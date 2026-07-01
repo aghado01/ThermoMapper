@@ -1,0 +1,18 @@
+# renv: commit the lockfile + activation, ignore the materialised library.
+**/library/
+**/local/
+**/cellar/
+**/staging/
+**/sandbox/
+**/python/
+
+# ...but keep renv's bootstrap so `renv::restore` works on a fresh clone.
+!**/activate.R
+
+# R session cruft
+.Rhistory
+.RData
+.Rproj.user/
+
+# oracle scratch (reference JSON is regenerated each run, compared live)
+*.out.json

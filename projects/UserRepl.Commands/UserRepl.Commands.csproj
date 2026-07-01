@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>UserRepl.Commands</RootNamespace>
+    <AssemblyName>UserRepl.Commands</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\projects\Clustering.Graphical.SPC\Clustering.Graphical.SPC.csproj" />
+    <ProjectReference Include="..\..\projects\Clustering.Dendrograms\Clustering.Dendrograms.csproj" />
+    <ProjectReference Include="..\..\projects\Clustering.Graphical.HdbScan\Clustering.Graphical.HdbScan.csproj" />
+    <ProjectReference Include="..\..\projects\Clustering.Evaluation\Clustering.Evaluation.csproj" />
+    <ProjectReference Include="..\..\projects\Synthetic\Synthetic.csproj" />
+    <ProjectReference Include="..\..\projects\Archivory.Tabular\Archivory.Tabular.csproj" />
+    <ProjectReference Include="..\..\projects\Archivory.Jso\Archivory.Jso.csproj" />
+    <ProjectReference Include="..\..\projects\Archivory\Archivory.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Primitives\Graphs.Primitives.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Proximity\Graphs.Proximity.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Distance\Graphs.Distance.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Coupling\Graphs.Coupling.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Observables\Graphs.Observables.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Models.Potts\Graphs.Models.Potts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\user-repl\**\*.cs"
+             Link="UserRepl\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

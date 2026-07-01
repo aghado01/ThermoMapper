@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Clustering.Graphical.SPC</RootNamespace>
+    <AssemblyName>Clustering.Graphical.SPC</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/clustering/graphical/spc/**/*.cs" Link="spc/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Clustering.Primitives/Clustering.Primitives.csproj" />
+    <ProjectReference Include="../Clustering.Dendrograms/Clustering.Dendrograms.csproj" />
+    <ProjectReference Include="../Graphs.Primitives/Graphs.Primitives.csproj" />
+    <ProjectReference Include="../Graphs.Distance/Graphs.Distance.csproj" />
+    <ProjectReference Include="../Graphs.Proximity/Graphs.Proximity.csproj" />
+    <ProjectReference Include="../Graphs.Coupling/Graphs.Coupling.csproj" />
+    <ProjectReference Include="../Graphs.Models.Potts/Graphs.Models.Potts.csproj" />
+    <ProjectReference Include="../Graphs.Observables/Graphs.Observables.csproj" />
+    <ProjectReference Include="../Maths.Information/Maths.Information.csproj" />
+    <ProjectReference Include="../Maths.LinAlg/Maths.LinAlg.csproj" />
+    <ProjectReference Include="../Maths.Rng/Maths.Rng.csproj" />
+    <ProjectReference Include="../Maths.Samplers/Maths.Samplers.csproj" />
+    <ProjectReference Include="../Clustering.Evaluation/Clustering.Evaluation.csproj" />
+    <ProjectReference Include="../Archivory/Archivory.csproj" />
+    <ProjectReference Include="../Archivory.Tabular/Archivory.Tabular.csproj">
+      <Name>Archivory.Tabular</Name>
+    </ProjectReference>
+  </ItemGroup>
+</Project>

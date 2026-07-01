@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Maths.Distance</RootNamespace>
+    <AssemblyName>Maths.Distance</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\maths\distance\*.cs" Link="distance\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\maths\distance\euclidean\*.cs" Link="distance\euclidean\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\maths\distance\geodesic\*.cs" Link="distance\geodesic\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Maths.LinAlg\Maths.LinAlg.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Numerics.Tensors" Version="10.0.0" />
+  </ItemGroup>
+
+</Project>

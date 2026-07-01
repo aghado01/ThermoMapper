@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>TDA.Primitives</RootNamespace>
+    <AssemblyName>TDA.Primitives</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\tda\primitives\*.cs" Link="primitives\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Graphs.Primitives\Graphs.Primitives.csproj" />
+    <ProjectReference Include="..\Graphs.Spectral\Graphs.Spectral.csproj" />
+    <ProjectReference Include="..\Maths.LinAlg\Maths.LinAlg.csproj" />
+    <ProjectReference Include="..\Maths.Topology\Maths.Topology.csproj" />
+    <ProjectReference Include="..\TDA.Ph\TDA.Ph.csproj" />
+  </ItemGroup>
+</Project>

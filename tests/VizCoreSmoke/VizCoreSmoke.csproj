@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>VizCoreSmoke</RootNamespace>
+    <AssemblyName>VizCoreSmoke</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\projects\VizCore\VizCore.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Proximity\Graphs.Proximity.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Coupling\Graphs.Coupling.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Primitives\Graphs.Primitives.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Spectral\Graphs.Spectral.csproj" />
+    <ProjectReference Include="..\..\projects\Maths.Geometry\Maths.Geometry.csproj" />
+    <ProjectReference Include="..\..\projects\Synthetic\Synthetic.csproj" />
+  </ItemGroup>
+</Project>

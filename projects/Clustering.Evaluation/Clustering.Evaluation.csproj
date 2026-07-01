@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Clustering.Evaluation</RootNamespace>
+    <AssemblyName>Clustering.Evaluation</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\clustering\evaluation\**\*.cs" Link="evaluation\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Graphs.Primitives\Graphs.Primitives.csproj" />
+    <ProjectReference Include="..\..\projects\Clustering.Primitives\Clustering.Primitives.csproj" />
+  </ItemGroup>
+</Project>

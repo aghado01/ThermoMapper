@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Graphs.Observables</RootNamespace>
+    <AssemblyName>Graphs.Observables</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\graphs\observables\**\*.cs" Link="observables\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Graphs.Primitives\Graphs.Primitives.csproj" />
+    <ProjectReference Include="..\Maths.LinAlg\Maths.LinAlg.csproj" />
+    <ProjectReference Include="..\Maths.Information\Maths.Information.csproj" />
+  </ItemGroup>
+</Project>

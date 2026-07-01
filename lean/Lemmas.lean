@@ -1,0 +1,3 @@
+-- Lemmas tier (no-apologies proofs): empty until the first promotion lands.
+-- `enthymemes/PKWangA.lean` is PROMOTION-READY (proved, zero sorries) but deliberately not
+-- moved here yet — re-add `import Lemmas.PKWang` only when that promotion is finished.

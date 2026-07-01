@@ -1,0 +1,323 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>UserRepl.Commands</name>
+    </assembly>
+    <members>
+        <member name="T:UserRepl.Commands.DistanceMetricFactory">
+            <summary>
+            Maps a <c>--distance-metric</c> spec string to a concrete
+            <see cref="T:Graphs.Distance.IDistanceMetric"/>. Supports the metrics SPC's graph
+            builder typically consumes:
+            <list type="bullet">
+              <item><c>euclidean</c> — Minkowski L2 (graph builder default if no metric is supplied)</item>
+              <item><c>manhattan</c> — Minkowski L1</item>
+              <item><c>minkowski:p=N</c> — Minkowski with explicit exponent (clamped to [1,2])</item>
+              <item><c>poincare</c> — Poincaré-ball geodesic; assumes feature rows lie in the open unit ball</item>
+              <item><c>cosine</c> — spherical geodesic (cosine angle-only); rows must be unit-normalized</item>
+              <item><c>hamming</c> — Hamming distance on real vectors (count of differing coordinates with tolerance)</item>
+            </list>
+            </summary>
+        </member>
+        <member name="T:UserRepl.Commands.ExtractCommand">
+             <summary>
+             The <c>extract</c> subcommand. Walks an existing checkpoint
+             directory (the output of one or more interrupted/partial SPC sweeps),
+             hydrates the available <c>.spcx</c>/<c>.spce</c> files into
+             <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult"/>s, and rebuilds the standard SPC CSVs
+             (<c>spc_sweep.csv</c>, <c>spc_criteria.csv</c>) without re-running
+             the sampler.
+             </summary>
+             <remarks>
+             <para><b>Manifest-driven.</b> Reads <c>&lt;run-dir&gt;/manifest.json</c>
+             to reconstruct the original dataset + graph + checkpoint location.
+             No flags are needed beyond <c>--run-dir</c> for a typical case;
+             dataset/graph overrides exist for manifests that pre-date this
+             feature or for ad-hoc reanalysis with a different graph.</para>
+            
+             <para><b>Partial sweeps are fine.</b> Missing checkpoints just shrink
+             the assembled profile — there's no requirement that every (T, replica)
+             originally requested be present. The output is "the best SweepProfile
+             I can build from what's on disk."</para>
+             </remarks>
+        </member>
+        <member name="M:UserRepl.Commands.ExtractCommand.HydrateAllCheckpoints(Graphs.Primitives.CsrGraph,System.String)">
+            <summary>
+            Walks the checkpoint directory recursively, loading every
+            <c>.spcx</c> file (and its paired <c>.spce</c> when present)
+            into an in-memory <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult"/>. The sink's
+            <see cref="M:Clustering.Graphical.SPC.Runtime.Execution.IFrameSink.TryLoad(Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec,Graphs.Primitives.CsrGraph)"/> implementation handles the
+            per-file serialization; we just enumerate and synthesize task
+            specs to feed it.
+            </summary>
+        </member>
+        <member name="P:UserRepl.Commands.ExtractCommand.Options.HasGraphOverride">
+            <summary>True when the user passed any graph-override flag —
+            suppresses the manifest-driven graph reconstruction so the
+            override actually takes effect.</summary>
+        </member>
+        <member name="T:UserRepl.Commands.GraphHealthCommand">
+            <summary>
+            The <c>graph-health</c> subcommand. Re-evaluates a run's graph
+            health from its manifest (without touching the SPC checkpoints) and
+            refreshes <c>&lt;run-dir&gt;/graph-health.json</c>. Useful for
+            ad-hoc inspection of an existing run without re-rebuilding sweep
+            CSVs or paying the extract command's hydration cost.
+            </summary>
+            <remarks>
+            <para>Subset of <see cref="T:UserRepl.Commands.ExtractCommand"/>: same manifest read +
+            graph rebuild path, but stops after the diagnostic — no checkpoint
+            walk, no profile reconstruction. Output is the same
+            <c>graph-health.json</c> file the other commands write, so
+            downstream consumers can rely on a single file location regardless
+            of which command produced it.</para>
+            </remarks>
+        </member>
+        <member name="T:UserRepl.Commands.GraphHealthFile">
+            <summary>
+            Conventional JSON persistence for <see cref="T:Graphs.Diagnostics.GraphHealthReport"/>.
+            Written to <c>&lt;runDir&gt;/graph-health.json</c> alongside
+            <c>manifest.json</c> on every SPC run; refreshed by
+            <see cref="T:UserRepl.Commands.ExtractCommand"/> and the standalone
+            <see cref="T:UserRepl.Commands.GraphHealthCommand"/>. The file is a snapshot of the
+            reconstructible-from-config state of the graph — keeping it on
+            disk means the user can inspect health verdicts after the fact
+            without re-running the sampler.
+            </summary>
+        </member>
+        <member name="T:UserRepl.Commands.HdbscanCommand">
+            <summary>
+            The <c>hdbscan</c> subcommand. Runs HDBSCAN on the same dataset
+            shapes the SPC subcommand accepts (synthetic generators or CSV) and
+            writes a labels CSV + evaluator-score summary so output can sit
+            alongside SPC runs for like-for-like comparison.
+            </summary>
+        </member>
+        <member name="M:UserRepl.Commands.HdbscanCommand.WriteDendrogramJson(System.String,Clustering.Graphical.HdbScan.HdbscanResult)">
+            <summary>
+            Persist the single-linkage dendrogram as a JSON sidecar so
+            downstream plotting (Python dendrogram renders, matplotlib /
+            seaborn) can read the merge tree directly. Mutual-reachability
+            distance is the cost axis; λ = 1/distance is the persistence
+            scalar HDBSCAN's condensation pass consumed to produce the
+            labels.
+            </summary>
+        </member>
+        <member name="M:UserRepl.Commands.HdbscanCommand.ComputeClusterStats(Clustering.Graphical.HdbScan.HdbscanResult)">
+            <summary>
+            Per-cluster size + mean membership probability. Cheap to derive
+            from <see cref="P:Clustering.Graphical.HdbScan.HdbscanResult.Labels"/> + <see cref="P:Clustering.Graphical.HdbScan.HdbscanResult.MembershipProbabilities"/>;
+            gives the user a quick "is this cluster well-formed?" read in
+            summary.json without opening the per-point CSV.
+            </summary>
+        </member>
+        <member name="T:UserRepl.Commands.HdbscanPreset">
+            <summary>
+            JSON preset for the <c>userrepl hdbscan</c> subcommand. Sister of
+            <see cref="T:UserRepl.Commands.SpcPreset"/> — same rules: all-nullable, applied before
+            CLI args parse, snake_case JSON. Use to save HDBSCAN configurations
+            (minPts, metric, etc.) for repeated comparison against SPC runs.
+            </summary>
+        </member>
+        <member name="T:UserRepl.Commands.ManifestMaterialization">
+            <summary>
+            Materialization helpers that hydrate <see cref="T:UserRepl.Commands.RunManifest"/> DTO
+            pieces back into the live objects that the SPC/HDBSCAN code paths
+            consume — datasets, graph configs, etc. Used by
+            <see cref="T:UserRepl.Commands.ExtractCommand"/> (and any future reanalysis tooling)
+            to reconstruct a run from its on-disk manifest without re-passing
+            CLI flags.
+            </summary>
+            <remarks>
+            <para>Kept in a separate file from the DTO declarations so the
+            manifest record types stay declarative — the runtime dependencies
+            (synthetic generator catalog, kernel mixture structs,
+            <see cref="T:Clustering.Graphical.SPC.Runtime.Initialization.SpcGraphConfig"/>) only show up at materialization
+            time.</para>
+            </remarks>
+        </member>
+        <member name="M:UserRepl.Commands.ManifestMaterialization.Materialize(UserRepl.Commands.DatasetSpec)">
+            <summary>
+            Reconstructs the dataset from its <see cref="T:UserRepl.Commands.DatasetSpec"/>.
+            For synthetic datasets, re-invokes the same generator with the
+            same parameters + seed; for CSV, re-reads the file.
+            </summary>
+        </member>
+        <member name="M:UserRepl.Commands.ManifestMaterialization.ToConfig(UserRepl.Commands.GraphSpec)">
+            <summary>
+            Reconstructs an <see cref="T:Clustering.Graphical.SPC.Runtime.Initialization.SpcGraphConfig"/> from a
+            <see cref="T:UserRepl.Commands.GraphSpec"/>, including the distance metric and any
+            kernel-mixture configuration.
+            </summary>
+        </member>
+        <member name="T:UserRepl.Commands.MixtureSpecParser">
+             <summary>
+             Parses kernel-mixture flag values (<c>--mixture</c>,
+             <c>--mixture-bandwidth</c>) into the
+             <see cref="T:Graphs.Coupling.MixtureWeights"/> / <see cref="T:Graphs.Coupling.MixtureBandwidth"/> records
+             the graph builder consumes.
+             </summary>
+             <remarks>
+             <para><b>Format.</b> Comma-separated <c>name=value</c> pairs. Names
+             are case-insensitive; recognized names are <c>gauss</c>/<c>gaussian</c>,
+             <c>cauchy</c>, <c>laplace</c>/<c>laplacian</c>. Missing components
+             default to zero (weight) or NaN (bandwidth — see
+             <see cref="M:UserRepl.Commands.MixtureSpecParser.ParseBandwidth(System.String)"/>).</para>
+            
+             <para><b>Examples.</b> <c>"gauss=0.5,cauchy=0.3,laplace=0.2"</c> →
+             <see cref="T:Graphs.Coupling.MixtureWeights"/>(0.5, 0.3, 0.2). The graph builder
+             normalizes weights internally, so callers don't have to.</para>
+             </remarks>
+        </member>
+        <member name="M:UserRepl.Commands.MixtureSpecParser.ParseBandwidth(System.String)">
+            <summary>
+            Parse a per-kernel bandwidth spec. Components not listed default
+            to <c>0.0</c> — the graph builder treats zero as "auto-estimate
+            this component from nearest-neighbor distance statistics."
+            </summary>
+        </member>
+        <member name="T:UserRepl.Commands.RunManifest">
+             <summary>
+             Self-describing artifact written at the root of every CLI run
+             directory. Captures the dataset source, graph construction inputs,
+             sweep/algorithm parameters, and output layout so the
+             <see cref="T:UserRepl.Commands.ExtractCommand"/> (and future tooling) can reconstruct
+             the run end-to-end without re-passing flags.
+             </summary>
+             <remarks>
+             <para><b>Schema versioning.</b> <see cref="P:UserRepl.Commands.RunManifest.SchemaVersion"/> is bumped
+             when the on-disk layout changes in a way that older readers couldn't
+             understand. Readers should warn (not fail) on a newer schema and
+             degrade gracefully when possible.</para>
+            
+             <para><b>What's NOT captured.</b> Per-task results
+             (<c>.spcx</c>/<c>.spce</c>) and the post-run CSVs live alongside the
+             manifest but are addressed by convention, not by manifest entries —
+             adding files to the run dir doesn't require manifest churn.</para>
+             </remarks>
+        </member>
+        <member name="M:UserRepl.Commands.RunManifest.#ctor(System.String,System.DateTime,System.String,System.String,UserRepl.Commands.DatasetSpec,UserRepl.Commands.GraphSpec,UserRepl.Commands.SweepSpec,UserRepl.Commands.HdbscanSpec,UserRepl.Commands.OutputSpec)">
+             <summary>
+             Self-describing artifact written at the root of every CLI run
+             directory. Captures the dataset source, graph construction inputs,
+             sweep/algorithm parameters, and output layout so the
+             <see cref="T:UserRepl.Commands.ExtractCommand"/> (and future tooling) can reconstruct
+             the run end-to-end without re-passing flags.
+             </summary>
+             <remarks>
+             <para><b>Schema versioning.</b> <see cref="P:UserRepl.Commands.RunManifest.SchemaVersion"/> is bumped
+             when the on-disk layout changes in a way that older readers couldn't
+             understand. Readers should warn (not fail) on a newer schema and
+             degrade gracefully when possible.</para>
+            
+             <para><b>What's NOT captured.</b> Per-task results
+             (<c>.spcx</c>/<c>.spce</c>) and the post-run CSVs live alongside the
+             manifest but are addressed by convention, not by manifest entries —
+             adding files to the run dir doesn't require manifest churn.</para>
+             </remarks>
+        </member>
+        <member name="T:UserRepl.Commands.DatasetSpec">
+            <summary>Dataset provenance. Either synthetic-generator info or CSV path is set.</summary>
+        </member>
+        <member name="M:UserRepl.Commands.DatasetSpec.#ctor(System.String,System.String,System.Collections.Generic.IReadOnlyDictionary{System.String,System.Object},System.Nullable{System.Int32},System.String,System.String,System.Nullable{System.Boolean},System.String)">
+            <summary>Dataset provenance. Either synthetic-generator info or CSV path is set.</summary>
+        </member>
+        <member name="T:UserRepl.Commands.GraphSpec">
+            <summary>Graph construction inputs sufficient to deterministically rebuild the CsrGraph.</summary>
+        </member>
+        <member name="M:UserRepl.Commands.GraphSpec.#ctor(System.String,System.Int32,System.Double,System.String,System.Double,System.String,System.Boolean,System.Boolean,System.Collections.Generic.IReadOnlyDictionary{System.String,System.Double},System.Collections.Generic.IReadOnlyDictionary{System.String,System.Double})">
+            <summary>Graph construction inputs sufficient to deterministically rebuild the CsrGraph.</summary>
+        </member>
+        <member name="T:UserRepl.Commands.SweepSpec">
+            <summary>SPC sweep + cut configuration.</summary>
+        </member>
+        <member name="M:UserRepl.Commands.SweepSpec.#ctor(System.String,System.String,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.Int32,System.String,System.String,System.Double)">
+            <summary>SPC sweep + cut configuration.</summary>
+        </member>
+        <member name="T:UserRepl.Commands.HdbscanSpec">
+            <summary>HDBSCAN configuration.</summary>
+        </member>
+        <member name="M:UserRepl.Commands.HdbscanSpec.#ctor(System.Int32,System.Nullable{System.Int32},System.Boolean,System.String,System.Double)">
+            <summary>HDBSCAN configuration.</summary>
+        </member>
+        <member name="T:UserRepl.Commands.OutputSpec">
+            <summary>Run-directory layout (where the artifacts live).</summary>
+        </member>
+        <member name="M:UserRepl.Commands.OutputSpec.#ctor(System.String,System.String)">
+            <summary>Run-directory layout (where the artifacts live).</summary>
+        </member>
+        <member name="T:UserRepl.Commands.SpcCommand">
+            <summary>
+            The <c>spc</c> subcommand. Runs an end-to-end SPC clustering session
+            against a synthetic-generator dataset or a CSV input, with adaptive
+            or fixed-grid temperature sweeps and optional checkpoint resume.
+            </summary>
+        </member>
+        <member name="T:UserRepl.Commands.SpcPreset">
+             <summary>
+             JSON preset for the <c>userrepl spc</c> subcommand. All fields are
+             nullable — present fields override the defaults; absent fields leave
+             the defaults in place. Loaded via <c>--config &lt;path&gt;</c> before
+             other CLI args are processed, so any flag passed alongside
+             <c>--config</c> overrides the corresponding preset entry.
+             </summary>
+             <remarks>
+             <para><b>Field-name convention.</b> JSON properties are snake_case
+             (matching <c>manifest.json</c>'s convention). Enum-like fields
+             (<c>proximity</c>, <c>kernel</c>, <c>schedule</c>, <c>analyzer</c>,
+             <c>partition_strategy</c>) are stored as the same strings the CLI
+             accepts and parsed through <see cref="T:UserRepl.Commands.SpcCommand"/>'s shared
+             parsers, so the validation rules don't drift between argv and JSON.</para>
+            
+             <para><b>Minimal preset.</b> Every field is optional, so a preset
+             can be as small as <c>{ "dataset": "BlattHierarchy" }</c> — useful
+             for "give me the standard run on this dataset" presets.</para>
+             </remarks>
+        </member>
+        <member name="M:UserRepl.Commands.SpcPreset.ApplyTo(UserRepl.Commands.SpcCommand.Options)">
+            <summary>
+            Apply this preset to the given options instance. Only non-null
+            preset fields are written; null fields leave the options
+            untouched. Designed to run BEFORE the main argv loop so any CLI
+            flag passed alongside <c>--config</c> overrides the preset's
+            value.
+            </summary>
+        </member>
+        <member name="T:UserRepl.Commands.TemperatureGridSpec">
+             <summary>
+             Parses the <c>--temperatures</c> argument value into a concrete
+             <c>double[]</c> grid. Supported forms:
+             <list type="bullet">
+               <item><c>linspace:Tmin,Tmax,N</c> — evenly-spaced grid of N points</item>
+               <item><c>logspace:Tmin,Tmax,N</c> — log-spaced grid of N points (both bounds must be positive)</item>
+               <item>A bare comma-separated list of doubles, e.g. <c>0.01,0.05,0.1,0.5</c></item>
+             </list>
+             </summary>
+             <remarks>
+             <para>Endpoints are inclusive: <c>linspace:0,1,3</c> yields
+             <c>[0, 0.5, 1]</c>. Single-point grids (<c>linspace:0.1,0.1,1</c>)
+             are allowed; the strategy will treat them as a one-temperature
+             sweep.</para>
+            
+             <para>Validation is strict — malformed input throws
+             <see cref="T:System.ArgumentException"/> with a message that points at the
+             offending token. Callers should let the CLI's top-level error
+             handler print the message.</para>
+             </remarks>
+        </member>
+        <member name="T:UserRepl.SubcommandRouter">
+            <summary>
+            Top-level argv router for the UserRepl CLI. Dispatches based on the
+            first positional argument to one of the per-algorithm or per-action
+            subcommands.
+            </summary>
+            <remarks>
+            <para>Subcommands are kept self-contained — each owns its own argv
+            parsing, defaults, and help text. The router's job is only to peel
+            the leading verb off and forward the rest. This keeps adding a new
+            algorithm cheap (one new command class + one switch arm) and avoids
+            cross-coupling between unrelated CLI surfaces.</para>
+            </remarks>
+        </member>
+    </members>
+</doc>

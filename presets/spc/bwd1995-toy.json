@@ -1,0 +1,16 @@
+{
+  "dataset": "Bwd1995Toy",
+  "seed": 42,
+  "q": 20,
+  "topology": "knn",
+  "k": 10,
+  "filter": "mutualknn",
+  "ensure_connected": true,
+  "kernel": "gaussian",
+  "bandwidth_strategy": "mean-edge-distance",
+  "susceptibility": "fk-reduced",
+  "temperatures": "auto",
+  "theta": 0.5,
+  "partition_strategy": "co-membership",
+  "peripheral_capture": false
+}

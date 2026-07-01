@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Spc.BlattSmoke</RootNamespace>
+    <AssemblyName>Spc.BlattSmoke</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\projects\Clustering.Graphical.SPC\Clustering.Graphical.SPC.csproj" />
+    <ProjectReference Include="..\..\projects\Clustering.Evaluation\Clustering.Evaluation.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Primitives\Graphs.Primitives.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Distance\Graphs.Distance.csproj" />
+    <ProjectReference Include="..\..\projects\Synthetic\Synthetic.csproj" />
+  </ItemGroup>
+</Project>

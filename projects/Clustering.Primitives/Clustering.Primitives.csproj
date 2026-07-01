@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Clustering.Primitives</RootNamespace>
+    <AssemblyName>Clustering.Primitives</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\clustering\primitives\**\*.cs" Link="primitives\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

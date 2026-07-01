@@ -1,0 +1,2845 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Viz</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: #0e0e12;
+        color: #d4d3d0;
+        font-family: "Segoe UI", sans-serif;
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        overflow: hidden;
+      }
+      #header {
+        padding: 8px 14px;
+        background: #16161c;
+        border-bottom: 1px solid #2a2a34;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+      }
+      #header .title {
+        font-weight: 600;
+        color: #eeecea;
+      }
+      #header .meta {
+        color: #7a7975;
+        font-size: 12px;
+      }
+      #canvas-wrap {
+        flex: 1;
+        position: relative;
+      }
+      canvas {
+        display: block;
+        width: 100% !important;
+        height: 100% !important;
+      }
+      #graph-marquee {
+        position: absolute;
+        top: 14px;
+        left: 50%;
+        transform: translateX(-50%);
+        min-width: 360px;
+        max-width: min(62vw, 900px);
+        background: rgba(14, 14, 18, 0.86);
+        border: 1px solid #2a2a34;
+        border-radius: 8px;
+        padding: 8px 12px;
+        pointer-events: none;
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.24);
+      }
+      #graph-marquee .gm-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: baseline;
+      }
+      #graph-marquee .gm-row + .gm-row {
+        margin-top: 4px;
+      }
+      #graph-marquee .gm-group {
+        display: inline-flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      #graph-marquee .gm-label {
+        color: #7f8ea3;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      #graph-marquee .gm-value {
+        color: #e6e3df;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+      }
+      #legend {
+        position: absolute;
+        bottom: 14px;
+        left: 14px;
+        background: rgba(14, 14, 18, 0.82);
+        border: 1px solid #2a2a34;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 12px;
+        line-height: 1.8;
+        pointer-events: none;
+      }
+      #legend .swatch {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 6px;
+        vertical-align: middle;
+      }
+      #controls-panel {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        background: rgba(14, 14, 18, 0.82);
+        border: 1px solid #2a2a34;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      #debug-console {
+        position: absolute;
+        right: 14px;
+        bottom: 14px;
+        width: min(420px, 42vw);
+        max-height: min(42vh, 360px);
+        overflow: auto;
+        background: rgba(8, 8, 12, 0.9);
+        border: 1px solid #2a2a34;
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 11px;
+        font-family: Consolas, "Cascadia Mono", monospace;
+        line-height: 1.45;
+        color: #cfcfcb;
+        white-space: pre-wrap;
+      }
+      #debug-console .dbg-title {
+        color: #7f8ea3;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 10px;
+        margin-bottom: 6px;
+      }
+      #debug-console .dbg-state {
+        color: #e6e3df;
+        margin-bottom: 6px;
+      }
+      #debug-console .dbg-log {
+        color: #9fb2cc;
+      }
+      #controls-panel label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #9a9896;
+        cursor: pointer;
+        user-select: none;
+      }
+      #controls-panel input[type="range"] {
+        width: 90px;
+        accent-color: #6e9ef5;
+      }
+      #gen-panel {
+        position: absolute;
+        top: 14px;
+        left: 14px;
+        background: rgba(14, 14, 18, 0.88);
+        border: 1px solid #2a2a34;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 11px;
+        display: none;
+        flex-direction: column;
+        gap: 4px;
+        max-width: 230px;
+      }
+      .gp-hdr {
+        color: #eeecea;
+        font-size: 12px;
+        font-weight: 600;
+        margin-bottom: 2px;
+      }
+      .gp-sec {
+        color: #6e9ef5;
+        font-size: 10px;
+        margin: 4px 0 1px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      #gen-panel label {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: #9a9896;
+        white-space: nowrap;
+      }
+      #gen-panel input[type="range"] {
+        width: 80px;
+        accent-color: #6e9ef5;
+      }
+      #gen-panel input[type="number"] {
+        width: 54px;
+        background: #1a1a22;
+        color: #d4d3d0;
+        border: 1px solid #2a2a34;
+        border-radius: 3px;
+        padding: 1px 3px;
+        font-size: 11px;
+      }
+      #gen-panel select {
+        background: #1a1a22;
+        color: #d4d3d0;
+        border: 1px solid #2a2a34;
+        border-radius: 3px;
+        font-size: 10px;
+        max-width: 130px;
+      }
+      #gen-panel span[id$="-v"] {
+        color: #d4d3d0;
+        min-width: 2.8em;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      #btn-regen {
+        background: #1e3a5f;
+        color: #6e9ef5;
+        border: 1px solid #3a5a8f;
+        border-radius: 4px;
+        padding: 4px 10px;
+        cursor: pointer;
+        font-size: 12px;
+        margin-top: 6px;
+        align-self: flex-start;
+      }
+      #btn-regen:hover {
+        background: #2a4f7f;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="header">
+      <span class="title" id="header-title"></span>
+      <span class="meta" id="meta-n"></span>
+    </div>
+    <div id="canvas-wrap">
+      <canvas id="c"></canvas>
+      <div id="graph-marquee"></div>
+      <div id="legend"></div>
+      <div id="debug-console">
+        <div class="dbg-title">Viewer Debug</div>
+        <div id="dbg-state" class="dbg-state"></div>
+        <div id="dbg-log" class="dbg-log"></div>
+      </div>
+      <div id="controls-panel">
+        <label
+          ><input type="checkbox" id="chk-autorotate" checked />
+          Auto-rotate</label
+        >
+        <label style="padding-left: 2px">
+          Speed
+          <input
+            type="range"
+            id="rng-rotspeed"
+            min="0.5"
+            max="10"
+            step="0.5"
+            value="2"
+          />
+          <span
+            id="lbl-rotspeed"
+            style="color: #d4d3d0; min-width: 2.5em; text-align: right"
+            >2.0</span
+          >
+        </label>
+        <hr style="border-color: #2a2a34; margin: 2px 0" />
+        <div class="gp-sec">GMM</div>
+        <label
+          >Mode
+          <select
+            id="rp-gmmMode"
+            style="
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              font-size: 11px;
+              margin-left: 4px;
+            "
+          >
+            <option value="Oracle">Oracle</option>
+            <option value="EM">EM</option>
+          </select>
+        </label>
+        <label
+          >K
+          <select
+            id="rp-gmmComponents"
+            style="
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              font-size: 11px;
+              margin-left: 4px;
+            "
+          >
+            <option value="0">K=1</option>
+            <option value="1">K=2</option>
+            <option value="2">K=4</option>
+            <option value="3">K=8</option>
+            <option value="4">K=16</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="chk-gaussians" /> Surface</label>
+        <label><input type="checkbox" id="chk-wireframe" /> Wireframe</label>
+        <hr style="border-color: #2a2a34; margin: 2px 0" />
+        <div class="gp-sec">Analysis</div>
+        <label><input type="checkbox" id="chk-graph" /> Graph</label>
+        <label
+          ><input type="checkbox" id="chk-falsebridges" /> False bridges</label
+        >
+        <label><input type="checkbox" id="chk-flow" /> Flow field</label>
+        <label
+          >Flow glyph
+          <select
+            id="rp-flowMode"
+            style="
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              font-size: 11px;
+              margin-left: 4px;
+            "
+          >
+            <option value="Beam">Beam</option>
+            <option value="Cone">Cone</option>
+          </select>
+        </label>
+        <label
+          >Rule
+          <select
+            id="rp-neighborRule"
+            style="
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              font-size: 11px;
+              margin-left: 4px;
+            "
+          >
+            <option value="Knn">Knn</option>
+            <option value="MutualKnn">MutualKnn</option>
+            <option value="EpsilonBall">EpsilonBall</option>
+          </select>
+        </label>
+        <label id="rp-eps-row"
+          >ε
+          <input
+            type="number"
+            id="rp-epsilonBallEpsilon"
+            value="0.5"
+            min="0.05"
+            max="20"
+            step="0.05"
+            style="
+              width: 52px;
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              padding: 1px 3px;
+              font-size: 11px;
+            "
+        /></label>
+        <label
+          >k
+          <input
+            type="number"
+            id="rp-knnK"
+            value="5"
+            min="1"
+            max="30"
+            style="
+              width: 52px;
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              padding: 1px 3px;
+              font-size: 11px;
+            "
+        /></label>
+        <label
+          ><input type="checkbox" id="rp-ensureConnected" /> MST Repair</label
+        >
+        <label
+          >Metric
+          <select
+            id="rp-metric"
+            style="
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              font-size: 11px;
+              margin-left: 4px;
+            "
+          ></select>
+        </label>
+        <label id="rp-metric-param-row" style="display: none"
+          ><span id="rp-metric-param-label">p</span>
+          <input
+            type="number"
+            id="rp-metric-param"
+            value="2"
+            min="1"
+            step="0.1"
+            style="
+              width: 52px;
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              padding: 1px 3px;
+              font-size: 11px;
+              margin-left: 4px;
+            "
+        /></label>
+        </label>
+        <label
+          >Kernel
+          <select
+            id="rp-kernel"
+            style="
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              font-size: 11px;
+              margin-left: 4px;
+            "
+          >
+            <option value="Gaussian">Gaussian</option>
+            <option value="Cauchy">Cauchy</option>
+            <option value="Laplacian">Laplacian</option>
+            <option value="Linear">Linear</option>
+          </select>
+        </label>
+        <label
+          >σ
+          <input
+            type="number"
+            id="rp-bandwidth"
+            value="0"
+            min="0"
+            max="20"
+            step="0.05"
+            title="0 = auto-estimate from neighbourhood scale"
+            style="
+              width: 52px;
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              padding: 1px 3px;
+              font-size: 11px;
+            "
+        /></label>
+        <label
+          >seed
+          <input
+            type="number"
+            id="rp-seed"
+            value="42"
+            min="0"
+            max="99999"
+            style="
+              width: 62px;
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              padding: 1px 3px;
+              font-size: 11px;
+            "
+        /></label>
+        <hr style="border-color: #2a2a34; margin: 2px 0" />
+        <label
+          >Color by
+          <select
+            id="sel-scalarlayer"
+            style="
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              font-size: 11px;
+              margin-left: 4px;
+            "
+          >
+            <option value="">Labels</option>
+          </select>
+        </label>
+        <label
+          >Line field
+          <select
+            id="sel-linefield"
+            style="
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              font-size: 11px;
+              margin-left: 4px;
+            "
+          >
+            <option value="">None</option>
+          </select>
+        </label>
+        <label
+          >Triangles
+          <select
+            id="sel-triangles"
+            style="
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              font-size: 11px;
+              margin-left: 4px;
+            "
+          >
+            <option value="">None</option>
+          </select>
+        </label>
+      </div>
+      <div id="gen-panel">
+        <div class="gp-hdr">
+          <select
+            id="sel-generator"
+            style="
+              background: #1a1a22;
+              color: #d4d3d0;
+              border: 1px solid #2a2a34;
+              border-radius: 3px;
+              font-size: 11px;
+              max-width: 160px;
+              margin-right: 4px;
+            "
+          ></select
+          ><button
+            id="gen-toggle"
+            style="
+              float: right;
+              background: none;
+              border: none;
+              color: #6e9ef5;
+              cursor: pointer;
+              font-size: 10px;
+              padding: 0;
+            "
+          >
+            hide
+          </button>
+        </div>
+        <div id="gen-body"></div>
+        <div
+          id="gen-fixture"
+          style="
+            border-top: 1px solid #2a2a34;
+            margin-top: 6px;
+            padding-top: 6px;
+          "
+        >
+          <div class="gp-sec">Fixture</div>
+          <label
+            ><input type="checkbox" id="chk-spinecurves" checked /> Spine
+            curves</label
+          >
+          <label
+            ><input type="checkbox" id="chk-framearrows" checked /> Frame
+            arrows</label
+          >
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+      // ── Rendering architecture — read before adding features ──────────────────────
+      //
+      // RULE: Build once at load time. Toggle .visible only. Never rebuild geometry
+      //       in response to user events, and never put conditional state logic in
+      //       animate().
+      //
+      // Three cost tiers:
+      //   1. `.visible = true/false`              — free; Three.js skips the draw call
+      //   2. `attribute.needsUpdate = true`       — O(N) buffer re-upload, fires once
+      //   3. geometry rebuild / scene.add          — GPU alloc + GC; NEVER in hot path
+      //
+      // Pattern for all toggleable layer groups (edges, gaussians, spines, scalars):
+      //
+      //   // Load time — build all objects, park them invisible in the scene
+      //   const edgeMeshes = {};
+      //   for (const layer of SCENE.edge_layers ?? []) {
+      //     edgeMeshes[layer.name] = buildEdgeGeometry(layer);
+      //     edgeMeshes[layer.name].visible = false;
+      //     scene.add(edgeMeshes[layer.name]);
+      //   }
+      //
+      //   // Event handler — flip .visible only
+      //   dropdown.addEventListener('change', e => {
+      //     for (const m of Object.values(edgeMeshes)) m.visible = false;
+      //     edgeMeshes[e.target.value].visible = true;
+      //   });
+      //
+      // animate() contains exactly two lines: controls.update() and renderer.render().
+      // SceneRenderHints fields are treated as suggested initial defaults, not commands;
+      // the user can override any of them without a re-render.
+      //
+      // Temperature scrubbing: update the color BufferAttribute in-place
+      // (colors[i*3]=r; ... needsUpdate=true). Never recreate the Points geometry.
+      // ─────────────────────────────────────────────────────────────────────────────
+
+      // ── Scene data — injected by ThreeJsHtmlRenderTarget at __SCENE_DATA__ ───────
+      // Schema: JsonExportRenderTarget schema_version 1 (snake_case, flat row-major arrays).
+      const SCENE = __SCENE_DATA__;
+
+      // ── Semantic colour palette ────────────────────────────────────────────────
+      // Tier 1 (Base data / cluster identity): perceptually-distinct, equal-luma,
+      // dark-background optimised. First three slots correspond to the canonical
+      // generator clusters (Crescent=0 cyan, Ellipsoid=1 amber, Outlier=2 slate).
+      const PALETTE = [
+        0x00e5ff, // 0  cyan-teal   — crescent / primary cluster
+        0xffab00, // 1  amber       — ellipsoid / secondary cluster
+        0x6c7a89, // 2  slate       — outliers / third cluster
+        0xb388ff, // 3  soft violet
+        0x69f0ae, // 4  mint green
+        0xff6d00, // 5  deep orange
+        0x40c4ff, // 6  light blue
+        0xf48fb1, // 7  rose
+        0xccff90, // 8  yellow-green
+        0x80d8ff, // 9  sky
+        0xffd180, // 10 peach gold
+        0xea80fc, // 11 lavender
+      ];
+      const NOISE_COLOR = 0x3a3a4a;
+      const UNSET_COLOR = 0x555566;
+
+      function clusterColor(k) {
+        if (k < 0) return NOISE_COLOR;
+        if (k < PALETTE.length) return PALETTE[k];
+        // Deterministic overflow hash for K > 12
+        const h = ((k * 2654435761) >>> 0) % 360;
+        return new THREE.Color().setHSL(h / 360, 0.65, 0.55).getHex();
+      }
+
+      // ── Resolve active label layer ───────────────────────────────────────────────
+      // Prefer GroundTruth; fall back to first available layer.
+      const labelLayers = SCENE.label_layers ?? [];
+      const activeLayer =
+        labelLayers.find((l) => l.kind === "GroundTruth") ??
+        labelLayers[0] ??
+        null;
+      let labels = activeLayer?.labels ?? null;
+
+      // ── Header ───────────────────────────────────────────────────────────────────
+      document.title = SCENE.title ?? "Viz";
+      document.getElementById("header-title").textContent =
+        SCENE.title ?? "Viz";
+
+      const N = SCENE.points.n;
+      const D = SCENE.points.d;
+      if (D > 3)
+        console.warn(`D=${D} > 3; only first 3 dimensions are rendered.`);
+
+      let K = 0;
+      if (labels) {
+        for (const l of labels) if (l >= 0 && l + 1 > K) K = l + 1;
+      }
+      document.getElementById("meta-n").textContent = `N=${N}  D=${D}  K=${K}`;
+
+      // ── Three.js setup ───────────────────────────────────────────────────────────
+      const canvas = document.getElementById("c");
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setClearColor(0x0e0e12);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(55, 1, 0.01, 1000);
+
+      const controls = new OrbitControls(camera, canvas);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.07;
+      controls.rotateSpeed = 0.6;
+      controls.zoomSpeed = 1.2;
+      controls.minDistance = 0.5;
+      controls.maxDistance = 200;
+
+      // Ambient + directional — low intensity; pre-wired for ellipsoid shading (Pass 3)
+      const ambLight = new THREE.AmbientLight(0xffffff, 0.4);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(5, 8, 6);
+      scene.add(ambLight, dirLight);
+
+      // ── Point cloud ──────────────────────────────────────────────────────────────
+      // SCENE.points.features is flat row-major [N × D] as doubles.
+      const raw = SCENE.points.features;
+      let positions = new Float32Array(N * 3);
+      let colors = new Float32Array(N * 3);
+      const tmpColor = new THREE.Color();
+
+      for (let i = 0; i < N; i++) {
+        positions[i * 3] = raw[i * D];
+        positions[i * 3 + 1] = D >= 2 ? raw[i * D + 1] : 0;
+        positions[i * 3 + 2] = D >= 3 ? raw[i * D + 2] : 0;
+
+        const k = labels ? labels[i] : -999;
+        const hex = k === -999 ? UNSET_COLOR : clusterColor(k);
+        tmpColor.setHex(hex);
+        colors[i * 3] = tmpColor.r;
+        colors[i * 3 + 1] = tmpColor.g;
+        colors[i * 3 + 2] = tmpColor.b;
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      geo.computeBoundingSphere();
+
+      // Circle sprite — draw a filled circle on a small canvas, use it as the point texture.
+      const _circleCanvas = document.createElement("canvas");
+      _circleCanvas.width = _circleCanvas.height = 64;
+      {
+        const cx = _circleCanvas.getContext("2d");
+        cx.beginPath();
+        cx.arc(32, 32, 30, 0, Math.PI * 2);
+        cx.fillStyle = "#ffffff";
+        cx.fill();
+      }
+      const pointsMat = new THREE.PointsMaterial({
+        size: 0.04,
+        vertexColors: true,
+        sizeAttenuation: true,
+        depthWrite: false,
+        transparent: true,
+        alphaTest: 0.5,
+        map: new THREE.CanvasTexture(_circleCanvas),
+      });
+      let pointsMeshRef = new THREE.Points(geo, pointsMat);
+      scene.add(pointsMeshRef);
+      // ── EdgeLayers (Pass 2) ────────────────────────────────────────────────────────────
+      // Build-once: one LineSegments per layer, all parked invisible.
+      // Layer switching: flip .visible only (Tier 1 — free).
+      // False-bridge toggle: update color BufferAttribute in-place (Tier 2 — O(E), once).
+      const sceneLayers = SCENE.edge_layers ?? [];
+      const edgeMeshes = {};
+      let falseBridgeOn = SCENE.hints?.highlight_false_bridges ?? true;
+
+      // Tier 2 (Topological error — semantic alarm): pure crimson, aggressive contrast.
+      const FALSE_BRIDGE = new THREE.Color(0xff1744);
+      // White anchor for wire desaturation (lerp target).
+      const WHITE_COLOR = new THREE.Color(1, 1, 1);
+
+      // buildEdgeMesh — Semantic Compositing: two separate LineSegments.
+      // main    — intra-cluster edges, faint nebula (opacity 0.09).
+      // bridges — false-bridge edges only, diagnostic crimson (opacity 0.85).
+      // Separating into two objects allows per-tier opacity without per-vertex alpha.
+      function buildEdgeMesh(layer) {
+        const E = Math.min(
+          layer.src?.length ?? 0,
+          layer.dst?.length ?? 0,
+          layer.weight?.length ?? 0,
+        );
+        const hasFB = !!(layer.edge_cluster_src && layer.edge_cluster_dst);
+
+        // Partition edges into regular vs. bridge
+        const mainPos = [],
+          bridgePos = [],
+          mainCol = [],
+          bridgeCol = [];
+
+        for (let e = 0; e < E; e++) {
+          const si = layer.src[e];
+          const di = layer.dst[e];
+          if (
+            !Number.isInteger(si) ||
+            !Number.isInteger(di) ||
+            si < 0 ||
+            di < 0 ||
+            si >= positions.length / 3 ||
+            di >= positions.length / 3
+          )
+            continue;
+          if (si === di) continue;
+          const px0 = positions[si * 3],
+            py0 = positions[si * 3 + 1],
+            pz0 = positions[si * 3 + 2];
+          const px1 = positions[di * 3],
+            py1 = positions[di * 3 + 1],
+            pz1 = positions[di * 3 + 2];
+
+          const isBridge =
+            hasFB && layer.edge_cluster_src[e] !== layer.edge_cluster_dst[e];
+
+          if (isBridge) {
+            bridgePos.push(px0, py0, pz0, px1, py1, pz1);
+            bridgeCol.push(
+              FALSE_BRIDGE.r,
+              FALSE_BRIDGE.g,
+              FALSE_BRIDGE.b,
+              FALSE_BRIDGE.r,
+              FALSE_BRIDGE.g,
+              FALSE_BRIDGE.b,
+            );
+          } else {
+            // Wire tint: stay close to the cluster hue but ease toward white slightly
+            // to differentiate from point-cloud saturation. Brightness factor 0.85
+            // keeps edges legible against the dark background; combined with the
+            // bumped opacity below, edges are clearly visible without overpowering
+            // the underlying cluster colours.
+            const k = labels ? labels[si] : -999;
+            tmpColor
+              .setHex(clusterColor(k))
+              .lerp(WHITE_COLOR, 0.3)
+              .multiplyScalar(0.85);
+            mainPos.push(px0, py0, pz0, px1, py1, pz1);
+            mainCol.push(
+              tmpColor.r,
+              tmpColor.g,
+              tmpColor.b,
+              tmpColor.r,
+              tmpColor.g,
+              tmpColor.b,
+            );
+          }
+        }
+
+        function makeMesh(posData, colData, opacity) {
+          const g = new THREE.BufferGeometry();
+          g.setAttribute(
+            "position",
+            new THREE.BufferAttribute(new Float32Array(posData), 3),
+          );
+          g.setAttribute(
+            "color",
+            new THREE.BufferAttribute(new Float32Array(colData), 3),
+          );
+          const m = new THREE.LineSegments(
+            g,
+            new THREE.LineBasicMaterial({
+              vertexColors: true,
+              transparent: true,
+              opacity,
+              depthWrite: false,
+            }),
+          );
+          m.visible = false;
+          return m;
+        }
+
+        // Main edges at 0.40 alpha — bright enough to read topology against the
+        // dark background. False bridges stay at 0.90 as a saturated alarm tier.
+        const main = makeMesh(mainPos, mainCol, 0.4);
+        const bridges = makeMesh(bridgePos, bridgeCol, 0.9);
+        return { main, bridges };
+      }
+
+      const chkGraph = document.getElementById("chk-graph");
+      const graphMarquee = document.getElementById("graph-marquee");
+      const rpRule = document.getElementById("rp-neighborRule");
+      const rpEps = document.getElementById("rp-epsilonBallEpsilon");
+      const rpEpsRow = document.getElementById("rp-eps-row");
+      const rpKnnK = document.getElementById("rp-knnK");
+      const rpMetric = document.getElementById("rp-metric");
+      const rpMetricParamRow = document.getElementById("rp-metric-param-row");
+      const rpMetricParamLabel = document.getElementById(
+        "rp-metric-param-label",
+      );
+      const rpMetricParam = document.getElementById("rp-metric-param");
+      const rpKernel = document.getElementById("rp-kernel");
+      const rpBandwidth = document.getElementById("rp-bandwidth");
+      const rpEnsureConnected = document.getElementById("rp-ensureConnected");
+      const rpFlowMode = document.getElementById("rp-flowMode");
+      const rpSeed = document.getElementById("rp-seed");
+      const rpGmmComponents = document.getElementById("rp-gmmComponents");
+      let metricCatalog = [];
+
+      function parseMetricSpec(metricSpec) {
+        const raw = String(metricSpec ?? "").trim();
+        if (!raw) return { id: "euclidean", parameterValue: null };
+
+        const colonIndex = raw.indexOf(":");
+        const id = (colonIndex >= 0 ? raw.slice(0, colonIndex) : raw)
+          .trim()
+          .toLowerCase();
+
+        if (colonIndex < 0) return { id, parameterValue: null };
+
+        let body = raw.slice(colonIndex + 1).trim();
+        const equalsIndex = body.indexOf("=");
+        if (equalsIndex >= 0) body = body.slice(equalsIndex + 1).trim();
+
+        return {
+          id,
+          parameterValue: body || null,
+        };
+      }
+
+      function selectedMetricOption() {
+        return metricCatalog.find((metric) => metric.id === rpMetric.value) ?? null;
+      }
+
+      function syncMetricParameterUi() {
+        const metric = selectedMetricOption();
+        const showParameter = !!metric?.requiresParameter;
+        rpMetricParamRow.style.display = showParameter ? "" : "none";
+        rpMetricParamLabel.textContent = metric?.parameterName ?? "p";
+        if (showParameter && !rpMetricParam.value.trim()) rpMetricParam.value = "2";
+      }
+
+      function buildMetricSpec() {
+        const metric = selectedMetricOption();
+        if (!metric) return rpMetric.value || "euclidean";
+        if (!metric.requiresParameter) return metric.id;
+
+        const parameterValue = rpMetricParam.value.trim() || "2";
+        const parameterName = metric.parameterName || "p";
+        return `${metric.id}:${parameterName}=${parameterValue}`;
+      }
+
+      function applyMetricControlFromSpec(metricSpec) {
+        const parsed = parseMetricSpec(metricSpec);
+        const fallbackId = metricCatalog[0]?.id ?? "euclidean";
+        rpMetric.value = metricCatalog.some((metric) => metric.id === parsed.id)
+          ? parsed.id
+          : fallbackId;
+
+        const metric = selectedMetricOption();
+        if (metric?.requiresParameter) {
+          rpMetricParam.value = parsed.parameterValue ?? rpMetricParam.value || "2";
+        }
+
+        syncMetricParameterUi();
+      }
+
+      function populateMetricOptions(options, selectedMetricSpec) {
+        metricCatalog = Array.isArray(options) ? options : [];
+        rpMetric.innerHTML = "";
+
+        if (metricCatalog.length === 0) {
+          metricCatalog = [
+            {
+              id: "euclidean",
+              displayName: "Euclidean (L2)",
+              requiresParameter: false,
+              parameterName: null,
+            },
+          ];
+        }
+
+        for (const metric of metricCatalog) {
+          const option = document.createElement("option");
+          option.value = metric.id;
+          option.textContent = metric.displayName;
+          rpMetric.appendChild(option);
+        }
+
+        applyMetricControlFromSpec(selectedMetricSpec ?? metricCatalog[0].id);
+      }
+
+      function loadMetricCatalog() {
+        return fetch("/api/metrics")
+          .then((response) => {
+            if (!response.ok) throw new Error(`/api/metrics ${response.status}`);
+            return response.json();
+          })
+          .then((options) => {
+            populateMetricOptions(options, SCENE.generator_params?.metric);
+          })
+          .catch((err) => {
+            console.error("Metric catalog load failed:", err);
+            populateMetricOptions([], SCENE.generator_params?.metric);
+          });
+      }
+
+      // Sync right-panel controls from a generator_params dict.
+      function syncRightPanelFromParams(gp) {
+        if (!gp) return;
+        if (gp.neighborRule != null) rpRule.value = gp.neighborRule;
+        if (gp.epsilonBallEpsilon != null) rpEps.value = gp.epsilonBallEpsilon;
+        if (gp.knnK != null) rpKnnK.value = gp.knnK;
+        if (gp.metric != null) applyMetricControlFromSpec(gp.metric);
+        if (gp.kernel != null) rpKernel.value = gp.kernel;
+        if (gp.bandwidth != null) rpBandwidth.value = gp.bandwidth;
+        if (gp.ensureConnected != null)
+          rpEnsureConnected.checked = !!gp.ensureConnected;
+        if (gp.showFlow != null)
+          document.getElementById("chk-flow").checked = !!gp.showFlow;
+        if (gp.flowMode != null && rpFlowMode) rpFlowMode.value = gp.flowMode;
+        if (gp.seed != null) rpSeed.value = gp.seed;
+        if (gp.gmmComponents != null) rpGmmComponents.value = gp.gmmComponents;
+        if (gp.gmmMode != null) {
+          const mode = document.getElementById("rp-gmmMode");
+          if (mode) mode.value = gp.gmmMode;
+        }
+        syncEpsRow();
+      }
+
+      function syncEpsRow() {
+        rpEpsRow.style.display = rpRule.value === "EpsilonBall" ? "" : "none";
+      }
+
+      // Stats strip surfaces the three graph-builder knobs (metric · rule · kernel)
+      // together with the structural diagnostics they produce (edges · components ·
+      // weight range). The user can read the "interplay" here — change any knob and
+      // the four diagnostics on the right react.
+      //
+      // Diagnostics are computed client-side from the EdgeLayer payload so the API
+      // surface stays stable. Components run a union-find pass; weight range is a
+      // straight scan. Both are O(E) and run once per regen.
+      function computeEdgeDiagnostics(layer, nOverride) {
+        // Use the current point cloud size as the union-find domain. The caller
+        // passes nOverride after a regen so we don't accidentally read a stale N
+        // from the original SCENE on the first/initial call.
+        const N = nOverride ?? SCENE.points?.n ?? 0;
+        if (!layer || !layer.src || layer.src.length === 0) {
+          return {
+            points: N,
+            graphVertices: 0,
+            isolates: N,
+            edges: 0,
+            components: 0,
+            wmin: 0,
+            wmax: 0,
+            falseBridges: 0,
+            invalidEdges: 0,
+            selfLoops: 0,
+          };
+        }
+        const src = layer.src ?? [];
+        const dst = layer.dst ?? [];
+        const weight = layer.weight ?? [];
+        const edgeClusterSrc = layer.edge_cluster_src ?? null;
+        const edgeClusterDst = layer.edge_cluster_dst ?? null;
+        const hasFB = !!(
+          edgeClusterSrc &&
+          edgeClusterDst &&
+          edgeClusterSrc.length >= src.length &&
+          edgeClusterDst.length >= src.length
+        );
+        const E = Math.min(src.length, dst.length, weight.length);
+
+        const parent = new Int32Array(N);
+        const degree = new Int32Array(N);
+        for (let i = 0; i < N; i++) parent[i] = i;
+        function find(x) {
+          while (parent[x] !== x) {
+            parent[x] = parent[parent[x]];
+            x = parent[x];
+          }
+          return x;
+        }
+        let validEdges = 0;
+        let falseBridges = 0;
+        let invalidEdges = 0;
+        let selfLoops = 0;
+        for (let e = 0; e < E; e++) {
+          const si = src[e],
+            di = dst[e];
+          if (
+            !Number.isInteger(si) ||
+            !Number.isInteger(di) ||
+            si < 0 ||
+            di < 0 ||
+            si >= N ||
+            di >= N
+          ) {
+            invalidEdges++;
+            continue;
+          }
+          if (si === di) {
+            selfLoops++;
+            continue;
+          }
+          validEdges++;
+          degree[si]++;
+          degree[di]++;
+          if (hasFB && edgeClusterSrc[e] !== edgeClusterDst[e]) falseBridges++;
+          const a = find(si),
+            b = find(di);
+          if (a !== b) parent[a] = b;
+        }
+        let graphVertices = 0;
+        for (let i = 0; i < N; i++) if (degree[i] > 0) graphVertices++;
+        let components = 0;
+        for (let i = 0; i < N; i++)
+          if (degree[i] > 0 && parent[i] === i) components++;
+
+        let wmin = Infinity,
+          wmax = -Infinity;
+        for (let e = 0; e < E; e++) {
+          const si = src[e],
+            di = dst[e];
+          if (
+            !Number.isInteger(si) ||
+            !Number.isInteger(di) ||
+            si < 0 ||
+            di < 0 ||
+            si >= N ||
+            di >= N ||
+            si === di
+          )
+            continue;
+          const w = weight[e];
+          if (w < wmin) wmin = w;
+          if (w > wmax) wmax = w;
+        }
+        if (!isFinite(wmin)) {
+          wmin = 0;
+          wmax = 0;
+        }
+        return {
+          points: N,
+          graphVertices,
+          isolates: N - graphVertices,
+          edges: validEdges,
+          components,
+          wmin,
+          wmax,
+          falseBridges,
+          invalidEdges,
+          selfLoops,
+        };
+      }
+
+      // Diagnostics cache — recomputed on regen (in rehydrateFromJson) and at load
+      // time, so the stats line reflects the actually-built graph rather than the
+      // pending UI state.
+      let _activeDiagnostics = null;
+
+      function graphSpecModel() {
+        const rule = rpRule.value;
+        const metric = buildMetricSpec();
+        const kernel = rpKernel.value;
+        const k = rpKnnK.value;
+        const eps = rpEps.value;
+        const bw = parseFloat(rpBandwidth.value);
+        const mst = rpEnsureConnected.checked;
+
+        const topologyValue =
+          rule === "EpsilonBall"
+            ? `EpsilonBall · ε=${eps}`
+            : rule === "MutualKnn"
+              ? `MutualKnn · k=${k}`
+              : `Knn · k=${k}`;
+
+        const couplingValue = `${kernel} · σ=${bw > 0 ? bw.toFixed(2) : "auto"}${mst ? " · MST repair" : ""}`;
+
+        const diagnosticsValue = _activeDiagnostics
+          ? {
+              points: _activeDiagnostics.points.toLocaleString(),
+              graphVertices: _activeDiagnostics.graphVertices.toLocaleString(),
+              isolates: _activeDiagnostics.isolates.toLocaleString(),
+              edges: _activeDiagnostics.edges.toLocaleString(),
+              components:
+                _activeDiagnostics.components === 1
+                  ? "1 component"
+                  : `${_activeDiagnostics.components} components`,
+              weights: `[${_activeDiagnostics.wmin.toFixed(2)}, ${_activeDiagnostics.wmax.toFixed(2)}]`,
+              falseBridges: _activeDiagnostics.falseBridges.toLocaleString(),
+              invalidEdges: _activeDiagnostics.invalidEdges.toLocaleString(),
+              selfLoops: _activeDiagnostics.selfLoops.toLocaleString(),
+            }
+          : null;
+
+        return {
+          metric,
+          topologyValue,
+          couplingValue,
+          diagnosticsValue,
+        };
+      }
+
+      function updateGraphSpec() {
+        const spec = graphSpecModel();
+        const diagnosticsHtml = spec.diagnosticsValue
+          ? `
+      <div class="gm-row">
+        <span class="gm-group"><span class="gm-label">Points</span><span class="gm-value">${spec.diagnosticsValue.points}</span></span>
+        <span class="gm-group"><span class="gm-label">Graph Vertices</span><span class="gm-value">${spec.diagnosticsValue.graphVertices}</span></span>
+        <span class="gm-group"><span class="gm-label">Edges</span><span class="gm-value">${spec.diagnosticsValue.edges}</span></span>
+        <span class="gm-group"><span class="gm-label">Components</span><span class="gm-value">${spec.diagnosticsValue.components}</span></span>
+      </div>
+      <div class="gm-row">
+        <span class="gm-group"><span class="gm-label">Weight Range</span><span class="gm-value">${spec.diagnosticsValue.weights}</span></span>
+        <span class="gm-group"><span class="gm-label">Isolates</span><span class="gm-value">${spec.diagnosticsValue.isolates}</span></span>
+        <span class="gm-group"><span class="gm-label">False Bridges</span><span class="gm-value">${spec.diagnosticsValue.falseBridges}</span></span>
+      </div>`
+          : "";
+
+        const integrityHtml =
+          spec.diagnosticsValue &&
+          (spec.diagnosticsValue.invalidEdges !== "0" ||
+            spec.diagnosticsValue.selfLoops !== "0")
+            ? `
+      <div class="gm-row">
+        <span class="gm-group"><span class="gm-label">Invalid Edges</span><span class="gm-value">${spec.diagnosticsValue.invalidEdges}</span></span>
+        <span class="gm-group"><span class="gm-label">Self Loops</span><span class="gm-value">${spec.diagnosticsValue.selfLoops}</span></span>
+      </div>`
+            : "";
+
+        graphMarquee.innerHTML = `
+    <div class="gm-row">
+      <span class="gm-group"><span class="gm-label">Metric</span><span class="gm-value">${spec.metric}</span></span>
+      <span class="gm-group"><span class="gm-label">Topology</span><span class="gm-value">${spec.topologyValue}</span></span>
+    </div>
+    <div class="gm-row">
+      <span class="gm-group"><span class="gm-label">Coupling</span><span class="gm-value">${spec.couplingValue}</span></span>
+    </div>${diagnosticsHtml}${integrityHtml}`;
+      }
+
+      // Right-panel controls trigger a regen so graph topology/labels actually update.
+      // Selects/checkbox use immediate doRegen; number inputs use debounced regen to
+      // avoid firing on every keystroke.
+      rpRule.addEventListener("change", () => {
+        syncEpsRow();
+        updateGraphSpec();
+        doRegen();
+      });
+      rpKnnK.addEventListener("input", () => {
+        updateGraphSpec();
+        doRegenDebounced();
+      });
+      rpMetric.addEventListener("change", () => {
+        syncMetricParameterUi();
+        updateGraphSpec();
+        doRegen();
+      });
+      rpMetricParam.addEventListener("input", () => {
+        updateGraphSpec();
+        doRegenDebounced();
+      });
+      rpKernel.addEventListener("change", () => {
+        updateGraphSpec();
+        doRegen();
+      });
+      rpBandwidth.addEventListener("input", () => {
+        updateGraphSpec();
+        doRegenDebounced();
+      });
+      rpEnsureConnected.addEventListener("change", () => {
+        updateGraphSpec();
+        doRegen();
+      });
+      rpEps.addEventListener("input", () => {
+        updateGraphSpec();
+        doRegenDebounced();
+      });
+      rpFlowMode.addEventListener("change", doRegen);
+      rpSeed.addEventListener("input", () => {
+        doRegenDebounced();
+      });
+      rpGmmComponents.addEventListener("change", doRegen);
+
+      loadMetricCatalog().finally(() => {
+        syncRightPanelFromParams(SCENE.generator_params);
+        updateGraphSpec();
+      });
+
+      for (const layer of sceneLayers) {
+        const pair = buildEdgeMesh(layer);
+        edgeMeshes[layer.name] = pair;
+        // bridges start visible iff falseBridgeOn; main starts invisible (graph toggle controls it)
+        pair.bridges.visible = false;
+        scene.add(pair.main, pair.bridges);
+      }
+      // Seed the stats line from the first edge layer (typically the only one).
+      if (sceneLayers.length > 0) {
+        _activeDiagnostics = computeEdgeDiagnostics(sceneLayers[0]);
+        updateGraphSpec();
+      }
+      // ── NodeSignalLayers (Pass 5) ────────────────────────────────────────────────
+      // Tier 2: replaces point cloud vertex colors in-place when a node-signal layer
+      // is selected; restores label colors when set back to '-- labels --'.
+      // C# pre-bakes min/max so JS just linearly maps value → [0,1] → palette.
+      //
+      // JSON layout:
+      //   layer.values  flat [N] double
+      //   layer.min     pre-baked minimum (C# side)
+      //   layer.max     pre-baked maximum (C# side)
+      //   layer.source  string enum (CoherenceScore, MahalanobisDistance, ...)
+      //
+      // Palette: 3-stop diverging blue→white→red. Stops at t=0, 0.5, 1.
+      // Interpolation: linear in sRGB between adjacent stops (close enough for
+      // diagnostic heatmaps; perceptual accuracy not required).
+      // ─────────────────────────────────────────────────────────────────────────────
+      // Palette stops: t=0 → cool blue (#3288bd), t=0.5 → white, t=1 → warm red (#d53e4f)
+      const SCALAR_PALETTE = [
+        { t: 0.0, r: 0x32 / 255, g: 0x88 / 255, b: 0xbd / 255 }, // blue
+        { t: 0.5, r: 1.0, g: 1.0, b: 1.0 }, // white
+        { t: 1.0, r: 0xd5 / 255, g: 0x3e / 255, b: 0x4f / 255 }, // red
+      ];
+
+      function scalarToRgb(t) {
+        // t in [0,1]; clamp
+        t = Math.max(0, Math.min(1, t));
+        let lo = SCALAR_PALETTE[0],
+          hi = SCALAR_PALETTE[1];
+        for (let i = 1; i < SCALAR_PALETTE.length - 1; i++) {
+          if (t >= SCALAR_PALETTE[i].t) {
+            lo = SCALAR_PALETTE[i];
+            hi = SCALAR_PALETTE[i + 1];
+          }
+        }
+        const s = (t - lo.t) / (hi.t - lo.t);
+        return {
+          r: lo.r + s * (hi.r - lo.r),
+          g: lo.g + s * (hi.g - lo.g),
+          b: lo.b + s * (hi.b - lo.b),
+        };
+      }
+
+      let activeNodeSignalLayer = null; // null = show GT labels
+
+      function applyNodeSignalLayer(layer) {
+        // layer is the JS object from SCENE.node_signal_layers, or null to restore labels.
+        activeNodeSignalLayer = layer;
+        const colorAttr = pointsMeshRef.geometry.getAttribute("color");
+        const col = colorAttr.array;
+        const N = col.length / 3;
+        if (!layer) {
+          // Restore GT label colors
+          for (let i = 0; i < N; i++) {
+            const c = resolveOverlayColor(i, null);
+            col[i * 3] = c.r;
+            col[i * 3 + 1] = c.g;
+            col[i * 3 + 2] = c.b;
+          }
+        } else {
+          for (let i = 0; i < N; i++) {
+            const c = resolveOverlayColor(i, layer);
+            col[i * 3] = c.r;
+            col[i * 3 + 1] = c.g;
+            col[i * 3 + 2] = c.b;
+          }
+        }
+        colorAttr.needsUpdate = true;
+
+        const tmpInstC = new THREE.Color();
+        for (const mesh of _flowMeshes) {
+          for (let i = 0; i < Math.min(mesh.count, N); i++) {
+            const c = resolveOverlayColor(i, layer);
+            tmpInstC.setRGB(c.r, c.g, c.b);
+            mesh.setColorAt(i, tmpInstC);
+          }
+          if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        }
+
+        // Line-field segments — two vertices per node share one color.
+        // Interaction-hot tier: in-place buffer update, no geometry rebuild.
+        for (const mesh of _lineFieldMeshes) {
+          const colorAttr = mesh.geometry.getAttribute("color");
+          const arr = colorAttr.array;
+          const count = Math.min(arr.length / 6, N);
+          for (let i = 0; i < count; i++) {
+            const c = resolveOverlayColor(i, layer);
+            const base = i * 6;
+            arr[base + 0] = c.r;
+            arr[base + 1] = c.g;
+            arr[base + 2] = c.b;
+            arr[base + 3] = c.r;
+            arr[base + 4] = c.g;
+            arr[base + 5] = c.b;
+          }
+          colorAttr.needsUpdate = true;
+        }
+
+        // Triangle meshes use indexed geometry over the point cloud vertices.
+        // Recolor the shared vertex-color attribute in-place for hot selector changes.
+        for (const mesh of _triangleMeshes) {
+          const colorAttr = mesh.geometry.getAttribute("color");
+          const arr = colorAttr.array;
+          const count = Math.min(arr.length / 3, N);
+          for (let i = 0; i < count; i++) {
+            const c = resolveOverlayColor(i, layer);
+            arr[i * 3 + 0] = c.r;
+            arr[i * 3 + 1] = c.g;
+            arr[i * 3 + 2] = c.b;
+          }
+          colorAttr.needsUpdate = true;
+        }
+      }
+
+      const selScalar = document.getElementById("sel-scalarlayer");
+      const sceneNodeSignalLayers = SCENE.node_signal_layers ?? [];
+      for (const layer of sceneNodeSignalLayers) {
+        const opt = document.createElement("option");
+        opt.value = layer.name;
+        opt.textContent = layer.name;
+        selScalar.appendChild(opt);
+      }
+
+      // ── Line field selector ─────────────────────────────────────────────────────
+      // Tier 1 toggle: build-once meshes already in scene; switching visibility only.
+      // Selecting "" hides all; selecting a layer name shows that one and hides the rest.
+      const selLineField = document.getElementById("sel-linefield");
+      const sceneLineFieldLayers = SCENE.line_field_layers ?? [];
+      for (const layer of sceneLineFieldLayers) {
+        const opt = document.createElement("option");
+        opt.value = layer.name;
+        opt.textContent = layer.name;
+        selLineField.appendChild(opt);
+      }
+
+      function applyLineFieldLayer(name) {
+        for (const mesh of _lineFieldMeshes) {
+          mesh.visible = name !== "" && mesh.name === name;
+        }
+      }
+
+      // ── Triangle selector ──────────────────────────────────────────────────────
+      // Triangle layers are build-once indexed meshes. Selecting a layer shows only
+      // that mesh; selecting "None" hides all triangle overlays.
+      const selTriangles = document.getElementById("sel-triangles");
+      const sceneTriangleLayers = SCENE.triangle_layers ?? [];
+      for (const layer of sceneTriangleLayers) {
+        const opt = document.createElement("option");
+        opt.value = layer.name;
+        opt.textContent = layer.name;
+        selTriangles.appendChild(opt);
+      }
+
+      function applyTriangleLayer(name) {
+        for (const mesh of _triangleMeshes) {
+          mesh.visible = name !== "" && mesh.name === name;
+        }
+      }
+
+      function getActiveTriangleLayer() {
+        return (
+          sceneTriangleLayers.find((l) => l.name === selTriangles.value) ?? null
+        );
+      }
+
+      function getTriangleCount(layer) {
+        return Math.floor((layer?.vertices?.length ?? 0) / 3);
+      }
+
+      // ── GaussianLayers (Pass 3) ────────────────────────────────────────────────────
+      //
+      // Rendering: unit SphereGeometry(1,24,16) stretched by Matrix4 built from L.
+      // L[i*3+j] is loaded into the upper-3×3 of Matrix4 (column-major layout).
+      // Mean is the translation. Opacity 0.22 + depthWrite:false — forward-compatible
+      // with point cloud and spine overlays.
+      // ─────────────────────────────────────────────────────────────────────────────
+      const UNIT_SPHERE_GEO = new THREE.SphereGeometry(1, 24, 16);
+      const UNIT_SPHERE_EDGES = new THREE.EdgesGeometry(UNIT_SPHERE_GEO);
+      const gaussianMeshGroups = []; // one THREE.Group per GaussianLayer
+
+      function buildGaussianGroup(layer) {
+        const K = layer.k;
+        const D = layer.d;
+        const L = layer.cholesky_l; // flat [K×9]
+        const mu = layer.means; // flat [K×D]
+        const ctc = layer.component_to_cluster_map; // int[K] or null
+        const group = new THREE.Group();
+        // Parse K from layer name "GMM K={n}" to drive dim/wireframe-color.
+        // K=1 → single-component fit, render like analytic ellipsoid (full opacity).
+        // K>1 → tiled overlay, dim opacity + grey wireframe.
+        const gmmK = parseInt(layer.name?.match(/GMM K=(\d+)/)?.[1] ?? "0");
+        const dimGmm = gmmK > 1;
+
+        for (let k = 0; k < K; k++) {
+          const clusterIdx = ctc ? ctc[k] : k;
+          tmpColor.setHex(clusterColor(clusterIdx));
+          const mat = new THREE.MeshPhongMaterial({
+            color: new THREE.Color(tmpColor.r, tmpColor.g, tmpColor.b),
+            transparent: true,
+            opacity: 0.22,
+            depthWrite: false,
+            side: THREE.FrontSide,
+          });
+
+          const mesh = new THREE.Mesh(UNIT_SPHERE_GEO, mat);
+          mesh.userData.isSurface = true;
+
+          // Build Matrix4 from cholesky_l block for component k.
+          // L is lower-triangular [3×3] stored row-major: L[r][c] = L[r*3+c].
+          // THREE.Matrix4.set() takes column-major (n11..n44) but we need to
+          // load our row-major L into the upper-3×3 rotation block.
+          // Matrix4 column-major layout: col0=(n11,n21,n31,n41), col1=(n12,n22,n32,n42)...
+          // So Matrix4.set(n11,n12,n13,n14, n21,n22,n23,n24, ...) maps rows of args to rows of matrix.
+          // We can just use .elements directly: elements[col*4+row].
+          const lb = k * 9;
+          const mx = new THREE.Matrix4();
+          // col 0 (x-axis): L col 0 = [L00, L10, L20]
+          mx.elements[0] = L[lb]; // L[0][0]
+          mx.elements[1] = L[lb + 3]; // L[1][0]
+          mx.elements[2] = L[lb + 6]; // L[2][0]
+          mx.elements[3] = 0;
+          // col 1 (y-axis): L col 1 = [0, L11, L21]
+          mx.elements[4] = L[lb + 1]; // L[0][1] = 0 for lower-tri, but write it anyway
+          mx.elements[5] = L[lb + 4]; // L[1][1]
+          mx.elements[6] = L[lb + 7]; // L[2][1]
+          mx.elements[7] = 0;
+          // col 2 (z-axis): L col 2 = [0, 0, L22]
+          mx.elements[8] = L[lb + 2]; // L[0][2]
+          mx.elements[9] = L[lb + 5]; // L[1][2]
+          mx.elements[10] = L[lb + 8]; // L[2][2]
+          mx.elements[11] = 0;
+          // col 3 (translation): mean (first 3 dims only)
+          mx.elements[12] = mu[k * D];
+          mx.elements[13] = D >= 2 ? mu[k * D + 1] : 0;
+          mx.elements[14] = D >= 3 ? mu[k * D + 2] : 0;
+          mx.elements[15] = 1;
+
+          mesh.matrixAutoUpdate = false;
+          mesh.matrix.copy(mx);
+          group.add(mesh);
+
+          // Tier 3 — Spatial scale (GMM probability volume).
+          // Both K=1 and K>1 use normal blending with cluster-hue colours. Additive
+          // blending was dropped because, with proper componentToClusterMap, each
+          // ellipsoid already carries its cluster's hue — additive sum across
+          // components produced muddy mid-tones rather than a useful density readout.
+          mat.opacity = dimGmm ? 0.14 : 0.2;
+
+          // Wireframe takes the same cluster hue but at higher alpha — defines the
+          // ellipsoid boundary even when surface is hidden (wireframe-only mode).
+          const wireMat = new THREE.LineBasicMaterial({
+            color: new THREE.Color(tmpColor.r, tmpColor.g, tmpColor.b),
+            transparent: true,
+            opacity: dimGmm ? 0.7 : 0.8,
+          });
+          const wire = new THREE.LineSegments(UNIT_SPHERE_EDGES, wireMat);
+          wire.matrixAutoUpdate = false;
+          wire.matrix.copy(mx);
+          wire.userData.isWireframe = true;
+          group.add(wire);
+        }
+        return group;
+      }
+
+      // Surface and wireframe are now independent visibility flips on the children
+      // of an always-visible parent group. This makes wireframe-only a valid display
+      // state — you can hide the muddy surface and just see the contours.
+      {
+        for (const layer of SCENE.gaussian_layers ?? []) {
+          const grp = buildGaussianGroup(layer);
+          grp.visible = true;
+          grp.traverse((obj) => {
+            if (obj.userData.isSurface) obj.visible = false; // off by default
+            if (obj.userData.isWireframe) obj.visible = false; // off by default
+          });
+          scene.add(grp);
+          gaussianMeshGroups.push(grp);
+        }
+      }
+
+      // ── SpineLayers (Pass 4) ────────────────────────────────────────────────────
+      // Build-once: one LineLoop per layer + one ArrowHelper group per MobiusTube.
+      // Seam marker (white sphere at sample 0) parented to curve — inherits .visible.
+      // Toggle: Tier 1 .visible flip only.
+      //
+      // JSON layout:
+      //   layer.spine_samples        flat [M×D], shape = spine_samples_shape
+      //   layer.tangent_bases        flat [M×3×3], null for Arc kind
+      //   layer.kind                 'Arc' | 'MobiusTube'
+      //   hints.show_spine_overlays  initial spine-curve checkbox state
+      //   hints.show_tangent_bases   initial frame-arrow checkbox state
+      // ─────────────────────────────────────────────────────────────────────────────
+      const SPINE_T_COLOR = 0xff4444; // T — tangent  (red)
+      const SPINE_N_COLOR = 0x44cc44; // N — normal   (green)
+      const SPINE_B_COLOR = 0x4488ff; // B — binormal (blue)
+
+      const spineLayerObjects = []; // {curve, arrowGroup} per layer
+
+      function buildSpineObjects(layer, cloudRadius) {
+        const M = layer.spine_samples_shape[0];
+        const sD = layer.spine_samples_shape[1];
+        const ss = layer.spine_samples;
+
+        // Curve: project to 3D (clamp higher dims)
+        const spinePts = new Float32Array(M * 3);
+        for (let i = 0; i < M; i++) {
+          spinePts[i * 3] = ss[i * sD];
+          spinePts[i * 3 + 1] = sD >= 2 ? ss[i * sD + 1] : 0;
+          spinePts[i * 3 + 2] = sD >= 3 ? ss[i * sD + 2] : 0;
+        }
+
+        const curveGeo = new THREE.BufferGeometry();
+        curveGeo.setAttribute(
+          "position",
+          new THREE.BufferAttribute(spinePts, 3),
+        );
+        tmpColor.setHex(clusterColor(layer.cluster_idx));
+        const curve = new THREE.LineLoop(
+          curveGeo,
+          new THREE.LineBasicMaterial({
+            color: new THREE.Color(
+              tmpColor.r * 0.9,
+              tmpColor.g * 0.9,
+              tmpColor.b * 0.9,
+            ),
+            depthWrite: false,
+          }),
+        );
+
+        // Seam marker: white sphere at sample 0, parented so it inherits .visible
+        const seam = new THREE.Mesh(
+          new THREE.SphereGeometry(cloudRadius * 0.018, 7, 7),
+          new THREE.MeshBasicMaterial({ color: 0xffffff }),
+        );
+        seam.position.set(spinePts[0], spinePts[1], spinePts[2]);
+        curve.add(seam);
+
+        // Frame arrows — MobiusTube only; subsample to ~16 evenly spaced frames
+        const arrowGroup = new THREE.Group();
+        if (
+          layer.kind === "MobiusTube" &&
+          layer.tangent_bases &&
+          layer.tangent_bases_shape
+        ) {
+          const aLen = cloudRadius * 0.07;
+          const step = Math.max(1, Math.round(M / 16));
+          const tb = layer.tangent_bases;
+          for (let i = 0; i < M; i += step) {
+            const base = i * 9; // stride = 3×3 per sample, row order: T, N, B
+            const orig = new THREE.Vector3(
+              spinePts[i * 3],
+              spinePts[i * 3 + 1],
+              spinePts[i * 3 + 2],
+            );
+            const T = new THREE.Vector3(
+              tb[base],
+              tb[base + 1],
+              tb[base + 2],
+            ).normalize();
+            const N = new THREE.Vector3(
+              tb[base + 3],
+              tb[base + 4],
+              tb[base + 5],
+            ).normalize();
+            const B = new THREE.Vector3(
+              tb[base + 6],
+              tb[base + 7],
+              tb[base + 8],
+            ).normalize();
+            arrowGroup.add(
+              new THREE.ArrowHelper(
+                T,
+                orig,
+                aLen,
+                SPINE_T_COLOR,
+                aLen * 0.3,
+                aLen * 0.15,
+              ),
+            );
+            arrowGroup.add(
+              new THREE.ArrowHelper(
+                N,
+                orig,
+                aLen,
+                SPINE_N_COLOR,
+                aLen * 0.3,
+                aLen * 0.15,
+              ),
+            );
+            arrowGroup.add(
+              new THREE.ArrowHelper(
+                B,
+                orig,
+                aLen,
+                SPINE_B_COLOR,
+                aLen * 0.3,
+                aLen * 0.15,
+              ),
+            );
+          }
+        }
+
+        return { curve, arrowGroup };
+      }
+
+      {
+        const cloudR = geo.boundingSphere?.radius || 1;
+        const showSp = SCENE.hints?.show_spine_overlays ?? true;
+        const showTB = SCENE.hints?.show_tangent_bases ?? true;
+        for (const layer of SCENE.spine_layers ?? []) {
+          const obj = buildSpineObjects(layer, cloudR);
+          obj.curve.visible = showSp;
+          obj.arrowGroup.visible = showSp && showTB;
+          scene.add(obj.curve, obj.arrowGroup);
+          spineLayerObjects.push(obj);
+        }
+      }
+
+      // ── VectorFieldLayer (Pass 7) ────────────────────────────────────────────────
+      // Wing-2 empirical local tangent flow: InstancedMesh of cones, one per point.
+      // Each cone is positioned at the point, oriented along the tangent vector, and
+      // colored by cluster label using the shared PALETTE.
+      // Zero-vector entries (degenerate k-NN neighbourhoods) are skipped.
+      //
+      // JSON layout:
+      //   layer.n           N points
+      //   layer.d           vector dimensionality (≤ 3, C# clamps to geometry dim)
+      //   layer.vectors     flat [N×d] unit tangent vectors
+      //
+      // Build strategy: InstancedMesh with per-instance Matrix4.
+      // Orientation: align cone Y-axis (+Y = tip) to tangent vector via quaternion.
+      // Cone scale: r = cloudR * 0.025, h = cloudR * 0.10.
+      // Colour: per-instance color attribute from PALETTE[label % PALETTE.length].
+      //
+      // Toggle: Tier 1 .visible flip on the whole InstancedMesh group.
+      // ─────────────────────────────────────────────────────────────────────────────
+
+      const _flowMeshes = []; // InstancedMesh per VectorFieldLayer
+      const _lineFieldMeshes = []; // LineSegments per LineFieldLayer (unoriented)
+      const _triangleMeshes = []; // Mesh per TriangleLayer (indexed over point cloud)
+
+      function resolveOverlayColor(i, nodeSignalLayer = activeNodeSignalLayer) {
+        if (!nodeSignalLayer) {
+          const label = labels ? labels[i] : -999;
+          tmpColor.setHex(label === -999 ? UNSET_COLOR : clusterColor(label));
+          return { r: tmpColor.r, g: tmpColor.g, b: tmpColor.b };
+        }
+
+        const range = nodeSignalLayer.max - nodeSignalLayer.min;
+        const inv = range > 1e-12 ? 1.0 / range : 0.0;
+        const t = (nodeSignalLayer.values[i] - nodeSignalLayer.min) * inv;
+        return scalarToRgb(t);
+      }
+
+      {
+        const flowModeInit = document.getElementById("rp-flowMode");
+        if (SCENE.generator_params?.flowMode && flowModeInit)
+          flowModeInit.value = SCENE.generator_params.flowMode;
+      }
+
+      // ── VectorFieldLayer (Pass 7) ────────────────────────────────────────────────
+      // Wing-2 empirical local tangent flow: InstancedMesh of cones, one per point.
+      // Each cone is positioned at the point, oriented along the tangent vector, and
+      // colored by cluster label using the shared PALETTE.
+      // Zero-vector entries (degenerate k-NN neighbourhoods) are rendered at scale 0.
+      //
+      // JSON layout:
+      //   layer.n           N points
+      //   layer.d           vector dimensionality (≤ 3, C# clamps to geometry dim)
+      //   layer.vectors     flat [N×d] unit tangent vectors
+      //
+      // Cone scale: r = cloudR * 0.025, h = cloudR * 0.10.
+      // Toggle: Tier 1 .visible flip on the InstancedMesh.
+      // ─────────────────────────────────────────────────────────────────────────────
+      function buildFlowField(layer, cloudRadius, ptsSource) {
+        const N = layer.n;
+        const d = layer.d;
+        const vecs = layer.vectors; // flat [N×d]
+        const eps = 1e-6;
+
+        const mode =
+          document.getElementById("rp-flowMode")?.value ??
+          SCENE.generator_params?.flowMode ??
+          "Beam";
+        const isBeam = mode !== "Cone";
+        const r = cloudRadius * (isBeam ? 0.012 : 0.025);
+        const h = cloudRadius * (isBeam ? 0.15 : 0.1);
+
+        const geo = isBeam
+          ? new THREE.CylinderGeometry(r, r, h, 6)
+          : new THREE.ConeGeometry(r, h, 8);
+        if (!isBeam) geo.translate(0, h * 0.5, 0);
+
+        // Per-instance colour via THREE.InstancedMesh.instanceColor (populated by
+        // setColorAt). MeshPhongMaterial respects instanceColor when present; the
+        // older 'color' BufferAttribute path does not light up under instancing.
+        const mat = new THREE.MeshPhongMaterial({ color: 0xffffff });
+        const mesh = new THREE.InstancedMesh(geo, mat, N);
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+        const tmpQ = new THREE.Quaternion();
+        const yAxis = new THREE.Vector3(0, 1, 0);
+        const tmpV = new THREE.Vector3();
+        const tmpPos = new THREE.Vector3();
+        const tmpM = new THREE.Matrix4();
+        const tmpC = new THREE.Color();
+        const scale1 = new THREE.Vector3(1, 1, 1);
+        const curLabels = labels;
+        const D = ptsSource.d;
+        const feats = ptsSource.features;
+        const dim = THREE.Color.NAMES
+          ? new THREE.Color(0x222233)
+          : new THREE.Color(0.13, 0.13, 0.2);
+
+        for (let i = 0; i < N; i++) {
+          const vx = vecs[i * d] ?? 0;
+          const vy = d > 1 ? (vecs[i * d + 1] ?? 0) : 0;
+          const vz = d > 2 ? (vecs[i * d + 2] ?? 0) : 0;
+          const len = Math.sqrt(vx * vx + vy * vy + vz * vz);
+
+          if (len < eps) {
+            _tmpM_zero(tmpM);
+            mesh.setMatrixAt(i, tmpM);
+            mesh.setColorAt(i, dim);
+            continue;
+          }
+
+          const px = feats[i * D] ?? 0;
+          const py = D > 1 ? (feats[i * D + 1] ?? 0) : 0;
+          const pz = D > 2 ? (feats[i * D + 2] ?? 0) : 0;
+
+          tmpV.set(vx / len, vy / len, vz / len);
+          tmpQ.setFromUnitVectors(yAxis, tmpV);
+          tmpPos.set(px, py, pz);
+          tmpM.compose(tmpPos, tmpQ, scale1);
+          mesh.setMatrixAt(i, tmpM);
+
+          const c = resolveOverlayColor(i, activeNodeSignalLayer);
+          tmpC.setRGB(c.r, c.g, c.b);
+          mesh.setColorAt(i, tmpC);
+        }
+
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        mesh.count = N;
+        mesh.name = layer.name ?? "flow";
+        return mesh;
+      }
+
+      function _tmpM_zero(m) {
+        // Collapse instance to zero size so it's invisible without affecting count
+        m.set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+      }
+
+      // ── LineFieldLayer ───────────────────────────────────────────────────────────
+      // Unoriented direction per node (d ≡ -d). Renders as a centered LineSegments:
+      // for each node i with direction dᵢ, two vertices at pᵢ ± 0.5·L·d̂ᵢ. No arrowheads.
+      // Half-length is a fixed fraction of cloud radius.
+      //
+      // Per-vertex color tracks the active node-signal layer if present, else cluster.
+      // Both endpoints of a segment share one color (no gradient along the segment).
+      //
+      // Toggle model: build once per layer, store in _lineFieldMeshes, flip .visible
+      // via the sel-linefield dropdown. Honors the build-once invariant — no rebuilds
+      // on toggle, no allocations in the hot path.
+      // ─────────────────────────────────────────────────────────────────────────────
+      function buildLineField(layer, cloudRadius, ptsSource) {
+        const N = layer.n;
+        const d = layer.d;
+        const dirs = layer.directions; // flat [N×d]
+        const D = ptsSource.d;
+        const feats = ptsSource.features;
+        const eps = 1e-6;
+        const halfLen = cloudRadius * 0.05;
+
+        const positions = new Float32Array(N * 2 * 3);
+        const colors = new Float32Array(N * 2 * 3);
+        const tmpRgb = { r: 0, g: 0, b: 0 };
+
+        for (let i = 0; i < N; i++) {
+          const dx = dirs[i * d] ?? 0;
+          const dy = d > 1 ? (dirs[i * d + 1] ?? 0) : 0;
+          const dz = d > 2 ? (dirs[i * d + 2] ?? 0) : 0;
+          const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+          const px = feats[i * D] ?? 0;
+          const py = D > 1 ? (feats[i * D + 1] ?? 0) : 0;
+          const pz = D > 2 ? (feats[i * D + 2] ?? 0) : 0;
+
+          // Degenerate direction: collapse to a zero-length segment at the point.
+          const ux = len < eps ? 0 : (dx / len) * halfLen;
+          const uy = len < eps ? 0 : (dy / len) * halfLen;
+          const uz = len < eps ? 0 : (dz / len) * halfLen;
+
+          const base = i * 6;
+          positions[base + 0] = px - ux;
+          positions[base + 1] = py - uy;
+          positions[base + 2] = pz - uz;
+          positions[base + 3] = px + ux;
+          positions[base + 4] = py + uy;
+          positions[base + 5] = pz + uz;
+
+          const c = resolveOverlayColor(i, activeNodeSignalLayer);
+          tmpRgb.r = c.r;
+          tmpRgb.g = c.g;
+          tmpRgb.b = c.b;
+          colors[base + 0] = tmpRgb.r;
+          colors[base + 1] = tmpRgb.g;
+          colors[base + 2] = tmpRgb.b;
+          colors[base + 3] = tmpRgb.r;
+          colors[base + 4] = tmpRgb.g;
+          colors[base + 5] = tmpRgb.b;
+        }
+
+        const lineGeo = new THREE.BufferGeometry();
+        lineGeo.setAttribute(
+          "position",
+          new THREE.BufferAttribute(positions, 3),
+        );
+        lineGeo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+        const lineMat = new THREE.LineBasicMaterial({ vertexColors: true });
+        const mesh = new THREE.LineSegments(lineGeo, lineMat);
+        mesh.name = layer.name ?? "linefield";
+        return mesh;
+      }
+
+      // ── TriangleLayer ──────────────────────────────────────────────────────────
+      // Flat [T×3] vertex triples referencing the point cloud 0-skeleton. Built as
+      // an indexed mesh with per-vertex colors that track the active scalar layer.
+      // Default visibility is off; the selector flips one mesh visible at a time.
+      function buildTriangleMesh(layer) {
+        const vertexCount = positions.length / 3;
+        const rawIdx = layer.vertices ?? [];
+        const indices = [];
+        for (let i = 0; i + 2 < rawIdx.length; i += 3) {
+          const a = rawIdx[i + 0];
+          const b = rawIdx[i + 1];
+          const c = rawIdx[i + 2];
+          if (
+            !Number.isInteger(a) ||
+            !Number.isInteger(b) ||
+            !Number.isInteger(c) ||
+            a < 0 ||
+            b < 0 ||
+            c < 0 ||
+            a >= vertexCount ||
+            b >= vertexCount ||
+            c >= vertexCount ||
+            a === b ||
+            b === c ||
+            a === c
+          ) {
+            continue;
+          }
+          indices.push(a, b, c);
+        }
+
+        const triPositions = new Float32Array(positions);
+        const triColors = new Float32Array(vertexCount * 3);
+        for (let i = 0; i < vertexCount; i++) {
+          const c = resolveOverlayColor(i, activeNodeSignalLayer);
+          triColors[i * 3 + 0] = c.r;
+          triColors[i * 3 + 1] = c.g;
+          triColors[i * 3 + 2] = c.b;
+        }
+
+        const triGeo = new THREE.BufferGeometry();
+        triGeo.setAttribute(
+          "position",
+          new THREE.BufferAttribute(triPositions, 3),
+        );
+        triGeo.setAttribute("color", new THREE.BufferAttribute(triColors, 3));
+        triGeo.setIndex(indices);
+
+        const triMat = new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          opacity: 0.2,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const mesh = new THREE.Mesh(triGeo, triMat);
+        mesh.name = layer.name ?? "triangles";
+        return mesh;
+      }
+
+      {
+        const cloudR = geo.boundingSphere?.radius || 1;
+        const showFlow = SCENE.hints?.show_vector_field ?? false;
+        for (const layer of SCENE.vector_field_layers ?? []) {
+          const mesh = buildFlowField(layer, cloudR, SCENE.points);
+          mesh.visible = showFlow;
+          scene.add(mesh);
+          _flowMeshes.push(mesh);
+        }
+        for (const layer of SCENE.line_field_layers ?? []) {
+          const mesh = buildLineField(layer, cloudR, SCENE.points);
+          mesh.visible = false; // default off; user selects via sel-linefield
+          scene.add(mesh);
+          _lineFieldMeshes.push(mesh);
+        }
+        for (const layer of SCENE.triangle_layers ?? []) {
+          const mesh = buildTriangleMesh(layer);
+          mesh.visible = false; // default off; user selects via sel-triangles
+          scene.add(mesh);
+          _triangleMeshes.push(mesh);
+        }
+      }
+
+      // ── Auto-fit camera ──────────────────────────────────────────────────────────
+      const bs = geo.boundingSphere;
+      if (bs) {
+        const r = bs.radius || 1;
+        camera.position.set(bs.center.x, bs.center.y, bs.center.z + r * 2.4);
+        controls.target.copy(bs.center);
+        camera.near = r * 0.001;
+        camera.far = r * 100;
+        camera.updateProjectionMatrix();
+        controls.update();
+      }
+
+      // ── Legend ───────────────────────────────────────────────────────────────────
+      // Legend has three optional blocks, top-to-bottom:
+      //   1. Active node signal (gradient bar + min/max) — when a node-signal layer is selected
+      //   2. Cluster palette key — always present when labels exist
+      //   3. Edge/bridge key — only present when the graph layer is on
+      // Each block carries its own header so the user can map any colour they see
+      // back to its data semantic without consulting the source.
+      function buildLegend() {
+        const el = document.getElementById("legend");
+        const blocks = [];
+
+        if (activeNodeSignalLayer) {
+          const sl = activeNodeSignalLayer;
+          const fmt = (v) => (Number.isInteger(v) ? v : v.toPrecision(3));
+          blocks.push(`
+      <div style="color:#9a9896;margin-bottom:4px">${sl.name}</div>
+      <div style="display:flex;align-items:center;gap:6px;min-width:160px">
+        <span style="color:#6ab0e0;font-size:10px">${fmt(sl.min)}</span>
+        <div style="flex:1;height:8px;border-radius:3px;
+          background:linear-gradient(to right,#3288bd,#fff,#d53e4f)"></div>
+        <span style="color:#e06a7a;font-size:10px">${fmt(sl.max)}</span>
+      </div>`);
+        }
+
+        // Cluster palette key — always include when labels exist so the user can
+        // map cluster index → palette colour even while a scalar overlay is active.
+        if (labels) {
+          const name = activeLayer?.name ?? "Labels";
+          const seen = new Map();
+          for (const l of labels) seen.set(l, (seen.get(l) ?? 0) + 1);
+          let html = `<div style="color:#9a9896;margin-bottom:4px;margin-top:${blocks.length ? "6px" : "0"}">${name}</div>`;
+          for (const [k, count] of [...seen.entries()].sort(
+            (a, b) => a[0] - b[0],
+          )) {
+            const hex = "#" + clusterColor(k).toString(16).padStart(6, "0");
+            const lbl = k < 0 ? "noise" : `Cluster ${k}`;
+            html += `<div><span class="swatch" style="background:${hex}"></span>${lbl} <span style="color:#666">(${count})</span></div>`;
+          }
+          blocks.push(html);
+        } else if (!activeNodeSignalLayer) {
+          blocks.push(`<span style="color:#666">No label layer</span>`);
+        }
+
+        // Edge key — only meaningful when the graph layer is currently displayed.
+        // Cluster-tinted edges share the palette; false-bridges use the crimson
+        // alarm hue. We show both rows together so the user understands the
+        // diagnostic colour even before they trip a bridge.
+        if (chkGraph?.checked) {
+          const bridgeHex = "#" + FALSE_BRIDGE.getHexString();
+          const falseBridgeCount = _activeDiagnostics?.falseBridges ?? 0;
+          blocks.push(`
+      <div style="color:#9a9896;margin-top:6px;margin-bottom:4px">Edges</div>
+      <div><span class="swatch" style="background:#aaa"></span>intra-cluster <span style="color:#666">(palette)</span></div>
+      <div><span class="swatch" style="background:${bridgeHex}"></span>false bridge <span style="color:#666">(${falseBridgeCount})</span></div>`);
+        }
+
+        const activeTriangleLayer = getActiveTriangleLayer();
+        if (activeTriangleLayer) {
+          const triangleCount = getTriangleCount(activeTriangleLayer);
+          const triSource = activeTriangleLayer.source ?? "Custom";
+          const edgeId = activeTriangleLayer.source_edge_layer_id ?? "-";
+          blocks.push(`
+      <div style="color:#9a9896;margin-top:6px;margin-bottom:4px">Triangles</div>
+      <div><span class="swatch" style="background:rgba(120,190,255,0.45);border:1px solid #78beff"></span>${activeTriangleLayer.name}</div>
+      <div style="color:#666">count=${triangleCount} source=${triSource}</div>
+      <div style="color:#666">edge=${edgeId}</div>`);
+        }
+
+        el.innerHTML = blocks.join("");
+      }
+      buildLegend();
+
+      // ── Resize ───────────────────────────────────────────────────────────────
+      // ── Controls panel ───────────────────────────────────────────────────────────
+      const chkAutoRotate = document.getElementById("chk-autorotate");
+      const rngRotSpeed = document.getElementById("rng-rotspeed");
+      const lblRotSpeed = document.getElementById("lbl-rotspeed");
+      const dbgState = document.getElementById("dbg-state");
+      const dbgLog = document.getElementById("dbg-log");
+      const _debugLines = [];
+
+      function pushDebugLine(message) {
+        const stamp = new Date().toLocaleTimeString("en-US", { hour12: false });
+        _debugLines.push(`${stamp} ${message}`);
+        while (_debugLines.length > 14) _debugLines.shift();
+        dbgLog.textContent = _debugLines.join("\n");
+      }
+
+      function summarizeEdgeVisibility() {
+        const pairs = Object.values(edgeMeshes);
+        let mainVisible = 0;
+        let bridgeVisible = 0;
+        for (const pair of pairs) {
+          if (pair.main.visible) mainVisible++;
+          if (pair.bridges.visible) bridgeVisible++;
+        }
+        return `${mainVisible}/${pairs.length} main, ${bridgeVisible}/${pairs.length} bridges`;
+      }
+
+      function summarizeFlowVisibility() {
+        let visible = 0;
+        for (const mesh of _flowMeshes) if (mesh.visible) visible++;
+        return `${visible}/${_flowMeshes.length}`;
+      }
+
+      function summarizeTriangleVisibility() {
+        let visible = 0;
+        for (const mesh of _triangleMeshes) if (mesh.visible) visible++;
+        return `${visible}/${_triangleMeshes.length}`;
+      }
+
+      function summarizeTriangleSelection() {
+        const layer = getActiveTriangleLayer();
+        if (!layer) return "off";
+        return `${layer.name} count=${getTriangleCount(layer)} source=${layer.source ?? "Custom"}`;
+      }
+
+      function refreshDebugConsole(reason = "state") {
+        if (!dbgState) return;
+        dbgState.textContent = [
+          `reason=${reason}`,
+          `metric=${rpMetric?.value ?? "-"} rule=${rpRule?.value ?? "-"} flowMode=${rpFlowMode?.value ?? "-"}`,
+          `graph=${chkGraph?.checked ? "on" : "off"} bridges=${chkFalseBridges?.checked ? "on" : "off"} flow=${chkFlow?.checked ? "on" : "off"}`,
+          `edges=${summarizeEdgeVisibility()}`,
+          `flowMeshes=${summarizeFlowVisibility()}`,
+          `triangles=${summarizeTriangleVisibility()} selected=${summarizeTriangleSelection()}`,
+          `regen=inflight:${_activeRegenController ? "yes" : "no"} latest:${_latestRegenRequestId}`,
+        ].join("\n");
+      }
+
+      function applyGraphVisibility() {
+        const showGraph = chkGraph.checked;
+        const showBridges = showGraph && chkFalseBridges.checked;
+        for (const pair of Object.values(edgeMeshes)) {
+          pair.main.visible = showGraph;
+          pair.bridges.visible = showBridges;
+        }
+        refreshDebugConsole("applyGraphVisibility");
+      }
+
+      function applyFlowVisibility() {
+        const showFlow = chkFlow.checked;
+        for (const mesh of _flowMeshes) mesh.visible = showFlow;
+        refreshDebugConsole("applyFlowVisibility");
+      }
+
+      // Apply initial auto-rotate state from the checked HTML attribute.
+      controls.autoRotate = chkAutoRotate.checked;
+      controls.autoRotateSpeed = parseFloat(rngRotSpeed.value);
+
+      chkAutoRotate.addEventListener("change", () => {
+        controls.autoRotate = chkAutoRotate.checked;
+      });
+      rngRotSpeed.addEventListener("input", () => {
+        const v = parseFloat(rngRotSpeed.value);
+        controls.autoRotateSpeed = v;
+        lblRotSpeed.textContent = v.toFixed(1);
+      });
+
+      // Graph edges toggle — controls main (regular) edge mesh only.
+      // Bridges are a separate overlay under the false-bridges checkbox.
+      chkGraph.addEventListener("change", () => {
+        pushDebugLine(`toggle graph -> ${chkGraph.checked ? "on" : "off"}`);
+        applyGraphVisibility();
+        buildLegend();
+      });
+
+      // False-bridge toggle — Tier 1 .visible flip on the bridge overlay meshes.
+      const chkFalseBridges = document.getElementById("chk-falsebridges");
+      chkFalseBridges.checked = falseBridgeOn;
+      chkFalseBridges.addEventListener("change", () => {
+        falseBridgeOn = chkFalseBridges.checked;
+        pushDebugLine(
+          `toggle bridges -> ${chkFalseBridges.checked ? "on" : "off"}`,
+        );
+        applyGraphVisibility();
+        buildLegend();
+      });
+
+      selScalar.addEventListener("change", () => {
+        const layer =
+          sceneNodeSignalLayers.find((l) => l.name === selScalar.value) ?? null;
+        applyNodeSignalLayer(layer);
+        buildLegend();
+      });
+
+      selLineField.addEventListener("change", () => {
+        pushDebugLine(`linefield -> ${selLineField.value || "off"}`);
+        applyLineFieldLayer(selLineField.value);
+      });
+
+      selTriangles.addEventListener("change", () => {
+        pushDebugLine(`triangles -> ${selTriangles.value || "off"}`);
+        applyTriangleLayer(selTriangles.value);
+        buildLegend();
+        refreshDebugConsole("applyTriangleLayer");
+      });
+
+      // Spine curves + frame arrows (Tier 1: .visible flip only)
+      const chkGaussians = document.getElementById("chk-gaussians");
+      const chkWireframe = document.getElementById("chk-wireframe");
+      const chkSpineCurves = document.getElementById("chk-spinecurves");
+      const chkFrameArrows = document.getElementById("chk-framearrows");
+      // Surface and wireframe default off — user opts in via the right panel.
+      // The render hints are still honoured if explicitly set in the scene JSON.
+      chkGaussians.checked = SCENE.hints?.show_gaussian_ellipsoids ?? false;
+      chkWireframe.checked = SCENE.hints?.show_gaussian_wireframe ?? false;
+      chkSpineCurves.checked = SCENE.hints?.show_spine_overlays ?? true;
+      chkFrameArrows.checked = SCENE.hints?.show_tangent_bases ?? true;
+
+      // Apply initial visibility derived from checkbox state.
+      function applyGaussianVisibility() {
+        const showSurface = chkGaussians.checked;
+        const showWire = chkWireframe.checked;
+        for (const grp of gaussianMeshGroups) {
+          grp.traverse((obj) => {
+            if (obj.userData.isSurface) obj.visible = showSurface;
+            if (obj.userData.isWireframe) obj.visible = showWire;
+          });
+        }
+      }
+      applyGaussianVisibility();
+
+      chkGaussians.addEventListener("change", applyGaussianVisibility);
+      chkWireframe.addEventListener("change", applyGaussianVisibility);
+
+      // Mode dropdown — Oracle vs EM is a backend choice, so it triggers regen.
+      const rpGmmMode = document.getElementById("rp-gmmMode");
+      rpGmmMode.addEventListener("change", doRegen);
+      chkSpineCurves.addEventListener("change", () => {
+        const on = chkSpineCurves.checked;
+        const fa = chkFrameArrows.checked;
+        for (const obj of spineLayerObjects) {
+          obj.curve.visible = on;
+          obj.arrowGroup.visible = on && fa;
+        }
+      });
+      chkFrameArrows.addEventListener("change", () => {
+        const on = chkSpineCurves.checked;
+        const fa = chkFrameArrows.checked;
+        for (const obj of spineLayerObjects) {
+          obj.arrowGroup.visible = on && fa;
+        }
+      });
+
+      // Flow field toggle (Tier 1: .visible flip only)
+      const chkFlow = document.getElementById("chk-flow");
+      chkFlow.checked = SCENE.hints?.show_vector_field ?? false;
+      chkFlow.addEventListener("change", () => {
+        pushDebugLine(`toggle flow -> ${chkFlow.checked ? "on" : "off"}`);
+        applyFlowVisibility();
+        buildLegend();
+      });
+      // ── Generator panel (schema-driven) ──────────────────────────────────────────────
+      // Reads SCENE.generator_param_schema and SCENE.generator_params to build
+      // interactive controls for any generator without hardcoded HTML.
+      // To add a new generator: register its schema in SchemaCatalog.cs (C# side only).
+      let currentGenSchema = SCENE.generator_param_schema ?? null;
+
+      // Clears and rebuilds gen-body controls from schema + current param values.
+      // Called at load and after every rehydrate that changes the generator/schema.
+      function rebuildGenPanel(gp, schema) {
+        if (!gp || !schema) return;
+        currentGenSchema = schema;
+        const body = document.getElementById("gen-body");
+        while (body.firstChild) body.removeChild(body.firstChild);
+        let epsilonRow = null;
+        let ruleSelect = null;
+        for (const section of schema.sections) {
+          const hdr = document.createElement("div");
+          hdr.className = "gp-sec";
+          hdr.textContent = section.label;
+          body.appendChild(hdr);
+          for (const param of section.params) {
+            const el = buildParamControl(param, gp);
+            body.appendChild(el);
+            if (param.key === "epsilonBallEpsilon") epsilonRow = el;
+            if (param.key === "neighborRule")
+              ruleSelect = el.querySelector("select");
+          }
+        }
+        if (ruleSelect && epsilonRow) {
+          const syncEps = () => {
+            epsilonRow.style.display =
+              ruleSelect.value === "EpsilonBall" ? "" : "none";
+          };
+          ruleSelect.addEventListener("change", syncEps);
+          syncEps();
+        }
+        const btn = document.createElement("button");
+        btn.id = "btn-regen";
+        btn.textContent = "Regenerate";
+        body.appendChild(btn);
+        btn.addEventListener("click", doRegen);
+      }
+
+      // Shared regen action — called by button click and Enter keydown on int fields.
+      let _activeRegenController = null;
+      let _latestRegenRequestId = 0;
+
+      function issueRegenRequest(payload, sentParams = payload) {
+        const requestId = ++_latestRegenRequestId;
+        const btn = document.getElementById("btn-regen");
+
+        if (_activeRegenController) {
+          pushDebugLine(`abort regen #${requestId - 1}`);
+          _activeRegenController.abort();
+        }
+        const controller = new AbortController();
+        _activeRegenController = controller;
+        pushDebugLine(
+          `start regen #${requestId} metric=${payload.metric ?? "-"} graph=${payload.neighborRule ?? "-"} flow=${payload.showFlow ?? "-"}`,
+        );
+        refreshDebugConsole(`start regen #${requestId}`);
+
+        if (btn) btn.disabled = true;
+        fetch("/api/regen", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        })
+          .then((r) => {
+            if (!r.ok) throw new Error(`/api/regen ${r.status}`);
+            return r.json();
+          })
+          .then((json) => {
+            if (requestId !== _latestRegenRequestId) {
+              pushDebugLine(`drop stale regen #${requestId}`);
+              return;
+            }
+            pushDebugLine(
+              `finish regen #${requestId} edges=${json.edge_layers?.length ?? 0} flow=${json.vector_field_layers?.length ?? 0}`,
+            );
+            rehydrateFromJson(json, sentParams);
+          })
+          .catch((err) => {
+            if (err?.name === "AbortError") {
+              pushDebugLine(`abort handled regen #${requestId}`);
+              refreshDebugConsole(`abort regen #${requestId}`);
+              return;
+            }
+            pushDebugLine(`regen #${requestId} failed: ${err?.message ?? err}`);
+            console.error("Regen failed:", err);
+          })
+          .finally(() => {
+            if (_activeRegenController !== controller) return;
+            _activeRegenController = null;
+            if (btn) btn.disabled = false;
+            refreshDebugConsole(`settled regen #${requestId}`);
+          });
+      }
+
+      function doRegen() {
+        if (!currentGenSchema) return;
+        const p = harvestParams(currentGenSchema);
+        issueRegenRequest(p, p);
+      }
+
+      // Debounce wrapper for continuous inputs (range sliders).
+      // Waits 380 ms of inactivity before firing doRegen.
+      let _regenTimer = null;
+      function doRegenDebounced() {
+        clearTimeout(_regenTimer);
+        _regenTimer = setTimeout(doRegen, 380);
+      }
+
+      (function initGenPanel() {
+        const gp = SCENE.generator_params;
+        const sch = SCENE.generator_param_schema;
+        if (!gp || !sch) return;
+
+        document.getElementById("gen-panel").style.display = "flex";
+        document
+          .getElementById("gen-toggle")
+          .addEventListener("click", function () {
+            const body = document.getElementById("gen-body");
+            const show = body.style.display === "none";
+            body.style.display = show ? "" : "none";
+            this.textContent = show ? "hide" : "show";
+          });
+
+        // Populate generator picker from catalog baked into the scene JSON
+        const selGen = document.getElementById("sel-generator");
+        for (const name of SCENE.generator_catalog ?? []) {
+          const opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          selGen.appendChild(opt);
+        }
+        selGen.value = gp.generator ?? "";
+
+        // Generator-switch handler: sends only { generator } so C# defaults fill the rest
+        selGen.addEventListener("change", () => {
+          const gen = selGen.value;
+          if (!gen) return;
+          issueRegenRequest({ generator: gen }, null);
+        });
+
+        rebuildGenPanel(gp, sch);
+      })();
+
+      // Build one DOM element (label or div) for a param spec.
+      // Current value seeded from currentValues[param.key] if present.
+      function buildParamControl(param, currentValues) {
+        const key = param.key;
+        const curVal = currentValues?.[key];
+
+        if (param.type === "int") {
+          const lbl = document.createElement("label");
+          const inp = document.createElement("input");
+          inp.type = "number";
+          inp.id = `gp-${key}`;
+          if (param.min != null) inp.min = param.min;
+          if (param.max != null) inp.max = param.max;
+          inp.value = curVal ?? 0;
+          inp.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") doRegen();
+          });
+          lbl.appendChild(document.createTextNode(param.label + " "));
+          lbl.appendChild(inp);
+          return lbl;
+        }
+
+        if (param.type === "float") {
+          const lbl = document.createElement("label");
+          const inp = document.createElement("input");
+          const span = document.createElement("span");
+          inp.type = "range";
+          inp.id = `gp-${key}`;
+          inp.min = param.min ?? 0;
+          inp.max = param.max ?? 1;
+          inp.step = param.step ?? 0.01;
+          inp.value = curVal ?? 0;
+          const dvs = param.display_values;
+          const fmtVal = (v) =>
+            dvs
+              ? (dvs[Math.round(parseFloat(v))] ?? v)
+              : param.step != null && param.step >= 1
+                ? String(Math.round(parseFloat(v)))
+                : parseFloat(v).toFixed(2);
+          span.textContent = fmtVal(inp.value);
+          inp.addEventListener("input", () => {
+            span.textContent = fmtVal(inp.value);
+            doRegenDebounced();
+          });
+          lbl.appendChild(document.createTextNode(param.label + " "));
+          lbl.appendChild(inp);
+          lbl.appendChild(span);
+          return lbl;
+        }
+
+        if (param.type === "bool") {
+          const lbl = document.createElement("label");
+          const inp = document.createElement("input");
+          inp.type = "checkbox";
+          inp.id = `gp-${key}`;
+          inp.checked = !!curVal;
+          inp.addEventListener("change", doRegen);
+          lbl.appendChild(inp);
+          lbl.appendChild(document.createTextNode(" " + param.label));
+          return lbl;
+        }
+
+        if (param.type === "enum") {
+          const lbl = document.createElement("label");
+          const sel = document.createElement("select");
+          sel.id = `gp-${key}`;
+          for (const v of param.enum_values ?? []) {
+            const opt = document.createElement("option");
+            opt.value = v;
+            opt.textContent = v;
+            sel.appendChild(opt);
+          }
+          if (curVal != null) sel.value = String(curVal); // coerce int echoes (e.g. 3→"3") to match option values
+          sel.addEventListener("change", doRegen);
+          lbl.appendChild(document.createTextNode(param.label + " "));
+          lbl.appendChild(sel);
+          return lbl;
+        }
+
+        if (param.type === "vec3") {
+          // Returns a <div> containing 3 labeled range sliders.
+          const wrap = document.createElement("div");
+          const vals = Array.isArray(curVal) ? curVal : [0, 0, 0];
+          const labels = param.vec_labels ?? ["a", "b", "c"];
+          for (let i = 0; i < 3; i++) {
+            const row = document.createElement("label");
+            const inp = document.createElement("input");
+            const span = document.createElement("span");
+            inp.type = "range";
+            inp.id = `gp-${key}-${i}`;
+            inp.min = param.min ?? 0;
+            inp.max = param.max ?? 3;
+            inp.step = param.step ?? 0.05;
+            inp.value = vals[i] ?? 0;
+            span.textContent = parseFloat(inp.value).toFixed(2);
+            inp.addEventListener("input", () => {
+              span.textContent = parseFloat(inp.value).toFixed(2);
+              doRegenDebounced();
+            });
+            row.appendChild(document.createTextNode(labels[i] + " "));
+            row.appendChild(inp);
+            row.appendChild(span);
+            wrap.appendChild(row);
+          }
+          return wrap;
+        }
+
+        // Fallback: plain text input
+        const lbl = document.createElement("label");
+        const inp = document.createElement("input");
+        inp.type = "text";
+        inp.id = `gp-${key}`;
+        inp.value = curVal ?? "";
+        lbl.appendChild(document.createTextNode(param.label + " "));
+        lbl.appendChild(inp);
+        return lbl;
+      }
+
+      // Walk the schema and collect current control values into a plain object.
+      function harvestParams(schema) {
+        const p = {
+          generator: document.getElementById("sel-generator")?.value ?? "",
+        };
+        // Graph/shared params live in the right panel, not the gen panel schema.
+        p.neighborRule = rpRule.value;
+        p.epsilonBallEpsilon = parseFloat(rpEps.value);
+        p.knnK = parseInt(rpKnnK.value, 10);
+        p.metric = buildMetricSpec();
+        p.kernel = rpKernel.value;
+        p.bandwidth = parseFloat(rpBandwidth.value);
+        p.ensureConnected = rpEnsureConnected.checked;
+        p.seed = parseInt(rpSeed.value, 10);
+        // GMM params — static right-panel controls (removed from OverlaySection schema).
+        p.gmmComponents = parseFloat(rpGmmComponents.value);
+        p.gmmMode = document.getElementById("rp-gmmMode")?.value ?? "Oracle";
+        p.showFlow = chkFlow.checked;
+        p.flowMode = rpFlowMode.value;
+        for (const section of schema.sections) {
+          for (const param of section.params) {
+            const key = param.key;
+            if (param.type === "int") {
+              p[key] = parseInt(
+                document.getElementById(`gp-${key}`)?.value ?? "0",
+                10,
+              );
+            } else if (param.type === "float") {
+              p[key] = parseFloat(
+                document.getElementById(`gp-${key}`)?.value ?? "0",
+              );
+            } else if (param.type === "bool") {
+              p[key] = document.getElementById(`gp-${key}`)?.checked ?? false;
+            } else if (param.type === "enum") {
+              const raw = document.getElementById(`gp-${key}`)?.value ?? "";
+              // Send numeric-looking enum values as numbers so C# int properties deserialize correctly.
+              const asNum = Number(raw);
+              p[key] = raw !== "" && !isNaN(asNum) ? asNum : raw;
+            } else if (param.type === "vec3") {
+              p[key] = [0, 1, 2].map((i) =>
+                parseFloat(
+                  document.getElementById(`gp-${key}-${i}`)?.value ?? "0",
+                ),
+              );
+            }
+          }
+        }
+        return p;
+      }
+
+      // ── Scene rehydration (from /api/regen response) ─────────────────────────────────
+      // Accepts a ScenePackageJson object (same schema as SCENE).
+      // Performs Tier 3 geometry dispose + rebuild — acceptable on user button click only.
+      function rehydrateFromJson(newScene, sentParams = null) {
+        pushDebugLine(
+          `rehydrate edges=${newScene.edge_layers?.length ?? 0} triangles=${newScene.triangle_layers?.length ?? 0} flow=${newScene.vector_field_layers?.length ?? 0}`,
+        );
+        // Tier 3 cleanup
+        if (pointsMeshRef) {
+          scene.remove(pointsMeshRef);
+          pointsMeshRef.geometry.dispose();
+        }
+        for (const pair of Object.values(edgeMeshes)) {
+          scene.remove(pair.main, pair.bridges);
+          pair.main.geometry.dispose();
+          pair.bridges.geometry.dispose();
+        }
+        for (const key of Object.keys(edgeMeshes)) delete edgeMeshes[key];
+        for (const obj of spineLayerObjects) {
+          scene.remove(obj.curve, obj.arrowGroup);
+          obj.curve.geometry.dispose();
+          obj.arrowGroup.traverse((child) => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+          });
+        }
+        spineLayerObjects.length = 0;
+        for (const grp of gaussianMeshGroups) {
+          scene.remove(grp);
+          grp.traverse((child) => {
+            if (child.material) child.material.dispose();
+            // geometry is shared UNIT_SPHERE_GEO — do not dispose
+          });
+        }
+        gaussianMeshGroups.length = 0;
+        for (const m of _flowMeshes) {
+          scene.remove(m);
+          m.geometry.dispose();
+          m.material.dispose();
+        }
+        _flowMeshes.length = 0;
+        for (const m of _lineFieldMeshes) {
+          scene.remove(m);
+          m.geometry.dispose();
+          m.material.dispose();
+        }
+        _lineFieldMeshes.length = 0;
+        for (const m of _triangleMeshes) {
+          scene.remove(m);
+          m.geometry.dispose();
+          m.material.dispose();
+        }
+        _triangleMeshes.length = 0;
+
+        // Update label array (used by buildEdgeMesh for false-bridge coloring)
+        const newLabelLayers = newScene.label_layers ?? [];
+        const newActiveLayer =
+          newLabelLayers.find((l) => l.kind === "GroundTruth") ??
+          newLabelLayers[0] ??
+          null;
+        labels = newActiveLayer?.labels ?? null;
+
+        const pc = newScene.points;
+        const newN = pc.n;
+        const newD = pc.d;
+        const raw = pc.features;
+        positions = new Float32Array(newN * 3);
+        const newColors = new Float32Array(newN * 3);
+        for (let i = 0; i < newN; i++) {
+          positions[i * 3] = raw[i * newD];
+          positions[i * 3 + 1] = newD >= 2 ? raw[i * newD + 1] : 0;
+          positions[i * 3 + 2] = newD >= 3 ? raw[i * newD + 2] : 0;
+          const k = labels ? labels[i] : -999;
+          tmpColor.setHex(k === -999 ? UNSET_COLOR : clusterColor(k));
+          newColors[i * 3] = tmpColor.r;
+          newColors[i * 3 + 1] = tmpColor.g;
+          newColors[i * 3 + 2] = tmpColor.b;
+        }
+
+        const newGeo = new THREE.BufferGeometry();
+        newGeo.setAttribute(
+          "position",
+          new THREE.BufferAttribute(positions, 3),
+        );
+        newGeo.setAttribute("color", new THREE.BufferAttribute(newColors, 3));
+        newGeo.computeBoundingSphere();
+        pointsMeshRef = new THREE.Points(newGeo, pointsMat);
+        scene.add(pointsMeshRef);
+
+        const newEdgeLayers = newScene.edge_layers ?? [];
+        for (const layer of newEdgeLayers) {
+          const pair = buildEdgeMesh(layer);
+          edgeMeshes[layer.name] = pair;
+          scene.add(pair.main, pair.bridges);
+        }
+        // Recompute the stats line from the new edge layer so the legend reads
+        // diagnostics for the graph that was actually built, not the previous one.
+        _activeDiagnostics =
+          newEdgeLayers.length > 0
+            ? computeEdgeDiagnostics(newEdgeLayers[0], newN)
+            : null;
+        syncRightPanelFromParams(sentParams ?? newScene.generator_params);
+        updateGraphSpec();
+
+        const newBs = newGeo.boundingSphere;
+        if (newBs) {
+          const r = newBs.radius || 1;
+          camera.position.set(
+            newBs.center.x,
+            newBs.center.y,
+            newBs.center.z + r * 2.4,
+          );
+          controls.target.copy(newBs.center);
+          camera.near = r * 0.001;
+          camera.far = r * 100;
+          camera.updateProjectionMatrix();
+          controls.update();
+        }
+
+        const newCloudR = newBs?.radius || 1;
+        for (const layer of newScene.gaussian_layers ?? []) {
+          const grp = buildGaussianGroup(layer);
+          grp.visible = true;
+          scene.add(grp);
+          gaussianMeshGroups.push(grp);
+        }
+        applyGaussianVisibility();
+        for (const layer of newScene.spine_layers ?? []) {
+          const obj = buildSpineObjects(layer, newCloudR);
+          obj.curve.visible = chkSpineCurves.checked;
+          obj.arrowGroup.visible =
+            chkSpineCurves.checked && chkFrameArrows.checked;
+          scene.add(obj.curve, obj.arrowGroup);
+          spineLayerObjects.push(obj);
+        }
+        for (const layer of newScene.vector_field_layers ?? []) {
+          const mesh = buildFlowField(layer, newCloudR, newScene.points);
+          scene.add(mesh);
+          _flowMeshes.push(mesh);
+        }
+        for (const layer of newScene.line_field_layers ?? []) {
+          const mesh = buildLineField(layer, newCloudR, newScene.points);
+          mesh.visible = false;
+          scene.add(mesh);
+          _lineFieldMeshes.push(mesh);
+        }
+        for (const layer of newScene.triangle_layers ?? []) {
+          const mesh = buildTriangleMesh(layer);
+          mesh.visible = false;
+          scene.add(mesh);
+          _triangleMeshes.push(mesh);
+        }
+        applyGraphVisibility();
+        applyFlowVisibility();
+        refreshDebugConsole("rehydrate");
+
+        // Reset node-signal selector; populate from new scene
+        const prevScalar = selScalar.value;
+        while (selScalar.options.length > 1) selScalar.remove(1);
+        for (const layer of newScene.node_signal_layers ?? []) {
+          const opt = document.createElement("option");
+          opt.value = layer.name;
+          opt.textContent = layer.name;
+          selScalar.appendChild(opt);
+        }
+        sceneNodeSignalLayers.length = 0;
+        sceneNodeSignalLayers.push(...(newScene.node_signal_layers ?? []));
+        const restoredLayer =
+          sceneNodeSignalLayers.find((l) => l.name === prevScalar) ?? null;
+        if (prevScalar && restoredLayer) {
+          selScalar.value = prevScalar;
+          applyNodeSignalLayer(restoredLayer);
+        } else {
+          selScalar.value = "";
+          applyNodeSignalLayer(null);
+        }
+
+        // Repopulate line-field selector; restore previous selection by name if it still exists.
+        const prevLineField = selLineField.value;
+        while (selLineField.options.length > 1) selLineField.remove(1);
+        sceneLineFieldLayers.length = 0;
+        sceneLineFieldLayers.push(...(newScene.line_field_layers ?? []));
+        for (const layer of sceneLineFieldLayers) {
+          const opt = document.createElement("option");
+          opt.value = layer.name;
+          opt.textContent = layer.name;
+          selLineField.appendChild(opt);
+        }
+        const restoredLineField =
+          sceneLineFieldLayers.find((l) => l.name === prevLineField) ?? null;
+        if (prevLineField && restoredLineField) {
+          selLineField.value = prevLineField;
+          applyLineFieldLayer(prevLineField);
+        } else {
+          selLineField.value = "";
+          applyLineFieldLayer("");
+        }
+
+        // Repopulate triangle selector; restore previous selection by name if it still exists.
+        const prevTriangles = selTriangles.value;
+        while (selTriangles.options.length > 1) selTriangles.remove(1);
+        sceneTriangleLayers.length = 0;
+        sceneTriangleLayers.push(...(newScene.triangle_layers ?? []));
+        for (const layer of sceneTriangleLayers) {
+          const opt = document.createElement("option");
+          opt.value = layer.name;
+          opt.textContent = layer.name;
+          selTriangles.appendChild(opt);
+        }
+        const restoredTriangles =
+          sceneTriangleLayers.find((l) => l.name === prevTriangles) ?? null;
+        if (prevTriangles && restoredTriangles) {
+          selTriangles.value = prevTriangles;
+          applyTriangleLayer(prevTriangles);
+        } else {
+          selTriangles.value = "";
+          applyTriangleLayer("");
+        }
+
+        // Rebuild gen panel from new schema.
+        // sentParams: params that were sent to the server (regen case) — use these so
+        // the panel always reflects what was actually used, not server-echoed defaults.
+        // Omitted on generator switch, so new generator's schema defaults apply.
+        const selGen = document.getElementById("sel-generator");
+        if (newScene.generator_params && newScene.generator_param_schema) {
+          selGen.value =
+            sentParams?.generator ?? newScene.generator_params.generator ?? "";
+          rebuildGenPanel(
+            sentParams ?? newScene.generator_params,
+            newScene.generator_param_schema,
+          );
+        }
+
+        buildLegend();
+        refreshDebugConsole("rehydrate complete");
+        document.getElementById("meta-n").textContent =
+          `N=${newN}  D=${newD}  K=2`;
+      }
+      // ── Resize ───────────────────────────────────────────────────────────────────
+      function onResize() {
+        const wrap = document.getElementById("canvas-wrap");
+        const w = wrap.clientWidth,
+          h = wrap.clientHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+      window.addEventListener("resize", onResize);
+      onResize();
+      refreshDebugConsole("initial");
+      pushDebugLine("viewer initialized");
+
+      // ── Render loop ──────────────────────────────────────────────────────────────
+      (function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      })();
+    </script>
+  </body>
+</html>

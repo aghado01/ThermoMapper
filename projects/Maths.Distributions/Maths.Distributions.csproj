@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Maths.Distributions</RootNamespace>
+    <AssemblyName>Maths.Distributions</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\maths\distributions\**\*.cs" Link="distributions\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Maths.Rng\Maths.Rng.csproj" />
+  </ItemGroup>
+</Project>

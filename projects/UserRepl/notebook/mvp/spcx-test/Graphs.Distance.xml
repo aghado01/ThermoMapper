@@ -1,0 +1,199 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Graphs.Distance</name>
+    </assembly>
+    <members>
+        <member name="M:Graphs.Distance.Euclidean.Minkowski.Distance(System.Double[],System.Double[],System.Double)">
+            <summary>
+            Minkowski L^p distance. The exponent is clamped to [1, 2] for the current
+            dispatch contract, so p=1 is Manhattan and p=2 is Euclidean.
+            </summary>
+        </member>
+        <member name="T:Graphs.Distance.Geodesic.Cosine">
+            <summary>
+            Geodesic spherical distance on S^(d-1): the angular arc length in radians.
+            Inputs are treated as raw vectors and normalized internally; zero vectors
+            return π/2 by convention.
+            </summary>
+        </member>
+        <member name="M:Graphs.Distance.Geodesic.FisherRaoHalfPlane.Distance(System.Double[],System.Double[])">
+            <summary>
+            Fisher-Rao geodesic distance between two univariate Gaussians,
+            each encoded as <c>[mu, log_sigma]</c>.
+            Explicit length guard: fixed 2-element contract; direct indexing via <c>p[0]</c>/<c>p[1]</c> would throw OOB for shorter inputs but silently read wrong values for longer ones.
+            </summary>
+            <param name="p">2-element array <c>[mu1, log_sigma1]</c>.</param>
+            <param name="q">2-element array <c>[mu2, log_sigma2]</c>.</param>
+            <returns>
+            The geodesic distance on the Poincaré upper half-plane.
+            Returns 0 for identical inputs; always non-negative.
+            </returns>
+            <exception cref="T:System.ArgumentException">
+            Thrown if either array has length other than 2.
+            </exception>
+        </member>
+        <member name="T:Graphs.Distance.Geodesic.FisherRaoSimplex">
+             <summary>
+             Fisher-Rao geodesic distance on the probability simplex (discrete
+             probability mass vectors). Uses the Bhattacharyya-angle form:
+               d = 2 * arccos(sum_i sqrt(p_i * q_i))
+             which is the exact geodesic on the statistical manifold of categorical
+             distributions.
+            
+             INPUT CONTRACT: each input must be a non-negative D-vector summing to 1
+             (a probability mass function). Typical uses: topic model outputs, LDA
+             document-topic distributions, any discrete distribution embedding.
+            
+             CONTRAST WITH FisherRaoHalfPlane:
+               FisherRaoHalfPlane is the exact geodesic for continuous univariate
+               Gaussian parameters [mu, log_sigma] on the Poincaré upper half-plane.
+               Use FisherRaoSimplex for discrete PMFs; use FisherRaoHalfPlane for
+               Gaussian parameter spaces (e.g. GaussianManifold generator).
+            
+             LENGTH GUARD: explicit check for p.Length != q.Length — TensorPrimitives slices
+               both spans to p.Length, so a shorter q would throw inside TensorPrimitives with
+               an unhelpful bounds error rather than at the call boundary.
+            
+             FUTURE — IStatisticalManifold:
+               Both classes will implement IStatisticalManifold once multivariate or
+               Dirichlet families are added (those require numerical geodesic
+               integration over the FIM and need a shared interface).
+             </summary>
+        </member>
+        <member name="F:Graphs.Distance.Geodesic.Poincare.BoundaryMargin">
+            <summary>
+            Margin from the unit-ball boundary used by <see cref="M:Graphs.Distance.Geodesic.Poincare.ClampToBall(System.Span{System.Double})"/>.
+            Points with <c>‖x‖ ≥ 1 − BoundaryMargin</c> are projected radially
+            inward to that radius before the distance computation. Sized for
+            <c>acosh</c>'s numerical stability — 1e-5 gives the denominator
+            <c>(1 − ‖a‖²)(1 − ‖b‖²)</c> roughly 2e-5 of headroom rather than
+            the previous 1e-12 which was tight enough that the 1e9 sentinel
+            path was hit frequently for plausible inputs.
+            </summary>
+        </member>
+        <member name="M:Graphs.Distance.Geodesic.Poincare.Distance(System.Double[],System.Double[])">
+            <summary>
+            Poincaré (hyperbolic) distance in the unit ball model.
+            <c>d(u,v) = arcosh(1 + 2 · ‖u − v‖² / ((1 − ‖u‖²)(1 − ‖v‖²)))</c>.
+            Assumes points lie inside the open unit ball; out-of-bounds
+            points are projected radially to radius <c>1 − BoundaryMargin</c>
+            before the distance computation, producing a real (large but
+            finite) Poincaré distance rather than a sentinel.
+            </summary>
+            <remarks>
+            Explicit length guard: loop accumulates norms over
+            <c>a.Length</c> iterations — a shorter <c>b</c> would silently
+            under-accumulate without throwing.
+            </remarks>
+        </member>
+        <member name="M:Graphs.Distance.Geodesic.Poincare.ClampToBall(System.Span{System.Double})">
+            <summary>
+            Project a Poincaré-ball point radially inward to the open ball
+            <c>‖x‖ ≤ 1 − BoundaryMargin</c>. No-op when the point is already
+            inside. Exposed for callers that want to pre-clamp embedding
+            outputs before any distance computation.
+            </summary>
+        </member>
+        <member name="T:Graphs.Distance.Geodesic.Wasserstein1">
+            <summary>
+            Wasserstein-1 distance between discrete probability distributions over
+            ordered support. For PMF inputs, this is the exact Earth Mover's Distance:
+            the L1 distance between cumulative distribution functions.
+            </summary>
+        </member>
+        <member name="M:Graphs.Distance.Other.Canberra.Distance(System.Double[],System.Double[])">
+            <summary>Mismatched lengths throw at <c>b[i]</c> via array indexing; no explicit guard needed.</summary>
+        </member>
+        <member name="M:Graphs.Distance.Other.EarthMover.Distance1D(System.Double[],System.Double[])">
+            <summary>Mismatched lengths: <c>Array.Copy(b, sb, a.Length)</c> throws if <c>b</c> is shorter; no explicit guard needed.</summary>
+        </member>
+        <member name="T:Graphs.Distance.Other.Hamming">
+            <summary>
+            64-bit packed Hamming distance — XOR + POPCNT on a pair of ulongs.
+            The fast path for callers that already hold bit-packed feature
+            vectors (genome k-mer signatures, MinHash sketches, etc.). For
+            the standard "count coordinates where labels differ" semantic
+            over <see cref="T:System.ReadOnlySpan`1"/> of double, use
+            <see cref="T:Graphs.Distance.Other.HammingMetric"/>.
+            </summary>
+        </member>
+        <member name="T:Graphs.Distance.Other.HammingMetric">
+             <summary>
+             Symbol-Hamming distance over <see cref="T:System.ReadOnlySpan`1"/> of double:
+             counts coordinates where <c>a[i] != b[i]</c>. Matches the
+             scikit-learn / scipy <c>metric='hamming'</c> semantic except that
+             scipy normalizes to <c>[0, 1]</c> by dividing by length — this
+             implementation returns the raw count for compositional cleanliness
+             (kernels in this codebase scale to the bandwidth, not to a fixed
+             range).
+             </summary>
+             <remarks>
+             <para><b>Symbol encoding.</b> Each coordinate's <see cref="T:System.Double"/>
+             value is treated as an opaque symbol identity — integer labels
+             (0, 1, 2, …) stored in double slots is the standard idiom and
+             what Blatt-style symbolic-sequence clustering expects (one
+             coordinate per sequence position, value = amino-acid or DNA-base
+             index, etc.). Real-valued inputs are compared bit-exactly via
+             <c>!=</c>; for noisy real-valued inputs prefer a continuous metric
+             (Euclidean, Manhattan) instead.</para>
+            
+             <para><b>Why this replaced the bit-packing path.</b> The previous
+             implementation packed <c>a[i] != 0</c> into bit <c>i</c> of a
+             ulong, then XOR/POPCNT'd. That had two silent bugs: (1) dimensions
+             > 64 wrapped (C# masks shift counts mod 64), so high coordinates
+             collided rather than overflowed; (2) it preserved only whether
+             each coordinate was zero or non-zero, so <c>[1, 2, 3]</c> and
+             <c>[5, 6, 7]</c> hashed identical and got Hamming distance 0.
+             The fast 64-bit path is preserved as <see cref="M:Graphs.Distance.Other.Hamming.Distance(System.UInt64,System.UInt64)"/>
+             for callers that already hold ulong-packed data.</para>
+             </remarks>
+        </member>
+        <member name="M:Graphs.Distance.Other.Jaccard.Distance(System.Double[],System.Double[],System.Double)">
+            <summary>Jaccard distance on thresholded real-valued feature vectors.</summary>
+        </member>
+        <member name="M:Graphs.Distance.Other.Mahalanobis.Distance(System.Double[],System.Double[],System.Double[0:,0:])">
+            <summary>Explicit length guard: inner loop writes <c>diff[i] = a[i] - b[i]</c> over <c>a.Length</c> — a shorter <c>b</c> would throw inside the loop with no context on the mismatch.</summary>
+        </member>
+        <member name="M:Graphs.Distance.Other.Mahalanobis.DistanceSquared(System.Double[],System.Double[],System.Double[0:,0:])">
+            <summary>
+            Returns the squared Mahalanobis distance: (a−b)ᵀ Σ⁻¹ (a−b).
+            Avoids the sqrt of <see cref="M:Graphs.Distance.Other.Mahalanobis.Distance(System.Double[],System.Double[],System.Double[0:,0:])"/>;
+            prefer this when the squared form is all that is needed (e.g. log-pdf evaluation).
+            </summary>
+        </member>
+        <member name="M:Graphs.Distance.Other.Mahalanobis.DispatchQuadraticForm(System.Double[],System.Double[],System.Double[0:,0:],System.Int32)">
+            <summary>
+            Dimension-dispatched entry point. Selects the scratch-allocation tier and
+            delegates to <see cref="M:Graphs.Distance.Other.Mahalanobis.QuadraticFormCore(System.Double[],System.Double[],System.Double[0:,0:],System.Span{System.Double},System.Span{System.Double},System.Int32)"/>.
+            </summary>
+        </member>
+        <member name="M:Graphs.Distance.Other.Mahalanobis.QuadraticFormCore(System.Double[],System.Double[],System.Double[0:,0:],System.Span{System.Double},System.Span{System.Double},System.Int32)">
+            <summary>
+            Inner kernel. Returns the raw quadratic form max(0, (a−b)ᵀ Σ⁻¹ (a−b)).
+            Callers apply sqrt for Euclidean-equivalent distance, or use directly for D².
+            </summary>
+        </member>
+        <member name="T:Graphs.Distance.Other.NcdCompressor">
+            <summary>
+            Compressor selection for NCD. All options are System.IO.Compression
+            streaming compressors — no external dependencies.
+            Brotli is the default; designed for text and ships with a static
+            English/HTML/CSS dictionary that helps short-input compression.
+            Deflate / GZip / ZLib are the calibration-clean alternatives
+            (no static dictionary), differing only in stream framing overhead.
+            </summary>
+        </member>
+        <member name="M:Graphs.Distance.Other.NormalizedCompressionDistance.Distance(System.Byte[],System.Byte[],Graphs.Distance.Other.NcdCompressor)">
+            <summary>
+            Pairwise NCD between two byte payloads.
+            Public entry point for non-graph consumers (e.g. per-segment text
+            scoring in downstream tools). Caller does not need to construct
+            an SpcBatchRequest.
+            Other metrics in this library keep their pairwise distance functions
+            private; NCD exposes its primitive because direct pairwise scoring
+            is its primary external use case.
+            </summary>
+        </member>
+    </members>
+</doc>

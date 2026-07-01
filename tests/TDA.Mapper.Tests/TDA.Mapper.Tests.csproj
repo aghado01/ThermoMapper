@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>TDA.Mapper.Tests</RootNamespace>
+    <AssemblyName>TDA.Mapper.Tests</AssemblyName>
+    <IsTestProject>true</IsTestProject>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\tda\mapper\**\*.cs" Link="mapper\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\graphs\primitives\**\*.cs" Link="graphs\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\graphs\spectral\EffectiveResistanceTests.cs" Link="spectral\EffectiveResistanceTests.cs" />
+    <Compile Include="..\graphs\GraphCompilerTestPresets.cs" Link="graphs\GraphCompilerTestPresets.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\projects\TDA.Mapper\TDA.Mapper.csproj" />
+    <ProjectReference Include="..\..\projects\TDA.Ph\TDA.Ph.csproj" />
+    <ProjectReference Include="..\..\projects\TDA.Primitives\TDA.Primitives.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Primitives\Graphs.Primitives.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Spectral\Graphs.Spectral.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Proximity\Graphs.Proximity.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Coupling\Graphs.Coupling.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Distance\Graphs.Distance.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,32 @@
+artifacts/**
+
+*.code-workspace
+
+**.venv/**
+
+.claude
+.vscode
+.cache
+
+
+# Byte-compiled
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+share/python-wheels/
+
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini

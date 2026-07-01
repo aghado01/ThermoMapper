@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>TDA.Mapper</RootNamespace>
+    <AssemblyName>TDA.Mapper</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/tda/mapper/**/*.cs" Link="mapper/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Graphs.Primitives/Graphs.Primitives.csproj" />
+    <ProjectReference Include="../Graphs.Proximity/Graphs.Proximity.csproj" />
+    <ProjectReference Include="../Graphs.Observables/Graphs.Observables.csproj" />
+    <ProjectReference Include="../Graphs.Models.Potts/Graphs.Models.Potts.csproj" />
+    <ProjectReference Include="../Graphs.Spectral/Graphs.Spectral.csproj" />
+    <ProjectReference Include="../Maths.LinAlg/Maths.LinAlg.csproj" />
+    <ProjectReference Include="../Clustering.Geometric.KMeans/Clustering.Geometric.KMeans.csproj" />
+    <ProjectReference Include="../Clustering.Statistical.GMM/Clustering.Statistical.GMM.csproj" />
+    <ProjectReference Include="../Clustering.Graphical.SPC/Clustering.Graphical.SPC.csproj" />
+    <ProjectReference Include="../Clustering.Graphical.HdbScan/Clustering.Graphical.HdbScan.csproj" />
+    <ProjectReference Include="../Graphs.Distance/Graphs.Distance.csproj" />
+    <ProjectReference Include="../Maths.Topology/Maths.Topology.csproj" />
+    <ProjectReference Include="../TDA.Ph/TDA.Ph.csproj" />
+    <ProjectReference Include="../TDA.Primitives/TDA.Primitives.csproj" />
+  </ItemGroup>
+</Project>

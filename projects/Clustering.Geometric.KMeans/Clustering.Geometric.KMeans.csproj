@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Clustering.Geometric.KMeans</RootNamespace>
+    <AssemblyName>Clustering.Geometric.KMeans</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/clustering/geometric/kmeans/*.cs" Link="kmeans/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

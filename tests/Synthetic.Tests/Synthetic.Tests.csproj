@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Synthetic.Tests</RootNamespace>
+    <AssemblyName>Synthetic.Tests</AssemblyName>
+    <IsTestProject>true</IsTestProject>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\synthetic\**\*.cs" Link="synthetic\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\projects\Synthetic\Synthetic.csproj" />
+    <ProjectReference Include="..\..\projects\Maths.Samplers\Maths.Samplers.csproj" />
+    <ProjectReference Include="..\..\projects\Maths.LinAlg\Maths.LinAlg.csproj" />
+    <ProjectReference Include="..\..\projects\Maths.Rng\Maths.Rng.csproj" />
+  </ItemGroup>
+</Project>

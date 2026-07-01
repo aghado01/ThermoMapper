@@ -1,0 +1,145 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Clustering.Dendrograms</name>
+    </assembly>
+    <members>
+        <member name="T:Clustering.Dendrograms.Dendrogram">
+             <summary>
+             Immutable binary merge tree over <see cref="P:Clustering.Dendrograms.Dendrogram.LeafCount"/> leaves.
+             Carries the <see cref="T:Clustering.Dendrograms.DendrogramNode"/> sequence plus a free-text
+             <see cref="P:Clustering.Dendrograms.Dendrogram.CostAxis"/> label so downstream renderers and analyses can
+             label the y-axis correctly (e.g. <c>"mutual_reachability_distance"</c>
+             for HDBSCAN, <c>"entropy_delta"</c> for GMM agglomerative,
+             <c>"single_linkage_distance"</c> for vanilla SLINK).
+             </summary>
+             <remarks>
+             <para><b>Build invariant.</b> <see cref="P:Clustering.Dendrograms.Dendrogram.Merges"/> is expected to be
+             in build order — equivalently, monotone non-decreasing in
+             <see cref="P:Clustering.Dendrograms.DendrogramNode.Distance"/>. The <see cref="M:Clustering.Dendrograms.Dendrogram.CutAt(System.Double)"/>
+             helper relies on this; <see cref="M:Clustering.Dendrograms.Dendrogram.CutToK(System.Int32)"/> does not.</para>
+            
+             <para><b>Internal-node ids.</b> Each merge at index <c>i</c> in
+             <see cref="P:Clustering.Dendrograms.Dendrogram.Merges"/> is implicitly assigned id <c>LeafCount + i</c>,
+             matching the build-order convention HDBSCAN's condensation pass and
+             scipy/MATLAB linkage expect.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Dendrograms.Dendrogram.#ctor(Clustering.Dendrograms.DendrogramNode[],System.Int32,System.String)">
+             <summary>
+             Immutable binary merge tree over <see cref="P:Clustering.Dendrograms.Dendrogram.LeafCount"/> leaves.
+             Carries the <see cref="T:Clustering.Dendrograms.DendrogramNode"/> sequence plus a free-text
+             <see cref="P:Clustering.Dendrograms.Dendrogram.CostAxis"/> label so downstream renderers and analyses can
+             label the y-axis correctly (e.g. <c>"mutual_reachability_distance"</c>
+             for HDBSCAN, <c>"entropy_delta"</c> for GMM agglomerative,
+             <c>"single_linkage_distance"</c> for vanilla SLINK).
+             </summary>
+             <remarks>
+             <para><b>Build invariant.</b> <see cref="P:Clustering.Dendrograms.Dendrogram.Merges"/> is expected to be
+             in build order — equivalently, monotone non-decreasing in
+             <see cref="P:Clustering.Dendrograms.DendrogramNode.Distance"/>. The <see cref="M:Clustering.Dendrograms.Dendrogram.CutAt(System.Double)"/>
+             helper relies on this; <see cref="M:Clustering.Dendrograms.Dendrogram.CutToK(System.Int32)"/> does not.</para>
+            
+             <para><b>Internal-node ids.</b> Each merge at index <c>i</c> in
+             <see cref="P:Clustering.Dendrograms.Dendrogram.Merges"/> is implicitly assigned id <c>LeafCount + i</c>,
+             matching the build-order convention HDBSCAN's condensation pass and
+             scipy/MATLAB linkage expect.</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Dendrograms.Dendrogram.InternalNodeCount">
+            <summary>Number of internal merge nodes. Equals <c>LeafCount - 1</c>
+            for a fully-merged tree; smaller when the tree is truncated.</summary>
+        </member>
+        <member name="P:Clustering.Dendrograms.Dendrogram.TotalNodeCount">
+            <summary>Total node ids in <c>[0, TotalNodeCount)</c>: leaves +
+            internal nodes.</summary>
+        </member>
+        <member name="M:Clustering.Dendrograms.Dendrogram.CutToK(System.Int32)">
+            <summary>
+            Cuts to <paramref name="k"/> clusters by applying the first
+            <c>LeafCount - k</c> merges. Returns a dense
+            <c>int[LeafCount]</c> of cluster labels in <c>[0, k)</c>.
+            </summary>
+            <remarks>
+            Requires <c>1 ≤ k ≤ LeafCount</c> and a fully-merged tree
+            (<c>InternalNodeCount ≥ LeafCount - k</c>). Does not depend on
+            the build-order monotonicity invariant — only on the merge
+            sequence itself.
+            </remarks>
+        </member>
+        <member name="M:Clustering.Dendrograms.Dendrogram.CutAt(System.Double)">
+            <summary>
+            Cuts at cost level <paramref name="level"/>: applies all merges
+            with <see cref="P:Clustering.Dendrograms.DendrogramNode.Distance"/> ≤ <paramref name="level"/>.
+            Returns a dense <c>int[LeafCount]</c> of cluster labels.
+            </summary>
+            <remarks>
+            Assumes <see cref="P:Clustering.Dendrograms.Dendrogram.Merges"/> is monotone non-decreasing in
+            <see cref="P:Clustering.Dendrograms.DendrogramNode.Distance"/> (the build invariant) and
+            short-circuits the scan at the first merge exceeding the level.
+            For consumers needing λ-style "merges with λ ≥ level" cuts,
+            convert <c>level → 1/level</c> at the call site.
+            </remarks>
+        </member>
+        <member name="M:Clustering.Dendrograms.Dendrogram.FirstLeafBelow(System.Int32)">
+            <summary>
+            Resolves a node id (leaf or internal merge id) down to its
+            representative leaf for union-find purposes. For a leaf id
+            <c>x &lt; LeafCount</c>, returns <c>x</c>; for an internal id
+            <c>LeafCount + i</c>, walks <c>Merges[i].LeftChild</c> down to
+            a leaf.
+            </summary>
+        </member>
+        <member name="M:Clustering.Dendrograms.Dendrogram.Densify(Graphs.Primitives.UnionFind,System.Int32)">
+            <summary>
+            Densifies a <see cref="T:Graphs.Primitives.UnionFind"/>'s sparse root ids into dense
+            labels in <c>[0, clusterCount)</c>. Mirrors the SPC partition
+            helper but kept local to avoid the cross-namespace dependency.
+            </summary>
+        </member>
+        <member name="T:Clustering.Dendrograms.DendrogramNode">
+             <summary>
+             One merge event in an agglomerative single-linkage-style dendrogram.
+             Leaves are points <c>0..N-1</c>; internal merge nodes are assigned
+             dense ids <c>N..2N-2</c> in build order. <see cref="P:Clustering.Dendrograms.DendrogramNode.LeftChild"/> and
+             <see cref="P:Clustering.Dendrograms.DendrogramNode.RightChild"/> may reference either a leaf or an internal id.
+             </summary>
+             <remarks>
+             <para><b>Cost axis.</b> <see cref="P:Clustering.Dendrograms.DendrogramNode.Distance"/> is the scalar at which
+             the two subtrees merge. The build pass is expected to emit merges in
+             monotone non-decreasing <see cref="P:Clustering.Dendrograms.DendrogramNode.Distance"/> order — true for both
+             Kruskal single-linkage (HDBSCAN's mutual-reachability MST) and greedy
+             entropy merging (GMM agglomerative). The
+             <see cref="P:Clustering.Dendrograms.Dendrogram.CostAxis"/> field on the enclosing wrapper
+             documents the physical interpretation (distance, ΔH, dissimilarity).</para>
+            
+             <para><b>λ convention.</b> HDBSCAN's excess-of-mass pass consumes
+             <c>λ = 1/Distance</c>; that conversion lives in the consumer (e.g.
+             the condensation pass), not in this DTO — keeping the record neutral
+             across cost-axis interpretations.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Dendrograms.DendrogramNode.#ctor(System.Int32,System.Int32,System.Double,System.Int32)">
+             <summary>
+             One merge event in an agglomerative single-linkage-style dendrogram.
+             Leaves are points <c>0..N-1</c>; internal merge nodes are assigned
+             dense ids <c>N..2N-2</c> in build order. <see cref="P:Clustering.Dendrograms.DendrogramNode.LeftChild"/> and
+             <see cref="P:Clustering.Dendrograms.DendrogramNode.RightChild"/> may reference either a leaf or an internal id.
+             </summary>
+             <remarks>
+             <para><b>Cost axis.</b> <see cref="P:Clustering.Dendrograms.DendrogramNode.Distance"/> is the scalar at which
+             the two subtrees merge. The build pass is expected to emit merges in
+             monotone non-decreasing <see cref="P:Clustering.Dendrograms.DendrogramNode.Distance"/> order — true for both
+             Kruskal single-linkage (HDBSCAN's mutual-reachability MST) and greedy
+             entropy merging (GMM agglomerative). The
+             <see cref="P:Clustering.Dendrograms.Dendrogram.CostAxis"/> field on the enclosing wrapper
+             documents the physical interpretation (distance, ΔH, dissimilarity).</para>
+            
+             <para><b>λ convention.</b> HDBSCAN's excess-of-mass pass consumes
+             <c>λ = 1/Distance</c>; that conversion lives in the consumer (e.g.
+             the condensation pass), not in this DTO — keeping the record neutral
+             across cost-axis interpretations.</para>
+             </remarks>
+        </member>
+    </members>
+</doc>

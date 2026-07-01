@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Graphs.Coupling</name>
+    </assembly>
+    <members>
+        <member name="M:Graphs.Coupling.Cauchy.Evaluate(System.Double,System.Double)">
+            <summary>
+            J = 1 / (1 + d² / δ²). Heavy-tailed — decays much slower than Gaussian.
+            Retains weak long-range coupling that Gaussian would zero out.
+            </summary>
+        </member>
+        <member name="M:Graphs.Coupling.Gaussian.Evaluate(System.Double,System.Double)">
+            <summary>
+            J = exp(-d² / 2δ²). Smooth, differentiable decay.
+            Natural choice for Euclidean-geometry metrics.
+            </summary>
+        </member>
+        <member name="M:Graphs.Coupling.Laplacian.Evaluate(System.Double,System.Double)">
+            <summary>
+            J = exp(-d / δ). Decays on distance, not distance². Sharper local contrast
+            than Gaussian — near neighbors are favoured more aggressively.
+            </summary>
+        </member>
+        <member name="M:Graphs.Coupling.Linear.Evaluate(System.Double,System.Double)">
+            <summary>
+            J = max(0, 1 - d / δ). Compact support — exactly zero beyond one scale length.
+            Hard locality boundary; no long-range coupling whatsoever.
+            </summary>
+        </member>
+    </members>
+</doc>

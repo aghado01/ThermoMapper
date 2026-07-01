@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Graphs.Proximity</RootNamespace>
+    <AssemblyName>Graphs.Proximity</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\graphs\Bandwidth.cs" Link="graphs\Bandwidth.cs" />
+    <Compile Include="..\..\src\graphs\diagnostics\*.cs" Link="graphs\diagnostics\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\GraphEnums.cs" Link="graphs\GraphEnums.cs" />
+    <Compile Include="..\..\src\graphs\neighbors\*.cs" Link="graphs\neighbors\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\GraphCompiler.cs" Link="graphs\GraphCompiler.cs" />
+    <Compile Include="..\..\src\graphs\GraphCompilerConfig.cs" Link="graphs\GraphCompilerConfig.cs" />
+    <Compile Include="..\..\src\graphs\GraphBuildResult.cs" Link="graphs\GraphBuildResult.cs" />
+    <Compile Include="..\..\src\graphs\GraphMetric.cs" Link="graphs\GraphMetric.cs" />
+    <Compile Include="..\..\src\graphs\GraphProjection.cs" Link="graphs\GraphProjection.cs" />
+    <Compile Include="..\..\src\graphs\GraphSelection.cs" Link="graphs\GraphSelection.cs" />
+    <Compile Include="..\..\src\graphs\proximity\*.cs" Link="proximity\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\pipeline\*.cs" Link="pipeline\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\pipeline\generators\*.cs" Link="pipeline\generators\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\pipeline\filters\*.cs" Link="pipeline\filters\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\pipeline\repair\*.cs" Link="pipeline\repair\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\pipeline\refinement\*.cs" Link="pipeline\refinement\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\pipeline\scalers\*.cs" Link="pipeline\scalers\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Graphs.Primitives\Graphs.Primitives.csproj" />
+    <ProjectReference Include="..\Graphs.Distance\Graphs.Distance.csproj" />
+    <ProjectReference Include="..\Graphs.Coupling\Graphs.Coupling.csproj" />
+    <ProjectReference Include="..\Maths.Geometry\Maths.Geometry.csproj" />
+    <ProjectReference Include="..\Maths.LinAlg\Maths.LinAlg.csproj" />
+    <ProjectReference Include="..\Graphs.Observables\Graphs.Observables.csproj" />
+    <ProjectReference Include="..\TDA.Primitives\TDA.Primitives.csproj" />
+  </ItemGroup>
+</Project>

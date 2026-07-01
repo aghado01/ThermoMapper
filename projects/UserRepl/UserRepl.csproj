@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>UserRepl</RootNamespace>
+    <AssemblyName>UserRepl</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UserRepl.Commands\UserRepl.Commands.csproj" />
+  </ItemGroup>
+</Project>

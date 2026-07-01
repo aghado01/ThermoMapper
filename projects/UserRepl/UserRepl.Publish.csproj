@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>UserRepl</RootNamespace>
+    <AssemblyName>Spcx</AssemblyName>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <PublishSingleFileCompression>Fast</PublishSingleFileCompression>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <PublishTrimmed>true</PublishTrimmed>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <PublishSymbols>false</PublishSymbols>
+    <PublishDir>$(MSBuildThisFileDirectory)..\..\notebook\mvp\spcx\</PublishDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UserRepl.Commands\UserRepl.Commands.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <TrimmerRootAssembly Include="Synthetic" />
+  </ItemGroup>
+</Project>

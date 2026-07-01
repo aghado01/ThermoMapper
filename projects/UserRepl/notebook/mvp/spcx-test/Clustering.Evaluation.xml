@@ -1,0 +1,325 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Clustering.Evaluation</name>
+    </assembly>
+    <members>
+        <member name="T:Clustering.Evaluation.External.AdjustedRandIndex">
+             <summary>
+             Adjusted Rand Index (ARI): the Rand Index corrected for chance
+             agreement.
+             <code>ARI = (RI − E[RI]) / (max(RI) − E[RI])</code>
+             computed via the contingency-table identity
+             <code>ARI = (sum_index − expected) / (max_index − expected)</code>
+             where <c>sum_index = Σ C(n_ij, 2)</c>,
+             <c>expected = sum_a · sum_b / C(n, 2)</c>,
+             <c>max_index = (sum_a + sum_b) / 2</c>.
+             </summary>
+             <remarks>
+             <para><b>Range.</b> Up to <c>1.0</c> (perfect agreement);
+             <c>0.0</c> = chance-level agreement; can dip slightly negative for
+             worse-than-random agreement. <b>Higher is better.</b></para>
+            
+             <para><b>Why ARI over raw Rand.</b> The raw Rand Index is biased
+             upward — random partitions of similar size achieve high scores by
+             accident. ARI subtracts the expected value under a permutation
+             null model so a score of 0 genuinely means "no better than chance,"
+             which makes scores comparable across datasets of different sizes
+             and class counts.</para>
+            
+             <para><b>Symmetry.</b> Symmetric in its two arguments.</para>
+            
+             <para><b>Edge cases.</b> Returns 1.0 when both inputs are
+             identical-partition (or trivially when both have a single cluster
+             and N ≤ 1). Returns 0.0 when both are empty.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Evaluation.External.Completeness">
+             <summary>
+             Completeness: a partition is complete if all observations from a
+             reference class are grouped into a single predicted cluster.
+             <code>c = 1 − H(predicted | reference) / H(predicted)</code>
+             </summary>
+             <remarks>
+             <para><b>Range.</b> <c>[0, 1]</c>; <c>1.0</c> means every reference
+             class is fully contained in a single predicted cluster.
+             <b>Higher is better.</b></para>
+            
+             <para><b>Asymmetric.</b> Like <see cref="T:Clustering.Evaluation.External.Homogeneity"/>, this is
+             directional. Completeness asks "do my clusters preserve class
+             togetherness?" — the dual question to homogeneity's "do my clusters
+             preserve class identity?". <see cref="T:Clustering.Evaluation.External.VMeasure"/> combines the two
+             as a harmonic mean.</para>
+            
+             <para><b>Symmetry with Homogeneity.</b>
+             <c>Completeness(pred, truth) == Homogeneity(truth, pred)</c>.</para>
+            
+             <para><b>Edge cases.</b> Returns 1.0 when the predicted partition
+             is trivial (single cluster — every reference class is trivially
+             fully contained). Returns 0.0 for empty input.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Evaluation.External.Completeness.ConditionalEntropyColumnMajor(System.Int32[0:,0:],System.Int32,System.Int32,System.Int32[],System.Int32)">
+            <summary>
+            H(predicted | reference): the column-major counterpart of
+            <see cref="M:Clustering.Evaluation.External.Homogeneity.ConditionalEntropy(System.Int32[0:,0:],System.Int32,System.Int32,System.Int32[],System.Int32)"/>.
+            </summary>
+        </member>
+        <member name="T:Clustering.Evaluation.External.ContingencyTable">
+            <summary>
+            Internal helper that builds a contingency table from two parallel
+            label arrays. The shape every entropy-based external index (NMI,
+            ARI, Homogeneity, Completeness, V-measure) starts from — densify
+            both label sets once and tally pairwise co-occurrences.
+            </summary>
+            <remarks>
+            <para><b>Output.</b> A dense <c>int[rows, cols]</c> matrix where
+            <c>rows</c> is the predicted-class count and <c>cols</c> is the
+            reference-class count. <c>counts[r, c]</c> is the number of
+            observations whose predicted label maps to index <c>r</c> and whose
+            reference label maps to index <c>c</c>. The dense densified spaces
+            are also returned via out parameters so callers can use them for
+            marginal calculations without re-densifying.</para>
+            </remarks>
+        </member>
+        <member name="M:Clustering.Evaluation.External.ContingencyTable.Build(System.Int32[],System.Int32[],System.Int32@,System.Int32@,System.Int32[]@,System.Int32[]@)">
+            <summary>
+            Build the densified contingency table for <paramref name="predictedLabels"/>
+            and <paramref name="referenceLabels"/>. Both arrays must have the
+            same length; labels need not be dense — they are mapped to
+            <c>[0, K)</c> internally.
+            </summary>
+            <param name="predictedLabels">Predicted cluster labels.</param>
+            <param name="referenceLabels">Reference / ground-truth labels.</param>
+            <param name="rowCount">Number of distinct predicted labels (table rows).</param>
+            <param name="colCount">Number of distinct reference labels (table cols).</param>
+            <param name="rowSums">Per-row sums (marginal counts of predicted clusters).</param>
+            <param name="colSums">Per-col sums (marginal counts of reference classes).</param>
+            <returns>Dense <c>int[rowCount, colCount]</c> contingency matrix.</returns>
+        </member>
+        <member name="T:Clustering.Evaluation.External.Homogeneity">
+             <summary>
+             Homogeneity: a partition is homogeneous if each predicted cluster
+             contains observations from only a single reference class.
+             <code>h = 1 − H(reference | predicted) / H(reference)</code>
+             </summary>
+             <remarks>
+             <para><b>Range.</b> <c>[0, 1]</c>; <c>1.0</c> means every predicted
+             cluster is purely from one reference class. <b>Higher is better.</b></para>
+            
+             <para><b>Asymmetric.</b> Homogeneity is <i>not</i> symmetric:
+             <c>h(pred, truth) ≠ h(truth, pred)</c>. It measures one direction
+             — "do my clusters preserve class identity?" Pair with
+             <see cref="T:Clustering.Evaluation.External.Completeness"/> ("are class members kept together?") for
+             the symmetric pair, and <see cref="T:Clustering.Evaluation.External.VMeasure"/> for the harmonic
+             mean.</para>
+            
+             <para><b>Edge cases.</b> Returns 1.0 when the reference partition
+             is trivial (single class — perfectly homogeneous by definition).
+             Returns 0.0 for empty input.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Evaluation.External.Homogeneity.ConditionalEntropy(System.Int32[0:,0:],System.Int32,System.Int32,System.Int32[],System.Int32)">
+            <summary>
+            H(reference | predicted): conditional entropy of the reference
+            labels given the predicted clusters. Iterates row-by-row over
+            the contingency table.
+            </summary>
+        </member>
+        <member name="T:Clustering.Evaluation.External.IExternalClusterEvaluator">
+             <summary>
+             External cluster validation index. Measures agreement between a
+             predicted partition and a reference labeling (typically a ground
+             truth, but any reference partition works).
+             </summary>
+             <remarks>
+             <para><b>Input contract.</b> Both label arrays must have equal
+             length; labels need not be densely-numbered. Implementations
+             densify internally as needed.</para>
+            
+             <para><b>Family.</b> External indices (Purity, Normalized Mutual
+             Information, Adjusted Rand Index, V-measure, Fowlkes-Mallows) live
+             here. Indices that measure quality without a reference live in
+             <see cref="T:Clustering.Evaluation.Internal.IInternalClusterEvaluator"/>.</para>
+            
+             <para><b>Symmetry.</b> External indices are not in general
+             symmetric in their two arguments (Purity definitely isn't; NMI and
+             ARI are). Concrete implementations document which argument plays
+             which role.</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Evaluation.External.IExternalClusterEvaluator.Name">
+            <summary>
+            Stable identifier used as the dictionary key when the score
+            lands in a result envelope (e.g.
+            <c>SpcSessionResult.EvaluatorScores</c>) and as the CSV column
+            header in downstream exports. Defaults to the runtime type name;
+            concrete implementations override with a short canonical form
+            (e.g. <c>"NMI"</c>, <c>"ARI"</c>) when the type name is verbose.
+            </summary>
+        </member>
+        <member name="M:Clustering.Evaluation.External.IExternalClusterEvaluator.Evaluate(System.Int32[],System.Int32[])">
+            <param name="predictedLabels">Per-observation predicted cluster label.</param>
+            <param name="referenceLabels">Per-observation reference / ground-truth label.</param>
+            <returns>A scalar agreement score; direction is index-specific.</returns>
+        </member>
+        <member name="T:Clustering.Evaluation.External.NormalizedMutualInformation">
+             <summary>
+             Normalized Mutual Information (NMI), arithmetic-mean normalization:
+             <c>NMI = 2·I(U;V) / (H(U) + H(V))</c> where <c>I</c> is mutual
+             information and <c>H</c> is Shannon entropy of the marginal cluster
+             distributions. Range <c>[0, 1]</c>; 1.0 indicates perfect agreement
+             (up to relabeling).
+             </summary>
+             <remarks>
+             <para><b>Normalization choice.</b> Several variants exist (arithmetic
+             mean, geometric mean <c>sqrt(H(U)·H(V))</c>, maximum). The
+             arithmetic mean form is what scikit-learn returns as
+             <c>normalized_mutual_info_score</c> and is the most commonly cited
+             "NMI" in clustering literature; this evaluator returns that form.</para>
+            
+             <para><b>Symmetry.</b> Symmetric in the two arguments — swapping
+             predicted and reference labels gives the same value.</para>
+            
+             <para><b>Edge cases.</b> Returns 1.0 when both partitions are
+             trivial (single cluster — both entropies zero, undefined ratio
+             resolved to perfect-agreement by convention). Returns 0.0 for
+             empty input.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Evaluation.External.Purity">
+             <summary>
+             Purity: <c>(1/N) · Σ_p max_r |p ∩ r|</c> — the fraction of
+             observations whose predicted cluster is dominated by their reference
+             class. Range <c>[0, 1]</c>; 1.0 indicates perfect agreement.
+             </summary>
+             <remarks>
+             <para><b>Reading.</b> Purity rewards predicted clusters that contain
+             a single reference class but does <i>not</i> penalize
+             over-fragmentation — the trivial partition "every observation in its
+             own cluster" achieves purity 1.0 by construction. Read alongside
+             the predicted cluster count, or paired with a complementary index
+             like NMI/ARI that penalizes fragmentation, to detect this failure
+             mode.</para>
+            
+             <para><b>Asymmetry.</b> Purity is not symmetric in its arguments:
+             <c>Purity(pred, truth) ≠ Purity(truth, pred)</c> in general. The
+             canonical convention — and the one used here — is to take the max
+             over <i>reference</i> classes within each <i>predicted</i> cluster.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Evaluation.External.Purity.Compute(System.Int32[],System.Int32[])">
+            <summary>
+            Convenience helper for one-off purity computation.
+            </summary>
+        </member>
+        <member name="T:Clustering.Evaluation.External.VMeasure">
+             <summary>
+             V-measure: harmonic mean of <see cref="T:Clustering.Evaluation.External.Homogeneity"/> and
+             <see cref="T:Clustering.Evaluation.External.Completeness"/>.
+             <code>V = 2·h·c / (h + c)</code>
+             </summary>
+             <remarks>
+             <para><b>Range.</b> <c>[0, 1]</c>; <c>1.0</c> requires both perfect
+             homogeneity and perfect completeness simultaneously.
+             <b>Higher is better.</b></para>
+            
+             <para><b>Symmetric.</b> Unlike its two constituents, V-measure is
+             symmetric in its arguments — homogeneity and completeness swap
+             under argument swap, and the harmonic mean is invariant to that
+             swap.</para>
+            
+             <para><b>When to prefer V-measure.</b> Use this when you want a
+             single scalar that punishes both over-clustering (low homogeneity)
+             and under-clustering (low completeness). For asymmetric questions —
+             "does my clustering preserve class identity but it's OK if it
+             splits classes across clusters" — use <see cref="T:Clustering.Evaluation.External.Homogeneity"/>
+             alone.</para>
+            
+             <para><b>Edge cases.</b> Returns 0.0 when either component is 0
+             (the harmonic mean of 0 and anything is 0). Returns 0.0 for empty
+             input.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Evaluation.Internal.CalinskiHarabaszEvaluator">
+             <summary>
+             Calinski-Harabasz index: ratio of between-cluster scatter to
+             within-cluster scatter, F-statistic-flavored:
+             <c>(BSS / (K−1)) / (WSS / (N−K))</c>. Higher is better.
+             </summary>
+             <remarks>
+             <para><b>Edge cases.</b> Returns <see cref="F:System.Double.NaN"/> when the
+             index is undefined (fewer than 2 clusters, or N ≤ K). Returns
+             <see cref="F:System.Double.PositiveInfinity"/> when within-cluster scatter
+             is zero (a degenerate but mathematically clean limit).</para>
+            
+             <para><b>Distance metric.</b> Hardcoded to Euclidean — same caveat
+             as <see cref="T:Clustering.Evaluation.Internal.SilhouetteEvaluator"/>.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Evaluation.Internal.DaviesBouldinEvaluator">
+             <summary>
+             Davies-Bouldin index: average over clusters of the worst-case
+             <c>(scatter_i + scatter_j) / separation_{ij}</c> ratio. Lower is
+             better; 0 indicates perfectly compact, well-separated clusters.
+             </summary>
+             <remarks>
+             <para><b>Edge cases.</b> Returns <see cref="F:System.Double.NaN"/> when there
+             are fewer than 2 clusters (DB index is undefined). Returns
+             <see cref="F:System.Double.PositiveInfinity"/> when any two cluster centroids
+             coincide (separation 0).</para>
+            
+             <para><b>Distance metric.</b> Hardcoded to Euclidean — same caveat
+             as <see cref="T:Clustering.Evaluation.Internal.SilhouetteEvaluator"/>.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Evaluation.Internal.IInternalClusterEvaluator">
+             <summary>
+             Internal cluster validation index. Measures partition quality using
+             only the data and the partition itself — no ground truth required.
+             </summary>
+             <remarks>
+             <para><b>Input contract.</b> <c>data</c> is row-major
+             (one observation per row, equal-length rows); <c>labels</c>
+             is parallel to <c>data</c>, one cluster label per
+             observation. Labels need not be densely-numbered; implementations
+             densify internally.</para>
+            
+             <para><b>Family.</b> Internal indices (Silhouette, Davies-Bouldin,
+             Calinski-Harabasz) live here. Indices that compare two label arrays
+             (Purity, NMI, ARI) live in
+             <see cref="T:Clustering.Evaluation.External.IExternalClusterEvaluator"/>; domain-specific
+             indices that consume additional structure (e.g. graph + edge
+             observables) live in their owning domain assembly
+             (<c>Clustering.Graphical.SPC.Evaluators</c>, etc.).</para>
+            
+             <para><b>Score direction.</b> Higher-or-lower-is-better is
+             index-specific; each concrete implementation documents its
+             direction.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Evaluation.Internal.IInternalClusterEvaluator.Evaluate(System.Double[][],System.Int32[])">
+            <param name="data">Row-major data matrix; one observation per row.</param>
+            <param name="labels">Per-observation cluster label.</param>
+            <returns>A scalar quality score; direction is index-specific.</returns>
+        </member>
+        <member name="T:Clustering.Evaluation.Internal.SilhouetteEvaluator">
+             <summary>
+             Silhouette coefficient: <c>s_i = (b_i − a_i) / max(a_i, b_i)</c>
+             averaged over points, where <c>a_i</c> is the mean intra-cluster
+             distance and <c>b_i</c> is the mean distance to the nearest other
+             cluster. Range <c>[−1, 1]</c>; higher is better.
+             </summary>
+             <remarks>
+             <para><b>Edge cases.</b> Singletons score 0 (no intra-cluster pair
+             to average over). Partitions with fewer than 2 clusters return 0.0
+             (silhouette is undefined).</para>
+            
+             <para><b>Distance metric.</b> Currently hardcoded to Euclidean.
+             A future revision should accept an injectable
+             <c>IDistanceMetric</c> so non-Euclidean data (Mahalanobis, product
+             manifolds, etc.) can be scored honestly.</para>
+             </remarks>
+        </member>
+    </members>
+</doc>

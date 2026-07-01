@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Clustering.Graphical.HdbScanSmoke</RootNamespace>
+    <AssemblyName>Clustering.Graphical.HdbScanSmoke</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\projects\Clustering.Graphical.HdbScan\Clustering.Graphical.HdbScan.csproj" />
+    <ProjectReference Include="..\..\projects\Synthetic\Synthetic.csproj" />
+    <ProjectReference Include="..\..\projects\TDA.Mapper\TDA.Mapper.csproj" />
+  </ItemGroup>
+</Project>
+

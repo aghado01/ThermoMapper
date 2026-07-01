@@ -1,0 +1,82 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Archivory.Tabular</name>
+    </assembly>
+    <members>
+        <member name="M:Archivory.Tabular.TabularProjectionExtensions.WriteToFile(Archivory.Tabular.ITabularProjection,System.String,System.Char,System.String)">
+            <summary>
+            Atomically write the projection to <paramref name="path"/>. Writes to
+            <c>{path}.tmp</c> first, then renames; a partial write never leaves a
+            half-written file at the canonical path. Existing files at
+            <paramref name="path"/> are overwritten on success.
+            </summary>
+        </member>
+        <member name="M:Archivory.Tabular.TabularProjectionFactory.CreateIndexed(System.String,System.Int32)">
+            <summary>
+            Build a projection by iterating <paramref name="rowCount"/> indices
+            and applying per-index column selectors. Suited to parallel-array
+            shapes where each "row" corresponds to an index into multiple
+            columnar arrays (e.g. a sweep profile with <c>Temperatures[i]</c>,
+            <c>Susceptibility[i]</c>, <c>SpecificHeat[i]</c>).
+            </summary>
+        </member>
+        <member name="M:Archivory.Tabular.TabularProjectionFactory.CreateScalar(System.String)">
+            <summary>
+            Build a single-row projection by assembling named columns fluently.
+            Suited to scalar summaries (criteria, session totals, etc.) where
+            the source is a single instance rather than an iterable.
+            </summary>
+        </member>
+        <member name="T:Archivory.Tabular.IndexedProjectionBuilder">
+            <summary>
+            Fluent builder for a per-index <see cref="T:Archivory.Tabular.TabularProjection"/>. Use when
+            "row" means "an index into multiple parallel data arrays" rather than
+            "an item in a collection."
+            </summary>
+            <remarks>
+            <para>Composes three column families:</para>
+            <list type="bullet">
+              <item><see cref="M:Archivory.Tabular.IndexedProjectionBuilder.Column(System.String,System.Func{System.Int32,System.Object})"/> — always-on named column with a per-index selector.</item>
+              <item><see cref="M:Archivory.Tabular.IndexedProjectionBuilder.ColumnIf(System.Boolean,System.String,System.Func{System.Int32,System.Object})"/> — conditional column included only when the
+                predicate is true (e.g. an optional aggregate that may or may not
+                be present on the source).</item>
+              <item><see cref="M:Archivory.Tabular.IndexedProjectionBuilder.ColumnsFromDictionary``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.Func{``0,System.Int32,System.Object},System.Collections.Generic.IComparer{System.String})"/> — flatten a dictionary
+                into one column per key. Keys are sorted by the supplied comparer
+                (ordinal by default) so the column order is deterministic across runs.</item>
+            </list>
+            </remarks>
+        </member>
+        <member name="M:Archivory.Tabular.IndexedProjectionBuilder.Columns(System.Collections.Generic.IEnumerable{System.ValueTuple{System.String,System.Func{System.Int32,System.Object}}})">
+            <summary>
+            Bulk-add named columns. Equivalent to calling <see cref="M:Archivory.Tabular.IndexedProjectionBuilder.Column(System.String,System.Func{System.Int32,System.Object})"/>
+            for each entry but more convenient when the column list is itself
+            produced from a loop (e.g. one column per feature dimension).
+            </summary>
+        </member>
+        <member name="M:Archivory.Tabular.IndexedProjectionBuilder.ColumnsFromDictionary``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.Func{``0,System.Int32,System.Object},System.Collections.Generic.IComparer{System.String})">
+            <summary>
+            Append one column per key in <paramref name="dictionary"/>. The
+            <paramref name="valueAccessor"/> takes the dictionary value plus the
+            current row index and returns the cell value (useful when the
+            dictionary's values are themselves per-index sequences). Keys are
+            sorted by <paramref name="keyOrder"/> (ordinal by default) for
+            deterministic column ordering.
+            </summary>
+        </member>
+        <member name="T:Archivory.Tabular.ScalarProjectionBuilder">
+            <summary>
+            Fluent builder for a single-row <see cref="T:Archivory.Tabular.TabularProjection"/>. Use for
+            scalar/summary outputs where each column carries one value from a single
+            source instance.
+            </summary>
+        </member>
+        <member name="M:Archivory.Tabular.ScalarProjectionBuilder.ColumnsFromDictionary``1(System.Collections.Generic.IReadOnlyDictionary{System.String,``0},System.Collections.Generic.IComparer{System.String})">
+            <summary>
+            Append one column per key in <paramref name="dictionary"/>. Keys are
+            sorted by <paramref name="keyOrder"/> (ordinal by default) for
+            deterministic column ordering.
+            </summary>
+        </member>
+    </members>
+</doc>

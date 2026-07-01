@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Maths.Regression</RootNamespace>
+    <AssemblyName>Maths.Regression</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\maths\regression\**\*.cs" Link="regression\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Maths.Samplers\Maths.Samplers.csproj" />
+    <ProjectReference Include="..\Maths.Distributions\Maths.Distributions.csproj" />
+    <ProjectReference Include="..\Maths.LinAlg\Maths.LinAlg.csproj" />
+    <ProjectReference Include="..\Maths.Rng\Maths.Rng.csproj" />
+  </ItemGroup>
+</Project>

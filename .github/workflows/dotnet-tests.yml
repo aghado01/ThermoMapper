@@ -1,0 +1,54 @@
+name: dotnet-tests
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default
+            extraDefineConstants: ""
+          - name: eigen-reference
+            extraDefineConstants: "EIGEN_REFERENCE"
+
+    name: ${{ matrix.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore ps.core.pwshspc.sln
+
+      - name: Test TDA.Mapper
+        shell: pwsh
+        run: |
+          $args = @('--configuration', 'Release', '--no-restore')
+          if ('${{ matrix.extraDefineConstants }}') {
+            $args += '-p:ExtraDefineConstants=${{ matrix.extraDefineConstants }}'
+          }
+
+          dotnet test 'tests/TDA.Mapper.Tests/TDA.Mapper.Tests.csproj' @args
+
+      - name: Test VizCore
+        shell: pwsh
+        run: |
+          $args = @('--configuration', 'Release', '--no-restore')
+          if ('${{ matrix.extraDefineConstants }}') {
+            $args += '-p:ExtraDefineConstants=${{ matrix.extraDefineConstants }}'
+          }
+
+          dotnet test 'tests/VizCore.Tests/VizCore.Tests.csproj' @args

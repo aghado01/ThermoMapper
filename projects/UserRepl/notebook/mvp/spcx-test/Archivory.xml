@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Archivory</name>
+    </assembly>
+    <members>
+        <member name="T:Archivory.IBinarySerializer`1">
+            <summary>
+            Generic stream-based binary serializer contract. Implementations own
+            a self-describing on-disk format (typically a magic + version header)
+            and define how a value of <typeparamref name="T"/> is written to /
+            read from a stream.
+            </summary>
+            <remarks>
+            <para>The first primitive in the <c>Archivory</c> project — the
+            long-term home for the repository's persistence layer. The current
+            shape is intentionally minimal (stream-write + stream-read +
+            canonical file extension); a fuller blittable-archive primitive
+            (manifest + compression + seek-able partial reads) is planned to
+            land here alongside this interface, with concrete consumers
+            migrating onto it as it matures.</para>
+            <para>The <c>Tabular</c> project is conceptually a specialization
+            within <c>Archivory</c>'s broader mission — CSV is a lossy,
+            human-readable projection — and is expected to fold in here over
+            time. For now the two coexist as siblings while <c>Archivory</c>'s
+            surface stabilizes.</para>
+            </remarks>
+            <typeparam name="T">Domain type being serialized.</typeparam>
+        </member>
+        <member name="P:Archivory.IBinarySerializer`1.DefaultFileExtension">
+            <summary>Canonical file extension this serializer expects/produces.</summary>
+        </member>
+        <member name="T:Archivory.BinarySerializerBase`1">
+            <summary>
+            Base implementation of <see cref="T:Archivory.IBinarySerializer`1"/> that
+            provides the file-write and file-read instance helpers — including
+            atomic write-via-temp-rename. Concrete subclasses implement the
+            per-format <see cref="M:Archivory.BinarySerializerBase`1.WriteTo(`0,System.IO.Stream)"/> / <see cref="M:Archivory.BinarySerializerBase`1.ReadFrom(System.IO.Stream)"/> stream
+            methods and the <see cref="P:Archivory.BinarySerializerBase`1.DefaultFileExtension"/> property.
+            </summary>
+        </member>
+        <member name="M:Archivory.BinarySerializerBase`1.WriteToFile(`0,System.String)">
+            <summary>
+            Atomically write <paramref name="value"/> to
+            <paramref name="path"/>. Writes to <c>{path}.tmp</c> first, then
+            renames; a partial write never leaves a half-written file at the
+            canonical path. The rename fails (throws) if the destination
+            already exists — checkpoint files are treated as write-once.
+            </summary>
+        </member>
+    </members>
+</doc>

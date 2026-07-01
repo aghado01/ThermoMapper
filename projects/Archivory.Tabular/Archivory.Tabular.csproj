@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Archivory.Tabular</RootNamespace>
+    <AssemblyName>Archivory.Tabular</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\archivory\tabular\**\*.cs"
+      Link="archivory\tabular\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+
+</Project>

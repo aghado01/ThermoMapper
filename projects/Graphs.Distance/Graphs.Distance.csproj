@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Graphs.Distance</RootNamespace>
+    <AssemblyName>Graphs.Distance</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\graphs\distance\*.cs" Link="distance\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\distance\wrappers\*.cs" Link="distance\wrappers\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Graphs.Primitives\Graphs.Primitives.csproj"/>
+    <ProjectReference Include="..\Maths.Distance\Maths.Distance.csproj"/>
+  </ItemGroup>
+</Project>

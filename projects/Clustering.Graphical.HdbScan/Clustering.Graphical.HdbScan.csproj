@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Clustering.Graphical.HdbScan</RootNamespace>
+    <AssemblyName>Clustering.Graphical.HdbScan</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/clustering/graphical/hdbscan/**/*.cs" Link="hdbscan/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Clustering.Dendrograms/Clustering.Dendrograms.csproj" />
+    <ProjectReference Include="../Clustering.Evaluation/Clustering.Evaluation.csproj" />
+    <!-- Concrete metric structs (EuclideanMetric, MinkowskiMetric, ...) for
+         HdbscanMetricDispatch. The runner itself is metric-agnostic (struct-generic
+         over Maths.Distance.IDistanceMetric, which lives in Graphs.Primitives); the spec→struct
+         dispatch is the batteries-included layer that names the standard set. -->
+    <ProjectReference Include="../Graphs.Distance/Graphs.Distance.csproj" />
+    <ProjectReference Include="../Graphs.Primitives/Graphs.Primitives.csproj" />
+  </ItemGroup>
+</Project>

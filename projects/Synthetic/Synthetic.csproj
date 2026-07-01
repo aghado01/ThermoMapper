@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Synthetic</RootNamespace>
+    <AssemblyName>Synthetic</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\synthetic\**\*.cs" Link="synthetic\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Maths.Rng\Maths.Rng.csproj" />
+    <ProjectReference Include="..\Maths.Samplers\Maths.Samplers.csproj" />
+    <ProjectReference Include="..\Maths.Geometry\Maths.Geometry.csproj" />
+  </ItemGroup>
+</Project>

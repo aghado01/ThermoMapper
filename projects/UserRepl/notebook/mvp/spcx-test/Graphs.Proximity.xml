@@ -1,0 +1,316 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Graphs.Proximity</name>
+    </assembly>
+    <members>
+        <member name="F:Graphs.BandwidthEstimation.QuantileClampLevel">
+            <summary>
+            Default quantile for <see cref="F:Graphs.Distance.BandwidthStrategy.QuantileNormalized"/>'s
+            outlier clamping — clamps NN distances above this quantile to the
+            quantile value before computing MAD. Chosen as a fixed statistical
+            convention rather than a free parameter (per Pass 3 design notes).
+            </summary>
+        </member>
+        <member name="M:Graphs.BandwidthEstimation.BandwidthFor(System.ReadOnlySpan{System.Double},System.Span{System.Double},Graphs.Distance.BandwidthStrategy,System.Double)">
+            <summary>
+            Core dispatch: applies the chosen <see cref="T:Graphs.Distance.BandwidthStrategy"/> to
+            the NN distance sample, returns a bandwidth in distance units
+            suitable for kernel evaluation.
+            </summary>
+        </member>
+        <member name="M:Graphs.BandwidthEstimation.MadOfQuantileClamped(System.ReadOnlySpan{System.Double},System.Span{System.Double},System.Double)">
+            <summary>
+            MAD of distances after clamping values above the chosen quantile
+            to the quantile value. Truncates the long tail that destabilises
+            MAD for bounded metrics with degenerate near-boundary distances.
+            </summary>
+        </member>
+        <member name="M:Graphs.BandwidthEstimation.LogScaleBandwidth(System.ReadOnlySpan{System.Double},System.Span{System.Double},System.Double)">
+            <summary>
+            Bandwidth derived from MAD on log-distances, back-transformed to
+            distance units. For hyperbolic metrics whose NN distance
+            distribution is roughly log-normal (volume of a hyperbolic ball
+            grows exponentially with radius, so distances compress near the
+            origin and stretch near the boundary).
+            </summary>
+            <remarks>
+            Formula: <c>logD[i] = log(d[i] + 1)</c> (the +1 stabilises
+            near-zero distances); compute <c>med = median(logD)</c> and
+            <c>mad = mad(logD)</c>; bandwidth = <c>exp(med + mad·kernelFactor) − 1</c>.
+            The +1/−1 pair is symmetric and undoes itself; the median offset
+            anchors the bandwidth at the typical distance scale rather than
+            at zero.
+            </remarks>
+        </member>
+        <member name="M:Graphs.BandwidthEstimation.Mad(System.ReadOnlySpan{System.Double},System.Double,System.Span{System.Double},System.Double)">
+            <summary>Raw MAD with caller-supplied location.</summary>
+        </member>
+        <member name="M:Graphs.BandwidthEstimation.Mad(System.ReadOnlySpan{System.Double},System.Span{System.Double},System.Double)">
+            <summary>Raw MAD with internally computed sample median as location.</summary>
+        </member>
+        <member name="M:Graphs.Diagnostics.Connectivity.Validate(Graphs.Primitives.CsrGraph)">
+            <summary>
+            Connectivity diagnostics: component count, largest component coverage,
+            isolated node count. O(E alpha(N)) via union-find.
+            </summary>
+        </member>
+        <member name="T:Graphs.Diagnostics.GraphHealthVerdict">
+            <summary>
+            Verdict bits derived from a <see cref="T:Graphs.Diagnostics.GraphHealthReport"/> — the
+            "did the graph come out OK?" boolean fan-out. Each flag has a
+            documented detection rule; <see cref="P:Graphs.Diagnostics.GraphHealthVerdict.PrimaryRecommendation"/> is
+            the single actionable string the REPL surfaces by default.
+            </summary>
+        </member>
+        <member name="M:Graphs.Diagnostics.GraphHealthVerdict.#ctor(System.Boolean,System.Boolean,System.Boolean,System.Boolean,System.Boolean,System.Boolean,System.String)">
+            <summary>
+            Verdict bits derived from a <see cref="T:Graphs.Diagnostics.GraphHealthReport"/> — the
+            "did the graph come out OK?" boolean fan-out. Each flag has a
+            documented detection rule; <see cref="P:Graphs.Diagnostics.GraphHealthVerdict.PrimaryRecommendation"/> is
+            the single actionable string the REPL surfaces by default.
+            </summary>
+        </member>
+        <member name="T:Graphs.Diagnostics.GraphHealthReport">
+            <summary>
+            Composite diagnostic over the rich
+            <see cref="!:Graphs.Primitives.GraphBuildResult"/> produced by
+            <c>GraphBuilder.BuildResult</c>. Runs the affordable diagnostic
+            subset, packages each report alongside its peers, and distils
+            the lot into a <see cref="T:Graphs.Diagnostics.GraphHealthVerdict"/> with one
+            actionable recommendation. The expensive
+            <see cref="P:Graphs.Diagnostics.GraphHealthReport.AlgebraicConnectivity"/> pass is included only when
+            the graph is small enough to compute it dense; for larger graphs
+            the cheaper <see cref="P:Graphs.Diagnostics.GraphHealthReport.Connectivity"/> result drives the verdict.
+            </summary>
+        </member>
+        <member name="M:Graphs.Diagnostics.GraphHealthReport.#ctor(Graphs.Diagnostics.ConnectivityReport,Graphs.Diagnostics.DegreeReport,Graphs.Diagnostics.EdgeWeightSummary,Graphs.Diagnostics.HubnessReport,Graphs.Diagnostics.NeighborhoodScaleReport,Graphs.Diagnostics.CycleReport,System.Nullable{Graphs.Diagnostics.AlgebraicConnectivityReport},System.Nullable{Graphs.Diagnostics.MstBridgeReport},System.Nullable{System.Double},System.Nullable{Graphs.Coupling.MixtureBandwidth},System.Nullable{Graphs.Distance.MetricProperties},Graphs.Diagnostics.GraphHealthVerdict)">
+            <summary>
+            Composite diagnostic over the rich
+            <see cref="!:Graphs.Primitives.GraphBuildResult"/> produced by
+            <c>GraphBuilder.BuildResult</c>. Runs the affordable diagnostic
+            subset, packages each report alongside its peers, and distils
+            the lot into a <see cref="T:Graphs.Diagnostics.GraphHealthVerdict"/> with one
+            actionable recommendation. The expensive
+            <see cref="P:Graphs.Diagnostics.GraphHealthReport.AlgebraicConnectivity"/> pass is included only when
+            the graph is small enough to compute it dense; for larger graphs
+            the cheaper <see cref="P:Graphs.Diagnostics.GraphHealthReport.Connectivity"/> result drives the verdict.
+            </summary>
+        </member>
+        <member name="M:Graphs.Diagnostics.GraphHealth.Evaluate(Graphs.GraphBuildResult,System.Int32,System.Int32)">
+            <summary>
+            Run the standard diagnostic battery on a fresh
+            <see cref="T:Graphs.GraphBuildResult"/>. Returns a packaged report plus
+            a single-line recommendation suitable for REPL display.
+            </summary>
+            <param name="build">Rich-shape build result.</param>
+            <param name="k">Effective k used during construction (drives
+            Hubness expectations + NeighborhoodScale window).</param>
+            <param name="maxNodesForAlgebraic">Skip the dense
+            <see cref="T:Graphs.Diagnostics.AlgebraicConnectivity"/> pass above this size and
+            fall back to <see cref="T:Graphs.Diagnostics.Connectivity"/>-based signals.</param>
+        </member>
+        <member name="M:Graphs.Diagnostics.GraphHealth.PickPrimaryRecommendation(System.Boolean,System.Boolean,System.Boolean,System.Boolean,System.Boolean,System.Boolean,Graphs.Diagnostics.EdgeWeightSummary,Graphs.Diagnostics.HubnessReport,Graphs.Diagnostics.ConnectivityReport,Graphs.Diagnostics.DegreeReport)">
+            <summary>
+            Picks the single most-actionable recommendation by walking the
+            signal flags in priority order: bandwidth issues first (most
+            likely root cause, easiest to fix), then connectivity, then
+            hubness, then degree distribution.
+            </summary>
+        </member>
+        <member name="M:Graphs.Diagnostics.Hubness.Analyze(Graphs.NeighborSelection,System.Int32,System.Double,System.Double)">
+            <summary>
+            Analyze hub-spoke pathology in the directed KNN result. Pass the
+            directed NeighborSelection returned by SelectKnn, not a mutual-KNN result.
+            </summary>
+        </member>
+        <member name="M:Graphs.Diagnostics.NeighborhoodScale.Compute(Graphs.NeighborSelection,System.Int32)">
+            <summary>
+            Median 1NN distance vs. median k-th NN distance, both read
+            from the directed (pre-symmetrization) selection. The
+            previously-required <c>mutual</c> selection argument was
+            vestigial — the directed selection's
+            <c>NearestNeighborDistances</c> already carries the same 1NN
+            information without depending on whether MutualKnn was used
+            upstream.
+            </summary>
+        </member>
+        <member name="M:Graphs.GraphBuilder.BuildResult(System.Int32,System.Func{System.Int32,System.Int32,System.Double},Graphs.ProximityRule,System.Int32,System.Double,Graphs.KernelType,System.Double,System.Boolean,Graphs.Distance.BandwidthStrategy)">
+            <summary>
+            Full pipeline: N points, pairwise distance function →
+            <see cref="T:Graphs.GraphBuildResult"/> carrying the final
+            <see cref="T:Graphs.Primitives.CsrGraph"/> plus the intermediate artifacts
+            downstream diagnostics need — the directed (pre-symmetrization)
+            <see cref="T:Graphs.NeighborSelection"/>, the resolved bandwidth, the
+            pre-repair graph (when MST repair was applied), and whether
+            EnsureConnected ran. <c>bandwidth = 0</c> triggers automatic
+            estimation via <see cref="T:Graphs.BandwidthEstimation"/>. Callers
+            that only want the graph should pick <c>.Graph</c> off the
+            result.
+            </summary>
+        </member>
+        <member name="M:Graphs.GraphBuilder.BuildWithMixtureResult(System.Int32,System.Func{System.Int32,System.Int32,System.Double},Graphs.Coupling.MixtureWeights,Graphs.ProximityRule,System.Int32,System.Double,System.Nullable{Graphs.Coupling.MixtureBandwidth},System.Boolean,Graphs.Distance.BandwidthStrategy)">
+            <summary>
+            Mixture-kernel entry point — same composition as
+            <see cref="M:Graphs.GraphBuilder.BuildResult(System.Int32,System.Func{System.Int32,System.Int32,System.Double},Graphs.ProximityRule,System.Int32,System.Double,Graphs.KernelType,System.Double,System.Boolean,Graphs.Distance.BandwidthStrategy)"/> but for the multi-kernel mixture
+            path. Returns a <see cref="T:Graphs.GraphBuildResult"/>; callers that
+            only want the graph should pick <c>.Graph</c> off the result.
+            </summary>
+        </member>
+        <member name="M:Graphs.GraphBuilder.ToGraph(Graphs.NeighborSelection,Graphs.KernelType,System.Double)">
+            <summary>
+            Phase 2 only: convert pre-selected neighbors to a kernel-weighted CsrGraph.
+            Use when you already have a NeighborSelection (e.g. to try different
+            kernels on the same topology without re-running Phase 1).
+            bandwidth = 0 triggers automatic estimation.
+            </summary>
+        </member>
+        <member name="T:Graphs.GraphBuildResult">
+             <summary>
+             Rich-shape return for <see cref="M:Graphs.GraphBuilder.BuildResult(System.Int32,System.Func{System.Int32,System.Int32,System.Double},Graphs.ProximityRule,System.Int32,System.Double,Graphs.KernelType,System.Double,System.Boolean,Graphs.Distance.BandwidthStrategy)"/>
+             and <see cref="M:Graphs.GraphBuilder.BuildWithMixtureResult(System.Int32,System.Func{System.Int32,System.Int32,System.Double},Graphs.Coupling.MixtureWeights,Graphs.ProximityRule,System.Int32,System.Double,System.Nullable{Graphs.Coupling.MixtureBandwidth},System.Boolean,Graphs.Distance.BandwidthStrategy)"/>. Carries
+             the assembled <see cref="T:Graphs.Primitives.CsrGraph"/> plus the intermediate artifacts
+             that downstream diagnostics need: the directed (pre-symmetrization)
+             <see cref="T:Graphs.NeighborSelection"/>, the resolved bandwidth, and the
+             nearest-neighbor distance sample that bandwidth was derived from.
+             </summary>
+             <remarks>
+             <para><b>Why this exists.</b> The bare <c>CsrGraph</c> return loses
+             information that diagnostics need — <c>Hubness.Analyze</c> wants the
+             directed selection (counting in-degree pre-symmetrization),
+             <c>NeighborhoodScale</c> wants raw NN distances, and a bandwidth
+             retroactive check wants to know what bandwidth was actually used. The
+             historical <c>Build</c> path discarded all of this and forced
+             consumers to re-run KNN to recover it.</para>
+            
+             <para><b>Bandwidth discriminator.</b> Exactly one of
+             <see cref="P:Graphs.GraphBuildResult.SingleBandwidth"/> and <see cref="P:Graphs.GraphBuildResult.MixtureBandwidth"/> is
+             non-null: single-kernel paths populate the former, mixture paths
+             populate the latter. Consumers that need a representative scale
+             without caring which side of the union it came from can read
+             <see cref="P:Graphs.GraphBuildResult.RepresentativeBandwidth"/>.</para>
+            
+             <para><b>Metric provenance.</b> <see cref="P:Graphs.GraphBuildResult.Metric"/> is non-null
+             when the caller supplied a custom <see cref="T:Graphs.Distance.IDistanceMetric"/> —
+             it carries the metric's name, bounded/domain properties, and the
+             bandwidth strategy that was selected. Null when the inline default
+             Euclidean path was used. Graph-health persistence records this so
+             a reviewer can confirm "Poincaré → LogScaleHyperbolic" without
+             re-reading the manifest's metric spec string.</para>
+             </remarks>
+        </member>
+        <member name="M:Graphs.GraphBuildResult.#ctor(Graphs.Primitives.CsrGraph,Graphs.NeighborSelection,System.Nullable{System.Double},System.Nullable{Graphs.Coupling.MixtureBandwidth},System.Boolean,System.Nullable{Graphs.Primitives.CsrGraph},System.Nullable{Graphs.Distance.MetricProperties})">
+             <summary>
+             Rich-shape return for <see cref="M:Graphs.GraphBuilder.BuildResult(System.Int32,System.Func{System.Int32,System.Int32,System.Double},Graphs.ProximityRule,System.Int32,System.Double,Graphs.KernelType,System.Double,System.Boolean,Graphs.Distance.BandwidthStrategy)"/>
+             and <see cref="M:Graphs.GraphBuilder.BuildWithMixtureResult(System.Int32,System.Func{System.Int32,System.Int32,System.Double},Graphs.Coupling.MixtureWeights,Graphs.ProximityRule,System.Int32,System.Double,System.Nullable{Graphs.Coupling.MixtureBandwidth},System.Boolean,Graphs.Distance.BandwidthStrategy)"/>. Carries
+             the assembled <see cref="T:Graphs.Primitives.CsrGraph"/> plus the intermediate artifacts
+             that downstream diagnostics need: the directed (pre-symmetrization)
+             <see cref="T:Graphs.NeighborSelection"/>, the resolved bandwidth, and the
+             nearest-neighbor distance sample that bandwidth was derived from.
+             </summary>
+             <remarks>
+             <para><b>Why this exists.</b> The bare <c>CsrGraph</c> return loses
+             information that diagnostics need — <c>Hubness.Analyze</c> wants the
+             directed selection (counting in-degree pre-symmetrization),
+             <c>NeighborhoodScale</c> wants raw NN distances, and a bandwidth
+             retroactive check wants to know what bandwidth was actually used. The
+             historical <c>Build</c> path discarded all of this and forced
+             consumers to re-run KNN to recover it.</para>
+            
+             <para><b>Bandwidth discriminator.</b> Exactly one of
+             <see cref="P:Graphs.GraphBuildResult.SingleBandwidth"/> and <see cref="P:Graphs.GraphBuildResult.MixtureBandwidth"/> is
+             non-null: single-kernel paths populate the former, mixture paths
+             populate the latter. Consumers that need a representative scale
+             without caring which side of the union it came from can read
+             <see cref="P:Graphs.GraphBuildResult.RepresentativeBandwidth"/>.</para>
+            
+             <para><b>Metric provenance.</b> <see cref="P:Graphs.GraphBuildResult.Metric"/> is non-null
+             when the caller supplied a custom <see cref="T:Graphs.Distance.IDistanceMetric"/> —
+             it carries the metric's name, bounded/domain properties, and the
+             bandwidth strategy that was selected. Null when the inline default
+             Euclidean path was used. Graph-health persistence records this so
+             a reviewer can confirm "Poincaré → LogScaleHyperbolic" without
+             re-reading the manifest's metric spec string.</para>
+             </remarks>
+        </member>
+        <member name="P:Graphs.GraphBuildResult.RepresentativeBandwidth">
+            <summary>
+            Convenience accessor: returns <see cref="P:Graphs.GraphBuildResult.SingleBandwidth"/> for
+            single-kernel builds, or the Gaussian component of the mixture
+            bandwidth otherwise. Diagnostic code that just wants "a number
+            in distance units" can use this without branching on which build
+            variant produced the result.
+            </summary>
+        </member>
+        <member name="M:Graphs.Proximity.ProximityGraph.SelectEpsilonBall(System.Int32,System.Double,System.Func{System.Int32,System.Int32,System.Double})">
+             <summary>
+             Epsilon-ball proximity.
+             Edge (i,j) exists if d(i,j) &lt; epsilon.
+             Inherently symmetric given a symmetric distance function.
+             K parameter is not used — all pairs within radius are included.
+             Produces a variable-degree graph: dense regions get more edges,
+             sparse regions get fewer. Can fail in high dimensions where
+             distance concentration makes epsilon selection fragile.
+            
+             Returns per-node neighbor lists and 1-NN distances for auto-delta.
+             </summary>
+        </member>
+        <member name="M:Graphs.Proximity.ProximityGraph.SelectKnn(System.Int32,System.Int32,System.Func{System.Int32,System.Int32,System.Double})">
+            <summary>
+            Standard KNN proximity with OR-symmetrization.
+            For each node, selects K nearest neighbors by raw distance.
+            Then applies the OR rule: edge (i,j) exists if i is in j's KNN
+            OR j is in i's KNN. Produces an undirected neighbor set where
+            some nodes may have more than K neighbors after symmetrization.
+            </summary>
+        </member>
+        <member name="M:Graphs.Proximity.ProximityGraph.SelectMutualKnn(System.Int32,System.Int32,System.Func{System.Int32,System.Int32,System.Double})">
+            <summary>
+            Mutual KNN proximity (AND-rule).
+            Edge (i,j) exists only if i is in j's K-nearest AND j is in i's K-nearest.
+            Produces a sparser graph than OR-symmetrized KNN with higher-confidence edges,
+            but risks connectivity loss in high dimensions.
+            </summary>
+        </member>
+        <member name="M:Graphs.Proximity.ProximityGraph.EnsureConnected(Graphs.NeighborSelection,System.Int32,System.Func{System.Int32,System.Int32,System.Double})">
+            <summary>
+            Adds the minimum set of MST bridging edges needed to connect all
+            components in <paramref name="sel"/>. Works with any proximity rule
+            (Knn, MutualKnn, EpsilonBall). Uses Borůvka phases: each phase is
+            one O(N²) sweep finding the cheapest outgoing edge per component.
+            Typical MutualKnn graphs (1–3 disconnected components) finish in 1–2
+            phases. Exits immediately if the graph is already connected.
+            Returns a new NeighborSelection; the original is not modified.
+            </summary>
+        </member>
+        <member name="M:Graphs.Proximity.LocalMutualProximity.ApplyLocalScaling(Graphs.Primitives.CsrGraph,System.Boolean)">
+            <summary>
+            Re-weights a CSR graph using the Local Scaling Mutual Proximity algorithm.
+            Outputs a new CsrGraph sharing the original topology, but with edge weights
+            replaced by MP probabilities [0.0, 1.0].
+            </summary>
+            <param name="graph">The sparse adjacency structure.</param>
+            <param name="weightsAreCouplings">
+            If false (raw distances): counts neighbors further away (&gt; weight).
+            If true (J couplings): counts neighbors with weaker bonds (&lt; weight).
+            </param>
+        </member>
+        <member name="T:Graphs.Proximity.ImplicitPrims">
+            <summary>
+            Zero-allocation implicit Prim's MST over the mutual reachability graph.
+            No edge list is materialised; the N×N weight matrix is evaluated on-the-fly
+            inside the hot loop.
+            </summary>
+        </member>
+        <member name="M:Graphs.Proximity.ImplicitPrims.ComputeMst``1(System.ReadOnlySpan{System.Double},System.Int32,System.Int32,System.ReadOnlySpan{System.Double},System.Span{System.Boolean},System.Span{System.Double},System.Span{System.Int32},``0)">
+            <summary>
+            Computes the minimum spanning tree for the mutual reachability graph.
+            <paramref name="data"/> is flat row-major, length N×dim.
+            <paramref name="visited"/> and <paramref name="minWeight"/> are length ≥ N,
+            zeroed / filled to +∞ by the caller before each call.
+            <paramref name="parent"/> is length ≥ N, output MST parent indices.
+            parent[root] is undefined; root is always node 0.
+            </summary>
+        </member>
+    </members>
+</doc>

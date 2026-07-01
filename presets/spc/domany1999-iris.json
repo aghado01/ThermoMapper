@@ -1,0 +1,18 @@
+{
+  "dataset_file": "datasets/iris.csv",
+  "label_column": "4",
+  "has_header": false,
+  "seed": 42,
+  "q": 20,
+  "topology": "knn",
+  "k": 5,
+  "filter": "mutualknn",
+  "ensure_connected": true,
+  "kernel": "gaussian",
+  "bandwidth_strategy": "mean-edge-distance",
+  "susceptibility": "fk-reduced",
+  "temperatures": "auto",
+  "theta": 0.5,
+  "partition_strategy": "co-membership",
+  "peripheral_capture": true
+}

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>VizApi</RootNamespace>
+    <AssemblyName>VizApi</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VizCore\VizCore.csproj" />
+    <ProjectReference Include="..\Synthetic\Synthetic.csproj" />
+    <ProjectReference Include="..\Graphs.Proximity\Graphs.Proximity.csproj" />
+    <ProjectReference Include="..\Graphs.Spectral\Graphs.Spectral.csproj" />
+    <ProjectReference Include="..\Maths.Geometry\Maths.Geometry.csproj" />
+    <ProjectReference Include="..\Graphs.Distance\Graphs.Distance.csproj" />
+  </ItemGroup>
+</Project>

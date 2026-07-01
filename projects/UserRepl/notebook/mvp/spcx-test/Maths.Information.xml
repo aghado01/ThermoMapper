@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Maths.Information</name>
+    </assembly>
+    <members>
+        <member name="M:Maths.Information.KLDivergence.Forward(System.ReadOnlySpan{System.Double},System.ReadOnlySpan{System.Double},System.Double)">
+            <summary>
+            Forward KL divergence: KL(P ‖ Q) = Σᵢ pᵢ · log(pᵢ / qᵢ).
+            Result is in nats. Always ≥ 0; equals 0 iff P = Q almost everywhere.
+            <para>
+            Explicit length guard: spans are walked in lockstep from <c>p.Length</c>;
+            mismatched lengths would silently truncate rather than throw at indexing.
+            </para>
+            </summary>
+            <param name="eps">Floor applied to q[i] when p[i] &gt; 0 and q[i] ≈ 0.
+            Prevents −∞ without requiring pre-smoothed Q. For sparse text use
+            <see cref="!:Histogram"/> smoothing instead.</param>
+        </member>
+        <member name="M:Maths.Information.KLDivergence.Symmetric(System.ReadOnlySpan{System.Double},System.ReadOnlySpan{System.Double},System.Double)">
+            <summary>
+            Symmetric KL (Jeffreys divergence): KL(P ‖ Q) + KL(Q ‖ P).
+            Symmetric and always ≥ 0; equals 0 iff P = Q almost everywhere.
+            </summary>
+        </member>
+        <member name="T:Maths.Information.IDivergence`1">
+            <summary>
+            Dispatch surface for directed divergences over a domain <typeparamref name="T"/>.
+            <para>
+            <see cref="M:Maths.Information.IDivergence`1.Forward(`0,`0)"/> is order-sensitive: D(a ‖ b) ≠ D(b ‖ a) in general.
+            <see cref="M:Maths.Information.IDivergence`1.Symmetric(`0,`0)"/> returns a symmetrized form (default = Jeffreys-style sum);
+            implementations override when a more efficient or canonical symmetrization exists
+            (e.g. Jensen-Shannon's mid-distribution path).
+            </para>
+            </summary>
+        </member>
+        <member name="M:Maths.Information.IDivergence`1.Forward(`0,`0)">
+            <summary>Directed divergence D(a ‖ b). Order matters.</summary>
+        </member>
+        <member name="M:Maths.Information.IDivergence`1.Symmetric(`0,`0)">
+            <summary>Symmetrized form. Default implementation: Forward(a,b) + Forward(b,a).</summary>
+        </member>
+        <member name="T:Maths.Information.KlDivergence">
+            <summary>
+            Dispatch adapter for <see cref="T:Maths.Information.KLDivergence"/> over dense fixed-support
+            distributions. Uses <see cref="T:System.ReadOnlyMemory`1"/> so callers can pass
+            arrays, pooled buffers, or sliced Memory without copying.
+            </summary>
+        </member>
+        <member name="M:Maths.Information.KlDivergence.#ctor(System.Double)">
+            <summary>
+            Construct with a custom q-floor. Pass <c>0</c> to opt out (require pre-smoothed q).
+            </summary>
+        </member>
+        <member name="M:Maths.Information.KlDivergence.Forward(System.ReadOnlyMemory{System.Double},System.ReadOnlyMemory{System.Double})">
+            <summary>Forward KL: KL(p ‖ q) = Σᵢ pᵢ · log(pᵢ / qᵢ), in nats.</summary>
+        </member>
+        <member name="M:Maths.Information.KlDivergence.Symmetric(System.ReadOnlyMemory{System.Double},System.ReadOnlyMemory{System.Double})">
+            <summary>Symmetric KL (Jeffreys): KL(p ‖ q) + KL(q ‖ p), in nats.</summary>
+        </member>
+        <member name="M:Maths.Information.JSDistance.Distance(System.Double[],System.Double[])">
+            <summary>Spans are sized from <c>p.Length</c>; a shorter <c>q</c> throws at <c>q.AsSpan(0, len)</c> with an unhelpful bounds error rather than at the call boundary.</summary>
+        </member>
+    </members>
+</doc>

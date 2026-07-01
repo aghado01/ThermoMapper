@@ -1,0 +1,114 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Clustering.Graphical.HdbScan</name>
+    </assembly>
+    <members>
+        <member name="T:Clustering.Graphical.HdbScan.HdbscanRunner">
+             <summary>
+             Full HDBSCAN pipeline. Pre-allocates all scratch at construction time and
+             reuses it across <see cref="M:Clustering.Graphical.HdbScan.HdbscanRunner.Run``1(System.ReadOnlySpan{System.Double},System.Int32,System.Int32,``0,System.Nullable{System.Int32},System.Boolean)"/> calls on data of the same N.
+            
+             Pipeline phases:
+               1. Core-distance computation  — k-NN distance per point (minPts neighbour).
+               2. Implicit Prim's MST        — <see cref="M:Graphs.Proximity.ImplicitPrims.ComputeMst``1(System.ReadOnlySpan{System.Double},System.Int32,System.Int32,System.ReadOnlySpan{System.Double},System.Span{System.Boolean},System.Span{System.Double},System.Span{System.Int32},``0)"/>
+                  over the mutual reachability graph; zero edge-list allocation.
+               3. Edge materialisation       — N−1 <see cref="T:Clustering.Graphical.HdbScan.MstEdge"/> structs, sorted
+                  ascending by weight (Kruskal order).
+               4. Dendrogram construction    — single-linkage merge tree via UnionFind;
+                  emits <see cref="T:Clustering.Dendrograms.DendrogramNode"/>[N−1].
+               5. Condensation + extraction  — λ-stability / excess-of-mass pass;
+                  produces <see cref="T:Clustering.Graphical.HdbScan.HdbscanResult"/>.
+             </summary>
+        </member>
+        <member name="M:Clustering.Graphical.HdbScan.HdbscanRunner.Run``1(System.ReadOnlySpan{System.Double},System.Int32,System.Int32,``0,System.Nullable{System.Int32},System.Boolean)">
+            <param name="data">Flat row-major buffer, length N × dim.</param>
+            <param name="dim">Dimensionality of each row in <paramref name="data"/>.</param>
+            <param name="minPts">Smoothing parameter for core-distance computation (≥ 2).</param>
+            <param name="metric">Distance metric; struct-generic so the JIT inlines the call.</param>
+            <param name="minClusterSize">Minimum size for a subtree to be treated as
+            a "real" cluster during condensation. Smaller subtrees fall out of their
+            parent. Defaults to <paramref name="minPts"/> when null. Controls cluster
+            granularity, not the cluster count: larger values → fewer/bigger clusters.</param>
+            <param name="allowSingleCluster">If true, the root cluster can be selected
+            by EOM — useful when the input is one dense blob with outliers (mapper-style
+            cover patches). If false, datasets with no real splits return all-noise
+            (sklearn default behaviour).</param>
+        </member>
+        <member name="M:Clustering.Graphical.HdbScan.HdbscanRunner.ExtractClusters(Clustering.Dendrograms.DendrogramNode[],System.Int32,System.Int32,System.Boolean,Clustering.Dendrograms.Dendrogram)">
+             <summary>
+             HDBSCAN cluster extraction. Walks the dendrogram top-down (λ-increasing)
+             and condenses it into a tree of "real" clusters; then runs excess-of-mass
+             selection over the condensed tree.
+            
+             Each dendrogram split is classified by the size of its two subtrees:
+               • both ≥ minClusterSize → "real split": parent cluster dies, two new
+                 condensed clusters are born; all remaining leaves contribute
+                 (λ_split − λ_birth) to the dying parent's stability.
+               • exactly one ≥ minClusterSize → small side falls out of the parent;
+                 only the small-side leaves contribute; big side continues.
+               • both &lt; minClusterSize → whole remaining subtree falls out;
+                 all remaining leaves contribute.
+            
+             EOM: cluster C is tentatively selected iff stability(C) ≥
+               Σ subtreeStability(child); a top-down sweep then deselects any cluster
+               that has a selected ancestor. The root (id 0) is never selected, so a
+               dataset with no real splits returns all-noise (matches sklearn's
+               default <c>allow_single_cluster=False</c>).
+             </summary>
+        </member>
+        <member name="M:Clustering.Graphical.HdbScan.HdbscanRunner.TagLeaves(Clustering.Dendrograms.DendrogramNode[],System.Int32,System.Int32,System.Int32,System.Int32[],System.Int32[])">
+            <summary>
+            DFS through the dendrogram subtree rooted at <paramref name="subtreeRootId"/>,
+            stamping <paramref name="cid"/> onto every leaf encountered. <paramref name="stack"/>
+            is caller-supplied scratch sized to N — survives worst-case (chain) trees.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.HdbScan.HdbscanRunner.TagFallout(Clustering.Dendrograms.DendrogramNode[],System.Int32,System.Int32,System.Double,System.Double[],System.Int32[])">
+            <summary>
+            DFS that stamps <paramref name="lambda"/> as the fallout λ for every
+            leaf in the subtree rooted at <paramref name="subtreeRootId"/>. Called at
+            falls-out and both-too-small events so each leaf records the λ at which
+            it left its then-current cluster.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.HdbScan.HdbscanResult">
+             <summary>
+             Output of a completed <see cref="M:Clustering.Graphical.HdbScan.HdbscanRunner.Run``1(System.ReadOnlySpan{System.Double},System.Int32,System.Int32,``0,System.Nullable{System.Int32},System.Boolean)"/> call.
+            
+             <see cref="P:Clustering.Graphical.HdbScan.HdbscanResult.Labels"/>: cluster index per point in [0, ClusterCount), or
+               −1 for noise points.
+             <see cref="P:Clustering.Graphical.HdbScan.HdbscanResult.MembershipProbabilities"/>: soft assignment score ∈ [0, 1] for
+               each point. For a point x labelled to cluster L:
+               λ_fallout(x) / λ_death(L) when x's deepest condensed cluster is L itself
+               (the point may have left L early via a small-side falls-out); 1.0 when L
+               is a strict ancestor of x's deepest cluster (x stayed in L until L died).
+               0.0 for noise points.
+             </summary>
+        </member>
+        <member name="M:Clustering.Graphical.HdbScan.HdbscanResult.#ctor(System.Int32[],System.Double[],System.Int32,Clustering.Dendrograms.Dendrogram)">
+             <summary>
+             Output of a completed <see cref="M:Clustering.Graphical.HdbScan.HdbscanRunner.Run``1(System.ReadOnlySpan{System.Double},System.Int32,System.Int32,``0,System.Nullable{System.Int32},System.Boolean)"/> call.
+            
+             <see cref="P:Clustering.Graphical.HdbScan.HdbscanResult.Labels"/>: cluster index per point in [0, ClusterCount), or
+               −1 for noise points.
+             <see cref="P:Clustering.Graphical.HdbScan.HdbscanResult.MembershipProbabilities"/>: soft assignment score ∈ [0, 1] for
+               each point. For a point x labelled to cluster L:
+               λ_fallout(x) / λ_death(L) when x's deepest condensed cluster is L itself
+               (the point may have left L early via a small-side falls-out); 1.0 when L
+               is a strict ancestor of x's deepest cluster (x stayed in L until L died).
+               0.0 for noise points.
+             </summary>
+        </member>
+        <member name="P:Clustering.Graphical.HdbScan.HdbscanResult.Dendrogram">
+            <summary>
+            Raw single-linkage dendrogram produced in Phase 4. Cost axis is
+            mutual-reachability distance; λ = 1/cost is the persistence
+            scalar HDBSCAN's condensation pass consumes. Preserved on the
+            result so downstream plotting / re-analysis (and the
+            <c>userrepl hdbscan</c> persistence layer) can render the merge
+            tree without re-running the pipeline.
+            </summary>
+        </member>
+    </members>
+</doc>

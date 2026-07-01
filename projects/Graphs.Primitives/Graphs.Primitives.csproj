@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Graphs.Primitives</RootNamespace>
+    <AssemblyName>Graphs.Primitives</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\graphs\primitives\*.cs" Link="primitives\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\primitives\mst\*.cs" Link="primitives\mst\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\primitives\neighbors\*.cs" Link="primitives\neighbors\%(Filename)%(Extension)" />
+    <Compile Include="..\..\src\graphs\primitives\traversal\*.cs" Link="primitives\traversal\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Maths.Distance\Maths.Distance.csproj" />
+  </ItemGroup>
+
+  <!-- DO NOT add a ProjectReference to Graphs.Distance. MST hot loops depend on
+       Maths.Distance.IDistanceMetric via this assembly; Graphs.Distance (concrete
+       metric structs + MetricRegistry) depends DOWN on Primitives. A reference
+       back up creates a Primitives <-> Distance cycle. -->
+</Project>

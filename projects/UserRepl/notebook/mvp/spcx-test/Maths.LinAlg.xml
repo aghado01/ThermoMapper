@@ -1,0 +1,260 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Maths.LinAlg</name>
+    </assembly>
+    <members>
+        <member name="M:Maths.LinAlg.BSpline.EvaluateBasis(System.Double,System.Double[],System.Int32)">
+            <summary>
+            Evaluates all non-zero B-spline basis functions of the given degree at parameter t
+            using the Cox–de Boor recurrence. Returns a length-(knots.Length - degree - 1) array;
+            only the entries near the active knot span are non-zero.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.BSpline.MakeClampedKnots(System.Double[],System.Int32)">
+            <summary>
+            Builds a clamped knot vector for a B-spline parameterized on [0, 1].
+            The first and last knot are repeated degree+1 times to clamp the curve
+            to its end control points.
+            </summary>
+        </member>
+        <member name="T:Maths.LinAlg.CholeskyDecomposition">
+            <summary>
+            In-place lower-triangular Cholesky decomposition Σ = LLᵀ with derived quantities
+            for Gaussian statistics: ln|Σ|, Σ⁻¹, and Cholesky-factor sampling.
+            </summary>
+            <remarks>
+            <para>
+            Allocate once per component with <see cref="M:Maths.LinAlg.CholeskyDecomposition.#ctor(System.Int32)"/>, then call
+            <see cref="M:Maths.LinAlg.CholeskyDecomposition.Decompose(System.Double[0:,0:])"/> each time the covariance changes. This avoids per-iteration
+            heap allocations in EM loops.
+            </para>
+            <para>
+            <strong>Diagonal floor.</strong> If a pivot drops to ≤ 1e-12 during decomposition
+            it is clamped, providing a soft guard against near-singular matrices without
+            throwing. Callers that require strict positive-definiteness should add a
+            regularisation term to the diagonal before calling <see cref="M:Maths.LinAlg.CholeskyDecomposition.Decompose(System.Double[0:,0:])"/>.
+            </para>
+            </remarks>
+        </member>
+        <member name="P:Maths.LinAlg.CholeskyDecomposition.LogDet">
+            <summary>
+            ln|Σ| = 2 · Σ_i ln(L_{ii}). Valid after <see cref="M:Maths.LinAlg.CholeskyDecomposition.Decompose(System.Double[0:,0:])"/> has been called.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.CholeskyDecomposition.#ctor(System.Int32)">
+            <param name="dim">Dimensionality of the square covariance matrix.</param>
+        </member>
+        <member name="M:Maths.LinAlg.CholeskyDecomposition.Decompose(System.Double[0:,0:])">
+            <summary>
+            Decomposes <paramref name="sigma"/> into L·Lᵀ, updating <see cref="P:Maths.LinAlg.CholeskyDecomposition.LogDet"/>
+            and preparing the internal L⁻¹ required by <see cref="M:Maths.LinAlg.CholeskyDecomposition.WriteInverseTo(System.Double[0:,0:])"/>
+            and <see cref="M:Maths.LinAlg.CholeskyDecomposition.Sample(System.Random,System.Double[])"/>.
+            </summary>
+            <param name="sigma">
+            Square, symmetric, positive-semi-definite covariance matrix of size dim × dim.
+            Only the lower triangle is read; the upper triangle is ignored.
+            </param>
+        </member>
+        <member name="M:Maths.LinAlg.CholeskyDecomposition.WriteInverseTo(System.Double[0:,0:])">
+            <summary>
+            Writes Σ⁻¹ = (L⁻¹)ᵀ · L⁻¹ into <paramref name="target"/>.
+            Must be called after <see cref="M:Maths.LinAlg.CholeskyDecomposition.Decompose(System.Double[0:,0:])"/>.
+            </summary>
+            <param name="target">Pre-allocated dim × dim matrix to receive Σ⁻¹.</param>
+        </member>
+        <member name="M:Maths.LinAlg.CholeskyDecomposition.WriteLTo(System.Span{System.Double})">
+            <summary>
+            Writes the lower-triangular Cholesky factor L row-major into <paramref name="dst"/>.
+            Length of <paramref name="dst"/> must be dim×dim. Upper-triangle entries are written as 0.
+            Must be called after <see cref="M:Maths.LinAlg.CholeskyDecomposition.Decompose(System.Double[0:,0:])"/>.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.CholeskyDecomposition.Sample(System.Random,System.Double[])">
+            <summary>
+            Returns a sample x = <paramref name="mean"/> + L·z where z ~ N(0, I),
+            using the Box-Muller transform to generate standard normals.
+            Must be called after <see cref="M:Maths.LinAlg.CholeskyDecomposition.Decompose(System.Double[0:,0:])"/>.
+            </summary>
+            <param name="rng">Random number generator.</param>
+            <param name="mean">Mean vector of length dim.</param>
+        </member>
+        <member name="T:Maths.LinAlg.DenseEigen">
+            <summary>
+            Compile-time dispatch point for dense symmetric eigendecomposition.
+            </summary>
+        </member>
+        <member name="T:Maths.LinAlg.Eigen">
+            <summary>
+            Symmetric eigenvalue decomposition (Jacobi + refinement via Cholesky if needed).
+            Suitable for covariance matrices in PCA/ICA.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.EigenFast.DecomposeSymmetricInPlace(System.ReadOnlySpan{System.Double},System.Int32,System.Span{System.Double},System.Span{System.Double},System.Int32,System.Double,Maths.LinAlg.DenseEigenFastVariant)">
+            <summary>
+            v3: High-Performance Upper-Triangle Algebraic Cyclic Jacobi Solver.
+            Zero transcendentals, zero symmetry mirroring overhead, fully vectorized.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.EigenFast.DecomposeSymmetric(System.ReadOnlySpan{System.Double},System.Int32,System.Int32,System.Double,Maths.LinAlg.DenseEigenFastVariant)">
+            <summary>
+            Decomposes a symmetric row-major <c>double[,]</c> matrix and returns eigenvectors as jagged rows.
+            The input is flattened to the fast core's column-major layout before solving.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.FastIca.G(System.Double)">
+            <summary>
+            Nonlinearity: most common and robust choice (logcosh).
+            g(u) = tanh(u), g'(u) = 1 - tanh²(u)
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.MatrixOps.RandomOrthonormal(System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Generates a column-major flat block with <paramref name="k"/> orthonormal
+            vectors in R^<paramref name="n"/>. Layout is [col0 | col1 | ...].
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.MatrixOps.Dot(System.ReadOnlySpan{System.Double},System.ReadOnlySpan{System.Double})">
+            <summary>
+            Calculates the dot product of two vectors with native JIT specialization.
+            Safely tiers down from AVX-512 to AVX2 depending on the executing core's capabilities.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.MatrixOps.ScaledSubtract(System.Span{System.Double},System.ReadOnlySpan{System.Double},System.Double,System.Int32)">
+            <summary>
+            High-performance in-place vector subtraction mapping: qj -= r * qi.
+            Uses aggressive tiered JIT optimization matching execution hardware capabilities.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.MatrixOps.Orthonormalize(System.Double[],System.Int32,System.Int32,System.Double)">
+            <summary>
+            In-place modified Gram-Schmidt over a flat column-major block.
+            Degenerate columns fall back to a projected standard basis vector.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.Pca.Compute(System.Double[][],System.Int32,System.Boolean,System.Boolean)">
+            <summary>
+            Compute PCA. Returns projection basis + diagnostics.
+            </summary>
+        </member>
+        <member name="T:Maths.LinAlg.EigenPair">
+            <summary>
+            Eigenvalue / eigenvector pair returned by spectral routines.
+            <c>Vector</c> is a freshly allocated copy — callers may mutate freely.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.EigenPair.#ctor(System.Double,System.Double[])">
+            <summary>
+            Eigenvalue / eigenvector pair returned by spectral routines.
+            <c>Vector</c> is a freshly allocated copy — callers may mutate freely.
+            </summary>
+        </member>
+        <member name="T:Maths.LinAlg.SpectralMath">
+             <summary>
+             Graph-free dense spectral primitives. Operates on materialised symmetric
+             matrices, dispatches eigendecomposition via <see cref="T:Maths.LinAlg.DenseEigen"/>, and
+             selects the bottom-K eigenpairs (smallest eigenvalues, sorted ascending).
+            
+             Pair this with a graph-aware adapter — e.g.
+             <c>Graphs.Spectral.Spectral.ComputeBottomK</c> — when consuming
+             <c>CsrGraph</c> inputs: that adapter materialises the Laplacian and then
+             delegates the spectral work to the helpers here.
+             </summary>
+        </member>
+        <member name="M:Maths.LinAlg.SpectralMath.BottomK(System.Double[0:,0:],System.Int32,Maths.LinAlg.DenseEigenOptions)">
+            <summary>
+            Bottom-K eigenpairs of a symmetric dense matrix (idiomatic
+            <c>double[,]</c> layout). Returns the K smallest eigenvalues with
+            their eigenvectors, sorted ascending by eigenvalue.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.SpectralMath.BottomK(System.ReadOnlySpan{System.Double},System.Int32,System.Int32,Maths.LinAlg.DenseEigenOptions)">
+            <summary>
+            Bottom-K eigenpairs of a symmetric matrix supplied as a flat
+            column-major span (LAPACK / EigenFast layout). <paramref name="n"/>
+            is the matrix dimension; the span length must equal <c>n × n</c>.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.SpectralMath.SelectBottomK(Maths.LinAlg.EigenResult,System.Int32)">
+            <summary>
+            Selects the bottom-K eigenpairs from an existing decomposition.
+            <see cref="T:Maths.LinAlg.DenseEigen"/> returns eigenvalues sorted descending, so this
+            takes the tail K and re-sorts ascending. Vectors are copied; callers
+            may mutate them without affecting the source <see cref="T:Maths.LinAlg.EigenResult"/>.
+            </summary>
+        </member>
+        <member name="T:Maths.LinAlg.OnlineMahalanobis">
+            <summary>
+            Incremental diagonal Mahalanobis distance estimator using Welford's
+            online algorithm. Update with observations one at a time; query distance
+            at any point with at least two observations accumulated.
+            </summary>
+        </member>
+        <member name="P:Maths.LinAlg.OnlineMahalanobis.Dimension">
+            <summary>Dimensionality of the observation space.</summary>
+        </member>
+        <member name="P:Maths.LinAlg.OnlineMahalanobis.Count">
+            <summary>Number of observations accumulated so far.</summary>
+        </member>
+        <member name="P:Maths.LinAlg.OnlineMahalanobis.IsReady">
+            <summary>
+            Whether at least two observations have been accumulated.
+            Distance() returns 0 for any query until this is true.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.OnlineMahalanobis.#ctor(System.Int32)">
+            <param name="dimension">
+            Number of dimensions per observation. Must be &gt; 0.
+            </param>
+        </member>
+        <member name="M:Maths.LinAlg.OnlineMahalanobis.Update(System.ReadOnlySpan{System.Double})">
+            <summary>
+            Incorporates a new observation into the running statistics.
+            Uses Welford's numerically stable update.
+            </summary>
+            <param name="observation">
+            Array of length <see cref="P:Maths.LinAlg.OnlineMahalanobis.Dimension"/>. Not mutated.
+            </param>
+        </member>
+        <member name="M:Maths.LinAlg.OnlineMahalanobis.Update(System.Double[])">
+            <summary>Array overload of <see cref="M:Maths.LinAlg.OnlineMahalanobis.Update(System.ReadOnlySpan{System.Double})"/>.</summary>
+        </member>
+        <member name="M:Maths.LinAlg.OnlineMahalanobis.Distance(System.ReadOnlySpan{System.Double})">
+            <summary>
+            Computes the diagonal Mahalanobis distance from
+            <paramref name="observation"/> to the current running mean.
+            Returns 0 if fewer than two observations have been accumulated.
+            </summary>
+            <param name="observation">
+            Array of length <see cref="P:Maths.LinAlg.OnlineMahalanobis.Dimension"/>. Not mutated.
+            </param>
+        </member>
+        <member name="M:Maths.LinAlg.OnlineMahalanobis.Distance(System.Double[])">
+            <summary>Array overload of <see cref="M:Maths.LinAlg.OnlineMahalanobis.Distance(System.ReadOnlySpan{System.Double})"/>.</summary>
+        </member>
+        <member name="M:Maths.LinAlg.OnlineMahalanobis.Distance(System.ReadOnlySpan{System.Double},System.ReadOnlySpan{System.Double})">
+            <summary>
+            Computes the diagonal Mahalanobis distance between two arbitrary
+            observations using the current running statistics as the normalizer.
+            Useful for pairwise distance queries against a reference distribution.
+            Returns 0 if fewer than two observations have been accumulated.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.OnlineMahalanobis.GetVariances">
+            <summary>
+            Returns a snapshot of the current per-dimension sample variances.
+            Variance[i] = M2[i] / (Count - 1). Returns zeros if Count &lt; 2.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.OnlineMahalanobis.GetMean">
+            <summary>
+            Returns a snapshot of the current running mean.
+            </summary>
+        </member>
+        <member name="M:Maths.LinAlg.OnlineMahalanobis.Reset">
+            <summary>
+            Resets all accumulated statistics. Dimension is preserved.
+            </summary>
+        </member>
+    </members>
+</doc>

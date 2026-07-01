@@ -1,0 +1,377 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Graphs.Primitives</name>
+    </assembly>
+    <members>
+        <member name="T:Graphs.Primitives.BfsShellsResult">
+            <summary>
+            Result of a single-source BFS shell decomposition over a graph.
+            </summary>
+        </member>
+        <member name="P:Graphs.Primitives.BfsShellsResult.SeedNode">
+            <summary>Seed node BFS was launched from.</summary>
+        </member>
+        <member name="P:Graphs.Primitives.BfsShellsResult.Distances">
+            <summary>Hop distance per node. <c>Distances[i] == -1</c> means node
+            <c>i</c> was unreachable from the seed within the (optional) max depth.</summary>
+        </member>
+        <member name="P:Graphs.Primitives.BfsShellsResult.Shells">
+            <summary>Shell decomposition. <c>Shells[d]</c> is the array of node
+            indices at hop distance <c>d</c> from the seed. <c>Shells[0]</c>
+            always contains exactly the seed. <c>Shells.Length</c> == MaxDepth + 1.</summary>
+        </member>
+        <member name="P:Graphs.Primitives.BfsShellsResult.MaxDepth">
+            <summary>Deepest hop distance reached. Equal to <c>Shells.Length - 1</c>.</summary>
+        </member>
+        <member name="P:Graphs.Primitives.BfsShellsResult.ReachableNodeCount">
+            <summary>Total nodes reached. Equal to the sum of <c>Shells[d].Length</c>.</summary>
+        </member>
+        <member name="T:Graphs.Primitives.BfsShells">
+            <summary>
+            Single-source BFS over a <see cref="T:Graphs.Primitives.CsrGraph"/>. Returns both per-node
+            hop distances and the shell decomposition (nodes grouped by distance).
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.BfsShells.Compute(Graphs.Primitives.CsrGraph,System.Int32,System.Nullable{System.Int32})">
+            <summary>
+            Run BFS from <paramref name="seedNode"/> over <paramref name="graph"/>.
+            Returns hop distances and shells.
+            </summary>
+            <param name="graph">Source graph. Edges are traversed unweighted (each
+            counts as one hop) — for weighted shortest paths use Dijkstra (not yet
+            in this primitive). The CSR's symmetric edge storage means the BFS
+            proceeds as on an undirected graph.</param>
+            <param name="seedNode">Starting node, in [0, NodeCount).</param>
+            <param name="maxDepth">Optional hop-count cap. If specified, BFS stops
+            expanding past this depth. <c>null</c> means BFS the entire reachable
+            set. Useful for local-shell analyses (e.g., k-hop neighborhoods).</param>
+        </member>
+        <member name="M:Graphs.Primitives.BfsShells.ComputeDistances(Graphs.Primitives.CsrGraph,System.Int32,System.Nullable{System.Int32})">
+            <summary>
+            Convenience: BFS from seed and return only the per-node hop distances.
+            Equivalent to <c>Compute(graph, seedNode, maxDepth).Distances</c> but
+            skips the shell materialization when callers only need distances.
+            </summary>
+        </member>
+        <member name="T:Graphs.Primitives.Edge">
+            <summary>
+            Weighted undirected edge between two data points. <c>J</c> is the coupling
+            strength (kernel-transformed distance), not the raw distance. Lives here
+            because <see cref="M:Graphs.Primitives.CsrGraph.FromEdges(Graphs.Primitives.Edge[],System.Int32)"/> is its primary consumer; any
+            builder that produces a graph passes an array of these to be densified
+            into CSR form.
+            </summary>
+        </member>
+        <member name="T:Graphs.Primitives.CsrGraph">
+            <summary>
+            Symmetric CSR adjacency graph. Each undirected edge is stored in both
+            endpoint rows. The Swendsen-Wang inner loop skips target &lt;= source to
+            process each edge exactly once. Also used as the shared adjacency
+            structure for TDA passes (LocalTangent, BFS orientation propagation).
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.CsrGraph.FromEdges(Graphs.Primitives.Edge[],System.Int32)">
+            <summary>
+            Build a symmetric CSR graph from an undirected Edge[] where each
+            edge appears once (source &lt; target is not required, but duplicates
+            must not exist).
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.CsrGraph.Degree(System.Int32)">
+            <summary>
+            Unweighted degree of a node — the count of CSR row entries for it.
+            Replaces the inline <c>RowPointers[node+1] - RowPointers[node]</c>
+            idiom scattered across diagnostics and the LMP post-filter.
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.CsrGraph.WeightedDegree(System.Int32)">
+            <summary>
+            Sum of edge weights incident to a node. The Laplacian-diagonal
+            quantity D[v,v]; consumed by <c>AlgebraicConnectivity</c>'s
+            Laplacian construction and by any other diagnostic that wants
+            volume-style summaries.
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.CsrGraph.InducedSubgraph(System.Boolean[],System.Int32[]@,System.Int32[]@)">
+            <summary>
+            Build a new <see cref="T:Graphs.Primitives.CsrGraph"/> on the subset of nodes selected by
+            <paramref name="nodeMask"/>. Only edges whose <em>both</em> endpoints
+            are masked are retained; edge weights are copied verbatim. Output
+            node indices are densely renumbered in <c>[0, subN)</c>; use
+            <paramref name="newToOld"/> to translate back, or
+            <paramref name="oldToNew"/> for the reverse direction
+            (<c>-1</c> for nodes that were filtered out).
+            </summary>
+            <remarks>
+            O(N + E) time and space. The MAPPER-SPC patch driver consumes this:
+            given a Mapper cover bin's preimage, restrict the full proximity
+            graph to that bin's nodes and hand the result to the adaptive SPC
+            scheduler. Output preserves the input's CSR symmetry — if both
+            (i,j) and (j,i) survive the mask, both entries appear in the result.
+            </remarks>
+        </member>
+        <member name="T:Graphs.Primitives.Statistics">
+            <summary>
+            Shared statistical primitives used across bandwidth estimation and
+            graph diagnostics. Hoists what used to be 4 independent
+            <c>MedianOfSorted</c> implementations (in <c>BandwidthEstimation</c>,
+            <c>EdgeWeights</c>, <c>MstBridge</c>, <c>NeighborhoodScale</c>) and 2
+            inline skewness implementations (<c>Hubness</c>, <c>MstBridge</c>)
+            into one source of truth so the constants and edge cases don't
+            drift apart over time.
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.Statistics.MedianOfSorted(System.ReadOnlySpan{System.Double})">
+            <summary>
+            Median of a pre-sorted span. Even-length spans return the
+            arithmetic mean of the two middle values; odd-length spans
+            return the single middle. Empty span → 0.
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.Statistics.Skewness(System.ReadOnlySpan{System.Double})">
+            <summary>
+            Population skewness (γ₁) of a value sample:
+            <c>m₃ / m₂^(3/2)</c> where <c>m_k = E[(x − x̄)^k]</c>.
+            Returns 0 when the sample has fewer than 2 values or when
+            variance is below the numerical floor.
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.Statistics.Skewness(System.ReadOnlySpan{System.Int32})">
+            <summary>
+            Skewness over an integer sample (in-degree histograms, count
+            vectors). Promotes to <see cref="T:System.Double"/> internally; same
+            definition + variance floor as the double overload.
+            </summary>
+        </member>
+        <member name="T:Graphs.Primitives.TriangleCount">
+             <summary>
+             Pure graph operation: count 3-cycles (triangles) in an undirected
+             <see cref="T:Graphs.Primitives.CsrGraph"/> via sorted-adjacency neighbor intersection.
+             Lives in <c>Graphs.Primitives</c> rather than <c>TDA.Primitives</c>
+             because the operation is structural (counts closed triplets in the
+             adjacency relation) and has no topological content — TDA
+             consumers depend on it, not the other way around.
+             </summary>
+             <remarks>
+             <para><b>Algorithm.</b> Build sorted adjacency lists per node (CSR
+             rows are not guaranteed sorted), then for each ordered edge
+             <c>u &lt; v</c> count shared neighbors <c>w &gt; v</c>. The
+             per-pair intersection is linear-merge over the two sorted lists.
+             Each triangle <c>{u, v, w}</c> with <c>u &lt; v &lt; w</c> is
+             counted exactly once.</para>
+            
+             <para><b>Cost.</b> O(Σ_v d(v)²) in the worst case, dominated by
+             the intersection step on high-degree vertices. Fine for the
+             proximity graphs SPC and diagnostics actually consume (~50–5000
+             nodes, bounded k). Not appropriate for dense general graphs;
+             the <c>Cycles</c> diagnostic gates this behind a node-count cap.</para>
+             </remarks>
+        </member>
+        <member name="T:Graphs.Primitives.UnionFind">
+            <summary>
+            Path-compressed union-find with union-by-size.
+            Used for graph connectivity diagnostics in GraphBuilder.Validate.
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.UnionFind.Size(System.Int32)">
+            <summary>
+            Returns the size of the component whose root is <paramref name="root"/>.
+            Caller must pass a root (e.g. the return value of <see cref="M:Graphs.Primitives.UnionFind.Find(System.Int32)"/>);
+            no Find is performed here.
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.UnionFind.Reroot(System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Relabels the current root of <paramref name="member"/>'s component as
+            <paramref name="newId"/> and stamps the component size. Used by HDBSCAN's
+            Kruskal pass to assign fresh internal-node ids (in [N, 2N-2]) after each
+            merge. The structure must have been allocated with capacity for
+            <paramref name="newId"/>.
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.UnionFind.Reset">
+            <summary>
+            Resets all nodes to singleton components without reallocation.
+            Used by PottsModel to reuse the structure across Swendsen-Wang sweeps.
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.UnionFind.GetLabels">
+            <summary>
+            Returns the canonical root label for each node.
+            </summary>
+        </member>
+        <member name="M:Graphs.Primitives.UnionFind.WriteRootSizesTo(System.Span{System.Int32})">
+            <summary>
+            Walks the parent array once and writes the size of each component
+            (one entry per UF root) into <paramref name="sizes"/>. Returns the
+            number of roots written. <paramref name="sizes"/> must have capacity
+            at least N.
+            </summary>
+            <remarks>
+            O(N), zero allocation. Sizes are written in the order roots are
+            encountered while scanning indices <c>0..N-1</c>; this ordering
+            carries no semantic meaning — callers should treat the output as a
+            multiset. Relies on <c>_size[root]</c> being maintained at union
+            time, which is why this UF carries union-by-size in the first place.
+            </remarks>
+        </member>
+        <member name="T:Graphs.Distance.IDistanceMetric">
+            <summary>
+            Struct-constrained distance metric. Implementations must be
+            <see langword="readonly struct"/> so the JIT devirtualises and inlines
+            <see cref="M:Graphs.Distance.IDistanceMetric.Distance(System.ReadOnlySpan{System.Double},System.ReadOnlySpan{System.Double})"/> into hot loops (e.g. ImplicitPrims).
+            </summary>
+            <remarks>
+            <para><b>Properties.</b> Every metric also declares a
+            <see cref="T:Graphs.Distance.MetricProperties"/> descriptor — its domain constraints,
+            range, and the right bandwidth-estimation strategy. The descriptor is
+            consulted once at graph-build time (input validation, bandwidth
+            dispatch) and never touches the hot path. Implementations should
+            return a cached/static <see cref="T:Graphs.Distance.MetricProperties"/> instance from
+            the <see cref="P:Graphs.Distance.IDistanceMetric.Properties"/> getter — the JIT will fold the constant
+            at the call site.</para>
+            </remarks>
+        </member>
+        <member name="T:Graphs.Distance.BandwidthStrategy">
+            <summary>
+            How bandwidth should be estimated for a given metric — consumed by
+            the graph-construction layer's bandwidth dispatch (Pass 3). The
+            enum lives here in Pass 2 so every metric struct can declare its
+            preference up front; Pass 3 wires the dispatch in
+            <see cref="!:Graphs.BandwidthEstimation"/>.
+            </summary>
+        </member>
+        <member name="F:Graphs.Distance.BandwidthStrategy.MadConsistencyFactor">
+            <summary>
+            MAD of nearest-neighbor distances rescaled by the kernel's
+            MAD-to-σ consistency factor (the historical default). Correct
+            for Euclidean / Manhattan / Minkowski distances in moderate
+            dimensions where NN distances are approximately distributed as
+            half-normal / exponential / Cauchy draws.
+            </summary>
+        </member>
+        <member name="F:Graphs.Distance.BandwidthStrategy.QuantileNormalized">
+            <summary>
+            Normalize NN distances to <c>[0, 1]</c> by dividing by a high
+            quantile (e.g. 95th percentile), then apply the standard MAD
+            dispatch in normalized space. Right for bounded metrics
+            (JSD, FisherRao/Simplex, Cosine) where MAD-on-raw-distances is
+            scale-mismatched against the consistency factors.
+            </summary>
+        </member>
+        <member name="F:Graphs.Distance.BandwidthStrategy.LogScaleHyperbolic">
+            <summary>
+            MAD computed on <c>log(d + 1)</c> of NN distances, then
+            back-transformed. Right for hyperbolic metrics (Poincaré)
+            where the NN distance distribution is roughly log-normal and
+            raw MAD is dominated by boundary-region outliers.
+            </summary>
+        </member>
+        <member name="T:Graphs.Distance.MetricProperties">
+            <summary>
+            Companion descriptor for <see cref="T:Graphs.Distance.IDistanceMetric"/>. Encodes
+            the metric's domain constraints, range, and the right way to
+            estimate kernel bandwidth from its NN distance sample. Consulted
+            once at graph-build time — never on the hot path.
+            </summary>
+            <param name="IsBounded">True when distance values are bounded
+            above (cosine ≤ π, JSD ≤ 1, etc.). When true, <see cref="P:Graphs.Distance.MetricProperties.MaxValue"/>
+            is the upper bound; when false, <see cref="P:Graphs.Distance.MetricProperties.MaxValue"/> is
+            meaningless.</param>
+            <param name="MaxValue">Upper bound of <c>Distance(a, b)</c> when
+            <see cref="P:Graphs.Distance.MetricProperties.IsBounded"/> is true. Ignored otherwise.</param>
+            <param name="RequiresProbability">True when inputs must be valid
+            probability mass functions (non-negative, sum to 1). The
+            FisherRao-simplex and JSD metrics require this.</param>
+            <param name="RequiresUnitNorm">True when inputs are expected to be
+            L2-normalized. The cosine spherical-geodesic family requires this.</param>
+            <param name="FixedDimension">When non-null, the metric only accepts
+            vectors of exactly this length (e.g. FisherRao/half-plane is 2D
+            only, Wasserstein-1 is 1D only).</param>
+            <param name="BandwidthStrategy">The recommended bandwidth strategy
+            (see <see cref="T:Graphs.Distance.BandwidthStrategy"/>). Pass 3 wires
+            the dispatch.</param>
+            <param name="Name">Stable human-readable identifier for logging /
+            validation messages.</param>
+        </member>
+        <member name="M:Graphs.Distance.MetricProperties.#ctor(System.Boolean,System.Double,System.Boolean,System.Boolean,System.Nullable{System.Int32},Graphs.Distance.BandwidthStrategy,System.String)">
+            <summary>
+            Companion descriptor for <see cref="T:Graphs.Distance.IDistanceMetric"/>. Encodes
+            the metric's domain constraints, range, and the right way to
+            estimate kernel bandwidth from its NN distance sample. Consulted
+            once at graph-build time — never on the hot path.
+            </summary>
+            <param name="IsBounded">True when distance values are bounded
+            above (cosine ≤ π, JSD ≤ 1, etc.). When true, <see cref="P:Graphs.Distance.MetricProperties.MaxValue"/>
+            is the upper bound; when false, <see cref="P:Graphs.Distance.MetricProperties.MaxValue"/> is
+            meaningless.</param>
+            <param name="MaxValue">Upper bound of <c>Distance(a, b)</c> when
+            <see cref="P:Graphs.Distance.MetricProperties.IsBounded"/> is true. Ignored otherwise.</param>
+            <param name="RequiresProbability">True when inputs must be valid
+            probability mass functions (non-negative, sum to 1). The
+            FisherRao-simplex and JSD metrics require this.</param>
+            <param name="RequiresUnitNorm">True when inputs are expected to be
+            L2-normalized. The cosine spherical-geodesic family requires this.</param>
+            <param name="FixedDimension">When non-null, the metric only accepts
+            vectors of exactly this length (e.g. FisherRao/half-plane is 2D
+            only, Wasserstein-1 is 1D only).</param>
+            <param name="BandwidthStrategy">The recommended bandwidth strategy
+            (see <see cref="T:Graphs.Distance.BandwidthStrategy"/>). Pass 3 wires
+            the dispatch.</param>
+            <param name="Name">Stable human-readable identifier for logging /
+            validation messages.</param>
+        </member>
+        <member name="P:Graphs.Distance.MetricProperties.IsBounded">
+            <summary>True when distance values are bounded
+            above (cosine ≤ π, JSD ≤ 1, etc.). When true, <see cref="P:Graphs.Distance.MetricProperties.MaxValue"/>
+            is the upper bound; when false, <see cref="P:Graphs.Distance.MetricProperties.MaxValue"/> is
+            meaningless.</summary>
+        </member>
+        <member name="P:Graphs.Distance.MetricProperties.MaxValue">
+            <summary>Upper bound of <c>Distance(a, b)</c> when
+            <see cref="P:Graphs.Distance.MetricProperties.IsBounded"/> is true. Ignored otherwise.</summary>
+        </member>
+        <member name="P:Graphs.Distance.MetricProperties.RequiresProbability">
+            <summary>True when inputs must be valid
+            probability mass functions (non-negative, sum to 1). The
+            FisherRao-simplex and JSD metrics require this.</summary>
+        </member>
+        <member name="P:Graphs.Distance.MetricProperties.RequiresUnitNorm">
+            <summary>True when inputs are expected to be
+            L2-normalized. The cosine spherical-geodesic family requires this.</summary>
+        </member>
+        <member name="P:Graphs.Distance.MetricProperties.FixedDimension">
+            <summary>When non-null, the metric only accepts
+            vectors of exactly this length (e.g. FisherRao/half-plane is 2D
+            only, Wasserstein-1 is 1D only).</summary>
+        </member>
+        <member name="P:Graphs.Distance.MetricProperties.BandwidthStrategy">
+            <summary>The recommended bandwidth strategy
+            (see <see cref="T:Graphs.Distance.BandwidthStrategy"/>). Pass 3 wires
+            the dispatch.</summary>
+        </member>
+        <member name="P:Graphs.Distance.MetricProperties.Name">
+            <summary>Stable human-readable identifier for logging /
+            validation messages.</summary>
+        </member>
+        <member name="P:Graphs.Distance.MetricProperties.Default">
+            <summary>
+            Fallback descriptor: unbounded, unconstrained, MAD-consistency-factor
+            bandwidth, name <c>"unknown"</c>. Use only as a placeholder; every
+            real metric should declare its own properties.
+            </summary>
+        </member>
+        <member name="M:Graphs.Distance.MetricProperties.ValidateDimension(System.Int32)">
+            <summary>
+            Validates that an input batch matches the metric's contract.
+            Currently checks <see cref="P:Graphs.Distance.MetricProperties.FixedDimension"/>; richer checks
+            (RequiresProbability, RequiresUnitNorm) land with the bandwidth
+            dispatch work in Pass 3. Throws <see cref="T:System.ArgumentException"/>
+            on the first violation with a message identifying the metric
+            and the offending dimension.
+            </summary>
+            <param name="dimension">Common dimension of every input vector.</param>
+        </member>
+    </members>
+</doc>

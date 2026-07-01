@@ -1,0 +1,2187 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Clustering.Graphical.SPC</name>
+    </assembly>
+    <members>
+        <member name="T:Clustering.Graphical.SPC.Evaluation.BondConductance">
+             <summary>
+             Average per-cluster graph conductance on the bond-probability-weighted
+             graph: for each cluster <c>c</c>,
+             <c>φ(c) = cut(c) / min(vol(c), 2m − vol(c))</c>; the evaluator
+             returns the mean of <c>φ(c)</c> across non-trivial clusters.
+             </summary>
+             <remarks>
+             <para><b>Definitions.</b>
+             <list type="bullet">
+               <item><c>cut(c) = Σ_{i ∈ c, j ∉ c} w_ij</c> — bond weight on edges
+                 crossing cluster <c>c</c>'s boundary.</item>
+               <item><c>vol(c) = Σ_{i ∈ c} k_i</c> — weighted degree sum inside <c>c</c>.</item>
+               <item><c>2m = Σ_i k_i</c> — total weighted-degree mass.</item>
+             </list>
+             Each cross-boundary edge contributes its weight to both endpoint
+             clusters' cut counts (it leaves both sides), so the per-cluster cut
+             is accumulated symmetrically.</para>
+            
+             <para><b>Range.</b> <c>[0, 1]</c>. <b>Lower is better.</b> A
+             well-isolated cluster has nearly all its bond weight internal —
+             conductance near 0. A cluster that's mostly boundary has conductance
+             approaching 1. Average across clusters gives a partition-level score
+             where small values indicate the cut respects bond density
+             (clusters are tightly bound, weakly leaving).</para>
+            
+             <para><b>Why pair with modularity + coverage.</b>
+             <list type="bullet">
+               <item>Modularity: null-model-adjusted internal density (global).</item>
+               <item>Coverage: raw internal fraction (global).</item>
+               <item>Conductance: per-cluster boundary tightness, averaged.</item>
+             </list>
+             Together they triangulate "is this a good cut" from three orthogonal
+             angles.</para>
+            
+             <para><b>Edge cases.</b> A single cluster has cut 0 and conductance
+             0 (perfect by this metric — degenerate). Empty / single-node graphs
+             return 0. Clusters whose <c>min(vol(c), 2m − vol(c))</c> is zero are
+             skipped from the average (the formula is undefined).</para>
+            
+             <para><b>Requires.</b> Tier 1 edge observables.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Evaluation.BondCoverage">
+             <summary>
+             Fraction of total bond weight that lies within clusters:
+             <c>Coverage = (Σ_{ij: c_i=c_j} w_ij) / (Σ_{ij} w_ij)</c>.
+             </summary>
+             <remarks>
+             <para><b>Reading.</b> Raw "internal density" — what fraction of the
+             SW dynamics' bond activity is captured inside the partition's
+             clusters. Range <c>[0, 1]</c>; <b>higher is better.</b> Complements
+             <see cref="T:Clustering.Graphical.SPC.Evaluation.BondModularity"/>: coverage is the unadjusted internal
+             fraction; modularity is the same quantity adjusted against a degree-
+             preserving null model.</para>
+            
+             <para><b>Edge cases.</b> Returns 0 when there are no bonds (total
+             weight zero); returns 1 when the partition has a single cluster
+             (every edge is internal). Singleton clusters drop coverage toward 0
+             because every edge becomes a cut.</para>
+            
+             <para><b>Why pair with modularity.</b> Coverage rewards lumping
+             everything into one cluster; modularity penalizes that. Reading
+             both gives a more honest view than either alone: high coverage +
+             low modularity = "trivial big-cluster partition"; high coverage +
+             high modularity = "genuinely community-shaped."</para>
+            
+             <para><b>Requires.</b> Tier 1 edge observables.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Evaluation.BondModularity">
+             <summary>
+             Newman-Girvan modularity on the bond-probability-weighted graph.
+             Quantifies how much more strongly nodes are bonded within their
+             assigned cluster than would be expected from a random graph with
+             the same weighted degree sequence.
+             </summary>
+             <remarks>
+             <para><b>Definition.</b>
+             <code>Q = (1/2m) Σ_{ij} [w_ij − k_i·k_j / 2m] · δ(c_i, c_j)</code>
+             where <c>w_ij = ⟨ω(e)⟩</c> is the equilibrium bond probability,
+             <c>k_i = Σ_j w_ij</c> is the weighted degree,
+             <c>m = (1/2) Σ_i k_i</c> is the total edge weight, and
+             <c>δ(c_i, c_j) = 1</c> when both nodes share a cluster.</para>
+            
+             <para><b>Range.</b> <c>[-0.5, 1]</c>. Positive = the partition
+             captures more within-cluster bond weight than the null model expects;
+             values near 0 = random-quality; strongly negative = the partition
+             cuts where bonds are densest. <b>Higher is better.</b></para>
+            
+             <para><b>Edge cases.</b> Returns 0 for trivial cases (no edges, no
+             nodes, zero total weight). Single-cluster partition trivially scores
+             0. Singleton clusters score negatively.</para>
+            
+             <para><b>Requires.</b> Tier 1 edge observables.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Evaluation.ISpcEvaluator">
+             <summary>
+             Domain-specific cluster-quality evaluator. Scores a
+             <see cref="T:Clustering.Graphical.SPC.Partitions.Partition"/> against an <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult"/>'s
+             equilibrium observables — the kind of quality measure that requires
+             SPC-specific structure (graph + bond/spin-agreement accumulators)
+             rather than just data + labels.
+             </summary>
+             <remarks>
+             <para><b>Family.</b> Internal-validation indices that consume only
+             <c>(data, labels)</c> live in
+             <c>Clustering.Evaluation.Internal.IInternalClusterEvaluator</c>;
+             external indices that compare two label arrays live in
+             <c>Clustering.Evaluation.External.IExternalClusterEvaluator</c>. The
+             SPC-aware family lives here because its inputs include SPC-specific
+             types (<see cref="T:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult"/>) that the application-agnostic
+             evaluation framework deliberately does not know about.</para>
+            
+             <para><b>Namespace mirroring.</b> <c>Clustering.Graphical.SPC.Evaluation</c>
+             mirrors the parent <c>Clustering.Evaluation</c>; the family is the
+             SPC-specific sibling of the application-agnostic evaluation
+             framework.</para>
+            
+             <para><b>Direction.</b> Higher-or-lower-is-better is index-specific;
+             each concrete implementation documents its direction.</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Evaluation.ISpcEvaluator.Name">
+            <summary>
+            Stable identifier used as the key when the score lands in
+            <c>SpcSessionResult.EvaluatorScores</c> (and thereby as a CSV
+            column header). Defaults to the runtime type name; concrete
+            implementations override with a short canonical form
+            (e.g. <c>"BondModularity"</c>) to keep CSV column headers stable
+            across refactors that might rename the implementing type.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Evaluation.ISpcEvaluator.Evaluate(Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult,Clustering.Graphical.SPC.Partitions.Partition)">
+            <param name="run">Equilibrium output of an SPC run — supplies the
+            graph and (optionally) edge observables that SPC-aware quality
+            measures consume.</param>
+            <param name="partition">The partition to score.</param>
+            <returns>A scalar quality score; direction is index-specific.</returns>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Export.SpcCsvWriter">
+            <summary>
+            Canonical SPC CSV writer. Owns the per-output filename conventions and
+            the convenience batch shape ("write all standard CSVs to one directory").
+            Each <c>Write*</c> method is intentionally thin: pull a projection from
+            <see cref="T:Clustering.Graphical.SPC.Export.SpcTabularProjections"/>, write atomically, return the path.
+            </summary>
+            <remarks>
+            <para>Two-tier access pattern:</para>
+            <list type="bullet">
+              <item>Use these methods when you want the SPC-canonical filename and
+                default CSV shape — the common case.</item>
+              <item>Use <see cref="T:Clustering.Graphical.SPC.Export.SpcTabularProjections"/> directly when you need a
+                non-canonical filename, alternate CSV shape, or want to compose the
+                projection with other tabular machinery.</item>
+            </list>
+            <para>Atomic writes are provided by
+            <see cref="M:Archivory.Tabular.TabularProjectionExtensions.WriteToFile(Archivory.Tabular.ITabularProjection,System.String,System.Char,System.String)"/>; partial writes
+            never leave a half-written file at the canonical path.</para>
+            </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Export.SpcCsvWriter.WriteReplicaTraces(System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult},System.String)">
+            <summary>
+            One row per <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult"/> frame — preserves the
+            (T, replica) trace pre-averaging so variance-band plotting in
+            Python is straightforward. See
+            <see cref="M:Clustering.Graphical.SPC.Export.SpcTabularProjections.CreateReplicaTracesProjection(System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult},System.String)"/>
+            for the column schema.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Export.SpcCsvWriter.WriteFinalEdges(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables,System.String)">
+            <summary>
+            One row per undirected edge at the chosen-T equilibrium, carrying
+            source/target/weight + bond_frequency + spin_agreement. The flat
+            counterpart to the binary <c>.spce</c> sidecar — preferred for
+            Python-side edge-weight inspection. Returns the written path; or
+            <see langword="null"/> when <paramref name="edges"/> is null
+            (e.g. a Standard-tier final pass that didn't request edge
+            observables).
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Export.SpcCsvWriter.WriteAllToDirectory(Clustering.Graphical.SPC.SpcSessionResult,System.String,System.Double[][],System.Int32[],System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulePartitionRollup})">
+            <summary>
+            Write the canonical SPC CSV bundle for one session to
+            <paramref name="runDirectory"/>. Each CSV is written atomically with
+            its canonical filename (see the <c>*FileName</c> constants). Optional
+            inputs are only written when supplied.
+            </summary>
+            <remarks>
+            Callers typically create the run directory first via
+            <see cref="M:Clustering.Graphical.SPC.Export.SpcOutputPathHelper.CreateRunDirectory(System.String,System.String,System.Boolean)"/>, which applies
+            the timestamped <c>{yyyyMMdd}_{HHmmss}__{runName}__{guid}</c>
+            convention so concurrent or sequential runs do not overwrite one
+            another.
+            </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Export.SpcOutputPathHelper">
+            <summary>
+            Directory-layout helpers for SPC runs. Owns the on-disk structure
+            (timestamped run-directory naming, <c>csv/</c> subdirectory,
+            <c>checkpoints/</c> subdirectory) but defers per-file naming to
+            <see cref="T:Clustering.Graphical.SPC.Export.SpcCsvWriter"/>, which is the single source of truth for
+            canonical filenames.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Export.SpcOutputPathHelper.CreateRunDirectory(System.String,System.String,System.Boolean)">
+            <summary>
+            Create a unique run directory under <paramref name="baseDirectory"/>
+            using the <c>{yyyyMMdd}_{HHmmss}__{runName}__{guid}</c> pattern so
+            concurrent or sequential runs do not overwrite one another. Set
+            <paramref name="includeGuid"/> to <see langword="false"/> for a
+            shorter <c>{yyyyMMdd}_{HHmmss}__{runName}</c> shape when the
+            timestamp alone is unique enough.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Export.SpcTabularProjections">
+            <summary>
+            Domain-specific projections that map SPC types to
+            <see cref="T:Archivory.Tabular.TabularProjection"/> instances. One factory per domain type;
+            column naming and shape are canonical so downstream tooling can rely on
+            stable column names across runs.
+            </summary>
+            <remarks>
+            Consumes the general-purpose
+            <see cref="M:Archivory.Tabular.TabularProjectionFactory.CreateIndexed(System.String,System.Int32)"/> and
+            <see cref="M:Archivory.Tabular.TabularProjectionFactory.CreateScalar(System.String)"/> builders for plumbing
+            — column-list assembly, optional-column handling, dictionary flattening
+            — so the methods here express only the SPC-specific decisions about
+            what to surface and what each column is called.
+            </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Export.SpcTabularProjections.CreateReplicaTracesProjection(System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult},System.String)">
+            <summary>
+            One row per <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult"/> frame, preserving the
+            (T, replica, round) trace before averaging. Designed for
+            variance-band plotting in Python — the standard
+            <c>spc_sweep.csv</c> only carries the averaged χ(T) / Cv(T) /
+            label-entropy curves, so cross-replica variance gets lost. This
+            projection keeps the raw per-frame signals so the spread can be
+            reconstructed downstream.
+            </summary>
+            <remarks>
+            <para><b>Columns.</b> <c>temperature</c>, <c>replica_index</c>,
+            <c>cycle_count</c>, <c>chi_fk</c>, <c>cv</c>, <c>label_entropy</c>,
+            <c>mean_energy</c>, <c>mean_magnetization</c>,
+            <c>magnetization_variance</c>. Signals mirror the formulas used
+            by the <c>Susceptibility</c> / <c>SpecificHeat</c> / <c>LabelEntropy</c>
+            / <c>Magnetization</c> reductions, computed per-frame rather
+            than aggregated across the (T, replica) bucket.</para>
+            </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Export.SpcTabularProjections.CreateFinalEdgesProjection(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables,System.String)">
+             <summary>
+             One row per undirected edge of the input graph, carrying the
+             CSR weight + the equilibrium bond-frequency and spin-agreement
+             rates the chosen-T final pass measured. The natural "edge view"
+             for Python-side inspection — same data the threshold partition
+             strategies see, surfaced as a flat CSV instead of a
+             per-checkpoint <c>.spce</c> binary.
+             </summary>
+             <remarks>
+             <para><b>Upper-triangle only.</b> The CSR stores each undirected
+             edge twice (once per endpoint); this projection emits only
+             <c>i &lt; j</c> to match the convention threshold partition
+             strategies use.</para>
+            
+             <para><b>Columns.</b> <c>source</c>, <c>target</c>, <c>weight</c>,
+             <c>bond_frequency</c> (<c>BondFormedCount/CycleCount</c>),
+             <c>spin_agreement</c> (<c>SpinAgreementCount/CycleCount</c>).</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Observables.Projections.BondFrequencyBinaryEntropySum">
+             <summary>
+             Per-node sum of binary entropies of incident bond probabilities:
+             <c>V_i = Σ_{j ∈ N(i)} H_2(⟨ω(i,j)⟩)</c>
+             where <c>H_2(p) = −p log₂ p − (1−p) log₂(1−p)</c>.
+             </summary>
+             <remarks>
+             <para><b>Interpretation.</b> Binary entropy is zero when the bond
+             frequency saturates at 0 or 1 (the edge is permanently broken or
+             permanently fused — empty space or deep core respectively) and
+             peaks at <c>p = 0.5</c> (the edge is "flickering" — forming on
+             roughly half of SW cycles). Summed over a node's incident edges,
+             <c>V_i</c> is high for nodes whose neighborhoods sit on volatile
+             boundaries — the structural fracture lines of the dataset.</para>
+            
+             <para><b>Subject / Op decomposition.</b>
+             Subject: <c>BondFrequency</c> (per-edge <c>⟨ω(e)⟩</c>).
+             Op: <c>BinaryEntropySum</c> — a composite operation reading as
+             "pointwise binary entropy on each edge, summed over node's incident
+             edges to produce a per-node scalar."</para>
+            
+             <para><b>Units.</b> Result is in <i>bits</i>. The natural-log
+             binary entropy <c>−(p ln p + (1−p) ln(1−p))</c> is computed
+             internally for numerical stability, then divided by <c>ln 2</c>.</para>
+            
+             <para><b>CSR-walk convention.</b> Same upper-triangular pattern as
+             <see cref="T:Clustering.Graphical.SPC.Observables.Projections.BondFrequencyDegree"/>; each edge's binary entropy is
+             accumulated into both endpoints.</para>
+            
+             <para><b>Requires.</b> Tier 1 edge observables.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Observables.Projections.BondFrequencyBinaryEntropySum.BinaryEntropyNats(System.Double)">
+            <summary>
+            <c>H_2(p)</c> in nats: <c>−p ln p − (1−p) ln(1−p)</c>. Zero at
+            the endpoints (handled explicitly to avoid <c>log(0)</c>);
+            <c>ln 2</c> at <c>p = 0.5</c>.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Observables.Projections.BondFrequencyDegree">
+             <summary>
+             Per-node sum of incident bond probabilities:
+             <c>D_i = Σ_{j ∈ N(i)} ⟨ω(i,j)⟩</c>. The expected weighted degree of
+             node <c>i</c> in the random subgraph of formed Swendsen-Wang bonds
+             at the equilibrium temperature.
+             </summary>
+             <remarks>
+             <para><b>Interpretation.</b> Low <c>D_i</c> = node sits on fragile
+             bridges where few incident edges actually form bonds at this T;
+             high <c>D_i</c> = node sits in a structurally dense core where most
+             incident edges form bonds. Sometimes described in TDA contexts as
+             the "expected structural degree" or a "bottleneck score," but the
+             math is plain weighted degree on the bond-probability-weighted
+             graph.</para>
+            
+             <para><b>Subject / Op decomposition.</b>
+             Subject: <c>BondFrequency</c> (per-edge <c>⟨ω(e)⟩</c>).
+             Op: <c>Degree</c> (sum over node's incident edges).</para>
+            
+             <para><b>CSR-walk convention.</b> The SW inner loop only increments
+             upper-triangular CSR slots (j &gt; i). This implementation walks the
+             same pattern and accumulates the per-edge frequency into <i>both</i>
+             endpoints' degree (each undirected edge contributes to both nodes'
+             expected degree).</para>
+            
+             <para><b>Requires.</b> Tier 1 edge observables —
+             <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult.EdgeObservables"/> must be non-null with a
+             populated <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables.BondFormedCount"/>.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Observables.Projections.IGraphSignal">
+             <summary>
+             A per-node scalar field derived from an SPC run's equilibrium
+             observables. Mathematically a graph signal <c>f: V → ℝ</c> on the
+             proximity graph's vertex set. Each implementation names a distinct
+             measurement; many are routinely composed in a single analysis.
+             </summary>
+             <remarks>
+             <para><b>Pattern role.</b> Unlike
+             <see cref="T:Clustering.Graphical.SPC.Partitions.IPartitionStrategy"/> (alternatives — pick one
+             per analysis), graph signals are <i>distinct measurements</i> —
+             `BondFrequencyDegree` and `BondFrequencyBinaryEntropySum` do not
+             compete; they answer different questions about the same run. The
+             "Strategy" suffix is intentionally omitted — these are not
+             interchangeable approaches to one job.</para>
+            
+             <para><b>Naming convention for concrete signals.</b>
+             <c>&lt;Subject&gt;&lt;Op&gt;</c> — the family axis is the substrate
+             being measured (BondFrequency, SpinCorrelation, SpinHistogram,
+             SpinSequence, Cluster, ...), the secondary axis is the mathematical
+             operation that reduces that substrate to one scalar per node
+             (Degree, BinaryEntropySum, EigenvectorCentrality,
+             CyclomaticComplexity, Compressibility, ...). This inverts
+             <see cref="T:Clustering.Graphical.SPC.Partitions.IPartitionStrategy"/>'s
+             <c>&lt;Op&gt;&lt;Subject&gt;</c>: partitions vary by <i>how</i>,
+             signals vary by <i>what</i>. The naming order in each family
+             puts the varying axis first.</para>
+            
+             <para><b>Op precision.</b> Op tokens name the full mathematical
+             operation, not a category: <c>EigenvectorCentrality</c> not
+             <c>Centrality</c>; <c>CyclomaticComplexity</c> not <c>Cyclomatic</c>;
+             <c>Compressibility</c> (the property measured) rather than a
+             specific estimator (LempelZiv etc.) — estimator choice becomes a
+             configuration parameter, not part of the type identity.</para>
+            
+             <para><b>Algebraic closure.</b> Graph signals are closed under
+             pointwise combination (sum, scale, normalize, product). This lets
+             compound signals like "z-score of BondFrequencyDegree" be expressed
+             as combinators over primitive signals; partitions do not compose
+             this way.</para>
+            
+             <para><b>Output contract.</b> Returns a <c>double[]</c> of length
+             <c>run.Graph.NodeCount</c>. Implementations that require observable
+             tiers missing from the supplied <c>run</c> throw
+             <see cref="T:System.InvalidOperationException"/> with a clear message
+             identifying which tier was needed.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Observables.Projections.SpinCorrelationEigenvectorCentrality">
+             <summary>
+             Per-node entry of the top eigenvector of the spin-correlation matrix
+             <c>G_ij = ⟨1_{s_i = s_j}⟩</c>. Reads as eigenvector centrality on the
+             thermodynamic correlation graph: nodes whose entries are large
+             participate strongly in the dominant collective mode of correlated
+             spin fluctuations at equilibrium.
+             </summary>
+             <remarks>
+             <para><b>Algorithm.</b>
+             <list type="number">
+               <item>Build the dense N×N symmetric matrix <c>G</c>:
+                 <list type="bullet">
+                   <item><c>G[i,j] = G[j,i] = SpinAgreementCount[e] / CycleCount</c>
+                     for every undirected edge <c>(i,j)</c> in the CSR.</item>
+                   <item><c>G[i,i] = 1</c> (a node trivially agrees with itself —
+                     the correlation matrix convention).</item>
+                   <item>Off-graph pairs default to 0 (no observation; FK-zero
+                     baseline). Pairs whose mutual correlation is significant but
+                     whose edge was absent from the proximity graph cannot be
+                     recovered from this signal.</item>
+                 </list>
+               </item>
+               <item>Call <see cref="M:Maths.LinAlg.DenseEigen.DecomposeSymmetric(System.Double[0:,0:],System.Int32,System.Double,Maths.LinAlg.DenseEigenOptions)"/>;
+                 the result's eigenvalues are sorted descending.</item>
+               <item>Take <c>Eigenvectors[0]</c> as the per-node scalar.</item>
+               <item>By Perron-Frobenius (G is non-negative symmetric) the top
+                 eigenvector is sign-uniform. If the solver returned the negative
+                 branch, flip the sign so all entries are non-negative — gives
+                 callers a canonical, interpretable centrality.</item>
+             </list>
+             </para>
+            
+             <para><b>Subject / Op decomposition.</b>
+             Subject: <c>SpinCorrelation</c> (per-pair <c>G_ij = ⟨1_{s_i=s_j}⟩</c>).
+             Op: <c>EigenvectorCentrality</c> (top eigenvector of the symmetric
+             non-negative matrix). The Op name commits to eigenvector centrality
+             specifically — not betweenness, not Katz, not PageRank — and not
+             merely the abstract category <c>Centrality</c>.</para>
+            
+             <para><b>Cost.</b> Dense <c>O(N²)</c> memory and <c>O(N³)</c> compute
+             for the eigendecomposition. Suited to typical patch sizes
+             (N ≲ a few hundred); for global SPC on large graphs a Lanczos-style
+             sparse iteration on the symmetric correlation operator would scale
+             better but is not in the current LinAlg surface — revisit if
+             profiling shows this hot.</para>
+            
+             <para><b>Requires.</b> Tier 1 edge observables —
+             <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult.EdgeObservables"/> must be non-null with a
+             populated <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables.SpinAgreementCount"/>.</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Observables.Projections.SpinCorrelationEigenvectorCentrality.MaxSweeps">
+            <summary>
+            Maximum Jacobi sweeps for the symmetric eigendecomposition.
+            Default matches <see cref="T:Maths.LinAlg.DenseEigen"/>'s default.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Observables.Projections.SpinCorrelationEigenvectorCentrality.Tolerance">
+            <summary>
+            Convergence tolerance for the off-diagonal infinity norm.
+            Default matches <see cref="T:Maths.LinAlg.DenseEigen"/>'s default.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Observables.Projections.SpinCorrelationEigenvectorCentrality.EigenOptions">
+            <summary>
+            Optional eigensolver options (e.g. fast-variant selection). Default
+            uses the dispatcher's defaults.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionConfig">
+            <summary>
+            Configuration for <see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionStrategy"/>. Carries the
+            per-phase sampler knobs plus the pluggable detector and cut policy.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionConfig.Q">
+            <summary>Number of Potts colors (q) for per-phase equilibria.
+            Should match the q used to build the sweep — different q's would
+            place transitions at different temperatures.</summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionConfig.FinalBurn">
+            <summary>Burn-in cycles per phase equilibrium.</summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionConfig.FinalCycles">
+            <summary>Measurement cycles per phase equilibrium.</summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionConfig.FinalPassTier">
+            <summary>
+            Observable tier for the per-phase equilibrium. Defaults to
+            <see cref="F:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier.WithEdgeObservables"/> because the
+            default cut policy
+            (<see cref="T:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdSpinAgreement"/>) reads per-edge spin
+            agreement. Pin to <see cref="F:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier.Standard"/> when
+            the cut policy doesn't need edge observables.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionConfig.BaseSeed">
+            <summary>
+            Root seed for reproducible per-phase RNG derivation. Null draws
+            from OS entropy. Per-phase seeds are derived via
+            <see cref="M:Clustering.Graphical.SPC.Runtime.Scheduling.SpcSeedHelper.Derive(System.Nullable{System.Int32},System.Double,System.Int32,System.Int32,System.Int32)"/> with <c>round=-1</c> and
+            <c>replica=phaseIndex</c> to keep phase seed streams disjoint
+            from any companion sweep's probe seeds.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionConfig.Detector">
+            <summary>
+            Detector that scans <see cref="T:Clustering.Graphical.SPC.Profiling.SweepProfile"/> for
+            pseudo-transitions. Defaults to
+            <see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.MagnetizationPeakDetector"/> with its default
+            prominence threshold (0.1 of the χ_m range).
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionConfig.CutPolicy">
+            <summary>
+            Cut policy applied to each per-phase equilibrium. Defaults to
+            <see cref="T:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdSpinAgreement"/> at θ=0.5 — the canonical
+            Blatt 1996 friends-of-friends cut.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionStrategy">
+             <summary>
+             Hierarchical SPC partitioner in the Blatt 1996 / Blatt-Wiseman-Domany
+             1997 picture: detect pseudo-transitions on the χ_m trajectory, treat
+             the intervals between consecutive peaks as stable super-paramagnetic
+             phases, run a fresh Tier-1 equilibrium at each phase's representative
+             temperature, and apply the friends-of-friends cut to read off the
+             per-phase partition. The ordered sequence of partitions is the
+             hierarchy.
+             </summary>
+             <remarks>
+             <para><b>Inputs.</b> A <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.SweepResult"/>
+             from any sweep strategy — typically <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepStrategy"/>
+             with a dense user-supplied grid that brackets the expected transition
+             range. The strategy ignores <c>sweep.FinalRun</c> entirely; it cares
+             only about <c>sweep.Summary.Profile</c> (for peak detection) and
+             re-samples the equilibrium at each phase representative on its own
+             terms.</para>
+            
+             <para><b>Phase representative T.</b> v1 uses the geometric midpoint
+             of each interval between consecutive peaks, with the cold extremum
+             = <c>min(sweep.Temperatures)</c> below the first peak and the hot
+             extremum = <c>max(sweep.Temperatures)</c> above the last peak. The
+             geometric mean is the natural choice on log-spaced T grids and the
+             arithmetic mean degenerates to it on linear grids that don't span a
+             decade. Future variants may pick the local χ_m minimum inside each
+             interval (sharper but noisier).</para>
+            
+             <para><b>Nesting check.</b> The Blatt picture predicts strict
+             nesting between consecutive levels — every cluster at a hotter level
+             is a subset of some cluster at the colder level. The strategy
+             validates this against the actual per-phase partitions and reports
+             the verdict in <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy.NestingHolds"/>; the
+             boolean is informational, not a failure (an undersampled or noisy
+             sweep may produce non-nesting levels that are still useful as
+             individual partitions).</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionStrategy.Apply(Clustering.Graphical.SPC.Runtime.Scheduling.SweepResult,Graphs.Primitives.CsrGraph)">
+            <inheritdoc />
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionStrategy.ComputePhaseTemperatures(System.Double[],System.Double,System.Double)">
+            <summary>
+            Computes phase-representative temperatures from the detected
+            peak list. Geometric midpoints are used so log-spaced and
+            linear sweep grids both yield natural in-phase samples.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionStrategy.GeometricMidpoint(System.Double,System.Double)">
+            <summary>
+            Geometric mean of two positive temperatures, with arithmetic
+            fallback when either endpoint is non-positive (defensive — the
+            SPC temperature axis should be strictly positive but the
+            fallback keeps us out of NaN territory in degenerate sweeps).
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionStrategy.CheckNesting(System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Partitions.Hierarchical.HierarchyLevel})">
+            <summary>
+            Checks whether every cluster at a hotter level is a subset of
+            some cluster at the immediately colder level — the Blatt
+            nesting invariant. Empty or single-level hierarchies trivially
+            nest. O(N) per consecutive pair.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.Hierarchical.IHierarchicalPartitionStrategy">
+             <summary>
+             Hierarchical analogue of <see cref="T:Clustering.Graphical.SPC.Partitions.IPartitionStrategy"/>: consumes
+             the full cross-temperature output of an
+             <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.ISweepStrategy"/> rather than a single equilibrium frame,
+             and returns a multi-level <see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy"/> indexed
+             by temperature (or whichever axis the strategy's detector chose).
+             </summary>
+             <remarks>
+             <para><b>Why a separate seam.</b> The flat
+             <see cref="M:Clustering.Graphical.SPC.Partitions.IPartitionStrategy.Apply(Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult)"/> contract operates on a single
+             <c>SpcRunResult</c> — the chosen-T equilibrium picked by the sweep.
+             A hierarchical strategy needs the whole sweep (to detect phase
+             boundaries from signal trajectories) <i>and</i> the graph (to
+             re-sample equilibria at phase-representative temperatures with the
+             per-edge observables a cut policy needs). Different inputs, different
+             shape — separate interface.</para>
+            
+             <para><b>Typical implementations.</b>
+             <see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.BlattPartitionStrategy"/> implements the classical Blatt
+             1996 / Blatt-Wiseman-Domany 1997 picture: detect pseudo-transitions
+             on the χ_m trajectory, run a Tier-1 equilibrium per stable phase,
+             apply the friends-of-friends cut at each, emit the nested
+             sequence.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Partitions.Hierarchical.IHierarchicalPartitionStrategy.Apply(Clustering.Graphical.SPC.Runtime.Scheduling.SweepResult,Graphs.Primitives.CsrGraph)">
+            <summary>
+            Build the hierarchy. <paramref name="sweep"/> is typically the
+            output of a <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepStrategy"/> with a
+            dense T-grid; <paramref name="graph"/> is the same graph that
+            produced the sweep (used to run per-phase equilibria).
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.Hierarchical.IPseudoTransitionDetector">
+             <summary>
+             Detects pseudo-transitions in an SPC sweep — the temperature points
+             where the system reorganizes between super-paramagnetic phases in the
+             Blatt 1996 / Blatt-Wiseman-Domany 1997 picture.
+             </summary>
+             <remarks>
+             <para><b>Classical signal.</b> The canonical Blatt detector watches
+             the magnetization susceptibility <c>χ_m = N · (⟨m²⟩ − ⟨m⟩²) / T</c>
+             for peaks. Each peak marks a phase boundary where a cluster of size
+             <c>K_i</c> breaks into <c>K_{i+1} &gt; K_i</c> sub-clusters; between
+             consecutive peaks the system is in a stable super-paramagnetic phase
+             and the canonical friends-of-friends cut yields a clean partition.
+             The default implementation
+             (<see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.MagnetizationPeakDetector"/>) consumes
+             <see cref="P:Clustering.Graphical.SPC.Profiling.SweepProfile.AdditionalChannels"/>'s
+             <c>"MagnetizationVariance"</c> channel — N/T scaling is a strict
+             monotone transform and does not change peak locations on a fixed
+             graph, so the raw variance suffices for relative peak detection.</para>
+            
+             <para><b>Pluggable.</b> Concrete detectors may swap the signal
+             (specific heat <c>Cv</c> for energy-axis transitions, label entropy
+             for partition-shape jumps) or the discrimination policy (prominence
+             threshold, peak persistence, multi-signal consensus). All return
+             the same shape: a sorted set of temperatures at which a
+             pseudo-transition was detected.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Partitions.Hierarchical.IPseudoTransitionDetector.Detect(Clustering.Graphical.SPC.Profiling.SweepProfile)">
+            <summary>
+            Returns the temperatures at which pseudo-transitions were
+            detected, sorted ascending. Empty when the profile shows no
+            resolvable phase structure (e.g. a single-component system or a
+            sweep that didn't bracket any transition).
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.Hierarchical.MagnetizationPeakDetector">
+             <summary>
+             Default <see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.IPseudoTransitionDetector"/>: scans the
+             magnetization-variance trajectory for local maxima with prominence
+             above <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.MagnetizationPeakDetector.MinProminence"/>. The classical Blatt χ_m peak
+             detector, modulo the N/T pre-scaling that doesn't affect peak
+             location on a fixed graph.
+             </summary>
+             <remarks>
+             <para><b>Signal source.</b> Reads
+             <see cref="P:Clustering.Graphical.SPC.Profiling.SweepProfile.AdditionalChannels"/>'s
+             <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.MagnetizationPeakDetector.SignalChannelName"/> entry; throws if the channel is
+             absent. <see cref="M:Clustering.Graphical.SPC.Profiling.SweepProfile.From(System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult})"/> populates
+             <c>"MagnetizationVariance"</c> by default, so any sweep run through
+             the standard pipeline is consumable as-is.</para>
+            
+             <para><b>Peak rule.</b> A local maximum is recorded when both
+             neighbors are strictly lower AND the maximum's prominence
+             (height above the higher of the two surrounding minima within the
+             window) is at least <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.MagnetizationPeakDetector.MinProminence"/> relative to the
+             signal's peak-to-trough range. Endpoints are never peaks. Repeated
+             equal samples are treated as plateaus and skipped — a plateau is
+             only a peak when it has strict descents on both sides.</para>
+            
+             <para><b>Limitations.</b> v1 is a simple three-point scan with a
+             prominence gate; no smoothing, no Savitzky-Golay, no persistence
+             homology. Adequate for sweeps with reasonable sample density and
+             well-separated phases; noisy or undersampled sweeps will need a
+             successor detector (smoothed-spline peak, multi-signal consensus,
+             or BARS-derived posterior modes).</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Hierarchical.MagnetizationPeakDetector.SignalChannelName">
+            <summary>
+            Channel name read from
+            <see cref="P:Clustering.Graphical.SPC.Profiling.SweepProfile.AdditionalChannels"/>. Defaults to the
+            canonical <c>"MagnetizationVariance"</c> emitted by
+            <see cref="M:Clustering.Graphical.SPC.Profiling.SweepProfile.From(System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult})"/>.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Hierarchical.MagnetizationPeakDetector.MinProminence">
+            <summary>
+            Minimum prominence as a fraction of the signal's peak-to-trough
+            range, in <c>[0, 1]</c>. <c>0.0</c> accepts every local maximum;
+            <c>0.1</c> (default) filters out small numerical bumps that
+            aren't real pseudo-transitions.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Partitions.Hierarchical.MagnetizationPeakDetector.Detect(Clustering.Graphical.SPC.Profiling.SweepProfile)">
+            <inheritdoc />
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.Hierarchical.HierarchyLevel">
+            <summary>
+            One stable super-paramagnetic phase from the Blatt picture: the
+            representative temperature, the partition read off at that
+            temperature, and a short provenance string documenting how the level
+            was produced (e.g. <c>"phase-midpoint between χ_m peaks at T=0.05
+            and T=0.18"</c>).
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Partitions.Hierarchical.HierarchyLevel.#ctor(System.Double,Clustering.Graphical.SPC.Partitions.Partition,System.String)">
+            <summary>
+            One stable super-paramagnetic phase from the Blatt picture: the
+            representative temperature, the partition read off at that
+            temperature, and a short provenance string documenting how the level
+            was produced (e.g. <c>"phase-midpoint between χ_m peaks at T=0.05
+            and T=0.18"</c>).
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy">
+             <summary>
+             Ordered sequence of <see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.HierarchyLevel"/>s spanning the
+             temperature axis from cold (ordered phase, few large clusters) to
+             hot (paramagnetic, many small or singleton clusters). The
+             hierarchical output of an <see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.IHierarchicalPartitionStrategy"/>.
+             </summary>
+             <remarks>
+             <para><b>Ordering.</b> <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy.Levels"/> is sorted ascending in
+             <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.HierarchyLevel.Temperature"/>. The cold-end level is
+             <c>Levels[0]</c>; the hot-end level is <c>Levels[^1]</c>. Consumers
+             that want to walk merges (cold→hot) should iterate ascending;
+             consumers that want to walk splits (hot→cold) iterate descending.</para>
+            
+             <para><b>Nesting.</b> The Blatt picture predicts strict nesting:
+             every cluster at a hotter level is a subset of some cluster at a
+             colder level. <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy.NestingHolds"/> records whether that
+             invariant actually held for this run; an undersampled or noisy
+             sweep may produce non-nesting levels that are still individually
+             useful as per-phase partitions, just not stackable as a single
+             merge tree.</para>
+            
+             <para><b>Not a <c>Clustering.Dendrograms.Dendrogram</c>.</b> Both
+             shapes are hierarchical trees of clusters with a scalar cost axis,
+             but the semantics differ at the foundation. A
+             <c>Clustering.Dendrograms.Dendrogram</c> records pairwise
+             single-linkage merges between subtrees of data points; its cost
+             axis is a dissimilarity (mutual-reachability distance, ΔH, …) that
+             is intrinsic to the geometry of the data. A
+             <see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy"/> records phase-resolved partitions
+             along an SPC temperature sweep; its cost axis is the thermodynamic
+             control parameter and each level is the equilibrium clustering at
+             that T, not a pairwise merge event. Don't convert one into the
+             other — the shared "tree of clusters with a y-axis" is a napkin-
+             sketch coincidence, not a structural identity.</para>
+            
+             <para><b>Topology axis.</b> <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy.TopologyAxis"/> defaults to
+             <c>"temperature"</c> — the y-axis label for plot consumers. Custom
+             detectors that fold T into a transformed coordinate (e.g. log T,
+             inverse temperature β) should override.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy.#ctor(System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Partitions.Hierarchical.HierarchyLevel},System.Boolean,System.String)">
+             <summary>
+             Ordered sequence of <see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.HierarchyLevel"/>s spanning the
+             temperature axis from cold (ordered phase, few large clusters) to
+             hot (paramagnetic, many small or singleton clusters). The
+             hierarchical output of an <see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.IHierarchicalPartitionStrategy"/>.
+             </summary>
+             <remarks>
+             <para><b>Ordering.</b> <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy.Levels"/> is sorted ascending in
+             <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.HierarchyLevel.Temperature"/>. The cold-end level is
+             <c>Levels[0]</c>; the hot-end level is <c>Levels[^1]</c>. Consumers
+             that want to walk merges (cold→hot) should iterate ascending;
+             consumers that want to walk splits (hot→cold) iterate descending.</para>
+            
+             <para><b>Nesting.</b> The Blatt picture predicts strict nesting:
+             every cluster at a hotter level is a subset of some cluster at a
+             colder level. <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy.NestingHolds"/> records whether that
+             invariant actually held for this run; an undersampled or noisy
+             sweep may produce non-nesting levels that are still individually
+             useful as per-phase partitions, just not stackable as a single
+             merge tree.</para>
+            
+             <para><b>Not a <c>Clustering.Dendrograms.Dendrogram</c>.</b> Both
+             shapes are hierarchical trees of clusters with a scalar cost axis,
+             but the semantics differ at the foundation. A
+             <c>Clustering.Dendrograms.Dendrogram</c> records pairwise
+             single-linkage merges between subtrees of data points; its cost
+             axis is a dissimilarity (mutual-reachability distance, ΔH, …) that
+             is intrinsic to the geometry of the data. A
+             <see cref="T:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy"/> records phase-resolved partitions
+             along an SPC temperature sweep; its cost axis is the thermodynamic
+             control parameter and each level is the equilibrium clustering at
+             that T, not a pairwise merge event. Don't convert one into the
+             other — the shared "tree of clusters with a y-axis" is a napkin-
+             sketch coincidence, not a structural identity.</para>
+            
+             <para><b>Topology axis.</b> <see cref="P:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy.TopologyAxis"/> defaults to
+             <c>"temperature"</c> — the y-axis label for plot consumers. Custom
+             detectors that fold T into a transformed coordinate (e.g. log T,
+             inverse temperature β) should override.</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy.Count">
+            <summary>Number of phases / hierarchy levels.</summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy.IsEmpty">
+            <summary>True when no phases were detected (typically a single-
+            component graph or a sweep that didn't bracket any
+            transition).</summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.IPartitionStrategy">
+             <summary>
+             A strategy for partitioning an SPC run's node set into discrete
+             clusters. Implementations are <i>alternatives</i> — pick one per
+             analysis; replacing one with another gives a different answer to the
+             same question.
+             </summary>
+             <remarks>
+             <para><b>Pattern role.</b> Genuinely Strategy-shaped, unlike
+             <see cref="T:Clustering.Graphical.SPC.Observables.Projections.IGraphSignal"/> (which is plural by nature —
+             many distinct measurements composed in one analysis).</para>
+            
+             <para><b>Naming convention for concrete strategies.</b>
+             <c>&lt;Operation&gt;&lt;Subject&gt;</c> — the family axis is the
+             operation (Threshold, Spectral, Consensus, ...), the secondary axis
+             is the substrate the operation acts on (BondFrequency, SpinAgreement,
+             SpinCorrelation, ...). This asymmetry with
+             <see cref="T:Clustering.Graphical.SPC.Observables.Projections.IGraphSignal"/>'s <c>&lt;Subject&gt;&lt;Op&gt;</c>
+             convention is deliberate: partition strategies vary by <i>how</i>;
+             signals vary by <i>what</i>. Naming order follows the conceptual
+             variation axis.</para>
+            
+             <para><b>Output contract.</b> Returns a densely-labeled
+             <see cref="T:Clustering.Graphical.SPC.Partitions.Partition"/>. Implementations that require observables
+             missing from the supplied <c>run</c> throw
+             <see cref="T:System.InvalidOperationException"/> with a clear message
+             identifying which tier was needed.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.Partition">
+            <summary>
+            Densely-labeled partition of a graph's node set produced by an
+            <see cref="T:Clustering.Graphical.SPC.Partitions.IPartitionStrategy"/>. <see cref="P:Clustering.Graphical.SPC.Partitions.Partition.Labels"/>[i] gives the
+            cluster id of node <c>i</c>; labels live in
+            <c>[0, ClusterCount)</c> so downstream consumers can allocate
+            per-cluster arrays without remapping.
+            </summary>
+            <remarks>
+            <para><b>Densification contract.</b> Implementations of
+            <see cref="T:Clustering.Graphical.SPC.Partitions.IPartitionStrategy"/> are required to emit dense labels.
+            A union-find pass typically produces sparse root ids; the strategy is
+            responsible for collapsing them before returning. See
+            <c>UnionFindLabeler.Densify</c> for the canonical helper.</para>
+            </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdBondFrequency">
+             <summary>
+             Threshold-and-connected-components partition keyed on per-edge
+             equilibrium bond frequency <c>⟨ω(e)⟩</c>. The FK-direct counterpart
+             to <see cref="T:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdSpinAgreement"/>.
+             </summary>
+             <remarks>
+             <para><b>Algorithm.</b> For each undirected edge <c>(i,j)</c>,
+             compute <c>⟨ω(e)⟩ = BondFormedCount[e] / CycleCount</c>. Declare
+             <c>(i,j)</c> an active bond iff that value exceeds
+             <see cref="P:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdBondFrequency.Theta"/>. Compute connected components on the
+             active-bond subgraph via union-find.</para>
+            
+             <para><b>Relationship to <see cref="T:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdSpinAgreement"/>.</b>
+             In the joint Fortuin-Kasteleyn / Potts representation,
+             <c>⟨ω(e)⟩ = p_e · ⟨1_{s_i=s_j}⟩</c> where
+             <c>p_e = 1 − exp(−J_e/T)</c>. Spin agreement is what the canonical
+             Blatt cut uses; bond frequency is what FK theory and percolation
+             diagnostics consume directly. For homogeneous J the two ratios are
+             proportional, but for heterogeneous J they diverge — bond frequency
+             is the cleaner FK-aligned choice on weighted proximity graphs where
+             the coupling varies across edges.</para>
+            
+             <para><b>Index alignment.</b> Same upper-triangular CSR-walk pattern
+             as <see cref="T:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdSpinAgreement"/>.</para>
+            
+             <para><b>Requires.</b> Tier 1 edge observables —
+             <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult.EdgeObservables"/> must be non-null with a
+             populated <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables.BondFormedCount"/>.</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdBondFrequency.Theta">
+            <summary>
+            Bond-activity threshold; pairs with <c>⟨ω(e)⟩ &gt; Theta</c> get
+            unioned. Defaults to 0.5.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdSpinAgreement">
+             <summary>
+             Threshold-and-connected-components partition keyed on per-edge
+             equilibrium spin agreement <c>⟨1_{s_i=s_j}⟩</c>. The canonical Blatt
+             1996 friends-of-friends cut.
+             </summary>
+             <remarks>
+             <para><b>Algorithm.</b> For each undirected edge <c>(i,j)</c>,
+             compute <c>⟨1_{s_i=s_j}⟩ = SpinAgreementCount[e] / CycleCount</c>.
+             Declare <c>(i,j)</c> a friend iff that value exceeds
+             <see cref="P:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdSpinAgreement.Theta"/>. Compute connected components on the friend
+             subgraph via union-find; each component is one output cluster.</para>
+            
+             <para><b>Why it works.</b> At equilibrium in the superparamagnetic
+             phase, pairs that belong to the same physical cluster spend most
+             cycles in the same Potts color (<c>⟨1_{s_i=s_j}⟩ ≈ 1</c>); pairs in
+             different clusters align only by chance
+             (<c>⟨1_{s_i=s_j}⟩ ≈ 1/q</c>). A threshold between those two modes
+             sharply separates them; Blatt finds the cut is insensitive to θ
+             across roughly <c>0.2 ≤ θ ≤ 0.9</c>.</para>
+            
+             <para><b>Index alignment.</b>
+             <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables.SpinAgreementCount"/> is indexed
+             by CSR entry. The SW inner loop only increments upper-triangular
+             slots (j &gt; i), so this strategy walks the same pattern. Edges
+             with j ≤ i are skipped.</para>
+            
+             <para><b>Not yet implemented.</b> Blatt's max-correlation-neighbor
+             augmentation (also union each node with its single best-correlated
+             neighbor regardless of θ) is omitted. The θ-only path covers the
+             canonical Iris / 2D-toy cases from the original paper.</para>
+            
+             <para><b>Requires.</b> Tier 1 edge observables —
+             <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult.EdgeObservables"/> must be non-null with a
+             populated <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables.SpinAgreementCount"/>.</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdSpinAgreement.Theta">
+            <summary>
+            Friends-of-friends threshold; pairs with
+            <c>⟨1_{s_i=s_j}⟩ &gt; Theta</c> get unioned. Defaults to 0.5;
+            canonically insensitive across <c>[0.2, 0.9]</c>.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Partitions.Strategies.UnionFindLabeler">
+            <summary>
+            Internal helper that collapses a <see cref="T:Graphs.Primitives.UnionFind"/>'s sparse
+            root ids into a densely-labeled <see cref="T:Clustering.Graphical.SPC.Partitions.Partition"/> (labels in
+            <c>[0, ClusterCount)</c>). Shared across threshold-style partition
+            strategies that build their cluster structure via union-find.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Profiling.Signals.MultiSignalConsensusAnalyzer">
+             <summary>
+             Triangulates T_c by consensus across three thermodynamic signals —
+             FK susceptibility χ, specific heat C_v, and the derivative of
+             cluster-size entropy |dH/dT|. Reports per-signal peak temperatures
+             plus an agreement score in <c>[0, 1]</c>.
+             </summary>
+             <remarks>
+             <para><b>Per-signal peak rules:</b></para>
+             <list type="bullet">
+               <item><c>T_c(χ)</c>     = argmax χ(T)                          — direct peak of FK susceptibility.</item>
+               <item><c>T_c(C_v)</c>   = argmax C_v(T)                        — direct peak of specific heat.</item>
+               <item><c>T_c(H)</c>     = argmax |dH/dT|                        — derivative peak of cluster-size entropy,
+                     computed via central differences on the interior (forward/backward at endpoints).</item>
+             </list>
+            
+             <para><b>Consensus T.</b> The <see cref="P:Clustering.Graphical.SPC.Profiling.ProfileCriteria.RefinedTemperature"/>
+             is the median of the three peaks — more robust than the mean to a
+             single signal disagreeing strongly with the other two.</para>
+            
+             <para><b>Agreement score.</b> The
+             <see cref="P:Clustering.Graphical.SPC.Profiling.ProfileCriteria.CorroborationScore"/> is
+             <c>1 − spread / range(T)</c>, clamped to <c>[0, 1]</c>, where
+             <c>spread</c> is the temperature span of the three peaks and
+             <c>range(T)</c> is the sweep's full temperature range. Three coincident
+             peaks score 1.0; three peaks spanning the full sweep score 0.0.</para>
+            
+             <para><b>Anchor continuity.</b>
+             <see cref="P:Clustering.Graphical.SPC.Profiling.ProfileCriteria.AnchorTemperature"/> and
+             <see cref="P:Clustering.Graphical.SPC.Profiling.ProfileCriteria.AnchorBand"/> remain χ-based for continuity
+             with consumers that read those fields directly. The multi-signal
+             verdict lands in <c>RefinedTemperature</c> and the
+             <c>Enrichments</c> dictionary so callers wanting the consensus pick
+             it up explicitly.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Profiling.Signals.MultiSignalConsensusAnalyzer.AbsSlopeAt(System.Collections.Generic.IReadOnlyList{System.Double},System.Collections.Generic.IReadOnlyList{System.Double},System.Int32)">
+            <summary>
+            Absolute central-difference slope at <paramref name="index"/>.
+            Forward difference at the first index; backward at the last.
+            Returns 0 when the relevant temperature spacing is degenerate.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Profiling.Signals.MultiSignalConsensusAnalyzer.MedianOfThree(System.Double,System.Double,System.Double)">
+            <summary>Median of three values without allocating a sort buffer.</summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Profiling.SpcProfileAnalysis">
+            <summary>
+            Analysis helpers for SPC temperature profiles and Potts sampling.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Execution.IFrameSink">
+             <summary>
+             Sink for completed SPC task results. Decouples the executor's task
+             orchestration from the question of "what should happen with the
+             result once it's computed" — write to disk, accumulate in memory,
+             push to a message bus, or no-op.
+             </summary>
+             <remarks>
+             <para><b>Composition.</b> The executor's parallel dispatch loop
+             consults the sink for two things: (a) whether the task has already
+             been completed (resumable runs), and (b) what to do with each fresh
+             result. The sink doesn't own the executor's in-memory result array
+             for batch returns — that's tracked independently.</para>
+            
+             <para><b>Threading.</b> Implementations must be thread-safe. The
+             executor calls <see cref="M:Clustering.Graphical.SPC.Runtime.Execution.IFrameSink.Accept(Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec,Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult)"/> from multiple parallel workers
+             concurrently; sinks that maintain state across calls need their own
+             synchronization (concurrent collections, locks, etc.).</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.IFrameSink.TaskAlreadyCompleted(Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec)">
+            <summary>
+            Allow the sink to short-circuit a task whose result has already
+            been captured (e.g. a checkpoint file is already present on
+            disk). Returns <see langword="false"/> for sinks that don't
+            model "already completed" — those always re-execute.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.IFrameSink.Accept(Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec,Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult)">
+            <summary>
+            Called with a completed task's result. The sink decides what to
+            do with it. Thread-safe (called concurrently from the executor's
+            parallel loop).
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.IFrameSink.TryLoad(Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec,Graphs.Primitives.CsrGraph)">
+            <summary>
+            Hydrate a previously-persisted result for <paramref name="task"/>.
+            Returns <see langword="null"/> when the sink does not persist or
+            cannot reconstruct the result (e.g. a tier-2 sidecar is missing).
+            Used by <see cref="M:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor.RunBatch(Graphs.Primitives.CsrGraph,System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec},System.Threading.CancellationToken,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)"/> to populate
+            task-aligned results for tasks that
+            <see cref="M:Clustering.Graphical.SPC.Runtime.Execution.IFrameSink.TaskAlreadyCompleted(Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec)"/> reported as cached.
+            </summary>
+            <remarks>
+            Default implementation returns <see langword="null"/> — non-persistent
+            sinks (<see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.NullFrameSink"/>,
+            <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.InMemoryFrameSink"/>) get the right behavior for
+            free; persistent sinks override.
+            </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.ISpcExecutor.BuildTaskList(System.Collections.Generic.IReadOnlyList{System.Double},System.Int32,System.Int32,System.Int32,Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier,System.String,System.Nullable{System.Int32},System.Int32)">
+            <summary>
+            Builds a flat schedule of independent SPC tasks from the requested
+            temperatures, replicas, cycles, and output directory.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.ISpcExecutor.Run(Graphs.Primitives.CsrGraph,System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec},System.Threading.CancellationToken,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute the provided task list. Persistence is controlled by
+            <paramref name="executionOptions"/>.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.ISpcExecutor.RunBatch(Graphs.Primitives.CsrGraph,System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec},System.Threading.CancellationToken,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute the provided task list and return a batch result envelope.
+            Persistence is controlled by <paramref name="executionOptions"/>.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.ISpcExecutor.ExecuteAll(Graphs.Primitives.CsrGraph,System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec},System.Threading.CancellationToken,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute the provided task list in memory and return the results.
+            This is a pure execution path; it does not persist checkpoint
+            artifacts or sidecar files.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.ISpcExecutor.ExecuteAll(System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec},System.Threading.CancellationToken,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute the provided Potts run specs in memory and return the results.
+            This is a pure execution path; it does not persist checkpoint artifacts
+            or sidecar files.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.ISpcExecutor.ExecuteBatch(System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec},System.Threading.CancellationToken,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute the provided Potts run specs and return a batch result envelope.
+            This is a pure execution path; it does not persist checkpoint artifacts
+            unless <see cref="!:SpcExecutionOptions.PersistArtifacts"/> is explicitly
+            handled by a future implementation.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.ISpcExecutor.ExecuteTask(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute a single task spec and return the unified SPC result.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.ISpcExecutor.ExecuteTask(Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute a single Potts run spec and return the unified SPC result.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.InMemoryFrameSink">
+            <summary>
+            Frame sink that accumulates completed results into an in-memory
+            collection. Useful for callers (REPL, ad-hoc analysis harnesses)
+            that want to inspect every produced frame without going through
+            disk serialization.
+            </summary>
+            <remarks>
+            Results are collected in completion order — the executor's parallel
+            dispatch means this is not the task-list order. Callers that need
+            task-list-aligned results should use the executor's <c>RunBatch</c>
+            path (which builds an indexed array independent of the sink) and
+            pass <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.NullFrameSink"/> if no further persistence is needed.
+            </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.Sinks.InMemoryFrameSink.Results">
+            <summary>Snapshot of all results captured so far.</summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.Sinks.InMemoryFrameSink.Count">
+            <summary>Number of results captured so far.</summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.NullFrameSink">
+            <summary>
+            No-op frame sink. Use when the caller only wants the in-memory
+            batch result and does not want any persistence or post-processing
+            side-effects. Replaces the old <c>PersistArtifacts = false</c>
+            shortcut on <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions"/>.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.SpcxDiskFrameSink">
+             <summary>
+             Frame sink that writes results to disk as paired SPCX/SPCE files
+             using the canonical <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.PottsCoreObservablesSerializer"/> and
+             <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.PottsEdgeObservablesSerializer"/>. The default sink for
+             the executor — preserves the pre-IFrameSink persistence behavior.
+             </summary>
+             <remarks>
+             <para><b>Resumable runs.</b> <see cref="M:Clustering.Graphical.SPC.Runtime.Execution.Sinks.SpcxDiskFrameSink.TaskAlreadyCompleted(Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec)"/>
+             returns true when the checkpoint file already exists at
+             <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec.CheckpointPath"/>, so re-running the same
+             task list against the same output directory will skip already-completed
+             tasks rather than redoing them.</para>
+            
+             <para><b>Atomic writes.</b> Both serializers write through
+             <see cref="T:Archivory.BinarySerializerBase`1"/>'s temp-rename
+             pattern; partial writes never leave a half-written file at the
+             canonical path.</para>
+            
+             <para><b>Sidecar pairing.</b> The SPCE sidecar path is derived from
+             the SPCX path via <see cref="M:System.IO.Path.ChangeExtension(System.String,System.String)"/>, so the two
+             files share a base name and travel together.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.Sinks.SpcxDiskFrameSink.TryLoad(Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec,Graphs.Primitives.CsrGraph)">
+            <inheritdoc />
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Execution.SpcBatchResult">
+            <summary>
+            Envelope for a batch of SPC runs executed by the kernel.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.SpcBatchResult.Runs">
+            <summary>
+            Runs that were executed as part of the batch (dense view of
+            freshly-computed results, in completion order — not aligned
+            to the task list). Tasks skipped because their checkpoint already
+            existed are omitted from this list. For task-list-aligned access
+            across both executed and resumed tasks, use
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcBatchResult.AlignedRuns"/>.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.SpcBatchResult.AlignedRuns">
+            <summary>
+            Task-list-aligned view: <c>AlignedRuns[i]</c> is the result for
+            <c>tasks[i]</c>, regardless of whether it was freshly executed
+            this run or hydrated from a prior checkpoint via
+            <see cref="M:Clustering.Graphical.SPC.Runtime.Execution.IFrameSink.TryLoad(Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec,Graphs.Primitives.CsrGraph)"/>. <see langword="null"/> only when
+            the sink reported the task as cached but could not reconstruct
+            the result (non-persistent sink, missing tier-2 sidecar, etc.).
+            Sweep strategies consume this so partial-grid + resume produces
+            the same in-memory shape whether or not the run was a cold start.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.SpcBatchResult.RequestedTaskCount">
+            <summary>
+            Number of tasks requested for this batch.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.SpcBatchResult.ExecutedTaskCount">
+            <summary>
+            Number of tasks actually executed by the kernel.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.SpcBatchResult.SkippedTaskCount">
+            <summary>
+            Number of tasks skipped because their checkpoint already existed.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.SpcBatchResult.Elapsed">
+            <summary>
+            Total wall-clock time taken by the batch execution.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions">
+            <summary>
+            Execution-time options for the SPC kernel.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions.MaxDegreeOfParallelism">
+            <summary>
+            Degree of parallelism for the kernel. Null or negative means use
+            the default environment thread count.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions.FrameSink">
+            <summary>
+            Sink that receives each completed task's result. Defaults to
+            <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.SpcxDiskFrameSink"/> (writes canonical SPCX/SPCE
+            files to <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec.CheckpointPath"/>). Set
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.Sinks.NullFrameSink.Instance"/> to suppress persistence;
+            set <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.InMemoryFrameSink"/> to additionally accumulate
+            completed results in memory.
+            </summary>
+            <remarks>
+            Replaces the older <c>PersistArtifacts</c> boolean. The sink
+            owns both the "skip already-completed task" decision and the
+            per-result side-effect, so the executor's parallel loop stays
+            uniform regardless of persistence mode.
+            </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions.BaseSeed">
+            <summary>
+            Optional root seed for reproducible task-level RNG derivation.
+            When present, the executor will derive per-task seeds from this
+            base seed unless the task already supplies an explicit seed.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions.TemperatureQuantizationFactor">
+            <summary>
+            Quantization factor for temperature-based seed derivation.
+            Higher values preserve more precision when the same temperature
+            occurs across different tasks.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor">
+            <summary>
+            SPC executor — schedule builder, runspace pool manager, and
+            orchestration of per-task <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.IFrameSink"/> dispatch. Owns
+            the parallel loop and seed derivation; defers persistence semantics
+            to the configured sink.
+            </summary>
+            <remarks>
+            <para>This class subsumes the old <c>SpcScheduler</c> and
+            <c>SpcRunner</c> execution semantics. Persistence used to be
+            controlled by a boolean (<c>PersistArtifacts</c>); it is now
+            controlled by the sink on
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions.FrameSink"/>. Default sink is
+            <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.SpcxDiskFrameSink"/>, which preserves the prior
+            write-checkpoints-to-disk behavior.</para>
+            </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor.BuildTaskList(System.Collections.Generic.IReadOnlyList{System.Double},System.Int32,System.Int32,System.Int32,Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier,System.String,System.Nullable{System.Int32},System.Int32)">
+            <summary>
+            Builds a flat schedule of independent SPC tasks from the requested
+            temperatures, replicas, cycles, and output directory.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor.Run(Graphs.Primitives.CsrGraph,System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec},System.Threading.CancellationToken,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute the schedule and dispatch each completed result to the
+            configured <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.IFrameSink"/>. Tasks the sink reports as
+            already-completed are skipped. The default sink
+            (<see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.SpcxDiskFrameSink"/>) writes canonical SPCX/SPCE
+            files; pass <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.Sinks.NullFrameSink.Instance"/> to skip
+            persistence.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor.RunBatch(Graphs.Primitives.CsrGraph,System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec},System.Threading.CancellationToken,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute the schedule and return a batch envelope containing
+            results and execution counts. Sink behavior is controlled by
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions.FrameSink"/>; the returned
+            envelope is independent of the sink (task-list-aligned results
+            for tasks that were executed).
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor.ExecuteAll(Graphs.Primitives.CsrGraph,System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec},System.Threading.CancellationToken,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute the full schedule in memory and return the results.
+            Pure execution path — bypasses the sink entirely; useful when
+            checkpoint persistence is not required and the caller wants
+            task-list-aligned in-memory results.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor.ExecuteAll(System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec},System.Threading.CancellationToken,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute the full schedule in memory and return the results for the
+            provided Potts run specs. Pure execution path — does not invoke
+            the sink (PottsRunSpec carries no checkpoint metadata).
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor.ExecuteBatch(System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec},System.Threading.CancellationToken,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute a batch of Potts run specs and return an execution
+            envelope. Pure execution path — does not invoke the sink.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor.ExecuteTask(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute a single schedule task by mapping it to a Potts run spec.
+            Seed derivation is controlled by <paramref name="executionOptions"/>.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor.ExecuteTask(Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)">
+            <summary>
+            Execute a single Potts run spec and return the unified SPC result.
+            Seed derivation is controlled by <paramref name="executionOptions"/>.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult">
+             <summary>
+             Bundle of equilibrium inputs consumed by post-orchestrator analyses
+             (<see cref="T:Clustering.Graphical.SPC.Partitions.IPartitionStrategy"/> and
+             <see cref="T:Clustering.Graphical.SPC.Observables.Projections.IGraphSignal"/>). Carries the structural input
+             plus whatever observable tiers the run was configured to collect.
+             </summary>
+             <remarks>
+             <para><b>Tier mapping.</b>
+             <list type="bullet">
+               <item><see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult.Graph"/> — structural input, always required.</item>
+               <item><see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult.Frame"/> — Tier 0 raw snapshot (FK accumulators,
+                 energy, cluster-size histogram, Blatt magnetization), always
+                 populated by a completed run.</item>
+               <item><see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult.EdgeObservables"/> — Tier 1 per-edge sidecar
+                 (BondFormedCount, SpinAgreementCount), present when the runner
+                 specialization tracked edge observables. Nullable; strategies that
+                 need it throw a clear <see cref="T:System.InvalidOperationException"/>
+                 when it is missing.</item>
+             </list>
+             Future tiers (per-node histograms, spin-sequence logs) land as
+             additional nullable members alongside <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult.EdgeObservables"/>.</para>
+            
+             <para><b>What this is not.</b> Not the orchestrator's return type
+             (that will additionally carry diagnostics, per-T frames, and
+             sweep-strategy state). This is the minimum bundle a downstream
+             analysis needs to consume the equilibrium output of one run.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec">
+            <summary>
+            One atomic unit of work for the SPC executor.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec.CheckpointPath">
+            <summary>
+            Path the persistent sink writes the checkpoint to. Required by
+            disk-backed sinks (e.g.
+            <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.SpcxDiskFrameSink"/>); may be left null when the
+            executor is wired to a non-persistent sink
+            (<see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.NullFrameSink"/>,
+            <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.InMemoryFrameSink"/>) — those sinks ignore the
+            path entirely.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Initialization.SpcGraphBuilder.BuildResult(System.Double[][],Clustering.Graphical.SPC.Runtime.Initialization.SpcGraphConfig)">
+            <summary>
+            Build the SPC graph for a feature matrix, returning the rich
+            <see cref="T:Graphs.GraphBuildResult"/> that surfaces the directed
+            <see cref="T:Graphs.NeighborSelection"/>, resolved bandwidth, and pre-repair
+            graph alongside the final <see cref="T:Graphs.Primitives.CsrGraph"/>. Callers that only
+            want the graph should pick <c>.Graph</c> off the result; downstream
+            diagnostics (<see cref="T:Graphs.Diagnostics.GraphHealth"/>) consume
+            the full shape without re-running KNN.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunner">
+             <summary>
+             Public sampler boundary for one Potts run using a configuration spec.
+             </summary>
+             <remarks>
+             <para><b>Execution boundary.</b> This class is the public entrypoint for a
+             single Potts sampler execution. It constructs the correct internal model
+             specialization, performs optional burn-in and the requested number of
+             SWCycles, and returns the collected observables as a unified result.
+             </para>
+            
+             <para><b>Implementation detail.</b> The internal stateful simulation remains
+             hidden inside the generic <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModel`1"/> engine and the
+             <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.IPottsModel"/> bridge. The public API does not expose the hot-
+             path cycle semantics or mutable session state.</para>
+             </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunResult">
+            <summary>
+            Result of one Potts sampler execution.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunResult.Frame">
+            <summary>
+            Core observable state captured at the end of the run.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunResult.EdgeObservables">
+            <summary>
+            Optional tier-1 per-edge observables produced only when the runner
+            is configured with <see cref="F:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier.WithEdgeObservables"/>.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunResult.FkSusceptibility">
+            <summary>
+            The FK susceptibility measured by this run result.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.PottsCoreObservablesSerializer">
+            <summary>
+            Binary serializer for <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelCoreObservables"/>,
+            owning the SPCX checkpoint format. Access via the static
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsCoreObservablesSerializer.Instance"/> singleton:
+            <code>
+            PottsCoreObservablesSerializer.Instance.WriteToFile(frame, path);
+            </code>
+            </summary>
+            <remarks>
+            Format is little-endian, begins with a 4-byte magic followed by
+            a version integer. Self-describing so foreign files are rejected
+            at the boundary rather than silently corrupting downstream state.
+            Composes on Archivory's <see cref="T:Archivory.BinarySerializerBase`1"/>
+            for atomic file I/O — this class supplies only the SPC-specific
+            stream schema.
+            </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.PottsEdgeObservablesSerializer">
+            <summary>
+            Binary serializer for <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables"/>,
+            owning the SPCE sidecar format. Access via the static
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsEdgeObservablesSerializer.Instance"/> singleton:
+            <code>
+            PottsEdgeObservablesSerializer.Instance.WriteToFile(edges, path);
+            </code>
+            </summary>
+            <remarks>
+            Format is little-endian, begins with a 4-byte magic followed by a
+            version integer. The SPCE file pairs with its matching SPCX
+            checkpoint by
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables.Temperature"/>,
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables.ReplicaIndex"/>, and
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables.CycleCount"/>. Composes on
+            Archivory's <see cref="T:Archivory.BinarySerializerBase`1"/> for atomic
+            file I/O — this class supplies only the SPC-specific stream
+            schema.
+            </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec">
+            <summary>
+            Configuration for a single Potts sampler execution.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec.Graph">
+            <summary>
+            Weighted CSR graph for the sampler.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec.Temperature">
+            <summary>
+            Temperature in the Potts model energy units.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec.Q">
+            <summary>
+            Number of Potts colors (q) used by the sampler.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec.ObservableTier">
+            <summary>
+            Which observable tier the sampler should collect.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec.Seed">
+            <summary>
+            Optional deterministic seed for reproducible runs.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec.Cycles">
+            <summary>
+            Number of SWCycles to run after burn-in for observable collection.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec.BurnInCycles">
+            <summary>
+            Number of SWCycles to discard before starting accumulation.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunSpec.ReplicaIndex">
+            <summary>
+            Replica index for metadata/seed derivation.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelCoreObservables">
+            <summary>
+            Pure data DTO for the core Potts model checkpoint and always-on observables.
+            </summary>
+            <remarks>
+            Contains the full resume state for the Potts sampler without embedding any
+            serializer-specific metadata or format details.
+            </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModelEdgeObservables">
+            <summary>
+            Pure data DTO for per-edge Potts observables produced by the runner.
+            </summary>
+            <remarks>
+            Stored separately from the core checkpoint data so consumers can skip the
+            additional edge-level I/O when per-edge diagnostics are not required.
+            </remarks>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.IPottsConfig">
+             <summary>
+             Compile-time configuration for <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunner"/>. The
+             single <c>static abstract</c> member is folded as a compile-time
+             constant per specialization, letting the JIT DCE branches whose guard
+             evaluates to <c>false</c>.
+             </summary>
+             <remarks>
+             <para><b>One gate only.</b> The only accumulator dimension that justifies
+             a JIT-specialization gate is <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.IPottsConfig.EdgeObservables"/> — it carries
+             <c>O(|E|)</c> memory and adds a scatter-write per formed bond in the hot
+             loop. Everything else the runner accumulates (FK χ, specific heat,
+             Blatt magnetization, cluster-size histogram) is essentially free as a
+             byproduct of the SW union-find pass and is unconditionally populated;
+             gating those would double the specialization count to save a handful
+             of float ops per cycle, which is the wrong trade.</para>
+            
+             <para><b>Future tiers.</b> If a new accumulator lands that is genuinely
+             hot-loop threatening (per-edge or per-node memory and inner-loop
+             scatter writes), it earns a new compile-time bit here. Anything
+             cheaper than that — even another O(N) post-cycle pass — belongs
+             behind a runtime field on the runner, not a generic parameter, to
+             avoid combinatorial specialization growth.</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.IPottsConfig.EdgeObservables">
+            <summary>
+            When <c>false</c>, the per-edge <c>⟨ω(e)⟩</c> bond-frequency and
+            <c>⟨1_{s_i = s_j}⟩</c> spin-agreement accumulators (and their
+            <c>int[]</c> scratch arrays sized to CSR length) are absent from
+            the specialization. When <c>true</c>, both are tracked together
+            — they share a hot-loop branch and are conceptually paired (the
+            second is the marginal of the first over the bond-formation
+            random draw).
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.StandardObservables">
+            <summary>
+            Standard runner specialization — every always-on accumulator (FK χ,
+            specific heat, Blatt m, cluster-size histogram) is populated, but the
+            O(|E|) per-edge sidecar is omitted. The lightweight default; use when
+            you need thermodynamic curves and the global FK signal but not
+            edge-resolved equilibrium correlations.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.WithEdgeObservables">
+            <summary>
+            Standard accumulators plus per-edge <c>⟨ω(e)⟩</c> and
+            <c>⟨1_{s_i = s_j}⟩</c>. Required for partition strategies that
+            threshold on per-edge observables
+            (<c>ThresholdSpinAgreement</c>, <c>ThresholdBondFrequency</c>) and
+            for graph signals that project per-edge quantities to per-node
+            scalars (<c>BondFrequencyDegree</c>, etc.).
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier">
+            <summary>
+            Public enum selecting which <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.IPottsConfig"/> specialization
+            the runner is constructed with.
+            </summary>
+            <remarks>
+            <para>Renamed from <c>PottsSusceptibility</c>. The old name conflated
+            "estimator family" (FK / Blatt) with "observable tier" (what arrays
+            the specialization allocates); the new name reflects the latter,
+            which is what the enum actually controls. FK susceptibility and
+            Blatt magnetization are <i>both</i> always computed regardless of
+            which value is selected — they sit in Tier 0 and are free byproducts
+            of the SW union-find pass.</para>
+            </remarks>
+        </member>
+        <member name="F:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier.Standard">
+            <summary>Tier 0 only: FK χ, Cv, Blatt m, cluster-size histogram, energy.</summary>
+        </member>
+        <member name="F:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier.WithEdgeObservables">
+            <summary>Tier 0 + Tier 1: adds per-edge bond frequency and spin agreement.</summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.IPottsModel">
+            <summary>
+            Type-erased contract over <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModel`1"/>. The public
+            <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.PottsRunner"/> façade holds an <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.IPottsModel"/> so that
+            the susceptibility-config choice (made once at construction) does not leak
+            into the public API surface. All members forward to the underlying generic
+            runner via virtual dispatch; this dispatch is one indirection per public
+            call, not per SWCycle, so it is paid at the orchestration boundary, not in
+            the hot path.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Sampler.Potts.IPottsModel.GetEdgeCheckpoint">
+            <summary>
+            Snapshot the per-edge accumulators (bond formation count, spin agreement
+            count). Returns <see langword="null"/> when the specialization does not
+            track edge observables; consumers should branch on that, not throw.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModel`1">
+             <summary>
+             Single-temperature Swendsen-Wang sampler for the q-state Potts model.
+             Generic over an <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.IPottsConfig"/> struct so the JIT can specialize
+             the hot path and dead-code-eliminate the disabled accumulator branch.
+             </summary>
+             <remarks>
+             <para><b>Hot-path discipline.</b> No per-cycle allocation. All scratch
+             arrays are fields, sized at construction. Bond probabilities are precomputed
+             once; the inner loop is a table lookup. The bond-formation and energy
+             accumulation share a single edge walk because both decisions key off the
+             same spin-equality test. The <c>j &lt;= i</c> skip handles symmetric CSR
+             (each undirected edge stored as both (i,j) and (j,i)). The FK accumulator
+             widens to <see langword="long"/> on multiply to survive large N.</para>
+            
+             <para><b>Color semantics.</b> <c>_spins[i]</c> is a Potts color in
+             <c>[0, q)</c>, not a cluster ID. Bond formation reads the OLD spins (Pass 1)
+             and the energy is evaluated against that same configuration. The cluster
+             flip (Pass 2) overwrites <c>_spins</c> with NEW colors, one per UF root.
+             Two distinct bond clusters may independently draw the same color; this is
+             the "color collision" that distinguishes Blatt (which counts color buckets)
+             from FK (which counts UF root sizes directly).</para>
+            
+             <para><b>Always-on accumulators.</b> FK χ, specific-heat moments, Blatt
+             magnetization, and the cluster-size histogram are all populated every
+             cycle regardless of <typeparamref name="TConfig"/>. They are free
+             byproducts of the SW union-find pass — gating them would double the
+             specialization count to save a handful of float ops per cycle, which is
+             the wrong trade. Only <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.IPottsConfig.EdgeObservables"/> earns a
+             JIT-specialization gate (it owns the only per-bond scatter write).</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModel`1.Cycle">
+            <summary>
+            One Swendsen-Wang cycle: bond formation (with energy as a free byproduct),
+            cluster flip, and observable accumulation.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModel`1.ResetAccumulators">
+            <summary>
+            Zero every running accumulator and reset the cycle counter. Called
+            at the tail of <see cref="M:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModel`1.BurnIn(System.Int32)"/>; the model continues to hold
+            post-burn-in spins and RNG state, but starts collecting statistics
+            fresh from this point.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsModel`1.MaxColorBucket(System.ReadOnlySpan{System.Int32},System.Int32,System.Span{System.Int32})">
+            <summary>
+            Returns the size of the largest color bucket in <paramref name="spins"/>.
+            O(N + Q) with Q small (typically ≤ 20).
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsSamplerConfig">
+             <summary>
+             Sampler-level configuration for the Potts model — knobs that are
+             chosen once per run and don't vary across the temperature sweep
+             or the chosen scheduling strategy. Lives separately from
+             scheduler/sweep configs so the same sampler settings can be
+             reused regardless of which <c>ISweepStrategy</c> drives them.
+             </summary>
+             <remarks>
+             <para><b>Why separate from the sweep configs.</b> The number of
+             Potts colors <see cref="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsSamplerConfig.Q"/> is a property of the Potts model
+             itself, not of how the temperature axis is explored. Holding it
+             inside <c>AdaptiveSchedulerConfig</c> / <c>FixedGridSweepConfig</c>
+             duplicated the field and conflated two layers of concern. Both
+             sweep configs now compose this record instead.</para>
+            
+             <para><b>What stays on the sweep configs.</b>
+             <c>BaseSeed</c> remains on the sweep configs because it seeds the
+             schedule's per-task seed derivation, which is a scheduler-level
+             concern (the sampler only ever sees an already-derived per-task
+             seed). <c>MaxDegreeOfParallelism</c> remains there too pending a
+             broader parallelism-layering pass.</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsSamplerConfig.Q">
+            <summary>
+            Number of Potts colors (q). Default 20 — enough that the
+            paramagnetic <c>⟨1_{s_i = s_j}⟩ ≈ 1/q</c> baseline sits well
+            below the Blatt cut threshold (typically 0.5), while keeping
+            per-cycle color-bucket scratch small (O(Q) memory, single
+            digit ns per pass at q=20).
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig">
+            <summary>
+            Configuration for <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSweepStrategy"/>. Defaults are
+            tuned for typical SPC induced subgraphs (50-150 nodes) and produce a
+            sharp χ(T) peak in roughly a second on a single core; the flat-task
+            parallel pattern collapses that to well under a second on modern
+            multicore.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.DenseReplicas">
+            <summary>
+            Independent replicas per (Temperature, Round) task. Each replica is its
+            own fresh PottsModel with a deterministic per-task seed (derived from
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.BaseSeed"/>); their χ measurements are averaged to drive
+            down variance at each grid point. Set together with
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.DenseRounds"/> for total measurements per T =
+            <c>DenseReplicas × DenseRounds</c>.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.DenseRounds">
+            <summary>
+            Number of refinement rounds. Each round runs DenseReplicas measurements
+            at every grid point and merges into a running average. Multiple rounds
+            let the χ profile sharpen further than DenseReplicas alone.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.FinalPassTier">
+            <summary>
+            Observable tier the final-equilibrium pass runs at. Defaults to
+            <see cref="F:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier.WithEdgeObservables"/> — required by
+            the threshold-based partition strategies
+            (<c>ThresholdBondFrequency</c>, <c>ThresholdSpinAgreement</c>) and
+            the per-edge graph signals. Strategies that consume only the spin
+            frame (e.g. Blatt-style magnetization cuts, future spectral
+            strategies) can pin this to
+            <see cref="F:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier.Standard"/> to skip the O(|E|)
+            per-edge accumulators.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.TempMin">
+            <summary>
+            Lower bound of the coarse temperature grid. Null derives a graph-aware
+            value from SpcScheduleHelpers.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.TempMax">
+            <summary>
+            Upper bound of the coarse temperature grid. Null derives a graph-aware
+            value from SpcScheduleHelpers.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.Sampler">
+            <summary>
+            Sampler-level Potts configuration (number of colors, etc.).
+            Held as a composed record rather than inlined fields so the same
+            sampler settings can be shared across sweep strategies and
+            scheduler-vs-sampler concerns stay separable.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.EarlyStopStability">
+            <summary>
+            If the coarse profile's stability score exceeds this, skip the dense
+            refinement stage and go directly to final equilibrium at the coarse
+            peak. Useful when the χ(T) curve is already sharp from the coarse
+            pass alone.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.BaseSeed">
+            <summary>
+            Base seed for reproducibility. Per-task seeds are derived as
+            <c>HashCode.Combine(BaseSeed, T_quantized, round, replica)</c> so the
+            entire schedule is deterministic. <c>null</c> means each task draws
+            from OS entropy (non-reproducible but otherwise correct).
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.MaxDegreeOfParallelism">
+            <summary>
+            Number of threads for the flat-task Parallel.For dispatch. Default
+            uses <see cref="P:System.Environment.ProcessorCount"/>; lower it to leave
+            headroom when the caller runs multiple schedules in parallel.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.CheckpointDirectory">
+            <summary>
+            Optional directory for per-task checkpoint persistence (and
+            resume on re-run). When non-null, every probe and the final-
+            equilibrium pass are written as paired <c>.spcx</c> / <c>.spce</c>
+            files via <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.SpcxDiskFrameSink"/>;
+            re-running the strategy against the same directory skips
+            already-checkpointed work. When null, the schedule runs in-memory
+            only.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Scheduling.SweepSummary">
+            <summary>
+            Summary from one <see cref="M:Clustering.Graphical.SPC.Runtime.Scheduling.ISweepStrategy.Run(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Profiling.Signals.ISignalAnalyzer)"/> call. Intended
+            for both runtime introspection (debug output, profiling) and analytic
+            post-processing.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.SweepSummary.StageTimings">
+            <summary>
+            Per-stage wall-clock breakdown. Keys are strategy-defined stage
+            names (e.g. <c>"coarse"</c>, <c>"dense"</c>, <c>"final_equilibrium"</c>
+            for adaptive; <c>"probes"</c>, <c>"final_equilibrium"</c> for
+            fixed-grid). The sum should approximate <see cref="P:Clustering.Graphical.SPC.Runtime.Scheduling.SweepSummary.Elapsed"/>
+            minus negligible bookkeeping overhead. Empty for trivial graphs
+            or strategies that don't track per-stage timing.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.SweepSummary.Profile">
+            <summary>
+            The full χ(T) profile assembled from coarse + (optional) dense stages.
+            Sorted ascending in T. Useful for plotting the susceptibility curve.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Scheduling.SweepResult">
+            <summary>
+            Result of one sweep-strategy run. <see cref="P:Clustering.Graphical.SPC.Runtime.Scheduling.SweepResult.EdgeObservables"/> is
+            null when the final-pass tier did not request per-edge accumulators
+            (or for trivial subgraphs with less than 2 nodes); callers should
+            treat that case as "every node is its own cluster" downstream.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSweepStrategy">
+             <summary>
+             Three-stage adaptive sweep strategy: coarse log-spaced probe → dense
+             band refinement with multi-replica averaging → final equilibrium at
+             the chosen T. The default <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.ISweepStrategy"/> implementation
+             and the historical pipeline that the rest of the SPC stack was built
+             against.
+             </summary>
+             <remarks>
+             <para><b>Stage 1 — Coarse probe.</b> Log-spaced grid over
+             <c>[TempMin, TempMax]</c>; measures χ_FK at each grid point with a short
+             burn-in + accumulation. Goal: locate the susceptibility peak region.</para>
+            
+             <para><b>Stage 2 — Dense refinement with replicas.</b> Identify the
+             half-maximum band around the coarse peak; build a log-spaced grid within
+             that band; for each grid point, run <c>DenseReplicas × DenseRounds</c>
+             independent measurements and average. The (T, replica, round) cartesian
+             product is flattened to a single task list dispatched against the worker
+             budget.</para>
+            
+             <para><b>Stage 3 — Final equilibrium.</b> Construct a PottsModel at the
+             chosen T with <see cref="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.FinalPassTier"/> (defaults
+             to <see cref="F:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier.WithEdgeObservables"/>), run the full
+             burn + accumulate cycle, and return the per-edge observables when the
+             tier provides them. The cut policy consumes these to produce cluster
+             labels.</para>
+            
+             <para><b>Early-stop.</b> If the coarse profile already has stability ≥
+             <see cref="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.EarlyStopStability"/>, skip Stage 2
+             and go directly to Stage 3 at the coarse peak. Reduces compute when the
+             susceptibility curve is already sharp from the coarse sweep alone.</para>
+            
+             <para><b>Susceptibility estimator.</b> χ_FK = ⟨Σ|c|²⟩ / (cycles · N) read
+             directly from PottsModel's running accumulators.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSweepStrategy.#ctor(Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig)">
+            <summary>
+            Construct with the given configuration (or defaults if null).
+            Strategy instances are stateless across <see cref="M:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSweepStrategy.Run(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Profiling.Signals.ISignalAnalyzer)"/> calls and
+            safe to reuse.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSweepStrategy.Run(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Profiling.Signals.ISignalAnalyzer)">
+            <inheritdoc />
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig">
+             <summary>
+             Configuration for <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepStrategy"/>: a user-supplied
+             temperature grid plus per-point sampler parameters.
+             </summary>
+             <remarks>
+             <para>The user owns the grid — no log-spacing assumption, no
+             auto-bracketing. Order is preserved end-to-end; the assembled
+             <see cref="T:Clustering.Graphical.SPC.Profiling.SweepProfile"/> simply records what was measured at each
+             temperature, in whatever order was given. Pair with a dense linspace
+             (Tier-0 χ(T) survey), a hand-picked diagnostic grid, or the output of
+             any pre-existing analysis.</para>
+            
+             <para><b>Why this exists.</b> The adaptive scheduler's coarse→dense
+             pipeline is opinionated about where to spend cycles — useful when you
+             want one good T, hostile when you want to <i>see</i> the curves
+             before deciding what "good" means. A well-sampled fixed-grid sweep
+             is the natural input for cross-temperature analyses (pseudo-transition
+             detection on the way to T_c) and surrogate-model fitting.</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.Temperatures">
+            <summary>
+            User-supplied temperature grid. Order preserved; no sorting,
+            dedup, or log-spacing applied. Must be non-empty.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.Replicas">
+            <summary>
+            Independent replicas per temperature. Each replica is a fresh
+            PottsModel with a deterministic per-task seed (round=0,
+            replica-indexed). Their per-T measurements feed into
+            <see cref="T:Clustering.Graphical.SPC.Profiling.SweepProfile"/> as additional data points at the
+            same T — the profile aggregator averages them.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.BurnInCycles">
+            <summary>Burn-in cycles per probe.</summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.MeasureCycles">
+            <summary>Measurement cycles per probe.</summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.Sampler">
+            <summary>
+            Sampler-level Potts configuration. See
+            <see cref="T:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsSamplerConfig"/>.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.FinalBurn">
+            <summary>Final-pass burn-in.</summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.FinalCycles">
+            <summary>Final-pass measurement cycles.</summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.FinalPassTier">
+            <summary>
+            Observable tier for the final-equilibrium pass. Same semantics as
+            <see cref="P:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig.FinalPassTier"/>.
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.BaseSeed">
+            <summary>
+            Root seed for reproducible per-task RNG derivation. Null draws
+            from OS entropy (non-reproducible).
+            </summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.MaxDegreeOfParallelism">
+            <summary>Parallel.For degree of parallelism (-1 = environment default).</summary>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.CheckpointDirectory">
+            <summary>
+            Optional directory for per-task checkpoint persistence (and
+            resume on re-run). When non-null, each (T, replica) probe and
+            the final-equilibrium pass are written as paired
+            <c>.spcx</c> / <c>.spce</c> files via
+            <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.Sinks.SpcxDiskFrameSink"/>; re-running the
+            strategy against the same directory skips tasks whose checkpoints
+            already exist. When null, the sweep runs in-memory only (no
+            persistence, no resume).
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepStrategy">
+             <summary>
+             Brute-force sweep strategy: runs every point on a user-supplied
+             temperature grid (with optional replicas), assembles a
+             <see cref="T:Clustering.Graphical.SPC.Profiling.SweepProfile"/>, picks chosen-T via the supplied analyzer,
+             and runs the final-equilibrium pass at that T.
+             </summary>
+             <remarks>
+             <para><b>Use case.</b> The diagnostic / research workhorse: "just give
+             me χ(T) on this exact grid." Skip when you only want one good cluster
+             labeling — <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSweepStrategy"/>'s coarse→dense pipeline
+             is cheaper for that. Use when you want to <i>see</i> the
+             susceptibility (and label-entropy, specific-heat, bond-frequency)
+             curves across the whole T-domain before committing to an adaptive
+             search, or when downstream analysis (pseudo-transition detection,
+             surrogate fitting) needs a well-sampled trajectory.</para>
+            
+             <para><b>Parallelization.</b> Flattens (T × replica) into a single
+             task list dispatched against <see cref="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.MaxDegreeOfParallelism"/>
+             — same flat-task pattern as <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSweepStrategy"/>.</para>
+            
+             <para><b>Final pass.</b> Always runs one final-equilibrium pass at
+             the analyzer-picked T so the returned <see cref="P:Clustering.Graphical.SPC.Runtime.Scheduling.SweepResult.FinalRun"/>
+             is a drop-in input for downstream <see cref="T:Clustering.Graphical.SPC.Partitions.IPartitionStrategy"/>s.
+             Set <see cref="P:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepConfig.FinalPassTier"/> to
+             <see cref="F:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier.Standard"/> if no partition strategy
+             in the pipeline consumes edge observables.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepStrategy.Run(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Profiling.Signals.ISignalAnalyzer)">
+            <inheritdoc />
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Scheduling.FixedGridSweepStrategy.HydrateAlignedRuns(Clustering.Graphical.SPC.Runtime.Execution.SpcBatchResult,System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcTaskSpec},System.String)">
+            <summary>
+            Pulls task-aligned results out of <see cref="P:Clustering.Graphical.SPC.Runtime.Execution.SpcBatchResult.AlignedRuns"/>
+            and throws if any slot is null — covers both fresh-run and resume
+            paths. Caller passes a stage label (e.g. <c>"probe"</c>) used in
+            the error message.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Scheduling.ISweepStrategy">
+             <summary>
+             Strategy seam for SPC sweep schedules. A sweep strategy explores the
+             temperature axis (and any auxiliary axes), assembles a
+             <see cref="T:Clustering.Graphical.SPC.Profiling.SweepProfile"/>, picks an equilibrium point, and
+             returns the chosen state plus the probe traces that justified the
+             choice. The end-to-end <see cref="T:Clustering.Graphical.SPC.SpcClusteringSession"/> consumes
+             this output and hands the <see cref="P:Clustering.Graphical.SPC.Runtime.Scheduling.SweepResult.FinalRun"/>
+             to a partition strategy.
+             </summary>
+             <remarks>
+             <para><b>Implementations.</b> The default
+             <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSweepStrategy"/> implements the three-stage
+             coarse-probe → dense-refinement → final-equilibrium pipeline with an
+             early-stop on coarse stability. Future strategies may include
+             fixed-grid sweeps, BARS-style adaptive sampling, or replica-exchange
+             pre-warmups; all share this contract.</para>
+            
+             <para><b>Result type.</b> The return type is
+             <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.SweepResult"/> rather than a freshly-named
+             sibling — the shape (summary + sweep runs + final run + profile
+             criteria) is exactly what any sweep strategy must produce, and a
+             rename would cascade through callers. The "Adaptive" prefix is
+             historical; treat the type as the canonical sweep result.</para>
+            
+             <para><b>Stateless contract.</b> Implementations should be safe to
+             reuse across multiple <see cref="M:Clustering.Graphical.SPC.Runtime.Scheduling.ISweepStrategy.Run(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Profiling.Signals.ISignalAnalyzer)"/> calls on different graphs —
+             any per-run scratch lives inside the call, configuration on the
+             instance.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Scheduling.ISweepStrategy.Run(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Profiling.Signals.ISignalAnalyzer)">
+            <summary>
+            Execute the sweep and return the chosen equilibrium plus the
+            probe traces. <paramref name="analyzer"/> defaults to
+            <see cref="T:Clustering.Graphical.SPC.Profiling.Signals.ChiPeakSignalAnalyzer"/> when null; pass
+            <see cref="T:Clustering.Graphical.SPC.Profiling.Signals.MultiSignalConsensusAnalyzer"/> for the
+            triangulated-criteria variant.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Scheduling.SpcScheduleHelpers">
+            <summary>
+            Reusable helpers for SPC schedule shapes and schedule-envelope derivation.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Scheduling.SpcSeedHelper">
+             <summary>
+             Canonical per-task seed derivation for SPC schedules and ad-hoc
+             task lists. Centralizes what used to be two near-identical formulas
+             (one in <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor"/>, one in the
+             adaptive scheduler) so any task with the same logical
+             <c>(baseSeed, T, replica, round)</c> tuple resolves to the same seed
+             regardless of which strategy or executor builds it.
+             </summary>
+             <remarks>
+             <para><b>Quantization.</b> Temperatures are quantized to roughly 3
+             significant digits (factor 1000 by default) so callers that compute
+             <c>T</c> via slightly different float paths still hash to the same
+             bucket. Bump <see cref="F:Clustering.Graphical.SPC.Runtime.Scheduling.SpcSeedHelper.DefaultTemperatureQuantizationFactor"/> on
+             the per-call <c>quantizationFactor</c> argument when more precision
+             is needed.</para>
+            
+             <para><b>Reproducibility break.</b> The unified formula reorders the
+             <see cref="M:System.HashCode.Combine``1(``0)"/> inputs relative to the pre-unification
+             versions in <see cref="M:Clustering.Graphical.SPC.Runtime.Execution.SpcExecutor.ResolveSeed(System.Nullable{System.Int32},System.Int32,System.Double,Clustering.Graphical.SPC.Runtime.Execution.SpcExecutionOptions)"/> and
+             the adaptive scheduler. Cluster labels emitted before and after the
+             unification will differ even for identical configurations — the
+             schedules are still deterministic, just with a new seed-stream
+             identity.</para>
+             </remarks>
+        </member>
+        <member name="F:Clustering.Graphical.SPC.Runtime.Scheduling.SpcSeedHelper.DefaultTemperatureQuantizationFactor">
+            <summary>
+            Default temperature quantization factor (3 sig-fig granularity).
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Scheduling.SpcSeedHelper.Derive(System.Nullable{System.Int32},System.Double,System.Int32,System.Int32,System.Int32)">
+            <summary>
+            Derive a per-task seed from a base seed and the discriminating
+            task coordinates. Returns <see langword="null"/> when
+            <paramref name="baseSeed"/> is null — that path means "no
+            reproducibility; draw from OS entropy at run time."
+            </summary>
+            <param name="baseSeed">Root seed shared across the whole
+            schedule, or null for non-reproducible runs.</param>
+            <param name="temperature">Task temperature.</param>
+            <param name="replica">Replica index inside the (T, round)
+            bucket. Use 0 when the workload has no replica dimension.</param>
+            <param name="round">Refinement-round index. Use 0 when the
+            workload has no round dimension (most fixed-grid sweeps and
+            raw task lists).</param>
+            <param name="quantizationFactor">Temperature quantization
+            factor; defaults to
+            <see cref="F:Clustering.Graphical.SPC.Runtime.Scheduling.SpcSeedHelper.DefaultTemperatureQuantizationFactor"/>.</param>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.Runtime.Scheduling.SweepKernel">
+            <summary>
+            Stateless per-point sampler helpers shared across sweep strategies.
+            Owns the <c>PottsRunSpec</c> assembly + <c>PottsRunner.Run</c> call
+            and the post-call <see cref="T:Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult"/> wrapping. Strategies
+            (adaptive, fixed-grid, future BARS) call these to keep the per-T
+            sampling contract identical regardless of how the schedule was
+            produced.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Scheduling.SweepKernel.RunProbePoint(Graphs.Primitives.CsrGraph,System.Double,System.Int32,System.Int32,System.Int32,System.Nullable{System.Int32})">
+            <summary>
+            Run a single equilibrium probe at temperature <paramref name="T"/>
+            with <see cref="F:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier.Standard"/> — Tier-0 always-on
+            accumulators only, no per-edge sidecars. The cheap measurement
+            every χ(T)-style sweep uses.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Scheduling.SweepKernel.RunFinalEquilibrium(Graphs.Primitives.CsrGraph,System.Double,System.Int32,System.Int32,System.Int32,Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier,System.Nullable{System.Int32})">
+            <summary>
+            Run the final-equilibrium pass at the chosen temperature with the
+            caller-specified <paramref name="tier"/>. When
+            <paramref name="tier"/> is
+            <see cref="F:Clustering.Graphical.SPC.Runtime.Sampler.Potts.PottsObservableTier.WithEdgeObservables"/>, missing
+            edge observables is treated as a sampler bug and throws; otherwise
+            null edge observables are returned as-is (Tier-0 strategies
+            genuinely don't need them).
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.Runtime.Scheduling.SweepKernel.BuildTrivialResult(Graphs.Primitives.CsrGraph,System.Int32,System.TimeSpan)">
+            <summary>
+            Canonical empty-result shape for graphs with fewer than 2 nodes —
+            every node is its own cluster downstream. Strategies short-circuit
+            to this so their main pipelines never see <c>N&lt;2</c>.
+            </summary>
+        </member>
+        <member name="T:Clustering.Graphical.SPC.SpcSessionResult">
+             <summary>
+             Result of one end-to-end <see cref="M:Clustering.Graphical.SPC.SpcClusteringSession.Run(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig,Clustering.Graphical.SPC.Partitions.IPartitionStrategy,Clustering.Graphical.SPC.Profiling.Signals.ISignalAnalyzer,Clustering.Graphical.SPC.Runtime.Scheduling.ISweepStrategy,Clustering.Graphical.SPC.Partitions.Hierarchical.IHierarchicalPartitionStrategy,System.Collections.Generic.IEnumerable{Clustering.Evaluation.External.IExternalClusterEvaluator},System.Collections.Generic.IEnumerable{Clustering.Graphical.SPC.Evaluation.ISpcEvaluator},System.Int32[])"/>
+             call. Carries the partition + sweep diagnostics + final-equilibrium
+             run, plus a dictionary of evaluator scores keyed by each evaluator's
+             canonical <c>Name</c>.
+             </summary>
+             <remarks>
+             <para><b>Evaluator scores.</b> Both external evaluators (Purity,
+             NMI, ARI, ...) and SPC-aware evaluators (BondModularity,
+             BondCoverage, BondConductance, ...) fold into a single
+             <see cref="P:Clustering.Graphical.SPC.SpcSessionResult.EvaluatorScores"/> dictionary. The dictionary is keyed by
+             each evaluator's <c>Name</c> property — typically a short canonical
+             form like <c>"Purity"</c> or <c>"BondModularity"</c> rather than the
+             implementing type's full name.</para>
+            
+             <para><b>Purity convenience.</b> The <see cref="P:Clustering.Graphical.SPC.SpcSessionResult.Purity"/> accessor
+             reads the <c>"Purity"</c> key from <see cref="P:Clustering.Graphical.SPC.SpcSessionResult.EvaluatorScores"/>
+             for the common case. Returns <see langword="null"/> when no
+             <c>Purity</c> evaluator was supplied.</para>
+             </remarks>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.SpcSessionResult.#ctor(Clustering.Graphical.SPC.Partitions.Partition,Clustering.Graphical.SPC.Profiling.SweepProfile,Clustering.Graphical.SPC.Profiling.ProfileCriteria,Clustering.Graphical.SPC.Runtime.Scheduling.SweepSummary,Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult,System.Collections.Generic.IReadOnlyList{Clustering.Graphical.SPC.Runtime.Execution.SpcRunResult},System.Collections.Generic.IReadOnlyDictionary{System.String,System.Double},Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy)">
+             <summary>
+             Result of one end-to-end <see cref="M:Clustering.Graphical.SPC.SpcClusteringSession.Run(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig,Clustering.Graphical.SPC.Partitions.IPartitionStrategy,Clustering.Graphical.SPC.Profiling.Signals.ISignalAnalyzer,Clustering.Graphical.SPC.Runtime.Scheduling.ISweepStrategy,Clustering.Graphical.SPC.Partitions.Hierarchical.IHierarchicalPartitionStrategy,System.Collections.Generic.IEnumerable{Clustering.Evaluation.External.IExternalClusterEvaluator},System.Collections.Generic.IEnumerable{Clustering.Graphical.SPC.Evaluation.ISpcEvaluator},System.Int32[])"/>
+             call. Carries the partition + sweep diagnostics + final-equilibrium
+             run, plus a dictionary of evaluator scores keyed by each evaluator's
+             canonical <c>Name</c>.
+             </summary>
+             <remarks>
+             <para><b>Evaluator scores.</b> Both external evaluators (Purity,
+             NMI, ARI, ...) and SPC-aware evaluators (BondModularity,
+             BondCoverage, BondConductance, ...) fold into a single
+             <see cref="P:Clustering.Graphical.SPC.SpcSessionResult.EvaluatorScores"/> dictionary. The dictionary is keyed by
+             each evaluator's <c>Name</c> property — typically a short canonical
+             form like <c>"Purity"</c> or <c>"BondModularity"</c> rather than the
+             implementing type's full name.</para>
+            
+             <para><b>Purity convenience.</b> The <see cref="P:Clustering.Graphical.SPC.SpcSessionResult.Purity"/> accessor
+             reads the <c>"Purity"</c> key from <see cref="P:Clustering.Graphical.SPC.SpcSessionResult.EvaluatorScores"/>
+             for the common case. Returns <see langword="null"/> when no
+             <c>Purity</c> evaluator was supplied.</para>
+             </remarks>
+        </member>
+        <member name="P:Clustering.Graphical.SPC.SpcSessionResult.Purity">
+            <summary>
+            Convenience accessor for the <c>"Purity"</c> entry in
+            <see cref="P:Clustering.Graphical.SPC.SpcSessionResult.EvaluatorScores"/>. Returns <see langword="null"/>
+            when no Purity evaluator was supplied to the session.
+            </summary>
+        </member>
+        <member name="M:Clustering.Graphical.SPC.SpcClusteringSession.Run(Graphs.Primitives.CsrGraph,Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSchedulerConfig,Clustering.Graphical.SPC.Partitions.IPartitionStrategy,Clustering.Graphical.SPC.Profiling.Signals.ISignalAnalyzer,Clustering.Graphical.SPC.Runtime.Scheduling.ISweepStrategy,Clustering.Graphical.SPC.Partitions.Hierarchical.IHierarchicalPartitionStrategy,System.Collections.Generic.IEnumerable{Clustering.Evaluation.External.IExternalClusterEvaluator},System.Collections.Generic.IEnumerable{Clustering.Graphical.SPC.Evaluation.ISpcEvaluator},System.Int32[])">
+            <summary>
+            End-to-end SPC run on a prebuilt graph.
+            </summary>
+            <param name="graph">CSR graph to cluster.</param>
+            <param name="config">Configuration for the default
+            <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSweepStrategy"/>. Ignored when
+            <paramref name="sweepStrategy"/> is supplied — pre-configure that
+            strategy instance instead.</param>
+            <param name="partitionStrategy">Partition cut to apply to the
+            chosen-T equilibrium run. Defaults to
+            <see cref="T:Clustering.Graphical.SPC.Partitions.Strategies.ThresholdSpinAgreement"/> at θ=0.5.</param>
+            <param name="analyzer">Signal analyzer that scores the assembled
+            sweep profile. Defaults to <see cref="T:Clustering.Graphical.SPC.Profiling.Signals.ChiPeakSignalAnalyzer"/>.</param>
+            <param name="sweepStrategy">Sweep-strategy seam. When null, the
+            session constructs a default <see cref="T:Clustering.Graphical.SPC.Runtime.Scheduling.AdaptiveSweepStrategy"/>
+            from <paramref name="config"/>. Pass a pre-built strategy to swap
+            in a different sweep shape (fixed-grid, BARS, etc.) without
+            touching the rest of the call site.</param>
+        </member>
+    </members>
+</doc>

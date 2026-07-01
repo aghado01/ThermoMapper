@@ -1,0 +1,224 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Synthetic</name>
+    </assembly>
+    <members>
+        <member name="T:Synthetic.Euclidean.AnisotropicGaussian">
+            <summary>
+            Gaussian clusters with anisotropic (elongated) shapes along random
+            rotations. Cluster means are placed close enough that raw
+            feature-space distances overlap substantially between clusters
+            while covariance structure remains distinct. Per-cluster
+            covariance matrices are returned so callers can build a pooled
+            CovarianceInverse (or construct their own) if desired.
+            Reference: anisotropic Gaussian blob benchmark.
+            </summary>
+        </member>
+        <member name="T:Synthetic.Euclidean.BlattHierarchy">
+            <summary>
+            Coarse &gt; medium &gt; fine Gaussian structure. LabelsByLevel exposes
+            ground truth at each scale so temperature-dependent resolution can
+            be measured against all three simultaneously.
+            Reference: Blatt, Wiseman, Domany 1997 Neural Computation 9:1805.
+            </summary>
+        </member>
+        <member name="T:Synthetic.Euclidean.BlattThreeCluster">
+            <summary>
+            Three compact Gaussian clusters at fixed corners (-6, 0), (6, 0), (0, 6).
+            Canonical SPC engine-validation dataset.
+            Reference: Blatt, Wiseman, Domany 1996 PRL 76:3251.
+            </summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.EllipsoidPlacement.NearOpenFace">
+            <summary>Ellipsoid near the crescent's open face (original default).
+            Stresses proximity rules at the open gap.</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.EllipsoidPlacement.OrthogonalElbowIntersect">
+            <summary>Ellipsoid semi-major axis aligned with Z (perpendicular to the
+            crescent plane), center placed at the crescent elbow. The canonical stress
+            test for manifold-aware metrics: Euclidean distance fuses the clusters at
+            the intersection while geodesic / graph-based distances correctly separate them.</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.EllipsoidPlacement.IntersectUpperTip">
+            <summary>Ellipsoid centered at the upper arc tip (angle = π − arcHalfAngle).
+            Semi-major axis aligned outward along the radial direction at that tip.</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.EllipsoidPlacement.IntersectLowerTip">
+            <summary>Ellipsoid centered at the lower arc tip (angle = π + arcHalfAngle).
+            Mirror of IntersectUpperTip about the XZ plane.</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.EllipsoidPlacement.Manual">
+            <summary>Fully manual: use ellipsoidCenter and ellipsoidEulerXYZ directly.</summary>
+        </member>
+        <member name="T:Synthetic.Euclidean.EllipsoidShellMode">
+            <summary>Controls the radial density profile used when sampling the ellipsoid cluster.</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.EllipsoidShellMode.Solid">
+            <summary>Uniform volume density: cbrt-CDF radial scaling. Hard boundary.</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.EllipsoidShellMode.Gaussian">
+            <summary>True multivariate Gaussian: raw standard-normal vector without radial scaling.</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.EllipsoidShellMode.Hollow">
+            <summary>Surface shell only: all points on the ellipsoid boundary (r = 1 before Cholesky warp).</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.EllipsoidShellMode.Annular">
+            <summary>Thick shell: inner radius 0.75, outer radius 1.0 (uniform in that band).</summary>
+        </member>
+        <member name="T:Synthetic.Euclidean.CrescentAndEllipsoid">
+             <summary>
+             Two clusters with fundamentally different topologies:
+            
+               Cluster 0 — a crescent (half-annulus arc) in 3D ambient space.
+                 Non-convex; no single Gaussian can represent it faithfully.
+                 Exposes false-bridge formation in Euclidean k-NN graphs.
+            
+               Cluster 1 — a compact anisotropic ellipsoid. Convex; a single
+                 full-covariance Gaussian fits it well.
+            
+             v2 adds full positional and orientational control. See <see cref="T:Synthetic.Euclidean.EllipsoidPlacement"/>
+             for preset arrangements targeting specific stress scenarios.
+             Reference: custom crescent-and-ellipsoid topology stress test benchmark.
+             </summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.MobiusPlacement.NearSeam">
+            <summary>Near θ≈0/2π seam — maximum Euclidean false-bridge stress.</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.MobiusPlacement.CenterCrossOrtho">
+            <summary>Ellipsoid at center-cross zone with semi-major axis orthogonal to the Möbius plane (along Z).</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.MobiusPlacement.PeripheralElbow">
+            <summary>Near the peripheral turning elbow (θ≈¾π).</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.MobiusPlacement.CenterCrossCoPlanar">
+            <summary>Ellipsoid at center-cross zone with semi-major axis coplanar with the Möbius plane.</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.MobiusPlacement.Manual">
+            <summary>Fully manual; use ellipsoidCenter and ellipsoidEulerXYZ directly.</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.MobiusSpineShape.Circle">
+            <summary>Classic circular spine — the standard Möbius strip topology.</summary>
+        </member>
+        <member name="F:Synthetic.Euclidean.MobiusSpineShape.FigureEight">
+            <summary>Lissajous figure-eight spine (x=R·sin θ, y=R/2·sin 2θ): two loops connected at the origin.</summary>
+        </member>
+        <member name="P:Synthetic.Euclidean.MobiusTubeGeometry.LocalFrames">
+            <summary>Per-spine-sample [T, N, B] frame triplet. Shape: M × 3 × 3.</summary>
+        </member>
+        <member name="T:Synthetic.Euclidean.MobiusAndEllipsoid">
+             <summary>
+             Two clusters with fundamentally different topologies:
+            
+               Cluster 0 — a solid Möbius tube with non-orientable topology. In 3D it
+                 self-intersects at the gluing seam (θ=0/2π), creating genuine false-neighbor
+                 opportunities for Euclidean proximity graphs. Optional 4D embedding resolves
+                 the self-intersection cleanly.
+            
+               Cluster 1 — a compact anisotropic ellipsoid. Convex; a single full-covariance
+                 Gaussian fits it faithfully.
+             Reference: custom Möbius tube + ellipsoid topology stress test benchmark.
+             </summary>
+        </member>
+        <member name="M:Synthetic.Euclidean.MobiusAndEllipsoid.Project4DTo3D(System.Double[][],System.Double)">
+            <summary>
+            Projects 4D points to 3D by rotating in the x₃–x₄ plane.
+            Sweep <paramref name="angle4"/> from 0 → 2π for an animated 4D rotation.
+            Points with fewer than 4 dimensions are passed through unchanged.
+            </summary>
+        </member>
+        <member name="T:Synthetic.Euclidean.SparseSupports">
+            <summary>
+            Each cluster lives on its own contiguous range of feature
+            dimensions ("support"), with configurable overlap between adjacent
+            clusters. Feature values are uniform [0.5, 1.5] inside the support
+            and exactly zero outside. Exposes the high-dimensional distance-
+            concentration regime; supportOverlap controls how ambiguous cluster
+            boundaries are.
+            Reference: sparse high-dimensional support benchmark.
+            </summary>
+        </member>
+        <member name="T:Synthetic.Euclidean.SpatialBlobs">
+            <summary>
+            Compact Gaussian clusters arranged on a hypersphere so inter-cluster
+            gaps exceed intra-cluster spread. Classic "obvious blobs" case:
+            clear density voids between clusters, no manifold structure,
+            isotropic covariance within each cluster.
+            Reference: classic isotropic Gaussian blobs benchmark.
+            </summary>
+        </member>
+        <member name="T:Synthetic.Euclidean.TwoMoons">
+            <summary>
+            Two interleaved half-moons. Non-convex shape; methods that assume
+            convex or spherical clusters will struggle. Matches parameters of
+            sklearn.datasets.make_moons.
+            Reference: scikit-learn make_moons benchmark / classic two moons dataset.
+            </summary>
+        </member>
+        <member name="T:Synthetic.Manifolds.GaussianManifold">
+            <summary>
+            Each data point is a (mu, log_sigma) pair describing a 1D Gaussian.
+            Clusters correspond to regions of the Gaussian statistical manifold.
+            Centers are arranged on the Poincaré half-plane so that Euclidean
+            distance in (mu, log_sigma) space gives a neighborhood structure
+            different from the manifold geodesic (Fisher-Rao).
+            Reference: Gaussian statistical manifold benchmark (Fisher-Rao half-plane).
+            </summary>
+        </member>
+        <member name="T:Synthetic.Manifolds.HyperbolicBlobs">
+            <summary>
+            Generates clustered data directly in the Poincaré ball model of hyperbolic space (curvature K = −1).
+            Cluster centers are placed via exponential map from origin on a sphere in tangent space.
+            Points are sampled as tangent-space Gaussians at origin then translated via Möbius addition.
+            All points lie strictly inside the open unit ball, making PoincaréDistance the exact geodesic.
+            Perfect for testing SpcMetric.Poincaré with purity / susceptibility / radial-KL analysis.
+            Reference: standard Poincaré ball hyperbolic blob benchmark.
+            </summary>
+        </member>
+        <member name="M:Synthetic.Manifolds.HyperbolicBlobs.MobiusAdd(System.Double[],System.Double[])">
+            <summary>
+            Möbius addition in the Poincaré ball (exact group operation preserving the ball).
+            Used for cluster translation. Formula is the canonical one from hyperbolic geometry.
+            </summary>
+        </member>
+        <member name="T:Synthetic.Manifolds.HyperbolicHierarchy">
+            <summary>
+            Generates a hierarchical cluster tree directly in the Poincaré ball.
+            Leaf clusters are arranged recursively so broad branches separate near
+            the core and finer branches peel outward toward the boundary.
+            Reference: hierarchical Poincaré ball cluster benchmark.
+            </summary>
+        </member>
+        <member name="T:Synthetic.Manifolds.Simplex">
+            <summary>
+            Each data point is a categorical probability vector drawn from a
+            cluster-specific Dirichlet. With disjointSupports = true, each
+            cluster's mass concentrates on a non-overlapping range of
+            categories — producing distribution pairs whose KL / JSD saturate
+            at the metric's maximum. Exposes the stress case for
+            information-geometric metrics and for proximity rules that depend
+            on non-degenerate distance rankings.
+            Reference: Dirichlet-distributed simplex clusters (information-geometric benchmark).
+            </summary>
+        </member>
+        <member name="T:Synthetic.SyntheticDataset">
+            <summary>
+            Generators for labeled synthetic datasets used to characterize how
+            different metric / proximity / delta-estimator combinations behave on
+            controlled geometries. No generator prescribes a configuration; each
+            dataset exposes a specific structural feature (density voids, sparse
+            supports, simplex-valued points, anisotropy, parametric manifolds,
+            hierarchical scales, non-convex shapes) so experiment harnesses can
+            sweep configurations and measure outcomes directly.
+            </summary>
+        </member>
+        <member name="M:Synthetic.SyntheticData.EulerToRotation(System.Double,System.Double,System.Double)">
+            <summary>Euler rotation Rz(rz) * Ry(ry) * Rx(rx), intrinsic XYZ convention.
+            Shared between CrescentAndEllipsoid and MobiusAndEllipsoid generators.</summary>
+        </member>
+        <member name="M:Synthetic.SyntheticData.CholeskyLower(System.Double[0:,0:],System.Int32)">
+            <summary>Lower-triangular Cholesky factor of a dim×dim positive-definite matrix.
+            L s.t. L * Lᵀ = A. Shared between CrescentAndEllipsoid and MobiusAndEllipsoid.</summary>
+        </member>
+    </members>
+</doc>

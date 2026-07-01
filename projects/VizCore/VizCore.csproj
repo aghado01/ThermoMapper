@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Viz</RootNamespace>
+    <AssemblyName>VizCore</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\viz-core\viz_core.cs"           Link="viz-core\viz_core.cs" />
+    <Compile Include="..\..\src\viz-core\viz_core_types.cs"     Link="viz-core\viz_core_types.cs" />
+    <Compile Include="..\..\src\viz-core\viz_graph.cs"           Link="viz-core\viz_graph.cs" />
+    <Compile Include="..\..\src\viz-core\viz_layers.cs"          Link="viz-core\viz_layers.cs" />
+    <Compile Include="..\..\src\viz-core\viz_dataset.cs"         Link="viz-core\viz_dataset.cs" />
+    <Compile Include="..\..\src\viz-core\scene_renderer.cs"     Link="viz-core\scene_renderer.cs" />
+    <Compile Include="..\..\src\viz-core\html_render_target.cs" Link="viz-core\html_render_target.cs" />
+    <Compile Include="..\..\src\viz-core\serializer.cs"         Link="viz-core\serializer.cs" />
+    <Compile Include="..\..\src\viz-core\adapter.cs"            Link="viz-core\adapter.cs" />
+    <Compile Include="..\..\src\viz-core\LocalTangent.cs"        Link="viz-core\LocalTangent.cs" />
+    <Compile Include="..\..\src\viz-core\gmm_adapter.cs"        Link="viz-core\gmm_adapter.cs" />
+    <Compile Include="..\..\src\viz-core\param_schema.cs"       Link="viz-core\param_schema.cs" />
+    <Compile Include="..\..\src\viz-core\schema_catalog.cs"     Link="viz-core\schema_catalog.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\src\viz-core\viewer.html" LogicalName="Viz.viewer.html" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Synthetic\Synthetic.csproj" />
+    <ProjectReference Include="..\Maths.LinAlg\Maths.LinAlg.csproj" />
+    <ProjectReference Include="..\Maths.Geometry\Maths.Geometry.csproj" />
+    <ProjectReference Include="..\Clustering.Statistical.GMM\Clustering.Statistical.GMM.csproj" />
+  </ItemGroup>
+</Project>

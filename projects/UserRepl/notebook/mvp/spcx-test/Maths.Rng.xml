@@ -1,0 +1,92 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Maths.Rng</name>
+    </assembly>
+    <members>
+        <member name="T:Maths.Rng.Xoshiro256PlusPlus">
+             <summary>
+             xoshiro256++ pseudo-random generator (Blackman &amp; Vigna 2018) with
+             raw 4-word state save/restore. .NET 6+'s unseeded <see cref="T:System.Random"/>
+             and <see cref="P:System.Random.Shared"/> use a xoshiro256 family generator
+             internally, but do not expose its state — this class exists so SPC
+             checkpoint artifacts can roundtrip RNG state bit-identically across
+             save/restore boundaries.
+             </summary>
+             <remarks>
+             <para><b>Variant.</b> This is xoshiro256++ — the scrambler is
+             <c>rotl(s0 + s3, 23) + s0</c>. Equivalent statistical quality to
+             xoshiro256** but a different output function; the two are not
+             interchangeable. The state-advance is identical across both variants.</para>
+            
+             <para><b>Seeding.</b> An <see langword="int"/> seed is expanded to four
+             state words via SplitMix64 (Vigna's recommended xoshiro initializer).
+             A <see langword="null"/> seed draws 32 bytes from
+             <see cref="T:System.Security.Cryptography.RandomNumberGenerator"/> for OS-entropy bootstrapping.
+             The all-zero state is a fixed point of the recurrence and is guarded
+             against in both seeding paths.</para>
+            
+             <para><b>Provisional placement.</b> Lives under
+             <c>Clustering.Graphical.SPC.Potts</c> for now to keep the SPC spine compiling,
+             but xoshiro is a generic numerics primitive — should migrate to
+             <c>src/numerics</c> (or wherever shared numerical primitives land)
+             when that namespace is established.</para>
+            
+             <para><b>Reference.</b>
+             https://prng.di.unimi.it/ — public-domain reference implementation.</para>
+             </remarks>
+        </member>
+        <member name="M:Maths.Rng.Xoshiro256PlusPlus.#ctor(System.Nullable{System.Int32})">
+            <summary>
+            Construct from an optional 32-bit seed. <see langword="null"/>
+            draws from <see cref="T:System.Security.Cryptography.RandomNumberGenerator"/> for non-reproducible
+            runs; pass a concrete seed for reproducibility across runs (and
+            for replica generation in the SPC scheduler).
+            </summary>
+        </member>
+        <member name="M:Maths.Rng.Xoshiro256PlusPlus.SaveState">
+            <summary>Snapshot the current 4-word state for checkpointing.</summary>
+        </member>
+        <member name="M:Maths.Rng.Xoshiro256PlusPlus.LoadState(System.UInt64,System.UInt64,System.UInt64,System.UInt64)">
+            <summary>
+            Overwrite this generator's state in place. The next call to
+            <see cref="M:Maths.Rng.Xoshiro256PlusPlus.NextUInt64"/> produces output bit-identical to the
+            generator at the moment the state was saved. Used by checkpoint
+            restore where the consumer wants to keep the existing instance
+            (and its readonly field membership) rather than allocate a fresh
+            one via <see cref="M:Maths.Rng.Xoshiro256PlusPlus.Restore(System.UInt64,System.UInt64,System.UInt64,System.UInt64)"/>.
+            </summary>
+        </member>
+        <member name="M:Maths.Rng.Xoshiro256PlusPlus.Restore(System.UInt64,System.UInt64,System.UInt64,System.UInt64)">
+            <summary>
+            Reconstruct a generator from a saved state. The restored instance
+            produces output bit-identical to the generator at the moment
+            <see cref="M:Maths.Rng.Xoshiro256PlusPlus.SaveState"/> was called.
+            </summary>
+        </member>
+        <member name="M:Maths.Rng.Xoshiro256PlusPlus.NextUInt64">
+            <summary>Advance the state and return the next 64-bit output.</summary>
+        </member>
+        <member name="M:Maths.Rng.Xoshiro256PlusPlus.NextDouble">
+            <summary>
+            Uniform <see langword="double"/> in <c>[0, 1)</c>. Uses the top 53
+            bits of one generator output — the canonical conversion for IEEE-754
+            double precision.
+            </summary>
+        </member>
+        <member name="M:Maths.Rng.Xoshiro256PlusPlus.NextInt(System.Int32)">
+            <summary>
+            Uniform <see langword="int"/> in <c>[0, q)</c>. Multiplication-shift
+            on the upper 32 bits of a state output — bias is <c>q / 2^32</c>,
+            negligible for Potts-scale <c>q</c> (≤ ~30).
+            </summary>
+        </member>
+        <member name="M:Maths.Rng.Xoshiro256PlusPlus.SplitMix64(System.UInt64@)">
+            <summary>
+            SplitMix64 step — Vigna's recommended xoshiro seed initializer.
+            Each call advances <paramref name="state"/> by the golden-ratio
+            constant and returns a well-distributed 64-bit word.
+            </summary>
+        </member>
+    </members>
+</doc>

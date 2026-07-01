@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>TDA.Ph.Tests</RootNamespace>
+    <AssemblyName>TDA.Ph.Tests</AssemblyName>
+    <IsTestProject>true</IsTestProject>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="BarCycleEdgesTests.cs" Link="BarCycleEdgesTests.cs" />
+    <Compile Include="LazyRipsFiltrationTests.cs" Link="LazyRipsFiltrationTests.cs" />
+    <Compile Include="LocalMutualProximityH1CycleTests.cs" Link="LocalMutualProximityH1CycleTests.cs" />
+    <Compile Include="DiagramMetricsTests.cs" Link="DiagramMetricsTests.cs" />
+    <Compile Include="PersistentCohomologyTests.cs" Link="PersistentCohomologyTests.cs" />
+    <Compile Include="PersistentCohomologyRipsParityTests.cs" Link="PersistentCohomologyRipsParityTests.cs" />
+    <Compile Include="PersistentInvolutedHomologyTests.cs" Link="PersistentInvolutedHomologyTests.cs" />
+    <Compile Include="SimplicialFiltrationFixtures.cs" Link="SimplicialFiltrationFixtures.cs" />
+    <Compile Include="ZigzagBarcodeNaiveTests.cs" Link="ZigzagBarcodeNaiveTests.cs" />
+    <Compile Include="FastZigzagTests.cs" Link="FastZigzagTests.cs" />
+    <Compile Include="StrongCollapseTests.cs" Link="StrongCollapseTests.cs" />
+    <Compile Include="ZigzagMapBarcodeTests.cs" Link="ZigzagMapBarcodeTests.cs" />
+    <Compile Include="StrongCollapseSequenceTests.cs" Link="StrongCollapseSequenceTests.cs" />
+    <Compile Include="CycleReconstructionTests.cs" Link="CycleReconstructionTests.cs" />
+    <Compile Include="H1CycleEdgesTests.cs" Link="H1CycleEdgesTests.cs" />
+    <Compile Include="GraphZigzagTests.cs" Link="GraphZigzagTests.cs" />
+    <Compile Include="GraphZigzagH1Tests.cs" Link="GraphZigzagH1Tests.cs" />
+    <Compile Include="EulerTourTreeTests.cs" Link="EulerTourTreeTests.cs" />
+    <Compile Include="DynamicConnectivityTests.cs" Link="DynamicConnectivityTests.cs" />
+    <Compile Include="GraphZigzagFastTests.cs" Link="GraphZigzagFastTests.cs" />
+    <Compile Include="LinkCutTreeTests.cs" Link="LinkCutTreeTests.cs" />
+    <Compile Include="DynamicMsfTests.cs" Link="DynamicMsfTests.cs" />
+    <Compile Include="GraphZigzagH1FastTests.cs" Link="GraphZigzagH1FastTests.cs" />
+    <Compile Include="GraphZigzagH1RepresentativeTests.cs" Link="GraphZigzagH1RepresentativeTests.cs" />
+    <Compile Include="GraphZigzagH0RepTests.cs" Link="GraphZigzagH0RepTests.cs" />
+    <Compile Include="CodimensionOneZigzagTests.cs" Link="CodimensionOneZigzagTests.cs" />
+    <Compile Include="PlanarDualGraphTests.cs" Link="PlanarDualGraphTests.cs" />
+    <Compile Include="CodimensionOneDualGraphTests.cs" Link="CodimensionOneDualGraphTests.cs" />
+    <Compile Include="EmbeddedComplexZigzagTests.cs" Link="EmbeddedComplexZigzagTests.cs" />
+    <Compile Include="ZigzagChurnParityTests.cs" Link="ZigzagChurnParityTests.cs" />
+    <Compile Include="ReflectionZigzagTests.cs" Link="ReflectionZigzagTests.cs" />
+    <Compile Include="RuVineyardTests.cs" Link="RuVineyardTests.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\projects\TDA.Ph\TDA.Ph.csproj" />
+    <ProjectReference Include="..\..\projects\TDA.Primitives\TDA.Primitives.csproj" />
+    <ProjectReference Include="..\..\projects\Maths.Topology\Maths.Topology.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Primitives\Graphs.Primitives.csproj" />
+    <ProjectReference Include="..\..\projects\Graphs.Proximity\Graphs.Proximity.csproj" />
+  </ItemGroup>
+</Project>

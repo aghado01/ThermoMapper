@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Maths.Rng</RootNamespace>
+    <AssemblyName>Maths.Rng</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\maths\rng\*.cs" Link="rng\%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

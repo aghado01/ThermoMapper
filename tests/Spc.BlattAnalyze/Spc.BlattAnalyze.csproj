@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Spc.BlattAnalyze</RootNamespace>
+    <AssemblyName>Spc.BlattAnalyze</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\projects\Clustering.Graphical.SPC\Clustering.Graphical.SPC.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Maths.Topology</RootNamespace>
+    <AssemblyName>Maths.Topology</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\maths\topology\*.cs" Link="topology\%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

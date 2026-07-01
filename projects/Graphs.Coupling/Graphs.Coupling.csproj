@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Graphs.Coupling</RootNamespace>
+    <AssemblyName>Graphs.Coupling</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\graphs\coupling\*.cs" Link="coupling\%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
