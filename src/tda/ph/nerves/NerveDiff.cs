@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Graphs.Primitives;
 
-namespace TDA.Primitives;
+namespace TDA.Ph.Nerves;
 
 // ── NodeMatch ─────────────────────────────────────────────────────────────────
 

@@ -104,7 +104,9 @@ public static class GraphHealthCommand
             IDistanceMetric? metric = string.IsNullOrWhiteSpace(graphSpec.DistanceMetric)
                 ? null
                 : DistanceMetricFactory.Create(graphSpec.DistanceMetric);
-            return SpcGraphBuilder.BuildResult(dataset.Features, graphSpec.ToConfig(), metric);
+            return SpcGraphBuilder.BuildResult(
+                dataset.Features, graphSpec.ToConfig(), metric,
+                protectedEdges: TDA.Ph.H1CycleEdges.FromDistanceGraph);
         }
 
         var config = new GraphCompilerConfig
@@ -127,7 +129,9 @@ public static class GraphHealthCommand
                 Kernel = new Gaussian(1.0),
             },
         };
-        return SpcGraphBuilder.BuildResult(dataset.Features, config);
+        return SpcGraphBuilder.BuildResult(
+            dataset.Features, config,
+            protectedEdges: TDA.Ph.H1CycleEdges.FromDistanceGraph);
     }
 
     private static Options ParseArguments(string[] args)

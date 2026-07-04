@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using Graphs.Primitives;
 
-namespace TDA.Primitives;
+namespace TDA.Ph.Nerves;
 
 // ── NerveFiltrationFrame ──────────────────────────────────────────────────────
 

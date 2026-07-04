@@ -4,8 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Graphs.Primitives;
-using TDA.Ph;
-namespace TDA.Primitives;
+namespace TDA.Ph;
 
 /// <summary>
 /// General p≥3 codimension-one dual-graph builder — Dey–Hou–Mandal §4.1 <c>VoidBoundary</c>

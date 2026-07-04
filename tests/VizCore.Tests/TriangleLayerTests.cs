@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Graphs.Primitives;
-using TDA.Primitives;
+using TDA.Ph;
 using Viz;
 using Xunit;
 

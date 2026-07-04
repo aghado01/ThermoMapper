@@ -20,6 +20,7 @@
     <ProjectReference Include="..\..\projects\Graphs.Coupling\Graphs.Coupling.csproj" />
     <ProjectReference Include="..\..\projects\Graphs.Observables\Graphs.Observables.csproj" />
     <ProjectReference Include="..\..\projects\Graphs.Models.Potts\Graphs.Models.Potts.csproj" />
+    <ProjectReference Include="..\..\projects\TDA.Ph\TDA.Ph.csproj" />
   </ItemGroup>
 
   <ItemGroup>

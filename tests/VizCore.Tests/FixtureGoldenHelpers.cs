@@ -7,7 +7,7 @@ using Graphs.Proximity;
 using Graphs.Spectral;
 using Maths.Geometry;
 using Maths.LinAlg;
-using TDA.Primitives;
+using TDA.Ph;
 using Viz;
 
 namespace VizCore.Tests;

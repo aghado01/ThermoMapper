@@ -52,7 +52,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\projects\TDA.Ph\TDA.Ph.csproj" />
-    <ProjectReference Include="..\..\projects\TDA.Primitives\TDA.Primitives.csproj" />
     <ProjectReference Include="..\..\projects\Maths.Topology\Maths.Topology.csproj" />
     <ProjectReference Include="..\..\projects\Graphs.Primitives\Graphs.Primitives.csproj" />
     <ProjectReference Include="..\..\projects\Graphs.Proximity\Graphs.Proximity.csproj" />

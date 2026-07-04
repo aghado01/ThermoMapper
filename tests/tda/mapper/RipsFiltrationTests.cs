@@ -5,7 +5,6 @@ using Graphs.Primitives;
 using Graphs.Spectral;
 using Maths.LinAlg;
 using Maths.Topology;
-using TDA.Primitives;
 using Xunit;
 
 using TDA.Ph;

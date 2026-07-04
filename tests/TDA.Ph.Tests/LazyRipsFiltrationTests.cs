@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using Graphs.Primitives;
-using TDA.Primitives;
 using Xunit;
 
 using Maths.Topology;

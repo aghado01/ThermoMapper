@@ -6,8 +6,7 @@ using Graphs.Spectral;
 using Maths.LinAlg;
 using Maths.Topology;
 
-using TDA.Ph;
-namespace TDA.Primitives;
+namespace TDA.Ph;
 
 /// <summary>
 /// Selects edge filtration values for <see cref="RipsFiltration.RipsFromGraph"/>.

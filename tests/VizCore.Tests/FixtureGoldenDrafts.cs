@@ -10,7 +10,7 @@ using Maths.LinAlg;
 using Repo.TestHarness;
 using Synthetic;
 using Synthetic.Euclidean;
-using TDA.Primitives;
+using TDA.Ph;
 using Viz;
 using Xunit;
 

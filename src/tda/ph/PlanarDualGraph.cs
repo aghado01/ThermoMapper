@@ -3,8 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using TDA.Ph;
-namespace TDA.Primitives;
+namespace TDA.Ph;
 
 /// <summary>
 /// p=2 planar specialization of Dey–Hou–Mandal §4.1 void-boundary reconstruction (`1907.04889`): builds the

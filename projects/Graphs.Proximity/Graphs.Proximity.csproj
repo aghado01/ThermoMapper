@@ -32,6 +32,5 @@
     <ProjectReference Include="..\Maths.Geometry\Maths.Geometry.csproj" />
     <ProjectReference Include="..\Maths.LinAlg\Maths.LinAlg.csproj" />
     <ProjectReference Include="..\Graphs.Observables\Graphs.Observables.csproj" />
-    <ProjectReference Include="..\TDA.Primitives\TDA.Primitives.csproj" />
   </ItemGroup>
 </Project>

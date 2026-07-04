@@ -5,7 +5,7 @@ namespace Graphs.Primitives
     /// <summary>
     /// Pure graph operation: count 3-cycles (triangles) in an undirected
     /// <see cref="CsrGraph"/> via sorted-adjacency neighbor intersection.
-    /// Lives in <c>Graphs.Primitives</c> rather than <c>TDA.Primitives</c>
+    /// Lives in <c>Graphs.Primitives</c> rather than <c>TDA.Ph</c>
     /// because the operation is structural (counts closed triplets in the
     /// adjacency relation) and has no topological content — TDA
     /// consumers depend on it, not the other way around.

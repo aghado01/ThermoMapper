@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 using Maths.Topology;
-using TDA.Primitives;
+using TDA.Ph.Nerves;
 
 using TDA.Ph;
 namespace TDA.Mapper;

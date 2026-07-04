@@ -12,9 +12,18 @@ using Graphs.Pipeline.Repair;
 using Graphs.Pipeline.Scalers;
 using Graphs.Primitives;
 using Maths.Geometry;
-using TDA.Primitives;
 
 namespace Graphs;
+
+/// <summary>
+/// Caller-supplied source of protected edges for demoting passes (today: LMP
+/// rescaling). Receives the conditioned distance graph of the selection being
+/// scaled; returns normalized <c>(Lo, Hi)</c> vertex pairs to shield, or
+/// <c>null</c> for none. Keeps construction consumer-neutral: topological
+/// criteria (e.g. involuted-persistence H1 cycle edges) are computed above
+/// this seam and injected — never imported by a build stage.
+/// </summary>
+public delegate IReadOnlySet<(int Lo, int Hi)>? ProtectedEdgeSource(CsrGraph distanceGraph);
 
 /// <summary>
 /// Pure declarative graph-construction engine. Takes a single immutable
@@ -50,7 +59,8 @@ public static class GraphCompiler
     public static GraphBuildResult Build(
         GraphCompilerConfig config,
         int n,
-        GraphMetric metric)
+        GraphMetric metric,
+        ProtectedEdgeSource? protectedEdges = null)
     {
         if (config is null) throw new ArgumentNullException(nameof(config));
         if (metric is null) throw new ArgumentNullException(nameof(metric));
@@ -181,6 +191,7 @@ public static class GraphCompiler
 
         IEdgeScaler scaler = BuildScaler(
             coupling,
+            protectedEdges,
             lmpSetting,
             metric.Properties,
             metric.AmbientDimension,
@@ -403,6 +414,7 @@ public static class GraphCompiler
 
     private static IEdgeScaler BuildScaler(
         CouplingProjection coupling,
+        ProtectedEdgeSource? protectedEdges,
         bool? lmpSetting,
         MetricProperties? metricProps,
         int? ambientDimension,
@@ -469,11 +481,11 @@ public static class GraphCompiler
             $"Kernel={kernel.GetType().Name}, Strategy={strategy}, Geometry={geometry}, Fidelity={fidelity}, SphericalMode={sphericalMode}.");
 
         Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? protectedProvider = null;
-        if (coupling.PreserveH1Cycles)
+        if (protectedEdges is not null)
         {
             protectedProvider = (sel, nodeCount) =>
-                H1CycleEdges.FromDistanceGraph(BuildDistanceGraph(sel, nodeCount));
-            log.Info("Scaling", "Load-bearing H1 edge protection enabled for LMP.");
+                protectedEdges(BuildDistanceGraph(sel, nodeCount));
+            log.Info("Scaling", "Protected-edge source supplied; LMP will preserve the designated edges.");
         }
 
         IEdgeScaler inner = kernel switch
@@ -638,6 +650,6 @@ public sealed class GraphSession
     }
 
     /// <summary>Build a graph for the given config against this session's data.</summary>
-    public GraphBuildResult Build(GraphCompilerConfig config) =>
-        GraphCompiler.Build(config, _n, _metric);
+    public GraphBuildResult Build(GraphCompilerConfig config, ProtectedEdgeSource? protectedEdges = null) =>
+        GraphCompiler.Build(config, _n, _metric, protectedEdges);
 }

@@ -29,7 +29,7 @@
     <ProjectReference Include="..\..\projects\Graphs.Models.Potts\Graphs.Models.Potts.csproj" />
     <ProjectReference Include="..\..\projects\Maths.LinAlg\Maths.LinAlg.csproj" />
     <ProjectReference Include="..\..\projects\Graphs.Spectral\Graphs.Spectral.csproj" />
-    <ProjectReference Include="..\..\projects\TDA.Primitives\TDA.Primitives.csproj" />
+    <ProjectReference Include="..\..\projects\TDA.Ph\TDA.Ph.csproj" />
     <ProjectReference Include="..\..\projects\Graphs.Distance\Graphs.Distance.csproj" />
     <ProjectReference Include="..\..\projects\Graphs.Primitives\Graphs.Primitives.csproj" />
     <ProjectReference Include="..\..\projects\Graphs.Observables\Graphs.Observables.csproj" />

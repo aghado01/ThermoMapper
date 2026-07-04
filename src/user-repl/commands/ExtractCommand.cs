@@ -182,7 +182,9 @@ public static class ExtractCommand
             IDistanceMetric? metric = string.IsNullOrWhiteSpace(graphSpec.DistanceMetric)
                 ? null
                 : DistanceMetricFactory.Create(graphSpec.DistanceMetric);
-            return SpcGraphBuilder.BuildResult(dataset.Features, graphSpec.ToConfig(), metric);
+            return SpcGraphBuilder.BuildResult(
+                dataset.Features, graphSpec.ToConfig(), metric,
+                protectedEdges: TDA.Ph.H1CycleEdges.FromDistanceGraph);
         }
 
         // Override path or pre-manifest fallback.
@@ -206,7 +208,9 @@ public static class ExtractCommand
                 Kernel = new Gaussian(1.0),
             },
         };
-        return SpcGraphBuilder.BuildResult(dataset.Features, config);
+        return SpcGraphBuilder.BuildResult(
+            dataset.Features, config,
+            protectedEdges: TDA.Ph.H1CycleEdges.FromDistanceGraph);
     }
 
     // Rebuild the signal analyzer the original run recorded (manifest.Sweep.Analyzer

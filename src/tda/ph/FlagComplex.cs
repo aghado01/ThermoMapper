@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Graphs.Primitives;
 
-namespace TDA.Primitives
+namespace TDA.Ph
 {
     /// <summary>
     /// Enumerates 2-simplices induced by an undirected graph skeleton.

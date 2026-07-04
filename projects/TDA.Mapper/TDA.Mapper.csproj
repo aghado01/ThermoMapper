@@ -23,6 +23,5 @@
     <ProjectReference Include="../Graphs.Distance/Graphs.Distance.csproj" />
     <ProjectReference Include="../Maths.Topology/Maths.Topology.csproj" />
     <ProjectReference Include="../TDA.Ph/TDA.Ph.csproj" />
-    <ProjectReference Include="../TDA.Primitives/TDA.Primitives.csproj" />
   </ItemGroup>
 </Project>

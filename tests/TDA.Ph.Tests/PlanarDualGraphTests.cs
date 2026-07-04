@@ -4,7 +4,6 @@ using System.Linq;
 using Xunit;
 
 using Maths.Topology;
-using TDA.Primitives;
 namespace TDA.Ph.Tests;
 
 /// <summary>

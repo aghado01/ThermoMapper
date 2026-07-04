@@ -5,8 +5,7 @@ using System.Linq;
 
 using Graphs.Primitives;
 using Maths.Topology;
-using TDA.Ph;
-namespace TDA.Primitives;
+namespace TDA.Ph;
 
 /// <summary>
 /// Z5d item C/F — the full Dey–Hou §5 Algorithm 3 front door for an <b>arbitrary</b> ℝᵖ-embedded simplicial

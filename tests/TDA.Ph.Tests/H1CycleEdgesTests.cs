@@ -1,7 +1,6 @@
 #nullable enable
 using System.Linq;
 using Graphs.Primitives;
-using TDA.Primitives;
 using Xunit;
 
 using Maths.Topology;

@@ -1,7 +1,6 @@
 #nullable enable
 using Graphs.Primitives;
 using Graphs.Proximity;
-using TDA.Primitives;
 using Xunit;
 
 using Maths.Topology;

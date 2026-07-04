@@ -1,7 +1,7 @@
 #nullable enable
 using System;
 using Graphs.Primitives;
-using TDA.Primitives;
+using TDA.Ph.Nerves;
 using Xunit;
 
 namespace TDA.Mapper.Tests;

@@ -6,8 +6,7 @@ using Graphs.Primitives;
 using Graphs.Spectral;
 using Maths.Topology;
 
-using TDA.Ph;
-namespace TDA.Primitives;
+namespace TDA.Ph;
 
 /// <summary>
 /// Graph-backed Vietoris–Rips filtration without a materialized <see cref="SimplicialFiltration"/>.

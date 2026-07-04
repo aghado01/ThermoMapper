@@ -60,12 +60,6 @@ public sealed record CouplingProjection : IEdgeProjection
     /// diagnostic-driven; <c>true</c>/<c>false</c> = explicit user assertion.</summary>
     public bool? LmpRescale { get; init; }
 
-    /// <summary>
-    /// When LMP runs, preserve couplings on H1 load-bearing edges discovered from the
-    /// conditioned distance graph via involuted persistence (default <c>true</c>).
-    /// </summary>
-    public bool PreserveH1Cycles { get; init; } = true;
-
     /// <summary>Override for the metric's declared
     /// <see cref="MetricProperties.BandwidthStrategy"/>. <c>null</c> = use the
     /// metric's preference; non-null is an explicit override. (Was

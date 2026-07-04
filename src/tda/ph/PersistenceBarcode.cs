@@ -3,8 +3,9 @@ using System;
 using System.Collections.Generic;
 using Maths.Topology;
 
-using TDA.Ph;
-namespace TDA.Primitives;
+using TDA.Ph.Nerves;
+
+namespace TDA.Ph;
 
 /// <summary>
 /// Computes persistence barcodes from a <see cref="NerveFiltration"/> by walking

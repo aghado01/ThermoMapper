@@ -8,7 +8,7 @@ using TDA.Mapper;
 using TDA.Mapper.Clusterers;
 using TDA.Mapper.Cover;
 using TDA.Mapper.Filters;
-using TDA.Primitives;
+using TDA.Ph.Nerves;
 using Xunit;
 
 using TDA.Ph;

@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using Graphs.Primitives;
 using Maths.Topology;
 
-using TDA.Ph;
-namespace TDA.Primitives;
+namespace TDA.Ph;
 
 /// <summary>
 /// H1 loop edges from involuted persistence on a distance-weighted skeleton —
-/// the loops PreserveH1Cycles shields from LMP product-of-ranks demotion.
+/// the protect-set callers inject into GraphCompiler.Build (as its ProtectedEdgeSource) so LMP demotion spares load-bearing loops.
 /// </summary>
 public static class H1CycleEdges
 {

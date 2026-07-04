@@ -165,7 +165,9 @@ public static class SpcCommand
             }
             else
             {
-                GraphBuildResult buildResult = SpcGraphBuilder.BuildResult(dataset.Features, graphConfig, distanceMetric);
+                GraphBuildResult buildResult = SpcGraphBuilder.BuildResult(
+                    dataset.Features, graphConfig, distanceMetric,
+                    protectedEdges: TDA.Ph.H1CycleEdges.FromDistanceGraph);
 
                 graphManifest = GraphConstructionPersistence.MaterializeManifest(
                     graphConfig, buildResult, datasetFingerprint);

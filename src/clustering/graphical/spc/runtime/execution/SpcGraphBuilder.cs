@@ -21,7 +21,8 @@ public static class SpcGraphBuilder
     public static GraphBuildResult BuildResult(
         double[][] features,
         GraphCompilerConfig config,
-        IDistanceMetric? metric = null)
+        IDistanceMetric? metric = null,
+        ProtectedEdgeSource? protectedEdges = null)
     {
         if (features is null)
             throw new ArgumentNullException(nameof(features));
@@ -43,6 +44,6 @@ public static class SpcGraphBuilder
                     nameof(features));
         }
 
-        return GraphCompiler.Build(config, features.Length, GraphMetric.FromFeatures(features, metric));
+        return GraphCompiler.Build(config, features.Length, GraphMetric.FromFeatures(features, metric), protectedEdges);
     }
 }
