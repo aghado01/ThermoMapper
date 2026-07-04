@@ -43,11 +43,11 @@ Engine-first, P0 → P1 → P2. This is the track with the first genuinely new *
   SIFTS `τ≡0` degenerate proven, barcode through the existing reducer unchanged. *Commit pending* (selective,
   atop the Spred session's tree). Brief: [p0-conditioned-filtration-brief.md](../../../MarkBrain/ThermoMapper/issues/tda-purification/persistent-homology/p0-conditioned-filtration-brief.md).
 - **P1 · prior generalizes + multiparameter frame** — **← NEXT (scoped).**
-  - **P1a** (residual band, monotone δ) — brief: [p1a-residual-prior-brief.md](p1a-residual-prior-brief.md).
-    A thin residual-prior producer feeding P0's `BuildGraph`; `τ≡0` subsumes P0's similarity, the prior shifts
-    a return's birth. Ready to build.
-  - **P1b** (deferred) — the `Δ` reach axis + the non-monotone **zigzag** reader
-    ([zigzag-frontier.md](../../../MarkBrain/ThermoMapper/issues/tda-purification/zigzag-engine/zigzag-frontier.md)).
+  - **P1a** (residual band, monotone δ) — ✅ **landed & green** (`src/tda/ph/ResidualPrior.cs`; TDA.Ph.Tests
+    **303/303**, +5). `ResidualEdges` producer feeds P0's `BuildGraph`; `τ≡0` subsumes P0's similarity, a
+    nonzero prior shifts a return's birth. *Commit pending.* Brief: [p1a-residual-prior-brief.md](p1a-residual-prior-brief.md).
+  - **P1b** (deferred **← NEXT**, wants its own scoping pass) — the `Δ` reach axis + the non-monotone
+    **zigzag** reader ([zigzag-frontier.md](../../../MarkBrain/ThermoMapper/issues/tda-purification/zigzag-engine/zigzag-frontier.md)).
 - **P2 · directedness v1.5** — directed flag complex (combinatorial) + the built magnetic Laplacian (spectral);
   experiments M1–M3. **M2 = two returns equal in persistence, separated by flux — the gate that earns the phase.**
 

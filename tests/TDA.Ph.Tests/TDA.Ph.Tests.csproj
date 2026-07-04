@@ -32,6 +32,7 @@
     <Compile Include="CycleReconstructionTests.cs" Link="CycleReconstructionTests.cs" />
     <Compile Include="H1CycleEdgesTests.cs" Link="H1CycleEdgesTests.cs" />
     <Compile Include="ConditionedFiltrationTests.cs" Link="ConditionedFiltrationTests.cs" />
+    <Compile Include="ResidualPriorTests.cs" Link="ResidualPriorTests.cs" />
     <Compile Include="GraphZigzagTests.cs" Link="GraphZigzagTests.cs" />
     <Compile Include="GraphZigzagH1Tests.cs" Link="GraphZigzagH1Tests.cs" />
     <Compile Include="EulerTourTreeTests.cs" Link="EulerTourTreeTests.cs" />
