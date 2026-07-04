@@ -102,38 +102,95 @@ Composes `SubspaceAnnealer` (geometry) with the step-1 objective (ph). Named `Sp
 - Surface: `Spred.Compute(data, targetDim, phOptions, maxIters, seed)` → delegates objective construction
   to step 1, optimization to the engine.
 
-## After the driver (parallelizable)
+## Performance & Scale
 
-### 3a — Performance
-Each objective evaluation is a full k-dim Rips-PH over n points; the anneal runs `maxIters` of them, so PH
-dominates wall-clock. Options to weigh (measure first): `LazyRipsFiltration`, landmark/subsampling
-the cloud, restricting to H0/H1, and tuning the cooling schedule / iteration budget against a
-proposal that moves further per accepted step. Do not silently cap — record any subsampling.
+The recompile-per-proposal loop is the wall: one graph-build + PH + Wasserstein, ×`maxIters`.
+**Measure before optimizing** (repo discipline) — two very different terms can dominate.
 
-### 3b — Validation (R-oracle) + topological-equivalence measures
+Per-`Evaluate` hotspot inventory:
+
+| step | complexity | note |
+|---|---|---|
+| projected kNN | ~O(n²·k) | brute-force `pairDistance` (compiler can't index an arbitrary metric); k = target dim, tiny |
+| **H0 Wasserstein** | **O(n³) time, O(n²) mem** | dense (n+m)² cost matrix + Hungarian; #H0 bars ≈ n. H1 is cheap. The sleeper cost — and why the paper runs order-0 as its own mode. |
+| PathNeighbor refinement | ~O(n·(E + n log n)) | bounded SSSP (Euclidean pass-through is retired) |
+| PH reduction | superlinear in #simplices | ≈ O(n·k + triangles) |
+| reference barcode | once | amortized |
+
+Prime suspects are projected kNN and H0-Wasserstein; which dominates depends on n and whether H0 is
+matched — hence P0.
+
+### P0 — Profile first
+A small harness reporting the per-`Evaluate` breakdown (kNN vs PH vs Wasserstein vs refinement) and
+total wall-clock at n ≈ few-hundred → few-thousand (cylinder / iris / synthetic). Optimization order
+follows the profile, not guesswork.
+
+### P1 — Per-evaluation speed
+- **Fixed-skeleton mode** (the demoted skeleton option): freeze the ambient topology, reflow only edge
+  weights per proposal → skip per-eval kNN entirely (valid for `RawDistance`). Biggest structural win;
+  trades neighborhood-fidelity for speed.
+- **KD-tree kNN** in the tiny projected space (k = 2–3) → O(n log n); a graph-layer change inside
+  `DirectedKnn` for Euclidean metrics — keeps recompile fidelity, benefits every consumer.
+- **Kill the O(n³):** restrict to H1 (config flip), or approximate H0-Wasserstein (paper §6: Gaussian-
+  mixture / entropic / sliced OT).
+- **Incremental PH via vineyards** (`RuVineyard.cs` exists): under fixed-skeleton only weights change →
+  the filtration reorders → vineyard update instead of full recompute.
+
+### P2 — Problem size
+Subsampling / landmarks / witness complexes — shrinks n, helps kNN and Wasserstein superlinearly; also
+the conceptual bridge to P4. Record any cap (no silent truncation).
+
+### P3 — Iteration efficiency
+Adaptive cooling, early-stop on plateau, larger accepted steps, restart ensembles. Each avoided iter
+is a whole eval saved.
+
+### P4 — Scale-out: Distributed SPRED (§3.2) — a facet of scale, its own sub-track
+Partition X into m blocks, run `Spred.Compute` per block (embarrassingly parallel), aggregate the
+block subspaces by **geometric median on the Grassmann** (Weiszfeld/IRLS). Distinct from P1–P3 — it
+changes the *decomposition*, not per-eval speed — composes on top (each block still wants a fast eval),
+and carries a **robustness co-benefit** (median breakdown point, outlier-resistant), so it is not
+purely a performance lever.
+
+**You-lineage (why it's mostly wiring).** Distributed SPRED and You's distributed PCA are the same
+robust-aggregation pattern — geometric median of per-partition manifold-valued estimates — differing
+only in the estimator and the factor:
+- Distributed SPRED — `2106.02096` §3.2 (cites Lin et al. 2020): subspace-only → median on **Gr(n,k)**.
+- Distributed PCA — `2605.20681` "Scale-Calibrated MoM for Robust Distributed PCA": (mean, subspace) →
+  scale-calibrated MoM on the product **ℝᵖ × Gr(r,p)**.
+- Underpinnings: product-median theory `2505.18844`, scale selection `2605.08001`, constant metric
+  scaling `2601.10992`; the persistence-comparison sibling is `2208.12435`.
+  Corpus: `codex-scientiae/corpora/KisungYou/`.
+
+**Reuse — verified present, but only the primitive.** The piece distributed SPRED needs is the
+Grassmann geometric median, already wired and exercised by `MoMPCA.ComputeMoM`
+(`src/maths/geometry/dim-reduction/MoMPCA.cs` — it calls `GeometricMedian.Compute` on `GrassmannManifold`,
+and does the full scale-calibrated product median over `ScaledManifold`×`ProductManifold`). So
+distributed SPRED ≈ `Spred.Compute` per block → `GeometricMedian.Compute<Grassmann>` — **not** `MoMPCA`
+itself (that carries the PCA mean factor SPRED lacks), but the same underlying primitive.
+
+**Integration of You's program is only partially complete** (AG — started before the PH-engine wall,
+resuming now that the SPRED track arrives here naturally). In place: `GrassmannManifold`,
+`GeometricMedian`/Weiszfeld, `ScaledManifold`, `ProductManifold`, `MoMPCA` (the 2605.20681 consumer —
+implemented, **not yet oracle-validated**). Owed / uncertain: validation of the whole median/`MoMPCA`
+stack (no unit or R-oracle parity tests yet — `project_kisungyou_dr_track`), and much of the wider
+cluster (the general product-median theory `2505.18844` beyond the PCA use, the scale-selection
+approaches of `2605.08001`, the Wasserstein-median line `2209.03318`) not yet in code. Treat the reuse
+as "lean on the primitive, validate as part of this sub-track" — not "it's done".
+
+## Validation & measures
 Per `validation-independence`: ground truth must originate outside the estimator's own model.
 Engine-level manifold-opt facts are green; owed:
 - End-to-end SPRED parity against an external oracle (Rdimtools / maotai are installed in the in-repo
-  `r/` renv — see `project_kisungyou_dr_track`). **Parity may require a Stiefel-QR PERTURB mode** on
-  the engine (add i.i.d. Gaussian to every entry + QR, per paper §3.1) to match the reference
-  apples-to-apples — our Grassmann-geodesic walk is a deliberate improvement (design.md), so the
-  oracle comparison needs the paper-faithful walk as an option.
+  `r/` renv — see `project_kisungyou_dr_track`). **Parity may require a Stiefel-QR PERTURB mode** on the
+  engine (add i.i.d. Gaussian to every entry + QR, per paper §3.1) to match the reference apples-to-
+  apples — the Grassmann-geodesic walk is a deliberate improvement (design.md), so the oracle comparison
+  needs the paper-faithful walk as an option.
 - **§4 topological-equivalence measures** `μ_quasi-iso` / `μ_equiv` — post-hoc quality metrics via the
   filtration homomorphism (not the SA objective). `μ_quasi-iso` is barcode-computable (Prop 4.3: a
   height-matching sweep over `B_X`, `B_Y` with the η shift); `μ_equiv` needs π₁ of a quotient complex
-  (SageMath-grade, hard) — defer. These make a natural reporting layer over an optimized projection.
-- Scale-calibration and the paper's eigengap block weighting (distributed track).
+  (SageMath-grade, hard) — defer. A natural reporting layer over an optimized projection.
 
-### 3c — Application: ISOLET
+## Application: ISOLET
 SPRED is unsupervised + linear, so it is not blocked by validation-independence but is bounded by the
-unsupervised ceiling (the PCA-front-end wall in `project_isolet_pca_wall`). Track SPRED vs raw-617-d
-and vs PCA-14 once the driver exists.
-
-## Independent track (start anytime — needs only the engine)
-
-### Distributed SPRED (§3.2)
-Per-block simulated annealing yields one subspace per block; aggregate them by **geometric median on
-the Grassmann manifold** (Weiszfeld/IRLS), reusing the existing
-`GeometricMedian.Compute<GrassmannManifold>` / `RobustDistributedPCA` infrastructure. This is where a
-Stiefel/Grassmann *estimator* (not the annealer) is the right tool. Ties into the
-`project_kisungyou_dr_track` robust-DR work.
+unsupervised ceiling (the PCA-front-end wall in `project_isolet_pca_wall`). Track SPRED vs raw-617-d and
+vs PCA-14 once the driver exists.
