@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>TDA.DimReduction</RootNamespace>
+    <AssemblyName>TDA.DimReduction</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\tda\dim-reduction\**\*.cs" Link="dim-reduction\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Maths.Geometry\Maths.Geometry.csproj" />
+    <ProjectReference Include="..\TDA.Ph\TDA.Ph.csproj" />
+    <ProjectReference Include="..\Graphs.Proximity\Graphs.Proximity.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="TDA.DimReduction.Tests" />
+  </ItemGroup>
+</Project>

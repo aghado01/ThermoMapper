@@ -21,9 +21,20 @@ Files:
 - Objective ingredients (already present): `src/tda/ph/DiagramMetrics.cs`,
   `src/tda/ph/PersistenceBarcode.cs`, `src/tda/ph/RipsFiltration.cs`, `src/tda/ph/LazyRipsFiltration.cs`
 
-## Critical path
+### 1–2 — Objective + driver (`PersistenceObjective`, `Spred`) ✔ 2026-07-03
+`TDA.DimReduction` project stood up (csproj + test project + sln wiring), referencing Maths.Geometry
++ TDA.Ph + Graphs.Proximity. `PersistenceObjective` (recompile-per-proposal via GraphCompiler → Rips →
+PH → Wasserstein; `Evaluate` + `ReferenceBarcode`; auto `FinitePenalty` at diam/2; `GraphPathologyException`
+→ `PathologyPenalty`; optional variance regularizer) and the `Spred` driver land. Smoke tests green:
+the objective scores a loop-preserving projection strictly below a loop-collapsing one on a 3D circle
+(β₁=1), and `Spred.Compute` runs end-to-end returning an orthonormal loop-preserving projection.
 
-### 1 — PH objective (`PersistenceObjective`)  →  unblocks step 2
+Files: `src/tda/dim-reduction/{PersistenceObjectiveConfig,PersistenceObjective,Spred}.cs`,
+`tests/tda/dim-reduction/SpredSmokeTests.cs`.
+
+## Critical path (landed — detailed specs below)
+
+### 1 — PH objective (`PersistenceObjective`) ✔ landed 2026-07-03
 The `SubspaceObjectiveFunction` the driver injects (as `PersistenceObjective.Evaluate`). **API verified 2026-07-03.** The pipeline is real and
 SPRED-anticipated: `RawDistanceWeights` is documented "CSR edge weights as Rips filtration values
 (SPRED SA path)", and `Barcode` names "SPRED cost" as a consumer.
@@ -81,7 +92,7 @@ group). The type carries the state a closure would have hidden.
 `Bottleneck` stays out — still `NotImplementedException` (P1). Full Rips/Čech is recoverable as a dense
 recipe; Čech proper deferred (nerves/ unwired here).
 
-### 2 — SPRED driver (new consumer)  →  depends on step 1
+### 2 — SPRED driver (`Spred`, new consumer) ✔ landed 2026-07-03
 Composes `SubspaceAnnealer` (geometry) with the step-1 objective (ph). Named `Spred` (the reserved name).
 - **Placement decision (open):** a dedicated consumer project (e.g. `TDA.DimReduction`) referencing
   both `Maths.Geometry` and `TDA.Ph`, versus adding a `TDA.Ph → Maths.Geometry` edge and hosting it
