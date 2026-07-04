@@ -1,10 +1,10 @@
 using System;
-using Maths.LinAlg;
+using Maths.Geometry.DimReduction;
 using Xunit;
 
-namespace Maths.LinAlg.Tests;
+namespace Maths.Geometry.Tests;
 
-public sealed class SpredTests
+public sealed class SubspaceAnnealerTests
 {
     // A fixed, deterministic subspace cost (no RNG inside), so any non-determinism in the
     // result can only originate from the sampler's own RNG.
@@ -22,8 +22,8 @@ public sealed class SpredTests
     {
         double[][] data = BuildData(samples: 40, dim: 4, seed: 11);
 
-        double[][] a = Spred.Compute(data, targetDim: 2, Cost, maxIters: 300, seed: 7);
-        double[][] b = Spred.Compute(data, targetDim: 2, Cost, maxIters: 300, seed: 7);
+        double[][] a = SubspaceAnnealer.Compute(data, targetDim: 2, Cost, maxIters: 300, seed: 7);
+        double[][] b = SubspaceAnnealer.Compute(data, targetDim: 2, Cost, maxIters: 300, seed: 7);
 
         Assert.Equal(a.Length, b.Length);
         for (int i = 0; i < a.Length; i++)
@@ -39,7 +39,7 @@ public sealed class SpredTests
     {
         double[][] data = BuildData(samples: 40, dim: 4, seed: 11);
 
-        double[][] proj = Spred.Compute(data, targetDim: 2, Cost, maxIters: 300, seed: 7);
+        double[][] proj = SubspaceAnnealer.Compute(data, targetDim: 2, Cost, maxIters: 300, seed: 7);
 
         for (int i = 0; i < proj.Length; i++)
         {
