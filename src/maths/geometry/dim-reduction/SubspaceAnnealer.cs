@@ -5,34 +5,35 @@ using Maths.LinAlg;
 namespace Maths.Geometry.DimReduction
 {
     /// <summary>
-    /// A black-box cost on a candidate subspace: takes an orthonormal targetDim×d projection
+    /// A black-box objective on a candidate subspace: takes an orthonormal targetDim×d projection
     /// (each row a basis vector of the subspace) and returns a scalar to be minimized.
     /// </summary>
-    public delegate double SubspaceCostFunction(double[][] projectionMatrix);
+    public delegate double SubspaceObjectiveFunction(double[][] projectionMatrix);
 
     /// <summary>
     /// Simulated-annealing search over the Grassmann manifold Gr(k, d) for a k-dimensional subspace
     /// (returned as an orthonormal k×d projection) that minimizes an arbitrary caller-supplied
-    /// <see cref="SubspaceCostFunction"/>. The cost is a black box, so the engine is agnostic to what
-    /// "good" means; proposals move along Grassmann geodesics via <see cref="GrassmannManifold.ExpMap"/>.
+    /// <see cref="SubspaceObjectiveFunction"/>. The objective is a black box, so the engine is agnostic
+    /// to what "good" means; proposals move along Grassmann geodesics via
+    /// <see cref="GrassmannManifold.ExpMap"/>.
     ///
     /// <para>This is the engine extracted from SPRED (Shape-Preserving Dimensionality Reduction,
-    /// Kisung You, arXiv:2106.02096). SPRED is recovered by supplying a persistent-homology cost —
+    /// Kisung You, arXiv:2106.02096). SPRED is recovered by supplying a persistent-homology objective —
     /// the Wasserstein distance between the barcodes of the projected and the ambient cloud. That
-    /// cost, and the SPRED driver that wires it in, are a consumer sitting above this engine and
+    /// objective, and the SPRED driver that wires it in, are a consumer sitting above this engine and
     /// belong with the barcodes in TDA.Ph; the annealer itself carries no homology dependency.</para>
     /// </summary>
     public static class SubspaceAnnealer
     {
-        /// <summary>Anneal a projection that minimizes <paramref name="costFunction"/>.</summary>
+        /// <summary>Anneal a projection that minimizes <paramref name="objective"/>.</summary>
         /// <param name="data">Row-major samples; every row has the same ambient dimension d.</param>
         /// <param name="targetDim">Subspace dimension k (1 ≤ k ≤ d), e.g. 2 or 3 for visualization.</param>
-        /// <param name="costFunction">Scalar cost of a candidate k×d orthonormal projection.</param>
+        /// <param name="objective">Scalar objective value of a candidate k×d orthonormal projection.</param>
         /// <param name="maxIters">Number of simulated-annealing steps.</param>
         /// <param name="seed">RNG seed for a reproducible annealing stream; null draws OS entropy.</param>
         /// <returns>The best k×d orthonormal projection found (rows orthonormal).</returns>
         public static double[][] Compute(
-            double[][] data, int targetDim, SubspaceCostFunction costFunction,
+            double[][] data, int targetDim, SubspaceObjectiveFunction objective,
             int maxIters = 1000, int? seed = null)
         {
             int nSamples = data.Length;
@@ -52,10 +53,10 @@ namespace Maths.Geometry.DimReduction
             MatrixOps.Orthonormalize(current, d, k);   // clean Stiefel representative for a valid point
 
             double[][] currentProj = ToProjection(current, k, d);
-            double currentCost = costFunction(currentProj);
+            double currentValue = objective(currentProj);
 
             double[][] bestProj = currentProj;
-            double bestCost = currentCost;
+            double bestValue = currentValue;
 
             var rng = new Xoshiro256PlusPlus(seed);
             double[] tangent = new double[d * k];
@@ -71,19 +72,19 @@ namespace Maths.Geometry.DimReduction
                 manifold.ExpMap(current, tangent, proposal);         // retract along the geodesic
 
                 double[][] proposalProj = ToProjection(proposal, k, d);
-                double proposalCost = costFunction(proposalProj);
+                double proposalValue = objective(proposalProj);
 
-                if (proposalCost < currentCost ||
-                    rng.NextDouble() < Math.Exp((currentCost - proposalCost) / temp))
+                if (proposalValue < currentValue ||
+                    rng.NextDouble() < Math.Exp((currentValue - proposalValue) / temp))
                 {
                     (current, proposal) = (proposal, current);       // adopt; recycle the old buffer
                     currentProj = proposalProj;
-                    currentCost = proposalCost;
+                    currentValue = proposalValue;
 
-                    if (currentCost < bestCost)
+                    if (currentValue < bestValue)
                     {
                         bestProj = currentProj;
-                        bestCost = currentCost;
+                        bestValue = currentValue;
                     }
                 }
             }
@@ -143,7 +144,7 @@ namespace Maths.Geometry.DimReduction
             return point;
         }
 
-        // d×k column-major point → k×d projection (column j → row j) for the cost function.
+        // d×k column-major point → k×d projection (column j → row j) for the objective function.
         private static double[][] ToProjection(double[] point, int k, int d)
         {
             double[][] proj = new double[k][];

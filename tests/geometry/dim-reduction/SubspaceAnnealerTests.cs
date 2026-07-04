@@ -6,9 +6,9 @@ namespace Maths.Geometry.Tests;
 
 public sealed class SubspaceAnnealerTests
 {
-    // A fixed, deterministic subspace cost (no RNG inside), so any non-determinism in the
+    // A fixed, deterministic subspace objective (no RNG inside), so any non-determinism in the
     // result can only originate from the sampler's own RNG.
-    private static double Cost(double[][] projection)
+    private static double Objective(double[][] projection)
     {
         double c = 0.0;
         for (int r = 0; r < projection.Length; r++)
@@ -22,8 +22,8 @@ public sealed class SubspaceAnnealerTests
     {
         double[][] data = BuildData(samples: 40, dim: 4, seed: 11);
 
-        double[][] a = SubspaceAnnealer.Compute(data, targetDim: 2, Cost, maxIters: 300, seed: 7);
-        double[][] b = SubspaceAnnealer.Compute(data, targetDim: 2, Cost, maxIters: 300, seed: 7);
+        double[][] a = SubspaceAnnealer.Compute(data, targetDim: 2, Objective, maxIters: 300, seed: 7);
+        double[][] b = SubspaceAnnealer.Compute(data, targetDim: 2, Objective, maxIters: 300, seed: 7);
 
         Assert.Equal(a.Length, b.Length);
         for (int i = 0; i < a.Length; i++)
@@ -39,7 +39,7 @@ public sealed class SubspaceAnnealerTests
     {
         double[][] data = BuildData(samples: 40, dim: 4, seed: 11);
 
-        double[][] proj = SubspaceAnnealer.Compute(data, targetDim: 2, Cost, maxIters: 300, seed: 7);
+        double[][] proj = SubspaceAnnealer.Compute(data, targetDim: 2, Objective, maxIters: 300, seed: 7);
 
         for (int i = 0; i < proj.Length; i++)
         {

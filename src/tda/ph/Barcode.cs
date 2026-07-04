@@ -36,7 +36,7 @@ public readonly record struct Bar(
 
 /// <summary>
 /// Persistence diagram output currency — the narrow waist both PH paths emit and
-/// every consumer reads (viz, diagnostics, diagram distances, SPRED cost).
+/// every consumer reads (viz, diagnostics, diagram distances, SPRED objective).
 /// </summary>
 public sealed class Barcode
 {
