@@ -40,10 +40,14 @@ public static class ResidualPrior
     /// <param name="observations">The scalar field <c>{t_i}</c>, indexed by vertex.</param>
     /// <param name="prior">Candidate content edges with their predictions <c>(i, j, tau)</c>.</param>
     /// <param name="symmetry">How to fold the two orientations into one undirected residual.</param>
+    /// <param name="reachBound">P1b · the <c>Δ</c> reach axis: admit a prior edge only when its magnitude
+    /// <c>|tau| ≤ reachBound</c> (the prediction's horizon). Default <c>+∞</c> admits all — P1a exactly.
+    /// Raising the bound only <em>adds</em> edges, so a Δ-sweep is a monotone filtration read as ordinary PH.</param>
     public static IReadOnlyList<(int i, int j, double r)> ResidualEdges(
         double[] observations,
         IReadOnlyList<(int i, int j, double tau)> prior,
-        ResidualSymmetry symmetry = ResidualSymmetry.Min)
+        ResidualSymmetry symmetry = ResidualSymmetry.Min,
+        double reachBound = double.PositiveInfinity)
     {
         ArgumentNullException.ThrowIfNull(observations);
         ArgumentNullException.ThrowIfNull(prior);
@@ -54,6 +58,8 @@ public static class ResidualPrior
             if ((uint)i >= (uint)observations.Length || (uint)j >= (uint)observations.Length)
                 throw new ArgumentOutOfRangeException(nameof(prior),
                     $"Edge ({i},{j}) out of range for {observations.Length} observations.");
+
+            if (Math.Abs(tau) > reachBound) continue; // Δ reach filter — horizon too far for this slice
 
             double forward = Math.Abs(observations[j] - (observations[i] + tau));
             double reverse = Math.Abs(observations[i] - (observations[j] + tau));
@@ -68,5 +74,27 @@ public static class ResidualPrior
         }
 
         return edges;
+    }
+
+    /// <summary>
+    /// P1b · the Δ reach axis materialized. For each bound in <paramref name="reachGrid"/>, the residual
+    /// content edges admitted at that reach (<c>|tau| ≤ reach</c>). Because raising the bound only <em>adds</em>
+    /// edges, the slices are nested — the <c>(δ, Δ)</c> bifiltration read by monotone Δ-slices, each a P1a
+    /// residual-edge set for the existing barcode path. The full multiparameter module is deferred (Z6); the
+    /// non-monotone (zigzag) reading is P1c.
+    /// </summary>
+    public static IReadOnlyList<(double reach, IReadOnlyList<(int i, int j, double r)> edges)> ReachSlices(
+        double[] observations,
+        IReadOnlyList<(int i, int j, double tau)> prior,
+        IReadOnlyList<double> reachGrid,
+        ResidualSymmetry symmetry = ResidualSymmetry.Min)
+    {
+        ArgumentNullException.ThrowIfNull(reachGrid);
+
+        var slices = new List<(double, IReadOnlyList<(int, int, double)>)>(reachGrid.Count);
+        foreach (double reach in reachGrid)
+            slices.Add((reach, ResidualEdges(observations, prior, symmetry, reach)));
+
+        return slices;
     }
 }

@@ -96,6 +96,54 @@ public sealed class ResidualPriorTests
         Assert.True(min < max);
     }
 
+    // ── P1b · the Δ reach axis ───────────────────────────────────────────────────
+
+    [Fact]
+    public void ReachBound_Infinity_SubsumesP1a()
+    {
+        var prior = new List<(int, int, double)> { (0, 3, 1.0), (1, 4, 3.0) };
+
+        var p1a = ResidualPrior.ResidualEdges(Field, prior);                                    // default +∞
+        var bounded = ResidualPrior.ResidualEdges(Field, prior, ResidualSymmetry.Min, double.PositiveInfinity);
+
+        Assert.Equal(p1a, bounded); // Δ generalizes, doesn't perturb — same edges as P1a
+    }
+
+    [Fact]
+    public void ReachGatedReturn_AppearsAboveDeltaThreshold()
+    {
+        const int n = 6;
+        List<(int, int)> backbone = PathEdges(n);
+        // Two chords, both spanning ≥3 path edges (no triangle fill → essential loops):
+        // short-reach (0,3) at |τ|=1, long-reach (0,5) at |τ|=3.
+        var prior = new List<(int, int, double)> { (0, 3, 1.0), (0, 5, 3.0) };
+
+        var below = ResidualPrior.ResidualEdges(Field, prior, ResidualSymmetry.Min, reachBound: 1.5);
+        var above = ResidualPrior.ResidualEdges(Field, prior, ResidualSymmetry.Min, reachBound: 3.5);
+
+        int belowCount = SignificantH1(ConditionedFiltration.ComputeBarcode(n, backbone, below)).Count();
+        int aboveCount = SignificantH1(ConditionedFiltration.ComputeBarcode(n, backbone, above)).Count();
+
+        Assert.Equal(1, belowCount); // only the short-reach return
+        Assert.Equal(2, aboveCount); // long-reach return admitted once Δ clears its |τ|
+    }
+
+    [Fact]
+    public void ReachSlices_AreNestedInDelta()
+    {
+        var prior = new List<(int, int, double)> { (0, 3, 1.0), (0, 5, 3.0) };
+        var slices = ResidualPrior.ReachSlices(Field, prior, new double[] { 1.5, 3.5 });
+
+        HashSet<(int, int)> small = slices[0].edges.Select(e => (e.i, e.j)).ToHashSet();
+        HashSet<(int, int)> large = slices[1].edges.Select(e => (e.i, e.j)).ToHashSet();
+
+        Assert.Equal(1.5, slices[0].reach);
+        Assert.True(small.IsSubsetOf(large));   // growing Δ only adds edges
+        Assert.Contains((0, 3), small);
+        Assert.DoesNotContain((0, 5), small);   // long-reach dropped at small Δ
+        Assert.Contains((0, 5), large);
+    }
+
     // ── helpers ─────────────────────────────────────────────────────────────────
     static List<(int, int)> PathEdges(int n)
     {

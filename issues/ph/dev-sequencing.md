@@ -46,10 +46,11 @@ Engine-first, P0 → P1 → P2. This is the track with the first genuinely new *
   - **P1a** (residual band, monotone δ) — ✅ **landed** (`c91143d`; `src/tda/ph/ResidualPrior.cs`, TDA.Ph.Tests
     303/303). `ResidualEdges` feeds P0's `BuildGraph`; `τ≡0` subsumes P0's similarity, a nonzero prior shifts a
     return's birth. Brief: [p1a-residual-prior-brief.md](p1a-residual-prior-brief.md).
-  - **P1b** (Δ reach axis) — **← NEXT (scoped).** brief: [p1b-delta-reach-brief.md](p1b-delta-reach-brief.md).
-    A reach bound `|τ| ≤ Δ` making `(δ,Δ)` a monotone bifiltration read by PH slices. Tight, reuse-maximal.
-  - **P1c** (deferred) — the non-monotone **zigzag** reader (persistent-Mapper-over-`T`); grounds in the built
-    zigzag stack, verify against git before building — multi-track area
+  - **P1b** (Δ reach axis) — ✅ **landed & green** (`ResidualPrior.reachBound` + `ReachSlices`; TDA.Ph.Tests
+    **306/306**, +3). Reach bound `|τ| ≤ Δ` → the monotone `(δ,Δ)` bifiltration read by PH slices; `+∞`
+    subsumes P1a, β₁ steps up at a return's Δ threshold. *Commit pending.* Brief: [p1b-delta-reach-brief.md](p1b-delta-reach-brief.md).
+  - **P1c** (**← NEXT**, wants scoping) — the non-monotone **zigzag** reader (persistent-Mapper-over-`T`);
+    grounds in the built zigzag stack, verify against git before building — multi-track area
     ([zigzag-frontier.md](../../../MarkBrain/ThermoMapper/issues/tda-purification/zigzag-engine/zigzag-frontier.md)).
   - **full multiparameter module** → **Z6**.
 - **P2 · directedness v1.5** — directed flag complex (combinatorial) + the built magnetic Laplacian (spectral);
