@@ -32,6 +32,15 @@ the objective scores a loop-preserving projection strictly below a loop-collapsi
 Files: `src/tda/dim-reduction/{PersistenceObjectiveConfig,PersistenceObjective,Spred}.cs`,
 `tests/tda/dim-reduction/SpredSmokeTests.cs`.
 
+### Cylinder validation (paper Fig.1) ✔ 2026-07-03 — search works + full-persistence finding
+`tests/tda/dim-reduction/SpredCylinderTests.cs`. On the noisy cylinder S¹×[-2,2] (β₁=1) where PCA's
+warm start flattens the loop, the anneal converges to a projection **far better than any axis-aligned
+view** (objective ~0.84 vs (h,x)=4.14, (x,y)=4.91) — the SA search is functional. **Key finding:** the
+H0+H1 objective preserves *full* persistence, so the naive circle (x,y) is **not** optimal — it
+collapses every height onto the same θ, destroying the H0 merge structure, and scores *worse* than the
+loop-flat (h,x); SPRED instead finds a faithful **oblique** view keeping loop + height. **Perf wall
+confirmed:** ~4 min at n=100, ~23 s at n=70 — H0-Wasserstein O(n³) is the binding constraint (→ P1).
+
 ## Critical path (landed — detailed specs below)
 
 ### 1 — PH objective (`PersistenceObjective`) ✔ landed 2026-07-03
@@ -131,8 +140,11 @@ follows the profile, not guesswork.
   trades neighborhood-fidelity for speed.
 - **KD-tree kNN** in the tiny projected space (k = 2–3) → O(n log n); a graph-layer change inside
   `DirectedKnn` for Euclidean metrics — keeps recompile fidelity, benefits every consumer.
-- **Kill the O(n³):** restrict to H1 (config flip), or approximate H0-Wasserstein (paper §6: Gaussian-
-  mixture / entropic / sliced OT).
+- **Attack the O(n³) H0-Wasserstein** — empirically the binding cost (cylinder validation). H0 can
+  **not** simply be dropped: it drives the SA descent (the cylinder converged *with* H0+H1; pure H1 is
+  a near-flat penalty plateau). So **approximate** it (paper §6: entropic/Sinkhorn or sliced OT —
+  `T4transport`'s `dist_sinkhorn`/`dist_swdist` is both the reference and the oracle) rather than
+  restricting to H1.
 - **Incremental PH via vineyards** (`RuVineyard.cs` exists): under fixed-skeleton only weights change →
   the filtration reorders → vineyard update instead of full recompute.
 
