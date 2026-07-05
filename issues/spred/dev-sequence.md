@@ -178,17 +178,53 @@ approaches of `2605.08001`, the Wasserstein-median line `2209.03318`) not yet in
 as "lean on the primitive, validate as part of this sub-track" — not "it's done".
 
 ## Validation & measures
-Per `validation-independence`: ground truth must originate outside the estimator's own model.
-Engine-level manifold-opt facts are green; owed:
-- End-to-end SPRED parity against an external oracle (Rdimtools / maotai are installed in the in-repo
-  `r/` renv — see `project_kisungyou_dr_track`). **Parity may require a Stiefel-QR PERTURB mode** on the
-  engine (add i.i.d. Gaussian to every entry + QR, per paper §3.1) to match the reference apples-to-
-  apples — the Grassmann-geodesic walk is a deliberate improvement (design.md), so the oracle comparison
-  needs the paper-faithful walk as an option.
-- **§4 topological-equivalence measures** `μ_quasi-iso` / `μ_equiv` — post-hoc quality metrics via the
-  filtration homomorphism (not the SA objective). `μ_quasi-iso` is barcode-computable (Prop 4.3: a
-  height-matching sweep over `B_X`, `B_Y` with the η shift); `μ_equiv` needs π₁ of a quotient complex
-  (SageMath-grade, hard) — defer. A natural reporting layer over an optimized projection.
+Per `validation-independence`: ground truth must originate outside the estimator's own model. The
+`r/` sub-project is that channel — a recently-introduced R-oracle harness (C# `ROracle` bridge; PCA
+parity vs base-R `prcomp` already green = precedent) validating the C# ports against **Kisung You's
+own reference code**, not just paper transcriptions. Sources: the CRAN packages in the `r/` renv
+**and** the vendored source clones at `D:\aghado01\packages\kisungyou` (deeper than the CRAN API —
+unexported internals + MATLAB per-paper toolboxes). Coverage is **only partially mapped** (harness is
+new; the K.You integration paused at the PH-engine wall and is resuming now — AG).
+
+**Independent-eval tiers (by what runs), pick the highest available per dependency:**
+1. **Live R oracle** via `r/` — `Riemann` / `SHT` / `Rdimtools` source that executes, for numerical
+   parity (strongest, most independent).
+2. **Transcribed fixtures** where a reference exists but can't run in-repo — notably the `papers/`
+   **MATLAB** toolboxes (no MATLAB license in ThermoMapper): transcribe the algorithm / expected values
+   into C# facts as a best-effort independent eval.
+3. **Paper-derived conditions** where no runnable or transcribable reference exists (SPRED itself):
+   glean testable invariants from the text — Betti numbers, monotonicity, analytic special cases, the
+   cylinder/iris outcomes. The general paper-adaptation fallback, and often sufficient on its own.
+
+**Oracle-source map** — vendored set is growing (~12 repos now, toward the ~37 K.You has; a **project-
+wide** oracle asset). SPRED-relevant, confirmed by inspection:
+- **`TDAkit/`** (R) — the key new find: `homology_diagRips.R` (Rips → persistence diagram) is the oracle
+  for the C# **PH pipeline** (`RipsFiltration`→`PersistentHomology`→`Barcode`); `summaries_dist*.R` for
+  **diagram distances** cross-checks `DiagramMetrics`. SPRED's objective is now component-oracle-able.
+- `Riemann/` (R) — `inference_median.R` + `special_grassmann_*`: the **Grassmann geometric median** →
+  the MoM / distributed-SPRED aggregation primitive.
+- `T4transport/` (R) — computational OT: `dist_wasserstein` / `dist_sinkhorn` / `dist_swdist` (exact +
+  entropic + sliced) → the OT layer and the §6 Wasserstein *approximations*; `free_median_*` (`2209.03318`).
+- `SHT/` (R) — hypothesis testing → MxPbf (`2112.02580`); `Rdimtools/` (R) — linear DR (PCA oracle green).
+- `DirectMedian/` — **Python** (not R): free-support Wasserstein medians; peripheral to SPRED (OT/median
+  track), live-via-python or transcribe.
+- Other-track clones: `T4cluster`, `mclustcomp` (clustering), `dglearn` (diffusion geometry),
+  `IntrinsicESS` (`2605.03266`), `GeoInfoDec`.
+- `papers/` — **MATLAB** (76 `.m`; `01-SPDtoolbox`…`06-Wasserstein-Heterogeneity`, `03-TopLSM` ≈
+  `2208.12435`): **transcribe-only** (no MATLAB license), Tier 2. Not fully mapped.
+
+**SPRED-the-composition still has no direct reference** (a `spred` grep across the clones is empty), but
+each dependency-half now has a live R oracle — **`TDAkit`** (PH + diagram distance) and **`Riemann`**
+(Grassmann median) — so **component-wise Tier-1 validation is strong** without a SPRED-direct oracle.
+The paper's qualitative examples (cylinder β₁=1, iris) stay the end-to-end sanity. Any *direct* SPRED
+comparison later needs the **Stiefel-QR PERTURB mode** (paper §3.1) for apples-to-apples — the
+Grassmann-geodesic walk is a deliberate improvement (design.md).
+
+Owed R oracles (per `project_kisungyou_dr_track`): `mom_oracle.R` (Riemann geometric median + §5.3 α),
+`mxpbf_oracle.R` (SHT / transcribe §2.2/§3.1). Plus the **§4 topological-equivalence measures**
+`μ_quasi-iso` / `μ_equiv` — post-hoc quality metrics via the filtration homomorphism (not the SA
+objective): `μ_quasi-iso` is barcode-computable (Prop 4.3, height-matching sweep with the η shift);
+`μ_equiv` needs π₁ of a quotient (SageMath-grade) — defer.
 
 ## Application: ISOLET
 SPRED is unsupervised + linear, so it is not blocked by validation-independence but is bounded by the
