@@ -129,24 +129,34 @@ Per-`Evaluate` hotspot inventory:
 Prime suspects are projected kNN and H0-Wasserstein; which dominates depends on n and whether H0 is
 matched — hence P0.
 
-### P0 — Profile first
-A small harness reporting the per-`Evaluate` breakdown (kNN vs PH vs Wasserstein vs refinement) and
-total wall-clock at n ≈ few-hundred → few-thousand (cylinder / iris / synthetic). Optimization order
-follows the profile, not guesswork.
+### P0 — Profile first ✔ 2026-07-03 (`tests/tda/dim-reduction/SpredProfileTests.cs`)
+Per-`Evaluate` breakdown on the cylinder (JIT-warmed, 3 reps), ms:
 
-### P1 — Per-evaluation speed
-- **Fixed-skeleton mode** (the demoted skeleton option): freeze the ambient topology, reflow only edge
-  weights per proposal → skip per-eval kNN entirely (valid for `RawDistance`). Biggest structural win;
-  trades neighborhood-fidelity for speed.
-- **KD-tree kNN** in the tiny projected space (k = 2–3) → O(n log n); a graph-layer change inside
-  `DirectedKnn` for Euclidean metrics — keeps recompile fidelity, benefits every consumer.
-- **Attack the O(n³) H0-Wasserstein** — empirically the binding cost (cylinder validation). H0 can
-  **not** simply be dropped: it drives the SA descent (the cylinder converged *with* H0+H1; pure H1 is
-  a near-flat penalty plateau). So **approximate** it (paper §6: entropic/Sinkhorn or sliced OT —
-  `T4transport`'s `dist_sinkhorn`/`dist_swdist` is both the reference and the oracle) rather than
-  restricting to H1.
-- **Incremental PH via vineyards** (`RuVineyard.cs` exists): under fixed-skeleton only weights change →
-  the filtration reorders → vineyard update instead of full recompute.
+| n | #H0 | #H1 | graph | rips | ph | W(H0) | W(H1) | total |
+|---|---|---|---|---|---|---|---|---|
+| 60 | 60 | 238 | 0.8 | 1.3 | 3.5 | 8.1 | 68.2 | 82 |
+| 100 | 100 | 394 | 1.6 | 3.0 | 5.2 | 29.3 | 105.2 | 144 |
+| 150 | 150 | 584 | 1.3 | 4.6 | 7.2 | 77.0 | 105.6 | 196 |
+| 200 | 200 | 785 | 1.5 | 2.8 | 3.5 | 165.3 | 242.4 | 416 |
+
+**Decisive finding — overturns the a-priori plan.** The bottleneck is **diagram-Wasserstein (Hungarian
+matching), overwhelmingly H1 (54–83%)** — because the graph-restricted Rips emits **~4n H1 bars** (noise
+loops in the loopy kNN graph) vs n H0 bars, so the H1 Hungarian O((4n)³) dwarfs everything. **graph /
+Rips / PH are negligible (<15 ms).** So kNN / fixed-skeleton / KD-tree would save almost nothing — the
+earlier "H0-Wasserstein / kNN is the wall" guess was wrong on every count.
+
+### P1 — Per-evaluation speed (reordered by P0: the cost is Wasserstein, not graph/PH)
+- **Prune low-persistence bars before matching — the top lever.** The ~4n H1 bars are mostly
+  near-diagonal noise loops; drop bars below a persistence threshold before `DiagramMetrics.Wasserstein`
+  and the H1 Hungarian collapses from O((4n)³) to ~O(1³), **near-exactly** (near-diagonal bars barely
+  move the Wasserstein value). Attacks the root cause — bar count. First thing to build.
+- **Approximate the Wasserstein** (paper §6: entropic/Sinkhorn or sliced OT — `T4transport`'s
+  `dist_sinkhorn`/`dist_swdist`, both reference and oracle). Helps H0 and any residual H1. H0 still
+  can't be dropped (drives the SA descent — cylinder converged *with* H0+H1).
+- **Sparser / less-loopy filtration** — fewer H1 noise loops at the source (fill more triangles,
+  mutual-kNN, or a persistence-aware graph). Secondary; pruning is simpler and downstream-agnostic.
+- **Deprioritized (P0 says negligible):** fixed-skeleton, KD-tree kNN, vineyards — graph + PH are
+  <15 ms/eval; optimizing them saves ~nothing until the Wasserstein matching is fixed.
 
 ### P2 — Problem size
 Subsampling / landmarks / witness complexes — shrinks n, helps kNN and Wasserstein superlinearly; also
