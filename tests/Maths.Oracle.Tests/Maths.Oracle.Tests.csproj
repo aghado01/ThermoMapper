@@ -22,5 +22,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\projects\Maths.LinAlg\Maths.LinAlg.csproj" />
     <ProjectReference Include="..\..\projects\Maths.Geometry\Maths.Geometry.csproj" />
+    <ProjectReference Include="..\..\projects\TDA.Ph\TDA.Ph.csproj" />
   </ItemGroup>
 </Project>

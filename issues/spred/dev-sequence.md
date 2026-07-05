@@ -251,6 +251,34 @@ Owed R oracles (per `project_kisungyou_dr_track`): `mom_oracle.R` (Riemann geome
 objective): `μ_quasi-iso` is barcode-computable (Prop 4.3, height-matching sweep with the η shift);
 `μ_equiv` needs π₁ of a quotient (SageMath-grade) — defer.
 
+### Oracle-harness status (2026-07-05) — TDA PH oracle built; R-env rebuild pending
+**Where this fits:** the first Tier-1 live oracle — validating SPRED's **PH half** (`RipsFiltration` +
+`PersistentHomology`) against gold-standard **Ripser**. Built:
+- `r/oracles/tda_oracle.R` — emits Ripser's full-Rips diagram (via `TDAstats::calculate_homology`, the
+  engine `TDAkit::diagRips` wraps); essential/infinite bars → `-1` sentinel.
+- `tests/oracle/TdaParityTests.cs` — C# builds a *complete* distance graph → `RipsFromGraph` → PH (a
+  true full Rips, apples-to-apples with Ripser) and matches finite H0/H1 bars, plus asserts the one
+  essential H0 bar Ripser omits. Gated on `ROracle.IsAvailable`. `TDA.Ph` ref added to the oracle csproj.
+- **Oracle verified standalone:** `tda_oracle.R` returns a correct diagram (8-point octagon → 7 H0
+  merges at the adjacent-point spacing + 1 H1 loop), so the oracle and its JSON format are sound.
+
+**Blocker — R env broken by the ThermoMapper migration.** The recent move (new disk path + project
+rename) orphaned renv's path-keyed cache junctions, so every package installed *before* the move reports
+"missing DESCRIPTION files" (Rdimtools, maotai, Riemann, SHT, jsonlite, …). Freshly reinstalled at the
+new path — and working — are `TDAstats` and `jsonlite` (the two the TDA oracle needs); the rest remain
+broken.
+
+**In-test hang (described, not diagnosed).** Run inside `dotnet test`, the parity test hangs (>10 min)
+at both n=30 and n=12, cause undetermined. The oracle runs fine *standalone* and the C# full-Rips is
+tiny at n=12, yet the in-test invocation stalls. Diagnosis was deliberately stopped (diminishing
+returns) — an open item to revisit after the env rebuild.
+
+**Plan — clean R-env rebuild at the new location (AG).** Wipe the stale `r/renv/library` + renv sandbox,
+reinstall the full dependency set **including the new oracle packages** (TDAstats ✓, TDAkit, Riemann,
+T4transport, SHT), and `renv::snapshot()` a fresh lockfile keyed to the new path; then re-attempt the
+parity test. `tda_oracle.R` + `TdaParityTests.cs` are **uncommitted / parked** until the harness is
+healthy and the test runs green — it must not enter the suite while a present-but-broken R can hang it.
+
 ## Application: ISOLET
 SPRED is unsupervised + linear, so it is not blocked by validation-independence but is bounded by the
 unsupervised ceiling (the PCA-front-end wall in `project_isolet_pca_wall`). Track SPRED vs raw-617-d and
