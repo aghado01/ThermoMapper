@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Graphs;
 using Maths.Geometry.DimReduction;
 using TDA.Ph;
@@ -77,7 +78,17 @@ public sealed class PersistenceObjective
         GraphMetric metric = GraphMetric.FromFeatures(features, _config.ProjectedMetric);
         GraphBuildResult built = GraphCompiler.Build(recipe, features.Length, metric);
         var filtration = RipsFiltration.RipsFromGraph(built.Graph, _config.Filtration, _config.MaxDimension);
-        return PersistentHomology.Compute(filtration, _config.MaxDimension);
+        Barcode bc = PersistentHomology.Compute(filtration, _config.MaxDimension);
+        return _config.MinPersistence > 0.0 ? Prune(bc, _config.MinPersistence) : bc;
+    }
+
+    // Drop finite bars below the persistence threshold; essential (infinite) bars are always kept.
+    private static Barcode Prune(Barcode bc, double minPersistence)
+    {
+        var kept = new List<Bar>(bc.Bars.Count);
+        foreach (Bar bar in bc.Bars)
+            if (bar.Persistence >= minPersistence) kept.Add(bar);
+        return new Barcode(kept, bc.AxisLabel);
     }
 
     // Y = P·X : project each ambient row x_i (length d) through the k×d frame → length-k row.

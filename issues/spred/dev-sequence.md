@@ -146,10 +146,13 @@ Rips / PH are negligible (<15 ms).** So kNN / fixed-skeleton / KD-tree would sav
 earlier "H0-Wasserstein / kNN is the wall" guess was wrong on every count.
 
 ### P1 — Per-evaluation speed (reordered by P0: the cost is Wasserstein, not graph/PH)
-- **Prune low-persistence bars before matching — the top lever.** The ~4n H1 bars are mostly
-  near-diagonal noise loops; drop bars below a persistence threshold before `DiagramMetrics.Wasserstein`
-  and the H1 Hungarian collapses from O((4n)³) to ~O(1³), **near-exactly** (near-diagonal bars barely
-  move the Wasserstein value). Attacks the root cause — bar count. First thing to build.
+- **Prune low-persistence bars before matching ✔ 2026-07-03 — the top lever, landed.** `MinPersistence`
+  on `PersistenceObjectiveConfig`, applied in `PersistenceObjective.BarcodeFor` to both barcodes.
+  Measured (profiler): the ~4n finite H1 bars are **all near-zero persistence** (`maxPersH1 ≈ 0` — the
+  real loop is an *essential*/∞ bar), so any τ>0 cleanly separates noise from signal. W(H1) collapses
+  **~1774–3600×** (→ 0.04–0.18 ms), leaving exactly the 1 essential loop bar — **near-exact** (cylinder
+  objective 0.834 pruned vs 0.841 exact) and a **denoiser**. Whole cylinder eval ~2–3× faster (31→11 s);
+  **H0-Wasserstein is now the residual** (next sub-lever).
 - **Approximate the Wasserstein** (paper §6: entropic/Sinkhorn or sliced OT — `T4transport`'s
   `dist_sinkhorn`/`dist_swdist`, both reference and oracle). Helps H0 and any residual H1. H0 still
   can't be dropped (drives the SA descent — cylinder converged *with* H0+H1).

@@ -51,4 +51,11 @@ public sealed record PersistenceObjectiveConfig
     /// <summary>PCA-spirit variance regularizer (§6): adds <c>w · tr(P Σ_X Pᵀ)</c>. <b>Negative</b>
     /// rewards variance (PCA maximizes that trace); default 0 (off).</summary>
     public double VarianceRegularizer { get; init; } = 0.0;
+
+    /// <summary>Finite bars with persistence (death − birth) below this are pruned from both barcodes
+    /// before Wasserstein matching. 0 = no pruning (exact). Raising it collapses the H1 Hungarian —
+    /// the graph-restricted Rips emits O(n) near-diagonal noise-loop bars that dominate matching cost
+    /// but barely move the Wasserstein value — so pruning is a near-exact speedup (and a denoiser).
+    /// Essential (infinite) bars are always kept.</summary>
+    public double MinPersistence { get; init; } = 0.0;
 }

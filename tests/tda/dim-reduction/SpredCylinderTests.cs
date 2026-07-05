@@ -51,6 +51,7 @@ public sealed class SpredCylinderTests
         },
         Dimensions = [(0, 0.5), (1, 1.0)],   // H0 smooth descent + H1 loop target (paper runs orders 0 and 1)
         MaxDimension = 2,
+        MinPersistence = 0.05,               // prune the ~4n near-diagonal H1 noise loops (P0/P1): huge speedup, denoises
     };
 
     [Fact]

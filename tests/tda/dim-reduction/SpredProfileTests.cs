@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using Graphs;
 using TDA.Ph;
@@ -112,5 +113,48 @@ public sealed class SpredProfileTests
             _out.WriteLine($"{n,-5} {nH0,4} {nH1,3} | {g,6:F1} {r,6:F1} {p,6:F1} {w0,7:F1} {w1,7:F1} | {total,8:F1}  {dom} ({100 * domv / total:F0}%)");
         }
         Assert.True(true);
+    }
+
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Profile_PruningCollapsesH1Wasserstein()
+    {
+        var essential = DiagramMetrics.EssentialPolicy.FinitePenalty(1.0);
+        const double Tau = 0.25;   // persistence threshold
+
+        // warmup
+        { var wd = Cylinder3D(40, 1); var a = BuildTimed(wd, Recipe()).bc; var b = BuildTimed(ProjectXY(wd), Recipe()).bc; DiagramMetrics.Wasserstein(b, a, 1, 2.0, essential); }
+
+        _out.WriteLine($"prune τ={Tau}:  n     #H1  maxPersH1  #H1≥τ |  W(H1) ms   W(H1)@τ ms   speedup");
+        foreach (int n in new[] { 60, 100, 150, 200 })
+        {
+            double[][] data = Cylinder3D(n, seed: 3);
+            Barcode refBc = BuildTimed(data, Recipe()).bc;
+            Barcode projBc = BuildTimed(ProjectXY(data), Recipe()).bc;
+
+            int nH1 = 0; double maxPers = 0;
+            foreach (Bar bar in projBc.Bars)
+                if (bar.Dimension == 1 && !bar.IsInfinite) { nH1++; if (bar.Persistence > maxPers) maxPers = bar.Persistence; }
+
+            Barcode refP = PruneLocal(refBc, Tau), projP = PruneLocal(projBc, Tau);
+            int nH1p = 0;
+            foreach (Bar bar in projP.Bars) if (bar.Dimension == 1) nH1p++;
+
+            var sw = Stopwatch.StartNew();
+            DiagramMetrics.Wasserstein(projBc, refBc, 1, 2.0, essential);
+            double full = sw.Elapsed.TotalMilliseconds; sw.Restart();
+            DiagramMetrics.Wasserstein(projP, refP, 1, 2.0, essential);
+            double pruned = sw.Elapsed.TotalMilliseconds;
+
+            _out.WriteLine($"           {n,-5} {nH1,4}   {maxPers,7:F3}   {nH1p,4}  | {full,8:F1}   {pruned,9:F2}    {full / Math.Max(pruned, 0.001),6:F0}x");
+        }
+        Assert.True(true);
+    }
+
+    private static Barcode PruneLocal(Barcode bc, double tau)
+    {
+        var kept = new List<Bar>(bc.Bars.Count);
+        foreach (Bar b in bc.Bars) if (b.Persistence >= tau) kept.Add(b);
+        return new Barcode(kept, bc.AxisLabel);
     }
 }
