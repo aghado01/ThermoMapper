@@ -117,6 +117,47 @@ public sealed class DistributedSpredTests
         Assert.InRange(distance, 0.0, 1e-8);
     }
 
+    [Fact]
+    public void ComputeWithDiagnostics_MultipleBlocks_ReportsBlockMetadataAndProjections()
+    {
+        const int seed = 23;
+        const int blockCount = 3;
+        const int pointsPerBlock = 18;
+
+        DistributedSpredResult result = DistributedSpred.ComputeWithDiagnostics(
+            RepeatedCircleBlocks(blockCount, pointsPerBlock),
+            targetDim: 2,
+            blockCount,
+            SmallConfig(),
+            maxIters: 0,
+            seed);
+
+        Assert.Equal(3, result.AmbientDimension);
+        Assert.Equal(2, result.TargetDimension);
+        Assert.Equal(blockCount, result.BlockCount);
+        Assert.Equal(blockCount, result.Blocks.Count);
+        AssertOrthonormalRows(result.Projection);
+
+        double[][] xy =
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ];
+        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
+        Assert.InRange(grass.Distance(PackFrame(result.Projection), PackFrame(xy)), 0.0, 1e-8);
+
+        for (int block = 0; block < blockCount; block++)
+        {
+            DistributedSpredBlockResult info = result.Blocks[block];
+            Assert.Equal(block, info.Index);
+            Assert.Equal(block * pointsPerBlock, info.Start);
+            Assert.Equal(pointsPerBlock, info.Count);
+            Assert.Equal(seed + 1009 * block, info.Seed);
+            AssertOrthonormalRows(info.Projection);
+            Assert.InRange(grass.Distance(PackFrame(info.Projection), PackFrame(xy)), 0.0, 1e-8);
+        }
+    }
+
     private static PersistenceObjectiveConfig SmallConfig() => new()
     {
         Graph = new GraphCompilerConfig

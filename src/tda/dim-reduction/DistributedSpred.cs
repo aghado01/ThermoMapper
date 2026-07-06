@@ -5,6 +5,22 @@ using Maths.Geometry.Estimators.Intrinsic;
 
 namespace TDA.DimReduction;
 
+public sealed record DistributedSpredBlockResult(
+    int Index,
+    int Start,
+    int Count,
+    int? Seed,
+    double[][] Projection);
+
+public sealed record DistributedSpredResult(
+    int AmbientDimension,
+    int TargetDimension,
+    double[][] Projection,
+    IReadOnlyList<DistributedSpredBlockResult> Blocks)
+{
+    public int BlockCount => Blocks.Count;
+}
+
 /// <summary>
 /// Distributed SPRED (§3.2): run SPRED independently on contiguous data blocks, then aggregate the
 /// resulting projection subspaces by geometric median on the Grassmann manifold.
@@ -12,6 +28,17 @@ namespace TDA.DimReduction;
 public static class DistributedSpred
 {
     public static double[][] Compute(
+        double[][] data,
+        int targetDim,
+        int blockCount,
+        PersistenceObjectiveConfig objective,
+        int maxIters = 1000,
+        int? seed = null)
+    {
+        return ComputeWithDiagnostics(data, targetDim, blockCount, objective, maxIters, seed).Projection;
+    }
+
+    public static DistributedSpredResult ComputeWithDiagnostics(
         double[][] data,
         int targetDim,
         int blockCount,
@@ -33,19 +60,30 @@ public static class DistributedSpred
                 throw new ArgumentException("All data rows must have the same dimension.", nameof(data));
 
         if (blockCount == 1)
-            return Spred.Compute(data, targetDim, objective, maxIters, seed);
+        {
+            double[][] projection = Spred.Compute(data, targetDim, objective, maxIters, seed);
+            var blocks = new[]
+            {
+                new DistributedSpredBlockResult(0, 0, data.Length, seed, projection),
+            };
+            return new DistributedSpredResult(ambientDim, targetDim, projection, blocks);
+        }
 
         var projections = new List<double[][]>(blockCount);
+        var blockResults = new List<DistributedSpredBlockResult>(blockCount);
         for (int block = 0; block < blockCount; block++)
         {
             int start = block * data.Length / blockCount;
             int end = (block + 1) * data.Length / blockCount;
             double[][] slice = SliceRows(data, start, end);
-            int? blockSeed = seed is null ? null : unchecked(seed.Value + 1009 * block);
-            projections.Add(Spred.Compute(slice, targetDim, objective, maxIters, blockSeed));
+            int? blockSeed = BlockSeed(seed, block);
+            double[][] projection = Spred.Compute(slice, targetDim, objective, maxIters, blockSeed);
+            projections.Add(projection);
+            blockResults.Add(new DistributedSpredBlockResult(block, start, end - start, blockSeed, projection));
         }
 
-        return AggregateProjections(projections, ambientDim, targetDim);
+        double[][] aggregate = AggregateProjections(projections, ambientDim, targetDim);
+        return new DistributedSpredResult(ambientDim, targetDim, aggregate, blockResults);
     }
 
     internal static double[][] AggregateProjections(
@@ -75,6 +113,11 @@ public static class DistributedSpred
         var slice = new double[end - start][];
         Array.Copy(data, start, slice, 0, slice.Length);
         return slice;
+    }
+
+    private static int? BlockSeed(int? seed, int block)
+    {
+        return seed is null ? null : unchecked(seed.Value + 1009 * block);
     }
 
     private static double[] ProjectionToFrame(double[][] projection, int ambientDim, int targetDim)
