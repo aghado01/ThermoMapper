@@ -13,22 +13,26 @@ lives outside** and whose only in-tree state is the pinned package set.
 | --- | --- |
 | `oracles/*.R` | reference-value generators (read a fixture, emit JSON) |
 | `oracles/_common.R` | shared fixture I/O helpers |
+| `DESCRIPTION` | explicit oracle dependency manifest for `renv::snapshot()` |
 | `scripts/bootstrap.R` | one-time provisioning: install packages + pin `renv.lock` |
+| `scripts/r-session.ps1` | project-local R resolver + aliases (`rver`, `rnr`, `rns`, `rnsnap`, `rs`) |
 | `scripts/oracle-ci.ps1` | health/repro gate — turn R on, check renv in sync, smoke an oracle |
+| `.Renviron` | project R environment; disables renv's Windows sandbox for stable CLI/test activation |
 | `renv.lock` | the pinned package set (reproducible via `renv::restore`) |
 
-The R **toolchain is external** — the portable install at `$PORTABLE_ROOT/rlang`
-(R 4.6.0), turned on by sourcing `ps.core.bootstrap/helpers/env-Rlang.ps1`. R is
-**opt-in**: it is not in the default env (niche, validation-only). Only this
-project's *package library* (`renv/library/`, gitignored, pinned by `renv.lock`)
-lives in-tree.
+The R **toolchain is external** — normally the PDenv install under
+`~/PDenv/rlang` (R 4.6.1), or any shell/user-level `R_HOME` / `PATH` that points
+at `Rscript.exe`. R is **opt-in**: it is not assumed to be in the default env
+(niche, validation-only). Only this project's *package library*
+(`renv/library/`, gitignored, pinned by `renv.lock`) lives in-tree.
 
 ## One-time provisioning (network)
 
 ```powershell
-. "$env:PORTABLE_ROOT/UserGithub/PowerShellCore/ps.core.bootstrap/helpers/env-Rlang.ps1"  # turn R on
 Set-Location <repo>/r
-Rscript scripts/bootstrap.R    # installs jsonlite + Rdimtools/maotai/T4cluster, writes renv.lock
+. scripts/r-session.ps1     # resolves R and adds project-local aliases
+Initialize-ROracleSession -SetAliases
+Rscript scripts/bootstrap.R    # installs the oracle package set and writes renv.lock
 ```
 
 Thereafter `rnr` (`renv::restore`) reproduces the exact library from `renv.lock`;

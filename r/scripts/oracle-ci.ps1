@@ -16,29 +16,33 @@ param([switch]$Restore)
 $ErrorActionPreference = 'Stop'
 $rRoot = Split-Path -Parent $PSScriptRoot
 
-# 1. Turn R on (single entry point; R is opt-in, not in the default env).
-. "$env:PORTABLE_ROOT/UserGithub/PowerShellCore/ps.core.bootstrap/helpers/env-Rlang.ps1"
+# 1. Turn R on. This first honors live/user-level R env vars, then falls back to
+# the PDenv layout used by the portable toolchain.
+. (Join-Path $PSScriptRoot 'r-session.ps1')
+$toolchain = Initialize-ROracleSession -SetAliases
 
-if (-not (Test-Path -LiteralPath $env:R_HOME)) {
-    Write-Host "oracle-ci: SKIP - R toolchain not found at $env:R_HOME (provision with scripts/bootstrap.R)." -ForegroundColor Yellow
+if (-not $toolchain -or -not (Test-Path -LiteralPath $toolchain.RscriptExe -PathType Leaf)) {
+    Write-Host "oracle-ci: SKIP - R toolchain not found (set R_HOME, put Rscript on PATH, or install PDenv R under ~/PDenv/rlang)." -ForegroundColor Yellow
     exit 0
 }
 
 Push-Location -LiteralPath $rRoot
 try {
-    Invoke-RVersion
+    Invoke-RscriptChecked -TimeoutSeconds 30 -ArgumentList @('--vanilla', '-e', "cat(R.version.string, '\n')") | Out-Null
 
-    if ($Restore) { Invoke-RenvRestore }
-    Invoke-RenvStatus   # reproducibility: warns if the library drifts from renv.lock
+    if ($Restore) {
+        Invoke-RscriptChecked -TimeoutSeconds 900 -ArgumentList @('-e', 'renv::restore(prompt = FALSE)') | Out-Null
+    }
+    Invoke-RscriptChecked -TimeoutSeconds 45 -ArgumentList @('-e', 'renv::status()') | Out-Null
 
     # Smoke: a base-R oracle round-trips on a tiny fixture.
     $fixture = Join-Path $env:TEMP 'oracle_smoke.csv'
     @('1,2', '2,1', '3,5', '5,3', '4,4') | Set-Content -LiteralPath $fixture
     $out = Join-Path $env:TEMP 'oracle_smoke.json'
     Remove-Item -LiteralPath $out -ErrorAction SilentlyContinue
-    Invoke-Rscript 'oracles/pca_oracle.R' $fixture $out 2
+    Invoke-RscriptChecked -TimeoutSeconds 120 -ArgumentList @('oracles/pca_oracle.R', $fixture, $out, '2') | Out-Null
 
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $out)) {
+    if (-not (Test-Path -LiteralPath $out)) {
         Write-Host 'oracle-ci: FAIL - pca_oracle smoke produced no output.' -ForegroundColor Red
         exit 1
     }

@@ -251,7 +251,7 @@ Owed R oracles (per `project_kisungyou_dr_track`): `mom_oracle.R` (Riemann geome
 objective): `μ_quasi-iso` is barcode-computable (Prop 4.3, height-matching sweep with the η shift);
 `μ_equiv` needs π₁ of a quotient (SageMath-grade) — defer.
 
-### Oracle-harness status (2026-07-05) — TDA PH oracle built; R-env rebuild pending
+### Oracle-harness status (2026-07-05) — R-env repaired; TDA PH oracle green
 **Where this fits:** the first Tier-1 live oracle — validating SPRED's **PH half** (`RipsFiltration` +
 `PersistentHomology`) against gold-standard **Ripser**. Built:
 - `r/oracles/tda_oracle.R` — emits Ripser's full-Rips diagram (via `TDAstats::calculate_homology`, the
@@ -259,25 +259,25 @@ objective): `μ_quasi-iso` is barcode-computable (Prop 4.3, height-matching swee
 - `tests/oracle/TdaParityTests.cs` — C# builds a *complete* distance graph → `RipsFromGraph` → PH (a
   true full Rips, apples-to-apples with Ripser) and matches finite H0/H1 bars, plus asserts the one
   essential H0 bar Ripser omits. Gated on `ROracle.IsAvailable`. `TDA.Ph` ref added to the oracle csproj.
-- **Oracle verified standalone:** `tda_oracle.R` returns a correct diagram (8-point octagon → 7 H0
-  merges at the adjacent-point spacing + 1 H1 loop), so the oracle and its JSON format are sound.
+- **R env repaired (2026-07-06):** wiped stale `r/renv/library` + sandbox, rebuilt the package library at
+  the ThermoMapper path, upgraded PDenv R to **4.6.1**, added `r/DESCRIPTION` as the explicit oracle
+  dependency manifest, and pinned the full oracle dependency closure in `r/renv.lock`.
+  `r/scripts/oracle-ci.ps1` now resolves the user-level PDenv R toolchain without `$PORTABLE_ROOT`, runs
+  Rscript with timeouts, and passes.
 
-**Blocker — R env broken by the ThermoMapper migration.** The recent move (new disk path + project
-rename) orphaned renv's path-keyed cache junctions, so every package installed *before* the move reports
-"missing DESCRIPTION files" (Rdimtools, maotai, Riemann, SHT, jsonlite, …). Freshly reinstalled at the
-new path — and working — are `TDAstats` and `jsonlite` (the two the TDA oracle needs); the rest remain
-broken.
+**Migration cause fixed.** The old package dirs had missing `DESCRIPTION` files after the move; the fresh
+library now has zero missing `DESCRIPTION` files. `renv::load()` was also hanging in renv's Windows
+sandbox/junction setup, so `r/.Renviron` disables `RENV_CONFIG_SANDBOX_ENABLED` for this isolated oracle
+project. Plain activation, `renv::status()`, and the PCA smoke are green.
 
-**In-test hang (described, not diagnosed).** Run inside `dotnet test`, the parity test hangs (>10 min)
-at both n=30 and n=12, cause undetermined. The oracle runs fine *standalone* and the C# full-Rips is
-tiny at n=12, yet the in-test invocation stalls. Diagnosis was deliberately stopped (diminishing
-returns) — an open item to revisit after the env rebuild.
-
-**Plan — clean R-env rebuild at the new location (AG).** Wipe the stale `r/renv/library` + renv sandbox,
-reinstall the full dependency set **including the new oracle packages** (TDAstats ✓, TDAkit, Riemann,
-T4transport, SHT), and `renv::snapshot()` a fresh lockfile keyed to the new path; then re-attempt the
-parity test. `tda_oracle.R` + `TdaParityTests.cs` are **uncommitted / parked** until the harness is
-healthy and the test runs green — it must not enter the suite while a present-but-broken R can hang it.
+**TDA oracle green with a contained Windows quirk.** `TDAstats::calculate_homology` computes and writes the
+expected diagram, then `Rscript.exe` exits with Windows access violation `-1073741819` ("memory could not
+be read"). Upgrading to R 4.6.1 did not remove that upstream native-exit quirk, and a source rebuild with
+Rtools45 reaches link but fails during package lazy-loading. The C# bridge now suppresses the Windows fault
+dialog for child R processes and tolerates this exact exit code only for `tda_oracle.R` when parseable JSON
+was produced. `TdaParityTests.FullRips_PH_Matches_Ripser_H0_H1` is unparked and green; the comparison
+filters diagonal zero-persistence H1 intervals because Ripser omits them while the explicit reducer
+materializes them.
 
 ### Full Vietoris–Rips → `src` (near-term engine enrichment; AG) — TDA.Ph capability, may graduate to issues/ph
 Emerged from the parity test: `TdaParityTests.FullRipsBarcode` builds a *complete* distance graph and

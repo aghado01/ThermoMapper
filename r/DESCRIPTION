@@ -1,0 +1,16 @@
+Package: ThermoMapperOracles
+Type: Project
+Title: ThermoMapper R Validation Oracles
+Version: 0.0.0
+Description: Project-local dependency manifest for ThermoMapper's R validation
+    oracles.
+Imports:
+    jsonlite,
+    maotai,
+    Rdimtools,
+    Riemann,
+    SHT,
+    T4cluster,
+    T4transport,
+    TDAkit,
+    TDAstats

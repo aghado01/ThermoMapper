@@ -13,12 +13,22 @@ if (!requireNamespace("renv", quietly = TRUE))
 if (!file.exists("renv.lock"))
   renv::init(bare = TRUE, restart = FALSE)
 
-# Oracle dependencies. jsonlite = fixture/result I/O; the rest are Kisung You's
-# reference implementations the C# estimators are validated against.
-pkgs <- c("jsonlite", "Rdimtools", "maotai", "T4cluster")
+# Oracle dependencies. jsonlite = fixture/result I/O; the rest are reference
+# implementations the C# estimators are validated against.
+pkgs <- c(
+  "jsonlite",
+  "Rdimtools",
+  "maotai",
+  "T4cluster",
+  "TDAstats",
+  "TDAkit",
+  "Riemann",
+  "T4transport",
+  "SHT"
+)
 renv::install(pkgs)
 
-# Pin exact versions into renv.lock for reproducible `renv::restore`.
+# Pin exact versions from DESCRIPTION + transitive imports into renv.lock.
 renv::snapshot(prompt = FALSE)
 
 cat("oracle bootstrap complete:", paste(pkgs, collapse = ", "), "\n")

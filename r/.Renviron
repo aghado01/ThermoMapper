@@ -1,0 +1,4 @@
+# renv's Windows sandbox uses path-keyed junctions; after repo/toolchain moves it
+# can hang during project activation. The oracle project uses an isolated library
+# already, so disable the sandbox for deterministic CLI/test runs.
+RENV_CONFIG_SANDBOX_ENABLED=false

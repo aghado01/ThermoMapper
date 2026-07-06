@@ -20,9 +20,7 @@ public sealed class TdaParityTests
     /// Finite H0/H1 bars match within tolerance; C# additionally carries the one essential H0 bar
     /// Ripser omits. Cross-checks the boundary-matrix reduction against the gold-standard library.
     /// </summary>
-    [Fact(Skip = "Parked: hangs when run in-test, and the r/ renv library is broken by the ThermoMapper " +
-                 "migration (path-keyed junctions orphaned). The oracle is verified standalone; unskip after " +
-                 "the clean R-env rebuild. See issues/spred/dev-sequence.md.")]
+    [Fact]
     public void FullRips_PH_Matches_Ripser_H0_H1()
     {
         if (!ROracle.IsAvailable) return;   // opt-in: no-op without the portable R toolchain
@@ -67,9 +65,12 @@ public sealed class TdaParityTests
 
     private static List<(double b, double d)> FiniteBars(Barcode bc, int dim)
     {
+        // Ripser omits diagonal zero-persistence intervals; the explicit reducer materializes them.
+        const double diagonalTol = 1e-10;
         var list = new List<(double, double)>();
         foreach (Bar bar in bc.Bars)
-            if (bar.Dimension == dim && !bar.IsInfinite) list.Add((bar.Birth, bar.Death));
+            if (bar.Dimension == dim && !bar.IsInfinite && bar.Death - bar.Birth > diagonalTol)
+                list.Add((bar.Birth, bar.Death));
         return list;
     }
 
