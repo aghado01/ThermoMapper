@@ -279,6 +279,34 @@ T4transport, SHT), and `renv::snapshot()` a fresh lockfile keyed to the new path
 parity test. `tda_oracle.R` + `TdaParityTests.cs` are **uncommitted / parked** until the harness is
 healthy and the test runs green — it must not enter the suite while a present-but-broken R can hang it.
 
+### Full Vietoris–Rips → `src` (near-term engine enrichment; AG) — TDA.Ph capability, may graduate to issues/ph
+Emerged from the parity test: `TdaParityTests.FullRipsBarcode` builds a *complete* distance graph and
+hands it to the existing `RipsFromGraph(maxDim=2)` — a full Rips only in **density** (all pairs vs a kNN
+skeleton), still the same 2-skeleton (H0/H1), and ad-hoc in the test. `src` currently has *only* the
+graph-restricted path (`RipsFromGraph` / `LazyRipsFiltration` / `FlagComplex`, all triangle-capped),
+consumed by SPRED / `ConditionedFiltration` / `H1CycleEdges`. Full Rips is a missing first-class capability.
+
+**Two orthogonal axes** (name them so they don't conflate):
+- *Density* — complete graph (all pairs, threshold-bounded) vs kNN-restricted skeleton. The immediate one.
+- *Dimension* — 2-skeleton (H0/H1) vs higher (H2 voids …). Deferred; it's an **enumeration** gap only —
+  `FlagComplex` does triangles, but `PersistentHomology.Compute` is already dimension-agnostic.
+
+**Naming (settle at impl):** `FullRips` (dense/complete — the standard TDA term) vs `GraphRips` /
+`SkeletonRips` (the current graph-restricted). Avoid `SparseRips` — it collides with Sheehy's sparse-Rips
+*approximation*; ours is exact on the skeleton, not an approximation. `DenseRips` isn't a standard term.
+
+**Additive, not a swap:** production stays graph-restricted (SPRED's recompile-a-sparse-graph design is
+load-bearing). Full Rips is for validation, small-cloud exact topology, and capability.
+
+**Phased plan:**
+- *P0 (prereq):* fix the renv env, unskip `TdaParityTests`, get it green.
+- *P1 (ball-rolling, next session):* migrate the test's full-Rips minimally into `src` — a first-class,
+  **threshold-bounded** `FullRips` reusing `RipsFromGraph`; refactor the parity test onto it.
+- *P2 (full integration):* the density API + settled naming; the dimension axis (k-clique enumeration in
+  `FlagComplex` + higher simplices — deferred); performance (threshold bounding + route dense reductions
+  through `PersistentCohomology` / `PersistenceClearing`, not the naive standard reducer — the n=30
+  dense-complex cost, which is separate from the parked R-env hang).
+
 ## Application: ISOLET
 SPRED is unsupervised + linear, so it is not blocked by validation-independence but is bounded by the
 unsupervised ceiling (the PCA-front-end wall in `project_isolet_pca_wall`). Track SPRED vs raw-617-d and
