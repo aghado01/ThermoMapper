@@ -41,7 +41,7 @@ public sealed class ConditionedFiltrationTests
         var similarity = new List<(int, int, double)> { (0, 5, d) };
 
         CsrGraph graph = ConditionedFiltration.BuildGraph(n, backbone, similarity);
-        var filtration = RipsFiltration.RipsFromGraph(graph, FiltrationWeights.RawDistance, 2, "conditioned");
+        var filtration = RipsFiltration.GraphRips(graph, FiltrationWeights.RawDistance, 2, "conditioned");
         Barcode barcode = PersistentInvolutedHomology.Compute(filtration, representatives: true);
 
         (Bar Bar, IReadOnlyList<UndirectedEdge> Edges) loop = Assert.Single(BarCycleEdges.H1Loops(barcode, filtration));

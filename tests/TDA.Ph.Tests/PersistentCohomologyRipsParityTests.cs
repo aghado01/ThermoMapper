@@ -56,7 +56,7 @@ public sealed class PersistentCohomologyRipsParityTests
             edges.Add(new Edge(0, 1, 1.0));
 
         var g = CsrGraph.FromEdges(edges.ToArray(), nodeCount: n);
-        var filtration = RipsFiltration.RipsFromGraph(g, FiltrationWeights.RawDistance, maxDimension: 2);
+        var filtration = RipsFiltration.GraphRips(g, FiltrationWeights.RawDistance, maxDimension: 2);
         AssertBarcodeParity(filtration);
     }
 }

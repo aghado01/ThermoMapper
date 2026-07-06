@@ -9,7 +9,7 @@ using Maths.Topology;
 namespace TDA.Ph;
 
 /// <summary>
-/// Selects edge filtration values for <see cref="RipsFiltration.RipsFromGraph"/>.
+/// Selects edge filtration values for <see cref="RipsFiltration.GraphRips"/>.
 /// Filtration values are never coupling affinities — use <see cref="RawDistanceWeights"/>
 /// for CSR distance weights, or <see cref="EffectiveResistanceWeights"/> (gate metric, P0#3).
 /// </summary>
@@ -56,7 +56,7 @@ public static class RipsFiltration
     /// <param name="weights">Filtration-value source (raw distance or effective resistance).</param>
     /// <param name="maxDimension">2 for H0+H1 (loops need triangle fillers); 1 for H0-only.</param>
     /// <param name="label">Filtration label stored on the output complex.</param>
-    public static SimplicialFiltration RipsFromGraph(
+    public static SimplicialFiltration GraphRips(
         CsrGraph g,
         FiltrationWeights weights,
         int maxDimension = 2,

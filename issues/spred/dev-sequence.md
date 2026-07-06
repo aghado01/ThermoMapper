@@ -58,7 +58,7 @@ space (Poincaré / spherical / Fisher-Rao) too.
 
 **Pipeline (per proposal P):**
 `features_P = P·X` → `GraphMetric.FromFeatures(features_P)` → `GraphCompiler.Build(config, n, metric).Graph`
-→ `RipsFiltration.RipsFromGraph(g, filtrationWeights, maxDim)` → `PersistentHomology.Compute(g, maxDim)`
+→ `RipsFiltration.GraphRips(g, filtrationWeights, maxDim)` → `PersistentHomology.Compute(g, maxDim)`
 → `Σ_dim w_dim · DiagramMetrics.Wasserstein(B_P, B_ref, dim, p, essential)`.
 `B_ref` built once the same way on ambient `GraphMetric.FromFeatures(X)` under the same recipe.
 
@@ -68,7 +68,7 @@ first, and it honors the "leverage the compiler" steer. SA tolerates the combina
 (global stochastic optimizer, no continuity needed). The earlier fixed-skeleton + reflow-weights idea
 is demoted to a step-3a perf mode (valid only for RawDistance on a frozen ambient topology).
 
-**Filtration-value axis (also injected):** `RipsFromGraph` takes a `FiltrationWeights` — `RawDistance`
+**Filtration-value axis (also injected):** `GraphRips` takes a `FiltrationWeights` — `RawDistance`
 (needs a DistanceProjection graph) or `EffectiveResistance` (Laplacian-derived, any graph). Expose it.
 
 **Placement (supersedes design.md row 2).** Not a new `TDA.Ph` type — TDA.Ph holds every barcode/
@@ -176,6 +176,12 @@ changes the *decomposition*, not per-eval speed — composes on top (each block 
 and carries a **robustness co-benefit** (median breakdown point, outlier-resistant), so it is not
 purely a performance lever.
 
+**First wiring slice landed 2026-07-06:** `DistributedSpred.Compute` now performs contiguous block
+splitting, runs `Spred.Compute` per block, converts each k×d projection to the d×k Grassmann frame
+currency, and aggregates by `GeometricMedian.Compute<GrassmannManifold>`. Tests cover the median
+aggregation path and the public single-block facade; larger distributed robustness/performance
+fixtures remain future P4 work.
+
 **You-lineage (why it's mostly wiring).** Distributed SPRED and You's distributed PCA are the same
 robust-aggregation pattern — geometric median of per-partition manifold-valued estimates — differing
 only in the estimator and the factor:
@@ -196,8 +202,9 @@ itself (that carries the PCA mean factor SPRED lacks), but the same underlying p
 **Integration of You's program is only partially complete** (AG — started before the PH-engine wall,
 resuming now that the SPRED track arrives here naturally). In place: `GrassmannManifold`,
 `GeometricMedian`/Weiszfeld, `ScaledManifold`, `ProductManifold`, `MoMPCA` (the 2605.20681 consumer —
-implemented, **not yet oracle-validated**). Owed / uncertain: validation of the whole median/`MoMPCA`
-stack (no unit or R-oracle parity tests yet — `project_kisungyou_dr_track`), and much of the wider
+implemented, only partially oracle-validated). `mom_oracle.R` now validates the Grassmann geometric
+median primitive against `Riemann::riem.median`; owed / uncertain: validation of the whole
+`MoMPCA` product/scale stack (`project_kisungyou_dr_track`), and much of the wider
 cluster (the general product-median theory `2505.18844` beyond the PCA use, the scale-selection
 approaches of `2605.08001`, the Wasserstein-median line `2209.03318`) not yet in code. Treat the reuse
 as "lean on the primitive, validate as part of this sub-track" — not "it's done".
@@ -224,7 +231,7 @@ new; the K.You integration paused at the PH-engine wall and is resuming now — 
 **Oracle-source map** — vendored set is growing (~12 repos now, toward the ~37 K.You has; a **project-
 wide** oracle asset). SPRED-relevant, confirmed by inspection:
 - **`TDAkit/`** (R) — the key new find: `homology_diagRips.R` (Rips → persistence diagram) is the oracle
-  for the C# **PH pipeline** (`RipsFiltration`→`PersistentHomology`→`Barcode`); `summaries_dist*.R` for
+  for the C# **PH pipeline** (`GraphRips` / `FullRips` → `PersistentHomology` → `Barcode`); `summaries_dist*.R` for
   **diagram distances** cross-checks `DiagramMetrics`. SPRED's objective is now component-oracle-able.
 - `Riemann/` (R) — `inference_median.R` + `special_grassmann_*`: the **Grassmann geometric median** →
   the MoM / distributed-SPRED aggregation primitive.
@@ -245,8 +252,9 @@ The paper's qualitative examples (cylinder β₁=1, iris) stay the end-to-end sa
 comparison later needs the **Stiefel-QR PERTURB mode** (paper §3.1) for apples-to-apples — the
 Grassmann-geodesic walk is a deliberate improvement (design.md).
 
-Owed R oracles (per `project_kisungyou_dr_track`): `mom_oracle.R` (Riemann geometric median + §5.3 α),
-`mxpbf_oracle.R` (SHT / transcribe §2.2/§3.1). Plus the **§4 topological-equivalence measures**
+Owed R oracles (per `project_kisungyou_dr_track`): extend `mom_oracle.R` to the full MoMPCA §5.3 α
+product/scale median; add `mxpbf_oracle.R` (SHT / transcribe §2.2/§3.1). Plus the
+**§4 topological-equivalence measures**
 `μ_quasi-iso` / `μ_equiv` — post-hoc quality metrics via the filtration homomorphism (not the SA
 objective): `μ_quasi-iso` is barcode-computable (Prop 4.3, height-matching sweep with the η shift);
 `μ_equiv` needs π₁ of a quotient (SageMath-grade) — defer.
@@ -256,8 +264,8 @@ objective): `μ_quasi-iso` is barcode-computable (Prop 4.3, height-matching swee
 `PersistentHomology`) against gold-standard **Ripser**. Built:
 - `r/oracles/tda_oracle.R` — emits Ripser's full-Rips diagram (via `TDAstats::calculate_homology`, the
   engine `TDAkit::diagRips` wraps); essential/infinite bars → `-1` sentinel.
-- `tests/oracle/TdaParityTests.cs` — C# builds a *complete* distance graph → `RipsFromGraph` → PH (a
-  true full Rips, apples-to-apples with Ripser) and matches finite H0/H1 bars, plus asserts the one
+- `tests/oracle/TdaParityTests.cs` — C# builds a full Rips via `FullRips.Build` → PH (a true full Rips,
+  apples-to-apples with Ripser) and matches finite H0/H1 bars, plus asserts the one
   essential H0 bar Ripser omits. Gated on `ROracle.IsAvailable`. `TDA.Ph` ref added to the oracle csproj.
 - **R env repaired (2026-07-06):** wiped stale `r/renv/library` + sandbox, rebuilt the package library at
   the ThermoMapper path, upgraded PDenv R to **4.6.1**, added `r/DESCRIPTION` as the explicit oracle
@@ -282,10 +290,10 @@ materializes them.
 ### Full Vietoris–Rips → `src` ✔ P1 landed 2026-07-06 — TDA.Ph capability
 Canonical roadmap: `issues/ph/full-rips-roadmap.md`. Emerged from the parity test:
 `TdaParityTests.FullRipsBarcode` had built a *complete* distance graph and handed it to the existing
-`RipsFromGraph(maxDim=2)` — a full Rips only in **density** (all pairs vs a kNN skeleton), still the same
+`GraphRips(maxDim=2)` — a full Rips only in **density** (all pairs vs a kNN skeleton), still the same
 2-skeleton (H0/H1), and ad-hoc in the test. P1 moved that into `TDA.Ph.FullRips.Build`, a
-threshold-bounded complete Euclidean density API that reuses `RipsFromGraph`. The graph-restricted path
-(`RipsFromGraph` / `LazyRipsFiltration` / `FlagComplex`, all triangle-capped) remains load-bearing for
+threshold-bounded complete Euclidean density API that reuses `GraphRips`. The graph-restricted path
+(`GraphRips` / `LazyRipsFiltration` / `FlagComplex`, all triangle-capped) remains load-bearing for
 SPRED / `ConditionedFiltration` / `H1CycleEdges`.
 
 **Two orthogonal axes** (name them so they don't conflate):
@@ -293,8 +301,8 @@ SPRED / `ConditionedFiltration` / `H1CycleEdges`.
 - *Dimension* — 2-skeleton (H0/H1) vs higher (H2 voids …). Deferred; it's an **enumeration** gap only —
   `FlagComplex` does triangles, but `PersistentHomology.Compute` is already dimension-agnostic.
 
-**Naming (settle at impl):** `FullRips` (dense/complete — the standard TDA term) vs `GraphRips` /
-`SkeletonRips` (the current graph-restricted). Avoid `SparseRips` — it collides with Sheehy's sparse-Rips
+**Naming settled:** `FullRips` (dense/complete — the standard TDA term) and `GraphRips`
+(the graph-restricted builder). Avoid `SparseRips` — it collides with Sheehy's sparse-Rips
 *approximation*; ours is exact on the skeleton, not an approximation. `DenseRips` isn't a standard term.
 
 **Additive, not a swap:** production stays graph-restricted (SPRED's recompile-a-sparse-graph design is
@@ -303,8 +311,8 @@ load-bearing). Full Rips is for validation, small-cloud exact topology, and capa
 **Phased plan:**
 - *P0 (prereq) ✔ 2026-07-05/06:* fix the renv env, unskip `TdaParityTests`, get it green.
 - *P1 (ball-rolling) ✔ 2026-07-06:* migrate the test's full-Rips minimally into `src` — a first-class,
-  **threshold-bounded** `FullRips` reusing `RipsFromGraph`; refactor the parity test onto it.
-- *P2 (full integration):* the density API + settled naming; the dimension axis (k-clique enumeration in
+  **threshold-bounded** `FullRips` reusing `GraphRips`; refactor the parity test onto it.
+- *P2 (full integration):* metric/enclosing-radius options; the dimension axis (k-clique enumeration in
   `FlagComplex` + higher simplices — deferred); performance (threshold bounding + route dense reductions
   through `PersistentCohomology` / `PersistenceClearing`, not the naive standard reducer — the n=30
   dense-complex cost, which is separate from the parked R-env hang).

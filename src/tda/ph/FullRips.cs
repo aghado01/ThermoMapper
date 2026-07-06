@@ -39,7 +39,7 @@ public static class FullRips
                 RowPointers = new[] { 0 },
                 NodeCount = 0,
             };
-            return RipsFiltration.RipsFromGraph(emptyGraph, FiltrationWeights.RawDistance, maxDimension, label);
+            return RipsFiltration.GraphRips(emptyGraph, FiltrationWeights.RawDistance, maxDimension, label);
         }
 
         int dimension = points[0]?.Length ?? throw new ArgumentException("Point rows must not be null.", nameof(points));
@@ -56,7 +56,7 @@ public static class FullRips
         }
 
         CsrGraph graph = CsrGraph.FromEdges(edges.ToArray(), n);
-        return RipsFiltration.RipsFromGraph(graph, FiltrationWeights.RawDistance, maxDimension, label);
+        return RipsFiltration.GraphRips(graph, FiltrationWeights.RawDistance, maxDimension, label);
     }
 
     private static double[] RequirePoint(double[][] points, int index, int dimension)

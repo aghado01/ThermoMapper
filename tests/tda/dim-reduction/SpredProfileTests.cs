@@ -58,7 +58,7 @@ public sealed class SpredProfileTests
         var metric = GraphMetric.FromFeatures(feats);
         var graph = GraphCompiler.Build(recipe, feats.Length, metric).Graph;
         double g = sw.Elapsed.TotalMilliseconds; sw.Restart();
-        var filt = RipsFiltration.RipsFromGraph(graph, FiltrationWeights.RawDistance, MaxDim);
+        var filt = RipsFiltration.GraphRips(graph, FiltrationWeights.RawDistance, MaxDim);
         double r = sw.Elapsed.TotalMilliseconds; sw.Restart();
         var bc = PersistentHomology.Compute(filt, MaxDim);
         double p = sw.Elapsed.TotalMilliseconds;

@@ -11,7 +11,7 @@ using TDA.Ph;
 namespace TDA.Mapper.Tests;
 
 /// <summary>
-/// <see cref="RipsFiltration.RipsFromGraph"/> → <see cref="PersistentHomology.Compute"/>
+/// <see cref="RipsFiltration.GraphRips"/> → <see cref="PersistentHomology.Compute"/>
 /// → <see cref="DiagramMetrics.Wasserstein"/> pipeline tests.
 /// </summary>
 public sealed class RipsFiltrationTests
@@ -20,7 +20,7 @@ public sealed class RipsFiltrationTests
     public void SingleEdge_MatchesHandBuiltH0Barcode()
     {
         var g = CsrGraph.FromEdges(new[] { new Edge(0, 1, 1.0) }, nodeCount: 2);
-        var filtration = RipsFiltration.RipsFromGraph(g, FiltrationWeights.RawDistance, maxDimension: 1);
+        var filtration = RipsFiltration.GraphRips(g, FiltrationWeights.RawDistance, maxDimension: 1);
 
         Barcode barcode = PersistentHomology.Compute(filtration);
 
@@ -34,7 +34,7 @@ public sealed class RipsFiltrationTests
     public void TriangleSkeleton_NoFillers_InfiniteH1()
     {
         var g = TriangleGraph(edgeWeight: 1.0);
-        var filtration = RipsFiltration.RipsFromGraph(g, FiltrationWeights.RawDistance, maxDimension: 1);
+        var filtration = RipsFiltration.GraphRips(g, FiltrationWeights.RawDistance, maxDimension: 1);
 
         Barcode barcode = PersistentHomology.Compute(filtration);
 
@@ -48,7 +48,7 @@ public sealed class RipsFiltrationTests
     public void TriangleGraph_WithFillers_FiniteH1()
     {
         var g = TriangleGraph(edgeWeight: 1.0);
-        var filtration = RipsFiltration.RipsFromGraph(g, FiltrationWeights.RawDistance, maxDimension: 2);
+        var filtration = RipsFiltration.GraphRips(g, FiltrationWeights.RawDistance, maxDimension: 2);
 
         Barcode barcode = PersistentHomology.Compute(filtration);
 
@@ -64,7 +64,7 @@ public sealed class RipsFiltrationTests
     public void IdenticalGraphs_PipelineWassersteinIsZero()
     {
         var g = TriangleGraph(edgeWeight: 1.0);
-        var f = RipsFiltration.RipsFromGraph(g, FiltrationWeights.RawDistance);
+        var f = RipsFiltration.GraphRips(g, FiltrationWeights.RawDistance);
 
         Barcode a = PersistentHomology.Compute(f);
         Barcode b = PersistentHomology.Compute(f);
@@ -80,9 +80,9 @@ public sealed class RipsFiltrationTests
         var gLarge = CsrGraph.FromEdges(new[] { new Edge(0, 1, 2.0) }, nodeCount: 2);
 
         Barcode small = PersistentHomology.Compute(
-            RipsFiltration.RipsFromGraph(gSmall, FiltrationWeights.RawDistance, maxDimension: 1));
+            RipsFiltration.GraphRips(gSmall, FiltrationWeights.RawDistance, maxDimension: 1));
         Barcode large = PersistentHomology.Compute(
-            RipsFiltration.RipsFromGraph(gLarge, FiltrationWeights.RawDistance, maxDimension: 1));
+            RipsFiltration.GraphRips(gLarge, FiltrationWeights.RawDistance, maxDimension: 1));
 
         double w1 = DiagramMetrics.Wasserstein(small, large, dimension: 0, p: 1.0);
         Assert.Equal(1.0, w1, precision: 12);
@@ -94,7 +94,7 @@ public sealed class RipsFiltrationTests
         var g = TriangleGraph(edgeWeight: 1.0);
         var weights = EffectiveResistanceWeights.FromGraph(g, kMax: 8, solverKind: SolverKind.Dense);
 
-        var filtration = RipsFiltration.RipsFromGraph(g, weights, maxDimension: 2);
+        var filtration = RipsFiltration.GraphRips(g, weights, maxDimension: 2);
         Barcode barcode = PersistentHomology.Compute(filtration, maxDimension: 1);
 
         Assert.NotEmpty(barcode.Bars);

@@ -12,8 +12,8 @@ namespace Maths.Geometry
     /// inner product on the ambient space restricted to tangent vectors: ⟨Δ₁,Δ₂⟩ = tr(Δ₁ᵀΔ₂).
     /// Tangent vectors satisfy YᵀΔ + ΔᵀY = 0 (skew-symmetric constraint).</para>
     ///
-    /// <para>For distributed SPRED aggregation: per-block SA produces orthonormal projection matrices
-    /// (Stiefel points), aggregated by geometric median on V_{n,r} via Weiszfeld/ILRS.</para>
+    /// <para>Use this when frame orientation is meaningful. Subspace-only consumers such as SPRED
+    /// aggregate on <see cref="GrassmannManifold"/> instead.</para>
     /// </summary>
     public readonly struct StiefelManifold : IRiemannianManifold
     {

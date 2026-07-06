@@ -20,7 +20,7 @@ public static class H1CycleEdges
         if (distanceGraph.NodeCount == 0)
             return new HashSet<(int, int)>();
 
-        SimplicialFiltration filtration = RipsFiltration.RipsFromGraph(
+        SimplicialFiltration filtration = RipsFiltration.GraphRips(
             distanceGraph,
             FiltrationWeights.RawDistance,
             maxDimension: 2,

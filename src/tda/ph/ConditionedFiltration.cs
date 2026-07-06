@@ -14,7 +14,7 @@ namespace TDA.Ph;
 /// the backbone is an H₁ generator born at that chord's distance — a <em>return relative
 /// to the prior</em>. SIFTS is the <c>τ≡0</c> degenerate (reading-order backbone, zero prior).
 /// <para>The union convention (<see cref="BuildGraph"/>) is the only new code here; everything
-/// downstream is reuse — <see cref="RipsFiltration.RipsFromGraph"/> and
+/// downstream is reuse — <see cref="RipsFiltration.GraphRips"/> and
 /// <see cref="PersistentInvolutedHomology"/>. Directedness, the <c>Δ</c> reach axis, the gauge
 /// <c>q</c>, the sheaf / <c>λ_q</c> reading, and zigzag slices are P1–P4 and deliberately absent.</para>
 /// </summary>
@@ -78,7 +78,7 @@ public static class ConditionedFiltration
     }
 
     /// <summary>
-    /// Convenience: <see cref="BuildGraph"/> → <see cref="RipsFiltration.RipsFromGraph"/> (raw
+    /// Convenience: <see cref="BuildGraph"/> → <see cref="RipsFiltration.GraphRips"/> (raw
     /// distance filtration values) → involuted persistence → <see cref="TDA.Ph.Barcode"/>. H₁ bars
     /// carry representative cycles, so <see cref="BarCycleEdges.H1Loops"/> recovers which chord
     /// closed each return. Reads the built engine unchanged — no reduction code lives here.
@@ -91,7 +91,7 @@ public static class ConditionedFiltration
         double baseWeight = 0.0)
     {
         CsrGraph graph = BuildGraph(n, backbone, similarity, baseWeight);
-        SimplicialFiltration filtration = RipsFiltration.RipsFromGraph(
+        SimplicialFiltration filtration = RipsFiltration.GraphRips(
             graph, FiltrationWeights.RawDistance, maxDimension, label: "conditioned");
         return PersistentInvolutedHomology.Compute(filtration, representatives: true);
     }

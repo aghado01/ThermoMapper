@@ -30,7 +30,7 @@ public sealed class LazyRipsFiltrationTests
         };
         var g = CsrGraph.FromEdges(edges, 4);
 
-        var materialized = RipsFiltration.RipsFromGraph(g, FiltrationWeights.RawDistance, maxDimension: 2);
+        var materialized = RipsFiltration.GraphRips(g, FiltrationWeights.RawDistance, maxDimension: 2);
         var lazy = new LazyRipsFiltration(g, FiltrationWeights.RawDistance);
 
         Barcode phMat = PersistentHomology.Compute(materialized);

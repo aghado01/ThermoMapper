@@ -18,8 +18,8 @@ The Rips machinery is capped at the 2-skeleton (H0/H1) — triangles are the top
 There are now two density entry points over that same materializer:
 
 - `FullRips.Build(points, maxDimension, threshold, label)` — complete Euclidean proximity graph
-  (all pairs ≤ threshold) → `RipsFromGraph`; for validation and small-cloud exact topology.
-- `RipsFiltration.RipsFromGraph(g, weights, maxDim)` — materializes a `SimplicialFiltration`; vertices +
+  (all pairs ≤ threshold) → `GraphRips`; for validation and small-cloud exact topology.
+- `RipsFiltration.GraphRips(g, weights, maxDim)` — materializes a `SimplicialFiltration`; vertices +
   edges + triangles (via `FlagComplex.Triangles`) when `maxDim ≥ 2`. Graph-restricted and still the
   production SPRED path. **No tetrahedra.**
 - `LazyRipsFiltration` — the lazy/cohomology-oriented `IFiltration`; also discovers **only triangles**
@@ -51,9 +51,8 @@ the same **2-skeleton** (H0/H1), reusing all existing machinery.
 - **Avoid `SparseRips`** — it collides with Sheehy's *sparse-Rips approximation* (a specific linear-size
   construction with interleaving guarantees). Ours is *exact on the provided skeleton*, not an
   approximation. `DenseRips` isn't a standard term either.
-- **Rename `RipsFromGraph` → `GraphRips`?** A P2 decision — weigh the symmetry against churn across
-  consumers (`PersistenceObjective`, `ConditionedFiltration`, `H1CycleEdges`) + their tests. P1 does
-  *not* rename; it only adds `FullRips`.
+- **`RipsFromGraph` → `GraphRips` landed 2026-07-06.** This keeps the graph-restricted API symmetric
+  with `FullRips` without adding a pre-release compatibility alias.
 
 ## API / design scoping
 
@@ -69,15 +68,15 @@ public static SimplicialFiltration FullRips.Build(
 ```
 
 Internals: enumerate pairs `i<j`, keep those with `dist(i,j) ≤ threshold` as `Edge(i,j,dist)` →
-`CsrGraph.FromEdges` → delegate to `RipsFromGraph`. Returns the same `SimplicialFiltration` currency, so
+`CsrGraph.FromEdges` → delegate to `GraphRips`. Returns the same `SimplicialFiltration` currency, so
 it drops straight into `PersistentHomology.Compute` and every existing consumer/test.
 
 - **Threshold semantics.** Bounds the whole complex (triangle births = max edge birth ≤ threshold).
   Default ∞ = true full Rips (all pairs). P2: offer Ripser's **enclosing-radius** default.
 - **Distance metric.** Euclidean inline for P1 (keeps TDA.Ph dep-free). P2: optional `IDistanceMetric`
   (adds a `Graphs.Distance` edge) for non-Euclidean clouds.
-- **Home.** A dedicated `FullRips` static class reads best against the `GraphRips` rename; a method on
-  `RipsFiltration` is the lower-churn alternative. Decide with the rename question.
+- **Home.** Settled: `FullRips` is a dedicated static class; the graph-restricted builder remains a
+  method on `RipsFiltration` named `GraphRips`.
 
 ## Performance
 
@@ -106,12 +105,12 @@ To reach H_k, build the (k+1)-skeleton = all cliques up to size k+2:
 - **P0 — prereq ✔ 2026-07-05/06.** Rebuild the `r/` renv at the new path, unskip
   `TdaParityTests`, get it **green**. This anchors correctness (our PH + the full-Rips-via-complete-graph
   vs Ripser) before we build the API.
-- **P1 — ball-rolling ✔ 2026-07-06.** Add `FullRips.Build` (threshold-bounded, reusing `RipsFromGraph`); refactor
+- **P1 — ball-rolling ✔ 2026-07-06.** Add `FullRips.Build` (threshold-bounded, reusing `GraphRips`); refactor
   `TdaParityTests.FullRipsBarcode` onto it; add a small self-contained unit test (known cloud → known
   diagram). Minimal, non-disruptive.
-- **P2 — full integration.** Settle the naming/rename; add the `IDistanceMetric` option and the
-  enclosing-radius default; wire the cohomology/clearing reducer path + benchmark the envelope; scope
-  (not necessarily build) the dimension axis.
+- **P2 — full integration.** Add the `IDistanceMetric` option and the enclosing-radius default; wire
+  the cohomology/clearing reducer path + benchmark the envelope; scope (not necessarily build) the
+  dimension axis.
 
 ## Non-disruption
 
@@ -122,8 +121,6 @@ topology, capability.
 ## Open decisions
 
 - Threshold default: ∞ vs Ripser enclosing radius?
-- Rename `RipsFromGraph → GraphRips` (symmetry) or keep (avoid consumer churn)?
-- `FullRips` home: dedicated class vs method on `RipsFiltration`?
 - Euclidean-only vs `IDistanceMetric` abstraction, and when?
 - Does any project dataset actually need H2 (voids) — i.e., is the dimension axis ever on the critical path?
 

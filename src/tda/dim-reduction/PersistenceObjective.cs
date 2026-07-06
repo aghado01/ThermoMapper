@@ -77,7 +77,7 @@ public sealed class PersistenceObjective
     {
         GraphMetric metric = GraphMetric.FromFeatures(features, _config.ProjectedMetric);
         GraphBuildResult built = GraphCompiler.Build(recipe, features.Length, metric);
-        var filtration = RipsFiltration.RipsFromGraph(built.Graph, _config.Filtration, _config.MaxDimension);
+        var filtration = RipsFiltration.GraphRips(built.Graph, _config.Filtration, _config.MaxDimension);
         Barcode bc = PersistentHomology.Compute(filtration, _config.MaxDimension);
         return _config.MinPersistence > 0.0 ? Prune(bc, _config.MinPersistence) : bc;
     }

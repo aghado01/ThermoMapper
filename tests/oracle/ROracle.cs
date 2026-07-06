@@ -87,21 +87,23 @@ internal static class ROracle
         string json = File.ReadAllText(outPath);
         File.Delete(outPath);
         using var doc = JsonDocument.Parse(json);
-        if (proc.ExitCode != 0 && !IsKnownTdaExitAfterJson(oracleRelPath, proc.ExitCode))
+        if (proc.ExitCode != 0 && !IsKnownOracleExitAfterJson(oracleRelPath, proc.ExitCode))
             throw new InvalidOperationException(
                 $"R oracle '{oracleRelPath}' failed (exit {proc.ExitCode}):\n{stderr}\n{stdout}");
 
         return doc.RootElement.Clone();
     }
 
-    private static bool IsKnownTdaExitAfterJson(string oracleRelPath, int exitCode)
+    private static bool IsKnownOracleExitAfterJson(string oracleRelPath, int exitCode)
     {
-        // TDAstats / Ripser currently writes the complete diagram and then exits Rscript with
-        // 0xC0000005 on Windows. The JSON contract is complete, so tolerate only this known oracle.
+        // TDAstats / Ripser and Riemann's Grassmann median currently write complete JSON and then
+        // exit Rscript with 0xC0000005 on Windows. The JSON contract is complete, so tolerate only
+        // these known oracle scripts.
         string normalized = oracleRelPath.Replace('\\', '/');
         return OperatingSystem.IsWindows() &&
                exitCode == WindowsAccessViolation &&
-               normalized.EndsWith("oracles/tda_oracle.R", StringComparison.OrdinalIgnoreCase);
+               (normalized.EndsWith("oracles/tda_oracle.R", StringComparison.OrdinalIgnoreCase) ||
+                normalized.EndsWith("oracles/mom_oracle.R", StringComparison.OrdinalIgnoreCase));
     }
 
     private static RToolchain? FindRToolchain()

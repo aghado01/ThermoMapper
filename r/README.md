@@ -56,6 +56,14 @@ is opt-in), so the normal `dotnet test` run is unaffected.
 | --- | --- | --- |
 | `Maths.LinAlg.Pca` | `pca_oracle.R` | base `prcomp` |
 | `TDA.Ph.FullRips` + `PersistentHomology` | `tda_oracle.R` | Ripser via `TDAstats::calculate_homology` |
+| `GeometricMedian<GrassmannManifold>` | `mom_oracle.R` | `Riemann::riem.median` on `wrap.grassmann` |
 | `Maths.Estimators.MxPbf` | `mxpbf_oracle.R` *(todo)* | transcribe paper §2.2 / §3.1 |
-| `Maths.Estimators.RobustDistributedPCA` | `mom_oracle.R` *(todo)* | `maotai` geometric median + the §5.3 rule |
-| `TDA.DimReduction.Spred` | *(composition: component oracles + downstream ISOLET benchmark)* | PH via `tda_oracle.R`; median oracle pending |
+| `Maths.Estimators.RobustDistributedPCA` | *(todo: extend `mom_oracle.R`)* | `maotai` geometric median + the §5.3 rule |
+| `TDA.DimReduction.Spred` | *(composition: component oracles + downstream ISOLET benchmark)* | PH via `tda_oracle.R`; Grassmann median via `mom_oracle.R`; full SPRED composition still indirect |
+
+## Current caveats
+
+On Windows, the `TDAstats`/Ripser path and Riemann's intrinsic Grassmann median
+can write complete JSON and then exit `Rscript` with `0xC0000005` during native
+teardown. The C# bridge tolerates that only for the known oracle scripts and
+only after the output file exists and parses.
