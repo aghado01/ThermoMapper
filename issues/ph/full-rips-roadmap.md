@@ -1,8 +1,9 @@
 # Full Vietoris–Rips → `src` — roadmap
 
-**Status:** near-term TDA.Ph engine enrichment. **Additive** — the existing graph-restricted path is
-untouched; production (SPRED et al.) stays on it. Seed: the SPRED oracle parity test
-(`tests/oracle/TdaParityTests.cs`) needed a full Rips and built one ad-hoc.
+**Status:** P1 landed 2026-07-06. `TDA.Ph.FullRips.Build` is a first-class,
+threshold-bounded full-Rips density API over the existing 2-skeleton materializer. **Additive** — the
+existing graph-restricted path is untouched; production (SPRED et al.) stays on it. Seed: the SPRED
+oracle parity test (`tests/oracle/TdaParityTests.cs`) needed a full Rips and initially built one ad-hoc.
 
 ## Motivation
 
@@ -13,11 +14,14 @@ sibling of the graph-restricted builder, not a replacement.
 
 ## Current state in `src`
 
-The Rips machinery is **graph-restricted and capped at the 2-skeleton (H0/H1)** — three files, all
-triangle-max:
+The Rips machinery is capped at the 2-skeleton (H0/H1) — triangles are the top enumerated simplex.
+There are now two density entry points over that same materializer:
 
+- `FullRips.Build(points, maxDimension, threshold, label)` — complete Euclidean proximity graph
+  (all pairs ≤ threshold) → `RipsFromGraph`; for validation and small-cloud exact topology.
 - `RipsFiltration.RipsFromGraph(g, weights, maxDim)` — materializes a `SimplicialFiltration`; vertices +
-  edges + triangles (via `FlagComplex.Triangles`) when `maxDim ≥ 2`. **No tetrahedra.**
+  edges + triangles (via `FlagComplex.Triangles`) when `maxDim ≥ 2`. Graph-restricted and still the
+  production SPRED path. **No tetrahedra.**
 - `LazyRipsFiltration` — the lazy/cohomology-oriented `IFiltration`; also discovers **only triangles**
   (`CommonNeighbors`). Note its boundary/cofacet logic (`RemoveAt`, `PackKey`) is already
   *dimension-general* — only the enumeration is capped.
@@ -29,14 +33,14 @@ proposal is the scalability story).
 
 ## What the parity test's "full Rips" is
 
-`FullRipsBarcode` builds a *complete* distance graph and hands it to the existing `RipsFromGraph(maxDim=2)`.
-So it's "full" only in **density** (all pairs vs a kNN skeleton) — still the same **2-skeleton** (H0/H1),
-reusing all existing machinery. The only new code is ad-hoc complete-graph construction in the fixture.
+`TdaParityTests` now uses `FullRips.Build(points, maxDimension: 2)` and hands the resulting filtration
+to `PersistentHomology.Compute`. So it is "full" in **density** (all pairs vs a kNN skeleton) and still
+the same **2-skeleton** (H0/H1), reusing all existing machinery.
 
 ## Two orthogonal axes
 
-- **Density** — complete graph (all pairs, threshold-bounded) vs kNN-restricted skeleton. *Reachable
-  today via a complete graph; not yet a first-class API.* The immediate work.
+- **Density** — complete graph (all pairs, threshold-bounded) vs kNN-restricted skeleton. *P1 landed*
+  for complete Euclidean density via `FullRips.Build`.
 - **Dimension** — 2-skeleton (H0/H1) vs higher (H2 voids, …). *The genuinely missing capability;* capped
   in the **enumeration**, not the reducer. Deferred.
 
@@ -53,7 +57,7 @@ reusing all existing machinery. The only new code is ad-hoc complete-graph const
 
 ## API / design scoping
 
-Proposed surface (P1), in `TDA.Ph`:
+Landed surface (P1), in `TDA.Ph`:
 
 ```
 // FullRips.cs (new). No new project deps — CsrGraph/Edge already referenced by TDA.Ph.
@@ -99,10 +103,10 @@ To reach H_k, build the (k+1)-skeleton = all cliques up to size k+2:
 
 ## Phased plan
 
-- **P0 — prereq (next session, with the renv fix).** Rebuild the `r/` renv at the new path, unskip
+- **P0 — prereq ✔ 2026-07-05/06.** Rebuild the `r/` renv at the new path, unskip
   `TdaParityTests`, get it **green**. This anchors correctness (our PH + the full-Rips-via-complete-graph
   vs Ripser) before we build the API.
-- **P1 — ball-rolling.** Add `FullRips.Build` (threshold-bounded, reusing `RipsFromGraph`); refactor
+- **P1 — ball-rolling ✔ 2026-07-06.** Add `FullRips.Build` (threshold-bounded, reusing `RipsFromGraph`); refactor
   `TdaParityTests.FullRipsBarcode` onto it; add a small self-contained unit test (known cloud → known
   diagram). Minimal, non-disruptive.
 - **P2 — full integration.** Settle the naming/rename; add the `IDistanceMetric` option and the
@@ -126,5 +130,5 @@ topology, capability.
 ## References
 
 - `src/tda/ph/{RipsFiltration,LazyRipsFiltration,FlagComplex,PersistentHomology,PersistentCohomology,PersistenceClearing}.cs`
-- `tests/oracle/TdaParityTests.cs` (the ad-hoc full Rips + Ripser oracle)
+- `tests/oracle/TdaParityTests.cs` (the `FullRips.Build` + Ripser oracle)
 - SPRED tracker item: `issues/spred/dev-sequence.md` → "Full Vietoris–Rips → `src`" (pointer; this file is canonical)

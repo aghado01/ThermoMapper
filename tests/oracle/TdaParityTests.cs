@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using Graphs.Primitives;
 using TDA.Ph;
 using Xunit;
 
@@ -32,8 +31,8 @@ public sealed class TdaParityTests
         string csv = WriteCsv(pts);
         try
         {
-            // C#: complete distance graph → full Rips (maxDim = 2 builds the triangle fillers) → PH.
-            Barcode cs = FullRipsBarcode(pts);
+            // C#: full Rips (maxDim = 2 builds the triangle fillers) → PH.
+            Barcode cs = PersistentHomology.Compute(FullRips.Build(pts, maxDimension: 2), 2);
             List<(double b, double d)> csH0 = FiniteBars(cs, 0);
             List<(double b, double d)> csH1 = FiniteBars(cs, 1);
             int csEssentialH0 = cs.Bars.Count(b => b.Dimension == 0 && b.IsInfinite);
@@ -49,18 +48,6 @@ public sealed class TdaParityTests
             AssertBarsMatch(csH1, rH1, tol: 1e-4, dim: 1);
         }
         finally { File.Delete(csv); }
-    }
-
-    private static Barcode FullRipsBarcode(double[][] pts)
-    {
-        int n = pts.Length;
-        var edges = new List<Edge>(n * (n - 1) / 2);
-        for (int i = 0; i < n; i++)
-            for (int j = i + 1; j < n; j++)
-                edges.Add(new Edge(i, j, Dist(pts[i], pts[j])));
-        CsrGraph g = CsrGraph.FromEdges(edges.ToArray(), n);
-        var filt = RipsFiltration.RipsFromGraph(g, FiltrationWeights.RawDistance, 2);
-        return PersistentHomology.Compute(filt, 2);
     }
 
     private static List<(double b, double d)> FiniteBars(Barcode bc, int dim)

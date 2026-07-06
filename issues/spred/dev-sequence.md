@@ -279,12 +279,14 @@ was produced. `TdaParityTests.FullRips_PH_Matches_Ripser_H0_H1` is unparked and 
 filters diagonal zero-persistence H1 intervals because Ripser omits them while the explicit reducer
 materializes them.
 
-### Full Vietoris–Rips → `src` (near-term engine enrichment; AG) — TDA.Ph capability, may graduate to issues/ph
-Emerged from the parity test: `TdaParityTests.FullRipsBarcode` builds a *complete* distance graph and
-hands it to the existing `RipsFromGraph(maxDim=2)` — a full Rips only in **density** (all pairs vs a kNN
-skeleton), still the same 2-skeleton (H0/H1), and ad-hoc in the test. `src` currently has *only* the
-graph-restricted path (`RipsFromGraph` / `LazyRipsFiltration` / `FlagComplex`, all triangle-capped),
-consumed by SPRED / `ConditionedFiltration` / `H1CycleEdges`. Full Rips is a missing first-class capability.
+### Full Vietoris–Rips → `src` ✔ P1 landed 2026-07-06 — TDA.Ph capability
+Canonical roadmap: `issues/ph/full-rips-roadmap.md`. Emerged from the parity test:
+`TdaParityTests.FullRipsBarcode` had built a *complete* distance graph and handed it to the existing
+`RipsFromGraph(maxDim=2)` — a full Rips only in **density** (all pairs vs a kNN skeleton), still the same
+2-skeleton (H0/H1), and ad-hoc in the test. P1 moved that into `TDA.Ph.FullRips.Build`, a
+threshold-bounded complete Euclidean density API that reuses `RipsFromGraph`. The graph-restricted path
+(`RipsFromGraph` / `LazyRipsFiltration` / `FlagComplex`, all triangle-capped) remains load-bearing for
+SPRED / `ConditionedFiltration` / `H1CycleEdges`.
 
 **Two orthogonal axes** (name them so they don't conflate):
 - *Density* — complete graph (all pairs, threshold-bounded) vs kNN-restricted skeleton. The immediate one.
@@ -299,8 +301,8 @@ consumed by SPRED / `ConditionedFiltration` / `H1CycleEdges`. Full Rips is a mis
 load-bearing). Full Rips is for validation, small-cloud exact topology, and capability.
 
 **Phased plan:**
-- *P0 (prereq):* fix the renv env, unskip `TdaParityTests`, get it green.
-- *P1 (ball-rolling, next session):* migrate the test's full-Rips minimally into `src` — a first-class,
+- *P0 (prereq) ✔ 2026-07-05/06:* fix the renv env, unskip `TdaParityTests`, get it green.
+- *P1 (ball-rolling) ✔ 2026-07-06:* migrate the test's full-Rips minimally into `src` — a first-class,
   **threshold-bounded** `FullRips` reusing `RipsFromGraph`; refactor the parity test onto it.
 - *P2 (full integration):* the density API + settled naming; the dimension axis (k-clique enumeration in
   `FlagComplex` + higher simplices — deferred); performance (threshold bounding + route dense reductions

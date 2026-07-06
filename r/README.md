@@ -1,8 +1,8 @@
 # r — the validation oracle
 
 Validation-independent ground truth for the project's numerical estimators: the
-same inputs run through Kisung You's reference R packages (Rdimtools, maotai,
-T4cluster) and base R, so the C# in `src/maths/**` is checked against an
+same inputs run through external R implementations (Kisung You's packages,
+base R, and Ripser via TDAstats), so the C# in `src/**` is checked against an
 *external* implementation in a different language — not against itself. Sibling
 of `tests/`, modelled on `lean/`: a self-contained sub-project whose **toolchain
 lives outside** and whose only in-tree state is the pinned package set.
@@ -40,21 +40,22 @@ Thereafter `rnr` (`renv::restore`) reproduces the exact library from `renv.lock`
 
 ## How the C# tests reach it
 
-A parity test resolves `Rscript.exe` from the toolchain (`$PORTABLE_ROOT/rlang`),
-runs it with **this directory as the working dir** (so `.Rprofile` auto-activates
-the pinned library), and compares the emitted JSON within tolerance. The fixture
-matrix is generated once and fed to *both* sides — R's Mersenne-Twister and C#'s
-Xoshiro can't share a stream, so we compare *outputs*, not RNG. Eigenvector /
-subspace comparisons are sign-agnostic + subspace-distance; note `prcomp`
-eigenvalues use the (n−1) denominator vs the C# MLE (n) — rescale, or compare the
-subspaces. These tests are **skipped when R is absent** (toolchain is opt-in), so
-the normal `dotnet test` run is unaffected.
+A parity test resolves `Rscript.exe` from the live/user environment or the PDenv
+toolchain, runs it with **this directory as the working dir** (so `.Rprofile`
+auto-activates the pinned library), and compares the emitted JSON within
+tolerance. The fixture matrix is generated once and fed to *both* sides — R's
+Mersenne-Twister and C#'s Xoshiro can't share a stream, so we compare *outputs*,
+not RNG. Eigenvector / subspace comparisons are sign-agnostic + subspace-distance;
+note `prcomp` eigenvalues use the (n−1) denominator vs the C# MLE (n) — rescale,
+or compare the subspaces. These tests are **skipped when R is absent** (toolchain
+is opt-in), so the normal `dotnet test` run is unaffected.
 
 ## Oracle map (grows with the parity work)
 
 | C# | oracle | reference |
 | --- | --- | --- |
 | `Maths.LinAlg.Pca` | `pca_oracle.R` | base `prcomp` |
+| `TDA.Ph.FullRips` + `PersistentHomology` | `tda_oracle.R` | Ripser via `TDAstats::calculate_homology` |
 | `Maths.Estimators.MxPbf` | `mxpbf_oracle.R` *(todo)* | transcribe paper §2.2 / §3.1 |
 | `Maths.Estimators.RobustDistributedPCA` | `mom_oracle.R` *(todo)* | `maotai` geometric median + the §5.3 rule |
-| `Maths.LinAlg.Spred` | *(downstream: ISOLET benchmark, not R-parity)* | — |
+| `TDA.DimReduction.Spred` | *(composition: component oracles + downstream ISOLET benchmark)* | PH via `tda_oracle.R`; median oracle pending |
