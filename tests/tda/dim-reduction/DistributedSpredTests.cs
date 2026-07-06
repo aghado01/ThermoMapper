@@ -37,6 +37,50 @@ public sealed class DistributedSpredTests
     }
 
     [Fact]
+    public void AggregateProjections_CleanMajorityResistsCorruptedBlocks()
+    {
+        double[][] xy =
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ];
+        double[][] xyTiltX =
+        [
+            [Math.Cos(0.04), 0.0, Math.Sin(0.04)],
+            [0.0, 1.0, 0.0],
+        ];
+        double[][] xyTiltY =
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, Math.Cos(0.05), Math.Sin(0.05)],
+        ];
+        double[][] xz =
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ];
+        double[][] yz =
+        [
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ];
+
+        double[][] aggregated = DistributedSpred.AggregateProjections(
+            new[] { xy, xyTiltX, xyTiltY, xz, yz },
+            ambientDim: 3,
+            targetDim: 2);
+
+        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
+        double cleanDistance = grass.Distance(PackFrame(aggregated), PackFrame(xy));
+        double corruptedXzDistance = grass.Distance(PackFrame(aggregated), PackFrame(xz));
+        double corruptedYzDistance = grass.Distance(PackFrame(aggregated), PackFrame(yz));
+
+        Assert.InRange(cleanDistance, 0.0, 0.1);
+        Assert.True(cleanDistance < corruptedXzDistance);
+        Assert.True(cleanDistance < corruptedYzDistance);
+    }
+
+    [Fact]
     public void Compute_SingleBlock_ReturnsOrthonormalProjection()
     {
         double[][] projection = DistributedSpred.Compute(
@@ -48,6 +92,29 @@ public sealed class DistributedSpredTests
             seed: 11);
 
         AssertOrthonormalRows(projection);
+    }
+
+    [Fact]
+    public void Compute_MultipleBlocks_RunsSplitAndAggregatesProjection()
+    {
+        double[][] projection = DistributedSpred.Compute(
+            RepeatedCircleBlocks(blockCount: 2, pointsPerBlock: 24),
+            targetDim: 2,
+            blockCount: 2,
+            SmallConfig(),
+            maxIters: 0,
+            seed: 17);
+
+        AssertOrthonormalRows(projection);
+
+        double[][] xy =
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ];
+        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
+        double distance = grass.Distance(PackFrame(projection), PackFrame(xy));
+        Assert.InRange(distance, 0.0, 1e-8);
     }
 
     private static PersistenceObjectiveConfig SmallConfig() => new()
@@ -72,6 +139,17 @@ public sealed class DistributedSpredTests
             pts[i] = [Math.Cos(t), Math.Sin(t), 0.0];
         }
         return pts;
+    }
+
+    private static double[][] RepeatedCircleBlocks(int blockCount, int pointsPerBlock)
+    {
+        var data = new double[blockCount * pointsPerBlock][];
+        for (int block = 0; block < blockCount; block++)
+        {
+            double[][] circle = Circle3D(pointsPerBlock);
+            Array.Copy(circle, 0, data, block * pointsPerBlock, pointsPerBlock);
+        }
+        return data;
     }
 
     private static void AssertOrthonormalRows(double[][] projection)

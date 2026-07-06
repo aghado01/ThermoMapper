@@ -179,8 +179,8 @@ purely a performance lever.
 **First wiring slice landed 2026-07-06:** `DistributedSpred.Compute` now performs contiguous block
 splitting, runs `Spred.Compute` per block, converts each k×d projection to the d×k Grassmann frame
 currency, and aggregates by `GeometricMedian.Compute<GrassmannManifold>`. Tests cover the median
-aggregation path and the public single-block facade; larger distributed robustness/performance
-fixtures remain future P4 work.
+aggregation path, a clean-majority/corrupted-block robustness fixture, and public single-/multi-block
+facade smoke; larger end-to-end distributed robustness/performance fixtures remain future P4 work.
 
 **You-lineage (why it's mostly wiring).** Distributed SPRED and You's distributed PCA are the same
 robust-aggregation pattern — geometric median of per-partition manifold-valued estimates — differing
