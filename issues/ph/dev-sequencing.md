@@ -49,9 +49,12 @@ Engine-first, P0 → P1 → P2. This is the track with the first genuinely new *
   - **P1b** (Δ reach axis) — ✅ **landed & green** (`ResidualPrior.reachBound` + `ReachSlices`; TDA.Ph.Tests
     **306/306**, +3). Reach bound `|τ| ≤ Δ` → the monotone `(δ,Δ)` bifiltration read by PH slices; `+∞`
     subsumes P1a, β₁ steps up at a return's Δ threshold. *Commit pending.* Brief: [p1b-delta-reach-brief.md](p1b-delta-reach-brief.md).
-  - **P1c** (**← NEXT**, wants scoping) — the non-monotone **zigzag** reader (persistent-Mapper-over-`T`);
-    grounds in the built zigzag stack, verify against git before building — multi-track area
-    ([zigzag-frontier.md](../../../MarkBrain/ThermoMapper/issues/tda-purification/zigzag-engine/zigzag-frontier.md)).
+  - **P1c** (non-monotone reader — H0) — **← NEXT (scoped).** brief: [p1c-nonmonotone-zigzag-brief.md](p1c-nonmonotone-zigzag-brief.md).
+    A sweep→churn driver feeding the parity-complete `GraphZigzag` H0 → components-over-`T` (merge/split); the
+    telos seated on the zigzag oracle. New code = the driver; the oracle is built.
+  - **filled-H1 over the zigzag** (deferred, → P1d) — `GraphZigzag`'s H1 is *unfilled* cycle space; the
+    Rips-faithful filled case needs the full simplicial `ZigzagFiltration` + oracle. Key call: a return-over-`T`
+    dies by triangle-fill or by edge-departure ([zigzag-frontier.md](../../../MarkBrain/ThermoMapper/issues/tda-purification/zigzag-engine/zigzag-frontier.md) — verify before building, multi-track area).
   - **full multiparameter module** → **Z6**.
 - **P2 · directedness v1.5** — directed flag complex (combinatorial) + the built magnetic Laplacian (spectral);
   experiments M1–M3. **M2 = two returns equal in persistence, separated by flux — the gate that earns the phase.**
