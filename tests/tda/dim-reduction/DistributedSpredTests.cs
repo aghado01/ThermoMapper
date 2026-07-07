@@ -261,6 +261,32 @@ public sealed class DistributedSpredTests
         Assert.True(result.Blocks[4].AggregateObjective > result.Blocks[4].LocalObjective);
     }
 
+    [Fact]
+    public void ComputeWithDiagnostics_CleanFixture_MatchesGlobalSpredBaseline()
+    {
+        double[][] data = RepeatedCircleBlocks(blockCount: 3, pointsPerBlock: 24);
+        PersistenceObjectiveConfig config = SmallConfig();
+
+        double[][] global = Spred.Compute(data, targetDim: 2, config, maxIters: 0, seed: 41);
+        DistributedSpredResult distributed = DistributedSpred.ComputeWithDiagnostics(
+            data,
+            targetDim: 2,
+            blockCount: 3,
+            config,
+            maxIters: 0,
+            seed: 41);
+
+        double globalObjective = EvaluateFullDataObjective(data, config, global);
+
+        AssertOrthonormalRows(global);
+        AssertOrthonormalRows(distributed.Projection);
+        AssertFiniteFullObjective(distributed);
+        Assert.Equal(globalObjective, distributed.FullDataObjective, precision: 10);
+
+        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
+        Assert.InRange(grass.Distance(PackFrame(global), PackFrame(distributed.Projection)), 0.0, 1e-8);
+    }
+
     private static PersistenceObjectiveConfig SmallConfig() => new()
     {
         Graph = new GraphCompilerConfig
@@ -350,6 +376,14 @@ public sealed class DistributedSpredTests
     {
         Assert.True(double.IsFinite(result.FullDataObjective));
         Assert.True(result.FullDataObjective >= 0.0);
+    }
+
+    private static double EvaluateFullDataObjective(
+        double[][] data,
+        PersistenceObjectiveConfig config,
+        double[][] projection)
+    {
+        return new PersistenceObjective(data, config).Evaluate(projection);
     }
 
     private static double Dot(double[] a, double[] b)
