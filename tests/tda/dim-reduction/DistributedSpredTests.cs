@@ -288,6 +288,44 @@ public sealed class DistributedSpredTests
     }
 
     [Fact]
+    public void ComputeWithDiagnostics_CorruptedFixture_DocumentsGlobalVsDistributedTradeoff()
+    {
+        double[][] data = ScaledCorruptedCircleBlocks(pointsPerBlock: 24, corruptedRadius: 4.0);
+        PersistenceObjectiveConfig config = SmallConfig();
+
+        double[][] global = Spred.Compute(data, targetDim: 2, config, maxIters: 0, seed: 47);
+        DistributedSpredResult distributed = DistributedSpred.ComputeWithDiagnostics(
+            data,
+            targetDim: 2,
+            blockCount: 5,
+            config,
+            maxIters: 0,
+            seed: 47);
+
+        double globalObjective = EvaluateFullDataObjective(data, config, global);
+
+        AssertOrthonormalRows(global);
+        AssertOrthonormalRows(distributed.Projection);
+        Assert.True(double.IsFinite(globalObjective));
+        AssertFiniteFullObjective(distributed);
+
+        double[][] xy =
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ];
+
+        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
+        double globalToClean = grass.Distance(PackFrame(global), PackFrame(xy));
+        double distributedToClean = grass.Distance(PackFrame(distributed.Projection), PackFrame(xy));
+
+        Assert.InRange(distributedToClean, 0.0, 1e-8);
+        Assert.True(globalToClean > 0.5);
+        Assert.True(distributedToClean < globalToClean);
+        Assert.True(globalObjective >= 0.0);
+    }
+
+    [Fact]
     public void ComputeWithDiagnostics_AdversarialLowIteration_RunStaysInterpretable()
     {
         double[][] data = CorruptedCircleBlocks(pointsPerBlock: 20);
@@ -382,20 +420,31 @@ public sealed class DistributedSpredTests
         return data;
     }
 
+    private static double[][] ScaledCorruptedCircleBlocks(int pointsPerBlock, double corruptedRadius)
+    {
+        var data = new double[5 * pointsPerBlock][];
+        CopyBlock(CircleInPlane(pointsPerBlock, axisA: 0, axisB: 1), data, 0, pointsPerBlock);
+        CopyBlock(CircleInPlane(pointsPerBlock, axisA: 0, axisB: 1), data, 1, pointsPerBlock);
+        CopyBlock(CircleInPlane(pointsPerBlock, axisA: 0, axisB: 1), data, 2, pointsPerBlock);
+        CopyBlock(CircleInPlane(pointsPerBlock, axisA: 0, axisB: 2, corruptedRadius), data, 3, pointsPerBlock);
+        CopyBlock(CircleInPlane(pointsPerBlock, axisA: 1, axisB: 2, corruptedRadius), data, 4, pointsPerBlock);
+        return data;
+    }
+
     private static void CopyBlock(double[][] block, double[][] data, int blockIndex, int pointsPerBlock)
     {
         Array.Copy(block, 0, data, blockIndex * pointsPerBlock, pointsPerBlock);
     }
 
-    private static double[][] CircleInPlane(int n, int axisA, int axisB)
+    private static double[][] CircleInPlane(int n, int axisA, int axisB, double radius = 1.0)
     {
         var pts = new double[n][];
         for (int i = 0; i < n; i++)
         {
             double t = 2.0 * Math.PI * i / n;
             pts[i] = new double[3];
-            pts[i][axisA] = Math.Cos(t);
-            pts[i][axisB] = Math.Sin(t);
+            pts[i][axisA] = radius * Math.Cos(t);
+            pts[i][axisB] = radius * Math.Sin(t);
         }
         return pts;
     }
