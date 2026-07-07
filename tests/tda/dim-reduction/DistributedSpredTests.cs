@@ -10,40 +10,26 @@ public sealed class DistributedSpredTests
     [Fact]
     public void AggregateProjections_DuplicateSubspaceWinsMedian()
     {
-        double[][] xy =
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ];
+        double[][] xy = XyPlane();
         double[][] xyRotated =
         [
             [0.0, 1.0, 0.0],
             [-1.0, 0.0, 0.0],
         ];
-        double[][] xz =
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],
-        ];
+        double[][] xz = XzPlane();
 
         double[][] aggregated = DistributedSpred.AggregateProjections(
             new[] { xy, xyRotated, xz },
             ambientDim: 3,
             targetDim: 2);
 
-        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
-        double distance = grass.Distance(PackFrame(aggregated), PackFrame(xy));
-        Assert.InRange(distance, 0.0, 1e-8);
+        AssertNearPlane(aggregated, xy, 1e-8);
     }
 
     [Fact]
     public void AggregateProjections_CleanMajorityResistsCorruptedBlocks()
     {
-        double[][] xy =
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ];
+        double[][] xy = XyPlane();
         double[][] xyTiltX =
         [
             [Math.Cos(0.04), 0.0, Math.Sin(0.04)],
@@ -54,26 +40,17 @@ public sealed class DistributedSpredTests
             [1.0, 0.0, 0.0],
             [0.0, Math.Cos(0.05), Math.Sin(0.05)],
         ];
-        double[][] xz =
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],
-        ];
-        double[][] yz =
-        [
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0, 1.0],
-        ];
+        double[][] xz = XzPlane();
+        double[][] yz = YzPlane();
 
         double[][] aggregated = DistributedSpred.AggregateProjections(
             new[] { xy, xyTiltX, xyTiltY, xz, yz },
             ambientDim: 3,
             targetDim: 2);
 
-        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
-        double cleanDistance = grass.Distance(PackFrame(aggregated), PackFrame(xy));
-        double corruptedXzDistance = grass.Distance(PackFrame(aggregated), PackFrame(xz));
-        double corruptedYzDistance = grass.Distance(PackFrame(aggregated), PackFrame(yz));
+        double cleanDistance = DistanceToPlane(aggregated, xy);
+        double corruptedXzDistance = DistanceToPlane(aggregated, xz);
+        double corruptedYzDistance = DistanceToPlane(aggregated, yz);
 
         Assert.InRange(cleanDistance, 0.0, 0.1);
         Assert.True(cleanDistance < corruptedXzDistance);
@@ -106,15 +83,7 @@ public sealed class DistributedSpredTests
             seed: 17);
 
         AssertOrthonormalRows(projection);
-
-        double[][] xy =
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ];
-        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
-        double distance = grass.Distance(PackFrame(projection), PackFrame(xy));
-        Assert.InRange(distance, 0.0, 1e-8);
+        AssertNearPlane(projection, XyPlane(), 1e-8);
     }
 
     [Fact]
@@ -139,13 +108,8 @@ public sealed class DistributedSpredTests
         AssertOrthonormalRows(result.Projection);
         AssertFiniteFullObjective(result);
 
-        double[][] xy =
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ];
-        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
-        Assert.InRange(grass.Distance(PackFrame(result.Projection), PackFrame(xy)), 0.0, 1e-8);
+        double[][] xy = XyPlane();
+        AssertNearPlane(result.Projection, xy, 1e-8);
 
         for (int block = 0; block < blockCount; block++)
         {
@@ -155,7 +119,7 @@ public sealed class DistributedSpredTests
             Assert.Equal(pointsPerBlock, info.Count);
             Assert.Equal(seed + 1009 * block, info.Seed);
             AssertOrthonormalRows(info.Projection);
-            Assert.InRange(grass.Distance(PackFrame(info.Projection), PackFrame(xy)), 0.0, 1e-8);
+            AssertNearPlane(info.Projection, xy, 1e-8);
             AssertFiniteObjectives(info);
             Assert.Equal(info.LocalObjective, info.AggregateObjective, precision: 10);
         }
@@ -214,26 +178,13 @@ public sealed class DistributedSpredTests
             maxIters: 0,
             seed: 31);
 
-        double[][] xy =
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ];
-        double[][] xz =
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],
-        ];
-        double[][] yz =
-        [
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0, 1.0],
-        ];
+        double[][] xy = XyPlane();
+        double[][] xz = XzPlane();
+        double[][] yz = YzPlane();
 
-        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
-        double aggregateToClean = grass.Distance(PackFrame(result.Projection), PackFrame(xy));
-        double aggregateToXz = grass.Distance(PackFrame(result.Projection), PackFrame(xz));
-        double aggregateToYz = grass.Distance(PackFrame(result.Projection), PackFrame(yz));
+        double aggregateToClean = DistanceToPlane(result.Projection, xy);
+        double aggregateToXz = DistanceToPlane(result.Projection, xz);
+        double aggregateToYz = DistanceToPlane(result.Projection, yz);
 
         Assert.Equal(5, result.BlockCount);
         AssertFiniteFullObjective(result);
@@ -242,12 +193,12 @@ public sealed class DistributedSpredTests
         Assert.True(aggregateToClean < aggregateToYz);
 
         for (int block = 0; block < 3; block++)
-            Assert.InRange(grass.Distance(PackFrame(result.Blocks[block].Projection), PackFrame(xy)), 0.0, 1e-8);
+            AssertNearPlane(result.Blocks[block].Projection, xy, 1e-8);
 
-        Assert.InRange(grass.Distance(PackFrame(result.Blocks[3].Projection), PackFrame(xz)), 0.0, 1e-8);
-        Assert.InRange(grass.Distance(PackFrame(result.Blocks[4].Projection), PackFrame(yz)), 0.0, 1e-8);
-        Assert.True(grass.Distance(PackFrame(result.Blocks[3].Projection), PackFrame(xy)) > 0.5);
-        Assert.True(grass.Distance(PackFrame(result.Blocks[4].Projection), PackFrame(xy)) > 0.5);
+        AssertNearPlane(result.Blocks[3].Projection, xz, 1e-8);
+        AssertNearPlane(result.Blocks[4].Projection, yz, 1e-8);
+        Assert.True(DistanceToPlane(result.Blocks[3].Projection, xy) > 0.5);
+        Assert.True(DistanceToPlane(result.Blocks[4].Projection, xy) > 0.5);
 
         for (int block = 0; block < 3; block++)
         {
@@ -283,8 +234,7 @@ public sealed class DistributedSpredTests
         AssertFiniteFullObjective(distributed);
         Assert.Equal(globalObjective, distributed.FullDataObjective, precision: 10);
 
-        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
-        Assert.InRange(grass.Distance(PackFrame(global), PackFrame(distributed.Projection)), 0.0, 1e-8);
+        Assert.InRange(DistanceBetweenProjections(global, distributed.Projection), 0.0, 1e-8);
     }
 
     [Fact]
@@ -309,15 +259,9 @@ public sealed class DistributedSpredTests
         Assert.True(double.IsFinite(globalObjective));
         AssertFiniteFullObjective(distributed);
 
-        double[][] xy =
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ];
-
-        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
-        double globalToClean = grass.Distance(PackFrame(global), PackFrame(xy));
-        double distributedToClean = grass.Distance(PackFrame(distributed.Projection), PackFrame(xy));
+        double[][] xy = XyPlane();
+        double globalToClean = DistanceToPlane(global, xy);
+        double distributedToClean = DistanceToPlane(distributed.Projection, xy);
 
         Assert.InRange(distributedToClean, 0.0, 1e-8);
         Assert.True(globalToClean > 0.5);
@@ -326,6 +270,7 @@ public sealed class DistributedSpredTests
     }
 
     [Fact]
+    [Trait("Category", "SeededAnnealer")]
     public void ComputeWithDiagnostics_AdversarialLowIteration_RunStaysInterpretable()
     {
         double[][] data = CorruptedCircleBlocks(pointsPerBlock: 20);
@@ -339,30 +284,17 @@ public sealed class DistributedSpredTests
             maxIters: 6,
             seed: 53);
 
-        double[][] xy =
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ];
-        double[][] xz =
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0],
-        ];
-        double[][] yz =
-        [
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0, 1.0],
-        ];
+        double[][] xy = XyPlane();
+        double[][] xz = XzPlane();
+        double[][] yz = YzPlane();
 
         Assert.Equal(5, result.BlockCount);
         AssertOrthonormalRows(result.Projection);
         AssertFiniteFullObjective(result);
 
-        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
-        double aggregateToClean = grass.Distance(PackFrame(result.Projection), PackFrame(xy));
-        Assert.True(aggregateToClean < grass.Distance(PackFrame(result.Projection), PackFrame(xz)));
-        Assert.True(aggregateToClean < grass.Distance(PackFrame(result.Projection), PackFrame(yz)));
+        double aggregateToClean = DistanceToPlane(result.Projection, xy);
+        Assert.True(aggregateToClean < DistanceToPlane(result.Projection, xz));
+        Assert.True(aggregateToClean < DistanceToPlane(result.Projection, yz));
 
         foreach (DistributedSpredBlockResult block in result.Blocks)
         {
@@ -447,6 +379,40 @@ public sealed class DistributedSpredTests
             pts[i][axisB] = radius * Math.Sin(t);
         }
         return pts;
+    }
+
+    private static double[][] XyPlane() =>
+    [
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+    ];
+
+    private static double[][] XzPlane() =>
+    [
+        [1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ];
+
+    private static double[][] YzPlane() =>
+    [
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ];
+
+    private static void AssertNearPlane(double[][] projection, double[][] plane, double maxDistance)
+    {
+        Assert.InRange(DistanceToPlane(projection, plane), 0.0, maxDistance);
+    }
+
+    private static double DistanceToPlane(double[][] projection, double[][] plane)
+    {
+        return DistanceBetweenProjections(projection, plane);
+    }
+
+    private static double DistanceBetweenProjections(double[][] a, double[][] b)
+    {
+        var grass = new GrassmannManifold(ambientN: a[0].Length, subspaceR: a.Length);
+        return grass.Distance(PackFrame(a), PackFrame(b));
     }
 
     private static void AssertOrthonormalRows(double[][] projection)
