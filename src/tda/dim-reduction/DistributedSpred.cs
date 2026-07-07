@@ -19,6 +19,7 @@ public sealed record DistributedSpredResult(
     int AmbientDimension,
     int TargetDimension,
     double[][] Projection,
+    double FullDataObjective,
     IReadOnlyList<DistributedSpredBlockResult> Blocks)
 {
     public int BlockCount => Blocks.Count;
@@ -38,7 +39,20 @@ public static class DistributedSpred
         int maxIters = 1000,
         int? seed = null)
     {
-        return ComputeWithDiagnostics(data, targetDim, blockCount, objective, maxIters, seed).Projection;
+        int ambientDim = ValidateInputs(data, targetDim, blockCount, objective);
+        if (blockCount == 1)
+            return Spred.Compute(data, targetDim, objective, maxIters, seed);
+
+        var projections = new List<double[][]>(blockCount);
+        for (int block = 0; block < blockCount; block++)
+        {
+            int start = block * data.Length / blockCount;
+            int end = (block + 1) * data.Length / blockCount;
+            double[][] slice = SliceRows(data, start, end);
+            projections.Add(Spred.Compute(slice, targetDim, objective, maxIters, BlockSeed(seed, block)));
+        }
+
+        return AggregateProjections(projections, ambientDim, targetDim);
     }
 
     public static DistributedSpredResult ComputeWithDiagnostics(
@@ -49,27 +63,17 @@ public static class DistributedSpred
         int maxIters = 1000,
         int? seed = null)
     {
-        ArgumentNullException.ThrowIfNull(data);
-        ArgumentNullException.ThrowIfNull(objective);
-        if (data.Length == 0) throw new ArgumentException("Empty data", nameof(data));
-        if (blockCount < 1 || blockCount > data.Length)
-            throw new ArgumentOutOfRangeException(nameof(blockCount), "Block count must be between 1 and data.Length.");
-
-        int ambientDim = data[0].Length;
-        if (targetDim < 1 || targetDim > ambientDim)
-            throw new ArgumentOutOfRangeException(nameof(targetDim), "Target dimension must satisfy 1 <= targetDim <= ambient dimension.");
-        for (int i = 1; i < data.Length; i++)
-            if (data[i].Length != ambientDim)
-                throw new ArgumentException("All data rows must have the same dimension.", nameof(data));
+        int ambientDim = ValidateInputs(data, targetDim, blockCount, objective);
 
         if (blockCount == 1)
         {
             BlockRun run = RunBlock(0, 0, data, targetDim, objective, maxIters, seed);
+            double singleBlockObjective = run.AggregateObjective(run.Projection);
             var blocks = new[]
             {
                 run.ToResult(run.Projection),
             };
-            return new DistributedSpredResult(ambientDim, targetDim, run.Projection, blocks);
+            return new DistributedSpredResult(ambientDim, targetDim, run.Projection, singleBlockObjective, blocks);
         }
 
         var projections = new List<double[][]>(blockCount);
@@ -90,7 +94,9 @@ public static class DistributedSpred
         foreach (BlockRun run in blockRuns)
             blockResults.Add(run.ToResult(aggregate));
 
-        return new DistributedSpredResult(ambientDim, targetDim, aggregate, blockResults);
+        var fullObjective = new PersistenceObjective(data, objective);
+        double fullDataObjective = fullObjective.Evaluate(aggregate);
+        return new DistributedSpredResult(ambientDim, targetDim, aggregate, fullDataObjective, blockResults);
     }
 
     private sealed class BlockRun
@@ -122,6 +128,11 @@ public static class DistributedSpred
         public double[][] Projection { get; }
         public double LocalObjective { get; }
 
+        public double AggregateObjective(double[][] aggregate)
+        {
+            return _objective.Evaluate(aggregate);
+        }
+
         public DistributedSpredBlockResult ToResult(double[][] aggregate)
         {
             return new DistributedSpredBlockResult(
@@ -131,8 +142,30 @@ public static class DistributedSpred
                 Seed,
                 Projection,
                 LocalObjective,
-                _objective.Evaluate(aggregate));
+                AggregateObjective(aggregate));
         }
+    }
+
+    private static int ValidateInputs(
+        double[][] data,
+        int targetDim,
+        int blockCount,
+        PersistenceObjectiveConfig objective)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        ArgumentNullException.ThrowIfNull(objective);
+        if (data.Length == 0) throw new ArgumentException("Empty data", nameof(data));
+        if (blockCount < 1 || blockCount > data.Length)
+            throw new ArgumentOutOfRangeException(nameof(blockCount), "Block count must be between 1 and data.Length.");
+
+        int ambientDim = data[0].Length;
+        if (targetDim < 1 || targetDim > ambientDim)
+            throw new ArgumentOutOfRangeException(nameof(targetDim), "Target dimension must satisfy 1 <= targetDim <= ambient dimension.");
+        for (int i = 1; i < data.Length; i++)
+            if (data[i].Length != ambientDim)
+                throw new ArgumentException("All data rows must have the same dimension.", nameof(data));
+
+        return ambientDim;
     }
 
     private static BlockRun RunBlock(

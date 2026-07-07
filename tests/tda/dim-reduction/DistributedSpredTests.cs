@@ -137,6 +137,7 @@ public sealed class DistributedSpredTests
         Assert.Equal(blockCount, result.BlockCount);
         Assert.Equal(blockCount, result.Blocks.Count);
         AssertOrthonormalRows(result.Projection);
+        AssertFiniteFullObjective(result);
 
         double[][] xy =
         [
@@ -197,6 +198,7 @@ public sealed class DistributedSpredTests
         Assert.Equal(rowCount, covered);
         Assert.Equal(rowCount, result.Blocks[^1].Start + result.Blocks[^1].Count);
         AssertOrthonormalRows(result.Projection);
+        AssertFiniteFullObjective(result);
     }
 
     [Fact]
@@ -234,6 +236,7 @@ public sealed class DistributedSpredTests
         double aggregateToYz = grass.Distance(PackFrame(result.Projection), PackFrame(yz));
 
         Assert.Equal(5, result.BlockCount);
+        AssertFiniteFullObjective(result);
         Assert.InRange(aggregateToClean, 0.0, 1e-8);
         Assert.True(aggregateToClean < aggregateToXz);
         Assert.True(aggregateToClean < aggregateToYz);
@@ -341,6 +344,12 @@ public sealed class DistributedSpredTests
         Assert.True(double.IsFinite(block.AggregateObjective));
         Assert.True(block.LocalObjective >= 0.0);
         Assert.True(block.AggregateObjective >= 0.0);
+    }
+
+    private static void AssertFiniteFullObjective(DistributedSpredResult result)
+    {
+        Assert.True(double.IsFinite(result.FullDataObjective));
+        Assert.True(result.FullDataObjective >= 0.0);
     }
 
     private static double Dot(double[] a, double[] b)
