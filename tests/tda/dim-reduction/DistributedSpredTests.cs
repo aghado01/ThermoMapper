@@ -155,6 +155,8 @@ public sealed class DistributedSpredTests
             Assert.Equal(seed + 1009 * block, info.Seed);
             AssertOrthonormalRows(info.Projection);
             Assert.InRange(grass.Distance(PackFrame(info.Projection), PackFrame(xy)), 0.0, 1e-8);
+            AssertFiniteObjectives(info);
+            Assert.Equal(info.LocalObjective, info.AggregateObjective, precision: 10);
         }
     }
 
@@ -187,6 +189,7 @@ public sealed class DistributedSpredTests
             Assert.Equal(expectedEnd - expectedStart, block.Count);
             Assert.Equal(covered, block.Start);
             AssertOrthonormalRows(block.Projection);
+            AssertFiniteObjectives(block);
 
             covered += block.Count;
         }
@@ -242,6 +245,17 @@ public sealed class DistributedSpredTests
         Assert.InRange(grass.Distance(PackFrame(result.Blocks[4].Projection), PackFrame(yz)), 0.0, 1e-8);
         Assert.True(grass.Distance(PackFrame(result.Blocks[3].Projection), PackFrame(xy)) > 0.5);
         Assert.True(grass.Distance(PackFrame(result.Blocks[4].Projection), PackFrame(xy)) > 0.5);
+
+        for (int block = 0; block < 3; block++)
+        {
+            AssertFiniteObjectives(result.Blocks[block]);
+            Assert.Equal(result.Blocks[block].LocalObjective, result.Blocks[block].AggregateObjective, precision: 10);
+        }
+
+        AssertFiniteObjectives(result.Blocks[3]);
+        AssertFiniteObjectives(result.Blocks[4]);
+        Assert.True(result.Blocks[3].AggregateObjective > result.Blocks[3].LocalObjective);
+        Assert.True(result.Blocks[4].AggregateObjective > result.Blocks[4].LocalObjective);
     }
 
     private static PersistenceObjectiveConfig SmallConfig() => new()
@@ -319,6 +333,14 @@ public sealed class DistributedSpredTests
             for (int j = i + 1; j < projection.Length; j++)
                 Assert.InRange(Dot(projection[i], projection[j]), -1e-9, 1e-9);
         }
+    }
+
+    private static void AssertFiniteObjectives(DistributedSpredBlockResult block)
+    {
+        Assert.True(double.IsFinite(block.LocalObjective));
+        Assert.True(double.IsFinite(block.AggregateObjective));
+        Assert.True(block.LocalObjective >= 0.0);
+        Assert.True(block.AggregateObjective >= 0.0);
     }
 
     private static double Dot(double[] a, double[] b)

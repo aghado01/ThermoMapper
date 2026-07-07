@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.Geometry.DimReduction;
 using Maths.Geometry;
 using Maths.Geometry.Estimators.Intrinsic;
 
@@ -10,7 +11,9 @@ public sealed record DistributedSpredBlockResult(
     int Start,
     int Count,
     int? Seed,
-    double[][] Projection);
+    double[][] Projection,
+    double LocalObjective,
+    double AggregateObjective);
 
 public sealed record DistributedSpredResult(
     int AmbientDimension,
@@ -61,29 +64,90 @@ public static class DistributedSpred
 
         if (blockCount == 1)
         {
-            double[][] projection = Spred.Compute(data, targetDim, objective, maxIters, seed);
+            BlockRun run = RunBlock(0, 0, data, targetDim, objective, maxIters, seed);
             var blocks = new[]
             {
-                new DistributedSpredBlockResult(0, 0, data.Length, seed, projection),
+                run.ToResult(run.Projection),
             };
-            return new DistributedSpredResult(ambientDim, targetDim, projection, blocks);
+            return new DistributedSpredResult(ambientDim, targetDim, run.Projection, blocks);
         }
 
         var projections = new List<double[][]>(blockCount);
-        var blockResults = new List<DistributedSpredBlockResult>(blockCount);
+        var blockRuns = new List<BlockRun>(blockCount);
         for (int block = 0; block < blockCount; block++)
         {
             int start = block * data.Length / blockCount;
             int end = (block + 1) * data.Length / blockCount;
             double[][] slice = SliceRows(data, start, end);
             int? blockSeed = BlockSeed(seed, block);
-            double[][] projection = Spred.Compute(slice, targetDim, objective, maxIters, blockSeed);
-            projections.Add(projection);
-            blockResults.Add(new DistributedSpredBlockResult(block, start, end - start, blockSeed, projection));
+            BlockRun run = RunBlock(block, start, slice, targetDim, objective, maxIters, blockSeed);
+            projections.Add(run.Projection);
+            blockRuns.Add(run);
         }
 
         double[][] aggregate = AggregateProjections(projections, ambientDim, targetDim);
+        var blockResults = new List<DistributedSpredBlockResult>(blockCount);
+        foreach (BlockRun run in blockRuns)
+            blockResults.Add(run.ToResult(aggregate));
+
         return new DistributedSpredResult(ambientDim, targetDim, aggregate, blockResults);
+    }
+
+    private sealed class BlockRun
+    {
+        private readonly PersistenceObjective _objective;
+
+        public BlockRun(
+            int index,
+            int start,
+            int count,
+            int? seed,
+            double[][] projection,
+            double localObjective,
+            PersistenceObjective objective)
+        {
+            Index = index;
+            Start = start;
+            Count = count;
+            Seed = seed;
+            Projection = projection;
+            LocalObjective = localObjective;
+            _objective = objective;
+        }
+
+        public int Index { get; }
+        public int Start { get; }
+        public int Count { get; }
+        public int? Seed { get; }
+        public double[][] Projection { get; }
+        public double LocalObjective { get; }
+
+        public DistributedSpredBlockResult ToResult(double[][] aggregate)
+        {
+            return new DistributedSpredBlockResult(
+                Index,
+                Start,
+                Count,
+                Seed,
+                Projection,
+                LocalObjective,
+                _objective.Evaluate(aggregate));
+        }
+    }
+
+    private static BlockRun RunBlock(
+        int index,
+        int start,
+        double[][] data,
+        int targetDim,
+        PersistenceObjectiveConfig objective,
+        int maxIters,
+        int? seed)
+    {
+        var ph = new PersistenceObjective(data, objective);
+        double[][] projection = SubspaceAnnealer.Compute(data, targetDim, ph.Evaluate, maxIters, seed);
+        double localObjective = ph.Evaluate(projection);
+        return new BlockRun(index, start, data.Length, seed, projection, localObjective, ph);
     }
 
     internal static double[][] AggregateProjections(

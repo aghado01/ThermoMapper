@@ -181,8 +181,8 @@ splitting, runs `Spred.Compute` per block, converts each k×d projection to the 
 currency, and aggregates by `GeometricMedian.Compute<GrassmannManifold>`. Tests cover the median
 aggregation path, uneven block coverage/no truncation, a clean-majority/corrupted-block robustness
 fixture, and public single-/multi-block facade smoke. `ComputeWithDiagnostics` exposes block ranges,
-derived block seeds, per-block
-projections, and the aggregate projection. A deterministic end-to-end corrupted-block fixture now
+derived block seeds, per-block projections, per-block local objective values, aggregate-vs-block
+objective values, and the aggregate projection. A deterministic end-to-end corrupted-block fixture
 uses that surface to show three clean circle blocks outvote two corrupted block subspaces; larger
 stochastic distributed robustness/performance fixtures remain future P4 work.
 
