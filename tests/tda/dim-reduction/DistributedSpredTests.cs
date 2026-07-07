@@ -159,6 +159,44 @@ public sealed class DistributedSpredTests
     }
 
     [Fact]
+    public void ComputeWithDiagnostics_UnevenBlocks_CoversEveryRowWithoutTruncation()
+    {
+        const int rowCount = 50;
+        const int blockCount = 3;
+
+        DistributedSpredResult result = DistributedSpred.ComputeWithDiagnostics(
+            Circle3D(rowCount),
+            targetDim: 2,
+            blockCount,
+            SmallConfig(),
+            maxIters: 0,
+            seed: 29);
+
+        Assert.Equal(blockCount, result.BlockCount);
+        Assert.Equal(0, result.Blocks[0].Start);
+
+        int covered = 0;
+        for (int i = 0; i < result.Blocks.Count; i++)
+        {
+            DistributedSpredBlockResult block = result.Blocks[i];
+            int expectedStart = i * rowCount / blockCount;
+            int expectedEnd = (i + 1) * rowCount / blockCount;
+
+            Assert.Equal(i, block.Index);
+            Assert.Equal(expectedStart, block.Start);
+            Assert.Equal(expectedEnd - expectedStart, block.Count);
+            Assert.Equal(covered, block.Start);
+            AssertOrthonormalRows(block.Projection);
+
+            covered += block.Count;
+        }
+
+        Assert.Equal(rowCount, covered);
+        Assert.Equal(rowCount, result.Blocks[^1].Start + result.Blocks[^1].Count);
+        AssertOrthonormalRows(result.Projection);
+    }
+
+    [Fact]
     public void ComputeWithDiagnostics_CorruptedBlocks_AggregatesCleanMajority()
     {
         const int pointsPerBlock = 24;

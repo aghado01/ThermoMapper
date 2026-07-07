@@ -179,8 +179,9 @@ purely a performance lever.
 **First wiring slice landed 2026-07-06:** `DistributedSpred.Compute` now performs contiguous block
 splitting, runs `Spred.Compute` per block, converts each k×d projection to the d×k Grassmann frame
 currency, and aggregates by `GeometricMedian.Compute<GrassmannManifold>`. Tests cover the median
-aggregation path, a clean-majority/corrupted-block robustness fixture, and public single-/multi-block
-facade smoke. `ComputeWithDiagnostics` exposes block ranges, derived block seeds, per-block
+aggregation path, uneven block coverage/no truncation, a clean-majority/corrupted-block robustness
+fixture, and public single-/multi-block facade smoke. `ComputeWithDiagnostics` exposes block ranges,
+derived block seeds, per-block
 projections, and the aggregate projection. A deterministic end-to-end corrupted-block fixture now
 uses that surface to show three clean circle blocks outvote two corrupted block subspaces; larger
 stochastic distributed robustness/performance fixtures remain future P4 work.
