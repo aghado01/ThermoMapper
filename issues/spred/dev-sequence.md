@@ -181,8 +181,9 @@ splitting, runs `Spred.Compute` per block, converts each k×d projection to the 
 currency, and aggregates by `GeometricMedian.Compute<GrassmannManifold>`. Tests cover the median
 aggregation path, a clean-majority/corrupted-block robustness fixture, and public single-/multi-block
 facade smoke. `ComputeWithDiagnostics` exposes block ranges, derived block seeds, per-block
-projections, and the aggregate projection, preparing the end-to-end corrupted-block fixture; larger
-distributed robustness/performance fixtures remain future P4 work.
+projections, and the aggregate projection. A deterministic end-to-end corrupted-block fixture now
+uses that surface to show three clean circle blocks outvote two corrupted block subspaces; larger
+stochastic distributed robustness/performance fixtures remain future P4 work.
 
 **You-lineage (why it's mostly wiring).** Distributed SPRED and You's distributed PCA are the same
 robust-aggregation pattern — geometric median of per-partition manifold-valued estimates — differing
