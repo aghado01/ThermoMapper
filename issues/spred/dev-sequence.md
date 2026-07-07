@@ -185,8 +185,9 @@ derived block seeds, per-block projections, per-block local objective values, ag
 objective values, the aggregate projection, and the aggregate's full-data objective value. A
 deterministic end-to-end corrupted-block fixture uses that surface to show three clean circle blocks
 outvote two corrupted block subspaces; a clean repeated-circle fixture cross-checks distributed
-full-data objective reporting against global `Spred.Compute`. Larger stochastic distributed
-robustness/performance fixtures remain future P4 work.
+full-data objective reporting against global `Spred.Compute`; and a seeded low-iteration adversarial
+fixture exercises the stochastic annealer path while asserting only stable diagnostic relationships.
+Larger stochastic distributed robustness/performance fixtures remain future P4 work.
 
 **You-lineage (why it's mostly wiring).** Distributed SPRED and You's distributed PCA are the same
 robust-aggregation pattern — geometric median of per-partition manifold-valued estimates — differing

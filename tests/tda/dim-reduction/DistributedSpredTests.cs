@@ -287,6 +287,55 @@ public sealed class DistributedSpredTests
         Assert.InRange(grass.Distance(PackFrame(global), PackFrame(distributed.Projection)), 0.0, 1e-8);
     }
 
+    [Fact]
+    public void ComputeWithDiagnostics_AdversarialLowIteration_RunStaysInterpretable()
+    {
+        double[][] data = CorruptedCircleBlocks(pointsPerBlock: 20);
+        PersistenceObjectiveConfig config = SmallConfig();
+
+        DistributedSpredResult result = DistributedSpred.ComputeWithDiagnostics(
+            data,
+            targetDim: 2,
+            blockCount: 5,
+            config,
+            maxIters: 6,
+            seed: 53);
+
+        double[][] xy =
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ];
+        double[][] xz =
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ];
+        double[][] yz =
+        [
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ];
+
+        Assert.Equal(5, result.BlockCount);
+        AssertOrthonormalRows(result.Projection);
+        AssertFiniteFullObjective(result);
+
+        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
+        double aggregateToClean = grass.Distance(PackFrame(result.Projection), PackFrame(xy));
+        Assert.True(aggregateToClean < grass.Distance(PackFrame(result.Projection), PackFrame(xz)));
+        Assert.True(aggregateToClean < grass.Distance(PackFrame(result.Projection), PackFrame(yz)));
+
+        foreach (DistributedSpredBlockResult block in result.Blocks)
+        {
+            AssertOrthonormalRows(block.Projection);
+            AssertFiniteObjectives(block);
+        }
+
+        Assert.True(result.Blocks[3].AggregateObjective > result.Blocks[3].LocalObjective);
+        Assert.True(result.Blocks[4].AggregateObjective > result.Blocks[4].LocalObjective);
+    }
+
     private static PersistenceObjectiveConfig SmallConfig() => new()
     {
         Graph = new GraphCompilerConfig
