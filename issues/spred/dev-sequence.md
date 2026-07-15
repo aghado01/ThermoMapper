@@ -1,6 +1,6 @@
 # SPRED — Dev Sequence
 
-**Updated:** 2026-07-03
+**Updated:** 2026-07-15
 
 Ordered build plan for the SPRED track. For the architecture and the rationale behind each layer,
 see [design.md](design.md).
@@ -169,26 +169,36 @@ the conceptual bridge to P4. Record any cap (no silent truncation).
 Adaptive cooling, early-stop on plateau, larger accepted steps, restart ensembles. Each avoided iter
 is a whole eval saved.
 
-### P4 — Scale-out: Distributed SPRED (§3.2) — a facet of scale, its own sub-track
+### P4 — Scale-out: Distributed SPRED (§3.2) — a facet of scale, its own sub-track ✔ 2026-07-15
 Partition X into m blocks, run `Spred.Compute` per block (embarrassingly parallel), aggregate the
 block subspaces by **geometric median on the Grassmann** (Weiszfeld/IRLS). Distinct from P1–P3 — it
 changes the *decomposition*, not per-eval speed — composes on top (each block still wants a fast eval),
 and carries a **robustness co-benefit** (median breakdown point, outlier-resistant), so it is not
 purely a performance lever.
 
-**First wiring slice landed 2026-07-06:** `DistributedSpred.Compute` now performs contiguous block
+**P4 landed 2026-07-06 through 2026-07-15:** `DistributedSpred.Compute` performs contiguous block
 splitting, runs `Spred.Compute` per block, converts each k×d projection to the d×k Grassmann frame
-currency, and aggregates by `GeometricMedian.Compute<GrassmannManifold>`. Tests cover the median
-aggregation path, uneven block coverage/no truncation, a clean-majority/corrupted-block robustness
-fixture, and public single-/multi-block facade smoke. `ComputeWithDiagnostics` exposes block ranges,
-derived block seeds, per-block projections, per-block local objective values, aggregate-vs-block
-objective values, the aggregate projection, and the aggregate's full-data objective value. A
-deterministic end-to-end corrupted-block fixture uses that surface to show three clean circle blocks
-outvote two corrupted block subspaces; a clean repeated-circle fixture cross-checks distributed
-full-data objective reporting against global `Spred.Compute`; a high-variance contaminated fixture
-documents the global-vs-distributed robustness tradeoff; and a seeded low-iteration adversarial fixture
-exercises the stochastic annealer path while asserting only stable diagnostic relationships. Larger
-stochastic distributed robustness/performance fixtures remain future P4 work.
+currency, and aggregates by `GeometricMedian.Compute<GrassmannManifold>`. Block execution is locally
+parallelizable through a bounded `maxDegreeOfParallelism`; the conservative default of one avoids
+silently multiplying the graph pipeline's own parallelism and memory demand. Ordered result slots and
+index-derived seeds make seeded serial and parallel runs agree independently of scheduling. Cancellation
+flows through distributed dispatch, `Spred`, and the annealer, where it is observed around setup,
+objective evaluations, and annealing iterations.
+
+`ComputeWithDiagnostics` exposes block ranges, derived block seeds, per-block projections, per-block
+local objective values, aggregate-vs-block objective values, the aggregate projection, and the
+aggregate's full-data objective value. Tests cover contracts, the median aggregation path, uneven block
+coverage/no truncation, deterministic serial-vs-parallel execution, cancellation, a clean-majority /
+corrupted-block robustness fixture, clean global comparison, a high-variance contaminated tradeoff,
+and a seeded low-iteration adversarial run. `DistributedSpredProfileTests` is an opt-in scale profile
+(`THERMOMAPPER_SPRED_PROFILE=1`) comparing global, serial-block, and bounded-parallel fitting without a
+brittle timing assertion. Cross-process transport/orchestration and sustained benchmark matrices are
+deployment/performance follow-ons, not part of this algorithmic P4 scope.
+
+Local closure run (2026-07-15, n=192, six blocks, four annealing iterations): global fit 101 ms,
+serial-block fit 71 ms, six-worker fit 18 ms. The serial and parallel aggregate subspaces had Grassmann
+distance 0 and identical full-data objectives. These are profile evidence for this machine, not a
+portable speed guarantee.
 
 **You-lineage (why it's mostly wiring).** Distributed SPRED and You's distributed PCA are the same
 robust-aggregation pattern — geometric median of per-partition manifold-valued estimates — differing
