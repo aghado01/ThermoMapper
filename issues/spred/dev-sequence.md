@@ -336,6 +336,14 @@ load-bearing). Full Rips is for validation, small-cloud exact topology, and capa
   dense-complex cost, which is separate from the parked R-env hang).
 
 ## Application: ISOLET
-SPRED is unsupervised + linear, so it is not blocked by validation-independence but is bounded by the
-unsupervised ceiling (the PCA-front-end wall in `project_isolet_pca_wall`). Track SPRED vs raw-617-d and
-vs PCA-14 once the driver exists.
+The detailed research and implementation protocol now lives in
+[`isolet-benchmark-brief.md`](isolet-benchmark-brief.md).
+
+ISOLET proceeds on two separate tracks: forensic raw-617 SPC parity against the published 93% purity
+at 65% coverage plus hierarchy, then a label-sealed improvement tournament. The latter compares
+stable unsupervised feature selection, PCA, matched random projection, raw SPRED, selected-feature
+SPRED, and a small set of graph/coupling variants.
+
+The previous "PCA-front-end wall" is not treated as an established unsupervised ceiling. Current
+evidence points first to graph and resolver fidelity, and SPRED must beat dimension-matched controls
+rather than merely lower its own persistence objective.
