@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Maths.Geometry.DimReduction;
 using Maths.Geometry;
 using Maths.Geometry.Estimators.Intrinsic;
@@ -55,6 +57,8 @@ public static class DistributedSpred
     /// <param name="objective">Persistent-homology objective shared by all local runs.</param>
     /// <param name="maxIters">Simulated-annealing steps per block.</param>
     /// <param name="seed">Base RNG seed; block i receives <c>seed + 1009 * i</c>. Null draws OS entropy.</param>
+    /// <param name="maxDegreeOfParallelism">Maximum concurrent block runs. One preserves serial execution.</param>
+    /// <param name="cancellationToken">Cancellation observed between annealing iterations and pipeline phases.</param>
     /// <returns>The aggregate k x d orthonormal projection.</returns>
     public static double[][] Compute(
         double[][] data,
@@ -62,21 +66,31 @@ public static class DistributedSpred
         int blockCount,
         PersistenceObjectiveConfig objective,
         int maxIters = 1000,
-        int? seed = null)
+        int? seed = null,
+        int maxDegreeOfParallelism = 1,
+        CancellationToken cancellationToken = default)
     {
-        int ambientDim = ValidateInputs(data, targetDim, blockCount, objective);
+        int ambientDim = ValidateInputs(data, targetDim, blockCount, objective, maxDegreeOfParallelism);
+        cancellationToken.ThrowIfCancellationRequested();
         if (blockCount == 1)
-            return Spred.Compute(data, targetDim, objective, maxIters, seed);
+            return Spred.Compute(data, targetDim, objective, maxIters, seed, cancellationToken);
 
-        var projections = new List<double[][]>(blockCount);
-        for (int block = 0; block < blockCount; block++)
+        var projections = new double[blockCount][][];
+        RunBlocks(blockCount, maxDegreeOfParallelism, cancellationToken, block =>
         {
             int start = block * data.Length / blockCount;
             int end = (block + 1) * data.Length / blockCount;
             double[][] slice = SliceRows(data, start, end);
-            projections.Add(Spred.Compute(slice, targetDim, objective, maxIters, BlockSeed(seed, block)));
-        }
+            projections[block] = Spred.Compute(
+                slice,
+                targetDim,
+                objective,
+                maxIters,
+                BlockSeed(seed, block),
+                cancellationToken);
+        });
 
+        cancellationToken.ThrowIfCancellationRequested();
         return AggregateProjections(projections, ambientDim, targetDim);
     }
 
@@ -90,6 +104,8 @@ public static class DistributedSpred
     /// <param name="objective">Persistent-homology objective shared by all local runs.</param>
     /// <param name="maxIters">Simulated-annealing steps per block.</param>
     /// <param name="seed">Base RNG seed; block i receives <c>seed + 1009 * i</c>. Null draws OS entropy.</param>
+    /// <param name="maxDegreeOfParallelism">Maximum concurrent block runs. One preserves serial execution.</param>
+    /// <param name="cancellationToken">Cancellation observed between annealing iterations and pipeline phases.</param>
     /// <returns>The aggregate projection and ordered block diagnostics.</returns>
     /// <remarks>This path performs additional objective evaluations and is more expensive than <see cref="Compute"/>.</remarks>
     public static DistributedSpredResult ComputeWithDiagnostics(
@@ -98,41 +114,57 @@ public static class DistributedSpred
         int blockCount,
         PersistenceObjectiveConfig objective,
         int maxIters = 1000,
-        int? seed = null)
+        int? seed = null,
+        int maxDegreeOfParallelism = 1,
+        CancellationToken cancellationToken = default)
     {
-        int ambientDim = ValidateInputs(data, targetDim, blockCount, objective);
+        int ambientDim = ValidateInputs(data, targetDim, blockCount, objective, maxDegreeOfParallelism);
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (blockCount == 1)
         {
-            BlockRun run = RunBlock(0, 0, data, targetDim, objective, maxIters, seed);
-            double singleBlockObjective = run.AggregateObjective(run.Projection);
+            BlockRun run = RunBlock(0, 0, data, targetDim, objective, maxIters, seed, cancellationToken);
+            double singleBlockObjective = run.AggregateObjective(run.Projection, cancellationToken);
             var blocks = new[]
             {
-                run.ToResult(run.Projection),
+                run.ToResult(run.Projection, cancellationToken),
             };
             return new DistributedSpredResult(ambientDim, targetDim, run.Projection, singleBlockObjective, blocks);
         }
 
-        var projections = new List<double[][]>(blockCount);
-        var blockRuns = new List<BlockRun>(blockCount);
-        for (int block = 0; block < blockCount; block++)
+        var blockRuns = new BlockRun[blockCount];
+        RunBlocks(blockCount, maxDegreeOfParallelism, cancellationToken, block =>
         {
             int start = block * data.Length / blockCount;
             int end = (block + 1) * data.Length / blockCount;
             double[][] slice = SliceRows(data, start, end);
             int? blockSeed = BlockSeed(seed, block);
-            BlockRun run = RunBlock(block, start, slice, targetDim, objective, maxIters, blockSeed);
-            projections.Add(run.Projection);
-            blockRuns.Add(run);
-        }
+            blockRuns[block] = RunBlock(
+                block,
+                start,
+                slice,
+                targetDim,
+                objective,
+                maxIters,
+                blockSeed,
+                cancellationToken);
+        });
 
+        var projections = new double[blockCount][][];
+        for (int block = 0; block < blockCount; block++)
+            projections[block] = blockRuns[block].Projection;
+
+        cancellationToken.ThrowIfCancellationRequested();
         double[][] aggregate = AggregateProjections(projections, ambientDim, targetDim);
-        var blockResults = new List<DistributedSpredBlockResult>(blockCount);
-        foreach (BlockRun run in blockRuns)
-            blockResults.Add(run.ToResult(aggregate));
+        var blockResults = new DistributedSpredBlockResult[blockCount];
+        RunBlocks(blockCount, maxDegreeOfParallelism, cancellationToken, block =>
+            blockResults[block] = blockRuns[block].ToResult(aggregate, cancellationToken));
 
+        cancellationToken.ThrowIfCancellationRequested();
         var fullObjective = new PersistenceObjective(data, objective);
+        cancellationToken.ThrowIfCancellationRequested();
         double fullDataObjective = fullObjective.Evaluate(aggregate);
+        cancellationToken.ThrowIfCancellationRequested();
         return new DistributedSpredResult(ambientDim, targetDim, aggregate, fullDataObjective, blockResults);
     }
 
@@ -165,12 +197,15 @@ public static class DistributedSpred
         public double[][] Projection { get; }
         public double LocalObjective { get; }
 
-        public double AggregateObjective(double[][] aggregate)
+        public double AggregateObjective(double[][] aggregate, CancellationToken cancellationToken)
         {
-            return _objective.Evaluate(aggregate);
+            cancellationToken.ThrowIfCancellationRequested();
+            double value = _objective.Evaluate(aggregate);
+            cancellationToken.ThrowIfCancellationRequested();
+            return value;
         }
 
-        public DistributedSpredBlockResult ToResult(double[][] aggregate)
+        public DistributedSpredBlockResult ToResult(double[][] aggregate, CancellationToken cancellationToken)
         {
             return new DistributedSpredBlockResult(
                 Index,
@@ -179,7 +214,7 @@ public static class DistributedSpred
                 Seed,
                 Projection,
                 LocalObjective,
-                AggregateObjective(aggregate));
+                AggregateObjective(aggregate, cancellationToken));
         }
     }
 
@@ -187,13 +222,18 @@ public static class DistributedSpred
         double[][] data,
         int targetDim,
         int blockCount,
-        PersistenceObjectiveConfig objective)
+        PersistenceObjectiveConfig objective,
+        int maxDegreeOfParallelism)
     {
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(objective);
         if (data.Length == 0) throw new ArgumentException("Empty data", nameof(data));
         if (blockCount < 1 || blockCount > data.Length)
             throw new ArgumentOutOfRangeException(nameof(blockCount), "Block count must be between 1 and data.Length.");
+        if (maxDegreeOfParallelism < 1)
+            throw new ArgumentOutOfRangeException(
+                nameof(maxDegreeOfParallelism),
+                "Maximum degree of parallelism must be at least one.");
 
         int ambientDim = data[0].Length;
         if (targetDim < 1 || targetDim > ambientDim)
@@ -205,6 +245,34 @@ public static class DistributedSpred
         return ambientDim;
     }
 
+    private static void RunBlocks(
+        int blockCount,
+        int maxDegreeOfParallelism,
+        CancellationToken cancellationToken,
+        Action<int> body)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (maxDegreeOfParallelism == 1 || blockCount == 1)
+        {
+            for (int block = 0; block < blockCount; block++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                body(block);
+            }
+            return;
+        }
+
+        Parallel.For(
+            0,
+            blockCount,
+            new ParallelOptions
+            {
+                MaxDegreeOfParallelism = maxDegreeOfParallelism,
+                CancellationToken = cancellationToken,
+            },
+            body);
+    }
+
     private static BlockRun RunBlock(
         int index,
         int start,
@@ -212,11 +280,22 @@ public static class DistributedSpred
         int targetDim,
         PersistenceObjectiveConfig objective,
         int maxIters,
-        int? seed)
+        int? seed,
+        CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var ph = new PersistenceObjective(data, objective);
-        double[][] projection = SubspaceAnnealer.Compute(data, targetDim, ph.Evaluate, maxIters, seed);
+        cancellationToken.ThrowIfCancellationRequested();
+        double[][] projection = SubspaceAnnealer.Compute(
+            data,
+            targetDim,
+            ph.Evaluate,
+            maxIters,
+            seed,
+            cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         double localObjective = ph.Evaluate(projection);
+        cancellationToken.ThrowIfCancellationRequested();
         return new BlockRun(index, start, data.Length, seed, projection, localObjective, ph);
     }
 

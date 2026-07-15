@@ -1,3 +1,4 @@
+using System.Threading;
 using Maths.Geometry.DimReduction;
 
 namespace TDA.DimReduction;
@@ -22,12 +23,15 @@ public static class Spred
     /// <param name="objective">The PH objective recipe (graph construction, matched dimensions, …).</param>
     /// <param name="maxIters">Simulated-annealing steps.</param>
     /// <param name="seed">RNG seed for a reproducible anneal; null draws OS entropy.</param>
+    /// <param name="cancellationToken">Cancellation observed around objective setup and between annealing steps.</param>
     /// <returns>The best k×d orthonormal projection found.</returns>
     public static double[][] Compute(
         double[][] data, int targetDim, PersistenceObjectiveConfig objective,
-        int maxIters = 1000, int? seed = null)
+        int maxIters = 1000, int? seed = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var ph = new PersistenceObjective(data, objective);
-        return SubspaceAnnealer.Compute(data, targetDim, ph.Evaluate, maxIters, seed);
+        cancellationToken.ThrowIfCancellationRequested();
+        return SubspaceAnnealer.Compute(data, targetDim, ph.Evaluate, maxIters, seed, cancellationToken);
     }
 }

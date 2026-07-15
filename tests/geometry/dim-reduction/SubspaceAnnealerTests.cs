@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Maths.Geometry.DimReduction;
 using Xunit;
 
@@ -54,6 +55,31 @@ public sealed class SubspaceAnnealerTests
                 Assert.InRange(crossDot, -1e-9, 1e-9);
             }
         }
+    }
+
+    [Fact]
+    public void Compute_CancellationDuringAnneal_Throws()
+    {
+        double[][] data = BuildData(samples: 20, dim: 4, seed: 11);
+        using var cancellation = new CancellationTokenSource();
+        int evaluations = 0;
+
+        double CancelAfterFirstProposal(double[][] projection)
+        {
+            if (++evaluations == 2) cancellation.Cancel();
+            return Objective(projection);
+        }
+
+        Assert.Throws<OperationCanceledException>(() =>
+            SubspaceAnnealer.Compute(
+                data,
+                targetDim: 2,
+                CancelAfterFirstProposal,
+                maxIters: 100,
+                seed: 7,
+                cancellation.Token));
+
+        Assert.Equal(2, evaluations);
     }
 
     private static double[][] BuildData(int samples, int dim, int seed)

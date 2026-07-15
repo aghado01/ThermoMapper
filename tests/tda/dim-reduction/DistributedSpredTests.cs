@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Graphs;
 using Maths.Geometry;
 using Xunit;
@@ -60,6 +61,85 @@ public sealed class DistributedSpredTests
                 seed: 1));
 
         Assert.Equal("data", error.ParamName);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(0)]
+    public void Compute_NonPositiveParallelism_Throws(int maxDegreeOfParallelism)
+    {
+        ArgumentOutOfRangeException error = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            DistributedSpred.Compute(
+                Circle3D(8),
+                targetDim: 2,
+                blockCount: 2,
+                SmallConfig(),
+                maxIters: 0,
+                seed: 1,
+                maxDegreeOfParallelism));
+
+        Assert.Equal("maxDegreeOfParallelism", error.ParamName);
+    }
+
+    [Fact]
+    public void Compute_PreCanceledToken_Throws()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            DistributedSpred.Compute(
+                Circle3D(16),
+                targetDim: 2,
+                blockCount: 2,
+                SmallConfig(),
+                maxIters: 8,
+                seed: 1,
+                maxDegreeOfParallelism: 2,
+                cancellation.Token));
+    }
+
+    [Fact]
+    public void ComputeWithDiagnostics_ParallelMatchesSeededSerialRun()
+    {
+        const int blockCount = 3;
+        double[][] data = RepeatedCircleBlocks(blockCount, pointsPerBlock: 18);
+        PersistenceObjectiveConfig config = SmallConfig();
+
+        DistributedSpredResult serial = DistributedSpred.ComputeWithDiagnostics(
+            data,
+            targetDim: 2,
+            blockCount,
+            config,
+            maxIters: 3,
+            seed: 37,
+            maxDegreeOfParallelism: 1);
+        DistributedSpredResult parallel = DistributedSpred.ComputeWithDiagnostics(
+            data,
+            targetDim: 2,
+            blockCount,
+            config,
+            maxIters: 3,
+            seed: 37,
+            maxDegreeOfParallelism: blockCount);
+
+        Assert.InRange(DistanceBetweenProjections(serial.Projection, parallel.Projection), 0.0, 1e-10);
+        Assert.Equal(serial.FullDataObjective, parallel.FullDataObjective, precision: 10);
+        Assert.Equal(serial.BlockCount, parallel.BlockCount);
+
+        for (int block = 0; block < blockCount; block++)
+        {
+            DistributedSpredBlockResult expected = serial.Blocks[block];
+            DistributedSpredBlockResult actual = parallel.Blocks[block];
+
+            Assert.Equal(expected.Index, actual.Index);
+            Assert.Equal(expected.Start, actual.Start);
+            Assert.Equal(expected.Count, actual.Count);
+            Assert.Equal(expected.Seed, actual.Seed);
+            Assert.InRange(DistanceBetweenProjections(expected.Projection, actual.Projection), 0.0, 1e-10);
+            Assert.Equal(expected.LocalObjective, actual.LocalObjective, precision: 10);
+            Assert.Equal(expected.AggregateObjective, actual.AggregateObjective, precision: 10);
+        }
     }
 
     [Fact]

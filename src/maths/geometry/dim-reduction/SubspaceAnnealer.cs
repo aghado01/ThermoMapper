@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Maths.Rng;
 using Maths.LinAlg;
 
@@ -31,11 +32,13 @@ namespace Maths.Geometry.DimReduction
         /// <param name="objective">Scalar objective value of a candidate k×d orthonormal projection.</param>
         /// <param name="maxIters">Number of simulated-annealing steps.</param>
         /// <param name="seed">RNG seed for a reproducible annealing stream; null draws OS entropy.</param>
+        /// <param name="cancellationToken">Cancellation observed before setup and between annealing steps.</param>
         /// <returns>The best k×d orthonormal projection found (rows orthonormal).</returns>
         public static double[][] Compute(
             double[][] data, int targetDim, SubspaceObjectiveFunction objective,
-            int maxIters = 1000, int? seed = null)
+            int maxIters = 1000, int? seed = null, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             int nSamples = data.Length;
             if (nSamples == 0) throw new ArgumentException("Empty data", nameof(data));
             int d = data[0].Length;
@@ -49,11 +52,13 @@ namespace Maths.Geometry.DimReduction
             // Warm start on the PCA subspace, packed as a d×k column-major Grassmann representative
             // (each PCA component becomes one orthonormal column / one projection row).
             var pca = Pca.Compute(data, k, center: true, whiten: false);
+            cancellationToken.ThrowIfCancellationRequested();
             double[] current = PackColumnMajor(pca.Components, k, d);
             MatrixOps.Orthonormalize(current, d, k);   // clean Stiefel representative for a valid point
 
             double[][] currentProj = ToProjection(current, k, d);
             double currentValue = objective(currentProj);
+            cancellationToken.ThrowIfCancellationRequested();
 
             double[][] bestProj = currentProj;
             double bestValue = currentValue;
@@ -65,6 +70,7 @@ namespace Maths.Geometry.DimReduction
 
             for (int iter = 0; iter < maxIters; iter++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 double temp = initialTemp * Math.Pow(0.99, iter);   // geometric cooling
                 double step = temp * 0.1;                            // geodesic step length
 
@@ -73,6 +79,7 @@ namespace Maths.Geometry.DimReduction
 
                 double[][] proposalProj = ToProjection(proposal, k, d);
                 double proposalValue = objective(proposalProj);
+                cancellationToken.ThrowIfCancellationRequested();
 
                 if (proposalValue < currentValue ||
                     rng.NextDouble() < Math.Exp((currentValue - proposalValue) / temp))
