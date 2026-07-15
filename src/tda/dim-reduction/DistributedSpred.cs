@@ -6,6 +6,14 @@ using Maths.Geometry.Estimators.Intrinsic;
 
 namespace TDA.DimReduction;
 
+/// <summary>Diagnostics for one local SPRED block.</summary>
+/// <param name="Index">Zero-based block index.</param>
+/// <param name="Start">Zero-based index of the block's first row in the original input.</param>
+/// <param name="Count">Number of input rows assigned to the block.</param>
+/// <param name="Seed">Seed passed to the block annealer; <c>null</c> draws OS entropy.</param>
+/// <param name="Projection">The block's locally optimized k x d orthonormal projection.</param>
+/// <param name="LocalObjective">The block objective evaluated at <paramref name="Projection"/>.</param>
+/// <param name="AggregateObjective">The block objective evaluated at the final aggregate projection.</param>
 public sealed record DistributedSpredBlockResult(
     int Index,
     int Start,
@@ -15,6 +23,12 @@ public sealed record DistributedSpredBlockResult(
     double LocalObjective,
     double AggregateObjective);
 
+/// <summary>The aggregate projection and diagnostics from a distributed SPRED run.</summary>
+/// <param name="AmbientDimension">Input dimension d.</param>
+/// <param name="TargetDimension">Projection dimension k.</param>
+/// <param name="Projection">The k x d Grassmann-median projection aggregated from all blocks.</param>
+/// <param name="FullDataObjective">The full input objective evaluated at <paramref name="Projection"/>.</param>
+/// <param name="Blocks">Per-block results in ascending input-partition order.</param>
 public sealed record DistributedSpredResult(
     int AmbientDimension,
     int TargetDimension,
@@ -22,6 +36,7 @@ public sealed record DistributedSpredResult(
     double FullDataObjective,
     IReadOnlyList<DistributedSpredBlockResult> Blocks)
 {
+    /// <summary>Number of input blocks represented by <see cref="Blocks"/>.</summary>
     public int BlockCount => Blocks.Count;
 }
 
@@ -31,6 +46,16 @@ public sealed record DistributedSpredResult(
 /// </summary>
 public static class DistributedSpred
 {
+    /// <summary>
+    /// Run SPRED on contiguous, non-overlapping input blocks and return their Grassmann-median projection.
+    /// </summary>
+    /// <param name="data">Row-major ambient samples.</param>
+    /// <param name="targetDim">Projection dimension k.</param>
+    /// <param name="blockCount">Number of contiguous blocks; must be between one and the row count.</param>
+    /// <param name="objective">Persistent-homology objective shared by all local runs.</param>
+    /// <param name="maxIters">Simulated-annealing steps per block.</param>
+    /// <param name="seed">Base RNG seed; block i receives <c>seed + 1009 * i</c>. Null draws OS entropy.</param>
+    /// <returns>The aggregate k x d orthonormal projection.</returns>
     public static double[][] Compute(
         double[][] data,
         int targetDim,
@@ -55,6 +80,18 @@ public static class DistributedSpred
         return AggregateProjections(projections, ambientDim, targetDim);
     }
 
+    /// <summary>
+    /// Run distributed SPRED and also evaluate each local projection, the aggregate on every block,
+    /// and the aggregate on the full input.
+    /// </summary>
+    /// <param name="data">Row-major ambient samples.</param>
+    /// <param name="targetDim">Projection dimension k.</param>
+    /// <param name="blockCount">Number of contiguous blocks; must be between one and the row count.</param>
+    /// <param name="objective">Persistent-homology objective shared by all local runs.</param>
+    /// <param name="maxIters">Simulated-annealing steps per block.</param>
+    /// <param name="seed">Base RNG seed; block i receives <c>seed + 1009 * i</c>. Null draws OS entropy.</param>
+    /// <returns>The aggregate projection and ordered block diagnostics.</returns>
+    /// <remarks>This path performs additional objective evaluations and is more expensive than <see cref="Compute"/>.</remarks>
     public static DistributedSpredResult ComputeWithDiagnostics(
         double[][] data,
         int targetDim,

@@ -7,6 +7,61 @@ namespace TDA.DimReduction.Tests;
 
 public sealed class DistributedSpredTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(9)]
+    public void Compute_BlockCountOutsideRowRange_Throws(int blockCount)
+    {
+        ArgumentOutOfRangeException error = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            DistributedSpred.Compute(
+                Circle3D(8),
+                targetDim: 2,
+                blockCount,
+                SmallConfig(),
+                maxIters: 0,
+                seed: 1));
+
+        Assert.Equal("blockCount", error.ParamName);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    public void Compute_TargetDimensionOutsideAmbientRange_Throws(int targetDim)
+    {
+        ArgumentOutOfRangeException error = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            DistributedSpred.Compute(
+                Circle3D(8),
+                targetDim,
+                blockCount: 2,
+                SmallConfig(),
+                maxIters: 0,
+                seed: 1));
+
+        Assert.Equal("targetDim", error.ParamName);
+    }
+
+    [Fact]
+    public void Compute_RaggedInput_Throws()
+    {
+        double[][] data =
+        [
+            [1.0, 2.0, 3.0],
+            [4.0, 5.0],
+        ];
+
+        ArgumentException error = Assert.Throws<ArgumentException>(() =>
+            DistributedSpred.Compute(
+                data,
+                targetDim: 2,
+                blockCount: 1,
+                SmallConfig(),
+                maxIters: 0,
+                seed: 1));
+
+        Assert.Equal("data", error.ParamName);
+    }
+
     [Fact]
     public void AggregateProjections_DuplicateSubspaceWinsMedian()
     {
