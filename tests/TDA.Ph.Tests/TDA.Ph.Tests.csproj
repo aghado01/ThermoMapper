@@ -20,6 +20,7 @@
     <Compile Include="LazyRipsFiltrationTests.cs" Link="LazyRipsFiltrationTests.cs" />
     <Compile Include="LocalMutualProximityH1CycleTests.cs" Link="LocalMutualProximityH1CycleTests.cs" />
     <Compile Include="DiagramMetricsTests.cs" Link="DiagramMetricsTests.cs" />
+    <Compile Include="DiagramMetricsApproxTests.cs" Link="DiagramMetricsApproxTests.cs" />
     <Compile Include="FullRipsTests.cs" Link="FullRipsTests.cs" />
     <Compile Include="PersistentCohomologyTests.cs" Link="PersistentCohomologyTests.cs" />
     <Compile Include="PersistentCohomologyRipsParityTests.cs" Link="PersistentCohomologyRipsParityTests.cs" />

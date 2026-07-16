@@ -77,9 +77,24 @@ public sealed class PersistenceObjective
                     nameof(config));
         }
 
-        if (!double.IsFinite(config.WassersteinOrder) || config.WassersteinOrder <= 0.0)
+        if (!double.IsFinite(config.WassersteinOrder) || config.WassersteinOrder < 1.0)
             throw new ArgumentException(
-                "WassersteinOrder must be finite and > 0 — it exponentiates matching costs, so p <= 0, NaN, or ∞ makes the Wasserstein value meaningless.",
+                "WassersteinOrder must be finite and >= 1 — DiagramMetrics requires p >= 1 (rejecting at evaluation time otherwise), and p = ∞ is Bottleneck, not Wasserstein.",
+                nameof(config));
+
+        if (config.SlicedDirections < 1)
+            throw new ArgumentException(
+                "SlicedDirections must be >= 1 — the sliced distance averages 1-D transports over slice directions and is undefined over zero slices.",
+                nameof(config));
+
+        if (!double.IsFinite(config.SinkhornEpsilon) || config.SinkhornEpsilon <= 0.0)
+            throw new ArgumentException(
+                "SinkhornEpsilon must be finite and > 0 — it is the entropic smoothing scale; 0, NaN, or ∞ degenerates the Sinkhorn kernel.",
+                nameof(config));
+
+        if (config.SinkhornMaxIters < 1)
+            throw new ArgumentException(
+                "SinkhornMaxIters must be >= 1 — zero iterations returns the unscaled kernel, not a transport cost.",
                 nameof(config));
 
         if (!(config.MinPersistence >= 0.0))
@@ -108,8 +123,7 @@ public sealed class PersistenceObjective
 
         double total = 0.0;
         foreach (var (dim, weight) in _config.Dimensions)
-            total += weight * DiagramMetrics.Wasserstein(
-                projected, ReferenceBarcode, dim, _config.WassersteinOrder, _essential);
+            total += weight * DiagramDistance(projected, ReferenceBarcode, dim);
 
         if (_covariance is not null)
             total += _config.VarianceRegularizer * TraceProjectedCovariance(projection, _covariance);
@@ -118,6 +132,21 @@ public sealed class PersistenceObjective
     }
 
     // ── pipeline ─────────────────────────────────────────────────────────────
+
+    // One dispatch point for the per-dimension diagram distance, selected by the config's
+    // DiagramDistance backend (exact Hungarian vs the two screening-scale alternatives).
+    private double DiagramDistance(Barcode projected, Barcode reference, int dimension) =>
+        _config.DiagramDistance switch
+        {
+            DiagramDistanceKind.SlicedWasserstein => DiagramMetrics.SlicedWasserstein(
+                projected, reference, dimension, _config.WassersteinOrder, _essential,
+                _config.SlicedDirections),
+            DiagramDistanceKind.SinkhornWasserstein => DiagramMetrics.SinkhornWasserstein(
+                projected, reference, dimension, _config.WassersteinOrder, _essential,
+                _config.SinkhornEpsilon, _config.SinkhornMaxIters),
+            _ => DiagramMetrics.Wasserstein(
+                projected, reference, dimension, _config.WassersteinOrder, _essential),
+        };
 
     private Barcode BarcodeFor(double[][] features, GraphCompilerConfig recipe)
     {

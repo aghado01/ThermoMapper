@@ -153,11 +153,18 @@ earlier "H0-Wasserstein / kNN is the wall" guess was wrong on every count.
   **~1774–3600×** (→ 0.04–0.18 ms), leaving exactly the 1 essential loop bar — **near-exact** (cylinder
   objective 0.834 pruned vs 0.841 exact) and a **denoiser**. Whole cylinder eval ~2–3× faster (31→11 s);
   **H0-Wasserstein is now the residual** (next sub-lever).
-- **Approximate the Wasserstein** (paper §6: entropic/Sinkhorn or sliced OT — `T4transport`'s
-  `dist_sinkhorn`/`dist_swdist`, both reference and oracle). Helps H0 and any residual H1. H0 still
-  can't be dropped (drives the SA descent — cylinder converged *with* H0+H1). **Now gates the
-  ISOLET Phase-2 SPRED screen** — exact H0 matching at block scale is the binding cost
-  (isolet-benchmark-brief.md, "H0 matching-cost gate").
+- **Approximate the Wasserstein ✔ 2026-07-16** (paper §6: entropic/Sinkhorn or sliced OT —
+  `T4transport`'s `dist_sinkhorn`/`dist_swdist`, both reference and oracle). Landed as
+  `DiagramMetrics.SlicedWasserstein` (Carrière-style diagonal-augmented deterministic slices,
+  O(L·n log n)) + `DiagramMetrics.SinkhornWasserstein` (log-domain entropic on the exact
+  diagonal-augmented cost geometry, ε→0 → exact) + the `DiagramDistance` selector on
+  `PersistenceObjectiveConfig`. Validated against the in-repo exact Hungarian oracle, an analytic
+  sliced anchor (2√2/π), and objective-level rank preservation; **T4transport numerical
+  cross-check still open**. Measured n=200 bars/side: exact 32 ms, sliced 4 ms, Sinkhorn 1.1 s
+  (iteration-capped and entropically biased at that scale) — **sliced is the screening metric;
+  Sinkhorn is the small-diagram fidelity tool**. H0 still can't be dropped (drives the SA
+  descent — cylinder converged *with* H0+H1). This was the binding cost for the
+  ISOLET Phase-2 SPRED screen (isolet-benchmark-brief.md, "H0 matching-cost gate").
 - **Sparser / less-loopy filtration** — fewer H1 noise loops at the source (fill more triangles,
   mutual-kNN, or a persistence-aware graph). Secondary; pruning is simpler and downstream-agnostic.
 - **Deprioritized (P0 says negligible):** fixed-skeleton, KD-tree kNN, vineyards — graph + PH are

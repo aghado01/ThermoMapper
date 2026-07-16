@@ -348,6 +348,19 @@ Phase 2 therefore does not begin until at least one of the following is landed a
 The two pilot seeds at dimension 30 must produce the full-screen wall-clock extrapolation before
 any promotion decision.
 
+**Status 2026-07-16 — condition 1 landed, with residuals.** `DiagramMetrics.SlicedWasserstein`
+(deterministic diagonal-augmented slices, O(L·n log n)) and `DiagramMetrics.SinkhornWasserstein`
+(log-domain entropic on the exact cost geometry) are in, selectable per run via
+`PersistenceObjectiveConfig.DiagramDistance`. Validation: Sinkhorn converges to the in-repo exact
+Hungarian oracle (ε→0, small diagrams, ≤1% relative), sliced matches its analytic single-bar
+integral (2√2/π), and all three backends preserve the clean-vs-collapsed projection ranking at
+objective level. Measured at n = 200 bars/side: exact 32 ms, sliced 4 ms, Sinkhorn 1.1 s
+(iteration-capped, entropically biased at that scale). **Sliced is the screening metric** — at the
+8-block split its n·log n replaces the cubic 15–20 s/eval extrapolation with tens of milliseconds;
+Sinkhorn is a small-diagram fidelity tool, not a block-scale screen. Residuals before promotion:
+the `T4transport` numerical cross-check (condition 1's oracle clause) and the two pilot seeds'
+wall-clock extrapolation both remain open.
+
 ### Barcode limitation
 
 For a connected weighted graph, the finite H0 death values are closely related to spanning-tree merge

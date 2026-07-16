@@ -39,6 +39,25 @@ public sealed record PersistenceObjectiveConfig
     /// <see cref="DiagramMetrics"/>.)</summary>
     public double WassersteinOrder { get; init; } = 2.0;
 
+    /// <summary>Diagram-distance backend for the per-dimension matching. Exact Hungarian matching
+    /// is O((bars)³) and is the block-scale wall (ISOLET brief, "H0 matching-cost gate");
+    /// <see cref="DiagramDistanceKind.SlicedWasserstein"/> and
+    /// <see cref="DiagramDistanceKind.SinkhornWasserstein"/> are the screening-scale
+    /// alternatives.</summary>
+    public DiagramDistanceKind DiagramDistance { get; init; } = DiagramDistanceKind.Wasserstein;
+
+    /// <summary>Slice count for <see cref="DiagramDistanceKind.SlicedWasserstein"/> — evenly
+    /// spaced, deterministic (no RNG).</summary>
+    public int SlicedDirections { get; init; } = 50;
+
+    /// <summary>Entropic regularization for <see cref="DiagramDistanceKind.SinkhornWasserstein"/>,
+    /// dimensionless (relative to the largest finite matching cost). Smaller = closer to exact,
+    /// slower to converge.</summary>
+    public double SinkhornEpsilon { get; init; } = 0.01;
+
+    /// <summary>Iteration cap for <see cref="DiagramDistanceKind.SinkhornWasserstein"/>.</summary>
+    public int SinkhornMaxIters { get; init; } = 500;
+
     /// <summary>Essential-bar policy. <c>null</c> auto-derives <see cref="DiagramMetrics.EssentialPolicy.FinitePenalty"/>
     /// at scale diam(X)/2, so an essential-count mismatch yields a finite (SA-usable) penalty rather
     /// than the <c>+∞</c> of <see cref="DiagramMetrics.EssentialPolicy.InfiniteOnMismatch"/>.</summary>
