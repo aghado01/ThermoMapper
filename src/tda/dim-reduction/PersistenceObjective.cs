@@ -33,6 +33,10 @@ public sealed class PersistenceObjective
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(config);
         if (data.Length == 0) throw new ArgumentException("Empty data", nameof(data));
+        for (int i = 1; i < data.Length; i++)
+            if (data[i].Length != data[0].Length)
+                throw new ArgumentException("All data rows must have the same dimension.", nameof(data));
+        ValidateConfig(config);
 
         _data = data;
         _config = config;
@@ -45,6 +49,48 @@ public sealed class PersistenceObjective
             ?? DiagramMetrics.EssentialPolicy.FinitePenalty(Diameter(data) / 2.0);
 
         _covariance = config.VarianceRegularizer != 0.0 ? Covariance(data, _ambientDim) : null;
+    }
+
+    // Reject silently-degenerate recipes at construction, so every entry point — Spred,
+    // DistributedSpred, direct use — inherits the same guarantees.
+    private static void ValidateConfig(PersistenceObjectiveConfig config)
+    {
+        if (config.MaxDimension < 1)
+            throw new ArgumentException(
+                "MaxDimension must be >= 1 — below that the Rips complex carries no edges and there is no homology to match.",
+                nameof(config));
+
+        if (config.Dimensions is not { Length: > 0 })
+            throw new ArgumentException(
+                "Dimensions must weight at least one homological dimension — an empty combination makes the objective constant and the anneal optimizes nothing.",
+                nameof(config));
+
+        foreach (var (dim, weight) in config.Dimensions)
+        {
+            if (dim < 0 || dim >= config.MaxDimension)
+                throw new ArgumentException(
+                    $"Dimensions entry H{dim} needs 0 <= Dim < MaxDimension ({config.MaxDimension}): H_k requires (k+1)-simplices as fillers and the Rips complex only builds up to MaxDimension, so this term compares degenerate diagrams and goes constant.",
+                    nameof(config));
+            if (!double.IsFinite(weight) || weight <= 0.0)
+                throw new ArgumentException(
+                    $"Weight {weight} on H{dim} must be finite and > 0: a zero weight still pays the Wasserstein matching and turns an infinite essential penalty into NaN (0·∞) — drop the entry instead; a negative weight rewards barcode mismatch.",
+                    nameof(config));
+        }
+
+        if (!double.IsFinite(config.WassersteinOrder) || config.WassersteinOrder <= 0.0)
+            throw new ArgumentException(
+                "WassersteinOrder must be finite and > 0 — it exponentiates matching costs, so p <= 0, NaN, or ∞ makes the Wasserstein value meaningless.",
+                nameof(config));
+
+        if (!(config.MinPersistence >= 0.0))
+            throw new ArgumentException(
+                "MinPersistence must be >= 0 — it thresholds finite-bar persistence before matching (0 = no pruning).",
+                nameof(config));
+
+        if (!double.IsFinite(config.PathologyPenalty) || config.PathologyPenalty <= 0.0)
+            throw new ArgumentException(
+                "PathologyPenalty must be finite and > 0 — the annealer compares it as an ordinary objective value, so NaN, ∞, or a reward poisons the anneal.",
+                nameof(config));
     }
 
     /// <summary>Objective value at a candidate k×d orthonormal projection (each row a basis vector).</summary>

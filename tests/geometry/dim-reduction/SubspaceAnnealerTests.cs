@@ -23,16 +23,29 @@ public sealed class SubspaceAnnealerTests
     {
         double[][] data = BuildData(samples: 40, dim: 4, seed: 11);
 
-        double[][] a = SubspaceAnnealer.Compute(data, targetDim: 2, Objective, maxIters: 300, seed: 7);
-        double[][] b = SubspaceAnnealer.Compute(data, targetDim: 2, Objective, maxIters: 300, seed: 7);
+        SubspaceAnnealerResult a = SubspaceAnnealer.Compute(data, targetDim: 2, Objective, maxIters: 300, seed: 7);
+        SubspaceAnnealerResult b = SubspaceAnnealer.Compute(data, targetDim: 2, Objective, maxIters: 300, seed: 7);
 
-        Assert.Equal(a.Length, b.Length);
-        for (int i = 0; i < a.Length; i++)
+        Assert.Equal(a.Objective, b.Objective); // same seed -> same xoshiro stream -> identical bits
+        Assert.Equal(a.Projection.Length, b.Projection.Length);
+        for (int i = 0; i < a.Projection.Length; i++)
         {
-            Assert.Equal(a[i].Length, b[i].Length);
-            for (int j = 0; j < a[i].Length; j++)
-                Assert.Equal(a[i][j], b[i][j]); // same seed -> same xoshiro stream -> identical bits
+            Assert.Equal(a.Projection[i].Length, b.Projection[i].Length);
+            for (int j = 0; j < a.Projection[i].Length; j++)
+                Assert.Equal(a.Projection[i][j], b.Projection[i][j]);
         }
+    }
+
+    [Fact]
+    public void Compute_ReturnedObjective_MatchesFreshEvaluation()
+    {
+        double[][] data = BuildData(samples: 40, dim: 4, seed: 11);
+
+        SubspaceAnnealerResult result = SubspaceAnnealer.Compute(data, targetDim: 2, Objective, maxIters: 300, seed: 7);
+
+        // Callers reuse the tracked value in place of re-evaluating, which is only sound while a
+        // fresh deterministic evaluation at the returned projection reproduces it bit-for-bit.
+        Assert.Equal(Objective(result.Projection), result.Objective);
     }
 
     [Fact]
@@ -40,7 +53,7 @@ public sealed class SubspaceAnnealerTests
     {
         double[][] data = BuildData(samples: 40, dim: 4, seed: 11);
 
-        double[][] proj = SubspaceAnnealer.Compute(data, targetDim: 2, Objective, maxIters: 300, seed: 7);
+        double[][] proj = SubspaceAnnealer.Compute(data, targetDim: 2, Objective, maxIters: 300, seed: 7).Projection;
 
         for (int i = 0; i < proj.Length; i++)
         {

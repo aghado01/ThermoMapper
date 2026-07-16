@@ -327,6 +327,27 @@ target dimensions = {20, 30, 50}
 
 This also avoids triangle construction and the H1 Hungarian matching cost.
 
+### H0 matching-cost gate
+
+Avoiding H1 does not make evaluation cheap. With `MinPersistence = 0` every finite H0 bar survives,
+so each objective evaluation performs an exact Hungarian match on roughly one bar per observation
+per side, and H0 bars do not prune the way the near-diagonal H1 noise loops did. The committed P0
+profile measured W(H0) at about 165 ms for n = 200 with roughly cubic growth. At the planned
+8-block split (about 975 observations per block) that extrapolates to 15-20 seconds per objective
+evaluation per block, multiplied by annealing iterations, seeds, and target dimensions. Exact
+full-data H0 matching at 7,797 observations is not feasible at all.
+
+Phase 2 therefore does not begin until at least one of the following is landed and recorded:
+
+1. an approximate diagram distance (entropic Sinkhorn or sliced Wasserstein, validated against the
+   `T4transport` oracle) adopted as the screening metric;
+2. a declared subsampling or landmark reduction with the cap serialized in the run artifact;
+3. a pilot-derived wall-clock budget showing exact block-level matching fits the available compute
+   at the chosen iteration count.
+
+The two pilot seeds at dimension 30 must produce the full-screen wall-clock extrapolation before
+any promotion decision.
+
 ### Barcode limitation
 
 For a connected weighted graph, the finite H0 death values are closely related to spanning-tree merge
@@ -635,6 +656,7 @@ Aggregate reports should include:
 | Z-scoring amplifies weak bounded features | Keep raw scaling primary and z-score as an isolated control |
 | H0 SPRED preserves merge scales but not memberships | Require neighborhood diagnostics; add graph-distortion term only if indicated |
 | H1 cost dominates with noise loops | Start H0-only; gate H1 on stable ambient persistence |
+| Exact H0 Wasserstein matching is cubic in block size | Gate Phase 2 on an approximate distance, declared subsampling, or a measured pilot budget |
 | Contiguous distributed blocks encode source order | Deterministic permutation with retained row IDs and repeated seeds |
 | Flexible graph/projection grid becomes label-tuned | Use staged Pareto screening and cap finalists before labels |
 | Literature comparisons use ISOLET subsets or label-tuned grids | Report dataset size, known-cluster assumptions, and tuning protocol beside every comparison |

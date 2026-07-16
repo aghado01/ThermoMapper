@@ -34,6 +34,64 @@ public sealed class MoMPCATests
         Assert.InRange(mom.Mean[1], -3.0, 3.0);   // robust mean resists the y=20 outlier nodes
     }
 
+    /// <summary>
+    /// Cut-locus regression guard mirroring DistributedSpredTests: the corrupted leading block
+    /// spans xz while every clean block spans xy — principal angle exactly π/2 (YᵀZ singular),
+    /// so a blockFrames[0] warm start would stall the preliminary Grassmann median on the
+    /// corrupted subspace and poison the scale calibration and joint median downstream. The
+    /// medoid warm start must recover the clean majority.
+    /// </summary>
+    [Fact]
+    public void ComputeMoM_CorruptedFirstBlock_RecoversCleanSubspace()
+    {
+        const int perBlock = 24;
+        double[][] data = new double[5 * perBlock][];
+        int idx = 0;
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitZ); // corrupted leading block: xz plane
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitY); // clean majority: xy plane
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitY);
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitY);
+        idx = AddCircleBlock(data, idx, perBlock, UnitY, UnitZ); // corrupted trailing block: yz plane
+
+        PcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 2);
+
+        double toXy = SubspaceDistance(mom.Components, [UnitX, UnitY]);
+
+        Assert.InRange(toXy, 0.0, 0.1);
+        Assert.True(toXy < SubspaceDistance(mom.Components, [UnitX, UnitZ]));
+        Assert.True(toXy < SubspaceDistance(mom.Components, [UnitY, UnitZ]));
+    }
+
+    /// <summary>
+    /// In-domain contrast: the corrupted leading plane tilted 0.3 rad off xz keeps its principal
+    /// angles to the clean frames strictly below π/2, so Weiszfeld is not stalled — a
+    /// blockFrames[0] warm start lands near tolerance (≈0.13) rather than hard-stalled at π/2 as
+    /// in ComputeMoM_CorruptedFirstBlock_RecoversCleanSubspace. Full recovery within tolerance
+    /// still requires the medoid warm start, whose preliminary median seeds the scale calibration
+    /// and joint median cleanly.
+    /// </summary>
+    [Fact]
+    public void ComputeMoM_TiltedCorruptedFirstBlock_RecoversCleanSubspace()
+    {
+        const int perBlock = 24;
+        double[] tilted = [0.0, Math.Sin(0.3), Math.Cos(0.3)];
+        double[][] data = new double[5 * perBlock][];
+        int idx = 0;
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, tilted); // corrupted, 0.3 rad off xz
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitY);  // clean majority: xy plane
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitY);
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitY);
+        idx = AddCircleBlock(data, idx, perBlock, UnitY, UnitZ);  // corrupted trailing block: yz plane
+
+        PcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 2);
+
+        double toXy = SubspaceDistance(mom.Components, [UnitX, UnitY]);
+
+        Assert.InRange(toXy, 0.0, 0.1);
+        Assert.True(toXy < SubspaceDistance(mom.Components, [UnitX, UnitZ]));
+        Assert.True(toXy < SubspaceDistance(mom.Components, [UnitY, UnitZ]));
+    }
+
     [Fact]
     public void ComputeMoM_SingleBlock_DelegatesToPca()
     {
@@ -45,6 +103,39 @@ public sealed class MoMPCATests
         PcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 1, numComponents: 2);
 
         Assert.Equal(2, mom.Components.Length);
+    }
+
+    private static double[] UnitX => [1.0, 0.0, 0.0];
+    private static double[] UnitY => [0.0, 1.0, 0.0];
+    private static double[] UnitZ => [0.0, 0.0, 1.0];
+
+    // A contiguous block of `count` points on the unit circle spanning {u, v} (orthonormal) in R³.
+    private static int AddCircleBlock(double[][] data, int start, int count, double[] u, double[] v)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            double t = 2.0 * Math.PI * i / count;
+            var point = new double[3];
+            for (int j = 0; j < 3; j++)
+                point[j] = Math.Cos(t) * u[j] + Math.Sin(t) * v[j];
+            data[start + i] = point;
+        }
+        return start + count;
+    }
+
+    private static double SubspaceDistance(double[][] a, double[][] b)
+    {
+        var grass = new GrassmannManifold(ambientN: 3, subspaceR: 2);
+        return grass.Distance(PackFrame(a), PackFrame(b));
+    }
+
+    // Rows (r vectors of length 3) → column-major 3×r Grassmann frame.
+    private static double[] PackFrame(double[][] rows)
+    {
+        var frame = new double[3 * rows.Length];
+        for (int c = 0; c < rows.Length; c++)
+            Array.Copy(rows[c], 0, frame, c * 3, 3);
+        return frame;
     }
 
     // A contiguous block of `count` points with mean (meanX, meanY), spread along (1, slope).

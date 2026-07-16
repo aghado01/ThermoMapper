@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Maths.Geometry.DimReduction;
@@ -60,6 +61,14 @@ public static class DistributedSpred
     /// <param name="maxDegreeOfParallelism">Maximum concurrent block runs. One preserves serial execution.</param>
     /// <param name="cancellationToken">Cancellation observed between annealing iterations and pipeline phases.</param>
     /// <returns>The aggregate k x d orthonormal projection.</returns>
+    /// <remarks>
+    /// With more than one block, a block whose objective construction or annealing fails surfaces as an
+    /// <see cref="InvalidOperationException"/> naming the block index and row count, with the original
+    /// failure as <see cref="Exception.InnerException"/> — validation cannot see the objective's graph
+    /// recipe (e.g. its kNN K), so blocks too small for the recipe fail here rather than up front.
+    /// Serial and parallel runs throw identically; cancellation surfaces as
+    /// <see cref="OperationCanceledException"/>, never <see cref="AggregateException"/>.
+    /// </remarks>
     public static double[][] Compute(
         double[][] data,
         int targetDim,
@@ -81,13 +90,20 @@ public static class DistributedSpred
             int start = block * data.Length / blockCount;
             int end = (block + 1) * data.Length / blockCount;
             double[][] slice = SliceRows(data, start, end);
-            projections[block] = Spred.Compute(
-                slice,
-                targetDim,
-                objective,
-                maxIters,
-                BlockSeed(seed, block),
-                cancellationToken);
+            try
+            {
+                projections[block] = Spred.Compute(
+                    slice,
+                    targetDim,
+                    objective,
+                    maxIters,
+                    BlockSeed(seed, block),
+                    cancellationToken);
+            }
+            catch (Exception failure) when (failure is not OperationCanceledException)
+            {
+                throw BlockSetupFailure(block, slice.Length, failure);
+            }
         });
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -107,7 +123,14 @@ public static class DistributedSpred
     /// <param name="maxDegreeOfParallelism">Maximum concurrent block runs. One preserves serial execution.</param>
     /// <param name="cancellationToken">Cancellation observed between annealing iterations and pipeline phases.</param>
     /// <returns>The aggregate projection and ordered block diagnostics.</returns>
-    /// <remarks>This path performs additional objective evaluations and is more expensive than <see cref="Compute"/>.</remarks>
+    /// <remarks>
+    /// This path performs additional objective evaluations and is more expensive than <see cref="Compute"/>.
+    /// The failure surface matches <see cref="Compute"/>: with more than one block, a block whose objective
+    /// construction or annealing fails surfaces as an <see cref="InvalidOperationException"/> naming the
+    /// block index and row count, with the original failure as <see cref="Exception.InnerException"/>,
+    /// identically for serial and parallel runs; cancellation surfaces as
+    /// <see cref="OperationCanceledException"/>, never <see cref="AggregateException"/>.
+    /// </remarks>
     public static DistributedSpredResult ComputeWithDiagnostics(
         double[][] data,
         int targetDim,
@@ -123,13 +146,16 @@ public static class DistributedSpred
 
         if (blockCount == 1)
         {
+            // The aggregate is the block projection and the block data is the full input, so the
+            // deterministic local objective serves all three reported values without re-evaluation.
             BlockRun run = RunBlock(0, 0, data, targetDim, objective, maxIters, seed, cancellationToken);
-            double singleBlockObjective = run.AggregateObjective(run.Projection, cancellationToken);
             var blocks = new[]
             {
-                run.ToResult(run.Projection, cancellationToken),
+                new DistributedSpredBlockResult(
+                    run.Index, run.Start, run.Count, run.Seed, run.Projection,
+                    run.LocalObjective, run.LocalObjective),
             };
-            return new DistributedSpredResult(ambientDim, targetDim, run.Projection, singleBlockObjective, blocks);
+            return new DistributedSpredResult(ambientDim, targetDim, run.Projection, run.LocalObjective, blocks);
         }
 
         var blockRuns = new BlockRun[blockCount];
@@ -139,15 +165,22 @@ public static class DistributedSpred
             int end = (block + 1) * data.Length / blockCount;
             double[][] slice = SliceRows(data, start, end);
             int? blockSeed = BlockSeed(seed, block);
-            blockRuns[block] = RunBlock(
-                block,
-                start,
-                slice,
-                targetDim,
-                objective,
-                maxIters,
-                blockSeed,
-                cancellationToken);
+            try
+            {
+                blockRuns[block] = RunBlock(
+                    block,
+                    start,
+                    slice,
+                    targetDim,
+                    objective,
+                    maxIters,
+                    blockSeed,
+                    cancellationToken);
+            }
+            catch (Exception failure) when (failure is not OperationCanceledException)
+            {
+                throw BlockSetupFailure(block, slice.Length, failure);
+            }
         });
 
         var projections = new double[blockCount][][];
@@ -245,7 +278,14 @@ public static class DistributedSpred
         return ambientDim;
     }
 
-    private static void RunBlocks(
+    /// <summary>
+    /// Run <paramref name="body"/> once per block index — serially when
+    /// <paramref name="maxDegreeOfParallelism"/> is one, otherwise via
+    /// <see cref="Parallel.For(int, int, ParallelOptions, Action{int})"/>. Both paths share one failure
+    /// surface: the first body exception is rethrown with its original stack (never
+    /// <see cref="AggregateException"/>), and cancellation surfaces as <see cref="OperationCanceledException"/>.
+    /// </summary>
+    internal static void RunBlocks(
         int blockCount,
         int maxDegreeOfParallelism,
         CancellationToken cancellationToken,
@@ -262,15 +302,30 @@ public static class DistributedSpred
             return;
         }
 
-        Parallel.For(
-            0,
-            blockCount,
-            new ParallelOptions
-            {
-                MaxDegreeOfParallelism = maxDegreeOfParallelism,
-                CancellationToken = cancellationToken,
-            },
-            body);
+        try
+        {
+            Parallel.For(
+                0,
+                blockCount,
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = maxDegreeOfParallelism,
+                    CancellationToken = cancellationToken,
+                },
+                body);
+        }
+        catch (AggregateException aggregate)
+        {
+            ExceptionDispatchInfo.Capture(aggregate.InnerExceptions[0]).Throw();
+        }
+    }
+
+    private static InvalidOperationException BlockSetupFailure(int index, int rowCount, Exception failure)
+    {
+        return new InvalidOperationException(
+            $"Distributed SPRED block {index} ({rowCount} rows) failed objective construction or annealing; " +
+            "the block may be too small for the objective's graph recipe.",
+            failure);
     }
 
     private static BlockRun RunBlock(
@@ -286,7 +341,7 @@ public static class DistributedSpred
         cancellationToken.ThrowIfCancellationRequested();
         var ph = new PersistenceObjective(data, objective);
         cancellationToken.ThrowIfCancellationRequested();
-        double[][] projection = SubspaceAnnealer.Compute(
+        SubspaceAnnealerResult annealed = SubspaceAnnealer.Compute(
             data,
             targetDim,
             ph.Evaluate,
@@ -294,9 +349,7 @@ public static class DistributedSpred
             seed,
             cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        double localObjective = ph.Evaluate(projection);
-        cancellationToken.ThrowIfCancellationRequested();
-        return new BlockRun(index, start, data.Length, seed, projection, localObjective, ph);
+        return new BlockRun(index, start, data.Length, seed, annealed.Projection, annealed.Objective, ph);
     }
 
     internal static double[][] AggregateProjections(
@@ -311,11 +364,16 @@ public static class DistributedSpred
         for (int i = 0; i < projections.Count; i++)
             frames[i] = ProjectionToFrame(projections[i], ambientDim, targetDim);
 
-        double[] median = (double[])frames[0].Clone();
+        var grass = new GrassmannManifold(ambientDim, targetDim);
+
+        // Warm-start at the medoid frame rather than frames[0]: an arbitrary leading block can sit
+        // at principal angle exactly pi/2 from the clean majority (Y^T Z singular — the Grassmann
+        // cut locus, where LogMap degenerates and Weiszfeld cannot move off the initialization;
+        // see GeometricMedian.MedoidIndex). Also makes the aggregate invariant to block order.
+        double[] median = (double[])frames[GeometricMedian.MedoidIndex(grass, frames)].Clone();
         double[] weights = new double[frames.Length];
         Array.Fill(weights, 1.0);
 
-        var grass = new GrassmannManifold(ambientDim, targetDim);
         GeometricMedian.Compute(grass, frames, weights, median);
 
         return FrameToProjection(median, ambientDim, targetDim);

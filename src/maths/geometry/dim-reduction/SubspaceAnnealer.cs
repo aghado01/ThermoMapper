@@ -11,6 +11,13 @@ namespace Maths.Geometry.DimReduction
     /// </summary>
     public delegate double SubspaceObjectiveFunction(double[][] projectionMatrix);
 
+    /// <summary>The outcome of a subspace anneal.</summary>
+    /// <param name="Projection">The best k×d orthonormal projection found (rows orthonormal).</param>
+    /// <param name="Objective">The objective value at <paramref name="Projection"/>, as tracked during
+    /// the anneal; equals a fresh evaluation because the objective is a deterministic function of the
+    /// projection.</param>
+    public sealed record SubspaceAnnealerResult(double[][] Projection, double Objective);
+
     /// <summary>
     /// Simulated-annealing search over the Grassmann manifold Gr(k, d) for a k-dimensional subspace
     /// (returned as an orthonormal k×d projection) that minimizes an arbitrary caller-supplied
@@ -33,8 +40,8 @@ namespace Maths.Geometry.DimReduction
         /// <param name="maxIters">Number of simulated-annealing steps.</param>
         /// <param name="seed">RNG seed for a reproducible annealing stream; null draws OS entropy.</param>
         /// <param name="cancellationToken">Cancellation observed before setup and between annealing steps.</param>
-        /// <returns>The best k×d orthonormal projection found (rows orthonormal).</returns>
-        public static double[][] Compute(
+        /// <returns>The best k×d orthonormal projection found and its objective value.</returns>
+        public static SubspaceAnnealerResult Compute(
             double[][] data, int targetDim, SubspaceObjectiveFunction objective,
             int maxIters = 1000, int? seed = null, CancellationToken cancellationToken = default)
         {
@@ -96,7 +103,7 @@ namespace Maths.Geometry.DimReduction
                 }
             }
 
-            return bestProj;
+            return new SubspaceAnnealerResult(bestProj, bestValue);
         }
 
         /// <summary>

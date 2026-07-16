@@ -49,7 +49,7 @@ public sealed class SpredCylinderTests
             Repair = new RepairConfig { Kind = RepairKind.NoRepair },
             Projection = new DistanceProjection(),
         },
-        Dimensions = [(0, 0.5), (1, 1.0)],   // H0 smooth descent + H1 loop target (paper runs orders 0 and 1)
+        Dimensions = [(0, 0.5), (1, 1.0)],   // paper's multi-order idea, weights deliberately unnormalized: H0 smooth descent + full-strength H1 loop target
         MaxDimension = 2,
         MinPersistence = 0.05,               // prune the ~4n near-diagonal H1 noise loops (P0/P1): huge speedup, denoises
     };

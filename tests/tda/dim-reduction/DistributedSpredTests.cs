@@ -99,6 +99,74 @@ public sealed class DistributedSpredTests
                 cancellation.Token));
     }
 
+    // blockCount == data.Length gives 1-row blocks — far below what SmallConfig's kNN (K=6) recipe and
+    // the annealer's PCA warm start can support. Validation cannot see the recipe's K, so the failure
+    // surfaces at block setup, wrapped with the block index and row count — identically for serial and
+    // parallel runs.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public void Compute_BlocksTooSmallForGraphRecipe_ThrowsWithBlockContext(int maxDegreeOfParallelism)
+    {
+        double[][] data = Circle3D(8);
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            DistributedSpred.Compute(
+                data,
+                targetDim: 2,
+                blockCount: data.Length,
+                SmallConfig(),
+                maxIters: 0,
+                seed: 1,
+                maxDegreeOfParallelism));
+
+        Assert.Matches(@"block \d+ \(1 rows\)", error.Message);
+        Assert.NotNull(error.InnerException);
+        if (maxDegreeOfParallelism == 1)
+            Assert.Contains("block 0 (1 rows)", error.Message);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public void ComputeWithDiagnostics_BlocksTooSmallForGraphRecipe_ThrowsWithBlockContext(int maxDegreeOfParallelism)
+    {
+        double[][] data = Circle3D(8);
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            DistributedSpred.ComputeWithDiagnostics(
+                data,
+                targetDim: 2,
+                blockCount: data.Length,
+                SmallConfig(),
+                maxIters: 0,
+                seed: 1,
+                maxDegreeOfParallelism));
+
+        Assert.Matches(@"block \d+ \(1 rows\)", error.Message);
+        Assert.NotNull(error.InnerException);
+    }
+
+    // Deterministic mid-run cancellation: the body cancels the shared source and throws with that
+    // token, so the parallel path must collapse to OperationCanceledException rather than surfacing
+    // Parallel.For's AggregateException.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void RunBlocks_BodyCancellation_SurfacesOperationCanceledException(int maxDegreeOfParallelism)
+    {
+        using var cancellation = new CancellationTokenSource();
+
+        OperationCanceledException error = Assert.Throws<OperationCanceledException>(() =>
+            DistributedSpred.RunBlocks(blockCount: 4, maxDegreeOfParallelism, cancellation.Token, _ =>
+            {
+                cancellation.Cancel();
+                throw new OperationCanceledException(cancellation.Token);
+            }));
+
+        Assert.Equal(cancellation.Token, error.CancellationToken);
+    }
+
     [Fact]
     public void ComputeWithDiagnostics_ParallelMatchesSeededSerialRun()
     {
@@ -139,6 +207,53 @@ public sealed class DistributedSpredTests
             Assert.InRange(DistanceBetweenProjections(expected.Projection, actual.Projection), 0.0, 1e-10);
             Assert.Equal(expected.LocalObjective, actual.LocalObjective, precision: 10);
             Assert.Equal(expected.AggregateObjective, actual.AggregateObjective, precision: 10);
+        }
+    }
+
+    // One serial-vs-parallel comparison can miss a race that only fires under a particular
+    // thread interleaving; five seeded repetitions on a small fixture raise the odds of
+    // surfacing one while keeping the fact cheap.
+    [Fact]
+    public void ComputeWithDiagnostics_RepeatedParallelRuns_StayDeterministic()
+    {
+        const int blockCount = 3;
+        double[][] data = RepeatedCircleBlocks(blockCount, pointsPerBlock: 14);
+        PersistenceObjectiveConfig config = SmallConfig();
+
+        for (int rep = 0; rep < 5; rep++)
+        {
+            int seed = 61 + 17 * rep;
+
+            DistributedSpredResult serial = DistributedSpred.ComputeWithDiagnostics(
+                data,
+                targetDim: 2,
+                blockCount,
+                config,
+                maxIters: 2,
+                seed,
+                maxDegreeOfParallelism: 1);
+            DistributedSpredResult parallel = DistributedSpred.ComputeWithDiagnostics(
+                data,
+                targetDim: 2,
+                blockCount,
+                config,
+                maxIters: 2,
+                seed,
+                maxDegreeOfParallelism: blockCount);
+
+            Assert.InRange(DistanceBetweenProjections(serial.Projection, parallel.Projection), 0.0, 1e-10);
+            Assert.Equal(serial.FullDataObjective, parallel.FullDataObjective, precision: 10);
+
+            for (int block = 0; block < blockCount; block++)
+            {
+                DistributedSpredBlockResult expected = serial.Blocks[block];
+                DistributedSpredBlockResult actual = parallel.Blocks[block];
+
+                Assert.Equal(expected.Seed, actual.Seed);
+                Assert.InRange(DistanceBetweenProjections(expected.Projection, actual.Projection), 0.0, 1e-10);
+                Assert.Equal(expected.LocalObjective, actual.LocalObjective, precision: 10);
+                Assert.Equal(expected.AggregateObjective, actual.AggregateObjective, precision: 10);
+            }
         }
     }
 
@@ -193,6 +308,75 @@ public sealed class DistributedSpredTests
     }
 
     [Fact]
+    public void AggregateProjections_CorruptedFirstBlock_StillFindsCleanMajority()
+    {
+        double[][] xz = XzPlane();
+        double[][] xy = XyPlane();
+        double[][] xyRotated =
+        [
+            [0.0, 1.0, 0.0],
+            [-1.0, 0.0, 0.0],
+        ];
+        double[][] xyTilted =
+        [
+            [Math.Cos(0.04), 0.0, Math.Sin(0.04)],
+            [0.0, 1.0, 0.0],
+        ];
+
+        // Regression guard for the old frames[0] warm start: every clean frame contains
+        // the y axis while xz is normal to it, so from xz each clean frame sits at
+        // principal angle exactly pi/2 (Y^T Z singular — the Grassmann cut locus, where
+        // LogMap degenerates and Weiszfeld stalls on the corrupted initialization).
+        // The medoid warm start must land inside the clean majority instead.
+        double[][] aggregated = DistributedSpred.AggregateProjections(
+            new[] { xz, xy, xyRotated, xyTilted },
+            ambientDim: 3,
+            targetDim: 2);
+
+        double cleanDistance = DistanceToPlane(aggregated, xy);
+
+        Assert.InRange(cleanDistance, 0.0, 0.1);
+        Assert.True(cleanDistance < DistanceToPlane(aggregated, xz));
+    }
+
+    [Fact]
+    public void AggregateProjections_TiltedCorruptedFirstBlock_ConvergesToCleanMajority()
+    {
+        // Corrupted first frame tilted 0.3 rad off xz so every principal angle to the
+        // clean frames stays strictly below pi/2 — all pairwise logs inside
+        // GrassmannManifold.LogMap's documented domain. Weiszfeld converges to the clean
+        // majority from any warm start here; contrast with
+        // AggregateProjections_CorruptedFirstBlock_StillFindsCleanMajority, whose exactly
+        // orthogonal frames sit on the cut locus and require the medoid warm start.
+        double[][] xzTilted =
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, Math.Sin(0.3), Math.Cos(0.3)],
+        ];
+        double[][] xy = XyPlane();
+        double[][] xyRotated =
+        [
+            [0.0, 1.0, 0.0],
+            [-1.0, 0.0, 0.0],
+        ];
+        double[][] xyTilted =
+        [
+            [Math.Cos(0.04), 0.0, Math.Sin(0.04)],
+            [0.0, 1.0, 0.0],
+        ];
+
+        double[][] aggregated = DistributedSpred.AggregateProjections(
+            new[] { xzTilted, xy, xyRotated, xyTilted },
+            ambientDim: 3,
+            targetDim: 2);
+
+        double cleanDistance = DistanceToPlane(aggregated, xy);
+
+        Assert.InRange(cleanDistance, 0.0, 0.1);
+        Assert.True(cleanDistance < DistanceToPlane(aggregated, XzPlane()));
+    }
+
+    [Fact]
     public void Compute_SingleBlock_ReturnsOrthonormalProjection()
     {
         double[][] projection = DistributedSpred.Compute(
@@ -206,6 +390,10 @@ public sealed class DistributedSpredTests
         AssertOrthonormalRows(projection);
     }
 
+    // With maxIters: 0 the annealer returns the PCA warm start, so this validates the
+    // PCA-per-block + Grassmann-median aggregation path, not the annealed SPRED estimator
+    // (the annealed path is covered by ComputeWithDiagnostics_ParallelMatchesSeededSerialRun
+    // and ComputeWithDiagnostics_AdversarialLowIteration_RunStaysInterpretable).
     [Fact]
     public void Compute_MultipleBlocks_RunsSplitAndAggregatesProjection()
     {
@@ -300,6 +488,10 @@ public sealed class DistributedSpredTests
         AssertFiniteFullObjective(result);
     }
 
+    // With maxIters: 0 the annealer returns the PCA warm start, so this validates the
+    // PCA-per-block + Grassmann-median aggregation path, not the annealed SPRED estimator
+    // (the annealed path is covered by ComputeWithDiagnostics_ParallelMatchesSeededSerialRun
+    // and ComputeWithDiagnostics_AdversarialLowIteration_RunStaysInterpretable).
     [Fact]
     public void ComputeWithDiagnostics_CorruptedBlocks_AggregatesCleanMajority()
     {
@@ -347,6 +539,49 @@ public sealed class DistributedSpredTests
         Assert.True(result.Blocks[4].AggregateObjective > result.Blocks[4].LocalObjective);
     }
 
+    // With maxIters: 0 the annealer returns the PCA warm start, so this validates the
+    // PCA-per-block + Grassmann-median aggregation path, not the annealed SPRED estimator
+    // (the annealed path is covered by ComputeWithDiagnostics_ParallelMatchesSeededSerialRun
+    // and ComputeWithDiagnostics_AdversarialLowIteration_RunStaysInterpretable).
+    [Fact]
+    public void ComputeWithDiagnostics_CorruptedFirstBlock_AggregatesCleanMajority()
+    {
+        const int pointsPerBlock = 24;
+
+        // Regression guard for the old frames[0] warm start: the block PCA frames span
+        // exact coordinate planes, so the clean xy frames sit at principal angle exactly
+        // pi/2 from the leading xz frame (the cut-locus configuration where Weiszfeld
+        // stalls). The medoid warm start must recover the clean majority end to end.
+        DistributedSpredResult result = DistributedSpred.ComputeWithDiagnostics(
+            CorruptedFirstCircleBlocks(pointsPerBlock),
+            targetDim: 2,
+            blockCount: 5,
+            SmallConfig(),
+            maxIters: 0,
+            seed: 59);
+
+        double[][] xy = XyPlane();
+        double[][] xz = XzPlane();
+        double[][] yz = YzPlane();
+
+        double aggregateToClean = DistanceToPlane(result.Projection, xy);
+
+        Assert.Equal(5, result.BlockCount);
+        AssertFiniteFullObjective(result);
+        Assert.InRange(aggregateToClean, 0.0, 0.1);
+        Assert.True(aggregateToClean < DistanceToPlane(result.Projection, xz));
+        Assert.True(aggregateToClean < DistanceToPlane(result.Projection, yz));
+
+        AssertNearPlane(result.Blocks[0].Projection, xz, 1e-8);
+        for (int block = 1; block < 4; block++)
+            AssertNearPlane(result.Blocks[block].Projection, xy, 1e-8);
+        AssertNearPlane(result.Blocks[4].Projection, yz, 1e-8);
+    }
+
+    // With maxIters: 0 the annealer returns the PCA warm start, so this validates the
+    // PCA-per-block + Grassmann-median aggregation path, not the annealed SPRED estimator
+    // (the annealed path is covered by ComputeWithDiagnostics_ParallelMatchesSeededSerialRun
+    // and ComputeWithDiagnostics_AdversarialLowIteration_RunStaysInterpretable).
     [Fact]
     public void ComputeWithDiagnostics_CleanFixture_MatchesGlobalSpredBaseline()
     {
@@ -372,6 +607,10 @@ public sealed class DistributedSpredTests
         Assert.InRange(DistanceBetweenProjections(global, distributed.Projection), 0.0, 1e-8);
     }
 
+    // With maxIters: 0 the annealer returns the PCA warm start, so this validates the
+    // PCA-per-block + Grassmann-median aggregation path, not the annealed SPRED estimator
+    // (the annealed path is covered by ComputeWithDiagnostics_ParallelMatchesSeededSerialRun
+    // and ComputeWithDiagnostics_AdversarialLowIteration_RunStaysInterpretable).
     [Fact]
     public void ComputeWithDiagnostics_CorruptedFixture_DocumentsGlobalVsDistributedTradeoff()
     {
@@ -483,6 +722,17 @@ public sealed class DistributedSpredTests
         CopyBlock(CircleInPlane(pointsPerBlock, axisA: 0, axisB: 1), data, 1, pointsPerBlock);
         CopyBlock(CircleInPlane(pointsPerBlock, axisA: 0, axisB: 1), data, 2, pointsPerBlock);
         CopyBlock(CircleInPlane(pointsPerBlock, axisA: 0, axisB: 2), data, 3, pointsPerBlock);
+        CopyBlock(CircleInPlane(pointsPerBlock, axisA: 1, axisB: 2), data, 4, pointsPerBlock);
+        return data;
+    }
+
+    private static double[][] CorruptedFirstCircleBlocks(int pointsPerBlock)
+    {
+        var data = new double[5 * pointsPerBlock][];
+        CopyBlock(CircleInPlane(pointsPerBlock, axisA: 0, axisB: 2), data, 0, pointsPerBlock);
+        CopyBlock(CircleInPlane(pointsPerBlock, axisA: 0, axisB: 1), data, 1, pointsPerBlock);
+        CopyBlock(CircleInPlane(pointsPerBlock, axisA: 0, axisB: 1), data, 2, pointsPerBlock);
+        CopyBlock(CircleInPlane(pointsPerBlock, axisA: 0, axisB: 1), data, 3, pointsPerBlock);
         CopyBlock(CircleInPlane(pointsPerBlock, axisA: 1, axisB: 2), data, 4, pointsPerBlock);
         return data;
     }

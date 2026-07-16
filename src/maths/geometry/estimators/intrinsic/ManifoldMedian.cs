@@ -38,6 +38,51 @@ namespace Maths.Geometry.Estimators.Intrinsic
                 finalIrlsWeights: default);
         }
 
+        // ── Warm-start selection ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Index of the medoid: the data point minimizing the total distance to all others.
+        /// The natural warm-start for <see cref="Compute{TManifold}"/> — a sample inside
+        /// the majority cluster keeps the IRLS iteration within the manifold's injectivity radius,
+        /// whereas an arbitrary point can sit on the cut locus of the rest, where the log map
+        /// degenerates and Weiszfeld stalls. O(n²) distance evaluations; ties resolve to the
+        /// lowest index.
+        /// </summary>
+        public static int MedoidIndex<TManifold>(
+            TManifold              manifold,
+            ReadOnlySpan<double[]> data)
+            where TManifold : struct, IRiemannianManifold
+        {
+            int      n      = data.Length;
+            double[] rented = ArrayPool<double>.Shared.Rent(n);
+            try
+            {
+                Span<double> totals = rented.AsSpan(0, n);
+                totals.Clear();
+                for (int i = 0; i < n; i++)
+                {
+                    for (int j = i + 1; j < n; j++)
+                    {
+                        double distance = manifold.Distance(data[i], data[j]);
+                        totals[i] += distance;
+                        totals[j] += distance;
+                    }
+                }
+
+                int medoid = 0;
+                for (int i = 1; i < n; i++)
+                {
+                    if (totals[i] < totals[medoid])
+                        medoid = i;
+                }
+                return medoid;
+            }
+            finally
+            {
+                ArrayPool<double>.Shared.Return(rented);
+            }
+        }
+
         // ── (Location, Scatter) ───────────────────────────────────────────────
 
         /// <summary>

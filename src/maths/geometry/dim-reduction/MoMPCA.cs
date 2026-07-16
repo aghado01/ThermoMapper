@@ -59,7 +59,11 @@ namespace Maths.Geometry.DimReduction
             double[] meanPrelim = ArithmeticMean(blockMeans, d);
             GeometricMedian.Compute(euclid, blockMeans, weights, meanPrelim);
 
-            double[] framePrelim = (double[])blockFrames[0].Clone();
+            // Warm-start at the medoid frame rather than blockFrames[0]: a contaminated leading
+            // block can sit on the Grassmann cut locus of the clean majority, where Weiszfeld
+            // stalls on the corrupted initialization (see GeometricMedian.MedoidIndex) — and a
+            // stalled framePrelim poisons the scale calibration and the joint warm-start below.
+            double[] framePrelim = (double[])blockFrames[GeometricMedian.MedoidIndex(grass, blockFrames)].Clone();
             GeometricMedian.Compute(grass, blockFrames, weights, framePrelim);
 
             // 3. Scale calibration α̂ = 2·τ̂_U/(τ̂_μ + τ̂_U) from the per-tangent-dimension block scales.
