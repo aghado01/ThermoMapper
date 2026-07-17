@@ -22,8 +22,11 @@ namespace Maths.Geometry.DimReduction
     /// Simulated-annealing search over the Grassmann manifold Gr(k, d) for a k-dimensional subspace
     /// (returned as an orthonormal k×d projection) that minimizes an arbitrary caller-supplied
     /// <see cref="SubspaceObjectiveFunction"/>. The objective is a black box, so the engine is agnostic
-    /// to what "good" means; proposals move along Grassmann geodesics via
-    /// <see cref="GrassmannManifold.ExpMap"/>.
+    /// to what "good" means; proposals move along Grassmann geodesics — primarily two-plane Givens
+    /// rotations (the rank-1 closed form of <see cref="GrassmannManifold.ExpMap"/>), optionally mixed
+    /// with isotropic horizontal tangents per <see cref="SubspaceAnnealerOptions"/>. Geodesic step
+    /// scales adapt per move coordinate toward a target acceptance rate; cooling governs the
+    /// Metropolis temperature.
     ///
     /// <para>This is the engine extracted from SPRED (Shape-Preserving Dimensionality Reduction,
     /// Kisung You, arXiv:2106.02096). SPRED is recovered by supplying a persistent-homology objective —
@@ -38,14 +41,22 @@ namespace Maths.Geometry.DimReduction
         /// <param name="targetDim">Subspace dimension k (1 ≤ k ≤ d), e.g. 2 or 3 for visualization.</param>
         /// <param name="objective">Scalar objective value of a candidate k×d orthonormal projection.</param>
         /// <param name="maxIters">Number of simulated-annealing steps.</param>
-        /// <param name="seed">RNG seed for a reproducible annealing stream; null draws OS entropy.</param>
+        /// <param name="seed">RNG seed for a reproducible annealing stream; null draws OS entropy.
+        /// One Xoshiro stream drives proposals, Metropolis, and (indirectly) step adaptation, so
+        /// same-seed runs are bit-identical.</param>
+        /// <param name="options">Proposal mixture, step adaptation, and cooling; null takes the
+        /// <see cref="SubspaceAnnealerOptions"/> defaults.</param>
         /// <param name="cancellationToken">Cancellation observed before setup and between annealing steps.</param>
         /// <returns>The best k×d orthonormal projection found and its objective value.</returns>
         public static SubspaceAnnealerResult Compute(
             double[][] data, int targetDim, SubspaceObjectiveFunction objective,
-            int maxIters = 1000, int? seed = null, CancellationToken cancellationToken = default)
+            int maxIters = 1000, int? seed = null,
+            SubspaceAnnealerOptions? options = null,
+            CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            options ??= new SubspaceAnnealerOptions();
+            ValidateOptions(options);
             int nSamples = data.Length;
             if (nSamples == 0) throw new ArgumentException("Empty data", nameof(data));
             int d = data[0].Length;
@@ -73,37 +84,138 @@ namespace Maths.Geometry.DimReduction
             var rng = new Xoshiro256PlusPlus(seed);
             double[] tangent = new double[d * k];
             double[] proposal = new double[d * k];
-            const double initialTemp = 1.0;
+            double[] direction = new double[d];
+
+            // One adaptive step scale per move coordinate — each retained column's Givens angle,
+            // plus one for the isotropic kind (index k). Column-local acceptance diverges sharply
+            // once some columns converge (their moves reject at any scale while mobile columns
+            // keep improving), so a pooled scale would be strangled below the target by the
+            // converged majority and starve the mobile columns.
+            double[] stepByMove = new double[k + 1];
+            Array.Fill(stepByMove, Math.Clamp(options.InitialStep, options.StepFloor, options.StepCeiling));
+            // Multiplicative controller with zero expected log-step drift exactly at the target:
+            // grow^p · shrink^(1−p) = 1 ⇔ p = TargetAcceptance.
+            double growOnAccept = Math.Exp(AdaptationGain * (1.0 - options.TargetAcceptance));
+            double shrinkOnReject = Math.Exp(-AdaptationGain * options.TargetAcceptance);
 
             for (int iter = 0; iter < maxIters; iter++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                double temp = initialTemp * Math.Pow(0.99, iter);   // geometric cooling
-                double step = temp * 0.1;                            // geodesic step length
+                double temp = options.InitialTemperature * Math.Pow(options.CoolingRate, iter);
 
-                HorizontalTangent(current, d, k, rng, step, tangent);
-                manifold.ExpMap(current, tangent, proposal);         // retract along the geodesic
+                int move;   // controller index: the rotated column for Givens, k for isotropic
+                if (rng.NextDouble() < options.IsotropicFraction)
+                {
+                    move = k;
+                    HorizontalTangent(current, d, k, rng, stepByMove[move], tangent);
+                    manifold.ExpMap(current, tangent, proposal);     // retract along the geodesic
+                }
+                else
+                {
+                    move = rng.NextInt(k);
+                    GivensProposal(current, d, k, move, rng, stepByMove[move], direction, proposal);
+                }
 
                 double[][] proposalProj = ToProjection(proposal, k, d);
                 double proposalValue = objective(proposalProj);
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (proposalValue < currentValue ||
-                    rng.NextDouble() < Math.Exp((currentValue - proposalValue) / temp))
+                bool accepted = proposalValue < currentValue ||
+                    rng.NextDouble() < Math.Exp((currentValue - proposalValue) / temp);
+                if (accepted)
                 {
                     (current, proposal) = (proposal, current);       // adopt; recycle the old buffer
-                    currentProj = proposalProj;
                     currentValue = proposalValue;
 
                     if (currentValue < bestValue)
                     {
-                        bestProj = currentProj;
+                        bestProj = proposalProj;
                         bestValue = currentValue;
                     }
                 }
+
+                stepByMove[move] = accepted
+                    ? Math.Min(options.StepCeiling, stepByMove[move] * growOnAccept)
+                    : Math.Max(options.StepFloor, stepByMove[move] * shrinkOnReject);
             }
 
             return new SubspaceAnnealerResult(bestProj, bestValue);
+        }
+
+        // Step-controller gain: each decision nudges log-step by ±gain-scaled amounts, so the
+        // scale equilibrates within tens of iterations without chattering.
+        private const double AdaptationGain = 0.1;
+
+        private static void ValidateOptions(SubspaceAnnealerOptions options)
+        {
+            if (options.IsotropicFraction is < 0.0 or > 1.0)
+                throw new ArgumentOutOfRangeException(nameof(options),
+                    "IsotropicFraction must lie in [0, 1].");
+            if (options.TargetAcceptance is <= 0.0 or >= 1.0)
+                throw new ArgumentOutOfRangeException(nameof(options),
+                    "TargetAcceptance must lie in (0, 1).");
+            if (options.StepFloor <= 0.0 || options.StepCeiling < options.StepFloor)
+                throw new ArgumentOutOfRangeException(nameof(options),
+                    "Step bounds must satisfy 0 < StepFloor ≤ StepCeiling.");
+            if (options.InitialStep <= 0.0)
+                throw new ArgumentOutOfRangeException(nameof(options),
+                    "InitialStep must be positive.");
+            if (options.InitialTemperature <= 0.0)
+                throw new ArgumentOutOfRangeException(nameof(options),
+                    "InitialTemperature must be positive.");
+            if (options.CoolingRate is <= 0.0 or > 1.0)
+                throw new ArgumentOutOfRangeException(nameof(options),
+                    "CoolingRate must lie in (0, 1].");
+        }
+
+        /// <summary>
+        /// Two-plane Givens proposal: rotate the retained column <paramref name="col"/> of
+        /// <paramref name="y"/> by angle θ = step × standard normal toward a uniformly random unit
+        /// direction v orthogonal to the current span (y_i ← y_i·cosθ + v·sinθ). This is the closed
+        /// form of <see cref="GrassmannManifold.ExpMap"/> for the rank-1 horizontal tangent θ·v·e_iᵀ
+        /// (single singular value θ) — the classic subspace-search move. Its improving fraction
+        /// survives high codimension, where a fixed-length isotropic tangent's directional
+        /// derivative thins out like 1/√dim against an O(step²) curvature penalty.
+        /// </summary>
+        private static void GivensProposal(
+            double[] y, int d, int k, int col, Xoshiro256PlusPlus rng, double step,
+            double[] direction, double[] dst)
+        {
+            double theta = step * NextGaussian(rng);
+
+            for (int row = 0; row < d; row++) direction[row] = NextGaussian(rng);
+
+            // v ← v − Y(Yᵀv): strip the in-span component so the rotated column stays orthogonal
+            // to every other column.
+            for (int a = 0; a < k; a++)
+            {
+                double dot = 0.0;
+                int ya = a * d;
+                for (int row = 0; row < d; row++) dot += y[ya + row] * direction[row];
+                for (int row = 0; row < d; row++) direction[row] -= dot * y[ya + row];
+            }
+
+            double norm = 0.0;
+            for (int row = 0; row < d; row++) norm += direction[row] * direction[row];
+            norm = Math.Sqrt(norm);
+
+            Array.Copy(y, dst, d * k);
+            if (norm < 1e-12) return;   // k = d: the complement is empty and Gr(d, d) is a point
+
+            double cos = Math.Cos(theta);
+            double sin = Math.Sin(theta) / norm;   // folds v's normalization into the rotation
+            int yc = col * d;
+            double renorm = 0.0;
+            for (int row = 0; row < d; row++)
+            {
+                double value = y[yc + row] * cos + direction[row] * sin;
+                dst[yc + row] = value;
+                renorm += value * value;
+            }
+            // Exact unit length keeps roundoff from compounding over long anneals; the residual
+            // cross-column error stays second-order.
+            renorm = 1.0 / Math.Sqrt(renorm);
+            for (int row = 0; row < d; row++) dst[yc + row] *= renorm;
         }
 
         /// <summary>

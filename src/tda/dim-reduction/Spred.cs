@@ -32,6 +32,8 @@ public static class Spred
         cancellationToken.ThrowIfCancellationRequested();
         var ph = new PersistenceObjective(data, objective);
         cancellationToken.ThrowIfCancellationRequested();
-        return SubspaceAnnealer.Compute(data, targetDim, ph.Evaluate, maxIters, seed, cancellationToken).Projection;
+        return SubspaceAnnealer.Compute(
+            data, targetDim, ph.Evaluate, maxIters, seed,
+            cancellationToken: cancellationToken).Projection;
     }
 }

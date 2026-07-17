@@ -347,7 +347,7 @@ public static class DistributedSpred
             ph.Evaluate,
             maxIters,
             seed,
-            cancellationToken);
+            cancellationToken: cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return new BlockRun(index, start, data.Length, seed, annealed.Projection, annealed.Objective, ph);
     }
