@@ -133,3 +133,13 @@ insufficient, exactly as the design section predicted. Runs in ~1 s, no PH depen
 `changelog.md` beside `Directory.Build.props`; the file is absent), so suites ran via plain
 `dotnet test`: Maths.Geometry.Tests 21/21; TDA.DimReduction.Tests 66/66 with
 `--filter "Category!=Benchmark"` (pilot facts untouched, per coordination).
+*(Root anchor fixed in `ec0e9d4`.)*
+
+**Parent-thread addendum (2026-07-16):** finding 1's premise is already evidenced, not
+hypothetical — the ISOLET benchmark brief's diagnostics record covariance effective rank ≈ 45.4,
+participation ratio ≈ 12.1, and 95% variance at 173 dims, so the k = 30 cut sits inside a flat
+stretch of the spectrum where near-degenerate tail pairs are the expected case. Cheap pre-check
+before any S0 budget: read out the eigengaps λ₂₅…λ₃₅ from the existing PCA — if the gaps near the
+cut are small relative to their magnitudes, treat the paired rank-2 column move as a prerequisite
+rather than a fallback, and calibrate `InitialTemperature` from the I=1000 probe's recorded
+per-move increments in the same pass (finding 2).
