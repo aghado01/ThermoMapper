@@ -159,8 +159,10 @@ earlier "H0-Wasserstein / kNN is the wall" guess was wrong on every count.
   O(L·n log n)) + `DiagramMetrics.SinkhornWasserstein` (log-domain entropic on the exact
   diagonal-augmented cost geometry, ε→0 → exact) + the `DiagramDistance` selector on
   `PersistenceObjectiveConfig`. Validated against the in-repo exact Hungarian oracle, an analytic
-  sliced anchor (2√2/π), and objective-level rank preservation; **T4transport numerical
-  cross-check still open**. Measured n=200 bars/side: exact 32 ms, sliced 4 ms, Sinkhorn 1.1 s
+  sliced anchor (2√2/π), objective-level rank preservation, and — closing the oracle clause —
+  live `T4transport`/`lpSolve` parity (transport_oracle.R: sliced ≤8% vs swdist's measured 3–4%
+  interpolation residual, Sinkhorn ≤1% at matched smoothing, exact Hungarian ≤1e-8 vs lp.assign;
+  both p = 1, 2). Measured n=200 bars/side: exact 32 ms, sliced 4 ms, Sinkhorn 1.1 s
   (iteration-capped and entropically biased at that scale) — **sliced is the screening metric;
   Sinkhorn is the small-diagram fidelity tool**. H0 still can't be dropped (drives the SA
   descent — cylinder converged *with* H0+H1). This was the binding cost for the

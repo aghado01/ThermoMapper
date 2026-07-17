@@ -357,9 +357,24 @@ integral (2√2/π), and all three backends preserve the clean-vs-collapsed proj
 objective level. Measured at n = 200 bars/side: exact 32 ms, sliced 4 ms, Sinkhorn 1.1 s
 (iteration-capped, entropically biased at that scale). **Sliced is the screening metric** — at the
 8-block split its n·log n replaces the cubic 15–20 s/eval extrapolation with tens of milliseconds;
-Sinkhorn is a small-diagram fidelity tool, not a block-scale screen. Residuals before promotion:
-the `T4transport` numerical cross-check (condition 1's oracle clause) and the two pilot seeds'
-wall-clock extrapolation both remain open.
+Sinkhorn is a small-diagram fidelity tool, not a block-scale screen.
+
+**Status 2026-07-16 (later) — condition 1 CLOSED.** The `T4transport` oracle clause is discharged
+by `r/oracles/transport_oracle.R` + `tests/oracle/DiagramMetricsTransportParityTests.cs` (live
+R toolchain, skip-when-absent), on an s = 100 diagonal-augmented fixture reconstructed
+independently in R from raw bars, at p = 1 and p = 2:
+
+- sliced vs `T4transport::swdist`: ≤ 8% tolerance against a measured 3–4% residual that is
+  T4transport's own interpolated-quantile smoothing (its per-slice 1-D transport linearly
+  interpolates ecdf quantiles on a 1000-point grid) plus ~1% Monte Carlo error; its scalar
+  `distance` is also mean(W_p), not the documented (mean W_p^p)^(1/p), so the oracle recombines
+  from `projdist`;
+- Sinkhorn vs `T4transport::sinkhornD` at matched smoothing (λ = ε·cMax, identical kernel): ≤ 1%;
+- exact Hungarian vs `lpSolve::lp.assign`: ≤ 1e-8 — an external oracle for the exact path too
+  (the ε→0 Sinkhorn limit is pinned through this externally closed chain plus the unit suite).
+
+Remaining before promotion: only the two pilot seeds' full-screen wall-clock extrapolation
+(the standing pilot requirement above — not a gate condition).
 
 ### Barcode limitation
 
