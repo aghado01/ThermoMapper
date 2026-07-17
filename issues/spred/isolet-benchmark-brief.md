@@ -373,8 +373,26 @@ independently in R from raw bars, at p = 1 and p = 2:
 - exact Hungarian vs `lpSolve::lp.assign`: ≤ 1e-8 — an external oracle for the exact path too
   (the ε→0 Sinkhorn limit is pinned through this externally closed chain plus the unit suite).
 
-Remaining before promotion: only the two pilot seeds' full-screen wall-clock extrapolation
-(the standing pilot requirement above — not a gate condition).
+**Status 2026-07-17 — pilot recorded; the gate section is fully discharged.** The two S0 pilot
+seeds (211, 223) at dimension 30 ran on the shuffled raw617 (permutation seed 41, hashes in the
+artifact), 8 blocks, H0-only, sliced screening metric, parity-grade mutual-K10+MST recipe on both
+sides, I = 100 iterations. Full record: `pilot/spred-pilot-s0-dim30.json`; runner:
+`tests/tda/dim-reduction/SpredIsoletPilotTests.cs` (`Category=Benchmark`).
+
+- **Cost**: run(I) ≈ 46.7 s + 0.025 s·I (parallelism 8). The fixed share is dominated by the
+  full-data objective's 7,797-row ambient reference; the marginal share is the annealing loop —
+  the sliced metric prices a full 8-block iteration at ~25 ms wall. Full S0 screen
+  (3 dims × 5 seeds): **12.3 / 14.7 / 17.8 min at I = 100 / 500 / 1000** — versus ≈ 30+ hours
+  under the pre-gate exact-matching extrapolation. Cost is no longer a screen-design constraint.
+- **Health**: every objective finite (no pathology penalties observed); block locals 65.8–66.9,
+  aggregate-on-block 66.9–67.7, full-data 185.86; aggregate-to-aggregate Grassmann distance
+  across seeds **0.024** — the distributed pipeline is seed-stable.
+- **Finding for the screen design**: at I = 100 the anneal barely leaves the PCA warm start —
+  five of eight blocks end bit-identical to it across both seeds, and the accepted improvements
+  are ≤ 0.07% of the local objective. Block-to-aggregate Grassmann angles run 1.51–1.94, so
+  975-row blocks disperse substantially in Gr(617, 30) while the medoid-seeded aggregate stays
+  put. Before the full screen, either raise I well past 100 or tune the proposal/cooling scale —
+  otherwise S0 will not differentiate from the B6 PCA arm by construction.
 
 ### Barcode limitation
 

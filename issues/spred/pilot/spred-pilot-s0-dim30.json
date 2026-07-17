@@ -1,0 +1,223 @@
+{
+  "pilot": "S0-dim30-two-seeds",
+  "date": "2026-07-17",
+  "dataset": {
+    "path": "datasets/isolet.csv.gz",
+    "rows": 7797,
+    "features": 617,
+    "sha256": "aa0f64c303d2204a81672ca138f9aceba0607f667603fbc24e84c1152104c901"
+  },
+  "shuffle": {
+    "algorithm": "SplitMix64-FisherYates (Lemire bounded)",
+    "seed": 41,
+    "permutationSha256": "92eda04c9f8e735ec4633be97a6c4102e4e3c15cacc6d0d7f27b9df6e1b449b5"
+  },
+  "config": {
+    "objective": "H0",
+    "dimensions": [
+      {
+        "dim": 0,
+        "weight": 1
+      }
+    ],
+    "maxDimension": 1,
+    "diagramDistance": "SlicedWasserstein",
+    "slicedDirections": 50,
+    "wassersteinOrder": 2,
+    "minPersistence": 0,
+    "graph": {
+      "topology": "Knn",
+      "k": 10,
+      "filter": "MutualKnn",
+      "repair": "MstMin"
+    },
+    "targetDim": 30,
+    "blockCount": 8,
+    "pilotIterations": 100,
+    "maxDegreeOfParallelism": 8,
+    "processorCount": 18
+  },
+  "fixedOverheadSeconds": 46.6942957,
+  "seeds": [
+    {
+      "seed": 211,
+      "wallClockSeconds": 49.4806256,
+      "fullDataObjective": 185.85877678536474,
+      "blocks": [
+        {
+          "Index": 0,
+          "Start": 0,
+          "Count": 974,
+          "Seed": 211,
+          "localObjective": 66.12833963082367,
+          "aggregateObjective": 67.32171396715736,
+          "grassmannAngleToAggregate": 1.6234471959228003
+        },
+        {
+          "Index": 1,
+          "Start": 974,
+          "Count": 975,
+          "Seed": 1220,
+          "localObjective": 66.40106516701422,
+          "aggregateObjective": 67.36435938071364,
+          "grassmannAngleToAggregate": 1.5146838819785353
+        },
+        {
+          "Index": 2,
+          "Start": 1949,
+          "Count": 974,
+          "Seed": 2229,
+          "localObjective": 65.81993422634525,
+          "aggregateObjective": 66.99902849119185,
+          "grassmannAngleToAggregate": 1.9400147502309453
+        },
+        {
+          "Index": 3,
+          "Start": 2923,
+          "Count": 975,
+          "Seed": 3238,
+          "localObjective": 66.12628921946285,
+          "aggregateObjective": 66.88082032053008,
+          "grassmannAngleToAggregate": 1.5092666342070575
+        },
+        {
+          "Index": 4,
+          "Start": 3898,
+          "Count": 975,
+          "Seed": 4247,
+          "localObjective": 66.6107194285075,
+          "aggregateObjective": 67.69092441636778,
+          "grassmannAngleToAggregate": 1.6134371809254509
+        },
+        {
+          "Index": 5,
+          "Start": 4873,
+          "Count": 974,
+          "Seed": 5256,
+          "localObjective": 65.96396187591847,
+          "aggregateObjective": 67.02223434445825,
+          "grassmannAngleToAggregate": 1.5532953132544722
+        },
+        {
+          "Index": 6,
+          "Start": 5847,
+          "Count": 975,
+          "Seed": 6265,
+          "localObjective": 66.00701377258359,
+          "aggregateObjective": 67.10987912967548,
+          "grassmannAngleToAggregate": 1.7394264708816387
+        },
+        {
+          "Index": 7,
+          "Start": 6822,
+          "Count": 975,
+          "Seed": 7274,
+          "localObjective": 66.89645023334508,
+          "aggregateObjective": 67.49257881820749,
+          "grassmannAngleToAggregate": 1.635672151724416
+        }
+      ]
+    },
+    {
+      "seed": 223,
+      "wallClockSeconds": 48.8249276,
+      "fullDataObjective": 185.86290769769522,
+      "blocks": [
+        {
+          "Index": 0,
+          "Start": 0,
+          "Count": 974,
+          "Seed": 223,
+          "localObjective": 66.12833963082367,
+          "aggregateObjective": 67.32269695042417,
+          "grassmannAngleToAggregate": 1.623374618000196
+        },
+        {
+          "Index": 1,
+          "Start": 974,
+          "Count": 975,
+          "Seed": 1232,
+          "localObjective": 66.39574965696147,
+          "aggregateObjective": 67.3656848621933,
+          "grassmannAngleToAggregate": 1.5179429503720527
+        },
+        {
+          "Index": 2,
+          "Start": 1949,
+          "Count": 974,
+          "Seed": 2241,
+          "localObjective": 65.81993422634525,
+          "aggregateObjective": 66.99899904347127,
+          "grassmannAngleToAggregate": 1.9405053750648422
+        },
+        {
+          "Index": 3,
+          "Start": 2923,
+          "Count": 975,
+          "Seed": 3250,
+          "localObjective": 66.12628921946285,
+          "aggregateObjective": 66.87317443854656,
+          "grassmannAngleToAggregate": 1.5089622138430283
+        },
+        {
+          "Index": 4,
+          "Start": 3898,
+          "Count": 975,
+          "Seed": 4259,
+          "localObjective": 66.6107194285075,
+          "aggregateObjective": 67.69421522309065,
+          "grassmannAngleToAggregate": 1.6142839967330826
+        },
+        {
+          "Index": 5,
+          "Start": 4873,
+          "Count": 974,
+          "Seed": 5268,
+          "localObjective": 65.96799972768761,
+          "aggregateObjective": 67.02088991561111,
+          "grassmannAngleToAggregate": 1.5493317015974872
+        },
+        {
+          "Index": 6,
+          "Start": 5847,
+          "Count": 975,
+          "Seed": 6277,
+          "localObjective": 65.99891758162725,
+          "aggregateObjective": 67.11510462664481,
+          "grassmannAngleToAggregate": 1.742576792522707
+        },
+        {
+          "Index": 7,
+          "Start": 6822,
+          "Count": 975,
+          "Seed": 7286,
+          "localObjective": 66.89645023334508,
+          "aggregateObjective": 67.49259046995019,
+          "grassmannAngleToAggregate": 1.6354321643953078
+        }
+      ]
+    }
+  ],
+  "aggregateToAggregateGrassmann": 0.02359069889957168,
+  "extrapolation": {
+    "model": "run(I) = fixedOverheadSeconds \u002B I * perIterationSeconds",
+    "perIterationSeconds": 0.02458480900000005,
+    "s0Screen": [
+      {
+        "iterations": 100,
+        "secondsPerRun": 49.1527766,
+        "s0ScreenMinutes": 12.28819415
+      },
+      {
+        "iterations": 500,
+        "secondsPerRun": 58.98670020000002,
+        "s0ScreenMinutes": 14.746675050000004
+      },
+      {
+        "iterations": 1000,
+        "secondsPerRun": 71.27910470000005,
+        "s0ScreenMinutes": 17.819776175000012
+      }
+    ]
+  }
+}
