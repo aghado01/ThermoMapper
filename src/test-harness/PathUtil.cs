@@ -12,13 +12,13 @@ internal static class PathUtil
         while (current is not null)
         {
             if (File.Exists(Path.Combine(current.FullName, "Directory.Build.props")) &&
-                File.Exists(Path.Combine(current.FullName, "changelog.md")))
+                File.Exists(Path.Combine(current.FullName, "ThermoMapper.sln")))
                 return current.FullName;
             current = current.Parent;
         }
 
         throw new DirectoryNotFoundException(
-            "Could not locate repository root — expected Directory.Build.props and changelog.md on the path up from the binary.");
+            "Could not locate repository root — expected Directory.Build.props and ThermoMapper.sln on the path up from the binary.");
     }
 
     public static string BuildRunRoot(string repoRoot, DateTime stamp) =>
