@@ -43,11 +43,15 @@ Grassmann quotient the correct substrate. `GrassmannManifold.ExpMap` is a true E
 flag it "simplified"), so it is the wrong engine substrate. Reserve Stiefel/Grassmann *estimators*
 for the distributed-aggregation target space (dev-sequence, distributed track), not the anneal step.
 
-**Proposal + step semantics.** A proposal is a random isotropic ambient Gaussian projected onto the
-horizontal tangent space at the current subspace (`Δ ← Δ − Y(YᵀΔ)`), scaled to a geodesic step, then
-retracted via `GrassmannManifold.ExpMap`. The step is a genuine geodesic distance (principal-angle
-radians): `step = temp · 0.1`, `temp = 0.99^iter`. This is a behavioral change from the old
-per-entry perturbation magnitude; convergence values are not pinned by tests.
+**Proposal + step semantics (superseded 2026-07-16 — see [annealer-mobility-brief.md](annealer-mobility-brief.md)).**
+The primary move is now a **two-plane Givens rotation**: rotate one retained column toward a fresh
+direction orthogonal to the current span (`y_i ← y_i·cosθ + v·sinθ`) — the closed-form Grassmann
+geodesic of a rank-1 horizontal tangent, so the "geodesic SA on Grassmann" story is unchanged, only
+the proposal distribution. Step scale is **acceptance-adaptive per retained column** (targeting ~25%),
+not the retired fixed `step = temp · 0.1`, `temp = 0.99^iter` isotropic schedule; a small isotropic
+mixture is kept as ergodicity insurance. The retired schedule stalled at high codimension (the ISOLET
+S0 finding: isotropic fixed-length proposals have a vanishing improving fraction on Gr(617,30)).
+Config lives in `SubspaceAnnealerOptions`; convergence values are not pinned by tests.
 
 **Naming seam.** `SubspaceAnnealer` (engine) reserves the name *SPRED/Spred* for the driver.
 `SubspaceObjectiveFunction` is the seam between the two: the engine optimizes any scalar objective,

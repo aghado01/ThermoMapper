@@ -1,6 +1,7 @@
 # SubspaceAnnealer mobility — proposal redesign brief
 
-**Status:** ready to execute
+**Status:** implemented (`927955a`, `49e4672`); engine-level mobility fact green — S0 real-data
+re-probe pending (pilot lane). See Report-back.
 **Date:** 2026-07-16
 **Home:** engine layer — `src/maths/geometry/dim-reduction/SubspaceAnnealer.cs` + `tests/geometry/dim-reduction/`
 **Seed evidence:** [chip-grassman-median.md](chip-grassman-median.md) iteration-budget probe (`2c84cac`)

@@ -176,15 +176,18 @@ earlier "H0-Wasserstein / kNN is the wall" guess was wrong on every count.
 Subsampling / landmarks / witness complexes — shrinks n, helps kNN and Wasserstein superlinearly; also
 the conceptual bridge to P4. Record any cap (no silent truncation).
 
-### P3 — Iteration efficiency → annealer mobility (ACTIVE — the S0 blocker)
+### P3 — Iteration efficiency → annealer mobility (implementation landed; S0 validation pending)
 The iteration-budget probe (`2c84cac`, chip-grassman-median.md) overturned the framing: S0 is
 **proposal-scale-bound, not budget-bound** — at I=1000, 7/8 blocks end bit-identical to the PCA warm
 start (isotropic fixed-length proposals in Gr(617,30): improving fraction vanishes at intrinsic
 dim 17,610; cooling kills uphill acceptance by ~iter 500). Compute is a non-constraint (0.092 s/iter
-corrected; ~34 min full S0). Redesign settled in
-[annealer-mobility-brief.md](annealer-mobility-brief.md): two-plane Givens proposals + acceptance-
-adaptive step, executing; gradient-informed search tracked. Restart ensembles / plateau early-stop
-remain as later add-ons.
+corrected; ~34 min full S0). Redesign **landed** (`927955a`, `49e4672`;
+[annealer-mobility-brief.md](annealer-mobility-brief.md)): two-plane Givens proposals + per-column
+acceptance-adaptive step, `SubspaceAnnealerOptions` surface, engine-level high-codimension mobility
+fact green (two-plane descends where isotropic stays bit-frozen). **Pending:** the real-data S0
+re-probe (pilot lane) — eigengap pre-check, temperature calibration from measured proposal deltas,
+paired rank-2 move if the eigentail is flat. Gradient-informed search tracked; restart ensembles /
+plateau early-stop remain later add-ons.
 
 ### P4 — Scale-out: Distributed SPRED (§3.2) — a facet of scale, its own sub-track ✔ 2026-07-15
 Partition X into m blocks, run `Spred.Compute` per block (embarrassingly parallel), aggregate the
