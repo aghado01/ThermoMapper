@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Viz.Scene</RootNamespace>
+    <AssemblyName>Viz.Scene</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\viz\scene\*.cs" Link="scene\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Viz.Contracts\Viz.Contracts.csproj" />
+  </ItemGroup>
+</Project>

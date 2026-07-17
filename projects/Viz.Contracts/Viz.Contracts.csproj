@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Viz.Contracts</RootNamespace>
+    <AssemblyName>Viz.Contracts</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\viz\contracts\*.cs" Link="contracts\%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
