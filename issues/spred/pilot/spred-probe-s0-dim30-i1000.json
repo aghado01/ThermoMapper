@@ -1,0 +1,71 @@
+{
+  "probe": "S0-dim30-iteration-budget",
+  "date": "2026-07-17",
+  "seed": 211,
+  "iterations": 1000,
+  "shuffleSeed": 41,
+  "datasetSha256": "aa0f64c303d2204a81672ca138f9aceba0607f667603fbc24e84c1152104c901",
+  "warmStartSeconds": 42.9633904,
+  "annealedSeconds": 135.418318,
+  "warmStartFullDataObjective": 185.86289933762578,
+  "annealedFullDataObjective": 185.85877678536474,
+  "blocksImproved": 1,
+  "blocks": [
+    {
+      "index": 0,
+      "warmStartLocal": 66.12833963082367,
+      "annealedLocal": 66.12833963082367,
+      "improvementPercent": 0,
+      "grassmannFromWarmStart": 1.1250129990683123E-07
+    },
+    {
+      "index": 1,
+      "warmStartLocal": 66.40106516701422,
+      "annealedLocal": 66.40106516701422,
+      "improvementPercent": 0,
+      "grassmannFromWarmStart": 1.1733186057227569E-07
+    },
+    {
+      "index": 2,
+      "warmStartLocal": 65.81993422634525,
+      "annealedLocal": 65.81993422634525,
+      "improvementPercent": 0,
+      "grassmannFromWarmStart": 1.4370159448672764E-07
+    },
+    {
+      "index": 3,
+      "warmStartLocal": 66.12628921946285,
+      "annealedLocal": 66.12628921946285,
+      "improvementPercent": 0,
+      "grassmannFromWarmStart": 1.210576058124894E-07
+    },
+    {
+      "index": 4,
+      "warmStartLocal": 66.6107194285075,
+      "annealedLocal": 66.6107194285075,
+      "improvementPercent": 0,
+      "grassmannFromWarmStart": 8.940696716308595E-08
+    },
+    {
+      "index": 5,
+      "warmStartLocal": 65.96799972768761,
+      "annealedLocal": 65.96396187591847,
+      "improvementPercent": 0.0061209249724243275,
+      "grassmannFromWarmStart": 0.09999999999998124
+    },
+    {
+      "index": 6,
+      "warmStartLocal": 66.00701377258359,
+      "annealedLocal": 66.00701377258359,
+      "improvementPercent": 0,
+      "grassmannFromWarmStart": 1.021572142899192E-07
+    },
+    {
+      "index": 7,
+      "warmStartLocal": 66.89645023334508,
+      "annealedLocal": 66.89645023334508,
+      "improvementPercent": 0,
+      "grassmannFromWarmStart": 1.0323827311807139E-07
+    }
+  ]
+}

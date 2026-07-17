@@ -174,6 +174,92 @@ public sealed class SpredIsoletPilotTests
         Assert.True(true);
     }
 
+    /// <summary>
+    /// Iteration-budget probe (pilot follow-up): one seed at I = 1000 against the PCA warm-start
+    /// baseline, to separate "the anneal needs more budget" from "the proposal/cooling scale is
+    /// wrong at 617 -> 30". The pilot found I = 100 leaves five of eight blocks bit-identical to
+    /// the warm start; if I = 1000 moves them roughly linearly the screen just needs budget, and
+    /// if they stay pinned the annealer needs tuning first.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Probe_S0_Dim30_IterationBudget()
+    {
+        const int probeIters = 1000;
+        int probeSeed = PilotSeeds[0];
+
+        string repoRoot = LocateRepoRoot();
+        (double[][] features, string datasetHash) = LoadIsoletFeatures(
+            Path.Combine(repoRoot, "datasets", "isolet.csv.gz"));
+        int n = features.Length, d = features[0].Length;
+        int[] permutation = SplitMix64Permutation(n, ShuffleSeed);
+        var shuffled = new double[n][];
+        for (int i = 0; i < n; i++) shuffled[i] = features[permutation[i]];
+
+        PersistenceObjectiveConfig config = PilotConfig();
+        int parallelism = Math.Min(BlockCount, Environment.ProcessorCount);
+
+        var sw = Stopwatch.StartNew();
+        DistributedSpredResult warm = DistributedSpred.ComputeWithDiagnostics(
+            shuffled, TargetDim, BlockCount, config, maxIters: 0, probeSeed, parallelism);
+        double warmSeconds = sw.Elapsed.TotalSeconds;
+
+        sw.Restart();
+        DistributedSpredResult annealed = DistributedSpred.ComputeWithDiagnostics(
+            shuffled, TargetDim, BlockCount, config, probeIters, probeSeed, parallelism);
+        double annealedSeconds = sw.Elapsed.TotalSeconds;
+
+        _out.WriteLine($"warm start (maxIters=0): {warmSeconds:F1} s, fullDataObjective {warm.FullDataObjective:G6}");
+        _out.WriteLine($"I={probeIters}, seed {probeSeed}: {annealedSeconds:F1} s, fullDataObjective {annealed.FullDataObjective:G6}");
+        _out.WriteLine($"extrapolation check: pilot model predicted {46.7 + probeIters * 0.025:F1} s");
+        _out.WriteLine("");
+        _out.WriteLine("block | warm-start local | annealed local | improvement %");
+
+        var grass = new GrassmannManifold(d, TargetDim);
+        var blocks = new List<object>();
+        int moved = 0;
+        for (int b = 0; b < BlockCount; b++)
+        {
+            double baseline = warm.Blocks[b].LocalObjective;
+            double after = annealed.Blocks[b].LocalObjective;
+            double improvementPct = 100.0 * (baseline - after) / baseline;
+            double angleFromWarm = grass.Distance(
+                PackFrame(warm.Blocks[b].Projection, d), PackFrame(annealed.Blocks[b].Projection, d));
+            if (after < baseline) moved++;
+            _out.WriteLine($"  {b}   | {baseline,14:G6}  | {after,12:G6}  | {improvementPct,6:F3}   (Grassmann from warm start: {angleFromWarm:F4})");
+            blocks.Add(new
+            {
+                index = b,
+                warmStartLocal = baseline,
+                annealedLocal = after,
+                improvementPercent = improvementPct,
+                grassmannFromWarmStart = angleFromWarm,
+            });
+        }
+        _out.WriteLine("");
+        _out.WriteLine($"blocks improved: {moved}/{BlockCount}");
+
+        File.WriteAllText(
+            Path.Combine(repoRoot, "issues", "spred", "pilot", "spred-probe-s0-dim30-i1000.json"),
+            JsonSerializer.Serialize(new
+            {
+                probe = "S0-dim30-iteration-budget",
+                date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                seed = probeSeed,
+                iterations = probeIters,
+                shuffleSeed = ShuffleSeed,
+                datasetSha256 = datasetHash,
+                warmStartSeconds = warmSeconds,
+                annealedSeconds,
+                warmStartFullDataObjective = warm.FullDataObjective,
+                annealedFullDataObjective = annealed.FullDataObjective,
+                blocksImproved = moved,
+                blocks,
+            }, new JsonSerializerOptions { WriteIndented = true }));
+
+        Assert.True(true);
+    }
+
     private static PersistenceObjectiveConfig PilotConfig() => new()
     {
         Graph = new GraphCompilerConfig

@@ -394,6 +394,24 @@ sides, I = 100 iterations. Full record: `pilot/spred-pilot-s0-dim30.json`; runne
   put. Before the full screen, either raise I well past 100 or tune the proposal/cooling scale —
   otherwise S0 will not differentiate from the B6 PCA arm by construction.
 
+**Probe 2026-07-17 — iteration budget is NOT the fix; the annealer proposal scale is.** One seed
+(211) at I = 1000 vs the same-run PCA warm-start baseline
+(`pilot/spred-probe-s0-dim30-i1000.json`): **seven of eight blocks end bit-identical to the warm
+start (Grassmann distance 0.0000 — zero accepted proposals in 1000 iterations); block 5 accepts
+exactly one first-iteration step** (improvement 0.006%, Grassmann move 0.1000 = the annealer's
+step length `temp·0.1` at initial temperature). Mechanism: `SubspaceAnnealer` proposes isotropic
+random horizontal tangents at schedule-fixed length with geometric cooling `0.99^iter`; in
+Gr(617, 30) — intrinsic dimension 30·587 = 17,610 — the improving-direction fraction from a PCA
+start is vanishing, and cooling extinguishes uphill acceptance by iter ≈ 500. Raising I cannot
+fix this; the proposal mechanism can (dimension-aware / acceptance-targeted step adaptation,
+structured two-plane rotations mixing one retained with one discarded direction, or a
+gradient-informed Riemannian search). **S0 is blocked on annealer mobility, not compute.**
+
+Cost-model correction (faithfulness): the probe's same-run differencing gives a marginal of
+0.092 s/iteration — the pilot's 0.025 s was small-I differencing noise (the ~47 s fixed share
+varies ±4 s run-to-run, swamping a 2.5 s marginal at I = 100). Corrected model:
+run(I) ≈ 43 s + 0.092 s·I → full S0 screen at I = 1000 ≈ **34 min**. Still no constraint.
+
 ### Barcode limitation
 
 For a connected weighted graph, the finite H0 death values are closely related to spanning-tree merge
