@@ -98,3 +98,23 @@ positives.** F1/F3/F4 are latent or boundary issues, not live bugs at current de
 Accepted forward-looking notes (no action now): SPRED as the first PH-consumer that turns PH into an
 optimization signal (placement affirmed); a neutral per-iteration trace/observer contract for viz is
 a real seed → parked to the viz track, not the annealer.
+
+### Chip A result (2026-07-17)
+
+F1/F3/F4 landed in `DiagramMetrics.cs` + `TDA.Ph.Tests` — 343/343 green, 15 new facts. Essential
+bars now match by birth in all three backends (their only finite coordinate; death = ∞ on both
+sides collapses the L∞ ground metric to |Δbirth|), solved with the existing KMN `MinAssignment` on
+a birth-only matrix whose surplus rows/columns stay at zero — sorted-order pairing is exact for
+equal counts but cannot choose which surplus bars go unmatched under `FinitePenalty`, so one
+assignment path serves both, and essential counts are Betti-scale so O(k³) is free. Sliced adds the
+term once, slice-independent (no finite death to project; the transport is already 1-D); Sinkhorn
+adds it exactly, never smoothed — cross-backend equality is pinned by test. Surplus stays charged
+at perBar^p and `InfiniteOnMismatch` still returns +∞ on count mismatch. Sinkhorn's sentinel cells
+are now masked as log-kernel −∞ inside both LSE sweeps and skipped in the transport sum; a
+forced-support fixture (two bars vs empty ⇒ the constrained plan is the identity at any ε) verifies
+exact agreement at ε = 1 and ε = 10, where the unmasked kernel drifted to ≈ 138 / ≈ 323 against the
+exact 101. `ValidateP` rejects NaN; `FinitePenalty` requires finite perBar ≥ 0 (zero deliberately
+disables the surplus charge, negative would reward essential-count mismatch). One caveat vs the
+chip brief: "close to exact W at large ε" is a theorem only on forced-support fixtures — on general
+diagrams large ε smears mass across *admissible* cells (ordinary entropic bias), so the general
+large-ε test asserts LP feasibility (finite, ≥ exact optimum) instead.

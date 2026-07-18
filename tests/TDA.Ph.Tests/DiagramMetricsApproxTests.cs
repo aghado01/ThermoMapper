@@ -93,6 +93,21 @@ public sealed class DiagramMetricsApproxTests
     }
 
     [Fact]
+    public void Sliced_EssentialSameCountDifferentBirth_ChargesBirthDistance()
+    {
+        // The essential term is slice-independent and identical to the exact backend's:
+        // |Δbirth| = 99 for (1, ∞) vs (100, ∞), and 0 once the births coincide.
+        var a = new Barcode(new[] { new Bar(1.0, double.PositiveInfinity, 1) });
+        var b = new Barcode(new[] { new Bar(100.0, double.PositiveInfinity, 1) });
+
+        double sw = DiagramMetrics.SlicedWasserstein(a, b, dimension: 1, p: 2.0);
+        Assert.Equal(99.0, sw, precision: 12);
+
+        double self = DiagramMetrics.SlicedWasserstein(a, a, dimension: 1, p: 2.0);
+        Assert.Equal(0.0, self, precision: 12);
+    }
+
+    [Fact]
     public void Sliced_RejectsNonPositiveDirections()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
@@ -170,6 +185,52 @@ public sealed class DiagramMetricsApproxTests
         Assert.Equal(2.0, sink, precision: 12);
     }
 
+    [Fact]
+    public void Sinkhorn_EssentialSameCountDifferentBirth_ChargesBirthDistance()
+    {
+        // The essential term is the exact birth matching, never entropically smoothed —
+        // essential-only diagrams give exactly |Δbirth| = 99 regardless of ε.
+        var a = new Barcode(new[] { new Bar(1.0, double.PositiveInfinity, 1) });
+        var b = new Barcode(new[] { new Bar(100.0, double.PositiveInfinity, 1) });
+
+        double sink = DiagramMetrics.SinkhornWasserstein(a, b, dimension: 1, p: 2.0);
+        Assert.Equal(99.0, sink, precision: 12);
+    }
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(10.0)]
+    public void Sinkhorn_ForcedAdmissibleSupport_LargeEpsilon_MatchesExact(double epsilon)
+    {
+        // Two bars vs empty: each bar's only admissible column is its own diagonal cell — the
+        // cross diagonal cells carry the forbidden sentinel, so the constrained plan is forced to
+        // the identity and the entropic value must equal the exact distance at ANY ε. Before the
+        // log-kernel −∞ mask, exp(−big′/ε) was no longer negligible at these ε and the sentinel
+        // cells won real mass, drifting the value toward the sentinel scale (≈ 138 and ≈ 323 here
+        // versus the exact 101).
+        var a = new Barcode(new[] { new Bar(0.0, 2.0, 0), new Bar(0.0, 200.0, 0) });
+        var b = new Barcode(Array.Empty<Bar>());
+
+        double exact = DiagramMetrics.Wasserstein(a, b, dimension: 0, p: 1.0);
+        double sink = DiagramMetrics.SinkhornWasserstein(a, b, dimension: 0, p: 1.0, epsilon: epsilon);
+
+        Assert.Equal(101.0, exact, precision: 12);
+        Assert.Equal(exact, sink, precision: 9);
+    }
+
+    [Fact]
+    public void Sinkhorn_LargeEpsilon_RemainsFeasibleOverAdmissibleSupport()
+    {
+        // At large ε the value smears across admissible cells, but the plan must stay a feasible
+        // point of the admissible-support assignment LP: finite, and never below the exact optimum.
+        double exact = DiagramMetrics.Wasserstein(FixtureA(), FixtureB(), dimension: 1, p: 2.0);
+        double sink = DiagramMetrics.SinkhornWasserstein(
+            FixtureA(), FixtureB(), dimension: 1, p: 2.0, epsilon: 1.0, maxIters: 2000);
+
+        Assert.True(double.IsFinite(sink));
+        Assert.True(sink >= exact - 1e-6, $"Large-ε Sinkhorn {sink} undercuts exact {exact}.");
+    }
+
     [Theory]
     [InlineData(0.0)]
     [InlineData(-1.0)]
@@ -193,6 +254,23 @@ public sealed class DiagramMetricsApproxTests
         var empty = new Barcode(Array.Empty<Bar>());
         Assert.Equal(0.0, DiagramMetrics.SlicedWasserstein(empty, empty, dimension: 0));
         Assert.Equal(0.0, DiagramMetrics.SinkhornWasserstein(empty, empty, dimension: 0));
+    }
+
+    [Fact]
+    public void AllBackends_EssentialOnly_AgreeOnMatchedBirthTerm()
+    {
+        // The matched-essential term is the same exact birth assignment in all three backends, so
+        // essential-only diagrams pin the cross-backend semantics: identical values, no tolerance.
+        var a = new Barcode(new[] { new Bar(1.0, double.PositiveInfinity, 1) });
+        var b = new Barcode(new[] { new Bar(100.0, double.PositiveInfinity, 1) });
+
+        double w = DiagramMetrics.Wasserstein(a, b, dimension: 1, p: 2.0);
+        double sw = DiagramMetrics.SlicedWasserstein(a, b, dimension: 1, p: 2.0);
+        double sink = DiagramMetrics.SinkhornWasserstein(a, b, dimension: 1, p: 2.0);
+
+        Assert.Equal(99.0, w, precision: 12);
+        Assert.Equal(w, sw, precision: 12);
+        Assert.Equal(w, sink, precision: 12);
     }
 
     private static Barcode Scale(Barcode barcode, double factor)

@@ -33,8 +33,13 @@ public static class DiagramMetrics
     internal enum EssentialKind { InfiniteOnMismatch, FinitePenalty }
 
     /// <summary>
-    /// Policy for essential (infinite-death) bars, handled before finite matching.
-    /// <see cref="InfiniteOnMismatch"/> is the default via <c>default(EssentialPolicy)</c>.
+    /// Policy for essential (infinite-death) bars, matched separately from finite bars: with
+    /// death = ∞ on both sides, the L∞ ground metric between two essentials reduces to |Δbirth|,
+    /// so min-count essentials pair by birth (see <see cref="MatchEssentialBirths"/>) and the
+    /// policy governs only the count surplus. <see cref="InfiniteOnMismatch"/> (the default via
+    /// <c>default(EssentialPolicy)</c>) returns +∞ on any count mismatch; <see cref="FinitePenalty"/>
+    /// charges perBar^p per surplus bar — a surplus essential has infinite persistence, so this
+    /// deliberately caps a genuinely infinite transport term.
     /// </summary>
     public readonly record struct EssentialPolicy
     {
@@ -43,13 +48,20 @@ public static class DiagramMetrics
 
         public static EssentialPolicy InfiniteOnMismatch => default;
 
-        public static EssentialPolicy FinitePenalty(double perBar) =>
-            new() { Kind = EssentialKind.FinitePenalty, PerBar = perBar };
+        public static EssentialPolicy FinitePenalty(double perBar)
+        {
+            if (!double.IsFinite(perBar) || perBar < 0.0)
+                throw new ArgumentOutOfRangeException(nameof(perBar),
+                    "Essential per-bar penalty is a distance scale: finite and >= 0 (zero deliberately " +
+                    "disables the surplus charge; a negative value would reward essential-count mismatch).");
+            return new() { Kind = EssentialKind.FinitePenalty, PerBar = perBar };
+        }
     }
 
     /// <summary>
     /// Wasserstein distance W_p between two barcodes in the given homological dimension.
-    /// L∞ ground metric; balanced (n+m) assignment (Kerber–Morozov–Nigmetov).
+    /// L∞ ground metric; balanced (n+m) assignment (Kerber–Morozov–Nigmetov). Essential bars
+    /// match by birth under the <see cref="EssentialPolicy"/>.
     /// </summary>
     public static double Wasserstein(
         Barcode a,
@@ -62,10 +74,10 @@ public static class DiagramMetrics
         ArgumentNullException.ThrowIfNull(b);
         ValidateP(p);
 
-        int essA = CountEssential(a, dimension);
-        int essB = CountEssential(b, dimension);
+        var essA = CollectEssentialBirths(a, dimension);
+        var essB = CollectEssentialBirths(b, dimension);
 
-        if (essential.Kind == EssentialKind.InfiniteOnMismatch && essA != essB)
+        if (essential.Kind == EssentialKind.InfiniteOnMismatch && essA.Count != essB.Count)
             return double.PositiveInfinity;
 
         var finiteA = CollectFinite(a, dimension);
@@ -75,9 +87,11 @@ public static class DiagramMetrics
         int s = finiteA.Count + finiteB.Count;
         double assignmentSum = s == 0 ? 0.0 : MinAssignment(cost, s);
 
+        assignmentSum += MatchEssentialBirths(essA, essB, p);
+
         if (essential.Kind == EssentialKind.FinitePenalty)
         {
-            int surplus = Math.Abs(essA - essB);
+            int surplus = Math.Abs(essA.Count - essB.Count);
             if (surplus > 0)
                 assignmentSum += surplus * Math.Pow(essential.PerBar, p);
         }
@@ -93,8 +107,9 @@ public static class DiagramMetrics
     /// spaced lines, and each 1-D transport is the sorted matching. Returns
     /// ((1/L)·Σ_l W_p^p(θ_l))^(1/p). O(L·(n+m)·log(n+m)) — the cheap screening metric; a distinct
     /// (strongly equivalent) metric with L2 slice geometry, not a numerical approximation of the
-    /// L∞-ground-metric W_p. Deterministic: fixed slices, no RNG. Essential bars follow the same
-    /// policy as <see cref="Wasserstein"/>.
+    /// L∞-ground-metric W_p. Deterministic: fixed slices, no RNG. Essential bars contribute the
+    /// same slice-independent birth-matched term and surplus policy as <see cref="Wasserstein"/> —
+    /// an essential has no finite death to project, and its exact transport is already 1-D.
     /// </summary>
     public static double SlicedWasserstein(
         Barcode a,
@@ -110,9 +125,9 @@ public static class DiagramMetrics
         if (directions < 1)
             throw new ArgumentOutOfRangeException(nameof(directions), "At least one slice direction is required.");
 
-        int essA = CountEssential(a, dimension);
-        int essB = CountEssential(b, dimension);
-        if (essential.Kind == EssentialKind.InfiniteOnMismatch && essA != essB)
+        var essA = CollectEssentialBirths(a, dimension);
+        var essB = CollectEssentialBirths(b, dimension);
+        if (essential.Kind == EssentialKind.InfiniteOnMismatch && essA.Count != essB.Count)
             return double.PositiveInfinity;
 
         var finiteA = CollectFinite(a, dimension);
@@ -150,9 +165,11 @@ public static class DiagramMetrics
             meanPowerSum /= directions;
         }
 
+        meanPowerSum += MatchEssentialBirths(essA, essB, p);   // slice-independent, enters once
+
         if (essential.Kind == EssentialKind.FinitePenalty)
         {
-            int surplus = Math.Abs(essA - essB);
+            int surplus = Math.Abs(essA.Count - essB.Count);
             if (surplus > 0)
                 meanPowerSum += surplus * Math.Pow(essential.PerBar, p);
         }
@@ -171,6 +188,8 @@ public static class DiagramMetrics
     /// <para>Entropic bias: the self-distance is positive (smoothing smears mass onto
     /// near-diagonal escape cells whose cost is comparable to ε) and shrinks as ε → 0 — hold ε
     /// fixed when comparing values, as the SPRED objective does.</para>
+    /// <para>Essential bars enter as the exact birth-matched term of <see cref="Wasserstein"/>,
+    /// never smoothed — Betti-scale counts leave nothing worth relaxing.</para>
     /// </summary>
     public static double SinkhornWasserstein(
         Barcode a,
@@ -189,9 +208,9 @@ public static class DiagramMetrics
         if (maxIters < 1)
             throw new ArgumentOutOfRangeException(nameof(maxIters), "At least one Sinkhorn iteration is required.");
 
-        int essA = CountEssential(a, dimension);
-        int essB = CountEssential(b, dimension);
-        if (essential.Kind == EssentialKind.InfiniteOnMismatch && essA != essB)
+        var essA = CollectEssentialBirths(a, dimension);
+        var essB = CollectEssentialBirths(b, dimension);
+        if (essential.Kind == EssentialKind.InfiniteOnMismatch && essA.Count != essB.Count)
             return double.PositiveInfinity;
 
         var finiteA = CollectFinite(a, dimension);
@@ -205,9 +224,11 @@ public static class DiagramMetrics
             transportSum = SinkhornAssignment(cost, s, big, epsilon, maxIters);
         }
 
+        transportSum += MatchEssentialBirths(essA, essB, p);
+
         if (essential.Kind == EssentialKind.FinitePenalty)
         {
-            int surplus = Math.Abs(essA - essB);
+            int surplus = Math.Abs(essA.Count - essB.Count);
             if (surplus > 0)
                 transportSum += surplus * Math.Pow(essential.PerBar, p);
         }
@@ -225,19 +246,19 @@ public static class DiagramMetrics
 
     static void ValidateP(double p)
     {
-        if (p < 1.0)
+        if (double.IsNaN(p) || p < 1.0)
             throw new ArgumentOutOfRangeException(nameof(p), "Wasserstein requires p >= 1.");
         if (double.IsPositiveInfinity(p))
             throw new ArgumentOutOfRangeException(nameof(p), "Use Bottleneck for p = infinity.");
     }
 
-    static int CountEssential(Barcode barcode, int dimension)
+    static List<double> CollectEssentialBirths(Barcode barcode, int dimension)
     {
-        int count = 0;
+        var births = new List<double>();
         foreach (Bar bar in barcode.Bars)
             if (bar.Dimension == dimension && bar.IsInfinite)
-                count++;
-        return count;
+                births.Add(bar.Birth);
+        return births;
     }
 
     static List<Bar> CollectFinite(Barcode barcode, int dimension)
@@ -247,6 +268,30 @@ public static class DiagramMetrics
             if (bar.Dimension == dimension && !bar.IsInfinite)
                 list.Add(bar);
         return list;
+    }
+
+    /// <summary>
+    /// Matched-essential term: min(|A|,|B|) essential bars paired by birth — their only finite
+    /// coordinate (death = ∞ on both sides collapses the L∞ ground metric to |Δbirth|). Solved
+    /// with the same balanced <see cref="MinAssignment"/> as the finite matching, on a birth-only
+    /// matrix whose surplus rows/columns stay at zero so the solver also chooses which surplus
+    /// bars go unmatched — sorted-order pairing is exact for equal counts (1-D transport with
+    /// convex ground distance is monotone) but cannot make that choice. Essential counts are
+    /// Betti-number scale, so O(k³) is immaterial. The surplus itself is charged by the
+    /// <see cref="EssentialPolicy"/> at the call site.
+    /// </summary>
+    static double MatchEssentialBirths(List<double> birthsA, List<double> birthsB, double p)
+    {
+        int n = birthsA.Count, m = birthsB.Count;
+        if (n == 0 || m == 0)
+            return 0.0;
+
+        int k = Math.Max(n, m);
+        var cost = new double[k, k];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < m; j++)
+                cost[i, j] = Math.Pow(Math.Abs(birthsA[i] - birthsB[j]), p);
+        return MinAssignment(cost, k);
     }
 
     static double Dinf(in Bar p, in Bar q) =>
@@ -291,10 +336,12 @@ public static class DiagramMetrics
 
     /// <summary>
     /// Log-domain Sinkhorn on a square cost matrix with unit row/column marginals — the entropic
-    /// relaxation of <see cref="MinAssignment"/>. Costs are normalized by the largest finite entry
-    /// so <paramref name="epsilon"/> is dimensionless; forbidden cells (cost ≥ <paramref name="big"/>)
-    /// need no special casing — their kernel weights underflow to exactly zero. Returns the
-    /// transport cost Σ π_ij·C_ij on the original cost scale.
+    /// relaxation of <see cref="MinAssignment"/>. Entries are normalized by the largest admissible
+    /// entry so <paramref name="epsilon"/> is dimensionless; forbidden cells (≥ <paramref name="big"/>)
+    /// are masked as log-kernel −∞ inside both LSE sweeps and omitted from the transport sum, so
+    /// the plan is confined to the declared diagonal-augmented support at every ε — a finite
+    /// sentinel only underflows for small ε and would otherwise receive real mass. Returns the
+    /// transport objective Σ π_ij·C_ij on the original scale.
     /// </summary>
     static double SinkhornAssignment(double[,] cost, int n, double big, double epsilon, int maxIters)
     {
@@ -316,16 +363,23 @@ public static class DiagramMetrics
         for (int iter = 0; iter < maxIters; iter++)
         {
             // f_i ← −ε·LSE_j((g_j − C'_ij)/ε);  g_j ← −ε·LSE_i((f_i − C'_ij)/ε)   (log a_i = log b_j = 0)
+            // Forbidden cells enter as −∞ — outside the support at any ε, not merely expensive.
             for (int i = 0; i < n; i++)
             {
-                for (int j = 0; j < n; j++) scratch[j] = (g[j] - cost[i, j] / cMax) / eps;
+                for (int j = 0; j < n; j++)
+                    scratch[j] = cost[i, j] >= big
+                        ? double.NegativeInfinity
+                        : (g[j] - cost[i, j] / cMax) / eps;
                 f[i] = -eps * LogSumExp(scratch);
             }
 
             double violation = 0.0;
             for (int j = 0; j < n; j++)
             {
-                for (int i = 0; i < n; i++) scratch[i] = (f[i] - cost[i, j] / cMax) / eps;
+                for (int i = 0; i < n; i++)
+                    scratch[i] = cost[i, j] >= big
+                        ? double.NegativeInfinity
+                        : (f[i] - cost[i, j] / cMax) / eps;
                 double lse = LogSumExp(scratch);
                 violation = Math.Max(violation, Math.Abs(Math.Exp(g[j] / eps + lse) - 1.0));
                 g[j] = -eps * lse;
@@ -340,8 +394,10 @@ public static class DiagramMetrics
         {
             for (int j = 0; j < n; j++)
             {
+                if (cost[i, j] >= big)                    // masked support — no mass at any ε
+                    continue;
                 double logPi = (f[i] + g[j] - cost[i, j] / cMax) / eps;
-                if (logPi > -700.0)                       // exp underflow guard: 0·big stays 0
+                if (logPi > -700.0)                       // exp underflow guard
                     transport += Math.Exp(logPi) * cost[i, j];
             }
         }
