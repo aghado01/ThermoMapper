@@ -118,3 +118,21 @@ disables the surplus charge, negative would reward essential-count mismatch). On
 chip brief: "close to exact W at large ε" is a theorem only on forced-support fixtures — on general
 diagrams large ε smears mass across *admissible* cells (ordinary entropic bias), so the general
 large-ε test asserts LP feasibility (finite, ≥ exact optimum) instead.
+
+### Chip B result (2026-07-17, parent thread)
+
+F2 + F4-remainder landed in `5f9fc2e` — executed in the parent thread per the "pilot lane should
+own or gate it" call (the interrupted session had picked B up; this session finished it).
+`Spred.Compute` and both `DistributedSpred` entry points take an optional `SubspaceAnnealerOptions`
+forwarded to every engine call; the parameter sits **after** `maxDegreeOfParallelism` so the pilot
+suite's positional call sites compile unchanged (no collision — `SpredIsoletPilotTests` untouched).
+Validation moved onto `SubspaceAnnealerOptions.Validate()` (public, NaN-proof pattern checks) so
+drivers reject a bad record *before* the reference-barcode build, with the offending property as
+`ParamName`, never wrapped in block context. `ValidateConfig` rejects non-finite
+`VarianceRegularizer` (negative stays legal — PCA-spirit) and undeclared `DiagramDistanceKind`;
+the `_ => Wasserstein` silent fallback is now an explicit case plus a throwing arm. Forwarding
+facts live on the cylinder fixture deliberately — only where the anneal moves is a dropped
+parameter detectable (best-so-far tracking makes optimal-warm-start fixtures option-invariant).
+Maths.Geometry.Tests 41/41; TDA.DimReduction.Tests 76/76. **The S0 re-probe is unblocked** —
+`InitialTemperature` (mobility finding 2) is now reachable from the public drivers; that re-probe
+stays with the pilot lane.

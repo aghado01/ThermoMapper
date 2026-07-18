@@ -136,6 +136,13 @@ insufficient, exactly as the design section predicted. Runs in ~1 s, no PH depen
 `--filter "Category!=Benchmark"` (pilot facts untouched, per coordination).
 *(Root anchor fixed in `ec0e9d4`.)*
 
+**Parent-thread addendum (2026-07-17):** the options surface now reaches the public drivers —
+`Spred.Compute` / `DistributedSpred.Compute` / `ComputeWithDiagnostics` take `SubspaceAnnealerOptions`
+(after `maxDegreeOfParallelism`; pilot call sites unchanged) and validate it up front
+(`SubspaceAnnealerOptions.Validate()`, NaN-proof). Landed in `5f9fc2e` with driver-level forwarding
+facts. The S0 re-probe can set `InitialTemperature` (finding 2) and the probe-calibrated schedule
+directly; it remains the pilot lane's.
+
 **Parent-thread addendum (2026-07-16):** finding 1's premise is already evidenced, not
 hypothetical — the ISOLET benchmark brief's diagnostics record covariance effective rank ≈ 45.4,
 participation ratio ≈ 12.1, and 95% variance at 173 dims, so the k = 30 cut sits inside a flat
