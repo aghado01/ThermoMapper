@@ -162,6 +162,38 @@ not melt).
   is a no-op for this H0 objective (connected MST-repaired graphs put one essential bar born at 0
   on each side), and the re-measured values confirm it.
 
+### 2026-07-17 — paired rank-2 move landed (`eaa974e`); S0 paired probe: per-block parity at I=1000, aggregate better
+
+**Engine:** `PairedGivensProposal` — the rank-1 Givens geodesic applied to an in-span mixture
+m = cos φ·y_i + sin φ·y_(i+1) of eigen-adjacent columns, partner fixed. Opt-in
+`PairedFraction` (default 0: existing seeded streams bit-identical), own step controller,
+mixture-sum validation. The engine fact (`Compute_DegeneratePair_*`, Gr(5,200), 45°-smeared
+defect pair, temperature 1e-6 isolating proposal geometry from thermal saddle diffusion):
+single-column bit-frozen at 1.000000; paired mixture 0.649 at 12k iters, **super-linear**
+(0.951 at 6k) — early descent is window-rate-limited because accepted Δ≈0 uniform-φ rotations
+re-smear the pair between excisions; compounding opens once accumulated target-share unlocks
+first-order channels. Fixture lessons recorded in the fact: an exactly-degenerate pair leaves
+PCA's axes sample-determined (pin with a ~10% eigengap between the 45°-mixtures); temperatures
+≥1e-3 escape saddles by thermal diffusion regardless of proposal kind; small d lets rare
+complement draws hand single-column moves an escape (d=200 closes the tail).
+
+**S0 paired probe** (`Probe_S0_Dim30_PairedMoves`, artifact `pilot/spred-probe-s0-dim30-paired.json`;
+paired 0.5 / single 0.4 / isotropic 0.1, T₀ = 1e-3, StepFloor 0.05 to keep the paired kind's
+window-limited acceptance off the crawl floor): **8/8 blocks improve; per-block parity with the
+two-plane re-probe at equal budget** (mean 0.070% vs 0.068%; wins on blocks 2/5/6 up to 0.109%,
+losses on 0/1/4/7) — while the single-column share ran on **44% of its previous draw budget**, so
+paired draws pull their per-draw weight from iteration one. The full-data aggregate landed
+meaningfully better (185.807 vs 185.827 against warm 185.863 — a 55% larger improvement; one
+seed, suggestive not conclusive). Reading via the engine fact: I = 1000 sits in the paired
+move's window-limited early regime — the compounding that took the synthetic from 5% to 35%
+descent needs multi-thousand budgets.
+
+**Next probe, before promoting or demoting the mixture:** a deep-budget single-block probe
+(e.g. block 5, the strongest paired responder, I = 8000, serial — roughly the wall-clock of one
+8-block I=1000 run) to see whether S0 descent compounds the way the synthetic does. If it stays
+linear, the S0 defect structure is not pair-smearing (suspect wider smearing or PH-landscape
+ruggedness) and the tracked levers (screened multi-proposal, restarts) move up.
+
 **Parent-thread addendum (2026-07-17):** the options surface now reaches the public drivers —
 `Spred.Compute` / `DistributedSpred.Compute` / `ComputeWithDiagnostics` take `SubspaceAnnealerOptions`
 (after `maxDegreeOfParallelism`; pilot call sites unchanged) and validate it up front

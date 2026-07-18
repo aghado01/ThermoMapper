@@ -1,0 +1,79 @@
+{
+  "probe": "S0-dim30-paired-moves",
+  "date": "2026-07-18",
+  "seed": 211,
+  "iterations": 1000,
+  "shuffleSeed": 41,
+  "datasetSha256": "aa0f64c303d2204a81672ca138f9aceba0607f667603fbc24e84c1152104c901",
+  "annealer": {
+    "proposals": "two-plane Givens \u002B paired two-column at 0.5 mixture",
+    "pairedFraction": 0.5,
+    "initialTemperature": 0.001,
+    "stepFloor": 0.05,
+    "stepFloorRationale": "paired-kind phi-window acceptance sits far below the controller target; the default floor would pin excisions at diffusion scale",
+    "blockSeedDerivation": "SeedTree SplitMix64 children (post seed-aliasing audit)"
+  },
+  "warmStartSeconds": 207.3561077,
+  "annealedSeconds": 709.6806692,
+  "warmStartFullDataObjective": 185.86289933762578,
+  "annealedFullDataObjective": 185.80749982821897,
+  "blocksImproved": 8,
+  "blocks": [
+    {
+      "index": 0,
+      "warmStartLocal": 66.12833963082367,
+      "annealedLocal": 66.10587690113434,
+      "improvementPercent": 0.033968386042566044,
+      "grassmannFromWarmStart": 0.24285633403580237
+    },
+    {
+      "index": 1,
+      "warmStartLocal": 66.40106516701422,
+      "annealedLocal": 66.37144518946008,
+      "improvementPercent": 0.044607684349109396,
+      "grassmannFromWarmStart": 0.26142977517054605
+    },
+    {
+      "index": 2,
+      "warmStartLocal": 65.81993422634525,
+      "annealedLocal": 65.75268583836348,
+      "improvementPercent": 0.10217024488435383,
+      "grassmannFromWarmStart": 0.25979890264862754
+    },
+    {
+      "index": 3,
+      "warmStartLocal": 66.12628921946285,
+      "annealedLocal": 66.06297941748682,
+      "improvementPercent": 0.09574074505514314,
+      "grassmannFromWarmStart": 0.2766191203948948
+    },
+    {
+      "index": 4,
+      "warmStartLocal": 66.6107194285075,
+      "annealedLocal": 66.57549618709166,
+      "improvementPercent": 0.05287923883428372,
+      "grassmannFromWarmStart": 0.27574826786863943
+    },
+    {
+      "index": 5,
+      "warmStartLocal": 65.96799972768761,
+      "annealedLocal": 65.89611585225735,
+      "improvementPercent": 0.10896779609354891,
+      "grassmannFromWarmStart": 0.267892726102496
+    },
+    {
+      "index": 6,
+      "warmStartLocal": 66.00701377258359,
+      "annealedLocal": 65.95205075790419,
+      "improvementPercent": 0.08326844609084677,
+      "grassmannFromWarmStart": 0.26710670602512937
+    },
+    {
+      "index": 7,
+      "warmStartLocal": 66.89645023334508,
+      "annealedLocal": 66.86887086097813,
+      "improvementPercent": 0.04122695938385768,
+      "grassmannFromWarmStart": 0.23114057646002564
+    }
+  ]
+}

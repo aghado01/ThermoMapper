@@ -189,8 +189,14 @@ high-codimension mobility fact green. **S0 re-probe executed 2026-07-17**
 I=1000 / T₀=1e-3 (old annealer: 1/8), Grassmann 0.20–0.30 rad from warm start — but the eigengap
 pre-check confirms the flat tail (min λ25…λ35 gaps 0.65–1.33%), so descent is the predicted
 single-column crawl (0.05–0.1%/1000 iters) and the **paired rank-2 column move is promoted to
-prerequisite** for an efficient S0 screen. Gradient-informed search stays tracked; restart
-ensembles / plateau early-stop remain later add-ons.
+prerequisite** for an efficient S0 screen. **Paired move landed** (`eaa974e`,
+`PairedFraction` on the options surface; engine fact: single-column bit-frozen at a smeared-pair
+saddle where the paired mixture descends, super-linearly). **Paired S0 probe executed** same day
+(`Probe_S0_Dim30_PairedMoves`): per-block parity with two-plane at I=1000 on 44% of the
+single-column draw budget, full-data aggregate better on the probe seed — I=1000 sits in the
+paired move's window-limited early regime; next lever is a deep-budget single-block probe
+(brief report-back) before promoting or demoting the mixture. Gradient-informed search stays
+tracked; restart ensembles / plateau early-stop remain later add-ons.
 
 ### P4 — Scale-out: Distributed SPRED (§3.2) — a facet of scale, its own sub-track ✔ 2026-07-15
 Partition X into m blocks, run `Spred.Compute` per block (embarrassingly parallel), aggregate the

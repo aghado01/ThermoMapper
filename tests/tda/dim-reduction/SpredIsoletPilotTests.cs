@@ -398,6 +398,113 @@ public sealed class SpredIsoletPilotTests
         Assert.True(true);
     }
 
+    /// <summary>
+    /// Paired-move S0 probe (the mobility re-probe's successor): the eigengap pre-check confirmed
+    /// a flat tail in every block (min λ25…λ35 gaps 0.65–1.33%), firing finding 1's gate — the
+    /// two-plane re-probe's 0.05–0.1%/1000-iter descent is single-column crawl against smeared
+    /// defects. This probe adds the paired two-column move at 50% mixture. StepFloor is raised to
+    /// 0.05 because the paired kind's φ-window acceptance sits far below the 25% controller
+    /// target, so its scale pins to the floor — the default 1e-3 floor would put excisions at
+    /// diffusion scale. Reference numbers: two-plane re-probe moved 8/8 blocks by 0.048–0.096%
+    /// (spred-probe-s0-dim30-mobility-reprobe.json); old annealer moved 1/8 by 0.006%.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Probe_S0_Dim30_PairedMoves()
+    {
+        const int probeIters = 1000;
+        int probeSeed = PilotSeeds[0];
+        var annealerOptions = new SubspaceAnnealerOptions
+        {
+            PairedFraction = 0.5,
+            InitialTemperature = 1e-3,
+            StepFloor = 0.05,
+        };
+
+        string repoRoot = LocateRepoRoot();
+        (double[][] features, string datasetHash) = LoadIsoletFeatures(
+            Path.Combine(repoRoot, "datasets", "isolet.csv.gz"));
+        int n = features.Length, d = features[0].Length;
+        int[] permutation = SplitMix64Permutation(n, ShuffleSeed);
+        var shuffled = new double[n][];
+        for (int i = 0; i < n; i++) shuffled[i] = features[permutation[i]];
+
+        PersistenceObjectiveConfig config = PilotConfig();
+        int parallelism = Math.Min(BlockCount, Environment.ProcessorCount);
+
+        var sw = Stopwatch.StartNew();
+        DistributedSpredResult warm = DistributedSpred.ComputeWithDiagnostics(
+            shuffled, TargetDim, BlockCount, config, maxIters: 0, probeSeed, parallelism);
+        double warmSeconds = sw.Elapsed.TotalSeconds;
+
+        sw.Restart();
+        DistributedSpredResult annealed = DistributedSpred.ComputeWithDiagnostics(
+            shuffled, TargetDim, BlockCount, config, probeIters, probeSeed, parallelism,
+            annealerOptions);
+        double annealedSeconds = sw.Elapsed.TotalSeconds;
+
+        _out.WriteLine($"warm start (maxIters=0): {warmSeconds:F1} s, fullDataObjective {warm.FullDataObjective:G6}");
+        _out.WriteLine($"I={probeIters}, seed {probeSeed}, paired 0.5 @ T0=1e-3, floor 0.05: {annealedSeconds:F1} s, " +
+            $"fullDataObjective {annealed.FullDataObjective:G6}");
+        _out.WriteLine("reference: two-plane re-probe (same protocol, no pairing) improved 8/8 blocks by 0.048-0.096%");
+        _out.WriteLine("");
+        _out.WriteLine("block | warm-start local | annealed local | improvement % | Grassmann from warm");
+
+        var grass = new GrassmannManifold(d, TargetDim);
+        var blocks = new List<object>();
+        int moved = 0;
+        for (int b = 0; b < BlockCount; b++)
+        {
+            double baseline = warm.Blocks[b].LocalObjective;
+            double after = annealed.Blocks[b].LocalObjective;
+            double improvementPct = 100.0 * (baseline - after) / baseline;
+            double angleFromWarm = grass.Distance(
+                PackFrame(warm.Blocks[b].Projection, d), PackFrame(annealed.Blocks[b].Projection, d));
+            if (after < baseline) moved++;
+            _out.WriteLine($"  {b}   | {baseline,14:G6}  | {after,12:G6}  | {improvementPct,8:F4}  | {angleFromWarm:F4}");
+            blocks.Add(new
+            {
+                index = b,
+                warmStartLocal = baseline,
+                annealedLocal = after,
+                improvementPercent = improvementPct,
+                grassmannFromWarmStart = angleFromWarm,
+            });
+        }
+        _out.WriteLine("");
+        _out.WriteLine($"blocks improved: {moved}/{BlockCount}");
+
+        File.WriteAllText(
+            Path.Combine(repoRoot, "issues", "spred", "pilot", "spred-probe-s0-dim30-paired.json"),
+            JsonSerializer.Serialize(new
+            {
+                probe = "S0-dim30-paired-moves",
+                date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                seed = probeSeed,
+                iterations = probeIters,
+                shuffleSeed = ShuffleSeed,
+                datasetSha256 = datasetHash,
+                annealer = new
+                {
+                    proposals = "two-plane Givens + paired two-column at 0.5 mixture",
+                    pairedFraction = annealerOptions.PairedFraction,
+                    initialTemperature = annealerOptions.InitialTemperature,
+                    stepFloor = annealerOptions.StepFloor,
+                    stepFloorRationale =
+                        "paired-kind phi-window acceptance sits far below the controller target; the default floor would pin excisions at diffusion scale",
+                    blockSeedDerivation = "SeedTree SplitMix64 children (post seed-aliasing audit)",
+                },
+                warmStartSeconds = warmSeconds,
+                annealedSeconds,
+                warmStartFullDataObjective = warm.FullDataObjective,
+                annealedFullDataObjective = annealed.FullDataObjective,
+                blocksImproved = moved,
+                blocks,
+            }, new JsonSerializerOptions { WriteIndented = true }));
+
+        Assert.True(true);
+    }
+
     private static PersistenceObjectiveConfig PilotConfig() => new()
     {
         Graph = new GraphCompilerConfig
