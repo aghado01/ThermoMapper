@@ -8,7 +8,7 @@ maths/topology  →  tda/ph  →  tda/mapper  →  tda/pipelines
 ```
 
 Dependencies point left (downward). `graphs` is a neutral substrate: it emits a
-weighted `CsrGraph` + provenance manifest, and SW/SPC/PH/Mapper are *consumers*
+weighted `CsrGraph` + provenance manifest, and SW/SPC/PH/Mapper are _consumers_
 of that artifact. Placement authority for the topology stack lives in
 `tda-placement.md` (MarkBrain: `ThermoMapper/issues/tda-purification/persistent-homology/`).
 There is no `tda/primitives` — everything PH lives in `tda/ph`.
@@ -29,7 +29,7 @@ injects it as a delegate over the distance graph. Future topology-scored passes
 (the graph sculptor's persistence/spectral criteria) flow in the same way:
 scores in, neutral substrate out.
 
-## The litmus test
+## The litmus test - under construction
 
 `CsrGraph` round-trips to disk (`WriteTo`/`FromBinary`). The compiler is
 decoupled exactly when a non-SPC reader — a pure PH run, a Mapper nerve, a
@@ -47,3 +47,29 @@ instead of threading the consumer concern into a build stage.
   the pure DTO.
 - Pre-release discipline: no back-compat shims, no `[Obsolete]` aliases —
   superseded surfaces are deleted wholesale.
+
+## RepoAudit - Static & semantic analysis
+
+`scripts/repo-audit.ps1`
+
+Entry point that builds `src/repo-audit` (project: `projects/RepoAudit/RepoAudit.csproj`) on first run, then runs it. Default run writes `artifacts/project-health.md` and renders it inline. Flags:
+
+- `-Validate` — strict mode; fail on warnings.
+- `-NoGit` — skip git-history-based checks.
+- `-Impact <path>` — focused analysis around a single path.
+- `-NoDisplay` — suppress the auto-render of the health report.
+- `-Rebuild` — force-rebuild RepoAudit before running. **Required after editing `src/repo-audit/*`:** the built exe is cached (only rebuilt on `-Rebuild` or if missing), so changes to the analyzer itself won't take effect without it.
+
+Repo-audit is a detector is a valuable tool that can be used to root out project dependencies but may present false positives/negatives. Verify root causes in source code. Targeted `dotnet build` spot-checks.When repo-audit inaccuracies are detected, escalate to user for potential bug fixes and/or enhancements to the tool,
+
+## test-harness - Parallel test runner
+
+`src/test-harness/`
+
+C# xUnit parallel fact runner; project at `projects/TestHarness.Runner/`. Discovers facts via `dotnet test --list-tests`, runs them concurrently up to `--max-workers`, and drops per-suite manifests + a `summary.json` into `artifacts/test-runs/<suite>/<stamp>/`. Invoke via:
+
+```
+dotnet run --project projects/TestHarness.Runner --
+    --project <test.csproj> [--fixture <Class> | --filter <expr>]
+    [--max-workers N] [--list-only]
+```
