@@ -106,6 +106,16 @@ public sealed class PersistenceObjective
             throw new ArgumentException(
                 "PathologyPenalty must be finite and > 0 — the annealer compares it as an ordinary objective value, so NaN, ∞, or a reward poisons the anneal.",
                 nameof(config));
+
+        if (!double.IsFinite(config.VarianceRegularizer))
+            throw new ArgumentException(
+                "VarianceRegularizer must be finite — it scales tr(P Σ Pᵀ) straight into every objective value, so NaN or ±∞ poisons the anneal. The sign is meaningful (negative rewards variance, the PCA-spirit direction); 0 turns the term off.",
+                nameof(config));
+
+        if (!Enum.IsDefined(config.DiagramDistance))
+            throw new ArgumentException(
+                $"DiagramDistance value {(int)config.DiagramDistance} is not a declared DiagramDistanceKind — an unrecognized backend would otherwise fall through to some default matching and hide the config error.",
+                nameof(config));
     }
 
     /// <summary>Objective value at a candidate k×d orthonormal projection (each row a basis vector).</summary>
@@ -144,8 +154,11 @@ public sealed class PersistenceObjective
             DiagramDistanceKind.SinkhornWasserstein => DiagramMetrics.SinkhornWasserstein(
                 projected, reference, dimension, _config.WassersteinOrder, _essential,
                 _config.SinkhornEpsilon, _config.SinkhornMaxIters),
-            _ => DiagramMetrics.Wasserstein(
+            DiagramDistanceKind.Wasserstein => DiagramMetrics.Wasserstein(
                 projected, reference, dimension, _config.WassersteinOrder, _essential),
+            // ValidateConfig rejects undeclared values at construction; no silent fallback here.
+            _ => throw new InvalidOperationException(
+                $"Unhandled DiagramDistanceKind {_config.DiagramDistance}."),
         };
 
     private Barcode BarcodeFor(double[][] features, GraphCompilerConfig recipe)

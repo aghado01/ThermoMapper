@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using Graphs;
 using Maths.Geometry;
+using Maths.Geometry.DimReduction;
 using Xunit;
 
 namespace TDA.DimReduction.Tests;
@@ -96,7 +97,44 @@ public sealed class DistributedSpredTests
                 maxIters: 8,
                 seed: 1,
                 maxDegreeOfParallelism: 2,
-                cancellation.Token));
+                cancellationToken: cancellation.Token));
+    }
+
+    // A bad options record is a caller error, not a block failure: it must surface raw with the
+    // offending property's name, before any block work — never wrapped in the block-context
+    // InvalidOperationException.
+    [Fact]
+    public void Compute_NonFiniteAnnealerOption_FailsFastUnwrapped()
+    {
+        ArgumentOutOfRangeException error = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            DistributedSpred.Compute(
+                Circle3D(16),
+                targetDim: 2,
+                blockCount: 2,
+                SmallConfig(),
+                maxIters: 1,
+                seed: 1,
+                maxDegreeOfParallelism: 1,
+                new SubspaceAnnealerOptions { CoolingRate = double.NaN }));
+
+        Assert.Equal("CoolingRate", error.ParamName);
+    }
+
+    [Fact]
+    public void ComputeWithDiagnostics_NonFiniteAnnealerOption_FailsFastUnwrapped()
+    {
+        ArgumentOutOfRangeException error = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            DistributedSpred.ComputeWithDiagnostics(
+                Circle3D(16),
+                targetDim: 2,
+                blockCount: 2,
+                SmallConfig(),
+                maxIters: 1,
+                seed: 1,
+                maxDegreeOfParallelism: 1,
+                new SubspaceAnnealerOptions { InitialTemperature = double.PositiveInfinity }));
+
+        Assert.Equal("InitialTemperature", error.ParamName);
     }
 
     // blockCount == data.Length gives 1-row blocks — far below what SmallConfig's kNN (K=6) recipe and

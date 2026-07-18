@@ -56,7 +56,7 @@ namespace Maths.Geometry.DimReduction
         {
             cancellationToken.ThrowIfCancellationRequested();
             options ??= new SubspaceAnnealerOptions();
-            ValidateOptions(options);
+            options.Validate();
             int nSamples = data.Length;
             if (nSamples == 0) throw new ArgumentException("Empty data", nameof(data));
             int d = data[0].Length;
@@ -145,28 +145,6 @@ namespace Maths.Geometry.DimReduction
         // Step-controller gain: each decision nudges log-step by ±gain-scaled amounts, so the
         // scale equilibrates within tens of iterations without chattering.
         private const double AdaptationGain = 0.1;
-
-        private static void ValidateOptions(SubspaceAnnealerOptions options)
-        {
-            if (options.IsotropicFraction is < 0.0 or > 1.0)
-                throw new ArgumentOutOfRangeException(nameof(options),
-                    "IsotropicFraction must lie in [0, 1].");
-            if (options.TargetAcceptance is <= 0.0 or >= 1.0)
-                throw new ArgumentOutOfRangeException(nameof(options),
-                    "TargetAcceptance must lie in (0, 1).");
-            if (options.StepFloor <= 0.0 || options.StepCeiling < options.StepFloor)
-                throw new ArgumentOutOfRangeException(nameof(options),
-                    "Step bounds must satisfy 0 < StepFloor ≤ StepCeiling.");
-            if (options.InitialStep <= 0.0)
-                throw new ArgumentOutOfRangeException(nameof(options),
-                    "InitialStep must be positive.");
-            if (options.InitialTemperature <= 0.0)
-                throw new ArgumentOutOfRangeException(nameof(options),
-                    "InitialTemperature must be positive.");
-            if (options.CoolingRate is <= 0.0 or > 1.0)
-                throw new ArgumentOutOfRangeException(nameof(options),
-                    "CoolingRate must lie in (0, 1].");
-        }
 
         /// <summary>
         /// Two-plane Givens proposal: rotate the retained column <paramref name="col"/> of

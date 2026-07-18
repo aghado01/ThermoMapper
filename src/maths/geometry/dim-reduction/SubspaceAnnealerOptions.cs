@@ -43,5 +43,40 @@ namespace Maths.Geometry.DimReduction
         /// <summary>Geometric cooling factor per iteration. Cooling governs the Metropolis
         /// temperature only; the step scale is governed by acceptance.</summary>
         public double CoolingRate { get; init; } = 0.99;
+
+        /// <summary>
+        /// Reject records the anneal cannot run on. Lives on the DTO so every consumer shares one
+        /// gate: <see cref="SubspaceAnnealer.Compute"/> calls it on entry, and drivers that do
+        /// expensive setup before annealing (SPRED builds its reference barcode first) call it up
+        /// front to fail before that work. Checks are written so NaN fails them — the relational
+        /// forms NaN slips through were the hole.
+        /// </summary>
+        public void Validate()
+        {
+            if (IsotropicFraction is not (>= 0.0 and <= 1.0))
+                throw new ArgumentOutOfRangeException(nameof(IsotropicFraction),
+                    "IsotropicFraction is a mixture probability: it must lie in [0, 1].");
+            if (TargetAcceptance is not (> 0.0 and < 1.0))
+                throw new ArgumentOutOfRangeException(nameof(TargetAcceptance),
+                    "TargetAcceptance must lie strictly inside (0, 1) — the step controller's " +
+                    "zero-drift update law is degenerate at either endpoint.");
+            if (!double.IsFinite(StepFloor) || StepFloor <= 0.0)
+                throw new ArgumentOutOfRangeException(nameof(StepFloor),
+                    "StepFloor is a geodesic length: it must be finite and positive.");
+            if (!double.IsFinite(StepCeiling) || StepCeiling < StepFloor)
+                throw new ArgumentOutOfRangeException(nameof(StepCeiling),
+                    "StepCeiling must be finite and at least StepFloor — step scales clamp into " +
+                    "[floor, ceiling], and an unbounded ceiling lets the controller wrap geodesic circles.");
+            if (!double.IsFinite(InitialStep) || InitialStep <= 0.0)
+                throw new ArgumentOutOfRangeException(nameof(InitialStep),
+                    "InitialStep is a geodesic length: it must be finite and positive.");
+            if (!double.IsFinite(InitialTemperature) || InitialTemperature <= 0.0)
+                throw new ArgumentOutOfRangeException(nameof(InitialTemperature),
+                    "InitialTemperature must be finite and positive — an infinite temperature accepts " +
+                    "every proposal and a NaN one silently freezes Metropolis into greedy descent.");
+            if (CoolingRate is not (> 0.0 and <= 1.0))
+                throw new ArgumentOutOfRangeException(nameof(CoolingRate),
+                    "CoolingRate must lie in (0, 1].");
+        }
     }
 }

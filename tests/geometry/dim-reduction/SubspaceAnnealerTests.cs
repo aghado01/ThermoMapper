@@ -154,6 +154,52 @@ public sealed class SubspaceAnnealerTests
             $"got {isotropicAdaptive.Objective:F6}.");
     }
 
+    // One row per validation rule, NaN cases prominent: the original relational checks were the
+    // hole NaN slipped through (a NaN TargetAcceptance turns every step scale into NaN; a NaN
+    // InitialTemperature silently freezes Metropolis into greedy descent). The record's ToString
+    // identifies a failing row.
+    public static TheoryData<SubspaceAnnealerOptions> InvalidOptions => new()
+    {
+        new() { IsotropicFraction = double.NaN },
+        new() { IsotropicFraction = -0.1 },
+        new() { IsotropicFraction = 1.1 },
+        new() { TargetAcceptance = double.NaN },
+        new() { TargetAcceptance = 0.0 },
+        new() { TargetAcceptance = 1.0 },
+        new() { InitialStep = double.NaN },
+        new() { InitialStep = double.PositiveInfinity },
+        new() { InitialStep = 0.0 },
+        new() { StepFloor = double.NaN },
+        new() { StepFloor = 0.0 },
+        new() { StepCeiling = double.NaN },
+        new() { StepCeiling = double.PositiveInfinity },
+        new() { StepFloor = 0.5, StepCeiling = 0.1 },
+        new() { InitialTemperature = double.NaN },
+        new() { InitialTemperature = double.PositiveInfinity },
+        new() { InitialTemperature = 0.0 },
+        new() { CoolingRate = double.NaN },
+        new() { CoolingRate = 0.0 },
+        new() { CoolingRate = 1.1 },
+    };
+
+    [Theory]
+    [MemberData(nameof(InvalidOptions))]
+    public void Compute_InvalidOptions_ThrowsBeforeAnyEvaluation(SubspaceAnnealerOptions options)
+    {
+        double[][] data = BuildData(samples: 10, dim: 4, seed: 11);
+        int evaluations = 0;
+        double Counting(double[][] projection)
+        {
+            evaluations++;
+            return Objective(projection);
+        }
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            SubspaceAnnealer.Compute(data, targetDim: 2, Counting, maxIters: 5, seed: 7, options));
+
+        Assert.Equal(0, evaluations);
+    }
+
     [Fact]
     public void Compute_CancellationDuringAnneal_Throws()
     {

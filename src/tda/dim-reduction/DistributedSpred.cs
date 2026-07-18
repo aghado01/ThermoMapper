@@ -59,6 +59,9 @@ public static class DistributedSpred
     /// <param name="maxIters">Simulated-annealing steps per block.</param>
     /// <param name="seed">Base RNG seed; block i receives <c>seed + 1009 * i</c>. Null draws OS entropy.</param>
     /// <param name="maxDegreeOfParallelism">Maximum concurrent block runs. One preserves serial execution.</param>
+    /// <param name="annealerOptions">Proposal mixture, step adaptation, and cooling shared by every
+    /// block's <see cref="SubspaceAnnealer"/>; null takes the engine defaults. Validated before any
+    /// block work, so a bad record fails fast rather than inside a block wrap.</param>
     /// <param name="cancellationToken">Cancellation observed between annealing iterations and pipeline phases.</param>
     /// <returns>The aggregate k x d orthonormal projection.</returns>
     /// <remarks>
@@ -77,12 +80,14 @@ public static class DistributedSpred
         int maxIters = 1000,
         int? seed = null,
         int maxDegreeOfParallelism = 1,
+        SubspaceAnnealerOptions? annealerOptions = null,
         CancellationToken cancellationToken = default)
     {
         int ambientDim = ValidateInputs(data, targetDim, blockCount, objective, maxDegreeOfParallelism);
+        annealerOptions?.Validate();
         cancellationToken.ThrowIfCancellationRequested();
         if (blockCount == 1)
-            return Spred.Compute(data, targetDim, objective, maxIters, seed, cancellationToken);
+            return Spred.Compute(data, targetDim, objective, maxIters, seed, annealerOptions, cancellationToken);
 
         var projections = new double[blockCount][][];
         RunBlocks(blockCount, maxDegreeOfParallelism, cancellationToken, block =>
@@ -98,6 +103,7 @@ public static class DistributedSpred
                     objective,
                     maxIters,
                     BlockSeed(seed, block),
+                    annealerOptions,
                     cancellationToken);
             }
             catch (Exception failure) when (failure is not OperationCanceledException)
@@ -121,6 +127,9 @@ public static class DistributedSpred
     /// <param name="maxIters">Simulated-annealing steps per block.</param>
     /// <param name="seed">Base RNG seed; block i receives <c>seed + 1009 * i</c>. Null draws OS entropy.</param>
     /// <param name="maxDegreeOfParallelism">Maximum concurrent block runs. One preserves serial execution.</param>
+    /// <param name="annealerOptions">Proposal mixture, step adaptation, and cooling shared by every
+    /// block's <see cref="SubspaceAnnealer"/>; null takes the engine defaults. Validated before any
+    /// block work, so a bad record fails fast rather than inside a block wrap.</param>
     /// <param name="cancellationToken">Cancellation observed between annealing iterations and pipeline phases.</param>
     /// <returns>The aggregate projection and ordered block diagnostics.</returns>
     /// <remarks>
@@ -139,16 +148,18 @@ public static class DistributedSpred
         int maxIters = 1000,
         int? seed = null,
         int maxDegreeOfParallelism = 1,
+        SubspaceAnnealerOptions? annealerOptions = null,
         CancellationToken cancellationToken = default)
     {
         int ambientDim = ValidateInputs(data, targetDim, blockCount, objective, maxDegreeOfParallelism);
+        annealerOptions?.Validate();
         cancellationToken.ThrowIfCancellationRequested();
 
         if (blockCount == 1)
         {
             // The aggregate is the block projection and the block data is the full input, so the
             // deterministic local objective serves all three reported values without re-evaluation.
-            BlockRun run = RunBlock(0, 0, data, targetDim, objective, maxIters, seed, cancellationToken);
+            BlockRun run = RunBlock(0, 0, data, targetDim, objective, maxIters, seed, annealerOptions, cancellationToken);
             var blocks = new[]
             {
                 new DistributedSpredBlockResult(
@@ -175,6 +186,7 @@ public static class DistributedSpred
                     objective,
                     maxIters,
                     blockSeed,
+                    annealerOptions,
                     cancellationToken);
             }
             catch (Exception failure) when (failure is not OperationCanceledException)
@@ -336,6 +348,7 @@ public static class DistributedSpred
         PersistenceObjectiveConfig objective,
         int maxIters,
         int? seed,
+        SubspaceAnnealerOptions? annealerOptions,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -347,7 +360,8 @@ public static class DistributedSpred
             ph.Evaluate,
             maxIters,
             seed,
-            cancellationToken: cancellationToken);
+            annealerOptions,
+            cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return new BlockRun(index, start, data.Length, seed, annealed.Projection, annealed.Objective, ph);
     }

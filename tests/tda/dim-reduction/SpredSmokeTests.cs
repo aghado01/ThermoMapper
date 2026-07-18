@@ -1,5 +1,6 @@
 using System;
 using Graphs;
+using Maths.Geometry.DimReduction;
 using Xunit;
 
 namespace TDA.DimReduction.Tests;
@@ -59,6 +60,20 @@ public sealed class SpredSmokeTests
 
         Assert.True(preserving < collapsing,
             $"loop-preserving projection ({preserving}) should score below loop-collapsing ({collapsing}).");
+    }
+
+    // The driver validates the options record before building the reference barcode, so a bad
+    // record costs nothing and names its offending property (at block scale that barcode is
+    // seconds-to-minutes of work).
+    [Fact]
+    public void Compute_NonFiniteAnnealerOption_FailsFastWithPropertyName()
+    {
+        ArgumentOutOfRangeException error = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            Spred.Compute(
+                Circle3D(N), targetDim: 2, H1Config(), maxIters: 1, seed: 1,
+                new SubspaceAnnealerOptions { InitialTemperature = double.NaN }));
+
+        Assert.Equal("InitialTemperature", error.ParamName);
     }
 
     [Fact]

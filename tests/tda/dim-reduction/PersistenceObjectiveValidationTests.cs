@@ -1,5 +1,6 @@
 using System;
 using Graphs;
+using TDA.Ph;
 using Xunit;
 
 namespace TDA.DimReduction.Tests;
@@ -94,6 +95,37 @@ public sealed class PersistenceObjectiveValidationTests
     {
         ArgumentException error = Assert.Throws<ArgumentException>(() =>
             new PersistenceObjective(Circle3D(8), BaseConfig() with { MaxDimension = maxDimension }));
+
+        Assert.Equal("config", error.ParamName);
+    }
+
+    [Theory]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void Construct_NonFiniteVarianceRegularizer_Throws(double weight)
+    {
+        ArgumentException error = Assert.Throws<ArgumentException>(() =>
+            new PersistenceObjective(Circle3D(8), BaseConfig() with { VarianceRegularizer = weight }));
+
+        Assert.Equal("config", error.ParamName);
+    }
+
+    // The regularizer's sign is meaningful: negative rewards variance (the PCA-spirit direction,
+    // §6). Guard against a future "fix" that rejects it alongside the non-finite values.
+    [Fact]
+    public void Construct_NegativeVarianceRegularizer_IsAccepted()
+    {
+        _ = new PersistenceObjective(Circle3D(8), BaseConfig() with { VarianceRegularizer = -0.5 });
+    }
+
+    [Fact]
+    public void Construct_UndeclaredDiagramDistanceKind_Throws()
+    {
+        ArgumentException error = Assert.Throws<ArgumentException>(() =>
+            new PersistenceObjective(
+                Circle3D(8),
+                BaseConfig() with { DiagramDistance = (DiagramDistanceKind)99 }));
 
         Assert.Equal("config", error.ParamName);
     }
