@@ -136,6 +136,32 @@ insufficient, exactly as the design section predicted. Runs in ~1 s, no PH depen
 `--filter "Category!=Benchmark"` (pilot facts untouched, per coordination).
 *(Root anchor fixed in `ec0e9d4`.)*
 
+### 2026-07-17 — S0 re-probe executed: mobility restored on real data; finding 1's gate fires
+
+`Probe_S0_Dim30_MobilityReprobe` (artifact: `pilot/spred-probe-s0-dim30-mobility-reprobe.json`),
+I = 1000, seed 211, shipped two-plane defaults with `InitialTemperature = 1e-3` — calibrated from
+the budget probe's one recorded per-move increment (~4e-3 ⇒ exp(−4) ≈ 2% accept-worse: refinement,
+not melt).
+
+- **Mobility: 8/8 blocks improved** (old annealer: 1/8, seven bit-frozen). Every block moved a
+  real Grassmann distance from its PCA warm start (0.20–0.30 rad vs the old probe's 1e-7 floor).
+  Per-block objective improvements 0.048–0.096% — 8–16× the old probe's single 0.006% mover.
+  Full-data objective 185.863 → 185.827. No melt at T₀ = 1e-3: the calibration held.
+- **Eigengap pre-check confirms the flat tail, so the finding-1 gate fires.** Min relative gap in
+  the λ25…λ35 window is 0.65–1.33% across all eight blocks; the k = 30 cut-boundary gap
+  (λ30 → λ31) runs 0.92–6.16% with blocks 0 and 6 under 1.2%. Per the addendum's decision rule,
+  the **paired rank-2 column move is now a prerequisite, not a fallback**: the steady-but-slow
+  0.05–0.1%-per-1000-iters descent is exactly the tiny-θ cross-term crawl predicted for
+  single-column moves against offset directions smeared over near-degenerate columns. Budget
+  scaling alone will not close S0 — pair the move next.
+- Wall clock ran ~4× the recorded probe (warm 168 s vs 43 s, annealed 623 s vs 135 s) —
+  uniform across the anneal-free warm pass too, so machine load, not per-iteration algorithmic
+  cost. Re-price the S0 screen from a quiet machine before quoting minutes.
+- Provenance notes: block seeds are now SeedTree SplitMix64 children (seed-aliasing audit,
+  `5539a69`); warm baselines re-measured under current code — Chip A's essential-birth matching
+  is a no-op for this H0 objective (connected MST-repaired graphs put one essential bar born at 0
+  on each side), and the re-measured values confirm it.
+
 **Parent-thread addendum (2026-07-17):** the options surface now reaches the public drivers —
 `Spred.Compute` / `DistributedSpred.Compute` / `ComputeWithDiagnostics` take `SubspaceAnnealerOptions`
 (after `maxDegreeOfParallelism`; pilot call sites unchanged) and validate it up front

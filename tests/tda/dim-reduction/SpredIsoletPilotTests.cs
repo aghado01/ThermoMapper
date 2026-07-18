@@ -9,6 +9,8 @@ using System.Text;
 using System.Text.Json;
 using Graphs;
 using Maths.Geometry;
+using Maths.Geometry.DimReduction;
+using Maths.LinAlg;
 using TDA.Ph;
 using Xunit;
 using Xunit.Abstractions;
@@ -249,6 +251,142 @@ public sealed class SpredIsoletPilotTests
                 iterations = probeIters,
                 shuffleSeed = ShuffleSeed,
                 datasetSha256 = datasetHash,
+                warmStartSeconds = warmSeconds,
+                annealedSeconds,
+                warmStartFullDataObjective = warm.FullDataObjective,
+                annealedFullDataObjective = annealed.FullDataObjective,
+                blocksImproved = moved,
+                blocks,
+            }, new JsonSerializerOptions { WriteIndented = true }));
+
+        Assert.True(true);
+    }
+
+    /// <summary>
+    /// Mobility re-probe (dev-sequence P3; mobility-brief findings 1+2): the I = 1000 budget probe
+    /// re-run through the two-plane annealer, with <c>InitialTemperature</c> calibrated to the
+    /// recorded per-move objective increment — the budget probe's single accepted move improved
+    /// block 5 by ~4e-3, so temperature 1e-3 puts a comparable worsening at exp(−4) ≈ 2%
+    /// acceptance: refinement, not melt (the same increment-commensurate choice as the engine
+    /// mobility fact). Runs the addendum's eigengap pre-check first: per-block PCA eigengaps
+    /// λ25…λ35 around the k = 30 cut, read before spending anneal budget — small relative gaps
+    /// mean the offset directions smear across near-degenerate retained columns and single-column
+    /// Givens moves crawl (finding 1), which is how a still-pinned re-probe should then be read.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Benchmark")]
+    public void Probe_S0_Dim30_MobilityReprobe()
+    {
+        const int probeIters = 1000;
+        int probeSeed = PilotSeeds[0];
+        var annealerOptions = new SubspaceAnnealerOptions { InitialTemperature = 1e-3 };
+
+        string repoRoot = LocateRepoRoot();
+        (double[][] features, string datasetHash) = LoadIsoletFeatures(
+            Path.Combine(repoRoot, "datasets", "isolet.csv.gz"));
+        int n = features.Length, d = features[0].Length;
+        int[] permutation = SplitMix64Permutation(n, ShuffleSeed);
+        var shuffled = new double[n][];
+        for (int i = 0; i < n; i++) shuffled[i] = features[permutation[i]];
+
+        // Eigengap pre-check (finding 1's interpretation gate). Same contiguous slices the
+        // distributed run uses; eigenvalue indices below are 1-based in the λ naming.
+        _out.WriteLine("eigengap pre-check, per-block PCA λ25..λ35 (relative gap (λi−λi+1)/λi):");
+        var eigenReports = new List<object>();
+        for (int b = 0; b < BlockCount; b++)
+        {
+            int start = b * n / BlockCount, end = (b + 1) * n / BlockCount;
+            var slice = new double[end - start][];
+            Array.Copy(shuffled, start, slice, 0, slice.Length);
+            double[] eig = Pca.Compute(slice, numComponents: 35).Eigenvalues;
+
+            var window = new double[11];
+            Array.Copy(eig, 24, window, 0, 11);           // λ25..λ35
+            var relGaps = new double[10];
+            double minGap = double.PositiveInfinity;
+            for (int i = 0; i < 10; i++)
+            {
+                relGaps[i] = (window[i] - window[i + 1]) / window[i];
+                if (relGaps[i] < minGap) minGap = relGaps[i];
+            }
+            double cutGap = (eig[29] - eig[30]) / eig[29];   // the k = 30 boundary: λ30 vs λ31
+            _out.WriteLine($"  block {b}: cut gap {cutGap:P2}, min gap in window {minGap:P2}");
+            eigenReports.Add(new
+            {
+                block = b,
+                lambda25to35 = window,
+                relativeGaps = relGaps,
+                cutRelativeGap = cutGap,
+                minRelativeGapInWindow = minGap,
+            });
+        }
+
+        PersistenceObjectiveConfig config = PilotConfig();
+        int parallelism = Math.Min(BlockCount, Environment.ProcessorCount);
+
+        var sw = Stopwatch.StartNew();
+        DistributedSpredResult warm = DistributedSpred.ComputeWithDiagnostics(
+            shuffled, TargetDim, BlockCount, config, maxIters: 0, probeSeed, parallelism);
+        double warmSeconds = sw.Elapsed.TotalSeconds;
+
+        sw.Restart();
+        DistributedSpredResult annealed = DistributedSpred.ComputeWithDiagnostics(
+            shuffled, TargetDim, BlockCount, config, probeIters, probeSeed, parallelism,
+            annealerOptions);
+        double annealedSeconds = sw.Elapsed.TotalSeconds;
+
+        _out.WriteLine("");
+        _out.WriteLine($"warm start (maxIters=0): {warmSeconds:F1} s, fullDataObjective {warm.FullDataObjective:G6}");
+        _out.WriteLine($"I={probeIters}, seed {probeSeed}, two-plane @ T0=1e-3: {annealedSeconds:F1} s, " +
+            $"fullDataObjective {annealed.FullDataObjective:G6}");
+        _out.WriteLine("reference: old-annealer I=1000 probe moved 1/8 blocks, best improvement 0.006% " +
+            "(spred-probe-s0-dim30-i1000.json)");
+        _out.WriteLine("");
+        _out.WriteLine("block | warm-start local | annealed local | improvement % | Grassmann from warm");
+
+        var grass = new GrassmannManifold(d, TargetDim);
+        var blocks = new List<object>();
+        int moved = 0;
+        for (int b = 0; b < BlockCount; b++)
+        {
+            double baseline = warm.Blocks[b].LocalObjective;
+            double after = annealed.Blocks[b].LocalObjective;
+            double improvementPct = 100.0 * (baseline - after) / baseline;
+            double angleFromWarm = grass.Distance(
+                PackFrame(warm.Blocks[b].Projection, d), PackFrame(annealed.Blocks[b].Projection, d));
+            if (after < baseline) moved++;
+            _out.WriteLine($"  {b}   | {baseline,14:G6}  | {after,12:G6}  | {improvementPct,8:F4}  | {angleFromWarm:F4}");
+            blocks.Add(new
+            {
+                index = b,
+                warmStartLocal = baseline,
+                annealedLocal = after,
+                improvementPercent = improvementPct,
+                grassmannFromWarmStart = angleFromWarm,
+            });
+        }
+        _out.WriteLine("");
+        _out.WriteLine($"blocks improved: {moved}/{BlockCount}");
+
+        File.WriteAllText(
+            Path.Combine(repoRoot, "issues", "spred", "pilot", "spred-probe-s0-dim30-mobility-reprobe.json"),
+            JsonSerializer.Serialize(new
+            {
+                probe = "S0-dim30-mobility-reprobe",
+                date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                seed = probeSeed,
+                iterations = probeIters,
+                shuffleSeed = ShuffleSeed,
+                datasetSha256 = datasetHash,
+                annealer = new
+                {
+                    proposals = "two-plane Givens primary (shipped defaults)",
+                    initialTemperature = annealerOptions.InitialTemperature,
+                    temperatureCalibration =
+                        "budget probe's recorded per-move increment ~4e-3 => T0 = 1e-3 (exp(-4) accept-worse)",
+                    blockSeedDerivation = "SeedTree SplitMix64 children (post seed-aliasing audit)",
+                },
+                eigengapPreCheck = eigenReports,
                 warmStartSeconds = warmSeconds,
                 annealedSeconds,
                 warmStartFullDataObjective = warm.FullDataObjective,
