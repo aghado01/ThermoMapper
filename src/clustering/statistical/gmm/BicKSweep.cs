@@ -1,4 +1,5 @@
 using System;
+using Maths.Rng;
 
 namespace Clustering.Statistical.GMM
 {
@@ -49,11 +50,16 @@ namespace Clustering.Statistical.GMM
                 GaussianMixtureModel? bestModel = null;
                 double bestLogL = double.NegativeInfinity;
 
+                // SplitMix64 children keep restart streams decorrelated across base seeds (the
+                // former baseSeed + 7919·restart arithmetic aliased streams across runs). The base
+                // seed is deliberately shared across K so every K sees the same initialization
+                // randomness and BIC differences come from K, not luck.
                 int baseSeed = randomSeed ?? Environment.TickCount;
+                int[] restartSeeds = SeedTree.Derive(baseSeed, restarts);
                 for (int restart = 0; restart < restarts; restart++)
                 {
                     var model = new GaussianMixtureModel(k, dimension);
-                    model.RandomInitialize(data, new Random(baseSeed + restart * 7919));
+                    model.RandomInitialize(data, new Random(restartSeeds[restart]));
                     model.Fit(data, maxIterations, tolerance);
 
                     if (model.FinalLogLikelihood > bestLogL)

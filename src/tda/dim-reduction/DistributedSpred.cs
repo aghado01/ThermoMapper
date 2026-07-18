@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Maths.Geometry.DimReduction;
 using Maths.Geometry;
 using Maths.Geometry.Estimators.Intrinsic;
+using Maths.Rng;
 
 namespace TDA.DimReduction;
 
@@ -57,7 +58,11 @@ public static class DistributedSpred
     /// <param name="blockCount">Number of contiguous blocks; must be between one and the row count.</param>
     /// <param name="objective">Persistent-homology objective shared by all local runs.</param>
     /// <param name="maxIters">Simulated-annealing steps per block.</param>
-    /// <param name="seed">Base RNG seed; block i receives <c>seed + 1009 * i</c>. Null draws OS entropy.</param>
+    /// <param name="seed">Base RNG seed; block i receives the i-th <see cref="SeedTree.Derive"/>
+    /// child (SplitMix64), so block streams stay decorrelated across base seeds — the former
+    /// <c>seed + 1009·i</c> arithmetic aliased streams across runs. A single block passes the base
+    /// seed through, keeping <c>blockCount == 1</c> identical to <see cref="Spred.Compute"/>.
+    /// Null draws OS entropy.</param>
     /// <param name="maxDegreeOfParallelism">Maximum concurrent block runs. One preserves serial execution.</param>
     /// <param name="annealerOptions">Proposal mixture, step adaptation, and cooling shared by every
     /// block's <see cref="SubspaceAnnealer"/>; null takes the engine defaults. Validated before any
@@ -90,6 +95,7 @@ public static class DistributedSpred
             return Spred.Compute(data, targetDim, objective, maxIters, seed, annealerOptions, cancellationToken);
 
         var projections = new double[blockCount][][];
+        int[]? blockSeeds = seed is null ? null : SeedTree.Derive(seed.Value, blockCount);
         RunBlocks(blockCount, maxDegreeOfParallelism, cancellationToken, block =>
         {
             int start = block * data.Length / blockCount;
@@ -102,7 +108,7 @@ public static class DistributedSpred
                     targetDim,
                     objective,
                     maxIters,
-                    BlockSeed(seed, block),
+                    blockSeeds?[block],
                     annealerOptions,
                     cancellationToken);
             }
@@ -125,7 +131,11 @@ public static class DistributedSpred
     /// <param name="blockCount">Number of contiguous blocks; must be between one and the row count.</param>
     /// <param name="objective">Persistent-homology objective shared by all local runs.</param>
     /// <param name="maxIters">Simulated-annealing steps per block.</param>
-    /// <param name="seed">Base RNG seed; block i receives <c>seed + 1009 * i</c>. Null draws OS entropy.</param>
+    /// <param name="seed">Base RNG seed; block i receives the i-th <see cref="SeedTree.Derive"/>
+    /// child (SplitMix64), so block streams stay decorrelated across base seeds — the former
+    /// <c>seed + 1009·i</c> arithmetic aliased streams across runs. A single block passes the base
+    /// seed through, keeping <c>blockCount == 1</c> identical to <see cref="Spred.Compute"/>.
+    /// Null draws OS entropy.</param>
     /// <param name="maxDegreeOfParallelism">Maximum concurrent block runs. One preserves serial execution.</param>
     /// <param name="annealerOptions">Proposal mixture, step adaptation, and cooling shared by every
     /// block's <see cref="SubspaceAnnealer"/>; null takes the engine defaults. Validated before any
@@ -170,12 +180,13 @@ public static class DistributedSpred
         }
 
         var blockRuns = new BlockRun[blockCount];
+        int[]? blockSeeds = seed is null ? null : SeedTree.Derive(seed.Value, blockCount);
         RunBlocks(blockCount, maxDegreeOfParallelism, cancellationToken, block =>
         {
             int start = block * data.Length / blockCount;
             int end = (block + 1) * data.Length / blockCount;
             double[][] slice = SliceRows(data, start, end);
-            int? blockSeed = BlockSeed(seed, block);
+            int? blockSeed = blockSeeds?[block];
             try
             {
                 blockRuns[block] = RunBlock(
@@ -398,11 +409,6 @@ public static class DistributedSpred
         var slice = new double[end - start][];
         Array.Copy(data, start, slice, 0, slice.Length);
         return slice;
-    }
-
-    private static int? BlockSeed(int? seed, int block)
-    {
-        return seed is null ? null : unchecked(seed.Value + 1009 * block);
     }
 
     private static double[] ProjectionToFrame(double[][] projection, int ambientDim, int targetDim)

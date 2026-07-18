@@ -3,6 +3,7 @@ using System.Threading;
 using Graphs;
 using Maths.Geometry;
 using Maths.Geometry.DimReduction;
+using Maths.Rng;
 using Xunit;
 
 namespace TDA.DimReduction.Tests;
@@ -478,7 +479,7 @@ public sealed class DistributedSpredTests
             Assert.Equal(block, info.Index);
             Assert.Equal(block * pointsPerBlock, info.Start);
             Assert.Equal(pointsPerBlock, info.Count);
-            Assert.Equal(seed + 1009 * block, info.Seed);
+            Assert.Equal(SeedTree.Derive(seed, blockCount)[block], info.Seed);
             AssertOrthonormalRows(info.Projection);
             AssertNearPlane(info.Projection, xy, 1e-8);
             AssertFiniteObjectives(info);

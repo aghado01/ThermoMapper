@@ -16,12 +16,6 @@ namespace Maths.Samplers.Ensemble;
 /// </summary>
 public sealed class ChainEnsemble
 {
-    /// <summary>
-    /// Salt mixed into the master seed for the decoupled readout-seed stream, so a model's readout-side randomness
-    /// (e.g. BARS's per-sample coefficient draws) runs on a stream independent of the transition kernel's.
-    /// </summary>
-    private const int ReadoutSeedSalt = 0x5EAD;
-
     /// <param name="model">Supplies each replica's kernel + start policy and the draw→functional reduction.</param>
     /// <param name="chains">Number of independent replicas (R̂/ESS need ≥ 2 to be defined).</param>
     /// <param name="masterSeed">The single integer the whole fan-out is reproducible from.</param>
@@ -43,8 +37,13 @@ public sealed class ChainEnsemble
         int essDim = model.EssDim;
         if (essDim < 0 || essDim > dim) throw new ArgumentOutOfRangeException(nameof(model), "EssDim must be in [0, FunctionalDim].");
 
-        int[] seeds = SeedTree.Derive(masterSeed, chains);
-        int[] readoutSeeds = SeedTree.Derive(masterSeed + ReadoutSeedSalt, chains);
+        // One SeedTree expansion, split into slices: kernel streams take children [0, chains) and
+        // the decoupled readout streams (e.g. BARS's per-sample coefficient draws) take
+        // [chains, 2·chains) — the ParallelTempering pattern. The former additive master salt
+        // aliased across runs: master m+salt's kernel streams were master m's readout streams.
+        int[] all = SeedTree.Derive(masterSeed, 2 * chains);
+        int[] seeds = all[..chains];
+        int[] readoutSeeds = all[chains..];
 
         var runs = new IChainRun<TDraw>[chains];
         var sums = new double[chains][];          // [ci][f] running Σ of functional f
