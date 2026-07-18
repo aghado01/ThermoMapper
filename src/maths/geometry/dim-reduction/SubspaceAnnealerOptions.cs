@@ -19,6 +19,22 @@ namespace Maths.Geometry.DimReduction
         public double IsotropicFraction { get; init; } = 0.1;
 
         /// <summary>
+        /// Fraction of proposals drawn as paired two-column moves: the rank-1 Givens geodesic
+        /// applied to an in-span mixture m = cos φ·y_i + sin φ·y_(i+1) of two eigen-adjacent
+        /// retained columns, rotated toward the complement while the orthogonal partner stays
+        /// fixed. This is the move that survives a flat eigentail — a defect direction smeared
+        /// across a near-degenerate column pair is excised in one rotation, where single-column
+        /// moves fight an O(1) loss of the pair's good share and crawl through second-order cross
+        /// terms. Adjacent pairing is a spectral-locality prior: the warm start orders columns by
+        /// eigenvalue, so near-degeneracy lives between neighbors (compositions of adjacent moves
+        /// reach arbitrary pairs). Requires targetDim ≥ 2 when positive.
+        /// <see cref="IsotropicFraction"/> + PairedFraction must not exceed 1; the remainder
+        /// draws single-column Givens moves. Default 0 — opt in where the spectrum is flat
+        /// (the ISOLET/S0 regime).
+        /// </summary>
+        public double PairedFraction { get; init; } = 0.0;
+
+        /// <summary>
         /// Acceptance rate the step controller steers toward — the classic random-walk
         /// Metropolis operating point. Higher acceptance grows the step, lower shrinks it.
         /// </summary>
@@ -56,6 +72,13 @@ namespace Maths.Geometry.DimReduction
             if (IsotropicFraction is not (>= 0.0 and <= 1.0))
                 throw new ArgumentOutOfRangeException(nameof(IsotropicFraction),
                     "IsotropicFraction is a mixture probability: it must lie in [0, 1].");
+            if (PairedFraction is not (>= 0.0 and <= 1.0))
+                throw new ArgumentOutOfRangeException(nameof(PairedFraction),
+                    "PairedFraction is a mixture probability: it must lie in [0, 1].");
+            if (IsotropicFraction + PairedFraction > 1.0)
+                throw new ArgumentOutOfRangeException(nameof(PairedFraction),
+                    "IsotropicFraction + PairedFraction must not exceed 1 — the remainder is the " +
+                    "single-column Givens share.");
             if (TargetAcceptance is not (> 0.0 and < 1.0))
                 throw new ArgumentOutOfRangeException(nameof(TargetAcceptance),
                     "TargetAcceptance must lie strictly inside (0, 1) — the step controller's " +

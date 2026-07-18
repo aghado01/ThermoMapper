@@ -43,6 +43,7 @@ public sealed class SubspaceAnnealerTests
         var options = new SubspaceAnnealerOptions
         {
             IsotropicFraction = 0.5,
+            PairedFraction = 0.2,
             TargetAcceptance = 0.3,
             StepCeiling = 1.0,
         };
@@ -67,13 +68,19 @@ public sealed class SubspaceAnnealerTests
     }
 
     [Theory]
-    [InlineData(0.0)]   // pure two-plane Givens
-    [InlineData(0.1)]   // default mixture
-    [InlineData(1.0)]   // isotropic-only
-    public void Compute_Result_RowsAreOrthonormal(double isotropicFraction)
+    [InlineData(0.0, 0.0)]   // pure single-column Givens
+    [InlineData(0.1, 0.0)]   // default mixture
+    [InlineData(1.0, 0.0)]   // isotropic-only
+    [InlineData(0.0, 1.0)]   // paired-only
+    [InlineData(0.3, 0.3)]   // all three kinds
+    public void Compute_Result_RowsAreOrthonormal(double isotropicFraction, double pairedFraction)
     {
         double[][] data = BuildData(samples: 40, dim: 4, seed: 11);
-        var options = new SubspaceAnnealerOptions { IsotropicFraction = isotropicFraction };
+        var options = new SubspaceAnnealerOptions
+        {
+            IsotropicFraction = isotropicFraction,
+            PairedFraction = pairedFraction,
+        };
 
         double[][] proj = SubspaceAnnealer.Compute(data, targetDim: 2, Objective, maxIters: 300, seed: 7, options).Projection;
 
@@ -180,6 +187,10 @@ public sealed class SubspaceAnnealerTests
         new() { CoolingRate = double.NaN },
         new() { CoolingRate = 0.0 },
         new() { CoolingRate = 1.1 },
+        new() { PairedFraction = double.NaN },
+        new() { PairedFraction = -0.1 },
+        new() { PairedFraction = 1.1 },
+        new() { IsotropicFraction = 0.6, PairedFraction = 0.6 },   // mixture over-full
     };
 
     [Theory]
@@ -198,6 +209,76 @@ public sealed class SubspaceAnnealerTests
             SubspaceAnnealer.Compute(data, targetDim: 2, Counting, maxIters: 5, seed: 7, options));
 
         Assert.Equal(0, evaluations);
+    }
+
+    [Fact]
+    public void Compute_PairedFractionWithTargetDimOne_Throws()
+    {
+        double[][] data = BuildData(samples: 10, dim: 4, seed: 11);
+        var options = new SubspaceAnnealerOptions { PairedFraction = 0.5 };
+
+        Assert.Throws<ArgumentException>(() =>
+            SubspaceAnnealer.Compute(data, targetDim: 1, Objective, maxIters: 1, seed: 7, options));
+    }
+
+    [Fact]
+    public void Compute_DegeneratePair_PairedMovesDescend_WhereSingleColumnCrawls()
+    {
+        // Finding 1's geometry made synthetic: rank-5 data on Gr(5, 200) whose 4th/5th variance
+        // directions are the 45°-mixtures of the good direction e_3 and the complement defect
+        // e_100, so the warm start spans {e_0..e_3, e_100} (objective 1 against the target
+        // span{e_0..e_4}) with the defect smeared evenly across the near-degenerate pair. That
+        // warm start is a saddle where strict single-column improvement is essentially impossible:
+        // a rotation of either mixed column pays an O(1/2) loss of its good share against an
+        // O(1/(d−k)) complement gain, and at 195 complement dimensions a draw carrying enough e_4
+        // mass to beat that trade has vanishing probability (at small d the tail is fat enough to
+        // leak — measured: d=30 lets single-column moves recover fully). The paired move's in-span
+        // mixing angle reaches m ≈ e_100 and excises the defect with no good-share loss — and its
+        // first success CONCENTRATES the pair basis ({≈e_3, ≈junk}), after which the ordinary
+        // single-column share descends exactly as on a pure-offset column. The temperature is
+        // pinned at 1e-6 (≪ any real increment) so thermal saddle diffusion — which SA temperature
+        // legitimately provides, and which descends either arm at 1e-3 — cannot contribute: the
+        // contrast isolates proposal geometry alone. The shared raised step floor keeps the
+        // acceptance controller from buying acceptance by shrinking θ into the diffusion regime.
+        const int d = 200, k = 5;
+        double[][] data = DegeneratePairData(samples: 300, dim: d, seed: 5);
+
+        static double DistanceToTarget(double[][] projection)
+        {
+            double overlap = 0.0;
+            for (int r = 0; r < projection.Length; r++)
+                for (int j = 0; j < 5; j++)
+                    overlap += projection[r][j] * projection[r][j];
+            return projection.Length - overlap;   // k − Σ cos²θ_i = Σ sin²θ_i
+        }
+
+        var singleOnly = new SubspaceAnnealerOptions
+        {
+            IsotropicFraction = 0.0,
+            PairedFraction = 0.0,
+            InitialStep = 0.5,
+            StepFloor = 0.4,
+            InitialTemperature = 1e-6,
+        };
+        var paired = singleOnly with { PairedFraction = 0.5 };
+
+        SubspaceAnnealerResult single = SubspaceAnnealer.Compute(
+            data, k, DistanceToTarget, maxIters: 12000, seed: 7, singleOnly);
+        SubspaceAnnealerResult mixed = SubspaceAnnealer.Compute(
+            data, k, DistanceToTarget, maxIters: 12000, seed: 7, paired);
+
+        _out.WriteLine($"start ≈ 1: single-column={single.Objective:F6}  paired-mixture={mixed.Objective:F6}");
+
+        // Measured at seed 7: single-column exactly 1.000000 (bit-frozen), paired 0.649 — and
+        // super-linearly (0.951 at half budget): early descent is window-rate-limited because
+        // accepted Δ≈0 uniform-φ rotations re-smear the pair basis between excision hits, until
+        // enough e_4 share accumulates to open first-order channels and compound. The engine fact
+        // pins the qualitative escape; efficiency at scale is the S0 probe's question.
+        Assert.True(single.Objective > 0.99,
+            $"Single-column moves should stay pinned at the smeared-defect saddle (≈ 1); got {single.Objective:F6} — " +
+            "if they now descend, the degenerate-pair premise needs revisiting.");
+        Assert.True(mixed.Objective < 0.8,
+            $"The paired mixture should escape the saddle and descend decisively; got {mixed.Objective:F6}.");
     }
 
     [Fact]
@@ -245,6 +326,32 @@ public sealed class SubspaceAnnealerTests
             data[i] = new double[dim];
             for (int j = 0; j < dim; j++)
                 data[i][j] = rng.NextDouble() * 2.0 - 1.0;
+        }
+        return data;
+    }
+
+    // Exact rank-5 data whose 4th/5th variance directions are the 45°-mixtures q1 = (e_3 + e_100)/√2
+    // and q2 = (e_3 − e_100)/√2 with a deliberate ~10% eigengap between them: the gap pins PCA's
+    // component choice to q1, q2 themselves (stable against sample noise, unlike an exactly
+    // degenerate pair whose axes land at a sample-determined angle), so the warm start's last two
+    // columns each carry half good direction e_3, half complement defect e_100 — maximal smearing,
+    // the flat-eigentail geometry of mobility finding 1, deterministically.
+    private static double[][] DegeneratePairData(int samples, int dim, int seed)
+    {
+        var rng = new Random(seed);
+        const double invSqrt2 = 0.7071067811865476;
+        var data = new double[samples][];
+        for (int i = 0; i < samples; i++)
+        {
+            var row = new double[dim];
+            row[0] = 2.0 * (rng.NextDouble() * 2.0 - 1.0);
+            row[1] = 1.9 * (rng.NextDouble() * 2.0 - 1.0);
+            row[2] = 1.8 * (rng.NextDouble() * 2.0 - 1.0);
+            double a = 1.05 * (rng.NextDouble() * 2.0 - 1.0);   // weight on q1 = (e_3 + e_100)/√2
+            double b = 0.95 * (rng.NextDouble() * 2.0 - 1.0);   // weight on q2 = (e_3 − e_100)/√2
+            row[3] = invSqrt2 * (a + b);
+            row[100] = invSqrt2 * (a - b);
+            data[i] = row;
         }
         return data;
     }

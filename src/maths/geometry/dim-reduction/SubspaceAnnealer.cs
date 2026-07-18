@@ -24,9 +24,10 @@ namespace Maths.Geometry.DimReduction
     /// <see cref="SubspaceObjectiveFunction"/>. The objective is a black box, so the engine is agnostic
     /// to what "good" means; proposals move along Grassmann geodesics — primarily two-plane Givens
     /// rotations (the rank-1 closed form of <see cref="GrassmannManifold.ExpMap"/>), optionally mixed
-    /// with isotropic horizontal tangents per <see cref="SubspaceAnnealerOptions"/>. Geodesic step
-    /// scales adapt per move coordinate toward a target acceptance rate; cooling governs the
-    /// Metropolis temperature.
+    /// with paired two-column moves (the same rank-1 form on an in-span mixture of eigen-adjacent
+    /// columns, for flat-eigentail warm starts) and isotropic horizontal tangents per
+    /// <see cref="SubspaceAnnealerOptions"/>. Geodesic step scales adapt per move coordinate toward
+    /// a target acceptance rate; cooling governs the Metropolis temperature.
     ///
     /// <para>This is the engine extracted from SPRED (Shape-Preserving Dimensionality Reduction,
     /// Kisung You, arXiv:2106.02096). SPRED is recovered by supplying a persistent-homology objective —
@@ -64,6 +65,10 @@ namespace Maths.Geometry.DimReduction
             if (k < 1 || k > d)
                 throw new ArgumentOutOfRangeException(nameof(targetDim),
                     "targetDim must satisfy 1 ≤ targetDim ≤ d.");
+            if (options.PairedFraction > 0.0 && k < 2)
+                throw new ArgumentException(
+                    "PairedFraction > 0 requires targetDim ≥ 2 — a paired move rotates an in-span mixture of two retained columns.",
+                    nameof(options));
 
             var manifold = new GrassmannManifold(ambientN: d, subspaceR: k);
 
@@ -87,11 +92,11 @@ namespace Maths.Geometry.DimReduction
             double[] direction = new double[d];
 
             // One adaptive step scale per move coordinate — each retained column's Givens angle,
-            // plus one for the isotropic kind (index k). Column-local acceptance diverges sharply
-            // once some columns converge (their moves reject at any scale while mobile columns
-            // keep improving), so a pooled scale would be strangled below the target by the
-            // converged majority and starve the mobile columns.
-            double[] stepByMove = new double[k + 1];
+            // plus one for the isotropic kind (index k) and one for the paired kind (index k+1).
+            // Column-local acceptance diverges sharply once some columns converge (their moves
+            // reject at any scale while mobile columns keep improving), so a pooled scale would be
+            // strangled below the target by the converged majority and starve the mobile columns.
+            double[] stepByMove = new double[k + 2];
             Array.Fill(stepByMove, Math.Clamp(options.InitialStep, options.StepFloor, options.StepCeiling));
             // Multiplicative controller with zero expected log-step drift exactly at the target:
             // grow^p · shrink^(1−p) = 1 ⇔ p = TargetAcceptance.
@@ -103,12 +108,22 @@ namespace Maths.Geometry.DimReduction
                 cancellationToken.ThrowIfCancellationRequested();
                 double temp = options.InitialTemperature * Math.Pow(options.CoolingRate, iter);
 
-                int move;   // controller index: the rotated column for Givens, k for isotropic
-                if (rng.NextDouble() < options.IsotropicFraction)
+                // Controller index: the rotated column for single Givens, k isotropic, k+1 paired.
+                // One uniform draw partitions the mixture, so PairedFraction = 0 reproduces the
+                // pre-paired seeded streams bit-for-bit.
+                int move;
+                double kind = rng.NextDouble();
+                if (kind < options.IsotropicFraction)
                 {
                     move = k;
                     HorizontalTangent(current, d, k, rng, stepByMove[move], tangent);
                     manifold.ExpMap(current, tangent, proposal);     // retract along the geodesic
+                }
+                else if (kind < options.IsotropicFraction + options.PairedFraction)
+                {
+                    move = k + 1;
+                    int pair = rng.NextInt(k - 1);                   // eigen-adjacent pair (pair, pair+1)
+                    PairedGivensProposal(current, d, k, pair, rng, stepByMove[move], direction, proposal);
                 }
                 else
                 {
@@ -194,6 +209,70 @@ namespace Maths.Geometry.DimReduction
             // cross-column error stays second-order.
             renorm = 1.0 / Math.Sqrt(renorm);
             for (int row = 0; row < d; row++) dst[yc + row] *= renorm;
+        }
+
+        /// <summary>
+        /// Paired two-column proposal: form the in-span mixture m = cos φ·y_a + sin φ·y_(a+1) of the
+        /// eigen-adjacent columns (a, a+1) at a uniform mixing angle φ, rotate m toward a random unit
+        /// direction v orthogonal to the current span (m ← m·cosθ + v·sinθ), and keep the orthogonal
+        /// partner m⊥ = −sin φ·y_a + cos φ·y_(a+1) fixed. Still the rank-1 closed form of
+        /// <see cref="GrassmannManifold.ExpMap"/> — the horizontal tangent θ·v·mᵀ has a single
+        /// singular value θ; only the moving line now sweeps the pair's 2-plane instead of sitting
+        /// on a basis column. This is the escape move for flat-eigentail warm starts: a defect
+        /// direction smeared across a near-degenerate pair is reachable at φ near its in-span angle
+        /// with zero loss of the pair's good share, where a single-column rotation pays an O(1)
+        /// share loss against an O(1/(d−k)) gain and crawls (mobility brief finding 1). Because the
+        /// partner column is exactly preserved and v ⊥ span, orthonormality survives to the same
+        /// second-order roundoff as the single-column move; both written columns are renormalized.
+        /// </summary>
+        private static void PairedGivensProposal(
+            double[] y, int d, int k, int pair, Xoshiro256PlusPlus rng, double step,
+            double[] direction, double[] dst)
+        {
+            double theta = step * NextGaussian(rng);
+            double phi = 2.0 * Math.PI * rng.NextDouble();
+
+            for (int row = 0; row < d; row++) direction[row] = NextGaussian(rng);
+
+            // v ← v − Y(Yᵀv): strip the in-span component (same guard as the single-column move).
+            for (int a = 0; a < k; a++)
+            {
+                double dot = 0.0;
+                int ya = a * d;
+                for (int row = 0; row < d; row++) dot += y[ya + row] * direction[row];
+                for (int row = 0; row < d; row++) direction[row] -= dot * y[ya + row];
+            }
+
+            double norm = 0.0;
+            for (int row = 0; row < d; row++) norm += direction[row] * direction[row];
+            norm = Math.Sqrt(norm);
+
+            Array.Copy(y, dst, d * k);
+            if (norm < 1e-12) return;   // k = d: the complement is empty and Gr(d, d) is a point
+
+            double cosPhi = Math.Cos(phi);
+            double sinPhi = Math.Sin(phi);
+            double cosTheta = Math.Cos(theta);
+            double sinTheta = Math.Sin(theta) / norm;   // folds v's normalization into the rotation
+            int yc = pair * d, yn = (pair + 1) * d;
+            double renormM = 0.0, renormP = 0.0;
+            for (int row = 0; row < d; row++)
+            {
+                double mixed = cosPhi * y[yc + row] + sinPhi * y[yn + row];
+                double partner = -sinPhi * y[yc + row] + cosPhi * y[yn + row];
+                double moved = mixed * cosTheta + direction[row] * sinTheta;
+                dst[yc + row] = moved;
+                dst[yn + row] = partner;
+                renormM += moved * moved;
+                renormP += partner * partner;
+            }
+            renormM = 1.0 / Math.Sqrt(renormM);
+            renormP = 1.0 / Math.Sqrt(renormP);
+            for (int row = 0; row < d; row++)
+            {
+                dst[yc + row] *= renormM;
+                dst[yn + row] *= renormP;
+            }
         }
 
         /// <summary>
