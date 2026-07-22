@@ -1,4 +1,25 @@
-# AGENTS.md — layering invariants
+# AGENTS.md — project orientation & working guidance
+
+Project-specific guidance for agents: how the repo is laid out, the invariants
+that govern placement and dependencies, the tooling, and how to behave while
+working here. Development practices, design principles, and testing standards
+are the province of [CONTRIBUTING.md](CONTRIBUTING.md) — read it before
+writing code.
+
+## Project orientation
+
+| Path        | What lives there |
+| ----------- | ---------------- |
+| `src/`      | C# source, one folder per functional area (`maths`, `graphs`, `clustering`, `tda`, `viz`, `viz-core`, `synthetic`, `hashish`, `archivory`, `user-repl`, `repo-audit`, `test-harness`) |
+| `projects/` | `.csproj` files, one per assembly (`Maths.LinAlg`, `Graphs.Observables`, `Clustering.Graphical.SPC`, …) pointing into `src/` |
+| `tests/`    | xUnit test projects mirroring `projects/` (`*.Tests`), plus harness plumbing |
+| `scripts/`  | PowerShell entry points (`repo-audit.ps1`, `fact-harness.ps1`, `portable-python.ps1`, `venv-boostrap.ps1`, `parse-lean-docs.ps1`) |
+| `r/`        | R oracle package (renv-managed) — reference implementations that validate the C# engine (`r/oracles`) |
+| `lean/`     | Lean 4 formalization (lake project: `proto-lemmas`, `enthymemes`) |
+| `datasets/` | Benchmark datasets (`iris`, `isolet`, `landsat`, …) + prep and reference material |
+| `presets/`  | Named run configurations (e.g. `presets/spc`) |
+| `artifacts/`| Build output, test-run manifests, health reports — generated, never hand-edited |
+| `issues/`   | Design notes and work coordination — see DocOps below |
 
 ## The one-way layer order
 
@@ -44,32 +65,66 @@ instead of threading the consumer concern into a build stage.
 - Configs are declarative, JSON-serializable DTOs. Delegates and live objects
   ride the call, not the config.
 - Fluent/chained ergonomics live at the CLI/REPL boundary; the backend consumes
-  the pure DTO.
+  the pure DTO. (Rationale and shape conventions: *strict core, fluent shell*
+  in [CONTRIBUTING.md](CONTRIBUTING.md).)
 - Pre-release discipline: no back-compat shims, no `[Obsolete]` aliases —
   superseded surfaces are deleted wholesale.
 
-## RepoAudit - Static & semantic analysis
+## How to work here — behavioral guidance
 
-`scripts/repo-audit.ps1`
+- **Engine first.** Don't push toward wiring up consumers/applications to
+  validate in-progress engine work — validate with oracles and property
+  checks, and sequence engine depth ahead of integration (see
+  [CONTRIBUTING.md](CONTRIBUTING.md)).
+- **Match the sketched shape.** When a structural pattern is proposed with
+  examples, render one unified shape; don't invent asymmetries the examples
+  didn't ask for. Genuine misfits get raised as a single question.
+- **Refactors:** new files land beside old ones; deletions happen only in the
+  final cleanup sweep, as their own commit. End state carries no compat shims.
+- **Commits:** work lands directly on `main` as targeted, per-concern commits
+  during interactive sessions.
+- **Escalate tool inaccuracies.** When repo-audit (or other project tooling)
+  produces false positives/negatives, verify root cause in source, then flag
+  it to the user as a candidate bug fix or enhancement — don't silently work
+  around it.
 
-Entry point that builds `src/repo-audit` (project: `projects/RepoAudit/RepoAudit.csproj`) on first run, then runs it. Default run writes `artifacts/project-health.md` and renders it inline. Flags:
+## Environment
 
-- `-Validate` — strict mode; fail on warnings.
-- `-NoGit` — skip git-history-based checks.
-- `-Impact <path>` — focused analysis around a single path.
-- `-NoDisplay` — suppress the auto-render of the health report.
-- `-Rebuild` — force-rebuild RepoAudit before running. **Required after editing `src/repo-audit/*`:** the built exe is cached (only rebuilt on `-Rebuild` or if missing), so changes to the analyzer itself won't take effect without it.
+- Toolchains (dotnet, R, Lean, python, llama-cpp, …) come from the portable
+  environment (pdenv) and reach shells via the **user-registry PATH**;
+  `$env:PORTABLE_ROOT` points at the install root. The old
+  bootstrap-profile/`SHARED_ENV` mechanism is dead — never gate on
+  `SHARED_ENV_LOADED` or assume its aliases exist.
+- A registry PATH change only reaches processes started afterward, so a
+  spawned tool shell may hold a **stale PATH snapshot**. A failed
+  `Get-Command` probe therefore cannot distinguish "not on PATH yet" from
+  "not installed" — don't conclude from the probe; use an absolute path under
+  `$env:PORTABLE_ROOT`, or ask.
+- Python work goes through the local venv (`scripts/portable-python.ps1`,
+  `scripts/venv-boostrap.ps1`). Convenience-alias loader scripts for R /
+  dotnet / Lean are planned ([TODO.md](TODO.md)).
+- PowerShell filesystem cmdlets: `-LiteralPath` by default (see
+  [CONTRIBUTING.md](CONTRIBUTING.md)).
 
-Repo-audit is a detector is a valuable tool that can be used to root out project dependencies but may present false positives/negatives. Verify root causes in source code. Targeted `dotnet build` spot-checks.When repo-audit inaccuracies are detected, escalate to user for potential bug fixes and/or enhancements to the tool,
+## DocOps — conventions for `issues/`
 
-## test-harness - Parallel test runner
+`issues/` is the design-note and work-coordination space, organized by
+workstream subfolder (`ph`, `spred`, `viz`, `docs`, …). Canonical file kinds:
 
-`src/test-harness/`
+- **Briefs** (`*-brief.md`) — scoped work assignments, JIRA-ticket-like:
+  context, scope, constraints, sequencing. Written before delegated or
+  deferred work begins.
+- **Reports** — writeups of work performed: what was done, open ends, caveats,
+  follow-up items. A report on delegated work is appended to (or sits beside)
+  the brief that commissioned it, closing the loop.
+- **Design notes** (`design.md`, `dev-sequence.md`, roadmaps) — settled
+  decisions with rationale. Also the designated parking lot for academic
+  critique, derivations, and prior-art discussion kept out of docstrings.
+- **Discussion digests / transcripts** — distilled ideation and reviews
+  (`*-thread.md`, `*-transcript-*.md`, retrospectives).
+- **[The Shelf](issues/SHELF.md)** (`issues/SHELF.md`) — action items jotted
+  organically mid-work; entries incubate and may be amended before being
+  promoted to a brief.
 
-C# xUnit parallel fact runner; project at `projects/TestHarness.Runner/`. Discovers facts via `dotnet test --list-tests`, runs them concurrently up to `--max-workers`, and drops per-suite manifests + a `summary.json` into `artifacts/test-runs/<suite>/<stamp>/`. Invoke via:
-
-```
-dotnet run --project projects/TestHarness.Runner --
-    --project <test.csproj> [--fixture <Class> | --filter <expr>]
-    [--max-workers N] [--list-only]
-```
+Docs reference each other by wikilink or explicit relative link. Generated
+analysis output goes to `artifacts/`, not `issues/`.
