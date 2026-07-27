@@ -104,6 +104,54 @@ Doc 4's manifold-null warning applies unchanged and hardest at step 1: on point-
 kNN graphs, local repetition is the null, so screens must fire on **mesoscale**
 structure against a **matched random-geometric** baseline.
 
+## VI. The SPCX layer — thermal curves as inference objects
+
+**Seed (Azriel):** the ideas above dovetail with the spirit of **SPCX** — not "run SPC
+across T and find T_c," but advanced analytical treatment of thermal observable
+curves: BARS estimation of the curve as a **joint posterior**, features extracted
+*analytically* from the fitted object; groundwork already laid (adaptive BARS
+scheduling — uniform first pass, iterative RJMCMC curve fitting; Lean lemmas and
+protolemmas attached to this line). Plus the SPC × Mapper applications (ThermoMapper
+proper: SPC-derived Mapper lenses; global SPC over the Mapper nerve) — discussed, not
+yet implemented.
+
+**The reframe this buys the whole arc:** every screen in docs 3–5 is a *curve
+feature* — χ(T) peak location/width, `−dS/d log t` peak-vs-plateau, cluster-size
+degeneracy at transition, plateau extents, extensivity slope. SPCX-as-curve-inference
+upgrades each from a grid-read to a posterior quantity:
+
+1. **Analytic derivatives with uncertainty.** The screens need derivatives and
+   curvature of noisy MC-estimated curves; finite differences amplify exactly the
+   noise MC produces. Splines differentiate exactly — the joint posterior hands every
+   derivative-based screen its credible interval for free.
+2. **The knot posterior is a transition detector.** RJMCMC knot placement concentrates
+   where the curve has structure — knot density over T is a "where is the action"
+   observable at zero extra cost, and it is what the adaptive scheduling refines on:
+   uniform pass → knots cluster → resample there → refit. An active-learning loop
+   over T.
+3. **Extensivity becomes Bayesian model comparison.** `F(T) ≈ m·f_unit(T)` vs a free
+   curve is a shared-shape-times-multiplier model; `m` gets a posterior, and the
+   Bayes-factor machinery already in the K.You track applies. The §II fit stops being
+   a heuristic.
+4. **The thermal curve is a behavioral signature** (rung-0 descriptor). Repeated units
+   have the *same* `f_unit(T)`; clustering per-subgraph thermal-response curves is the
+   thermal twin of HKS-profile clustering. Node-level version: per-node melting
+   profile / `T_melt(i)` as a field over nodes.
+5. **Thermal autonomy becomes a two-curve comparison with a likelihood** (in-situ vs
+   island melting curves), not an eyeball.
+
+**Engine note — MCMC feeding MCMC.** SW sampling yields heteroscedastic noisy
+observables per T; the robust-by-augmentation BARS design is built for exactly that
+noise model, and SPC + BARS already sit in the planned shared mixing/diagnostics
+family. The Lean harness has natural targets here of the boring-load-bearing kind
+(spline-derivative exactness; validity conditions for the extensivity decomposition).
+
+**ThermoMapper proper** (destination markers, not scheduled): (a) curve-feature
+fields as Mapper lenses — `T_melt(i)`, local susceptibility-peak location — now
+analytic-with-uncertainty rather than grid-read; (b) global SPC over the Mapper
+nerve; (c) §IV's SPC-cover → nerve. The repetition program and ThermoMapper proper
+consume the **same nerve**.
+
 ## Open edges
 
 - Does the free-energy extensivity fit survive realistic coupling (overlap +
@@ -116,3 +164,10 @@ structure against a **matched random-geometric** baseline.
   Potts subsystem?
 - Does the SPC-cover → Mapper-nerve construction need the interleaving guarantees
   before it is usable, or is that a later rigor pass?
+- Heteroscedastic MC-noise propagation into the BARS likelihood: is the augmentation
+  scheme sufficient as-is, or does per-T error need explicit modeling?
+- Does the knot posterior actually concentrate at transitions in practice — testable
+  cheaply on synthetic m-copy fixtures before trusting it as a detector.
+- `m`-posterior identifiability as coupling strengthens: where does the extensivity
+  model comparison stop being able to distinguish m from m±1?
+- Which curve-feature extraction claims are Lean-lemma-ready now vs protolemma-stage.
