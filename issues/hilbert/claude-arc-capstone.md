@@ -230,6 +230,17 @@ slices, not a parallel workstream. It also keeps the confidence-pushforward chai
 justified γ through it — which is also what makes the level-III curve machinery
 (SPCX/BARS over one backbone parameter) the right readout rather than a compromise.
 
+**The loop between §III and §VII (confirmed as the main line, 2026-07-27 — "warped
+path between two axes"):** BARS sits on *both* ends of γ. It **infers** the path — a
+ridge like `θ*(T)` is a curve fit through a noisy landscape, exactly the object the
+BARS/Cᵥ-warp machinery produces — and it **reads along** the path once chosen, since
+the readout theory is axis-agnostic (§III). So "expanded SPC" is not merely a
+readout layer bolted onto the topology: it is the instrument that *constructs the
+backbone the topology is computed over*. Two standing questions for any new
+landscape, in order: **which γ**, and **is that γ monotone in the poset** (⇒ PH) or
+not (⇒ zigzag). Nothing in the repetition program (docs 4–5) needs more than this —
+its screens are already curve features over a single backbone parameter.
+
 ## Open edges
 
 - Item 3 first: does swapping SPC into Mapper cells break the convergence guarantees
