@@ -109,9 +109,21 @@ structure against a **matched random-geometric** baseline.
 **Seed (Azriel):** the ideas above dovetail with the spirit of **SPCX** — not "run SPC
 across T and find T_c," but advanced analytical treatment of thermal observable
 curves: BARS estimation of the curve as a **joint posterior**, features extracted
-*analytically* from the fitted object; groundwork already laid (adaptive BARS
-scheduling — uniform first pass, iterative RJMCMC curve fitting; Lean lemmas and
-protolemmas attached to this line). Plus the SPC × Mapper applications (ThermoMapper
+*analytically* — per draw, pushed forward — from the fitted object. Groundwork laid:
+**interleaved uniform refinement scheduling** (NOT adaptive — corrected 2026-07-27):
+a sparse uniform grid over the normalized [0,1] thermal range with **endpoints
+included by design** (anchoring knot fits at the range edges), then a complementary
+schedule roughly between the first-pass points, refit on the **union**, iterate until
+confident the curve's features have surfaced implicitly. Location-agnostic by
+construction; only the *stopping* is evidence-driven. This is a different approach in
+kind from the classical schedules — descending-T with density placed by a
+physics-based T_c estimator (Domany) or heuristics (wave_clus / Quiroga) — which bake
+the answer's presumed location into the measurement. Schedule-neutrality is
+calibration-not-API applied to scheduling, and it is load-bearing here: hunting
+schedules are single-T_c-shaped, while repeated units produce **multi-transition
+curves** — what a schedule biased toward one expected critical point would miss.
+Lean lemmas/protolemmas attached (grounding below). Plus the SPC × Mapper
+applications (ThermoMapper
 proper: SPC-derived Mapper lenses; global SPC over the Mapper nerve) — discussed, not
 yet implemented.
 
@@ -124,11 +136,13 @@ upgrades each from a grid-read to a posterior quantity:
    curvature of noisy MC-estimated curves; finite differences amplify exactly the
    noise MC produces. Splines differentiate exactly — the joint posterior hands every
    derivative-based screen its credible interval for free.
-2. **The knot posterior is a transition detector.** RJMCMC knot placement concentrates
-   where the curve has structure — knot density over T is a "where is the action"
-   observable at zero extra cost, and it is what the adaptive scheduling refines on:
-   uniform pass → knots cluster → resample there → refit. An active-learning loop
-   over T.
+2. **The stopping rule is the span self-audit** (BARS-S, `spans_audit_sufficiency`):
+   the narrowest significant-peak FWHM span sets a Nyquist-ish floor against the
+   current union-grid spacing — the spans audit their own sufficiency premise. Stop
+   refining when the narrowest span comfortably exceeds achieved spacing; a
+   principled termination, not "looks converged." (Knot density over T remains a free
+   *readout* of where structure lives — but it is not a scheduling driver; the
+   schedule stays uniform by design.)
 3. **Extensivity becomes Bayesian model comparison.** `F(T) ≈ m·f_unit(T)` vs a free
    curve is a shared-shape-times-multiplier model; `m` gets a posterior, and the
    Bayes-factor machinery already in the K.You track applies. The §II fit stops being
@@ -139,6 +153,30 @@ upgrades each from a grid-read to a posterior quantity:
    profile / `T_melt(i)` as a field over nodes.
 5. **Thermal autonomy becomes a two-curve comparison with a likelihood** (in-situ vs
    island melting curves), not an eyeball.
+
+**Lean grounding** (`lean/enthymemes/BARS.lean` + `lean/proto-lemmas/`; taxonomy:
+proto-lemmas → enthymemes (compile, `sorry`) → lemmas (no apologies)):
+
+- **MP-1 / SP-1 / SP-2** — per-draw feature extraction is closed-form and zero-slop:
+  local maxima and level-set crossings lie in exact finite candidate sets
+  (derivative/level roots; degree-general since `afe9689b`), so pushforwards like
+  π(T) are exact. Certifies point 1 above.
+- **MP-2 / SP-3** — peak *count* and FWHM *width* do not commute with averaging
+  (averaging merges peaks and reshapes level sets): **every screen in this doc must
+  be computed per draw and pooled, never read off the pooled mean fit.** The
+  per-draw reduce is forced, not stylistic.
+- **MP-3** — the count is piecewise-constant, jumping on a fold/threshold set: mass
+  split between k and k+1 near a bifurcation is *correct ambiguity*. The right
+  epistemics for reading the degeneracy screens of §II.
+- **MP-4** — the peak set is a point process; intensity `λ(T)` is the matching-free
+  multi-peak summary. **This names the engine readout the repetition program
+  consumes**: m units co-melting = an intensity spike of mass m; near-degenerate
+  splitting = m resolvable bumps. The peak-intensity histogram (flagged there as a
+  candidate increment) now has a motivated consumer.
+- **BARS-S** — the sufficiency premise under the whole slate; its measurable half is
+  the stopping rule in point 2. Clip-semantics corollary: uniform coverage of [0,1]
+  ⇒ no interior coverage gap; clip migrates to an edge-transition signal owned by
+  the consumer.
 
 **Engine note — MCMC feeding MCMC.** SW sampling yields heteroscedastic noisy
 observables per T; the robust-by-augmentation BARS design is built for exactly that
@@ -166,8 +204,13 @@ consume the **same nerve**.
   before it is usable, or is that a later rigor pass?
 - Heteroscedastic MC-noise propagation into the BARS likelihood: is the augmentation
   scheme sufficient as-is, or does per-T error need explicit modeling?
-- Does the knot posterior actually concentrate at transitions in practice — testable
-  cheaply on synthetic m-copy fixtures before trusting it as a detector.
+- Does knot density track transitions in practice (as a readout only) — testable
+  cheaply on synthetic m-copy fixtures.
+- Is the span self-audit sufficient as the sole stopping rule for interleaved
+  refinement, or does it need a companion criterion for feature *absence* (flat
+  curves stop immediately — is that correct behavior)?
+- MP-4 intensity histogram: the repetition program is its first motivated consumer —
+  does that change its priority in the BARS slate?
 - `m`-posterior identifiability as coupling strengthens: where does the extensivity
   model comparison stop being able to distinguish m from m±1?
 - Which curve-feature extraction claims are Lean-lemma-ready now vs protolemma-stage.
