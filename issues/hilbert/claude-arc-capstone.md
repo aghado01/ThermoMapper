@@ -176,11 +176,59 @@ couplings → holonomy toolkit this arc assembled.
 | 1 | **Zigzag ↔ Mapper on one cover** — use the existing zigzag engine for the Reeb content of Mapper | established theory (CdSM), unexploited here |
 | 2 | **Thermal lenses** — Reeb graph of `T_melt(i)` / susceptibility-peak fields | synthesis; buildable on existing parts |
 | 3 | **Declare which object SPC-in-cells estimates** (density-supported Reeb graph) | correctness note, cheap, do first |
-| 4 | **(T, cover-resolution) bifiltration** — ThermoMapper is natively 2-parameter | established frontier: no complete discrete invariant; rank invariant / fibered barcodes / RIVET-style tooling |
+| 4 | **(T, cover-resolution) as a landscape read by a warped path γ** — *not* a bifiltration; see §VII | **settled doctrine, do not re-litigate** |
 | 5 | **Soft nerve from SPC soft memberships** — weighted/fuzzy Mapper from `Groups` | thin literature — real greenfield |
 | 6 | **Loops as holonomy sites** (Reeb `b₁` = base cycles = defect carriers) | my synthesis; testable via doc 4 §II |
 | 7 | **Merge-tree comparison for repeated units** — interleaving distance / ultrametric GW between subtree dendrograms | established but computationally hard; approximations exist; feeds doc 5 §III hashing |
 | 8 | **Reeb *space*** for multivariate thermal lenses | established (Edelsbrunner–Harer–Patel); pulls back to item 4 |
+
+## VII. Correction — multiparameter is settled doctrine, not an open frontier
+
+An earlier draft of §VI item 4 framed "(T, cover-resolution) bifiltration" as a
+frontier to consider. **That re-opened a settled question.** The canonical statement
+lives in the arch-overhaul vocabulary (MarkBrain
+`ThermoMapper/issues/architecture-overhaul/vocabulary.md`, the order-type/species
+axis), with the operational form in `issues/ph/` (P1a/P1b/P1c briefs,
+`dev-sequencing.md`, `zigzag-frontier.md`). Recorded here so this arc does not drift
+back into it:
+
+**Order-type is the species axis — it picks the machinery:**
+
+| order-type of the *slice* | machinery |
+|---|---|
+| totally ordered + monotone | standard 1-parameter PH |
+| totally ordered, arrows both ways | **zigzag** (SPC over T; the Z5 engine) |
+| genuine poset | multiparameter — **fraught**: no complete barcode invariant (REF-MPH §9.2.1) |
+
+**The primary move is the warped path, not the bifiltration.** A warped curve through
+a 2+-axis landscape **is not a bifiltration**: it is a 1-D monotone path `γ` that
+*pulls back* the multi-axis structure onto a single backbone (γ's arc-length),
+**keeping a proper barcode exactly where the full product-poset loses it**. `γ` is the
+design/inference choice — the BARS / Cᵥ-warp, or a coupled ridge like `θ*(T)`
+following the temperature-dependent cut. Crucially: **the slice's order-type, not the
+landscape's, picks the machinery** — γ monotone-in-poset ⇒ standard PH; non-monotone
+⇒ zigzag. This is *why the zigzag engine exists*: it is the reader of non-monotone
+slices, not a parallel workstream. It also keeps the confidence-pushforward chain
+1-parameter, where a true bifiltration would force multiparameter interleaving.
+
+**Ranked positions:**
+
+1. **Warped path γ** — first resort; proper barcode preserved.
+2. **Fibered barcode** (vary γ, watch the barcode) — the **middle ground when one path
+   cannot be justified**, not a default readout.
+3. **Genuinely monotone-in-both-axes special cases** are fine and already in play: P1b
+   makes `K_{δ,Δ}` a real `(δ,Δ)` bifiltration with **both axes monotone**, exposed as
+   a slice family read by monotone PH. This is the feasible special case — feasibility
+   comes from both-axes monotonicity, not from bipersistence machinery.
+4. **Full multiparameter module** — deferred to **Z6 quasi-zigzag** (multiparameter ×
+   zigzag), an unstarted far rung. DS2026's *quasi-zigzag bifiltration* is the
+   principled formal home: a real, stable object that is **not** the fraught full
+   bipersistence.
+
+**Implication for §I–§IV:** the three filtration axes (heat `t`, thermal `T`, metric
+`ε`) plus cover resolution form a *landscape*, and the arc's readouts should ride a
+justified γ through it — which is also what makes the level-III curve machinery
+(SPCX/BARS over one backbone parameter) the right readout rather than a compromise.
 
 ## Open edges
 
@@ -188,9 +236,10 @@ couplings → holonomy toolkit this arc assembled.
   in a way that matters at realistic cover resolutions, or only in principle?
 - Does the zigzag engine's existing interval/cover machinery accept a Mapper cover
   unchanged, or is there an impedance mismatch in how covers are specified?
-- Two-parameter persistence: is the honest near-term move a *fibered* readout (slices
-  along fixed `T`, barcode per slice — which the BARS layer then reads as curves over
-  the slice parameter) rather than a genuine 2-parameter invariant?
+- For the (T, cover) landscape: what is the *justified* γ — is there a coupled ridge
+  (cover resolution tracking thermal scale) analogous to `θ*(T)`, or does this case
+  fall to the fibered middle ground? (§VII — the machinery question is settled; only
+  the choice of γ for this particular landscape is open.)
 - Merge-tree interleaving is NP-hard exactly; is the subtree-hash screen (doc 5 §III)
   plus a cheap approximation enough for the repetition program?
 - Prominence-as-persistence: does adopting the PH stability theorem wholesale
