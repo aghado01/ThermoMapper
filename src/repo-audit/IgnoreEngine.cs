@@ -316,7 +316,9 @@ public static class GitIgnoreCompiler
 
     // ── Stage 4: Gather-Scatter ───────────────────────────────────────────
 
-    private static Dictionary<string, CompiledIgnoreState> GatherScatter(
+    // internal rather than private so the scatter contract — every node stamped,
+    // identical signatures sharing one regex pair — is directly testable
+    internal static Dictionary<string, CompiledIgnoreState> GatherScatter(
         List<GitIgnoreNode> nodes,
         GlobSemantics semantics)
     {
@@ -334,9 +336,13 @@ public static class GitIgnoreCompiler
                 compiled = (
                         GlobCompiler.CompileGlobs(node.EffectivePositives),
                         GlobCompiler.CompileGlobs(node.EffectiveExceptions));
-                result[node.NodePath] = new CompiledIgnoreState(
-                    node.NodePath, compiled.Pos, compiled.Ex, semantics);
+                cache[sig] = compiled;
             }
+
+            // Every node is stamped, cache hit or miss — the cache decides whether the
+            // regex pair is recompiled, never whether the node appears in the result
+            result[node.NodePath] = new CompiledIgnoreState(
+                node.NodePath, compiled.Pos, compiled.Ex, semantics);
         }
 
         return result;
