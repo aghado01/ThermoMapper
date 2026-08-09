@@ -1,0 +1,2 @@
+-- Theorems tier: intentionally empty until a verified result of sufficient
+-- consequence and stability merits promotion beyond the reusable lemma tier.

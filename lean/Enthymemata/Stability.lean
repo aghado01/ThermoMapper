@@ -11,14 +11,18 @@
   PROVED : stability_event_subset, confidence_pushforward   (measure monotonicity over the axiom).
   OBLIGATION : landscape_stable   (FH2024 §4 — the averageable surrogate; build with TDA.Ph).
 
-  Proto-lemma: ../proto-lemmas/confidence-pushforward-lemmas.md
+  Protolemma: ../Protolemmata/confidence-pushforward-lemmas.md
 -/
 import Mathlib.MeasureTheory.Measure.MeasureSpace
 import Mathlib.Topology.MetricSpace.Basic
 
 namespace Spc.Stability
 
-/-! ### 0. Opaque stand-ins for the TDA-layer objects (as Bifiltration.lean does for the measure). -/
+/-! ### 0. Abstract stand-ins for the TDA-layer objects (as Bifiltration.lean does for the measure).
+
+Carrier and metric stand-ins can be opaque because their codomains are inhabited. The two
+carrier-producing maps are axioms until the TDA layer supplies definitions: an opaque definition
+would itself need an inhabitant of the still-abstract carrier merely to elaborate. -/
 
 opaque PersistenceDiagram : Type
 opaque bottleneck : PersistenceDiagram → PersistenceDiagram → ℝ
@@ -26,7 +30,7 @@ opaque bottleneck : PersistenceDiagram → PersistenceDiagram → ℝ
 opaque supNorm : (ℝ → ℝ) → ℝ
 /-- The filtration-then-diagram functor: a curve (filtration index → value) to its barcode. The
     monotonicity that makes this well-defined is `Bifiltration.lean`'s `spin_agreement_mono`. -/
-opaque Dgm : (ℝ → ℝ) → PersistenceDiagram
+axiom Dgm : (ℝ → ℝ) → PersistenceDiagram
 
 /-! ### 1. The one cited input — stability for functions. -/
 
@@ -55,7 +59,7 @@ theorem stability_event_subset (fhat : ℝ → ℝ) (ε : ℝ) :
     The "no inflation" is `BARS.lean`'s exactness: the band-ε is *also* the bottleneck-ε. -/
 theorem confidence_pushforward
     {Ω : Type*} [MeasurableSpace Ω] (μ : MeasureTheory.Measure Ω)
-    (f : Ω → (ℝ → ℝ))                       -- a random curve = one posterior draw
+    (f : Ω → (ℝ → ℝ)) -- a random curve = one posterior draw
     (fhat : ℝ → ℝ) (ε α : ℝ)
     (hband : ENNReal.ofReal (1 - α)
               ≤ μ {ω | supNorm (fun x => f ω x - fhat x) ≤ ε}) :
@@ -68,7 +72,7 @@ theorem confidence_pushforward
 
 /-- Persistence landscape: the Banach-valued, stable, averageable summary of a diagram (FH2024). -/
 opaque PersistenceLandscape : Type
-opaque landscape : PersistenceDiagram → PersistenceLandscape
+axiom landscape : PersistenceDiagram → PersistenceLandscape
 opaque landscapeSupNorm : PersistenceLandscape → PersistenceLandscape → ℝ
 
 /-- **L5 — landscape stability (OBLIGATION; FH2024 §4).**

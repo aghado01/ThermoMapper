@@ -7,30 +7,45 @@ unit tests, sibling of `tests/`.
 
 ## Taxonomy
 
-Three tiers, promotion-driven:
+Four active stages, promotion-driven, plus a curated archive:
 
-| Tier | Where | Contract |
+| Stage | Where | Contract |
 | --- | --- | --- |
-| **proto-lemmas** | `proto-lemmas/*.md` | Informal lemma briefs (chat-exported). Informal, markdown format. Not compiled. |
-| **enthymemes** | `Enthymemes/*.lean` | Statements are real and **compile**; proofs still apologize (`sorry`). An enthymeme suppresses a premise — these suppress proof steps. |
-| **lemmas** | `Lemmas/*.lean` | No apologies. Complete as far as current concerns go. |
+| **protolemmata** | `Protolemmata/*.md` | Informal briefs, conjectures, design arguments, and candidate statements. Expected to change; not compiled. |
+| **enthymemata** | `Enthymemata/*.lean` | Statements are real and **compile**; proofs may still apologize (`sorry`). An enthymema suppresses a premise — these suppress proof steps. |
+| **lemmas** | `Lemmas/*.lean` | Verified, reusable results with no apologies and no dependency on `Enthymemata`. |
+| **theorems** | `Theorems/*.lean` | Verified results whose consequence and stability merit treatment as named project deliverables. The distinction from lemmas is curatorial, not a Lean keyword distinction. |
+| **archeion** | `Archeion/` | Superseded or retired material preserved with provenance. A side exit from the active path, not a maturity stage; not compiled. |
 
-An enthymeme is **promoted** when it stops apologizing: move the file (or the
-finished declarations) to `Lemmas/`. Declaration names and namespaces never
-change on promotion — tier is location, not identity.
+An enthymema becomes **eligible for promotion** when it stops apologizing.
+After its statement and dependencies pass semantic review, move the file (or
+the finished declarations) to `Lemmas/`. Declaration names and namespaces
+never change on promotion — stage is location, not identity. Promotion from
+`Lemmas/` to `Theorems/` is optional and deliberate: most verified results
+remain lemmas. Material may instead leave any active stage for `Archeion/`
+when it is superseded or retired.
 
 ## meta-CI
 
 `scripts/meta-ci.ps1` enforces the taxonomy:
 
-1. `lake build` green — both tiers must compile (enthymemes owe proofs, never
-   statements).
-2. The lemmas tier never apologizes: no `sorry` token under `Lemmas/` (not
-   even in prose), and no `import Enthymemes.*` — an import could launder a
-   sorried dependency into a "proved" lemma without the token appearing.
-3. Enthymeme ledger: each file is `unstated` (no declarations yet),
-   `apologizing(n)`, or `PROMOTION-READY` (declarations, zero sorries —
-   move it).
+The script prefers the portable Lake executable under
+`$env:PORTABLE_ROOT\elan\bin`, then falls back to `lake` on `PATH`. When it
+uses the portable executable, it supplies a process-local `ELAN_HOME` if the
+calling process inherited a stale environment snapshot.
+
+1. `lake build` green — all active formal stages must compile (enthymemata owe
+   proofs, never statements).
+2. Each active aggregate (`Lemmas.lean`, `Theorems.lean`, and
+   `Enthymemata.lean`) imports every `.lean` file in its stage, so a draft
+   cannot silently evade the build.
+3. The verified stages never apologize: no `sorry` token in their Lean source
+   (including comments), and no `import Enthymemata.*` — an import could
+   launder a sorried dependency into a verified result without the token
+   appearing. `Lemmas` also cannot depend upward on `Theorems`.
+4. Enthymema ledger: each file is `unstated` (no declarations yet),
+   `apologizing(n)`, or `PROOF-CLOSED` (declarations, zero sorries — a
+   candidate for semantic review and promotion, not an automatic endorsement).
 
 Flags: `-Validate` makes ledger notices fail (strict mode); `-NoBuild` skips
 the compile gate (CI runs it after lean-action has already built).

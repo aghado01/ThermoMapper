@@ -314,11 +314,14 @@ Thought for 14s
 
 This fits the same wall, one course higher.
 
-What you have in lean/ is already named with unusual precision. The README calls it **the rigor harness**: work backward from the engineering you actually built to the mathematical contracts it silently rests on, then force those contracts into the open. The three-tier promotion path is the right shape for solo work:
+What you have in lean/ is already named with unusual precision. The README calls it **the rigor harness**: work backward from the engineering you actually built to the mathematical contracts it silently rests on, then force those contracts into the open. The active promotion path is the right shape for solo work:
 
-- **proto-lemmas** — informal briefs that capture the gap while the idea is still fluid
-- **enthymemes** — statements that compile, proofs that still apologize (sorry). The name is exact: an enthymeme is an argument that suppresses a premise. Cross-domain adaptation is almost definitionally enthymematic; the original paper never stated the premise that becomes load-bearing once you put BARS on a thermal affinity field or push a Potts comparison through a bifiltration.
+- **protolemmata** — informal briefs that capture the gap while the idea is still fluid
+- **enthymemata** — statements that compile, proofs that still apologize (sorry). The name is exact: an enthymema is an argument that suppresses a premise. Cross-domain adaptation is almost definitionally enthymematic; the original paper never stated the premise that becomes load-bearing once you put BARS on a thermal affinity field or push a Potts comparison through a bifiltration.
 - **lemmas** — no apologies. Only then does the brick count as fully load-bearing at the mathematical layer.
+- **theorems** — the verified results consequential enough to merit treatment as named project deliverables.
+
+**Archeion** is the curated side exit for superseded or retired material, not another maturity stage.
 
 meta-ci.ps1 already enforces the discipline (build green, lemmas never import apologizing material, ledger of promotion readiness). That is the same external validation pattern we were discussing for capability targets and oracles, just aimed at the implicit mathematics rather than at numeric or structural checks.
 
@@ -402,7 +405,7 @@ You do not need a full verification toolchain to generate a backlog:
 - **Config / manifest fields** that carry theoretically loaded quantities (temperatures, bandwidths, bond probabilities, persistence thresholds, knot priors). Each is an implicit contract.
 - **Layering violations that were fixed** (the GraphCompiler / PH protect-set story is already documented). Past fusion points are high-yield: the mathematical obligation often appeared exactly when the seam was cut.
 
-Turn the hits into a single living backlog under lean/proto-lemmas/ or issues/lean/ — same shape as the SHELF, just for mathematical debt.
+Turn the hits into a single living backlog under lean/Protolemmata/ or issues/lean/ — same shape as the SHELF, just for mathematical debt.
 
 ### 4. Agent-assisted enthymeme mining over the substrate
 
@@ -440,7 +443,7 @@ This produces a finite, ordered debt list instead of an open-ended feeling that 
 You will not get a complete decision procedure that spits out every missing lemma. Cross-domain synthesis creates obligations that are not present in any single source; some discovery remains creative. What you _can_ systematize is:
 
 - where to look first (seams, oracles, manifests, past fusion points)
-- how to record candidates uniformly (proto-lemmas)
+- how to record candidates uniformly (protolemmata)
 - how to decide what must be formalized now vs later (load-bearing for other bricks)
 - how to keep the debt visible (ledger + meta-ci)
 

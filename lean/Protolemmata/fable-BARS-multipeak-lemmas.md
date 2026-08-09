@@ -174,6 +174,6 @@ adaptive-schedule role BARS plays downstream.
 
 **Promotion order:** MP-2 leads (smallest true statement, certifies the shipped per-draw reduce) but rides on
 MP-1's `peakCount` def, so MP-1 must land first to give MP-2 something non-sorried to stand on. MP-3 and MP-4
-each carry an unfishable half — stage them as enthymemes; let MP-4 be the one that motivates the peak-intensity
+each carry an unfishable half — stage them as enthymemata; let MP-4 be the one that motivates the peak-intensity
 readout the engine is currently missing. **BARS-S sits *under* the slate** — the premise MP-1..4 quantify over —
-and lands as an enthymeme whose measurable half (spans-as-resolution) is already in code.
+and lands as an enthymema whose measurable half (spans-as-resolution) is already in code.

@@ -10,7 +10,7 @@ every edge whose cumulative energy fails the threshold, read clusters off
 connected components.
 
 Open obligations (Lemma A pooling, single-linkage equivalence) apologize in
-`Enthymemes.PKWang`. Prelemma: `lean/prelemmas/spc-pkwang-lemmas.md`.
+`Enthymemata.PKWangB`. Protolemma: `lean/Protolemmata/spc-pkwang-lemmas.md`.
 -/
 
 open Real

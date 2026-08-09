@@ -10,7 +10,7 @@ in `Lemmas.PKWang` (threshold reduction + deterministic cut graph).
   the density-adaptive LocalField per-site ranking.
 * **Lemma B, part 2** — single-linkage equivalence of the deterministic cut.
 
-Prelemma and provenance: `lean/prelemmas/spc-pkwang-lemmas.md`.
+Protolemma and provenance: `lean/Protolemmata/spc-pkwang-lemmas.md`.
 -/
 
 namespace PKWang

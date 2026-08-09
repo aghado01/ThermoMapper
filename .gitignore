@@ -4,6 +4,7 @@ artifacts/**
 
 **.venv/**
 
+.codex
 .claude
 .vscode
 .cache

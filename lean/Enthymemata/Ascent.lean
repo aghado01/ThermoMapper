@@ -3,7 +3,7 @@
 
 Formalization target for the ascent operator lemmas. Statement inventory
 (faithful translation pending; do NOT restate from memory — work from the
-prelemma): `lean/prelemmas/fable-ascent-wellposedness-lemmas.md`.
+protolemma): `lean/Protolemmata/fable-ascent-wellposedness-lemmas.md`.
 
 * **L1** — termination, forest structure, basins (the foundation).
 * **L2** — abstains are landscape phenomena (connectivity's real payoff).

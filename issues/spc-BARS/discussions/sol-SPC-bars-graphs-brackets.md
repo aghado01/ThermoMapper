@@ -25,11 +25,11 @@ For SPC+BARS, the important near-term design questions seem to be:
 
 I’ll keep the broader HOPE synthesis parked as a design lens: useful for deciding what response artifacts should be preserved now, but not a justification for pulling future sheaf or meta-clustering work ahead of the engine roadmap.
 
-# review the `lean` directory protolemmas, enthymemes and lemmas for context on the BARS x SPC theoretical work
+# review the `lean` directory protolemmata, enthymemata and lemmas for context on the BARS x SPC theoretical work
 
 <details><summary>3 previous messages</summary>
 
-> I’ll read the Lean project as mathematical context, not merely scan theorem names. I’ll start from the project structure and supporting notes, then trace the protolemmas, enthymemes, and proved lemmas that constrain the intended BARS×SPC theory.
+> I’ll read the Lean project as mathematical context, not merely scan theorem names. I’ll start from the project structure and supporting notes, then trace the protolemmata, enthymemata, and proved lemmas that constrain the intended BARS×SPC theory.
 >
 > The formal queue reveals a deliberate chain rather than a single “BARS finds the SPC peak” claim: exact draw-wise spline reductions, thermodynamic monotonicity, a \((\beta,\theta)\) bifiltration, and finally a confidence pushforward from curve uncertainty to barcode uncertainty. I’m checking each link for whether it is proved, merely stated, or still only described informally.
 >

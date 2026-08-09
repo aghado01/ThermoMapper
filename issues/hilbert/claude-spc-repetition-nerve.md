@@ -154,8 +154,8 @@ upgrades each from a grid-read to a posterior quantity:
 5. **Thermal autonomy becomes a two-curve comparison with a likelihood** (in-situ vs
    island melting curves), not an eyeball.
 
-**Lean grounding** (`lean/enthymemes/BARS.lean` + `lean/proto-lemmas/`; taxonomy:
-proto-lemmas → enthymemes (compile, `sorry`) → lemmas (no apologies)):
+**Lean grounding** (`lean/Enthymemata/BARS.lean` + `lean/Protolemmata/`; taxonomy:
+protolemmata → enthymemata (compile, `sorry`) → lemmas (no apologies)):
 
 - **MP-1 / SP-1 / SP-2** — per-draw feature extraction is closed-form and zero-slop:
   local maxima and level-set crossings lie in exact finite candidate sets

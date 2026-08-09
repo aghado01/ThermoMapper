@@ -32,7 +32,7 @@ to the whole barcode.
 
 Honest `sorry` count: **one cited** (L2 — the stability theorem; the random band's probability lives in
 the BARS posterior, not formalized here), **one built** (L5 — the landscape map, once
-`PersistenceLandscape` lands in `TDA.Ph`). L3 is fully discharged — see [Stability.lean](../enthymemes/Stability.lean).
+`PersistenceLandscape` lands in `TDA.Ph`). L3 is fully discharged — see [Stability.lean](../Enthymemata/Stability.lean).
 
 > **Corpus note.** **MMO2019** and **SGL2022** live in `compendia/ph` (moved from `intersections` this
 > session — both PH-proper: statistical PH, and applied-PH-for-phase-transitions). **Acronym guard:**

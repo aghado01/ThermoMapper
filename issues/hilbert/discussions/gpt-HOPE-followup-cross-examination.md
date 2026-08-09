@@ -207,7 +207,7 @@ So:
 - A finite sampled SPC partition stack may be non-nested and then requires lineages, zigzag persistence, or a formigram.
 - A dendrogram is available only after nesting is established or deliberately restored.
 
-The repo’s FK bridge is the strongest formulation: [bifiltration-bridge-lemmas.md](./lean/proto-lemmas/bifiltration-bridge-lemmas.md:159) derives monotonic graph inclusion from the ideal co-membership estimand.
+The repo’s FK bridge is the strongest formulation: [bifiltration-bridge-lemmas.md](../../../lean/Protolemmata/bifiltration-bridge-lemmas.md:159) derives monotonic graph inclusion from the ideal co-membership estimand.
 
 The Mapper claim needs a parallel correction. Mapper requires:
 
@@ -272,7 +272,7 @@ First, a global peak-set point process does not give intensity mass `m` when `m`
 - per-unit peak processes; or
 - a marked process whose mark is amplitude, released energy, or cluster multiplicity.
 
-Second, the span self-audit cannot certify that no narrower peak was missed completely. The protolemma itself still marks both sufficiency claims as `sorry`: [fable-BARS-multipeak-lemmas.md](./lean/proto-lemmas/fable-BARS-multipeak-lemmas.md:150). Returned spans diagnose resolution conditional on recovery; they cannot prove recovery without a prior smoothness, derivative, bandwidth, or minimum-prominence assumption.
+Second, the span self-audit cannot certify that no narrower peak was missed completely. The protolemma itself still marks both sufficiency claims as `sorry`: [fable-BARS-multipeak-lemmas.md](../../../lean/Protolemmata/fable-BARS-multipeak-lemmas.md:150). Returned spans diagnose resolution conditional on recovery; they cannot prove recovery without a prior smoothness, derivative, bandwidth, or minimum-prominence assumption.
 
 That makes it a posterior self-consistency diagnostic, not a Nyquist certificate.
 

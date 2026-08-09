@@ -1,7 +1,7 @@
 name = "lemmas"
 version = "0.1.0"
 keywords = ["math"]
-defaultTargets = ["Lemmas", "Enthymemes"]
+defaultTargets = ["Lemmas", "Theorems", "Enthymemata"]
 
 [leanOptions]
 pp.unicode.fun = true # pretty-prints `fun a ↦ b`
@@ -19,4 +19,7 @@ rev = "v4.30.0"
 name = "Lemmas"
 
 [[lean_lib]]
-name = "Enthymemes"
+name = "Theorems"
+
+[[lean_lib]]
+name = "Enthymemata"

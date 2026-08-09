@@ -111,7 +111,7 @@ gap, just a definitional choice for `levelWidth`.
 | **SP-3** | span must be per-draw (width doesn't commute with averaging) | ✅ one witness (def-choice for width) |
 
 **Recommendation:** lead with **SP-2** — it is the smallest true statement, already corroborated numerically by
-`SpanCrossingTests`, and a clean IVT + `StrictMonoOn.injOn` close; graduating it to `enthymemes/BARS.lean`
+`SpanCrossingTests`, and a clean IVT + `StrictMonoOn.injOn` close; graduating it to `Enthymemata/BARS.lean`
 alongside MP-2 would pair the count and span non-commutation certificates. **SP-1** is the enumeration behind it;
 **SP-3** is the per-draw mandate (define `levelWidth` as `right − left` of the SP-2 crossings to keep it pure
 real analysis). All three are the structural-width analogues of the peak trio, not posterior-spread claims.

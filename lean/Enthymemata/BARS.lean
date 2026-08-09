@@ -4,7 +4,7 @@ import Mathlib
 # BARS — argmax, multi-peak & span lemmas
 
 Formalization targets for the BARS posterior-curve readout. Statements faithfully translate the
-proto-lemmas (work from those, not memory): `fable-BARS-lemma.md` (single peak),
+protolemmata (work from those, not memory): `fable-BARS-lemma.md` (single peak),
 `bars-multipeak-lemmas.md` (MP-1..4), `bars-span-lemmas.md` (SP-1..3).
 
 Graduated here (statements compile, proofs apologize):
