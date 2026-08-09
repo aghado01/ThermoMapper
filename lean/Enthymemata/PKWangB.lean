@@ -1,4 +1,5 @@
-import Mathlib
+import Mathlib.Data.Fintype.Basic
+import Mathlib.Data.Real.Basic
 
 /-!
 # PKWang — the open obligations

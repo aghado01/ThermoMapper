@@ -13,16 +13,18 @@ Invariants enforced:
      proofs, never statements.
   2. Each aggregate module imports every Lean file in its active stage; no file
      can silently evade the build.
-  3. The Lemmas and Theorems stages never apologize: no `sorry` token in
+  3. Active Lean source uses scoped Mathlib modules; the `import Mathlib`
+     umbrella is forbidden.
+  4. The Lemmas and Theorems stages never apologize: no `sorry` token in
      their Lean files and no `import Enthymemata.*` (which could launder a
      sorried dependency). Lemmas also cannot import upward from Theorems.
-  4. Enthymema ledger, per file:
+  5. Enthymema ledger, per file:
        unstated         — no declarations yet (a prelemma in costume)
        apologizing(n)   — n sorries outstanding
        PROOF-CLOSED     — declarations present, zero sorries: review the
                           statement and dependencies for promotion to Lemmas/.
 
-Exit 1 on any invariant-2 violation or red build. With -Validate, ledger
+Exit 1 on any invariant violation or red build. With -Validate, ledger
 notices (unstated / proof-closed) also fail — taxonomy drift is an error
 in strict mode. -NoBuild skips the compile gate (for use after lean-action
 has already built, e.g. in CI).
@@ -96,7 +98,20 @@ foreach ($tier in @('Lemmas', 'Theorems', 'Enthymemata')) {
     }
 }
 
-# --- Invariant 3: verified stages don't apologize ---------------------------
+# --- Invariant 3: active source uses scoped Mathlib imports -----------------
+foreach ($tier in @('Lemmas', 'Theorems', 'Enthymemata')) {
+    $activeFiles = @(
+        Get-ChildItem -LiteralPath (Join-Path $leanRoot $tier) -Filter *.lean -Recurse
+        Get-Item -LiteralPath (Join-Path $leanRoot "$tier.lean")
+    )
+    foreach ($f in $activeFiles) {
+        foreach ($m in @(Select-String -LiteralPath $f.FullName -Pattern '^\s*import\s+Mathlib(?:\s|$)')) {
+            $violations += "$tier uses the Mathlib umbrella: $($f.Name):$($m.LineNumber)"
+        }
+    }
+}
+
+# --- Invariant 4: verified stages don't apologize ---------------------------
 foreach ($tier in @('Lemmas', 'Theorems')) {
     $verifiedFiles = @(Get-ChildItem -LiteralPath (Join-Path $leanRoot $tier) -Filter *.lean -Recurse) +
                      @(Get-Item -LiteralPath (Join-Path $leanRoot "$tier.lean"))
@@ -115,7 +130,7 @@ foreach ($tier in @('Lemmas', 'Theorems')) {
     }
 }
 
-# --- Invariant 4: enthymema ledger ------------------------------------------
+# --- Invariant 5: enthymema ledger ------------------------------------------
 $declPattern = '^\s*(noncomputable\s+)?(private\s+)?(theorem|lemma|def|abbrev|instance|structure|inductive|axiom|opaque)\b'
 $ledger = foreach ($f in Get-ChildItem -LiteralPath (Join-Path $leanRoot 'Enthymemata') -Filter *.lean -Recurse) {
     $sorries = @(Select-String -LiteralPath $f.FullName -Pattern '\bsorry\b').Count

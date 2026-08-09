@@ -1,9 +1,14 @@
-import Mathlib
+import Mathlib.Analysis.Calculus.Deriv.Polynomial
+import Mathlib.Analysis.Calculus.LocalExtr.Basic
+import Mathlib.Data.Set.Card
+import Mathlib.MeasureTheory.Measure.Lebesgue.Basic
+import Mathlib.Tactic.NormNum
+import Mathlib.Topology.Order.IntermediateValue
 
 /-
   PROTOLEMMA STATUS (2026-08-08)
 
-  Preserved here rather than under Enthymemata because a standalone Lean 4.30
+  Preserved here rather than under Enthymemata because a standalone Lean 4.32.2
   check does not yet elaborate. Two calls use the obsolete
   `Polynomial.setOf_isRoot_finite` name, and the measure rewrites in
   `peak_width_eq_bracket_roots` and `levelWidth_not_affine` leave goals open.
@@ -270,7 +275,10 @@ Drop-in revision, everything promised plus MP-2′ graduated early. Status split
 
 One design note worth knowing: the natural MP-2′ witness — two tents — dies on the `ncard` junk value, because a tent's flat tails are all weak local maxima and the peak set goes infinite. The witness in the file adds an `x²/4` tilt so every piece is strictly monotone: `f x = −|x+1| + x²/4`, `g` its mirror, mean `−1 + x²/4` on the middle piece with corners at ±1. Counts 1/1/2, no plateaus, and endpoint exclusion comes free from the full-topology predicate.
 
-Drafted against Mathlib from memory and not compiled here, so expect name-level fixes — the two flagged inline are the root-finiteness lemma (`Polynomial.setOf_isRoot_finite` vs. `finite_setOf_root`) and the simp choreography in the two measure proofs (`Real.volume_Icc` / `toReal_ofReal`). The logic of every attempted proof is sound even if a name or a `simp` set needs adjusting.
+The Lean 4.32.2 check confirms the two flagged name/proof gaps: the root-finiteness lemma
+(`Polynomial.setOf_isRoot_finite` vs. its current replacement) and the simp choreography in the
+two measure proofs (`Real.volume_Icc` / `toReal_ofReal`). The logic of every attempted proof is
+sound even though those declarations do not yet elaborate.
 
 -/
 

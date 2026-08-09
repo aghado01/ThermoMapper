@@ -28,7 +28,7 @@ average has one. Self-contained real analysis, no external dependency. **Lemma t
 once the witnesses are formalized.
 
 ```lean
-import Mathlib
+import Mathlib.Data.Real.Basic
 
 /-- Number of significant local maxima of `f` on `[a,b]` at relative prominence `θ` (the functional behind
     `SignificantPeakCount`). Definition is shared with MP-1/MP-3; sorried here only because its home is MP-1. -/
@@ -56,7 +56,9 @@ The extra fact the C² structure buys: `f` is monotone between consecutive criti
 neighbor-comparison on the recorded heights *is* the true local-max test.
 
 ```lean
-import Mathlib
+import Mathlib.Analysis.Calculus.LocalExtr.Basic
+import Mathlib.Data.Finset.Basic
+import Mathlib.Data.Real.Basic
 
 variable (config : KnotConfig) (coef : ℝ → ℝ) -- placeholder for the spline draw
 

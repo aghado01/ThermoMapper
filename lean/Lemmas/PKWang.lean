@@ -1,4 +1,7 @@
-import Mathlib
+import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Mathlib.Combinatorics.SimpleGraph.Basic
+import Mathlib.Data.Fintype.Basic
+import Mathlib.Tactic.NormNum
 
 /-!
 # PKWang — threshold reduction and the deterministic cut
@@ -39,6 +42,7 @@ def deterministicCutGraph (Hcum : V → V → ℝ) (T : ℝ)
     (hsymm : ∀ u v, Hcum u v = Hcum v u) : SimpleGraph V where
   Adj u v := u ≠ v ∧ T * log 2 < Hcum u v
   symm := by
+    constructor
     intro u v ⟨hne, h⟩
     exact ⟨hne.symm, by rw [hsymm v u]; exact h⟩
   loopless := by

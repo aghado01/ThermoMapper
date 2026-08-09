@@ -39,24 +39,51 @@ calling process inherited a stale environment snapshot.
 2. Each active aggregate (`Lemmas.lean`, `Theorems.lean`, and
    `Enthymemata.lean`) imports every `.lean` file in its stage, so a draft
    cannot silently evade the build.
-3. The verified stages never apologize: no `sorry` token in their Lean source
+3. Active Lean source uses scoped Mathlib modules; the `import Mathlib`
+   umbrella is forbidden.
+4. The verified stages never apologize: no `sorry` token in their Lean source
    (including comments), and no `import Enthymemata.*` — an import could
    launder a sorried dependency into a verified result without the token
    appearing. `Lemmas` also cannot depend upward on `Theorems`.
-4. Enthymema ledger: each file is `unstated` (no declarations yet),
+5. Enthymema ledger: each file is `unstated` (no declarations yet),
    `apologizing(n)`, or `PROOF-CLOSED` (declarations, zero sorries — a
    candidate for semantic review and promotion, not an automatic endorsement).
 
 Flags: `-Validate` makes ledger notices fail (strict mode); `-NoBuild` skips
 the compile gate (CI runs it after lean-action has already built).
 
+## Import discipline
+
+Lean modules import the narrowest stable public Mathlib modules that own the
+declarations, notation, and tactics they actually use. Active source must not
+use the `Mathlib` umbrella; `scripts/meta-ci.ps1` enforces that boundary.
+
+- Add a scoped import when a new dependency first arises rather than loading
+  likely future dependencies in advance. Import tactics explicitly, such as
+  `Mathlib.Tactic.NormNum`.
+- Prefer a declaration's owning public module (or a coherent public feature
+  module) over an unrelated transitive import. The goal is an intentional,
+  stable dependency boundary, not the smallest accidental import closure.
+- Compile the affected module directly after changing its imports. When code
+  stops using a feature, remove the corresponding import and compile again.
+- Apply the same discipline to Lean examples in `Protolemmata/`, so
+  promotion into an active stage does not reintroduce the umbrella.
+- When a new import lacks cached artifacts, fetch that module specifically,
+  for example `lake exe cache get Mathlib.Analysis.Calculus.Deriv.Polynomial`.
+  The cache tool follows its transitive imports. A bare `lake exe cache get`
+  starts from `Mathlib.lean` and restores the entire library, so use it only
+  when a complete Mathlib cache is intentional.
+
 ## Build notes
 
-- Toolchain: Lean 4.30.0 + mathlib v4.30.0 (cache fetched — never build
-  mathlib from source; `lake exe cache get` if it ever goes missing).
-- A file importing `Mathlib` elaborates ~8 min on first touch, ~25 s warm.
-- `SimpleGraph.loopless` is `Std.Irrefl` — a structure; tactic proofs need
-  `constructor` before `intro`.
+- Toolchain: Lean 4.32.2 + mathlib v4.32.2. Fetch missing artifacts by scoped
+  module as described above; artifacts unavailable from the cache build
+  locally.
+- The `Mathlib` umbrella was measured at 5–12 min to elaborate cold and about
+  a minute warm in this harness; scoped imports also make dependency changes
+  reviewable.
+- `SimpleGraph.symm` and `SimpleGraph.loopless` are `Std.Symm` and
+  `Std.Irrefl` structures; tactic proofs need `constructor` before `intro`.
 - The mathlib standard linter set is on; the copyright-header linter is off
   (`lakefile.toml`).
 - The `.github/workflows/` here are inert while `lean/` lives inside the

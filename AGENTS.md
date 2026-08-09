@@ -103,6 +103,9 @@ instead of threading the consumer concern into a build stage.
 - Python work goes through the local venv (`scripts/portable-python.ps1`,
   `scripts/venv-boostrap.ps1`). Convenience-alias loader scripts for R /
   dotnet / Lean are planned ([TODO.md](TODO.md)).
+- Lean source imports declaration- or feature-owning Mathlib modules. Active
+  modules never use `import Mathlib`; add scoped imports only as dependencies
+  arise, then compile the affected module directly.
 - PowerShell filesystem cmdlets: `-LiteralPath` by default (see
   [CONTRIBUTING.md](CONTRIBUTING.md)).
 

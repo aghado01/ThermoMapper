@@ -1,4 +1,8 @@
-import Mathlib
+import Mathlib.Algebra.Polynomial.Derivative
+import Mathlib.Analysis.Calculus.LocalExtr.Basic
+import Mathlib.Data.Set.Card
+import Mathlib.MeasureTheory.Measure.Lebesgue.Basic
+import Mathlib.Topology.Order.IntermediateValue
 
 /-!
 # BARS — argmax, multi-peak & span lemmas
