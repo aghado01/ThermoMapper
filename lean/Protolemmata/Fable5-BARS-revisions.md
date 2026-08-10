@@ -1,3 +1,8 @@
+> **Editorial status (2026-08-09).** This discussion is retained as historical
+> reasoning. Its `PKWangA`/`PKWangB` and clustering-backend claims are
+> superseded by `PKWangAudit.md` (paper correction) and
+> `CumulativeField/design.md` (the independently specified construction).
+
 Not vacuous — all six statements have satisfiable hypotheses and nontrivial conclusions, and each is true as written. The audit turns up something more useful than vacuity, though: one dead hypothesis that actively blocks the proof route your own docstring describes, two statements that are quieter than their billing, and one direction claim that's instance-true but not sign-general — with the opposite direction being exactly your pending MP-2′. Per-lemma:
 
 ## The structural bug: MP-1's interval obstructs MP-2's finiteness lemma

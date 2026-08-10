@@ -1,5 +1,5 @@
 /-!
-# Potts / Griffiths — the FK theorem chain
+# Potts / FK theorem chain
 
 Formalization target for the Potts correlation-monotonicity chain. Statement
 inventory (faithful translation pending; work from the protolemma):

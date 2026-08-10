@@ -17,27 +17,29 @@ import Mathlib.Topology.Order.IntermediateValue
 -/
 
 /-!
-# BARS — argmax, multi-peak & span lemmas (revised)
+# SPC × BARS — posterior thermal-feature readout (revised)
 
 Formalization targets for the BARS posterior-curve readout. Statements faithfully translate the
 protolemmata (work from those, not memory): `fable-BARS-lemma.md` (single peak),
-`bars-multipeak-lemmas.md` (MP-1..4), `bars-span-lemmas.md` (SP-1..3).
+`bars-multipeak-lemmas.md` (MP-1..4), `bars-span-lemmas.md` (SP-1..3), and
+`spc-bars-readout-obligations.md` (the implementation-facing application contract).
 
 ## Revisions in this pass
 
 * **MP-1 is interval-free.** `IsLocalMax` is the two-sided filter statement
   `∀ᶠ x in 𝓝 t, f x ≤ f t`; Fermat needs no bracket. The old `Ioo` hypothesis was dead weight
   and blocked applying MP-1 at the `Icc` endpoints inside `finite_local_max`.
-* **SP-2 gains its antitone dual.** A peak has two shoulders; FWHM needs the up-crossing and
+* **SP-2 gains its antitone dual.** A peak has two shoulders; its width needs the up-crossing and
   the down-crossing.
 * **Per-peak width is the bracket-root difference.** `superlevel_of_peak_bracket` shows the
   super-level set of a single-peak bracket is exactly `Icc xL xR`, so `levelWidth` restricted
   to the bracket computes `xR − xL`. Globally, `levelWidth` is *occupancy* — total measure
   above the level, summed across every hump — and is a peak width only on a bracket.
 * **SP-3 splits.** `levelWidth_not_affine` keeps the free-level statement under an honest name
-  (constants witness it; it certifies only non-affinity). The FWHM claim proper is
-  `fwhm_of_mean_ne_mean_of_fwhm`, with the level *draw-relative* (each curve's own half-max) —
-  that is the statement that indicts pooled-mean reduction.
+  (constants witness it; it certifies only non-affinity).
+  `fwhm_of_mean_ne_mean_of_fwhm` strengthens the witness to a draw-relative global half-maximum.
+  The implementation-facing result must strengthen it again to the prominence-relative level
+  of each branch; that obligation is recorded separately below.
 * **MP-2′ graduates in witness form.** Two single-peak draws whose pointwise mean is bimodal —
   the overcount direction. Jointly, MP-2 (undercount instance) and MP-2′ (overcount instance)
   show the peak-count functional admits **no signed bound under mixing**: it is not
@@ -50,11 +52,16 @@ protolemmata (work from those, not memory): `fable-BARS-lemma.md` (single peak),
 * `peakCount` uses full-topology `IsLocalMax` (weak `≤`), so: (i) boundary maxima of the
   *restricted* curve are not counted — interior features only; (ii) any plateau makes the set
   infinite and `ncard` junks to `0`. Safe on non-constant polynomial spans; document at the
-  call sites feeding `SignificantPeaks` / `PeakCountMean`.
-* Everything here is per-span. Globalization keystone (pending spline infra): a spline draw's
-  candidate set is the finite union of per-span root sets, exhaustive at knots *because* `C¹`
-  gluing forces knot extrema to be critical points of both adjacent pieces. Below `C¹`, knots
-  join the candidate set explicitly, like range endpoints.
+  call sites feeding `SignificantPeaks` / `PeakCountMean`. It is a raw witness functional, not
+  yet the specification of the prominence-gated, policy-bearing SPC readout.
+* Everything here is per-span. The implementation-faithful globalization keystone (pending
+  spline infra) is the finite union of domain endpoints, knots, and per-span interior root sets.
+  Including knots unconditionally covers continuously glued splines below `C¹`; a `C¹`
+  corollary can show when knot extrema are already derivative-root candidates on both sides.
+* The application-faithful layer must additionally model the ordered critical-neighbour test,
+  boundary inclusion, prominence gating, clipped spans, and the branch-relative level
+  `h - ρ * (h - c)` used by `SplineExtrema`. These obligations and their intended homes are
+  recorded in `spc-bars-readout-obligations.md`.
 
 Proof status: mechanical proofs are attempted against Mathlib from memory (drafted, not
 compiled — expect name-level fixes, flagged inline); structural `sorry`s carry their intended
@@ -234,17 +241,20 @@ theorem levelWidth_not_affine :
   simp [levelWidth, h1, h2, h3, Real.volume_Icc]
   norm_num
 
-/-- Draw-relative level: half of the curve's supremum on the window. FWHM's defining feature —
-the level depends on the draw, which is what makes the functional *doubly* nonlinear. -/
+/-- Draw-relative global-window level: half of the curve's supremum on the window. The level
+depends on the draw, which makes this witness functional *doubly* nonlinear. This is not yet
+the `SplineExtrema` span contract, whose level is relative to each peak's prominence and col. -/
 noncomputable def halfMax (f : ℝ → ℝ) (a b : ℝ) : ℝ := sSup (f '' Icc a b) / 2
 
-/-- FWHM as occupancy at the draw's own half-max. On a single-peak window this equals the
-shoulder-root difference via `peak_width_eq_bracket_roots`. -/
+/-- Global half-maximum occupancy. On a suitably based single-peak window this equals the
+shoulder-root difference via `peak_width_eq_bracket_roots`; application-level branch-relative
+width and clipping remain specified in `spc-bars-readout-obligations.md`. -/
 noncomputable def fwhm (f : ℝ → ℝ) (a b : ℝ) : ℝ := levelWidth f a b (halfMax f a b)
 
-/-- **SP-3.** FWHM does not commute with averaging *even for genuine single-peak draws with the
-level tied to each curve*: the mean's FWHM (at the mean's own half-max) differs from the mean
-of the draws' FWHMs. Certifies the span must be computed per draw, not on the pooled mean fit.
+/-- **SP-3.** Global half-maximum width does not commute with averaging *even for genuine
+single-peak curves with the level tied to each curve*: the mean curve's width differs from the
+mean of the individual widths. This is the continuous-function witness for reduce-per-draw;
+the spline-carrier and prominence-relative application statement remain pending.
 
 Witness on `[−2, 2]`: tent `f x = max 0 (1 − |x|)` (half-max `1/2`, width `1`; its plateau is
 fine here — `fwhm` is measure-based, not `peakCount`-based) and parabola `g x = 2 − x²/2`
@@ -262,16 +272,24 @@ theorem fwhm_of_mean_ne_mean_of_fwhm :
 
 /-! ### Pending (spline infra / measure carrier)
 
-* Globalization keystone: a spline draw's candidate set is the finite union of per-span root
-  sets; exhaustive at knots iff the gluing is `C¹` (knot extrema are then critical points of
-  both adjacent pieces). This is the bridge from the per-span lemmas above to what
-  `SignificantPeaks` actually scans.
+* Globalization keystone: a spline draw's candidate set is the finite union of domain endpoints,
+  knots, and per-span interior root sets. This is the bridge from the per-span lemmas above to
+  what `SignificantPeaks` actually scans.
+* Boundary-aware closed-span argmax and the ordered-neighbour test connecting that candidate
+  set to `SplineExtrema.CriticalPoints`.
+* SPC readout carrier: prominence-gated peaks, explicit boundary policy, prominence-relative
+  per-branch levels, and independently clipped span endpoints. See
+  `spc-bars-readout-obligations.md`.
 * MP-2′, measure form: pointwise-mean curve of a genuinely multimodal posterior vs draws.
 * MP-3: prominence-count pushforward.  MP-4: point-process intensity of peak locations.
 
 Notes:
 
-Drop-in revision, everything promised plus MP-2′ graduated early. Status split: five proofs are attempted in full (MP-1 as a two-liner, `finite_local_max`, SP-1, both SP-2 shoulders, SP-3a, and the width corollary), four sorries remain with their routes in comments (MP-2 with the `mp2F`/reflection witnesses now defined in the file, MP-2′, the bracket set-equality, and draw-relative SP-3 with the tent-vs-parabola witness worked out in the docstring).
+Drop-in replacement for the v1 declaration set, plus MP-2′ graduated early. It remains analytic
+scaffolding rather than a complete specification of the SPC readout; the application obligations
+are tracked in `spc-bars-readout-obligations.md`. Status split: the elementary proofs are attempted
+in full, while four sorries retain explicit routes: MP-2 with the `mp2F`/reflection witnesses,
+MP-2′, the bracket set-equality, and global half-maximum SP-3 with the tent-vs-parabola witness.
 
 One design note worth knowing: the natural MP-2′ witness — two tents — dies on the `ncard` junk value, because a tent's flat tails are all weak local maxima and the peak set goes infinite. The witness in the file adds an `x²/4` tilt so every piece is strictly monotone: `f x = −|x+1| + x²/4`, `g` its mirror, mean `−1 + x²/4` on the middle piece with corners at ±1. Counts 1/1/2, no plateaus, and endpoint exclusion comes free from the full-topology predicate.
 

@@ -4,7 +4,8 @@
 > stack covers **application #2** — the graph mode-seek periphery policy, the alternative to
 > Domany's peripheral capture). The selector-side walk math (per-leaf landscape integrals on the
 > dendrogram) is a separate future note once R1 lands. Siblings: `fable-BARS-lemma.md`,
-> `fable-bifiltration-lemmas.md`, `spc-pkwang-lemmas.md` (the Lemma A/B register).
+> `fable-bifiltration-lemmas.md`, `PKWangAudit.md` (the critical register), and
+> `CumulativeField/design.md` (the recovered construction).
 > Map context: `../hierarchy/dendrogram-integration-map.md` § R1 refinements.
 
 A different genre than the A/B register. Those are "surprising exact reduction, apparatus rendered

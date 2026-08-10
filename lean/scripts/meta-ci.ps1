@@ -11,8 +11,8 @@ Archeion/ is the non-building side exit for superseded material.
 Invariants enforced:
   1. `lake build` is green — every active formal stage must compile; an enthymema owes
      proofs, never statements.
-  2. Each aggregate module imports every Lean file in its active stage; no file
-     can silently evade the build.
+  2. Each aggregate module's recursive import closure reaches every Lean file
+     in its active stage; no file can silently evade the build.
   3. Active Lean source uses scoped Mathlib modules; the `import Mathlib`
      umbrella is forbidden.
   4. The Lemmas and Theorems stages never apologize: no `sorry` token in
@@ -78,22 +78,47 @@ if (-not $NoBuild) {
 $violations = @()
 $notices    = @()
 
-# --- Invariant 2: aggregate modules cover every active Lean file ------------
-foreach ($tier in @('Lemmas', 'Theorems', 'Enthymemata')) {
-    $tierRoot = Join-Path $leanRoot $tier
-    $aggregatePath = Join-Path $leanRoot "$tier.lean"
-    $aggregateImports = @(
-        Get-Content -LiteralPath $aggregatePath | ForEach-Object {
+# --- Invariant 2: aggregate import closures cover every active Lean file ----
+function Get-LeanImports([string]$file) {
+    @(
+        Get-Content -LiteralPath $file | ForEach-Object {
             if ($_ -match '^\s*import\s+(\S+)') { $Matches[1] }
         }
     )
+}
+
+foreach ($tier in @('Lemmas', 'Theorems', 'Enthymemata')) {
+    $tierRoot = Join-Path $leanRoot $tier
+    $aggregatePath = Join-Path $leanRoot "$tier.lean"
+    $moduleFiles = @{}
 
     foreach ($f in Get-ChildItem -LiteralPath $tierRoot -Filter *.lean -Recurse) {
         $relative = [IO.Path]::GetRelativePath($tierRoot, $f.FullName)
         $moduleSuffix = ($relative -replace '\.lean$', '') -replace '[\\/]', '.'
         $moduleName = "$tier.$moduleSuffix"
-        if ($moduleName -notin $aggregateImports) {
-            $violations += "$tier aggregate omits active module: $moduleName"
+        $moduleFiles[$moduleName] = $f.FullName
+    }
+
+    $reachable = [Collections.Generic.HashSet[string]]::new(
+        [StringComparer]::Ordinal)
+    $pending = [Collections.Generic.Stack[string]]::new()
+    foreach ($import in Get-LeanImports $aggregatePath) {
+        $pending.Push($import)
+    }
+
+    while ($pending.Count -gt 0) {
+        $moduleName = $pending.Pop()
+        if (-not $reachable.Add($moduleName)) { continue }
+        if (-not $moduleFiles.ContainsKey($moduleName)) { continue }
+
+        foreach ($import in Get-LeanImports $moduleFiles[$moduleName]) {
+            $pending.Push($import)
+        }
+    }
+
+    foreach ($moduleName in $moduleFiles.Keys) {
+        if (-not $reachable.Contains($moduleName)) {
+            $violations += "$tier aggregate import closure omits active module: $moduleName"
         }
     }
 }
@@ -135,6 +160,11 @@ $declPattern = '^\s*(noncomputable\s+)?(private\s+)?(theorem|lemma|def|abbrev|in
 $ledger = foreach ($f in Get-ChildItem -LiteralPath (Join-Path $leanRoot 'Enthymemata') -Filter *.lean -Recurse) {
     $sorries = @(Select-String -LiteralPath $f.FullName -Pattern '\bsorry\b').Count
     $decls   = @(Select-String -LiteralPath $f.FullName -Pattern $declPattern).Count
+    $imports = @(Select-String -LiteralPath $f.FullName -Pattern '^\s*import\s+\S+').Count
+    $siblingModuleDirectory = Join-Path $f.DirectoryName $f.BaseName
+    $isBarrel = $decls -eq 0 -and $imports -gt 0 -and
+                (Test-Path -LiteralPath $siblingModuleDirectory -PathType Container)
+    if ($isBarrel) { continue }
     $state   = if ($decls -eq 0) { 'unstated' }
                elseif ($sorries -eq 0) { 'PROOF-CLOSED' }
                else { "apologizing($sorries)" }

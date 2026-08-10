@@ -11,10 +11,10 @@ Four active stages, promotion-driven, plus a curated archive:
 
 | Stage | Where | Contract |
 | --- | --- | --- |
-| **protolemmata** | `Protolemmata/*.md` | Informal briefs, conjectures, design arguments, and candidate statements. Expected to change; not compiled. |
-| **enthymemata** | `Enthymemata/*.lean` | Statements are real and **compile**; proofs may still apologize (`sorry`). An enthymema suppresses a premise — these suppress proof steps. |
-| **lemmas** | `Lemmas/*.lean` | Verified, reusable results with no apologies and no dependency on `Enthymemata`. |
-| **theorems** | `Theorems/*.lean` | Verified results whose consequence and stability merit treatment as named project deliverables. The distinction from lemmas is curatorial, not a Lean keyword distinction. |
+| **protolemmata** | `Protolemmata/**/*.md` | Informal briefs, conjectures, design arguments, and candidate statements. Expected to change; not compiled. |
+| **enthymemata** | `Enthymemata/**/*.lean` | Statements are real and **compile**; proofs may still apologize (`sorry`). An enthymema suppresses a premise — these suppress proof steps. |
+| **lemmas** | `Lemmas/**/*.lean` | Verified, reusable results with no apologies and no dependency on `Enthymemata`. |
+| **theorems** | `Theorems/**/*.lean` | Verified results whose consequence and stability merit treatment as named project deliverables. The distinction from lemmas is curatorial, not a Lean keyword distinction. |
 | **archeion** | `Archeion/` | Superseded or retired material preserved with provenance. A side exit from the active path, not a maturity stage; not compiled. |
 
 An enthymema becomes **eligible for promotion** when it stops apologizing.
@@ -37,8 +37,9 @@ calling process inherited a stale environment snapshot.
 1. `lake build` green — all active formal stages must compile (enthymemata owe
    proofs, never statements).
 2. Each active aggregate (`Lemmas.lean`, `Theorems.lean`, and
-   `Enthymemata.lean`) imports every `.lean` file in its stage, so a draft
-   cannot silently evade the build.
+   `Enthymemata.lean`) reaches every `.lean` file in its stage through its
+   recursive import closure, so hierarchical module barrels are supported and
+   a draft cannot silently evade the build.
 3. Active Lean source uses scoped Mathlib modules; the `import Mathlib`
    umbrella is forbidden.
 4. The verified stages never apologize: no `sorry` token in their Lean source
@@ -48,6 +49,7 @@ calling process inherited a stale environment snapshot.
 5. Enthymema ledger: each file is `unstated` (no declarations yet),
    `apologizing(n)`, or `PROOF-CLOSED` (declarations, zero sorries — a
    candidate for semantic review and promotion, not an automatic endorsement).
+   Import-only hierarchical barrels are omitted from the ledger.
 
 Flags: `-Validate` makes ledger notices fail (strict mode); `-NoBuild` skips
 the compile gate (CI runs it after lean-action has already built).
