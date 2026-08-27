@@ -1,5 +1,7 @@
 artifacts/**
 
+**/.snapshot**
+
 *.code-workspace
 
 **.venv/**
