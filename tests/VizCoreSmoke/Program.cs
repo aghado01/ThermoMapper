@@ -15,6 +15,12 @@ using Viz;
 using Viz.Adapters.Synthetic;
 using Viz.Renderers;
 
+if (args.Length > 0 && args[0] == "--gallery")
+{
+    FixtureGallery.Render(args.Length > 1 ? args[1] : null);
+    return;
+}
+
 ArtifactRun run = args.Length > 0
     ? HarnessArtifacts.Attach(
         runKind: "smoke-runs",

@@ -47,6 +47,8 @@ public static class EyeTorusToy
         public double UpperArcEnd { get; set; } = Math.PI * 0.6;
         public double LowerArcStart { get; set; } = Math.PI * 0.7;
         public double LowerArcEnd { get; set; } = Math.PI * 2.3;
+        public double[] CentralOffset { get; set; } = { 0.0, 0.0, 0.0 };
+        public double[] UpperOffset { get; set; } = { 0.0, 0.0, 0.0 };
         public double[] LowerOffset { get; set; } = { 0.0, -0.5, 0.0 }; // asymmetry
 
         // Sampling.
@@ -64,6 +66,7 @@ public static class EyeTorusToy
         // Pupil (solid ball in the iris void; dilation 0 → point, 1 → fills the bore R_central − r_central).
         public int PupilPoints { get; set; }             // 0 = no pupil
         public double PupilDilation { get; set; } = 0.6;
+        public double[] PupilOffset { get; set; } = { 0.0, 0.0, 0.0 };
 
         // Background blanket (colored-noise density field; 3-D only).
         public double BackgroundDensityRatio { get; set; } = 0.12; // bg points / structure points
@@ -119,7 +122,11 @@ public static class EyeTorusToy
         {
             double bore = Math.Max(0.0, cfg.CentralMajorR - cfg.CentralMinorR);
             double radius = Math.Clamp(cfg.PupilDilation, 0.0, 0.98) * bore;
-            pupil = new EyePupil { Radius = radius, PointCount = cfg.PupilPoints, Label = 3 };
+            pupil = new EyePupil
+            {
+                Radius = radius, PointCount = cfg.PupilPoints, Label = 3,
+                Offset = Resize(cfg.PupilOffset, dim),
+            };
         }
 
         return new EyeSkeleton
@@ -138,7 +145,7 @@ public static class EyeTorusToy
                     CrossSection = cfg.CentralCrossSection ?? cfg.CrossSection,
                     RibbonThickness = cfg.RibbonThickness, EndTaper = 0.0,
                     SweepAxisA = centralF.a, SweepAxisB = centralF.b, AxialAxis = centralF.ax,
-                    Offset = new double[dim],
+                    Offset = Resize(cfg.CentralOffset, dim),
                     PointCount = cfg.CentralPoints, Label = 0,
                 },
                 new EyeStroke
@@ -149,7 +156,7 @@ public static class EyeTorusToy
                     CrossSection = cfg.CrossSection, RibbonThickness = cfg.RibbonThickness,
                     EndTaper = cfg.HalfArcTaper,
                     SweepAxisA = upperF.a, SweepAxisB = upperF.b, AxialAxis = upperF.ax,
-                    Offset = new double[dim],
+                    Offset = Resize(cfg.UpperOffset, dim),
                     PointCount = cfg.UpperPoints, Label = 1,
                 },
                 new EyeStroke
@@ -257,7 +264,8 @@ public static class EyeTorusToy
                 double rr = pup.Radius * Math.Pow(rng.NextDouble(), 1.0 / dim);
 
                 var v = new double[dim];
-                for (int d = 0; d < dim; d++) v[d] = rr * dir[d] / norm;
+                for (int d = 0; d < dim; d++)
+                    v[d] = rr * dir[d] / norm + (d < pup.Offset.Length ? pup.Offset[d] : 0.0);
                 local[idx] = v;
                 fine[idx] = pup.Label;
                 coarse[idx] = 0;

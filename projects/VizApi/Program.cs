@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using Clustering.Statistical.GMM;
 using Graphs;
 using Graphs.Coupling;
@@ -37,12 +38,39 @@ app.MapGet("/", () =>
     return Results.Content(html, "text/html; charset=utf-8");
 });
 
+app.MapGet("/eye", () =>
+{
+    using var ms = new MemoryStream();
+    new ThreeJsHtmlRenderTarget().Render(EyeTorusScene.Build(new EyeTorusRequest()), ms);
+    return Results.Content(Encoding.UTF8.GetString(ms.ToArray()), "text/html; charset=utf-8");
+});
+
 // ── POST /api/regen → ScenePackage JSON ───────────────────────────────────────
 // Receives generator params from viewer.html; returns full ScenePackageJson.
 // Dispatches on req.Generator; add new generators to the switch below.
-app.MapPost("/api/regen", (RegenRequest req) =>
+app.MapPost("/api/regen", (JsonElement payload) =>
 {
-    var package = BuildPackage(req);
+    if (payload.ValueKind != JsonValueKind.Object)
+        return Results.BadRequest(new { error = "Expected an object containing generator parameters." });
+    var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+    ScenePackage package;
+    try
+    {
+        var generator = payload.EnumerateObject().FirstOrDefault(property =>
+            string.Equals(property.Name, "generator", StringComparison.OrdinalIgnoreCase)).Value;
+        package = generator.ValueKind == JsonValueKind.String &&
+            generator.GetString() == "EyeTorusToy"
+            ? EyeTorusScene.Build(payload.Deserialize<EyeTorusRequest>(options) ?? new())
+            : BuildPackage(payload.Deserialize<RegenRequest>(options) ?? new());
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (JsonException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
     using var ms = new MemoryStream();
     new JsonExportRenderTarget(compact: true).Render(package, ms);
     string json = Encoding.UTF8.GetString(ms.ToArray());

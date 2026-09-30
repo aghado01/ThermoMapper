@@ -85,6 +85,8 @@ public sealed class EyePupil
     public required double Radius { get; init; }
     public required int PointCount { get; init; }
     public required int Label { get; init; }
+    /// <summary>Position relative to the skeleton center, in eye-local coordinates.</summary>
+    public double[] Offset { get; init; } = { 0.0, 0.0, 0.0 };
 }
 
 /// <summary>

@@ -28,7 +28,10 @@ namespace Viz.Renderers
                     "Embedded resource 'Viz.viewer.html' not found. " +
                     "Ensure viewer.html is marked EmbeddedResource in VizCore.csproj.");
             using var reader = new StreamReader(stream, Encoding.UTF8);
-            return reader.ReadToEnd();
+            using var eyeStream = asm.GetManifestResourceStream("Viz.eye_viewer.js")
+                ?? throw new InvalidOperationException("Embedded resource 'Viz.eye_viewer.js' not found.");
+            using var eyeReader = new StreamReader(eyeStream, Encoding.UTF8);
+            return reader.ReadToEnd().Replace("__EYE_VIEWER__", eyeReader.ReadToEnd());
         }
 
         public void Render(ScenePackage scene, Stream output)

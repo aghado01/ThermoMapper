@@ -19,10 +19,12 @@
     <Compile Include="..\..\src\viz-core\gmm_adapter.cs"        Link="viz-core\gmm_adapter.cs" />
     <Compile Include="..\..\src\viz-core\param_schema.cs"       Link="viz-core\param_schema.cs" />
     <Compile Include="..\..\src\viz-core\schema_catalog.cs"     Link="viz-core\schema_catalog.cs" />
+    <Compile Include="..\..\src\viz-core\eye_torus_schema.cs"   Link="viz-core\eye_torus_schema.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\src\viz-core\viewer.html" LogicalName="Viz.viewer.html" />
+    <EmbeddedResource Include="..\..\src\viz-core\eye_viewer.js" LogicalName="Viz.eye_viewer.js" />
   </ItemGroup>
 
   <ItemGroup>

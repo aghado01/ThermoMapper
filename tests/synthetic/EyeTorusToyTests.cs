@@ -7,6 +7,49 @@ namespace Synthetic.Tests;
 public sealed class EyeTorusToyTests
 {
     [Fact]
+    public void ComponentOffsets_TranslateEachComponentWithoutChangingItsSamples()
+    {
+        var cfg = new EyeTorusToy.EyeTorusToyConfig
+        {
+            CentralPoints = 60, UpperPoints = 40, LowerPoints = 50, PupilPoints = 30,
+            BackgroundDensityRatio = 0, LowerOffset = new double[3], Seed = 42,
+        };
+        var original = EyeTorusToy.Generate(cfg);
+        double[][] offsets = { new[] { 1.0, 2.0, 0.5 }, new[] { -2.0, 3.0, 1.0 },
+            new[] { 0.0, -4.0, -1.0 }, new[] { 0.5, 0.25, 2.0 } };
+        cfg.CentralOffset = offsets[0]; cfg.UpperOffset = offsets[1];
+        cfg.LowerOffset = offsets[2]; cfg.PupilOffset = offsets[3];
+        var moved = EyeTorusToy.Generate(cfg);
+        Assert.Equal(original.Labels, moved.Labels);
+        for (int i = 0; i < original.Features.Length; i++)
+            for (int d = 0; d < 3; d++)
+                Assert.Equal(original.Features[i][d] + offsets[original.Labels[i]][d], moved.Features[i][d], 10);
+    }
+
+    [Fact]
+    public void HalfArcs_CanBracketIrisAndPupilFitsItsBore()
+    {
+        var cfg = new EyeTorusToy.EyeTorusToyConfig
+        {
+            CentralPoints = 100, UpperPoints = 100, LowerPoints = 100, PupilPoints = 100,
+            UpperArcStart = 0, UpperArcEnd = Math.PI,
+            LowerArcStart = Math.PI, LowerArcEnd = 2 * Math.PI,
+            LowerOffset = new double[3], StructureNoiseSigma = 0, BackgroundDensityRatio = 0,
+        };
+        var eye = EyeTorusToy.Generate(cfg);
+        double pupilRadius = cfg.PupilDilation * (cfg.CentralMajorR - cfg.CentralMinorR);
+        for (int i = 0; i < eye.Features.Length; i++)
+        {
+            var p = eye.Features[i];
+            if (eye.Labels[i] == 1) Assert.True(p[1] >= 0);
+            if (eye.Labels[i] == 2) Assert.True(p[1] <= 0);
+            if (eye.Labels[i] == 3)
+                Assert.InRange(Math.Sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]), 0, pupilRadius);
+        }
+        Assert.Equal(4, eye.ClusterCount);
+    }
+
+    [Fact]
     public void Generate_ProducesExactCountsAndLabelInvariants()
     {
         var cfg = new EyeTorusToy.EyeTorusToyConfig

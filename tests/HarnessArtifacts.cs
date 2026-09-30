@@ -187,7 +187,7 @@ internal static class HarnessArtifacts
         while (current is not null)
         {
             if (File.Exists(Path.Combine(current.FullName, "Directory.Build.props")) &&
-                File.Exists(Path.Combine(current.FullName, "changelog.md")))
+                File.Exists(Path.Combine(current.FullName, "ThermoMapper.sln")))
             {
                 return current.FullName;
             }

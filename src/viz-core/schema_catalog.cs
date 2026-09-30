@@ -20,6 +20,7 @@ namespace Viz
         /// </summary>
         public static readonly string[] KnownGenerators =
         [
+            "EyeTorusToy",
             "CrescentAndEllipsoid",
             "MobiusAndEllipsoid",
             "HyperbolicBlobs",
@@ -37,6 +38,7 @@ namespace Viz
         public static GeneratorParamSchema? ForGenerator(string? generatorName) =>
             generatorName switch
             {
+                "EyeTorusToy" => EyeTorusSchema.Value,
                 "CrescentAndEllipsoid" => CrescentAndEllipsoidSchema,
                 "MobiusAndEllipsoid" => MobiusAndEllipsoidSchema,
                 "HyperbolicBlobs" => HyperbolicBlobsSchema,

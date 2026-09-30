@@ -47,6 +47,7 @@
       }
       #canvas-wrap {
         flex: 1;
+        min-height: 0;
         position: relative;
       }
       canvas {
@@ -244,15 +245,78 @@
       #btn-regen:hover {
         background: #2a4f7f;
       }
+      body.photo #controls-panel,
+      body.photo #gen-panel,
+      body.photo #debug-console,
+      body.photo #graph-marquee,
+      body.photo #eye-tools {
+        display: none !important;
+      }
+      [hidden] { display: none !important; }
+      body.eye-editor #controls-panel,
+      body.eye-editor #graph-marquee,
+      body.eye-editor #debug-console,
+      body.eye-editor #gen-fixture,
+      body.eye-editor #legend { display: none; }
+      body.eye-editor #gen-panel { display: none !important; }
+      body.eye-editor.photo #legend { display: block; }
+      body.eye-editor:not(.photo) #canvas-wrap { margin-left: 316px; }
+      body.eye-editor:not(.photo) #eye-tools { left: -302px; }
+      #gen-panel details { border-top: 1px solid #30303a; padding: 8px 0; }
+      #gen-panel summary { color: #d4d3d0; cursor: pointer; margin-bottom: 6px; }
+      body.eye-editor #gen-panel label { flex-wrap: wrap; margin: 5px 0; }
+      body.eye-editor #gen-panel input[type=range] { flex: 1; min-width: 60px; }
+      body.eye-editor #gen-panel .gp-number { width: 62px; }
+      #eye-tools {
+        position: absolute; left: 14px; top: 14px; width: 288px;
+        max-height: calc(100% - 28px); overflow-y: auto; box-sizing: border-box;
+        background: rgba(16,18,24,.95); border: 1px solid #303747;
+        border-radius: 10px; padding: 14px; font-size: 12px; scrollbar-width: thin;
+      }
+      #eye-tools label { display: flex; align-items: center; gap: 6px; margin: 8px 0; color: #c8cedb; }
+      #eye-tools input[type=range] { min-width: 35px; width: 100%; accent-color: #63cdd2; }
+      #eye-tools input[type=number] { width: 58px; background: #232735; color: #e1e7ee; border: 1px solid #3c4659; border-radius: 3px; }
+      #eye-tools input[type=color] { width: 32px; height: 22px; padding: 0; border: 0; background: none; margin-left: auto; }
+      #eye-tools select { min-width: 0; background: #232735; color: #e1e7ee; border: 1px solid #3c4659; border-radius: 4px; padding: 4px; }
+      #eye-tools .eye-object-label select { flex: 1; font-size: 13px; padding: 7px; }
+      .eye-toolbar, .eye-select-row, .eye-identity { display: flex; gap: 8px; justify-content: space-between; }
+      .eye-toolbar button { flex: 1; }
+      .eye-identity label { margin: 3px 0 !important; }
+      #eye-tools .eye-range { display: grid; grid-template-columns: 86px minmax(35px,1fr) 30px; gap: 7px; }
+      .eye-range output { text-align: right; font-variant-numeric: tabular-nums; font-size: 11px; color: #9daec2; }
+      .eye-section { border-top: 1px solid #303747; margin-top: 10px; padding-top: 10px; }
+      .eye-section > summary { cursor: pointer; color: #e3e9f2; margin-bottom: 8px; font-weight: 600; }
+      #eye-shape > details > summary, #eye-sampling > details > summary { display: none; }
+      #eye-shape label, #eye-sampling label { flex-wrap: wrap; }
+      #eye-shape input[type=range], #eye-sampling input[type=range] { flex: 1; width: auto; }
+      .eye-help { color: #8491a6; line-height: 1.6; font-size: 11px; }
+      #eye-tools button, #photo-toggle, #eye-play, #eye-collect {
+        background: #20232d; border: 1px solid #41485b; border-radius: 4px;
+        color: #dfdfeb; padding: 5px 8px; cursor: pointer;
+      }
+      #eye-play { margin-left: auto; }
+      #eye-play[aria-pressed=true], #eye-collect[aria-pressed=true] { border-color: #58a9af; color: #a5edf0; }
+      @media (max-width: 640px) {
+        #eye-tools { width: 245px; }
+        #header .meta { display: none; }
+        body.eye-editor:not(.photo) #canvas-wrap { margin-left: 273px; }
+        body.eye-editor:not(.photo) #eye-tools { left: -259px; }
+      }
+      #regen-status { color: #aeb8cc; font-size: 11px; margin-top: 8px; }
+      #regen-status[data-error=true] { color: #ff9797; }
     </style>
   </head>
   <body>
     <div id="header">
       <span class="title" id="header-title"></span>
       <span class="meta" id="meta-n"></span>
+      <button id="eye-play" hidden>Pause motion</button>
+      <button id="eye-collect" aria-pressed="false" hidden>Collect</button>
+      <button id="photo-toggle" hidden>Photo view</button>
     </div>
     <div id="canvas-wrap">
       <canvas id="c"></canvas>
+      <div id="eye-tools" hidden></div>
       <div id="graph-marquee"></div>
       <div id="legend"></div>
       <div id="debug-console">
@@ -637,7 +701,8 @@
 
       // ── Scene data — injected by ThreeJsHtmlRenderTarget at __SCENE_DATA__ ───────
       // Schema: JsonExportRenderTarget schema_version 1 (snake_case, flat row-major arrays).
-      const SCENE = __SCENE_DATA__;
+      __EYE_VIEWER__
+      let SCENE = __SCENE_DATA__;
 
       // ── Semantic colour palette ────────────────────────────────────────────────
       // Tier 1 (Base data / cluster identity): perceptually-distinct, equal-luma,
@@ -659,8 +724,17 @@
       ];
       const NOISE_COLOR = 0x3a3a4a;
       const UNSET_COLOR = 0x555566;
+      const componentAppearance = new Map();
+      let eyeEditor = null;
+
+      function componentName(k) {
+        return SCENE.generator_params?.componentNames?.[k] ??
+          (k === SCENE.generator_params?.backgroundLabel ? "Background" : k < 0 ? "noise" : `Cluster ${k}`);
+      }
 
       function clusterColor(k) {
+        const custom = componentAppearance.get(componentName(k))?.color ?? SCENE.generator_params?.componentColors?.[k];
+        if (custom && /^#[0-9a-f]{6}$/i.test(custom)) return parseInt(custom.slice(1), 16);
         if (k < 0) return NOISE_COLOR;
         if (k < PALETTE.length) return PALETTE[k];
         // Deterministic overflow hash for K > 12
@@ -671,7 +745,7 @@
       // ── Resolve active label layer ───────────────────────────────────────────────
       // Prefer GroundTruth; fall back to first available layer.
       const labelLayers = SCENE.label_layers ?? [];
-      const activeLayer =
+      let activeLayer =
         labelLayers.find((l) => l.kind === "GroundTruth") ??
         labelLayers[0] ??
         null;
@@ -679,6 +753,15 @@
 
       // ── Header ───────────────────────────────────────────────────────────────────
       document.title = SCENE.title ?? "Viz";
+      // Repeatable portraits: ?photo&yaw=25&pitch=15&zoom=2 (angles in degrees).
+      const viewParams = new URLSearchParams(window.location.search);
+      const photoMode = viewParams.has("photo");
+      document.body.classList.toggle("photo", photoMode);
+      function viewNumber(name, fallback, min, max) {
+        if (!viewParams.has(name)) return fallback;
+        const value = Number(viewParams.get(name));
+        return Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+      }
       document.getElementById("header-title").textContent =
         SCENE.title ?? "Viz";
 
@@ -752,7 +835,7 @@
         cx.fill();
       }
       const pointsMat = new THREE.PointsMaterial({
-        size: 0.04,
+        size: photoMode ? viewNumber("pointSize", 0.04, 0.005, 1) : SCENE.generator_params?.generator === "EyeTorusToy" ? 0.055 : 0.04,
         vertexColors: true,
         sizeAttenuation: true,
         depthWrite: false,
@@ -951,7 +1034,7 @@
 
         const metric = selectedMetricOption();
         if (metric?.requiresParameter) {
-          rpMetricParam.value = parsed.parameterValue ?? rpMetricParam.value || "2";
+          rpMetricParam.value = parsed.parameterValue ?? (rpMetricParam.value || "2");
         }
 
         syncMetricParameterUi();
@@ -983,6 +1066,10 @@
       }
 
       function loadMetricCatalog() {
+        if (photoMode) {
+          populateMetricOptions([], SCENE.generator_params?.metric);
+          return Promise.resolve();
+        }
         return fetch("/api/metrics")
           .then((response) => {
             if (!response.ok) throw new Error(`/api/metrics ${response.status}`);
@@ -2005,6 +2092,16 @@
       if (bs) {
         const r = bs.radius || 1;
         camera.position.set(bs.center.x, bs.center.y, bs.center.z + r * 2.4);
+        if (photoMode) {
+          const yaw = viewNumber("yaw", 0, -180, 180) * Math.PI / 180;
+          const pitch = viewNumber("pitch", 0, -85, 85) * Math.PI / 180;
+          const distance = r * 2.4 / viewNumber("zoom", 1, 0.25, 8);
+          camera.position.set(
+            bs.center.x + distance * Math.sin(yaw) * Math.cos(pitch),
+            bs.center.y + distance * Math.sin(pitch),
+            bs.center.z + distance * Math.cos(yaw) * Math.cos(pitch),
+          );
+        }
         controls.target.copy(bs.center);
         camera.near = r * 0.001;
         camera.far = r * 100;
@@ -2047,7 +2144,7 @@
             (a, b) => a[0] - b[0],
           )) {
             const hex = "#" + clusterColor(k).toString(16).padStart(6, "0");
-            const lbl = k < 0 ? "noise" : `Cluster ${k}`;
+            const lbl = componentName(k);
             html += `<div><span class="swatch" style="background:${hex}"></span>${lbl} <span style="color:#666">(${count})</span></div>`;
           }
           blocks.push(html);
@@ -2159,6 +2256,7 @@
       }
 
       // Apply initial auto-rotate state from the checked HTML attribute.
+      if (photoMode || SCENE.generator_params?.generator === "EyeTorusToy") chkAutoRotate.checked = false;
       controls.autoRotate = chkAutoRotate.checked;
       controls.autoRotateSpeed = parseFloat(rngRotSpeed.value);
 
@@ -2280,14 +2378,26 @@
         while (body.firstChild) body.removeChild(body.firstChild);
         let epsilonRow = null;
         let ruleSelect = null;
+        let eyeSectionIndex = 0;
         for (const section of schema.sections) {
+          let sectionBody = body;
+          if (gp.generator === "EyeTorusToy") {
+            const details = document.createElement("details");
+            details.dataset.eyeComponent = ["central", "upper", "lower", "pupil", "sampling", "background"][eyeSectionIndex++];
+            details.open = section.label.startsWith("Iris");
+            const summary = document.createElement("summary");
+            summary.textContent = section.label;
+            details.appendChild(summary);
+            body.appendChild(details);
+            sectionBody = details;
+          }
           const hdr = document.createElement("div");
           hdr.className = "gp-sec";
           hdr.textContent = section.label;
-          body.appendChild(hdr);
+          if (sectionBody === body) body.appendChild(hdr);
           for (const param of section.params) {
             const el = buildParamControl(param, gp);
-            body.appendChild(el);
+            sectionBody.appendChild(el);
             if (param.key === "epsilonBallEpsilon") epsilonRow = el;
             if (param.key === "neighborRule")
               ruleSelect = el.querySelector("select");
@@ -2306,6 +2416,7 @@
         btn.textContent = "Regenerate";
         body.appendChild(btn);
         btn.addEventListener("click", doRegen);
+        if (gp.generator === "EyeTorusToy") eyeEditor?.attachGeometry(body);
       }
 
       // Shared regen action — called by button click and Enter keydown on int fields.
@@ -2328,14 +2439,20 @@
         refreshDebugConsole(`start regen #${requestId}`);
 
         if (btn) btn.disabled = true;
+        const status = document.getElementById("regen-status");
+        status.textContent = "Updating…";
+        status.dataset.error = "false";
         fetch("/api/regen", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
           signal: controller.signal,
         })
-          .then((r) => {
-            if (!r.ok) throw new Error(`/api/regen ${r.status}`);
+          .then(async (r) => {
+            if (!r.ok) {
+              const detail = await r.json().catch(() => null);
+              throw new Error(detail?.error ?? `/api/regen ${r.status}`);
+            }
             return r.json();
           })
           .then((json) => {
@@ -2347,6 +2464,7 @@
               `finish regen #${requestId} edges=${json.edge_layers?.length ?? 0} flow=${json.vector_field_layers?.length ?? 0}`,
             );
             rehydrateFromJson(json, sentParams);
+            status.textContent = `Updated · ${json.points.n.toLocaleString()} points`;
           })
           .catch((err) => {
             if (err?.name === "AbortError") {
@@ -2356,6 +2474,8 @@
             }
             pushDebugLine(`regen #${requestId} failed: ${err?.message ?? err}`);
             console.error("Regen failed:", err);
+            status.textContent = err?.message ?? "Could not update the scene.";
+            status.dataset.error = "true";
           })
           .finally(() => {
             if (_activeRegenController !== controller) return;
@@ -2428,6 +2548,9 @@
           if (param.min != null) inp.min = param.min;
           if (param.max != null) inp.max = param.max;
           inp.value = curVal ?? 0;
+          inp.setAttribute("aria-label", param.label);
+          if (SCENE.generator_params?.generator === "EyeTorusToy")
+            inp.addEventListener("input", () => { if (inp.value !== "" && inp.checkValidity()) doRegenDebounced(); });
           inp.addEventListener("keydown", (e) => {
             if (e.key === "Enter") doRegen();
           });
@@ -2446,6 +2569,7 @@
           inp.max = param.max ?? 1;
           inp.step = param.step ?? 0.01;
           inp.value = curVal ?? 0;
+          inp.setAttribute("aria-label", param.label);
           const dvs = param.display_values;
           const fmtVal = (v) =>
             dvs
@@ -2460,7 +2584,21 @@
           });
           lbl.appendChild(document.createTextNode(param.label + " "));
           lbl.appendChild(inp);
-          lbl.appendChild(span);
+          if (SCENE.generator_params?.generator === "EyeTorusToy") {
+            const number = document.createElement("input");
+            number.type = "number";
+            number.className = "gp-number";
+            number.min = inp.min; number.max = inp.max; number.step = inp.step;
+            number.value = inp.value;
+            number.setAttribute("aria-label", param.label + " value");
+            inp.addEventListener("input", () => { number.value = inp.value; });
+            number.addEventListener("input", () => {
+              if (!number.checkValidity() || number.value === "") return;
+              inp.value = number.value;
+              doRegenDebounced();
+            });
+            lbl.appendChild(number);
+          } else lbl.appendChild(span);
           return lbl;
         }
 
@@ -2508,12 +2646,13 @@
             inp.max = param.max ?? 3;
             inp.step = param.step ?? 0.05;
             inp.value = vals[i] ?? 0;
+            inp.setAttribute("aria-label", param.label + " " + labels[i]);
             span.textContent = parseFloat(inp.value).toFixed(2);
             inp.addEventListener("input", () => {
               span.textContent = parseFloat(inp.value).toFixed(2);
               doRegenDebounced();
             });
-            row.appendChild(document.createTextNode(labels[i] + " "));
+            row.appendChild(document.createTextNode(param.label + " " + labels[i] + " "));
             row.appendChild(inp);
             row.appendChild(span);
             wrap.appendChild(row);
@@ -2586,6 +2725,10 @@
       // Accepts a ScenePackageJson object (same schema as SCENE).
       // Performs Tier 3 geometry dispose + rebuild — acceptable on user button click only.
       function rehydrateFromJson(newScene, sentParams = null) {
+        const sameGenerator = SCENE.generator_params?.generator === newScene.generator_params?.generator;
+        const preserveCamera = sameGenerator && sentParams !== null && newScene.generator_params?.generator === "EyeTorusToy";
+        if (!sameGenerator) componentAppearance.clear();
+        SCENE = newScene;
         pushDebugLine(
           `rehydrate edges=${newScene.edge_layers?.length ?? 0} triangles=${newScene.triangle_layers?.length ?? 0} flow=${newScene.vector_field_layers?.length ?? 0}`,
         );
@@ -2643,6 +2786,7 @@
           newLabelLayers[0] ??
           null;
         labels = newActiveLayer?.labels ?? null;
+        activeLayer = newActiveLayer;
 
         const pc = newScene.points;
         const newN = pc.n;
@@ -2687,7 +2831,7 @@
         updateGraphSpec();
 
         const newBs = newGeo.boundingSphere;
-        if (newBs) {
+        if (newBs && !preserveCamera) {
           const r = newBs.radius || 1;
           camera.position.set(
             newBs.center.x,
@@ -2809,23 +2953,74 @@
         if (newScene.generator_params && newScene.generator_param_schema) {
           selGen.value =
             sentParams?.generator ?? newScene.generator_params.generator ?? "";
-          rebuildGenPanel(
-            sentParams ?? newScene.generator_params,
-            newScene.generator_param_schema,
-          );
+          if (!preserveCamera)
+            rebuildGenPanel(sentParams ?? newScene.generator_params, newScene.generator_param_schema);
         }
 
         buildLegend();
         refreshDebugConsole("rehydrate complete");
         document.getElementById("meta-n").textContent =
-          `N=${newN}  D=${newD}  K=2`;
+          `N=${newN}  D=${newD}  K=${new Set(labels ?? []).size}`;
+        document.title = newScene.title ?? "Viz";
+        document.getElementById("header-title").textContent = document.title;
+        updateEyeTools();
       }
+
+      function updateEyeTools() {
+        const isEye = SCENE.generator_params?.generator === "EyeTorusToy";
+        document.body.classList.toggle("eye-editor", isEye);
+        document.getElementById("photo-toggle").hidden = !isEye;
+        pointsMeshRef.visible = !isEye;
+        if (isEye) {
+          controls.autoRotate = false;
+          chkAutoRotate.checked = false;
+        }
+        eyeEditor.setScene(SCENE);
+      }
+
+      function frameEye(yaw, pitch) {
+        const sphere = pointsMeshRef.geometry.boundingSphere;
+        if (!sphere) return;
+        const direction = yaw === null
+          ? camera.position.clone().sub(controls.target).normalize()
+          : new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+        const r = sphere.radius || 1;
+        controls.target.copy(sphere.center);
+        camera.position.copy(sphere.center).addScaledVector(direction, r * 2.4 / Math.min(1, camera.aspect));
+        camera.near = r * 0.001; camera.far = r * 100;
+        camera.updateProjectionMatrix(); controls.update();
+      }
+      eyeEditor = createEyeViewer({
+        THREE, scene, camera, renderer, controls, root: document.getElementById("eye-tools"),
+        appearance: componentAppearance, frame: frameEye, photo: photoMode,
+        initialPointSize: photoMode ? pointsMat.size : 0.07,
+        reset: () => { componentAppearance.clear(); issueRegenRequest({ generator: "EyeTorusToy" }, null); },
+        recolor: () => { applyNodeSignalLayer(activeNodeSignalLayer); buildLegend(); },
+      });
+      if (SCENE.generator_params?.generator === "EyeTorusToy")
+        eyeEditor.attachGeometry(document.getElementById("gen-body"));
+      document.getElementById("photo-toggle").addEventListener("click", (event) => {
+        const photo = document.body.classList.toggle("photo");
+        event.target.textContent = photo ? "Edit view" : "Photo view";
+        if (photo) {
+          controls.autoRotate = false;
+          chkAutoRotate.checked = false;
+          eyeEditor.setPlaying(false);
+        }
+        onResize();
+      });
+      document.getElementById("photo-toggle").textContent = photoMode ? "Edit view" : "Photo view";
+      updateEyeTools();
       // ── Resize ───────────────────────────────────────────────────────────────────
       function onResize() {
         const wrap = document.getElementById("canvas-wrap");
         const w = wrap.clientWidth,
           h = wrap.clientHeight;
         renderer.setSize(w, h, false);
+        if (SCENE.generator_params?.generator === "EyeTorusToy") {
+          const scale = Math.min(1, camera.aspect) / Math.min(1, w / h);
+          camera.position.sub(controls.target).multiplyScalar(scale).add(controls.target);
+        }
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
       }
@@ -2835,9 +3030,15 @@
       pushDebugLine("viewer initialized");
 
       // ── Render loop ──────────────────────────────────────────────────────────────
+      let lastFrameTime = performance.now();
       (function animate() {
         requestAnimationFrame(animate);
+        const now = performance.now();
+        const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+        lastFrameTime = now;
         controls.update();
+        camera.updateMatrixWorld();
+        eyeEditor.tick(document.hidden ? 0 : dt);
         renderer.render(scene, camera);
       })();
     </script>

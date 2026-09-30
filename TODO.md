@@ -27,10 +27,16 @@ Resolved en route: `feedback_fluent_apis`'s `[Obsolete]`-shim migration-window
 advice is superseded by no-compat-bandaids + strict-core/fluent-shell; only
 its "param lists encoding stages → make stages first-class" signal was kept.
 
+## Done (2026-09-15)
+
+- [x] README landing page with a code map, EyeTorusToy portrait, and a working
+      fixture-render command. Camera settings and five screenshots are in
+      [the gallery](docs/gallery.md).
+
 ## Remaining
 
-- [ ] README.md — conceptual overview of the project, current state, and
-      broader vision (author's voice; not yet drafted).
+- [ ] README.md — author's conceptual overview and broader vision. The current
+      landing page covers the code and fixture gallery.
 - [ ] Convenience aliases for R / dotnet / Lean etc. — add PowerShell loader
       scripts (activate local python venv, load aliases), then surface them
       in AGENTS.md § Environment.
