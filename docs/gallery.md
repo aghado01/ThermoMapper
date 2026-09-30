@@ -12,7 +12,7 @@ gallery.
 dotnet run --project projects/VizApi/VizApi.csproj -c Release -- --urls http://127.0.0.1:8766
 ```
 
-Open [localhost:8766/eye](http://127.0.0.1:8766/eye).
+~~Open [localhost:8766/eye](http://127.0.0.1:8766/eye).~~
 
 ![EyeTorusToy editor with independent motion and lighting controls](images/eye-editor.png)
 
@@ -84,8 +84,8 @@ the tube cross-sections:
 
 ![EyeTorusToy with full tube depth and no background](images/eye-torus-depth.png)
 
-The reference is the toy problem in [Blatt, Wiseman & Domany, *Superparamagnetic
-Clustering of Data* (1996), Fig. 1](https://doi.org/10.1103/PhysRevLett.76.3251).
+The reference is the toy problem in [Blatt, Wiseman & Domany, _Superparamagnetic
+Clustering of Data_ (1996), Fig. 1](https://doi.org/10.1103/PhysRevLett.76.3251).
 This generator is a toroidal interpretation. Its current arc angles are measured
 from +X: the configuration's `UpperArcStart/End` span −0.6π to 0.6π, placing
 that arc mainly on the right in the face-on view.
@@ -135,13 +135,13 @@ Removing the query restores the normal viewer.
 The fixture PNGs below predate the Eye lighting controls. They use a 1280 × 720
 browser viewport and the following settings:
 
-| HTML scene | PNG | yaw | pitch | zoom | pointSize |
-| --- | --- | ---: | ---: | ---: | ---: |
-| `eye-torus.html` | `eye-torus-front.png` | 0 | 0 | 3 | 0.07 |
-| `eye-torus-xy.html` | `eye-torus-xy.png` | 0 | 0 | 3 | 0.07 |
-| `eye-torus-depth.html` | `eye-torus-depth.png` | 38 | 28 | 1.12 | 0.07 |
-| `crescent-ellipsoid.html` | `crescent-ellipsoid.png` | 25 | 20 | 1.12 | 0.045 |
-| `mobius-ellipsoid.html` | `mobius-ellipsoid.png` | 35 | 32 | 1.12 | 0.045 |
+| HTML scene                | PNG                      | yaw | pitch | zoom | pointSize |
+| ------------------------- | ------------------------ | --: | ----: | ---: | --------: |
+| `eye-torus.html`          | `eye-torus-front.png`    |   0 |     0 |    3 |      0.07 |
+| `eye-torus-xy.html`       | `eye-torus-xy.png`       |   0 |     0 |    3 |      0.07 |
+| `eye-torus-depth.html`    | `eye-torus-depth.png`    |  38 |    28 | 1.12 |      0.07 |
+| `crescent-ellipsoid.html` | `crescent-ellipsoid.png` |  25 |    20 | 1.12 |     0.045 |
+| `mobius-ellipsoid.html`   | `mobius-ellipsoid.png`   |  35 |    32 | 1.12 |     0.045 |
 
 For example:
 
