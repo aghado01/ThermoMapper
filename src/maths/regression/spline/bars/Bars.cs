@@ -37,7 +37,8 @@ public sealed record BarsConfig
     public int StartDispersion { get; init; } = 4;
     public int WeightEvery { get; init; } = 25;
 
-    /// <summary>Stop once R̂ ≤ this on all reported functionals (0 = run the full <see cref="MaxSamples"/>).</summary>
+    /// <summary>Stop once every reported functional's R̂ meets this target (0 = run the full <see cref="MaxSamples"/>);
+    /// frozen or unavailable R̂ never does. Needs at least two chains.</summary>
     public double RHatTarget { get; init; }
 
     /// <summary>Samples per round between R̂ checks (≤0 = a single round).</summary>

@@ -160,7 +160,7 @@ For these three models, only $m\le\nu$ yields −∞. A singular design still gi
 
 **Pooled outputs.**
 
-- `Fit`: the grid posterior means, with a per-grid R̂ consensus map (`RHatFit`, where non-finite values are clamped to 0).
+- `Fit`: the grid posterior means, with a per-grid R̂ consensus map (`RHatFit`, each reading with its state) and its worst reading (`RHatFitMax`).
 - `PeakPosterior`: the mean argmax location and height, a 95% interval from type-7 quantiles, and R̂/ESS.
 - λ(T) and π(T).
 - `PeakModes`: interior local maxima of λ. Each has a λ-weighted location, a span equal to the contiguous region with π ≥ 0.5 (a fixed coverage cutoff), and a mass. Modes are sorted by mass.

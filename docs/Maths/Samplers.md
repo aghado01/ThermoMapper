@@ -114,22 +114,30 @@ Later pairs in the same sweep see earlier swaps. The chain interface reports the
 
 1. Validate the arguments, then derive 2C seeds: kernel seeds are children $[0,C)$ and readout seeds are children $[C,2C)$.
 2. In parallel, start each chain and run its burn-in.
-3. Run sampling rounds of `batchSize` steps. The default is a single round of `samples` steps. Each draw is reduced to a functional vector, and its sums and sums of squares are accumulated. Full sequences are kept for the leading `EssDim` functionals.
-4. If `rHatTarget > 0`, stop once $\max_f\hat R_f\le$ target. A non-finite $\hat R$ is treated as 0, that is, as converged. See [Status](#status-and-caveats).
+3. Run sampling rounds of `batchSize` steps. The default is a single round of `samples` steps. Each draw is reduced to a functional vector, whose streaming moments (Welford's update) are accumulated per chain. Full sequences are kept for the leading `EssDim` functionals.
+4. If `rHatTarget > 0`, stop once every functional's R̂ meets the target (`RHatDiagnostic.MeetsTarget`). The check runs at round boundaries once each chain holds at least `ChainEnsemble.MinDrawsForStop` (100) draws. An R̂ target with a single chain is rejected.
 5. Pool the results:
    - means over $C\cdot n$ draws;
-   - raw $\hat R$ per functional;
+   - a typed R̂ (`RHatDiagnostic`) per functional;
    - ESS on the leading functionals;
    - acceptance $\sum\text{Accepted}/\sum\text{Attempts}$ from the chains' cumulative counters. These counters include burn-in.
 
 ### Convergence diagnostics
 
-**R̂.** The classic Gelman–Rubin statistic, computed from moments. It is **not** split and **not** rank-normalized.
+**R̂.** The classic Gelman–Rubin statistic, computed from per-chain means and sample variances. It is **not** split and **not** rank-normalized.
 
 $$W=\tfrac1C\sum_i s_i^2,\quad B=\tfrac{n}{C-1}\sum_i(\bar x_i-\bar x)^2,\quad \hat V=\tfrac{n-1}{n}W+\tfrac{B}{n},\quad \hat R=\sqrt{\hat V/W}.$$
 
-- It returns NaN when $C<2$ or $n<2$.
-- If $W\approx0$, it returns 1 when $B\approx0$ as well, and $+\infty$ otherwise. The $+\infty$ case means the chains are frozen at *different* values.
+Each reading carries a state (`RHatState`):
+
+| State | When | Meets a stopping target |
+|---|---|---|
+| `Estimated` | $W>0$ | When $\hat R\le$ target |
+| `Constant` | $W=0$ and every chain mean is equal | Always: there is nothing to converge |
+| `Frozen` | $W=0$ and the chain means differ ($\hat R=+\infty$) | Never |
+| `Unavailable` | $C<2$, $n<2$, or a non-finite draw | Never |
+
+Streaming moments keep $W$ exactly zero for constant chains; running sums and sums of squares cancel to rounding noise and turn a constant functional into a spurious estimate. `RHatDiagnostic.Worst` summarizes a set in the order constant, estimates by value, frozen, unavailable.
 
 **ESS.** The BDA3 variogram estimator:
 
@@ -160,12 +168,13 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | Setting | Default | Meaning |
 |---|---|---|
 | `ChainEnsemble.Run` rHatTarget / batchSize | 0 / 0 | No early stop / one round of `samples` steps |
+| `ChainEnsemble.MinDrawsForStop` | 100 | Draws per chain before an R̂ target may stop sampling |
 | `GeometricLadder` levels / betaMin | (required) | L ≥ 2; $\beta_{\min}\in(0,1)$ |
 | `SpectralNoiseField` presets | White 0 / Pink 1 / Brown 2 | Spectral exponent β |
 
 ## Status and caveats
 
-- **Frozen chains can pass the early stop.** Early stopping treats a non-finite R̂ as converged, including $+\infty$, which arises when chains are frozen at different values. It is safer to check the R̂ values after the run.
+- **ESS of a constant functional depends on rounding.** It comes out as about $C/2$ or as $Cn$ depending on whether the chain means round exactly to the constant. Rank-normalized bulk and tail ESS are planned.
 - **Acceptance rates include burn-in.** The counters are never reset.
 - **The ESS pairing is non-standard.** Treat ESS as indicative when you compare it with other libraries. It is NaN for single-chain runs.
 - **Ladder validation is minimal.** `ParallelTempering` does not check that the β ladder is descending or that $\beta_0=1$.

@@ -15,7 +15,7 @@ namespace Maths.Regression.Spline.Bars;
 /// </summary>
 public sealed record PeakPosterior(
     double LocationMean, double LocationLo, double LocationHi,
-    double HeightMean, double LocationRHat, double LocationEss);
+    double HeightMean, RHatDiagnostic LocationRHat, double LocationEss);
 
 /// <summary>
 /// One transition resolved from the pooled fields — the per-mode generalization of <see cref="PeakPosterior"/>
@@ -24,18 +24,19 @@ public sealed record PeakPosterior(
 /// come from the coverage π(T) (structural — how wide the feature is); <see cref="Mass"/> = ∫λ over the support
 /// (≈ posterior probability of a transition there). <see cref="LocationRHat"/> is the cross-chain R̂ on the mode
 /// location, computed matching-free from the per-chain λ histograms (each chain's λ over the support IS its own
-/// peak-location distribution there) — ≈1 when the chains agree, &gt;1 a disagreement / multimodality flag, NaN if
-/// fewer than two chains resolved the mode. Modes are ordered by mass, dominant first.
+/// peak-location distribution there) — ≈1 when the chains agree, &gt;1 a disagreement / multimodality flag,
+/// unavailable if fewer than two chains resolved the mode. Modes are ordered by mass, dominant first.
 /// </summary>
 public sealed record PeakMode(
     double Location, double LocationLo, double LocationHi,
-    double SpanLeft, double SpanRight, double Mass, double LocationRHat);
+    double SpanLeft, double SpanRight, double Mass, RHatDiagnostic LocationRHat);
 
 /// <summary>
 /// The pooled posterior fit of a BARS run plus its convergence diagnostics, all on the reported functionals
 /// (knot count, fitted grid values) — the quantities you read, monitored for convergence.
 /// <see cref="RHatFit"/> is the per-grid-point consensus map: where it is elevated the chains disagree on the
-/// fit (multimodality / under-determination), where it is ≈1 the fit is settled.
+/// fit (multimodality / under-determination), where it is ≈1 the fit is settled; <see cref="RHatFitMax"/> is its
+/// least favourable reading (<see cref="RHatDiagnostic.Worst"/>).
 /// <see cref="PeakIntensity"/> is the grid-aligned peak-intensity λ(T): the matching-free posterior density
 /// of significant transitions (∑ = <see cref="PeakCountMean"/>), its modes the persistent transitions.
 /// <see cref="SpanCoverage"/> is the grid-aligned span-coverage π(T): the posterior probability each T lies
@@ -46,13 +47,13 @@ public sealed record PeakMode(
 public sealed record BarsResult(
     double[] Grid,
     double[] Fit,
-    double[] RHatFit,
+    RHatDiagnostic[] RHatFit,
     double MeanKnots,
     double PeakCountMean,
     double[] PeakIntensity,
     double[] SpanCoverage,
-    double RHatKnots,
-    double RHatFitMax,
+    RHatDiagnostic RHatKnots,
+    RHatDiagnostic RHatFitMax,
     double EssKnots,
     PeakPosterior Peak,
     IReadOnlyList<PeakMode> PeakModes,
@@ -158,9 +159,10 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     }
 
     /// <remarks>
-    /// <paramref name="rHatTarget"/> &gt; 0 stops sampling early once R̂ on knot count and every grid point is ≤
-    /// it (checked each round of <paramref name="batchSize"/> samples; a non-positive batch is a single round of
-    /// <paramref name="samples"/>).
+    /// <paramref name="rHatTarget"/> &gt; 0 stops sampling early once R̂ on knot count and every grid point meets
+    /// it (<see cref="RHatDiagnostic.MeetsTarget"/>; checked each round of <paramref name="batchSize"/> samples from
+    /// <see cref="ChainEnsemble.MinDrawsForStop"/> draws per chain on; a non-positive batch is a single round of
+    /// <paramref name="samples"/>). It needs at least two chains.
     /// </remarks>
     public BarsResult Run(double[] x, double[] y, double[] grid,
                           int chains = 4, int masterSeed = 0, int burn = 2000, int samples = 2000,
@@ -196,18 +198,10 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         for (int gi = 0; gi < g; gi++) fit[gi] = summary.FunctionalMean[1 + gi];
         double meanK = summary.FunctionalMean[0];
 
-        // Consensus map: clamp a degenerate-variance grid point's R̂ to 0 (the historical FitRHat display rule);
-        // the knot R̂ is reported raw, as before.
-        var rHatFit = new double[g];
-        double rHatFitMax = 0.0;
-        for (int gi = 0; gi < g; gi++)
-        {
-            double r = summary.FunctionalRHat[1 + gi];
-            double rv = double.IsNaN(r) || double.IsInfinity(r) ? 0.0 : r;
-            rHatFit[gi] = rv;
-            if (rv > rHatFitMax) rHatFitMax = rv;
-        }
-        double rHatK = summary.FunctionalRHat[0];
+        // Consensus map: each grid point's R̂ as the shell computed it, with its state; the summary is the worst point.
+        var rHatFit = summary.FunctionalRHat[1..];
+        RHatDiagnostic rHatFitMax = RHatDiagnostic.Worst(rHatFit);
+        RHatDiagnostic rHatK = summary.FunctionalRHat[0];
         double essK = summary.FunctionalEss[0];
 
         // BARS's own pooled sinks (the orchestrator does not know what these mean).
@@ -237,26 +231,24 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         foreach (string key in moveAtt.Keys)
             moveStats.Add(new MoveStat(key, moveAtt[key], moveAcc.GetValueOrDefault(key)));
 
-        PeakPosterior peak = SummarisePeak(bars, collected, denom);
+        PeakPosterior peak = SummarisePeak(bars, denom);
         var chainLambda = new double[chains][];
         for (int ci = 0; ci < chains; ci++) chainLambda[ci] = bars[ci].PeakIntensitySum;
         var peakModes = ExtractModes(grid, peakIntensity, spanCoverage, chainLambda);
         return new BarsResult(grid, fit, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, rHatK, rHatFitMax, essK, peak, peakModes, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats);
     }
 
-    private static PeakPosterior SummarisePeak(BarsChainRun[] states, int n, double denom)
+    private static PeakPosterior SummarisePeak(BarsChainRun[] states, double denom)
     {
         int c = states.Length;
-        var sums = new double[c];
-        var sqs = new double[c];
+        var moments = new RunningMoments[c];
         var peakChains = new double[c][];
         var all = new List<double>();
         double mean = 0.0, height = 0.0;
         for (int i = 0; i < c; i++)
         {
-            sums[i] = states[i].PeakLocSum;
-            sqs[i] = states[i].PeakLocSumSq;
             peakChains[i] = states[i].PeakDraws.ToArray();
+            moments[i] = RunningMoments.Of(peakChains[i]);
             all.AddRange(states[i].PeakDraws);
             mean += states[i].PeakLocSum;
             height += states[i].PeakHeightSum;
@@ -266,7 +258,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         all.Sort();
         double lo = Quantile(all, 0.025);
         double hi = Quantile(all, 0.975);
-        double rHat = ChainDiagnostics.RHat(sums, sqs, n);
+        RHatDiagnostic rHat = ChainDiagnostics.RHat(moments);
         double ess = ChainDiagnostics.Ess(peakChains);
         return new PeakPosterior(mean, lo, hi, height, rHat, ess);
     }
@@ -327,7 +319,6 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         {
             (double peakX, double peakF) = SplineExtrema.Argmax(draw, coef, splineBasis);
             st.PeakLocSum += peakX;
-            st.PeakLocSumSq += peakX * peakX;
             st.PeakHeightSum += peakF;
             st.PeakDraws.Add(peakX);
 
@@ -447,7 +438,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             while (sr < g - 1 && pi[sr + 1] >= 0.5) sr++;
             bool covered = pi[i] >= 0.5;
 
-            double rhat = ModeRHat(chainLambda, grid, lo, hi);
+            RHatDiagnostic rhat = ModeRHat(chainLambda, grid, lo, hi);
             modes.Add(new PeakMode(location, loCi, hiCi,
                 covered ? grid[sl] : grid[i], covered ? grid[sr] : grid[i], mass, rhat));
         }
@@ -457,8 +448,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
     // Matching-free between-chain R̂ on a mode's location: each chain's λ over the support [lo,hi] is that chain's
     // own peak-location histogram there, giving its mean and within-chain variance directly. Gelman–Rubin on those
-    // (B = Var of the chain means, W = mean within-variance, n = mean per-chain peak count) → ≈1 when chains agree.
-    private static double ModeRHat(double[][] chainLambda, double[] grid, int lo, int hi)
+    // (n = mean per-chain peak count) → ≈1 when chains agree. The variance is two-pass and exactly zero for a chain
+    // whose mass sits on one grid point, so agreeing point masses read as constant and disagreeing ones as frozen.
+    private static RHatDiagnostic ModeRHat(double[][] chainLambda, double[] grid, int lo, int hi)
     {
         int m = chainLambda.Length;
         var mean = new double[m];
@@ -467,31 +459,37 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         int seen = 0;
         for (int c = 0; c < m; c++)
         {
-            double cnt = 0.0, s = 0.0, s2 = 0.0;
+            double cnt = 0.0, s = 0.0;
+            int support = 0, only = -1;
             for (int j = lo; j <= hi; j++)
             {
                 double w = chainLambda[c][j];
-                cnt += w; s += w * grid[j]; s2 += w * grid[j] * grid[j];
+                if (w <= 0.0) continue;
+                cnt += w; s += w * grid[j]; support++; only = j;
             }
             if (cnt <= 0.0) continue;
-            mean[seen] = s / cnt;
-            varc[seen] = Math.Max(0.0, s2 / cnt - mean[seen] * mean[seen]);
+            if (support == 1)
+            {
+                mean[seen] = grid[only];
+                varc[seen] = 0.0;
+            }
+            else
+            {
+                double mu = s / cnt, ss = 0.0;
+                for (int j = lo; j <= hi; j++)
+                {
+                    double w = chainLambda[c][j];
+                    if (w > 0.0) { double d = grid[j] - mu; ss += w * d * d; }
+                }
+                mean[seen] = mu;
+                varc[seen] = ss / cnt;
+            }
             nbar += cnt;
             seen++;
         }
-        if (seen < 2) return double.NaN;        // can't assess convergence from one chain
+        if (seen < 2) return RHatDiagnostic.Unavailable;   // can't assess convergence from one chain
         nbar = Math.Max(1.0, nbar / seen);
-
-        double gm = 0.0;
-        for (int c = 0; c < seen; c++) gm += mean[c];
-        gm /= seen;
-        double between = 0.0, within = 0.0;
-        for (int c = 0; c < seen; c++) { between += (mean[c] - gm) * (mean[c] - gm); within += varc[c]; }
-        between /= seen - 1;                     // Var of the chain means (= B/n in Gelman–Rubin)
-        within /= seen;
-        if (within <= 0.0) return double.NaN;
-        double varPlus = (nbar - 1.0) / nbar * within + between;
-        return Math.Sqrt(varPlus / within);
+        return ChainDiagnostics.RHat(mean.AsSpan(0, seen), varc.AsSpan(0, seen), nbar);
     }
 
     // Step-CDF quantile of λ-mass over the support [lo, hi].
@@ -532,7 +530,6 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         public readonly Dictionary<string, long> MoveAtt = new();   // per-move attempts, banked across rebuilds
         public readonly Dictionary<string, long> MoveAcc = new();   // per-move accepts
         public double PeakLocSum;
-        public double PeakLocSumSq;
         public double PeakHeightSum;
         public double PeakCountSum;
         public long BankedAccepted;

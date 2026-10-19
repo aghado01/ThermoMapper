@@ -14,14 +14,14 @@ namespace Maths.Regression.Bgp;
 /// <param name="BandwidthHi">97.5% bandwidth quantile.</param>
 /// <param name="AcceptanceRate">Metropolis acceptance over the sampled steps (pooled across chains).</param>
 /// <param name="Draws">Post-burn draws averaged (pooled = chains × per-chain draws).</param>
-/// <param name="BandwidthRHat">Gelman–Rubin R̂ on the bandwidth across chains (NaN for a single chain) — ≈1 at convergence.</param>
+/// <param name="BandwidthRHat">Gelman–Rubin R̂ on the bandwidth across chains (unavailable for a single chain) — ≈1 at convergence.</param>
 /// <param name="BandwidthEss">Effective sample size of the bandwidth across the pooled chains.</param>
 /// <param name="ChainSeeds">The resolved per-chain seeds (reproducibility provenance).</param>
 public sealed record BgpResult(
     double[] PosteriorMean,
     double BandwidthMean, double BandwidthLo, double BandwidthHi,
     double AcceptanceRate, int Draws,
-    double BandwidthRHat, double BandwidthEss, int[] ChainSeeds);
+    RHatDiagnostic BandwidthRHat, double BandwidthEss, int[] ChainSeeds);
 
 /// <summary>
 /// The top of the Bayesian-GP instrument (Tang, Wu, Cheng &amp; Dunson 2025): with the regression function

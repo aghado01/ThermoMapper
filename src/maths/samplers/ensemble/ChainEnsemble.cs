@@ -16,13 +16,20 @@ namespace Maths.Samplers.Ensemble;
 /// </summary>
 public sealed class ChainEnsemble
 {
+    /// <summary>
+    /// Draws per chain before an R̂ target may stop sampling. Vehtari et al. (2021) ask for an effective sample size
+    /// of at least 100 per chain before trusting R̂, and the draw count bounds the effective sample size from above.
+    /// </summary>
+    public const int MinDrawsForStop = 100;
+
     /// <param name="model">Supplies each replica's kernel + start policy and the draw→functional reduction.</param>
-    /// <param name="chains">Number of independent replicas (R̂/ESS need ≥ 2 to be defined).</param>
+    /// <param name="chains">Number of independent replicas (R̂ needs ≥ 2; an R̂ target requires it).</param>
     /// <param name="masterSeed">The single integer the whole fan-out is reproducible from.</param>
     /// <param name="burn">Burn-in steps per replica (no accumulation).</param>
     /// <param name="samples">Post-burn samples per replica to collect (an early R̂ stop may use fewer).</param>
-    /// <param name="rHatTarget">When &gt; 0, stop once every functional's R̂ is ≤ this (checked each round; a
-    /// degenerate-variance functional, R̂ NaN/∞, is treated as converged so it cannot block the stop).</param>
+    /// <param name="rHatTarget">When &gt; 0, stop once every functional meets this target
+    /// (<see cref="RHatDiagnostic.MeetsTarget"/>), checked each round from <see cref="MinDrawsForStop"/> draws per
+    /// chain on. A frozen or unavailable R̂ never meets it.</param>
     /// <param name="batchSize">Samples per round between R̂ checks (≤ 0 = a single round of <paramref name="samples"/>).</param>
     /// <returns>The pooled <see cref="EnsembleRun"/> plus the per-chain handles, so the client can pool its own sinks.</returns>
     public (EnsembleRun Summary, IReadOnlyList<IChainRun<TDraw>> Chains) Run<TDraw>(
@@ -31,6 +38,8 @@ public sealed class ChainEnsemble
     {
         ArgumentNullException.ThrowIfNull(model);
         if (chains < 1) throw new ArgumentOutOfRangeException(nameof(chains));
+        if (rHatTarget > 0.0 && chains < 2)
+            throw new ArgumentOutOfRangeException(nameof(chains), "An R̂ stopping target needs at least two chains.");
         if (samples < 1) throw new ArgumentOutOfRangeException(nameof(samples));
 
         int dim = model.FunctionalDim;
@@ -46,17 +55,15 @@ public sealed class ChainEnsemble
         int[] readoutSeeds = all[chains..];
 
         var runs = new IChainRun<TDraw>[chains];
-        var sums = new double[chains][];          // [ci][f] running Σ of functional f
-        var sumSqs = new double[chains][];        // [ci][f] running Σ² of functional f
-        var seqs = new List<double>[chains][];    // [ci][f<essDim] the post-burn sequence (for ESS)
+        var moments = new RunningMoments[chains][];   // [ci][f] streaming moments of functional f
+        var seqs = new List<double>[chains][];        // [ci][f<essDim] the post-burn sequence (for ESS)
 
         Parallel.For(0, chains, ci =>
         {
             IChainRun<TDraw> run = model.StartChain(seeds[ci], readoutSeeds[ci]);
             run.Burn(burn);
             runs[ci] = run;
-            sums[ci] = new double[dim];
-            sumSqs[ci] = new double[dim];
+            moments[ci] = new RunningMoments[dim];
             var s = new List<double>[essDim];
             for (int f = 0; f < essDim; f++) s[f] = new List<double>(samples);
             seqs[ci] = s;
@@ -70,34 +77,33 @@ public sealed class ChainEnsemble
             Parallel.For(0, chains, ci =>
             {
                 IChain<TDraw> chain = runs[ci].Chain;
-                double[] cs = sums[ci], css = sumSqs[ci];
+                RunningMoments[] cm = moments[ci];
                 List<double>[] cseq = seqs[ci];
                 var fn = new double[dim];
                 for (int s = 0; s < step; s++)
                 {
                     TDraw draw = chain.Step();
                     runs[ci].Accumulate(draw, fn);
-                    for (int f = 0; f < dim; f++) { double v = fn[f]; cs[f] += v; css[f] += v * v; }
+                    for (int f = 0; f < dim; f++) cm[f].Add(fn[f]);
                     for (int f = 0; f < essDim; f++) cseq[f].Add(fn[f]);
                 }
             });
             collected += step;
 
-            if (rHatTarget > 0.0 && collected >= effBatch && MaxClampedRHat(sums, sumSqs, dim, collected) <= rHatTarget)
+            if (rHatTarget > 0.0 && collected >= Math.Max(effBatch, MinDrawsForStop)
+                && AllMeetTarget(moments, dim, rHatTarget))
                 break;
         }
 
-        double denom = chains * (double)collected;
         var mean = new double[dim];
-        var rhat = new double[dim];
-        var chainSums = new double[chains];
-        var chainSqs = new double[chains];
+        var rhat = new RHatDiagnostic[dim];
+        var chainMoments = new RunningMoments[chains];
         for (int f = 0; f < dim; f++)
         {
             double s = 0.0;
-            for (int ci = 0; ci < chains; ci++) { double v = sums[ci][f]; s += v; chainSums[ci] = v; chainSqs[ci] = sumSqs[ci][f]; }
-            mean[f] = s / denom;
-            rhat[f] = ChainDiagnostics.RHat(chainSums, chainSqs, collected);
+            for (int ci = 0; ci < chains; ci++) { chainMoments[ci] = moments[ci][f]; s += moments[ci][f].Mean; }
+            mean[f] = s / chains;   // every chain holds `collected` draws
+            rhat[f] = ChainDiagnostics.RHat(chainMoments);
         }
 
         var ess = new double[essDim];
@@ -116,21 +122,16 @@ public sealed class ChainEnsemble
         return (summary, runs);
     }
 
-    // Max R̂ over all functionals, treating a non-finite (degenerate-variance) functional as converged (→ 0) so it
-    // cannot stall the early stop — the same clamp the client applies to the per-functional consensus map.
-    private static double MaxClampedRHat(double[][] sums, double[][] sumSqs, int dim, int n)
+    // Whether every functional's R̂ meets the target; one frozen or unavailable functional blocks the stop.
+    private static bool AllMeetTarget(RunningMoments[][] moments, int dim, double target)
     {
-        int c = sums.Length;
-        var cs = new double[c];
-        var css = new double[c];
-        double max = 0.0;
+        int c = moments.Length;
+        var chainMoments = new RunningMoments[c];
         for (int f = 0; f < dim; f++)
         {
-            for (int ci = 0; ci < c; ci++) { cs[ci] = sums[ci][f]; css[ci] = sumSqs[ci][f]; }
-            double r = ChainDiagnostics.RHat(cs, css, n);
-            double rv = double.IsNaN(r) || double.IsInfinity(r) ? 0.0 : r;
-            if (rv > max) max = rv;
+            for (int ci = 0; ci < c; ci++) chainMoments[ci] = moments[ci][f];
+            if (!ChainDiagnostics.RHat(chainMoments).MeetsTarget(target)) return false;
         }
-        return max;
+        return true;
     }
 }

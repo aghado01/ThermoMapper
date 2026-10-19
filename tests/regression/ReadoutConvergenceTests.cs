@@ -55,7 +55,7 @@ public sealed class ReadoutConvergenceTests
         // The mode carries a real structural span around its location.
         Assert.True(m.SpanLeft < m.Location && m.Location < m.SpanRight, "dominant mode should have a span");
         // ...and a cross-chain convergence diagnostic (matching-free): ≈1 for a well-mixed single peak.
-        Assert.True(!double.IsNaN(m.LocationRHat) && m.LocationRHat < 1.5, $"dominant mode R̂={m.LocationRHat:F3} should be ≈1");
+        Assert.True(m.LocationRHat.MeetsTarget(1.5), $"dominant mode R̂={m.LocationRHat:F3} should be ≈1");
     }
 
     [Fact]
