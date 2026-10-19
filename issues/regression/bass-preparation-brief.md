@@ -59,8 +59,8 @@ Steps 0.1, 0.2, 0.3 and 0.5 all touch `BarsEnsemble`, so they run in that order.
 
 Files: [ChainEnsemble](../../src/maths/samplers/ensemble/ChainEnsemble.cs#L131), [ChainDiagnostics](../../src/maths/samplers/ensemble/ChainDiagnostics.cs), the [BARS readout](../../src/maths/regression/spline/bars/BarsEnsemble.cs#L206).
 
-- A non-finite or unavailable R̂ is reported as unavailable and never certifies convergence, in stopping and in display alike.
-- Declare a minimum number of draws and an explicit policy for a constant functional, distinct from chains frozen at different values.
+- Every R̂ carries a state (estimated, constant, frozen, unavailable), and only an estimate at or below the target, or a constant functional, satisfies a stopping rule. Stopping and display report the same reading.
+- Declare a minimum number of draws for stopping, and an explicit policy for a constant functional, distinct from chains frozen at different values.
 
 This step lands first because BAPS and BGP consume these diagnostics; the chip starts after it.
 
@@ -167,7 +167,7 @@ Deterministic even/odd swaps and ladder adaptation (Syed et al. 2022). Measure t
 
 ### 3.4 Diagnostics expansion
 
-Rank-normalized split and folded R̂, and bulk and tail ESS, built on the step 0.1 failure policy.
+Rank-normalized split and folded R̂, and bulk and tail ESS, built on the step 0.1 failure policy. Give ESS the same exact constant-functional handling: today a constant functional's ESS reads about C/2 or Cn depending on rounding.
 
 ### 3.5 Baseline rerun
 
@@ -175,7 +175,7 @@ Rerun the step 0.6 checks after the migrations. Every difference must trace to a
 
 ### 3.6 Cleanup sweep
 
-Delete the superseded surfaces in their own commit: the old target contract, the chain-rebuild path, the duplicated model math, and the status-less factor calls, including BAPS and BGP once the chip has closed.
+Delete the superseded surfaces in their own commit: the old target contract, the chain-rebuild path, the duplicated model math, the status-less factor calls (including BAPS and BGP once the chip has closed), and the sums-based `ChainDiagnostics.RHat` overload once BAPS has moved to the moments form.
 
 ## Decisions
 
@@ -209,3 +209,45 @@ BASS code, the BASS-only numerics of port stage 2, the SMC core, B04 and B05 (th
 ## Report
 
 Append one section per completed step: date, commits, checks with results, and anything deferred.
+
+### 0.1 Diagnostics failure policy — done 2026-10-19
+
+Commit `2824bf9`.
+
+**Failing checks at the parent revision `c0cfe7a`:**
+- Chains frozen at different values stopped after 10 of 200 draws.
+- A chain emitting NaN stopped after 10 of 200 draws.
+- With a batch size of 1, the run stopped after 1 draw.
+- A single chain was accepted with an R̂ target.
+- Four constant chains of 0.1 read R̂ = 0.9995 instead of the constant policy.
+
+The last check exposed a defect beyond R09: running Σ and Σ² cancel to rounding noise for a constant value that isn't exactly representable, so a constant functional produced a spurious estimate.
+
+**Specification:**
+- `RHatState` has four values: estimated, constant, frozen, unavailable.
+- `RHatDiagnostic.MeetsTarget` holds for an estimate at or below the target, or for a constant functional.
+- `RHatDiagnostic.Worst` orders readings as constant, then estimates by value, then frozen, then unavailable.
+- R̂ is computed from streaming (Welford) moments.
+- `ChainEnsemble.MinDrawsForStop = 100` draws per chain. Vehtari et al. (2021) ask for an effective sample size of 100 per chain before trusting R̂.
+- An R̂ target with a single chain is rejected.
+
+**Changed:**
+- `ChainDiagnostics`, `ChainEnsemble` and `EnsembleRun`, plus the new `RunningMoments` and `RHatDiagnostic`.
+- `BarsEnsemble`:
+  - the consensus map is reported unclamped, and `RHatFitMax` is its worst reading;
+  - the peak and mode R̂ are typed;
+  - the mode R̂ uses two-pass variances and the shared core.
+- `BgpResult.BandwidthRHat` is typed.
+- `docs/Maths/Samplers.md` and `docs/Maths/BayesianRegression.md`.
+
+**Results:**
+- The 11 checks in `DiagnosticsPolicyTests` pass.
+- `Maths.Regression.Tests` passes 87 of 87 under `scripts/fact-harness.ps1` (run `20261019_155925675`).
+- `Clustering.Graphical.SPC`, `Synthetic` and `Synthetic.Tests` build.
+
+**Deferred:**
+- The ESS of a constant functional reads about C/2 or Cn depending on rounding; this goes to step 3.4.
+- BAPS stays on the sums-based overload until chip item 6.
+- That overload is deleted in step 3.6.
+
+**For the user to confirm:** the 100-draw minimum, and the rule that a constant functional meets the stopping target.

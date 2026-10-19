@@ -47,7 +47,7 @@ Step 0.1 changes how non-finite R̂ is treated in [ChainEnsemble](../../src/math
      - a separate evidence-optimization mode beside the Bayesian sampler.
    - Implement the chosen option. Because the target is one-dimensional in `log λ`, check it against quadrature.
    - `Gibbs`, `AdaptiveGibbs` and `MarginalEvidence` use different priors, so agreement between them is not a criterion.
-6. **B01 policy in BAPS display.** Make BAPS's reported R̂ follow the step 0.1 policy: unavailable values are shown as unavailable and never as converged.
+6. **B01 policy in BAPS display.** Move [BapsSampler](../../src/maths/regression/spline/baps/BapsSampler.cs#L160) to the moments form of R̂: a `RunningMoments` per chain and `ChainDiagnostics.RHat` returning an `RHatDiagnostic`, so `RHatLogLambda` carries its state. The sums-based overload it calls today stays only until then. Step 0.1 already changed `BgpResult.BandwidthRHat` to `RHatDiagnostic`.
 
 ## Order of work
 
