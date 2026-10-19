@@ -1,7 +1,7 @@
 
 # i wonder how the MCMC data augmentation might bear on ThermoMapper's SPC sampler conceptually
 
-Let me look at what SPC actually is there before answering — I don't want to reason about a sampler I've inferred.
+
 SPC is Superparamagnetic Clustering — Blatt–Wiseman–Domany, with Swendsen–Wang cluster updates on a Potts model. That makes the DTA connection much more concrete than I expected. Let me check how the couplings are built.
 Confirmed: `J = exp(-d²/2δ²)` with a **single global bandwidth**. Let me check whether the scaler already supports per-point bandwidths.
 Good question — and the answer is sharper than I expected, because ThermoMapper already has the *obvious* version and DTA's actual move is the non-obvious one.
@@ -20,17 +20,14 @@ Good question — and the answer is sharper than I expected, because ThermoMappe
 
 There's also a tidy structural symmetry worth naming: DTA transforms the *data* to homogenize variance; `ScaledManifold`/`H_α` transforms the *metric* to the same end. Those are one operation from opposite sides, and ThermoMapper has both in the tree already.
 
-**The zero-stretch application, if you want something immediately usable:** `2605.03266`'s intrinsic ESS applies to the SPC sampler with no assumption-bending at all, because SPC *is* MCMC — unlike the ABLITERALUS layer axis, where we had to argue about it. And it's not a generic diagnostic there: SPC's output summary is a spin–spin correlation matrix, so "coordinate-wise ESS is not canonical under reparameterization" is the exact pathology the paper names. The caveat about geodesic Gaussian kernels failing positive-definiteness on curved spaces would bite if the kernel were built on manifold-valued state.
+**The zero-stretch application, if you want something immediately usable:** `2605.03266`'s intrinsic ESS applies to the SPC sampler with no assumption-bending at all, because SPC *is* MCMC SPC's output summary is a spin–spin correlation matrix, so "coordinate-wise ESS is not canonical under reparameterization" is the exact pathology the paper names. 
 
-Want me to write this up as a note in the issues repo alongside the others? It's a different track from the ABLITERALUS roadmap — ThermoMapper-side — so I'd keep it as its own file rather than folding it into the PR queue.
+The caveat about geodesic Gaussian kernels failing positive-definiteness on curved spaces would bite if the kernel were built on manifold-valued state.
 
 ---
 
 # yea lets capture the thermomapper-direction asides for later, this point about ESS, the discussion about scatter/covariance/weiszfeld etc, and others as distinct topic briefs
 
-Let me check how the issues repo is organized before placing these.
-Obsidian vault, not a git repo. Let me match the existing brief conventions.
-Format is clear. Let me check whether ThermoMapper has a revision I can cite.
 Now cross-linking the two tracks from the roadmap.
 Four briefs written to `D:\aipithicus\aipithicus-issues\thermomapper\briefs\`, matching the house format from `quantized-abliteration-surgery.md` (status / date / evidence checkout / primary question / executive finding), with Obsidian wikilinks between them and a cross-reference table added to the roadmap.
 
@@ -43,7 +40,7 @@ Four briefs written to `D:\aipithicus\aipithicus-issues\thermomapper\briefs\`, m
 
 **Two placement decisions worth flagging.** I created a new top-level `thermomapper/` area rather than filing these under `abliteralus/`, since you framed them as a separate track — easy to move if you'd rather they sat with the abliteralus briefs. And I put the Weiszfeld and scale-selection briefs there too even though both span the projects, because both originated in the ThermoMapper review; the roadmap's R2 and R7 rows carry the actionable versions and now link across.
 
-**One substantive thing surfaced while writing them up.** The scale-selection and median-of-means papers together imply there is no single correct `α`: the MoM paper offers *two* calibration rules, a robust block-scale one and an inference-optimal one. So "which scale is right" depends on whether you want robustness or inference, and that choice is a prerequisite to picking among the three alternatives — not something to settle afterward. That's recorded in the scale-selection brief and it's a decision R7 will have to make explicitly rather than inherit.
+**One substantive thing surfaced while writing them up.** The scale-selection and median-of-means papers together imply there is no single correct `α`: the MoM paper offers *two* calibration rules, a robust block-scale one and an inference-optimal one. So "which scale is right" depends on whether you want robustness or inference, and that choice is a prerequisite to picking among the three alternatives recorded in the scale-selection brief and it's a decision R7 will have to make explicitly rather than inherit.
 
 The vault isn't a git repo (it's an Obsidian vault), so nothing to commit there; the roadmap cross-link is committed in abliteralus as `b6f309b`.
 
@@ -58,9 +55,15 @@ The bracket loop is expansion-only with an explicit identifiability limit — th
 This substantially revises two of the briefs I wrote last turn. Let me capture the cross-examination and correct them.
 Read `BARS.lean`, the readout obligations, the brackets discussion, and the `bars/` implementation. You're right that it isn't adaptive, and the design is better defended than "not adaptive" — I'd have kept worrying about the outer bracket loop, and it turns out that's closed too.
 
-**Where my caution actually fails.** Temperature is a design variable on a deterministic nested schedule (`S₀ = {0,1}`, complementary midpoint refinement, refit to the accumulated union `U_r`), and the RJMCMC is over spline knots — a *representation* of the curve, not a scale competing with the estimate. Nothing is jointly minimized over location and scale, so the degeneracy mechanism has no purchase. The one place a scale genuinely does get adapted on evidence from its own fit is the bracket loop, and the degenerate direction there would be *narrowing until everything looks resolved*. **Expansion-only forecloses it** — monotone expansion on a log axis, all prior observations retained and remapped, nothing extrapolated into newly exposed interval, plus the identifiability limit stated outright. That removes the degenerate direction rather than penalizing it, which is stronger than any of You's three alternatives requires. I've corrected `scale-selection-degeneracy.md`.
+**Where my caution actually fails.** Temperature is a design variable on a deterministic nested schedule (`S₀ = {0,1}`, complementary midpoint refinement, refit to the accumulated union `U_r`), and the RJMCMC is over spline knots — a *representation* of the curve, not a scale competing with the estimate. Nothing is jointly minimized over location and scale, so the degeneracy mechanism has no purchase. 
 
-**My DTA proposal narrows to almost nothing — for a good reason.** The design already homogenizes twice over: the normalized bracket *is* a deterministic reparameterization of the temperature axis, and free-knot adaptivity absorbs residual structure. Making the representation adaptive is cleaner than transforming couplings and needs no latent-state feedback. What survives is physical and narrow: **critical slowing down**. SW autocorrelation time rises near the transition, so observation noise on the thermal curve is heteroscedastic in `T` and worst exactly at the feature being localized. That heteroscedasticity lives in the observation model, not the coupling field. Narrowed in the DTA brief.
+The one place a scale genuinely does get adapted on evidence from its own fit is the bracket loop, and the degenerate direction there would be *narrowing until everything looks resolved*. **Expansion-only forecloses it** — monotone expansion on a log axis, all prior observations retained and remapped, nothing extrapolated into newly exposed interval, plus the identifiability limit stated outright. That removes the degenerate direction which is stronger than any of You's three alternatives requires. I've corrected `scale-selection-degeneracy.md`.
+
+**My DTA proposal narrows to almost nothing — for a good reason.** 
+
+- The design already homogenizes twice over: the normalized bracket *is* a deterministic reparameterization of the temperature axis.
+- free-knot adaptivity absorbs residual structure. Making the representation adaptive is cleaner than transforming couplings and needs no latent-state feedback. What survives is physical and narrow: **critical slowing down**. 
+- SW autocorrelation time rises near the transition, so observation noise on the thermal curve is heteroscedastic in `T` and worst exactly at the feature being localized. That heteroscedasticity lives in the observation model, not the coupling field. Narrowed in the DTA brief.
 
 **The ESS claim gets substantially stronger, and lands on a seam you already built.** It's not a diagnostic — it's the **weight**. `IObservationModel.LogMarginalLikelihood(design, y, weights)` takes per-point weights, and `WeightedNormalModel` documents `W ≡ I` as the *non-robust* case, with the marginal likelihood explicitly conditional on `W`. Feed nominal precision from raw sweep count and you understate uncertainty precisely where autocorrelation is highest — so the posterior is most overconfident about peak location exactly where the science depends on it, and it fails invisibly, because a confident-looking peak is what you expect to see. The coordinate-free property is load-bearing here rather than decorative: susceptibility comes from a spin–spin correlation matrix, so there's no canonical scalar whose classical ESS you'd take.
 
@@ -68,7 +71,11 @@ Read `BARS.lean`, the readout obligations, the brackets discussion, and the `bar
 
 The stopping rule references "absence of unresolved spans near the current schedule spacing." After a bracket expansion the accumulated union is deliberately non-uniform in normalized coordinates — prior points compress toward the interior, new sampling goes to the newly exposed edges. That's correct behaviour, but it makes "the current schedule spacing" ambiguous, and it sits directly on a stopping criterion. The self-audit should use the **local** gap at the feature's location: otherwise a sparse edge inflates the global gap and a resolved interior feature reads as unresolved, or a dense interior deflates it and an edge feature reads as resolved when it isn't.
 
-And MP-2 (`count_of_mean_undercounts`) and SP-3 (`fwhm_of_mean_ne_mean_of_fwhm`) are the same theorem class as the scatter-versus-sandwich distinction — a nonlinear functional not commuting with expectation. You've formalized the general principle and enforced it at the readout. The ABLITERALUS roadmap sits on the same principle at R4 and R8 without saying so, and its per-layer treatment is vindicated by it rather than just convenient. Want me to write that discipline into the roadmap explicitly? It's a small edit and it'd give R4/R8 a stated reason rather than an implicit one.
+And MP-2 (`count_of_mean_undercounts`) and SP-3 (`fwhm_of_mean_ne_mean_of_fwhm`) are the same theorem class as the scatter-versus-sandwich distinction — a nonlinear functional not commuting with expectation. 
+
+You've formalized the general principle and enforced it at the readout. 
+
+The ABLITERALUS roadmap sits on the same principle at R4 and R8 without saying so, and its per-layer treatment is vindicated by it rather than just convenient. Want me to write that discipline into the roadmap explicitly? It's a small edit and it'd give R4/R8 a stated reason rather than an implicit one.
 
 New brief at `thermomapper/briefs/spc-bars-cross-examination.md`, with the two corrections applied in place.
 
@@ -81,13 +88,15 @@ Registered, and it relocates two of my findings.
 
 **The two regimes are doing unrelated jobs.** Regime A is uniform nested grid → refit BARS on the accumulated union `U_r` → joint posterior over the *whole* curve, on an economical SW config. Regime B is dense, expensive SW at analytically identified ROIs, and it's the only place clustering happens. "Densify" means grid refinement in A and replica/equilibration depth in B — unrelated operations, and an argument that slides between them is wrong wherever it lands. Mine was sliding.
 
-**What I hadn't connected: the closed-form readout is what licenses the sparse grid.** That's the real content of the subversion. If ROIs had to be found by scanning the measured curve, the grid would need to be dense enough to resolve features directly — which is the classical sweep again under a new name. Because peaks and spans come analytically from posterior draws — candidates exactly `{endpoints} ∪ {knots} ∪ ⋃ᵢ {interior derivative roots}`, argmax in a finite closed-form set — feature location is limited by the *posterior*, not by grid spacing. So O1 and O2 aren't tidiness results; they're the premise the entire cost inversion rests on. Remove the zero-scan-slop certificate and the sparse grid stops being sufficient.
+**What I hadn't connected: the closed-form readout is what licenses the sparse grid.** Because peaks and spans come analytically from posterior draws — candidates exactly `{endpoints} ∪ {knots} ∪ ⋃ᵢ {interior derivative roots}`, argmax in a finite closed-form set — feature location is limited by the *posterior*, not by grid spacing. So O1 and O2 aren't tidiness results; they're the premise the entire cost inversion rests on. Remove the zero-scan-slop certificate and the sparse grid stops being sufficient.
 
 **My ESS framing was subtly wrong and is now stated correctly.** I'd written that noise is worst "exactly where the peak is being localized," which smuggles in targeting. The regime-A grid is uniform and doesn't know where `T_c` is. The right statement: whichever grid points happen to land near the transition are the *least reliable measurements on the curve*, and they're the ones determining where the peak gets inferred. Uniform design, non-uniform observation quality, degrading toward the feature the fit exists to localize.
 
 **And there's a second argument for per-point weights that doesn't need critical slowing down at all.** The design already plans two SW configurations. The moment observations of different provenance are pooled — most obviously if regime-B measurements at resolved ROIs are ever folded back to sharpen the curve — precision differs by orders of magnitude, and a few excellent points get drowned by many economical ones under `W ≡ I`. Weights are what make heterogeneous-provenance observations poolable at all. Whether B should feed back into the curve is a real open design question; the weighting machinery is a precondition either way.
 
-**The bigger version of my §4 gap, now that the regimes are separate.** Regime A has *two* knobs — grid density and per-point run length — and one stopping rule spanning both. Two different inadequacies present identically as a wide posterior: the grid is too coarse to resolve a narrow feature, or the runs at existing points are too short to be worth fitting. The remedies are opposite, and choosing wrong burns the reconnaissance budget in the way that most resembles progress. ESS separates them cleanly: low ESS at existing points means the measurements are inadequate; adequate ESS with a wide posterior *between* points means the grid is. So the self-audit wants a local gap **and** a local ESS — and that's the same quantity from §3 doing double duty, which is the tidiest argument in the pass for computing it at all.
+**The bigger version of my §4 gap, now that the regimes are separate.** Regime A has *two* knobs — grid density and per-point run length — and one stopping rule spanning both. Two different inadequacies present identically as a wide posterior: the grid is too coarse to resolve a narrow feature, or the runs at existing points are too short to be worth fitting. The remedies are opposite, and choosing wrong burns the reconnaissance budget in the way that most resembles progress. 
+
+ESS separates them cleanly: low ESS at existing points means the measurements are inadequate; adequate ESS with a wide posterior *between* points means the grid is. So the self-audit wants a local gap **and** a local ESS — and that's the same quantity from §3 doing double duty, which is the tidiest argument in the pass for computing it at all.
 
 Brief updated in place at `thermomapper/briefs/spc-bars-cross-examination.md`, with each finding now tagged to its regime.
 
@@ -132,10 +141,20 @@ Briefs corrected: §2 now records the collapse and why, with an accuracy-levers 
 # right, and this is why i have a graph compiler engine and work to do on that in addition to my integration with BARS. but first things first, i have already replicated most of the work of BWD on the classical sweeping approach used in SPC, and that has fixed graph settings and known results on known datasets, so i can test my method exhaustively under those constraints
 
 That's the right sequencing — fix the graph at known-good settings and vary one thing at a time. BWD replication gives you something rarer than a baseline, though: ground truth for the *curve itself*, not just the final partition. That enables a validation you can't otherwise get, and it bears on one specific weakness.
+
 Right, and that ordering also makes the BARS validation much stronger than a partition-agreement check, because the dense sweep gives you ground truth for the **curve**. So you can test coverage directly: does the sparse-grid BARS posterior contain the densely measured classical curve at its nominal rate? That's a real calibration check against real ground truth — the thing that's normally unavailable, and the one that certifies the inferential apparatus rather than just one of its outputs. Iris is the good case for feature agreement, since the parity test already documents the hotter versicolor/virginica split that a first-`T_ps` clip hides — MP-2 in the field rather than on paper.
 
-**The thing I'd aim it at specifically.** The stopping rule's self-audit catches features that are *partially* resolved — a posterior-supported span narrower than the current spacing. It cannot catch one that's **entirely unsampled**. A transition of width `w` falling wholly between grid points at spacing `h > w` puts no grid point on it, the neighbours read as baseline, and BARS fits a smooth curve through them. There's no narrow span to flag because there's no span at all: the audit stays silent and the posterior is confidently featureless precisely where a feature exists. Dyadic refinement resolves it eventually since `h` halves each round, but the stopping rule may fire first, because everything visible looks fine.
+**The thing I'd aim it at specifically.** The stopping rule's self-audit catches features that are *partially* resolved — a posterior-supported span narrower than the current spacing. It cannot catch one that's **entirely unsampled**. A transition of width `w` falling wholly between grid points at spacing `h > w` puts no grid point on it, the neighbours read as baseline, and BARS fits a smooth curve through them. There's no narrow span to flag because there's no span at all: the audit stays silent and the posterior is confidently featureless precisely where a feature exists. 
+
+**Dyadic refinement resolves it eventually since `h` halves each round, but the stopping rule may fire first, because everything visible looks fine.**
 
 No internal criterion can close that — a sparse design can't know what it didn't sample. Which is exactly why the BWD replication is the right place to attack it: with known feature inventories you can measure the miss rate against spacing and convert an unbounded risk into a characterized operating curve. And it suggests the stopping rule should certify **"no features narrower than `w_min`"** rather than "no unresolved features" — honest, falsifiable, directly calibrated by that first measurement, and it turns the audit from a self-report into a guarantee with a stated failure boundary.
 
 Captured in the cross-examination brief. That also gives the graph-compiler work a cleaner starting point later: once the method is characterized at fixed graph settings, anything that shifts when you start varying kernels and scalers is attributable to the graph rather than confounded with the estimator.
+
+
+# User notes 
+
+1. is there a way to estimate w_min apriori based on the Potts model or with graph diagnostics? maybe something else? Since the susceptibility and other curves are continuous and modeling a physical system when assumptions are met, this seems like it should be possible. This would be akin to estimating something like a Nyquist frequency for latent curves. I'm thinking that perhaps something in the spectral density of the graph or in the shape of the susceptibility curve itself could give us a clue as to the typical lengthscale of features. 
+
+2. Need to separate issues raised about the current design versus planned changes not seen. The current scheduler will probably be updated. The graph compiler will be updated to make the SPC run path more clear and not confounded by ill-concieved features of the graph compiler design. 
