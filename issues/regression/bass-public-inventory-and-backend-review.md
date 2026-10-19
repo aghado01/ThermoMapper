@@ -309,6 +309,8 @@ This separates implementation improvements that preserve a specified model from 
 
 ## Validation and implementation sequence for complete coverage
 
+The [full port brief's stage table](bass-full-port-brief.md#implementation-stages) is the current sequence (stages 0–9); the table below records the analysis it was built from.
+
 The shipped [test-f1 through test-f5 tests](D:/aghado01/packages/BASS/tests/testthat/test-f1.R:1) read saved fitted models and compare prediction/Sobol output to saved values at `1e-12`. They cover mixed categorical/continuous inputs, continuous examples, direct functional output, PCA output, and several input measures. The PCA prediction test explicitly disables nugget and truncation error. They do not exercise fresh fitting, prove transition invariance, or test calibration. Example-generation scripts are not a substitute for those tests.
 
 | Stage | Work and completion evidence | Coverage |
