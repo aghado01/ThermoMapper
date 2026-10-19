@@ -69,6 +69,32 @@ R already samples σ² from this conditional, with the comment "with beta margin
 
 The brief is right that `WeightedNormalModel` cannot be reused unchanged: its τ is fixed and its factor is banded. What both engines share sits one level down. A collapsed g-prior block holding `(‖r‖², Q, k, N)` and a factor backend serves both through the settings above, and every closed form in §§2–5 is written once. BAPS uses a difference-penalty precision rather than one proportional to `G`. It adds a `log|Λ+G| − log|Λ|` term and can join the block when it migrates.
 
+### 1.4 Why the identity was hard to see, and how to sort engine differences
+
+The two implementations hide the shared target in different ways. BARS writes it in closed form, with τ folded into the constant `m+1` and σ² already integrated out. R's BASS never writes the full target. It computes per-move changes inside acceptance ratios (`½log τ − ½log(1+τ)` per added term, a change in `Q` divided by `1+τ`), spread across six data-mode files, and it samples σ². The identity appears once BASS's target is written whole, σ² is integrated out, and BARS's constant is read as a parameter: `m+1 = (1+τ)/τ` at `τ = 1/m`. Both engines descend from Denison, Mallick and Smith's 1998 pair of papers on reversible-jump curve fitting and Bayesian MARS.
+
+Because the target depends only on the spanned space (§1.1), every difference between two engines falls into one of three bins:
+
+| Bin | Meaning | BARS vs BASS |
+|---|---|---|
+| Representation | Same space, same target | B-splines or hinges for a given space; hinge normalization; banded LDLᵀ, dense Cholesky or QR; code organization |
+| Sampler | Same posterior, different chain | σ² integrated out or sampled; move design; any valid tempering scheme |
+| Model | Different posterior | Reachable spaces; the structure prior; τ fixed or sampled |
+
+Code is shared freely across the first two bins; only the model bin holds genuine engine differences. The banded-versus-dense contrast, for instance, comes from basis support (B-splines are local, hinges one-sided) and is invisible to the statistics.
+
+Sorted by the model bin, the spline engines are points in one space:
+
+| Engine | Knots | Reachable space | Coefficient prior |
+|---|---|---|---|
+| BARS | Adaptive, continuous | The full one-dimensional spline space for its knots | g-prior, τ = 1/N |
+| BAPS | Fixed, dense | The full tensor-product spline space | Difference penalty |
+| BASS | Adaptive, at data values | Sparse subspaces of tensor-product spline spaces, spanned by hinge products | g-prior, τ sampled |
+
+In one dimension with matching degree, each BASS model spans a subspace of the spline space BARS uses for the same knots.
+
+What stays per-engine is the basis family, the moves and the structure prior: which subspaces an engine reaches, how it proposes them, and how its prior weights them. The ensemble shell and the collapsed observation model are shared. Transfers run both ways. BARS offers BASS its robustness weights, its ensemble shell, and its structure priors as named options. BASS offers BARS a sampled τ: the fixed unit-information value gives a BIC-like penalty of `(k/2)·log(N+1)`, while a mixture-of-g hyperprior such as Zellner–Siow adapts the shrinkage to the data (Liang et al. 2008).
+
 ## 2. D04 proposal: full collapse with composition sampling
 
 The chain state is `(structure, τ, λ)`. One sweep:
@@ -176,7 +202,7 @@ Ranked by cost, given the code that already exists.
 
 | # | Opportunity | Builds on | Lands with |
 |---|---|---|---|
-| 1 | Collapsed g-prior block shared by BARS and BASS (§1.3). | `WeightedNormalModel`, `BandCholesky` | Stage 2, after D04 and D06 |
+| 1 | Collapsed g-prior block shared by BARS and BASS (§1.3); BARS gains a sampled τ through it (§1.4). | `WeightedNormalModel`, `BandCholesky` | Stage 2, after D04 and D06 |
 | 2 | Likelihood-tempered PT for both engines, with even/odd non-reversible swaps and an adaptive ladder (Syed et al. 2022). Under that scheme the rate of full round trips across the ladder stays bounded as rungs are added; under reversible PT it decays. | `ParallelTempering`, `GeometricLadder` | Stage 3, after D05 |
 | 3 | SMC with O(1) reweighting (§3). | Item 1 and a proper σ² prior | Stages 3 and 8 |
 | 4 | Robust BASS from the BARS scale-mixture resamplers (`StudentTWeights`, `ContaminatedNormalWeights`). Each weight sweep rebuilds `G` and `h`, so run it at a slow cadence. The largest benefit is in the calibration measurement model. | BARS robustness seam | After stage 4 |
@@ -195,6 +221,8 @@ Ranked by cost, given the code that already exists.
 
 ## References
 
+- Denison, Mallick and Smith (1998). Automatic Bayesian curve fitting. *JRSS-B* 60.
+- Denison, Mallick and Smith (1998). Bayesian MARS. *Statistics and Computing* 8.
 - DiMatteo, Genovese and Kass (2001). Bayesian curve-fitting with free-knot splines. *Biometrika* 88.
 - Friel and Pettitt (2008). Marginal likelihood estimation via power posteriors. *JRSS-B* 70.
 - Gelman and Meng (1998). Simulating normalizing constants: from importance sampling to bridge sampling to path sampling. *Statistical Science* 13.
