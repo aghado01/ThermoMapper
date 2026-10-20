@@ -7,26 +7,24 @@ using Maths.Regression.Spline;
 namespace Maths.Regression.Spline.Bars;
 
 /// <summary>
-/// The outer Gibbs block of scale-mixture robust BARS: given the current fit, resample the per-point weights
-/// <c>w</c> that the weighted-Normal marginal conditions on. Conditional on <c>w</c> the (k,ξ) chain is exact
-/// weighted-Normal; this is the only piece that makes it robust. A null resampler on an ensemble is the
+/// The weight block of scale-mixture robust BARS: draw the per-point weights <c>w</c> that the Normal model's marginal
+/// conditions on, from their full conditional given the residuals <c>r = y − Zβ</c> of a coefficient draw and the
+/// noise variance σ² drawn with it. One sweep is: knots given w (β and σ² integrated out), then (σ², β) given knots
+/// and w, then w given (β, σ²), a valid collapse-then-redraw scan. A null resampler on an ensemble is the
 /// non-robust case.
 /// </summary>
 public interface IWeightResampler
 {
-    /// <summary>
-    /// Draw new per-point weights given the residuals of <paramref name="config"/>'s fit under
-    /// <paramref name="currentWeights"/> (null = unit).
-    /// </summary>
-    double[] Resample(KnotConfig config, double[]? currentWeights, double[] x, double[] y,
-                      IBasis basis, IObservationModel model, Xoshiro256PlusPlus rng);
+    /// <summary>Draw new per-point weights from their full conditional given <paramref name="residuals"/> and
+    /// <paramref name="sigma2"/>.</summary>
+    double[] Resample(ReadOnlySpan<double> residuals, double sigma2, Xoshiro256PlusPlus rng);
 }
 
 /// <summary>
-/// Student-t error augmentation: <c>εᵢ ~ N(0, σ²/wᵢ)</c> with <c>wᵢ | rᵢ ~ Gamma((ν+1)/2, 2/(ν + (rᵢ/σ)²))</c>,
-/// the standard t-as-scale-mixture-of-normals Gibbs step. A true likelihood, so BIC/EBIC-over-k stays valid;
-/// the scale σ is a robust MAD estimate so a few gross outliers cannot inflate it. <b>Bounded influence</b> —
-/// outliers are downweighted (<c>E[wᵢ] → 0</c> as the residual grows), not rejected.
+/// Student-t error augmentation: <c>εᵢ ~ N(0, σ²/wᵢ)</c> with <c>wᵢ ~ Gamma(ν/2, rate ν/2)</c>, so
+/// <c>wᵢ | rᵢ, σ² ~ Gamma((ν+1)/2, scale 2/(ν + rᵢ²/σ²))</c>, the standard t-as-scale-mixture-of-normals Gibbs step.
+/// A true likelihood, so BIC/EBIC-over-k stays valid. <b>Bounded influence</b> — outliers are downweighted
+/// (<c>E[wᵢ] → 0</c> as the residual grows), not rejected.
 /// </summary>
 public sealed class StudentTWeights : IWeightResampler
 {
@@ -39,21 +37,16 @@ public sealed class StudentTWeights : IWeightResampler
         _nu = degreesOfFreedom;
     }
 
-    public double[] Resample(KnotConfig config, double[]? currentWeights, double[] x, double[] y,
-                             IBasis basis, IObservationModel model, Xoshiro256PlusPlus rng)
+    public double[] Resample(ReadOnlySpan<double> residuals, double sigma2, Xoshiro256PlusPlus rng)
     {
-        ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(rng);
-
-        double[] r = Residuals(config, currentWeights, x, y, basis, model, out int m);
-        double sigma = RobustScale.MadSigma(r);
+        if (!(sigma2 > 0.0)) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive.");
 
         double shape = (_nu + 1.0) / 2.0;
-        var w = new double[m];
-        for (int i = 0; i < m; i++)
+        var w = new double[residuals.Length];
+        for (int i = 0; i < w.Length; i++)
         {
-            double z2 = r[i] / sigma;
-            z2 *= z2;
+            double z2 = residuals[i] * residuals[i] / sigma2;
             w[i] = Gamma.Sample(rng, shape, 2.0 / (_nu + z2));
         }
         return w;
@@ -84,8 +77,7 @@ public sealed class StudentTWeights : IWeightResampler
 /// Contaminated-normal augmentation: <c>εᵢ ~ (1−π) N(0,σ²) + π N(0, κ²σ²)</c> — a two-component scale mixture
 /// giving near-<b>rejection</b> (not merely downweighting) of gross outliers. Each point's weight is 1 (good
 /// component) or 1/κ² ≈ 0 (outlier), drawn from the posterior responsibility — which is itself the per-point
-/// outlier probability, a free diagnostic. Still a true likelihood, so BIC/EBIC-over-k stays valid; σ is a
-/// robust MAD scale.
+/// outlier probability, a free diagnostic. Still a true likelihood, so BIC/EBIC-over-k stays valid.
 /// </summary>
 public sealed class ContaminatedNormalWeights : IWeightResampler
 {
@@ -102,22 +94,18 @@ public sealed class ContaminatedNormalWeights : IWeightResampler
         _kappa = inflation;
     }
 
-    public double[] Resample(KnotConfig config, double[]? currentWeights, double[] x, double[] y,
-                             IBasis basis, IObservationModel model, Xoshiro256PlusPlus rng)
+    public double[] Resample(ReadOnlySpan<double> residuals, double sigma2, Xoshiro256PlusPlus rng)
     {
-        ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(rng);
+        if (!(sigma2 > 0.0)) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive.");
 
-        double[] r = StudentTWeights.Residuals(config, currentWeights, x, y, basis, model);
-        int m = r.Length;
-        double sigma = RobustScale.MadSigma(r);
+        double sigma = Math.Sqrt(sigma2);
         double invKappaSq = 1.0 / (_kappa * _kappa);
-
-        var w = new double[m];
-        for (int i = 0; i < m; i++)
+        var w = new double[residuals.Length];
+        for (int i = 0; i < w.Length; i++)
         {
-            double zg = r[i] / sigma;
-            double zo = r[i] / (_kappa * sigma);
+            double zg = residuals[i] / sigma;
+            double zo = residuals[i] / (_kappa * sigma);
             double good = (1.0 - _pi) * Math.Exp(-0.5 * zg * zg) / sigma;
             double outlier = _pi * Math.Exp(-0.5 * zo * zo) / (_kappa * sigma);
             double pOutlier = outlier / (good + outlier);

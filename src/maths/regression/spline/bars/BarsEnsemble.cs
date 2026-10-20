@@ -123,6 +123,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         if (kernel is AdaptiveLocalBetaKernel)
             throw new ArgumentException(
                 "An adaptive kernel holds per-chain state and cannot be shared; request it with adaptKernelTau.", nameof(kernel));
+        if (resampler is not null && model is not WeightedNormalModel)
+            throw new ArgumentException(
+                "Robust weights need the Normal model: only WeightedNormalModel conditions on weights and draws σ².", nameof(resampler));
         if (temperLevels is int lv)
         {
             if (lv < 2) throw new ArgumentOutOfRangeException(nameof(temperLevels), "Tempering needs ≥ 2 levels.");
@@ -157,6 +160,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var run = new BarsChainRun(this, rng, OverdispersedStart(rng, _startDispersion), _grid.Length)
         {
             ReadoutRng = new Xoshiro256PlusPlus(readoutSeed),
+            // The fifth SplitMix64 output of the chain seed: the chain's own generator consumes the first four.
+            WeightRng = new Xoshiro256PlusPlus(SeedTree.Derive(chainSeed, 5)[4]),
             Kernel = _adaptKernelTau is double t0 ? new AdaptiveLocalBetaKernel(t0) : _kernel,
         };
         if (_temperLevels is int levels)
@@ -297,8 +302,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     }
 
     // Advance the chain one step (the IChain.Step body): step the lone chain or the tempered ladder (returning the
-    // cold state), then run the optional scale-mixture weight resampler — every weightEvery steps it redraws w and
-    // hands the RJ knot chain the target | w, keeping its state and cumulative move counters.
+    // cold state), then run the optional scale-mixture weight block. Every weightEvery steps it draws (σ², β) from
+    // their exact conditional given the knots and w, redraws w given the residuals and σ², and hands the RJ knot chain
+    // the target | w, keeping its state and cumulative move counters. The block has its own seeded stream.
     private KnotConfig StepOnce(BarsChainRun st)
     {
         st.Config = st.Ladder is not null ? st.Ladder.Step() : st.RjChain.Step();
@@ -308,8 +314,20 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             st.SinceWeight++;
             if (st.SinceWeight >= _weightEvery)
             {
-                st.W = _resampler.Resample(st.Config, st.W, _x, _y, _basis, _model, st.Rng);
-                st.RjChain.ReplaceTarget(new SplineTarget(_basis, _model, _prior, _x, _y, st.W));
+                double[,] z = _basis.Design(st.Config, _x);
+                (double[] beta, double sigma2) = ((WeightedNormalModel)_model).SampleConditional(z, _y, st.W, st.WeightRng);
+                if (sigma2 > 0.0)
+                {
+                    var r = new double[_y.Length];
+                    for (int i = 0; i < r.Length; i++)
+                    {
+                        double f = 0.0;
+                        for (int j = 0; j < beta.Length; j++) f += z[i, j] * beta[j];
+                        r[i] = _y[i] - f;
+                    }
+                    st.W = _resampler.Resample(r, sigma2, st.WeightRng);
+                    st.RjChain.ReplaceTarget(new SplineTarget(_basis, _model, _prior, _x, _y, st.W));
+                }
                 st.SinceWeight = 0;
             }
         }
@@ -541,6 +559,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         public double[]? W;
         public IKnotKernel Kernel = null!;
         public Xoshiro256PlusPlus ReadoutRng = null!;   // per-draw coefficient draws, decoupled from the chain RNG
+        public Xoshiro256PlusPlus WeightRng = null!;    // the robust weight block's (σ², β, w) draws, derived from the chain seed
         public ParallelTempering<KnotConfig>? Ladder;   // set ⇒ the RJ chain is this ladder's cold replica
         public double PeakLocSum;
         public double PeakHeightSum;

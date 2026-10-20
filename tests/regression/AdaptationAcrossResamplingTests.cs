@@ -27,9 +27,11 @@ public sealed class AdaptationAcrossResamplingTests
         BarsResult resampled = Ensemble(new KeepWeights())
             .Run(x, y, grid: x, chains: 2, masterSeed: 5, burn: burn, samples: 200, weightEvery: weightEvery);
 
+        // The knot trajectory must be identical. The fit agrees to rounding: unit weights take the weighted marginal's
+        // path, which factors Zᵀ(W + I/m)Z rather than rescaling ZᵀZ.
         Assert.Equal(plain.MeanKnots, resampled.MeanKnots);
-        Assert.Equal(plain.Fit, resampled.Fit);
         Assert.Equal(plain.AcceptanceRate, resampled.AcceptanceRate);
+        for (int i = 0; i < plain.Fit.Length; i++) Assert.Equal(plain.Fit[i], resampled.Fit[i], 12);
     }
 
     private static BarsEnsemble Ensemble(IWeightResampler? resampler) =>
@@ -51,13 +53,13 @@ public sealed class AdaptationAcrossResamplingTests
         return (x, y);
     }
 
-    // Unit weights every time, drawing nothing from the RNG: the target after a resample equals the one before.
+    // Unit weights every time: the target after a resample equals the one before. The weight block draws from its
+    // own stream, so the chain's trajectory is untouched.
     private sealed class KeepWeights : IWeightResampler
     {
-        public double[] Resample(KnotConfig config, double[]? currentWeights, double[] x, double[] y,
-                                 IBasis basis, IObservationModel model, Xoshiro256PlusPlus rng)
+        public double[] Resample(ReadOnlySpan<double> residuals, double sigma2, Xoshiro256PlusPlus rng)
         {
-            var w = new double[y.Length];
+            var w = new double[residuals.Length];
             Array.Fill(w, 1.0);
             return w;
         }

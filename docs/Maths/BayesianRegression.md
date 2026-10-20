@@ -132,9 +132,15 @@ All Jacobians are 0.
 
 **`WeightedNormalModel`** (default) is the exact unit-information (Zellner $g=m$) marginal, with the coefficients and σ integrated out:
 
-$$\log p(y\mid Z,W)=-\tfrac{\nu}{2}\log(m+1)-\tfrac m2\log a,\qquad a=y^\top Wy-\tfrac{m}{m+1}\,b^\top A^{-1}b,$$
+$$\log p(y\mid Z)=-\tfrac{\nu}{2}\log(m+1)-\tfrac m2\log a,\qquad a=y^\top y-\tfrac{m}{m+1}\,b^\top G^{-1}b,$$
 
-where $A=Z^\top WZ$ and $b=Z^\top Wy$. It returns −∞ when $m\le\nu$, when the design fails admission (below), or when $a\le0$. Because $a=\lVert y-Z\hat\beta\rVert_W^2+b^\top A^{-1}b/(m+1)$, the last case occurs only for an identically zero response; an interpolating fit with $m>\nu$ stays finite. The subtraction loses at most $\log_{10}(m+1)$ digits. The posterior mean is $\frac{m}{m+1}A^{-1}b$.
+where $G=Z^\top Z$ and $b=Z^\top y$. It returns −∞ when $m\le\nu$, when the design fails admission (below), or when $a\le0$. Because $a=\lVert y-Z\hat\beta\rVert^2+b^\top G^{-1}b/(m+1)$, the last case occurs only for an identically zero response; an interpolating fit with $m>\nu$ stays finite. The subtraction loses at most $\log_{10}(m+1)$ digits. The posterior mean is $\frac{m}{m+1}G^{-1}b$.
+
+With per-point weights $W$ (robust runs, $y\sim N(Z\beta,\sigma^2W^{-1})$), the coefficient prior stays the **unweighted** g-prior $\beta\sim N(0, m\sigma^2G^{-1})$, so the prior on the curve does not depend on the weights. The marginal is
+
+$$\log p(y\mid Z,W)=\tfrac12\log\lvert G/m\rvert-\tfrac12\log\lvert P_a\rvert+\tfrac12\textstyle\sum_i\log w_i-\tfrac m2\log S,$$
+
+with $P_a=Z^\top(W+I/m)Z$, $h=Z^\top Wy$ and $S=y^\top Wy-h^\top P_a^{-1}h=\lVert y-Z\tilde\beta\rVert_W^2+\tilde\beta^\top(G/m)\tilde\beta$. The posterior mean is $\tilde\beta=P_a^{-1}h$, and the covariance given σ² is $\sigma^2P_a^{-1}$. At unit weights this reduces to the form above. Both $G$ and $P_a$ must pass admission.
 
 **Laplace/BIC-type models.** Each returns (log-likelihood at the estimate) $-\tfrac\nu2\log m$:
 
@@ -153,7 +159,19 @@ The three IRLS fits (Poisson, Whittle and GibbsLoss's Tukey reweighting) return 
   - *The absolute pivot floor alone* misreads scale, flagging 10⁻²⁰·I as singular, and passes ill-conditioned designs.
 - **Effect on results.** Admission changes results only near degenerate configurations, such as knots packed where there is no data, or nearly coincident knots. Counting rejections by reason is planned with the shell's accumulator contract.
 
-**Robust weights.** `StudentTWeights` ($\nu=4$) and `ContaminatedNormalWeights` ($\pi=0.05$, $\kappa=10$) resample per-point weights from the residuals of the posterior-mean fit, using a MAD-based scale. They run every `WeightEvery` steps (default 25). This is an *approximate* Gibbs block: it conditions on the posterior-mean fit and a plug-in scale, not on a draw. Only the Normal model uses the weights.
+**Robust weights.** `StudentTWeights` ($\nu=4$) and `ContaminatedNormalWeights` ($\pi=0.05$, $\kappa=10$) are scale mixtures of normals. Every `WeightEvery` steps (default 25), the weight block runs an exact Gibbs sweep:
+
+1. Draw $(\sigma^2,\beta)$ from their conditional given the knots and the current weights: $\sigma^2\sim\mathrm{IG}(m/2,S/2)$, then $\beta\sim N(\tilde\beta,\sigma^2P_a^{-1})$.
+2. Draw each weight from its full conditional given the residual $r_i=y_i-z_i\beta$ and $\sigma^2$:
+   - Student-t: $w_i\sim\mathrm{Gamma}\big((\nu+1)/2,\ \text{scale } 2/(\nu+r_i^2/\sigma^2)\big)$;
+   - contaminated normal: $w_i=1/\kappa^2$ with the posterior probability that $r_i$ came from the inflated component, and 1 otherwise.
+3. Hand the chain the target given the new weights (`ReplaceTarget`).
+
+The knot moves integrate β and σ² out given the weights, so the sweep is a valid collapse-then-redraw scan. The block draws from its own stream: the fifth SplitMix64 output of the chain seed, since the chain's generator uses the first four.
+
+- **Model requirement.** Robust weights require `WeightedNormalModel`, the only model that conditions on weights and draws σ². The ensemble rejects a resampler paired with any other model.
+- **Trade-offs.** The unweighted prior makes the weight update an exact Gamma (or Bernoulli) draw, at the cost of two banded factorizations per proposal in robust runs ($G$ and $P_a$) instead of one. The alternative, a g-prior on the weighted Gram $Z^\top WZ$, keeps one factorization. But its prior on the curve shifts with the outlier weights, and the weights' conditional gains a $\lvert Z^\top WZ\rvert^{1/2}$ factor that needs a Metropolis correction.
+- **Effect.** On the robustness test problems the gain over least squares went from 135× to 146× (Student-t) and from 146× to 159× (contaminated normal).
 
 ### BARS: orchestration and readouts
 
