@@ -478,3 +478,31 @@ Commit `594c19f`.
 - `Maths.Regression.Tests` passes 149 of 149 under the harness.
 
 **Deferred:** counting rejections by reason, added to the step 3.4 accumulator contract.
+
+### 0.5c Full coefficient draws (R12) — done 2026-10-20
+
+Commits: `7971749` (shell: mergeable moments, pooled variance), `3bd4fcf` (BARS readouts).
+
+**Failing check at the parent revision `e6fb5dd`:** `WeightedNormalModel`'s draws had covariance 0 against a true 0.034, because they returned the conditional mean.
+
+**Specification (Q1, option B):**
+- Readouts affine in the curve (`Fit`, `RHatFit`) use the conditional mean. Nonlinear readouts (`Peak`, λ, π, `PeakCountMean`, `PeakModes`) use a coefficient draw.
+- `BarsResult.FitSd` is the pointwise posterior sd by the law of total variance. The shell pools the variance of the conditional means (`EnsembleRun.FunctionalVariance`, via `RunningMoments.Merge`), and BARS accumulates the models' conditional variances.
+- `BarsResult.Uncertainty` carries the model's `CoefficientUncertainty` label:
+  - **Normal:** `Exact`. Draws σ² ~ IG(m/2, a/2), then β, with the exact conditional variance.
+  - **Whittle:** `Approximate`. Laplace draws and variance.
+  - **Poisson:** `Approximate`. Independence MH started from a Laplace draw, with standard accept/reject, replacing the early-return heuristic; Laplace variance.
+  - **GibbsLoss:** `KnotOnly`.
+
+**Results:**
+- `CoefficientDrawTests`:
+  - the Normal draw mean and covariance against a dense Gauss–Jordan reference (40,000 draws);
+  - Normal, Whittle and Poisson conditional variances against dense references, to 10–12 digits;
+  - the labels, and BARS `FitSd` being finite, positive and plausible.
+- The moments merge has its own check. `SkewedPoissonTests` passes with the proper MH.
+- `Maths.Regression.Tests` passes 155 of 155.
+- On the test problems the single-bump peak interval is unchanged at [0.394, 0.404]: knot uncertainty dominates at that signal-to-noise. The tempered argmax ESS rose from 652 to 1620, because of the independent coefficient noise.
+
+**Docs:** `BayesianRegression.md` gives the rule, the per-model table, the alternatives considered, and the implications for counts, ESS and the readout seed. `Samplers.md` covers the pooled variance and the merge.
+
+**Deferred:** none.
