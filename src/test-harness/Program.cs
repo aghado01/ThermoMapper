@@ -64,6 +64,17 @@ internal static class Program
             return 1;
         }
 
+        IReadOnlyList<IReadOnlyList<string>> collisions = TestDiscovery.CaseCollisions(facts);
+        if (collisions.Count > 0)
+        {
+            Console.Error.WriteLine(
+                "These test cases differ only in letter case. The harness selects each case by display name, and " +
+                "VSTest compares names without regard to case, so it cannot run them separately. Rename one of each group:");
+            foreach (IReadOnlyList<string> group in collisions)
+                Console.Error.WriteLine("  " + string.Join("  |  ", group));
+            return 1;
+        }
+
         if (opts.ListOnly)
         {
             Console.WriteLine($"Project\t{projectPath}");

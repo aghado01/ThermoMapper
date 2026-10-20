@@ -60,6 +60,16 @@ internal static class TestDiscovery
         return ParseFacts(outputLines);
     }
 
+    /// <summary>
+    /// Groups of discovered display names that differ only in letter case. VSTest's <c>DisplayName=</c> filter
+    /// compares without regard to case, so per-case selection cannot run the members of a group separately.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<string>> CaseCollisions(IReadOnlyList<string> facts) =>
+        facts.GroupBy(f => f, StringComparer.OrdinalIgnoreCase)
+             .Where(g => g.Count() > 1)
+             .Select(g => (IReadOnlyList<string>)g.ToList())
+             .ToList();
+
     private static IReadOnlyList<string> ParseFacts(List<string> outputLines)
     {
         bool capture = false;
