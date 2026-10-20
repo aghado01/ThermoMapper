@@ -6,7 +6,8 @@ namespace Maths.Regression.Spline.Bars;
 /// <summary>
 /// Prior on the number of interior knots — the dimension penalty the (k,ξ) chain pays for complexity, the
 /// declared component ranging from flat (<see cref="UniformPrior"/>) through <see cref="PoissonPrior"/> to the
-/// model-space-cardinality <see cref="EbicPrior"/>. Returned up to an additive constant (cancels in ratios).
+/// model-space-cardinality <see cref="EbicPrior"/>. Returned up to an additive constant (cancels in ratios). The
+/// target supplies the ordered-uniform location density, so <c>p(k)</c> is the knot-count marginal.
 /// </summary>
 public interface IComplexityPrior
 {
@@ -54,11 +55,38 @@ public sealed class PoissonPrior : IComplexityPrior
 }
 
 /// <summary>
+/// Conway–Maxwell–Poisson prior on the knot count (Conway and Maxwell 1962; Shmueli et al. 2005):
+/// <c>p(k) ∝ λᵏ/(k!)^ν</c>. ν sets how fast the penalty grows with k. ν = 1 is Poisson(λ). ν = 2 is the law BARS
+/// ran under before the target carried the ordered-uniform location density (R01), since that left
+/// <c>Poisson(λ)/k!</c>. ν &lt; 1 has heavier tails. Unnormalized: the sampler uses only the ratio
+/// <c>p(k+1)/p(k) = λ/(k+1)^ν</c>.
+/// </summary>
+public sealed class ConwayMaxwellPoissonPrior : IComplexityPrior
+{
+    private readonly double _logLambda;
+    private readonly double _nu;
+
+    public ConwayMaxwellPoissonPrior(double lambda, double nu)
+    {
+        if (!(lambda > 0.0)) throw new ArgumentOutOfRangeException(nameof(lambda), "λ must be positive.");
+        if (!(nu >= 0.0)) throw new ArgumentOutOfRangeException(nameof(nu), "ν must be non-negative.");
+        if (nu == 0.0 && !(lambda < 1.0))
+            throw new ArgumentOutOfRangeException(nameof(lambda), "With ν = 0 the prior is geometric and needs λ < 1.");
+        _logLambda = Math.Log(lambda);
+        _nu = nu;
+    }
+
+    public double LogPrior(int knotCount)
+        => knotCount < 0 ? double.NegativeInfinity : knotCount * _logLambda - _nu * SpecialFunctions.LogGamma(knotCount + 1.0);
+}
+
+/// <summary>
 /// EBIC-style complexity prior (He, Yang &amp; Kang 2024) adapted to continuous knots: the joint (k,ξ) prior is
 /// <c>τ(M_k)^(−γ)</c> with <c>τ(M_k)=C(n,k)</c> the size of the k-knot model space over <c>n</c> effective
-/// candidates, so the k-marginal penalty is <c>log p(k) = −γ·log C(n,k)</c> (the uniform-over-positions factor
-/// is supplied by the continuous proposal). γ = 0 is flat; γ → 1 strongly penalizes large model spaces — the
-/// guard against over-knotting a dense candidate grid.
+/// candidates, so the k-marginal is <c>log p(k) = −γ·log C(n,k)</c>. γ = 0 is flat; γ → 1 strongly penalizes large
+/// model spaces, the guard against over-knotting a dense candidate grid. The law is symmetric in k ↔ n − k, so it
+/// penalizes only below n/2. It is not He, Yang &amp; Kang's count law: their prior puts C(n,k)^(−γ) on each of the
+/// C(n,k) models, so theirs is C(n,k)^(1−γ).
 /// </summary>
 public sealed class EbicPrior : IComplexityPrior
 {

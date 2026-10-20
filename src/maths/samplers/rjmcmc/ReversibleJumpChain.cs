@@ -83,7 +83,8 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
     /// <c>min(1, exp(Δlog-target + log-auxiliary-ratio + log-Jacobian + log-selection-ratio))</c>, where the
     /// selection ratio is <c>[w_{m'}(x')/ΣW(x')] / [w_m(x)/ΣW(x)]</c>. A move unavailable from the current state
     /// (null proposal) leaves the chain in place and does not count as an attempt; a proposal whose reverse has
-    /// zero weight is rejected (no detailed balance). Returns the (possibly unchanged) <see cref="Current"/>.
+    /// zero weight is rejected (no detailed balance), and so is a candidate outside the target's support (log target
+    /// −∞ or NaN), whatever its proposal ratio. Returns the (possibly unchanged) <see cref="Current"/>.
     /// </summary>
     public TState Step()
     {
@@ -107,9 +108,12 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
         // log[ j_{m'}(x') / j_m(x) ] = log[ w_{m'}(x')/ΣW(x') ] − log[ w_m(x)/ΣW(x) ]
         double logSelection = Math.Log(wReverse / totalCand) - Math.Log(move.Weight(Current) / totalCur);
 
+        // Off the support, the proposal ratio must not decide the move: a sampler that underflows onto the
+        // support's edge can report an infinite ratio there, and −∞ + ∞ is NaN. The uniform is still drawn.
         double candidateLogTarget = _target.LogPosterior(p.Candidate);
-        double logAccept = (candidateLogTarget - _currentLogTarget)
-                         + p.LogProposalRatio + p.LogJacobian + logSelection;
+        double logAccept = candidateLogTarget > double.NegativeInfinity
+            ? (candidateLogTarget - _currentLogTarget) + p.LogProposalRatio + p.LogJacobian + logSelection
+            : double.NegativeInfinity;
 
         if (logAccept >= 0.0 || _rng.NextDouble() < Math.Exp(logAccept))
         {

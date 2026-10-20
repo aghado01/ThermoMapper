@@ -8,11 +8,11 @@ using Xunit.Abstractions;
 namespace Maths.Regression.Tests;
 
 /// <summary>
-/// The DMGK birth/death schedule (prior-aware, state-dependent move-selection weights) must sample the same
-/// posterior as equal weights — that it does is the proof the Green-general selection ratio is unbiased.
-/// Mixing is logged, not asserted. At equal c the schedule never raises a birth/death flow (<see cref="DmgkSchedule"/>),
-/// and over 12 master seeds on this problem DMGK had the higher ESS(k) in 5, with single-seed ESS(k) from 6 to 223
-/// (preparation brief, BARS mixing).
+/// The DMGK birth/death schedule (prior-aware, state-dependent move-selection weights) recovers the curve through the
+/// full ensemble. That it samples the same posterior as constant weights is checked exactly by the count-law oracle
+/// (<see cref="CountLawTests"/>). Mixing is logged, not asserted. At equal c the schedule never raises a birth/death
+/// flow (<see cref="DmgkSchedule"/>), and over 12 master seeds on this problem, before the R01 measure fix, DMGK had
+/// the higher ESS(k) in 5, with single-seed ESS(k) from 6 to 223 (preparation brief, BARS mixing).
 /// </summary>
 public sealed class DmgkScheduleTests
 {
@@ -34,7 +34,7 @@ public sealed class DmgkScheduleTests
     }
 
     [Fact]
-    public void Dmgk_SamplesTheSamePosterior()
+    public void Dmgk_RecoversTheCurve()
     {
         var rng = new Xoshiro256PlusPlus(seed: 314);
         int n = 90;
@@ -62,9 +62,6 @@ public sealed class DmgkScheduleTests
         _out.WriteLine($"[dmgk] equal: mse={mseEqual:F5} k̄={equal.MeanKnots:F2} ESS(k)={equal.EssKnots:F0} acc={equal.AcceptanceRate:F3}");
         _out.WriteLine($"[dmgk] dmgk : mse={mseDmgk:F5} k̄={dmgk.MeanKnots:F2} ESS(k)={dmgk.EssKnots:F0} acc={dmgk.AcceptanceRate:F3}");
 
-        // Correctness: both recover the curve, and DMGK does not bias the dimension posterior.
         Assert.True(mseDmgk < 0.01, $"DMGK fit MSE {mseDmgk:F5} should recover the curve");
-        Assert.True(Math.Abs(dmgk.MeanKnots - equal.MeanKnots) < 0.6,
-            $"DMGK mean knots {dmgk.MeanKnots:F2} should match equal-weight {equal.MeanKnots:F2} (unbiased)");
     }
 }

@@ -13,7 +13,8 @@ namespace Maths.Regression.Tests;
 /// Poisson prior) to noisy data from three function shapes — smooth, a sharp localized peak, and a jump —
 /// and check the posterior-mean fit denoises (closer to truth than the raw data). The smooth/peak cases get
 /// strong-denoise thresholds; the jump is softer because v1 has no coincident-knot mechanism yet, so it
-/// approximates the discontinuity with a steep continuous spline.
+/// approximates the discontinuity with a steep continuous spline. Each case runs under a Conway–Maxwell–Poisson count
+/// prior at ν = 1 (Poisson) and ν = 2 (the law BARS ran under before the R01 measure fix), at the same thresholds.
 /// </summary>
 public sealed class DmgkValidationTests
 {
@@ -27,13 +28,14 @@ public sealed class DmgkValidationTests
         return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
     }
 
-    /// <summary>Run the sampler and return the chain-averaged posterior-mean fit evaluated at <paramref name="x"/>.</summary>
-    private static double[] PosteriorMeanFit(
-        double[] x, double[] y, double meanKnots, double tau, int seed, int burn, int samples)
+    /// <summary>Run the sampler and return the chain-averaged posterior-mean fit evaluated at <paramref name="x"/>,
+    /// and the mean knot count.</summary>
+    private static (double[] Fit, double MeanKnots) PosteriorMeanFit(
+        double[] x, double[] y, IComplexityPrior prior, double tau, int seed, int burn, int samples)
     {
         var basis = new SplineBasis(degree: 3);
         var model = new WeightedNormalModel();
-        var target = new SplineTarget(basis, model, new PoissonPrior(meanKnots), x, y);
+        var target = new SplineTarget(basis, model, prior, x, y);
         var kernel = new LocalBetaKernel(tau);
         var moves = new IRjMove<KnotConfig>[]
         {
@@ -45,9 +47,11 @@ public sealed class DmgkValidationTests
         for (int i = 0; i < burn; i++) chain.Step();
 
         var sum = new double[x.Length];
+        double knots = 0.0;
         for (int s = 0; s < samples; s++)
         {
             KnotConfig cfg = chain.Step();
+            knots += cfg.Count;
             double[,] zTrain = basis.Design(cfg, x);
             double[] c = model.PosteriorMeanCoefficients(zTrain, y, null);
             for (int g = 0; g < x.Length; g++)
@@ -58,7 +62,7 @@ public sealed class DmgkValidationTests
             }
         }
         for (int g = 0; g < sum.Length; g++) sum[g] /= samples;
-        return sum;
+        return (sum, knots / samples);
     }
 
     private static double Mse(double[] a, double[] b)
@@ -69,9 +73,20 @@ public sealed class DmgkValidationTests
     }
 
     private void RunCase(string name, Func<double, double> truth, double sigma, int n,
-                         double meanKnots, double maxFitToDataRatio)
+                         double lambda, double nu, double maxFitToDataRatio)
     {
-        var rng = new Xoshiro256PlusPlus(seed: 2026);
+        (double mseFit, double mseData, double meanKnots) =
+            Fit(truth, sigma, n, new ConwayMaxwellPoissonPrior(lambda, nu), dataSeed: 2026, chainSeed: 99);
+        _out.WriteLine($"{name} ν={nu}: mseFit={mseFit:F5} mseData={mseData:F5} ratio={mseFit / mseData:F3} k̄={meanKnots:F2}");
+
+        Assert.True(mseFit < maxFitToDataRatio * mseData,
+            $"{name} ν={nu}: fit MSE {mseFit:F5} not below {maxFitToDataRatio}× data MSE {mseData:F5}");
+    }
+
+    private static (double MseFit, double MseData, double MeanKnots) Fit(
+        Func<double, double> truth, double sigma, int n, IComplexityPrior prior, int dataSeed, int chainSeed)
+    {
+        var rng = new Xoshiro256PlusPlus(dataSeed);
         var x = new double[n];
         var f = new double[n];
         var y = new double[n];
@@ -82,28 +97,29 @@ public sealed class DmgkValidationTests
             y[i] = f[i] + sigma * Gaussian(rng);
         }
 
-        double[] fit = PosteriorMeanFit(x, y, meanKnots, tau: 50.0, seed: 99, burn: 1500, samples: 3000);
-
-        double mseFit = Mse(fit, f);
-        double mseData = Mse(y, f);
-        _out.WriteLine($"{name}: mseFit={mseFit:F5} mseData={mseData:F5} ratio={mseFit / mseData:F3}");
-
-        Assert.True(mseFit < maxFitToDataRatio * mseData,
-            $"{name}: fit MSE {mseFit:F5} not below {maxFitToDataRatio}× data MSE {mseData:F5}");
+        (double[] fit, double meanKnots) = PosteriorMeanFit(x, y, prior, tau: 50.0, seed: chainSeed, burn: 1500, samples: 3000);
+        return (Mse(fit, f), Mse(y, f), meanKnots);
     }
 
-    [Fact]
-    public void Smooth_StrongDenoise()
-        => RunCase("smooth", t => Math.Sin(2.0 * Math.PI * t), sigma: 0.15, n: 120,
-                   meanKnots: 4.0, maxFitToDataRatio: 0.5);
+    private static readonly Func<double, double> SmoothTruth = t => Math.Sin(2.0 * Math.PI * t);
+    private static readonly Func<double, double> PeakTruth = t => Math.Exp(-150.0 * (t - 0.4) * (t - 0.4));
+    private static readonly Func<double, double> JumpTruth = t => (t < 0.5 ? 0.2 : 0.8) + 0.3 * t;
 
-    [Fact]
-    public void SharpPeak_Denoise()
-        => RunCase("peak", t => Math.Exp(-150.0 * (t - 0.4) * (t - 0.4)), sigma: 0.10, n: 150,
-                   meanKnots: 5.0, maxFitToDataRatio: 0.6);
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(2.0)]
+    public void Smooth_StrongDenoise(double nu)
+        => RunCase("smooth", SmoothTruth, sigma: 0.15, n: 120, lambda: 4.0, nu, maxFitToDataRatio: 0.5);
 
-    [Fact]
-    public void Discontinuity_StillFits()
-        => RunCase("jump", t => (t < 0.5 ? 0.2 : 0.8) + 0.3 * t, sigma: 0.08, n: 150,
-                   meanKnots: 6.0, maxFitToDataRatio: 1.0);
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(2.0)]
+    public void SharpPeak_Denoise(double nu)
+        => RunCase("peak", PeakTruth, sigma: 0.10, n: 150, lambda: 5.0, nu, maxFitToDataRatio: 0.6);
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(2.0)]
+    public void Discontinuity_StillFits(double nu)
+        => RunCase("jump", JumpTruth, sigma: 0.08, n: 150, lambda: 6.0, nu, maxFitToDataRatio: 1.0);
 }

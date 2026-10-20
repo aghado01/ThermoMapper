@@ -1,4 +1,5 @@
 using System;
+using Maths.Distributions;
 using Maths.Samplers.Rjmcmc;
 
 using Maths.Regression.Spline;
@@ -8,6 +9,8 @@ namespace Maths.Regression.Spline.Bars;
 /// <summary>
 /// The reversible-jump target for free-knot regression: the marginalized posterior over knot configurations,
 /// exposed to the engine as <c>Δ log-marginal-likelihood + Δ log-prior</c> with coefficients integrated out.
+/// Given k, the knot locations are the order statistics of k uniforms on (0,1), with density <c>k!</c> on the
+/// ordered simplex, so the count prior <c>p(k)</c> is the knot-count marginal (R01).
 /// Holds the fixed run data (design points + response) and composes a <see cref="SplineBasis"/>, an
 /// <see cref="IObservationModel"/> and an <see cref="IComplexityPrior"/>.
 /// </summary>
@@ -47,11 +50,22 @@ public sealed class SplineTarget : IRjTarget<KnotConfig>
         _weights = weights;
     }
 
-    /// <summary>Log marginal posterior at a configuration (up to the constant shared across configs).</summary>
+    /// <summary>
+    /// Log marginal posterior at a configuration (up to the constant shared across configs); −∞ off the support,
+    /// the open ordered simplex <c>0 &lt; ξ₁ &lt; … &lt; ξ_k &lt; 1</c>.
+    /// </summary>
     public double LogPosterior(KnotConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
+        double[] knots = config.InteriorKnots;
+        double previous = 0.0;
+        foreach (double knot in knots)
+        {
+            if (!(knot > previous && knot < 1.0)) return double.NegativeInfinity;
+            previous = knot;
+        }
+        int k = knots.Length;
         return _model.LogMarginalLikelihood(_basis.Design(config, _x), _y, _weights)
-             + _prior.LogPrior(config.Count);
+             + _prior.LogPrior(k) + SpecialFunctions.LogGamma(k + 1.0);
     }
 }

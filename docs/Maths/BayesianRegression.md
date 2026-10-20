@@ -55,7 +55,7 @@ flowchart LR
 |---|---|
 | `IBasis` | `SplineBasis` (clamped B-splines), `StepBasis` (piecewise constant) |
 | `IObservationModel` | `WeightedNormalModel` (default), `PoissonModel`, `WhittleModel`, `GibbsLossModel` |
-| `IComplexityPrior` | `UniformPrior`, `PoissonPrior` (default λ = 5), `EbicPrior` |
+| `IComplexityPrior` | `UniformPrior`, `PoissonPrior` (default λ = 5), `ConwayMaxwellPoissonPrior`, `EbicPrior` |
 | `IKnotKernel` | `UniformKernel`, `LocalBetaKernel` (default τ = 50); immutable, because one instance is shared by every chain. Adaptive τ is requested with `adaptKernelTau` / `BarsConfig.AdaptKernelTau`, which builds an internal `AdaptiveLocalBetaKernel` per chain. |
 | `IWeightResampler` (optional) | `StudentTWeights`, `ContaminatedNormalWeights` |
 
@@ -125,15 +125,27 @@ All Jacobians are 0.
   Under the prior alone, Green's motivating case, the two agree, and DMGK turns the constant schedule's rejections into relocations. With a likelihood, $F_{\text{DMGK}}\le F_{\text{const}}$ at equal $c$: the prior moves from the acceptance into the proposal rate, and the acceptance cap means the lost proposals are not recovered. So the lag-1 autocorrelation and the expected squared jump of $k$ favor constant weights exactly. ESS(k) is not ordered, because the extra relocations interact with later dimension moves.
 - **Normalization.** Equal $c$ gives DMGK a smaller dimension budget: under Poisson(4) at $c=0.4$, $\max_k(b_k+d_k)=0.72$, against 0.8. Green instead takes the largest $c$ with $b_k+d_k\le0.9$, which can exceed the 0.5 cap here. At equal budget neither schedule dominates. DMGK leads where the posterior sits on a flat prior top, and loses about a factor $p(k+1)/p(k)$ where prior and likelihood conflict.
 - **Hard caps.** Birth weight vanishes where $p(k+1)=0$, so a cap costs no rejected proposals.
-- **Measured.** On `DmgkScheduleTests`' problem (posterior at the Poisson(4) mode, equal $c$), 12 seeds showed no ESS(k) difference. The comparison that would settle a default is planned in the [preparation brief](../../issues/regression/bass-preparation-brief.md#after-phase-3-bars-mixing).
+- **Measured.** On `DmgkScheduleTests`' problem (posterior at the Poisson(4) mode, equal $c$, before the knot-measure fix), 12 seeds showed no ESS(k) difference. The comparison that would settle a default is planned in the [preparation brief](../../issues/regression/bass-preparation-brief.md#after-phase-3-bars-mixing).
 
 **Priors.**
 
 - `UniformPrior`: flat on $0..\text{max}$.
 - `PoissonPrior`: $k\log\lambda-\lambda-\log k!$.
+- `ConwayMaxwellPoissonPrior(lambda, nu)`: $k\log\lambda-\nu\log k!$, unnormalized (Conway and Maxwell 1962; Shmueli et al. 2005). ν = 1 is Poisson(λ); ν = 2 is the effective prior BARS ran under before the knot-measure fix; ν < 1 has heavier tails. With ν = 0 it is geometric and needs λ < 1.
 - `EbicPrior(gamma, candidateCount)`: $-\gamma\log\binom{n_c}{k}$ with $n_c$ = `candidateCount` and $\gamma\in[0,1]$; −∞ for $k>n_c$.
 
-**Implied knot-count distribution.** Birth's $-\log(k+1)$ is the correct Hastings factor for a target with Lebesgue measure on the ordered knot simplex. That simplex has volume $1/k!$. Under a flat likelihood, the stationary knot-count marginal is therefore $\propto p(k)/k!$, not $p(k)$. See [Status](#status-and-caveats).
+**Knot measure.** Given $k$, the knot locations are the order statistics of $k$ independent uniforms on $(0,1)$: density $k!$ on the ordered simplex $0<\xi_1<\dots<\xi_k<1$. The target adds $\log k!$, so $p(k)$ is exactly the knot-count prior. Birth's $-\log(k+1)$ is the Hastings factor for that ordered representation, and the target is −∞ off the open simplex.
+
+- **Checked.** Under a constant likelihood, `CountLawTests` recovers $p(k)$ bin by bin for Poisson, capped-uniform and Conway–Maxwell–Poisson priors, under both move schedules. The check is generic over the target and the move set, so BASS's term-measure check reuses it.
+- **Before the fix** (until 2026-10-20), the target lacked $\log k!$, so the effective count prior was $p(k)/k!$. For `PoissonPrior(λ)` that is $\lambda^k/(k!)^2$, which `ConwayMaxwellPoissonPrior(λ, 2)` reproduces exactly. Runs with `PoissonPrior` now carry a weaker penalty and use more knots. `UniformPrior(max)` is now flat; it used to act as $1/k!$.
+- **Choosing ν.** On the three `DmgkValidationTests` fits (smooth, sharp peak, jump; 8 seeds each):
+  - ν = 1 used about half a knot more than ν = 2: mean $\bar k$ of 2.36, 4.70 and 4.78, against 1.82, 4.12 and 4.09.
+  - Its mean fit-to-data MSE ratio was slightly lower: 0.077, 0.078 and 0.103, against 0.086, 0.096 and 0.110. The differences lie mostly within seed noise; ν = 1 won 6, 5 and 4 of the 8 paired seeds.
+  - Both pass the same thresholds.
+
+  At these sample sizes the marginal's Occam factor, about $\tfrac12\log(m+1)$ per basis function, matters more than the count prior. ν = 2 suits fits where over-knotting is costly, such as readouts that count peaks; ν = 1 lets the data decide. The default stays `PoissonPrior(5)`, which is ν = 1.
+- **Support.** `Beta.Sample` can underflow to exactly 0 or 1, where `LocalBetaKernel`'s density is 0, so a birth or relocation there carried a Hastings term of +∞. Under a flat likelihood such knots were accepted and never removed, and the chain ran away; with data, design admission rejected them. The support rule now rejects them, and the engine rejects any candidate whose log target is −∞ or NaN, whatever its proposal ratio.
+- **`EbicPrior`.** Its count law is now exactly $\binom{n_c}{k}^{-\gamma}$, which is symmetric under $k\leftrightarrow n_c-k$. It falls until $k=n_c/2$ and rises after, so it acts as a penalty only while every admissible $k$ stays below $n_c/2$. It also differs from the cited law; see [Status](#status-and-caveats).
 
 ### BARS: observation models
 
@@ -341,7 +353,7 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 
 ## Status and caveats
 
-- **The knot-count prior acts as $p(k)/k!$.** The BARS target adds only $\log p(k)$, and the birth move's Hastings factor assumes Lebesgue measure on ordered knots, so the stationary knot-count marginal is $\propto p(k)/k!$. If an ordered i.i.d.-uniform knot prior was intended, the target lacks $+\log k!$. The code does not state which prior was intended.
+- **`EbicPrior` is not He, Yang and Kang's count law.** Their discrete-candidate prior gives each of the $\binom{n}{k}$ models with $k$ knots the mass $\binom{n}{k}^{-\gamma}$, so their count law is $\binom{n}{k}^{1-\gamma}$: flat at γ = 1, peaked at $n/2$ below it. `EbicPrior`'s law is $\binom{n_c}{k}^{-\gamma}$. Which one is intended is undecided.
 - **The BAPS `MarginalEvidence` posterior of λ is heavy-tailed.** Under the uniform-edf prior the density of ln λ decays like $e^{-u}$, so $E[\lambda]$ is infinite; `BapsResult` therefore reports the median. $\ell_p$ is computed as $y^\top y-\hat\beta^\top Z^\top y$ and loses precision above about λ = 10¹⁰ (NaN near 10¹⁴), but the prior keeps the chain far below that range. The λ modes target different posteriors.
 - **Knot count and peak location mix slowly.** In the regression tests, knot-count ESS is about 1.75% of draws and untempered peak-location ESS about 0.14%. A 5-rung tempering ladder gave about 8% on similar data, though not in a controlled comparison. Judge a run by ESS, not by draw count: an R̂ early stop can fire at 100 draws per chain, which for these readouts is only a few effective draws.
 - **Reporting limits.**

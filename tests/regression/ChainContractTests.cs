@@ -72,6 +72,33 @@ public sealed class ChainContractTests
                 Assert.NotSame(built[i].Moves[0], built[j].Moves[0]);
     }
 
+    [Fact]
+    public void Candidate_OffTheSupport_IsRejected_WhateverItsProposalRatio()
+    {
+        // A sampler that underflows onto the support's edge can report an infinite proposal ratio there; the
+        // candidate's −∞ (or NaN) log target decides the move, not −∞ + ∞.
+        IRjMove<int>[] moves = [new InfiniteRatioMove("up", "down", +1), new StepMove("down", "up", -1)];
+        var chain = new ReversibleJumpChain<int>(moves, new SupportOfZero(), 0, new Xoshiro256PlusPlus(seed: 3));
+        for (int i = 0; i < 1000; i++) Assert.Equal(0, chain.Step());
+        Assert.Equal(0, chain.Accepted);
+    }
+
+    // Support {0}: −∞ above it, NaN below it.
+    private sealed class SupportOfZero : IRjTarget<int>
+    {
+        public double LogPosterior(int state) => state == 0 ? 0.0 : state > 0 ? double.NegativeInfinity : double.NaN;
+    }
+
+    private sealed class InfiniteRatioMove : IRjMove<int>
+    {
+        private readonly int _delta;
+        public InfiniteRatioMove(string key, string reverseKey, int delta) { Key = key; ReverseKey = reverseKey; _delta = delta; }
+        public string Key { get; }
+        public string ReverseKey { get; }
+        public double Weight(int state) => 1.0;
+        public Proposal<int>? Propose(int current, Xoshiro256PlusPlus rng) => new(current + _delta, double.PositiveInfinity, 0.0);
+    }
+
     private sealed class FlatTarget : IRjTarget<int>
     {
         public double LogPosterior(int state) => 0.0;
