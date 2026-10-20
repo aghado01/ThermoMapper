@@ -54,6 +54,21 @@ public sealed class DiagnosticsPolicyTests
     }
 
     [Fact]
+    public void RunningMoments_Merge_MatchesFoldingTheConcatenation()
+    {
+        double[] a = [1.5, -2.0, 3.25, 0.5];
+        double[] b = [10.0, 11.5, 9.0];
+        RunningMoments merged = RunningMoments.Merge(RunningMoments.Of(a), RunningMoments.Of(b));
+        RunningMoments whole = RunningMoments.Of([.. a, .. b]);
+
+        Assert.Equal(whole.Count, merged.Count);
+        Assert.Equal(whole.Mean, merged.Mean, 12);
+        Assert.Equal(whole.SumSquaredDeviations, merged.SumSquaredDeviations, 10);
+        Assert.Equal(whole.Mean, RunningMoments.Merge(RunningMoments.Of(b), RunningMoments.Of(a)).Mean, 12);
+        Assert.Equal(RunningMoments.Of(a).Mean, RunningMoments.Merge(RunningMoments.Of(a), new RunningMoments()).Mean);
+    }
+
+    [Fact]
     public void Worst_OrdersConstantEstimateFrozenUnavailable()
     {
         RHatDiagnostic[] set = [RHatDiagnostic.Constant, RHatDiagnostic.Estimate(1.02), RHatDiagnostic.Estimate(1.4)];

@@ -97,13 +97,21 @@ public sealed class ChainEnsemble
         }
 
         var mean = new double[dim];
+        var variance = new double[dim];
         var rhat = new RHatDiagnostic[dim];
         var chainMoments = new RunningMoments[chains];
         for (int f = 0; f < dim; f++)
         {
             double s = 0.0;
-            for (int ci = 0; ci < chains; ci++) { chainMoments[ci] = moments[ci][f]; s += moments[ci][f].Mean; }
+            var pooled = new RunningMoments();
+            for (int ci = 0; ci < chains; ci++)
+            {
+                chainMoments[ci] = moments[ci][f];
+                s += moments[ci][f].Mean;
+                pooled = RunningMoments.Merge(pooled, moments[ci][f]);
+            }
             mean[f] = s / chains;   // every chain holds `collected` draws
+            variance[f] = pooled.PopulationVariance;
             rhat[f] = ChainDiagnostics.RHat(chainMoments);
         }
 
@@ -119,7 +127,7 @@ public sealed class ChainEnsemble
         for (int ci = 0; ci < chains; ci++) { accA += runs[ci].Chain.Accepted; accT += runs[ci].Chain.Attempts; }
         double acceptance = accT > 0 ? (double)accA / accT : 0.0;
 
-        var summary = new EnsembleRun(mean, rhat, ess, collected, acceptance, seeds);
+        var summary = new EnsembleRun(mean, variance, rhat, ess, collected, acceptance, seeds);
         return (summary, runs);
     }
 

@@ -65,7 +65,7 @@ flowchart LR
 |---|---|
 | Reversible jump | `ReversibleJumpChain<T>(moves, target, start, rng)` with `Step()`, `Current`, `CurrentLogTarget`, `Attempts`, `Accepted`, `MoveStats()`, `SetState`; `IRjMove<T>` (`Key`, `ReverseKey`, `Weight`, `Propose`); `IRjTarget<T>`; `Proposal<T>`; `MoveStat`; `ScheduledMove<T>` |
 | Tempering | `TemperedTarget<T>`; `ParallelTempering<T>(movesForReplica, baseTarget, start, betas, masterSeed)` with `Step()`, `Cold`, `SwapAttempts`, `SwapAccepts`, and static `GeometricLadder(levels, betaMin)` |
-| Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.RHat`, `ChainDiagnostics.Ess`; `IChain<T>`, `IEnsembleModel<T>`, `IChainRun<T>`, `EnsembleRun` |
+| Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.RHat`, `ChainDiagnostics.Ess`; `RunningMoments` (`Add`, `Merge`, `Of`); `IChain<T>`, `IEnsembleModel<T>`, `IChainRun<T>`, `EnsembleRun` |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
 ## Algorithms
@@ -118,6 +118,7 @@ Later pairs in the same sweep see earlier swaps. The chain interface reports the
 4. If `rHatTarget > 0`, stop once every functional's R̂ meets the target (`RHatDiagnostic.MeetsTarget`). The check runs at round boundaries once each chain holds at least `ChainEnsemble.MinDrawsForStop` (100) draws. An R̂ target with a single chain is rejected.
 5. Pool the results:
    - means over $C\cdot n$ draws;
+   - population variances over all $C\cdot n$ draws (`FunctionalVariance`), from the per-chain streaming moments merged by Chan's parallel update (`RunningMoments.Merge`, which is associative and commutative);
    - a typed R̂ (`RHatDiagnostic`) per functional;
    - ESS on the leading functionals;
    - acceptance $\sum\text{Accepted}/\sum\text{Attempts}$ from the chains' cumulative counters. These counters include burn-in.
