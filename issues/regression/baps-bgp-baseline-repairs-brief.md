@@ -1,6 +1,6 @@
 # BAPS and BGP baseline repairs — chip brief
 
-Date: 2026-10-19. Status: complete. The report is below, and the suite passes at `ed60885`. Started after step 0.1 of the [BASS preparation brief](bass-preparation-brief.md) landed on `main`.
+Date: 2026-10-19. Status: complete. The report is below, and the suite passes at `fbe6d0d`. Started after step 0.1 of the [BASS preparation brief](bass-preparation-brief.md) landed on `main`.
 
 ## Context
 
@@ -148,6 +148,8 @@ Beyond about λ = 10⁸ the values drift because of rounding, and at 10¹⁴ the
 
 **Decided by the user, 2026-10-19:** R02 = A1, with `LambdaMean` replaced by `LambdaMedian` for all modes. R10 = T2 + M1 with a `None` option, plus response centering.
 
+**Refined by the user, 2026-10-19 (relayed by the main session):** for R10, the constant mean is integrated out under a flat prior instead of centering on the sample mean, and bandwidths are reported in both the fitted and original frames. See Item 2a in the report.
+
 ## Report
 
 For each item, record:
@@ -162,11 +164,11 @@ For each item, record:
 
 ### Summary
 
-Completed 2026-10-19.
+Completed 2026-10-19; updated the same day for the R10 follow-up (Item 2a).
 
-- **Qualified revision:** `ed60885`, built with .NET SDK 10.0.201 in Release.
-- **Regression suite:** `scripts/fact-harness.ps1 -Project tests/Maths.Regression.Tests/Maths.Regression.Tests.csproj` passes 117 of 117 (`artifacts/test-runs/TestHarness.Runner/20261019_190012452`).
-- **Benchmark:** the env-gated `BgpBenchmark` (`BGP_BENCH=1`) also passes.
+- **Qualified revision:** `fbe6d0d`, built with .NET SDK 10.0.201 in Release.
+- **Regression suite:** 121 of 121 pass, both under `scripts/fact-harness.ps1 -Project tests/Maths.Regression.Tests/Maths.Regression.Tests.csproj` (`artifacts/test-runs/TestHarness.Runner/20261019_202150690`) and under plain `dotnet test`. The plain run matters because the harness-fix session was editing the harness at the time. The first closure, at `ed60885`, passed 117 of 117 (`20261019_190012452`).
+- **Benchmark:** the env-gated `BgpBenchmark` (`BGP_BENCH=1`) passes at `fbe6d0d`.
 - **Parent revision for the reproductions:** `6f481ea`, whose code is identical to `f5afb7a`, unless an item names another.
 
 | Commit | Content |
@@ -179,7 +181,9 @@ Completed 2026-10-19.
 | `dc75590`, `e7acce6` | Decision memo and its addendum |
 | `1d1cada` | `BapsResult.LambdaMedian` replaces `LambdaMean` |
 | `5fe826e` | R02: uniform-edf prior for `MarginalEvidence` |
-| `1f10ba0` | R10: fitted transform (similarity inputs, centered response) |
+| `1f10ba0` | R10: fitted transform (similarity inputs; its response centering was replaced by `f24d9d7`) |
+| `f24d9d7` | R10: constant mean integrated out under a flat prior |
+| `fbe6d0d` | R10: bandwidth posterior reported in both frames |
 | `ed60885` | Enum theory data, so the fact harness can run each case |
 
 **Closure against the register.**
@@ -209,7 +213,7 @@ Completed 2026-10-19.
 **Specification.**
 
 - **Support rule.** The prior rejects fewer than two inputs, a non-finite γ₁T_n², γ₁T_n² ≥ 1, and T_n = 0. Non-finite inputs and responses are rejected when the transform is fitted. Chains start at √(γ₁T_n²); an explicit start outside the support is rejected.
-- **Transform** (user decision: T2 + M1 + centering, with `None`). `GpRegression` fits a `GpTransform`. The default input map is `Similarity`, (x − lo)/s with s the largest span; `None` keeps the inputs as given. The response is centered on the training mean and restored in prediction, and it is not rescaled.
+- **Transform** (user decision: T2 + M1 + centering, with `None`). `GpRegression` fits a `GpTransform`. The default input map is `Similarity`, (x − lo)/s with s the largest span; `None` keeps the inputs as given. The response is centered on the training mean and restored in prediction, and it is not rescaled. The centering is superseded by Item 2a.
 - **Units.** Bandwidths, the support and T_n are in the mapped frame. `BgpResult.InputScale` reports s, and t_original = s²·t. The prior's constructor is now `(gp, …)`, reading T_n from the GP's own distances.
 
 **Paths.**
@@ -245,6 +249,32 @@ Completed 2026-10-19.
 - Anisotropic data keep their anisotropy by design.
 - `PredictMean` does not check that test inputs are finite.
 - The tests and benchmark still apply a per-coordinate min–max (M2) by hand, so the instrument's similarity map is the identity on their data.
+
+### Item 2a: R10 follow-up — integrated constant mean, bandwidths in both frames (B05)
+
+**Reproduction** at `1f10ba0`, which used sample-mean centering. The reference is a dense GP with a wide Normal prior N(0, 10⁶) on the constant mean, which converges to the flat-prior answer. Against it, the evidence was off by 0.02, 0.58 and 2.08 at t = 0.005, 0.05 and 0.4. Because the error depends on t, it biases the bandwidth posterior. The prediction at x = 1.4 was off by 0.12 to 0.27. `BgpResult` reported bandwidths only in the fitted frame.
+
+**Specification** (the user's refinement):
+
+- **Evidence.** The constant mean m has a flat prior and is integrated out: log ∫ N(y; m1, K) dm = −½[yᵀK⁻¹y − (1ᵀK⁻¹y)²/1ᵀK⁻¹1] − ½log|K| − ½log 1ᵀK⁻¹1 − ((n−1)/2)log 2π, keeping the t-dependent −½log 1ᵀK⁻¹1 term.
+- **Mean and prediction.** `GpFit.Mean` is the GLS mean m̂ = 1ᵀK⁻¹y / 1ᵀK⁻¹1, α = K⁻¹(y − m̂1), and predictions are m̂ + k*ᵀα. Each fit makes one extra solve, for K⁻¹1, on the same factor.
+- **Conditioning.** The training mean is subtracted first, for numerical conditioning only; results do not depend on it.
+- **Transform.** `GpTransform` is now an input map only, `Fit(x, scaling)`; its `ResponseOffset` is removed.
+- **Bandwidths in both frames.** `BgpResult` carries `Bandwidth` (mapped frame) and `BandwidthOriginal` (s²·t), both `BandwidthSummary(Mean, Lo, Hi)`, plus `InputScale`. They replace `BandwidthMean`, `BandwidthLo` and `BandwidthHi`.
+
+**Paths.** `GpRegression.cs`, `GpTransform.cs` and `BgpSampler.cs`; `tests/regression/BgpConstantMeanTests.cs` (new) and `BgpTransformTests.cs`; the `Bandwidth.*` migrations in `BgpSamplerTests` and `BgpSupportTests`; the BGP docs section.
+
+**Commits.** `f24d9d7` and `fbe6d0d`.
+
+**Checks.**
+
+- The evidence, GLS mean and predictions match the wide-prior limit to 1e-5 at all three bandwidths, and far from the data the prediction returns to m̂.
+- The offset test now compares GLS means: an offset of 20 shifts m̂ and the predictions by exactly 20 and leaves the evidence and the bandwidth posterior unchanged.
+- Under both scalings, each original-frame value is s²·(fitted value).
+- Rescaling the inputs by 100 leaves the fitted posterior unchanged and multiplies the original-frame mean by 10⁴.
+- End to end, the Swiss-roll test gives t̂ = 0.188 [0.155, 0.228] and a test MSE of 0.0031. In the benchmark, the EB/oracle RMSE ratio is 0.999, 0.984, 0.982 and 0.989 at n = 50, 100, 200 and 400, with RMSE ∼ n^−0.626.
+
+**Limitations.** The mean model is a single constant; there is no linear or other trend term. The flat prior on m is improper, but the evidence is proper in t and the improper constant is the same for every t.
 
 ### Item 3: R10 wording (B05)
 
@@ -312,7 +342,7 @@ Completed 2026-10-19.
 3. **Baseline (step 0.6).** These public changes alter BAPS and BGP outputs by design, so any baseline recorded before them will differ:
    - `BapsResult.LambdaMedian` replaces `LambdaMean`, and `BapsResult.RHatLogLambda` is an `RHatDiagnostic`;
    - `MarginalEvidence` now uses the edf prior;
-   - `GpRegression` gains a `scaling` argument (default `Similarity`) and centers the response;
+   - `GpRegression` gains a `scaling` argument (default `Similarity`) and integrates the constant mean out; `GpFit` gains `Mean`, and `GpTransform` maps inputs only;
    - `EmpiricalBayesBandwidthPrior(gp, …)` no longer takes `x`;
-   - `BgpResult` gains `InputScale`.
+   - `BgpResult` gains `InputScale`, and reports `Bandwidth` and `BandwidthOriginal` (`BandwidthSummary`) in place of `BandwidthMean`, `BandwidthLo` and `BandwidthHi`.
 4. **Fact harness.** `scripts/fact-harness.ps1` fails any theory case whose display name contains a string argument, with MSBuild error MSB4177, because the quotes break the generated `dotnet test` arguments. Escalated as a candidate harness fix, per AGENTS.md; the chip's tests now use enum data.
