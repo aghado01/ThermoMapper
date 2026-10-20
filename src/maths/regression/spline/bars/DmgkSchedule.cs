@@ -10,7 +10,7 @@ namespace Maths.Regression.Spline.Bars;
 /// fold the knot-count prior into the proposal — <c>b_k = c·min{1, p(k+1)/p(k)}</c>, <c>d_k = c·min{1,
 /// p(k−1)/p(k)}</c>, relocate = <c>1 − b_k − d_k</c>. Because the Green-general engine applies the selection
 /// ratio <c>j_{m'}(x')/j_m(x)</c>, the prior then cancels between the posterior and selection terms, so a
-/// dimension change is accepted on the <i>likelihood</i> evidence alone — the DMGK mixing improvement. Birth
+/// dimension change is accepted on the <i>likelihood</i> evidence alone, the source of the mixing gain DMGK report. Birth
 /// weight vanishes where the prior has no mass (<c>p(k+1)=0</c>), so a hard cap (e.g. <see cref="UniformPrior"/>)
 /// is honored automatically. Wraps existing knot moves via <see cref="ScheduledMove{TState}"/>; the proposal
 /// mechanics are unchanged.

@@ -9,9 +9,9 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// The DMGK birth/death schedule (prior-aware, state-dependent move-selection weights) must sample the same
-/// posterior as equal weights — that it does is the proof the Green-general selection ratio is unbiased — while
-/// mixing the dimension at least as well, since folding the prior into the proposal lets it cancel in the
-/// acceptance so dimension moves turn on likelihood evidence.
+/// posterior as equal weights — that it does is the proof the Green-general selection ratio is unbiased.
+/// The mixing gain DMGK report is logged, not asserted: over 12 master seeds on this problem DMGK had the higher
+/// ESS(k) in 5, and single-seed ESS(k) ranged 6–223 (preparation brief, BARS mixing).
 /// </summary>
 public sealed class DmgkScheduleTests
 {
@@ -33,7 +33,7 @@ public sealed class DmgkScheduleTests
     }
 
     [Fact]
-    public void Dmgk_SamplesSamePosterior_AndMixesDimension()
+    public void Dmgk_SamplesTheSamePosterior()
     {
         var rng = new Xoshiro256PlusPlus(seed: 314);
         int n = 90;
@@ -65,10 +65,5 @@ public sealed class DmgkScheduleTests
         Assert.True(mseDmgk < 0.01, $"DMGK fit MSE {mseDmgk:F5} should recover the curve");
         Assert.True(Math.Abs(dmgk.MeanKnots - equal.MeanKnots) < 0.6,
             $"DMGK mean knots {dmgk.MeanKnots:F2} should match equal-weight {equal.MeanKnots:F2} (unbiased)");
-
-        // Mixing: DMGK mixes the knot count better — folding the prior into the proposal lets it cancel in the
-        // acceptance, so dimension moves turn on likelihood evidence (here ~8× the ESS of equal weights).
-        Assert.True(dmgk.EssKnots > equal.EssKnots,
-            $"DMGK ESS(k) {dmgk.EssKnots:F0} should exceed equal-weight {equal.EssKnots:F0}");
     }
 }

@@ -31,7 +31,7 @@ public sealed class AdaptationAcrossResamplingTests
         // path, which factors Zᵀ(W + I/m)Z rather than rescaling ZᵀZ.
         Assert.Equal(plain.MeanKnots, resampled.MeanKnots);
         Assert.Equal(plain.AcceptanceRate, resampled.AcceptanceRate);
-        for (int i = 0; i < plain.Fit.Length; i++) Assert.Equal(plain.Fit[i], resampled.Fit[i], 12);
+        for (int i = 0; i < plain.Fit.Length; i++) Assert.Equal(plain.Fit[i], resampled.Fit[i], 1e-12);
     }
 
     private static BarsEnsemble Ensemble(IWeightResampler? resampler) =>

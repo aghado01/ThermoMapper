@@ -103,7 +103,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// <param name="kernel">The knot proposal kernel, shared by every chain and tempering replica, so it must be
     /// immutable. To tune τ, pass <paramref name="adaptKernelTau"/>, which builds a private adaptive kernel per chain.</param>
     /// <param name="dmgkConstant">When set (DMGK uses 0.4), birth/death/relocate use the prior-aware DMGK
-    /// schedule (<see cref="DmgkSchedule"/>) instead of equal weights — better dimension mixing.</param>
+    /// schedule (<see cref="DmgkSchedule"/>) instead of equal weights, which DMGK report mixes the dimension better.</param>
     /// <param name="adaptKernelTau">When set, each chain proposes with an <see cref="AdaptiveLocalBetaKernel"/>
     /// started at this τ and tunes it to the relocate target during burn-in (then freezes) — robust to a
     /// mis-scaled proposal. Overrides <paramref name="kernel"/> for proposals.</param>
@@ -150,23 +150,26 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     public int EssDim => 1;
 
     /// <summary>
-    /// Start one reversible-jump replica from the shell's seeds: <paramref name="chainSeed"/> drives the
-    /// overdispersed start, the chain (or the tempering sub-ladder, which re-derives from this same seed), and the
-    /// resampler RNG; <paramref name="readoutSeed"/> drives the per-sample coefficient draws, decoupled from the chain.
+    /// Start one reversible-jump replica from the shell's seeds. <paramref name="chainSeed"/> fans out into three
+    /// child seeds: the overdispersed start and the untempered chain, the tempering sub-ladder's own fan-out, and the
+    /// weight block. <paramref name="readoutSeed"/> drives the per-sample coefficient draws, decoupled from the chain.
     /// </summary>
     public IChainRun<KnotConfig> StartChain(int chainSeed, int readoutSeed)
     {
-        var rng = new Xoshiro256PlusPlus(chainSeed);
+        // One child per consumer, so no two generators share a stream. Seeding them all from chainSeed directly
+        // would not: Xoshiro and the ladder's SeedTree read the same SplitMix64 sequence, so a 4+-level ladder
+        // would duplicate the weight stream.
+        int[] seeds = SeedTree.Derive(chainSeed, 3);
+        var rng = new Xoshiro256PlusPlus(seeds[0]);
         var run = new BarsChainRun(this, rng, OverdispersedStart(rng, _startDispersion), _grid.Length)
         {
             ReadoutRng = new Xoshiro256PlusPlus(readoutSeed),
-            // The fifth SplitMix64 output of the chain seed: the chain's own generator consumes the first four.
-            WeightRng = new Xoshiro256PlusPlus(SeedTree.Derive(chainSeed, 5)[4]),
+            WeightRng = new Xoshiro256PlusPlus(seeds[2]),
             Kernel = _adaptKernelTau is double t0 ? new AdaptiveLocalBetaKernel(t0) : _kernel,
         };
         if (_temperLevels is int levels)
         {
-            run.Ladder = NewLadder(run, levels, chainSeed);
+            run.Ladder = NewLadder(run, levels, seeds[1]);
             run.SetChain(run.Ladder.ColdChain);   // the cold (β = 1) replica is the sampler; its draws are the posterior
         }
         else
