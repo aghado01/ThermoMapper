@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace TestHarness.Runner;
 
@@ -21,6 +22,7 @@ internal static class FactRunner
         bool noRestore,
         string stdoutLogPath,
         string stderrLogPath,
+        string runSettingsPath,
         string sharedRunDirectory,
         string manifestPath,
         CancellationToken ct)
@@ -32,10 +34,12 @@ internal static class FactRunner
             RedirectStandardError = true,
         };
 
+        WriteCaseRunSettings(runSettingsPath, factName);
+
         foreach (string a in new[]
             { "test", project, "--no-build", "--nologo", "--verbosity", "minimal",
               "--configuration", configuration,
-              "--filter", $"FullyQualifiedName={factName}" })
+              "--settings", runSettingsPath })
             psi.ArgumentList.Add(a);
 
         if (noRestore) psi.ArgumentList.Add("--no-restore");
@@ -73,5 +77,36 @@ internal static class FactRunner
         }
 
         return process.ExitCode;
+    }
+
+    /// <summary>
+    /// Selects one case by its exact display name through a runsettings file. A theory display
+    /// name carries its arguments (<c>Method(shape: "sine")</c>), so the case is matched on
+    /// <c>DisplayName</c>, not <c>FullyQualifiedName</c>, and the filter travels as XML: on the
+    /// command line it would pass through MSBuild property parsing and the VSTest task's
+    /// re-quoting, which break on quotes, semicolons and backslash-quote pairs.
+    /// <c>TreatNoTestsAsError</c> makes a filter that matches nothing fail instead of passing.
+    /// </summary>
+    private static void WriteCaseRunSettings(string path, string displayName)
+    {
+        var settings = new XElement("RunSettings",
+            new XElement("RunConfiguration",
+                new XElement("TestCaseFilter", "DisplayName=" + EscapeFilterValue(displayName)),
+                new XElement("TreatNoTestsAsError", "true")));
+
+        PathUtil.EnsureDirectory(Path.GetDirectoryName(path)!);
+        settings.Save(path);
+    }
+
+    /// <summary>Backslash-escapes the characters the VSTest filter grammar treats as syntax.</summary>
+    private static string EscapeFilterValue(string value)
+    {
+        var sb = new StringBuilder(value.Length);
+        foreach (char c in value)
+        {
+            if (c is '\\' or '(' or ')' or '&' or '|' or '=' or '!' or '~') sb.Append('\\');
+            sb.Append(c);
+        }
+        return sb.ToString();
     }
 }

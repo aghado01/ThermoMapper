@@ -28,11 +28,14 @@ internal static class PathUtil
     public static string BuildSuiteDirectory(string repoRoot, string suiteName, string runStamp) =>
         Path.Combine(repoRoot, "artifacts", "test-runs", Sanitize(suiteName), runStamp);
 
-    public static string SuiteNameFromFact(string fullyQualifiedName)
+    public static string SuiteNameFromFact(string displayName)
     {
-        ReadOnlySpan<char> span = fullyQualifiedName.AsSpan();
+        // A theory case's arguments can hold dots (x: 0.5, "a.b"); the suite comes from the method path before them.
+        ReadOnlySpan<char> span = displayName.AsSpan();
+        int args = span.IndexOf('(');
+        if (args >= 0) span = span[..args];
         int last = span.LastIndexOf('.');
-        if (last <= 0) return Sanitize(fullyQualifiedName);
+        if (last <= 0) return Sanitize(displayName);
         int prev = span[..last].LastIndexOf('.');
         return prev < 0
             ? span[..last].ToString()

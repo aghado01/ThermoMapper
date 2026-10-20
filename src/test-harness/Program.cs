@@ -125,6 +125,8 @@ internal static class Program
                     string stem     = PathUtil.Sanitize(fact);
                     string stdout   = Path.Combine(runDirectory, $"{n:D3}__{stem}.stdout.log");
                     string stderr   = Path.Combine(runDirectory, $"{n:D3}__{stem}.stderr.log");
+                    // Ordinal-only name: the path rides an MSBuild property, where '%' or ';' in a stem would be reinterpreted.
+                    string settings = Path.Combine(runDirectory, $"{n:D3}.runsettings");
 
                     Console.WriteLine($"  START  [{n:D3}] {fact}");
                     DateTime factStart = DateTime.Now;
@@ -134,7 +136,7 @@ internal static class Program
                     {
                         exitCode = await FactRunner.RunAsync(
                             projectPath, fact, opts.Configuration, opts.CommonArgs,
-                            opts.NoRestore, stdout, stderr, suiteDir, manifestPath, ct);
+                            opts.NoRestore, stdout, stderr, settings, suiteDir, manifestPath, ct);
                     }
                     catch (OperationCanceledException)
                     {

@@ -3,9 +3,11 @@
     Runs a test project through the parallel fact harness (projects/TestHarness.Runner).
 
 .DESCRIPTION
-    Convenience wrapper that runs each [Fact] of a test project as its own
-    `dotnet test --no-build` process, fanned out across workers. Defaults to the
-    VizCore.Tests suite in Release.
+    Convenience wrapper that runs each [Fact] and each [Theory] case of a test
+    project as its own `dotnet test --no-build` process, fanned out across workers.
+    A case is selected by its exact display name through a per-case runsettings
+    file, and a case that matches no test fails. Defaults to the VizCore.Tests
+    suite in Release.
 
     Release is the default configuration on purpose: the harness is a performance
     runner, and unoptimized Debug builds push heavy compute facts (e.g. the 1500-point
