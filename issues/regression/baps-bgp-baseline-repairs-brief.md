@@ -97,6 +97,53 @@ Added 2026-10-19 from the [additional-bugs review](gemini-additional-bugs.md). N
 - The regression suite passes at a recorded revision.
 - The report below is complete.
 
+## Decision memo: R02 sampling target and R10 transform policy
+
+Written 2026-10-19 by the chip, at parent revision `6f481ea`. Two decisions are needed before the R02 repair and the R10 transform land.
+
+### R02: what `MarginalEvidence` samples
+
+**Reproduction.** On a cubic P-spline with n = 30, ν = 12 and r = 2, the profiled evidence ℓ_p levels off as λ grows:
+
+| log₁₀ λ | 2 | 4 | 6 | 8 | 10 | 12 | 14 |
+|---|---|---|---|---|---|---|---|
+| ℓ_p, linear + noise | 8.3394 | 8.4282 | 8.42876 | 8.42860 | 8.4338 | 8.6385 | NaN |
+| ℓ_p, sine + noise | −33.8998 | −34.6106 | −34.6175 | −34.6176 | −34.6176 | −34.6165 | −34.4152 |
+
+Beyond about λ = 10⁸ the values drift because of rounding, and at 10¹⁴ the linear case returns NaN. On the linear data, the `MarginalEvidence` chains (4 chains, burn 500) drift upward with run length. The 97.5% quantile of log₁₀ λ is 7.55 after 1500 samples, 14.01 after 6000 and 14.01 after 24000. The chains stop near 10¹⁴ only because the evidence there is NaN, and a NaN comparison rejects the move: the effective upper bound is a floating-point failure. R̂ is 1.06 at 24000 samples, so it does not flag the drift. On the sine data no drift is visible, because the interior maximum is about 19 nats above the plateau, but the target is still improper.
+
+**Options.**
+
+- **A1. Uniform prior on the effective degrees of freedom (recommended).** edf(λ) = tr[(ZᵀZ + λP)⁻¹ZᵀZ] runs monotonically from ν down to r. A uniform prior on edf induces the density on u = log λ of |d edf/du| / (ν − r), with |d edf/du| = tr S − tr S² for S = A⁻¹ZᵀZ. The prior is proper, has no hyperparameter, and is unchanged by rescaling Z, y or P, which only shifts λ. Its upper tail decays like 1/λ, so the posterior normalizes; the lower tail is already controlled by ℓ_p. This is the multivariate form of a uniform shrinkage prior (Natarajan & Kass 2000), with edf as the complexity measure (Hodges & Sargent 2001). Cost: S comes from ν solves with the existing band factor, O(ν²·bw) per step. No linalg change is needed.
+- **A2. Normal prior on log λ, mean and sd declared by the caller.** The simplest code. There is no honest default, because the scale of λ depends on the units of Z and P.
+- **A3. PC prior** (Simpson et al. 2017). It shrinks toward the polynomial base model (λ = ∞) and needs the caller's tail statement (U, α). Principled, but needs more machinery than A1.
+- **B. Declared bounded support**, uniform on log λ over [L, U]. A small code change, but for data near the null space the posterior piles up at U, so summaries depend on U directly. A scale-free U would itself be stated in edf units, which needs the A1 machinery.
+- **C. Separate evidence optimization.** Remove `MarginalEvidence` from `BapsLambdaUpdate` (a clean break) and add an explicit REML optimizer that returns λ̂, β̂(λ̂), σ̂² and a flag for when the maximum is the polynomial limit. There is no prior to defend, but the λ uncertainty under the marginal model is lost; only `Gibbs` and `AdaptiveGibbs` would report λ intervals.
+
+**Recommendation: A1.** It keeps the mode's purpose (a λ posterior with β integrated out) without inventing a scale. The check is one-dimensional: posterior mean and quantiles of log λ from the sampler against quadrature of ℓ_p(e^u) + log(tr S − tr S²), using dense S computed independently in the test, on both the linear and the sine data. The mode's prior stays different from the `Gibbs` prior, which is already the documented position. Under `Gibbs`, the IG(10⁻³, 10⁻³) priors make the λ posterior proper only through the 10⁻³ terms; that is outside this chip and is recorded as an observation only.
+
+### R10: input units and the fitted transform
+
+**Current state.** Inputs are used exactly as given. The fixed upper bound t ≤ 1 assumes squared distances of order 1 (TWCD2025 assumes X ⊂ [0,1]^D). Prediction uses the same raw coordinates. The response is not centered, so the zero-mean GP pulls predictions toward 0 away from the data, and the bandwidth absorbs the offset. In a probe (n = 60 on [0,1], y = c + sin 2πx + noise 0.1), adding an offset c moved t̂ from 0.074 (c = 0) to 0.132 (c = 5) and 0.282 (c = 20). In-sample MSE rose from 0.0015 to 0.0101, and the c = 20 prediction at x = 2 was 5.8 instead of about 20.
+
+**Settled already, and implemented under item 2 regardless of this choice.** The prior's constructor rejects inputs whose support is empty or not finite in the sampled coordinate log t: γ₁T_n² ≥ 1, a non-finite T_n (NaN, infinite or overflowing inputs), T_n = 0 (every point duplicated, which leaves log t unbounded below), and fewer than two inputs.
+
+**Options for the transform.**
+
+- **T1. Caller-owned.** `GpRegression` keeps using coordinates and response as given. The documentation states the contract: coordinates scaled so the domain lies in [0,1]^D, and a centered response. A public fitted-transform type is offered, which callers apply to training and test inputs and use to restore predictions. Public behavior is unchanged apart from the new type.
+- **T2. Instrument-owned (recommended).** `GpRegression` fits one transform from the training data at construction, applies it in `Fit`, `KernelAffinity` and `PredictMean`, and restores the response offset in predictions. The prior reads T_n from the GP's own distances, so its separate `x` argument goes away. `BgpResult` reports bandwidths in the fitted frame, with the frame's scale for conversion (t_original = s²·t). Public behavior changes: raw test inputs are mapped by the training transform, and bandwidths are in fitted units.
+
+**Input map (either option).**
+
+- **M1. Isotropic similarity (recommended).** x′ = (x − lo)/s, where lo is the per-coordinate training minimum and s the largest coordinate span. The data map into [0,1]^D with their shape preserved. A constant coordinate needs no special case, and the map is nonsingular unless all inputs coincide (already rejected, because then T_n = 0).
+- **M2. Per-coordinate min–max.** This is what the current tests do by hand. It is anisotropic, changes the geometry the kernel sees (the BGP-2 question), and needs a rule for zero-span coordinates.
+
+**Response.** Center on the training mean: the fitted offset is subtracted in training and added back in prediction. The response is not rescaled, so σ² stays in response units.
+
+**Recommendation: T2 + M1 + centering,** with a `None` choice for callers whose inputs are already in the documented units. Both M1 and M2 are empirical transforms whose constants depend on n, which the corrected BGP-2 wording records. The tests that normalize by hand (`BgpSamplerTests`, `BgpBenchmark`) produce data that M1 maps by the identity: their training minimum is 0 and their largest span is 1.
+
+**Decisions requested:** (1) R02: A1, A2, A3, B or C. (2) R10: T1 or T2, M1 or M2, and confirmation of response centering.
+
 ## Report
 
 For each item, record:
