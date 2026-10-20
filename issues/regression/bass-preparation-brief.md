@@ -43,7 +43,7 @@ flowchart TD
     J --> L["3.2 Tempering paths"]
     K --> L
     L --> M["3.3 Non-reversible swap schedule"]
-    G --> N["3.4 Diagnostics expansion"]
+    G --> N["3.4 Diagnostics and accumulators"]
     I --> O["3.5 Baseline rerun"]
     M --> O
     N --> O
@@ -105,23 +105,31 @@ Run these in order. Decisions Q1–Q4 are listed below.
 
 Revised 2026-10-19. The first version of this step computed `a` from an explicit residual. Re-checked before coding: for BARS's τ = 1/m the subtraction loses at most log₁₀(m+1) digits, so that change waits for step 2.3, where a sampled small τ makes it matter.
 
-**b. R08: rank policy per model.** Normal, Poisson, Whittle and GibbsLoss models decide admission from the step 0.4 status, under the Q4 policy. None of them scores a floored factor.
+**b. R08: rank policy per model (Q4 decided 2026-10-20: reject).** Normal, Poisson, Whittle and GibbsLoss models decide admission from the step 0.4 status, under the Q4 policy. None of them scores a floored factor.
 - Poisson and Whittle also need a policy for IRLS non-convergence: reject with a recorded reason.
 - `PoissonModel`'s N(0, 100) coefficient ridge ([PoissonModel.cs:141](../../src/maths/regression/spline/bars/PoissonModel.cs#L141)) is intentional regularization; record it in the step 0.4 inventory and in the docs.
 
-**c. R12: full posterior coefficient draws.** After Q1 is settled, `WeightedNormalModel.SampleCoefficients` draws σ² from `IG(m/2, a/2)`, then β from `N((m/(m+1))A⁻¹b, σ²(m/(m+1))A⁻¹)`, using BandCholesky's existing precision-draw path.
+**c. R12: full posterior coefficient draws (Q1 decided 2026-10-20: option B).** `WeightedNormalModel.SampleCoefficients` draws σ² from `IG(m/2, a/2)`, then β from `N((m/(m+1))A⁻¹b, σ²(m/(m+1))A⁻¹)`, using BandCholesky's existing precision-draw path.
+- **Rule for which readouts may use the conditional mean.** A readout may use the conditional (Rao-Blackwellized) mean only if it is affine in f: the mean fitted curve, derivatives, integrals. Argmax, peak counts, spans and quantile intervals use full draws. This is the SW side's "affine, so pooling commutes" rule (`SweepEdgeCurves`), applied one level down.
+- **Pointwise posterior variance** (the adaptive sweep's σ_curve) comes from the law of total variance: Var[f(T)] = E_knots[v(T)] + Var_knots[m(T)].
+  - m(T) is the conditional mean, and v(T) = (a/(m−2))·(m/(m+1))·z(T)ᵀA⁻¹z(T) is the closed-form conditional variance given the knots, with σ integrated out.
+  - Accumulate Σm, Σm² and Σv additively and reduce once. The result is exact, with lower Monte Carlo variance than drawing.
+- **Non-Normal models.** Whittle draws from its Laplace approximation, labeled as approximate. GibbsLoss labels its nonlinear readouts as reflecting knot uncertainty only, since its posterior is already a generalized one.
+- **Scope note.** The BARS-for-SPC application is not deployed, and its design is still in progress; the peak and elbow readouts penciled in so far may change. Keep the readout contract general (the rule above) rather than tailored to the current peak and elbow plan.
 - Draw σ² as the reciprocal of the existing scale-parameterized Gamma, with a unit check; the explicit rate/scale API arrives in step 2.1.
 - Correct the [IObservationModel](../../src/maths/regression/spline/bars/IObservationModel.cs#L35) docstring's claim that mean-based intervals are already integrated.
 - Expect wider intervals for peaks, extrema and peak counts, and record that change against R12.
-- Whittle and GibbsLoss inherit the conditional-mean default. Under Q1, either draw from their Laplace or generalized posterior, or label their nonlinear readouts as reflecting knot uncertainty only.
-- `PoissonModel`'s draw heuristics (keep the first Laplace draw when the log MH ratio exceeds −10, otherwise at most five independence MH steps, then β̂) fall under the same decision.
-**d. R04: exact robust weights.** After Q2 is settled, Student-t and contaminated-normal weights use residuals from a drawn β and the scale from a drawn σ², replacing the conditional mean and the MAD scale.
+- `PoissonModel`'s draw heuristics (keep the first Laplace draw when the log MH ratio exceeds −10, otherwise at most five independence MH steps, then β̂) get a specification under the same rule, or are replaced.
+
+**d. R04: exact robust weights (Q2 decided 2026-10-20: unweighted g-prior).** Student-t and contaminated-normal weights use residuals from a drawn β and the scale from a drawn σ², replacing the conditional mean and the MAD scale.
 - Sweep order: structure given weights, with β and σ² integrated out; then β and σ² given structure and weights; then weights given β and σ². That order is a valid collapse-then-redraw scan.
 - If an approximation is kept anywhere, it carries an explicit name and stays out of exact comparisons.
 
-**e. R01: knot measure.** After Q3 is settled, add the chosen location density to the target. Build the constant-likelihood count-law check generically over any reversible-jump target and move set, so BASS's D01 check reuses it.
+**e. R01: knot measure (Q3 open: ordered uniform favored; how to keep the complexity penalty configurable is under discussion).** After Q3 is settled, add the chosen location density to the target. Build the constant-likelihood count-law check generically over any reversible-jump target and move set, so BASS's D01 check reuses it.
 
 **f. R14: span coverage as a probability.** Each covering span adds 1 to a grid point (the span-coverage loop in [BarsEnsemble](../../src/maths/regression/spline/bars/BarsEnsemble.cs)), so overlapping spans of nested peaks push π(T) above 1, and `PeakModes`' 0.5 cutoff is then not a probability threshold. Count each grid point at most once per draw (the union of spans), or rename π(T) as an expected coverage count. This is a BARS readout repair that does not gate BASS.
+- **Framing.** Choose the estimand, then accumulate its sufficient statistic per draw. P(T lies inside some significant span) needs the per-draw indicator of the union. The expected number of covering spans needs the per-draw count. The union has to happen per draw, because it is part of the per-function functional.
+- **Default:** the union, so π(T) means what its documentation and `PeakModes`' ½ cutoff assume. Add the count as a separate accumulator only if nesting depth turns out to matter. Confirm this when the step starts.
 
 ### 0.6 Baseline qualification
 
@@ -174,13 +182,21 @@ This step is a pure refactor. BARS outputs match the step 0.6 baseline to roundi
 
 Deterministic even/odd swaps and ladder adaptation (Syed et al. 2022). Measure them by full round trips across the ladder, not by swap acceptance.
 
-### 3.4 Diagnostics expansion
+### 3.4 Shell readouts: diagnostics and accumulators
 
-Rank-normalized split and folded R̂, and bulk and tail ESS, built on the step 0.1 failure policy. Give ESS the same exact constant-functional handling: today a constant functional's ESS reads about C/2 or Cn depending on rounding. Then replace the 100-draw stopping floor with an ESS gate: stop only when R̂ meets the target and the per-chain ESS of the monitored functionals is at least 100.
+**Diagnostics.** Rank-normalized split and folded R̂, and bulk and tail ESS, built on the step 0.1 failure policy. Give ESS the same exact constant-functional handling: today a constant functional's ESS reads about C/2 or Cn depending on rounding. Then replace the 100-draw stopping floor with an ESS gate: stop only when R̂ meets the target and the per-chain ESS of the monitored functionals is at least 100.
 
 Two clear-cut additions:
 - **ESS cost.** ESS computes every lag before truncating, at O(Cn²) ([ChainDiagnostics.Ess](../../src/maths/samplers/ensemble/ChainDiagnostics.cs)). Compute lags until truncation, or use FFT autocovariances.
 - **Acceptance rate.** Report it from post-burn counters; today the shell's rate includes burn-in, and BGP inherits that.
+
+**Accumulator contract** (added 2026-10-20). Give the ensemble shell one accumulator contract that every engine's readouts use, following the SW sampler's `Accumulator`:
+- additive sufficient statistics with an associative, commutative merge, so pooling across chains does not depend on order;
+- an optional weight on each fold, so the same accumulator pools weighted SMC particles;
+- resume state (RNG words, iteration, adaptation state) beside the statistics, so the accumulator doubles as the checkpoint the port brief requires;
+- nonlinear reductions in a separate tier that reads only pooled statistics, applied once, at the level where the estimand lives.
+
+Keep per-chain accumulators beside the merged one, because R̂ needs the chains separately. The streaming moments from step 0.1 already merge this way (Chan's parallel formula). BARS's readouts move onto the contract: the step 0.5c moments, λ, π and the peak sample. BASS and the SMC backend consume it.
 
 ### 3.5 Baseline rerun
 
@@ -252,10 +268,10 @@ Added 2026-10-19. [gemini-additional-bugs.md](gemini-additional-bugs.md) compare
 
 | ID | Decision | Needed before | Recommendation |
 |---|---|---|---|
-| Q1 | What BARS's readouts mean once full draws exist | 0.5c | Keep the conditional-mean curve as the Rao-Blackwellized estimator for linear readouts. Use full draws for intervals and for nonlinear readouts (peaks, extrema, peak counts). For Whittle, GibbsLoss and Poisson, decide between a posterior draw and an explicit knot-uncertainty-only label. |
-| Q2 | Whether the coefficient prior uses the weighted Gram matrix | 0.5d | **Unweighted** for BARS. The weight update stays the exact Gamma draw. The marginal becomes `|G/m|^½ · |Zᵀ(W + I/m)Z|^−½ · ∏ w_i^½ · S^−m/2` with `S = ‖y − Zβ̂‖²_W + β̂ᵀ(G/m)β̂`, which reduces to today's form at unit weights and needs one extra banded factorization per proposal. The weighted alternative keeps one factorization but needs a Metropolis correction by `|ZᵀWZ|^½` on every weight sweep. BASS's robust mode decides separately, because a sampled τ changes this tradeoff. |
-| Q3 | BARS knot location measure | 0.5e | Ordered uniform locations, with `log k!` added to the target, so that `p(k)` is the actual count prior, as the complexity priors are documented. |
-| Q4 | Rank and admission policy per model | 0.5b | Reject rank-deficient designs in all four models, using the step 0.4 status with a relative criterion. Declare any near-interpolation limit for the Normal model as part of its prior. |
+| Q1 | What BARS's readouts mean once full draws exist | 0.5c | **Decided 2026-10-20: option B.** The conditional mean serves readouts that are affine in f; full draws serve the rest; pointwise variance comes from conditional moments (step 0.5c). Whittle draws from its Laplace approximation; GibbsLoss is labeled knot-uncertainty only. The BARS-for-SPC application is not deployed, so readouts stay general. |
+| Q2 | Whether the coefficient prior uses the weighted Gram matrix | 0.5d | **Decided 2026-10-20: unweighted** for BARS. The weight update stays the exact Gamma draw. The marginal becomes `|G/m|^½ · |Zᵀ(W + I/m)Z|^−½ · ∏ w_i^½ · S^−m/2` with `S = ‖y − Zβ̂‖²_W + β̂ᵀ(G/m)β̂`, which reduces to today's form at unit weights and needs one extra banded factorization per proposal. The weighted alternative keeps one factorization but needs a Metropolis correction by `|ZᵀWZ|^½` on every weight sweep. BASS's robust mode decides separately, because a sampled τ changes this tradeoff. |
+| Q3 | BARS knot location measure | 0.5e | **Open.** Ordered uniform locations are favored: add `log k!` to the target, so that `p(k)` is the actual count prior, as the complexity priors are documented. Still open: how to keep the complexity penalty configurable, given the risk of overfitting without today's extra 1/k! and underfitting with it. |
+| Q4 | Rank and admission policy per model | 0.5b | **Decided 2026-10-20: reject** rank-deficient designs in all four models, using the step 0.4 status with a relative criterion (`PositiveDefinite` and `PivotRatio` ≥ r_min, with r_min recorded with its rationale). This is a declared prior support restriction: every basis function must be supported by data. Declare any near-interpolation limit for the Normal model as part of its prior. |
 | Q5 | BARS tempering path | 3.2 | Likelihood-tempered: hot replicas approach the prior, and the swap is O(1) from the block's statistics. |
 
 ## Working rules
@@ -272,6 +288,7 @@ Added 2026-10-19. [gemini-additional-bugs.md](gemini-additional-bugs.md) compare
   | The chip | The BAPS and BGP sources, their tests, and their documentation sections |
 
 - **Evidence per item:** the reproduction, the chosen specification, affected paths, commits, independent checks and remaining limitations, as the prerequisites review requires.
+- **Document every statistical choice.** When a decision lands, its `docs/Maths` page states the choice, the alternatives considered, the trade-offs and the implications for users: `BayesianRegression.md` for BARS, `Samplers.md` for the shell. The brief's record is the provenance, and the docs are the user-facing statement.
 
 ## Out of scope
 
