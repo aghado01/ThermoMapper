@@ -101,7 +101,9 @@ BAPS and BGP call sites keep their current behavior until the chip completes; th
 
 Run these in order. Decisions Q1–Q4 are listed below.
 
-**a. R13: cancellation-free marginal.** Compute `a = ‖r‖²_W + Q/(m+1)` from an explicit residual in [WeightedNormalModel](../../src/maths/regression/spline/bars/WeightedNormalModel.cs#L74). The rounding-driven `a ≤ 0` rejection goes away. Any near-interpolation restriction becomes an explicit admission rule under step b.
+**a. R13: the marginal's guard.** In [WeightedNormalModel](../../src/maths/regression/spline/bars/WeightedNormalModel.cs#L74), `a ≥ Q/(m+1)`, so the `a ≤ 0` guard rejects only an identically zero response; over-knotting is caught earlier by the `m ≤ ν` rule. Correct the guard's documentation, and pin its behavior with a check. Any near-interpolation restriction becomes an explicit admission rule under step b.
+
+Revised 2026-10-19. The first version of this step computed `a` from an explicit residual. Re-checked before coding: for BARS's τ = 1/m the subtraction loses at most log₁₀(m+1) digits, so that change waits for step 2.3, where a sampled small τ makes it matter.
 
 **b. R08: rank policy per model.** Normal, Poisson, Whittle and GibbsLoss models decide admission from the step 0.4 status, under the Q4 policy. None of them scores a floored factor.
 - Poisson and Whittle also need a policy for IRLS non-convergence: reject with a recorded reason.

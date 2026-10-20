@@ -175,10 +175,13 @@ where θ is the angle between `b` and the current span.
 
 - **Admission.** Admit a term when `s ≥ s_min`, with `s_min` declared as part of `F` (§4) so that the rule is a stated prior support restriction. It is scale-free, unlike an absolute `δ ≤ 1e-12`. Statistically, it bounds extrapolation variance: a column nearly inside the training span produces large opposing coefficients that behave badly at new inputs. Numerically, `δ` carries an absolute error of order `ε·v` times a modest growth factor, plus accumulated drift, so the decision is reliable when `s_min` is well above `k·ε`.
 - **Shared state.** The same `(r, δ)` serves the factor border, the admission test and the informed-proposal score.
-- **Cancellation.** Computing `‖r‖²` as `yᵀy − Q` loses about `log₁₀(yᵀy/‖r‖²)` digits. That ratio is uncentered, so a large response offset costs digits even at moderate R². R shows the symptom: it floors a nonpositive `s2.rate` to machine epsilon, next to a commented-out stop asking users to center or rescale `y` ([floor](D:/aghado01/packages/BASS/R/mcmc_update.R:69)). Keep `r` explicitly and compute `S` as in §1.1:
+- **Cancellation.** Computing `S` as `yᵀy − Q/(1+τ)` loses about `log₁₀(yᵀy/S)` digits. Because `S ≥ τQ/(1+τ)`, the loss is at most `log₁₀((1+τ)/τ)`; it is large only when τ is small *and* the fit is close (`‖r‖²` small). The ratio is uncentered, so a response offset adds to it.
+  - **BARS:** τ = 1/N caps the loss at `log₁₀(N+1)` digits, which is negligible, so BARS's current form is adequate. Its `a ≤ 0` guard rejects only an identically zero response (R13 in the prerequisites register; corrected 2026-10-19, after the first version of this note overstated the BARS case).
+  - **BASS:** a sampled τ tracks the signal-to-noise ratio, roughly `k/(N·SNR)`, so it is small in the emulator regime, where fits are also close. That is where the loss becomes real. R shows the symptom: it floors a nonpositive `s2.rate` to machine epsilon, next to a commented-out stop asking users to center or rescale `y` ([floor](D:/aghado01/packages/BASS/R/mcmc_update.R:69)).
+
+  For the shared block, keep `r` explicitly and compute `S` as in §1.1:
   - **Scalar responses:** update `r` in O(N) per accepted birth, and recompute it at O(Nk) after deaths and on a fixed cadence.
   - **Direct functional responses:** `r` is `n × m`; refresh it per accepted move or on a cadence, at O(nmk).
-  - **BARS:** its `a = ‖r‖²_W + Q/(m+1)` benefits identically; its rounding-driven `a ≤ 0` rejection is recorded as R13 in the prerequisites register.
 - **Factor reference.** The target depends only on the span, so an updatable QR, an orthonormal basis for the span, is a natural strict reference for scalar responses and avoids squaring the condition number. Direct functional responses need the Gram path because of their Khatri–Rao structure. Both can satisfy one factor contract.
 
 Independent check: randomized insert/delete sequences against fresh factorizations; residual drift against recomputation; `s` against the SVD-computed principal angle.
