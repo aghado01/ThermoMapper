@@ -236,6 +236,7 @@ The slow mixing is mostly structural:
 
 | Candidate | Why | Before adopting |
 |---|---|---|
+| DMGK's schedule as the default | DMGK report better dimension mixing. A 12-seed sweep at step 0.5d found no ESS(k) gain on `DmgkScheduleTests`' problem: DMGK won 5 of 12, median 40 vs 44.5, though its range was narrower (19–126 vs 6–223) | A multi-seed comparison at equal compute, after the step 3.4 ESS fixes |
 | Tempering as the default for slow readouts | The lead above | A controlled comparison: same data, seed and kernel, with and without the ladder, at equal compute |
 | Delayed rejection on relocations (Green and Mira 2001) | Never worse in asymptotic variance than the single-stage kernel | Gain per second, since each rejection costs another target evaluation |
 | Informed births scored by fitted gain (ΔQ, derivations review §5) | Proposes knots where the residual says they help | Exact reverse probabilities and a full-support exploratory component; uses step 2.3's explicit residual |
@@ -440,6 +441,14 @@ Steps 0.5b (R08, the BARS rows) and 3.6 (the BAPS and BGP rows, after the chip) 
 
 **Found outside this step:** `GramMatrixBenchmarks.GramMatrixVsNaive_HeadToHead(n: 500, p: 100)` asserts that SIMD beats the naive Gram computation by wall-clock time. It passes alone (4× faster, three runs). It fails under the harness's full load (0.47×): 18 workers, one per logical processor of this 14-core Core Ultra 5 125H (4 P-cores with Hyper-Threading, 8 E-cores, 2 LP-E cores). Each worker is a whole `dotnet test` process, so runnable threads exceed the logical processors. An earlier version of this note said 24-way, confusing the suite's 24 cases with the worker count. Before `1f96cb4`, the harness never ran this theory case.
 
+**Parked, 2026-10-20: a core-type and load ramp.** The user expects the SIMD-versus-naive crossover somewhere between 14- and 18-way concurrency on this hybrid chip. A competing explanation for the failure: the SIMD timing of 15 ms matches one Windows scheduler quantum (about 15.6 ms), which points to a single preemption during a 1 ms measurement rather than slower vector units.
+
+To tell the two apart:
+- time SIMD and naive pinned to P-, E- and LP-E cores, taking the minimum of N runs at tick resolution;
+- ramp the harness from 1 to 18 workers, recording the spread of the speedup and the suite's wall time.
+
+The second also informs the harness's default worker count.
+
 **Resolved after the step:** the benchmark now logs the speedup and asserts only element-wise agreement. `Maths.LinAlg.Tests` passes 24 of 24 under the harness. No other test asserts on wall-clock time.
 
 ### 0.5a The marginal's guard (R13) — done 2026-10-19
@@ -506,3 +515,54 @@ Commits: `7971749` (shell: mergeable moments, pooled variance), `3bd4fcf` (BARS 
 **Docs:** `BayesianRegression.md` gives the rule, the per-model table, the alternatives considered, and the implications for counts, ESS and the readout seed. `Samplers.md` covers the pooled variance and the merge.
 
 **Deferred:** none.
+
+### 0.5d Exact robust weights (R04) — done 2026-10-20
+
+Commits: `a8c61eb` (the exact weight block), `1b8572c` (dead plug-in helpers removed), `16b50e6` (seed fan-out, and the seed-fragile tests it exposed).
+
+**Failing checks at the parent revision `4731486`:**
+- The weighted marginal read −7.69 against the unweighted-g-prior reference −16.75, because it put the g-prior on the weighted Gram ZᵀWZ.
+- The weighted draw mean was −0.1607 against −0.1655.
+- A resampler paired with the Poisson model was accepted, although Poisson ignores the weights.
+
+**Specification (Q2, unweighted g-prior):**
+- **Prior.** β ~ N(0, mσ²(ZᵀZ)⁻¹), whatever the weights.
+- **Marginal.** ½log|G/m| − ½log|Pa| + ½Σlog wᵢ − (m/2)·log S, with Pa = Zᵀ(W + I/m)Z, h = ZᵀWy and S = yᵀWy − hᵀPa⁻¹h.
+- **Posterior.** β ~ N(Pa⁻¹h, σ²Pa⁻¹) and σ² ~ IG(m/2, S/2).
+- **Sweep.** Knots given w (β and σ² integrated out); then (σ², β) given knots and w (`WeightedNormalModel.SampleConditional`); then w given β and σ².
+- **Weight conditionals.**
+  - Student-t: Gamma((ν+1)/2, scale 2/(ν + r²/σ²)).
+  - Contaminated normal: a Bernoulli responsibility between 1 and 1/κ².
+- **Model requirement.** A resampler requires `WeightedNormalModel`, and the ensemble constructor rejects any other model.
+- **Null weights.** The null-weights path is unchanged bit for bit. Unit weights take the weighted path and agree to about 5e-16.
+
+**Seed hygiene, found while wiring the weight stream:**
+- **Pre-existing overlap.** `StartChain` used the chain seed twice. `Xoshiro256PlusPlus(chainSeed)` takes SplitMix64 outputs 1–4 as its state, and the tempering ladder's `SeedTree.Derive(chainSeed, L+1)` reads outputs 1…L+1 of the same sequence. The streams did not coincide, because each replica re-expands its seed, but the derivation was not separated.
+- **Collision in `a8c61eb`.** My first wiring (output 5) collided exactly with the ladder at L ≥ 4: it took the swap generator's seed at L = 4, and replica 4's at L ≥ 5. `TemperingTests`' robust five-level run was such a case.
+- **Fix.** The chain seed now fans out into three child seeds: the start and untempered chain, the ladder, and the weights. Every BARS trajectory changed.
+- **Rule for the deferred RNG audit:** a seed either seeds one generator or fans out, never both. In `src/maths/regression` and `src/maths/samplers`, `StartChain` was the only violation found by a search of `SeedTree.Derive` and `new Xoshiro256PlusPlus(`.
+
+**Seed-fragile tests exposed by the new trajectories:**
+- **`AdaptationAcrossResamplingTests`** compared `Fit` by rounding to 12 places. That fails when a 4e-16 difference straddles a rounding boundary. It now uses an absolute tolerance of 1e-12; knots and acceptance stay exact.
+- **`DmgkScheduleTests`** asserted that DMGK gives a higher knot-count ESS than equal weights. A 12-seed sweep found that it does in 5 of 12: the median was 40 against 44.5, and single-seed ESS(k) ranged from 6 to 223. The test now checks only the shared posterior and logs ESS, and the docstrings credit the mixing gain to DMGK's report. The open question is a new row in the BARS-mixing table.
+
+**Results:**
+- **`RobustWeightTests`:**
+  - the marginal against a dense LU reference, to 9 digits;
+  - the draw mean and covariance against Pa⁻¹h and E[σ²]·Pa⁻¹ (40,000 draws);
+  - both weight conditionals against their closed forms (40,000 draws each);
+  - the Poisson rejection.
+- **`Maths.Regression.Tests`** passes 160 of 160.
+- **Robust MSE to the truth** is 110× (Student-t) and 144× (contaminated normal) lower than least squares. Before the seed fan-out the same code gave 146× and 159×, so single-seed ratios carry tens of percent of seed noise and do not measure the exact block's gain. Its justification is that it targets the right posterior.
+
+**Cost:** two banded factorizations per proposal in robust runs (G and Pa) instead of one. Not timed.
+
+**Docs:** `BayesianRegression.md` gives:
+- the weighted marginal and posterior, and the sweep and its conditionals;
+- the model requirement and the seed fan-out;
+- the trade-off against a weighted g-prior: one factorization, but a curve prior that moves with the outlier weights, and a |ZᵀWZ|^½ factor in the weights' conditional that needs a Metropolis correction;
+- the caveat on the measured effect.
+
+**Deferred:**
+- The DMGK mixing question: a multi-seed comparison at equal compute after the step 3.4 ESS fixes (BARS-mixing table).
+- The repository-wide RNG audit, under the rule above.
