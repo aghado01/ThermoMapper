@@ -6,8 +6,9 @@ using Xunit;
 namespace Maths.Regression.Tests;
 
 /// <summary>
-/// The fitted <see cref="GpTransform"/> shared by training and prediction. The response is centered on its training
-/// mean and restored in prediction, so a constant offset changes neither the evidence nor the bandwidth posterior.
+/// The fitted <see cref="GpTransform"/> shared by training and prediction, and the integrated constant mean. With the mean
+/// integrated out, a constant offset changes neither the evidence nor the bandwidth posterior and shifts predictions by
+/// exactly that offset.
 /// The default isotropic similarity maps the inputs into the unit cube, so the fit does not depend on the units or
 /// origin of the coordinates, and a bandwidth t in the mapped frame is s²·t in the original units. Without these,
 /// an offset of 20 moved the log-evidence at t = 0.05 from 36.3 to −861.6 and the posterior-mean bandwidth from 0.092
@@ -51,7 +52,7 @@ public sealed class BgpTransformTests
         => Assert.True(Math.Abs(expected - actual) <= rel * Math.Max(1.0, Math.Abs(expected)), $"{what}: {expected} vs {actual}");
 
     [Fact]
-    public void ResponseOffset_IsRemovedInFitting_AndRestoredInPrediction()
+    public void ResponseOffset_LeavesTheFitUnchanged_AndShiftsPredictions()
     {
         (double[,] x, double[] y, double[,] xTest) = Data();
         var yShift = new double[y.Length];
@@ -60,9 +61,8 @@ public sealed class BgpTransformTests
         var kernel = new SquaredExponentialKernel();
         var gp = new GpRegression(x, y, 0.0025, kernel);
         var gpShift = new GpRegression(x, yShift, 0.0025, kernel);
-        Close(gp.Transform.ResponseOffset + 20.0, gpShift.Transform.ResponseOffset, 1e-12, "response offset");
-
         GpFit fit = gp.Fit(0.05), fitShift = gpShift.Fit(0.05);
+        Close(fit.Mean + 20.0, fitShift.Mean, 1e-9, "GLS mean");
         Close(fit.LogMarginal, fitShift.LogMarginal, 1e-9, "log-evidence");
         double[] pred = gp.PredictMean(fit, xTest), predShift = gpShift.PredictMean(fitShift, xTest);
         for (int i = 0; i < pred.Length; i++) Close(pred[i] + 20.0, predShift[i], 1e-9, $"prediction {i}");

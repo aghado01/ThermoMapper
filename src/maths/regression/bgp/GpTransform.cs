@@ -17,9 +17,8 @@ public enum GpInputScaling
 }
 
 /// <summary>
-/// The fitted transform shared by training and prediction. Inputs map by <c>x′ = (x − InputOffset)/InputScale</c>,
-/// and the response is centered on <see cref="ResponseOffset"/> (the training mean), which prediction adds back.
-/// Bandwidths live in the mapped frame; a bandwidth t there is <c>InputScale²·t</c> in the original units. The
+/// The fitted input map shared by training and prediction: <c>x′ = (x − InputOffset)/InputScale</c>. Bandwidths live in
+/// the mapped frame; a bandwidth t there is <c>InputScale²·t</c> in the original units. The
 /// map is fitted on the sample, so its constants depend on n (the qualification recorded under BGP-2 of the
 /// TWCD2025 lemma notes).
 /// </summary>
@@ -27,12 +26,11 @@ public sealed class GpTransform
 {
     private readonly double[] _offset;
 
-    private GpTransform(GpInputScaling scaling, double[] offset, double scale, double responseOffset)
+    private GpTransform(GpInputScaling scaling, double[] offset, double scale)
     {
         Scaling = scaling;
         _offset = offset;
         InputScale = scale;
-        ResponseOffset = responseOffset;
     }
 
     /// <summary>Which input map was fitted.</summary>
@@ -44,26 +42,14 @@ public sealed class GpTransform
     /// <summary>The single scale s dividing every coordinate (1 for <see cref="GpInputScaling.None"/>).</summary>
     public double InputScale { get; }
 
-    /// <summary>The training-mean response offset: subtracted before fitting, added back to predictions.</summary>
-    public double ResponseOffset { get; }
-
-    /// <summary>Fit the transform on the training inputs <paramref name="x"/> (n × D) and responses <paramref name="y"/>.</summary>
-    public static GpTransform Fit(double[,] x, double[] y, GpInputScaling scaling)
+    /// <summary>Fit the map on the training inputs <paramref name="x"/> (n × D).</summary>
+    public static GpTransform Fit(double[,] x, GpInputScaling scaling)
     {
         ArgumentNullException.ThrowIfNull(x);
-        ArgumentNullException.ThrowIfNull(y);
         int n = x.GetLength(0), d = x.GetLength(1);
         if (n < 1) throw new ArgumentException("Need at least one input.", nameof(x));
-        if (y.Length != n) throw new ArgumentException("y length must match the number of rows of x.", nameof(y));
         foreach (double v in x)
             if (!double.IsFinite(v)) throw new ArgumentException("Inputs must be finite.", nameof(x));
-        double mean = 0.0;
-        foreach (double v in y)
-        {
-            if (!double.IsFinite(v)) throw new ArgumentException("Responses must be finite.", nameof(y));
-            mean += v;
-        }
-        mean /= n;
 
         var offset = new double[d];
         double scale = 1.0;
@@ -84,7 +70,7 @@ public sealed class GpTransform
         {
             throw new ArgumentOutOfRangeException(nameof(scaling));
         }
-        return new GpTransform(scaling, offset, scale, mean);
+        return new GpTransform(scaling, offset, scale);
     }
 
     /// <summary>Map inputs (m × D, the training dimension) into the fitted frame; returns a new array.</summary>

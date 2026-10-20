@@ -197,18 +197,19 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
 
 ### Bayesian GP bandwidth (BGP)
 
-**Input units and the fitted transform.** `GpRegression` fits one `GpTransform` on the training data, and training and prediction share it:
+**Input units and the fitted transform.** `GpRegression` fits one `GpTransform` on the training inputs, and training and prediction share it:
 
 - **Inputs.** The default, `GpInputScaling.Similarity`, is the isotropic map $\phi(x)=(x-\mathrm{lo})/s$. Here lo is the per-coordinate training minimum and s the largest coordinate span, so the data fill the unit cube with their shape preserved. A constant coordinate maps to 0. `GpInputScaling.None` uses the inputs as given, for callers whose coordinates already have squared distances of order 1.
-- **Response.** Centered on the training mean ȳ. The response is not rescaled, so σ² stays in response units.
 - **Units.** Bandwidths, the prior's support and $T_n$ are all in the mapped frame. A bandwidth t there is $s^2t$ in the original units; `BgpResult.InputScale` reports s.
 - **Validation.** Non-finite inputs or responses are rejected, and so are all-identical inputs under `Similarity`.
 
-**GP model.** A zero-mean GP for the centered response, with squared-exponential kernel $k_t(d^2)=\exp(-d^2/2t)$ on mapped distances and known noise σ². The fit is $A=K_t+\sigma^2I$ and $\alpha=A^{-1}(y-\bar y)$, with evidence
+The response is not rescaled, so σ² stays in response units.
 
-$$\log p(y-\bar y\mid t)=-\tfrac12(y-\bar y)^\top\alpha-\tfrac12\log|A|-\tfrac n2\log2\pi.$$
+**GP model.** $y=m\mathbf1+g+\varepsilon$, where g is a zero-mean GP with squared-exponential kernel $k_t(d^2)=\exp(-d^2/2t)$ on mapped distances, the noise σ² is known, and the constant mean m has a flat prior and is integrated out. With $K=K_t+\sigma^2I$, the evidence is
 
-Predictions return the mean only, $\hat f(x_*)=\bar y+\sum_jk_t(\|\phi(x_*)-\phi(x_j)\|^2)\alpha_j$, with the test inputs mapped by the training transform.
+$$\log\int p(y\mid m,t)\,dm=-\tfrac12\Big[y^\top K^{-1}y-\frac{(\mathbf1^\top K^{-1}y)^2}{\mathbf1^\top K^{-1}\mathbf1}\Big]-\tfrac12\log|K|-\tfrac12\log\mathbf1^\top K^{-1}\mathbf1-\tfrac{n-1}2\log2\pi.$$
+
+The term $-\tfrac12\log\mathbf1^\top K^{-1}\mathbf1$ depends on t, so it is kept. The GLS mean $\hat m=\mathbf1^\top K^{-1}y/\mathbf1^\top K^{-1}\mathbf1$ is the posterior mean of m. With $\alpha=K^{-1}(y-\hat m\mathbf1)$, predictions return the mean only, $\hat f(x_*)=\hat m+\sum_jk_t(\|\phi(x_*)-\phi(x_j)\|^2)\alpha_j$, and revert to $\hat m$ away from the data. A constant shift of y moves $\hat m$ and the predictions by the same amount and leaves the evidence unchanged. Each fit makes one extra solve, for $K^{-1}\mathbf1$, on the same factor. Internally, the training mean ȳ is subtracted before the solves for numerical conditioning only; the results do not depend on it.
 
 **Empirical-Bayes prior** (Tang, Wu, Cheng & Dunson 2025):
 
@@ -273,7 +274,7 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 | `BapsSampler` priorShape / priorScale / mhLogStep / phi | 1e-3 / 1e-3 / 0.6 / 1.0 | IG hyperprior; random-walk step on ln λ; adaptivity |
 | `BapsSampler.Run` chains / masterSeed / burn / samples | 4 / 1 / 500 / 1500 | — |
 | `HierarchicalPSpline.Run` burn / samples / seed | 1000 / 2000 / 1 | Single chain |
-| `GpRegression` scaling | `Similarity` | Inputs mapped by $(x-\mathrm{lo})/s$; response centered |
+| `GpRegression` scaling | `Similarity` | Inputs mapped by $(x-\mathrm{lo})/s$; constant mean integrated out |
 | `EmpiricalBayesBandwidthPrior` a0 / b0 / gamma1 / gamma2 | 1 / 1 / 0.25 / 0.25 | Support $(\gamma_1T_n^2,1]$ in the mapped frame |
 | `BgpSampler.Run` draws / burn / proposalSd / chains / seed | 600 / 200 / 0.4 / 2 / 0 | — |
 | `CauchySegmentModel` gridPoints | 512 (minimum 8) | Quadrature nodes on $\nu\pm6\rho$ |
