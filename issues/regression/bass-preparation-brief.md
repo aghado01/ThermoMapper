@@ -578,3 +578,53 @@ Commits: `a8c61eb` (the exact weight block), `1b8572c` (dead plug-in helpers rem
 **Deferred:**
 - The DMGK mixing question: a multi-seed comparison at equal compute after the step 3.4 ESS fixes (BARS-mixing table).
 - The repository-wide RNG audit, under the rule above.
+
+### 0.5e Knot measure (R01) — done 2026-10-20
+
+Commit: `98aa181`.
+
+**Failing checks at the parent revision `b884dbc`:** under a constant likelihood, the knot count did not follow p(k).
+- **First, a runaway.** Under Poisson(4), about 95% of the mass sat above k = 10, and one case ran for 9.5 minutes as k grew; a capped uniform prior jammed at its cap. That was the boundary bug below.
+- **With the support rule alone,** the law was p(k)/k!. For Poisson(4) that is λᵏ/(k!)², normalized (0.089, 0.354, 0.354, 0.157, 0.039, 0.006). Both schedules matched it to within about 1σ.
+
+**Specification (Q3):**
+- **Measure.** Given k, the knot locations are the order statistics of k uniforms, with density k! on the open ordered simplex. `SplineTarget` adds log k! and returns −∞ off the simplex.
+- **Count prior.** `ConwayMaxwellPoissonPrior(λ, ν)`: log p(k) = k·log λ − ν·log k!, unnormalized. ν = 0 requires λ < 1.
+- **Default unchanged:** `PoissonPrior(5)`, which is ν = 1. Runs with `PoissonPrior` now carry a weaker penalty, and `UniformPrior` is now flat; `ConwayMaxwellPoissonPrior(λ, 2)` reproduces the old Poisson law exactly.
+
+**Boundary bug, found by the oracle:**
+- **Mechanism.** `Beta.Sample` can underflow to exactly 0 or 1, where `Beta.LogPdf` is −∞. A birth or relocation there got a Hastings term of +∞, so it was accepted. Its death needs the reverse density at the boundary, which is 0, so it was never removed. The boundary knot's clamped kernel shape then kept proposing more knots at the boundary.
+- **Reach.** With data, design admission (step 0.5b) rejected such configurations. The sum −∞ + ∞ is NaN, and NaN fails both acceptance comparisons. Before step 0.5b the non-Normal models continued through floored factors, so they may have been exposed; not checked.
+- **Fix.** The substantive fix is the target's support rule. The engine now sets the log acceptance to −∞ for a −∞ or NaN candidate before adding the proposal ratio. That formalizes what the NaN comparisons already did, and the uniform is still drawn, so no trajectory changes.
+
+**Count-law oracle:**
+- **Design.** `CountLaw.Sample` is generic over the target, the move set and the carrier. It uses batch-means standard errors, and the tests require |observed − expected| ≤ 5·SE + 0.002 in every bin.
+- **Cases:**
+  - Poisson(4) under both schedules, with `UniformKernel` and with `LocalBetaKernel(5)`;
+  - capped uniform (6) under both schedules;
+  - CMP(4, 2) under both schedules;
+  - CMP(1.5, 0.5).
+- **Kernel choice.** Under a flat target, `LocalBetaKernel(50)` wanders slowly, and 40 batches understate its error.
+  - A 2M-step uniform-prior run put P(k ≤ 1) 2.9σ low by batch SE.
+  - Four runs of 10M steps gave 0.2837 ± 0.0016 against 0.2857 (1.3σ, seed sd 0.0032).
+  - τ = 5 gave 0.28561, and `UniformKernel` was exact to ±0.001.
+  - So there is no bias, and the tests use kernels that mix within their batches.
+- **`DmgkScheduleTests`.** Its |Δk̄| < 0.6 check is gone; the test checks curve recovery and logs mixing.
+
+**ν comparison** on the `DmgkValidationTests` fits, 8 paired seeds per case:
+
+| Case | Mean fit/data MSE ratio, ν = 1 / ν = 2 | Mean k̄, ν = 1 / ν = 2 | ν = 1 better |
+|---|---|---|---|
+| Smooth | 0.077 / 0.086 | 2.36 / 1.82 | 6 of 8 |
+| Sharp peak | 0.078 / 0.096 | 4.70 / 4.12 | 5 of 8 |
+| Jump | 0.103 / 0.110 | 4.78 / 4.09 | 4 of 8 |
+
+ν = 1 adds about half a knot and is slightly better on average, mostly within seed noise. Both ν pass the existing thresholds, which the tests now run at both. As Q3 asked, the docs state the trade-off and do not pick ν from these data.
+
+**Results:** `Maths.Regression.Tests` passes 176 of 176. The 16 new tests are 12 count-law, CMP and support tests, three ν = 2 validation cases and one engine contract test.
+
+**Docs:** `BayesianRegression.md` covers the knot measure, the oracle, the behavior change for existing priors, the ν trade-off, the support rule and `EbicPrior`'s law. The p(k)/k! caveat in Status is replaced by the open `EbicPrior` question.
+
+**Open, for decision:** `EbicPrior`'s count law. Its law is now exactly C(n_c, k)^(−γ), which is symmetric in k ↔ n_c − k, so it penalizes only below n_c/2. He, Yang and Kang's prior gives each of the C(n, k) models the mass C(n, k)^(−γ), so their count law is C(n, k)^(1−γ): flat at γ = 1 and peaked at n/2 below it. Which law is intended is undecided. `EbicTests` uses n_c = 200, so only the falling half is reached there.
+
+**Deferred:** none beyond the `EbicPrior` decision.
