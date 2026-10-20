@@ -421,4 +421,4 @@ Steps 0.5b (R08, the BARS rows) and 3.6 (the BAPS and BGP rows, after the chip) 
 
 **Found outside this step:** `GramMatrixBenchmarks.GramMatrixVsNaive_HeadToHead(n: 500, p: 100)` asserts that SIMD beats the naive Gram computation by wall-clock time. It passes alone (4× faster, three runs) and fails under the harness's 24-way parallel load (0.47×). Before `1f96cb4`, the harness never ran this theory case.
 
-**Deferred:** the flaky benchmark assertion, above.
+**Resolved after the step:** the benchmark now logs the speedup and asserts only element-wise agreement. `Maths.LinAlg.Tests` passes 24 of 24 under the harness. No other test asserts on wall-clock time.
