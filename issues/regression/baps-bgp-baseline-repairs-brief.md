@@ -184,7 +184,7 @@ Completed 2026-10-19; updated the same day for the R10 follow-up (Item 2a).
 | `1f10ba0` | R10: fitted transform (similarity inputs; its response centering was replaced by `f24d9d7`) |
 | `f24d9d7` | R10: constant mean integrated out under a flat prior |
 | `fbe6d0d` | R10: bandwidth posterior reported in both frames |
-| `ed60885` | Enum theory data, so the fact harness can run each case |
+| `ed60885` | Enum theory data, so the fact harness can run each case (reverted in `d229ec6` once the harness was fixed) |
 
 **Closure against the register.**
 
@@ -346,3 +346,4 @@ Completed 2026-10-19; updated the same day for the R10 follow-up (Item 2a).
    - `EmpiricalBayesBandwidthPrior(gp, …)` no longer takes `x`;
    - `BgpResult` gains `InputScale`, and reports `Bandwidth` and `BandwidthOriginal` (`BandwidthSummary`) in place of `BandwidthMean`, `BandwidthLo` and `BandwidthHi`.
 4. **Fact harness.** `scripts/fact-harness.ps1` fails any theory case whose display name contains a string argument, with MSBuild error MSB4177, because the quotes break the generated `dotnet test` arguments. Escalated as a candidate harness fix, per AGENTS.md; the chip's tests now use enum data.
+   - **Resolved 2026-10-19.** The cause was wider: before `1f96cb4` the harness selected cases by a filter that no theory case could match, so every theory case passed without running. `1f96cb4` selects each case by exact display name and fails a case that matches nothing. `065193d` rejects pass-through arguments that would override that selection, and `0494919` refuses cases whose names differ only in letter case. `d229ec6` restored the string data, and under the harness each of the 121 regression cases now runs exactly one test.
