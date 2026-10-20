@@ -167,7 +167,7 @@ Deterministic even/odd swaps and ladder adaptation (Syed et al. 2022). Measure t
 
 ### 3.4 Diagnostics expansion
 
-Rank-normalized split and folded R̂, and bulk and tail ESS, built on the step 0.1 failure policy. Give ESS the same exact constant-functional handling: today a constant functional's ESS reads about C/2 or Cn depending on rounding.
+Rank-normalized split and folded R̂, and bulk and tail ESS, built on the step 0.1 failure policy. Give ESS the same exact constant-functional handling: today a constant functional's ESS reads about C/2 or Cn depending on rounding. Then replace the 100-draw stopping floor with an ESS gate: stop only when R̂ meets the target and the per-chain ESS of the monitored functionals is at least 100.
 
 ### 3.5 Baseline rerun
 
@@ -250,4 +250,6 @@ The last check exposed a defect beyond R09: running Σ and Σ² cancel to roundi
 - BAPS stays on the sums-based overload until chip item 6.
 - That overload is deleted in step 3.6.
 
-**For the user to confirm:** the 100-draw minimum, and the rule that a constant functional meets the stopping target.
+**Confirmed by the user, 2026-10-19:**
+- The 100-draw floor stays as a fixed constant; step 3.4 replaces it with an ESS gate.
+- A constant functional doesn't block a stop but can't certify one alone: an early stop needs at least one estimated functional, so an all-constant set runs to the end. Commit `5f8826e`; `Maths.Regression.Tests` passes 88 of 88 (run `20261019_175042153`).
