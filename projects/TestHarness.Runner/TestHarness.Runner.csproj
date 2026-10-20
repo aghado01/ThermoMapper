@@ -10,4 +10,8 @@
     <Compile Include="..\..\src\test-harness\**\*.cs"
              Link="test-harness\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="TestHarness.Runner.Tests" />
+  </ItemGroup>
 </Project>

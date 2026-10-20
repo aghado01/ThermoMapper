@@ -58,6 +58,12 @@ internal sealed record HarnessOptions(
         if (fixture is not null && filter is not null)
             throw new ArgumentException("--fixture and --filter are mutually exclusive.");
 
+        foreach (string a in commonArgs)
+            if (OverridesCaseSelection(a))
+                throw new ArgumentException(
+                    $"--common-arg '{a}' would override the harness's per-case selection. " +
+                    "Narrow the run with the harness's own --filter or --fixture instead.");
+
         string resolvedFilter = fixture is not null
             ? $"FullyQualifiedName~{fixture}"
             : filter ?? string.Empty;
@@ -74,6 +80,22 @@ internal sealed record HarnessOptions(
             NoBuild: noBuild,
             ListOnly: listOnly,
             RunDirectory: runDirectory);
+    }
+
+    // Each case runs under its own runsettings file (FactRunner). A dotnet test filter or settings option, an
+    // inline runsettings override of the case filter, or the MSBuild properties behind them would replace that
+    // selection, so the case would run other tests, or none, and still report.
+    private static bool OverridesCaseSelection(string arg)
+    {
+        foreach (string option in (ReadOnlySpan<string>)["--filter", "--settings", "-s"])
+            if (arg == option || arg.StartsWith(option + ":", StringComparison.Ordinal)
+                              || arg.StartsWith(option + "=", StringComparison.Ordinal))
+                return true;
+
+        return arg.StartsWith("RunConfiguration.TestCaseFilter", StringComparison.OrdinalIgnoreCase)
+            || arg.StartsWith("RunConfiguration.TreatNoTestsAsError", StringComparison.OrdinalIgnoreCase)
+            || arg.Contains("VSTestTestCaseFilter", StringComparison.OrdinalIgnoreCase)
+            || arg.Contains("VSTestSetting", StringComparison.OrdinalIgnoreCase);
     }
 
     private static int ParseInt(string argName, string value)

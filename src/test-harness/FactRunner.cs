@@ -89,14 +89,16 @@ internal static class FactRunner
     /// </summary>
     private static void WriteCaseRunSettings(string path, string displayName)
     {
-        var settings = new XElement("RunSettings",
+        PathUtil.EnsureDirectory(Path.GetDirectoryName(path)!);
+        CaseRunSettings(displayName).Save(path);
+    }
+
+    /// <summary>The runsettings document that selects the case with this display name.</summary>
+    internal static XElement CaseRunSettings(string displayName) =>
+        new("RunSettings",
             new XElement("RunConfiguration",
                 new XElement("TestCaseFilter", "DisplayName=" + EscapeFilterValue(displayName)),
                 new XElement("TreatNoTestsAsError", "true")));
-
-        PathUtil.EnsureDirectory(Path.GetDirectoryName(path)!);
-        settings.Save(path);
-    }
 
     /// <summary>Backslash-escapes the characters the VSTest filter grammar treats as syntax.</summary>
     private static string EscapeFilterValue(string value)
