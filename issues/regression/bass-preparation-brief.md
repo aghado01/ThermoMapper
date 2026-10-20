@@ -424,3 +424,15 @@ Steps 0.5b (R08, the BARS rows) and 3.6 (the BAPS and BGP rows, after the chip) 
 **Found outside this step:** `GramMatrixBenchmarks.GramMatrixVsNaive_HeadToHead(n: 500, p: 100)` asserts that SIMD beats the naive Gram computation by wall-clock time. It passes alone (4× faster, three runs) and fails under the harness's 24-way parallel load (0.47×). Before `1f96cb4`, the harness never ran this theory case.
 
 **Resolved after the step:** the benchmark now logs the speedup and asserts only element-wise agreement. `Maths.LinAlg.Tests` passes 24 of 24 under the harness. No other test asserts on wall-clock time.
+
+### 0.5a The marginal's guard (R13) — done 2026-10-19
+
+Commits: `4d2564d` (comment and check), `b1f4744` (analysis correction).
+
+**Re-check before coding.** `a = ‖r‖²_W + Q/(m+1) ≥ Q/(m+1)`, so the `a ≤ 0` guard fires only for an identically zero response, and over-knotting is the separate `m ≤ ν` rule. Computing `S = yᵀy − Q/(1+τ)` loses at most `log₁₀((1+τ)/τ)` digits, which for BARS's τ = 1/m is at most log₁₀(m+1). The original R13 overstated the BARS case. R13, the derivations review §5 and this step are corrected. The cancellation-free form stays with step 2.3, where a sampled small τ makes it matter.
+
+**Change.** The guard's comment states what it rejects and the bound on the digits lost. A new check, `Marginal_ZeroResponse_IsRejected_WhileAnInterpolatingFitIsNot`, pins the behavior, which is unchanged.
+
+**Results:** `Maths.Regression.Tests` passes 134 of 134 under the harness.
+
+**Next:** steps 0.5b–0.5f wait on decisions Q1–Q4 and the R14 choice.
