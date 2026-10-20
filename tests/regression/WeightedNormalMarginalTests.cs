@@ -59,6 +59,21 @@ public sealed class WeightedNormalMarginalTests
     }
 
     [Fact]
+    public void Marginal_ZeroResponse_IsRejected_WhileAnInterpolatingFitIsNot()
+    {
+        // a ≥ Q/(m+1), so the a ≤ 0 guard fires only for an identically zero response. A fit that interpolates
+        // with m > ν keeps a = Q/(m+1) > 0 and a finite marginal; over-knotting (m ≤ ν) has its own rule.
+        var basis = new SplineBasis(degree: 1);
+        var config = new KnotConfig(new[] { 0.5 });
+        double[] x = { 0.1, 0.3, 0.5, 0.7, 0.9 };
+        double[,] z = basis.Design(config, x);
+        var model = new WeightedNormalModel();
+
+        Assert.Equal(double.NegativeInfinity, model.LogMarginalLikelihood(z, new double[x.Length], null));
+        Assert.True(double.IsFinite(model.LogMarginalLikelihood(z, InSpan(z, new[] { 1.0, 2.0, -1.0 }), null)));
+    }
+
+    [Fact]
     public void Marginal_UnitWeights_MatchNullWeights()
     {
         var basis = new SplineBasis(degree: 3);

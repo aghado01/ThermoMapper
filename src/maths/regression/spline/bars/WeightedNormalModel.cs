@@ -70,10 +70,12 @@ public sealed class WeightedNormalModel : IObservationModel
         for (int p = 0; p < nu; p++)
             quad += b[p] * sol[p];
 
+        // a = ‖y − Zβ̂‖²_W + quad/(m+1) ≥ quad/(m+1): positive for any nonzero response, an interpolating fit
+        // included (over-knotting is the m ≤ ν rule above). The subtraction loses at most log₁₀(m+1) digits.
         double shrink = (double)m / (m + 1);
         double aScalar = yWy - shrink * quad;
         if (aScalar <= 0.0)
-            return double.NegativeInfinity;   // over-interpolating fit ⇒ reject (never reward a singular fit)
+            return double.NegativeInfinity;   // an identically zero response: no posterior for σ
 
         return -0.5 * nu * Math.Log(m + 1) - 0.5 * m * Math.Log(aScalar);
     }
