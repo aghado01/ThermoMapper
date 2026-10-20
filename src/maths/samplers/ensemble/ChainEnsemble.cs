@@ -28,8 +28,9 @@ public sealed class ChainEnsemble
     /// <param name="burn">Burn-in steps per replica (no accumulation).</param>
     /// <param name="samples">Post-burn samples per replica to collect (an early R̂ stop may use fewer).</param>
     /// <param name="rHatTarget">When &gt; 0, stop once every functional meets this target
-    /// (<see cref="RHatDiagnostic.MeetsTarget"/>), checked each round from <see cref="MinDrawsForStop"/> draws per
-    /// chain on. A frozen or unavailable R̂ never meets it.</param>
+    /// (<see cref="RHatDiagnostic.MeetsTarget"/>) and at least one is an estimate, checked each round from
+    /// <see cref="MinDrawsForStop"/> draws per chain on. A frozen or unavailable R̂ never meets it; an all-constant
+    /// set runs to <paramref name="samples"/>.</param>
     /// <param name="batchSize">Samples per round between R̂ checks (≤ 0 = a single round of <paramref name="samples"/>).</param>
     /// <returns>The pooled <see cref="EnsembleRun"/> plus the per-chain handles, so the client can pool its own sinks.</returns>
     public (EnsembleRun Summary, IReadOnlyList<IChainRun<TDraw>> Chains) Run<TDraw>(
@@ -122,16 +123,20 @@ public sealed class ChainEnsemble
         return (summary, runs);
     }
 
-    // Whether every functional's R̂ meets the target; one frozen or unavailable functional blocks the stop.
+    // Whether every functional's R̂ meets the target and at least one of them is an actual estimate. A frozen or
+    // unavailable functional blocks the stop; constant functionals don't block it but can't certify it on their own.
     private static bool AllMeetTarget(RunningMoments[][] moments, int dim, double target)
     {
         int c = moments.Length;
         var chainMoments = new RunningMoments[c];
+        bool anyEstimate = false;
         for (int f = 0; f < dim; f++)
         {
             for (int ci = 0; ci < c; ci++) chainMoments[ci] = moments[ci][f];
-            if (!ChainDiagnostics.RHat(chainMoments).MeetsTarget(target)) return false;
+            RHatDiagnostic r = ChainDiagnostics.RHat(chainMoments);
+            if (!r.MeetsTarget(target)) return false;
+            anyEstimate |= r.State == RHatState.Estimated;
         }
-        return true;
+        return anyEstimate;
     }
 }

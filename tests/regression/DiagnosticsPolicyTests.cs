@@ -100,11 +100,21 @@ public sealed class DiagnosticsPolicyTests
     [Fact]
     public void EarlyStop_ConstantFunctional_DoesNotBlockStop()
     {
-        var model = new ScriptedModel((_, _) => () => 0.1);
+        var model = new ScriptedModel((_, _) => () => 0.1, Noise);
         EnsembleRun run = new ChainEnsemble().Run(model, chains: 4, masterSeed: 1, burn: 0, samples: 400,
                                                   rHatTarget: 1.1, batchSize: 10).Summary;
-        Assert.Equal(ChainEnsemble.MinDrawsForStop, run.SamplesUsed);
+        Assert.True(run.SamplesUsed < 400, "a constant functional beside a converged one should not block the stop");
         Assert.Equal(RHatState.Constant, run.FunctionalRHat[0].State);
+        Assert.Equal(RHatState.Estimated, run.FunctionalRHat[1].State);
+    }
+
+    [Fact]
+    public void EarlyStop_OnlyConstantFunctionals_RunsToTheEnd()
+    {
+        var model = new ScriptedModel((_, _) => () => 0.1, (_, _) => () => 2.5);
+        EnsembleRun run = new ChainEnsemble().Run(model, chains: 4, masterSeed: 1, burn: 0, samples: 400,
+                                                  rHatTarget: 1.1, batchSize: 10).Summary;
+        Assert.Equal(400, run.SamplesUsed);
     }
 
     [Fact]
@@ -136,35 +146,45 @@ public sealed class DiagnosticsPolicyTests
         };
     }
 
-    // One scalar functional per chain; the source maps (chain index, chain seed) to that chain's draw generator.
-    private sealed class ScriptedModel : IEnsembleModel<double>
+    // One functional per source; each source maps (chain index, chain seed) to that chain's draw generator.
+    private sealed class ScriptedModel : IEnsembleModel<double[]>
     {
-        private readonly Func<int, int, Func<double>> _source;
+        private readonly Func<int, int, Func<double>>[] _sources;
         private int _next = -1;
 
-        public ScriptedModel(Func<int, int, Func<double>> source) => _source = source;
+        public ScriptedModel(params Func<int, int, Func<double>>[] sources) => _sources = sources;
 
-        public int FunctionalDim => 1;
+        public int FunctionalDim => _sources.Length;
         public int EssDim => 0;
 
-        public IChainRun<double> StartChain(int chainSeed, int readoutSeed)
-            => new ScriptedRun(new ScriptedChain(_source(Interlocked.Increment(ref _next), chainSeed)));
+        public IChainRun<double[]> StartChain(int chainSeed, int readoutSeed)
+        {
+            int index = Interlocked.Increment(ref _next);
+            var generators = new Func<double>[_sources.Length];
+            for (int f = 0; f < _sources.Length; f++) generators[f] = _sources[f](index, chainSeed);
+            return new ScriptedRun(new ScriptedChain(generators));
+        }
     }
 
-    private sealed class ScriptedChain : IChain<double>
+    private sealed class ScriptedChain : IChain<double[]>
     {
-        private readonly Func<double> _next;
-        public ScriptedChain(Func<double> next) => _next = next;
-        public double Step() => _next();
+        private readonly Func<double>[] _generators;
+        public ScriptedChain(Func<double>[] generators) => _generators = generators;
+        public double[] Step()
+        {
+            var draw = new double[_generators.Length];
+            for (int f = 0; f < draw.Length; f++) draw[f] = _generators[f]();
+            return draw;
+        }
         public long Accepted => 0;
         public long Attempts => 0;
     }
 
-    private sealed class ScriptedRun : IChainRun<double>
+    private sealed class ScriptedRun : IChainRun<double[]>
     {
         public ScriptedRun(ScriptedChain chain) => Chain = chain;
-        public IChain<double> Chain { get; }
+        public IChain<double[]> Chain { get; }
         public void Burn(int steps) { }
-        public void Accumulate(in double draw, Span<double> functionals) => functionals[0] = draw;
+        public void Accumulate(in double[] draw, Span<double> functionals) => draw.CopyTo(functionals);
     }
 }

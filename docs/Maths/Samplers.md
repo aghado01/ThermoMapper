@@ -133,7 +133,7 @@ Each reading carries a state (`RHatState`):
 | State | When | Meets a stopping target |
 |---|---|---|
 | `Estimated` | $W>0$ | When $\hat R\le$ target |
-| `Constant` | $W=0$ and every chain mean is equal | Always: there is nothing to converge |
+| `Constant` | $W=0$ and every chain mean is equal | Yes, since there is nothing to converge; but an early stop also needs at least one `Estimated` functional, so an all-constant set runs to the end |
 | `Frozen` | $W=0$ and the chain means differ ($\hat R=+\infty$) | Never |
 | `Unavailable` | $C<2$, $n<2$, or a non-finite draw | Never |
 
