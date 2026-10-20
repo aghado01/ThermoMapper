@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 
 namespace Maths.Regression.Bgp;
 
@@ -10,6 +11,8 @@ namespace Maths.Regression.Bgp;
 /// T_n² ∼ n^{−2/d} — so the prior concentrates t near the dimension-adaptive scale n^{−2/(2s+d)} <em>without ever
 /// estimating d</em> (their Prop. 4.4). It is an observable over the data that induces a density over the
 /// bandwidth field; the normalizer is dropped because the downstream Metropolis–Hastings sampler never needs it.
+/// Construction rejects data whose support is empty or unbounded in log t (γ₁T_n² ≥ 1, T_n = 0 or non-finite), so
+/// no chain can start where the prior has no mass.
 /// </summary>
 public sealed class EmpiricalBayesBandwidthPrior
 {
@@ -43,7 +46,10 @@ public sealed class EmpiricalBayesBandwidthPrior
         if (!(b0 > 0.0)) throw new ArgumentOutOfRangeException(nameof(b0));
         if (!(gamma1 > 0.0)) throw new ArgumentOutOfRangeException(nameof(gamma1));
         int n = x.GetLength(0), dim = x.GetLength(1);
+        if (n < 2) throw new ArgumentException("The bandwidth prior needs at least two inputs: T_n is a distance to other points.", nameof(x));
         if (gp.Count != n) throw new ArgumentException("gp must wrap the same data as x.", nameof(gp));
+        foreach (double v in x)
+            if (!double.IsFinite(v)) throw new ArgumentException("Inputs must be finite.", nameof(x));
         _gp = gp; _a0 = a0; _b0 = b0;
 
         K = k ?? (n < 200 ? 2 : (int)Math.Ceiling(gamma2 * Math.Log(n) * Math.Log(n)));
@@ -65,6 +71,24 @@ public sealed class EmpiricalBayesBandwidthPrior
         }
         Tn = sum / n;
         _lowerBound = gamma1 * Tn * Tn;
+        ValidateSupport(_lowerBound, Tn);
+    }
+
+    // The sampler walks log t, so the support (γ₁T_n², 1] must be nonempty with a finite, positive lower edge.
+    private static void ValidateSupport(double lowerBound, double tn)
+    {
+        string bound = lowerBound.ToString(CultureInfo.InvariantCulture);
+        string t = tn.ToString(CultureInfo.InvariantCulture);
+        if (!double.IsFinite(lowerBound))
+            throw new ArgumentException($"The bandwidth support (γ₁T_n², 1] is not finite: γ₁T_n² = {bound} with T_n = {t}.", "x");
+        if (lowerBound >= 1.0)
+            throw new ArgumentException(
+                $"The bandwidth support (γ₁T_n², 1] is empty: γ₁T_n² = {bound} with T_n = {t}. " +
+                "The upper bound 1 assumes squared input distances of order 1; scale the inputs into the unit cube.", "x");
+        if (!(lowerBound > 0.0))
+            throw new ArgumentException(
+                "The bandwidth support (γ₁T_n², 1] is unbounded below in log t: T_n = 0 because every input's " +
+                "nearest other inputs are duplicates of it.", "x");
     }
 
     /// <summary>

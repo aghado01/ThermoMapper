@@ -72,7 +72,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
     /// <param name="burn">Burn-in steps per chain.</param>
     /// <param name="proposalSd">Random-walk standard deviation on log t.</param>
     /// <param name="seed">Master RNG seed (the ensemble fans out per-chain streams from it).</param>
-    /// <param name="tInit">Optional starting bandwidth (default: the geometric midpoint of the prior's support); shared by every chain.</param>
+    /// <param name="tInit">Optional starting bandwidth inside the prior's support (default: the support's geometric midpoint); shared by every chain.</param>
     /// <param name="chains">Number of warm-started replicas (≥ 2 makes R̂ defined; default 2).</param>
     public BgpResult Run(double[,] xTest, int draws = 600, int burn = 200, double proposalSd = 0.4,
                          int seed = 0, double? tInit = null, int chains = 2)
@@ -81,8 +81,9 @@ public sealed class BgpSampler : IEnsembleModel<double>
         if (draws < 1) throw new ArgumentOutOfRangeException(nameof(draws));
         if (chains < 1) throw new ArgumentOutOfRangeException(nameof(chains));
 
-        double t0 = tInit ?? Math.Sqrt(Math.Max(_prior.LowerBound, 1e-12));   // geometric mid of (γ₁T_n², 1]
-        t0 = Math.Min(0.999, Math.Max(t0, _prior.LowerBound * 1.000001));
+        double t0 = tInit ?? Math.Sqrt(_prior.LowerBound);   // geometric mid of (γ₁T_n², 1], inside any valid support
+        if (!(t0 > _prior.LowerBound && t0 <= 1.0))
+            throw new ArgumentOutOfRangeException(nameof(tInit), t0, "The starting bandwidth must lie in the prior support (γ₁T_n², 1].");
 
         _xTest = xTest;
         _t0 = t0;

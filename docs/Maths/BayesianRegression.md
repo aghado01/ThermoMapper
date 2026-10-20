@@ -211,12 +211,13 @@ $$\log p(t)=-a_0\ln t-\frac{b_0}{\hat v_n(t)},\qquad t\in(\gamma_1T_n^2,\,1],$$
 - $T_n$ is the mean distance to the K-th nearest neighbor, where the neighbor list counts the point itself first. So $K=2$ means the nearest *other* point.
 - $K=2$ for $n<200$, and $\lceil\gamma_2(\ln n)^2\rceil$ otherwise.
 - The defaults are $a_0=b_0=1$ and $\gamma_1=\gamma_2=0.25$.
-- The upper bound 1 is fixed, which assumes the predictors are scaled so that squared distances are O(1).
-- The prior requires $n\ge2$.
+- The upper bound 1 is fixed, which assumes the predictors are scaled so that squared distances are O(1); TWCD2025 take the domain to be $[0,1]^D$. Inputs are used in the units given.
+- The support must be nonempty and finite in $\ln t$. Construction rejects fewer than two inputs, non-finite inputs or $T_n$, $\gamma_1T_n^2\ge1$ (empty support), and $T_n=0$ (every point's nearest others are duplicates, so $\ln t$ is unbounded below).
 
 **Sampler.** A random-walk Metropolis–Hastings on $u=\ln t$ with target $\log p(y\mid e^u)+\log p(e^u)+u$. The last term is the Jacobian of $t=e^u$.
 
 - The default proposal standard deviation is 0.4, with 2 chains, 200 burn-in steps and 600 draws.
+- The chains start at the geometric midpoint $\sqrt{\gamma_1T_n^2}$ of the support; an explicit start outside the support is rejected.
 - A proposal outside the prior's support is rejected without fitting.
 - The posterior mean prediction averages $\hat f_t$ over all pooled draws.
 - The bandwidth interval uses the type-7 2.5% and 97.5% quantiles of the pooled draws.
