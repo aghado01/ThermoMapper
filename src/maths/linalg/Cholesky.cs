@@ -36,6 +36,12 @@ namespace Maths.LinAlg
         /// </summary>
         public double LogDet { get; private set; }
 
+        /// <summary>
+        /// What the last <see cref="Decompose"/> found: finiteness, floored pivots and the pivot range before flooring.
+        /// The factor, <see cref="LogDet"/> and the solves keep their floored behavior; this reports it.
+        /// </summary>
+        public FactorStatus Status { get; private set; }
+
         /// <param name="dim">Dimensionality of the square covariance matrix.</param>
         public CholeskyDecomposition(int dim)
         {
@@ -58,6 +64,7 @@ namespace Maths.LinAlg
         public void Decompose(double[,] sigma)
         {
             double logDetL = 0.0;
+            var tally = PivotTally.Start();
 
             // ── Step 1: L via Cholesky-Banachiewicz ──────────────────────────────
             for (int i = 0; i < _dim; i++)
@@ -70,7 +77,9 @@ namespace Maths.LinAlg
 
                     if (i == j)
                     {
-                        if (sum <= 1e-12) sum = 1e-12; // diagonal floor
+                        bool floored = sum <= 1e-12;
+                        tally.Observe(sum, floored);
+                        if (floored) sum = 1e-12; // diagonal floor
                         _l[i, i] = Math.Sqrt(sum);
                         logDetL += Math.Log(_l[i, i]);
                     }
@@ -83,6 +92,7 @@ namespace Maths.LinAlg
             }
 
             LogDet = 2.0 * logDetL; // ln|Σ| = 2·ln|L|
+            Status = tally.ToStatus();
 
             // ── Step 2: L⁻¹ via forward substitution ────────────────────────────
             for (int i = 0; i < _dim; i++)

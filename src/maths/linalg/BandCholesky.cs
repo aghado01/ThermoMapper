@@ -60,6 +60,14 @@ namespace Maths.LinAlg
         /// </summary>
         public bool HitFloor { get; private set; }
 
+        /// <summary>
+        /// What the last factorization found: finiteness, floored pivots and the pivot range before flooring. The
+        /// factor, <see cref="LogDet"/> and the solves keep their floored behavior; this reports it. Unlike
+        /// <see cref="HitFloor"/>, it separates a rank problem (a small <see cref="FactorStatus.PivotRatio"/>) from a
+        /// matrix that is merely small in scale (floored pivots with a ratio near 1).
+        /// </summary>
+        public FactorStatus Status { get; private set; }
+
         /// <summary>Matrix order n.</summary>
         public int Dimension => _n;
 
@@ -136,6 +144,7 @@ namespace Maths.LinAlg
         {
             double logDetL = 0.0;
             HitFloor = false;
+            var tally = PivotTally.Start();
             for (int j = 0; j < _n; j++)
             {
                 double sum = _l[0, j];                     // A(j,j)
@@ -145,7 +154,9 @@ namespace Maths.LinAlg
                     double ljk = _l[j - k, k];            // L(j,k)
                     sum -= ljk * ljk;
                 }
-                if (sum <= 1e-12) { sum = 1e-12; HitFloor = true; }   // diagonal floor ⇒ singular
+                bool floored = sum <= 1e-12;
+                tally.Observe(sum, floored);
+                if (floored) { sum = 1e-12; HitFloor = true; }   // diagonal floor ⇒ singular
                 double ljj = Math.Sqrt(sum);
                 _l[0, j] = ljj;
                 logDetL += Math.Log(ljj);
@@ -162,6 +173,7 @@ namespace Maths.LinAlg
                 }
             }
             LogDet = 2.0 * logDetL;                        // ln|A| = 2·ln|L|
+            Status = tally.ToStatus();
         }
 
         // A = L·D·Lᵀ, L unit lower-triangular, in place over _l. No sqrt: the diagonal slot holds D(j).
@@ -169,6 +181,7 @@ namespace Maths.LinAlg
         {
             double logDet = 0.0;
             HitFloor = false;
+            var tally = PivotTally.Start();
             for (int j = 0; j < _n; j++)
             {
                 double dj = _l[0, j];                      // A(j,j)
@@ -178,7 +191,9 @@ namespace Maths.LinAlg
                     double ljk = _l[j - k, k];            // L(j,k)
                     dj -= ljk * ljk * _l[0, k];           // L(j,k)²·D(k)
                 }
-                if (dj <= 1e-12) { dj = 1e-12; HitFloor = true; }   // diagonal floor ⇒ singular
+                bool floored = dj <= 1e-12;
+                tally.Observe(dj, floored);
+                if (floored) { dj = 1e-12; HitFloor = true; }   // diagonal floor ⇒ singular
                 _l[0, j] = dj;                             // store D(j)
                 logDet += Math.Log(dj);
 
@@ -194,6 +209,7 @@ namespace Maths.LinAlg
                 }
             }
             LogDet = logDet;                               // ln|A| = Σ ln D(j)
+            Status = tally.ToStatus();
         }
 
         // ── Solve ─────────────────────────────────────────────────────────────────

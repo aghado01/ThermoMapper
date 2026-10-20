@@ -80,7 +80,7 @@ For a slightly asymmetric input, the two dense eigen routes therefore decompose 
 |---|---|
 | Dense eigen | `DenseEigen.DecomposeSymmetric` (`double[,]` or column-major span) → `EigenResult`; `EigenFast.DecomposeSymmetricInPlace` (allocation-free core); `Eigen.DecomposeSymmetric`; `SpectralMath.BottomK`, `SpectralMath.SelectBottomK` → `IReadOnlyList<EigenPair>` |
 | Iterative eigen | `LOBPCG.Solve(op, k, Options?)` → `Result(Eigenpairs, Iterations, ResidualNorm, Converged)`; `LOBPCG.BottomK` / `TopK` (dense convenience); `DenseSymmetricOperator`; `ILinearOperator`, `IPreconditioner` |
-| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `HitFloor`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`) |
+| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `HitFloor`, `Status`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `FactorStatus` |
 | Transforms and statistics | `Fft` (1-D, 3-D, N-D; `IsPowerOfTwo`); `Pca.Compute` → `PcaResult`; `FastIca.Compute` → `IcaResult`; `OnlineMahalanobis` (`Update`, `Distance` to the mean or between two points, `IsReady`, `GetMean`, `GetVariances`, `Reset`) |
 | Kernels | `MatrixOps` (`Dot`, `ScaledSubtract`, `Orthonormalize`, `RandomOrthonormal`, `ColumnGramMatrix`, `ColumnGramMatrixFromRowMajor`, `TransposeToColumnMajor`) |
 
@@ -140,7 +140,7 @@ All projections are two passes of **modified** Gram–Schmidt (MGS with re-ortho
 
 `Decompose` always builds two factors, each costing about $n^3/6$ multiply–adds (≈ $n^3/3$ flops):
 
-- **$L$**, by Cholesky–Banachiewicz, reading only the lower triangle. Each pivot is floored: $\ell_{ii}=\sqrt{\max(s,10^{-12})}$. The floor is silent; there is no flag.
+- **$L$**, by Cholesky–Banachiewicz, reading only the lower triangle. Each pivot is floored: $\ell_{ii}=\sqrt{\max(s,10^{-12})}$. The factor keeps the floored pivot; `Status` reports it (see [Factor status](#factor-status-factorstatus)).
 - **$L^{-1}$**, by forward substitution: $(L^{-1})_{ii}=1/\ell_{ii}$ and $(L^{-1})_{ij}=-\big(\sum_{k=j}^{i-1}\ell_{ik}(L^{-1})_{kj}\big)/\ell_{ii}$.
 
 Derived quantities:
@@ -164,9 +164,23 @@ $$\text{Cholesky:}\quad \ell_{jj}=\sqrt{a_{jj}-\textstyle\sum_k\ell_{jk}^2},\qqu
 
 $$\text{LDL}^\top:\quad D_j=a_{jj}-\textstyle\sum_k\ell_{jk}^2D_k,\qquad \ell_{ij}=\Big(a_{ij}-\textstyle\sum_k\ell_{ik}\ell_{jk}D_k\Big)\Big/D_j$$
 
-**Pivot floor.** A pivot ($\ell_{jj}^2$ or $D_j$) at or below 1e-12 is clamped to 1e-12, and `HitFloor` is set. `HitFloor` is reset at the start of every factorization.
+**Pivot floor.** A pivot ($\ell_{jj}^2$ or $D_j$) at or below 1e-12 is clamped to 1e-12, and `HitFloor` is set. `HitFloor` is reset at the start of every factorization. `Status` gives the fuller report.
 
 **Log-determinant.** $2\sum_j\ln\ell_{jj}$ for Cholesky, $\sum_j\ln D_j$ for LDLᵀ.
+
+### Factor status (`FactorStatus`)
+
+After each factorization, both classes set `Status`. It reports what the factorization found and leaves the decision to the caller. The pivots are the Schur-complement diagonals $d_j$ before flooring: $\ell_{jj}^2$ or $D_j$.
+
+| Member | Meaning |
+|---|---|
+| `Finite` | Every pivot was finite. A NaN or infinite entry in the lower triangle or band makes a later pivot non-finite. |
+| `FlooredPivots` | How many pivots were at or below 1e-12 and were clamped. |
+| `MinPivot`, `MaxPivot` | The pivot range before flooring. `MinPivot` ≤ 0 means the input is not numerically positive definite. |
+| `PivotRatio` | `MinPivot / MaxPivot`. For a positive-definite matrix every $d_j$ lies in $[\lambda_{\min},\lambda_{\max}]$, so the ratio is at least $1/\kappa$: a small ratio proves ill-conditioning, but a ratio near 1 does not prove good conditioning. |
+| `PositiveDefinite` | `Finite` and `MinPivot` > 0. |
+
+Because the floor is absolute, a well-conditioned matrix with a small scale, such as $10^{-20}I$, is floored: `FlooredPivots` is positive while `PivotRatio` is 1. A rank problem shows a small `PivotRatio` or a non-positive `MinPivot` instead.
 
 **Innovation sampling.** `SampleInnovation` requires LDLᵀ mode. It computes $v=L^{-\top}D^{-1/2}z$. Since $\operatorname{Cov}(v)=(LDL^\top)^{-1}$, this gives $v\sim N(0,A^{-1})$ exactly, which is the draw a conjugate posterior $\beta=\mu+v$ needs.
 
@@ -240,7 +254,7 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
   Treat `FastIca` as experimental.
 - **`EigenFast` can exhaust its sweeps silently.** Its skip test is per element ($|a_{pq}|<\text{tol}$) but its stop test uses the Frobenius norm. If many sub-tolerance entries accumulate, no rotation fires and the loop runs all 256 sweeps without reporting it. There is no convergence flag. The reference `Eigen` pairs its per-element skip test with a max-norm stop test; the two agree, so it does not have this problem.
 - **Tolerances are absolute** in the Jacobi and LOBPCG routines (and in the graph smoother's conjugate-gradient solve; see [SpectralGraphs](./SpectralGraphs.md)), so results depend on the scale of the input. Rescale badly scaled problems.
-- **Pivot floors hide non-positive-definite input.** `CholeskyDecomposition` silently floors pivots at 1e-12, so a non-SPD input never raises an error. `BandCholesky` reports the same event through `HitFloor`.
+- **Pivot floors are absolute and never raise.** Both factorizations clamp pivots at 1e-12 and carry on, so `LogDet` and the solves of a floored factor describe the clamped matrix, not the input. A small-scale input such as $10^{-20}I$ is floored even though it is perfectly conditioned. Read `Status` before trusting a factor; a strict, solve-oriented dense path without flooring is planned.
 - **LOBPCG rejects seed 0.** Callers that pass seed 0 through to LOBPCG fail. This affects the defaults of several spectral entry points (see [SpectralGraphs](./SpectralGraphs.md#status-and-caveats)).
 
 ## Source map
