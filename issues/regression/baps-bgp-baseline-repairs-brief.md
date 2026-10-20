@@ -1,6 +1,6 @@
 # BAPS and BGP baseline repairs — chip brief
 
-Date: 2026-10-19. Status: chip brief, not started. Start once step 0.1 of the [BASS preparation brief](bass-preparation-brief.md) has landed on `main`. Append the report below when done.
+Date: 2026-10-19. Status: complete. The report is below, and the suite passes at `ed60885`. Started after step 0.1 of the [BASS preparation brief](bass-preparation-brief.md) landed on `main`.
 
 ## Context
 
@@ -146,6 +146,8 @@ Beyond about λ = 10⁸ the values drift because of rounding, and at 10¹⁴ the
 
 **Decisions requested:** (1) R02: A1, A2, A3, B or C, and with A1 or A3, whether `LambdaMean` becomes `LambdaMedian`. (2) R10: T1 or T2, M1 or M2, and confirmation of response centering.
 
+**Decided by the user, 2026-10-19:** R02 = A1, with `LambdaMean` replaced by `LambdaMedian` for all modes. R10 = T2 + M1 with a `None` option, plus response centering.
+
 ## Report
 
 For each item, record:
@@ -157,3 +159,160 @@ For each item, record:
 - independent checks with results;
 - remaining limitations;
 - requests for the main track.
+
+### Summary
+
+Completed 2026-10-19.
+
+- **Qualified revision:** `ed60885`, built with .NET SDK 10.0.201 in Release.
+- **Regression suite:** `scripts/fact-harness.ps1 -Project tests/Maths.Regression.Tests/Maths.Regression.Tests.csproj` passes 117 of 117 (`artifacts/test-runs/TestHarness.Runner/20261019_190012452`).
+- **Benchmark:** the env-gated `BgpBenchmark` (`BGP_BENCH=1`) also passes.
+- **Parent revision for the reproductions:** `6f481ea`, whose code is identical to `f5afb7a`, unless an item names another.
+
+| Commit | Content |
+|---|---|
+| `0ea0329` | R03: hierarchical scan fix and its checks |
+| `4745e00` | R10: support rejection and warm start |
+| `c2f0a1d` | R06: concurrency protection test |
+| `9f9a0b3` | R10: theorem wording (docs and BGP-2) |
+| `3d57bab` | Item 6: BAPS R̂ in moments form |
+| `dc75590`, `e7acce6` | Decision memo and its addendum |
+| `1d1cada` | `BapsResult.LambdaMedian` replaces `LambdaMean` |
+| `5fe826e` | R02: uniform-edf prior for `MarginalEvidence` |
+| `1f10ba0` | R10: fitted transform (similarity inputs, centered response) |
+| `ed60885` | Enum theory data, so the fact harness can run each case |
+
+**Closure against the register.**
+
+- **B04 meets its closure evidence.** The sampling target is normalizable, with a documented prior (A1), and is checked against quadrature. The hierarchical update order is valid. Small reference conditional and posterior checks run with Monte Carlo tolerances. No agreement is required between intentionally different priors.
+- **B05 meets its closure evidence.** Empty or non-finite support is rejected early. The input units and the transform policy are documented. Boundary and constant-coordinate cases are covered. Concurrent and serial fits are checked against each other. The theoretical wording is corrected without claiming a new proof.
+
+### Item 1: R06 protection (B05)
+
+- **Reproduction.** This is a historical defect, so the check passes at the parent, as it should. To show the check has teeth, the shared scratch matrix was put back temporarily (not committed): the check then failed, with a concurrent log-marginal of 67.20 against the serial −43.91.
+- **Specification.** `GpRegression.Fit` is pure over immutable inputs and a stateless kernel. Concurrent results must equal serial results bit for bit.
+- **Paths.** `tests/regression/BgpConcurrencyTests.cs`.
+- **Commit.** `c2f0a1d`.
+- **Checks.** 192 concurrent fits and predictions over 24 bandwidths equal the serial ones bit for bit, and the inputs are unchanged afterwards. Pass.
+- **Limitations.** Interleaving needs at least two cores. A future mutable kernel is not covered.
+
+### Item 2: R10 support and transform (B05)
+
+**Reproductions.** At `6f481ea` unless stated:
+
+- **Empty support.** Inputs {0, 100} gave a lower bound of 2500. The chains froze at t = 0.999, where the prior density is zero, with acceptance 0 and a constant R̂ that satisfies a stopping rule, and a prediction was still returned. The same happened with a lower bound of exactly 1 ({0, 2}) and with T_n = ∞ ({0, 10²⁰⁰}).
+- **Narrow support.** For {0, 1.9995}, the warm start was clamped to 0.999, below the support (0.9995, 1], so the chains froze there.
+- **Degenerate inputs.** Duplicated inputs gave T_n = 0, and the chains drifted to t ≈ 10⁻¹¹ with acceptance 1. A NaN input made every output NaN, silently. A single input failed with an unclear `Math.Clamp` message.
+- **Uncentered response** (at `5fe826e`). Adding 20 to the response moved the log-evidence at t = 0.05 from 36.29 to −861.62, and t̂ from 0.092 to 0.542. In the memo probe, offsets 0, 5 and 20 gave t̂ = 0.074, 0.132 and 0.282.
+- **Units.** Rescaling the inputs to 100x − 7 emptied the support (lower bound 5.95).
+
+**Specification.**
+
+- **Support rule.** The prior rejects fewer than two inputs, a non-finite γ₁T_n², γ₁T_n² ≥ 1, and T_n = 0. Non-finite inputs and responses are rejected when the transform is fitted. Chains start at √(γ₁T_n²); an explicit start outside the support is rejected.
+- **Transform** (user decision: T2 + M1 + centering, with `None`). `GpRegression` fits a `GpTransform`. The default input map is `Similarity`, (x − lo)/s with s the largest span; `None` keeps the inputs as given. The response is centered on the training mean and restored in prediction, and it is not rescaled.
+- **Units.** Bandwidths, the support and T_n are in the mapped frame. `BgpResult.InputScale` reports s, and t_original = s²·t. The prior's constructor is now `(gp, …)`, reading T_n from the GP's own distances.
+
+**Paths.**
+
+- `src/maths/regression/bgp/`: `GpTransform.cs` (new), `GpRegression.cs`, `EmpiricalBayesBandwidthPrior.cs` and `BgpSampler.cs`.
+- Tests: `BgpSupportTests.cs`, `BgpTransformTests.cs` (new), and the constructor calls in `BgpTests`, `BgpSamplerTests` and `BgpBenchmark`.
+- The BGP docs section.
+
+**Commits.** `4745e00` and `1f10ba0`.
+
+**Checks.**
+
+- **Support** (`BgpSupportTests`):
+  - empty support;
+  - lower bounds of 1, 0.9025 and 0.9995 (the narrow case, where the chains now move inside);
+  - three non-finite cases, duplicated inputs and a single input;
+  - a constant coordinate, under both scalings;
+  - `Similarity` makes {0, 100} valid, but not two opposite corners of a 4-cube.
+- **Transform** (`BgpTransformTests`):
+  - an offset of 20 leaves the evidence and the bandwidth posterior unchanged and shifts predictions by exactly 20, all to 10⁻⁹;
+  - 100x − 7 gives the same T_n, support, evidence, predictions and posterior;
+  - the s² bandwidth conversion;
+  - inputs already in the unit frame map by the identity, so `None` and `Similarity` agree bit for bit;
+  - a NaN response is rejected.
+- **End to end.**
+  - The Swiss-roll test gives t̂ = 0.184 [0.156, 0.220] and a test MSE of 0.0032 (Var f* = 0.555).
+  - In the benchmark, the EB/oracle RMSE ratio is 0.997, 0.997, 0.990 and 0.991 at n = 50, 100, 200 and 400, with RMSE ∼ n^−0.628.
+
+**Limitations.**
+
+- The similarity map is fitted on the sample, so its constants depend on n. The theory for that case stays open (BGP-2).
+- Very few points in four or more dimensions can still produce an empty support, which is rejected.
+- Anisotropic data keep their anisotropy by design.
+- `PredictMean` does not check that test inputs are finite.
+- The tests and benchmark still apply a per-coordinate min–max (M2) by hand, so the instrument's similarity map is the identity on their data.
+
+### Item 3: R10 wording (B05)
+
+- **Specification.** A fixed nonsingular affine map, including a diagonal one, keeps the rate exponents. It changes only the constants, which Lemma 4.1 and Prop. 4.2 tie to curvature, second fundamental form, volume, diameter, injectivity radius and reach. Maps fitted on the sample (the similarity or a min–max) depend on n: carrying the rate over needs φₙ → φ with constants uniform near φ, and a degenerating span breaks that. No new proof is claimed.
+- **Paths.** The "Coordinate scaling and the theory" paragraph in `docs/Maths/BayesianRegression.md`, and BGP-2 in `lean/Protolemmata/BARS/bgp-twcd-lemmas.md`. The numbering (Lemma 4.1 for the operator expansion, Prop. 4.2 for the RKHS approximation) was checked against arXiv 2407.09286v3 §4.1.
+- **Commits.** `9f9a0b3`, updated by `1f10ba0` for the similarity map.
+- **Checks.** None apply to the wording; the Lean blocks remain uncompiled sketches.
+- **Limitations.** The fixed-affine half is a lemma-tier candidate and is not formalized.
+
+### Item 4: R03 hierarchical scan (B04)
+
+- **Reproduction** (`6f481ea`). On the τ_u² conditional, the first sweep gave mean z = −85.6 (variance z = −16.3), and sweep 5 gave mean z = 4.6 (variance z = 49.3). Against quadrature, the stationary E[σ] was off by z = 8.35 and E[τ_u] by z = −4.58, and the β_0 entries by up to |z| = 4.1.
+- **Specification.** The deviation statistic is recomputed after the β_0 draw. Each sweep draws β_r, then β_0, then σ², τ_u² and τ_0², and every draw conditions on the current values of the others.
+- **Paths.** `HierarchicalPSpline.cs`, `tests/regression/HierarchicalPSplineConditionalTests.cs`, and the BAPS docs (the scan is described and the caveat removed).
+- **Commit.** `0ea0329`.
+- **Checks.** On a tiny model (ν = 5, two replicates, eight points, IG(2, 0.2)):
+  - the whitened Gaussian conditionals over 4000 draws are within |z| ≤ 3;
+  - the IG conditionals at sweeps 1 and 5 are within |z| ≤ 2.1;
+  - against quadrature with every coefficient integrated out (16 chains of 20000 draws), every stationary mean is within |z| ≤ 1.3;
+  - the existing borrow-strength test still passes (MSE ratio 0.26).
+- **Limitations.** The sampler still runs a single chain without R̂ or ESS. The tolerances are 5σ on the conditionals and 4.5 standard errors on the stationary means.
+
+### Item 5: R02 `MarginalEvidence` target (B04)
+
+- **Reproduction.** At `6f481ea`, see the memo: ℓ_p plateaus, and on linear data the chains drift to the NaN wall near λ = 10¹⁴, with R̂ = 1.06. At `1d1cada` (flat prior), the quadrature check fails on linear data: the sampler's ln λ median is 19.2 ± 3.2 against 1.23, and its 97.5% quantile 30.5 against 5.80.
+- **Specification** (user decision: A1 with `LambdaMedian`).
+  - The mode places a uniform prior on edf, which induces the density |d edf/d ln λ| on ln λ.
+  - `PenalizedSpline.EffectiveDegreesOfFreedom` and `EdfSlope` read the generalized spectrum of (P, ZᵀZ + P). It is computed once, lazily, from a band LDLᵀ factor via `SampleInnovation` and `DenseEigen`, with the r null-space eigenvalues set to zero.
+  - `BapsResult` reports `LambdaMedian` for all modes.
+- **Paths.** `PenalizedSpline.cs`, `BapsSampler.cs`, `tests/regression/BapsMarginalEvidenceTests.cs` (new), `BapsTests.cs`, and the BAPS docs.
+- **Commits.** `1d1cada`, `5fe826e` and `ed60885`.
+- **Checks.**
+  - edf and its slope match a dense reference from λ = 10⁻³ to 10⁹.
+  - ∫ |d edf/du| du = 10.000000 = ν − r, so the prior is proper.
+  - The sampler matches quadrature (10 runs × 4 chains × 4000 draws). Linear data give ln λ quantiles −1.491, 1.211 and 5.787 against −1.471, 1.225 and 5.801; sine data give −3.869, −2.423 and −1.194 against −3.861, −2.416 and −1.184.
+  - On the `BapsTests` sine data, the median is 3.74 [1.25, 9.30] against the REML λ = 5.41.
+- **Limitations.**
+  - E[λ] is infinite under A1, which is why the median is reported.
+  - ℓ_p is formed as yᵀy − β̂ᵀZᵀy, so it loses precision above about λ = 10¹⁰ and returns NaN near 10¹⁴. The prior keeps the chain far below that range.
+  - The spectrum requires ZᵀZ + P to be nonsingular. Otherwise the first `MarginalEvidence` evaluation throws `InvalidOperationException`, which `Parallel.For` wraps in an `AggregateException`.
+  - The sine case also passes against the old flat target, because the prior varies slowly over the bulk; the linear case is the one that discriminates.
+  - Observation only: under `Gibbs`, the IG(10⁻³, 10⁻³) priors make the λ posterior proper only through the 10⁻³ terms.
+
+### Item 6: B01 policy in BAPS display
+
+- **Reproduction** (`6f481ea`). `RHatLogLambda` was a bare double from the sums-based overload: NaN for one chain, with the constant and frozen cases blurred by cancellation.
+- **Specification.** One `RunningMoments` per chain, reduced by `ChainDiagnostics.RHat(moments)` to an `RHatDiagnostic`.
+- **Paths.** `BapsSampler.cs`, `BapsTests.cs`.
+- **Commit.** `3d57bab`.
+- **Checks.** One chain reports `Unavailable` (value NaN) and four chains report `Estimated`, under both `Gibbs` and `AdaptiveGibbs`. The mixing assertions now require an estimated state.
+- **Limitations.** `HierarchicalPSpline` still reports no R̂.
+
+### Related findings (observed, not repaired)
+
+- **Single-chain `HierarchicalPSpline`.** Confirmed. The new checks take their standard errors from independent seeded runs. A candidate for the ensemble shell.
+- **`DifferencePenalty` only.** Confirmed: `BapsSampler` and `HierarchicalPSpline` accept only `DifferencePenalty`. `PenalizedSpline`'s edf spectrum works for any `IBandPenalty`.
+- **No λ optimizer in `AnisotropicTensorSpline`.** Confirmed, unchanged.
+- **`MarginalEvidence` refactorization.** Unchanged: one factorization per proposal for ℓ_p, and two more per recorded step. The new spectrum could give ℓ_p, β̂ and the edf terms in O(ν²) per step, without refactorizing and with a stable RSS. That would be a separate caching and stability change.
+- **BGP acceptance rate includes burn-in.** Confirmed, unchanged; it belongs to main-track step 3.4.
+
+### Requests for the main track
+
+1. **Delete the sums overload (step 3.6).** `ChainDiagnostics.RHat(double[], double[], int)` has no callers left. Its doc line "Remaining caller: `BapsSampler`" is stale.
+2. **Factor-status migration (step 3.6).** There is one new `BandCholesky` call site: `PenalizedSpline.PenaltySpectrum` (`DecomposeBanded`, `HitFloor`, `SampleInnovation`). The existing call sites are unchanged: `BapsSampler`, `HierarchicalPSpline`, `PenalizedSpline.Solve`, and `CholeskyDecomposition` in `GpRegression.Fit`.
+3. **Baseline (step 0.6).** These public changes alter BAPS and BGP outputs by design, so any baseline recorded before them will differ:
+   - `BapsResult.LambdaMedian` replaces `LambdaMean`, and `BapsResult.RHatLogLambda` is an `RHatDiagnostic`;
+   - `MarginalEvidence` now uses the edf prior;
+   - `GpRegression` gains a `scaling` argument (default `Similarity`) and centers the response;
+   - `EmpiricalBayesBandwidthPrior(gp, …)` no longer takes `x`;
+   - `BgpResult` gains `InputScale`.
+4. **Fact harness.** `scripts/fact-harness.ps1` fails any theory case whose display name contains a string argument, with MSBuild error MSB4177, because the quotes break the generated `dotnet test` arguments. Escalated as a candidate harness fix, per AGENTS.md; the chip's tests now use enum data.
