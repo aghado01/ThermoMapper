@@ -732,3 +732,56 @@ This step is additive, so there was no defect to reproduce first.
 - The truncated-Poisson count prior (D02): the incomplete gamma now supplies its normalizer.
 - Student-t accuracy at very large ν, where ln B(ν/2, ½) cancels.
 - Synthetic's `System.Random` normal draws: the shelved RNG audit.
+
+### 2.2 Strict dense reference factor — done 2026-10-20
+
+Commit: `92d0deb`.
+
+**Starting point.** The only dense factor was `CholeskyDecomposition`. It floors pivots at an absolute 1e-12, forms L⁻¹ on every decomposition, and draws covariance-side with `System.Random`. That is right for its GMM callers and the opposite of what BASS's dense Gram needs. The step 0.4 caveat listed a strict path as planned. This step is additive, so there was no defect to reproduce.
+
+**Specification: `DenseCholesky`:**
+- **Strict.** There is no floor. The first pivot that is not finite and positive stops the factorization:
+  - `FailedAt` gives its row;
+  - `Status` covers the pivots up to and including it, with `FlooredPivots` always 0;
+  - `LogDet` is NaN, and every solve throws.
+
+  LinAlg reports the failure; admission stays the caller's decision.
+- **Solve-oriented.** The members are `Solve` and `SolveInPlace`, `ForwardSolveInPlace` and `BackSolveInPlace`, `InverseQuadraticForm` (‖L⁻¹b‖², a sum of squares), `SampleInnovation` (L⁻ᵀz ~ N(0, A⁻¹)), `LogDet`, `Factor(i, j)` and `RelativePivot(j)`. No inverse is formed.
+- **Row at a time.** Rows are factored by Cholesky–Banachiewicz into packed row-major storage, each row the bordered extension of the factor above it. A port-stage-2 birth appends a row through the same step. Storage is allocated once, for a capacity.
+- **Agreement.** It uses `CholeskyDecomposition`'s loop order, so with no pivot near the floor the factor, `LogDet` and `Status` are bit-identical. A test asserts this.
+
+**Scale-aware check: `FactorStatus.MinRelativePivot`, reported by all three factors.** It is min dⱼ/Aⱼⱼ, the pivots of the equilibrated matrix D^(−½)AD^(−½):
+- it does not change when columns are rescaled;
+- 1/MinRelativePivot is a lower bound on the equilibrated matrix's condition number;
+- for a Gram matrix's last column it is sin² of the column's angle to the span of the others, which is the derivations review's D06 admission statistic for a birth.
+
+This is the relative check the port brief asks for, in place of an absolute 1e-12. `PivotRatio` is unchanged, as is everything BARS admits.
+
+**Design choices:**
+- **Stop at the first bad pivot, rather than continue and report every pivot.** After a non-positive pivot the later ones mean nothing, and the failing row is the fact a caller acts on.
+- **Packed rows, rather than a 2-D array.** Bordering appends a row, and both triangular solves read rows contiguously.
+- **The relative pivot in the shared `FactorStatus`, rather than a field of the strict factor only.** One meaning across all three factors, at the cost of one division per pivot.
+- **No pivoted, rank-revealing Cholesky.** The reference factor keeps the model's term order, so its diagnostics depend on that order. The docs say so.
+
+**Results:**
+- **`DenseCholeskyTests`:**
+  - reconstruction of LLᵀ = A to backward-error size, at n = 1, 2, 7 and 40;
+  - solve and log-determinant against an independent LU;
+  - bᵀA⁻¹b;
+  - the innovation map against the exact inverse (A·Σvvᵀ = I);
+  - bit-identity with `CholeskyDecomposition`;
+  - failure at the exact pivot for singular, indefinite and negative-diagonal inputs;
+  - a non-finite entry;
+  - 10⁻²⁰I factored exactly;
+  - Hilbert(10) solved backward-stably;
+  - the relative pivot as sin²θ for a constructed angle;
+  - its invariance under column scaling and its κ bound for all four factor kinds;
+  - capacity reuse and bounds.
+- **Suites.** `Maths.LinAlg.Tests` passes 46 of 46 (previously 24), `Maths.Regression.Tests` passes 178 of 178, and GMM builds.
+
+**Docs:** `LinearAlgebra.md` gains the strict factor's section, its API and the `MinRelativePivot` row, and the planned-strict-path caveat is resolved.
+
+**Deferred:**
+- Bordered births, Givens deletions and the staged replace: port stage 2.
+- **Scale-aware BARS admission.** `DesignAdmission` still uses `PivotRatio` ≥ 1e-10, which depends on column scaling. Switching it to `MinRelativePivot` is a Regression policy decision, for step 2.3's g-prior block or later.
+- `CholeskyDecomposition`'s callers stay on the floored path: they want its regularization semantics.
