@@ -20,7 +20,7 @@ public interface IWeightResampler
 
 /// <summary>
 /// Student-t error augmentation: <c>εᵢ ~ N(0, σ²/wᵢ)</c> with <c>wᵢ ~ Gamma(ν/2, rate ν/2)</c>, so
-/// <c>wᵢ | rᵢ, σ² ~ Gamma((ν+1)/2, scale 2/(ν + rᵢ²/σ²))</c>, the standard t-as-scale-mixture-of-normals Gibbs step.
+/// <c>wᵢ | rᵢ, σ² ~ Gamma((ν+1)/2, rate (ν + rᵢ²/σ²)/2)</c>, the standard t-as-scale-mixture-of-normals Gibbs step.
 /// A true likelihood, so BIC/EBIC-over-k stays valid. <b>Bounded influence</b> — outliers are downweighted
 /// (<c>E[wᵢ] → 0</c> as the residual grows), not rejected.
 /// </summary>
@@ -45,7 +45,7 @@ public sealed class StudentTWeights : IWeightResampler
         for (int i = 0; i < w.Length; i++)
         {
             double z2 = residuals[i] * residuals[i] / sigma2;
-            w[i] = Gamma.Sample(rng, shape, 2.0 / (_nu + z2));
+            w[i] = Gamma.ShapeRate(shape, 0.5 * (_nu + z2)).Sample(rng);
         }
         return w;
     }

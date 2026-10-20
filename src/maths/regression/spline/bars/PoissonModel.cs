@@ -1,4 +1,5 @@
 using System;
+using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
 
@@ -99,7 +100,7 @@ public sealed class PoissonModel : IObservationModel
         (double[] Beta, double LogTarget, double LogProposal) Propose()
         {
             double ss = 0.0;
-            for (int j = 0; j < nu; j++) { z[j] = StandardNormal(rng); ss += z[j] * z[j]; }
+            for (int j = 0; j < nu; j++) { z[j] = Normal.SampleStandard(rng); ss += z[j] * z[j]; }
             chol.SampleInnovation(z, innov);             // innov ~ N(0, J⁻¹)
             var beta = new double[nu];
             for (int j = 0; j < nu; j++) beta[j] = betaHat[j] + innov[j];
@@ -166,13 +167,6 @@ public sealed class PoissonModel : IObservationModel
         double prior = 0.0;
         for (int j = 0; j < beta.Length; j++) prior -= 0.5 * beta[j] * beta[j] / 100.0;
         return ll + prior;
-    }
-
-    private static double StandardNormal(Xoshiro256PlusPlus rng)
-    {
-        double u1 = 1.0 - rng.NextDouble();
-        double u2 = 1.0 - rng.NextDouble();
-        return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
     }
 
     // Fisher-scoring IRLS for the canonical (log-link) Poisson GLM: working response z = η + (y−μ)/μ,

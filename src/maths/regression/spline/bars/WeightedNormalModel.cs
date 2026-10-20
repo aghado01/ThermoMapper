@@ -75,9 +75,9 @@ public sealed class WeightedNormalModel : IObservationModel
         if (!c.Admitted || !(c.S > 0.0))
             return (beta, double.NaN);
 
-        double sigma2 = 1.0 / Gamma.Sample(rng, 0.5 * c.M, 2.0 / c.S);   // IG(m/2, S/2) as 1/Gamma(shape, scale)
+        double sigma2 = InverseGamma.ShapeScale(0.5 * c.M, 0.5 * c.S).Sample(rng);
         var z = new double[c.Nu];
-        for (int j = 0; j < c.Nu; j++) z[j] = Normal.Sample(rng);
+        for (int j = 0; j < c.Nu; j++) z[j] = Normal.SampleStandard(rng);
         var innov = new double[c.Nu];
         c.Factor.SampleInnovation(z, innov);                               // ~ N(0, factored matrix⁻¹)
         double scale = Math.Sqrt(sigma2 * c.FactorScale);

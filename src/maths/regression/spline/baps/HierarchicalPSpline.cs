@@ -110,7 +110,7 @@ public sealed class HierarchicalPSpline
             {
                 for (int j = 0; j < _nu; j++) rhs[j] = zty[rr][j] / sigma2 + beta0[j] / tauU2;
                 double[] mr = cholR.Solve(rhs);            // E[β_r | ·] = Q_r⁻¹ rhs
-                for (int j = 0; j < _nu; j++) z[j] = StandardNormal(rng);
+                for (int j = 0; j < _nu; j++) z[j] = Normal.SampleStandard(rng);
                 cholR.SampleInnovation(z, innov);          // ~ N(0, Q_r⁻¹)
                 double[] br = beta[rr];
                 for (int j = 0; j < _nu; j++) br[j] = mr[j] + innov[j];
@@ -128,7 +128,7 @@ public sealed class HierarchicalPSpline
                 for (int j = 0; j < _nu; j++) rhs[j] += beta[rr][j];
             for (int j = 0; j < _nu; j++) rhs[j] /= tauU2;
             double[] m0 = chol0.Solve(rhs);
-            for (int j = 0; j < _nu; j++) z[j] = StandardNormal(rng);
+            for (int j = 0; j < _nu; j++) z[j] = Normal.SampleStandard(rng);
             chol0.SampleInnovation(z, innov);
             for (int j = 0; j < _nu; j++) beta0[j] = m0[j] + innov[j];
 
@@ -137,9 +137,9 @@ public sealed class HierarchicalPSpline
             for (int rr = 0; rr < reps; rr++)
                 for (int j = 0; j < _nu; j++) { double d = beta[rr][j] - beta0[j]; sumDev += d * d; }
 
-            sigma2 = InvGamma(rng, _a0 + 0.5 * reps * _n, _b0 + 0.5 * sumResid);
-            tauU2 = InvGamma(rng, _a0 + 0.5 * reps * _nu, _b0 + 0.5 * sumDev);
-            tau02 = InvGamma(rng, _a0 + 0.5 * (_nu - _r), _b0 + 0.5 * _penalty.Roughness(beta0));
+            sigma2 = InverseGamma.ShapeScale(_a0 + 0.5 * reps * _n, _b0 + 0.5 * sumResid).Sample(rng);
+            tauU2 = InverseGamma.ShapeScale(_a0 + 0.5 * reps * _nu, _b0 + 0.5 * sumDev).Sample(rng);
+            tau02 = InverseGamma.ShapeScale(_a0 + 0.5 * (_nu - _r), _b0 + 0.5 * _penalty.Roughness(beta0)).Sample(rng);
 
             if (it >= burn)
             {
@@ -173,15 +173,5 @@ public sealed class HierarchicalPSpline
             ss += d * d;
         }
         return ss;
-    }
-
-    private static double InvGamma(Xoshiro256PlusPlus rng, double shape, double scale)
-        => 1.0 / Gamma.Sample(rng, shape, 1.0 / scale);
-
-    private static double StandardNormal(Xoshiro256PlusPlus rng)
-    {
-        double u1 = 1.0 - rng.NextDouble();
-        double u2 = 1.0 - rng.NextDouble();
-        return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
     }
 }

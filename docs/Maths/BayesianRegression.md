@@ -182,7 +182,7 @@ The three IRLS fits (Poisson, Whittle and GibbsLoss's Tukey reweighting) return 
 
 1. Draw $(\sigma^2,\beta)$ from their conditional given the knots and the current weights: $\sigma^2\sim\mathrm{IG}(m/2,S/2)$, then $\beta\sim N(\tilde\beta,\sigma^2P_a^{-1})$.
 2. Draw each weight from its full conditional given the residual $r_i=y_i-z_i\beta$ and $\sigma^2$:
-   - Student-t: $w_i\sim\mathrm{Gamma}\big((\nu+1)/2,\ \text{scale } 2/(\nu+r_i^2/\sigma^2)\big)$;
+   - Student-t: $w_i\sim\mathrm{Gamma}\big((\nu+1)/2,\ \text{rate } (\nu+r_i^2/\sigma^2)/2\big)$;
    - contaminated normal: $w_i=1/\kappa^2$ with the posterior probability that $r_i$ came from the inflated component, and 1 otherwise.
 3. Hand the chain the target given the new weights (`ReplaceTarget`).
 

@@ -79,7 +79,7 @@ public sealed class WhittleModel : IObservationModel
         if (!usable) return beta;
         int nu = beta.Length;
         var z = new double[nu];
-        for (int j = 0; j < nu; j++) z[j] = Normal.Sample(rng);
+        for (int j = 0; j < nu; j++) z[j] = Normal.SampleStandard(rng);
         var innov = new double[nu];
         factor.SampleInnovation(z, innov);
         for (int j = 0; j < nu; j++) beta[j] += innov[j];

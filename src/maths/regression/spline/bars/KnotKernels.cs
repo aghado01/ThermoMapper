@@ -44,13 +44,13 @@ public sealed class LocalBetaKernel : IKnotKernel
     {
         ArgumentNullException.ThrowIfNull(rng);
         var (a, b) = Shapes(center);
-        return Beta.Sample(rng, a, b);
+        return Beta.Shapes(a, b).Sample(rng);
     }
 
     public double LogDensity(double x, double center)
     {
         var (a, b) = Shapes(center);
-        return Beta.LogPdf(x, a, b);
+        return Beta.Shapes(a, b).LogPdf(x);
     }
 }
 

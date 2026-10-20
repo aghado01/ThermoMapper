@@ -179,13 +179,13 @@ public sealed class BapsSampler
             chol.DecomposeBanded(band);
             double[] betaHat = chol.Solve(_zty);            // posterior mean A⁻¹Zᵀy
 
-            for (int p = 0; p < _nu; p++) z[p] = StandardNormal(rng);
+            for (int p = 0; p < _nu; p++) z[p] = Normal.SampleStandard(rng);
             chol.SampleInnovation(z, innov);                // v ~ N(0, A⁻¹)
             double sigma = Math.Sqrt(sigma2);
             for (int p = 0; p < _nu; p++) beta[p] = betaHat[p] + sigma * innov[p];
 
-            sigma2 = InvGamma(rng, _priorShape + 0.5 * _n, _priorScale + 0.5 * ResidualSS(beta));
-            tau2 = InvGamma(rng, _priorShape + 0.5 * (_nu - _r), _priorScale + 0.5 * _penalty.Roughness(beta));
+            sigma2 = InverseGamma.ShapeScale(_priorShape + 0.5 * _n, _priorScale + 0.5 * ResidualSS(beta)).Sample(rng);
+            tau2 = InverseGamma.ShapeScale(_priorShape + 0.5 * (_nu - _r), _priorScale + 0.5 * _penalty.Roughness(beta)).Sample(rng);
 
             if (it >= burn) acc.Record(it - burn, beta, sigma2 / tau2, Math.Sqrt(sigma2));
         }
@@ -201,7 +201,7 @@ public sealed class BapsSampler
         int steps = burn + samples;
         for (int it = 0; it < steps; it++)
         {
-            double prop = logLam + _mhLogStep * StandardNormal(rng);
+            double prop = logLam + _mhLogStep * Normal.SampleStandard(rng);
             double evProp = MarginalLogTarget(Math.Exp(prop));
             if (Math.Log(1.0 - rng.NextDouble()) < evProp - ev)
             {
@@ -247,22 +247,22 @@ public sealed class BapsSampler
             chol.DecomposeBanded(band);
             double[] betaHat = chol.Solve(_zty);
 
-            for (int p = 0; p < _nu; p++) z[p] = StandardNormal(rng);
+            for (int p = 0; p < _nu; p++) z[p] = Normal.SampleStandard(rng);
             chol.SampleInnovation(z, innov);
             double sigma = Math.Sqrt(sigma2);
             for (int p = 0; p < _nu; p++) beta[p] = betaHat[p] + sigma * innov[p];
 
             _penalty.SquaredDifferencesInto(beta, sqDiff);       // (Δ^rβ)_i²
 
-            sigma2 = InvGamma(rng, _priorShape + 0.5 * _n, _priorScale + 0.5 * ResidualSS(beta));
+            sigma2 = InverseGamma.ShapeScale(_priorShape + 0.5 * _n, _priorScale + 0.5 * ResidualSS(beta)).Sample(rng);
 
             double weightedRough = 0.0;                          // Σ η_i (Δβ)_i²
             for (int i = 0; i < nLoc; i++) weightedRough += eta[i] * sqDiff[i];
-            tau2 = InvGamma(rng, _priorShape + 0.5 * nLoc, _priorScale + 0.5 * weightedRough);
+            tau2 = InverseGamma.ShapeScale(_priorShape + 0.5 * nLoc, _priorScale + 0.5 * weightedRough).Sample(rng);
 
             // η_i | β, τ² ~ Gamma(φ + ½, φ + (Δβ)_i²/(2τ²)) — the +½ is the prior-normalizer Jacobian.
             for (int i = 0; i < nLoc; i++)
-                eta[i] = Gamma.Sample(rng, _phi + 0.5, 1.0 / (_phi + 0.5 * sqDiff[i] / tau2));
+                eta[i] = Gamma.ShapeRate(_phi + 0.5, _phi + 0.5 * sqDiff[i] / tau2).Sample(rng);
 
             if (it >= burn)
             {
@@ -285,16 +285,6 @@ public sealed class BapsSampler
             ss += d * d;
         }
         return ss;
-    }
-
-    private static double InvGamma(Xoshiro256PlusPlus rng, double shape, double scale)
-        => 1.0 / Gamma.Sample(rng, shape, 1.0 / scale);
-
-    private static double StandardNormal(Xoshiro256PlusPlus rng)
-    {
-        double u1 = 1.0 - rng.NextDouble();
-        double u2 = 1.0 - rng.NextDouble();
-        return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
     }
 
     private static double Quantile(double[] sorted, double p)

@@ -11,8 +11,12 @@ These three small projects sit at the bottom of the [architecture](./Architectur
 | `Xoshiro256PlusPlus` | distributions, regression, [samplers](./Samplers.md), SPC, geometry, synthetic noise fields |
 | `SeedTree` | the ensemble shell, parallel tempering, BAPS, GMM K-sweeps, distributed SPRED |
 | `Beta` | BARS knot-locality proposals (regression) |
-| `Gamma` | regression (BAPS inverse-gamma and local-multiplier draws, BARS robust weights) |
+| `Gamma` | regression (BAPS local-multiplier draws, BARS robust weights); the sampler behind `Beta`, `InverseGamma` and `StudentT` |
+| `InverseGamma` | regression (the BARS σ² draw, BAPS and hierarchical P-spline variance components) |
+| `Normal` | regression (standard draws behind coefficient and Laplace draws) |
+| `StudentT`, `Truncated<T>` | no callers yet; built for BASS sensitivity input measures and calibration priors |
 | `SpecialFunctions.LogGamma` | geometry, regression (changepoint and BARS priors) |
+| `SpecialFunctions` incomplete gamma and beta | the distributions' CDFs |
 | `Shannon` | SPC profiling, graph observables |
 
 The KL, Jensen–Shannon and `IDivergence` types have no in-repository callers yet.
@@ -26,7 +30,12 @@ The KL, Jensen–Shannon and `IDivergence` types have no in-repository callers y
 
 ## Design
 
-- **Static, stateless primitives that take an explicit RNG.** `Normal`, `Gamma`, `Beta`, `SpecialFunctions`, `KLDivergence`, `JSDistance` and `Shannon` are static and allocate nothing on their hot paths. Reproducibility is purely a seeding question: one generator per chain, seeded from the seed tree.
+- **Value types with named factories.** Each distribution is a readonly struct built by a factory that names its parameterization: `Normal.MeanSd`, `Gamma.ShapeRate` or `Gamma.ShapeScale`, `InverseGamma.ShapeScale`, `StudentT.LocationScale`, `Beta.Shapes`.
+  - Conjugate updates produce rates, so a caller passes a rate as a rate rather than converting it at the call site. That conversion is where R's BASS τ prior slipped ([BASS derivations review §6](../../issues/regression/bass-derivations-and-integration-review.md#6-d03-finding-rs-default-τ-hyperprior)).
+  - The structs allocate nothing and take the generator explicitly. `Normal.SampleStandard` and `Gamma.SampleStandard` are the unit draws.
+  - `SpecialFunctions`, `KLDivergence`, `JSDistance` and `Shannon` stay static.
+  - Reproducibility is purely a seeding question: one generator per chain, seeded from the seed tree.
+- **Log-space tails.** CDFs, survival functions and interval probabilities come from whichever tail represents them directly, in log space, so a probability far below the double range keeps its digits as a log. `Truncated<T>` normalizes by its parent's interval probability.
 - **Seeding convention.** `SeedTree.Derive(master, count)` has the prefix property: `Derive(m, C)` is a prefix of `Derive(m, 2C)`. The ensemble shell uses this to give chain c a *kernel* seed from children $[0, C)$ and a separate *readout* seed from children $[C, 2C)$. See [Samplers](./Samplers.md).
 - **Dispatch surface for divergences (partial).** `IDivergence<T>` is a dispatch interface over a domain T. It has one adapter, `KlDivergence`, over `ReadOnlyMemory<double>`, and no consumers. The Jensen–Shannon distance mentioned in its documentation does not implement it.
 
@@ -36,7 +45,8 @@ The KL, Jensen–Shannon and `IDivergence` types have no in-repository callers y
 |---|---|
 | Generator | `Xoshiro256PlusPlus(int? seed)`, `NextUInt64`, `NextDouble`, `NextInt(q)`, `SaveState`, `LoadState`, `Restore` |
 | Seeds | `SeedTree.Derive(master, count)` |
-| Distributions | `Normal.Sample(rng[, mean, sd])`, `Normal.LogPdf`; `Gamma.Sample(rng, shape, scale = 1)`, `Gamma.LogPdf`; `Beta.Sample(rng, a, b)`, `Beta.LogPdf`; `SpecialFunctions.LogGamma` |
+| Distributions | `Normal.Standard`, `Normal.MeanSd(mean, sd)`, `Normal.MeanVariance`, `Normal.SampleStandard(rng)`; `Gamma.ShapeRate(shape, rate)`, `Gamma.ShapeScale(shape, scale)`, `Gamma.SampleStandard(rng, shape)`; `InverseGamma.ShapeScale(shape, scale)`; `StudentT.Standard(ν)`, `StudentT.LocationScale(ν, location, scale)`; `Beta.Shapes(a, b)`. Each has `Sample(rng)`, `LogPdf`, `Cdf`, `Survival`, `LogCdf`, `LogSurvival`, `IntervalProbability`, `LogIntervalProbability` and its moments. `Truncated.Of(parent, lower, upper)`; `IContinuousDistribution` |
+| Special functions | `LogGamma`, `LogBeta`; `RegularizedGammaP`, `RegularizedGammaQ` and their logs; `RegularizedBeta`, `LogRegularizedBeta`, `LogRegularizedBetaComplement` |
 | Information | `KLDivergence.Forward(p, q, eps)`, `KLDivergence.Symmetric(p, q, eps)`; `IDivergence<T>`, `KlDivergence(eps)`; `JSDistance.Distance(p, q)`; `Shannon.EntropyNats` (counts or probabilities) |
 
 ## Algorithms
@@ -68,14 +78,28 @@ This is the published xoshiro256++ reference algorithm.
 ### Distributions
 
 - **Normal.** Box–Muller, cosine branch only: $z=\sqrt{-2\ln u_1}\cos(2\pi u_2)$ with $u_i\in(0,1]$. Each draw consumes two uniforms.
-- **Gamma(a, θ)** uses Marsaglia–Tsang (2000):
+- **Gamma(α, rate β)**, scale θ = 1/β, uses Marsaglia–Tsang (2000):
   1. Set $d=a-\tfrac13$ and $c=1/\sqrt{9d}$.
   2. Draw $x\sim N(0,1)$ until $1+cx>0$, then set $v=(1+cx)^3$.
   3. Accept $d\,v\,\theta$ if the squeeze $u<1-0.0331x^4$ holds, or if $\ln u<\tfrac12x^2+d(1-v+\ln v)$.
 
-  For shape $a<1$ it uses the boost $G(a)=G(a+1)\,u^{1/a}$, which recurses at most once. The log-density is $(a-1)\ln x-x/\theta-a\ln\theta-\ln\Gamma(a)$, and $-\infty$ for $x\le0$.
+  For shape $a<1$ it uses the boost $G(a)=G(a+1)\,u^{1/a}$, which recurses at most once. The log-density is $(\alpha-1)\ln x-\beta x+\alpha\ln\beta-\ln\Gamma(\alpha)$, and $-\infty$ for $x\le0$. The CDF is $P(\alpha,\beta x)$.
 - **Beta(a, b)** is sampled as $G_a/(G_a+G_b)$ with unit-scale gammas. If the sum underflows it returns 0.5. The log-density is $(a-1)\ln x+(b-1)\ln(1-x)-\ln B(a,b)$ on $(0,1)$.
+- **Inverse gamma IG(α, β)** is $1/G$ with $G\sim\mathrm{Gamma}(\alpha,\text{rate }\beta)$; β is a scale of X and the rate of 1/X. The draw uses the same arithmetic as the call sites it replaced, so seeded streams are unchanged. The CDF is $Q(\alpha,\beta/x)$.
+- **Student-t** draws $\mu+s\,Z\sqrt{\nu/V}$ with $V\sim\chi^2_\nu=2\,\mathrm{Gamma}(\nu/2)$. Its tail is $P(T>t)=\tfrac12 I_x(\nu/2,\tfrac12)$ with $x=\nu/(\nu+t^2)$. Both $x$ and $1-x$ are formed from whichever of $t^2/\nu$ and $\nu/t^2$ is below 1, with their logs, so neither overflows.
 - **LogGamma** uses the Lanczos approximation with $g=7$ and nine coefficients for $x\ge 0.5$, and the reflection $\ln(\pi/\sin\pi x)-\ln\Gamma(1-x)$ below that. The documented domain is $x>0$.
+- **Incomplete gamma.** $P(a,x)$ comes from the power series for $x<a+1$, and $Q(a,x)$ from the Lentz continued fraction otherwise (Numerical Recipes §6.2). The prefactor $x^a e^{-x}/\Gamma(a)$ is kept in log space. The other tail is the accurate complement $\ln(1-e^u)$ (Mächler 2012). Each loop runs at most 100,000 iterations and throws `ArithmeticException` if it does not converge.
+- **Incomplete beta.** $I_x(a,b)$ comes from the Lentz continued fraction (Numerical Recipes §6.4), switching to $I_{1-x}(b,a)$ above $x=(a+1)/(a+b+2)$.
+- **Normal tails.** $\Phi(-z)=\tfrac12 Q(\tfrac12, z^2/2)$.
+- **Interval probabilities.**
+  - An interval above the median is $S(a)-S(b)$ and one below is $F(b)-F(a)$, each computed in log space, so neither subtracts from 1.
+  - An interval across the median is $1-F(a)-S(b)$ in general. The normal uses $\tfrac12[\operatorname{erf}(|\alpha|/\sqrt2)+\operatorname{erf}(\beta/\sqrt2)]$ instead, and the Student-t $\tfrac12[P(|T|<|\alpha|)+P(|T|<\beta)]$. Both stay accurate for an interval narrow around the centre.
+- **Truncation.** `Truncated<T>` has density $f(x)/P(\text{lower}\le X\le\text{upper})$ on the interval, with the normaliser taken from the parent's log interval probability. N(0, 1) on $[10,\infty)$ therefore has density $\varphi(x)/Q(10)$, where $1-\Phi(10)$ is exactly 0 in double precision.
+- **Accuracy**, checked against mpmath at 50–60 digits (`DistributionReferenceTests`):
+  - **LogGamma** is within $2\times10^{-14}\max(1,|\ln\Gamma|)$ at ten points from $10^{-8}$ to $10^{5}$.
+  - **Incomplete gamma and beta** are limited by their log prefactor, a sum of terms of size $S$ ($|\ln\Gamma(a)|$, $|a\ln x|$, …). Their relative error is about $\varepsilon S$: about $10^{-13}$ for moderate shapes and $10^{-12}$ at shape 1000.
+  - **Far tails** keep their digits in log space, for example $\ln\Phi(-40)=-804.6084\ldots$ and $\ln P(T>10^{200})$ for ν = 1.
+  - **A same-tail interval** loses relative accuracy as it narrows: about $\varepsilon\max(1,|\alpha|)/(\beta-\alpha)$ for the normal.
 
 ### Information measures
 
@@ -99,7 +123,7 @@ This is the published xoshiro256++ reference algorithm.
 | Setting | Default | Meaning |
 |---|---|---|
 | `Xoshiro256PlusPlus(seed)` | `null` | Seed from OS entropy (not reproducible) |
-| `Gamma.Sample` / `LogPdf` scale | 1.0 | Scale θ (mean aθ) |
+| Incomplete gamma and beta iterations | 100,000 | Cap before `ArithmeticException` |
 | `KLDivergence` eps | 1e-12 | Floor applied to q |
 | `KlDivergence(eps)` | 1e-12 | Floor applied to q; `default(KlDivergence)` and `new KlDivergence()` both have eps = 0 |
 | `JSDistance` clamps | 1e-15 (fixed) | Hard-coded floor on $m_i$ and on the ratio; not configurable |
@@ -109,7 +133,10 @@ This is the published xoshiro256++ reference algorithm.
 - **`default(KlDivergence)` and `new KlDivergence()` have eps = 0.** The parameterless form bypasses the optional-argument constructor, so a zero entry in q (with $p_i>0$) gives $+\infty$ rather than being floored. Construct with an explicit eps, e.g. `new KlDivergence(1e-12)`.
 - **Unbounded rejection loop.** The Gamma rejection loop has no iteration cap. This is standard for Marsaglia–Tsang, whose acceptance rate is above 95%.
 - **Integer draws are slightly biased.** `NextInt` has no rejection step. The bias is negligible for small q.
-- **Unchecked documentation claims.** The ~15-digit accuracy claimed for `LogGamma` is the author's statement and was not independently checked.
+- **No truncated sampler and no quantiles.** `Truncated<T>` cannot draw, and no distribution has a quantile function. No caller needs either yet.
+- **No interval moments.** BASS sensitivity needs truncated means and higher raw moments (port brief D08). They are not implemented.
+- **Large shapes.** Accuracy falls as $\varepsilon S$ with the prefactor's size (see Algorithms). For a Student-t with very large ν, use `Normal`.
+- **`default` structs are invalid.** `default(Gamma)` and the other `default` values have zero parameters. Build distributions with their factories.
 - **Partial divergence abstraction.** `IDivergence<T>` is a partial abstraction with a single adapter and no consumers.
 
 ## Source map
@@ -117,7 +144,7 @@ This is the published xoshiro256++ reference algorithm.
 | Role | Files |
 |---|---|
 | Generator and seeds | `ThermoMapper/src/maths/rng/Xoshiro256PlusPlus.cs`, `SeedTree.cs` |
-| Distributions | `ThermoMapper/src/maths/distributions/Normal.cs`, `Gamma.cs`, `Beta.cs`, `SpecialFunctions.cs` |
+| Distributions | `ThermoMapper/src/maths/distributions/Normal.cs`, `Gamma.cs`, `InverseGamma.cs`, `StudentT.cs`, `Beta.cs`, `Truncated.cs`, `IContinuousDistribution.cs`, `SpecialFunctions.cs` |
 | Information | `ThermoMapper/src/maths/information/Divergences.cs` (`KLDivergence`), `IDivergence.cs`, `JSDistance.cs`, `Shannon.cs` |
 
 **See also:** [Samplers](./Samplers.md) (ensemble seeding) · [BayesianRegression](./BayesianRegression.md) · [DesignPrinciples](./DesignPrinciples.md#6-reproducible-randomness)

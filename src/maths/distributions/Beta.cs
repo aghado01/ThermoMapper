@@ -4,35 +4,68 @@ using Maths.Rng;
 namespace Maths.Distributions;
 
 /// <summary>
-/// The beta distribution as a sampler+density primitive, sampled as <c>G_a / (G_a + G_b)</c> from two
-/// <see cref="Gamma"/> draws. The home of BARS's locality proposal: a knot at center <c>ξ</c> with spread
-/// <c>τ</c> proposes from <c>Beta(ξτ, (1−ξ)τ)</c>, and the (asymmetric) <see cref="LogPdf"/> supplies the
-/// Hastings correction. Static and zero-alloc for the proposal inner loop.
+/// The beta distribution Beta(a, b) on (0, 1), built with <see cref="Shapes"/> and sampled as
+/// <c>G_a / (G_a + G_b)</c> from two unit-scale <see cref="Gamma"/> draws. The home of BARS's locality proposal: a
+/// knot at center <c>ξ</c> with spread <c>τ</c> proposes from <c>Beta(ξτ, (1−ξ)τ)</c>, and the (asymmetric)
+/// <see cref="LogPdf"/> supplies the Hastings correction. The CDF is <c>I_x(a, b)</c>. A readonly value type:
+/// zero-alloc in the proposal inner loop.
 /// </summary>
-public static class Beta
+public readonly struct Beta : IContinuousDistribution
 {
-    /// <summary>One draw from <c>Beta(a, b)</c> on (0,1) (mean <c>a/(a+b)</c>).</summary>
-    public static double Sample(Xoshiro256PlusPlus rng, double a, double b)
+    /// <summary>First shape a.</summary>
+    public double A { get; }
+
+    /// <summary>Second shape b.</summary>
+    public double B { get; }
+
+    private Beta(double a, double b)
+    {
+        A = a;
+        B = b;
+    }
+
+    /// <summary>Beta(a, b): mean a/(a + b).</summary>
+    public static Beta Shapes(double a, double b)
+    {
+        if (!(a > 0.0) || double.IsPositiveInfinity(a)) throw new ArgumentOutOfRangeException(nameof(a), "Shape a must be positive and finite.");
+        if (!(b > 0.0) || double.IsPositiveInfinity(b)) throw new ArgumentOutOfRangeException(nameof(b), "Shape b must be positive and finite.");
+        return new Beta(a, b);
+    }
+
+    public double Mean => A / (A + B);
+    public double Variance => A * B / ((A + B) * (A + B) * (A + B + 1.0));
+
+    /// <summary>One draw on (0,1). If both gamma draws underflow it returns 0.5.</summary>
+    public double Sample(Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        if (!(a > 0.0)) throw new ArgumentOutOfRangeException(nameof(a), "Shape a must be positive.");
-        if (!(b > 0.0)) throw new ArgumentOutOfRangeException(nameof(b), "Shape b must be positive.");
-
-        double ga = Gamma.Sample(rng, a);
-        double gb = Gamma.Sample(rng, b);
+        double ga = Gamma.SampleCore(rng, A, 1.0);
+        double gb = Gamma.SampleCore(rng, B, 1.0);
         double sum = ga + gb;
         return sum > 0.0 ? ga / sum : 0.5;   // degenerate underflow guard
     }
 
-    /// <summary>Log density of <c>Beta(a, b)</c> at <paramref name="x"/>; −∞ outside (0,1).</summary>
-    public static double LogPdf(double x, double a, double b)
+    /// <summary>Log density; −∞ outside (0,1).</summary>
+    public double LogPdf(double x)
     {
-        if (!(a > 0.0)) throw new ArgumentOutOfRangeException(nameof(a));
-        if (!(b > 0.0)) throw new ArgumentOutOfRangeException(nameof(b));
         if (x <= 0.0 || x >= 1.0) return double.NegativeInfinity;
+        return (A - 1.0) * Math.Log(x) + (B - 1.0) * Math.Log(1.0 - x) - SpecialFunctions.LogBeta(A, B);
+    }
 
-        double logBeta = SpecialFunctions.LogGamma(a) + SpecialFunctions.LogGamma(b)
-                       - SpecialFunctions.LogGamma(a + b);
-        return (a - 1.0) * Math.Log(x) + (b - 1.0) * Math.Log(1.0 - x) - logBeta;
+    public double Cdf(double x) => Math.Exp(LogCdf(x));
+    public double Survival(double x) => Math.Exp(LogSurvival(x));
+
+    public double LogCdf(double x)
+        => x <= 0.0 ? double.NegativeInfinity : x >= 1.0 ? 0.0 : SpecialFunctions.LogRegularizedBeta(x, A, B);
+
+    public double LogSurvival(double x)
+        => x <= 0.0 ? 0.0 : x >= 1.0 ? double.NegativeInfinity : SpecialFunctions.LogRegularizedBetaComplement(x, A, B);
+
+    public double IntervalProbability(double lower, double upper) => Math.Exp(LogIntervalProbability(lower, upper));
+
+    public double LogIntervalProbability(double lower, double upper)
+    {
+        if (Tails.IsEmpty(lower, upper) || upper <= 0.0 || lower >= 1.0) return double.NegativeInfinity;
+        return Tails.LogInterval(LogCdf(lower), LogSurvival(lower), LogCdf(upper), LogSurvival(upper));
     }
 }
