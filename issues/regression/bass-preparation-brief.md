@@ -353,3 +353,24 @@ Commits: `c7035d5` (reciprocity), `201b2c2` (target refresh), `d10d676` (cleanup
 - `Maths.Regression.Tests` passes 128 of 128 under the fixed harness (run `20261019_212345405`, and again after the cleanup).
 
 **Deferred:** none. The chain-rebuild deletion that step 3.6 listed is done here, and that item is removed from 3.6.
+
+### 0.3 Kernel and replica ownership — done 2026-10-19
+
+Commit `a566f53`.
+
+**Failing checks at the parent revision `e62a038`:**
+- A supplied `AdaptiveLocalBetaKernel` was accepted, and was accepted alongside tempering, which bypassed the exclusion.
+- With one adaptive kernel shared by 4 parallel chains, the mean knot count was 2.14, against 2.19 with per-chain kernels from `adaptKernelTau`, at the same seed. This was a temporary check, removed once the shared path no longer existed.
+- `ParallelTempering` handed one move list to every replica.
+
+**Specification:**
+- `AdaptiveLocalBetaKernel` is internal. `BarsEnsemble` builds one per chain from `adaptKernelTau` and rejects a supplied adaptive kernel.
+- `BarsConfig.AdaptKernelTau` requests per-chain τ tuning declaratively.
+- A supplied `IKnotKernel` instance is documented as shared, and therefore immutable.
+- `ParallelTempering` takes a `movesForReplica` factory, called once per replica.
+
+**Results:**
+- The checks in `KernelOwnershipTests` and `ChainContractTests` pass. These cover: a supplied adaptive kernel rejected, alone and with tempering; adaptive τ rejected with tempering; repeated 4-chain concurrent runs that agree exactly; and each replica getting its own moves.
+- `Maths.Regression.Tests` passes 133 of 133 under the harness. `Clustering.Graphical.SPC` builds.
+
+**Deferred:** none.
