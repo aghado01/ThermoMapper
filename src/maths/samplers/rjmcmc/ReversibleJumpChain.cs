@@ -35,8 +35,8 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
     /// <summary>Proposals accepted so far; <c>Accepted / Attempts</c> is the running acceptance rate.</summary>
     public long Accepted { get; private set; }
 
-    /// <param name="moves">The move set; combined by weighted random choice. Keys must be unique and each
-    /// <see cref="IRjMove{TState}.ReverseKey"/> must name a move in the set.</param>
+    /// <param name="moves">The move set; combined by weighted random choice. Keys must be unique, and each
+    /// <see cref="IRjMove{TState}.ReverseKey"/> must name a move in the set that names it back (or itself).</param>
     /// <param name="target">Supplies the log target density.</param>
     /// <param name="start">The chain's initial state.</param>
     /// <param name="rng">This chain's private RNG stream (the ensemble layer owns the seed tree).</param>
@@ -60,8 +60,14 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
                 throw new ArgumentException($"Duplicate move key '{m.Key}'.", nameof(moves));
         }
         foreach (IRjMove<TState> m in moves)
-            if (!_byKey.ContainsKey(m.ReverseKey))
+        {
+            if (!_byKey.TryGetValue(m.ReverseKey, out IRjMove<TState>? reverse))
                 throw new ArgumentException($"Move '{m.Key}' names a reverse '{m.ReverseKey}' not in the palette.", nameof(moves));
+            if (reverse.ReverseKey != m.Key)
+                throw new ArgumentException(
+                    $"Move '{m.Key}' names '{m.ReverseKey}' as its reverse, but '{m.ReverseKey}' names '{reverse.ReverseKey}'. " +
+                    "Each pair must name each other, or a move must name itself.", nameof(moves));
+        }
 
         _moves = moves;
         _target = target;
