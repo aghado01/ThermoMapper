@@ -17,14 +17,18 @@ namespace Maths.Regression.Spline.Bars;
 /// </summary>
 public sealed class GibbsLossModel : IObservationModel
 {
-    private const int MaxIterations = 50;
     private const double Tolerance = 1e-9;
     private readonly double _c;
+    private readonly int _maxIterations;
 
-    public GibbsLossModel(double tuning = 4.685)
+    public GibbsLossModel(double tuning = 4.685) : this(tuning, maxIterations: 50) { }
+
+    // The IRLS iteration cap; below the default only to exercise the non-convergence rejection.
+    internal GibbsLossModel(double tuning, int maxIterations)
     {
         if (!(tuning > 0.0)) throw new ArgumentOutOfRangeException(nameof(tuning), "Tuning constant must be positive.");
         _c = tuning;
+        _maxIterations = maxIterations;
     }
 
     /// <inheritdoc/>
@@ -47,7 +51,9 @@ public sealed class GibbsLossModel : IObservationModel
             return double.NegativeInfinity;
 
         double sigma = RobustNoise(y);
-        double[] beta = FitM(design, y, sigma);
+        (double[] beta, bool usable) = FitM(design, y, sigma);
+        if (!usable)
+            return double.NegativeInfinity;   // inadmissible weighted Gram, or IRLS did not converge
         double loss = 0.0;
         for (int i = 0; i < m; i++)
             loss += Rho((y[i] - Fit(design, beta, i)) / sigma);
@@ -59,11 +65,13 @@ public sealed class GibbsLossModel : IObservationModel
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
-        return FitM(design, y, RobustNoise(y));
+        return FitM(design, y, RobustNoise(y)).Beta;
     }
 
     // Tukey bisquare M-estimation by banded IRLS at fixed scale σ, warm-started with one LS step (iter 0, w = 1).
-    private double[] FitM(double[,] design, double[] y, double sigma)
+    // Usable is false when a weighted Gram fails DesignAdmission (redescending weights can zero out a span) or the
+    // iteration cap is reached before the step settles.
+    private (double[] Beta, bool Usable) FitM(double[,] design, double[] y, double sigma)
     {
         int nu = design.GetLength(1);
         var bd = new BandedDesign(design);
@@ -74,7 +82,7 @@ public sealed class GibbsLossModel : IObservationModel
         var b = new double[nu];
         var chol = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt);
 
-        for (int iter = 0; iter < MaxIterations; iter++)
+        for (int iter = 0; iter < _maxIterations; iter++)
         {
             for (int i = 0; i < m; i++)
                 w[i] = iter == 0 ? 1.0 : TukeyWeight((y[i] - Fit(design, beta, i)) / sigma);
@@ -83,6 +91,8 @@ public sealed class GibbsLossModel : IObservationModel
             bd.Accumulate(w, band, y, b);
 
             chol.DecomposeBanded(band);
+            if (!DesignAdmission.Admits(chol.Status))
+                return (beta, false);
             double[] sol = chol.Solve(b);
 
             double shift = 0.0;
@@ -92,9 +102,9 @@ public sealed class GibbsLossModel : IObservationModel
                 shift += d * d;
                 beta[p] = sol[p];
             }
-            if (iter > 0 && shift < Tolerance) break;
+            if (iter > 0 && shift < Tolerance) return (beta, true);
         }
-        return beta;
+        return (beta, false);
     }
 
     // Tukey bisquare, normalized so ρ_c(u) ≈ u²/2 for small u.

@@ -15,9 +15,14 @@ namespace Maths.Regression.Spline.Bars;
 /// </summary>
 public sealed class WhittleModel : IObservationModel
 {
-    private const int MaxIterations = 100;
     private const double Tolerance = 1e-9;
     private const double EtaClamp = 30.0;
+    private readonly int _maxIterations;
+
+    public WhittleModel() : this(maxIterations: 100) { }
+
+    // The IRLS iteration cap; below the default only to exercise the non-convergence rejection.
+    internal WhittleModel(int maxIterations) => _maxIterations = maxIterations;
 
     /// <inheritdoc/>
     public int EffectiveDimension(double[,] design, double[]? weights)
@@ -38,7 +43,9 @@ public sealed class WhittleModel : IObservationModel
         if (m <= nu)
             return double.NegativeInfinity;
 
-        double[] beta = FitGlm(design, y);
+        (double[] beta, bool usable) = FitGlm(design, y);
+        if (!usable)
+            return double.NegativeInfinity;   // inadmissible BᵀB, or IRLS did not converge
         double logLik = 0.0;
         for (int i = 0; i < m; i++)
         {
@@ -53,11 +60,12 @@ public sealed class WhittleModel : IObservationModel
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
-        return FitGlm(design, y);
+        return FitGlm(design, y).Beta;
     }
 
-    // Gamma(shape 1) / log-link IRLS: weights are 1, so A = BᵀB is constant — factor once, iterate z only.
-    private static double[] FitGlm(double[,] design, double[] periodogram)
+    // Gamma(shape 1) / log-link IRLS: weights are 1, so A = BᵀB is constant — factor once, iterate z only. Usable is
+    // false when BᵀB fails DesignAdmission or the iteration cap is reached before the step settles.
+    private (double[] Beta, bool Usable) FitGlm(double[,] design, double[] periodogram)
     {
         int nu = design.GetLength(1);
         var bd = new BandedDesign(design);
@@ -69,9 +77,11 @@ public sealed class WhittleModel : IObservationModel
         chol.DecomposeBanded(band);               // factored once
 
         var beta = new double[nu];
+        if (!DesignAdmission.Admits(chol.Status))
+            return (beta, false);
         var z = new double[m];
         var b = new double[nu];
-        for (int iter = 0; iter < MaxIterations; iter++)
+        for (int iter = 0; iter < _maxIterations; iter++)
         {
             for (int i = 0; i < m; i++)
             {
@@ -89,9 +99,9 @@ public sealed class WhittleModel : IObservationModel
                 shift += d * d;
                 beta[p] = sol[p];
             }
-            if (shift < Tolerance) break;
+            if (shift < Tolerance) return (beta, true);
         }
-        return beta;
+        return (beta, false);
     }
 
     private static double LinearPredictor(double[,] design, double[] beta, int row)

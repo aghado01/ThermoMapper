@@ -16,9 +16,14 @@ namespace Maths.Regression.Spline.Bars;
 /// </summary>
 public sealed class PoissonModel : IObservationModel
 {
-    private const int MaxIterations = 100;
     private const double Tolerance = 1e-9;
     private const double EtaClamp = 30.0;
+    private readonly int _maxIterations;
+
+    public PoissonModel() : this(maxIterations: 100) { }
+
+    // The IRLS iteration cap; below the default only to exercise the non-convergence rejection.
+    internal PoissonModel(int maxIterations) => _maxIterations = maxIterations;
 
     /// <inheritdoc/>
     public int EffectiveDimension(double[,] design, double[]? weights)
@@ -39,7 +44,9 @@ public sealed class PoissonModel : IObservationModel
         if (m <= nu)
             return double.NegativeInfinity;
 
-        double[] beta = FitGlm(design, y);
+        (double[] beta, bool usable) = FitGlm(design, y);
+        if (!usable)
+            return double.NegativeInfinity;   // inadmissible weighted Gram, or IRLS did not converge
 
         double logLik = 0.0;
         for (int i = 0; i < m; i++)
@@ -55,7 +62,7 @@ public sealed class PoissonModel : IObservationModel
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
-        return FitGlm(design, y);
+        return FitGlm(design, y).Beta;
     }
 
     /// <inheritdoc/>
@@ -81,7 +88,7 @@ public sealed class PoissonModel : IObservationModel
         if (mhIterations < 1) throw new ArgumentOutOfRangeException(nameof(mhIterations));
 
         int nu = design.GetLength(1);
-        double[] betaHat = FitGlm(design, y);
+        double[] betaHat = FitGlm(design, y).Beta;
 
         var bd = new BandedDesign(design);
         int m = bd.Rows;
@@ -150,8 +157,9 @@ public sealed class PoissonModel : IObservationModel
     }
 
     // Fisher-scoring IRLS for the canonical (log-link) Poisson GLM: working response z = η + (y−μ)/μ,
-    // weight w = μ, solving the banded weighted normal equations (BᵀWB) β⁺ = BᵀW z each iteration.
-    private static double[] FitGlm(double[,] design, double[] y)
+    // weight w = μ, solving the banded weighted normal equations (BᵀWB) β⁺ = BᵀW z each iteration. Usable is false
+    // when a weighted Gram fails DesignAdmission or the iteration cap is reached before the step settles.
+    private (double[] Beta, bool Usable) FitGlm(double[,] design, double[] y)
     {
         int nu = design.GetLength(1);
         var bd = new BandedDesign(design);
@@ -163,7 +171,7 @@ public sealed class PoissonModel : IObservationModel
         var b = new double[nu];
         var chol = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt);
 
-        for (int iter = 0; iter < MaxIterations; iter++)
+        for (int iter = 0; iter < _maxIterations; iter++)
         {
             for (int i = 0; i < m; i++)
             {
@@ -178,6 +186,8 @@ public sealed class PoissonModel : IObservationModel
             bd.Accumulate(w, band, z, b);
 
             chol.DecomposeBanded(band);
+            if (!DesignAdmission.Admits(chol.Status))
+                return (beta, false);
             double[] sol = chol.Solve(b);
 
             double shift = 0.0;
@@ -187,9 +197,9 @@ public sealed class PoissonModel : IObservationModel
                 shift += d * d;
                 beta[p] = sol[p];
             }
-            if (shift < Tolerance) break;
+            if (shift < Tolerance) return (beta, true);
         }
-        return beta;
+        return (beta, false);
     }
 
     private static double LinearPredictor(double[,] design, double[] beta, int row)

@@ -60,8 +60,8 @@ public sealed class WeightedNormalModel : IObservationModel
 
         var chol = new BandCholesky(nu, design2.Bandwidth, BandFactorization.Ldlt);
         chol.DecomposeBanded(band);
-        if (chol.HitFloor)
-            return double.NegativeInfinity;   // singular / rank-deficient design ⇒ unfittable, reject
+        if (!DesignAdmission.Admits(chol.Status))
+            return double.NegativeInfinity;   // rank-deficient or ill-conditioned design ⇒ outside the support
 
         double[] sol = chol.Solve(b);   // A⁻¹b — no inverse materialized
 

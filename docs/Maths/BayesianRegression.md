@@ -134,15 +134,24 @@ All Jacobians are 0.
 
 $$\log p(y\mid Z,W)=-\tfrac{\nu}{2}\log(m+1)-\tfrac m2\log a,\qquad a=y^\top Wy-\tfrac{m}{m+1}\,b^\top A^{-1}b,$$
 
-where $A=Z^\top WZ$ and $b=Z^\top Wy$. It returns −∞ when $m\le\nu$, when the band factor hits its pivot floor (singular design), or when $a\le0$. The posterior mean is $\frac{m}{m+1}A^{-1}b$.
+where $A=Z^\top WZ$ and $b=Z^\top Wy$. It returns −∞ when $m\le\nu$, when the design fails admission (below), or when $a\le0$. Because $a=\lVert y-Z\hat\beta\rVert_W^2+b^\top A^{-1}b/(m+1)$, the last case occurs only for an identically zero response; an interpolating fit with $m>\nu$ stays finite. The subtraction loses at most $\log_{10}(m+1)$ digits. The posterior mean is $\frac{m}{m+1}A^{-1}b$.
 
 **Laplace/BIC-type models.** Each returns (log-likelihood at the estimate) $-\tfrac\nu2\log m$:
 
-- **`PoissonModel`** (counts): log link, IRLS maximum-likelihood estimate, η clamped to ±30. Weights are ignored.
+- **`PoissonModel`** (counts): log link, IRLS maximum-likelihood estimate, η clamped to ±30. Weights are ignored. Its coefficient draw corrects the Laplace proposal by independence Metropolis–Hastings against the likelihood times an N(0, 100) prior on each coefficient. That ridge enters only the draw's correction, not the marginal and not the factored matrices.
 - **`WhittleModel`** (periodograms): $\ell=\sum(-\eta_i-I_ie^{-\eta_i})$, fitted by IRLS with unit weights.
 - **`GibbsLossModel`**: a Tukey-bisquare pseudo-likelihood with $c=4.685$ and a difference-based MAD scale.
 
-For these three models, only $m\le\nu$ yields −∞. A singular design still gives a finite value.
+The three IRLS fits (Poisson, Whittle and GibbsLoss's Tukey reweighting) return −∞ when the iteration cap (100, 100 and 50) is reached before the step settles (squared step < 1e-9).
+
+**Design admission** (`DesignAdmission`). Every model scores a knot configuration only if its factored Gram or Hessian is admissible: `FactorStatus.PositiveDefinite`, no floored pivot, and `PivotRatio` ≥ `MinPivotRatio` = 1e-10. Otherwise the score is −∞.
+
+- **Why 1e-10.** `PivotRatio` ≥ 1/κ for a positive-definite matrix, so a smaller ratio proves κ > 1e10. Solves then keep fewer than about 6 of 16 digits.
+- **What it means.** For the Normal and Whittle models the factored matrix depends only on the inputs, so admission is a declared restriction of the prior support: every basis function needs data under it, and nearly collinear designs are excluded. For Poisson and GibbsLoss the factored matrix is weighted by the fit, so admission also depends on the response, and it acts as a numerical truncation of the posterior rather than a prior restriction. The same holds for the IRLS non-convergence rule.
+- **Alternatives considered.**
+  - *Model-specific admission:* a model whose prior keeps the posterior proper could admit rank-deficient designs. It was rejected because coefficients of basis functions with no data under them would then be set by the prior alone, which adds noise to knot selection.
+  - *The absolute pivot floor alone* misreads scale, flagging 10⁻²⁰·I as singular, and passes ill-conditioned designs.
+- **Effect on results.** Admission changes results only near degenerate configurations, such as knots packed where there is no data, or nearly coincident knots. Counting rejections by reason is planned with the shell's accumulator contract.
 
 **Robust weights.** `StudentTWeights` ($\nu=4$) and `ContaminatedNormalWeights` ($\pi=0.05$, $\kappa=10$) resample per-point weights from the residuals of the posterior-mean fit, using a MAD-based scale. They run every `WeightEvery` steps (default 25). This is an *approximate* Gibbs block: it conditions on the posterior-mean fit and a plug-in scale, not on a draw. Only the Normal model uses the weights.
 
