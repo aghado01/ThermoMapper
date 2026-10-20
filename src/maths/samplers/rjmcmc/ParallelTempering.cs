@@ -27,15 +27,16 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// <summary>Adjacent-pair swaps accepted so far; <c>SwapAccepts / SwapAttempts</c> is the exchange rate.</summary>
     public long SwapAccepts { get; private set; }
 
-    /// <param name="moves">Shared move set for every replica.</param>
+    /// <param name="movesForReplica">Builds replica i's own move set (i = 0 is the cold replica). It is called once
+    /// per replica, so any mutable move or kernel state is private to that replica.</param>
     /// <param name="baseTarget">The untempered target (β = 1); replica i samples <c>baseTarget^{β_i}</c>.</param>
     /// <param name="start">Common initial state for all replicas.</param>
     /// <param name="betas">Inverse-temperature ladder, descending from 1 (cold, index 0) to β_min &gt; 0.</param>
     /// <param name="masterSeed">Seeds the per-replica streams and the swap stream via the <see cref="SeedTree"/>.</param>
-    public ParallelTempering(IReadOnlyList<IRjMove<TState>> moves, IRjTarget<TState> baseTarget, TState start,
-                             double[] betas, int masterSeed)
+    public ParallelTempering(Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica, IRjTarget<TState> baseTarget,
+                             TState start, double[] betas, int masterSeed)
     {
-        ArgumentNullException.ThrowIfNull(moves);
+        ArgumentNullException.ThrowIfNull(movesForReplica);
         ArgumentNullException.ThrowIfNull(baseTarget);
         ArgumentNullException.ThrowIfNull(betas);
         if (betas.Length < 2) throw new ArgumentException("Tempering needs at least two levels.", nameof(betas));
@@ -47,7 +48,7 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         _chains = new ReversibleJumpChain<TState>[betas.Length];
         for (int i = 0; i < betas.Length; i++)
             _chains[i] = new ReversibleJumpChain<TState>(
-                moves, new TemperedTarget<TState>(baseTarget, betas[i]), start, new Xoshiro256PlusPlus(seeds[i]));
+                movesForReplica(i), new TemperedTarget<TState>(baseTarget, betas[i]), start, new Xoshiro256PlusPlus(seeds[i]));
         _swapRng = new Xoshiro256PlusPlus(seeds[betas.Length]);
     }
 

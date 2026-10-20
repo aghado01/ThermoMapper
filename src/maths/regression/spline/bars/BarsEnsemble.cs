@@ -92,6 +92,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private double _peakProminence;
     private double _spanDropFraction;
 
+    /// <param name="kernel">The knot proposal kernel, shared by every chain and tempering replica, so it must be
+    /// immutable. To tune τ, pass <paramref name="adaptKernelTau"/>, which builds a private adaptive kernel per chain.</param>
     /// <param name="dmgkConstant">When set (DMGK uses 0.4), birth/death/relocate use the prior-aware DMGK
     /// schedule (<see cref="DmgkSchedule"/>) instead of equal weights — better dimension mixing.</param>
     /// <param name="adaptKernelTau">When set, each chain proposes with an <see cref="AdaptiveLocalBetaKernel"/>
@@ -110,6 +112,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(prior);
         ArgumentNullException.ThrowIfNull(kernel);
+        if (kernel is AdaptiveLocalBetaKernel)
+            throw new ArgumentException(
+                "An adaptive kernel holds per-chain state and cannot be shared; request it with adaptKernelTau.", nameof(kernel));
         if (temperLevels is int lv)
         {
             if (lv < 2) throw new ArgumentOutOfRangeException(nameof(temperLevels), "Tempering needs ≥ 2 levels.");
@@ -338,7 +343,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     {
         var target = new SplineTarget(_basis, _model, _prior, _x, _y, st.W);
         double[] betas = ParallelTempering<KnotConfig>.GeometricLadder(levels, _temperBetaMin);
-        return new ParallelTempering<KnotConfig>(Moves(st.Kernel), target, st.Config, betas, seed);
+        return new ParallelTempering<KnotConfig>(_ => Moves(st.Kernel), target, st.Config, betas, seed);
     }
 
     private IRjMove<KnotConfig>[] Moves(IKnotKernel kernel)

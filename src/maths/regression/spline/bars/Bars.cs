@@ -24,8 +24,12 @@ public sealed record BarsConfig
     /// <summary>Prior on the knot count.</summary>
     public IComplexityPrior Prior { get; init; } = new PoissonPrior(5.0);
 
-    /// <summary>Proposal locality kernel.</summary>
+    /// <summary>Proposal locality kernel, shared by every chain (immutable).</summary>
     public IKnotKernel Kernel { get; init; } = new LocalBetaKernel(50.0);
+
+    /// <summary>When set, each chain tunes its own local-Beta kernel from this initial τ during burn-in, then
+    /// freezes it; overrides <see cref="Kernel"/> for proposals. Null = the fixed <see cref="Kernel"/>.</summary>
+    public double? AdaptKernelTau { get; init; }
 
     /// <summary>Optional scale-mixture robustness (null = non-robust least squares).</summary>
     public IWeightResampler? Robustness { get; init; }
@@ -62,7 +66,8 @@ public static class Bars
     {
         ArgumentNullException.ThrowIfNull(config);
         IBasis basis = config.Basis ?? new SplineBasis(config.Degree);
-        var ensemble = new BarsEnsemble(basis, config.Model, config.Prior, config.Kernel, config.Robustness);
+        var ensemble = new BarsEnsemble(basis, config.Model, config.Prior, config.Kernel, config.Robustness,
+                                        adaptKernelTau: config.AdaptKernelTau);
         return ensemble.Run(x, y, grid,
             config.Chains, config.MasterSeed, config.BurnIn, config.MaxSamples,
             config.StartDispersion, config.WeightEvery, config.RHatTarget, config.BatchSize, config.PeakProminence,

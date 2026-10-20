@@ -64,7 +64,7 @@ flowchart LR
 | Area | Entry points |
 |---|---|
 | Reversible jump | `ReversibleJumpChain<T>(moves, target, start, rng)` with `Step()`, `Current`, `CurrentLogTarget`, `Attempts`, `Accepted`, `MoveStats()`, `SetState`; `IRjMove<T>` (`Key`, `ReverseKey`, `Weight`, `Propose`); `IRjTarget<T>`; `Proposal<T>`; `MoveStat`; `ScheduledMove<T>` |
-| Tempering | `TemperedTarget<T>`; `ParallelTempering<T>(moves, baseTarget, start, betas, masterSeed)` with `Step()`, `Cold`, `SwapAttempts`, `SwapAccepts`, and static `GeometricLadder(levels, betaMin)` |
+| Tempering | `TemperedTarget<T>`; `ParallelTempering<T>(movesForReplica, baseTarget, start, betas, masterSeed)` with `Step()`, `Cold`, `SwapAttempts`, `SwapAccepts`, and static `GeometricLadder(levels, betaMin)` |
 | Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.RHat`, `ChainDiagnostics.Ess`; `IChain<T>`, `IEnsembleModel<T>`, `IChainRun<T>`, `EnsembleRun` |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
@@ -97,7 +97,7 @@ The chain accepts if $\log\alpha\ge0$ or $U<e^{\log\alpha}$. A NaN value, for ex
 
 **Tempered target.** `TemperedTarget` returns $\log\pi_\beta=\beta\log\pi$ and requires $\beta>0$.
 
-**The ladder.** In `ParallelTempering`, every replica shares the move palette and the start state. Each replica has its own RNG, and one further RNG drives swaps. `GeometricLadder` gives $\beta_i=\beta_{\min}^{\,i/(L-1)}$.
+**The ladder.** In `ParallelTempering`, every replica starts from the same state, and each builds its own move palette from the `movesForReplica` factory, so mutable move state stays private to one replica. Each replica has its own RNG, and one further RNG drives swaps. `GeometricLadder` gives $\beta_i=\beta_{\min}^{\,i/(L-1)}$.
 
 **One step.**
 

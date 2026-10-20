@@ -51,6 +51,27 @@ public sealed class ChainContractTests
         Assert.Equal(attempts + 1, chain.Attempts);
     }
 
+    [Fact]
+    public void ParallelTempering_BuildsEachReplicaItsOwnMoves()
+    {
+        var built = new System.Collections.Generic.List<(int Replica, IRjMove<int>[] Moves)>();
+        IRjMove<int>[] MovesFor(int replica)
+        {
+            IRjMove<int>[] moves = [new StepMove("up", "down", +1), new StepMove("down", "up", -1)];
+            built.Add((replica, moves));
+            return moves;
+        }
+
+        double[] betas = ParallelTempering<int>.GeometricLadder(levels: 4, betaMin: 0.1);
+        var pt = new ParallelTempering<int>(MovesFor, new FlatTarget(), 0, betas, masterSeed: 2);
+        pt.Step();
+
+        Assert.Equal(new[] { 0, 1, 2, 3 }, built.ConvertAll(b => b.Replica));
+        for (int i = 0; i < built.Count; i++)
+            for (int j = i + 1; j < built.Count; j++)
+                Assert.NotSame(built[i].Moves[0], built[j].Moves[0]);
+    }
+
     private sealed class FlatTarget : IRjTarget<int>
     {
         public double LogPosterior(int state) => 0.0;

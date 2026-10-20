@@ -10,8 +10,10 @@ namespace Maths.Regression.Spline.Bars;
 /// step from the observed acceptance (higher acceptance ⇒ proposals too timid ⇒ loosen, i.e. <i>smaller</i> τ).
 /// To stay ergodic, adapt only during burn-in and freeze for the sampling phase (diminishing/zero adaptation).
 /// Delegates the Beta math to an immutable inner kernel, rebuilt on each adapt — no duplicated proposal code.
+/// Its τ is one chain's state, so <see cref="BarsEnsemble"/> builds one per chain from <c>adaptKernelTau</c>;
+/// it is never supplied as a shared kernel instance.
 /// </summary>
-public sealed class AdaptiveLocalBetaKernel : IKnotKernel
+internal sealed class AdaptiveLocalBetaKernel : IKnotKernel
 {
     private const double MinLogTau = 0.0;          // τ ≥ 1
     private const double MaxLogTau = 11.512925;    // τ ≤ 1e5

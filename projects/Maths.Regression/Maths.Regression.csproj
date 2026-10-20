@@ -10,6 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Maths.Regression.Tests" />
     <ProjectReference Include="..\Maths.Samplers\Maths.Samplers.csproj" />
     <ProjectReference Include="..\Maths.Distributions\Maths.Distributions.csproj" />
     <ProjectReference Include="..\Maths.LinAlg\Maths.LinAlg.csproj" />

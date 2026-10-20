@@ -7,7 +7,8 @@ namespace Maths.Regression.Spline.Bars;
 /// moves (DMGK's declared proposal component). <see cref="UniformKernel"/> ignores the center (the Denison
 /// baseline); <see cref="LocalBetaKernel"/> concentrates proposals near the center. Birth/death consume it as
 /// a mixture over existing knots (<see cref="ProposalMath.LogMixtureDensity"/>); relocate uses it directly and
-/// asymmetrically.
+/// asymmetrically. A supplied kernel instance is shared by every chain and tempering replica, so implementations
+/// are immutable; τ tuning is per-chain state, requested declaratively (<c>adaptKernelTau</c>).
 /// </summary>
 public interface IKnotKernel
 {

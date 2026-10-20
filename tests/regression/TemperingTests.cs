@@ -70,7 +70,7 @@ public sealed class TemperingTests
 
         // Tempered ladder — the cold replica visits both modes.
         double[] betas = ParallelTempering<double>.GeometricLadder(levels: 6, betaMin: 0.02);
-        var pt = new ParallelTempering<double>(moves, target, -3.0, betas, masterSeed: 7);
+        var pt = new ParallelTempering<double>(_ => moves, target, -3.0, betas, masterSeed: 7);
         for (int i = 0; i < 5_000; i++) pt.Step();
         int tempRight = 0;
         for (int i = 0; i < draws; i++) if (pt.Step() > 0.0) tempRight++;

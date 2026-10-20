@@ -56,7 +56,7 @@ flowchart LR
 | `IBasis` | `SplineBasis` (clamped B-splines), `StepBasis` (piecewise constant) |
 | `IObservationModel` | `WeightedNormalModel` (default), `PoissonModel`, `WhittleModel`, `GibbsLossModel` |
 | `IComplexityPrior` | `UniformPrior`, `PoissonPrior` (default λ = 5), `EbicPrior` |
-| `IKnotKernel` | `UniformKernel`, `LocalBetaKernel` (default τ = 50), `AdaptiveLocalBetaKernel` |
+| `IKnotKernel` | `UniformKernel`, `LocalBetaKernel` (default τ = 50); immutable, because one instance is shared by every chain. Adaptive τ is requested with `adaptKernelTau` / `BarsConfig.AdaptKernelTau`, which builds an internal `AdaptiveLocalBetaKernel` per chain. |
 | `IWeightResampler` (optional) | `StudentTWeights`, `ContaminatedNormalWeights` |
 
 `Bars.Run` passes only basis, model, prior, kernel and robustness settings. The DMGK move schedule and parallel tempering are reachable only by constructing `BarsEnsemble` directly. Per-chain adaptive τ (`adaptKernelTau`) is also a constructor option; see [Status](#status-and-caveats) for the other route.
@@ -266,6 +266,7 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 | Setting | Default | Meaning |
 |---|---|---|
 | `BarsConfig` Degree / Model / Prior / Kernel | 3 / `WeightedNormalModel` / `PoissonPrior(5)` / `LocalBetaKernel(50)` | Components |
+| `BarsConfig` AdaptKernelTau | null | Fixed kernel; a value tunes a private local-Beta kernel per chain from that initial τ |
 | `BarsConfig` Chains / MasterSeed / BurnIn / MaxSamples | 4 / 0 / 2000 / 2000 | Ensemble |
 | `BarsConfig` StartDispersion / WeightEvery | 4 / 25 | Start $k\sim U\{0..4\}$; resampler period |
 | `BarsConfig` RHatTarget / BatchSize | 0 / 0 | No early stop; single round |
@@ -283,7 +284,6 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 
 - **The knot-count prior acts as $p(k)/k!$.** The BARS target adds only $\log p(k)$, and the birth move's Hastings factor assumes Lebesgue measure on ordered knots, so the stationary knot-count marginal is $\propto p(k)/k!$. If an ordered i.i.d.-uniform knot prior was intended, the target lacks $+\log k!$. The code does not state which prior was intended.
 - **The BAPS `MarginalEvidence` posterior of λ is heavy-tailed.** Under the uniform-edf prior the density of ln λ decays like $e^{-u}$, so $E[\lambda]$ is infinite; `BapsResult` therefore reports the median. $\ell_p$ is computed as $y^\top y-\hat\beta^\top Z^\top y$ and loses precision above about λ = 10¹⁰ (NaN near 10¹⁴), but the prior keeps the chain far below that range. The λ modes target different posteriors.
-- **An adaptive kernel passed through `BarsConfig.Kernel` is shared.** Passing an `AdaptiveLocalBetaKernel` this way does enable adaptation, but every parallel chain (and every tempering replica) then shares and mutates the same kernel instance. Only `adaptKernelTau` gives each chain its own kernel.
 - **Knot count and peak location mix slowly.** In the regression tests, knot-count ESS is about 1.75% of draws and untempered peak-location ESS about 0.14%. A 5-rung tempering ladder gave about 8% on similar data, though not in a controlled comparison. Judge a run by ESS, not by draw count: an R̂ early stop can fire at 100 draws per chain, which for these readouts is only a few effective draws.
 - **Reporting limits.**
   - `AnisotropicTensorSpline` evaluates REML but provides no optimizer; callers must search $(\lambda_x,\lambda_y)$ themselves.
