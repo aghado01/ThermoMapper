@@ -2,8 +2,6 @@ using System;
 using Maths.Distributions;
 using Maths.Rng;
 
-using Maths.Regression.Spline;
-
 namespace Maths.Regression.Spline.Bars;
 
 /// <summary>
@@ -51,26 +49,6 @@ public sealed class StudentTWeights : IWeightResampler
         }
         return w;
     }
-
-    private static double[] Residuals(KnotConfig config, double[]? currentWeights, double[] x, double[] y,
-                                      IBasis basis, IObservationModel model, out int m)
-    {
-        double[,] z = basis.Design(config, x);
-        double[] coef = model.PosteriorMeanCoefficients(z, y, currentWeights);
-        m = y.Length;
-        var r = new double[m];
-        for (int i = 0; i < m; i++)
-        {
-            double f = 0.0;
-            for (int j = 0; j < coef.Length; j++) f += z[i, j] * coef[j];
-            r[i] = y[i] - f;
-        }
-        return r;
-    }
-
-    internal static double[] Residuals(KnotConfig config, double[]? currentWeights, double[] x, double[] y,
-                                       IBasis basis, IObservationModel model)
-        => Residuals(config, currentWeights, x, y, basis, model, out _);
 }
 
 /// <summary>
@@ -112,31 +90,5 @@ public sealed class ContaminatedNormalWeights : IWeightResampler
             w[i] = rng.NextDouble() < pOutlier ? invKappaSq : 1.0;
         }
         return w;
-    }
-}
-
-/// <summary>Robust dispersion of residuals — the MAD-based σ̂ = 1.4826·median|r − median r|, floored.</summary>
-internal static class RobustScale
-{
-    public static double MadSigma(double[] r)
-    {
-        double sigma = 1.4826 * Mad(r);
-        return sigma > 0.0 ? sigma : 1e-6;
-    }
-
-    private static double Mad(double[] r)
-    {
-        double med = Median(r);
-        var dev = new double[r.Length];
-        for (int i = 0; i < r.Length; i++) dev[i] = Math.Abs(r[i] - med);
-        return Median(dev);
-    }
-
-    private static double Median(double[] values)
-    {
-        var sorted = (double[])values.Clone();
-        Array.Sort(sorted);
-        int n = sorted.Length;
-        return n % 2 == 1 ? sorted[n / 2] : 0.5 * (sorted[n / 2 - 1] + sorted[n / 2]);
     }
 }
