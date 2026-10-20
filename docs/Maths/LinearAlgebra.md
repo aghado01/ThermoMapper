@@ -11,6 +11,7 @@
 | Spectral graph analysis ([SpectralGraphs](./SpectralGraphs.md)) | dense eigen routes, LOBPCG |
 | Gaussian mixtures ([GaussianMixtures](./GaussianMixtures.md)) | `CholeskyDecomposition` |
 | Spline regression ([BayesianRegression](./BayesianRegression.md)) | `BandCholesky` in LDLᵀ mode |
+| Dense Gram reference (BASS, planned) | `DenseCholesky` |
 | Riemannian statistics ([RiemannianGeometry](./RiemannianGeometry.md)) | `DenseEigen`, `Pca`, `MatrixOps` |
 | Colored-noise synthesis ([Samplers](./Samplers.md)) | `Fft` |
 
@@ -25,6 +26,7 @@ flowchart LR
   PCA[Pca] --> DE
   ICA[FastIca] --> PCA
   CH[CholeskyDecomposition]
+  DC[DenseCholesky: strict]
   BC[BandCholesky]
 ```
 
@@ -61,7 +63,7 @@ Concrete operators live beside the structures they wrap: `DenseSymmetricOperator
 - `EigenResult` is the dense route's output: eigenvalues **descending**, `Eigenvectors[i]` a unit vector for `Eigenvalues[i]`, signs arbitrary.
 - `EigenPair` is the output of both routes. Its `Vector` is always a fresh copy. Lists are ascending for bottom-k and descending for top-k.
 
-**Allocate once, decompose many.** `CholeskyDecomposition` and `BandCholesky` own their factor storage and are meant to be re-decomposed in inner loops: EM iterations in mixtures, MCMC steps in splines. Instances are stateful and not thread-safe.
+**Allocate once, decompose many.** `CholeskyDecomposition`, `DenseCholesky` (allocated for a capacity) and `BandCholesky` own their factor storage and are meant to be re-decomposed in inner loops: EM iterations in mixtures, MCMC steps in splines. Instances are stateful and not thread-safe.
 
 **Which triangle each routine reads.** This matters when an input is not exactly symmetric:
 
@@ -70,6 +72,7 @@ Concrete operators live beside the structures they wrap: `DenseSymmetricOperator
 | `EigenFast` (and `DenseEigen` in the default build) | upper triangle + diagonal (for `double[,]` input, the entries `matrix[r, c]` with r ≤ c, after a copy into column-major layout) |
 | `Eigen` | both triangles (mirrors them) |
 | `CholeskyDecomposition` | lower triangle |
+| `DenseCholesky` | lower triangle |
 | `BandCholesky` | lower band |
 
 For a slightly asymmetric input, the two dense eigen routes therefore decompose *different* matrices.
@@ -80,7 +83,7 @@ For a slightly asymmetric input, the two dense eigen routes therefore decompose 
 |---|---|
 | Dense eigen | `DenseEigen.DecomposeSymmetric` (`double[,]` or column-major span) → `EigenResult`; `EigenFast.DecomposeSymmetricInPlace` (allocation-free core); `Eigen.DecomposeSymmetric`; `SpectralMath.BottomK`, `SpectralMath.SelectBottomK` → `IReadOnlyList<EigenPair>` |
 | Iterative eigen | `LOBPCG.Solve(op, k, Options?)` → `Result(Eigenpairs, Iterations, ResidualNorm, Converged)`; `LOBPCG.BottomK` / `TopK` (dense convenience); `DenseSymmetricOperator`; `ILinearOperator`, `IPreconditioner` |
-| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `HitFloor`, `Status`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `FactorStatus` |
+| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `HitFloor`, `Status`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `FactorStatus` |
 | Transforms and statistics | `Fft` (1-D, 3-D, N-D; `IsPowerOfTwo`); `Pca.Compute` → `PcaResult`; `FastIca.Compute` → `IcaResult`; `OnlineMahalanobis` (`Update`, `Distance` to the mean or between two points, `IsReady`, `GetMean`, `GetVariances`, `Reset`) |
 | Kernels | `MatrixOps` (`Dot`, `ScaledSubtract`, `Orthonormalize`, `RandomOrthonormal`, `ColumnGramMatrix`, `ColumnGramMatrixFromRowMajor`, `TransposeToColumnMajor`) |
 
@@ -154,6 +157,31 @@ Derived quantities:
 
 `Sample` produces exactly $N(\mu, LL^\top)$, which is $\Sigma$ unless a pivot was floored.
 
+### Strict dense Cholesky (`DenseCholesky`)
+
+The reference factor for dense Gram matrices: BASS's active-term Gram, and the full rebuild that the incremental border and Givens updates (port stage 2) are checked against.
+
+- **Strict.** There is no pivot floor. The first pivot that is not finite and positive stops the factorization:
+  - `FailedAt` gives its row;
+  - `Status` covers the pivots up to and including it, and `FlooredPivots` is always 0;
+  - `LogDet` is NaN, and every solve throws.
+
+  A singular or indefinite input is reported, not repaired. Whether a rank-deficient design is admissible under some proper prior is the caller's decision.
+- **Solve-oriented.** It never forms $A^{-1}$:
+
+  | Member | Computes | Via |
+  |---|---|---|
+  | `Solve`, `SolveInPlace` | $A^{-1}b$ | forward, then back substitution |
+  | `ForwardSolveInPlace`, `BackSolveInPlace` | $L^{-1}b$, $L^{-\top}y$ | one triangular solve |
+  | `InverseQuadraticForm` | $b^\top A^{-1}b$ | $\lVert L^{-1}b\rVert^2$, a sum of squares |
+  | `SampleInnovation` | $v=L^{-\top}z\sim N(0,A^{-1})$ | back substitution |
+  | `LogDet` | $\ln|A|=2\sum_i\ln\ell_{ii}$ | — |
+  | `RelativePivot(j)` | $d_j/a_{jj}$ | stored per row |
+- **Row at a time.** Rows are factored in order (Cholesky–Banachiewicz) into packed row-major storage, with $L(i,j)$ at $i(i+1)/2+j$. Each row is the bordered extension of the factor above it, the step a birth reuses. Both triangular solves read rows contiguously.
+- **Agreement.** The loop order is `CholeskyDecomposition`'s. With no pivot at or below 1e-12, the factor, `LogDet` and `Status` are bit-identical.
+
+**Cost.** Factorization is about $n^3/6$ multiply-adds; solves and draws are $O(n^2)$; storage is $n(n+1)/2$.
+
 ### Band Cholesky / LDLᵀ (`BandCholesky`)
 
 **Storage** is the LAPACK lower-band layout `_l[d, j] = L(j+d, j)` for $d=0..p$. The diagonal slot holds $\ell_{jj}$ (Cholesky) or $D_j$ (LDLᵀ, where L has a unit diagonal). `Decompose(double[,])` reads only the lower band and does not check that entries outside it are zero. `DecomposeBanded` accepts band storage directly.
@@ -170,7 +198,7 @@ $$\text{LDL}^\top:\quad D_j=a_{jj}-\textstyle\sum_k\ell_{jk}^2D_k,\qquad \ell_{i
 
 ### Factor status (`FactorStatus`)
 
-After each factorization, both classes set `Status`. It reports what the factorization found and leaves the decision to the caller. The pivots are the Schur-complement diagonals $d_j$ before flooring: $\ell_{jj}^2$ or $D_j$.
+After each factorization, all three classes set `Status`. It reports what the factorization found and leaves the decision to the caller. The pivots are the Schur-complement diagonals $d_j$ before flooring: $\ell_{jj}^2$ or $D_j$.
 
 | Member | Meaning |
 |---|---|
@@ -178,9 +206,10 @@ After each factorization, both classes set `Status`. It reports what the factori
 | `FlooredPivots` | How many pivots were at or below 1e-12 and were clamped. |
 | `MinPivot`, `MaxPivot` | The pivot range before flooring. `MinPivot` ≤ 0 means the input is not numerically positive definite. |
 | `PivotRatio` | `MinPivot / MaxPivot`. For a positive-definite matrix every $d_j$ lies in $[\lambda_{\min},\lambda_{\max}]$, so the ratio is at least $1/\kappa$: a small ratio proves ill-conditioning, but a ratio near 1 does not prove good conditioning. |
+| `MinRelativePivot` | The smallest $d_j/a_{jj}$: the pivots of the equilibrated matrix $D^{-1/2}AD^{-1/2}$, with $D=\operatorname{diag}A$. For a Gram matrix it is the squared sine of the angle between column j and the span of the earlier columns. It is at least $\lambda_{\min}$ of the equilibrated matrix, whose $\lambda_{\max}\ge1$, so its reciprocal is a lower bound on that matrix's condition number. Unlike `PivotRatio`, it does not change when columns are rescaled; it does depend on column order. A value ≤ 0 means not positive definite. |
 | `PositiveDefinite` | `Finite` and `MinPivot` > 0. |
 
-Because the floor is absolute, a well-conditioned matrix with a small scale, such as $10^{-20}I$, is floored: `FlooredPivots` is positive while `PivotRatio` is 1. A rank problem shows a small `PivotRatio` or a non-positive `MinPivot` instead.
+Because the floor is absolute, a well-conditioned matrix with a small scale, such as $10^{-20}I$, is floored: `FlooredPivots` is positive while `PivotRatio` is 1. A rank problem shows a small `PivotRatio` or a non-positive `MinPivot` instead. `MinRelativePivot` is the scale-aware check: 1 for $10^{-20}I$, and small for a column nearly in the span of the others, whatever the columns' scales. `DenseCholesky` has no floor, so it factors $10^{-20}I$ exactly.
 
 **Innovation sampling.** `SampleInnovation` requires LDLᵀ mode. It computes $v=L^{-\top}D^{-1/2}z$. Since $\operatorname{Cov}(v)=(LDL^\top)^{-1}$, this gives $v\sim N(0,A^{-1})$ exactly, which is the draw a conjugate posterior $\beta=\mu+v$ needs.
 
@@ -239,7 +268,7 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
 | `LOBPCG.Options.Constraints` / `Preconditioner` | null / null | Deflation block Y; identity preconditioner |
 | `LOBPCG.Options.ConstraintColumns` | 0 | Column count of `Constraints` (flat column-major, length n × columns); `Constraints` is ignored unless this is > 0 |
 | Column-drop / degeneracy tolerance | 1e-12 | Gram–Schmidt in LOBPCG and `MatrixOps` |
-| Cholesky pivot floor | 1e-12 | On $\ell^2$ or $D$ |
+| Cholesky pivot floor | 1e-12 | On $\ell^2$ or $D$; `CholeskyDecomposition` and `BandCholesky` only (`DenseCholesky` has none) |
 | `BandCholesky` factorization | `Cholesky` | `Ldlt` is required for `SampleInnovation` |
 | `Pca.Compute` numComponents / center / whiten | 1 / true / false | — |
 | `FastIca.Compute` mode / maxIter / tol / seed | `Deflation` / 200 / 1e-6 / 42 | — |
@@ -254,7 +283,7 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
   Treat `FastIca` as experimental.
 - **`EigenFast` can exhaust its sweeps silently.** Its skip test is per element ($|a_{pq}|<\text{tol}$) but its stop test uses the Frobenius norm. If many sub-tolerance entries accumulate, no rotation fires and the loop runs all 256 sweeps without reporting it. There is no convergence flag. The reference `Eigen` pairs its per-element skip test with a max-norm stop test; the two agree, so it does not have this problem.
 - **Tolerances are absolute** in the Jacobi and LOBPCG routines (and in the graph smoother's conjugate-gradient solve; see [SpectralGraphs](./SpectralGraphs.md)), so results depend on the scale of the input. Rescale badly scaled problems.
-- **Pivot floors are absolute and never raise.** Both factorizations clamp pivots at 1e-12 and carry on, so `LogDet` and the solves of a floored factor describe the clamped matrix, not the input. A small-scale input such as $10^{-20}I$ is floored even though it is perfectly conditioned. Read `Status` before trusting a factor; a strict, solve-oriented dense path without flooring is planned.
+- **Pivot floors are absolute and never raise.** Both factorizations clamp pivots at 1e-12 and carry on, so `LogDet` and the solves of a floored factor describe the clamped matrix, not the input. A small-scale input such as $10^{-20}I$ is floored even though it is perfectly conditioned. Read `Status` before trusting a factor. `DenseCholesky` is the strict, solve-oriented dense path without flooring; existing callers keep the floored factors.
 - **LOBPCG rejects seed 0.** Callers that pass seed 0 through to LOBPCG fail. This affects the defaults of several spectral entry points (see [SpectralGraphs](./SpectralGraphs.md#status-and-caveats)).
 
 ## Source map
@@ -263,7 +292,7 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
 |---|---|
 | Dense eigen | `DenseEigen.cs`, `EigenFast.cs`, `Eigen.cs`, `SpectralMath.cs` |
 | Iterative eigen | `Lobpcg.cs`, `DenseSymmetricOperator.cs` |
-| Factorizations | `Cholesky.cs`, `BandCholesky.cs` |
+| Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `FactorStatus.cs` |
 | Transforms and statistics | `Fft.cs`, `PCA.cs` (`Pca`), `ICA.cs` (`FastIca`), `WelfordMahal.cs` (`OnlineMahalanobis`) |
 | Kernels | `MatrixOps.cs` |
 

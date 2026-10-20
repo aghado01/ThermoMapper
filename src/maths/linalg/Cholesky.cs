@@ -78,7 +78,7 @@ namespace Maths.LinAlg
                     if (i == j)
                     {
                         bool floored = sum <= 1e-12;
-                        tally.Observe(sum, floored);
+                        tally.Observe(sum, sigma[i, i], floored);
                         if (floored) sum = 1e-12; // diagonal floor
                         _l[i, i] = Math.Sqrt(sum);
                         logDetL += Math.Log(_l[i, i]);

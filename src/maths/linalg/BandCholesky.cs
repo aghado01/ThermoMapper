@@ -147,7 +147,8 @@ namespace Maths.LinAlg
             var tally = PivotTally.Start();
             for (int j = 0; j < _n; j++)
             {
-                double sum = _l[0, j];                     // A(j,j)
+                double ajj = _l[0, j];                     // A(j,j)
+                double sum = ajj;
                 int kmin = Math.Max(0, j - _p);
                 for (int k = kmin; k < j; k++)
                 {
@@ -155,7 +156,7 @@ namespace Maths.LinAlg
                     sum -= ljk * ljk;
                 }
                 bool floored = sum <= 1e-12;
-                tally.Observe(sum, floored);
+                tally.Observe(sum, ajj, floored);
                 if (floored) { sum = 1e-12; HitFloor = true; }   // diagonal floor ⇒ singular
                 double ljj = Math.Sqrt(sum);
                 _l[0, j] = ljj;
@@ -184,7 +185,8 @@ namespace Maths.LinAlg
             var tally = PivotTally.Start();
             for (int j = 0; j < _n; j++)
             {
-                double dj = _l[0, j];                      // A(j,j)
+                double ajj = _l[0, j];                     // A(j,j)
+                double dj = ajj;
                 int kmin = Math.Max(0, j - _p);
                 for (int k = kmin; k < j; k++)
                 {
@@ -192,7 +194,7 @@ namespace Maths.LinAlg
                     dj -= ljk * ljk * _l[0, k];           // L(j,k)²·D(k)
                 }
                 bool floored = dj <= 1e-12;
-                tally.Observe(dj, floored);
+                tally.Observe(dj, ajj, floored);
                 if (floored) { dj = 1e-12; HitFloor = true; }   // diagonal floor ⇒ singular
                 _l[0, j] = dj;                             // store D(j)
                 logDet += Math.Log(dj);

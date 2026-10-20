@@ -166,7 +166,7 @@ public sealed class FactorReferenceTests
         }
     }
 
-    private static double[,] DenseSpd(int n, Xoshiro256PlusPlus rng)
+    internal static double[,] DenseSpd(int n, Xoshiro256PlusPlus rng)
     {
         var b = new double[n, n];
         for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) b[i, j] = rng.NextDouble() - 0.5;
@@ -189,14 +189,14 @@ public sealed class FactorReferenceTests
         return a;
     }
 
-    private static double[] Vector(int n, Xoshiro256PlusPlus rng)
+    internal static double[] Vector(int n, Xoshiro256PlusPlus rng)
     {
         var v = new double[n];
         for (int i = 0; i < n; i++) v[i] = rng.NextDouble() - 0.5;
         return v;
     }
 
-    private static double[,] Householder(double[] v)
+    internal static double[,] Householder(double[] v)
     {
         int n = v.Length;
         double vv = 0.0;
@@ -208,7 +208,7 @@ public sealed class FactorReferenceTests
     }
 
     // Gaussian elimination with partial pivoting: x = A⁻¹b and ln|det A|.
-    private static (double[] X, double LogAbsDet) LuSolve(double[,] a0, double[] b0)
+    internal static (double[] X, double LogAbsDet) LuSolve(double[,] a0, double[] b0)
     {
         int n = b0.Length;
         var a = (double[,])a0.Clone();
@@ -241,7 +241,7 @@ public sealed class FactorReferenceTests
         return (x, logDet);
     }
 
-    private static double[,] Multiply(double[,] x, double[,] y)
+    internal static double[,] Multiply(double[,] x, double[,] y)
     {
         int n = x.GetLength(0), m = y.GetLength(1), k = x.GetLength(1);
         var r = new double[n, m];
@@ -255,7 +255,7 @@ public sealed class FactorReferenceTests
         return r;
     }
 
-    private static double[,] Transpose(double[,] x)
+    internal static double[,] Transpose(double[,] x)
     {
         int n = x.GetLength(0), m = x.GetLength(1);
         var r = new double[m, n];
@@ -271,7 +271,7 @@ public sealed class FactorReferenceTests
         return r;
     }
 
-    private static void AssertClose(double[] expected, double[] actual, double tol)
+    internal static void AssertClose(double[] expected, double[] actual, double tol)
     {
         Assert.Equal(expected.Length, actual.Length);
         for (int i = 0; i < expected.Length; i++)
@@ -279,7 +279,7 @@ public sealed class FactorReferenceTests
                         $"index {i}: expected {expected[i]:R}, got {actual[i]:R}");
     }
 
-    private static void AssertIdentity(double[,] x, double tol)
+    internal static void AssertIdentity(double[,] x, double tol)
     {
         int n = x.GetLength(0);
         for (int i = 0; i < n; i++)
