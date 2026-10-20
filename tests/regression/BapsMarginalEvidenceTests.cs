@@ -19,6 +19,9 @@ public sealed class BapsMarginalEvidenceTests
 {
     private const int N = 30, Knots = 8, Order = 2;
 
+    /// <summary>Near the penalty null space (linear) or away from it (sine).</summary>
+    public enum Shape { Linear, Sine }
+
     private readonly ITestOutputHelper _out;
     public BapsMarginalEvidenceTests(ITestOutputHelper output) => _out = output;
 
@@ -30,7 +33,7 @@ public sealed class BapsMarginalEvidenceTests
     }
 
     // A cubic P-spline (ν = 12) on 30 points; "linear" data lies near the penalty null space, "sine" does not.
-    private static (double[,] Z, double[] Y) Data(string shape)
+    private static (double[,] Z, double[] Y) Data(Shape shape)
     {
         var x = new double[N];
         for (int i = 0; i < N; i++) x[i] = (i + 0.5) / N;
@@ -40,15 +43,15 @@ public sealed class BapsMarginalEvidenceTests
         var rng = new Xoshiro256PlusPlus(seed: 11);
         var y = new double[N];
         for (int i = 0; i < N; i++)
-            y[i] = shape == "linear" ? 1.0 + 2.0 * x[i] + 0.1 * Gaussian(rng)
+            y[i] = shape == Shape.Linear ? 1.0 + 2.0 * x[i] + 0.1 * Gaussian(rng)
                                      : Math.Sin(2.0 * Math.PI * x[i]) + 0.15 * Gaussian(rng);
         return (z, y);
     }
 
     [Theory]
-    [InlineData("linear")]
-    [InlineData("sine")]
-    public void ProfiledEvidence_Plateaus_SoAFlatPriorIsImproper(string shape)
+    [InlineData(Shape.Linear)]
+    [InlineData(Shape.Sine)]
+    public void ProfiledEvidence_Plateaus_SoAFlatPriorIsImproper(Shape shape)
     {
         (double[,] z, double[] y) = Data(shape);
         var ps = new PenalizedSpline(z, y, new DifferencePenalty(Order));
@@ -60,7 +63,7 @@ public sealed class BapsMarginalEvidenceTests
     [Fact]
     public void EdfAndItsSlope_MatchDenseReference_AndThePriorIsProper()
     {
-        (double[,] z, double[] y) = Data("sine");
+        (double[,] z, double[] y) = Data(Shape.Sine);
         int nu = z.GetLength(1);
         var ps = new PenalizedSpline(z, y, new DifferencePenalty(Order));
         var reference = new DenseReference(z, y);
@@ -84,9 +87,9 @@ public sealed class BapsMarginalEvidenceTests
     }
 
     [Theory]
-    [InlineData("linear")]
-    [InlineData("sine")]
-    public void MarginalEvidence_MatchesQuadratureOfTheEdfPosterior(string shape)
+    [InlineData(Shape.Linear)]
+    [InlineData(Shape.Sine)]
+    public void MarginalEvidence_MatchesQuadratureOfTheEdfPosterior(Shape shape)
     {
         (double[,] z, double[] y) = Data(shape);
         var reference = new DenseReference(z, y);
