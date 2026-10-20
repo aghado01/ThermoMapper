@@ -26,6 +26,7 @@ Step 0.1 changes how non-finite R̂ is treated in [ChainEnsemble](../../src/math
    - Reproduce the empty support: two one-dimensional inputs at 0 and 100 with the default `gamma1 = 0.25` give a lower bandwidth bound of 2500 against the fixed upper bound of 1 in [EmpiricalBayesBandwidthPrior](../../src/maths/regression/bgp/EmpiricalBayesBandwidthPrior.cs#L67).
    - Then reject empty or non-finite support before the chain starts, with a clear error.
    - Define and document the input units, and one fitted transform shared by training and prediction.
+   - Include the response in that policy: [GpRegression.Fit](../../src/maths/regression/bgp/GpRegression.cs#L98) fits a zero-mean GP to the response as given, so an uncentered response pulls predictions toward 0 away from the data and biases the bandwidth. Put response centering (a fitted offset applied in training and restored in prediction) in the transform-policy memo.
    - Cover boundary and constant-coordinate inputs.
 3. **R10 wording.** In the BGP section of [BayesianRegression.md](../../docs/Maths/BayesianRegression.md) and in [bgp-twcd-lemmas.md](../../lean/Protolemmata/BARS/bgp-twcd-lemmas.md#L67), replace the claim that coordinate scaling breaks the approximation theorem:
    - A fixed nonsingular affine map preserves the rates and changes only the constants.
@@ -48,6 +49,16 @@ Step 0.1 changes how non-finite R̂ is treated in [ChainEnsemble](../../src/math
    - Implement the chosen option. Because the target is one-dimensional in `log λ`, check it against quadrature.
    - `Gibbs`, `AdaptiveGibbs` and `MarginalEvidence` use different priors, so agreement between them is not a criterion.
 6. **B01 policy in BAPS display.** Move [BapsSampler](../../src/maths/regression/spline/baps/BapsSampler.cs#L160) to the moments form of R̂: a `RunningMoments` per chain and `ChainDiagnostics.RHat` returning an `RHatDiagnostic`, so `RHatLogLambda` carries its state. The sums-based overload it calls today stays only until then. Step 0.1 already changed `BgpResult.BandwidthRHat` to `RHatDiagnostic`.
+
+### Related findings outside this chip's repairs
+
+Added 2026-10-19 from the [additional-bugs review](gemini-additional-bugs.md). None of these is a reviewed baseline defect, and none touches BASS. Record what you observe about them in the report, but don't repair them here:
+
+- `HierarchicalPSpline` runs a single chain with no R̂ or ESS (already documented). Multi-chain support would need the ensemble shell; it is a candidate after this chip.
+- `BapsSampler` and `HierarchicalPSpline` accept only `DifferencePenalty`, not the `IBandPenalty` extension interface.
+- `AnisotropicTensorSpline` has no λ optimizer (already documented).
+- `MarginalEvidence` mode reassembles and refactors the banded system on every recorded step. If the R02 repair touches this path, keep any caching change in a separate commit.
+- BGP's acceptance rate includes burn-in. The fix belongs to the shell (main-track step 3.4), and BGP inherits it.
 
 ## Order of work
 
