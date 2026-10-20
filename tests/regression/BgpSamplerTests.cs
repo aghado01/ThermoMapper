@@ -90,13 +90,13 @@ public sealed class BgpSamplerTests
         for (int i = 0; i < nTest; i++) varF += (fTe[i] - meanF) * (fTe[i] - meanF);
         varF /= nTest;
 
-        _out.WriteLine($"[bgp-swiss] t̂={r.BandwidthMean:F3} [{r.BandwidthLo:F3},{r.BandwidthHi:F3}] " +
+        _out.WriteLine($"[bgp-swiss] t̂={r.Bandwidth.Mean:F3} [{r.Bandwidth.Lo:F3},{r.Bandwidth.Hi:F3}] " +
                        $"accept={r.AcceptanceRate:F3} test MSE={mse:F4} (Var f*={varF:F3})");
 
         // Recovers the manifold function: out-of-sample error far below the function's own variance.
         Assert.True(mse < 0.1 * varF, $"test MSE {mse:F4} should be ≪ Var f* {varF:F3}");
         Assert.InRange(r.AcceptanceRate, 0.1, 0.85);                    // healthy RW mixing
-        Assert.True(r.BandwidthMean > prior.LowerBound && r.BandwidthMean <= 1.0, "t̂ inside the prior band");
-        Assert.True(r.BandwidthLo < r.BandwidthHi, "non-degenerate bandwidth posterior");
+        Assert.True(r.Bandwidth.Mean > prior.LowerBound && r.Bandwidth.Mean <= 1.0, "t̂ inside the prior band");
+        Assert.True(r.Bandwidth.Lo < r.Bandwidth.Hi, "non-degenerate bandwidth posterior");
     }
 }

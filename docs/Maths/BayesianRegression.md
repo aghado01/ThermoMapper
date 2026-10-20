@@ -200,7 +200,7 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
 **Input units and the fitted transform.** `GpRegression` fits one `GpTransform` on the training inputs, and training and prediction share it:
 
 - **Inputs.** The default, `GpInputScaling.Similarity`, is the isotropic map $\phi(x)=(x-\mathrm{lo})/s$. Here lo is the per-coordinate training minimum and s the largest coordinate span, so the data fill the unit cube with their shape preserved. A constant coordinate maps to 0. `GpInputScaling.None` uses the inputs as given, for callers whose coordinates already have squared distances of order 1.
-- **Units.** Bandwidths, the prior's support and $T_n$ are all in the mapped frame. A bandwidth t there is $s^2t$ in the original units; `BgpResult.InputScale` reports s.
+- **Units.** The sampler, the prior's support and $T_n$ work in the mapped frame. A bandwidth t there is $s^2t$ in the original units. `BgpResult` reports the bandwidth posterior mean and its 2.5% and 97.5% quantiles in both frames, as `Bandwidth` and `BandwidthOriginal` (both `BandwidthSummary`), together with s as `InputScale`.
 - **Validation.** Non-finite inputs or responses are rejected, and so are all-identical inputs under `Similarity`.
 
 The response is not rescaled, so σ² stays in response units.

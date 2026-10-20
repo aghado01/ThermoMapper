@@ -5,13 +5,16 @@ using Maths.Samplers.Ensemble;
 
 namespace Maths.Regression.Bgp;
 
+/// <summary>A bandwidth posterior in one frame: the posterior mean and the type-7 2.5% and 97.5% quantiles.</summary>
+public sealed record BandwidthSummary(double Mean, double Lo, double Hi);
+
 /// <summary>The pooled posterior of a Bayesian-GP run: the Bayes-averaged conditional mean at the requested points
 /// plus the bandwidth posterior (the data-chosen length scale, with a credible interval) and the sampler's mixing
 /// and convergence.</summary>
 /// <param name="PosteriorMean">f̂(x*) at each test point — averaged over the bandwidth posterior (model averaging).</param>
-/// <param name="BandwidthMean">t̂ = posterior-mean bandwidth, in the GP's mapped frame (as are the quantiles).</param>
-/// <param name="BandwidthLo">2.5% bandwidth quantile.</param>
-/// <param name="BandwidthHi">97.5% bandwidth quantile.</param>
+/// <param name="Bandwidth">The bandwidth posterior in the GP's mapped frame, where the sampler and the prior work.</param>
+/// <param name="BandwidthOriginal">The same posterior in the original input units: every value is s²·t (exact for the mean
+/// and, the map being monotone, for the quantiles).</param>
 /// <param name="AcceptanceRate">Metropolis acceptance over the sampled steps (pooled across chains).</param>
 /// <param name="Draws">Post-burn draws averaged (pooled = chains × per-chain draws).</param>
 /// <param name="BandwidthRHat">Gelman–Rubin R̂ on the bandwidth across chains (unavailable for a single chain) — ≈1 at convergence.</param>
@@ -20,7 +23,7 @@ namespace Maths.Regression.Bgp;
 /// <param name="InputScale">The GP's fitted input scale s (<see cref="GpTransform.InputScale"/>): a bandwidth t in the mapped frame is s²·t in the original units.</param>
 public sealed record BgpResult(
     double[] PosteriorMean,
-    double BandwidthMean, double BandwidthLo, double BandwidthHi,
+    BandwidthSummary Bandwidth, BandwidthSummary BandwidthOriginal,
     double AcceptanceRate, int Draws,
     RHatDiagnostic BandwidthRHat, double BandwidthEss, int[] ChainSeeds, double InputScale);
 
@@ -107,7 +110,11 @@ public sealed class BgpSampler : IEnsembleModel<double>
         for (int i = 0; i < m; i++) meanAcc[i] /= denom;
         allT.Sort();
 
-        return new BgpResult(meanAcc, summary.FunctionalMean[0], Quantile(allT, 0.025), Quantile(allT, 0.975),
+        var fitted = new BandwidthSummary(summary.FunctionalMean[0], Quantile(allT, 0.025), Quantile(allT, 0.975));
+        double s2 = _gp.Transform.InputScale * _gp.Transform.InputScale;   // t_original = s²·t
+        var original = new BandwidthSummary(s2 * fitted.Mean, s2 * fitted.Lo, s2 * fitted.Hi);
+
+        return new BgpResult(meanAcc, fitted, original,
                              summary.AcceptanceRate, chains * summary.SamplesUsed,
                              summary.FunctionalRHat[0], summary.FunctionalEss[0], summary.ChainSeeds,
                              _gp.Transform.InputScale);

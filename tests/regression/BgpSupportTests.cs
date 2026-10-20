@@ -74,8 +74,8 @@ public sealed class BgpSupportTests
         var prior = new EmpiricalBayesBandwidthPrior(gp);
         BgpResult r = new BgpSampler(gp, prior).Run(x, draws: 200, burn: 50, proposalSd: 1e-4, seed: 3, chains: 2);
 
-        Assert.True(r.BandwidthLo > prior.LowerBound && r.BandwidthHi <= 1.0,
-            $"draws [{r.BandwidthLo}, {r.BandwidthHi}] must lie in ({prior.LowerBound}, 1]");
+        Assert.True(r.Bandwidth.Lo > prior.LowerBound && r.Bandwidth.Hi <= 1.0,
+            $"draws [{r.Bandwidth.Lo}, {r.Bandwidth.Hi}] must lie in ({prior.LowerBound}, 1]");
         Assert.True(r.AcceptanceRate > 0.0, "the chains must move inside the support");
     }
 

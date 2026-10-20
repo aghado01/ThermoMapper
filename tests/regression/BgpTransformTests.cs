@@ -69,7 +69,7 @@ public sealed class BgpTransformTests
 
         BgpResult r = new BgpSampler(gp, new EmpiricalBayesBandwidthPrior(gp)).Run(xTest, draws: 300, burn: 100, seed: 2);
         BgpResult rShift = new BgpSampler(gpShift, new EmpiricalBayesBandwidthPrior(gpShift)).Run(xTest, draws: 300, burn: 100, seed: 2);
-        Close(r.BandwidthMean, rShift.BandwidthMean, 1e-9, "posterior-mean bandwidth");
+        Close(r.Bandwidth.Mean, rShift.Bandwidth.Mean, 1e-9, "posterior-mean bandwidth");
         for (int i = 0; i < pred.Length; i++) Close(r.PosteriorMean[i] + 20.0, rShift.PosteriorMean[i], 1e-8, $"posterior mean {i}");
     }
 
@@ -99,8 +99,30 @@ public sealed class BgpTransformTests
 
         BgpResult r = new BgpSampler(gp, prior).Run(xTest, draws: 300, burn: 100, seed: 4);
         BgpResult ru = new BgpSampler(gpUnits, priorUnits).Run(xTestUnits, draws: 300, burn: 100, seed: 4);
-        Close(r.BandwidthMean, ru.BandwidthMean, 1e-9, "posterior-mean bandwidth");
+        Close(r.Bandwidth.Mean, ru.Bandwidth.Mean, 1e-9, "posterior-mean bandwidth (fitted frame)");
+        Close(1e4 * r.BandwidthOriginal.Mean, ru.BandwidthOriginal.Mean, 1e-9, "posterior-mean bandwidth (original units)");
         Close(100.0 * r.InputScale, ru.InputScale, 1e-12, "reported input scale");
+    }
+
+    [Theory]
+    [InlineData(GpInputScaling.Similarity)]
+    [InlineData(GpInputScaling.None)]
+    public void BgpResult_ReportsTheBandwidthInBothFrames(GpInputScaling scaling)
+    {
+        // Spans about 3 and 1.2 (Similarity: s ≈ 3); with None the two frames coincide.
+        (double[,] x, double[] y, double[,] xTest) = Data();
+        double[,] xWide = Affine(x, 3.0, 1.0), xTestWide = Affine(xTest, 3.0, 1.0);
+        var gp = new GpRegression(xWide, y, 0.0025, new SquaredExponentialKernel(), scaling);
+        BgpResult r = new BgpSampler(gp, new EmpiricalBayesBandwidthPrior(gp)).Run(xTestWide, draws: 200, burn: 100, seed: 6);
+
+        double s2 = r.InputScale * r.InputScale;
+        Assert.Equal(gp.Transform.InputScale, r.InputScale);
+        if (scaling == GpInputScaling.None) Assert.Equal(1.0, r.InputScale);
+        else Assert.InRange(r.InputScale, 2.9, 3.0);   // 3 × the first coordinate's sample span
+        Close(s2 * r.Bandwidth.Mean, r.BandwidthOriginal.Mean, 1e-12, "original-frame mean");
+        Close(s2 * r.Bandwidth.Lo, r.BandwidthOriginal.Lo, 1e-12, "original-frame 2.5% quantile");
+        Close(s2 * r.Bandwidth.Hi, r.BandwidthOriginal.Hi, 1e-12, "original-frame 97.5% quantile");
+        Assert.True(r.Bandwidth.Lo < r.Bandwidth.Mean && r.Bandwidth.Mean < r.Bandwidth.Hi);
     }
 
     [Fact]
