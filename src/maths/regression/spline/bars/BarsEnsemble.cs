@@ -222,11 +222,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var moveAtt = new Dictionary<string, long>();
         var moveAcc = new Dictionary<string, long>();
         for (int ci = 0; ci < chains; ci++)
-        {
-            BankMoveStats(bars[ci]);   // fold the final (post-last-rebuild) segment
-            foreach (var kv in bars[ci].MoveAtt) moveAtt[kv.Key] = moveAtt.GetValueOrDefault(kv.Key) + kv.Value;
-            foreach (var kv in bars[ci].MoveAcc) moveAcc[kv.Key] = moveAcc.GetValueOrDefault(kv.Key) + kv.Value;
-        }
+            foreach (MoveStat m in bars[ci].RjChain.MoveStats())
+            {
+                moveAtt[m.Key] = moveAtt.GetValueOrDefault(m.Key) + m.Attempts;
+                moveAcc[m.Key] = moveAcc.GetValueOrDefault(m.Key) + m.Accepted;
+            }
         var moveStats = new List<MoveStat>(moveAtt.Count);
         foreach (string key in moveAtt.Keys)
             moveStats.Add(new MoveStat(key, moveAtt[key], moveAcc.GetValueOrDefault(key)));
@@ -385,16 +385,6 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         return (0, 0);
     }
 
-    // Fold the chain's current per-move counts into the chain-state banks (the chain resets on resampler rebuilds).
-    private static void BankMoveStats(BarsChainRun st)
-    {
-        foreach (MoveStat m in st.RjChain.MoveStats())
-        {
-            st.MoveAtt[m.Key] = st.MoveAtt.GetValueOrDefault(m.Key) + m.Attempts;
-            st.MoveAcc[m.Key] = st.MoveAcc.GetValueOrDefault(m.Key) + m.Accepted;
-        }
-    }
-
     // Nearest grid index to x for the peak-intensity deposit (grid ascending — it is the evaluation grid).
     private static int NearestGridIndex(double[] grid, double x)
     {
@@ -509,7 +499,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// <summary>
     /// One BARS reversible-jump replica + its thread-local accumulators. As an <see cref="IChain{KnotConfig}"/> its
     /// <see cref="Step"/> advances the chain (or tempered ladder) and runs the resampler block, and its acceptance
-    /// is banked-inclusive (it survives the resampler's chain rebuilds); as an <see cref="IChainRun{KnotConfig}"/>
+    /// is the RJ chain's cumulative count; as an <see cref="IChainRun{KnotConfig}"/>
     /// it burns adaptively, reduces a draw to functionals, and carries the BARS sinks (peak cloud, λ/π fields).
     /// </summary>
     private sealed class BarsChainRun : IChain<KnotConfig>, IChainRun<KnotConfig>
@@ -524,13 +514,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         public IKnotKernel Kernel = null!;
         public Xoshiro256PlusPlus ReadoutRng = null!;   // per-draw coefficient draws, decoupled from the chain RNG
         public ParallelTempering<KnotConfig>? Ladder;   // set ⇒ the RJ chain is this ladder's cold replica
-        public readonly Dictionary<string, long> MoveAtt = new();   // per-move attempts, banked across rebuilds
-        public readonly Dictionary<string, long> MoveAcc = new();   // per-move accepts
         public double PeakLocSum;
         public double PeakHeightSum;
         public double PeakCountSum;
-        public long BankedAccepted;
-        public long BankedAttempts;
         public int SinceWeight;
 
         private ReversibleJumpChain<KnotConfig> _rjChain = null!;
@@ -544,14 +530,14 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             SpanCoverageSum = new double[gridSize];
         }
 
-        /// <summary>The live RJ chain — for the tempered case, the ladder's cold replica (reassigned on resampler rebuilds).</summary>
+        /// <summary>The RJ chain — for the tempered case, the ladder's cold replica. Set once, at start.</summary>
         public ReversibleJumpChain<KnotConfig> RjChain => _rjChain;
         public void SetChain(ReversibleJumpChain<KnotConfig> chain) => _rjChain = chain;
 
-        // IChain — banked-inclusive so the resampler's chain rebuilds don't drop acceptance history.
+        // IChain
         public KnotConfig Step() => _owner.StepOnce(this);
-        public long Accepted => BankedAccepted + _rjChain.Accepted;
-        public long Attempts => BankedAttempts + _rjChain.Attempts;
+        public long Accepted => _rjChain.Accepted;
+        public long Attempts => _rjChain.Attempts;
 
         // IChainRun
         public IChain<KnotConfig> Chain => this;
