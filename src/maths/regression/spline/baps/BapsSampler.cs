@@ -38,7 +38,8 @@ public enum BapsLambdaUpdate
 /// <paramref name="LambdaMean"/>/<paramref name="LambdaLo"/>/<paramref name="LambdaHi"/> summarize the global
 /// smoothing (in the adaptive mode, λ_global). <paramref name="LocalSmoothing"/> is the posterior-mean local
 /// smoothing field λ_i (length ν−r) — non-null only for <see cref="BapsLambdaUpdate.AdaptiveGibbs"/>; its dips
-/// mark where the fit was allowed to track features.
+/// mark where the fit was allowed to track features. <paramref name="RHatLogLambda"/> is R̂ on log λ across chains
+/// with its <see cref="RHatState"/> (unavailable for a single chain).
 /// </remarks>
 public sealed record BapsResult(
     double[] Coefficients,
@@ -46,7 +47,7 @@ public sealed record BapsResult(
     double LambdaLo,
     double LambdaHi,
     double SigmaMean,
-    double RHatLogLambda,
+    RHatDiagnostic RHatLogLambda,
     int Draws,
     double[]? LocalSmoothing = null);
 
@@ -123,8 +124,7 @@ public sealed class BapsSampler
 
         double total = chains * (double)samples;
         var coef = new double[_nu];
-        var logLamSum = new double[chains];
-        var logLamSumSq = new double[chains];
+        var logLam = new RunningMoments[chains];
         double sigSum = 0.0;
         var allLam = new double[(int)total];
         int idx = 0;
@@ -132,8 +132,7 @@ public sealed class BapsSampler
         {
             ChainAccum a = accums[c];
             for (int p = 0; p < _nu; p++) coef[p] += a.CoefSum[p];
-            logLamSum[c] = a.LogLamSum;
-            logLamSumSq[c] = a.LogLamSumSq;
+            logLam[c] = a.LogLambda;
             sigSum += a.SigmaSum;
             Array.Copy(a.Lambdas, 0, allLam, idx, samples);
             idx += samples;
@@ -157,7 +156,7 @@ public sealed class BapsSampler
 
         return new BapsResult(
             coef, lamMean, Quantile(allLam, 0.025), Quantile(allLam, 0.975),
-            sigSum / total, ChainDiagnostics.RHat(logLamSum, logLamSumSq, samples), (int)total, localField);
+            sigSum / total, ChainDiagnostics.RHat(logLam), (int)total, localField);
     }
 
     // ── Gibbs: β | σ²,τ²  then  σ² | β  then  τ² | β ───────────────────────────
@@ -303,14 +302,13 @@ public sealed class BapsSampler
         return sorted[lo] + (pos - lo) * (sorted[hi] - sorted[lo]);
     }
 
-    // Per-chain reduction: running Σβ, the λ draws, and the log-λ moments for R̂.
+    // Per-chain reduction: running Σβ, the λ draws, and the streaming log-λ moments for R̂.
     private sealed class ChainAccum
     {
         public readonly double[] CoefSum;
         public readonly double[] Lambdas;
         public readonly double[]? LocalLambdaSum;   // running Σ λ_i field (adaptive mode only)
-        public double LogLamSum;
-        public double LogLamSumSq;
+        public RunningMoments LogLambda;
         public double SigmaSum;
 
         public ChainAccum(int nu, int samples, int nLocal)
@@ -324,9 +322,7 @@ public sealed class BapsSampler
         {
             for (int p = 0; p < CoefSum.Length; p++) CoefSum[p] += beta[p];
             Lambdas[i] = lambda;
-            double ll = Math.Log(lambda);
-            LogLamSum += ll;
-            LogLamSumSq += ll * ll;
+            LogLambda.Add(Math.Log(lambda));
             SigmaSum += sigma;
             if (localLambda is not null && LocalLambdaSum is not null)
                 for (int k = 0; k < LocalLambdaSum.Length; k++) LocalLambdaSum[k] += localLambda[k];
