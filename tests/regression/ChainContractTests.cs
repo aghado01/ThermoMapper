@@ -28,9 +28,39 @@ public sealed class ChainContractTests
         Assert.Equal(0, chain.Current);
     }
 
+    [Fact]
+    public void ReplaceTarget_KeepsStateAndCounters_AndReevaluatesTheCachedTarget()
+    {
+        IRjMove<int>[] moves = [new StepMove("up", "down", +1), new StepMove("down", "up", -1)];
+        var chain = new ReversibleJumpChain<int>(moves, new FlatTarget(), 0, new Xoshiro256PlusPlus(3));
+        for (int i = 0; i < 50; i++) chain.Step();
+
+        int state = chain.Current;
+        long attempts = chain.Attempts, accepted = chain.Accepted;
+        MoveStat[] before = [.. chain.MoveStats()];
+
+        chain.ReplaceTarget(new LinearTarget(0.5));
+
+        Assert.Equal(state, chain.Current);
+        Assert.Equal(0.5 * state, chain.CurrentLogTarget);
+        Assert.Equal(attempts, chain.Attempts);
+        Assert.Equal(accepted, chain.Accepted);
+        Assert.Equal(before, chain.MoveStats());
+
+        chain.Step();
+        Assert.Equal(attempts + 1, chain.Attempts);
+    }
+
     private sealed class FlatTarget : IRjTarget<int>
     {
         public double LogPosterior(int state) => 0.0;
+    }
+
+    private sealed class LinearTarget : IRjTarget<int>
+    {
+        private readonly double _slope;
+        public LinearTarget(double slope) => _slope = slope;
+        public double LogPosterior(int state) => _slope * state;
     }
 
     private sealed class StepMove : IRjMove<int>

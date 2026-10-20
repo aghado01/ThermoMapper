@@ -20,7 +20,7 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
 {
     private readonly IReadOnlyList<IRjMove<TState>> _moves;
     private readonly Dictionary<string, IRjMove<TState>> _byKey;
-    private readonly IRjTarget<TState> _target;
+    private IRjTarget<TState> _target;
     private readonly Xoshiro256PlusPlus _rng;
     private double _currentLogTarget;   // cached log-density of Current; only the candidate is evaluated per step
     private readonly long[] _moveAttempts;
@@ -147,6 +147,18 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
     {
         Current = state;
         _currentLogTarget = logTarget;
+    }
+
+    /// <summary>
+    /// Replace the target the chain samples, keeping its state and cumulative counters, and re-evaluate the cached
+    /// log target at <see cref="Current"/>. For a conditional update that changes the target between steps: new
+    /// robustness weights, a hyperparameter draw, or the next stage of a tempering or SMC sequence.
+    /// </summary>
+    public void ReplaceTarget(IRjTarget<TState> target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        _target = target;
+        _currentLogTarget = target.LogPosterior(Current);
     }
 
     private double TotalWeight(TState state)

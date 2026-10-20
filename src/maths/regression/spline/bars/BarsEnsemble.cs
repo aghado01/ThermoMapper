@@ -276,7 +276,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
     // Advance the chain one step (the IChain.Step body): step the lone chain or the tempered ladder (returning the
     // cold state), then run the optional scale-mixture weight resampler — every weightEvery steps it redraws w and
-    // rebuilds the RJ knot chain | w (banking the retired chain's acceptance + per-move counts first).
+    // hands the RJ knot chain the target | w, keeping its state and cumulative move counters.
     private KnotConfig StepOnce(BarsChainRun st)
     {
         st.Config = st.Ladder is not null ? st.Ladder.Step() : st.RjChain.Step();
@@ -287,10 +287,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             if (st.SinceWeight >= _weightEvery)
             {
                 st.W = _resampler.Resample(st.Config, st.W, _x, _y, _basis, _model, st.Rng);
-                st.BankedAccepted += st.RjChain.Accepted;
-                st.BankedAttempts += st.RjChain.Attempts;
-                BankMoveStats(st);
-                st.SetChain(NewChain(st));
+                st.RjChain.ReplaceTarget(new SplineTarget(_basis, _model, _prior, _x, _y, st.W));
                 st.SinceWeight = 0;
             }
         }
@@ -373,8 +370,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             int step = Math.Min(adaptEvery, burn - done);
             for (int k = 0; k < step; k++) StepOnce(st);
             done += step;
-            (long att, long acc) = RelocateStat(st.RjChain);
-            long dA = att - prevAtt, dC = acc - prevAcc;   // dA ≤ 0 ⇒ chain rebuilt (resampler) → skip this round
+            (long att, long acc) = RelocateStat(st.RjChain);   // cumulative across weight resamples
+            long dA = att - prevAtt, dC = acc - prevAcc;         // dA = 0 ⇒ no relocate attempted this window
             prevAtt = att; prevAcc = acc;
             if (dA > 0) ak.Adapt((double)dC / dA, stepSize: 3.0 / Math.Sqrt(round + 1));
             round++;
