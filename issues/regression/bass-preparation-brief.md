@@ -653,3 +653,46 @@ Commit: `5a42bcd`.
 **Step 0.5 is complete.** The next step is 0.6, baseline qualification.
 
 **Deferred:** none.
+
+### 0.6 Baseline qualification — done 2026-10-20
+
+**Qualified revision:** `4c97de2`, the source at the end of step 0.5f. The commit that records this report changes no code.
+
+**Toolchain:**
+- .NET SDK 10.0.201, target `net10.0`, Release.
+- Windows 11 Home 10.0.26220.
+- Intel Core Ultra 5 125H: 14 cores, 18 logical processors.
+
+**Results** (`scripts/fact-harness.ps1 -Project`, each case its own `dotnet test` process):
+
+| Suite | Cases | Passed | Workers | Wall time | Run |
+|---|---|---|---|---|---|
+| `Maths.Regression.Tests` | 178 | 178 | 18 | 93.2 s | `20261020_081536293` |
+| `Maths.LinAlg.Tests` | 24 | 24 | 18 | 9.6 s | `20261020_081728988` |
+| `Maths.Distributions.Tests` | 5 | 5 | 5 | 2.5 s | `20261020_081747051` |
+
+Runs are under `artifacts/test-runs/TestHarness.Runner/`.
+
+- **Not vacuous.** Every one of the 207 per-case logs reports exactly one test run and passed. The runner also sets `TreatNoTestsAsError`, so a case whose selection matched nothing would have failed.
+- **The new checks** from steps 0.1–0.5 and the chip all live in `Maths.Regression.Tests`, along with the sampler tests, so the table covers them. They include R̂, reciprocity, ownership, factor references, admission, coefficient draws, robust weights, the count law, span coverage and the BAPS and BGP checks. Theory cases with string arguments, such as `CountLawTests`', ran by exact display name.
+
+**Coverage against the gate** in the [prerequisites review](bass-adaptation-prerequisites-review.md#baseline-completion-gate):
+- **Item 1.** Each batch's report records its failing check at the parent revision.
+- **Item 2.** B01 is step 0.1; B02 is steps 0.2–0.3; B03 is steps 0.5a–f; B06 is steps 0.4 and 0.5b; B04 and B05 are the chip, complete at `fbe6d0d`.
+- **Item 3.** This report.
+
+**Intentional output changes in this baseline** (the chip's request 3). The baseline is recorded after them, so later comparisons start from:
+- the chip's BAPS and BGP result and API changes;
+- BARS's full coefficient draws and `FitSd` (0.5c);
+- exact robust weights (0.5d);
+- the ordered-uniform knot measure (0.5e). Runs with `PoissonPrior` or `UniformPrior` now use more knots than before.
+- the span-coverage union (0.5f).
+
+Step 3.5 reruns these checks after the Phase 3 migrations.
+
+**Not part of this qualification** (recorded so they are not lost):
+- **The open `EbicPrior` count-law decision** (0.5e).
+- **The multi-seed sweep of comparative stochastic assertions,** floated in the step 0.5d discussion and not adopted as part of 0.6. A candidate for step 3.5: every "A beats B on an MCMC statistic" test, swept across seeds, keeping only the margins that survive.
+- **Seed-fragile tolerances.** The harness runs each case alone, so it does not exercise seed fragility. Single-seed tolerances remain as recorded in steps 0.5d and 0.5e.
+
+**Gate status:** closed at `4c97de2`. Phase 2 can start.

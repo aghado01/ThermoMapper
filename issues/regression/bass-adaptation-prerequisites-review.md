@@ -1,6 +1,6 @@
 # BASS adaptation prerequisites review
 
-Date: 2026-10-18. Status: source review complete; repairs and runtime qualification pending. This document authorizes no source-code changes. R13 and R14 added 2026-10-19; the work is sequenced in the [preparation brief](bass-preparation-brief.md) and the [BAPS and BGP chip brief](baps-bgp-baseline-repairs-brief.md).
+Date: 2026-10-18. Status: source review complete. Repairs and runtime qualification completed 2026-10-20; the baseline gate closed at `4c97de2` (preparation brief, step 0.6 report). This document authorizes no source-code changes. R13 and R14 added 2026-10-19; the work is sequenced in the [preparation brief](bass-preparation-brief.md) and the [BAPS and BGP chip brief](baps-bgp-baseline-repairs-brief.md).
 
 Establish a sound existing regression engine before integrating BASS. Pre-existing defects must have independent reproductions, repairs or explicit statistical resolutions, and verification before the new capability is used to assess the shared infrastructure. Keep existing-engine repairs as separately scoped work, with their own evidence, so a BASS discrepancy can be attributed to the new implementation rather than an unresolved baseline defect.
 
@@ -131,7 +131,7 @@ For every batch, record the reproduction or mathematical counterexample, chosen 
 
 1. Establish independent failing checks or counterexamples for the confirmed current defects before introducing BASS or refactoring their shared contracts.
 2. Resolve B01-B06 as separately scoped repairs/qualification work. Keep hypothetical model enhancements and unrelated subsystem work outside these batches.
-3. Run the affected existing-engine suites and the new independent checks. Record a qualified source revision, toolchain and test results. Until then, the baseline gate is open.
+3. Run the affected existing-engine suites and the new independent checks. Record a qualified source revision, toolchain and test results. Until then, the baseline gate is open. **Closed 2026-10-20** at `4c97de2`: 207 of 207 cases pass across Regression, LinAlg and Distributions ([step 0.6 report](bass-preparation-brief.md#06-baseline-qualification--done-2026-10-20)).
 4. Develop and verify new numerical and general-sampler facilities against that baseline. Rerun the affected baseline checks after shared-contract migration. Changes in expected statistical behavior must be explained by the separately recorded repairs.
 5. Integrate and test BASS after the existing baseline and the specific shared facilities it consumes are qualified. Use the pinned R implementation only where its output is qualified; use independent mathematical references for known R defects.
 
