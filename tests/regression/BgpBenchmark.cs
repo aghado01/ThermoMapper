@@ -91,7 +91,7 @@ public sealed class BgpBenchmark
                 var gp = new GpRegression(xTr, y, sigma * sigma, new SquaredExponentialKernel());
 
                 // GP-EB (ours): the empirical-Bayes prior, d never supplied.
-                var prior = new EmpiricalBayesBandwidthPrior(xTr, gp);
+                var prior = new EmpiricalBayesBandwidthPrior(gp);
                 BgpResult r = new BgpSampler(gp, prior).Run(xTe, draws: 120, burn: 100, proposalSd: 0.5, seed: rep + 1);
                 ebSum += Rmse(r.PosteriorMean, fTe);
 

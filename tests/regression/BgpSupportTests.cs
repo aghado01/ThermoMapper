@@ -9,16 +9,18 @@ namespace Maths.Regression.Tests;
 /// coordinate log t before any chain starts. Without the check, two inputs at 0 and 100 put the lower bound at
 /// 2500: every warm-started chain sits at a bandwidth of zero prior density, never accepts a move, and reports a
 /// constant R̂ that satisfies a stopping rule. Boundary and constant-coordinate inputs pin the edges of the rule.
+/// The rule is checked on raw distances (<see cref="GpInputScaling.None"/>); the default similarity scaling makes
+/// such raw-unit inputs valid but cannot rescue every configuration.
 /// </summary>
 public sealed class BgpSupportTests
 {
-    private static EmpiricalBayesBandwidthPrior Prior(double[,] x)
+    private static EmpiricalBayesBandwidthPrior Prior(double[,] x, GpInputScaling scaling = GpInputScaling.None)
     {
         int n = x.GetLength(0);
         var y = new double[n];
         for (int i = 0; i < n; i++) y[i] = 0.3 * Math.Cos(i);
-        var gp = new GpRegression(x, y, sigma2: 0.01, new SquaredExponentialKernel());
-        return new EmpiricalBayesBandwidthPrior(x, gp);
+        var gp = new GpRegression(x, y, sigma2: 0.01, new SquaredExponentialKernel(), scaling);
+        return new EmpiricalBayesBandwidthPrior(gp);
     }
 
     private static double[,] Column(params double[] values)
@@ -35,6 +37,17 @@ public sealed class BgpSupportTests
         var ex = Assert.Throws<ArgumentException>(() => Prior(Column(0.0, 100.0)));
         Assert.Contains("2500", ex.Message);
         Assert.Contains("support", ex.Message);
+    }
+
+    [Fact]
+    public void SimilarityScaling_RescuesRawUnits_ButNotEveryConfiguration()
+    {
+        // Mapped to {0, 1}: T_n = 1 and the support is (0.25, 1].
+        Assert.Equal(0.25, Prior(Column(0.0, 100.0), GpInputScaling.Similarity).LowerBound, 12);
+
+        // Two opposite corners of a 4-cube stay at distance 2 after mapping: γ₁T_n² = 1, an empty support.
+        var corners = new double[,] { { 0.0, 0.0, 0.0, 0.0 }, { 50.0, 50.0, 50.0, 50.0 } };
+        Assert.Throws<ArgumentException>(() => Prior(corners, GpInputScaling.Similarity));
     }
 
     [Fact]
@@ -57,8 +70,8 @@ public sealed class BgpSupportTests
     {
         // T_n = 1.9995 ⇒ support (0.99950006…, 1]; a warm start clamped to 0.999 would sit below it.
         double[,] x = Column(0.0, 1.9995);
-        var gp = new GpRegression(x, new[] { 0.3, -0.1 }, sigma2: 0.01, new SquaredExponentialKernel());
-        var prior = new EmpiricalBayesBandwidthPrior(x, gp);
+        var gp = new GpRegression(x, new[] { 0.3, -0.1 }, sigma2: 0.01, new SquaredExponentialKernel(), GpInputScaling.None);
+        var prior = new EmpiricalBayesBandwidthPrior(gp);
         BgpResult r = new BgpSampler(gp, prior).Run(x, draws: 200, burn: 50, proposalSd: 1e-4, seed: 3, chains: 2);
 
         Assert.True(r.BandwidthLo > prior.LowerBound && r.BandwidthHi <= 1.0,
@@ -71,7 +84,7 @@ public sealed class BgpSupportTests
     {
         double[,] x = Column(0.0, 0.3, 0.7, 1.0);
         var gp = new GpRegression(x, new[] { 0.1, 0.4, -0.2, 0.0 }, sigma2: 0.01, new SquaredExponentialKernel());
-        var sampler = new BgpSampler(gp, new EmpiricalBayesBandwidthPrior(x, gp));
+        var sampler = new BgpSampler(gp, new EmpiricalBayesBandwidthPrior(gp));
         Assert.Throws<ArgumentOutOfRangeException>(() => sampler.Run(x, tInit: 2.0));
         Assert.Throws<ArgumentOutOfRangeException>(() => sampler.Run(x, tInit: 1e-6));
     }
@@ -100,8 +113,10 @@ public sealed class BgpSupportTests
         Assert.Contains("two", ex.Message);
     }
 
-    [Fact]
-    public void ConstantCoordinate_LeavesPriorAndFitUnchanged()
+    [Theory]
+    [InlineData(GpInputScaling.Similarity)]
+    [InlineData(GpInputScaling.None)]
+    public void ConstantCoordinate_LeavesPriorAndFitUnchanged(GpInputScaling scaling)
     {
         const int n = 40;
         var x1 = new double[n, 1];
@@ -115,10 +130,10 @@ public sealed class BgpSupportTests
             x2[i, 1] = 5.0;   // constant coordinate
             y[i] = Math.Sin(2.0 * Math.PI * u);
         }
-        var gp1 = new GpRegression(x1, y, sigma2: 0.01, new SquaredExponentialKernel());
-        var gp2 = new GpRegression(x2, y, sigma2: 0.01, new SquaredExponentialKernel());
-        var p1 = new EmpiricalBayesBandwidthPrior(x1, gp1);
-        var p2 = new EmpiricalBayesBandwidthPrior(x2, gp2);
+        var gp1 = new GpRegression(x1, y, sigma2: 0.01, new SquaredExponentialKernel(), scaling);
+        var gp2 = new GpRegression(x2, y, sigma2: 0.01, new SquaredExponentialKernel(), scaling);
+        var p1 = new EmpiricalBayesBandwidthPrior(gp1);
+        var p2 = new EmpiricalBayesBandwidthPrior(gp2);
 
         Assert.Equal(p1.Tn, p2.Tn);
         Assert.Equal(p1.LowerBound, p2.LowerBound);

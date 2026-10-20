@@ -76,7 +76,7 @@ public sealed class BgpSamplerTests
         for (int i = 0; i < nTrain; i++) y[i] = fTr[i] + sigma * Gaussian(rng);
 
         var gp = new GpRegression(xTr, y, sigma * sigma, new SquaredExponentialKernel());
-        var prior = new EmpiricalBayesBandwidthPrior(xTr, gp);          // d=2 never supplied
+        var prior = new EmpiricalBayesBandwidthPrior(gp);          // d=2 never supplied
         var sampler = new BgpSampler(gp, prior);
         BgpResult r = sampler.Run(xTe, draws: 300, burn: 200, proposalSd: 0.5, seed: 1);
 

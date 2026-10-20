@@ -102,7 +102,7 @@ public sealed class BgpTests
         for (int i = 0; i < n; i++)
             for (int k = 0; k < d; k++) x[i, k] = rng.NextDouble();
         var gp = new GpRegression(x, new double[n], sigma2: 1.0, new SquaredExponentialKernel());
-        return new EmpiricalBayesBandwidthPrior(x, gp, k: 5).Tn;
+        return new EmpiricalBayesBandwidthPrior(gp, k: 5).Tn;
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class BgpTests
         for (int i = 0; i < n; i++) { x[i, 0] = rng.NextDouble(); x[i, 1] = rng.NextDouble(); }  // d=2 in R³
 
         var gp = new GpRegression(x, new double[n], sigma2: 1.0, new SquaredExponentialKernel());
-        var prior = new EmpiricalBayesBandwidthPrior(x, gp);
+        var prior = new EmpiricalBayesBandwidthPrior(gp);
 
         _out.WriteLine($"[bgp-prior] k={prior.K} T_n={prior.Tn:F4} support=({prior.LowerBound:F5}, 1]");
 

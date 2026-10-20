@@ -11,6 +11,7 @@ namespace Maths.Regression.Bgp;
 /// T_n² ∼ n^{−2/d} — so the prior concentrates t near the dimension-adaptive scale n^{−2/(2s+d)} <em>without ever
 /// estimating d</em> (their Prop. 4.4). It is an observable over the data that induces a density over the
 /// bandwidth field; the normalizer is dropped because the downstream Metropolis–Hastings sampler never needs it.
+/// T_n is measured in the GP's mapped frame (<see cref="GpRegression.Transform"/>), the frame the kernel sees.
 /// Construction rejects data whose support is empty or unbounded in log t (γ₁T_n² ≥ 1, T_n = 0 or non-finite), so
 /// no chain can start where the prior has no mass.
 /// </summary>
@@ -30,42 +31,34 @@ public sealed class EmpiricalBayesBandwidthPrior
     /// <summary>The neighbor order k actually used.</summary>
     public int K { get; }
 
-    /// <param name="x">n × D predictors — the same data wrapped by <paramref name="gp"/>.</param>
-    /// <param name="gp">The GP core supplying the kernel-affinity statistic v̂_n(t).</param>
+    /// <param name="gp">The GP core: its mapped-frame distances give T_n, and it supplies the kernel affinity v̂_n(t).</param>
     /// <param name="a0">Tail exponent a₀ &gt; 0 (arbitrary hyperparameter).</param>
     /// <param name="b0">Affinity weight b₀ &gt; 0 (arbitrary hyperparameter).</param>
     /// <param name="gamma1">Support-floor constant γ₁ (paper uses 1/4).</param>
     /// <param name="gamma2">Neighbor-order constant γ₂ (paper uses 1/4); k = ⌈γ₂ (ln n)²⌉, or 2 when n &lt; 200.</param>
     /// <param name="k">Explicit neighbor order, overriding the γ₂ rule (e.g. for scaling diagnostics).</param>
-    public EmpiricalBayesBandwidthPrior(double[,] x, GpRegression gp,
+    public EmpiricalBayesBandwidthPrior(GpRegression gp,
         double a0 = 1.0, double b0 = 1.0, double gamma1 = 0.25, double gamma2 = 0.25, int? k = null)
     {
-        ArgumentNullException.ThrowIfNull(x);
         ArgumentNullException.ThrowIfNull(gp);
         if (!(a0 > 0.0)) throw new ArgumentOutOfRangeException(nameof(a0));
         if (!(b0 > 0.0)) throw new ArgumentOutOfRangeException(nameof(b0));
         if (!(gamma1 > 0.0)) throw new ArgumentOutOfRangeException(nameof(gamma1));
-        int n = x.GetLength(0), dim = x.GetLength(1);
-        if (n < 2) throw new ArgumentException("The bandwidth prior needs at least two inputs: T_n is a distance to other points.", nameof(x));
-        if (gp.Count != n) throw new ArgumentException("gp must wrap the same data as x.", nameof(gp));
-        foreach (double v in x)
-            if (!double.IsFinite(v)) throw new ArgumentException("Inputs must be finite.", nameof(x));
+        int n = gp.Count;
+        if (n < 2) throw new ArgumentException("The bandwidth prior needs at least two inputs: T_n is a distance to other points.", nameof(gp));
         _gp = gp; _a0 = a0; _b0 = b0;
 
         K = k ?? (n < 200 ? 2 : (int)Math.Ceiling(gamma2 * Math.Log(n) * Math.Log(n)));
         K = Math.Clamp(K, 2, n);
 
-        // T_n = (1/n) Σ_i R̂_k(X_i); R̂_k(x) = distance to the k-th nearest neighbor (x is its own 1st NN, dist 0).
+        // T_n = (1/n) Σ_i R̂_k(X_i); R̂_k(x) = distance to the k-th nearest neighbor (x is its own 1st NN, dist 0),
+        // measured in the GP's mapped frame so the support and the kernel share units.
+        double[,] sq = gp.SquaredDistances;
         var d2 = new double[n];
         double sum = 0.0;
         for (int i = 0; i < n; i++)
         {
-            for (int j = 0; j < n; j++)
-            {
-                double s = 0.0;
-                for (int c = 0; c < dim; c++) { double diff = x[i, c] - x[j, c]; s += diff * diff; }
-                d2[j] = s;
-            }
+            for (int j = 0; j < n; j++) d2[j] = sq[i, j];
             Array.Sort(d2);
             sum += Math.Sqrt(d2[K - 1]);   // k-th smallest (index 0 = self = 0)
         }
@@ -80,15 +73,16 @@ public sealed class EmpiricalBayesBandwidthPrior
         string bound = lowerBound.ToString(CultureInfo.InvariantCulture);
         string t = tn.ToString(CultureInfo.InvariantCulture);
         if (!double.IsFinite(lowerBound))
-            throw new ArgumentException($"The bandwidth support (γ₁T_n², 1] is not finite: γ₁T_n² = {bound} with T_n = {t}.", "x");
+            throw new ArgumentException($"The bandwidth support (γ₁T_n², 1] is not finite: γ₁T_n² = {bound} with T_n = {t}.", "gp");
         if (lowerBound >= 1.0)
             throw new ArgumentException(
                 $"The bandwidth support (γ₁T_n², 1] is empty: γ₁T_n² = {bound} with T_n = {t}. " +
-                "The upper bound 1 assumes squared input distances of order 1; scale the inputs into the unit cube.", "x");
+                "The upper bound 1 assumes squared distances of order 1 in the GP's input frame; GpInputScaling.Similarity " +
+                "maps the inputs into the unit cube.", "gp");
         if (!(lowerBound > 0.0))
             throw new ArgumentException(
                 "The bandwidth support (γ₁T_n², 1] is unbounded below in log t: T_n = 0 because every input's " +
-                "nearest other inputs are duplicates of it.", "x");
+                "nearest other inputs are duplicates of it.", "gp");
     }
 
     /// <summary>

@@ -66,9 +66,11 @@ the version we pin? The first keeps it self-contained; the second risks API drif
 
 ### BGP-2: Coordinate transforms and the adaptive rate
 
-TWCD2025 assume the data domain `X ⊂ [0,1]^D`. The instrument uses its inputs as given; the BGP
-tests and benchmark rescale each coordinate by its training min–max, `φ(x)_k = (x_k − loₖ)/spanₖ`,
-before fitting. Corrected 2026-10-19: an earlier version of this note treated the anisotropy of `φ`
+TWCD2025 assume the data domain `X ⊂ [0,1]^D`. By default the instrument imposes it with an
+isotropic similarity fitted on the training inputs, `φ(x) = (x − lo)/s`, where s is the largest
+coordinate span (`GpInputScaling.Similarity`). The BGP tests and benchmark also rescale each
+coordinate by its training min–max, `φ(x)_k = (x_k − loₖ)/spanₖ`, before fitting. Both maps are
+fitted on the sample. Corrected 2026-10-19: an earlier version of this note treated the anisotropy of `φ`
 as a possible failure of the approximation rate. Anisotropy alone does not break it; the open
 question is the data dependence of a fitted transform.
 
@@ -85,11 +87,13 @@ Per-coordinate scales are a diagonal `A`, so they are covered. This follows from
 hypotheses; the paper does not analyze preprocessing, and no new proof is claimed here.
 **Lemma-tier candidate**, complete up to citable sorries.
 
-**Fitted transforms (the open part).** The min–max map `φₙ` is estimated from the sample, so its
-constants `(loₖ, spanₖ)` depend on `n` and on the data, and the transformed design is not a fixed
-manifold sampled i.i.d. Carrying the rate over needs at least `φₙ → φ` for a fixed nonsingular `φ`,
-and Lemma 4.1's constants uniform over maps near `φ`. A coordinate whose span shrinks with `n` makes
-`φₙ` degenerate, and then the constants are not uniform. The empirical-Bayes prior (`T_n`, `v̂_n`)
+**Fitted transforms (the open part).** A fitted map `φₙ` (the default similarity or a min–max) is
+estimated from the sample, so its constants (`lo` and the span or spans) depend on `n` and on the
+data, and the transformed design is not a fixed manifold sampled i.i.d. Carrying the rate over needs
+at least `φₙ → φ` for a fixed nonsingular `φ`, and Lemma 4.1's constants uniform over maps near `φ`.
+The similarity has a single scale, the largest span, which degenerates only if every coordinate does;
+a min–max has one scale per coordinate, so any coordinate whose span shrinks with `n` makes `φₙ`
+degenerate. Then the constants are not uniform. The empirical-Bayes prior (`T_n`, `v̂_n`)
 is computed after the transform, so Prop. 4.4 needs the same conditional argument. **Enthymeme**:
 this is a forward boundary, not a citable step.
 

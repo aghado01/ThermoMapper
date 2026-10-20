@@ -9,7 +9,7 @@ namespace Maths.Regression.Bgp;
 /// plus the bandwidth posterior (the data-chosen length scale, with a credible interval) and the sampler's mixing
 /// and convergence.</summary>
 /// <param name="PosteriorMean">f̂(x*) at each test point — averaged over the bandwidth posterior (model averaging).</param>
-/// <param name="BandwidthMean">t̂ = posterior-mean bandwidth.</param>
+/// <param name="BandwidthMean">t̂ = posterior-mean bandwidth, in the GP's mapped frame (as are the quantiles).</param>
 /// <param name="BandwidthLo">2.5% bandwidth quantile.</param>
 /// <param name="BandwidthHi">97.5% bandwidth quantile.</param>
 /// <param name="AcceptanceRate">Metropolis acceptance over the sampled steps (pooled across chains).</param>
@@ -17,11 +17,12 @@ namespace Maths.Regression.Bgp;
 /// <param name="BandwidthRHat">Gelman–Rubin R̂ on the bandwidth across chains (unavailable for a single chain) — ≈1 at convergence.</param>
 /// <param name="BandwidthEss">Effective sample size of the bandwidth across the pooled chains.</param>
 /// <param name="ChainSeeds">The resolved per-chain seeds (reproducibility provenance).</param>
+/// <param name="InputScale">The GP's fitted input scale s (<see cref="GpTransform.InputScale"/>): a bandwidth t in the mapped frame is s²·t in the original units.</param>
 public sealed record BgpResult(
     double[] PosteriorMean,
     double BandwidthMean, double BandwidthLo, double BandwidthHi,
     double AcceptanceRate, int Draws,
-    RHatDiagnostic BandwidthRHat, double BandwidthEss, int[] ChainSeeds);
+    RHatDiagnostic BandwidthRHat, double BandwidthEss, int[] ChainSeeds, double InputScale);
 
 /// <summary>
 /// The top of the Bayesian-GP instrument (Tang, Wu, Cheng &amp; Dunson 2025): with the regression function
@@ -67,7 +68,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
         return new BgpChainRun(chain, _gp, _xTest, _testCount);
     }
 
-    /// <param name="xTest">Points at which to report the posterior mean (the training inputs for the in-sample fit).</param>
+    /// <param name="xTest">Points (original units) at which to report the posterior mean (the training inputs for the in-sample fit).</param>
     /// <param name="draws">Post-burn draws to average, per chain.</param>
     /// <param name="burn">Burn-in steps per chain.</param>
     /// <param name="proposalSd">Random-walk standard deviation on log t.</param>
@@ -85,7 +86,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
         if (!(t0 > _prior.LowerBound && t0 <= 1.0))
             throw new ArgumentOutOfRangeException(nameof(tInit), t0, "The starting bandwidth must lie in the prior support (γ₁T_n², 1].");
 
-        _xTest = xTest;
+        _xTest = _gp.Transform.MapInputs(xTest);   // mapped once; every draw predicts in the fitted frame
         _t0 = t0;
         _proposalSd = proposalSd;
         _testCount = xTest.GetLength(0);
@@ -108,7 +109,8 @@ public sealed class BgpSampler : IEnsembleModel<double>
 
         return new BgpResult(meanAcc, summary.FunctionalMean[0], Quantile(allT, 0.025), Quantile(allT, 0.975),
                              summary.AcceptanceRate, chains * summary.SamplesUsed,
-                             summary.FunctionalRHat[0], summary.FunctionalEss[0], summary.ChainSeeds);
+                             summary.FunctionalRHat[0], summary.FunctionalEss[0], summary.ChainSeeds,
+                             _gp.Transform.InputScale);
     }
 
     private static double Quantile(List<double> sorted, double q)
@@ -213,7 +215,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
         {
             functionals[0] = draw;
             TDraws.Add(draw);
-            double[] pred = _gp.PredictMean(_chain.CurrentFit, _xTest);
+            double[] pred = _gp.PredictMeanInFrame(_chain.CurrentFit, _xTest);
             for (int i = 0; i < MeanAcc.Length; i++) MeanAcc[i] += pred[i];
         }
     }

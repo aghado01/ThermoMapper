@@ -5,9 +5,9 @@ namespace Maths.Regression.Bgp;
 
 /// <summary>A GP fit at one bandwidth: the marginal evidence and the posterior weights α = (Σ_t+σ²I)⁻¹Y that
 /// produce the conditional-mean prediction. Returned by <see cref="GpRegression.Fit"/>.</summary>
-/// <param name="Bandwidth">The kernel bandwidth t this fit was computed at.</param>
-/// <param name="LogMarginal">log p(Y | t), the GP marginal log-likelihood (the t-posterior's likelihood factor).</param>
-/// <param name="Alpha">Posterior weights α = (Σ_t+σ²I)⁻¹Y; the conditional mean is k_t(·,X)·α.</param>
+/// <param name="Bandwidth">The kernel bandwidth t this fit was computed at, in the GP's mapped frame.</param>
+/// <param name="LogMarginal">log p(Y − ȳ | t), the GP marginal log-likelihood of the centered response (the t-posterior's likelihood factor).</param>
+/// <param name="Alpha">Posterior weights α = (Σ_t+σ²I)⁻¹(Y − ȳ); the conditional mean is ȳ + k_t(·,X)·α.</param>
 public sealed record GpFit(double Bandwidth, double LogMarginal, double[] Alpha);
 
 /// <summary>
@@ -18,44 +18,58 @@ public sealed record GpFit(double Bandwidth, double LogMarginal, double[] Alpha)
 /// mean. It also exposes the kernel-affinity observable v̂_n(t) (the dimension-implicit statistic the empirical
 /// Bayes prior is built from). The linear algebra is dense (an n×n SPD Cholesky), unlike the banded free-knot
 /// world; pairwise squared distances are t-independent, so they are computed once and reused across every fit.
+/// One fitted <see cref="GpTransform"/> is shared by training and prediction: inputs are mapped into its frame
+/// (by default an isotropic similarity into the unit cube), and the response is centered on its training mean,
+/// which predictions restore. Bandwidths are in the mapped frame.
 /// </summary>
 public sealed class GpRegression
 {
-    private readonly double[,] _x;        // n × D train predictors (ambient coordinates)
-    private readonly double[] _y;         // n responses
+    private readonly double[,] _x;        // n × D train predictors in the mapped frame
+    private readonly double[] _y;         // n centered responses
     private readonly double _sigma2;      // known noise variance σ²
     private readonly IGpKernel _kernel;
     private readonly int _n;
     private readonly int _d;              // ambient dimension D
-    private readonly double[,] _sqDist;   // n × n precomputed ‖X_i − X_j‖² (independent of t)
+    private readonly double[,] _sqDist;   // n × n precomputed ‖X_i − X_j‖² in the mapped frame (independent of t)
 
-    /// <param name="x">n × D matrix of ambient predictor coordinates.</param>
+    /// <param name="x">n × D matrix of ambient predictor coordinates, in any units.</param>
     /// <param name="y">Length-n responses.</param>
-    /// <param name="sigma2">Known observation-noise variance σ² &gt; 0.</param>
+    /// <param name="sigma2">Known observation-noise variance σ² &gt; 0, in response units.</param>
     /// <param name="kernel">Radial covariance kernel (squared-exponential is the canonical choice).</param>
-    public GpRegression(double[,] x, double[] y, double sigma2, IGpKernel kernel)
+    /// <param name="scaling">How the inputs are mapped before fitting (default: isotropic similarity into the unit cube).</param>
+    public GpRegression(double[,] x, double[] y, double sigma2, IGpKernel kernel,
+                        GpInputScaling scaling = GpInputScaling.Similarity)
     {
         ArgumentNullException.ThrowIfNull(x);
         ArgumentNullException.ThrowIfNull(y);
         ArgumentNullException.ThrowIfNull(kernel);
         if (!(sigma2 > 0.0)) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive.");
+        Transform = GpTransform.Fit(x, y, scaling);
         _n = x.GetLength(0);
         _d = x.GetLength(1);
-        if (y.Length != _n) throw new ArgumentException("y length must match the number of rows of x.", nameof(y));
-        _x = x; _y = y; _sigma2 = sigma2; _kernel = kernel;
+        _x = Transform.MapInputs(x);
+        _y = new double[_n];
+        for (int i = 0; i < _n; i++) _y[i] = y[i] - Transform.ResponseOffset;
+        _sigma2 = sigma2; _kernel = kernel;
 
         _sqDist = new double[_n, _n];
         for (int i = 0; i < _n; i++)
             for (int j = i + 1; j < _n; j++)
             {
                 double s = 0.0;
-                for (int k = 0; k < _d; k++) { double diff = x[i, k] - x[j, k]; s += diff * diff; }
+                for (int k = 0; k < _d; k++) { double diff = _x[i, k] - _x[j, k]; s += diff * diff; }
                 _sqDist[i, j] = s;
                 _sqDist[j, i] = s;
             }
     }
 
     public int Count => _n;
+
+    /// <summary>The fitted input map and response offset shared by training and prediction.</summary>
+    public GpTransform Transform { get; }
+
+    /// <summary>Pairwise squared distances in the mapped frame — the frame the bandwidth prior must read.</summary>
+    internal double[,] SquaredDistances => _sqDist;
 
     /// <summary>
     /// v̂_n(t) = mean off-diagonal kernel affinity (TWCD2025 eq. 14): (1/n(n−1)) Σ_{i≠j} k_t(X_i,X_j). The
@@ -72,10 +86,10 @@ public sealed class GpRegression
     }
 
     /// <summary>
-    /// Factor A = Σ_t + σ²I and reduce to the marginal evidence log p(Y|t) = −½ YᵀA⁻¹Y − ½ log|A| − (n/2)log2π,
-    /// together with α = A⁻¹Y for the conditional mean. The scratch matrix + Cholesky are local, so the call is
-    /// pure: an ensemble can drive many bandwidth chains concurrently over one shared <see cref="GpRegression"/>
-    /// (only the immutable <see cref="_sqDist"/> precompute is reused across fits).
+    /// Factor A = Σ_t + σ²I and reduce to the marginal evidence log p(Y−ȳ|t) = −½ (Y−ȳ)ᵀA⁻¹(Y−ȳ) − ½ log|A| −
+    /// (n/2)log2π, together with α = A⁻¹(Y−ȳ) for the conditional mean. The scratch matrix + Cholesky are local, so
+    /// the call is pure: an ensemble can drive many bandwidth chains concurrently over one shared
+    /// <see cref="GpRegression"/> (only the immutable <see cref="_sqDist"/> precompute is reused across fits).
     /// </summary>
     public GpFit Fit(double t)
     {
@@ -104,26 +118,33 @@ public sealed class GpRegression
     }
 
     /// <summary>
-    /// Posterior conditional mean f̂(x*) = Σ_j k_t(x*,X_j) α_j at each row of <paramref name="xTest"/>, using the
-    /// weights of a <see cref="Fit"/>. Pass the training inputs as <paramref name="xTest"/> for the in-sample fit.
+    /// Posterior conditional mean f̂(x*) = ȳ + Σ_j k_t(x*,X_j) α_j at each row of <paramref name="xTest"/> (original
+    /// units, mapped by the fitted <see cref="Transform"/>), using the weights of a <see cref="Fit"/>. Pass the
+    /// training inputs as <paramref name="xTest"/> for the in-sample fit.
     /// </summary>
     public double[] PredictMean(GpFit fit, double[,] xTest)
     {
         ArgumentNullException.ThrowIfNull(fit);
         ArgumentNullException.ThrowIfNull(xTest);
         if (xTest.GetLength(1) != _d) throw new ArgumentException("Test inputs must have the training dimension.", nameof(xTest));
-        int m = xTest.GetLength(0);
+        return PredictMeanInFrame(fit, Transform.MapInputs(xTest));
+    }
+
+    /// <summary>As <see cref="PredictMean"/>, for test inputs already mapped into the fitted frame.</summary>
+    internal double[] PredictMeanInFrame(GpFit fit, double[,] mappedTest)
+    {
+        int m = mappedTest.GetLength(0);
         double t = fit.Bandwidth;
         double[] alpha = fit.Alpha;
 
         var mean = new double[m];
         for (int a = 0; a < m; a++)
         {
-            double f = 0.0;
+            double f = Transform.ResponseOffset;
             for (int j = 0; j < _n; j++)
             {
                 double s = 0.0;
-                for (int k = 0; k < _d; k++) { double diff = xTest[a, k] - _x[j, k]; s += diff * diff; }
+                for (int k = 0; k < _d; k++) { double diff = mappedTest[a, k] - _x[j, k]; s += diff * diff; }
                 f += _kernel.Evaluate(s, t) * alpha[j];
             }
             mean[a] = f;

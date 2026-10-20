@@ -87,7 +87,7 @@ flowchart LR
 | Spline core | `KnotConfig`; `IBasis`; `SplineBasis(degree = 3)`; `StepBasis`; `BSpline.EvaluateBasis`, `BSpline.MakeClampedKnots`; `BandedDesign` (`Accumulate`, `AccumulateRhs`) |
 | BARS | `BarsConfig`; `Bars.Run(config, x, y, grid)` → `BarsResult`; `BarsEnsemble(basis, model, prior, kernel, resampler?, dmgkConstant?, adaptKernelTau?, temperLevels?, temperBetaMin = 0.05)`; `PeakPosterior`, `PeakMode`, `PeakSpan`; `SplineExtrema` (`Argmax`, `SignificantPeaks`, `SignificantPeakSpans`) |
 | BAPS | `DifferencePenalty(order = 2)`; `PenalizedSpline(design, y, IBandPenalty)` (`Coefficients`, `ProfiledVariance`, `RemlLogEvidence`, `EffectiveDegreesOfFreedom`, `EdfSlope`); `BapsSampler(...).Run(BapsLambdaUpdate, …)` → `BapsResult`; `HierarchicalPSpline(...).Run` → `HierarchicalResult`; `TensorProductDesign.Build` → `TensorDesign`; `TensorPenalty`; `AnisotropicTensorSpline` (`Coefficients`, `RemlLogEvidence`) |
-| BGP | `SquaredExponentialKernel : IGpKernel`; `GpRegression(x, y, sigma2, kernel)` (`Fit(t)` → `GpFit`, `PredictMean`, `KernelAffinity`); `EmpiricalBayesBandwidthPrior(x, gp, …)`; `BgpSampler(gp, prior).Run(...)` → `BgpResult` |
+| BGP | `SquaredExponentialKernel : IGpKernel`; `GpRegression(x, y, sigma2, kernel, scaling = Similarity)` (`Fit(t)` → `GpFit`, `PredictMean`, `KernelAffinity`, `Transform` → `GpTransform`); `EmpiricalBayesBandwidthPrior(gp, …)`; `BgpSampler(gp, prior).Run(...)` → `BgpResult` |
 | Changepoint | `ExactChangepoint.Infer(y, σ², ν, ρ², maxSegments)` or `Infer(y, ISegmentModel, maxSegments)` → `ChangepointResult`; `DefaultHyperparameters(y)`; `GaussianSegmentModel`, `CauchySegmentModel` |
 
 ## Algorithms
@@ -197,11 +197,18 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
 
 ### Bayesian GP bandwidth (BGP)
 
-**GP model.** A zero-mean GP with squared-exponential kernel $k_t(d^2)=\exp(-d^2/2t)$ and known noise σ². The fit is $A=K_t+\sigma^2I$, $\alpha=A^{-1}y$, with evidence
+**Input units and the fitted transform.** `GpRegression` fits one `GpTransform` on the training data, and training and prediction share it:
 
-$$\log p(y\mid t)=-\tfrac12y^\top\alpha-\tfrac12\log|A|-\tfrac n2\log2\pi.$$
+- **Inputs.** The default, `GpInputScaling.Similarity`, is the isotropic map $\phi(x)=(x-\mathrm{lo})/s$. Here lo is the per-coordinate training minimum and s the largest coordinate span, so the data fill the unit cube with their shape preserved. A constant coordinate maps to 0. `GpInputScaling.None` uses the inputs as given, for callers whose coordinates already have squared distances of order 1.
+- **Response.** Centered on the training mean ȳ. The response is not rescaled, so σ² stays in response units.
+- **Units.** Bandwidths, the prior's support and $T_n$ are all in the mapped frame. A bandwidth t there is $s^2t$ in the original units; `BgpResult.InputScale` reports s.
+- **Validation.** Non-finite inputs or responses are rejected, and so are all-identical inputs under `Similarity`.
 
-Predictions return the mean only, $\hat f(x_*)=\sum_jk_t(\|x_*-x_j\|^2)\alpha_j$. The response is not centered.
+**GP model.** A zero-mean GP for the centered response, with squared-exponential kernel $k_t(d^2)=\exp(-d^2/2t)$ on mapped distances and known noise σ². The fit is $A=K_t+\sigma^2I$ and $\alpha=A^{-1}(y-\bar y)$, with evidence
+
+$$\log p(y-\bar y\mid t)=-\tfrac12(y-\bar y)^\top\alpha-\tfrac12\log|A|-\tfrac n2\log2\pi.$$
+
+Predictions return the mean only, $\hat f(x_*)=\bar y+\sum_jk_t(\|\phi(x_*)-\phi(x_j)\|^2)\alpha_j$, with the test inputs mapped by the training transform.
 
 **Empirical-Bayes prior** (Tang, Wu, Cheng & Dunson 2025):
 
@@ -211,10 +218,10 @@ $$\log p(t)=-a_0\ln t-\frac{b_0}{\hat v_n(t)},\qquad t\in(\gamma_1T_n^2,\,1],$$
 - $T_n$ is the mean distance to the K-th nearest neighbor, where the neighbor list counts the point itself first. So $K=2$ means the nearest *other* point.
 - $K=2$ for $n<200$, and $\lceil\gamma_2(\ln n)^2\rceil$ otherwise.
 - The defaults are $a_0=b_0=1$ and $\gamma_1=\gamma_2=0.25$.
-- The upper bound 1 is fixed, which assumes the predictors are scaled so that squared distances are O(1); TWCD2025 take the domain to be $[0,1]^D$. Inputs are used in the units given.
+- The upper bound 1 is fixed, which assumes squared distances of order 1 in the mapped frame; TWCD2025 take the domain to be $[0,1]^D$. The default similarity map provides that, but very few points in four or more dimensions can still give $\gamma_1T_n^2\ge1$.
 - The support must be nonempty and finite in $\ln t$. Construction rejects fewer than two inputs, non-finite inputs or $T_n$, $\gamma_1T_n^2\ge1$ (empty support), and $T_n=0$ (every point's nearest others are duplicates, so $\ln t$ is unbounded below).
 
-**Coordinate scaling and the theory.** A fixed nonsingular affine map of the inputs, including per-coordinate (anisotropic) scales, keeps the TWCD2025 rates, which depend only on the intrinsic dimension and the smoothness. This is a deduction from the theorem's hypotheses applied to the transformed manifold, not a new proof. The map changes only the constants: the curvature, reach, volume and diameter of the transformed manifold. An empirical min–max transform fitted on the sample depends on n, and coordinates whose span degenerates need further control; neither the paper nor a proof here covers that case. See BGP-2 in [the BGP lemma notes](../../lean/Protolemmata/BARS/bgp-twcd-lemmas.md).
+**Coordinate scaling and the theory.** A fixed nonsingular affine map of the inputs, including per-coordinate (anisotropic) scales, keeps the TWCD2025 rates, which depend only on the intrinsic dimension and the smoothness. This is a deduction from the theorem's hypotheses applied to the transformed manifold, not a new proof. The map changes only the constants: the curvature, reach, volume and diameter of the transformed manifold. An empirical transform fitted on the sample, such as the default similarity map or a per-coordinate min–max, depends on n, and a degenerating span needs further control; neither the paper nor a proof here covers that case. See BGP-2 in [the BGP lemma notes](../../lean/Protolemmata/BARS/bgp-twcd-lemmas.md).
 
 **Sampler.** A random-walk Metropolis–Hastings on $u=\ln t$ with target $\log p(y\mid e^u)+\log p(e^u)+u$. The last term is the Jacobian of $t=e^u$.
 
@@ -266,7 +273,8 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 | `BapsSampler` priorShape / priorScale / mhLogStep / phi | 1e-3 / 1e-3 / 0.6 / 1.0 | IG hyperprior; random-walk step on ln λ; adaptivity |
 | `BapsSampler.Run` chains / masterSeed / burn / samples | 4 / 1 / 500 / 1500 | — |
 | `HierarchicalPSpline.Run` burn / samples / seed | 1000 / 2000 / 1 | Single chain |
-| `EmpiricalBayesBandwidthPrior` a0 / b0 / gamma1 / gamma2 | 1 / 1 / 0.25 / 0.25 | Support $(\gamma_1T_n^2,1]$ |
+| `GpRegression` scaling | `Similarity` | Inputs mapped by $(x-\mathrm{lo})/s$; response centered |
+| `EmpiricalBayesBandwidthPrior` a0 / b0 / gamma1 / gamma2 | 1 / 1 / 0.25 / 0.25 | Support $(\gamma_1T_n^2,1]$ in the mapped frame |
 | `BgpSampler.Run` draws / burn / proposalSd / chains / seed | 600 / 200 / 0.4 / 2 / 0 | — |
 | `CauchySegmentModel` gridPoints | 512 (minimum 8) | Quadrature nodes on $\nu\pm6\rho$ |
 
@@ -288,7 +296,7 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 | Spline core | `spline/KnotConfig.cs`, `IBasis.cs`, `SplineBasis.cs`, `BSpline.cs`, `BandedDesign.cs` |
 | BARS | `spline/bars/Bars.cs`, `BarsEnsemble.cs`, `SplineTarget.cs`, `KnotMoves.cs`, `KnotKernels.cs`, `AdaptiveLocalBetaKernel.cs`, `DmgkSchedule.cs`, `ComplexityPriors.cs`, `WeightedNormalModel.cs`, `PoissonModel.cs`, `WhittleModel.cs`, `GibbsLossModel.cs`, `WeightResampling.cs`, `StepBasis.cs`, `SplineExtrema.cs`, `IObservationModel.cs`, `IKnotKernel.cs` |
 | BAPS | `spline/baps/DifferencePenalty.cs`, `IBandPenalty.cs`, `PenalizedSpline.cs`, `BapsSampler.cs`, `HierarchicalPSpline.cs`, `TensorProductDesign.cs`, `TensorPenalty.cs`, `AnisotropicTensorSpline.cs` |
-| BGP | `bgp/GpKernel.cs`, `GpRegression.cs`, `EmpiricalBayesBandwidthPrior.cs`, `BgpSampler.cs` |
+| BGP | `bgp/GpKernel.cs`, `GpTransform.cs`, `GpRegression.cs`, `EmpiricalBayesBandwidthPrior.cs`, `BgpSampler.cs` |
 | Changepoint | `changepoint/ExactChangepoint.cs`, `SegmentModels.cs` |
 
 **See also:** [Samplers](./Samplers.md) · [LinearAlgebra](./LinearAlgebra.md#band-cholesky--ldlᵀ-bandcholesky) · [ProbabilityAndInformation](./ProbabilityAndInformation.md)
