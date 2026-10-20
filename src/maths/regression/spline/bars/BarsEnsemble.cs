@@ -103,7 +103,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// <param name="kernel">The knot proposal kernel, shared by every chain and tempering replica, so it must be
     /// immutable. To tune τ, pass <paramref name="adaptKernelTau"/>, which builds a private adaptive kernel per chain.</param>
     /// <param name="dmgkConstant">When set (DMGK uses 0.4), birth/death/relocate use the prior-aware DMGK
-    /// schedule (<see cref="DmgkSchedule"/>) instead of equal weights, which DMGK report mixes the dimension better.</param>
+    /// schedule (<see cref="DmgkSchedule"/>) instead of constant weights. The prior cancels from the acceptance; dimension mixing is not faster.</param>
     /// <param name="adaptKernelTau">When set, each chain proposes with an <see cref="AdaptiveLocalBetaKernel"/>
     /// started at this τ and tunes it to the relocate target during burn-in (then freezes) — robust to a
     /// mis-scaled proposal. Overrides <paramref name="kernel"/> for proposals.</param>

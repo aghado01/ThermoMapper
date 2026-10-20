@@ -6,18 +6,22 @@ using Maths.Regression.Spline;
 namespace Maths.Regression.Spline.Bars;
 
 /// <summary>
-/// The DiMatteo–Genovese–Kass (2001) birth/death/relocate schedule: state-dependent move-selection weights that
-/// fold the knot-count prior into the proposal — <c>b_k = c·min{1, p(k+1)/p(k)}</c>, <c>d_k = c·min{1,
-/// p(k−1)/p(k)}</c>, relocate = <c>1 − b_k − d_k</c>. Because the Green-general engine applies the selection
-/// ratio <c>j_{m'}(x')/j_m(x)</c>, the prior then cancels between the posterior and selection terms, so a
-/// dimension change is accepted on the <i>likelihood</i> evidence alone, the source of the mixing gain DMGK report. Birth
-/// weight vanishes where the prior has no mass (<c>p(k+1)=0</c>), so a hard cap (e.g. <see cref="UniformPrior"/>)
-/// is honored automatically. Wraps existing knot moves via <see cref="ScheduledMove{TState}"/>; the proposal
-/// mechanics are unchanged.
+/// Green's (1995, §4.1) prior-aware birth/death/relocate schedule, which Denison et al. (1998) and
+/// DiMatteo–Genovese–Kass (2001) use with <c>c = 0.4</c>: <c>b_k = c·min{1, p(k+1)/p(k)}</c>,
+/// <c>d_k = c·min{1, p(k−1)/p(k)}</c>, relocate = <c>1 − b_k − d_k</c>. It makes <c>b_k·p(k) = d_{k+1}·p(k+1)</c>, so
+/// with the engine's selection ratio <c>j_{m'}(x')/j_m(x)</c> the prior cancels from the acceptance.
+/// The prior moves from the acceptance into the proposal rate, and because acceptance is capped at 1 this does not
+/// speed dimension mixing: the birth/death flow becomes <c>c·min(p_k, p_{k+1})·min(Ã_f, Ã_r)</c> against the
+/// constant schedule's <c>c·min(p_k·Ã_f, p_{k+1}·Ã_r)</c>, where Ã is likelihood times proposal density. The two agree
+/// under the prior alone, Green's motivating case; with a likelihood, at equal <c>c</c> the flow is never higher, and
+/// the unused mass goes to relocation. Birth weight vanishes where the prior has no mass (<c>p(k+1)=0</c>), so a hard
+/// cap (e.g. <see cref="UniformPrior"/>) costs no rejected proposals. Wraps existing knot moves via
+/// <see cref="ScheduledMove{TState}"/>; the proposal mechanics are unchanged.
 /// </summary>
 public static class DmgkSchedule
 {
-    /// <param name="c">DMGK constant in (0, 0.5] (paper default 0.4) — caps the birth+death proposal mass.</param>
+    /// <param name="c">Schedule constant in (0, 0.5], which caps the birth+death proposal mass; DMGK use 0.4. Green
+/// instead takes the largest c with b_k + d_k ≤ 0.9 for all k, which can exceed 0.5.</param>
     public static IRjMove<KnotConfig>[] Wrap(
         IRjMove<KnotConfig> birth, IRjMove<KnotConfig> death, IRjMove<KnotConfig> relocate,
         IComplexityPrior prior, double c = 0.4)

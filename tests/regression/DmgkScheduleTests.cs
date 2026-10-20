@@ -10,8 +10,9 @@ namespace Maths.Regression.Tests;
 /// <summary>
 /// The DMGK birth/death schedule (prior-aware, state-dependent move-selection weights) must sample the same
 /// posterior as equal weights — that it does is the proof the Green-general selection ratio is unbiased.
-/// The mixing gain DMGK report is logged, not asserted: over 12 master seeds on this problem DMGK had the higher
-/// ESS(k) in 5, and single-seed ESS(k) ranged 6–223 (preparation brief, BARS mixing).
+/// Mixing is logged, not asserted. At equal c the schedule never raises a birth/death flow (<see cref="DmgkSchedule"/>),
+/// and over 12 master seeds on this problem DMGK had the higher ESS(k) in 5, with single-seed ESS(k) from 6 to 223
+/// (preparation brief, BARS mixing).
 /// </summary>
 public sealed class DmgkScheduleTests
 {
