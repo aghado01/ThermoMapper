@@ -35,15 +35,16 @@ public enum BapsLambdaUpdate
 
 /// <summary>Posterior summary of a BAPS run: the Bayes fit coefficients and the smoothing / noise posteriors.</summary>
 /// <remarks>
-/// <paramref name="LambdaMean"/>/<paramref name="LambdaLo"/>/<paramref name="LambdaHi"/> summarize the global
-/// smoothing (in the adaptive mode, λ_global). <paramref name="LocalSmoothing"/> is the posterior-mean local
-/// smoothing field λ_i (length ν−r) — non-null only for <see cref="BapsLambdaUpdate.AdaptiveGibbs"/>; its dips
+/// <paramref name="LambdaMedian"/>/<paramref name="LambdaLo"/>/<paramref name="LambdaHi"/> are the 50%, 2.5% and 97.5%
+/// quantiles of the pooled draws of the global smoothing (in the adaptive mode, λ_global). A median, not a mean,
+/// because λ can be heavy-tailed enough that its posterior mean does not exist. <paramref name="LocalSmoothing"/> is
+/// the posterior-mean local smoothing field λ_i (length ν−r) — non-null only for <see cref="BapsLambdaUpdate.AdaptiveGibbs"/>; its dips
 /// mark where the fit was allowed to track features. <paramref name="RHatLogLambda"/> is R̂ on log λ across chains
 /// with its <see cref="RHatState"/> (unavailable for a single chain).
 /// </remarks>
 public sealed record BapsResult(
     double[] Coefficients,
-    double LambdaMean,
+    double LambdaMedian,
     double LambdaLo,
     double LambdaHi,
     double SigmaMean,
@@ -149,13 +150,10 @@ public sealed class BapsSampler
             for (int k = 0; k < nLoc; k++) localField[k] /= total;
         }
 
-        double lamMean = 0.0;
-        foreach (double l in allLam) lamMean += l;
-        lamMean /= total;
         Array.Sort(allLam);
 
         return new BapsResult(
-            coef, lamMean, Quantile(allLam, 0.025), Quantile(allLam, 0.975),
+            coef, Quantile(allLam, 0.5), Quantile(allLam, 0.025), Quantile(allLam, 0.975),
             sigSum / total, ChainDiagnostics.RHat(logLam), (int)total, localField);
     }
 

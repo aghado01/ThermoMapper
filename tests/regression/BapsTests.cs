@@ -74,13 +74,13 @@ public sealed class BapsTests
         }
         mse /= n;
 
-        _out.WriteLine($"[baps {mode}] mse={mse:F5} λ̄={r.LambdaMean:F2} [{r.LambdaLo:F2},{r.LambdaHi:F2}] " +
+        _out.WriteLine($"[baps {mode}] mse={mse:F5} λ̃={r.LambdaMedian:F2} [{r.LambdaLo:F2},{r.LambdaHi:F2}] " +
                        $"λ_reml={lamReml:F2} σ̄={r.SigmaMean:F3} R̂={r.RHatLogLambda:F3}");
 
         // Recovers the smooth truth.
         Assert.True(mse < 0.01, $"BAPS fit MSE {mse:F5} should recover the smooth truth");
         // Posterior smoothing concentrates around the REML optimum (order-of-magnitude agreement).
-        Assert.InRange(r.LambdaMean, lamReml / 5.0, lamReml * 5.0);
+        Assert.InRange(r.LambdaMedian, lamReml / 5.0, lamReml * 5.0);
         // Noise level recovered near the truth (σ = 0.15).
         Assert.InRange(r.SigmaMean, 0.10, 0.22);
         // Chains mixed.
