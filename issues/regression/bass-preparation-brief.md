@@ -322,3 +322,5 @@ The last check exposed a defect beyond R09: running Σ and Σ² cancel to roundi
 **Confirmed by the user, 2026-10-19:**
 - The 100-draw floor stays as a fixed constant; step 3.4 replaces it with an ESS gate.
 - A constant functional doesn't block a stop but can't certify one alone: an early stop needs at least one estimated functional, so an all-constant set runs to the end. Commit `5f8826e`; `Maths.Regression.Tests` passes 88 of 88 (run `20261019_175042153`).
+
+**Correction, 2026-10-19.** The fact-harness counts above (87 and 88) overstate coverage: before `1f96cb4`, the harness never ran theory cases, and counted them as passing. Four theories existed then (in `BandCholeskyTests`, `BapsTests`, `BgpTests` and `PeakTests`). The step 0.1 code is confirmed by a full `dotnet test` run at `fbe6d0d`, which runs every theory case: 121 of 121 pass.
