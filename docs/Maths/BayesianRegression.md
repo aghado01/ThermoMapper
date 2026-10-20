@@ -273,6 +273,7 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 - **The BAPS `MarginalEvidence` target is improper as λ → ∞.** $\ell_p$ levels off to a constant, so a flat prior on ln λ cannot be normalized. For nearly polynomial data the random walk can drift upward. The two λ modes also target different posteriors.
 - **`HierarchicalPSpline` update order.** The $\tau_u^2$ update uses the population curve from *before* that sweep's redraw. That is a simultaneous update, not a strict Gibbs scan.
 - **An adaptive kernel passed through `BarsConfig.Kernel` is shared.** Passing an `AdaptiveLocalBetaKernel` this way does enable adaptation, but every parallel chain (and every tempering replica) then shares and mutates the same kernel instance. Only `adaptKernelTau` gives each chain its own kernel.
+- **Knot count and peak location mix slowly.** In the regression tests, knot-count ESS is about 1.75% of draws and untempered peak-location ESS about 0.14%. A 5-rung tempering ladder gave about 8% on similar data, though not in a controlled comparison. Judge a run by ESS, not by draw count: an R̂ early stop can fire at 100 draws per chain, which for these readouts is only a few effective draws.
 - **Reporting limits.**
   - `AnisotropicTensorSpline` evaluates REML but provides no optimizer; callers must search $(\lambda_x,\lambda_y)$ themselves.
   - BGP's `AcceptanceRate` includes burn-in.

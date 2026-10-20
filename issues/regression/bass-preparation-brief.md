@@ -177,6 +177,45 @@ Rerun the step 0.6 checks after the migrations. Every difference must trace to a
 
 Delete the superseded surfaces in their own commit: the old target contract, the chain-rebuild path, the duplicated model math, the status-less factor calls (including BAPS and BGP once the chip has closed), and the sums-based `ChainDiagnostics.RHat` overload once BAPS has moved to the moments form.
 
+## After Phase 3: BARS mixing
+
+Added 2026-10-19. This section sits outside the baseline gate: nothing in it is required before BASS integration, apart from the step 3.4 items already listed there. Measured on existing regression tests (Release build):
+
+| Test | Readout | Draws (4 chains) | ESS | ESS per draw |
+|---|---|---|---|---|
+| `EnsembleTests.Ensemble_Converges_RHatNearOne_ConsensusSized_AndDenoises` (sine, n = 100) | Knot count | 6000 | 105 | 1.75% |
+| `PeakTests.PeakPosterior_RecoversKnownPeak_WithBracketingInterval` (bump, n = 150) | Peak location | 8000 | 11 | 0.14% |
+| `TemperingTests.TemperedEnsemble_RecoversPeak_ViaColdReplica` (bump, n = 150, 5-rung ladder) | Peak location | 8000 | 652 | 8.2% |
+
+The last two runs differ in kernel and noise seed, so the tempering gain is a lead, not a result. Even after paying for five replicas per chain, it works out to about ten times more effective peak-location draws per unit of compute.
+
+The slow mixing is mostly structural:
+
+- **One knot per step.** Each move changes one knot, so moving between substantially different curves is a random walk through model space.
+- **Near-equivalent arrangements.** Different knot arrangements that fit about equally well form separate modes.
+- **A sharp target.** With β and σ integrated out, most proposals are rejected; cold acceptance was 0.088 in the tempered run.
+- **Readouts differ.** Knot count and peak location mix slowest; fitted grid values mix faster.
+
+**Clear-cut wins.** Each of these preserves the model, rests on established results, and does not depend on the dataset:
+
+- The ESS stopping gate in step 3.4.
+- ESS reported per functional and per second, with readout time separated from kernel time. Every candidate below is judged by this measure.
+- After R12 adds full draws, keep the conditional-mean (Rao-Blackwellized) curve for linear readouts; its variance is never higher.
+- No thinning of chains for statistical reasons: thinning loses information per unit of compute (MacEachern and Berliner 1994; Link and Eaton 2012).
+
+**To consider when we get there.** Each needs a measurement, a derivation, or both:
+
+| Candidate | Why | Before adopting |
+|---|---|---|
+| Tempering as the default for slow readouts | The lead above | A controlled comparison: same data, seed and kernel, with and without the ladder, at equal compute |
+| Delayed rejection on relocations (Green and Mira 2001) | Never worse in asymptotic variance than the single-stage kernel | Gain per second, since each rejection costs another target evaluation |
+| Informed births scored by fitted gain (ΔQ, derivations review §5) | Proposes knots where the residual says they help | Exact reverse probabilities and a full-support exploratory component; uses step 2.3's explicit residual |
+| Multi-knot or split/merge moves | Larger jumps between knot arrangements | Dimension-matching and reverse-move accounting |
+| Guided walk on knot count (Gustafson 1998) | Keeps a birth/death direction, damping the random walk in k | Its own derivation for the variable-dimension case |
+| Readout thinning (Owen 2017) | Pays only if processing a draw costs more than producing it | The readout-versus-kernel timing above |
+| SMC for BARS | Independence comes from a population rather than one time series; BARS's likelihood-tempered weights are O(1) in closed form (derivations review §3) | The port's SMC core |
+| Many short chains with nested R̂ (Margossian et al.) | Uses parallel hardware without long per-chain runs | Burn-in cost per chain, and the nested-R̂ diagnostic |
+
 ## Decisions
 
 | ID | Decision | Needed before | Recommendation |
