@@ -120,6 +120,8 @@ Beyond about λ = 10⁸ the values drift because of rounding, and at 10¹⁴ the
 - **B. Declared bounded support**, uniform on log λ over [L, U]. A small code change, but for data near the null space the posterior piles up at U, so summaries depend on U directly. A scale-free U would itself be stated in edf units, which needs the A1 machinery.
 - **C. Separate evidence optimization.** Remove `MarginalEvidence` from `BapsLambdaUpdate` (a clean break) and add an explicit REML optimizer that returns λ̂, β̂(λ̂), σ̂² and a flag for when the maximum is the polynomial limit. There is no prior to defend, but the λ uncertainty under the marginal model is lost; only `Gibbs` and `AdaptiveGibbs` would report λ intervals.
 
+**Consequence for the reported mean.** A1 and A3 put positive prior density at the polynomial limit, so the posterior density of u = log λ decays only like e^(−u) (A3: e^(−u/2)). Then E[λ] = ∫ e^u p(u | y) du is infinite on any data, and `LambdaMean`, the mean of the λ draws, has no population value. On data with a clear interior maximum, the tail weight is tiny (about e^(−19) for the sine case), so the estimate is stable in practice; near the null space it is not. A2 and B keep E[λ] finite. With A1 I would report the posterior median `LambdaMedian` in place of `LambdaMean`, for all three modes. It sits with `LambdaLo` and `LambdaHi` as quantiles of the same pooled draws, and it reads the same on λ and log λ. That is a clean break in `BapsResult`, and the `BapsTests` assertions on `LambdaMean` would move to the median.
+
 **Recommendation: A1.** It keeps the mode's purpose (a λ posterior with β integrated out) without inventing a scale. The check is one-dimensional: posterior mean and quantiles of log λ from the sampler against quadrature of ℓ_p(e^u) + log(tr S − tr S²), using dense S computed independently in the test, on both the linear and the sine data. The mode's prior stays different from the `Gibbs` prior, which is already the documented position. Under `Gibbs`, the IG(10⁻³, 10⁻³) priors make the λ posterior proper only through the 10⁻³ terms; that is outside this chip and is recorded as an observation only.
 
 ### R10: input units and the fitted transform
@@ -142,7 +144,7 @@ Beyond about λ = 10⁸ the values drift because of rounding, and at 10¹⁴ the
 
 **Recommendation: T2 + M1 + centering,** with a `None` choice for callers whose inputs are already in the documented units. Both M1 and M2 are empirical transforms whose constants depend on n, which the corrected BGP-2 wording records. The tests that normalize by hand (`BgpSamplerTests`, `BgpBenchmark`) produce data that M1 maps by the identity: their training minimum is 0 and their largest span is 1.
 
-**Decisions requested:** (1) R02: A1, A2, A3, B or C. (2) R10: T1 or T2, M1 or M2, and confirmation of response centering.
+**Decisions requested:** (1) R02: A1, A2, A3, B or C, and with A1 or A3, whether `LambdaMean` becomes `LambdaMedian`. (2) R10: T1 or T2, M1 or M2, and confirmation of response centering.
 
 ## Report
 
