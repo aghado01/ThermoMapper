@@ -186,7 +186,7 @@ Rerun the step 0.6 checks after the migrations. Every difference must trace to a
 
 ### 3.6 Cleanup sweep
 
-Delete the superseded surfaces in their own commit: the old target contract, the chain-rebuild path, the duplicated model math, the status-less factor calls (including BAPS and BGP once the chip has closed), and the sums-based `ChainDiagnostics.RHat` overload once BAPS has moved to the moments form.
+Delete the superseded surfaces in their own commit: the old target contract, the duplicated model math, the status-less factor calls (including BAPS and BGP once the chip has closed), and the sums-based `ChainDiagnostics.RHat` overload once BAPS has moved to the moments form.
 
 ## After Phase 3: BARS mixing
 
@@ -324,3 +324,32 @@ The last check exposed a defect beyond R09: running Σ and Σ² cancel to roundi
 - A constant functional doesn't block a stop but can't certify one alone: an early stop needs at least one estimated functional, so an all-constant set runs to the end. Commit `5f8826e`; `Maths.Regression.Tests` passes 88 of 88 (run `20261019_175042153`).
 
 **Correction, 2026-10-19.** The fact-harness counts above (87 and 88) overstate coverage: before `1f96cb4`, the harness never ran theory cases, and counted them as passing. Four theories existed then (in `BandCholeskyTests`, `BapsTests`, `BgpTests` and `PeakTests`). The step 0.1 code is confirmed by a full `dotnet test` run at `fbe6d0d`, which runs every theory case: 121 of 121 pass.
+
+### 0.2 Target refresh and move-pair reciprocity — done 2026-10-19
+
+Commits: `c7035d5` (reciprocity), `201b2c2` (target refresh), `d10d676` (cleanup).
+
+**Failing checks at the parent revision `5d706a2`:**
+- A palette in which "up" names "down" as its reverse, but "down" names itself, was accepted.
+- Under adaptive τ, a resampler that keeps unit weights changed the result. Mean knot count compared with the run without a resampler:
+
+  | Period | Burn-in | With resampler | Without |
+  |---|---|---|---|
+  | 25 | 1000 | 2.30 | 1.60 |
+  | 30 | 1000 | 1.28 | 1.60 |
+  | 25 | 950 | 2.38 | 1.45 |
+  | 30 | 950 | 1.30 | 1.45 |
+
+  At period 25 every 200-step window saw no relocate attempts, so τ never moved. At period 30 the counters were differenced across rebuilt chain segments.
+
+**Specification:**
+- The chain constructor requires each move pair to name each other, or a move to name itself.
+- `ReversibleJumpChain.ReplaceTarget` swaps the target, keeps the state and the cumulative counters, and re-evaluates the cached log target.
+- BARS weight resampling uses `ReplaceTarget` instead of rebuilding the chain.
+- The per-rebuild counter banking is removed, since the chain now lives for the whole run.
+
+**Results:**
+- The checks in `ChainContractTests` and `AdaptationAcrossResamplingTests` pass. With a weight-keeping resampler, every schedule now reproduces the run without a resampler exactly.
+- `Maths.Regression.Tests` passes 128 of 128 under the fixed harness (run `20261019_212345405`, and again after the cleanup).
+
+**Deferred:** none. The chain-rebuild deletion that step 3.6 listed is done here, and that item is removed from 3.6.
