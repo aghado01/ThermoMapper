@@ -25,6 +25,7 @@ public sealed class PenalizedSpline
     private readonly int _nu;
     private readonly int _bw;
     private readonly double _yy;   // yᵀy
+    private readonly Lazy<double[]> _spectrum;   // generalized eigenvalues μ_j of (P, ZᵀZ + P), for edf
 
     public PenalizedSpline(double[,] design, double[] y, IBandPenalty penalty)
     {
@@ -42,6 +43,7 @@ public sealed class PenalizedSpline
         double yy = 0.0;
         for (int i = 0; i < _n; i++) yy += y[i] * y[i];
         _yy = yy;
+        _spectrum = new Lazy<double[]>(PenaltySpectrum);
     }
 
     /// <summary>Number of basis functions ν.</summary>
@@ -85,5 +87,97 @@ public sealed class PenalizedSpline
         int r = _penalty.Nullity;
         double minusTwoEll = (_n - r) * Math.Log(rssPen) - (_nu - r) * Math.Log(lambda) + logDetA;
         return -0.5 * minusTwoEll;
+    }
+
+    /// <summary>
+    /// Effective degrees of freedom <c>edf(λ) = tr[(ZᵀZ + λP)⁻¹ZᵀZ]</c> (Hodges &amp; Sargent 2001): from the number of
+    /// coefficients the data identify as λ → 0 down to the nullity r as λ → ∞. Read off the penalty spectrum in O(ν).
+    /// </summary>
+    public double EffectiveDegreesOfFreedom(double lambda)
+    {
+        if (!(lambda > 0.0)) throw new ArgumentOutOfRangeException(nameof(lambda), "Smoothing λ must be positive.");
+        double edf = 0.0;
+        foreach (double mu in _spectrum.Value) edf += (1.0 - mu) / (1.0 - mu + lambda * mu);
+        return edf;
+    }
+
+    /// <summary>
+    /// <c>|d edf / d ln λ| = Σ_j λμ_j(1 − μ_j)/(1 − μ_j + λμ_j)²</c>: the density on u = ln λ that a uniform prior on
+    /// <see cref="EffectiveDegreesOfFreedom"/> induces, up to the constant edf range (a uniform shrinkage prior in the
+    /// sense of Natarajan &amp; Kass 2000). It integrates to the edf range and decays like 1/λ, so it makes the
+    /// marginal-evidence target proper; each term is positive, so it stays accurate at extreme λ.
+    /// </summary>
+    public double EdfSlope(double lambda)
+    {
+        if (!(lambda > 0.0)) throw new ArgumentOutOfRangeException(nameof(lambda), "Smoothing λ must be positive.");
+        double slope = 0.0;
+        foreach (double mu in _spectrum.Value)
+        {
+            double denom = 1.0 - mu + lambda * mu;
+            slope += lambda * mu * (1.0 - mu) / (denom * denom);
+        }
+        return slope;
+    }
+
+    // Generalized eigenvalues μ_j ∈ [0, 1] of P relative to M = ZᵀZ + P. With W = L⁻ᵀD^{−½} from M's LDLᵀ factor
+    // (WWᵀ = M⁻¹), they are the eigenvalues of WᵀPW, and in that basis A(λ) = ZᵀZ + λP is diag(1 − μ + λμ). The r
+    // smallest belong to the penalty null space and are set to exactly zero.
+    private double[] PenaltySpectrum()
+    {
+        var band = new double[_bw + 1, _nu];
+        _design.Accumulate(null, band, null, null);   // ZᵀZ
+        _penalty.AccumulateInto(band, _nu, 1.0);      // + P
+        var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
+        chol.DecomposeBanded(band);
+        if (chol.HitFloor)
+            throw new InvalidOperationException("ZᵀZ + P is singular: the design does not identify the penalty null space.");
+
+        var w = new double[_nu, _nu];                  // columns of W = L⁻ᵀD^{−½}
+        var unit = new double[_nu];
+        var col = new double[_nu];
+        for (int k = 0; k < _nu; k++)
+        {
+            Array.Clear(unit);
+            unit[k] = 1.0;
+            chol.SampleInnovation(unit, col);
+            for (int i = 0; i < _nu; i++) w[i, k] = col[i];
+        }
+
+        var p = new double[_bw + 1, _nu];              // P in lower-band storage p[d, j] = P(j+d, j)
+        _penalty.AccumulateInto(p, _nu, 1.0);
+        var pw = new double[_nu, _nu];
+        for (int j = 0; j < _nu; j++)
+            for (int d = 0; d <= _bw && j + d < _nu; d++)
+            {
+                double v = p[d, j];
+                if (v == 0.0) continue;
+                for (int k = 0; k < _nu; k++)
+                {
+                    pw[j + d, k] += v * w[j, k];
+                    if (d > 0) pw[j, k] += v * w[j + d, k];
+                }
+            }
+
+        var c = new double[_nu, _nu];                  // WᵀPW, symmetrized
+        for (int a = 0; a < _nu; a++)
+            for (int b = 0; b <= a; b++)
+            {
+                double s = 0.0, t = 0.0;
+                for (int i = 0; i < _nu; i++) { s += w[i, a] * pw[i, b]; t += w[i, b] * pw[i, a]; }
+                c[a, b] = c[b, a] = 0.5 * (s + t);
+            }
+
+        double[] mu = DenseEigen.DecomposeSymmetric(c).Eigenvalues;
+        Array.Sort(mu);
+        int r = _penalty.Nullity;
+        bool identified = false;
+        for (int i = 0; i < mu.Length; i++)
+        {
+            mu[i] = i < r ? 0.0 : Math.Clamp(mu[i], 0.0, 1.0);
+            identified |= mu[i] > 0.0 && mu[i] < 1.0;
+        }
+        if (!identified)
+            throw new InvalidOperationException("No penalized direction is identified by the data: edf is constant in λ.");
+        return mu;
     }
 }

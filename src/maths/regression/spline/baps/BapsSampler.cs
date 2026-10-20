@@ -19,8 +19,10 @@ public enum BapsLambdaUpdate
     Gibbs,
 
     /// <summary>
-    /// Metropolis on <c>log λ</c> against the profiled REML marginal evidence (β integrated out), with a flat
-    /// prior on <c>log λ</c>; β is Rao-Blackwellized to its posterior mean at each draw. Marginalizes the spline.
+    /// Metropolis on <c>log λ</c> against the profiled REML marginal evidence (β integrated out) under a uniform prior
+    /// on the effective degrees of freedom (<see cref="PenalizedSpline.EdfSlope"/>); β is Rao-Blackwellized to its
+    /// posterior mean at each draw. Marginalizes the spline. The evidence levels off as λ → ∞, so a flat prior on
+    /// <c>log λ</c> would be improper; the edf prior decays like 1/λ and makes the target proper.
     /// </summary>
     MarginalEvidence,
 
@@ -190,18 +192,18 @@ public sealed class BapsSampler
         return acc;
     }
 
-    // ── Marginal evidence: Metropolis on log λ against the REML evidence; β Rao-Blackwellized ──
+    // ── Marginal evidence: Metropolis on log λ against REML evidence × uniform-edf prior; β Rao-Blackwellized ──
     private ChainAccum RunMarginal(Xoshiro256PlusPlus rng, int burn, int samples)
     {
         var acc = new ChainAccum(_nu, samples, 0);
         double logLam = 0.0;
-        double ev = _model.RemlLogEvidence(1.0);
+        double ev = MarginalLogTarget(1.0);
         int steps = burn + samples;
         for (int it = 0; it < steps; it++)
         {
             double prop = logLam + _mhLogStep * StandardNormal(rng);
-            double evProp = _model.RemlLogEvidence(Math.Exp(prop));
-            if (Math.Log(1.0 - rng.NextDouble()) < evProp - ev)   // flat prior on log λ ⇒ pure evidence ratio
+            double evProp = MarginalLogTarget(Math.Exp(prop));
+            if (Math.Log(1.0 - rng.NextDouble()) < evProp - ev)
             {
                 logLam = prop;
                 ev = evProp;
@@ -214,6 +216,9 @@ public sealed class BapsSampler
         }
         return acc;
     }
+
+    // log p(u | y) up to a constant on u = ln λ: the profiled evidence plus the uniform-edf prior density |d edf/du|.
+    private double MarginalLogTarget(double lambda) => _model.RemlLogEvidence(lambda) + Math.Log(_model.EdfSlope(lambda));
 
     // ── Adaptive Gibbs: as RunGibbs, plus per-difference multipliers η_i ~ Gamma(φ, φ) ──
     private ChainAccum RunAdaptiveGibbs(Xoshiro256PlusPlus rng, int burn, int samples)
