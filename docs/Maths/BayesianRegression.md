@@ -186,7 +186,7 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
 
 The two λ modes use **different priors**, so their λ posteriors, and hence `LambdaMean`, `LambdaLo` and `LambdaHi`, are not the same quantity.
 
-**Hierarchical P-spline** (Behseta–Kass–Wallstrom). Replicate curves $\beta_r\sim N(\beta_0,\tau_u^2I)$ share a penalized population curve $\beta_0$. It uses conjugate banded Gibbs updates for $\beta_r$, $\beta_0$, σ², $\tau_u^2$ and $\tau_0^2$ in a single chain.
+**Hierarchical P-spline** (Behseta–Kass–Wallstrom). Replicate curves $\beta_r\sim N(\beta_0,\tau_u^2I)$ share a penalized population curve $\beta_0$. It uses conjugate banded Gibbs updates for $\beta_r$, $\beta_0$, σ², $\tau_u^2$ and $\tau_0^2$, in that order, in a single chain. Each draw conditions on the current values of the others; in particular, the $\tau_u^2$ statistic $\sum_r\|\beta_r-\beta_0\|^2$ uses the $\beta_0$ drawn in the same sweep.
 
 **Bivariate smoothing.**
 
@@ -271,7 +271,6 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 
 - **The knot-count prior acts as $p(k)/k!$.** The BARS target adds only $\log p(k)$, and the birth move's Hastings factor assumes Lebesgue measure on ordered knots, so the stationary knot-count marginal is $\propto p(k)/k!$. If an ordered i.i.d.-uniform knot prior was intended, the target lacks $+\log k!$. The code does not state which prior was intended.
 - **The BAPS `MarginalEvidence` target is improper as λ → ∞.** $\ell_p$ levels off to a constant, so a flat prior on ln λ cannot be normalized. For nearly polynomial data the random walk can drift upward. The two λ modes also target different posteriors.
-- **`HierarchicalPSpline` update order.** The $\tau_u^2$ update uses the population curve from *before* that sweep's redraw. That is a simultaneous update, not a strict Gibbs scan.
 - **An adaptive kernel passed through `BarsConfig.Kernel` is shared.** Passing an `AdaptiveLocalBetaKernel` this way does enable adaptation, but every parallel chain (and every tempering replica) then shares and mutates the same kernel instance. Only `adaptKernelTau` gives each chain its own kernel.
 - **Knot count and peak location mix slowly.** In the regression tests, knot-count ESS is about 1.75% of draws and untempered peak-location ESS about 0.14%. A 5-rung tempering ladder gave about 8% on similar data, though not in a controlled comparison. Judge a run by ESS, not by draw count: an R̂ early stop can fire at 100 draws per chain, which for these readouts is only a few effective draws.
 - **Reporting limits.**

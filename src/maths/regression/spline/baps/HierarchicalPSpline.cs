@@ -23,7 +23,8 @@ public sealed record HierarchicalResult(
 /// deviations <c>β_r ~ N(β_0, τ_u² I)</c>, so each curve borrows strength from the others — shrunk toward the
 /// population where its own data is weak. A fully conjugate banded Gibbs on the BAPS machinery: <c>β_r | ·</c> and
 /// <c>β_0 | ·</c> are banded Gaussian draws (<see cref="BandCholesky"/> factor + <see cref="BandCholesky.SampleInnovation"/>),
-/// the three variance components <c>(σ², τ_u², τ_0²)</c> inverse-gamma (reciprocal of <see cref="Gamma"/>).
+/// the three variance components <c>(σ², τ_u², τ_0²)</c> inverse-gamma (reciprocal of <see cref="Gamma"/>). Each sweep
+/// draws β_r, then β_0, then the variances, every draw conditioning on the current values of the others.
 /// <c>Q_r = ZᵀZ/σ² + I/τ_u²</c> is shared across replicates so it factors once per sweep; the identity deviation
 /// term keeps <c>β_0</c>'s posterior proper. (Unstructured deviations are the clean first cut; smooth deviations
 /// would need a sum-to-zero constraint.)
@@ -104,7 +105,7 @@ public sealed class HierarchicalPSpline
             for (int j = 0; j < _nu; j++) qrBand[0, j] += 1.0 / tauU2;
             cholR.DecomposeBanded(qrBand);
 
-            double sumResid = 0.0, sumDev = 0.0;
+            double sumResid = 0.0;
             for (int rr = 0; rr < reps; rr++)
             {
                 for (int j = 0; j < _nu; j++) rhs[j] = zty[rr][j] / sigma2 + beta0[j] / tauU2;
@@ -115,7 +116,6 @@ public sealed class HierarchicalPSpline
                 for (int j = 0; j < _nu; j++) br[j] = mr[j] + innov[j];
 
                 sumResid += ResidualSS(_responses[rr], br);
-                for (int j = 0; j < _nu; j++) { double d = br[j] - beta0[j]; sumDev += d * d; }
             }
 
             // Q_0 = (R/τ_u²) I + (1/τ_0²) P — identity term keeps it proper despite P's null space.
@@ -131,6 +131,11 @@ public sealed class HierarchicalPSpline
             for (int j = 0; j < _nu; j++) z[j] = StandardNormal(rng);
             chol0.SampleInnovation(z, innov);
             for (int j = 0; j < _nu; j++) beta0[j] = m0[j] + innov[j];
+
+            // Deviations from the population curve just drawn: τ_u² conditions on the current β_0, not the last one.
+            double sumDev = 0.0;
+            for (int rr = 0; rr < reps; rr++)
+                for (int j = 0; j < _nu; j++) { double d = beta[rr][j] - beta0[j]; sumDev += d * d; }
 
             sigma2 = InvGamma(rng, _a0 + 0.5 * reps * _n, _b0 + 0.5 * sumResid);
             tauU2 = InvGamma(rng, _a0 + 0.5 * reps * _nu, _b0 + 0.5 * sumDev);
