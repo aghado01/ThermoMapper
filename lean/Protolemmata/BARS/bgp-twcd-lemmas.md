@@ -2,7 +2,7 @@
 
 The `maths/regression/bgp/` instrument implements Tang–Wu–Cheng–Dunson 2025 (TWCD2025),
 *Adaptive Bayesian Regression on Data with Low Intrinsic Dimensionality*. The paper's own
-results — the contraction rate (Thm. in §3.3), the manifold RKHS approximation (Lemma 4.1),
+results — the contraction rate (Thm. in §3.3), the manifold RKHS approximation (Lemma 4.1, Prop. 4.2),
 the empirical-prior validity (Prop. 4.4) — are **given**. We do not re-prove them; a step that
 rests on one of them is a *citable* `sorry`.
 
@@ -64,51 +64,64 @@ the version we pin? The first keeps it self-contained; the second risks API drif
 
 ---
 
-### BGP-2: Normalization preserves the adaptive rate (the real interface)
+### BGP-2: Coordinate transforms and the adaptive rate
 
-TWCD2025 *assumes* the data domain `X ⊂ [0,1]^D`. The implementation *imposes* it: each ambient
-coordinate is min–max rescaled, `φ(x)_k = (x_k − loₖ)/spanₖ`. This is a **per-coordinate** (hence
-**anisotropic**) affine map, and that anisotropy is the thing I'm not yet satisfied transports.
+TWCD2025 assume the data domain `X ⊂ [0,1]^D`. The instrument uses its inputs as given; the BGP
+tests and benchmark rescale each coordinate by its training min–max, `φ(x)_k = (x_k − loₖ)/spanₖ`,
+before fitting. Corrected 2026-10-19: an earlier version of this note treated the anisotropy of `φ`
+as a possible failure of the approximation rate. Anisotropy alone does not break it; the open
+question is the data dependence of a fitted transform.
 
-The benign part is citable: `φ` with `0 < spanₖ < ∞` is bi-Lipschitz, and the covering-number /
-Minkowski-dimension condition (A1) is a bi-Lipschitz invariant — so the intrinsic dimension `ϱ`
-survives, constants aside. The part that opens a forward boundary is the **RKHS approximation**
-(A2 / Lemma 4.1): the squared-exponential kernel is isotropic in `‖x−x'‖²`, but after `φ` it sees
-the *weighted* distance `Σₖ (xₖ−x'ₖ)²/spanₖ²`. Does `F^ε`'s approximation of `f*` hold at the same
-`s`-rate under that warped metric, or does the anisotropy interact with the manifold's second
-fundamental form in a way the isotropic analysis didn't cover? That is the unsatisfied step.
-**Enthymeme** until the proof-walk through Lemma 4.1's approximation closes — the `sorry` there is
-*not* citable; it's the gap I opened.
+**Fixed affine maps (a deduction, citable).** Let `φ(x) = A x + c` with `A` nonsingular and fixed,
+not estimated from the sample. If `M` is a `d`-dimensional smooth closed manifold embedded in
+`ℝ^D`, then `φ(M)` is another one. With its induced metric it satisfies Assumption 3, and
+`f* ∘ φ⁻¹` is Hölder of the same order `s` on `φ(M)`. Apply the manifold RKHS approximation
+(Lemma 4.1 and Prop. 4.2) and the contraction theorem to `φ(M)`. The squared-exponential kernel then
+sees the ambient Euclidean distance of the new embedding, which is exactly the theorem's setting.
+The powers of the bandwidth and of `n` depend only on `d` and `s`, so they are unchanged. The
+constants change: Lemma 4.1's constants depend on the curvature, second fundamental form, volume,
+diameter, injectivity radius and reach of the embedded manifold, and `φ` moves all of them.
+Per-coordinate scales are a diagonal `A`, so they are covered. This follows from the theorem's
+hypotheses; the paper does not analyze preprocessing, and no new proof is claimed here.
+**Lemma-tier candidate**, complete up to citable sorries.
+
+**Fitted transforms (the open part).** The min–max map `φₙ` is estimated from the sample, so its
+constants `(loₖ, spanₖ)` depend on `n` and on the data, and the transformed design is not a fixed
+manifold sampled i.i.d. Carrying the rate over needs at least `φₙ → φ` for a fixed nonsingular `φ`,
+and Lemma 4.1's constants uniform over maps near `φ`. A coordinate whose span shrinks with `n` makes
+`φₙ` degenerate, and then the constants are not uniform. The empirical-Bayes prior (`T_n`, `v̂_n`)
+is computed after the transform, so Prop. 4.4 needs the same conditional argument. **Enthymeme**:
+this is a forward boundary, not a citable step.
 
 ```lean
-import Mathlib.Topology.MetricSpace.Lipschitz
-import Mathlib.Topology.MetricSpace.HausdorffDimension
+import Mathlib.LinearAlgebra.Matrix.NonsingularInverse
 
 variable {D : ℕ}
-variable (lo span : Fin D → ℝ) (hspan : ∀ k, 0 < span k)
 
-/-- Per-coordinate min–max normalization: anisotropic affine. -/
-def normalize (x : Fin D → ℝ) : Fin D → ℝ := fun k => (x k - lo k) / span k
+/-- A fixed affine map of the ambient coordinates. -/
+def affineMap (A : Matrix (Fin D) (Fin D) ℝ) (c : Fin D → ℝ) (x : Fin D → ℝ) : Fin D → ℝ :=
+  A.mulVec x + c
 
-/-- Benign half — citable.  `normalize` is bi-Lipschitz, so it preserves the covering-number
-    dimension of the data domain.  Citation boundary: bi-Lipschitz invariance of Minkowski
-    dimension (standard; Falconer / mathlib `dimH`-style results). -/
-theorem normalize_preserves_intrinsic_dimension :
-    AntilipschitzWith sorry (normalize lo span) ∧ LipschitzWith sorry (normalize lo span) := by
+/-- Citable half.  A fixed nonsingular affine map sends a smooth closed embedded d-manifold to
+    another, and intrinsic Hölder-s functions to intrinsic Hölder-s functions, so the contraction
+    rate keeps its exponent and only the geometric constants move.  Citation boundary: TWCD2025
+    Lemma 4.1, Prop. 4.2 and the manifold contraction theorem, applied to φ(M). -/
+theorem fixed_affine_preserves_rate (A : Matrix (Fin D) (Fin D) ℝ) (hA : IsUnit A.det) :
+    -- rate(φ(M), f* ∘ φ⁻¹) = rate(M, f*) up to constants depending on A
+    sorry := by
   sorry
 
-/-- Open half — the forward boundary, NOT citable.  Under the anisotropic warp the SE kernel's
-    RKHS approximation (A2 / Lemma 4.1) of an intrinsic Hölder `f*` must still achieve the
-    `ε^{s/2}` sup-error.  This is what I'm exploring: does the isotropic approximation argument
-    transport, or does coordinate-anisotropy × curvature break the rate? -/
-theorem normalized_rkhs_approximation_holds :
-    -- ∀ ε < ε₀, ∃ F ∈ Hε(φ X), ‖F − f*‖∞ ≤ ν₁ ε^{s/2} ∧ ‖F‖²_{Hε} ≤ ν₂ ε^{−ℓ/2}
-    sorry
+/-- Open half, NOT citable.  For the sample-fitted min–max map φₙ: if φₙ → φ with φ nonsingular
+    and Lemma 4.1's constants are uniform near φ, the rate carries over.  Degenerating spans
+    violate the uniformity. -/
+theorem fitted_minmax_preserves_rate :
+    sorry := by
+  sorry
 ```
 
-*Open question:* the cleanest escape may be to make the kernel anisotropic-by-construction (absorb
-`spanₖ` into per-coordinate bandwidths) and show that is exactly an isotropic fit in the original
-coordinates — collapsing the delta. Worth checking before grinding the warped-metric approximation.
+*Resolved for fixed maps:* a kernel with fixed per-coordinate scales is the isotropic kernel after a
+fixed diagonal affine map, so it falls under the citable half and needs no kernel redesign. What
+remains open is the data dependence of `φₙ`.
 
 ---
 
