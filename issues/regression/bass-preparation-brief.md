@@ -628,3 +628,28 @@ Commit: `98aa181`.
 **Open, for decision:** `EbicPrior`'s count law. Its law is now exactly C(n_c, k)^(−γ), which is symmetric in k ↔ n_c − k, so it penalizes only below n_c/2. He, Yang and Kang's prior gives each of the C(n, k) models the mass C(n, k)^(−γ), so their count law is C(n, k)^(1−γ): flat at γ = 1 and peaked at n/2 below it. Which law is intended is undecided. `EbicTests` uses n_c = 200, so only the falling half is reached there.
 
 **Deferred:** none beyond the `EbicPrior` decision.
+
+### 0.5f Span coverage as a probability (R14) — done 2026-10-20
+
+Commit: `5a42bcd`.
+
+**Failing check at the parent revision `f3632f1`:** on a nested-peak curve, π(0.40) was 1.933 and π(0.54) was 1.067. The curve is N(0.40, 0.08) plus 0.8·N(0.54, 0.03), n = 200, noise sd 0.02, with 2.01 significant peaks per draw.
+
+**Specification (the default the plan named, confirmed when the step started):**
+- **Estimand.** π(T) is P(T lies in some significant span). Each draw therefore adds 1 to a grid point at most once: `BarsEnsemble.AddSpanCoverage` counts the union of the draw's spans.
+- **λ(T) unchanged.** It stays an intensity, one count per span, with sum `PeakCountMean`.
+- **No count readout.** There is no separate expected-coverage-count accumulator; add one only if nesting depth turns out to matter.
+
+**When nesting happens:** a lower peak joined to a higher one by a col above the higher peak's half-prominence level. The higher span then runs over the col and contains the lower peak's span.
+
+**Consequence for `PeakModes`:** its ½ cutoff is now a probability threshold. It reads only the pooled π, so nested modes share one span: on the test curve both report [0.307, 0.573], the higher peak's span. A nested peak's own span would need spans matched across draws. On this curve the π ≥ ½ regions are the same before and after the fix, so the modes there did not change.
+
+**Results:**
+- `SpanCoverageTests` adds the union on explicit nested and disjoint spans, and the nested-peak ensemble check: π = 1.000 at both peaks, with max π = 1.000.
+- `Maths.Regression.Tests` passes 178 of 178.
+
+**Docs:** `BayesianRegression.md` defines π as the union probability and states when nesting occurs and what it means for `PeakModes`.
+
+**Step 0.5 is complete.** The next step is 0.6, baseline qualification.
+
+**Deferred:** none.
