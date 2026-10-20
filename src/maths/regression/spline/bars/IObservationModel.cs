@@ -33,11 +33,23 @@ public interface IObservationModel
     double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights);
 
     /// <summary>
-    /// A coefficient vector for the per-draw readout. Defaults to the posterior <i>mean</i> (the Rao-Blackwell
-    /// choice — exact for the Normal model, where its credible intervals are already integrated over the chain);
-    /// models whose conditional β-posterior is non-Gaussian override this with an actual draw (e.g.
-    /// <see cref="PoissonModel"/> corrects the skew at small counts). Uses <paramref name="rng"/> only when it draws.
+    /// A draw of the coefficients from their conditional posterior given the knots, for readouts that are
+    /// nonlinear in the fitted curve (argmax, peak counts, spans, intervals). Readouts that are affine in the curve
+    /// use <see cref="PosteriorMeanCoefficients"/> instead, the lower-variance Rao-Blackwellized estimate. The
+    /// default returns the mean, which carries no coefficient uncertainty; a model that keeps it reports
+    /// <see cref="CoefficientUncertainty.KnotOnly"/>. Uses <paramref name="rng"/> only when it draws.
     /// </summary>
     double[] SampleCoefficients(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
         => PosteriorMeanCoefficients(design, y, weights);
+
+    /// <summary>
+    /// The conditional posterior variance of the fitted curve at each row of <paramref name="readoutDesign"/>,
+    /// given the knots, or null when the model has none. Pooled with the spread of the conditional means across
+    /// knot draws, it gives the pointwise posterior variance by the law of total variance.
+    /// </summary>
+    double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign) => null;
+
+    /// <summary>How <see cref="SampleCoefficients"/> and <see cref="ConditionalVariance"/> relate to the exact
+    /// conditional posterior.</summary>
+    CoefficientUncertainty Uncertainty => CoefficientUncertainty.KnotOnly;
 }

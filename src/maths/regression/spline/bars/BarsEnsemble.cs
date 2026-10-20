@@ -34,6 +34,12 @@ public sealed record PeakMode(
 /// <summary>
 /// The pooled posterior fit of a BARS run plus its convergence diagnostics, all on the reported functionals
 /// (knot count, fitted grid values) — the quantities you read, monitored for convergence.
+/// <see cref="Fit"/> averages each draw's conditional mean curve (exact for this affine readout, and lower in variance
+/// than averaging coefficient draws). <see cref="FitSd"/> is the pointwise posterior sd by the law of total variance:
+/// the spread of the conditional means across draws plus the mean conditional variance the model reports. Readouts
+/// that are nonlinear in the curve (<see cref="Peak"/>, <see cref="PeakCountMean"/>, λ, π, <see cref="PeakModes"/>)
+/// use each draw's coefficient draw instead; <see cref="Uncertainty"/> says how exact those draws, and the
+/// conditional variance, are.
 /// <see cref="RHatFit"/> is the per-grid-point consensus map: where it is elevated the chains disagree on the
 /// fit (multimodality / under-determination), where it is ≈1 the fit is settled; <see cref="RHatFitMax"/> is its
 /// least favourable reading (<see cref="RHatDiagnostic.Worst"/>).
@@ -47,6 +53,7 @@ public sealed record PeakMode(
 public sealed record BarsResult(
     double[] Grid,
     double[] Fit,
+    double[] FitSd,
     RHatDiagnostic[] RHatFit,
     double MeanKnots,
     double PeakCountMean,
@@ -60,7 +67,8 @@ public sealed record BarsResult(
     int SamplesUsed,
     double AcceptanceRate,
     int[] ChainSeeds,
-    IReadOnlyList<MoveStat> MoveStats);
+    IReadOnlyList<MoveStat> MoveStats,
+    CoefficientUncertainty Uncertainty);
 
 /// <summary>
 /// The BARS client of the kernel-agnostic ensemble shell (<see cref="ChainEnsemble"/>): it knows how to start one
@@ -203,6 +211,15 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         for (int gi = 0; gi < g; gi++) fit[gi] = summary.FunctionalMean[1 + gi];
         double meanK = summary.FunctionalMean[0];
 
+        // Law of total variance: Var[f(T)] = Var_draws(conditional mean) + E_draws(conditional variance).
+        var fitSd = new double[g];
+        for (int gi = 0; gi < g; gi++)
+        {
+            double sv = 0.0;
+            for (int ci = 0; ci < chains; ci++) sv += bars[ci].ConditionalVarianceSum[gi];
+            fitSd[gi] = Math.Sqrt(summary.FunctionalVariance[1 + gi] + sv / denom);
+        }
+
         // Consensus map: each grid point's R̂ as the shell computed it, with its state; the summary is the worst point.
         var rHatFit = summary.FunctionalRHat[1..];
         RHatDiagnostic rHatFitMax = RHatDiagnostic.Worst(rHatFit);
@@ -240,7 +257,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var chainLambda = new double[chains][];
         for (int ci = 0; ci < chains; ci++) chainLambda[ci] = bars[ci].PeakIntensitySum;
         var peakModes = ExtractModes(grid, peakIntensity, spanCoverage, chainLambda);
-        return new BarsResult(grid, fit, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, rHatK, rHatFitMax, essK, peak, peakModes, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats);
+        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, rHatK, rHatFitMax, essK, peak, peakModes, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty);
     }
 
     private static PeakPosterior SummarisePeak(BarsChainRun[] states, double denom)
@@ -299,26 +316,31 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         return st.Config;
     }
 
-    // Reduce one post-burn draw: fit the grid values into the functionals (index 0 = knot count), then deposit the
-    // BARS-specific sinks — the per-draw closed-form argmax cloud, and per significant peak its location into the
+    // Reduce one post-burn draw. Readouts affine in the curve use the conditional mean: the grid values into the
+    // functionals (index 0 = knot count), and the conditional variance into its sink for FitSd. Readouts nonlinear in
+    // the curve use a coefficient draw: the closed-form argmax cloud, and per significant peak its location into the
     // grid-aligned intensity accumulator (pooled → λ(T), ∑_grid λ = PeakCountMean) and its FWHM-esque span into the
     // coverage accumulator (pooled → π(T)).
     private void AccumulateDraw(BarsChainRun st, KnotConfig draw, Span<double> functionals)
     {
         int g = _grid.Length;
         double[,] zTrain = _basis.Design(draw, _x);
-        double[] coef = _model.SampleCoefficients(zTrain, _y, st.W, st.ReadoutRng);
+        double[] mean = _model.PosteriorMeanCoefficients(zTrain, _y, st.W);
         double[,] zGrid = _basis.Design(draw, _grid);
         for (int gi = 0; gi < g; gi++)
         {
             double f = 0.0;
-            for (int j = 0; j < coef.Length; j++) f += zGrid[gi, j] * coef[j];
+            for (int j = 0; j < mean.Length; j++) f += zGrid[gi, j] * mean[j];
             functionals[1 + gi] = f;
         }
         functionals[0] = draw.Count;
 
+        if (_model.ConditionalVariance(zTrain, _y, st.W, zGrid) is double[] v)
+            for (int gi = 0; gi < g; gi++) st.ConditionalVarianceSum[gi] += v[gi];
+
         if (_basis is SplineBasis splineBasis)
         {
+            double[] coef = _model.SampleCoefficients(zTrain, _y, st.W, st.ReadoutRng);
             (double peakX, double peakF) = SplineExtrema.Argmax(draw, coef, splineBasis);
             st.PeakLocSum += peakX;
             st.PeakHeightSum += peakF;
@@ -513,6 +535,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         public readonly Xoshiro256PlusPlus Rng;
         public readonly double[] PeakIntensitySum;
         public readonly double[] SpanCoverageSum;
+        public readonly double[] ConditionalVarianceSum;
         public readonly List<double> PeakDraws = new();
         public KnotConfig Config;
         public double[]? W;
@@ -533,6 +556,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             Config = start;
             PeakIntensitySum = new double[gridSize];
             SpanCoverageSum = new double[gridSize];
+            ConditionalVarianceSum = new double[gridSize];
         }
 
         /// <summary>The RJ chain — for the tempered case, the ladder's cold replica. Set once, at start.</summary>

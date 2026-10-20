@@ -1,5 +1,7 @@
 using System;
+using Maths.Distributions;
 using Maths.LinAlg;
+using Maths.Rng;
 
 using Maths.Regression.Spline;
 
@@ -43,7 +45,7 @@ public sealed class WhittleModel : IObservationModel
         if (m <= nu)
             return double.NegativeInfinity;
 
-        (double[] beta, bool usable) = FitGlm(design, y);
+        (double[] beta, bool usable, _) = FitGlm(design, y);
         if (!usable)
             return double.NegativeInfinity;   // inadmissible BᵀB, or IRLS did not converge
         double logLik = 0.0;
@@ -63,9 +65,39 @@ public sealed class WhittleModel : IObservationModel
         return FitGlm(design, y).Beta;
     }
 
+    /// <inheritdoc/>
+    public CoefficientUncertainty Uncertainty => CoefficientUncertainty.Approximate;
+
+    /// <summary>
+    /// A draw from the Laplace approximation <c>N(β̂, (BᵀB)⁻¹)</c>: the Whittle log-likelihood's Fisher information is
+    /// BᵀB (unit IRLS weights). Approximate; falls back to β̂ when the fit is unusable.
+    /// </summary>
+    public double[] SampleCoefficients(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        (double[] beta, bool usable, BandCholesky factor) = FitGlm(design, y);
+        if (!usable) return beta;
+        int nu = beta.Length;
+        var z = new double[nu];
+        for (int j = 0; j < nu; j++) z[j] = Normal.Sample(rng);
+        var innov = new double[nu];
+        factor.SampleInnovation(z, innov);
+        for (int j = 0; j < nu; j++) beta[j] += innov[j];
+        return beta;
+    }
+
+    /// <summary>The Laplace variance <c>z(t)ᵀ(BᵀB)⁻¹z(t)</c> of the log-spectrum at each readout row; NaN when the fit
+    /// is unusable.</summary>
+    public double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign)
+    {
+        ArgumentNullException.ThrowIfNull(readoutDesign);
+        (_, bool usable, BandCholesky factor) = FitGlm(design, y);
+        return usable ? ReadoutQuadratics.Of(factor, readoutDesign, 1.0) : ReadoutQuadratics.Unavailable(readoutDesign);
+    }
+
     // Gamma(shape 1) / log-link IRLS: weights are 1, so A = BᵀB is constant — factor once, iterate z only. Usable is
     // false when BᵀB fails DesignAdmission or the iteration cap is reached before the step settles.
-    private (double[] Beta, bool Usable) FitGlm(double[,] design, double[] periodogram)
+    private (double[] Beta, bool Usable, BandCholesky Factor) FitGlm(double[,] design, double[] periodogram)
     {
         int nu = design.GetLength(1);
         var bd = new BandedDesign(design);
@@ -78,7 +110,7 @@ public sealed class WhittleModel : IObservationModel
 
         var beta = new double[nu];
         if (!DesignAdmission.Admits(chol.Status))
-            return (beta, false);
+            return (beta, false, chol);
         var z = new double[m];
         var b = new double[nu];
         for (int iter = 0; iter < _maxIterations; iter++)
@@ -99,9 +131,9 @@ public sealed class WhittleModel : IObservationModel
                 shift += d * d;
                 beta[p] = sol[p];
             }
-            if (shift < Tolerance) return (beta, true);
+            if (shift < Tolerance) return (beta, true, chol);
         }
-        return (beta, false);
+        return (beta, false, chol);
     }
 
     private static double LinearPredictor(double[,] design, double[] beta, int row)

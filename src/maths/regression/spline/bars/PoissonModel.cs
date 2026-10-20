@@ -66,21 +66,22 @@ public sealed class PoissonModel : IObservationModel
     }
 
     /// <inheritdoc/>
+    public CoefficientUncertainty Uncertainty => CoefficientUncertainty.Approximate;
+
+    /// <inheritdoc/>
     public double[] SampleCoefficients(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
         => SampleCoefficients(design, y, rng);
 
     /// <summary>
-    /// Draws a coefficient vector from the (possibly skewed) conditional posterior <c>π(β | ξ, y) ∝ Poisson-lik ×
-    /// weak prior</c> by independence Metropolis–Hastings, proposing from the Laplace/normal approximation
-    /// <c>N(β̂, (XᵀŴX)⁻¹)</c> at the MLE (WLS2008 §5.4). For large Poisson means the normal approximation is good
-    /// and the first draw is kept (governed by <paramref name="suspectThreshold"/> — accept early when the log MH
-    /// ratio exceeds it); for small means the posterior is skewed and the MH steps correct toward the true
-    /// likelihood — the refinement that matters for low-count neuronal data. (<see cref="PosteriorMeanCoefficients"/>
-    /// is the cheaper Laplace-mean readout.) The proposal exponent is <c>−½‖z‖²</c> by construction
-    /// (<c>innov = L⁻ᵀD^{−½}z</c>), so no quadratic form is needed.
+    /// An approximate draw from the conditional posterior <c>π(β | ξ, y) ∝ Poisson likelihood × N(0, 100·I)</c> by
+    /// independence Metropolis–Hastings, proposing from the Laplace approximation <c>N(β̂, J⁻¹)</c> with
+    /// <c>J = BᵀŴB</c> at the MLE (WLS2008 §5.4). The chain starts from a proposal draw and runs
+    /// <paramref name="mhIterations"/> accept/reject steps. It approaches the posterior as the steps grow (geometrically
+    /// when π/q is bounded), so any finite count is an approximation; the steps matter most for skewed, low-count
+    /// posteriors. The proposal exponent is <c>−½‖z‖²</c> by construction (<c>innov = L⁻ᵀD^{−½}z</c>), so no quadratic
+    /// form is needed.
     /// </summary>
-    public double[] SampleCoefficients(double[,] design, double[] y, Xoshiro256PlusPlus rng,
-                                       int mhIterations = 5, double suspectThreshold = -10.0)
+    public double[] SampleCoefficients(double[,] design, double[] y, Xoshiro256PlusPlus rng, int mhIterations = 5)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -89,7 +90,54 @@ public sealed class PoissonModel : IObservationModel
 
         int nu = design.GetLength(1);
         double[] betaHat = FitGlm(design, y).Beta;
+        BandCholesky chol = LaplaceFactor(design, betaHat);
 
+        var z = new double[nu];
+        var innov = new double[nu];
+
+        // One proposal draw, with its target and proposal log-densities.
+        (double[] Beta, double LogTarget, double LogProposal) Propose()
+        {
+            double ss = 0.0;
+            for (int j = 0; j < nu; j++) { z[j] = StandardNormal(rng); ss += z[j] * z[j]; }
+            chol.SampleInnovation(z, innov);             // innov ~ N(0, J⁻¹)
+            var beta = new double[nu];
+            for (int j = 0; j < nu; j++) beta[j] = betaHat[j] + innov[j];
+            return (beta, LogPosterior(design, y, beta), -0.5 * ss);
+        }
+
+        (double[] cur, double logTargetCur, double logPropCur) = Propose();
+        for (int it = 0; it < mhIterations; it++)
+        {
+            (double[] cand, double logTargetCand, double logPropCand) = Propose();
+            double r = (logTargetCand - logTargetCur) + (logPropCur - logPropCand);   // independence-MH ratio
+            if (r >= 0.0 || Math.Log(1.0 - rng.NextDouble()) < r)
+            {
+                cur = cand;
+                logTargetCur = logTargetCand;
+                logPropCur = logPropCand;
+            }
+        }
+        return cur;
+    }
+
+    /// <summary>The Laplace variance <c>z(t)ᵀJ⁻¹z(t)</c> of the log-intensity at each readout row, with
+    /// <c>J = BᵀŴB</c> at the MLE; NaN when the fit is unusable.</summary>
+    public double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign)
+    {
+        ArgumentNullException.ThrowIfNull(readoutDesign);
+        (double[] betaHat, bool usable) = FitGlm(design, y);
+        if (!usable) return ReadoutQuadratics.Unavailable(readoutDesign);
+        BandCholesky j = LaplaceFactor(design, betaHat);
+        return DesignAdmission.Admits(j.Status)
+            ? ReadoutQuadratics.Of(j, readoutDesign, 1.0)
+            : ReadoutQuadratics.Unavailable(readoutDesign);
+    }
+
+    // J = BᵀŴB at β̂, the Laplace precision of the coefficients.
+    private static BandCholesky LaplaceFactor(double[,] design, double[] betaHat)
+    {
+        int nu = design.GetLength(1);
         var bd = new BandedDesign(design);
         int m = bd.Rows;
         var w = new double[m];
@@ -99,39 +147,10 @@ public sealed class PoissonModel : IObservationModel
             w[i] = mu < 1e-10 ? 1e-10 : mu;
         }
         var jBand = new double[bd.Bandwidth + 1, nu];
-        bd.Accumulate(w, jBand, null, null);              // J = XᵀŴX at the MLE — the normal-approx precision
+        bd.Accumulate(w, jBand, null, null);
         var chol = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt);
         chol.DecomposeBanded(jBand);
-
-        var z = new double[nu];
-        var innov = new double[nu];
-        var cand = new double[nu];
-        var cur = (double[])betaHat.Clone();
-        double logTargetCur = LogPosterior(design, y, cur);
-        double logPropCur = 0.0;                          // cur = β̂ ⇒ proposal exponent 0
-
-        for (int it = 0; it < mhIterations; it++)
-        {
-            double ss = 0.0;
-            for (int j = 0; j < nu; j++) { z[j] = StandardNormal(rng); ss += z[j] * z[j]; }
-            chol.SampleInnovation(z, innov);             // innov ~ N(0, J⁻¹)
-            for (int j = 0; j < nu; j++) cand[j] = betaHat[j] + innov[j];
-
-            double logTargetCand = LogPosterior(design, y, cand);
-            double logPropCand = -0.5 * ss;
-            double r = (logTargetCand - logTargetCur) + (logPropCur - logPropCand);   // independence-MH ratio
-
-            if (it == 0 && r > suspectThreshold)
-                return cand;                             // normal approx adequate — keep the first draw
-
-            if (r >= 0.0 || Math.Log(1.0 - rng.NextDouble()) < r)
-            {
-                Array.Copy(cand, cur, nu);
-                logTargetCur = logTargetCand;
-                logPropCur = logPropCand;
-            }
-        }
-        return cur;
+        return chol;
     }
 
     // Poisson log-likelihood + a weak Gaussian ridge (propriety; the skew the MH corrects is the likelihood's).

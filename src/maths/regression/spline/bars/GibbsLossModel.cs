@@ -68,6 +68,10 @@ public sealed class GibbsLossModel : IObservationModel
         return FitM(design, y, RobustNoise(y)).Beta;
     }
 
+    /// <summary>The Gibbs posterior is a generalized one with no calibrated conditional spread, so draws are the
+    /// M-estimate and nonlinear readouts reflect knot uncertainty only.</summary>
+    public CoefficientUncertainty Uncertainty => CoefficientUncertainty.KnotOnly;
+
     // Tukey bisquare M-estimation by banded IRLS at fixed scale σ, warm-started with one LS step (iter 0, w = 1).
     // Usable is false when a weighted Gram fails DesignAdmission (redescending weights can zero out a span) or the
     // iteration cap is reached before the step settles.

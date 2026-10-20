@@ -53,7 +53,7 @@ public sealed class SkewedPoissonTests
         const int draws = 20_000;
         double sum = 0.0;
         for (int d = 0; d < draws; d++)
-            sum += model.SampleCoefficients(design, y, rng, mhIterations: 30, suspectThreshold: double.PositiveInfinity)[0];
+            sum += model.SampleCoefficients(design, y, rng, mhIterations: 30)[0];
         double mhMean = sum / draws;
 
         _out.WriteLine($"[skew-poisson] trueMean={trueMean:F4} MLE(β̂)={mle:F4} MH mean={mhMean:F4} " +
