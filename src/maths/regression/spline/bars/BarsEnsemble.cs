@@ -46,7 +46,8 @@ public sealed record PeakMode(
 /// <see cref="PeakIntensity"/> is the grid-aligned peak-intensity λ(T): the matching-free posterior density
 /// of significant transitions (∑ = <see cref="PeakCountMean"/>), its modes the persistent transitions.
 /// <see cref="SpanCoverage"/> is the grid-aligned span-coverage π(T): the posterior probability each T lies
-/// within a peak's FWHM-esque span — its plateaus the structural feature widths, its complement the stable regimes.
+/// within some significant peak's FWHM-esque span, counted once per draw where nested spans overlap — its plateaus
+/// the structural feature widths, its complement the stable regimes.
 /// <see cref="PeakModes"/> resolves each transition from those fields — location + credible interval from λ, span
 /// from π — with <see cref="Peak"/> the dominant mode (the k = 1 case).
 /// </summary>
@@ -370,13 +371,18 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             var spans = SplineExtrema.SignificantPeakSpans(draw, coef, splineBasis, _peakProminence, _spanDropFraction);
             st.PeakCountSum += spans.Count;
             for (int p = 0; p < spans.Count; p++)
-            {
-                PeakSpan sp = spans[p];
-                st.PeakIntensitySum[NearestGridIndex(_grid, sp.Location)] += 1.0;
-                for (int gi = 0; gi < g; gi++)
-                    if (_grid[gi] >= sp.Left && _grid[gi] <= sp.Right) st.SpanCoverageSum[gi] += 1.0;
-            }
+                st.PeakIntensitySum[NearestGridIndex(_grid, spans[p].Location)] += 1.0;
+            AddSpanCoverage(spans, _grid, st.SpanCoverageSum);
         }
+    }
+
+    // π(T) is P(T lies in some significant span), so a draw adds 1 to a grid point at most once, however many spans
+    // cover it: a nested peak's span lies inside its neighbour's (R14). λ(T) stays a count, one per span.
+    internal static void AddSpanCoverage(IReadOnlyList<PeakSpan> spans, double[] grid, double[] sum)
+    {
+        for (int gi = 0; gi < grid.Length; gi++)
+            for (int p = 0; p < spans.Count; p++)
+                if (grid[gi] >= spans[p].Left && grid[gi] <= spans[p].Right) { sum[gi] += 1.0; break; }
     }
 
     private ReversibleJumpChain<KnotConfig> NewChain(BarsChainRun st)
