@@ -81,7 +81,7 @@ flowchart LR
 |---|---|
 | Targets | `ISamplingTarget<T>` (`Evaluate`); `ITargetEvaluation` (`LogPrior`, `LogLikelihood(b)`); `Temperature(b, path)` with `LogDensity(evaluation)`, static `Posterior` and `LogPosterior(evaluation)`; `TemperingPath` (`Powered`, `Likelihood`); `SamplingTarget.FromLogDensity`, `SamplingTarget.Separable`, and the extension `target.LogPosterior(state)`; `SeparableEvaluation` |
 | Reversible jump | `ReversibleJumpChain<T>(moves, target, start, rng, temperature = null)` with `Step()`, `Current`, `Temperature`, `CurrentEvaluation`, `CurrentLogDensity`, `Attempts`, `Accepted`, `MoveStats()`, `SetState(state, evaluation)`, `ReplaceTarget(target)`; `IRjMove<T>` (`Key`, `ReverseKey`, `Weight`, `Propose`); `Proposal<T>`; `MoveStat`; `ScheduledMove<T>` |
-| Tempering | `ParallelTempering<T>(movesForReplica, target, start, betas, path, masterSeed)` with `Step()`, `Path`, `Cold`, `ColdChain`, `Replicas`, `SwapAttempts`, `SwapAccepts`, and static `GeometricLadder(levels, betaMin)` |
+| Tempering | `ParallelTempering<T>(movesForReplica, target, start, betas, path, masterSeed, schedule = DeterministicEvenOdd)` with `Step()`, `Path`, `Schedule`, `Betas`, `Cold`, `ColdChain`, `Replicas`, `Scans`, `RoundTrips`, `AnnealedRestarts`, `PairStats`, `SwapAttempts`, `SwapAccepts`, `AdaptLadder()`, and static `GeometricLadder(levels, betaMin)`; `SwapSchedule` (`DeterministicEvenOdd`, `StochasticEvenOdd`, `Sequential`); `SwapPairStat`; `TemperingLadder` (`Barrier`, `IdealRoundTripRate`, `Equalize`, `RecommendedLevels`) |
 | Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.RHat`, `ChainDiagnostics.Ess`; `RunningMoments` (`Add`, `Merge`, `Of`); `IChain<T>`, `IEnsembleModel<T>`, `IChainRun<T>`, `EnsembleRun` |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
@@ -128,14 +128,52 @@ The chain accepts if $\log\alpha\ge0$ or $U<e^{\log\alpha}$. A candidate whose d
 
 **One step.**
 
-1. Every replica steps once.
-2. A deterministic sweep from cold to hot attempts a swap for each adjacent pair $(i,i+1)$, with
+1. Every replica steps once (local exploration).
+2. The swap schedule picks adjacent pairs $(i,i+1)$ to attempt, each with
 
 $$\log A=d_i(x_{i+1})+d_{i+1}(x_i)-d_i(x_i)-d_{i+1}(x_{i+1}),$$
 
 where $d_i$ is replica $i$'s log density, its `Temperature.LogDensity`. The two current densities are cached, and the two cross terms query the other replica's evaluation at this replica's temperature, so a swap evaluates no state. An accepted swap hands each replica the other's state and evaluation, and each recomputes its density at its own β.
 - **On the powered path** this is $(\beta_i-\beta_{i+1})(L_{i+1}-L_i)$ with $L=\log p+\ell_1$, the formula used until step 3.2; BARS's powered runs are bit-identical across the change.
-- **On the likelihood path** the prior cancels, leaving $\ell_{\beta_i}(x_{i+1})+\ell_{\beta_{i+1}}(x_i)-\ell_{\beta_i}(x_i)-\ell_{\beta_{i+1}}(x_{i+1})$. The β-linear shortcut is wrong here, because $\ell_\beta$ need not be linear in β. On a six-state test with a nonlinear $\ell_\beta$, the shortcut biases even the cold rung (a state's frequency 0.0114 against the exact 0.0223). The general form matches every rung's law on both paths to total variation ≤ 0.005. Later pairs in the same sweep see earlier swaps. The chain interface reports the cold replica's move acceptance. Swaps are counted separately.
+- **On the likelihood path** the prior cancels, leaving $\ell_{\beta_i}(x_{i+1})+\ell_{\beta_{i+1}}(x_i)-\ell_{\beta_i}(x_i)-\ell_{\beta_{i+1}}(x_{i+1})$. The β-linear shortcut is wrong here, because $\ell_\beta$ need not be linear in β. On a six-state test with a nonlinear $\ell_\beta$, the shortcut biases even the cold rung (a state's frequency 0.0114 against the exact 0.0223). The general form matches every rung's law on both paths to total variation ≤ 0.005.
+
+Every pair's rejection probability $1-\alpha$ is recorded on every scan, attempted or not (Rao–Blackwellized: computed from the cached evaluations, not the 0/1 outcomes). The chain interface reports the cold replica's move acceptance. Swaps are counted separately.
+
+### Swap schedules, round trips and ladder adaptation (step 3.3)
+
+Following Syed, Bouchard-Côté, Deligiannidis and Doucet (2022).
+
+**Schedules** (`SwapSchedule`).
+- **Deterministic even-odd** (DEO, the default): pairs (0,1), (2,3), … on even scans and (1,2), (3,4), … on odd ones. Each pair is attempted every other scan, and a state that was just swapped is offered the next rung in the same direction on the next scan, so it keeps moving until a swap is rejected. The scheme is non-reversible.
+- **Stochastic even-odd** (SEO): the even or the odd pairs by a fair coin each scan. Reversible: states random-walk along the ladder.
+- **Sequential:** every pair each scan, cold to hot, later pairs seeing earlier swaps; this engine's schedule until step 3.3, kept for comparison and for reproducing earlier runs. Within one swap phase a state can cascade up several rungs with no local step between; it descends one rung a scan.
+- The even and the odd pairs are disjoint, so an even-odd scan takes all its ratios before any swap.
+
+**Round trips.** A state that leaves the hot end, reaches the cold end and returns completes a round trip; its arrival at the cold end is an *annealed restart*, carrying what the hot rungs explored down to the posterior. `RoundTrips / Scans`, summed over states, is the round-trip rate τ, the measure a ladder is judged by. Swap acceptance is not: a ladder of nearly equal rungs accepts almost every swap and moves nothing anywhere.
+
+**What theory predicts.** With $r_i$ pair $i$'s rejection rate, $N$ the number of pairs and $E=\sum_i r_i/(1-r_i)$, under *efficient local exploration* (each rung's local move an exact independent draw), Theorem 1 of Syed et al. gives
+
+$$\tau_{\text{DEO}}=\frac{1}{2+2E},\qquad \tau_{\text{SEO}}=\frac{1}{2N+2E}.$$
+
+`TemperingLadder.IdealRoundTripRate` computes these from observed rates. Real local moves fall short of exact draws, so the gap between the observed and the ideal rate measures local exploration.
+- **Rung count.** The barrier $\Lambda\approx\sum_i r_i$ (`Barrier`) is nearly the same for every ladder of the same endpoints (their Corollary 2). For an equalized ladder $E\approx\Lambda/(1-\Lambda/N)$, so DEO's τ rises toward $1/(2+2\Lambda)$ as rungs are added while SEO's decays like $1/(2N)$. About $N\approx2\Lambda$ pairs, rejection rate near ½, uses the rungs best (`RecommendedLevels`).
+- **Checked** (`SwapScheduleTests`, exact Gaussian draws on the likelihood path): observed against Theorem 1, DEO 0.1366 against 0.1369 and SEO 0.0516 against 0.0518; without rejections, DEO 0.4999 (theory ½) and SEO 0.1007 (theory 1/10, five pairs); from 5 to 17 rungs on equalized ladders, DEO 0.120 → 0.160 (bound 0.178) and SEO 0.070 → 0.027.
+
+**Ladder adaptation** (`AdaptLadder`).
+- **Rule.** For a fixed number of rungs, equal rejection rates minimise $E$. The cumulative barrier $\Lambda(\beta)$, the running sum of the observed rates from the hot end, is interpolated by a monotone cubic (Fritsch and Carlson 1980) and inverted at equal steps, which places the new interior rungs (their Algorithms 2 and 3). The cold rung (exactly 1) and the hot end never move.
+- **Retempering is free.** Each replica moves to its new rung by `SetTemperature`, a query on its cached evaluation; nothing is re-evaluated.
+- **Statistics** come from the scans since the previous adaptation; a ladder with no rejections, or no interior rung, is left alone.
+- **Adapt during burn-in only.** A ladder that keeps changing does not leave the posterior invariant. Syed et al.'s Algorithm 4 tunes in rounds of 1, 2, 4, … scans, adapting after each, and BARS follows it.
+- **Checked:** from a uniform ladder whose rejection rates spread 6.8-fold, adaptation equalizes them to within 4% and leaves the barrier where it was (Λ̂ 1.79 → 1.84).
+
+**What round trips do not measure.**
+- **Round trips compare like with like only between schedules in which a state takes at most one swap per local step, on one path.** Theorem 1 and the adaptation rule rest on that structure: each swap a state takes is separated from its next by local exploration.
+- **The sweep breaks it.** Without rejections it completes one round trip per scan against DEO's ½ (`SwapScheduleTests`). A state cascades from the cold to the hot end within one swap phase, with no local step at the rungs between; it gets one local step at the hot end, where DEO gives two; and it descends a rung a scan. Both schedules spend the same local steps per scan, so the sweep's extra trips each carry less exploration.
+  - Only when every local move is an exact draw is a trip's value independent of the steps in it. There the sweep's advantage is real: about 1.7× DEO's round trips at 5 and 17 rungs, on exact Gaussian draws. It is worth less as local moves weaken.
+  - On BARS fits (`TemperingBenchmark`) the sweep completes 1.4–2.0× DEO's round trips on equalized ladders. Yet the cold chain's ESS per second does not separate the two: 0.97–1.33× across fits on the likelihood path (0.87–1.39× counting the powered path), within the noise of 3-chain estimates.
+- **Paths have different hot ends,** so their round trips are journeys to different places. On Poisson counts the powered ladder makes about 5× the likelihood ladder's round trips, because its hot end barely differs from the posterior (barrier Λ̂ ≈ 0.24 against 1.4; hot rung 1.0 knots against the prior's 4.4). The cold chain's ESS per second does not follow (0.85×, within noise).
+- **The neutral measure is the cold chain's ESS per unit work.** At this budget it is noisy: single 3-chain estimates swing 2–8×. Step 3.4's rank-normalized ESS is the instrument for the next comparison.
+- **Default: deterministic even-odd.** Round trips and Theorem 1 apply to it, the adaptation rule is derived for it, and its swaps within a scan are independent, so a parallel or distributed ladder can run them at once. SEO is the reversible baseline.
 
 **The swap uniform is drawn on every attempt**, accepted or not.
 - Between two states whose $L$ agree to rounding, $\log A$ is of rounding size and its sign is rounding noise. Until step 3.1, $L_i$ was recovered as `CurrentLogTarget`$/\beta_i$ after an earlier swap stored $\beta_i L$, so replicas holding the same state produced such ties routinely. $L_i$ is now read from the evaluation, so the same state gives the same $L$ exactly, but distinct states can still tie. The regression test builds two targets that break such a tie in opposite directions.
@@ -206,6 +244,7 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | `ChainEnsemble.Run` rHatTarget / batchSize | 0 / 0 | No early stop / one round of `samples` steps |
 | `ChainEnsemble.MinDrawsForStop` | 100 | Draws per chain before an R̂ target may stop sampling |
 | `GeometricLadder` levels / betaMin | (required) | L ≥ 2; $\beta_{\min}\in(0,1)$ |
+| `ParallelTempering` schedule | `DeterministicEvenOdd` | Non-reversible even-odd swaps |
 | `SpectralNoiseField` presets | White 0 / Pink 1 / Brown 2 | Spectral exponent β |
 
 ## Status and caveats
@@ -220,10 +259,10 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | Role | Files (`ThermoMapper/src/maths/samplers/`) |
 |---|---|
 | Targets | `targets/SamplingTarget.cs` |
-| Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `ParallelTempering.cs`; `IRjTarget.cs` and `TemperedTarget.cs` are unused since step 3.1 and go in step 3.6 |
+| Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `ParallelTempering.cs`, `TemperingLadder.cs`; `IRjTarget.cs` and `TemperedTarget.cs` are unused since step 3.1 and go in step 3.6 |
 | Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
 | i.i.d. and fields | `iid/InverseTransform.cs`; `SpectralNoiseField.cs` (at the `samplers/` root) |
 
-**Tests:** `tests/Maths.Samplers.Tests` (sources in `tests/samplers/`) owns the samplers' own checks, with targets built from `Maths.Samplers` alone: chain contracts, the reversible-jump generality check, the target contract, parallel tempering (each rung's law on both paths, ladder validation) and the diagnostics policy.
+**Tests:** `tests/Maths.Samplers.Tests` (sources in `tests/samplers/`) owns the samplers' own checks, with targets built from `Maths.Samplers` alone: chain contracts, the reversible-jump generality check, the target contract, parallel tempering (each rung's law on both paths, ladder validation), swap schedules against Theorem 1, ladder adaptation, and the diagnostics policy.
 
 **See also:** [BayesianRegression](./BayesianRegression.md) (BARS, BGP) · [ProbabilityAndInformation](./ProbabilityAndInformation.md) · [DesignPrinciples](./DesignPrinciples.md)
