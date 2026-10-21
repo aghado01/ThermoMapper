@@ -31,7 +31,7 @@ namespace Maths.LinAlg
     /// Built for the free-knot spline normal equations BᵀWB, which are banded at p = spline degree (heptadiagonal
     /// for cubics): factor once, then solve A·x = b by two banded triangular substitutions. The marginal never
     /// needs A⁻¹ — both the quadratic form bᵀA⁻¹b and the posterior coefficients A⁻¹b are recovered from the
-    /// <see cref="Solve(double[])"/> alone, so no inverse is ever materialized.
+    /// <see cref="Solve(ReadOnlySpan{double})"/> alone, so no inverse is ever materialized.
     /// </para>
     /// <para>
     /// Allocate once with <see cref="BandCholesky(int,int,BandFactorization)"/>, then call <see cref="Decompose"/>
@@ -94,7 +94,7 @@ namespace Maths.LinAlg
 
         /// <summary>
         /// Decomposes <paramref name="a"/> over the band, updating <see cref="LogDet"/> and preparing the factor
-        /// used by <see cref="Solve(double[])"/>. Only the lower band (|i−j| ≤ p) is read; entries outside it are
+        /// used by <see cref="Solve(ReadOnlySpan{double})"/>. Only the lower band (|i−j| ≤ p) is read; entries outside it are
         /// assumed zero (the band structure is a precondition, not enforced).
         /// </summary>
         /// <param name="a">
@@ -117,7 +117,7 @@ namespace Maths.LinAlg
         /// <summary>
         /// Decomposes a matrix already in LAPACK lower-band storage: <paramref name="band"/><c>[d, j] = A(j+d, j)</c>
         /// for d = 0..p. This is the allocation-lean entry point — the caller accumulates the band directly,
-        /// never materializing the dense ν×ν matrix. Updates <see cref="LogDet"/>; prepares <see cref="Solve(double[])"/>.
+        /// never materializing the dense ν×ν matrix. Updates <see cref="LogDet"/>; prepares <see cref="Solve(ReadOnlySpan{double})"/>.
         /// </summary>
         public void DecomposeBanded(double[,] band)
         {
