@@ -12,5 +12,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Maths.Rng\Maths.Rng.csproj" />
     <ProjectReference Include="..\Maths.LinAlg\Maths.LinAlg.csproj" />
+    <ProjectReference Include="..\Maths.Distributions\Maths.Distributions.csproj" />
   </ItemGroup>
 </Project>

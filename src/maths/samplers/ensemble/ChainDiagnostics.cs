@@ -8,7 +8,7 @@ namespace Maths.Samplers.Ensemble;
 /// computed on the fixed-dimensional invariant reductions the run reports). Pure functional reductions with no
 /// coupling to any kernel: the most reusable asset in the engine family, shared across every member.
 /// </summary>
-public static class ChainDiagnostics
+public static partial class ChainDiagnostics
 {
     /// <summary>
     /// Gelman–Rubin R̂ for one scalar functional from each chain's streaming moments (all chains must hold the same
