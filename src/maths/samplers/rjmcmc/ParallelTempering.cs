@@ -8,11 +8,13 @@ namespace Maths.Samplers.Rjmcmc;
 /// <summary>
 /// Parallel tempering (replica exchange) over a ladder of reversible-jump chains at inverse temperatures
 /// 1 = β₀ &gt; β₁ &gt; … &gt; β_{L-1}, all on one declared <see cref="TemperingPath"/>: the powered posterior
-/// <c>(prior · likelihood)^β</c> or the likelihood-tempered path <c>prior · likelihood^β</c>. After every sweep,
-/// adjacent replicas attempt a Metropolis state swap, each replica's density evaluated at the other's state from the
-/// cached evaluations — so the hot replicas, which cross modal barriers freely, ferry the cold replica (β = 1, the true
-/// posterior) between modes. The cold chain is the sampler; the rest are scaffolding. For multimodal targets (e.g. a
-/// multi-peak T_c posterior) where a single chain would lock into one mode.
+/// <c>(prior · likelihood)^β</c> or the likelihood-tempered path <c>prior · likelihood^β</c>. After every scan, adjacent
+/// replicas attempt Metropolis state swaps on the pairs the <see cref="SwapSchedule"/> chooses, each replica's density
+/// evaluated at the other's state from the cached evaluations — so the hot replicas, which cross modal barriers freely,
+/// ferry the cold replica (β = 1, the true posterior) between modes. The cold chain is the sampler; the rest are
+/// scaffolding. For multimodal targets (e.g. a multi-peak T_c posterior) where a single chain would lock into one mode.
+/// <para>The ladder reports what Syed et al. (2022) measure it by: round trips of states from the hot end to the cold
+/// end and back, and each pair's rejection rate, from which <see cref="AdaptLadder"/> equalizes the rungs.</para>
 /// As an <see cref="IChain{TState}"/> the ladder presents as a single chain whose draw is the cold state and whose
 /// acceptance is the cold replica's, so the ensemble shell can drive a tempered replica like any other.
 /// </summary>
@@ -20,6 +22,13 @@ public sealed class ParallelTempering<TState> : IChain<TState>
 {
     private readonly ReversibleJumpChain<TState>[] _chains;
     private readonly Xoshiro256PlusPlus _swapRng;
+    private readonly double[] _logA;              // this scan's log swap ratio per pair
+    private readonly long[] _pairAttempts, _pairAccepts;
+    private readonly double[] _rejectionSum;       // Σ (1 − α) per pair, every scan
+    private readonly double[] _roundRejectionSum;  // the same since the last adaptation
+    private long _roundScans;
+    private readonly int[] _labelAt;               // which state (by its starting rung) each rung holds
+    private readonly sbyte[] _lastEnd;             // per state: +1 last at the hot end, −1 at the cold end, 0 neither yet
 
     /// <summary>Adjacent-pair swap attempts so far.</summary>
     public long SwapAttempts { get; private set; }
@@ -36,24 +45,43 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// the prior, which a target with an improper nuisance prior refuses. The array is not retained.</param>
     /// <param name="path">The tempering path every replica takes.</param>
     /// <param name="masterSeed">Seeds the per-replica streams and the swap stream via the <see cref="SeedTree"/>.</param>
+    /// <param name="schedule">Which pairs each scan attempts; deterministic even-odd by default.</param>
     public ParallelTempering(Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica, ISamplingTarget<TState> target,
-                             TState start, double[] betas, TemperingPath path, int masterSeed)
+                             TState start, double[] betas, TemperingPath path, int masterSeed,
+                             SwapSchedule schedule = SwapSchedule.DeterministicEvenOdd)
     {
         ArgumentNullException.ThrowIfNull(movesForReplica);
         ArgumentNullException.ThrowIfNull(target);
         ValidateLadder(betas, path);
+        if (schedule is not (SwapSchedule.DeterministicEvenOdd or SwapSchedule.StochasticEvenOdd or SwapSchedule.Sequential))
+            throw new ArgumentOutOfRangeException(nameof(schedule));
 
         Path = path;
-        int[] seeds = SeedTree.Derive(masterSeed, betas.Length + 1);
-        _chains = new ReversibleJumpChain<TState>[betas.Length];
-        for (int i = 0; i < betas.Length; i++)
+        Schedule = schedule;
+        int levels = betas.Length;
+        int[] seeds = SeedTree.Derive(masterSeed, levels + 1);
+        _chains = new ReversibleJumpChain<TState>[levels];
+        for (int i = 0; i < levels; i++)
             _chains[i] = new ReversibleJumpChain<TState>(
                 movesForReplica(i), target, start, new Xoshiro256PlusPlus(seeds[i]), new Temperature(betas[i], path));
-        _swapRng = new Xoshiro256PlusPlus(seeds[betas.Length]);
+        _swapRng = new Xoshiro256PlusPlus(seeds[levels]);
+
+        _logA = new double[levels - 1];
+        _pairAttempts = new long[levels - 1];
+        _pairAccepts = new long[levels - 1];
+        _rejectionSum = new double[levels - 1];
+        _roundRejectionSum = new double[levels - 1];
+        _labelAt = new int[levels];
+        _lastEnd = new sbyte[levels];
+        for (int i = 0; i < levels; i++) _labelAt[i] = i;
+        _lastEnd[levels - 1] = +1;   // a state's first round trip starts at its first visit to the hot end
     }
 
     /// <summary>The path every replica takes.</summary>
     public TemperingPath Path { get; }
+
+    /// <summary>Which pairs each scan attempts.</summary>
+    public SwapSchedule Schedule { get; }
 
     /// <summary>The current cold-chain (β = 1) state — the posterior sample.</summary>
     public TState Cold => _chains[0].Current;
@@ -66,35 +94,98 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// is its rung. Stepping a replica directly takes it out of the ladder's schedule.</summary>
     public IReadOnlyList<ReversibleJumpChain<TState>> Replicas => _chains;
 
+    /// <summary>The current ladder, cold first.</summary>
+    public double[] Betas
+    {
+        get
+        {
+            var b = new double[_chains.Length];
+            for (int i = 0; i < b.Length; i++) b[i] = _chains[i].Temperature.InverseTemperature;
+            return b;
+        }
+    }
+
+    /// <summary>Scans so far: one <see cref="Step"/> each.</summary>
+    public long Scans { get; private set; }
+
     /// <summary>
-    /// Advance every replica one step, then sweep adjacent-replica swaps, cold to hot. A swap of x_i and x_j is
+    /// Round trips so far, summed over states: a state that leaves the hot end, reaches the cold end and returns
+    /// completes one (Syed et al.'s definition, with the hot end as the reference). <c>RoundTrips / Scans</c> is the
+    /// round-trip rate, the measure of how well the ladder moves.
+    /// </summary>
+    public long RoundTrips { get; private set; }
+
+    /// <summary>Arrivals at the cold end of states last seen at the hot end ("annealed restarts"): each carries what
+    /// the hot rungs explored down to the posterior.</summary>
+    public long AnnealedRestarts { get; private set; }
+
+    /// <summary>Per adjacent pair, cold first: attempts, accepts and the mean rejection probability over every scan.</summary>
+    public IReadOnlyList<SwapPairStat> PairStats
+    {
+        get
+        {
+            var stats = new SwapPairStat[_chains.Length - 1];
+            for (int i = 0; i < stats.Length; i++)
+                stats[i] = new SwapPairStat(_chains[i].Temperature.InverseTemperature, _chains[i + 1].Temperature.InverseTemperature,
+                                            _pairAttempts[i], _pairAccepts[i], Scans > 0 ? _rejectionSum[i] / Scans : double.NaN);
+            return stats;
+        }
+    }
+
+    /// <summary>
+    /// Advance every replica one step (local exploration), then attempt the scan's swaps. A swap of x_i and x_j is
     /// accepted with <c>log α = d_i(x_j) + d_j(x_i) − d_i(x_i) − d_j(x_j)</c>, d_i replica i's log density, which on
-    /// the powered path reduces to <c>(β_i − β_j)(L_j − L_i)</c>. Later pairs see earlier swaps. Returns the cold
-    /// state.
+    /// the powered path reduces to <c>(β_i − β_j)(L_j − L_i)</c>. Every pair's rejection probability 1 − α is recorded
+    /// every scan, attempted or not. Returns the cold state.
     /// </summary>
     public TState Step()
     {
         for (int i = 0; i < _chains.Length; i++) _chains[i].Step();
+        Scans++;
+        _roundScans++;
+        int pairs = _chains.Length - 1;
 
-        for (int i = 0; i < _chains.Length - 1; i++)
+        if (Schedule == SwapSchedule.Sequential)
         {
-            SwapAttempts++;
-            ReversibleJumpChain<TState> a = _chains[i], b = _chains[i + 1];
-            ITargetEvaluation ea = a.CurrentEvaluation, eb = b.CurrentEvaluation;
-            double logA = a.Temperature.LogDensity(eb) + b.Temperature.LogDensity(ea)
-                        - a.CurrentLogDensity - b.CurrentLogDensity;
-            // Drawn on every attempt, so the swap stream does not advance by the decision: between states whose targets
-            // agree to rounding, rounding decides a tie's sign, and it must not decide whether a uniform is consumed.
-            double u = _swapRng.NextDouble();
-            if (logA >= 0.0 || u < Math.Exp(logA))
+            // Every pair, cold to hot; each sees the swaps before it.
+            for (int i = 0; i < pairs; i++)
             {
-                SwapAccepts++;
-                TState xa = a.Current, xb = b.Current;
-                a.SetState(xb, eb);
-                b.SetState(xa, ea);
+                double logA = Record(i);
+                Attempt(i, logA);
             }
         }
+        else
+        {
+            // The even and the odd pairs are each disjoint, so this scan's ratios are all taken before any swap.
+            for (int i = 0; i < pairs; i++) _logA[i] = Record(i);
+            int parity = Schedule == SwapSchedule.DeterministicEvenOdd
+                ? (int)(Scans % 2 == 0 ? 0 : 1)
+                : _swapRng.NextDouble() < 0.5 ? 0 : 1;
+            for (int i = parity; i < pairs; i += 2) Attempt(i, _logA[i]);
+        }
+
+        TrackEnds();
         return _chains[0].Current;
+    }
+
+    /// <summary>
+    /// Re-space the interior rungs so that adjacent rejection rates are equal (<see cref="TemperingLadder.Equalize"/>),
+    /// from the rates observed since the last adaptation, and return those rates' barrier estimate Λ̂. The cold and hot
+    /// ends stay where they are. Retempering is a query on each replica's cached evaluation: no state is re-evaluated.
+    /// Adapt during burn-in only; a ladder that keeps changing does not leave the posterior invariant.
+    /// </summary>
+    public double AdaptLadder()
+    {
+        if (_roundScans == 0) throw new InvalidOperationException("No scans since the last adaptation.");
+        int pairs = _chains.Length - 1;
+        var rejection = new double[pairs];
+        for (int i = 0; i < pairs; i++) rejection[i] = _roundRejectionSum[i] / _roundScans;
+        double[] next = TemperingLadder.Equalize(Betas, rejection);
+        ValidateLadder(next, Path);
+        for (int i = 0; i < _chains.Length; i++) _chains[i].SetTemperature(new Temperature(next[i], Path));
+        Array.Clear(_roundRejectionSum);
+        _roundScans = 0;
+        return TemperingLadder.Barrier(rejection);
     }
 
     // IChain view: the ladder advances by one swept Step; its acceptance is the cold replica's own move acceptance
@@ -111,6 +202,52 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         for (int i = 0; i < levels; i++)
             b[i] = Math.Pow(betaMin, i / (double)(levels - 1));   // 1 … β_min
         return b;
+    }
+
+    // Pair i's log swap ratio on the current states, with its rejection probability recorded.
+    private double Record(int i)
+    {
+        ReversibleJumpChain<TState> a = _chains[i], b = _chains[i + 1];
+        double logA = a.Temperature.LogDensity(b.CurrentEvaluation) + b.Temperature.LogDensity(a.CurrentEvaluation)
+                    - a.CurrentLogDensity - b.CurrentLogDensity;
+        double accept = logA >= 0.0 ? 1.0 : logA < 0.0 ? Math.Exp(logA) : 0.0;   // NaN: no swap
+        _rejectionSum[i] += 1.0 - accept;
+        _roundRejectionSum[i] += 1.0 - accept;
+        return logA;
+    }
+
+    private void Attempt(int i, double logA)
+    {
+        SwapAttempts++;
+        _pairAttempts[i]++;
+        // Drawn on every attempt, so the swap stream does not advance by the decision: between states whose targets
+        // agree to rounding, rounding decides a tie's sign, and it must not decide whether a uniform is consumed.
+        double u = _swapRng.NextDouble();
+        if (!(logA >= 0.0 || u < Math.Exp(logA))) return;
+
+        SwapAccepts++;
+        _pairAccepts[i]++;
+        ReversibleJumpChain<TState> a = _chains[i], b = _chains[i + 1];
+        TState xa = a.Current, xb = b.Current;
+        ITargetEvaluation ea = a.CurrentEvaluation, eb = b.CurrentEvaluation;
+        a.SetState(xb, eb);
+        b.SetState(xa, ea);
+        (_labelAt[i], _labelAt[i + 1]) = (_labelAt[i + 1], _labelAt[i]);
+    }
+
+    // A state at the hot end that was last at the cold end completes a round trip; one at the cold end that was last
+    // at the hot end is an annealed restart. A state that has not yet been to the hot end is at neither.
+    private void TrackEnds()
+    {
+        int hot = _chains.Length - 1;
+        int atHot = _labelAt[hot], atCold = _labelAt[0];
+        if (_lastEnd[atHot] == -1) RoundTrips++;
+        _lastEnd[atHot] = +1;
+        if (_lastEnd[atCold] == +1)
+        {
+            AnnealedRestarts++;
+            _lastEnd[atCold] = -1;
+        }
     }
 
     private static void ValidateLadder(double[] betas, TemperingPath path)

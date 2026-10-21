@@ -86,7 +86,17 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
     }
 
     /// <summary>The tempered density this chain samples.</summary>
-    public Temperature Temperature { get; }
+    public Temperature Temperature { get; private set; }
+
+    /// <summary>
+    /// Move the chain to another temperature, keeping its state and counters. The current density is recomputed from
+    /// the cached evaluation; the state is not re-evaluated. For ladder adaptation, which moves rungs between scans.
+    /// </summary>
+    public void SetTemperature(Temperature temperature)
+    {
+        Temperature = temperature;
+        _currentLogDensity = temperature.LogDensity(_currentEvaluation);
+    }
 
     /// <summary>
     /// Advance the chain one Draw: select a move ∝ weight(Current), propose, and accept with probability

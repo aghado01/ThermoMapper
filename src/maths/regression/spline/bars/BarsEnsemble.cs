@@ -407,7 +407,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     {
         var target = new SplineTarget(_basis, _model, _prior, _x, _y, st.W);
         double[] betas = ParallelTempering<KnotConfig>.GeometricLadder(levels, _temperBetaMin);
-        return new ParallelTempering<KnotConfig>(_ => Moves(st.Kernel), target, st.Config, betas, _temperPath, seed);
+        return new ParallelTempering<KnotConfig>(_ => Moves(st.Kernel), target, st.Config, betas, _temperPath, seed,
+                                                 SwapSchedule.Sequential);
     }
 
     private IRjMove<KnotConfig>[] Moves(IKnotKernel kernel)
