@@ -4,7 +4,7 @@ using Maths.Samplers;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
 
-namespace Maths.Regression.Tests;
+namespace Maths.Samplers.Tests;
 
 /// <summary>
 /// Reversible-jump chain contracts: move pairings must be reciprocal, and replacing the target keeps the chain's

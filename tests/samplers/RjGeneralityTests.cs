@@ -5,7 +5,7 @@ using Maths.Samplers.Rjmcmc;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Maths.Regression.Tests;
+namespace Maths.Samplers.Tests;
 
 /// <summary>
 /// Green-generality of the reversible-jump engine, on its own terms — no model consumer involved. A trans-

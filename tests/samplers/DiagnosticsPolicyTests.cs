@@ -4,7 +4,7 @@ using Maths.Rng;
 using Maths.Samplers.Ensemble;
 using Xunit;
 
-namespace Maths.Regression.Tests;
+namespace Maths.Samplers.Tests;
 
 /// <summary>
 /// B01 (R09) diagnostic failure policy: an undefined R̂ never certifies convergence, chains frozen at different
