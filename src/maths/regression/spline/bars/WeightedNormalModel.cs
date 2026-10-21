@@ -39,6 +39,9 @@ public sealed class WeightedNormalModel : IObservationModel
     public CoefficientUncertainty Uncertainty => CoefficientUncertainty.Exact;
 
     /// <inheritdoc/>
+    public bool CanTemperLikelihood => true;
+
+    /// <inheritdoc/>
     public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights)
         => TemperedMarginal(design, y, weights).LogMarginalLikelihood(1.0);
 

@@ -73,7 +73,47 @@ internal static class CountLaw
                 batchFreq[b, Math.Min(dimension(chain.Step()), bins - 1)] += 1.0;
             for (int j = 0; j < bins; j++) batchFreq[b, j] /= batchLength;
         }
+        return Summarize(batchFreq, expected);
+    }
 
+    /// <summary>
+    /// The same check on every rung of a tempering ladder: rung r's dimension law against
+    /// <paramref name="logLawForRung"/>(r), with the standard errors from batch means over the ladder's run.
+    /// </summary>
+    public static Result[] SampleLadder<TState>(
+        Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica, ISamplingTarget<TState> target, TState start,
+        Func<TState, int> dimension, double[] betas, TemperingPath path, Func<int, Func<int, double>> logLawForRung,
+        int bins, int burn, int steps, int batches, int seed)
+    {
+        if (bins < 2) throw new ArgumentOutOfRangeException(nameof(bins));
+        if (batches < 2 || steps % batches != 0) throw new ArgumentOutOfRangeException(nameof(batches));
+
+        var ladder = new ParallelTempering<TState>(movesForReplica, target, start, betas, path, seed);
+        for (int i = 0; i < burn; i++) ladder.Step();
+
+        int rungs = betas.Length, batchLength = steps / batches;
+        var batchFreq = new double[rungs][,];
+        for (int r = 0; r < rungs; r++) batchFreq[r] = new double[batches, bins];
+        for (int b = 0; b < batches; b++)
+        {
+            for (int i = 0; i < batchLength; i++)
+            {
+                ladder.Step();
+                for (int r = 0; r < rungs; r++)
+                    batchFreq[r][b, Math.Min(dimension(ladder.Replicas[r].Current), bins - 1)] += 1.0;
+            }
+            for (int r = 0; r < rungs; r++)
+                for (int j = 0; j < bins; j++) batchFreq[r][b, j] /= batchLength;
+        }
+
+        var results = new Result[rungs];
+        for (int r = 0; r < rungs; r++) results[r] = Summarize(batchFreq[r], ExpectedLaw(logLawForRung(r), bins));
+        return results;
+    }
+
+    private static Result Summarize(double[,] batchFreq, double[] expected)
+    {
+        int batches = batchFreq.GetLength(0), bins = batchFreq.GetLength(1);
         var observed = new double[bins];
         var se = new double[bins];
         for (int j = 0; j < bins; j++)

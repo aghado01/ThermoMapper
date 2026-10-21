@@ -32,6 +32,10 @@ public interface IObservationModel
     ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights)
         => new UntemperedMarginal(LogMarginalLikelihood(design, y, weights));
 
+    /// <summary>True when <see cref="TemperedMarginal"/> serves every b in (0, 1] at unit weights, so the model can
+    /// be tempered on the likelihood path. The default serves b = 1 only.</summary>
+    bool CanTemperLikelihood => false;
+
     /// <summary>Effective number of parameters for the complexity penalty (ν for the Normal model).</summary>
     int EffectiveDimension(double[,] design, double[]? weights);
 

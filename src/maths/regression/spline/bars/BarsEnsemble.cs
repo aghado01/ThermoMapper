@@ -91,6 +91,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private readonly double? _adaptKernelTau;    // set ⇒ each chain tunes an AdaptiveLocalBetaKernel in burn-in
     private readonly int? _temperLevels;        // set ⇒ each chain is a parallel-tempering ladder (cold = the sample)
     private readonly double _temperBetaMin;
+    private readonly TemperingPath _temperPath;
 
     // Per-run context, set at the top of Run and read (only) by StartChain/the chain runs during that call. Run
     // drives the shell synchronously, so these are valid for the whole run; the fan-out reads them, never writes.
@@ -113,10 +114,15 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// this many replicas, and the cold (β = 1) replica supplies the draws — so the readout is unchanged but the
     /// chain can cross modal barriers (a multi-peak T_c posterior). Mutually exclusive with the resampler and with
     /// adaptive-τ in this version (a plain fixed-kernel tempered ladder).</param>
-    /// <param name="temperBetaMin">The hot end of the geometric β-ladder (default 0.05).</param>
+    /// <param name="temperBetaMin">The hot end of the geometric β-ladder (default 0.05), in (0, 1).</param>
+    /// <param name="temperPath">The ladder's tempering path. The default, the likelihood-tempered path (Q5), keeps the
+    /// knot prior whole, so hot replicas approach the prior itself; it needs a model that
+    /// <see cref="IObservationModel.CanTemperLikelihood"/>. The powered path tempers prior and likelihood together and
+    /// serves every model.</param>
     public BarsEnsemble(IBasis basis, IObservationModel model, IComplexityPrior prior, IKnotKernel kernel,
                         IWeightResampler? resampler = null, double? dmgkConstant = null, double? adaptKernelTau = null,
-                        int? temperLevels = null, double temperBetaMin = 0.05)
+                        int? temperLevels = null, double temperBetaMin = 0.05,
+                        TemperingPath temperPath = TemperingPath.Likelihood)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(model);
@@ -133,6 +139,13 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             if (lv < 2) throw new ArgumentOutOfRangeException(nameof(temperLevels), "Tempering needs ≥ 2 levels.");
             if (resampler is not null || adaptKernelTau is not null)
                 throw new ArgumentException("Tempering is mutually exclusive with the resampler and adaptive-τ.", nameof(temperLevels));
+            if (!(temperBetaMin > 0.0 && temperBetaMin < 1.0))
+                throw new ArgumentOutOfRangeException(nameof(temperBetaMin), "The hot end of the ladder must lie in (0, 1).");
+            if (temperPath is not (TemperingPath.Powered or TemperingPath.Likelihood))
+                throw new ArgumentOutOfRangeException(nameof(temperPath));
+            if (temperPath == TemperingPath.Likelihood && !model.CanTemperLikelihood)
+                throw new ArgumentException(
+                    $"{model.GetType().Name} has no tempered marginal; temper it on the powered path.", nameof(temperPath));
         }
         _basis = basis;
         _model = model;
@@ -143,6 +156,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         _adaptKernelTau = adaptKernelTau;
         _temperLevels = temperLevels;
         _temperBetaMin = temperBetaMin;
+        _temperPath = temperPath;
     }
 
     /// <summary>Functionals R̂ runs on: knot count (index 0) + each fitted grid value (the per-grid consensus map).</summary>
@@ -393,7 +407,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     {
         var target = new SplineTarget(_basis, _model, _prior, _x, _y, st.W);
         double[] betas = ParallelTempering<KnotConfig>.GeometricLadder(levels, _temperBetaMin);
-        return new ParallelTempering<KnotConfig>(_ => Moves(st.Kernel), target, st.Config, betas, TemperingPath.Powered, seed);
+        return new ParallelTempering<KnotConfig>(_ => Moves(st.Kernel), target, st.Config, betas, _temperPath, seed);
     }
 
     private IRjMove<KnotConfig>[] Moves(IKnotKernel kernel)

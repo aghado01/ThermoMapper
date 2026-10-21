@@ -2,6 +2,7 @@ using System;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
+using Maths.Samplers;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -51,6 +52,25 @@ public sealed class TemperingTests
         Assert.True(Math.Abs(p.LocationMean - truePeak) < 0.06, $"tempered peak {p.LocationMean:F3} off {truePeak}");
         Assert.True(p.LocationLo <= truePeak && truePeak <= p.LocationHi, "95% interval should bracket the peak");
         Assert.InRange(result.AcceptanceRate, 1e-6, 1.0);   // cold replica genuinely mixed
+    }
+
+    [Fact]
+    public void LikelihoodPath_IsRejected_ForAModelWithoutATemperedMarginal()
+    {
+        Assert.Throws<ArgumentException>(() => new BarsEnsemble(
+            new SplineBasis(3), new PoissonModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0), temperLevels: 3));
+        _ = new BarsEnsemble(new SplineBasis(3), new PoissonModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
+                             temperLevels: 3, temperPath: TemperingPath.Powered);
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(1.0)]
+    public void HotEnd_OutsideTheOpenUnitInterval_IsRejected(double betaMin)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BarsEnsemble(
+            new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
+            temperLevels: 3, temperBetaMin: betaMin));
     }
 
     [Fact]

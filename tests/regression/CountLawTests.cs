@@ -83,6 +83,37 @@ public sealed class CountLawTests
         Assert.True(double.IsFinite(target.LogPosterior(new KnotConfig([0.3, 0.6]))));
     }
 
+    [Theory]
+    [InlineData(TemperingPath.Likelihood)]
+    [InlineData(TemperingPath.Powered)]
+    public void TemperedRungs_FollowTheirPathsCountLaw(TemperingPath path)
+    {
+        // Under a constant likelihood the likelihood path's every rung samples the knot prior itself. The powered path's
+        // rung β samples (p(k)·k!)^β on the ordered simplex, whose volume is 1/k!, so for a Poisson(λ) count prior its
+        // knot count is Poisson(λ^β): a powered density on a space of varying dimension depends on the reference measure
+        // of each subspace, and its hot rungs leave the prior (Q5).
+        const double lambda = 4.0;
+        var prior = new PoissonPrior(lambda);
+        IKnotKernel kernel = new LocalBetaKernel(5.0);
+        double[] betas = [1.0, 0.5, 0.25];
+        var target = new SplineTarget(new SplineBasis(3), new FlatModel(), prior, x: [0.5], y: [0.0]);
+        Func<int, double> LawAt(int rung) => path == TemperingPath.Likelihood
+            ? prior.LogPrior
+            : new PoissonPrior(Math.Pow(lambda, betas[rung])).LogPrior;
+
+        CountLaw.Result[] rungs = CountLaw.SampleLadder(
+            _ => [new KnotBirthMove(kernel), new KnotDeathMove(kernel), new KnotRelocateMove(kernel)], target,
+            new KnotConfig([]), s => s.Count, betas, path, LawAt, bins: 10, burn: 10_000, steps: 300_000, batches: 30,
+            seed: 41);
+
+        for (int r = 0; r < rungs.Length; r++)
+        {
+            string label = $"{path} β={betas[r]}";
+            _out.WriteLine($"[count-law-ladder] {label}:{rungs[r].Describe()}");
+            Assert.True(rungs[r].Agrees(z: 5.0, floor: 0.002), $"{label}:{rungs[r].Describe()}");
+        }
+    }
+
     [Fact]
     public void Target_OffTheCountPriorsSupport_BuildsNoDesign()
     {
@@ -103,12 +134,20 @@ public sealed class CountLawTests
             => new double[design.GetLength(1)];
     }
 
-    // A constant likelihood: the target reduces to the count prior and the location measure.
+    // A constant likelihood at every temperature: the target reduces to the count prior and the location measure.
     private sealed class FlatModel : IObservationModel
     {
         public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights) => 0.0;
+        public bool CanTemperLikelihood => true;
+        public ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights) => Constant.Zero;
         public int EffectiveDimension(double[,] design, double[]? weights) => design.GetLength(1);
         public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
             => new double[design.GetLength(1)];
+    }
+
+    private sealed class Constant : ITemperedMarginal
+    {
+        public static readonly Constant Zero = new();
+        public double LogMarginalLikelihood(double inverseTemperature) => 0.0;
     }
 }
