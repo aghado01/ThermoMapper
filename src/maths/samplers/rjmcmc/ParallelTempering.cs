@@ -7,18 +7,18 @@ namespace Maths.Samplers.Rjmcmc;
 
 /// <summary>
 /// Parallel tempering (replica exchange) over a ladder of reversible-jump chains at inverse temperatures
-/// 1 = β₀ &gt; β₁ &gt; … &gt; β_{L-1} &gt; 0. Each replica samples the powered posterior <c>π^β</c>; after every sweep,
-/// adjacent replicas attempt a Metropolis state swap — accept ∝ <c>exp((β_i − β_{i+1})(L_{i+1} − L_i))</c>, L the
-/// untempered log-posterior read from each replica's cached evaluation — so the hot replicas, which cross modal barriers freely, ferry the cold replica
-/// (β = 1, the true posterior) between modes. The cold chain is the sampler; the rest are scaffolding. For
-/// multimodal targets (e.g. a multi-peak T_c posterior) where a single chain would lock into one mode.
+/// 1 = β₀ &gt; β₁ &gt; … &gt; β_{L-1}, all on one declared <see cref="TemperingPath"/>: the powered posterior
+/// <c>(prior · likelihood)^β</c> or the likelihood-tempered path <c>prior · likelihood^β</c>. After every sweep,
+/// adjacent replicas attempt a Metropolis state swap, each replica's density evaluated at the other's state from the
+/// cached evaluations — so the hot replicas, which cross modal barriers freely, ferry the cold replica (β = 1, the true
+/// posterior) between modes. The cold chain is the sampler; the rest are scaffolding. For multimodal targets (e.g. a
+/// multi-peak T_c posterior) where a single chain would lock into one mode.
 /// As an <see cref="IChain{TState}"/> the ladder presents as a single chain whose draw is the cold state and whose
 /// acceptance is the cold replica's, so the ensemble shell can drive a tempered replica like any other.
 /// </summary>
 public sealed class ParallelTempering<TState> : IChain<TState>
 {
     private readonly ReversibleJumpChain<TState>[] _chains;
-    private readonly double[] _betas;
     private readonly Xoshiro256PlusPlus _swapRng;
 
     /// <summary>Adjacent-pair swap attempts so far.</summary>
@@ -29,29 +29,31 @@ public sealed class ParallelTempering<TState> : IChain<TState>
 
     /// <param name="movesForReplica">Builds replica i's own move set (i = 0 is the cold replica). It is called once
     /// per replica, so any mutable move or kernel state is private to that replica.</param>
-    /// <param name="target">The target; replica i samples its powered posterior at β_i.</param>
+    /// <param name="target">The target; replica i samples it at <c>Temperature(β_i, path)</c>.</param>
     /// <param name="start">Common initial state for all replicas.</param>
-    /// <param name="betas">Inverse-temperature ladder, descending from 1 (cold, index 0) to β_min &gt; 0.</param>
+    /// <param name="betas">The ladder: finite, strictly descending, cold value exactly 1 at index 0. The hot end is
+    /// above 0 on the powered path, where β = 0 would be the bare reference measure; on the likelihood path β = 0 is
+    /// the prior, which a target with an improper nuisance prior refuses. The array is not retained.</param>
+    /// <param name="path">The tempering path every replica takes.</param>
     /// <param name="masterSeed">Seeds the per-replica streams and the swap stream via the <see cref="SeedTree"/>.</param>
     public ParallelTempering(Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica, ISamplingTarget<TState> target,
-                             TState start, double[] betas, int masterSeed)
+                             TState start, double[] betas, TemperingPath path, int masterSeed)
     {
         ArgumentNullException.ThrowIfNull(movesForReplica);
         ArgumentNullException.ThrowIfNull(target);
-        ArgumentNullException.ThrowIfNull(betas);
-        if (betas.Length < 2) throw new ArgumentException("Tempering needs at least two levels.", nameof(betas));
-        foreach (double b in betas)
-            if (!(b > 0.0 && b <= 1.0)) throw new ArgumentException("Inverse temperatures must lie in (0, 1].", nameof(betas));
+        ValidateLadder(betas, path);
 
-        _betas = betas;
+        Path = path;
         int[] seeds = SeedTree.Derive(masterSeed, betas.Length + 1);
         _chains = new ReversibleJumpChain<TState>[betas.Length];
         for (int i = 0; i < betas.Length; i++)
             _chains[i] = new ReversibleJumpChain<TState>(
-                movesForReplica(i), target, start, new Xoshiro256PlusPlus(seeds[i]),
-                new Temperature(betas[i], TemperingPath.Powered));
+                movesForReplica(i), target, start, new Xoshiro256PlusPlus(seeds[i]), new Temperature(betas[i], path));
         _swapRng = new Xoshiro256PlusPlus(seeds[betas.Length]);
     }
+
+    /// <summary>The path every replica takes.</summary>
+    public TemperingPath Path { get; }
 
     /// <summary>The current cold-chain (β = 1) state — the posterior sample.</summary>
     public TState Cold => _chains[0].Current;
@@ -60,7 +62,16 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// can read its acceptance / per-move diagnostics. Its state advances both by its own moves and by swaps.</summary>
     public ReversibleJumpChain<TState> ColdChain => _chains[0];
 
-    /// <summary>Advance every replica one step, then sweep adjacent-replica swaps. Returns the cold state.</summary>
+    /// <summary>Every replica, cold first, for per-rung diagnostics. Each one's <see cref="ReversibleJumpChain{TState}.Temperature"/>
+    /// is its rung. Stepping a replica directly takes it out of the ladder's schedule.</summary>
+    public IReadOnlyList<ReversibleJumpChain<TState>> Replicas => _chains;
+
+    /// <summary>
+    /// Advance every replica one step, then sweep adjacent-replica swaps, cold to hot. A swap of x_i and x_j is
+    /// accepted with <c>log α = d_i(x_j) + d_j(x_i) − d_i(x_i) − d_j(x_j)</c>, d_i replica i's log density, which on
+    /// the powered path reduces to <c>(β_i − β_j)(L_j − L_i)</c>. Later pairs see earlier swaps. Returns the cold
+    /// state.
+    /// </summary>
     public TState Step()
     {
         for (int i = 0; i < _chains.Length; i++) _chains[i].Step();
@@ -68,19 +79,19 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         for (int i = 0; i < _chains.Length - 1; i++)
         {
             SwapAttempts++;
-            ITargetEvaluation ei = _chains[i].CurrentEvaluation, ei1 = _chains[i + 1].CurrentEvaluation;
-            double li = Temperature.LogPosterior(ei);   // untempered log π at replica i
-            double li1 = Temperature.LogPosterior(ei1);
-            double logA = (_betas[i] - _betas[i + 1]) * (li1 - li);
+            ReversibleJumpChain<TState> a = _chains[i], b = _chains[i + 1];
+            ITargetEvaluation ea = a.CurrentEvaluation, eb = b.CurrentEvaluation;
+            double logA = a.Temperature.LogDensity(eb) + b.Temperature.LogDensity(ea)
+                        - a.CurrentLogDensity - b.CurrentLogDensity;
             // Drawn on every attempt, so the swap stream does not advance by the decision: between states whose targets
             // agree to rounding, rounding decides a tie's sign, and it must not decide whether a uniform is consumed.
             double u = _swapRng.NextDouble();
             if (logA >= 0.0 || u < Math.Exp(logA))
             {
                 SwapAccepts++;
-                TState xi = _chains[i].Current, xi1 = _chains[i + 1].Current;
-                _chains[i].SetState(xi1, ei1);
-                _chains[i + 1].SetState(xi, ei);
+                TState xa = a.Current, xb = b.Current;
+                a.SetState(xb, eb);
+                b.SetState(xa, ea);
             }
         }
         return _chains[0].Current;
@@ -100,5 +111,20 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         for (int i = 0; i < levels; i++)
             b[i] = Math.Pow(betaMin, i / (double)(levels - 1));   // 1 … β_min
         return b;
+    }
+
+    private static void ValidateLadder(double[] betas, TemperingPath path)
+    {
+        ArgumentNullException.ThrowIfNull(betas);
+        if (betas.Length < 2) throw new ArgumentException("Tempering needs at least two levels.", nameof(betas));
+        if (betas[0] != 1.0) throw new ArgumentException("The cold rung must be exactly β = 1.", nameof(betas));
+        for (int i = 1; i < betas.Length; i++)
+            if (!(betas[i] < betas[i - 1]))
+                throw new ArgumentException("The ladder must be strictly descending.", nameof(betas));
+        double hot = betas[^1];
+        if (!(path == TemperingPath.Powered ? hot > 0.0 : hot >= 0.0))
+            throw new ArgumentException(path == TemperingPath.Powered
+                ? "On the powered path every β must be positive."
+                : "Every β must be non-negative.", nameof(betas));
     }
 }

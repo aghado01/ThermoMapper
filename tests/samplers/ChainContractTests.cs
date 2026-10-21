@@ -64,7 +64,7 @@ public sealed class ChainContractTests
         }
 
         double[] betas = ParallelTempering<int>.GeometricLadder(levels: 4, betaMin: 0.1);
-        var pt = new ParallelTempering<int>(MovesFor, Flat, 0, betas, masterSeed: 2);
+        var pt = new ParallelTempering<int>(MovesFor, Flat, 0, betas, TemperingPath.Powered, masterSeed: 2);
         pt.Step();
 
         Assert.Equal(new[] { 0, 1, 2, 3 }, built.ConvertAll(b => b.Replica));
@@ -81,8 +81,8 @@ public sealed class ChainContractTests
         // identically: the swap uniform is drawn on every attempt, so a tie's sign cannot shift the stream.
         IRjMove<int>[] MovesFor(int replica) => [new StepMove("up", "down", +1), new StepMove("down", "up", -1)];
         double[] betas = ParallelTempering<int>.GeometricLadder(levels: 4, betaMin: 0.05);
-        var a = new ParallelTempering<int>(MovesFor, Peaked(tieBreak: 2), 0, betas, masterSeed: 9);
-        var b = new ParallelTempering<int>(MovesFor, Peaked(tieBreak: 4), 0, betas, masterSeed: 9);
+        var a = new ParallelTempering<int>(MovesFor, Peaked(tieBreak: 2), 0, betas, TemperingPath.Powered, masterSeed: 9);
+        var b = new ParallelTempering<int>(MovesFor, Peaked(tieBreak: 4), 0, betas, TemperingPath.Powered, masterSeed: 9);
         for (int i = 0; i < 5000; i++) Assert.Equal(a.Step(), b.Step());
         Assert.Equal(a.SwapAccepts, b.SwapAccepts);
     }
