@@ -13,6 +13,9 @@ namespace Maths.Samplers.Tests;
 /// round-trip rate must match their Theorem 1 from the observed rejection rates: 1/(2 + 2E) for deterministic even-odd
 /// and 1/(2N + 2E) for stochastic even-odd. Adding rungs to an equalized ladder must not slow DEO, and must slow SEO.
 /// Equalization must leave the barrier Σ r unchanged (their Corollary 2) and the rates equal.
+/// <para>The sequential sweep's round trips are counted as mechanism, not merit. Within one swap phase a state can
+/// cascade up several rungs with no local step between, so the sweep completes more round trips than the even-odd
+/// schedules, each carrying less exploration; the count is not comparable with theirs.</para>
 /// </summary>
 public sealed class SwapScheduleTests
 {
@@ -49,6 +52,14 @@ public sealed class SwapScheduleTests
         return (observed, TemperingLadder.IdealRoundTripRate(rejection, pt.Schedule), rejection);
     }
 
+    private static double MeasureTrips(ParallelTempering<double> pt, int scans)
+    {
+        for (int i = 0; i < 2_000; i++) pt.Step();
+        long trips0 = pt.RoundTrips;
+        for (int i = 0; i < scans; i++) pt.Step();
+        return (double)(pt.RoundTrips - trips0) / scans;
+    }
+
     [Theory]
     [InlineData(SwapSchedule.DeterministicEvenOdd)]
     [InlineData(SwapSchedule.StochasticEvenOdd)]
@@ -63,6 +74,7 @@ public sealed class SwapScheduleTests
     [Theory]
     [InlineData(SwapSchedule.DeterministicEvenOdd, 0.5)]
     [InlineData(SwapSchedule.StochasticEvenOdd, 0.1)]   // 1/(2N) with N = 5 pairs: a random walk
+    [InlineData(SwapSchedule.Sequential, 1.0)]          // the sweep cascades a state up the whole ladder in one swap phase, then down a rung a scan
     public void RoundTripRate_WithoutRejections_IsTheSchedulesOwn(SwapSchedule schedule, double expected)
     {
         IRjMove<int>[] MovesFor(int replica) => [new Stay()];
@@ -81,9 +93,11 @@ public sealed class SwapScheduleTests
         foreach (int levels in new[] { 5, 17 })
         {
             double[] ladder = Adapted(levels, seed: 30 + levels);
-            foreach (SwapSchedule schedule in new[] { SwapSchedule.DeterministicEvenOdd, SwapSchedule.StochasticEvenOdd })
+            // The sweep is logged for the record, not asserted: its cascades make its count incomparable.
+            foreach (SwapSchedule schedule in new[] { SwapSchedule.DeterministicEvenOdd, SwapSchedule.StochasticEvenOdd, SwapSchedule.Sequential })
             {
-                (double observed, _, _) = Measure(ExactLadder(ladder, schedule, seed: 7), scans: 100_000);
+                ParallelTempering<double> pt = ExactLadder(ladder, schedule, seed: 7);
+                double observed = schedule == SwapSchedule.Sequential ? MeasureTrips(pt, 100_000) : Measure(pt, scans: 100_000).Observed;
                 rate[(schedule, levels)] = observed;
                 _out.WriteLine($"[round-trips] {schedule}, {levels} rungs: {observed:F4}");
             }
