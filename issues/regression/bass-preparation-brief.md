@@ -49,6 +49,8 @@ flowchart TD
     N --> O
     O --> P["3.6 Cleanup sweep"]
     X --> P
+    O --> Q["3.7 BARS admission gates"]
+    N --> Q
 ```
 
 Steps 0.1, 0.2, 0.3 and 0.5 all touch `BarsEnsemble`, so they run in that order. Step 0.4 touches only LinAlg and can run alongside them.
@@ -163,6 +165,18 @@ Extract the block from the repaired `WeightedNormalModel` (derivations review §
 
 This step is a pure refactor. BARS outputs match the step 0.6 baseline to rounding. Build it beside the existing class, switch callers, and leave deletion to step 3.6.
 
+Design notes (added 2026-10-20, from the admission discussion and its [evidence](#addendum-admission-evidence-2026-10-20)):
+
+- **Cache the statistics that depend on neither τ nor temperature.** These are ‖r_OLS‖² (from the explicit residual), Q = ‖L⁻¹Zᵀy‖² and the dimension p.
+  - With likelihood inverse-temperature β, S = β·yᵀy − β²Q/(β + τ) = β·(‖r_OLS‖² + τ/(β + τ)·Q). At β = 1 and τ = 1/m this is today's yᵀy − m/(m+1)·Q in its cancellation-free form (R13; derivations review §5).
+  - At W = I the log-determinant term is (τ/(β + τ))^(p/2), and log|G| cancels.
+  - So S and the marginal cost O(1) for any τ or temperature. BASS's τ updates and step 3.2's tempered swaps then need no refactorization.
+- **Two paths.** At W = I, one factor G. On the robust path (step 0.5d), G and P_a are both factored and both log-determinants enter.
+- **What the block does not own.** Rules about data under each basis function belong to the basis and target layer, checked before any factorization; BASS likewise checks `npart` when it proposes. Numerical admission reads the factor's status. The block takes an admitted factored system and returns marginals, residuals, tempered densities and (σ², β) draws.
+- **The coefficient prior is a parameter, not an interface.** The g-prior, with τ fixed or sampled, is the only coefficient prior. An interface waits for a second one; see the [seam map](#seam-map-admission-prior-and-schedule).
+- **No per-proposal allocation** beyond the factor's own storage: scratch is owned by the caller.
+- **`DesignAdmission` is not touched** in steps 2.3–3.5 (Q6).
+
 ## Phase 3: sampler contracts
 
 ### 3.1 Neutral target contract
@@ -196,7 +210,12 @@ Two clear-cut additions:
 - resume state (RNG words, iteration, adaptation state) beside the statistics, so the accumulator doubles as the checkpoint the port brief requires;
 - nonlinear reductions in a separate tier that reads only pooled statistics, applied once, at the level where the estimand lives.
 
-Keep per-chain accumulators beside the merged one, because R̂ needs the chains separately. Include counts of admission rejections by reason (rank or conditioning; IRLS non-convergence; the m ≤ ν rule), so the truncation that step 0.5b introduces stays visible. The streaming moments from step 0.1 already merge this way (Chan's parallel formula). BARS's readouts move onto the contract: the step 0.5c moments, λ, π and the peak sample. BASS and the SMC backend consume it.
+Keep per-chain accumulators beside the merged one, because R̂ needs the chains separately. Include counts of admission rejections by reason (rank or conditioning; IRLS non-convergence; the m ≤ ν rule; and, from step 3.7, the support gate), so the truncation that step 0.5b introduces stays visible. The streaming moments from step 0.1 already merge this way (Chan's parallel formula). BARS's readouts move onto the contract: the step 0.5c moments, λ, π and the peak sample. BASS and the SMC backend consume it.
+
+**Extrapolation readout** (added 2026-10-20). Report the prediction leverage h(T) = z(T)ᵀ(ZᵀZ)⁻¹z(T) beside `FitSd`: its posterior mean, or the fraction of draws with h > 1.
+- A grid point with h ≫ 1 is extrapolated from the data. The g-prior adds no shrinkage there, so the fit is the least-squares extrapolation, and coefficient draws swing with it.
+- Leverage flags every fit across a real data gap, so it belongs in the readouts rather than in admission ([evidence](#addendum-admission-evidence-2026-10-20)).
+- It is the conditional-variance quadratic that `ReadoutQuadratics` already computes, without the σ² scale, so it adds no solves.
 
 ### 3.5 Baseline rerun
 
@@ -205,6 +224,21 @@ Rerun the step 0.6 checks after the migrations. Every difference must trace to a
 ### 3.6 Cleanup sweep
 
 Delete the superseded surfaces in their own commit: the old target contract, the duplicated model math, the status-less factor calls (including BAPS and BGP once the chip has closed), and the sums-based `ChainDiagnostics.RHat` overload once BAPS has moved to the moments form.
+
+### 3.7 BARS admission: numerical and support gates (Q6)
+
+Added 2026-10-20. This lands after step 3.5's zero-drift rerun as its own change, measured with step 3.4's rejection counts by reason. It splits today's admission rule into its two jobs ([evidence](#addendum-admission-evidence-2026-10-20)):
+
+- **Numerical gate.** The model's factor runs without a pivot floor (a strict `BandCholesky` mode, following step 2.2's `DenseCholesky`), must be positive definite, and needs `MinRelativePivot` ≥ 1e-10. This keeps Q4's six-digit rationale, now on the equilibrated condition number that governs Cholesky accuracy (van der Sluis 1969; Demmel 1989). It replaces `PivotRatio` ≥ 1e-10 and `FlooredPivots` == 0, both of which depend on column scaling.
+- **Support gate.** Every basis function needs column mass Σᵢ Bⱼ(xᵢ) ≥ w_min, with default 1 (one data point's worth) and configurable. `SplineTarget` checks it before any factorization, beside the open-simplex rule, as a declared prior-support restriction.
+- **Checks, before and after:**
+  - the validation fits;
+  - a sharp transient near a domain boundary;
+  - fits across a data gap, both the posterior mean and the coefficient draws in the gap;
+  - robust runs;
+  - a low-rate Poisson case, to test the unmeasured prediction that `PivotRatio` rejects knots in low-count regions because μ̂ shrinks those columns;
+  - rejection counts by reason.
+- **Docs.** `BayesianRegression.md`'s admission section states the two gates, the alternatives (count, mass, Kish size, leverage) and the trade-offs.
 
 ## After Phase 3: BARS mixing
 
@@ -277,6 +311,48 @@ Added 2026-10-19. [gemini-additional-bugs.md](gemini-additional-bugs.md) compare
 | `SpectralNoiseField` is not periodic over the box | Already documented | No action |
 | `ExactChangepoint`: σ² documentation mismatch, Cauchy quadrature cost and truncation | Not checked | Outside this brief: no BASS path and not in the reviewed register; needs its own review |
 
+## Seam map: admission, prior and schedule
+
+Added 2026-10-20, adapted from an external review of the admission discussion (`aghado01-issues/argon-bars-bass-discussion.md`). Each concern lives in one place. An interface exists only where two implementations do.
+
+| Gate | Concern | Lives in | Implementations |
+|---|---|---|---|
+| 1. Support | Does each basis function have data under it? | Basis and target layer, before factorization | BARS: column mass (step 3.7). BASS: `npart` count over half-space hinges. An interface once BASS lands. |
+| 2. Numerical | Can the factored system be trusted? | `DesignAdmission`, reading `FactorStatus` | Strict factor with `MinRelativePivot` (step 3.7) |
+| 3. Coefficient prior | β's prior given the basis | The g-prior block (step 2.3) | g-prior with τ fixed (BARS) or sampled (BASS). A parameter until a second prior exists. |
+| 4. Move schedule | Birth/death/relocate selection | The reversible-jump move set | Constant weights, Green's prior-aware schedule, masked constant ([BARS mixing](#after-phase-3-bars-mixing)) |
+
+## Addendum: admission evidence (2026-10-20)
+
+Probes on the Grams a BARS chain evaluates: 6,000 steps per dataset, Normal model, Poisson(5–8) count prior, cubic basis. The curve was a bump plus sin(3x) with noise 0.1, on four designs: dense x (n = 150), x with a gap (0.35, 0.65) (n = 120), a sparser gap design (n = 60), and small n = 40. The probes were temporary and are not in the tree.
+
+**Disagreements between the rules are rare, and run one way.**
+
+| Data | Not positive definite | Rejected by `PivotRatio` only | By `MinRelativePivot` only | By both |
+|---|---|---|---|---|
+| dense, n = 150 | 0 | 0 | 0 | 0 |
+| gap, n = 120 | 83 | 3 | 0 | 0 |
+| small, n = 40 | 21 | 2 | 0 | 1 |
+
+**What `PivotRatio` alone rejects is thin support, not ill-conditioning.** Those configurations have relative pivots of 0.1–0.2. A basis function whose data sit only in its cubic tail gets βⱼ ≈ r/Bⱼ(xᵢ) and spikes inside the gap. The g-prior's shrinkage m/(m+1) is isotropic, so it adds nothing in data-free directions. On data ranging 0–2, the conditional-mean fit in the gap reached 290–1,310, on both sides of the 1e-10 cut. `PivotRatio` was in effect thresholding column energy against the largest pivot.
+
+**Which support statistic separates the wild fits** (wild: max |fit| in the gap > 10):
+
+| Rule | gap (38 wild) | gap-sparse (26 wild) | dense (0 wild) |
+|---|---|---|---|
+| count ≥ 12 (about BASS's `npart`) | 5 wild pass; 335 sane fail | 0 pass; 1,416 sane fail | 33 sane fail |
+| Kish size (ΣB)²/ΣB² ≥ 6 | 5 wild pass; 422 sane fail | 0 pass; 1,869 sane fail | 32 sane fail |
+| mass ΣB ≥ 2.5 | 0 pass; 896 sane fail | 0 pass; 1,720 sane fail | 20 sane fail, 18 at a boundary basis function |
+| mass ΣB ≥ 1 | 0 pass; 403 sane fail | 0 pass; 728 sane fail | 0 |
+| leverage ≤ 30 across the gap | 0 pass; 824 sane fail | 0 pass; 452 sane fail | 0 |
+
+- **Count fails** because tail points count fully. **Kish fails** because it ignores a common scale.
+- **Mass works.** The largest wild mass was 0.19 (gap) and 0.015 (gap-sparse).
+- **What mass means.** For uniformly spread data, an interior basis function's mass is about the number of data points per knot interval, and the first basis function's is about n·ξ₁/4. So a threshold sets resolution: mass ≥ 2.5 needs about 10 points before the first interior knot. BASS's `npart` = min(20, 0.1·n) (`bass.R:23`, `bass.R:259–261`, enforced in `rjmcmc_des_*.R`) is a count over half-space hinges, which is the right statistic for that basis and the wrong one for local B-splines.
+- **"Sane" low-mass configurations are sane only in their mean.** Since step 0.5c, nonlinear readouts use coefficient draws, whose variance grows like 1/B². So these configurations are wild in draws, and rejecting them loses nothing.
+- **Leverage is the exact measure of the instability**, but it flags every fit across a real gap. Hence step 3.4's extrapolation readout, not an admission rule.
+- **Root cause, parked.** The g-prior has no fixed-scale shrinkage in data-free directions. A proper coefficient prior with a fixed-scale component would fix that, but it would break the BARS ≡ BASS(τ = 1/m) identity unless BASS changes too. It belongs with BASS's coefficient-prior decisions.
+
 ## Decisions
 
 | ID | Decision | Needed before | Recommendation |
@@ -284,8 +360,10 @@ Added 2026-10-19. [gemini-additional-bugs.md](gemini-additional-bugs.md) compare
 | Q1 | What BARS's readouts mean once full draws exist | 0.5c | **Decided 2026-10-20: option B.** The conditional mean serves readouts that are affine in f; full draws serve the rest; pointwise variance comes from conditional moments (step 0.5c). Whittle draws from its Laplace approximation; GibbsLoss is labeled knot-uncertainty only. The BARS-for-SPC application is not deployed, so readouts stay general. |
 | Q2 | Whether the coefficient prior uses the weighted Gram matrix | 0.5d | **Decided 2026-10-20: unweighted** for BARS. The weight update stays the exact Gamma draw. The marginal becomes `|G/m|^½ · |Zᵀ(W + I/m)Z|^−½ · ∏ w_i^½ · S^−m/2` with `S = ‖y − Zβ̂‖²_W + β̂ᵀ(G/m)β̂`, which reduces to today's form at unit weights and needs one extra banded factorization per proposal. The weighted alternative keeps one factorization but needs a Metropolis correction by `|ZᵀWZ|^½` on every weight sweep. BASS's robust mode decides separately, because a sampled τ changes this tradeoff. |
 | Q3 | BARS knot location measure | 0.5e | **Decided 2026-10-20: ordered uniform locations,** with `log k!` added to the target, so that `p(k)` is the actual count prior. The complexity penalty stays configurable through the count prior: a new `ConwayMaxwellPoissonPrior(λ, ν)`, with ν = 1 plain Poisson and ν = 2 reproducing today's effective prior, λᵏ/(k!)². The marginal's Occam factor of about ½·log(m+1) per basis function remains either way. Compare ν = 1 and ν = 2 on the existing validation fits and document the result, rather than choosing ν from one dataset. |
-| Q4 | Rank and admission policy per model | 0.5b | **Decided 2026-10-20: reject** rank-deficient designs in all four models, using the step 0.4 status with a relative criterion (`PositiveDefinite` and `PivotRatio` ≥ r_min, with r_min recorded with its rationale). This is a declared prior support restriction: every basis function must be supported by data. Declare any near-interpolation limit for the Normal model as part of its prior. |
+| Q4 | Rank and admission policy per model | 0.5b | (Its `PivotRatio` criterion is superseded by Q6 at step 3.7.) **Decided 2026-10-20: reject** rank-deficient designs in all four models, using the step 0.4 status with a relative criterion (`PositiveDefinite` and `PivotRatio` ≥ r_min, with r_min recorded with its rationale). This is a declared prior support restriction: every basis function must be supported by data. Declare any near-interpolation limit for the Normal model as part of its prior. |
 | Q5 | BARS tempering path | 3.2 | Likelihood-tempered: hot replicas approach the prior, and the swap is O(1) from the block's statistics. |
+| Q6 | BARS admission policy | 3.7 | **Decided 2026-10-20: split the rule into its two jobs** (step 3.7). Numerical: a strict factor, positive definite, `MinRelativePivot` ≥ 1e-10. Support: column mass Σᵢ Bⱼ(xᵢ) ≥ 1 per basis function, configurable. It lands after step 3.5, so steps 2.3–3.5 stay a zero-drift refactor. BASS's count-based `npart` default is rejected for BARS. Basis for the decision: the [evidence](#addendum-admission-evidence-2026-10-20). |
+| Q7 | `EbicPrior`'s count law | before BARS ships `EbicPrior` | **Open.** Today's law C(n_c, k)^(−γ) is He, Yang and Kang's C(n, k)^(1−γ_HYK) with γ_HYK = 1 + γ, so it is EBIC extended past their γ ≤ 1. Both laws satisfy step 0.5e's count-law contract, so the choice is semantic. The options:<ul><li>keep the law, document the mapping, and restrict support to k ≤ ⌊n_c/2⌋, where the law is a penalty;</li><li>reparameterize to HYK's law;</li><li>rename the prior.</li></ul>An EBIC question is being examined first (2026-10-20). |
 
 ## Working rules
 
