@@ -81,7 +81,7 @@ flowchart LR
 |---|---|
 | Targets | `ISamplingTarget<T>` (`Evaluate`); `ITargetEvaluation` (`LogPrior`, `LogLikelihood(b)`); `Temperature(b, path)` with `LogDensity(evaluation)`, static `Posterior` and `LogPosterior(evaluation)`; `TemperingPath` (`Powered`, `Likelihood`); `SamplingTarget.FromLogDensity`, `SamplingTarget.Separable`, and the extension `target.LogPosterior(state)`; `SeparableEvaluation` |
 | Reversible jump | `ReversibleJumpChain<T>(moves, target, start, rng, temperature = null)` with `Step()`, `Current`, `Temperature`, `CurrentEvaluation`, `CurrentLogDensity`, `Attempts`, `Accepted`, `MoveStats()`, `SetState(state, evaluation)`, `ReplaceTarget(target)`; `IRjMove<T>` (`Key`, `ReverseKey`, `Weight`, `Propose`); `Proposal<T>`; `MoveStat`; `ScheduledMove<T>` |
-| Tempering | `ParallelTempering<T>(movesForReplica, target, start, betas, masterSeed)` with `Step()`, `Cold`, `ColdChain`, `SwapAttempts`, `SwapAccepts`, and static `GeometricLadder(levels, betaMin)` |
+| Tempering | `ParallelTempering<T>(movesForReplica, target, start, betas, path, masterSeed)` with `Step()`, `Path`, `Cold`, `ColdChain`, `Replicas`, `SwapAttempts`, `SwapAccepts`, and static `GeometricLadder(levels, betaMin)` |
 | Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.RHat`, `ChainDiagnostics.Ess`; `RunningMoments` (`Add`, `Merge`, `Of`); `IChain<T>`, `IEnsembleModel<T>`, `IChainRun<T>`, `EnsembleRun` |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
@@ -114,18 +114,26 @@ The chain accepts if $\log\alpha\ge0$ or $U<e^{\log\alpha}$. A candidate whose d
 
 ### Tempering
 
-**Replicas.** Replica $i$ samples the powered posterior at $\beta_i$, `Temperature(β_i, Powered)`: $\beta_i(\log p+\ell_1)$. Step 3.2 adds the likelihood-tempered path, which Q5 sets for BARS.
+**Paths (step 3.2).** A ladder declares one `TemperingPath` for all its replicas, and replica $i$ samples `Temperature(β_i, path)`.
+- **Powered:** $\beta_i(\log p+\ell_1)$. Prior and likelihood are flattened together.
+- **Likelihood-tempered:** $\log p+\ell_{\beta_i}$, the power posterior of Friel and Pettitt (2008). The prior stays whole, and $\beta=0$ is the prior itself.
+- **What separates them.** On a space of varying dimension, a powered density depends on the reference measure of each subspace, so its hot rungs leave the prior in a direction that measure sets, not the model. For BARS's ordered knots under a Poisson(λ) count prior and a constant likelihood, the powered rung β samples a Poisson(λ^β) knot count, fewer knots as β falls; every likelihood-path rung samples the prior (`CountLawTests`, per rung). The likelihood path needs $\ell_b$ at every rung; the powered path needs only $\ell_1$, so it serves every target.
+- **Choice.** The caller declares the path; no default lives in the sampler. BARS takes the likelihood path ([BayesianRegression](./BayesianRegression.md), Q5).
 
-**The ladder.** In `ParallelTempering`, every replica starts from the same state, and each builds its own move palette from the `movesForReplica` factory, so mutable move state stays private to one replica. Each replica has its own RNG, and one further RNG drives swaps. `GeometricLadder` gives $\beta_i=\beta_{\min}^{\,i/(L-1)}$.
+**The ladder.** In `ParallelTempering`, every replica starts from the same state, and each builds its own move palette from the `movesForReplica` factory, so mutable move state stays private to one replica. Each replica has its own RNG, and one further RNG drives swaps. `GeometricLadder` gives $\beta_i=\beta_{\min}^{\,i/(L-1)}$. `Replicas` exposes every rung, cold first, for per-rung diagnostics.
+
+**Ladder validation.** At least two rungs, strictly descending, cold rung exactly $\beta_0=1$. The hot end must be positive on the powered path, where $\beta=0$ would be the bare reference measure. It may be 0 on the likelihood path, where $\beta=0$ is the prior; a target whose nuisance prior is improper refuses that rung when it is evaluated (BARS does).
 
 **One step.**
 
 1. Every replica steps once.
 2. A deterministic sweep from cold to hot attempts a swap for each adjacent pair $(i,i+1)$, with
 
-$$\log A=(\beta_i-\beta_{i+1})(L_{i+1}-L_i),\qquad L_i=\log p(x_i)+\ell_1(x_i),$$
+$$\log A=d_i(x_{i+1})+d_{i+1}(x_i)-d_i(x_i)-d_{i+1}(x_{i+1}),$$
 
-with $L_i$ read from replica $i$'s cached evaluation. An accepted swap hands each replica the other's state and evaluation, and each recomputes its density at its own β; nothing is re-evaluated. Later pairs in the same sweep see earlier swaps. The chain interface reports the cold replica's move acceptance. Swaps are counted separately.
+where $d_i$ is replica $i$'s log density, its `Temperature.LogDensity`. The two current densities are cached, and the two cross terms query the other replica's evaluation at this replica's temperature, so a swap evaluates no state. An accepted swap hands each replica the other's state and evaluation, and each recomputes its density at its own β.
+- **On the powered path** this is $(\beta_i-\beta_{i+1})(L_{i+1}-L_i)$ with $L=\log p+\ell_1$, the formula used until step 3.2; BARS's powered runs are bit-identical across the change.
+- **On the likelihood path** the prior cancels, leaving $\ell_{\beta_i}(x_{i+1})+\ell_{\beta_{i+1}}(x_i)-\ell_{\beta_i}(x_i)-\ell_{\beta_{i+1}}(x_{i+1})$. The β-linear shortcut is wrong here, because $\ell_\beta$ need not be linear in β. On a six-state test with a nonlinear $\ell_\beta$, the shortcut biases even the cold rung (a state's frequency 0.0114 against the exact 0.0223). The general form matches every rung's law on both paths to total variation ≤ 0.005. Later pairs in the same sweep see earlier swaps. The chain interface reports the cold replica's move acceptance. Swaps are counted separately.
 
 **The swap uniform is drawn on every attempt**, accepted or not.
 - Between two states whose $L$ agree to rounding, $\log A$ is of rounding size and its sign is rounding noise. Until step 3.1, $L_i$ was recovered as `CurrentLogTarget`$/\beta_i$ after an earlier swap stored $\beta_i L$, so replicas holding the same state produced such ties routinely. $L_i$ is now read from the evaluation, so the same state gives the same $L$ exactly, but distinct states can still tie. The regression test builds two targets that break such a tie in opposite directions.
@@ -203,7 +211,6 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 - **ESS of a constant functional depends on rounding.** It comes out as about $C/2$ or as $Cn$ depending on whether the chain means round exactly to the constant. Rank-normalized bulk and tail ESS are planned.
 - **Acceptance rates include burn-in.** The counters are never reset.
 - **The ESS pairing is non-standard.** Treat ESS as indicative when you compare it with other libraries. It is NaN for single-chain runs.
-- **Ladder validation is minimal.** `ParallelTempering` checks that every β lies in $(0,1]$, but not that the ladder is descending or that $\beta_0=1$ (step 3.2).
 - **`SpectralNoiseField` is not periodic.** Its documentation describes the grid as periodic, but queries map the box to nodes 0..N−1, so the sampled field is not periodic over the box.
 
 ## Source map
@@ -215,6 +222,6 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
 | i.i.d. and fields | `iid/InverseTransform.cs`; `SpectralNoiseField.cs` (at the `samplers/` root) |
 
-**Tests:** `tests/Maths.Samplers.Tests` (sources in `tests/samplers/`) owns the samplers' own checks, with targets built from `Maths.Samplers` alone: chain contracts, the reversible-jump generality check, the target contract, parallel tempering and the diagnostics policy.
+**Tests:** `tests/Maths.Samplers.Tests` (sources in `tests/samplers/`) owns the samplers' own checks, with targets built from `Maths.Samplers` alone: chain contracts, the reversible-jump generality check, the target contract, parallel tempering (each rung's law on both paths, ladder validation) and the diagnostics policy.
 
 **See also:** [BayesianRegression](./BayesianRegression.md) (BARS, BGP) · [ProbabilityAndInformation](./ProbabilityAndInformation.md) · [DesignPrinciples](./DesignPrinciples.md)
