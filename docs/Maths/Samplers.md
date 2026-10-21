@@ -108,6 +108,12 @@ $$\log A=(\beta_i-\beta_{i+1})(L_{i+1}-L_i),\qquad L_i=\texttt{CurrentLogTarget}
 
 Later pairs in the same sweep see earlier swaps. The chain interface reports the cold replica's move acceptance. Swaps are counted separately.
 
+**The swap uniform is drawn on every attempt**, accepted or not.
+- Replicas often hold the same state, and their $L_i$ then differ by rounding, because $L_i$ is recovered as `CurrentLogTarget`$/\beta_i$ after an earlier swap stored $\beta_i L$. At such a tie, $\log A$'s sign is rounding noise.
+- Drawing every time keeps the swap stream independent of it, so a last-bit change in the target cannot shift later swaps.
+- Before 2026-10-20 the draw was skipped when $\log A\ge0$, and step 2.3's cancellation-free scale moved a tempered BARS run through exactly this tie.
+- The within-replica Metropolis step still skips the draw when $\log\alpha\ge0$. A tie there needs a candidate whose target equals the current one to rounding, which continuous knots do not produce.
+
 ### Ensemble shell
 
 `ChainEnsemble.Run`:
