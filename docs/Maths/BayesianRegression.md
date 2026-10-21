@@ -147,13 +147,38 @@ All Jacobians are 0.
 - **Support.** `Beta.Sample` can underflow to exactly 0 or 1, where `LocalBetaKernel`'s density is 0, so a birth or relocation there carried a Hastings term of +∞. Under a flat likelihood such knots were accepted and never removed, and the chain ran away; with data, design admission rejected them. The support rule now rejects them, and the engine rejects any candidate whose log target is −∞ or NaN, whatever its proposal ratio.
 - **`EbicPrior`.** Its count law is now exactly $\binom{n_c}{k}^{-\gamma}$, which is symmetric under $k\leftrightarrow n_c-k$. It falls until $k=n_c/2$ and rises after, so it acts as a penalty only while every admissible $k$ stays below $n_c/2$. It also differs from the cited law; see [Status](#status-and-caveats).
 
+### The collapsed g-prior block
+
+`CollapsedGPrior` (namespace `Maths.Regression.GPrior`) holds the closed forms shared by the free-knot engines, BARS now and BASS next. The model is
+
+$$y\sim N(Z\beta,\sigma^2W^{-1}),\qquad \beta\mid\sigma^2\sim N(0,\sigma^2(\tau G)^{-1}),\qquad G=Z^\top Z,$$
+
+with the likelihood raised to an inverse temperature $b$ (1 is untempered).
+
+- **Unweighted, W = I.**
+  - The block caches the statistics that depend on neither τ nor $b$: the factor of $G$, $\hat\beta_{\text{OLS}}$, $\lVert r\rVert^2=\lVert y-Z\hat\beta\rVert^2$ and $Q=\lVert Z\hat\beta\rVert^2$.
+  - `At(τ, b)` then costs O(1), plus the mean vector: $S=b\,(\lVert r\rVert^2+\tfrac{\tau}{\tau+b}Q)$, the determinant term $\tfrac p2\ln\tfrac{\tau}{\tau+b}$, mean $\tfrac{b}{\tau+b}\hat\beta$, and $\operatorname{Cov}(\beta\mid\sigma^2)=\sigma^2G^{-1}/(\tau+b)$.
+  - Because $S$ is a sum of non-negative terms from the explicit residual, a small τ on a close fit keeps its digits. The subtracted form $b\,y^\top y-b^2Q/(\tau+b)$ loses about $\log_{10}((1+\tau)/\tau)$ of them.
+- **Weighted (the robust path, Q2).** The posterior precision $P_a=Z^\top(W+\tau I)Z$ depends on τ, so this form is built at one τ and $b=1$. Its scale is $S=\lVert y-Z\tilde\beta\rVert_W^2+\tau\lVert Z\tilde\beta\rVert^2$.
+- **σ².** The prior is IG($g_1, g_2$), or the improper $1/\sigma^2$ that BARS uses. The posterior is $\sigma^2\mid y\sim\mathrm{IG}(g_1+mb/2,\ g_2+S/2)$.
+  - `LogMarginal` is the complete $\ln p_b(y\mid Z,\tau)$ (derivations review §3), comparable across τ and $b$. Under the improper prior it is defined up to that prior's constant.
+  - `Sample` is a composition draw: σ² first, then β through the factor's precision draw.
+  - `ConditionalVariance` returns $E[\sigma^2\mid y]\,z^\top\operatorname{Cov}z$.
+- **Seams.** The factor is any `ISpdFactor`. `BandedGPrior` builds the block from a banded spline design; BASS's dense or incremental design layer will build it through `FromLeastSquares`. The block does not decide admission (it reports the factors' statuses) and knows nothing about the basis.
+- **Checks** (`CollapsedGPriorTests`):
+  - scale, mean and determinant term against dense algebra at four (τ, $b$) settings;
+  - the complete log marginal against quadrature over σ², under improper and proper priors and at tempered rungs;
+  - draw moments at a tempered rung;
+  - conditional variances;
+  - a constructed near-interpolating fit, where the subtracted form loses its digits and the block keeps them.
+
 ### BARS: observation models
 
 **`WeightedNormalModel`** (default) is the exact unit-information (Zellner $g=m$) marginal, with the coefficients and σ integrated out:
 
 $$\log p(y\mid Z)=-\tfrac{\nu}{2}\log(m+1)-\tfrac m2\log a,\qquad a=y^\top y-\tfrac{m}{m+1}\,b^\top G^{-1}b,$$
 
-where $G=Z^\top Z$ and $b=Z^\top y$. It returns −∞ when $m\le\nu$, when the design fails admission (below), or when $a\le0$. Because $a=\lVert y-Z\hat\beta\rVert^2+b^\top G^{-1}b/(m+1)$, the last case occurs only for an identically zero response; an interpolating fit with $m>\nu$ stays finite. The subtraction loses at most $\log_{10}(m+1)$ digits. The posterior mean is $\frac{m}{m+1}G^{-1}b$.
+where $G=Z^\top Z$ and $b=Z^\top y$. It returns −∞ when $m\le\nu$, when the design fails admission (below), or when $a\le0$. Because $a=\lVert y-Z\hat\beta\rVert^2+b^\top G^{-1}b/(m+1)$, the last case occurs only for an identically zero response; an interpolating fit with $m>\nu$ stays finite. It is computed through the collapsed g-prior block at τ = 1/m, from the explicit residual, $a=\lVert y-Z\hat\beta\rVert^2+\lVert Z\hat\beta\rVert^2/(m+1)$. At BARS's τ the subtracted form would lose at most $\log_{10}(m+1)$ digits; the explicit form loses none. The posterior mean is $\frac{m}{m+1}G^{-1}b$.
 
 With per-point weights $W$ (robust runs, $y\sim N(Z\beta,\sigma^2W^{-1})$), the coefficient prior stays the **unweighted** g-prior $\beta\sim N(0, m\sigma^2G^{-1})$, so the prior on the curve does not depend on the weights. The marginal is
 

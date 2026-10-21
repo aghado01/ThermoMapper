@@ -1,8 +1,7 @@
 using System;
-using Maths.Distributions;
-using Maths.LinAlg;
 using Maths.Rng;
 
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
 
 namespace Maths.Regression.Spline.Bars;
@@ -20,9 +19,11 @@ namespace Maths.Regression.Spline.Bars;
 /// <c>S = yᵀWy − hᵀ(Zᵀ(W + I/m)Z)⁻¹h</c> and <c>h = ZᵀWy</c>; it reduces to the form above at unit weights.</para>
 /// </summary>
 /// <remarks>
-/// <c>A = ZᵀW Z</c> is banded at the spline degree (heptadiagonal for cubics, diagonal for step bases), so it is
-/// factored by a root-free banded LDLᵀ (<see cref="BandCholesky"/>) and the regression sum of squares
-/// <c>bᵀA⁻¹b</c> and posterior coefficients <c>A⁻¹b</c> are read from the band solve alone — A⁻¹ is never formed.
+/// Built on the collapsed g-prior block (<see cref="CollapsedGPrior"/>) at τ = 1/m and inverse temperature 1, with
+/// <see cref="BandedGPrior"/> factoring the banded Gram matrices (a root-free LDLᵀ; no inverse is formed). The block
+/// computes the scale from the explicit residual, <c>‖y − Zβ̂‖² + Q/(m+1)</c>, the cancellation-free form of
+/// <c>a</c>. This model adds the m ≤ ν rule and the admission policy, and keeps its marginal up to the
+/// σ-integration constant.
 /// </remarks>
 public sealed class WeightedNormalModel : IObservationModel
 {
@@ -46,13 +47,13 @@ public sealed class WeightedNormalModel : IObservationModel
         if (design.GetLength(0) <= design.GetLength(1))
             return double.NegativeInfinity;
 
-        Conditioned c = Condition(design, y, weights);
-        if (!c.Admitted)
+        (GPriorConditional c, bool admitted) = Condition(design, y, weights);
+        if (!admitted)
             return double.NegativeInfinity;   // rank-deficient or ill-conditioned design ⇒ outside the support
         if (c.S <= 0.0)
             return double.NegativeInfinity;   // an identically zero response: no posterior for σ
 
-        return c.LogDeterminantTerm - 0.5 * c.M * Math.Log(c.S);
+        return c.LogDeterminantTerm - 0.5 * c.Rows * Math.Log(c.S);
     }
 
     /// <summary>
@@ -70,18 +71,11 @@ public sealed class WeightedNormalModel : IObservationModel
                                                              Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        Conditioned c = Condition(design, y, weights);
-        double[] beta = (double[])c.MeanCoefficients.Clone();
-        if (!c.Admitted || !(c.S > 0.0))
+        (GPriorConditional c, bool admitted) = Condition(design, y, weights);
+        double[] beta = c.Mean.ToArray();
+        if (!admitted || !(c.S > 0.0))
             return (beta, double.NaN);
-
-        double sigma2 = InverseGamma.ShapeScale(0.5 * c.M, 0.5 * c.S).Sample(rng);
-        var z = new double[c.Nu];
-        for (int j = 0; j < c.Nu; j++) z[j] = Normal.SampleStandard(rng);
-        var innov = new double[c.Nu];
-        c.Factor.SampleInnovation(z, innov);                               // ~ N(0, factored matrix⁻¹)
-        double scale = Math.Sqrt(sigma2 * c.FactorScale);
-        for (int j = 0; j < c.Nu; j++) beta[j] += scale * innov[j];
+        double sigma2 = c.Sample(null, rng, beta);   // the improper 1/σ² prior
         return (beta, sigma2);
     }
 
@@ -93,10 +87,10 @@ public sealed class WeightedNormalModel : IObservationModel
     public double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign)
     {
         ArgumentNullException.ThrowIfNull(readoutDesign);
-        Conditioned c = Condition(design, y, weights);
-        if (!c.Admitted || !(c.S > 0.0) || c.M <= 2)
+        (GPriorConditional c, bool admitted) = Condition(design, y, weights);
+        if (!admitted || !(c.S > 0.0) || c.Rows <= 2)
             return ReadoutQuadratics.Unavailable(readoutDesign);
-        return ReadoutQuadratics.Of(c.Factor, readoutDesign, c.S / (c.M - 2) * c.FactorScale);
+        return c.ConditionalVariance(null, readoutDesign);
     }
 
     /// <summary>
@@ -106,81 +100,28 @@ public sealed class WeightedNormalModel : IObservationModel
     /// <paramref name="weights"/> null means unit weights.
     /// </summary>
     public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
-        => (double[])Condition(design, y, weights).MeanCoefficients.Clone();
+        => Condition(design, y, weights).C.Mean.ToArray();
 
-    // One knot configuration's conditional posterior pieces: a factor of the coefficients' precision matrix (the
-    // covariance is σ²·FactorScale·factored⁻¹), the posterior mean, S, the marginal's determinant term and the
-    // admission verdict. Null weights factor G = ZᵀZ once; weights factor G for the prior and Pa = Zᵀ(W + I/m)Z.
-    private readonly record struct Conditioned(
-        BandCholesky Factor, double[] MeanCoefficients, double S, double FactorScale, double LogDeterminantTerm,
-        int M, int Nu, bool Admitted);
-
-    private static Conditioned Condition(double[,] design, double[] y, double[]? weights)
+    // One knot configuration's conditional posterior at BARS's τ = 1/m, untempered, and the admission verdict: G's
+    // factor alone without weights; G's and P_a's with them.
+    private static (GPriorConditional C, bool Admitted) Condition(double[,] design, double[] y, double[]? weights)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
         int m = design.GetLength(0);
-        int nu = design.GetLength(1);
         if (y.Length != m)
             throw new ArgumentException("Response length must match the design row count.", nameof(y));
         if (weights is not null && weights.Length != m)
             throw new ArgumentException("Weights length must match the design row count.", nameof(weights));
 
-        var design2 = new BandedDesign(design);
-        double shrink = (double)m / (m + 1);
-
+        var banded = new BandedDesign(design);
+        double tau = 1.0 / m;
         if (weights is null)
         {
-            var band = new double[design2.Bandwidth + 1, nu];
-            var b = new double[nu];
-            design2.Accumulate(null, band, y, b);
-            double yy = 0.0;
-            for (int i = 0; i < m; i++) yy += y[i] * y[i];
-
-            var chol = new BandCholesky(nu, design2.Bandwidth, BandFactorization.Ldlt);
-            chol.DecomposeBanded(band);
-            double[] sol = chol.Solve(b);   // G⁻¹b — no inverse materialized
-            double quad = 0.0;              // bᵀG⁻¹b, the regression sum of squares
-            for (int p = 0; p < nu; p++) quad += b[p] * sol[p];
-
-            // a = ‖y − Zβ̂‖² + quad/(m+1) ≥ quad/(m+1): positive for any nonzero response, an interpolating fit
-            // included (over-knotting is the m ≤ ν rule). The subtraction loses at most log₁₀(m+1) digits.
-            double a = yy - shrink * quad;
-            var mean = new double[nu];
-            for (int p = 0; p < nu; p++) mean[p] = shrink * sol[p];
-            return new Conditioned(chol, mean, a, shrink, -0.5 * nu * Math.Log(m + 1), m, nu,
-                                   DesignAdmission.Admits(chol.Status));
+            CollapsedGPrior block = BandedGPrior.Fit(banded, y);
+            return (block.At(tau), DesignAdmission.Admits(block.GramStatus));
         }
-
-        // Weighted: the prior uses the unweighted Gram G = ZᵀZ; the posterior precision is Pa = Zᵀ(W + I/m)Z.
-        var gBand = new double[design2.Bandwidth + 1, nu];
-        design2.Accumulate(null, gBand, null, null);
-        var gChol = new BandCholesky(nu, design2.Bandwidth, BandFactorization.Ldlt);
-        gChol.DecomposeBanded(gBand);
-
-        var wPlus = new double[m];
-        double yWy = 0.0, sumLogW = 0.0;
-        for (int i = 0; i < m; i++)
-        {
-            wPlus[i] = weights[i] + 1.0 / m;
-            yWy += weights[i] * y[i] * y[i];
-            sumLogW += Math.Log(weights[i]);
-        }
-        var pBand = new double[design2.Bandwidth + 1, nu];
-        design2.Accumulate(wPlus, pBand, null, null);
-        var h = new double[nu];
-        design2.AccumulateRhs(weights, y, h);
-        var pChol = new BandCholesky(nu, design2.Bandwidth, BandFactorization.Ldlt);
-        pChol.DecomposeBanded(pBand);
-
-        double[] beta = pChol.Solve(h);   // Pa⁻¹h, the posterior mean
-        double quadW = 0.0;
-        for (int p = 0; p < nu; p++) quadW += h[p] * beta[p];
-
-        // S = ‖y − Zβ̃‖²_W + β̃ᵀ(G/m)β̃ ≥ 0, zero only for an identically zero response.
-        double s = yWy - quadW;
-        double logDet = 0.5 * (gChol.LogDet - nu * Math.Log(m)) - 0.5 * pChol.LogDet + 0.5 * sumLogW;
-        bool admitted = DesignAdmission.Admits(gChol.Status) && DesignAdmission.Admits(pChol.Status);
-        return new Conditioned(pChol, beta, s, 1.0, logDet, m, nu, admitted);
+        CollapsedGPrior weighted = BandedGPrior.Fit(banded, y, weights, tau);
+        return (weighted.At(tau), DesignAdmission.Admits(weighted.GramStatus) && DesignAdmission.Admits(weighted.PosteriorStatus));
     }
 }

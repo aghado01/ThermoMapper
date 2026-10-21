@@ -40,7 +40,7 @@ namespace Maths.LinAlg
     /// the floor is applied to the variance so the two conventions clamp to the same D = 1e-12.
     /// </para>
     /// </remarks>
-    public sealed class BandCholesky
+    public sealed class BandCholesky : ISpdFactor
     {
         private readonly int _n;
         private readonly int _p;                 // lower half-bandwidth (sub-diagonals); L has the same.
@@ -220,11 +220,10 @@ namespace Maths.LinAlg
         /// Solves A·x = b and returns x, leaving <paramref name="b"/> untouched. Banded forward + back
         /// substitution. Must be called after <see cref="Decompose"/>.
         /// </summary>
-        public double[] Solve(double[] b)
+        public double[] Solve(ReadOnlySpan<double> b)
         {
-            ArgumentNullException.ThrowIfNull(b);
             if (b.Length != _n) throw new ArgumentException("Right-hand side length must equal the matrix order.", nameof(b));
-            var x = (double[])b.Clone();
+            double[] x = b.ToArray();
             SolveInPlace(x);
             return x;
         }
@@ -233,16 +232,15 @@ namespace Maths.LinAlg
         /// In-place band solve: <paramref name="x"/> enters as the right-hand side b and exits as A⁻¹b.
         /// Must be called after <see cref="Decompose"/>.
         /// </summary>
-        public void SolveInPlace(double[] x)
+        public void SolveInPlace(Span<double> x)
         {
-            ArgumentNullException.ThrowIfNull(x);
             if (x.Length != _n) throw new ArgumentException("Right-hand side length must equal the matrix order.", nameof(x));
             if (_mode == BandFactorization.Ldlt) SolveLdlt(x);
             else SolveCholesky(x);
         }
 
         // L·Lᵀ solve: divide by L(i,i) in both sweeps.
-        private void SolveCholesky(double[] x)
+        private void SolveCholesky(Span<double> x)
         {
             for (int i = 0; i < _n; i++)               // forward: L·y = b
             {
@@ -263,7 +261,7 @@ namespace Maths.LinAlg
         }
 
         // L·D·Lᵀ solve: unit-triangular sweeps carry no division; only the middle scale by D.
-        private void SolveLdlt(double[] x)
+        private void SolveLdlt(Span<double> x)
         {
             for (int i = 0; i < _n; i++)               // forward: L·z = b (unit diagonal)
             {
@@ -294,10 +292,8 @@ namespace Maths.LinAlg
         /// root-free factor is what makes <c>D^{−½}</c> a single diagonal scale. <paramref name="result"/> and
         /// <paramref name="z"/> may alias. Must be called after <see cref="DecomposeBanded"/>/<see cref="Decompose"/>.
         /// </summary>
-        public void SampleInnovation(double[] z, double[] result)
+        public void SampleInnovation(ReadOnlySpan<double> z, Span<double> result)
         {
-            ArgumentNullException.ThrowIfNull(z);
-            ArgumentNullException.ThrowIfNull(result);
             if (_mode != BandFactorization.Ldlt)
                 throw new InvalidOperationException("Gaussian sampling requires the Ldlt factorization.");
             if (z.Length != _n || result.Length != _n)

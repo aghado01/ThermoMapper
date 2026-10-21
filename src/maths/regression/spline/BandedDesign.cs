@@ -91,4 +91,19 @@ public sealed class BandedDesign
                 b[p] += _design[i, p] * wr;
         }
     }
+
+    /// <summary>The fitted values <c>f = Zβ</c>, each row summed over its non-zero span.</summary>
+    public void Apply(System.ReadOnlySpan<double> beta, System.Span<double> f)
+    {
+        if (beta.Length != Dimension) throw new System.ArgumentException("One coefficient per design column is required.", nameof(beta));
+        if (f.Length != Rows) throw new System.ArgumentException("One fitted value per design row is required.", nameof(f));
+        for (int i = 0; i < Rows; i++)
+        {
+            int lo = _lo[i];
+            if (lo < 0) { f[i] = 0.0; continue; }
+            double s = 0.0;
+            for (int p = lo; p <= _hi[i]; p++) s += _design[i, p] * beta[p];
+            f[i] = s;
+        }
+    }
 }

@@ -17,7 +17,7 @@ namespace Maths.LinAlg
     /// Only the lower triangle of the input is read. With no pivot near the floor, its factor is bit-identical to
     /// <see cref="CholeskyDecomposition"/>'s, whose floored, inverse-forming path its existing callers keep.
     /// </summary>
-    public sealed class DenseCholesky
+    public sealed class DenseCholesky : ISpdFactor
     {
         private readonly double[] _l;          // packed lower triangle: L(i, j) at i(i+1)/2 + j
         private readonly double[] _relative;   // d_j / A(j,j) per row

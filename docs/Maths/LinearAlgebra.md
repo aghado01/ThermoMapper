@@ -83,7 +83,7 @@ For a slightly asymmetric input, the two dense eigen routes therefore decompose 
 |---|---|
 | Dense eigen | `DenseEigen.DecomposeSymmetric` (`double[,]` or column-major span) → `EigenResult`; `EigenFast.DecomposeSymmetricInPlace` (allocation-free core); `Eigen.DecomposeSymmetric`; `SpectralMath.BottomK`, `SpectralMath.SelectBottomK` → `IReadOnlyList<EigenPair>` |
 | Iterative eigen | `LOBPCG.Solve(op, k, Options?)` → `Result(Eigenpairs, Iterations, ResidualNorm, Converged)`; `LOBPCG.BottomK` / `TopK` (dense convenience); `DenseSymmetricOperator`; `ILinearOperator`, `IPreconditioner` |
-| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `HitFloor`, `Status`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `FactorStatus` |
+| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `HitFloor`, `Status`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`; implemented by `BandCholesky` and `DenseCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus` |
 | Transforms and statistics | `Fft` (1-D, 3-D, N-D; `IsPowerOfTwo`); `Pca.Compute` → `PcaResult`; `FastIca.Compute` → `IcaResult`; `OnlineMahalanobis` (`Update`, `Distance` to the mean or between two points, `IsReady`, `GetMean`, `GetVariances`, `Reset`) |
 | Kernels | `MatrixOps` (`Dot`, `ScaledSubtract`, `Orthonormalize`, `RandomOrthonormal`, `ColumnGramMatrix`, `ColumnGramMatrixFromRowMajor`, `TransposeToColumnMajor`) |
 
@@ -215,6 +215,8 @@ Because the floor is absolute, a well-conditioned matrix with a small scale, suc
 
 **Cost.** Factorization is $O(np^2)$; solve and sampling are $O(np)$; storage is $O((p+1)n)$.
 
+**As an `ISpdFactor`.** `Solve`, `SolveInPlace` and `SampleInnovation` take spans, so the collapsed g-prior block can hold a banded factor (BARS) or a dense one (BASS) behind one interface. `SpdFactorExtensions.InverseQuadraticForms` gives $s\,z_t^\top A^{-1}z_t$ for each row through either.
+
 ### FFT
 
 `Fft` is an iterative in-place radix-2 Cooley–Tukey transform. It applies a bit-reversal permutation, then butterflies with twiddle $e^{\mp 2\pi i/\text{len}}$:
@@ -292,7 +294,7 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
 |---|---|
 | Dense eigen | `DenseEigen.cs`, `EigenFast.cs`, `Eigen.cs`, `SpectralMath.cs` |
 | Iterative eigen | `Lobpcg.cs`, `DenseSymmetricOperator.cs` |
-| Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `FactorStatus.cs` |
+| Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `FactorStatus.cs`, `ISpdFactor.cs` |
 | Transforms and statistics | `Fft.cs`, `PCA.cs` (`Pca`), `ICA.cs` (`FastIca`), `WelfordMahal.cs` (`OnlineMahalanobis`) |
 | Kernels | `MatrixOps.cs` |
 
