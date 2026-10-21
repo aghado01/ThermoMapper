@@ -51,6 +51,7 @@ flowchart TD
     X --> P
     O --> Q["3.7 BARS admission gates"]
     N --> Q
+    O --> R["3.8 EbicPrior convention"]
 ```
 
 Steps 0.1, 0.2, 0.3 and 0.5 all touch `BarsEnsemble`, so they run in that order. Step 0.4 touches only LinAlg and can run alongside them.
@@ -240,6 +241,34 @@ Added 2026-10-20. This lands after step 3.5's zero-drift rerun as its own change
   - rejection counts by reason.
 - **Docs.** `BayesianRegression.md`'s admission section states the two gates, the alternatives (count, mass, Kish size, leverage) and the trade-offs.
 
+### 3.8 `EbicPrior` in He, Yang and Kang's convention (Q7)
+
+Added 2026-10-20. This lands after step 3.5, beside 3.7, once the checklist below has been verified against the *Biometrics* text.
+
+- **Law.** log p(k) = (1 − γ)·log C(C, k), with γ ≥ 0 and C the candidate count:
+  - γ < 1 favors larger k: this is EBIC's interpolation from BIC's uniform-over-models prior at γ = 0;
+  - γ = 1 is flat;
+  - γ > 1 penalizes.
+
+  Today's `EbicPrior(γ)` is this law at γ_HYK = γ + 1.
+- **Support.** HYK's support, [0, C]. For γ > 1 the law rises again past C/2, so the docs advise C ≥ 2·k_max, which keeps that half out of reach. Truncating at ⌊C/2⌋ is the alternative, as a declared extension; choose between them on item 3 below.
+- **Tests.** `EbicTests` moves from γ = 0 to 1 (flat) and from γ = 1 to 2 (penalized). `CountLawTests` gains an EBIC case.
+- **Docs.** `BayesianRegression.md` states the three regimes, the mapping from the old γ, the support guidance and the citation.
+
+**Verify in the *Biometrics* text first.** The paper is not yet in the compendium; the preprint is, as `HYK2024.md`. The external summary of the differences was wrong on one checkable point: it said the death formula changed, but the preprint already has the same formula. So check each item against the paper:
+
+| # | What to verify | Where it matters |
+|---|---|---|
+| 1 | Whether the prior keeps the preprint's form: π(k) ∝ C(C,k)^(1−γ) with π(ξ \| k) = 1/C(C,k) (equation 3) | The γ_HYK = 1 + γ mapping, and so this step |
+| 2 | γ's range (γ ≥ 0?), the three regimes and the recommended [0.5, 2] | Whether γ > 1 is their convention, to cite, or our extension, to label; constructor bounds; docs |
+| 3 | Guidance on C ("typically > m"), or anything on k past C/2 | Support [0, C] with guidance, or truncation |
+| 4 | The b_k and d_k formulas; c = 0.3 and any stated reason or mixing claim | The mixing benchmark's arms ([BARS mixing](#after-phase-3-bars-mixing)) |
+| 5 | Coincident knots (multiplicity above 1) | The tensor-product extension's handling of jumps (port brief) |
+| 6 | The non-normal treatment (still an EBIC plug-in?) | The docs' comparison with our Laplace marginals |
+| 7 | How peak inference is defined and computed (draws or a plug-in) | The readout contract for the tensor-product extension |
+| 8 | Whether the γ comparison still favors γ = 1, and whether it separates the prior from mixing | The confound noted under BARS mixing |
+| 9 | Title, method name (ABMRS?), volume, issue, article ID, DOI | The citation |
+
 ## After Phase 3: BARS mixing
 
 Added 2026-10-19. This section sits outside the baseline gate: nothing in it is required before BASS integration, apart from the step 3.4 items already listed there. Measured on existing regression tests (Release build):
@@ -286,8 +315,14 @@ The slow mixing is mostly structural:
 - **At equal budget** max_k(b_k + d_k), DMGK leads near a flat prior top and loses about a factor p(k+1)/p(k) where prior and likelihood conflict. At c = 0.4 under Poisson(4), DMGK's budget is 0.72 against constant weights' 0.8, so the step 0.5d sweep compared unequal budgets.
 - **Measured so far.** The step 0.5d sweep used equal c on a posterior at the Poisson(4) mode, where the schedules coincide on the 3↔4 bridge. It found no ESS(k) difference.
 
+**He, Yang and Kang's schedule is this one, applied to their count law** (added 2026-10-20).
+- Their b_k = c·min(1, {(C−k)/(k+1)}^(1−γ)) and d_k = c·min(1, {k/(C−k+1)}^(1−γ)) (preprint §3) are Green's schedule for π(k) ∝ C(C,k)^(1−γ). At γ = 1 it is the constant schedule, which at equal c has the largest birth/death flows.
+- So their finding that γ = 1 gives the best MSE changes the prior and the mixing together. At γ = 0, with k ≈ 5 and C large, d_k ≈ c·k/C is about 1%, so deaths are almost never proposed, and part of that γ's overfitting may be finite-chain mixing.
+- Our engine keeps the schedule and the count prior separate ([seam map](#seam-map-admission-prior-and-schedule), gates 1 and 4), so γ here is purely a prior parameter.
+- Their *Biometrics* version reportedly fixes c = 0.3, which puts relocation at 0.4 or more (step 3.8's checklist, item 4).
+
 The comparison, after the step 3.4 ESS fixes:
-- **Arms:** constant weights; DMGK at c = 0.4 and at Green's budget-scaled c, which needs the 0.5 cap in `DmgkSchedule.Wrap` relaxed; a masked constant schedule at equal budget (constant weights, with zero mass on moves into zero-prior states, reassigned to relocation).
+- **Arms:** constant weights; DMGK at c = 0.4 and at Green's budget-scaled c, which needs the 0.5 cap in `DmgkSchedule.Wrap` relaxed; a masked constant schedule at equal budget (constant weights, with zero mass on moves into zero-prior states, reassigned to relocation); and the constant schedule at HYK's c = 0.3 (0.3/0.3/0.4).
 - **Regimes:** the posterior at the prior mode; prior–likelihood conflict (a Poisson(1) prior and a truth that needs about 8 knots); an active hard cap.
 - **Readouts:** ESJD(k); the immediate-reversal rate, since a birth undone by the next dimension move inflates ESJD without decorrelating anything; and ESS of knot count, fit and peak location, per second. ESJD is a sum and a count, so it fits the step 3.4 accumulator contract.
 - **Seeds:** at least 20 per arm and regime.
@@ -363,7 +398,7 @@ Probes on the Grams a BARS chain evaluates: 6,000 steps per dataset, Normal mode
 | Q4 | Rank and admission policy per model | 0.5b | (Its `PivotRatio` criterion is superseded by Q6 at step 3.7.) **Decided 2026-10-20: reject** rank-deficient designs in all four models, using the step 0.4 status with a relative criterion (`PositiveDefinite` and `PivotRatio` ≥ r_min, with r_min recorded with its rationale). This is a declared prior support restriction: every basis function must be supported by data. Declare any near-interpolation limit for the Normal model as part of its prior. |
 | Q5 | BARS tempering path | 3.2 | Likelihood-tempered: hot replicas approach the prior, and the swap is O(1) from the block's statistics. |
 | Q6 | BARS admission policy | 3.7 | **Decided 2026-10-20: split the rule into its two jobs** (step 3.7). Numerical: a strict factor, positive definite, `MinRelativePivot` ≥ 1e-10. Support: column mass Σᵢ Bⱼ(xᵢ) ≥ 1 per basis function, configurable. It lands after step 3.5, so steps 2.3–3.5 stay a zero-drift refactor. BASS's count-based `npart` default is rejected for BARS. Basis for the decision: the [evidence](#addendum-admission-evidence-2026-10-20). |
-| Q7 | `EbicPrior`'s count law | before BARS ships `EbicPrior` | **Open.** Today's law C(n_c, k)^(−γ) is He, Yang and Kang's C(n, k)^(1−γ_HYK) with γ_HYK = 1 + γ, so it is EBIC extended past their γ ≤ 1. Both laws satisfy step 0.5e's count-law contract, so the choice is semantic. The options:<ul><li>keep the law, document the mapping, and restrict support to k ≤ ⌊n_c/2⌋, where the law is a penalty;</li><li>reparameterize to HYK's law;</li><li>rename the prior.</li></ul>An EBIC question is being examined first (2026-10-20). |
+| Q7 | `EbicPrior`'s count law | 3.8 | **Decided 2026-10-20: adopt He, Yang and Kang's convention** (step 3.8): log p(k) = (1 − γ)·log C(C, k) with γ ≥ 0, so γ < 1 favors more knots, γ = 1 is flat and γ > 1 penalizes. Today's law C(n_c, k)^(−γ) is that law at γ_HYK = 1 + γ, inside the range [0.5, 2] their *Biometrics* version (2026) reportedly recommends. Support stays [0, C], with guidance C ≥ 2·k_max. The citation waits on verifying the published text against step 3.8's checklist; the preprint (arXiv 2405.13353) already states the law for γ ≤ 1. |
 
 ## Working rules
 
