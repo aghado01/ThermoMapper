@@ -23,6 +23,15 @@ public interface IObservationModel
     /// </summary>
     double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights);
 
+    /// <summary>
+    /// The same marginal as a function of the likelihood's inverse temperature b: the coefficients and scale
+    /// integrated against <c>p(y | β, σ)^b</c> (the likelihood-tempered path, Q5). The design's work is done here,
+    /// once, so each b is then a query. The default serves b = 1 only, from <see cref="LogMarginalLikelihood"/>; a
+    /// model with a closed form at every b overrides it.
+    /// </summary>
+    ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights)
+        => new UntemperedMarginal(LogMarginalLikelihood(design, y, weights));
+
     /// <summary>Effective number of parameters for the complexity penalty (ν for the Normal model).</summary>
     int EffectiveDimension(double[,] design, double[]? weights);
 

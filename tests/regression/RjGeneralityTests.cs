@@ -1,5 +1,6 @@
 using System;
 using Maths.Rng;
+using Maths.Samplers;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
 using Xunit.Abstractions;
@@ -18,16 +19,17 @@ public sealed class RjGeneralityTests
     private readonly ITestOutputHelper _out;
     public RjGeneralityTests(ITestOutputHelper output) => _out = output;
 
-    // Target over the count k: Poisson(μ) up to the k-independent constant (mean = variance = μ).
-    private sealed class PoissonDimension : IRjTarget<int>
+    // Target over the count k: a Poisson(μ) prior up to the k-independent constant (mean = variance = μ), under a
+    // flat likelihood.
+    private sealed class PoissonDimension : ISamplingTarget<int>
     {
         private readonly double _logMu;
         public PoissonDimension(double mu) => _logMu = Math.Log(mu);
-        public double LogPosterior(int k)
+        public ITargetEvaluation Evaluate(int k)
         {
             double logFactorial = 0.0;
             for (int i = 2; i <= k; i++) logFactorial += Math.Log(i);
-            return k * _logMu - logFactorial;
+            return new SeparableEvaluation(k * _logMu - logFactorial, 0.0);
         }
     }
 

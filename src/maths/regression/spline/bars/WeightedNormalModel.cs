@@ -39,21 +39,27 @@ public sealed class WeightedNormalModel : IObservationModel
 
     /// <inheritdoc/>
     public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights)
+        => TemperedMarginal(design, y, weights).LogMarginalLikelihood(1.0);
+
+    /// <summary>
+    /// The marginal at inverse temperature b, from the block at τ = 1/m: <c>LDT_b − (mb/2)·ln S_b</c>, dropping
+    /// the σ-integration constant, which depends on m and b only. Unweighted, any b in (0, 1]; b = 0 is refused,
+    /// since the improper 1/σ² prior then leaves σ unidentified. Weighted, b = 1 only (the block is built at one τ
+    /// and b). A configuration with m ≤ ν, an inadmissible design or a zero response is −∞ at every b.
+    /// </summary>
+    public ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights)
     {
         ArgumentNullException.ThrowIfNull(design);
 
         // With at most as many observations as parameters the unit-information marginal is improper —
         // an unfittable (over-knotted) configuration. Report it as infinitely unlikely so the chain rejects.
         if (design.GetLength(0) <= design.GetLength(1))
-            return double.NegativeInfinity;
+            return ImpossibleMarginal.Instance;
 
-        (GPriorConditional c, bool admitted) = Condition(design, y, weights);
+        (CollapsedGPrior block, double tau, bool admitted) = Fit(design, y, weights);
         if (!admitted)
-            return double.NegativeInfinity;   // rank-deficient or ill-conditioned design ⇒ outside the support
-        if (c.S <= 0.0)
-            return double.NegativeInfinity;   // an identically zero response: no posterior for σ
-
-        return c.LogDeterminantTerm - 0.5 * c.Rows * Math.Log(c.S);
+            return ImpossibleMarginal.Instance;   // rank-deficient or ill-conditioned design ⇒ outside the support
+        return new NormalMarginal(block, tau);
     }
 
     /// <summary>
@@ -102,9 +108,16 @@ public sealed class WeightedNormalModel : IObservationModel
     public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
         => Condition(design, y, weights).C.Mean.ToArray();
 
-    // One knot configuration's conditional posterior at BARS's τ = 1/m, untempered, and the admission verdict: G's
-    // factor alone without weights; G's and P_a's with them.
+    // One knot configuration's conditional posterior at BARS's τ = 1/m, untempered, and the admission verdict.
     private static (GPriorConditional C, bool Admitted) Condition(double[,] design, double[] y, double[]? weights)
+    {
+        (CollapsedGPrior block, double tau, bool admitted) = Fit(design, y, weights);
+        return (block.At(tau), admitted);
+    }
+
+    // The block for one knot configuration at BARS's τ = 1/m, and the admission verdict: G's factor alone without
+    // weights; G's and P_a's with them.
+    private static (CollapsedGPrior Block, double Tau, bool Admitted) Fit(double[,] design, double[] y, double[]? weights)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -119,9 +132,39 @@ public sealed class WeightedNormalModel : IObservationModel
         if (weights is null)
         {
             CollapsedGPrior block = BandedGPrior.Fit(banded, y);
-            return (block.At(tau), DesignAdmission.Admits(block.GramStatus));
+            return (block, tau, DesignAdmission.Admits(block.GramStatus));
         }
         CollapsedGPrior weighted = BandedGPrior.Fit(banded, y, weights, tau);
-        return (weighted.At(tau), DesignAdmission.Admits(weighted.GramStatus) && DesignAdmission.Admits(weighted.PosteriorStatus));
+        return (weighted, tau, DesignAdmission.Admits(weighted.GramStatus) && DesignAdmission.Admits(weighted.PosteriorStatus));
+    }
+
+    // An admitted configuration's marginal. The b = 1 value is computed up front, since every chain and swap reads it.
+    private sealed class NormalMarginal : ITemperedMarginal
+    {
+        private readonly CollapsedGPrior _block;
+        private readonly double _tau;
+        private readonly double _atOne;
+
+        public NormalMarginal(CollapsedGPrior block, double tau)
+        {
+            _block = block;
+            _tau = tau;
+            _atOne = At(block.At(tau));
+        }
+
+        public double LogMarginalLikelihood(double inverseTemperature)
+        {
+            if (inverseTemperature == 1.0) return _atOne;
+            if (_block.IsWeighted)
+                throw new NotSupportedException("The weighted marginal is untempered: P_a is built at b = 1.");
+            if (!(inverseTemperature > 0.0 && inverseTemperature <= 1.0))
+                throw new ArgumentOutOfRangeException(nameof(inverseTemperature),
+                    "Under the improper 1/σ² prior the tempered marginal needs b in (0, 1].");
+            return At(_block.At(_tau, inverseTemperature));
+        }
+
+        // An identically zero response has S = 0 at every b: no posterior for σ.
+        private static double At(GPriorConditional c)
+            => c.S > 0.0 ? c.LogDeterminantTerm - 0.5 * c.Rows * c.InverseTemperature * Math.Log(c.S) : double.NegativeInfinity;
     }
 }

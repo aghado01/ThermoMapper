@@ -14,15 +14,18 @@ namespace Maths.Samplers.Rjmcmc;
 /// a move declares its reverse via <see cref="IRjMove{TState}.ReverseKey"/>. The chain is the unit of parallelism
 /// — it shares nothing — so an ensemble layer fans out independent chains and pools their reductions.
 /// Model-agnostic: the same engine serves free-knot BARS, partition samplers, and any trans-dimensional target.
-/// As an <see cref="IChain{TState}"/> it plugs straight into the kernel-agnostic ensemble shell.
+/// The chain samples its <see cref="ISamplingTarget{TState}"/> at one <see cref="Samplers.Temperature"/>, the
+/// posterior unless told otherwise, and caches the current state's evaluation, so each step evaluates only the
+/// candidate. As an <see cref="IChain{TState}"/> it plugs straight into the kernel-agnostic ensemble shell.
 /// </summary>
 public sealed class ReversibleJumpChain<TState> : IChain<TState>
 {
     private readonly IReadOnlyList<IRjMove<TState>> _moves;
     private readonly Dictionary<string, IRjMove<TState>> _byKey;
-    private IRjTarget<TState> _target;
+    private ISamplingTarget<TState> _target;
     private readonly Xoshiro256PlusPlus _rng;
-    private double _currentLogTarget;   // cached log-density of Current; only the candidate is evaluated per step
+    private ITargetEvaluation _currentEvaluation;   // Current's; only the candidate is evaluated per step
+    private double _currentLogDensity;              // its log density at Temperature
     private readonly long[] _moveAttempts;
     private readonly long[] _moveAccepts;
 
@@ -37,14 +40,16 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
 
     /// <param name="moves">The move set; combined by weighted random choice. Keys must be unique, and each
     /// <see cref="IRjMove{TState}.ReverseKey"/> must name a move in the set that names it back (or itself).</param>
-    /// <param name="target">Supplies the log target density.</param>
+    /// <param name="target">The target; the chain samples its log density at <paramref name="temperature"/>.</param>
     /// <param name="start">The chain's initial state.</param>
     /// <param name="rng">This chain's private RNG stream (the ensemble layer owns the seed tree).</param>
+    /// <param name="temperature">The tempered density the chain samples; null is the posterior, b = 1.</param>
     public ReversibleJumpChain(
         IReadOnlyList<IRjMove<TState>> moves,
-        IRjTarget<TState> target,
+        ISamplingTarget<TState> target,
         TState start,
-        Xoshiro256PlusPlus rng)
+        Xoshiro256PlusPlus rng,
+        Temperature? temperature = null)
     {
         ArgumentNullException.ThrowIfNull(moves);
         ArgumentNullException.ThrowIfNull(target);
@@ -72,19 +77,25 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
         _moves = moves;
         _target = target;
         _rng = rng;
+        Temperature = temperature ?? Temperature.Posterior;
         _moveAttempts = new long[moves.Count];
         _moveAccepts = new long[moves.Count];
         Current = start;
-        _currentLogTarget = target.LogPosterior(start);
+        _currentEvaluation = target.Evaluate(start);
+        _currentLogDensity = Temperature.LogDensity(_currentEvaluation);
     }
+
+    /// <summary>The tempered density this chain samples.</summary>
+    public Temperature Temperature { get; }
 
     /// <summary>
     /// Advance the chain one Draw: select a move ∝ weight(Current), propose, and accept with probability
     /// <c>min(1, exp(Δlog-target + log-auxiliary-ratio + log-Jacobian + log-selection-ratio))</c>, where the
-    /// selection ratio is <c>[w_{m'}(x')/ΣW(x')] / [w_m(x)/ΣW(x)]</c>. A move unavailable from the current state
-    /// (null proposal) leaves the chain in place and does not count as an attempt; a proposal whose reverse has
-    /// zero weight is rejected (no detailed balance), and so is a candidate outside the target's support (log target
-    /// −∞ or NaN), whatever its proposal ratio. Returns the (possibly unchanged) <see cref="Current"/>.
+    /// selection ratio is <c>[w_{m'}(x')/ΣW(x')] / [w_m(x)/ΣW(x)]</c> and the target term is the log density at
+    /// <see cref="Temperature"/>. A move unavailable from the current state (null proposal) leaves the chain in place
+    /// and does not count as an attempt; a proposal whose reverse has zero weight is rejected (no detailed balance),
+    /// and so is a candidate outside the target's support (log density −∞ or NaN), whatever its proposal ratio.
+    /// Returns the (possibly unchanged) <see cref="Current"/>.
     /// </summary>
     public TState Step()
     {
@@ -110,15 +121,17 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
 
         // Off the support, the proposal ratio must not decide the move: a sampler that underflows onto the
         // support's edge can report an infinite ratio there, and −∞ + ∞ is NaN. The uniform is still drawn.
-        double candidateLogTarget = _target.LogPosterior(p.Candidate);
-        double logAccept = candidateLogTarget > double.NegativeInfinity
-            ? (candidateLogTarget - _currentLogTarget) + p.LogProposalRatio + p.LogJacobian + logSelection
+        ITargetEvaluation candidate = _target.Evaluate(p.Candidate);
+        double candidateLogDensity = Temperature.LogDensity(candidate);
+        double logAccept = candidateLogDensity > double.NegativeInfinity
+            ? (candidateLogDensity - _currentLogDensity) + p.LogProposalRatio + p.LogJacobian + logSelection
             : double.NegativeInfinity;
 
         if (logAccept >= 0.0 || _rng.NextDouble() < Math.Exp(logAccept))
         {
             Current = p.Candidate;
-            _currentLogTarget = candidateLogTarget;
+            _currentEvaluation = candidate;
+            _currentLogDensity = candidateLogDensity;
             Accepted++;
             _moveAccepts[idx]++;
         }
@@ -137,32 +150,38 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
         return stats;
     }
 
-    /// <summary>The cached log target-density at <see cref="Current"/> (β-tempered if the target is a
-    /// <see cref="TemperedTarget{TState}"/>). Exposed so replica-exchange can read it without recomputing.</summary>
-    public double CurrentLogTarget => _currentLogTarget;
+    /// <summary>The cached evaluation of <see cref="Current"/>. Replica exchange reads it, and queries it at other
+    /// temperatures, without re-evaluating the state.</summary>
+    public ITargetEvaluation CurrentEvaluation => _currentEvaluation;
+
+    /// <summary>The cached log density of <see cref="Current"/> at <see cref="Temperature"/>.</summary>
+    public double CurrentLogDensity => _currentLogDensity;
 
     /// <summary>
-    /// Force the chain to <paramref name="state"/> with its already-known <paramref name="logTarget"/> — for
-    /// replica-exchange swaps, where another replica hands over its state and the tempered log-density is known
-    /// (avoids a target recompute). The caller is responsible for <paramref name="logTarget"/> matching this
-    /// chain's target at <paramref name="state"/>.
+    /// Force the chain to <paramref name="state"/> with its already-known <paramref name="evaluation"/>, for
+    /// replica-exchange swaps, where another replica hands over its state and evaluation. The density is recomputed
+    /// at this chain's own temperature; the state is not re-evaluated. The caller is responsible for
+    /// <paramref name="evaluation"/> being this chain's target's at <paramref name="state"/>.
     /// </summary>
-    public void SetState(TState state, double logTarget)
+    public void SetState(TState state, ITargetEvaluation evaluation)
     {
+        ArgumentNullException.ThrowIfNull(evaluation);
         Current = state;
-        _currentLogTarget = logTarget;
+        _currentEvaluation = evaluation;
+        _currentLogDensity = Temperature.LogDensity(evaluation);
     }
 
     /// <summary>
-    /// Replace the target the chain samples, keeping its state and cumulative counters, and re-evaluate the cached
-    /// log target at <see cref="Current"/>. For a conditional update that changes the target between steps: new
-    /// robustness weights, a hyperparameter draw, or the next stage of a tempering or SMC sequence.
+    /// Replace the target the chain samples, keeping its state, temperature and cumulative counters, and re-evaluate
+    /// <see cref="Current"/>. For a conditional update that changes the target between steps: new robustness weights
+    /// or a hyperparameter draw.
     /// </summary>
-    public void ReplaceTarget(IRjTarget<TState> target)
+    public void ReplaceTarget(ISamplingTarget<TState> target)
     {
         ArgumentNullException.ThrowIfNull(target);
         _target = target;
-        _currentLogTarget = target.LogPosterior(Current);
+        _currentEvaluation = target.Evaluate(Current);
+        _currentLogDensity = Temperature.LogDensity(_currentEvaluation);
     }
 
     private double TotalWeight(TState state)

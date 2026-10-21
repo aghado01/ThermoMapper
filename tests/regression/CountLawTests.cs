@@ -1,6 +1,7 @@
 using System;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
+using Maths.Samplers;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
 using Xunit.Abstractions;
@@ -80,6 +81,26 @@ public sealed class CountLawTests
         Assert.Equal(double.NegativeInfinity, target.LogPosterior(new KnotConfig([0.3, 0.3])));
         Assert.Equal(double.NegativeInfinity, target.LogPosterior(new KnotConfig([0.6, 0.3])));
         Assert.True(double.IsFinite(target.LogPosterior(new KnotConfig([0.3, 0.6]))));
+    }
+
+    [Fact]
+    public void Target_OffTheCountPriorsSupport_BuildsNoDesign()
+    {
+        // A zero count prior decides the evaluation before any design is built or factored.
+        var target = new SplineTarget(new SplineBasis(3), new ThrowingModel(), new UniformPrior(1), x: [0.5], y: [0.0]);
+        ITargetEvaluation e = target.Evaluate(new KnotConfig([0.3, 0.6]));
+        Assert.Equal(double.NegativeInfinity, e.LogPrior);
+        Assert.Equal(double.NegativeInfinity, e.LogLikelihood(1.0));
+        Assert.Throws<InvalidOperationException>(() => target.Evaluate(new KnotConfig([0.3])));
+    }
+
+    private sealed class ThrowingModel : IObservationModel
+    {
+        public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights)
+            => throw new InvalidOperationException("The model was consulted.");
+        public int EffectiveDimension(double[,] design, double[]? weights) => design.GetLength(1);
+        public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
+            => new double[design.GetLength(1)];
     }
 
     // A constant likelihood: the target reduces to the count prior and the location measure.

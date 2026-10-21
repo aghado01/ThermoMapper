@@ -1,5 +1,6 @@
 using System;
 using Maths.Rng;
+using Maths.Samplers;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
 
@@ -17,14 +18,14 @@ public sealed class ChainContractTests
         // "up" names "down" as its reverse, but "down" names itself.
         IRjMove<int>[] moves = [new StepMove("up", "down", +1), new StepMove("down", "down", -1)];
         Assert.Throws<ArgumentException>(() =>
-            new ReversibleJumpChain<int>(moves, new FlatTarget(), 0, new Xoshiro256PlusPlus(1)));
+            new ReversibleJumpChain<int>(moves, Flat, 0, new Xoshiro256PlusPlus(1)));
     }
 
     [Fact]
     public void Palette_WithReciprocalAndSelfReverseMoves_IsAccepted()
     {
         IRjMove<int>[] moves = [new StepMove("up", "down", +1), new StepMove("down", "up", -1), new StepMove("stay", "stay", 0)];
-        var chain = new ReversibleJumpChain<int>(moves, new FlatTarget(), 0, new Xoshiro256PlusPlus(1));
+        var chain = new ReversibleJumpChain<int>(moves, Flat, 0, new Xoshiro256PlusPlus(1));
         Assert.Equal(0, chain.Current);
     }
 
@@ -32,17 +33,17 @@ public sealed class ChainContractTests
     public void ReplaceTarget_KeepsStateAndCounters_AndReevaluatesTheCachedTarget()
     {
         IRjMove<int>[] moves = [new StepMove("up", "down", +1), new StepMove("down", "up", -1)];
-        var chain = new ReversibleJumpChain<int>(moves, new FlatTarget(), 0, new Xoshiro256PlusPlus(3));
+        var chain = new ReversibleJumpChain<int>(moves, Flat, 0, new Xoshiro256PlusPlus(3));
         for (int i = 0; i < 50; i++) chain.Step();
 
         int state = chain.Current;
         long attempts = chain.Attempts, accepted = chain.Accepted;
         MoveStat[] before = [.. chain.MoveStats()];
 
-        chain.ReplaceTarget(new LinearTarget(0.5));
+        chain.ReplaceTarget(Linear(0.5));
 
         Assert.Equal(state, chain.Current);
-        Assert.Equal(0.5 * state, chain.CurrentLogTarget);
+        Assert.Equal(0.5 * state, chain.CurrentLogDensity);
         Assert.Equal(attempts, chain.Attempts);
         Assert.Equal(accepted, chain.Accepted);
         Assert.Equal(before, chain.MoveStats());
@@ -63,7 +64,7 @@ public sealed class ChainContractTests
         }
 
         double[] betas = ParallelTempering<int>.GeometricLadder(levels: 4, betaMin: 0.1);
-        var pt = new ParallelTempering<int>(MovesFor, new FlatTarget(), 0, betas, masterSeed: 2);
+        var pt = new ParallelTempering<int>(MovesFor, Flat, 0, betas, masterSeed: 2);
         pt.Step();
 
         Assert.Equal(new[] { 0, 1, 2, 3 }, built.ConvertAll(b => b.Replica));
@@ -75,24 +76,21 @@ public sealed class ChainContractTests
     [Fact]
     public void ParallelTempering_SwapStream_DoesNotDependOnRoundingTies()
     {
-        // Replicas often hold the same state, and their untempered log targets then differ by rounding (L/β·β after
-        // earlier swaps). Two ladders whose targets differ by one part in 10¹⁵ must run identically: the swap uniform is
-        // drawn on every attempt, so a tie's sign cannot shift the stream.
+        // A swap between states whose log targets tie up to rounding has a log A of rounding size, and rounding
+        // decides its sign. Two ladders whose targets break the 2-vs-4 tie in opposite directions, by 10⁻¹⁵, must run
+        // identically: the swap uniform is drawn on every attempt, so a tie's sign cannot shift the stream.
         IRjMove<int>[] MovesFor(int replica) => [new StepMove("up", "down", +1), new StepMove("down", "up", -1)];
         double[] betas = ParallelTempering<int>.GeometricLadder(levels: 4, betaMin: 0.05);
-        var a = new ParallelTempering<int>(MovesFor, new ScaledLinearTarget(0.3, 1.0), 0, betas, masterSeed: 9);
-        var b = new ParallelTempering<int>(MovesFor, new ScaledLinearTarget(0.3, 1.0 + 1e-15), 0, betas, masterSeed: 9);
+        var a = new ParallelTempering<int>(MovesFor, Peaked(tieBreak: 2), 0, betas, masterSeed: 9);
+        var b = new ParallelTempering<int>(MovesFor, Peaked(tieBreak: 4), 0, betas, masterSeed: 9);
         for (int i = 0; i < 5000; i++) Assert.Equal(a.Step(), b.Step());
         Assert.Equal(a.SwapAccepts, b.SwapAccepts);
     }
 
-    // −slope·|state − 3|, scaled: a peaked target whose replicas meet at the same states.
-    private sealed class ScaledLinearTarget : IRjTarget<int>
-    {
-        private readonly double _slope, _scale;
-        public ScaledLinearTarget(double slope, double scale) { _slope = slope; _scale = scale; }
-        public double LogPosterior(int state) => _scale * (-_slope * Math.Abs(state - 3) - 1.234567);
-    }
+    // −0.3·|state − 3|: a peaked target whose replicas meet at the mirror states 2 and 4, whose tie is broken by 10⁻¹⁵
+    // in favour of tieBreak.
+    private static ISamplingTarget<int> Peaked(int tieBreak)
+        => SamplingTarget.FromLogDensity<int>(s => -0.3 * Math.Abs(s - 3) - 1.234567 + (s == tieBreak ? 1e-15 : 0.0));
 
     [Fact]
     public void Candidate_OffTheSupport_IsRejected_WhateverItsProposalRatio()
@@ -100,16 +98,14 @@ public sealed class ChainContractTests
         // A sampler that underflows onto the support's edge can report an infinite proposal ratio there; the
         // candidate's −∞ (or NaN) log target decides the move, not −∞ + ∞.
         IRjMove<int>[] moves = [new InfiniteRatioMove("up", "down", +1), new StepMove("down", "up", -1)];
-        var chain = new ReversibleJumpChain<int>(moves, new SupportOfZero(), 0, new Xoshiro256PlusPlus(seed: 3));
+        var chain = new ReversibleJumpChain<int>(moves, SupportOfZero, 0, new Xoshiro256PlusPlus(seed: 3));
         for (int i = 0; i < 1000; i++) Assert.Equal(0, chain.Step());
         Assert.Equal(0, chain.Accepted);
     }
 
     // Support {0}: −∞ above it, NaN below it.
-    private sealed class SupportOfZero : IRjTarget<int>
-    {
-        public double LogPosterior(int state) => state == 0 ? 0.0 : state > 0 ? double.NegativeInfinity : double.NaN;
-    }
+    private static readonly ISamplingTarget<int> SupportOfZero
+        = SamplingTarget.FromLogDensity<int>(s => s == 0 ? 0.0 : s > 0 ? double.NegativeInfinity : double.NaN);
 
     private sealed class InfiniteRatioMove : IRjMove<int>
     {
@@ -121,17 +117,9 @@ public sealed class ChainContractTests
         public Proposal<int>? Propose(int current, Xoshiro256PlusPlus rng) => new(current + _delta, double.PositiveInfinity, 0.0);
     }
 
-    private sealed class FlatTarget : IRjTarget<int>
-    {
-        public double LogPosterior(int state) => 0.0;
-    }
+    private static readonly ISamplingTarget<int> Flat = SamplingTarget.FromLogDensity<int>(_ => 0.0);
 
-    private sealed class LinearTarget : IRjTarget<int>
-    {
-        private readonly double _slope;
-        public LinearTarget(double slope) => _slope = slope;
-        public double LogPosterior(int state) => _slope * state;
-    }
+    private static ISamplingTarget<int> Linear(double slope) => SamplingTarget.FromLogDensity<int>(s => slope * s);
 
     private sealed class StepMove : IRjMove<int>
     {

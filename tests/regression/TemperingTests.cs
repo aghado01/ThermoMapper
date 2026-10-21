@@ -2,6 +2,7 @@ using System;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
+using Maths.Samplers;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
 using Xunit.Abstractions;
@@ -20,21 +21,18 @@ public sealed class TemperingTests
     public TemperingTests(ITestOutputHelper output) => _out = output;
 
     // 0.5·N(−3, 0.5²) + 0.5·N(+3, 0.5²): two modes separated by a deep barrier.
-    private sealed class BimodalTarget : IRjTarget<double>
+    private static readonly ISamplingTarget<double> Bimodal = SamplingTarget.FromLogDensity<double>(x =>
     {
-        public double LogPosterior(double x)
-        {
-            double l1 = LogNormal(x, -3.0, 0.5);
-            double l2 = LogNormal(x, 3.0, 0.5);
-            double m = Math.Max(l1, l2);
-            return m + Math.Log(0.5 * Math.Exp(l1 - m) + 0.5 * Math.Exp(l2 - m));
-        }
+        double l1 = LogNormal(x, -3.0, 0.5);
+        double l2 = LogNormal(x, 3.0, 0.5);
+        double m = Math.Max(l1, l2);
+        return m + Math.Log(0.5 * Math.Exp(l1 - m) + 0.5 * Math.Exp(l2 - m));
+    });
 
-        private static double LogNormal(double x, double mu, double sd)
-        {
-            double z = (x - mu) / sd;
-            return -0.5 * z * z - Math.Log(sd * Math.Sqrt(2.0 * Math.PI));
-        }
+    private static double LogNormal(double x, double mu, double sd)
+    {
+        double z = (x - mu) / sd;
+        return -0.5 * z * z - Math.Log(sd * Math.Sqrt(2.0 * Math.PI));
     }
 
     // Symmetric random walk; too small to jump the barrier at β = 1.
@@ -57,7 +55,7 @@ public sealed class TemperingTests
     [Fact]
     public void Tempering_VisitsBothModes_WhereSingleChainSticks()
     {
-        var target = new BimodalTarget();
+        ISamplingTarget<double> target = Bimodal;
         var moves = new IRjMove<double>[] { new RandomWalk(0.5) };
         const int draws = 100_000;
 

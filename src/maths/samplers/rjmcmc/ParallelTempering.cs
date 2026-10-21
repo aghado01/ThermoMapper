@@ -7,9 +7,9 @@ namespace Maths.Samplers.Rjmcmc;
 
 /// <summary>
 /// Parallel tempering (replica exchange) over a ladder of reversible-jump chains at inverse temperatures
-/// 1 = β₀ &gt; β₁ &gt; … &gt; β_{L-1} &gt; 0. Each replica samples the β-tempered target; after every sweep, adjacent
-/// replicas attempt a Metropolis state swap — accept ∝ <c>exp((β_i − β_{i+1})(L_{i+1} − L_i))</c>, L the
-/// untempered log-posterior — so the hot replicas, which cross modal barriers freely, ferry the cold replica
+/// 1 = β₀ &gt; β₁ &gt; … &gt; β_{L-1} &gt; 0. Each replica samples the powered posterior <c>π^β</c>; after every sweep,
+/// adjacent replicas attempt a Metropolis state swap — accept ∝ <c>exp((β_i − β_{i+1})(L_{i+1} − L_i))</c>, L the
+/// untempered log-posterior read from each replica's cached evaluation — so the hot replicas, which cross modal barriers freely, ferry the cold replica
 /// (β = 1, the true posterior) between modes. The cold chain is the sampler; the rest are scaffolding. For
 /// multimodal targets (e.g. a multi-peak T_c posterior) where a single chain would lock into one mode.
 /// As an <see cref="IChain{TState}"/> the ladder presents as a single chain whose draw is the cold state and whose
@@ -29,26 +29,27 @@ public sealed class ParallelTempering<TState> : IChain<TState>
 
     /// <param name="movesForReplica">Builds replica i's own move set (i = 0 is the cold replica). It is called once
     /// per replica, so any mutable move or kernel state is private to that replica.</param>
-    /// <param name="baseTarget">The untempered target (β = 1); replica i samples <c>baseTarget^{β_i}</c>.</param>
+    /// <param name="target">The target; replica i samples its powered posterior at β_i.</param>
     /// <param name="start">Common initial state for all replicas.</param>
     /// <param name="betas">Inverse-temperature ladder, descending from 1 (cold, index 0) to β_min &gt; 0.</param>
     /// <param name="masterSeed">Seeds the per-replica streams and the swap stream via the <see cref="SeedTree"/>.</param>
-    public ParallelTempering(Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica, IRjTarget<TState> baseTarget,
+    public ParallelTempering(Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica, ISamplingTarget<TState> target,
                              TState start, double[] betas, int masterSeed)
     {
         ArgumentNullException.ThrowIfNull(movesForReplica);
-        ArgumentNullException.ThrowIfNull(baseTarget);
+        ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(betas);
         if (betas.Length < 2) throw new ArgumentException("Tempering needs at least two levels.", nameof(betas));
         foreach (double b in betas)
-            if (!(b > 0.0)) throw new ArgumentException("Inverse temperatures must be positive.", nameof(betas));
+            if (!(b > 0.0 && b <= 1.0)) throw new ArgumentException("Inverse temperatures must lie in (0, 1].", nameof(betas));
 
         _betas = betas;
         int[] seeds = SeedTree.Derive(masterSeed, betas.Length + 1);
         _chains = new ReversibleJumpChain<TState>[betas.Length];
         for (int i = 0; i < betas.Length; i++)
             _chains[i] = new ReversibleJumpChain<TState>(
-                movesForReplica(i), new TemperedTarget<TState>(baseTarget, betas[i]), start, new Xoshiro256PlusPlus(seeds[i]));
+                movesForReplica(i), target, start, new Xoshiro256PlusPlus(seeds[i]),
+                new Temperature(betas[i], TemperingPath.Powered));
         _swapRng = new Xoshiro256PlusPlus(seeds[betas.Length]);
     }
 
@@ -67,19 +68,19 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         for (int i = 0; i < _chains.Length - 1; i++)
         {
             SwapAttempts++;
-            double li = _chains[i].CurrentLogTarget / _betas[i];           // untempered log π at replica i
-            double li1 = _chains[i + 1].CurrentLogTarget / _betas[i + 1];
+            ITargetEvaluation ei = _chains[i].CurrentEvaluation, ei1 = _chains[i + 1].CurrentEvaluation;
+            double li = Temperature.LogPosterior(ei);   // untempered log π at replica i
+            double li1 = Temperature.LogPosterior(ei1);
             double logA = (_betas[i] - _betas[i + 1]) * (li1 - li);
-            // Drawn on every attempt, so the swap stream does not advance by the decision: replicas holding the same
-            // state carry log targets that differ by rounding (L/β·β after earlier swaps), and a tie's sign must not
-            // decide whether a uniform is consumed.
+            // Drawn on every attempt, so the swap stream does not advance by the decision: between states whose targets
+            // agree to rounding, rounding decides a tie's sign, and it must not decide whether a uniform is consumed.
             double u = _swapRng.NextDouble();
             if (logA >= 0.0 || u < Math.Exp(logA))
             {
                 SwapAccepts++;
                 TState xi = _chains[i].Current, xi1 = _chains[i + 1].Current;
-                _chains[i].SetState(xi1, _betas[i] * li1);
-                _chains[i + 1].SetState(xi, _betas[i + 1] * li);
+                _chains[i].SetState(xi1, ei1);
+                _chains[i + 1].SetState(xi, ei);
             }
         }
         return _chains[0].Current;

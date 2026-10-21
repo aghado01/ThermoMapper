@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using Maths.Rng;
+using Maths.Samplers;
 using Maths.Samplers.Rjmcmc;
 
 namespace Maths.Regression.Tests;
@@ -53,7 +54,7 @@ internal static class CountLaw
     /// <param name="batches">Batches for the standard errors; must divide <paramref name="steps"/>.</param>
     /// <param name="seed">The chain's seed.</param>
     public static Result Sample<TState>(
-        IReadOnlyList<IRjMove<TState>> moves, IRjTarget<TState> target, TState start, Func<TState, int> dimension,
+        IReadOnlyList<IRjMove<TState>> moves, ISamplingTarget<TState> target, TState start, Func<TState, int> dimension,
         Func<int, double> logPrior, int bins, int burn, int steps, int batches, int seed)
     {
         if (bins < 2) throw new ArgumentOutOfRangeException(nameof(bins));

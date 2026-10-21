@@ -2,6 +2,7 @@ using System;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
+using Maths.Samplers;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
 
