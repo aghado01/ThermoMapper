@@ -1080,3 +1080,73 @@ Commits: `4b3fdfe` (Q5 decided), `9137f7a` (the linear form).
   - `Maths.Regression.Tests` passes 192 of 192.
 - **For step 3.3.** The two forms give ladders of different shape at the same β: the linear form's hot end is near the prior, the integrated form's is not until b ≈ 1/m. Ladder adaptation should be per model, not one β_min for all.
 - **BASS** still needs the integrated form, because it samples σ² as a Gibbs block.
+
+### 3.3 Non-reversible swap schedule — done 2026-10-21
+
+Commits: `e7efd67` (the engine), `b28d1dc` (BARS), `08c5f45` (the sweep's tests), `2ff9b0b` (the benchmark), `a5b0ee6` (docs).
+
+**Specification:**
+- **Schedules** (`SwapSchedule`).
+  - Deterministic even-odd is the default: even pairs on even scans, odd pairs on odd ones (Syed, Bouchard-Côté, Deligiannidis and Doucet 2022).
+  - Stochastic even-odd picks the even or the odd pairs by a fair coin each scan; it is the reversible baseline.
+  - The sequential sweep (all pairs, cold to hot) is the schedule used until now, kept for comparison and reproduction.
+  - An even-odd scan takes all its ratios before any swap, since its pairs are disjoint.
+- **Statistics.**
+  - Every pair's rejection probability, 1 − α, is recorded on every scan, attempted or not. It is Rao–Blackwellized from the cached evaluations, as in their Algorithm 1.
+  - Round trips (a state's hot → cold → hot) and annealed restarts (its hot → cold arrivals) are counted by tracking each state's label.
+  - `PairStats` and `Betas` expose the ladder.
+- **Adaptation** (`AdaptLadder`). It re-spaces the interior rungs to equal rejection by inverting a Fritsch–Carlson monotone cubic interpolation of the cumulative barrier, their Algorithms 2 and 3. Both ends stay fixed. It uses the scans since the previous adaptation. Each replica retempers through `ReversibleJumpChain.SetTemperature`, a query on its cached evaluation, so nothing is re-evaluated.
+- **`TemperingLadder`** holds the arithmetic:
+  - `Barrier`, the sum of the rejection rates;
+  - `IdealRoundTripRate`, their Theorem 1: 1/(2 + 2E) for DEO and 1/(2N + 2E) for SEO;
+  - `Equalize`;
+  - `RecommendedLevels`, from N ≈ 2Λ pairs.
+- **BARS.** `temperSchedule` defaults to DEO and `temperAdaptLadder` to true. Burn-in runs their Algorithm 4 (rounds of 1, 2, 4, … scans, each followed by `AdaptLadder`), and sampling keeps the last ladder.
+
+**Check first** (`SwapScheduleTests`, exact Gaussian draws on the likelihood path, so that efficient local exploration holds):
+- **Theorem 1 from observed rejection rates:** DEO 0.1366 against 0.1369, SEO 0.0516 against 0.0518.
+- **Rejection-free limits:** DEO 0.4999 (theory ½), SEO 0.1007 (1/(2N) with five pairs).
+- **Equalized ladders from 5 to 17 rungs:** DEO rises 0.120 → 0.160, against the bound 1/(2 + 2Λ) = 0.178; SEO falls 0.070 → 0.027.
+- **Adaptation** from a uniform ladder takes the spread of rejection rates from 6.8× to 1.04× and keeps the barrier (Λ̂ 1.79 → 1.84, their Corollary 2).
+
+**Other verification:**
+- The swap-tie test (R16) still fails with the skip-draw swap restored, under the DEO default.
+- With BARS pinned to the sequential sweep and no adaptation, all eight probe runs are bit-identical to the 3.2 state, the tempered runs included.
+- With the new defaults, the tempered BARS tests find their peaks: 0.396 for the Normal fit, against a true 0.4, and 0.399 for the Poisson fit.
+- The cold chain's mean knots agree across every schedule, path and adaptation setting in the benchmark: sine 2.96–3.16, peak 5.58–5.65, counts 0.56–0.65.
+
+**Benchmark** (`TemperingBenchmark`: three fits, two paths, three schedule and adaptation settings, 4 or 8 rungs, 3 seeds × 20,000 scans):
+- **Adaptation** raised DEO's round trips on the sine fit by about 1.3× at 4 rungs and 1.2× at 8, was neutral on the peak and count fits, and never hurt.
+- **The sweep completed 1.4–2.0× DEO's round trips, but that is not a mixing advantage.**
+  - Within one swap phase a state cascades up several rungs with no local step between, and it gets one local step at the hot end where DEO gives two. Both schedules spend the same local steps per scan, so the sweep's extra trips each carry less exploration. Without rejections it completes one round trip per scan against DEO's ½.
+  - Theorem 1 and the adaptation rule assume each swap a state takes is separated from its next by local exploration; the sweep violates that.
+  - The cold chain's ESS per second does not separate the two schedules: 0.97–1.33× across fits on the likelihood path, within the noise of 3-chain estimates.
+  - Under exact local exploration the sweep's advantage is real (about 1.7×), because one exact draw refreshes a state fully. It is worth less as local moves weaken.
+  - The cascade point came from the user's review (`discussion/sweeps-notes.md`). Its explanations for the count and peak fits did not match the measured knot counts: the count posterior averages 0.6 knots, and the powered peak ladder's hot rung held 3.9.
+- **Decision: DEO stays the default.** Round trips and Theorem 1 apply to it, adaptation is derived for it, and its swaps within a scan are independent, so a parallel or distributed ladder can run them at once.
+
+**Q5's revisit trigger:**
+- **Round trips favour the powered ladder** on the peak fit (about 2×) and the count fit (about 5×). But round trips cannot compare paths, because their hot ends differ: on counts the powered ladder's barrier is Λ̂ ≈ 0.24 against 1.4, and its hot rung holds 1.0 knots against the prior's 4.4.
+- **The cold chain's ESS per second**, powered against likelihood like for like:
+
+  | Fit | Knot-count ESS/s | Energy ESS/s |
+  |---|---|---|
+  | sine | 1.5× | 0.97× |
+  | peak | 1.4× | 1.3× |
+  | counts | 0.85× | 0.84× |
+
+  These are all within the noise of 3-chain estimates, whose single values swing 2–8×.
+- **Outcome.** The powered ladder is not clearly ahead per unit work, so Q5 stands. The peak fit is the one to re-measure with step 3.4's ESS.
+
+**Results:**
+- `Maths.Samplers.Tests` passes 57 of 57 under the fact harness: 13 new schedule, round-trip, adaptation and ladder-arithmetic cases.
+- `Maths.Regression.Tests` passes 193 of 193 under the fact harness: the benchmark's fact, off by default.
+
+**For later steps:**
+- **Step 3.4.**
+  - Put the ladder's readouts (round trips, barrier, final rungs, per-pair rates) in `BarsResult`.
+  - Re-measure schedules and paths by rank-normalized ESS with more chains; the peak fit first.
+  - The ESS cost fix matters here: the benchmark thinned its series tenfold to keep ESS affordable.
+- **The hot end does not adapt.** `AdaptLadder` keeps β_min, so the b_min ≈ 1/m regime noted for this step is unexplored. Choosing β_min, and the rung count from `RecommendedLevels`, are still the caller's.
+- **Adaptation on the sequential sweep** is allowed but not theory-backed: the equal-rejection rule is derived for even-odd schedules.
+- **Step 3.6** decides whether the sequential sweep stays, for reproduction and comparison, or goes.
