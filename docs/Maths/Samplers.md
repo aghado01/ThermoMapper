@@ -1,6 +1,6 @@
 # Samplers
 
-> A model-agnostic Markov chain Monte Carlo (MCMC) toolkit covering reversible-jump MCMC with pluggable moves, tempering decorators, parallel tempering, and a replica-ensemble shell that runs independent chains in parallel and diagnoses convergence on scalar functionals. The project also contains inverse-transform sampling and a power-law Gaussian noise-field generator. · **Project:** `Maths.Samplers` (namespaces `Maths.Samplers.Rjmcmc`, `Maths.Samplers.Ensemble`, and others) · **Maturity:** core
+> A model-agnostic Markov chain Monte Carlo (MCMC) toolkit covering a model-neutral target contract with declared tempering paths, reversible-jump MCMC with pluggable moves, parallel tempering, and a replica-ensemble shell that runs independent chains in parallel and diagnoses convergence on scalar functionals. The project also contains inverse-transform sampling and a power-law Gaussian noise-field generator. · **Project:** `Maths.Samplers` (namespaces `Maths.Samplers`, `Maths.Samplers.Rjmcmc`, `Maths.Samplers.Ensemble`, and others) · **Maturity:** core
 
 ## Overview
 
@@ -12,13 +12,17 @@ The samplers sit in layer 2 of the [architecture](./Architecture.md). They depen
 
 ```mermaid
 flowchart LR
+  subgraph Targets
+    TG["ISamplingTarget&lt;T&gt;"] -->|Evaluate| EV["ITargetEvaluation"]
+    TT["Temperature"] -.reads.-> EV
+  end
   subgraph Rjmcmc
     RJ["ReversibleJumpChain&lt;T&gt;"] --> MV["IRjMove&lt;T&gt; / Proposal&lt;T&gt;"]
-    RJ --> TG["IRjTarget&lt;T&gt;"]
     SM["ScheduledMove&lt;T&gt;"] -.decorates.-> MV
-    TT["TemperedTarget&lt;T&gt;"] -.decorates.-> TG
     PT["ParallelTempering&lt;T&gt;"] -->|L replicas| RJ
   end
+  RJ --> TG
+  RJ -->|samples at| TT
   subgraph Ensemble
     CE[ChainEnsemble] -->|drives| IC["IChain&lt;T&gt;"]
     CE -->|StartChain / Burn / Accumulate| EM["IEnsembleModel&lt;T&gt; / IChainRun&lt;T&gt;"]
@@ -32,7 +36,8 @@ flowchart LR
 
 - **Carrier.** The state a chain walks. For BARS this is a knot configuration of varying dimension.
 - **Move and palette.** A move is one proposal type, such as birth, death or relocate. The palette is the set of moves a chain chooses from. Each move names its **reverse** move by key.
-- **Target.** An unnormalized log density over carriers. Returning −∞ rejects a state.
+- **Target and evaluation.** A target evaluates a carrier state once into an `ITargetEvaluation`: an untempered log prior and a log likelihood $\ell_b$ at any inverse temperature $b\in[0,1]$. A log prior of −∞ rejects a state without any likelihood work.
+- **Temperature.** An inverse temperature and the path it is taken along: the **powered** posterior $b(\log p+\ell_1)$ or the **likelihood-tempered** path $\log p+\ell_b$. Both are the log posterior at $b=1$. A chain samples its target at one temperature.
 - **Kernel vs shell.** The *kernel* (`IChain<T>`) advances one replica. The *shell* (`ChainEnsemble`) fans out replicas, runs rounds and pools diagnostics.
 - **Functional.** A fixed-width scalar reduction of each draw, such as the knot count or fitted grid values. Convergence diagnostics are computed on functionals, not on raw states. R̂ is meaningless on a state whose dimension varies or whose labels are symmetric.
 
@@ -41,14 +46,25 @@ flowchart LR
 **Green's acceptance ratio, split by responsibility.** Only the engine sees the whole palette and each state's total move weight, so it owns two factors: the **target ratio** and the **move-selection ratio**. Only a move knows its bijection, so it owns the other two: its **auxiliary-density ratio** and its **Jacobian**. `Proposal<T>` carries exactly those two move-side terms. This split has two consequences:
 
 - State-dependent selection weights can be a pure decorator (`ScheduledMove`, used by the DMGK schedule in BARS).
-- Tempering can be a decorator on the target alone (`TemperedTarget`). Tempering then leaves the Hastings terms untempered, as it should.
+- Tempering acts on the target term alone: the chain's `Temperature` turns each evaluation into a log density. Tempering then leaves the Hastings terms untempered, as it should.
+
+**The target contract (step 3.1).** A target returns an evaluation object, not a number.
+- **Why the split.** The likelihood-tempered path keeps the prior whole, so it needs the prior and the likelihood apart. A collapsed model, such as BARS's Normal marginal with β and σ² integrated out, has an $\ell_b$ that is not $b\,\ell_1$, so "β times the log posterior" cannot express it.
+- **Why an object.** The state's expensive work (for BARS, the design and its factorization) happens once, in `Evaluate`. Another temperature is then a query on the result, which is what a swap between rungs on the likelihood path, an SMC reweighting or a thermodynamic-integration estimate needs. A swap hands each replica the other's evaluation, and nothing is re-evaluated.
+- **Constants.** Values are needed only up to an additive constant that may depend on $b$ and the data but never on the state. It cancels in Metropolis ratios, in swaps (each rung's constant enters once with each sign) and in normalized SMC weights. An evidence estimate needs complete values.
+- **Refusals.** A model may refuse $b\ne1$ (`NotSupportedException`); the powered path asks only for $\ell_1$. A model may refuse $b=0$ when a nuisance prior is improper (`ArgumentOutOfRangeException`).
+- **Alternatives set aside.**
+  - A target that returns $\log\pi$ alone, with tempering as a decorator ($\beta\log\pi$, the `IRjTarget`/`TemperedTarget` pair it replaces): it cannot express the likelihood path or a nonlinear $\ell_b$.
+  - Methods `LogPrior(state)` and `LogLikelihood(state, b)` on the target: each temperature would re-evaluate the state.
+  - A closed-form tempered density only, `LogDensity(state, b)`: it hides the prior/likelihood split that SMC and evidence estimates read.
+- **Costs.** One evaluation object per proposal, and each chain keeps its current state's evaluation alive (for BARS, the factor of $G$). Both are small beside the design and factor the model already builds per proposal.
 
 **Conventions.**
 
 - A `null` proposal means the move is unavailable here. The chain stays and does not count an attempt.
 - A non-positive weight removes a move from the palette at that state.
-- Infeasible states return a log target of −∞.
-- Log densities are defined only up to state-independent constants.
+- An infeasible state has a log prior of −∞ (no likelihood work is done) or a log likelihood of −∞ at every temperature.
+- Log densities are defined only up to constants that do not depend on the state; a likelihood's may depend on $b$ and the data.
 
 **Kernel/shell split.**
 
@@ -63,8 +79,9 @@ flowchart LR
 
 | Area | Entry points |
 |---|---|
-| Reversible jump | `ReversibleJumpChain<T>(moves, target, start, rng)` with `Step()`, `Current`, `CurrentLogTarget`, `Attempts`, `Accepted`, `MoveStats()`, `SetState`; `IRjMove<T>` (`Key`, `ReverseKey`, `Weight`, `Propose`); `IRjTarget<T>`; `Proposal<T>`; `MoveStat`; `ScheduledMove<T>` |
-| Tempering | `TemperedTarget<T>`; `ParallelTempering<T>(movesForReplica, baseTarget, start, betas, masterSeed)` with `Step()`, `Cold`, `SwapAttempts`, `SwapAccepts`, and static `GeometricLadder(levels, betaMin)` |
+| Targets | `ISamplingTarget<T>` (`Evaluate`); `ITargetEvaluation` (`LogPrior`, `LogLikelihood(b)`); `Temperature(b, path)` with `LogDensity(evaluation)`, static `Posterior` and `LogPosterior(evaluation)`; `TemperingPath` (`Powered`, `Likelihood`); `SamplingTarget.FromLogDensity`, `SamplingTarget.Separable`, and the extension `target.LogPosterior(state)`; `SeparableEvaluation` |
+| Reversible jump | `ReversibleJumpChain<T>(moves, target, start, rng, temperature = null)` with `Step()`, `Current`, `Temperature`, `CurrentEvaluation`, `CurrentLogDensity`, `Attempts`, `Accepted`, `MoveStats()`, `SetState(state, evaluation)`, `ReplaceTarget(target)`; `IRjMove<T>` (`Key`, `ReverseKey`, `Weight`, `Propose`); `Proposal<T>`; `MoveStat`; `ScheduledMove<T>` |
+| Tempering | `ParallelTempering<T>(movesForReplica, target, start, betas, masterSeed)` with `Step()`, `Cold`, `ColdChain`, `SwapAttempts`, `SwapAccepts`, and static `GeometricLadder(levels, betaMin)` |
 | Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.RHat`, `ChainDiagnostics.Ess`; `RunningMoments` (`Add`, `Merge`, `Of`); `IChain<T>`, `IEnsembleModel<T>`, `IChainRun<T>`, `EnsembleRun` |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
@@ -79,9 +96,11 @@ At state $x$, let $w_i(x)$ be the move weights and $W(x)=\sum_{i:\,w_i(x)>0}w_i(
 3. If the reverse move's weight at $x'$ is non-positive, or $W(x')\le0$, reject.
 4. Otherwise accept with
 
-$$\log\alpha=\big[\log\pi(x')-\log\pi(x)\big]+\underbrace{\log\tfrac{q_{m'}(u')}{q_m(u)}}_{\texttt{LogProposalRatio}}+\underbrace{\log|J|}_{\texttt{LogJacobian}}+\log\frac{w_{m'}(x')/W(x')}{w_m(x)/W(x)}.$$
+$$\log\alpha=\big[\log\pi_b(x')-\log\pi_b(x)\big]+\underbrace{\log\tfrac{q_{m'}(u')}{q_m(u)}}_{\texttt{LogProposalRatio}}+\underbrace{\log|J|}_{\texttt{LogJacobian}}+\log\frac{w_{m'}(x')/W(x')}{w_m(x)/W(x)}.$$
 
-The chain accepts if $\log\alpha\ge0$ or $U<e^{\log\alpha}$. A NaN value, for example from $-\infty+\infty$, is rejected. The current $\log\pi$ is cached, so each step makes at most one target evaluation (none when the move is unavailable or the reverse move is blocked).
+Here $\log\pi_b$ is the chain's `Temperature.LogDensity` of a state's evaluation: $b(\log p+\ell_1)$ on the powered path and $\log p+\ell_b$ on the likelihood path, the log posterior at $b=1$, the default.
+
+The chain accepts if $\log\alpha\ge0$ or $U<e^{\log\alpha}$. A candidate whose density is −∞ or NaN is rejected whatever its proposal ratio, so $-\infty+\infty$ cannot decide a move. The current evaluation and its density are cached, so each step makes at most one evaluation (none when the move is unavailable or the reverse move is blocked).
 
 **What the constructor checks.** There must be at least one move, the keys must be unique, and every `ReverseKey` must exist in the palette.
 
@@ -95,7 +114,7 @@ The chain accepts if $\log\alpha\ge0$ or $U<e^{\log\alpha}$. A NaN value, for ex
 
 ### Tempering
 
-**Tempered target.** `TemperedTarget` returns $\log\pi_\beta=\beta\log\pi$ and requires $\beta>0$.
+**Replicas.** Replica $i$ samples the powered posterior at $\beta_i$, `Temperature(β_i, Powered)`: $\beta_i(\log p+\ell_1)$. Step 3.2 adds the likelihood-tempered path, which Q5 sets for BARS.
 
 **The ladder.** In `ParallelTempering`, every replica starts from the same state, and each builds its own move palette from the `movesForReplica` factory, so mutable move state stays private to one replica. Each replica has its own RNG, and one further RNG drives swaps. `GeometricLadder` gives $\beta_i=\beta_{\min}^{\,i/(L-1)}$.
 
@@ -104,12 +123,12 @@ The chain accepts if $\log\alpha\ge0$ or $U<e^{\log\alpha}$. A NaN value, for ex
 1. Every replica steps once.
 2. A deterministic sweep from cold to hot attempts a swap for each adjacent pair $(i,i+1)$, with
 
-$$\log A=(\beta_i-\beta_{i+1})(L_{i+1}-L_i),\qquad L_i=\texttt{CurrentLogTarget}_i/\beta_i.$$
+$$\log A=(\beta_i-\beta_{i+1})(L_{i+1}-L_i),\qquad L_i=\log p(x_i)+\ell_1(x_i),$$
 
-Later pairs in the same sweep see earlier swaps. The chain interface reports the cold replica's move acceptance. Swaps are counted separately.
+with $L_i$ read from replica $i$'s cached evaluation. An accepted swap hands each replica the other's state and evaluation, and each recomputes its density at its own β; nothing is re-evaluated. Later pairs in the same sweep see earlier swaps. The chain interface reports the cold replica's move acceptance. Swaps are counted separately.
 
 **The swap uniform is drawn on every attempt**, accepted or not.
-- Replicas often hold the same state, and their $L_i$ then differ by rounding, because $L_i$ is recovered as `CurrentLogTarget`$/\beta_i$ after an earlier swap stored $\beta_i L$. At such a tie, $\log A$'s sign is rounding noise.
+- Between two states whose $L$ agree to rounding, $\log A$ is of rounding size and its sign is rounding noise. Until step 3.1, $L_i$ was recovered as `CurrentLogTarget`$/\beta_i$ after an earlier swap stored $\beta_i L$, so replicas holding the same state produced such ties routinely. $L_i$ is now read from the evaluation, so the same state gives the same $L$ exactly, but distinct states can still tie. The regression test builds two targets that break such a tie in opposite directions.
 - Drawing every time keeps the swap stream independent of it, so a last-bit change in the target cannot shift later swaps.
 - Before 2026-10-20 the draw was skipped when $\log A\ge0$, and step 2.3's cancellation-free scale moved a tempered BARS run through exactly this tie.
 - The within-replica Metropolis step still skips the draw when $\log\alpha\ge0$. A tie there needs a candidate whose target equals the current one to rounding, which continuous knots do not produce.
@@ -184,15 +203,18 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 - **ESS of a constant functional depends on rounding.** It comes out as about $C/2$ or as $Cn$ depending on whether the chain means round exactly to the constant. Rank-normalized bulk and tail ESS are planned.
 - **Acceptance rates include burn-in.** The counters are never reset.
 - **The ESS pairing is non-standard.** Treat ESS as indicative when you compare it with other libraries. It is NaN for single-chain runs.
-- **Ladder validation is minimal.** `ParallelTempering` does not check that the β ladder is descending or that $\beta_0=1$.
+- **Ladder validation is minimal.** `ParallelTempering` checks that every β lies in $(0,1]$, but not that the ladder is descending or that $\beta_0=1$ (step 3.2).
 - **`SpectralNoiseField` is not periodic.** Its documentation describes the grid as periodic, but queries map the box to nodes 0..N−1, so the sampled field is not periodic over the box.
 
 ## Source map
 
 | Role | Files (`ThermoMapper/src/maths/samplers/`) |
 |---|---|
-| Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `IRjTarget.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `TemperedTarget.cs`, `ParallelTempering.cs` |
+| Targets | `targets/SamplingTarget.cs` |
+| Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `ParallelTempering.cs`; `IRjTarget.cs` and `TemperedTarget.cs` are unused since step 3.1 and go in step 3.6 |
 | Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
 | i.i.d. and fields | `iid/InverseTransform.cs`; `SpectralNoiseField.cs` (at the `samplers/` root) |
+
+**Tests:** `tests/Maths.Samplers.Tests` (sources in `tests/samplers/`) owns the samplers' own checks, with targets built from `Maths.Samplers` alone: chain contracts, the reversible-jump generality check, the target contract, parallel tempering and the diagnostics policy.
 
 **See also:** [BayesianRegression](./BayesianRegression.md) (BARS, BGP) · [ProbabilityAndInformation](./ProbabilityAndInformation.md) · [DesignPrinciples](./DesignPrinciples.md)

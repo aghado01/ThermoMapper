@@ -224,13 +224,12 @@ public sealed class GraphPathologyException : Exception
 public interface IChain<out TDraw>
 public (EnsembleRun Summary, IReadOnlyList<IChainRun<TDraw>> Chains) Run<TDraw>(IEnsembleModel<TDraw> model, int chains, int masterSeed, int burn, int samples, double rHatTarget = 0.0, int batchSize = 0)
 public ScheduledMove(IRjMove<TState> inner, Func<TState, double> weight)
-public TemperedTarget(IRjTarget<TState> baseTarget, double beta)
 ```
 
 **Where it applies.**
 
 - `IChain` (one replica) vs `ChainEnsemble` (the shell).
-- `ScheduledMove` and `TemperedTarget` wrap a move and a target ([Samplers](./Samplers.md)).
+- `ScheduledMove` wraps a move ([Samplers](./Samplers.md)). Tempering is not a target decorator: a chain samples its target at a `Temperature`, a query on each state's evaluation, because a collapsed model's tempered likelihood is not β times its log density.
 - In graph construction, local-mutual-proximity scalers decorate the global-bandwidth scaler ([Graph Construction](./GraphConstruction.md)).
 - In SPC, the sweep strategy orchestrates per-temperature Swendsen–Wang kernels through an executor ([SPC Engine](./SpcEngine.md)).
 
