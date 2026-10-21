@@ -92,6 +92,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private readonly int? _temperLevels;        // set ⇒ each chain is a parallel-tempering ladder (cold = the sample)
     private readonly double _temperBetaMin;
     private readonly TemperingPath _temperPath;
+    private readonly SwapSchedule _temperSchedule;
+    private readonly bool _temperAdaptLadder;
 
     // Per-run context, set at the top of Run and read (only) by StartChain/the chain runs during that call. Run
     // drives the shell synchronously, so these are valid for the whole run; the fan-out reads them, never writes.
@@ -119,10 +121,16 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// knot prior whole, so hot replicas approach the prior itself; it needs a model that
     /// <see cref="IObservationModel.CanTemperLikelihood"/>. The powered path tempers prior and likelihood together and
     /// serves every model.</param>
+    /// <param name="temperSchedule">Which adjacent pairs each scan attempts to swap; deterministic even-odd by
+    /// default (Syed et al. 2022).</param>
+    /// <param name="temperAdaptLadder">When true (the default), each ladder re-spaces its interior rungs during burn-in
+    /// to equalize adjacent rejection rates, in rounds of doubling length, and then holds them fixed for sampling.
+    /// The geometric ladder from <paramref name="temperBetaMin"/> is the start; the endpoints never move.</param>
     public BarsEnsemble(IBasis basis, IObservationModel model, IComplexityPrior prior, IKnotKernel kernel,
                         IWeightResampler? resampler = null, double? dmgkConstant = null, double? adaptKernelTau = null,
                         int? temperLevels = null, double temperBetaMin = 0.05,
-                        TemperingPath temperPath = TemperingPath.Likelihood)
+                        TemperingPath temperPath = TemperingPath.Likelihood,
+                        SwapSchedule temperSchedule = SwapSchedule.DeterministicEvenOdd, bool temperAdaptLadder = true)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(model);
@@ -146,6 +154,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             if (temperPath == TemperingPath.Likelihood && !model.CanTemperLikelihood)
                 throw new ArgumentException(
                     $"{model.GetType().Name} has no tempered marginal; temper it on the powered path.", nameof(temperPath));
+            if (temperSchedule is not (SwapSchedule.DeterministicEvenOdd or SwapSchedule.StochasticEvenOdd or SwapSchedule.Sequential))
+                throw new ArgumentOutOfRangeException(nameof(temperSchedule));
         }
         _basis = basis;
         _model = model;
@@ -157,6 +167,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         _temperLevels = temperLevels;
         _temperBetaMin = temperBetaMin;
         _temperPath = temperPath;
+        _temperSchedule = temperSchedule;
+        _temperAdaptLadder = temperAdaptLadder;
     }
 
     /// <summary>Functionals R̂ runs on: knot count (index 0) + each fitted grid value (the per-grid consensus map).</summary>
@@ -408,7 +420,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var target = new SplineTarget(_basis, _model, _prior, _x, _y, st.W);
         double[] betas = ParallelTempering<KnotConfig>.GeometricLadder(levels, _temperBetaMin);
         return new ParallelTempering<KnotConfig>(_ => Moves(st.Kernel), target, st.Config, betas, _temperPath, seed,
-                                                 SwapSchedule.Sequential);
+                                                 _temperSchedule);
     }
 
     private IRjMove<KnotConfig>[] Moves(IKnotKernel kernel)
@@ -426,6 +438,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     // sampling phase (the diminishing-adaptation condition for ergodicity).
     private void AdaptiveBurn(BarsChainRun st, int burn)
     {
+        if (st.Ladder is ParallelTempering<KnotConfig> ladder && _temperAdaptLadder)
+        {
+            LadderBurn(st, ladder, burn);
+            return;
+        }
         if (st.Kernel is not AdaptiveLocalBetaKernel ak)
         {
             for (int k = 0; k < burn; k++) StepOnce(st);
@@ -446,6 +463,21 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             if (dA > 0) ak.Adapt((double)dC / dA, stepSize: 3.0 / Math.Sqrt(round + 1));
             round++;
         }
+    }
+
+    // Burn-in that tunes the ladder (Syed et al. 2022, Algorithm 4): rounds of 1, 2, 4, … scans, each followed by a
+    // re-spacing of the interior rungs from that round's rejection rates, while the burn budget lasts; the rest of the
+    // burn runs on the last ladder, which sampling then keeps.
+    private void LadderBurn(BarsChainRun st, ParallelTempering<KnotConfig> ladder, int burn)
+    {
+        int done = 0;
+        for (int round = 1; done + round <= burn; round *= 2)
+        {
+            for (int k = 0; k < round; k++) StepOnce(st);
+            done += round;
+            ladder.AdaptLadder();
+        }
+        for (; done < burn; done++) StepOnce(st);
     }
 
     private static (long Attempts, long Accepted) RelocateStat(ReversibleJumpChain<KnotConfig> chain)
