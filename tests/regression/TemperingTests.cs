@@ -58,9 +58,41 @@ public sealed class TemperingTests
     public void LikelihoodPath_IsRejected_ForAModelWithoutATemperedMarginal()
     {
         Assert.Throws<ArgumentException>(() => new BarsEnsemble(
-            new SplineBasis(3), new PoissonModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0), temperLevels: 3));
-        _ = new BarsEnsemble(new SplineBasis(3), new PoissonModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
+            new SplineBasis(3), new ConstantModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0), temperLevels: 3));
+        _ = new BarsEnsemble(new SplineBasis(3), new ConstantModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
                              temperLevels: 3, temperPath: TemperingPath.Powered);
+    }
+
+    [Fact]
+    public void PoissonLadder_OnTheLikelihoodPath_RecoversThePeak()
+    {
+        // Counts at the noiseless intensity exp(1 + 1.5·exp(−80(x − 0.4)²)); the Laplace marginal tempered linearly.
+        int n = 120;
+        const double truePeak = 0.4;
+        var x = new double[n];
+        var counts = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            x[i] = (i + 0.5) / n;
+            counts[i] = Math.Round(Math.Exp(1.0 + 1.5 * Math.Exp(-80.0 * (x[i] - truePeak) * (x[i] - truePeak))));
+        }
+
+        BarsResult result = new BarsEnsemble(
+                new SplineBasis(3), new PoissonModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0), temperLevels: 3)
+            .Run(x, counts, grid: x, chains: 2, masterSeed: 5, burn: 300, samples: 500);
+        PeakPosterior p = result.Peak;
+
+        _out.WriteLine($"[tempered-poisson] peak={p.LocationMean:F3} [{p.LocationLo:F3},{p.LocationHi:F3}] knots={result.MeanKnots:F2}");
+        Assert.True(Math.Abs(p.LocationMean - truePeak) < 0.05, $"tempered Poisson peak {p.LocationMean:F3} off {truePeak}");
+    }
+
+    // A model that implements only the required members, so it has no tempered marginal.
+    private sealed class ConstantModel : IObservationModel
+    {
+        public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights) => 0.0;
+        public int EffectiveDimension(double[,] design, double[]? weights) => design.GetLength(1);
+        public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
+            => new double[design.GetLength(1)];
     }
 
     [Theory]

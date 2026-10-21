@@ -72,18 +72,78 @@ public sealed class TemperedMarginalTests
         Assert.Equal(double.NegativeInfinity, marginal.LogMarginalLikelihood(0.4));
     }
 
-    [Fact]
-    public void ModelWithoutClosedForm_ServesOnlyTheUntemperedMarginal()
-    {
-        (double[] x, _) = Data(50);
-        var counts = new double[x.Length];
-        for (int i = 0; i < counts.Length; i++) counts[i] = Math.Round(Math.Exp(1.0 + Math.Sin(2.0 * Math.PI * x[i])));
-        double[,] z = new SplineBasis(3).Design(new KnotConfig([0.5]), x);
-        IObservationModel model = new PoissonModel();
+    public static TheoryData<string> LaplaceModels => new() { "poisson", "whittle", "gibbs" };
 
-        ITemperedMarginal marginal = model.TemperedMarginal(z, counts, null);
-        Assert.Equal(model.LogMarginalLikelihood(z, counts, null), marginal.LogMarginalLikelihood(1.0));
+    [Theory]
+    [MemberData(nameof(LaplaceModels))]
+    public void LaplaceModel_TempersItsMarginalLinearly(string name)
+    {
+        (double[] x, double[] y) = Data(50);
+        IObservationModel model = Laplace(name);
+        double[] response = Response(name, x, y);
+        double[,] z = new SplineBasis(3).Design(new KnotConfig([0.5]), x);
+
+        double l1 = model.LogMarginalLikelihood(z, response, null);
+        ITemperedMarginal marginal = model.TemperedMarginal(z, response, null);
+        Assert.True(model.CanTemperLikelihood);
+        Assert.Equal(l1, marginal.LogMarginalLikelihood(1.0));
+        Assert.Equal(0.3 * l1, marginal.LogMarginalLikelihood(0.3));
+        Assert.Equal(0.0, marginal.LogMarginalLikelihood(0.0));   // the prior
+        Assert.Throws<ArgumentOutOfRangeException>(() => marginal.LogMarginalLikelihood(1.5));
+    }
+
+    [Theory]
+    [MemberData(nameof(LaplaceModels))]
+    public void LaplaceModel_OverKnotted_StaysOffTheSupport_EvenAtZero(string name)
+    {
+        (double[] x, double[] y) = Data(6);
+        double[,] z = new SplineBasis(3).Design(new KnotConfig([0.3, 0.6]), x);   // 6 columns, 6 rows
+        ITemperedMarginal marginal = Laplace(name).TemperedMarginal(z, Response(name, x, y), null);
+        Assert.Equal(double.NegativeInfinity, marginal.LogMarginalLikelihood(0.4));
+        Assert.Equal(double.NegativeInfinity, marginal.LogMarginalLikelihood(0.0));   // not 0·(−∞) = NaN
+    }
+
+    [Fact]
+    public void ModelWithoutATemperedMarginal_ServesOnlyTheUntemperedMarginal()
+    {
+        (double[] x, double[] y) = Data(40);
+        double[,] z = new SplineBasis(3).Design(new KnotConfig([0.5]), x);
+        IObservationModel model = new ConstantModel();
+
+        ITemperedMarginal marginal = model.TemperedMarginal(z, y, null);
+        Assert.False(model.CanTemperLikelihood);
+        Assert.Equal(-2.5, marginal.LogMarginalLikelihood(1.0));
         Assert.Throws<NotSupportedException>(() => marginal.LogMarginalLikelihood(0.5));
+    }
+
+    private static IObservationModel Laplace(string name) => name switch
+    {
+        "poisson" => new PoissonModel(),
+        "whittle" => new WhittleModel(),
+        _ => new GibbsLossModel(),
+    };
+
+    // Counts for Poisson, a positive periodogram for Whittle, the real response for Gibbs-loss.
+    private static double[] Response(string name, double[] x, double[] y)
+    {
+        var r = new double[x.Length];
+        for (int i = 0; i < x.Length; i++)
+            r[i] = name switch
+            {
+                "poisson" => Math.Round(Math.Exp(1.0 + y[i])),
+                "whittle" => Math.Exp(y[i]) * (1.0 + 0.3 * Math.Cos(23.0 * x[i])),
+                _ => y[i],
+            };
+        return r;
+    }
+
+    // A model that implements only the required members, so it takes the interface's defaults.
+    private sealed class ConstantModel : IObservationModel
+    {
+        public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights) => -2.5;
+        public int EffectiveDimension(double[,] design, double[]? weights) => design.GetLength(1);
+        public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
+            => new double[design.GetLength(1)];
     }
 
     [Fact]

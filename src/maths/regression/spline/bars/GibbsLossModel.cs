@@ -60,6 +60,16 @@ public sealed class GibbsLossModel : IObservationModel
         return -loss - 0.5 * nu * Math.Log(m);
     }
 
+    /// <summary>
+    /// The linear tempered marginal, <c>b·ℓ₁</c>: the pseudo-marginal raised to b, with the knot prior untempered. Integrating
+    /// β against the tempered likelihood would need a fit at every rung, and at every swap.
+    /// </summary>
+    public ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights)
+        => new LinearMarginal(LogMarginalLikelihood(design, y, weights));
+
+    /// <inheritdoc/>
+    public bool CanTemperLikelihood => true;
+
     /// <inheritdoc/>
     public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
     {
