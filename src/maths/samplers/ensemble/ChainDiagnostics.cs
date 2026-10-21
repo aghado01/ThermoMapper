@@ -34,9 +34,9 @@ public static class ChainDiagnostics
     /// <summary>
     /// Gelman–Rubin potential scale reduction R̂ for one scalar functional from per-chain means and sample variances
     /// over <paramref name="drawsPerChain"/> draws each; R̂ → 1 at convergence. Zero within-chain variance in every
-    /// chain gives <see cref="RHatState.Constant"/> when the chain means coincide and <see cref="RHatState.Frozen"/>
+    /// chain gives <see cref="DiagnosticState.Constant"/> when the chain means coincide and <see cref="DiagnosticState.Frozen"/>
     /// when they differ. Fewer than two chains or draws, or a non-finite input, gives
-    /// <see cref="RHatState.Unavailable"/>.
+    /// <see cref="DiagnosticState.Unavailable"/>.
     /// </summary>
     public static RHatDiagnostic RHat(ReadOnlySpan<double> chainMeans, ReadOnlySpan<double> chainVariances,
                                       double drawsPerChain)

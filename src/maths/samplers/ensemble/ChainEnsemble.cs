@@ -143,7 +143,7 @@ public sealed class ChainEnsemble
             for (int ci = 0; ci < c; ci++) chainMoments[ci] = moments[ci][f];
             RHatDiagnostic r = ChainDiagnostics.RHat(chainMoments);
             if (!r.MeetsTarget(target)) return false;
-            anyEstimate |= r.State == RHatState.Estimated;
+            anyEstimate |= r.State == DiagnosticState.Estimated;
         }
         return anyEstimate;
     }

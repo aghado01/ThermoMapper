@@ -202,7 +202,7 @@ $$\tau_{\text{DEO}}=\frac{1}{2+2E},\qquad \tau_{\text{SEO}}=\frac{1}{2N+2E}.$$
 
 $$W=\tfrac1C\sum_i s_i^2,\quad B=\tfrac{n}{C-1}\sum_i(\bar x_i-\bar x)^2,\quad \hat V=\tfrac{n-1}{n}W+\tfrac{B}{n},\quad \hat R=\sqrt{\hat V/W}.$$
 
-Each reading carries a state (`RHatState`):
+Each reading carries a state (`DiagnosticState`):
 
 | State | When | Meets a stopping target |
 |---|---|---|

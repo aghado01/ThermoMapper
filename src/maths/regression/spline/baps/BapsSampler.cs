@@ -42,7 +42,7 @@ public enum BapsLambdaUpdate
 /// because λ can be heavy-tailed enough that its posterior mean does not exist. <paramref name="LocalSmoothing"/> is
 /// the posterior-mean local smoothing field λ_i (length ν−r) — non-null only for <see cref="BapsLambdaUpdate.AdaptiveGibbs"/>; its dips
 /// mark where the fit was allowed to track features. <paramref name="RHatLogLambda"/> is R̂ on log λ across chains
-/// with its <see cref="RHatState"/> (unavailable for a single chain).
+/// with its <see cref="DiagnosticState"/> (unavailable for a single chain).
 /// </remarks>
 public sealed record BapsResult(
     double[] Coefficients,

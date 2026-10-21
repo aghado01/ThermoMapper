@@ -3,8 +3,9 @@ using System.Globalization;
 
 namespace Maths.Samplers.Ensemble;
 
-/// <summary>What a Gelman–Rubin R̂ reading is: an estimate, or one of the cases with no estimate.</summary>
-public enum RHatState
+/// <summary>What a convergence reading (R̂, or an effective sample size) is: an estimate, or one of the cases with no
+/// estimate. One failure policy for every diagnostic on a set of chains.</summary>
+public enum DiagnosticState
 {
     /// <summary>A finite estimate from positive within-chain variance.</summary>
     Estimated,
@@ -20,23 +21,23 @@ public enum RHatState
 }
 
 /// <summary>
-/// One functional's R̂ with its <see cref="RHatState"/>. <see cref="Value"/> is the estimate when
-/// <see cref="RHatState.Estimated"/>, +∞ when <see cref="RHatState.Frozen"/>, and NaN otherwise. Only an estimate
+/// One functional's R̂ with its <see cref="DiagnosticState"/>. <see cref="Value"/> is the estimate when
+/// <see cref="DiagnosticState.Estimated"/>, +∞ when <see cref="DiagnosticState.Frozen"/>, and NaN otherwise. Only an estimate
 /// at or below a target, or a constant functional, satisfies a stopping rule; frozen and unavailable readings never do.
 /// </summary>
-public readonly record struct RHatDiagnostic(RHatState State, double Value) : IFormattable
+public readonly record struct RHatDiagnostic(DiagnosticState State, double Value) : IFormattable
 {
-    public static RHatDiagnostic Unavailable => new(RHatState.Unavailable, double.NaN);
-    public static RHatDiagnostic Constant => new(RHatState.Constant, double.NaN);
-    public static RHatDiagnostic Frozen => new(RHatState.Frozen, double.PositiveInfinity);
-    public static RHatDiagnostic Estimate(double value) => new(RHatState.Estimated, value);
+    public static RHatDiagnostic Unavailable => new(DiagnosticState.Unavailable, double.NaN);
+    public static RHatDiagnostic Constant => new(DiagnosticState.Constant, double.NaN);
+    public static RHatDiagnostic Frozen => new(DiagnosticState.Frozen, double.PositiveInfinity);
+    public static RHatDiagnostic Estimate(double value) => new(DiagnosticState.Estimated, value);
 
     /// <summary>
     /// Whether this functional satisfies an R̂ stopping <paramref name="target"/>: an estimate at or below it, or a
     /// constant functional (exempt — it has nothing to converge).
     /// </summary>
     public bool MeetsTarget(double target)
-        => State == RHatState.Constant || (State == RHatState.Estimated && Value <= target);
+        => State == DiagnosticState.Constant || (State == DiagnosticState.Estimated && Value <= target);
 
     /// <summary>
     /// The least favourable reading of a set — the summary a consensus map reports. Order: constant, then estimates
@@ -55,14 +56,14 @@ public readonly record struct RHatDiagnostic(RHatState State, double Value) : IF
     {
         int ra = Rank(a.State), rb = Rank(b.State);
         if (ra != rb) return ra > rb;
-        return a.State == RHatState.Estimated && a.Value > b.Value;
+        return a.State == DiagnosticState.Estimated && a.Value > b.Value;
     }
 
-    private static int Rank(RHatState state) => state switch
+    private static int Rank(DiagnosticState state) => state switch
     {
-        RHatState.Constant => 0,
-        RHatState.Estimated => 1,
-        RHatState.Frozen => 2,
+        DiagnosticState.Constant => 0,
+        DiagnosticState.Estimated => 1,
+        DiagnosticState.Frozen => 2,
         _ => 3,
     };
 
@@ -70,9 +71,9 @@ public readonly record struct RHatDiagnostic(RHatState State, double Value) : IF
 
     public string ToString(string? format, IFormatProvider? formatProvider) => State switch
     {
-        RHatState.Estimated => Value.ToString(format, formatProvider),
-        RHatState.Constant => "constant",
-        RHatState.Frozen => "frozen",
+        DiagnosticState.Estimated => Value.ToString(format, formatProvider),
+        DiagnosticState.Constant => "constant",
+        DiagnosticState.Frozen => "frozen",
         _ => "unavailable",
     };
 }

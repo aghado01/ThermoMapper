@@ -84,7 +84,7 @@ public sealed class BapsTests
         // Noise level recovered near the truth (σ = 0.15).
         Assert.InRange(r.SigmaMean, 0.10, 0.22);
         // Chains mixed.
-        Assert.Equal(RHatState.Estimated, r.RHatLogLambda.State);
+        Assert.Equal(DiagnosticState.Estimated, r.RHatLogLambda.State);
         Assert.True(r.RHatLogLambda.Value < 1.2, $"R̂ {r.RHatLogLambda:F3} indicates poor mixing");
     }
 
@@ -111,9 +111,9 @@ public sealed class BapsTests
         BapsResult one = sampler.Run(mode, chains: 1, masterSeed: 3, burn: 50, samples: 200);
         BapsResult four = sampler.Run(mode, chains: 4, masterSeed: 3, burn: 50, samples: 200);
 
-        Assert.Equal(RHatState.Unavailable, one.RHatLogLambda.State);
+        Assert.Equal(DiagnosticState.Unavailable, one.RHatLogLambda.State);
         Assert.True(double.IsNaN(one.RHatLogLambda.Value));
-        Assert.Equal(RHatState.Estimated, four.RHatLogLambda.State);
+        Assert.Equal(DiagnosticState.Estimated, four.RHatLogLambda.State);
         Assert.True(double.IsFinite(four.RHatLogLambda.Value) && four.RHatLogLambda.Value > 0.0);
     }
 
@@ -184,7 +184,7 @@ public sealed class BapsTests
             $"adaptive MSE {mseAdaptive:F5} should beat global {mseGlobal:F5} on heterogeneous smoothness");
         Assert.True(central < outer,
             $"local smoothing at the bump ({central:F2}) should be lighter than the flat region ({outer:F2})");
-        Assert.Equal(RHatState.Estimated, adaptive.RHatLogLambda.State);
+        Assert.Equal(DiagnosticState.Estimated, adaptive.RHatLogLambda.State);
         Assert.True(adaptive.RHatLogLambda.Value < 1.3, $"R̂ {adaptive.RHatLogLambda:F3} indicates poor mixing");
     }
 }

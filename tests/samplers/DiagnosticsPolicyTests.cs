@@ -17,7 +17,7 @@ public sealed class DiagnosticsPolicyTests
     {
         // Running Σ/Σ² read this as a finite estimate (0.9995); streaming moments keep it exactly constant.
         RHatDiagnostic r = ChainDiagnostics.RHat(Chains(4, 1000, (_, _) => 0.1));
-        Assert.Equal(RHatState.Constant, r.State);
+        Assert.Equal(DiagnosticState.Constant, r.State);
         Assert.True(r.MeetsTarget(1.01));
     }
 
@@ -25,15 +25,15 @@ public sealed class DiagnosticsPolicyTests
     public void RHat_ChainsFrozenAtDifferentValues_IsFrozen()
     {
         RHatDiagnostic r = ChainDiagnostics.RHat(Chains(4, 1000, (chain, _) => 0.1 * (chain + 1)));
-        Assert.Equal(RHatState.Frozen, r.State);
+        Assert.Equal(DiagnosticState.Frozen, r.State);
         Assert.False(r.MeetsTarget(1e6));
     }
 
     [Fact]
     public void RHat_OneChainOrOneDraw_IsUnavailable()
     {
-        Assert.Equal(RHatState.Unavailable, ChainDiagnostics.RHat(Chains(1, 100, (_, i) => i)).State);
-        Assert.Equal(RHatState.Unavailable, ChainDiagnostics.RHat(Chains(4, 1, (chain, _) => chain)).State);
+        Assert.Equal(DiagnosticState.Unavailable, ChainDiagnostics.RHat(Chains(1, 100, (_, i) => i)).State);
+        Assert.Equal(DiagnosticState.Unavailable, ChainDiagnostics.RHat(Chains(4, 1, (chain, _) => chain)).State);
         Assert.False(RHatDiagnostic.Unavailable.MeetsTarget(1e6));
     }
 
@@ -41,7 +41,7 @@ public sealed class DiagnosticsPolicyTests
     public void RHat_NonFiniteDraw_IsUnavailable()
     {
         RHatDiagnostic r = ChainDiagnostics.RHat(Chains(4, 100, (chain, i) => chain == 2 && i == 50 ? double.NaN : i));
-        Assert.Equal(RHatState.Unavailable, r.State);
+        Assert.Equal(DiagnosticState.Unavailable, r.State);
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public sealed class DiagnosticsPolicyTests
     {
         // Four identical chains of {1,2,3,4,5}: W = 2.5, B = 0, R̂ = √((4/5)·W / W) = √0.8.
         RHatDiagnostic r = ChainDiagnostics.RHat(Chains(4, 5, (_, i) => i + 1));
-        Assert.Equal(RHatState.Estimated, r.State);
+        Assert.Equal(DiagnosticState.Estimated, r.State);
         Assert.Equal(Math.Sqrt(0.8), r.Value, 12);
     }
 
@@ -73,10 +73,10 @@ public sealed class DiagnosticsPolicyTests
     {
         RHatDiagnostic[] set = [RHatDiagnostic.Constant, RHatDiagnostic.Estimate(1.02), RHatDiagnostic.Estimate(1.4)];
         Assert.Equal(RHatDiagnostic.Estimate(1.4), RHatDiagnostic.Worst(set));
-        Assert.Equal(RHatState.Frozen, RHatDiagnostic.Worst([.. set, RHatDiagnostic.Frozen]).State);
-        Assert.Equal(RHatState.Unavailable,
+        Assert.Equal(DiagnosticState.Frozen, RHatDiagnostic.Worst([.. set, RHatDiagnostic.Frozen]).State);
+        Assert.Equal(DiagnosticState.Unavailable,
                      RHatDiagnostic.Worst([RHatDiagnostic.Unavailable, RHatDiagnostic.Frozen, .. set]).State);
-        Assert.Equal(RHatState.Constant, RHatDiagnostic.Worst([RHatDiagnostic.Constant]).State);
+        Assert.Equal(DiagnosticState.Constant, RHatDiagnostic.Worst([RHatDiagnostic.Constant]).State);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class DiagnosticsPolicyTests
         EnsembleRun run = new ChainEnsemble().Run(model, chains: 4, masterSeed: 1, burn: 0, samples: 200,
                                                   rHatTarget: 1.1, batchSize: 10).Summary;
         Assert.Equal(200, run.SamplesUsed);
-        Assert.Equal(RHatState.Frozen, run.FunctionalRHat[0].State);
+        Assert.Equal(DiagnosticState.Frozen, run.FunctionalRHat[0].State);
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public sealed class DiagnosticsPolicyTests
         EnsembleRun run = new ChainEnsemble().Run(model, chains: 4, masterSeed: 1, burn: 0, samples: 200,
                                                   rHatTarget: 1.1, batchSize: 10).Summary;
         Assert.Equal(200, run.SamplesUsed);
-        Assert.Equal(RHatState.Unavailable, run.FunctionalRHat[0].State);
+        Assert.Equal(DiagnosticState.Unavailable, run.FunctionalRHat[0].State);
     }
 
     [Fact]
@@ -119,8 +119,8 @@ public sealed class DiagnosticsPolicyTests
         EnsembleRun run = new ChainEnsemble().Run(model, chains: 4, masterSeed: 1, burn: 0, samples: 400,
                                                   rHatTarget: 1.1, batchSize: 10).Summary;
         Assert.True(run.SamplesUsed < 400, "a constant functional beside a converged one should not block the stop");
-        Assert.Equal(RHatState.Constant, run.FunctionalRHat[0].State);
-        Assert.Equal(RHatState.Estimated, run.FunctionalRHat[1].State);
+        Assert.Equal(DiagnosticState.Constant, run.FunctionalRHat[0].State);
+        Assert.Equal(DiagnosticState.Estimated, run.FunctionalRHat[1].State);
     }
 
     [Fact]

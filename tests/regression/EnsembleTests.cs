@@ -97,7 +97,7 @@ public sealed class EnsembleTests
         _out.WriteLine($"R̂(fit)={result.RHatFitMax:F3} R̂(k)={result.RHatKnots:F3} ESS(k)={result.EssKnots:F0} " +
                        $"meanK={result.MeanKnots:F2} used={result.SamplesUsed} mseFit={mseFit:F5}");
 
-        Assert.Equal(RHatState.Estimated, result.RHatFitMax.State);
+        Assert.Equal(DiagnosticState.Estimated, result.RHatFitMax.State);
         Assert.True(result.RHatFitMax.MeetsTarget(1.3));
         Assert.True(result.RHatKnots.MeetsTarget(1.3));
         Assert.Equal(x.Length, result.RHatFit.Length);          // consensus map sized to the grid
