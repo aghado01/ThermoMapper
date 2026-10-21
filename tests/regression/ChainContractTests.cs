@@ -73,6 +73,28 @@ public sealed class ChainContractTests
     }
 
     [Fact]
+    public void ParallelTempering_SwapStream_DoesNotDependOnRoundingTies()
+    {
+        // Replicas often hold the same state, and their untempered log targets then differ by rounding (L/β·β after
+        // earlier swaps). Two ladders whose targets differ by one part in 10¹⁵ must run identically: the swap uniform is
+        // drawn on every attempt, so a tie's sign cannot shift the stream.
+        IRjMove<int>[] MovesFor(int replica) => [new StepMove("up", "down", +1), new StepMove("down", "up", -1)];
+        double[] betas = ParallelTempering<int>.GeometricLadder(levels: 4, betaMin: 0.05);
+        var a = new ParallelTempering<int>(MovesFor, new ScaledLinearTarget(0.3, 1.0), 0, betas, masterSeed: 9);
+        var b = new ParallelTempering<int>(MovesFor, new ScaledLinearTarget(0.3, 1.0 + 1e-15), 0, betas, masterSeed: 9);
+        for (int i = 0; i < 5000; i++) Assert.Equal(a.Step(), b.Step());
+        Assert.Equal(a.SwapAccepts, b.SwapAccepts);
+    }
+
+    // −slope·|state − 3|, scaled: a peaked target whose replicas meet at the same states.
+    private sealed class ScaledLinearTarget : IRjTarget<int>
+    {
+        private readonly double _slope, _scale;
+        public ScaledLinearTarget(double slope, double scale) { _slope = slope; _scale = scale; }
+        public double LogPosterior(int state) => _scale * (-_slope * Math.Abs(state - 3) - 1.234567);
+    }
+
+    [Fact]
     public void Candidate_OffTheSupport_IsRejected_WhateverItsProposalRatio()
     {
         // A sampler that underflows onto the support's edge can report an infinite proposal ratio there; the

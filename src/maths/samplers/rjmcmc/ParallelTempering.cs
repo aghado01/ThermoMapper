@@ -70,7 +70,11 @@ public sealed class ParallelTempering<TState> : IChain<TState>
             double li = _chains[i].CurrentLogTarget / _betas[i];           // untempered log π at replica i
             double li1 = _chains[i + 1].CurrentLogTarget / _betas[i + 1];
             double logA = (_betas[i] - _betas[i + 1]) * (li1 - li);
-            if (logA >= 0.0 || _swapRng.NextDouble() < Math.Exp(logA))
+            // Drawn on every attempt, so the swap stream does not advance by the decision: replicas holding the same
+            // state carry log targets that differ by rounding (L/β·β after earlier swaps), and a tie's sign must not
+            // decide whether a uniform is consumed.
+            double u = _swapRng.NextDouble();
+            if (logA >= 0.0 || u < Math.Exp(logA))
             {
                 SwapAccepts++;
                 TState xi = _chains[i].Current, xi1 = _chains[i + 1].Current;
