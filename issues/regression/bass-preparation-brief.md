@@ -898,3 +898,62 @@ This is the relative check the port brief asks for, in place of an absolute 1e-1
 - Bordered births, Givens deletions and the staged replace: port stage 2.
 - **Scale-aware BARS admission.** `DesignAdmission` still uses `PivotRatio` ≥ 1e-10, which depends on column scaling. Switching it to `MinRelativePivot` is a Regression policy decision, for step 2.3's g-prior block or later.
 - `CholeskyDecomposition`'s callers stay on the floored path: they want its regularization semantics.
+
+### 2.3 Collapsed g-prior block — done 2026-10-20
+
+Commits: `98347f1` (a sampler repair this step found), `bab4e87` (the block, with BARS built on it), `c2dbbfc` (samplers docs).
+
+**Specification:**
+- **The block.** `CollapsedGPrior` (namespace `Maths.Regression.GPrior`) holds the closed forms for y ~ N(Zβ, σ²W⁻¹) under β | σ² ~ N(0, σ²(τG)⁻¹), with the likelihood at inverse temperature b.
+  - **Unweighted.** It caches the factor of G, β_OLS, ‖r‖² and Q, none of which depend on τ or b. `At(τ, b)` then costs O(1) plus the mean vector, with S = b(‖r‖² + τ/(τ+b)·Q) computed from the explicit residual.
+  - **Weighted.** It is built at one τ and b = 1, because P_a = Zᵀ(W + τI)Z depends on both.
+- **`GPriorConditional`.** It carries S, the determinant term, the covariance scale and the mean, and gives:
+  - `Sigma2Posterior`: IG(g₁ + mb/2, g₂ + S/2), with the improper 1/σ² when no prior is given;
+  - `LogMarginal`: the complete ln p_b(y | Z, τ), comparable across τ and b;
+  - `Sample`: a composition draw, with stack scratch for p ≤ 128;
+  - `ConditionalVariance`.
+- **Seams.**
+  - `ISpdFactor` in LinAlg, implemented by `BandCholesky` and `DenseCholesky`. `BandCholesky`'s `Solve`, `SolveInPlace` and `SampleInnovation` now take spans.
+  - `SpdFactorExtensions.InverseQuadraticForms`, through which `ReadoutQuadratics` now routes.
+  - `BandedGPrior` builds the block from a banded spline design, using a new `BandedDesign.Apply` for the fitted values.
+- **`WeightedNormalModel` on the block.** It keeps its marginal formula (up to the σ-integration constant), the m ≤ ν rule and admission, unchanged.
+
+**Design choices:**
+- **The block owns no design, support rule or admission policy.** It reports the factors' statuses (seam map, gates 1–3).
+- **The coefficient prior is the parameter τ, not an interface.**
+- **`ISpdFactor` is an interface** because both of its implementations already exist.
+- **The improper σ² prior's constant is dropped**, and documented as such. Tempering at b → 0 needs a proper prior, as derivations review §3 says.
+
+**Verification:** a temporary probe recorded five seeded BARS runs before the change: plain, Student-t, contaminated, three-rung tempered and Poisson.
+1. **Untempered runs.** After the switch, the four untempered runs kept identical knot trajectories and acceptance, with continuous outputs within 2.05e-15.
+2. **The tempered run diverged.** The two scale formulas differ by at most 6e-11 on admitted designs, so a genuine accept/reject flip was implausible. A seed sweep localized the divergence:
+   - over 30 master seeds, most single-chain runs parted within the first 10–60 evaluations, often at the empty configuration;
+   - the cause was `ParallelTempering`'s swap, which skipped its uniform when logA ≥ 0;
+   - replicas holding the same state carry log targets that differ by rounding (L/β after an earlier swap's β·L), so a tie's sign decided whether the swap stream advanced.
+3. **The repair.** The uniform is now drawn on every attempt (`98347f1`, register R16). Over the same 30 seeds, the old and new formulas then gave zero divergences. A regression test now requires two ladders whose targets differ by 1e-15 to run identically; it fails without the repair.
+4. **Re-baselined at `98347f1`.** All five runs keep identical knot trajectories and acceptance. Continuous outputs are within 2.05e-15, and Poisson is bit-identical.
+
+**Results:**
+- `CollapsedGPriorTests` has 13 checks:
+  - dense algebra at four (τ, b) settings;
+  - the complete log marginal against σ² quadrature, under improper and proper priors and at tempered rungs;
+  - draw moments at a tempered rung;
+  - conditional variances;
+  - the weighted path and its fixed τ;
+  - a constructed near-interpolating fit at τ = 1e-18, where the subtracted form loses its digits and the block keeps them;
+  - validation.
+- `ChainContractTests` gains the swap-stream test.
+- `Maths.Regression.Tests` passes 192 of 192 and `Maths.LinAlg.Tests` 46 of 46.
+
+**Docs:**
+- `BayesianRegression.md` gains a section for the block and states that `WeightedNormalModel` computes its scale through it.
+- `LinearAlgebra.md` covers `ISpdFactor` and the span signatures.
+- `Samplers.md` states why the swap uniform is drawn on every attempt.
+
+**For step 3.5:** the tempered runs' trajectories changed at `98347f1`, which is a recorded repair, so differences from the 0.6 baseline in tempered runs trace to it.
+
+**Deferred:**
+- **Allocation-free proposals at the model level.** This needs per-chain workspaces passed through `IObservationModel`, because one model instance serves all chains. The block allocates only its mean vector; the model still allocates its band storage and factors per proposal, as before.
+- **The Metropolis step's draw-only-when-needed pattern.** `ReversibleJumpChain` still skips the uniform when logα ≥ 0. A tie there needs a candidate whose target equals the current one to rounding, and none appeared: untempered trajectories stayed identical. It goes to the RNG audit.
+- **Step 3.2** uses `At(τ, b < 1)` for the likelihood-tempered path.
+- **BASS's dense or incremental design layer** builds the block through `FromLeastSquares` (port stage).
