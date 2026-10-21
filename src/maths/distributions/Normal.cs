@@ -82,6 +82,56 @@ public readonly struct Normal : IContinuousDistribution
         return Math.Log(0.5 * (Erf(-a) + Erf(b)));                             // straddles the mean
     }
 
+    /// <summary>The quantile function: the x with <c>P(X ≤ x) = p</c>; −∞ at 0, +∞ at 1, NaN outside [0, 1].</summary>
+    public double Quantile(double p) => Mean + Sd * StandardQuantile(p);
+
+    /// <summary>
+    /// The standard normal quantile Φ⁻¹(p), by Wichura's algorithm AS 241 (PPND16, 1988): rational approximations
+    /// in three regions, accurate to about 1 part in 10¹⁶. −∞ at 0, +∞ at 1, NaN outside [0, 1].
+    /// </summary>
+    public static double StandardQuantile(double p)
+    {
+        if (!(p >= 0.0 && p <= 1.0)) return double.NaN;
+        if (p == 0.0) return double.NegativeInfinity;
+        if (p == 1.0) return double.PositiveInfinity;
+
+        double q = p - 0.5;
+        if (Math.Abs(q) <= 0.425)
+        {
+            double r = 0.180625 - q * q;
+            return q * (((((((r * 2509.0809287301226727 + 33430.575583588128105) * r + 67265.770927008700853) * r
+                              + 45921.953931549871457) * r + 13731.693765509461125) * r + 1971.5909503065514427) * r
+                              + 133.14166789178437745) * r + 3.387132872796366608)
+                     / (((((((r * 5226.495278852545925 + 28729.085735721942674) * r + 39307.89580009271061) * r
+                              + 21213.794301586595867) * r + 5394.1960214247511077) * r + 687.1870074920579083) * r
+                              + 42.313330701600911252) * r + 1.0);
+        }
+
+        double t = Math.Sqrt(-Math.Log(q < 0.0 ? p : 1.0 - p));
+        double value;
+        if (t <= 5.0)
+        {
+            t -= 1.6;
+            value = (((((((t * 7.7454501427834140764e-4 + 0.0227238449892691845833) * t + 0.24178072517745061177) * t
+                          + 1.27045825245236838258) * t + 3.64784832476320460504) * t + 5.7694972214606914055) * t
+                          + 4.6303378461565452959) * t + 1.42343711074968357734)
+                  / (((((((t * 1.05075007164441684324e-9 + 5.475938084995344946e-4) * t + 0.0151986665636164571966) * t
+                          + 0.14810397642748007459) * t + 0.68976733498510000455) * t + 1.6763848301838038494) * t
+                          + 2.05319162663775882187) * t + 1.0);
+        }
+        else
+        {
+            t -= 5.0;
+            value = (((((((t * 2.01033439929228813265e-7 + 2.71155556874348757815e-5) * t + 0.0012426609473880784386) * t
+                          + 0.026532189526576123093) * t + 0.29656057182850489123) * t + 1.7848265399172913358) * t
+                          + 5.4637849111641143699) * t + 6.6579046435011037772)
+                  / (((((((t * 2.04426310338993978564e-15 + 1.4215117583164458887e-7) * t + 1.8463183175100546818e-5) * t
+                          + 7.868691311456132591e-4) * t + 0.0148753612908506148525) * t + 0.13692988092273580531) * t
+                          + 0.59983220655588793769) * t + 1.0);
+        }
+        return q < 0.0 ? -value : value;
+    }
+
     /// <summary><c>ln Φ(z)</c> of the standard normal.</summary>
     public static double StandardLogCdf(double z)
         => z < 0.0 ? LogLowerTail(-z) : SpecialFunctions.Log1mExp(LogLowerTail(z));
