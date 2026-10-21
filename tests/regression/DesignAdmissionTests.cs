@@ -73,6 +73,25 @@ public sealed class DesignAdmissionTests
         Assert.Equal(double.NegativeInfinity, capped.LogMarginalLikelihood(z, Response(model, x), null));
     }
 
+    [Fact]
+    public void Normal_DesignWhoseFactorBreaksDown_IsRejectedWithoutBuildingTheFit()
+    {
+        // Four knots crowded at the left edge of 120 even points, as a hot likelihood-tempered rung proposed them. The
+        // Gram factor breaks down (floored pivots, one near −1e155) and its solve is NaN. Admission must judge the factor
+        // before any least-squares statistic is formed from it.
+        double[] x = EvenInputs(120);
+        var knots = new[] { 0.010348173957892346, 0.012750809965187548, 0.021147317788105583, 0.06881582846542306 };
+        double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
+        double[] y = Response("normal", x);
+        var model = new WeightedNormalModel();
+
+        Assert.Equal(double.NegativeInfinity, model.LogMarginalLikelihood(z, y, null));
+        Assert.Equal(double.NegativeInfinity, model.TemperedMarginal(z, y, null).LogMarginalLikelihood(0.5));
+        Assert.All(model.PosteriorMeanCoefficients(z, y, null), v => Assert.True(double.IsNaN(v)));
+        Assert.All(model.SampleCoefficients(z, y, null, new Maths.Rng.Xoshiro256PlusPlus(1)), v => Assert.True(double.IsNaN(v)));
+        Assert.All(model.ConditionalVariance(z, y, null, z)!, v => Assert.True(double.IsNaN(v)));
+    }
+
     private static IObservationModel Model(string name) => name switch
     {
         "normal" => new WeightedNormalModel(),

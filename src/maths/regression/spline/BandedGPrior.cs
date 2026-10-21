@@ -9,14 +9,19 @@ namespace Maths.Regression.Spline;
 /// (<see cref="BandedDesign"/>), are factored by a root-free <see cref="BandCholesky"/> (LDLᵀ, so the block can
 /// draw), and the explicit residual comes from <see cref="BandedDesign.Apply"/>. The block's closed forms are the
 /// same for any design layer; this is the banded one BARS uses.
+/// <para>The caller's admission rule judges each factor as soon as it exists, before anything is solved with it: a
+/// factor that breaks down can solve to NaN, which no least-squares statistic may be formed from. A refused factor
+/// gives no block (null).</para>
 /// </summary>
 public static class BandedGPrior
 {
-    /// <summary>The unweighted block: G = ZᵀZ factored, β_OLS, <c>‖y − Zβ_OLS‖²</c> and <c>Q = ‖Zβ_OLS‖²</c>.</summary>
-    public static CollapsedGPrior Fit(BandedDesign design, double[] y)
+    /// <summary>The unweighted block: G = ZᵀZ factored, β_OLS, <c>‖y − Zβ_OLS‖²</c> and <c>Q = ‖Zβ_OLS‖²</c>; null when
+    /// <paramref name="admits"/> refuses G's factor.</summary>
+    public static CollapsedGPrior? Fit(BandedDesign design, double[] y, Func<FactorStatus, bool> admits)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
+        ArgumentNullException.ThrowIfNull(admits);
         int m = design.Rows, nu = design.Dimension;
         if (y.Length != m) throw new ArgumentException("Response length must match the design row count.", nameof(y));
 
@@ -25,6 +30,7 @@ public static class BandedGPrior
         design.Accumulate(null, band, y, b);
         var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt);
         gram.DecomposeBanded(band);
+        if (!admits(gram.Status)) return null;
         double[] beta = gram.Solve(b);   // β_OLS = G⁻¹Zᵀy; no inverse is formed
 
         var f = new double[m];
@@ -41,13 +47,16 @@ public static class BandedGPrior
 
     /// <summary>
     /// The weighted block at prior precision <paramref name="tau"/>: G = ZᵀZ and <c>P_a = Zᵀ(W + τI)Z</c> factored,
-    /// the posterior mean <c>β̃ = P_a⁻¹ZᵀWy</c>, and <c>S = ‖y − Zβ̃‖²_W + τ‖Zβ̃‖²</c>, a sum of non-negative terms.
+    /// the posterior mean <c>β̃ = P_a⁻¹ZᵀWy</c>, and <c>S = ‖y − Zβ̃‖²_W + τ‖Zβ̃‖²</c>, a sum of non-negative terms;
+    /// null when <paramref name="admits"/> refuses either factor.
     /// </summary>
-    public static CollapsedGPrior Fit(BandedDesign design, double[] y, double[] weights, double tau)
+    public static CollapsedGPrior? Fit(BandedDesign design, double[] y, double[] weights, double tau,
+                                       Func<FactorStatus, bool> admits)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
         ArgumentNullException.ThrowIfNull(weights);
+        ArgumentNullException.ThrowIfNull(admits);
         int m = design.Rows, nu = design.Dimension;
         if (y.Length != m) throw new ArgumentException("Response length must match the design row count.", nameof(y));
         if (weights.Length != m) throw new ArgumentException("Weights length must match the design row count.", nameof(weights));
@@ -56,6 +65,7 @@ public static class BandedGPrior
         design.Accumulate(null, gBand, null, null);
         var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt);
         gram.DecomposeBanded(gBand);
+        if (!admits(gram.Status)) return null;
 
         var wPlus = new double[m];
         double sumLogW = 0.0;
@@ -70,6 +80,7 @@ public static class BandedGPrior
         design.AccumulateRhs(weights, y, h);
         var posterior = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt);
         posterior.DecomposeBanded(pBand);
+        if (!admits(posterior.Status)) return null;
         double[] beta = posterior.Solve(h);
 
         var f = new double[m];

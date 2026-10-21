@@ -1,4 +1,5 @@
 using System;
+using Maths.LinAlg;
 using Maths.Rng;
 
 using Maths.Regression.GPrior;
@@ -56,8 +57,8 @@ public sealed class WeightedNormalModel : IObservationModel
         if (design.GetLength(0) <= design.GetLength(1))
             return ImpossibleMarginal.Instance;
 
-        (CollapsedGPrior block, double tau, bool admitted) = Fit(design, y, weights);
-        if (!admitted)
+        (CollapsedGPrior? block, double tau) = Fit(design, y, weights);
+        if (block is null)
             return ImpossibleMarginal.Instance;   // rank-deficient or ill-conditioned design ⇒ outside the support
         return new NormalMarginal(block, tau);
     }
@@ -66,7 +67,8 @@ public sealed class WeightedNormalModel : IObservationModel
     /// A draw from the exact conditional posterior given the knots: <c>σ² ~ IG(m/2, S/2)</c>, then β from its Normal
     /// conditional through the band factor's precision draw. At unit weights <c>S = a</c> and
     /// <c>β ~ N((m/(m+1))(ZᵀZ)⁻¹Zᵀy, σ²·(m/(m+1))·(ZᵀZ)⁻¹)</c>; with weights, <c>β ~ N(Pa⁻¹h, σ²Pa⁻¹)</c> with
-    /// <c>Pa = Zᵀ(W + I/m)Z</c>. Falls back to the mean when the design is inadmissible or the response is zero.
+    /// <c>Pa = Zᵀ(W + I/m)Z</c>. Falls back to the mean when the response is zero; NaN when the design is
+    /// inadmissible, which has no posterior.
     /// </summary>
     public double[] SampleCoefficients(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
         => SampleConditional(design, y, weights, rng).Beta;
@@ -77,9 +79,10 @@ public sealed class WeightedNormalModel : IObservationModel
                                                              Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        (GPriorConditional c, bool admitted) = Condition(design, y, weights);
+        if (Condition(design, y, weights) is not GPriorConditional c)
+            return (Unavailable(design), double.NaN);
         double[] beta = c.Mean.ToArray();
-        if (!admitted || !(c.S > 0.0))
+        if (!(c.S > 0.0))
             return (beta, double.NaN);
         double sigma2 = c.Sample(null, rng, beta);   // the improper 1/σ² prior
         return (beta, sigma2);
@@ -93,8 +96,7 @@ public sealed class WeightedNormalModel : IObservationModel
     public double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign)
     {
         ArgumentNullException.ThrowIfNull(readoutDesign);
-        (GPriorConditional c, bool admitted) = Condition(design, y, weights);
-        if (!admitted || !(c.S > 0.0) || c.Rows <= 2)
+        if (Condition(design, y, weights) is not GPriorConditional c || !(c.S > 0.0) || c.Rows <= 2)
             return ReadoutQuadratics.Unavailable(readoutDesign);
         return c.ConditionalVariance(null, readoutDesign);
     }
@@ -103,21 +105,21 @@ public sealed class WeightedNormalModel : IObservationModel
     /// Posterior mean spline coefficients: <c>(m/(m+1)) (ZᵀZ)⁻¹ Zᵀy</c> at unit weights (DMGK eq. 7's
     /// <c>E{f | k, ξ, y}</c>), and <c>Pa⁻¹h</c> with weights. Evaluated against a design at any points this is the
     /// conditional posterior mean curve for one knot draw; averaging over the chain is the Bayes fit.
-    /// <paramref name="weights"/> null means unit weights.
+    /// <paramref name="weights"/> null means unit weights. NaN when the design is inadmissible.
     /// </summary>
     public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
-        => Condition(design, y, weights).C.Mean.ToArray();
+        => Condition(design, y, weights) is GPriorConditional c ? c.Mean.ToArray() : Unavailable(design);
 
-    // One knot configuration's conditional posterior at BARS's τ = 1/m, untempered, and the admission verdict.
-    private static (GPriorConditional C, bool Admitted) Condition(double[,] design, double[] y, double[]? weights)
+    // One knot configuration's conditional posterior at BARS's τ = 1/m, untempered; null when it is inadmissible.
+    private static GPriorConditional? Condition(double[,] design, double[] y, double[]? weights)
     {
-        (CollapsedGPrior block, double tau, bool admitted) = Fit(design, y, weights);
-        return (block.At(tau), admitted);
+        (CollapsedGPrior? block, double tau) = Fit(design, y, weights);
+        return block?.At(tau);
     }
 
-    // The block for one knot configuration at BARS's τ = 1/m, and the admission verdict: G's factor alone without
-    // weights; G's and P_a's with them.
-    private static (CollapsedGPrior Block, double Tau, bool Admitted) Fit(double[,] design, double[] y, double[]? weights)
+    // The block for one knot configuration at BARS's τ = 1/m, or null when admission refuses a factor: G's alone
+    // without weights; G's and P_a's with them.
+    private static (CollapsedGPrior? Block, double Tau) Fit(double[,] design, double[] y, double[]? weights)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -129,13 +131,20 @@ public sealed class WeightedNormalModel : IObservationModel
 
         var banded = new BandedDesign(design);
         double tau = 1.0 / m;
-        if (weights is null)
-        {
-            CollapsedGPrior block = BandedGPrior.Fit(banded, y);
-            return (block, tau, DesignAdmission.Admits(block.GramStatus));
-        }
-        CollapsedGPrior weighted = BandedGPrior.Fit(banded, y, weights, tau);
-        return (weighted, tau, DesignAdmission.Admits(weighted.GramStatus) && DesignAdmission.Admits(weighted.PosteriorStatus));
+        CollapsedGPrior? block = weights is null
+            ? BandedGPrior.Fit(banded, y, Admits)
+            : BandedGPrior.Fit(banded, y, weights, tau, Admits);
+        return (block, tau);
+    }
+
+    private static bool Admits(FactorStatus status) => DesignAdmission.Admits(status);
+
+    // No posterior: one NaN per coefficient.
+    private static double[] Unavailable(double[,] design)
+    {
+        var nan = new double[design.GetLength(1)];
+        Array.Fill(nan, double.NaN);
+        return nan;
     }
 
     // An admitted configuration's marginal. The b = 1 value is computed up front, since every chain and swap reads it.

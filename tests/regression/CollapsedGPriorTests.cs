@@ -1,4 +1,5 @@
 using System;
+using Maths.LinAlg;
 using Maths.Distributions;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
@@ -33,7 +34,7 @@ public sealed class CollapsedGPriorTests
     public void Unweighted_MatchesDenseAlgebra_AtAnyTauAndTemperature(double tau, double b)
     {
         (double[,] z, double[] y) = CoefficientDrawTests.Problem();
-        CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y);
+        CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite)!;
         GPriorConditional c = block.At(tau, b);
         Dense d = Dense.Of(z, y, tau, b);
 
@@ -79,7 +80,7 @@ public sealed class CollapsedGPriorTests
         for (int i = 0; i <= n; i++) sum += (i == 0 || i == n ? 0.5 : 1.0) * Math.Exp(vals[i] - max);
         double quadrature = max + Math.Log(sum * h);
 
-        CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y);
+        CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite)!;
         Assert.True(Math.Abs(block.At(tau, b).LogMarginal(prior) - quadrature) < 1e-8,
                     $"log marginal {block.At(tau, b).LogMarginal(prior):R} vs quadrature {quadrature:R}");
     }
@@ -114,7 +115,7 @@ public sealed class CollapsedGPriorTests
         for (int p = 0; p < nu; p++) { for (int q = 0; q < nu; q++) mean[p] += paInv[p, q] * hv[q]; quad += hv[p] * mean[p]; }
         double logDet = 0.5 * (LogDet(g) + nu * Math.Log(tau)) - 0.5 * LogDet(pa) + 0.5 * sumLogW;
 
-        CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y, w, tau);
+        CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y, w, tau, PositiveDefinite)!;
         GPriorConditional c = block.At(tau);
         Close(yWy - quad, c.S, 1e-11);
         Close(logDet, c.LogDeterminantTerm, 1e-11);
@@ -136,7 +137,7 @@ public sealed class CollapsedGPriorTests
         Dense d = Dense.Of(z, y, tau, b);
         InverseGamma post = InverseGamma.ShapeScale(3.0 + 0.5 * m * b, 0.4 + 0.5 * d.S);
 
-        GPriorConditional c = BandedGPrior.Fit(new BandedDesign(z), y).At(tau, b);
+        GPriorConditional c = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite)!.At(tau, b);
         Close(post.Mean, c.Sigma2Posterior(prior).Mean, 1e-12);
 
         var rng = new Xoshiro256PlusPlus(seed: 23);
@@ -175,7 +176,7 @@ public sealed class CollapsedGPriorTests
         Dense d = Dense.Of(z, y, tau, 1.0);
         double eSigma2 = 0.5 * d.S / (0.5 * m - 1.0);
 
-        GPriorConditional c = BandedGPrior.Fit(new BandedDesign(z), y).At(tau);
+        GPriorConditional c = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite)!.At(tau);
         double[] v = c.ConditionalVariance(null, z);
         for (int t = 0; t < m; t++)
         {
@@ -213,7 +214,7 @@ public sealed class CollapsedGPriorTests
         double reference = ee + tau / (1.0 + tau) * q;
         double subtracted = yy - q / (1.0 + tau);
 
-        GPriorConditional c = BandedGPrior.Fit(new BandedDesign(z), y).At(tau);
+        GPriorConditional c = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite)!.At(tau);
         Assert.True(Math.Abs(c.S - reference) <= 1e-3 * reference, $"S {c.S:R} vs {reference:R}");
         Assert.True(Math.Abs(subtracted - reference) >= 0.5 * reference, $"the subtracted form {subtracted:R} should have lost its digits"); 
     }
@@ -222,11 +223,13 @@ public sealed class CollapsedGPriorTests
     public void Settings_AreValidated()
     {
         (double[,] z, double[] y) = CoefficientDrawTests.Problem();
-        CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y);
+        CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite)!;
         Assert.Throws<ArgumentOutOfRangeException>(() => block.At(0.0));
         Assert.Throws<ArgumentOutOfRangeException>(() => block.At(0.1, 0.0));
         Assert.Throws<ArgumentOutOfRangeException>(() => block.At(double.NaN));
     }
+
+    private static bool PositiveDefinite(FactorStatus status) => status.PositiveDefinite;
 
     private static void Close(double expected, double actual, double rel)
         => Assert.True(Math.Abs(actual - expected) <= rel * Math.Max(1.0, Math.Abs(expected)), $"expected {expected:R}, got {actual:R}");

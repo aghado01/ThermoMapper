@@ -1,4 +1,5 @@
 using System;
+using Maths.LinAlg;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
@@ -28,7 +29,7 @@ public sealed class TemperedMarginalTests
         foreach (double[] knots in new[] { Array.Empty<double>(), new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 } })
         {
             double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
-            double complete = BandedGPrior.Fit(new BandedDesign(z), y).At(tau, b).LogMarginal(null);
+            double complete = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite)!.At(tau, b).LogMarginal(null);
             double d = model.TemperedMarginal(z, y, null).LogMarginalLikelihood(b) - complete;
             offset ??= d;
             Assert.Equal(offset.Value, d, 1e-9);
@@ -97,6 +98,8 @@ public sealed class TemperedMarginalTests
         Assert.Equal(b * (e.LogPrior + e.LogLikelihood(1.0)), new Temperature(b, TemperingPath.Powered).LogDensity(e));
         Assert.Equal(target.LogPosterior(new KnotConfig([0.25, 0.6])), e.LogPrior + e.LogLikelihood(1.0));
     }
+
+    private static bool PositiveDefinite(FactorStatus status) => status.PositiveDefinite;
 
     private static (double[] X, double[] Y) Data(int n)
     {
