@@ -1055,4 +1055,28 @@ Commits: `b5e9737` (a repair this step found, R17), `8e5aa62` (the engine), `c51
 - **Step 3.5.** The tempered BARS run's trajectories change at `c510876` (the likelihood path is now the default), so differences from the 0.6 baseline in tempered runs trace to it as well as to `98347f1`.
 - **Step 3.6** deletes `IRjTarget` and `TemperedTarget` as planned.
 - **b = 0 with a proper σ² prior (SMC and BASS stage).** `CollapsedGPrior.At(τ, b)` refuses b = 0 even though, with a proper IG(g₁, g₂) prior, every quantity there is finite and the log marginal is exactly 0. Relax the guard when the first consumer (an SMC start at the prior) needs it. The block already takes the proper prior in `Sigma2Posterior`, `LogMarginal` and `Sample`, so nothing else changes.
-- **Open: a likelihood path for the non-Normal models.** Poisson, Whittle and Gibbs-loss could temper their collapsed marginal linearly, ℓ_b = b·ℓ₁, with the prior untempered. That keeps the representation invariance, costs nothing per swap, and its β = 0 rung is still the prior. It is a different bridge from the Normal model's integrated ℓ_b, with a much weaker Occam penalty at hot rungs (b·½·ln(1 + m), against ½·ln(1 + mb): 0.12 against 0.97 nats per basis function at b = 0.05, m = 120). BASS needs the integrated form, because it samples σ² as a Gibbs block.
+- **A likelihood path for the non-Normal models: built** (`9137f7a`, addendum below).
+
+#### Addendum: linear marginal tempering — done 2026-10-21
+
+Commits: `4b3fdfe` (Q5 decided), `9137f7a` (the linear form).
+
+- **What.** Poisson, Whittle and Gibbs-loss temper their marginal linearly, ℓ_b = b·ℓ₁, with the knot prior untempered, and report `CanTemperLikelihood`. Every built-in model can now take BARS's likelihood path. The interface default still serves b = 1 only, so a custom model opts in.
+- **Why linear.** The integrated form would need an IRLS fit at every rung and at every swap. The linear form costs nothing per swap; it is likelihood-tempered, so the hot measure is the same in every representation; and it runs from the prior at b = 0 to the posterior. A marginal of −∞ stays −∞ at every b, b = 0 included.
+- **The difference from the Normal model's integrated form** is the hot rungs' charge for dimension. The integrated factor per basis function is (1 + mb)^(−½), about 0.97 nats at b = 0.05 and m = 120; the linear form charges b·½·ln m, about 0.12 nats. Per-rung mean knots, measured on ladder 1, 0.368, 0.136, 0.05 under a Poisson(5) prior over 20,000 sweeps:
+
+  | Model and path | b = 1 | 0.368 | 0.136 | 0.05 | Swap rate |
+  |---|---|---|---|---|---|
+  | Normal, integrated (likelihood) | 3.10 | 1.68 | 1.51 | 1.97 | 0.52 |
+  | Normal, powered | 2.75 | 1.55 | 1.16 | 1.03 | 0.54 |
+  | Poisson, linear (likelihood) | 0.58 | 2.19 | 3.66 | 4.37 | 0.56 |
+  | Poisson, powered | 0.68 | 0.93 | 1.05 | 1.10 | 0.92 |
+
+  The linear form's hot rungs approach the prior mean of 5. The integrated form's are still held near 2 knots at b = 0.05, above the b ≈ 1/m regime where its Occam factor fades. Both powered ladders head for Poisson(5^β) ≈ 1.08 knots, as derived. The powered Poisson ladder's high swap rate reflects rungs that barely differ, which is not the same as moving well; step 3.3's round trips are the measure.
+- **Verification.**
+  - Untempered BARS runs, and the probe's tempered runs, are bit-identical.
+  - On count data, a 4-rung Poisson ladder on the linear path agrees with untempered chains 15 times longer and with a powered ladder: 8 seeds each, all |z| ≤ 1.66. Mean knots were 0.611, 0.601 and 0.608.
+  - `TemperedMarginalTests` checks the linear values, b = 0, the range, and −∞ off the support at b = 0, for all three models; the interface default still refuses b ≠ 1. `TemperingTests` adds a Poisson ladder on the likelihood path that finds the peak at 0.401, against a true 0.4.
+  - `Maths.Regression.Tests` passes 192 of 192.
+- **For step 3.3.** The two forms give ladders of different shape at the same β: the linear form's hot end is near the prior, the integrated form's is not until b ≈ 1/m. Ladder adaptation should be per model, not one β_min for all.
+- **BASS** still needs the integrated form, because it samples σ² as a Gibbs block.
