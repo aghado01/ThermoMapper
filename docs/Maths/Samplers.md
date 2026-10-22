@@ -82,7 +82,7 @@ flowchart LR
 | Targets | `ISamplingTarget<T>` (`Evaluate`); `ITargetEvaluation` (`LogPrior`, `LogLikelihood(b)`); `Temperature(b, path)` with `LogDensity(evaluation)`, static `Posterior` and `LogPosterior(evaluation)`; `TemperingPath` (`Powered`, `Likelihood`); `SamplingTarget.FromLogDensity`, `SamplingTarget.Separable`, and the extension `target.LogPosterior(state)`; `SeparableEvaluation` |
 | Reversible jump | `ReversibleJumpChain<T>(moves, target, start, rng, temperature = null)` with `Step()`, `Current`, `Temperature`, `CurrentEvaluation`, `CurrentLogDensity`, `Attempts`, `Accepted`, `MoveStats()`, `SetState(state, evaluation)`, `ReplaceTarget(target)`; `IRjMove<T>` (`Key`, `ReverseKey`, `Weight`, `Propose`); `Proposal<T>`; `MoveStat`; `ScheduledMove<T>` |
 | Tempering | `ParallelTempering<T>(movesForReplica, target, start, betas, path, masterSeed, schedule = DeterministicEvenOdd)` with `Step()`, `Path`, `Schedule`, `Betas`, `Cold`, `ColdChain`, `Replicas`, `Scans`, `RoundTrips`, `AnnealedRestarts`, `PairStats`, `SwapAttempts`, `SwapAccepts`, `AdaptLadder()`, and static `GeometricLadder(levels, betaMin)`; `SwapSchedule` (`DeterministicEvenOdd`, `StochasticEvenOdd`, `Sequential`); `SwapPairStat`; `TemperingLadder` (`Barrier`, `IdealRoundTripRate`, `Equalize`, `RecommendedLevels`) |
-| Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.RHat`, `ChainDiagnostics.Ess`; `RunningMoments` (`Add`, `Merge`, `Of`); `IChain<T>`, `IEnsembleModel<T>`, `IChainRun<T>`, `EnsembleRun` |
+| Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0, minEssPerChain = 100)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.Diagnose` → `ConvergenceDiagnostic` (`RHat`, `BulkRHat`, `TailRHat`, `BulkEss`, `TailEss`, `Ess`); `ChainDiagnostics.RHat`; `RHatDiagnostic`, `EssDiagnostic`, `DiagnosticState`; `RunningMoments` (`Add`, `Merge`, `Of`); `IChain<T>`, `IEnsembleModel<T>` (`FunctionalDim`, `MonitoredDim`), `IChainRun<T>`, `EnsembleRun` |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
 ## Algorithms
@@ -187,14 +187,15 @@ $$\tau_{\text{DEO}}=\frac{1}{2+2E},\qquad \tau_{\text{SEO}}=\frac{1}{2N+2E}.$$
 
 1. Validate the arguments, then derive 2C seeds: kernel seeds are children $[0,C)$ and readout seeds are children $[C,2C)$.
 2. In parallel, start each chain and run its burn-in.
-3. Run sampling rounds of `batchSize` steps. The default is a single round of `samples` steps. Each draw is reduced to a functional vector, whose streaming moments (Welford's update) are accumulated per chain. Full sequences are kept for the leading `EssDim` functionals.
-4. If `rHatTarget > 0`, stop once every functional's R̂ meets the target (`RHatDiagnostic.MeetsTarget`). The check runs at round boundaries once each chain holds at least `ChainEnsemble.MinDrawsForStop` (100) draws. An R̂ target with a single chain is rejected.
+3. Run sampling rounds of `batchSize` steps. The default is a single round of `samples` steps. Each draw is reduced to a functional vector, whose streaming moments (Welford's update) are accumulated per chain. The draws of the leading `MonitoredDim` functionals are kept.
+4. If `rHatTarget > 0`, stop after the first round in which every functional's R̂ meets the target (rank-normalized for the monitored functionals, classic for the rest), at least one is an estimate, and every monitored functional's bulk and tail ESS reach `minEssPerChain` per chain (100 by default, Vehtari et al. 2021). An R̂ target needs at least two chains and one monitored functional.
+   - **The ESS gate replaced a 100-draw floor** (step 3.4). A draw count bounds the effective sample size only from above. BARS's knot count, for one, has an autocorrelation time of about 450 steps on a test fit (Stan's estimator and batch means agree), where an R̂ of 1.5 is met within 500 draws.
 5. Pool the results:
    - means over $C\cdot n$ draws;
    - population variances over all $C\cdot n$ draws (`FunctionalVariance`), from the per-chain streaming moments merged by Chan's parallel update (`RunningMoments.Merge`, which is associative and commutative);
-   - a typed R̂ (`RHatDiagnostic`) per functional;
-   - ESS on the leading functionals;
-   - acceptance $\sum\text{Accepted}/\sum\text{Attempts}$ from the chains' cumulative counters. These counters include burn-in.
+   - a typed classic R̂ (`RHatDiagnostic`) per functional;
+   - the rank-normalized diagnostics of the monitored functionals (`EnsembleRun.Monitored`);
+   - acceptance $\sum\text{Accepted}/\sum\text{Attempts}$ over the sampling phase: each chain's counts at the end of burn-in are subtracted, so tuning during burn-in does not colour it.
 
 ### Convergence diagnostics
 
@@ -213,14 +214,21 @@ Each reading carries a state (`DiagnosticState`):
 
 Streaming moments keep $W$ exactly zero for constant chains; running sums and sums of squares cancel to rounding noise and turn a constant functional into a spurious estimate. `RHatDiagnostic.Worst` summarizes a set in the order constant, estimates by value, frozen, unavailable.
 
-**ESS.** The BDA3 variogram estimator:
+**Rank-normalized diagnostics** (`ChainDiagnostics.Diagnose`; Vehtari, Gelman, Simpson, Carpenter and Bürkner 2021, step 3.4). These are what the shell reports for the monitored functionals.
+- **Split chains.** Each chain's first and last ⌊n/2⌋ draws are two chains, so a trend within a chain shows as disagreement, and one chain can be diagnosed.
+- **Rank normalization.** All draws are ranked together, ties averaged, and mapped to $z=\Phi^{-1}((r-3/8)/(S+1/4))$. This makes the diagnostics invariant to monotone transforms and defined for heavy tails: on Cauchy draws, which have no variance for classic R̂ to use, the bulk ESS is about S.
+- **R̂.** `BulkRHat` is classic R̂ on the normalized split chains. `TailRHat` is the same on the folded draws $\lvert x-\operatorname{median}\rvert$, so it sees differences in scale. `RHat` is the less favourable of the two. Chains with one mean and different scales are invisible to classic and bulk R̂ (0.9998 and 0.9996 on a test with one chain three times wider), and the tail R̂ catches them (1.150).
+- **ESS** follows Stan's estimator:
+  - within-chain autocovariances by FFT (biased, as Geyer recommends);
+  - combined across chains as $\hat\rho_t=1-(W-\overline{\gamma_t})/\hat V^+$;
+  - Geyer's initial positive sequence of the pairs $\hat\rho_{2m}+\hat\rho_{2m+1}$, made monotone;
+  - $\hat\tau=-1+2\sum\hat\rho_t$ plus the last positive even term, bounded below by $1/\log_{10}S$, so antithetic chains can exceed S (by at most a factor of $\log_{10}S$).
+  - `BulkEss` is the ESS of the normalized draws. `TailEss` is the smaller of the ESS of the indicators $x\le q_{0.05}$ and $x\le q_{0.95}$.
+  - The cost is $O(S\log S)$: 800,000 draws take about 2 s.
+- **Checked** (`ConvergenceDiagnosticsTests`): bulk ESS within 6% of the AR(1) value $S(1-\phi)/(1+\phi)$ at φ = 0, 0.9 and −0.5 (above S for the last); tail ESS between the bulk and S for φ = 0.9, since a Gaussian process's exceedances decorrelate faster than the process; a shifted chain raises the bulk R̂; discrete draws with ties are diagnosed.
+- **The failure policy is R̂'s.** Every draw one value is `Constant` (exempt from the ESS gate). Every split chain constant at different values is `Frozen`. Fewer than four draws per chain, or a non-finite draw, is `Unavailable`. `EssDiagnostic.Worst` orders readings as `RHatDiagnostic.Worst` does, smaller estimates worse.
 
-$$V_t=\tfrac{1}{C(n-t)}\sum_j\sum_{i\ge t}(x_{j,i}-x_{j,i-t})^2,\qquad \hat\rho_t=1-\frac{V_t}{2\hat V}.$$
-
-- The estimator sums the lag pairs $(\hat\rho_1+\hat\rho_2),(\hat\rho_3+\hat\rho_4),\dots$ and stops at the first *negative* pair. This pairing is offset by one lag from Geyer's $\hat\rho_{2m}+\hat\rho_{2m+1}$, and there is no monotone-sequence step.
-- The result is $\tau=1+2\sum$ and $\text{ESS}=\min(Cn/\max(\tau,10^{-6}),\,Cn)$.
-- It is NaN for $n<4$ and for a single chain ($C=1$).
-- All lags are computed before truncation, so the cost is $O(C n^2)$.
+**Classic ESS** (`ChainDiagnostics.Ess`, the BDA3 variogram estimator with a non-standard pairing and $O(Cn^2)$ cost) is no longer used by the shell, BARS or BGP, and goes in step 3.6.
 
 ### Inverse transform and spectral noise fields
 
@@ -242,16 +250,14 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | Setting | Default | Meaning |
 |---|---|---|
 | `ChainEnsemble.Run` rHatTarget / batchSize | 0 / 0 | No early stop / one round of `samples` steps |
-| `ChainEnsemble.MinDrawsForStop` | 100 | Draws per chain before an R̂ target may stop sampling |
+| `ChainEnsemble.Run` minEssPerChain | `ChainEnsemble.MinEssPerChain` = 100 | Bulk and tail ESS per chain every monitored functional needs before an R̂ target may stop sampling |
 | `GeometricLadder` levels / betaMin | (required) | L ≥ 2; $\beta_{\min}\in(0,1)$ |
 | `ParallelTempering` schedule | `DeterministicEvenOdd` | Non-reversible even-odd swaps |
 | `SpectralNoiseField` presets | White 0 / Pink 1 / Brown 2 | Spectral exponent β |
 
 ## Status and caveats
 
-- **ESS of a constant functional depends on rounding.** It comes out as about $C/2$ or as $Cn$ depending on whether the chain means round exactly to the constant. Rank-normalized bulk and tail ESS are planned.
-- **Acceptance rates include burn-in.** The counters are never reset.
-- **The ESS pairing is non-standard.** Treat ESS as indicative when you compare it with other libraries. It is NaN for single-chain runs.
+- **Only the monitored functionals get rank-normalized diagnostics.** The rest (BARS's per-grid fit) keep classic R̂ from streaming moments, which costs no stored draws but does not see differences in scale or behave for heavy tails.
 - **`SpectralNoiseField` is not periodic.** Its documentation describes the grid as periodic, but queries map the box to nodes 0..N−1, so the sampled field is not periodic over the box.
 
 ## Source map
@@ -260,7 +266,7 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 |---|---|
 | Targets | `targets/SamplingTarget.cs` |
 | Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `ParallelTempering.cs`, `TemperingLadder.cs`; `IRjTarget.cs` and `TemperedTarget.cs` are unused since step 3.1 and go in step 3.6 |
-| Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
+| Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `ConvergenceDiagnostics.cs`, `RHatDiagnostic.cs`, `RunningMoments.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
 | i.i.d. and fields | `iid/InverseTransform.cs`; `SpectralNoiseField.cs` (at the `samplers/` root) |
 
 **Tests:** `tests/Maths.Samplers.Tests` (sources in `tests/samplers/`) owns the samplers' own checks, with targets built from `Maths.Samplers` alone: chain contracts, the reversible-jump generality check, the target contract, parallel tempering (each rung's law on both paths, ladder validation), swap schedules against Theorem 1, ladder adaptation, and the diagnostics policy.

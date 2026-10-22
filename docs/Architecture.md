@@ -55,7 +55,7 @@ flowchart BT
   subgraph L0_2[Layers 0–2: foundations]
     RNG[Maths.Rng] --> LA[Maths.LinAlg] --> DIST[Maths.Distance]
     LA --> SMP[Maths.Samplers]
-    RNG --> DSTR[Maths.Distributions]
+    RNG --> DSTR[Maths.Distributions] --> SMP
     INF[Maths.Information]
     TOP[Maths.Topology]
     CPL[Graphs.Coupling]
