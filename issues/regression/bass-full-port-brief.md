@@ -193,6 +193,8 @@ Keep weight ESS, ancestry/family diversity, and population diagnostics separate 
 
 The current [TemperedTarget](../../src/maths/samplers/rjmcmc/TemperedTarget.cs) powers the whole log posterior. A likelihood bridge, a powered collapsed posterior, and a marginalized powered joint model are different paths. BASS must declare its path; replica swaps and all mutation blocks must preserve the corresponding stage target. A general replica-exchange implementation should evaluate the required cross-target densities rather than assume every path has the current simple power form.
 
+**Exact reference rung (tracked as OQ2 in the preparation brief).** The same machinery gives parallel tempering a β = 0 rung drawn exactly from a normalized reference, which turns each annealed restart into an independent draw, the setting of Syed et al.'s round-trip analysis. BARS has one on both paths: the knot prior on the likelihood path (with a proper variance prior for the Normal model), and k ~ Poisson(1) with uniform ordered locations on the powered path. Build it here, then rerun the preparation brief's OQ1 tempering comparison.
+
 BASS's default improper variance prior cannot initialize a prior-to-posterior SMC run. Select a proper-prior mode or a specified normalized reference distribution with appropriate support. A proper final posterior alone does not make the prior a valid initial particle distribution or establish a marginal likelihood.
 
 For cut calibration, the intended form to investigate is

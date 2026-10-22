@@ -237,7 +237,7 @@ The knot moves integrate β and σ² out given the weights, so the sweep is a va
 **Chain start.** Each chain starts overdispersed: $k\sim U\{0..4\}$ with sorted uniform knots. With `temperLevels` set, each chain is a parallel-tempering ladder, which cannot be combined with the resampler or with `adaptKernelTau`.
 
 **Tempering path (Q5, step 3.2).** `temperPath` declares the ladder's path ([Samplers](./Samplers.md)).
-- **Default: likelihood-tempered** (decided 2026-10-21). Rung $b$ samples $p(k)\,k!\,e^{\ell_b}$ with $\ell_b$ the tempered marginal above. The knot prior stays whole, so the hottest rungs approach the prior itself, and they do so in any representation of the knots ([Samplers](./Samplers.md), "What separates them"). It is also the path BASS's Gibbs blocks, SMC and path-sampling evidence use. The default is reopened if round-trip measurements (step 3.3) show the powered ladder clearly ahead per unit work.
+- **Default: likelihood-tempered** (Q5, decided per engine 2026-10-21). Rung $b$ samples $p(k)\,k!\,e^{\ell_b}$ with $\ell_b$ the tempered marginal above. The knot prior stays whole, so the hottest rungs approach the prior itself, and they do so in any representation of the knots ([Samplers](./Samplers.md), "What separates them"). This is BARS's own principled default. Other engines choose their own path, and both paths stay selectable here. Whether BARS should default to the powered path is an open question (the preparation brief's OQ1), settled by comparing ladders tuned on their own terms.
 - **Alternative: `TemperingPath.Powered`,** $(p(k)\,k!\,e^{\ell_1})^b$. Its hot rungs leave the prior in the direction the ordered-simplex measure sets: under a constant likelihood and a Poisson(λ) prior, rung $b$'s knot count is Poisson(λ^b), so hot rungs carry fewer knots than the prior. `CountLawTests` checks both laws rung by rung.
 - **The same cold chain.** Both paths' cold rung is the posterior. On the probe data, a 4-rung ladder on each path agrees with untempered chains 15 times longer on mean knot count, fitted values, pointwise SD and peak count (8 seeds each, all |z| ≤ 1.6). Short untempered runs did not: one of 12 seeds sat at a mean of 1.6 knots against about 3.0, the slow knot-count mixing noted under caveats.
 - **Requirements.** The likelihood path needs a model with a tempered marginal at every rung, `CanTemperLikelihood`. Every built-in model has one at unit weights: the Normal model's integrated marginal, and the linear form for Poisson, Whittle and Gibbs-loss. A custom model without one must use the powered path; the constructor rejects the combination. `temperBetaMin` must lie in (0, 1), because the Normal model's improper σ² prior refuses $b=0$.
@@ -250,7 +250,17 @@ The knot moves integrate β and σ² out given the weights, so the sweep is a va
   - Adaptation raised DEO's round trips on the sine fit by about 1.3× at 4 rungs and 1.2× at 8, and was neutral on the peak and count fits.
   - An adapted 8-rung likelihood ladder on the sine fit: 1, 0.864, 0.711, 0.562, 0.433, 0.309, 0.157, 0.05.
 - **The cold chain's law is unchanged.** Mean knots agree across every schedule, path and adaptation setting: sine 2.96–3.16, peak 5.58–5.65, counts 0.56–0.65.
-- **Comparing paths.** Round trips cannot compare the likelihood and powered ladders, because their hot ends differ; on counts the powered ladder's 5× round trips came with 0.85× the cold-chain ESS per second ([Samplers](./Samplers.md), "What round trips do not measure"). On the peak fit the powered ladder's ESS per second was about 1.3× the likelihood ladder's, inside the noise of 3-chain estimates; it is the fit to re-measure with step 3.4's ESS.
+- **Comparing paths.** Round trips cannot compare the likelihood and powered ladders, because their hot ends differ ([Samplers](./Samplers.md), "What round trips do not measure"). The neutral measure is the cold chain's ESS at equal work.
+  - **Measured** (step 3.4: 8 chains per estimate, two replicate groups, 20,000 scans, adapted 8-rung ladders, hot end β = 0.05). The table gives knot-count bulk ESS.
+
+    | Fit | Likelihood ladder | Powered ladder | Untempered, equal work |
+    |---|---|---|---|
+    | counts | 17,300–17,800 | 86,100–88,100 | 7,500 |
+    | peak | 4,700–5,000 | 7,800 | 6,600 |
+    | sine | 1,200–1,400 | 1,400 | 240 (R̂ 1.18) |
+
+  - **The shared hot end favours the powered ladder.** The ESS ordering follows each ladder's barrier: on counts Λ̂ is 0.24 for the powered ladder and 1.4 for the likelihood ladder. At β = 0.05 the likelihood rung is nearly the knot prior, a reach a unimodal posterior does not need, while the powered rung stays near the posterior. Tuning each path's hot end is the open comparison (OQ1).
+- **When to temper.** At equal work tempering helped where untempered chains were stuck (sine) or slow (counts), and did not help on peak, where the likelihood ladder fell below untempered chains. Run untempered first and read `BarsResult.Knots`; temper when R̂ or the ESS says the target is hard.
 - **Readouts** (step 3.4). `BarsResult.Tempering`, null for an untempered run, reports the sampling phase averaged over chains: round-trip and annealed-restart rates per scan, each pair's mean rejection rate, the barrier, Theorem 1's ideal rate (NaN for the sweep), and each chain's final rungs.
 
 **Functionals.** Index 0 is the knot count. Indices $1..g$ are the fitted grid values. Among the shell functionals, ESS is computed for the knot count only; `PeakPosterior` computes its own R̂ and ESS on the argmax draws.
