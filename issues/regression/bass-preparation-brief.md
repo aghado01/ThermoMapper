@@ -1178,3 +1178,83 @@ Commits: `e7efd67` (the engine), `b28d1dc` (BARS), `08c5f45` (the sweep's tests)
 - **The hot end does not adapt.** `AdaptLadder` keeps β_min, so the b_min ≈ 1/m regime noted for this step is unexplored. Choosing β_min, and the rung count from `RecommendedLevels`, are still the caller's.
 - **Adaptation on the sequential sweep** is allowed but not theory-backed: the equal-rejection rule is derived for even-odd schedules.
 - **Step 3.6** decides whether the sequential sweep stays, for reproduction and comparison, or goes.
+
+### 3.4 Shell readouts: diagnostics, readouts, traces and checkpoints — done 2026-10-21
+
+Commits, in order:
+
+| Commit | Content |
+|---|---|
+| `b1e666f` | The normal quantile |
+| `7c32a75` | `RHatState` becomes `DiagnosticState` |
+| `f80efae` | Rank-normalized diagnostics |
+| `bd2ab6a` | ESS gate, monitored functionals, post-burn acceptance |
+| `646eb64` | Ladder readouts |
+| `c741e32` | The design split into readouts, traces and checkpoints |
+| `0038ce0` | `ChainTrace` |
+| `ca4cded` | `BarsConfig.MinEssPerChain` |
+| `973d0b3` | Diagnostics docs |
+| `e4c7677` | Benchmark |
+| `cef2966` | Q5 per engine; open questions |
+| `1d48fb6` | Readout primitives |
+| `54eb8a4` | BARS readouts and rejection reasons |
+| `bcf2808` | Checkpoint container |
+| `67ed136` | BARS resume |
+| `b2d32b3` | Docs |
+
+**Specification:**
+- **Diagnostics** (Vehtari, Gelman, Simpson, Carpenter and Bürkner 2021). `ChainDiagnostics.Diagnose` returns a `ConvergenceDiagnostic`:
+  - split R̂ on rank-normalized draws (bulk) and on folded draws (tail); `RHat` is the less favourable;
+  - bulk ESS and tail ESS (the 5% and 95% exceedance indicators).
+
+  ESS follows Stan: FFT autocovariances, Geyer's initial positive and monotone sequences, τ̂ ≥ 1/log₁₀ S, at O(S log S). `EssDiagnostic` carries R̂'s failure policy, under the shared `DiagnosticState`. A normal quantile (Wichura's AS 241) was added to Maths.Distributions for the rank normalization, and Maths.Samplers now references Distributions, one layer below.
+- **Shell.**
+  - `MonitoredDim` replaces `EssDim`: the leading functionals keep their draws and get the rank-normalized diagnostics (`EnsembleRun.Monitored`, `EnsembleRun.Traces`). The rest keep classic R̂ from streaming moments.
+  - An R̂ stop now also waits until every monitored functional's bulk and tail ESS reach `minEssPerChain` per chain. The default, 100, replaces the 100-draw floor; the setting is configurable, and `BarsConfig.MinEssPerChain` passes it through.
+  - Acceptance counts the sampling phase only.
+- **Readouts** (`IMergeable<T>`): `RunningMoments` with fold weights, `WeightedSums`, `DrawSample` and `Tally<TEnum>`, each with an associative, commutative merge and unit weights reproducing the unweighted arithmetic exactly. BARS's sinks become one `BarsReadout`, merged once and reduced.
+- **Admission outcomes.** The models report `DesignRejection` through `ITemperedMarginal.Rejection`; the IRLS fits now tell an inadmissible factor from non-convergence. `SplineTarget` tallies every evaluation into a counter its chain owns, reported as `BarsResult.Evaluations`.
+- **Traces** (`ChainTrace`): ordered per-chain draws that never merge; pooling keeps the chains apart. BARS keeps one for the peak location, which it diagnoses but does not gate on (OQ7).
+- **Checkpoints.**
+  - **Container.** `EnsembleCheckpoint` owns the run's identity (master seed, chain count, model fingerprint), the chain seeds, the draws so far, and per chain the engine's `IChainState`, the shell's moments, its trace and its burn-in counters, all as separate components.
+  - **Shell.** `ChainEnsemble.Run` takes `checkpoint` and `resumeFrom`.
+  - **Snapshots.** `ReversibleJumpChain` and `ParallelTempering` gain `Snapshot` and `Restore`.
+  - **BARS** saves each chain's configuration, weights, RNG streams, the kernel's exact log τ, the chain or ladder snapshot, the burn-in ladder counts, and copies of its readout and peak trace. Its fingerprint covers the data, the settings and the component types.
+- **Ladder readouts.** `BarsResult.Tempering` reports the sampling-phase round-trip and annealed-restart rates, the pair rejection rates, the barrier, Theorem 1's ideal rate and the final rungs.
+
+**Design changes during the step:**
+- **Readouts, traces and checkpoints are three components** (`c741e32`), not one accumulator contract. A review pointed out that the first design combined commutative statistics, ordered chain information and restart state, contrary to the port brief.
+- **MCMC diagnostic ESS stays distinct from particle-weight ESS,** which belongs to the SMC module.
+- **Q5 was reframed per engine** (`cef2966`). The tempering questions it raised are tracked as OQ1–OQ6.
+
+**Verification:**
+- **Diagnostics** (`ConvergenceDiagnosticsTests`, 11 cases):
+  - bulk ESS within 6% of AR(1) theory at φ = 0, 0.9 and −0.5;
+  - tail ESS between the bulk and S at φ = 0.9;
+  - the folded R̂ catches a 3× scale mismatch that classic and bulk R̂ miss (1.150 against 0.9998);
+  - Cauchy draws give ESS ≈ S and R̂ ≈ 1;
+  - discrete draws with ties are diagnosed;
+  - the failure policy holds;
+  - 800,000 draws take about 2 s;
+  - traces diagnose like their draws.
+- **The knot count's mixing, measured independently.** On the adaptive-stop fit, batch means on 400,000-step chains give an autocorrelation time of about 340–460, against Stan's estimate of about 450. The default gate needs about 45,000 draws per chain there, and the adaptive-stop test now runs the gate at 10.
+- **Readouts** (`ReadoutTests`): merges in any order; unit weights equal to the unweighted update; type-7 quantiles; weighted ECDF interpolation. `DesignRejectionTests` reaches each reason, and the tally appears in `BarsResult`.
+- **Bit-identity.** Moving BARS onto the readouts left every knot count, fit, SD and peak value of the eight probe runs bit-identical to step 3.3; only the acceptance rate moved, by the post-burn change. The checkpoint work left the probe bit-identical again, acceptance included.
+- **Checkpoints** (`SnapshotTests`, `BarsResumeTests`).
+  - Restored chains and ladders, with mid-round adaptation statistics, continue identically.
+  - A BARS run checkpointed after 200 draws and resumed for 300 in a fresh ensemble equals the 500-draw run exactly, for the untempered chain, robust weights, the adaptive kernel and a tempered ladder.
+  - Resuming twice from one checkpoint gives the same result.
+  - Another problem's checkpoint is refused, as is a model that cannot restore or a chain that cannot save.
+- **Results** under the fact harness: `Maths.Samplers.Tests` 81 of 81, `Maths.Regression.Tests` 203 of 203 (the benchmark facts off by default), `Maths.Distributions.Tests` 86 of 86.
+
+**Findings recorded as open questions:**
+- **OQ1 and OQ4–OQ6** (the tempering study, cold-chain ESS at equal work):
+  - the powered ladder led the likelihood ladder at a shared hot end;
+  - ladders beat untempered chains on counts and sine and not on peak;
+  - DEO and the sweep were indistinguishable.
+- **OQ8:** the knot count's slow mixing.
+- **OQ10:** the checkpoint scope: in memory and after burn-in only, a fingerprint that covers component types but not their parameters, and only BARS resumes.
+
+**For later steps:**
+- **Step 3.5.** Against the 0.6 baseline, the acceptance rate now counts post-burn draws only, and ESS values come from a different estimator. Tempered runs changed trajectory at `98347f1`, `c510876` (the likelihood path) and `b28d1dc` (DEO and adaptation).
+- **Step 3.6.** Delete `ChainDiagnostics.Ess` (the classic variogram, now unused), the sums-based `RHat` overload (a trap: `RHat(double[], double[], int)` binds to it), `IRjTarget` and `TemperedTarget`, and decide the sequential sweep (OQ5).
