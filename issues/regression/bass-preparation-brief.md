@@ -208,13 +208,21 @@ Two clear-cut additions:
 - **ESS cost.** ESS computes every lag before truncating, at O(Cn²) ([ChainDiagnostics.Ess](../../src/maths/samplers/ensemble/ChainDiagnostics.cs)). Compute lags until truncation, or use FFT autocovariances.
 - **Acceptance rate.** Report it from post-burn counters; today the shell's rate includes burn-in, and BGP inherits that.
 
-**Accumulator contract** (added 2026-10-20). Give the ensemble shell one accumulator contract that every engine's readouts use, following the SW sampler's `Accumulator`:
-- additive sufficient statistics with an associative, commutative merge, so pooling across chains does not depend on order;
-- an optional weight on each fold, so the same accumulator pools weighted SMC particles;
-- resume state (RNG words, iteration, adaptation state) beside the statistics, so the accumulator doubles as the checkpoint the port brief requires;
-- nonlinear reductions in a separate tier that reads only pooled statistics, applied once, at the level where the estimand lives.
-
-Keep per-chain accumulators beside the merged one, because R̂ needs the chains separately. Include counts of admission rejections by reason (rank or conditioning; IRLS non-convergence; the m ≤ ν rule; and, from step 3.7, the support gate), so the truncation that step 0.5b introduces stays visible. The streaming moments from step 0.1 already merge this way (Chan's parallel formula). BARS's readouts move onto the contract: the step 0.5c moments, λ, π and the peak sample. BASS and the SMC backend consume it.
+**Readouts, traces and checkpoints** (revised 2026-10-21; supersedes the single "accumulator contract" of 2026-10-20). The first version combined three things that pool differently: commutative statistics, ordered chain information, and restart state. A review pointed out that the port brief already separates them ("Keep posterior storage separate from checkpoints"; weight ESS separate from chain R̂ and autocorrelation ESS). They are three components:
+- **Readout accumulators: mergeable statistics,** the shared infrastructure.
+  - Additive sufficient statistics with an associative, commutative merge, so pooling across chains does not depend on order. The step 0.1 streaming moments already merge this way (Chan's parallel formula).
+  - An optional weight on each fold, so the same statistics pool weighted particles.
+  - Nonlinear reductions in a separate tier that reads only pooled statistics, applied once, at the level where the estimand lives.
+  - Counts of admission rejections by reason (rank or conditioning; IRLS non-convergence; the m ≤ ν rule; and, from step 3.7, the support gate), so the truncation step 0.5b introduced stays visible.
+  - BARS's readouts move onto it: the step 0.5c moments, λ, π and the peak sample.
+- **Diagnostic traces: ordered per-chain draws** of the monitored functionals.
+  - Rank-normalized split R̂ and autocorrelation ESS need the order of each chain's draws. Per-chain moments are not enough, and a trace does not merge like a statistic: pooling keeps the chains apart.
+  - These are MCMC diagnostics. `EssDiagnostic` is autocorrelation ESS, distinct from a particle population's weight ESS (Kish), ancestry diversity and population diagnostics, which belong to the SMC module and are never reported as the same quantity.
+- **Execution checkpoints: restart state,** which cannot be pooled.
+  - Sampler configuration and data identity, every RNG stream's state, the iteration or stage, adaptation state, replica assignments, swap-schedule state (scan parity, the stochastic schedule's stream), and BARS's robust weights.
+  - A checkpoint container owns these together with the accumulators and traces it resumes. It holds them as separate components, never as one merged structure.
+- **Dependency boundaries** (the port brief's). Maths.Samplers owns the generic contracts: the statistic primitives, the trace, and the checkpoint container. Each engine in Maths.Regression supplies its own components. Neither project acquires an SPC or Graphs dependency; the SW sampler's `Accumulator` is the pattern, not a shared type.
+- BASS and the SMC backend consume all three.
 
 **Extrapolation readout** (added 2026-10-20). Report the prediction leverage h(T) = z(T)ᵀ(ZᵀZ)⁻¹z(T) beside `FitSd`: its posterior mean, or the fraction of draws with h > 1.
 - A grid point with h ≫ 1 is extrapolated from the data. The g-prior adds no shrinkage there, so the fit is the least-squares extrapolation, and coefficient draws swing with it.
