@@ -532,6 +532,7 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 | OQ10 | Checkpoint scope | Step 3.4 checkpoints are in-memory copies, taken after burn-in at a round boundary. The run fingerprint covers data, settings and component types, not components' internal parameters. Only BARS implements `RestoreChain`; BGP and BAPS do not resume. | Persist checkpoints to disk through Archivory (format, versioning, data identity); decide whether mid-burn checkpoints are needed (adaptation state in flight); fingerprint component parameters (value records, or a component fingerprint member); resume for BGP and BASS. | With the BASS port's posterior storage, and Archivory |
 | OQ11 | Local births strand isolated knots | Births are proposed near an existing knot (`LocalBetaKernel`, τ = 50, an SD of about 0.07; uniformly only at k = 0). A death's acceptance carries the reverse birth's density at the removed knot, so a knot far from the rest is almost never removed: from knots at 0.39 and 0.96 that density is e⁻³⁷ or e⁻⁶¹, against a posterior gain of e^3.8 to e^5.3, so a death is accepted with probability e⁻³¹ at best. In `EbicTests`' γ = 1 runs, overdispersed starts held such knots for about 1,500 steps (the 3.5 seed sweep). A probe settled the mechanism: ε = 0.1 uniform births in the birth density cut the knot count's autocorrelation time 12× (adaptive-stop fit, 485 → 40), about 20× (outlier sine, 2,160 → 110) and 2× (peak, 166 → 77), at the same cost per step, on the same posterior, with the count law intact. BASS's `w1` and `w2` pseudo-counts are its own exploratory component. | Step 3.9: the base measure, against step 3.7's support gate; an ε study with peak-location ESS; ε as a setting with a measured default. Until then, burn-ins that outlast overdispersed starts. | Step 3.9, after 3.7 |
 | OQ12 | Poisson fits over runs of zero counts | Where every count under a basis function is zero, the Poisson MLE lies at −∞. IRLS stops at a fixed point set by the η clamp (±30) and the μ floor (1e-10), with coefficients in the thousands: −5,961 with one knot at 0.8 when the counts are zero beyond 0.797. The BIC-type marginal stays near the knot-free one (−75.8 against −73.5), so such configurations take real posterior mass and the posterior-mean log-intensity there runs to −10³. Present before step 3.7. The pivot ratio happened to refuse many of them (1,590 of 11,969 evaluations, against 76 under the scale-free gate). | A model-level fix. Options: (a) a penalized IRLS with the N(0, 100·I) ridge the coefficient draw already uses, and a Laplace marginal at that MAP, with log-determinant and prior terms, replacing BIC at a nonexistent MLE; (b) keep BIC and add a response-dependent count gate, a truncation of the posterior; (c) a Poisson analogue of the g-prior. Measure each on the low-rate fit and the existing count-data tests. | **Decided 2026-10-21: (c), the Poisson g-prior, as step 3.10,** with the BIC pathway kept beside it as a setting (DMGK's original, and HYK's EBIC base). |
+| OQ13 | He, Yang and Kang's repositories as external fixtures and demos | The user, 2026-10-21: the ABMRS repositories (github.com/junhuihe2000/ABMRS and exampleABMRS) and the supplement's data and demos (`triceps`, the jump curves, the surfaces) would serve as fixtures for the R harness and as demo material, fitting the same data with this engine. The supplement is already in `issues/regression/ABMRS_Revision_V2_Supplementary_Materials/`. Its code differs from the paper in places (step 3.8's findings), so fixtures must record which version they come from. | Decide what to fix as oracles: their EBARS fits as an external comparison, not ground truth, and the datasets. Fetching the repositories, and installing the package into the `r/` oracles' environment, needs approval for the download. | With the R harness; demos after the BASS port |
 
 Tracked elsewhere: the `EbicPrior` text check (step 3.8, waiting on the *Biometrics* PDF), BARS admission (step 3.7), the b = 0 guard (step 3.2's report), and the linear form's weaker hot-rung Occam penalty (step 3.2 addendum).
 
@@ -1619,3 +1620,40 @@ Both are corrected.
 - **Step 3.9** designs its exploratory birth against this gate. Uniform births into data gaps will now be refused as `ThinSupport`, which argues for a base measure that follows the data.
 - **OQ12,** the Poisson fix, is its own step. It should land before BARS is used on sparse counts.
 - **Step 3.8** still waits on the *Biometrics* text.
+
+### 3.8 `EbicPrior` in He, Yang and Kang's convention — done 2026-10-21
+
+| Commit | Content |
+|---|---|
+| `4666a26` | The checklist, verified against the article's open supplement; the main text is paywalled |
+| `ff29c94` | The law and its tests |
+| docs commit | `BayesianRegression.md`, OQ13, this report |
+
+**Specification:**
+- **Law.** log p(k) = (1 − γ)·log C(C, k) on [0, C], for any finite γ ≥ 0:
+  - γ = 0 is BIC's uniform prior over models;
+  - γ = 1 is flat;
+  - γ > 1 penalizes.
+
+  The authors' recommended [0.5, 2] is documented but not enforced: it is calibration, not a constraint of the law.
+- **Support.** [0, C] with guidance, C ≥ 2·k_max, as theirs. Truncating at ⌊C/2⌋ is recorded as the alternative not taken.
+- **Mapping.** Before this step, `EbicPrior(γ)` was −γ·log C(C, k), the new law at γ + 1.
+- **Callers.** The only callers are tests. Their γ = 0 and 1 become 1 and 2: the same laws, so trajectories are unchanged.
+
+**Verification:**
+- **Bit-identity.** The EBIC fit's own-seed values in the seed sweep are 0 and 0.2329166666666666 both before and after. No other code uses `EbicPrior`, so the step 3.7 sweep table stands.
+- **`EbicTests`** pins the closed form at γ = 0, 0.5 and 2 (log C(10, 3) = log 120). It also checks the γ < 1 peak at C/2, the γ > 1 symmetry and its return to 0 at k = C, and the bounds: γ < 0 and NaN are refused, while 2.5 is accepted.
+- **`CountLawTests`** gains three cases under a constant likelihood:
+  - γ = 0.5 with C = 12: the law peaks at k = 6;
+  - γ = 2 with C = 6, under constant weights and DMGK's schedule: the chain reproduces the U shape, 0.404 and 0.394 at the ends against 0.397 expected, and visits nothing past C.
+- **Results** under the fact harness: `Maths.Regression.Tests` 212 of 212 (`20261021_220410784`): the 208 of step 3.7 plus the closed-form test and the three count-law cases. Nothing outside `Maths.Regression` changed.
+
+**Docs.** `BayesianRegression.md` states the regimes, the range, the support and its U shape, the truncation alternative, and the mapping from the earlier convention. It also says why only the count law is theirs: BARS's knots are continuous, so C is a complexity parameter, not a grid. And it says how the pieces map:
+- their Lemma 1 is `WeightedNormalModel`'s marginal, so `WeightedNormalModel` with `EbicPrior` is ABMRS's Normal model on continuous knots;
+- for non-normal responses, step 3.10's BIC pathway is the EBIC route.
+
+**Recorded:** OQ13, the user's proposal to use the ABMRS repositories, data and demos as fixtures for the R harness and as demo material. Fetching them waits on approval for the download.
+
+**For later steps:**
+- **Moot now.** The external debrief's suggestion of a `FromHyk` factory no longer applies, since the constructor takes their γ directly.
+- **Still open:** steps 3.9 (full-support births) and 3.10 (the Poisson g-prior marginal).
