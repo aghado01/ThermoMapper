@@ -451,7 +451,8 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
   - **The size of it.** At τ = 50 the kernel's SD is about 0.07. From knots at 0.39 and 0.96 the reverse birth's density is $e^{-37}$ or $e^{-61}$, by which knot goes, against a posterior gain of $e^{3.8}$ to $e^{5.3}$. So a death is accepted with probability $e^{-31}$ at best.
   - **The escape.** The chain gets out only by relocating the knots together first.
   - **Seen in practice.** In `EbicTests`' γ = 1 runs, chains started that way held their knots for about 1,500 steps: the step 3.5 seed sweep found γ = 1 keeping more knots than γ = 0 in 4 of 100 runs at burn-in 800 and in none at 2,000.
-  - **What to do.** Burn-in has to outlast overdispersed starts. A birth proposal with full support is the candidate fix (preparation brief, OQ11), and it may be part of the knot count's slow mixing above.
+  - **What to do.** Burn-in has to outlast overdispersed starts. A birth proposal with full support fixes it.
+  - **It is most of the slow mixing above.** A scratch probe put a 10% uniform component in the birth density, with deaths carrying it in reverse. The knot count's autocorrelation time fell from 485 to 40 on the adaptive-stop fit, from 2,160 to 110 on a sine with outliers, and from 166 to 77 on a narrow peak. The cost per step and the posterior were unchanged, and the count law held. The change is planned as preparation step 3.9 (brief, OQ11).
 - **Reporting limits.**
   - `AnisotropicTensorSpline` evaluates REML but provides no optimizer; callers must search $(\lambda_x,\lambda_y)$ themselves.
   - Acceptance rates count the sampling phase only, since step 3.4; BGP's included burn-in before.

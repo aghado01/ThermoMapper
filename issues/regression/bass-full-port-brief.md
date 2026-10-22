@@ -273,6 +273,12 @@ Benchmark by case count, predictor count, active terms, interaction order, respo
 | Additional kernels preserving the target when correctly derived | Variable-replacement/coordinated moves and residual-informed proposal mixtures with exact forward/reverse probabilities and exploratory support. Validate before making them defaults. |
 | Distinct statistical model or representation extensions | Sparse Dirichlet priors, learned projections/directional hinges, intrinsic-dimension restrictions, new likelihoods, dependent-input sensitivity, or basis-estimation uncertainty. Give each its own specification and acceptance criteria. |
 
+**Exploratory support in BASS's own births** (added 2026-10-21).
+- **What BASS does.** Its births draw knots from observed values. They choose interaction orders and variables with weights `w1` and `w2` (both 5) added to the current model's counts.
+- **Why the pseudo-counts matter.** A death's acceptance carries the reverse birth's probability of the removed term, given the reduced model. With `w1` or `w2` at 0, a variable used only by the removed term would have proposal probability 0 there, so its death could never be accepted.
+- **What the port does.** It keeps both weights positive and validates them as such, never offering 0.
+- **The evidence.** BARS lacked such a component: its births were local only. A 10% uniform component cut its knot count's autocorrelation time 12× and about 20× on two fits (preparation brief, OQ11 and step 3.9).
+
 **Parked extension (2026-10-20): free-knot tensor-product surfaces.**
 - **What.** An expensive variant that carries BARS's continuous knot moves (birth, death and relocation per input dimension) to tensor-product spline surfaces, reserved for low-dimensional problems where its cost is tractable.
 - **Pieces it would reuse,** once the BASS upgrades are done: the shared g-prior block, the `IBasis` carrier seam, the reversible-jump engine and the ensemble shell.
