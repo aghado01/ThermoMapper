@@ -107,6 +107,7 @@ public sealed class PoissonModel : IObservationModel
         int nu = design.GetLength(1);
         double[] betaHat = FitGlm(design, y).Beta;
         BandCholesky chol = LaplaceFactor(design, betaHat);
+        if (!DesignAdmission.Admits(chol.Status)) return betaHat;   // no Laplace proposal: fall back to β̂, as Whittle does
 
         var z = new double[nu];
         var innov = new double[nu];
@@ -164,7 +165,7 @@ public sealed class PoissonModel : IObservationModel
         }
         var jBand = new double[bd.Bandwidth + 1, nu];
         bd.Accumulate(w, jBand, null, null);
-        var chol = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt);
+        var chol = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt, strict: true);
         chol.DecomposeBanded(jBand);
         return chol;
     }
@@ -198,7 +199,7 @@ public sealed class PoissonModel : IObservationModel
         var z = new double[m];
         var band = new double[bd.Bandwidth + 1, nu];
         var b = new double[nu];
-        var chol = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt);
+        var chol = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt, strict: true);
 
         for (int iter = 0; iter < _maxIterations; iter++)
         {

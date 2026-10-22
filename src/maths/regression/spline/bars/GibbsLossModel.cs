@@ -99,7 +99,7 @@ public sealed class GibbsLossModel : IObservationModel
         var w = new double[m];
         var band = new double[bd.Bandwidth + 1, nu];
         var b = new double[nu];
-        var chol = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt);
+        var chol = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt, strict: true);
 
         for (int iter = 0; iter < _maxIterations; iter++)
         {

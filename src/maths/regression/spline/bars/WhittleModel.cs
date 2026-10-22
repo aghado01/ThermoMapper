@@ -123,7 +123,7 @@ public sealed class WhittleModel : IObservationModel
 
         var band = new double[bd.Bandwidth + 1, nu];
         bd.Accumulate(null, band, null, null);   // A = BᵀB only (W = 1)
-        var chol = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt);
+        var chol = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt, strict: true);
         chol.DecomposeBanded(band);               // factored once
 
         var beta = new double[nu];

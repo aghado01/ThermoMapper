@@ -28,7 +28,7 @@ public static class BandedGPrior
         var band = new double[design.Bandwidth + 1, nu];
         var b = new double[nu];
         design.Accumulate(null, band, y, b);
-        var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt);
+        var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         gram.DecomposeBanded(band);
         if (!admits(gram.Status)) return null;
         double[] beta = gram.Solve(b);   // β_OLS = G⁻¹Zᵀy; no inverse is formed
@@ -63,7 +63,7 @@ public static class BandedGPrior
 
         var gBand = new double[design.Bandwidth + 1, nu];
         design.Accumulate(null, gBand, null, null);
-        var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt);
+        var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         gram.DecomposeBanded(gBand);
         if (!admits(gram.Status)) return null;
 
@@ -78,7 +78,7 @@ public static class BandedGPrior
         design.Accumulate(wPlus, pBand, null, null);
         var h = new double[nu];
         design.AccumulateRhs(weights, y, h);
-        var posterior = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt);
+        var posterior = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         posterior.DecomposeBanded(pBand);
         if (!admits(posterior.Status)) return null;
         double[] beta = posterior.Solve(h);

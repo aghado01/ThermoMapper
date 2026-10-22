@@ -6,9 +6,9 @@ using Xunit;
 namespace Maths.Regression.Tests;
 
 /// <summary>
-/// R08 / Q4: every BARS observation model admits a design only when its factored matrix is exact (no floored
-/// pivot), positive definite and not proven ill-conditioned; anything else scores −∞. The IRLS models also
-/// reject a fit that did not converge.
+/// R08 / Q4, and Q6's numerical gate (step 3.7): every BARS observation model admits a design only when its strict
+/// factor is positive definite and its smallest equilibrated pivot is at least 1e-10; anything else scores −∞. The gate
+/// does not depend on column scaling. The IRLS models also reject a fit that did not converge.
 /// </summary>
 public sealed class DesignAdmissionTests
 {
@@ -30,15 +30,15 @@ public sealed class DesignAdmissionTests
     [MemberData(nameof(Models))]
     public void NearlyCollinearDesign_IsRejected(string model)
     {
-        // Columns 1, x and x + 1e-5·cos 7x: the last pivot is ≈1e-9 against ≈40, so the pivot ratio is ≈3e-11,
-        // below the admission threshold, while no pivot reaches the absolute floor.
+        // Columns 1, x and x + 1e-6·cos 7x: the last pivot is 2.0e-11 against its diagonal 13.3, so the relative pivot
+        // is 1.5e-12, below the admission threshold. (At 1e-5 it is 1.5e-10, just inside it.)
         double[] x = EvenInputs(40);
         var z = new double[x.Length, 3];
         for (int i = 0; i < x.Length; i++)
         {
             z[i, 0] = 1.0;
             z[i, 1] = x[i];
-            z[i, 2] = x[i] + 1e-5 * Math.Cos(7.0 * x[i]);
+            z[i, 2] = x[i] + 1e-6 * Math.Cos(7.0 * x[i]);
         }
 
         Assert.Equal(double.NegativeInfinity, Model(model).LogMarginalLikelihood(z, Response(model, x), null));
@@ -52,6 +52,24 @@ public sealed class DesignAdmissionTests
         double[,] z = new SplineBasis(3).Design(new KnotConfig(new[] { 0.3, 0.6 }), x);
 
         Assert.True(double.IsFinite(Model(model).LogMarginalLikelihood(z, Response(model, x), null)));
+    }
+
+    [Theory]
+    [MemberData(nameof(Models))]
+    public void ColumnScaling_DoesNotChangeAdmission(string model)
+    {
+        // One basis column scaled by 1e-8: the pivot ratio fell to about 1e-16 and refused this design; the
+        // equilibrated pivots do not move. The Normal model's g-prior marginal is invariant to column scaling as well.
+        double[] x = EvenInputs(40);
+        double[,] z = new SplineBasis(3).Design(new KnotConfig(new[] { 0.3, 0.6 }), x);
+        double[,] scaled = (double[,])z.Clone();
+        for (int i = 0; i < x.Length; i++) scaled[i, 2] *= 1e-8;
+        double[] y = Response(model, x);
+
+        double plain = Model(model).LogMarginalLikelihood(z, y, null);
+        double rescaled = Model(model).LogMarginalLikelihood(scaled, y, null);
+        Assert.True(double.IsFinite(rescaled), $"{model}: the rescaled design was refused");
+        if (model == "normal") Assert.Equal(plain, rescaled, 6);
     }
 
     public static TheoryData<string> IrlsModels => new() { "poisson", "whittle", "gibbs" };
@@ -77,8 +95,8 @@ public sealed class DesignAdmissionTests
     public void Normal_DesignWhoseFactorBreaksDown_IsRejectedWithoutBuildingTheFit()
     {
         // Four knots crowded at the left edge of 120 even points, as a hot likelihood-tempered rung proposed them. The
-        // Gram factor breaks down (floored pivots, one near −1e155) and its solve is NaN. Admission must judge the factor
-        // before any least-squares statistic is formed from it.
+        // Gram is not numerically positive definite: the floored factor's pivots ran to −1e155 and its solve was NaN,
+        // and the strict factor stops. Admission must judge the factor before any least-squares statistic is formed.
         double[] x = EvenInputs(120);
         var knots = new[] { 0.010348173957892346, 0.012750809965187548, 0.021147317788105583, 0.06881582846542306 };
         double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
