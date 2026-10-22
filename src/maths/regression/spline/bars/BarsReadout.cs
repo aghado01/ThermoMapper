@@ -38,6 +38,14 @@ internal sealed class BarsReadout : IMergeable<BarsReadout>
     /// <summary>Every evaluated configuration's admission outcome, the chain's proposals and its ladder's included.</summary>
     public Tally<DesignRejection> Evaluations { get; } = new();
 
+    /// <summary>An independent copy (a merge into an empty readout, which adds nothing to any value).</summary>
+    public BarsReadout Copy()
+    {
+        var copy = new BarsReadout(ConditionalVariance.Length);
+        copy.MergeFrom(this);
+        return copy;
+    }
+
     public void MergeFrom(BarsReadout other)
     {
         ArgumentNullException.ThrowIfNull(other);

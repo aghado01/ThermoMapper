@@ -59,7 +59,8 @@ public sealed record TemperingReadout(
 /// phase only. <see cref="Tempering"/> reports the ladders when the run was tempered, and is null otherwise.
 /// <see cref="Evaluations"/> counts every evaluated knot configuration of every chain and ladder rung, burn-in
 /// included, by admission outcome (<see cref="DesignRejection.None"/> for admitted), so the truncation the support
-/// rules and admission impose stays visible.
+/// rules and admission impose stays visible. <see cref="Checkpoint"/> is the run's restart state when it was requested
+/// (<see cref="BarsEnsemble.Run"/>'s <c>checkpoint</c>), and null otherwise.
 /// <see cref="PeakIntensity"/> is the grid-aligned peak-intensity λ(T): the matching-free posterior density
 /// of significant transitions (∑ = <see cref="PeakCountMean"/>), its modes the persistent transitions.
 /// <see cref="SpanCoverage"/> is the grid-aligned span-coverage π(T): the posterior probability each T lies
@@ -87,7 +88,8 @@ public sealed record BarsResult(
     IReadOnlyList<MoveStat> MoveStats,
     CoefficientUncertainty Uncertainty,
     TemperingReadout? Tempering,
-    Tally<DesignRejection> Evaluations);
+    Tally<DesignRejection> Evaluations,
+    EnsembleCheckpoint? Checkpoint);
 
 /// <summary>
 /// The BARS client of the kernel-agnostic ensemble shell (<see cref="ChainEnsemble"/>): it knows how to start one
@@ -224,6 +226,76 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         return run;
     }
 
+    /// <summary>
+    /// The run's fingerprint for checkpoints: the data (design points, responses, grid), the run settings, and each
+    /// component's type and the ensemble's own settings. The components' internal parameters (a prior's mean, a
+    /// kernel's spread) are the caller's to keep the same.
+    /// </summary>
+    public string Fingerprint => new RunFingerprint().Add("BARS").Add(_x).Add(_y).Add(_grid)
+        .Add(_weightEvery).Add(_startDispersion).Add(_peakProminence).Add(_spanDropFraction)
+        .Add(_basis.GetType().FullName!).Add(_model.GetType().FullName!).Add(_prior.GetType().FullName!)
+        .Add(_kernel.GetType().FullName!).Add(_resampler?.GetType().FullName ?? "")
+        .Add(_dmgkConstant ?? double.NaN).Add(_adaptKernelTau ?? double.NaN).Add(_temperLevels ?? 0).Add(_temperBetaMin)
+        .Add((int)_temperPath).Add((int)_temperSchedule).Add(_temperAdaptLadder ? 1 : 0).ToString();
+
+    /// <summary>
+    /// Rebuild one chain from its saved restart state (<see cref="BarsChainState"/>): the chain or ladder, every RNG
+    /// stream, the kernel's tuning, the robust weights, and the chain's readouts and peak trace. Rebuilding evaluates
+    /// the current states once; those evaluations are not counted.
+    /// </summary>
+    public IChainRun<KnotConfig> RestoreChain(IChainState state)
+    {
+        if (state is not BarsChainState s) throw new ArgumentException("Not a BARS chain's restart state.", nameof(state));
+        static Xoshiro256PlusPlus Rng((ulong, ulong, ulong, ulong) w) => Xoshiro256PlusPlus.Restore(w.Item1, w.Item2, w.Item3, w.Item4);
+
+        var run = new BarsChainRun(this, Rng(s.StartRng), s.Config, s.Readout.Copy(), s.PeakTrace.Copy())
+        {
+            W = s.Weights is null ? null : (double[])s.Weights.Clone(),
+            SinceWeight = s.SinceWeight,
+            ReadoutRng = Rng(s.ReadoutRng),
+            WeightRng = Rng(s.WeightRng),
+            Kernel = s.KernelLogTau is double logTau ? AdaptiveLocalBetaKernel.FromLogTau(logTau) : _kernel,
+            BurnScans = s.BurnScans,
+            BurnRoundTrips = s.BurnRoundTrips,
+            BurnRestarts = s.BurnRestarts,
+            BurnRejection = s.BurnRejection is null ? null : (double[])s.BurnRejection.Clone(),
+        };
+        var target = new SplineTarget(_basis, _model, _prior, _x, _y, run.W, run.Readout.Evaluations);
+        if (s.Ladder is LadderSnapshot<KnotConfig> ladder)
+        {
+            run.Ladder = ParallelTempering<KnotConfig>.Restore(_ => Moves(run.Kernel), target, ladder);
+            run.SetChain(run.Ladder.ColdChain);
+        }
+        else
+        {
+            run.SetChain(ReversibleJumpChain<KnotConfig>.Restore(Moves(run.Kernel), target, s.Chain!));
+        }
+        run.Readout.Evaluations.Assign(s.Readout.Evaluations);
+        return run;
+    }
+
+    // One chain's restart state. The untempered chain shares the start stream, so its snapshot carries those words.
+    private IChainState Save(BarsChainRun st) => new BarsChainState(
+        st.Config, st.W is null ? null : (double[])st.W.Clone(), st.SinceWeight,
+        st.Rng.SaveState(), st.ReadoutRng.SaveState(), st.WeightRng.SaveState(),
+        st.Kernel is AdaptiveLocalBetaKernel adaptive ? adaptive.LogTau : null,
+        st.Ladder is null ? st.RjChain.Snapshot() : null, st.Ladder?.Snapshot(),
+        st.Readout.Copy(), st.PeakTrace.Copy(), st.BurnScans, st.BurnRoundTrips, st.BurnRestarts,
+        st.BurnRejection is null ? null : (double[])st.BurnRejection.Clone());
+
+    /// <summary>
+    /// One BARS chain's restart state, beside its readouts: the knot configuration, the robust weights and their
+    /// cadence, every RNG stream's words, the adaptive kernel's log τ, the chain's or ladder's snapshot (rungs,
+    /// replica assignments, swap stream, round-trip and swap statistics), and the ladder's counts at the end of
+    /// burn-in. Taken after burn-in, so burn-in adaptation is never in flight.
+    /// </summary>
+    private sealed record BarsChainState(
+        KnotConfig Config, double[]? Weights, int SinceWeight,
+        (ulong, ulong, ulong, ulong) StartRng, (ulong, ulong, ulong, ulong) ReadoutRng, (ulong, ulong, ulong, ulong) WeightRng,
+        double? KernelLogTau, ChainSnapshot<KnotConfig>? Chain, LadderSnapshot<KnotConfig>? Ladder,
+        BarsReadout Readout, ChainTrace PeakTrace, long BurnScans, long BurnRoundTrips, long BurnRestarts,
+        double[]? BurnRejection) : IChainState;
+
     /// <remarks>
     /// <paramref name="rHatTarget"/> &gt; 0 stops sampling early once R̂ on knot count (rank-normalized) and every
     /// grid point (classic) meets it (<see cref="RHatDiagnostic.MeetsTarget"/>) and the knot count's bulk and tail
@@ -231,12 +303,17 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// checked after each round of
     /// <paramref name="batchSize"/> samples (a non-positive batch is a single round of <paramref name="samples"/>).
     /// It needs at least two chains.
+    /// <para>With <paramref name="checkpoint"/>, the result carries the run's restart state; with
+    /// <paramref name="resumeFrom"/>, the run continues that checkpoint's chains for <paramref name="samples"/> more
+    /// draws, exactly as the uninterrupted run would have, and its result covers every draw since burn-in. Resuming
+    /// needs the same data and settings (the run's fingerprint) and the same master seed and chain count.</para>
     /// </remarks>
     public BarsResult Run(double[] x, double[] y, double[] grid,
                           int chains = 4, int masterSeed = 0, int burn = 2000, int samples = 2000,
                           int startDispersion = 4, int weightEvery = 25, double rHatTarget = 0.0, int batchSize = 0,
                           double peakProminence = 0.1, double spanDropFraction = 0.5,
-                          double minEssPerChain = ChainEnsemble.MinEssPerChain)
+                          double minEssPerChain = ChainEnsemble.MinEssPerChain,
+                          bool checkpoint = false, EnsembleCheckpoint? resumeFrom = null)
     {
         ArgumentNullException.ThrowIfNull(x);
         ArgumentNullException.ThrowIfNull(y);
@@ -253,7 +330,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         _spanDropFraction = spanDropFraction;
 
         (EnsembleRun summary, IReadOnlyList<IChainRun<KnotConfig>> chainRuns) =
-            new ChainEnsemble().Run<KnotConfig>(this, chains, masterSeed, burn, samples, rHatTarget, batchSize, minEssPerChain);
+            new ChainEnsemble().Run<KnotConfig>(this, chains, masterSeed, burn, samples, rHatTarget, batchSize, minEssPerChain,
+                                                checkpoint, resumeFrom);
 
         int g = grid.Length;
         int collected = summary.SamplesUsed;
@@ -307,7 +385,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var chainLambda = new double[chains][];
         for (int ci = 0; ci < chains; ci++) chainLambda[ci] = bars[ci].Readout.PeakIntensity.Sums.ToArray();
         var peakModes = ExtractModes(grid, peakIntensity, spanCoverage, chainLambda);
-        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations);
+        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations, summary.Checkpoint);
     }
 
     // The ladders' sampling-phase statistics, averaged over chains; null for an untempered run.
@@ -634,12 +712,12 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// is the RJ chain's cumulative count; as an <see cref="IChainRun{KnotConfig}"/>
     /// it burns adaptively, reduces a draw to functionals, and carries the BARS sinks (peak cloud, λ/π fields).
     /// </summary>
-    private sealed class BarsChainRun : IChain<KnotConfig>, IChainRun<KnotConfig>
+    private sealed class BarsChainRun : IChain<KnotConfig>, IResumableChainRun<KnotConfig>
     {
         private readonly BarsEnsemble _owner;
         public readonly Xoshiro256PlusPlus Rng;
         public readonly BarsReadout Readout;              // this chain's mergeable readout statistics
-        public readonly ChainTrace PeakTrace = new(1);    // the peak location's ordered draws, for its diagnostics
+        public readonly ChainTrace PeakTrace;             // the peak location's ordered draws, for its diagnostics
         public KnotConfig Config;
         public double[]? W;
         public IKnotKernel Kernel = null!;
@@ -653,11 +731,15 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         private ReversibleJumpChain<KnotConfig> _rjChain = null!;
 
         public BarsChainRun(BarsEnsemble owner, Xoshiro256PlusPlus rng, KnotConfig start, int gridSize)
+            : this(owner, rng, start, new BarsReadout(gridSize), new ChainTrace(1)) { }
+
+        public BarsChainRun(BarsEnsemble owner, Xoshiro256PlusPlus rng, KnotConfig start, BarsReadout readout, ChainTrace peakTrace)
         {
             _owner = owner;
             Rng = rng;
             Config = start;
-            Readout = new BarsReadout(gridSize);
+            Readout = readout;
+            PeakTrace = peakTrace;
         }
 
         /// <summary>The RJ chain — for the tempered case, the ladder's cold replica. Set once, at start.</summary>
@@ -683,5 +765,6 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             for (int i = 0; i < stats.Count; i++) BurnRejection[i] = ladder.Scans > 0 ? stats[i].MeanRejection * ladder.Scans : 0.0;
         }
         public void Accumulate(in KnotConfig draw, Span<double> functionals) => _owner.AccumulateDraw(this, draw, functionals);
+        public IChainState SaveState() => _owner.Save(this);
     }
 }

@@ -30,6 +30,17 @@ internal sealed class AdaptiveLocalBetaKernel : IKnotKernel
     /// <summary>The current spread τ.</summary>
     public double Tau => Math.Exp(_logTau);
 
+    // The tuning state exactly, for checkpoints: rebuilding from τ = e^{log τ} could move log τ by an ulp.
+    internal double LogTau => _logTau;
+
+    internal static AdaptiveLocalBetaKernel FromLogTau(double logTau)
+    {
+        var kernel = new AdaptiveLocalBetaKernel();
+        kernel._logTau = logTau;
+        kernel._inner = new LocalBetaKernel(Math.Exp(logTau));
+        return kernel;
+    }
+
     public double Sample(double center, Xoshiro256PlusPlus rng) => _inner.Sample(center, rng);
 
     public double LogDensity(double x, double center) => _inner.LogDensity(x, center);
