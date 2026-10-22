@@ -414,7 +414,7 @@ The slow mixing is mostly structural:
 
 | Candidate | Why | Before adopting |
 |---|---|---|
-| Move schedule: Green's prior-aware weights (used by DMGK) or constant weights | Neither Green nor DMGK claims faster mixing; the schedule cancels the prior from the acceptance. At equal c it never raises a birth/death flow, and at equal budget the winner depends on the regime | Measured 2026-10-22: DMGK at c = 0.4 beat the default constant schedule on every regime and readout (up to 2.6×); a default change, for the user |
+| Move schedule: Green's prior-aware weights (used by DMGK) or constant weights | Neither Green nor DMGK claims faster mixing; the schedule cancels the prior from the acceptance. At equal c it never raises a birth/death flow, and at equal budget the winner depends on the regime | Measured 2026-10-22: DMGK at c = 0.4 beat the constant schedule where the prior wants fewer knots than the data (up to 2.6×), and lost where it wants more (knot-count ESS 0.29–0.33×). No schedule dominates; the constant schedule stays the default |
 | Tempering as the default for slow readouts | The lead above | Measured 2026-10-22: at equal work, tempering lost on the knot count on all four fits, and gained only on a sharp peak's location (1.4–1.65×, shallow ladder). Not a default |
 | Delayed rejection on relocations (Green and Mira 2001) | Never worse in asymptotic variance than the single-stage kernel | Gain per second, since each rejection costs another target evaluation |
 | A uniform component in births | Local births strand a knot far from the rest, since its death needs the reverse birth near the knots that remain (OQ11) | Done in step 3.9: births come from the uniform base by default (ε = 1) |
@@ -1998,3 +1998,28 @@ The two mixing studies the parked decisions left independent, run on the default
 - **Relocation:** the adaptive kernel from τ = 50.
 - **Neither depends on the readout design,** so the parked stopping question does not hold them.
 - **Measured only on Normal fits, and separately.** A confirmation run of the combination, with the Poisson counts fit added, should come before switching.
+
+### Confirmation of the two candidates — 2026-10-22
+
+The user asked for DMGK at c = 0.4 and the adaptive relocation kernel to be confirmed together, and for both defaults to switch if the combination held.
+
+**The criterion, fixed before the run:** the combination's ESS ratio to the current default must have a geometric mean above 1 across fits, for both the knot count and the peak location. No fit may fall below 0.8× on either readout. Mean knots must stay within 3% and median MSE within 10% on every fit.
+
+**The run** (`MixingBenchmark.Combination_Confirmation`, `CONFIRM_BENCH=10`; 14 minutes):
+- **Arms:** the default, each change alone, and both.
+- **Fits:** `BirthBenchmark`'s seven, plus two Poisson fits (the tempering study's counts and `PoissonTests`' intensity peak), under each fit's Poisson count prior.
+- **Draws:** 4 chains × 10,000 after 2,000.
+
+| Arm | Knot-count ESS: geometric mean (worst fit) | Peak-location ESS: geometric mean (worst fit) | Mean knots | MSE |
+|---|---|---|---|---|
+| DMGK c = 0.4 | 0.73 (0.29, counts) | 1.08 (0.68, gap) | within 2.3% | within 5.3% |
+| Adaptive kernel | 1.05 (0.98) | 1.15 (0.87) | within 0.8% | within 4.0% |
+| Both | 0.74 (0.30, counts) | 1.38 (0.83) | within 1.4% | within 2.6% |
+
+**Verdict.**
+- **The combination fails on the knot count** (geometric mean 0.74; the gap at 0.33× and the counts at 0.30×), so neither default was switched.
+- **The cause is DMGK's,** and it is the regime the schedule study did not cover. There the prior wanted fewer knots than the data. Here, under a Poisson(5) prior, it wants more: on the gap and the counts the posterior sits at 0–1 knots. DMGK proposes a death from k = 1 at 0.4·p(0)/p(1) = 0.08, the factor p(k+1)/p(k) the flow identity predicts.
+- **No schedule dominates,** and the constant schedule stays the default. Its relocation-heavier form, 0.3/0.3/0.4, never lost badly in the schedule study, but is untested on this conflict.
+- **The adaptive kernel alone passes the same criterion.** Its per-second ratios average 1.03× and 1.13×, but on the narrow peak they fell to 0.75× and 0.58×, so its runs took longer there. Wall time varies by about 25% between identical runs, but that drop is larger.
+
+**Open, for the user:** switching the adaptive kernel alone, which passed. That needs the API change designed for it: `adaptKernel = true` tuning a private copy of the given `LocalBetaKernel` from its own τ, in untempered runs only.
