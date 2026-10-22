@@ -121,11 +121,14 @@ public sealed class AdaptiveKernelTests
         var basis = new SplineBasis(3);
         var prior = new PoissonPrior(4.0);
 
-        // A fixed, far-too-tight τ: relocate barely moves knots ⇒ the peak mixes slowly.
-        BarsResult fixedBad = new BarsEnsemble(basis, new WeightedNormalModel(), prior, new LocalBetaKernel(2000.0))
+        // A fixed, far-too-tight τ: relocate barely moves knots ⇒ the peak mixes slowly. Births stay local (ε = 0), so τ
+        // governs them too: with births from the base (the default since step 3.9) a bad τ costs far less, and the
+        // comparison would no longer isolate the kernel's adaptation.
+        BarsResult fixedBad = new BarsEnsemble(basis, new WeightedNormalModel(), prior, new LocalBetaKernel(2000.0), birthExploration: 0.0)
             .Run(x, y, grid: x, chains: 4, masterSeed: masterSeed, burn: 1500, samples: 3000);
         // Same bad start, but adapt τ during burn-in.
-        BarsResult adaptive = new BarsEnsemble(basis, new WeightedNormalModel(), prior, new LocalBetaKernel(50.0), adaptKernelTau: 2000.0)
+        BarsResult adaptive = new BarsEnsemble(basis, new WeightedNormalModel(), prior, new LocalBetaKernel(50.0), adaptKernelTau: 2000.0,
+                                               birthExploration: 0.0)
             .Run(x, y, grid: x, chains: 4, masterSeed: masterSeed, burn: 1500, samples: 3000);
 
         double Mse(double[] fit) { double s = 0.0; for (int i = 0; i < n; i++) { double d = fit[i] - f[i]; s += d * d; } return s / n; }

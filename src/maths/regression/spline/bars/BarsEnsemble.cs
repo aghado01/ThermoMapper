@@ -153,7 +153,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// (one data point's worth by default; 0 turns it off). A declared restriction of the knot prior's support
     /// (<see cref="SplineTarget.MinColumnMass"/>).</param>
     /// <param name="birthExploration">ε, the share of births drawn from <paramref name="birthBase"/> rather than near
-    /// an existing knot (<see cref="KnotBirthDensity"/>; 0: local births only).</param>
+    /// an existing knot (<see cref="KnotBirthDensity"/>). The default 1 draws every birth from the base, which step 3.9's
+    /// benchmark found best or tied on every fit; values below 1 restore DMGK's local births in part, and 0 entirely.</param>
     /// <param name="birthBase">The base measure of the exploratory births and of the first knot.</param>
     public BarsEnsemble(IBasis basis, IObservationModel model, IComplexityPrior prior, IKnotKernel kernel,
                         IWeightResampler? resampler = null, double? dmgkConstant = null, double? adaptKernelTau = null,
@@ -161,7 +162,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                         TemperingPath temperPath = TemperingPath.Likelihood,
                         SwapSchedule temperSchedule = SwapSchedule.DeterministicEvenOdd, bool temperAdaptLadder = true,
                         double minColumnMass = SplineTarget.DefaultMinColumnMass,
-                        double birthExploration = 0.0, BirthBase birthBase = BirthBase.Uniform)
+                        double birthExploration = 1.0, BirthBase birthBase = BirthBase.Uniform)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(model);

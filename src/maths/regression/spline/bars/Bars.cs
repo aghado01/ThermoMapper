@@ -67,9 +67,10 @@ public sealed record BarsConfig
     /// by default; 0 turns it off. It restricts the knot prior's support, since it reads only the inputs and the knots.</summary>
     public double MinColumnMass { get; init; } = SplineTarget.DefaultMinColumnMass;
 
-    /// <summary>ε, the share of births drawn from <see cref="BirthBase"/> rather than near an existing knot; 0 keeps
-    /// births local. A positive share lets a knot far from the others be removed (<see cref="KnotBirthDensity"/>).</summary>
-    public double BirthExploration { get; init; }
+    /// <summary>ε, the share of births drawn from <see cref="BirthBase"/> rather than near an existing knot. The default 1
+    /// draws every birth from the base; below 1 restores DMGK's local births in part, and 0 entirely. A positive share lets
+    /// a knot far from the others be removed (<see cref="KnotBirthDensity"/>).</summary>
+    public double BirthExploration { get; init; } = 1.0;
 
     /// <summary>The base measure of the exploratory births and of the first knot.</summary>
     public BirthBase BirthBase { get; init; } = BirthBase.Uniform;

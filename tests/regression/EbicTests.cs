@@ -84,10 +84,7 @@ public sealed class EbicTests
         var model = new WeightedNormalModel();
         var kernel = new LocalBetaKernel(50.0);
 
-        // Burn-in 2,000. Births land near existing knots, so a chain started with knots far apart can hold one for
-        // about 1,500 steps although deaths would raise the posterior; at 800, γ = 2 sometimes kept more knots than
-        // γ = 1 (4 of 100 runs in the step 3.5 seed sweep, when these were γ = 1 and 0 in the old convention).
-        const int burn = 2000;
+        const int burn = 800;
         BarsResult flat = new BarsEnsemble(basis, model, new EbicPrior(1.0, 200), kernel)
             .Run(x, y, grid: x, chains: 2, masterSeed: masterSeed, burn: burn, samples: 1200);
         BarsResult strict = new BarsEnsemble(basis, model, new EbicPrior(2.0, 200), kernel)
