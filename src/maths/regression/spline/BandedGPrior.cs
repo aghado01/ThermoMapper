@@ -12,12 +12,16 @@ namespace Maths.Regression.Spline;
 /// <para>The caller's admission rule judges each factor as soon as it exists, before anything is solved with it: a
 /// factor that breaks down can solve to NaN, which no least-squares statistic may be formed from. A refused factor
 /// gives no block (null).</para>
+/// <para>With <see cref="GPriorCentre.NullFit"/> the prior is centred on the null fit, <c>μ₀ = ȳ·G⁻¹Zᵀ1</c> with ȳ the
+/// response's plain mean, and the statistics are those of <c>ỹ = y − Zμ₀</c>. The mean is unweighted even when weights
+/// enter, so the prior does not depend on the robust weights a sampler redraws.</para>
 /// </summary>
 public static class BandedGPrior
 {
-    /// <summary>The unweighted block: G = ZᵀZ factored, β_OLS, <c>‖y − Zβ_OLS‖²</c> and <c>Q = ‖Zβ_OLS‖²</c>; null when
-    /// <paramref name="admits"/> refuses G's factor.</summary>
-    public static CollapsedGPrior? Fit(BandedDesign design, double[] y, Func<ISpdFactor, bool> admits)
+    /// <summary>The unweighted block: G = ZᵀZ factored, β_OLS, <c>‖ỹ − Zβ_OLS‖²</c> and <c>Q = ‖Zβ_OLS‖²</c> for the
+    /// response centred by <paramref name="centre"/>; null when <paramref name="admits"/> refuses G's factor.</summary>
+    public static CollapsedGPrior? Fit(BandedDesign design, double[] y, Func<ISpdFactor, bool> admits,
+                                       GPriorCentre centre = GPriorCentre.Zero)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -31,18 +35,24 @@ public static class BandedGPrior
         var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         gram.DecomposeBanded(band);
         if (!admits(gram)) return null;
-        double[] beta = gram.Solve(b);   // β_OLS = G⁻¹Zᵀy; no inverse is formed
+        (double[]? priorMean, double[] response) = Centre(design, gram, y, centre);
+        if (priorMean is not null)
+        {
+            Array.Clear(b);
+            design.AccumulateRhs(null, response, b);
+        }
+        double[] beta = gram.Solve(b);   // β_OLS = G⁻¹Zᵀỹ; no inverse is formed
 
         var f = new double[m];
         design.Apply(beta, f);
         double rss = 0.0, fitted = 0.0;
         for (int i = 0; i < m; i++)
         {
-            double r = y[i] - f[i];
+            double r = response[i] - f[i];
             rss += r * r;
             fitted += f[i] * f[i];
         }
-        return CollapsedGPrior.FromLeastSquares(gram, beta, rss, fitted, m);
+        return CollapsedGPrior.FromLeastSquares(gram, beta, rss, fitted, m, priorMean);
     }
 
     /// <summary>
@@ -55,7 +65,7 @@ public static class BandedGPrior
     /// is a numerical defect, raised as an exception.</para>
     /// </summary>
     public static CollapsedGPrior? Fit(BandedDesign design, double[] y, double[] weights, double tau,
-                                       Func<ISpdFactor, bool> admits)
+                                       Func<ISpdFactor, bool> admits, GPriorCentre centre = GPriorCentre.Zero)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -70,6 +80,7 @@ public static class BandedGPrior
         var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         gram.DecomposeBanded(gBand);
         if (!admits(gram)) return null;
+        (double[]? priorMean, double[] response) = Centre(design, gram, y, centre);
 
         var wPlus = new double[m];
         double sumLogW = 0.0;
@@ -81,7 +92,7 @@ public static class BandedGPrior
         var pBand = new double[design.Bandwidth + 1, nu];
         design.Accumulate(wPlus, pBand, null, null);
         var h = new double[nu];
-        design.AccumulateRhs(weights, y, h);
+        design.AccumulateRhs(weights, response, h);
         var posterior = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         posterior.DecomposeBanded(pBand);
         if (!posterior.Status.PositiveDefinite)
@@ -94,10 +105,33 @@ public static class BandedGPrior
         double weightedRss = 0.0, fitted = 0.0;
         for (int i = 0; i < m; i++)
         {
-            double r = y[i] - f[i];
+            double r = response[i] - f[i];
             weightedRss += weights[i] * r * r;
             fitted += f[i] * f[i];
         }
-        return CollapsedGPrior.FromWeighted(gram, posterior, beta, weightedRss + tau * fitted, sumLogW, m, tau);
+        return CollapsedGPrior.FromWeighted(gram, posterior, beta, weightedRss + tau * fitted, sumLogW, m, tau, priorMean);
+    }
+
+    // The prior mean and the response it leaves: none and y at zero; for the null fit μ₀ = ȳ·G⁻¹Zᵀ1 and y − Zμ₀.
+    private static (double[]? PriorMean, double[] Response) Centre(BandedDesign design, ISpdFactor gram, double[] y,
+                                                                  GPriorCentre centre)
+    {
+        if (centre == GPriorCentre.Zero) return (null, y);
+        if (centre != GPriorCentre.NullFit) throw new ArgumentOutOfRangeException(nameof(centre));
+        int m = design.Rows;
+        double mean = 0.0;
+        foreach (double v in y) mean += v;
+        mean /= m;
+        var ones = new double[m];
+        Array.Fill(ones, 1.0);
+        var columnSums = new double[design.Dimension];
+        design.AccumulateRhs(null, ones, columnSums);
+        double[] priorMean = gram.Solve(columnSums);
+        for (int j = 0; j < priorMean.Length; j++) priorMean[j] *= mean;
+        var nullFit = new double[m];
+        design.Apply(priorMean, nullFit);
+        var response = new double[m];
+        for (int i = 0; i < m; i++) response[i] = y[i] - nullFit[i];
+        return (priorMean, response);
     }
 }

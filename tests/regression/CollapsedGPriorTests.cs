@@ -44,6 +44,47 @@ public sealed class CollapsedGPriorTests
         for (int p = 0; p < d.Mean.Length; p++) Close(d.Mean[p], c.Mean[p], 1e-11);
     }
 
+    [Theory]
+    [MemberData(nameof(Settings))]
+    public void NullFitCentre_IsTheZeroCentredBlockOnTheCentredResponse(double tau, double b)
+    {
+        // N(μ₀, σ²(τG)⁻¹) with Zμ₀ = ȳ·1, so μ₀ = ȳ·1 for B-splines, which sum to one: the zero-centred closed forms on
+        // y − ȳ, with ȳ added back to every coefficient. Shifting y by a constant moves only that level.
+        (double[,] z, double[] y) = CoefficientDrawTests.Problem();
+        int m = y.Length, nu = z.GetLength(1);
+        for (int i = 0; i < m; i++)
+        {
+            double rowSum = 0.0;
+            for (int j = 0; j < nu; j++) rowSum += z[i, j];
+            Close(1.0, rowSum, 1e-14);
+        }
+        double mean = 0.0;
+        foreach (double v in y) mean += v / m;
+        var centred = new double[m];
+        for (int i = 0; i < m; i++) centred[i] = y[i] - mean;
+        GPriorConditional reference = BandedGPrior.Fit(new BandedDesign(z), centred, PositiveDefinite)!.At(tau, b);
+
+        var w = new double[m];
+        for (int i = 0; i < m; i++) w[i] = i % 5 == 2 ? 0.01 : 0.5 + (i % 3);
+        GPriorConditional weightedReference = BandedGPrior.Fit(new BandedDesign(z), centred, w, tau, PositiveDefinite)!.At(tau);
+
+        foreach (double offset in new[] { 0.0, 5.0, -300.0 })
+        {
+            var shifted = new double[m];
+            for (int i = 0; i < m; i++) shifted[i] = y[i] + offset;
+            GPriorConditional c = BandedGPrior.Fit(new BandedDesign(z), shifted, PositiveDefinite, GPriorCentre.NullFit)!.At(tau, b);
+            Close(reference.S, c.S, 1e-10);
+            Close(reference.LogDeterminantTerm, c.LogDeterminantTerm, 1e-12);
+            for (int p = 0; p < nu; p++) Close(reference.Mean[p] + mean + offset, c.Mean[p], 1e-10);
+
+            // Weighted: the centre is the plain mean, so the prior does not move with the weights.
+            GPriorConditional cw = BandedGPrior.Fit(new BandedDesign(z), shifted, w, tau, PositiveDefinite, GPriorCentre.NullFit)!.At(tau);
+            Close(weightedReference.S, cw.S, 1e-10);
+            Close(weightedReference.LogDeterminantTerm, cw.LogDeterminantTerm, 1e-12);
+            for (int p = 0; p < nu; p++) Close(weightedReference.Mean[p] + mean + offset, cw.Mean[p], 1e-10);
+        }
+    }
+
     public static TheoryData<double, double, double, double> MarginalSettings => new()
     {
         { 1.0 / 30.0, 1.0, 0.0, 0.0 },   // improper σ² prior (g1 = g2 = 0)

@@ -5,10 +5,30 @@ using Maths.Rng;
 
 namespace Maths.Regression.GPrior;
 
+/// <summary>Where a g-prior centres its coefficients.</summary>
+public enum GPriorCentre
+{
+    /// <summary>
+    /// On the null fit: <c>μ₀ = ȳ·G⁻¹Zᵀ1</c> projects the response's mean level onto the design's span (<c>ȳ·1</c> for a
+    /// basis whose functions sum to one). The prior then shrinks the fit's shape toward flat and leaves its level where
+    /// the data put it, so the marginal and the fit do not change when the response is shifted by a constant. The
+    /// proper counterpart of Liang et al.'s (2008) flat intercept.
+    /// </summary>
+    NullFit,
+
+    /// <summary>
+    /// At zero, DiMatteo, Genovese and Kass's original. The fit is shrunk toward zero by τ/(τ + b), level included, and
+    /// the level's energy enters the scale S, so a response far from zero against its noise is under-fitted.
+    /// </summary>
+    Zero,
+}
+
 /// <summary>
 /// The collapsed g-prior block shared by the free-knot engines (BARS now, BASS next): for a fixed design Z with Gram
-/// <c>G = ZᵀZ</c>, the closed forms of <c>y ~ N(Zβ, σ²W⁻¹)</c> under <c>β | σ² ~ N(0, σ²(τG)⁻¹)</c>, with the
+/// <c>G = ZᵀZ</c>, the closed forms of <c>y ~ N(Zβ, σ²W⁻¹)</c> under <c>β | σ² ~ N(μ₀, σ²(τG)⁻¹)</c>, with the
 /// likelihood raised to an inverse temperature b and σ² integrated out or drawn (BASS derivations review §§1–3, 5).
+/// The prior mean μ₀ is zero unless the design layer centres it (<see cref="GPriorCentre"/>); the statistics the block
+/// holds are then those of the centred response <c>ỹ = y − Zμ₀</c>, and μ₀ is added back to every mean and draw.
 /// <list type="bullet">
 /// <item><b>Unweighted (W = I).</b> The block holds the statistics of the least-squares fit that depend on neither τ
 /// nor b: the factor of G, β_OLS, <c>‖r_OLS‖²</c> and <c>Q = ‖Zβ_OLS‖²</c>. Any (τ, b) then costs O(1) plus the mean
@@ -25,13 +45,17 @@ public sealed class CollapsedGPrior
 {
     private readonly ISpdFactor _gram;
     private readonly ISpdFactor? _posterior;   // weighted only
-    private readonly double[] _coefficients;   // β_OLS (unweighted) or the posterior mean P_a⁻¹ZᵀWy (weighted)
+    private readonly double[] _coefficients;   // of ỹ: β_OLS (unweighted) or the posterior mean P_a⁻¹ZᵀWỹ (weighted)
+    private readonly double[]? _priorMean;     // μ₀; null is zero
     private readonly double _rss, _fitted;     // unweighted: ‖r_OLS‖², Q
     private readonly double _scale, _sumLogWeights, _tau;   // weighted: S, Σ ln wᵢ, the τ it was built at
 
     private CollapsedGPrior(ISpdFactor gram, ISpdFactor? posterior, double[] coefficients, double rss, double fitted,
-                            double scale, double sumLogWeights, double tau, int rows)
+                            double scale, double sumLogWeights, double tau, int rows, double[]? priorMean)
     {
+        if (priorMean is not null && priorMean.Length != gram.Dimension)
+            throw new ArgumentException("One prior mean per Gram column is required.", nameof(priorMean));
+        _priorMean = priorMean;
         _gram = gram;
         _posterior = posterior;
         _coefficients = coefficients;
@@ -45,12 +69,14 @@ public sealed class CollapsedGPrior
     }
 
     /// <summary>
-    /// The unweighted block from a least-squares fit: the factor of G, <c>β_OLS = G⁻¹Zᵀy</c>, the residual sum of
-    /// squares <c>‖y − Zβ_OLS‖²</c> and the fitted sum of squares <c>Q = ‖Zβ_OLS‖²</c>, over <paramref name="rows"/>
-    /// observations. A caller that maintains these incrementally (BASS's bordered births) builds the block directly.
+    /// The unweighted block from a least-squares fit of the centred response ỹ = y − Zμ₀: the factor of G,
+    /// <c>β_OLS = G⁻¹Zᵀỹ</c>, the residual sum of squares <c>‖ỹ − Zβ_OLS‖²</c> and the fitted sum of squares
+    /// <c>Q = ‖Zβ_OLS‖²</c>, over <paramref name="rows"/> observations, with the prior mean
+    /// <paramref name="priorMean"/> (null is zero, when ỹ = y). A caller that maintains these incrementally (BASS's
+    /// bordered births) builds the block directly.
     /// </summary>
     public static CollapsedGPrior FromLeastSquares(ISpdFactor gram, double[] olsCoefficients, double residualSumOfSquares,
-                                                   double fittedSumOfSquares, int rows)
+                                                   double fittedSumOfSquares, int rows, double[]? priorMean = null)
     {
         ArgumentNullException.ThrowIfNull(gram);
         ArgumentNullException.ThrowIfNull(olsCoefficients);
@@ -59,16 +85,17 @@ public sealed class CollapsedGPrior
         if (!(fittedSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(fittedSumOfSquares));
         if (rows < 1) throw new ArgumentOutOfRangeException(nameof(rows));
         return new CollapsedGPrior(gram, null, olsCoefficients, residualSumOfSquares, fittedSumOfSquares,
-                                   double.NaN, 0.0, double.NaN, rows);
+                                   double.NaN, 0.0, double.NaN, rows, priorMean);
     }
 
     /// <summary>
-    /// The weighted block at prior precision τ: the factor of G (for <c>|τG|</c>), the factor of
-    /// <c>P_a = Zᵀ(W + τI)Z</c>, the posterior mean <c>P_a⁻¹ZᵀWy</c>, the scale <c>S = ‖y − Zβ̃‖²_W + τ‖Zβ̃‖²</c> and
-    /// <c>Σ ln wᵢ</c>.
+    /// The weighted block at prior precision τ, from the centred response ỹ = y − Zμ₀: the factor of G (for
+    /// <c>|τG|</c>), the factor of <c>P_a = Zᵀ(W + τI)Z</c>, the posterior mean <c>β̃ = P_a⁻¹ZᵀWỹ</c>, the scale
+    /// <c>S = ‖ỹ − Zβ̃‖²_W + τ‖Zβ̃‖²</c> and <c>Σ ln wᵢ</c>, with the prior mean <paramref name="priorMean"/> (null is
+    /// zero).
     /// </summary>
     public static CollapsedGPrior FromWeighted(ISpdFactor gram, ISpdFactor posterior, double[] posteriorMean, double scale,
-                                               double sumLogWeights, int rows, double tau)
+                                               double sumLogWeights, int rows, double tau, double[]? priorMean = null)
     {
         ArgumentNullException.ThrowIfNull(gram);
         ArgumentNullException.ThrowIfNull(posterior);
@@ -78,7 +105,8 @@ public sealed class CollapsedGPrior
         if (!(scale >= 0.0)) throw new ArgumentOutOfRangeException(nameof(scale));
         if (rows < 1) throw new ArgumentOutOfRangeException(nameof(rows));
         CheckTau(tau);
-        return new CollapsedGPrior(gram, posterior, posteriorMean, double.NaN, double.NaN, scale, sumLogWeights, tau, rows);
+        return new CollapsedGPrior(gram, posterior, posteriorMean, double.NaN, double.NaN, scale, sumLogWeights, tau, rows,
+                                   priorMean);
     }
 
     /// <summary>Observations m.</summary>
@@ -89,6 +117,9 @@ public sealed class CollapsedGPrior
 
     /// <summary>Whether per-point weights enter (the robust path).</summary>
     public bool IsWeighted => _posterior is not null;
+
+    /// <summary>The prior mean μ₀; empty when it is zero.</summary>
+    public ReadOnlySpan<double> PriorMean => _priorMean;
 
     /// <summary>The status of G's factor.</summary>
     public FactorStatus GramStatus => _gram.Status;
@@ -114,12 +145,14 @@ public sealed class CollapsedGPrior
             if (tau != _tau) throw new ArgumentException($"The weighted block was built at τ = {_tau}; P_a depends on τ.", nameof(tau));
             if (b != 1.0) throw new ArgumentException("The weighted block is untempered.", nameof(inverseTemperature));
             double logDet = 0.5 * (_gram.LogDet + p * Math.Log(tau)) - 0.5 * posterior.LogDet + 0.5 * _sumLogWeights;
-            return new GPriorConditional(posterior, _coefficients, _scale, logDet, 1.0, Rows, p, tau, b);
+            var weightedMean = new double[p];
+            for (int j = 0; j < p; j++) weightedMean[j] = (_priorMean?[j] ?? 0.0) + _coefficients[j];
+            return new GPriorConditional(posterior, weightedMean, _scale, logDet, 1.0, Rows, p, tau, b);
         }
 
         double shrink = b / (tau + b);
         var mean = new double[p];
-        for (int j = 0; j < p; j++) mean[j] = shrink * _coefficients[j];
+        for (int j = 0; j < p; j++) mean[j] = (_priorMean?[j] ?? 0.0) + shrink * _coefficients[j];
         double s = b * (_rss + tau / (tau + b) * _fitted);
         return new GPriorConditional(_gram, mean, s, 0.5 * p * Math.Log(tau / (tau + b)), 1.0 / (tau + b), Rows, p, tau, b);
     }
