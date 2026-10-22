@@ -20,6 +20,37 @@ public interface ITemperedMarginal
 {
     /// <summary>The log marginal likelihood at <paramref name="inverseTemperature"/>; b = 1 is untempered.</summary>
     double LogMarginalLikelihood(double inverseTemperature);
+
+    /// <summary>Why the design is outside the model's support, or <see cref="DesignRejection.None"/> when it is admitted.</summary>
+    DesignRejection Rejection => DesignRejection.None;
+}
+
+/// <summary>
+/// Why a knot configuration scores −∞: outside the prior's support, or refused by the observation model. Counted by
+/// reason (<see cref="SplineTarget"/>), so the truncation the support rules and admission impose stays visible.
+/// </summary>
+public enum DesignRejection
+{
+    /// <summary>Admitted: the configuration has a finite score.</summary>
+    None,
+
+    /// <summary>The knots are not on the open ordered simplex 0 &lt; ξ₁ &lt; … &lt; ξ_k &lt; 1.</summary>
+    OutsideSimplex,
+
+    /// <summary>The count prior gives the knot count probability zero.</summary>
+    ZeroCountPrior,
+
+    /// <summary>No more observations than basis functions (m ≤ ν): the marginal is improper.</summary>
+    TooFewObservations,
+
+    /// <summary>A factored matrix failed admission: rank-deficient or ill-conditioned.</summary>
+    Inadmissible,
+
+    /// <summary>The model's iterative fit (IRLS) did not settle within its iteration cap.</summary>
+    NotConverged,
+
+    /// <summary>An identically zero response leaves no posterior for the scale.</summary>
+    ZeroResponse,
 }
 
 // The default for a model without a tempered closed form: its untempered marginal, at b = 1 only.
@@ -40,6 +71,10 @@ internal sealed class LinearMarginal : ITemperedMarginal
     private readonly double _value;
     public LinearMarginal(double value) => _value = value;
 
+    // A model refuses a design with ImpossibleMarginal and its reason; the linear form is for admitted ones.
+    public static ITemperedMarginal Of(double value, DesignRejection rejection)
+        => rejection == DesignRejection.None ? new LinearMarginal(value) : new ImpossibleMarginal(rejection);
+
     public double LogMarginalLikelihood(double inverseTemperature)
     {
         if (!(inverseTemperature >= 0.0 && inverseTemperature <= 1.0))
@@ -48,9 +83,10 @@ internal sealed class LinearMarginal : ITemperedMarginal
     }
 }
 
-// A configuration outside the model's support: −∞ at every temperature.
+// A configuration outside the model's support: −∞ at every temperature, with the reason.
 internal sealed class ImpossibleMarginal : ITemperedMarginal
 {
-    public static readonly ImpossibleMarginal Instance = new();
+    public ImpossibleMarginal(DesignRejection rejection) => Rejection = rejection;
+    public DesignRejection Rejection { get; }
     public double LogMarginalLikelihood(double inverseTemperature) => double.NegativeInfinity;
 }

@@ -57,6 +57,9 @@ public sealed record TemperingReadout(
 /// least favourable reading (<see cref="RHatDiagnostic.Worst"/>). <see cref="Knots"/> holds the knot count's
 /// rank-normalized diagnostics (split R̂, bulk and tail ESS), and <see cref="AcceptanceRate"/> counts the sampling
 /// phase only. <see cref="Tempering"/> reports the ladders when the run was tempered, and is null otherwise.
+/// <see cref="Evaluations"/> counts every evaluated knot configuration of every chain and ladder rung, burn-in
+/// included, by admission outcome (<see cref="DesignRejection.None"/> for admitted), so the truncation the support
+/// rules and admission impose stays visible.
 /// <see cref="PeakIntensity"/> is the grid-aligned peak-intensity λ(T): the matching-free posterior density
 /// of significant transitions (∑ = <see cref="PeakCountMean"/>), its modes the persistent transitions.
 /// <see cref="SpanCoverage"/> is the grid-aligned span-coverage π(T): the posterior probability each T lies
@@ -83,7 +86,8 @@ public sealed record BarsResult(
     int[] ChainSeeds,
     IReadOnlyList<MoveStat> MoveStats,
     CoefficientUncertainty Uncertainty,
-    TemperingReadout? Tempering);
+    TemperingReadout? Tempering,
+    Tally<DesignRejection> Evaluations);
 
 /// <summary>
 /// The BARS client of the kernel-agnostic ensemble shell (<see cref="ChainEnsemble"/>): it knows how to start one
@@ -253,10 +257,13 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
         int g = grid.Length;
         int collected = summary.SamplesUsed;
-        double denom = chains * (double)collected;
 
         var bars = new BarsChainRun[chains];
         for (int ci = 0; ci < chains; ci++) bars[ci] = (BarsChainRun)chainRuns[ci];
+
+        // Merge the chains' readouts once; the reductions below read the merged one.
+        var pooled = new BarsReadout(g);
+        foreach (BarsChainRun st in bars) pooled.MergeFrom(st.Readout);
 
         // Pooled functionals: index 0 = knot count, indices 1..g = fitted grid values.
         var fit = new double[g];
@@ -265,12 +272,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
         // Law of total variance: Var[f(T)] = Var_draws(conditional mean) + E_draws(conditional variance).
         var fitSd = new double[g];
+        WeightedSums cv = pooled.ConditionalVariance;
         for (int gi = 0; gi < g; gi++)
-        {
-            double sv = 0.0;
-            for (int ci = 0; ci < chains; ci++) sv += bars[ci].ConditionalVarianceSum[gi];
-            fitSd[gi] = Math.Sqrt(summary.FunctionalVariance[1 + gi] + sv / denom);
-        }
+            fitSd[gi] = Math.Sqrt(summary.FunctionalVariance[1 + gi] + (cv.TotalWeight > 0.0 ? cv.Mean(gi) : 0.0));
 
         // Consensus map: each grid point's R̂ as the shell computed it, with its state; the summary is the worst point.
         var rHatFit = summary.FunctionalRHat[1..];
@@ -282,15 +286,10 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var spanCoverage = new double[g];
         for (int gi = 0; gi < g; gi++)
         {
-            double si = 0.0, sc = 0.0;
-            for (int ci = 0; ci < chains; ci++) { si += bars[ci].PeakIntensitySum[gi]; sc += bars[ci].SpanCoverageSum[gi]; }
-            peakIntensity[gi] = si / denom;
-            spanCoverage[gi] = sc / denom;
+            peakIntensity[gi] = pooled.PeakIntensity.Mean(gi);
+            spanCoverage[gi] = pooled.SpanCoverage.Mean(gi);
         }
-
-        double peakCountMean = 0.0;
-        for (int ci = 0; ci < chains; ci++) peakCountMean += bars[ci].PeakCountSum;
-        peakCountMean /= denom;
+        double peakCountMean = pooled.Peak.Mean(2);
 
         var moveAtt = new Dictionary<string, long>();
         var moveAcc = new Dictionary<string, long>();
@@ -304,11 +303,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         foreach (string key in moveAtt.Keys)
             moveStats.Add(new MoveStat(key, moveAtt[key], moveAcc.GetValueOrDefault(key)));
 
-        PeakPosterior peak = SummarisePeak(bars, denom);
+        PeakPosterior peak = SummarisePeak(bars, pooled);
         var chainLambda = new double[chains][];
-        for (int ci = 0; ci < chains; ci++) chainLambda[ci] = bars[ci].PeakIntensitySum;
+        for (int ci = 0; ci < chains; ci++) chainLambda[ci] = bars[ci].Readout.PeakIntensity.Sums.ToArray();
         var peakModes = ExtractModes(grid, peakIntensity, spanCoverage, chainLambda);
-        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars));
+        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations);
     }
 
     // The ladders' sampling-phase statistics, averaged over chains; null for an untempered run.
@@ -336,36 +335,14 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                                     TemperingLadder.Barrier(rejection), ideal, ladders);
     }
 
-    private static PeakPosterior SummarisePeak(BarsChainRun[] states, double denom)
+    // The peak location's mean, height and credible interval from the merged readout; its diagnostics from the
+    // chains' traces.
+    private static PeakPosterior SummarisePeak(BarsChainRun[] states, BarsReadout pooled)
     {
-        int c = states.Length;
-        var traces = new ChainTrace[c];
-        var all = new List<double>();
-        double mean = 0.0, height = 0.0;
-        for (int i = 0; i < c; i++)
-        {
-            traces[i] = states[i].PeakTrace;
-            all.AddRange(states[i].PeakDraws);
-            mean += states[i].PeakLocSum;
-            height += states[i].PeakHeightSum;
-        }
-        mean /= denom;
-        height /= denom;
-        all.Sort();
-        double lo = Quantile(all, 0.025);
-        double hi = Quantile(all, 0.975);
-        return new PeakPosterior(mean, lo, hi, height, ChainDiagnostics.Diagnose(traces, 0));
-    }
-
-    private static double Quantile(List<double> sorted, double q)
-    {
-        int n = sorted.Count;
-        if (n == 0) return double.NaN;
-        if (n == 1) return sorted[0];
-        double pos = q * (n - 1);
-        int lo = (int)Math.Floor(pos);
-        double frac = pos - lo;
-        return lo + 1 < n ? sorted[lo] * (1.0 - frac) + sorted[lo + 1] * frac : sorted[lo];
+        var traces = new ChainTrace[states.Length];
+        for (int i = 0; i < states.Length; i++) traces[i] = states[i].PeakTrace;
+        return new PeakPosterior(pooled.Peak.Mean(0), pooled.PeakSample.Quantile(0.025), pooled.PeakSample.Quantile(0.975),
+                                 pooled.Peak.Mean(1), ChainDiagnostics.Diagnose(traces, 0));
     }
 
     // Advance the chain one step (the IChain.Step body): step the lone chain or the tempered ladder (returning the
@@ -393,7 +370,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                         r[i] = _y[i] - f;
                     }
                     st.W = _resampler.Resample(r, sigma2, st.WeightRng);
-                    st.RjChain.ReplaceTarget(new SplineTarget(_basis, _model, _prior, _x, _y, st.W));
+                    st.RjChain.ReplaceTarget(new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations));
                 }
                 st.SinceWeight = 0;
             }
@@ -420,41 +397,57 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         }
         functionals[0] = draw.Count;
 
+        BarsReadout r = st.Readout;
         if (_model.ConditionalVariance(zTrain, _y, st.W, zGrid) is double[] v)
-            for (int gi = 0; gi < g; gi++) st.ConditionalVarianceSum[gi] += v[gi];
+            r.ConditionalVariance.Add(v);
 
-        if (_basis is SplineBasis splineBasis)
+        // Every draw folds into the peak fields, so their weights stay the draw count; a basis without closed-form
+        // peaks folds zeros and adds nothing to the sample or the trace.
+        if (_basis is not SplineBasis splineBasis)
         {
-            double[] coef = _model.SampleCoefficients(zTrain, _y, st.W, st.ReadoutRng);
-            (double peakX, double peakF) = SplineExtrema.Argmax(draw, coef, splineBasis);
-            st.PeakLocSum += peakX;
-            st.PeakHeightSum += peakF;
-            st.PeakDraws.Add(peakX);
-            st.PeakTrace.Add(peakX);
-
-            var spans = SplineExtrema.SignificantPeakSpans(draw, coef, splineBasis, _peakProminence, _spanDropFraction);
-            st.PeakCountSum += spans.Count;
-            for (int p = 0; p < spans.Count; p++)
-                st.PeakIntensitySum[NearestGridIndex(_grid, spans[p].Location)] += 1.0;
-            AddSpanCoverage(spans, _grid, st.SpanCoverageSum);
+            r.Peak.Add([0.0, 0.0, 0.0]);
+            r.PeakIntensity.AddSparse([], []);
+            r.SpanCoverage.AddSparse([], []);
+            return;
         }
+        double[] coef = _model.SampleCoefficients(zTrain, _y, st.W, st.ReadoutRng);
+        (double peakX, double peakF) = SplineExtrema.Argmax(draw, coef, splineBasis);
+        var spans = SplineExtrema.SignificantPeakSpans(draw, coef, splineBasis, _peakProminence, _spanDropFraction);
+        r.Peak.Add([peakX, peakF, spans.Count]);
+        r.PeakSample.Add(peakX);
+        st.PeakTrace.Add(peakX);
+
+        var located = new int[spans.Count];
+        for (int p = 0; p < spans.Count; p++) located[p] = NearestGridIndex(_grid, spans[p].Location);
+        r.PeakIntensity.AddSparse(located, Ones(spans.Count));
+        int[] covered = CoveredGridPoints(spans, _grid);
+        r.SpanCoverage.AddSparse(covered, Ones(covered.Length));
+    }
+
+    private static double[] Ones(int n)
+    {
+        var ones = new double[n];
+        Array.Fill(ones, 1.0);
+        return ones;
     }
 
     // π(T) is P(T lies in some significant span), so a draw adds 1 to a grid point at most once, however many spans
     // cover it: a nested peak's span lies inside its neighbour's (R14). λ(T) stays a count, one per span.
-    internal static void AddSpanCoverage(IReadOnlyList<PeakSpan> spans, double[] grid, double[] sum)
+    internal static int[] CoveredGridPoints(IReadOnlyList<PeakSpan> spans, double[] grid)
     {
+        var covered = new List<int>();
         for (int gi = 0; gi < grid.Length; gi++)
             for (int p = 0; p < spans.Count; p++)
-                if (grid[gi] >= spans[p].Left && grid[gi] <= spans[p].Right) { sum[gi] += 1.0; break; }
+                if (grid[gi] >= spans[p].Left && grid[gi] <= spans[p].Right) { covered.Add(gi); break; }
+        return covered.ToArray();
     }
 
     private ReversibleJumpChain<KnotConfig> NewChain(BarsChainRun st)
-        => new(Moves(st.Kernel), new SplineTarget(_basis, _model, _prior, _x, _y, st.W), st.Config, st.Rng);
+        => new(Moves(st.Kernel), new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations), st.Config, st.Rng);
 
     private ParallelTempering<KnotConfig> NewLadder(BarsChainRun st, int levels, int seed)
     {
-        var target = new SplineTarget(_basis, _model, _prior, _x, _y, st.W);
+        var target = new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations);
         double[] betas = ParallelTempering<KnotConfig>.GeometricLadder(levels, _temperBetaMin);
         return new ParallelTempering<KnotConfig>(_ => Moves(st.Kernel), target, st.Config, betas, _temperPath, seed,
                                                  _temperSchedule);
@@ -645,20 +638,14 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     {
         private readonly BarsEnsemble _owner;
         public readonly Xoshiro256PlusPlus Rng;
-        public readonly double[] PeakIntensitySum;
-        public readonly double[] SpanCoverageSum;
-        public readonly double[] ConditionalVarianceSum;
-        public readonly List<double> PeakDraws = new();
-        public readonly ChainTrace PeakTrace = new(1);   // the same draws, as the diagnostics' ordered trace
+        public readonly BarsReadout Readout;              // this chain's mergeable readout statistics
+        public readonly ChainTrace PeakTrace = new(1);    // the peak location's ordered draws, for its diagnostics
         public KnotConfig Config;
         public double[]? W;
         public IKnotKernel Kernel = null!;
         public Xoshiro256PlusPlus ReadoutRng = null!;   // per-draw coefficient draws, decoupled from the chain RNG
         public Xoshiro256PlusPlus WeightRng = null!;    // the robust weight block's (σ², β, w) draws, derived from the chain seed
         public ParallelTempering<KnotConfig>? Ladder;   // set ⇒ the RJ chain is this ladder's cold replica
-        public double PeakLocSum;
-        public double PeakHeightSum;
-        public double PeakCountSum;
         public int SinceWeight;
         public long BurnScans, BurnRoundTrips, BurnRestarts;   // the ladder's counts at the end of burn-in
         public double[]? BurnRejection;                        // its per-pair rejection sums then
@@ -670,9 +657,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             _owner = owner;
             Rng = rng;
             Config = start;
-            PeakIntensitySum = new double[gridSize];
-            SpanCoverageSum = new double[gridSize];
-            ConditionalVarianceSum = new double[gridSize];
+            Readout = new BarsReadout(gridSize);
         }
 
         /// <summary>The RJ chain — for the tempered case, the ladder's cold replica. Set once, at start.</summary>

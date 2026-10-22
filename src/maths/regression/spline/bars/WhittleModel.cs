@@ -34,7 +34,9 @@ public sealed class WhittleModel : IObservationModel
     }
 
     /// <inheritdoc/>
-    public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights)
+    public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights) => Marginal(design, y).Value;
+
+    private (double Value, DesignRejection Rejection) Marginal(double[,] design, double[] y)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -43,18 +45,18 @@ public sealed class WhittleModel : IObservationModel
         if (y.Length != m)
             throw new ArgumentException("Periodogram length must match the design row count.", nameof(y));
         if (m <= nu)
-            return double.NegativeInfinity;
+            return (double.NegativeInfinity, DesignRejection.TooFewObservations);
 
-        (double[] beta, bool usable, _) = FitGlm(design, y);
-        if (!usable)
-            return double.NegativeInfinity;   // inadmissible BᵀB, or IRLS did not converge
+        (double[] beta, DesignRejection rejection, _) = FitGlm(design, y);
+        if (rejection != DesignRejection.None)
+            return (double.NegativeInfinity, rejection);   // inadmissible BᵀB, or IRLS did not converge
         double logLik = 0.0;
         for (int i = 0; i < m; i++)
         {
             double eta = Clamp(LinearPredictor(design, beta, i));
             logLik += -eta - y[i] * Math.Exp(-eta);
         }
-        return logLik - 0.5 * nu * Math.Log(m);
+        return (logLik - 0.5 * nu * Math.Log(m), DesignRejection.None);
     }
 
     /// <summary>
@@ -62,7 +64,10 @@ public sealed class WhittleModel : IObservationModel
     /// β against the tempered likelihood would need a fit at every rung, and at every swap.
     /// </summary>
     public ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights)
-        => new LinearMarginal(LogMarginalLikelihood(design, y, weights));
+    {
+        (double value, DesignRejection rejection) = Marginal(design, y);
+        return LinearMarginal.Of(value, rejection);
+    }
 
     /// <inheritdoc/>
     public bool CanTemperLikelihood => true;
@@ -85,8 +90,8 @@ public sealed class WhittleModel : IObservationModel
     public double[] SampleCoefficients(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
-        (double[] beta, bool usable, BandCholesky factor) = FitGlm(design, y);
-        if (!usable) return beta;
+        (double[] beta, DesignRejection rejection, BandCholesky factor) = FitGlm(design, y);
+        if (rejection != DesignRejection.None) return beta;
         int nu = beta.Length;
         var z = new double[nu];
         for (int j = 0; j < nu; j++) z[j] = Normal.SampleStandard(rng);
@@ -101,13 +106,16 @@ public sealed class WhittleModel : IObservationModel
     public double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign)
     {
         ArgumentNullException.ThrowIfNull(readoutDesign);
-        (_, bool usable, BandCholesky factor) = FitGlm(design, y);
-        return usable ? ReadoutQuadratics.Of(factor, readoutDesign, 1.0) : ReadoutQuadratics.Unavailable(readoutDesign);
+        (_, DesignRejection rejection, BandCholesky factor) = FitGlm(design, y);
+        return rejection == DesignRejection.None
+            ? ReadoutQuadratics.Of(factor, readoutDesign, 1.0)
+            : ReadoutQuadratics.Unavailable(readoutDesign);
     }
 
-    // Gamma(shape 1) / log-link IRLS: weights are 1, so A = BᵀB is constant — factor once, iterate z only. Usable is
-    // false when BᵀB fails DesignAdmission or the iteration cap is reached before the step settles.
-    private (double[] Beta, bool Usable, BandCholesky Factor) FitGlm(double[,] design, double[] periodogram)
+    // Gamma(shape 1) / log-link IRLS: weights are 1, so A = BᵀB is constant — factor once, iterate z only. The
+    // rejection is Inadmissible when BᵀB fails DesignAdmission and NotConverged when the iteration cap is reached
+    // before the step settles.
+    private (double[] Beta, DesignRejection Rejection, BandCholesky Factor) FitGlm(double[,] design, double[] periodogram)
     {
         int nu = design.GetLength(1);
         var bd = new BandedDesign(design);
@@ -120,7 +128,7 @@ public sealed class WhittleModel : IObservationModel
 
         var beta = new double[nu];
         if (!DesignAdmission.Admits(chol.Status))
-            return (beta, false, chol);
+            return (beta, DesignRejection.Inadmissible, chol);
         var z = new double[m];
         var b = new double[nu];
         for (int iter = 0; iter < _maxIterations; iter++)
@@ -141,9 +149,9 @@ public sealed class WhittleModel : IObservationModel
                 shift += d * d;
                 beta[p] = sol[p];
             }
-            if (shift < Tolerance) return (beta, true, chol);
+            if (shift < Tolerance) return (beta, DesignRejection.None, chol);
         }
-        return (beta, false, chol);
+        return (beta, DesignRejection.NotConverged, chol);
     }
 
     private static double LinearPredictor(double[,] design, double[] beta, int row)

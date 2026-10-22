@@ -87,8 +87,7 @@ public sealed class SpanCoverageTests
         var grid = new double[21];
         for (int i = 0; i < grid.Length; i++) grid[i] = i * 0.05;
         var sum = new double[grid.Length];
-
-        BarsEnsemble.AddSpanCoverage(spans, grid, sum);
+        foreach (int gi in BarsEnsemble.CoveredGridPoints(spans, grid)) sum[gi] += 1.0;
 
         for (int i = 0; i < grid.Length; i++)
         {

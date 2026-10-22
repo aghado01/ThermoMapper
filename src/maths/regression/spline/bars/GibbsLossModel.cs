@@ -39,7 +39,9 @@ public sealed class GibbsLossModel : IObservationModel
     }
 
     /// <inheritdoc/>
-    public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights)
+    public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights) => Marginal(design, y).Value;
+
+    private (double Value, DesignRejection Rejection) Marginal(double[,] design, double[] y)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -48,16 +50,16 @@ public sealed class GibbsLossModel : IObservationModel
         if (y.Length != m)
             throw new ArgumentException("Response length must match the design row count.", nameof(y));
         if (m <= nu)
-            return double.NegativeInfinity;
+            return (double.NegativeInfinity, DesignRejection.TooFewObservations);
 
         double sigma = RobustNoise(y);
-        (double[] beta, bool usable) = FitM(design, y, sigma);
-        if (!usable)
-            return double.NegativeInfinity;   // inadmissible weighted Gram, or IRLS did not converge
+        (double[] beta, DesignRejection rejection) = FitM(design, y, sigma);
+        if (rejection != DesignRejection.None)
+            return (double.NegativeInfinity, rejection);   // inadmissible weighted Gram, or IRLS did not converge
         double loss = 0.0;
         for (int i = 0; i < m; i++)
             loss += Rho((y[i] - Fit(design, beta, i)) / sigma);
-        return -loss - 0.5 * nu * Math.Log(m);
+        return (-loss - 0.5 * nu * Math.Log(m), DesignRejection.None);
     }
 
     /// <summary>
@@ -65,7 +67,10 @@ public sealed class GibbsLossModel : IObservationModel
     /// β against the tempered likelihood would need a fit at every rung, and at every swap.
     /// </summary>
     public ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights)
-        => new LinearMarginal(LogMarginalLikelihood(design, y, weights));
+    {
+        (double value, DesignRejection rejection) = Marginal(design, y);
+        return LinearMarginal.Of(value, rejection);
+    }
 
     /// <inheritdoc/>
     public bool CanTemperLikelihood => true;
@@ -83,9 +88,9 @@ public sealed class GibbsLossModel : IObservationModel
     public CoefficientUncertainty Uncertainty => CoefficientUncertainty.KnotOnly;
 
     // Tukey bisquare M-estimation by banded IRLS at fixed scale σ, warm-started with one LS step (iter 0, w = 1).
-    // Usable is false when a weighted Gram fails DesignAdmission (redescending weights can zero out a span) or the
-    // iteration cap is reached before the step settles.
-    private (double[] Beta, bool Usable) FitM(double[,] design, double[] y, double sigma)
+    // The rejection is Inadmissible when a weighted Gram fails DesignAdmission (redescending weights can zero out a
+    // span) and NotConverged when the iteration cap is reached before the step settles.
+    private (double[] Beta, DesignRejection Rejection) FitM(double[,] design, double[] y, double sigma)
     {
         int nu = design.GetLength(1);
         var bd = new BandedDesign(design);
@@ -106,7 +111,7 @@ public sealed class GibbsLossModel : IObservationModel
 
             chol.DecomposeBanded(band);
             if (!DesignAdmission.Admits(chol.Status))
-                return (beta, false);
+                return (beta, DesignRejection.Inadmissible);
             double[] sol = chol.Solve(b);
 
             double shift = 0.0;
@@ -116,9 +121,9 @@ public sealed class GibbsLossModel : IObservationModel
                 shift += d * d;
                 beta[p] = sol[p];
             }
-            if (iter > 0 && shift < Tolerance) return (beta, true);
+            if (iter > 0 && shift < Tolerance) return (beta, DesignRejection.None);
         }
-        return (beta, false);
+        return (beta, DesignRejection.NotConverged);
     }
 
     // Tukey bisquare, normalized so ρ_c(u) ≈ u²/2 for small u.

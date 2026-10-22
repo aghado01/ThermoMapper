@@ -58,11 +58,11 @@ public sealed class WeightedNormalModel : IObservationModel
         // With at most as many observations as parameters the unit-information marginal is improper —
         // an unfittable (over-knotted) configuration. Report it as infinitely unlikely so the chain rejects.
         if (design.GetLength(0) <= design.GetLength(1))
-            return ImpossibleMarginal.Instance;
+            return new ImpossibleMarginal(DesignRejection.TooFewObservations);
 
         (CollapsedGPrior? block, double tau) = Fit(design, y, weights);
-        if (block is null)
-            return ImpossibleMarginal.Instance;   // rank-deficient or ill-conditioned design ⇒ outside the support
+        if (block is null)   // rank-deficient or ill-conditioned design ⇒ outside the support
+            return new ImpossibleMarginal(DesignRejection.Inadmissible);
         return new NormalMarginal(block, tau);
     }
 
@@ -163,6 +163,8 @@ public sealed class WeightedNormalModel : IObservationModel
             _tau = tau;
             _atOne = At(block.At(tau));
         }
+
+        public DesignRejection Rejection => double.IsNegativeInfinity(_atOne) ? DesignRejection.ZeroResponse : DesignRejection.None;
 
         public double LogMarginalLikelihood(double inverseTemperature)
         {

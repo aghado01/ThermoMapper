@@ -34,7 +34,9 @@ public sealed class PoissonModel : IObservationModel
     }
 
     /// <inheritdoc/>
-    public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights)
+    public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights) => Marginal(design, y).Value;
+
+    private (double Value, DesignRejection Rejection) Marginal(double[,] design, double[] y)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -43,11 +45,11 @@ public sealed class PoissonModel : IObservationModel
         if (y.Length != m)
             throw new ArgumentException("Response length must match the design row count.", nameof(y));
         if (m <= nu)
-            return double.NegativeInfinity;
+            return (double.NegativeInfinity, DesignRejection.TooFewObservations);
 
-        (double[] beta, bool usable) = FitGlm(design, y);
-        if (!usable)
-            return double.NegativeInfinity;   // inadmissible weighted Gram, or IRLS did not converge
+        (double[] beta, DesignRejection rejection) = FitGlm(design, y);
+        if (rejection != DesignRejection.None)
+            return (double.NegativeInfinity, rejection);   // inadmissible weighted Gram, or IRLS did not converge
 
         double logLik = 0.0;
         for (int i = 0; i < m; i++)
@@ -55,7 +57,7 @@ public sealed class PoissonModel : IObservationModel
             double eta = Clamp(LinearPredictor(design, beta, i));
             logLik += y[i] * eta - Math.Exp(eta);
         }
-        return logLik - 0.5 * nu * Math.Log(m);
+        return (logLik - 0.5 * nu * Math.Log(m), DesignRejection.None);
     }
 
     /// <summary>
@@ -63,7 +65,10 @@ public sealed class PoissonModel : IObservationModel
     /// β against the tempered likelihood would need a fit at every rung, and at every swap.
     /// </summary>
     public ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights)
-        => new LinearMarginal(LogMarginalLikelihood(design, y, weights));
+    {
+        (double value, DesignRejection rejection) = Marginal(design, y);
+        return LinearMarginal.Of(value, rejection);
+    }
 
     /// <inheritdoc/>
     public bool CanTemperLikelihood => true;
@@ -137,8 +142,8 @@ public sealed class PoissonModel : IObservationModel
     public double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign)
     {
         ArgumentNullException.ThrowIfNull(readoutDesign);
-        (double[] betaHat, bool usable) = FitGlm(design, y);
-        if (!usable) return ReadoutQuadratics.Unavailable(readoutDesign);
+        (double[] betaHat, DesignRejection rejection) = FitGlm(design, y);
+        if (rejection != DesignRejection.None) return ReadoutQuadratics.Unavailable(readoutDesign);
         BandCholesky j = LaplaceFactor(design, betaHat);
         return DesignAdmission.Admits(j.Status)
             ? ReadoutQuadratics.Of(j, readoutDesign, 1.0)
@@ -180,9 +185,10 @@ public sealed class PoissonModel : IObservationModel
     }
 
     // Fisher-scoring IRLS for the canonical (log-link) Poisson GLM: working response z = η + (y−μ)/μ,
-    // weight w = μ, solving the banded weighted normal equations (BᵀWB) β⁺ = BᵀW z each iteration. Usable is false
-    // when a weighted Gram fails DesignAdmission or the iteration cap is reached before the step settles.
-    private (double[] Beta, bool Usable) FitGlm(double[,] design, double[] y)
+    // weight w = μ, solving the banded weighted normal equations (BᵀWB) β⁺ = BᵀW z each iteration. The rejection is
+    // Inadmissible when a weighted Gram fails DesignAdmission and NotConverged when the iteration cap is reached
+    // before the step settles.
+    private (double[] Beta, DesignRejection Rejection) FitGlm(double[,] design, double[] y)
     {
         int nu = design.GetLength(1);
         var bd = new BandedDesign(design);
@@ -210,7 +216,7 @@ public sealed class PoissonModel : IObservationModel
 
             chol.DecomposeBanded(band);
             if (!DesignAdmission.Admits(chol.Status))
-                return (beta, false);
+                return (beta, DesignRejection.Inadmissible);
             double[] sol = chol.Solve(b);
 
             double shift = 0.0;
@@ -220,9 +226,9 @@ public sealed class PoissonModel : IObservationModel
                 shift += d * d;
                 beta[p] = sol[p];
             }
-            if (shift < Tolerance) return (beta, true);
+            if (shift < Tolerance) return (beta, DesignRejection.None);
         }
-        return (beta, false);
+        return (beta, DesignRejection.NotConverged);
     }
 
     private static double LinearPredictor(double[,] design, double[] beta, int row)

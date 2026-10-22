@@ -1,6 +1,7 @@
 using System;
 using Maths.Distributions;
 using Maths.Samplers;
+using Maths.Samplers.Ensemble;
 
 using Maths.Regression.Spline;
 
@@ -23,6 +24,7 @@ public sealed class SplineTarget : ISamplingTarget<KnotConfig>
     private readonly double[] _x;
     private readonly double[] _y;
     private readonly double[]? _weights;
+    private readonly Tally<DesignRejection>? _outcomes;
 
     /// <param name="basis">Spline basis (fixed degree).</param>
     /// <param name="model">Observation model supplying the marginal likelihood.</param>
@@ -30,8 +32,10 @@ public sealed class SplineTarget : ISamplingTarget<KnotConfig>
     /// <param name="x">Design points, each in [0,1].</param>
     /// <param name="y">Responses, same length as <paramref name="x"/>.</param>
     /// <param name="weights">Optional per-point weights (null = unit).</param>
+    /// <param name="outcomes">When given, every evaluation's admission outcome is counted into it. A chain owns its
+    /// tally, so the target holds no shared mutable state.</param>
     public SplineTarget(IBasis basis, IObservationModel model, IComplexityPrior prior,
-                        double[] x, double[] y, double[]? weights = null)
+                        double[] x, double[] y, double[]? weights = null, Tally<DesignRejection>? outcomes = null)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(model);
@@ -49,6 +53,7 @@ public sealed class SplineTarget : ISamplingTarget<KnotConfig>
         _x = x;
         _y = y;
         _weights = weights;
+        _outcomes = outcomes;
     }
 
     /// <summary>
@@ -63,13 +68,21 @@ public sealed class SplineTarget : ISamplingTarget<KnotConfig>
         double previous = 0.0;
         foreach (double knot in knots)
         {
-            if (!(knot > previous && knot < 1.0)) return KnotEvaluation.OffSupport;
+            if (!(knot > previous && knot < 1.0)) return Rejected(DesignRejection.OutsideSimplex);
             previous = knot;
         }
         int k = knots.Length;
         double logPrior = _prior.LogPrior(k) + SpecialFunctions.LogGamma(k + 1.0);
-        if (double.IsNegativeInfinity(logPrior)) return KnotEvaluation.OffSupport;
-        return new KnotEvaluation(logPrior, _model.TemperedMarginal(_basis.Design(config, _x), _y, _weights));
+        if (double.IsNegativeInfinity(logPrior)) return Rejected(DesignRejection.ZeroCountPrior);
+        ITemperedMarginal marginal = _model.TemperedMarginal(_basis.Design(config, _x), _y, _weights);
+        _outcomes?.Add(marginal.Rejection);
+        return new KnotEvaluation(logPrior, marginal);
+    }
+
+    private ITargetEvaluation Rejected(DesignRejection reason)
+    {
+        _outcomes?.Add(reason);
+        return KnotEvaluation.OffSupport;
     }
 
     private sealed class KnotEvaluation : ITargetEvaluation
