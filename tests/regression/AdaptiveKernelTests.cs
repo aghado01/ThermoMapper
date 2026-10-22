@@ -96,6 +96,8 @@ public sealed class AdaptiveKernelTests
         _out.WriteLine($"[adaptive-ens] adaptive: mse={mseAdaptive:F5} peakESS={adaptive.Peak.LocationConvergence.BulkEss:F0} ESS(k)={adaptive.Knots.BulkEss:F0}");
 
         Assert.True(mseAdaptive < 0.01, $"adaptive fit MSE {mseAdaptive:F5} should recover the curve");
+        // In the step 3.5 seed sweep the adaptive kernel's peak ESS led in 199 of 200 runs (median ratio about 0.06). The
+        // one reversal was a fixed-kernel estimate of 100 against 95, so a change of trajectory can flip it, rarely.
         Assert.True(adaptive.Peak.LocationConvergence.BulkEss.Value > fixedBad.Peak.LocationConvergence.BulkEss.Value,
             $"adaptive peak ESS {adaptive.Peak.LocationConvergence.BulkEss:F0} should beat the too-tight fixed kernel {fixedBad.Peak.LocationConvergence.BulkEss:F0}");
     }

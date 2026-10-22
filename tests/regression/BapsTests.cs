@@ -127,6 +127,8 @@ public sealed class BapsTests
         _out.WriteLine($"[adaptive] mseGlobal={mseGlobal:F5} mseAdaptive={mseAdaptive:F5} " +
                        $"λ̄(bump)={central:F2} λ̄(flat)={outer:F2} R̂={adaptive.RHatLogLambda:F3}");
 
+        // In the step 3.5 seed sweep this held for all 100 chain seeds on this data (ratio at most 0.79), and adaptive λ
+        // won on 99 of 100 datasets (median ratio 0.72): the assertion checks this bump, not every one.
         Assert.True(mseAdaptive < mseGlobal,
             $"adaptive MSE {mseAdaptive:F5} should beat global {mseGlobal:F5} on heterogeneous smoothness");
         Assert.True(central < outer,
