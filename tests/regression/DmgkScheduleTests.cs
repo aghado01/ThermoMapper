@@ -59,8 +59,8 @@ public sealed class DmgkScheduleTests
 
         double mseEqual = Mse(equal.Fit, f);
         double mseDmgk = Mse(dmgk.Fit, f);
-        _out.WriteLine($"[dmgk] equal: mse={mseEqual:F5} k̄={equal.MeanKnots:F2} ESS(k)={equal.EssKnots:F0} acc={equal.AcceptanceRate:F3}");
-        _out.WriteLine($"[dmgk] dmgk : mse={mseDmgk:F5} k̄={dmgk.MeanKnots:F2} ESS(k)={dmgk.EssKnots:F0} acc={dmgk.AcceptanceRate:F3}");
+        _out.WriteLine($"[dmgk] equal: mse={mseEqual:F5} k̄={equal.MeanKnots:F2} ESS(k)={equal.Knots.BulkEss:F0} acc={equal.AcceptanceRate:F3}");
+        _out.WriteLine($"[dmgk] dmgk : mse={mseDmgk:F5} k̄={dmgk.MeanKnots:F2} ESS(k)={dmgk.Knots.BulkEss:F0} acc={dmgk.AcceptanceRate:F3}");
 
         Assert.True(mseDmgk < 0.01, $"DMGK fit MSE {mseDmgk:F5} should recover the curve");
     }

@@ -17,15 +17,15 @@ public sealed record BandwidthSummary(double Mean, double Lo, double Hi);
 /// and, the map being monotone, for the quantiles).</param>
 /// <param name="AcceptanceRate">Metropolis acceptance over the sampled steps (pooled across chains).</param>
 /// <param name="Draws">Post-burn draws averaged (pooled = chains × per-chain draws).</param>
-/// <param name="BandwidthRHat">Gelman–Rubin R̂ on the bandwidth across chains (unavailable for a single chain) — ≈1 at convergence.</param>
-/// <param name="BandwidthEss">Effective sample size of the bandwidth across the pooled chains.</param>
+/// <param name="BandwidthConvergence">The bandwidth's rank-normalized diagnostics across chains: split R̂ (≈1 at
+/// convergence) and bulk and tail effective sample sizes.</param>
 /// <param name="ChainSeeds">The resolved per-chain seeds (reproducibility provenance).</param>
 /// <param name="InputScale">The GP's fitted input scale s (<see cref="GpTransform.InputScale"/>): a bandwidth t in the mapped frame is s²·t in the original units.</param>
 public sealed record BgpResult(
     double[] PosteriorMean,
     BandwidthSummary Bandwidth, BandwidthSummary BandwidthOriginal,
     double AcceptanceRate, int Draws,
-    RHatDiagnostic BandwidthRHat, double BandwidthEss, int[] ChainSeeds, double InputScale);
+    ConvergenceDiagnostic BandwidthConvergence, int[] ChainSeeds, double InputScale);
 
 /// <summary>
 /// The top of the Bayesian-GP instrument (Tang, Wu, Cheng &amp; Dunson 2025): with the regression function
@@ -62,7 +62,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
     public int FunctionalDim => 1;
 
     /// <summary>ESS on the bandwidth.</summary>
-    public int EssDim => 1;
+    public int MonitoredDim => 1;
 
     /// <summary>Warm-start one bandwidth chain at the prior midpoint (<paramref name="readoutSeed"/> unused — the readout is deterministic).</summary>
     public IChainRun<double> StartChain(int chainSeed, int readoutSeed)
@@ -116,7 +116,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
 
         return new BgpResult(meanAcc, fitted, original,
                              summary.AcceptanceRate, chains * summary.SamplesUsed,
-                             summary.FunctionalRHat[0], summary.FunctionalEss[0], summary.ChainSeeds,
+                             summary.Monitored[0], summary.ChainSeeds,
                              _gp.Transform.InputScale);
     }
 

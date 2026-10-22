@@ -47,7 +47,7 @@ public sealed class TemperingTests
         PeakPosterior p = result.Peak;
 
         _out.WriteLine($"[tempered-ens] peak={p.LocationMean:F3} [{p.LocationLo:F3},{p.LocationHi:F3}] " +
-                       $"R̂={p.LocationRHat:F3} ESS={p.LocationEss:F0} coldAcc={result.AcceptanceRate:F3}");
+                       $"R̂={p.LocationConvergence.RHat:F3} ESS={p.LocationConvergence.BulkEss:F0} coldAcc={result.AcceptanceRate:F3}");
 
         Assert.True(Math.Abs(p.LocationMean - truePeak) < 0.06, $"tempered peak {p.LocationMean:F3} off {truePeak}");
         Assert.True(p.LocationLo <= truePeak && truePeak <= p.LocationHi, "95% interval should bracket the peak");

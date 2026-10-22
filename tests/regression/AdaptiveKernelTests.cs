@@ -116,11 +116,11 @@ public sealed class AdaptiveKernelTests
         double Mse(double[] fit) { double s = 0.0; for (int i = 0; i < n; i++) { double d = fit[i] - f[i]; s += d * d; } return s / n; }
         double mseFixed = Mse(fixedBad.Fit);
         double mseAdaptive = Mse(adaptive.Fit);
-        _out.WriteLine($"[adaptive-ens] fixedBad: mse={mseFixed:F5} peakESS={fixedBad.Peak.LocationEss:F0} ESS(k)={fixedBad.EssKnots:F0}");
-        _out.WriteLine($"[adaptive-ens] adaptive: mse={mseAdaptive:F5} peakESS={adaptive.Peak.LocationEss:F0} ESS(k)={adaptive.EssKnots:F0}");
+        _out.WriteLine($"[adaptive-ens] fixedBad: mse={mseFixed:F5} peakESS={fixedBad.Peak.LocationConvergence.BulkEss:F0} ESS(k)={fixedBad.Knots.BulkEss:F0}");
+        _out.WriteLine($"[adaptive-ens] adaptive: mse={mseAdaptive:F5} peakESS={adaptive.Peak.LocationConvergence.BulkEss:F0} ESS(k)={adaptive.Knots.BulkEss:F0}");
 
         Assert.True(mseAdaptive < 0.01, $"adaptive fit MSE {mseAdaptive:F5} should recover the curve");
-        Assert.True(adaptive.Peak.LocationEss > fixedBad.Peak.LocationEss,
-            $"adaptive peak ESS {adaptive.Peak.LocationEss:F0} should beat the too-tight fixed kernel {fixedBad.Peak.LocationEss:F0}");
+        Assert.True(adaptive.Peak.LocationConvergence.BulkEss.Value > fixedBad.Peak.LocationConvergence.BulkEss.Value,
+            $"adaptive peak ESS {adaptive.Peak.LocationConvergence.BulkEss:F0} should beat the too-tight fixed kernel {fixedBad.Peak.LocationConvergence.BulkEss:F0}");
     }
 }

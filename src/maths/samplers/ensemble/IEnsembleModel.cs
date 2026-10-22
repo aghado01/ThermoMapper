@@ -16,11 +16,13 @@ public interface IEnsembleModel<TDraw>
     int FunctionalDim { get; }
 
     /// <summary>
-    /// How many leading functionals also get ESS (their per-chain sequences are retained). ESS is O(n²) per
-    /// functional, so a model with a wide R̂ map (e.g. BARS's per-grid consensus) keeps this small and orders the
-    /// ESS-worthy functionals first (BARS: knot count at index 0). 0 ≤ EssDim ≤ <see cref="FunctionalDim"/>.
+    /// How many leading functionals are monitored: their per-chain draws are kept, so they get the rank-normalized
+    /// diagnostics (<see cref="ChainDiagnostics.Diagnose"/>: split R̂, bulk and tail ESS), and an R̂ stopping target
+    /// waits on their effective sample size. The rest get classic R̂ from streaming moments only, so a model with a
+    /// wide map of functionals (BARS's per-grid fit) keeps the monitored set small and puts it first (BARS: knot
+    /// count at index 0). 0 ≤ MonitoredDim ≤ <see cref="FunctionalDim"/>.
     /// </summary>
-    int EssDim { get; }
+    int MonitoredDim { get; }
 
     /// <summary>
     /// Build one replica + its sink from the two decorrelated seeds the shell derived for this chain.

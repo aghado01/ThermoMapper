@@ -97,7 +97,7 @@ public sealed class PeakTests
         PeakPosterior p = result.Peak;
 
         _out.WriteLine($"peak={p.LocationMean:F3} [{p.LocationLo:F3},{p.LocationHi:F3}] " +
-                       $"height={p.HeightMean:F3} R̂={p.LocationRHat:F3} ESS={p.LocationEss:F0}");
+                       $"height={p.HeightMean:F3} R̂={p.LocationConvergence.RHat:F3} ESS={p.LocationConvergence.BulkEss:F0}");
 
         Assert.True(Math.Abs(p.LocationMean - truePeak) < 0.06, $"peak mean {p.LocationMean:F3} off {truePeak}");
         Assert.True(p.LocationLo <= truePeak && truePeak <= p.LocationHi, "95% interval should bracket the true peak");

@@ -94,14 +94,14 @@ public sealed class EnsembleTests
         BarsResult result = ensemble.Run(x, y, grid: x, chains: 4, masterSeed: 7, burn: 1500, samples: 1500);
 
         double mseFit = Mse(result.Fit, f);
-        _out.WriteLine($"R̂(fit)={result.RHatFitMax:F3} R̂(k)={result.RHatKnots:F3} ESS(k)={result.EssKnots:F0} " +
+        _out.WriteLine($"R̂(fit)={result.RHatFitMax:F3} R̂(k)={result.Knots.RHat:F3} ESS(k)={result.Knots.BulkEss:F0} " +
                        $"meanK={result.MeanKnots:F2} used={result.SamplesUsed} mseFit={mseFit:F5}");
 
         Assert.Equal(DiagnosticState.Estimated, result.RHatFitMax.State);
         Assert.True(result.RHatFitMax.MeetsTarget(1.3));
-        Assert.True(result.RHatKnots.MeetsTarget(1.3));
+        Assert.True(result.Knots.RHat.MeetsTarget(1.3));
         Assert.Equal(x.Length, result.RHatFit.Length);          // consensus map sized to the grid
-        Assert.True(result.EssKnots > 0.0 && result.EssKnots <= 4 * 1500);
+        Assert.True(result.Knots.BulkEss.Value > 0.0 && result.Knots.BulkEss.Value <= 4 * 1500);
         Assert.Equal(1500, result.SamplesUsed);
         Assert.True(mseFit < 0.5 * Mse(y, f));
         Assert.Equal(4, result.ChainSeeds.Length);
@@ -122,12 +122,16 @@ public sealed class EnsembleTests
 
         var ensemble = new BarsEnsemble(
             new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(4.0), new LocalBetaKernel(50.0));
-        BarsResult result = ensemble.Run(x, y, grid: x, chains: 4, masterSeed: 7, burn: 1000, samples: 6000,
-                                         rHatTarget: 1.5, batchSize: 500);
+        // The knot count's autocorrelation time here is about 450 steps (batch means agree), so the default gate of
+        // 100 effective draws per chain would need about 45,000 draws per chain; a gate of 10 keeps the test short.
+        BarsResult result = ensemble.Run(x, y, grid: x, chains: 4, masterSeed: 7, burn: 1000, samples: 40_000,
+                                         rHatTarget: 1.5, batchSize: 500, minEssPerChain: 10.0);
 
-        _out.WriteLine($"used={result.SamplesUsed}/6000 R̂(fit)={result.RHatFitMax:F3} R̂(k)={result.RHatKnots:F3}");
-        Assert.True(result.SamplesUsed < 6000, $"adaptive stop used all {result.SamplesUsed} samples");
-        Assert.True(result.SamplesUsed >= 500);
+        _out.WriteLine($"used={result.SamplesUsed}/40000 R̂(fit)={result.RHatFitMax:F3} R̂(k)={result.Knots.RHat:F3} " +
+                       $"ESS(k) bulk={result.Knots.BulkEss:F0} tail={result.Knots.TailEss:F0}");
+        Assert.True(result.SamplesUsed < 40_000, $"adaptive stop used all {result.SamplesUsed} samples");
+        // The stop waits for the knot count's bulk and tail ESS, not for a draw count.
+        Assert.True(result.Knots.Ess.MeetsMinimum(4 * 10.0), $"stopped at ESS {result.Knots.Ess:F0}");
     }
 
     [Fact]

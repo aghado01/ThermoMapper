@@ -90,12 +90,48 @@ public sealed class DiagnosticsPolicyTests
     }
 
     [Fact]
-    public void EarlyStop_TooFewDraws_DoesNotStop()
+    public void EarlyStop_WaitsForTheEssGate()
     {
+        // Independent draws meet an R̂ target almost at once; the stop still waits until the bulk and tail ESS reach
+        // MinEssPerChain per chain, about 100 draws each here.
         var model = new ScriptedModel(Noise);
         EnsembleRun run = new ChainEnsemble().Run(model, chains: 4, masterSeed: 1, burn: 0, samples: 400,
                                                   rHatTarget: 1.1, batchSize: 1).Summary;
-        Assert.True(run.SamplesUsed >= ChainEnsemble.MinDrawsForStop, $"stopped after {run.SamplesUsed} draw(s)");
+        Assert.True(run.SamplesUsed < 400, "independent draws should stop early");
+        Assert.True(run.SamplesUsed >= 60, $"stopped after {run.SamplesUsed} draw(s)");
+        Assert.True(run.Monitored[0].Ess.MeetsMinimum(4 * ChainEnsemble.MinEssPerChain));
+    }
+
+    [Fact]
+    public void EarlyStop_StronglyCorrelatedDraws_WaitLonger()
+    {
+        // AR(1) with φ = 0.95: about 1/39 of the draws are effective, so the gate needs about 3,900 draws per chain.
+        var model = new ScriptedModel((_, seed) =>
+        {
+            Func<double> noise = Noise(0, seed);
+            double x = 0.0;
+            return () => x = 0.95 * x + Math.Sqrt(1.0 - 0.95 * 0.95) * noise();
+        });
+        EnsembleRun run = new ChainEnsemble().Run(model, chains: 4, masterSeed: 1, burn: 200, samples: 20_000,
+                                                  rHatTarget: 1.1, batchSize: 100).Summary;
+        Assert.InRange(run.SamplesUsed, 2_000, 8_000);
+    }
+
+    [Fact]
+    public void EarlyStop_WithoutAMonitoredFunctional_IsRejected()
+    {
+        var model = new ScriptedModel(monitored: 0, Noise);
+        Assert.Throws<ArgumentException>(() =>
+            new ChainEnsemble().Run(model, chains: 4, masterSeed: 1, burn: 0, samples: 200, rHatTarget: 1.1));
+    }
+
+    [Fact]
+    public void AcceptanceRate_CountsTheSamplingPhaseOnly()
+    {
+        // The chain accepts every proposal while burning in and none while sampling.
+        var model = new BurnAcceptingModel();
+        EnsembleRun run = new ChainEnsemble().Run(model, chains: 2, masterSeed: 1, burn: 50, samples: 50).Summary;
+        Assert.Equal(0.0, run.AcceptanceRate);
     }
 
     [Fact]
@@ -167,10 +203,16 @@ public sealed class DiagnosticsPolicyTests
         private readonly Func<int, int, Func<double>>[] _sources;
         private int _next = -1;
 
-        public ScriptedModel(params Func<int, int, Func<double>>[] sources) => _sources = sources;
+        public ScriptedModel(params Func<int, int, Func<double>>[] sources) : this(sources.Length, sources) { }
+
+        public ScriptedModel(int monitored, params Func<int, int, Func<double>>[] sources)
+        {
+            _sources = sources;
+            MonitoredDim = monitored;
+        }
 
         public int FunctionalDim => _sources.Length;
-        public int EssDim => 0;
+        public int MonitoredDim { get; }
 
         public IChainRun<double[]> StartChain(int chainSeed, int readoutSeed)
         {
@@ -201,5 +243,37 @@ public sealed class DiagnosticsPolicyTests
         public IChain<double[]> Chain { get; }
         public void Burn(int steps) { }
         public void Accumulate(in double[] draw, Span<double> functionals) => draw.CopyTo(functionals);
+    }
+
+    private sealed class BurnAcceptingModel : IEnsembleModel<double>
+    {
+        public int FunctionalDim => 1;
+        public int MonitoredDim => 1;
+        public IChainRun<double> StartChain(int chainSeed, int readoutSeed) => new BurnAcceptingRun();
+    }
+
+    private sealed class BurnAcceptingRun : IChainRun<double>, IChain<double>
+    {
+        private bool _burning;
+        private double _x;
+        public IChain<double> Chain => this;
+        public long Accepted { get; private set; }
+        public long Attempts { get; private set; }
+
+        public double Step()
+        {
+            Attempts++;
+            if (_burning) Accepted++;
+            return _x += 1.0;
+        }
+
+        public void Burn(int steps)
+        {
+            _burning = true;
+            for (int i = 0; i < steps; i++) Step();
+            _burning = false;
+        }
+
+        public void Accumulate(in double draw, Span<double> functionals) => functionals[0] = draw;
     }
 }
