@@ -34,10 +34,17 @@ namespace Maths.LinAlg
     /// <see cref="Solve(ReadOnlySpan{double})"/> alone, so no inverse is ever materialized.
     /// </para>
     /// <para>
-    /// Allocate once with <see cref="BandCholesky(int,int,BandFactorization)"/>, then call <see cref="Decompose"/>
-    /// each time the matrix changes (the inner-loop MCMC pattern). Mirrors <see cref="CholeskyDecomposition"/>'s
-    /// 1e-12 diagonal floor — a soft guard against a near-interpolating (over-knotted) design without throwing;
-    /// the floor is applied to the variance so the two conventions clamp to the same D = 1e-12.
+    /// Allocate once with <see cref="BandCholesky(int,int,BandFactorization,bool)"/>, then call <see cref="Decompose"/>
+    /// each time the matrix changes (the inner-loop MCMC pattern). By default it mirrors
+    /// <see cref="CholeskyDecomposition"/>'s 1e-12 diagonal floor — a soft guard against a near-interpolating
+    /// (over-knotted) design without throwing; the floor is applied to the variance so the two conventions clamp to
+    /// the same D = 1e-12.
+    /// </para>
+    /// <para>
+    /// A strict factor (<see cref="Strict"/>) has no floor, as <see cref="DenseCholesky"/>: the first pivot that is not
+    /// finite and positive stops the factorization, <see cref="FailedAt"/> says where, <see cref="LogDet"/> is NaN and
+    /// every solve and draw refuses. On a matrix whose pivots all exceed the floor the two modes compute the same
+    /// factor.
     /// </para>
     /// </remarks>
     public sealed class BandCholesky : ISpdFactor
@@ -45,6 +52,7 @@ namespace Maths.LinAlg
         private readonly int _n;
         private readonly int _p;                 // lower half-bandwidth (sub-diagonals); L has the same.
         private readonly BandFactorization _mode;
+        private readonly bool _strict;
 
         // Lower-band factor in LAPACK 'L' layout: _l[d, j] = L(j+d, j) for d = 1..p (sub-diagonals).
         // The diagonal slot _l[0, j] holds L(j,j) for Cholesky, or D(j) for LDLᵀ (where L is unit-diagonal).
@@ -71,16 +79,26 @@ namespace Maths.LinAlg
         /// <summary>The factorization convention in force.</summary>
         public BandFactorization Factorization => _mode;
 
+        /// <summary>Whether the factor is strict: no pivot floor, and no solve after a failed factorization.</summary>
+        public bool Strict => _strict;
+
+        /// <summary>The row whose pivot stopped the last strict factorization, or −1 when it completed (always −1
+        /// for a floored factor).</summary>
+        public int FailedAt { get; private set; } = -1;
+
         /// <param name="dim">Matrix order n.</param>
         /// <param name="bandwidth">Lower half-bandwidth p; clamped to n−1 (a dense matrix is the limiting case).</param>
         /// <param name="factorization">Square-root convention; defaults to <see cref="BandFactorization.Cholesky"/>.</param>
-        public BandCholesky(int dim, int bandwidth, BandFactorization factorization = BandFactorization.Cholesky)
+        /// <param name="strict">No pivot floor: a pivot that is not finite and positive stops the factorization.</param>
+        public BandCholesky(int dim, int bandwidth, BandFactorization factorization = BandFactorization.Cholesky,
+                            bool strict = false)
         {
             if (dim <= 0) throw new ArgumentOutOfRangeException(nameof(dim), "Dimension must be positive.");
             if (bandwidth < 0) throw new ArgumentOutOfRangeException(nameof(bandwidth), "Bandwidth must be non-negative.");
             _n = dim;
             _p = Math.Min(bandwidth, dim - 1);
             _mode = factorization;
+            _strict = strict;
             _l = new double[_p + 1, dim];
         }
 
@@ -137,6 +155,7 @@ namespace Maths.LinAlg
         private void FactorCholesky()
         {
             double logDetL = 0.0;
+            FailedAt = -1;
             var tally = PivotTally.Start();
             for (int j = 0; j < _n; j++)
             {
@@ -148,8 +167,9 @@ namespace Maths.LinAlg
                     double ljk = _l[j - k, k];            // L(j,k)
                     sum -= ljk * ljk;
                 }
-                bool floored = sum <= 1e-12;
+                bool floored = !_strict && sum <= 1e-12;
                 tally.Observe(sum, ajj, floored);
+                if (_strict && !(sum > 0.0 && double.IsFinite(sum))) { Fail(j, tally); return; }
                 if (floored) sum = 1e-12;                   // the diagonal floor, which Status reports
                 double ljj = Math.Sqrt(sum);
                 _l[0, j] = ljj;
@@ -174,6 +194,7 @@ namespace Maths.LinAlg
         private void FactorLdlt()
         {
             double logDet = 0.0;
+            FailedAt = -1;
             var tally = PivotTally.Start();
             for (int j = 0; j < _n; j++)
             {
@@ -185,8 +206,9 @@ namespace Maths.LinAlg
                     double ljk = _l[j - k, k];            // L(j,k)
                     dj -= ljk * ljk * _l[0, k];           // L(j,k)²·D(k)
                 }
-                bool floored = dj <= 1e-12;
+                bool floored = !_strict && dj <= 1e-12;
                 tally.Observe(dj, ajj, floored);
+                if (_strict && !(dj > 0.0 && double.IsFinite(dj))) { Fail(j, tally); return; }
                 if (floored) dj = 1e-12;                    // the diagonal floor, which Status reports
                 _l[0, j] = dj;                             // store D(j)
                 logDet += Math.Log(dj);
@@ -204,6 +226,21 @@ namespace Maths.LinAlg
             }
             LogDet = logDet;                               // ln|A| = Σ ln D(j)
             Status = tally.ToStatus();
+        }
+
+        // A strict factorization stopped at row j: the factor is unusable.
+        private void Fail(int j, PivotTally tally)
+        {
+            FailedAt = j;
+            LogDet = double.NaN;
+            Status = tally.ToStatus();
+        }
+
+        private void RequireFactor()
+        {
+            if (FailedAt >= 0)
+                throw new InvalidOperationException(
+                    $"The matrix is not positive definite: the factorization stopped at pivot {FailedAt}.");
         }
 
         // ── Solve ─────────────────────────────────────────────────────────────────
@@ -227,6 +264,7 @@ namespace Maths.LinAlg
         public void SolveInPlace(Span<double> x)
         {
             if (x.Length != _n) throw new ArgumentException("Right-hand side length must equal the matrix order.", nameof(x));
+            RequireFactor();
             if (_mode == BandFactorization.Ldlt) SolveLdlt(x);
             else SolveCholesky(x);
         }
@@ -290,6 +328,7 @@ namespace Maths.LinAlg
                 throw new InvalidOperationException("Gaussian sampling requires the Ldlt factorization.");
             if (z.Length != _n || result.Length != _n)
                 throw new ArgumentException("Vector length must equal the matrix order.");
+            RequireFactor();
 
             for (int i = 0; i < _n; i++)
                 result[i] = z[i] / Math.Sqrt(_l[0, i]);   // D^{−½} z
