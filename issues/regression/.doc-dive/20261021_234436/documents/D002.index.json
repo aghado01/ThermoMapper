@@ -1,10 +1,10 @@
 {
   "schema": 2,
   "id": "D002",
-  "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-derivations-and-integration-review.md",
-  "bytes": 23591,
-  "sha256": "06bd7cf77214aa10ffe3fa51645114d3a78297c2e75c9d0d363f445d6359b073",
-  "mtimeMs": 1792477802310.4104,
+  "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-preparation-brief.md",
+  "bytes": 201948,
+  "sha256": "037d3da3f271667597c042f07ccf664052ce9325ebc2b6d3a0cb61fee01454a3",
+  "mtimeMs": 1792711082864.4062,
   "encoding": "utf-8",
   "bom": false,
   "newline": "lf",
@@ -12,167 +12,698 @@
     {
       "hid": "H01",
       "level": 1,
-      "title": "BASS derivations and integration review",
-      "digest": "ae43",
+      "title": "BASS preparation brief",
+      "digest": "fa62",
       "line": 1,
       "headingStart": 0,
-      "bodyStart": 42,
-      "subtreeEnd": 23591
+      "bodyStart": 25,
+      "subtreeEnd": 201948
     },
     {
       "hid": "H02",
       "level": 2,
-      "title": "Notation",
-      "digest": "3e74",
-      "line": 7,
-      "headingStart": 818,
-      "bodyStart": 830,
-      "subtreeEnd": 1632
+      "title": "How this brief maps onto the port stages",
+      "digest": "0c63",
+      "line": 15,
+      "headingStart": 1203,
+      "bodyStart": 1247,
+      "subtreeEnd": 1930
     },
     {
       "hid": "H03",
       "level": 2,
-      "title": "1. One collapsed g-prior family",
-      "digest": "78dd",
-      "line": 23,
-      "headingStart": 1632,
-      "bodyStart": 1667,
-      "subtreeEnd": 7776
+      "title": "Sequence",
+      "digest": "0740",
+      "line": 26,
+      "headingStart": 1930,
+      "bodyStart": 1942,
+      "subtreeEnd": 3044
     },
     {
       "hid": "H04",
-      "level": 3,
-      "title": "1.1 Coefficient-marginal target",
-      "digest": "5bf3",
-      "line": 25,
-      "headingStart": 1668,
-      "bodyStart": 1704,
-      "subtreeEnd": 2644
+      "level": 2,
+      "title": "Phase 0: existing-engine baseline",
+      "digest": "43cc",
+      "line": 61,
+      "headingStart": 3044,
+      "bodyStart": 3081,
+      "subtreeEnd": 12543
     },
     {
       "hid": "H05",
       "level": 3,
-      "title": "1.2 Variance-collapsed target",
-      "digest": "4533",
-      "line": 41,
-      "headingStart": 2644,
-      "bodyStart": 2678,
-      "subtreeEnd": 3496
+      "title": "0.1 Diagnostics failure policy (B01: R09)",
+      "digest": "6f9c",
+      "line": 63,
+      "headingStart": 3082,
+      "bodyStart": 3128,
+      "subtreeEnd": 3830
     },
     {
       "hid": "H06",
       "level": 3,
-      "title": "1.3 BARS is a member of the family",
-      "digest": "682b",
-      "line": 59,
-      "headingStart": 3496,
-      "bodyStart": 3535,
-      "subtreeEnd": 5029
+      "title": "0.2 Refresh a chain's target in place (B02: R07)",
+      "digest": "96ba",
+      "line": 72,
+      "headingStart": 3830,
+      "bodyStart": 3883,
+      "subtreeEnd": 4950
     },
     {
       "hid": "H07",
       "level": 3,
-      "title": "1.4 Why the identity was hard to see, and how to sort engine differences",
-      "digest": "9697",
-      "line": 72,
-      "headingStart": 5029,
-      "bodyStart": 5106,
-      "subtreeEnd": 7776
+      "title": "0.3 Kernel and replica ownership (B02: R05)",
+      "digest": "3fca",
+      "line": 84,
+      "headingStart": 4950,
+      "bodyStart": 4998,
+      "subtreeEnd": 5667
     },
     {
       "hid": "H08",
-      "level": 2,
-      "title": "2. D04 proposal: full collapse with composition sampling",
-      "digest": "f279",
-      "line": 98,
-      "headingStart": 7776,
-      "bodyStart": 7836,
-      "subtreeEnd": 9218
+      "level": 3,
+      "title": "0.4 Factor status (B06: R11 and the LinAlg side of R08)",
+      "digest": "a7ad",
+      "line": 95,
+      "headingStart": 5667,
+      "bodyStart": 5727,
+      "subtreeEnd": 6340
     },
     {
       "hid": "H09",
-      "level": 2,
-      "title": "3. D05 proposal: the likelihood-tempered path",
-      "digest": "56f8",
-      "line": 112,
-      "headingStart": 9218,
-      "bodyStart": 9267,
-      "subtreeEnd": 12350
+      "level": 3,
+      "title": "0.5 BARS statistical contracts (B03: R13, R08, R12, R04, R01, R14)",
+      "digest": "95de",
+      "line": 105,
+      "headingStart": 6340,
+      "bodyStart": 6411,
+      "subtreeEnd": 12130
     },
     {
       "hid": "H10",
-      "level": 2,
-      "title": "4. D02 proposal: a globally truncated joint prior",
-      "digest": "b83f",
-      "line": 146,
-      "headingStart": 12350,
-      "bodyStart": 12403,
-      "subtreeEnd": 14234
+      "level": 3,
+      "title": "0.6 Baseline qualification",
+      "digest": "1ab3",
+      "line": 139,
+      "headingStart": 12130,
+      "bodyStart": 12161,
+      "subtreeEnd": 12543
     },
     {
       "hid": "H11",
       "level": 2,
-      "title": "5. D06 proposal: admission by angle, with the residual as shared state",
-      "digest": "7dec",
-      "line": 164,
-      "headingStart": 14234,
-      "bodyStart": 14308,
-      "subtreeEnd": 17177
+      "title": "Phase 2: shared numerics and the g-prior block",
+      "digest": "0bef",
+      "line": 148,
+      "headingStart": 12543,
+      "bodyStart": 12593,
+      "subtreeEnd": 15329
     },
     {
       "hid": "H12",
-      "level": 2,
-      "title": "6. D03 finding: R's default τ hyperprior",
-      "digest": "b032",
-      "line": 189,
-      "headingStart": 17177,
-      "bodyStart": 17222,
-      "subtreeEnd": 19012
+      "level": 3,
+      "title": "2.1 Distributions",
+      "digest": "aefc",
+      "line": 150,
+      "headingStart": 12594,
+      "bodyStart": 12616,
+      "subtreeEnd": 12889
     },
     {
       "hid": "H13",
-      "level": 2,
-      "title": "7. Integration opportunities",
-      "digest": "600c",
-      "line": 202,
-      "headingStart": 19012,
-      "bodyStart": 19044,
-      "subtreeEnd": 21071
+      "level": 3,
+      "title": "2.2 Strict dense reference factor",
+      "digest": "7749",
+      "line": 156,
+      "headingStart": 12889,
+      "bodyStart": 12927,
+      "subtreeEnd": 13128
     },
     {
       "hid": "H14",
-      "level": 2,
-      "title": "8. Document notes",
-      "digest": "3bfe",
-      "line": 218,
-      "headingStart": 21071,
-      "bodyStart": 21092,
-      "subtreeEnd": 22586
+      "level": 3,
+      "title": "2.3 Collapsed g-prior block",
+      "digest": "e2c1",
+      "line": 160,
+      "headingStart": 13128,
+      "bodyStart": 13160,
+      "subtreeEnd": 15329
     },
     {
       "hid": "H15",
       "level": 2,
-      "title": "References",
-      "digest": "6982",
-      "line": 226,
-      "headingStart": 22586,
-      "bodyStart": 22600,
-      "subtreeEnd": 23591
+      "title": "Phase 3: sampler contracts",
+      "digest": "59f6",
+      "line": 183,
+      "headingStart": 15329,
+      "bodyStart": 15359,
+      "subtreeEnd": 38584
+    },
+    {
+      "hid": "H16",
+      "level": 3,
+      "title": "3.1 Neutral target contract",
+      "digest": "cee7",
+      "line": 185,
+      "headingStart": 15360,
+      "bodyStart": 15392,
+      "subtreeEnd": 15833
+    },
+    {
+      "hid": "H17",
+      "level": 3,
+      "title": "3.2 Tempering paths",
+      "digest": "7bd5",
+      "line": 191,
+      "headingStart": 15833,
+      "bodyStart": 15857,
+      "subtreeEnd": 16388
+    },
+    {
+      "hid": "H18",
+      "level": 3,
+      "title": "3.3 Non-reversible swap schedule",
+      "digest": "5f10",
+      "line": 198,
+      "headingStart": 16388,
+      "bodyStart": 16425,
+      "subtreeEnd": 17136
+    },
+    {
+      "hid": "H19",
+      "level": 3,
+      "title": "3.4 Shell readouts: diagnostics and accumulators",
+      "digest": "cbff",
+      "line": 205,
+      "headingStart": 17136,
+      "bodyStart": 17189,
+      "subtreeEnd": 21239
+    },
+    {
+      "hid": "H20",
+      "level": 3,
+      "title": "3.5 Baseline rerun",
+      "digest": "920a",
+      "line": 234,
+      "headingStart": 21239,
+      "bodyStart": 21262,
+      "subtreeEnd": 21391
+    },
+    {
+      "hid": "H21",
+      "level": 3,
+      "title": "3.6 Cleanup sweep",
+      "digest": "64af",
+      "line": 238,
+      "headingStart": 21391,
+      "bodyStart": 21413,
+      "subtreeEnd": 21692
+    },
+    {
+      "hid": "H22",
+      "level": 3,
+      "title": "3.7 BARS admission: numerical and support gates (Q6)",
+      "digest": "86a1",
+      "line": 242,
+      "headingStart": 21692,
+      "bodyStart": 21749,
+      "subtreeEnd": 23462
+    },
+    {
+      "hid": "H23",
+      "level": 3,
+      "title": "3.8 `EbicPrior` in He, Yang and Kang's convention (Q7)",
+      "digest": "709f",
+      "line": 257,
+      "headingStart": 23462,
+      "bodyStart": 23521,
+      "subtreeEnd": 30864
+    },
+    {
+      "hid": "H24",
+      "level": 3,
+      "title": "3.9 Full-support births (OQ11)",
+      "digest": "3f5c",
+      "line": 303,
+      "headingStart": 30864,
+      "bodyStart": 30899,
+      "subtreeEnd": 34675
+    },
+    {
+      "hid": "H25",
+      "level": 3,
+      "title": "3.10 Poisson g-prior marginal (OQ12)",
+      "digest": "0365",
+      "line": 346,
+      "headingStart": 34675,
+      "bodyStart": 34716,
+      "subtreeEnd": 38584
+    },
+    {
+      "hid": "H26",
+      "level": 2,
+      "title": "After Phase 3: BARS mixing",
+      "digest": "042c",
+      "line": 385,
+      "headingStart": 38584,
+      "bodyStart": 38614,
+      "subtreeEnd": 46628
+    },
+    {
+      "hid": "H27",
+      "level": 2,
+      "title": "Addendum: triage of the additional-bugs review",
+      "digest": "a43c",
+      "line": 446,
+      "headingStart": 46628,
+      "bodyStart": 46678,
+      "subtreeEnd": 48372
+    },
+    {
+      "hid": "H28",
+      "level": 2,
+      "title": "Seam map: admission, prior and schedule",
+      "digest": "b4e7",
+      "line": 465,
+      "headingStart": 48372,
+      "bodyStart": 48415,
+      "subtreeEnd": 49437
+    },
+    {
+      "hid": "H29",
+      "level": 2,
+      "title": "Addendum: admission evidence (2026-10-20)",
+      "digest": "d4ec",
+      "line": 476,
+      "headingStart": 49437,
+      "bodyStart": 49482,
+      "subtreeEnd": 52692
+    },
+    {
+      "hid": "H30",
+      "level": 2,
+      "title": "Decisions",
+      "digest": "cfa6",
+      "line": 507,
+      "headingStart": 52692,
+      "bodyStart": 52705,
+      "subtreeEnd": 57106
+    },
+    {
+      "hid": "H31",
+      "level": 2,
+      "title": "Open questions",
+      "digest": "5e0a",
+      "line": 519,
+      "headingStart": 57106,
+      "bodyStart": 57124,
+      "subtreeEnd": 69624
+    },
+    {
+      "hid": "H32",
+      "level": 2,
+      "title": "Working rules",
+      "digest": "df3d",
+      "line": 541,
+      "headingStart": 69624,
+      "bodyStart": 69641,
+      "subtreeEnd": 71205
+    },
+    {
+      "hid": "H33",
+      "level": 2,
+      "title": "Out of scope",
+      "digest": "3e91",
+      "line": 557,
+      "headingStart": 71205,
+      "bodyStart": 71221,
+      "subtreeEnd": 71342
+    },
+    {
+      "hid": "H34",
+      "level": 2,
+      "title": "Report",
+      "digest": "b6ce",
+      "line": 561,
+      "headingStart": 71342,
+      "bodyStart": 71352,
+      "subtreeEnd": 201948
+    },
+    {
+      "hid": "H35",
+      "level": 3,
+      "title": "0.1 Diagnostics failure policy — done 2026-10-19",
+      "digest": "70ff",
+      "line": 565,
+      "headingStart": 71452,
+      "bodyStart": 71507,
+      "subtreeEnd": 74305
+    },
+    {
+      "hid": "H36",
+      "level": 3,
+      "title": "0.2 Target refresh and move-pair reciprocity — done 2026-10-19",
+      "digest": "d071",
+      "line": 611,
+      "headingStart": 74305,
+      "bodyStart": 74374,
+      "subtreeEnd": 75953
+    },
+    {
+      "hid": "H37",
+      "level": 3,
+      "title": "0.3 Kernel and replica ownership — done 2026-10-19",
+      "digest": "0ad2",
+      "line": 640,
+      "headingStart": 75953,
+      "bodyStart": 76010,
+      "subtreeEnd": 77316
+    },
+    {
+      "hid": "H38",
+      "level": 3,
+      "title": "0.4 Factor status — done 2026-10-19",
+      "digest": "864d",
+      "line": 661,
+      "headingStart": 77316,
+      "bodyStart": 77358,
+      "subtreeEnd": 82775
+    },
+    {
+      "hid": "H39",
+      "level": 3,
+      "title": "0.5a The marginal's guard (R13) — done 2026-10-19",
+      "digest": "d69d",
+      "line": 717,
+      "headingStart": 82775,
+      "bodyStart": 82831,
+      "subtreeEnd": 83780
+    },
+    {
+      "hid": "H40",
+      "level": 3,
+      "title": "0.5b Rank and admission policy (R08) — done 2026-10-20",
+      "digest": "58d3",
+      "line": 729,
+      "headingStart": 83780,
+      "bodyStart": 83841,
+      "subtreeEnd": 85695
+    },
+    {
+      "hid": "H41",
+      "level": 3,
+      "title": "0.5c Full coefficient draws (R12) — done 2026-10-20",
+      "digest": "1de1",
+      "line": 754,
+      "headingStart": 85695,
+      "bodyStart": 85753,
+      "subtreeEnd": 87805
+    },
+    {
+      "hid": "H42",
+      "level": 3,
+      "title": "0.5d Exact robust weights (R04) — done 2026-10-20",
+      "digest": "dd6d",
+      "line": 782,
+      "headingStart": 87805,
+      "bodyStart": 87861,
+      "subtreeEnd": 92507
+    },
+    {
+      "hid": "H43",
+      "level": 3,
+      "title": "0.5e Knot measure (R01) — done 2026-10-20",
+      "digest": "feef",
+      "line": 833,
+      "headingStart": 92507,
+      "bodyStart": 92555,
+      "subtreeEnd": 97074
+    },
+    {
+      "hid": "H44",
+      "level": 3,
+      "title": "0.5f Span coverage as a probability (R14) — done 2026-10-20",
+      "digest": "b6ce",
+      "line": 883,
+      "headingStart": 97074,
+      "bodyStart": 97140,
+      "subtreeEnd": 98918
+    },
+    {
+      "hid": "H45",
+      "level": 3,
+      "title": "0.6 Baseline qualification — done 2026-10-20",
+      "digest": "fde1",
+      "line": 908,
+      "headingStart": 98918,
+      "bodyStart": 98969,
+      "subtreeEnd": 101807
+    },
+    {
+      "hid": "H46",
+      "level": 3,
+      "title": "2.1 Distributions — done 2026-10-20",
+      "digest": "7aa6",
+      "line": 951,
+      "headingStart": 101807,
+      "bodyStart": 101849,
+      "subtreeEnd": 105980
+    },
+    {
+      "hid": "H47",
+      "level": 3,
+      "title": "2.2 Strict dense reference factor — done 2026-10-20",
+      "digest": "6f4a",
+      "line": 987,
+      "headingStart": 105980,
+      "bodyStart": 106038,
+      "subtreeEnd": 110173
+    },
+    {
+      "hid": "H48",
+      "level": 3,
+      "title": "2.3 Collapsed g-prior block — done 2026-10-20",
+      "digest": "0c86",
+      "line": 1040,
+      "headingStart": 110173,
+      "bodyStart": 110225,
+      "subtreeEnd": 115425
+    },
+    {
+      "hid": "H49",
+      "level": 3,
+      "title": "3.1 Neutral target contract — done 2026-10-21",
+      "digest": "ecb0",
+      "line": 1099,
+      "headingStart": 115425,
+      "bodyStart": 115477,
+      "subtreeEnd": 121609
+    },
+    {
+      "hid": "H50",
+      "level": 3,
+      "title": "3.2 Tempering paths — done 2026-10-21",
+      "digest": "797a",
+      "line": 1150,
+      "headingStart": 121609,
+      "bodyStart": 121653,
+      "subtreeEnd": 131402
+    },
+    {
+      "hid": "H51",
+      "level": 4,
+      "title": "Addendum: linear marginal tempering — done 2026-10-21",
+      "digest": "c3f3",
+      "line": 1195,
+      "headingStart": 128563,
+      "bodyStart": 128624,
+      "subtreeEnd": 131402
+    },
+    {
+      "hid": "H52",
+      "level": 3,
+      "title": "3.3 Non-reversible swap schedule — done 2026-10-21",
+      "digest": "ea4c",
+      "line": 1219,
+      "headingStart": 131402,
+      "bodyStart": 131459,
+      "subtreeEnd": 138020
+    },
+    {
+      "hid": "H53",
+      "level": 3,
+      "title": "3.4 Shell readouts: diagnostics, readouts, traces and checkpoints — done 2026-10-21",
+      "digest": "3bce",
+      "line": 1289,
+      "headingStart": 138020,
+      "bodyStart": 138110,
+      "subtreeEnd": 145269
+    },
+    {
+      "hid": "H54",
+      "level": 3,
+      "title": "3.5 Baseline rerun — done 2026-10-21",
+      "digest": "133b",
+      "line": 1369,
+      "headingStart": 145269,
+      "bodyStart": 145312,
+      "subtreeEnd": 158653
+    },
+    {
+      "hid": "H55",
+      "level": 4,
+      "title": "Addendum: the multi-seed sweep of comparative assertions — done 2026-10-21",
+      "digest": "d3c4",
+      "line": 1437,
+      "headingStart": 152366,
+      "bodyStart": 152448,
+      "subtreeEnd": 158653
+    },
+    {
+      "hid": "H56",
+      "level": 3,
+      "title": "3.6 Cleanup sweep — done 2026-10-21",
+      "digest": "96dd",
+      "line": 1515,
+      "headingStart": 158653,
+      "bodyStart": 158695,
+      "subtreeEnd": 162669
+    },
+    {
+      "hid": "H57",
+      "level": 3,
+      "title": "3.7 BARS admission: numerical and support gates — done 2026-10-21",
+      "digest": "60d6",
+      "line": 1563,
+      "headingStart": 162669,
+      "bodyStart": 162741,
+      "subtreeEnd": 168951
+    },
+    {
+      "hid": "H58",
+      "level": 3,
+      "title": "3.8 `EbicPrior` in He, Yang and Kang's convention — done 2026-10-21",
+      "digest": "de9a",
+      "line": 1626,
+      "headingStart": 168951,
+      "bodyStart": 169025,
+      "subtreeEnd": 171861
+    },
+    {
+      "hid": "H59",
+      "level": 3,
+      "title": "3.9 Full-support births — done 2026-10-21",
+      "digest": "53ff",
+      "line": 1663,
+      "headingStart": 171861,
+      "bodyStart": 171909,
+      "subtreeEnd": 177139
+    },
+    {
+      "hid": "H60",
+      "level": 3,
+      "title": "3.10 Poisson g-prior marginal — done 2026-10-22",
+      "digest": "bc55",
+      "line": 1728,
+      "headingStart": 177139,
+      "bodyStart": 177193,
+      "subtreeEnd": 182351
+    },
+    {
+      "hid": "H61",
+      "level": 3,
+      "title": "Review follow-up — done 2026-10-22",
+      "digest": "4f1f",
+      "line": 1785,
+      "headingStart": 182351,
+      "bodyStart": 182392,
+      "subtreeEnd": 187300
+    },
+    {
+      "hid": "H62",
+      "level": 3,
+      "title": "Normal null-fit centre — done 2026-10-22",
+      "digest": "f3e9",
+      "line": 1837,
+      "headingStart": 187300,
+      "bodyStart": 187347,
+      "subtreeEnd": 191709
+    },
+    {
+      "hid": "H63",
+      "level": 3,
+      "title": "After Phase 3: BARS mixing re-measured — 2026-10-22",
+      "digest": "1285",
+      "line": 1884,
+      "headingStart": 191709,
+      "bodyStart": 191767,
+      "subtreeEnd": 196945
+    },
+    {
+      "hid": "H64",
+      "level": 3,
+      "title": "Parked decisions — 2026-10-22",
+      "digest": "0084",
+      "line": 1955,
+      "headingStart": 196945,
+      "bodyStart": 196981,
+      "subtreeEnd": 198258
+    },
+    {
+      "hid": "H65",
+      "level": 3,
+      "title": "Relocation and move-schedule studies — 2026-10-22",
+      "digest": "3fc8",
+      "line": 1963,
+      "headingStart": 198258,
+      "bodyStart": 198314,
+      "subtreeEnd": 201948
     }
   ],
   "counts": [
     1,
-    10,
-    4,
-    0,
+    14,
+    48,
+    2,
     0,
     0
   ],
   "spine": {
-    "bytes": 42,
-    "ratio": 0.001780339960154296
+    "bytes": 25,
+    "ratio": 0.00012379424406282807
   },
   "breaks": [],
-  "maxLine": 766,
-  "noise": []
+  "maxLine": 1470,
+  "noise": [
+    {
+      "kind": "html",
+      "start": 103152,
+      "end": 103155,
+      "bytes": 3
+    },
+    {
+      "kind": "html",
+      "start": 115786,
+      "end": 115794,
+      "bytes": 8
+    },
+    {
+      "kind": "html",
+      "start": 117570,
+      "end": 117582,
+      "bytes": 12
+    },
+    {
+      "kind": "html",
+      "start": 140075,
+      "end": 140078,
+      "bytes": 3
+    },
+    {
+      "kind": "html",
+      "start": 140157,
+      "end": 140164,
+      "bytes": 7
+    }
+  ]
 }

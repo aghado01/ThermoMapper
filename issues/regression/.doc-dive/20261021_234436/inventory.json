@@ -5,34 +5,10 @@
   "docs": [
     {
       "id": "D001",
-      "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-adaptation-prerequisites-review.md",
-      "name": "bass-adaptation-prerequisites-review.md",
-      "bytes": 29207,
-      "grain": "1/8/13~28.5K",
-      "spineRatio": 0.001,
-      "levels": "1/7/5",
-      "notes": "",
-      "noiseRatio": 0,
-      "breaksUnaligned": false
-    },
-    {
-      "id": "D002",
-      "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-derivations-and-integration-review.md",
-      "name": "bass-derivations-and-integration-review.md",
-      "bytes": 23591,
-      "grain": "1/11/15~23.0K",
-      "spineRatio": 0.002,
-      "levels": "1/10/4",
-      "notes": "",
-      "noiseRatio": 0,
-      "breaksUnaligned": false
-    },
-    {
-      "id": "D003",
       "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-full-port-brief.md",
       "name": "bass-full-port-brief.md",
-      "bytes": 42859,
-      "grain": "1/12/16~41.9K",
+      "bytes": 44528,
+      "grain": "1/12/16~43.5K",
       "spineRatio": 0.001,
       "levels": "1/11/4",
       "notes": "",
@@ -40,13 +16,13 @@
       "breaksUnaligned": false
     },
     {
-      "id": "D004",
+      "id": "D002",
       "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-preparation-brief.md",
       "name": "bass-preparation-brief.md",
-      "bytes": 110008,
-      "grain": "1/14/48~107.4K",
+      "bytes": 201948,
+      "grain": "1/15/63~197.2K",
       "spineRatio": 0,
-      "levels": "1/13/34/1",
+      "levels": "1/14/48/2",
       "notes": "",
       "noiseRatio": 0,
       "breaksUnaligned": false

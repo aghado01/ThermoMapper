@@ -1,10 +1,10 @@
 {
   "schema": 2,
   "id": "D001",
-  "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-adaptation-prerequisites-review.md",
-  "bytes": 29207,
-  "sha256": "59644f7e3e8b1ef2bf88a30a69a112e65ec9e310593adcffac94f7e44225f35a",
-  "mtimeMs": 1792604581667.6362,
+  "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-full-port-brief.md",
+  "bytes": 44528,
+  "sha256": "faca5a149ed48b6f98e7a80f8553e652b9c0b2a4f540548ba06e10490f2caf2a",
+  "mtimeMs": 1792644900888.1038,
   "encoding": "utf-8",
   "bom": false,
   "newline": "lf",
@@ -12,147 +12,177 @@
     {
       "hid": "H01",
       "level": 1,
-      "title": "BASS adaptation prerequisites review",
-      "digest": "2807",
+      "title": "Full BASS port brief",
+      "digest": "b375",
       "line": 1,
       "headingStart": 0,
-      "bodyStart": 39,
-      "subtreeEnd": 29207
+      "bodyStart": 23,
+      "subtreeEnd": 44528
     },
     {
       "hid": "H02",
       "level": 2,
-      "title": "Evidence and scope",
-      "digest": "fa3c",
-      "line": 9,
-      "headingStart": 1354,
-      "bodyStart": 1376,
-      "subtreeEnd": 2585
+      "title": "Scope and completion contract",
+      "digest": "d175",
+      "line": 13,
+      "headingStart": 1540,
+      "bodyStart": 1573,
+      "subtreeEnd": 5284
     },
     {
       "hid": "H03",
       "level": 2,
-      "title": "Existing engine findings",
-      "digest": "788e",
-      "line": 20,
-      "headingStart": 2585,
-      "bodyStart": 2613,
-      "subtreeEnd": 16843
+      "title": "Existing engine baseline before integration",
+      "digest": "d54f",
+      "line": 45,
+      "headingStart": 5284,
+      "bodyStart": 5331,
+      "subtreeEnd": 9333
     },
     {
       "hid": "H04",
-      "level": 3,
-      "title": "Count priors and conditional location measures",
-      "digest": "c8e5",
-      "line": 40,
-      "headingStart": 11306,
-      "bodyStart": 11357,
-      "subtreeEnd": 12389
+      "level": 2,
+      "title": "Placement and dependency boundaries",
+      "digest": "34bc",
+      "line": 64,
+      "headingStart": 9333,
+      "bodyStart": 9372,
+      "subtreeEnd": 13125
     },
     {
       "hid": "H05",
-      "level": 3,
-      "title": "BAPS tail and Gibbs conditioning",
-      "digest": "8458",
-      "line": 58,
-      "headingStart": 12389,
-      "bodyStart": 12426,
-      "subtreeEnd": 14224
+      "level": 2,
+      "title": "Reuse and shared renovations",
+      "digest": "ef02",
+      "line": 110,
+      "headingStart": 13125,
+      "bodyStart": 13157,
+      "subtreeEnd": 18574
     },
     {
       "hid": "H06",
-      "level": 3,
-      "title": "State ownership and diagnostic failure",
-      "digest": "cb24",
-      "line": 73,
-      "headingStart": 14224,
-      "bodyStart": 14267,
-      "subtreeEnd": 15553
+      "level": 2,
+      "title": "Numerical and operation contracts",
+      "digest": "d8a3",
+      "line": 139,
+      "headingStart": 18574,
+      "bodyStart": 18611,
+      "subtreeEnd": 22581
     },
     {
       "hid": "H07",
       "level": 3,
-      "title": "BGP scaling qualification",
-      "digest": "2de9",
-      "line": 81,
-      "headingStart": 15553,
-      "bodyStart": 15583,
-      "subtreeEnd": 16843
+      "title": "Dense factor maintenance",
+      "digest": "d1af",
+      "line": 141,
+      "headingStart": 18612,
+      "bodyStart": 18641,
+      "subtreeEnd": 19860
     },
     {
       "hid": "H08",
-      "level": 2,
-      "title": "Additional constraints on reuse",
-      "digest": "aaa3",
-      "line": 89,
-      "headingStart": 16843,
-      "bodyStart": 16878,
-      "subtreeEnd": 18491
+      "level": 3,
+      "title": "Direct functional algebra",
+      "digest": "7049",
+      "line": 149,
+      "headingStart": 19860,
+      "bodyStart": 19890,
+      "subtreeEnd": 20305
     },
     {
       "hid": "H09",
-      "level": 2,
-      "title": "Corrections to BASS modernization claims",
-      "digest": "9dfa",
-      "line": 98,
-      "headingStart": 18491,
-      "bodyStart": 18535,
-      "subtreeEnd": 22157
+      "level": 3,
+      "title": "Response basis conventions",
+      "digest": "051e",
+      "line": 159,
+      "headingStart": 20305,
+      "bodyStart": 20336,
+      "subtreeEnd": 20960
     },
     {
       "hid": "H10",
-      "level": 2,
-      "title": "Existing engine remediation register",
-      "digest": "57cf",
-      "line": 118,
-      "headingStart": 22157,
-      "bodyStart": 22197,
-      "subtreeEnd": 26992
+      "level": 3,
+      "title": "Posterior ownership and prediction",
+      "digest": "eeed",
+      "line": 165,
+      "headingStart": 20960,
+      "bodyStart": 20999,
+      "subtreeEnd": 22581
     },
     {
       "hid": "H11",
-      "level": 3,
-      "title": "Baseline completion gate",
-      "digest": "a334",
-      "line": 133,
-      "headingStart": 25451,
-      "bodyStart": 25480,
-      "subtreeEnd": 26992
+      "level": 2,
+      "title": "SMC integration",
+      "digest": "3e11",
+      "line": 178,
+      "headingStart": 22581,
+      "bodyStart": 22600,
+      "subtreeEnd": 26735
     },
     {
       "hid": "H12",
       "level": 2,
-      "title": "Implications for SMC and dependency boundaries",
-      "digest": "e93f",
-      "line": 143,
-      "headingStart": 26992,
-      "bodyStart": 27042,
-      "subtreeEnd": 28153
+      "title": "Statistical decisions to settle",
+      "digest": "3194",
+      "line": 209,
+      "headingStart": 26735,
+      "bodyStart": 26770,
+      "subtreeEnd": 31004
     },
     {
       "hid": "H13",
       "level": 2,
-      "title": "References",
-      "digest": "6982",
-      "line": 151,
-      "headingStart": 28153,
-      "bodyStart": 28167,
-      "subtreeEnd": 29207
+      "title": "Implementation stages",
+      "digest": "2b1c",
+      "line": 228,
+      "headingStart": 31004,
+      "bodyStart": 31029,
+      "subtreeEnd": 34682
+    },
+    {
+      "hid": "H14",
+      "level": 2,
+      "title": "Validation and performance qualification",
+      "digest": "0f4a",
+      "line": 249,
+      "headingStart": 34682,
+      "bodyStart": 34726,
+      "subtreeEnd": 37446
+    },
+    {
+      "hid": "H15",
+      "level": 2,
+      "title": "Modernization choices and deferred extensions",
+      "digest": "fed7",
+      "line": 268,
+      "headingStart": 37446,
+      "bodyStart": 37495,
+      "subtreeEnd": 42451
+    },
+    {
+      "hid": "H16",
+      "level": 2,
+      "title": "References and documentation updates",
+      "digest": "5371",
+      "line": 303,
+      "headingStart": 42451,
+      "bodyStart": 42491,
+      "subtreeEnd": 44528
     }
   ],
   "counts": [
     1,
-    7,
-    5,
+    11,
+    4,
     0,
     0,
     0
   ],
   "spine": {
-    "bytes": 39,
-    "ratio": 0.0013352963330708393
+    "bytes": 23,
+    "ratio": 0.0005165289256198347
   },
   "breaks": [],
-  "maxLine": 1015,
+  "maxLine": 827,
   "noise": []
 }
