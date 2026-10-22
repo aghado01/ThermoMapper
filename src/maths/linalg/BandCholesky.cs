@@ -58,6 +58,11 @@ namespace Maths.LinAlg
         // The diagonal slot _l[0, j] holds L(j,j) for Cholesky, or D(j) for LDLᵀ (where L is unit-diagonal).
         private readonly double[,] _l;
 
+        // From the input, for the condition estimate: √A_jj and ‖D^(−½)·A·D^(−½)‖₁ (scratch: the column sums).
+        private readonly double[] _sqrtDiagonal;
+        private readonly double[] _columnSums;
+        private double _equilibratedNorm1 = double.NaN;
+
         /// <summary>ln|A|. For Cholesky 2·Σ_j ln(L_{jj}); for LDLᵀ Σ_j ln(D_j). Valid after <see cref="Decompose"/>.</summary>
         public double LogDet { get; private set; }
 
@@ -100,6 +105,8 @@ namespace Maths.LinAlg
             _mode = factorization;
             _strict = strict;
             _l = new double[_p + 1, dim];
+            _sqrtDiagonal = new double[dim];
+            _columnSums = new double[dim];
         }
 
         // ── Decompose ────────────────────────────────────────────────────────────
@@ -146,6 +153,7 @@ namespace Maths.LinAlg
 
         private void FactorInPlace()
         {
+            _equilibratedNorm1 = ConditionEstimate.EquilibratedNorm1(_l, _n, _p, _sqrtDiagonal, _columnSums);   // _l holds A
             if (_mode == BandFactorization.Ldlt) FactorLdlt();
             else FactorCholesky();
         }
@@ -311,6 +319,17 @@ namespace Maths.LinAlg
                     s -= _l[k - i, i] * x[k];          // L(k,i)
                 x[i] = s;
             }
+        }
+
+        // ── Condition ────────────────────────────────────────────────────────────
+
+        /// <inheritdoc/>
+        /// <remarks>Refuses after a failed strict factorization. A floored factor's solves describe the floored matrix, so
+        /// its estimate is of that matrix.</remarks>
+        public double EquilibratedCondition()
+        {
+            RequireFactor();
+            return ConditionEstimate.Equilibrated(this, _sqrtDiagonal, _equilibratedNorm1);
         }
 
         // ── Gaussian draw ───────────────────────────────────────────────────────

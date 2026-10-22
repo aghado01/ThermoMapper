@@ -21,6 +21,9 @@ namespace Maths.LinAlg
     {
         private readonly double[] _l;          // packed lower triangle: L(i, j) at i(i+1)/2 + j
         private readonly double[] _relative;   // d_j / A(j,j) per row
+        private readonly double[] _sqrtDiagonal;   // √A(j,j), for the condition estimate
+        private readonly double[] _columnSums;     // scratch for ‖D^(−½)·A·D^(−½)‖₁
+        private double _equilibratedNorm1 = double.NaN;
         private int _n;
         private bool _valid;
 
@@ -32,6 +35,8 @@ namespace Maths.LinAlg
             Capacity = capacity;
             _l = new double[capacity * (capacity + 1) / 2];
             _relative = new double[capacity];
+            _sqrtDiagonal = new double[capacity];
+            _columnSums = new double[capacity];
         }
 
         /// <summary>Largest order this instance can factor.</summary>
@@ -92,6 +97,34 @@ namespace Maths.LinAlg
             _valid = true;
             Status = tally.ToStatus();
             LogDet = 2.0 * logDetL;
+            _equilibratedNorm1 = EquilibratedNorm1(a, n);
+        }
+
+        // ‖D^(−½)·A·D^(−½)‖₁ from A's lower triangle, recording √A(j,j); called once A is known to be positive definite.
+        private double EquilibratedNorm1(double[,] a, int n)
+        {
+            for (int j = 0; j < n; j++)
+            {
+                _sqrtDiagonal[j] = Math.Sqrt(a[j, j]);
+                _columnSums[j] = 1.0;
+            }
+            for (int i = 1; i < n; i++)
+                for (int j = 0; j < i; j++)
+                {
+                    double e = Math.Abs(a[i, j]) / (_sqrtDiagonal[i] * _sqrtDiagonal[j]);
+                    _columnSums[i] += e;
+                    _columnSums[j] += e;
+                }
+            double norm = 0.0;
+            for (int j = 0; j < n; j++) norm = Math.Max(norm, _columnSums[j]);
+            return norm;
+        }
+
+        /// <inheritdoc/>
+        public double EquilibratedCondition()
+        {
+            RequireValid();
+            return ConditionEstimate.Equilibrated(this, _sqrtDiagonal, _equilibratedNorm1);
         }
 
         /// <summary>L(i, j); 0 above the diagonal.</summary>
