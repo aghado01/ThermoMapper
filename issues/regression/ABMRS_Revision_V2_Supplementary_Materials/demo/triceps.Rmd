@@ -1,0 +1,107 @@
+---
+title: "Triceps Skinfold Thickness"
+author: "Junhui He"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r package}
+library(ggplot2)
+library(ABMRS)
+library(ggpubr)
+```
+
+
+# Read and Display Data
+
+```{r data}
+# read data
+triceps = read.csv('data/triceps/triceps.csv')
+# plot
+p_data = ggplot(triceps, aes(age, lntriceps)) + geom_point(shape = 1) + ylim(1.0, 4.0) + xlab('Age in years') + ylab('Triceps skinfold thickness in mm (log)') + theme_classic() + theme(axis.title = element_text(size = 14))
+
+p_data
+```
+
+# Knot Inference
+
+```{r knot-inference}
+set.seed(1234) # set random seed
+# ABMRS
+ebars_model = ebars(triceps$age, triceps$lntriceps, degree = 1, times=2, gamma = 1)
+ebars_model$rjmcmc(burns=20000, steps=20000)
+knot_samples = ebars_model$knots()
+counts = sapply(knot_samples, function(xi) {return(length(xi))}) # calculate the number of knots
+nodes = unlist(knot_samples) # calculate the posterior distribution
+
+# plot counts
+p_1 = ggplot(mapping=aes(x=counts)) + geom_bar(aes(y=after_stat(prop)), width = 0.6) + ylab("Proportion") + xlab("Number of Knots") + geom_vline(aes(xintercept=mean(counts)), color="red", linetype="dashed") + scale_x_continuous(breaks=1:6) + theme_classic() + theme(axis.title = element_text(size = 14))
+# plot nodes
+p_2 = ggplot(mapping=aes(x=nodes)) + geom_density(adjust=1) + ylab("Density") + xlab("Age in Years") + theme_classic() + theme(axis.title = element_text(size = 14))
+
+ggarrange(p_1,p_2,ncol=2,align="hv")
+```
+
+```{r knot-inference}
+set.seed(1234) # set random seed
+# ABMRS
+ebars_model = ebars(triceps$age, triceps$lntriceps, degree = 1, times=2, gamma = 1.5)
+ebars_model$rjmcmc(burns=20000, steps=20000)
+knot_samples = ebars_model$knots()
+counts = sapply(knot_samples, function(xi) {return(length(xi))}) # calculate the number of knots
+nodes = unlist(knot_samples) # calculate the posterior distribution
+
+# plot counts
+p_1 = ggplot(mapping=aes(x=counts)) + geom_bar(aes(y=after_stat(prop)), width = 0.6) + ylab("Proportion") + xlab("Number of Knots") + geom_vline(aes(xintercept=mean(counts)), color="red", linetype="dashed") + scale_x_continuous(breaks=1:6) + theme_classic() + theme(axis.title = element_text(size = 14))
+# plot nodes
+p_2 = ggplot(mapping=aes(x=nodes)) + geom_density(adjust=1) + ylab("Density") + xlab("Age in Years") + theme_classic() + theme(axis.title = element_text(size = 14))
+
+ggarrange(p_1,p_2,ncol=2,align="hv")
+```
+
+
+# Regression and Hypothesis Testing
+
+
+```{r regression}
+set.seed(1234)
+# fix the number of knots
+ebars_model = ebars(triceps$age, triceps$lntriceps, degree = 1, k = 2, times = 2)
+ebars_model$rjmcmc(burns=20000, steps=20000)
+nodes_mat = sapply(ebars_model$knots(), function(xi) {return(xi)})
+# predict
+pred = ebars_model$predict(triceps$age)
+y_hat = rowMeans(pred)
+```
+
+```{r hypothsis-testing}
+# mean and standard deviation of estimated knots
+node = rowMeans(nodes_mat)
+print(node)
+node_sd = apply(nodes_mat, 1, sd)
+print(node_sd)
+node_quantiles = apply(nodes_mat, 1, quantile, probs=c(0.025,0.975))
+print(node_quantiles)
+# generate truncated power series
+U = outer(triceps$age, rep(1,3))
+K = outer(rep(1,892), c(0, node))
+B = (U-K) * (U>K)
+# predict using `glm` with design matrix
+fitted_model = glm(triceps$lntriceps~B)
+summary(fitted_model)
+```
+
+```{r plot, include=FALSE}
+y_hat = fitted_model$fitted.values
+# plot
+p_fit = p_data + geom_line(aes(age, y_hat), color = 'red', linewidth = 1.2) + geom_vline(aes(xintercept=node[1]), linetype="solid", linewidth = 1) + geom_vline(aes(xintercept=node[2]), linetype="solid", linewidth = 1) +
+  geom_vline(aes(xintercept=node_quantiles[1,1]), linetype="dashed") + geom_vline(aes(xintercept=node_quantiles[1,2]), linetype="dashed") +
+  geom_vline(aes(xintercept=node_quantiles[2,1]), linetype="dashed") + geom_vline(aes(xintercept=node_quantiles[2,2]), linetype="dashed")
+p_fit
+```
+
+

@@ -1,0 +1,299 @@
+--- PAGE 1 ---
+SUPPLEMENTARY MATERIALS FOR "ADAPTIVE
+BAYESIAN MULTIVARIATE SPLINE KNOT INFERENCE
+WITH PRIOR SPECIFICATIONS ON MODEL
+COMPLEXITY "
+Junhui He
+Department of Mathematical Sciences
+Tsinghua University
+Beijing, China
+Ying Yang
+Department of Statistics and Data Science
+Tsinghua University
+Beijing, China
+yangying@tsinghua.edu.cn
+Jian Kang
+Department of Biostatistics
+University of Michigan, Ann Arbor
+Michigan, United States
+jiankang@umich.edu
+A Web Appendix A
+A.1 Proof of Lemma 1
+Proof. The marginal likelihood p(y|k, ξ) is given by
+p(y|k, ξ) =p(y|Z) =
+Z
+(0,∞)
+Z
+Rν
+p(y|Z, β, σ)π(β|Z, σ)π(σ)dβdσ.
+According to the specified priors, we have
+p(y|Z, β, σ) = 1(2πσ 2)m/2 exp{− 12σ2 (y − Zβ )⊤(y − Zβ )},
+π(β|Z, σ) = 1(2πmσ 2)ν/2 |Z ⊤Z|1/2 exp{− 12mσ2 β⊤Z ⊤Zβ }.
+Then the Fubini’s Theorem (Royden and Fitzpatrick, 2010) implies that,
+p(y|k, ξ) =
+Z ∞
+0
+1
+(2πσ 2)m/2(m + 1)ν/2 exp{− 12σ2 ak,ξ}π(σ)dσ,
+
+--- PAGE 2 ---
+where ak,ξ = y⊤(Im − mm+1 Z(Z ⊤Z)−1Z ⊤)y. With change of variables w = σ/√ak,ξ, we have
+p(y|k, ξ) ∝ (m + 1)−ν/2a−m/2k,ξ . It follows from π(k, ξ) ∝ τ (Mk)−γ that p(k, ξ|y) ∝ (m +
+1)−ν/2a−m/2k,ξ τ (Mk)−γ.
+A.2 Proof of Lemma 3
+Proof. According to the detailed balance equation,
+α(k′, ξ′|k, ξ) = min
+
+1, p(k′, ξ′|y)q(k, ξ|k′, ξ′)p(k, ξ|y)q(k′, ξ′|k, ξ)  ,
+where p(k′, ξ′|y) and p(k, ξ|y) are the posterior densities, and q(k, ξ|k′, ξ′) and q(k′, ξ′|k, ξ) are
+the proposal distributions. We claim that under our prior and proposal specification, the relation
+π(k, ξ)q(k′, ξ′|k, ξ) = π(k′, ξ′)q(k, ξ|k′, ξ′) holds. Without loss of generality, assume that d = 1.
+From the prior specification,
+π(k, ξ) =π(ξ|k)π(k) ∝ τ (Mk)−γ, π (k′, ξ′) ∝ τ (Mk′)−γ.
+1. Birth step ( k′ = k + 1): The prior ratio is
+π(k + 1, ξ′)
+π(k, ξ) =
+ τ (Mk+1)
+τ (Mk)
+−γ
+=
+ n − k
+k + 1
+−γ
+.
+The proposal ratio is
+q(k + 1, ξ′|k, ξ)
+q(k, ξ|k + 1, ξ′) = bk(k + 1)dk+1(n − k) = π(k + 1)(k + 1)π(k)(n − k) =  n − kk + 1−γ .
+The second equality uses the identity π(k)bk = π(k + 1)dk+1. Therefore, we have
+π(k, ξ)q(k + 1, ξ′|k, ξ) =π(k + 1, ξ′)q(k, ξ|k + 1, ξ′).
+2. Death step (k′ = k − 1): The derivation mirrors the Birth case, with the numerator and
+denominator reversed.
+3. Relocation step ( k′ = k): Here,
+π(k, ξ′)
+π(k, ξ) = 1, q(k, ξ′|k, ξ)q(k, ξ|k, ξ′) = 1.
+Since p(k, ξ|y) ∝ p(y|k, ξ)π(k, ξ), we have
+α(k′, ξ′|k, ξ) = min
+
+1, p(y|k′, ξ′)p(y|k, ξ)  .
+Thus, Lemma 1 implies the acceptance probability in RJMCMC. For the EBIC-based approximation,
+we substitute ˆp for the corresponding p.
+2
+
+--- PAGE 3 ---
+B Web Appendix B
+For curve fitting, the proposed method is benchmarked against Bayesian Adaptive Knot Regression
+Splines (BARS) (Dimatteo et al., 2001), Smoothing Splines (SMS) (Green and Silverman, 1994),
+and Gaussian Process Regression (GPR) (Rasmussen and Williams, 2005). BARS is a Bayesian
+method for knot estimation in univariate splines, which employs a Poisson prior for the number of
+knots. However, this method cannot be directly extended to multivariate splines. SMS represents a
+class of penalized splines that incorporate a roughness penalty. It models the unknown function as
+a spline with a large number of knots, enabling a high degree of flexibility, while the roughness
+penalty regulates the smoothness of the spline. SMS is implemented using the build-in funtion
+smooth.spline, and GPR with the squared exponential kernel is implemented using the R package
+GauPro (Erickson, 2025).
+We examine three curves with varying levels of smoothness, labeled as Curves 1–3. The output
+noise follows a Gaussian distribution with standard deviations of 2, 4, and 1 for Curves 1, 2, and 3,
+respectively. Web Figure 1 depicts the curves along with the training samples. Curve1 is continuous,
+whereas Curves 2 and 3 exhibit discontinuities with one or more jump breakpoints.
+To investigate the influence of the parameter γ in the proposed method, we consider three scenarios
+where γ is set to 0.8, 1.0, and 1.2. All methods are evaluated under sample sizes m = 200and 500,
+with the experiment repeated 50 times. Prediction performance is assessed using the Root Mean
+Squared Error (RMSE).
+Web Figure 1: Curve fitting with sample size m = 200. Rows correspond to Curves 1–3 (top to
+bottom). Columns correspond to the ground truth with noisy samples (red points), followed by
+estimates using ABMRS (with γ ∈ {0.8, 1.0, 1.2}), BARS, SMS, and GPR (left to right).
+3
+
+--- PAGE 4 ---
+The fitted curves are shown in Columns 2–6 of Web Figure 1, and the RMSEs are summarized
+in Web Table 1. For the smooth curve (Curve1), all methods achieve low RMSEs. However, for
+the discontinuous curves (Curves 2 and 3), SMS and GPR fail to capture the jump discontinuities,
+resulting in substantially degraded performance. The BARS method performs well when the true
+number of knots is relatively small. However, for highly oscillatory true functions (Curve 3), BARS
+tends to include too few knots in its estimation. In this example, the proposed method with γ = 1.2
+yields a high RMSE for Curve 3 when the sample size is m = 200, indicating that γ >1 can lead
+to overly regularized models for highly oscillatory curves. This issue can be substantially alleviated
+by choosing a smaller value of γ or increasing the sample size.
+Web Table 1: RMSE based on 50 repeated experiments in Curves 1–3 with sample sizem = 200
+and 500. Curve 1 is smooth, while Curves 2 and 3 exhibit jump discontinuities.
+m Curve 1 Curve 2 Curve 3
+ABMRS (γ = 0.8)
+200
+0.378 ± 0.092 1.385 ± 0.574 0.680 ± 0.143
+ABMRS (γ = 1.0) 0.391 ± 0.099 1.328 ± 0.610 0.751 ± 0.278
+ABMRS (γ = 1.2) 0.430 ± 0.122 1.314 ± 0.601 1.533 ± 0.496
+BARS 0.411 ± 0.119 1.290 ± 0.839 1.742 ± 0.202
+SMS 0.364 ± 0.100 2.838 ± 0.542 0.806 ± 0.110
+GPR 0.365 ± 0.261 2.999 ± 0.547 0.936 ± 0.356
+ABMRS (γ = 0.8)
+500
+0.245 ± 0.069 0.886 ± 0.368 0.425 ± 0.058
+ABMRS (γ = 1.0) 0.242 ± 0.068 0.918 ± 0.356 0.437 ± 0.061
+ABMRS (γ = 1.2) 0.242 ± 0.072 0.957 ± 0.359 0.457 ± 0.064
+BARS 0.288 ± 0.063 0.869 ± 0.443 0.615 ± 0.364
+SMS 0.249 ± 0.071 2.254 ± 0.339 0.619 ± 0.052
+GPR 0.202 ± 0.065 2.511 ± 0.868 0.713 ± 0.301
+C Web Appendix C
+To further evaluate model performance, we analyze five additional surface functions given by
+Denison et al. (1998), specified as follows:
+1. Case 1: g1(x) = 10.391[(x1 − 0.4)(x2 − 0.6) + 0.36];
+2. Case 2: g2(x) = 24.234[r2(0.75 − r2)], where r2 = (x1 − 0.5)2 + (x2 − 0.5)2;
+3. Case 3: g3(x) = 42.659[0.1 + ˆx1(0.05 + ˆx41 − 10ˆx21 ˆx22 + 5ˆx42)], where ˆx1 = x1 − 0.5, ˆx2 =
+x2 − 0.5;
+4. Case 4: g4(x) = 1.3356
+n
+1.5(1 − x1) + e2x1−1 sin[3π(x1 − 0.6)2] + e3(x2−0.5) sin[4π(x2 −
+0.9)2]o;
+5. Case 5: g5(x) = 1.9
+n
+1.35 + ex1 sin[13(x1 − 0.6)2] × e−x2 sin(7x2)o.
+4
+
+--- PAGE 5 ---
+The output noise for each surface follows a Gaussian distribution with standard deviations of 0.25,
+0.22, 0.22, 0.25 and 0.25, respectively.
+We compare the proposed method with Thin Plate Regression Splines (TPRS) (Wood, 2003), Tensor
+Product Regression Splines (TEPS) (Wood, 2017), Bayesian MARS (BMARS) (Denison et al.,
+1998), and Gaussian Process Regression (GPR) (Rasmussen and Williams, 2005). Both TPRS and
+TEPS extend smoothing splines to multivariate settings using prespecified knots. We implement
+TPRS and TEPS using the R package mgcv with a roughness penalty (Wood and Wood, 2015).
+BMARS is implemented using the R package BASS (Francom and Sansó, 2020), and GPR with the
+Matérn kernel is implemented using the R package GauPro (Erickson, 2025). For BMARS, we
+consider spline degrees 1, 2, and 3, and report the best results.
+In this example, we employ cubic splines and consider γ ∈ {0.8, 1.0, 1.2} in the proposed method.
+All methods are evaluated under sample sizes m = 250and 1000, with the experiment repeated 50
+times. Model performance is assessed using the Root Mean Squared Error (RMSE). To evaluate
+predictive uncertainty, we construct prediction intervals for the true functions and compare the
+average coverage and interval widths across methods.
+Web Table 2 reports the results for the additional surface fitting problem. All methods achieve low
+RMSEs across all scenarios, with RMSEs decreasing as the sample size increases. When evaluating
+predictive uncertainty, all compared methods achieve an empirical coverage for their prediction
+intervals that matches the nominal confidence level. The credible or confidence intervals for the
+mean function—which exclude noise variance—tell a slightly different story. Here, our proposed
+method yields moderately lower coverage than TPRS, TEPS, and GPR. Even so, it stays within a
+reasonable range, unlike BMARS, which suffers from consistently poor coverage across every case.
+Finally, the proposed method proves highly robust to the choice of γ, showing very similar results
+across different values.
+D Web Appendix D
+Web Table 3 reports the additional results about predictive uncertainty in Section 4.2.1. When
+evaluating the coverage of 95% credible (confidence) intervals for the mean function, the proposed
+method achieves moderately lower, yet still reasonable, coverage compared to TPRS, TEPS, and
+GPR. This difference is expected: TPRS, TEPS and GPR rely on frequentist interval construction
+and therefore enjoy nominal frequency guarantees, whereas the proposed method is fully Bayesian
+and constructs confidence intervals using posterior quantiles, which do not provide exact frequentist
+coverage. BMARS, by contrast, attains consistently poor coverage across all surfaces.
+References
+Denison, D. G. T., Mallick, B. K., and Smith, A. F. M. (1998). Bayesian MARS. Statistics and
+Computing 8, 337–346.
+Dimatteo, I., Genovese, C. R., and Kass, R. E. (2001). Bayesian curve-fitting with free-knot splines.
+Biometrika 88, 1055–1071.
+Erickson, C. (2025). GauPro: Gaussian process fitting. R package version 0.2.15.
+5
+
+--- PAGE 6 ---
+Web Table 2: Surface fitting results for Cases 1–5 with sample size m = 250and 1000 under 50
+repeated experiments.
+(a) Root Mean Square Errors (RMSE) (×10−1)
+m Case 1 Case 2 Case 3 Case 4 Case 5
+ABMRS (γ = 0.8)
+250
+0.67 ± 0.15 0.86 ± 0.16 1.02 ± 0.16 1.34 ± 0.21 1.55 ± 0.39
+ABMRS (γ = 1.0) 0.67 ± 0.15 0.86 ± 0.16 1.01 ± 0.16 1.34 ± 0.21 1.56 ± 0.37
+ABMRS (γ = 1.2) 0.67 ± 0.15 0.86 ± 0.16 1.01 ± 0.16 1.34 ± 0.21 1.56 ± 0.37
+TPRS 0.86 ± 0.14 0.91 ± 0.13 2.08 ± 0.42 1.42 ± 0.15 1.52 ± 0.24
+TEPS 0.43 ± 0.17 0.86 ± 0.13 1.45 ± 0.26 1.44 ± 0.27 1.44 ± 0.28
+BMARS 0.51 ± 0.16 0.89 ± 0.17 1.24 ± 0.29 0.78 ± 0.13 2.66 ± 0.82
+GPR 0.58 ± 0.11 0.81 ± 0.12 1.51 ± 0.35 1.14 ± 0.16 1.36 ± 0.19
+ABMRS (γ = 0.8)
+1000
+0.30 ± 0.05 0.43 ± 0.06 0.63 ± 0.08 0.70 ± 0.10 0.68 ± 0.08
+ABMRS (γ = 1.0) 0.30 ± 0.05 0.43 ± 0.06 0.66 ± 0.06 0.72 ± 0.10 0.69 ± 0.09
+ABMRS (γ = 1.2) 0.30 ± 0.05 0.43 ± 0.06 0.68 ± 0.06 0.71 ± 0.10 0.71 ± 0.09
+TPRS 0.47 ± 0.05 0.54 ± 0.06 0.97 ± 0.11 0.77 ± 0.06 0.79 ± 0.07
+TEPS 0.18 ± 0.07 0.50 ± 0.06 0.71 ± 0.08 0.71 ± 0.06 0.76 ± 0.07
+BMARS 0.27 ± 0.10 0.39 ± 0.08 0.62 ± 0.09 0.45 ± 0.09 1.13 ± 0.18
+GPR 0.27 ± 0.05 0.45 ± 0.06 0.64 ± 0.07 0.60 ± 0.06 0.69 ± 0.06
+(b) Average coverage and width of 95% prediction intervals
+m Case 1 Case 2 Case 3 Case 4 Case 5
+ABMRS (γ = 0.8)
+250
+93.8% (9.69) 93.4% (8.77) 93.9% (8.96) 93.5% (10.34) 93.0% (10.36)
+ABMRS (γ = 1.0) 93.8% (9.69) 93.3% (8.78) 93.9% (8.96) 93.5% (10.33) 93.1% (10.40)
+ABMRS (γ = 1.2) 93.8% (9.69) 93.4% (8.78) 93.9% (8.97) 93.5% (10.33) 93.0% (10.43)
+TPRS 93.9% (10.03) 94.3% (9.12) 90.9% (9.47) 93.1% (10.62) 93.1% (10.47)
+TEPS 94.3% (9.74) 94.7% (9.19) 94.1% (9.81) 94.5% (11.10) 94.4% (10.96)
+BMARS 94.1% (9.79) 93.6% (9.40) 91.1% (11.10) 93.8% (10.39) 92.3% (14.45)
+GPR 94.5% (9.88) 94.6% (9.11) 94.2% (10.30) 94.6% (10.71) 94.5% (10.86)
+ABMRS (γ = 0.8)
+1000
+94.8% (9.79) 94.5% (8.69) 94.6% (8.84) 94.6% (9.97) 94.5% (9.93)
+ABMRS (γ = 1.0) 94.8% (9.79) 94.5% (8.69) 94.6% (8.88) 94.6% (10.01) 94.5% (9.93)
+ABMRS (γ = 1.2) 94.8% (9.79) 94.5% (8.69) 94.7% (8.90) 94.6% (10.01) 94.6% (9.97)
+TPRS 94.9% (9.96) 94.9% (8.85) 94.7% (9.23) 94.8% (10.18) 94.7% (10.20)
+TEPS 94.8% (9.80) 94.8% (8.83) 94.9% (9.04) 94.9% (10.17) 94.9% (10.19)
+BMARS 94.7% (9.79) 94.0% (8.89) 93.6% (9.15) 94.3% (9.98) 94.0% (10.57)
+GPR 94.9% (9.85) 94.8% (8.81) 94.9% (8.97) 95.0% (10.07) 94.9% (10.14)
+* Values are reported as a(b), where a denotes coverage and b denotes width (×10−1).
+6
+
+--- PAGE 7 ---
+(c) Average coverage and width of 95% credible or confidence intervals for the mean function
+m Case 1 Case 2 Case 3 Case 4 Case 5
+ABMRS (γ = 0.8)
+250
+93.6% (2.35) 92.7% (2.84) 84.6% (2.61) 84.8% (3.33) 85.0% (3.70)
+ABMRS (γ = 1.0) 93.6% (2.35) 92.7% (2.85) 84.3% (2.60) 84.8% (3.30) 84.5% (3.66)
+ABMRS (γ = 1.2) 93.6% (2.35) 92.6% (2.85) 83.8% (2.56) 84.4% (3.28) 84.1% (3.63)
+TPRS 96.6% (3.40) 95.6% (3.23) 90.2% (5.05) 93.4% (4.99) 93.4% (5.07)
+TEPS 95.1% (1.66) 96.0% (3.30) 96.1% (5.10) 96.6% (5.46) 95.4% (5.51)
+BMARS 89.4% (1.14) 80.3% (2.19) 65.3% (2.08) 84.5% (2.16) 53.2% (3.22)
+GPR 95.8% (2.24) 96.1% (3.00) 95.7% (4.89) 96.4% (4.56) 96.2% (5.41)
+ABMRS (γ = 0.8)
+1000
+95.8% (1.16) 90.6% (1.38) 76.3% (1.43) 84.5% (1.75) 86.4% (1.84)
+ABMRS (γ = 1.0) 95.8% (1.16) 90.6% (1.38) 69.4% (1.36) 82.9% (1.73) 85.4% (1.83)
+ABMRS (γ = 1.2) 95.9% (1.16) 92.1% (1.38) 66.3% (1.31) 83.0% (1.73) 83.9% (1.82)
+TPRS 97.8% (2.05) 96.7% (2.09) 94.3% (3.17) 95.7% (3.06) 96.2% (3.10)
+TEPS 93.8% (0.69) 96.3% (1.97) 96.7% (2.78) 96.8% (2.93) 96.5% (3.05)
+BMARS 87.2% (0.68) 84.7% (1.09) 65.2% (1.12) 79.7% (1.10) 56.3% (1.66)
+GPR 97.3% (1.15) 96.5% (1.73) 97.0% (2.58) 96.6% (2.49) 97.3% (2.93)
+* Values are reported as a(b), where a denotes coverage and b denotes width (×10−1).
+Web Table 3: Additional results in Section 4.2.1: average coverage and width of95% credible or
+confidence intervals for the mean function
+m Surface 1 Surface 2 Surface 3
+ABMRS (γ = 0.8)
+500
+83.8% (0.913) 87.9% (2.715) 89.2% (3.542)
+ABMRS (γ = 1.0) 82.7% (0.901) 87.3% (2.688) 88.8% (3.502)
+ABMRS (γ = 1.2) 82.5% (0.896) 85.9% (2.669) 88.7% (3.539)
+TPRS 95.8% (1.195) 92.7% (5.164) 89.2% (5.086)
+TEPS 96.8% (1.304) 92.0% (5.100) 90.6% (6.001)
+BMARS 62.6% (0.703) 58.6% (3.193) 48.5% (3.134)
+GPR 97.4% (1.185) 95.0% (5.587) 92.5% (6.209)
+ABMRS (γ = 0.8)
+1000
+82.5% (0.691) 92.4% (1.832) 93.0% (2.228)
+ABMRS (γ = 1.0) 80.8% (0.677) 91.8% (1.840) 92.5% (2.215)
+ABMRS (γ = 1.2) 80.2% (0.674) 92.1% (1.845) 92.4% (2.220)
+TPRS 96.7% (0.904) 92.1% (4.081) 88.1% (3.930)
+TEPS 96.9% (0.949) 90.7% (6.001) 88.4% (4.319)
+BMARS 61.4% (0.509) 60.3% (2.104) 51.7% (2.528)
+GPR 95.0% (0.881) 95.4% (6.209) 92.7% (4.865)
+* Values are reported as a(b), where a denotes coverage and b denotes width.
+7
+
+--- PAGE 8 ---
+Francom, D. and Sansó, B. (2020). BASS: An R package for fitting and performing sensitivity
+analysis of Bayesian adaptive spline surfaces. Journal of Statistical Software 94, 1–36.
+Green, P. J. and Silverman, B. W. (1994). Nonparametric Regression and Generalized Linear
+Models: A Roughness Penalty Approach. Chapman and Hall, London.
+Rasmussen, C. E. and Williams, C. K. I. (2005). Gaussian Processes for Machine Learning. The
+MIT Press.
+Royden, H. and Fitzpatrick, P. M. (2010). Real Analysis. China Machine Press, Beijing.
+Wood, S. and Wood, M. S. (2015). Package ’mgcv’. R Package Version1, 729.
+Wood, S. N. (2003). Thin plate regression splines. Journal of the Royal Statistical Society Series B:
+Statistical Methodology 65, 95–114.
+Wood, S. N. (2017). Generalized Additive Models: An Introduction with R. Chapman and Hall/CRC,
+New York.
+8
+

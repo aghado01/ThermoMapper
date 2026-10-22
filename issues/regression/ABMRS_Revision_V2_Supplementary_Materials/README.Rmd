@@ -1,0 +1,94 @@
+---
+title: "Supplementary Materials: Adaptive Bayesian Multivariate Regression Spline"
+author: "Junhui He"
+output: github_document
+---
+
+## Overview
+
+This repository contains the supplementary materials for the paper "Adaptive Bayesian Multivariate Spline Knot Inference with Prior Specifications on Model Complexity" by Junhui He, Ying Yang, and Jian Kang.
+
+The ABMRS R package implements the methodology described in the paper and is publicly available at [https://github.com/junhuihe2000/ABMRS](https://github.com/junhuihe2000/ABMRS).
+The R codes for all simulation studies and real data analyses presented in the paper are publicly available at [https://github.com/junhuihe2000/exampleABMRS](https://github.com/junhuihe2000/exampleABMRS).
+
+## Installation
+
+To install the ABMRS package from GitHub, execute the following commands in R:
+
+```{r eval=FALSE}
+# install.packages("devtools")
+devtools::install_github("junhuihe2000/ABMRS")
+```
+
+## Repository Contents
+
+- **`ABMRS_Biometrics_Supplement.pdf`**: Detailed supplementary materials including additional simulation results, theoretical proofs, and computational details.
+- **`data/`**: Real data sets analyzed in the paper, including the triceps skinfold thickness data.
+- **`demo/`**: Reproducible R scripts and R Markdown files for all simulation studies and real data analyses presented in the paper.
+
+## Illustrative Example
+
+The following example demonstrates the application of ABMRS for knot inference in univariate linear spline regression. We simulate data from a piecewise linear function with four true knots and apply the ABMRS algorithm to recover the knot locations and their posterior distributions.
+
+### Data Generation
+
+```{r}
+library(ABMRS)
+library(splines)
+library(ggplot2)
+library(ggpubr)
+
+# Define the true piecewise linear function with four knots
+f = function(x) {
+  knots = c(0.2, 0.2, 0.5, 0.7)
+  beta = c(0, -1, 1, 0, 1, 0)
+  B = bs(x, knots = knots, degree = 1, intercept = TRUE, Boundary.knots = c(0, 1))
+  y = B %*% beta
+  return(y)
+}
+
+# Generate simulated data
+set.seed(1234)
+m = 500  # Sample size
+sd = 0.4  # Noise level
+
+x = runif(m, 0, 1)
+y = f(x)
+y_obs = y + rnorm(m, 0, sd)  # Add Gaussian noise
+
+# Visualize the observed data and true function
+p = ggplot() + 
+  geom_point(aes(x, y_obs), size = 0.6, col = "red") + 
+  geom_line(aes(x, y)) + 
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank())
+
+annotate_figure(p, top = "Simulated Data: Linear Splines with Four Knots")
+```
+
+### ABMRS Knot Inference
+
+```{r}
+# Apply ABMRS algorithm
+ebars = ebars(x, y_obs, gamma = 1, c = 0.3, time = 2, degree = 1, intercept = TRUE)
+ebars$rjmcmc(burns = 5000, steps = 5000)  # Run RJMCMC with 5000 burn-in and 5000 iterations
+
+# Extract posterior samples of knots
+knots = ebars$knots()
+nums = sapply(knots, function(xi) { return(length(xi)) })
+points = unlist(knots)
+
+# Visualize posterior distributions
+p1 = ggplot(mapping = aes(x = nums)) + 
+  geom_bar(aes(y = after_stat(prop))) + 
+  ylab("") + xlab("Number of Knots") + 
+  geom_vline(aes(xintercept = mean(nums)), color = "red", linetype = "dashed") + 
+  scale_x_continuous(breaks = seq(min(nums), max(nums)), 
+                     labels = seq(min(nums), max(nums)))
+
+p2 = ggplot(mapping = aes(x = points)) + 
+  geom_density(adjust = 1) + 
+  ylab("") + xlab("Knot Location")
+
+annotate_figure(ggarrange(p1, p2, ncol = 2, nrow = 1, align = "hv"),
+                top = "Posterior Distributions from ABMRS")
+```

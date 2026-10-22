@@ -1,0 +1,102 @@
+---
+title: "Curve Fitting"
+author: "Junhui He"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ABMRS)
+library(splines)
+library(GauPro)
+source("bars.R")
+```
+
+```{r}
+set.seed(1234)
+```
+
+# Test functions
+```{r}
+# Three test functions
+f1 <- function(x) {
+  return(10*sin(2*pi*(x)))
+}
+
+f2 <- function(x){
+  knot = c(0.4,0.4,0.4,0.4,0.7)
+  beta = matrix(c(2,-5,5,2,-3,-1,2),ncol=1)
+  B = ns(x,knots=knot,intercept=TRUE,Boundary.knots=c(0,1))
+  y = 5*B%*%beta
+  return(y)
+}
+
+f3 <- function(x) {
+  return(40*(x%%0.167))
+}
+
+# configuration
+noises = c(2,4,1)
+fs = list(f1,f2,f3)
+```
+
+# Run simulation
+
+```{r}
+m_train = 200
+# generate train data
+x_train = seq(0,1,length.out=m_train)
+ys_train = array(dim=c(3,m_train))
+ys = array(dim=c(3,7,m_train))
+
+for(i in c(1:3)) {
+ys_train[i,] = sapply(x_train,fs[[i]])
+ys[i,1,] = ys_train[i,] + rnorm(m_train,0,noises[[i]])
+
+# EBARS with gamma = 0.8
+ebars_1 = ebars(x_train, ys[i,1,], gamma = 0.8, times = 2, intercept = TRUE)
+ebars_1$rjmcmc(burns=5000,steps=5000)
+ys[i,2,] = rowMeans(ebars_1$predict(x_train))
+
+# EBARS with gamma = 1
+ebars_2 = ebars(x_train, ys[i,1,], gamma = 1, times = 2, intercept = TRUE)
+ebars_2$rjmcmc(burns=5000,steps=5000)
+ys[i,3,] = rowMeans(ebars_2$predict(x_train))
+
+# EBARS with gamma = 1.2
+ebars_3 = ebars(x_train, ys[i,1,], gamma = 1.2, times = 2, intercept = TRUE)
+ebars_3$rjmcmc(burns=5000,steps=5000)
+ys[i,4,] = rowMeans(ebars_3$predict(x_train))
+
+# BARS
+bars_conf = BARS(x_train,ys[i,1,], burns_in = 1000, effective_length = 1000)
+ys[i,5,] = bars_fit(x_train, bars_conf)
+
+# Smooth spline
+splinesmooth = smooth.spline(x_train,ys[i,1,])
+ys[i,6,] = predict(splinesmooth,x_train)$y
+
+# Gaussian process regression
+gp_model = gpkm(X = cbind(x_train), Z = ys[i,1,], kernel = k_Gaussian(0.1))
+ys[i,7,] = gp_model$pred(cbind(x_train), se.fit = FALSE)
+}
+```
+
+# Plot predictions
+
+```{r}
+par(mfrow=c(3,7))
+par(mar=c(0,0,0,0))
+for(i in c(1:3)) {
+plot(x_train,ys[i,1,],col="red",cex=0.5,pch=16,ylim=range(ys[i,1,]),xlab="",ylab="",xaxt='n',yaxt='n')
+points(x_train,ys_train[i,],type="l",lwd=1.5)
+
+for(j in 2:7){
+  plot(x_train,ys[i,j,],type="l",lwd=1.5,ylim=range(ys[i,1,]),xlab="",ylab="",xaxt='n',yaxt='n')
+} 
+}
+```

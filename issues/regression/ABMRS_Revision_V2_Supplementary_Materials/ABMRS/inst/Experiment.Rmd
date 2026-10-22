@@ -1,0 +1,292 @@
+---
+title: "Experiment"
+author: "He Junhui"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(devtools)
+library(splines)
+library(ggplot2)
+```
+
+```{r}
+Rcpp::sourceCpp(code='
+// [[Rcpp::depends(RcppEigen)]]
+#include <RcppEigen.h>
+#include <iostream>
+#include <algorithm>
+using namespace std;
+
+// [[Rcpp::export]]
+void testcpp(const Eigen::RowVectorXd & x) {
+  std::cout << x << std::endl;
+}
+')
+```
+
+
+
+## curve fitting
+
+generate data
+```{r}
+set.seed(1234)
+knot = c(0.4,0.4,0.4,0.4,0.7)
+beta = matrix(c(3,-5,5,-3,3,-5,3,-2),ncol=1)
+# beta = matrix(c(3,-5,5,-3,3,-4),ncol=1)
+m_train = 400; m_test = 400
+```
+
+```{r}
+# generate train data set
+x = c(0,sort(runif(m_train, 0, 1))[c(-1,-m_train)],1)
+B = bs(x,knots=knot,Boundary.knots=c(0,1))
+y = B%*%beta
+y_h = y + rnorm(m_train,0,0.4)
+
+# generate test data set
+x_new = runif(m_test,0,1)
+y_new = predict(B,x_new)%*%beta
+```
+
+```{r}
+# plot train data and true curve
+ggplot() + geom_point(aes(x,y_h)) + ylim(-5, 5) +
+  geom_line(aes(x, B%*%beta), color="blue", size=1)
+```
+
+```{r}
+?ebars()
+```
+
+run EBARS
+
+```{r}
+time_start = Sys.time()
+a = ebars(x,y_h,gamma=1.0,times=2)
+a$rjmcmc(burns=5000,steps=5000)
+time_end = Sys.time()
+print(time_end-time_start)
+# Time difference of 3.260445 secs
+```
+
+plot prediction and uncertainty band
+
+```{r}
+# plot prediction on test set
+pred = a$predict(x_new, nugget = TRUE)
+y_hat = rowMeans(pred)
+mse = mean((y_hat - y_new)^2)
+cat("MSE on test set:", mse, "\n")
+y_lower = apply(pred,1,quantile,0.025)
+y_upper = apply(pred,1,quantile,0.975)
+coverage = mean((y_new>=y_lower)&(y_new<=y_upper))
+cat("95% CI coverage on test set:", coverage, "\n")
+bandwidth = mean(y_upper - y_lower)
+cat("Average bandwidth of 95% CI on test set:", bandwidth, "\n")
+ggplot() + geom_point(aes(x_new,y_hat),color="red") + ylim(-5, 5) +
+  geom_ribbon(aes(x=x_new,ymin=y_lower,ymax=y_upper),alpha=0.2,fill="blue") +
+  geom_line(aes(x, B%*%beta), color="blue", size=1)
+```
+
+```{r}
+knots = a$knots()
+nums = sapply(knots, function(xi) {return(length(xi))})
+points = unlist(knots)
+```
+
+knot posterior distribution
+
+```{r}
+ggplot(mapping=aes(x=nums)) + geom_histogram(binwidth = 0.5)
+
+ggplot(mapping=aes(x=points)) + geom_density()
+```
+
+
+
+## surface fitting
+
+```{r}
+set.seed(1234)
+#tensor spline
+beta = matrix(rnorm(40,0,1),ncol=1)
+fss <- function(x,y){
+  xix = c(0.2,0.5)
+  xiy = c(0.4,0.4,0.4,0.4,0.7)
+  B = tensor_spline(cbind(x,y),list(xix,xiy), c(3, 3), c(FALSE, FALSE), c(0,0), c(1,1))
+  return(B%*%beta)
+}
+```
+
+plot true surface
+
+```{r}
+x_1_grid <- x_2_grid <- seq(0, 1, length = 50)
+
+y_grid <- outer(x_1_grid, x_2_grid, fss)
+# plot the 3D surface
+persp(x_1_grid, x_2_grid, y_grid, xlab="x_1",ylab="x_2",zlab="y",
+      shade=0.75,main="perspective plot")
+
+contour(x_1_grid, x_2_grid, y_grid, drawlabels = FALSE)
+```
+
+generate data
+
+```{r}
+# parameters' configuration
+m_train = 1000
+m_test = 500
+noise = 0.1
+# generate train data set
+x_1 = c(runif(m_train-2,0,1),0,1)
+x_2 = c(runif(m_train-2,0,1),0,1)
+y = fss(x_1,x_2)
+y_h = y + rnorm(m_train,0,noise)
+
+# generate test set
+x_1_new = runif(m_test,0,1)
+x_2_new = runif(m_test,0,1)
+y_new = fss(x_1_new,x_2_new)
+```
+
+run MEBARS
+
+```{r}
+# run multivariate EBARS
+time_start = Sys.time()
+my_mebars = mebars(cbind(x_1,x_2), y_h)
+my_mebars$rjmcmc(burns=5000,steps=5000)
+time_end = Sys.time()
+time_end - time_start
+# Time difference of 2 mins
+```
+
+plot prediction and uncertainty band
+
+```{r}
+# plot prediction on test set
+pred = my_mebars$predict(cbind(x_1_new,x_2_new))
+y_hat = rowMeans(pred)
+mse = mean((y_hat - y_new)^2)
+cat("MSE on test set:", mse, "\n")
+y_lower = apply(pred,1,quantile,0.025)
+y_upper = apply(pred,1,quantile,0.975)
+coverage = mean((y_new>=y_lower)&(y_new<=y_upper))
+cat("95% CI coverage on test set:", coverage, "\n")
+
+# Faster grid prediction without per-cell outer calls
+mebars_grid <- cbind(rep(x_1_grid, times = length(x_2_grid)),
+                     rep(x_2_grid, each  = length(x_1_grid)))
+mebars_pred  <- my_mebars$predict(mebars_grid)
+y_mebars_hat <- rowMeans(mebars_pred)
+y_mebars <- matrix(y_mebars_hat,
+                   nrow = length(x_1_grid), ncol = length(x_2_grid), 
+                   byrow = FALSE)
+
+contour(x_1_grid, x_2_grid, y_mebars, drawlabels = FALSE)
+```
+
+
+other methods for comparison
+
+```{r}
+# kernel smooth method
+library(sm)
+sm = sm.regression(cbind(x_1,x_2),y_h,method="cv",eval.points=cbind(x_1_new,x_2_new),eval.grid=FALSE)
+mean((y_new-sm$estimate)^2)
+```
+
+```{r}
+my_sm = sm.regression(cbind(x_1,x_2),y_h,method="cv",eval.points=cbind(rep(x_1_grid,times=50),rep(x_2_grid,each=50)),eval.grid=FALSE)
+y_grid_sm = matrix(my_sm$estimate, 50, 50)
+
+contour(x_1_grid, x_2_grid, y_grid_sm, drawlabels = FALSE)
+```
+
+
+```{r}
+# local polynomial regression method
+df = data.frame(x=x_1,y=x_2,z=y_h)
+locpm = loess(z~x*y,data=df,degree=2,span=0.05)
+#control = loess.control(surface = "direct")
+y_locpm = predict(locpm,cbind(x_1_new,x_2_new))
+mean((y_new-y_locpm)^2)
+```
+
+```{r}
+locp_predict <- function(x,y) {
+  return(predict(locpm, cbind(x,y)))
+}
+
+contour(x_1_grid, x_2_grid, outer(x_1_grid,x_2_grid,locp_predict), drawlabels = FALSE)
+```
+
+
+## trivariate fitting
+
+```{r}
+set.seed(1234)
+#tensor spline
+beta = matrix(rnorm(200,0,1),ncol=1)
+xix = c(0.2,0.3)
+xiy = c(0.5,0.5,0.5,0.5,0.7)
+xiz = c(0.4,0.6)
+fss <- function(x,y,z){
+B = tensor_spline(cbind(x,y,z),list(xix,xiy,xiz), c(3, 3, 3), c(FALSE, FALSE, FALSE))
+return(B%*%beta)
+}
+```
+
+generate data
+
+```{r}
+# parameters' configuration
+m_train = 1000; m_test = 500
+noise = 0.1
+# generate train data set
+x_1 = c(runif(m_train-2,0,1),0,1)
+x_2 = c(runif(m_train-2,0,1),0,1)
+x_3 = c(runif(m_train-2,0,1),0,1)
+y = fss(x_1,x_2,x_3)
+y_h = y + rnorm(m_train,0,noise)
+# generate test set
+x_1_new = runif(m_test,0,1)
+x_2_new = runif(m_test,0,1)
+x_3_new = runif(m_test,0,1)
+y_new = fss(x_1_new,x_2_new,x_3_new)
+```
+
+run MEBARS
+
+```{r}
+# run multivariate EBARS
+time_start = Sys.time()
+my_mebars = mebars(cbind(x_1,x_2,x_3), y_h, ks = c(2,5,2))
+my_mebars$rjmcmc(burns=1000,steps=1000)
+time_end = Sys.time()
+time_end - time_start
+# Time difference of 10 mins
+```
+
+plot prediction and uncertainty band
+
+```{r}
+# plot prediction on test set
+pred = my_mebars$predict(cbind(x_1_new,x_2_new,x_3_new))
+y_hat = rowMeans(pred)
+mse = mean((y_hat - y_new)^2)
+cat("MSE on test set:", mse, "\n")
+y_lower = apply(pred,1,quantile,0.025)
+y_upper = apply(pred,1,quantile,0.975)
+coverage = mean((y_new>=y_lower)&(y_new<=y_upper))
+cat("95% CI coverage on test set:", coverage, "\n")
+```
+

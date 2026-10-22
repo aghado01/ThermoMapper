@@ -1,0 +1,426 @@
+---
+title: "Surface Fitting"
+author: "Junhui He"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+library(ABMRS)
+library(BASS)
+library(GauPro)
+library(mgcv)
+library(plot3D)
+```
+
+# Function for ABMRS
+
+```{r}
+f1 = function(x) {
+  return(-40*(exp(-(x[,1]-0.3)^2/0.1-(x[,2]-0.3)^2/0.1)-exp(-(x[,1]-0.7)^2/0.1-(x[,2]-0.7)^2/0.1)))
+}
+
+
+f2 = function(x) {
+  xi_1 = c(0.2,0.5)
+  xi_2 = c(0.4,0.4,0.4,0.4,0.7)
+  beta = c(-1.21, 0.28, 1.08, -2.35, 0.43, 0.51, -0.57, -0.55, -0.56, -0.89, -0.48, -1.00, -0.78,  0.06,  0.96, -0.11, -0.51, -0.91, -0.84,  2.42,  0.13, -0.49, -0.44,  0.46, -0.69, -1.45,  0.57, -1.02, -0.02, -0.94,  1.10, -0.48, -0.71, -0.50, -1.63, -1.17, -2.18, -1.34, -0.29, -0.47)
+  B = tensor_spline(x,list(xi_1,xi_2), c(3,3), c(FALSE,FALSE), c(0 , 0), c(1, 1))
+  return(c(20*B%*%cbind(beta)))
+}
+
+f3 = function(x) {
+  xi_1 = c(0.2,0.2,0.2,0.2,0.6)
+  xi_2 = c(0.5,0.5,0.5,0.5,0.7)
+  beta = c(0.83, -0.28, -0.36,  0.09,  2.25,  0.83,  1.31,  2.50,  1.17, -0.43, -1.00, -1.11, -0.06,  1.17,  1.05,  0.06, -0.74,  0.93,  1.67,  0.56, -0.75,  1.26, 0.04,  0.19,  0.46, -0.43,  0.02,  0.70,  0.97, -0.62, -0.86,  0.07, -1.05, -2.75, -1.13, -0.86,  1.56,  1.02,  1.04, -1.12, -1.07,  0.97,  0.17, -0.90,  0.16, -0.50, -0.97, -0.11, 1.09, -1.21, -1.77, -0.49,  0.32,  1.46,  1.54, -0.34, -1.08, -1.49, -0.25, -0.12, -0.65,  0.31,  0.12, -0.84)
+  B = tensor_spline(x,list(xi_1,xi_2), c(3,3), c(FALSE,FALSE), c(0 , 0), c(1, 1))
+  return(c(20*B%*%cbind(beta)))
+}
+
+fs = list(f1,f2,f3)
+noises = c(0.8,2,2)
+```
+
+# Plot True Surface
+
+```{r}
+par(mfrow=c(1,3))
+par(mar=c(2,2,2,2))
+grid = seq(0,1,by=0.01)
+x = cbind(rep(grid,each=length(grid)),rep(grid,times=length(grid)))
+for(i in c(1:3)) {
+  f = fs[[i]]
+  scatter3D(x[,1], x[,2], f(x),
+          theta = 20, phi = 20,
+          pch = 20, box=TRUE, cex = 0.4, colkey = FALSE, 
+          border="black", shade=0.8, 
+          bty = "b2", axes = TRUE, ticktype = "detailed",
+          main="")
+}
+```
+
+
+
+# Run simulation
+
+```{r}
+time.start = Sys.time()
+set.seed(1234)
+# generate training data
+m_train = 1000
+x_train = cbind(runif(m_train,0,1), runif(m_train,0,1))
+m_test = 500
+x_test = cbind(runif(m_test,0,1), runif(m_test,0,1))
+xmin = c(0, 0)
+xmax = c(1, 1)
+
+p = 0.025 # censoring proportion
+level = 0.95 # credible level
+upper_level = (1 + level)/2
+lower_level = (1 - level)/2
+cases = c("Case 1","Case 2","Case 3")
+methods = c("ABMRS (gamma=0.8)","ABMRS (gamma=1)","ABMRS (gamma=1.2)","Thin Plate Spline","Tensor Product Spline","Gaussian Process", "BASS")
+censor_mse_array = array(NA, dim = c(length(cases), length(methods)), 
+                        dimnames = list(cases, methods))
+mse_array = array(NA, dim = c(length(cases), length(methods)), 
+                  dimnames = list(cases, methods))
+cov_array = array(NA, dim = c(length(cases), length(methods)), 
+                   dimnames = list(cases, methods))
+bandwidth_array = array(NA, dim = c(length(cases), length(methods)), 
+                      dimnames = list(cases, methods))
+
+for(i in c(1:3)) {
+  cat("Running", cases[i], "\n")
+  f = fs[[i]]; noise = noises[i]
+  y_train = f(x_train)
+  y_obs = y_train + rnorm(m_train, 0, noise)
+  y_test = f(x_test)
+
+  # ABMRS with gamma = 0.8
+  mebars_1 = mebars(x_train, y_obs, xmin, xmax, gamma = 0.8, times = c(2,2))
+  mebars_1$rjmcmc(burns=20000,steps=20000)
+  pred_1 = mebars_1$predict(x_test)
+  y_mebars_1 = rowMeans(pred_1)
+  mse_array[i,"ABMRS (gamma=0.8)"] = mean((y_mebars_1 - y_test)^2)
+  censor_mse_array[i,"ABMRS (gamma=0.8)"] = mean(sort((y_mebars_1 - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  lower_bound_1 = apply(pred_1, 1, quantile, probs = lower_level)
+  upper_bound_1 = apply(pred_1, 1, quantile, probs = upper_level)
+  cov_array[i,"ABMRS (gamma=0.8)"] = mean((y_test >= lower_bound_1) & (y_test <= upper_bound_1))
+  bandwidth_array[i,"ABMRS (gamma=0.8)"] = mean(upper_bound_1 - lower_bound_1)
+
+
+  # ABMRS with gamma = 1
+  mebars_2 = mebars(x_train, y_obs, xmin, xmax, gamma = 1, times = c(2,2))
+  mebars_2$rjmcmc(burns=20000,steps=20000)
+  pred_2 = mebars_2$predict(x_test)
+  y_mebars_2 = rowMeans(pred_2)
+  mse_array[i,"ABMRS (gamma=1)"] = mean((y_mebars_2 - y_test)^2)
+  censor_mse_array[i,"ABMRS (gamma=1)"] = mean(sort((y_mebars_2 - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  lower_bound_2 = apply(pred_2, 1, quantile, probs = lower_level)
+  upper_bound_2 = apply(pred_2, 1, quantile, probs = upper_level)
+  cov_array[i,"ABMRS (gamma=1)"] = mean((y_test >= lower_bound_2) & (y_test <= upper_bound_2))
+  bandwidth_array[i,"ABMRS (gamma=1)"] = mean(upper_bound_2 - lower_bound_2)
+
+  # ABMRS with gamma = 1.2
+  mebars_3 = mebars(x_train, y_obs, xmin, xmax, gamma = 1.2, times = c(2,2))
+  mebars_3$rjmcmc(burns=20000,steps=20000)
+  pred_3 = mebars_3$predict(x_test)
+  y_mebars_3 = rowMeans(pred_3)
+  mse_array[i,"ABMRS (gamma=1.2)"] = mean((y_mebars_3 - y_test)^2)
+  censor_mse_array[i,"ABMRS (gamma=1.2)"] = mean(sort((y_mebars_3 - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  lower_bound_3 = apply(pred_3, 1, quantile, probs = lower_level)
+  upper_bound_3 = apply(pred_3, 1, quantile, probs = upper_level)
+  cov_array[i,"ABMRS (gamma=1.2)"] = mean((y_test >= lower_bound_3) & (y_test <= upper_bound_3))
+  bandwidth_array[i,"ABMRS (gamma=1.2)"] = mean(upper_bound_3 - lower_bound_3)
+
+  # Thin Plate Spline
+  train_df = data.frame(x1 = x_train[,1], x2 = x_train[,2], y = y_obs)
+  x_test_df = data.frame(x1 = x_test[,1], x2 = x_test[,2])
+
+  model_tps = gam(y~s(x1, x2, k = 200), data = train_df)
+  pred_tps = predict(model_tps, newdata = x_test_df, se.fit = TRUE)
+  y_tps = pred_tps$fit
+  lower_bound_tps = pred_tps$fit - qnorm(upper_level)*pred_tps$se.fit
+  upper_bound_tps = pred_tps$fit + qnorm(upper_level)*pred_tps$se.fit
+  mse_array[i,"Thin Plate Spline"] = mean((y_tps - y_test)^2)
+  censor_mse_array[i,"Thin Plate Spline"] = mean(sort((y_tps - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  cov_array[i,"Thin Plate Spline"] = mean((y_test >= lower_bound_tps) & (y_test <= upper_bound_tps))
+  bandwidth_array[i,"Thin Plate Spline"] = mean(upper_bound_tps - lower_bound_tps)
+
+  # Tensor Product Spline
+  model_tep = gam(y~te(x1, x2, k = 15), data = train_df)
+  pred_tep = predict(model_tep, newdata = x_test_df, se.fit = TRUE)
+  y_tep = pred_tep$fit
+  lower_bound_tep = pred_tep$fit - qnorm(upper_level)*pred_tep$se.fit
+  upper_bound_tep = pred_tep$fit + qnorm(upper_level)*pred_tep$se.fit
+  mse_array[i,"Tensor Product Spline"] = mean((y_tep - y_test)^2)
+  censor_mse_array[i,"Tensor Product Spline"] = mean(sort((y_tep - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  cov_array[i,"Tensor Product Spline"] = mean((y_test >= lower_bound_tep) & (y_test <= upper_bound_tep))
+  bandwidth_array[i,"Tensor Product Spline"] = mean(upper_bound_tep - lower_bound_tep)
+
+  # Gaussian Process Regression
+  gp_model = gpkm(X = x_train, Z = y_obs, kernel = k_Matern52(D = 2))
+  pred_gp = gp_model$pred(x_test, se = TRUE, mean_dist = TRUE)
+  mse_array[i,"Gaussian Process"] = mean((pred_gp$mean - y_test)^2)
+  censor_mse_array[i,"Gaussian Process"] = mean(sort((pred_gp$mean - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  lower_bound_gp = pred_gp$mean - qnorm(upper_level)*pred_gp$se
+  upper_bound_gp = pred_gp$mean + qnorm(upper_level)*pred_gp$se
+  cov_array[i,"Gaussian Process"] = mean((y_test >= lower_bound_gp) & (y_test <= upper_bound_gp))
+  bandwidth_array[i,"Gaussian Process"] = mean(upper_bound_gp - lower_bound_gp)
+
+  # BASS
+  bass = bass(xx = x_train, y = y_obs, nmcmc = 10000, nburn = 9000, verbose = FALSE)
+  pred_bass = predict(bass, x_test)
+  y_bass = colMeans(pred_bass)
+  mse_array[i,"BASS"] = mean((y_bass - y_test)^2)
+  censor_mse_array[i,"BASS"] = mean(sort((y_bass - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  lower_bound_bass = apply(pred_bass, 2, quantile, probs = lower_level)
+  upper_bound_bass = apply(pred_bass, 2, quantile, probs = upper_level)
+  cov_array[i,"BASS"] = mean((y_test >= lower_bound_bass) & (y_test <= upper_bound_bass))
+  bandwidth_array[i,"BASS"] = mean(upper_bound_bass - lower_bound_bass)
+}
+time.end = Sys.time()
+print(time.end-time.start)
+
+print(mse_array)
+print(censor_mse_array)
+print(cov_array)
+print(bandwidth_array)
+```
+
+# Plot fitted surfaces
+
+```{r}
+time.start = Sys.time()
+set.seed(1234)
+# generate training data
+m_train = 500
+x_train = cbind(runif(m_train,0,1), runif(m_train,0,1))
+xmin = c(0, 0)
+xmax = c(1, 1)
+
+# speed/quality knobs
+grid_step <- 0.01   # was 0.01; larger = faster
+burns_plot <- 20000  # was 20000; smaller = faster
+steps_plot <- 20000  # was 20000; smaller = faster
+
+grid = seq(0,1,by=grid_step)
+grid_xy <- expand.grid(x1 = grid, x2 = grid)
+grid_mat <- as.matrix(grid_xy)
+n_grid <- length(grid)
+
+par(mfrow=c(3,8))
+par(mar=c(0,0,0,0))
+for(i in c(1:3)) {
+  f = fs[[i]]; noise = noises[i]
+  y_train = f(x_train)
+  y_obs = y_train + rnorm(m_train,0,noise)
+
+  z_true <- matrix(f(grid_mat), nrow = n_grid, ncol = n_grid)
+  contour(x=grid,y=grid,z=z_true,axes = FALSE,frame.plot =TRUE)
+  # ABMRS with gamma = 0.8
+  mebars_1 = mebars(x_train, y_obs, xmin, xmax, gamma = 0.8, times = c(2,2))
+  mebars_1$rjmcmc(burns=burns_plot,steps=steps_plot)
+  pred_1_grid <- mebars_1$predict(grid_mat)
+  z_1 <- matrix(rowMeans(pred_1_grid), nrow = n_grid, ncol = n_grid)
+  contour(x=grid,y=grid,z=z_1,axes = FALSE,frame.plot =TRUE)
+  # ABMRS with gamma = 1.0
+  mebars_2 = mebars(x_train, y_obs, xmin, xmax, gamma = 1.0, times = c(2,2))
+  mebars_2$rjmcmc(burns=burns_plot,steps=steps_plot)
+  pred_2_grid <- mebars_2$predict(grid_mat)
+  z_2 <- matrix(rowMeans(pred_2_grid), nrow = n_grid, ncol = n_grid)
+  contour(x=grid,y=grid,z=z_2,axes = FALSE,frame.plot =TRUE)
+  # ABMRS with gamma = 1.2
+  mebars_3 = mebars(x_train, y_obs, xmin, xmax, gamma = 1.2, times = c(2,2))
+  mebars_3$rjmcmc(burns=burns_plot,steps=steps_plot)
+  pred_3_grid <- mebars_3$predict(grid_mat)
+  z_3 <- matrix(rowMeans(pred_3_grid), nrow = n_grid, ncol = n_grid)
+  contour(x=grid,y=grid,z=z_3,axes = FALSE,frame.plot =TRUE)
+  # Thin Plate Spline
+  train_df = data.frame(x1 = x_train[,1], x2 = x_train[,2], y = y_obs)
+  model_tps = gam(y_obs~s(x1, x2, k = 200), data = train_df)
+  z_tps <- matrix(predict(model_tps, newdata = grid_xy), nrow = n_grid, ncol = n_grid)
+  contour(x=grid,y=grid,z=z_tps,axes = FALSE,frame.plot =TRUE)
+  # Tensor Product Spline
+  model_tep = gam(y_obs~te(x1, x2, k = 15), data = train_df)
+  z_tep <- matrix(predict(model_tep, newdata = grid_xy), nrow = n_grid, ncol = n_grid)
+  contour(x=grid,y=grid,z=z_tep,axes = FALSE,frame.plot =TRUE)
+  # Gaussian Process Regression
+  gp_model = gpkm(X = x_train, Z = y_obs, kernel = k_Matern52(D = 2))
+  pred_gp_grid = gp_model$pred(grid_mat, se = TRUE, mean_dist = TRUE)
+  z_gp <- matrix(pred_gp_grid$mean, nrow = n_grid, ncol = n_grid)
+  contour(x=grid,y=grid,z=z_gp,axes = FALSE,frame.plot =TRUE)
+  # BASS
+  bass = bass(xx = x_train, y = y_obs, nmcmc = 10000, nburn = 9000, verbose = FALSE)
+  pred_bass_grid = predict(bass, grid_mat)
+  z_bass <- matrix(colMeans(pred_bass_grid), nrow = n_grid, ncol = n_grid)
+  contour(x=grid,y=grid,z=z_bass,axes = FALSE,frame.plot =TRUE)
+}
+time.end = Sys.time()
+print(time.end-time.start)
+```
+
+
+# Function for BASS
+
+```{r}
+set.seed(1234)
+```
+
+```{r}
+g1 = function(x) {
+  10.391 * ((x[,1]-0.4)*(x[,2]-0.6)) + 0.36
+}
+
+g2 = function(x) {
+  r2 = (x[,1]-0.5)^2 + (x[,2]-0.5)^2
+  24.342 * r2 * (0.75 - r2)
+}
+
+g3 = function(x) {
+  x1_hat = x[,1] - 0.5
+  x2_hat = x[,2] - 0.5
+  42.659 * (0.1 + x1_hat*(0.05+x1_hat^4-10*x1_hat^2*x2_hat^2+5*x2_hat^4))
+}
+
+g4 = function(x) {
+  1.3356 * (1.5*(1-x[,1]) + exp(2*x[,1]-1)*sin(3*pi*(x[,1]-0.6)^2) + exp(3*(x[,2]-0.5))*sin(4*pi*(x[,2]-0.9)^2))
+}
+
+g5 = function(x) {
+  1.9 * (1.35 + exp(x[,1])*sin(13*(x[,1]-0.6)^2)*exp(-x[,2])*sin(7*x[,2]))
+}
+
+gs = list(g1,g2,g3,g4,g5)
+noises_bass = c(0.25,0.22,0.22,0.25,0.25)
+```
+
+# Run simulation
+
+```{r}
+time.start = Sys.time()
+# generate training data
+m_train = 250
+x_train = cbind(runif(m_train,0,1), runif(m_train,0,1))
+m_test = 250
+x_test = cbind(runif(m_test,0,1), runif(m_test,0,1))
+xmin = c(0, 0)
+xmax = c(1, 1)
+
+p = 0.025 # censoring proportion
+level = 0.95 # credible level
+upper_level = (1 + level)/2
+lower_level = (1 - level)/2
+cases = c("Case 1","Case 2","Case 3", "Case 4", "Case 5")
+methods = c("ABMRS (gamma=0.8)","ABMRS (gamma=1)","ABMRS (gamma=1.2)","Thin Plate Spline","Tensor Product Spline","Gaussian Process", "BASS")
+censor_mse_array = array(NA, dim = c(length(cases), length(methods)), 
+                        dimnames = list(cases, methods))
+mse_array = array(NA, dim = c(length(cases), length(methods)), 
+                  dimnames = list(cases, methods))
+cov_array = array(NA, dim = c(length(cases), length(methods)), 
+                   dimnames = list(cases, methods))
+bandwidth_array = array(NA, dim = c(length(cases), length(methods)), 
+                      dimnames = list(cases, methods))
+
+for(i in c(1:length(cases))) {
+  cat("Running", cases[i], "\n")
+  f = gs[[i]]; noise = noises_bass[i]
+  y_train = f(x_train)
+  y_obs = y_train + rnorm(m_train, 0, noise)
+  y_test = f(x_test)
+
+  # ABMRS with gamma = 0.8
+  mebars_1 = mebars(x_train, y_obs, xmin, xmax, gamma = 0.8, times = c(2,2))
+  mebars_1$rjmcmc(burns=20000,steps=20000)
+  pred_1 = mebars_1$predict(x_test)
+  y_mebars_1 = rowMeans(pred_1)
+  mse_array[i,"ABMRS (gamma=0.8)"] = mean((y_mebars_1 - y_test)^2)
+  censor_mse_array[i,"ABMRS (gamma=0.8)"] = mean(sort((y_mebars_1 - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  lower_bound_1 = apply(pred_1, 1, quantile, probs = lower_level)
+  upper_bound_1 = apply(pred_1, 1, quantile, probs = upper_level)
+  cov_array[i,"ABMRS (gamma=0.8)"] = mean((y_test >= lower_bound_1) & (y_test <= upper_bound_1))
+  bandwidth_array[i,"ABMRS (gamma=0.8)"] = mean(upper_bound_1 - lower_bound_1)
+
+
+  # ABMRS with gamma = 1
+  mebars_2 = mebars(x_train, y_obs, xmin, xmax, gamma = 1, times = c(2,2))
+  mebars_2$rjmcmc(burns=20000,steps=20000)
+  pred_2 = mebars_2$predict(x_test)
+  y_mebars_2 = rowMeans(pred_2)
+  mse_array[i,"ABMRS (gamma=1)"] = mean((y_mebars_2 - y_test)^2)
+  censor_mse_array[i,"ABMRS (gamma=1)"] = mean(sort((y_mebars_2 - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  lower_bound_2 = apply(pred_2, 1, quantile, probs = lower_level)
+  upper_bound_2 = apply(pred_2, 1, quantile, probs = upper_level)
+  cov_array[i,"ABMRS (gamma=1)"] = mean((y_test >= lower_bound_2) & (y_test <= upper_bound_2))
+  bandwidth_array[i,"ABMRS (gamma=1)"] = mean(upper_bound_2 - lower_bound_2)
+
+  # ABMRS with gamma = 1.2
+  mebars_3 = mebars(x_train, y_obs, xmin, xmax, gamma = 1.2, times = c(2,2))
+  mebars_3$rjmcmc(burns=20000,steps=20000)
+  pred_3 = mebars_3$predict(x_test)
+  y_mebars_3 = rowMeans(pred_3)
+  mse_array[i,"ABMRS (gamma=1.2)"] = mean((y_mebars_3 - y_test)^2)
+  censor_mse_array[i,"ABMRS (gamma=1.2)"] = mean(sort((y_mebars_3 - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  lower_bound_3 = apply(pred_3, 1, quantile, probs = lower_level)
+  upper_bound_3 = apply(pred_3, 1, quantile, probs = upper_level)
+  cov_array[i,"ABMRS (gamma=1.2)"] = mean((y_test >= lower_bound_3) & (y_test <= upper_bound_3))
+  bandwidth_array[i,"ABMRS (gamma=1.2)"] = mean(upper_bound_3 - lower_bound_3)
+
+  # Thin Plate Spline
+  train_df = data.frame(x1 = x_train[,1], x2 = x_train[,2], y = y_obs)
+  x_test_df = data.frame(x1 = x_test[,1], x2 = x_test[,2])
+
+  model_tps = gam(y~s(x1, x2, k = 200), data = train_df)
+  pred_tps = predict(model_tps, newdata = x_test_df, se.fit = TRUE)
+  y_tps = pred_tps$fit
+  lower_bound_tps = pred_tps$fit - qnorm(upper_level)*pred_tps$se.fit
+  upper_bound_tps = pred_tps$fit + qnorm(upper_level)*pred_tps$se.fit
+  mse_array[i,"Thin Plate Spline"] = mean((y_tps - y_test)^2)
+  censor_mse_array[i,"Thin Plate Spline"] = mean(sort((y_tps - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  cov_array[i,"Thin Plate Spline"] = mean((y_test >= lower_bound_tps) & (y_test <= upper_bound_tps))
+  bandwidth_array[i,"Thin Plate Spline"] = mean(upper_bound_tps - lower_bound_tps)
+
+  # Tensor Product Spline
+  model_tep = gam(y~te(x1, x2, k = 15), data = train_df)
+  pred_tep = predict(model_tep, newdata = x_test_df, se.fit = TRUE)
+  y_tep = pred_tep$fit
+  lower_bound_tep = pred_tep$fit - qnorm(upper_level)*pred_tep$se.fit
+  upper_bound_tep = pred_tep$fit + qnorm(upper_level)*pred_tep$se.fit
+  mse_array[i,"Tensor Product Spline"] = mean((y_tep - y_test)^2)
+  censor_mse_array[i,"Tensor Product Spline"] = mean(sort((y_tep - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  cov_array[i,"Tensor Product Spline"] = mean((y_test >= lower_bound_tep) & (y_test <= upper_bound_tep))
+  bandwidth_array[i,"Tensor Product Spline"] = mean(upper_bound_tep - lower_bound_tep)
+
+  # Gaussian Process Regression
+  gp_model = gpkm(X = x_train, Z = y_obs, kernel = k_Matern52(D = 2))
+  pred_gp = gp_model$pred(x_test, se = TRUE, mean_dist = TRUE)
+  mse_array[i,"Gaussian Process"] = mean((pred_gp$mean - y_test)^2)
+  censor_mse_array[i,"Gaussian Process"] = mean(sort((pred_gp$mean - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  lower_bound_gp = pred_gp$mean - qnorm(upper_level)*pred_gp$se
+  upper_bound_gp = pred_gp$mean + qnorm(upper_level)*pred_gp$se
+  cov_array[i,"Gaussian Process"] = mean((y_test >= lower_bound_gp) & (y_test <= upper_bound_gp))
+  bandwidth_array[i,"Gaussian Process"] = mean(upper_bound_gp - lower_bound_gp)
+
+  # BASS
+  bass = bass(xx = x_train, y = y_obs, nmcmc = 10000, nburn = 9000, verbose = FALSE)
+  pred_bass = predict(bass, x_test)
+  y_bass = colMeans(pred_bass)
+  mse_array[i,"BASS"] = mean((y_bass - y_test)^2)
+  censor_mse_array[i,"BASS"] = mean(sort((y_bass - y_test)^2)[round(p*m_test):round((1-p)*m_test)])
+  lower_bound_bass = apply(pred_bass, 2, quantile, probs = lower_level)
+  upper_bound_bass = apply(pred_bass, 2, quantile, probs = upper_level)
+  cov_array[i,"BASS"] = mean((y_test >= lower_bound_bass) & (y_test <= upper_bound_bass))
+  bandwidth_array[i,"BASS"] = mean(upper_bound_bass - lower_bound_bass)
+}
+time.end = Sys.time()
+print(time.end-time.start)
+
+print(mse_array)
+print(censor_mse_array)
+print(cov_array)
+print(bandwidth_array)
+```

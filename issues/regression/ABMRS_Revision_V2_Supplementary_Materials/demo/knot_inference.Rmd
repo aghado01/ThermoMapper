@@ -1,0 +1,270 @@
+---
+title: "Linear Spline Knot Inference"
+author: "Junhui He"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ABMRS)
+library(splines)
+library(segmented)
+
+library(ggplot2)
+library(ggpubr)
+source("Linear_Spline_Estimation.R")
+```
+
+```{r}
+f1 = function(x) {
+  knots = c(0.5)
+  beta = c(1,-1,1)
+  B = bs(x,knots=knots,degree=1,intercept=TRUE,Boundary.knots=c(0,1))
+  y = B%*%beta
+  return(y)
+}
+
+f2 = function(x) {
+  knots = c(0.3,0.7)
+  beta = c(2,-1,-2,-1)
+  B = bs(x,knots=knots,degree=1,intercept=TRUE,Boundary.knots=c(0,1))
+  y = B%*%beta
+  return(y)
+}
+
+f3 = function(x) {
+  knots = c(0.2,0.2,0.5,0.7)
+  beta = c(0,-1,1,0,1,0)
+  B = bs(x,knots=knots,degree=1,intercept=TRUE,Boundary.knots=c(0,1))
+  y = B%*%beta
+  return(y)
+}
+
+noises = c(0.4,0.3,0.4)
+xis = list(c(0.5),c(0.3,0.7),c(0.2,0.2,0.5,0.7))
+```
+
+
+# Plot Data
+
+```{r}
+set.seed(1234)
+m = 500
+x_train = runif(m,0,1)
+# case 1
+y_train_1 = f1(x_train)
+y_obs_1 = y_train_1 + rnorm(m,0,noises[1])
+p1 = ggplot() + geom_point(aes(x_train,y_obs_1),size=0.6,col="red") + geom_line(aes(x_train,y_train_1)) + theme_classic() + labs(title="One knot", x="x", y="y") + theme(plot.title=element_text(hjust=0.5), title = element_text(size = 16))
+# case 2
+y_train_2 = f2(x_train)
+y_obs_2 = y_train_2 + rnorm(m,0,noises[2])
+p2 = ggplot() + geom_point(aes(x_train,y_obs_2),size=0.6,col="red") + geom_line(aes(x_train,y_train_2)) + theme_classic() + labs(title="Two knots", x="x", y="y") + theme(plot.title=element_text(hjust=0.5), title = element_text(size = 16))
+# case 3 
+y_train_3 = f3(x_train)
+y_obs_3 = y_train_3 + rnorm(m,0,noises[3])
+p3 = ggplot() + geom_point(aes(x_train,y_obs_3),size=0.6,col="red") + geom_line(aes(x_train,y_train_3)) + theme_classic() + labs(title="Four knots", x="x", y="y") + theme(plot.title=element_text(hjust=0.5), title = element_text(size = 16))
+# arrange in one page
+ggarrange(p1,p2,p3,ncol=3)
+```
+
+# Posterior distribution
+
+```{r}
+set.seed(1234)
+gamma = 1
+# case 1
+m_1 = 500; sd_1 = noises[1]
+x_1 = runif(m_1)
+y_1 = f1(x_1) + rnorm(m_1,0,sd_1)
+# EBARS
+ebars_1 = ebars(x_1,y_1,gamma=gamma,c=0.3,times=2,degree=1,intercept=TRUE)
+ebars_1$rjmcmc(burns=5000,steps=5000)
+knots_1 = ebars_1$knots()
+nums_1 = sapply(knots_1, function(xi) {return(length(xi))})
+points_1 = unlist(knots_1)
+p_11 = ggplot(mapping=aes(x=nums_1)) + geom_bar(aes(y=after_stat(prop)), width = 0.6) + labs(x="Number of Knots", y="Proportion") + geom_vline(aes(xintercept=mean(nums_1)), color="red", linetype="dashed") + theme_classic() + theme(axis.title = element_text(size = 14))
+p_12 = ggplot(mapping=aes(x=points_1)) + geom_density(adjust=3) + labs(x="Knot Location", y="Density") + xlim(0, 1) + theme_classic() + theme(axis.title = element_text(size = 14))
+
+# case 2
+m_2 = 500; sd_2 = noises[2]
+x_2 = runif(m_2)
+y_2 = f2(x_2) + rnorm(m_2,0,sd_2)
+# EBARS
+ebars_2 = ebars(x_2,y_2,gamma=gamma,c=0.3,times=2,degree=1,intercept=TRUE)
+ebars_2$rjmcmc(burns=5000,steps=5000)
+knots_2 = ebars_2$knots()
+nums_2 = sapply(knots_2, function(xi) {return(length(xi))})
+points_2 = unlist(knots_2)
+p_21 = ggplot(mapping=aes(x=nums_2)) + geom_bar(aes(y=after_stat(prop)), width = 0.6) + labs(x="Number of Knots", y="Proportion") + geom_vline(aes(xintercept=mean(nums_2)), color="red", linetype="dashed") + theme_classic() + theme(axis.title = element_text(size = 14))
+p_22 = ggplot(mapping=aes(x=points_2)) + geom_density(adjust=1) + labs(x="Knot Location", y="Density") + xlim(0, 1) + theme_classic() + theme(axis.title = element_text(size = 14))
+
+# case 3
+m_3 = 500; sd_3 = noises[3]
+x_3 = runif(m_3)
+y_3 = f3(x_3) + rnorm(m_3,0,sd_3)
+# EBARS
+ebars_3 = ebars(x_3,y_3,gamma=gamma,c=0.3,times=2,degree=1,intercept=TRUE)
+ebars_3$rjmcmc(burns=5000,steps=5000)
+knots_3 = ebars_3$knots()
+nums_3 = sapply(knots_3, function(xi) {return(length(xi))})
+points_3 = unlist(knots_3)
+p_31 = ggplot(mapping=aes(x=nums_3)) + geom_bar(aes(y=after_stat(prop)), width = 0.6) + labs(x="Number of Knots", y="Proportion") + geom_vline(aes(xintercept=mean(nums_3)), color="red", linetype="dashed") + theme_classic() + theme(axis.title = element_text(size = 14))
+p_32 = ggplot(mapping=aes(x=points_3)) + geom_density(adjust=1) + labs(x="Knot Location", y="Density") + xlim(0, 1) + theme_classic() + theme(axis.title = element_text(size = 14))
+
+ggarrange(p_11,p_21,p_31,p_12,p_22,p_32,ncol=3,nrow=2,align="hv")
+```
+
+```{r}
+set.seed(1234)
+gamma = 1.5
+# case 1
+m_1 = 500; sd_1 = noises[1]
+x_1 = runif(m_1)
+y_1 = f1(x_1) + rnorm(m_1,0,sd_1)
+# EBARS
+ebars_1 = ebars(x_1,y_1,gamma=gamma,c=0.3,times=2,degree=1,intercept=TRUE)
+ebars_1$rjmcmc(burns=5000,steps=5000)
+knots_1 = ebars_1$knots()
+nums_1 = sapply(knots_1, function(xi) {return(length(xi))})
+points_1 = unlist(knots_1)
+p_11 = ggplot(mapping=aes(x=nums_1)) + geom_bar(aes(y=after_stat(prop)), width = 0.5) + labs(x="Number of Knots", y="Proportion") + geom_vline(aes(xintercept=mean(nums_1)), color="red", linetype="dashed") + scale_x_continuous(breaks=1:6) + theme_classic() + theme(axis.title = element_text(size = 14))
+p_12 = ggplot(mapping=aes(x=points_1)) + geom_density(adjust=3) + labs(x="Knot Location", y="Density") + xlim(0, 1) + theme_classic() + theme(axis.title = element_text(size = 14))
+
+# case 2
+m_2 = 500; sd_2 = noises[2]
+x_2 = runif(m_2)
+y_2 = f2(x_2) + rnorm(m_2,0,sd_2)
+# EBARS
+ebars_2 = ebars(x_2,y_2,gamma=gamma,c=0.3,times=2,degree=1,intercept=TRUE)
+ebars_2$rjmcmc(burns=5000,steps=5000)
+knots_2 = ebars_2$knots()
+nums_2 = sapply(knots_2, function(xi) {return(length(xi))})
+points_2 = unlist(knots_2)
+p_21 = ggplot(mapping=aes(x=nums_2)) + geom_bar(aes(y=after_stat(prop)), width = 0.5) + labs(x="Number of Knots", y="Proportion") + geom_vline(aes(xintercept=mean(nums_2)), color="red", linetype="dashed") + scale_x_continuous(breaks=1:6) + theme_classic() + theme(axis.title = element_text(size = 14))
+p_22 = ggplot(mapping=aes(x=points_2)) + geom_density(adjust=1) + labs(x="Knot Location", y="Density") + xlim(0, 1) + theme_classic() + theme(axis.title = element_text(size = 14))
+
+# case 3
+m_3 = 500; sd_3 = noises[3]
+x_3 = runif(m_3)
+y_3 = f3(x_3) + rnorm(m_3,0,sd_3)
+# EBARS
+ebars_3 = ebars(x_3,y_3,gamma=gamma,c=0.3,times=2,degree=1,intercept=TRUE)
+ebars_3$rjmcmc(burns=5000,steps=5000)
+knots_3 = ebars_3$knots()
+nums_3 = sapply(knots_3, function(xi) {return(length(xi))})
+points_3 = unlist(knots_3)
+p_31 = ggplot(mapping=aes(x=nums_3)) + geom_bar(aes(y=after_stat(prop)), width = 0.5) + labs(x="Number of Knots", y="Proportion") + geom_vline(aes(xintercept=mean(nums_3)), color="red", linetype="dashed") + scale_x_continuous(breaks=1:6) + theme_classic() + theme(axis.title = element_text(size = 14))
+p_32 = ggplot(mapping=aes(x=points_3)) + geom_density(adjust=1) + labs(x="Knot Location", y="Density") + xlim(0, 1) + theme_classic() + theme(axis.title = element_text(size = 14))
+
+ggarrange(p_11,p_21,p_31,p_12,p_22,p_32,ncol=3,nrow=2,align="hv")
+```
+
+
+# Knot Inference Simulation
+
+```{r}
+noises = c(0.4,0.3,0.4)
+fs = list(f1,f2,f3); ks = c(1,2,4)
+xis = list(c(0.5),c(0.3,0.7),c(0.2,0.2,0.5,0.7))
+idxs = list(c(1),c(2:3),c(4:7))
+error_array = array(dim=c(3,7))
+dim_names = list(c("EBARS","LSE","Segmented"),c("Case 1 Knot 1","Case 2 Knot 1","Case 2 Knot 2","Case 3 Knot 1","Case 3 Knot 2","Case 3 Knot 3","Case 3 Knot 4"))
+dimnames(error_array) = dim_names
+```
+
+```{r, include=FALSE}
+time.start = Sys.time()
+set.seed(1234)
+m_train = 200
+for(i in 1:3) {
+  # generate training data
+  k = ks[i]; f = fs[[i]]; noise = noises[[i]]
+  xi = xis[[i]]; idx = idxs[[i]]
+  x_train = runif(m_train)
+  y_train = f(x_train)
+  y_obs = y_train + rnorm(m_train,0,noise)
+
+  # ABMRS
+  ebars_linear = ebars(x_train,y_obs,k=k,times=2,degree=1,intercept=TRUE)
+  ebars_linear$rjmcmc(burns=5000,steps=5000)
+  knots_ebars = rbind(sapply(ebars_linear$knots(), function(xi) {return(xi)}))
+  xi_ebars = rowMeans(knots_ebars)
+  error_array[1,idx] = xi-xi_ebars
+  
+  # Linear Spline Estimation
+  if(k==4) {
+    init_lse = quantile(x_train, probs=seq(0,1,length.out=(5))[2:4])
+    xi_lse = sort(LSE(x_train,y_obs,init_lse))
+    xi_lse = c(xi_lse[1], xi_lse[1], xi_lse[2], xi_lse[3])
+  } else {
+    init_lse = quantile(x_train, probs=seq(0,1,length.out=(k+2))[2:(k+1)])
+    xi_lse = sort(LSE(x_train,y_obs,init_lse))
+  }
+  xi_lse = sapply(xi_lse, function(x) {max(min(x,1),0)})
+  error_array[2,idx] = xi-xi_lse
+  
+  # segmented method
+  init_seg = quantile(x_train, probs=seq(0,1,length.out=(k+2))[2:(k+1)])
+  fit.lm = lm(y_obs~x_train)
+  fit.seg = segmented(fit.lm,seg.Z=~x_train,npsi=k)
+  xi_seg = sort(fit.seg$psi[,2])
+  error_array[3,idx] = xi-xi_seg
+
+}
+time.end = Sys.time()
+print(time.end-time.start)
+print(error_array)
+# Time difference of 1.018486 hours
+# Time difference of 2.022524 hours
+```
+
+
+# Knot Credible Intervals
+
+```{r, include=FALSE}
+set.seed(1234)
+m_train = 500
+n_exps = 10
+knot_quantiles = array(NA, dim = c(6,7,n_exps))
+dimnames(knot_quantiles)[[1]] = c("2.5%", "12.5%", "25%", "75%", "87.5%", "97.5%")
+dimnames(knot_quantiles)[[2]] = c("Case 1 Knot 1","Case 2 Knot 1","Case 2 Knot 2","Case 3 Knot 1","Case 3 Knot 2","Case 3 Knot 3","Case 3 Knot 4")
+knot_quantiles_calib = array(NA, dim = c(6,n_exps))
+rownames(knot_quantiles_calib) = c("2.5%", "12.5%", "25%", "75%", "87.5%", "97.5%")
+for(k in 1:n_exps) {
+  print(paste0("The ",k,"-th experiment"))
+  # case 1
+  sd_1 = noises[1]
+  x_1 = runif(m_train)
+  y_1 = f1(x_1) + rnorm(m_train,0,sd_1)
+  # EBARS
+  ebars_1 = ebars(x_1,y_1,k=1,times=2,degree=1,intercept=TRUE)
+  ebars_1$rjmcmc(burns=10000,steps=10000)
+  nodes_1 = sapply(ebars_1$knots(), function(xi) {return(xi)})
+  knot_quantiles[,1,k] = quantile(nodes_1, probs = c(0.025, 0.125, 0.25, 0.75, 0.875, 0.975))
+  
+  # case 2
+  sd_2 = noises[2]
+  x_2 = runif(m_train)
+  y_2 = f2(x_2) + rnorm(m_train,0,sd_2)
+  # EBARS
+  ebars_2 = ebars(x_2,y_2,k=2,times=2,degree=1,intercept=TRUE)
+  ebars_2$rjmcmc(burns=10000,steps=10000)
+  nodes_2 = sapply(ebars_2$knots(), function(xi) {return(xi)})
+  knot_quantiles[,2:3,k] = apply(nodes_2, 1, function(xi) quantile(xi, probs = c(0.025, 0.125, 0.25, 0.75, 0.875, 0.975)))
+  apply(rbind(nodes_1), 1, function(xi) quantile(xi, probs = c(0.025, 0.125, 0.25, 0.75, 0.875, 0.975)))
+  
+  # case 3
+  sd_3 = noises[3]
+  x_3 = runif(m_train)
+  y_3 = f3(x_3) + rnorm(m_train,0,sd_3)
+  # EBARS
+  ebars_3 = ebars(x_3,y_3,k=4,times=2,degree=1,intercept=TRUE)
+  ebars_3$rjmcmc(burns=10000,steps=10000)
+  nodes_3 = sapply(ebars_3$knots(), function(xi) {return(xi)})
+  knot_quantiles[,4:7,k] = apply(nodes_3, 1, function(xi) quantile(xi, probs = c(0.025, 0.125, 0.25, 0.75, 0.875, 0.975)))
+}
+```
