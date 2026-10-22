@@ -235,13 +235,56 @@ $$\ell_b(Z)=\tfrac{\nu}{2}\log\tfrac{\tau}{\tau+b}-\tfrac{mb}{2}\log S_b,\qquad 
   - **The interface default** still serves $b=1$ only, so a custom model must opt in (`TemperedMarginal`, `CanTemperLikelihood`).
 - **m ≤ ν, an inadmissible design or a zero response** is −∞ at every b, so admission does not depend on the temperature.
 
-**Laplace/BIC-type models.** Each returns (log-likelihood at the estimate) $-\tfrac\nu2\log m$:
+**Laplace/BIC-type models.** `WhittleModel` and `GibbsLossModel` return (log-likelihood at the estimate) $-\tfrac\nu2\log m$. So does `PoissonModel` on its BIC pathway, while its default is the Laplace marginal under a g-prior:
 
-- **`PoissonModel`** (counts): log link, IRLS maximum-likelihood estimate, η clamped to ±30. Weights are ignored. Its coefficient draw corrects the Laplace proposal by independence Metropolis–Hastings against the likelihood times an N(0, 100) prior on each coefficient. That ridge enters only the draw's correction, not the marginal and not the factored matrices.
+- **`PoissonModel`** (counts): log link, IRLS fit, η clamped to ±30. Weights are ignored. The knot marginal is a setting, `PoissonMarginal` (step 3.10, OQ12):
+  - **`GPrior`, the default.** The prior is the unit-information g-prior $\beta\sim N(\beta_0,\Lambda^{-1})$ with $\Lambda=\tfrac{\bar y}{m}B^\top B$. That is $g\,(B^\top W_0B)^{-1}$, with $g=m$ and $W_0=\bar yI$ the Fisher weight of the null fit $\mu=\bar y$. The mean $\beta_0$ projects the null fit's log-intensity $\log\bar y$ onto the basis ($\beta_0=\log\bar y\cdot\mathbf 1$ for B-splines, which sum to one).
+    - **The fit.** The mode comes from penalized IRLS started at $\beta_0$: $(B^\top\hat WB+\Lambda)\beta^+=B^\top\hat Wz+\Lambda\beta_0$.
+    - **The marginal** is its Laplace approximation, $\ell(\hat\beta)-\tfrac12(\hat\beta-\beta_0)^\top\Lambda(\hat\beta-\beta_0)+\tfrac12\log|\Lambda|-\tfrac12\log|H|$, with $H=B^\top\hat WB+\Lambda$ (the $2\pi$ terms cancel).
+    - **Its rules.** A zero response, $\bar y=0$, is refused as `ZeroResponse`. The numerical gate applies to both factored matrices, $B^\top B$ and $H$.
+  - **`Bic`.** DiMatteo, Genovese and Kass's original: the MLE, with $\ell(\hat\beta)-\tfrac\nu2\log m$. It is the base He, Yang and Kang's EBIC builds on, and it keeps OQ12's separation behavior (see the limitations).
+  - **The coefficient draw** corrects the Laplace proposal by independence Metropolis–Hastings, against the likelihood times the coefficient prior. That prior is the g-prior itself, or under BIC an N(0, 100) ridge on each coefficient, which enters only the draw's correction.
 - **`WhittleModel`** (periodograms): $\ell=\sum(-\eta_i-I_ie^{-\eta_i})$, fitted by IRLS with unit weights.
 - **`GibbsLossModel`**: a Tukey-bisquare pseudo-likelihood with $c=4.685$ and a difference-based MAD scale.
 
 The three IRLS fits (Poisson, Whittle and GibbsLoss's Tukey reweighting) return −∞ when the iteration cap (100, 100 and 50) is reached before the step settles (squared step < 1e-9).
+
+**The Poisson g-prior (step 3.10, OQ12).**
+- **The defect it fixes.** Over a run of zero counts the Poisson MLE lies at −∞. IRLS stopped at a fixed point of the η clamp and the μ floor, and the BIC marginal still gave those configurations real mass. Behind that were two coefficient priors: the draw targeted the likelihood times the N(0, 100) ridge, while BIC approximates the Bayes factor under a unit-information prior (Kass and Wasserman 1995).
+- **Why this prior.**
+  - **It makes BIC's prior explicit and proper.** The g-prior with g = m is the GLM analogue of the Normal model's Zellner prior at g = m (Sabanés Bové and Held 2011; Li and Clyde 2018). Its mode stays finite in a separated direction, so the clamp and the floor go back to being overflow guards.
+  - **Its Occam factor.** It is $\tfrac12\log|I+\Lambda^{-1}B^\top\hat WB|$, about $\tfrac12\log(1+m\,\mu_j/\bar y)$ per basis function, where $\mu_j$ is the fitted rate under it. At a flat fit that is $\tfrac12\log(1+m)$, BIC's charge. Where the rate is low a knot costs less, because the data there carry less information.
+- **Why the null fit's information.** At the MLE the information in a separated direction is near zero, so a prior scaled by it, as in Li and Clyde's $J(\hat\beta)$ form, would be infinitely wide there and keep the separation. The null fit's $\bar yI$ is positive wherever there are any counts.
+- **Why the null fit's mean.** The preparation brief wrote the prior at mean 0, the form of the Normal model's Zellner prior. On the log-intensity, mean 0 puts the prior's one pseudo-observation at one count per bin. That pulls the log-rate toward 0 by about $\log\bar y/(m+1)$, about 4% of the rate at $\bar y=50$, $m=100$. Its penalty on the fit's shape also scales with $1-\log\bar y$, so it changes sign above $\bar y=e$. Centring at the null fit removes both. It is a proper counterpart of Sabanés Bové and Held's flat intercept, and needs neither an intercept column nor the constant in the basis's span.
+- **Trade-offs.**
+  - **More work per IRLS fit.** Each evaluation also factors $B^\top B$ and $H$, and solves once for $\beta_0$. It is still faster than BIC's (measured below).
+  - **The prior reads the data,** through $\bar y$ in its scale and mean, as the null-information choice requires. Both are the same for every knot configuration.
+  - **It is a Laplace approximation.** Against importance sampling at m = 40 and ν = 5 or 6, its error is −0.017 and −0.024 nats, and −0.008 for their ratio (`PoissonGPriorTests`). That is about 1% of the Occam factor per basis function.
+  - **It is not fixed-scale shrinkage.** The prior's scale follows $B^\top B$, so a basis function with little data under it gets a wide prior there. The support gate refuses the worst of those, and the question stays parked with BASS's coefficient-prior decisions (D03).
+- **Alternatives considered.**
+  - **A penalized mode with a fixed ridge** (OQ12's remedy a). Its Occam factor, about $\tfrac12\log(1+100\,J_{jj})$, depends on the ridge's arbitrary scale and makes knots cheap where μ is small.
+  - **A count gate** (remedy b), refusing configurations with a basis function that sees no counts. It is a support restriction that depends on the response, and it leaves the two priors mismatched.
+  - **The MLE's information,** $J(\hat\beta)$: it fails under separation, as above.
+  - **A flat intercept** (Sabanés Bové and Held): improper in the constant direction. It needs the constant to be in the basis's span, and it differs from the null-centred prior by $O(1/m)$.
+  - **Mean 0:** it biases the level, as above.
+- **Measured** (4 chains × 3,000 draws after 1,500, Poisson(6) count prior).
+  - **Step 3.7's low-rate fit** (rate $e^{1.5-5x}$, from 4.5 counts per bin to 0.03, n = 150), g-prior against BIC:
+    - the log-intensity's MSE over the data fell from 163,982 to 0.16, and beyond x = 0.6 from 412,006 to 0.33;
+    - its largest posterior SD fell from 199 to 0.54;
+    - R̂(k) went from 1.058 to 1.002, and knot-count ESS from 119 to 638;
+    - the 14 inadmissible or non-converged evaluations went to none.
+  - **Five count fits**, 5 data seeds each, g-prior / BIC, medians:
+
+    | Fit | Mean knots | Log-intensity MSE |
+    |---|---|---|
+    | Peak (`PoissonTests`), 3.3 to 12 counts, n = 150 | 3.29 / 3.26 | 0.011 / 0.011 |
+    | Spike histogram, baseline 0.5 and peak 8.5 counts, n = 120 | 4.84 / 4.61 | 0.168 / 0.170 |
+    | Sine, 1.6 to 12 counts, n = 150 | 1.43 / 1.23 | 0.009 / 0.008 |
+    | Sine, 20 to 55 counts, n = 150 | 3.93 / 3.81 | 0.003 / 0.003 |
+    | Low rate (above) | 1.26 / 0.68 | 0.17 / 12,948 |
+
+  - **Away from separation the fits agree** within seed noise, and the g-prior carries 0.03–0.23 more knots, because its Occam factor is lighter where the rate is low. Its bias in the level stays under 0.01 on the log scale at every count level.
+  - **Speed.** On the peak fit (ν = 6 and 9), an evaluation took 52–59 µs against BIC's 76–99 µs. IRLS starts at the null fit and needs fewer steps, which more than pays for the extra factorizations.
 
 **Design admission (Q6, step 3.7).** A knot configuration is scored only if it passes two gates, which answer different questions. Otherwise its score is −∞, and `BarsResult.Evaluations` counts the refusal by reason.
 - **Support gate** (`SplineTarget.MinColumnMass`, `BarsConfig.MinColumnMass`, default 1). Every basis function needs column mass $\sum_i B_j(x_i)\ge1$, one data point's worth. It is checked before anything is factored, and a refusal is counted as `ThinSupport`.
@@ -266,7 +309,7 @@ The three IRLS fits (Poisson, Whittle and GibbsLoss's Tukey reweighting) return 
   - **Beside a sharp transient at x = 0.03,** the MSE on [0, 0.1] fell 25× and the posterior SD there 68× (5.1 → 0.075), with the transient still located at 0.0309 [0.0289, 0.0329].
   - **Dense data** were unchanged.
   - **How often each gate refuses.** The support gate refused 0.6–10% of evaluations. The numerical gate alone changed only the few configurations the pivot ratio had misjudged.
-  - **Poisson** is the exception (OQ12; see the limitations).
+  - **Poisson's BIC pathway** is the exception (OQ12; see the limitations). Its g-prior pathway, the default since step 3.10, is not.
 
 **Robust weights.** `StudentTWeights` ($\nu=4$) and `ContaminatedNormalWeights` ($\pi=0.05$, $\kappa=10$) are scale mixtures of normals. Every `WeightEvery` steps (default 25), the weight block runs an exact Gibbs sweep:
 
@@ -347,7 +390,7 @@ How exact the draws and $v$ are depends on the model (`BarsResult.Uncertainty`, 
 |---|---|---|---|
 | `WeightedNormalModel` | `Exact` | $\sigma^2\sim\mathrm{IG}(m/2, a/2)$, then $\beta\sim N(\tfrac{m}{m+1}A^{-1}b,\ \sigma^2\tfrac{m}{m+1}A^{-1})$ | $\tfrac{a}{m-2}\cdot\tfrac{m}{m+1}\,z(T)^\top A^{-1}z(T)$ (σ integrated out) |
 | `WhittleModel` | `Approximate` | Laplace: $N(\hat\beta, (B^\top B)^{-1})$ | $z(T)^\top(B^\top B)^{-1}z(T)$, on the log-spectrum |
-| `PoissonModel` | `Approximate` | Independence Metropolis–Hastings: starts from a Laplace draw $N(\hat\beta, J^{-1})$, $J=B^\top\hat WB$, and runs 5 accept/reject steps against the likelihood times an N(0, 100) coefficient prior | Laplace: $z(T)^\top J^{-1}z(T)$, on the log-intensity |
+| `PoissonModel` | `Approximate` | Independence Metropolis–Hastings: starts from a Laplace draw $N(\hat\beta, H^{-1})$, $H=B^\top\hat WB+\Lambda$ at the mode, and runs 5 accept/reject steps against the likelihood times the g-prior. Under BIC, $\Lambda=0$ at the MLE and the prior is N(0, 100) on each coefficient | Laplace: $z(T)^\top H^{-1}z(T)$, on the log-intensity |
 | `GibbsLossModel` | `KnotOnly` | The M-estimate, with no coefficient uncertainty | None, so `FitSd` is the knot spread only |
 
 **Trade-offs and implications.**
@@ -493,6 +536,7 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 | `BarsConfig` PeakProminence / SpanDropFraction | 0.1 / 0.5 | Peak significance; span level |
 | `BarsConfig` MinColumnMass | 1 | Support gate: every basis function needs column mass $\sum_i B_j(x_i)\ge1$; 0 turns it off |
 | `BarsConfig` BirthExploration / BirthBase | 1 / `Uniform` | Births from the base: uniform on (0, 1); below 1 mixes in DMGK's local births |
+| `PoissonModel` marginal | `GPrior` | The unit-information g-prior's Laplace marginal, centred on the null fit; `Bic` is DMGK's BIC at the MLE |
 | `BarsEnsemble` dmgkConstant / adaptKernelTau / temperLevels / temperBetaMin / temperPath / temperSchedule / temperAdaptLadder | null / null / null / 0.05 / Likelihood / DeterministicEvenOdd / true | Constant weights 0.4/0.4/0.2; fixed kernel; no tempering; a tempered ladder keeps the knot prior whole, swaps even-odd and equalizes its rungs in burn-in |
 | `BapsSampler` priorShape / priorScale / mhLogStep / phi | 1e-3 / 1e-3 / 0.6 / 1.0 | IG hyperprior; random-walk step on ln λ; adaptivity |
 | `BapsSampler.Run` chains / masterSeed / burn / samples | 4 / 1 / 500 / 1500 | — |
@@ -505,11 +549,11 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 ## Status and caveats
 
 - **`EbicPrior` reproduces He, Yang and Kang's count law, not their location measure.** Their knots are subsets of a discrete candidate grid, while BARS's are continuous, so a fit with the same γ and C is the same prior on k, not the same model. For γ > 1 the law rises again past C/2: keep C ≥ 2·k_max.
-- **Poisson fits over runs of zero counts are unreliable** (preparation brief, OQ12).
+- **Poisson's BIC pathway is unreliable over runs of zero counts** (OQ12). The default g-prior pathway is not (step 3.10, above).
   - **The cause.** Where every count under a basis function is zero, the Poisson MLE lies at −∞. IRLS stops at a fixed point set by the η clamp (±30) and the μ floor (1e-10), with coefficients in the thousands. Meanwhile the BIC-type marginal stays near the knot-free one: −75.8 against −73.5 in step 3.7's probe.
   - **The consequence.** Such configurations take real posterior mass, and the posterior-mean log-intensity there runs to −10³.
   - **What the gates do.** The pivot ratio that admission used before step 3.7 happened to refuse many of them: 1,590 of 11,969 evaluations, against 76 under the scale-free gate, which correctly does not.
-  - **Where the fix belongs:** in the model, not in admission.
+  - **Why the pathway stays.** It is DMGK's original, and EBIC's base for non-normal responses.
 - **The BAPS `MarginalEvidence` posterior of λ is heavy-tailed.** Under the uniform-edf prior the density of ln λ decays like $e^{-u}$, so $E[\lambda]$ is infinite; `BapsResult` therefore reports the median. $\ell_p$ is computed as $y^\top y-\hat\beta^\top Z^\top y$ and loses precision above about λ = 10¹⁰ (NaN near 10¹⁴), but the prior keeps the chain far below that range. The λ modes target different posteriors.
 - **Knot count and peak location mix slowly.** On the adaptive-stop test fit (n = 100, a sine under noise 0.15, Poisson(4) count prior), the knot count's autocorrelation time is about 450 steps: about 0.2% of draws are effective, by Stan's estimator and by batch means alike. The classic variogram estimator this replaced reported higher figures on other fits. Judge a run by ESS, not by draw count. Since step 3.4 an R̂ stop waits for the knot count's bulk and tail ESS to reach `MinEssPerChain` per chain (100 by default), which here takes about 45,000 draws per chain; `BarsResult.Knots` and `Peak.LocationConvergence` report those diagnostics.
 - **Local births strand isolated knots** (OQ11). This applies when ε < 1 and births are local.

@@ -529,9 +529,9 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 | OQ7 | Which readouts gate an R̂ stop | BARS monitors the knot count only. The peak location is diagnosed (`Peak.LocationConvergence`) but does not gate the stop, and its ESS has been about 0.14% of draws. | Let callers choose the monitored readouts, and measure what gating on the peak costs. | After step 3.4 |
 | OQ8 | BARS's knot-count mixing and default run lengths | On the adaptive-stop fit the knot count's autocorrelation time is about 450 steps (Stan's estimator and batch means agree), so the default gate of 100 effective draws per chain needs about 45,000 draws per chain. The earlier 1.75% figure came from the classic variogram estimator. Most of it is the local-birth trap (OQ11). With ε = 0.1 uniform births, the autocorrelation time on this fit falls to about 40, so the gate needs about 4,000 draws per chain. Since step 3.9 (ε = 1) the time on the adaptive-stop fit is about 14 (`BirthBenchmark`), so the gate needs about 1,400 draws per chain. | Revisit the default sample sizes and the move schedule on the new kernel, with the "After Phase 3: BARS mixing" studies. | "After Phase 3: BARS mixing" |
 | OQ9 | An external reference for the rank-normalized diagnostics | Checked against theory only (AR(1) ESS, scale mismatch, Cauchy draws). R is installed, but the `posterior` package is not, and installing it means a download. | Add `posterior` to the `r/` oracles' environment (with approval for the download) and compare R̂, bulk ESS and tail ESS on shared fixtures. | Any time |
-| OQ10 | Checkpoint scope | Step 3.4 checkpoints are in-memory copies, taken after burn-in at a round boundary. The run fingerprint covers data, settings and component types, not components' internal parameters. Only BARS implements `RestoreChain`; BGP and BAPS do not resume. | Persist checkpoints to disk through Archivory (format, versioning, data identity); decide whether mid-burn checkpoints are needed (adaptation state in flight); fingerprint component parameters (value records, or a component fingerprint member); resume for BGP and BASS. | With the BASS port's posterior storage, and Archivory |
+| OQ10 | Checkpoint scope | Step 3.4 checkpoints are in-memory copies, taken after burn-in at a round boundary. The run fingerprint covers data, settings and component types, not components' internal parameters. Only BARS implements `RestoreChain`; BGP and BAPS do not resume. Step 3.10's `PoissonMarginal` is one such parameter: the fingerprint does not tell the two Poisson pathways apart. | Persist checkpoints to disk through Archivory (format, versioning, data identity); decide whether mid-burn checkpoints are needed (adaptation state in flight); fingerprint component parameters (value records, or a component fingerprint member); resume for BGP and BASS. | With the BASS port's posterior storage, and Archivory |
 | OQ11 | Local births strand isolated knots | Births are proposed near an existing knot (`LocalBetaKernel`, τ = 50, an SD of about 0.07; uniformly only at k = 0). A death's acceptance carries the reverse birth's density at the removed knot, so a knot far from the rest is almost never removed: from knots at 0.39 and 0.96 that density is e⁻³⁷ or e⁻⁶¹, against a posterior gain of e^3.8 to e^5.3, so a death is accepted with probability e⁻³¹ at best. In `EbicTests`' γ = 1 runs, overdispersed starts held such knots for about 1,500 steps (the 3.5 seed sweep). A probe settled the mechanism: ε = 0.1 uniform births in the birth density cut the knot count's autocorrelation time 12× (adaptive-stop fit, 485 → 40), about 20× (outlier sine, 2,160 → 110) and 2× (peak, 166 → 77), at the same cost per step, on the same posterior, with the count law intact. BASS's `w1` and `w2` pseudo-counts are its own exploratory component. **Resolved in step 3.9:** births now come from the uniform base by default (ε = 1), which `BirthBenchmark` found best or tied on every fit (knot-count ESS up to 76×, peak-location ESS up to 31×). | Closed. ε stays a setting, for fits outside the benchmark where local births might help. | Closed (step 3.9) |
-| OQ12 | Poisson fits over runs of zero counts | Where every count under a basis function is zero, the Poisson MLE lies at −∞. IRLS stops at a fixed point set by the η clamp (±30) and the μ floor (1e-10), with coefficients in the thousands: −5,961 with one knot at 0.8 when the counts are zero beyond 0.797. The BIC-type marginal stays near the knot-free one (−75.8 against −73.5), so such configurations take real posterior mass and the posterior-mean log-intensity there runs to −10³. Present before step 3.7. The pivot ratio happened to refuse many of them (1,590 of 11,969 evaluations, against 76 under the scale-free gate). | A model-level fix. Options: (a) a penalized IRLS with the N(0, 100·I) ridge the coefficient draw already uses, and a Laplace marginal at that MAP, with log-determinant and prior terms, replacing BIC at a nonexistent MLE; (b) keep BIC and add a response-dependent count gate, a truncation of the posterior; (c) a Poisson analogue of the g-prior. Measure each on the low-rate fit and the existing count-data tests. | **Decided 2026-10-21: (c), the Poisson g-prior, as step 3.10,** with the BIC pathway kept beside it as a setting (DMGK's original, and HYK's EBIC base). |
+| OQ12 | Poisson fits over runs of zero counts | Where every count under a basis function is zero, the Poisson MLE lies at −∞. IRLS stops at a fixed point set by the η clamp (±30) and the μ floor (1e-10), with coefficients in the thousands: −5,961 with one knot at 0.8 when the counts are zero beyond 0.797. The BIC-type marginal stays near the knot-free one (−75.8 against −73.5), so such configurations take real posterior mass and the posterior-mean log-intensity there runs to −10³. Present before step 3.7. The pivot ratio happened to refuse many of them (1,590 of 11,969 evaluations, against 76 under the scale-free gate). Decided 2026-10-21: remedy (c), with the BIC pathway kept as a setting. **Resolved in step 3.10:** the g-prior pathway is the default. On the low-rate fit the log-intensity's MSE fell from 163,982 to 0.16 and knot-count ESS rose from 119 to 638; away from separation it agrees with BIC. | Closed. The BIC pathway keeps the behavior, as its docs state. | Closed (step 3.10) |
 | OQ13 | He, Yang and Kang's repositories as external fixtures and demos | The user, 2026-10-21: the ABMRS repositories (github.com/junhuihe2000/ABMRS and exampleABMRS) and the supplement's data and demos (`triceps`, the jump curves, the surfaces) would serve as fixtures for the R harness and as demo material, fitting the same data with this engine. The supplement is already in `issues/regression/ABMRS_Revision_V2_Supplementary_Materials/`. Its code differs from the paper in places (step 3.8's findings), so fixtures must record which version they come from. | Decide what to fix as oracles: their EBARS fits as an external comparison, not ground truth, and the datasets. Fetching the repositories, and installing the package into the `r/` oracles' environment, needs approval for the download. | With the R harness; demos after the BASS port |
 
 Tracked elsewhere: the `EbicPrior` text check (step 3.8, waiting on the *Biometrics* PDF), BARS admission (step 3.7), the b = 0 guard (step 3.2's report), and the linear form's weaker hot-rung Occam penalty (step 3.2 addendum).
@@ -1722,3 +1722,60 @@ Both are corrected.
 - **Measure again on the new kernel:** the BARS-mixing table, OQ1, OQ4 and OQ8, in "After Phase 3: BARS mixing". Tempering's measured gains were partly trap escape.
 - **Relocation is still local.** ABMRS's relocations are global, uniform over unused candidates, and an exploratory share for relocation is unmeasured. It goes with the move-schedule study.
 - **Step 3.10,** the Poisson g-prior marginal, is next.
+
+### 3.10 Poisson g-prior marginal — done 2026-10-22
+
+| Commit | Content |
+|---|---|
+| `1e6aec2` | `PoissonMarginal`: the g-prior pathway beside BIC, as the default; its tests |
+| docs commit | `BayesianRegression.md`, OQ10 and OQ12, this report |
+
+**Specification:**
+- **The setting.** `new PoissonModel(PoissonMarginal marginal = GPrior)`, reported by `Marginal`. `Bic` is the previous code path exactly.
+- **The g-prior** is N(β₀, Λ⁻¹), with Λ = (ȳ/m)·BᵀB and β₀ = log ȳ·(BᵀB)⁻¹Bᵀ1, which is log ȳ·1 for B-splines.
+  - The mode comes from penalized IRLS started at β₀.
+  - The marginal is its Laplace approximation at the mode.
+  - The draw is an independence MH from N(β̂, H⁻¹), targeting the likelihood × the g-prior.
+  - The readout is z(t)ᵀH⁻¹z(t).
+- **The rules.** ȳ = 0 is refused as `ZeroResponse`. The numerical gate applies to BᵀB and to H. Tempering keeps b·ℓ₁.
+- **One departure from the plan: the prior's mean.** The plan wrote N(0, ·), the form of the Normal model's Zellner prior.
+  - **The problem with zero.** On the log-intensity, mean 0 puts the prior's pseudo-observation at one count per bin. It pulls the log-rate toward 0 by about log ȳ/(m+1), about 4% of the rate at ȳ = 50, m = 100. Its penalty on the fit's shape scales with 1 − log ȳ, so above ȳ = e it rewards shape.
+  - **The fix.** Centring on the null fit removes both, for one extra solve. It is the proper counterpart of Sabanés Bové and Held's flat intercept.
+  - **Measured.** The level's bias stayed under 0.01 on the log scale at every count level, including ȳ ≈ 35 (m = 150), where mean 0 would pull it by about 0.024.
+- **The fingerprint** covers component types only (OQ10), so a checkpoint does not distinguish the two pathways. This is recorded in OQ10.
+
+**Verification:**
+- **Zero drift on the BIC pathway.** With `PoissonMarginal.Bic`, both step probes are byte-identical to their step 3.9 outputs.
+- **`PoissonGPriorTests`** (3 cases). Each reference is computed densely from the prior's definition.
+  - **Separation.** In OQ12's case (one knot at 0.8, zero counts beyond 0.797), the g-prior's separated coefficient is −4.59, against BIC's −59,440. The mode is a stationary point of the log posterior, with |gradient| < 1e-6.
+  - **A zero response** is refused as `ZeroResponse`. Without a g-prior, the draw falls back to the fit, as when H is refused, rather than to BIC's ridge target.
+  - **The Laplace marginal against importance sampling** (a multivariate t proposal, 200,000 draws, standard errors 0.0013–0.0015, m = 40). The errors were −0.017 at ν = 5, −0.024 at ν = 6, and −0.008 on their ratio. The bounds are 0.05 and 0.02.
+- **Updated:**
+  - `SkewedPoissonTests` runs on both pathways' targets. The MH mean came within 0.007 of the quadrature mean under the g-prior, and within 0.0045 under BIC.
+  - `CoefficientDrawTests` checks the readout against (BᵀŴB + Λ)⁻¹ at the g-prior's mode, and against (BᵀŴB)⁻¹ at BIC's MLE.
+- **Results** under the fact harness: `Maths.Regression.Tests` 227 of 227 (`20261022_050834425`): the 223 of step 3.9, the 3 `PoissonGPriorTests` cases, and the BIC case of `SkewedPoissonTests`, now a theory.
+- **Seed sweep** (`SEED_SWEEP=50`, `20261022_050720639`). No claim in the registry uses the Poisson model, and every claim holds as at step 3.9. The adaptive-kernel rows match step 3.7's sweep exactly, which confirms that step 3.9's ε = 0 pin restored that test.
+
+**Effects at the default:**
+- **Step 3.7's low-rate fit** (4 chains × 3,000 draws), BIC → g-prior:
+
+  | Measure | BIC | g-prior |
+  |---|---|---|
+  | Log-intensity MSE over the data | 163,982 | 0.16 |
+  | Log-intensity MSE beyond x = 0.6 | 412,006 | 0.33 |
+  | Largest posterior SD | 199 | 0.54 |
+  | Peak interval | [0, 0.81] | [0, 0.072] |
+  | R̂(k) | 1.058 | 1.002 |
+  | Knot-count ESS | 119 | 638 |
+  | Inadmissible or non-converged evaluations | 14 | 0 |
+
+- **Five count fits,** 5 data seeds each (`BayesianRegression.md` has the table).
+  - **Away from separation** the fits agree within seed noise. The g-prior carries 0.03–0.23 more knots, because its Occam factor, about ½·log(1 + m·μⱼ/ȳ) per basis function, is lighter where the rate is low.
+  - **The low-rate fit's** median MSE is 0.17 against BIC's 12,948.
+- **Step 3.5's probe:** only the Poisson rows moved. Mean knots went 0.49 → 0.66 (plain) and 0.55 → 0.68 (tempered), on 2 chains × 300 draws.
+- **Speed.** On the peak fit an evaluation took 52–59 µs against BIC's 76–99 µs. IRLS starts at the null fit and needs fewer steps.
+
+**For later steps:**
+- **Phase 3 is complete.** Next come the "After Phase 3: BARS mixing" re-measurements on the new kernel (OQ1, OQ4, OQ8), then the BASS port.
+- **Whittle and GibbsLoss stay BIC-type.** They cannot separate (the plan's scope), and moving them to the same footing would only unify the family.
+- **A note for BASS's coefficient-prior decisions (D03).** The Normal model's Zellner prior is centred at zero (DMGK), so it shrinks the level by m/(m+1). Being Gaussian, it has no shape term, so the bias is the level's alone. Centring it on the null fit would be the same choice as here.
