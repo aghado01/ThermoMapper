@@ -48,7 +48,11 @@ public static class BandedGPrior
     /// <summary>
     /// The weighted block at prior precision <paramref name="tau"/>: G = ZᵀZ and <c>P_a = Zᵀ(W + τI)Z</c> factored,
     /// the posterior mean <c>β̃ = P_a⁻¹ZᵀWy</c>, and <c>S = ‖y − Zβ̃‖²_W + τ‖Zβ̃‖²</c>, a sum of non-negative terms;
-    /// null when <paramref name="admits"/> refuses either factor.
+    /// null when <paramref name="admits"/> refuses G.
+    /// <para>Admission reads G alone, so it depends on the design and not on the weights, which a robust sampler redraws:
+    /// a weight update can never move the current knots out of the support. P_a ≥ τG is positive definite whenever G is,
+    /// and its conditioning is within a factor of about (w_max + τ)/(w_min + τ) of G's; a P_a that still fails to factor
+    /// is a numerical defect, raised as an exception.</para>
     /// </summary>
     public static CollapsedGPrior? Fit(BandedDesign design, double[] y, double[] weights, double tau,
                                        Func<ISpdFactor, bool> admits)
@@ -80,7 +84,9 @@ public static class BandedGPrior
         design.AccumulateRhs(weights, y, h);
         var posterior = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         posterior.DecomposeBanded(pBand);
-        if (!admits(posterior)) return null;
+        if (!posterior.Status.PositiveDefinite)
+            throw new InvalidOperationException(
+                $"P_a = Zᵀ(W + τI)Z failed to factor at pivot {posterior.FailedAt} although G was admitted; P_a ≥ τG must be positive definite.");
         double[] beta = posterior.Solve(h);
 
         var f = new double[m];

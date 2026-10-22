@@ -20,8 +20,10 @@ namespace Maths.Regression.Spline.Bars;
 /// <para>BARS's factors are strict, so no pivot is ever floored; a floored factor's solves would describe a different
 /// matrix, and <see cref="FactorStatus.FlooredPivots"/> must be 0.</para>
 /// <para>For the Normal and Whittle models the factored matrix depends only on the inputs, so the gate restricts the
-/// model's support. Poisson and GibbsLoss factor a matrix weighted by the fit, so for them it also depends on the
-/// response, and it is a numerical truncation of the posterior rather than a prior restriction.</para>
+/// model's support. That holds for robust Normal runs too: the weighted block admits on the unweighted Gram alone, so a
+/// weight update cannot change it (<see cref="BandedGPrior"/>). Poisson and GibbsLoss factor a matrix weighted by the
+/// fit, so for them it also depends on the response, and it is a numerical truncation of the posterior rather than a
+/// prior restriction; that weighting is a deterministic function of the knots and the data, not a sampled state.</para>
 /// </remarks>
 public static class DesignAdmission
 {

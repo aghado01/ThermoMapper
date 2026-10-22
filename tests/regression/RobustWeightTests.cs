@@ -137,6 +137,51 @@ public sealed class RobustWeightTests
             Assert.All(resampler.Resample(r, sigma2, rng), w => Assert.Equal(1.0 / (kappa * kappa), w));
     }
 
+    [Fact]
+    public void Admission_ReadsTheKnotsAlone_WhateverTheWeights()
+    {
+        // A robust sampler redraws the weights while the knots stay, so a weight update must not move the current knots
+        // out of the support (the external review's item 2). For random knot configurations on 40 points, the weighted
+        // model's verdict under weights a resampler can produce, down to 1e-12 for gross outliers, is its verdict at unit
+        // weights.
+        const int m = 40;
+        double[] x = new double[m], y = new double[m];
+        for (int i = 0; i < m; i++) { x[i] = (i + 0.5) / m; y[i] = Math.Sin(2.0 * Math.PI * x[i]); }
+        var basis = new SplineBasis(3);
+        var model = new WeightedNormalModel();
+        var rng = new Xoshiro256PlusPlus(seed: 41);
+        var ones = new double[m];
+        Array.Fill(ones, 1.0);
+        int admitted = 0, refused = 0;
+        for (int trial = 0; trial < 400; trial++)
+        {
+            int k = 1 + (int)(rng.NextDouble() * 14);
+            var knots = new double[k];
+            for (int j = 0; j < k; j++) knots[j] = rng.NextDouble();
+            if (trial % 2 == 0) knots[0] = Math.Min(0.999999, knots[k - 1] + Math.Pow(10.0, -2.0 - 8.0 * rng.NextDouble()));
+            Array.Sort(knots);
+            bool distinct = true;
+            for (int j = 1; j < k; j++) distinct &= knots[j] > knots[j - 1];
+            if (!distinct) continue;
+            double[,] z = basis.Design(new KnotConfig(knots), x);
+            DesignRejection atUnit = model.TemperedMarginal(z, y, ones).Rejection;
+            if (atUnit == DesignRejection.None) admitted++; else refused++;
+            for (int draw = 0; draw < 5; draw++)
+            {
+                var w = new double[m];
+                for (int i = 0; i < m; i++)
+                {
+                    double u = rng.NextDouble();
+                    w[i] = u < 0.1 ? 1e-12 : u < 0.2 ? 0.01 : u < 0.9 ? 1.0 : 3.0;
+                }
+                ITemperedMarginal weighted = model.TemperedMarginal(z, y, w);
+                Assert.Equal(atUnit, weighted.Rejection);
+                if (atUnit == DesignRejection.None) Assert.True(double.IsFinite(weighted.LogMarginalLikelihood(1.0)));
+            }
+        }
+        Assert.True(admitted > 50 && refused > 50, $"admitted {admitted}, refused {refused}: both verdicts must be exercised");
+    }
+
     // The CoefficientDrawTests design with fixed, uneven positive weights (a few points downweighted hard).
     private static (double[,] Z, double[] Y, double[] W) Problem()
     {
