@@ -77,21 +77,32 @@ public sealed class CoefficientDrawTests
         double[]? vw = new WhittleModel().ConditionalVariance(z, periodogram, null, readout);
         for (int t = 0; t < readout.GetLength(0); t++) Assert.Equal(QuadraticForm(readout, t, whittleCov), vw![t], 10);
 
-        // Poisson: J = BᵀŴB at the MLE, Ŵ = exp(η̂).
+        // Poisson: H = BᵀŴB + Λ at the mode, Ŵ = exp(η̂), with the g-prior's Λ = (ȳ/m)·BᵀB, or Λ = 0 at BIC's MLE.
         var counts = new double[m];
         for (int i = 0; i < m; i++) counts[i] = Math.Round(5.0 + 3.0 * s[i]);
-        var poisson = new PoissonModel();
-        double[] betaHat = poisson.PosteriorMeanCoefficients(z, counts, null);
-        var w = new double[m];
-        for (int i = 0; i < m; i++)
+        double priorScale = 0.0;
+        foreach (double c in counts) priorScale += c / ((double)m * m);   // ȳ/m
+        foreach (PoissonMarginal marginal in new[] { PoissonMarginal.GPrior, PoissonMarginal.Bic })
         {
-            double eta = 0.0;
-            for (int j = 0; j < nu; j++) eta += z[i, j] * betaHat[j];
-            w[i] = Math.Exp(eta);
+            var poisson = new PoissonModel(marginal);
+            double[] betaHat = poisson.PosteriorMeanCoefficients(z, counts, null);
+            var w = new double[m];
+            for (int i = 0; i < m; i++)
+            {
+                double eta = 0.0;
+                for (int j = 0; j < nu; j++) eta += z[i, j] * betaHat[j];
+                w[i] = Math.Exp(eta);
+            }
+            double[,] h = Gram(z, w);
+            if (marginal == PoissonMarginal.GPrior)
+            {
+                double[,] gram = Gram(z, null);
+                for (int p = 0; p < nu; p++) for (int q = 0; q < nu; q++) h[p, q] += priorScale * gram[p, q];
+            }
+            double[,] poissonCov = Invert(h);
+            double[]? vp = poisson.ConditionalVariance(z, counts, null, readout);
+            for (int t = 0; t < readout.GetLength(0); t++) Assert.Equal(QuadraticForm(readout, t, poissonCov), vp![t], 10);
         }
-        double[,] poissonCov = Invert(Gram(z, w));
-        double[]? vp = poisson.ConditionalVariance(z, counts, null, readout);
-        for (int t = 0; t < readout.GetLength(0); t++) Assert.Equal(QuadraticForm(readout, t, poissonCov), vp![t], 10);
     }
 
     [Fact]
