@@ -64,6 +64,30 @@ public sealed class CountLawTests
         Assert.True(r.Agrees(z: 5.0, floor: 0.002), $"{label}:{r.Describe()}");
     }
 
+    [Theory]
+    [InlineData(0.1, "uniform")]
+    [InlineData(0.1, "design")]
+    [InlineData(1.0, "design")]
+    public void MixtureBirths_KeepTheCountLaw(double exploration, string baseName)
+    {
+        // Births with an exploratory share ε from a base measure (step 3.9): any proposal density leaves the target alone
+        // when the death carries it in reverse. The design base is a histogram of 40 points packed into [0.6, 0.9], with
+        // a uniform floor: deliberately uneven. The local kernel is the default τ = 50.
+        var prior = new PoissonPrior(4.0);
+        double[] packed = new double[40];
+        for (int i = 0; i < packed.Length; i++) packed[i] = 0.6 + 0.3 * (i + 0.5) / packed.Length;
+        IKnotBase knotBase = baseName == "design" ? new DesignHistogramBase(packed) : UniformKnotBase.Instance;
+        var density = new KnotBirthDensity(new LocalBetaKernel(50.0), exploration, knotBase);
+        var target = new SplineTarget(new SplineBasis(3), new FlatModel(), prior, x: [0.5], y: [0.0], minColumnMass: 0.0);
+
+        CountLaw.Result r = CountLaw.Sample<KnotConfig>(
+            [new KnotBirthMove(density), new KnotDeathMove(density), new KnotRelocateMove(density.Kernel)], target,
+            new KnotConfig([]), s => s.Count, prior.LogPrior, 12, burn: 10_000, steps: 400_000, batches: 40, seed: 31);
+        string label = $"ε={exploration} base={baseName}";
+        _out.WriteLine($"[count-law-mixture] {label}:{r.Describe()}");
+        Assert.True(r.Agrees(z: 5.0, floor: 0.002), $"{label}:{r.Describe()}");
+    }
+
     [Fact]
     public void SupportGate_RestrictsTheKnotPrior_AndNothingElse()
     {

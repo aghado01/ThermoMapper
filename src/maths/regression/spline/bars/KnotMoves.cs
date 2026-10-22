@@ -7,22 +7,26 @@ using Maths.Regression.Spline;
 namespace Maths.Regression.Spline.Bars;
 
 /// <summary>
-/// Birth move: pick an existing knot uniformly as a center, perturb it with the proposal
-/// <see cref="IKnotKernel"/> to get a new knot (uniform on (0,1) when k = 0). With equal birth/death weight the
-/// move-selection probabilities cancel; the Hastings correction is <c>−log(k+1) − log q(cand | knots)</c> where
-/// q is the mixture density, and the Jacobian is 0. With <see cref="UniformKernel"/> this reduces to
-/// <c>−log(k+1)</c>.
+/// Birth move: draw a new knot from the birth density <see cref="KnotBirthDensity"/>, which perturbs an existing
+/// knot with the proposal <see cref="IKnotKernel"/>, draws from its base with probability ε, and draws from the base
+/// when k = 0. With equal birth/death weight the move-selection probabilities cancel; the Hastings correction is
+/// <c>−log(k+1) − log q(cand | knots)</c>, and the Jacobian is 0. With <see cref="UniformKernel"/> and the uniform base
+/// this reduces to <c>−log(k+1)</c>.
 /// </summary>
 public sealed class KnotBirthMove : IRjMove<KnotConfig>
 {
-    private readonly IKnotKernel _kernel;
+    private readonly KnotBirthDensity _density;
     private readonly double _weight;
 
-    public KnotBirthMove(IKnotKernel kernel, double weight = 0.4)
+    /// <summary>Local births from <paramref name="kernel"/> (ε = 0), uniform when there are no knots.</summary>
+    public KnotBirthMove(IKnotKernel kernel, double weight = 0.4) : this(new KnotBirthDensity(kernel), weight) { }
+
+    /// <summary>Births from <paramref name="density"/>; its <see cref="KnotDeathMove"/> must share it.</summary>
+    public KnotBirthMove(KnotBirthDensity density, double weight = 0.4)
     {
-        ArgumentNullException.ThrowIfNull(kernel);
+        ArgumentNullException.ThrowIfNull(density);
         if (!(weight > 0.0)) throw new ArgumentOutOfRangeException(nameof(weight));
-        _kernel = kernel;
+        _density = density;
         _weight = weight;
     }
 
@@ -37,9 +41,7 @@ public sealed class KnotBirthMove : IRjMove<KnotConfig>
 
         double[] knots = current.InteriorKnots;
         int k = knots.Length;
-        double candidate = k == 0
-            ? rng.NextDouble()
-            : _kernel.Sample(knots[rng.NextInt(k)], rng);
+        double candidate = _density.Sample(knots, rng);
 
         var next = new double[k + 1];
         int j = 0;
@@ -47,25 +49,30 @@ public sealed class KnotBirthMove : IRjMove<KnotConfig>
         next[j] = candidate;
         for (int t = j; t < k; t++) next[t + 1] = knots[t];
 
-        double logForward = ProposalMath.LogMixtureDensity(candidate, knots, _kernel);
+        double logForward = _density.LogDensity(candidate, knots);
         return new Proposal<KnotConfig>(new KnotConfig(next), -Math.Log(k + 1) - logForward, 0.0);
     }
 }
 
 /// <summary>
-/// Death move: delete one interior knot chosen uniformly. Exact reverse of <see cref="KnotBirthMove"/> —
-/// Hastings correction <c>+log(k) + log q(dropped | remaining)</c>, Jacobian 0. Unavailable (null) at k = 0.
+/// Death move: delete one interior knot chosen uniformly. Exact reverse of <see cref="KnotBirthMove"/> with the same
+/// <see cref="KnotBirthDensity"/> — Hastings correction <c>+log(k) + log q(dropped | remaining)</c>, Jacobian 0.
+/// Unavailable (null) at k = 0.
 /// </summary>
 public sealed class KnotDeathMove : IRjMove<KnotConfig>
 {
-    private readonly IKnotKernel _kernel;
+    private readonly KnotBirthDensity _density;
     private readonly double _weight;
 
-    public KnotDeathMove(IKnotKernel kernel, double weight = 0.4)
+    /// <summary>The reverse of local births from <paramref name="kernel"/> (ε = 0).</summary>
+    public KnotDeathMove(IKnotKernel kernel, double weight = 0.4) : this(new KnotBirthDensity(kernel), weight) { }
+
+    /// <summary>The reverse of births from <paramref name="density"/>, which its <see cref="KnotBirthMove"/> shares.</summary>
+    public KnotDeathMove(KnotBirthDensity density, double weight = 0.4)
     {
-        ArgumentNullException.ThrowIfNull(kernel);
+        ArgumentNullException.ThrowIfNull(density);
         if (!(weight > 0.0)) throw new ArgumentOutOfRangeException(nameof(weight));
-        _kernel = kernel;
+        _density = density;
         _weight = weight;
     }
 
@@ -88,7 +95,7 @@ public sealed class KnotDeathMove : IRjMove<KnotConfig>
         for (int t = 0, w = 0; t < k; t++)
             if (t != drop) next[w++] = knots[t];
 
-        double logReverse = ProposalMath.LogMixtureDensity(dropped, next, _kernel);
+        double logReverse = _density.LogDensity(dropped, next);
         return new Proposal<KnotConfig>(new KnotConfig(next), Math.Log(k) + logReverse, 0.0);
     }
 }

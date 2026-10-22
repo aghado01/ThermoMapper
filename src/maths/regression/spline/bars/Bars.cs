@@ -66,6 +66,13 @@ public sealed record BarsConfig
     /// <summary>The support gate: every basis function needs column mass Σᵢ Bⱼ(xᵢ) at least this, one data point's worth
     /// by default; 0 turns it off. It restricts the knot prior's support, since it reads only the inputs and the knots.</summary>
     public double MinColumnMass { get; init; } = SplineTarget.DefaultMinColumnMass;
+
+    /// <summary>ε, the share of births drawn from <see cref="BirthBase"/> rather than near an existing knot; 0 keeps
+    /// births local. A positive share lets a knot far from the others be removed (<see cref="KnotBirthDensity"/>).</summary>
+    public double BirthExploration { get; init; }
+
+    /// <summary>The base measure of the exploratory births and of the first knot.</summary>
+    public BirthBase BirthBase { get; init; } = BirthBase.Uniform;
 }
 
 /// <summary>Strict-core entry point: build the ensemble from a <see cref="BarsConfig"/> and run it.</summary>
@@ -76,7 +83,8 @@ public static class Bars
         ArgumentNullException.ThrowIfNull(config);
         IBasis basis = config.Basis ?? new SplineBasis(config.Degree);
         var ensemble = new BarsEnsemble(basis, config.Model, config.Prior, config.Kernel, config.Robustness,
-                                        adaptKernelTau: config.AdaptKernelTau, minColumnMass: config.MinColumnMass);
+                                        adaptKernelTau: config.AdaptKernelTau, minColumnMass: config.MinColumnMass,
+                                        birthExploration: config.BirthExploration, birthBase: config.BirthBase);
         return ensemble.Run(x, y, grid,
             config.Chains, config.MasterSeed, config.BurnIn, config.MaxSamples,
             config.StartDispersion, config.WeightEvery, config.RHatTarget, config.BatchSize, config.PeakProminence,

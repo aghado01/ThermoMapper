@@ -114,6 +114,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private readonly SwapSchedule _temperSchedule;
     private readonly bool _temperAdaptLadder;
     private readonly double _minColumnMass;
+    private readonly double _birthExploration;
+    private readonly BirthBase _birthBase;
+    private IKnotBase _knotBase = UniformKnotBase.Instance;
 
     // Per-run context, set at the top of Run and read (only) by StartChain/the chain runs during that call. Run
     // drives the shell synchronously, so these are valid for the whole run; the fan-out reads them, never writes.
@@ -149,12 +152,16 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// <param name="minColumnMass">The support gate: every basis function needs column mass Σᵢ Bⱼ(xᵢ) at least this
     /// (one data point's worth by default; 0 turns it off). A declared restriction of the knot prior's support
     /// (<see cref="SplineTarget.MinColumnMass"/>).</param>
+    /// <param name="birthExploration">ε, the share of births drawn from <paramref name="birthBase"/> rather than near
+    /// an existing knot (<see cref="KnotBirthDensity"/>; 0: local births only).</param>
+    /// <param name="birthBase">The base measure of the exploratory births and of the first knot.</param>
     public BarsEnsemble(IBasis basis, IObservationModel model, IComplexityPrior prior, IKnotKernel kernel,
                         IWeightResampler? resampler = null, double? dmgkConstant = null, double? adaptKernelTau = null,
                         int? temperLevels = null, double temperBetaMin = 0.05,
                         TemperingPath temperPath = TemperingPath.Likelihood,
                         SwapSchedule temperSchedule = SwapSchedule.DeterministicEvenOdd, bool temperAdaptLadder = true,
-                        double minColumnMass = SplineTarget.DefaultMinColumnMass)
+                        double minColumnMass = SplineTarget.DefaultMinColumnMass,
+                        double birthExploration = 0.0, BirthBase birthBase = BirthBase.Uniform)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(model);
@@ -196,6 +203,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         if (!(minColumnMass >= 0.0 && double.IsFinite(minColumnMass)))
             throw new ArgumentOutOfRangeException(nameof(minColumnMass), "The minimum column mass must be finite and non-negative.");
         _minColumnMass = minColumnMass;
+        if (!(birthExploration >= 0.0 && birthExploration <= 1.0))
+            throw new ArgumentOutOfRangeException(nameof(birthExploration), "The exploratory share must lie in [0, 1].");
+        if (birthBase is not (BirthBase.Uniform or BirthBase.Design)) throw new ArgumentOutOfRangeException(nameof(birthBase));
+        _birthExploration = birthExploration;
+        _birthBase = birthBase;
     }
 
     /// <summary>Functionals R̂ runs on: knot count (index 0) + each fitted grid value (the per-grid consensus map).</summary>
@@ -244,7 +256,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         .Add(_basis.GetType().FullName!).Add(_model.GetType().FullName!).Add(_prior.GetType().FullName!)
         .Add(_kernel.GetType().FullName!).Add(_resampler?.GetType().FullName ?? "")
         .Add(_dmgkConstant ?? double.NaN).Add(_adaptKernelTau ?? double.NaN).Add(_temperLevels ?? 0).Add(_temperBetaMin)
-        .Add((int)_temperPath).Add((int)_temperSchedule).Add(_temperAdaptLadder ? 1 : 0).Add(_minColumnMass).ToString();
+        .Add((int)_temperPath).Add((int)_temperSchedule).Add(_temperAdaptLadder ? 1 : 0).Add(_minColumnMass).Add(_birthExploration).Add((int)_birthBase).ToString();
 
     /// <summary>
     /// Rebuild one chain from its saved restart state (<see cref="BarsChainState"/>): the chain or ladder, every RNG
@@ -330,6 +342,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         if (samples < 1) throw new ArgumentOutOfRangeException(nameof(samples));
 
         _x = x;
+        _knotBase = _birthBase == BirthBase.Design ? new DesignHistogramBase(x) : UniformKnotBase.Instance;
         _y = y;
         _grid = grid;
         _weightEvery = weightEvery;
@@ -541,8 +554,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
     private IRjMove<KnotConfig>[] Moves(IKnotKernel kernel)
     {
-        var birth = new KnotBirthMove(kernel);
-        var death = new KnotDeathMove(kernel);
+        var density = new KnotBirthDensity(kernel, _birthExploration, _knotBase);
+        var birth = new KnotBirthMove(density);
+        var death = new KnotDeathMove(density);
         var relocate = new KnotRelocateMove(kernel);
         return _dmgkConstant is double c
             ? DmgkSchedule.Wrap(birth, death, relocate, _prior, c)
