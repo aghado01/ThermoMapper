@@ -40,6 +40,10 @@ public enum DesignRejection
     /// <summary>The count prior gives the knot count probability zero.</summary>
     ZeroCountPrior,
 
+    /// <summary>A basis function's column mass Σᵢ Bⱼ(xᵢ) is below the support gate's minimum: too little data under
+    /// it (<see cref="SplineTarget.MinColumnMass"/>).</summary>
+    ThinSupport,
+
     /// <summary>No more observations than basis functions (m ≤ ν): the marginal is improper.</summary>
     TooFewObservations,
 

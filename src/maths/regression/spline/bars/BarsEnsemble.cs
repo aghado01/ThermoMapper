@@ -113,6 +113,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private readonly TemperingPath _temperPath;
     private readonly SwapSchedule _temperSchedule;
     private readonly bool _temperAdaptLadder;
+    private readonly double _minColumnMass;
 
     // Per-run context, set at the top of Run and read (only) by StartChain/the chain runs during that call. Run
     // drives the shell synchronously, so these are valid for the whole run; the fan-out reads them, never writes.
@@ -145,11 +146,15 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// <param name="temperAdaptLadder">When true (the default), each ladder re-spaces its interior rungs during burn-in
     /// to equalize adjacent rejection rates, in rounds of doubling length, and then holds them fixed for sampling.
     /// The geometric ladder from <paramref name="temperBetaMin"/> is the start; the endpoints never move.</param>
+    /// <param name="minColumnMass">The support gate: every basis function needs column mass Σᵢ Bⱼ(xᵢ) at least this
+    /// (one data point's worth by default; 0 turns it off). A declared restriction of the knot prior's support
+    /// (<see cref="SplineTarget.MinColumnMass"/>).</param>
     public BarsEnsemble(IBasis basis, IObservationModel model, IComplexityPrior prior, IKnotKernel kernel,
                         IWeightResampler? resampler = null, double? dmgkConstant = null, double? adaptKernelTau = null,
                         int? temperLevels = null, double temperBetaMin = 0.05,
                         TemperingPath temperPath = TemperingPath.Likelihood,
-                        SwapSchedule temperSchedule = SwapSchedule.DeterministicEvenOdd, bool temperAdaptLadder = true)
+                        SwapSchedule temperSchedule = SwapSchedule.DeterministicEvenOdd, bool temperAdaptLadder = true,
+                        double minColumnMass = SplineTarget.DefaultMinColumnMass)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(model);
@@ -188,6 +193,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         _temperPath = temperPath;
         _temperSchedule = temperSchedule;
         _temperAdaptLadder = temperAdaptLadder;
+        if (!(minColumnMass >= 0.0 && double.IsFinite(minColumnMass)))
+            throw new ArgumentOutOfRangeException(nameof(minColumnMass), "The minimum column mass must be finite and non-negative.");
+        _minColumnMass = minColumnMass;
     }
 
     /// <summary>Functionals R̂ runs on: knot count (index 0) + each fitted grid value (the per-grid consensus map).</summary>
@@ -236,7 +244,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         .Add(_basis.GetType().FullName!).Add(_model.GetType().FullName!).Add(_prior.GetType().FullName!)
         .Add(_kernel.GetType().FullName!).Add(_resampler?.GetType().FullName ?? "")
         .Add(_dmgkConstant ?? double.NaN).Add(_adaptKernelTau ?? double.NaN).Add(_temperLevels ?? 0).Add(_temperBetaMin)
-        .Add((int)_temperPath).Add((int)_temperSchedule).Add(_temperAdaptLadder ? 1 : 0).ToString();
+        .Add((int)_temperPath).Add((int)_temperSchedule).Add(_temperAdaptLadder ? 1 : 0).Add(_minColumnMass).ToString();
 
     /// <summary>
     /// Rebuild one chain from its saved restart state (<see cref="BarsChainState"/>): the chain or ladder, every RNG
@@ -260,7 +268,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             BurnRestarts = s.BurnRestarts,
             BurnRejection = s.BurnRejection is null ? null : (double[])s.BurnRejection.Clone(),
         };
-        var target = new SplineTarget(_basis, _model, _prior, _x, _y, run.W, run.Readout.Evaluations);
+        var target = new SplineTarget(_basis, _model, _prior, _x, _y, run.W, run.Readout.Evaluations, _minColumnMass);
         if (s.Ladder is LadderSnapshot<KnotConfig> ladder)
         {
             run.Ladder = ParallelTempering<KnotConfig>.Restore(_ => Moves(run.Kernel), target, ladder);
@@ -448,7 +456,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                         r[i] = _y[i] - f;
                     }
                     st.W = _resampler.Resample(r, sigma2, st.WeightRng);
-                    st.RjChain.ReplaceTarget(new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations));
+                    st.RjChain.ReplaceTarget(new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations, _minColumnMass));
                 }
                 st.SinceWeight = 0;
             }
@@ -521,11 +529,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     }
 
     private ReversibleJumpChain<KnotConfig> NewChain(BarsChainRun st)
-        => new(Moves(st.Kernel), new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations), st.Config, st.Rng);
+        => new(Moves(st.Kernel), new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations, _minColumnMass), st.Config, st.Rng);
 
     private ParallelTempering<KnotConfig> NewLadder(BarsChainRun st, int levels, int seed)
     {
-        var target = new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations);
+        var target = new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations, _minColumnMass);
         double[] betas = ParallelTempering<KnotConfig>.GeometricLadder(levels, _temperBetaMin);
         return new ParallelTempering<KnotConfig>(_ => Moves(st.Kernel), target, st.Config, betas, _temperPath, seed,
                                                  _temperSchedule);

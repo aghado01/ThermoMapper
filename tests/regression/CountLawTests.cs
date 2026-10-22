@@ -1,6 +1,7 @@
 using System;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
+using Maths.Rng;
 using Maths.Samplers;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
@@ -13,7 +14,9 @@ namespace Maths.Regression.Tests;
 /// simplex), so with the likelihood held constant the knot count must follow the count prior p(k) exactly. Checked
 /// under both move schedules, constant weights and DMGK's, which settles that the two sample the same posterior;
 /// for a hard cap; and for the Conway–Maxwell–Poisson tails. The kernels mix within the batches: under a flat
-/// target the default LocalBeta(50) wanders slowly enough that 40 batches understate its error.
+/// target the default LocalBeta(50) wanders slowly enough that 40 batches understate its error. These targets put one
+/// data point under the basis, so the support gate is off: they check the bare knot prior. With the gate on, the law
+/// is the prior restricted to supported configurations, checked against direct sampling.
 /// </summary>
 public sealed class CountLawTests
 {
@@ -45,7 +48,7 @@ public sealed class CountLawTests
         IRjMove<KnotConfig>[] moves = dmgk
             ? DmgkSchedule.Wrap(new KnotBirthMove(kernel), new KnotDeathMove(kernel), new KnotRelocateMove(kernel), prior)
             : [new KnotBirthMove(kernel), new KnotDeathMove(kernel), new KnotRelocateMove(kernel)];
-        var target = new SplineTarget(new SplineBasis(3), new FlatModel(), prior, x: [0.5], y: [0.0]);
+        var target = new SplineTarget(new SplineBasis(3), new FlatModel(), prior, x: [0.5], y: [0.0], minColumnMass: 0.0);
 
         CountLaw.Result r = CountLaw.Sample(moves, target, new KnotConfig([]), s => s.Count, prior.LogPrior,
                                             bins, burn: 10_000, steps: 400_000, batches: 40, seed: 31);
@@ -53,6 +56,54 @@ public sealed class CountLawTests
         _out.WriteLine($"[count-law] {label}:{r.Describe()}");
 
         Assert.True(r.Agrees(z: 5.0, floor: 0.002), $"{label}:{r.Describe()}");
+    }
+
+    [Fact]
+    public void SupportGate_RestrictsTheKnotPrior_AndNothingElse()
+    {
+        // Under a constant likelihood with the gate on, the target is the knot prior restricted to configurations whose
+        // every basis function has column mass ≥ 1. The knot count's law is then p(k)·s(k)/Z, where s(k) is the chance
+        // that k sorted uniforms pass the gate: a prior-support restriction leaves the knot measure alone. s(k) is
+        // estimated by direct sampling, apart from the chain.
+        var prior = new PoissonPrior(4.0);
+        var basis = new SplineBasis(3);
+        double[] x = new double[30];
+        for (int i = 0; i < x.Length; i++) x[i] = (i + 0.5) / x.Length;
+        var target = new SplineTarget(basis, new FlatModel(), prior, x, new double[x.Length]);
+        Assert.Equal(SplineTarget.DefaultMinColumnMass, target.MinColumnMass);
+
+        const int bins = 12, draws = 50_000;
+        var rng = new Xoshiro256PlusPlus(seed: 23);
+        var logPass = new double[40];
+        for (int k = 0; k < logPass.Length; k++)
+        {
+            int pass = 0;
+            for (int d = 0; d < draws; d++)
+            {
+                var knots = new double[k];
+                for (int i = 0; i < k; i++) knots[i] = rng.NextDouble();
+                Array.Sort(knots);
+                double[,] z = basis.Design(new KnotConfig(knots), x);
+                bool supported = true;
+                for (int j = 0; j < z.GetLength(1) && supported; j++)
+                {
+                    double mass = 0.0;
+                    for (int i = 0; i < x.Length; i++) mass += z[i, j];
+                    supported = mass >= 1.0;
+                }
+                if (supported) pass++;
+            }
+            logPass[k] = Math.Log((double)pass / draws);
+        }
+        _out.WriteLine($"[count-law-gate] s(k) for k = 0..8: {string.Join(", ", Array.ConvertAll(logPass[..9], v => Math.Exp(v).ToString("F3")))}");
+
+        IKnotKernel kernel = new LocalBetaKernel(5.0);
+        CountLaw.Result r = CountLaw.Sample<KnotConfig>(
+            [new KnotBirthMove(kernel), new KnotDeathMove(kernel), new KnotRelocateMove(kernel)], target, new KnotConfig([]),
+            s => s.Count, k => prior.LogPrior(k) + (k < logPass.Length ? logPass[k] : double.NegativeInfinity),
+            bins, burn: 10_000, steps: 400_000, batches: 40, seed: 31);
+        _out.WriteLine($"[count-law-gate]{r.Describe()}");
+        Assert.True(r.Agrees(z: 5.0, floor: 0.003), r.Describe());
     }
 
     [Fact]
@@ -75,7 +126,7 @@ public sealed class CountLawTests
     [Fact]
     public void Target_IsMinusInfinityOffTheOpenOrderedSimplex()
     {
-        var target = new SplineTarget(new SplineBasis(3), new FlatModel(), new PoissonPrior(4.0), x: [0.5], y: [0.0]);
+        var target = new SplineTarget(new SplineBasis(3), new FlatModel(), new PoissonPrior(4.0), x: [0.5], y: [0.0], minColumnMass: 0.0);
         Assert.Equal(double.NegativeInfinity, target.LogPosterior(new KnotConfig([0.0, 0.5])));
         Assert.Equal(double.NegativeInfinity, target.LogPosterior(new KnotConfig([0.5, 1.0])));
         Assert.Equal(double.NegativeInfinity, target.LogPosterior(new KnotConfig([0.3, 0.3])));
@@ -96,7 +147,7 @@ public sealed class CountLawTests
         var prior = new PoissonPrior(lambda);
         IKnotKernel kernel = new LocalBetaKernel(5.0);
         double[] betas = [1.0, 0.5, 0.25];
-        var target = new SplineTarget(new SplineBasis(3), new FlatModel(), prior, x: [0.5], y: [0.0]);
+        var target = new SplineTarget(new SplineBasis(3), new FlatModel(), prior, x: [0.5], y: [0.0], minColumnMass: 0.0);
         Func<int, double> LawAt(int rung) => path == TemperingPath.Likelihood
             ? prior.LogPrior
             : new PoissonPrior(Math.Pow(lambda, betas[rung])).LogPrior;
@@ -118,7 +169,7 @@ public sealed class CountLawTests
     public void Target_OffTheCountPriorsSupport_BuildsNoDesign()
     {
         // A zero count prior decides the evaluation before any design is built or factored.
-        var target = new SplineTarget(new SplineBasis(3), new ThrowingModel(), new UniformPrior(1), x: [0.5], y: [0.0]);
+        var target = new SplineTarget(new SplineBasis(3), new ThrowingModel(), new UniformPrior(1), x: [0.5], y: [0.0], minColumnMass: 0.0);
         ITargetEvaluation e = target.Evaluate(new KnotConfig([0.3, 0.6]));
         Assert.Equal(double.NegativeInfinity, e.LogPrior);
         Assert.Equal(double.NegativeInfinity, e.LogLikelihood(1.0));

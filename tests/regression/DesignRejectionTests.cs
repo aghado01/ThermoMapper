@@ -9,8 +9,8 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// Every refused knot configuration is counted by why it was refused (step 3.4), so the truncation that the support
-/// rules and admission impose stays visible: off the simplex, a zero count prior, too few observations, an
-/// inadmissible factor, an IRLS fit that did not settle, a zero response.
+/// rules and admission impose stays visible: off the simplex, a zero count prior, thin support, too few observations,
+/// an inadmissible factor, an IRLS fit that did not settle, a zero response.
 /// </summary>
 public sealed class DesignRejectionTests
 {
@@ -21,10 +21,12 @@ public sealed class DesignRejectionTests
         return x;
     }
 
-    private static DesignRejection OutcomeOf(IObservationModel model, IComplexityPrior prior, double[] x, double[] y, double[] knots)
+    private static DesignRejection OutcomeOf(IObservationModel model, IComplexityPrior prior, double[] x, double[] y, double[] knots,
+                                             double minColumnMass = SplineTarget.DefaultMinColumnMass)
     {
         var tally = new Tally<DesignRejection>();
-        ITargetEvaluation e = new SplineTarget(new SplineBasis(3), model, prior, x, y, outcomes: tally).Evaluate(new KnotConfig(knots));
+        ITargetEvaluation e = new SplineTarget(new SplineBasis(3), model, prior, x, y, outcomes: tally, minColumnMass: minColumnMass)
+            .Evaluate(new KnotConfig(knots));
         Assert.Equal(1, tally.Total);
         foreach ((DesignRejection reason, long count) in tally.Entries)
             if (count == 1)
@@ -47,16 +49,24 @@ public sealed class DesignRejectionTests
         Assert.Equal(DesignRejection.None, OutcomeOf(normal, poisson, x, y, [0.3, 0.6]));
         Assert.Equal(DesignRejection.OutsideSimplex, OutcomeOf(normal, poisson, x, y, [0.6, 0.3]));
         Assert.Equal(DesignRejection.ZeroCountPrior, OutcomeOf(normal, new UniformPrior(1), x, y, [0.3, 0.6]));
-        Assert.Equal(DesignRejection.TooFewObservations, OutcomeOf(normal, poisson, Even(6), new double[6], [0.3, 0.6]));
+        Assert.Equal(DesignRejection.TooFewObservations, OutcomeOf(normal, poisson, Even(6), new double[6], [0.3, 0.6], minColumnMass: 0.0));
         Assert.Equal(DesignRejection.ZeroResponse, OutcomeOf(normal, poisson, x, new double[x.Length], [0.3, 0.6]));
 
-        // Knots packed into a gap in the data leave cubic B-splines with nothing under them.
+        // Knots packed into a gap in the data leave cubic B-splines with nothing under them: the support gate refuses
+        // the configuration before anything is factored, and without the gate the singular Gram fails the numerical gate.
         var gapped = new double[40];
         for (int i = 0; i < 20; i++) { gapped[i] = 0.4 * (i + 0.5) / 20; gapped[20 + i] = 0.6 + 0.4 * (i + 0.5) / 20; }
         var gy = new double[40];
         for (int i = 0; i < 40; i++) gy[i] = Math.Sin(2.0 * Math.PI * gapped[i]);
-        Assert.Equal(DesignRejection.Inadmissible,
-                     OutcomeOf(normal, poisson, gapped, gy, [0.42, 0.44, 0.46, 0.48, 0.50, 0.52, 0.54, 0.56, 0.58]));
+        double[] packed = [0.42, 0.44, 0.46, 0.48, 0.50, 0.52, 0.54, 0.56, 0.58];
+        Assert.Equal(DesignRejection.ThinSupport, OutcomeOf(normal, poisson, gapped, gy, packed));
+        Assert.Equal(DesignRejection.Inadmissible, OutcomeOf(normal, poisson, gapped, gy, packed, minColumnMass: 0.0));
+
+        // The basis function centred in the gap reaches only the data at its edges: mass 0.002, while its relative pivot
+        // is 0.24, so the factor is well conditioned and only the support gate refuses the configuration.
+        double[] thin = [0.38, 0.42, 0.5, 0.58, 0.62];
+        Assert.Equal(DesignRejection.ThinSupport, OutcomeOf(normal, poisson, gapped, gy, thin));
+        Assert.Equal(DesignRejection.None, OutcomeOf(normal, poisson, gapped, gy, thin, minColumnMass: 0.0));
 
         var counts = new double[x.Length];
         for (int i = 0; i < counts.Length; i++) counts[i] = Math.Round(6.0 + 4.0 * Math.Sin(2.0 * Math.PI * x[i]));

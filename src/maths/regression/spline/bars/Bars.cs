@@ -62,6 +62,10 @@ public sealed record BarsConfig
     /// span around the peak", not BARS's.
     /// </summary>
     public double SpanDropFraction { get; init; } = 0.5;
+
+    /// <summary>The support gate: every basis function needs column mass Σᵢ Bⱼ(xᵢ) at least this, one data point's worth
+    /// by default; 0 turns it off. It restricts the knot prior's support, since it reads only the inputs and the knots.</summary>
+    public double MinColumnMass { get; init; } = SplineTarget.DefaultMinColumnMass;
 }
 
 /// <summary>Strict-core entry point: build the ensemble from a <see cref="BarsConfig"/> and run it.</summary>
@@ -72,7 +76,7 @@ public static class Bars
         ArgumentNullException.ThrowIfNull(config);
         IBasis basis = config.Basis ?? new SplineBasis(config.Degree);
         var ensemble = new BarsEnsemble(basis, config.Model, config.Prior, config.Kernel, config.Robustness,
-                                        adaptKernelTau: config.AdaptKernelTau);
+                                        adaptKernelTau: config.AdaptKernelTau, minColumnMass: config.MinColumnMass);
         return ensemble.Run(x, y, grid,
             config.Chains, config.MasterSeed, config.BurnIn, config.MaxSamples,
             config.StartDispersion, config.WeightEvery, config.RHatTarget, config.BatchSize, config.PeakProminence,
