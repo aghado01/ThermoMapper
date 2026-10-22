@@ -415,7 +415,7 @@ The slow mixing is mostly structural:
 | Move schedule: Green's prior-aware weights (used by DMGK) or constant weights | Neither Green nor DMGK claims faster mixing; the schedule cancels the prior from the acceptance. At equal c it never raises a birth/death flow, and at equal budget the winner depends on the regime | The comparison under **Move schedule** below |
 | Tempering as the default for slow readouts | The lead above | A controlled comparison: same data, seed and kernel, with and without the ladder, at equal compute |
 | Delayed rejection on relocations (Green and Mira 2001) | Never worse in asymptotic variance than the single-stage kernel | Gain per second, since each rejection costs another target evaluation |
-| A uniform component in births | Local births strand a knot far from the rest, since its death needs the reverse birth near the knots that remain (OQ11) | Now step 3.9: a probe measured 2–20× the knot-count ESS per second at ε = 0.1 |
+| A uniform component in births | Local births strand a knot far from the rest, since its death needs the reverse birth near the knots that remain (OQ11) | Done in step 3.9: births come from the uniform base by default (ε = 1) |
 | Informed births scored by fitted gain (ΔQ, derivations review §5) | Proposes knots where the residual says they help | Exact reverse probabilities and a full-support exploratory component; uses step 2.3's explicit residual |
 | Multi-knot or split/merge moves | Larger jumps between knot arrangements | Dimension-matching and reverse-move accounting |
 | Guided walk on knot count (Gustafson 1998) | Keeps a birth/death direction, damping the random walk in k | Its own derivation for the variable-dimension case |
@@ -527,10 +527,10 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 | OQ5 | Keep or delete the sequential sweep | Its round-trip lead is a cascade effect (step 3.3), and its cold-chain ESS was indistinguishable from DEO's (step 3.4). | **Decided in step 3.6: keep** it as a selectable schedule, not the default. It is a valid kernel, a composition of reversible pair swaps, not a compatibility path, and options stay open to users with a principled default (DEO). The docs state why its round trips read high. | Closed |
 | OQ6 | Each engine's own tempering path | BASS's conjugate blocks keep closed-form conditionals on either path (a powered Gamma(a, b) block is Gamma(β(a+M−1)+1, β(b+1))); the likelihood path leaves them unchanged across rungs, which is simpler. SMC and path-sampling evidence start from a normalized endpoint, which the likelihood path's prior is. | Each engine decides at its port with its own measurements; no default is inherited. | BASS port; SMC stage |
 | OQ7 | Which readouts gate an R̂ stop | BARS monitors the knot count only. The peak location is diagnosed (`Peak.LocationConvergence`) but does not gate the stop, and its ESS has been about 0.14% of draws. | Let callers choose the monitored readouts, and measure what gating on the peak costs. | After step 3.4 |
-| OQ8 | BARS's knot-count mixing and default run lengths | On the adaptive-stop fit the knot count's autocorrelation time is about 450 steps (Stan's estimator and batch means agree), so the default gate of 100 effective draws per chain needs about 45,000 draws per chain. The earlier 1.75% figure came from the classic variogram estimator. Most of it is the local-birth trap (OQ11). With ε = 0.1 uniform births, the autocorrelation time on this fit falls to about 40, so the gate needs about 4,000 draws per chain. | After step 3.9, re-measure the "After Phase 3: BARS mixing" table with the new ESS; then revisit the default sample sizes and the move schedule. | After step 3.9 |
+| OQ8 | BARS's knot-count mixing and default run lengths | On the adaptive-stop fit the knot count's autocorrelation time is about 450 steps (Stan's estimator and batch means agree), so the default gate of 100 effective draws per chain needs about 45,000 draws per chain. The earlier 1.75% figure came from the classic variogram estimator. Most of it is the local-birth trap (OQ11). With ε = 0.1 uniform births, the autocorrelation time on this fit falls to about 40, so the gate needs about 4,000 draws per chain. Since step 3.9 (ε = 1) the time on the adaptive-stop fit is about 14 (`BirthBenchmark`), so the gate needs about 1,400 draws per chain. | Revisit the default sample sizes and the move schedule on the new kernel, with the "After Phase 3: BARS mixing" studies. | "After Phase 3: BARS mixing" |
 | OQ9 | An external reference for the rank-normalized diagnostics | Checked against theory only (AR(1) ESS, scale mismatch, Cauchy draws). R is installed, but the `posterior` package is not, and installing it means a download. | Add `posterior` to the `r/` oracles' environment (with approval for the download) and compare R̂, bulk ESS and tail ESS on shared fixtures. | Any time |
 | OQ10 | Checkpoint scope | Step 3.4 checkpoints are in-memory copies, taken after burn-in at a round boundary. The run fingerprint covers data, settings and component types, not components' internal parameters. Only BARS implements `RestoreChain`; BGP and BAPS do not resume. | Persist checkpoints to disk through Archivory (format, versioning, data identity); decide whether mid-burn checkpoints are needed (adaptation state in flight); fingerprint component parameters (value records, or a component fingerprint member); resume for BGP and BASS. | With the BASS port's posterior storage, and Archivory |
-| OQ11 | Local births strand isolated knots | Births are proposed near an existing knot (`LocalBetaKernel`, τ = 50, an SD of about 0.07; uniformly only at k = 0). A death's acceptance carries the reverse birth's density at the removed knot, so a knot far from the rest is almost never removed: from knots at 0.39 and 0.96 that density is e⁻³⁷ or e⁻⁶¹, against a posterior gain of e^3.8 to e^5.3, so a death is accepted with probability e⁻³¹ at best. In `EbicTests`' γ = 1 runs, overdispersed starts held such knots for about 1,500 steps (the 3.5 seed sweep). A probe settled the mechanism: ε = 0.1 uniform births in the birth density cut the knot count's autocorrelation time 12× (adaptive-stop fit, 485 → 40), about 20× (outlier sine, 2,160 → 110) and 2× (peak, 166 → 77), at the same cost per step, on the same posterior, with the count law intact. BASS's `w1` and `w2` pseudo-counts are its own exploratory component. | Step 3.9: the base measure, against step 3.7's support gate; an ε study with peak-location ESS; ε as a setting with a measured default. Until then, burn-ins that outlast overdispersed starts. | Step 3.9, after 3.7 |
+| OQ11 | Local births strand isolated knots | Births are proposed near an existing knot (`LocalBetaKernel`, τ = 50, an SD of about 0.07; uniformly only at k = 0). A death's acceptance carries the reverse birth's density at the removed knot, so a knot far from the rest is almost never removed: from knots at 0.39 and 0.96 that density is e⁻³⁷ or e⁻⁶¹, against a posterior gain of e^3.8 to e^5.3, so a death is accepted with probability e⁻³¹ at best. In `EbicTests`' γ = 1 runs, overdispersed starts held such knots for about 1,500 steps (the 3.5 seed sweep). A probe settled the mechanism: ε = 0.1 uniform births in the birth density cut the knot count's autocorrelation time 12× (adaptive-stop fit, 485 → 40), about 20× (outlier sine, 2,160 → 110) and 2× (peak, 166 → 77), at the same cost per step, on the same posterior, with the count law intact. BASS's `w1` and `w2` pseudo-counts are its own exploratory component. **Resolved in step 3.9:** births now come from the uniform base by default (ε = 1), which `BirthBenchmark` found best or tied on every fit (knot-count ESS up to 76×, peak-location ESS up to 31×). | Closed. ε stays a setting, for fits outside the benchmark where local births might help. | Closed (step 3.9) |
 | OQ12 | Poisson fits over runs of zero counts | Where every count under a basis function is zero, the Poisson MLE lies at −∞. IRLS stops at a fixed point set by the η clamp (±30) and the μ floor (1e-10), with coefficients in the thousands: −5,961 with one knot at 0.8 when the counts are zero beyond 0.797. The BIC-type marginal stays near the knot-free one (−75.8 against −73.5), so such configurations take real posterior mass and the posterior-mean log-intensity there runs to −10³. Present before step 3.7. The pivot ratio happened to refuse many of them (1,590 of 11,969 evaluations, against 76 under the scale-free gate). | A model-level fix. Options: (a) a penalized IRLS with the N(0, 100·I) ridge the coefficient draw already uses, and a Laplace marginal at that MAP, with log-determinant and prior terms, replacing BIC at a nonexistent MLE; (b) keep BIC and add a response-dependent count gate, a truncation of the posterior; (c) a Poisson analogue of the g-prior. Measure each on the low-rate fit and the existing count-data tests. | **Decided 2026-10-21: (c), the Poisson g-prior, as step 3.10,** with the BIC pathway kept beside it as a setting (DMGK's original, and HYK's EBIC base). |
 | OQ13 | He, Yang and Kang's repositories as external fixtures and demos | The user, 2026-10-21: the ABMRS repositories (github.com/junhuihe2000/ABMRS and exampleABMRS) and the supplement's data and demos (`triceps`, the jump curves, the surfaces) would serve as fixtures for the R harness and as demo material, fitting the same data with this engine. The supplement is already in `issues/regression/ABMRS_Revision_V2_Supplementary_Materials/`. Its code differs from the paper in places (step 3.8's findings), so fixtures must record which version they come from. | Decide what to fix as oracles: their EBARS fits as an external comparison, not ground truth, and the datasets. Fetching the repositories, and installing the package into the `r/` oracles' environment, needs approval for the download. | With the R harness; demos after the BASS port |
 
@@ -1657,3 +1657,68 @@ Both are corrected.
 **For later steps:**
 - **Moot now.** The external debrief's suggestion of a `FromHyk` factory no longer applies, since the constructor takes their γ directly.
 - **Still open:** steps 3.9 (full-support births) and 3.10 (the Poisson g-prior marginal).
+
+### 3.9 Full-support births — done 2026-10-21
+
+| Commit | Content |
+|---|---|
+| `8679786` | The birth density and its two bases, with the default off; byte-identical probes |
+| `32e2d72` | `BirthBenchmark` |
+| `62e8d6e` | Births from the uniform base by default |
+| docs commit | `BayesianRegression.md`, OQ8 and OQ11, this report |
+
+**Specification:**
+- **The density.** `KnotBirthDensity` is q(t | ξ) = ε·b(t) + (1 − ε)·(local mixture), with q = b when there are no knots. It is shared by `KnotBirthMove` and `KnotDeathMove`, so the reverse density always matches.
+- **The bases.** `UniformKnotBase`; and `DesignHistogramBase`, a histogram of the inputs over ⌈√n⌉ bins (5 to 100), mixed with the uniform at weight 0.1.
+- **The settings.** `BarsEnsemble(…, birthExploration, birthBase)` and `BarsConfig.BirthExploration` / `BirthBase` carry them, and the run fingerprint covers them.
+- **The default** is ε = 1 with the uniform base. ε = 0 restores DMGK's local births exactly: the same draws and densities as before.
+
+**Study** (`BirthBenchmark`, `BIRTH_BENCH=10`):
+- **Design.** ε ∈ {0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1}, 10 seeds, 4 chains × 10,000 draws after 2,000 burn-in.
+- **Fits:** the adaptive-stop fit, the sine with outliers, the narrow peak, a data gap, a skewed design, a jump, and an oscillation with about 13 knots. The design base was run on the two uneven designs.
+- **Measured by deterministic ESS.** Comparisons use ESS medians rather than ESS per second, because wall time varied about 25% between identical runs; the cost per step did not change with ε.
+
+| Fit | Knot-count ESS at ε = 0.1 / 0.5 / 1 | Peak-location ESS at ε = 1 | Knot autocorrelation time, ε = 0 → 1 |
+|---|---|---|---|
+| Adaptive-stop sine | 10× / 24× / 27× | 3.7× | 388 → 14 |
+| Sine with outliers | 23× / 54× / 76× | 31× | 3,377 → 45 |
+| Gap | 23× / 38× / 38× | 1.2× | 265 → 7 |
+| Jump | 12× / 12× / 13× | 0.9× | 390 → 31 |
+| Skewed design | 3.5× / 5.0× / 5.5× | 1.0× | 249 → 45 |
+| Narrow peak | 1.6× / 1.8× / 2.1× | 1.0× | 121 → 59 |
+| Oscillation, about 13 knots | 0.9× / 0.9× / 0.9× | 0.95× | — |
+
+**Choosing the default:**
+- **The rule:** the smallest ε within 10% of the best knot-count ESS on every fit where the trap bites. It gives ε = 1, because the sine with outliers reaches 76× there against 66× at 0.7 and 54× at 0.5.
+- **The hedge at ε = 0.5 failed on the evidence.** On the dense-knot fit, the one place locality might matter, 0.5 recovers nothing over 1 (0.9× both).
+- **Local births did not pay even where designed for.** The jump's cluster of nearby knots, the case DMGK's locality was designed for, gained 13× from uniform births.
+- **The design base was never better** (27× against 38× on the gap at ε = 1).
+- **The posterior did not move:** mean knots and MSE were flat across ε on every fit.
+
+**Effects at the default:**
+- **The step 3.7 probe fits** moved as follows.
+  - Knot-count ESS: dense 64 → 495, gap 66 → 1,510, sparse gap 57 → 1,705, boundary transient 43 → 398, robust gap 14 → 1,809.
+  - The robust gap's R̂(k) went from 1.22 to 1.001.
+  - The boundary transient is still located at 0.0311 [0.0290, 0.0334].
+- **The validation rows.** Every BARS row moved, as a kernel change should; BAPS, BGP and the hierarchical spline did not.
+- **The low-rate Poisson fit** is still OQ12's, for step 3.10.
+
+**Verification:**
+- **Zero drift at ε = 0.** With the default off, both step probes were byte-identical to their step 3.7 outputs.
+- **`KnotBirthDensityTests`** (8 cases):
+  - each density and base integrates to 1, and their samples follow them within five standard errors;
+  - ε = 0 is DMGK's mixture exactly;
+  - an empty configuration draws from the base;
+  - ε bounds the isolated knot's reverse density (e⁻³⁷ locally, at least 0.1 at ε = 0.1);
+  - the bounds hold.
+- **`CountLawTests.MixtureBirths_KeepTheCountLaw`** (3 cases: ε = 0.1 on the uniform and design bases, and ε = 1 on the design base, packed into [0.6, 0.9]). Under a constant likelihood the knot count follows the prior in every bin.
+- **Seed sweep** (`SEED_SWEEP=50`):
+  - `EbicTests` now passes 100 of 100 at burn-in 800, so step 3.5's 2,000-step workaround is withdrawn.
+  - The adaptive-kernel comparison fell to 42 of 50 on the chain axis under uniform births. That was expected: with births no longer governed by τ, a bad τ costs far less. The test now keeps births local (ε = 0), which restores its previous behavior exactly, since it measures the kernel's adaptation.
+  - Every other assertion holds as at step 3.7.
+- **Results** under the fact harness: `Maths.Regression.Tests` 223 of 223 (`20261021_230019809`): the 212 of step 3.8, the 8 density cases, the 3 mixture count-law cases, and the benchmark fact, which is off by default.
+
+**For later steps:**
+- **Measure again on the new kernel:** the BARS-mixing table, OQ1, OQ4 and OQ8, in "After Phase 3: BARS mixing". Tempering's measured gains were partly trap escape.
+- **Relocation is still local.** ABMRS's relocations are global, uniform over unused candidates, and an exploratory share for relocation is unmeasured. It goes with the move-schedule study.
+- **Step 3.10,** the Poisson g-prior marginal, is next.

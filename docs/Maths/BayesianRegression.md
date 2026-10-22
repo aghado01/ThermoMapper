@@ -103,15 +103,42 @@ flowchart LR
 
 **Target.** $\log p(y\mid Z(\xi),W)+\log p(k)$. It includes no density term for ξ given k.
 
-**Moves.** The default constant selection weights are birth 0.4, death 0.4 and relocate 0.2. With $\bar q(x\mid\xi)=\frac1k\sum_ih(x\mid\xi_i)$:
+**Moves.** The default constant selection weights are birth 0.4, death 0.4 and relocate 0.2. The birth density is $q(x\mid\xi)=\varepsilon\,b(x)+(1-\varepsilon)\,\bar q(x\mid\xi)$, with $\bar q(x\mid\xi)=\frac1k\sum_ih(x\mid\xi_i)$ and $q=b$ when $k=0$ (`KnotBirthDensity`, below):
 
 | Move | Proposal | $\log$ auxiliary ratio |
 |---|---|---|
-| Birth (`KnotBirthMove`) | $\xi^*\sim U[0,1)$ if $k=0$; otherwise $h(\cdot\mid\xi_c)$ around a uniformly chosen knot | $-\log(k+1)-\log\bar q(\xi^*\mid\xi)$ |
-| Death (`KnotDeathMove`) | remove a uniformly chosen knot (unavailable at $k=0$) | $+\log k+\log\bar q(\xi_d\mid\xi\setminus\xi_d)$ |
+| Birth (`KnotBirthMove`) | $\xi^*\sim q(\cdot\mid\xi)$: from the base $b$ with probability ε (always when $k=0$), otherwise $h(\cdot\mid\xi_c)$ around a uniformly chosen knot | $-\log(k+1)-\log q(\xi^*\mid\xi)$ |
+| Death (`KnotDeathMove`) | remove a uniformly chosen knot (unavailable at $k=0$) | $+\log k+\log q(\xi_d\mid\xi\setminus\xi_d)$ |
 | Relocate (`KnotRelocateMove`) | perturb one uniformly chosen knot and re-sort | $\log h(\xi_{\text{old}}\mid\xi_{\text{new}})-\log h(\xi_{\text{new}}\mid\xi_{\text{old}})$ |
 
 All Jacobians are 0.
+
+**Birth density (step 3.9, OQ11).** Birth and death share one `KnotBirthDensity`, so the reverse density always matches.
+- **The default:** ε = 1 with the uniform base, so every birth is uniform on (0, 1). This is the birth of Denison et al. (1998), and the global birth that ABMRS uses over its candidates and BASS over observed values. Locality stays in the relocation move.
+- **The settings:** `BarsConfig.BirthExploration`, or `birthExploration`. Below 1 it restores DMGK's local births in part, and at 0 entirely. `BirthBase.Design` draws from a histogram of the inputs mixed with the uniform at weight 0.1 (`DesignHistogramBase`).
+- **Why.** A death's acceptance carries the reverse birth's density at the removed knot. Under local births, a knot far from the others is almost never removed: from knots at 0.39 and 0.96 that density is $e^{-37}$ or $e^{-61}$. Any ε > 0 bounds it below by ε·b(t).
+- **What was measured** (`BirthBenchmark`, 10 seeds per arm, 4 chains × 10,000 draws; ESS relative to ε = 0):
+
+  | Fit | Knot-count ESS at ε = 0.1 / 0.5 / 1 | Peak-location ESS at ε = 1 | Knot autocorrelation time, ε = 0 → 1 |
+  |---|---|---|---|
+  | Sine, n = 100 (the adaptive-stop fit) | 10× / 24× / 27× | 3.7× | 388 → 14 |
+  | Sine with outliers, n = 120 | 23× / 54× / 76× | 31× | 3,377 → 45 |
+  | Data gap, n = 120 | 23× / 38× / 38× | 1.2× | 265 → 7 |
+  | Jump, n = 150 | 12× / 12× / 13× | 0.9× | 390 → 31 |
+  | Skewed design, n = 150 | 3.5× / 5.0× / 5.5× | 1.0× | 249 → 45 |
+  | Narrow peak, n = 150 | 1.6× / 1.8× / 2.1× | 1.0× | 121 → 59 |
+  | Oscillation with about 13 knots, n = 200 | 0.9× / 0.9× / 0.9× | 0.95× | — |
+
+  - **Unchanged:** mean knot counts and fit MSE at every ε, and the cost per step.
+  - **The design base was never better than uniform:** 27× against 38× on the gap at ε = 1, and about equal on the skewed design.
+  - **Densely packed knots** gain nothing (the 0.9× is within noise). Every knot has neighbors there, so the trap does not arise.
+- **Trade-offs.**
+  - **Wasted births.** Uniform births are mostly refused where the data do not want a knot. Those landing in data gaps are refused cheaply by the support gate, before any factorization (refusals as `ThinSupport` stayed at 2–7% of evaluations).
+  - **Possible regimes outside the benchmark.** Local births could still help fits it does not cover, which is why ε stays a setting.
+- **Alternatives considered.**
+  - **A separate global birth/death pair:** it escapes the trap only at the global death's selection rate.
+  - **The design base:** measured, no advantage.
+  - **DMGK's local births (ε = 0):** they strand knots, as above.
 
 **Kernels.**
 
@@ -465,6 +492,7 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 | `BarsConfig` RHatTarget / BatchSize / MinEssPerChain | 0 / 0 / 100 | No early stop; single round; an R̂ stop waits for 100 effective knot-count draws per chain |
 | `BarsConfig` PeakProminence / SpanDropFraction | 0.1 / 0.5 | Peak significance; span level |
 | `BarsConfig` MinColumnMass | 1 | Support gate: every basis function needs column mass $\sum_i B_j(x_i)\ge1$; 0 turns it off |
+| `BarsConfig` BirthExploration / BirthBase | 1 / `Uniform` | Births from the base: uniform on (0, 1); below 1 mixes in DMGK's local births |
 | `BarsEnsemble` dmgkConstant / adaptKernelTau / temperLevels / temperBetaMin / temperPath / temperSchedule / temperAdaptLadder | null / null / null / 0.05 / Likelihood / DeterministicEvenOdd / true | Constant weights 0.4/0.4/0.2; fixed kernel; no tempering; a tempered ladder keeps the knot prior whole, swaps even-odd and equalizes its rungs in burn-in |
 | `BapsSampler` priorShape / priorScale / mhLogStep / phi | 1e-3 / 1e-3 / 0.6 / 1.0 | IG hyperprior; random-walk step on ln λ; adaptivity |
 | `BapsSampler.Run` chains / masterSeed / burn / samples | 4 / 1 / 500 / 1500 | — |
@@ -484,13 +512,10 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
   - **Where the fix belongs:** in the model, not in admission.
 - **The BAPS `MarginalEvidence` posterior of λ is heavy-tailed.** Under the uniform-edf prior the density of ln λ decays like $e^{-u}$, so $E[\lambda]$ is infinite; `BapsResult` therefore reports the median. $\ell_p$ is computed as $y^\top y-\hat\beta^\top Z^\top y$ and loses precision above about λ = 10¹⁰ (NaN near 10¹⁴), but the prior keeps the chain far below that range. The λ modes target different posteriors.
 - **Knot count and peak location mix slowly.** On the adaptive-stop test fit (n = 100, a sine under noise 0.15, Poisson(4) count prior), the knot count's autocorrelation time is about 450 steps: about 0.2% of draws are effective, by Stan's estimator and by batch means alike. The classic variogram estimator this replaced reported higher figures on other fits. Judge a run by ESS, not by draw count. Since step 3.4 an R̂ stop waits for the knot count's bulk and tail ESS to reach `MinEssPerChain` per chain (100 by default), which here takes about 45,000 draws per chain; `BarsResult.Knots` and `Peak.LocationConvergence` report those diagnostics.
-- **Births are local, so a knot far from the others is hard to remove.**
-  - **The mechanism.** A birth proposes near a randomly chosen existing knot (`LocalBetaKernel`), and uniformly only when there are none. A death's acceptance carries the density of the reverse birth at the removed knot. So deleting a knot far from every other is almost never accepted, whatever it gains.
-  - **The size of it.** At τ = 50 the kernel's SD is about 0.07. From knots at 0.39 and 0.96 the reverse birth's density is $e^{-37}$ or $e^{-61}$, by which knot goes, against a posterior gain of $e^{3.8}$ to $e^{5.3}$. So a death is accepted with probability $e^{-31}$ at best.
-  - **The escape.** The chain gets out only by relocating the knots together first.
-  - **Seen in practice.** In `EbicTests`' γ = 1 runs, chains started that way held their knots for about 1,500 steps: the step 3.5 seed sweep found γ = 1 keeping more knots than γ = 0 in 4 of 100 runs at burn-in 800 and in none at 2,000.
-  - **What to do.** Burn-in has to outlast overdispersed starts. A birth proposal with full support fixes it.
-  - **It is most of the slow mixing above.** A scratch probe put a 10% uniform component in the birth density, with deaths carrying it in reverse. The knot count's autocorrelation time fell from 485 to 40 on the adaptive-stop fit, from 2,160 to 110 on a sine with outliers, and from 166 to 77 on a narrow peak. The cost per step and the posterior were unchanged, and the count law held. The change is planned as preparation step 3.9 (brief, OQ11).
+- **Local births strand isolated knots** (OQ11). This applies when ε < 1 and births are local.
+  - **The mechanism.** A death's acceptance carries the reverse birth's density at the removed knot. Under local births, a knot far from every other is almost never removed: from knots at 0.39 and 0.96 that density is $e^{-37}$ or $e^{-61}$, against a posterior gain of $e^{3.8}$ to $e^{5.3}$.
+  - **Seen in practice.** In `EbicTests`' runs, chains started that way held their knots for about 1,500 steps.
+  - **The default avoids it.** Since step 3.9, births come from the uniform base (ε = 1, above). The knot count's autocorrelation time on the adaptive-stop fit fell from about 390 to 14, so an R̂ stop's ESS gate needs about 1,400 draws per chain there, not 45,000.
 - **Reporting limits.**
   - `AnisotropicTensorSpline` evaluates REML but provides no optimizer; callers must search $(\lambda_x,\lambda_y)$ themselves.
   - Acceptance rates count the sampling phase only, since step 3.4; BGP's included burn-in before.
