@@ -1831,3 +1831,50 @@ An external review of the preparation, anchored at `64d98a4` (end of step 3.3), 
 **Results** under the fact harness: `Maths.Regression.Tests` 230 of 230 (`20261022_124455338`: step 3.10's 227, the extreme-tail weights, the ill-conditioned factor and the weight-independent verdict); `Maths.LinAlg.Tests` 64 of 64 (`20261022_124708496`, 10 new); `Maths.Samplers.Tests` 82 of 82 (`20261022_124752112`).
 
 **Seed sweep** (`SEED_SWEEP=50`): the summary is identical to step 3.10's (`20261022_125115176`), the robust claims included.
+
+### Normal null-fit centre — done 2026-10-22
+
+Added after step 3.10's discussion, at the user's go-ahead, before the BARS-mixing studies. It is the change step 3.10's report noted for BASS's coefficient-prior decisions (D03).
+
+| Commit | Content |
+|---|---|
+| `3ac0755` | `CollapsedGPrior` takes a prior mean; `BandedGPrior.Fit` takes a `GPriorCentre` (Zero by default, unchanged) |
+| `c2eb203` | `WeightedNormalModel(GPriorCentre centre = NullFit)`; the reference tests on both centres; `NormalCentreTests` |
+| docs commit | `BayesianRegression.md`, this report |
+
+**The defect, measured before the change.**
+- **The mechanism.** DMGK's prior β ~ N(0, mσ²G⁻¹) shrinks the fit toward zero, level included, and the level's energy enters the scale a. For a response far from zero against its noise, that term swamps the residual, so a knot barely moves the marginal.
+- **On a sine with noise 0.15** (n = 100, 4 chains × 3,000 draws):
+  - an offset of 3 (20σ) halved the knot count (1.80 → 0.82) and nearly doubled the pointwise SD;
+  - an offset of 300 gave 0.40 knots, MSE 8.9 and a level 3.0 low.
+- **Why nothing caught it.** BARS did not centre the response, and every test curve sat near zero. Any real curve away from zero was under-fitted.
+
+**Specification:**
+- **The prior** is N(μ₀, σ²(τG)⁻¹), with μ₀ = ȳ·G⁻¹Zᵀ1, the null fit's level projected onto the basis (ȳ·1 for B-splines). The block's statistics are those of ỹ = y − Zμ₀, and μ₀ is added back to every mean and draw.
+- **The weights stay out of it.** ȳ is the plain mean even under robust weights, so the prior does not enter the weights' conditional.
+- **Tempering** is unchanged in form: ỹ is fixed data at every rung.
+- **A constant response** centres to zero, and is refused as `ZeroResponse`.
+- **`GPriorCentre.Zero`** keeps DMGK's original, selectable. The block's own default stays Zero, so BASS's use is unchanged until its port decides.
+- **The fingerprint** covers component types only (OQ10), so it does not tell the two centres apart.
+
+**Verification:**
+- **Location invariance.**
+  - At the model level: the marginal, the coefficients (shifted by the offset) and the pointwise variance agree at offsets 7, −250 and 10⁴, with and without weights.
+  - At the BARS level: the same chains on y and on y + 1,000 give identical knots, fits (shifted) and SDs. Under the zero centre the shift costs more than half the knots (1.76 → 0.36).
+- **The block:** the null-fit block equals the zero-centred block on y − ȳ, at offsets 0, 5 and −300, with and without weights.
+- **The dense-reference tests** (draw moments, conditional variance, the weighted marginal and draws, the perfect-fit marginal, the tempered marginal's design-free constant) now run on both centres.
+- **The offset probe:** every offset from 0 to 300 gives 1.80 knots, MSE 0.0040 and mean SD 0.046.
+- **Results** under the fact harness: `Maths.Regression.Tests` 241 of 241 (`20261022_135201603`): the 230 of the review follow-up, 4 block cases, 5 reference cases on the null-fit centre, and 2 `NormalCentreTests`; `Maths.Samplers.Tests` 82 of 82 (`20261022_135425649`).
+- **Seed sweep** (`SEED_SWEEP=50`): `20261022_135753369`. Every claim holds as before except the adaptive-kernel comparison on the data axis, 49 → 48 of 50. Under the sweep's policy that is a wording matter for its dataset, since the test measures the kernel's adaptation and the data axis changes the data.
+
+**Effects at the default:**
+- **Step 3.5's probe.** BAPS, BGP and Poisson are byte-identical. On its near-zero-mean BARS fits the level moved about 0.1%, the old shrinkage, and the knots did not move. The short Student-t run changed trajectory (3.89 → 4.04 knots, 400 draws).
+- **Step 3.7's fits** average about 0.6 against noise of 0.1, an offset of 6σ:
+  - knot counts rose 3–20%: dense 5.61 → 5.78, gap 0.72 → 0.79, sparse gap 0.85 → 0.96, robust gap 0.66 → 0.79;
+  - pointwise SDs fell by up to 14%;
+  - MSE moved both ways, within single-seed noise.
+  - Knot-count ESS fell on two fits (dense 495 → 188, robust gap 1,809 → 939), on one seed.
+
+**For later steps:**
+- **The BARS-mixing studies** (OQ1, OQ4, OQ8) now measure the centred model; the ESS drop above is theirs to confirm or dismiss.
+- **BASS's D03.** The shared block now carries a prior mean, so BASS's port decides its own centre on its own evidence.
