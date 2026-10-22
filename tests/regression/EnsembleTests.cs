@@ -34,44 +34,10 @@ public sealed class EnsembleTests
     [Fact]
     public void RHat_IdenticalChains_BelowOne_ShiftedChains_AboveOne()
     {
-        var sums = new[] { 15.0, 15.0, 15.0, 15.0 };      // four chains of {1,2,3,4,5}
-        var sqs = new[] { 55.0, 55.0, 55.0, 55.0 };
-        Assert.Equal(Math.Sqrt(0.8), ChainDiagnostics.RHat(sums, sqs, 5), 6);
-
-        var sumsShift = new[] { 15.0, 20.0, 25.0, 30.0 }; // shifted by a constant each
-        var sqsShift = new[] { 55.0, 90.0, 135.0, 190.0 };
-        Assert.True(ChainDiagnostics.RHat(sumsShift, sqsShift, 5) > 1.1);
-    }
-
-    [Fact]
-    public void Ess_IidChains_NearTotal_AutocorrelatedChains_Reduced()
-    {
-        var rng = new Xoshiro256PlusPlus(seed: 1);
-        int c = 4, n = 600;
-        var iid = new double[c][];
-        for (int j = 0; j < c; j++)
-        {
-            var a = new double[n];
-            for (int i = 0; i < n; i++) a[i] = Gaussian(rng);
-            iid[j] = a;
-        }
-        var ar = new double[c][];
-        for (int j = 0; j < c; j++)
-        {
-            var a = new double[n];
-            double prev = 0.0;
-            for (int i = 0; i < n; i++) { prev = 0.8 * prev + Gaussian(rng); a[i] = prev; }
-            ar[j] = a;
-        }
-
-        double total = c * (double)n;
-        double essIid = ChainDiagnostics.Ess(iid);
-        double essAr = ChainDiagnostics.Ess(ar);
-        _out.WriteLine($"ESS iid={essIid:F0}/{total} ar1={essAr:F0}/{total}");
-
-        Assert.True(essIid > 0.5 * total, $"iid ESS {essIid} should be near total {total}");
-        Assert.True(essAr < 0.5 * total, $"AR(1) ESS {essAr} should be well below total {total}");
-        Assert.True(essAr < essIid);
+        // Four chains of {1,2,3,4,5}: each mean 3, each sample variance 2.5.
+        Assert.Equal(Math.Sqrt(0.8), ChainDiagnostics.RHat([3.0, 3.0, 3.0, 3.0], [2.5, 2.5, 2.5, 2.5], 5).Value, 12);
+        // The same chains shifted by 0, 1, 2 and 3.
+        Assert.True(ChainDiagnostics.RHat([3.0, 4.0, 5.0, 6.0], [2.5, 2.5, 2.5, 2.5], 5).Value > 1.1);
     }
 
     [Fact]

@@ -17,7 +17,7 @@ public interface IEnsembleModel<TDraw>
 
     /// <summary>
     /// How many leading functionals are monitored: their per-chain draws are kept, so they get the rank-normalized
-    /// diagnostics (<see cref="ChainDiagnostics.Diagnose"/>: split R̂, bulk and tail ESS), and an R̂ stopping target
+    /// diagnostics (<see cref="ChainDiagnostics.Diagnose(double[][])"/>: split R̂, bulk and tail ESS), and an R̂ stopping target
     /// waits on their effective sample size. The rest get classic R̂ from streaming moments only, so a model with a
     /// wide map of functionals (BARS's per-grid fit) keeps the monitored set small and puts it first (BARS: knot
     /// count at index 0). 0 ≤ MonitoredDim ≤ <see cref="FunctionalDim"/>.

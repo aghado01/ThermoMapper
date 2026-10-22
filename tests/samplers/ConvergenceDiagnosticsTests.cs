@@ -80,7 +80,7 @@ public sealed class ConvergenceDiagnosticsTests
         var means = new double[4];
         var variances = new double[4];
         for (int j = 0; j < 4; j++) { RunningMoments m = RunningMoments.Of(chains[j]); means[j] = m.Mean; variances[j] = m.Variance; }
-        RHatDiagnostic classic = ChainDiagnostics.RHat(means.AsSpan(), variances.AsSpan(), 2_000);
+        RHatDiagnostic classic = ChainDiagnostics.RHat(means, variances, 2_000);
         _out.WriteLine($"[rhat] classic {classic:F4}, bulk {d.BulkRHat:F4}, tail {d.TailRHat:F4}");
 
         Assert.True(classic.Value < 1.01, $"classic R̂ {classic.Value:F4}");

@@ -54,17 +54,11 @@ namespace Maths.LinAlg
         public double LogDet { get; private set; }
 
         /// <summary>
-        /// True if any pivot was clamped to the diagonal floor during the last factorization — i.e. the matrix is
-        /// (numerically) singular / rank-deficient. A consumer should treat the system as unfittable rather than
-        /// trust the resulting solve. Set per call by <see cref="Decompose"/> / <see cref="DecomposeBanded"/>.
-        /// </summary>
-        public bool HitFloor { get; private set; }
-
-        /// <summary>
         /// What the last factorization found: finiteness, floored pivots and the pivot range before flooring. The
-        /// factor, <see cref="LogDet"/> and the solves keep their floored behavior; this reports it. Unlike
-        /// <see cref="HitFloor"/>, it separates a rank problem (a small <see cref="FactorStatus.PivotRatio"/>) from a
-        /// matrix that is merely small in scale (floored pivots with a ratio near 1).
+        /// factor, <see cref="LogDet"/> and the solves keep their floored behavior; this reports it, separating a rank
+        /// problem (a small <see cref="FactorStatus.PivotRatio"/>) from a matrix that is merely small in scale (floored
+        /// pivots with a ratio near 1). A consumer that needs the solves to describe its matrix requires
+        /// <see cref="FactorStatus.FlooredPivots"/> = 0.
         /// </summary>
         public FactorStatus Status { get; private set; }
 
@@ -143,7 +137,6 @@ namespace Maths.LinAlg
         private void FactorCholesky()
         {
             double logDetL = 0.0;
-            HitFloor = false;
             var tally = PivotTally.Start();
             for (int j = 0; j < _n; j++)
             {
@@ -157,7 +150,7 @@ namespace Maths.LinAlg
                 }
                 bool floored = sum <= 1e-12;
                 tally.Observe(sum, ajj, floored);
-                if (floored) { sum = 1e-12; HitFloor = true; }   // diagonal floor ⇒ singular
+                if (floored) sum = 1e-12;                   // the diagonal floor, which Status reports
                 double ljj = Math.Sqrt(sum);
                 _l[0, j] = ljj;
                 logDetL += Math.Log(ljj);
@@ -181,7 +174,6 @@ namespace Maths.LinAlg
         private void FactorLdlt()
         {
             double logDet = 0.0;
-            HitFloor = false;
             var tally = PivotTally.Start();
             for (int j = 0; j < _n; j++)
             {
@@ -195,7 +187,7 @@ namespace Maths.LinAlg
                 }
                 bool floored = dj <= 1e-12;
                 tally.Observe(dj, ajj, floored);
-                if (floored) { dj = 1e-12; HitFloor = true; }   // diagonal floor ⇒ singular
+                if (floored) dj = 1e-12;                    // the diagonal floor, which Status reports
                 _l[0, j] = dj;                             // store D(j)
                 logDet += Math.Log(dj);
 

@@ -195,7 +195,7 @@ public static partial class ChainDiagnostics
             means[j] = mo.Mean;
             variances[j] = mo.Variance;
         }
-        return RHat(means.AsSpan(), variances.AsSpan(), chains[0].Length);
+        return RHat(means, variances, chains[0].Length);
     }
 
     // The ESS of the indicator x ≤ q; an indicator that is the same everywhere has nothing to estimate.
