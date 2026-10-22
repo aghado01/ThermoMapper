@@ -169,6 +169,24 @@ public sealed class ConvergenceDiagnosticsTests
     }
 
     [Fact]
+    public void Traces_AreDiagnosedLikeTheirDraws()
+    {
+        double[][] chains = Ar1(3, 1_000, 0.6, seed: 31);
+        double[][] other = Ar1(3, 1_000, 0.0, seed: 32);
+        var traces = new ChainTrace[3];
+        for (int c = 0; c < 3; c++)
+        {
+            traces[c] = new ChainTrace(2);
+            for (int i = 0; i < 1_000; i++) traces[c].Add([chains[c][i], other[c][i]]);
+        }
+        Assert.Equal(1_000, traces[0].Count);
+        Assert.Equal(chains[1], traces[1].Draws(0));
+        Assert.Equal(ChainDiagnostics.Diagnose(chains), ChainDiagnostics.Diagnose(traces, 0));
+        Assert.Equal(ChainDiagnostics.Diagnose(other), ChainDiagnostics.Diagnose(traces, 1));
+        Assert.Throws<ArgumentException>(() => traces[0].Add([1.0]));   // a draw needs both functionals
+    }
+
+    [Fact]
     public void Ess_IsLinearithmic()
     {
         double[][] chains = Ar1(4, 200_000, 0.9, seed: 5);

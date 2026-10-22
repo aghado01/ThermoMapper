@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace Maths.Samplers.Ensemble;
 
 /// <summary>
@@ -6,7 +8,8 @@ namespace Maths.Samplers.Ensemble;
 /// span all <see cref="IEnsembleModel{TDraw}.FunctionalDim"/> functionals, each classic R̂ carrying its
 /// <see cref="DiagnosticState"/> so a client reports it as is; <see cref="FunctionalVariance"/> is the population
 /// variance over every pooled draw. <see cref="Monitored"/> holds the rank-normalized diagnostics of the leading
-/// <see cref="IEnsembleModel{TDraw}.MonitoredDim"/> functionals. <see cref="AcceptanceRate"/> counts the sampling
+/// <see cref="IEnsembleModel{TDraw}.MonitoredDim"/> functionals, read from <see cref="Traces"/>, one per chain.
+/// <see cref="AcceptanceRate"/> counts the sampling
 /// phase only. <see cref="ChainSeeds"/> is the run's reproducibility provenance (the resolved children of the master
 /// seed). The client assembles its domain result from these plus the per-chain <see cref="IChainRun{TDraw}"/>
 /// handles the shell hands back alongside this record.
@@ -16,6 +19,7 @@ public sealed record EnsembleRun(
     double[] FunctionalVariance,
     RHatDiagnostic[] FunctionalRHat,
     ConvergenceDiagnostic[] Monitored,
+    IReadOnlyList<ChainTrace> Traces,
     int SamplesUsed,
     double AcceptanceRate,
     int[] ChainSeeds);

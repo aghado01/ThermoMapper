@@ -339,12 +339,12 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private static PeakPosterior SummarisePeak(BarsChainRun[] states, double denom)
     {
         int c = states.Length;
-        var peakChains = new double[c][];
+        var traces = new ChainTrace[c];
         var all = new List<double>();
         double mean = 0.0, height = 0.0;
         for (int i = 0; i < c; i++)
         {
-            peakChains[i] = states[i].PeakDraws.ToArray();
+            traces[i] = states[i].PeakTrace;
             all.AddRange(states[i].PeakDraws);
             mean += states[i].PeakLocSum;
             height += states[i].PeakHeightSum;
@@ -354,7 +354,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         all.Sort();
         double lo = Quantile(all, 0.025);
         double hi = Quantile(all, 0.975);
-        return new PeakPosterior(mean, lo, hi, height, ChainDiagnostics.Diagnose(peakChains));
+        return new PeakPosterior(mean, lo, hi, height, ChainDiagnostics.Diagnose(traces, 0));
     }
 
     private static double Quantile(List<double> sorted, double q)
@@ -430,6 +430,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             st.PeakLocSum += peakX;
             st.PeakHeightSum += peakF;
             st.PeakDraws.Add(peakX);
+            st.PeakTrace.Add(peakX);
 
             var spans = SplineExtrema.SignificantPeakSpans(draw, coef, splineBasis, _peakProminence, _spanDropFraction);
             st.PeakCountSum += spans.Count;
@@ -648,6 +649,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         public readonly double[] SpanCoverageSum;
         public readonly double[] ConditionalVarianceSum;
         public readonly List<double> PeakDraws = new();
+        public readonly ChainTrace PeakTrace = new(1);   // the same draws, as the diagnostics' ordered trace
         public KnotConfig Config;
         public double[]? W;
         public IKnotKernel Kernel = null!;

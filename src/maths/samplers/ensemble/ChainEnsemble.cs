@@ -64,7 +64,7 @@ public sealed class ChainEnsemble
 
         var runs = new IChainRun<TDraw>[chains];
         var moments = new RunningMoments[chains][];   // [ci][f] streaming moments of functional f
-        var seqs = new List<double>[chains][];        // [ci][f<monitored] the post-burn draws
+        var traces = new ChainTrace[chains];          // [ci] the monitored functionals' post-burn draws
         var burnAccepted = new long[chains];
         var burnAttempts = new long[chains];
 
@@ -76,9 +76,7 @@ public sealed class ChainEnsemble
             burnAccepted[ci] = run.Chain.Accepted;
             burnAttempts[ci] = run.Chain.Attempts;
             moments[ci] = new RunningMoments[dim];
-            var s = new List<double>[monitored];
-            for (int f = 0; f < monitored; f++) s[f] = new List<double>(samples);
-            seqs[ci] = s;
+            traces[ci] = new ChainTrace(monitored, samples);
         });
 
         int effBatch = batchSize <= 0 ? samples : batchSize;
@@ -90,19 +88,19 @@ public sealed class ChainEnsemble
             {
                 IChain<TDraw> chain = runs[ci].Chain;
                 RunningMoments[] cm = moments[ci];
-                List<double>[] cseq = seqs[ci];
+                ChainTrace trace = traces[ci];
                 var fn = new double[dim];
                 for (int s = 0; s < step; s++)
                 {
                     TDraw draw = chain.Step();
                     runs[ci].Accumulate(draw, fn);
                     for (int f = 0; f < dim; f++) cm[f].Add(fn[f]);
-                    for (int f = 0; f < monitored; f++) cseq[f].Add(fn[f]);
+                    trace.Add(fn);
                 }
             });
             collected += step;
 
-            if (rHatTarget > 0.0 && collected < samples && MayStop(moments, seqs, dim, monitored, rHatTarget, minEssPerChain))
+            if (rHatTarget > 0.0 && collected < samples && MayStop(moments, traces, dim, monitored, rHatTarget, minEssPerChain))
                 break;
         }
 
@@ -126,7 +124,7 @@ public sealed class ChainEnsemble
         }
 
         var diagnostics = new ConvergenceDiagnostic[monitored];
-        for (int f = 0; f < monitored; f++) diagnostics[f] = ChainDiagnostics.Diagnose(Draws(seqs, f));
+        for (int f = 0; f < monitored; f++) diagnostics[f] = ChainDiagnostics.Diagnose(traces, f);
 
         // The sampling phase only: the burn-in's counts, adaptation included, are subtracted.
         long accA = 0, accT = 0;
@@ -137,7 +135,7 @@ public sealed class ChainEnsemble
         }
         double acceptance = accT > 0 ? (double)accA / accT : 0.0;
 
-        var summary = new EnsembleRun(mean, variance, rhat, diagnostics, collected, acceptance, seeds);
+        var summary = new EnsembleRun(mean, variance, rhat, diagnostics, traces, collected, acceptance, seeds);
         return (summary, runs);
     }
 
@@ -145,14 +143,14 @@ public sealed class ChainEnsemble
     // classic for the rest), at least one is an estimate, and every monitored functional's bulk and tail ESS reach
     // minEssPerChain per chain. A frozen or unavailable reading blocks the stop; constant functionals pass but cannot
     // certify it on their own.
-    private static bool MayStop(RunningMoments[][] moments, List<double>[][] seqs, int dim, int monitored, double target,
+    private static bool MayStop(RunningMoments[][] moments, ChainTrace[] traces, int dim, int monitored, double target,
                                 double minEssPerChain)
     {
         int c = moments.Length;
         bool anyEstimate = false;
         for (int f = 0; f < monitored; f++)
         {
-            ConvergenceDiagnostic d = ChainDiagnostics.Diagnose(Draws(seqs, f));
+            ConvergenceDiagnostic d = ChainDiagnostics.Diagnose(traces, f);
             if (!d.RHat.MeetsTarget(target) || !d.Ess.MeetsMinimum(minEssPerChain * c)) return false;
             anyEstimate |= d.RHat.State == DiagnosticState.Estimated;
         }
@@ -165,12 +163,5 @@ public sealed class ChainEnsemble
             anyEstimate |= r.State == DiagnosticState.Estimated;
         }
         return anyEstimate;
-    }
-
-    private static double[][] Draws(List<double>[][] seqs, int f)
-    {
-        var draws = new double[seqs.Length][];
-        for (int ci = 0; ci < seqs.Length; ci++) draws[ci] = seqs[ci][f].ToArray();
-        return draws;
     }
 }

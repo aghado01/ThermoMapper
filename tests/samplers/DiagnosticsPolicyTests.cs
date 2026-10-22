@@ -100,6 +100,9 @@ public sealed class DiagnosticsPolicyTests
         Assert.True(run.SamplesUsed < 400, "independent draws should stop early");
         Assert.True(run.SamplesUsed >= 60, $"stopped after {run.SamplesUsed} draw(s)");
         Assert.True(run.Monitored[0].Ess.MeetsMinimum(4 * ChainEnsemble.MinEssPerChain));
+        Assert.Equal(4, run.Traces.Count);
+        Assert.All(run.Traces, t => Assert.Equal(run.SamplesUsed, t.Count));
+        Assert.Equal(run.Monitored[0], ChainDiagnostics.Diagnose(run.Traces, 0));
     }
 
     [Fact]
