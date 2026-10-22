@@ -83,7 +83,7 @@ For a slightly asymmetric input, the two dense eigen routes therefore decompose 
 |---|---|
 | Dense eigen | `DenseEigen.DecomposeSymmetric` (`double[,]` or column-major span) → `EigenResult`; `EigenFast.DecomposeSymmetricInPlace` (allocation-free core); `Eigen.DecomposeSymmetric`; `SpectralMath.BottomK`, `SpectralMath.SelectBottomK` → `IReadOnlyList<EigenPair>` |
 | Iterative eigen | `LOBPCG.Solve(op, k, Options?)` → `Result(Eigenpairs, Iterations, ResidualNorm, Converged)`; `LOBPCG.BottomK` / `TopK` (dense convenience); `DenseSymmetricOperator`; `ILinearOperator`, `IPreconditioner` |
-| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `HitFloor`, `Status`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`; implemented by `BandCholesky` and `DenseCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus` |
+| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `Status`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`; implemented by `BandCholesky` and `DenseCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus` |
 | Transforms and statistics | `Fft` (1-D, 3-D, N-D; `IsPowerOfTwo`); `Pca.Compute` → `PcaResult`; `FastIca.Compute` → `IcaResult`; `OnlineMahalanobis` (`Update`, `Distance` to the mean or between two points, `IsReady`, `GetMean`, `GetVariances`, `Reset`) |
 | Kernels | `MatrixOps` (`Dot`, `ScaledSubtract`, `Orthonormalize`, `RandomOrthonormal`, `ColumnGramMatrix`, `ColumnGramMatrixFromRowMajor`, `TransposeToColumnMajor`) |
 
@@ -192,7 +192,7 @@ $$\text{Cholesky:}\quad \ell_{jj}=\sqrt{a_{jj}-\textstyle\sum_k\ell_{jk}^2},\qqu
 
 $$\text{LDL}^\top:\quad D_j=a_{jj}-\textstyle\sum_k\ell_{jk}^2D_k,\qquad \ell_{ij}=\Big(a_{ij}-\textstyle\sum_k\ell_{ik}\ell_{jk}D_k\Big)\Big/D_j$$
 
-**Pivot floor.** A pivot ($\ell_{jj}^2$ or $D_j$) at or below 1e-12 is clamped to 1e-12, and `HitFloor` is set. `HitFloor` is reset at the start of every factorization. `Status` gives the fuller report.
+**Pivot floor.** A pivot ($\ell_{jj}^2$ or $D_j$) at or below 1e-12 is clamped to 1e-12 and counted in `Status.FlooredPivots`. Step 3.6 removed the separate `HitFloor` flag, once its last caller had moved to `Status`.
 
 **Log-determinant.** $2\sum_j\ln\ell_{jj}$ for Cholesky, $\sum_j\ln D_j$ for LDLᵀ.
 
@@ -285,7 +285,12 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
   Treat `FastIca` as experimental.
 - **`EigenFast` can exhaust its sweeps silently.** Its skip test is per element ($|a_{pq}|<\text{tol}$) but its stop test uses the Frobenius norm. If many sub-tolerance entries accumulate, no rotation fires and the loop runs all 256 sweeps without reporting it. There is no convergence flag. The reference `Eigen` pairs its per-element skip test with a max-norm stop test; the two agree, so it does not have this problem.
 - **Tolerances are absolute** in the Jacobi and LOBPCG routines (and in the graph smoother's conjugate-gradient solve; see [SpectralGraphs](./SpectralGraphs.md)), so results depend on the scale of the input. Rescale badly scaled problems.
-- **Pivot floors are absolute and never raise.** Both factorizations clamp pivots at 1e-12 and carry on, so `LogDet` and the solves of a floored factor describe the clamped matrix, not the input. A small-scale input such as $10^{-20}I$ is floored even though it is perfectly conditioned. Read `Status` before trusting a factor. `DenseCholesky` is the strict, solve-oriented dense path without flooring; existing callers keep the floored factors.
+- **Pivot floors are absolute and never raise.** Both factorizations clamp pivots at 1e-12 and carry on, so `LogDet` and the solves of a floored factor describe the clamped matrix, not the input. A small-scale input such as $10^{-20}I$ is floored even though it is perfectly conditioned. Read `Status` before trusting a factor.
+  - BARS admits a design by its `Status`.
+  - BAPS and BGP throw on a factor that is floored or not positive definite (since step 3.6).
+  - The GMM, Bhattacharyya and viz-core callers still rely on the silent floor.
+
+  `DenseCholesky` is the strict, solve-oriented dense path without flooring.
 - **LOBPCG rejects seed 0.** Callers that pass seed 0 through to LOBPCG fail. This affects the defaults of several spectral entry points (see [SpectralGraphs](./SpectralGraphs.md#status-and-caveats)).
 
 ## Source map

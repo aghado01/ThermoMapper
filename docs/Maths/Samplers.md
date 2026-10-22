@@ -54,7 +54,7 @@ flowchart LR
 - **Constants.** Values are needed only up to an additive constant that may depend on $b$ and the data but never on the state. It cancels in Metropolis ratios, in swaps (each rung's constant enters once with each sign) and in normalized SMC weights. An evidence estimate needs complete values.
 - **Refusals.** A model may refuse $b\ne1$ (`NotSupportedException`); the powered path asks only for $\ell_1$. A model may refuse $b=0$ when a nuisance prior is improper (`ArgumentOutOfRangeException`).
 - **Alternatives set aside.**
-  - A target that returns $\log\pi$ alone, with tempering as a decorator ($\beta\log\pi$, the `IRjTarget`/`TemperedTarget` pair it replaces): it cannot express the likelihood path or a nonlinear $\ell_b$.
+  - A target that returns $\log\pi$ alone, with tempering as a decorator ($\beta\log\pi$, the `IRjTarget`/`TemperedTarget` pair it replaced, deleted in step 3.6): it cannot express the likelihood path or a nonlinear $\ell_b$.
   - Methods `LogPrior(state)` and `LogLikelihood(state, b)` on the target: each temperature would re-evaluate the state.
   - A closed-form tempered density only, `LogDensity(state, b)`: it hides the prior/likelihood split that SMC and evidence estimates read.
 - **Costs.** One evaluation object per proposal, and each chain keeps its current state's evaluation alive (for BARS, the factor of $G$). Both are small beside the design and factor the model already builds per proposal.
@@ -147,7 +147,7 @@ Following Syed, Bouchard-Côté, Deligiannidis and Doucet (2022).
 **Schedules** (`SwapSchedule`).
 - **Deterministic even-odd** (DEO, the default): pairs (0,1), (2,3), … on even scans and (1,2), (3,4), … on odd ones. Each pair is attempted every other scan, and a state that was just swapped is offered the next rung in the same direction on the next scan, so it keeps moving until a swap is rejected. The scheme is non-reversible.
 - **Stochastic even-odd** (SEO): the even or the odd pairs by a fair coin each scan. Reversible: states random-walk along the ladder.
-- **Sequential:** every pair each scan, cold to hot, later pairs seeing earlier swaps; this engine's schedule until step 3.3, kept for comparison and for reproducing earlier runs. Within one swap phase a state can cascade up several rungs with no local step between; it descends one rung a scan.
+- **Sequential:** every pair each scan, cold to hot, later pairs seeing earlier swaps; this engine's schedule until step 3.3. It stays a selectable schedule (OQ5, decided in step 3.6): a valid kernel, being a composition of reversible pair swaps, for comparison and for reproducing earlier runs, but not the default. Within one swap phase a state can cascade up several rungs with no local step between; it descends one rung a scan.
 - The even and the odd pairs are disjoint, so an even-odd scan takes all its ratios before any swap.
 
 **Round trips.** A state that leaves the hot end, reaches the cold end and returns completes a round trip; its arrival at the cold end is an *annealed restart*, carrying what the hot rungs explored down to the posterior. `RoundTrips / Scans`, summed over states, is the round-trip rate τ, the measure a ladder is judged by. Swap acceptance is not: a ladder of nearly equal rungs accepts almost every swap and moves nothing anywhere.
@@ -244,7 +244,7 @@ Streaming moments keep $W$ exactly zero for constant chains; running sums and su
 - **Checked** (`ConvergenceDiagnosticsTests`): bulk ESS within 6% of the AR(1) value $S(1-\phi)/(1+\phi)$ at φ = 0, 0.9 and −0.5 (above S for the last); tail ESS between the bulk and S for φ = 0.9, since a Gaussian process's exceedances decorrelate faster than the process; a shifted chain raises the bulk R̂; discrete draws with ties are diagnosed.
 - **The failure policy is R̂'s.** Every draw one value is `Constant` (exempt from the ESS gate). Every split chain constant at different values is `Frozen`. Fewer than four draws per chain, or a non-finite draw, is `Unavailable`. `EssDiagnostic.Worst` orders readings as `RHatDiagnostic.Worst` does, smaller estimates worse.
 
-**Classic ESS** (`ChainDiagnostics.Ess`, the BDA3 variogram estimator with a non-standard pairing and $O(Cn^2)$ cost) is no longer used by the shell, BARS or BGP, and goes in step 3.6.
+**Classic ESS** (`ChainDiagnostics.Ess`, the BDA3 variogram estimator with a non-standard pairing and $O(Cn^2)$ cost) was replaced in step 3.4 and deleted in step 3.6.
 
 ### Inverse transform and spectral noise fields
 
@@ -281,7 +281,7 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | Role | Files (`ThermoMapper/src/maths/samplers/`) |
 |---|---|
 | Targets | `targets/SamplingTarget.cs` |
-| Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `ParallelTempering.cs`, `TemperingLadder.cs`; `IRjTarget.cs` and `TemperedTarget.cs` are unused since step 3.1 and go in step 3.6 |
+| Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `ParallelTempering.cs`, `TemperingLadder.cs` |
 | Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `ConvergenceDiagnostics.cs`, `RHatDiagnostic.cs`, `RunningMoments.cs`, `Readouts.cs`, `ChainTrace.cs`, `Checkpoint.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
 | i.i.d. and fields | `iid/InverseTransform.cs`; `SpectralNoiseField.cs` (at the `samplers/` root) |
 

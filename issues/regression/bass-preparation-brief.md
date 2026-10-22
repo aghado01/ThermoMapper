@@ -466,7 +466,7 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 | OQ2 | An exact reference rung: β = 0 drawn exactly, so each annealed restart is an independent draw (the setting of Syed et al.'s round trips) | Both BARS paths have an exactly drawable β = 0. Powered: on ordered knots the reference measure is k ~ Poisson(1) with uniform locations, defined even for the Normal model's improper σ² prior, because powering never re-integrates σ². Likelihood: the knot prior itself, which needs a marginal defined at b = 0 (the linear-form models now; the Normal model only with a proper σ² prior). `CollapsedGPrior.At(τ, b)` still refuses b = 0 (step 3.2's report). | Build it with the SMC module, which needs the same machinery (exact draws from a normalized reference, a proper-prior mode); then rerun OQ1. | SMC stage (full-port brief, "SMC integration") |
 | OQ3 | Placing the hot end and choosing the rung count | `AdaptLadder` keeps both ends fixed. The integrated Normal marginal's Occam factor holds hot rungs' knots down until b ≈ 1/m, while the linear form's hot rungs approach the prior (step 3.2 addendum). `TemperingLadder.RecommendedLevels` gives N ≈ 2Λ but nothing applies it. | A rule for β_min per model and path, measured by cold-chain ESS, and whether to adapt the rung count. | With OQ1 |
 | OQ4 | When BARS should temper at all | At equal work, tempering helped where untempered chains were stuck (sine, R̂ 1.18) or slow (counts), and did not help on peak. Measured on the trapped birth kernel (OQ11). | User guidance now: diagnose an untempered run first (`BarsResult.Knots`), and temper when R̂ or ESS says the target is hard. Later: a measured rule, or a trial run that chooses, measured after step 3.9. | BARS docs; after step 3.9 and OQ1 |
-| OQ5 | Keep or delete the sequential sweep | Its round-trip lead is a cascade effect (step 3.3), and its cold-chain ESS was indistinguishable from DEO's (step 3.4). | Decide in step 3.6: keep for reproducing pre-3.3 runs and as a comparison, or delete. | Step 3.6 |
+| OQ5 | Keep or delete the sequential sweep | Its round-trip lead is a cascade effect (step 3.3), and its cold-chain ESS was indistinguishable from DEO's (step 3.4). | **Decided in step 3.6: keep** it as a selectable schedule, not the default. It is a valid kernel, a composition of reversible pair swaps, not a compatibility path, and options stay open to users with a principled default (DEO). The docs state why its round trips read high. | Closed |
 | OQ6 | Each engine's own tempering path | BASS's conjugate blocks keep closed-form conditionals on either path (a powered Gamma(a, b) block is Gamma(β(a+M−1)+1, β(b+1))); the likelihood path leaves them unchanged across rungs, which is simpler. SMC and path-sampling evidence start from a normalized endpoint, which the likelihood path's prior is. | Each engine decides at its port with its own measurements; no default is inherited. | BASS port; SMC stage |
 | OQ7 | Which readouts gate an R̂ stop | BARS monitors the knot count only. The peak location is diagnosed (`Peak.LocationConvergence`) but does not gate the stop, and its ESS has been about 0.14% of draws. | Let callers choose the monitored readouts, and measure what gating on the peak costs. | After step 3.4 |
 | OQ8 | BARS's knot-count mixing and default run lengths | On the adaptive-stop fit the knot count's autocorrelation time is about 450 steps (Stan's estimator and batch means agree), so the default gate of 100 effective draws per chain needs about 45,000 draws per chain. The earlier 1.75% figure came from the classic variogram estimator. Most of it is the local-birth trap (OQ11). With ε = 0.1 uniform births, the autocorrelation time on this fit falls to about 40, so the gate needs about 4,000 draws per chain. | After step 3.9, re-measure the "After Phase 3: BARS mixing" table with the new ESS; then revisit the default sample sizes and the move schedule. | After step 3.9 |
@@ -1449,3 +1449,51 @@ Both are corrected.
 - **Steps 3.7 and 3.8 move BARS trajectories** (admission, and `EbicPrior`'s convention). Each reruns `SEED_SWEEP=50` and reports the table again. Step 3.8 ports the EBIC claim to the new γ, keeping the 2,000-step burn-in.
 - **Step 3.6** deletes `ChainDiagnostics.Ess`. `EnsembleTests`' iid-against-AR(1) test, which uses it, goes with it or moves to `Diagnose`.
 - **Single-value tolerances** remain unswept.
+
+### 3.6 Cleanup sweep — done 2026-10-21
+
+| Commit | Content |
+|---|---|
+| `25f7312` | BAPS and BGP factors read their status |
+| `f1a77c2` | The superseded surfaces deleted |
+| `9f82787` | The last private normal samplers replaced |
+| docs commit | This report |
+
+**Deleted:**
+- **`IRjTarget` and `TemperedTarget`,** unused since step 3.1.
+- **The sums-based `ChainDiagnostics.RHat(double[], double[], int)`.**
+  - Its last caller had left with the chip, and its signature was a trap: arrays of chain means and variances bound to it rather than to the moments form.
+  - The `.AsSpan()` calls that avoided the trap go with it.
+  - `EnsembleTests`' R̂ test moves to the moments form, keeping its √0.8 case and its shifted case.
+- **The classic `ChainDiagnostics.Ess`,** the BDA3 variogram estimator at O(Cn²), replaced in step 3.4. `EnsembleTests`' iid-against-AR(1) test goes with it, since `ConvergenceDiagnosticsTests` checks the same claim against AR(1) theory at φ = 0, 0.9 and −0.5.
+- **`BandCholesky.HitFloor`,** once its last caller read `Status`. The floor's count is in `Status.FlooredPivots`.
+
+**Migrated:** the chip's request 2.
+- **The sites.** Seven BAPS and BGP factor calls now require a finite, positive-definite factor with no clamped pivot, and throw `InvalidOperationException` otherwise, naming the matrix and its status:
+  - `PenalizedSpline`'s solve and penalty spectrum;
+  - both `BapsSampler` Gibbs modes;
+  - both `HierarchicalPSpline` blocks;
+  - `AnisotropicTensorSpline`'s REML factor;
+  - `GpRegression.Fit`.
+- **Why throw.** Each system is positive definite by construction once its design identifies the penalty's null space, and the hierarchical identity terms and BGP's nugget make theirs so unconditionally. A clamp therefore means degenerate input, and the floored solves would describe another matrix.
+- **Why BARS differs.** BARS refuses such a configuration as outside its support instead (design admission), because a knot configuration is a proposal.
+- **Not migrated:** the GMM, Bhattacharyya and viz-core callers. They are outside this brief, and step 0.4's inventory records their reliance on the floor for their owners.
+
+**Already gone:** the plan's "duplicated model math".
+- Step 2.3 rebuilt `WeightedNormalModel`'s marginal on the collapsed block in place, and a search finds no other g-prior marginal.
+- Step 2.1 removed three private Box–Muller copies. The search found two more, in `BgpSampler` and `SpectralNoiseField`, with `Normal.SampleStandard`'s arithmetic and uniform order; they now call it (`9f82787`).
+
+**Decided:** OQ5. The sequential sweep stays as a selectable schedule, not the default. It is a valid kernel, a composition of reversible pair swaps, not a compatibility path, and options stay open to users behind a principled default.
+
+**Also fixed:** the ambiguous `cref` to `ChainDiagnostics.Diagnose` in `IEnsembleModel`, a CS0419 warning since step 3.4.
+
+**Process note.** A shell slip first committed the two target deletions under `9f82787`'s message. The commit was local and unpushed, and it was amended into `f1a77c2` before anything built on it.
+
+**Verification:**
+- **Fact harness:** `Maths.Regression.Tests` 203 of 203 (run `20261021_210445829`), `Maths.Samplers.Tests` 82 of 82 (`20261021_210717067`) and `Maths.LinAlg.Tests` 46 of 46 (`20261021_210051612`, before the sampler swap, which touches no LinAlg code). Regression has one case fewer than at step 3.5: the deleted ESS test.
+- **Downstream:** `Synthetic.Tests` 38 of 38, which exercises `SpectralNoiseField`. Every test host that compiles against the changed libraries builds without errors: Regression, Samplers, LinAlg, Synthetic, `Clustering.Graphical.SPC` and Geometry.
+- **Zero drift:** the step 3.5 probe at the final revision is byte-identical to its step 3.5 output (207 fields: BARS, BAPS, the hierarchical spline and BGP).
+
+**For later steps:**
+- **Step 3.7** is next, then step 3.9 (full-support births, OQ11).
+- **Step 3.8** waits on the *Biometrics* text.
