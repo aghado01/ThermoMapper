@@ -36,12 +36,25 @@ public sealed class ParallelTemperingTests
     [Fact]
     public void Tempering_VisitsBothModes_WhereSingleChainSticks()
     {
+        (double singleFrac, double tempFrac, double swapRate) = SingleAgainstTempered(singleSeed: 1, ladderSeed: 7);
+
+        _out.WriteLine($"[temper] single-chain right-mode frac={singleFrac:F3} (stuck); " +
+                       $"tempering cold frac={tempFrac:F3}; swap acc={swapRate:F3}");
+
+        Assert.True(singleFrac < 0.05, $"single chain should stay stuck in one mode (got {singleFrac:F3})");
+        Assert.InRange(tempFrac, 0.35, 0.65);   // cold replica visits both modes ≈ equally
+    }
+
+    // The test's computation at any seeds, which the seed sweep reruns (ComparativeSweep): the right-mode fraction of a
+    // single chain and of a ladder's cold replica, both started in the left mode, and the ladder's swap acceptance.
+    internal static (double SingleFraction, double TemperedFraction, double SwapRate) SingleAgainstTempered(int singleSeed, int ladderSeed)
+    {
         ISamplingTarget<double> target = Bimodal;
         var moves = new IRjMove<double>[] { new RandomWalk(0.5) };
         const int draws = 100_000;
 
         // Single cold chain started in the left mode — it stays stuck.
-        var single = new ReversibleJumpChain<double>(moves, target, -3.0, new Xoshiro256PlusPlus(1));
+        var single = new ReversibleJumpChain<double>(moves, target, -3.0, new Xoshiro256PlusPlus(singleSeed));
         for (int i = 0; i < 5_000; i++) single.Step();
         int singleRight = 0;
         for (int i = 0; i < draws; i++) if (single.Step() > 0.0) singleRight++;
@@ -49,17 +62,11 @@ public sealed class ParallelTemperingTests
 
         // Tempered ladder — the cold replica visits both modes.
         double[] betas = ParallelTempering<double>.GeometricLadder(levels: 6, betaMin: 0.02);
-        var pt = new ParallelTempering<double>(_ => moves, target, -3.0, betas, TemperingPath.Powered, masterSeed: 7);
+        var pt = new ParallelTempering<double>(_ => moves, target, -3.0, betas, TemperingPath.Powered, masterSeed: ladderSeed);
         for (int i = 0; i < 5_000; i++) pt.Step();
         int tempRight = 0;
         for (int i = 0; i < draws; i++) if (pt.Step() > 0.0) tempRight++;
-        double tempFrac = (double)tempRight / draws;
-
-        _out.WriteLine($"[temper] single-chain right-mode frac={singleFrac:F3} (stuck); " +
-                       $"tempering cold frac={tempFrac:F3}; swap acc={(double)pt.SwapAccepts / pt.SwapAttempts:F3}");
-
-        Assert.True(singleFrac < 0.05, $"single chain should stay stuck in one mode (got {singleFrac:F3})");
-        Assert.InRange(tempFrac, 0.35, 0.65);   // cold replica visits both modes ≈ equally
+        return (singleFrac, (double)tempRight / draws, (double)pt.SwapAccepts / pt.SwapAttempts);
     }
 
     [Fact]

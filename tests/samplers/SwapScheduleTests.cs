@@ -110,10 +110,7 @@ public sealed class SwapScheduleTests
     [Fact]
     public void AdaptLadder_EqualizesRejection_AndKeepsTheBarrier()
     {
-        double[] start = [1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125, 0.0];   // uniform: most barrier near β = 0
-        (_, _, double[] before) = Measure(ExactLadder(start, SwapSchedule.DeterministicEvenOdd, seed: 3), scans: 60_000);
-        double[] adapted = Adapted(start, seed: 5);
-        (_, _, double[] after) = Measure(ExactLadder(adapted, SwapSchedule.DeterministicEvenOdd, seed: 3), scans: 60_000);
+        (double[] before, double[] adapted, double[] after) = AdaptAndMeasure(measureSeed: 3, adaptSeed: 5);
 
         double spreadBefore = Spread(before), spreadAfter = Spread(after);
         double barrierBefore = TemperingLadder.Barrier(before), barrierAfter = TemperingLadder.Barrier(after);
@@ -125,6 +122,17 @@ public sealed class SwapScheduleTests
         Assert.True(spreadAfter < 1.25, $"rates still unequal: max/min {spreadAfter:F2}");
         Assert.True(spreadAfter < spreadBefore);
         Assert.InRange(barrierAfter / barrierBefore, 0.93, 1.07);
+    }
+
+    // The test's computation at any seeds, which the seed sweep reruns (ComparativeSweep): the pair rejection rates of a
+    // uniform ladder, its adapted rungs, and their rejection rates.
+    internal static (double[] Before, double[] Adapted, double[] After) AdaptAndMeasure(int measureSeed, int adaptSeed)
+    {
+        double[] start = [1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125, 0.0];   // uniform: most barrier near β = 0
+        (_, _, double[] before) = Measure(ExactLadder(start, SwapSchedule.DeterministicEvenOdd, seed: measureSeed), scans: 60_000);
+        double[] adapted = Adapted(start, seed: adaptSeed);
+        (_, _, double[] after) = Measure(ExactLadder(adapted, SwapSchedule.DeterministicEvenOdd, seed: measureSeed), scans: 60_000);
+        return (before, adapted, after);
     }
 
     [Fact]
@@ -214,7 +222,7 @@ public sealed class SwapScheduleTests
         return pt.Betas;
     }
 
-    private static double Spread(double[] r)
+    internal static double Spread(double[] r)
     {
         double lo = double.PositiveInfinity, hi = 0.0;
         foreach (double v in r) { lo = Math.Min(lo, v); hi = Math.Max(hi, v); }

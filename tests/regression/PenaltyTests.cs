@@ -48,7 +48,23 @@ public sealed class PenaltyTests
     [Fact]
     public void DifferencePenalty_SmoothsOverRichBasis()
     {
-        var rng = new Xoshiro256PlusPlus(seed: 31);
+        (double r0, double r1, double r2, double mseOver, double mseBest, double bestLambda) = PenalizedAgainstOverfit(noiseSeed: 31);
+
+        // Roughness strictly decreases as the penalty tightens — the operator does what it should.
+        _out.WriteLine($"[penalty] roughness λ=0:{r0:E3} λ=1:{r1:E3} λ=100:{r2:E3}");
+        Assert.True(r1 < r0, $"roughness should fall with λ: {r1:E3} !< {r0:E3}");
+        Assert.True(r2 < r1, $"roughness should fall with λ: {r2:E3} !< {r1:E3}");
+
+        // The best penalized fit beats the unpenalized rich-basis overfit on MSE-to-truth.
+        _out.WriteLine($"[penalty] mseOverfit={mseOver:F5} mseBest={mseBest:F5} (λ*={bestLambda}) ratio={mseBest / mseOver:F3}");
+        Assert.True(mseBest < mseOver, $"penalized MSE {mseBest:F5} should beat unpenalized {mseOver:F5}");
+    }
+
+    // The test's computation at any noise seed, which the seed sweep reruns (ComparativeSweep): the roughness at three
+    // penalties, and the MSE to the truth of the unpenalized fit and of the best of five penalized ones.
+    internal static (double R0, double R1, double R2, double MseOver, double MseBest, double BestLambda) PenalizedAgainstOverfit(int noiseSeed)
+    {
+        var rng = new Xoshiro256PlusPlus(seed: noiseSeed);
         int n = 120;
         var x = new double[n];
         var f = new double[n];
@@ -95,15 +111,10 @@ public sealed class PenaltyTests
             return fit;
         }
 
-        // Roughness strictly decreases as the penalty tightens — the operator does what it should.
         double r0 = Roughness(Coefficients(0.0));
         double r1 = Roughness(Coefficients(1.0));
         double r2 = Roughness(Coefficients(100.0));
-        _out.WriteLine($"[penalty] roughness λ=0:{r0:E3} λ=1:{r1:E3} λ=100:{r2:E3}");
-        Assert.True(r1 < r0, $"roughness should fall with λ: {r1:E3} !< {r0:E3}");
-        Assert.True(r2 < r1, $"roughness should fall with λ: {r2:E3} !< {r1:E3}");
 
-        // The best penalized fit beats the unpenalized rich-basis overfit on MSE-to-truth.
         double mseOver = Mse(Fit(Coefficients(0.0)), f);
         double mseBest = double.PositiveInfinity;
         double bestLambda = 0.0;
@@ -112,7 +123,6 @@ public sealed class PenaltyTests
             double mse = Mse(Fit(Coefficients(lambda)), f);
             if (mse < mseBest) { mseBest = mse; bestLambda = lambda; }
         }
-        _out.WriteLine($"[penalty] mseOverfit={mseOver:F5} mseBest={mseBest:F5} (λ*={bestLambda}) ratio={mseBest / mseOver:F3}");
-        Assert.True(mseBest < mseOver, $"penalized MSE {mseBest:F5} should beat unpenalized {mseOver:F5}");
+        return (r0, r1, r2, mseOver, mseBest, bestLambda);
     }
 }

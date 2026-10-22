@@ -28,7 +28,28 @@ public sealed class PenalizedSplineTests
     [Fact]
     public void RemlEvidence_SelectsInteriorSmoothing_AndRecoversTruth()
     {
-        var rng = new Xoshiro256PlusPlus(seed: 73);
+        (double[] lambdas, double[] evidence, int best, double mseStar, double mseUnder, double mseOver) = RemlAgainstExtremes(noiseSeed: 73);
+        int g = lambdas.Length;
+        _out.WriteLine($"[reml] λ*={lambdas[best]:E2} ℓ*={evidence[best]:F3} " +
+                       $"ℓ(min)={evidence[0]:F3} ℓ(max)={evidence[g - 1]:F3}");
+
+        // Interior optimum: the best λ strictly beats both ends of the grid.
+        Assert.True(best > 0 && best < g - 1, $"REML optimum landed at the grid edge (index {best}).");
+        Assert.True(evidence[best] > evidence[0] && evidence[best] > evidence[g - 1],
+            "REML evidence should peak in the interior, not at an extreme.");
+
+        // The fit at λ* recovers the truth better than gross over/under-smoothing.
+        _out.WriteLine($"[reml] mse λ*={mseStar:F5} under={mseUnder:F5} over={mseOver:F5}");
+        Assert.True(mseStar < mseUnder, $"REML fit {mseStar:F5} should beat the overfit {mseUnder:F5}");
+        Assert.True(mseStar < mseOver, $"REML fit {mseStar:F5} should beat the over-smoothed {mseOver:F5}");
+    }
+
+    // The test's computation at any noise seed, which the seed sweep reruns (ComparativeSweep): the REML evidence over a
+    // geometric λ grid, its argmax, and the MSE to the truth there and at both ends of the grid.
+    internal static (double[] Lambdas, double[] Evidence, int Best, double MseStar, double MseUnder, double MseOver) RemlAgainstExtremes(
+        int noiseSeed)
+    {
+        var rng = new Xoshiro256PlusPlus(seed: noiseSeed);
         int n = 120;
         var x = new double[n];
         var f = new double[n];
@@ -61,15 +82,7 @@ public sealed class PenalizedSplineTests
             evidence[j] = ps.RemlLogEvidence(lambdas[j]);
             if (evidence[j] > evidence[best]) best = j;
         }
-        _out.WriteLine($"[reml] λ*={lambdas[best]:E2} ℓ*={evidence[best]:F3} " +
-                       $"ℓ(min)={evidence[0]:F3} ℓ(max)={evidence[g - 1]:F3}");
 
-        // Interior optimum: the best λ strictly beats both ends of the grid.
-        Assert.True(best > 0 && best < g - 1, $"REML optimum landed at the grid edge (index {best}).");
-        Assert.True(evidence[best] > evidence[0] && evidence[best] > evidence[g - 1],
-            "REML evidence should peak in the interior, not at an extreme.");
-
-        // The fit at λ* recovers the truth better than gross over/under-smoothing.
         double Mse(double lambda)
         {
             double[] beta = ps.Coefficients(lambda);
@@ -84,11 +97,7 @@ public sealed class PenalizedSplineTests
             return s / n;
         }
 
-        double mseStar = Mse(lambdas[best]);
-        double mseUnder = Mse(lambdas[0]);      // λ→0, overfit
-        double mseOver = Mse(lambdas[g - 1]);   // λ→∞, over-smoothed
-        _out.WriteLine($"[reml] mse λ*={mseStar:F5} under={mseUnder:F5} over={mseOver:F5}");
-        Assert.True(mseStar < mseUnder, $"REML fit {mseStar:F5} should beat the overfit {mseUnder:F5}");
-        Assert.True(mseStar < mseOver, $"REML fit {mseStar:F5} should beat the over-smoothed {mseOver:F5}");
+        // λ→0 overfits, λ→∞ over-smooths.
+        return (lambdas, evidence, best, Mse(lambdas[best]), Mse(lambdas[0]), Mse(lambdas[g - 1]));
     }
 }

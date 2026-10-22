@@ -122,7 +122,25 @@ public sealed class BapsTests
     {
         // A sharp bump on a flat background: a single global λ must either blur the bump or leave noise in the
         // flat region; locally-adaptive λ smooths the background hard and tracks the bump.
-        var rng = new Xoshiro256PlusPlus(seed: 123);
+        (BapsResult adaptive, double mseGlobal, double mseAdaptive, double central, double outer) = AdaptiveAgainstGlobal(noiseSeed: 123, masterSeed: 5);
+
+        _out.WriteLine($"[adaptive] mseGlobal={mseGlobal:F5} mseAdaptive={mseAdaptive:F5} " +
+                       $"λ̄(bump)={central:F2} λ̄(flat)={outer:F2} R̂={adaptive.RHatLogLambda:F3}");
+
+        Assert.True(mseAdaptive < mseGlobal,
+            $"adaptive MSE {mseAdaptive:F5} should beat global {mseGlobal:F5} on heterogeneous smoothness");
+        Assert.True(central < outer,
+            $"local smoothing at the bump ({central:F2}) should be lighter than the flat region ({outer:F2})");
+        Assert.Equal(DiagnosticState.Estimated, adaptive.RHatLogLambda.State);
+        Assert.True(adaptive.RHatLogLambda.Value < 1.3, $"R̂ {adaptive.RHatLogLambda:F3} indicates poor mixing");
+    }
+
+    // The test's computation at any seeds, which the seed sweep reruns (ComparativeSweep): both λ updates' MSE to the
+    // truth, and the adaptive update's mean local smoothing around the bump and on the flat ends.
+    internal static (BapsResult Adaptive, double MseGlobal, double MseAdaptive, double Central, double Outer) AdaptiveAgainstGlobal(
+        int noiseSeed, int masterSeed)
+    {
+        var rng = new Xoshiro256PlusPlus(seed: noiseSeed);
         int n = 150;
         var x = new double[n];
         var f = new double[n];
@@ -156,8 +174,8 @@ public sealed class BapsTests
         }
 
         var sampler = new BapsSampler(z, y, penalty);
-        BapsResult global = sampler.Run(BapsLambdaUpdate.Gibbs, chains: 4, masterSeed: 5, burn: 500, samples: 1500);
-        BapsResult adaptive = sampler.Run(BapsLambdaUpdate.AdaptiveGibbs, chains: 4, masterSeed: 5, burn: 500, samples: 1500);
+        BapsResult global = sampler.Run(BapsLambdaUpdate.Gibbs, chains: 4, masterSeed: masterSeed, burn: 500, samples: 1500);
+        BapsResult adaptive = sampler.Run(BapsLambdaUpdate.AdaptiveGibbs, chains: 4, masterSeed: masterSeed, burn: 500, samples: 1500);
 
         double mseGlobal = Mse(global.Coefficients);
         double mseAdaptive = Mse(adaptive.Coefficients);
@@ -176,15 +194,6 @@ public sealed class BapsTests
         }
         central /= cN;
         outer /= oN;
-
-        _out.WriteLine($"[adaptive] mseGlobal={mseGlobal:F5} mseAdaptive={mseAdaptive:F5} " +
-                       $"λ̄(bump)={central:F2} λ̄(flat)={outer:F2} R̂={adaptive.RHatLogLambda:F3}");
-
-        Assert.True(mseAdaptive < mseGlobal,
-            $"adaptive MSE {mseAdaptive:F5} should beat global {mseGlobal:F5} on heterogeneous smoothness");
-        Assert.True(central < outer,
-            $"local smoothing at the bump ({central:F2}) should be lighter than the flat region ({outer:F2})");
-        Assert.Equal(DiagnosticState.Estimated, adaptive.RHatLogLambda.State);
-        Assert.True(adaptive.RHatLogLambda.Value < 1.3, $"R̂ {adaptive.RHatLogLambda:F3} indicates poor mixing");
+        return (adaptive, mseGlobal, mseAdaptive, central, outer);
     }
 }

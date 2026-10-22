@@ -96,19 +96,7 @@ public sealed class ExactChangepointTests
     [Fact]
     public void Cauchy_IsRobust_WhereGaussianIsFooled()
     {
-        var rng = new Xoshiro256PlusPlus(seed: 123);
-        const int n = 60;
-        var y = new double[n];
-        for (int i = 0; i < n; i++)
-        {
-            double level = i < 30 ? 0.0 : 3.0;       // one true break after position 30
-            y[i] = level + 0.30 * Gaussian(rng);
-        }
-        foreach (int o in new[] { 10, 20, 45 }) y[o] += 10.0;   // gross outliers inside the segments
-
-        ChangepointResult gauss = ExactChangepoint.Infer(y, sigma2: 0.1, nu: 1.5, rho2: 4.0, maxSegments: 10);
-        ChangepointResult cauchy = ExactChangepoint.Infer(
-            y, new CauchySegmentModel(y, scale: 0.5, nu: 1.5, rho2: 4.0), maxSegments: 10);
+        (ChangepointResult gauss, ChangepointResult cauchy) = GaussianAndCauchy(noiseSeed: 123);
 
         _out.WriteLine($"[robust] gaussian k̂={gauss.MapSegments}; cauchy k̂={cauchy.MapSegments} break@30={cauchy.BreakProbability[29]:F3}");
 
@@ -123,5 +111,25 @@ public sealed class ExactChangepointTests
         // The Gaussian model is fooled — it isolates the outliers into extra segments.
         Assert.True(gauss.MapSegments > cauchy.MapSegments,
             $"gaussian should over-segment around outliers (k̂={gauss.MapSegments}) vs cauchy ({cauchy.MapSegments})");
+    }
+
+    // The test's computation at any noise seed, which the seed sweep reruns (ComparativeSweep): both segment models on
+    // one break with three gross outliers.
+    internal static (ChangepointResult GaussianFit, ChangepointResult CauchyFit) GaussianAndCauchy(int noiseSeed)
+    {
+        var rng = new Xoshiro256PlusPlus(seed: noiseSeed);
+        const int n = 60;
+        var y = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            double level = i < 30 ? 0.0 : 3.0;       // one true break after position 30
+            y[i] = level + 0.30 * Gaussian(rng);
+        }
+        foreach (int o in new[] { 10, 20, 45 }) y[o] += 10.0;   // gross outliers inside the segments
+
+        ChangepointResult gauss = ExactChangepoint.Infer(y, sigma2: 0.1, nu: 1.5, rho2: 4.0, maxSegments: 10);
+        ChangepointResult cauchy = ExactChangepoint.Infer(
+            y, new CauchySegmentModel(y, scale: 0.5, nu: 1.5, rho2: 4.0), maxSegments: 10);
+        return (gauss, cauchy);
     }
 }

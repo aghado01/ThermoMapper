@@ -29,7 +29,23 @@ public sealed class TensorPSplineTests
     [Fact]
     public void TensorPSpline_RecoversSurface_ViaReml()
     {
-        var rng = new Xoshiro256PlusPlus(seed: 202);
+        (TensorDesign td, double[] lambdas, int best, double mseStar, double mseUnder, double mseOver) = RemlAgainstExtremes(noiseSeed: 202);
+        int g = lambdas.Length;
+        _out.WriteLine($"[tensor] ν={td.NuX * td.NuY} (={td.NuX}×{td.NuY}) λ*={lambdas[best]:E2} " +
+                       $"mse λ*={mseStar:F5} under={mseUnder:F5} over={mseOver:F5}");
+
+        Assert.True(best > 0 && best < g - 1, $"REML optimum at grid edge (index {best}).");
+        Assert.True(mseStar < mseUnder, $"REML fit {mseStar:F5} should beat the overfit {mseUnder:F5}");
+        Assert.True(mseStar < mseOver, $"REML fit {mseStar:F5} should beat the over-smoothed {mseOver:F5}");
+        Assert.True(mseStar < 0.01, $"REML fit {mseStar:F5} should recover the surface");
+    }
+
+    // The test's computation at any noise seed, which the seed sweep reruns (ComparativeSweep): the REML argmax over a
+    // geometric λ grid, and the MSE to the truth there and at both ends of the grid.
+    internal static (TensorDesign Design, double[] Lambdas, int Best, double MseStar, double MseUnder, double MseOver) RemlAgainstExtremes(
+        int noiseSeed)
+    {
+        var rng = new Xoshiro256PlusPlus(seed: noiseSeed);
         const int gx = 18, gy = 18;
         int n = gx * gy;
         var xs = new double[n];
@@ -80,16 +96,6 @@ public sealed class TensorPSplineTests
             ev[j] = ps.RemlLogEvidence(lambdas[j]);
             if (ev[j] > ev[best]) best = j;
         }
-
-        double mseStar = Mse(lambdas[best]);
-        double mseUnder = Mse(lambdas[0]);
-        double mseOver = Mse(lambdas[g - 1]);
-        _out.WriteLine($"[tensor] ν={nu} (={td.NuX}×{td.NuY}) λ*={lambdas[best]:E2} " +
-                       $"mse λ*={mseStar:F5} under={mseUnder:F5} over={mseOver:F5}");
-
-        Assert.True(best > 0 && best < g - 1, $"REML optimum at grid edge (index {best}).");
-        Assert.True(mseStar < mseUnder, $"REML fit {mseStar:F5} should beat the overfit {mseUnder:F5}");
-        Assert.True(mseStar < mseOver, $"REML fit {mseStar:F5} should beat the over-smoothed {mseOver:F5}");
-        Assert.True(mseStar < 0.01, $"REML fit {mseStar:F5} should recover the surface");
+        return (td, lambdas, best, Mse(lambdas[best]), Mse(lambdas[0]), Mse(lambdas[g - 1]));
     }
 }

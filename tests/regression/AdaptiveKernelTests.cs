@@ -91,7 +91,20 @@ public sealed class AdaptiveKernelTests
     [Fact]
     public void AdaptiveBurn_InEnsemble_RecoversMixing_FromBadTau()
     {
-        var noise = new Xoshiro256PlusPlus(seed: 41);
+        (BarsResult fixedBad, BarsResult adaptive, double mseFixed, double mseAdaptive) = AdaptiveAgainstFixedKernel(noiseSeed: 41, masterSeed: 5);
+        _out.WriteLine($"[adaptive-ens] fixedBad: mse={mseFixed:F5} peakESS={fixedBad.Peak.LocationConvergence.BulkEss:F0} ESS(k)={fixedBad.Knots.BulkEss:F0}");
+        _out.WriteLine($"[adaptive-ens] adaptive: mse={mseAdaptive:F5} peakESS={adaptive.Peak.LocationConvergence.BulkEss:F0} ESS(k)={adaptive.Knots.BulkEss:F0}");
+
+        Assert.True(mseAdaptive < 0.01, $"adaptive fit MSE {mseAdaptive:F5} should recover the curve");
+        Assert.True(adaptive.Peak.LocationConvergence.BulkEss.Value > fixedBad.Peak.LocationConvergence.BulkEss.Value,
+            $"adaptive peak ESS {adaptive.Peak.LocationConvergence.BulkEss:F0} should beat the too-tight fixed kernel {fixedBad.Peak.LocationConvergence.BulkEss:F0}");
+    }
+
+    // The test's computation at any seeds, which the seed sweep reruns (ComparativeSweep).
+    internal static (BarsResult FixedBad, BarsResult Adaptive, double MseFixed, double MseAdaptive) AdaptiveAgainstFixedKernel(
+        int noiseSeed, int masterSeed)
+    {
+        var noise = new Xoshiro256PlusPlus(seed: noiseSeed);
         int n = 90;
         var x = new double[n];
         var f = new double[n];
@@ -108,19 +121,12 @@ public sealed class AdaptiveKernelTests
 
         // A fixed, far-too-tight τ: relocate barely moves knots ⇒ the peak mixes slowly.
         BarsResult fixedBad = new BarsEnsemble(basis, new WeightedNormalModel(), prior, new LocalBetaKernel(2000.0))
-            .Run(x, y, grid: x, chains: 4, masterSeed: 5, burn: 1500, samples: 3000);
+            .Run(x, y, grid: x, chains: 4, masterSeed: masterSeed, burn: 1500, samples: 3000);
         // Same bad start, but adapt τ during burn-in.
         BarsResult adaptive = new BarsEnsemble(basis, new WeightedNormalModel(), prior, new LocalBetaKernel(50.0), adaptKernelTau: 2000.0)
-            .Run(x, y, grid: x, chains: 4, masterSeed: 5, burn: 1500, samples: 3000);
+            .Run(x, y, grid: x, chains: 4, masterSeed: masterSeed, burn: 1500, samples: 3000);
 
         double Mse(double[] fit) { double s = 0.0; for (int i = 0; i < n; i++) { double d = fit[i] - f[i]; s += d * d; } return s / n; }
-        double mseFixed = Mse(fixedBad.Fit);
-        double mseAdaptive = Mse(adaptive.Fit);
-        _out.WriteLine($"[adaptive-ens] fixedBad: mse={mseFixed:F5} peakESS={fixedBad.Peak.LocationConvergence.BulkEss:F0} ESS(k)={fixedBad.Knots.BulkEss:F0}");
-        _out.WriteLine($"[adaptive-ens] adaptive: mse={mseAdaptive:F5} peakESS={adaptive.Peak.LocationConvergence.BulkEss:F0} ESS(k)={adaptive.Knots.BulkEss:F0}");
-
-        Assert.True(mseAdaptive < 0.01, $"adaptive fit MSE {mseAdaptive:F5} should recover the curve");
-        Assert.True(adaptive.Peak.LocationConvergence.BulkEss.Value > fixedBad.Peak.LocationConvergence.BulkEss.Value,
-            $"adaptive peak ESS {adaptive.Peak.LocationConvergence.BulkEss:F0} should beat the too-tight fixed kernel {fixedBad.Peak.LocationConvergence.BulkEss:F0}");
+        return (fixedBad, adaptive, Mse(fixedBad.Fit), Mse(adaptive.Fit));
     }
 }

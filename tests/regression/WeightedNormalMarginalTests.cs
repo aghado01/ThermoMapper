@@ -97,8 +97,17 @@ public sealed class WeightedNormalMarginalTests
     public void Posterior_PrefersTrueModel_OverSpuriousKnots()
     {
         // Data from a 2-knot cubic with tiny noise; the (m+1)^(-ν/2) penalty must beat a 9-knot bloat.
+        (double trueScore, double bloatScore) = TrueAndBloated(noiseSeed: 12345);
+
+        Assert.True(trueScore > bloatScore, $"true {trueScore} should beat bloated {bloatScore}");
+    }
+
+    // The test's computation at any noise seed, which the seed sweep reruns (ComparativeSweep): the log posterior of
+    // the true two knots and of nine spurious ones.
+    internal static (double TrueScore, double BloatScore) TrueAndBloated(int noiseSeed)
+    {
         var basis = new SplineBasis(degree: 3);
-        var rng = new Xoshiro256PlusPlus(seed: 12345);
+        var rng = new Xoshiro256PlusPlus(seed: noiseSeed);
         int m = 80;
         var x = new double[m];
         for (int i = 0; i < m; i++) x[i] = (i + 0.5) / m;
@@ -115,9 +124,7 @@ public sealed class WeightedNormalMarginalTests
         var target = new SplineTarget(basis, new WeightedNormalModel(), new UniformPrior(50), x, y);
         double trueScore = target.LogPosterior(trueConfig);
         var bloat = new KnotConfig(new[] { 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9 });
-        double bloatScore = target.LogPosterior(bloat);
-
-        Assert.True(trueScore > bloatScore, $"true {trueScore} should beat bloated {bloatScore}");
+        return (trueScore, target.LogPosterior(bloat));
     }
 
     [Fact]

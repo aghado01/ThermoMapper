@@ -29,7 +29,20 @@ public sealed class AnisotropicTensorTests
     [Fact]
     public void Anisotropic_BeatsIsotropic_OnAsymmetricSurface()
     {
-        var rng = new Xoshiro256PlusPlus(seed: 808);
+        (double isoLam, double isoMse, double lamX, double lamY, double anisoMse) = AnisotropicAgainstIsotropic(noiseSeed: 808);
+
+        _out.WriteLine($"[aniso] iso: λ={isoLam:E1} mse={isoMse:F5} | aniso: λx={lamX:E1} λy={lamY:E1} " +
+                       $"mse={anisoMse:F5} (ratio {anisoMse / isoMse:F2})");
+
+        Assert.True(anisoMse < isoMse, $"anisotropic MSE {anisoMse:F5} should beat isotropic {isoMse:F5}");
+        Assert.True(lamX > lamY, $"x is smoother ⇒ λx {lamX:E1} should exceed λy {lamY:E1}");
+    }
+
+    // The test's computation at any noise seed, which the seed sweep reruns (ComparativeSweep): the isotropic and the
+    // anisotropic REML fits, with their smoothing parameters.
+    internal static (double IsoLambda, double IsoMse, double LambdaX, double LambdaY, double AnisoMse) AnisotropicAgainstIsotropic(int noiseSeed)
+    {
+        var rng = new Xoshiro256PlusPlus(seed: noiseSeed);
         const int gx = 22, gy = 22;
         int n = gx * gy;
         var xs = new double[n];
@@ -91,12 +104,6 @@ public sealed class AnisotropicTensorTests
                 double ev = aniso.RemlLogEvidence(lx, ly);
                 if (ev > anisoBest) { anisoBest = ev; lamX = lx; lamY = ly; }
             }
-        double anisoMse = Mse(aniso.Coefficients(lamX, lamY));
-
-        _out.WriteLine($"[aniso] iso: λ={isoLam:E1} mse={isoMse:F5} | aniso: λx={lamX:E1} λy={lamY:E1} " +
-                       $"mse={anisoMse:F5} (ratio {anisoMse / isoMse:F2})");
-
-        Assert.True(anisoMse < isoMse, $"anisotropic MSE {anisoMse:F5} should beat isotropic {isoMse:F5}");
-        Assert.True(lamX > lamY, $"x is smoother ⇒ λx {lamX:E1} should exceed λy {lamY:E1}");
+        return (isoLam, isoMse, lamX, lamY, Mse(aniso.Coefficients(lamX, lamY)));
     }
 }

@@ -34,7 +34,16 @@ public sealed class GibbsLossTests
     [Fact]
     public void GibbsLoss_RejectsOutliers_BeatsLeastSquares()
     {
-        var rng = new Xoshiro256PlusPlus(seed: 44);
+        (double mseLs, double mseRobust) = AgainstLeastSquares(noiseSeed: 44, masterSeed: 9);
+        _out.WriteLine($"[gibbs] mseLS={mseLs:F5} mseRobust={mseRobust:F5} ratio={mseRobust / mseLs:F3}");
+
+        Assert.True(mseRobust < mseLs, $"Gibbs-loss MSE {mseRobust:F5} should beat least-squares {mseLs:F5}");
+    }
+
+    // The test's computation at any seeds, which the seed sweep reruns (ComparativeSweep).
+    internal static (double MseLs, double MseRobust) AgainstLeastSquares(int noiseSeed, int masterSeed)
+    {
+        var rng = new Xoshiro256PlusPlus(seed: noiseSeed);
         int n = 100;
         var x = new double[n];
         var f = new double[n];
@@ -53,14 +62,9 @@ public sealed class GibbsLossTests
         var kernel = new LocalBetaKernel(50.0);
 
         BarsResult ls = new BarsEnsemble(basis, new WeightedNormalModel(), prior, kernel)
-            .Run(x, y, grid: x, chains: 2, masterSeed: 9, burn: 1000, samples: 1500);
+            .Run(x, y, grid: x, chains: 2, masterSeed: masterSeed, burn: 1000, samples: 1500);
         BarsResult robust = new BarsEnsemble(basis, new GibbsLossModel(), prior, kernel)
-            .Run(x, y, grid: x, chains: 2, masterSeed: 9, burn: 1000, samples: 1500);
-
-        double mseLs = Mse(ls.Fit, f);
-        double mseRobust = Mse(robust.Fit, f);
-        _out.WriteLine($"[gibbs] mseLS={mseLs:F5} mseRobust={mseRobust:F5} ratio={mseRobust / mseLs:F3}");
-
-        Assert.True(mseRobust < mseLs, $"Gibbs-loss MSE {mseRobust:F5} should beat least-squares {mseLs:F5}");
+            .Run(x, y, grid: x, chains: 2, masterSeed: masterSeed, burn: 1000, samples: 1500);
+        return (Mse(ls.Fit, f), Mse(robust.Fit, f));
     }
 }

@@ -42,7 +42,22 @@ public sealed class HierarchicalPSplineTests
     [Fact]
     public void Hierarchical_BorrowsStrength_BeatsIndependent()
     {
-        var rng = new Xoshiro256PlusPlus(seed: 2025);
+        (HierarchicalResult h, double indepRep, double hierRep, double popMse) = HierarchicalAgainstIndependent(noiseSeed: 2025, samplerSeed: 7);
+
+        _out.WriteLine($"[hier] per-rep MSE: independent={indepRep:F5} hierarchical={hierRep:F5} " +
+                       $"(ratio {hierRep / indepRep:F2}); population MSE={popMse:F5}; " +
+                       $"σ̂={h.NoiseSd:F3} τ̂_u={h.DeviationSd:F3} τ̂_0={h.PopulationSmoothingSd:F3}");
+
+        Assert.True(hierRep < indepRep, $"hierarchical per-rep MSE {hierRep:F5} should beat independent {indepRep:F5}");
+        Assert.True(popMse < 0.02, $"population fit MSE {popMse:F5} should recover the shared mean");
+    }
+
+    // The test's computation at any seeds, which the seed sweep reruns (ComparativeSweep): the per-replicate MSE of
+    // independent REML fits and of the hierarchical fit, and the population fit's MSE.
+    internal static (HierarchicalResult Fit, double IndependentMse, double HierarchicalMse, double PopulationMse) HierarchicalAgainstIndependent(
+        int noiseSeed, int samplerSeed)
+    {
+        var rng = new Xoshiro256PlusPlus(seed: noiseSeed);
         const int reps = 10, n = 50;
         var x = new double[n];
         for (int i = 0; i < n; i++) x[i] = (i + 0.5) / n;
@@ -90,17 +105,10 @@ public sealed class HierarchicalPSplineTests
         indepRep /= reps;
 
         // Hierarchical: shared population mean + shrunken replicate curves.
-        HierarchicalResult h = new HierarchicalPSpline(z, y, penalty).Run(burn: 1000, samples: 2500, seed: 7);
+        HierarchicalResult h = new HierarchicalPSpline(z, y, penalty).Run(burn: 1000, samples: 2500, seed: samplerSeed);
         double hierRep = 0.0;
         for (int r = 0; r < reps; r++) hierRep += Mse(z, h.ReplicateCoefficients[r], truth[r]);
         hierRep /= reps;
-        double popMse = Mse(z, h.PopulationCoefficients, f0);
-
-        _out.WriteLine($"[hier] per-rep MSE: independent={indepRep:F5} hierarchical={hierRep:F5} " +
-                       $"(ratio {hierRep / indepRep:F2}); population MSE={popMse:F5}; " +
-                       $"σ̂={h.NoiseSd:F3} τ̂_u={h.DeviationSd:F3} τ̂_0={h.PopulationSmoothingSd:F3}");
-
-        Assert.True(hierRep < indepRep, $"hierarchical per-rep MSE {hierRep:F5} should beat independent {indepRep:F5}");
-        Assert.True(popMse < 0.02, $"population fit MSE {popMse:F5} should recover the shared mean");
+        return (h, indepRep, hierRep, Mse(z, h.PopulationCoefficients, f0));
     }
 }

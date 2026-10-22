@@ -26,7 +26,26 @@ public sealed class RobustnessTests
     [Fact]
     public void Robust_DownweightsOutliers_BeatsLeastSquares()
     {
-        var rng = new Xoshiro256PlusPlus(seed: 44);
+        (double mseLs, double mseRobust) = AgainstLeastSquares(new StudentTWeights(4.0), noiseSeed: 44, masterSeed: 9);
+        _out.WriteLine($"mseLS={mseLs:F5} mseRobust={mseRobust:F5} ratio={mseRobust / mseLs:F3}");
+
+        Assert.True(mseRobust < mseLs, $"robust MSE {mseRobust:F5} should beat least-squares {mseLs:F5}");
+    }
+
+    [Fact]
+    public void ContaminatedNormal_RejectsOutliers_BeatsLeastSquares()
+    {
+        (double mseLs, double mseRobust) = AgainstLeastSquares(new ContaminatedNormalWeights(0.1, 12.0), noiseSeed: 44, masterSeed: 9);
+        _out.WriteLine($"[contam] mseLS={mseLs:F5} mseRobust={mseRobust:F5} ratio={mseRobust / mseLs:F3}");
+
+        Assert.True(mseRobust < mseLs, $"contaminated-normal MSE {mseRobust:F5} should beat least-squares {mseLs:F5}");
+    }
+
+    // Both tests' computation at any seeds, which the seed sweep reruns (ComparativeSweep): least squares and a robust
+    // weight block on a sine with eight gross outliers, by MSE to the truth.
+    internal static (double MseLs, double MseRobust) AgainstLeastSquares(IWeightResampler resampler, int noiseSeed, int masterSeed)
+    {
+        var rng = new Xoshiro256PlusPlus(seed: noiseSeed);
         int n = 100;
         var x = new double[n];
         var f = new double[n];
@@ -40,55 +59,16 @@ public sealed class RobustnessTests
         foreach (int b in new[] { 8, 21, 37, 50, 63, 79, 88, 95 })
             y[b] = f[b] + 3.5;   // gross outliers
 
-        var basis = new SplineBasis(degree: 3);
-        var model = new WeightedNormalModel();
-        var prior = new PoissonPrior(4.0);
-        var kernel = new LocalBetaKernel(50.0);
-
-        BarsResult ls = new BarsEnsemble(basis, model, prior, kernel)
-            .Run(x, y, grid: x, chains: 2, masterSeed: 9, burn: 1000, samples: 1500);
-        BarsResult robust = new BarsEnsemble(basis, model, prior, kernel, new StudentTWeights(4.0))
-            .Run(x, y, grid: x, chains: 2, masterSeed: 9, burn: 1000, samples: 1500);
-
-        double mseLs = Mse(ls.Fit, f);
-        double mseRobust = Mse(robust.Fit, f);
-        _out.WriteLine($"mseLS={mseLs:F5} mseRobust={mseRobust:F5} ratio={mseRobust / mseLs:F3}");
-
-        Assert.True(mseRobust < mseLs, $"robust MSE {mseRobust:F5} should beat least-squares {mseLs:F5}");
-    }
-
-    [Fact]
-    public void ContaminatedNormal_RejectsOutliers_BeatsLeastSquares()
-    {
-        var rng = new Xoshiro256PlusPlus(seed: 44);
-        int n = 100;
-        var x = new double[n];
-        var f = new double[n];
-        var y = new double[n];
-        for (int i = 0; i < n; i++)
-        {
-            x[i] = (i + 0.5) / n;
-            f[i] = Math.Sin(2.0 * Math.PI * x[i]);
-            y[i] = f[i] + 0.08 * Gaussian(rng);
-        }
-        foreach (int b in new[] { 8, 21, 37, 50, 63, 79, 88, 95 })
-            y[b] = f[b] + 3.5;
-
         var basis = new SplineBasis(3);
         var model = new WeightedNormalModel();
         var prior = new PoissonPrior(4.0);
         var kernel = new LocalBetaKernel(50.0);
 
         BarsResult ls = new BarsEnsemble(basis, model, prior, kernel)
-            .Run(x, y, grid: x, chains: 2, masterSeed: 9, burn: 1000, samples: 1500);
-        BarsResult robust = new BarsEnsemble(basis, model, prior, kernel, new ContaminatedNormalWeights(0.1, 12.0))
-            .Run(x, y, grid: x, chains: 2, masterSeed: 9, burn: 1000, samples: 1500);
-
-        double mseLs = Mse(ls.Fit, f);
-        double mseRobust = Mse(robust.Fit, f);
-        _out.WriteLine($"[contam] mseLS={mseLs:F5} mseRobust={mseRobust:F5} ratio={mseRobust / mseLs:F3}");
-
-        Assert.True(mseRobust < mseLs, $"contaminated-normal MSE {mseRobust:F5} should beat least-squares {mseLs:F5}");
+            .Run(x, y, grid: x, chains: 2, masterSeed: masterSeed, burn: 1000, samples: 1500);
+        BarsResult robust = new BarsEnsemble(basis, model, prior, kernel, resampler)
+            .Run(x, y, grid: x, chains: 2, masterSeed: masterSeed, burn: 1000, samples: 1500);
+        return (Mse(ls.Fit, f), Mse(robust.Fit, f));
     }
 
     private static double Mse(double[] a, double[] b)
