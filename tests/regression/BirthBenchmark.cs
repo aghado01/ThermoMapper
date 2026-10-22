@@ -33,7 +33,7 @@ public sealed class BirthBenchmark
         return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
     }
 
-    private sealed record Fit(string Name, double[] X, double[] Y, Func<double, double> Truth, double PriorMean, bool Uneven);
+    internal sealed record Fit(string Name, double[] X, double[] Y, Func<double, double> Truth, double PriorMean, bool Uneven);
 
     private static Fit Make(string name, double[] x, Func<double, double> truth, double noise, int seed, double priorMean, bool uneven,
                             Func<int, double>? extra = null)
@@ -43,7 +43,8 @@ public sealed class BirthBenchmark
         return new Fit(name, x, y, truth, priorMean, uneven);
     }
 
-    private static Fit[] Fits()
+    // Shared with MixingBenchmark's relocation study.
+    internal static Fit[] Fits()
     {
         double[] Even(int n) => Enumerable.Range(0, n).Select(i => (i + 0.5) / n).ToArray();
         double[] gap = Enumerable.Range(0, 60).Select(i => 0.35 * (i + 0.5) / 60)
