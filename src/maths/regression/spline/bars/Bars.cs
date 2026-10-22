@@ -41,12 +41,17 @@ public sealed record BarsConfig
     public int StartDispersion { get; init; } = 4;
     public int WeightEvery { get; init; } = 25;
 
-    /// <summary>Stop once every reported functional's R̂ meets this target (0 = run the full <see cref="MaxSamples"/>);
-    /// frozen or unavailable R̂ never does. Needs at least two chains.</summary>
+    /// <summary>Stop once every reported functional's R̂ meets this target and the knot count's bulk and tail ESS reach
+    /// <see cref="MinEssPerChain"/> per chain (0 = run the full <see cref="MaxSamples"/>); frozen or unavailable
+    /// readings never do. Needs at least two chains.</summary>
     public double RHatTarget { get; init; }
 
     /// <summary>Samples per round between R̂ checks (≤0 = a single round).</summary>
     public int BatchSize { get; init; }
+
+    /// <summary>The ESS per chain an R̂ stop waits for (Vehtari et al. 2021 recommend 100). BARS's knot count mixes
+    /// slowly, so meeting it can take tens of thousands of draws per chain.</summary>
+    public double MinEssPerChain { get; init; } = Maths.Samplers.Ensemble.ChainEnsemble.MinEssPerChain;
 
     /// <summary>Relative prominence (fraction of the fit's range) for the significant-peak count.</summary>
     public double PeakProminence { get; init; } = 0.1;
@@ -71,6 +76,6 @@ public static class Bars
         return ensemble.Run(x, y, grid,
             config.Chains, config.MasterSeed, config.BurnIn, config.MaxSamples,
             config.StartDispersion, config.WeightEvery, config.RHatTarget, config.BatchSize, config.PeakProminence,
-            config.SpanDropFraction);
+            config.SpanDropFraction, config.MinEssPerChain);
     }
 }
