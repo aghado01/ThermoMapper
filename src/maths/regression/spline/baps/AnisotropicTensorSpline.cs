@@ -106,6 +106,9 @@ public sealed class AnisotropicTensorSpline
         for (int k = 0; k < _nuY; k++) _px.AccumulateStrided(band, _nuX, _nuY, k, lambdaX);       // D_xᵀD_x ⊗ I
         var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
         chol.DecomposeBanded(band);
+        if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+            throw new InvalidOperationException(
+                $"ZᵀZ + λx·Px + λy·Py is not numerically positive definite at (λx, λy) = ({lambdaX}, {lambdaY}) ({chol.Status}).");
         logDetA = chol.LogDet;
         return chol;
     }

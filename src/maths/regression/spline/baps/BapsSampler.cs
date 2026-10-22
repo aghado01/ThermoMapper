@@ -177,6 +177,8 @@ public sealed class BapsSampler
             Array.Copy(_gram0, band, _gram0.Length);        // A = ZᵀZ + λP
             _penalty.AccumulateInto(band, _nu, lambda);
             chol.DecomposeBanded(band);
+            if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                throw new InvalidOperationException($"ZᵀZ + λP is not numerically positive definite at λ = {lambda} ({chol.Status}).");
             double[] betaHat = chol.Solve(_zty);            // posterior mean A⁻¹Zᵀy
 
             for (int p = 0; p < _nu; p++) z[p] = Normal.SampleStandard(rng);
@@ -245,6 +247,8 @@ public sealed class BapsSampler
             Array.Copy(_gram0, band, _gram0.Length);            // A = ZᵀZ + Dᵀdiag(λ_i)D
             _penalty.AccumulateInto(band, _nu, weights);
             chol.DecomposeBanded(band);
+            if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                throw new InvalidOperationException($"ZᵀZ + Dᵀdiag(λᵢ)D is not numerically positive definite at global λ = {lamGlobal} ({chol.Status}).");
             double[] betaHat = chol.Solve(_zty);
 
             for (int p = 0; p < _nu; p++) z[p] = Normal.SampleStandard(rng);

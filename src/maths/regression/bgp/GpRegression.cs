@@ -121,6 +121,8 @@ public sealed class GpRegression
 
         var chol = new CholeskyDecomposition(_n);
         chol.Decompose(a);
+        if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })   // the nugget makes it positive definite; clamping means bad input
+            throw new InvalidOperationException($"Σ_t + σ²I is not numerically positive definite at t = {t} ({chol.Status}).");
 
         // K⁻¹Y and K⁻¹1 by triangular solves (O(n²) each); the GLS mean and the residual quadratic follow.
         double[] kInvY = chol.Solve(_y);

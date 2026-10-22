@@ -61,6 +61,8 @@ public sealed class PenalizedSpline
         _penalty.AccumulateInto(band, _nu, lambda);   // + λ·DᵀD
         var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
         chol.DecomposeBanded(band);
+        if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+            throw new InvalidOperationException($"ZᵀZ + λP is not numerically positive definite at λ = {lambda} ({chol.Status}).");
         double[] beta = chol.Solve(b);
 
         double bBeta = 0.0;                            // RSS_pen = yᵀy − β̂ᵀZᵀy
@@ -129,8 +131,8 @@ public sealed class PenalizedSpline
         _penalty.AccumulateInto(band, _nu, 1.0);      // + P
         var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
         chol.DecomposeBanded(band);
-        if (chol.HitFloor)
-            throw new InvalidOperationException("ZᵀZ + P is singular: the design does not identify the penalty null space.");
+        if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+            throw new InvalidOperationException($"ZᵀZ + P is singular: the design does not identify the penalty null space ({chol.Status}).");
 
         var w = new double[_nu, _nu];                  // columns of W = L⁻ᵀD^{−½}
         var unit = new double[_nu];

@@ -104,6 +104,8 @@ public sealed class HierarchicalPSpline
                 for (int j = 0; j < _nu; j++) qrBand[d, j] = gram[d, j] / sigma2;
             for (int j = 0; j < _nu; j++) qrBand[0, j] += 1.0 / tauU2;
             cholR.DecomposeBanded(qrBand);
+            if (cholR.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                throw new InvalidOperationException($"ZᵀZ/σ² + I/τ_u² is not numerically positive definite ({cholR.Status}).");
 
             double sumResid = 0.0;
             for (int rr = 0; rr < reps; rr++)
@@ -123,6 +125,8 @@ public sealed class HierarchicalPSpline
             for (int j = 0; j < _nu; j++) q0Band[0, j] = reps / tauU2;
             _penalty.AccumulateInto(q0Band, _nu, 1.0 / tau02);
             chol0.DecomposeBanded(q0Band);
+            if (chol0.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                throw new InvalidOperationException($"(R/τ_u²)I + P/τ_0² is not numerically positive definite ({chol0.Status}).");
             for (int j = 0; j < _nu; j++) rhs[j] = 0.0;
             for (int rr = 0; rr < reps; rr++)
                 for (int j = 0; j < _nu; j++) rhs[j] += beta[rr][j];
