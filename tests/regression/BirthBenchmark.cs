@@ -17,7 +17,8 @@ namespace Maths.Regression.Tests;
 /// The exploratory share of births (step 3.9, OQ11): knot-count and peak-location ESS per second for ε from 0 (local
 /// births only) to 1 (births from the base only), with the uniform base on every fit and the design base on the two uneven designs. The fits' MSE and
 /// mean knot count check that the posterior does not move with ε. Guarded by <c>BIRTH_BENCH</c> (seeds per arm);
-/// <c>BIRTH_BENCH_FITS</c> (comma-separated names) restricts the fits. The table and summary go under
+/// <c>BIRTH_BENCH_FITS</c> (comma-separated names) restricts the fits and <c>BIRTH_BENCH_EPS</c> (comma-separated values)
+/// the exploratory shares. The table and summary go under
 /// <c>artifacts/test-runs/BirthBenchmark/</c>.
 /// </summary>
 public sealed class BirthBenchmark
@@ -69,7 +70,9 @@ public sealed class BirthBenchmark
     {
         if (!int.TryParse(Environment.GetEnvironmentVariable("BIRTH_BENCH"), out int seeds) || seeds <= 0) return;   // heavy
         static string F(double v) => v.ToString("R", CultureInfo.InvariantCulture);
-        double[] epsilons = [0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0];
+        double[] epsilons = Environment.GetEnvironmentVariable("BIRTH_BENCH_EPS") is string shares
+            ? shares.Split(',').Select(e => double.Parse(e, CultureInfo.InvariantCulture)).ToArray()
+            : [0.0, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0];
         double[] grid = Enumerable.Range(0, 51).Select(i => i / 50.0).ToArray();
         var table = new StringBuilder("fit\tbase\texploration\tseed\tseconds\tknots_ess\tpeak_ess\tknots_ess_per_s\tpeak_ess_per_s\t" +
                                       "mean_knots\tmse\tacceptance\tthin_support_share\n");
