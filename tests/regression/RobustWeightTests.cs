@@ -1,4 +1,5 @@
 using System;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
@@ -13,27 +14,31 @@ namespace Maths.Regression.Tests;
 /// </summary>
 public sealed class RobustWeightTests
 {
-    [Fact]
-    public void WeightedMarginal_IsTheUnweightedGPriorMarginal()
+    [Theory]
+    [InlineData(GPriorCentre.NullFit)]
+    [InlineData(GPriorCentre.Zero)]
+    public void WeightedMarginal_IsTheUnweightedGPriorMarginal(GPriorCentre centre)
     {
         (double[,] z, double[] y, double[] w) = Problem();
-        Dense d = Dense.Of(z, y, w);
+        Dense d = Dense.Of(z, y, w, centre);
 
         double expected = 0.5 * (d.LogDetG - z.GetLength(1) * Math.Log(y.Length)) - 0.5 * d.LogDetA
                           + 0.5 * d.SumLogW - 0.5 * y.Length * Math.Log(d.S);
 
-        Assert.Equal(expected, new WeightedNormalModel().LogMarginalLikelihood(z, y, w), 9);
+        Assert.Equal(expected, new WeightedNormalModel(centre).LogMarginalLikelihood(z, y, w), 9);
     }
 
-    [Fact]
-    public void WeightedDraws_HaveTheUnweightedGPriorConditionalMeanAndCovariance()
+    [Theory]
+    [InlineData(GPriorCentre.NullFit)]
+    [InlineData(GPriorCentre.Zero)]
+    public void WeightedDraws_HaveTheUnweightedGPriorConditionalMeanAndCovariance(GPriorCentre centre)
     {
         (double[,] z, double[] y, double[] w) = Problem();
-        Dense d = Dense.Of(z, y, w);
+        Dense d = Dense.Of(z, y, w, centre);
         int m = y.Length, nu = z.GetLength(1);
         double scale = d.S / (m - 2);   // E[σ²] under IG(m/2, S/2)
 
-        IObservationModel model = new WeightedNormalModel();
+        IObservationModel model = new WeightedNormalModel(centre);
         var rng = new Xoshiro256PlusPlus(seed: 5);
         const int n = 40_000;
         var mean = new double[nu];
@@ -193,9 +198,15 @@ public sealed class RobustWeightTests
 
     private sealed record Dense(double LogDetG, double LogDetA, double SumLogW, double S, double[] Mean, double[,] InvA)
     {
-        public static Dense Of(double[,] z, double[] y, double[] w)
+        // The weighted block's reference on ỹ = y − Zμ₀, with μ₀ = ȳ·1 under the null-fit centre (the plain mean: the
+        // cubic B-splines here sum to one) and 0 under zero.
+        public static Dense Of(double[,] z, double[] y0, double[] w, GPriorCentre centre)
         {
-            int m = y.Length, nu = z.GetLength(1);
+            int m = y0.Length, nu = z.GetLength(1);
+            double level = 0.0;
+            if (centre == GPriorCentre.NullFit) foreach (double v in y0) level += v / m;
+            var y = new double[m];
+            for (int i = 0; i < m; i++) y[i] = y0[i] - level;
             var g = new double[nu, nu];
             var a = new double[nu, nu];
             var h = new double[nu];
@@ -221,7 +232,7 @@ public sealed class RobustWeightTests
             {
                 double s = 0.0;
                 for (int q = 0; q < nu; q++) s += invA[p, q] * h[q];
-                mean[p] = s;
+                mean[p] = level + s;
                 quad += h[p] * s;
             }
             return new Dense(LogDet(g), LogDet(a), sumLogW, yWy - quad, mean, invA);

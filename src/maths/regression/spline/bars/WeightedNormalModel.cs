@@ -11,13 +11,18 @@ namespace Maths.Regression.Spline.Bars;
 /// Exact marginal likelihood for the Normal model under the unit-information prior (DiMatteo, Genovese &amp;
 /// Kass 2001, eq. 6; analytic form in He, Yang &amp; Kang 2024, Lemma 1): with β, σ integrated out,
 /// <c>p(y|Z) ∝ (m+1)^(−ν/2) · a^(−m/2)</c> where
-/// <c>a = yᵀy − (m/(m+1)) · (Zᵀy)ᵀ (ZᵀZ)⁻¹ (Zᵀy)</c>. Returned up to the σ-integration constant that depends only
-/// on m and so cancels in ratios.
+/// <c>a = ỹᵀỹ − (m/(m+1)) · (Zᵀỹ)ᵀ (ZᵀZ)⁻¹ (Zᵀỹ)</c> and <c>ỹ = y − Zμ₀</c> is the response less the prior's centre.
+/// Returned up to the σ-integration constant that depends only on m and so cancels in ratios.
+/// <para>The prior is <c>β ~ N(μ₀, mσ²(ZᵀZ)⁻¹)</c>. By default it is centred on the null fit
+/// (<see cref="GPriorCentre.NullFit"/>, <c>Zμ₀ = ȳ·1</c> for B-splines), so a constant shift of the response moves only
+/// the fit's level and changes neither the marginal nor the knots. DMGK's original centres it at zero
+/// (<see cref="GPriorCentre.Zero"/>, ỹ = y): the level's energy then enters a, and a response far from zero against its
+/// noise is under-fitted.</para>
 /// <para>With per-point weights W (robust scale-mixture BARS, <c>y ~ N(Zβ, σ²W⁻¹)</c>) the coefficient prior stays the
-/// <i>unweighted</i> g-prior <c>β ~ N(0, mσ²(ZᵀZ)⁻¹)</c>, so the prior on the curve does not depend on the weights
-/// (decision Q2). The marginal is then
+/// <i>unweighted</i> g-prior, so the prior on the curve does not depend on the weights (decision Q2), and its centre uses
+/// the plain mean. The marginal is then
 /// <c>½log|ZᵀZ/m| − ½log|Zᵀ(W + I/m)Z| + ½Σ log wᵢ − (m/2)·log S</c>, with
-/// <c>S = yᵀWy − hᵀ(Zᵀ(W + I/m)Z)⁻¹h</c> and <c>h = ZᵀWy</c>; it reduces to the form above at unit weights.</para>
+/// <c>S = ỹᵀWỹ − hᵀ(Zᵀ(W + I/m)Z)⁻¹h</c> and <c>h = ZᵀWỹ</c>; it reduces to the form above at unit weights.</para>
 /// </summary>
 /// <remarks>
 /// Built on the collapsed g-prior block (<see cref="CollapsedGPrior"/>) at τ = 1/m and inverse temperature 1, with
@@ -28,6 +33,16 @@ namespace Maths.Regression.Spline.Bars;
 /// </remarks>
 public sealed class WeightedNormalModel : IObservationModel
 {
+    /// <param name="centre">Where the coefficient prior is centred: the null fit (default) or zero, DMGK's original.</param>
+    public WeightedNormalModel(GPriorCentre centre = GPriorCentre.NullFit)
+    {
+        if (centre is not (GPriorCentre.NullFit or GPriorCentre.Zero)) throw new ArgumentOutOfRangeException(nameof(centre));
+        Centre = centre;
+    }
+
+    /// <summary>Where the coefficient prior is centred.</summary>
+    public GPriorCentre Centre { get; }
+
     /// <inheritdoc/>
     public int EffectiveDimension(double[,] design, double[]? weights)
     {
@@ -49,7 +64,8 @@ public sealed class WeightedNormalModel : IObservationModel
     /// The marginal at inverse temperature b, from the block at τ = 1/m: <c>LDT_b − (mb/2)·ln S_b</c>, dropping
     /// the σ-integration constant, which depends on m and b only. Unweighted, any b in (0, 1]; b = 0 is refused,
     /// since the improper 1/σ² prior then leaves σ unidentified. Weighted, b = 1 only (the block is built at one τ
-    /// and b). A configuration with m ≤ ν, an inadmissible design or a zero response is −∞ at every b.
+    /// and b). A configuration with m ≤ ν, an inadmissible design or a zero centred response (a constant response,
+    /// under the null-fit centre) is −∞ at every b.
     /// </summary>
     public ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights)
     {
@@ -114,15 +130,14 @@ public sealed class WeightedNormalModel : IObservationModel
         => Condition(design, y, weights) is GPriorConditional c ? c.Mean.ToArray() : Unavailable(design);
 
     // One knot configuration's conditional posterior at BARS's τ = 1/m, untempered; null when it is inadmissible.
-    private static GPriorConditional? Condition(double[,] design, double[] y, double[]? weights)
+    private GPriorConditional? Condition(double[,] design, double[] y, double[]? weights)
     {
         (CollapsedGPrior? block, double tau) = Fit(design, y, weights);
         return block?.At(tau);
     }
 
-    // The block for one knot configuration at BARS's τ = 1/m, or null when admission refuses a factor: G's alone
-    // without weights; G's and P_a's with them.
-    private static (CollapsedGPrior? Block, double Tau) Fit(double[,] design, double[] y, double[]? weights)
+    // The block for one knot configuration at BARS's τ = 1/m, centred as set, or null when admission refuses G's factor.
+    private (CollapsedGPrior? Block, double Tau) Fit(double[,] design, double[] y, double[]? weights)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -135,8 +150,8 @@ public sealed class WeightedNormalModel : IObservationModel
         var banded = new BandedDesign(design);
         double tau = 1.0 / m;
         CollapsedGPrior? block = weights is null
-            ? BandedGPrior.Fit(banded, y, Admits)
-            : BandedGPrior.Fit(banded, y, weights, tau, Admits);
+            ? BandedGPrior.Fit(banded, y, Admits, Centre)
+            : BandedGPrior.Fit(banded, y, weights, tau, Admits, Centre);
         return (block, tau);
     }
 
@@ -177,7 +192,7 @@ public sealed class WeightedNormalModel : IObservationModel
             return At(_block.At(_tau, inverseTemperature));
         }
 
-        // An identically zero response has S = 0 at every b: no posterior for σ.
+        // A zero centred response (a constant one, under the null-fit centre) has S = 0 at every b: no posterior for σ.
         private static double At(GPriorConditional c)
             => c.S > 0.0 ? c.LogDeterminantTerm - 0.5 * c.Rows * c.InverseTemperature * Math.Log(c.S) : double.NegativeInfinity;
     }

@@ -1,4 +1,5 @@
 using System;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
@@ -13,14 +14,16 @@ namespace Maths.Regression.Tests;
 /// </summary>
 public sealed class CoefficientDrawTests
 {
-    [Fact]
-    public void NormalDraws_HaveTheConditionalPosteriorMeanAndCovariance()
+    [Theory]
+    [InlineData(GPriorCentre.NullFit)]
+    [InlineData(GPriorCentre.Zero)]
+    public void NormalDraws_HaveTheConditionalPosteriorMeanAndCovariance(GPriorCentre centre)
     {
         (double[,] z, double[] y) = Problem();
         int m = y.Length, nu = z.GetLength(1);
-        (double[] mu, double[,] cov) = Reference(z, y);
+        (double[] mu, double[,] cov) = Reference(z, y, centre);
 
-        IObservationModel model = new WeightedNormalModel();
+        IObservationModel model = new WeightedNormalModel(centre);
         var rng = new Xoshiro256PlusPlus(seed: 77);
         const int n = 40_000;
         var mean = new double[nu];
@@ -49,14 +52,16 @@ public sealed class CoefficientDrawTests
         }
     }
 
-    [Fact]
-    public void NormalConditionalVariance_MatchesTheDenseReference()
+    [Theory]
+    [InlineData(GPriorCentre.NullFit)]
+    [InlineData(GPriorCentre.Zero)]
+    public void NormalConditionalVariance_MatchesTheDenseReference(GPriorCentre centre)
     {
         (double[,] z, double[] y) = Problem();
-        (_, double[,] cov) = Reference(z, y);
+        (_, double[,] cov) = Reference(z, y, centre);
         double[,] readout = new SplineBasis(3).Design(new KnotConfig(new[] { 0.5 }), new[] { 0.05, 0.37, 0.5, 0.81, 0.99 });
 
-        double[]? v = new WeightedNormalModel().ConditionalVariance(z, y, null, readout);
+        double[]? v = new WeightedNormalModel(centre).ConditionalVariance(z, y, null, readout);
 
         Assert.NotNull(v);
         for (int t = 0; t < v!.Length; t++)
@@ -173,10 +178,15 @@ public sealed class CoefficientDrawTests
     }
 
     // The unit-information conditional posterior from a dense Gauss–Jordan inverse of A = ZᵀZ:
-    // μ = (m/(m+1))A⁻¹b and, with σ² integrated out, Cov β = (a/(m−2))·(m/(m+1))·A⁻¹.
-    internal static (double[] Mu, double[,] Cov) Reference(double[,] z, double[] y)
+    // μ = μ₀ + (m/(m+1))A⁻¹Zᵀỹ and, with σ² integrated out, Cov β = (a/(m−2))·(m/(m+1))·A⁻¹, where ỹ = y − Zμ₀. Under the
+    // null-fit centre μ₀ = ȳ·1, since the cubic B-splines here sum to one, so ỹ = y − ȳ; under zero, ỹ = y.
+    internal static (double[] Mu, double[,] Cov) Reference(double[,] z, double[] y0, GPriorCentre centre = GPriorCentre.Zero)
     {
-        int m = y.Length, nu = z.GetLength(1);
+        int m = y0.Length, nu = z.GetLength(1);
+        double level = 0.0;
+        if (centre == GPriorCentre.NullFit) foreach (double v in y0) level += v / m;
+        var y = new double[m];
+        for (int i = 0; i < m; i++) y[i] = y0[i] - level;
         var a = new double[nu, nu];
         var b = new double[nu];
         double yy = 0.0;
@@ -197,7 +207,7 @@ public sealed class CoefficientDrawTests
         {
             double s = 0.0;
             for (int q = 0; q < nu; q++) s += inv[p, q] * b[q];
-            mu[p] = shrink * s;
+            mu[p] = level + shrink * s;
             quad += b[p] * s;
         }
         double aScalar = yy - shrink * quad;

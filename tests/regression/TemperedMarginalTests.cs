@@ -23,16 +23,19 @@ public sealed class TemperedMarginalTests
     public void Normal_DiffersFromTheCompleteMarginal_ByADesignFreeConstant(double b)
     {
         (double[] x, double[] y) = Data(60);
-        var model = new WeightedNormalModel();
         double tau = 1.0 / x.Length;
-        double? offset = null;
-        foreach (double[] knots in new[] { Array.Empty<double>(), new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 } })
+        foreach (GPriorCentre centre in new[] { GPriorCentre.NullFit, GPriorCentre.Zero })
         {
-            double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
-            double complete = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite)!.At(tau, b).LogMarginal(null);
-            double d = model.TemperedMarginal(z, y, null).LogMarginalLikelihood(b) - complete;
-            offset ??= d;
-            Assert.Equal(offset.Value, d, 1e-9);
+            var model = new WeightedNormalModel(centre);
+            double? offset = null;
+            foreach (double[] knots in new[] { Array.Empty<double>(), new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 } })
+            {
+                double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
+                double complete = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite, centre)!.At(tau, b).LogMarginal(null);
+                double d = model.TemperedMarginal(z, y, null).LogMarginalLikelihood(b) - complete;
+                offset ??= d;
+                Assert.Equal(offset.Value, d, 1e-9);
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 using System;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
@@ -36,10 +37,13 @@ public sealed class WeightedNormalMarginalTests
         return y;
     }
 
-    [Fact]
-    public void Marginal_PerfectFit_ReducesToShrinkageResidual()
+    [Theory]
+    [InlineData(GPriorCentre.NullFit)]
+    [InlineData(GPriorCentre.Zero)]
+    public void Marginal_PerfectFit_ReducesToShrinkageResidual(GPriorCentre centre)
     {
-        // When y lies exactly in span(Z), the regression SS equals yᵀy, so a = yᵀy/(m+1) exactly.
+        // When y lies exactly in span(Z), so does ỹ = y − Zμ₀, whose regression SS is then ỹᵀỹ, so a = ỹᵀỹ/(m+1) exactly:
+        // ỹ = y − ȳ under the null-fit centre (the B-splines sum to one), and y under zero.
         var basis = new SplineBasis(degree: 1);
         var config = new KnotConfig(new[] { 0.5 });
         double[] x = { 0.1, 0.3, 0.5, 0.7, 0.9 };
@@ -50,12 +54,14 @@ public sealed class WeightedNormalMarginalTests
         Assert.Equal(nu, beta.Length);
         double[] y = InSpan(z, beta);
 
+        double level = 0.0;
+        if (centre == GPriorCentre.NullFit) foreach (double v in y) level += v / m;
         double yy = 0.0;
-        foreach (double v in y) yy += v * v;
+        foreach (double v in y) yy += (v - level) * (v - level);
         double expectedA = yy / (m + 1);
         double expected = -0.5 * nu * Math.Log(m + 1) - 0.5 * m * Math.Log(expectedA);
 
-        double actual = new WeightedNormalModel().LogMarginalLikelihood(z, y, null);
+        double actual = new WeightedNormalModel(centre).LogMarginalLikelihood(z, y, null);
         Assert.Equal(expected, actual, 6);
     }
 

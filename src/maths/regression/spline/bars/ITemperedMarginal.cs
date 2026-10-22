@@ -53,8 +53,8 @@ public enum DesignRejection
     /// <summary>The model's iterative fit (IRLS) did not settle within its iteration cap.</summary>
     NotConverged,
 
-    /// <summary>An identically zero response: it leaves the Normal model no posterior for the scale, and the Poisson
-    /// g-prior no null intensity to scale its prior.</summary>
+    /// <summary>An identically zero response: it leaves the Normal model no posterior for the scale (under its null-fit
+    /// centre, any constant response does), and the Poisson g-prior no null intensity to scale its prior.</summary>
     ZeroResponse,
 }
 
