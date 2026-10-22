@@ -446,10 +446,16 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 - **Admission mixes conditioning with data support.** `DesignAdmission`'s `PivotRatio` ≥ 1e-10 depends on column scaling. It rejects some thin-support configurations, where a basis function's data sit only in its cubic tail, and admits others just like them. In a data gap those configurations give posterior-mean fits two to three orders of magnitude beyond the data's range, and coefficient draws that swing further. Read fits inside data gaps alongside `FitSd`. A split into a scale-free numerical gate (`MinRelativePivot`) and an explicit support gate (column mass ≥ 1 per basis function) is planned as preparation step 3.7.
 - **The BAPS `MarginalEvidence` posterior of λ is heavy-tailed.** Under the uniform-edf prior the density of ln λ decays like $e^{-u}$, so $E[\lambda]$ is infinite; `BapsResult` therefore reports the median. $\ell_p$ is computed as $y^\top y-\hat\beta^\top Z^\top y$ and loses precision above about λ = 10¹⁰ (NaN near 10¹⁴), but the prior keeps the chain far below that range. The λ modes target different posteriors.
 - **Knot count and peak location mix slowly.** On the adaptive-stop test fit (n = 100, a sine under noise 0.15, Poisson(4) count prior), the knot count's autocorrelation time is about 450 steps: about 0.2% of draws are effective, by Stan's estimator and by batch means alike. The classic variogram estimator this replaced reported higher figures on other fits. Judge a run by ESS, not by draw count. Since step 3.4 an R̂ stop waits for the knot count's bulk and tail ESS to reach `MinEssPerChain` per chain (100 by default), which here takes about 45,000 draws per chain; `BarsResult.Knots` and `Peak.LocationConvergence` report those diagnostics.
+- **Births are local, so a knot far from the others is hard to remove.**
+  - **The mechanism.** A birth proposes near a randomly chosen existing knot (`LocalBetaKernel`), and uniformly only when there are none. A death's acceptance carries the density of the reverse birth at the removed knot. So deleting a knot far from every other is almost never accepted, whatever it gains.
+  - **The size of it.** At τ = 50 the kernel's SD is about 0.07. From knots at 0.39 and 0.96 the reverse birth's density is $e^{-37}$ or $e^{-61}$, by which knot goes, against a posterior gain of $e^{3.8}$ to $e^{5.3}$. So a death is accepted with probability $e^{-31}$ at best.
+  - **The escape.** The chain gets out only by relocating the knots together first.
+  - **Seen in practice.** In `EbicTests`' γ = 1 runs, chains started that way held their knots for about 1,500 steps: the step 3.5 seed sweep found γ = 1 keeping more knots than γ = 0 in 4 of 100 runs at burn-in 800 and in none at 2,000.
+  - **What to do.** Burn-in has to outlast overdispersed starts. A birth proposal with full support is the candidate fix (preparation brief, OQ11), and it may be part of the knot count's slow mixing above.
 - **Reporting limits.**
   - `AnisotropicTensorSpline` evaluates REML but provides no optimizer; callers must search $(\lambda_x,\lambda_y)$ themselves.
-  - BGP's `AcceptanceRate` includes burn-in.
-  - Single-chain runs report NaN ESS.
+  - Acceptance rates count the sampling phase only, since step 3.4; BGP's included burn-in before.
+  - A single chain gets the monitored functionals' rank-normalized R̂ and ESS from its two halves; the classic R̂ of the other functionals, such as the fit map, needs two chains and is unavailable.
 
 ## Source map
 

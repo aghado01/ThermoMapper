@@ -313,6 +313,7 @@ The slow mixing is mostly structural:
 | Move schedule: Green's prior-aware weights (used by DMGK) or constant weights | Neither Green nor DMGK claims faster mixing; the schedule cancels the prior from the acceptance. At equal c it never raises a birth/death flow, and at equal budget the winner depends on the regime | The comparison under **Move schedule** below |
 | Tempering as the default for slow readouts | The lead above | A controlled comparison: same data, seed and kernel, with and without the ladder, at equal compute |
 | Delayed rejection on relocations (Green and Mira 2001) | Never worse in asymptotic variance than the single-stage kernel | Gain per second, since each rejection costs another target evaluation |
+| A uniform component in births | Local births strand a knot far from the rest, since its death needs the reverse birth near the knots that remain (OQ11) | Its weight ε, measured by knot-count ESS per second against the current kernel |
 | Informed births scored by fitted gain (ΔQ, derivations review §5) | Proposes knots where the residual says they help | Exact reverse probabilities and a full-support exploratory component; uses step 2.3's explicit residual |
 | Multi-knot or split/merge moves | Larger jumps between knot arrangements | Dimension-matching and reverse-move accounting |
 | Guided walk on knot count (Gustafson 1998) | Keeps a birth/death direction, damping the random walk in k | Its own derivation for the variable-dimension case |
@@ -426,8 +427,8 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 | OQ7 | Which readouts gate an R̂ stop | BARS monitors the knot count only. The peak location is diagnosed (`Peak.LocationConvergence`) but does not gate the stop, and its ESS has been about 0.14% of draws. | Let callers choose the monitored readouts, and measure what gating on the peak costs. | After step 3.4 |
 | OQ8 | BARS's knot-count mixing and default run lengths | On the adaptive-stop fit the knot count's autocorrelation time is about 450 steps (Stan's estimator and batch means agree), so the default gate of 100 effective draws per chain needs about 45,000 draws per chain. The earlier 1.75% figure came from the classic variogram estimator. | Re-measure the "After Phase 3: BARS mixing" table with the new ESS; revisit the default sample sizes and the move schedule. | "After Phase 3: BARS mixing" |
 | OQ9 | An external reference for the rank-normalized diagnostics | Checked against theory only (AR(1) ESS, scale mismatch, Cauchy draws). R is installed, but the `posterior` package is not, and installing it means a download. | Add `posterior` to the `r/` oracles' environment (with approval for the download) and compare R̂, bulk ESS and tail ESS on shared fixtures. | Any time |
-
 | OQ10 | Checkpoint scope | Step 3.4 checkpoints are in-memory copies, taken after burn-in at a round boundary. The run fingerprint covers data, settings and component types, not components' internal parameters. Only BARS implements `RestoreChain`; BGP and BAPS do not resume. | Persist checkpoints to disk through Archivory (format, versioning, data identity); decide whether mid-burn checkpoints are needed (adaptation state in flight); fingerprint component parameters (value records, or a component fingerprint member); resume for BGP and BASS. | With the BASS port's posterior storage, and Archivory |
+| OQ11 | Local births strand isolated knots | Births are proposed near an existing knot (`LocalBetaKernel`, τ = 50, an SD of about 0.07; uniformly only at k = 0). A death's acceptance carries the reverse birth's density at the removed knot, so a knot far from the rest is almost never removed: from knots at 0.39 and 0.96 that density is e⁻³⁷ or e⁻⁶¹, against a posterior gain of e^3.8 to e^5.3, so a death is accepted with probability e⁻³¹ at best. In `EbicTests`' γ = 1 runs, overdispersed starts held such knots for about 1,500 steps (the 3.5 seed sweep). A candidate mechanism for OQ8, not yet measured as such. | A birth proposal with full support (a uniform component of weight ε in the birth mixture, a defensive mixture), measured by knot-count ESS per second against the current kernel on the BARS-mixing fits; meanwhile, burn-ins that outlast overdispersed starts. | "After Phase 3: BARS mixing" |
 
 Tracked elsewhere: the `EbicPrior` text check (step 3.8, waiting on the *Biometrics* PDF), BARS admission (step 3.7), the b = 0 guard (step 3.2's report), and the linear form's weaker hot-rung Occam penalty (step 3.2 addendum).
 
@@ -1326,3 +1327,81 @@ Everything else in the row is bit-identical: knot counts, fits, SDs, R̂ maps, p
 - **The probe** remains in the scratchpad, not the repository, like the earlier steps' probes.
 
 **Gate status:** closed at `2efa134`. Steps 3.6 (cleanup), 3.7 (admission gates) and 3.8 (`EbicPrior`) measure against this baseline.
+
+#### Addendum: the multi-seed sweep of comparative assertions — done 2026-10-21
+
+Step 0.6's candidate: every test asserting "A beats B" on a stochastic result, swept across seeds, keeping the margins that survive.
+
+| Commit | Content |
+|---|---|
+| `186ca3b` | Each such test computes through an internal function of its seeds; same seeds, same printed values |
+| `b2e7764` | `SeedSweep` and the two hosts' `ComparativeSweep` registries |
+| `1e29617` | The changes the results called for |
+| docs commit | This addendum, OQ11, `BayesianRegression.md`, `CONTRIBUTING.md` |
+
+**Scope.** There are 15 claims, holding 22 assertions:
+- **Eight claims rest on MCMC runs:**
+  - BARS: the adaptive kernel, EBIC's γ, Student-t weights, contaminated-normal weights and the Gibbs loss;
+  - BAPS: adaptive against global λ;
+  - the hierarchical P-spline;
+  - in `Maths.Samplers.Tests`: the bimodal ladder and ladder adaptation.
+- **Six are exact computations on simulated data:** anisotropic against isotropic REML, Cauchy against Gaussian changepoints, the marginal's true knots against spurious ones, P-spline REML, tensor P-spline REML, and the difference penalty.
+
+Left out:
+- **Theorems:** roughness falls with λ, and the EBIC log prior's order.
+- **`EnsembleTests`' iid-against-AR(1) ESS,** whose classic estimator step 3.6 deletes.
+- **Single-value tolerances** such as an MSE below 0.01, which are step 0.6's other carried item.
+
+**Method** (`SEED_SWEEP=50`):
+- Each claim runs once at its test's own seeds, which reproduced every test's printed values.
+- It then runs on two axes of 50 seeds each, derived by `SeedTree` from the test's seeds:
+  - **chain seeds alone** on the test's data, which tests whether the assertion is stable against the sampler's draws;
+  - **data and chain seeds together,** which tests whether the claim holds for the data-generating process its wording names.
+- A first sweep used arithmetic seed offsets, against the repository's RNG rule. It was rerun with `SeedTree` seeds, and the counts below pool both.
+- Costs: 2 min 44 s for the regression host and 3 s for the sampler host.
+
+**Rule applied.** The chain axis decides robustness:
+- An assertion that fails there gets the budget its mechanism needs, or its measured rate beside it.
+- One that fails often, as DMGK's did (7 of 12 seeds, step 0.5d), is replaced.
+
+The data axis decides wording: a claim that fails on some datasets is stated for its own.
+
+**Results** (pass counts over 100 runs per axis; ratio = the losing side over the winning side, on the data axis, or on the chain axis for claims with no data):
+
+| Claim and assertion | Chain axis | Data axis | Median ratio (worst) | Action |
+|---|---|---|---|---|
+| EBIC: mean knots, γ = 1 below γ = 0, at burn-in 800 | 96 | 96 | — | Burn-in 2,000: then 100 and 100, in the sweep and in a separate 50-seed check |
+| Adaptive kernel: peak-location bulk ESS above the too-tight fixed kernel's | 99 | 100 | 0.06–0.07 (0.73) | Kept; rate noted |
+| BAPS: adaptive λ's MSE below global λ's | 100 (ratios ≤ 0.79) | 99 | 0.72 (1.12) | Kept; stated for its bump |
+| BAPS: local λ lighter at the bump | 100 | 100 | 0.44 (0.49) | — |
+| Student-t, contaminated-normal and Gibbs-loss MSE below least squares | 100 each | 100 each | 0.007–0.008 (≤ 0.23) | — |
+| Hierarchical per-replicate MSE below independent REML | 100 | 100 | 0.29–0.32 (0.61) | — |
+| Anisotropic MSE below isotropic; λy below λx | — | 100; 100 | 0.86–0.88 (0.97); 0.03 (0.10) | — |
+| Cauchy MAP segments below Gaussian's | — | 100 | 0.22 (0.25) | — |
+| True knots' log posterior above nine spurious ones | — | 100 | margin ≥ 3.19 | — |
+| P-spline REML: interior argmax; MSE below λ → 0 and λ → ∞ | — | 100 each | 0.32 (0.60); 0.008 (0.02) | — |
+| Tensor P-spline REML: the same three | — | 100 each | 0.48 (0.63); 0.009 (0.013) | — |
+| Penalized MSE below unpenalized | — | 100 | 0.22–0.25 (0.51) | — |
+| Bimodal ladder: single chain stuck; cold replica near half | 100; 100 | — | 0.09 (0.30) for the second | — |
+| Ladder adaptation: rejection spread below the uniform ladder's | 100 | — | 0.15 (0.16) | — |
+
+- **EBIC.** The two EBIC failures on the chain axis came from the test's own data. In each, one γ = 1 chain held one or two knots for the first 570–730 sampling draws, with R̂ 4.5 and 2.5 and a bulk ESS of about 2. Long runs give posterior means of 0.0013 knots at γ = 1 and 0.395 at γ = 0, so the claim is right and the short run was not.
+- **The mechanism** is a sampler property, recorded as OQ11 and in `BayesianRegression.md`:
+  - births are proposed near an existing knot, and a death's acceptance carries the reverse birth's density at the removed knot;
+  - so from knots at 0.39 and 0.96 a death is accepted with probability e⁻³¹ at best, although it would raise the posterior 40- to 200-fold;
+  - the chain escapes only by first relocating the knots together.
+- **Adaptive kernel.** The fixed kernel's peak-location ESS estimate ranges from 7.7 to 100 across seeds. The single reversal was its highest value, against an adaptive value of 95.
+- **BAPS.** The comparison is chain-stable on its data, and adaptive λ loses on 1 dataset in 100.
+
+**Found while documenting:**
+- Two of `BayesianRegression.md`'s reporting limits had been wrong since step 3.4. BGP's acceptance no longer includes burn-in, and a single chain now gets split rank diagnostics instead of NaN ESS.
+- The open-questions table had a blank line before OQ10, left by step 3.4's edit, which cut it off from the table.
+
+Both are corrected.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 204 of 204 (run `20261021_200133536`) and `Maths.Samplers.Tests` 82 of 82 (`20261021_200351350`). Each count includes its host's gated sweep fact, which returns at once without `SEED_SWEEP`.
+
+**For later steps:**
+- **Steps 3.7 and 3.8 move BARS trajectories** (admission, and `EbicPrior`'s convention). Each reruns `SEED_SWEEP=50` and reports the table again. Step 3.8 ports the EBIC claim to the new γ, keeping the 2,000-step burn-in.
+- **Step 3.6** deletes `ChainDiagnostics.Ess`. `EnsembleTests`' iid-against-AR(1) test, which uses it, goes with it or moves to `Diagnose`.
+- **Single-value tolerances** remain unswept.

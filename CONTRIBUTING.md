@@ -176,6 +176,19 @@ Wang 2020; computes the closed form instead of Monte Carlo"*).
   (`Xoshiro256PlusPlus`) over `System.Random` where cross-version stream
   stability matters. Regenerating pinned fixture expectations is a deliberate,
   called-out act, not a side effect.
+- **Comparative assertions.** A test that asserts one method or setting beats
+  another on a stochastic result computes through a function of its seeds and
+  registers it, with those seeds, in its host's `ComparativeSweep`.
+  `SEED_SWEEP=<n>` reruns every registered claim across n seeds per axis,
+  derived by `SeedTree`, and writes a table and a summary under
+  `artifacts/test-runs/SeedSweep/`:
+  - **The chain axis** (sampler seeds on the test's own data) decides
+    robustness. An assertion that fails there gets the budget its mechanism
+    needs, or its measured rate beside it; one that fails often is replaced.
+  - **The data axis** (data and sampler seeds together) decides wording. A
+    claim that fails on some datasets is stated for its own dataset.
+
+  Rerun the sweep whenever a change moves sampler trajectories.
 
 ## PowerShell conventions
 
