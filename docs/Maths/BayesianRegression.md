@@ -209,14 +209,30 @@ $$\ell_b(Z)=\tfrac{\nu}{2}\log\tfrac{\tau}{\tau+b}-\tfrac{mb}{2}\log S_b,\qquad 
 
 The three IRLS fits (Poisson, Whittle and GibbsLoss's Tukey reweighting) return −∞ when the iteration cap (100, 100 and 50) is reached before the step settles (squared step < 1e-9).
 
-**Design admission** (`DesignAdmission`). Every model scores a knot configuration only if its factored Gram or Hessian is admissible: `FactorStatus.PositiveDefinite`, no floored pivot, and `PivotRatio` ≥ `MinPivotRatio` = 1e-10. Otherwise the score is −∞.
-
-- **Why 1e-10.** `PivotRatio` ≥ 1/κ for a positive-definite matrix, so a smaller ratio proves κ > 1e10. Solves then keep fewer than about 6 of 16 digits.
-- **What it means.** For the Normal and Whittle models the factored matrix depends only on the inputs, so admission is a declared restriction of the prior support: every basis function needs data under it, and nearly collinear designs are excluded. For Poisson and GibbsLoss the factored matrix is weighted by the fit, so admission also depends on the response, and it acts as a numerical truncation of the posterior rather than a prior restriction. The same holds for the IRLS non-convergence rule.
-- **Alternatives considered.**
-  - *Model-specific admission:* a model whose prior keeps the posterior proper could admit rank-deficient designs. It was rejected because coefficients of basis functions with no data under them would then be set by the prior alone, which adds noise to knot selection.
-  - *The absolute pivot floor alone* misreads scale, flagging 10⁻²⁰·I as singular, and passes ill-conditioned designs.
-- **Effect on results.** Admission changes results only near degenerate configurations, such as knots packed where there is no data, or nearly coincident knots. Counting rejections by reason is planned with the shell's accumulator contract.
+**Design admission (Q6, step 3.7).** A knot configuration is scored only if it passes two gates, which answer different questions. Otherwise its score is −∞, and `BarsResult.Evaluations` counts the refusal by reason.
+- **Support gate** (`SplineTarget.MinColumnMass`, `BarsConfig.MinColumnMass`, default 1). Every basis function needs column mass $\sum_i B_j(x_i)\ge1$, one data point's worth. It is checked before anything is factored, and a refusal is counted as `ThinSupport`.
+  - **What it means.** It reads only the inputs and the knots, so it is a declared restriction of the knot prior's support. The effective knot prior is $p(k)\,k!\,\mathbf 1\{\text{supported}\}$ on the ordered simplex, so the knot count's prior law becomes $p(k)\,s(k)/Z$, where $s(k)$ is the chance that k uniform knots pass (`CountLawTests` checks this against direct sampling).
+  - **Its resolution limit.** For uniformly spread data an interior basis function's mass is about the number of points per knot interval, and the first one's is about $n\xi_1/4$. So the gate needs about four points before the first interior knot.
+  - **Why mass.** In a data gap, a basis function whose data sit only in its cubic tail gets a coefficient of about $r/B_j(x_i)$. The fit spikes inside the gap, and coefficient draws, whose variance grows like $1/B^2$, swing further. The g-prior's shrinkage is isotropic, so it adds nothing there. Of the statistics tried on such designs (preparation brief, admission evidence), mass ≥ 1 alone refused every wild configuration and no sane one on dense data.
+  - **Alternatives considered.**
+    - A data count per basis function: BASS's `npart`, the right statistic for half-space hinges. It counts tail points fully and passes wild configurations.
+    - The Kish effective size, which ignores a common scale.
+    - Mass ≥ 2.5, which also refuses sane boundary configurations.
+    - Leverage, which measures the instability exactly but flags every fit across a real gap; it belongs among the readouts.
+- **Numerical gate** (`DesignAdmission`). The model's strict factor, with no pivot floor, must be positive definite with `MinRelativePivot` ≥ 1e-10. A refusal is counted as `Inadmissible`.
+  - **Why the relative pivot.** It is the smallest pivot of the equilibrated matrix $D^{-1/2}AD^{-1/2}$, $D=\operatorname{diag}A$, whose condition number governs Cholesky's accuracy (van der Sluis 1969; Demmel 1989). 1/`MinRelativePivot` bounds that condition number from below, so below 1e-10 a solve has lost more than about ten of sixteen digits.
+  - **Scale-free.** Unlike the pivot ratio it replaced, it does not change when a column is rescaled (`DesignAdmissionTests`).
+  - **What it means.** For the Normal and Whittle models the factored matrix depends only on the inputs, so the gate restricts the prior support further, to designs that are not nearly collinear. For Poisson and GibbsLoss the matrix is weighted by the fit, so the gate depends on the response and truncates the posterior numerically. The same holds for the IRLS non-convergence rule.
+  - **Alternatives considered.**
+    - *Model-specific admission:* a proper coefficient prior could admit rank-deficient designs. Rejected, because coefficients of data-free basis functions would then be set by the prior alone.
+    - *The pivot ratio,* used before step 3.7: scale-dependent, and in effect a threshold on column energy against the largest pivot, so it mixed thin support with conditioning.
+    - *The absolute pivot floor alone:* it misreads scale.
+- **Effect on results** (step 3.7's probe, 4 chains × 3,000 draws):
+  - **Across a data gap,** the fit's MSE fell 29× (0.0060 → 0.0002) and its largest posterior SD in the gap 11× (0.37 → 0.03).
+  - **Beside a sharp transient at x = 0.03,** the MSE on [0, 0.1] fell 25× and the posterior SD there 68× (5.1 → 0.075), with the transient still located at 0.0309 [0.0289, 0.0329].
+  - **Dense data** were unchanged.
+  - **How often each gate refuses.** The support gate refused 0.6–10% of evaluations. The numerical gate alone changed only the few configurations the pivot ratio had misjudged.
+  - **Poisson** is the exception (OQ12; see the limitations).
 
 **Robust weights.** `StudentTWeights` ($\nu=4$) and `ContaminatedNormalWeights` ($\pi=0.05$, $\kappa=10$) are scale mixtures of normals. Every `WeightEvery` steps (default 25), the weight block runs an exact Gibbs sweep:
 
@@ -245,7 +261,7 @@ The knot moves integrate β and σ² out given the weights, so the sweep is a va
   - an admission tally.
 
   The peak location's ordered draws are a separate trace, which `Peak.LocationConvergence` reads.
-- **Admission outcomes.** `BarsResult.Evaluations` counts every evaluated knot configuration, burn-in and every ladder rung included, by why it was refused, so the truncation the support rules and admission impose stays visible. The reasons (`DesignRejection`) are: outside the open simplex; a zero count prior; m ≤ ν; an inadmissible factor; an IRLS fit that did not settle; a zero response. The observation models report them through `ITemperedMarginal.Rejection`.
+- **Admission outcomes.** `BarsResult.Evaluations` counts every evaluated knot configuration, burn-in and every ladder rung included, by why it was refused, so the truncation the support rules and admission impose stays visible. The reasons (`DesignRejection`) are: outside the open simplex; a zero count prior; thin support (the support gate, step 3.7); m ≤ ν; an inadmissible factor; an IRLS fit that did not settle; a zero response. The observation models report them through `ITemperedMarginal.Rejection`.
 - **Checkpoints.** `BarsEnsemble.Run(…, checkpoint: true)` returns the run's restart state in `BarsResult.Checkpoint`. `Run(…, resumeFrom: c, samples: n)` continues it for n more draws, exactly as the uninterrupted run would have, and reports every draw since burn-in. Each chain's state holds:
   - its knot configuration, robust weights and their cadence;
   - every RNG stream's words;
@@ -441,6 +457,7 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 | `BarsConfig` StartDispersion / WeightEvery | 4 / 25 | Start $k\sim U\{0..4\}$; resampler period |
 | `BarsConfig` RHatTarget / BatchSize / MinEssPerChain | 0 / 0 / 100 | No early stop; single round; an R̂ stop waits for 100 effective knot-count draws per chain |
 | `BarsConfig` PeakProminence / SpanDropFraction | 0.1 / 0.5 | Peak significance; span level |
+| `BarsConfig` MinColumnMass | 1 | Support gate: every basis function needs column mass $\sum_i B_j(x_i)\ge1$; 0 turns it off |
 | `BarsEnsemble` dmgkConstant / adaptKernelTau / temperLevels / temperBetaMin / temperPath / temperSchedule / temperAdaptLadder | null / null / null / 0.05 / Likelihood / DeterministicEvenOdd / true | Constant weights 0.4/0.4/0.2; fixed kernel; no tempering; a tempered ladder keeps the knot prior whole, swaps even-odd and equalizes its rungs in burn-in |
 | `BapsSampler` priorShape / priorScale / mhLogStep / phi | 1e-3 / 1e-3 / 0.6 / 1.0 | IG hyperprior; random-walk step on ln λ; adaptivity |
 | `BapsSampler.Run` chains / masterSeed / burn / samples | 4 / 1 / 500 / 1500 | — |
@@ -453,7 +470,11 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 ## Status and caveats
 
 - **`EbicPrior` is not He, Yang and Kang's count law.** Their discrete-candidate prior gives each of the $\binom{n}{k}$ models with $k$ knots the mass $\binom{n}{k}^{-\gamma}$, so their count law is $\binom{n}{k}^{1-\gamma}$: flat at γ = 1, peaked at $n/2$ below it. `EbicPrior`'s law is $\binom{n_c}{k}^{-\gamma}$: theirs at $\gamma_{\text{HYK}}=1+\gamma$, so EBIC extended past their $\gamma\le1$. Decided (preparation brief, Q7): `EbicPrior` will take their convention, log p(k) = (1 − γ) log C(C, k) with γ ≥ 0, in preparation step 3.8. Until then it keeps the shifted law.
-- **Admission mixes conditioning with data support.** `DesignAdmission`'s `PivotRatio` ≥ 1e-10 depends on column scaling. It rejects some thin-support configurations, where a basis function's data sit only in its cubic tail, and admits others just like them. In a data gap those configurations give posterior-mean fits two to three orders of magnitude beyond the data's range, and coefficient draws that swing further. Read fits inside data gaps alongside `FitSd`. A split into a scale-free numerical gate (`MinRelativePivot`) and an explicit support gate (column mass ≥ 1 per basis function) is planned as preparation step 3.7.
+- **Poisson fits over runs of zero counts are unreliable** (preparation brief, OQ12).
+  - **The cause.** Where every count under a basis function is zero, the Poisson MLE lies at −∞. IRLS stops at a fixed point set by the η clamp (±30) and the μ floor (1e-10), with coefficients in the thousands. Meanwhile the BIC-type marginal stays near the knot-free one: −75.8 against −73.5 in step 3.7's probe.
+  - **The consequence.** Such configurations take real posterior mass, and the posterior-mean log-intensity there runs to −10³.
+  - **What the gates do.** The pivot ratio that admission used before step 3.7 happened to refuse many of them: 1,590 of 11,969 evaluations, against 76 under the scale-free gate, which correctly does not.
+  - **Where the fix belongs:** in the model, not in admission.
 - **The BAPS `MarginalEvidence` posterior of λ is heavy-tailed.** Under the uniform-edf prior the density of ln λ decays like $e^{-u}$, so $E[\lambda]$ is infinite; `BapsResult` therefore reports the median. $\ell_p$ is computed as $y^\top y-\hat\beta^\top Z^\top y$ and loses precision above about λ = 10¹⁰ (NaN near 10¹⁴), but the prior keeps the chain far below that range. The λ modes target different posteriors.
 - **Knot count and peak location mix slowly.** On the adaptive-stop test fit (n = 100, a sine under noise 0.15, Poisson(4) count prior), the knot count's autocorrelation time is about 450 steps: about 0.2% of draws are effective, by Stan's estimator and by batch means alike. The classic variogram estimator this replaced reported higher figures on other fits. Judge a run by ESS, not by draw count. Since step 3.4 an R̂ stop waits for the knot count's bulk and tail ESS to reach `MinEssPerChain` per chain (100 by default), which here takes about 45,000 draws per chain; `BarsResult.Knots` and `Peak.LocationConvergence` report those diagnostics.
 - **Births are local, so a knot far from the others is hard to remove.**

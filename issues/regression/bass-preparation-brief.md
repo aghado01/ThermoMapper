@@ -453,7 +453,7 @@ Probes on the Grams a BARS chain evaluates: 6,000 steps per dataset, Normal mode
 | Q3 | BARS knot location measure | 0.5e | **Decided 2026-10-20: ordered uniform locations,** with `log k!` added to the target, so that `p(k)` is the actual count prior. The complexity penalty stays configurable through the count prior: a new `ConwayMaxwellPoissonPrior(λ, ν)`, with ν = 1 plain Poisson and ν = 2 reproducing today's effective prior, λᵏ/(k!)². The marginal's Occam factor of about ½·log(m+1) per basis function remains either way. Compare ν = 1 and ν = 2 on the existing validation fits and document the result, rather than choosing ν from one dataset. |
 | Q4 | Rank and admission policy per model | 0.5b | (Its `PivotRatio` criterion is superseded by Q6 at step 3.7.) **Decided 2026-10-20: reject** rank-deficient designs in all four models, using the step 0.4 status with a relative criterion (`PositiveDefinite` and `PivotRatio` ≥ r_min, with r_min recorded with its rationale). This is a declared prior support restriction: every basis function must be supported by data. Declare any near-interpolation limit for the Normal model as part of its prior. |
 | Q5 | Tempering path, per engine | 3.2 | **Decided per engine (2026-10-21, revised).** There is no house default: `ParallelTempering` requires a declared path, and each engine sets and documents its own default, with every path selectable. **BARS** defaults to the likelihood-tempered path (`c510876`), the principled choice: a chain targets a measure, and powering a density f = dΠ/dμ gives a hot measure f^β·dμ that depends on the reference μ. Ordered and labeled knots give powered hot rungs of 1.08 and 14.17 mean knots for one posterior at λ = 5, β = 0.05, while the likelihood path, dΠ_b/dΠ₀ = L^b, is the same in every representation. **Measured since** (step 3.4, cold-chain ESS at equal work): at a shared hot end β = 0.05 the powered ladder led on counts (about 5×) and peak (about 1.6×) and tied on sine, tracking each ladder's barrier; that comparison favours the path whose hot end stays near the posterior. [OQ1](#open-questions) settles BARS's default by comparing tuned ladders. **Other engines** choose their own path when they land ([OQ6](#open-questions)); nothing is inherited from BARS. |
-| Q6 | BARS admission policy | 3.7 | **Decided 2026-10-20: split the rule into its two jobs** (step 3.7). Numerical: a strict factor, positive definite, `MinRelativePivot` ≥ 1e-10. Support: column mass Σᵢ Bⱼ(xᵢ) ≥ 1 per basis function, configurable. It lands after step 3.5, so steps 2.3–3.5 stay a zero-drift refactor. BASS's count-based `npart` default is rejected for BARS. Basis for the decision: the [evidence](#addendum-admission-evidence-2026-10-20). |
+| Q6 | BARS admission policy | 3.7 | **Decided 2026-10-20: split the rule into its two jobs** (step 3.7; implemented in `0986bac` and `21e5325`). Numerical: a strict factor, positive definite, `MinRelativePivot` ≥ 1e-10. Support: column mass Σᵢ Bⱼ(xᵢ) ≥ 1 per basis function, configurable. It lands after step 3.5, so steps 2.3–3.5 stay a zero-drift refactor. BASS's count-based `npart` default is rejected for BARS. Basis for the decision: the [evidence](#addendum-admission-evidence-2026-10-20). |
 | Q7 | `EbicPrior`'s count law | 3.8 | **Decided 2026-10-20: adopt He, Yang and Kang's convention** (step 3.8): log p(k) = (1 − γ)·log C(C, k) with γ ≥ 0, so γ < 1 favors more knots, γ = 1 is flat and γ > 1 penalizes. Today's law C(n_c, k)^(−γ) is that law at γ_HYK = 1 + γ, inside the range [0.5, 2] their *Biometrics* version (2026) reportedly recommends. Support stays [0, C], with guidance C ≥ 2·k_max. The citation waits on verifying the published text against step 3.8's checklist; the preprint (arXiv 2405.13353) already states the law for γ ≤ 1. |
 
 ## Open questions
@@ -473,6 +473,7 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 | OQ9 | An external reference for the rank-normalized diagnostics | Checked against theory only (AR(1) ESS, scale mismatch, Cauchy draws). R is installed, but the `posterior` package is not, and installing it means a download. | Add `posterior` to the `r/` oracles' environment (with approval for the download) and compare R̂, bulk ESS and tail ESS on shared fixtures. | Any time |
 | OQ10 | Checkpoint scope | Step 3.4 checkpoints are in-memory copies, taken after burn-in at a round boundary. The run fingerprint covers data, settings and component types, not components' internal parameters. Only BARS implements `RestoreChain`; BGP and BAPS do not resume. | Persist checkpoints to disk through Archivory (format, versioning, data identity); decide whether mid-burn checkpoints are needed (adaptation state in flight); fingerprint component parameters (value records, or a component fingerprint member); resume for BGP and BASS. | With the BASS port's posterior storage, and Archivory |
 | OQ11 | Local births strand isolated knots | Births are proposed near an existing knot (`LocalBetaKernel`, τ = 50, an SD of about 0.07; uniformly only at k = 0). A death's acceptance carries the reverse birth's density at the removed knot, so a knot far from the rest is almost never removed: from knots at 0.39 and 0.96 that density is e⁻³⁷ or e⁻⁶¹, against a posterior gain of e^3.8 to e^5.3, so a death is accepted with probability e⁻³¹ at best. In `EbicTests`' γ = 1 runs, overdispersed starts held such knots for about 1,500 steps (the 3.5 seed sweep). A probe settled the mechanism: ε = 0.1 uniform births in the birth density cut the knot count's autocorrelation time 12× (adaptive-stop fit, 485 → 40), about 20× (outlier sine, 2,160 → 110) and 2× (peak, 166 → 77), at the same cost per step, on the same posterior, with the count law intact. BASS's `w1` and `w2` pseudo-counts are its own exploratory component. | Step 3.9: the base measure, against step 3.7's support gate; an ε study with peak-location ESS; ε as a setting with a measured default. Until then, burn-ins that outlast overdispersed starts. | Step 3.9, after 3.7 |
+| OQ12 | Poisson fits over runs of zero counts | Where every count under a basis function is zero, the Poisson MLE lies at −∞. IRLS stops at a fixed point set by the η clamp (±30) and the μ floor (1e-10), with coefficients in the thousands: −5,961 with one knot at 0.8 when the counts are zero beyond 0.797. The BIC-type marginal stays near the knot-free one (−75.8 against −73.5), so such configurations take real posterior mass and the posterior-mean log-intensity there runs to −10³. Present before step 3.7. The pivot ratio happened to refuse many of them (1,590 of 11,969 evaluations, against 76 under the scale-free gate). | A model-level fix. Options: (a) a penalized IRLS with the N(0, 100·I) ridge the coefficient draw already uses, and a Laplace marginal at that MAP, with log-determinant and prior terms, replacing BIC at a nonexistent MLE; (b) keep BIC and add a response-dependent count gate, a truncation of the posterior; (c) a Poisson analogue of the g-prior. Measure each on the low-rate fit and the existing count-data tests. | Before BARS is used on sparse count data; its own step |
 
 Tracked elsewhere: the `EbicPrior` text check (step 3.8, waiting on the *Biometrics* PDF), BARS admission (step 3.7), the b = 0 guard (step 3.2's report), and the linear form's weaker hot-rung Occam penalty (step 3.2 addendum).
 
@@ -1497,3 +1498,66 @@ Both are corrected.
 **For later steps:**
 - **Step 3.7** is next, then step 3.9 (full-support births, OQ11).
 - **Step 3.8** waits on the *Biometrics* text.
+
+### 3.7 BARS admission: numerical and support gates — done 2026-10-21
+
+| Commit | Content |
+|---|---|
+| `8caff04` | A strict mode for `BandCholesky` |
+| `0986bac` | The numerical gate |
+| `21e5325` | The support gate |
+| docs commit | This report, OQ12 |
+
+**Specification:**
+- **Strict band factor** (`new BandCholesky(n, p, mode, strict: true)`). There is no pivot floor. As `DenseCholesky`, the first pivot that is not finite and positive stops the factorization: `FailedAt` gives its row, `LogDet` is NaN, and solves and draws throw. On a matrix whose pivots all clear the floor, it computes the floored factor's numbers exactly.
+- **Numerical gate** (`DesignAdmission`). The rule is `PositiveDefinite`, no floored pivot, and `MinRelativePivot` ≥ 1e-10.
+  - **Every BARS model factors strictly:** the Normal model's G and P_a, Poisson's IRLS and Laplace factors, Whittle and GibbsLoss.
+  - **Poisson's coefficient draw** falls back to β̂ when its Laplace factor fails the gate, as Whittle's draw already did.
+- **Support gate** (`SplineTarget.MinColumnMass`, default 1; 0 turns it off). Every basis function needs column mass Σᵢ Bⱼ(xᵢ) ≥ 1, checked before any factorization. A refusal is counted as the new reason `ThinSupport`. `BarsEnsemble(…, minColumnMass)` and `BarsConfig.MinColumnMass` carry the setting, and the run fingerprint covers it.
+
+**Measured** with a scratch probe at three revisions: the pre-3.7 source (`1056245`), the numerical gate alone (`0986bac`), and both gates (`21e5325`). Each fit is BARS, 4 chains × 3,000 draws after 1,500 burn-in, with a Poisson(6) count prior, read on a 201-point grid.
+
+| Fit | Before | Numerical gate only | Both gates |
+|---|---|---|---|
+| Dense (n = 150, bump + sin 3x) | MSE 5.4e-4; refusals: 6 inadmissible | identical | MSE 5.6e-4; mean knots 5.61 → 5.78; refusals: 101 thin support (0.6%) |
+| Gap (0.35, 0.65), n = 120 | MSE 6.0e-3; largest SD in the gap 0.37; 130 inadmissible | 127 inadmissible; fit unchanged | MSE 2.0e-4 (29× lower); SD 0.032; 435 thin support |
+| Gap, n = 60 | MSE 8.4e-4; SD 0.065 | identical | MSE 3.0e-4; SD 0.072 |
+| Sharp transient at x = 0.03 (n = 150) | MSE on [0, 0.1] 0.093; mean SD there 5.1 | identical | MSE 0.0037 (25×); SD 0.075 (68×); peak 0.0309 [0.0289, 0.0329] against 0.03; 1,877 thin support (10%) |
+| Gap, Student-t weights, 5 outliers | MSE 9.0e-4 | identical | MSE 3.2e-4; R̂(k) 1.22, ESS(k) 14 |
+| Low-rate Poisson, μ = exp(1.5 − 5x) | 1,590 of 11,969 inadmissible; log-intensity MSE on x > 0.6 1.7e5 | 76 inadmissible, 11 not converged; MSE 6.9e5 | 309 thin support, 9 inadmissible; MSE 7.0e5 |
+
+- **The support gate does what the evidence predicted.**
+  - Across the gap and beside the boundary transient, the wild fits and their posterior SDs are gone.
+  - The transient is still resolved, so mass ≥ 1 sets no visible resolution limit at n = 150.
+  - Dense data are unchanged up to Monte Carlo noise.
+- **The numerical gate alone moved almost nothing on the Normal fits:** a few configurations a scale-dependent ratio had refused (130 → 127, 154 → 153, 186 → 182, 104 → 103). Of the step 3.5 probe's 13 validation rows it changed 2, plain and tempered BARS; the rest, BAPS, the hierarchical spline and BGP included, stayed bit-identical. The support gate then moves every BARS row, as a support restriction should.
+- **The low-rate Poisson prediction is confirmed.**
+  - **What the pivot ratio was doing.** It refused knots in low-count regions because μ̂ shrinks those columns: 1,590 refusals against 76 under the scale-free gate.
+  - **What those configurations are.** A scratch check on the same data, where every count beyond x = 0.797 is zero, shows a separation pathology. With one knot at 0.8, IRLS stops at a fixed point set by the η clamp (±30) and the μ floor, with a coefficient of −5,961, yet the BIC-type marginal (−75.8) stays close to the knot-free fit's (−73.5).
+  - **So the defect is in the model.** It was present before (MSE 1.7e5), and the old ratio hid part of it by accident. It is recorded as OQ12 with three remedies to measure, and in `BayesianRegression.md`'s limitations. The gate stays scale-free.
+
+**Tests:**
+- **New:**
+  - `BandCholeskyStrictTests` (8 cases): equality with the floored factor, stops and refusals, non-finite entries, a 1e-20-scale matrix.
+  - `DesignAdmissionTests.ColumnScaling_DoesNotChangeAdmission` (4 models): a column scaled by 1e-8 is admitted, and the Normal marginal is unchanged to six places.
+  - `CountLawTests.SupportGate_RestrictsTheKnotPrior_AndNothingElse`: under a constant likelihood the knot count follows p(k)s(k)/Z, with s(k) from direct sampling of uniform knots, apart from the chain. Every bin agrees. s(1) = 0.726 on 30 points, as mass ≥ 1 on the first basis function needs ξ₁ ≥ 4/30.
+  - `DesignRejectionTests` covers `ThinSupport`: a basis function in a gap with mass 0.002 and relative pivot 0.24, refused by the support gate alone.
+- **Changed:**
+  - The collinear fixture moves from 1e-5 to 1e-6. At 1e-5 its relative pivot is 1.5e-10, just inside the gate, where its pivot ratio of 5e-11 had refused it.
+  - The bare-prior count-law tests and the off-support test turn the gate off, since their single data point supports no design.
+  - The gap case now reads `ThinSupport`, with `Inadmissible` checked with the gate off.
+
+**Seed sweep** (`SEED_SWEEP=50`, the seeds of step 3.5):
+- Every assertion holds on every run, EBIC's included, except two single data-axis reversals.
+- The adaptive-kernel ESS comparison reversed once (ratio 1.8). The rate noted beside it stands at about 1 in 100.
+- BAPS's MSE comparison reversed once, as before (BAPS code is unchanged).
+
+**Results** under the fact harness:
+- `Maths.Regression.Tests` 208 of 208 (`20261021_212719074`);
+- `Maths.LinAlg.Tests` 54 of 54 (`20261021_213621885`);
+- `Maths.Samplers.Tests` 82 of 82 (`20261021_213752025`).
+
+**For later steps:**
+- **Step 3.9** designs its exploratory birth against this gate. Uniform births into data gaps will now be refused as `ThinSupport`, which argues for a base measure that follows the data.
+- **OQ12,** the Poisson fix, is its own step. It should land before BARS is used on sparse counts.
+- **Step 3.8** still waits on the *Biometrics* text.
