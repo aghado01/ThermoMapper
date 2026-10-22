@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.Distributions;
 using Maths.Rng;
 using Maths.Samplers.Ensemble;
 
@@ -162,7 +163,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
 
         public double Step()
         {
-            double uProp = _u + _proposalSd * Gaussian(_rng);
+            double uProp = _u + _proposalSd * Normal.SampleStandard(_rng);
             double tProp = Math.Exp(uProp);
             double priorProp = _prior.LogDensity(tProp);
             Attempts++;
@@ -182,12 +183,6 @@ public sealed class BgpSampler : IEnsembleModel<double>
             return Math.Exp(_u);
         }
 
-        private static double Gaussian(Xoshiro256PlusPlus rng)
-        {
-            double u1 = 1.0 - rng.NextDouble();
-            double u2 = 1.0 - rng.NextDouble();
-            return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
-        }
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
 
@@ -82,7 +83,7 @@ public sealed class SpectralNoiseField
 
         var grid = new Complex[total];
         for (int i = 0; i < total; i++)
-            grid[i] = new Complex(NextGaussian(rng), 0.0);
+            grid[i] = new Complex(Normal.SampleStandard(rng), 0.0);
 
         Fft.ForwardND(grid, dims);
 
@@ -178,12 +179,5 @@ public sealed class SpectralNoiseField
     {
         Span<double> p = stackalloc double[3] { x, y, z };
         return Sample(p);
-    }
-
-    private static double NextGaussian(Xoshiro256PlusPlus rng)
-    {
-        double u1 = 1.0 - rng.NextDouble();
-        double u2 = 1.0 - rng.NextDouble();
-        return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
     }
 }
