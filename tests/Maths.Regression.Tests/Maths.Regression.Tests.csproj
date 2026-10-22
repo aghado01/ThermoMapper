@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <Compile Include="..\regression\**\*.cs" Link="regression\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\samplers\SeedSweep.cs" Link="samplers\SeedSweep.cs" />
   </ItemGroup>
 
   <ItemGroup>
