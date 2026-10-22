@@ -1,6 +1,6 @@
 # BASS preparation brief
 
-Date: 2026-10-19. Status: brief, not started. Each phase begins on the user's go-ahead; this document changes no source.
+Date: 2026-10-19. Status: Phases 0, 2 and 3 done (2026-10-22), with the external review's follow-up; each step's report is under "Report". Each phase began on the user's go-ahead; this document changes no source.
 
 Prepare the existing regression and sampler engines for BASS. The work has two kinds of change: repairs of the reviewed defects, and renovations of shared contracts that BASS will consume. Each repair lands in the form BASS will reuse, so nothing is fixed twice. Repairs and refactors stay in separate commits, so every change in statistical behavior traces to a recorded repair.
 
@@ -243,7 +243,7 @@ Delete the superseded surfaces in their own commit: the old target contract, the
 
 Added 2026-10-20. This lands after step 3.5's zero-drift rerun as its own change, measured with step 3.4's rejection counts by reason. It splits today's admission rule into its two jobs ([evidence](#addendum-admission-evidence-2026-10-20)):
 
-- **Numerical gate.** The model's factor runs without a pivot floor (a strict `BandCholesky` mode, following step 2.2's `DenseCholesky`), must be positive definite, and needs `MinRelativePivot` ≥ 1e-10. This keeps Q4's six-digit rationale, now on the equilibrated condition number that governs Cholesky accuracy (van der Sluis 1969; Demmel 1989). It replaces `PivotRatio` ≥ 1e-10 and `FlooredPivots` == 0, both of which depend on column scaling.
+- **Numerical gate.** The model's factor runs without a pivot floor (a strict `BandCholesky` mode, following step 2.2's `DenseCholesky`), must be positive definite, and needs `MinRelativePivot` ≥ 1e-10. This keeps Q4's six-digit rationale, now on the equilibrated condition number that governs Cholesky accuracy (van der Sluis 1969; Demmel 1989). *(Erratum, 2026-10-22: 1/`MinRelativePivot` only bounds that condition number from below, so it can justify a refusal but cannot keep six digits. The review follow-up adds a condition estimate to the gate.)* It replaces `PivotRatio` ≥ 1e-10 and `FlooredPivots` == 0, both of which depend on column scaling.
 - **Support gate.** Every basis function needs column mass Σᵢ Bⱼ(xᵢ) ≥ w_min, with default 1 (one data point's worth) and configurable. `SplineTarget` checks it before any factorization, beside the open-simplex rule, as a declared prior-support restriction.
 - **Checks, before and after:**
   - the validation fits;
@@ -521,7 +521,7 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 | ID | Question | Known so far | What would settle it | Belongs with |
 |---|---|---|---|---|
 | OQ1 | BARS's tempering default: likelihood or powered, each tuned on its own terms | Step 3.4: at a shared hot end β = 0.05 the powered ladder led on cold-chain ESS at equal work (counts: knot ESS about 87,000 against 17,500 at 8 rungs; peak: about 1.6×; sine: a tie), following the barriers (counts 0.24 against 1.4). Both ladders beat untempered chains of equal work on counts (11× and 2.3×) and sine (6× and 5×); on peak the likelihood ladder fell below them (0.73×). The likelihood ladder's hot end at β = 0.05 is nearly the knot prior, so it pays for reach a unimodal posterior does not need. These gains were measured on the trapped birth kernel (OQ11). There, an untempered chain with ε = 0.1 births gained 12–20× in knot-count ESS per second on two fits at no extra cost, so part of tempering's gain was probably trap escape. | After step 3.9, the `TemperingBenchmark` decision study (`TEMPER_BENCH_ESS`, `TEMPER_BENCH_BASE`) with the likelihood ladder's hot end tuned (β_min 0.2, 0.35, 0.5) and, once OQ2 exists, both paths with an exact reference rung; then a multimodal fit, the case tempering is for. Decide on cold-chain ESS at equal work. | After step 3.9; with OQ2 at the SMC stage |
-| OQ2 | An exact reference rung: β = 0 drawn exactly, so each annealed restart is an independent draw (the setting of Syed et al.'s round trips) | Both BARS paths have an exactly drawable β = 0. Powered: on ordered knots the reference measure is k ~ Poisson(1) with uniform locations, defined even for the Normal model's improper σ² prior, because powering never re-integrates σ². Likelihood: the knot prior itself, which needs a marginal defined at b = 0 (the linear-form models now; the Normal model only with a proper σ² prior). `CollapsedGPrior.At(τ, b)` still refuses b = 0 (step 3.2's report). | Build it with the SMC module, which needs the same machinery (exact draws from a normalized reference, a proper-prior mode); then rerun OQ1. | SMC stage (full-port brief, "SMC integration") |
+| OQ2 | An exact reference rung: β = 0 drawn exactly, so each annealed restart is an independent draw (the setting of Syed et al.'s round trips) | Both BARS paths have an exactly drawable β = 0. Powered: on ordered knots the reference measure is k ~ Poisson(1) with uniform locations, defined even for the Normal model's improper σ² prior, because powering never re-integrates σ². Likelihood: the knot prior itself, which needs a marginal defined at b = 0 (the linear-form models now; the Normal model only with a proper σ² prior). `CollapsedGPrior.At(τ, b)` still refuses b = 0 (step 3.2's report). The linear form's b = 0 endpoint keeps every refusal, so it is the prior restricted to admitted configurations (external review, item 4). The refusal reasons separate what an exact reference needs: `ThinSupport` and `TooFewObservations` are declared prior restrictions, drawable by rejection, whose normalizer enters the evidence; `Inadmissible`, `NotConverged` and `ZeroResponse` are numerical or depend on the response, and must be ruled out or accounted for. When SMC lands, the particle weights' ESS is a different quantity from the chains' MCMC ESS and gets its own name. | Build it with the SMC module, which needs the same machinery (exact draws from a normalized reference, a proper-prior mode); then rerun OQ1. | SMC stage (full-port brief, "SMC integration") |
 | OQ3 | Placing the hot end and choosing the rung count | `AdaptLadder` keeps both ends fixed. The integrated Normal marginal's Occam factor holds hot rungs' knots down until b ≈ 1/m, while the linear form's hot rungs approach the prior (step 3.2 addendum). `TemperingLadder.RecommendedLevels` gives N ≈ 2Λ but nothing applies it. | A rule for β_min per model and path, measured by cold-chain ESS, and whether to adapt the rung count. | With OQ1 |
 | OQ4 | When BARS should temper at all | At equal work, tempering helped where untempered chains were stuck (sine, R̂ 1.18) or slow (counts), and did not help on peak. Measured on the trapped birth kernel (OQ11). | User guidance now: diagnose an untempered run first (`BarsResult.Knots`), and temper when R̂ or ESS says the target is hard. Later: a measured rule, or a trial run that chooses, measured after step 3.9. | BARS docs; after step 3.9 and OQ1 |
 | OQ5 | Keep or delete the sequential sweep | Its round-trip lead is a cascade effect (step 3.3), and its cold-chain ESS was indistinguishable from DEO's (step 3.4). | **Decided in step 3.6: keep** it as a selectable schedule, not the default. It is a valid kernel, a composition of reversible pair swaps, not a compatibility path, and options stay open to users with a principled default (DEO). The docs state why its round trips read high. | Closed |
@@ -1779,3 +1779,55 @@ Both are corrected.
 - **Phase 3 is complete.** Next come the "After Phase 3: BARS mixing" re-measurements on the new kernel (OQ1, OQ4, OQ8), then the BASS port.
 - **Whittle and GibbsLoss stay BIC-type.** They cannot separate (the plan's scope), and moving them to the same footing would only unify the family.
 - **A note for BASS's coefficient-prior decisions (D03).** The Normal model's Zellner prior is centred at zero (DMGK), so it shrinks the level by m/(m+1). Being Gaussian, it has no shape term, so the bias is the level's alone. Centring it on the null fit would be the same choice as here.
+
+### Review follow-up — done 2026-10-22
+
+An external review of the preparation, anchored at `64d98a4` (end of step 3.3), is in `discussion/astra-bass-prep-review.md`. Each item was checked against the current code before anything changed.
+
+| Commit | Content |
+|---|---|
+| `b8b111f` | Item 1: contaminated-normal weights from the log odds |
+| `8777fed` | Item 3: `ISpdFactor.EquilibratedCondition`, a condition estimate for both factors |
+| `62510b9` | Item 3: admission gates on the estimate |
+| `7c7103d` | Item 2: robust admission reads the knots alone |
+| docs commit | `BayesianRegression.md`, `LinearAlgebra.md`, the erratum, OQ2, the status line, this report |
+
+**Item 1: gross outliers got full weight. Confirmed and fixed.**
+- **The defect.** The contaminated-normal responsibility was a ratio of the two component densities. Past about 386σ (κ = 10) both underflow, the ratio is NaN, and the comparison with it is false, so the point got weight 1.
+- **The fix.** The responsibility now comes from its log odds.
+- **Verified.** A new test checks residuals out to 10⁶σ against the log densities' odds. The step probes' robust rows are byte-identical.
+
+**Item 2: a weight update could move the knots out of the support. Structure confirmed, unreachable, fixed.**
+- **The structure.** The weighted block gated $P_a$ = Zᵀ(W + τI)Z, which depends on the weights. The weight block replaced the target without checking the current knots.
+- **Unreachable since step 3.7.**
+  - In about 3,500 admitted configurations, half with near-coincident knots, no down-weighting to 0.01, 1e-4 or 1e-8 refused one.
+  - Over about 59,000 supported configurations per design, G's relative pivot stayed at or above 0.25 (even) and 0.024 (gapped).
+  - The review's reproduction predates the support gate.
+- **The decision: admission is structural.** The weighted block admits on G alone. $P_a$ ⪰ τG is then positive definite, and a failure throws.
+  - The weight conditional is untruncated, so the sweep is exact as written.
+  - Robust and plain fits share one knot support, and the b = 0 reference does not depend on w.
+  - The alternative was the joint gate with a rejecting weight update. It is exact too, but it hides numerical failures as statistical events and ties the knot support to latent weights.
+- **Verified.** The probes are byte-identical. A new test checks that the verdict at resampler-like weights, down to 1e-12, equals the verdict at unit weights. It pins the semantics: the old code would also have passed it on these designs.
+
+**Item 3: `MinRelativePivot` does not certify accuracy. Confirmed, and closed with a condition estimate.**
+- **The counterexample holds.** Every relative pivot is 0.2, while the equilibrated condition number is 2.1·10¹⁵ (numpy).
+- **Where the texts stood.** `FactorStatus` and `BayesianRegression.md` already called the reciprocal a lower bound. This brief's step 3.7 text and `DesignAdmission`'s remarks overclaimed "six digits"; both are corrected, the brief by an erratum.
+- **The estimate.** It is Higham's refinement of Hager's method, as in LAPACK's xPOCON, run through the factor's solves.
+  - On 120 random matrices it stayed between a third of the exact value and the exact value.
+  - It measures the counterexample at above 10¹⁴.
+- **The gate** requires an estimate of at most 1e10. IRLS steps check the pivots, and each fit's final system gets the full gate.
+- **Measured on spline Grams.** Over about 17,000 supported configurations, the worst true equilibrated condition number was 537, and the pivot bound came within 60× of it. The probes are byte-identical, so the estimate guards designs outside that range, BASS's dense ones first.
+
+**Item 4: b = 0 is not the plain prior. Confirmed, and corrected in the docs.**
+- The linear form's b = 0 endpoint keeps every refusal, so it is the prior restricted to admitted configurations.
+- `BayesianRegression.md` now says so, and OQ2 records which refusal reasons an exact reference must treat as prior restrictions, and which it must rule out or account for.
+
+**Item 5: accumulators, traces and checkpoints. Already done in step 3.4.**
+- Step 3.4 split them three ways: mergeable `Readouts`; `ChainTrace`, which is never merged and keeps the ordered draws that rank-normalized ESS needs; and `Checkpoint`, with per-chain state.
+- No particle-weight ESS exists yet. OQ2 notes that it will get its own name.
+
+**The status line** at the top of this brief now reflects the completed phases.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 230 of 230 (`20261022_124455338`: step 3.10's 227, the extreme-tail weights, the ill-conditioned factor and the weight-independent verdict); `Maths.LinAlg.Tests` 64 of 64 (`20261022_124708496`, 10 new); `Maths.Samplers.Tests` 82 of 82 (`20261022_124752112`).
+
+**Seed sweep** (`SEED_SWEEP=50`): the summary is identical to step 3.10's (`20261022_125115176`), the robust claims included.

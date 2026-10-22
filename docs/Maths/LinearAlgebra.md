@@ -83,7 +83,7 @@ For a slightly asymmetric input, the two dense eigen routes therefore decompose 
 |---|---|
 | Dense eigen | `DenseEigen.DecomposeSymmetric` (`double[,]` or column-major span) → `EigenResult`; `EigenFast.DecomposeSymmetricInPlace` (allocation-free core); `Eigen.DecomposeSymmetric`; `SpectralMath.BottomK`, `SpectralMath.SelectBottomK` → `IReadOnlyList<EigenPair>` |
 | Iterative eigen | `LOBPCG.Solve(op, k, Options?)` → `Result(Eigenpairs, Iterations, ResidualNorm, Converged)`; `LOBPCG.BottomK` / `TopK` (dense convenience); `DenseSymmetricOperator`; `ILinearOperator`, `IPreconditioner` |
-| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `Status`, `Strict`, `FailedAt`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`; implemented by `BandCholesky` and `DenseCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus` |
+| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `Status`, `Strict`, `FailedAt`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`, `EquilibratedCondition`; implemented by `BandCholesky` and `DenseCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus` |
 | Transforms and statistics | `Fft` (1-D, 3-D, N-D; `IsPowerOfTwo`); `Pca.Compute` → `PcaResult`; `FastIca.Compute` → `IcaResult`; `OnlineMahalanobis` (`Update`, `Distance` to the mean or between two points, `IsReady`, `GetMean`, `GetVariances`, `Reset`) |
 | Kernels | `MatrixOps` (`Dot`, `ScaledSubtract`, `Orthonormalize`, `RandomOrthonormal`, `ColumnGramMatrix`, `ColumnGramMatrixFromRowMajor`, `TransposeToColumnMajor`) |
 
@@ -213,6 +213,14 @@ After each factorization, all three classes set `Status`. It reports what the fa
 
 Because the floor is absolute, a well-conditioned matrix with a small scale, such as $10^{-20}I$, is floored: `FlooredPivots` is positive while `PivotRatio` is 1. A rank problem shows a small `PivotRatio` or a non-positive `MinPivot` instead. `MinRelativePivot` is the scale-aware check: 1 for $10^{-20}I$, and small for a column nearly in the span of the others, whatever the columns' scales. `DenseCholesky` has no floor, so it factors $10^{-20}I$ exactly.
 
+### Condition estimate (`EquilibratedCondition`)
+
+`ISpdFactor.EquilibratedCondition()` estimates $\kappa_1(E)=\lVert E\rVert_1\lVert E^{-1}\rVert_1$ for the equilibrated matrix $E=D^{-1/2}AD^{-1/2}$, $D=\operatorname{diag}A$ (BASS preparation, review follow-up).
+- **How.** Both factors record $\lVert E\rVert_1$ and $\sqrt{a_{jj}}$ when they decompose, in O(n·p) for the band factor and O(n²) for the dense one; the factorization itself is unchanged. $\lVert E^{-1}\rVert_1$ is estimated by Higham's (1988) refinement of Hager's (1984) method, as LAPACK's xLACN2 does for xPOCON. It applies $E^{-1}=D^{1/2}A^{-1}D^{1/2}$ through the factor's solves, at most eleven times.
+- **What it promises.** The estimate is $\lVert E^{-1}v\rVert_1/\lVert v\rVert_1$ for vectors it found, so it never exceeds the exact value. In practice it is rarely below a third of it, but nothing guarantees that. On 120 random banded and dense matrices it stayed between a third of the exact value and the exact value (`ConditionEstimateTests`).
+- **Why beside `MinRelativePivot`.** The relative pivot costs nothing but only bounds κ(E) from below. Take $A=LL^\top$ with L lower bidiagonal, diagonal 1 and subdiagonal 2: every relative pivot is at least 0.2, while κ(E) is about $2\cdot10^{15}$, because $(-\tfrac12)^j$ is nearly a null vector. The estimate measures it.
+- **Refusals.** It refuses after a failed strict factorization. A floored factor's solves describe the floored matrix, so its estimate is of that matrix.
+
 **Innovation sampling.** `SampleInnovation` requires LDLᵀ mode. It computes $v=L^{-\top}D^{-1/2}z$. Since $\operatorname{Cov}(v)=(LDL^\top)^{-1}$, this gives $v\sim N(0,A^{-1})$ exactly, which is the draw a conjugate posterior $\beta=\mu+v$ needs.
 
 **Cost.** Factorization is $O(np^2)$; solve and sampling are $O(np)$; storage is $O((p+1)n)$.
@@ -301,7 +309,7 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
 |---|---|
 | Dense eigen | `DenseEigen.cs`, `EigenFast.cs`, `Eigen.cs`, `SpectralMath.cs` |
 | Iterative eigen | `Lobpcg.cs`, `DenseSymmetricOperator.cs` |
-| Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `FactorStatus.cs`, `ISpdFactor.cs` |
+| Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `FactorStatus.cs`, `ISpdFactor.cs`, `ConditionEstimate.cs` |
 | Transforms and statistics | `Fft.cs`, `PCA.cs` (`Pca`), `ICA.cs` (`FastIca`), `WelfordMahal.cs` (`OnlineMahalanobis`) |
 | Kernels | `MatrixOps.cs` |
 
