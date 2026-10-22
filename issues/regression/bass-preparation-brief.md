@@ -394,6 +394,8 @@ Added 2026-10-19. This section sits outside the baseline gate: nothing in it is 
 
 The last two runs differ in kernel and noise seed, so the tempering gain is a lead, not a result. Even after paying for five replicas per chain, it works out to about ten times more effective peak-location draws per unit of compute.
 
+Re-measured 2026-10-22, on the default kernel (uniform births, step 3.9) and the centred Normal model, with the same seeds: knot-count ESS 439 (7.3%), untempered peak-location ESS 57 (0.71%), tempered 90 (1.1%). The lead is gone: the ladder gives 1.6× the effective draws for 5× the compute. The decision study below confirms it.
+
 The slow mixing is mostly structural:
 
 - **One knot per step.** Each move changes one knot, so moving between substantially different curves is a random walk through model space.
@@ -413,7 +415,7 @@ The slow mixing is mostly structural:
 | Candidate | Why | Before adopting |
 |---|---|---|
 | Move schedule: Green's prior-aware weights (used by DMGK) or constant weights | Neither Green nor DMGK claims faster mixing; the schedule cancels the prior from the acceptance. At equal c it never raises a birth/death flow, and at equal budget the winner depends on the regime | The comparison under **Move schedule** below |
-| Tempering as the default for slow readouts | The lead above | A controlled comparison: same data, seed and kernel, with and without the ladder, at equal compute |
+| Tempering as the default for slow readouts | The lead above | Measured 2026-10-22: at equal work, tempering lost on the knot count on all four fits, and gained only on a sharp peak's location (1.4–1.65×, shallow ladder). Not a default |
 | Delayed rejection on relocations (Green and Mira 2001) | Never worse in asymptotic variance than the single-stage kernel | Gain per second, since each rejection costs another target evaluation |
 | A uniform component in births | Local births strand a knot far from the rest, since its death needs the reverse birth near the knots that remain (OQ11) | Done in step 3.9: births come from the uniform base by default (ε = 1) |
 | Informed births scored by fitted gain (ΔQ, derivations review §5) | Proposes knots where the residual says they help | Exact reverse probabilities and a full-support exploratory component; uses step 2.3's explicit residual |
@@ -520,14 +522,14 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 
 | ID | Question | Known so far | What would settle it | Belongs with |
 |---|---|---|---|---|
-| OQ1 | BARS's tempering default: likelihood or powered, each tuned on its own terms | Step 3.4: at a shared hot end β = 0.05 the powered ladder led on cold-chain ESS at equal work (counts: knot ESS about 87,000 against 17,500 at 8 rungs; peak: about 1.6×; sine: a tie), following the barriers (counts 0.24 against 1.4). Both ladders beat untempered chains of equal work on counts (11× and 2.3×) and sine (6× and 5×); on peak the likelihood ladder fell below them (0.73×). The likelihood ladder's hot end at β = 0.05 is nearly the knot prior, so it pays for reach a unimodal posterior does not need. These gains were measured on the trapped birth kernel (OQ11). There, an untempered chain with ε = 0.1 births gained 12–20× in knot-count ESS per second on two fits at no extra cost, so part of tempering's gain was probably trap escape. | After step 3.9, the `TemperingBenchmark` decision study (`TEMPER_BENCH_ESS`, `TEMPER_BENCH_BASE`) with the likelihood ladder's hot end tuned (β_min 0.2, 0.35, 0.5) and, once OQ2 exists, both paths with an exact reference rung; then a multimodal fit, the case tempering is for. Decide on cold-chain ESS at equal work. | After step 3.9; with OQ2 at the SMC stage |
+| OQ1 | BARS's tempering default: likelihood or powered, each tuned on its own terms | Step 3.4: at a shared hot end β = 0.05 the powered ladder led on cold-chain ESS at equal work (counts: knot ESS about 87,000 against 17,500 at 8 rungs; peak: about 1.6×; sine: a tie), following the barriers (counts 0.24 against 1.4). Both ladders beat untempered chains of equal work on counts (11× and 2.3×) and sine (6× and 5×); on peak the likelihood ladder fell below them (0.73×). The likelihood ladder's hot end at β = 0.05 is nearly the knot prior, so it pays for reach a unimodal posterior does not need. These gains were measured on the trapped birth kernel (OQ11). There, an untempered chain with ε = 0.1 births gained 12–20× in knot-count ESS per second on two fits at no extra cost, so part of tempering's gain was probably trap escape. **Measured 2026-10-22 on the default kernel** (uniform births; hot ends β_min 0.05, 0.2, 0.35 and 0.5 on the likelihood path, 0.05 powered; adapted DEO; 8 ladders × 2 groups; untempered chains of equal work as reference). With the hot end tuned, the likelihood path matched or beat the powered path on every Normal fit. On counts both lost to untempered chains (0.40× and 0.46× knot-count ESS at 8 rungs). Step 3.4's powered lead came from the shared deep hot end on the trapped kernel. | Closed: the likelihood path stays BARS's tempering path. Where the hot end goes is OQ3's. | Closed (BARS-mixing re-measurement) |
 | OQ2 | An exact reference rung: β = 0 drawn exactly, so each annealed restart is an independent draw (the setting of Syed et al.'s round trips) | Both BARS paths have an exactly drawable β = 0. Powered: on ordered knots the reference measure is k ~ Poisson(1) with uniform locations, defined even for the Normal model's improper σ² prior, because powering never re-integrates σ². Likelihood: the knot prior itself, which needs a marginal defined at b = 0 (the linear-form models now; the Normal model only with a proper σ² prior). `CollapsedGPrior.At(τ, b)` still refuses b = 0 (step 3.2's report). The linear form's b = 0 endpoint keeps every refusal, so it is the prior restricted to admitted configurations (external review, item 4). The refusal reasons separate what an exact reference needs: `ThinSupport` and `TooFewObservations` are declared prior restrictions, drawable by rejection, whose normalizer enters the evidence; `Inadmissible`, `NotConverged` and `ZeroResponse` are numerical or depend on the response, and must be ruled out or accounted for. When SMC lands, the particle weights' ESS is a different quantity from the chains' MCMC ESS and gets its own name. | Build it with the SMC module, which needs the same machinery (exact draws from a normalized reference, a proper-prior mode); then rerun OQ1. | SMC stage (full-port brief, "SMC integration") |
-| OQ3 | Placing the hot end and choosing the rung count | `AdaptLadder` keeps both ends fixed. The integrated Normal marginal's Occam factor holds hot rungs' knots down until b ≈ 1/m, while the linear form's hot rungs approach the prior (step 3.2 addendum). `TemperingLadder.RecommendedLevels` gives N ≈ 2Λ but nothing applies it. | A rule for β_min per model and path, measured by cold-chain ESS, and whether to adapt the rung count. | With OQ1 |
-| OQ4 | When BARS should temper at all | At equal work, tempering helped where untempered chains were stuck (sine, R̂ 1.18) or slow (counts), and did not help on peak. Measured on the trapped birth kernel (OQ11). | User guidance now: diagnose an untempered run first (`BarsResult.Knots`), and temper when R̂ or ESS says the target is hard. Later: a measured rule, or a trial run that chooses, measured after step 3.9. | BARS docs; after step 3.9 and OQ1 |
+| OQ3 | Placing the hot end and choosing the rung count | `AdaptLadder` keeps both ends fixed. The integrated Normal marginal's Occam factor holds hot rungs' knots down until b ≈ 1/m, while the linear form's hot rungs approach the prior (step 3.2 addendum). `TemperingLadder.RecommendedLevels` gives N ≈ 2Λ but nothing applies it. Measured 2026-10-22: on four unimodal fits, efficiency rose with β_min from 0.05 to 0.5 on every readout, and the default 0.05 was the worst likelihood arm everywhere. | A rule for β_min per model and path, measured by cold-chain ESS. Until one exists, the measured choice for unimodal fits is a shallow end (0.35–0.5), a default change the user decides. | With OQ1 |
+| OQ4 | When BARS should temper at all | At equal work, tempering helped where untempered chains were stuck (sine, R̂ 1.18) or slow (counts), and did not help on peak. Measured on the trapped birth kernel (OQ11). **Measured 2026-10-22 on the default kernel:** at equal work no ladder beat untempered chains on the knot count, on any of four fits. The one gain was a narrow peak's location, 1.4–1.65× with β_min 0.2–0.5. On six two-bump designs untempered chains crossed between the modes freely (R̂ ≤ 1.011), so no multimodal BARS posterior was found. | Closed: tempering stays off by default. The docs' guidance: run untempered and read `Knots` and `Peak.LocationConvergence`; for a sharp peak's location use a shallow ladder; keep deep ladders for real barriers. | Closed (BARS-mixing re-measurement) |
 | OQ5 | Keep or delete the sequential sweep | Its round-trip lead is a cascade effect (step 3.3), and its cold-chain ESS was indistinguishable from DEO's (step 3.4). | **Decided in step 3.6: keep** it as a selectable schedule, not the default. It is a valid kernel, a composition of reversible pair swaps, not a compatibility path, and options stay open to users with a principled default (DEO). The docs state why its round trips read high. | Closed |
 | OQ6 | Each engine's own tempering path | BASS's conjugate blocks keep closed-form conditionals on either path (a powered Gamma(a, b) block is Gamma(β(a+M−1)+1, β(b+1))); the likelihood path leaves them unchanged across rungs, which is simpler. SMC and path-sampling evidence start from a normalized endpoint, which the likelihood path's prior is. | Each engine decides at its port with its own measurements; no default is inherited. | BASS port; SMC stage |
-| OQ7 | Which readouts gate an R̂ stop | BARS monitors the knot count only. The peak location is diagnosed (`Peak.LocationConvergence`) but does not gate the stop, and its ESS has been about 0.14% of draws. | Let callers choose the monitored readouts, and measure what gating on the peak costs. | After step 3.4 |
-| OQ8 | BARS's knot-count mixing and default run lengths | On the adaptive-stop fit the knot count's autocorrelation time is about 450 steps (Stan's estimator and batch means agree), so the default gate of 100 effective draws per chain needs about 45,000 draws per chain. The earlier 1.75% figure came from the classic variogram estimator. Most of it is the local-birth trap (OQ11). With ε = 0.1 uniform births, the autocorrelation time on this fit falls to about 40, so the gate needs about 4,000 draws per chain. Since step 3.9 (ε = 1) the time on the adaptive-stop fit is about 14 (`BirthBenchmark`), so the gate needs about 1,400 draws per chain. | Revisit the default sample sizes and the move schedule on the new kernel, with the "After Phase 3: BARS mixing" studies. | "After Phase 3: BARS mixing" |
+| OQ7 | Which readouts gate an R̂ stop | BARS monitors the knot count only. The peak location is diagnosed (`Peak.LocationConvergence`) but does not gate the stop, and its ESS has been about 0.14% of draws. Measured 2026-10-22 (OQ8): on peaked fits the peak location's autocorrelation time is 250–330 steps, four to six times the knot count's, so a stop gated on the knot count alone ends before the peak readout is estimated. | Let callers choose the monitored readouts, and measure what gating on the peak costs. | After step 3.4 |
+| OQ8 | BARS's knot-count mixing and default run lengths | On the adaptive-stop fit the knot count's autocorrelation time is about 450 steps (Stan's estimator and batch means agree), so the default gate of 100 effective draws per chain needs about 45,000 draws per chain. The earlier 1.75% figure came from the classic variogram estimator. Most of it is the local-birth trap (OQ11). With ε = 0.1 uniform births, the autocorrelation time on this fit falls to about 40, so the gate needs about 4,000 draws per chain. Since step 3.9 (ε = 1) the time on the adaptive-stop fit is about 14 (`BirthBenchmark`), so the gate needs about 1,400 draws per chain. **Measured 2026-10-22 at the defaults** (centred Normal model; `BirthBenchmark`, 10 seeds): knot-count τ is 8–61 on fits with up to 6 knots and 298 at 13. Peak-location τ reaches 333 on peaked fits. 2,000 draws per chain give 7–260 effective knot counts per chain. | The default run length, decided with OQ7: an ESS-gated stop on knot count and peak location with a cap, or a longer fixed run. The move-schedule comparison is a study of its own (it needs new schedule arms). | "After Phase 3: BARS mixing" |
 | OQ9 | An external reference for the rank-normalized diagnostics | Checked against theory only (AR(1) ESS, scale mismatch, Cauchy draws). R is installed, but the `posterior` package is not, and installing it means a download. | Add `posterior` to the `r/` oracles' environment (with approval for the download) and compare R̂, bulk ESS and tail ESS on shared fixtures. | Any time |
 | OQ10 | Checkpoint scope | Step 3.4 checkpoints are in-memory copies, taken after burn-in at a round boundary. The run fingerprint covers data, settings and component types, not components' internal parameters. Only BARS implements `RestoreChain`; BGP and BAPS do not resume. Step 3.10's `PoissonMarginal` is one such parameter: the fingerprint does not tell the two Poisson pathways apart. | Persist checkpoints to disk through Archivory (format, versioning, data identity); decide whether mid-burn checkpoints are needed (adaptation state in flight); fingerprint component parameters (value records, or a component fingerprint member); resume for BGP and BASS. | With the BASS port's posterior storage, and Archivory |
 | OQ11 | Local births strand isolated knots | Births are proposed near an existing knot (`LocalBetaKernel`, τ = 50, an SD of about 0.07; uniformly only at k = 0). A death's acceptance carries the reverse birth's density at the removed knot, so a knot far from the rest is almost never removed: from knots at 0.39 and 0.96 that density is e⁻³⁷ or e⁻⁶¹, against a posterior gain of e^3.8 to e^5.3, so a death is accepted with probability e⁻³¹ at best. In `EbicTests`' γ = 1 runs, overdispersed starts held such knots for about 1,500 steps (the 3.5 seed sweep). A probe settled the mechanism: ε = 0.1 uniform births in the birth density cut the knot count's autocorrelation time 12× (adaptive-stop fit, 485 → 40), about 20× (outlier sine, 2,160 → 110) and 2× (peak, 166 → 77), at the same cost per step, on the same posterior, with the count law intact. BASS's `w1` and `w2` pseudo-counts are its own exploratory component. **Resolved in step 3.9:** births now come from the uniform base by default (ε = 1), which `BirthBenchmark` found best or tied on every fit (knot-count ESS up to 76×, peak-location ESS up to 31×). | Closed. ε stays a setting, for fits outside the benchmark where local births might help. | Closed (step 3.9) |
@@ -1878,3 +1880,74 @@ Added after step 3.10's discussion, at the user's go-ahead, before the BARS-mixi
 **For later steps:**
 - **The BARS-mixing studies** (OQ1, OQ4, OQ8) now measure the centred model; the ESS drop above is theirs to confirm or dismiss.
 - **BASS's D03.** The shared block now carries a prior mean, so BASS's port decides its own centre on its own evidence.
+
+### After Phase 3: BARS mixing re-measured — 2026-10-22
+
+Measured on the default kernel (uniform births, step 3.9) and the centred Normal model, as step 3.9's report asked.
+
+| Commit | Content |
+|---|---|
+| `34ed42d` | `TemperingBenchmark` on BARS's default moves, with hot-end arms, the oscillation fit and a peak-location readout; `BIRTH_BENCH_EPS` |
+| docs commit | `BayesianRegression.md` (tempering and mixing), OQ1, OQ3, OQ4, OQ7 and OQ8, this report |
+
+**A correction first.** `TemperingBenchmark` built its moves from the kernel alone, which gives local births (ε = 0). So step 3.4's tempering study, and every tempering figure before it, measured the trapped kernel rather than BARS's default since step 3.9. It now shares one birth density from the uniform base, as `BarsEnsemble` does.
+
+**The mixing table** (same tests and seeds as the section's table):
+
+| Test | Readout | Draws (4 chains) | ESS then | ESS now |
+|---|---|---|---|---|
+| Ensemble sine, n = 100 | Knot count | 6,000 | 105 (1.75%) | 439 (7.3%) |
+| Peak bump, n = 150 | Peak location | 8,000 | 11 (0.14%) | 57 (0.71%) |
+| Tempered peak, 5 rungs | Peak location | 8,000 | 652 (8.2%) | 90 (1.1%) |
+
+**OQ8: autocorrelation times at the defaults** (`BirthBenchmark` at ε = 1, 10 seeds × 4 chains × 10,000 draws):
+
+| Fit | Knot-count τ (median, range) | Peak-location τ | Draws per chain for 100 effective knot counts |
+|---|---|---|---|
+| Data gap | 8 (7–9) | 1 | 770 |
+| Sine, n = 100 | 14 (12–16) | 19 | 1,440 |
+| Jump | 35 (33–43) | 55 | 3,530 |
+| Sine with outliers | 46 (39–52) | 39 | 4,600 |
+| Skewed design | 55 (42–79) | 248 | 5,520 |
+| Narrow peak | 61 (39–160) | 333 | 6,150 |
+| Oscillation, about 13 knots | 298 (174–776) | 32 | 29,850 |
+
+- **At the defaults** (2,000 draws per chain, no early stop), a run gets 7–260 effective knot counts per chain.
+- **On peaked fits** it gets 6–8 effective peak locations per chain. That is ThermoMapper's main readout, and it mixes four to six times slower than the knot count there.
+
+**OQ1 and OQ4: the tempering decision study.**
+- **Design.** Adapted DEO ladders of 4 and 8 rungs: the likelihood path at β_min 0.05, 0.2, 0.35 and 0.5, and the powered path at 0.05.
+  - Each estimate pools 8 ladders, in two replicate groups.
+  - Measurement is 20,000 scans after Algorithm 4's burn-in.
+  - The reference is untempered chains of equal work (8 × L chains, each as long), and comparisons use cold-chain ESS per replica-step.
+  - The run took 51 minutes.
+- **Results at 8 rungs**, relative to untempered chains:
+
+  | Fit | Knot count: β_min 0.05 / 0.2 / 0.35 / 0.5 / powered 0.05 | Peak location: the same arms |
+  |---|---|---|
+  | Narrow peak | 0.51 / 0.78 / 1.00 / 1.18 / 0.65 | 1.03 / 1.40 / 1.63 / 1.65 / 1.37 |
+  | Sine with outliers | 0.65 / 0.73 / 0.85 / 0.96 / 0.70 | 0.65 / 0.71 / 0.75 / 0.91 / 0.65 |
+  | Counts | 0.34 / 0.37 / 0.38 / 0.40 / 0.46 | 0.36 / 0.37 / 0.38 / 0.41 / 0.42 |
+  | Oscillation | 0.31 / 0.58 / 0.73 / 0.96 / 0.33 | 0.37 / 0.65 / 0.64 / 1.10 / 0.37 |
+
+- **What it shows.**
+  - The two groups agree to about 10%, and 4 rungs tell the same story.
+  - Tempering lost on the knot count everywhere, apart from the shallowest ladder on the narrow peak.
+  - It gained on one readout, the narrow peak's location (1.4–1.65×).
+  - Efficiency rose with β_min on every fit and readout.
+- **The multimodal fit OQ1 asked for was not found.**
+  - On six two-bump designs, untempered chains with uniform births crossed between the bumps freely: R̂ of the peak location stayed at or below 1.011, with per-chain shares on each bump within about ±0.1 of one another.
+  - Switching which feature a small model fits passes through fitting neither. That costs about one feature's evidence, which is comparable to its Occam cost exactly when only one feature can be afforded.
+  - So the hard case stood in for it: the 13-knot oscillation, where tempering also lost.
+
+**Open questions settled:**
+- **OQ1 closed.** The likelihood path stays BARS's tempering path. Tuned, it matched or beat the powered path on every Normal fit, and step 3.4's powered lead came from the shared deep hot end on the trapped kernel.
+- **OQ4 closed.** Tempering stays off by default. The docs say to run untempered first, to use a shallow ladder for a sharp peak's location, and to keep deep ladders for real barriers.
+- **OQ3 updated.** The default hot end, 0.05, was the worst likelihood arm on every fit. A shallow end (0.35–0.5) is the measured choice for unimodal fits until a rule exists.
+- **OQ7 and OQ8 updated.** The default run length is open: a stop gated on the knot count alone ends before the peak location is estimated.
+
+**Decisions for the user:**
+- **The default run length (OQ7 and OQ8).** One option is an ESS-gated stop on the knot count and the peak location, with a cap; on peaked fits it would run about 30,000 draws per chain. The other is a longer fixed run.
+- **`temperBetaMin`'s default** for opt-in tempering: 0.05 now, against the measured 0.35–0.5.
+
+**Not in this round: the move-schedule comparison** (the section's "Move schedule"). It needs new schedule arms in `DmgkSchedule`, a relaxed 0.5 cap and a masked constant schedule, so it is a study of its own.

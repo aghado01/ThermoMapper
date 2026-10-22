@@ -411,8 +411,22 @@ The knot moves integrate β and σ² out given the weights, so the sweep is a va
     | peak | 4,700–5,000 | 7,800 | 6,600 |
     | sine | 1,200–1,400 | 1,400 | 240 (R̂ 1.18) |
 
-  - **The shared hot end favours the powered ladder.** The ESS ordering follows each ladder's barrier: on counts Λ̂ is 0.24 for the powered ladder and 1.4 for the likelihood ladder. At β = 0.05 the likelihood rung is nearly the knot prior, a reach a unimodal posterior does not need, while the powered rung stays near the posterior. Tuning each path's hot end is the open comparison (OQ1).
-- **When to temper.** At equal work tempering helped where untempered chains were stuck (sine) or slow (counts), and did not help on peak, where the likelihood ladder fell below untempered chains. Run untempered first and read `BarsResult.Knots`; temper when R̂ or the ESS says the target is hard.
+  - **The shared hot end favours the powered ladder.** The ESS ordering follows each ladder's barrier: on counts Λ̂ is 0.24 for the powered ladder and 1.4 for the likelihood ladder. At β = 0.05 the likelihood rung is nearly the knot prior, a reach a unimodal posterior does not need, while the powered rung stays near the posterior.
+  - **These runs used local births** (ε = 0), the trapped kernel of OQ11. The measurement below replaces them.
+- **Measured on the default kernel** (2026-10-22, OQ1 and OQ4). `TemperingBenchmark` with births from the uniform base, adapted DEO ladders, 8 ladders per estimate in two replicate groups, 20,000 scans each. The reference is untempered chains of equal work (8 × L chains, each as long), and the table gives cold-chain ESS per replica-step relative to it. The two groups agree to about 10%, and 4 rungs tell the same story.
+
+    | Fit, 8 rungs | Knot count: β_min 0.05 / 0.2 / 0.35 / 0.5 / powered 0.05 | Peak location: the same arms |
+    |---|---|---|
+    | Narrow peak, n = 150 | 0.51 / 0.78 / 1.00 / 1.18 / 0.65 | 1.03 / 1.40 / 1.63 / 1.65 / 1.37 |
+    | Sine with outliers, n = 120 | 0.65 / 0.73 / 0.85 / 0.96 / 0.70 | 0.65 / 0.71 / 0.75 / 0.91 / 0.65 |
+    | Counts, n = 120 | 0.34 / 0.37 / 0.38 / 0.40 / 0.46 | 0.36 / 0.37 / 0.38 / 0.41 / 0.42 |
+    | Oscillation, about 13 knots, n = 200 | 0.31 / 0.58 / 0.73 / 0.96 / 0.33 | 0.37 / 0.65 / 0.64 / 1.10 / 0.37 |
+
+  - **Tempering rarely pays.** On the knot count no arm beat untempered chains, apart from the shallowest on the narrow peak (1.18×). The one real gain is the narrow peak's location, its slow readout (τ ≈ 330): 1.4–1.65× with β_min from 0.2 to 0.5.
+  - **A deeper hot end is worse.** Efficiency rose with β_min on every fit and readout, and 0.05, the default, was the worst likelihood arm everywhere. The powered path at 0.05 never beat the likelihood path at 0.35–0.5 on the Normal fits. On counts both lost to untempered chains (0.46× and 0.40×).
+  - **Step 3.4's lead was the trapped kernel's.** Under local births, tempering escaped the stranded-knot trap; uniform births escape it directly.
+  - **No multimodal fit was found.** On six two-bump designs (n = 150, noise 0.15–0.2, Poisson(1)–(5) priors), untempered chains crossed between the bumps freely: R̂ of the peak location stayed at or below 1.011. Switching which feature a small model fits passes through fitting neither. That costs at most one feature's evidence, which is comparable to its Occam cost when only one can be afforded, so the barrier stays low.
+- **When to temper** (OQ4). Run untempered first and read `BarsResult.Knots` and `Peak.LocationConvergence`. On the measured fits untempered chains matched or beat every ladder, except for a sharp peak's location, where a shallow likelihood ladder (β_min 0.35–0.5) gained up to 1.65×. A deep ladder is for a posterior with real barriers, which none of these fits had.
 - **Readouts** (step 3.4). `BarsResult.Tempering`, null for an untempered run, reports the sampling phase averaged over chains: round-trip and annealed-restart rates per scan, each pair's mean rejection rate, the barrier, Theorem 1's ideal rate (NaN for the sweep), and each chain's final rungs.
 
 **Functionals.** Index 0 is the knot count. Indices $1..g$ are the fitted grid values. Among the shell functionals, ESS is computed for the knot count only; `PeakPosterior` computes its own R̂ and ESS on the argmax draws.
@@ -595,7 +609,21 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
   - **What the gates do.** The pivot ratio that admission used before step 3.7 happened to refuse many of them: 1,590 of 11,969 evaluations, against 76 under the scale-free gate, which correctly does not.
   - **Why the pathway stays.** It is DMGK's original, and EBIC's base for non-normal responses.
 - **The BAPS `MarginalEvidence` posterior of λ is heavy-tailed.** Under the uniform-edf prior the density of ln λ decays like $e^{-u}$, so $E[\lambda]$ is infinite; `BapsResult` therefore reports the median. $\ell_p$ is computed as $y^\top y-\hat\beta^\top Z^\top y$ and loses precision above about λ = 10¹⁰ (NaN near 10¹⁴), but the prior keeps the chain far below that range. The λ modes target different posteriors.
-- **Knot count and peak location mix slowly.** On the adaptive-stop test fit (n = 100, a sine under noise 0.15, Poisson(4) count prior), the knot count's autocorrelation time is about 450 steps: about 0.2% of draws are effective, by Stan's estimator and by batch means alike. The classic variogram estimator this replaced reported higher figures on other fits. Judge a run by ESS, not by draw count. Since step 3.4 an R̂ stop waits for the knot count's bulk and tail ESS to reach `MinEssPerChain` per chain (100 by default), which here takes about 45,000 draws per chain; `BarsResult.Knots` and `Peak.LocationConvergence` report those diagnostics.
+- **Knot count and peak location mix slowly** (OQ8). Measured at the defaults, with the centred Normal model (`BirthBenchmark`, 10 seeds × 4 chains × 10,000 draws, 2026-10-22):
+
+  | Fit | Knot-count τ (median, range) | Peak-location τ | Draws per chain for 100 effective knot counts |
+  |---|---|---|---|
+  | Data gap, n = 120 | 8 (7–9) | 1 | 770 |
+  | Sine, n = 100 | 14 (12–16) | 19 | 1,440 |
+  | Jump, n = 150 | 35 (33–43) | 55 | 3,530 |
+  | Sine with outliers, n = 120 | 46 (39–52) | 39 | 4,600 |
+  | Skewed design, n = 150 | 55 (42–79) | 248 | 5,520 |
+  | Narrow peak, n = 150 | 61 (39–160) | 333 | 6,150 |
+  | Oscillation, about 13 knots, n = 200 | 298 (174–776) | 32 | 29,850 |
+
+  - **At the defaults** (2,000 draws per chain, no early stop) a run gets 7–260 effective knot counts per chain, and on peaked fits 6–8 effective peak locations per chain.
+  - **Judge a run by ESS,** not by draw count: `BarsResult.Knots` and `Peak.LocationConvergence` report it. An R̂ stop's ESS gate waits on the knot count only (OQ7), which on peaked fits is several times faster than the peak location.
+  - **Before step 3.9,** under local births, the sine fit's knot-count τ was about 450.
 - **Local births strand isolated knots** (OQ11). This applies when ε < 1 and births are local.
   - **The mechanism.** A death's acceptance carries the reverse birth's density at the removed knot. Under local births, a knot far from every other is almost never removed: from knots at 0.39 and 0.96 that density is $e^{-37}$ or $e^{-61}$, against a posterior gain of $e^{3.8}$ to $e^{5.3}$.
   - **Seen in practice.** In `EbicTests`' runs, chains started that way held their knots for about 1,500 steps.
