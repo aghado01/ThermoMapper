@@ -13,7 +13,8 @@ namespace Maths.Regression.Tests;
 /// R01 / Q3: BARS's knot measure. Knot locations are the order statistics of k uniforms (density k! on the ordered
 /// simplex), so with the likelihood held constant the knot count must follow the count prior p(k) exactly. Checked
 /// under both move schedules, constant weights and DMGK's, which settles that the two sample the same posterior;
-/// for a hard cap; and for the Conway–Maxwell–Poisson tails. The kernels mix within the batches: under a flat
+/// for a hard cap; for the Conway–Maxwell–Poisson tails; and for the EBIC law on both sides of γ = 1, including its
+/// rise past C/2 when γ &gt; 1, which its support [0, C] keeps. The kernels mix within the batches: under a flat
 /// target the default LocalBeta(50) wanders slowly enough that 40 batches understate its error. These targets put one
 /// data point under the basis, so the support gate is off: they check the bare knot prior. With the gate on, the law
 /// is the prior restricted to supported configurations, checked against direct sampling.
@@ -33,6 +34,9 @@ public sealed class CountLawTests
     [InlineData("cmp-nu2", false, "beta")]
     [InlineData("cmp-nu2", true, "beta")]
     [InlineData("cmp-nu0.5", false, "beta")]
+    [InlineData("ebic-0.5", false, "beta")]
+    [InlineData("ebic-2", false, "beta")]
+    [InlineData("ebic-2", true, "beta")]
     public void KnotCount_FollowsTheCountPrior(string priorName, bool dmgk, string kernelName)
     {
         (IComplexityPrior prior, int bins) = priorName switch
@@ -41,6 +45,8 @@ public sealed class CountLawTests
             "uniform" => (new UniformPrior(6), 9),
             "cmp-nu2" => (new ConwayMaxwellPoissonPrior(4.0, 2.0), 7),
             "cmp-nu0.5" => (new ConwayMaxwellPoissonPrior(1.5, 0.5), 12),
+            "ebic-0.5" => (new EbicPrior(0.5, 12), 14),   // peaks at C/2 = 6; zero past C = 12
+            "ebic-2" => (new EbicPrior(2.0, 6), 8),       // U-shaped: falls to C/2 = 3, rises to C = 6, zero past it
             _ => throw new ArgumentOutOfRangeException(nameof(priorName)),
         };
         IKnotKernel kernel = kernelName == "uniform" ? new UniformKernel() : new LocalBetaKernel(5.0);

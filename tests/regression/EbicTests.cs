@@ -8,8 +8,9 @@ using Xunit.Abstractions;
 namespace Maths.Regression.Tests;
 
 /// <summary>
-/// The EBIC complexity prior: the γ knob is flat at 0 and penalizes growing model space at 1 (pinned against
-/// the closed form), and a γ=1 fit selects fewer knots than γ=0 on noisy over-knotting-prone data.
+/// The EBIC count law in He, Yang and Kang's convention (step 3.8): log p(k) = (1 − γ)·log C(C, k), pinned against the
+/// closed form. γ = 0 is BIC's uniform prior over models, γ = 1 is flat, γ = 2 penalizes; and a γ = 2 fit selects fewer
+/// knots than a γ = 1 fit on noisy over-knotting-prone data.
 /// </summary>
 public sealed class EbicTests
 {
@@ -24,17 +25,36 @@ public sealed class EbicTests
     }
 
     [Fact]
-    public void GammaZero_IsFlat_GammaOne_PenalizesGrowingK()
+    public void GammaOne_IsFlat_GammaTwo_PenalizesGrowingK()
     {
-        var flat = new EbicPrior(gamma: 0.0, candidateCount: 200);
+        var flat = new EbicPrior(gamma: 1.0, candidateCount: 200);
         Assert.Equal(0.0, flat.LogPrior(0), 12);
         Assert.Equal(0.0, flat.LogPrior(5), 12);
         Assert.Equal(0.0, flat.LogPrior(20), 12);
 
-        var penalised = new EbicPrior(gamma: 1.0, candidateCount: 200);
-        Assert.True(penalised.LogPrior(2) > penalised.LogPrior(5));    // −log C(n,k) strictly decreasing for k « n
+        var penalised = new EbicPrior(gamma: 2.0, candidateCount: 200);
+        Assert.True(penalised.LogPrior(2) > penalised.LogPrior(5));    // −log C(C,k) strictly decreasing for k « C
         Assert.True(penalised.LogPrior(5) > penalised.LogPrior(10));
         Assert.Equal(double.NegativeInfinity, penalised.LogPrior(201));
+        Assert.Equal(double.NegativeInfinity, penalised.LogPrior(-1));
+    }
+
+    [Fact]
+    public void Law_IsOneMinusGamma_TimesTheLogModelCount()
+    {
+        // log C(10, 3) = log 120.
+        Assert.Equal(Math.Log(120.0), new EbicPrior(0.0, 10).LogPrior(3), 12);           // BIC's uniform prior over models
+        Assert.Equal(0.5 * Math.Log(120.0), new EbicPrior(0.5, 10).LogPrior(3), 12);
+        Assert.Equal(-Math.Log(120.0), new EbicPrior(2.0, 10).LogPrior(3), 12);
+        // Below γ = 1 the law peaks at C/2; above it, the law is symmetric and smallest there.
+        var favoring = new EbicPrior(0.5, 10);
+        Assert.True(favoring.LogPrior(5) > favoring.LogPrior(4) && favoring.LogPrior(5) > favoring.LogPrior(6));
+        var penalizing = new EbicPrior(2.0, 10);
+        Assert.Equal(penalizing.LogPrior(2), penalizing.LogPrior(8), 12);
+        Assert.Equal(0.0, penalizing.LogPrior(10), 12);   // it rises again to the far end, which C ≥ 2·k_max keeps away
+        Assert.Throws<ArgumentOutOfRangeException>(() => new EbicPrior(-0.1, 10));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new EbicPrior(double.NaN, 10));
+        _ = new EbicPrior(2.5, 10);   // past the authors' recommended [0.5, 2], still a valid law
     }
 
     [Fact]
@@ -42,9 +62,9 @@ public sealed class EbicTests
     {
         (BarsResult flat, BarsResult strict) = FlatAndStrict(noiseSeed: 17, masterSeed: 3);
 
-        _out.WriteLine($"meanK γ=0: {flat.MeanKnots:F2}, γ=1: {strict.MeanKnots:F2}");
+        _out.WriteLine($"meanK γ=1: {flat.MeanKnots:F2}, γ=2: {strict.MeanKnots:F2}");
         Assert.True(strict.MeanKnots < flat.MeanKnots,
-            $"γ=1 mean knots {strict.MeanKnots:F2} should be below γ=0 {flat.MeanKnots:F2}");
+            $"γ=2 mean knots {strict.MeanKnots:F2} should be below γ=1 {flat.MeanKnots:F2}");
     }
 
     // The test's computation at any seeds, which the seed sweep reruns (ComparativeSweep).
@@ -65,12 +85,12 @@ public sealed class EbicTests
         var kernel = new LocalBetaKernel(50.0);
 
         // Burn-in 2,000. Births land near existing knots, so a chain started with knots far apart can hold one for
-        // about 1,500 steps although deaths would raise the posterior; at 800, γ = 1 sometimes kept more knots than
-        // γ = 0 (4 of 100 runs in the step 3.5 seed sweep).
+        // about 1,500 steps although deaths would raise the posterior; at 800, γ = 2 sometimes kept more knots than
+        // γ = 1 (4 of 100 runs in the step 3.5 seed sweep, when these were γ = 1 and 0 in the old convention).
         const int burn = 2000;
-        BarsResult flat = new BarsEnsemble(basis, model, new EbicPrior(0.0, 200), kernel)
+        BarsResult flat = new BarsEnsemble(basis, model, new EbicPrior(1.0, 200), kernel)
             .Run(x, y, grid: x, chains: 2, masterSeed: masterSeed, burn: burn, samples: 1200);
-        BarsResult strict = new BarsEnsemble(basis, model, new EbicPrior(1.0, 200), kernel)
+        BarsResult strict = new BarsEnsemble(basis, model, new EbicPrior(2.0, 200), kernel)
             .Run(x, y, grid: x, chains: 2, masterSeed: masterSeed, burn: burn, samples: 1200);
         return (flat, strict);
     }

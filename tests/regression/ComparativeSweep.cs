@@ -33,7 +33,7 @@ public sealed class ComparativeSweep
         new("EbicTests.HigherGamma_SelectsFewerKnots", DataSeed: 17, ChainSeeds: [3], (d, c) =>
         {
             var r = EbicTests.FlatAndStrict(d, c[0]);
-            return [new("mean knots: γ = 1 < γ = 0", r.Strict.MeanKnots, r.Flat.MeanKnots)];
+            return [new("mean knots: γ = 2 < γ = 1", r.Strict.MeanKnots, r.Flat.MeanKnots)];
         }),
         new("RobustnessTests.Robust_DownweightsOutliers", DataSeed: 44, ChainSeeds: [9], (d, c) =>
         {

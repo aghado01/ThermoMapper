@@ -81,21 +81,25 @@ public sealed class ConwayMaxwellPoissonPrior : IComplexityPrior
 }
 
 /// <summary>
-/// EBIC-style complexity prior (He, Yang &amp; Kang 2024) adapted to continuous knots: the joint (k,ξ) prior is
-/// <c>τ(M_k)^(−γ)</c> with <c>τ(M_k)=C(n,k)</c> the size of the k-knot model space over <c>n</c> effective
-/// candidates, so the k-marginal is <c>log p(k) = −γ·log C(n,k)</c>. γ = 0 is flat; γ → 1 strongly penalizes large
-/// model spaces, the guard against over-knotting a dense candidate grid. The law is symmetric in k ↔ n − k, so it
-/// penalizes only below n/2. It is not He, Yang &amp; Kang's count law: their prior puts C(n,k)^(−γ) on each of the
-/// C(n,k) models, so theirs is C(n,k)^(1−γ).
+/// He, Yang and Kang's EBIC count law (ABMRS: <i>Biometrics</i> 82(3), 2026, ujag121; preprint 2024). Over C discrete
+/// candidates their joint prior is <c>τ(M_k)^(−γ)</c>, with <c>τ(M_k) = C(C,k)</c> the number of k-knot models, so
+/// the knot count's law is <c>log p(k) = (1 − γ)·log C(C,k)</c> on [0, C]. γ = 0 is BIC's uniform prior over models,
+/// which favors k near C/2; γ = 1 is flat in k; γ &gt; 1 penalizes. The authors recommend γ ∈ [0.5, 2] (default 1);
+/// any γ ≥ 0 is accepted. BARS keeps its continuous knot measure, so only the count law is theirs, and C is a
+/// complexity parameter rather than a grid. For γ &gt; 1 the law falls until C/2 and rises after it, so choose C at
+/// least twice the largest knot count the data can support.
 /// </summary>
 public sealed class EbicPrior : IComplexityPrior
 {
     private readonly double _gamma;
     private readonly int _candidates;
 
+    /// <param name="gamma">He, Yang and Kang's γ: 1 is flat, above 1 penalizes, below 1 favors more knots.</param>
+    /// <param name="candidateCount">C, the candidate count; the support is 0 ≤ k ≤ C.</param>
     public EbicPrior(double gamma, int candidateCount)
     {
-        if (gamma < 0.0 || gamma > 1.0) throw new ArgumentOutOfRangeException(nameof(gamma), "γ must be in [0,1].");
+        if (!(gamma >= 0.0 && double.IsFinite(gamma)))
+            throw new ArgumentOutOfRangeException(nameof(gamma), "γ must be finite and non-negative.");
         if (candidateCount < 1) throw new ArgumentOutOfRangeException(nameof(candidateCount));
         _gamma = gamma;
         _candidates = candidateCount;
@@ -104,7 +108,7 @@ public sealed class EbicPrior : IComplexityPrior
     public double LogPrior(int knotCount)
     {
         if (knotCount < 0 || knotCount > _candidates) return double.NegativeInfinity;
-        return -_gamma * LogBinomial(_candidates, knotCount);
+        return (1.0 - _gamma) * LogBinomial(_candidates, knotCount);
     }
 
     private static double LogBinomial(int n, int k)
