@@ -3,6 +3,7 @@ using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
 using Maths.Samplers;
+using Maths.Samplers.Rjmcmc;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -52,6 +53,47 @@ public sealed class TemperingTests
         Assert.True(Math.Abs(p.LocationMean - truePeak) < 0.06, $"tempered peak {p.LocationMean:F3} off {truePeak}");
         Assert.True(p.LocationLo <= truePeak && truePeak <= p.LocationHi, "95% interval should bracket the peak");
         Assert.InRange(result.AcceptanceRate, 1e-6, 1.0);   // cold replica genuinely mixed
+    }
+
+    [Fact]
+    public void TemperedRun_ReportsItsLadders()
+    {
+        var rng = new Xoshiro256PlusPlus(seed: 21);
+        int n = 100;
+        var x = new double[n];
+        var y = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            x[i] = (i + 0.5) / n;
+            y[i] = Math.Sin(2.0 * Math.PI * x[i]) + 0.15 * Gaussian(rng);
+        }
+        BarsEnsemble Ensemble(bool adapt) => new(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0),
+                                                  new LocalBetaKernel(50.0), temperLevels: 4, temperAdaptLadder: adapt);
+
+        BarsResult adapted = Ensemble(adapt: true).Run(x, y, grid: x, chains: 2, masterSeed: 4, burn: 600, samples: 600);
+        TemperingReadout t = adapted.Tempering!;
+        _out.WriteLine($"[ladder] trips/scan {t.RoundTripsPerScan:F4} (ideal {t.IdealRoundTripRate:F4}), Λ̂ {t.Barrier:F3}, " +
+                       $"rejection [{string.Join(", ", Array.ConvertAll(t.PairRejection, r => r.ToString("F3")))}]");
+        Assert.Equal(TemperingPath.Likelihood, t.Path);
+        Assert.Equal(SwapSchedule.DeterministicEvenOdd, t.Schedule);
+        Assert.Equal(3, t.PairRejection.Length);
+        Assert.All(t.PairRejection, r => Assert.InRange(r, 0.0, 1.0));
+        Assert.Equal(t.PairRejection[0] + t.PairRejection[1] + t.PairRejection[2], t.Barrier, 12);
+        Assert.InRange(t.RoundTripsPerScan, 0.0, t.IdealRoundTripRate);   // real local moves fall short of exact draws
+        Assert.Equal(2, t.Ladders.Length);
+        double[] geometric = ParallelTempering<KnotConfig>.GeometricLadder(4, 0.05);
+        foreach (double[] ladder in t.Ladders)
+        {
+            Assert.Equal(1.0, ladder[0]);
+            Assert.Equal(0.05, ladder[^1], 15);
+            Assert.NotEqual(geometric, ladder);   // the interior rungs moved in burn-in
+        }
+
+        TemperingReadout fixedLadder = Ensemble(adapt: false).Run(x, y, grid: x, chains: 2, masterSeed: 4, burn: 300, samples: 300).Tempering!;
+        Assert.All(fixedLadder.Ladders, ladder => Assert.Equal(geometric, ladder));
+
+        Assert.Null(new BarsEnsemble(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0))
+            .Run(x, y, grid: x, chains: 2, masterSeed: 4, burn: 100, samples: 100).Tempering);
     }
 
     [Fact]

@@ -33,6 +33,17 @@ public sealed record PeakMode(
     double SpanLeft, double SpanRight, double Mass, RHatDiagnostic LocationRHat);
 
 /// <summary>
+/// What the tempering ladders did while sampling (burn-in excluded), averaged over chains: the round-trip and
+/// annealed-restart rates per scan, each adjacent pair's mean rejection rate (cold first), their sum the barrier
+/// estimate Λ̂, the round-trip rate Theorem 1 of Syed et al. (2022) would give under ideal local exploration (NaN for
+/// the sequential sweep), and each chain's final rungs. Compare round trips only between even-odd schedules on one
+/// path; the cold chain's ESS is the neutral measure.
+/// </summary>
+public sealed record TemperingReadout(
+    TemperingPath Path, SwapSchedule Schedule, double RoundTripsPerScan, double AnnealedRestartsPerScan,
+    double[] PairRejection, double Barrier, double IdealRoundTripRate, double[][] Ladders);
+
+/// <summary>
 /// The pooled posterior fit of a BARS run plus its convergence diagnostics, all on the reported functionals
 /// (knot count, fitted grid values) — the quantities you read, monitored for convergence.
 /// <see cref="Fit"/> averages each draw's conditional mean curve (exact for this affine readout, and lower in variance
@@ -45,7 +56,7 @@ public sealed record PeakMode(
 /// fit (multimodality / under-determination), where it is ≈1 the fit is settled; <see cref="RHatFitMax"/> is its
 /// least favourable reading (<see cref="RHatDiagnostic.Worst"/>). <see cref="Knots"/> holds the knot count's
 /// rank-normalized diagnostics (split R̂, bulk and tail ESS), and <see cref="AcceptanceRate"/> counts the sampling
-/// phase only.
+/// phase only. <see cref="Tempering"/> reports the ladders when the run was tempered, and is null otherwise.
 /// <see cref="PeakIntensity"/> is the grid-aligned peak-intensity λ(T): the matching-free posterior density
 /// of significant transitions (∑ = <see cref="PeakCountMean"/>), its modes the persistent transitions.
 /// <see cref="SpanCoverage"/> is the grid-aligned span-coverage π(T): the posterior probability each T lies
@@ -71,7 +82,8 @@ public sealed record BarsResult(
     double AcceptanceRate,
     int[] ChainSeeds,
     IReadOnlyList<MoveStat> MoveStats,
-    CoefficientUncertainty Uncertainty);
+    CoefficientUncertainty Uncertainty,
+    TemperingReadout? Tempering);
 
 /// <summary>
 /// The BARS client of the kernel-agnostic ensemble shell (<see cref="ChainEnsemble"/>): it knows how to start one
@@ -296,7 +308,32 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var chainLambda = new double[chains][];
         for (int ci = 0; ci < chains; ci++) chainLambda[ci] = bars[ci].PeakIntensitySum;
         var peakModes = ExtractModes(grid, peakIntensity, spanCoverage, chainLambda);
-        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty);
+        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars));
+    }
+
+    // The ladders' sampling-phase statistics, averaged over chains; null for an untempered run.
+    private TemperingReadout? Tempering(BarsChainRun[] states)
+    {
+        if (_temperLevels is not int levels) return null;
+        int pairs = levels - 1, c = states.Length;
+        double trips = 0.0, restarts = 0.0;
+        var rejection = new double[pairs];
+        var ladders = new double[c][];
+        foreach (BarsChainRun st in states)
+        {
+            ParallelTempering<KnotConfig> ladder = st.Ladder!;
+            double scans = ladder.Scans - st.BurnScans;
+            trips += (ladder.RoundTrips - st.BurnRoundTrips) / scans;
+            restarts += (ladder.AnnealedRestarts - st.BurnRestarts) / scans;
+            IReadOnlyList<SwapPairStat> stats = ladder.PairStats;
+            for (int i = 0; i < pairs; i++) rejection[i] += (stats[i].MeanRejection * ladder.Scans - st.BurnRejection![i]) / scans;
+        }
+        for (int i = 0; i < pairs; i++) rejection[i] /= c;
+        for (int ci = 0; ci < c; ci++) ladders[ci] = states[ci].Ladder!.Betas;
+        double ideal = _temperSchedule == SwapSchedule.Sequential ? double.NaN
+                     : TemperingLadder.IdealRoundTripRate(rejection, _temperSchedule);
+        return new TemperingReadout(_temperPath, _temperSchedule, trips / c, restarts / c, rejection,
+                                    TemperingLadder.Barrier(rejection), ideal, ladders);
     }
 
     private static PeakPosterior SummarisePeak(BarsChainRun[] states, double denom)
@@ -621,6 +658,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         public double PeakHeightSum;
         public double PeakCountSum;
         public int SinceWeight;
+        public long BurnScans, BurnRoundTrips, BurnRestarts;   // the ladder's counts at the end of burn-in
+        public double[]? BurnRejection;                        // its per-pair rejection sums then
 
         private ReversibleJumpChain<KnotConfig> _rjChain = null!;
 
@@ -645,7 +684,17 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
         // IChainRun
         public IChain<KnotConfig> Chain => this;
-        public void Burn(int steps) => _owner.AdaptiveBurn(this, steps);
+        public void Burn(int steps)
+        {
+            _owner.AdaptiveBurn(this, steps);
+            if (Ladder is not ParallelTempering<KnotConfig> ladder) return;
+            BurnScans = ladder.Scans;
+            BurnRoundTrips = ladder.RoundTrips;
+            BurnRestarts = ladder.AnnealedRestarts;
+            IReadOnlyList<SwapPairStat> stats = ladder.PairStats;
+            BurnRejection = new double[stats.Count];
+            for (int i = 0; i < stats.Count; i++) BurnRejection[i] = ladder.Scans > 0 ? stats[i].MeanRejection * ladder.Scans : 0.0;
+        }
         public void Accumulate(in KnotConfig draw, Span<double> functionals) => _owner.AccumulateDraw(this, draw, functionals);
     }
 }
