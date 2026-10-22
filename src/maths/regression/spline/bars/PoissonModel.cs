@@ -100,7 +100,7 @@ public sealed class PoissonModel : IObservationModel
         }
 
         BandCholesky h = LaplaceFactor(design, beta, prior);
-        if (!DesignAdmission.Admits(h.Status)) return (double.NegativeInfinity, DesignRejection.Inadmissible);
+        if (!DesignAdmission.Admits(h)) return (double.NegativeInfinity, DesignRejection.Inadmissible);
         double logNormalizer = 0.5 * (nu * Math.Log(prior.Scale) + prior.LogDetGram);
         return (LogPosterior(design, y, beta, prior) + logNormalizer - 0.5 * h.LogDet, DesignRejection.None);
     }
@@ -154,7 +154,7 @@ public sealed class PoissonModel : IObservationModel
         (double[] betaHat, _, GPriorTerms? prior) = FitGlm(design, y);
         if (prior is null && Marginal == PoissonMarginal.GPrior) return betaHat;   // no g-prior: ȳ = 0 or BᵀB refused
         BandCholesky chol = LaplaceFactor(design, betaHat, prior);
-        if (!DesignAdmission.Admits(chol.Status)) return betaHat;   // no Laplace proposal: fall back to β̂, as Whittle does
+        if (!DesignAdmission.Admits(chol)) return betaHat;   // no Laplace proposal: fall back to β̂, as Whittle does
 
         var z = new double[nu];
         var innov = new double[nu];
@@ -194,7 +194,7 @@ public sealed class PoissonModel : IObservationModel
         (double[] betaHat, DesignRejection rejection, GPriorTerms? prior) = FitGlm(design, y);
         if (rejection != DesignRejection.None) return ReadoutQuadratics.Unavailable(readoutDesign);
         BandCholesky j = LaplaceFactor(design, betaHat, prior);
-        return DesignAdmission.Admits(j.Status)
+        return DesignAdmission.Admits(j)
             ? ReadoutQuadratics.Of(j, readoutDesign, 1.0)
             : ReadoutQuadratics.Unavailable(readoutDesign);
     }
@@ -288,7 +288,7 @@ public sealed class PoissonModel : IObservationModel
             }
 
             chol.DecomposeBanded(band);
-            if (!DesignAdmission.Admits(chol.Status))
+            if (!DesignAdmission.PivotsAdmit(chol.Status))
                 return (beta, DesignRejection.Inadmissible, prior);
             double[] sol = chol.Solve(b);
 
@@ -299,7 +299,8 @@ public sealed class PoissonModel : IObservationModel
                 shift += d * d;
                 beta[p] = sol[p];
             }
-            if (shift < Tolerance) return (beta, DesignRejection.None, prior);
+            if (shift < Tolerance)   // the final system: the full gate
+                return (beta, DesignAdmission.Admits(chol) ? DesignRejection.None : DesignRejection.Inadmissible, prior);
         }
         return (beta, DesignRejection.NotConverged, prior);
     }
@@ -324,7 +325,7 @@ public sealed class PoissonModel : IObservationModel
         var gram = new BandCholesky(nu, bd.Bandwidth, BandFactorization.Ldlt, strict: true);
         gram.DecomposeBanded(gramBand);
         refused = DesignRejection.Inadmissible;
-        if (!DesignAdmission.Admits(gram.Status)) return null;
+        if (!DesignAdmission.Admits(gram)) return null;
 
         double level = Math.Log(mean), scale = mean / m;
         double[] priorMean = gram.Solve(columnSums);

@@ -110,7 +110,7 @@ public sealed class GibbsLossModel : IObservationModel
             bd.Accumulate(w, band, y, b);
 
             chol.DecomposeBanded(band);
-            if (!DesignAdmission.Admits(chol.Status))
+            if (!DesignAdmission.PivotsAdmit(chol.Status))
                 return (beta, DesignRejection.Inadmissible);
             double[] sol = chol.Solve(b);
 
@@ -121,7 +121,8 @@ public sealed class GibbsLossModel : IObservationModel
                 shift += d * d;
                 beta[p] = sol[p];
             }
-            if (iter > 0 && shift < Tolerance) return (beta, DesignRejection.None);
+            if (iter > 0 && shift < Tolerance)   // the final system: the full gate
+                return (beta, DesignAdmission.Admits(chol) ? DesignRejection.None : DesignRejection.Inadmissible);
         }
         return (beta, DesignRejection.NotConverged);
     }

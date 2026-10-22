@@ -229,7 +229,7 @@ public sealed class CollapsedGPriorTests
         Assert.Throws<ArgumentOutOfRangeException>(() => block.At(double.NaN));
     }
 
-    private static bool PositiveDefinite(FactorStatus status) => status.PositiveDefinite;
+    private static bool PositiveDefinite(ISpdFactor factor) => factor.Status.PositiveDefinite;
 
     private static void Close(double expected, double actual, double rel)
         => Assert.True(Math.Abs(actual - expected) <= rel * Math.Max(1.0, Math.Abs(expected)), $"expected {expected:R}, got {actual:R}");

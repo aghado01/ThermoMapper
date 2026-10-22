@@ -17,7 +17,7 @@ public static class BandedGPrior
 {
     /// <summary>The unweighted block: G = ZᵀZ factored, β_OLS, <c>‖y − Zβ_OLS‖²</c> and <c>Q = ‖Zβ_OLS‖²</c>; null when
     /// <paramref name="admits"/> refuses G's factor.</summary>
-    public static CollapsedGPrior? Fit(BandedDesign design, double[] y, Func<FactorStatus, bool> admits)
+    public static CollapsedGPrior? Fit(BandedDesign design, double[] y, Func<ISpdFactor, bool> admits)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -30,7 +30,7 @@ public static class BandedGPrior
         design.Accumulate(null, band, y, b);
         var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         gram.DecomposeBanded(band);
-        if (!admits(gram.Status)) return null;
+        if (!admits(gram)) return null;
         double[] beta = gram.Solve(b);   // β_OLS = G⁻¹Zᵀy; no inverse is formed
 
         var f = new double[m];
@@ -51,7 +51,7 @@ public static class BandedGPrior
     /// null when <paramref name="admits"/> refuses either factor.
     /// </summary>
     public static CollapsedGPrior? Fit(BandedDesign design, double[] y, double[] weights, double tau,
-                                       Func<FactorStatus, bool> admits)
+                                       Func<ISpdFactor, bool> admits)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -65,7 +65,7 @@ public static class BandedGPrior
         design.Accumulate(null, gBand, null, null);
         var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         gram.DecomposeBanded(gBand);
-        if (!admits(gram.Status)) return null;
+        if (!admits(gram)) return null;
 
         var wPlus = new double[m];
         double sumLogW = 0.0;
@@ -80,7 +80,7 @@ public static class BandedGPrior
         design.AccumulateRhs(weights, y, h);
         var posterior = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         posterior.DecomposeBanded(pBand);
-        if (!admits(posterior.Status)) return null;
+        if (!admits(posterior)) return null;
         double[] beta = posterior.Solve(h);
 
         var f = new double[m];

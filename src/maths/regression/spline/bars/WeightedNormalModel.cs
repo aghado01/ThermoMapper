@@ -140,7 +140,7 @@ public sealed class WeightedNormalModel : IObservationModel
         return (block, tau);
     }
 
-    private static bool Admits(FactorStatus status) => DesignAdmission.Admits(status);
+    private static bool Admits(ISpdFactor factor) => DesignAdmission.Admits(factor);
 
     // No posterior: one NaN per coefficient.
     private static double[] Unavailable(double[,] design)

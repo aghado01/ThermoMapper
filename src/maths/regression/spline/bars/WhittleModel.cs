@@ -127,7 +127,7 @@ public sealed class WhittleModel : IObservationModel
         chol.DecomposeBanded(band);               // factored once
 
         var beta = new double[nu];
-        if (!DesignAdmission.Admits(chol.Status))
+        if (!DesignAdmission.Admits(chol))
             return (beta, DesignRejection.Inadmissible, chol);
         var z = new double[m];
         var b = new double[nu];

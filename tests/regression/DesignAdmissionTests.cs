@@ -1,4 +1,5 @@
 using System;
+using Maths.LinAlg;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Xunit;
@@ -89,6 +90,24 @@ public sealed class DesignAdmissionTests
         };
 
         Assert.Equal(double.NegativeInfinity, capped.LogMarginalLikelihood(z, Response(model, x), null));
+    }
+
+    [Fact]
+    public void HealthyPivots_DoNotAdmitAnIllConditionedFactor()
+    {
+        // A = L·Lᵀ with L lower bidiagonal, diagonal 1 and subdiagonal 2 (the external review's counterexample): every
+        // relative pivot is at least 0.2, so the pivot check passes, but κ(E) is about 2·10¹⁵ and the estimate refuses it.
+        const int n = 25;
+        var band = new double[2, n];
+        for (int j = 0; j < n; j++)
+        {
+            band[0, j] = j == 0 ? 1.0 : 5.0;
+            if (j < n - 1) band[1, j] = 2.0;
+        }
+        var factor = new BandCholesky(n, 1, BandFactorization.Ldlt, strict: true);
+        factor.DecomposeBanded(band);
+        Assert.True(DesignAdmission.PivotsAdmit(factor.Status));
+        Assert.False(DesignAdmission.Admits(factor));
     }
 
     [Fact]

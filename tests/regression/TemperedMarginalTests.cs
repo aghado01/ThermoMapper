@@ -159,7 +159,7 @@ public sealed class TemperedMarginalTests
         Assert.Equal(target.LogPosterior(new KnotConfig([0.25, 0.6])), e.LogPrior + e.LogLikelihood(1.0));
     }
 
-    private static bool PositiveDefinite(FactorStatus status) => status.PositiveDefinite;
+    private static bool PositiveDefinite(ISpdFactor factor) => factor.Status.PositiveDefinite;
 
     private static (double[] X, double[] Y) Data(int n)
     {
