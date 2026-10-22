@@ -31,7 +31,10 @@ namespace Maths.Regression.Tests;
 /// (dimension changes undone by the next one), and ESS of the knot count, the energy (log likelihood), the fit at
 /// x = 0.5 and the peak location.</item>
 /// </list>
-/// <c>MIXING_BENCH_FITS</c> (comma-separated) restricts the relocation study's fits. Tables and summaries go under
+/// <c>CONFIRM_BENCH</c> (seeds per arm) runs the two winners together before they become defaults: the constant schedule
+/// with a fixed kernel, DMGK at c = 0.4 alone, the adaptive kernel alone, and both, on <see cref="BirthBenchmark"/>'s
+/// fits plus two Poisson fits. <c>MIXING_BENCH_FITS</c> (comma-separated) restricts the relocation and confirmation
+/// studies' fits. Tables and summaries go under
 /// <c>artifacts/test-runs/MixingBenchmark/</c>.
 /// </summary>
 public sealed class MixingBenchmark
@@ -115,6 +118,85 @@ public sealed class MixingBenchmark
             double hi = Math.Max(a, b);
             return hi + Math.Log(Math.Exp(a - hi) + Math.Exp(b - hi));
         }
+    }
+
+    private sealed record ConfirmFit(string Name, IObservationModel Model, double[] X, double[] Y, Func<double, double> Truth,
+                                     double PriorMean);
+
+    // BirthBenchmark's Normal fits, and two count fits scored on the log-intensity: TemperingBenchmark's counts and
+    // PoissonTests' intensity peak.
+    private static ConfirmFit[] ConfirmFits()
+    {
+        var fits = BirthBenchmark.Fits()
+            .Select(f => new ConfirmFit(f.Name, new WeightedNormalModel(), f.X, f.Y, f.Truth, f.PriorMean)).ToList();
+        int n = 120;
+        double[] cx = Enumerable.Range(0, n).Select(i => (i + 0.5) / n).ToArray();
+        var crng = new Xoshiro256PlusPlus(seed: 77);
+        double[] cy = cx.Select(t => { double z = Gaussian(crng); return Math.Round(Math.Exp(1.0 + Math.Sin(2.0 * Math.PI * t)) + 0.5 * z * z); }).ToArray();
+        fits.Add(new ConfirmFit("counts", new PoissonModel(), cx, cy, t => 1.0 + Math.Sin(2.0 * Math.PI * t), 5.0));
+        double[] px = Enumerable.Range(0, 150).Select(i => (i + 0.5) / 150).ToArray();
+        var prng = new Xoshiro256PlusPlus(seed: 33);
+        Func<double, double> logPeak = t => 1.2 + 1.3 * Math.Exp(-60.0 * (t - 0.4) * (t - 0.4));
+        double[] py = px.Select(t =>
+        {
+            double l = Math.Exp(-Math.Exp(logPeak(t))), p = 1.0;
+            int k = 0;
+            do { k++; p *= prng.NextDouble(); } while (p > l);
+            return (double)(k - 1);
+        }).ToArray();
+        fits.Add(new ConfirmFit("count-peak", new PoissonModel(), px, py, logPeak, 5.0));
+        return fits.ToArray();
+    }
+
+    [Fact]
+    public void Combination_Confirmation()
+    {
+        if (!int.TryParse(Environment.GetEnvironmentVariable("CONFIRM_BENCH"), out int seeds) || seeds <= 0) return;   // heavy
+        (string Name, double? Dmgk, double? Adapt)[] arms =
+            [("default", null, null), ("dmgk-0.4", 0.4, null), ("adaptive-50", null, 50.0), ("both", 0.4, 50.0)];
+        double[] grid = Enumerable.Range(0, 51).Select(i => i / 50.0).ToArray();
+        string[]? only = Environment.GetEnvironmentVariable("MIXING_BENCH_FITS")?.Split(',');
+        var table = new StringBuilder("fit\tarm\tseed\tseconds\tknots_ess\tpeak_ess\tmean_knots\tmse\n");
+        var rows = new List<(string Fit, string Arm, double KnotsEss, double PeakEss, double Knots, double Mse, double Seconds)>();
+        foreach (ConfirmFit fit in ConfirmFits().Where(f => only is null || only.Contains(f.Name)))
+            foreach ((string arm, double? dmgk, double? adapt) in arms)
+                for (int s = 0; s < seeds; s++)
+                {
+                    var ensemble = new BarsEnsemble(new SplineBasis(3), fit.Model, new PoissonPrior(fit.PriorMean), new LocalBetaKernel(50.0),
+                                                    dmgkConstant: dmgk, adaptKernelTau: adapt);
+                    var clock = Stopwatch.StartNew();
+                    BarsResult r = ensemble.Run(fit.X, fit.Y, grid: grid, chains: 4, masterSeed: 100 + s, burn: 2000, samples: 10_000);
+                    double seconds = clock.Elapsed.TotalSeconds;
+                    double mse = grid.Select((t, g) => Math.Pow(r.Fit[g] - fit.Truth(t), 2)).Where((_, g) =>
+                        fit.Name != "gap" || grid[g] < 0.35 || grid[g] > 0.65).Average();
+                    double knotsEss = r.Knots.BulkEss.Value, peakEss = r.Peak.LocationConvergence.BulkEss.Value;
+                    table.Append(string.Join('\t', fit.Name, arm, s, F(seconds), F(knotsEss), F(peakEss), F(r.MeanKnots), F(mse))).Append('\n');
+                    rows.Add((fit.Name, arm, knotsEss, peakEss, r.MeanKnots, mse, seconds));
+                }
+
+        var summary = new StringBuilder("fit\tarm\tknots_ess\tpeak_ess\tknots_vs_default\tpeak_vs_default\tknots_per_s_vs_default\t" +
+                                        "peak_per_s_vs_default\tmean_knots\tmean_knots_vs_default\tmse\tmse_vs_default\n");
+        foreach (var g in rows.GroupBy(r => r.Fit))
+        {
+            var d = g.Where(r => r.Arm == "default").ToArray();
+            double k0 = Median(d.Select(r => r.KnotsEss)), p0 = Median(d.Select(r => r.PeakEss));
+            double ks0 = Median(d.Select(r => r.KnotsEss / r.Seconds)), ps0 = Median(d.Select(r => r.PeakEss / r.Seconds));
+            double n0 = Median(d.Select(r => r.Knots)), m0 = Median(d.Select(r => r.Mse));
+            foreach (var a in g.GroupBy(r => r.Arm))
+            {
+                double k = Median(a.Select(r => r.KnotsEss)), p = Median(a.Select(r => r.PeakEss));
+                double ks = Median(a.Select(r => r.KnotsEss / r.Seconds)), ps = Median(a.Select(r => r.PeakEss / r.Seconds));
+                double nk = Median(a.Select(r => r.Knots)), mse = Median(a.Select(r => r.Mse));
+                summary.Append(string.Join('\t', g.Key, a.Key, F(k), F(p), F(k / k0), F(p / p0), F(ks / ks0), F(ps / ps0), F(nk), F(nk / n0),
+                                           F(mse), F(mse / m0))).Append('\n');
+                _out.WriteLine($"[confirm] {g.Key,-13} {a.Key,-11}: knots {k / k0:F2}×  peak {p / p0:F2}×  per s {ks / ks0:F2}× / {ps / ps0:F2}×  " +
+                               $"mean k {nk:F2} ({nk / n0:F3})  mse {mse / m0:F3}");
+            }
+        }
+        ArtifactRun run = HarnessArtifacts.Create("test-runs", "MixingBenchmark", "Maths.Regression.Tests",
+                                                  new Dictionary<string, object?> { ["Study"] = "confirmation", ["Seeds"] = seeds });
+        _out.WriteLine($"[confirm] table {run.WriteText("confirmation.tsv", table.ToString())}");
+        _out.WriteLine($"[confirm] summary {run.WriteText("confirmation-summary.tsv", summary.ToString())}");
     }
 
     private sealed record Regime(string Name, double[] X, double[] Y, IComplexityPrior Prior);
