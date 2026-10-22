@@ -6,6 +6,15 @@ using Maths.Samplers.Ensemble;
 namespace Maths.Samplers.Rjmcmc;
 
 /// <summary>
+/// A reversible-jump chain's restart state: its current state, temperature, RNG words and counters. The moves and
+/// target are the caller's to rebuild; the cached evaluation is recomputed on restore, since evaluation is
+/// deterministic. Mutable move or kernel state (adaptation) is the engine's to save beside it.
+/// </summary>
+public sealed record ChainSnapshot<TState>(
+    TState Current, Temperature Temperature, ulong Rng0, ulong Rng1, ulong Rng2, ulong Rng3,
+    long Attempts, long Accepted, long[] MoveAttempts, long[] MoveAccepts);
+
+/// <summary>
 /// One reversible-jump Markov chain (Green 1995): a pure, sequential sampler that walks a carrier
 /// <typeparamref name="TState"/> by weighted random choice among <see cref="IRjMove{TState}"/> moves, accepting
 /// each proposal under the full Green acceptance ratio. The engine assembles all four factors — target ratio,
@@ -158,6 +167,34 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
         for (int i = 0; i < _moves.Count; i++)
             stats[i] = new MoveStat(_moves[i].Key, _moveAttempts[i], _moveAccepts[i]);
         return stats;
+    }
+
+    /// <summary>This chain's restart state; the chain itself is unchanged.</summary>
+    public ChainSnapshot<TState> Snapshot()
+    {
+        (ulong s0, ulong s1, ulong s2, ulong s3) = _rng.SaveState();
+        return new ChainSnapshot<TState>(Current, Temperature, s0, s1, s2, s3, Attempts, Accepted,
+                                         (long[])_moveAttempts.Clone(), (long[])_moveAccepts.Clone());
+    }
+
+    /// <summary>
+    /// A chain that continues exactly where <paramref name="snapshot"/>'s left off: the same state, temperature, RNG
+    /// stream and counters, over <paramref name="moves"/> and <paramref name="target"/>, which must be the ones it ran
+    /// with (in the same order). The current state is evaluated once, against <paramref name="target"/>.
+    /// </summary>
+    public static ReversibleJumpChain<TState> Restore(IReadOnlyList<IRjMove<TState>> moves, ISamplingTarget<TState> target,
+                                                      ChainSnapshot<TState> snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        var chain = new ReversibleJumpChain<TState>(moves, target, snapshot.Current,
+            Xoshiro256PlusPlus.Restore(snapshot.Rng0, snapshot.Rng1, snapshot.Rng2, snapshot.Rng3), snapshot.Temperature);
+        if (snapshot.MoveAttempts.Length != moves.Count || snapshot.MoveAccepts.Length != moves.Count)
+            throw new ArgumentException("The snapshot was taken over a different move set.", nameof(snapshot));
+        chain.Attempts = snapshot.Attempts;
+        chain.Accepted = snapshot.Accepted;
+        Array.Copy(snapshot.MoveAttempts, chain._moveAttempts, moves.Count);
+        Array.Copy(snapshot.MoveAccepts, chain._moveAccepts, moves.Count);
+        return chain;
     }
 
     /// <summary>The cached evaluation of <see cref="Current"/>. Replica exchange reads it, and queries it at other

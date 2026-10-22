@@ -35,10 +35,18 @@ public sealed class ChainEnsemble
     /// chains and one monitored functional.</param>
     /// <param name="batchSize">Samples per round between R̂ checks (≤ 0 = a single round of <paramref name="samples"/>).</param>
     /// <param name="minEssPerChain">The ESS gate of an R̂ stop, per chain; <see cref="MinEssPerChain"/> by default.</param>
+    /// <param name="checkpoint">When true, <see cref="EnsembleRun.Checkpoint"/> holds the run's restart state at its end;
+    /// every chain run must then be an <see cref="IResumableChainRun{TDraw}"/>.</param>
+    /// <param name="resumeFrom">When given, continue that checkpoint's run instead of starting one: its chains are
+    /// rebuilt by <see cref="IEnsembleModel{TDraw}.RestoreChain"/>, <paramref name="burn"/> is not run again, and
+    /// <paramref name="samples"/> more draws per chain are collected. The checkpoint's identity must match
+    /// <paramref name="masterSeed"/>, <paramref name="chains"/> and the model's <see cref="IEnsembleModel{TDraw}.Fingerprint"/>.
+    /// A run resumed from a checkpoint continues exactly as the uninterrupted run would have.</param>
     /// <returns>The pooled <see cref="EnsembleRun"/> plus the per-chain handles, so the client can pool its own sinks.</returns>
     public (EnsembleRun Summary, IReadOnlyList<IChainRun<TDraw>> Chains) Run<TDraw>(
         IEnsembleModel<TDraw> model, int chains, int masterSeed, int burn, int samples,
-        double rHatTarget = 0.0, int batchSize = 0, double minEssPerChain = MinEssPerChain)
+        double rHatTarget = 0.0, int batchSize = 0, double minEssPerChain = MinEssPerChain,
+        bool checkpoint = false, EnsembleCheckpoint? resumeFrom = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         if (chains < 1) throw new ArgumentOutOfRangeException(nameof(chains));
@@ -67,23 +75,45 @@ public sealed class ChainEnsemble
         var traces = new ChainTrace[chains];          // [ci] the monitored functionals' post-burn draws
         var burnAccepted = new long[chains];
         var burnAttempts = new long[chains];
-
-        Parallel.For(0, chains, ci =>
-        {
-            IChainRun<TDraw> run = model.StartChain(seeds[ci], readoutSeeds[ci]);
-            run.Burn(burn);
-            runs[ci] = run;
-            burnAccepted[ci] = run.Chain.Accepted;
-            burnAttempts[ci] = run.Chain.Attempts;
-            moments[ci] = new RunningMoments[dim];
-            traces[ci] = new ChainTrace(monitored, samples);
-        });
-
-        int effBatch = batchSize <= 0 ? samples : batchSize;
         int collected = 0;
-        while (collected < samples)
+
+        if (resumeFrom is null)
         {
-            int step = Math.Min(effBatch, samples - collected);
+            Parallel.For(0, chains, ci =>
+            {
+                IChainRun<TDraw> run = model.StartChain(seeds[ci], readoutSeeds[ci]);
+                run.Burn(burn);
+                runs[ci] = run;
+                burnAccepted[ci] = run.Chain.Accepted;
+                burnAttempts[ci] = run.Chain.Attempts;
+                moments[ci] = new RunningMoments[dim];
+                traces[ci] = new ChainTrace(monitored, samples);
+            });
+        }
+        else
+        {
+            var identity = new RunIdentity(masterSeed, chains, model.Fingerprint);
+            if (resumeFrom.Identity != identity || resumeFrom.Chains.Count != chains)
+                throw new ArgumentException(
+                    $"The checkpoint belongs to another run ({resumeFrom.Identity}, not {identity}).", nameof(resumeFrom));
+            seeds = (int[])resumeFrom.ChainSeeds.Clone();
+            collected = resumeFrom.DrawsPerChain;
+            for (int ci = 0; ci < chains; ci++)   // in order, so a model that cannot restore says so directly
+            {
+                ChainCheckpoint cp = resumeFrom.Chains[ci];
+                runs[ci] = model.RestoreChain(cp.Engine);
+                burnAccepted[ci] = cp.BurnAccepted;
+                burnAttempts[ci] = cp.BurnAttempts;
+                moments[ci] = (RunningMoments[])cp.Moments.Clone();
+                traces[ci] = cp.Trace.Copy();
+            }
+        }
+
+        int total = collected + samples;
+        int effBatch = batchSize <= 0 ? samples : batchSize;
+        while (collected < total)
+        {
+            int step = Math.Min(effBatch, total - collected);
             Parallel.For(0, chains, ci =>
             {
                 IChain<TDraw> chain = runs[ci].Chain;
@@ -100,7 +130,7 @@ public sealed class ChainEnsemble
             });
             collected += step;
 
-            if (rHatTarget > 0.0 && collected < samples && MayStop(moments, traces, dim, monitored, rHatTarget, minEssPerChain))
+            if (rHatTarget > 0.0 && collected < total && MayStop(moments, traces, dim, monitored, rHatTarget, minEssPerChain))
                 break;
         }
 
@@ -135,7 +165,22 @@ public sealed class ChainEnsemble
         }
         double acceptance = accT > 0 ? (double)accA / accT : 0.0;
 
-        var summary = new EnsembleRun(mean, variance, rhat, diagnostics, traces, collected, acceptance, seeds);
+        EnsembleCheckpoint? restart = null;
+        if (checkpoint)
+        {
+            var parts = new ChainCheckpoint[chains];
+            for (int ci = 0; ci < chains; ci++)
+            {
+                if (runs[ci] is not IResumableChainRun<TDraw> resumable)
+                    throw new InvalidOperationException($"{runs[ci].GetType().Name} cannot save its restart state.");
+                parts[ci] = new ChainCheckpoint(resumable.SaveState(), (RunningMoments[])moments[ci].Clone(), traces[ci].Copy(),
+                                                burnAccepted[ci], burnAttempts[ci]);
+            }
+            restart = new EnsembleCheckpoint(new RunIdentity(masterSeed, chains, model.Fingerprint), (int[])seeds.Clone(),
+                                             collected, parts);
+        }
+
+        var summary = new EnsembleRun(mean, variance, rhat, diagnostics, traces, collected, acceptance, seeds, restart);
         return (summary, runs);
     }
 

@@ -43,6 +43,14 @@ public sealed class ChainTrace
 
     /// <summary>Functional <paramref name="functional"/>'s draws, in order.</summary>
     public double[] Draws(int functional) => _draws[functional].ToArray();
+
+    /// <summary>An independent copy.</summary>
+    public ChainTrace Copy()
+    {
+        var c = new ChainTrace(_draws.Length, Count) { Count = Count };
+        for (int f = 0; f < _draws.Length; f++) c._draws[f].AddRange(_draws[f]);
+        return c;
+    }
 }
 
 public static partial class ChainDiagnostics

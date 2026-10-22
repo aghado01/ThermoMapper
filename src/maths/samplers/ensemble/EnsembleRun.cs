@@ -11,8 +11,9 @@ namespace Maths.Samplers.Ensemble;
 /// <see cref="IEnsembleModel{TDraw}.MonitoredDim"/> functionals, read from <see cref="Traces"/>, one per chain.
 /// <see cref="AcceptanceRate"/> counts the sampling
 /// phase only. <see cref="ChainSeeds"/> is the run's reproducibility provenance (the resolved children of the master
-/// seed). The client assembles its domain result from these plus the per-chain <see cref="IChainRun{TDraw}"/>
-/// handles the shell hands back alongside this record.
+/// seed). <see cref="Checkpoint"/> is the run's restart state when it was requested, and null otherwise. The client
+/// assembles its domain result from these plus the per-chain <see cref="IChainRun{TDraw}"/> handles the shell hands
+/// back alongside this record.
 /// </summary>
 public sealed record EnsembleRun(
     double[] FunctionalMean,
@@ -22,4 +23,5 @@ public sealed record EnsembleRun(
     IReadOnlyList<ChainTrace> Traces,
     int SamplesUsed,
     double AcceptanceRate,
-    int[] ChainSeeds);
+    int[] ChainSeeds,
+    EnsembleCheckpoint? Checkpoint = null);

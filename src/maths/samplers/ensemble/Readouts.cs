@@ -67,6 +67,14 @@ public sealed class WeightedSums : IMergeable<WeightedSums>
     /// <summary>Index <paramref name="i"/>'s weighted mean; NaN when nothing has been folded in.</summary>
     public double Mean(int i) => TotalWeight > 0.0 ? _sums[i] / TotalWeight : double.NaN;
 
+    /// <summary>An independent copy.</summary>
+    public WeightedSums Copy()
+    {
+        var c = new WeightedSums(_sums.Length) { TotalWeight = TotalWeight, Folds = Folds };
+        _sums.CopyTo(c._sums, 0);
+        return c;
+    }
+
     public void MergeFrom(WeightedSums other)
     {
         ArgumentNullException.ThrowIfNull(other);
@@ -98,6 +106,15 @@ public sealed class DrawSample : IMergeable<DrawSample>
 
     /// <summary>The total weight: the draw count under unit weights.</summary>
     public double TotalWeight { get; private set; }
+
+    /// <summary>An independent copy.</summary>
+    public DrawSample Copy()
+    {
+        var c = new DrawSample { TotalWeight = TotalWeight };
+        c._values.AddRange(_values);
+        if (_weights is not null) c._weights = new List<double>(_weights);
+        return c;
+    }
 
     /// <summary>Fold one draw.</summary>
     public void Add(double value, double weight = 1.0)
@@ -205,6 +222,22 @@ public sealed class Tally<TCategory> : IMergeable<Tally<TCategory>> where TCateg
     {
         ArgumentNullException.ThrowIfNull(other);
         for (int i = 0; i < _counts.Length; i++) _counts[i] += other._counts[i];
+    }
+
+    /// <summary>An independent copy.</summary>
+    public Tally<TCategory> Copy()
+    {
+        var c = new Tally<TCategory>();
+        _counts.CopyTo(c._counts, 0);
+        return c;
+    }
+
+    /// <summary>Overwrite these counts with <paramref name="other"/>'s, keeping this instance (a restore whose
+    /// rebuilding evaluated states counts nothing).</summary>
+    public void Assign(Tally<TCategory> other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        other._counts.CopyTo(_counts, 0);
     }
 
     private static int IndexOf(TCategory category)

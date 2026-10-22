@@ -6,6 +6,18 @@ using Maths.Samplers.Ensemble;
 namespace Maths.Samplers.Rjmcmc;
 
 /// <summary>
+/// A ladder's restart state: every replica's <see cref="ChainSnapshot{TState}"/> (its rung is its temperature), the
+/// swap stream, the scan count, which state each rung holds, the round-trip bookkeeping and the swap statistics,
+/// including those gathered since the last adaptation.
+/// </summary>
+public sealed record LadderSnapshot<TState>(
+    IReadOnlyList<ChainSnapshot<TState>> Replicas, TemperingPath Path, SwapSchedule Schedule,
+    ulong SwapRng0, ulong SwapRng1, ulong SwapRng2, ulong SwapRng3,
+    long Scans, long SwapAttempts, long SwapAccepts, long RoundTrips, long AnnealedRestarts,
+    int[] LabelAt, sbyte[] LastEnd, long[] PairAttempts, long[] PairAccepts, double[] RejectionSum,
+    double[] RoundRejectionSum, long RoundScans);
+
+/// <summary>
 /// Parallel tempering (replica exchange) over a ladder of reversible-jump chains at inverse temperatures
 /// 1 = β₀ &gt; β₁ &gt; … &gt; β_{L-1}, all on one declared <see cref="TemperingPath"/>: the powered posterior
 /// <c>(prior · likelihood)^β</c> or the likelihood-tempered path <c>prior · likelihood^β</c>. After every scan, adjacent
@@ -75,6 +87,68 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         _lastEnd = new sbyte[levels];
         for (int i = 0; i < levels; i++) _labelAt[i] = i;
         _lastEnd[levels - 1] = +1;   // a state's first round trip starts at its first visit to the hot end
+    }
+
+    // A ladder rebuilt from a snapshot: the replicas and swap stream are restored, the bookkeeping copied after.
+    private ParallelTempering(ReversibleJumpChain<TState>[] chains, Xoshiro256PlusPlus swapRng, TemperingPath path,
+                              SwapSchedule schedule)
+    {
+        _chains = chains;
+        _swapRng = swapRng;
+        Path = path;
+        Schedule = schedule;
+        int levels = chains.Length;
+        _logA = new double[levels - 1];
+        _pairAttempts = new long[levels - 1];
+        _pairAccepts = new long[levels - 1];
+        _rejectionSum = new double[levels - 1];
+        _roundRejectionSum = new double[levels - 1];
+        _labelAt = new int[levels];
+        _lastEnd = new sbyte[levels];
+    }
+
+    /// <summary>This ladder's restart state; the ladder itself is unchanged.</summary>
+    public LadderSnapshot<TState> Snapshot()
+    {
+        var replicas = new ChainSnapshot<TState>[_chains.Length];
+        for (int i = 0; i < replicas.Length; i++) replicas[i] = _chains[i].Snapshot();
+        (ulong s0, ulong s1, ulong s2, ulong s3) = _swapRng.SaveState();
+        return new LadderSnapshot<TState>(replicas, Path, Schedule, s0, s1, s2, s3, Scans, SwapAttempts, SwapAccepts,
+            RoundTrips, AnnealedRestarts, (int[])_labelAt.Clone(), (sbyte[])_lastEnd.Clone(), (long[])_pairAttempts.Clone(),
+            (long[])_pairAccepts.Clone(), (double[])_rejectionSum.Clone(), (double[])_roundRejectionSum.Clone(), _roundScans);
+    }
+
+    /// <summary>
+    /// A ladder that continues exactly where <paramref name="snapshot"/>'s left off, over the move sets and target it
+    /// ran with. Each replica's current state is evaluated once, against <paramref name="target"/>.
+    /// </summary>
+    public static ParallelTempering<TState> Restore(Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica,
+                                                    ISamplingTarget<TState> target, LadderSnapshot<TState> snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(movesForReplica);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        int levels = snapshot.Replicas.Count;
+        var chains = new ReversibleJumpChain<TState>[levels];
+        for (int i = 0; i < levels; i++)
+            chains[i] = ReversibleJumpChain<TState>.Restore(movesForReplica(i), target, snapshot.Replicas[i]);
+        var ladder = new ParallelTempering<TState>(chains,
+            Xoshiro256PlusPlus.Restore(snapshot.SwapRng0, snapshot.SwapRng1, snapshot.SwapRng2, snapshot.SwapRng3),
+            snapshot.Path, snapshot.Schedule)
+        {
+            Scans = snapshot.Scans,
+            SwapAttempts = snapshot.SwapAttempts,
+            SwapAccepts = snapshot.SwapAccepts,
+            RoundTrips = snapshot.RoundTrips,
+            AnnealedRestarts = snapshot.AnnealedRestarts,
+        };
+        snapshot.LabelAt.CopyTo(ladder._labelAt, 0);
+        snapshot.LastEnd.CopyTo(ladder._lastEnd, 0);
+        snapshot.PairAttempts.CopyTo(ladder._pairAttempts, 0);
+        snapshot.PairAccepts.CopyTo(ladder._pairAccepts, 0);
+        snapshot.RejectionSum.CopyTo(ladder._rejectionSum, 0);
+        snapshot.RoundRejectionSum.CopyTo(ladder._roundRejectionSum, 0);
+        ladder._roundScans = snapshot.RoundScans;
+        return ladder;
     }
 
     /// <summary>The path every replica takes.</summary>

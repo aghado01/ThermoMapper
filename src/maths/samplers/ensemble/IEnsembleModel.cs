@@ -31,6 +31,19 @@ public interface IEnsembleModel<TDraw>
     /// uses for readout-side randomness (BARS draws spline coefficients per sample), ignored by clients that need none.
     /// </summary>
     IChainRun<TDraw> StartChain(int chainSeed, int readoutSeed);
+
+    /// <summary>
+    /// A fingerprint of the configuration and data a run depends on, checked when a run resumes from a checkpoint so
+    /// that it continues the same problem (<see cref="RunFingerprint"/>). Empty when the model does not resume.
+    /// </summary>
+    string Fingerprint => string.Empty;
+
+    /// <summary>
+    /// Rebuild one chain from the restart state its <see cref="IResumableChainRun{TDraw}.SaveState"/> gave, so that it
+    /// continues exactly where it left off. The default refuses: the model does not resume.
+    /// </summary>
+    IChainRun<TDraw> RestoreChain(IChainState state)
+        => throw new NotSupportedException($"{GetType().Name} does not resume from checkpoints.");
 }
 
 /// <summary>
