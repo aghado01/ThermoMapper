@@ -1,0 +1,537 @@
+{
+  "schema": 2,
+  "id": "D004",
+  "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-preparation-brief.md",
+  "bytes": 110008,
+  "sha256": "1e6c477c37b86777c0c117fa1bc89a62ce38d4f38b71868556246edb1d088bbb",
+  "mtimeMs": 1792624673652.3398,
+  "encoding": "utf-8",
+  "bom": false,
+  "newline": "lf",
+  "headings": [
+    {
+      "hid": "H01",
+      "level": 1,
+      "title": "BASS preparation brief",
+      "digest": "fa62",
+      "line": 1,
+      "headingStart": 0,
+      "bodyStart": 25,
+      "subtreeEnd": 110008
+    },
+    {
+      "hid": "H02",
+      "level": 2,
+      "title": "How this brief maps onto the port stages",
+      "digest": "0c63",
+      "line": 15,
+      "headingStart": 1111,
+      "bodyStart": 1155,
+      "subtreeEnd": 1838
+    },
+    {
+      "hid": "H03",
+      "level": 2,
+      "title": "Sequence",
+      "digest": "0740",
+      "line": 26,
+      "headingStart": 1838,
+      "bodyStart": 1850,
+      "subtreeEnd": 2854
+    },
+    {
+      "hid": "H04",
+      "level": 2,
+      "title": "Phase 0: existing-engine baseline",
+      "digest": "43cc",
+      "line": 59,
+      "headingStart": 2854,
+      "bodyStart": 2891,
+      "subtreeEnd": 12353
+    },
+    {
+      "hid": "H05",
+      "level": 3,
+      "title": "0.1 Diagnostics failure policy (B01: R09)",
+      "digest": "6f9c",
+      "line": 61,
+      "headingStart": 2892,
+      "bodyStart": 2938,
+      "subtreeEnd": 3640
+    },
+    {
+      "hid": "H06",
+      "level": 3,
+      "title": "0.2 Refresh a chain's target in place (B02: R07)",
+      "digest": "96ba",
+      "line": 70,
+      "headingStart": 3640,
+      "bodyStart": 3693,
+      "subtreeEnd": 4760
+    },
+    {
+      "hid": "H07",
+      "level": 3,
+      "title": "0.3 Kernel and replica ownership (B02: R05)",
+      "digest": "3fca",
+      "line": 82,
+      "headingStart": 4760,
+      "bodyStart": 4808,
+      "subtreeEnd": 5477
+    },
+    {
+      "hid": "H08",
+      "level": 3,
+      "title": "0.4 Factor status (B06: R11 and the LinAlg side of R08)",
+      "digest": "a7ad",
+      "line": 93,
+      "headingStart": 5477,
+      "bodyStart": 5537,
+      "subtreeEnd": 6150
+    },
+    {
+      "hid": "H09",
+      "level": 3,
+      "title": "0.5 BARS statistical contracts (B03: R13, R08, R12, R04, R01, R14)",
+      "digest": "95de",
+      "line": 103,
+      "headingStart": 6150,
+      "bodyStart": 6221,
+      "subtreeEnd": 11940
+    },
+    {
+      "hid": "H10",
+      "level": 3,
+      "title": "0.6 Baseline qualification",
+      "digest": "1ab3",
+      "line": 137,
+      "headingStart": 11940,
+      "bodyStart": 11971,
+      "subtreeEnd": 12353
+    },
+    {
+      "hid": "H11",
+      "level": 2,
+      "title": "Phase 2: shared numerics and the g-prior block",
+      "digest": "0bef",
+      "line": 146,
+      "headingStart": 12353,
+      "bodyStart": 12403,
+      "subtreeEnd": 15139
+    },
+    {
+      "hid": "H12",
+      "level": 3,
+      "title": "2.1 Distributions",
+      "digest": "aefc",
+      "line": 148,
+      "headingStart": 12404,
+      "bodyStart": 12426,
+      "subtreeEnd": 12699
+    },
+    {
+      "hid": "H13",
+      "level": 3,
+      "title": "2.2 Strict dense reference factor",
+      "digest": "7749",
+      "line": 154,
+      "headingStart": 12699,
+      "bodyStart": 12737,
+      "subtreeEnd": 12938
+    },
+    {
+      "hid": "H14",
+      "level": 3,
+      "title": "2.3 Collapsed g-prior block",
+      "digest": "e2c1",
+      "line": 158,
+      "headingStart": 12938,
+      "bodyStart": 12970,
+      "subtreeEnd": 15139
+    },
+    {
+      "hid": "H15",
+      "level": 2,
+      "title": "Phase 3: sampler contracts",
+      "digest": "59f6",
+      "line": 181,
+      "headingStart": 15139,
+      "bodyStart": 15169,
+      "subtreeEnd": 24174
+    },
+    {
+      "hid": "H16",
+      "level": 3,
+      "title": "3.1 Neutral target contract",
+      "digest": "cee7",
+      "line": 183,
+      "headingStart": 15170,
+      "bodyStart": 15202,
+      "subtreeEnd": 15643
+    },
+    {
+      "hid": "H17",
+      "level": 3,
+      "title": "3.2 Tempering paths",
+      "digest": "7bd5",
+      "line": 189,
+      "headingStart": 15643,
+      "bodyStart": 15667,
+      "subtreeEnd": 16198
+    },
+    {
+      "hid": "H18",
+      "level": 3,
+      "title": "3.3 Non-reversible swap schedule",
+      "digest": "5f10",
+      "line": 196,
+      "headingStart": 16198,
+      "bodyStart": 16235,
+      "subtreeEnd": 16946
+    },
+    {
+      "hid": "H19",
+      "level": 3,
+      "title": "3.4 Shell readouts: diagnostics and accumulators",
+      "digest": "cbff",
+      "line": 203,
+      "headingStart": 16946,
+      "bodyStart": 16999,
+      "subtreeEnd": 19606
+    },
+    {
+      "hid": "H20",
+      "level": 3,
+      "title": "3.5 Baseline rerun",
+      "digest": "920a",
+      "line": 224,
+      "headingStart": 19606,
+      "bodyStart": 19629,
+      "subtreeEnd": 19758
+    },
+    {
+      "hid": "H21",
+      "level": 3,
+      "title": "3.6 Cleanup sweep",
+      "digest": "64af",
+      "line": 228,
+      "headingStart": 19758,
+      "bodyStart": 19780,
+      "subtreeEnd": 20059
+    },
+    {
+      "hid": "H22",
+      "level": 3,
+      "title": "3.7 BARS admission: numerical and support gates (Q6)",
+      "digest": "86a1",
+      "line": 232,
+      "headingStart": 20059,
+      "bodyStart": 20116,
+      "subtreeEnd": 21621
+    },
+    {
+      "hid": "H23",
+      "level": 3,
+      "title": "3.8 `EbicPrior` in He, Yang and Kang's convention (Q7)",
+      "digest": "709f",
+      "line": 247,
+      "headingStart": 21621,
+      "bodyStart": 21680,
+      "subtreeEnd": 24174
+    },
+    {
+      "hid": "H24",
+      "level": 2,
+      "title": "After Phase 3: BARS mixing",
+      "digest": "042c",
+      "line": 275,
+      "headingStart": 24174,
+      "bodyStart": 24204,
+      "subtreeEnd": 31386
+    },
+    {
+      "hid": "H25",
+      "level": 2,
+      "title": "Addendum: triage of the additional-bugs review",
+      "digest": "a43c",
+      "line": 333,
+      "headingStart": 31386,
+      "bodyStart": 31436,
+      "subtreeEnd": 33130
+    },
+    {
+      "hid": "H26",
+      "level": 2,
+      "title": "Seam map: admission, prior and schedule",
+      "digest": "b4e7",
+      "line": 352,
+      "headingStart": 33130,
+      "bodyStart": 33173,
+      "subtreeEnd": 34195
+    },
+    {
+      "hid": "H27",
+      "level": 2,
+      "title": "Addendum: admission evidence (2026-10-20)",
+      "digest": "d4ec",
+      "line": 363,
+      "headingStart": 34195,
+      "bodyStart": 34240,
+      "subtreeEnd": 37450
+    },
+    {
+      "hid": "H28",
+      "level": 2,
+      "title": "Decisions",
+      "digest": "cfa6",
+      "line": 394,
+      "headingStart": 37450,
+      "bodyStart": 37463,
+      "subtreeEnd": 41613
+    },
+    {
+      "hid": "H29",
+      "level": 2,
+      "title": "Working rules",
+      "digest": "df3d",
+      "line": 406,
+      "headingStart": 41613,
+      "bodyStart": 41630,
+      "subtreeEnd": 43194
+    },
+    {
+      "hid": "H30",
+      "level": 2,
+      "title": "Out of scope",
+      "digest": "3e91",
+      "line": 422,
+      "headingStart": 43194,
+      "bodyStart": 43210,
+      "subtreeEnd": 43331
+    },
+    {
+      "hid": "H31",
+      "level": 2,
+      "title": "Report",
+      "digest": "b6ce",
+      "line": 426,
+      "headingStart": 43331,
+      "bodyStart": 43341,
+      "subtreeEnd": 110008
+    },
+    {
+      "hid": "H32",
+      "level": 3,
+      "title": "0.1 Diagnostics failure policy — done 2026-10-19",
+      "digest": "70ff",
+      "line": 430,
+      "headingStart": 43441,
+      "bodyStart": 43496,
+      "subtreeEnd": 46294
+    },
+    {
+      "hid": "H33",
+      "level": 3,
+      "title": "0.2 Target refresh and move-pair reciprocity — done 2026-10-19",
+      "digest": "d071",
+      "line": 476,
+      "headingStart": 46294,
+      "bodyStart": 46363,
+      "subtreeEnd": 47942
+    },
+    {
+      "hid": "H34",
+      "level": 3,
+      "title": "0.3 Kernel and replica ownership — done 2026-10-19",
+      "digest": "0ad2",
+      "line": 505,
+      "headingStart": 47942,
+      "bodyStart": 47999,
+      "subtreeEnd": 49305
+    },
+    {
+      "hid": "H35",
+      "level": 3,
+      "title": "0.4 Factor status — done 2026-10-19",
+      "digest": "864d",
+      "line": 526,
+      "headingStart": 49305,
+      "bodyStart": 49347,
+      "subtreeEnd": 54764
+    },
+    {
+      "hid": "H36",
+      "level": 3,
+      "title": "0.5a The marginal's guard (R13) — done 2026-10-19",
+      "digest": "d69d",
+      "line": 582,
+      "headingStart": 54764,
+      "bodyStart": 54820,
+      "subtreeEnd": 55769
+    },
+    {
+      "hid": "H37",
+      "level": 3,
+      "title": "0.5b Rank and admission policy (R08) — done 2026-10-20",
+      "digest": "58d3",
+      "line": 594,
+      "headingStart": 55769,
+      "bodyStart": 55830,
+      "subtreeEnd": 57684
+    },
+    {
+      "hid": "H38",
+      "level": 3,
+      "title": "0.5c Full coefficient draws (R12) — done 2026-10-20",
+      "digest": "1de1",
+      "line": 619,
+      "headingStart": 57684,
+      "bodyStart": 57742,
+      "subtreeEnd": 59794
+    },
+    {
+      "hid": "H39",
+      "level": 3,
+      "title": "0.5d Exact robust weights (R04) — done 2026-10-20",
+      "digest": "dd6d",
+      "line": 647,
+      "headingStart": 59794,
+      "bodyStart": 59850,
+      "subtreeEnd": 64496
+    },
+    {
+      "hid": "H40",
+      "level": 3,
+      "title": "0.5e Knot measure (R01) — done 2026-10-20",
+      "digest": "feef",
+      "line": 698,
+      "headingStart": 64496,
+      "bodyStart": 64544,
+      "subtreeEnd": 69063
+    },
+    {
+      "hid": "H41",
+      "level": 3,
+      "title": "0.5f Span coverage as a probability (R14) — done 2026-10-20",
+      "digest": "b6ce",
+      "line": 748,
+      "headingStart": 69063,
+      "bodyStart": 69129,
+      "subtreeEnd": 70907
+    },
+    {
+      "hid": "H42",
+      "level": 3,
+      "title": "0.6 Baseline qualification — done 2026-10-20",
+      "digest": "fde1",
+      "line": 773,
+      "headingStart": 70907,
+      "bodyStart": 70958,
+      "subtreeEnd": 73796
+    },
+    {
+      "hid": "H43",
+      "level": 3,
+      "title": "2.1 Distributions — done 2026-10-20",
+      "digest": "7aa6",
+      "line": 816,
+      "headingStart": 73796,
+      "bodyStart": 73838,
+      "subtreeEnd": 77969
+    },
+    {
+      "hid": "H44",
+      "level": 3,
+      "title": "2.2 Strict dense reference factor — done 2026-10-20",
+      "digest": "6f4a",
+      "line": 852,
+      "headingStart": 77969,
+      "bodyStart": 78027,
+      "subtreeEnd": 82162
+    },
+    {
+      "hid": "H45",
+      "level": 3,
+      "title": "2.3 Collapsed g-prior block — done 2026-10-20",
+      "digest": "0c86",
+      "line": 905,
+      "headingStart": 82162,
+      "bodyStart": 82214,
+      "subtreeEnd": 87414
+    },
+    {
+      "hid": "H46",
+      "level": 3,
+      "title": "3.1 Neutral target contract — done 2026-10-21",
+      "digest": "ecb0",
+      "line": 964,
+      "headingStart": 87414,
+      "bodyStart": 87466,
+      "subtreeEnd": 93598
+    },
+    {
+      "hid": "H47",
+      "level": 3,
+      "title": "3.2 Tempering paths — done 2026-10-21",
+      "digest": "797a",
+      "line": 1015,
+      "headingStart": 93598,
+      "bodyStart": 93642,
+      "subtreeEnd": 103391
+    },
+    {
+      "hid": "H48",
+      "level": 4,
+      "title": "Addendum: linear marginal tempering — done 2026-10-21",
+      "digest": "c3f3",
+      "line": 1060,
+      "headingStart": 100552,
+      "bodyStart": 100613,
+      "subtreeEnd": 103391
+    },
+    {
+      "hid": "H49",
+      "level": 3,
+      "title": "3.3 Non-reversible swap schedule — done 2026-10-21",
+      "digest": "ea4c",
+      "line": 1084,
+      "headingStart": 103391,
+      "bodyStart": 103448,
+      "subtreeEnd": 110008
+    }
+  ],
+  "counts": [
+    1,
+    13,
+    34,
+    1,
+    0,
+    0
+  ],
+  "spine": {
+    "bytes": 25,
+    "ratio": 0.0002272561995491237
+  },
+  "breaks": [],
+  "maxLine": 914,
+  "noise": [
+    {
+      "kind": "html",
+      "start": 75141,
+      "end": 75144,
+      "bytes": 3
+    },
+    {
+      "kind": "html",
+      "start": 87775,
+      "end": 87783,
+      "bytes": 8
+    },
+    {
+      "kind": "html",
+      "start": 89559,
+      "end": 89571,
+      "bytes": 12
+    }
+  ]
+}

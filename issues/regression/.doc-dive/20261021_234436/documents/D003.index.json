@@ -1,0 +1,188 @@
+{
+  "schema": 2,
+  "id": "D003",
+  "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-full-port-brief.md",
+  "bytes": 42859,
+  "sha256": "8d5a19b15611adb9740d988770f2dd1fe47ac7bc62730e81972a816e44eadf6f",
+  "mtimeMs": 1792553271685.0889,
+  "encoding": "utf-8",
+  "bom": false,
+  "newline": "lf",
+  "headings": [
+    {
+      "hid": "H01",
+      "level": 1,
+      "title": "Full BASS port brief",
+      "digest": "b375",
+      "line": 1,
+      "headingStart": 0,
+      "bodyStart": 23,
+      "subtreeEnd": 42859
+    },
+    {
+      "hid": "H02",
+      "level": 2,
+      "title": "Scope and completion contract",
+      "digest": "d175",
+      "line": 13,
+      "headingStart": 1540,
+      "bodyStart": 1573,
+      "subtreeEnd": 5284
+    },
+    {
+      "hid": "H03",
+      "level": 2,
+      "title": "Existing engine baseline before integration",
+      "digest": "d54f",
+      "line": 45,
+      "headingStart": 5284,
+      "bodyStart": 5331,
+      "subtreeEnd": 9333
+    },
+    {
+      "hid": "H04",
+      "level": 2,
+      "title": "Placement and dependency boundaries",
+      "digest": "34bc",
+      "line": 64,
+      "headingStart": 9333,
+      "bodyStart": 9372,
+      "subtreeEnd": 13125
+    },
+    {
+      "hid": "H05",
+      "level": 2,
+      "title": "Reuse and shared renovations",
+      "digest": "ef02",
+      "line": 110,
+      "headingStart": 13125,
+      "bodyStart": 13157,
+      "subtreeEnd": 18574
+    },
+    {
+      "hid": "H06",
+      "level": 2,
+      "title": "Numerical and operation contracts",
+      "digest": "d8a3",
+      "line": 139,
+      "headingStart": 18574,
+      "bodyStart": 18611,
+      "subtreeEnd": 22581
+    },
+    {
+      "hid": "H07",
+      "level": 3,
+      "title": "Dense factor maintenance",
+      "digest": "d1af",
+      "line": 141,
+      "headingStart": 18612,
+      "bodyStart": 18641,
+      "subtreeEnd": 19860
+    },
+    {
+      "hid": "H08",
+      "level": 3,
+      "title": "Direct functional algebra",
+      "digest": "7049",
+      "line": 149,
+      "headingStart": 19860,
+      "bodyStart": 19890,
+      "subtreeEnd": 20305
+    },
+    {
+      "hid": "H09",
+      "level": 3,
+      "title": "Response basis conventions",
+      "digest": "051e",
+      "line": 159,
+      "headingStart": 20305,
+      "bodyStart": 20336,
+      "subtreeEnd": 20960
+    },
+    {
+      "hid": "H10",
+      "level": 3,
+      "title": "Posterior ownership and prediction",
+      "digest": "eeed",
+      "line": 165,
+      "headingStart": 20960,
+      "bodyStart": 20999,
+      "subtreeEnd": 22581
+    },
+    {
+      "hid": "H11",
+      "level": 2,
+      "title": "SMC integration",
+      "digest": "3e11",
+      "line": 178,
+      "headingStart": 22581,
+      "bodyStart": 22600,
+      "subtreeEnd": 26189
+    },
+    {
+      "hid": "H12",
+      "level": 2,
+      "title": "Statistical decisions to settle",
+      "digest": "3194",
+      "line": 207,
+      "headingStart": 26189,
+      "bodyStart": 26224,
+      "subtreeEnd": 30458
+    },
+    {
+      "hid": "H13",
+      "level": 2,
+      "title": "Implementation stages",
+      "digest": "2b1c",
+      "line": 226,
+      "headingStart": 30458,
+      "bodyStart": 30483,
+      "subtreeEnd": 34136
+    },
+    {
+      "hid": "H14",
+      "level": 2,
+      "title": "Validation and performance qualification",
+      "digest": "0f4a",
+      "line": 247,
+      "headingStart": 34136,
+      "bodyStart": 34180,
+      "subtreeEnd": 36900
+    },
+    {
+      "hid": "H15",
+      "level": 2,
+      "title": "Modernization choices and deferred extensions",
+      "digest": "fed7",
+      "line": 266,
+      "headingStart": 36900,
+      "bodyStart": 36949,
+      "subtreeEnd": 40782
+    },
+    {
+      "hid": "H16",
+      "level": 2,
+      "title": "References and documentation updates",
+      "digest": "5371",
+      "line": 294,
+      "headingStart": 40782,
+      "bodyStart": 40822,
+      "subtreeEnd": 42859
+    }
+  ],
+  "counts": [
+    1,
+    11,
+    4,
+    0,
+    0,
+    0
+  ],
+  "spine": {
+    "bytes": 23,
+    "ratio": 0.0005366434121188082
+  },
+  "breaks": [],
+  "maxLine": 827,
+  "noise": []
+}

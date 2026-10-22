@@ -1,0 +1,158 @@
+{
+  "schema": 2,
+  "id": "D001",
+  "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-adaptation-prerequisites-review.md",
+  "bytes": 29207,
+  "sha256": "59644f7e3e8b1ef2bf88a30a69a112e65ec9e310593adcffac94f7e44225f35a",
+  "mtimeMs": 1792604581667.6362,
+  "encoding": "utf-8",
+  "bom": false,
+  "newline": "lf",
+  "headings": [
+    {
+      "hid": "H01",
+      "level": 1,
+      "title": "BASS adaptation prerequisites review",
+      "digest": "2807",
+      "line": 1,
+      "headingStart": 0,
+      "bodyStart": 39,
+      "subtreeEnd": 29207
+    },
+    {
+      "hid": "H02",
+      "level": 2,
+      "title": "Evidence and scope",
+      "digest": "fa3c",
+      "line": 9,
+      "headingStart": 1354,
+      "bodyStart": 1376,
+      "subtreeEnd": 2585
+    },
+    {
+      "hid": "H03",
+      "level": 2,
+      "title": "Existing engine findings",
+      "digest": "788e",
+      "line": 20,
+      "headingStart": 2585,
+      "bodyStart": 2613,
+      "subtreeEnd": 16843
+    },
+    {
+      "hid": "H04",
+      "level": 3,
+      "title": "Count priors and conditional location measures",
+      "digest": "c8e5",
+      "line": 40,
+      "headingStart": 11306,
+      "bodyStart": 11357,
+      "subtreeEnd": 12389
+    },
+    {
+      "hid": "H05",
+      "level": 3,
+      "title": "BAPS tail and Gibbs conditioning",
+      "digest": "8458",
+      "line": 58,
+      "headingStart": 12389,
+      "bodyStart": 12426,
+      "subtreeEnd": 14224
+    },
+    {
+      "hid": "H06",
+      "level": 3,
+      "title": "State ownership and diagnostic failure",
+      "digest": "cb24",
+      "line": 73,
+      "headingStart": 14224,
+      "bodyStart": 14267,
+      "subtreeEnd": 15553
+    },
+    {
+      "hid": "H07",
+      "level": 3,
+      "title": "BGP scaling qualification",
+      "digest": "2de9",
+      "line": 81,
+      "headingStart": 15553,
+      "bodyStart": 15583,
+      "subtreeEnd": 16843
+    },
+    {
+      "hid": "H08",
+      "level": 2,
+      "title": "Additional constraints on reuse",
+      "digest": "aaa3",
+      "line": 89,
+      "headingStart": 16843,
+      "bodyStart": 16878,
+      "subtreeEnd": 18491
+    },
+    {
+      "hid": "H09",
+      "level": 2,
+      "title": "Corrections to BASS modernization claims",
+      "digest": "9dfa",
+      "line": 98,
+      "headingStart": 18491,
+      "bodyStart": 18535,
+      "subtreeEnd": 22157
+    },
+    {
+      "hid": "H10",
+      "level": 2,
+      "title": "Existing engine remediation register",
+      "digest": "57cf",
+      "line": 118,
+      "headingStart": 22157,
+      "bodyStart": 22197,
+      "subtreeEnd": 26992
+    },
+    {
+      "hid": "H11",
+      "level": 3,
+      "title": "Baseline completion gate",
+      "digest": "a334",
+      "line": 133,
+      "headingStart": 25451,
+      "bodyStart": 25480,
+      "subtreeEnd": 26992
+    },
+    {
+      "hid": "H12",
+      "level": 2,
+      "title": "Implications for SMC and dependency boundaries",
+      "digest": "e93f",
+      "line": 143,
+      "headingStart": 26992,
+      "bodyStart": 27042,
+      "subtreeEnd": 28153
+    },
+    {
+      "hid": "H13",
+      "level": 2,
+      "title": "References",
+      "digest": "6982",
+      "line": 151,
+      "headingStart": 28153,
+      "bodyStart": 28167,
+      "subtreeEnd": 29207
+    }
+  ],
+  "counts": [
+    1,
+    7,
+    5,
+    0,
+    0,
+    0
+  ],
+  "spine": {
+    "bytes": 39,
+    "ratio": 0.0013352963330708393
+  },
+  "breaks": [],
+  "maxLine": 1015,
+  "noise": []
+}

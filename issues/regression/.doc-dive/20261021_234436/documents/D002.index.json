@@ -1,0 +1,178 @@
+{
+  "schema": 2,
+  "id": "D002",
+  "path": "D:\\aghado01\\ThermoMapper\\issues\\regression\\bass-derivations-and-integration-review.md",
+  "bytes": 23591,
+  "sha256": "06bd7cf77214aa10ffe3fa51645114d3a78297c2e75c9d0d363f445d6359b073",
+  "mtimeMs": 1792477802310.4104,
+  "encoding": "utf-8",
+  "bom": false,
+  "newline": "lf",
+  "headings": [
+    {
+      "hid": "H01",
+      "level": 1,
+      "title": "BASS derivations and integration review",
+      "digest": "ae43",
+      "line": 1,
+      "headingStart": 0,
+      "bodyStart": 42,
+      "subtreeEnd": 23591
+    },
+    {
+      "hid": "H02",
+      "level": 2,
+      "title": "Notation",
+      "digest": "3e74",
+      "line": 7,
+      "headingStart": 818,
+      "bodyStart": 830,
+      "subtreeEnd": 1632
+    },
+    {
+      "hid": "H03",
+      "level": 2,
+      "title": "1. One collapsed g-prior family",
+      "digest": "78dd",
+      "line": 23,
+      "headingStart": 1632,
+      "bodyStart": 1667,
+      "subtreeEnd": 7776
+    },
+    {
+      "hid": "H04",
+      "level": 3,
+      "title": "1.1 Coefficient-marginal target",
+      "digest": "5bf3",
+      "line": 25,
+      "headingStart": 1668,
+      "bodyStart": 1704,
+      "subtreeEnd": 2644
+    },
+    {
+      "hid": "H05",
+      "level": 3,
+      "title": "1.2 Variance-collapsed target",
+      "digest": "4533",
+      "line": 41,
+      "headingStart": 2644,
+      "bodyStart": 2678,
+      "subtreeEnd": 3496
+    },
+    {
+      "hid": "H06",
+      "level": 3,
+      "title": "1.3 BARS is a member of the family",
+      "digest": "682b",
+      "line": 59,
+      "headingStart": 3496,
+      "bodyStart": 3535,
+      "subtreeEnd": 5029
+    },
+    {
+      "hid": "H07",
+      "level": 3,
+      "title": "1.4 Why the identity was hard to see, and how to sort engine differences",
+      "digest": "9697",
+      "line": 72,
+      "headingStart": 5029,
+      "bodyStart": 5106,
+      "subtreeEnd": 7776
+    },
+    {
+      "hid": "H08",
+      "level": 2,
+      "title": "2. D04 proposal: full collapse with composition sampling",
+      "digest": "f279",
+      "line": 98,
+      "headingStart": 7776,
+      "bodyStart": 7836,
+      "subtreeEnd": 9218
+    },
+    {
+      "hid": "H09",
+      "level": 2,
+      "title": "3. D05 proposal: the likelihood-tempered path",
+      "digest": "56f8",
+      "line": 112,
+      "headingStart": 9218,
+      "bodyStart": 9267,
+      "subtreeEnd": 12350
+    },
+    {
+      "hid": "H10",
+      "level": 2,
+      "title": "4. D02 proposal: a globally truncated joint prior",
+      "digest": "b83f",
+      "line": 146,
+      "headingStart": 12350,
+      "bodyStart": 12403,
+      "subtreeEnd": 14234
+    },
+    {
+      "hid": "H11",
+      "level": 2,
+      "title": "5. D06 proposal: admission by angle, with the residual as shared state",
+      "digest": "7dec",
+      "line": 164,
+      "headingStart": 14234,
+      "bodyStart": 14308,
+      "subtreeEnd": 17177
+    },
+    {
+      "hid": "H12",
+      "level": 2,
+      "title": "6. D03 finding: R's default τ hyperprior",
+      "digest": "b032",
+      "line": 189,
+      "headingStart": 17177,
+      "bodyStart": 17222,
+      "subtreeEnd": 19012
+    },
+    {
+      "hid": "H13",
+      "level": 2,
+      "title": "7. Integration opportunities",
+      "digest": "600c",
+      "line": 202,
+      "headingStart": 19012,
+      "bodyStart": 19044,
+      "subtreeEnd": 21071
+    },
+    {
+      "hid": "H14",
+      "level": 2,
+      "title": "8. Document notes",
+      "digest": "3bfe",
+      "line": 218,
+      "headingStart": 21071,
+      "bodyStart": 21092,
+      "subtreeEnd": 22586
+    },
+    {
+      "hid": "H15",
+      "level": 2,
+      "title": "References",
+      "digest": "6982",
+      "line": 226,
+      "headingStart": 22586,
+      "bodyStart": 22600,
+      "subtreeEnd": 23591
+    }
+  ],
+  "counts": [
+    1,
+    10,
+    4,
+    0,
+    0,
+    0
+  ],
+  "spine": {
+    "bytes": 42,
+    "ratio": 0.001780339960154296
+  },
+  "breaks": [],
+  "maxLine": 766,
+  "noise": []
+}
