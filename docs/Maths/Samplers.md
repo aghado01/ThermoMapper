@@ -82,7 +82,8 @@ flowchart LR
 | Targets | `ISamplingTarget<T>` (`Evaluate`); `ITargetEvaluation` (`LogPrior`, `LogLikelihood(b)`); `Temperature(b, path)` with `LogDensity(evaluation)`, static `Posterior` and `LogPosterior(evaluation)`; `TemperingPath` (`Powered`, `Likelihood`); `SamplingTarget.FromLogDensity`, `SamplingTarget.Separable`, and the extension `target.LogPosterior(state)`; `SeparableEvaluation` |
 | Reversible jump | `ReversibleJumpChain<T>(moves, target, start, rng, temperature = null)` with `Step()`, `Current`, `Temperature`, `CurrentEvaluation`, `CurrentLogDensity`, `Attempts`, `Accepted`, `MoveStats()`, `SetState(state, evaluation)`, `ReplaceTarget(target)`; `IRjMove<T>` (`Key`, `ReverseKey`, `Weight`, `Propose`); `Proposal<T>`; `MoveStat`; `ScheduledMove<T>` |
 | Tempering | `ParallelTempering<T>(movesForReplica, target, start, betas, path, masterSeed, schedule = DeterministicEvenOdd)` with `Step()`, `Path`, `Schedule`, `Betas`, `Cold`, `ColdChain`, `Replicas`, `Scans`, `RoundTrips`, `AnnealedRestarts`, `PairStats`, `SwapAttempts`, `SwapAccepts`, `AdaptLadder()`, and static `GeometricLadder(levels, betaMin)`; `SwapSchedule` (`DeterministicEvenOdd`, `StochasticEvenOdd`, `Sequential`); `SwapPairStat`; `TemperingLadder` (`Barrier`, `IdealRoundTripRate`, `Equalize`, `RecommendedLevels`) |
-| Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0, minEssPerChain = 100)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.Diagnose` → `ConvergenceDiagnostic` (`RHat`, `BulkRHat`, `TailRHat`, `BulkEss`, `TailEss`, `Ess`); `ChainDiagnostics.RHat`; `RHatDiagnostic`, `EssDiagnostic`, `DiagnosticState`; `RunningMoments` (`Add`, `Merge`, `Of`); `IChain<T>`, `IEnsembleModel<T>` (`FunctionalDim`, `MonitoredDim`), `IChainRun<T>`, `EnsembleRun` |
+| Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0, minEssPerChain = 100, checkpoint = false, resumeFrom = null)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.Diagnose` → `ConvergenceDiagnostic` (`RHat`, `BulkRHat`, `TailRHat`, `BulkEss`, `TailEss`, `Ess`); `ChainDiagnostics.RHat`; `RHatDiagnostic`, `EssDiagnostic`, `DiagnosticState`; `IChain<T>`, `IEnsembleModel<T>` (`FunctionalDim`, `MonitoredDim`, `Fingerprint`, `RestoreChain`), `IChainRun<T>`, `EnsembleRun` |
+| Readouts, traces, checkpoints | `IMergeable<T>`; `RunningMoments` (`Add(x, weight)`, `Merge`, `Of`), `WeightedSums` (`Add`, `AddSparse`, `Mean`), `DrawSample` (`Add`, `Quantile`), `Tally<TEnum>`; `ChainTrace` (`Add`, `Draws`, `Copy`); `EnsembleCheckpoint`, `ChainCheckpoint`, `RunIdentity`, `IChainState`, `IResumableChainRun<T>`, `RunFingerprint`; `ReversibleJumpChain.Snapshot`/`Restore` (`ChainSnapshot<T>`), `ParallelTempering.Snapshot`/`Restore` (`LadderSnapshot<T>`) |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
 ## Algorithms
@@ -197,6 +198,21 @@ $$\tau_{\text{DEO}}=\frac{1}{2+2E},\qquad \tau_{\text{SEO}}=\frac{1}{2N+2E}.$$
    - the rank-normalized diagnostics of the monitored functionals (`EnsembleRun.Monitored`);
    - acceptance $\sum\text{Accepted}/\sum\text{Attempts}$ over the sampling phase: each chain's counts at the end of burn-in are subtracted, so tuning during burn-in does not colour it.
 
+### Readouts, traces and checkpoints (step 3.4)
+
+A run's state comes in three kinds, which pool differently, so they are three components.
+- **Readout statistics** pool by merging (`IMergeable<T>`): additive sufficient statistics whose merge is associative and commutative, so pooling across chains does not depend on order.
+  - The primitives: `RunningMoments` (streaming moments), `WeightedSums` (a field or a few scalars, dense or sparse folds, with a total weight), `DrawSample` (a weighted multiset, for quantiles; type 7 under unit weights) and `Tally<TEnum>` (outcome counts).
+  - Each fold may carry a weight, so the same statistics pool weighted particles. Unit weights, the MCMC case, reproduce the unweighted arithmetic exactly: `RunningMoments` uses West's weighted update, arranged so that weight 1 is the same sequence of operations.
+  - Nonlinear reductions (a standard deviation, a quantile, a mode) read the merged statistics once, where the estimand lives.
+- **Diagnostic traces** (`ChainTrace`) are one chain's ordered draws of its monitored functionals. Rank-normalized R̂ and autocorrelation ESS need that order, so a trace never merges with another chain's: pooling keeps one per chain. Their ESS is autocorrelation ESS, a different quantity from a particle population's weight ESS, which belongs to the SMC module.
+- **Execution checkpoints** (`EnsembleCheckpoint`) hold restart state, which does not pool.
+  - **Components, kept apart:** the run's identity (master seed, chain count, and the model's `Fingerprint` of its configuration and data); the chain seeds; the draws per chain so far; and per chain the engine's restart state (`IChainState`), the shell's moments, its trace and its burn-in counters.
+  - **Engine state:** every RNG stream's words, the sampler's state and counters, adaptation state, and replica assignments and swap-schedule state for a ladder. `ReversibleJumpChain.Snapshot`/`Restore` and `ParallelTempering.Snapshot`/`Restore` supply the generic parts. A restored chain or ladder recomputes its cached evaluations, since evaluation is deterministic.
+  - **API:** `Run(…, checkpoint: true)` returns one in `EnsembleRun.Checkpoint`, and `Run(…, resumeFrom: c, samples: n)` continues that run for n more draws after checking its identity. A resumed run continues exactly as the uninterrupted one would have.
+  - **Scope:** checkpoints are in-memory copies taken after burn-in, at a round boundary, so burn-in adaptation is never in flight; writing them to disk is not yet built. A model resumes only if it implements `RestoreChain`, and BARS does.
+- **Checked** (`ReadoutTests`, `SnapshotTests`): merges in any order; unit-weight equality with the unweighted update; restored chains and ladders, mid-round adaptation statistics included, continue identically to the live ones; the shell refuses to checkpoint a chain run that cannot save its state, and to resume a model that cannot restore one or a run whose identity differs.
+
 ### Convergence diagnostics
 
 **R̂.** The classic Gelman–Rubin statistic, computed from per-chain means and sample variances. It is **not** split and **not** rank-normalized.
@@ -266,7 +282,7 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 |---|---|
 | Targets | `targets/SamplingTarget.cs` |
 | Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `ParallelTempering.cs`, `TemperingLadder.cs`; `IRjTarget.cs` and `TemperedTarget.cs` are unused since step 3.1 and go in step 3.6 |
-| Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `ConvergenceDiagnostics.cs`, `RHatDiagnostic.cs`, `RunningMoments.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
+| Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `ConvergenceDiagnostics.cs`, `RHatDiagnostic.cs`, `RunningMoments.cs`, `Readouts.cs`, `ChainTrace.cs`, `Checkpoint.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
 | i.i.d. and fields | `iid/InverseTransform.cs`; `SpectralNoiseField.cs` (at the `samplers/` root) |
 
 **Tests:** `tests/Maths.Samplers.Tests` (sources in `tests/samplers/`) owns the samplers' own checks, with targets built from `Maths.Samplers` alone: chain contracts, the reversible-jump generality check, the target contract, parallel tempering (each rung's law on both paths, ladder validation), swap schedules against Theorem 1, ladder adaptation, and the diagnostics policy.
