@@ -1,7 +1,9 @@
 using System;
+using System.Linq;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
+using Maths.Samplers.Rjmcmc;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -63,5 +65,29 @@ public sealed class DmgkScheduleTests
         _out.WriteLine($"[dmgk] dmgk : mse={mseDmgk:F5} k̄={dmgk.MeanKnots:F2} ESS(k)={dmgk.Knots.BulkEss:F0} acc={dmgk.AcceptanceRate:F3}");
 
         Assert.True(mseDmgk < 0.01, $"DMGK fit MSE {mseDmgk:F5} should recover the curve");
+    }
+
+    [Fact]
+    public void GreenConstant_IsTheLargestCWithinTheBudget()
+    {
+        // Poisson(1): the worst k is 1, with min(1, 1/2) + min(1, 1/1) = 1.5, so c = 0.9/1.5 = 0.6, above DMGK's old cap.
+        Assert.Equal(0.6, DmgkSchedule.GreenConstant(new PoissonPrior(1.0), maxKnots: 40), 12);
+        // Poisson(4): the worst k is 4, with min(1, 4/5) + min(1, 4/4) = 1.8, so c = 0.5.
+        Assert.Equal(0.5, DmgkSchedule.GreenConstant(new PoissonPrior(4.0), maxKnots: 40), 12);
+        // A cap at 5: interior k have 1 + 1 = 2, so c = 0.45; the cap itself has no birth.
+        Assert.Equal(0.45, DmgkSchedule.GreenConstant(new UniformPrior(5), maxKnots: 40), 12);
+
+        // At Green's c every reachable k keeps b_k + d_k within the budget, so the weights sum to one.
+        var kernel = new LocalBetaKernel(50.0);
+        var prior = new PoissonPrior(1.0);
+        IRjMove<KnotConfig>[] moves = DmgkSchedule.Wrap(new KnotBirthMove(kernel), new KnotDeathMove(kernel), new KnotRelocateMove(kernel),
+                                                        prior, DmgkSchedule.GreenConstant(prior, maxKnots: 40));
+        for (int k = 0; k <= 40; k++)
+        {
+            var state = new KnotConfig(Enumerable.Range(0, k).Select(i => (i + 0.5) / (k + 1)).ToArray());
+            double b = moves[0].Weight(state), d = moves[1].Weight(state), r = moves[2].Weight(state);
+            Assert.True(b + d <= 0.9 + 1e-12, $"k = {k}: b + d = {b + d}");
+            Assert.Equal(1.0, b + d + r, 12);
+        }
     }
 }

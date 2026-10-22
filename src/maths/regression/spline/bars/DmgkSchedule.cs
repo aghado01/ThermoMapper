@@ -20,8 +20,9 @@ namespace Maths.Regression.Spline.Bars;
 /// </summary>
 public static class DmgkSchedule
 {
-    /// <param name="c">Schedule constant in (0, 0.5], which caps the birth+death proposal mass; DMGK use 0.4. Green
-/// instead takes the largest c with b_k + d_k ≤ 0.9 for all k, which can exceed 0.5.</param>
+    /// <param name="c">Schedule constant in (0, 1], which scales the birth+death proposal mass; DMGK use 0.4. Green
+/// instead takes the largest c with b_k + d_k ≤ 0.9 for all k (<see cref="GreenConstant"/>), which can exceed 0.5. The
+/// weights sum to one, as the prior's cancellation needs, only while b_k + d_k ≤ 1 at every reachable k.</param>
     public static IRjMove<KnotConfig>[] Wrap(
         IRjMove<KnotConfig> birth, IRjMove<KnotConfig> death, IRjMove<KnotConfig> relocate,
         IComplexityPrior prior, double c = 0.4)
@@ -30,7 +31,7 @@ public static class DmgkSchedule
         ArgumentNullException.ThrowIfNull(death);
         ArgumentNullException.ThrowIfNull(relocate);
         ArgumentNullException.ThrowIfNull(prior);
-        if (!(c > 0.0 && c <= 0.5)) throw new ArgumentOutOfRangeException(nameof(c), "DMGK constant must be in (0, 0.5].");
+        if (!(c > 0.0 && c <= 1.0)) throw new ArgumentOutOfRangeException(nameof(c), "DMGK constant must be in (0, 1].");
 
         double Birth(KnotConfig s) => c * Ratio(prior, s.Count, s.Count + 1);
         double Death(KnotConfig s) => s.Count == 0 ? 0.0 : c * Ratio(prior, s.Count, s.Count - 1);
@@ -42,6 +43,26 @@ public static class DmgkSchedule
             new ScheduledMove<KnotConfig>(death, Death),
             new ScheduledMove<KnotConfig>(relocate, Relocate),
         };
+    }
+
+    /// <summary>
+    /// Green's (1995, §4.1) choice: the largest c with <c>b_k + d_k ≤ budget</c> for every k in [0, <paramref name="maxKnots"/>],
+    /// i.e. <c>budget / max_k(min{1, p(k+1)/p(k)} + min{1, p(k−1)/p(k)})</c>. Green used a budget of 0.9, which leaves
+    /// relocation at least 0.1.
+    /// </summary>
+    public static double GreenConstant(IComplexityPrior prior, int maxKnots, double budget = 0.9)
+    {
+        ArgumentNullException.ThrowIfNull(prior);
+        if (maxKnots < 0) throw new ArgumentOutOfRangeException(nameof(maxKnots));
+        if (!(budget > 0.0 && budget <= 1.0)) throw new ArgumentOutOfRangeException(nameof(budget), "The budget must be in (0, 1].");
+        double worst = 0.0;
+        for (int k = 0; k <= maxKnots; k++)
+        {
+            if (double.IsNegativeInfinity(prior.LogPrior(k))) continue;   // outside the prior's support
+            double sum = Ratio(prior, k, k + 1) + (k == 0 ? 0.0 : Ratio(prior, k, k - 1));
+            worst = Math.Max(worst, sum);
+        }
+        return Math.Min(1.0, budget / worst);
     }
 
     // min{1, p(to)/p(from)} from the log-prior difference; 0 when the target carries no prior mass.
