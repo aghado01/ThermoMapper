@@ -77,16 +77,16 @@ public sealed class ContaminatedNormalWeights : IWeightResampler
         ArgumentNullException.ThrowIfNull(rng);
         if (!(sigma2 > 0.0)) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive.");
 
-        double sigma = Math.Sqrt(sigma2);
+        // The responsibility from its log odds, log(π/((1−π)κ)) + ½·(r²/σ²)·(1 − 1/κ²): the two densities underflow
+        // together past about 386σ at κ = 10, where their ratio would be 0/0.
         double invKappaSq = 1.0 / (_kappa * _kappa);
+        double logPriorOdds = Math.Log(_pi / ((1.0 - _pi) * _kappa));
+        double gain = 0.5 * (1.0 - invKappaSq);
         var w = new double[residuals.Length];
         for (int i = 0; i < w.Length; i++)
         {
-            double zg = residuals[i] / sigma;
-            double zo = residuals[i] / (_kappa * sigma);
-            double good = (1.0 - _pi) * Math.Exp(-0.5 * zg * zg) / sigma;
-            double outlier = _pi * Math.Exp(-0.5 * zo * zo) / (_kappa * sigma);
-            double pOutlier = outlier / (good + outlier);
+            double logOdds = logPriorOdds + gain * residuals[i] * residuals[i] / sigma2;
+            double pOutlier = 1.0 / (1.0 + Math.Exp(-logOdds));
             w[i] = rng.NextDouble() < pOutlier ? invKappaSq : 1.0;
         }
         return w;

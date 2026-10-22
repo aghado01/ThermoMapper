@@ -117,6 +117,26 @@ public sealed class RobustWeightTests
         }
     }
 
+    [Fact]
+    public void ContaminatedNormalWeights_RejectGrossOutliers_FarIntoTheTail()
+    {
+        // Past about 386σ (κ = 10) both component densities underflow to 0, so a ratio of densities is 0/0. The
+        // reference here is the log odds of the two components' log densities, log N(r; 0, κ²σ²) + log π against
+        // log N(r; 0, σ²) + log(1−π); every residual below is an outlier with probability 1 to double precision.
+        double[] r = [100.0, 380.0, 386.0, 400.0, 1e3, 1e6, -1e3];
+        const double sigma2 = 1.0, pi = 0.05, kappa = 10.0;
+        static double LogNormal(double x, double variance) => -0.5 * Math.Log(2.0 * Math.PI * variance) - 0.5 * x * x / variance;
+        foreach (double ri in r)
+        {
+            double logOdds = LogNormal(ri, kappa * kappa * sigma2) + Math.Log(pi) - LogNormal(ri, sigma2) - Math.Log(1.0 - pi);
+            Assert.True(logOdds > 40.0, $"reference log odds at r = {ri}: {logOdds}");
+        }
+        var resampler = new ContaminatedNormalWeights(pi, kappa);
+        var rng = new Xoshiro256PlusPlus(seed: 23);
+        for (int s = 0; s < 1000; s++)
+            Assert.All(resampler.Resample(r, sigma2, rng), w => Assert.Equal(1.0 / (kappa * kappa), w));
+    }
+
     // The CoefficientDrawTests design with fixed, uneven positive weights (a few points downweighted hard).
     private static (double[,] Z, double[] Y, double[] W) Problem()
     {
