@@ -256,7 +256,7 @@ Added 2026-10-20. This lands after step 3.5's zero-drift rerun as its own change
 
 ### 3.8 `EbicPrior` in He, Yang and Kang's convention (Q7)
 
-Added 2026-10-20. This lands after step 3.5, beside 3.7, once the checklist below has been verified against the *Biometrics* text.
+Added 2026-10-20. This lands after step 3.5, beside 3.7. Its checklist was verified on 2026-10-21 against the article's open supplementary materials, below; the main text is behind a paywall.
 
 - **Law.** log p(k) = (1 − γ)·log C(C, k), with γ ≥ 0 and C the candidate count:
   - γ < 1 favors larger k: this is EBIC's interpolation from BIC's uniform-over-models prior at γ = 0;
@@ -268,19 +268,37 @@ Added 2026-10-20. This lands after step 3.5, beside 3.7, once the checklist belo
 - **Tests.** `EbicTests` moves from γ = 0 to 1 (flat) and from γ = 1 to 2 (penalized). `CountLawTests` gains an EBIC case.
 - **Docs.** `BayesianRegression.md` states the three regimes, the mapping from the old γ, the support guidance and the citation.
 
-**Verify in the *Biometrics* text first.** The paper is not yet in the compendium; the preprint is, as `HYK2024.md`. The external summary of the differences was wrong on one checkable point: it said the death formula changed, but the preprint already has the same formula. So check each item against the paper:
+**Verified against the supplementary materials** (2026-10-21).
+- **Sources.** The user obtained `issues/regression/ABMRS_Revision_V2_Supplementary_Materials/`: the Web Appendix (`ABMRS_Biometrics_Revision_V2_WebAppendix.pdf`, extracted as `web_appendix_extracted.txt`), the `ABMRS` 0.1.0 package source (R and C++) and the demos. Their review is in `discussion/abmrs-verification-questions.md`, with a follow-up in `discussion/argon-abmrs-verification-debrief.md`. Each finding below was rechecked against the source files.
+- **What the earlier external summary got wrong:** the death formula did not change since the preprint.
+- **What the follow-up debrief gets wrong about this engine:**
+  - Our Poisson and Whittle marginals are BIC-type, not Laplace.
+  - The triceps demo's knot inference fixes k = 2, so averaging its ordered knots across draws is meaningful. Its frequentist refit at those knots does ignore their uncertainty.
 
-| # | What to verify | Where it matters |
-|---|---|---|
-| 1 | Whether the prior keeps the preprint's form: π(k) ∝ C(C,k)^(1−γ) with π(ξ \| k) = 1/C(C,k) (equation 3) | The γ_HYK = 1 + γ mapping, and so this step |
-| 2 | γ's range (γ ≥ 0?), the three regimes and the recommended [0.5, 2] | Whether γ > 1 is their convention, to cite, or our extension, to label; constructor bounds; docs |
-| 3 | Guidance on C ("typically > m"), or anything on k past C/2 | Support [0, C] with guidance, or truncation |
-| 4 | The b_k and d_k formulas; c = 0.3 and any stated reason or mixing claim | The mixing benchmark's arms ([BARS mixing](#after-phase-3-bars-mixing)) |
-| 5 | Coincident knots (multiplicity above 1) | The tensor-product extension's handling of jumps (port brief) |
-| 6 | The non-normal treatment (still an EBIC plug-in?) | The docs' comparison with our Laplace marginals |
-| 7 | How peak inference is defined and computed (draws or a plug-in) | The readout contract for the tensor-product extension |
-| 8 | Whether the γ comparison still favors γ = 1, and whether it separates the prior from mixing | The confound noted under BARS mixing |
-| 9 | Title, method name (ABMRS?), volume, issue, article ID, DOI | The citation |
+| # | What to verify | Where it matters | Found (2026-10-21) |
+|---|---|---|---|
+| 1 | Whether the prior keeps the preprint's form: π(k) ∝ C(C,k)^(1−γ) with π(ξ \| k) = 1/C(C,k) (equation 3) | The γ_HYK = 1 + γ mapping, and so this step | **Confirmed.** Web Appendix A.1–A.2: π(k, ξ) ∝ τ(M_k)^(−γ), with τ(M_k) = C(n, k) the number of k-knot models. So π(ξ \| k) = 1/C(n, k) and π(k) ∝ C(n, k)^(1−γ). `ebars.cpp`'s schedule is Green's for that law. The mapping γ_HYK = 1 + γ holds. |
+| 2 | γ's range (γ ≥ 0?), the three regimes and the recommended [0.5, 2] | Whether γ > 1 is their convention, to cite, or our extension, to label; constructor bounds; docs | **Their convention.** The package documents γ ∈ [0.5, 2.0] with default 1.0 (`wrapper.R`), and the Web Appendix runs γ = 0.8, 1.0 and 1.2. So γ > 1 is theirs to cite. The code excludes no regime. |
+| 3 | Guidance on C ("typically > m"), or anything on k past C/2 | Support [0, C] with guidance, or truncation | **C = times·m,** with times = 3 by default; the demos use 2, and `n` can be set directly. Candidates are the grid j/(n + 1). There is no truncation and no stated guidance past C/2; in practice a column filter (below) keeps chains far from it. So: support [0, C] with guidance, as planned. |
+| 4 | The b_k and d_k formulas; c = 0.3 and any stated reason or mixing claim | The mixing benchmark's arms ([BARS mixing](#after-phase-3-bars-mixing)) | **Confirmed.** b_k = c·min(1, ((n − k)/(k + 1))^(1−γ)), d_k = c·min(1, (k/(n − k + 1))^(1−γ)), r_k = 1 − b_k − d_k. c defaults to 0.3 within [0, 1], so relocation gets at least 0.4. The supplement gives no reason or mixing claim. Births and relocations draw uniformly from the unused candidates: global, unlike our local births (OQ11). |
+| 5 | Coincident knots (multiplicity above 1) | The tensor-product extension's handling of jumps (port brief) | **Not supported.** Knots are drawn without replacement from distinct candidates, and jumps are fitted with nearly adjacent knots. Coincident knots appear only in the demos' data generators. |
+| 6 | The non-normal treatment (still an EBIC plug-in?) | The docs' comparison with our Laplace marginals | **An EBIC plug-in, described but not shipped.** The README and Web Appendix A.2 ("substitute p̂ for the corresponding p") describe it, but the released package implements only the Normal model. |
+| 7 | How peak inference is defined and computed (draws or a plug-in) | The readout contract for the tensor-product extension | **From draws, with no derivative machinery.** The package returns draws of knots, coefficients and predictions, and the demos summarize them pointwise. |
+| 8 | Whether the γ comparison still favors γ = 1, and whether it separates the prior from mixing | The confound noted under BARS mixing | **It favors neither, and it does not separate them.** Web Table 1 (RMSE over 50 runs, Curves 1–3): at m = 200, γ = 0.8 is best on Curves 1 and 3 (Curve 3: 0.680, against 0.751 at γ = 1 and 1.533 at γ = 1.2). At m = 500 the three are close (Curve 3: 0.425, 0.437, 0.457). γ sets both the count law and the schedule. The main text's own comparison was not available. |
+| 9 | Title, method name (ABMRS?), volume, issue, article ID, DOI | The citation | **Title** confirmed by the supplement's header. **The rest,** from the journal page as the user found it: Junhui He, Ying Yang and Jian Kang, "Adaptive Bayesian multivariate spline knot inference with prior specifications on model complexity", *Biometrics* 82(3), September 2026, ujag121, doi:10.1093/biomtc/ujag121. **The method** is ABMRS, in the R package `ABMRS` (classes `EBARS`, `MEBARS`). |
+
+**Status:** the supplement settles all nine items for this step (the law, the range, the support), so step 3.8 is unblocked. Cite the article, with the supplement as the source of the verified details.
+
+**Further findings,** recorded for comparison and not for the port:
+- **Paper and code differ on the Normal marginal.**
+  - Lemma 1 (Web Appendix A.1) is the exact g-prior marginal (m + 1)^(−ν/2)·a^(−m/2), with a = yᵀ(I − m/(m + 1)·P)y: BARS's own.
+  - `ebars.cpp` computes m^(Δν/2)·(σ̂/σ̂′)^m, with σ̂² the OLS residual over m. That is the BIC-type form, asymptotically equivalent.
+- **Thin columns are dropped, not refused.**
+  - **What the code does.** `mle_regression` removes from the fit every basis column with at most `npart` = min(20, ⌊0.1·m⌋) entries above 1e-8. It keeps the configuration, zeroes those coefficients, and predicts with the full basis, so the partition of unity breaks where columns drop. The complexity term still counts the dropped columns, since ν is the full column count. A 1e-8 ridge stabilizes the factor.
+  - **Where it came from.** `npart` is BASS's threshold, applied here as a column filter.
+  - **How ours differs.** Step 3.7's support gate refuses the configuration instead, and judges by column mass.
+- **Coefficient draws condition on σ̂.** β ~ N(m/(m + 1)·β̂, m/(m + 1)·σ̂²(ZᵀZ)⁻¹), with σ fixed at its OLS value and never drawn. Ours compose σ² then β (step 0.5c).
+- **A boundary slip at k = 0** (our reading, untested). At k = 0 the move is forced to a birth, and its acceptance is multiplied by b_0, but the reverse death from k = 1 omits the matching 1/b_0. So k = 0 is undersampled whenever one knot is favored.
 
 ### 3.9 Full-support births (OQ11)
 
@@ -413,9 +431,9 @@ The slow mixing is mostly structural:
 
 **He, Yang and Kang's schedule is this one, applied to their count law** (added 2026-10-20).
 - Their b_k = c·min(1, {(C−k)/(k+1)}^(1−γ)) and d_k = c·min(1, {k/(C−k+1)}^(1−γ)) (preprint §3) are Green's schedule for π(k) ∝ C(C,k)^(1−γ). At γ = 1 it is the constant schedule, which at equal c has the largest birth/death flows.
-- So their finding that γ = 1 gives the best MSE changes the prior and the mixing together. At γ = 0, with k ≈ 5 and C large, d_k ≈ c·k/C is about 1%, so deaths are almost never proposed, and part of that γ's overfitting may be finite-chain mixing.
+- So their finding that γ = 1 gives the best MSE changes the prior and the mixing together. The *Biometrics* supplement's Web Table 1 does not favor γ = 1 (step 3.8, item 8). At γ = 0, with k ≈ 5 and C large, d_k ≈ c·k/C is about 1%, so deaths are almost never proposed, and part of that γ's overfitting may be finite-chain mixing.
 - Our engine keeps the schedule and the count prior separate ([seam map](#seam-map-admission-prior-and-schedule), gates 1 and 4), so γ here is purely a prior parameter.
-- Their *Biometrics* version reportedly fixes c = 0.3, which puts relocation at 0.4 or more (step 3.8's checklist, item 4).
+- Their *Biometrics* package defaults to c = 0.3, which puts relocation at 0.4 or more (verified in step 3.8's checklist, item 4).
 
 The comparison, after the step 3.4 ESS fixes:
 - **Arms:** constant weights; DMGK at c = 0.4 and at Green's budget-scaled c, which needs the 0.5 cap in `DmgkSchedule.Wrap` relaxed; a masked constant schedule at equal budget (constant weights, with zero mass on moves into zero-prior states, reassigned to relocation); and the constant schedule at HYK's c = 0.3 (0.3/0.3/0.4).

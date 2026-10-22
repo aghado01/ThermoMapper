@@ -284,11 +284,12 @@ Benchmark by case count, predictor count, active terms, interaction order, respo
 - **Pieces it would reuse,** once the BASS upgrades are done: the shared g-prior block, the `IBasis` carrier seam, the reversible-jump engine and the ensemble shell.
 - **Cost.** For scattered data the Gram matrix is block-banded rather than a Kronecker product, so factor cost grows quickly with the per-dimension basis sizes.
 - **Before designing it,** survey prior work on Bayesian free-knot surface splines. This is outside the completion contract.
-- **Prior work found (2026-10-20).** He, Yang and Kang's EBARS (arXiv 2405.13353, 2024), published in *Biometrics* (2026) as ABMRS. The published details are still to be verified, against the preparation brief's step 3.8 checklist. It is the multivariate BARS this extension describes:
+- **Prior work found (2026-10-20).** He, Yang and Kang's EBARS (arXiv 2405.13353, 2024), published in *Biometrics* (2026) as ABMRS. The published details were verified against the article's open supplement on 2026-10-21 (preparation brief, step 3.8 checklist). It is the multivariate BARS this extension describes:
   - a discrete candidate grid on each axis, with tensor-product B-splines;
-  - the same collapsed g-prior marginal (their Lemma 1);
+  - the same collapsed g-prior marginal (their Lemma 1), though the released code computes the BIC-type ratio;
   - Green's prior-aware schedule on the EBIC count law;
-  - EBIC plug-ins for non-normal responses.
+  - EBIC plug-ins for non-normal responses, described but not in the released package;
+  - basis columns with at most `npart` = min(20, ⌊0.1·m⌋) supported points dropped from the fit, rather than the configuration refused.
 
   The rest of the survey stays open.
 - **Design notes from reviewing it:**
