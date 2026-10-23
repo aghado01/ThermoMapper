@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
@@ -21,9 +20,10 @@ public enum BapsLambdaUpdate
 
     /// <summary>
     /// Metropolis on <c>log λ</c> against the profiled REML marginal evidence (β integrated out) under a uniform prior
-    /// on the effective degrees of freedom (<see cref="PenalizedSpline.EdfSlope"/>); β is Rao-Blackwellized to its
-    /// posterior mean at each draw. Marginalizes the spline. The evidence levels off as λ → ∞, so a flat prior on
-    /// <c>log λ</c> would be improper; the edf prior decays like 1/λ and makes the target proper.
+    /// on the effective degrees of freedom (<see cref="PenalizedSpline.EdfSlope"/>). Each retained λ then draws σ² and β
+    /// exactly from their conditionals, and the coefficient mean is Rao–Blackwellized on β̂(λ). Marginalizes the spline.
+    /// The evidence levels off as λ → ∞, so a flat prior on <c>log λ</c> would be improper; the edf prior decays like
+    /// 1/λ and makes the target proper.
     /// </summary>
     MarginalEvidence,
 
@@ -42,9 +42,14 @@ public enum BapsLambdaUpdate
 /// quantiles of the pooled draws of the global smoothing (in the adaptive mode, λ_global). A median, not a mean,
 /// because λ can be heavy-tailed enough that its posterior mean does not exist. <paramref name="LocalSmoothing"/> is
 /// the posterior-mean local smoothing field λ_i (length ν−r) — non-null only for <see cref="BapsLambdaUpdate.AdaptiveGibbs"/>; its dips
-/// mark where the fit was allowed to track features. <paramref name="RHatLogLambda"/> is R̂ on log λ across chains
+/// mark where the fit was allowed to track features. <paramref name="RHatLogLambda"/> is classic R̂ on log λ across chains
 /// with its <see cref="DiagnosticState"/> (unavailable for a single chain). <paramref name="PosteriorDraws"/> keeps
 /// every retained draw (<see cref="BapsDraw"/>), per chain in draw order; every summary above is read from it.
+/// <paramref name="LogLambdaConvergence"/> and <paramref name="LogSigma2Convergence"/> are the ensemble shell's
+/// rank-normalized diagnostics (split R̂, bulk and tail ESS) on log λ and log σ², the functionals an early stop waits
+/// on. <paramref name="AcceptanceRate"/> is the sampling phase's: 1 for the Gibbs modes, the Metropolis rate on log λ
+/// for the marginal-evidence mode. <paramref name="ChainSeeds"/> are the resolved per-chain seeds, and
+/// <paramref name="Checkpoint"/> the run's restart state when it was requested.
 /// </remarks>
 public sealed record BapsResult(
     double[] Coefficients,
@@ -55,6 +60,11 @@ public sealed record BapsResult(
     RHatDiagnostic RHatLogLambda,
     int Draws,
     IReadOnlyList<IReadOnlyList<BapsDraw>> PosteriorDraws,
+    ConvergenceDiagnostic LogLambdaConvergence,
+    ConvergenceDiagnostic LogSigma2Convergence,
+    double AcceptanceRate,
+    int[] ChainSeeds,
+    EnsembleCheckpoint? Checkpoint,
     double[]? LocalSmoothing = null)
 {
     /// <summary>σ²'s posterior median and 95% interval, read from the retained draws.</summary>
@@ -155,8 +165,10 @@ public sealed record BapsDraw(double[] Coefficients, double[]? ConditionalMean, 
 /// basis with a difference penalty whose strength λ is inferred, sampled either by conjugate Gibbs over the
 /// variance components or by Metropolis against the REML marginal evidence (<see cref="BapsLambdaUpdate"/>). Every
 /// inner solve is banded (<c>A = ZᵀZ + λP</c> via <see cref="BandCholesky"/>'s root-free LDLᵀ, whose factor also
-/// supplies the Gaussian β-draw); chains run in parallel from one seed tree and retain every draw, from which the Bayes
-/// fit, the λ posterior (median + 95% interval), σ, and R̂ on log λ are read.
+/// supplies the Gaussian β-draw). As a client of the ensemble shell (<see cref="ChainEnsemble"/>) its chains run in
+/// parallel from one seed tree, with rank-normalized R̂ and ESS on log λ and log σ², an optional early stop, and
+/// checkpoints. Every draw is retained, and the Bayes fit, the λ posterior (median + 95% interval), σ and the bands are
+/// read from the draws.
 /// </summary>
 public sealed class BapsSampler
 {
@@ -202,33 +214,40 @@ public sealed class BapsSampler
         _phi = phi;
     }
 
-    public BapsResult Run(BapsLambdaUpdate mode, int chains = 4, int masterSeed = 1, int burn = 500, int samples = 1500)
+    /// <param name="mode">How λ is sampled.</param>
+    /// <param name="chains">Independent chains; R̂ and the ESS need at least two.</param>
+    /// <param name="masterSeed">The seed every chain's streams fan out from.</param>
+    /// <param name="burn">Burn-in sweeps per chain.</param>
+    /// <param name="samples">Retained draws per chain; an early stop may keep fewer.</param>
+    /// <param name="rHatTarget">When &gt; 0, stop after the first round in which log λ and log σ² meet this R̂ target
+    /// and their bulk and tail ESS reach <paramref name="minEssPerChain"/> per chain (<see cref="ChainEnsemble"/>'s
+    /// rule). It needs at least two chains.</param>
+    /// <param name="batchSize">Draws per round between stop checks; ≤ 0 is a single round.</param>
+    /// <param name="minEssPerChain">The early stop's ESS gate, per chain.</param>
+    /// <param name="checkpoint">When true, the result carries the run's restart state.</param>
+    /// <param name="resumeFrom">Continue that checkpoint's chains for <paramref name="samples"/> more draws, exactly as the
+    /// uninterrupted run would have; the result covers every draw since burn-in. It needs the same data, settings, mode,
+    /// master seed and chain count.</param>
+    public BapsResult Run(BapsLambdaUpdate mode, int chains = 4, int masterSeed = 1, int burn = 500, int samples = 1500,
+                          double rHatTarget = 0.0, int batchSize = 0, double minEssPerChain = ChainEnsemble.MinEssPerChain,
+                          bool checkpoint = false, EnsembleCheckpoint? resumeFrom = null)
     {
         if (chains < 1) throw new ArgumentOutOfRangeException(nameof(chains));
         if (samples < 2 || burn < 0) throw new ArgumentOutOfRangeException(nameof(samples));
+        if (mode is not (BapsLambdaUpdate.Gibbs or BapsLambdaUpdate.MarginalEvidence or BapsLambdaUpdate.AdaptiveGibbs))
+            throw new ArgumentOutOfRangeException(nameof(mode));
 
-        // The chains' seeds lead the tree, so they do not depend on the readout streams after them, which only the
-        // marginal-evidence mode's conditional draws use.
-        int[] tree = SeedTree.Derive(masterSeed, 2 * chains);
-        int[] seeds = tree[..chains];
-        var draws = new List<BapsDraw>[chains];
-        Parallel.For(0, chains, c =>
-        {
-            var rng = new Xoshiro256PlusPlus(seeds[c]);
-            draws[c] = mode switch
-            {
-                BapsLambdaUpdate.Gibbs => RunGibbs(rng, burn, samples),
-                BapsLambdaUpdate.MarginalEvidence => RunMarginal(rng, new Xoshiro256PlusPlus(tree[chains + c]), burn, samples),
-                BapsLambdaUpdate.AdaptiveGibbs => RunAdaptiveGibbs(rng, burn, samples),
-                _ => throw new ArgumentOutOfRangeException(nameof(mode)),
-            };
-        });
+        // The shell gives each chain a kernel stream and a readout stream. Only the marginal-evidence mode's conditional
+        // draws use the readout stream, so the λ chain does not depend on them.
+        (EnsembleRun summary, IReadOnlyList<IChainRun<BapsDraw>> runs) = new ChainEnsemble().Run<BapsDraw>(
+            new BapsEnsemble(this, mode), chains, masterSeed, burn, samples, rHatTarget, batchSize, minEssPerChain,
+            checkpoint, resumeFrom);
 
-        // Every summary is read from the retained draws: each chain's sums in draw order, then over chains; the log-λ
-        // moments per chain for R̂; and the pooled λ sample for its quantiles.
-        double total = chains * (double)samples;
+        // Every summary is read from the retained draws: each chain's sums in draw order, then over chains, and the pooled
+        // λ sample for its quantiles. R̂ on log λ is the shell's classic reading of the same draws; the rank-normalized
+        // diagnostics come from its traces of log λ and log σ².
+        double total = chains * (double)summary.SamplesUsed;
         var coef = new double[_nu];
-        var logLam = new RunningMoments[chains];
         double sigSum = 0.0;
         var allLam = new double[(int)total];
         int nLoc = _nu - _r;
@@ -237,23 +256,21 @@ public sealed class BapsSampler
         int idx = 0;
         for (int c = 0; c < chains; c++)
         {
-            posteriorDraws[c] = draws[c].ToArray();
+            List<BapsDraw> draws = ((BapsChainRun)runs[c]).Draws;
+            posteriorDraws[c] = draws.ToArray();
             var coefSum = new double[_nu];
-            var moments = new RunningMoments();
             double sigmaSum = 0.0;
             double[]? localSum = localField is null ? null : new double[nLoc];
-            foreach (BapsDraw d in draws[c])
+            foreach (BapsDraw d in draws)
             {
                 double[] coefficients = d.ConditionalMean ?? d.Coefficients;   // Rao–Blackwellized where the mode has it
                 for (int p = 0; p < _nu; p++) coefSum[p] += coefficients[p];
                 allLam[idx++] = d.Lambda;
-                moments.Add(Math.Log(d.Lambda));
                 sigmaSum += Math.Sqrt(d.Sigma2);
                 if (localSum is not null)
                     for (int k = 0; k < nLoc; k++) localSum[k] += d.Lambda * d.Eta![k];
             }
             for (int p = 0; p < _nu; p++) coef[p] += coefSum[p];
-            logLam[c] = moments;
             sigSum += sigmaSum;
             if (localSum is not null)
                 for (int k = 0; k < nLoc; k++) localField![k] += localSum[k];
@@ -266,133 +283,249 @@ public sealed class BapsSampler
 
         return new BapsResult(
             coef, Quantile(allLam, 0.5), Quantile(allLam, 0.025), Quantile(allLam, 0.975),
-            sigSum / total, ChainDiagnostics.RHat(logLam), (int)total, posteriorDraws, localField);
-    }
-
-    // ── Gibbs: β | σ²,τ²  then  σ² | β  then  τ² | β ───────────────────────────
-    private List<BapsDraw> RunGibbs(Xoshiro256PlusPlus rng, int burn, int samples)
-    {
-        var draws = new List<BapsDraw>(samples);
-        var band = new double[_bw + 1, _nu];
-        var z = new double[_nu];
-        var innov = new double[_nu];
-        var beta = new double[_nu];
-        var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
-
-        double sigma2 = 1.0, tau2 = 1.0;
-        int steps = burn + samples;
-        for (int it = 0; it < steps; it++)
-        {
-            double lambda = sigma2 / tau2;
-            Array.Copy(_gram0, band, _gram0.Length);        // A = ZᵀZ + λP
-            _penalty.AccumulateInto(band, _nu, lambda);
-            chol.DecomposeBanded(band);
-            if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-                throw new InvalidOperationException($"ZᵀZ + λP is not numerically positive definite at λ = {lambda} ({chol.Status}).");
-            double[] betaHat = chol.Solve(_zty);            // posterior mean A⁻¹Zᵀy
-
-            for (int p = 0; p < _nu; p++) z[p] = Normal.SampleStandard(rng);
-            chol.SampleInnovation(z, innov);                // v ~ N(0, A⁻¹)
-            double sigma = Math.Sqrt(sigma2);
-            for (int p = 0; p < _nu; p++) beta[p] = betaHat[p] + sigma * innov[p];
-
-            sigma2 = InverseGamma.ShapeScale(_priorShape + 0.5 * _n, _priorScale + 0.5 * ResidualSS(beta)).Sample(rng);
-            tau2 = InverseGamma.ShapeScale(_priorShape + 0.5 * (_nu - _r), _priorScale + 0.5 * _penalty.Roughness(beta)).Sample(rng);
-
-            if (it >= burn) draws.Add(new BapsDraw((double[])beta.Clone(), null, sigma2 / tau2, sigma2, tau2, null));
-        }
-        return draws;
-    }
-
-    // ── Marginal evidence: Metropolis on log λ against REML evidence × uniform-edf prior ──
-    // Each retained λ then gets exact conjugate draws on the readout stream, so the λ chain is unchanged by them. Under
-    // the Jeffreys prior the evidence assumes, σ² | λ, y ~ IG((n − r)/2, RSS_pen/2); then β | σ², λ, y ~ N(β̂, σ²A⁻¹).
-    // β̂(λ) is kept beside the draw for the Rao–Blackwellized coefficient mean.
-    private List<BapsDraw> RunMarginal(Xoshiro256PlusPlus rng, Xoshiro256PlusPlus readout, int burn, int samples)
-    {
-        var draws = new List<BapsDraw>(samples);
-        var z = new double[_nu];
-        var innov = new double[_nu];
-        int nullity = _r;
-        double logLam = 0.0;
-        double ev = MarginalLogTarget(1.0);
-        int steps = burn + samples;
-        for (int it = 0; it < steps; it++)
-        {
-            double prop = logLam + _mhLogStep * Normal.SampleStandard(rng);
-            double evProp = MarginalLogTarget(Math.Exp(prop));
-            if (Math.Log(1.0 - rng.NextDouble()) < evProp - ev)
-            {
-                logLam = prop;
-                ev = evProp;
-            }
-            if (it >= burn)
-            {
-                double lambda = Math.Exp(logLam);
-                (double[] betaHat, double rssPen, BandCholesky factor) = _model.SolveFactored(lambda);
-                double sigma2 = InverseGamma.ShapeScale(0.5 * (_n - nullity), 0.5 * rssPen).Sample(readout);
-                for (int p = 0; p < _nu; p++) z[p] = Normal.SampleStandard(readout);
-                factor.SampleInnovation(z, innov);              // v ~ N(0, A⁻¹)
-                double sigma = Math.Sqrt(sigma2);
-                var beta = new double[_nu];
-                for (int p = 0; p < _nu; p++) beta[p] = betaHat[p] + sigma * innov[p];
-                draws.Add(new BapsDraw(beta, betaHat, lambda, sigma2, sigma2 / lambda, null));
-            }
-        }
-        return draws;
+            sigSum / total, summary.FunctionalRHat[0], (int)total, posteriorDraws,
+            summary.Monitored[0], summary.Monitored[1], summary.AcceptanceRate, summary.ChainSeeds, summary.Checkpoint,
+            localField);
     }
 
     // log p(u | y) up to a constant on u = ln λ: the profiled evidence plus the uniform-edf prior density |d edf/du|.
     private double MarginalLogTarget(double lambda) => _model.RemlLogEvidence(lambda) + Math.Log(_model.EdfSlope(lambda));
 
-    // ── Adaptive Gibbs: as RunGibbs, plus per-difference multipliers η_i ~ Gamma(φ, φ) ──
-    private List<BapsDraw> RunAdaptiveGibbs(Xoshiro256PlusPlus rng, int burn, int samples)
+    /// <summary>
+    /// The ensemble-shell client for one mode: it starts and restores chains, fingerprints the run for checkpoints, and
+    /// names the functionals the shell monitors. Those are log λ and log σ², which get split R̂ and bulk and tail ESS and
+    /// gate an early stop.
+    /// </summary>
+    private sealed class BapsEnsemble : IEnsembleModel<BapsDraw>
     {
-        int nLoc = _nu - _r;
-        var draws = new List<BapsDraw>(samples);
-        var band = new double[_bw + 1, _nu];
-        var z = new double[_nu];
-        var innov = new double[_nu];
-        var beta = new double[_nu];
-        var eta = new double[nLoc];
-        var sqDiff = new double[nLoc];
-        var weights = new double[nLoc];        // λ_i = (σ²/τ²)·η_i
-        var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
+        private readonly BapsSampler _owner;
+        private readonly BapsLambdaUpdate _mode;
 
-        double sigma2 = 1.0, tau2 = 1.0;
-        for (int i = 0; i < nLoc; i++) eta[i] = 1.0;   // start unadapted (= global)
-        int steps = burn + samples;
-        for (int it = 0; it < steps; it++)
+        public BapsEnsemble(BapsSampler owner, BapsLambdaUpdate mode)
         {
-            double lamGlobal = sigma2 / tau2;
-            for (int i = 0; i < nLoc; i++) weights[i] = lamGlobal * eta[i];
-            Array.Copy(_gram0, band, _gram0.Length);            // A = ZᵀZ + Dᵀdiag(λ_i)D
-            _penalty.AccumulateInto(band, _nu, weights);
-            chol.DecomposeBanded(band);
-            if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-                throw new InvalidOperationException($"ZᵀZ + Dᵀdiag(λᵢ)D is not numerically positive definite at global λ = {lamGlobal} ({chol.Status}).");
-            double[] betaHat = chol.Solve(_zty);
+            _owner = owner;
+            _mode = mode;
+        }
 
-            for (int p = 0; p < _nu; p++) z[p] = Normal.SampleStandard(rng);
-            chol.SampleInnovation(z, innov);
+        public int FunctionalDim => 2;
+
+        public int MonitoredDim => 2;
+
+        public IChainRun<BapsDraw> StartChain(int chainSeed, int readoutSeed) =>
+            new BapsChainRun(_owner, _mode, new Xoshiro256PlusPlus(chainSeed), new Xoshiro256PlusPlus(readoutSeed));
+
+        /// <summary>The design, the responses, the penalty order, the hyperparameters and the mode.</summary>
+        public string Fingerprint
+        {
+            get
+            {
+                var f = new RunFingerprint().Add("BAPS").Add((int)_mode).Add(_owner._n).Add(_owner._nu).Add(_owner._r);
+                foreach (double v in _owner._z) f.Add(v);
+                return f.Add(_owner._y).Add(_owner._priorShape).Add(_owner._priorScale).Add(_owner._mhLogStep)
+                        .Add(_owner._phi).ToString();
+            }
+        }
+
+        public IChainRun<BapsDraw> RestoreChain(IChainState state) => state is BapsChainState s
+            ? new BapsChainRun(_owner, _mode, s)
+            : throw new ArgumentException("Not a BAPS chain's restart state.", nameof(state));
+    }
+
+    /// <summary>One BAPS chain's restart state: both streams' words, the state its next sweep conditions on (σ², τ² and η
+    /// for the Gibbs modes; log λ and its target value for the marginal-evidence mode), its counters and its retained
+    /// draws.</summary>
+    private sealed record BapsChainState(
+        (ulong, ulong, ulong, ulong) Rng, (ulong, ulong, ulong, ulong) Readout, double Sigma2, double Tau2, double[] Eta,
+        double LogLambda, double Evidence, long Accepted, long Attempts, List<BapsDraw> Draws) : IChainState;
+
+    /// <summary>
+    /// One BAPS chain: its mode's sweep, its retained draws and its restart state. Burn-in advances without recording;
+    /// each sampling step advances once and records the draw, so the chain's streams are the same however its steps
+    /// are split into rounds or runs.
+    /// </summary>
+    private sealed class BapsChainRun : IChain<BapsDraw>, IResumableChainRun<BapsDraw>
+    {
+        private readonly BapsSampler _o;
+        private readonly BapsLambdaUpdate _mode;
+        private readonly Xoshiro256PlusPlus _rng;       // the sweep's stream
+        private readonly Xoshiro256PlusPlus _readout;   // the marginal-evidence mode's conditional draws
+        private readonly double[,] _band;
+        private readonly BandCholesky _chol;
+        private readonly double[] _z, _innov, _beta, _sqDiff, _weights;
+        private readonly double[] _eta;                 // adaptive mode's local multipliers
+        private double _sigma2 = 1.0, _tau2 = 1.0;      // the Gibbs modes' variance components
+        private double _logLam, _ev;                    // the marginal-evidence chain's state and its log target
+
+        public readonly List<BapsDraw> Draws;           // every post-burn draw, in order
+
+        public BapsChainRun(BapsSampler owner, BapsLambdaUpdate mode, Xoshiro256PlusPlus rng, Xoshiro256PlusPlus readout)
+            : this(owner, mode, rng, readout, new List<BapsDraw>())
+        {
+            Array.Fill(_eta, 1.0);   // start unadapted (= global)
+            if (mode == BapsLambdaUpdate.MarginalEvidence) _ev = owner.MarginalLogTarget(1.0);   // log λ = 0
+        }
+
+        public BapsChainRun(BapsSampler owner, BapsLambdaUpdate mode, BapsChainState s)
+            : this(owner, mode, Restore(s.Rng), Restore(s.Readout), new List<BapsDraw>(s.Draws))
+        {
+            Array.Copy(s.Eta, _eta, _eta.Length);
+            _sigma2 = s.Sigma2;
+            _tau2 = s.Tau2;
+            _logLam = s.LogLambda;
+            _ev = s.Evidence;
+            Accepted = s.Accepted;
+            Attempts = s.Attempts;
+        }
+
+        private BapsChainRun(BapsSampler owner, BapsLambdaUpdate mode, Xoshiro256PlusPlus rng, Xoshiro256PlusPlus readout,
+                             List<BapsDraw> draws)
+        {
+            _o = owner;
+            _mode = mode;
+            _rng = rng;
+            _readout = readout;
+            Draws = draws;
+            int nu = owner._nu, nLoc = owner._nu - owner._r;
+            _band = new double[owner._bw + 1, nu];
+            _chol = new BandCholesky(nu, owner._bw, BandFactorization.Ldlt);
+            _z = new double[nu];
+            _innov = new double[nu];
+            _beta = new double[nu];
+            _sqDiff = new double[nLoc];
+            _weights = new double[nLoc];   // λ_i = (σ²/τ²)·η_i
+            _eta = new double[nLoc];
+        }
+
+        private static Xoshiro256PlusPlus Restore((ulong, ulong, ulong, ulong) w) =>
+            Xoshiro256PlusPlus.Restore(w.Item1, w.Item2, w.Item3, w.Item4);
+
+        // IChain
+        public long Accepted { get; private set; }
+        public long Attempts { get; private set; }
+
+        public BapsDraw Step()
+        {
+            Advance();
+            return Record();
+        }
+
+        // IChainRun
+        public IChain<BapsDraw> Chain => this;
+
+        public void Burn(int steps)
+        {
+            for (int i = 0; i < steps; i++) Advance();
+        }
+
+        public void Accumulate(in BapsDraw draw, Span<double> functionals)
+        {
+            functionals[0] = Math.Log(draw.Lambda);
+            functionals[1] = Math.Log(draw.Sigma2);
+            Draws.Add(draw);
+        }
+
+        public IChainState SaveState() => new BapsChainState(
+            _rng.SaveState(), _readout.SaveState(), _sigma2, _tau2, (double[])_eta.Clone(), _logLam, _ev,
+            Accepted, Attempts, new List<BapsDraw>(Draws));
+
+        private void Advance()
+        {
+            switch (_mode)
+            {
+                case BapsLambdaUpdate.Gibbs: AdvanceGibbs(); break;
+                case BapsLambdaUpdate.MarginalEvidence: AdvanceMarginal(); break;
+                default: AdvanceAdaptiveGibbs(); break;
+            }
+            Attempts++;
+        }
+
+        // The draw at the end of the sweep. The marginal-evidence mode adds its exact conjugate draws given λ here, on the
+        // readout stream: σ² | λ, y ~ IG((n − r)/2, RSS_pen/2) under the Jeffreys prior the evidence assumes, then
+        // β | σ², λ, y ~ N(β̂, σ²A⁻¹), with β̂(λ) kept for the Rao–Blackwellized coefficient mean.
+        private BapsDraw Record()
+        {
+            if (_mode != BapsLambdaUpdate.MarginalEvidence)
+                return new BapsDraw((double[])_beta.Clone(), null, _sigma2 / _tau2, _sigma2, _tau2,
+                                    _mode == BapsLambdaUpdate.AdaptiveGibbs ? (double[])_eta.Clone() : null);
+
+            int nu = _o._nu;
+            double lambda = Math.Exp(_logLam);
+            (double[] betaHat, double rssPen, BandCholesky factor) = _o._model.SolveFactored(lambda);
+            double sigma2 = InverseGamma.ShapeScale(0.5 * (_o._n - _o._r), 0.5 * rssPen).Sample(_readout);
+            for (int p = 0; p < nu; p++) _z[p] = Normal.SampleStandard(_readout);
+            factor.SampleInnovation(_z, _innov);                 // v ~ N(0, A⁻¹)
             double sigma = Math.Sqrt(sigma2);
-            for (int p = 0; p < _nu; p++) beta[p] = betaHat[p] + sigma * innov[p];
+            var beta = new double[nu];
+            for (int p = 0; p < nu; p++) beta[p] = betaHat[p] + sigma * _innov[p];
+            return new BapsDraw(beta, betaHat, lambda, sigma2, sigma2 / lambda, null);
+        }
 
-            _penalty.SquaredDifferencesInto(beta, sqDiff);       // (Δ^rβ)_i²
+        // ── Gibbs: β | σ²,τ²  then  σ² | β  then  τ² | β ───────────────────────────
+        private void AdvanceGibbs()
+        {
+            int nu = _o._nu;
+            double lambda = _sigma2 / _tau2;
+            Array.Copy(_o._gram0, _band, _o._gram0.Length);       // A = ZᵀZ + λP
+            _o._penalty.AccumulateInto(_band, nu, lambda);
+            _chol.DecomposeBanded(_band);
+            if (_chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                throw new InvalidOperationException($"ZᵀZ + λP is not numerically positive definite at λ = {lambda} ({_chol.Status}).");
+            double[] betaHat = _chol.Solve(_o._zty);             // posterior mean A⁻¹Zᵀy
 
-            sigma2 = InverseGamma.ShapeScale(_priorShape + 0.5 * _n, _priorScale + 0.5 * ResidualSS(beta)).Sample(rng);
+            for (int p = 0; p < nu; p++) _z[p] = Normal.SampleStandard(_rng);
+            _chol.SampleInnovation(_z, _innov);                  // v ~ N(0, A⁻¹)
+            double sigma = Math.Sqrt(_sigma2);
+            for (int p = 0; p < nu; p++) _beta[p] = betaHat[p] + sigma * _innov[p];
 
-            double weightedRough = 0.0;                          // Σ η_i (Δβ)_i²
-            for (int i = 0; i < nLoc; i++) weightedRough += eta[i] * sqDiff[i];
-            tau2 = InverseGamma.ShapeScale(_priorShape + 0.5 * nLoc, _priorScale + 0.5 * weightedRough).Sample(rng);
+            _sigma2 = InverseGamma.ShapeScale(_o._priorShape + 0.5 * _o._n, _o._priorScale + 0.5 * _o.ResidualSS(_beta)).Sample(_rng);
+            _tau2 = InverseGamma.ShapeScale(_o._priorShape + 0.5 * (nu - _o._r), _o._priorScale + 0.5 * _o._penalty.Roughness(_beta)).Sample(_rng);
+            Accepted++;
+        }
+
+        // ── Marginal evidence: Metropolis on log λ against REML evidence × uniform-edf prior ──
+        private void AdvanceMarginal()
+        {
+            double prop = _logLam + _o._mhLogStep * Normal.SampleStandard(_rng);
+            double evProp = _o.MarginalLogTarget(Math.Exp(prop));
+            if (Math.Log(1.0 - _rng.NextDouble()) < evProp - _ev)
+            {
+                _logLam = prop;
+                _ev = evProp;
+                Accepted++;
+            }
+        }
+
+        // ── Adaptive Gibbs: as Gibbs, plus per-difference multipliers η_i ~ Gamma(φ, φ) ──
+        private void AdvanceAdaptiveGibbs()
+        {
+            int nu = _o._nu, nLoc = _eta.Length;
+            double lamGlobal = _sigma2 / _tau2;
+            for (int i = 0; i < nLoc; i++) _weights[i] = lamGlobal * _eta[i];
+            Array.Copy(_o._gram0, _band, _o._gram0.Length);       // A = ZᵀZ + Dᵀdiag(λ_i)D
+            _o._penalty.AccumulateInto(_band, nu, _weights);
+            _chol.DecomposeBanded(_band);
+            if (_chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                throw new InvalidOperationException($"ZᵀZ + Dᵀdiag(λᵢ)D is not numerically positive definite at global λ = {lamGlobal} ({_chol.Status}).");
+            double[] betaHat = _chol.Solve(_o._zty);
+
+            for (int p = 0; p < nu; p++) _z[p] = Normal.SampleStandard(_rng);
+            _chol.SampleInnovation(_z, _innov);
+            double sigma = Math.Sqrt(_sigma2);
+            for (int p = 0; p < nu; p++) _beta[p] = betaHat[p] + sigma * _innov[p];
+
+            _o._penalty.SquaredDifferencesInto(_beta, _sqDiff);   // (Δ^rβ)_i²
+
+            _sigma2 = InverseGamma.ShapeScale(_o._priorShape + 0.5 * _o._n, _o._priorScale + 0.5 * _o.ResidualSS(_beta)).Sample(_rng);
+
+            double weightedRough = 0.0;                           // Σ η_i (Δβ)_i²
+            for (int i = 0; i < nLoc; i++) weightedRough += _eta[i] * _sqDiff[i];
+            _tau2 = InverseGamma.ShapeScale(_o._priorShape + 0.5 * nLoc, _o._priorScale + 0.5 * weightedRough).Sample(_rng);
 
             // η_i | β, τ² ~ Gamma(φ + ½, φ + (Δβ)_i²/(2τ²)) — the +½ is the prior-normalizer Jacobian.
             for (int i = 0; i < nLoc; i++)
-                eta[i] = Gamma.ShapeRate(_phi + 0.5, _phi + 0.5 * sqDiff[i] / tau2).Sample(rng);
-
-            if (it >= burn) draws.Add(new BapsDraw((double[])beta.Clone(), null, sigma2 / tau2, sigma2, tau2, (double[])eta.Clone()));
+                _eta[i] = Gamma.ShapeRate(_o._phi + 0.5, _o._phi + 0.5 * _sqDiff[i] / _tau2).Sample(_rng);
+            Accepted++;
         }
-        return draws;
     }
 
     private double ResidualSS(double[] beta)
