@@ -138,8 +138,10 @@ public sealed class DrawSample : IMergeable<DrawSample>
 
     /// <summary>
     /// The <paramref name="p"/> quantile. Under unit weights it is the type-7 estimator, linear interpolation between
-    /// order statistics at position <c>p(n − 1)</c>; under general weights, linear interpolation of the weighted ECDF
-    /// between the midpoints of each draw's weight. NaN for an empty sample.
+    /// order statistics at position <c>p(n − 1)</c>. Under general weights it is linear interpolation of the weighted ECDF
+    /// between the midpoints of each distinct value's weight: zero weights carry no mass and are dropped, and tied values
+    /// pool their weight, so the answer depends on the weighted multiset alone, not on the order its draws arrived or
+    /// merged in. NaN for an empty sample or one with no mass.
     /// </summary>
     public double Quantile(double p)
     {
@@ -157,23 +159,35 @@ public sealed class DrawSample : IMergeable<DrawSample>
             return lo + 1 < n ? sorted[lo] * (1.0 - frac) + sorted[lo + 1] * frac : sorted[lo];
         }
 
-        var values = _values.ToArray();
-        var weights = _weights.ToArray();
-        Array.Sort(values, weights);
-        double target = p * TotalWeight, below = 0.0, previousMid = double.NaN;
-        for (int i = 0; i < n; i++)
+        // Sorted by value, then weight, so that tied weights are pooled in one order and the sums are reproducible.
+        var draws = new (double Value, double Weight)[n];
+        for (int i = 0; i < n; i++) draws[i] = (_values[i], _weights[i]);
+        Array.Sort(draws, (a, b) => a.Value != b.Value ? a.Value.CompareTo(b.Value) : a.Weight.CompareTo(b.Weight));
+        var distinct = new List<(double Value, double Weight)>(n);
+        double total = 0.0;
+        foreach ((double value, double weight) in draws)
         {
-            double mid = below + 0.5 * weights[i];
+            if (weight == 0.0) continue;
+            if (distinct.Count > 0 && distinct[^1].Value == value) distinct[^1] = (value, distinct[^1].Weight + weight);
+            else distinct.Add((value, weight));
+            total += weight;
+        }
+        if (distinct.Count == 0) return double.NaN;   // no mass
+
+        double target = p * total, below = 0.0, previousMid = double.NaN;
+        for (int i = 0; i < distinct.Count; i++)
+        {
+            double mid = below + 0.5 * distinct[i].Weight;
             if (target <= mid)
             {
-                if (i == 0 || double.IsNaN(previousMid) || mid == previousMid) return values[i];
+                if (i == 0) return distinct[0].Value;
                 double t = (target - previousMid) / (mid - previousMid);
-                return values[i - 1] + t * (values[i] - values[i - 1]);
+                return distinct[i - 1].Value + t * (distinct[i].Value - distinct[i - 1].Value);
             }
             previousMid = mid;
-            below += weights[i];
+            below += distinct[i].Weight;
         }
-        return values[n - 1];
+        return distinct[^1].Value;
     }
 
     private static List<double> Ones(int count)

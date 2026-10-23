@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Maths.Samplers.Ensemble;
 using Xunit;
 
@@ -102,6 +104,71 @@ public sealed class ReadoutTests
         s.MergeFrom(unit);
         Assert.Equal(3, s.Count);
         Assert.Equal(5.0, s.TotalWeight);
+    }
+
+    [Fact]
+    public void DrawSample_Weighted_PoolsTiesAndDropsZeroMass()
+    {
+        // The external review's cases. Ties: (0, 1), (0, 3), (1, 1) in either order is (0, 4), (1, 1), whose weight
+        // midpoints are 2 and 4.5 of 5, so the 70th percentile is 0.6.
+        foreach (double[] order in new[] { new[] { 1.0, 3.0 }, new[] { 3.0, 1.0 } })
+        {
+            var tied = new DrawSample();
+            tied.Add(0.0, order[0]);
+            tied.Add(0.0, order[1]);
+            tied.Add(1.0, 1.0);
+            Assert.Equal(0.6, tied.Quantile(0.7), 12);
+        }
+        // A zero weight carries no mass: every quantile lies within the positive mass's range.
+        var zero = new DrawSample();
+        zero.Add(10.0, 0.5);
+        zero.Add(20.0, 0.5);
+        zero.Add(-100.0, 0.0);
+        Assert.Equal(10.0, zero.Quantile(0.05));
+        Assert.Equal(15.0, zero.Quantile(0.5), 12);
+        // No mass at all: no quantile.
+        var none = new DrawSample();
+        none.Add(123.0, 0.0);
+        Assert.True(double.IsNaN(none.Quantile(0.5)));
+    }
+
+    [Fact]
+    public void DrawSample_Weighted_IsInvariantToOrderMergeAndScale()
+    {
+        // A weighted multiset with ties and zero weights, as SMC's duplicated particles give. Its quantiles must not
+        // depend on insertion order or on how it was split and merged (exactly), nor on a common rescaling of the weights.
+        var rng = new Maths.Rng.Xoshiro256PlusPlus(seed: 17);
+        var draws = new List<(double Value, double Weight)>();
+        for (int i = 0; i < 60; i++)
+        {
+            double value = Math.Round(rng.NextDouble() * 8.0) / 2.0;   // many ties
+            double weight = i % 7 == 0 ? 0.0 : 0.1 + rng.NextDouble();
+            draws.Add((value, weight));
+        }
+        double[] ps = [0.0, 0.03, 0.25, 0.5, 0.61, 0.9, 1.0];
+        DrawSample From(IEnumerable<(double Value, double Weight)> items, double scale = 1.0)
+        {
+            var s = new DrawSample();
+            foreach ((double v, double w) in items) s.Add(v, w * scale);
+            return s;
+        }
+        double[] reference = ps.Select(From(draws).Quantile).ToArray();
+
+        for (int trial = 0; trial < 20; trial++)
+        {
+            var shuffled = draws.OrderBy(_ => rng.NextDouble()).ToList();
+            Assert.Equal(reference, ps.Select(From(shuffled).Quantile).ToArray());
+
+            int cut = 1 + (int)(rng.NextDouble() * (draws.Count - 2));
+            DrawSample left = From(shuffled.Take(cut)), right = From(shuffled.Skip(cut));
+            DrawSample leftThenRight = left.Copy(), rightThenLeft = right.Copy();
+            leftThenRight.MergeFrom(right);
+            rightThenLeft.MergeFrom(left);
+            Assert.Equal(reference, ps.Select(leftThenRight.Quantile).ToArray());
+            Assert.Equal(reference, ps.Select(rightThenLeft.Quantile).ToArray());
+        }
+        double[] scaled = ps.Select(From(draws, scale: 3.7).Quantile).ToArray();
+        for (int i = 0; i < ps.Length; i++) Assert.Equal(reference[i], scaled[i], 12);
     }
 
     private enum Outcome { Kept, LostA, LostB }
