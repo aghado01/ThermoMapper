@@ -509,7 +509,7 @@ How exact the draws and $v$ are depends on the model (`BarsResult.Uncertainty`, 
 
 - `Fit`: the grid posterior means, with a per-grid R̂ consensus map (`RHatFit`, each reading with its state) and its worst reading (`RHatFitMax`).
 - `FitSd`: the pointwise posterior sd (above), and `Uncertainty`: the model's `CoefficientUncertainty` label.
-- `PeakPosterior`: the mean argmax location and height, a 95% interval from type-7 quantiles, and R̂/ESS.
+- `PeakPosterior`: the mean argmax location and height, a 95% interval from type-7 quantiles, and R̂/ESS, all read from `PeakDraws` (each chain's argmax draws in order are its trace). A basis without closed-form peaks has no argmax, so these are NaN or unavailable, not a location of 0. `PeakCountMean` is likewise the mean span count over `PeakDraws`.
 - `PeakDraws`: every retained draw's exact peak readout, per chain in draw order (`PeakDraw`). It holds the closed-form argmax (location and height) and each significant span in location order (`PeakSpan`: location, height, both crossings, both clipping flags). Nothing in it is snapped to the grid, and it travels with checkpoints. A basis without closed-form peaks records a NaN argmax and no spans.
 - λ(T) and π(T): views over `PeakDraws`. Per draw, λ counts each significant span once at the grid point nearest its location, and π counts once each grid point some span covers. Both are divided by the draw count. Only these two views are grid-aligned; the clipping flags, the exact crossings and the heights are in `PeakDraws` alone.
 - `PeakModes`: interior local maxima of λ. Each has a λ-weighted location, a span equal to the contiguous region with π ≥ 0.5 (a fixed coverage cutoff), and a mass. Modes are sorted by mass.

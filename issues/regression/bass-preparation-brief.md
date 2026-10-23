@@ -532,7 +532,7 @@ Only BARS and BGP run on the ensemble shell. BAPS runs its own chain loop, and t
 | Conditional-mean curve on the grid | Fit, FitSd, per-point classic R̂ | The per-draw curves |
 | Coefficient draw (`SampleCoefficients`) | Only through the readouts below | The draw |
 | σ², drawn with β in `WeightedNormalModel.SampleConditional` | Nothing | σ²: the public seam returns β only |
-| Argmax location and height | Location mean and interval, height mean; since `724bdf2` also each draw's exact values, in `PeakDraws` | Nothing, since `724bdf2` (before: the per-draw sample, kept in-run but not returned) |
+| Argmax location and height | Location mean and interval, height mean; since `724bdf2` also each draw's exact values, in `PeakDraws`, over which the summary is a view since `dc4daef` | Nothing, since `724bdf2` (before: the per-draw sample, kept in-run but not returned) |
 | Significant spans (`PeakSpan`: location, height, left, right, two clipping flags) | Since `724bdf2`, every span exactly, in `PeakDraws`; λ(T), π(T) and the modes are views over them (`6b6aa5f`) | Nothing, since `724bdf2` (before: exact locations and endpoints snapped to the grid, the heights, and both clipping flags) |
 | Conditional variance on the grid | Pooled into FitSd | The per-draw values |
 | Robust weights (weighted model) | Nothing | The per-draw weights |
@@ -2277,6 +2277,11 @@ The user asked for the two BARS readout breaches the retention inventory found t
 
 **Not changed:**
 - **`PeakModes`** still takes mode locations and intervals from the grid-based λ. With exact per-draw locations retained, it could read them off the draws instead; that is a readout-design question (OQ7).
-- **`Peak`, `PeakSample` and the peak trace** still accumulate beside the draws. They could become views as well.
+- **`Peak`, `PeakSample` and the peak trace** still accumulated beside the draws. Superseded the same day; see the follow-up below.
 
 **Results** under the fact harness: `Maths.Regression.Tests` 257 of 257 (`20261023_124320705`). The solution builds.
+
+**Follow-up, the same day: the peak summary from the draws** (`dc4daef`). At the user's request, `PeakPosterior` (location and height means, the 95% interval, the location's R̂ and ESS) and `PeakCountMean` are now read from `PeakDraws`. The `Peak` sums, the `PeakSample` and the per-chain `PeakTrace` are deleted, and the checkpoint no longer carries a duplicate trace.
+- **Spline bases are bit-identical.** A probe over the plain, robust, adaptive and tempered resume setups matched the previous code to the last digit on every field. The probe was not committed.
+- **One behaviour change.** A basis without closed-form peaks (`StepBasis`) used to report a peak location and height of 0, a location that does not exist. It now reports NaN, matching its empty interval. A new test pins this, and no consumer read the old value.
+- **Results:** `Maths.Regression.Tests` 258 of 258 (`20261023_125325276`). The solution builds.
