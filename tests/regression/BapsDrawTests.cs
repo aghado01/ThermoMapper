@@ -54,15 +54,20 @@ public sealed class BapsDrawTests
             foreach (BapsDraw d in chain)
             {
                 Assert.Equal(nu, d.Coefficients.Length);
-                for (int p = 0; p < nu; p++) coef[p] += d.Coefficients[p];
+                double[] mean = d.ConditionalMean ?? d.Coefficients;   // the coefficient mean is Rao–Blackwellized where it can be
+                for (int p = 0; p < nu; p++) coef[p] += mean[p];
                 lambdas.Add(d.Lambda);
                 sigma += Math.Sqrt(d.Sigma2);
                 if (mode == BapsLambdaUpdate.MarginalEvidence)
                 {
-                    Assert.True(double.IsNaN(d.Tau2));   // λ is sampled alone
+                    // λ is the chain's state; σ² and β are conditional draws given it, and τ² = σ²/λ.
+                    Assert.Equal(nu, d.ConditionalMean!.Length);
+                    Assert.NotEqual(d.ConditionalMean[0], d.Coefficients[0]);
+                    Assert.Equal(d.Lambda, d.Sigma2 / d.Tau2, 1e-15 * d.Lambda);
                 }
                 else
                 {
+                    Assert.Null(d.ConditionalMean);
                     Assert.Equal(d.Sigma2 / d.Tau2, d.Lambda);
                 }
                 if (mode == BapsLambdaUpdate.AdaptiveGibbs)

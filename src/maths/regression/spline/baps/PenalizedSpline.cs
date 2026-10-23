@@ -55,6 +55,14 @@ public sealed class PenalizedSpline
     // (β̂, penalized RSS, log|A|) at smoothing λ; A = ZᵀZ + λP factored once and shared by every read-out.
     private (double[] beta, double rssPen, double logDetA) Solve(double lambda)
     {
+        (double[] beta, double rssPen, BandCholesky factor) = SolveFactored(lambda);
+        return (beta, rssPen, factor.LogDet);
+    }
+
+    /// <summary>β̂(λ) = A⁻¹Zᵀy, RSS_pen(λ) = yᵀy − β̂ᵀZᵀy and the factor of A = ZᵀZ + λP — what an exact conditional draw
+    /// of (σ², β) given λ needs.</summary>
+    internal (double[] Beta, double RssPen, BandCholesky Factor) SolveFactored(double lambda)
+    {
         var band = new double[_bw + 1, _nu];
         var b = new double[_nu];
         _design.Accumulate(null, band, _y, b);       // ZᵀZ (band) and Zᵀy
@@ -67,7 +75,7 @@ public sealed class PenalizedSpline
 
         double bBeta = 0.0;                            // RSS_pen = yᵀy − β̂ᵀZᵀy
         for (int p = 0; p < _nu; p++) bBeta += b[p] * beta[p];
-        return (beta, _yy - bBeta, chol.LogDet);
+        return (beta, _yy - bBeta, chol);
     }
 
     /// <summary>Posterior-mean (penalized) coefficients <c>β̂(λ) = (ZᵀZ + λP)⁻¹ Zᵀy</c> — the Reinsch solve.</summary>

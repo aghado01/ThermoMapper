@@ -151,6 +151,113 @@ public sealed class BapsMarginalEvidenceTests
         Assert.True(ok, "MarginalEvidence quantiles disagree with quadrature (see output)");
     }
 
+    [Theory]
+    [InlineData("linear")]
+    [InlineData("sine")]
+    public void MarginalEvidence_ConditionalDraws_MatchQuadrature(string shape)
+    {
+        // Each retained λ draws σ² | λ, y ~ IG((n − r)/2, RSS_pen/2) and then β | σ², λ, y ~ N(β̂, σ²A⁻¹). Their marginal
+        // moments are mixtures over p(u | y): E[σ² | λ] = RSS_pen/(n − r − 2), Var[σ² | λ] = E[σ² | λ]²/((n − r)/2 − 2),
+        // E[f | λ] = zᵀβ̂ and Var[f | λ] = E[σ² | λ]·zᵀA⁻¹z for f = zᵀβ at a mid-design row, all from the dense reference.
+        (double[,] z, double[] y) = Data(shape);
+        var reference = new DenseReference(z, y);
+        int nu = z.GetLength(1);
+        var zRow = new double[nu];
+        for (int j = 0; j < nu; j++) zRow[j] = z[N / 2, j];
+
+        const double lo = -25.0, hi = 28.0, h = 0.005;   // the grid of the λ quadrature above
+        int g = (int)Math.Round((hi - lo) / h) + 1;
+        var logp = new double[g];
+        double max = double.NegativeInfinity;
+        for (int i = 0; i < g; i++)
+        {
+            (double ell, _, double slope) = reference.At(Math.Exp(lo + i * h));
+            logp[i] = ell + Math.Log(slope);
+            max = Math.Max(max, logp[i]);
+        }
+        double shapeIg = 0.5 * (N - Order);
+        double mass = 0.0, s1 = 0.0, s2 = 0.0, f1 = 0.0, f2 = 0.0;
+        for (int i = 0; i < g; i++)
+        {
+            double w = Math.Exp(logp[i] - max) * (i == 0 || i == g - 1 ? 0.5 : 1.0);   // trapezoid
+            (double rss, double fitMean, double fitScale) = reference.Conditional(Math.Exp(lo + i * h), zRow);
+            double e = rss / (N - Order - 2);
+            mass += w;
+            s1 += w * e;
+            s2 += w * (e * e / (shapeIg - 2.0) + e * e);
+            f1 += w * fitMean;
+            f2 += w * (e * fitScale + fitMean * fitMean);
+        }
+        double refSigma2 = s1 / mass, refSigma2Var = s2 / mass - refSigma2 * refSigma2;
+        double refFit = f1 / mass, refFitVar = f2 / mass - refFit * refFit;
+
+        const int runs = 10;
+        int[] seeds = SeedTree.Derive(202, runs);
+        var sampler = new BapsSampler(z, y, new DifferencePenalty(Order));
+        var est = new double[4][];
+        for (int k = 0; k < 4; k++) est[k] = new double[runs];
+        for (int r = 0; r < runs; r++)
+        {
+            BapsResult res = sampler.Run(BapsLambdaUpdate.MarginalEvidence, chains: 4, masterSeed: seeds[r], burn: 500, samples: 4000);
+            double count = 0.0, m1 = 0.0, m2 = 0.0, q1 = 0.0, q2 = 0.0;
+            foreach (var chain in res.PosteriorDraws)
+                foreach (BapsDraw d in chain)
+                {
+                    double fit = 0.0;
+                    for (int j = 0; j < nu; j++) fit += zRow[j] * d.Coefficients[j];
+                    count++;
+                    m1 += d.Sigma2; m2 += d.Sigma2 * d.Sigma2;
+                    q1 += fit; q2 += fit * fit;
+                }
+            est[0][r] = m1 / count;
+            est[1][r] = m2 / count - (m1 / count) * (m1 / count);
+            est[2][r] = q1 / count;
+            est[3][r] = q2 / count - (q1 / count) * (q1 / count);
+            if (r == 0) AssertDrawsMatchTheirConditionals(res, reference, zRow, shape);
+        }
+
+        double[] refs = { refSigma2, refSigma2Var, refFit, refFitVar };
+        string[] names = { "E[σ²]", "Var[σ²]", "E[f]", "Var[f]" };
+        bool ok = true;
+        for (int k = 0; k < 4; k++)
+        {
+            double mean = 0.0;
+            foreach (double v in est[k]) mean += v / runs;
+            double ss = 0.0;
+            foreach (double v in est[k]) ss += (v - mean) * (v - mean);
+            double se = Math.Sqrt(ss / (runs - 1) / runs);
+            bool pass = Math.Abs(mean - refs[k]) <= 4.5 * se + 1e-3 * Math.Abs(refs[k]);
+            ok &= pass;
+            _out.WriteLine($"[marginal-draws {shape}] {names[k]}: sampler {mean:E5} ± {se:E2}  quadrature {refs[k]:E5}  z = {(mean - refs[k]) / se:F2}{(pass ? "" : "  FAIL")}");
+        }
+        Assert.True(ok, "MarginalEvidence conditional draws disagree with quadrature (see output)");
+    }
+
+    // The conditional draws alone, separated from the λ chain: on the run's own λ sample, the draws' mean σ² and f
+    // must match the mean of their exact conditional expectations. Given the λs the draws are independent (their own
+    // stream), so the standard error is the root of the summed conditional variances over the draw count.
+    private void AssertDrawsMatchTheirConditionals(BapsResult res, DenseReference reference, double[] zRow, string shape)
+    {
+        double shapeIg = 0.5 * (N - Order);
+        double count = 0.0, drawSigma2 = 0.0, condSigma2 = 0.0, varSigma2 = 0.0, drawFit = 0.0, condFit = 0.0, varFit = 0.0;
+        foreach (var chain in res.PosteriorDraws)
+            foreach (BapsDraw d in chain)
+            {
+                (double rss, double fitMean, double fitScale) = reference.Conditional(d.Lambda, zRow);
+                double e = rss / (N - Order - 2);
+                double fit = 0.0;
+                for (int j = 0; j < zRow.Length; j++) fit += zRow[j] * d.Coefficients[j];
+                count++;
+                drawSigma2 += d.Sigma2; condSigma2 += e; varSigma2 += e * e / (shapeIg - 2.0);
+                drawFit += fit; condFit += fitMean; varFit += e * fitScale;
+            }
+        double zSigma2 = (drawSigma2 - condSigma2) / Math.Sqrt(varSigma2);
+        double zFit = (drawFit - condFit) / Math.Sqrt(varFit);
+        _out.WriteLine($"[marginal-draws {shape}] given the run's λs: σ² z = {zSigma2:F2}, f z = {zFit:F2} over {count} draws");
+        Assert.InRange(zSigma2, -4.0, 4.0);
+        Assert.InRange(zFit, -4.0, 4.0);
+    }
+
     // Dense reference: ℓ_p from an explicit penalized residual, edf = tr(A⁻¹G), and |d edf/d ln λ| = λ‖Z A⁻¹ Dᵀ‖²_F.
     private sealed class DenseReference
     {
@@ -177,7 +284,8 @@ public sealed class BapsMarginalEvidenceTests
             for (int r = 0; r < _nu - Order; r++) { _d[r, r] = 1.0; _d[r, r + 1] = -2.0; _d[r, r + 2] = 1.0; }
         }
 
-        public (double Ell, double Edf, double Slope) At(double lambda)
+        // The Cholesky factor of A = ZᵀZ + λDᵀD.
+        private double[,] FactorA(double lambda)
         {
             var a = new double[_nu, _nu];
             for (int i = 0; i < _nu; i++)
@@ -187,7 +295,37 @@ public sealed class BapsMarginalEvidenceTests
                     for (int r = 0; r < _nu - Order; r++) p += _d[r, i] * _d[r, j];
                     a[i, j] = _g[i, j] + lambda * p;
                 }
-            double[,] l = Cholesky(a);
+            return Cholesky(a);
+        }
+
+        // Given λ: RSS_pen from an explicit penalized residual, and for f = zᵀβ its conditional mean zᵀβ̂ and zᵀA⁻¹z,
+        // so that Var[f | σ², λ, y] = σ²·zᵀA⁻¹z.
+        public (double Rss, double FitMean, double FitScale) Conditional(double lambda, double[] zRow)
+        {
+            double[,] l = FactorA(lambda);
+            double[] beta = Solve(l, _zty);
+            double rss = 0.0;
+            for (int k = 0; k < _n; k++)
+            {
+                double fit = 0.0;
+                for (int j = 0; j < _nu; j++) fit += _z[k, j] * beta[j];
+                rss += (_y[k] - fit) * (_y[k] - fit);
+            }
+            for (int r = 0; r < _nu - Order; r++)
+            {
+                double db = 0.0;
+                for (int j = 0; j < _nu; j++) db += _d[r, j] * beta[j];
+                rss += lambda * db * db;
+            }
+            double mean = 0.0, scale = 0.0;
+            double[] aInvZ = Solve(l, zRow);
+            for (int j = 0; j < _nu; j++) { mean += zRow[j] * beta[j]; scale += zRow[j] * aInvZ[j]; }
+            return (rss, mean, scale);
+        }
+
+        public (double Ell, double Edf, double Slope) At(double lambda)
+        {
+            double[,] l = FactorA(lambda);
             double logDet = 0.0;
             for (int i = 0; i < _nu; i++) logDet += 2.0 * Math.Log(l[i, i]);
 

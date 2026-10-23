@@ -58,16 +58,17 @@ public sealed record BapsResult(
     double[]? LocalSmoothing = null);
 
 /// <summary>
-/// One retained BAPS draw: the coefficients, the global smoothing λ, the noise variance σ², the penalty variance τ²,
-/// and the adaptive mode's local multipliers η.
+/// One retained BAPS draw: the coefficients, the global smoothing λ, the noise variance σ², the penalty variance τ²
+/// (λ = σ²/τ²), and the adaptive mode's local multipliers η.
 /// <list type="bullet">
-///   <item>In the Gibbs modes λ = σ²/τ², all from the end of the sweep.</item>
-///   <item>The marginal-evidence mode samples λ alone. Its coefficients are the conditional mean and σ² the profiled
-///   variance at λ, not draws, and τ² is NaN.</item>
+///   <item>In the Gibbs modes all of them come from the end of the sweep.</item>
+///   <item>The marginal-evidence mode samples λ, then draws σ² and β exactly from their conditionals given λ, and
+///   sets τ² = σ²/λ. <see cref="ConditionalMean"/> holds β̂(λ) = E[β | λ, y] beside the draw.</item>
 ///   <item><see cref="Eta"/> is set in the adaptive mode only, where the local smoothing is λᵢ = λ·ηᵢ.</item>
 /// </list>
 /// </summary>
-public sealed record BapsDraw(double[] Coefficients, double Lambda, double Sigma2, double Tau2, double[]? Eta);
+public sealed record BapsDraw(double[] Coefficients, double[]? ConditionalMean, double Lambda, double Sigma2, double Tau2,
+                              double[]? Eta);
 
 /// <summary>
 /// The BAPS (Bayesian adaptive P-spline) sampler — the measure-side dual of free-knot BARS. A rich fixed B-spline
@@ -126,7 +127,10 @@ public sealed class BapsSampler
         if (chains < 1) throw new ArgumentOutOfRangeException(nameof(chains));
         if (samples < 2 || burn < 0) throw new ArgumentOutOfRangeException(nameof(samples));
 
-        int[] seeds = SeedTree.Derive(masterSeed, chains);
+        // The chains' seeds lead the tree, so they do not depend on the readout streams after them, which only the
+        // marginal-evidence mode's conditional draws use.
+        int[] tree = SeedTree.Derive(masterSeed, 2 * chains);
+        int[] seeds = tree[..chains];
         var draws = new List<BapsDraw>[chains];
         Parallel.For(0, chains, c =>
         {
@@ -134,7 +138,7 @@ public sealed class BapsSampler
             draws[c] = mode switch
             {
                 BapsLambdaUpdate.Gibbs => RunGibbs(rng, burn, samples),
-                BapsLambdaUpdate.MarginalEvidence => RunMarginal(rng, burn, samples),
+                BapsLambdaUpdate.MarginalEvidence => RunMarginal(rng, new Xoshiro256PlusPlus(tree[chains + c]), burn, samples),
                 BapsLambdaUpdate.AdaptiveGibbs => RunAdaptiveGibbs(rng, burn, samples),
                 _ => throw new ArgumentOutOfRangeException(nameof(mode)),
             };
@@ -160,7 +164,8 @@ public sealed class BapsSampler
             double[]? localSum = localField is null ? null : new double[nLoc];
             foreach (BapsDraw d in draws[c])
             {
-                for (int p = 0; p < _nu; p++) coefSum[p] += d.Coefficients[p];
+                double[] coefficients = d.ConditionalMean ?? d.Coefficients;   // Rao–Blackwellized where the mode has it
+                for (int p = 0; p < _nu; p++) coefSum[p] += coefficients[p];
                 allLam[idx++] = d.Lambda;
                 moments.Add(Math.Log(d.Lambda));
                 sigmaSum += Math.Sqrt(d.Sigma2);
@@ -214,15 +219,21 @@ public sealed class BapsSampler
             sigma2 = InverseGamma.ShapeScale(_priorShape + 0.5 * _n, _priorScale + 0.5 * ResidualSS(beta)).Sample(rng);
             tau2 = InverseGamma.ShapeScale(_priorShape + 0.5 * (_nu - _r), _priorScale + 0.5 * _penalty.Roughness(beta)).Sample(rng);
 
-            if (it >= burn) draws.Add(new BapsDraw((double[])beta.Clone(), sigma2 / tau2, sigma2, tau2, null));
+            if (it >= burn) draws.Add(new BapsDraw((double[])beta.Clone(), null, sigma2 / tau2, sigma2, tau2, null));
         }
         return draws;
     }
 
-    // ── Marginal evidence: Metropolis on log λ against REML evidence × uniform-edf prior; β Rao-Blackwellized ──
-    private List<BapsDraw> RunMarginal(Xoshiro256PlusPlus rng, int burn, int samples)
+    // ── Marginal evidence: Metropolis on log λ against REML evidence × uniform-edf prior ──
+    // Each retained λ then gets exact conjugate draws on the readout stream, so the λ chain is unchanged by them. Under
+    // the Jeffreys prior the evidence assumes, σ² | λ, y ~ IG((n − r)/2, RSS_pen/2); then β | σ², λ, y ~ N(β̂, σ²A⁻¹).
+    // β̂(λ) is kept beside the draw for the Rao–Blackwellized coefficient mean.
+    private List<BapsDraw> RunMarginal(Xoshiro256PlusPlus rng, Xoshiro256PlusPlus readout, int burn, int samples)
     {
         var draws = new List<BapsDraw>(samples);
+        var z = new double[_nu];
+        var innov = new double[_nu];
+        int nullity = _r;
         double logLam = 0.0;
         double ev = MarginalLogTarget(1.0);
         int steps = burn + samples;
@@ -238,8 +249,14 @@ public sealed class BapsSampler
             if (it >= burn)
             {
                 double lambda = Math.Exp(logLam);
-                draws.Add(new BapsDraw((double[])_model.Coefficients(lambda).Clone(), lambda, _model.ProfiledVariance(lambda),
-                                       double.NaN, null));
+                (double[] betaHat, double rssPen, BandCholesky factor) = _model.SolveFactored(lambda);
+                double sigma2 = InverseGamma.ShapeScale(0.5 * (_n - nullity), 0.5 * rssPen).Sample(readout);
+                for (int p = 0; p < _nu; p++) z[p] = Normal.SampleStandard(readout);
+                factor.SampleInnovation(z, innov);              // v ~ N(0, A⁻¹)
+                double sigma = Math.Sqrt(sigma2);
+                var beta = new double[_nu];
+                for (int p = 0; p < _nu; p++) beta[p] = betaHat[p] + sigma * innov[p];
+                draws.Add(new BapsDraw(beta, betaHat, lambda, sigma2, sigma2 / lambda, null));
             }
         }
         return draws;
@@ -293,7 +310,7 @@ public sealed class BapsSampler
             for (int i = 0; i < nLoc; i++)
                 eta[i] = Gamma.ShapeRate(_phi + 0.5, _phi + 0.5 * sqDiff[i] / tau2).Sample(rng);
 
-            if (it >= burn) draws.Add(new BapsDraw((double[])beta.Clone(), sigma2 / tau2, sigma2, tau2, (double[])eta.Clone()));
+            if (it >= burn) draws.Add(new BapsDraw((double[])beta.Clone(), null, sigma2 / tau2, sigma2, tau2, (double[])eta.Clone()));
         }
         return draws;
     }
