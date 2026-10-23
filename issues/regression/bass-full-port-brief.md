@@ -136,6 +136,23 @@ Several existing components provide useful patterns but cannot be substituted un
 
 Existing covariance callers may legitimately require regularization or inverse output. A new strict factor path must not silently change their semantics. No blanket conversion of the existing engines from one dimension to two dimensions is required.
 
+**Open (2026-10-23): shared Gibbs building blocks, and separating samplers from model classes.** Tracked as the preparation brief's OQ18. The user's direction: this kind of unification is the ideal, and samplers should be separate from model classes where that is not unwieldy.
+- **The observation.** The engines hand-roll the same conjugate steps: 21 sites across 7 files in `Maths.Regression`.
+  - **Banded Gaussian conditional draws:** factor a precision band, solve for the mean, add a `SampleInnovation` draw. They appear in BAPS's Gibbs and adaptive sweeps and its marginal-mode β, in `HierarchicalPSpline`'s β_r and β₀, and in the g-prior block's coefficient draw.
+  - **Inverse-gamma updates from a sum of squares:** σ², τ², τ_u², τ₀², and the σ² behind BARS's robust weights.
+  - **Gamma updates for local multipliers:** BAPS's η, and the Student-t weights.
+  - **Random-walk Metropolis on a scalar:** BAPS's log λ, and BGP's log t.
+
+  BASS needs all of them, for its coefficient, variance, hyperparameter and count-intensity blocks.
+- **The shape, to be designed (not decided):**
+  - **Primitives in `Maths.Samplers`:** a Gaussian conditional draw from a precision factor and right-hand side, the inverse-gamma and gamma conjugate updates, and a scalar random-walk Metropolis step that counts its acceptances. `Maths.Samplers` already references LinAlg and Distributions, so they fit there.
+  - **A generic scan in `Maths.Samplers`:** a chain over a model's state that runs its blocks in order each step, counts acceptance per block, and records a draw. It saves its streams and state for checkpoints, and the ensemble shell drives it like any other chain.
+  - **Composition with the reversible-jump chain:** BARS's step is already a reversible-jump step plus the weight block, assembled ad hoc in `StepOnce`, and BASS is reversible-jump moves plus conjugate blocks. One composite kernel would serve both.
+  - **What stays with the model in `Maths.Regression`:** the state type, each block's sufficient statistics (residual sum of squares, roughness, the penalty band), and the result assembly.
+- **Why `BapsSampler` cannot simply move to `Maths.Samplers`.** Its conditionals use `PenalizedSpline`, `DifferencePenalty` and `BandedDesign`, all in `Maths.Regression`, and Regression references Samplers, so the move would make a cycle. The split above is the version that works: the generic scan and primitives move down, and the model's blocks stay. It matches the reversible-jump engine's existing split, with `ReversibleJumpChain` in Samplers and `SplineTarget` and the knot moves in Regression.
+- **The check when it lands:** each engine moved onto the blocks must be bit-identical to its current sampler, with the same streams and the same order, as BAPS's move onto the ensemble shell was.
+- **Sequencing:** `HierarchicalPSpline`'s move onto the ensemble shell waits for this, so it lands on the shared scan rather than another hand-rolled chain class. Its draw retention does not depend on it.
+
 ## Numerical and operation contracts
 
 ### Dense factor maintenance
