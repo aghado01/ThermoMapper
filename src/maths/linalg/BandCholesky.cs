@@ -324,11 +324,14 @@ namespace Maths.LinAlg
         // ── Condition ────────────────────────────────────────────────────────────
 
         /// <inheritdoc/>
-        /// <remarks>Refuses after a failed strict factorization. A floored factor's solves describe the floored matrix, so
-        /// its estimate is of that matrix.</remarks>
+        /// <remarks>Refuses after a failed strict factorization, and after any floored pivot: the floored factor's solves
+        /// describe a different matrix from the one whose diagonal and norm the estimate is scaled by.</remarks>
         public double EquilibratedCondition()
         {
             RequireFactor();
+            if (Status.FlooredPivots > 0)
+                throw new InvalidOperationException(
+                    $"{Status.FlooredPivots} pivot(s) were floored, so the solves describe another matrix; factor strictly to estimate the condition.");
             return ConditionEstimate.Equilibrated(this, _sqrtDiagonal, _equilibratedNorm1);
         }
 

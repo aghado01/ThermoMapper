@@ -32,7 +32,7 @@ namespace Maths.LinAlg
         /// An estimate of κ₁(E), the 1-norm condition number of the equilibrated matrix E = D^(−½)·A·D^(−½),
         /// D = diag(A), in at most eleven solves (Hager 1984; Higham 1988; LAPACK's xPOCON). It is a lower bound on the
         /// exact value, rarely below a third of it in practice. Unlike 1/<see cref="FactorStatus.MinRelativePivot"/>,
-        /// which only bounds κ(E) from below, it measures it.
+        /// which only bounds κ(E) from below, it measures it. It refuses after a failed factorization or a floored pivot.
         /// </summary>
         double EquilibratedCondition();
     }
