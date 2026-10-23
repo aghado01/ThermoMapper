@@ -546,9 +546,9 @@ Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc
 
 - **Computed per step:** a bandwidth t, its GP fit (`GpFit`: α and the log marginal), and the conditional mean at the test points.
 - **Reaches the result:** the Bayes-averaged mean; the bandwidth's mean and 95% interval in both frames; its rank-normalized diagnostics.
-- **Dropped:**
+- **Dropped,** until `513c317`, which retains every draw's bandwidth and GP fit in `BgpResult.BandwidthDraws` (report "BGP and BAPS draws retained"):
   - the bandwidth sample, which every chain kept: it is pooled and sorted for two quantiles, then discarded;
-  - the per-draw curves and their spread across bandwidths. Only a running sum is kept, so the between-bandwidth uncertainty is lost;
+  - the per-draw curves and their spread across bandwidths. Only a running sum is kept, so the between-bandwidth uncertainty is lost. The curves can now be recomputed from the retained fits;
   - each draw's log marginal.
 - **Never computed:** the GP's conditional variance at the test points (`PredictMean` only), so `BgpResult` carries no uncertainty on f at all. σ² is fixed at construction, not inferred.
 - **No resume:** `RestoreChain` refuses (OQ10).
@@ -557,7 +557,7 @@ Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc
 
 - **Computed per draw (Gibbs modes):** a full β draw, σ², τ² and λ = σ²/τ²; in the adaptive mode also η and the local field λᵢ.
 - **Reaches the result:** the mean of β, three quantiles of λ, the mean of σ (not σ², and with no interval), the mean local field, and classic R̂ on log λ.
-- **Dropped:** every β draw, so there is no band on the fit and no nonlinear readout; the σ², τ² and η draws; the λ sample beyond its three quantiles; and the local field beyond its mean.
+- **Dropped,** until `3d88ab1`, which retains every draw in `BapsResult.PosteriorDraws` (report "BGP and BAPS draws retained"): every β draw, so there is no band on the fit and no nonlinear readout; the σ², τ² and η draws; the λ sample beyond its three quantiles; and the local field beyond its mean.
 - **The marginal-evidence mode** records the conditional mean `Coefficients(λ)` and the profiled σ in place of draws, so its coefficient uncertainty is zero by construction.
 - **Off the shell:** no traces, no ESS or rank-normalized R̂, no early stop, no checkpoint.
 
@@ -596,8 +596,8 @@ Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc
 
 1. `IObservationModel.SampleCoefficients` returns β. `WeightedNormalModel.SampleConditional` drew σ² with it, and only the robust weight update sees that σ².
 2. `SplineExtrema.SignificantPeakSpans` returns exact spans with clipping flags; `BarsEnsemble.AccumulateDraw` keeps grid counts.
-3. `BgpChainRun` keeps the bandwidth sample; `BgpSampler.Run` returns three numbers from it.
-4. `BapsSampler`'s chain accumulators keep the λ sample; `BapsResult` returns three quantiles.
+3. `BgpChainRun` keeps the bandwidth sample; `BgpSampler.Run` returns three numbers from it. Fixed in `513c317`.
+4. `BapsSampler`'s chain accumulators keep the λ sample; `BapsResult` returns three quantiles. Fixed in `3d88ab1`.
 5. `ExactChangepoint.Infer` builds the full forward and backward tables; it returns marginals.
 6. `IChainRun.Accumulate` receives each draw and is told to reduce it: the shell's contract is the root of the pattern.
 7. `SwendsenWang`'s cycle finds the largest cluster's size every sweep. It survives only folded into Σ|c|² without the largest.
@@ -2285,3 +2285,33 @@ The user asked for the two BARS readout breaches the retention inventory found t
 - **Spline bases are bit-identical.** A probe over the plain, robust, adaptive and tempered resume setups matched the previous code to the last digit on every field. The probe was not committed.
 - **One behaviour change.** A basis without closed-form peaks (`StepBasis`) used to report a peak location and height of 0, a location that does not exist. It now reports NaN, matching its empty interval. A new test pins this, and no consumer read the old value.
 - **Results:** `Maths.Regression.Tests` 258 of 258 (`20261023_125325276`). The solution builds.
+
+### BGP and BAPS draws retained — 2026-10-23
+
+The user asked for tier 1 of the retention work on BGP and BAPS: retain each draw's state and read the existing summaries from it, bit-identical, one commit per engine, each checked against the old code with a probe.
+
+| Commit | Content |
+|---|---|
+| `513c317` | `BgpDraw` (bandwidth and GP fit), retained per chain and returned as `BgpResult.BandwidthDraws`; the posterior mean and the bandwidth summary read from it; `BgpDrawTests` |
+| `3d88ab1` | `BapsDraw` (coefficients, λ, σ², τ², η), retained per chain and returned as `BapsResult.PosteriorDraws`; every summary read from it; `BapsDrawTests` |
+| docs commit | `BayesianRegression.md`, the retention inventory, this report |
+
+**What is retained:**
+- **BGP:** each draw's bandwidth t with the GP fit the chain held there (log marginal, α, mean). Given t the GP posterior is fixed, so this is the whole state. A rejected proposal shares the previous fit, so only distinct fits cost memory.
+- **BAPS:** each draw's coefficients, λ, σ² and τ², plus η in the adaptive mode. The marginal-evidence mode keeps what it recorded before (the conditional mean and the profiled σ²), with τ² NaN. Repairing it into real draws is tier 2.
+
+**How the summaries stay bit-identical.** Each sum runs in the old order: per chain in draw order, then over chains. The bandwidth mean averages the chains' running means as the shell did, the λ R̂ rebuilds each chain's running moments from the retained λ, and the quantiles sort the same pooled values. BGP predicts each distinct fit once, which changes nothing numerically.
+
+**The probes** (temporary, not committed) compared every reported field against the previous code:
+- **BGP:** 1 and 3 chains, posterior mean at 25 test points, both bandwidth summaries, acceptance and convergence.
+- **BAPS:** the Gibbs, marginal-evidence and adaptive modes at 1 and 3 chains, coefficients, λ quantiles, σ mean, R̂ and the local field.
+
+All matched to the last digit.
+
+**The tests:**
+- **`BgpDrawTests`:** every draw is kept; each fit sits at its draw's bandwidth; rejected proposals share fits; the posterior mean is the draws' average prediction; and the interval is the draws' type-7 quantiles.
+- **`BapsDrawTests`:** in each mode, every draw is kept as its own arrays; λ = σ²/τ² in the Gibbs modes; τ² is NaN in the marginal mode; η is present only in the adaptive mode; and the coefficients, σ mean, λ median and local field are the draws' summaries.
+
+**Not done (tier 2, open):** BGP's predictive variance at the test points (its factor is still dropped after each fit), the BAPS fit band and σ²/τ² intervals, exact conjugate draws in BAPS's marginal-evidence mode, and BAPS on the ensemble shell (tier 3).
+
+**Results** under the fact harness: `Maths.Regression.Tests` 262 of 262 (`20261023_131411056`). The solution builds.

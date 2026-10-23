@@ -537,6 +537,11 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
 
 `BapsResult` summarizes λ by quantiles of the pooled draws: `LambdaMedian`, `LambdaLo` (2.5%) and `LambdaHi` (97.5%). It reports a median, not a mean, because λ can be heavy-tailed enough that its posterior mean does not exist. The λ modes use **different priors**, so their λ posteriors, and hence these summaries, are not the same quantity.
 
+`BapsResult.PosteriorDraws` keeps every draw, per chain in draw order (`BapsDraw`), and every summary above is read from it:
+- **What a draw holds:** the coefficients, λ, σ², τ², and in the adaptive mode η, with local smoothing λᵢ = λ·ηᵢ.
+- **In the Gibbs modes** λ = σ²/τ², all from the end of the sweep.
+- **The `MarginalEvidence` mode** samples λ alone. Its coefficients are the conditional mean and its σ² the profiled variance at λ, not draws, and τ² is NaN.
+
 **Hierarchical P-spline** (Behseta–Kass–Wallstrom). Replicate curves $\beta_r\sim N(\beta_0,\tau_u^2I)$ share a penalized population curve $\beta_0$. It uses conjugate banded Gibbs updates for $\beta_r$, $\beta_0$, σ², $\tau_u^2$ and $\tau_0^2$, in that order, in a single chain. Each draw conditions on the current values of the others; in particular, the $\tau_u^2$ statistic $\sum_r\|\beta_r-\beta_0\|^2$ uses the $\beta_0$ drawn in the same sweep.
 
 **Bivariate smoothing.**
@@ -562,6 +567,7 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
 
 - **Inputs.** The default, `GpInputScaling.Similarity`, is the isotropic map $\phi(x)=(x-\mathrm{lo})/s$. Here lo is the per-coordinate training minimum and s the largest coordinate span, so the data fill the unit cube with their shape preserved. A constant coordinate maps to 0. `GpInputScaling.None` uses the inputs as given, for callers whose coordinates already have squared distances of order 1.
 - **Units.** The sampler, the prior's support and $T_n$ work in the mapped frame. A bandwidth t there is $s^2t$ in the original units. `BgpResult` reports the bandwidth posterior mean and its 2.5% and 97.5% quantiles in both frames, as `Bandwidth` and `BandwidthOriginal` (both `BandwidthSummary`), together with s as `InputScale`.
+- **Retained draws.** `BgpResult.BandwidthDraws` keeps every draw, per chain in draw order (`BgpDraw`): the bandwidth t and the GP fit the chain held there, with its log marginal, α and mean. Given t the GP posterior is fixed, so this is the draw's whole state. A rejected proposal shares the previous fit. The posterior mean at the test points and the bandwidth summary are read from these draws.
 - **Validation.** Non-finite inputs or responses are rejected, and so are all-identical inputs under `Similarity`.
 
 The response is not rescaled, so σ² stays in response units.
