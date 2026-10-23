@@ -9,12 +9,20 @@ namespace Maths.Regression.GPrior;
 public enum GPriorCentre
 {
     /// <summary>
-    /// On the null fit: <c>μ₀ = ȳ·G⁻¹Zᵀ1</c> projects the response's mean level onto the design's span (<c>ȳ·1</c> for a
-    /// basis whose functions sum to one). The prior then shrinks the fit's shape toward flat and leaves its level where
-    /// the data put it, so the marginal and the fit do not change when the response is shifted by a constant. The
-    /// proper counterpart of Liang et al.'s (2008) flat intercept.
+    /// On the response's median level: <c>μ₀ = med(y)·G⁻¹Zᵀ1</c> projects the median onto the design's span (<c>med(y)·1</c>
+    /// for a basis whose functions sum to one). The prior then shrinks the fit's shape toward flat and leaves its level
+    /// where the bulk of the data put it, so a constant shift of the response moves only the fit's level. No single
+    /// response can drag the median far, so an outlier that robust weights discount cannot move the prior either. The level
+    /// is the data's alone, never the sampled weights'.
     /// </summary>
-    NullFit,
+    Median,
+
+    /// <summary>
+    /// On the response's mean level, the least-squares null fit: <c>μ₀ = ȳ·G⁻¹Zᵀ1</c>. Location-invariant like the median,
+    /// and a proper counterpart of Liang et al.'s (2008) flat intercept. But an outlier of size R moves it by R/m even when
+    /// robust weights discount the outlier, which shifts the fit by about R/m².
+    /// </summary>
+    Mean,
 
     /// <summary>
     /// At zero, DiMatteo, Genovese and Kass's original. The fit is shrunk toward zero by τ/(τ + b), level included, and

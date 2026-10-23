@@ -15,7 +15,8 @@ namespace Maths.Regression.Tests;
 public sealed class CoefficientDrawTests
 {
     [Theory]
-    [InlineData(GPriorCentre.NullFit)]
+    [InlineData(GPriorCentre.Median)]
+    [InlineData(GPriorCentre.Mean)]
     [InlineData(GPriorCentre.Zero)]
     public void NormalDraws_HaveTheConditionalPosteriorMeanAndCovariance(GPriorCentre centre)
     {
@@ -53,7 +54,8 @@ public sealed class CoefficientDrawTests
     }
 
     [Theory]
-    [InlineData(GPriorCentre.NullFit)]
+    [InlineData(GPriorCentre.Median)]
+    [InlineData(GPriorCentre.Mean)]
     [InlineData(GPriorCentre.Zero)]
     public void NormalConditionalVariance_MatchesTheDenseReference(GPriorCentre centre)
     {
@@ -178,13 +180,12 @@ public sealed class CoefficientDrawTests
     }
 
     // The unit-information conditional posterior from a dense Gauss–Jordan inverse of A = ZᵀZ:
-    // μ = μ₀ + (m/(m+1))A⁻¹Zᵀỹ and, with σ² integrated out, Cov β = (a/(m−2))·(m/(m+1))·A⁻¹, where ỹ = y − Zμ₀. Under the
-    // null-fit centre μ₀ = ȳ·1, since the cubic B-splines here sum to one, so ỹ = y − ȳ; under zero, ỹ = y.
+    // μ = μ₀ + (m/(m+1))A⁻¹Zᵀỹ and, with σ² integrated out, Cov β = (a/(m−2))·(m/(m+1))·A⁻¹, where ỹ = y − Zμ₀. Under a
+    // median or mean centre c, μ₀ = c·1, since the cubic B-splines here sum to one, so ỹ = y − c; under zero, ỹ = y.
     internal static (double[] Mu, double[,] Cov) Reference(double[,] z, double[] y0, GPriorCentre centre = GPriorCentre.Zero)
     {
         int m = y0.Length, nu = z.GetLength(1);
-        double level = 0.0;
-        if (centre == GPriorCentre.NullFit) foreach (double v in y0) level += v / m;
+        double level = NormalCentreTests.Level(y0, centre);
         var y = new double[m];
         for (int i = 0; i < m; i++) y[i] = y0[i] - level;
         var a = new double[nu, nu];

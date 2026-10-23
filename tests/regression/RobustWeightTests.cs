@@ -15,7 +15,8 @@ namespace Maths.Regression.Tests;
 public sealed class RobustWeightTests
 {
     [Theory]
-    [InlineData(GPriorCentre.NullFit)]
+    [InlineData(GPriorCentre.Median)]
+    [InlineData(GPriorCentre.Mean)]
     [InlineData(GPriorCentre.Zero)]
     public void WeightedMarginal_IsTheUnweightedGPriorMarginal(GPriorCentre centre)
     {
@@ -29,7 +30,8 @@ public sealed class RobustWeightTests
     }
 
     [Theory]
-    [InlineData(GPriorCentre.NullFit)]
+    [InlineData(GPriorCentre.Median)]
+    [InlineData(GPriorCentre.Mean)]
     [InlineData(GPriorCentre.Zero)]
     public void WeightedDraws_HaveTheUnweightedGPriorConditionalMeanAndCovariance(GPriorCentre centre)
     {
@@ -198,13 +200,12 @@ public sealed class RobustWeightTests
 
     private sealed record Dense(double LogDetG, double LogDetA, double SumLogW, double S, double[] Mean, double[,] InvA)
     {
-        // The weighted block's reference on ỹ = y − Zμ₀, with μ₀ = ȳ·1 under the null-fit centre (the plain mean: the
-        // cubic B-splines here sum to one) and 0 under zero.
+        // The weighted block's reference on ỹ = y − Zμ₀, with μ₀ = c·1 for the unweighted median or mean c (the cubic
+        // B-splines here sum to one) and 0 under zero.
         public static Dense Of(double[,] z, double[] y0, double[] w, GPriorCentre centre)
         {
             int m = y0.Length, nu = z.GetLength(1);
-            double level = 0.0;
-            if (centre == GPriorCentre.NullFit) foreach (double v in y0) level += v / m;
+            double level = NormalCentreTests.Level(y0, centre);
             var y = new double[m];
             for (int i = 0; i < m; i++) y[i] = y0[i] - level;
             var g = new double[nu, nu];

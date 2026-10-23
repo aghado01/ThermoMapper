@@ -12,9 +12,9 @@ namespace Maths.Regression.Spline;
 /// <para>The caller's admission rule judges each factor as soon as it exists, before anything is solved with it: a
 /// factor that breaks down can solve to NaN, which no least-squares statistic may be formed from. A refused factor
 /// gives no block (null).</para>
-/// <para>With <see cref="GPriorCentre.NullFit"/> the prior is centred on the null fit, <c>μ₀ = ȳ·G⁻¹Zᵀ1</c> with ȳ the
-/// response's plain mean, and the statistics are those of <c>ỹ = y − Zμ₀</c>. The mean is unweighted even when weights
-/// enter, so the prior does not depend on the robust weights a sampler redraws.</para>
+/// <para>With <see cref="GPriorCentre.Median"/> or <see cref="GPriorCentre.Mean"/> the prior is centred on the response's
+/// level, <c>μ₀ = c·G⁻¹Zᵀ1</c> with c its median or mean, and the statistics are those of <c>ỹ = y − Zμ₀</c>. Both are
+/// unweighted even when weights enter, so the prior does not depend on the robust weights a sampler redraws.</para>
 /// </summary>
 public static class BandedGPrior
 {
@@ -112,27 +112,21 @@ public static class BandedGPrior
         return CollapsedGPrior.FromWeighted(gram, posterior, beta, weightedRss + tau * fitted, sumLogW, m, tau, priorMean);
     }
 
-    // The prior mean and the response it leaves: none and y at zero; for the null fit μ₀ = ȳ·G⁻¹Zᵀ1 and y − Zμ₀.
-    // The constant is kept exactly where it can be. A constant response takes its value as ȳ, not a rounded mean. A
-    // basis whose functions sum to one (B-splines, steps) holds the constant as μ₀ = ȳ·1 with no solve, so a constant
-    // response centres to exactly zero. Another basis projects; when its span holds the constant (the projection
+    // The prior mean and the response it leaves: none and y at zero; for a level c, the median or the mean,
+    // μ₀ = c·G⁻¹Zᵀ1 and y − Zμ₀. The constant is kept exactly where it can be. A constant response takes its value as c,
+    // not a rounded average. A basis whose functions sum to one (B-splines, steps) holds the constant as μ₀ = c·1 with no
+    // solve, so a constant response centres to exactly zero. Another basis projects; when its span holds the constant (the projection
     // reproduces 1 to 1e-10), a constant response's centred value is zero by definition and is set so, rather than left
     // as the projection's roundoff, which the improper σ² prior would read as a near-perfect fit.
     private static (double[]? PriorMean, double[] Response) Centre(BandedDesign design, ISpdFactor gram, double[] y,
                                                                   GPriorCentre centre)
     {
         if (centre == GPriorCentre.Zero) return (null, y);
-        if (centre != GPriorCentre.NullFit) throw new ArgumentOutOfRangeException(nameof(centre));
+        if (centre is not (GPriorCentre.Median or GPriorCentre.Mean)) throw new ArgumentOutOfRangeException(nameof(centre));
         int m = design.Rows, nu = design.Dimension;
         bool constant = true;
         for (int i = 1; i < m && constant; i++) constant = y[i] == y[0];
-        double mean = y[0];
-        if (!constant)
-        {
-            mean = 0.0;
-            foreach (double v in y) mean += v;
-            mean /= m;
-        }
+        double mean = constant ? y[0] : centre == GPriorCentre.Median ? Median(y) : Average(y);
 
         var unit = new double[nu];
         Array.Fill(unit, 1.0);
@@ -164,5 +158,20 @@ public static class BandedGPrior
         if (!(constant && spansConstant))
             for (int i = 0; i < m; i++) response[i] = y[i] - mean * projected[i];
         return (priorMean, response);
+    }
+
+    private static double Median(double[] y)
+    {
+        var sorted = (double[])y.Clone();
+        Array.Sort(sorted);
+        int half = sorted.Length / 2;
+        return sorted.Length % 2 == 1 ? sorted[half] : 0.5 * (sorted[half - 1] + sorted[half]);
+    }
+
+    private static double Average(double[] y)
+    {
+        double s = 0.0;
+        foreach (double v in y) s += v;
+        return s / y.Length;
     }
 }

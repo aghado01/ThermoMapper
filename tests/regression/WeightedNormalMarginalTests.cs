@@ -38,12 +38,13 @@ public sealed class WeightedNormalMarginalTests
     }
 
     [Theory]
-    [InlineData(GPriorCentre.NullFit)]
+    [InlineData(GPriorCentre.Median)]
+    [InlineData(GPriorCentre.Mean)]
     [InlineData(GPriorCentre.Zero)]
     public void Marginal_PerfectFit_ReducesToShrinkageResidual(GPriorCentre centre)
     {
         // When y lies exactly in span(Z), so does ỹ = y − Zμ₀, whose regression SS is then ỹᵀỹ, so a = ỹᵀỹ/(m+1) exactly:
-        // ỹ = y − ȳ under the null-fit centre (the B-splines sum to one), and y under zero.
+        // ỹ = y − c with c the median or mean (the B-splines sum to one), and y under zero.
         var basis = new SplineBasis(degree: 1);
         var config = new KnotConfig(new[] { 0.5 });
         double[] x = { 0.1, 0.3, 0.5, 0.7, 0.9 };
@@ -54,8 +55,7 @@ public sealed class WeightedNormalMarginalTests
         Assert.Equal(nu, beta.Length);
         double[] y = InSpan(z, beta);
 
-        double level = 0.0;
-        if (centre == GPriorCentre.NullFit) foreach (double v in y) level += v / m;
+        double level = NormalCentreTests.Level(y, centre);
         double yy = 0.0;
         foreach (double v in y) yy += (v - level) * (v - level);
         double expectedA = yy / (m + 1);

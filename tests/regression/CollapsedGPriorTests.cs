@@ -46,10 +46,10 @@ public sealed class CollapsedGPriorTests
 
     [Theory]
     [MemberData(nameof(Settings))]
-    public void NullFitCentre_IsTheZeroCentredBlockOnTheCentredResponse(double tau, double b)
+    public void LevelCentres_AreTheZeroCentredBlockOnTheCentredResponse(double tau, double b)
     {
-        // N(μ₀, σ²(τG)⁻¹) with Zμ₀ = ȳ·1, so μ₀ = ȳ·1 for B-splines, which sum to one: the zero-centred closed forms on
-        // y − ȳ, with ȳ added back to every coefficient. Shifting y by a constant moves only that level.
+        // N(μ₀, σ²(τG)⁻¹) with Zμ₀ = c·1 for the median or mean c, so μ₀ = c·1 for B-splines, which sum to one: the
+        // zero-centred closed forms on y − c, with c added back to every coefficient. Shifting y moves only that level.
         (double[,] z, double[] y) = CoefficientDrawTests.Problem();
         int m = y.Length, nu = z.GetLength(1);
         for (int i = 0; i < m; i++)
@@ -58,30 +58,31 @@ public sealed class CollapsedGPriorTests
             for (int j = 0; j < nu; j++) rowSum += z[i, j];
             Close(1.0, rowSum, 1e-14);
         }
-        double mean = 0.0;
-        foreach (double v in y) mean += v / m;
-        var centred = new double[m];
-        for (int i = 0; i < m; i++) centred[i] = y[i] - mean;
-        GPriorConditional reference = BandedGPrior.Fit(new BandedDesign(z), centred, PositiveDefinite)!.At(tau, b);
-
         var w = new double[m];
         for (int i = 0; i < m; i++) w[i] = i % 5 == 2 ? 0.01 : 0.5 + (i % 3);
-        GPriorConditional weightedReference = BandedGPrior.Fit(new BandedDesign(z), centred, w, tau, PositiveDefinite)!.At(tau);
-
-        foreach (double offset in new[] { 0.0, 5.0, -300.0 })
+        foreach (GPriorCentre centre in new[] { GPriorCentre.Median, GPriorCentre.Mean })
         {
-            var shifted = new double[m];
-            for (int i = 0; i < m; i++) shifted[i] = y[i] + offset;
-            GPriorConditional c = BandedGPrior.Fit(new BandedDesign(z), shifted, PositiveDefinite, GPriorCentre.NullFit)!.At(tau, b);
-            Close(reference.S, c.S, 1e-10);
-            Close(reference.LogDeterminantTerm, c.LogDeterminantTerm, 1e-12);
-            for (int p = 0; p < nu; p++) Close(reference.Mean[p] + mean + offset, c.Mean[p], 1e-10);
+            double level = NormalCentreTests.Level(y, centre);
+            var centred = new double[m];
+            for (int i = 0; i < m; i++) centred[i] = y[i] - level;
+            GPriorConditional reference = BandedGPrior.Fit(new BandedDesign(z), centred, PositiveDefinite)!.At(tau, b);
+            GPriorConditional weightedReference = BandedGPrior.Fit(new BandedDesign(z), centred, w, tau, PositiveDefinite)!.At(tau);
 
-            // Weighted: the centre is the plain mean, so the prior does not move with the weights.
-            GPriorConditional cw = BandedGPrior.Fit(new BandedDesign(z), shifted, w, tau, PositiveDefinite, GPriorCentre.NullFit)!.At(tau);
-            Close(weightedReference.S, cw.S, 1e-10);
-            Close(weightedReference.LogDeterminantTerm, cw.LogDeterminantTerm, 1e-12);
-            for (int p = 0; p < nu; p++) Close(weightedReference.Mean[p] + mean + offset, cw.Mean[p], 1e-10);
+            foreach (double offset in new[] { 0.0, 5.0, -300.0 })
+            {
+                var shifted = new double[m];
+                for (int i = 0; i < m; i++) shifted[i] = y[i] + offset;
+                GPriorConditional c = BandedGPrior.Fit(new BandedDesign(z), shifted, PositiveDefinite, centre)!.At(tau, b);
+                Close(reference.S, c.S, 1e-10);
+                Close(reference.LogDeterminantTerm, c.LogDeterminantTerm, 1e-12);
+                for (int p = 0; p < nu; p++) Close(reference.Mean[p] + level + offset, c.Mean[p], 1e-10);
+
+                // Weighted: the centre is unweighted, so the prior does not move with the weights.
+                GPriorConditional cw = BandedGPrior.Fit(new BandedDesign(z), shifted, w, tau, PositiveDefinite, centre)!.At(tau);
+                Close(weightedReference.S, cw.S, 1e-10);
+                Close(weightedReference.LogDeterminantTerm, cw.LogDeterminantTerm, 1e-12);
+                for (int p = 0; p < nu; p++) Close(weightedReference.Mean[p] + level + offset, cw.Mean[p], 1e-10);
+            }
         }
     }
 

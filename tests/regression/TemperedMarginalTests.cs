@@ -24,7 +24,7 @@ public sealed class TemperedMarginalTests
     {
         (double[] x, double[] y) = Data(60);
         double tau = 1.0 / x.Length;
-        foreach (GPriorCentre centre in new[] { GPriorCentre.NullFit, GPriorCentre.Zero })
+        foreach (GPriorCentre centre in new[] { GPriorCentre.Median, GPriorCentre.Mean, GPriorCentre.Zero })
         {
             var model = new WeightedNormalModel(centre);
             double? offset = null;
