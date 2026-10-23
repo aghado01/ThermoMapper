@@ -536,6 +536,7 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 | OQ12 | Poisson fits over runs of zero counts | Where every count under a basis function is zero, the Poisson MLE lies at −∞. IRLS stops at a fixed point set by the η clamp (±30) and the μ floor (1e-10), with coefficients in the thousands: −5,961 with one knot at 0.8 when the counts are zero beyond 0.797. The BIC-type marginal stays near the knot-free one (−75.8 against −73.5), so such configurations take real posterior mass and the posterior-mean log-intensity there runs to −10³. Present before step 3.7. The pivot ratio happened to refuse many of them (1,590 of 11,969 evaluations, against 76 under the scale-free gate). Decided 2026-10-21: remedy (c), with the BIC pathway kept as a setting. **Resolved in step 3.10:** the g-prior pathway is the default. On the low-rate fit the log-intensity's MSE fell from 163,982 to 0.16 and knot-count ESS rose from 119 to 638; away from separation it agrees with BIC. | Closed. The BIC pathway keeps the behavior, as its docs state. | Closed (step 3.10) |
 | OQ13 | He, Yang and Kang's repositories as external fixtures and demos | The user, 2026-10-21: the ABMRS repositories (github.com/junhuihe2000/ABMRS and exampleABMRS) and the supplement's data and demos (`triceps`, the jump curves, the surfaces) would serve as fixtures for the R harness and as demo material, fitting the same data with this engine. The supplement is already in `issues/regression/ABMRS_Revision_V2_Supplementary_Materials/`. Its code differs from the paper in places (step 3.8's findings), so fixtures must record which version they come from. | Decide what to fix as oracles: their EBARS fits as an external comparison, not ground truth, and the datasets. Fetching the repositories, and installing the package into the `r/` oracles' environment, needs approval for the download. | With the R harness; demos after the BASS port |
 | OQ14 | BARS's efficiency defaults: move schedule, relocation kernel, hot end, run length | Measured 2026-10-22 on the default kernel (reports "After Phase 3: BARS mixing re-measured", "Relocation and move-schedule studies" and "Confirmation of the two candidates"). Each result is scoped to its regimes, and the winners flipped between regimes: DMGK at c = 0.4 won where the prior wants fewer knots than the data (up to 2.6×) and lost where it wants more (0.29–0.33× knot-count ESS). The adaptive relocation kernel passed the confirmation's criterion (knot count 1.05×, peak location 1.15×, nine fits). The constant 0.3/0.3/0.4 schedule is untested on the prior-wants-more conflict. Tempering helped only a narrow peak's location, and nothing tried fixes that readout's τ ≈ 330. No default has changed. | One designed pass, deciding every efficiency default at once (the brief's "Follow-up record"). It needs both directions of prior–likelihood conflict, sparse and dense fits, counts and peaks, and a criterion fixed before the run. The stopping strategy (OQ7) joins it once the readout design exists. | With the readout design (OQ7) |
+| OQ15 | Robust centring of the Normal prior | The null-fit centre uses the plain mean, which keeps the robust weights' Gibbs conditional exact, since the prior cannot depend on the sampled weights. But an outlier whose likelihood weight goes to zero still moves the centre, and pulls the fit by about R/m² (second external review, item 3: intercept-only, m = 40, outlier at 10⁶, conditional mean 625). | The user's decision. Options: a median centre (data-only, robust and location-invariant, a small change), or a flat intercept (Liang et al. 2008). The flat intercept is exact, but the posterior precision stops being a multiple of G, so it changes the shared block's closed forms; it belongs with BASS's D03, where BASS has an explicit intercept column. Document the data-dependent prior either way. | With D03 |
 
 Tracked elsewhere: the `EbicPrior` text check (step 3.8, waiting on the *Biometrics* PDF), BARS admission (step 3.7), the b = 0 guard (step 3.2's report), and the linear form's weaker hot-rung Occam penalty (step 3.2 addendum).
 
@@ -2074,3 +2075,36 @@ Where the efficiency work stands, for the pass OQ14 calls for. **No default chan
 - **Raw tables.** They go under `artifacts/test-runs/<Benchmark>/`, which git ignores, so this machine's copies are not in the repository. The figures quoted in the reports above are the record, and the runs are deterministic given their seeds.
 - **Cost:** the tempering study took 51 minutes, the relocation study 13, the schedule study 8 and the confirmation 14.
 - **The two-bump scan** was a scratch probe and is not in the repository. Its designs are listed in the tempering docs, so it can be rebuilt.
+
+### Second external review — 2026-10-22
+
+`astra-bass-prep-review-2.md`, anchored at `1783921`. All four items held against the code; three are fixed, and one waits on the user.
+
+| Commit | Content |
+|---|---|
+| `ac082ea` | Item 4: the condition estimate refuses after a floored pivot |
+| `bce1780` | Item 1: weighted quantiles pool ties and drop zero mass |
+| `eff9172` | Item 2: a constant response centres to exactly zero |
+| docs commit | `Samplers.md`, `BayesianRegression.md`, OQ15, this report |
+
+- **Item 1: weighted quantiles depended on merge order. Fixed.**
+  - **The cause.** `DrawSample`'s weighted path interpolated between individual draws' weight midpoints. So the order of tied values mattered: (0, 1), (0, 3), (1, 1) gave a 70th percentile of 0.5 or 0. A zero-weight draw still took a midpoint, which pulled a 5th percentile to −78, and a sample with no mass returned a value.
+  - **The fix.** It now works on distinct values with pooled positive weights, sorted by value and weight so the sums repeat exactly, and returns NaN with no mass.
+  - **Tests:** the review's cases, and invariance to insertion order and merge order (exact, over 20 shuffles and splits) and to weight rescaling (12 digits).
+  - **BARS was unaffected**, since it uses only unit weights. The bug would have bitten SMC, where duplicate particles and zero weights are normal.
+- **Item 2: a constant response was admitted. Fixed; my bug from the centring step.**
+  - **The cause.** The centring report said a constant response is refused as `ZeroResponse`, but only an exactly zero centred response was. A projected constant left roundoff of about 1e-16, admitted with marginals near 1,300.
+  - **The fix.** The centre keeps the constant exactly:
+    - a constant response takes its value as ȳ;
+    - a basis that sums to one holds μ₀ = ȳ·1 with no solve;
+    - another basis whose span holds the constant (its projection reproduces 1 to 1e-10) sets a constant response's centred value to zero.
+  - **Tests:** six constant levels, three knot configurations, both paths, with and without weights. The zero centre still refuses only the zero response.
+  - **Effect on fits.** Step 3.7's probe is byte-identical. Step 3.5's differs only in rounding (at most 9e-15 relative), with every trajectory unchanged.
+- **Item 3: the plain-mean centre lets an outlier back in through the prior. Open as OQ15, the user's decision.** The options are a median centre for BARS's robust runs, or a flat intercept with BASS's D03. The docs state the trade-off.
+- **Item 4: the condition estimate after flooring. Fixed; my bug from the review follow-up.**
+  - A floored factor's solves describe the floored matrix, while the estimate's scaling came from the original. That gave 1e-8 for [1e-20], whose condition number is 1.
+  - It now throws once any pivot was floored, and the docs no longer claim otherwise.
+  - BARS was unaffected: admission checks for floored pivots first.
+- **For BASS,** the review narrows what remains: the statistical specification, dense incremental factor operations, the basis and support rules, and reference fixtures. It places OQ10's parameter-complete checkpoint identity before dependable resume, and normalized reference distributions and evidence accounting before SMC (OQ2).
+- **Results** under the fact harness: `Maths.Regression.Tests` 246 of 246 (`20261022_171130801`), `Maths.Samplers.Tests` 84 of 84 (`20261022_171423619`), `Maths.LinAlg.Tests` 65 of 65 (`20261022_171512572`).
+- **Seed sweep** (`SEED_SWEEP=50`): every hold count matches the post-centring sweep (`20261022_171806396`).
