@@ -550,7 +550,7 @@ Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc
   - the bandwidth sample, which every chain kept: it is pooled and sorted for two quantiles, then discarded;
   - the per-draw curves and their spread across bandwidths. Only a running sum is kept, so the between-bandwidth uncertainty is lost. The curves can now be recomputed from the retained fits;
   - each draw's log marginal.
-- **Never computed:** the GP's conditional variance at the test points (`PredictMean` only), so `BgpResult` carries no uncertainty on f at all. σ² is fixed at construction, not inferred.
+- **Never computed,** until `3e270b9` added `PosteriorSd` (report "Tier 2: uncertainty for BGP and BAPS"): the GP's conditional variance at the test points (`PredictMean` only), so `BgpResult` carried no uncertainty on f at all. σ² is fixed at construction, not inferred; that remains.
 - **No resume:** `RestoreChain` refuses (OQ10).
 
 ### BAPS (`BapsSampler`, its own loop)
@@ -558,7 +558,7 @@ Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc
 - **Computed per draw (Gibbs modes):** a full β draw, σ², τ² and λ = σ²/τ²; in the adaptive mode also η and the local field λᵢ.
 - **Reaches the result:** the mean of β, three quantiles of λ, the mean of σ (not σ², and with no interval), the mean local field, and classic R̂ on log λ.
 - **Dropped,** until `3d88ab1`, which retains every draw in `BapsResult.PosteriorDraws` (report "BGP and BAPS draws retained"): every β draw, so there is no band on the fit and no nonlinear readout; the σ², τ² and η draws; the λ sample beyond its three quantiles; and the local field beyond its mean.
-- **The marginal-evidence mode** records the conditional mean `Coefficients(λ)` and the profiled σ in place of draws, so its coefficient uncertainty is zero by construction.
+- **The marginal-evidence mode** recorded the conditional mean `Coefficients(λ)` and the profiled σ in place of draws, so its coefficient uncertainty was zero by construction. Fixed in `b3faccb` with exact conjugate draws (report "Tier 2: uncertainty for BGP and BAPS").
 - **Off the shell:** no traces, no ESS or rank-normalized R̂, no early stop, no checkpoint.
 
 ### Changepoint (`ExactChangepoint`, exact)
@@ -2312,6 +2312,38 @@ All matched to the last digit.
 - **`BgpDrawTests`:** every draw is kept; each fit sits at its draw's bandwidth; rejected proposals share fits; the posterior mean is the draws' average prediction; and the interval is the draws' type-7 quantiles.
 - **`BapsDrawTests`:** in each mode, every draw is kept as its own arrays; λ = σ²/τ² in the Gibbs modes; τ² is NaN in the marginal mode; η is present only in the adaptive mode; and the coefficients, σ mean, λ median and local field are the draws' summaries.
 
-**Not done (tier 2, open):** BGP's predictive variance at the test points (its factor is still dropped after each fit), the BAPS fit band and σ²/τ² intervals, exact conjugate draws in BAPS's marginal-evidence mode, and BAPS on the ensemble shell (tier 3).
+**Not done here:** BGP's predictive variance at the test points (its factor was still dropped after each fit), the BAPS fit band and σ²/τ² intervals, exact conjugate draws in BAPS's marginal-evidence mode, and BAPS on the ensemble shell (tier 3). The first three followed the same day (report "Tier 2: uncertainty for BGP and BAPS").
 
 **Results** under the fact harness: `Maths.Regression.Tests` 262 of 262 (`20261023_131411056`). The solution builds.
+
+### Tier 2: uncertainty for BGP and BAPS — 2026-10-23
+
+The user asked for tier 2: BGP's predictive variance at the test points by the law of total variance, computed during the run while each fit's factor exists; the BAPS fit band and σ²/τ² intervals from the retained draws; and exact conjugate draws in BAPS's marginal-evidence mode, with a quadrature check.
+
+| Commit | Content |
+|---|---|
+| `3e270b9` | `BgpResult.PosteriorSd`; `BgpDraw.ConditionalVariance`; `GpRegression.PredictVariance`; `BgpVarianceTests`, and `BgpDrawTests` extended |
+| `b3faccb` | Exact σ² and β draws in BAPS's marginal-evidence mode on their own stream; `BapsDraw.ConditionalMean`; τ² = σ²/λ; the quadrature check in `BapsMarginalEvidenceTests` |
+| `493995d` | `BapsResult.FitBand(design)`, `Sigma2Interval` and `Tau2Interval`, views over the retained draws; `BapsDrawTests` extended |
+| docs commit | `BayesianRegression.md`, the retention inventory, this report |
+
+**BGP posterior sd.**
+- **The quantity:** the spread of the draws' conditional means plus their mean conditional variance.
+- **The conditional variance** integrates the constant mean out under its flat prior: k** − k*ᵀK⁻¹k* + (1 − 1ᵀK⁻¹k*)²/1ᵀK⁻¹1. It is computed once per distinct fit while that fit's factor exists, then retained per draw. The factor (n² numbers) is held only while its fit is current.
+- **The independent check:** a proper N(0, 10⁸) prior on the mean, conditioned as one joint Gaussian and solved by Gaussian elimination in `decimal`, so neither the formula nor the arithmetic is shared. It agrees to 10⁻⁹ at six points: inside, at the edges, and up to 1.5 beyond the data.
+- **No other output moved:** a probe at 1 and 3 chains showed the existing outputs bit-identical.
+
+**BAPS marginal-evidence draws.**
+- **The draws.** Given each retained λ, σ² | λ, y ~ IG((n − r)/2, RSS_pen/2) under the Jeffreys prior the evidence assumes, then β | σ², λ, y ~ N(β̂, σ²A⁻¹), and τ² = σ²/λ. They come from a readout stream: the master seed's tree is extended past the chain seeds, so the λ chain is unchanged.
+- **The coefficient mean** stays Rao–Blackwellized on β̂(λ) (`ConditionalMean`). It is an affine readout, as in BARS.
+- **What changed:** the marginal mode's σ mean, on the probe's data, from the profiled plug-in (0.0938) to the posterior draws (0.0956). Everything else, in all three modes, is bit-identical.
+- **The quadrature check** (dense reference, 10 runs × 4 chains × 4,000 draws, on linear and sine data). E[σ²], Var[σ²], E[f] and Var[f] at a mid-design row agree within |z| ≤ 2.4.
+- **Locating the small low readings.** All the marginal z-scores are low, E[σ²] the most at −1.8 and −2.4, so a sharper check separates the draws from the λ chain. On the run's own λ sample, the draws match their exact conditional expectations to |z| ≤ 0.64. The low readings therefore follow the λ chain's small downward offset against quadrature. That offset predates this change: the chip's R02 check shows the same quantiles.
+
+**BAPS band and intervals.**
+- **What they are:** views over `PosteriorDraws`, computed on request. The band's mean is the design times the reported coefficients. Its sd and quantiles are those of the draws' fits.
+- **The marginal mode's band now matches the Gibbs mode's.** On the probe's data both average sd 0.0384, against 0.0021 for the spread of the conditional means alone, so a band built before the fix would have been about 18× too narrow. The two modes' σ² intervals agree: [0.0063, 0.0135] against [0.0061, 0.0138], both with median 0.0090.
+
+**Still open:** BAPS on the ensemble shell (tier 3), `HierarchicalPSpline`'s single chain, BGP's fixed σ², and the changepoint and SW items of the retention inventory.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 268 of 268 (`20261023_133234392`). The solution builds.
