@@ -90,6 +90,17 @@ public sealed class BarsResumeTests
         Assert.Equal(a.SpanCoverage, b.SpanCoverage);
         Assert.Equal(a.Peak, b.Peak);
         Assert.Equal(a.PeakModes, b.PeakModes);
+        Assert.Equal(a.PeakDraws.Count, b.PeakDraws.Count);
+        for (int c = 0; c < a.PeakDraws.Count; c++)
+        {
+            Assert.Equal(a.PeakDraws[c].Count, b.PeakDraws[c].Count);
+            for (int d = 0; d < a.PeakDraws[c].Count; d++)
+            {
+                Assert.Equal(a.PeakDraws[c][d].ArgmaxLocation, b.PeakDraws[c][d].ArgmaxLocation);
+                Assert.Equal(a.PeakDraws[c][d].ArgmaxHeight, b.PeakDraws[c][d].ArgmaxHeight);
+                Assert.Equal(a.PeakDraws[c][d].Spans, b.PeakDraws[c][d].Spans);
+            }
+        }
         Assert.Equal(a.AcceptanceRate, b.AcceptanceRate);
         Assert.Equal(a.MoveStats, b.MoveStats);
         Assert.Equal(a.Evaluations.Entries, b.Evaluations.Entries);

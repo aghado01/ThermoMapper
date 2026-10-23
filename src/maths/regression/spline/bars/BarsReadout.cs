@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Maths.Samplers.Ensemble;
 
 namespace Maths.Regression.Spline.Bars;
@@ -38,6 +39,9 @@ internal sealed class BarsReadout : IMergeable<BarsReadout>
     /// <summary>Every evaluated configuration's admission outcome, the chain's proposals and its ladder's included.</summary>
     public Tally<DesignRejection> Evaluations { get; } = new();
 
+    /// <summary>Every draw's exact peak readout, in draw order; a merge appends the other readout's draws.</summary>
+    public List<PeakDraw> Draws { get; } = new();
+
     /// <summary>An independent copy (a merge into an empty readout, which adds nothing to any value).</summary>
     public BarsReadout Copy()
     {
@@ -55,5 +59,6 @@ internal sealed class BarsReadout : IMergeable<BarsReadout>
         Peak.MergeFrom(other.Peak);
         PeakSample.MergeFrom(other.PeakSample);
         Evaluations.MergeFrom(other.Evaluations);
+        Draws.AddRange(other.Draws);
     }
 }

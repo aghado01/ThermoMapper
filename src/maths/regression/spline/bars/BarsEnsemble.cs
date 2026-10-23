@@ -33,6 +33,14 @@ public sealed record PeakMode(
     double SpanLeft, double SpanRight, double Mass, RHatDiagnostic LocationRHat);
 
 /// <summary>
+/// One retained draw's exact peak readout, read off its coefficient draw: the closed-form global argmax (location and
+/// height) and the significant peaks' spans in location order (<see cref="PeakSpan"/>: location, height, the two
+/// crossings and both clipping flags). Nothing is snapped to the grid. A basis without closed-form peaks gives a NaN
+/// argmax and no spans.
+/// </summary>
+public sealed record PeakDraw(double ArgmaxLocation, double ArgmaxHeight, IReadOnlyList<PeakSpan> Spans);
+
+/// <summary>
 /// What the tempering ladders did while sampling (burn-in excluded), averaged over chains: the round-trip and
 /// annealed-restart rates per scan, each adjacent pair's mean rejection rate (cold first), their sum the barrier
 /// estimate Λ̂, the round-trip rate Theorem 1 of Syed et al. (2022) would give under ideal local exploration (NaN for
@@ -68,6 +76,8 @@ public sealed record TemperingReadout(
 /// the structural feature widths, its complement the stable regimes.
 /// <see cref="PeakModes"/> resolves each transition from those fields — location + credible interval from λ, span
 /// from π — with <see cref="Peak"/> the dominant mode (the k = 1 case).
+/// <see cref="PeakDraws"/> keeps every retained draw's exact peak readout (<see cref="PeakDraw"/>), per chain in draw
+/// order: the closed-form locations, heights, crossings and clipping flags that λ and π count on the grid.
 /// </summary>
 public sealed record BarsResult(
     double[] Grid,
@@ -82,6 +92,7 @@ public sealed record BarsResult(
     RHatDiagnostic RHatFitMax,
     PeakPosterior Peak,
     IReadOnlyList<PeakMode> PeakModes,
+    IReadOnlyList<IReadOnlyList<PeakDraw>> PeakDraws,
     int SamplesUsed,
     double AcceptanceRate,
     int[] ChainSeeds,
@@ -407,7 +418,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var chainLambda = new double[chains][];
         for (int ci = 0; ci < chains; ci++) chainLambda[ci] = bars[ci].Readout.PeakIntensity.Sums.ToArray();
         var peakModes = ExtractModes(grid, peakIntensity, spanCoverage, chainLambda);
-        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations, summary.Checkpoint);
+        var peakDraws = new IReadOnlyList<PeakDraw>[chains];
+        for (int ci = 0; ci < chains; ci++) peakDraws[ci] = bars[ci].Readout.Draws.ToArray();
+        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, peakDraws, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations, summary.Checkpoint);
     }
 
     // The ladders' sampling-phase statistics, averaged over chains; null for an untempered run.
@@ -482,7 +495,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     // functionals (index 0 = knot count), and the conditional variance into its sink for FitSd. Readouts nonlinear in
     // the curve use a coefficient draw: the closed-form argmax cloud, and per significant peak its location into the
     // grid-aligned intensity accumulator (pooled → λ(T), ∑_grid λ = PeakCountMean) and its FWHM-esque span into the
-    // coverage accumulator (pooled → π(T)).
+    // coverage accumulator (pooled → π(T)). The draw's exact argmax and spans are retained as its PeakDraw.
     private void AccumulateDraw(BarsChainRun st, KnotConfig draw, Span<double> functionals)
     {
         int g = _grid.Length;
@@ -508,11 +521,13 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             r.Peak.Add([0.0, 0.0, 0.0]);
             r.PeakIntensity.AddSparse([], []);
             r.SpanCoverage.AddSparse([], []);
+            r.Draws.Add(new PeakDraw(double.NaN, double.NaN, Array.Empty<PeakSpan>()));
             return;
         }
         double[] coef = _model.SampleCoefficients(zTrain, _y, st.W, st.ReadoutRng);
         (double peakX, double peakF) = SplineExtrema.Argmax(draw, coef, splineBasis);
         var spans = SplineExtrema.SignificantPeakSpans(draw, coef, splineBasis, _peakProminence, _spanDropFraction);
+        r.Draws.Add(new PeakDraw(peakX, peakF, spans.ToArray()));
         r.Peak.Add([peakX, peakF, spans.Count]);
         r.PeakSample.Add(peakX);
         st.PeakTrace.Add(peakX);
