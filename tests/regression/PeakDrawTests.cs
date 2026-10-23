@@ -138,6 +138,30 @@ public sealed class PeakDrawTests
         Assert.True(clippedRight > draws / 2, $"{clippedRight} of {draws} draws kept a right-clipped span");
     }
 
+    [Fact]
+    public void StepBasis_HasNoArgmax_RatherThanALocationOfZero()
+    {
+        // A piecewise-constant carrier has no closed-form peaks: every draw is retained with a NaN argmax and no spans,
+        // so the peak summary is NaN and unavailable instead of reporting a peak at 0.
+        (double[] x, double[] y) = Data(t => t < 0.5 ? 0.0 : 1.0, seed: 8);
+        BarsResult r = new BarsEnsemble(new StepBasis(), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0))
+            .Run(x, y, Grid(21), chains: 2, masterSeed: 4, burn: 200, samples: 100);
+
+        foreach (IReadOnlyList<PeakDraw> chain in r.PeakDraws)
+        {
+            Assert.Equal(r.SamplesUsed, chain.Count);
+            foreach (PeakDraw d in chain)
+            {
+                Assert.True(double.IsNaN(d.ArgmaxLocation));
+                Assert.Empty(d.Spans);
+            }
+        }
+        Assert.True(double.IsNaN(r.Peak.LocationMean));
+        Assert.True(double.IsNaN(r.Peak.HeightMean));
+        Assert.True(double.IsNaN(r.Peak.LocationLo));
+        Assert.Equal(0.0, r.PeakCountMean);
+    }
+
     // The grid point nearest t, ties to the lower index (BarsEnsemble's deposit rule).
     private static int Nearest(double[] grid, double t)
     {

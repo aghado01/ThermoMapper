@@ -272,7 +272,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
     /// <summary>
     /// Rebuild one chain from its saved restart state (<see cref="BarsChainState"/>): the chain or ladder, every RNG
-    /// stream, the kernel's tuning, the robust weights, and the chain's readouts and peak trace. Rebuilding evaluates
+    /// stream, the kernel's tuning, the robust weights, and the chain's readouts with its retained draws. Rebuilding evaluates
     /// the current states once; those evaluations are not counted.
     /// </summary>
     public IChainRun<KnotConfig> RestoreChain(IChainState state)
@@ -280,7 +280,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         if (state is not BarsChainState s) throw new ArgumentException("Not a BARS chain's restart state.", nameof(state));
         static Xoshiro256PlusPlus Rng((ulong, ulong, ulong, ulong) w) => Xoshiro256PlusPlus.Restore(w.Item1, w.Item2, w.Item3, w.Item4);
 
-        var run = new BarsChainRun(this, Rng(s.StartRng), s.Config, s.Readout.Copy(), s.PeakTrace.Copy())
+        var run = new BarsChainRun(this, Rng(s.StartRng), s.Config, s.Readout.Copy())
         {
             W = s.Weights is null ? null : (double[])s.Weights.Clone(),
             SinceWeight = s.SinceWeight,
@@ -312,7 +312,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         st.Rng.SaveState(), st.ReadoutRng.SaveState(), st.WeightRng.SaveState(),
         st.Kernel is AdaptiveLocalBetaKernel adaptive ? adaptive.LogTau : null,
         st.Ladder is null ? st.RjChain.Snapshot() : null, st.Ladder?.Snapshot(),
-        st.Readout.Copy(), st.PeakTrace.Copy(), st.BurnScans, st.BurnRoundTrips, st.BurnRestarts,
+        st.Readout.Copy(), st.BurnScans, st.BurnRoundTrips, st.BurnRestarts,
         st.BurnRejection is null ? null : (double[])st.BurnRejection.Clone());
 
     /// <summary>
@@ -325,7 +325,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         KnotConfig Config, double[]? Weights, int SinceWeight,
         (ulong, ulong, ulong, ulong) StartRng, (ulong, ulong, ulong, ulong) ReadoutRng, (ulong, ulong, ulong, ulong) WeightRng,
         double? KernelLogTau, ChainSnapshot<KnotConfig>? Chain, LadderSnapshot<KnotConfig>? Ladder,
-        BarsReadout Readout, ChainTrace PeakTrace, long BurnScans, long BurnRoundTrips, long BurnRestarts,
+        BarsReadout Readout, long BurnScans, long BurnRoundTrips, long BurnRestarts,
         double[]? BurnRejection) : IChainState;
 
     /// <remarks>
@@ -397,7 +397,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var chainLambda = new double[chains][];
         var peakIntensity = new double[g];
         var spanCoverage = new double[g];
-        double draws = 0.0;
+        double draws = 0.0, spans = 0.0;
         for (int ci = 0; ci < chains; ci++)
         {
             (double[] intensity, double[] coverage) = PeakCounts(bars[ci].Readout.Draws, grid);
@@ -408,13 +408,14 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                 spanCoverage[gi] += coverage[gi];
             }
             draws += bars[ci].Readout.Draws.Count;
+            foreach (PeakDraw d in bars[ci].Readout.Draws) spans += d.Spans.Count;
         }
         for (int gi = 0; gi < g; gi++)
         {
             peakIntensity[gi] /= draws;
             spanCoverage[gi] /= draws;
         }
-        double peakCountMean = pooled.Peak.Mean(2);
+        double peakCountMean = spans / draws;
 
         var moveAtt = new Dictionary<string, long>();
         var moveAcc = new Dictionary<string, long>();
@@ -428,7 +429,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         foreach (string key in moveAtt.Keys)
             moveStats.Add(new MoveStat(key, moveAtt[key], moveAcc.GetValueOrDefault(key)));
 
-        PeakPosterior peak = SummarisePeak(bars, pooled);
+        PeakPosterior peak = SummarisePeak(bars, _basis is SplineBasis);
         var peakModes = ExtractModes(grid, peakIntensity, spanCoverage, chainLambda);
         var peakDraws = new IReadOnlyList<PeakDraw>[chains];
         for (int ci = 0; ci < chains; ci++) peakDraws[ci] = bars[ci].Readout.Draws.ToArray();
@@ -460,14 +461,32 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                                     TemperingLadder.Barrier(rejection), ideal, ladders);
     }
 
-    // The peak location's mean, height and credible interval from the merged readout; its diagnostics from the
-    // chains' traces.
-    private static PeakPosterior SummarisePeak(BarsChainRun[] states, BarsReadout pooled)
+    // The peak location's mean, height and credible interval, and its diagnostics, read from the retained draws' argmax:
+    // each chain's draws in order form its trace, and the pooled ones the sample. A basis without closed-form peaks
+    // (closedForm false) has no argmax, so every field is NaN or unavailable rather than a location of 0.
+    private static PeakPosterior SummarisePeak(BarsChainRun[] states, bool closedForm)
     {
         var traces = new ChainTrace[states.Length];
-        for (int i = 0; i < states.Length; i++) traces[i] = states[i].PeakTrace;
-        return new PeakPosterior(pooled.Peak.Mean(0), pooled.PeakSample.Quantile(0.025), pooled.PeakSample.Quantile(0.975),
-                                 pooled.Peak.Mean(1), ChainDiagnostics.Diagnose(traces, 0));
+        var sample = new DrawSample();
+        double location = 0.0, height = 0.0, count = 0.0;
+        for (int i = 0; i < states.Length; i++)
+        {
+            traces[i] = new ChainTrace(1);
+            if (!closedForm) continue;
+            double chainLocation = 0.0, chainHeight = 0.0;
+            foreach (PeakDraw d in states[i].Readout.Draws)
+            {
+                chainLocation += d.ArgmaxLocation;
+                chainHeight += d.ArgmaxHeight;
+                sample.Add(d.ArgmaxLocation);
+                traces[i].Add(d.ArgmaxLocation);
+            }
+            location += chainLocation;
+            height += chainHeight;
+            count += states[i].Readout.Draws.Count;
+        }
+        return new PeakPosterior(count > 0.0 ? location / count : double.NaN, sample.Quantile(0.025), sample.Quantile(0.975),
+                                 count > 0.0 ? height / count : double.NaN, ChainDiagnostics.Diagnose(traces, 0));
     }
 
     // Advance the chain one step (the IChain.Step body): step the lone chain or the tempered ladder (returning the
@@ -525,11 +544,10 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         if (_model.ConditionalVariance(zTrain, _y, st.W, zGrid) is double[] v)
             r.ConditionalVariance.Add(v);
 
-        // Every draw folds into the peak fields, so their weights stay the draw count; a basis without closed-form
-        // peaks folds zeros and adds nothing to the sample or the trace.
+        // Every draw is retained, so the draw count stays every peak readout's denominator; a basis without closed-form
+        // peaks retains a NaN argmax and no spans.
         if (_basis is not SplineBasis splineBasis)
         {
-            r.Peak.Add([0.0, 0.0, 0.0]);
             r.Draws.Add(new PeakDraw(double.NaN, double.NaN, Array.Empty<PeakSpan>()));
             return;
         }
@@ -537,9 +555,6 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         (double peakX, double peakF) = SplineExtrema.Argmax(draw, coef, splineBasis);
         var spans = SplineExtrema.SignificantPeakSpans(draw, coef, splineBasis, _peakProminence, _spanDropFraction);
         r.Draws.Add(new PeakDraw(peakX, peakF, spans.ToArray()));
-        r.Peak.Add([peakX, peakF, spans.Count]);
-        r.PeakSample.Add(peakX);
-        st.PeakTrace.Add(peakX);
     }
 
     // A chain's λ and π grid counts, read from its retained draws: λ adds one per significant span at the grid point
@@ -759,14 +774,13 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// One BARS reversible-jump replica + its thread-local accumulators. As an <see cref="IChain{KnotConfig}"/> its
     /// <see cref="Step"/> advances the chain (or tempered ladder) and runs the resampler block, and its acceptance
     /// is the RJ chain's cumulative count; as an <see cref="IChainRun{KnotConfig}"/>
-    /// it burns adaptively, reduces a draw to functionals, and carries the BARS sinks (peak cloud, λ/π fields).
+    /// it burns adaptively, reduces a draw to functionals, and carries the BARS readout (its retained peak draws).
     /// </summary>
     private sealed class BarsChainRun : IChain<KnotConfig>, IResumableChainRun<KnotConfig>
     {
         private readonly BarsEnsemble _owner;
         public readonly Xoshiro256PlusPlus Rng;
         public readonly BarsReadout Readout;              // this chain's mergeable readout statistics
-        public readonly ChainTrace PeakTrace;             // the peak location's ordered draws, for its diagnostics
         public KnotConfig Config;
         public double[]? W;
         public IKnotKernel Kernel = null!;
@@ -780,15 +794,14 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         private ReversibleJumpChain<KnotConfig> _rjChain = null!;
 
         public BarsChainRun(BarsEnsemble owner, Xoshiro256PlusPlus rng, KnotConfig start, int gridSize)
-            : this(owner, rng, start, new BarsReadout(gridSize), new ChainTrace(1)) { }
+            : this(owner, rng, start, new BarsReadout(gridSize)) { }
 
-        public BarsChainRun(BarsEnsemble owner, Xoshiro256PlusPlus rng, KnotConfig start, BarsReadout readout, ChainTrace peakTrace)
+        public BarsChainRun(BarsEnsemble owner, Xoshiro256PlusPlus rng, KnotConfig start, BarsReadout readout)
         {
             _owner = owner;
             Rng = rng;
             Config = start;
             Readout = readout;
-            PeakTrace = peakTrace;
         }
 
         /// <summary>The RJ chain — for the tempered case, the ladder's cold replica. Set once, at start.</summary>
