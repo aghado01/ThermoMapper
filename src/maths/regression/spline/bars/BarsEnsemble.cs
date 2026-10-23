@@ -392,13 +392,27 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         RHatDiagnostic rHatFitMax = RHatDiagnostic.Worst(rHatFit);
         ConvergenceDiagnostic knots = summary.Monitored[0];
 
-        // BARS's own pooled sinks (the orchestrator does not know what these mean).
+        // λ(T) and π(T) are views over the retained draws: each chain's grid counts, pooled over chains and divided by
+        // the draw count. The per-chain λ counts are each chain's peak-location histogram, which ModeRHat reads.
+        var chainLambda = new double[chains][];
         var peakIntensity = new double[g];
         var spanCoverage = new double[g];
+        double draws = 0.0;
+        for (int ci = 0; ci < chains; ci++)
+        {
+            (double[] intensity, double[] coverage) = PeakCounts(bars[ci].Readout.Draws, grid);
+            chainLambda[ci] = intensity;
+            for (int gi = 0; gi < g; gi++)
+            {
+                peakIntensity[gi] += intensity[gi];
+                spanCoverage[gi] += coverage[gi];
+            }
+            draws += bars[ci].Readout.Draws.Count;
+        }
         for (int gi = 0; gi < g; gi++)
         {
-            peakIntensity[gi] = pooled.PeakIntensity.Mean(gi);
-            spanCoverage[gi] = pooled.SpanCoverage.Mean(gi);
+            peakIntensity[gi] /= draws;
+            spanCoverage[gi] /= draws;
         }
         double peakCountMean = pooled.Peak.Mean(2);
 
@@ -415,8 +429,6 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             moveStats.Add(new MoveStat(key, moveAtt[key], moveAcc.GetValueOrDefault(key)));
 
         PeakPosterior peak = SummarisePeak(bars, pooled);
-        var chainLambda = new double[chains][];
-        for (int ci = 0; ci < chains; ci++) chainLambda[ci] = bars[ci].Readout.PeakIntensity.Sums.ToArray();
         var peakModes = ExtractModes(grid, peakIntensity, spanCoverage, chainLambda);
         var peakDraws = new IReadOnlyList<PeakDraw>[chains];
         for (int ci = 0; ci < chains; ci++) peakDraws[ci] = bars[ci].Readout.Draws.ToArray();
@@ -493,9 +505,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
     // Reduce one post-burn draw. Readouts affine in the curve use the conditional mean: the grid values into the
     // functionals (index 0 = knot count), and the conditional variance into its sink for FitSd. Readouts nonlinear in
-    // the curve use a coefficient draw: the closed-form argmax cloud, and per significant peak its location into the
-    // grid-aligned intensity accumulator (pooled → λ(T), ∑_grid λ = PeakCountMean) and its FWHM-esque span into the
-    // coverage accumulator (pooled → π(T)). The draw's exact argmax and spans are retained as its PeakDraw.
+    // the curve use a coefficient draw: the closed-form argmax cloud, and the draw's exact argmax and significant spans,
+    // retained as its PeakDraw (λ(T) and π(T) are read from those after the run).
     private void AccumulateDraw(BarsChainRun st, KnotConfig draw, Span<double> functionals)
     {
         int g = _grid.Length;
@@ -519,8 +530,6 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         if (_basis is not SplineBasis splineBasis)
         {
             r.Peak.Add([0.0, 0.0, 0.0]);
-            r.PeakIntensity.AddSparse([], []);
-            r.SpanCoverage.AddSparse([], []);
             r.Draws.Add(new PeakDraw(double.NaN, double.NaN, Array.Empty<PeakSpan>()));
             return;
         }
@@ -531,19 +540,21 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         r.Peak.Add([peakX, peakF, spans.Count]);
         r.PeakSample.Add(peakX);
         st.PeakTrace.Add(peakX);
-
-        var located = new int[spans.Count];
-        for (int p = 0; p < spans.Count; p++) located[p] = NearestGridIndex(_grid, spans[p].Location);
-        r.PeakIntensity.AddSparse(located, Ones(spans.Count));
-        int[] covered = CoveredGridPoints(spans, _grid);
-        r.SpanCoverage.AddSparse(covered, Ones(covered.Length));
     }
 
-    private static double[] Ones(int n)
+    // A chain's λ and π grid counts, read from its retained draws: λ adds one per significant span at the grid point
+    // nearest its location, and π adds one per draw at each grid point some span covers. Each draw still counts in the
+    // denominator when it has no spans.
+    private static (double[] Intensity, double[] Coverage) PeakCounts(IReadOnlyList<PeakDraw> draws, double[] grid)
     {
-        var ones = new double[n];
-        Array.Fill(ones, 1.0);
-        return ones;
+        var intensity = new double[grid.Length];
+        var coverage = new double[grid.Length];
+        foreach (PeakDraw d in draws)
+        {
+            foreach (PeakSpan s in d.Spans) intensity[NearestGridIndex(grid, s.Location)]++;
+            foreach (int gi in CoveredGridPoints(d.Spans, grid)) coverage[gi]++;
+        }
+        return (intensity, coverage);
     }
 
     // π(T) is P(T lies in some significant span), so a draw adds 1 to a grid point at most once, however many spans
@@ -633,7 +644,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         return (0, 0);
     }
 
-    // Nearest grid index to x for the peak-intensity deposit (grid ascending — it is the evaluation grid).
+    // Nearest grid index to x for the peak-intensity count (grid ascending — it is the evaluation grid).
     private static int NearestGridIndex(double[] grid, double x)
     {
         int idx = Array.BinarySearch(grid, x);
