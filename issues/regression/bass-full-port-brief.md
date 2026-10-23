@@ -182,7 +182,20 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
   - **WAIC and PSIS-LOO** (Watanabe 2010; Vehtari, Gelman and Gabry 2017), for comparing models across BARS, BAPS and BASS.
   - **The noise-model calibration check.** Replicates at one design point are exchangeable, so the grouped (partially exchangeable) form of conformal Bayes tests whether the posterior's predictive width is right there.
 - **What exists.** `IObservationModel` returns the collapsed `LogMarginalLikelihood` (coefficients and scale integrated out), conditional means and coefficient draws, and the conditional variance. The chain's state is the knot configuration. No pointwise term exists.
-- **The choice it waits on (D04, D07).** Either the retained draws carry the coefficients and the noise scale, so the density is the plain likelihood, or each structural draw supplies the collapsed posterior predictive (Student t for the Normal g-prior). The default `SampleCoefficients` returns the conditional mean, which is not a full draw, so a density evaluated there understates the uncertainty.
+- **Decided 2026-10-23 by the user: both, as configurable options.**
+  - **Retained parameters.** Each structural draw keeps its coefficients and noise scale, so the pointwise density is the plain likelihood.
+  - **Collapsed predictive.** Each structural draw supplies the collapsed posterior predictive (Student t for the Normal g-prior).
+  - **Defaults.** Each engine picks its default at its port (D04, D07), and the other option stays selectable. The default `SampleCoefficients` returns the conditional mean, which is not a full draw, so a density evaluated there would understate the uncertainty.
+- **The prerequisite: a retained posterior sample.**
+  - **What BARS does today.** It keeps no sample. `BarsEnsemble` reduces each draw into accumulators fixed at configuration time (the fit and its sd, the peak and span sinks), then drops:
+    - the knot configuration;
+    - the coefficient draw made for the peak readouts;
+    - the σ² that `WeightedNormalModel.SampleConditional` draws with it (the public `SampleCoefficients` returns only β).
+
+    So every new readout needs a rerun.
+  - **What the retained sample holds.** Each draw's generative state: the structure, coefficients, noise scale and, where present, the robust weights.
+  - **What is derived, not stored.** Per-draw curves are recomputed from that state. The streaming accumulators stay as online views (the R̂ stop needs them), not as the only output.
+  - **Size.** At BARS's sizes this is small: 4 chains × 10,000 draws × about 40 numbers is 1.6 million doubles, about 13 MB.
 - **Models without a plain density.** The Gibbs-loss route's term is a pseudo-likelihood, exp(−η·loss), and Whittle's observations are periodogram ordinates. Each states what its pointwise term means, or declines the capability.
 
 ## SMC integration
