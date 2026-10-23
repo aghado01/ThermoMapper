@@ -94,4 +94,78 @@ public sealed class BapsDrawTests
         else
             Assert.Null(r.LocalSmoothing);
     }
+
+    [Theory]
+    [MemberData(nameof(Modes))]
+    public void IntervalsAndFitBand_AreReadFromTheDraws(BapsLambdaUpdate mode)
+    {
+        (double[,] z, double[] y) = Data();
+        int n = z.GetLength(0), nu = z.GetLength(1);
+        BapsResult r = new BapsSampler(z, y, new DifferencePenalty(2)).Run(mode, chains: 3, masterSeed: 7, burn: 200, samples: 400);
+
+        var sigma2 = new List<double>();
+        var tau2 = new List<double>();
+        var fits = new List<double>[n];
+        var conditionalFits = new List<double>[n];
+        for (int i = 0; i < n; i++) { fits[i] = new List<double>(); conditionalFits[i] = new List<double>(); }
+        foreach (IReadOnlyList<BapsDraw> chain in r.PosteriorDraws)
+            foreach (BapsDraw d in chain)
+            {
+                sigma2.Add(d.Sigma2);
+                tau2.Add(d.Tau2);
+                for (int i = 0; i < n; i++)
+                {
+                    double f = 0.0, c = 0.0;
+                    for (int j = 0; j < nu; j++)
+                    {
+                        f += z[i, j] * d.Coefficients[j];
+                        c += z[i, j] * (d.ConditionalMean ?? d.Coefficients)[j];
+                    }
+                    fits[i].Add(f);
+                    conditionalFits[i].Add(c);
+                }
+            }
+        sigma2.Sort();
+        tau2.Sort();
+        Assert.Equal(new PosteriorInterval(Type7(sigma2, 0.5), Type7(sigma2, 0.025), Type7(sigma2, 0.975)), r.Sigma2Interval);
+        Assert.Equal(new PosteriorInterval(Type7(tau2, 0.5), Type7(tau2, 0.025), Type7(tau2, 0.975)), r.Tau2Interval);
+
+        PointwiseBand band = r.FitBand(z);
+        double drawSpread = 0.0, conditionalSpread = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            double mean = 0.0;
+            for (int j = 0; j < nu; j++) mean += z[i, j] * r.Coefficients[j];
+            Assert.Equal(mean, band.Mean[i], 12);
+            fits[i].Sort();
+            Assert.Equal(Type7(fits[i], 0.025), band.Lo[i]);
+            Assert.Equal(Type7(fits[i], 0.975), band.Hi[i]);
+            Assert.True(band.Lo[i] < band.Mean[i] && band.Mean[i] < band.Hi[i], $"row {i}: the band must hold the mean");
+            drawSpread += band.Sd[i];
+            conditionalSpread += Sd(conditionalFits[i]);
+        }
+        // Draws carry the coefficients' own uncertainty, which conditional means leave out: in the marginal-evidence
+        // mode the band is wider than the spread of β̂(λ) alone.
+        if (mode == BapsLambdaUpdate.MarginalEvidence)
+            Assert.True(drawSpread > 2.0 * conditionalSpread, $"draw sd {drawSpread / n:E3} against conditional-mean sd {conditionalSpread / n:E3}");
+        Assert.Throws<ArgumentException>(() => r.FitBand(new double[3, nu + 1]));
+    }
+
+    private static double Type7(List<double> sorted, double p)
+    {
+        double pos = p * (sorted.Count - 1);
+        int lo = (int)Math.Floor(pos);
+        int hi = Math.Min(lo + 1, sorted.Count - 1);
+        return sorted[lo] + (pos - lo) * (sorted[hi] - sorted[lo]);
+    }
+
+    private static double Sd(List<double> values)
+    {
+        double mean = 0.0;
+        foreach (double v in values) mean += v;
+        mean /= values.Count;
+        double ss = 0.0;
+        foreach (double v in values) ss += (v - mean) * (v - mean);
+        return Math.Sqrt(ss / values.Count);
+    }
 }
