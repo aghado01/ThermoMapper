@@ -532,13 +532,13 @@ Only BARS and BGP run on the ensemble shell. BAPS runs its own chain loop, and t
 | Conditional-mean curve on the grid | Fit, FitSd, per-point classic R̂ | The per-draw curves |
 | Coefficient draw (`SampleCoefficients`) | Only through the readouts below | The draw |
 | σ², drawn with β in `WeightedNormalModel.SampleConditional` | Nothing | σ²: the public seam returns β only |
-| Argmax location and height | Location mean and interval, height mean | The per-draw sample (`PeakSample`, kept in-run but not returned) |
-| Significant spans (`PeakSpan`: location, height, left, right, two clipping flags) | λ(T) and π(T) as grid counts, and the modes read from them | Exact locations and endpoints (snapped to the nearest grid point or to grid coverage), heights, and both clipping flags |
+| Argmax location and height | Location mean and interval, height mean; since `724bdf2` also each draw's exact values, in `PeakDraws` | Nothing, since `724bdf2` (before: the per-draw sample, kept in-run but not returned) |
+| Significant spans (`PeakSpan`: location, height, left, right, two clipping flags) | Since `724bdf2`, every span exactly, in `PeakDraws`; λ(T), π(T) and the modes are views over them (`6b6aa5f`) | Nothing, since `724bdf2` (before: exact locations and endpoints snapped to the grid, the heights, and both clipping flags) |
 | Conditional variance on the grid | Pooled into FitSd | The per-draw values |
 | Robust weights (weighted model) | Nothing | The per-draw weights |
 | Tempering rungs | Pair rejection, round trips, final ladders | Hot-rung states and the per-rung target values the swaps use (no path-sampling evidence) |
 
-Two of these drops break the readout's own contract (`lean/Protolemmata/BARS/spc-bars-readout-obligations.md`):
+Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc-bars-readout-obligations.md`). **Both were fixed on 2026-10-23** (`724bdf2`, `6b6aa5f`; report "Retained peak draws").
 - **Exact locations snapped to the grid.** The closed-form peak locations are exact by design (O1–O2, "no grid search"), but they are snapped to grid indices before pooling, which reintroduces the scan error the readout was built to avoid.
 - **Clipping flags lost.** O3 requires a span result carrying the left and right crossings and independent clipping flags. The flags are computed per draw and never reach the result.
 
@@ -613,7 +613,7 @@ Two of these drops break the readout's own contract (`lean/Protolemmata/BARS/spc
 - **Sizes.**
   - **Small:** BARS at 4 chains × 10,000 draws is about 13 MB. BAPS is a few MB. SW's per-sweep scalars are about 0.3 MB per run at 10⁴ sweeps.
   - **Large:** SW partitions are N integers per sweep, about 40 MB per run at N = 1,000 and 10⁴ sweeps, so gigabytes over a sweep's temperatures and replicas. They are an option with thinning, not a default.
-- **The candidate first step** is the two BARS contract breaches (exact spans and clipping flags), since the readout design that OQ7 waits on depends on them.
+- **The first step is done:** the two BARS contract breaches (exact spans and clipping flags), which the readout design that OQ7 waits on depends on (report "Retained peak draws").
 
 ## Decisions
 
@@ -2254,3 +2254,29 @@ The user chose the median centre for the Normal prior, with checks for contamina
 **Results** under the fact harness: `Maths.Regression.Tests` 254 of 254 (`20261022_181345350`): the three new checks, plus a `Mean` case beside each `Median` case in the reference theories; `Maths.Samplers.Tests` 84 of 84 (`20261022_181620747`).
 
 **Seed sweep** (`SEED_SWEEP=50`): `20261022_182007796`. Every hold count matches the previous sweep, except the adaptive-kernel comparison on the data axis, which went from 48 to 49 of 50.
+
+### Retained peak draws — 2026-10-23
+
+The user asked for the two BARS readout breaches the retention inventory found to be fixed. `BarsResult` now returns the exact per-draw peak and span readout, and λ(T) and π(T) are views over it.
+
+| Commit | Content |
+|---|---|
+| `724bdf2` | `PeakDraw` (each draw's exact argmax and spans) retained per chain in `BarsReadout`, carried by checkpoints and returned as `BarsResult.PeakDraws`; `PeakDrawTests`; the resume test also compares the retained draws |
+| `6b6aa5f` | λ(T) and π(T), and the per-chain λ counts behind the mode R̂, read from the retained draws; the two accumulators deleted |
+| docs commit | `BayesianRegression.md`, the retention inventory, this report |
+
+**What is retained.**
+- **Per draw, per chain, in draw order:** the closed-form argmax (location and height), and the significant spans in location order (`PeakSpan`: location, height, left and right crossings, both clipping flags).
+- **A basis without closed-form peaks** records a NaN argmax and no spans, so every draw still counts in λ's and π's denominator.
+
+**The checks** (`PeakDrawTests`):
+- **Off the grid.** On an 11-point readout grid, both the span locations and the argmax locations lie off the grid points; the test requires more than 1e-3 from the nearest one. Grid-snapped values would sit on them.
+- **Views.** λ and π rebuilt from the retained draws equal the result's exactly, and the peak-count mean matches to 1e-12. The check passed against the accumulators in `724bdf2` and against the views in `6b6aa5f`, so the values did not change.
+- **Clipping.** On a rising ramp, more than half the draws keep a span that is clipped on the right, ends at its boundary apex, and is unclipped on the left. λ and π cannot show this.
+- **Resume.** In all four resume setups, a resumed run returns the same retained draws as the uninterrupted one.
+
+**Not changed:**
+- **`PeakModes`** still takes mode locations and intervals from the grid-based λ. With exact per-draw locations retained, it could read them off the draws instead; that is a readout-design question (OQ7).
+- **`Peak`, `PeakSample` and the peak trace** still accumulate beside the draws. They could become views as well.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 257 of 257 (`20261023_124320705`). The solution builds.
