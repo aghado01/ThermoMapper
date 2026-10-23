@@ -63,6 +63,46 @@ public sealed class NormalCentreTests
     }
 
     [Fact]
+    public void ConstantResponses_AreRefused_AsZeroCentredResponses()
+    {
+        // A constant response has nothing left once centred on the null fit, so under the improper σ² prior it has no
+        // posterior and is refused as ZeroResponse. Before the exact handling, a projected constant left roundoff of
+        // about 1e-16, admitted with marginals near 1,300 (the external review's 40-point cubic fixture).
+        double[] x = Even(40);
+        var model = new WeightedNormalModel();
+        double[] w = x.Select((_, i) => i % 5 == 2 ? 0.01 : 1.0 + 0.5 * (i % 3)).ToArray();
+        foreach (double[] knots in new[] { Array.Empty<double>(), new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 } })
+        {
+            double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
+            double[,] doubled = Scaled(z, 2.0);   // the same span, but its functions sum to two: the projection path
+            foreach (double level in new[] { 0.0, 1.0, 7.0, 0.1, -250.0, 1e4 })
+            {
+                double[] y = Enumerable.Repeat(level, x.Length).ToArray();
+                foreach (double[,] design in new[] { z, doubled })
+                    foreach (double[]? weights in new[] { null, w })
+                    {
+                        Assert.Equal(DesignRejection.ZeroResponse, model.TemperedMarginal(design, y, weights).Rejection);
+                        Assert.Equal(double.NegativeInfinity, model.LogMarginalLikelihood(design, y, weights));
+                    }
+                // The fit is the constant itself.
+                double[] beta = model.PosteriorMeanCoefficients(z, y, null);
+                Assert.All(beta, b => Assert.Equal(level, b, 1e-12 * Math.Max(1.0, Math.Abs(level))));
+            }
+            // DMGK's zero centre keeps a nonzero constant's level in the scale, so only the zero response is refused.
+            var zero = new WeightedNormalModel(GPriorCentre.Zero);
+            Assert.Equal(DesignRejection.None, zero.TemperedMarginal(z, Enumerable.Repeat(7.0, x.Length).ToArray(), null).Rejection);
+            Assert.Equal(DesignRejection.ZeroResponse, zero.TemperedMarginal(z, new double[x.Length], null).Rejection);
+        }
+    }
+
+    private static double[,] Scaled(double[,] z, double s)
+    {
+        var r = (double[,])z.Clone();
+        for (int i = 0; i < r.GetLength(0); i++) for (int j = 0; j < r.GetLength(1); j++) r[i, j] *= s;
+        return r;
+    }
+
+    [Fact]
     public void Bars_FitsAShiftedResponse_AsTheUnshiftedOne()
     {
         // The offset probe's comparison as a check: the same chains on the response and on the response plus 1,000.

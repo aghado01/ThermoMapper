@@ -113,25 +113,56 @@ public static class BandedGPrior
     }
 
     // The prior mean and the response it leaves: none and y at zero; for the null fit μ₀ = ȳ·G⁻¹Zᵀ1 and y − Zμ₀.
+    // The constant is kept exactly where it can be. A constant response takes its value as ȳ, not a rounded mean. A
+    // basis whose functions sum to one (B-splines, steps) holds the constant as μ₀ = ȳ·1 with no solve, so a constant
+    // response centres to exactly zero. Another basis projects; when its span holds the constant (the projection
+    // reproduces 1 to 1e-10), a constant response's centred value is zero by definition and is set so, rather than left
+    // as the projection's roundoff, which the improper σ² prior would read as a near-perfect fit.
     private static (double[]? PriorMean, double[] Response) Centre(BandedDesign design, ISpdFactor gram, double[] y,
                                                                   GPriorCentre centre)
     {
         if (centre == GPriorCentre.Zero) return (null, y);
         if (centre != GPriorCentre.NullFit) throw new ArgumentOutOfRangeException(nameof(centre));
-        int m = design.Rows;
-        double mean = 0.0;
-        foreach (double v in y) mean += v;
-        mean /= m;
+        int m = design.Rows, nu = design.Dimension;
+        bool constant = true;
+        for (int i = 1; i < m && constant; i++) constant = y[i] == y[0];
+        double mean = y[0];
+        if (!constant)
+        {
+            mean = 0.0;
+            foreach (double v in y) mean += v;
+            mean /= m;
+        }
+
+        var unit = new double[nu];
+        Array.Fill(unit, 1.0);
+        var rowSums = new double[m];
+        design.Apply(unit, rowSums);
+        bool sumsToOne = true;
+        for (int i = 0; i < m && sumsToOne; i++) sumsToOne = Math.Abs(rowSums[i] - 1.0) <= 1e-12;
+
+        var response = new double[m];
+        if (sumsToOne)
+        {
+            var levelMean = new double[nu];
+            Array.Fill(levelMean, mean);
+            for (int i = 0; i < m; i++) response[i] = y[i] - mean;
+            return (levelMean, response);
+        }
+
         var ones = new double[m];
         Array.Fill(ones, 1.0);
-        var columnSums = new double[design.Dimension];
+        var columnSums = new double[nu];
         design.AccumulateRhs(null, ones, columnSums);
-        double[] priorMean = gram.Solve(columnSums);
-        for (int j = 0; j < priorMean.Length; j++) priorMean[j] *= mean;
-        var nullFit = new double[m];
-        design.Apply(priorMean, nullFit);
-        var response = new double[m];
-        for (int i = 0; i < m; i++) response[i] = y[i] - nullFit[i];
+        double[] projection = gram.Solve(columnSums);   // G⁻¹Zᵀ1
+        var projected = new double[m];
+        design.Apply(projection, projected);            // P·1
+        bool spansConstant = true;
+        for (int i = 0; i < m && spansConstant; i++) spansConstant = Math.Abs(projected[i] - 1.0) <= 1e-10;
+        var priorMean = new double[nu];
+        for (int j = 0; j < nu; j++) priorMean[j] = mean * projection[j];
+        if (!(constant && spansConstant))
+            for (int i = 0; i < m; i++) response[i] = y[i] - mean * projected[i];
         return (priorMean, response);
     }
 }
