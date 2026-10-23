@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Maths.Distributions;
 using Maths.LinAlg;
@@ -42,7 +43,8 @@ public enum BapsLambdaUpdate
 /// because λ can be heavy-tailed enough that its posterior mean does not exist. <paramref name="LocalSmoothing"/> is
 /// the posterior-mean local smoothing field λ_i (length ν−r) — non-null only for <see cref="BapsLambdaUpdate.AdaptiveGibbs"/>; its dips
 /// mark where the fit was allowed to track features. <paramref name="RHatLogLambda"/> is R̂ on log λ across chains
-/// with its <see cref="DiagnosticState"/> (unavailable for a single chain).
+/// with its <see cref="DiagnosticState"/> (unavailable for a single chain). <paramref name="PosteriorDraws"/> keeps
+/// every retained draw (<see cref="BapsDraw"/>), per chain in draw order; every summary above is read from it.
 /// </remarks>
 public sealed record BapsResult(
     double[] Coefficients,
@@ -52,15 +54,28 @@ public sealed record BapsResult(
     double SigmaMean,
     RHatDiagnostic RHatLogLambda,
     int Draws,
+    IReadOnlyList<IReadOnlyList<BapsDraw>> PosteriorDraws,
     double[]? LocalSmoothing = null);
+
+/// <summary>
+/// One retained BAPS draw: the coefficients, the global smoothing λ, the noise variance σ², the penalty variance τ²,
+/// and the adaptive mode's local multipliers η.
+/// <list type="bullet">
+///   <item>In the Gibbs modes λ = σ²/τ², all from the end of the sweep.</item>
+///   <item>The marginal-evidence mode samples λ alone. Its coefficients are the conditional mean and σ² the profiled
+///   variance at λ, not draws, and τ² is NaN.</item>
+///   <item><see cref="Eta"/> is set in the adaptive mode only, where the local smoothing is λᵢ = λ·ηᵢ.</item>
+/// </list>
+/// </summary>
+public sealed record BapsDraw(double[] Coefficients, double Lambda, double Sigma2, double Tau2, double[]? Eta);
 
 /// <summary>
 /// The BAPS (Bayesian adaptive P-spline) sampler — the measure-side dual of free-knot BARS. A rich fixed B-spline
 /// basis with a difference penalty whose strength λ is inferred, sampled either by conjugate Gibbs over the
 /// variance components or by Metropolis against the REML marginal evidence (<see cref="BapsLambdaUpdate"/>). Every
 /// inner solve is banded (<c>A = ZᵀZ + λP</c> via <see cref="BandCholesky"/>'s root-free LDLᵀ, whose factor also
-/// supplies the Gaussian β-draw); chains run in parallel from one seed tree and reduce per draw to the Bayes fit,
-/// the λ posterior (mean + 95% interval), σ, and R̂ on log λ.
+/// supplies the Gaussian β-draw); chains run in parallel from one seed tree and retain every draw, from which the Bayes
+/// fit, the λ posterior (median + 95% interval), σ, and R̂ on log λ are read.
 /// </summary>
 public sealed class BapsSampler
 {
@@ -112,11 +127,11 @@ public sealed class BapsSampler
         if (samples < 2 || burn < 0) throw new ArgumentOutOfRangeException(nameof(samples));
 
         int[] seeds = SeedTree.Derive(masterSeed, chains);
-        var accums = new ChainAccum[chains];
+        var draws = new List<BapsDraw>[chains];
         Parallel.For(0, chains, c =>
         {
             var rng = new Xoshiro256PlusPlus(seeds[c]);
-            accums[c] = mode switch
+            draws[c] = mode switch
             {
                 BapsLambdaUpdate.Gibbs => RunGibbs(rng, burn, samples),
                 BapsLambdaUpdate.MarginalEvidence => RunMarginal(rng, burn, samples),
@@ -125,44 +140,54 @@ public sealed class BapsSampler
             };
         });
 
+        // Every summary is read from the retained draws: each chain's sums in draw order, then over chains; the log-λ
+        // moments per chain for R̂; and the pooled λ sample for its quantiles.
         double total = chains * (double)samples;
         var coef = new double[_nu];
         var logLam = new RunningMoments[chains];
         double sigSum = 0.0;
         var allLam = new double[(int)total];
+        int nLoc = _nu - _r;
+        double[]? localField = mode == BapsLambdaUpdate.AdaptiveGibbs && nLoc > 0 ? new double[nLoc] : null;
+        var posteriorDraws = new IReadOnlyList<BapsDraw>[chains];
         int idx = 0;
         for (int c = 0; c < chains; c++)
         {
-            ChainAccum a = accums[c];
-            for (int p = 0; p < _nu; p++) coef[p] += a.CoefSum[p];
-            logLam[c] = a.LogLambda;
-            sigSum += a.SigmaSum;
-            Array.Copy(a.Lambdas, 0, allLam, idx, samples);
-            idx += samples;
+            posteriorDraws[c] = draws[c].ToArray();
+            var coefSum = new double[_nu];
+            var moments = new RunningMoments();
+            double sigmaSum = 0.0;
+            double[]? localSum = localField is null ? null : new double[nLoc];
+            foreach (BapsDraw d in draws[c])
+            {
+                for (int p = 0; p < _nu; p++) coefSum[p] += d.Coefficients[p];
+                allLam[idx++] = d.Lambda;
+                moments.Add(Math.Log(d.Lambda));
+                sigmaSum += Math.Sqrt(d.Sigma2);
+                if (localSum is not null)
+                    for (int k = 0; k < nLoc; k++) localSum[k] += d.Lambda * d.Eta![k];
+            }
+            for (int p = 0; p < _nu; p++) coef[p] += coefSum[p];
+            logLam[c] = moments;
+            sigSum += sigmaSum;
+            if (localSum is not null)
+                for (int k = 0; k < nLoc; k++) localField![k] += localSum[k];
         }
         for (int p = 0; p < _nu; p++) coef[p] /= total;
-
-        double[]? localField = null;
-        if (accums[0].LocalLambdaSum is not null)
-        {
-            int nLoc = accums[0].LocalLambdaSum!.Length;
-            localField = new double[nLoc];
-            for (int c = 0; c < chains; c++)
-                for (int k = 0; k < nLoc; k++) localField[k] += accums[c].LocalLambdaSum![k];
+        if (localField is not null)
             for (int k = 0; k < nLoc; k++) localField[k] /= total;
-        }
 
         Array.Sort(allLam);
 
         return new BapsResult(
             coef, Quantile(allLam, 0.5), Quantile(allLam, 0.025), Quantile(allLam, 0.975),
-            sigSum / total, ChainDiagnostics.RHat(logLam), (int)total, localField);
+            sigSum / total, ChainDiagnostics.RHat(logLam), (int)total, posteriorDraws, localField);
     }
 
     // ── Gibbs: β | σ²,τ²  then  σ² | β  then  τ² | β ───────────────────────────
-    private ChainAccum RunGibbs(Xoshiro256PlusPlus rng, int burn, int samples)
+    private List<BapsDraw> RunGibbs(Xoshiro256PlusPlus rng, int burn, int samples)
     {
-        var acc = new ChainAccum(_nu, samples, 0);
+        var draws = new List<BapsDraw>(samples);
         var band = new double[_bw + 1, _nu];
         var z = new double[_nu];
         var innov = new double[_nu];
@@ -189,15 +214,15 @@ public sealed class BapsSampler
             sigma2 = InverseGamma.ShapeScale(_priorShape + 0.5 * _n, _priorScale + 0.5 * ResidualSS(beta)).Sample(rng);
             tau2 = InverseGamma.ShapeScale(_priorShape + 0.5 * (_nu - _r), _priorScale + 0.5 * _penalty.Roughness(beta)).Sample(rng);
 
-            if (it >= burn) acc.Record(it - burn, beta, sigma2 / tau2, Math.Sqrt(sigma2));
+            if (it >= burn) draws.Add(new BapsDraw((double[])beta.Clone(), sigma2 / tau2, sigma2, tau2, null));
         }
-        return acc;
+        return draws;
     }
 
     // ── Marginal evidence: Metropolis on log λ against REML evidence × uniform-edf prior; β Rao-Blackwellized ──
-    private ChainAccum RunMarginal(Xoshiro256PlusPlus rng, int burn, int samples)
+    private List<BapsDraw> RunMarginal(Xoshiro256PlusPlus rng, int burn, int samples)
     {
-        var acc = new ChainAccum(_nu, samples, 0);
+        var draws = new List<BapsDraw>(samples);
         double logLam = 0.0;
         double ev = MarginalLogTarget(1.0);
         int steps = burn + samples;
@@ -213,20 +238,21 @@ public sealed class BapsSampler
             if (it >= burn)
             {
                 double lambda = Math.Exp(logLam);
-                acc.Record(it - burn, _model.Coefficients(lambda), lambda, Math.Sqrt(_model.ProfiledVariance(lambda)));
+                draws.Add(new BapsDraw((double[])_model.Coefficients(lambda).Clone(), lambda, _model.ProfiledVariance(lambda),
+                                       double.NaN, null));
             }
         }
-        return acc;
+        return draws;
     }
 
     // log p(u | y) up to a constant on u = ln λ: the profiled evidence plus the uniform-edf prior density |d edf/du|.
     private double MarginalLogTarget(double lambda) => _model.RemlLogEvidence(lambda) + Math.Log(_model.EdfSlope(lambda));
 
     // ── Adaptive Gibbs: as RunGibbs, plus per-difference multipliers η_i ~ Gamma(φ, φ) ──
-    private ChainAccum RunAdaptiveGibbs(Xoshiro256PlusPlus rng, int burn, int samples)
+    private List<BapsDraw> RunAdaptiveGibbs(Xoshiro256PlusPlus rng, int burn, int samples)
     {
         int nLoc = _nu - _r;
-        var acc = new ChainAccum(_nu, samples, nLoc);
+        var draws = new List<BapsDraw>(samples);
         var band = new double[_bw + 1, _nu];
         var z = new double[_nu];
         var innov = new double[_nu];
@@ -234,7 +260,6 @@ public sealed class BapsSampler
         var eta = new double[nLoc];
         var sqDiff = new double[nLoc];
         var weights = new double[nLoc];        // λ_i = (σ²/τ²)·η_i
-        var localLambda = new double[nLoc];
         var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
 
         double sigma2 = 1.0, tau2 = 1.0;
@@ -268,14 +293,9 @@ public sealed class BapsSampler
             for (int i = 0; i < nLoc; i++)
                 eta[i] = Gamma.ShapeRate(_phi + 0.5, _phi + 0.5 * sqDiff[i] / tau2).Sample(rng);
 
-            if (it >= burn)
-            {
-                double lg = sigma2 / tau2;
-                for (int i = 0; i < nLoc; i++) localLambda[i] = lg * eta[i];
-                acc.Record(it - burn, beta, lg, Math.Sqrt(sigma2), localLambda);
-            }
+            if (it >= burn) draws.Add(new BapsDraw((double[])beta.Clone(), sigma2 / tau2, sigma2, tau2, (double[])eta.Clone()));
         }
-        return acc;
+        return draws;
     }
 
     private double ResidualSS(double[] beta)
@@ -297,32 +317,5 @@ public sealed class BapsSampler
         int lo = (int)Math.Floor(pos);
         int hi = Math.Min(lo + 1, sorted.Length - 1);
         return sorted[lo] + (pos - lo) * (sorted[hi] - sorted[lo]);
-    }
-
-    // Per-chain reduction: running Σβ, the λ draws, and the streaming log-λ moments for R̂.
-    private sealed class ChainAccum
-    {
-        public readonly double[] CoefSum;
-        public readonly double[] Lambdas;
-        public readonly double[]? LocalLambdaSum;   // running Σ λ_i field (adaptive mode only)
-        public RunningMoments LogLambda;
-        public double SigmaSum;
-
-        public ChainAccum(int nu, int samples, int nLocal)
-        {
-            CoefSum = new double[nu];
-            Lambdas = new double[samples];
-            LocalLambdaSum = nLocal > 0 ? new double[nLocal] : null;
-        }
-
-        public void Record(int i, double[] beta, double lambda, double sigma, double[]? localLambda = null)
-        {
-            for (int p = 0; p < CoefSum.Length; p++) CoefSum[p] += beta[p];
-            Lambdas[i] = lambda;
-            LogLambda.Add(Math.Log(lambda));
-            SigmaSum += sigma;
-            if (localLambda is not null && LocalLambdaSum is not null)
-                for (int k = 0; k < LocalLambdaSum.Length; k++) LocalLambdaSum[k] += localLambda[k];
-        }
     }
 }
