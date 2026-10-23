@@ -12,6 +12,10 @@ namespace Maths.Regression.Bgp;
 /// <param name="Mean">The GLS mean m̂ = 1ᵀK⁻¹Y / 1ᵀK⁻¹1, the posterior mean of m; the conditional mean is m̂ + k_t(·,X)·α.</param>
 public sealed record GpFit(double Bandwidth, double LogMarginal, double[] Alpha, double Mean);
 
+/// <summary>A <see cref="GpFit"/> with what its conditional variance needs: the factor of K = Σ_t + σ²I, K⁻¹1 and
+/// 1ᵀK⁻¹1. It costs n² numbers, so a sampler holds one per chain while it is current and never retains it.</summary>
+internal sealed record GpFactoredFit(GpFit Fit, CholeskyDecomposition Factor, double[] KInvOne, double OneKOne);
+
 /// <summary>
 /// Bayesian GP regression with an ambient radial kernel (Tang, Wu, Cheng &amp; Dunson 2025): the conjugate core
 /// behind the dimension-adaptive method. With the regression function marginalized out by GP conjugacy, all that
@@ -105,7 +109,10 @@ public sealed class GpRegression
     /// call is pure: an ensemble can drive many bandwidth chains concurrently over one shared
     /// <see cref="GpRegression"/> (only the immutable <see cref="_sqDist"/> precompute is reused across fits).
     /// </summary>
-    public GpFit Fit(double t)
+    public GpFit Fit(double t) => FitFactored(t).Fit;
+
+    /// <summary>As <see cref="Fit"/>, keeping the factor, K⁻¹1 and 1ᵀK⁻¹1 that the conditional variance needs.</summary>
+    internal GpFactoredFit FitFactored(double t)
     {
         var a = new double[_n, _n];   // working A = Σ_t + σ²I (thread-local — Fit must stay reentrant)
         for (int i = 0; i < _n; i++)
@@ -143,7 +150,50 @@ public sealed class GpRegression
 
         double logMarginal = -0.5 * quad - 0.5 * chol.LogDet - 0.5 * Math.Log(oneKOne)
                              - 0.5 * (_n - 1) * Math.Log(2.0 * Math.PI);
-        return new GpFit(t, logMarginal, alpha, _yShift + mHat);
+        return new GpFactoredFit(new GpFit(t, logMarginal, alpha, _yShift + mHat), chol, kInvOne, oneKOne);
+    }
+
+    /// <summary>
+    /// The conditional variance of the regression function f(x*) given the bandwidth, at each row of
+    /// <paramref name="xTest"/> (original units), with the constant mean integrated out under its flat prior:
+    /// Var = k(x*,x*) − k*ᵀK⁻¹k* + (1 − 1ᵀK⁻¹k*)² / 1ᵀK⁻¹1 (universal kriging; Rasmussen &amp; Williams 2006, §2.7).
+    /// The last term is the mean's own uncertainty. It is the variance of f, not of a new observation, which adds σ².
+    /// This refactors K at the fit's bandwidth (O(n³)); <see cref="BgpSampler"/> computes it during the run instead,
+    /// while each fit's factor still exists.
+    /// </summary>
+    public double[] PredictVariance(GpFit fit, double[,] xTest)
+    {
+        ArgumentNullException.ThrowIfNull(fit);
+        ArgumentNullException.ThrowIfNull(xTest);
+        if (xTest.GetLength(1) != _d) throw new ArgumentException("Test inputs must have the training dimension.", nameof(xTest));
+        return ConditionalVarianceInFrame(FitFactored(fit.Bandwidth), Transform.MapInputs(xTest));
+    }
+
+    /// <summary>As <see cref="PredictVariance"/>, from a factored fit and test inputs already in the fitted frame: one
+    /// O(n²) solve per test point. Rounding can leave a variance a hair below zero where the data pin f; it is floored
+    /// at 0.</summary>
+    internal double[] ConditionalVarianceInFrame(GpFactoredFit factored, double[,] mappedTest)
+    {
+        int m = mappedTest.GetLength(0);
+        double t = factored.Fit.Bandwidth;
+        double prior = _kernel.Evaluate(0.0, t);
+        var k = new double[_n];
+        var variance = new double[m];
+        for (int a = 0; a < m; a++)
+        {
+            for (int j = 0; j < _n; j++)
+            {
+                double s = 0.0;
+                for (int c = 0; c < _d; c++) { double diff = mappedTest[a, c] - _x[j, c]; s += diff * diff; }
+                k[j] = _kernel.Evaluate(s, t);
+            }
+            double[] kInvK = factored.Factor.Solve(k);
+            double quad = 0.0, oneKInvK = 0.0;
+            for (int j = 0; j < _n; j++) { quad += k[j] * kInvK[j]; oneKInvK += kInvK[j]; }
+            double u = 1.0 - oneKInvK;
+            variance[a] = Math.Max(0.0, prior - quad + u * u / factored.OneKOne);
+        }
+        return variance;
     }
 
     /// <summary>

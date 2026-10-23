@@ -10,16 +10,21 @@ namespace Maths.Regression.Bgp;
 public sealed record BandwidthSummary(double Mean, double Lo, double Hi);
 
 /// <summary>
-/// One retained bandwidth draw: the bandwidth t in the mapped frame and the GP fit the chain held there (its log
-/// marginal, α and mean). Given t the GP posterior is fixed, so this is the draw's whole state. A rejected proposal
-/// keeps the previous fit, so neighbouring draws share one <see cref="GpFit"/>.
+/// One retained bandwidth draw: the bandwidth t in the mapped frame, the GP fit the chain held there (its log marginal,
+/// α and mean), and that fit's conditional variance of f at the run's test points
+/// (<see cref="GpRegression.PredictVariance"/>). Given t the GP posterior is fixed, so this is the draw's whole state.
+/// A rejected proposal keeps the previous fit, so neighbouring draws share one <see cref="GpFit"/> and one variance
+/// array.
 /// </summary>
-public sealed record BgpDraw(double Bandwidth, GpFit Fit);
+public sealed record BgpDraw(double Bandwidth, GpFit Fit, double[] ConditionalVariance);
 
 /// <summary>The pooled posterior of a Bayesian-GP run: the Bayes-averaged conditional mean at the requested points
 /// plus the bandwidth posterior (the data-chosen length scale, with a credible interval) and the sampler's mixing
 /// and convergence.</summary>
 /// <param name="PosteriorMean">f̂(x*) at each test point — averaged over the bandwidth posterior (model averaging).</param>
+/// <param name="PosteriorSd">The posterior sd of f(x*) at each test point, by the law of total variance: the spread of the
+/// draws' conditional means plus their mean conditional variance (<see cref="BgpDraw.ConditionalVariance"/>). It is the
+/// uncertainty of the regression function; a new observation adds σ².</param>
 /// <param name="Bandwidth">The bandwidth posterior in the GP's mapped frame, where the sampler and the prior work.</param>
 /// <param name="BandwidthOriginal">The same posterior in the original input units: every value is s²·t (exact for the mean
 /// and, the map being monotone, for the quantiles).</param>
@@ -33,6 +38,7 @@ public sealed record BgpDraw(double Bandwidth, GpFit Fit);
 /// and the bandwidth summary are read from these.</param>
 public sealed record BgpResult(
     double[] PosteriorMean,
+    double[] PosteriorSd,
     BandwidthSummary Bandwidth, BandwidthSummary BandwidthOriginal,
     double AcceptanceRate, int Draws,
     ConvergenceDiagnostic BandwidthConvergence, int[] ChainSeeds, double InputScale,
@@ -79,7 +85,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
     public IChainRun<double> StartChain(int chainSeed, int readoutSeed)
     {
         var chain = new BgpBandwidthChain(_gp, _prior, _t0, _proposalSd, new Xoshiro256PlusPlus(chainSeed));
-        return new BgpChainRun(chain);
+        return new BgpChainRun(chain, _gp, _xTest);
     }
 
     /// <param name="xTest">Points (original units) at which to report the posterior mean (the training inputs for the in-sample fit).</param>
@@ -110,10 +116,14 @@ public sealed class BgpSampler : IEnsembleModel<double>
 
         // Every summary is read from the retained draws. The posterior mean sums each draw's conditional mean at the test
         // points per chain in draw order, then over chains; a fit shared by neighbouring draws is predicted once. The
-        // bandwidth mean averages the chains' running means, and its interval reads the pooled sample.
+        // posterior sd adds, by the law of total variance, the spread of those conditional means about the mean (a
+        // second pass) to the draws' mean conditional variance. The bandwidth mean averages the chains' running means,
+        // and its interval reads the pooled sample.
         int m = _testCount;
         var meanAcc = new double[m];
+        var varianceAcc = new double[m];
         var allT = new List<double>(chains * summary.SamplesUsed);
+        var preds = new List<double[]>(chains * summary.SamplesUsed);
         var bandwidthDraws = new IReadOnlyList<BgpDraw>[chains];
         double chainMeans = 0.0;
         for (int ci = 0; ci < chains; ci++)
@@ -132,6 +142,8 @@ public sealed class BgpSampler : IEnsembleModel<double>
                     predicted = d.Fit;
                 }
                 for (int i = 0; i < m; i++) chainSum[i] += pred[i];
+                for (int i = 0; i < m; i++) varianceAcc[i] += d.ConditionalVariance[i];
+                preds.Add(pred);
                 moments.Add(d.Bandwidth);
                 allT.Add(d.Bandwidth);
             }
@@ -142,11 +154,21 @@ public sealed class BgpSampler : IEnsembleModel<double>
         for (int i = 0; i < m; i++) meanAcc[i] /= denom;
         allT.Sort();
 
+        var spread = new double[m];
+        foreach (double[] pred in preds)
+            for (int i = 0; i < m; i++)
+            {
+                double dev = pred[i] - meanAcc[i];
+                spread[i] += dev * dev;
+            }
+        var posteriorSd = new double[m];
+        for (int i = 0; i < m; i++) posteriorSd[i] = Math.Sqrt((spread[i] + varianceAcc[i]) / denom);
+
         var fitted = new BandwidthSummary(chainMeans / chains, Quantile(allT, 0.025), Quantile(allT, 0.975));
         double s2 = _gp.Transform.InputScale * _gp.Transform.InputScale;   // t_original = s²·t
         var original = new BandwidthSummary(s2 * fitted.Mean, s2 * fitted.Lo, s2 * fitted.Hi);
 
-        return new BgpResult(meanAcc, fitted, original,
+        return new BgpResult(meanAcc, posteriorSd, fitted, original,
                              summary.AcceptanceRate, chains * summary.SamplesUsed,
                              summary.Monitored[0], summary.ChainSeeds,
                              _gp.Transform.InputScale, bandwidthDraws);
@@ -176,20 +198,23 @@ public sealed class BgpSampler : IEnsembleModel<double>
         private readonly double _proposalSd;
         private double _u;          // log t
         private double _cur;        // log target at the current state
-        private GpFit _fit;
+        private GpFactoredFit _factored;   // the current fit with its factor, held only while current
 
         public long Accepted { get; private set; }
         public long Attempts { get; private set; }
 
         /// <summary>The GP fit at the current accepted bandwidth — the readout's conditional-mean source.</summary>
-        public GpFit CurrentFit => _fit;
+        public GpFit CurrentFit => _factored.Fit;
+
+        /// <summary>The current fit with its factor — the readout's conditional-variance source.</summary>
+        public GpFactoredFit CurrentFactored => _factored;
 
         public BgpBandwidthChain(GpRegression gp, EmpiricalBayesBandwidthPrior prior, double t0, double proposalSd, Xoshiro256PlusPlus rng)
         {
             _gp = gp; _prior = prior; _proposalSd = proposalSd; _rng = rng;
             _u = Math.Log(t0);
-            _fit = gp.Fit(t0);
-            _cur = _fit.LogMarginal + prior.LogDensity(t0) + _u;   // +u: log t Jacobian
+            _factored = gp.FitFactored(t0);
+            _cur = _factored.Fit.LogMarginal + prior.LogDensity(t0) + _u;   // +u: log t Jacobian
         }
 
         public double Step()
@@ -199,17 +224,17 @@ public sealed class BgpSampler : IEnsembleModel<double>
             double priorProp = _prior.LogDensity(tProp);
             Attempts++;
 
-            GpFit fitProp = null;
+            GpFactoredFit? fitProp = null;
             double prop = double.NegativeInfinity;
             if (!double.IsNegativeInfinity(priorProp))
             {
-                fitProp = _gp.Fit(tProp);
-                prop = fitProp.LogMarginal + priorProp + uProp;
+                fitProp = _gp.FitFactored(tProp);
+                prop = fitProp.Fit.LogMarginal + priorProp + uProp;
             }
 
             if (prop - _cur >= 0.0 || _rng.NextDouble() < Math.Exp(prop - _cur))
             {
-                _u = uProp; _cur = prop; _fit = fitProp; Accepted++;
+                _u = uProp; _cur = prop; _factored = fitProp!; Accepted++;   // prop is −∞ without a fit, so never accepted
             }
             return Math.Exp(_u);
         }
@@ -218,15 +243,23 @@ public sealed class BgpSampler : IEnsembleModel<double>
 
     /// <summary>
     /// One bandwidth chain and its retained draws: the per-draw bandwidth t (the R̂/ESS functional) and, per draw, the
-    /// bandwidth with the GP fit the chain held there, from which the run's summaries are read.
+    /// bandwidth with the GP fit the chain held there and its conditional variance at the test points, computed once
+    /// per distinct fit while the fit's factor exists. The run's summaries are read from these.
     /// </summary>
     private sealed class BgpChainRun : IChainRun<double>
     {
         private readonly BgpBandwidthChain _chain;
+        private readonly GpRegression _gp;
+        private readonly double[,] _xTest;
+        private GpFit? _varianceFit;          // the fit _variance belongs to
+        private double[] _variance = [];
 
         public readonly List<BgpDraw> Draws = new();   // every post-burn draw, in order
 
-        public BgpChainRun(BgpBandwidthChain chain) => _chain = chain;
+        public BgpChainRun(BgpBandwidthChain chain, GpRegression gp, double[,] xTest)
+        {
+            _chain = chain; _gp = gp; _xTest = xTest;
+        }
 
         public IChain<double> Chain => _chain;
 
@@ -238,7 +271,13 @@ public sealed class BgpSampler : IEnsembleModel<double>
         public void Accumulate(in double draw, Span<double> functionals)
         {
             functionals[0] = draw;
-            Draws.Add(new BgpDraw(draw, _chain.CurrentFit));
+            GpFit fit = _chain.CurrentFit;
+            if (!ReferenceEquals(fit, _varianceFit))
+            {
+                _variance = _gp.ConditionalVarianceInFrame(_chain.CurrentFactored, _xTest);
+                _varianceFit = fit;
+            }
+            Draws.Add(new BgpDraw(draw, fit, _variance));
         }
     }
 }

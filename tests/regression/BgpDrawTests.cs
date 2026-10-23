@@ -34,6 +34,8 @@ public sealed class BgpDrawTests
         Assert.Equal(3, r.BandwidthDraws.Count);
         var bandwidths = new List<double>();
         var mean = new double[25];
+        var preds = new List<double[]>();
+        var conditional = new double[25];
         int shared = 0;
         foreach (IReadOnlyList<BgpDraw> chain in r.BandwidthDraws)
         {
@@ -43,15 +45,34 @@ public sealed class BgpDrawTests
                 BgpDraw draw = chain[d];
                 // The fit is the one at the draw's bandwidth (the start's t = exp(log t0) may differ from t0 in the last bit).
                 Assert.Equal(draw.Bandwidth, draw.Fit.Bandwidth, 1e-14 * draw.Bandwidth);
-                if (d > 0 && ReferenceEquals(draw.Fit, chain[d - 1].Fit)) shared++;
+                if (d > 0 && ReferenceEquals(draw.Fit, chain[d - 1].Fit))
+                {
+                    shared++;
+                    Assert.Same(chain[d - 1].ConditionalVariance, draw.ConditionalVariance);   // computed once per fit
+                }
                 bandwidths.Add(draw.Bandwidth);
                 double[] pred = gp.PredictMean(draw.Fit, xTest);
+                preds.Add(pred);
                 for (int i = 0; i < 25; i++) mean[i] += pred[i];
+                double[] variance = gp.PredictVariance(draw.Fit, xTest);   // refactored from the fit's bandwidth
+                for (int i = 0; i < 25; i++)
+                {
+                    Assert.Equal(variance[i], draw.ConditionalVariance[i], 1e-12);
+                    conditional[i] += draw.ConditionalVariance[i];
+                }
             }
         }
         Assert.True(shared > 0, "rejected proposals should share the previous fit");
 
         for (int i = 0; i < 25; i++) Assert.Equal(mean[i] / r.Draws, r.PosteriorMean[i], 12);
+        // The law of total variance: the spread of the conditional means plus their mean conditional variance.
+        for (int i = 0; i < 25; i++)
+        {
+            double spread = 0.0;
+            foreach (double[] pred in preds) spread += (pred[i] - r.PosteriorMean[i]) * (pred[i] - r.PosteriorMean[i]);
+            Assert.Equal(Math.Sqrt((spread + conditional[i]) / r.Draws), r.PosteriorSd[i], 12);
+            Assert.True(r.PosteriorSd[i] > 0.0);
+        }
         bandwidths.Sort();
         Assert.Equal(Type7(bandwidths, 0.025), r.Bandwidth.Lo);
         Assert.Equal(Type7(bandwidths, 0.975), r.Bandwidth.Hi);
