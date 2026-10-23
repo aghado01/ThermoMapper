@@ -504,6 +504,117 @@ Probes on the Grams a BARS chain evaluates: 6,000 steps per dataset, Normal mode
 - **Leverage is the exact measure of the instability**, but it flags every fit across a real gap. Hence step 3.4's extrapolation readout, not an admission rule.
 - **Root cause, parked.** The g-prior has no fixed-scale shrinkage in data-free directions. A proper coefficient prior with a fixed-scale component would fix that, but it would break the BARS ≡ BASS(τ = 1/m) identity unless BASS changes too. It belongs with BASS's coefficient-prior decisions.
 
+## Retention inventory (2026-10-23)
+
+Recorded at the user's request, after OQ17 found that BARS keeps no posterior sample. For each engine it lists what is computed per draw (per run, for the exact engine), what reaches the result, and what is dropped. "Dropped" means the information is gone once the run returns, and getting it back needs a rerun. Read from the code at `47c98ea`.
+
+The principle, from the user: keep each draw's generative state, derive views from it, and where alternatives keep different information, offer both as options.
+
+Only BARS and BGP run on the ensemble shell. BAPS runs its own chain loop, and the changepoint engine is exact, with no draws.
+
+### The ensemble shell (`samplers/ensemble`)
+
+- **The contract.** `IChainRun.Accumulate` reduces each draw to a fixed vector of functionals and folds the model's own sinks. The shell never stores `TDraw`.
+- **Kept:**
+  - per-chain traces of the monitored functionals only (`ChainTrace`, the first `MonitoredDim`: BARS's knot count, BGP's bandwidth);
+  - running moments of every functional;
+  - acceptance, seeds and an in-memory checkpoint.
+- **Dropped:**
+  - every draw;
+  - the per-draw values of unmonitored functionals. Of BARS's fitted grid values only the mean and variance survive, so there is no quantile band on the fit and no ESS for it;
+  - all burn-in draws, so there is no warm-up trace for equilibration or the adaptive-τ schedule.
+
+### BARS (`BarsEnsemble`)
+
+| Computed per draw | Reaches the result | Dropped |
+|---|---|---|
+| Knot configuration | Knot count (traced), mean knot count | The configuration |
+| Conditional-mean curve on the grid | Fit, FitSd, per-point classic R̂ | The per-draw curves |
+| Coefficient draw (`SampleCoefficients`) | Only through the readouts below | The draw |
+| σ², drawn with β in `WeightedNormalModel.SampleConditional` | Nothing | σ²: the public seam returns β only |
+| Argmax location and height | Location mean and interval, height mean | The per-draw sample (`PeakSample`, kept in-run but not returned) |
+| Significant spans (`PeakSpan`: location, height, left, right, two clipping flags) | λ(T) and π(T) as grid counts, and the modes read from them | Exact locations and endpoints (snapped to the nearest grid point or to grid coverage), heights, and both clipping flags |
+| Conditional variance on the grid | Pooled into FitSd | The per-draw values |
+| Robust weights (weighted model) | Nothing | The per-draw weights |
+| Tempering rungs | Pair rejection, round trips, final ladders | Hot-rung states and the per-rung target values the swaps use (no path-sampling evidence) |
+
+Two of these drops break the readout's own contract (`lean/Protolemmata/BARS/spc-bars-readout-obligations.md`):
+- **Exact locations snapped to the grid.** The closed-form peak locations are exact by design (O1–O2, "no grid search"), but they are snapped to grid indices before pooling, which reintroduces the scan error the readout was built to avoid.
+- **Clipping flags lost.** O3 requires a span result carrying the left and right crossings and independent clipping flags. The flags are computed per draw and never reach the result.
+
+### BGP (`BgpSampler`)
+
+- **Computed per step:** a bandwidth t, its GP fit (`GpFit`: α and the log marginal), and the conditional mean at the test points.
+- **Reaches the result:** the Bayes-averaged mean; the bandwidth's mean and 95% interval in both frames; its rank-normalized diagnostics.
+- **Dropped:**
+  - the bandwidth sample, which every chain kept: it is pooled and sorted for two quantiles, then discarded;
+  - the per-draw curves and their spread across bandwidths. Only a running sum is kept, so the between-bandwidth uncertainty is lost;
+  - each draw's log marginal.
+- **Never computed:** the GP's conditional variance at the test points (`PredictMean` only), so `BgpResult` carries no uncertainty on f at all. σ² is fixed at construction, not inferred.
+- **No resume:** `RestoreChain` refuses (OQ10).
+
+### BAPS (`BapsSampler`, its own loop)
+
+- **Computed per draw (Gibbs modes):** a full β draw, σ², τ² and λ = σ²/τ²; in the adaptive mode also η and the local field λᵢ.
+- **Reaches the result:** the mean of β, three quantiles of λ, the mean of σ (not σ², and with no interval), the mean local field, and classic R̂ on log λ.
+- **Dropped:** every β draw, so there is no band on the fit and no nonlinear readout; the σ², τ² and η draws; the λ sample beyond its three quantiles; and the local field beyond its mean.
+- **The marginal-evidence mode** records the conditional mean `Coefficients(λ)` and the profiled σ in place of draws, so its coefficient uncertainty is zero by construction.
+- **Off the shell:** no traces, no ESS or rank-normalized R̂, no early stop, no checkpoint.
+
+### Changepoint (`ExactChangepoint`, exact)
+
+- **Computed:**
+  - the per-segment evidence and level tables;
+  - the forward and backward DP tables, which together are the exact posterior over all segmentations;
+  - P(segment [a..b] | y) for every segment.
+- **Reaches the result:** P(k | y), the MAP k, the evidence, the per-position break marginals, and the curve's mean and sd.
+- **Dropped:** the DP tables and the segment posteriors.
+  - **What they would give:** exact segmentation draws, by forward filtering and backward sampling. Those give joint break locations (which breaks co-occur), per-draw features and exact pointwise predictives. The marginals alone cannot.
+  - **Cost of keeping them:** small. The tables are (K+1)×(n+1) and (n+1)², which is nothing for a thermal grid.
+
+### SPC samplers (`SwendsenWang`, `SwRunner`)
+
+- **Computed per sweep:** the spins, the FK bonds and their clusters (union-find), the energy, the magnetization, Σ|c|², and the largest and giant clusters.
+- **Kept:**
+  - running sums of E, E², m, m², Σ|c|², and Σ|c|² without the largest cluster;
+  - the cluster-size histogram;
+  - the final spins and RNG state, for resume;
+  - the optional per-edge counts and per-node sums.
+
+  A sweep keeps every run's accumulator, per temperature and replica (`SweepResult.SweepRuns`).
+- **Dropped:**
+  - **The per-sweep series of E, m and Σ|c|².**
+    - With sums only there is no autocorrelation time, so χ and C_v from a single run have no Monte Carlo error bar; only replicate spread gives one.
+    - Histogram reweighting is also impossible: Ferrenberg–Swendsen needs per-sweep energies paired with the observables.
+    - σ_E itself survives, from E and E², so the thermodynamic-length estimate is not blocked.
+  - **Higher moments:** no m⁴ (the Binder cumulant) and no E³ or E⁴.
+  - **The per-sweep partitions** (cluster labels). Only co-membership counts survive, so partition posteriors, draw-level lineage across T, and a process trace of the clusters are out of reach.
+  - **Burn-in sweeps,** so there is no equilibration trace.
+- **A view that drops spread:** `SweepCurves` averages the replicas at each T without their spread. The runs still carry it, so it can be recovered.
+
+### Seams that return less than they compute
+
+1. `IObservationModel.SampleCoefficients` returns β. `WeightedNormalModel.SampleConditional` drew σ² with it, and only the robust weight update sees that σ².
+2. `SplineExtrema.SignificantPeakSpans` returns exact spans with clipping flags; `BarsEnsemble.AccumulateDraw` keeps grid counts.
+3. `BgpChainRun` keeps the bandwidth sample; `BgpSampler.Run` returns three numbers from it.
+4. `BapsSampler`'s chain accumulators keep the λ sample; `BapsResult` returns three quantiles.
+5. `ExactChangepoint.Infer` builds the full forward and backward tables; it returns marginals.
+6. `IChainRun.Accumulate` receives each draw and is told to reduce it: the shell's contract is the root of the pattern.
+7. `SwendsenWang`'s cycle finds the largest cluster's size every sweep. It survives only folded into Σ|c|² without the largest.
+
+### What follows (not scheduled)
+
+- **Retention at the source.** Each result carries a retained sample of draw states, or, for the exact engine, its tables. Today's summaries become views over that sample.
+  - BARS: knots, β, σ² and weights.
+  - BGP: t and its fit.
+  - BAPS: β, σ², τ², λ and η.
+  - SW: the per-sweep scalars and, optionally, the partitions.
+- **The shell's contract becomes "record, then reduce."** Each chain gets a retained-draw store beside its traces, with thinning as an option, not a substitute. This is the posterior storage the port brief already requires of BASS ("Posterior ownership and prediction"), and Archivory's persistence (OQ10) sits behind it.
+- **Sizes.**
+  - **Small:** BARS at 4 chains × 10,000 draws is about 13 MB. BAPS is a few MB. SW's per-sweep scalars are about 0.3 MB per run at 10⁴ sweeps.
+  - **Large:** SW partitions are N integers per sweep, about 40 MB per run at N = 1,000 and 10⁴ sweeps, so gigabytes over a sweep's temperatures and replicas. They are an option with thinning, not a default.
+- **The candidate first step** is the two BARS contract breaches (exact spans and clipping flags), since the readout design that OQ7 waits on depends on them.
+
 ## Decisions
 
 | ID | Decision | Needed before | Recommendation |
@@ -538,7 +649,7 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 | OQ14 | BARS's efficiency defaults: move schedule, relocation kernel, hot end, run length | Measured 2026-10-22 on the default kernel (reports "After Phase 3: BARS mixing re-measured", "Relocation and move-schedule studies" and "Confirmation of the two candidates"). Each result is scoped to its regimes, and the winners flipped between regimes: DMGK at c = 0.4 won where the prior wants fewer knots than the data (up to 2.6×) and lost where it wants more (0.29–0.33× knot-count ESS). The adaptive relocation kernel passed the confirmation's criterion (knot count 1.05×, peak location 1.15×, nine fits). The constant 0.3/0.3/0.4 schedule is untested on the prior-wants-more conflict. Tempering helped only a narrow peak's location, and nothing tried fixes that readout's τ ≈ 330. No default has changed. | One designed pass, deciding every efficiency default at once (the brief's "Follow-up record"). It needs both directions of prior–likelihood conflict, sparse and dense fits, counts and peaks, and a criterion fixed before the run. The stopping strategy (OQ7) joins it once the readout design exists. | With the readout design (OQ7) |
 | OQ15 | Robust centring of the Normal prior | The null-fit centre uses the plain mean, which keeps the robust weights' Gibbs conditional exact, since the prior cannot depend on the sampled weights. But an outlier whose likelihood weight goes to zero still moves the centre, and pulls the fit by about R/m² (second external review, item 3: intercept-only, m = 40, outlier at 10⁶, conditional mean 625). **Decided 2026-10-22 by the user: the median centre**, the Normal model's default (`Mean` and `Zero` stay selectable). Measured: the contaminated intercept-only fit stays at about 1e-12·R/m against the mean centre's R/m²; a robust BARS fit with a 10⁶ glitch matches the clean fit (MSE 0.00328 against 0.00296; the mean centre gives 6,790); clean asymmetric fits differ from the mean centre's by exactly (median − mean)/(m + 1). | Open for later, with the user's planned look at robust statistics: the flat intercept (Liang et al. 2008; exact, but it changes the shared block's closed forms, so it goes with BASS's D03), and robust centring more generally. | Median decided; flat intercept with D03 |
 | OQ16 | Robust centring and bases for functional BASS | OQ15's functional counterpart, raised by the user on 2026-10-22 from `Maths.Geometry`'s geometric median and Weiszfeld scatter. In direct functional BASS the level is a curve, and the geometric (spatial) median of the curves is the standard robust functional location (Gervini 2008; Cardot, Cénac and Zitt 2013). It depends only on the data, is translation-equivariant and has breakdown point 1/2; `EuclideanMedian` computes it. For `bassPCA`, spherical PCA (Locantore et al. 1999) takes the eigenvectors of the spatial-sign covariance (weights 1/‖v‖²), whose influence is bounded; the Weiszfeld scatter's 1/‖v‖ weights leave it growing linearly. Distances must be L²(t), with coordinates scaled by √Δt, and `Maths.Regression` does not reference `Maths.Geometry` yet. | An extension beyond R parity, specified under D03 (the curve centre) and D07 (the basis), with the user's later look at robust statistics. Details are in the port brief's deferred extensions. | BASS port, after parity |
-| OQ17 | Per-observation log density per draw on the shared observation-model seam | Raised 2026-10-23 with the user's question on conformal Bayes (Fong and Holmes 2021). `IObservationModel` exposes the collapsed marginal, conditional means and coefficient draws, and the conditional variance, but no log p(yᵢ \| xᵢ, draw). Three consumers need the n × S matrix: conformal Bayes (add-one-in importance weights over the existing draws; coverage under exchangeability up to Monte Carlo error; no refits), WAIC and PSIS-LOO across BARS, BAPS and BASS, and the noise-model calibration check. On SPC × BARS's fixed grid only the replicates at a temperature are exchangeable. Coverage there is for a new replicate at a measured temperature, in steps of 1/(k+1), and says nothing about unmeasured temperatures, the curve or the readout's features. | **Decided 2026-10-23 by the user: both draw contents, as configurable options.** One option retains the coefficients and noise scale with each structural draw (a plain likelihood); the other gives the collapsed posterior predictive per structural draw. Each engine picks its default at its port (D04, D07). The prerequisite is a retained posterior sample. BARS keeps none today: `BarsEnsemble` folds each draw into fixed accumulators and drops its knots, its coefficient draw and its σ², which `SampleCoefficients` discards even though `SampleConditional` draws it. Still open: what the Gibbs-loss and Whittle models' pointwise terms mean, or whether they decline. The conformal readout itself waits for the SPC × BARS work. Details are in the port brief's "Posterior ownership and prediction". | BASS port (the seam and retention); SPC × BARS (conformal Bayes) |
+| OQ17 | Per-observation log density per draw on the shared observation-model seam | Raised 2026-10-23 with the user's question on conformal Bayes (Fong and Holmes 2021). `IObservationModel` exposes the collapsed marginal, conditional means and coefficient draws, and the conditional variance, but no log p(yᵢ \| xᵢ, draw). Three consumers need the n × S matrix: conformal Bayes (add-one-in importance weights over the existing draws; coverage under exchangeability up to Monte Carlo error; no refits), WAIC and PSIS-LOO across BARS, BAPS and BASS, and the noise-model calibration check. On SPC × BARS's fixed grid only the replicates at a temperature are exchangeable. Coverage there is for a new replicate at a measured temperature, in steps of 1/(k+1), and says nothing about unmeasured temperatures, the curve or the readout's features. | **Decided 2026-10-23 by the user: both draw contents, as configurable options.** One option retains the coefficients and noise scale with each structural draw (a plain likelihood); the other gives the collapsed posterior predictive per structural draw. Each engine picks its default at its port (D04, D07). The prerequisite is a retained posterior sample. BARS keeps none today: `BarsEnsemble` folds each draw into fixed accumulators and drops its knots, its coefficient draw and its σ², which `SampleCoefficients` discards even though `SampleConditional` draws it. Still open: what the Gibbs-loss and Whittle models' pointwise terms mean, or whether they decline. The conformal readout itself waits for the SPC × BARS work. Details are in the port brief's "Posterior ownership and prediction"; the inventory across engines is under "Retention inventory". | BASS port (the seam and retention); SPC × BARS (conformal Bayes) |
 
 Tracked elsewhere: the `EbicPrior` text check (step 3.8, waiting on the *Biometrics* PDF), BARS admission (step 3.7), the b = 0 guard (step 3.2's report), and the linear form's weaker hot-rung Occam penalty (step 3.2 addendum).
 
