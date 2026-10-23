@@ -536,7 +536,7 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 | OQ12 | Poisson fits over runs of zero counts | Where every count under a basis function is zero, the Poisson MLE lies at −∞. IRLS stops at a fixed point set by the η clamp (±30) and the μ floor (1e-10), with coefficients in the thousands: −5,961 with one knot at 0.8 when the counts are zero beyond 0.797. The BIC-type marginal stays near the knot-free one (−75.8 against −73.5), so such configurations take real posterior mass and the posterior-mean log-intensity there runs to −10³. Present before step 3.7. The pivot ratio happened to refuse many of them (1,590 of 11,969 evaluations, against 76 under the scale-free gate). Decided 2026-10-21: remedy (c), with the BIC pathway kept as a setting. **Resolved in step 3.10:** the g-prior pathway is the default. On the low-rate fit the log-intensity's MSE fell from 163,982 to 0.16 and knot-count ESS rose from 119 to 638; away from separation it agrees with BIC. | Closed. The BIC pathway keeps the behavior, as its docs state. | Closed (step 3.10) |
 | OQ13 | He, Yang and Kang's repositories as external fixtures and demos | The user, 2026-10-21: the ABMRS repositories (github.com/junhuihe2000/ABMRS and exampleABMRS) and the supplement's data and demos (`triceps`, the jump curves, the surfaces) would serve as fixtures for the R harness and as demo material, fitting the same data with this engine. The supplement is already in `issues/regression/ABMRS_Revision_V2_Supplementary_Materials/`. Its code differs from the paper in places (step 3.8's findings), so fixtures must record which version they come from. | Decide what to fix as oracles: their EBARS fits as an external comparison, not ground truth, and the datasets. Fetching the repositories, and installing the package into the `r/` oracles' environment, needs approval for the download. | With the R harness; demos after the BASS port |
 | OQ14 | BARS's efficiency defaults: move schedule, relocation kernel, hot end, run length | Measured 2026-10-22 on the default kernel (reports "After Phase 3: BARS mixing re-measured", "Relocation and move-schedule studies" and "Confirmation of the two candidates"). Each result is scoped to its regimes, and the winners flipped between regimes: DMGK at c = 0.4 won where the prior wants fewer knots than the data (up to 2.6×) and lost where it wants more (0.29–0.33× knot-count ESS). The adaptive relocation kernel passed the confirmation's criterion (knot count 1.05×, peak location 1.15×, nine fits). The constant 0.3/0.3/0.4 schedule is untested on the prior-wants-more conflict. Tempering helped only a narrow peak's location, and nothing tried fixes that readout's τ ≈ 330. No default has changed. | One designed pass, deciding every efficiency default at once (the brief's "Follow-up record"). It needs both directions of prior–likelihood conflict, sparse and dense fits, counts and peaks, and a criterion fixed before the run. The stopping strategy (OQ7) joins it once the readout design exists. | With the readout design (OQ7) |
-| OQ15 | Robust centring of the Normal prior | The null-fit centre uses the plain mean, which keeps the robust weights' Gibbs conditional exact, since the prior cannot depend on the sampled weights. But an outlier whose likelihood weight goes to zero still moves the centre, and pulls the fit by about R/m² (second external review, item 3: intercept-only, m = 40, outlier at 10⁶, conditional mean 625). | The user's decision. Options: a median centre (data-only, robust and location-invariant, a small change), or a flat intercept (Liang et al. 2008). The flat intercept is exact, but the posterior precision stops being a multiple of G, so it changes the shared block's closed forms; it belongs with BASS's D03, where BASS has an explicit intercept column. Document the data-dependent prior either way. | With D03 |
+| OQ15 | Robust centring of the Normal prior | The null-fit centre uses the plain mean, which keeps the robust weights' Gibbs conditional exact, since the prior cannot depend on the sampled weights. But an outlier whose likelihood weight goes to zero still moves the centre, and pulls the fit by about R/m² (second external review, item 3: intercept-only, m = 40, outlier at 10⁶, conditional mean 625). **Decided 2026-10-22 by the user: the median centre**, the Normal model's default (`Mean` and `Zero` stay selectable). Measured: the contaminated intercept-only fit stays at about 1e-12·R/m against the mean centre's R/m²; a robust BARS fit with a 10⁶ glitch matches the clean fit (MSE 0.00328 against 0.00296; the mean centre gives 6,790); clean asymmetric fits differ from the mean centre's by exactly (median − mean)/(m + 1). | Open for later, with the user's planned look at robust statistics: the flat intercept (Liang et al. 2008; exact, but it changes the shared block's closed forms, so it goes with BASS's D03), and robust centring more generally. | Median decided; flat intercept with D03 |
 
 Tracked elsewhere: the `EbicPrior` text check (step 3.8, waiting on the *Biometrics* PDF), BARS admission (step 3.7), the b = 0 guard (step 3.2's report), and the linear form's weaker hot-rung Occam penalty (step 3.2 addendum).
 
@@ -2108,3 +2108,36 @@ Where the efficiency work stands, for the pass OQ14 calls for. **No default chan
 - **For BASS,** the review narrows what remains: the statistical specification, dense incremental factor operations, the basis and support rules, and reference fixtures. It places OQ10's parameter-complete checkpoint identity before dependable resume, and normalized reference distributions and evidence accounting before SMC (OQ2).
 - **Results** under the fact harness: `Maths.Regression.Tests` 246 of 246 (`20261022_171130801`), `Maths.Samplers.Tests` 84 of 84 (`20261022_171423619`), `Maths.LinAlg.Tests` 65 of 65 (`20261022_171512572`).
 - **Seed sweep** (`SEED_SWEEP=50`): every hold count matches the post-centring sweep (`20261022_171806396`).
+
+### Median centre (OQ15) — 2026-10-22
+
+The user chose the median centre for the Normal prior, with checks for contamination by extreme responses, translation equivariance and clean asymmetric responses. The flat intercept stays open for a later look at robust statistics.
+
+| Commit | Content |
+|---|---|
+| `73ed8c0` | `GPriorCentre { Median, Mean, Zero }`, with the Normal model defaulting to `Median`; the checks; reference tests on all three centres |
+| docs commit | `BayesianRegression.md`, OQ15, this report |
+
+**Specification:**
+- **The prior** is μ₀ = med(y)·G⁻¹Zᵀ1, which is med(y)·1 for a basis that sums to one.
+- **The median is unweighted,** so the robust weights' Gibbs step stays exact.
+- **A constant response** still centres to exactly zero.
+- **`Mean`** keeps the previous centre, and **`Zero`** DMGK's original. The block's own default stays `Zero`, so BASS is untouched until D03.
+- **The fingerprint** covers component types only (OQ10), so it does not tell the centres apart.
+
+**The checks** (`NormalCentreTests`):
+- **Contamination.**
+  - In the review's intercept-only fixture (m = 40, an outlier at weight 1e-12), the fit at R = 10³, 10⁴ and 10⁶ is 2.5e-11, 2.5e-10 and 2.5e-8 under the median centre, against R/m² (0.625, 6.25 and 625) under the mean centre.
+  - A robust BARS fit (Student-t weights) of a sine with one reading at 10⁶ reaches MSE 0.00328 under the median centre, against 0.00296 without the glitch and 6,790 under the mean centre.
+- **Translation equivariance.** The marginal, the coefficients (shifted) and the pointwise variance agree at offsets 7, −250 and 10⁴ for both level centres, and BARS fits a response shifted by 1,000 identically.
+- **Clean asymmetric responses.**
+  - On a narrow peak over a flat baseline (median 0.013, mean 0.155), the two centres' conditional-mean fits differ by exactly (median − mean)/(m + 1) at fixed knots, to 1e-12.
+  - Over the chains they agree: 5.50 against 5.60 knots, and MSE 0.000309 against 0.000282 on one seed.
+
+**Effects on the step probes** (against the mean centre):
+- **Step 3.5's fits** moved by at most 0.3%, the level shift.
+- **Step 3.7's fits:** knot counts within 2% and MSE within single-seed noise. Knot ESS on the robust gap rose from 939 to 1,150.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 254 of 254 (`20261022_181345350`): the three new checks, plus a `Mean` case beside each `Median` case in the reference theories; `Maths.Samplers.Tests` 84 of 84 (`20261022_181620747`).
+
+**Seed sweep** (`SEED_SWEEP=50`): `20261022_182007796`. Every hold count matches the previous sweep, except the adaptive-kernel comparison on the data axis, which went from 48 to 49 of 50.

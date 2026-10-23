@@ -227,7 +227,7 @@ $$y\sim N(Z\beta,\sigma^2W^{-1}),\qquad \beta\mid\sigma^2\sim N(\mu_0,\sigma^2(\
 
 with the likelihood raised to an inverse temperature $b$ (1 is untempered).
 
-- **Prior mean.** $\mu_0$ is zero unless the design layer centres it (`GPriorCentre`). The block's statistics are then those of the centred response $\tilde y=y-Z\mu_0$, and $\mu_0$ is added back to every mean and draw; below, $y$ stands for $\tilde y$. `BandedGPrior.Fit(…, centre)` builds the null-fit centre, $\mu_0=\bar y\,G^{-1}Z^\top\mathbf 1$, from the plain mean, even when weights enter.
+- **Prior mean.** $\mu_0$ is zero unless the design layer centres it (`GPriorCentre`). The block's statistics are then those of the centred response $\tilde y=y-Z\mu_0$, and $\mu_0$ is added back to every mean and draw; below, $y$ stands for $\tilde y$. `BandedGPrior.Fit(…, centre)` builds a level centre, $\mu_0=c\,G^{-1}Z^\top\mathbf 1$ with $c$ the response's median or mean, unweighted even when weights enter.
 
 - **Unweighted, W = I.**
   - The block caches the statistics that depend on neither τ nor $b$: the factor of $G$, $\hat\beta_{\text{OLS}}$, $\lVert r\rVert^2=\lVert y-Z\hat\beta\rVert^2$ and $Q=\lVert Z\hat\beta\rVert^2$.
@@ -246,7 +246,7 @@ with the likelihood raised to an inverse temperature $b$ (1 is untempered).
   - draw moments at a tempered rung;
   - conditional variances;
   - a constructed near-interpolating fit, where the subtracted form loses its digits and the block keeps them;
-  - the null-fit block against the zero-centred block on $y-\bar y$, at offsets 0, 5 and −300, with and without weights.
+  - the median- and mean-centred blocks against the zero-centred block on $y-c$, at offsets 0, 5 and −300, with and without weights.
 
 ### BARS: observation models
 
@@ -254,9 +254,9 @@ with the likelihood raised to an inverse temperature $b$ (1 is untempered).
 
 $$\log p(y\mid Z)=-\tfrac{\nu}{2}\log(m+1)-\tfrac m2\log a,\qquad a=\tilde y^\top\tilde y-\tfrac{m}{m+1}\,b^\top G^{-1}b,$$
 
-where $G=Z^\top Z$, $\tilde y=y-Z\mu_0$ and $b=Z^\top\tilde y$. By default the prior is centred on the null fit (`GPriorCentre.NullFit`, $Z\mu_0=\bar y\mathbf 1$ for B-splines); `GPriorCentre.Zero` is DMGK's original, $\tilde y=y$ (below). It returns −∞ when $m\le\nu$, when the design fails admission (below), or when $a\le0$. Because $a=\lVert \tilde y-Z\hat\beta\rVert^2+b^\top G^{-1}b/(m+1)$, the last case occurs only when $\tilde y$ is identically zero: a zero response, or under the null-fit centre any constant one. An interpolating fit with $m>\nu$ stays finite. It is computed through the collapsed g-prior block at τ = 1/m, from the explicit residual, $a=\lVert y-Z\hat\beta\rVert^2+\lVert Z\hat\beta\rVert^2/(m+1)$. At BARS's τ the subtracted form would lose at most $\log_{10}(m+1)$ digits; the explicit form loses none. The posterior mean is $\mu_0+\frac{m}{m+1}G^{-1}b$.
+where $G=Z^\top Z$, $\tilde y=y-Z\mu_0$ and $b=Z^\top\tilde y$. By default the prior is centred on the response's median (`GPriorCentre.Median`, $Z\mu_0=\operatorname{med}(y)\mathbf 1$ for B-splines); `GPriorCentre.Mean` centres it on the mean, and `GPriorCentre.Zero` is DMGK's original, $\tilde y=y$ (below). It returns −∞ when $m\le\nu$, when the design fails admission (below), or when $a\le0$. Because $a=\lVert \tilde y-Z\hat\beta\rVert^2+b^\top G^{-1}b/(m+1)$, the last case occurs only when $\tilde y$ is identically zero: a zero response, or under a level centre any constant one. An interpolating fit with $m>\nu$ stays finite. It is computed through the collapsed g-prior block at τ = 1/m, from the explicit residual, $a=\lVert y-Z\hat\beta\rVert^2+\lVert Z\hat\beta\rVert^2/(m+1)$. At BARS's τ the subtracted form would lose at most $\log_{10}(m+1)$ digits; the explicit form loses none. The posterior mean is $\mu_0+\frac{m}{m+1}G^{-1}b$.
 
-With per-point weights $W$ (robust runs, $y\sim N(Z\beta,\sigma^2W^{-1})$), the coefficient prior stays the **unweighted** g-prior $\beta\sim N(\mu_0, m\sigma^2G^{-1})$, centred with the plain mean, so the prior on the curve does not depend on the weights. The marginal is
+With per-point weights $W$ (robust runs, $y\sim N(Z\beta,\sigma^2W^{-1})$), the coefficient prior stays the **unweighted** g-prior $\beta\sim N(\mu_0, m\sigma^2G^{-1})$, centred on the unweighted median, so the prior on the curve does not depend on the weights. The marginal is
 
 $$\log p(y\mid Z,W)=\tfrac12\log\lvert G/m\rvert-\tfrac12\log\lvert P_a\rvert+\tfrac12\textstyle\sum_i\log w_i-\tfrac m2\log S,$$
 
@@ -274,13 +274,18 @@ with $P_a=Z^\top(W+I/m)Z$, $h=Z^\top W\tilde y$ and $S=\tilde y^\top W\tilde y-h
     | 300 | 0.40 | 8.9 | 6.2 | −2.99 |
 
   - **Unseen until now** because every test curve sat near zero, and BARS did not centre the response.
-- **The fix.** The prior is centred on the null fit, $\mu_0=\bar y\,G^{-1}Z^\top\mathbf 1$, the projection of the response's mean level onto the basis. The prior then shrinks the fit's shape toward flat, and leaves its level where the data put it.
+- **The fix.** The prior is centred on the response's level, $\mu_0=c\,G^{-1}Z^\top\mathbf 1$, the projection of the level onto the basis. The prior then shrinks the fit's shape toward flat, and leaves its level where the data put it. The level was first the mean; it is the median since OQ15 (below).
   - **Location-invariant.** A constant shift of the response moves only the fit's level. On the sine above, every offset from 0 to 300 gives 1.80 knots, MSE 0.0040 and mean SD 0.046 (`NormalCentreTests`).
-  - **Robust runs.** The centre uses the plain mean. A centre that depended on the weights would put the prior into the weights' conditional and break the exact Gamma or Bernoulli draw.
+  - **Robust runs.** The centre is unweighted. A centre that depended on the weights would put the prior into the weights' conditional and break the exact Gamma or Bernoulli draw.
 - **Trade-offs.**
   - **The prior reads the data,** through ȳ, the null model's estimate. Every configuration contains the constant, so the level contributes the same factor to every configuration's marginal, as a flat intercept's would.
   - **A constant response** has nothing left once centred, so it is refused as `ZeroResponse`. Under DMGK's centre only an identically zero one was. The centre keeps the constant exactly. A constant response takes its value as ȳ, and a basis that sums to one holds μ₀ = ȳ·1 with no solve. Another basis whose span holds the constant sets a constant response's centred value to zero. Before this, a projected constant left roundoff of about 1e-16, which the improper σ² prior admitted as a near-perfect fit (second external review).
-  - **An outlier still moves the prior's centre** (open, OQ15). The plain mean ignores the robust weights, which keeps the weights' conditional exact. But as an outlier's weight goes to zero it still shifts the centre, and the fit by about R/m², where R is its size. In the review's intercept-only case with m = 40, that is 625 for R = 10⁶: negligible for ordinary outliers, large for a gross glitch. A median centre, which also depends only on the data, or a flat intercept would remove it.
+  - **Why the median (OQ15).** The mean ignores the robust weights, which keeps the weights' conditional exact. But as an outlier's weight goes to zero it still shifts the mean centre by R/m, and the fit by about R/m², where R is its size. The median depends only on the data too, and a single response cannot drag it far (`NormalCentreTests`):
+    - **Contamination.** In the second external review's intercept-only fixture (m = 40, an outlier at weight 1e-12), the median centre's fit stays at about 1e-12·R/m (2.5e-8 at R = 10⁶), against the mean centre's R/m² (625).
+    - **A robust BARS fit** of a sine under noise 0.15 with one reading at 10⁶, with Student-t weights, reaches MSE 0.00328 under the median centre against 0.00296 without the glitch. Under the mean centre it reaches 6,790.
+    - **Translation equivariance** holds as for the mean: the median shifts with the response.
+    - **Clean asymmetric responses** cost the median only its distance from the mean. For a basis that sums to one the conditional-mean fit is $\tfrac{m}{m+1}f_{\text{OLS}}+c/(m+1)$, so the two centres' fits differ by exactly (median − mean)/(m + 1). On a narrow peak over a flat baseline (median 0.013, mean 0.155, n = 150) that is 0.0009, against noise of 0.05. Over the chains: 5.50 against 5.60 knots, and MSE 0.000309 against 0.000282 on one seed.
+    - **Left open:** a flat intercept (Liang et al. 2008), the exact form, which changes the block's closed forms, and robust centring more generally. Both are for a later look at robust statistics (OQ15).
   - **σ² gets m, not m − 1, degrees of freedom.** The level is centred on the data's own mean at no charge, where a flat intercept would spend one. Bayes factors differ from the flat-intercept form only as m does from m − 1 in one exponent.
 - **Alternatives considered.**
   - **Zero, DMGK's original:** kept as `GPriorCentre.Zero`, with the defect above.
@@ -628,7 +633,7 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 | `BarsConfig` PeakProminence / SpanDropFraction | 0.1 / 0.5 | Peak significance; span level |
 | `BarsConfig` MinColumnMass | 1 | Support gate: every basis function needs column mass $\sum_i B_j(x_i)\ge1$; 0 turns it off |
 | `BarsConfig` BirthExploration / BirthBase | 1 / `Uniform` | Births from the base: uniform on (0, 1); below 1 mixes in DMGK's local births |
-| `WeightedNormalModel` centre | `NullFit` | The g-prior centred on the null fit, so a shifted response fits the same; `Zero` is DMGK's original |
+| `WeightedNormalModel` centre | `Median` | The g-prior centred on the response's median: a shifted response fits the same, and an outlier the robust weights discount cannot move it. `Mean` centres it on the mean; `Zero` is DMGK's original |
 | `PoissonModel` marginal | `GPrior` | The unit-information g-prior's Laplace marginal, centred on the null fit; `Bic` is DMGK's BIC at the MLE |
 | `BarsEnsemble` dmgkConstant / adaptKernelTau / temperLevels / temperBetaMin / temperPath / temperSchedule / temperAdaptLadder | null / null / null / 0.05 / Likelihood / DeterministicEvenOdd / true | Constant weights 0.4/0.4/0.2; fixed kernel; no tempering; a tempered ladder keeps the knot prior whole, swaps even-odd and equalizes its rungs in burn-in |
 | `BapsSampler` priorShape / priorScale / mhLogStep / phi | 1e-3 / 1e-3 / 0.6 / 1.0 | IG hyperprior; random-walk step on ln λ; adaptivity |
