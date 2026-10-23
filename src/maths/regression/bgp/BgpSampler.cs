@@ -9,6 +9,13 @@ namespace Maths.Regression.Bgp;
 /// <summary>A bandwidth posterior in one frame: the posterior mean and the type-7 2.5% and 97.5% quantiles.</summary>
 public sealed record BandwidthSummary(double Mean, double Lo, double Hi);
 
+/// <summary>
+/// One retained bandwidth draw: the bandwidth t in the mapped frame and the GP fit the chain held there (its log
+/// marginal, α and mean). Given t the GP posterior is fixed, so this is the draw's whole state. A rejected proposal
+/// keeps the previous fit, so neighbouring draws share one <see cref="GpFit"/>.
+/// </summary>
+public sealed record BgpDraw(double Bandwidth, GpFit Fit);
+
 /// <summary>The pooled posterior of a Bayesian-GP run: the Bayes-averaged conditional mean at the requested points
 /// plus the bandwidth posterior (the data-chosen length scale, with a credible interval) and the sampler's mixing
 /// and convergence.</summary>
@@ -22,11 +29,14 @@ public sealed record BandwidthSummary(double Mean, double Lo, double Hi);
 /// convergence) and bulk and tail effective sample sizes.</param>
 /// <param name="ChainSeeds">The resolved per-chain seeds (reproducibility provenance).</param>
 /// <param name="InputScale">The GP's fitted input scale s (<see cref="GpTransform.InputScale"/>): a bandwidth t in the mapped frame is s²·t in the original units.</param>
+/// <param name="BandwidthDraws">Every retained draw (<see cref="BgpDraw"/>), per chain in draw order. The posterior mean
+/// and the bandwidth summary are read from these.</param>
 public sealed record BgpResult(
     double[] PosteriorMean,
     BandwidthSummary Bandwidth, BandwidthSummary BandwidthOriginal,
     double AcceptanceRate, int Draws,
-    ConvergenceDiagnostic BandwidthConvergence, int[] ChainSeeds, double InputScale);
+    ConvergenceDiagnostic BandwidthConvergence, int[] ChainSeeds, double InputScale,
+    IReadOnlyList<IReadOnlyList<BgpDraw>> BandwidthDraws);
 
 /// <summary>
 /// The top of the Bayesian-GP instrument (Tang, Wu, Cheng &amp; Dunson 2025): with the regression function
@@ -69,7 +79,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
     public IChainRun<double> StartChain(int chainSeed, int readoutSeed)
     {
         var chain = new BgpBandwidthChain(_gp, _prior, _t0, _proposalSd, new Xoshiro256PlusPlus(chainSeed));
-        return new BgpChainRun(chain, _gp, _xTest, _testCount);
+        return new BgpChainRun(chain);
     }
 
     /// <param name="xTest">Points (original units) at which to report the posterior mean (the training inputs for the in-sample fit).</param>
@@ -98,27 +108,48 @@ public sealed class BgpSampler : IEnsembleModel<double>
         (EnsembleRun summary, IReadOnlyList<IChainRun<double>> runs) =
             new ChainEnsemble().Run<double>(this, chains, seed, burn, draws);
 
+        // Every summary is read from the retained draws. The posterior mean sums each draw's conditional mean at the test
+        // points per chain in draw order, then over chains; a fit shared by neighbouring draws is predicted once. The
+        // bandwidth mean averages the chains' running means, and its interval reads the pooled sample.
         int m = _testCount;
         var meanAcc = new double[m];
         var allT = new List<double>(chains * summary.SamplesUsed);
-        foreach (IChainRun<double> r in runs)
+        var bandwidthDraws = new IReadOnlyList<BgpDraw>[chains];
+        double chainMeans = 0.0;
+        for (int ci = 0; ci < chains; ci++)
         {
-            var br = (BgpChainRun)r;
-            for (int i = 0; i < m; i++) meanAcc[i] += br.MeanAcc[i];
-            allT.AddRange(br.TDraws);
+            List<BgpDraw> chainDraws = ((BgpChainRun)runs[ci]).Draws;
+            bandwidthDraws[ci] = chainDraws.ToArray();
+            var chainSum = new double[m];
+            var moments = new RunningMoments();
+            GpFit? predicted = null;
+            double[] pred = [];
+            foreach (BgpDraw d in chainDraws)
+            {
+                if (!ReferenceEquals(d.Fit, predicted))
+                {
+                    pred = _gp.PredictMeanInFrame(d.Fit, _xTest);
+                    predicted = d.Fit;
+                }
+                for (int i = 0; i < m; i++) chainSum[i] += pred[i];
+                moments.Add(d.Bandwidth);
+                allT.Add(d.Bandwidth);
+            }
+            for (int i = 0; i < m; i++) meanAcc[i] += chainSum[i];
+            chainMeans += moments.Mean;
         }
         double denom = chains * (double)summary.SamplesUsed;
         for (int i = 0; i < m; i++) meanAcc[i] /= denom;
         allT.Sort();
 
-        var fitted = new BandwidthSummary(summary.FunctionalMean[0], Quantile(allT, 0.025), Quantile(allT, 0.975));
+        var fitted = new BandwidthSummary(chainMeans / chains, Quantile(allT, 0.025), Quantile(allT, 0.975));
         double s2 = _gp.Transform.InputScale * _gp.Transform.InputScale;   // t_original = s²·t
         var original = new BandwidthSummary(s2 * fitted.Mean, s2 * fitted.Lo, s2 * fitted.Hi);
 
         return new BgpResult(meanAcc, fitted, original,
                              summary.AcceptanceRate, chains * summary.SamplesUsed,
                              summary.Monitored[0], summary.ChainSeeds,
-                             _gp.Transform.InputScale);
+                             _gp.Transform.InputScale, bandwidthDraws);
     }
 
     private static double Quantile(List<double> sorted, double q)
@@ -186,25 +217,16 @@ public sealed class BgpSampler : IEnsembleModel<double>
     }
 
     /// <summary>
-    /// One bandwidth chain + its readout sinks: the per-draw bandwidth t (the R̂/ESS functional) plus the model's
-    /// own accumulators — the running sum of the GP conditional mean (pooled → the Bayes-averaged f̂) and the
-    /// t-draw cloud (pooled → the bandwidth credible interval).
+    /// One bandwidth chain and its retained draws: the per-draw bandwidth t (the R̂/ESS functional) and, per draw, the
+    /// bandwidth with the GP fit the chain held there, from which the run's summaries are read.
     /// </summary>
     private sealed class BgpChainRun : IChainRun<double>
     {
         private readonly BgpBandwidthChain _chain;
-        private readonly GpRegression _gp;
-        private readonly double[,] _xTest;
 
-        public readonly double[] MeanAcc;       // Σ over draws of the GP conditional mean at the test points
-        public readonly List<double> TDraws;    // the post-burn bandwidth cloud
+        public readonly List<BgpDraw> Draws = new();   // every post-burn draw, in order
 
-        public BgpChainRun(BgpBandwidthChain chain, GpRegression gp, double[,] xTest, int testCount)
-        {
-            _chain = chain; _gp = gp; _xTest = xTest;
-            MeanAcc = new double[testCount];
-            TDraws = new List<double>();
-        }
+        public BgpChainRun(BgpBandwidthChain chain) => _chain = chain;
 
         public IChain<double> Chain => _chain;
 
@@ -216,9 +238,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
         public void Accumulate(in double draw, Span<double> functionals)
         {
             functionals[0] = draw;
-            TDraws.Add(draw);
-            double[] pred = _gp.PredictMeanInFrame(_chain.CurrentFit, _xTest);
-            for (int i = 0; i < MeanAcc.Length; i++) MeanAcc[i] += pred[i];
+            Draws.Add(new BgpDraw(draw, _chain.CurrentFit));
         }
     }
 }
