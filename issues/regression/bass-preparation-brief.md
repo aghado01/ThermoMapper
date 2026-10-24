@@ -2449,8 +2449,26 @@ The user asked for the two open BGP items: checkpoint resume (OQ10), and inferri
 
 - **What the table shows.** With amplitude 6 the known model, even given the true σ², shrinks the bandwidth to compensate for its unit signal variance (t ≈ 0.025 against 0.13). The unknown-scale model fixes that at about ten times fewer effective draws, because t and η trade off in the posterior. σ² was recovered at 0.30 [0.22, 0.42] against a true 0.25.
 - **s² is weakly identified:** [16, 1263] on the amplitude-6 data. The signal variance and the bandwidth trade off, and the 100% coverage suggests conservative bands.
-- **Follow-ups worth a look:** a correlated or adaptive proposal on (log t, log η), and a designed comparison before any change of default.
-
-**Still open:** BGP's mixing under the unknown scale (above), `HierarchicalPSpline`'s shell move (waits for OQ18), and the changepoint and SW items of the retention inventory.
+- **Follow-ups worth a look:** a correlated or adaptive proposal on (log t, log η), done the same day (below), and a designed comparison before any change of the noise model's default.
 
 **Results** under the fact harness: `Maths.Regression.Tests` 292 of 292 (`20261023_185409669`). The solution builds.
+
+**Follow-up, the same day: an adaptive proposal for the unknown-scale walk** (`9deb29a`). The user asked for an adaptive correlated proposal: tune its covariance in burn-in, freeze it for sampling, keep the fixed walk selectable, and measure ESS against the fixed walk on the same data.
+- **The method: adaptive Metropolis** (Haario, Saksman & Tamminen 2001), learned in burn-in and frozen for sampling.
+  - Its shape is (2.38²/2)·Σ̂ from the burn-in draws after the first tenth, updated every 50 steps.
+  - Its global scale takes a vanishing Robbins–Monro step toward acceptance 0.35 (Andrieu & Thoms 2008, algorithm 4).
+  - It is the default for an unknown scale; `BgpProposal.Fixed` keeps the independent steps.
+  - The frozen step's Cholesky factor travels with checkpoints, and the proposal enters the fingerprint.
+- **Measured at equal work** (4 chains × 4,000 draws, burn 1,000; sines of amplitude 1 and 6 × three seeds), adaptive against fixed:
+  - t bulk ESS 1,695–2,098 against 160–371;
+  - η bulk ESS 1,593–2,130 against 129–269;
+  - R̂ ≤ 1.003 against up to 1.025;
+  - acceptance 0.32–0.37, near its target;
+  - the same posterior means, σ² medians and fit MSE.
+- **Correctness.** Both proposals match a two-dimensional quadrature of the (log t, log η) posterior means over 8 runs × 4 chains: adaptive within 0.4 and 0.9 SE, fixed within 0.2 and 0.1 SE. The fixed walk's SEs were four times larger. Resume is exact, and a checkpoint is refused under the other proposal.
+- **Unchanged:** known σ² and the fixed walk are bit-identical to before (probe). The recovery test's R̂ fell from 1.09 and 1.13 under the fixed walk to 1.002 and 1.003.
+- **Why it became the default here.** It won every comparison at equal cost per step. The unknown-scale mode is new, so no established default changed, and a short burn-in simply leaves the step at the fixed one.
+
+**Still open:** `HierarchicalPSpline`'s shell move (waits for OQ18), and the changepoint and SW items of the retention inventory.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 295 of 295 (`20261023_191116331`). The solution builds.

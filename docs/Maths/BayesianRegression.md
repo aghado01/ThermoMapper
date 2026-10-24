@@ -602,14 +602,21 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
   - **The marginal.** With the constant mean integrated out under its flat prior and s² under 1/s², $\log p(Y\mid t,\eta)=-\tfrac12\log|R|-\tfrac12\log\mathbf 1^\top R^{-1}\mathbf 1-\tfrac{n-1}{2}\log Q+\log\Gamma(\tfrac{n-1}{2})-\tfrac{n-1}{2}\log\pi$. Here R = Σ_t + ηI and Q = (Y − m̂1)ᵀR⁻¹(Y − m̂1).
   - **s² given (t, η):** s² | t, η, y ~ IG((n − 1)/2, Q/2). It is drawn exactly for every retained draw, on the readout stream, so the (t, η) chain does not depend on it.
   - **What s² changes.** The conditional mean m̂ + k*ᵀR⁻¹(Y − m̂1) does not depend on s². The conditional variance scales with it: each draw's `ConditionalVariance` is s² times the unit-scale variance (`PredictVariance`).
-  - **The sampler.** It walks (log t, log η) jointly, one refactor per step (`noiseRatioProposalSd`, 0.4 by default). η has a log-uniform prior over [`noiseRatioLower`, `noiseRatioUpper`], 10⁻⁶ to 10² by default; its lower end also floors the nugget, which keeps R well conditioned. η is a second monitored functional (`NoiseRatioConvergence`), and `NoiseVarianceInterval`, `SignalVarianceInterval` and `NoiseRatioInterval` summarize the draws.
+  - **The sampler.** It walks (log t, log η) jointly, one refactor per step.
+    - **The proposal** is `BgpProposal.Adaptive` by default (adaptive Metropolis: Haario, Saksman & Tamminen 2001). In burn-in it learns a correlated step: its shape is (2.38²/2)·Σ̂ from the draws after the first tenth, updated every 50 steps, and its global scale takes a vanishing Robbins–Monro step toward an acceptance rate of 0.35, the two-dimensional optimum (Andrieu & Thoms 2008, algorithm 4; Roberts & Rosenthal 2001). The step is then frozen, so sampling is ordinary Metropolis–Hastings, and the frozen step travels with checkpoints.
+    - **`BgpProposal.Fixed`** keeps independent steps (`proposalSd`, `noiseRatioProposalSd`, 0.4 each by default), which also start the adaptive one.
+    - **The prior on η.** η has a log-uniform prior over [`noiseRatioLower`, `noiseRatioUpper`], 10⁻⁶ to 10² by default; its lower end also floors the nugget, which keeps R well conditioned. η is a second monitored functional (`NoiseRatioConvergence`), and `NoiseVarianceInterval`, `SignalVarianceInterval` and `NoiseRatioInterval` summarize the draws.
 - **Alternatives considered:**
   - *σ² only, signal variance kept at 1:* a prior on σ² and a joint walk on (log t, log σ²). It is the closest match to the "+ unknown σ" row of TWCD2025's Lucky Cat table, which does not state its prior. It leaves the scale mismatch in place: a response far from unit scale still has a mis-scaled prior, and σ² absorbs the difference.
   - *Plug-in estimates* by maximizing the marginal likelihood: estimation, not inference. The paper lists empirical Bayes for σ as future work.
 - **Trade-offs and implications.** Measured on single test data sets: exploration, not a study for defaults.
   - **Scale invariance.** Rescaling the response by c shifts the marginal by −(n − 1) log c, and rescales s² and σ² by c², with t and η unchanged.
   - **It fixes mis-scaling.** On a sine of amplitude 6 with noise sd 0.5, the known model, even given the true σ², shrank the bandwidth to compensate (t ≈ 0.025 against 0.13). Its fit MSE was 0.054 with 82% pointwise 95% coverage; the unknown-scale model reached 0.020 and 100%. On unit-scale data, where the known model is well specified, the two were alike (MSE 0.022 against 0.024; coverage 0.92 against 0.96).
-  - **Mixing costs about tenfold.** t's ESS fell from 1,567 to 174 (unit scale) and from 3,746 to 372 (amplitude 6) over 16,000 draws, and η's ESS was 137–279, because t and η trade off in the posterior (a longer bandwidth with more noise against a shorter one with less). Use more draws or the early stop; a correlated or adaptive proposal on (log t, log η) is the natural improvement.
+  - **Mixing.** t and η trade off in the posterior: a longer bandwidth with more noise against a shorter one with less.
+    - **With the fixed walk** this cost about tenfold. t's ESS fell from 1,567 under a known σ² to 174 (unit scale), and from 3,746 to 372 (amplitude 6), over 16,000 draws; η's ESS was 137–279.
+    - **The adaptive proposal recovers most of it.** At equal work (4 chains × 4,000 draws, burn 1,000, two data sets × three seeds), t's bulk ESS was 1,695–2,098 against the fixed walk's 160–371, and η's was 1,593–2,130 against 129–269. R̂ was ≤ 1.003 against up to 1.025, with acceptance 0.32–0.37 and the same posterior.
+    - **Both proposals target the right posterior.** They match a two-dimensional quadrature of the (log t, log η) posterior means: adaptive within 0.4 and 0.9 SE, fixed within 0.2 and 0.1 SE, with the fixed walk's SEs four times larger.
+    - **A short burn-in leaves the adaptive step at the fixed one.** It needs some hundreds of burn-in steps to learn.
   - **s² is weakly identified:** median 87 with a 95% interval [16, 1263] on the amplitude-6 data. For squared-exponential kernels the signal variance and the bandwidth trade off, and only a combination of them is well determined (compare Zhang 2004 for Matérn variance and range). The fit is unaffected, but the bands can run conservative: the 100% coverage above is a sign of it.
   - **The η range matters at its ends.** A posterior piled against either bound means the range is too narrow.
   - **Outside the paper's theory.** TWCD2025's contraction analysis assumes σ is known; the unknown-scale model is a full-Bayes extension it mentions but does not analyse.
@@ -700,6 +707,7 @@ $$F_s(b)=\operatorname*{LSE}_{a}\big[F_{s-1}(a)+\log D(a+1,b)\big],\qquad B_s(a)
 | `GpRegression` scaling | `Similarity` | Inputs mapped by $(x-\mathrm{lo})/s$; constant mean integrated out |
 | `EmpiricalBayesBandwidthPrior` a0 / b0 / gamma1 / gamma2 | 1 / 1 / 0.25 / 0.25 | Support $(\gamma_1T_n^2,1]$ in the mapped frame |
 | `BgpSampler.Run` draws / burn / proposalSd / chains / seed | 600 / 200 / 0.4 / 2 / 0 | — |
+| `BgpSampler` noise-ratio prior; `Run` noiseRatioProposalSd / proposal | 10⁻⁶ to 10²; 0.4 / `Adaptive` | Unknown scale only; the adaptive step is learned in burn-in and frozen |
 | `CauchySegmentModel` gridPoints | 512 (minimum 8) | Quadrature nodes on $\nu\pm6\rho$ |
 
 ## Status and caveats
