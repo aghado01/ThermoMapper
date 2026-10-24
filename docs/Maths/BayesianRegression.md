@@ -589,6 +589,11 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
   - **It is the uncertainty of f,** not of a new observation, which adds σ².
   - **When it is computed.** The sampler computes it during the run, once per distinct fit, while that fit's factor of K exists. The factor costs n² numbers, so it is never retained. `GpRegression.PredictVariance(fit, x)` gives the variance at other points by refactoring at the fit's bandwidth.
   - **Checked** against an independent route (`BgpVarianceTests`): a proper N(0, 10⁸) prior on the mean, conditioned as one joint Gaussian and solved in `decimal`, agrees to 10⁻⁹, inside, at the edges and outside the data.
+- **Checkpoints and the early stop.**
+  - `Run(checkpoint: true)` returns the restart state. `Run(resumeFrom: …)` continues it exactly as the uninterrupted run would have.
+  - The chain's state is its stream, its log bandwidth, the log target there, the bandwidth its current fit was made at (refitted on restore, giving the same fit), its counters and its retained draws.
+  - The fingerprint covers the GP's data, noise variance, kernel and input map, the bandwidth prior, the test points, the starting bandwidth and the proposal scale.
+  - `rHatTarget` stops the run once the bandwidth's split R̂ and bulk and tail ESS pass, as for the other shell clients.
 - **Validation.** Non-finite inputs or responses are rejected, and so are all-identical inputs under `Similarity`.
 
 The response is not rescaled, so σ² stays in response units.
