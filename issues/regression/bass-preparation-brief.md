@@ -460,7 +460,7 @@ Added 2026-10-19. [gemini-additional-bugs.md](gemini-additional-bugs.md) compare
 | BAPS items: single-chain hierarchical sampler, `IBandPenalty` seam, no anisotropic λ optimizer, repeated factorization in `MarginalEvidence` | The first and third already documented | The chip brief's addendum |
 | `SplineExtrema` switches root finders above degree 3 | Documented design, not a defect | No action |
 | `SpectralNoiseField` is not periodic over the box | Already documented | No action |
-| `ExactChangepoint`: σ² documentation mismatch, Cauchy quadrature cost and truncation | Not checked | Outside this brief: no BASS path and not in the reviewed register; needs its own review |
+| `ExactChangepoint`: σ² documentation mismatch, Cauchy quadrature cost and truncation | Checked 2026-10-24: the σ² formula was already documented right; the truncation bites only under a narrow user prior; the quadrature also failed to resolve narrow posteriors, which the review did not name | Fixed in `3e29261` and `9617747` (report "ExactChangepoint review and retained posterior") |
 
 ## Seam map: admission, prior and schedule
 
@@ -571,6 +571,7 @@ Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc
 - **Dropped:** the DP tables and the segment posteriors.
   - **What they would give:** exact segmentation draws, by forward filtering and backward sampling. Those give joint break locations (which breaks co-occur), per-draw features and exact pointwise predictives. The marginals alone cannot.
   - **Cost of keeping them:** small. The tables are (K+1)×(n+1) and (n+1)², which is nothing for a thermal grid.
+  - **Kept since `2da510f`** (`ChangepointResult.Posterior`), with exact segmentation draws (report "ExactChangepoint review and retained posterior").
 
 ### SPC samplers (`SwendsenWang`, `SwRunner`)
 
@@ -600,7 +601,7 @@ Moved on 2026-10-24 to a side brief, `issues/spc/sw-retention-brief.md` (items S
 2. `SplineExtrema.SignificantPeakSpans` returns exact spans with clipping flags; `BarsEnsemble.AccumulateDraw` keeps grid counts.
 3. `BgpChainRun` keeps the bandwidth sample; `BgpSampler.Run` returns three numbers from it. Fixed in `513c317`.
 4. `BapsSampler`'s chain accumulators keep the λ sample; `BapsResult` returns three quantiles. Fixed in `3d88ab1`.
-5. `ExactChangepoint.Infer` builds the full forward and backward tables; it returns marginals.
+5. `ExactChangepoint.Infer` builds the full forward and backward tables; it returns marginals. Fixed in `2da510f`: the result keeps them.
 6. `IChainRun.Accumulate` receives each draw and is told to reduce it: the shell's contract is the root of the pattern.
 7. `SwendsenWang`'s cycle finds the largest cluster's size every sweep. It survives only folded into Σ|c|² without the largest.
 
@@ -2500,3 +2501,42 @@ At the user's request: retain each BARS draw's knots, β, σ² and weights, with
 **Results** under the fact harness: `Maths.Regression.Tests` 301 of 301 (`20261024_015633005`). The solution builds.
 
 **Still open:** `HierarchicalPSpline`'s shell move (waits for OQ18), OQ17's pointwise term, and the changepoint items of the retention inventory. The SW items moved to `issues/spc/sw-retention-brief.md`.
+
+### ExactChangepoint review and retained posterior — 2026-10-24
+
+At the user's request: check the three changepoint items the additional-bugs triage set aside (the σ² documentation mismatch, the Cauchy quadrature's cost and its truncation), then keep the dynamic program's tables with exact segmentation draws.
+
+| Commit | Change |
+|---|---|
+| `3e29261` | Cauchy quadrature: a range over the prior and the data, a spacing from a curvature bound, per-segment windowing, a `Resolution` diagnostic, and refusal of an unresolvable scale |
+| `9617747` | The default σ²'s exact divisor, 2·Φ⁻¹(¾)²; the doc comments state the ρ² formula and the curve's cost |
+| `2da510f` | `ChangepointResult.Posterior` keeps the tables; `Sample` gives exact segmentation draws; segment models gain `SampleLevel` |
+
+- **σ² documentation.** The docs already gave the right formula, the median of the squared differences rather than the square of the median difference; an earlier docs pass had fixed it. Two inaccuracies remained and are corrected:
+  - the docs said "lower median", where the code takes the upper middle value for an even count;
+  - the code's doc comment called ρ² "data variance", where the code nets out σ² and floors it.
+
+  The divisor 0.9098 truncated 2·median χ²₁ = 0.909873, an 8·10⁻⁵ relative shift in σ²; it is now exact.
+- **Truncation** was real only under a user-set narrow prior. On default hyperparameters the Gaussian prior keeps Cauchy segment levels inside ν ± 6ρ (worst 5·10⁻⁴ in log D). With ν = 0, ρ = 0.5 and a level near 5, the old grid lost 132 nats and pinned the level at 2.95.
+- **Resolution was the larger defect, and the review did not name it.** The fixed spacing 12ρ/511 stops resolving a long segment's posterior, about γ/√(2n) wide, once ρ/γ passes about 20. At ρ/γ ≈ 110, integer levels under light noise as in b₁(T), log D was off by 6.1, level means by 4 posterior sds, P(k) by 0.017 and the evidence by 3.7. The MAP counts stayed right on the probes.
+- **The fix.**
+  - Range [min(ν, y_min) − 6ρ, max(ν, y_max) + 6ρ]: the cut mass is at most the prior's 6ρ tail ratio, about 2·10⁻⁹ per side.
+  - Spacing ½/√C with C = 1/ρ² + 2n/γ², a bound on the log integrand's curvature.
+  - Windowing per segment from every 16th node, keeping what can come within 50 nats of the maximum.
+
+  Against a fine reference the error is at most 4·10⁻¹¹ in log D on all seven probed cases: moderate data, integer steps at three noise levels, a short far segment, the narrow prior, and Cauchy noise.
+- **The cost**, which the review raised. O(n²G) was cheap at G = 512, but a resolving grid is larger (1,900 to 65,000 nodes on the probes). A first, unwindowed version took 74 s at n = 200 and ρ/γ = 110. Windowing brings that to 4.4 s, against the old grid's 0.7 s with wrong answers, and to 20–200 ms at n = 60.
+- **Retained posterior.**
+  - The tables, 4(n+1)² + 2(K+1)(n+1) numbers, and the segment model.
+  - Exact draws by forward filtering and backward sampling. Levels come from the segment model: the conjugate draw for the Gaussian model, and quadrature nodes for the Cauchy model.
+  - Every existing output is bit-identical (probe over both models on two series).
+- **Checks.**
+  - Brute force over all 64 segmentations of a 7-point series, with each segment's Gaussian evidence from an explicit covariance. P(k | y), the break marginals, every segment probability and the curve agree to 10⁻¹², the evidence to 10⁻¹⁰.
+  - 100,000 draws match all 64 segmentation probabilities within 5 SE, and the curve's mean and variance.
+  - Cauchy draws match the curve within 5 SE.
+  - Each point lies in exactly one segment: Σ P(segment ∋ i) = 1 to 10⁻¹² under both models.
+- **Not done:** OQ17's per-draw pointwise term.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 310 of 310 (`20261024_124337333`). The solution builds.
+
+**Still open:** `HierarchicalPSpline`'s shell move (waits for OQ18) and OQ17's pointwise term. The SW items are in `issues/spc/sw-retention-brief.md`.
