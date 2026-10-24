@@ -115,7 +115,7 @@ public enum HierarchicalStart
 
 /// <summary>
 /// The sweep a <see cref="HierarchicalPSpline"/> run uses. All target the same posterior under a given prior; they differ
-/// in how fast they mix. The first three serve the inverse-gamma prior on τ_u², the last the half-t prior on τ_u.
+/// in how fast they mix. The first four serve the inverse-gamma prior on τ_u², the last the half-t prior on τ_u.
 /// </summary>
 public enum HierarchicalScheme
 {
@@ -133,6 +133,11 @@ public enum HierarchicalScheme
     /// Gaussian in τ_u (an ancillarity–sufficiency interweaving of the scale, Yu &amp; Meng 2011). The draw is a Metropolis
     /// step with that Gaussian as its proposal, so it accepts on the prior ratio alone.</summary>
     Interweaved,
+
+    /// <summary>The collapsed population block and the scale interweaving in one sweep: β_0 with the β_r integrated out,
+    /// β_r given β_0, the variances, then the non-centred τ_u draw. The two cure different couplings, the collapse the
+    /// population curve's and the interweaving the deviation scale's, so together they serve both.</summary>
+    CollapsedInterweaved,
 
     /// <summary>The half-t prior's conjugate sweep by parameter expansion (Gelman 2006): β_r = β_0 + ξη_r with
     /// η_r ~ N(0, σ_η² I), ξ ~ N(0, A²) and σ_η² ~ IG(ν/2, ν/2), so τ_u = |ξ|σ_η has the half-t prior and every block is
@@ -284,7 +289,7 @@ public sealed class HierarchicalPSpline
         if (start is not (HierarchicalStart.Overdispersed or HierarchicalStart.Fixed)) throw new ArgumentOutOfRangeException(nameof(start));
         HierarchicalScheme sweep = scheme ?? (_halfT is null ? HierarchicalScheme.Centred : HierarchicalScheme.ParameterExpanded);
         if (sweep is not (HierarchicalScheme.Centred or HierarchicalScheme.CollapsedPopulation or HierarchicalScheme.Interweaved
-                          or HierarchicalScheme.ParameterExpanded))
+                          or HierarchicalScheme.CollapsedInterweaved or HierarchicalScheme.ParameterExpanded))
             throw new ArgumentOutOfRangeException(nameof(scheme));
         if ((sweep == HierarchicalScheme.ParameterExpanded) != (_halfT is not null))
             throw new ArgumentException(_halfT is null
@@ -482,6 +487,11 @@ public sealed class HierarchicalPSpline
         {
             new ReplicateBlock(this, _gram, _zty), new PopulationBlock(this), new NoiseBlock(this), new DeviationBlock(this),
             new ScaleInterweaveBlock(this), new SmoothingBlock(this),
+        },
+        HierarchicalScheme.CollapsedInterweaved => new IBlock<SweepState>[]
+        {
+            new CollapsedPopulationBlock(this), new ReplicateBlock(this, _gram, _zty), new NoiseBlock(this),
+            new DeviationBlock(this), new ScaleInterweaveBlock(this), new SmoothingBlock(this),
         },
         HierarchicalScheme.ParameterExpanded => new IBlock<SweepState>[]
         {

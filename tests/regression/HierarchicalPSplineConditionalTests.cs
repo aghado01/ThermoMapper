@@ -222,6 +222,7 @@ public sealed class HierarchicalPSplineConditionalTests
     [InlineData(HierarchicalScheme.Centred)]
     [InlineData(HierarchicalScheme.CollapsedPopulation)]
     [InlineData(HierarchicalScheme.Interweaved)]
+    [InlineData(HierarchicalScheme.CollapsedInterweaved)]
     [InlineData(HierarchicalScheme.ParameterExpanded)]   // with the half-t prior on τ_u, which it samples
     public void StationaryMeans_MatchQuadratureReference(HierarchicalScheme scheme)
     {

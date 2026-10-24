@@ -159,7 +159,7 @@ public sealed class HierarchicalEnsembleTests
     public static TheoryData<HierarchicalScheme> Schemes => new()
     {
         HierarchicalScheme.Centred, HierarchicalScheme.CollapsedPopulation, HierarchicalScheme.Interweaved,
-        HierarchicalScheme.ParameterExpanded,
+        HierarchicalScheme.CollapsedInterweaved, HierarchicalScheme.ParameterExpanded,
     };
 
     // The parameter-expanded sweep carries η, ξ and σ_η² besides the curves and variances, so this checks the whole state
@@ -187,7 +187,8 @@ public sealed class HierarchicalEnsembleTests
 
         // The parameter-expanded sweep belongs to the half-t prior, and the half-t prior samples with it alone.
         Assert.Throws<ArgumentException>(() => inverseGamma.Run(chains: 1, burn: 1, samples: 1, scheme: HierarchicalScheme.ParameterExpanded));
-        foreach (HierarchicalScheme other in new[] { HierarchicalScheme.Centred, HierarchicalScheme.CollapsedPopulation, HierarchicalScheme.Interweaved })
+        foreach (HierarchicalScheme other in new[] { HierarchicalScheme.Centred, HierarchicalScheme.CollapsedPopulation, HierarchicalScheme.Interweaved,
+                                                     HierarchicalScheme.CollapsedInterweaved })
             Assert.Throws<ArgumentException>(() => halfT.Run(chains: 1, burn: 1, samples: 1, scheme: other));
 
         // With no scheme each prior takes its own: the half-t run matches an explicit parameter-expanded one.
