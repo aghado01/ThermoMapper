@@ -114,6 +114,41 @@ public enum HierarchicalStart
 }
 
 /// <summary>
+/// The sweep a <see cref="HierarchicalPSpline"/> run uses. All target the same posterior under a given prior; they differ
+/// in how fast they mix. The first three serve the inverse-gamma prior on τ_u², the last the half-t prior on τ_u.
+/// </summary>
+public enum HierarchicalScheme
+{
+    /// <summary>The original centred Gibbs sweep: β_r, β_0, σ², τ_u², τ_0². τ_u² mixes slowly when it is small, since it
+    /// is drawn from deviations β_r − β_0 that it holds small (the funnel of a centred parameterization).</summary>
+    Centred,
+
+    /// <summary>β_0 drawn with every β_r integrated out, then β_r given β_0: (β_0, β_r) as one joint block, which removes
+    /// the coupling between the population curve and the replicates. The marginal precision is formed through the
+    /// eigendecomposition of ZᵀZ, which stays stable as τ_u² → 0.</summary>
+    CollapsedPopulation,
+
+    /// <summary>The centred sweep plus a second draw of τ_u in the non-centred parameterization: after the centred τ_u²
+    /// draw, the deviations are standardized, ũ_r = (β_r − β_0)/τ_u, and τ_u is drawn given ũ, where the likelihood is
+    /// Gaussian in τ_u (an ancillarity–sufficiency interweaving of the scale, Yu &amp; Meng 2011). The draw is a Metropolis
+    /// step with that Gaussian as its proposal, so it accepts on the prior ratio alone.</summary>
+    Interweaved,
+
+    /// <summary>The half-t prior's conjugate sweep by parameter expansion (Gelman 2006): β_r = β_0 + ξη_r with
+    /// η_r ~ N(0, σ_η² I), ξ ~ N(0, A²) and σ_η² ~ IG(ν/2, ν/2), so τ_u = |ξ|σ_η has the half-t prior and every block is
+    /// conjugate. The redundant scale ξ is itself a mixing device (Liu &amp; Wu 1999).</summary>
+    ParameterExpanded,
+}
+
+/// <summary>
+/// A half-t prior on the replicate deviation sd τ_u, with <see cref="Degrees"/> ν and <see cref="Scale"/> A; null scale
+/// takes the responses' pooled sd. ν = 1 is the half-Cauchy Gelman (2006) recommends: weakly informative, without the
+/// inverse-gamma's sensitivity to its own hyperparameters when τ_u is small or the replicates few. It samples with
+/// <see cref="HierarchicalScheme.ParameterExpanded"/>.
+/// </summary>
+public sealed record HalfTDeviationPrior(double Degrees = 1.0, double? Scale = null);
+
+/// <summary>
 /// Hierarchical P-spline for multiple related curves (Behseta–Kass–Wallstrom 2005, the penalized form): replicates
 /// <c>y_r = Z β_r + ε</c> share a smooth population mean <c>β_0</c> (penalized, <c>τ_0² P⁻</c>) with replicate
 /// deviations <c>β_r ~ N(β_0, τ_u² I)</c>, so each curve borrows strength from the others — shrunk toward the
@@ -143,9 +178,24 @@ public sealed class HierarchicalPSpline
     private readonly double[,] _gram;           // ZᵀZ — constant
     private readonly double[][] _zty;           // each Zᵀy_r — constant
     private readonly double _responseVariance;  // the pooled variance of every response, the overdispersed start's scale
+    private readonly double[,] _gramDense;      // ZᵀZ, dense
+    private readonly double[] _gramValues;      // its eigenvalues λ_k
+    private readonly double[][] _gramVectors;   // its eigenvectors v_k, as rows
+    private readonly double[] _sumZtyInEigenbasis;   // v_kᵀ Σ_r Zᵀy_r
+    private readonly double[,] _penaltyDense;   // P, dense
+    private readonly HalfTDeviationPrior? _halfT;   // null: the inverse-gamma prior on τ_u²
+    private readonly double _halfTScale;        // the half-t prior's resolved scale A
 
+    /// <param name="design">The banded design Z shared by every replicate (n × ν).</param>
+    /// <param name="responses">The replicates' responses, each of length n.</param>
+    /// <param name="penalty">The difference penalty on the population curve.</param>
+    /// <param name="priorShape">The inverse-gamma prior's shape on each variance (σ², τ_0², and τ_u² unless
+    /// <paramref name="deviationPrior"/> is set).</param>
+    /// <param name="priorScale">The inverse-gamma prior's scale on each variance, as <paramref name="priorShape"/>.</param>
+    /// <param name="deviationPrior">A half-t prior on τ_u in place of the inverse-gamma prior on τ_u²; null (the
+    /// default) keeps the inverse-gamma prior.</param>
     public HierarchicalPSpline(double[,] design, double[][] responses, DifferencePenalty penalty,
-                               double priorShape = 1e-3, double priorScale = 1e-3)
+                               double priorShape = 1e-3, double priorScale = 1e-3, HalfTDeviationPrior? deviationPrior = null)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(responses);
@@ -176,6 +226,32 @@ public sealed class HierarchicalPSpline
         }
         double count = (double)responses.Length * _n, mean = sum / count, variance = sumSq / count - mean * mean;
         _responseVariance = variance > 0.0 && double.IsFinite(variance) ? variance : 1.0;
+
+        _gramDense = new double[_nu, _nu];
+        for (int d = 0; d <= _gramBw; d++)
+            for (int j = 0; j + d < _nu; j++) { _gramDense[j + d, j] = _gram[d, j]; _gramDense[j, j + d] = _gram[d, j]; }
+        EigenResult eigen = Eigen.DecomposeSymmetric(_gramDense);
+        _gramValues = eigen.Eigenvalues;
+        _gramVectors = eigen.Eigenvectors;
+        _sumZtyInEigenbasis = new double[_nu];
+        for (int k = 0; k < _nu; k++)
+            foreach (double[] zty in _zty)
+                for (int j = 0; j < _nu; j++) _sumZtyInEigenbasis[k] += _gramVectors[k][j] * zty[j];
+        var penaltyBand = new double[_r + 1, _nu];
+        penalty.AccumulateInto(penaltyBand, _nu, 1.0);
+        _penaltyDense = new double[_nu, _nu];
+        for (int d = 0; d <= _r; d++)
+            for (int j = 0; j + d < _nu; j++) { _penaltyDense[j + d, j] = penaltyBand[d, j]; _penaltyDense[j, j + d] = penaltyBand[d, j]; }
+
+        if (deviationPrior is not null)
+        {
+            if (!(deviationPrior.Degrees > 0.0 && double.IsFinite(deviationPrior.Degrees)))
+                throw new ArgumentOutOfRangeException(nameof(deviationPrior), "The half-t prior's degrees of freedom must be positive.");
+            if (deviationPrior.Scale is double a && !(a > 0.0 && double.IsFinite(a)))
+                throw new ArgumentOutOfRangeException(nameof(deviationPrior), "The half-t prior's scale must be positive.");
+        }
+        _halfT = deviationPrior;
+        _halfTScale = deviationPrior?.Scale ?? Math.Sqrt(_responseVariance);
     }
 
     /// <param name="chains">Independent chains; R̂ and the ESS need at least two.</param>
@@ -186,6 +262,8 @@ public sealed class HierarchicalPSpline
     /// mean, R × ν numbers twice over. When false, draws keep the population curve and the variances only, and the
     /// replicate summaries accumulate as the chains run; use it when R × ν × draws outgrows memory.</param>
     /// <param name="start">How each chain starts (<see cref="HierarchicalStart"/>); overdispersed by default.</param>
+    /// <param name="scheme">The sweep (<see cref="HierarchicalScheme"/>); null takes the prior's own: centred for the
+    /// inverse-gamma prior, parameter-expanded for the half-t prior.</param>
     /// <param name="rHatTarget">When &gt; 0, stop after the first round in which the log variances and the population
     /// coefficients meet this R̂ target and the log variances' bulk and tail ESS reach <paramref name="minEssPerChain"/>
     /// per chain (<see cref="ChainEnsemble"/>'s rule). It needs at least two chains.</param>
@@ -197,18 +275,26 @@ public sealed class HierarchicalPSpline
     /// master seed and chain count.</param>
     public HierarchicalResult Run(int chains = 4, int masterSeed = 1, int burn = 1000, int samples = 2000,
                                   bool retainReplicates = true, HierarchicalStart start = HierarchicalStart.Overdispersed,
-                                  double rHatTarget = 0.0, int batchSize = 0,
+                                  HierarchicalScheme? scheme = null, double rHatTarget = 0.0, int batchSize = 0,
                                   double minEssPerChain = ChainEnsemble.MinEssPerChain, bool checkpoint = false,
                                   EnsembleCheckpoint? resumeFrom = null)
     {
         if (chains < 1) throw new ArgumentOutOfRangeException(nameof(chains));
         if (samples < 1 || burn < 0) throw new ArgumentOutOfRangeException(nameof(samples));
         if (start is not (HierarchicalStart.Overdispersed or HierarchicalStart.Fixed)) throw new ArgumentOutOfRangeException(nameof(start));
+        HierarchicalScheme sweep = scheme ?? (_halfT is null ? HierarchicalScheme.Centred : HierarchicalScheme.ParameterExpanded);
+        if (sweep is not (HierarchicalScheme.Centred or HierarchicalScheme.CollapsedPopulation or HierarchicalScheme.Interweaved
+                          or HierarchicalScheme.ParameterExpanded))
+            throw new ArgumentOutOfRangeException(nameof(scheme));
+        if ((sweep == HierarchicalScheme.ParameterExpanded) != (_halfT is not null))
+            throw new ArgumentException(_halfT is null
+                ? "The parameter-expanded sweep samples the half-t prior; construct the model with a HalfTDeviationPrior."
+                : "The half-t prior samples with the parameter-expanded sweep.", nameof(scheme));
         int reps = _responses.Length;
 
         (EnsembleRun summary, IReadOnlyList<IChainRun<SweepState>> runs) = new ChainEnsemble().Run<SweepState>(
-            new HierarchicalEnsemble(this, retainReplicates, start), chains, masterSeed, burn, samples, rHatTarget, batchSize,
-            minEssPerChain, checkpoint, resumeFrom);
+            new HierarchicalEnsemble(this, retainReplicates, start, sweep), chains, masterSeed, burn, samples, rHatTarget,
+            batchSize, minEssPerChain, checkpoint, resumeFrom);
 
         // Every summary is read from the retained draws, chain by chain in draw order; without retained replicate draws,
         // the replicate sums were accumulated as each chain ran.
@@ -269,7 +355,8 @@ public sealed class HierarchicalPSpline
     /// functionals. The three log variances lead and are monitored (split R̂, bulk and tail ESS, the early stop's ESS
     /// gate); the population curve's coefficients follow with classic R̂, a consensus map an early stop also waits on.
     /// </summary>
-    private sealed class HierarchicalEnsemble(HierarchicalPSpline owner, bool retainReplicates, HierarchicalStart start)
+    private sealed class HierarchicalEnsemble(HierarchicalPSpline owner, bool retainReplicates, HierarchicalStart start,
+                                              HierarchicalScheme scheme)
         : IEnsembleModel<SweepState>
     {
         public int FunctionalDim => 3 + owner._nu;
@@ -284,12 +371,12 @@ public sealed class HierarchicalPSpline
             SweepState state = start == HierarchicalStart.Fixed
                 ? SweepState.Start(reps, owner._nu)
                 : SweepState.Overdispersed(reps, owner._nu, owner._responseVariance, new Xoshiro256PlusPlus(seeds[0]));
-            var scan = new BlockScan<SweepState>(owner.Blocks(), state, new Xoshiro256PlusPlus(seeds[1]), x => x.Copy());
+            var scan = new BlockScan<SweepState>(owner.Blocks(scheme), state, new Xoshiro256PlusPlus(seeds[1]), x => x.Copy());
             return new HierarchicalChainRun(scan, retainReplicates, new List<HierarchicalDraw>(), Zeros(reps, owner._nu),
                                             Zeros(reps, owner._nu));
         }
 
-        /// <summary>The design, the responses, the penalty order, the hyperparameters, the start and whether replicate
+        /// <summary>The design, the responses, the penalty order, the priors, the start, the scheme and whether replicate
         /// draws are retained.</summary>
         public string Fingerprint
         {
@@ -299,12 +386,14 @@ public sealed class HierarchicalPSpline
                                             .Add(owner._responses.Length);
                 foreach (double v in owner._z) f.Add(v);
                 foreach (double[] y in owner._responses) f.Add(y);
-                return f.Add(owner._a0).Add(owner._b0).Add(retainReplicates ? 1 : 0).Add((int)start).ToString();
+                f.Add(owner._a0).Add(owner._b0).Add(owner._halfT is null ? 0 : 1).Add(owner._halfT?.Degrees ?? 0.0)
+                 .Add(owner._halfTScale);
+                return f.Add(retainReplicates ? 1 : 0).Add((int)start).Add((int)scheme).ToString();
             }
         }
 
         public IChainRun<SweepState> RestoreChain(IChainState state) => state is HierarchicalChainState s
-            ? new HierarchicalChainRun(BlockScan<SweepState>.Restore(owner.Blocks(), s.Scan, x => x.Copy()), retainReplicates,
+            ? new HierarchicalChainRun(BlockScan<SweepState>.Restore(owner.Blocks(scheme), s.Scan, x => x.Copy()), retainReplicates,
                                        new List<HierarchicalDraw>(s.Draws), Clone(s.ReplicateSums), Clone(s.ReplicateMeanSums))
             : throw new ArgumentException("Not a hierarchical P-spline chain's restart state.", nameof(state));
     }
@@ -381,16 +470,48 @@ public sealed class HierarchicalPSpline
         return copy;
     }
 
-    // The five blocks in sweep order, each with its own scratch, so every chain builds its own.
-    private IBlock<SweepState>[] Blocks() => new IBlock<SweepState>[]
+    // The scheme's blocks in sweep order, each with its own scratch, so every chain builds its own.
+    private IBlock<SweepState>[] Blocks(HierarchicalScheme scheme) => scheme switch
     {
-        new ReplicateBlock(this, _gram, _zty), new PopulationBlock(this), new NoiseBlock(this), new DeviationBlock(this),
-        new SmoothingBlock(this),
+        HierarchicalScheme.CollapsedPopulation => new IBlock<SweepState>[]
+        {
+            new CollapsedPopulationBlock(this), new ReplicateBlock(this, _gram, _zty), new NoiseBlock(this),
+            new DeviationBlock(this), new SmoothingBlock(this),
+        },
+        HierarchicalScheme.Interweaved => new IBlock<SweepState>[]
+        {
+            new ReplicateBlock(this, _gram, _zty), new PopulationBlock(this), new NoiseBlock(this), new DeviationBlock(this),
+            new ScaleInterweaveBlock(this), new SmoothingBlock(this),
+        },
+        HierarchicalScheme.ParameterExpanded => new IBlock<SweepState>[]
+        {
+            new ExpandedDeviationBlock(this), new ExpandedPopulationBlock(this), new ExpansionScaleBlock(this),
+            new ExpansionVarianceBlock(this), new NoiseBlock(this), new SmoothingBlock(this),
+        },
+        _ => new IBlock<SweepState>[]
+        {
+            new ReplicateBlock(this, _gram, _zty), new PopulationBlock(this), new NoiseBlock(this), new DeviationBlock(this),
+            new SmoothingBlock(this),
+        },
     };
+
+    // Z·β, the curve a coefficient vector draws at the design rows.
+    private double[] DesignTimes(double[] beta)
+    {
+        var fit = new double[_n];
+        for (int i = 0; i < _n; i++)
+        {
+            double f = 0.0;
+            for (int j = 0; j < _nu; j++) f += _z[i, j] * beta[j];
+            fit[i] = f;
+        }
+        return fit;
+    }
 
     /// <summary>
     /// The sweep's state: each replicate's curve β_r, the population curve β_0, the three variances, and the conditional
-    /// means the last sweep drew around (fresh arrays each sweep, so a retained draw can keep them).
+    /// means the last sweep drew around (fresh arrays each sweep, so a retained draw can keep them). The parameter-expanded
+    /// sweep also carries η_r, ξ and σ_η², with β_r = β_0 + ξη_r and τ_u² = ξ²σ_η² kept in step.
     /// </summary>
     private sealed class SweepState
     {
@@ -399,6 +520,8 @@ public sealed class HierarchicalPSpline
         public double Sigma2, TauU2, Tau02;
         public double[][] ReplicateMeans = null!;
         public double[] PopulationMean = null!;
+        public double[][] Eta = null!;
+        public double Xi = 1.0, EtaVariance = 1.0;
 
         // Overdispersed (HierarchicalStart.Overdispersed): each variance at v·exp(2z) and the population coefficients at
         // N(0, v) draws. The replicate curves are drawn first in every sweep, so their start is never read.
@@ -408,6 +531,7 @@ public sealed class HierarchicalPSpline
             state.Sigma2 = v * Math.Exp(2.0 * Normal.SampleStandard(rng));
             state.TauU2 = v * Math.Exp(2.0 * Normal.SampleStandard(rng));
             state.Tau02 = v * Math.Exp(2.0 * Normal.SampleStandard(rng));
+            state.EtaVariance = state.TauU2;   // ξ = 1, so τ_u² = σ_η²
             double sd = Math.Sqrt(v);
             for (int j = 0; j < nu; j++) state.Population[j] = sd * Normal.SampleStandard(rng);
             return state;
@@ -419,9 +543,14 @@ public sealed class HierarchicalPSpline
             var state = new SweepState
             {
                 Replicates = new double[reps][], Population = new double[nu], Sigma2 = 1.0, TauU2 = 1.0, Tau02 = 1.0,
-                ReplicateMeans = new double[reps][], PopulationMean = new double[nu],
+                ReplicateMeans = new double[reps][], PopulationMean = new double[nu], Eta = new double[reps][],
             };
-            for (int rr = 0; rr < reps; rr++) { state.Replicates[rr] = new double[nu]; state.ReplicateMeans[rr] = new double[nu]; }
+            for (int rr = 0; rr < reps; rr++)
+            {
+                state.Replicates[rr] = new double[nu];
+                state.ReplicateMeans[rr] = new double[nu];
+                state.Eta[rr] = new double[nu];
+            }
             return state;
         }
 
@@ -432,11 +561,13 @@ public sealed class HierarchicalPSpline
                 Replicates = new double[Replicates.Length][], Population = (double[])Population.Clone(),
                 Sigma2 = Sigma2, TauU2 = TauU2, Tau02 = Tau02,
                 ReplicateMeans = new double[ReplicateMeans.Length][], PopulationMean = (double[])PopulationMean.Clone(),
+                Eta = new double[Eta.Length][], Xi = Xi, EtaVariance = EtaVariance,
             };
             for (int rr = 0; rr < Replicates.Length; rr++)
             {
                 copy.Replicates[rr] = (double[])Replicates[rr].Clone();
                 copy.ReplicateMeans[rr] = (double[])ReplicateMeans[rr].Clone();
+                copy.Eta[rr] = (double[])Eta[rr].Clone();
             }
             return copy;
         }
@@ -540,6 +671,212 @@ public sealed class HierarchicalPSpline
         {
             state.Tau02 = ConjugateUpdates.NormalVariance(owner._a0, owner._b0, owner._nu - owner._r,
                                                           owner._penalty.Roughness(state.Population)).Sample(rng);
+            return true;
+        }
+    }
+
+    // β_0 | σ², τ_u², τ_0², y with every β_r integrated out (HierarchicalScheme.CollapsedPopulation). Each y_r is then
+    // N(Zβ_0, σ²I + τ_u²ZZᵀ), so β_0's precision is P/τ_0² + R·Zᵀ(σ²I + τ_u²ZZᵀ)⁻¹Z and its linear term
+    // Σ_r Zᵀ(σ²I + τ_u²ZZᵀ)⁻¹y_r. With ZᵀZ = V diag(λ) Vᵀ these are R·V diag(λ/(σ² + τ_u²λ)) Vᵀ and
+    // V diag(1/(σ² + τ_u²λ)) Vᵀ Σ_r Zᵀy_r, with no cancellation as τ_u² → 0. The precision is dense (ν × ν).
+    private sealed class CollapsedPopulationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    {
+        private readonly double[,] _precision = new double[owner._nu, owner._nu];
+        private readonly DenseCholesky _factor = new(owner._nu);
+        private readonly double[] _rhs = new double[owner._nu];
+        private readonly GaussianConditional _gaussian = new(owner._nu);
+
+        public string Name => "population (collapsed)";
+
+        public bool Update(SweepState state, Xoshiro256PlusPlus rng)
+        {
+            int nu = owner._nu, reps = state.Replicates.Length;
+            for (int i = 0; i < nu; i++)
+                for (int j = 0; j < nu; j++) _precision[i, j] = owner._penaltyDense[i, j] / state.Tau02;
+            Array.Clear(_rhs);
+            for (int k = 0; k < nu; k++)
+            {
+                double lambda = Math.Max(0.0, owner._gramValues[k]), denominator = state.Sigma2 + state.TauU2 * lambda;
+                double weight = reps * lambda / denominator, coefficient = owner._sumZtyInEigenbasis[k] / denominator;
+                double[] v = owner._gramVectors[k];
+                for (int i = 0; i < nu; i++)
+                {
+                    _rhs[i] += coefficient * v[i];
+                    for (int j = 0; j < nu; j++) _precision[i, j] += weight * v[i] * v[j];
+                }
+            }
+            _factor.Decompose(_precision);
+            if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                throw new InvalidOperationException($"β_0's collapsed precision is not numerically positive definite ({_factor.Status}).");
+            state.PopulationMean = _gaussian.Draw(_factor, _rhs, rng, state.Population);
+            return true;
+        }
+    }
+
+    // The non-centred τ_u draw of the interweaving (HierarchicalScheme.Interweaved). With ũ_r = (β_r − β_0)/τ_u fixed,
+    // y_r − Zβ_0 = τ_u·Zũ_r + ε is a regression on τ_u, Gaussian with mean B/A and variance σ²/A, A = Σ‖Zũ_r‖² and
+    // B = Σ (y_r − Zβ_0)ᵀZũ_r. That Gaussian proposes τ_u′ over the whole line, and the step accepts on the prior ratio:
+    // IG(a, b) on τ_u² is ∝ |τ_u|^(−2a−1) exp(−b/τ_u²) in τ_u. The sign of τ_u′ is unidentified with ũ's, so τ_u′ < 0
+    // flips the deviations and leaves τ_u² = τ_u′²; the posterior is symmetric under the flip, so the step leaves it
+    // invariant.
+    private sealed class ScaleInterweaveBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    {
+        private readonly double[][] _standardized = Zeros(owner._responses.Length, owner._nu);
+
+        public string Name => "deviation scale (non-centred)";
+
+        public bool Update(SweepState state, Xoshiro256PlusPlus rng)
+        {
+            int nu = owner._nu, n = owner._n;
+            double tau = Math.Sqrt(state.TauU2);
+            if (!(tau > 0.0)) return false;
+            double[] fit0 = owner.DesignTimes(state.Population);
+            double a = 0.0, b = 0.0;
+            for (int rr = 0; rr < state.Replicates.Length; rr++)
+            {
+                double[] u = _standardized[rr];
+                for (int j = 0; j < nu; j++) u[j] = (state.Replicates[rr][j] - state.Population[j]) / tau;
+                double[] w = owner.DesignTimes(u);
+                double[] y = owner._responses[rr];
+                for (int i = 0; i < n; i++) { a += w[i] * w[i]; b += (y[i] - fit0[i]) * w[i]; }
+            }
+            if (!(a > 0.0)) return false;
+            double proposal = b / a + Math.Sqrt(state.Sigma2 / a) * Normal.SampleStandard(rng);
+            if (proposal == 0.0) return false;
+            double logRatio = LogPrior(Math.Abs(proposal)) - LogPrior(tau);
+            if (!(Math.Log(1.0 - rng.NextDouble()) < logRatio)) return false;
+            for (int rr = 0; rr < state.Replicates.Length; rr++)
+                for (int j = 0; j < nu; j++) state.Replicates[rr][j] = state.Population[j] + proposal * _standardized[rr][j];
+            state.TauU2 = proposal * proposal;
+            return true;
+        }
+
+        private double LogPrior(double tau) => -(2.0 * owner._a0 + 1.0) * Math.Log(tau) - owner._b0 / (tau * tau);
+    }
+
+    // η_r | ξ, σ_η², β_0, σ², y (HierarchicalScheme.ParameterExpanded): y_r − Zβ_0 = ξZη_r + ε with η_r ~ N(0, σ_η² I), so
+    // the precision ξ²ZᵀZ/σ² + I/σ_η² is shared by the replicates and banded, and the linear term is ξZᵀ(y_r − Zβ_0)/σ².
+    private sealed class ExpandedDeviationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    {
+        private readonly double[,] _band = new double[owner._gramBw + 1, owner._nu];
+        private readonly BandCholesky _factor = new(owner._nu, owner._gramBw, BandFactorization.Ldlt);
+        private readonly double[] _rhs = new double[owner._nu];
+        private readonly double[] _gramBeta0 = new double[owner._nu];
+        private readonly GaussianConditional _gaussian = new(owner._nu);
+
+        public string Name => "deviations (expanded)";
+
+        public bool Update(SweepState state, Xoshiro256PlusPlus rng)
+        {
+            int nu = owner._nu;
+            double xi = state.Xi;
+            for (int d = 0; d <= owner._gramBw; d++)
+                for (int j = 0; j < nu; j++) _band[d, j] = xi * xi * owner._gram[d, j] / state.Sigma2;
+            for (int j = 0; j < nu; j++) _band[0, j] += 1.0 / state.EtaVariance;
+            _factor.DecomposeBanded(_band);
+            if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                throw new InvalidOperationException($"ξ²ZᵀZ/σ² + I/σ_η² is not numerically positive definite ({_factor.Status}).");
+            for (int i = 0; i < nu; i++)
+            {
+                double g = 0.0;
+                for (int j = 0; j < nu; j++) g += owner._gramDense[i, j] * state.Population[j];
+                _gramBeta0[i] = g;
+            }
+            for (int rr = 0; rr < owner._zty.Length; rr++)
+            {
+                for (int j = 0; j < nu; j++) _rhs[j] = xi * (owner._zty[rr][j] - _gramBeta0[j]) / state.Sigma2;
+                double[] mean = _gaussian.Draw(_factor, _rhs, rng, state.Eta[rr]);
+                var replicateMean = new double[nu];
+                for (int j = 0; j < nu; j++)
+                {
+                    state.Replicates[rr][j] = state.Population[j] + xi * state.Eta[rr][j];
+                    replicateMean[j] = state.Population[j] + xi * mean[j];
+                }
+                state.ReplicateMeans[rr] = replicateMean;
+            }
+            return true;
+        }
+    }
+
+    // β_0 | η, ξ, σ², τ_0², y (HierarchicalScheme.ParameterExpanded): y_r − ξZη_r = Zβ_0 + ε, so the precision is
+    // R·ZᵀZ/σ² + P/τ_0², banded, and the linear term Σ_r (Zᵀy_r − ξZᵀZη_r)/σ².
+    private sealed class ExpandedPopulationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    {
+        private readonly int _bandwidth = Math.Max(owner._gramBw, owner._r);
+        private readonly double[,] _band = new double[Math.Max(owner._gramBw, owner._r) + 1, owner._nu];
+        private readonly BandCholesky _factor = new(owner._nu, Math.Max(owner._gramBw, owner._r), BandFactorization.Ldlt);
+        private readonly double[] _rhs = new double[owner._nu];
+        private readonly GaussianConditional _gaussian = new(owner._nu);
+
+        public string Name => "population (expanded)";
+
+        public bool Update(SweepState state, Xoshiro256PlusPlus rng)
+        {
+            int nu = owner._nu, reps = state.Replicates.Length;
+            Array.Clear(_band);
+            for (int d = 0; d <= owner._gramBw; d++)
+                for (int j = 0; j < nu; j++) _band[d, j] = reps * owner._gram[d, j] / state.Sigma2;
+            owner._penalty.AccumulateInto(_band, nu, 1.0 / state.Tau02);
+            _factor.DecomposeBanded(_band);
+            if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                throw new InvalidOperationException($"R·ZᵀZ/σ² + P/τ_0² is not numerically positive definite ({_factor.Status}).");
+            for (int i = 0; i < nu; i++)
+            {
+                double s = 0.0;
+                for (int rr = 0; rr < reps; rr++)
+                {
+                    double g = 0.0;
+                    for (int j = 0; j < nu; j++) g += owner._gramDense[i, j] * state.Eta[rr][j];
+                    s += owner._zty[rr][i] - state.Xi * g;
+                }
+                _rhs[i] = s / state.Sigma2;
+            }
+            state.PopulationMean = _gaussian.Draw(_factor, _rhs, rng, state.Population);
+            for (int rr = 0; rr < reps; rr++)
+                for (int j = 0; j < nu; j++) state.Replicates[rr][j] = state.Population[j] + state.Xi * state.Eta[rr][j];
+            return true;
+        }
+    }
+
+    // ξ | η, β_0, σ², y (HierarchicalScheme.ParameterExpanded): y_r − Zβ_0 = ξ·Zη_r + ε with ξ ~ N(0, A²), a scalar
+    // regression with precision Σ‖Zη_r‖²/σ² + 1/A².
+    private sealed class ExpansionScaleBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    {
+        public string Name => "expansion scale ξ";
+
+        public bool Update(SweepState state, Xoshiro256PlusPlus rng)
+        {
+            int nu = owner._nu, n = owner._n;
+            double[] fit0 = owner.DesignTimes(state.Population);
+            double precision = 1.0 / (owner._halfTScale * owner._halfTScale), linear = 0.0;
+            for (int rr = 0; rr < state.Replicates.Length; rr++)
+            {
+                double[] w = owner.DesignTimes(state.Eta[rr]);
+                double[] y = owner._responses[rr];
+                for (int i = 0; i < n; i++) { precision += w[i] * w[i] / state.Sigma2; linear += (y[i] - fit0[i]) * w[i] / state.Sigma2; }
+            }
+            state.Xi = linear / precision + Normal.SampleStandard(rng) / Math.Sqrt(precision);
+            for (int rr = 0; rr < state.Replicates.Length; rr++)
+                for (int j = 0; j < nu; j++) state.Replicates[rr][j] = state.Population[j] + state.Xi * state.Eta[rr][j];
+            state.TauU2 = state.Xi * state.Xi * state.EtaVariance;
+            return true;
+        }
+    }
+
+    // σ_η² | η (HierarchicalScheme.ParameterExpanded): IG(ν/2, ν/2) prior, R·ν terms.
+    private sealed class ExpansionVarianceBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    {
+        public string Name => "expansion variance σ_η²";
+
+        public bool Update(SweepState state, Xoshiro256PlusPlus rng)
+        {
+            double ss = 0.0;
+            foreach (double[] eta in state.Eta)
+                foreach (double e in eta) ss += e * e;
+            double degrees = owner._halfT!.Degrees;
+            state.EtaVariance = ConjugateUpdates.NormalVariance(0.5 * degrees, 0.5 * degrees, state.Eta.Length * owner._nu, ss)
+                                                .Sample(rng);
+            state.TauU2 = state.Xi * state.Xi * state.EtaVariance;
             return true;
         }
     }

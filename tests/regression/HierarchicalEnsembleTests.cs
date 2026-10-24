@@ -156,6 +156,52 @@ public sealed class HierarchicalEnsembleTests
         }
     }
 
+    public static TheoryData<HierarchicalScheme> Schemes => new()
+    {
+        HierarchicalScheme.Centred, HierarchicalScheme.CollapsedPopulation, HierarchicalScheme.Interweaved,
+        HierarchicalScheme.ParameterExpanded,
+    };
+
+    // The parameter-expanded sweep carries η, ξ and σ_η² besides the curves and variances, so this checks the whole state
+    // travels with a checkpoint.
+    [Theory]
+    [MemberData(nameof(Schemes))]
+    public void EveryScheme_ResumesExactly(HierarchicalScheme scheme)
+    {
+        (double[,] z, double[][] y) = Data();
+        HierarchicalPSpline Sampler() => scheme == HierarchicalScheme.ParameterExpanded
+            ? new HierarchicalPSpline(z, y, new DifferencePenalty(2), deviationPrior: new HalfTDeviationPrior())
+            : new HierarchicalPSpline(z, y, new DifferencePenalty(2));
+        HierarchicalResult straight = Sampler().Run(chains: 2, masterSeed: 8, burn: 100, samples: 200, scheme: scheme);
+        EnsembleCheckpoint checkpoint = Sampler().Run(chains: 2, masterSeed: 8, burn: 100, samples: 90, scheme: scheme,
+                                                      checkpoint: true).Checkpoint!;
+        AssertSame(straight, Sampler().Run(chains: 2, masterSeed: 8, burn: 100, samples: 110, scheme: scheme, resumeFrom: checkpoint));
+    }
+
+    [Fact]
+    public void Scheme_FollowsThePrior()
+    {
+        (double[,] z, double[][] y) = Data();
+        var inverseGamma = new HierarchicalPSpline(z, y, new DifferencePenalty(2));
+        var halfT = new HierarchicalPSpline(z, y, new DifferencePenalty(2), deviationPrior: new HalfTDeviationPrior(Degrees: 3.0, Scale: 0.2));
+
+        // The parameter-expanded sweep belongs to the half-t prior, and the half-t prior samples with it alone.
+        Assert.Throws<ArgumentException>(() => inverseGamma.Run(chains: 1, burn: 1, samples: 1, scheme: HierarchicalScheme.ParameterExpanded));
+        foreach (HierarchicalScheme other in new[] { HierarchicalScheme.Centred, HierarchicalScheme.CollapsedPopulation, HierarchicalScheme.Interweaved })
+            Assert.Throws<ArgumentException>(() => halfT.Run(chains: 1, burn: 1, samples: 1, scheme: other));
+
+        // With no scheme each prior takes its own: the half-t run matches an explicit parameter-expanded one.
+        HierarchicalResult byDefault = halfT.Run(chains: 1, masterSeed: 4, burn: 20, samples: 30);
+        HierarchicalResult explicitly = halfT.Run(chains: 1, masterSeed: 4, burn: 20, samples: 30, scheme: HierarchicalScheme.ParameterExpanded);
+        Assert.Equal(explicitly.PopulationCoefficients, byDefault.PopulationCoefficients);
+        Assert.All(byDefault.PosteriorDraws[0], d => Assert.True(d.DeviationVariance > 0.0));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new HierarchicalPSpline(z, y, new DifferencePenalty(2),
+                                                                                 deviationPrior: new HalfTDeviationPrior(Degrees: 0.0)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new HierarchicalPSpline(z, y, new DifferencePenalty(2),
+                                                                                 deviationPrior: new HalfTDeviationPrior(Scale: -1.0)));
+    }
+
     [Fact]
     public void Checkpoint_OfAnotherProblem_IsRefused()
     {

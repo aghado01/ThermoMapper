@@ -143,12 +143,96 @@ public sealed class HierarchicalPSplineConditionalTests
     }
 
     [Fact]
-    public void StationaryMeans_MatchQuadratureReference()
+    public void CollapsedFirstSweep_DrawsBeta0FromItsMarginal_ThenEachBetaRGivenIt()
+    {
+        // From the fixed start (σ² = τ_u² = τ_0² = 1) the collapsed block draws β_0 with every β_r integrated out: each y_r
+        // is N(Zβ_0, I + ZZᵀ), so β_0 ~ N(Λ⁻¹h, Λ⁻¹) with Λ = P + R·Zᵀ(I + ZZᵀ)⁻¹Z and h = Σ_r Zᵀ(I + ZZᵀ)⁻¹y_r, formed
+        // here through the explicit n × n covariance. β_r then follows from N(Q_r⁻¹(Zᵀy_r + β_0), Q_r⁻¹), Q_r = ZᵀZ + I.
+        (double[,] z, double[][] y) = TinyModel();
+        int nu = z.GetLength(1);
+        double[,] ztz = Gram(z);
+        double[,] p = PenaltyMatrix(nu);
+        var cov = new double[N, N];
+        for (int i = 0; i < N; i++)
+            for (int j = 0; j < N; j++)
+            {
+                double s = i == j ? 1.0 : 0.0;
+                for (int k = 0; k < nu; k++) s += z[i, k] * z[j, k];
+                cov[i, j] = s;
+            }
+        double[,] lc = Cholesky(cov);
+        var mz = new double[N, nu];                      // (I + ZZᵀ)⁻¹Z, column by column
+        for (int k = 0; k < nu; k++)
+        {
+            var column = new double[N];
+            for (int i = 0; i < N; i++) column[i] = z[i, k];
+            double[] solved = Solve(lc, column);
+            for (int i = 0; i < N; i++) mz[i, k] = solved[i];
+        }
+        var lam = new double[nu, nu];
+        var h0 = new double[nu];
+        for (int i = 0; i < nu; i++)
+        {
+            for (int j = 0; j < nu; j++)
+            {
+                double s = 0.0;
+                for (int t = 0; t < N; t++) s += z[t, i] * mz[t, j];
+                lam[i, j] = p[i, j] + Reps * s;
+            }
+            for (int r = 0; r < Reps; r++)
+                for (int t = 0; t < N; t++) h0[i] += mz[t, i] * y[r][t];
+        }
+        double[,] l0 = Cholesky(lam);
+        double[] m0 = Solve(l0, h0);
+        var qr = new double[nu, nu];
+        for (int i = 0; i < nu; i++)
+            for (int j = 0; j < nu; j++) qr[i, j] = ztz[i, j] + (i == j ? 1.0 : 0.0);
+        double[,] lr = Cholesky(qr);
+
+        HierarchicalPSpline sampler = Sampler(z, y);
+        int[] seeds = SeedTree.Derive(37, Draws);
+        var w0 = new double[Draws][];
+        var wr = new double[Reps][][];
+        for (int r = 0; r < Reps; r++) wr[r] = new double[Draws][];
+        for (int s = 0; s < Draws; s++)
+        {
+            HierarchicalResult h = sampler.Run(chains: 1, masterSeed: seeds[s], burn: 0, samples: 1, start: HierarchicalStart.Fixed,
+                                               scheme: HierarchicalScheme.CollapsedPopulation);
+            double[] b0 = h.PopulationCoefficients;
+            var dev0 = new double[nu];
+            for (int j = 0; j < nu; j++) dev0[j] = b0[j] - m0[j];
+            w0[s] = LowerTransposeTimes(l0, dev0);
+            for (int r = 0; r < Reps; r++)
+            {
+                double[] rhs = MulTranspose(z, y[r]);
+                for (int j = 0; j < nu; j++) rhs[j] += b0[j];
+                double[] mr = Solve(lr, rhs);
+                var dev = new double[nu];
+                for (int j = 0; j < nu; j++) dev[j] = h.ReplicateCoefficients[r][j] - mr[j];
+                wr[r][s] = LowerTransposeTimes(lr, dev);
+            }
+        }
+        AssertStandardNormal(w0, "β_0 | σ², τ_u², τ_0² with the β_r integrated out");
+        for (int r = 0; r < Reps; r++) AssertStandardNormal(wr[r], $"β_r (replicate {r + 1}) | β_0, σ², τ_u² after the collapsed draw");
+    }
+
+    private const double HalfTDegrees = 1.0, HalfTScale = 0.5;
+
+    [Theory]
+    [InlineData(HierarchicalScheme.Centred)]
+    [InlineData(HierarchicalScheme.CollapsedPopulation)]
+    [InlineData(HierarchicalScheme.Interweaved)]
+    [InlineData(HierarchicalScheme.ParameterExpanded)]   // with the half-t prior on τ_u, which it samples
+    public void StationaryMeans_MatchQuadratureReference(HierarchicalScheme scheme)
     {
         (double[,] z, double[][] y) = TinyModel();
         int nu = z.GetLength(1);
-        (double sigma, double tauU, double tau0, double[] beta0) reference = QuadratureMeans(z, y);
-        HierarchicalPSpline sampler = Sampler(z, y);
+        bool halfT = scheme == HierarchicalScheme.ParameterExpanded;
+        (double sigma, double tauU, double tau0, double[] beta0) reference = QuadratureMeans(z, y, halfT);
+        HierarchicalPSpline sampler = halfT
+            ? new HierarchicalPSpline(z, y, new DifferencePenalty(Order), PriorShape, PriorScale,
+                                      new HalfTDeviationPrior(HalfTDegrees, HalfTScale))
+            : Sampler(z, y);
 
         // Independent chains give an honest Monte Carlo standard error for each reported mean.
         const int chains = 16;
@@ -157,7 +241,7 @@ public sealed class HierarchicalPSplineConditionalTests
         var est = new double[chains][];
         for (int c = 0; c < chains; c++)
         {
-            HierarchicalResult h = sampler.Run(chains: 1, masterSeed: seeds[c], burn: 2000, samples: 20000);
+            HierarchicalResult h = sampler.Run(chains: 1, masterSeed: seeds[c], burn: 2000, samples: 20000, scheme: scheme);
             est[c] = new double[dim];
             est[c][0] = h.NoiseSd;
             est[c][1] = h.DeviationSd;
@@ -186,7 +270,7 @@ public sealed class HierarchicalPSplineConditionalTests
             double zScore = (mean - refs[k]) / se;
             bool pass = Math.Abs(mean - refs[k]) <= 4.5 * se + 1e-4 * Math.Abs(refs[k]);
             ok &= pass;
-            _out.WriteLine($"[hier-stationary] {names[k]}: MCMC {mean:F5} ± {se:F5}  quadrature {refs[k]:F5}  z = {zScore:F2}{(pass ? "" : "  FAIL")}");
+            _out.WriteLine($"[hier-stationary {scheme}] {names[k]}: MCMC {mean:F5} ± {se:F5}  quadrature {refs[k]:F5}  z = {zScore:F2}{(pass ? "" : "  FAIL")}");
         }
         Assert.True(ok, "stationary means disagree with the quadrature reference (see output)");
     }
@@ -237,10 +321,14 @@ public sealed class HierarchicalPSplineConditionalTests
 
     // ── Quadrature reference ──────────────────────────────────────────────────
 
-    // Posterior means of σ, τ_u, τ_0 and β_0 by quadrature over (ln σ², ln τ_u², ln τ_0²). Given the variances, all
-    // coefficients x = (β_1, …, β_R, β_0) are jointly Gaussian with precision Λ and linear term h, so they integrate out
-    // exactly: log p(θ | y) = ½hᵀΛ⁻¹h − ½ log|Λ| + the variance-only terms, and E[β_0 | θ, y] is the β_0 block of Λ⁻¹h.
-    private static (double, double, double, double[]) QuadratureMeans(double[,] z, double[][] y)
+    // Posterior means of σ, τ_u, τ_0 and β_0 by quadrature over (ln σ², c, ln τ_0²), with c = ln τ_u² under the
+    // inverse-gamma prior and τ_u = κ·sinh(c) under the half-t prior. The half-t density stays finite as τ_u → 0, so in
+    // ln τ_u² its posterior has a long e^{c/2} tail, and its upper tail decays only polynomially; asinh coordinates are
+    // linear near the natural boundary τ_u = 0, sampled at midpoints, and logarithmic in the tail.
+    // Given the variances, all coefficients x = (β_1, …, β_R, β_0) are jointly Gaussian with precision Λ and linear term
+    // h, so they integrate out exactly: log p(θ | y) = ½hᵀΛ⁻¹h − ½ log|Λ| + the variance-only terms, and E[β_0 | θ, y] is
+    // the β_0 block of Λ⁻¹h.
+    private static (double, double, double, double[]) QuadratureMeans(double[,] z, double[][] y, bool halfT)
     {
         int nu = z.GetLength(1);
         double[,] ztz = Gram(z);
@@ -255,10 +343,13 @@ public sealed class HierarchicalPSplineConditionalTests
         int dim = (Reps + 1) * nu;
         var lam = new double[dim, dim];
         var h = new double[dim];
+        const double kappa = 0.1;
+        double TauU(double c) => halfT ? kappa * Math.Sinh(c) : Math.Exp(0.5 * c);
+        double TauU2(double c) => TauU(c) * TauU(c);
 
-        double LogPost(double u1, double u2, double u3, double[]? beta0)
+        double LogPost(double u1, double c2, double u3, double[]? beta0)
         {
-            double s2 = Math.Exp(u1), tu = Math.Exp(u2), t0 = Math.Exp(u3);
+            double s2 = Math.Exp(u1), tu = TauU2(c2), t0 = Math.Exp(u3);
             Array.Clear(lam);
             Array.Clear(h);
             int o = Reps * nu;
@@ -287,48 +378,69 @@ public sealed class HierarchicalPSplineConditionalTests
             for (int k = 0; k < dim; k++) logDet += 2.0 * Math.Log(l[k, k]);
 
             double lp = -0.5 * Reps * N * u1 - 0.5 * yy / s2
-                        - 0.5 * Reps * nu * u2 - 0.5 * (nu - Order) * u3
+                        - 0.5 * Reps * nu * Math.Log(tu) - 0.5 * (nu - Order) * u3
                         + 0.5 * hm - 0.5 * logDet;
-            // IG(a, b) priors in log coordinates (Jacobian included): −a·u − b·e^{−u}.
-            lp += -PriorShape * (u1 + u2 + u3) - PriorScale * (1.0 / s2 + 1.0 / tu + 1.0 / t0);
+            // IG(a, b) priors in log coordinates (Jacobian included): −a·u − b·e^{−u}. The half-t(ν, A) density in τ_u is
+            // ∝ (1 + τ_u²/(νA²))^{−(ν+1)/2}, times the Jacobian dτ_u/dc ∝ cosh c.
+            lp += -PriorShape * (u1 + u3) - PriorScale * (1.0 / s2 + 1.0 / t0);
+            lp += halfT
+                ? -0.5 * (HalfTDegrees + 1.0) * Math.Log(1.0 + tu / (HalfTDegrees * HalfTScale * HalfTScale)) + Math.Log(Math.Cosh(c2))
+                : -PriorShape * c2 - PriorScale / tu;
             if (beta0 is not null) Array.Copy(m, o, beta0, 0, nu);
             return lp;
         }
 
+        // Each axis: its coarse grid's start, step and count; the τ_u axis of the half-t case starts at its natural
+        // boundary 0 and places its nodes at cell midpoints.
+        double[] lo = { -16.0, halfT ? 0.0 : -16.0, -16.0 };
+        double[] coarse = { 0.5, halfT ? 0.1 : 0.5, 0.5 };
+        int[] nc = { 57, halfT ? 100 : 57, 57 };
+        bool Natural(int axis) => halfT && axis == 1;
+        double CoarseNode(int axis, int k) => lo[axis] + (k + (Natural(axis) ? 0.5 : 0.0)) * coarse[axis];
+
         // Pass 1: coarse grid to locate the posterior mass.
-        const double lo = -16.0, hi = 12.0, coarse = 0.5;
-        int nc = (int)Math.Round((hi - lo) / coarse) + 1;
-        var lpc = new double[nc, nc, nc];
+        var lpc = new double[nc[0], nc[1], nc[2]];
         double maxC = double.NegativeInfinity;
-        for (int a = 0; a < nc; a++)
-            for (int b = 0; b < nc; b++)
-                for (int c = 0; c < nc; c++)
+        for (int a = 0; a < nc[0]; a++)
+            for (int b = 0; b < nc[1]; b++)
+                for (int c = 0; c < nc[2]; c++)
                 {
-                    lpc[a, b, c] = LogPost(lo + a * coarse, lo + b * coarse, lo + c * coarse, null);
+                    lpc[a, b, c] = LogPost(CoarseNode(0, a), CoarseNode(1, b), CoarseNode(2, c), null);
                     maxC = Math.Max(maxC, lpc[a, b, c]);
                 }
-        var boxLo = new[] { nc, nc, nc };
+        var boxLo = new[] { nc[0], nc[1], nc[2] };
         var boxHi = new[] { -1, -1, -1 };
-        for (int a = 0; a < nc; a++)
-            for (int b = 0; b < nc; b++)
-                for (int c = 0; c < nc; c++)
+        for (int a = 0; a < nc[0]; a++)
+            for (int b = 0; b < nc[1]; b++)
+                for (int c = 0; c < nc[2]; c++)
                     if (lpc[a, b, c] > maxC - 35.0)
                     {
                         int[] idx = { a, b, c };
                         for (int k = 0; k < 3; k++) { boxLo[k] = Math.Min(boxLo[k], idx[k]); boxHi[k] = Math.Max(boxHi[k], idx[k]); }
                     }
         for (int k = 0; k < 3; k++)
-            if (boxLo[k] == 0 || boxHi[k] == nc - 1) throw new InvalidOperationException("quadrature box touches the grid edge");
+            if ((boxLo[k] == 0 && !Natural(k)) || boxHi[k] == nc[k] - 1)
+                throw new InvalidOperationException($"quadrature box touches the grid edge on axis {k}: cells {boxLo[k]}..{boxHi[k]} of {nc[k]}");
 
-        // Pass 2: fine trapezoid grid over the box widened by one coarse cell (the integrand is negligible at its edge).
+        // Pass 2: fine grid over the box widened by one coarse cell (the integrand is negligible at its edge), or from
+        // the natural boundary; trapezoid nodes on the log axes, midpoints on the τ_u axis.
         const int nf = 64;
         var start = new double[3];
         var step = new double[3];
         for (int k = 0; k < 3; k++)
         {
-            start[k] = lo + (boxLo[k] - 1) * coarse;
-            step[k] = (boxHi[k] - boxLo[k] + 2) * coarse / (nf - 1);
+            if (Natural(k))
+            {
+                start[k] = 0.0;
+                step[k] = (boxHi[k] + 2) * coarse[k] / nf;
+            }
+            else
+            {
+                start[k] = lo[k] + (boxLo[k] - 1) * coarse[k];
+                step[k] = (boxHi[k] - boxLo[k] + 2) * coarse[k] / (nf - 1);
+            }
         }
+        double FineNode(int axis, int k) => start[axis] + (k + (Natural(axis) ? 0.5 : 0.0)) * step[axis];
         var bufBeta = new double[nu];
         double maxF = maxC, wSum = 0.0, eSigma = 0.0, eTauU = 0.0, eTau0 = 0.0;
         var eBeta = new double[nu];
@@ -336,11 +448,11 @@ public sealed class HierarchicalPSplineConditionalTests
             for (int b = 0; b < nf; b++)
                 for (int c = 0; c < nf; c++)
                 {
-                    double u1 = start[0] + a * step[0], u2 = start[1] + b * step[1], u3 = start[2] + c * step[2];
-                    double w = Math.Exp(LogPost(u1, u2, u3, bufBeta) - maxF);
+                    double u1 = FineNode(0, a), c2 = FineNode(1, b), u3 = FineNode(2, c);
+                    double w = Math.Exp(LogPost(u1, c2, u3, bufBeta) - maxF);
                     wSum += w;
                     eSigma += w * Math.Exp(0.5 * u1);
-                    eTauU += w * Math.Exp(0.5 * u2);
+                    eTauU += w * TauU(c2);
                     eTau0 += w * Math.Exp(0.5 * u3);
                     for (int j = 0; j < nu; j++) eBeta[j] += w * bufBeta[j];
                 }
