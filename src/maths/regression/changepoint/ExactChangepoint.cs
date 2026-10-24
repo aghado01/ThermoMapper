@@ -26,8 +26,9 @@ public sealed record ChangepointResult(
 /// transitions, where" answer for b₁(T) over a thermal grid. An <see cref="ISegmentModel"/> supplies the
 /// single-segment evidence and posterior level (Gaussian closed-form, or Cauchy/robust by quadrature); a
 /// log-space forward DP sums the per-segment evidences over every k-segmentation, a backward pass gives the break
-/// probabilities, and the segment posteriors give the regression curve. Everything is exact and polynomial —
-/// the DP is O(n²·K) — so for a coarse thermal grid (small n) it is cheap and MCMC-error-free. The
+/// probabilities, and the segment posteriors give the regression curve. Everything is exact and polynomial — the
+/// recursions are O(K·n²) and the regression curve O(K²·n²), on top of the segment model's tables — so for a coarse
+/// thermal grid (small n) it is cheap and MCMC-error-free. The
 /// uniform-over-segmentations boundary prior supplies the Occam penalty (`1/C(n−1,k−1)`); k is uniform over
 /// 1..maxSegments.
 /// </summary>
@@ -157,9 +158,14 @@ public static class ExactChangepoint
     }
 
     /// <summary>
-    /// Rough, semi-principled Gaussian hyperparameters (Hutter §7): ν = mean(y), ρ² = data variance (segment-level
-    /// spread), σ² from the robust median of squared first differences (within-segment noise, immune to the few
-    /// jumps). Override for a calibrated fit.
+    /// Rough, semi-principled Gaussian hyperparameters (Hutter §7). Override them for a calibrated fit.
+    /// <list type="bullet">
+    ///   <item>ν = mean(y).</item>
+    ///   <item>σ² = median of the squared first differences / (2·median χ²₁), at least 10⁻⁶. Within a segment a
+    ///   difference is N(0, 2σ²), so its square is 2σ²·χ²₁; the median ignores the few that straddle a jump. With an
+    ///   even number of differences it takes the upper of the two middle values.</item>
+    ///   <item>ρ² = max(var − σ², 0.1·var + 10⁻⁹): the data's variance net of the noise, floored.</item>
+    /// </list>
     /// </summary>
     public static (double Sigma2, double Nu, double Rho2) DefaultHyperparameters(double[] y)
     {
@@ -179,11 +185,14 @@ public static class ExactChangepoint
             for (int i = 0; i < n - 1; i++) { double d = y[i + 1] - y[i]; sqDiff[i] = d * d; }
             Array.Sort(sqDiff);
             double median = sqDiff[(n - 1) / 2];
-            sigma2 = Math.Max(median / 0.9098, 1e-6);   // E[(Δy)²]=2σ²·E[χ²₁], median(χ²₁)≈0.4549 ⇒ σ²≈median/0.91
+            sigma2 = Math.Max(median / SquaredDifferenceMedian, 1e-6);
         }
         double rho2 = Math.Max(variance - sigma2, 0.1 * variance + 1e-9);
         return (sigma2, mean, rho2);
     }
+
+    // The median of (Δy)²/σ² within a segment: 2·median χ²₁ = 2·Φ⁻¹(¾)² ≈ 0.909873.
+    private static readonly double SquaredDifferenceMedian = 2.0 * Math.Pow(Normal.StandardQuantile(0.75), 2);
 
     private static double[,] Fill(int rows, int cols, double value)
     {

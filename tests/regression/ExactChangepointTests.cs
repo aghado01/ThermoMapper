@@ -113,6 +113,23 @@ public sealed class ExactChangepointTests
             $"gaussian should over-segment around outliers (k̂={gauss.MapSegments}) vs cauchy ({cauchy.MapSegments})");
     }
 
+    [Fact]
+    public void DefaultSigma2_IsTheSquaredDifferencesMedian_OverTwiceTheChiSquaredMedian()
+    {
+        // Differences 1, 2, 3, 4: the squares' upper middle value is 9. Differences 1, 2, 3: the median square is 4.
+        // 2·median χ²₁ = 2·Φ⁻¹(¾)² = 0.9098728462391454 (computed independently).
+        Assert.Equal(9.891492022429796, ExactChangepoint.DefaultHyperparameters(new[] { 0.0, 1.0, 3.0, 6.0, 10.0 }).Sigma2, 12);
+        Assert.Equal(4.396218676635465, ExactChangepoint.DefaultHyperparameters(new[] { 0.0, 1.0, 3.0, 6.0 }).Sigma2, 12);
+
+        // On a long noisy step signal the estimate ignores the jumps and recovers σ². The sample median of χ²₁ has a
+        // relative sd of about 1/(2·f(m)·m·√N) ≈ 1.6% at N = 20,000 (f the χ²₁ density at its median m), a little more
+        // for differences, which are correlated; ±8% is about five of them.
+        var rng = new Xoshiro256PlusPlus(seed: 29);
+        var y = new double[20_000];
+        for (int i = 0; i < y.Length; i++) y[i] = (i / 4000 % 2 == 0 ? 0.0 : 5.0) + 0.5 * Gaussian(rng);
+        Assert.InRange(ExactChangepoint.DefaultHyperparameters(y).Sigma2, 0.25 * 0.92, 0.25 * 1.08);
+    }
+
     // The test's computation at any noise seed, which the seed sweep reruns (ComparativeSweep): both segment models on
     // one break with three gross outliers.
     internal static (ChangepointResult GaussianFit, ChangepointResult CauchyFit) GaussianAndCauchy(int noiseSeed)
