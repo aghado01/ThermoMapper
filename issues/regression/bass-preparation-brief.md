@@ -528,14 +528,14 @@ Only BARS and BGP run on the ensemble shell. BAPS runs its own chain loop, and t
 
 | Computed per draw | Reaches the result | Dropped |
 |---|---|---|
-| Knot configuration | Knot count (traced), mean knot count | The configuration |
-| Conditional-mean curve on the grid | Fit, FitSd, per-point classic R̂ | The per-draw curves |
-| Coefficient draw (`SampleCoefficients`) | Only through the readouts below | The draw |
-| σ², drawn with β in `WeightedNormalModel.SampleConditional` | Nothing | σ²: the public seam returns β only |
+| Knot configuration | Knot count (traced), mean knot count; since `43566f8` each draw's configuration, in `Draws` | Nothing, since `43566f8` |
+| Conditional-mean curve on the grid | Fit, FitSd, per-point classic R̂ | The per-draw curves, recomputable since `43566f8` from the retained knots and weights |
+| Coefficient draw (`SampleConditional` since `43566f8`, before `SampleCoefficients`) | The readouts below; since `43566f8` each draw's coefficients, in `Draws` | Nothing, since `43566f8` |
+| σ², drawn with β in `WeightedNormalModel.SampleConditional` | Since `43566f8`, each draw's σ², in `Draws`; the seam returns it with β | Nothing, since `43566f8` (before: σ², since the public seam returned β only) |
 | Argmax location and height | Location mean and interval, height mean; since `724bdf2` also each draw's exact values, in `PeakDraws`, over which the summary is a view since `dc4daef` | Nothing, since `724bdf2` (before: the per-draw sample, kept in-run but not returned) |
 | Significant spans (`PeakSpan`: location, height, left, right, two clipping flags) | Since `724bdf2`, every span exactly, in `PeakDraws`; λ(T), π(T) and the modes are views over them (`6b6aa5f`) | Nothing, since `724bdf2` (before: exact locations and endpoints snapped to the grid, the heights, and both clipping flags) |
-| Conditional variance on the grid | Pooled into FitSd | The per-draw values |
-| Robust weights (weighted model) | Nothing | The per-draw weights |
+| Conditional variance on the grid | Pooled into FitSd | The per-draw values, recomputable since `43566f8` from the retained knots and weights |
+| Robust weights (weighted model) | Since `43566f8`, the weights in force at each draw, in `Draws` | Nothing, since `43566f8` |
 | Tempering rungs | Pair rejection, round trips, final ladders | Hot-rung states and the per-rung target values the swaps use (no path-sampling evidence) |
 
 Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc-bars-readout-obligations.md`). **Both were fixed on 2026-10-23** (`724bdf2`, `6b6aa5f`; report "Retained peak draws").
@@ -574,6 +574,8 @@ Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc
 
 ### SPC samplers (`SwendsenWang`, `SwRunner`)
 
+Moved on 2026-10-24 to a side brief, `issues/spc/sw-retention-brief.md` (items S1–S6), parked for later. The inventory below stays as the record.
+
 - **Computed per sweep:** the spins, the FK bonds and their clusters (union-find), the energy, the magnetization, Σ|c|², and the largest and giant clusters.
 - **Kept:**
   - running sums of E, E², m, m², Σ|c|², and Σ|c|² without the largest cluster;
@@ -594,7 +596,7 @@ Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc
 
 ### Seams that return less than they compute
 
-1. `IObservationModel.SampleCoefficients` returns β. `WeightedNormalModel.SampleConditional` drew σ² with it, and only the robust weight update sees that σ².
+1. `IObservationModel.SampleCoefficients` returns β. `WeightedNormalModel.SampleConditional` drew σ² with it, and only the robust weight update sees that σ². Fixed in `43566f8`: the seam's `SampleConditional` returns both, and BARS retains them.
 2. `SplineExtrema.SignificantPeakSpans` returns exact spans with clipping flags; `BarsEnsemble.AccumulateDraw` keeps grid counts.
 3. `BgpChainRun` keeps the bandwidth sample; `BgpSampler.Run` returns three numbers from it. Fixed in `513c317`.
 4. `BapsSampler`'s chain accumulators keep the λ sample; `BapsResult` returns three quantiles. Fixed in `3d88ab1`.
@@ -605,7 +607,7 @@ Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc
 ### What follows (not scheduled)
 
 - **Retention at the source.** Each result carries a retained sample of draw states, or, for the exact engine, its tables. Today's summaries become views over that sample.
-  - BARS: knots, β, σ² and weights.
+  - BARS: knots, β, σ² and weights. Done in `43566f8` (report "BARS: draw state retained").
   - BGP: t and its fit.
   - BAPS: β, σ², τ², λ and η.
   - SW: the per-sweep scalars and, optionally, the partitions.
@@ -649,7 +651,7 @@ Tracked so that they are not lost between sessions. Each entry says what is know
 | OQ14 | BARS's efficiency defaults: move schedule, relocation kernel, hot end, run length | Measured 2026-10-22 on the default kernel (reports "After Phase 3: BARS mixing re-measured", "Relocation and move-schedule studies" and "Confirmation of the two candidates"). Each result is scoped to its regimes, and the winners flipped between regimes: DMGK at c = 0.4 won where the prior wants fewer knots than the data (up to 2.6×) and lost where it wants more (0.29–0.33× knot-count ESS). The adaptive relocation kernel passed the confirmation's criterion (knot count 1.05×, peak location 1.15×, nine fits). The constant 0.3/0.3/0.4 schedule is untested on the prior-wants-more conflict. Tempering helped only a narrow peak's location, and nothing tried fixes that readout's τ ≈ 330. No default has changed. | One designed pass, deciding every efficiency default at once (the brief's "Follow-up record"). It needs both directions of prior–likelihood conflict, sparse and dense fits, counts and peaks, and a criterion fixed before the run. The stopping strategy (OQ7) joins it once the readout design exists. | With the readout design (OQ7) |
 | OQ15 | Robust centring of the Normal prior | The null-fit centre uses the plain mean, which keeps the robust weights' Gibbs conditional exact, since the prior cannot depend on the sampled weights. But an outlier whose likelihood weight goes to zero still moves the centre, and pulls the fit by about R/m² (second external review, item 3: intercept-only, m = 40, outlier at 10⁶, conditional mean 625). **Decided 2026-10-22 by the user: the median centre**, the Normal model's default (`Mean` and `Zero` stay selectable). Measured: the contaminated intercept-only fit stays at about 1e-12·R/m against the mean centre's R/m²; a robust BARS fit with a 10⁶ glitch matches the clean fit (MSE 0.00328 against 0.00296; the mean centre gives 6,790); clean asymmetric fits differ from the mean centre's by exactly (median − mean)/(m + 1). | Open for later, with the user's planned look at robust statistics: the flat intercept (Liang et al. 2008; exact, but it changes the shared block's closed forms, so it goes with BASS's D03), and robust centring more generally. | Median decided; flat intercept with D03 |
 | OQ16 | Robust centring and bases for functional BASS | OQ15's functional counterpart, raised by the user on 2026-10-22 from `Maths.Geometry`'s geometric median and Weiszfeld scatter. In direct functional BASS the level is a curve, and the geometric (spatial) median of the curves is the standard robust functional location (Gervini 2008; Cardot, Cénac and Zitt 2013). It depends only on the data, is translation-equivariant and has breakdown point 1/2; `EuclideanMedian` computes it. For `bassPCA`, spherical PCA (Locantore et al. 1999) takes the eigenvectors of the spatial-sign covariance (weights 1/‖v‖²), whose influence is bounded; the Weiszfeld scatter's 1/‖v‖ weights leave it growing linearly. Distances must be L²(t), with coordinates scaled by √Δt, and `Maths.Regression` does not reference `Maths.Geometry` yet. | An extension beyond R parity, specified under D03 (the curve centre) and D07 (the basis), with the user's later look at robust statistics. Details are in the port brief's deferred extensions. | BASS port, after parity |
-| OQ17 | Per-observation log density per draw on the shared observation-model seam | Raised 2026-10-23 with the user's question on conformal Bayes (Fong and Holmes 2021). `IObservationModel` exposes the collapsed marginal, conditional means and coefficient draws, and the conditional variance, but no log p(yᵢ \| xᵢ, draw). Three consumers need the n × S matrix: conformal Bayes (add-one-in importance weights over the existing draws; coverage under exchangeability up to Monte Carlo error; no refits), WAIC and PSIS-LOO across BARS, BAPS and BASS, and the noise-model calibration check. On SPC × BARS's fixed grid only the replicates at a temperature are exchangeable. Coverage there is for a new replicate at a measured temperature, in steps of 1/(k+1), and says nothing about unmeasured temperatures, the curve or the readout's features. | **Decided 2026-10-23 by the user: both draw contents, as configurable options.** One option retains the coefficients and noise scale with each structural draw (a plain likelihood); the other gives the collapsed posterior predictive per structural draw. Each engine picks its default at its port (D04, D07). The prerequisite is a retained posterior sample. BARS keeps none today: `BarsEnsemble` folds each draw into fixed accumulators and drops its knots, its coefficient draw and its σ², which `SampleCoefficients` discards even though `SampleConditional` draws it. Still open: what the Gibbs-loss and Whittle models' pointwise terms mean, or whether they decline. The conformal readout itself waits for the SPC × BARS work. Details are in the port brief's "Posterior ownership and prediction"; the inventory across engines is under "Retention inventory". | BASS port (the seam and retention); SPC × BARS (conformal Bayes) |
+| OQ17 | Per-observation log density per draw on the shared observation-model seam | Raised 2026-10-23 with the user's question on conformal Bayes (Fong and Holmes 2021). `IObservationModel` exposes the collapsed marginal, conditional means and coefficient draws, and the conditional variance, but no log p(yᵢ \| xᵢ, draw). Three consumers need the n × S matrix: conformal Bayes (add-one-in importance weights over the existing draws; coverage under exchangeability up to Monte Carlo error; no refits), WAIC and PSIS-LOO across BARS, BAPS and BASS, and the noise-model calibration check. On SPC × BARS's fixed grid only the replicates at a temperature are exchangeable. Coverage there is for a new replicate at a measured temperature, in steps of 1/(k+1), and says nothing about unmeasured temperatures, the curve or the readout's features. | **Decided 2026-10-23 by the user: both draw contents, as configurable options.** One option retains the coefficients and noise scale with each structural draw (a plain likelihood); the other gives the collapsed posterior predictive per structural draw. Each engine picks its default at its port (D04, D07). The prerequisite is a retained posterior sample. BARS has kept one since `43566f8` (`BarsResult.Draws`: knots, coefficients, σ² and weights; report "BARS: draw state retained"), so the retained-parameters option needs only the pointwise term. Still open: what the Gibbs-loss and Whittle models' pointwise terms mean, or whether they decline. The conformal readout itself waits for the SPC × BARS work. Details are in the port brief's "Posterior ownership and prediction"; the inventory across engines is under "Retention inventory". | BASS port (the seam and retention); SPC × BARS (conformal Bayes) |
 | OQ18 | Shared Gibbs building blocks, and separating samplers from model classes | Raised 2026-10-23. The user: this unification is the ideal, and samplers should be separate from model classes where that is not unwieldy. The engines hand-roll the same conjugate steps, 21 sites across 7 regression files: banded Gaussian conditional draws, inverse-gamma updates from a sum of squares, gamma updates for local multipliers, and scalar random-walk Metropolis. BASS needs all of them. `BapsSampler` cannot move to `Maths.Samplers` as it stands, because its conditionals use `PenalizedSpline`, `DifferencePenalty` and `BandedDesign` in Regression, which references Samplers: a cycle. | Design the primitives and a generic block scan in `Maths.Samplers`. The scan saves state for checkpoints, is driven by the shell, and composes with the reversible-jump chain for BARS's weight block and BASS. Move BAPS's three modes, `HierarchicalPSpline`'s sweep and BARS's weight block onto them, each bit-identical to its current sampler; model-specific blocks stay in Regression. **The naming plan rides along (decided 2026-10-23):** BAPS stays the method name ("baps is the method, something that sits above just the sampler"), `BapsSampler` becomes `Baps`, and `BapsLambdaUpdate` becomes `BapsScheme { Gibbs, Collapsed, LocallyAdaptiveGibbs }`. The embedded samplers come out under their field names, block Gibbs and collapsed Metropolis. Details are in the port brief's "Reuse and shared renovations". | BASS port (shared renovations); before `HierarchicalPSpline` moves onto the shell |
 
 Tracked elsewhere: the `EbicPrior` text check (step 3.8, waiting on the *Biometrics* PDF), BARS admission (step 3.7), the b = 0 guard (step 3.2's report), and the linear form's weaker hot-rung Occam penalty (step 3.2 addendum).
@@ -2472,3 +2474,29 @@ The user asked for the two open BGP items: checkpoint resume (OQ10), and inferri
 **Still open:** `HierarchicalPSpline`'s shell move (waits for OQ18), and the changepoint and SW items of the retention inventory.
 
 **Results** under the fact harness: `Maths.Regression.Tests` 295 of 295 (`20261023_191116331`). The solution builds.
+
+### BARS: draw state retained — 2026-10-24
+
+At the user's request: retain each BARS draw's knots, β, σ² and weights, with the summaries read from them. It closes the BARS rows of the retention inventory and its first seam.
+
+| Commit | Change |
+|---|---|
+| `43566f8` | `BarsDraw` (knots, coefficients, σ², weights and the peak readout) retained per chain in `BarsReadout`, carried by checkpoints and returned as `BarsResult.Draws`, which replaces `PeakDraws`. The seam's `SampleConditional` returns σ² with β and replaces `SampleCoefficients`. |
+
+- **What a draw holds.**
+  - `Knots`: the configuration the chain held.
+  - `Coefficients` and `Sigma2`: one joint draw from their conditional posterior given the knots and weights, on the readout stream. Exact for the Normal model, labelled by `Uncertainty` otherwise. σ² is NaN for Poisson, Whittle and Gibbs loss, which have no noise scale.
+  - `Weights`: the robust weights in force at the draw, or null. The block replaces the array at each update, so draws share it between updates: 600 robust draws shared 26 arrays.
+  - `Peak`: the exact peak readout, as before.
+- **Not stored, because recomputable.** The conditional mean curve and the conditional variance follow from the knots and weights. A test recomputes `Fit` from them to 1e-10 under robust weights, which also checks that each draw kept the weights the run used.
+- **The seam.** `IObservationModel.SampleConditional` returns a `ConditionalDraw` (coefficients, σ²). Weighted Normal's joint draw was internal; it is now the seam's implementation.
+- **Every basis draws coefficients.** The step basis used to skip the draw. It now draws on the readout stream, which nothing else reads, so every other output is unchanged.
+- **Bit-identity.** A probe over seven setups matched the previous code byte for byte: fit, sd, the R̂ map, λ, π, the modes, every peak draw, move statistics, evaluations and tempering. The setups were plain, robust weights, adaptive τ, tempered, the step basis, Poisson and Gibbs loss, each at 2 chains × 300 draws.
+- **Measured.** σ² on n = 200 points at σ = 0.1: median 0.0092, 95% interval [0.0076, 0.0113] against 0.01 (4 chains × 500 draws).
+- **Cost.** About (2k + 4) numbers per draw for a cubic spline with k knots, plus n per weight update.
+- **What it enables.** OQ17's retained-parameters option (a plain likelihood per draw), quantile bands and new nonlinear readouts without a rerun, and per-draw σ² for the noise-model calibration check.
+- **Noticed, not changed.** Each draw refits the knots' g-prior block three times: for the conditional mean, the conditional variance and the joint draw. One conditional per draw would serve all three; it is an efficiency item, not a correctness one.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 301 of 301 (`20261024_015633005`). The solution builds.
+
+**Still open:** `HierarchicalPSpline`'s shell move (waits for OQ18), OQ17's pointwise term, and the changepoint items of the retention inventory. The SW items moved to `issues/spc/sw-retention-brief.md`.

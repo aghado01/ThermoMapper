@@ -131,7 +131,7 @@ Several existing components provide useful patterns but cannot be substituted un
 - [BAPS TensorProductDesign](../../src/maths/regression/spline/baps/TensorProductDesign.cs) constructs a fixed bivariate B-spline basis. It is not BASS's changing interaction basis.
 - [BandCholesky](../../src/maths/linalg/BandCholesky.cs) provides sampling/factorization patterns, but BASS's active-term Gram is generally dense.
 - [WeightedNormalModel](../../src/maths/regression/spline/bars/WeightedNormalModel.cs) has a different coefficient prior and marginal target. Its numerical operations are reusable; its statistical formula is not the BASS formula.
-- [IObservationModel.SampleCoefficients](../../src/maths/regression/spline/bars/IObservationModel.cs) defaults to a conditional mean. Weighted Normal inherits that behavior. Do not treat this as a full posterior draw or reuse its extrema intervals as a complete uncertainty reference.
+- [IObservationModel.SampleConditional](../../src/maths/regression/spline/bars/IObservationModel.cs) defaults to the conditional mean with a NaN σ², which is not a full posterior draw. Weighted Normal draws (σ², β) exactly (step 0.5c), Poisson and Whittle approximately, and Gibbs loss returns the mean; the model's `CoefficientUncertainty` label says which. Reuse its extrema intervals as an uncertainty reference only where the label is `Exact`.
 - BARS's fixed complexity-prior helpers do not implement BASS's sampled count-intensity hierarchy.
 
 Existing covariance callers may legitimately require regularization or inverse output. A new strict factor path must not silently change their semantics. No blanket conversion of the existing engines from one dimension to two dimensions is required.
@@ -218,14 +218,9 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
 - **Decided 2026-10-23 by the user: both, as configurable options.**
   - **Retained parameters.** Each structural draw keeps its coefficients and noise scale, so the pointwise density is the plain likelihood.
   - **Collapsed predictive.** Each structural draw supplies the collapsed posterior predictive (Student t for the Normal g-prior).
-  - **Defaults.** Each engine picks its default at its port (D04, D07), and the other option stays selectable. The default `SampleCoefficients` returns the conditional mean, which is not a full draw, so a density evaluated there would understate the uncertainty.
+  - **Defaults.** Each engine picks its default at its port (D04, D07), and the other option stays selectable. The seam's default `SampleConditional` returns the conditional mean, which is not a full draw, so a density evaluated there would understate the uncertainty.
 - **The prerequisite: a retained posterior sample.**
-  - **What BARS does today.** It keeps no sample. `BarsEnsemble` reduces each draw into accumulators fixed at configuration time (the fit and its sd, the peak and span sinks), then drops:
-    - the knot configuration;
-    - the coefficient draw made for the peak readouts;
-    - the σ² that `WeightedNormalModel.SampleConditional` draws with it (the public `SampleCoefficients` returns only β).
-
-    So every new readout needs a rerun.
+  - **What BARS does today.** Since 2026-10-24 it keeps every draw's state in `BarsResult.Draws` (`BarsDraw`): the knot configuration, the coefficients and σ² from one joint conditional draw, the robust weights in force at the draw, and the draw's peak readout. The seam returns σ² with β (`SampleConditional`, which replaced `SampleCoefficients`). Before that, `BarsEnsemble` reduced each draw into accumulators fixed at configuration time and dropped the knots, the coefficient draw and its σ², so every new readout needed a rerun (the preparation brief's report "BARS: draw state retained").
   - **What the retained sample holds.** Each draw's generative state: the structure, coefficients, noise scale and, where present, the robust weights.
   - **What is derived, not stored.** Per-draw curves are recomputed from that state. The streaming accumulators stay as online views (the R̂ stop needs them), not as the only output.
   - **Size.** At BARS's sizes this is small: 4 chains × 10,000 draws × about 40 numbers is 1.6 million doubles, about 13 MB.
