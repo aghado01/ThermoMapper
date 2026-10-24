@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Maths.Rng;
 using Maths.Samplers;
+using Maths.Samplers.Blocks;
 using Maths.Samplers.Ensemble;
 using Maths.Samplers.Rjmcmc;
 
@@ -260,7 +261,6 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var run = new BarsChainRun(this, rng, OverdispersedStart(rng, _startDispersion), _grid.Length)
         {
             ReadoutRng = new Xoshiro256PlusPlus(readoutSeed),
-            WeightRng = new Xoshiro256PlusPlus(seeds[2]),
             Kernel = _adaptKernelTau is double t0 ? new AdaptiveLocalBetaKernel(t0) : _kernel,
         };
         if (_temperLevels is int levels)
@@ -272,6 +272,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         {
             run.SetChain(NewChain(run));
         }
+        run.Scan = new BlockScan<BarsChainRun>(StepBlocks(), run, new Xoshiro256PlusPlus(seeds[2]), x => x);   // the weight stream
         return run;
     }
 
@@ -300,9 +301,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var run = new BarsChainRun(this, Rng(s.StartRng), s.Config, s.Readout.Copy())
         {
             W = s.Weights is null ? null : (double[])s.Weights.Clone(),
-            SinceWeight = s.SinceWeight,
             ReadoutRng = Rng(s.ReadoutRng),
-            WeightRng = Rng(s.WeightRng),
             Kernel = s.KernelLogTau is double logTau ? AdaptiveLocalBetaKernel.FromLogTau(logTau) : _kernel,
             BurnScans = s.BurnScans,
             BurnRoundTrips = s.BurnRoundTrips,
@@ -319,27 +318,36 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         {
             run.SetChain(ReversibleJumpChain<KnotConfig>.Restore(Moves(run.Kernel), target, s.Chain!));
         }
+        run.Scan = BlockScan<BarsChainRun>.Restore(StepBlocks(), new BlockScanSnapshot<BarsChainRun>(
+            run, s.WeightRng.Item1, s.WeightRng.Item2, s.WeightRng.Item3, s.WeightRng.Item4, s.ScanSteps, s.BlockAttempts,
+            s.BlockAccepts), x => x);
         run.Readout.Evaluations.Assign(s.Readout.Evaluations);
         return run;
     }
 
-    // One chain's restart state. The untempered chain shares the start stream, so its snapshot carries those words.
-    private IChainState Save(BarsChainRun st) => new BarsChainState(
-        st.Config, st.W is null ? null : (double[])st.W.Clone(), st.SinceWeight,
-        st.Rng.SaveState(), st.ReadoutRng.SaveState(), st.WeightRng.SaveState(),
-        st.Kernel is AdaptiveLocalBetaKernel adaptive ? adaptive.LogTau : null,
-        st.Ladder is null ? st.RjChain.Snapshot() : null, st.Ladder?.Snapshot(),
-        st.Readout.Copy(), st.BurnScans, st.BurnRoundTrips, st.BurnRestarts,
-        st.BurnRejection is null ? null : (double[])st.BurnRejection.Clone());
+    // One chain's restart state. The untempered chain shares the start stream, so its snapshot carries those words. The
+    // step scan's snapshot holds the live run as its state, so only its stream (the weight stream), step count and block
+    // counters are kept.
+    private IChainState Save(BarsChainRun st)
+    {
+        BlockScanSnapshot<BarsChainRun> scan = st.Scan.Snapshot();
+        return new BarsChainState(
+            st.Config, st.W is null ? null : (double[])st.W.Clone(), scan.Steps, scan.BlockAttempts, scan.BlockAccepts,
+            st.Rng.SaveState(), st.ReadoutRng.SaveState(), (scan.Rng0, scan.Rng1, scan.Rng2, scan.Rng3),
+            st.Kernel is AdaptiveLocalBetaKernel adaptive ? adaptive.LogTau : null,
+            st.Ladder is null ? st.RjChain.Snapshot() : null, st.Ladder?.Snapshot(),
+            st.Readout.Copy(), st.BurnScans, st.BurnRoundTrips, st.BurnRestarts,
+            st.BurnRejection is null ? null : (double[])st.BurnRejection.Clone());
+    }
 
     /// <summary>
-    /// One BARS chain's restart state, beside its readouts: the knot configuration, the robust weights and their
-    /// cadence, every RNG stream's words, the adaptive kernel's log τ, the chain's or ladder's snapshot (rungs,
+    /// One BARS chain's restart state, beside its readouts: the knot configuration, the robust weights, the step scan's
+    /// count and block counters (the weight block's cadence), every RNG stream's words, the adaptive kernel's log τ, the chain's or ladder's snapshot (rungs,
     /// replica assignments, swap stream, round-trip and swap statistics), and the ladder's counts at the end of
     /// burn-in. Taken after burn-in, so burn-in adaptation is never in flight.
     /// </summary>
     private sealed record BarsChainState(
-        KnotConfig Config, double[]? Weights, int SinceWeight,
+        KnotConfig Config, double[]? Weights, long ScanSteps, long[] BlockAttempts, long[] BlockAccepts,
         (ulong, ulong, ulong, ulong) StartRng, (ulong, ulong, ulong, ulong) ReadoutRng, (ulong, ulong, ulong, ulong) WeightRng,
         double? KernelLogTau, ChainSnapshot<KnotConfig>? Chain, LadderSnapshot<KnotConfig>? Ladder,
         BarsReadout Readout, long BurnScans, long BurnRoundTrips, long BurnRestarts,
@@ -506,37 +514,62 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                                  count > 0.0 ? height / count : double.NaN, ChainDiagnostics.Diagnose(traces, 0));
     }
 
-    // Advance the chain one step (the IChain.Step body): step the lone chain or the tempered ladder (returning the
-    // cold state), then run the optional scale-mixture weight block. Every weightEvery steps it draws (σ², β) from
-    // their exact conditional given the knots and w, redraws w given the residuals and σ², and hands the RJ knot chain
-    // the target | w, keeping its state and cumulative move counters. The block has its own seeded stream.
+    // Advance the chain one step (the IChain.Step body): the step scan runs the knot step, the lone chain or the tempered
+    // ladder (returning the cold state), and every weightEvery steps the scale-mixture weight block.
     private KnotConfig StepOnce(BarsChainRun st)
     {
-        st.Config = st.Ladder is not null ? st.Ladder.Step() : st.RjChain.Step();
-
-        if (_resampler is not null)
-        {
-            st.SinceWeight++;
-            if (st.SinceWeight >= _weightEvery)
-            {
-                double[,] z = _basis.Design(st.Config, _x);
-                (double[] beta, double sigma2) = ((WeightedNormalModel)_model).SampleConditional(z, _y, st.W, st.WeightRng);
-                if (sigma2 > 0.0)
-                {
-                    var r = new double[_y.Length];
-                    for (int i = 0; i < r.Length; i++)
-                    {
-                        double f = 0.0;
-                        for (int j = 0; j < beta.Length; j++) f += z[i, j] * beta[j];
-                        r[i] = _y[i] - f;
-                    }
-                    st.W = _resampler.Resample(r, sigma2, st.WeightRng);
-                    st.RjChain.ReplaceTarget(new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations, _minColumnMass));
-                }
-                st.SinceWeight = 0;
-            }
-        }
+        st.Scan.Step();
         return st.Config;
+    }
+
+    // The step scan's blocks: the knot step on every step, and the weight block on its cadence when the run resamples
+    // weights. The chain's own stream drives the knot step; the scan's stream is the weight stream.
+    private IBlock<BarsChainRun>[] StepBlocks() => _resampler is null
+        ? new IBlock<BarsChainRun>[] { new KnotStepBlock() }
+        : new IBlock<BarsChainRun>[] { new KnotStepBlock(), new WeightBlock(this) };
+
+    // The reversible-jump step, or the tempered ladder's scan returning its cold state, each on its own stream; accepted
+    // when the cold chain's move was.
+    private sealed class KnotStepBlock : IBlock<BarsChainRun>
+    {
+        public string Name => "knots";
+
+        public bool Update(BarsChainRun st, Xoshiro256PlusPlus rng)
+        {
+            long accepted = st.RjChain.Accepted;
+            st.Config = st.Ladder is not null ? st.Ladder.Step() : st.RjChain.Step();
+            return st.RjChain.Accepted > accepted;
+        }
+    }
+
+    // The scale-mixture weight block, every weightEvery steps on the weight stream: it draws (σ², β) from their exact
+    // conditional given the knots and w, redraws w given the residuals and σ², and hands the RJ knot chain the target | w,
+    // keeping its state and cumulative move counters.
+    private sealed class WeightBlock(BarsEnsemble owner) : IBlock<BarsChainRun>
+    {
+        public string Name => "robust weights";
+
+        public int Every => Math.Max(1, owner._weightEvery);
+
+        public bool Update(BarsChainRun st, Xoshiro256PlusPlus rng)
+        {
+            double[,] z = owner._basis.Design(st.Config, owner._x);
+            (double[] beta, double sigma2) = ((WeightedNormalModel)owner._model).SampleConditional(z, owner._y, st.W, rng);
+            if (sigma2 > 0.0)
+            {
+                var r = new double[owner._y.Length];
+                for (int i = 0; i < r.Length; i++)
+                {
+                    double f = 0.0;
+                    for (int j = 0; j < beta.Length; j++) f += z[i, j] * beta[j];
+                    r[i] = owner._y[i] - f;
+                }
+                st.W = owner._resampler!.Resample(r, sigma2, rng);
+                st.RjChain.ReplaceTarget(new SplineTarget(owner._basis, owner._model, owner._prior, owner._x, owner._y, st.W,
+                                                          st.Readout.Evaluations, owner._minColumnMass));
+            }
+            return true;
+        }
     }
 
     // Reduce one post-burn draw and retain its state. Readouts affine in the curve use the conditional mean: the grid
@@ -792,7 +825,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
     /// <summary>
     /// One BARS reversible-jump replica + its thread-local accumulators. As an <see cref="IChain{KnotConfig}"/> its
-    /// <see cref="Step"/> advances the chain (or tempered ladder) and runs the resampler block, and its acceptance
+    /// <see cref="Step"/> runs the step scan (the chain or tempered ladder, and the weight block), and its acceptance
     /// is the RJ chain's cumulative count; as an <see cref="IChainRun{KnotConfig}"/>
     /// it burns adaptively, reduces a draw to functionals, and carries the BARS readout (its retained draws).
     /// </summary>
@@ -805,9 +838,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         public double[]? W;
         public IKnotKernel Kernel = null!;
         public Xoshiro256PlusPlus ReadoutRng = null!;   // per-draw coefficient draws, decoupled from the chain RNG
-        public Xoshiro256PlusPlus WeightRng = null!;    // the robust weight block's (σ², β, w) draws, derived from the chain seed
+        public BlockScan<BarsChainRun> Scan = null!;     // the step: the knot step, and the weight block on its cadence
         public ParallelTempering<KnotConfig>? Ladder;   // set ⇒ the RJ chain is this ladder's cold replica
-        public int SinceWeight;
         public long BurnScans, BurnRoundTrips, BurnRestarts;   // the ladder's counts at the end of burn-in
         public double[]? BurnRejection;                        // its per-pair rejection sums then
 
