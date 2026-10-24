@@ -84,6 +84,7 @@ flowchart LR
 | Tempering | `ParallelTempering<T>(movesForReplica, target, start, betas, path, masterSeed, schedule = DeterministicEvenOdd)` with `Step()`, `Path`, `Schedule`, `Betas`, `Cold`, `ColdChain`, `Replicas`, `Scans`, `RoundTrips`, `AnnealedRestarts`, `PairStats`, `SwapAttempts`, `SwapAccepts`, `AdaptLadder()`, and static `GeometricLadder(levels, betaMin)`; `SwapSchedule` (`DeterministicEvenOdd`, `StochasticEvenOdd`, `Sequential`); `SwapPairStat`; `TemperingLadder` (`Barrier`, `IdealRoundTripRate`, `Equalize`, `RecommendedLevels`) |
 | Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0, minEssPerChain = 100, checkpoint = false, resumeFrom = null)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.Diagnose` → `ConvergenceDiagnostic` (`RHat`, `BulkRHat`, `TailRHat`, `BulkEss`, `TailEss`, `Ess`); `ChainDiagnostics.RHat`; `RHatDiagnostic`, `EssDiagnostic`, `DiagnosticState`; `IChain<T>`, `IEnsembleModel<T>` (`FunctionalDim`, `MonitoredDim`, `Fingerprint`, `RestoreChain`), `IChainRun<T>`, `EnsembleRun` |
 | Readouts, traces, checkpoints | `IMergeable<T>`; `RunningMoments` (`Add(x, weight)`, `Merge`, `Of`), `WeightedSums` (`Add`, `AddSparse`, `Mean`), `DrawSample` (`Add`, `Quantile`), `Tally<TEnum>`; `ChainTrace` (`Add`, `Draws`, `Copy`); `EnsembleCheckpoint`, `ChainCheckpoint`, `RunIdentity`, `IChainState`, `IResumableChainRun<T>`, `RunFingerprint`; `ReversibleJumpChain.Snapshot`/`Restore` (`ChainSnapshot<T>`), `ParallelTempering.Snapshot`/`Restore` (`LadderSnapshot<T>`) |
+| Blocks | `BlockScan<T>(blocks, state, rng, copy)` with `Step()`, `State`, `Steps`, `Attempts`, `Accepted`, `BlockStats()`, `Snapshot()` and static `Restore(blocks, snapshot, copy)` (`BlockScanSnapshot<T>`); `IBlock<T>` (`Name`, `Every`, `Update`); `GaussianConditional(dimension)` with `Draw(factor, rhs, rng, result, scale = 1)` and `Perturb(factor, mean, rng, result, scale = 1)`; `ConjugateUpdates.NormalVariance`, `ConjugateUpdates.NormalPrecision` |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
 ## Algorithms
@@ -198,6 +199,18 @@ $$\tau_{\text{DEO}}=\frac{1}{2+2E},\qquad \tau_{\text{SEO}}=\frac{1}{2N+2E}.$$
    - the rank-normalized diagnostics of the monitored functionals (`EnsembleRun.Monitored`);
    - acceptance $\sum\text{Accepted}/\sum\text{Attempts}$ over the sampling phase: each chain's counts at the end of burn-in are subtracted, so tuning during burn-in does not colour it.
 
+### Block scan and conjugate primitives (OQ18, 2026-10-24)
+
+The regression engines hand-rolled the same conjugate steps at 21 sites. These are the shared versions: the generic parts live here, and each model's blocks stay in `Maths.Regression`, the same split as the reversible-jump chain and its targets.
+
+- **`GaussianConditional`.** For $x\mid\cdot\sim N(Q^{-1}b,\ s^2Q^{-1})$ with Q factored (`ISpdFactor`, banded or dense), it solves $Q\mu=b$ and writes $\mu+s\,v$ with $v\sim N(0,Q^{-1})$ from the factor's innovation: `Dimension` standard normals in order, then `SampleInnovation`. It returns μ beside the draw, so Rao–Blackwellized means need no second solve. With a banded Q this is the block update of a Gaussian Markov random field (Rue 2001), as in Bayesian P-splines (Lang & Brezger 2004). An instance holds one dimension's scratch, so each chain owns its own.
+- **`ConjugateUpdates`.** n zero-mean normal terms with sum of squares S take an inverse-gamma prior IG(a, b) on their variance to IG(a + n/2, b + S/2), and a gamma prior (rate b) on their precision to Gamma(a + n/2, b + S/2). The posterior comes back, not just a draw, so its moments are at hand.
+- **`BlockScan<T>`.** A systematic-scan chain over a mutable state. Each step runs the blocks in order on one stream, each when its cadence (`IBlock.Every`, counted from step 1) falls due. All conditional draws make it Gibbs sampling; Metropolis blocks make it Metropolis-within-Gibbs; a collapsed block is just another block. As an `IChain<T>` the shell drives it like any kernel: `Accepted` and `Attempts` sum the blocks' counters, and `BlockStats()` keeps them apart. `Snapshot` copies the state (through the caller's `copy`) with the stream's words, the step count and the counters, and `Restore` resumes from a copy, so a snapshot stays usable.
+- **Tempering stays with the model.** A likelihood-tempered block scales its own sufficient statistics by b. The primitives never see a temperature.
+- **Not built yet: the scalar random-walk Metropolis step.** BAPS's λ step always draws a uniform, while BGP's t step skips it when the ratio is at least 1. One primitive cannot be bit-identical to both, so it waits for those moves.
+- **Checks.** The Gaussian draw's mean and covariance match an explicitly inverted precision through both factors, and the conjugate posteriors match numerical integration. A two-block Gibbs scan samples a known bivariate normal, cadences and counters follow the schedule, and a restored scan continues exactly.
+- **First client:** `HierarchicalPSpline`, whose sweep is five blocks, bit-identical to its former loop ([BayesianRegression](./BayesianRegression.md)).
+
 ### Readouts, traces and checkpoints (step 3.4)
 
 A run's state comes in three kinds, which pool differently, so they are three components.
@@ -283,8 +296,9 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | Targets | `targets/SamplingTarget.cs` |
 | Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `ParallelTempering.cs`, `TemperingLadder.cs` |
 | Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `ConvergenceDiagnostics.cs`, `RHatDiagnostic.cs`, `RunningMoments.cs`, `Readouts.cs`, `ChainTrace.cs`, `Checkpoint.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
+| Blocks | `blocks/BlockScan.cs`, `GaussianConditional.cs`, `ConjugateUpdates.cs` |
 | i.i.d. and fields | `iid/InverseTransform.cs`; `SpectralNoiseField.cs` (at the `samplers/` root) |
 
-**Tests:** `tests/Maths.Samplers.Tests` (sources in `tests/samplers/`) owns the samplers' own checks, with targets built from `Maths.Samplers` alone: chain contracts, the reversible-jump generality check, the target contract, parallel tempering (each rung's law on both paths, ladder validation), swap schedules against Theorem 1, ladder adaptation, and the diagnostics policy.
+**Tests:** `tests/Maths.Samplers.Tests` (sources in `tests/samplers/`) owns the samplers' own checks, with targets built from `Maths.Samplers` alone: chain contracts, the reversible-jump generality check, the target contract, parallel tempering (each rung's law on both paths, ladder validation), swap schedules against Theorem 1, ladder adaptation, the diagnostics policy, and the block primitives and scan.
 
 **See also:** [BayesianRegression](./BayesianRegression.md) (BARS, BGP) · [ProbabilityAndInformation](./ProbabilityAndInformation.md) · [DesignPrinciples](./DesignPrinciples.md)

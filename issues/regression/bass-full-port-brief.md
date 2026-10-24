@@ -168,6 +168,7 @@ Existing covariance callers may legitimately require regularization or inverse o
   - **`HierarchicalPSpline`** is already named for what it is. Its sweep becomes a block Gibbs scan in the same way.
 - **The check when it lands:** each engine moved onto the blocks must be bit-identical to its current sampler, with the same streams and the same order, as BAPS's move onto the ensemble shell was. The renames ride along in the same change.
 - **Sequencing:** `HierarchicalPSpline`'s move onto the ensemble shell waits for this, so it lands on the shared scan rather than another hand-rolled chain class. Its draw retention does not depend on it.
+- **Phase A landed (2026-10-24, `c525cd4`, `fb077f3`):** `GaussianConditional` (over any `ISpdFactor`, returning the conditional mean beside the draw), `ConjugateUpdates` (inverse-gamma and gamma posteriors of a normal scale) and `BlockScan<T>` (ordered blocks, per-block cadence and counters, `IChain`, exact snapshots) in `Maths.Samplers.Blocks`; `HierarchicalPSpline`'s sweep runs on them as five blocks, bit-identical to its former loop. The scalar random-walk Metropolis step waits for BAPS's λ and BGP's t, whose acceptance draws consume the stream differently (BAPS always draws the uniform; BGP skips it when the ratio is at least 1). Next: `HierarchicalPSpline` onto the ensemble shell (phase B), the mixing study (C), then BAPS and BARS's weight block (D).
 
 ## Numerical and operation contracts
 
