@@ -1,20 +1,43 @@
 using System;
+using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Samplers.Ensemble;
 
 namespace Maths.Regression.Bgp;
 
-/// <summary>A GP fit at one bandwidth: the marginal evidence with the constant mean integrated out, the GLS mean m̂ and
-/// the posterior weights α = K⁻¹(Y − m̂1) that produce the conditional-mean prediction. Returned by
-/// <see cref="GpRegression.Fit"/>.</summary>
-/// <param name="Bandwidth">The kernel bandwidth t this fit was computed at, in the GP's mapped frame.</param>
-/// <param name="LogMarginal">log ∫ p(Y | m, t) dm under a flat prior on the constant mean m (the t-posterior's likelihood factor).</param>
-/// <param name="Alpha">Posterior weights α = K⁻¹(Y − m̂1) with K = Σ_t + σ²I.</param>
-/// <param name="Mean">The GLS mean m̂ = 1ᵀK⁻¹Y / 1ᵀK⁻¹1, the posterior mean of m; the conditional mean is m̂ + k_t(·,X)·α.</param>
-public sealed record GpFit(double Bandwidth, double LogMarginal, double[] Alpha, double Mean);
+/// <summary>How a <see cref="GpRegression"/> treats the noise and signal variances.</summary>
+public enum GpNoiseModel
+{
+    /// <summary>
+    /// σ² is known and given, and the kernel's signal variance is 1: K = Σ_t + σ²I, as in TWCD2025's algorithm. The
+    /// response must then be on a scale where a unit signal variance is sensible.
+    /// </summary>
+    Known,
 
-/// <summary>A <see cref="GpFit"/> with what its conditional variance needs: the factor of K = Σ_t + σ²I, K⁻¹1 and
-/// 1ᵀK⁻¹1. It costs n² numbers, so a sampler holds one per chain while it is current and never retains it.</summary>
+    /// <summary>
+    /// The signal variance s² and the noise variance σ² = s²η are both unknown: K = s²(Σ_t + ηI), where η is the
+    /// noise-to-signal ratio. s² is integrated out under the 1/s² prior, leaving a marginal in (t, η), and drawn exactly
+    /// given them, s² | t, η, y ~ IG((n − 1)/2, Q/2). Rescaling the response rescales s² and σ² only.
+    /// </summary>
+    UnknownScale,
+}
+
+/// <summary>A GP fit at one bandwidth (and, for <see cref="GpNoiseModel.UnknownScale"/>, one noise ratio): the marginal
+/// evidence with the constant mean integrated out, the GLS mean m̂ and the posterior weights α = R⁻¹(Y − m̂1) that
+/// produce the conditional-mean prediction. Returned by <see cref="GpRegression.Fit(double)"/> and
+/// <see cref="GpRegression.Fit(double, double)"/>.</summary>
+/// <param name="Bandwidth">The kernel bandwidth t this fit was computed at, in the GP's mapped frame.</param>
+/// <param name="LogMarginal">The log evidence with the constant mean integrated out under its flat prior: log p(Y | t)
+/// for a known σ², or log p(Y | t, η) with s² also integrated out under 1/s² for an unknown scale.</param>
+/// <param name="Alpha">Posterior weights α = R⁻¹(Y − m̂1) with R = Σ_t + ηI (η = σ² for a known σ²).</param>
+/// <param name="Mean">The GLS mean m̂ = 1ᵀR⁻¹Y / 1ᵀR⁻¹1, the posterior mean of m; the conditional mean is m̂ + k_t(·,X)·α,
+/// which does not depend on s².</param>
+/// <param name="NoiseRatio">η, the nugget added to the unit-amplitude kernel: σ² itself for a known σ² (s² = 1).</param>
+/// <param name="Quadratic">Q = (Y − m̂1)ᵀR⁻¹(Y − m̂1), the residual quadratic that s²'s conditional posterior reads.</param>
+public sealed record GpFit(double Bandwidth, double LogMarginal, double[] Alpha, double Mean, double NoiseRatio, double Quadratic);
+
+/// <summary>A <see cref="GpFit"/> with what its conditional variance needs: the factor of R = Σ_t + ηI, R⁻¹1 and
+/// 1ᵀR⁻¹1. It costs n² numbers, so a sampler holds one per chain while it is current and never retains it.</summary>
 internal sealed record GpFactoredFit(GpFit Fit, CholeskyDecomposition Factor, double[] KInvOne, double OneKOne);
 
 /// <summary>
@@ -35,12 +58,13 @@ public sealed class GpRegression
     private readonly double[,] _x;        // n × D train predictors in the mapped frame
     private readonly double[] _y;         // n responses less _yShift
     private readonly double _yShift;      // training mean, subtracted for conditioning only (the mean is integrated out)
-    private readonly double _sigma2;      // known noise variance σ²
+    private readonly double _sigma2;      // known noise variance σ² (NaN for an unknown scale)
     private readonly IGpKernel _kernel;
     private readonly int _n;
     private readonly int _d;              // ambient dimension D
     private readonly double[,] _sqDist;   // n × n precomputed ‖X_i − X_j‖² in the mapped frame (independent of t)
 
+    /// <summary>A GP with a known noise variance and unit signal variance (<see cref="GpNoiseModel.Known"/>).</summary>
     /// <param name="x">n × D matrix of ambient predictor coordinates, in any units.</param>
     /// <param name="y">Length-n responses.</param>
     /// <param name="sigma2">Known observation-noise variance σ² &gt; 0, in response units.</param>
@@ -48,11 +72,29 @@ public sealed class GpRegression
     /// <param name="scaling">How the inputs are mapped before fitting (default: isotropic similarity into the unit cube).</param>
     public GpRegression(double[,] x, double[] y, double sigma2, IGpKernel kernel,
                         GpInputScaling scaling = GpInputScaling.Similarity)
+        : this(x, y, kernel, scaling, sigma2 > 0.0
+            ? sigma2 : throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive."))
+    {
+    }
+
+    /// <summary>A GP whose signal and noise variances are both unknown (<see cref="GpNoiseModel.UnknownScale"/>): fit it
+    /// with <see cref="Fit(double, double)"/>. A constant response has no scale and is refused.</summary>
+    public static GpRegression WithUnknownScale(double[,] x, double[] y, IGpKernel kernel,
+                                                GpInputScaling scaling = GpInputScaling.Similarity)
+    {
+        var gp = new GpRegression(x, y, kernel, scaling, double.NaN);
+        bool constant = true;
+        foreach (double v in gp._y) constant &= v == 0.0;
+        if (constant) throw new ArgumentException("A constant response has no scale to infer.", nameof(y));
+        return gp;
+    }
+
+    private GpRegression(double[,] x, double[] y, IGpKernel kernel, GpInputScaling scaling, double sigma2)
     {
         ArgumentNullException.ThrowIfNull(x);
         ArgumentNullException.ThrowIfNull(y);
         ArgumentNullException.ThrowIfNull(kernel);
-        if (!(sigma2 > 0.0)) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive.");
+        NoiseModel = double.IsNaN(sigma2) ? GpNoiseModel.UnknownScale : GpNoiseModel.Known;
         Transform = GpTransform.Fit(x, scaling);
         _n = x.GetLength(0);
         _d = x.GetLength(1);
@@ -82,6 +124,9 @@ public sealed class GpRegression
 
     public int Count => _n;
 
+    /// <summary>How this GP treats the noise and signal variances.</summary>
+    public GpNoiseModel NoiseModel { get; }
+
     /// <summary>The fitted input map and response offset shared by training and prediction.</summary>
     public GpTransform Transform { get; }
 
@@ -94,7 +139,7 @@ public sealed class GpRegression
     {
         fingerprint.Add(_n).Add(_d);
         foreach (double v in _x) fingerprint.Add(v);
-        fingerprint.Add(_y).Add(_yShift).Add(_sigma2).Add(Transform.InputScale).Add(_kernel.GetType().FullName!);
+        fingerprint.Add(_y).Add(_yShift).Add((int)NoiseModel).Add(_sigma2).Add(Transform.InputScale).Add(_kernel.GetType().FullName!);
     }
 
     /// <summary>
@@ -118,16 +163,45 @@ public sealed class GpRegression
     /// factor. The evidence is invariant to a constant shift of Y. The scratch matrix + Cholesky are local, so the
     /// call is pure: an ensemble can drive many bandwidth chains concurrently over one shared
     /// <see cref="GpRegression"/> (only the immutable <see cref="_sqDist"/> precompute is reused across fits).
+    /// For a known σ² only.
     /// </summary>
     public GpFit Fit(double t) => FitFactored(t).Fit;
 
-    /// <summary>As <see cref="Fit"/>, keeping the factor, K⁻¹1 and 1ᵀK⁻¹1 that the conditional variance needs.</summary>
+    /// <summary>
+    /// For an unknown scale (<see cref="GpNoiseModel.UnknownScale"/>): factor R = Σ_t + ηI and reduce to the evidence
+    /// with the constant mean integrated out under its flat prior and s² under 1/s²:
+    /// log p(Y | t, η) = −½ log|R| − ½ log 1ᵀR⁻¹1 − ((n − 1)/2) log Q + log Γ((n − 1)/2) − ((n − 1)/2) log π, with
+    /// Q = (Y − m̂1)ᵀR⁻¹(Y − m̂1). The GLS mean and α are as for a known σ², with η in its place; neither depends on s².
+    /// </summary>
+    public GpFit Fit(double t, double eta) => FitFactored(t, eta).Fit;
+
+    /// <summary>As <see cref="Fit(double)"/>, keeping the factor, K⁻¹1 and 1ᵀK⁻¹1 that the conditional variance needs.</summary>
     internal GpFactoredFit FitFactored(double t)
     {
-        var a = new double[_n, _n];   // working A = Σ_t + σ²I (thread-local — Fit must stay reentrant)
+        if (NoiseModel != GpNoiseModel.Known)
+            throw new InvalidOperationException("This GP has an unknown scale; fit it with Fit(t, η).");
+        return FitCore(t, _sigma2);
+    }
+
+    /// <summary>As <see cref="Fit(double, double)"/>, keeping the factor, R⁻¹1 and 1ᵀR⁻¹1.</summary>
+    internal GpFactoredFit FitFactored(double t, double eta)
+    {
+        if (NoiseModel != GpNoiseModel.UnknownScale)
+            throw new InvalidOperationException("This GP has a known σ²; fit it with Fit(t).");
+        if (!(eta > 0.0 && double.IsFinite(eta))) throw new ArgumentOutOfRangeException(nameof(eta), "η must be positive and finite.");
+        return FitCore(t, eta);
+    }
+
+    // A fit at its own bandwidth and nugget, whichever noise model made it: what refitting needs.
+    private GpFactoredFit Refit(GpFit fit) => FitCore(fit.Bandwidth, fit.NoiseRatio);
+
+    // The fit of R = Σ_t + nugget·I: σ² for a known σ², η for an unknown scale. Only the log evidence differs.
+    private GpFactoredFit FitCore(double t, double nugget)
+    {
+        var a = new double[_n, _n];   // working A = Σ_t + nugget·I (thread-local — Fit must stay reentrant)
         for (int i = 0; i < _n; i++)
         {
-            a[i, i] = _kernel.Evaluate(0.0, t) + _sigma2;
+            a[i, i] = _kernel.Evaluate(0.0, t) + nugget;
             for (int j = 0; j < i; j++)
             {
                 double v = _kernel.Evaluate(_sqDist[i, j], t);
@@ -139,7 +213,7 @@ public sealed class GpRegression
         var chol = new CholeskyDecomposition(_n);
         chol.Decompose(a);
         if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })   // the nugget makes it positive definite; clamping means bad input
-            throw new InvalidOperationException($"Σ_t + σ²I is not numerically positive definite at t = {t} ({chol.Status}).");
+            throw new InvalidOperationException($"Σ_t + {nugget:G4}·I is not numerically positive definite at t = {t} ({chol.Status}).");
 
         // K⁻¹Y and K⁻¹1 by triangular solves (O(n²) each); the GLS mean and the residual quadratic follow.
         double[] kInvY = chol.Solve(_y);
@@ -158,9 +232,11 @@ public sealed class GpRegression
             quad += (_y[i] - mHat) * alpha[i];
         }
 
-        double logMarginal = -0.5 * quad - 0.5 * chol.LogDet - 0.5 * Math.Log(oneKOne)
-                             - 0.5 * (_n - 1) * Math.Log(2.0 * Math.PI);
-        return new GpFactoredFit(new GpFit(t, logMarginal, alpha, _yShift + mHat), chol, kInvOne, oneKOne);
+        double logMarginal = NoiseModel == GpNoiseModel.Known
+            ? -0.5 * quad - 0.5 * chol.LogDet - 0.5 * Math.Log(oneKOne) - 0.5 * (_n - 1) * Math.Log(2.0 * Math.PI)
+            : -0.5 * chol.LogDet - 0.5 * Math.Log(oneKOne) - 0.5 * (_n - 1) * Math.Log(quad)
+              + SpecialFunctions.LogGamma(0.5 * (_n - 1)) - 0.5 * (_n - 1) * Math.Log(Math.PI);
+        return new GpFactoredFit(new GpFit(t, logMarginal, alpha, _yShift + mHat, nugget, quad), chol, kInvOne, oneKOne);
     }
 
     /// <summary>
@@ -168,15 +244,16 @@ public sealed class GpRegression
     /// <paramref name="xTest"/> (original units), with the constant mean integrated out under its flat prior:
     /// Var = k(x*,x*) − k*ᵀK⁻¹k* + (1 − 1ᵀK⁻¹k*)² / 1ᵀK⁻¹1 (universal kriging; Rasmussen &amp; Williams 2006, §2.7).
     /// The last term is the mean's own uncertainty. It is the variance of f, not of a new observation, which adds σ².
-    /// This refactors K at the fit's bandwidth (O(n³)); <see cref="BgpSampler"/> computes it during the run instead,
-    /// while each fit's factor still exists.
+    /// For an unknown scale it is in units of the signal variance: multiply by s². This refactors K at the fit's
+    /// bandwidth and nugget (O(n³)); <see cref="BgpSampler"/> computes it during the run instead, while each fit's
+    /// factor still exists.
     /// </summary>
     public double[] PredictVariance(GpFit fit, double[,] xTest)
     {
         ArgumentNullException.ThrowIfNull(fit);
         ArgumentNullException.ThrowIfNull(xTest);
         if (xTest.GetLength(1) != _d) throw new ArgumentException("Test inputs must have the training dimension.", nameof(xTest));
-        return ConditionalVarianceInFrame(FitFactored(fit.Bandwidth), Transform.MapInputs(xTest));
+        return ConditionalVarianceInFrame(Refit(fit), Transform.MapInputs(xTest));
     }
 
     /// <summary>As <see cref="PredictVariance"/>, from a factored fit and test inputs already in the fitted frame: one
