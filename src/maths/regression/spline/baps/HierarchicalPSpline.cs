@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
+using Maths.Samplers.Blocks;
 
 using Maths.Regression.Spline;
 
@@ -87,10 +88,11 @@ public sealed record HierarchicalDraw(
 /// Hierarchical P-spline for multiple related curves (Behseta–Kass–Wallstrom 2005, the penalized form): replicates
 /// <c>y_r = Z β_r + ε</c> share a smooth population mean <c>β_0</c> (penalized, <c>τ_0² P⁻</c>) with replicate
 /// deviations <c>β_r ~ N(β_0, τ_u² I)</c>, so each curve borrows strength from the others — shrunk toward the
-/// population where its own data is weak. A fully conjugate banded Gibbs on the BAPS machinery: <c>β_r | ·</c> and
-/// <c>β_0 | ·</c> are banded Gaussian draws (<see cref="BandCholesky"/> factor + <see cref="BandCholesky.SampleInnovation"/>),
-/// the three variance components <c>(σ², τ_u², τ_0²)</c> inverse-gamma (reciprocal of <see cref="Gamma"/>). Each sweep
-/// draws β_r, then β_0, then the variances, every draw conditioning on the current values of the others.
+/// population where its own data is weak. A fully conjugate banded Gibbs sampler, run as a <see cref="BlockScan{TState}"/>
+/// of five blocks: <c>β_r | ·</c> for every replicate and <c>β_0 | ·</c> are banded Gaussian draws
+/// (<see cref="GaussianConditional"/> on a <see cref="BandCholesky"/> factor), and the three variance components
+/// <c>(σ², τ_u², τ_0²)</c> are inverse-gamma (<see cref="ConjugateUpdates.NormalVariance"/>). Each sweep draws β_r,
+/// then β_0, then the variances, every draw conditioning on the current values of the others.
 /// <c>Q_r = ZᵀZ/σ² + I/τ_u²</c> is shared across replicates so it factors once per sweep; the identity deviation
 /// term keeps <c>β_0</c>'s posterior proper. (Unstructured deviations are the clean first cut; smooth deviations
 /// would need a sum-to-zero constraint.)
@@ -138,104 +140,39 @@ public sealed class HierarchicalPSpline
     public HierarchicalResult Run(int burn = 1000, int samples = 2000, int seed = 1, bool retainReplicates = true)
     {
         if (samples < 1 || burn < 0) throw new ArgumentOutOfRangeException(nameof(samples));
-        var rng = new Xoshiro256PlusPlus(seed);
         int reps = _responses.Length;
-
-        var gram = new double[_gramBw + 1, _nu];          // ZᵀZ — constant
-        _design.Accumulate(null, gram, null, null);
-        var zty = new double[reps][];                      // Zᵀy_r — constant
-        for (int rr = 0; rr < reps; rr++)
-        {
-            zty[rr] = new double[_nu];
-            _design.AccumulateRhs(null, _responses[rr], zty[rr]);
-        }
-
-        var beta = new double[reps][];
-        for (int rr = 0; rr < reps; rr++) beta[rr] = new double[_nu];
-        var beta0 = new double[_nu];
-        double sigma2 = 1.0, tauU2 = 1.0, tau02 = 1.0;
+        var scan = new BlockScan<SweepState>(Blocks(), SweepState.Start(reps, _nu), new Xoshiro256PlusPlus(seed),
+                                             state => state.Copy());
 
         var draws = new List<HierarchicalDraw>(samples);
         var betaSum = new double[reps][];                  // the replicate sums, accumulated from the draws when retained
         var meanSum = new double[reps][];                  // and the sums of their conditional means
         for (int rr = 0; rr < reps; rr++) { betaSum[rr] = new double[_nu]; meanSum[rr] = new double[_nu]; }
 
-        var qrBand = new double[_gramBw + 1, _nu];
-        var q0Band = new double[_r + 1, _nu];
-        var cholR = new BandCholesky(_nu, _gramBw, BandFactorization.Ldlt);
-        var chol0 = new BandCholesky(_nu, _r, BandFactorization.Ldlt);
-        var rhs = new double[_nu];
-        var z = new double[_nu];
-        var innov = new double[_nu];
-
         int steps = burn + samples;
         for (int it = 0; it < steps; it++)
         {
-            // Q_r = ZᵀZ/σ² + I/τ_u² — shared by all replicates, factor once.
-            for (int d = 0; d <= _gramBw; d++)
-                for (int j = 0; j < _nu; j++) qrBand[d, j] = gram[d, j] / sigma2;
-            for (int j = 0; j < _nu; j++) qrBand[0, j] += 1.0 / tauU2;
-            cholR.DecomposeBanded(qrBand);
-            if (cholR.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-                throw new InvalidOperationException($"ZᵀZ/σ² + I/τ_u² is not numerically positive definite ({cholR.Status}).");
+            SweepState state = scan.Step();
+            if (it < burn) continue;
 
-            double sumResid = 0.0;
-            double[][]? conditionalMeans = it >= burn && retainReplicates ? new double[reps][] : null;
-            for (int rr = 0; rr < reps; rr++)
+            double[][]? replicates = null, conditionalMeans = null;
+            if (retainReplicates)
             {
-                for (int j = 0; j < _nu; j++) rhs[j] = zty[rr][j] / sigma2 + beta0[j] / tauU2;
-                double[] mr = cholR.Solve(rhs);            // E[β_r | ·] = Q_r⁻¹ rhs
-                if (conditionalMeans is not null) conditionalMeans[rr] = mr;
-                else if (it >= burn)
-                    for (int j = 0; j < _nu; j++) meanSum[rr][j] += mr[j];
-                for (int j = 0; j < _nu; j++) z[j] = Normal.SampleStandard(rng);
-                cholR.SampleInnovation(z, innov);          // ~ N(0, Q_r⁻¹)
-                double[] br = beta[rr];
-                for (int j = 0; j < _nu; j++) br[j] = mr[j] + innov[j];
-
-                sumResid += ResidualSS(_responses[rr], br);
+                replicates = new double[reps][];
+                for (int rr = 0; rr < reps; rr++) replicates[rr] = (double[])state.Replicates[rr].Clone();
+                conditionalMeans = (double[][])state.ReplicateMeans.Clone();   // each sweep's means are fresh arrays
             }
-
-            // Q_0 = (R/τ_u²) I + (1/τ_0²) P — identity term keeps it proper despite P's null space.
-            Array.Clear(q0Band);
-            for (int j = 0; j < _nu; j++) q0Band[0, j] = reps / tauU2;
-            _penalty.AccumulateInto(q0Band, _nu, 1.0 / tau02);
-            chol0.DecomposeBanded(q0Band);
-            if (chol0.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
-                throw new InvalidOperationException($"(R/τ_u²)I + P/τ_0² is not numerically positive definite ({chol0.Status}).");
-            for (int j = 0; j < _nu; j++) rhs[j] = 0.0;
-            for (int rr = 0; rr < reps; rr++)
-                for (int j = 0; j < _nu; j++) rhs[j] += beta[rr][j];
-            for (int j = 0; j < _nu; j++) rhs[j] /= tauU2;
-            double[] m0 = chol0.Solve(rhs);
-            for (int j = 0; j < _nu; j++) z[j] = Normal.SampleStandard(rng);
-            chol0.SampleInnovation(z, innov);
-            for (int j = 0; j < _nu; j++) beta0[j] = m0[j] + innov[j];
-
-            // Deviations from the population curve just drawn: τ_u² conditions on the current β_0, not the last one.
-            double sumDev = 0.0;
-            for (int rr = 0; rr < reps; rr++)
-                for (int j = 0; j < _nu; j++) { double d = beta[rr][j] - beta0[j]; sumDev += d * d; }
-
-            sigma2 = InverseGamma.ShapeScale(_a0 + 0.5 * reps * _n, _b0 + 0.5 * sumResid).Sample(rng);
-            tauU2 = InverseGamma.ShapeScale(_a0 + 0.5 * reps * _nu, _b0 + 0.5 * sumDev).Sample(rng);
-            tau02 = InverseGamma.ShapeScale(_a0 + 0.5 * (_nu - _r), _b0 + 0.5 * _penalty.Roughness(beta0)).Sample(rng);
-
-            if (it >= burn)
+            else
             {
-                double[][]? replicates = null;
-                if (retainReplicates)
-                {
-                    replicates = new double[reps][];
-                    for (int rr = 0; rr < reps; rr++) replicates[rr] = (double[])beta[rr].Clone();
-                }
-                else
-                {
-                    for (int rr = 0; rr < reps; rr++)
-                        for (int j = 0; j < _nu; j++) betaSum[rr][j] += beta[rr][j];
-                }
-                draws.Add(new HierarchicalDraw((double[])beta0.Clone(), replicates, sigma2, tauU2, tau02, m0, conditionalMeans));
+                for (int rr = 0; rr < reps; rr++)
+                    for (int j = 0; j < _nu; j++)
+                    {
+                        betaSum[rr][j] += state.Replicates[rr][j];
+                        meanSum[rr][j] += state.ReplicateMeans[rr][j];
+                    }
             }
+            draws.Add(new HierarchicalDraw((double[])state.Population.Clone(), replicates, state.Sigma2, state.TauU2,
+                                           state.Tau02, state.PopulationMean, conditionalMeans));
         }
 
         // Every summary is read from the retained draws, each sum in draw order as the running sums used to run; without
@@ -271,6 +208,168 @@ public sealed class HierarchicalPSpline
         }
         return new HierarchicalResult(beta0Sum, repMeans, sigSum / samples, tauUSum / samples, tau0Sum / samples, samples,
                                       new IReadOnlyList<HierarchicalDraw>[] { draws.ToArray() }, mean0Sum, repConditionalMeans);
+    }
+
+    // The five blocks in sweep order, over this fit's constants: ZᵀZ and each Zᵀy_r.
+    private IBlock<SweepState>[] Blocks()
+    {
+        int reps = _responses.Length;
+        var gram = new double[_gramBw + 1, _nu];
+        _design.Accumulate(null, gram, null, null);
+        var zty = new double[reps][];
+        for (int rr = 0; rr < reps; rr++)
+        {
+            zty[rr] = new double[_nu];
+            _design.AccumulateRhs(null, _responses[rr], zty[rr]);
+        }
+        return new IBlock<SweepState>[]
+        {
+            new ReplicateBlock(this, gram, zty), new PopulationBlock(this), new NoiseBlock(this), new DeviationBlock(this),
+            new SmoothingBlock(this),
+        };
+    }
+
+    /// <summary>
+    /// The sweep's state: each replicate's curve β_r, the population curve β_0, the three variances, and the conditional
+    /// means the last sweep drew around (fresh arrays each sweep, so a retained draw can keep them).
+    /// </summary>
+    private sealed class SweepState
+    {
+        public double[][] Replicates = null!;
+        public double[] Population = null!;
+        public double Sigma2, TauU2, Tau02;
+        public double[][] ReplicateMeans = null!;
+        public double[] PopulationMean = null!;
+
+        // Every curve at 0 and every variance at 1.
+        public static SweepState Start(int reps, int nu)
+        {
+            var state = new SweepState
+            {
+                Replicates = new double[reps][], Population = new double[nu], Sigma2 = 1.0, TauU2 = 1.0, Tau02 = 1.0,
+                ReplicateMeans = new double[reps][], PopulationMean = new double[nu],
+            };
+            for (int rr = 0; rr < reps; rr++) { state.Replicates[rr] = new double[nu]; state.ReplicateMeans[rr] = new double[nu]; }
+            return state;
+        }
+
+        public SweepState Copy()
+        {
+            var copy = new SweepState
+            {
+                Replicates = new double[Replicates.Length][], Population = (double[])Population.Clone(),
+                Sigma2 = Sigma2, TauU2 = TauU2, Tau02 = Tau02,
+                ReplicateMeans = new double[ReplicateMeans.Length][], PopulationMean = (double[])PopulationMean.Clone(),
+            };
+            for (int rr = 0; rr < Replicates.Length; rr++)
+            {
+                copy.Replicates[rr] = (double[])Replicates[rr].Clone();
+                copy.ReplicateMeans[rr] = (double[])ReplicateMeans[rr].Clone();
+            }
+            return copy;
+        }
+    }
+
+    // β_r | · ~ N(Q_r⁻¹(Zᵀy_r/σ² + β_0/τ_u²), Q_r⁻¹) with Q_r = ZᵀZ/σ² + I/τ_u², shared by all replicates, so it is
+    // factored once per sweep.
+    private sealed class ReplicateBlock(HierarchicalPSpline owner, double[,] gram, double[][] zty) : IBlock<SweepState>
+    {
+        private readonly double[,] _band = new double[owner._gramBw + 1, owner._nu];
+        private readonly BandCholesky _factor = new(owner._nu, owner._gramBw, BandFactorization.Ldlt);
+        private readonly double[] _rhs = new double[owner._nu];
+        private readonly GaussianConditional _gaussian = new(owner._nu);
+
+        public string Name => "replicates";
+
+        public bool Update(SweepState state, Xoshiro256PlusPlus rng)
+        {
+            int nu = owner._nu;
+            for (int d = 0; d <= owner._gramBw; d++)
+                for (int j = 0; j < nu; j++) _band[d, j] = gram[d, j] / state.Sigma2;
+            for (int j = 0; j < nu; j++) _band[0, j] += 1.0 / state.TauU2;
+            _factor.DecomposeBanded(_band);
+            if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                throw new InvalidOperationException($"ZᵀZ/σ² + I/τ_u² is not numerically positive definite ({_factor.Status}).");
+            for (int rr = 0; rr < zty.Length; rr++)
+            {
+                for (int j = 0; j < nu; j++) _rhs[j] = zty[rr][j] / state.Sigma2 + state.Population[j] / state.TauU2;
+                state.ReplicateMeans[rr] = _gaussian.Draw(_factor, _rhs, rng, state.Replicates[rr]);
+            }
+            return true;
+        }
+    }
+
+    // β_0 | · ~ N(Q_0⁻¹ Σβ_r/τ_u², Q_0⁻¹) with Q_0 = (R/τ_u²) I + P/τ_0²: the identity term keeps it proper despite P's
+    // null space.
+    private sealed class PopulationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    {
+        private readonly double[,] _band = new double[owner._r + 1, owner._nu];
+        private readonly BandCholesky _factor = new(owner._nu, owner._r, BandFactorization.Ldlt);
+        private readonly double[] _rhs = new double[owner._nu];
+        private readonly GaussianConditional _gaussian = new(owner._nu);
+
+        public string Name => "population";
+
+        public bool Update(SweepState state, Xoshiro256PlusPlus rng)
+        {
+            int nu = owner._nu, reps = state.Replicates.Length;
+            Array.Clear(_band);
+            for (int j = 0; j < nu; j++) _band[0, j] = reps / state.TauU2;
+            owner._penalty.AccumulateInto(_band, nu, 1.0 / state.Tau02);
+            _factor.DecomposeBanded(_band);
+            if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                throw new InvalidOperationException($"(R/τ_u²)I + P/τ_0² is not numerically positive definite ({_factor.Status}).");
+            Array.Clear(_rhs);
+            for (int rr = 0; rr < reps; rr++)
+                for (int j = 0; j < nu; j++) _rhs[j] += state.Replicates[rr][j];
+            for (int j = 0; j < nu; j++) _rhs[j] /= state.TauU2;
+            state.PopulationMean = _gaussian.Draw(_factor, _rhs, rng, state.Population);
+            return true;
+        }
+    }
+
+    // σ² | · from every replicate's residual sum of squares, R·n terms.
+    private sealed class NoiseBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    {
+        public string Name => "noise variance";
+
+        public bool Update(SweepState state, Xoshiro256PlusPlus rng)
+        {
+            double sumResid = 0.0;
+            for (int rr = 0; rr < state.Replicates.Length; rr++) sumResid += owner.ResidualSS(owner._responses[rr], state.Replicates[rr]);
+            state.Sigma2 = ConjugateUpdates.NormalVariance(owner._a0, owner._b0, state.Replicates.Length * owner._n, sumResid)
+                                           .Sample(rng);
+            return true;
+        }
+    }
+
+    // τ_u² | · from the deviations of the replicates from the population curve just drawn, R·ν terms.
+    private sealed class DeviationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    {
+        public string Name => "deviation variance";
+
+        public bool Update(SweepState state, Xoshiro256PlusPlus rng)
+        {
+            double sumDev = 0.0;
+            for (int rr = 0; rr < state.Replicates.Length; rr++)
+                for (int j = 0; j < owner._nu; j++) { double d = state.Replicates[rr][j] - state.Population[j]; sumDev += d * d; }
+            state.TauU2 = ConjugateUpdates.NormalVariance(owner._a0, owner._b0, state.Replicates.Length * owner._nu, sumDev)
+                                          .Sample(rng);
+            return true;
+        }
+    }
+
+    // τ_0² | · from the population curve's roughness, ν − r terms (the penalty's rank).
+    private sealed class SmoothingBlock(HierarchicalPSpline owner) : IBlock<SweepState>
+    {
+        public string Name => "population smoothing variance";
+
+        public bool Update(SweepState state, Xoshiro256PlusPlus rng)
+        {
+            state.Tau02 = ConjugateUpdates.NormalVariance(owner._a0, owner._b0, owner._nu - owner._r,
+                                                          owner._penalty.Roughness(state.Population)).Sample(rng);
+            return true;
+        }
     }
 
     private double ResidualSS(double[] y, double[] beta)
