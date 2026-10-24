@@ -1,5 +1,6 @@
 using System;
 using Maths.LinAlg;
+using Maths.Samplers.Ensemble;
 
 namespace Maths.Regression.Bgp;
 
@@ -86,6 +87,15 @@ public sealed class GpRegression
 
     /// <summary>Pairwise squared distances in the mapped frame — the frame the bandwidth prior must read.</summary>
     internal double[,] SquaredDistances => _sqDist;
+
+    /// <summary>Add what a fit depends on to a run fingerprint: the mapped inputs and their scale, the shifted responses
+    /// and the shift, the noise variance and the kernel's type.</summary>
+    internal void AddTo(RunFingerprint fingerprint)
+    {
+        fingerprint.Add(_n).Add(_d);
+        foreach (double v in _x) fingerprint.Add(v);
+        fingerprint.Add(_y).Add(_yShift).Add(_sigma2).Add(Transform.InputScale).Add(_kernel.GetType().FullName!);
+    }
 
     /// <summary>
     /// v̂_n(t) = mean off-diagonal kernel affinity (TWCD2025 eq. 14): (1/n(n−1)) Σ_{i≠j} k_t(X_i,X_j). The

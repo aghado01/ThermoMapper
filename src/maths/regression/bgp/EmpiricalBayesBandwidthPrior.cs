@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using Maths.Samplers.Ensemble;
 
 namespace Maths.Regression.Bgp;
 
@@ -27,6 +28,9 @@ public sealed class EmpiricalBayesBandwidthPrior
 
     /// <summary>Lower edge of the support, γ₁ T_n²; the prior is 0 at or below it.</summary>
     public double LowerBound => _lowerBound;
+
+    /// <summary>Add the prior's hyperparameters and support bound to a run fingerprint.</summary>
+    internal void AddTo(RunFingerprint fingerprint) => fingerprint.Add(_a0).Add(_b0).Add(_lowerBound);
 
     /// <summary>The neighbor order k actually used.</summary>
     public int K { get; }

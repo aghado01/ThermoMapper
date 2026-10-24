@@ -36,13 +36,15 @@ public sealed record BgpDraw(double Bandwidth, GpFit Fit, double[] ConditionalVa
 /// <param name="InputScale">The GP's fitted input scale s (<see cref="GpTransform.InputScale"/>): a bandwidth t in the mapped frame is s²·t in the original units.</param>
 /// <param name="BandwidthDraws">Every retained draw (<see cref="BgpDraw"/>), per chain in draw order. The posterior mean
 /// and the bandwidth summary are read from these.</param>
+/// <param name="Checkpoint">The run's restart state when it was requested, and null otherwise.</param>
 public sealed record BgpResult(
     double[] PosteriorMean,
     double[] PosteriorSd,
     BandwidthSummary Bandwidth, BandwidthSummary BandwidthOriginal,
     double AcceptanceRate, int Draws,
     ConvergenceDiagnostic BandwidthConvergence, int[] ChainSeeds, double InputScale,
-    IReadOnlyList<IReadOnlyList<BgpDraw>> BandwidthDraws);
+    IReadOnlyList<IReadOnlyList<BgpDraw>> BandwidthDraws,
+    EnsembleCheckpoint? Checkpoint);
 
 /// <summary>
 /// The top of the Bayesian-GP instrument (Tang, Wu, Cheng &amp; Dunson 2025): with the regression function
@@ -85,7 +87,31 @@ public sealed class BgpSampler : IEnsembleModel<double>
     public IChainRun<double> StartChain(int chainSeed, int readoutSeed)
     {
         var chain = new BgpBandwidthChain(_gp, _prior, _t0, _proposalSd, new Xoshiro256PlusPlus(chainSeed));
-        return new BgpChainRun(chain, _gp, _xTest);
+        return new BgpChainRun(chain, _gp, _xTest, new List<BgpDraw>());
+    }
+
+    /// <summary>The run's fingerprint for checkpoints: the GP's data, noise variance, kernel and input map, the bandwidth
+    /// prior, the test points, the starting bandwidth and the proposal scale.</summary>
+    public string Fingerprint
+    {
+        get
+        {
+            var f = new RunFingerprint().Add("BGP");
+            _gp.AddTo(f);
+            _prior.AddTo(f);
+            foreach (double v in _xTest) f.Add(v);
+            return f.Add(_testCount).Add(_t0).Add(_proposalSd).ToString();
+        }
+    }
+
+    /// <summary>Rebuild one chain from its restart state: its stream, its log bandwidth, the log target there, its
+    /// counters and its retained draws. The current fit is recomputed at the bandwidth it was made at, which gives the
+    /// same fit.</summary>
+    public IChainRun<double> RestoreChain(IChainState state)
+    {
+        if (state is not BgpChainState s) throw new ArgumentException("Not a BGP chain's restart state.", nameof(state));
+        var chain = new BgpBandwidthChain(_gp, _prior, _proposalSd, s);
+        return new BgpChainRun(chain, _gp, _xTest, new List<BgpDraw>(s.Draws));
     }
 
     /// <param name="xTest">Points (original units) at which to report the posterior mean (the training inputs for the in-sample fit).</param>
@@ -95,8 +121,19 @@ public sealed class BgpSampler : IEnsembleModel<double>
     /// <param name="seed">Master RNG seed (the ensemble fans out per-chain streams from it).</param>
     /// <param name="tInit">Optional starting bandwidth inside the prior's support (default: the support's geometric midpoint); shared by every chain.</param>
     /// <param name="chains">Number of warm-started replicas (≥ 2 makes R̂ defined; default 2).</param>
+    /// <param name="rHatTarget">When &gt; 0, stop after the first round in which the bandwidth meets this R̂ target and its
+    /// bulk and tail ESS reach <paramref name="minEssPerChain"/> per chain (<see cref="ChainEnsemble"/>'s rule). It
+    /// needs at least two chains.</param>
+    /// <param name="batchSize">Draws per round between stop checks; ≤ 0 is a single round.</param>
+    /// <param name="minEssPerChain">The early stop's ESS gate, per chain.</param>
+    /// <param name="checkpoint">When true, the result carries the run's restart state.</param>
+    /// <param name="resumeFrom">Continue that checkpoint's chains for <paramref name="draws"/> more draws, exactly as the
+    /// uninterrupted run would have; the result covers every draw since burn-in. It needs the same GP, prior, test
+    /// points, settings, master seed and chain count.</param>
     public BgpResult Run(double[,] xTest, int draws = 600, int burn = 200, double proposalSd = 0.4,
-                         int seed = 0, double? tInit = null, int chains = 2)
+                         int seed = 0, double? tInit = null, int chains = 2,
+                         double rHatTarget = 0.0, int batchSize = 0, double minEssPerChain = ChainEnsemble.MinEssPerChain,
+                         bool checkpoint = false, EnsembleCheckpoint? resumeFrom = null)
     {
         ArgumentNullException.ThrowIfNull(xTest);
         if (draws < 1) throw new ArgumentOutOfRangeException(nameof(draws));
@@ -112,7 +149,8 @@ public sealed class BgpSampler : IEnsembleModel<double>
         _testCount = xTest.GetLength(0);
 
         (EnsembleRun summary, IReadOnlyList<IChainRun<double>> runs) =
-            new ChainEnsemble().Run<double>(this, chains, seed, burn, draws);
+            new ChainEnsemble().Run<double>(this, chains, seed, burn, draws, rHatTarget, batchSize, minEssPerChain,
+                                            checkpoint, resumeFrom);
 
         // Every summary is read from the retained draws. The posterior mean sums each draw's conditional mean at the test
         // points per chain in draw order, then over chains; a fit shared by neighbouring draws is predicted once. The
@@ -171,7 +209,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
         return new BgpResult(meanAcc, posteriorSd, fitted, original,
                              summary.AcceptanceRate, chains * summary.SamplesUsed,
                              summary.Monitored[0], summary.ChainSeeds,
-                             _gp.Transform.InputScale, bandwidthDraws);
+                             _gp.Transform.InputScale, bandwidthDraws, summary.Checkpoint);
     }
 
     private static double Quantile(List<double> sorted, double q)
@@ -184,6 +222,12 @@ public sealed class BgpSampler : IEnsembleModel<double>
         double frac = pos - lo;
         return lo + 1 < n ? sorted[lo] * (1.0 - frac) + sorted[lo + 1] * frac : sorted[lo];
     }
+
+    /// <summary>One bandwidth chain's restart state: its stream's words, its log bandwidth and the log target there, the
+    /// bandwidth its current fit was made at, its counters and its retained draws.</summary>
+    private sealed record BgpChainState(
+        (ulong, ulong, ulong, ulong) Rng, double LogBandwidth, double LogTarget, double FitBandwidth, long Accepted,
+        long Attempts, List<BgpDraw> Draws) : IChainState;
 
     /// <summary>
     /// One random-walk Metropolis chain on log t (the bandwidth kernel): each <see cref="Step"/> proposes
@@ -217,6 +261,23 @@ public sealed class BgpSampler : IEnsembleModel<double>
             _cur = _factored.Fit.LogMarginal + prior.LogDensity(t0) + _u;   // +u: log t Jacobian
         }
 
+        /// <summary>A chain continuing from its restart state. The fit is recomputed at the bandwidth it was made at —
+        /// the start's t0 can differ from exp(log t0) in the last bit — so it is the same fit.</summary>
+        public BgpBandwidthChain(GpRegression gp, EmpiricalBayesBandwidthPrior prior, double proposalSd, BgpChainState s)
+        {
+            _gp = gp; _prior = prior; _proposalSd = proposalSd;
+            _rng = Xoshiro256PlusPlus.Restore(s.Rng.Item1, s.Rng.Item2, s.Rng.Item3, s.Rng.Item4);
+            _u = s.LogBandwidth;
+            _cur = s.LogTarget;
+            _factored = gp.FitFactored(s.FitBandwidth);
+            Accepted = s.Accepted;
+            Attempts = s.Attempts;
+        }
+
+        /// <summary>The chain's part of its restart state.</summary>
+        public BgpChainState Save(List<BgpDraw> draws) =>
+            new(_rng.SaveState(), _u, _cur, _factored.Fit.Bandwidth, Accepted, Attempts, new List<BgpDraw>(draws));
+
         public double Step()
         {
             double uProp = _u + _proposalSd * Normal.SampleStandard(_rng);
@@ -246,7 +307,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
     /// bandwidth with the GP fit the chain held there and its conditional variance at the test points, computed once
     /// per distinct fit while the fit's factor exists. The run's summaries are read from these.
     /// </summary>
-    private sealed class BgpChainRun : IChainRun<double>
+    private sealed class BgpChainRun : IResumableChainRun<double>
     {
         private readonly BgpBandwidthChain _chain;
         private readonly GpRegression _gp;
@@ -254,12 +315,14 @@ public sealed class BgpSampler : IEnsembleModel<double>
         private GpFit? _varianceFit;          // the fit _variance belongs to
         private double[] _variance = [];
 
-        public readonly List<BgpDraw> Draws = new();   // every post-burn draw, in order
+        public readonly List<BgpDraw> Draws;   // every post-burn draw, in order
 
-        public BgpChainRun(BgpBandwidthChain chain, GpRegression gp, double[,] xTest)
+        public BgpChainRun(BgpBandwidthChain chain, GpRegression gp, double[,] xTest, List<BgpDraw> draws)
         {
-            _chain = chain; _gp = gp; _xTest = xTest;
+            _chain = chain; _gp = gp; _xTest = xTest; Draws = draws;
         }
+
+        public IChainState SaveState() => _chain.Save(Draws);
 
         public IChain<double> Chain => _chain;
 
