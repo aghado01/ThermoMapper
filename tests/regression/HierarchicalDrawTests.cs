@@ -77,6 +77,109 @@ public sealed class HierarchicalDrawTests
     }
 
     [Fact]
+    public void RaoBlackwellizedMeans_AverageTheConditionalMeans()
+    {
+        (double[,] z, double[][] y) = Data();
+        int nu = z.GetLength(1), reps = y.Length;
+        var sampler = new HierarchicalPSpline(z, y, new DifferencePenalty(2));
+        HierarchicalResult h = sampler.Run(burn: 200, samples: 400, seed: 7);
+        IReadOnlyList<HierarchicalDraw> chain = h.PosteriorDraws[0];
+
+        var pop = new double[nu];
+        var rep = new double[reps][];
+        for (int r = 0; r < reps; r++) rep[r] = new double[nu];
+        foreach (HierarchicalDraw d in chain)
+        {
+            for (int j = 0; j < nu; j++) pop[j] += d.PopulationConditionalMean[j];
+            for (int r = 0; r < reps; r++)
+                for (int j = 0; j < nu; j++) rep[r][j] += d.ReplicateConditionalMeans![r][j];
+        }
+        for (int j = 0; j < nu; j++) Assert.Equal(pop[j] / 400, h.RaoBlackwellizedPopulationCoefficients[j], 12);
+        for (int r = 0; r < reps; r++)
+            for (int j = 0; j < nu; j++) Assert.Equal(rep[r][j] / 400, h.RaoBlackwellizedReplicateCoefficients[r][j], 12);
+
+        // Both estimate the same posterior mean: they differ by the average of the conditional draws' own noise, far
+        // inside 5 posterior sds over √N.
+        for (int j = 0; j < nu; j++)
+        {
+            double sd = 0.0;
+            foreach (HierarchicalDraw d in chain) sd += (d.Population[j] - h.PopulationCoefficients[j]) * (d.Population[j] - h.PopulationCoefficients[j]);
+            sd = Math.Sqrt(sd / chain.Count);
+            Assert.InRange(h.RaoBlackwellizedPopulationCoefficients[j] - h.PopulationCoefficients[j],
+                           -5.0 * sd / Math.Sqrt(chain.Count), 5.0 * sd / Math.Sqrt(chain.Count));
+        }
+
+        // Without replicate draws the replicate conditional means still accumulate, to the same values.
+        HierarchicalResult lean = sampler.Run(burn: 200, samples: 400, seed: 7, retainReplicates: false);
+        Assert.Equal(h.RaoBlackwellizedPopulationCoefficients, lean.RaoBlackwellizedPopulationCoefficients);
+        for (int r = 0; r < reps; r++)
+            Assert.Equal(h.RaoBlackwellizedReplicateCoefficients[r], lean.RaoBlackwellizedReplicateCoefficients[r]);
+    }
+
+    [Fact]
+    public void IntervalsAndBands_AreReadFromTheDraws()
+    {
+        (double[,] z, double[][] y) = Data();
+        var sampler = new HierarchicalPSpline(z, y, new DifferencePenalty(2));
+        HierarchicalResult h = sampler.Run(burn: 200, samples: 400, seed: 7);
+        IReadOnlyList<HierarchicalDraw> chain = h.PosteriorDraws[0];
+
+        AssertInterval(chain, d => d.NoiseVariance, h.NoiseVarianceInterval);
+        AssertInterval(chain, d => d.DeviationVariance, h.DeviationVarianceInterval);
+        AssertInterval(chain, d => d.PopulationSmoothingVariance, h.PopulationSmoothingVarianceInterval);
+
+        AssertBand(z, h.PopulationCoefficients, chain, d => d.Population, h.PopulationBand(z));
+        AssertBand(z, h.ReplicateCoefficients[2], chain, d => d.Replicates![2], h.ReplicateBand(2, z));
+        Assert.Throws<ArgumentOutOfRangeException>(() => h.ReplicateBand(y.Length, z));
+
+        HierarchicalResult lean = sampler.Run(burn: 200, samples: 400, seed: 7, retainReplicates: false);
+        Assert.Throws<InvalidOperationException>(() => lean.ReplicateBand(0, z));
+        Assert.Equal(h.PopulationBand(z).Lo, lean.PopulationBand(z).Lo);   // the population band needs no replicate draws
+    }
+
+    private static void AssertInterval(IReadOnlyList<HierarchicalDraw> chain, Func<HierarchicalDraw, double> value,
+                                       PosteriorInterval interval)
+    {
+        var sample = new List<double>();
+        foreach (HierarchicalDraw d in chain) sample.Add(value(d));
+        sample.Sort();
+        Assert.Equal(new PosteriorInterval(Type7(sample, 0.5), Type7(sample, 0.025), Type7(sample, 0.975)), interval);
+        Assert.True(interval.Lo < interval.Median && interval.Median < interval.Hi);
+    }
+
+    private static void AssertBand(double[,] z, double[] mean, IReadOnlyList<HierarchicalDraw> chain,
+                                   Func<HierarchicalDraw, double[]> curve, PointwiseBand band)
+    {
+        int n = z.GetLength(0), nu = z.GetLength(1);
+        for (int i = 0; i < n; i++)
+        {
+            double m = 0.0;
+            for (int j = 0; j < nu; j++) m += z[i, j] * mean[j];
+            Assert.Equal(m, band.Mean[i], 12);
+            var fits = new List<double>();
+            foreach (HierarchicalDraw d in chain)
+            {
+                double f = 0.0;
+                double[] beta = curve(d);
+                for (int j = 0; j < nu; j++) f += z[i, j] * beta[j];
+                fits.Add(f);
+            }
+            fits.Sort();
+            Assert.Equal(Type7(fits, 0.025), band.Lo[i]);
+            Assert.Equal(Type7(fits, 0.975), band.Hi[i]);
+            Assert.True(band.Lo[i] < band.Mean[i] && band.Mean[i] < band.Hi[i] && band.Sd[i] > 0.0, $"row {i}");
+        }
+    }
+
+    private static double Type7(List<double> sorted, double p)
+    {
+        double pos = p * (sorted.Count - 1);
+        int lo = (int)Math.Floor(pos);
+        int hi = Math.Min(lo + 1, sorted.Count - 1);
+        return sorted[lo] + (pos - lo) * (sorted[hi] - sorted[lo]);
+    }
+
+    [Fact]
     public void WithoutReplicateDraws_TheSummariesAreUnchanged()
     {
         (double[,] z, double[][] y) = Data();

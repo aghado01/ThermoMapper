@@ -11,6 +11,13 @@ namespace Maths.Regression.Spline.Baps;
 /// <summary>Posterior summary of a hierarchical P-spline fit: the population (Bayes) curve, each replicate's
 /// shrunken curve, and the variance-component posteriors (posterior means of σ, τ_u and τ_0). Every summary is read
 /// from <see cref="PosteriorDraws"/>, every retained draw per chain in draw order (one chain for now).</summary>
+/// <remarks>
+/// <see cref="PopulationCoefficients"/> and <see cref="ReplicateCoefficients"/> average the drawn curves.
+/// <see cref="RaoBlackwellizedPopulationCoefficients"/> and <see cref="RaoBlackwellizedReplicateCoefficients"/> average
+/// instead the conditional means E[β | ·] the sweep computed. Both estimate the same posterior means. The Rao–Blackwellized
+/// ones drop the conditional draw's own noise, which usually lowers the Monte Carlo error; for a scan of more than two
+/// blocks that is typical rather than guaranteed (Liu, Wong &amp; Kong 1994 prove it for two).
+/// </remarks>
 public sealed record HierarchicalResult(
     double[] PopulationCoefficients,
     double[][] ReplicateCoefficients,
@@ -18,7 +25,52 @@ public sealed record HierarchicalResult(
     double DeviationSd,
     double PopulationSmoothingSd,
     int Draws,
-    IReadOnlyList<IReadOnlyList<HierarchicalDraw>> PosteriorDraws);
+    IReadOnlyList<IReadOnlyList<HierarchicalDraw>> PosteriorDraws,
+    double[] RaoBlackwellizedPopulationCoefficients,
+    double[][] RaoBlackwellizedReplicateCoefficients)
+{
+    /// <summary>σ²'s posterior median and 95% interval, read from the retained draws.</summary>
+    public PosteriorInterval NoiseVarianceInterval => Interval(d => d.NoiseVariance);
+
+    /// <summary>τ_u²'s posterior median and 95% interval, read from the retained draws.</summary>
+    public PosteriorInterval DeviationVarianceInterval => Interval(d => d.DeviationVariance);
+
+    /// <summary>τ_0²'s posterior median and 95% interval, read from the retained draws.</summary>
+    public PosteriorInterval PopulationSmoothingVarianceInterval => Interval(d => d.PopulationSmoothingVariance);
+
+    /// <summary>The pointwise band on the population curve at the rows of <paramref name="design"/>: the mean is the
+    /// design times <see cref="PopulationCoefficients"/>; the sd and 2.5% and 97.5% quantiles are those of the drawn
+    /// population curves.</summary>
+    public PointwiseBand PopulationBand(double[,] design)
+    {
+        var draws = new List<double[]>(Draws);
+        foreach (IReadOnlyList<HierarchicalDraw> chain in PosteriorDraws)
+            foreach (HierarchicalDraw d in chain) draws.Add(d.Population);
+        return PointwiseBand.Of(design, PopulationCoefficients, draws);
+    }
+
+    /// <summary>The pointwise band on one replicate's curve, as <see cref="PopulationBand"/>. It needs the replicate
+    /// draws, so a run without them refuses.</summary>
+    public PointwiseBand ReplicateBand(int replicate, double[,] design)
+    {
+        if (replicate < 0 || replicate >= ReplicateCoefficients.Length) throw new ArgumentOutOfRangeException(nameof(replicate));
+        var draws = new List<double[]>(Draws);
+        foreach (IReadOnlyList<HierarchicalDraw> chain in PosteriorDraws)
+            foreach (HierarchicalDraw d in chain)
+                draws.Add(d.Replicates?[replicate]
+                          ?? throw new InvalidOperationException("The run did not retain replicate draws (retainReplicates: false)."));
+        return PointwiseBand.Of(design, ReplicateCoefficients[replicate], draws);
+    }
+
+    private PosteriorInterval Interval(Func<HierarchicalDraw, double> value)
+    {
+        var sample = new double[Draws];
+        int s = 0;
+        foreach (IReadOnlyList<HierarchicalDraw> chain in PosteriorDraws)
+            foreach (HierarchicalDraw d in chain) sample[s++] = value(d);
+        return PosteriorInterval.Of(sample);
+    }
+}
 
 /// <summary>
 /// One retained draw of the hierarchical P-spline: the population curve β_0, each replicate's curve β_r, the noise
@@ -105,7 +157,8 @@ public sealed class HierarchicalPSpline
 
         var draws = new List<HierarchicalDraw>(samples);
         var betaSum = new double[reps][];                  // the replicate sums, accumulated from the draws when retained
-        for (int rr = 0; rr < reps; rr++) betaSum[rr] = new double[_nu];
+        var meanSum = new double[reps][];                  // and the sums of their conditional means
+        for (int rr = 0; rr < reps; rr++) { betaSum[rr] = new double[_nu]; meanSum[rr] = new double[_nu]; }
 
         var qrBand = new double[_gramBw + 1, _nu];
         var q0Band = new double[_r + 1, _nu];
@@ -133,6 +186,8 @@ public sealed class HierarchicalPSpline
                 for (int j = 0; j < _nu; j++) rhs[j] = zty[rr][j] / sigma2 + beta0[j] / tauU2;
                 double[] mr = cholR.Solve(rhs);            // E[β_r | ·] = Q_r⁻¹ rhs
                 if (conditionalMeans is not null) conditionalMeans[rr] = mr;
+                else if (it >= burn)
+                    for (int j = 0; j < _nu; j++) meanSum[rr][j] += mr[j];
                 for (int j = 0; j < _nu; j++) z[j] = Normal.SampleStandard(rng);
                 cholR.SampleInnovation(z, innov);          // ~ N(0, Q_r⁻¹)
                 double[] br = beta[rr];
@@ -186,27 +241,36 @@ public sealed class HierarchicalPSpline
         // Every summary is read from the retained draws, each sum in draw order as the running sums used to run; without
         // retained replicate draws, the replicate sums were accumulated as the chain ran.
         var beta0Sum = new double[_nu];
+        var mean0Sum = new double[_nu];
         double sigSum = 0.0, tauUSum = 0.0, tau0Sum = 0.0;
         foreach (HierarchicalDraw d in draws)
         {
             for (int j = 0; j < _nu; j++) beta0Sum[j] += d.Population[j];
+            for (int j = 0; j < _nu; j++) mean0Sum[j] += d.PopulationConditionalMean[j];
             if (d.Replicates is double[][] replicates)
                 for (int rr = 0; rr < reps; rr++)
                     for (int j = 0; j < _nu; j++) betaSum[rr][j] += replicates[rr][j];
+            if (d.ReplicateConditionalMeans is double[][] means)
+                for (int rr = 0; rr < reps; rr++)
+                    for (int j = 0; j < _nu; j++) meanSum[rr][j] += means[rr][j];
             sigSum += Math.Sqrt(d.NoiseVariance);
             tauUSum += Math.Sqrt(d.DeviationVariance);
             tau0Sum += Math.Sqrt(d.PopulationSmoothingVariance);
         }
 
         for (int j = 0; j < _nu; j++) beta0Sum[j] /= samples;
+        for (int j = 0; j < _nu; j++) mean0Sum[j] /= samples;
         var repMeans = new double[reps][];
+        var repConditionalMeans = new double[reps][];
         for (int rr = 0; rr < reps; rr++)
         {
             repMeans[rr] = new double[_nu];
+            repConditionalMeans[rr] = new double[_nu];
             for (int j = 0; j < _nu; j++) repMeans[rr][j] = betaSum[rr][j] / samples;
+            for (int j = 0; j < _nu; j++) repConditionalMeans[rr][j] = meanSum[rr][j] / samples;
         }
         return new HierarchicalResult(beta0Sum, repMeans, sigSum / samples, tauUSum / samples, tau0Sum / samples, samples,
-                                      new IReadOnlyList<HierarchicalDraw>[] { draws.ToArray() });
+                                      new IReadOnlyList<HierarchicalDraw>[] { draws.ToArray() }, mean0Sum, repConditionalMeans);
     }
 
     private double ResidualSS(double[] y, double[] beta)
