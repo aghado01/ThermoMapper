@@ -9,7 +9,7 @@ using Xunit.Abstractions;
 namespace Maths.Regression.Tests;
 
 /// <summary>
-/// The <see cref="BapsLambdaUpdate.MarginalEvidence"/> target. The profiled REML evidence ℓ_p levels off as λ → ∞,
+/// The <see cref="BapsScheme.Collapsed"/> target. The profiled REML evidence ℓ_p levels off as λ → ∞,
 /// so a flat prior on u = ln λ cannot be normalized. The mode therefore puts a uniform prior on the effective degrees
 /// of freedom edf(λ) = tr[(ZᵀZ + λP)⁻¹ZᵀZ], which induces the density |d edf/du| on u and decays like 1/λ at the top.
 /// The target is one-dimensional, so the sampler is checked against quadrature of a dense reference that shares no
@@ -124,12 +124,12 @@ public sealed class BapsMarginalEvidenceTests
         // Independent runs give a Monte Carlo standard error for each pooled quantile of ln λ.
         const int runs = 10;
         int[] seeds = SeedTree.Derive(101, runs);
-        var sampler = new BapsSampler(z, y, new DifferencePenalty(Order));
+        var sampler = new Baps(z, y, new DifferencePenalty(Order));
         var est = new double[3][];
         for (int k = 0; k < 3; k++) est[k] = new double[runs];
         for (int r = 0; r < runs; r++)
         {
-            BapsResult res = sampler.Run(BapsLambdaUpdate.MarginalEvidence, chains: 4, masterSeed: seeds[r], burn: 500, samples: 4000);
+            BapsResult res = sampler.Run(BapsScheme.Collapsed, chains: 4, masterSeed: seeds[r], burn: 500, samples: 4000);
             est[0][r] = Math.Log(res.LambdaLo);
             est[1][r] = Math.Log(res.LambdaMedian);
             est[2][r] = Math.Log(res.LambdaHi);
@@ -193,12 +193,12 @@ public sealed class BapsMarginalEvidenceTests
 
         const int runs = 10;
         int[] seeds = SeedTree.Derive(202, runs);
-        var sampler = new BapsSampler(z, y, new DifferencePenalty(Order));
+        var sampler = new Baps(z, y, new DifferencePenalty(Order));
         var est = new double[4][];
         for (int k = 0; k < 4; k++) est[k] = new double[runs];
         for (int r = 0; r < runs; r++)
         {
-            BapsResult res = sampler.Run(BapsLambdaUpdate.MarginalEvidence, chains: 4, masterSeed: seeds[r], burn: 500, samples: 4000);
+            BapsResult res = sampler.Run(BapsScheme.Collapsed, chains: 4, masterSeed: seeds[r], burn: 500, samples: 4000);
             double count = 0.0, m1 = 0.0, m2 = 0.0, q1 = 0.0, q2 = 0.0;
             foreach (var chain in res.PosteriorDraws)
                 foreach (BapsDraw d in chain)

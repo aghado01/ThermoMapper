@@ -33,17 +33,17 @@ public sealed class BapsEnsembleTests
         return (new SplineBasis(3).Design(new KnotConfig(knots), x), y);
     }
 
-    public static TheoryData<BapsLambdaUpdate> Modes => new()
+    public static TheoryData<BapsScheme> Modes => new()
     {
-        BapsLambdaUpdate.Gibbs, BapsLambdaUpdate.MarginalEvidence, BapsLambdaUpdate.AdaptiveGibbs,
+        BapsScheme.Gibbs, BapsScheme.Collapsed, BapsScheme.LocallyAdaptiveGibbs,
     };
 
     [Theory]
     [MemberData(nameof(Modes))]
-    public void ResumedRun_MatchesTheUninterruptedRun(BapsLambdaUpdate mode)
+    public void ResumedRun_MatchesTheUninterruptedRun(BapsScheme mode)
     {
         (double[,] z, double[] y) = Data();
-        var sampler = new BapsSampler(z, y, new DifferencePenalty(2));
+        var sampler = new Baps(z, y, new DifferencePenalty(2));
         BapsResult straight = sampler.Run(mode, chains: 3, masterSeed: 5, burn: 200, samples: 500);
 
         BapsResult first = sampler.Run(mode, chains: 3, masterSeed: 5, burn: 200, samples: 200, checkpoint: true);
@@ -60,25 +60,25 @@ public sealed class BapsEnsembleTests
     public void Checkpoint_OfAnotherProblemOrMode_IsRefused()
     {
         (double[,] z, double[] y) = Data();
-        EnsembleCheckpoint checkpoint = new BapsSampler(z, y, new DifferencePenalty(2))
-            .Run(BapsLambdaUpdate.Gibbs, chains: 2, masterSeed: 5, burn: 100, samples: 100, checkpoint: true).Checkpoint!;
+        EnsembleCheckpoint checkpoint = new Baps(z, y, new DifferencePenalty(2))
+            .Run(BapsScheme.Gibbs, chains: 2, masterSeed: 5, burn: 100, samples: 100, checkpoint: true).Checkpoint!;
 
         (double[,] z2, double[] y2) = Data(shift: 1e-9);
-        Assert.Throws<ArgumentException>(() => new BapsSampler(z2, y2, new DifferencePenalty(2))
-            .Run(BapsLambdaUpdate.Gibbs, chains: 2, masterSeed: 5, burn: 100, samples: 100, resumeFrom: checkpoint));
-        Assert.Throws<ArgumentException>(() => new BapsSampler(z, y, new DifferencePenalty(2))
-            .Run(BapsLambdaUpdate.AdaptiveGibbs, chains: 2, masterSeed: 5, burn: 100, samples: 100, resumeFrom: checkpoint));
-        Assert.Throws<ArgumentException>(() => new BapsSampler(z, y, new DifferencePenalty(2), phi: 2.0)
-            .Run(BapsLambdaUpdate.Gibbs, chains: 2, masterSeed: 5, burn: 100, samples: 100, resumeFrom: checkpoint));
+        Assert.Throws<ArgumentException>(() => new Baps(z2, y2, new DifferencePenalty(2))
+            .Run(BapsScheme.Gibbs, chains: 2, masterSeed: 5, burn: 100, samples: 100, resumeFrom: checkpoint));
+        Assert.Throws<ArgumentException>(() => new Baps(z, y, new DifferencePenalty(2))
+            .Run(BapsScheme.LocallyAdaptiveGibbs, chains: 2, masterSeed: 5, burn: 100, samples: 100, resumeFrom: checkpoint));
+        Assert.Throws<ArgumentException>(() => new Baps(z, y, new DifferencePenalty(2), phi: 2.0)
+            .Run(BapsScheme.Gibbs, chains: 2, masterSeed: 5, burn: 100, samples: 100, resumeFrom: checkpoint));
     }
 
     [Theory]
     [MemberData(nameof(Modes))]
-    public void EarlyStop_EndsOnceLogLambdaAndLogSigma2Converge(BapsLambdaUpdate mode)
+    public void EarlyStop_EndsOnceLogLambdaAndLogSigma2Converge(BapsScheme mode)
     {
         (double[,] z, double[] y) = Data();
         const int chains = 4, cap = 20000;
-        BapsResult r = new BapsSampler(z, y, new DifferencePenalty(2))
+        BapsResult r = new Baps(z, y, new DifferencePenalty(2))
             .Run(mode, chains: chains, masterSeed: 9, burn: 300, samples: cap, rHatTarget: 1.01, batchSize: 250);
 
         int perChain = r.Draws / chains;
@@ -93,17 +93,17 @@ public sealed class BapsEnsembleTests
 
     [Theory]
     [MemberData(nameof(Modes))]
-    public void Diagnostics_AndAcceptance_AreReported(BapsLambdaUpdate mode)
+    public void Diagnostics_AndAcceptance_AreReported(BapsScheme mode)
     {
         (double[,] z, double[] y) = Data();
-        BapsResult r = new BapsSampler(z, y, new DifferencePenalty(2)).Run(mode, chains: 3, masterSeed: 2, burn: 200, samples: 600);
+        BapsResult r = new Baps(z, y, new DifferencePenalty(2)).Run(mode, chains: 3, masterSeed: 2, burn: 200, samples: 600);
 
         Assert.Equal(3, r.ChainSeeds.Length);
         Assert.Null(r.Checkpoint);
         Assert.Equal(DiagnosticState.Estimated, r.LogLambdaConvergence.RHat.State);
         Assert.Equal(DiagnosticState.Estimated, r.LogSigma2Convergence.RHat.State);
         Assert.True(r.LogLambdaConvergence.BulkEss.Value > 0.0);
-        if (mode == BapsLambdaUpdate.MarginalEvidence)
+        if (mode == BapsScheme.Collapsed)
             Assert.InRange(r.AcceptanceRate, 0.05, 0.95);   // Metropolis on log λ
         else
             Assert.Equal(1.0, r.AcceptanceRate);              // every Gibbs sweep is accepted

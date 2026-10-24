@@ -27,9 +27,9 @@ public sealed class BapsTests
     }
 
     [Theory]
-    [InlineData(BapsLambdaUpdate.Gibbs)]
-    [InlineData(BapsLambdaUpdate.MarginalEvidence)]
-    public void Baps_InfersSmoothing_BothModes(BapsLambdaUpdate mode)
+    [InlineData(BapsScheme.Gibbs)]
+    [InlineData(BapsScheme.Collapsed)]
+    public void Baps_InfersSmoothing_BothModes(BapsScheme mode)
     {
         var rng = new Xoshiro256PlusPlus(seed: 91);
         int n = 120;
@@ -61,7 +61,7 @@ public sealed class BapsTests
             if (ev > bestEv) { bestEv = ev; lamReml = lam; }
         }
 
-        var sampler = new BapsSampler(z, y, penalty);
+        var sampler = new Baps(z, y, penalty);
         BapsResult r = sampler.Run(mode, chains: 4, masterSeed: 7, burn: 500, samples: 1500);
 
         double mse = 0.0;
@@ -89,9 +89,9 @@ public sealed class BapsTests
     }
 
     [Theory]
-    [InlineData(BapsLambdaUpdate.Gibbs)]
-    [InlineData(BapsLambdaUpdate.AdaptiveGibbs)]
-    public void Baps_RHatCarriesItsState(BapsLambdaUpdate mode)
+    [InlineData(BapsScheme.Gibbs)]
+    [InlineData(BapsScheme.LocallyAdaptiveGibbs)]
+    public void Baps_RHatCarriesItsState(BapsScheme mode)
     {
         // One chain cannot assess convergence: the reading is unavailable, not a number.
         var rng = new Xoshiro256PlusPlus(seed: 17);
@@ -106,7 +106,7 @@ public sealed class BapsTests
         var knots = new double[10];
         for (int k = 0; k < knots.Length; k++) knots[k] = (k + 1.0) / (knots.Length + 1);
         double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
-        var sampler = new BapsSampler(z, y, new DifferencePenalty(2));
+        var sampler = new Baps(z, y, new DifferencePenalty(2));
 
         BapsResult one = sampler.Run(mode, chains: 1, masterSeed: 3, burn: 50, samples: 200);
         BapsResult four = sampler.Run(mode, chains: 4, masterSeed: 3, burn: 50, samples: 200);
@@ -175,9 +175,9 @@ public sealed class BapsTests
             return s / n;
         }
 
-        var sampler = new BapsSampler(z, y, penalty);
-        BapsResult global = sampler.Run(BapsLambdaUpdate.Gibbs, chains: 4, masterSeed: masterSeed, burn: 500, samples: 1500);
-        BapsResult adaptive = sampler.Run(BapsLambdaUpdate.AdaptiveGibbs, chains: 4, masterSeed: masterSeed, burn: 500, samples: 1500);
+        var sampler = new Baps(z, y, penalty);
+        BapsResult global = sampler.Run(BapsScheme.Gibbs, chains: 4, masterSeed: masterSeed, burn: 500, samples: 1500);
+        BapsResult adaptive = sampler.Run(BapsScheme.LocallyAdaptiveGibbs, chains: 4, masterSeed: masterSeed, burn: 500, samples: 1500);
 
         double mseGlobal = Mse(global.Coefficients);
         double mseAdaptive = Mse(adaptive.Coefficients);

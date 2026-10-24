@@ -30,18 +30,18 @@ public sealed class BapsDrawTests
         return (new SplineBasis(3).Design(new KnotConfig(knots), x), y);
     }
 
-    public static TheoryData<BapsLambdaUpdate> Modes => new()
+    public static TheoryData<BapsScheme> Modes => new()
     {
-        BapsLambdaUpdate.Gibbs, BapsLambdaUpdate.MarginalEvidence, BapsLambdaUpdate.AdaptiveGibbs,
+        BapsScheme.Gibbs, BapsScheme.Collapsed, BapsScheme.LocallyAdaptiveGibbs,
     };
 
     [Theory]
     [MemberData(nameof(Modes))]
-    public void PosteriorDraws_KeepEveryDraw_AndGiveTheSummaries(BapsLambdaUpdate mode)
+    public void PosteriorDraws_KeepEveryDraw_AndGiveTheSummaries(BapsScheme mode)
     {
         (double[,] z, double[] y) = Data();
         int nu = z.GetLength(1), nLoc = nu - 2;
-        BapsResult r = new BapsSampler(z, y, new DifferencePenalty(2)).Run(mode, chains: 3, masterSeed: 7, burn: 200, samples: 400);
+        BapsResult r = new Baps(z, y, new DifferencePenalty(2)).Run(mode, chains: 3, masterSeed: 7, burn: 200, samples: 400);
 
         Assert.Equal(3, r.PosteriorDraws.Count);
         var coef = new double[nu];
@@ -58,7 +58,7 @@ public sealed class BapsDrawTests
                 for (int p = 0; p < nu; p++) coef[p] += mean[p];
                 lambdas.Add(d.Lambda);
                 sigma += Math.Sqrt(d.Sigma2);
-                if (mode == BapsLambdaUpdate.MarginalEvidence)
+                if (mode == BapsScheme.Collapsed)
                 {
                     // λ is the chain's state; σ² and β are conditional draws given it, and τ² = σ²/λ.
                     Assert.Equal(nu, d.ConditionalMean!.Length);
@@ -70,7 +70,7 @@ public sealed class BapsDrawTests
                     Assert.Null(d.ConditionalMean);
                     Assert.Equal(d.Sigma2 / d.Tau2, d.Lambda);
                 }
-                if (mode == BapsLambdaUpdate.AdaptiveGibbs)
+                if (mode == BapsScheme.LocallyAdaptiveGibbs)
                 {
                     Assert.Equal(nLoc, d.Eta!.Length);
                     for (int k = 0; k < nLoc; k++) local[k] += d.Lambda * d.Eta[k];
@@ -89,7 +89,7 @@ public sealed class BapsDrawTests
         lambdas.Sort();
         Assert.Equal(lambdas[(lambdas.Count - 1) / 2] + 0.5 * (lambdas[lambdas.Count / 2] - lambdas[(lambdas.Count - 1) / 2]),
                      r.LambdaMedian);
-        if (mode == BapsLambdaUpdate.AdaptiveGibbs)
+        if (mode == BapsScheme.LocallyAdaptiveGibbs)
             for (int k = 0; k < nLoc; k++) Assert.Equal(local[k] / r.Draws, r.LocalSmoothing![k], 12);
         else
             Assert.Null(r.LocalSmoothing);
@@ -97,11 +97,11 @@ public sealed class BapsDrawTests
 
     [Theory]
     [MemberData(nameof(Modes))]
-    public void IntervalsAndFitBand_AreReadFromTheDraws(BapsLambdaUpdate mode)
+    public void IntervalsAndFitBand_AreReadFromTheDraws(BapsScheme mode)
     {
         (double[,] z, double[] y) = Data();
         int n = z.GetLength(0), nu = z.GetLength(1);
-        BapsResult r = new BapsSampler(z, y, new DifferencePenalty(2)).Run(mode, chains: 3, masterSeed: 7, burn: 200, samples: 400);
+        BapsResult r = new Baps(z, y, new DifferencePenalty(2)).Run(mode, chains: 3, masterSeed: 7, burn: 200, samples: 400);
 
         var sigma2 = new List<double>();
         var tau2 = new List<double>();
@@ -146,7 +146,7 @@ public sealed class BapsDrawTests
         }
         // Draws carry the coefficients' own uncertainty, which conditional means leave out: in the marginal-evidence
         // mode the band is wider than the spread of β̂(λ) alone.
-        if (mode == BapsLambdaUpdate.MarginalEvidence)
+        if (mode == BapsScheme.Collapsed)
             Assert.True(drawSpread > 2.0 * conditionalSpread, $"draw sd {drawSpread / n:E3} against conditional-mean sd {conditionalSpread / n:E3}");
         Assert.Throws<ArgumentException>(() => r.FitBand(new double[3, nu + 1]));
     }
