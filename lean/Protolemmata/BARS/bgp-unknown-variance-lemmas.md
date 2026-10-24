@@ -70,7 +70,12 @@ log(σ/σ₀) + (σ₀z − δ)²/(2σ²) − z²/2. Take its mean and variance,
 So with σ₀ fixed, the sup-norm and |σ − σ₀| neighbourhood of radius cε lies inside the KL neighbourhood
 {K ≤ ε², V ≤ ε²}, averaged over the n observations. That is the inclusion the prior-mass step (UV-2) needs.
 
-**Tier: Lemma.**
+**Tier: Lemma.** **Discharged 2026-10-23** in `Enthymemata/BgpUnknownVariance.lean`:
+- `BGP.gaussian_kl_scale_part_le` holds for every r ≥ 1/2, since the upper end is not needed. The proof skips
+  Taylor: from 1 − 1/r ≤ log r, the gap is (r − 1)²(2r − 1)/r ≥ 0.
+- `BGP.gaussian_v_scale_part_le` holds on [1/2, 2].
+
+Notes:
 - The bound is elementary real analysis. It is the best Lean target here.
 - The closed forms need Gaussian moments (Mathlib's `gaussianReal`); worth formalizing once that API is in reach at
   our pinned version.
@@ -123,7 +128,13 @@ By UV-1, this gives the KL-neighbourhood mass the general theorem needs.
 - **To confirm against the paper:** that Part I's constants are continuous, or at least locally bounded, in
   (ν₁, ν₂) and in the radius scaling. Remark A.1 says so in words; the proof's constants C̄₁ and C̄₂ should be read
   once to make sure.
-- **Lean-worthy pieces:** the scaling identity (step 2) and the absorption of log(1/εₙ) (step 4).
+- **Lean-worthy pieces:** the scaling identity (step 2) and the absorption of log(1/εₙ) (step 4). **Both discharged
+  2026-10-23** in `Enthymemata/BgpUnknownVariance.lean`:
+  - `BGP.map_smul_closedBall`;
+  - `BGP.log_inv_radius_le_n_radius_sq`, for k ≥ 0, which covers the paper's k₁ = (1 + D)/(2 + ϱ/s) > 0. Mathlib's
+    `Pow.Asymptotics` module is not in the local cache, so the proof is elementary instead:
+    - log n ≤ nᵇ/b, from log y ≤ y − 1;
+    - an explicit threshold N = max(⌈e⌉, ⌈M^(1/b)⌉), with b = (1 − 2a)/2.
 
 ```lean
 import Mathlib.MeasureTheory.Measure.Map
@@ -279,15 +290,19 @@ frequentist confidence intervals.
 
 ## Lean-worthy pieces
 
-| Piece | Statement | Difficulty | Where it lands |
+| Piece | Statement | Difficulty | Status |
 |---|---|---|---|
-| UV-1a | −log r + (r² − 1)/2 ≤ (5/2)(r − 1)² on [1/2, 2] | Easy: Taylor with remainder | Lemma |
-| UV-1b | (r² − 1)²/2 ≤ (9/2)(r − 1)² on [1/2, 2] | Easy: algebra | Lemma |
-| UV-1c | Gaussian KL and log-ratio variance closed forms | Moderate: Gaussian moments in Mathlib | Lemma, once the API is in reach |
-| UV-2a | Ball mass under an amplitude rescaling | Easy: preimage of a ball under scaling | Lemma |
-| UV-2b | log(1/εₙ) ≤ nεₙ² eventually, for the paper's εₙ | Easy: asymptotics | Lemma |
-| UV-4a | Covering a scaled family and an interval | Moderate: the covering-number API | Lemma |
-| UV-6 | The composed theorem | Heavy; cites GvdV07 and TWCD2025 | Enthymema with `sorry` at UV-5 |
+| UV-1a | −log r + (r² − 1)/2 ≤ (5/2)(r − 1)² for r ≥ 1/2 | Easy: from 1 − 1/r ≤ log r | **Proved** (`BGP.gaussian_kl_scale_part_le`) |
+| UV-1b | (r² − 1)²/2 ≤ (9/2)(r − 1)² on [1/2, 2] | Easy: algebra | **Proved** (`BGP.gaussian_v_scale_part_le`) |
+| UV-1c | Gaussian KL and log-ratio variance closed forms | Moderate: Gaussian moments in Mathlib | Open; Lemma once the API is in reach |
+| UV-2a | Ball mass under an amplitude rescaling | Easy: preimage of a ball under scaling | **Proved** (`BGP.map_smul_closedBall`) |
+| UV-2b | log(1/εₙ) ≤ nεₙ² eventually, for the paper's εₙ (k ≥ 0) | Easy: elementary asymptotics | **Proved** (`BGP.log_inv_radius_le_n_radius_sq`) |
+| UV-4a | Covering a scaled family and an interval | Moderate: the covering-number API | Open |
+| UV-6 | The composed theorem | Heavy; cites GvdV07 and TWCD2025 | Open; an enthymema with `sorry` at UV-5 |
+
+**Where the proved pieces live.** `Enthymemata/BgpUnknownVariance.lean` compiles with scoped imports and no
+`sorry`. meta-CI's ledger marks it PROOF-CLOSED, which makes it a candidate for semantic review and promotion to
+`Lemmas/`; the names keep their `BGP` namespace on promotion.
 
 UV-1a, UV-1b, UV-2a and UV-2b are the boring load-bearing claims the rigor harness exists for. They are short, they
 carry the whole bookkeeping, and an error in any of them would quietly break the extension.
