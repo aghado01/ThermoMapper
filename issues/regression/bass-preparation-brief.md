@@ -550,7 +550,7 @@ Two of these drops broke the readout's own contract (`lean/Protolemmata/BARS/spc
   - the bandwidth sample, which every chain kept: it is pooled and sorted for two quantiles, then discarded;
   - the per-draw curves and their spread across bandwidths. Only a running sum is kept, so the between-bandwidth uncertainty is lost. The curves can now be recomputed from the retained fits;
   - each draw's log marginal.
-- **Never computed,** until `3e270b9` added `PosteriorSd` (report "Tier 2: uncertainty for BGP and BAPS"): the GP's conditional variance at the test points (`PredictMean` only), so `BgpResult` carried no uncertainty on f at all. σ² is fixed at construction, not inferred; that remains.
+- **Never computed,** until `3e270b9` added `PosteriorSd` (report "Tier 2: uncertainty for BGP and BAPS"): the GP's conditional variance at the test points (`PredictMean` only), so `BgpResult` carried no uncertainty on f at all. σ² was fixed at construction, not inferred. Since `e8bb73c` an unknown-scale noise model infers it as an option, with known σ² still the default (report "BGP: resume and an unknown-scale noise model").
 - **No resume:** `RestoreChain` refuses (OQ10). Fixed in `647422e`: checkpoints, resume and the early stop.
 
 ### BAPS (`BapsSampler`, its own loop)
@@ -2406,3 +2406,51 @@ The user asked for tiers 1 and 2 of the same retention work on `HierarchicalPSpl
 **Still open:** the ensemble shell (waits for OQ18), BGP's resume (OQ10), BGP's fixed σ², and the changepoint and SW items of the retention inventory.
 
 **Results** under the fact harness: `Maths.Regression.Tests` 282 of 282 (`20261023_181341941`). The solution builds.
+
+### BGP: resume and an unknown-scale noise model — 2026-10-23
+
+The user asked for the two open BGP items: checkpoint resume (OQ10), and inferring σ². For σ² they chose option B beside known σ², which stays the default: K = s²(h_t + ηI), with s² integrated out under 1/s², Metropolis on (log t, log η) with a log-uniform η prior, s² drawn per draw, and the trade-offs documented.
+
+| Commit | Content |
+|---|---|
+| `647422e` | Checkpoints, resume and the early stop for `BgpSampler`; `BgpResumeTests` |
+| `7976441` | Docs for resume |
+| `83d3193` | `PosteriorInterval` and `PointwiseBand` moved to the regression root, for BGP's intervals |
+| `e8bb73c` | `GpNoiseModel.UnknownScale` (`GpRegression.WithUnknownScale`, `Fit(t, η)`), the joint (log t, log η) walk, per-draw s² draws, η monitored, noise, signal and ratio intervals; `BgpUnknownScaleTests` |
+| docs commit | `BayesianRegression.md` (the noise model and its trade-offs), this report |
+
+**Why σ² was a decision, not a port.**
+- **The paper's model:** TWCD2025's algorithm takes σ² as an input with a unit signal variance, and its contraction theory assumes σ known.
+- **No reference to follow:** its Lucky Cat table has a "+ unknown σ" row that states no prior.
+- **The trap in inferring σ² alone:** it leaves the scale mismatch in place, so option B infers the signal variance too.
+
+**Resume.**
+- **The chain's state:** its streams (the readout stream too, for s²), log t (and log η), the log target, the bandwidth and nugget its current fit was made at (refitted on restore, to the same fit), its counters and its retained draws.
+- **The fingerprint:** the GP's data, noise model, noise variance, kernel and input map, both priors, the test points, the starting values and the proposal scales.
+- **Tested:** a resumed run equals the uninterrupted one draw for draw, in both noise models. A checkpoint is refused for other data, σ², prior, test points, proposal or η range. The early stop ends before its cap.
+
+**The unknown-scale model.**
+- **The equations:** the marginal, the s² conditional and the sampler are in `BayesianRegression.md`.
+- **The checks:**
+  - the closed-form marginal agrees with quadrature over s², against a dense reference, to 10⁻⁸ at three (t, η);
+  - rescaling the response shifts it by −(n − 1) log c, to 10⁻⁹;
+  - the s² draws match E[s² | ·] = Q/(n − 3), z = −0.08 over 3,000 draws;
+  - a known σ² reports s² = 1 and the given σ².
+- **Known σ² is untouched:** bit-identical, down to each draw's log marginal (probe at 1 and 3 chains).
+
+**Measured, on single data sets (exploration, not a study for defaults), 4 chains × 4,000 draws:**
+
+| Data | Model | MSE | 95% coverage | t ESS | η ESS |
+|---|---|---|---|---|---|
+| sine, amplitude 1 | known σ² = 0.25 | 0.022 | 0.92 | 1,567 | — |
+| sine, amplitude 1 | unknown scale | 0.024 | 0.96 | 174 | 137 |
+| sine, amplitude 6 | known σ² = 0.25 | 0.054 | 0.82 | 3,746 | — |
+| sine, amplitude 6 | unknown scale | 0.020 | 1.00 | 372 | 279 |
+
+- **What the table shows.** With amplitude 6 the known model, even given the true σ², shrinks the bandwidth to compensate for its unit signal variance (t ≈ 0.025 against 0.13). The unknown-scale model fixes that at about ten times fewer effective draws, because t and η trade off in the posterior. σ² was recovered at 0.30 [0.22, 0.42] against a true 0.25.
+- **s² is weakly identified:** [16, 1263] on the amplitude-6 data. The signal variance and the bandwidth trade off, and the 100% coverage suggests conservative bands.
+- **Follow-ups worth a look:** a correlated or adaptive proposal on (log t, log η), and a designed comparison before any change of default.
+
+**Still open:** BGP's mixing under the unknown scale (above), `HierarchicalPSpline`'s shell move (waits for OQ18), and the changepoint and SW items of the retention inventory.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 292 of 292 (`20261023_185409669`). The solution builds.
