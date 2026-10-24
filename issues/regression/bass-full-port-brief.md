@@ -150,7 +150,23 @@ Existing covariance callers may legitimately require regularization or inverse o
   - **Composition with the reversible-jump chain:** BARS's step is already a reversible-jump step plus the weight block, assembled ad hoc in `StepOnce`, and BASS is reversible-jump moves plus conjugate blocks. One composite kernel would serve both.
   - **What stays with the model in `Maths.Regression`:** the state type, each block's sufficient statistics (residual sum of squares, roughness, the penalty band), and the result assembly.
 - **Why `BapsSampler` cannot simply move to `Maths.Samplers`.** Its conditionals use `PenalizedSpline`, `DifferencePenalty` and `BandedDesign`, all in `Maths.Regression`, and Regression references Samplers, so the move would make a cycle. The split above is the version that works: the generic scan and primitives move down, and the model's blocks stay. It matches the reversible-jump engine's existing split, with `ReversibleJumpChain` in Samplers and `SplineTarget` and the knot moves in Regression.
-- **The check when it lands:** each engine moved onto the blocks must be bit-identical to its current sampler, with the same streams and the same order, as BAPS's move onto the ensemble shell was.
+- **The naming plan (decided by the user on 2026-10-23; applied with this work, not before).** The user: "baps is the method, something that sits above just the sampler."
+  - **BARS, BAPS and BASS are method names.** They name the folder, the namespace, the entry point and the result, and they stay.
+  - **The samplers inside a method are named for their algorithm in the field.** `BapsSampler` is really the BAPS method with two samplers embedded:
+    - **block Gibbs**, for the `Gibbs` and `AdaptiveGibbs` schemes: a conjugate block draw of β, then inverse-gamma variance updates, plus η in the adaptive scheme;
+    - **collapsed Metropolis**, for the `MarginalEvidence` scheme: random-walk Metropolis on log λ with β and σ² integrated out, then the exact conditional draws of σ² and β.
+
+  | Level | Today | Planned | Note |
+  |---|---|---|---|
+  | Method | `BapsSampler` | `Baps` | The entry point: data, priors, scheme, result assembly; parallel to `Bars` |
+  | Method | `BapsResult`, `BapsDraw` | unchanged | |
+  | Method | `BapsLambdaUpdate { Gibbs, MarginalEvidence, AdaptiveGibbs }` | `BapsScheme { Gibbs, Collapsed, LocallyAdaptiveGibbs }` | "λ update" does not describe the adaptive scheme, which changes the model (local weights on the penalty), not the update |
+  | Sampler | inside the private `BapsChainRun` | the shared block Gibbs scan in `Maths.Samplers` | BAPS's blocks (β, σ², τ², η) stay in `baps/` |
+  | Sampler | inside the private `BapsChainRun` | collapsed Metropolis | A scalar random-walk Metropolis block (BGP's log t uses the same step), followed by the conditional draws |
+
+  - **Canonical references,** for the docs when the names land: Bayesian P-splines (Lang & Brezger 2004), with block updates of the coefficients as banded Gaussian Markov random field draws (Rue 2001). For locally adaptive smoothing: Lang & Brezger 2004, and Baladandayuthapani, Mallick & Carroll 2005. For the uniform prior on effective degrees of freedom: Hodges & Sargent 2001.
+  - **`HierarchicalPSpline`** is already named for what it is. Its sweep becomes a block Gibbs scan in the same way.
+- **The check when it lands:** each engine moved onto the blocks must be bit-identical to its current sampler, with the same streams and the same order, as BAPS's move onto the ensemble shell was. The renames ride along in the same change.
 - **Sequencing:** `HierarchicalPSpline`'s move onto the ensemble shell waits for this, so it lands on the shared scan rather than another hand-rolled chain class. Its draw retention does not depend on it.
 
 ## Numerical and operation contracts
