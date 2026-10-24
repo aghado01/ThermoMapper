@@ -230,7 +230,7 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
   - **Size.** At BARS's sizes this is small: 4 chains × 10,000 draws × about 40 numbers is 1.6 million doubles, about 13 MB.
 - **Models without a plain density.** The Gibbs-loss route's term is a pseudo-likelihood, exp(−η·loss), and Whittle's observations are periodogram ordinates. Each states what its pointwise term means, or declines the capability.
 - **The unit is the caller's (decided 2026-10-24 by the user).** For SPC × BARS the unit of interest starts as a replicate at a temperature, but the code must treat that as one application, "because the engine shouldn't be built just to do this one thing."
-- **Proposed design for the seam (2026-10-24, agreed in direction, not yet built).**
+- **Design for the seam (2026-10-24, agreed in direction; built the same day for BARS, `HierarchicalPSpline` and the changepoint draws, `c1adf92`, `7bae205`).**
   - **Two caller-supplied maps, kept apart.**
     - The *unit map* sends each observation to a unit: what is left out or added in. The default is each observation its own unit.
     - The *stratum map* sends each unit to an exchangeability stratum. The default is one stratum. Only the consumers read it; the density does not. Stratified coverage is Mondrian conformal prediction (Vovk); Fong and Holmes's grouped conformal Bayes is its Bayesian form.
@@ -241,6 +241,12 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
   - **Models declare their latents' scope:** per observation (wᵢ), per group (β_r, given the group map), or global (β, σ², knots). The result carries the draws × units matrix, the unit map it was computed for, and which latents were integrated and which conditioned on, so a consumer can check the question it answers. A unit map that splits a group latent's dependents is allowed and reported as conditioning, not refused.
   - **Placement.** The density lives with each model: the shared observation-model seam for BARS and BASS, and `HierarchicalPSpline` and `ExactChangepoint` beside it. The contract types (the two maps and the pointwise result) are shared in `Maths.Regression`. The consumers (WAIC, PSIS-LOO, conformal Bayes, the calibration check) read the matrix and the strata and know no model. Only application code, such as SPC × BARS, picks the maps.
   - **The two draw contents fit inside it:** retained parameters integrate only the unit-private latents, and the collapsed predictive also integrates the structure's coefficients and scale.
+  - **Built, 2026-10-24.**
+    - `UnitPartition`, `PointwiseLogDensity` and `LatentReport` in `Maths.Regression`.
+    - The retained-parameters content for BARS (Normal with robust weights integrated through each resampler's marginal, Poisson, Whittle; Gibbs loss declines), `HierarchicalPSpline` (curve units integrate β_r) and the changepoint draws (whole-segment units integrate the level).
+    - The model-free consumers `PredictiveChecks.Waic` and `PsisLoo`.
+    - BASS's observation model implements the same contract at its port.
+  - **Not built:** the collapsed-predictive content, BAPS's and BGP's terms, and the conformal consumer (SPC × BARS).
 
 ## SMC integration
 

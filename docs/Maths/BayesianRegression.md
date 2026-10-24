@@ -89,6 +89,7 @@ flowchart LR
 | BAPS | `DifferencePenalty(order = 2)`; `PenalizedSpline(design, y, IBandPenalty)` (`Coefficients`, `ProfiledVariance`, `RemlLogEvidence`, `EffectiveDegreesOfFreedom`, `EdfSlope`); `Baps(...).Run(BapsScheme, …)` with `BapsScheme` (`Gibbs`, `Collapsed`, `LocallyAdaptiveGibbs`) → `BapsResult` (`PosteriorDraws`, `FitBand(design)` → `PointwiseBand`, `Sigma2Interval`, `Tau2Interval` → `PosteriorInterval`); `HierarchicalPSpline(...).Run` → `HierarchicalResult` (`PosteriorDraws` per chain, Rao–Blackwellized means, `PopulationBand`, `ReplicateBand`, three variance intervals, three convergence diagnostics, `RHatPopulation`, `Checkpoint`); `HierarchicalStart` (`Overdispersed`, `Fixed`); `HierarchicalScheme` (`Centred`, `CollapsedPopulation`, `Interweaved`, `CollapsedInterweaved`, `ParameterExpanded`); `HalfTDeviationPrior(Degrees, Scale)`; `TensorProductDesign.Build` → `TensorDesign`; `TensorPenalty`; `AnisotropicTensorSpline` (`Coefficients`, `RemlLogEvidence`) |
 | BGP | `SquaredExponentialKernel : IGpKernel`; `GpRegression(x, y, sigma2, kernel, scaling = Similarity)` or `GpRegression.WithUnknownScale(x, y, kernel, scaling)` (`NoiseModel`, `Fit(t, η)` for an unknown scale; `Fit(t)` → `GpFit`, `PredictMean`, `PredictVariance`, `KernelAffinity`, `Transform` → `GpTransform`); `EmpiricalBayesBandwidthPrior(gp, …)`; `BgpSampler(gp, prior).Run(...)` → `BgpResult` (`PosteriorMean`, `PosteriorSd`, `BandwidthDraws`) |
 | Changepoint | `ExactChangepoint.Infer(y, σ², ν, ρ², maxSegments)` or `Infer(y, ISegmentModel, maxSegments)` → `ChangepointResult`; `DefaultHyperparameters(y)`; `GaussianSegmentModel`, `CauchySegmentModel`; `ChangepointResult.Posterior.Sample(draws, seed)` → `ChangepointDraw` |
+| Pointwise and predictive checks | `UnitPartition(unitOf, stratumOf)`, `UnitPartition.EachObservation(n)`, `ConsecutiveBlocks(blocks, size)`; `PointwiseLogDensity` (`Values`, `Units`, `Latents`); `LatentReport`, `LatentScope`, `LatentTreatment`; `BarsEnsemble.PointwiseLogDensity(result, x, y, units)`, `HierarchicalPSpline.PointwiseLogDensity(result, units)`, `ChangepointPosterior.PointwiseLogDensity(draws, units)`; `PredictiveChecks.Waic`, `PsisLoo` → `PredictiveCheck`, `FitGeneralizedPareto`; `IWeightResampler.MarginalLogDensity`, `ISegmentModel.LogLikelihood` |
 
 ## Algorithms
 
@@ -758,6 +759,44 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 | 200 | 5.5 | 3,441 | 126 ms | 194 ms |
 | 200 | 110 | 64,522 | 721 ms | 4.4 s |
 
+### Pointwise densities and predictive checks (OQ17)
+
+**The contract** (`Pointwise.cs`). A `PointwiseLogDensity` is the draws × units matrix of log p(y_unit | draw), with the `UnitPartition` it was computed for and a `LatentReport` per latent.
+- **The unit map** sends each observation to a unit: what a leave-one-out or add-one-in step removes or adds. The default is each observation its own unit (`UnitPartition.EachObservation`); `ConsecutiveBlocks` makes curves.
+- **The stratum map** sends each unit to an exchangeability stratum, which only consumers read (stratified, Mondrian, coverage).
+- **The caller chooses both;** the engine serves no one application. SPC × BARS starts with a replicate's observation at a temperature as the unit and the temperature as the stratum.
+- **The rule.** A latent is integrated out of a unit's term when everything that depends on it lies inside the unit, and conditioned on otherwise, so the unit chooses the predictive question. Each latent is reported as `Integrated`, `Conditioned` or `Mixed`, with its scope (`Observation`, `Group`, `Global`), so a consumer can check the question it answers.
+
+**Each engine's terms.**
+- **BARS** (`BarsEnsemble.PointwiseLogDensity(result, x, y, units)`). Knots, β and σ² are global and conditioned on.
+  - Normal model: N(yᵢ; zᵢβ, σ²).
+  - With robust weights, each weight belongs to one observation and is integrated out under its prior: the resampler's `MarginalLogDensity`, Student t_ν(0, σ) or the mixture (1 − π)N(0, σ²) + πN(0, κ²σ²).
+  - Poisson: the Poisson log mass at exp(zᵢβ).
+  - Whittle: the exponential density of a periodogram ordinate with mean exp(zᵢβ), under Whittle's approximation of independent ordinates.
+  - Gibbs loss declines, since its likelihood is a pseudo-likelihood.
+- **`HierarchicalPSpline`** (`PointwiseLogDensity(result, units)`; observation o = r·n + i).
+  - A unit holding all of replicate r integrates β_r out: N(y_r; Zβ₀, σ²I + τ_u²ZZᵀ), formed through ZᵀZ = V diag(λ) Vᵀ.
+  - A unit holding part of it conditions on β_r, which needs the retained replicate draws.
+  - Curve units therefore work without replicate draws; split units refuse.
+- **The changepoint draws** (`ChangepointPosterior.PointwiseLogDensity(draws, units)`). The segmentation is conditioned on. A unit holding a whole segment integrates its level, its term the segment's evidence D(a, b) from the tables; otherwise the segment model's `LogLikelihood` is taken at the drawn level.
+
+**Consumers** (`PredictiveChecks`), which read the matrix and know no model:
+- **`Waic`** (Watanabe 2010): per unit, lppd − Var_s log p.
+- **`PsisLoo`:** leave-one-unit-out by Pareto-smoothed importance sampling (Vehtari, Gelman & Gabry 2017; Vehtari et al. 2024), following the loo package. The largest M = ⌈min(S/5, 3√S)⌉ log ratios are smoothed by a generalized Pareto fit (Zhang & Stephens 2009, with loo's weakly informative shape adjustment) and truncated at the raw maximum; each unit's k̂ flags unreliable estimates above 0.7.
+- Both treat the draws as independent, so autocorrelated chains make their Monte Carlo error larger than reported.
+- Conformal Bayes (Fong & Holmes 2021) is deferred to the SPC × BARS work.
+
+**Checks.**
+- The Pareto fit recovers shapes 0, 0.3 and 0.7.
+- PSIS-LOO matches exact leave-one-out within 0.03 per observation on a conjugate Gaussian linear model, and flags its outlier with the heaviest tail.
+- WAIC follows its definition and agrees with exact leave-one-out to O(1/n).
+- The Student-t marginal matches numerical integration over the weight's Gamma prior; the contaminated mixture integrates to 1.
+- Curve units match an explicit dense multivariate normal; observation units match the conditional terms.
+- Whole-segment units sum the draw's segment evidences.
+- On data with outliers, the Student-t error model's PSIS-LOO beats the Normal model's by more than 5 nats.
+
+**Not built yet:** the collapsed-predictive draw content (OQ17's second option), BAPS's and BGP's pointwise terms, and the conformal consumer.
+
 ## Configuration
 
 | Setting | Default | Meaning |
@@ -824,6 +863,7 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 | BARS | `spline/bars/Bars.cs`, `BarsEnsemble.cs`, `SplineTarget.cs`, `KnotMoves.cs`, `KnotKernels.cs`, `AdaptiveLocalBetaKernel.cs`, `DmgkSchedule.cs`, `ComplexityPriors.cs`, `WeightedNormalModel.cs`, `PoissonModel.cs`, `WhittleModel.cs`, `GibbsLossModel.cs`, `WeightResampling.cs`, `StepBasis.cs`, `SplineExtrema.cs`, `IObservationModel.cs`, `IKnotKernel.cs` |
 | BAPS | `spline/baps/DifferencePenalty.cs`, `IBandPenalty.cs`, `PenalizedSpline.cs`, `Baps.cs`, `HierarchicalPSpline.cs`, `TensorProductDesign.cs`, `TensorPenalty.cs`, `AnisotropicTensorSpline.cs` |
 | BGP | `bgp/GpKernel.cs`, `GpTransform.cs`, `GpRegression.cs`, `EmpiricalBayesBandwidthPrior.cs`, `BgpSampler.cs` |
-| Changepoint | `changepoint/ExactChangepoint.cs`, `SegmentModels.cs` |
+| Changepoint | `changepoint/ExactChangepoint.cs`, `SegmentModels.cs`, `ChangepointPosterior.cs` |
+| Pointwise and predictive checks | `Pointwise.cs`, `PredictiveChecks.cs` |
 
 **See also:** [Samplers](./Samplers.md) · [LinearAlgebra](./LinearAlgebra.md#band-cholesky--ldlᵀ-bandcholesky) · [ProbabilityAndInformation](./ProbabilityAndInformation.md)
