@@ -3,5 +3,5 @@ import Enthymemata.BARS
 import Enthymemata.Bifiltration
 import Enthymemata.BgpUnknownVariance
 import Enthymemata.CumulativeField
-import Enthymemata.PottsGriffiths
+import Enthymemata.PottsPK
 import Enthymemata.Stability
