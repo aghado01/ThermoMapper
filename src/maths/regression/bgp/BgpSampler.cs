@@ -155,7 +155,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
     public IChainRun<double> StartChain(int chainSeed, int readoutSeed)
     {
         var chain = new BgpBandwidthChain(this, new Xoshiro256PlusPlus(chainSeed));
-        return new BgpChainRun(chain, this, new Xoshiro256PlusPlus(readoutSeed), new List<BgpDraw>());
+        return new BgpChainRun(chain, this, new Xoshiro256PlusPlus(readoutSeed), new DrawStore<BgpDraw>());
     }
 
     /// <summary>The run's fingerprint for checkpoints: the GP's data, noise model, noise variance, kernel and input map,
@@ -181,7 +181,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
         if (state is not BgpChainState s) throw new ArgumentException("Not a BGP chain's restart state.", nameof(state));
         var chain = new BgpBandwidthChain(this, s);
         var readout = Xoshiro256PlusPlus.Restore(s.Readout.Item1, s.Readout.Item2, s.Readout.Item3, s.Readout.Item4);
-        return new BgpChainRun(chain, this, readout, new List<BgpDraw>(s.Draws));
+        return new BgpChainRun(chain, this, readout, s.Draws.Copy());
     }
 
     /// <param name="xTest">Points (original units) at which to report the posterior mean (the training inputs for the in-sample fit).</param>
@@ -256,7 +256,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
         double chainMeans = 0.0;
         for (int ci = 0; ci < chains; ci++)
         {
-            List<BgpDraw> chainDraws = ((BgpChainRun)runs[ci]).Draws;
+            DrawStore<BgpDraw> chainDraws = ((BgpChainRun)runs[ci]).Draws;
             bandwidthDraws[ci] = chainDraws.ToArray();
             var chainSum = new double[m];
             var moments = new RunningMoments();
@@ -320,7 +320,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
     private sealed record BgpChainState(
         (ulong, ulong, ulong, ulong) Rng, (ulong, ulong, ulong, ulong) Readout, double LogBandwidth, double LogNoiseRatio,
         double LogTarget, double FitBandwidth, double FitNoiseRatio, (double L00, double L10, double L11) Step,
-        long Accepted, long Attempts, List<BgpDraw> Draws)
+        long Accepted, long Attempts, DrawStore<BgpDraw> Draws)
         : IChainState;
 
     /// <summary>
@@ -388,9 +388,9 @@ public sealed class BgpSampler : IEnsembleModel<double>
         }
 
         /// <summary>The chain's part of its restart state, with the readout stream's words and the retained draws.</summary>
-        public BgpChainState Save((ulong, ulong, ulong, ulong) readout, List<BgpDraw> draws) =>
+        public BgpChainState Save((ulong, ulong, ulong, ulong) readout, DrawStore<BgpDraw> draws) =>
             new(_rng.SaveState(), readout, _u, _v, _cur, _factored.Fit.Bandwidth, _factored.Fit.NoiseRatio,
-                (_l00, _l10, _l11), Accepted, Attempts, new List<BgpDraw>(draws));
+                (_l00, _l10, _l11), Accepted, Attempts, draws.Copy());
 
         /// <summary>
         /// Burn-in. With the adaptive proposal it runs adaptive Metropolis:
@@ -505,9 +505,9 @@ public sealed class BgpSampler : IEnsembleModel<double>
         private GpFit? _varianceFit;          // the fit _variance belongs to
         private double[] _variance = [];
 
-        public readonly List<BgpDraw> Draws;   // every post-burn draw, in order
+        public readonly DrawStore<BgpDraw> Draws;   // every post-burn draw, in order
 
-        public BgpChainRun(BgpBandwidthChain chain, BgpSampler owner, Xoshiro256PlusPlus readout, List<BgpDraw> draws)
+        public BgpChainRun(BgpBandwidthChain chain, BgpSampler owner, Xoshiro256PlusPlus readout, DrawStore<BgpDraw> draws)
         {
             _chain = chain; _o = owner; _readout = readout; Draws = draws;
         }

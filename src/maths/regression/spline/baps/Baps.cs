@@ -211,7 +211,7 @@ public sealed class Baps
         int idx = 0;
         for (int c = 0; c < chains; c++)
         {
-            List<BapsDraw> draws = ((BapsChainRun)runs[c]).Draws;
+            DrawStore<BapsDraw> draws = ((BapsChainRun)runs[c]).Draws;
             posteriorDraws[c] = draws.ToArray();
             var coefSum = new double[_nu];
             double sigmaSum = 0.0;
@@ -262,7 +262,7 @@ public sealed class Baps
         public IChainRun<BapsState> StartChain(int chainSeed, int readoutSeed) => new BapsChainRun(owner, scheme,
             new BlockScan<BapsState>(owner.Blocks(scheme), BapsState.Start(owner, scheme), new Xoshiro256PlusPlus(chainSeed),
                                      state => state.Copy()),
-            new Xoshiro256PlusPlus(readoutSeed), new List<BapsDraw>());
+            new Xoshiro256PlusPlus(readoutSeed), new DrawStore<BapsDraw>());
 
         /// <summary>The design, the responses, the penalty order, the hyperparameters and the scheme.</summary>
         public string Fingerprint
@@ -279,14 +279,14 @@ public sealed class Baps
         public IChainRun<BapsState> RestoreChain(IChainState state) => state is BapsChainState s
             ? new BapsChainRun(owner, scheme, BlockScan<BapsState>.Restore(owner.Blocks(scheme), s.Scan, x => x.Copy()),
                                Xoshiro256PlusPlus.Restore(s.Readout.Item1, s.Readout.Item2, s.Readout.Item3, s.Readout.Item4),
-                               new List<BapsDraw>(s.Draws))
+                               s.Draws.Copy())
             : throw new ArgumentException("Not a BAPS chain's restart state.", nameof(state));
     }
 
     /// <summary>One BAPS chain's restart state: the scan's snapshot (the state its next sweep conditions on, the kernel
     /// stream and the blocks' counters), the readout stream's words and the retained draws.</summary>
     private sealed record BapsChainState(
-        BlockScanSnapshot<BapsState> Scan, (ulong, ulong, ulong, ulong) Readout, List<BapsDraw> Draws) : IChainState;
+        BlockScanSnapshot<BapsState> Scan, (ulong, ulong, ulong, ulong) Readout, DrawStore<BapsDraw> Draws) : IChainState;
 
     /// <summary>
     /// One BAPS chain: its scheme's block scan, its retained draws and its restart state. Burn-in steps the scan without
@@ -294,11 +294,11 @@ public sealed class Baps
     /// into rounds or runs.
     /// </summary>
     private sealed class BapsChainRun(Baps owner, BapsScheme scheme, BlockScan<BapsState> scan, Xoshiro256PlusPlus readout,
-                                      List<BapsDraw> draws) : IResumableChainRun<BapsState>
+                                      DrawStore<BapsDraw> draws) : IResumableChainRun<BapsState>
     {
         private readonly GaussianConditional _gaussian = new(owner._nu);   // the collapsed scheme's conditional β draw
 
-        public List<BapsDraw> Draws => draws;           // every post-burn draw, in order
+        public DrawStore<BapsDraw> Draws => draws;           // every post-burn draw, in order
 
         public IChain<BapsState> Chain => scan;
 
@@ -315,7 +315,7 @@ public sealed class Baps
             draws.Add(draw);
         }
 
-        public IChainState SaveState() => new BapsChainState(scan.Snapshot(), readout.SaveState(), new List<BapsDraw>(draws));
+        public IChainState SaveState() => new BapsChainState(scan.Snapshot(), readout.SaveState(), draws.Copy());
 
         // The draw at the end of the sweep. The collapsed scheme adds its exact conjugate draws given λ here, on the readout
         // stream: σ² | λ, y ~ IG((n − r)/2, RSS_pen/2) under the Jeffreys prior the evidence assumes, then

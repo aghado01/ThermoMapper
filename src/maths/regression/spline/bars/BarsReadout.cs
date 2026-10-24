@@ -25,7 +25,7 @@ internal sealed class BarsReadout : IMergeable<BarsReadout>
 
     /// <summary>Every draw's retained state, in draw order; a merge appends the other readout's draws. A draw's arrays
     /// are never written after it is retained, so a copy shares them.</summary>
-    public List<BarsDraw> Draws { get; } = new();
+    public DrawStore<BarsDraw> Draws { get; } = new();
 
     /// <summary>An independent copy (a merge into an empty readout, which adds nothing to any value).</summary>
     public BarsReadout Copy()
@@ -40,6 +40,6 @@ internal sealed class BarsReadout : IMergeable<BarsReadout>
         ArgumentNullException.ThrowIfNull(other);
         ConditionalVariance.MergeFrom(other.ConditionalVariance);
         Evaluations.MergeFrom(other.Evaluations);
-        Draws.AddRange(other.Draws);
+        Draws.AppendFrom(other.Draws);
     }
 }

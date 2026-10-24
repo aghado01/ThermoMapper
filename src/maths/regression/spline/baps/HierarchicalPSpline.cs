@@ -377,7 +377,7 @@ public sealed class HierarchicalPSpline
                 ? SweepState.Start(reps, owner._nu)
                 : SweepState.Overdispersed(reps, owner._nu, owner._responseVariance, new Xoshiro256PlusPlus(seeds[0]));
             var scan = new BlockScan<SweepState>(owner.Blocks(scheme), state, new Xoshiro256PlusPlus(seeds[1]), x => x.Copy());
-            return new HierarchicalChainRun(scan, retainReplicates, new List<HierarchicalDraw>(), Zeros(reps, owner._nu),
+            return new HierarchicalChainRun(scan, retainReplicates, new DrawStore<HierarchicalDraw>(), Zeros(reps, owner._nu),
                                             Zeros(reps, owner._nu));
         }
 
@@ -399,14 +399,14 @@ public sealed class HierarchicalPSpline
 
         public IChainRun<SweepState> RestoreChain(IChainState state) => state is HierarchicalChainState s
             ? new HierarchicalChainRun(BlockScan<SweepState>.Restore(owner.Blocks(scheme), s.Scan, x => x.Copy()), retainReplicates,
-                                       new List<HierarchicalDraw>(s.Draws), Clone(s.ReplicateSums), Clone(s.ReplicateMeanSums))
+                                       s.Draws.Copy(), Clone(s.ReplicateSums), Clone(s.ReplicateMeanSums))
             : throw new ArgumentException("Not a hierarchical P-spline chain's restart state.", nameof(state));
     }
 
     /// <summary>One chain's restart state: the scan's snapshot (its state, stream and counters), its retained draws, and
     /// the replicate sums a run without retained replicate draws accumulates.</summary>
     private sealed record HierarchicalChainState(
-        BlockScanSnapshot<SweepState> Scan, List<HierarchicalDraw> Draws, double[][] ReplicateSums,
+        BlockScanSnapshot<SweepState> Scan, DrawStore<HierarchicalDraw> Draws, double[][] ReplicateSums,
         double[][] ReplicateMeanSums) : IChainState;
 
     /// <summary>
@@ -414,11 +414,11 @@ public sealed class HierarchicalPSpline
     /// each sampling step records the draw, so the chain's stream is the same however its steps are split into rounds or
     /// runs.
     /// </summary>
-    private sealed class HierarchicalChainRun(BlockScan<SweepState> scan, bool retainReplicates, List<HierarchicalDraw> draws,
+    private sealed class HierarchicalChainRun(BlockScan<SweepState> scan, bool retainReplicates, DrawStore<HierarchicalDraw> draws,
                                               double[][] replicateSums, double[][] replicateMeanSums)
         : IResumableChainRun<SweepState>
     {
-        public List<HierarchicalDraw> Draws => draws;           // every post-burn draw, in order
+        public DrawStore<HierarchicalDraw> Draws => draws;           // every post-burn draw, in order
         public double[][] ReplicateSums => replicateSums;       // Σ β_r, accumulated only without retained replicate draws
         public double[][] ReplicateMeanSums => replicateMeanSums;
 
@@ -457,7 +457,7 @@ public sealed class HierarchicalPSpline
                                            state.Tau02, state.PopulationMean, conditionalMeans));
         }
 
-        public IChainState SaveState() => new HierarchicalChainState(scan.Snapshot(), new List<HierarchicalDraw>(draws),
+        public IChainState SaveState() => new HierarchicalChainState(scan.Snapshot(), draws.Copy(),
                                                                      Clone(replicateSums), Clone(replicateMeanSums));
     }
 
