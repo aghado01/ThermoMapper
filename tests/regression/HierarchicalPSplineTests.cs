@@ -105,7 +105,7 @@ public sealed class HierarchicalPSplineTests
         indepRep /= reps;
 
         // Hierarchical: shared population mean + shrunken replicate curves.
-        HierarchicalResult h = new HierarchicalPSpline(z, y, penalty).Run(burn: 1000, samples: 2500, seed: samplerSeed);
+        HierarchicalResult h = new HierarchicalPSpline(z, y, penalty).Run(chains: 1, masterSeed: samplerSeed, burn: 1000, samples: 2500);
         double hierRep = 0.0;
         for (int r = 0; r < reps; r++) hierRep += Mse(z, h.ReplicateCoefficients[r], truth[r]);
         hierRep /= reps;

@@ -41,7 +41,7 @@ public sealed class HierarchicalDrawTests
     {
         (double[,] z, double[][] y) = Data();
         int nu = z.GetLength(1), reps = y.Length;
-        HierarchicalResult h = new HierarchicalPSpline(z, y, new DifferencePenalty(2)).Run(burn: 200, samples: 400, seed: 7);
+        HierarchicalResult h = new HierarchicalPSpline(z, y, new DifferencePenalty(2)).Run(chains: 1, masterSeed: 7, burn: 200, samples: 400);
 
         Assert.Single(h.PosteriorDraws);
         IReadOnlyList<HierarchicalDraw> chain = h.PosteriorDraws[0];
@@ -82,7 +82,7 @@ public sealed class HierarchicalDrawTests
         (double[,] z, double[][] y) = Data();
         int nu = z.GetLength(1), reps = y.Length;
         var sampler = new HierarchicalPSpline(z, y, new DifferencePenalty(2));
-        HierarchicalResult h = sampler.Run(burn: 200, samples: 400, seed: 7);
+        HierarchicalResult h = sampler.Run(chains: 1, masterSeed: 7, burn: 200, samples: 400);
         IReadOnlyList<HierarchicalDraw> chain = h.PosteriorDraws[0];
 
         var pop = new double[nu];
@@ -110,7 +110,7 @@ public sealed class HierarchicalDrawTests
         }
 
         // Without replicate draws the replicate conditional means still accumulate, to the same values.
-        HierarchicalResult lean = sampler.Run(burn: 200, samples: 400, seed: 7, retainReplicates: false);
+        HierarchicalResult lean = sampler.Run(chains: 1, masterSeed: 7, burn: 200, samples: 400, retainReplicates: false);
         Assert.Equal(h.RaoBlackwellizedPopulationCoefficients, lean.RaoBlackwellizedPopulationCoefficients);
         for (int r = 0; r < reps; r++)
             Assert.Equal(h.RaoBlackwellizedReplicateCoefficients[r], lean.RaoBlackwellizedReplicateCoefficients[r]);
@@ -121,7 +121,7 @@ public sealed class HierarchicalDrawTests
     {
         (double[,] z, double[][] y) = Data();
         var sampler = new HierarchicalPSpline(z, y, new DifferencePenalty(2));
-        HierarchicalResult h = sampler.Run(burn: 200, samples: 400, seed: 7);
+        HierarchicalResult h = sampler.Run(chains: 1, masterSeed: 7, burn: 200, samples: 400);
         IReadOnlyList<HierarchicalDraw> chain = h.PosteriorDraws[0];
 
         AssertInterval(chain, d => d.NoiseVariance, h.NoiseVarianceInterval);
@@ -132,7 +132,7 @@ public sealed class HierarchicalDrawTests
         AssertBand(z, h.ReplicateCoefficients[2], chain, d => d.Replicates![2], h.ReplicateBand(2, z));
         Assert.Throws<ArgumentOutOfRangeException>(() => h.ReplicateBand(y.Length, z));
 
-        HierarchicalResult lean = sampler.Run(burn: 200, samples: 400, seed: 7, retainReplicates: false);
+        HierarchicalResult lean = sampler.Run(chains: 1, masterSeed: 7, burn: 200, samples: 400, retainReplicates: false);
         Assert.Throws<InvalidOperationException>(() => lean.ReplicateBand(0, z));
         Assert.Equal(h.PopulationBand(z).Lo, lean.PopulationBand(z).Lo);   // the population band needs no replicate draws
     }
@@ -184,8 +184,8 @@ public sealed class HierarchicalDrawTests
     {
         (double[,] z, double[][] y) = Data();
         var sampler = new HierarchicalPSpline(z, y, new DifferencePenalty(2));
-        HierarchicalResult full = sampler.Run(burn: 200, samples: 400, seed: 7);
-        HierarchicalResult lean = sampler.Run(burn: 200, samples: 400, seed: 7, retainReplicates: false);
+        HierarchicalResult full = sampler.Run(chains: 1, masterSeed: 7, burn: 200, samples: 400);
+        HierarchicalResult lean = sampler.Run(chains: 1, masterSeed: 7, burn: 200, samples: 400, retainReplicates: false);
 
         Assert.Equal(full.PopulationCoefficients, lean.PopulationCoefficients);
         for (int r = 0; r < y.Length; r++) Assert.Equal(full.ReplicateCoefficients[r], lean.ReplicateCoefficients[r]);

@@ -10,7 +10,8 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// The hierarchical P-spline's Gibbs scan, checked against closed forms on a tiny model (ν = 5, two replicates, eight
-/// points). The full conditionals are read through the public API: a one-sweep run from the known initial state
+/// points). The full conditionals are read through the public API: a one-sweep run from the known initial state (the
+/// fixed start, <see cref="HierarchicalStart.Fixed"/>)
 /// exposes the β_r and β_0 draws, and the end state of any sweep exposes everything the three variance draws condition
 /// on. The stationary posterior means are checked against quadrature over the variance components with every
 /// coefficient integrated out exactly, a reference that shares no code with the sampler.
@@ -80,7 +81,7 @@ public sealed class HierarchicalPSplineConditionalTests
         var w0 = new double[Draws][];
         for (int s = 0; s < Draws; s++)
         {
-            HierarchicalResult h = sampler.Run(burn: 0, samples: 1, seed: seeds[s]);
+            HierarchicalResult h = sampler.Run(chains: 1, masterSeed: seeds[s], burn: 0, samples: 1, start: HierarchicalStart.Fixed);
             var sum = new double[nu];
             for (int r = 0; r < Reps; r++)
             {
@@ -116,7 +117,7 @@ public sealed class HierarchicalPSplineConditionalTests
         var gPop = new double[Draws];
         for (int s = 0; s < Draws; s++)
         {
-            HierarchicalResult h = sampler.Run(burn: burn, samples: 1, seed: seeds[s]);
+            HierarchicalResult h = sampler.Run(chains: 1, masterSeed: seeds[s], burn: burn, samples: 1, start: HierarchicalStart.Fixed);
             double[] b0 = h.PopulationCoefficients;
             double resid = 0.0, dev = 0.0;
             for (int r = 0; r < Reps; r++)
@@ -156,7 +157,7 @@ public sealed class HierarchicalPSplineConditionalTests
         var est = new double[chains][];
         for (int c = 0; c < chains; c++)
         {
-            HierarchicalResult h = sampler.Run(burn: 2000, samples: 20000, seed: seeds[c]);
+            HierarchicalResult h = sampler.Run(chains: 1, masterSeed: seeds[c], burn: 2000, samples: 20000);
             est[c] = new double[dim];
             est[c][0] = h.NoiseSd;
             est[c][1] = h.DeviationSd;
