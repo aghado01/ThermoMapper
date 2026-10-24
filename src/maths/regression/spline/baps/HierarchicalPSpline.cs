@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
@@ -8,14 +9,27 @@ using Maths.Regression.Spline;
 namespace Maths.Regression.Spline.Baps;
 
 /// <summary>Posterior summary of a hierarchical P-spline fit: the population (Bayes) curve, each replicate's
-/// shrunken curve, and the variance-component posteriors.</summary>
+/// shrunken curve, and the variance-component posteriors (posterior means of σ, τ_u and τ_0). Every summary is read
+/// from <see cref="PosteriorDraws"/>, every retained draw per chain in draw order (one chain for now).</summary>
 public sealed record HierarchicalResult(
     double[] PopulationCoefficients,
     double[][] ReplicateCoefficients,
     double NoiseSd,
     double DeviationSd,
     double PopulationSmoothingSd,
-    int Draws);
+    int Draws,
+    IReadOnlyList<IReadOnlyList<HierarchicalDraw>> PosteriorDraws);
+
+/// <summary>
+/// One retained draw of the hierarchical P-spline: the population curve β_0, each replicate's curve β_r, the noise
+/// variance σ², the deviation variance τ_u² and the population smoothing variance τ_0², all from the end of the sweep.
+/// It also keeps the conditional means the sweep computed on the way: E[β_0 | ·] and each E[β_r | ·], which
+/// Rao–Blackwellized estimates average. <see cref="Replicates"/> and <see cref="ReplicateConditionalMeans"/> are null
+/// when the run did not retain replicate draws.
+/// </summary>
+public sealed record HierarchicalDraw(
+    double[] Population, double[][]? Replicates, double NoiseVariance, double DeviationVariance,
+    double PopulationSmoothingVariance, double[] PopulationConditionalMean, double[][]? ReplicateConditionalMeans);
 
 /// <summary>
 /// Hierarchical P-spline for multiple related curves (Behseta–Kass–Wallstrom 2005, the penalized form): replicates
@@ -63,7 +77,13 @@ public sealed class HierarchicalPSpline
         _b0 = priorScale;
     }
 
-    public HierarchicalResult Run(int burn = 1000, int samples = 2000, int seed = 1)
+    /// <param name="burn">Burn-in sweeps.</param>
+    /// <param name="samples">Retained draws.</param>
+    /// <param name="seed">The chain's seed.</param>
+    /// <param name="retainReplicates">When true (the default), every draw keeps each replicate's curve and conditional
+    /// mean, R × ν numbers twice over. When false, draws keep the population curve and the variances only, and the
+    /// replicate summaries accumulate as the chain runs; use it when R × ν × draws outgrows memory.</param>
+    public HierarchicalResult Run(int burn = 1000, int samples = 2000, int seed = 1, bool retainReplicates = true)
     {
         if (samples < 1 || burn < 0) throw new ArgumentOutOfRangeException(nameof(samples));
         var rng = new Xoshiro256PlusPlus(seed);
@@ -83,10 +103,9 @@ public sealed class HierarchicalPSpline
         var beta0 = new double[_nu];
         double sigma2 = 1.0, tauU2 = 1.0, tau02 = 1.0;
 
-        var beta0Sum = new double[_nu];
-        var betaSum = new double[reps][];
+        var draws = new List<HierarchicalDraw>(samples);
+        var betaSum = new double[reps][];                  // the replicate sums, accumulated from the draws when retained
         for (int rr = 0; rr < reps; rr++) betaSum[rr] = new double[_nu];
-        double sigSum = 0.0, tauUSum = 0.0, tau0Sum = 0.0;
 
         var qrBand = new double[_gramBw + 1, _nu];
         var q0Band = new double[_r + 1, _nu];
@@ -108,10 +127,12 @@ public sealed class HierarchicalPSpline
                 throw new InvalidOperationException($"ZᵀZ/σ² + I/τ_u² is not numerically positive definite ({cholR.Status}).");
 
             double sumResid = 0.0;
+            double[][]? conditionalMeans = it >= burn && retainReplicates ? new double[reps][] : null;
             for (int rr = 0; rr < reps; rr++)
             {
                 for (int j = 0; j < _nu; j++) rhs[j] = zty[rr][j] / sigma2 + beta0[j] / tauU2;
                 double[] mr = cholR.Solve(rhs);            // E[β_r | ·] = Q_r⁻¹ rhs
+                if (conditionalMeans is not null) conditionalMeans[rr] = mr;
                 for (int j = 0; j < _nu; j++) z[j] = Normal.SampleStandard(rng);
                 cholR.SampleInnovation(z, innov);          // ~ N(0, Q_r⁻¹)
                 double[] br = beta[rr];
@@ -147,13 +168,34 @@ public sealed class HierarchicalPSpline
 
             if (it >= burn)
             {
-                for (int j = 0; j < _nu; j++) beta0Sum[j] += beta0[j];
-                for (int rr = 0; rr < reps; rr++)
-                    for (int j = 0; j < _nu; j++) betaSum[rr][j] += beta[rr][j];
-                sigSum += Math.Sqrt(sigma2);
-                tauUSum += Math.Sqrt(tauU2);
-                tau0Sum += Math.Sqrt(tau02);
+                double[][]? replicates = null;
+                if (retainReplicates)
+                {
+                    replicates = new double[reps][];
+                    for (int rr = 0; rr < reps; rr++) replicates[rr] = (double[])beta[rr].Clone();
+                }
+                else
+                {
+                    for (int rr = 0; rr < reps; rr++)
+                        for (int j = 0; j < _nu; j++) betaSum[rr][j] += beta[rr][j];
+                }
+                draws.Add(new HierarchicalDraw((double[])beta0.Clone(), replicates, sigma2, tauU2, tau02, m0, conditionalMeans));
             }
+        }
+
+        // Every summary is read from the retained draws, each sum in draw order as the running sums used to run; without
+        // retained replicate draws, the replicate sums were accumulated as the chain ran.
+        var beta0Sum = new double[_nu];
+        double sigSum = 0.0, tauUSum = 0.0, tau0Sum = 0.0;
+        foreach (HierarchicalDraw d in draws)
+        {
+            for (int j = 0; j < _nu; j++) beta0Sum[j] += d.Population[j];
+            if (d.Replicates is double[][] replicates)
+                for (int rr = 0; rr < reps; rr++)
+                    for (int j = 0; j < _nu; j++) betaSum[rr][j] += replicates[rr][j];
+            sigSum += Math.Sqrt(d.NoiseVariance);
+            tauUSum += Math.Sqrt(d.DeviationVariance);
+            tau0Sum += Math.Sqrt(d.PopulationSmoothingVariance);
         }
 
         for (int j = 0; j < _nu; j++) beta0Sum[j] /= samples;
@@ -163,7 +205,8 @@ public sealed class HierarchicalPSpline
             repMeans[rr] = new double[_nu];
             for (int j = 0; j < _nu; j++) repMeans[rr][j] = betaSum[rr][j] / samples;
         }
-        return new HierarchicalResult(beta0Sum, repMeans, sigSum / samples, tauUSum / samples, tau0Sum / samples, samples);
+        return new HierarchicalResult(beta0Sum, repMeans, sigSum / samples, tauUSum / samples, tau0Sum / samples, samples,
+                                      new IReadOnlyList<HierarchicalDraw>[] { draws.ToArray() });
     }
 
     private double ResidualSS(double[] y, double[] beta)
