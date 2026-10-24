@@ -14,6 +14,9 @@ sorries) or to sit as an **enthymeme** (a forward boundary I'm not yet satisfied
 
 The Lean blocks are sketches — statements with proof-strategy comments, not compiled.
 
+**BGP-4, the unknown-variance extension** (the paper's §6 open item, for `GpNoiseModel.UnknownScale`), has its own
+note: [`bgp-unknown-variance-lemmas.md`](bgp-unknown-variance-lemmas.md).
+
 ---
 
 ### BGP-1: The sampler targets the true bandwidth posterior
