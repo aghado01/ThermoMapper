@@ -217,6 +217,29 @@ public sealed class BlockScanTests
     }
 
     [Fact]
+    public void RandomWalkMetropolis_SamplesItsTarget()
+    {
+        // A Gamma(3, 1) target on log x: f(u) = 3u − e^u, whose moments in x are E[x] = 3 and Var[x] = 3.
+        var rng = new Xoshiro256PlusPlus(seed: 21);
+        static double LogTarget(double u) => 3.0 * u - Math.Exp(u);
+        double u = 0.0, f = LogTarget(0.0), sum = 0.0, sumSq = 0.0;
+        int accepted = 0;
+        const int n = 400_000;
+        for (int i = 0; i < n; i++)
+        {
+            if (RandomWalkMetropolis.Step(ref u, ref f, 1.2, LogTarget, rng)) accepted++;
+            Assert.Equal(LogTarget(u), f);
+            double xv = Math.Exp(u);
+            sum += xv;
+            sumSq += xv * xv;
+        }
+        double mean = sum / n, variance = sumSq / n - mean * mean;
+        Assert.InRange(mean, 2.95, 3.05);
+        Assert.InRange(variance, 2.85, 3.15);
+        Assert.InRange(accepted / (double)n, 0.3, 0.8);
+    }
+
+    [Fact]
     public void InvalidScans_AreRefused()
     {
         Assert.Throws<ArgumentException>(() => new BlockScan<Pair>(Array.Empty<IBlock<Pair>>(), new Pair(), new Xoshiro256PlusPlus(1), p => p.Copy()));
