@@ -74,6 +74,8 @@ So with σ₀ fixed, the sup-norm and |σ − σ₀| neighbourhood of radius cε
 - `BGP.gaussian_kl_scale_part_le` holds for every r ≥ 1/2, since the upper end is not needed. The proof skips
   Taylor: from 1 − 1/r ≤ log r, the gap is (r − 1)²(2r − 1)/r ≥ 0.
 - `BGP.gaussian_v_scale_part_le` holds on [1/2, 2].
+- `BGP.scale_ratio_bridge` (UV-1d, added after review): |σ − σ₀| ≤ σ₀/2 puts r = σ₀/σ in [1/2, 2] with
+  (r − 1)² ≤ 4(σ − σ₀)²/σ₀². The neighbourhood is stated in |σ − σ₀|, so this lands it where UV-1a and UV-1b apply.
 
 Notes:
 - The bound is elementary real analysis. It is the best Lean target here.
@@ -135,6 +137,12 @@ By UV-1, this gives the KL-neighbourhood mass the general theorem needs.
     `Pow.Asymptotics` module is not in the local cache, so the proof is elementary instead:
     - log n ≤ nᵇ/b, from log y ≤ y − 1;
     - an explicit threshold N = max(⌈e⌉, ⌈M^(1/b)⌉), with b = (1 − 2a)/2.
+  - companions, added after review. `Real.log` is 0 at nonpositive arguments, so UV-2b alone holds vacuously
+    wherever εₙ ≤ 0 and hands the caller no positivity:
+    - `BGP.eventually_priorMassRadius_pos`: εₙ > 0 eventually;
+    - `BGP.exp_neg_n_radius_sq_le_radius`: exp(−nεₙ²) ≤ εₙ eventually, the form the prior-mass step consumes;
+    - `BGP.log_inv_mul_radius_le`: log(1/(c₁εₙ)) ≤ c₂nεₙ² eventually, for the slab width c₁εₙ and the exponent
+      budget c₂nεₙ². It applies UV-2b at c·C with c = min(c₁, 1, c₂).
 
 ```lean
 import Mathlib.MeasureTheory.Measure.Map
@@ -295,14 +303,18 @@ frequentist confidence intervals.
 | UV-1a | −log r + (r² − 1)/2 ≤ (5/2)(r − 1)² for r ≥ 1/2 | Easy: from 1 − 1/r ≤ log r | **Proved** (`BGP.gaussian_kl_scale_part_le`) |
 | UV-1b | (r² − 1)²/2 ≤ (9/2)(r − 1)² on [1/2, 2] | Easy: algebra | **Proved** (`BGP.gaussian_v_scale_part_le`) |
 | UV-1c | Gaussian KL and log-ratio variance closed forms | Moderate: Gaussian moments in Mathlib | Open; Lemma once the API is in reach |
+| UV-1d | \|σ − σ₀\| ≤ σ₀/2 ⇒ r ∈ [1/2, 2], (r − 1)² ≤ 4(σ − σ₀)²/σ₀² | Easy: algebra | **Proved** (`BGP.scale_ratio_bridge`) |
 | UV-2a | Ball mass under an amplitude rescaling | Easy: preimage of a ball under scaling | **Proved** (`BGP.map_smul_closedBall`) |
 | UV-2b | log(1/εₙ) ≤ nεₙ² eventually, for the paper's εₙ (k ≥ 0) | Easy: elementary asymptotics | **Proved** (`BGP.log_inv_radius_le_n_radius_sq`) |
+| UV-2b′ | εₙ > 0, exp(−nεₙ²) ≤ εₙ, and log(1/(c₁εₙ)) ≤ c₂nεₙ², each eventually | Easy: from UV-2b | **Proved** (`BGP.eventually_priorMassRadius_pos`, `BGP.exp_neg_n_radius_sq_le_radius`, `BGP.log_inv_mul_radius_le`) |
 | UV-4a | Covering a scaled family and an interval | Moderate: the covering-number API | Open |
 | UV-6 | The composed theorem | Heavy; cites GvdV07 and TWCD2025 | Open; an enthymema with `sorry` at UV-5 |
 
 **Where the proved pieces live.** `Enthymemata/BgpUnknownVariance.lean` compiles with scoped imports and no
 `sorry`. meta-CI's ledger marks it PROOF-CLOSED, which makes it a candidate for semantic review and promotion to
-`Lemmas/`; the names keep their `BGP` namespace on promotion.
+`Lemmas/`; the names keep their `BGP` namespace on promotion. The 2026-10-23 review
+(`Archeion/Markdown/bpg-review.md`) asked for the UV-2b companions and the UV-1d bridge; both have landed, and the
+module compiles with no warnings under the lakefile's linter options.
 
 UV-1a, UV-1b, UV-2a and UV-2b are the boring load-bearing claims the rigor harness exists for. They are short, they
 carry the whole bookkeeping, and an error in any of them would quietly break the extension.
