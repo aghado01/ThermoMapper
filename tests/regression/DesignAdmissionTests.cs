@@ -125,7 +125,9 @@ public sealed class DesignAdmissionTests
         Assert.Equal(double.NegativeInfinity, model.LogMarginalLikelihood(z, y, null));
         Assert.Equal(double.NegativeInfinity, model.TemperedMarginal(z, y, null).LogMarginalLikelihood(0.5));
         Assert.All(model.PosteriorMeanCoefficients(z, y, null), v => Assert.True(double.IsNaN(v)));
-        Assert.All(model.SampleCoefficients(z, y, null, new Maths.Rng.Xoshiro256PlusPlus(1)), v => Assert.True(double.IsNaN(v)));
+        ConditionalDraw draw = model.SampleConditional(z, y, null, new Maths.Rng.Xoshiro256PlusPlus(1));
+        Assert.All(draw.Coefficients, v => Assert.True(double.IsNaN(v)));
+        Assert.True(double.IsNaN(draw.Sigma2));
         Assert.All(model.ConditionalVariance(z, y, null, z)!, v => Assert.True(double.IsNaN(v)));
     }
 

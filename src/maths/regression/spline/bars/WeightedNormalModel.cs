@@ -89,24 +89,19 @@ public sealed class WeightedNormalModel : IObservationModel
     /// conditional through the band factor's precision draw. At unit weights <c>S = a</c> and
     /// <c>β ~ N((m/(m+1))(ZᵀZ)⁻¹Zᵀy, σ²·(m/(m+1))·(ZᵀZ)⁻¹)</c>; with weights, <c>β ~ N(Pa⁻¹h, σ²Pa⁻¹)</c> with
     /// <c>Pa = Zᵀ(W + I/m)Z</c>. Falls back to the mean when the response is zero; NaN when the design is
-    /// inadmissible, which has no posterior.
+    /// inadmissible, which has no posterior. σ² is NaN whenever no draw is possible. The robust weight update
+    /// conditions on both.
     /// </summary>
-    public double[] SampleCoefficients(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
-        => SampleConditional(design, y, weights, rng).Beta;
-
-    /// <summary>The joint draw behind <see cref="SampleCoefficients"/>: the coefficients and the noise variance they
-    /// were drawn with. σ² is NaN when no draw is possible. The robust weight update conditions on both.</summary>
-    internal (double[] Beta, double Sigma2) SampleConditional(double[,] design, double[] y, double[]? weights,
-                                                             Xoshiro256PlusPlus rng)
+    public ConditionalDraw SampleConditional(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
         if (Condition(design, y, weights) is not GPriorConditional c)
-            return (Unavailable(design), double.NaN);
+            return new(Unavailable(design), double.NaN);
         double[] beta = c.Mean.ToArray();
         if (!(c.S > 0.0))
-            return (beta, double.NaN);
+            return new(beta, double.NaN);
         double sigma2 = c.Sample(null, rng, beta);   // the improper 1/σ² prior
-        return (beta, sigma2);
+        return new(beta, sigma2);
     }
 
     /// <summary>

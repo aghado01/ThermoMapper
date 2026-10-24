@@ -41,6 +41,22 @@ public sealed record PeakMode(
 public sealed record PeakDraw(double ArgmaxLocation, double ArgmaxHeight, IReadOnlyList<PeakSpan> Spans);
 
 /// <summary>
+/// One retained BARS draw's state: the knot configuration the chain held, the coefficients and noise variance σ² drawn
+/// from their conditional posterior given those knots (and the robust weights), the robust weights in force at the
+/// draw, and the draw's exact peak readout, read off its coefficients.
+/// <list type="bullet">
+///   <item><see cref="Coefficients"/> and <see cref="Sigma2"/> are one joint draw on the readout stream
+///   (<see cref="IObservationModel.SampleConditional"/>): exact for the Normal model, and otherwise as exact as
+///   <see cref="BarsResult.Uncertainty"/> says. σ² is NaN for a model without a noise scale.</item>
+///   <item><see cref="Weights"/> is null without the robust weight block. The block replaces the array at each update,
+///   so the draws between two updates share one array.</item>
+///   <item>The conditional mean curve behind <see cref="BarsResult.Fit"/> is recomputable from <see cref="Knots"/>
+///   and <see cref="Weights"/> (<see cref="IObservationModel.PosteriorMeanCoefficients"/>), so it is not stored.</item>
+/// </list>
+/// </summary>
+public sealed record BarsDraw(KnotConfig Knots, double[] Coefficients, double Sigma2, double[]? Weights, PeakDraw Peak);
+
+/// <summary>
 /// What the tempering ladders did while sampling (burn-in excluded), averaged over chains: the round-trip and
 /// annealed-restart rates per scan, each adjacent pair's mean rejection rate (cold first), their sum the barrier
 /// estimate Λ̂, the round-trip rate Theorem 1 of Syed et al. (2022) would give under ideal local exploration (NaN for
@@ -76,8 +92,9 @@ public sealed record TemperingReadout(
 /// the structural feature widths, its complement the stable regimes.
 /// <see cref="PeakModes"/> resolves each transition from those fields — location + credible interval from λ, span
 /// from π — with <see cref="Peak"/> the dominant mode (the k = 1 case).
-/// <see cref="PeakDraws"/> keeps every retained draw's exact peak readout (<see cref="PeakDraw"/>), per chain in draw
-/// order: the closed-form locations, heights, crossings and clipping flags that λ and π count on the grid.
+/// <see cref="Draws"/> keeps every retained draw's state (<see cref="BarsDraw"/>), per chain in draw order: its knots,
+/// its coefficient and σ² draw, its robust weights, and its exact peak readout (the closed-form locations, heights,
+/// crossings and clipping flags that λ and π count on the grid).
 /// </summary>
 public sealed record BarsResult(
     double[] Grid,
@@ -92,7 +109,7 @@ public sealed record BarsResult(
     RHatDiagnostic RHatFitMax,
     PeakPosterior Peak,
     IReadOnlyList<PeakMode> PeakModes,
-    IReadOnlyList<IReadOnlyList<PeakDraw>> PeakDraws,
+    IReadOnlyList<IReadOnlyList<BarsDraw>> Draws,
     int SamplesUsed,
     double AcceptanceRate,
     int[] ChainSeeds,
@@ -408,7 +425,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                 spanCoverage[gi] += coverage[gi];
             }
             draws += bars[ci].Readout.Draws.Count;
-            foreach (PeakDraw d in bars[ci].Readout.Draws) spans += d.Spans.Count;
+            foreach (BarsDraw d in bars[ci].Readout.Draws) spans += d.Peak.Spans.Count;
         }
         for (int gi = 0; gi < g; gi++)
         {
@@ -431,9 +448,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
         PeakPosterior peak = SummarisePeak(bars, _basis is SplineBasis);
         var peakModes = ExtractModes(grid, peakIntensity, spanCoverage, chainLambda);
-        var peakDraws = new IReadOnlyList<PeakDraw>[chains];
-        for (int ci = 0; ci < chains; ci++) peakDraws[ci] = bars[ci].Readout.Draws.ToArray();
-        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, peakDraws, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations, summary.Checkpoint);
+        var retained = new IReadOnlyList<BarsDraw>[chains];
+        for (int ci = 0; ci < chains; ci++) retained[ci] = bars[ci].Readout.Draws.ToArray();
+        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, retained, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations, summary.Checkpoint);
     }
 
     // The ladders' sampling-phase statistics, averaged over chains; null for an untempered run.
@@ -474,12 +491,12 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             traces[i] = new ChainTrace(1);
             if (!closedForm) continue;
             double chainLocation = 0.0, chainHeight = 0.0;
-            foreach (PeakDraw d in states[i].Readout.Draws)
+            foreach (BarsDraw d in states[i].Readout.Draws)
             {
-                chainLocation += d.ArgmaxLocation;
-                chainHeight += d.ArgmaxHeight;
-                sample.Add(d.ArgmaxLocation);
-                traces[i].Add(d.ArgmaxLocation);
+                chainLocation += d.Peak.ArgmaxLocation;
+                chainHeight += d.Peak.ArgmaxHeight;
+                sample.Add(d.Peak.ArgmaxLocation);
+                traces[i].Add(d.Peak.ArgmaxLocation);
             }
             location += chainLocation;
             height += chainHeight;
@@ -522,10 +539,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         return st.Config;
     }
 
-    // Reduce one post-burn draw. Readouts affine in the curve use the conditional mean: the grid values into the
-    // functionals (index 0 = knot count), and the conditional variance into its sink for FitSd. Readouts nonlinear in
-    // the curve use a coefficient draw: the closed-form argmax cloud, and the draw's exact argmax and significant spans,
-    // retained as its PeakDraw (λ(T) and π(T) are read from those after the run).
+    // Reduce one post-burn draw and retain its state. Readouts affine in the curve use the conditional mean: the grid
+    // values into the functionals (index 0 = knot count), and the conditional variance into its sink for FitSd. The
+    // draw's coefficients and σ² come from one conditional draw on the readout stream; readouts nonlinear in the curve
+    // use those coefficients: the draw's exact argmax and significant spans, retained as its PeakDraw (the peak summary,
+    // λ(T) and π(T) are read from those after the run).
     private void AccumulateDraw(BarsChainRun st, KnotConfig draw, Span<double> functionals)
     {
         int g = _grid.Length;
@@ -544,30 +562,32 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         if (_model.ConditionalVariance(zTrain, _y, st.W, zGrid) is double[] v)
             r.ConditionalVariance.Add(v);
 
-        // Every draw is retained, so the draw count stays every peak readout's denominator; a basis without closed-form
-        // peaks retains a NaN argmax and no spans.
-        if (_basis is not SplineBasis splineBasis)
-        {
-            r.Draws.Add(new PeakDraw(double.NaN, double.NaN, Array.Empty<PeakSpan>()));
-            return;
-        }
-        double[] coef = _model.SampleCoefficients(zTrain, _y, st.W, st.ReadoutRng);
+        // Every draw is retained, so the draw count stays every peak readout's denominator.
+        ConditionalDraw c = _model.SampleConditional(zTrain, _y, st.W, st.ReadoutRng);
+        r.Draws.Add(new BarsDraw(draw, c.Coefficients, c.Sigma2, st.W, PeakReadout(draw, c.Coefficients)));
+    }
+
+    // A draw's exact peak readout from its coefficients; a basis without closed-form peaks gives a NaN argmax and no
+    // spans.
+    private PeakDraw PeakReadout(KnotConfig draw, double[] coef)
+    {
+        if (_basis is not SplineBasis splineBasis) return new PeakDraw(double.NaN, double.NaN, Array.Empty<PeakSpan>());
         (double peakX, double peakF) = SplineExtrema.Argmax(draw, coef, splineBasis);
         var spans = SplineExtrema.SignificantPeakSpans(draw, coef, splineBasis, _peakProminence, _spanDropFraction);
-        r.Draws.Add(new PeakDraw(peakX, peakF, spans.ToArray()));
+        return new PeakDraw(peakX, peakF, spans.ToArray());
     }
 
     // A chain's λ and π grid counts, read from its retained draws: λ adds one per significant span at the grid point
     // nearest its location, and π adds one per draw at each grid point some span covers. Each draw still counts in the
     // denominator when it has no spans.
-    private static (double[] Intensity, double[] Coverage) PeakCounts(IReadOnlyList<PeakDraw> draws, double[] grid)
+    private static (double[] Intensity, double[] Coverage) PeakCounts(IReadOnlyList<BarsDraw> draws, double[] grid)
     {
         var intensity = new double[grid.Length];
         var coverage = new double[grid.Length];
-        foreach (PeakDraw d in draws)
+        foreach (BarsDraw d in draws)
         {
-            foreach (PeakSpan s in d.Spans) intensity[NearestGridIndex(grid, s.Location)]++;
-            foreach (int gi in CoveredGridPoints(d.Spans, grid)) coverage[gi]++;
+            foreach (PeakSpan s in d.Peak.Spans) intensity[NearestGridIndex(grid, s.Location)]++;
+            foreach (int gi in CoveredGridPoints(d.Peak.Spans, grid)) coverage[gi]++;
         }
         return (intensity, coverage);
     }
@@ -774,7 +794,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// One BARS reversible-jump replica + its thread-local accumulators. As an <see cref="IChain{KnotConfig}"/> its
     /// <see cref="Step"/> advances the chain (or tempered ladder) and runs the resampler block, and its acceptance
     /// is the RJ chain's cumulative count; as an <see cref="IChainRun{KnotConfig}"/>
-    /// it burns adaptively, reduces a draw to functionals, and carries the BARS readout (its retained peak draws).
+    /// it burns adaptively, reduces a draw to functionals, and carries the BARS readout (its retained draws).
     /// </summary>
     private sealed class BarsChainRun : IChain<KnotConfig>, IResumableChainRun<KnotConfig>
     {

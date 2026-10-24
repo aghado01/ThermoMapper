@@ -46,14 +46,15 @@ public interface IObservationModel
     double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights);
 
     /// <summary>
-    /// A draw of the coefficients from their conditional posterior given the knots, for readouts that are
-    /// nonlinear in the fitted curve (argmax, peak counts, spans, intervals). Readouts that are affine in the curve
-    /// use <see cref="PosteriorMeanCoefficients"/> instead, the lower-variance Rao-Blackwellized estimate. The
-    /// default returns the mean, which carries no coefficient uncertainty; a model that keeps it reports
-    /// <see cref="CoefficientUncertainty.KnotOnly"/>. Uses <paramref name="rng"/> only when it draws.
+    /// A draw of the coefficients, and the noise variance where the model has one, from their conditional posterior
+    /// given the knots: the draw's state, and the input to readouts that are nonlinear in the fitted curve (argmax,
+    /// peak counts, spans, intervals). Readouts that are affine in the curve use <see cref="PosteriorMeanCoefficients"/>
+    /// instead, the lower-variance Rao-Blackwellized estimate. The default returns the mean with a NaN σ², which
+    /// carries no coefficient uncertainty; a model that keeps it reports <see cref="CoefficientUncertainty.KnotOnly"/>.
+    /// Uses <paramref name="rng"/> only when it draws.
     /// </summary>
-    double[] SampleCoefficients(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
-        => PosteriorMeanCoefficients(design, y, weights);
+    ConditionalDraw SampleConditional(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
+        => new(PosteriorMeanCoefficients(design, y, weights), double.NaN);
 
     /// <summary>
     /// The conditional posterior variance of the fitted curve at each row of <paramref name="readoutDesign"/>,
@@ -62,7 +63,7 @@ public interface IObservationModel
     /// </summary>
     double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign) => null;
 
-    /// <summary>How <see cref="SampleCoefficients"/> and <see cref="ConditionalVariance"/> relate to the exact
+    /// <summary>How <see cref="SampleConditional"/> and <see cref="ConditionalVariance"/> relate to the exact
     /// conditional posterior.</summary>
     CoefficientUncertainty Uncertainty => CoefficientUncertainty.KnotOnly;
 }

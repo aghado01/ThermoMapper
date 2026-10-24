@@ -130,8 +130,9 @@ public sealed class PoissonModel : IObservationModel
     public CoefficientUncertainty Uncertainty => CoefficientUncertainty.Approximate;
 
     /// <inheritdoc/>
-    public double[] SampleCoefficients(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
-        => SampleCoefficients(design, y, rng);
+    /// <remarks>The Poisson likelihood has no noise scale, so σ² is NaN.</remarks>
+    public ConditionalDraw SampleConditional(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
+        => new(SampleCoefficients(design, y, rng), double.NaN);
 
     /// <summary>
     /// An approximate draw from the conditional posterior <c>π(β | ξ, y) ∝ Poisson likelihood × prior</c> by

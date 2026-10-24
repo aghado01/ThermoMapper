@@ -31,7 +31,7 @@ public sealed class CoefficientDrawTests
         var second = new double[nu, nu];
         for (int s = 0; s < n; s++)
         {
-            double[] beta = model.SampleCoefficients(z, y, null, rng);
+            double[] beta = model.SampleConditional(z, y, null, rng).Coefficients;
             for (int i = 0; i < nu; i++)
             {
                 mean[i] += beta[i];

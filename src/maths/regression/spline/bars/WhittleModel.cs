@@ -85,20 +85,21 @@ public sealed class WhittleModel : IObservationModel
 
     /// <summary>
     /// A draw from the Laplace approximation <c>N(β̂, (BᵀB)⁻¹)</c>: the Whittle log-likelihood's Fisher information is
-    /// BᵀB (unit IRLS weights). Approximate; falls back to β̂ when the fit is unusable.
+    /// BᵀB (unit IRLS weights). Approximate; falls back to β̂ when the fit is unusable. The Whittle likelihood's scale
+    /// is fixed by the periodogram's exponential law, so σ² is NaN.
     /// </summary>
-    public double[] SampleCoefficients(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
+    public ConditionalDraw SampleConditional(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
         (double[] beta, DesignRejection rejection, BandCholesky factor) = FitGlm(design, y);
-        if (rejection != DesignRejection.None) return beta;
+        if (rejection != DesignRejection.None) return new(beta, double.NaN);
         int nu = beta.Length;
         var z = new double[nu];
         for (int j = 0; j < nu; j++) z[j] = Normal.SampleStandard(rng);
         var innov = new double[nu];
         factor.SampleInnovation(z, innov);
         for (int j = 0; j < nu; j++) beta[j] += innov[j];
-        return beta;
+        return new(beta, double.NaN);
     }
 
     /// <summary>The Laplace variance <c>z(t)ᵀ(BᵀB)⁻¹z(t)</c> of the log-spectrum at each readout row; NaN when the fit

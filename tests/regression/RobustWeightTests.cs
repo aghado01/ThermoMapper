@@ -47,7 +47,7 @@ public sealed class RobustWeightTests
         var second = new double[nu, nu];
         for (int s = 0; s < n; s++)
         {
-            double[] beta = model.SampleCoefficients(z, y, w, rng);
+            double[] beta = model.SampleConditional(z, y, w, rng).Coefficients;
             for (int i = 0; i < nu; i++)
             {
                 mean[i] += beta[i];

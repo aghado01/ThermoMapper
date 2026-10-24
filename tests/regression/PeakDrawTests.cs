@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
@@ -8,7 +9,7 @@ using Xunit;
 namespace Maths.Regression.Tests;
 
 /// <summary>
-/// The retained per-draw peak readout (<see cref="BarsResult.PeakDraws"/>): every draw of every chain is kept with its
+/// The retained per-draw peak readout (<see cref="BarsDraw.Peak"/>): every draw of every chain is kept with its
 /// exact closed-form argmax and spans, off the grid, with both clipping flags; λ(T) and π(T) are exactly its grid
 /// counts over the draw count.
 /// </summary>
@@ -60,12 +61,12 @@ public sealed class PeakDrawTests
         double[] grid = Grid(11);
         BarsResult r = Run(x, y, grid);
 
-        Assert.Equal(2, r.PeakDraws.Count);
+        Assert.Equal(2, r.Draws.Count);
         double farthestSpan = 0.0, farthestArgmax = 0.0;
-        foreach (IReadOnlyList<PeakDraw> chain in r.PeakDraws)
+        foreach (IReadOnlyList<BarsDraw> chain in r.Draws)
         {
             Assert.Equal(r.SamplesUsed, chain.Count);
-            foreach (PeakDraw d in chain)
+            foreach (PeakDraw d in chain.Select(b => b.Peak))
             {
                 farthestArgmax = Math.Max(farthestArgmax, DistanceToGrid(grid, d.ArgmaxLocation));
                 for (int p = 0; p < d.Spans.Count; p++)
@@ -93,8 +94,8 @@ public sealed class PeakDrawTests
         var lambda = new double[grid.Length];
         var pi = new double[grid.Length];
         double draws = 0.0, spans = 0.0;
-        foreach (IReadOnlyList<PeakDraw> chain in r.PeakDraws)
-            foreach (PeakDraw d in chain)
+        foreach (IReadOnlyList<BarsDraw> chain in r.Draws)
+            foreach (PeakDraw d in chain.Select(b => b.Peak))
             {
                 draws++;
                 spans += d.Spans.Count;
@@ -122,8 +123,8 @@ public sealed class PeakDrawTests
         BarsResult r = Run(x, y, Grid(21));
 
         int draws = 0, clippedRight = 0;
-        foreach (IReadOnlyList<PeakDraw> chain in r.PeakDraws)
-            foreach (PeakDraw d in chain)
+        foreach (IReadOnlyList<BarsDraw> chain in r.Draws)
+            foreach (PeakDraw d in chain.Select(b => b.Peak))
             {
                 draws++;
                 foreach (PeakSpan s in d.Spans)
@@ -147,10 +148,10 @@ public sealed class PeakDrawTests
         BarsResult r = new BarsEnsemble(new StepBasis(), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0))
             .Run(x, y, Grid(21), chains: 2, masterSeed: 4, burn: 200, samples: 100);
 
-        foreach (IReadOnlyList<PeakDraw> chain in r.PeakDraws)
+        foreach (IReadOnlyList<BarsDraw> chain in r.Draws)
         {
             Assert.Equal(r.SamplesUsed, chain.Count);
-            foreach (PeakDraw d in chain)
+            foreach (PeakDraw d in chain.Select(b => b.Peak))
             {
                 Assert.True(double.IsNaN(d.ArgmaxLocation));
                 Assert.Empty(d.Spans);
