@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.Distributions;
 using Maths.Rng;
 using Maths.Samplers;
 using Maths.Samplers.Blocks;
@@ -459,6 +460,73 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var retained = new IReadOnlyList<BarsDraw>[chains];
         for (int ci = 0; ci < chains; ci++) retained[ci] = bars[ci].Readout.Draws.ToArray();
         return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, retained, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations, summary.Checkpoint);
+    }
+
+    /// <summary>
+    /// log p(y_unit | draw) for every retained draw of a result this ensemble produced and every unit (OQ17), on the data it
+    /// fitted. A draw's knots, coefficients and σ² are global, so every unit conditions on them. A robust weight belongs to
+    /// one observation, so it is integrated out under its prior: the resampler's marginal (Student t, or the
+    /// contaminated-normal mixture) replaces the Normal term N(yᵢ; zᵢβ, σ²). The Poisson model's term is
+    /// Poisson(yᵢ; exp(zᵢβ)); the Whittle model's is the exponential density of a periodogram ordinate with mean exp(zᵢβ),
+    /// under Whittle's approximation of independent ordinates. The Gibbs-loss model declines: its likelihood is a
+    /// pseudo-likelihood, exp(−η·loss), not a density of a new observation.
+    /// </summary>
+    /// <param name="units">The partition of the n observations; null takes each observation as its own unit.</param>
+    public PointwiseLogDensity PointwiseLogDensity(BarsResult result, double[] x, double[] y, UnitPartition? units = null)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(x);
+        ArgumentNullException.ThrowIfNull(y);
+        if (x.Length != y.Length) throw new ArgumentException("One response per design point is required.", nameof(y));
+        UnitPartition partition = units ?? UnitPartition.EachObservation(y.Length);
+        if (partition.Observations != y.Length)
+            throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
+        Func<double, double, double, double> term = _model switch   // (yᵢ, ηᵢ = zᵢβ, σ²) → log density
+        {
+            WeightedNormalModel when _resampler is IWeightResampler resampler
+                => (yi, eta, s2) => resampler.MarginalLogDensity(yi - eta, s2),
+            WeightedNormalModel => (yi, eta, s2) => -0.5 * Math.Log(2.0 * Math.PI * s2) - 0.5 * (yi - eta) * (yi - eta) / s2,
+            PoissonModel => (yi, eta, _) => yi * eta - Math.Exp(eta) - SpecialFunctions.LogGamma(yi + 1.0),
+            WhittleModel => (yi, eta, _) => -eta - yi * Math.Exp(-eta),
+            _ => throw new NotSupportedException(
+                $"{_model.GetType().Name} has no pointwise density: its likelihood is a pseudo-likelihood, not a density of a new observation."),
+        };
+
+        int n = y.Length, draws = 0;
+        foreach (IReadOnlyList<BarsDraw> chain in result.Draws) draws += chain.Count;
+        var values = new double[draws, partition.Units];
+        var terms = new double[n];
+        int row = 0;
+        foreach (IReadOnlyList<BarsDraw> chain in result.Draws)
+            foreach (BarsDraw d in chain)
+            {
+                double[,] z = _basis.Design(d.Knots, x);
+                for (int i = 0; i < n; i++)
+                {
+                    double eta = 0.0;
+                    for (int j = 0; j < d.Coefficients.Length; j++) eta += z[i, j] * d.Coefficients[j];
+                    terms[i] = term(y[i], eta, d.Sigma2);
+                }
+                for (int u = 0; u < partition.Units; u++)
+                {
+                    double sum = 0.0;
+                    foreach (int i in partition.Members[u]) sum += terms[i];
+                    values[row, u] = sum;
+                }
+                row++;
+            }
+
+        var latents = new List<LatentReport>
+        {
+            new("knot configuration", LatentScope.Global, LatentTreatment.Conditioned),
+            new("coefficients β", LatentScope.Global, LatentTreatment.Conditioned),
+        };
+        if (_model is WeightedNormalModel)
+        {
+            latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned));
+            if (_resampler is not null) latents.Add(new LatentReport("robust weights wᵢ", LatentScope.Observation, LatentTreatment.Integrated));
+        }
+        return new PointwiseLogDensity(values, partition, latents);
     }
 
     // The ladders' sampling-phase statistics, averaged over chains; null for an untempered run.

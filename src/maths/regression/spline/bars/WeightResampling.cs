@@ -16,6 +16,10 @@ public interface IWeightResampler
     /// <summary>Draw new per-point weights from their full conditional given <paramref name="residuals"/> and
     /// <paramref name="sigma2"/>.</summary>
     double[] Resample(ReadOnlySpan<double> residuals, double sigma2, Xoshiro256PlusPlus rng);
+
+    /// <summary>The log density of one residual with its weight integrated out under the weight's prior: the error
+    /// model's marginal, which a pointwise density uses, since each weight belongs to one observation (OQ17).</summary>
+    double MarginalLogDensity(double residual, double sigma2);
 }
 
 /// <summary>
@@ -49,6 +53,11 @@ public sealed class StudentTWeights : IWeightResampler
         }
         return w;
     }
+
+    /// <summary>The Student t_ν(0, σ) log density: Γ((ν+1)/2)/(Γ(ν/2)√(νπσ²))·(1 + r²/(νσ²))^(−(ν+1)/2).</summary>
+    public double MarginalLogDensity(double residual, double sigma2)
+        => SpecialFunctions.LogGamma(0.5 * (_nu + 1.0)) - SpecialFunctions.LogGamma(0.5 * _nu) - 0.5 * Math.Log(_nu * Math.PI * sigma2)
+           - 0.5 * (_nu + 1.0) * Math.Log(1.0 + residual * residual / (_nu * sigma2));
 }
 
 /// <summary>
@@ -90,5 +99,15 @@ public sealed class ContaminatedNormalWeights : IWeightResampler
             w[i] = rng.NextDouble() < pOutlier ? invKappaSq : 1.0;
         }
         return w;
+    }
+
+    /// <summary>The mixture (1−π) N(0, σ²) + π N(0, κ²σ²), summed in log space.</summary>
+    public double MarginalLogDensity(double residual, double sigma2)
+    {
+        double z2 = residual * residual / sigma2, normal = -0.5 * Math.Log(2.0 * Math.PI * sigma2);
+        double good = Math.Log(1.0 - _pi) + normal - 0.5 * z2;
+        double outlier = Math.Log(_pi) + normal - Math.Log(_kappa) - 0.5 * z2 / (_kappa * _kappa);
+        double top = Math.Max(good, outlier);
+        return top + Math.Log(Math.Exp(good - top) + Math.Exp(outlier - top));
     }
 }

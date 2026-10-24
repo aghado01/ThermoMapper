@@ -356,6 +356,119 @@ public sealed class HierarchicalPSpline
     }
 
     /// <summary>
+    /// log p(y_unit | draw) for every retained draw of a result this model produced and every unit (OQ17). Observations are
+    /// numbered replicate by replicate, o = r·n + i. A replicate's curve β_r is a group latent: a unit that holds all n of
+    /// replicate r's observations integrates β_r out, and its term for them is N(y_r; Zβ_0, σ²I + τ_u²ZZᵀ), the question
+    /// of a new curve; a unit that holds only some of them conditions on β_r, the question of a new point on a seen curve,
+    /// which needs the retained replicate draws. β_0, σ² and τ_u² are global and always conditioned on. With
+    /// ZᵀZ = V diag(λ) Vᵀ the marginal's log-determinant is n·ln σ² + Σ ln(1 + τ_u²λ_k/σ²) and its quadratic
+    /// (‖e‖² − Σ (v_kᵀZᵀe)²/(σ²/τ_u² + λ_k))/σ² for e = y_r − Zβ_0.
+    /// </summary>
+    /// <param name="units">The partition of the R·n observations; null takes each observation as its own unit, and
+    /// <see cref="UnitPartition.ConsecutiveBlocks"/>(R, n) takes each curve as one.</param>
+    public PointwiseLogDensity PointwiseLogDensity(HierarchicalResult result, UnitPartition? units = null)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        int reps = _responses.Length, total = reps * _n;
+        UnitPartition partition = units ?? UnitPartition.EachObservation(total);
+        if (partition.Observations != total)
+            throw new ArgumentException("The partition must cover the R·n observations, replicate by replicate.", nameof(units));
+
+        // Per unit, its runs of observations from one replicate, and whether each run is the whole replicate.
+        var runs = new List<(int Replicate, int[] Points, bool Whole)>[partition.Units];
+        var tally = new TreatmentTally();
+        bool anyConditioned = false;
+        for (int u = 0; u < partition.Units; u++)
+        {
+            runs[u] = new List<(int, int[], bool)>();
+            int[] members = partition.Members[u];
+            for (int k = 0; k < members.Length;)
+            {
+                int r = members[k] / _n, end = k;
+                while (end < members.Length && members[end] / _n == r) end++;
+                var points = new int[end - k];
+                for (int j = k; j < end; j++) points[j - k] = members[j] % _n;
+                bool whole = points.Length == _n;
+                runs[u].Add((r, points, whole));
+                if (whole) tally.Integrated(); else { tally.Conditioned(); anyConditioned = true; }
+                k = end;
+            }
+        }
+
+        int draws = 0;
+        foreach (IReadOnlyList<HierarchicalDraw> chain in result.PosteriorDraws) draws += chain.Count;
+        var values = new double[draws, partition.Units];
+        var marginal = new double[reps];
+        var marginalDone = new bool[reps];
+        var zte = new double[_nu];
+        int row = 0;
+        foreach (IReadOnlyList<HierarchicalDraw> chain in result.PosteriorDraws)
+            foreach (HierarchicalDraw d in chain)
+            {
+                if (anyConditioned && d.Replicates is null)
+                    throw new InvalidOperationException("Units that split a replicate condition on its curve, which needs retained replicate draws (retainReplicates: true).");
+                double[] fit0 = DesignTimes(d.Population);
+                Array.Clear(marginalDone);
+                double s2 = d.NoiseVariance, ratio = s2 / d.DeviationVariance;
+                for (int u = 0; u < partition.Units; u++)
+                {
+                    double sum = 0.0;
+                    foreach ((int r, int[] points, bool whole) in runs[u])
+                    {
+                        double[] y = _responses[r];
+                        if (whole)
+                        {
+                            if (!marginalDone[r])
+                            {
+                                double ee = 0.0;
+                                Array.Clear(zte);
+                                for (int i = 0; i < _n; i++)
+                                {
+                                    double e = y[i] - fit0[i];
+                                    ee += e * e;
+                                    for (int j = 0; j < _nu; j++) zte[j] += _z[i, j] * e;
+                                }
+                                double logDet = _n * Math.Log(s2), reduction = 0.0;
+                                for (int k = 0; k < _nu; k++)
+                                {
+                                    double lambda = Math.Max(0.0, _gramValues[k]), proj = 0.0;
+                                    for (int j = 0; j < _nu; j++) proj += _gramVectors[k][j] * zte[j];
+                                    logDet += Math.Log(1.0 + lambda / ratio);
+                                    reduction += proj * proj / (ratio + lambda);
+                                }
+                                marginal[r] = -0.5 * (_n * Math.Log(2.0 * Math.PI) + logDet + (ee - reduction) / s2);
+                                marginalDone[r] = true;
+                            }
+                            sum += marginal[r];
+                        }
+                        else
+                        {
+                            double[] beta = d.Replicates![r];
+                            foreach (int i in points)
+                            {
+                                double f = 0.0;
+                                for (int j = 0; j < _nu; j++) f += _z[i, j] * beta[j];
+                                double e = y[i] - f;
+                                sum += -0.5 * Math.Log(2.0 * Math.PI * s2) - 0.5 * e * e / s2;
+                            }
+                        }
+                    }
+                    values[row, u] = sum;
+                }
+                row++;
+            }
+
+        var latents = new[]
+        {
+            new LatentReport("replicate curves β_r", LatentScope.Group, tally.Result),
+            new LatentReport("population curve β_0", LatentScope.Global, LatentTreatment.Conditioned),
+            new LatentReport("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned),
+            new LatentReport("deviation variance τ_u²", LatentScope.Global, LatentTreatment.Conditioned),
+        };
+        return new PointwiseLogDensity(values, partition, latents);
+    }
+
+    /// <summary>
     /// The ensemble-shell client: it starts and restores chains, fingerprints the run for checkpoints, and names the
     /// functionals. The three log variances lead and are monitored (split R̂, bulk and tail ESS, the early stop's ESS
     /// gate); the population curve's coefficients follow with classic R̂, a consensus map an early stop also waits on.

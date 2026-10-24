@@ -63,5 +63,9 @@ public sealed class AdaptationAcrossResamplingTests
             Array.Fill(w, 1.0);
             return w;
         }
+
+        // Unit weights are the Normal error model itself.
+        public double MarginalLogDensity(double residual, double sigma2)
+            => -0.5 * Math.Log(2.0 * Math.PI * sigma2) - 0.5 * residual * residual / sigma2;
     }
 }

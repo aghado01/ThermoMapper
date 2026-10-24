@@ -97,6 +97,65 @@ public sealed class ChangepointPosterior
         return _bwd[segments, start];
     }
 
+    /// <summary>
+    /// log p(y_unit | draw) for each of <paramref name="draws"/> and each unit (OQ17). A draw's segmentation is global, so
+    /// every unit conditions on it. A segment's level is a group latent: a unit that holds all of the segment's
+    /// observations integrates the level out, and its term for them is the segment's evidence D(a, b) from the tables
+    /// (the level under its prior); a unit that holds only some of them conditions on the drawn level, each observation's
+    /// term the segment model's likelihood there.
+    /// </summary>
+    /// <param name="units">The partition of the n observations; null takes each observation as its own unit.</param>
+    public PointwiseLogDensity PointwiseLogDensity(IReadOnlyList<ChangepointDraw> draws, UnitPartition? units = null)
+    {
+        ArgumentNullException.ThrowIfNull(draws);
+        int n = Count;
+        UnitPartition partition = units ?? UnitPartition.EachObservation(n);
+        if (partition.Observations != n) throw new ArgumentException("The partition must cover the n observations.", nameof(units));
+        var values = new double[draws.Count, partition.Units];
+        var segmentOf = new int[n];
+        var tally = new TreatmentTally();
+        for (int d = 0; d < draws.Count; d++)
+        {
+            ChangepointDraw draw = draws[d];
+            int start = 0;
+            for (int s = 0; s < draw.SegmentEnds.Length; s++)
+            {
+                for (int i = start; i <= draw.SegmentEnds[s]; i++) segmentOf[i] = s;
+                start = draw.SegmentEnds[s] + 1;
+            }
+            for (int u = 0; u < partition.Units; u++)
+            {
+                int[] members = partition.Members[u];
+                double sum = 0.0;
+                // Members ascend and segments are contiguous, so each segment's members in the unit form one run.
+                for (int k = 0; k < members.Length;)
+                {
+                    int s = segmentOf[members[k]], run = k;
+                    while (run < members.Length && segmentOf[members[run]] == s) run++;
+                    int first = s == 0 ? 0 : draw.SegmentEnds[s - 1] + 1, last = draw.SegmentEnds[s];
+                    if (run - k == last - first + 1)
+                    {
+                        sum += _logD[first + 1, last + 1];
+                        tally.Integrated();
+                    }
+                    else
+                    {
+                        for (int j = k; j < run; j++) sum += _model.LogLikelihood(members[j], draw.Levels[s]);
+                        tally.Conditioned();
+                    }
+                    k = run;
+                }
+                values[d, u] = sum;
+            }
+        }
+        var latents = new[]
+        {
+            new LatentReport("segmentation", LatentScope.Global, LatentTreatment.Conditioned),
+            new LatentReport("segment levels", LatentScope.Group, tally.Result),
+        };
+        return new PointwiseLogDensity(values, partition, latents);
+    }
+
     /// <summary><paramref name="draws"/> exact, independent draws on one stream seeded by <paramref name="seed"/>.</summary>
     public IReadOnlyList<ChangepointDraw> Sample(int draws, int seed)
     {

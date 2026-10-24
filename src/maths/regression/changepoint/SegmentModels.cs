@@ -28,6 +28,9 @@ public interface ISegmentModel
     /// <see cref="Fill"/>'s evidence and moments. Callable without <see cref="Fill"/>.
     /// </summary>
     double SampleLevel(int a, int b, Xoshiro256PlusPlus rng);
+
+    /// <summary>log p(y_i | level) for observation <paramref name="i"/> (0-based): the noise model's density.</summary>
+    double LogLikelihood(int i, double level);
 }
 
 /// <summary>
@@ -95,6 +98,13 @@ public sealed class GaussianSegmentModel : ISegmentModel
         for (int i = a; i <= b; i++) sum += _y[i - 1];
         double v = 1.0 / (1.0 / _rho2 + (b - a + 1) / _sigma2);
         return (_nu / _rho2 + sum / _sigma2) * v + Math.Sqrt(v) * Normal.SampleStandard(rng);
+    }
+
+    /// <summary>log N(y_i; level, σ²).</summary>
+    public double LogLikelihood(int i, double level)
+    {
+        double r = _y[i] - level;
+        return -0.5 * Math.Log(2.0 * Math.PI * _sigma2) - 0.5 * r * r / _sigma2;
     }
 }
 
@@ -237,6 +247,13 @@ public sealed class CauchySegmentModel : ISegmentModel
                 if (acc >= target) return _lo + node * _step;
             }
         return _lo + node * _step;
+    }
+
+    /// <summary>log Cauchy(y_i; level, γ).</summary>
+    public double LogLikelihood(int i, double level)
+    {
+        double z = (_y[i] - level) / _scale;
+        return -Math.Log(Math.PI * _scale) - Math.Log(1.0 + z * z);
     }
 
     // cum[i·G + h] = Σ_{j≤i} log Cauchy(y_j | μ_h), node-contiguous so a segment's nodes are read in order, and the log
