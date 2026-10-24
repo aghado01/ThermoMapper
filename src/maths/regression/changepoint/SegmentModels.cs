@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Maths.Distributions;
+using Maths.Rng;
 
 namespace Maths.Regression.Changepoint;
 
@@ -20,6 +22,12 @@ public interface ISegmentModel
     /// Tables are (n+1)×(n+1).
     /// </summary>
     void Fill(double[,] logEvidence, double[,] levelMean, double[,] levelVar);
+
+    /// <summary>
+    /// A draw of segment a..b's level (1-based, inclusive) from its posterior given that it is a segment, consistent with
+    /// <see cref="Fill"/>'s evidence and moments. Callable without <see cref="Fill"/>.
+    /// </summary>
+    double SampleLevel(int a, int b, Xoshiro256PlusPlus rng);
 }
 
 /// <summary>
@@ -76,6 +84,17 @@ public sealed class GaussianSegmentModel : ISegmentModel
                 levelVar[a, b] = v;
                 levelMean[a, b] = (_nu * invRho2 + (yPre[b] - yPre[a - 1]) / _sigma2) * v;
             }
+    }
+
+    /// <summary>The conjugate draw: N((ν/ρ² + Σy/σ²)·v, v) with v = 1/(1/ρ² + L/σ²).</summary>
+    public double SampleLevel(int a, int b, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (a < 1 || b < a || b > _y.Length) throw new ArgumentOutOfRangeException(nameof(b));
+        double sum = 0.0;
+        for (int i = a; i <= b; i++) sum += _y[i - 1];
+        double v = 1.0 / (1.0 / _rho2 + (b - a + 1) / _sigma2);
+        return (_nu / _rho2 + sum / _sigma2) * v + Math.Sqrt(v) * Normal.SampleStandard(rng);
     }
 }
 
@@ -186,6 +205,38 @@ public sealed class CauchySegmentModel : ISegmentModel
                 levelMean[a, b] = _nu + offset;
                 levelVar[a, b] = Math.Max(0.0, s2 / s0 - offset * offset);
             }
+    }
+
+    /// <summary>
+    /// A draw from the quadrature's posterior over the level: a node, in proportion to its weight in the segment's
+    /// integral. Expectations over the draws are the quadrature's own, so they agree with <see cref="Fill"/>'s moments and
+    /// are as accurate as its rule.
+    /// </summary>
+    public double SampleLevel(int a, int b, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (a < 1 || b < a || b > _y.Length) throw new ArgumentOutOfRangeException(nameof(b));
+        (double[] cum, double[] logPrior) = _table.Value;
+        var ranges = new List<(int Start, int End)>();
+        Window(cum, logPrior, a, b, new double[(_grid - 2) / Stride + 2], ranges);
+        int lower = (a - 1) * _grid, upper = b * _grid;
+        double top = double.NegativeInfinity;
+        foreach ((int start, int end) in ranges)
+            for (int h = start; h < end; h++) top = Math.Max(top, cum[upper + h] - cum[lower + h] + logPrior[h]);
+        double total = 0.0;
+        foreach ((int start, int end) in ranges)
+            for (int h = start; h < end; h++) total += Math.Exp(cum[upper + h] - cum[lower + h] + logPrior[h] - top);
+
+        double target = rng.NextDouble() * total, acc = 0.0;
+        int node = ranges[0].Start;
+        foreach ((int start, int end) in ranges)
+            for (int h = start; h < end; h++)
+            {
+                acc += Math.Exp(cum[upper + h] - cum[lower + h] + logPrior[h] - top);
+                node = h;
+                if (acc >= target) return _lo + node * _step;
+            }
+        return _lo + node * _step;
     }
 
     // cum[i·G + h] = Σ_{j≤i} log Cauchy(y_j | μ_h), node-contiguous so a segment's nodes are read in order, and the log

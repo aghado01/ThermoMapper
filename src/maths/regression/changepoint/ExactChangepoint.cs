@@ -12,13 +12,16 @@ namespace Maths.Regression.Changepoint;
 /// <param name="RegressionCurve">Posterior-mean level <c>E[f_i | y]</c> at each point (length n) — Bayes-averaged
 /// over all segmentations: flat in clear segments, wiggling in uncertain ones, jumping at boundaries.</param>
 /// <param name="RegressionStd">Posterior standard deviation of <c>f_i</c> (length n) — the curve's error band.</param>
+/// <param name="Posterior">The dynamic program's tables, kept: each segment's evidence, level moments and posterior
+/// probability, the forward and backward tables, and exact segmentation draws from them.</param>
 public sealed record ChangepointResult(
     double[] SegmentNumberPosterior,
     int MapSegments,
     double LogEvidence,
     double[] BreakProbability,
     double[] RegressionCurve,
-    double[] RegressionStd);
+    double[] RegressionStd,
+    ChangepointPosterior Posterior);
 
 /// <summary>
 /// Exact Bayesian regression of piecewise-constant functions (Marcus Hutter 2005) — change-point detection by
@@ -30,7 +33,8 @@ public sealed record ChangepointResult(
 /// recursions are O(K·n²) and the regression curve O(K²·n²), on top of the segment model's tables — so for a coarse
 /// thermal grid (small n) it is cheap and MCMC-error-free. The
 /// uniform-over-segmentations boundary prior supplies the Occam penalty (`1/C(n−1,k−1)`); k is uniform over
-/// 1..maxSegments.
+/// 1..maxSegments. The result keeps the tables (<see cref="ChangepointPosterior"/>), which give exact segmentation
+/// draws: joint break locations and per-draw curves that the marginals alone cannot.
 /// </summary>
 public static class ExactChangepoint
 {
@@ -118,6 +122,7 @@ public static class ExactChangepoint
         // (mean[a,b], var[a,b]) weighted by P(seg|y) = exp(logD + logΦ − logEvidence), range-added over [a..b].
         var diffMean = new double[n + 2];
         var diffM2 = new double[n + 2];
+        var segment = new double[n + 1, n + 1];
         for (int a = 1; a <= n; a++)
             for (int b = a; b <= n; b++)
             {
@@ -135,6 +140,7 @@ public static class ExactChangepoint
                 }
                 if (double.IsNegativeInfinity(logPhi)) continue;
                 double w = Math.Exp(logD[a, b] + logPhi - logEvidence);     // P(segment [a..b] | y)
+                segment[a, b] = w;
                 if (w <= 0.0) continue;
 
                 double mab = mean[a, b];
@@ -154,7 +160,8 @@ public static class ExactChangepoint
             std[i - 1] = Math.Sqrt(Math.Max(0.0, runM2 - runMean * runMean));
         }
 
-        return new ChangepointResult(posterior, map, logEvidence, breaks, curve, std);
+        return new ChangepointResult(posterior, map, logEvidence, breaks, curve, std,
+            new ChangepointPosterior(model, logD, mean, var, fwd, bwd, segment, posterior, logEvidence));
     }
 
     /// <summary>
