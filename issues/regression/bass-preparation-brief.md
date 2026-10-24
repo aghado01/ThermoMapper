@@ -2376,3 +2376,33 @@ The user asked for tier 3: move `BapsSampler` onto the ensemble shell (traces, r
 **Still open:** `HierarchicalPSpline`'s single chain (a shell candidate), BGP's resume (OQ10), BGP's fixed σ², and the changepoint and SW items of the retention inventory.
 
 **Results** under the fact harness: `Maths.Regression.Tests` 278 of 278 (`20261023_134456769`). The solution builds.
+
+### HierarchicalPSpline: draws retained, bands, intervals and Rao–Blackwellized means — 2026-10-23
+
+The user asked for tiers 1 and 2 of the same retention work on `HierarchicalPSpline`: retain every draw (full by default) with the summaries read from it bit-identically, then bands, variance intervals and Rao–Blackwellized means beside the current ones. Its move onto the ensemble shell waits for OQ18, so that it lands on the shared block Gibbs scan.
+
+| Commit | Content |
+|---|---|
+| `40958d7` | `HierarchicalDraw` retained per chain (one chain for now), with the conditional means the sweep used to drop; the summaries read from it; `Run(retainReplicates: false)`; `HierarchicalDrawTests` |
+| `62422b6` | `PosteriorInterval.Of` and `PointwiseBand.Of` shared from `PosteriorSummaries.cs`, used by BAPS and the hierarchical model; BAPS's arithmetic is unchanged |
+| `eaf7ade` | Rao–Blackwellized population and replicate means, three variance intervals, `PopulationBand` and `ReplicateBand`; `HierarchicalDrawTests` extended |
+| docs commit | `BayesianRegression.md`, this report |
+
+**What is retained.**
+- **Per draw:** the population curve, each replicate's curve, σ², τ_u², τ₀², and E[β₀ | ·] and each E[β_r | ·]. The sweep computed those conditional means and dropped them.
+- **The opt-out.** Replicate curves dominate memory, at R × ν numbers twice over per draw. `retainReplicates: false` keeps the population curve and the variances only. The replicate means, plain and Rao–Blackwellized, then accumulate as the chain runs, to identical values (tested).
+
+**The checks.**
+- **Bit-identical.** A probe at two seeds matched every existing summary against the previous code, after tier 1 and again after tier 2.
+- **Exact relations** (`HierarchicalDrawTests`):
+  - every summary is its draws' average;
+  - the Rao–Blackwellized means are the conditional means' average;
+  - the intervals and the band quantiles are the draws' type-7 quantiles;
+  - the band means are the design times the reported coefficients.
+- **Plain against Rao–Blackwellized.** The two population means differ by far less than 5 posterior sds over √N.
+
+**The variance reduction, measured, not asserted.** Across 12 seeds the Rao–Blackwellized means lowered the across-seed variance of the coefficient estimates by about 16%: ratio 0.84 for the population curve and 0.85 for replicate 0. Most of the spread comes from how the variance components mix, which Rao–Blackwellization does not touch. For a scan of more than two blocks, the reduction is typical rather than guaranteed (Liu, Wong & Kong 1994). The estimate is too noisy at 12 seeds to pin in a test.
+
+**Still open:** the ensemble shell (waits for OQ18), BGP's resume (OQ10), BGP's fixed σ², and the changepoint and SW items of the retention inventory.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 282 of 282 (`20261023_181341941`). The solution builds.

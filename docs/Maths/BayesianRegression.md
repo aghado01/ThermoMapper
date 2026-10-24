@@ -86,7 +86,7 @@ flowchart LR
 |---|---|
 | Spline core | `KnotConfig`; `IBasis`; `SplineBasis(degree = 3)`; `StepBasis`; `BSpline.EvaluateBasis`, `BSpline.MakeClampedKnots`; `BandedDesign` (`Accumulate`, `AccumulateRhs`) |
 | BARS | `BarsConfig`; `Bars.Run(config, x, y, grid)` → `BarsResult`; `BarsEnsemble(basis, model, prior, kernel, resampler?, dmgkConstant?, adaptKernelTau?, temperLevels?, temperBetaMin = 0.05, temperPath = Likelihood, temperSchedule = DeterministicEvenOdd, temperAdaptLadder = true)`; `PeakPosterior`, `PeakMode`, `PeakSpan`; `SplineExtrema` (`Argmax`, `SignificantPeaks`, `SignificantPeakSpans`) |
-| BAPS | `DifferencePenalty(order = 2)`; `PenalizedSpline(design, y, IBandPenalty)` (`Coefficients`, `ProfiledVariance`, `RemlLogEvidence`, `EffectiveDegreesOfFreedom`, `EdfSlope`); `BapsSampler(...).Run(BapsLambdaUpdate, …)` → `BapsResult` (`PosteriorDraws`, `FitBand(design)` → `PointwiseBand`, `Sigma2Interval`, `Tau2Interval` → `PosteriorInterval`); `HierarchicalPSpline(...).Run` → `HierarchicalResult`; `TensorProductDesign.Build` → `TensorDesign`; `TensorPenalty`; `AnisotropicTensorSpline` (`Coefficients`, `RemlLogEvidence`) |
+| BAPS | `DifferencePenalty(order = 2)`; `PenalizedSpline(design, y, IBandPenalty)` (`Coefficients`, `ProfiledVariance`, `RemlLogEvidence`, `EffectiveDegreesOfFreedom`, `EdfSlope`); `BapsSampler(...).Run(BapsLambdaUpdate, …)` → `BapsResult` (`PosteriorDraws`, `FitBand(design)` → `PointwiseBand`, `Sigma2Interval`, `Tau2Interval` → `PosteriorInterval`); `HierarchicalPSpline(...).Run` → `HierarchicalResult` (`PosteriorDraws`, Rao–Blackwellized means, `PopulationBand`, `ReplicateBand`, three variance intervals); `TensorProductDesign.Build` → `TensorDesign`; `TensorPenalty`; `AnisotropicTensorSpline` (`Coefficients`, `RemlLogEvidence`) |
 | BGP | `SquaredExponentialKernel : IGpKernel`; `GpRegression(x, y, sigma2, kernel, scaling = Similarity)` (`Fit(t)` → `GpFit`, `PredictMean`, `PredictVariance`, `KernelAffinity`, `Transform` → `GpTransform`); `EmpiricalBayesBandwidthPrior(gp, …)`; `BgpSampler(gp, prior).Run(...)` → `BgpResult` (`PosteriorMean`, `PosteriorSd`, `BandwidthDraws`) |
 | Changepoint | `ExactChangepoint.Infer(y, σ², ν, ρ², maxSegments)` or `Infer(y, ISegmentModel, maxSegments)` → `ChangepointResult`; `DefaultHyperparameters(y)`; `GaussianSegmentModel`, `CauchySegmentModel` |
 
@@ -551,6 +551,14 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
 - `FitBand(design)` gives, at any rows of the coefficients' basis, the mean (the design times `Coefficients`) with the sd and the 2.5% and 97.5% quantiles of the draws' fits Zβ. These carry the coefficients' uncertainty as well as λ's.
 
 **Hierarchical P-spline** (Behseta–Kass–Wallstrom). Replicate curves $\beta_r\sim N(\beta_0,\tau_u^2I)$ share a penalized population curve $\beta_0$. It uses conjugate banded Gibbs updates for $\beta_r$, $\beta_0$, σ², $\tau_u^2$ and $\tau_0^2$, in that order, in a single chain. Each draw conditions on the current values of the others; in particular, the $\tau_u^2$ statistic $\sum_r\|\beta_r-\beta_0\|^2$ uses the $\beta_0$ drawn in the same sweep.
+
+`HierarchicalResult.PosteriorDraws` keeps every draw (`HierarchicalDraw`), and every summary is read from it:
+- **What a draw holds:** the population curve, each replicate's curve, σ², τ_u² and τ₀², and the conditional means E[β₀ | ·] and E[β_r | ·] the sweep computes on the way.
+- **The opt-out.** Replicate curves dominate memory, at R × ν numbers twice over per draw. `Run(retainReplicates: false)` keeps only the population curve and the variances; the replicate summaries then accumulate as the chain runs, to the same values.
+- **Rao–Blackwellized means.** `RaoBlackwellizedPopulationCoefficients` and `RaoBlackwellizedReplicateCoefficients` average the conditional means, beside the current averages of the drawn curves. Both estimate the same posterior means. The Rao–Blackwellized ones drop the conditional draw's own noise; for a scan of more than two blocks that usually lowers the Monte Carlo error but is not guaranteed (Liu, Wong & Kong 1994 prove it for two). On the test data they lowered the across-seed variance of the coefficient estimates by about 16%, since most of the spread comes from how the variance components mix.
+- **Intervals and bands,** read from the draws on request:
+  - `NoiseVarianceInterval`, `DeviationVarianceInterval` and `PopulationSmoothingVarianceInterval` give each variance's median and 95% interval.
+  - `PopulationBand(design)` and `ReplicateBand(r, design)` give pointwise bands, built the same way as BAPS's `FitBand`. A replicate band needs the replicate draws.
 
 **Bivariate smoothing.**
 
