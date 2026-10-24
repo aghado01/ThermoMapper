@@ -83,6 +83,10 @@ public sealed class GibbsLossModel : IObservationModel
         return FitM(design, y, RobustNoise(y)).Beta;
     }
 
+    /// <summary>One knot configuration's conditional, fitted once: the M-estimate serves the mean and the draw alike.</summary>
+    public IConditionalFit FitConditional(double[,] design, double[] y, double[]? weights)
+        => new MeanOnlyFit(PosteriorMeanCoefficients(design, y, weights));
+
     /// <summary>The Gibbs posterior is a generalized one with no calibrated conditional spread, so draws are the
     /// M-estimate and nonlinear readouts reflect knot uncertainty only.</summary>
     public CoefficientUncertainty Uncertainty => CoefficientUncertainty.KnotOnly;

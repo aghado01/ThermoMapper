@@ -93,16 +93,7 @@ public sealed class WeightedNormalModel : IObservationModel
     /// conditions on both.
     /// </summary>
     public ConditionalDraw SampleConditional(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
-    {
-        ArgumentNullException.ThrowIfNull(rng);
-        if (Condition(design, y, weights) is not GPriorConditional c)
-            return new(Unavailable(design), double.NaN);
-        double[] beta = c.Mean.ToArray();
-        if (!(c.S > 0.0))
-            return new(beta, double.NaN);
-        double sigma2 = c.Sample(null, rng, beta);   // the improper 1/σ² prior
-        return new(beta, sigma2);
-    }
+        => FitConditional(design, y, weights).Sample(rng);
 
     /// <summary>
     /// <c>Var[f(t) | knots] = E[σ²]·z(t)ᵀ Cov z(t)</c> at each readout row z(t), with σ integrated out (the Student-t
@@ -110,12 +101,7 @@ public sealed class WeightedNormalModel : IObservationModel
     /// <c>(S/(m−2))·z(t)ᵀPa⁻¹z(t)</c> with weights. NaN entries when the design is inadmissible or m ≤ 2.
     /// </summary>
     public double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign)
-    {
-        ArgumentNullException.ThrowIfNull(readoutDesign);
-        if (Condition(design, y, weights) is not GPriorConditional c || !(c.S > 0.0) || c.Rows <= 2)
-            return ReadoutQuadratics.Unavailable(readoutDesign);
-        return c.ConditionalVariance(null, readoutDesign);
-    }
+        => FitConditional(design, y, weights).ConditionalVariance(readoutDesign);
 
     /// <summary>
     /// Posterior mean spline coefficients: <c>(m/(m+1)) (ZᵀZ)⁻¹ Zᵀy</c> at unit weights (DMGK eq. 7's
@@ -124,7 +110,35 @@ public sealed class WeightedNormalModel : IObservationModel
     /// <paramref name="weights"/> null means unit weights. NaN when the design is inadmissible.
     /// </summary>
     public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
-        => Condition(design, y, weights) is GPriorConditional c ? c.Mean.ToArray() : Unavailable(design);
+        => FitConditional(design, y, weights).MeanCoefficients();
+
+    /// <summary>One knot configuration's conditional, fitted once: the block at BARS's τ = 1/m serves the mean, the
+    /// conditional variance and the joint draw above.</summary>
+    public IConditionalFit FitConditional(double[,] design, double[] y, double[]? weights)
+        => new NormalConditional(Condition(design, y, weights), design.GetLength(1));
+
+    // The three readouts of one block's conditional, or NaN throughout when the design is inadmissible (no block).
+    private sealed class NormalConditional(GPriorConditional? c, int columns) : IConditionalFit
+    {
+        public double[] MeanCoefficients() => c is null ? Unavailable(columns) : c.Mean.ToArray();
+
+        public double[]? ConditionalVariance(double[,] readoutDesign)
+        {
+            ArgumentNullException.ThrowIfNull(readoutDesign);
+            if (c is null || !(c.S > 0.0) || c.Rows <= 2) return ReadoutQuadratics.Unavailable(readoutDesign);
+            return c.ConditionalVariance(null, readoutDesign);
+        }
+
+        public ConditionalDraw Sample(Xoshiro256PlusPlus rng)
+        {
+            ArgumentNullException.ThrowIfNull(rng);
+            if (c is null) return new(Unavailable(columns), double.NaN);
+            double[] beta = c.Mean.ToArray();
+            if (!(c.S > 0.0)) return new(beta, double.NaN);
+            double sigma2 = c.Sample(null, rng, beta);   // the improper 1/σ² prior
+            return new(beta, sigma2);
+        }
+    }
 
     // One knot configuration's conditional posterior at BARS's τ = 1/m, untempered; null when it is inadmissible.
     private GPriorConditional? Condition(double[,] design, double[] y, double[]? weights)
@@ -155,9 +169,9 @@ public sealed class WeightedNormalModel : IObservationModel
     private static bool Admits(ISpdFactor factor) => DesignAdmission.Admits(factor);
 
     // No posterior: one NaN per coefficient.
-    private static double[] Unavailable(double[,] design)
+    private static double[] Unavailable(int columns)
     {
-        var nan = new double[design.GetLength(1)];
+        var nan = new double[columns];
         Array.Fill(nan, double.NaN);
         return nan;
     }

@@ -649,7 +649,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     {
         int g = _grid.Length;
         double[,] zTrain = _basis.Design(draw, _x);
-        double[] mean = _model.PosteriorMeanCoefficients(zTrain, _y, st.W);
+        IConditionalFit conditional = _model.FitConditional(zTrain, _y, st.W);   // one fit for all three readouts
+        double[] mean = conditional.MeanCoefficients();
         double[,] zGrid = _basis.Design(draw, _grid);
         for (int gi = 0; gi < g; gi++)
         {
@@ -660,11 +661,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         functionals[0] = draw.Count;
 
         BarsReadout r = st.Readout;
-        if (_model.ConditionalVariance(zTrain, _y, st.W, zGrid) is double[] v)
+        if (conditional.ConditionalVariance(zGrid) is double[] v)
             r.ConditionalVariance.Add(v);
 
         // Every draw is retained, so the draw count stays every peak readout's denominator.
-        ConditionalDraw c = _model.SampleConditional(zTrain, _y, st.W, st.ReadoutRng);
+        ConditionalDraw c = conditional.Sample(st.ReadoutRng);
         r.Draws.Add(new BarsDraw(draw, c.Coefficients, c.Sigma2, st.W, PeakReadout(draw, c.Coefficients)));
     }
 

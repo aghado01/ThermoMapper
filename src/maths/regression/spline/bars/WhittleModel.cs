@@ -74,10 +74,44 @@ public sealed class WhittleModel : IObservationModel
 
     /// <inheritdoc/>
     public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
+        => FitConditional(design, y, weights).MeanCoefficients();
+
+    /// <summary>One knot configuration's conditional, fitted once: the IRLS fit and its factor of BᵀB serve the mean, the
+    /// conditional variance and the Laplace draw.</summary>
+    public IConditionalFit FitConditional(double[,] design, double[] y, double[]? weights)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
-        return FitGlm(design, y).Beta;
+        (double[] beta, DesignRejection rejection, BandCholesky factor) = FitGlm(design, y);
+        return new WhittleConditional(beta, rejection, factor);
+    }
+
+    // One configuration's IRLS fit and factor, shared by the three readouts.
+    private sealed class WhittleConditional(double[] beta, DesignRejection rejection, BandCholesky factor) : IConditionalFit
+    {
+        public double[] MeanCoefficients() => (double[])beta.Clone();
+
+        public double[]? ConditionalVariance(double[,] readoutDesign)
+        {
+            ArgumentNullException.ThrowIfNull(readoutDesign);
+            return rejection == DesignRejection.None
+                ? ReadoutQuadratics.Of(factor, readoutDesign, 1.0)
+                : ReadoutQuadratics.Unavailable(readoutDesign);
+        }
+
+        public ConditionalDraw Sample(Xoshiro256PlusPlus rng)
+        {
+            ArgumentNullException.ThrowIfNull(rng);
+            var draw = (double[])beta.Clone();
+            if (rejection != DesignRejection.None) return new(draw, double.NaN);
+            int nu = draw.Length;
+            var z = new double[nu];
+            for (int j = 0; j < nu; j++) z[j] = Normal.SampleStandard(rng);
+            var innov = new double[nu];
+            factor.SampleInnovation(z, innov);
+            for (int j = 0; j < nu; j++) draw[j] += innov[j];
+            return new(draw, double.NaN);
+        }
     }
 
     /// <inheritdoc/>
@@ -89,29 +123,12 @@ public sealed class WhittleModel : IObservationModel
     /// is fixed by the periodogram's exponential law, so σ² is NaN.
     /// </summary>
     public ConditionalDraw SampleConditional(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
-    {
-        ArgumentNullException.ThrowIfNull(rng);
-        (double[] beta, DesignRejection rejection, BandCholesky factor) = FitGlm(design, y);
-        if (rejection != DesignRejection.None) return new(beta, double.NaN);
-        int nu = beta.Length;
-        var z = new double[nu];
-        for (int j = 0; j < nu; j++) z[j] = Normal.SampleStandard(rng);
-        var innov = new double[nu];
-        factor.SampleInnovation(z, innov);
-        for (int j = 0; j < nu; j++) beta[j] += innov[j];
-        return new(beta, double.NaN);
-    }
+        => FitConditional(design, y, weights).Sample(rng);
 
     /// <summary>The Laplace variance <c>z(t)ᵀ(BᵀB)⁻¹z(t)</c> of the log-spectrum at each readout row; NaN when the fit
     /// is unusable.</summary>
     public double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign)
-    {
-        ArgumentNullException.ThrowIfNull(readoutDesign);
-        (_, DesignRejection rejection, BandCholesky factor) = FitGlm(design, y);
-        return rejection == DesignRejection.None
-            ? ReadoutQuadratics.Of(factor, readoutDesign, 1.0)
-            : ReadoutQuadratics.Unavailable(readoutDesign);
-    }
+        => FitConditional(design, y, weights).ConditionalVariance(readoutDesign);
 
     // Gamma(shape 1) / log-link IRLS: weights are 1, so A = BᵀB is constant — factor once, iterate z only. The
     // rejection is Inadmissible when BᵀB fails DesignAdmission and NotConverged when the iteration cap is reached

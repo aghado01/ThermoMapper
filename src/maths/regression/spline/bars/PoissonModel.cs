@@ -120,10 +120,16 @@ public sealed class PoissonModel : IObservationModel
 
     /// <inheritdoc/>
     public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
+        => FitConditional(design, y, weights).MeanCoefficients();
+
+    /// <summary>One knot configuration's conditional, fitted once: the IRLS fit serves the mean, and its Laplace factor
+    /// (built on first use) the conditional variance and the Metropolis–Hastings draw.</summary>
+    public IConditionalFit FitConditional(double[,] design, double[] y, double[]? weights)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
-        return FitGlm(design, y).Beta;
+        (double[] betaHat, DesignRejection rejection, GPriorTerms? prior) = FitGlm(design, y);
+        return new PoissonConditional(this, design, y, betaHat, rejection, prior);
     }
 
     /// <inheritdoc/>
@@ -132,7 +138,7 @@ public sealed class PoissonModel : IObservationModel
     /// <inheritdoc/>
     /// <remarks>The Poisson likelihood has no noise scale, so σ² is NaN.</remarks>
     public ConditionalDraw SampleConditional(double[,] design, double[] y, double[]? weights, Xoshiro256PlusPlus rng)
-        => new(SampleCoefficients(design, y, rng), double.NaN);
+        => FitConditional(design, y, weights).Sample(rng);
 
     /// <summary>
     /// An approximate draw from the conditional posterior <c>π(β | ξ, y) ∝ Poisson likelihood × prior</c> by
@@ -146,59 +152,76 @@ public sealed class PoissonModel : IObservationModel
     /// </summary>
     public double[] SampleCoefficients(double[,] design, double[] y, Xoshiro256PlusPlus rng, int mhIterations = 5)
     {
-        ArgumentNullException.ThrowIfNull(design);
-        ArgumentNullException.ThrowIfNull(y);
         ArgumentNullException.ThrowIfNull(rng);
         if (mhIterations < 1) throw new ArgumentOutOfRangeException(nameof(mhIterations));
+        return ((PoissonConditional)FitConditional(design, y, null)).Coefficients(rng, mhIterations);
+    }
 
-        int nu = design.GetLength(1);
-        (double[] betaHat, _, GPriorTerms? prior) = FitGlm(design, y);
-        if (prior is null && Marginal == PoissonMarginal.GPrior) return betaHat;   // no g-prior: ȳ = 0 or BᵀB refused
-        BandCholesky chol = LaplaceFactor(design, betaHat, prior);
-        if (!DesignAdmission.Admits(chol)) return betaHat;   // no Laplace proposal: fall back to β̂, as Whittle does
+    // One configuration's IRLS fit and, built on first use, its Laplace factor, shared by the three readouts.
+    private sealed class PoissonConditional(PoissonModel owner, double[,] design, double[] y, double[] betaHat,
+                                            DesignRejection rejection, GPriorTerms? prior) : IConditionalFit
+    {
+        private BandCholesky? _laplace;
 
-        var z = new double[nu];
-        var innov = new double[nu];
+        private BandCholesky Laplace => _laplace ??= LaplaceFactor(design, betaHat, prior);
 
-        // One proposal draw, with its target and proposal log-densities.
-        (double[] Beta, double LogTarget, double LogProposal) Propose()
+        public double[] MeanCoefficients() => (double[])betaHat.Clone();
+
+        public double[]? ConditionalVariance(double[,] readoutDesign)
         {
-            double ss = 0.0;
-            for (int j = 0; j < nu; j++) { z[j] = Normal.SampleStandard(rng); ss += z[j] * z[j]; }
-            chol.SampleInnovation(z, innov);             // innov ~ N(0, H⁻¹)
-            var beta = new double[nu];
-            for (int j = 0; j < nu; j++) beta[j] = betaHat[j] + innov[j];
-            return (beta, LogPosterior(design, y, beta, prior), -0.5 * ss);
+            ArgumentNullException.ThrowIfNull(readoutDesign);
+            if (rejection != DesignRejection.None) return ReadoutQuadratics.Unavailable(readoutDesign);
+            return DesignAdmission.Admits(Laplace)
+                ? ReadoutQuadratics.Of(Laplace, readoutDesign, 1.0)
+                : ReadoutQuadratics.Unavailable(readoutDesign);
         }
 
-        (double[] cur, double logTargetCur, double logPropCur) = Propose();
-        for (int it = 0; it < mhIterations; it++)
+        public ConditionalDraw Sample(Xoshiro256PlusPlus rng) => new(Coefficients(rng, 5), double.NaN);
+
+        // The independence Metropolis–Hastings draw of SampleCoefficients.
+        public double[] Coefficients(Xoshiro256PlusPlus rng, int mhIterations)
         {
-            (double[] cand, double logTargetCand, double logPropCand) = Propose();
-            double r = (logTargetCand - logTargetCur) + (logPropCur - logPropCand);   // independence-MH ratio
-            if (r >= 0.0 || Math.Log(1.0 - rng.NextDouble()) < r)
+            ArgumentNullException.ThrowIfNull(rng);
+            int nu = design.GetLength(1);
+            if (prior is null && owner.Marginal == PoissonMarginal.GPrior) return (double[])betaHat.Clone();   // no g-prior: ȳ = 0 or BᵀB refused
+            BandCholesky chol = Laplace;
+            if (!DesignAdmission.Admits(chol)) return (double[])betaHat.Clone();   // no Laplace proposal: fall back to β̂, as Whittle does
+
+            var z = new double[nu];
+            var innov = new double[nu];
+
+            // One proposal draw, with its target and proposal log-densities.
+            (double[] Beta, double LogTarget, double LogProposal) Propose()
             {
-                cur = cand;
-                logTargetCur = logTargetCand;
-                logPropCur = logPropCand;
+                double ss = 0.0;
+                for (int j = 0; j < nu; j++) { z[j] = Normal.SampleStandard(rng); ss += z[j] * z[j]; }
+                chol.SampleInnovation(z, innov);             // innov ~ N(0, H⁻¹)
+                var beta = new double[nu];
+                for (int j = 0; j < nu; j++) beta[j] = betaHat[j] + innov[j];
+                return (beta, LogPosterior(design, y, beta, prior), -0.5 * ss);
             }
+
+            (double[] cur, double logTargetCur, double logPropCur) = Propose();
+            for (int it = 0; it < mhIterations; it++)
+            {
+                (double[] cand, double logTargetCand, double logPropCand) = Propose();
+                double r = (logTargetCand - logTargetCur) + (logPropCur - logPropCand);   // independence-MH ratio
+                if (r >= 0.0 || Math.Log(1.0 - rng.NextDouble()) < r)
+                {
+                    cur = cand;
+                    logTargetCur = logTargetCand;
+                    logPropCur = logPropCand;
+                }
+            }
+            return cur;
         }
-        return cur;
     }
 
     /// <summary>The Laplace variance <c>z(t)ᵀH⁻¹z(t)</c> of the log-intensity at each readout row: under the g-prior
     /// <c>H = BᵀŴB + Λ</c> at the posterior mode, under BIC <c>H = J = BᵀŴB</c> at the MLE; NaN when the fit is
     /// unusable.</summary>
     public double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign)
-    {
-        ArgumentNullException.ThrowIfNull(readoutDesign);
-        (double[] betaHat, DesignRejection rejection, GPriorTerms? prior) = FitGlm(design, y);
-        if (rejection != DesignRejection.None) return ReadoutQuadratics.Unavailable(readoutDesign);
-        BandCholesky j = LaplaceFactor(design, betaHat, prior);
-        return DesignAdmission.Admits(j)
-            ? ReadoutQuadratics.Of(j, readoutDesign, 1.0)
-            : ReadoutQuadratics.Unavailable(readoutDesign);
-    }
+        => FitConditional(design, y, weights).ConditionalVariance(readoutDesign);
 
     // The Laplace precision of the coefficients at β̂: BᵀŴB, plus the g-prior's Λ when there is one.
     private static BandCholesky LaplaceFactor(double[,] design, double[] betaHat, GPriorTerms? prior)

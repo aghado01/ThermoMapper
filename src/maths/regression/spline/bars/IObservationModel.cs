@@ -63,6 +63,13 @@ public interface IObservationModel
     /// </summary>
     double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign) => null;
 
+    /// <summary>
+    /// The conditional posterior given the knots, fitted once for every readout a draw takes: the mean, the conditional
+    /// variance and the joint draw. A model that overrides it fits each configuration once per draw rather than once per
+    /// readout; the default calls the three methods above, each of which fits afresh.
+    /// </summary>
+    IConditionalFit FitConditional(double[,] design, double[] y, double[]? weights) => new SeparateFits(this, design, y, weights);
+
     /// <summary>How <see cref="SampleConditional"/> and <see cref="ConditionalVariance"/> relate to the exact
     /// conditional posterior.</summary>
     CoefficientUncertainty Uncertainty => CoefficientUncertainty.KnotOnly;
