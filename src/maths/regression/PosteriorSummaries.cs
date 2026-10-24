@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Maths.Regression.Spline.Baps;
+namespace Maths.Regression;
 
 /// <summary>A posterior median with its 95% interval: type-7 quantiles of the pooled draws.</summary>
 public sealed record PosteriorInterval(double Median, double Lo, double Hi)
