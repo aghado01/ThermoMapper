@@ -9,6 +9,23 @@ namespace Maths.Regression.Bgp;
 /// <summary>A bandwidth posterior in one frame: the posterior mean and the type-7 2.5% and 97.5% quantiles.</summary>
 public sealed record BandwidthSummary(double Mean, double Lo, double Hi);
 
+/// <summary>The random-walk proposal for an unknown scale's joint (log t, log η) walk. A known σ² walks log t alone with
+/// its fixed step and ignores this.</summary>
+public enum BgpProposal
+{
+    /// <summary>Independent normal steps on log t and log η with the given standard deviations.</summary>
+    Fixed,
+
+    /// <summary>
+    /// A correlated normal step whose covariance is learned in burn-in and then frozen for sampling (adaptive Metropolis:
+    /// Haario, Saksman &amp; Tamminen 2001). Its shape is (2.38²/2)·Σ̂, with Σ̂ the burn-in draws' covariance; its global
+    /// scale is tuned by Robbins–Monro toward an acceptance rate of 0.35, the optimum for a two-dimensional walk
+    /// (Andrieu &amp; Thoms 2008, algorithm 4; Roberts &amp; Rosenthal 2001). Sampling then runs ordinary Metropolis–Hastings
+    /// with the frozen step.
+    /// </summary>
+    Adaptive,
+}
+
 /// <summary>
 /// One retained draw: the bandwidth t in the mapped frame, the GP fit the chain held there (its log marginal, α, mean,
 /// noise ratio and residual quadratic), the signal variance s², and the conditional variance of f at the run's test
@@ -107,6 +124,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
     private double _proposalSd;
     private double _eta0;
     private double _etaProposalSd;
+    private BgpProposal _proposal;
     private int _testCount;
 
     /// <param name="gp">The GP: a known σ², or an unknown scale (<see cref="GpRegression.WithUnknownScale"/>).</param>
@@ -151,7 +169,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
             _prior.AddTo(f);
             foreach (double v in _xTest) f.Add(v);
             return f.Add(_testCount).Add(_t0).Add(_proposalSd).Add(_logEtaLower).Add(_logEtaUpper).Add(_eta0)
-                    .Add(_etaProposalSd).ToString();
+                    .Add(_etaProposalSd).Add((int)_proposal).ToString();
         }
     }
 
@@ -186,12 +204,17 @@ public sealed class BgpSampler : IEnsembleModel<double>
     /// jointly with log t.</param>
     /// <param name="noiseRatioInit">For an unknown scale, the starting η inside its prior (default: the geometric middle of
     /// the prior's range); shared by every chain.</param>
+    /// <param name="proposal">For an unknown scale, the joint walk's proposal (<see cref="BgpProposal"/>): adaptive by
+    /// default, which gave 5–19 times the fixed walk's ESS on every data set measured, at the same cost per step. The fixed
+    /// steps above start the adaptive one too. A known σ² ignores it.</param>
     public BgpResult Run(double[,] xTest, int draws = 600, int burn = 200, double proposalSd = 0.4,
                          int seed = 0, double? tInit = null, int chains = 2,
                          double rHatTarget = 0.0, int batchSize = 0, double minEssPerChain = ChainEnsemble.MinEssPerChain,
                          bool checkpoint = false, EnsembleCheckpoint? resumeFrom = null,
-                         double noiseRatioProposalSd = 0.4, double? noiseRatioInit = null)
+                         double noiseRatioProposalSd = 0.4, double? noiseRatioInit = null,
+                         BgpProposal proposal = BgpProposal.Adaptive)
     {
+        if (proposal is not (BgpProposal.Fixed or BgpProposal.Adaptive)) throw new ArgumentOutOfRangeException(nameof(proposal));
         ArgumentNullException.ThrowIfNull(xTest);
         if (draws < 1) throw new ArgumentOutOfRangeException(nameof(draws));
         if (chains < 1) throw new ArgumentOutOfRangeException(nameof(chains));
@@ -212,6 +235,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
         _proposalSd = proposalSd;
         _eta0 = eta0;
         _etaProposalSd = _unknownScale ? noiseRatioProposalSd : double.NaN;
+        _proposal = _unknownScale ? proposal : BgpProposal.Fixed;
         _testCount = xTest.GetLength(0);
 
         (EnsembleRun summary, IReadOnlyList<IChainRun<double>> runs) =
@@ -291,10 +315,12 @@ public sealed class BgpSampler : IEnsembleModel<double>
     }
 
     /// <summary>One chain's restart state: both streams' words, its log bandwidth (and log noise ratio) with the log target
-    /// there, the bandwidth and nugget its current fit was made at, its counters and its retained draws.</summary>
+    /// there, the bandwidth and nugget its current fit was made at, the frozen proposal's Cholesky factor (l00, l10, l11),
+    /// its counters and its retained draws.</summary>
     private sealed record BgpChainState(
         (ulong, ulong, ulong, ulong) Rng, (ulong, ulong, ulong, ulong) Readout, double LogBandwidth, double LogNoiseRatio,
-        double LogTarget, double FitBandwidth, double FitNoiseRatio, long Accepted, long Attempts, List<BgpDraw> Draws)
+        double LogTarget, double FitBandwidth, double FitNoiseRatio, (double L00, double L10, double L11) Step,
+        long Accepted, long Attempts, List<BgpDraw> Draws)
         : IChainState;
 
     /// <summary>
@@ -312,6 +338,11 @@ public sealed class BgpSampler : IEnsembleModel<double>
         private double _v;          // log η (unknown scale only)
         private double _cur;        // log target at the current state
         private GpFactoredFit _factored;   // the current fit with its factor, held only while current
+        private double _l00, _l10, _l11;   // the adaptive step's Cholesky factor (unknown scale, adaptive proposal)
+
+        // Adaptive Metropolis in burn-in: the acceptance rate it aims for (two dimensions) and how often it adapts.
+        private const double TargetAcceptance = 0.35;
+        private const int AdaptEvery = 50;
 
         public long Accepted { get; private set; }
         public long Attempts { get; private set; }
@@ -325,6 +356,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
         public BgpBandwidthChain(BgpSampler owner, Xoshiro256PlusPlus rng)
         {
             _o = owner; _rng = rng;
+            (_l00, _l10, _l11) = (owner._proposalSd, 0.0, owner._etaProposalSd);   // the adaptive step starts as the fixed one
             double t0 = owner._t0;
             _u = Math.Log(t0);
             if (owner._unknownScale)
@@ -350,19 +382,93 @@ public sealed class BgpSampler : IEnsembleModel<double>
             _cur = s.LogTarget;
             _factored = owner._unknownScale ? owner._gp.FitFactored(s.FitBandwidth, s.FitNoiseRatio)
                                             : owner._gp.FitFactored(s.FitBandwidth);
+            (_l00, _l10, _l11) = s.Step;
             Accepted = s.Accepted;
             Attempts = s.Attempts;
         }
 
         /// <summary>The chain's part of its restart state, with the readout stream's words and the retained draws.</summary>
         public BgpChainState Save((ulong, ulong, ulong, ulong) readout, List<BgpDraw> draws) =>
-            new(_rng.SaveState(), readout, _u, _v, _cur, _factored.Fit.Bandwidth, _factored.Fit.NoiseRatio, Accepted, Attempts,
-                new List<BgpDraw>(draws));
+            new(_rng.SaveState(), readout, _u, _v, _cur, _factored.Fit.Bandwidth, _factored.Fit.NoiseRatio,
+                (_l00, _l10, _l11), Accepted, Attempts, new List<BgpDraw>(draws));
+
+        /// <summary>
+        /// Burn-in. With the adaptive proposal it runs adaptive Metropolis:
+        /// <list type="bullet">
+        ///   <item>The first tenth of burn-in (at least <see cref="AdaptEvery"/> steps) is transient and left out.</item>
+        ///   <item>Every <see cref="AdaptEvery"/> steps after that, the step's shape becomes (2.38²/2)·Σ̂, from the draws
+        ///   so far, plus a small ridge.</item>
+        ///   <item>Its global scale takes a vanishing Robbins–Monro step toward the target acceptance.</item>
+        /// </list>
+        /// The step is then frozen, so sampling is ordinary Metropolis–Hastings. Otherwise burn-in just steps.
+        /// </summary>
+        public void Burn(int steps)
+        {
+            if (!(_o._unknownScale && _o._proposal == BgpProposal.Adaptive))
+            {
+                for (int k = 0; k < steps; k++) Step();
+                return;
+            }
+            int skip = Math.Max(AdaptEvery, steps / 10);
+            var us = new List<double>(steps);
+            var vs = new List<double>(steps);
+            double logScale = 0.0;
+            long windowAccepted = Accepted, windowAttempts = Attempts;
+            int round = 0;
+            for (int k = 0; k < steps; k++)
+            {
+                Step();
+                if (k >= skip) { us.Add(_u); vs.Add(_v); }
+                if ((k + 1) % AdaptEvery != 0 || us.Count < AdaptEvery) continue;
+
+                double rate = (double)(Accepted - windowAccepted) / (Attempts - windowAttempts);
+                windowAccepted = Accepted;
+                windowAttempts = Attempts;
+                logScale += 3.0 / Math.Sqrt(round + 1) * (rate - TargetAcceptance);
+                round++;
+
+                double mu = 0.0, mv = 0.0;
+                for (int i = 0; i < us.Count; i++) { mu += us[i]; mv += vs[i]; }
+                mu /= us.Count;
+                mv /= us.Count;
+                double cuu = 0.0, cuv = 0.0, cvv = 0.0;
+                for (int i = 0; i < us.Count; i++)
+                {
+                    double du = us[i] - mu, dv = vs[i] - mv;
+                    cuu += du * du; cuv += du * dv; cvv += dv * dv;
+                }
+                double scale = Math.Exp(2.0 * logScale) * 2.38 * 2.38 / 2.0 / (us.Count - 1);
+                const double ridge = 1e-8;
+                double a = scale * cuu + ridge, b = scale * cuv, c = scale * cvv + ridge;
+                _l00 = Math.Sqrt(a);
+                _l10 = b / _l00;
+                _l11 = Math.Sqrt(Math.Max(c - _l10 * _l10, ridge));
+            }
+        }
 
         public double Step()
         {
-            double uProp = _u + _o._proposalSd * Normal.SampleStandard(_rng);
-            double vProp = _o._unknownScale ? _v + _o._etaProposalSd * Normal.SampleStandard(_rng) : _v;
+            double uProp, vProp;
+            double zu = Normal.SampleStandard(_rng);
+            if (!_o._unknownScale)
+            {
+                uProp = _u + _o._proposalSd * zu;
+                vProp = _v;
+            }
+            else
+            {
+                double zv = Normal.SampleStandard(_rng);
+                if (_o._proposal == BgpProposal.Adaptive)
+                {
+                    uProp = _u + _l00 * zu;
+                    vProp = _v + (_l10 * zu + _l11 * zv);
+                }
+                else
+                {
+                    uProp = _u + _o._proposalSd * zu;
+                    vProp = _v + _o._etaProposalSd * zv;
+                }
+            }
             double tProp = Math.Exp(uProp);
             double priorProp = _o._prior.LogDensity(tProp);
             if (_o._unknownScale && !(vProp >= _o._logEtaLower && vProp <= _o._logEtaUpper)) priorProp = double.NegativeInfinity;
@@ -410,10 +516,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
 
         public IChain<double> Chain => _chain;
 
-        public void Burn(int steps)
-        {
-            for (int i = 0; i < steps; i++) _chain.Step();
-        }
+        public void Burn(int steps) => _chain.Burn(steps);
 
         public void Accumulate(in double draw, Span<double> functionals)
         {

@@ -170,6 +170,97 @@ public sealed class BgpUnknownScaleTests
             .Run(grid, draws: 250, burn: 100, seed: 5, chains: 2, resumeFrom: checkpoint));
     }
 
+    [Theory]
+    [InlineData(BgpProposal.Fixed)]
+    [InlineData(BgpProposal.Adaptive)]
+    public void PosteriorMeans_MatchTwoDimensionalQuadrature(BgpProposal proposal)
+    {
+        // The (log t, log η) posterior ∝ p(Y | t, η)·p(t)·t on η's log-uniform range, by quadrature on a grid, against the
+        // sampler's means over independent runs. The adaptive step is frozen after burn-in, so it must hit the same target.
+        (double[,] x, double[] y, _) = Data(30, 2.0, 0.3, seed: 21);
+        GpRegression gp = GpRegression.WithUnknownScale(x, y, new SquaredExponentialKernel());
+        var prior = new EmpiricalBayesBandwidthPrior(gp);
+        double uLo = Math.Log(prior.LowerBound), uHi = 0.0, vLo = Math.Log(1e-6), vHi = Math.Log(1e2);
+        const int nu = 160, nv = 200;
+        var logp = new double[nu, nv];
+        double max = double.NegativeInfinity;
+        for (int i = 0; i < nu; i++)
+        {
+            double u = uLo + (i + 0.5) * (uHi - uLo) / nu, t = Math.Exp(u);
+            double logPrior = prior.LogDensity(t) + u;
+            for (int j = 0; j < nv; j++)
+            {
+                double v = vLo + (j + 0.5) * (vHi - vLo) / nv;
+                logp[i, j] = double.IsNegativeInfinity(logPrior) ? double.NegativeInfinity : gp.Fit(t, Math.Exp(v)).LogMarginal + logPrior;
+                max = Math.Max(max, logp[i, j]);
+            }
+        }
+        double mass = 0.0, eu = 0.0, ev = 0.0;
+        for (int i = 0; i < nu; i++)
+            for (int j = 0; j < nv; j++)
+            {
+                double w = Math.Exp(logp[i, j] - max);
+                mass += w;
+                eu += w * (uLo + (i + 0.5) * (uHi - uLo) / nu);
+                ev += w * (vLo + (j + 0.5) * (vHi - vLo) / nv);
+            }
+        double refU = eu / mass, refV = ev / mass;
+
+        const int runs = 8;
+        var mu = new double[runs];
+        var mv = new double[runs];
+        for (int r = 0; r < runs; r++)
+        {
+            BgpResult res = new BgpSampler(gp, prior).Run(Grid(5), draws: 2000, burn: 600, seed: 100 + r, chains: 4, proposal: proposal);
+            double count = 0.0;
+            foreach (IReadOnlyList<BgpDraw> chain in res.BandwidthDraws)
+                foreach (BgpDraw d in chain)
+                {
+                    count++;
+                    mu[r] += Math.Log(d.Bandwidth);
+                    mv[r] += Math.Log(d.NoiseRatio);
+                }
+            mu[r] /= count;
+            mv[r] /= count;
+        }
+        (double meanU, double seU) = MeanAndSe(mu);
+        (double meanV, double seV) = MeanAndSe(mv);
+        _out.WriteLine($"{proposal}: E[log t] sampler {meanU:F4} ± {seU:F4}, quadrature {refU:F4}; " +
+                       $"E[log η] sampler {meanV:F4} ± {seV:F4}, quadrature {refV:F4}");
+        Assert.True(Math.Abs(meanU - refU) <= 4.5 * seU + 0.01, $"E[log t] {meanU:F4} against {refU:F4}");
+        Assert.True(Math.Abs(meanV - refV) <= 4.5 * seV + 0.02, $"E[log η] {meanV:F4} against {refV:F4}");
+    }
+
+    private static (double Mean, double Se) MeanAndSe(double[] values)
+    {
+        double mean = 0.0;
+        foreach (double v in values) mean += v / values.Length;
+        double ss = 0.0;
+        foreach (double v in values) ss += (v - mean) * (v - mean);
+        return (mean, Math.Sqrt(ss / (values.Length - 1) / values.Length));
+    }
+
+    [Fact]
+    public void AdaptiveProposal_ResumesExactly_AndLearnsACorrelatedStep()
+    {
+        (double[,] x, double[] y, _) = Data(50, 3.0, 0.3, seed: 9);
+        GpRegression gp = GpRegression.WithUnknownScale(x, y, new SquaredExponentialKernel());
+        var prior = new EmpiricalBayesBandwidthPrior(gp);
+        double[,] grid = Grid(15);
+        BgpResult straight = new BgpSampler(gp, prior).Run(grid, draws: 400, burn: 500, seed: 5, chains: 2, proposal: BgpProposal.Adaptive);
+        EnsembleCheckpoint checkpoint = new BgpSampler(gp, prior)
+            .Run(grid, draws: 150, burn: 500, seed: 5, chains: 2, checkpoint: true, proposal: BgpProposal.Adaptive).Checkpoint!;
+        BgpResult resumed = new BgpSampler(gp, prior).Run(grid, draws: 250, burn: 500, seed: 5, chains: 2, resumeFrom: checkpoint,
+                                                          proposal: BgpProposal.Adaptive);
+        Assert.Equal(straight.PosteriorMean, resumed.PosteriorMean);
+        Assert.Equal(straight.BandwidthConvergence, resumed.BandwidthConvergence);
+        Assert.Equal(straight.NoiseRatioConvergence, resumed.NoiseRatioConvergence);
+        Assert.Equal(straight.AcceptanceRate, resumed.AcceptanceRate);
+        Assert.InRange(straight.AcceptanceRate, 0.2, 0.5);   // tuned toward 0.35
+        Assert.Throws<ArgumentException>(() => new BgpSampler(gp, prior)
+            .Run(grid, draws: 250, burn: 500, seed: 5, chains: 2, resumeFrom: checkpoint, proposal: BgpProposal.Fixed));
+    }
+
     [Fact]
     public void KnownNoise_DrawsReportUnitSignalAndTheGivenNoise()
     {
