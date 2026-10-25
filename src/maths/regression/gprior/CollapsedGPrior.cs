@@ -270,12 +270,13 @@ public sealed class GPriorConditional
     /// <list type="bullet">
     ///   <item>Qr = We, with e = y − Zμ the posterior-mean residual, and rᵀQr = S.</item>
     ///   <item>The unit's block is Q_UU = W_U − W_U Z_U A⁻¹ Z_Uᵀ W_U: m solves with the factor.</item>
-    ///   <item>The rest follows <see cref="LeaveOutPredictive"/>, a Student t with n − m degrees of freedom under the improper
-    ///   1/σ² prior.</item>
+    ///   <item>The rest follows <see cref="LeaveOutPredictive"/>, a Student t with 2a + n − m degrees of freedom under
+    ///   σ²'s prior IG(a, b); null <paramref name="sigmaPrior"/> is the improper 1/σ², a = b = 0.</item>
     /// </list>
     /// Untempered only. <paramref name="weights"/> are the fit's (null for W = I).
     /// </summary>
-    public double LeaveOutLogDensity(double[,] design, ReadOnlySpan<double> y, double[]? weights, int[] unit)
+    public double LeaveOutLogDensity(InverseGamma? sigmaPrior, double[,] design, ReadOnlySpan<double> y, double[]? weights,
+                                     int[] unit)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(unit);
@@ -304,7 +305,7 @@ public sealed class GPriorConditional
                 for (int j = 0; j < p; j++) quadratic += design[unit[a], j] * solved[b][j];
                 block[a, b] = (a == b ? w[a] : 0.0) - w[a] * w[b] * CovarianceScale * quadratic;
             }
-        return LeaveOutPredictive.StudentT(block, qr, S, Rows);
+        return LeaveOutPredictive.StudentT(block, qr, S, Rows, sigmaPrior?.Shape ?? 0.0, sigmaPrior?.Scale ?? 0.0);
     }
 
     /// <summary>

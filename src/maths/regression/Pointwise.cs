@@ -125,10 +125,12 @@ public enum PointwiseContent
     /// against their posterior given the observations outside the unit, so each term is the leave-unit-out predictive
     /// log p(y_unit | y_rest, structure). PSIS-LOO reads it as the conditional term of a non-factorized model (Bürkner,
     /// Gabry &amp; Vehtari 2021). WAIC does not read it, since its terms must condition on the unit's own data.
-    /// Its importance ratios vary only with the structure. Where the structure is discrete, as BARS's knots are, the chain
-    /// revisits a few values, and the Pareto fit reads that lumpiness as a heavy tail. So k̂ runs pessimistic while the
-    /// estimate holds: on a BARS fit the elpd agreed with the retained content's to 0.006 nats per unit, with 30 units
-    /// above k̂ = 0.5 against 5.
+    /// Its importance ratios vary only with the structure, the chain's slow part, since the fast parts are integrated, so
+    /// they clump. A discrete structure is revisited (BARS's knots); a Metropolis walk repeats its state on rejection and
+    /// drifts slowly (BGP's bandwidth). The largest ratios then come from a few clumps, and the Pareto fit reads them as a
+    /// heavy tail. So k̂ runs pessimistic while the estimate holds. On a BARS fit the elpd agreed with the retained
+    /// content's to 0.006 nats per unit, with 30 units above k̂ = 0.5 against 5. On a BGP fit with a known σ², every unit
+    /// was within 0.02 nats of exact LOO by quadrature, and the three units above k̂ = 0.7 were within 0.003.
     /// </summary>
     CollapsedPredictive,
 }

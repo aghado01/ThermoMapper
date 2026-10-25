@@ -61,7 +61,7 @@ public static class PredictiveChecks
     /// With leave-unit-out terms (the collapsed content), the same arithmetic gives the non-factorized model's PSIS-LOO
     /// (Bürkner, Gabry &amp; Vehtari 2021): the ratios are 1/p(y_u | y_rest, structure), and elpd_u estimates log
     /// p(y_u | y_rest). The effective number of parameters, lppd − elpd, then has no in-sample lppd to subtract from and is
-    /// NaN. When those ratios vary only with a discrete structure, k̂ is pessimistic (see
+    /// NaN. Those ratios vary only with the chain's slow part and clump, which makes k̂ pessimistic (see
     /// <see cref="PointwiseContent.CollapsedPredictive"/>). A tail whose largest ratios tie has k̂ = −∞: bounded in the
     /// sample, it is left unsmoothed.
     /// </para>

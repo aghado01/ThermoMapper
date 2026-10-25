@@ -240,6 +240,50 @@ public sealed class GpRegression
     }
 
     /// <summary>
+    /// Each unit's leave-unit-out predictive log p(y_U | y_rest, t, η) at one fit (OQ17's collapsed content): f, the
+    /// constant mean and, for an unknown scale, s² are integrated out against their posterior given the observations
+    /// outside the unit. The flat mean leaves the projected precision P = R⁻¹ − R⁻¹11ᵀR⁻¹/1ᵀR⁻¹1, whose PY is the fit's α
+    /// and YᵀPY its Q. A known σ² gives a Gaussian. An unknown scale under 1/s² gives a Student t over n − 1 effective
+    /// observations. Either way each term is the evidence difference log p(Y | t, η) − log p(Y_rest | t, η). One refit and
+    /// one inverse, O(n³), serve every unit. A unit must leave one observation outside it, two for an unknown scale.
+    /// </summary>
+    public double[] LeaveOutLogDensities(GpFit fit, UnitPartition units)
+    {
+        ArgumentNullException.ThrowIfNull(fit);
+        ArgumentNullException.ThrowIfNull(units);
+        if (units.Observations != _n) throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
+        if (fit.Alpha.Length != _n) throw new ArgumentException("The fit is not of this GP's data.", nameof(fit));
+        GpFactoredFit factored = Refit(fit);
+        double[] alpha = factored.Fit.Alpha, kInvOne = factored.KInvOne;
+        double oneKOne = factored.OneKOne;
+        var rInv = new double[_n, _n];
+        factored.Factor.WriteInverseTo(rInv);
+        var terms = new double[units.Units];
+        for (int u = 0; u < units.Units; u++)
+        {
+            int[] members = units.Members[u];
+            int m = members.Length;
+            if (m >= _n) throw new ArgumentException("A unit must leave some observations outside it.", nameof(units));
+            var block = new double[m, m];   // P_UU
+            var pr = new double[m];         // (PY)_U = α_U
+            for (int a = 0; a < m; a++)
+            {
+                int i = members[a];
+                pr[a] = alpha[i];
+                for (int b = 0; b < m; b++)
+                {
+                    int j = members[b];
+                    block[a, b] = rInv[i, j] - kInvOne[i] * kInvOne[j] / oneKOne;
+                }
+            }
+            terms[u] = NoiseModel == GpNoiseModel.Known
+                ? LeaveOutPredictive.Gaussian(block, pr)
+                : LeaveOutPredictive.StudentT(block, pr, factored.Fit.Quadratic, _n - 1);
+        }
+        return terms;
+    }
+
+    /// <summary>
     /// The conditional variance of the regression function f(x*) given the bandwidth, at each row of
     /// <paramref name="xTest"/> (original units), with the constant mean integrated out under its flat prior:
     /// Var = k(x*,x*) − k*ᵀK⁻¹k* + (1 − 1ᵀK⁻¹k*)² / 1ᵀK⁻¹1 (universal kriging; Rasmussen &amp; Williams 2006, §2.7).

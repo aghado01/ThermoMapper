@@ -78,9 +78,11 @@ public sealed class CollapsedPredictiveTests
         return logDet;
     }
 
-    // ln p(y_U | y_rest) from the joint marginal y | σ² ~ N(m, σ²Σ) under 1/σ², densely: a multivariate t with n − m
-    // degrees of freedom, location m_U + Σ_UR Σ_RR⁻¹ r_R, and scale (S_R/ν)(Σ_UU − Σ_UR Σ_RR⁻¹ Σ_RU), S_R = r_Rᵀ Σ_RR⁻¹ r_R.
-    private static double DenseLeaveOut(double[,] sigma, double[] mean, double[] y, int[] unit)
+    // ln p(y_U | y_rest) from the joint marginal y | σ² ~ N(m, σ²Σ) under σ² ~ IG(a, b), densely: a multivariate t with
+    // ν = 2a + n − m degrees of freedom, location m_U + Σ_UR Σ_RR⁻¹ r_R, and scale ((2b + S_R)/ν)(Σ_UU − Σ_UR Σ_RR⁻¹ Σ_RU),
+    // S_R = r_Rᵀ Σ_RR⁻¹ r_R. a = b = 0 is the improper 1/σ².
+    private static double DenseLeaveOut(double[,] sigma, double[] mean, double[] y, int[] unit,
+                                        double priorShape = 0.0, double priorScale = 0.0)
     {
         int n = y.Length, m = unit.Length;
         int[] rest = Enumerable.Range(0, n).Except(unit).ToArray();
@@ -108,12 +110,12 @@ public sealed class CollapsedPredictiveTests
                 cond[a, c] = v;
             }
         }
-        double nu = n - m;
+        double nu = 2.0 * priorShape + n - m;
         var psi = new double[m, m];
-        for (int a = 0; a < m; a++) for (int c = 0; c < m; c++) psi[a, c] = sRest / nu * cond[a, c];
+        for (int i = 0; i < m; i++) for (int c = 0; c < m; c++) psi[i, c] = (2.0 * priorScale + sRest) / nu * cond[i, c];
         double[,] psiInv = Inverse(psi);
         double q = 0.0;
-        for (int a = 0; a < m; a++) for (int c = 0; c < m; c++) q += delta[a] * psiInv[a, c] * delta[c];
+        for (int i = 0; i < m; i++) for (int c = 0; c < m; c++) q += delta[i] * psiInv[i, c] * delta[c];
         return SpecialFunctions.LogGamma(0.5 * (nu + m)) - SpecialFunctions.LogGamma(0.5 * nu) - 0.5 * m * Math.Log(nu * Math.PI)
              - 0.5 * LogDet(psi) - 0.5 * (nu + m) * Math.Log(1.0 + q / nu);
     }
@@ -148,9 +150,18 @@ public sealed class CollapsedPredictiveTests
 
         IConditionalFit fit = new WeightedNormalModel(centre).FitConditional(z, y, w);
         double[] single = fit.LeaveOutLogDensities(UnitPartition.EachObservation(n))!;
-        for (int i = 0; i < n; i += 3) Assert.Equal(DenseLeaveOut(sigma, mean, y, [i]), single[i], 9);
+        for (int i = 0; i < n; i += 3) Assert.Equal(DenseLeaveOut(sigma, mean, y, [i]), single[i], 1e-9);
         double[] blocks = fit.LeaveOutLogDensities(UnitPartition.ConsecutiveBlocks(10, 4))!;
-        for (int u = 0; u < 10; u += 2) Assert.Equal(DenseLeaveOut(sigma, mean, y, [4 * u, 4 * u + 1, 4 * u + 2, 4 * u + 3]), blocks[u], 9);
+        for (int u = 0; u < 10; u += 2) Assert.Equal(DenseLeaveOut(sigma, mean, y, [4 * u, 4 * u + 1, 4 * u + 2, 4 * u + 3]), blocks[u], 1e-9);
+
+        // A proper σ² prior adds 2a degrees of freedom and 2b to the scale's sum of squares.
+        GPriorConditional conditional = (weighted
+            ? BandedGPrior.Fit(new BandedDesign(z), y, w!, tau, _ => true, centre)
+            : BandedGPrior.Fit(new BandedDesign(z), y, _ => true, centre))!.At(tau);
+        var prior = InverseGamma.ShapeScale(2.5, 0.3);
+        for (int i = 1; i < n; i += 5)
+            Assert.Equal(DenseLeaveOut(sigma, mean, y, [i], 2.5, 0.3), conditional.LeaveOutLogDensity(prior, z, y, w, [i]), 1e-9);
+        Assert.Equal(DenseLeaveOut(sigma, mean, y, [8, 9, 10], 2.5, 0.3), conditional.LeaveOutLogDensity(prior, z, y, w, [8, 9, 10]), 1e-9);
     }
 
     [Fact]

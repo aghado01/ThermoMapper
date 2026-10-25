@@ -304,6 +304,42 @@ public sealed class BgpSampler : IEnsembleModel<double>
                              _unknownScale ? summary.Monitored[1] : null);
     }
 
+    /// <summary>
+    /// The run's pointwise density (OQ17) in the collapsed content: per draw and unit, the leave-unit-out predictive
+    /// log p(y_U | y_rest, t, η), with f, the constant mean and s² integrated out (<see cref="GpRegression.LeaveOutLogDensities"/>).
+    /// It is BGP's one content, since f is integrated and never drawn. PSIS-LOO reads it; WAIC refuses it. Draws that
+    /// repeat their predecessor's (t, η), as a rejected proposal does, reuse its row, so a run costs one O(n³) refit per
+    /// accepted state.
+    /// </summary>
+    public PointwiseLogDensity PointwiseLogDensity(BgpResult result, UnitPartition? units = null)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        UnitPartition partition = units ?? UnitPartition.EachObservation(_gp.Count);
+        if (partition.Observations != _gp.Count)
+            throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
+        var values = new double[result.Draws, partition.Units];
+        double[]? terms = null;
+        GpFit? previous = null;
+        int row = 0;
+        foreach (IReadOnlyList<BgpDraw> chain in result.BandwidthDraws)
+            foreach (BgpDraw d in chain)
+            {
+                if (previous is null || d.Fit.Bandwidth != previous.Bandwidth || d.Fit.NoiseRatio != previous.NoiseRatio)
+                {
+                    terms = _gp.LeaveOutLogDensities(d.Fit, partition);
+                    previous = d.Fit;
+                }
+                for (int u = 0; u < partition.Units; u++) values[row, u] = terms![u];
+                row++;
+            }
+        var latents = new List<LatentReport> { new("bandwidth t", LatentScope.Global, LatentTreatment.Conditioned) };
+        if (_unknownScale) latents.Add(new("noise ratio η", LatentScope.Global, LatentTreatment.Conditioned));
+        latents.Add(new("regression function f", LatentScope.Global, LatentTreatment.IntegratedGivenOthers));
+        latents.Add(new("constant mean m", LatentScope.Global, LatentTreatment.IntegratedGivenOthers));
+        if (_unknownScale) latents.Add(new("signal variance s²", LatentScope.Global, LatentTreatment.IntegratedGivenOthers));
+        return new PointwiseLogDensity(values, partition, latents);
+    }
+
     private static double Quantile(List<double> sorted, double q)
     {
         int n = sorted.Count;

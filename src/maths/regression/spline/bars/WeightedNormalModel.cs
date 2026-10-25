@@ -149,7 +149,7 @@ public sealed class WeightedNormalModel : IObservationModel
                 throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
             var values = new double[units.Units];
             if (c is null || !(c.S > 0.0)) { Array.Fill(values, double.NaN); return values; }
-            for (int u = 0; u < units.Units; u++) values[u] = c.LeaveOutLogDensity(design, y, weights, units.Members[u]);
+            for (int u = 0; u < units.Units; u++) values[u] = c.LeaveOutLogDensity(null, design, y, weights, units.Members[u]);
             return values;
         }
     }
