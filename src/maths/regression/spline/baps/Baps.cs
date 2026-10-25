@@ -676,7 +676,7 @@ public sealed class Baps
             new("coefficients β", LatentScope.Global, LatentTreatment.Conditioned),
             new("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned),
         };
-        return new PointwiseLogDensity(values, partition, latents);
+        return new PointwiseLogDensity(values, partition, latents, ChainLengths.Of(result.PosteriorDraws));
     }
 
     private double ResidualSS(double[] beta)

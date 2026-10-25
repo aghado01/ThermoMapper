@@ -337,7 +337,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
         latents.Add(new("regression function f", LatentScope.Global, LatentTreatment.IntegratedGivenOthers));
         latents.Add(new("constant mean m", LatentScope.Global, LatentTreatment.IntegratedGivenOthers));
         if (_unknownScale) latents.Add(new("signal variance s²", LatentScope.Global, LatentTreatment.IntegratedGivenOthers));
-        return new PointwiseLogDensity(values, partition, latents);
+        return new PointwiseLogDensity(values, partition, latents, ChainLengths.Of(result.BandwidthDraws));
     }
 
     private static double Quantile(List<double> sorted, double q)

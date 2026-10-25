@@ -69,6 +69,56 @@ public sealed class ConvergenceDiagnosticsTests
         if (phi > 0.0) Assert.InRange(d.TailEss.Value, d.BulkEss.Value, total);
     }
 
+    /// <summary>
+    /// The mean ESS (posterior's ess_mean, which loo's relative efficiency reads) has the AR(1) theory's value on Gaussian
+    /// draws and ignores an affine map. Unlike the bulk ESS it reads a nonlinear monotone map: y = eˣ of a standard AR(1)
+    /// has lag-k correlation (e^{φᵏ} − 1)/(e − 1), so its ESS is S/τ with τ = 1 + 2Σₖ (e^{φᵏ} − 1)/(e − 1).
+    /// </summary>
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(0.9)]
+    [InlineData(-0.5)]
+    public void MeanEss_MatchesTheAr1Theory_AndReadsTheScale(double phi)
+    {
+        double[][] chains = Ar1(4, 20_000, phi, seed: 3);
+        double total = 4 * 20_000.0;
+        EssDiagnostic mean = ChainDiagnostics.MeanEss(chains);
+        Assert.Equal(DiagnosticState.Estimated, mean.State);
+        Assert.InRange(mean.Value / (total * (1.0 - phi) / (1.0 + phi)), 0.88, 1.12);
+
+        double[][] Map(Func<double, double> f) => Array.ConvertAll(chains, c => Array.ConvertAll(c, v => f(v)));
+        Assert.Equal(mean.Value, ChainDiagnostics.MeanEss(Map(v => 3.0 - 2.0 * v)).Value, 1e-9 * mean.Value);
+
+        double tau = 1.0;
+        for (int k = 1; k < 400; k++) tau += 2.0 * (Math.Exp(Math.Pow(phi, k)) - 1.0) / (Math.E - 1.0);
+        double[][] lognormal = Map(Math.Exp);
+        EssDiagnostic meanExp = ChainDiagnostics.MeanEss(lognormal);
+        _out.WriteLine($"[mean ess] φ = {phi}: x {mean.Value:F0}; eˣ {meanExp.Value:F0} against theory {total / tau:F0}");
+        Assert.InRange(meanExp.Value / (total / tau), 0.85, 1.15);
+        Assert.Equal(ChainDiagnostics.Diagnose(chains).BulkEss.Value, ChainDiagnostics.Diagnose(lognormal).BulkEss.Value, 1e-9);
+    }
+
+    [Fact]
+    public void MeanEss_FailurePolicy()
+    {
+        double[][] Fill(int c, int n, Func<int, int, double> f)
+        {
+            var x = new double[c][];
+            for (int j = 0; j < c; j++) { x[j] = new double[n]; for (int i = 0; i < n; i++) x[j][i] = f(j, i); }
+            return x;
+        }
+
+        Assert.Equal(DiagnosticState.Constant, ChainDiagnostics.MeanEss(Fill(4, 100, (_, _) => 0.1)).State);
+        Assert.Equal(DiagnosticState.Unavailable, ChainDiagnostics.MeanEss(Fill(4, 3, (_, i) => i)).State);
+        Assert.Equal(DiagnosticState.Unavailable,
+                     ChainDiagnostics.MeanEss(Fill(4, 100, (j, i) => j == 2 && i == 7 ? double.NaN : i)).State);
+        // Each split chain constant at its own value: eight split chains carry about four effective draws.
+        EssDiagnostic frozen = ChainDiagnostics.MeanEss(Fill(4, 100, (j, _) => j));
+        Assert.Equal(DiagnosticState.Estimated, frozen.State);
+        Assert.InRange(frozen.Value, 3.0, 6.0);
+        Assert.Throws<ArgumentException>(() => ChainDiagnostics.MeanEss([new double[10], new double[11]]));
+    }
+
     [Fact]
     public void FoldedRHat_CatchesAScaleMismatch_ThatClassicRHatMisses()
     {

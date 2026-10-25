@@ -127,6 +127,32 @@ public static partial class ChainDiagnostics
         return new ConvergenceDiagnostic(RHatDiagnostic.Worst(both), bulkRHat, tailRHat, bulkEss, tailEss);
     }
 
+    /// <summary>
+    /// The effective sample size of the mean of one scalar functional: Stan's estimator on split chains without rank
+    /// normalization (the posterior package's <c>ess_mean</c>), each row of <paramref name="chains"/> one chain's draws,
+    /// all of the same length. Unlike the bulk ESS of <see cref="Diagnose"/> it changes under a nonlinear monotone map,
+    /// as the precision of a mean does. The loo package's relative efficiency reads it. Every draw the same is
+    /// <see cref="DiagnosticState.Constant"/>; fewer than four draws per chain, or a non-finite draw, is
+    /// <see cref="DiagnosticState.Unavailable"/>. Split chains each constant at different values leave an estimate near
+    /// the number of split chains over two.
+    /// </summary>
+    public static EssDiagnostic MeanEss(double[][] chains)
+    {
+        ArgumentNullException.ThrowIfNull(chains);
+        if (chains.Length < 1) return EssDiagnostic.Unavailable;
+        int n = chains[0].Length;
+        foreach (double[] chain in chains)
+        {
+            ArgumentNullException.ThrowIfNull(chain);
+            if (chain.Length != n) throw new ArgumentException("Every chain must hold the same number of draws.", nameof(chains));
+            foreach (double v in chain)
+                if (!double.IsFinite(v)) return EssDiagnostic.Unavailable;
+        }
+        if (n < 4) return EssDiagnostic.Unavailable;
+        double[][] split = Split(chains);
+        return Spread(split) == DiagnosticState.Constant ? EssDiagnostic.Constant : StanEss(split);
+    }
+
     // Each chain's first and last ⌊n/2⌋ draws (an odd middle draw is dropped).
     private static double[][] Split(double[][] chains)
     {

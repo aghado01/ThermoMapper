@@ -130,7 +130,9 @@ public enum PointwiseContent
     /// drifts slowly (BGP's bandwidth). The largest ratios then come from a few clumps, and the Pareto fit reads them as a
     /// heavy tail. So k̂ runs pessimistic while the estimate holds. On a BARS fit the elpd agreed with the retained
     /// content's to 0.006 nats per unit, with 30 units above k̂ = 0.5 against 5. On a BGP fit with a known σ², every unit
-    /// was within 0.02 nats of exact LOO by quadrature, and the three units above k̂ = 0.7 were within 0.003.
+    /// was within 0.02 nats of exact LOO by quadrature, and the units above k̂ = 0.7 were within 0.003. PSIS's relative
+    /// efficiency, which lengthens a slowly mixing unit's tail, does not repair it: over four seeds it lowered the count on
+    /// some runs and raised it on others. It does make the Monte Carlo errors right.
     /// </summary>
     CollapsedPredictive,
 }
@@ -145,10 +147,32 @@ public sealed record LatentReport(string Name, LatentScope Scope, LatentTreatmen
 /// on a seen curve); <see cref="Latents"/> says which latents were treated which way, so a consumer can check the question
 /// it answers.
 /// </summary>
-public sealed record PointwiseLogDensity(double[,] Values, UnitPartition Units, IReadOnlyList<LatentReport> Latents)
+/// <param name="Values">The draws × units matrix of log terms.</param>
+/// <param name="Units">The partition the terms were computed for.</param>
+/// <param name="Latents">How each latent was treated.</param>
+/// <param name="ChainLengths">The draws per chain, in row order, when the draws come from Markov chains; null for
+/// independent draws. PSIS-LOO reads it for each unit's relative efficiency.</param>
+public sealed record PointwiseLogDensity(double[,] Values, UnitPartition Units, IReadOnlyList<LatentReport> Latents,
+                                         IReadOnlyList<int>? ChainLengths = null)
 {
+    /// <summary>The draws per chain, in row order; null for independent draws. They must sum to <see cref="Draws"/>.</summary>
+    public IReadOnlyList<int>? ChainLengths { get; init; } = CheckChains(ChainLengths, Values);
+
     /// <summary>The number of draws S.</summary>
     public int Draws => Values.GetLength(0);
+
+    private static IReadOnlyList<int>? CheckChains(IReadOnlyList<int>? lengths, double[,] values)
+    {
+        if (lengths is null) return null;
+        long total = 0;
+        foreach (int length in lengths)
+        {
+            if (length < 1) throw new ArgumentException("Every chain must hold at least one draw.", nameof(ChainLengths));
+            total += length;
+        }
+        if (total != values.GetLength(0)) throw new ArgumentException("The chain lengths must sum to the draws.", nameof(ChainLengths));
+        return lengths;
+    }
 
     /// <summary>Whether the terms are leave-unit-out predictives (some latent was <see cref="LatentTreatment.IntegratedGivenOthers"/>),
     /// as the collapsed content's are.</summary>
@@ -160,6 +184,17 @@ public sealed record PointwiseLogDensity(double[,] Values, UnitPartition Units, 
                 if (latent.Treatment == LatentTreatment.IntegratedGivenOthers) return true;
             return false;
         }
+    }
+}
+
+/// <summary>The <see cref="PointwiseLogDensity.ChainLengths"/> of a result that holds its draws per chain.</summary>
+internal static class ChainLengths
+{
+    public static int[] Of<T>(IReadOnlyList<IReadOnlyList<T>> chains)
+    {
+        var lengths = new int[chains.Count];
+        for (int c = 0; c < lengths.Length; c++) lengths[c] = chains[c].Count;
+        return lengths;
     }
 }
 

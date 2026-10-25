@@ -120,6 +120,9 @@ public sealed class BgpPointwiseTests
     /// log p(yᵢ | y₋ᵢ) = log ∫p(Y | t)p(t)dt − log ∫p(Y₋ᵢ | t)p(t)dt, independent of the chain. PSIS-LOO on the collapsed
     /// terms matches it per unit, and that includes the units its k̂ flags. Those flags come from clumping: the terms vary
     /// only with t, the chain's slow part, so the largest ratios come from a few excursions and the rejections' repeats.
+    /// The Monte Carlo errors hold too. With the chains' relative efficiency the errors against exact LOO are about one
+    /// reported error each (rms 0.5–1.3 over five runs); read as independent draws, the reported errors are 2.3–3 times
+    /// smaller.
     /// </summary>
     [Fact]
     public void PsisLoo_MatchesExactLoo_ByQuadratureOverTheBandwidth()
@@ -129,8 +132,9 @@ public sealed class BgpPointwiseTests
         GpRegression gp = Gp(x, y, unknownScale: false);
         var prior = new EmpiricalBayesBandwidthPrior(gp);
         var sampler = new BgpSampler(gp, prior);
-        PredictiveCheck loo = PredictiveChecks.PsisLoo(
-            sampler.PointwiseLogDensity(sampler.Run(x, draws: 1000, burn: 200, seed: 4, chains: 2)));
+        PointwiseLogDensity density = sampler.PointwiseLogDensity(sampler.Run(x, draws: 1000, burn: 200, seed: 4, chains: 2));
+        PredictiveCheck loo = PredictiveChecks.PsisLoo(density);
+        PredictiveCheck asIndependent = PredictiveChecks.PsisLoo(density with { ChainLengths = null });
 
         // The midpoint rule in log t over the prior's support, with the Jacobian t; the step cancels in each difference.
         const int grid = 800;
@@ -154,6 +158,11 @@ public sealed class BgpPointwiseTests
         Assert.All(delta, d => Assert.True(Math.Abs(d) < 0.03, $"Δᵢ {d:F5}"));
         Assert.True(Math.Abs(delta.Sum()) < 0.15, $"Σ Δ {delta.Sum():F4}");
         Assert.All(flagged, d => Assert.True(Math.Abs(d) < 0.01, $"a flagged unit's Δ {d:F5}"));
+
+        double Z(PredictiveCheck c) => Math.Sqrt(delta.Zip(c.MonteCarloErrors!, (d, e) => d / e * (d / e)).Average());
+        _out.WriteLine($"rms error over the reported error: {Z(loo):F2} with r_eff (mean {loo.RelativeEfficiency!.Average():F2}), {Z(asIndependent):F2} as independent");
+        Assert.InRange(Z(loo), 0.3, 1.5);
+        Assert.True(Z(asIndependent) > 2.0 * Z(loo), $"{Z(asIndependent):F2} against {Z(loo):F2}");
     }
 
     [Fact]

@@ -534,7 +534,7 @@ public sealed class HierarchicalPSpline
             new LatentReport("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned),
             new LatentReport("deviation variance τ_u²", LatentScope.Global, LatentTreatment.Conditioned),
         };
-        return new PointwiseLogDensity(values, partition, latents);
+        return new PointwiseLogDensity(values, partition, latents, ChainLengths.Of(result.PosteriorDraws));
     }
 
     /// <summary>

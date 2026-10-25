@@ -538,7 +538,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned));
             if (_resampler is not null) latents.Add(new LatentReport("robust weights wᵢ", LatentScope.Observation, LatentTreatment.Integrated));
         }
-        return new PointwiseLogDensity(values, partition, latents);
+        return new PointwiseLogDensity(values, partition, latents, ChainLengths.Of(result.Draws));
     }
 
     // The collapsed content: each draw's knots refitted, and its fit's leave-unit-out predictive per unit.
@@ -568,7 +568,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             new("coefficients β", LatentScope.Global, LatentTreatment.IntegratedGivenOthers),
             new("noise variance σ²", LatentScope.Global, LatentTreatment.IntegratedGivenOthers),
         };
-        return new PointwiseLogDensity(values, partition, latents);
+        return new PointwiseLogDensity(values, partition, latents, ChainLengths.Of(result.Draws));
     }
 
     // The ladders' sampling-phase statistics, averaged over chains; null for an untempered run.

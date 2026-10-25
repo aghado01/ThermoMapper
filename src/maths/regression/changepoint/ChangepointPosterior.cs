@@ -153,7 +153,7 @@ public sealed class ChangepointPosterior
             new LatentReport("segmentation", LatentScope.Global, LatentTreatment.Conditioned),
             new LatentReport("segment levels", LatentScope.Group, tally.Result),
         };
-        return new PointwiseLogDensity(values, partition, latents);
+        return new PointwiseLogDensity(values, partition, latents);   // exact draws are independent: no chains
     }
 
     /// <summary><paramref name="draws"/> exact, independent draws on one stream seeded by <paramref name="seed"/>.</summary>
