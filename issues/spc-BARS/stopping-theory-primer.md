@@ -256,9 +256,11 @@ entropy) suit it better.
 | C22 | The toy dump's bracket clips its cold edge | User observation; §12.7 | Checked here (§12.8), and confirmed by the extended run (§12.9): the cold side of the stripe split lies below the old T_lo; not a miscomputed bracket, and not components | done |
 | C23 | A spanning tree's S₂ is a closed-form lower bound on S₂(T) | §12.8 | Checked here (comparison inequality; all 48 grid points on both datasets) | Lean (L4) |
 | C24 | A split through a sparse bridging population frees those spins too, so it is sharper than a bare split, towards a melt | §12.9 | Derived from E1, unverified | Toys that vary the bridge density |
-| C25 | Per-interval ΔS₂ tests lose power at fine volleys; a test that descends the dyadic tree keeps it | §12.9, §12.14 | Observed on both schedules; a first-cut descending test holds 8 of 9 bump peaks at every volley | Q4 design |
+| C25 | Per-interval ΔS₂ tests lose power at fine volleys; a test that descends the dyadic tree keeps it | §12.9, §12.14, §12.17 | Designed (§12.17: hereditary quiet, α spent over levels, narrowest-over-threshold localization); no quiet certification contradicted by an independent sweep | More datasets; replicate allocation for indeterminate blocks |
 | C26 | BARS registers a bump at about one point per FWHM, roughly placed; its prominence gate, not the grid, drops weak bumps | §12.10, §12.14 | Observed (E4 on both schedules, equal weights): 0.2–2.4 points per FWHM, the low end from lucky lattice phases | E3; weighted fits |
 | C27 | Registration depends on the lattice's phase as well as its density, so a minimum should plan on the worst phase | §12.14 | Observed (n₀ = 2 against n₀ = 10 lattices) | Shifted lattices at fixed n₀ |
+| C28 | From about 145 points the default BARS fits sit at the replicate noise floor, so tighter fits need replicates, not settings | §12.18 | Observed (against an independent sweep) | More replicates on one curve |
+| C29 | Replicate weights through the robust-weight seam over-shrink, because the unweighted g-prior borrows the weighted σ² | §12.18 | Observed harm; mechanism a hypothesis | A weighted entry point with its own prior scale |
 
 ---
 
@@ -893,3 +895,103 @@ From the 289-point cluster-size histograms (cluster counts per draw by size bin)
     the melt, since it moves both temperatures by the same factor. The rebuilt graph's own bandwidth changes the
     contrast between near and far edges nonlinearly, and that can.
   - If so, regime B for short-lived clusters is a re-graphed subset, not a denser sweep.
+
+### 12.17 The descending test (Q4), designed and checked
+
+**The design.**
+- **Each interval is tested once.** Its drop ΔS₂ and Welch standard error are fixed once both endpoints exist, and new
+  volleys only add children. So the only multiplicity is the growing tree.
+  - Levels spend α_v = 6α/(π²(v + 1)²), split evenly over the level's intervals.
+  - The union bound then holds at whatever volley the schedule stops. That is the anytime validity §6 asked for,
+    without an e-process.
+- **Three states,** with t quantiles at the Welch degrees of freedom (8 replicates per temperature):
+  - **Q, certified quiet:** ΔS₂ + t·SE < floor. It is hereditary: S₂ is monotone, so every sub-interval is quiet in
+    truth, and descendants inherit Q untested.
+  - **A, active:** ΔS₂ − t·SE > floor.
+  - **I, indeterminate:** neither.
+- **Localization.** Events are the maximal runs of non-Q intervals at the current volley. Each is localized
+  narrowest-over-threshold, after Baranowski, Chen & Fryzlewicz's NOT (cited from memory): at the narrowest dyadic
+  interval, or adjacent pair, inside it whose lower bound clears the floor. An event spread over many fine intervals is
+  then reported at the coarser width where its mass still concentrates, which ends C25's fragmentation.
+- **What an indeterminate block means.** A block with no active interval is a measurement verdict, not a resolution
+  one: it needs more replicates there, not more volleys (the two knobs of §2).
+
+**Checked on the 10-point schedule at α = 0.05,** against an independent sweep at another seed (4242, same grid and
+budget):
+- **Validity.** No quiet certification on the main sweep (281 on the toy, 265 on iris, over all volleys) is contradicted
+  by the independent sweep's active bound. The two sweeps agree on 85–100% of interval states, volley by volley.
+- **Quiet share.** The certified share of ln T grows from 44% to 52% on the toy, and from 33% to 51% on iris, over
+  v0–v5.
+- **Localization on the toy.**
+  - v0–v3 report one block over the active region. From v4 it splits into the split region [0.0060, 0.0253], localized
+    to 0.08 e-folds, and the melt region [0.0304, 0.1100], localized to 0.04.
+  - The certified-quiet gap between them, [0.0253, 0.0304], is the three-stripe plateau. The clustering window falls
+    out of the certificate as a certified-quiet run between active blocks.
+- **Localization on iris.**
+  - The main block [0.0304, 0.1411] localizes to 0.04 e-folds by v5.
+  - The stage-1 plateau stays largely indeterminate. Setosa and its partner shed loose points continuously, about 0.1
+    of S₂ over two e-folds, which at 8 replicates keeps many fine intervals' bands across the floor. More replicates
+    there would certify it.
+- **Inventory, against the independent sweep's bump peaks.**
+  - Iris: 5 of 5 lie inside non-quiet intervals at v5.
+  - Toy: 1 of 3. The MagnetizationVariance split peak is inside. The FkReduced lifetime peak sits on the certified
+    plateau, as a lifetime should (§12.11). The heat-capacity melt peak (T = 0.117) sits where S₂ has stopped moving,
+    because by then the stripes have broken into fragments below the 160-point floor.
+  - The certificate certifies the size floor, not every χ bump.
+
+### 12.18 The BARS settings sweep, scored against the independent sweep
+
+**The run.**
+- **What varied.** One knob at a time from BARS's defaults, on every volley of the 10-point schedule (10 to 289 points),
+  for FkReduced, MagnetizationVariance and heat capacity on both datasets: 10 settings × 6 volleys × 3 curves × 2
+  datasets.
+- **The truth** is the independent sweep (seed 4242), which no fit saw.
+  - Error is the RMSE against its curve, as a share of its range.
+  - Registration and coverage are scored against its bumps (by topographic prominence) and their peaks, within one dense
+    grid step.
+- **Replicate weights** entered through a fixed-weights stand-in for the robust weight block: 1/SE², with SE clamped at a
+  fifth of its median, normalized to mean 1.
+- **One combination can't run.** The engine refuses tempering together with a weight resampler (or with adaptive τ), so
+  weights-plus-tempering doesn't run.
+
+| Setting | Median error against the default | Bump registrations (of 48 bump-volleys) | Peak intervals covering the truth | Fits with fit R̂ > 1.1 (of 36) | Mean knots | Seconds per fit |
+|---|---|---|---|---|---|---|
+| Defaults | 1.00 | 28 | 79% | 14 | 5.4 | 1.5 |
+| Replicate weights | 7.37 | 3 | 100% (3 intervals) | 0 | 3.4 | 1.5 |
+| Support gate 0.5 | 1.00 | 26 | 77% | 13 | 5.9 | 1.3 |
+| Support gate 0.25 | 1.00 | 27 | 78% | 12 | 6.0 | 1.3 |
+| Poisson(10) knot prior | 0.95 | 29 | 86% | 13 | 6.2 | 1.4 |
+| Uniform knot prior, up to 20 | 1.01 | 25 | 76% | 14 | 5.6 | 1.4 |
+| Log response | 1.57 | 17 | 88% | 7 | 4.5 | 1.3 |
+| Quadratic basis | 0.97 | 24 | 71% | 18 | 5.5 | 1.1 |
+| Adaptive kernel | 1.00 | 26 | 85% | 13 | 5.5 | 1.3 |
+| Tempering, 4 rungs | 1.00 | 28 | 79% | 10 | 5.4 | 2.0 |
+
+- **From about 145 points, the default fits are already at the measurement noise** (C28).
+  - The two independent dense sweeps disagree with each other by 0.4–2.7% of the range: toy FkReduced 0.83%,
+    MagnetizationVariance 1.35%, heat capacity 2.74%; iris 0.39%, 2.64%, 2.00%.
+  - The default fits at v4 (145 points) sit at 0.7–1.9%. That is at or below the floor for MagnetizationVariance and
+    heat capacity, since smoothing beats the raw points, and slightly above it for FkReduced.
+  - A tighter fit there needs more replicates, not other settings.
+- **Settings matter at the coarse volleys.** At v1 (19 points) the default errors run 5.7–8.7%, against floors of
+  0.4–2.7%. Poisson(10) and the quadratic basis recover some of the gap:
+  - toy MagnetizationVariance 0.080 → 0.042 (quadratic, though with fit R̂ 1.11);
+  - iris FkReduced 0.063 → 0.051 (Poisson(10)).
+- **Poisson(10) is the one consistent small gain.** Its median error is 0.95 of the default's, with the most
+  registrations (29) and better coverage (86%). With tempering and with the support gate at 0.5, it also registers
+  iris's MagnetizationVariance peak a volley earlier, at v1 instead of v2.
+- **Replicate weights, as BARS takes them now, do harm** (C29; the mechanism is a hypothesis).
+  - The coefficient prior stays the unweighted g-prior, β ~ N(μ₀, mσ²(ZᵀZ)⁻¹), while σ² becomes the noise of a
+    unit-weight point.
+  - With weights spread over orders of magnitude, the flat, precisely measured stretches set σ² small. The prior then
+    shrinks the curve toward flat, peaks included.
+  - §1's replicate weights need a prior that doesn't borrow the weighted noise scale, or a different normalization,
+    before they can be used.
+- **The log response is a trade.** It gives up held-out error (1.57×) and registrations (17, since the 10% prominence
+  gate reads differently on a log scale). It gains the best location error (0.018 e-folds), the best coverage (88%) and
+  the best convergence (7 fits over R̂ 1.1, against 14).
+- **Tempering helps mixing modestly:** 10 fits over R̂ 1.1 against 14, at 1.3× the time. Iris's heat-capacity fits stay
+  unconverged under every setting (fit R̂ up to 2.95).
+- **The support gate doesn't bind** at these spacings: at 0.5 or 0.25 the errors are unchanged.
+
+This is one pre-scored pass on two datasets: exploration, not a basis for defaults.
