@@ -457,7 +457,7 @@ Added 2026-10-19. [gemini-additional-bugs.md](gemini-additional-bugs.md) compare
 | ESS computes every lag, O(Cn²) | Confirmed | Step 3.4 |
 | Acceptance rates include burn-in | Confirmed and already documented | Step 3.4 |
 | BGP fits a zero-mean GP to the raw response | Confirmed: `GpRegression.Fit` uses the response as given | The chip, item 2 (the R10 transform policy) |
-| BAPS items: single-chain hierarchical sampler, `IBandPenalty` seam, no anisotropic λ optimizer, repeated factorization in `MarginalEvidence` | The first and third already documented | The chip brief's addendum. The hierarchical sampler moved to the shell in OQ18 phase B; the seam was built 2026-10-24 (report "BARS's shared fit and the penalty seam") |
+| BAPS items: single-chain hierarchical sampler, `IBandPenalty` seam, no anisotropic λ optimizer, repeated factorization in `MarginalEvidence` | The first and third already documented | The chip brief's addendum. The hierarchical sampler moved to the shell in OQ18 phase B; the seam was built 2026-10-24 (report "BARS's shared fit and the penalty seam"); the anisotropic optimizer, anisotropic sampling and the collapsed scheme's factorization were done the same day (report "The last BAPS items: one factorization per proposal, anisotropic smoothing") |
 | `SplineExtrema` switches root finders above degree 3 | Documented design, not a defect | No action |
 | `SpectralNoiseField` is not periodic over the box | Already documented | No action |
 | `ExactChangepoint`: σ² documentation mismatch, Cauchy quadrature cost and truncation | Checked 2026-10-24: the σ² formula was already documented right; the truncation bites only under a narrow user prior; the quadrature also failed to resolve narrow posteriors, which the review did not name | Fixed in `3e29261` and `9617747` (report "ExactChangepoint review and retained posterior") |
@@ -2743,3 +2743,42 @@ At the user's request, two loose ends from the reports, before the user's own de
 - **Not built:** the triage row's other two BAPS items. There is still no anisotropic λ in the samplers (`AnisotropicTensorSpline` stays REML-only), and `Collapsed` still repeats its factorization.
 
 **Results** under the fact harness: `Maths.Regression.Tests` 348 of 348 (`20261024_165628398`), `Maths.Samplers.Tests` 96 of 96 (`20261024_170335220`). A first Samplers run, under load, failed only `Ess_IsLinearithmic`'s 10 s wall-clock limit (11.9 s); the test takes 1.1 s alone. The solution builds.
+
+### The last BAPS items: one factorization per proposal, anisotropic smoothing — 2026-10-24
+
+At the user's request, the two BAPS items the previous report left open: the collapsed scheme's repeated factorization, and anisotropic smoothing. The triage row named the second as "no anisotropic λ optimizer"; the previous report had widened it to "no anisotropic λ in the samplers". Both are now done.
+
+| Commit | Change |
+|---|---|
+| `7d90e2e` | The collapsed scheme factors once per proposal: `PenalizedSpline` caches ZᵀZ and Zᵀy, and the accepted proposal's solve serves the draw |
+| `03f44f9` | `IAnisotropicPenalty` and `PenaltySpectrum` (Bach & Klein 2025); `TensorPenalty` implements them; `AnisotropicTensorSpline` builds on it, bit-identically, and gains `RemlOptimum` (an internal box-clamped `NelderMead`) |
+| `38a870d` | `NewtonMetropolis` in `Maths.Samplers.Blocks`: Bach & Klein's Taylored update with the Hessian's eigenvalues capped at −1/π |
+| `16690e5` | `BapsScheme.AnisotropicGibbs`, with `ComponentSmoothing`: one smoothing variance per penalty component |
+| `a6b6d59` | `HierarchicalPSpline(…, anisotropicSmoothing: true)`, under every scheme |
+
+- **The collapsed scheme.**
+  - **Before:** each proposal re-assembled ZᵀZ and factored A, and each recorded draw did both again.
+  - **After:** one factorization per proposal and none per draw.
+  - **Bit-identical,** on a probe over `PenalizedSpline`, `AnisotropicTensorSpline`, BAPS (every scheme, difference and tensor penalties) and `HierarchicalPSpline`.
+  - **Speed:** at ν = 44 and 2,500 sweeps, 59 → 24 ms at n = 200 and 314 → 20 ms at n = 2,000; the cost no longer grows with n.
+  - **Considered and declined:** a spectral evidence in O(ν) per proposal, from the generalized eigenbasis of (P, ZᵀZ + P). It would not be bit-identical, and it would not extend to several λ, where a band factorization per evaluation is needed anyway.
+- **The REML optimum.**
+  - **The search:** Nelder–Mead over (ln λ_x, ln λ_y), from each axis's balance point tr(ZᵀZ)/tr(P_axis), within 10^±8 of it.
+  - **Edges:** an axis that ends at the box's edge is flagged; the evidence levels off when the data have no curvature along that axis.
+  - **Measured:** 141 evaluations on a test surface, beating a 25 × 25 grid around the optimum. On a surface constant in x, λ_x came out 1.6·10⁵ times λ_y.
+- **Anisotropic sampling** (Bach & Klein 2025, read from arXiv 2211.16218).
+  - **Model and reduction.** Each component's τ_j² has the IG(a, b) prior BAPS gives τ². The prior's pseudo-determinant is O(ν) from the shared Kronecker eigenbasis. With one component the conditional reduces to the isotropic IG.
+  - **The update** is a Newton-proposal Metropolis step on every ln τ_j² at once, then one random-walk step per component, sd 1.
+  - **Why the random-walk steps (found while testing).** Newton steps alone are exact (one update from exact draws leaves the conditional in place to 0.04% over 8·10⁶ draws), but they stick in the conditional's exponential upper tail.
+    - On a fixed β, 4·10⁶ Newton steps never reached a region of probability 4.4·10⁻⁴, with rejection runs of 10⁴ steps, and the variance came out 7–10% low.
+    - With the random-walk steps the visit rate is 4.47·10⁻⁴, and the longest stay at one point is 8 steps.
+  - **Measured, BAPS.** On a surface gentle in x and fast in y, λ_x and λ_y have separated 95% intervals and medians within 4% of the REML optimum. The fit's error is 23% below the isotropic scheme's, with R̂ 1.001 on both log λ_j.
+  - **Measured, `HierarchicalPSpline`.** On replicate surfaces all five schemes agree within 2% on both population variances, with R̂ ≤ 1.009.
+  - **Isotropic paths:** bit-identical throughout.
+- **Not built.**
+  - The collapsed scheme stays isotropic: its uniform-edf prior has no cheap anisotropic counterpart.
+  - No Weibull(½, λ) prior on the τ_j², which Bach & Klein prefer for stability; it would be a new option beside the IG.
+  - No slice-sampling alternative to the composite update.
+  - None of these blocks a use; each is recorded in `docs/Maths/BayesianRegression.md` ("Anisotropic smoothing").
+
+**Results** under the fact harness: `Maths.Regression.Tests` 360 of 360 (`20261024_175751414`), `Maths.Samplers.Tests` 99 of 99 (`20261024_180219649`). The solution builds.
