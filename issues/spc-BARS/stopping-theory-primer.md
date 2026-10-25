@@ -629,14 +629,16 @@ bracket [0.0129, 1.031].
   prominence gate) ran on each volley's subsample of the main-budget curves of §12.9: v = 2 to 6, 5 to 65 points.
   v = 1 has 3 points, too few for a cubic.
 - **Equal weights.** The run API takes no per-point weights, so every point weighs the same (W ≡ I).
-- **v = 2 is degenerate.** At 5 points every fit returns a NaN curve and noise variance, with the knot count frozen at
-  2.0. Nothing registers there, so the table below is unaffected; the first usable fit is v = 3 (9 points).
+- **v = 2 can't be fitted.** At 5 points even the zero-knot cubic fails the support gate, so BARS refuses to start
+  (since 6bc5134 it says so; before, it returned NaN curves). The first usable fit is v = 3 (9 points).
+- **The fits below are on 6bc5134.** Before it, a chain whose overdispersed start held too many knots could stay there,
+  and that touched the 9-point fits. Rerun on the fix, every fit from v = 4 up is bit-identical and only v = 3 moved.
 - **Registration.** A bump counts as registered when a peak mode with posterior mass ≥ 0.5 falls inside the dense bump's
   FWHM. Every registration here reached mass ≥ 0.9 at once.
 
 | Bump | FWHM | First volley | h there | Points per FWHM | Location error | Interval width |
 |---|---|---|---|---|---|---|
-| toy FkReduced, T = 0.025 (the three-stripe lifetime) | 1.57 | 3 | 0.75 | 2.1 | +0.17 | 0.69 |
+| toy FkReduced, T = 0.025 (the three-stripe lifetime) | 1.57 | 3 | 0.75 | 2.1 | +0.17 | 0.72 |
 | toy MagnetizationVariance, T = 0.014 (the split) | 0.41 | 4 | 0.37 | 1.1 | +0.13 | 0.60 |
 | toy heat capacity, T = 0.110 (the melt) | 0.31 | 4 | 0.37 | 0.8 | +0.16 | 0.27 |
 | iris MagnetizationVariance, T = 0.091 | 0.24 | 5 | 0.19 | 1.3 | −0.06 | 0.36 |
@@ -648,20 +650,21 @@ Widths, errors and interval widths are in e-folds of ln T.
 - **BARS registers a bump at about one point per FWHM** (0.6–2.1). That is below Thread I's geometric two points per
   FWHM (C5), so on these data the geometric constant is conservative. The closed-form readout does what §1 says: it
   places a peak between grid points.
-- **At first registration the location is rough:** errors of 0.03–0.17 e-folds, with intervals 0.24–0.69 wide. By v = 5
+- **At first registration the location is rough:** errors of 0.03–0.17 e-folds, with intervals 0.24–0.72 wide. By v = 5
   the intervals run 0.09–0.36 wide.
 - **The location intervals cover the dense peak** (to within its own grid quantization, ±h/2) in 12 of 13 fits from
   first registration on. The exception is iris's heat capacity at v = 5, which misses by about one grid step.
-- **An under-resolved volley can put a mode in the wrong place.** At v = 3 the toy's MagnetizationVariance carries a mode
-  of mass 0.57 at T = 0.024, half an e-fold off the split: enough to report, and misplaced. Its w/h there is 0.55.
+- **An under-resolved volley spreads its mass rather than misplacing it.** At v = 3 (w/h = 0.55) the toy's
+  MagnetizationVariance splits its peak mass over three modes between T = 0.017 and 0.026, none above 0.43. A single
+  mode of mass 0.57 half an e-fold off the split, seen before 6bc5134, came from a chain stuck at its start.
 - **The one miss comes from the prominence gate, not the grid.**
   - Iris's bump at T = 0.160 rises about 5% of the curve's range above its higher neighbour, under BARS's 10% gate, and
     is one point wide even at v = 6.
   - It is plausibly setosa's melt: setosa's edges run hotter (median T* 0.037, against 0.026).
   - S₂'s flagged run at v = 6, [0.027, 0.175], covers it. The certificate doesn't let it hide; the BARS readout just
     doesn't count it. That is the division of labour of §12.7.
-- **No false bumps.** Apart from the misplaced mode above, no mode with mass ≥ 0.5 falls outside the dense features.
-  Iris's FkReduced, which has no dense bump, never gets a mode above 0.2.
+- **No false bumps.** No mode with mass ≥ 0.5 falls outside the dense features. Iris's FkReduced, which has no dense
+  bump, never gets a mode above 0.2.
 - **Not yet tested:**
   - C12's two-quiet-volleys rule, which needs each fit's predictive band at the next volley's midpoints;
   - an operating curve proper, which needs more than six bumps (E3's synthetic bumps, or more datasets);
@@ -676,8 +679,10 @@ Widths, errors and interval widths are in e-folds of ln T.
 - **The rule.** A volley is quiet when max |z| over its midpoints stays under the Bonferroni threshold
   Φ⁻¹(1 − 0.05/2m), as the argon notes have it (2.73, 2.96 and 3.16 for 8, 16 and 32 midpoints). The rule stops at the
   second quiet volley in a row.
-- **The first usable fit is v = 3,** since v = 2 is degenerate. So surprises start at volley 4, and the rule can fire at
-  volley 5 at the earliest.
+- **The first usable fit is v = 3,** since BARS can't start at 5 points. So surprises start at volley 4, and the rule
+  can fire at volley 5 at the earliest.
+- **Rerun on 6bc5134.** Only the v = 3 fits changed. Volley 4's surprises moved by at most 0.01, and every outcome below
+  is the same.
 
 | Curve | Bumps registered (E4) | max \|z\| at volley 4 / 5 / 6 | Rule fires (replicate z) | Rule fires (model z) |
 |---|---|---|---|---|
