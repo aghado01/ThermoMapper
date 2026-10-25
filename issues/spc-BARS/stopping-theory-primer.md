@@ -253,7 +253,8 @@ entropy) suit it better.
 | C19 | S₂ at the bracket ends bounds the merge mass outside the bracket | §12.5 | Checked here (a corollary of C17); usefulness open | E5, against the graph's components |
 | C20 | S₂ bounds FkReduced: inside an interval, sup \|Δχ_red\| ≤ N·ΔS₂ | §12.7 | Checked here (proof; enumeration) | Lean (L4) |
 | C21 | No monotone cluster functional ignores shedding: merge(n, n) ≤ n·max join(a) over a ∈ [n, 2n) | §12.7 | Checked here (proof) | none needed |
-| C22 | The toy dump's bracket clips its cold edge | User observation; §12.7 | Suspected (S₂ agrees) | Per-edge cut temperatures on the toy graph; size histogram at T_lo |
+| C22 | The toy dump's bracket clips its cold edge | User observation; §12.7 | Checked here (§12.8): the cold side of the stripe split lies below T_lo; not a miscomputed bracket, and not components | Rerun with T_lo about an e-fold colder |
+| C23 | A spanning tree's S₂ is a closed-form lower bound on S₂(T) | §12.8 | Checked here (comparison inequality; all 48 grid points on both datasets) | Lean (L4) |
 
 ---
 
@@ -497,3 +498,50 @@ Edwards–Sokal two-point identity).
 - **What is recorded today.** S₂ and ⟨c_max²⟩ exactly, through the FkCluster and FkReduced channels. The SW kernel's size
   histogram is log-binned (cluster counts in bins [2^k, 2^(k+1))), so it bounds the other functionals without giving
   them exactly.
+
+### 12.8 The toy's cold edge, diagnosed
+
+A scratch probe (not committed) rebuilt the parity battery's graphs: k = 10, mutual KNN, MST repair, a Gaussian kernel
+at the mean edge distance, no LMP rescaling. It read the per-edge cut temperatures T*_e = J_e/ln(q − 1) against the
+bracket [0.0129, 1.031].
+
+- **The bracket isn't miscomputed; its recipe can't see this graph's weakest significant cut.** T_lo = 0.05·T_ps is what
+  the q-only formula gives.
+- **The stripes are joined only through the sparse background in the two gaps between them.** The graph has no
+  stripe–stripe edges.
+  - The background's bonds are weak because the one global bandwidth (0.162, the mean edge distance) is set by the dense
+    stripes, and background edges are two to four times longer.
+  - Background–background edges have a median T* of 0.005, an e-fold below T_lo, and 66% of them lie below it. Stripe
+    edges have a median of 0.030, with 1% below.
+- **So the bracket cuts through the toy's defining event.**
+  - Single linkage puts the two stripe joins 0.2 and 0.3 e-folds below T_lo, each through a background–background
+    bottleneck.
+  - SW's collective binding lifts the split just inside the bracket: S₂ falls from 0.64 at T_lo to the three-stripe
+    plateau of 0.25 by T = 0.0155, two grid steps up.
+  - The split's cold side, with the stripes joined, lies colder than the bracket. That is the edge seen still rising.
+- **Below that, the background keeps ordering for several e-folds** (5% of its bonds sit 6.6 e-folds below T_lo). It is
+  a shedding tail, and matches the parity test's own note that Var(m)'s maximum sits on the sparse background's cold
+  ordering transition.
+- **Not components.** Before repair the toy has 13 components with a 3,179-point giant, an S₂ floor of 0.987. Its 12 MST
+  repair edges don't matter.
+- **Iris is clean, and shows a trap for the coverage check.**
+  - Setosa is joined to the rest by a single MST repair edge with T* ≈ 2×10⁻⁶, 8.8 e-folds below T_lo.
+  - Iris's S₂(T_lo) = 0.493 sits against a pre-repair floor of 0.504, so its bracket covers its real structure.
+  - A coverage check (C19) has to measure against the pre-repair components, or it chases the repair edge.
+- **A graph-only lower bound on S₂** (C23).
+  - Any subgraph's connectivities are at most the full graph's: dropping an edge sets its p_e to 0, and the comparison
+    inequality applies.
+  - A spanning tree's random-cluster measure is a product measure with p̃_e = p_e/(p_e + q(1 − p_e)). So S₂_tree(T) is
+    closed-form, O(N) per temperature, and S₂(T) ≥ S₂_tree(T) at every T.
+  - **Checked here:** the maximum spanning tree's S₂ lies below the measured S₂ at all 48 grid points, on both datasets.
+  - It is loose where binding is collective (the toy at T_lo: 0.14 against 0.64), since a tree breaks dense clusters at
+    single bonds.
+  - It still bounds the cold side from the graph alone. With the stripes apart, S₂ can't exceed 0.375, so
+    P(stripes apart) ≤ (1 − S₂)/0.625. The toy's tree S₂ is 0.78 one e-fold below T_lo and 0.89 two e-folds below, so
+    P(stripes apart) ≤ 0.36 and ≤ 0.18 there; the real join is warmer.
+- **What this means for the experiments.** The toy's interior is sound, from the three-stripe plateau through the melt.
+  E1–E5 on the toy need the cold end extended by about an e-fold (11 more steps at the current spacing) to hold the
+  split's cold side. The background's tail is shedding, and can stay outside.
+- **The graph-compiler link.** The background's couplings follow from one global bandwidth on data with two densities,
+  under mutual KNN. LMP rescaling, off in the parity config, is the codebase's existing fix for density inhomogeneity.
+  Whether parity wants it is a question for the graph-compiler work, not for this thread.
