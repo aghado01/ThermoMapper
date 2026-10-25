@@ -1108,6 +1108,40 @@ real, residue is the points in clusters under 5, and "correct" is the sum of the
   - Bandwidth and kernel shape don't reach this: they reweight the same edges by length.
   - The stage is still narrower than a split's width w_q ≈ 0.75. So in χ it shows as a shoulder rather than its own
     plateau, and regime A would read it from MagnetizationVariance's peak with a narrow window after it.
+- **The parity battery already reads iris at K = 5.** Its Domany 1999 iris tests (capture, the two-stage hierarchy and
+  lineage persistence) build k = 5 graphs. Only the BWD 1996 flat test and the profile dump use k = 10, which this
+  thread followed until here.
+
+### 12.21 Lineages across temperature
+
+Final assignments come from tracing clusters across temperatures, and the tree already holds the machinery under
+`src/clustering/graphical/spc/partitions/hierarchical/`:
+- **`DenseTStack`** cuts BWD's partition at every grid temperature, from pooled co-membership. It is schedule-agnostic
+  and accepts non-uniform grids.
+- **`HierarchyEom`** checks that the stack nests, restores nesting when sampling noise breaks it, bridges the stack to a
+  dendrogram and selects clusters by excess of mass.
+- **`LineagePersistence`** tracks each cluster lineage across the stack, keeping a cluster that erodes at its periphery
+  distinct from one that splits. It scores persistence as levels survived × decidedness.
+
+**How this thread's results sit under it.**
+- **Monotone connectivity makes the stack a merge tree.** Every pair connectivity τ_ij is monotone in T (C17), so the
+  edge sets kept by BWD's threshold are nested in T, in expectation, and so are their components.
+  - The T-stack is then a dendrogram, and a lineage's lifetime is the persistence of a one-parameter filtration.
+  - Nesting breaks only through sampling noise near the threshold, which is what `HierarchyEom`'s nesting gate catches,
+    or through peripheral capture's argmax step, which isn't monotone and so belongs to the zigzag engine.
+- **The certificate localizes the tree's nodes.**
+  - Active blocks of §12.17 are where splits and melts happen, the tree's nodes. Certified-quiet runs are its edges,
+    the plateaus.
+  - So regime A finds the nodes coarsely, regime B samples densely across each node with co-membership, and the T-stack
+    resolvers trace the lineages through those windows to the assignments.
+  - On iris at K = 5 that is one node near T = 0.046 (the species split) and the melt sequence after about 0.069.
+- **One interaction to settle with regime B's design** (engine side, parked).
+  - Persistence measured in levels survived depends on the grid once sampling is uneven: a lineage inside a densely
+    sampled window survives many more levels than an equally long-lived one elsewhere.
+  - The code's reason for levels over spans (an absolute span over-rewards the hot end of a log grid, a log span the
+    cold end of a linear one) holds for uniform grids. SPC × BARS's grids won't be uniform.
+  - A lifetime in ln T, or in thermodynamic length, is a property of the lineage rather than of the sampling, and would
+    keep persistence comparable across a sparse-plus-dense schedule.
 
 **The kernel's shape can't help here** (a static check on the K = 10 edge lengths, kernels matched in scale):
 - A cut edge is longer than a virginica edge 51% of the time, and longer than a versicolor edge 70% of the time.
