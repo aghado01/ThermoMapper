@@ -247,7 +247,8 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
     - The model-free consumers `PredictiveChecks.Waic` and `PsisLoo`.
     - BASS's observation model implements the same contract at its port.
   - **Built later the same day:** BAPS's retained terms (`78810a7`); the collapsed content for Normal BARS through `IConditionalFit.LeaveOutLogDensities` (`a6e8e5c`); BGP's collapsed terms, and σ²'s prior on `GPriorConditional.LeaveOutLogDensity`, which BASS's collapsed content will read (`a1f56b1`).
-  - **Not built:** the conformal consumer (SPC × BARS), the collapsed content for BAPS, `HierarchicalPSpline` and the changepoint draws, and PSIS's relative efficiency.
+  - **PSIS's relative efficiency** (`e4f4813`): the draws' chains ride on the pointwise result, and PSIS-LOO reads each unit's r_eff for its tail and Monte Carlo error, as loo does. BASS's producer sets its chains the same way.
+  - **Not built:** the conformal consumer (SPC × BARS), and the collapsed content for BAPS, `HierarchicalPSpline` and the changepoint draws.
 
 ## SMC integration
 
