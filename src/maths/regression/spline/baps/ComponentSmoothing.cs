@@ -4,6 +4,20 @@ using Maths.Samplers.Blocks;
 
 namespace Maths.Regression.Spline.Baps;
 
+/// <summary>How the anisotropic schemes update their log smoothing variances (<see cref="ComponentSmoothing"/>). Both
+/// leave the full conditional invariant.</summary>
+public enum SmoothingVarianceUpdate
+{
+    /// <summary>Bach &amp; Klein's Newton-proposal Metropolis step on every ln τⱼ² at once (<see cref="NewtonMetropolis"/>),
+    /// then one random-walk Metropolis step on each, which reach the tails the Newton step alone visits too
+    /// rarely.</summary>
+    Newton,
+
+    /// <summary>One slice-sampling update on each ln τⱼ² in turn (<see cref="SliceSampler"/>, width 1, at most 32
+    /// steps out): values only, no derivatives, and no rejections.</summary>
+    Slice,
+}
+
 /// <summary>
 /// The full conditional of an anisotropic penalty's smoothing variances, on <c>ρⱼ = ln τⱼ²</c>, and its sampler. The
 /// coefficients' prior is <c>N(0, K⁻)</c> with <c>K = Σⱼ Pⱼ/τⱼ²</c>, and each τⱼ² has the prior q
@@ -12,7 +26,8 @@ namespace Maths.Regression.Spline.Baps;
 /// gradient and Hessian follow from the spectrum's derivatives in <c>ln w = −ρ</c> (<see cref="PenaltySpectrum"/>) and
 /// the prior's. With one component and the IG prior it is the IG conditional of the isotropic Gibbs scheme.
 /// <para>
-/// Each update is a Newton-proposal Metropolis step on every ρⱼ at once (<see cref="NewtonMetropolis"/>), Bach &amp;
+/// The update is <see cref="SmoothingVarianceUpdate.Newton"/> or <see cref="SmoothingVarianceUpdate.Slice"/>. The Newton
+/// update is a Newton-proposal Metropolis step on every ρⱼ at once (<see cref="NewtonMetropolis"/>), Bach &amp;
 /// Klein's update, then one random-walk Metropolis step on each ρⱼ in turn with standard deviation
 /// <see cref="EscapeStep"/>. Both leave the conditional invariant. The random-walk steps are there for the tails: ρⱼ's
 /// upper tail decays only exponentially, more slowly than the Gaussian proposal, and from deep in it the capped Newton
@@ -27,8 +42,13 @@ internal sealed class ComponentSmoothing
     /// <summary>The random-walk steps' standard deviation, in ln τ².</summary>
     public const double EscapeStep = 1.0;
 
+    /// <summary>The slice update's initial width, in ln τ², and its stepping-out limit.</summary>
+    public const double SliceWidth = 1.0;
+    public const int SliceSteps = 32;
+
     private readonly IAnisotropicPenalty _penalty;
     private readonly ISmoothingVariancePrior _prior;
+    private readonly SmoothingVarianceUpdate _update;
     private readonly NewtonMetropolis _step;
     private readonly NewtonMetropolis.LogDensity _density;
     private readonly Func<double, double>[] _coordinate;   // ρ ↦ ln p with only ρⱼ replaced, for the random-walk steps
@@ -38,10 +58,13 @@ internal sealed class ComponentSmoothing
     private readonly double[] _hessian;
     private double[] _current = Array.Empty<double>();
 
-    public ComponentSmoothing(IAnisotropicPenalty penalty, ISmoothingVariancePrior prior)
+    public ComponentSmoothing(IAnisotropicPenalty penalty, ISmoothingVariancePrior prior,
+                              SmoothingVarianceUpdate update = SmoothingVarianceUpdate.Newton)
     {
+        if (update is not (SmoothingVarianceUpdate.Newton or SmoothingVarianceUpdate.Slice)) throw new ArgumentOutOfRangeException(nameof(update));
         _penalty = penalty;
         _prior = prior;
+        _update = update;
         int p = penalty.Components;
         _step = new NewtonMetropolis(p);
         _density = LogDensity;
@@ -64,22 +87,31 @@ internal sealed class ComponentSmoothing
         }
     }
 
-    /// <summary>One update of <paramref name="logTau2"/> given the coefficients: the Newton step, then the random-walk
-    /// steps. Returns whether the Newton step was accepted.</summary>
+    /// <summary>The log-density evaluations spent so far, with or without derivatives.</summary>
+    public long Evaluations { get; private set; }
+
+    /// <summary>One update of <paramref name="logTau2"/> given the coefficients. The Newton update returns whether its
+    /// Newton step was accepted; the slice update always moves.</summary>
     public bool Update(double[] logTau2, double[] beta, Xoshiro256PlusPlus rng)
     {
         for (int j = 0; j < _roughness.Length; j++) _roughness[j] = _penalty.ComponentRoughness(beta, j);
-        bool accepted = _step.Step(logTau2, _density, rng);
+        bool accepted = _update == SmoothingVarianceUpdate.Slice || _step.Step(logTau2, _density, rng);
         _current = logTau2;
         double value = LogDensity(logTau2);
         for (int j = 0; j < logTau2.Length; j++)
-            RandomWalkMetropolis.Step(ref logTau2[j], ref value, EscapeStep, _coordinate[j], rng);
+        {
+            if (_update == SmoothingVarianceUpdate.Slice)
+                SliceSampler.Step(ref logTau2[j], ref value, SliceWidth, SliceSteps, _coordinate[j], rng);
+            else
+                RandomWalkMetropolis.Step(ref logTau2[j], ref value, EscapeStep, _coordinate[j], rng);
+        }
         return accepted;
     }
 
     /// <summary>The log full conditional at ρ.</summary>
     public double LogDensity(ReadOnlySpan<double> rho)
     {
+        Evaluations++;
         if (!Weights(rho)) return double.NegativeInfinity;
         double value = 0.5 * _penalty.Spectrum.LogPseudoDeterminant(_weights);
         for (int j = 0; j < rho.Length; j++) value += _prior.LogDensityOfLog(rho[j], out _, out _) - 0.5 * _roughness[j] * _weights[j];
@@ -89,6 +121,7 @@ internal sealed class ComponentSmoothing
     /// <summary>The log full conditional at ρ, with its gradient and Hessian in ρ.</summary>
     public double LogDensity(ReadOnlySpan<double> rho, Span<double> gradient, Span<double> hessian)
     {
+        Evaluations++;
         if (!Weights(rho)) return double.NegativeInfinity;
         int p = rho.Length;
         double value = 0.5 * _penalty.Spectrum.LogPseudoDeterminant(_weights, _gradient, _hessian);

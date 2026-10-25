@@ -216,6 +216,7 @@ public sealed class HierarchicalPSpline
     private readonly IAnisotropicPenalty? _anisotropic;   // set when each penalty component has its own τ_0j²
     private readonly double[][,]? _componentDense;       // each component Pⱼ, dense, for the collapsed population block
     private readonly ISmoothingVariancePrior _componentPrior;   // the prior on each τ_0j² with anisotropic smoothing
+    private readonly SmoothingVarianceUpdate _componentUpdate;   // and the update of their logs
     private readonly HalfTDeviationPrior? _halfT;   // null: the inverse-gamma prior on τ_u²
     private readonly double _halfTScale;        // the half-t prior's resolved scale A
 
@@ -233,9 +234,12 @@ public sealed class HierarchicalPSpline
     /// prior; false (the default) smooths every component with one τ_0².</param>
     /// <param name="componentPrior">With anisotropic smoothing, the prior on each τ_0j²; null takes the inverse gamma
     /// IG(<paramref name="priorShape"/>, <paramref name="priorScale"/>).</param>
+    /// <param name="componentUpdate">With anisotropic smoothing, how the ln τ_0j² are updated
+    /// (<see cref="SmoothingVarianceUpdate"/>).</param>
     public HierarchicalPSpline(double[,] design, double[][] responses, IBandPenalty penalty,
                                double priorShape = 1e-3, double priorScale = 1e-3, HalfTDeviationPrior? deviationPrior = null,
-                               bool anisotropicSmoothing = false, ISmoothingVariancePrior? componentPrior = null)
+                               bool anisotropicSmoothing = false, ISmoothingVariancePrior? componentPrior = null,
+                               SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Newton)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(responses);
@@ -255,6 +259,9 @@ public sealed class HierarchicalPSpline
         _a0 = priorShape;
         _b0 = priorScale;
         _componentPrior = componentPrior ?? new InverseGammaVariancePrior(priorShape, priorScale);
+        if (componentUpdate is not (SmoothingVarianceUpdate.Newton or SmoothingVarianceUpdate.Slice))
+            throw new ArgumentOutOfRangeException(nameof(componentUpdate));
+        _componentUpdate = componentUpdate;
 
         _gram = new double[_gramBw + 1, _nu];
         _design.Accumulate(null, _gram, null, null);
@@ -561,7 +568,7 @@ public sealed class HierarchicalPSpline
                 f.Add(owner._a0).Add(owner._b0).Add(owner._halfT is null ? 0 : 1).Add(owner._halfT?.Degrees ?? 0.0)
                  .Add(owner._halfTScale);
                 return f.Add(retainReplicates ? 1 : 0).Add((int)start).Add((int)scheme).Add(owner.Components)
-                        .Add(owner._componentPrior.ToString()!).ToString();
+                        .Add(owner._componentPrior.ToString()!).Add((int)owner._componentUpdate).ToString();
             }
         }
 
@@ -894,7 +901,7 @@ public sealed class HierarchicalPSpline
     private sealed class SmoothingBlock(HierarchicalPSpline owner) : IBlock<SweepState>
     {
         private readonly ComponentSmoothing? _components =
-            owner._anisotropic is null ? null : new ComponentSmoothing(owner._anisotropic, owner._componentPrior);
+            owner._anisotropic is null ? null : new ComponentSmoothing(owner._anisotropic, owner._componentPrior, owner._componentUpdate);
 
         public string Name => "population smoothing variance";
 

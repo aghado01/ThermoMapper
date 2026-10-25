@@ -175,6 +175,7 @@ public sealed class Baps
     private readonly double _mhLogStep;  // Metropolis log-λ proposal sd (the collapsed scheme)
     private readonly double _phi;        // adaptivity: η_i ~ Gamma(φ, φ); φ→∞ recovers global smoothing
     private readonly ISmoothingVariancePrior _componentPrior;   // the anisotropic scheme's prior on each τⱼ²
+    private readonly SmoothingVarianceUpdate _componentUpdate;   // and its update of their logs
 
     /// <param name="design">The banded design Z (n × ν).</param>
     /// <param name="y">The responses.</param>
@@ -185,9 +186,10 @@ public sealed class Baps
     /// <param name="phi">The locally adaptive scheme's multiplier prior, η ~ Gamma(φ, φ).</param>
     /// <param name="componentPrior">The anisotropic scheme's prior on each component's τⱼ²; null takes the inverse gamma
     /// IG(<paramref name="priorShape"/>, <paramref name="priorScale"/>) the other schemes give τ².</param>
+    /// <param name="componentUpdate">How the anisotropic scheme updates the ln τⱼ² (<see cref="SmoothingVarianceUpdate"/>).</param>
     public Baps(double[,] design, double[] y, IBandPenalty penalty,
                        double priorShape = 1e-3, double priorScale = 1e-3, double mhLogStep = 0.6, double phi = 1.0,
-                       ISmoothingVariancePrior? componentPrior = null)
+                       ISmoothingVariancePrior? componentPrior = null, SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Newton)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -213,6 +215,9 @@ public sealed class Baps
         _mhLogStep = mhLogStep;
         _phi = phi;
         _componentPrior = componentPrior ?? new InverseGammaVariancePrior(priorShape, priorScale);
+        if (componentUpdate is not (SmoothingVarianceUpdate.Newton or SmoothingVarianceUpdate.Slice))
+            throw new ArgumentOutOfRangeException(nameof(componentUpdate));
+        _componentUpdate = componentUpdate;
     }
 
     /// <param name="scheme">The sampling scheme (<see cref="BapsScheme"/>).</param>
@@ -328,7 +333,7 @@ public sealed class Baps
                                             .Add(owner._penalty.Bandwidth).Add(owner._penalty.GetType().FullName!);
                 foreach (double v in owner._z) f.Add(v);
                 return f.Add(owner._y).Add(owner._priorShape).Add(owner._priorScale).Add(owner._mhLogStep)
-                        .Add(owner._phi).Add(owner._componentPrior.ToString()!).ToString();
+                        .Add(owner._phi).Add(owner._componentPrior.ToString()!).Add((int)owner._componentUpdate).ToString();
             }
         }
 
@@ -542,7 +547,7 @@ public sealed class Baps
     // conditional (ComponentSmoothing).
     private sealed class ComponentSmoothingBlock(Baps owner) : IBlock<BapsState>
     {
-        private readonly ComponentSmoothing _smoothing = new((IAnisotropicPenalty)owner._penalty, owner._componentPrior);
+        private readonly ComponentSmoothing _smoothing = new((IAnisotropicPenalty)owner._penalty, owner._componentPrior, owner._componentUpdate);
 
         public string Name => "component smoothing variances";
 

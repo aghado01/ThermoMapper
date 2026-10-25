@@ -106,21 +106,24 @@ public sealed class BapsAnisotropicTests
         return (r0, r1, cdf);
     }
 
-    private static (ComponentSmoothing Smoothing, double[] Beta) FixedConditional(ISmoothingVariancePrior? prior = null)
+    private static (ComponentSmoothing Smoothing, double[] Beta) FixedConditional(
+        ISmoothingVariancePrior? prior = null, SmoothingVarianceUpdate update = SmoothingVarianceUpdate.Newton)
     {
         var rng = new Xoshiro256PlusPlus(seed: 7);
         double[] beta = Enumerable.Range(0, 30).Select(i => Gaussian(rng) * (i % 2 == 0 ? 0.3 : 1.0)).ToArray();
-        var smoothing = new ComponentSmoothing(new TensorPenalty(5, 6), prior ?? new InverseGammaVariancePrior());
+        var smoothing = new ComponentSmoothing(new TensorPenalty(5, 6), prior ?? new InverseGammaVariancePrior(), update);
         smoothing.Update(new double[2], beta, new Xoshiro256PlusPlus(1));   // reads the roughness
         return (smoothing, beta);
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Update_FromExactDraws_StaysOnTheConditional(bool weibull)
+    [InlineData(false, SmoothingVarianceUpdate.Newton)]
+    [InlineData(true, SmoothingVarianceUpdate.Newton)]
+    [InlineData(false, SmoothingVarianceUpdate.Slice)]
+    [InlineData(true, SmoothingVarianceUpdate.Slice)]
+    public void Update_FromExactDraws_StaysOnTheConditional(bool weibull, SmoothingVarianceUpdate update)
     {
-        (ComponentSmoothing smoothing, double[] beta) = FixedConditional(weibull ? new WeibullVariancePrior(2.0) : null);
+        (ComponentSmoothing smoothing, double[] beta) = FixedConditional(weibull ? new WeibullVariancePrior(2.0) : null, update);
         (double[] r0, double[] r1, double[] cdf) = Grid(smoothing);
         var rng = new Xoshiro256PlusPlus(seed: 9);
         const int n = 500_000;
@@ -135,16 +138,18 @@ public sealed class BapsAnisotropicTests
             a0 += rho[0]; a00 += rho[0] * rho[0]; a1 += rho[1];
         }
         double mb = b0 / n, ma = a0 / n, vb = b00 / n - mb * mb, va = a00 / n - ma * ma;
-        _out.WriteLine($"[aniso-block] {(weibull ? "Weibull" : "IG")} exact draws: mean {mb:F5} var {vb:F5}; after one update: mean {ma:F5} var {va:F5}");
+        _out.WriteLine($"[aniso-block] {(weibull ? "Weibull" : "IG")} {update} exact draws: mean {mb:F5} var {vb:F5}; after one update: mean {ma:F5} var {va:F5}");
         double se = Math.Sqrt(vb / n);
         Assert.InRange(ma - mb, -5.0 * se, 5.0 * se);
         Assert.InRange(va / vb, 0.98, 1.02);   // the upper tail is exponential, so the variance estimate is noisy: ±2% is about 4σ here
     }
 
-    [Fact]
-    public void Chain_VisitsTheConditionalsUpperTail()
+    [Theory]
+    [InlineData(SmoothingVarianceUpdate.Newton)]
+    [InlineData(SmoothingVarianceUpdate.Slice)]
+    public void Chain_VisitsTheConditionalsUpperTail(SmoothingVarianceUpdate update)
     {
-        (ComponentSmoothing smoothing, double[] beta) = FixedConditional();
+        (ComponentSmoothing smoothing, double[] beta) = FixedConditional(update: update);
         (double[] r0, _, double[] cdf) = Grid(smoothing);
         double tail = 0.0;
         for (int c = 0; c < cdf.Length; c++)
@@ -169,7 +174,7 @@ public sealed class BapsAnisotropicTests
             }
         }
         double visited = inTail / (double)n;
-        _out.WriteLine($"[aniso-block] P(ρ0 > 3.5): chain {visited:E3}, conditional {tail:E3}; longest stay {longest}");
+        _out.WriteLine($"[aniso-block] {update} P(ρ0 > 3.5): chain {visited:E3}, conditional {tail:E3}; longest stay {longest}");
         Assert.InRange(visited / tail, 0.85, 1.15);
         Assert.True(longest < 100, $"the chain stayed {longest} updates at one point");
     }
@@ -231,6 +236,23 @@ public sealed class BapsAnisotropicTests
             Assert.Equal(d.Sigma2 / Math.Sqrt(d.ComponentTau2![0] * d.ComponentTau2[1]), d.Lambda, 10);   // the geometric mean
         Assert.Null(iso.ComponentLogLambdaConvergence);
         Assert.Throws<InvalidOperationException>(() => iso.ComponentLambdaInterval(0));
+    }
+
+    [Fact]
+    public void SliceUpdate_AgreesWithTheNewtonUpdate()
+    {
+        (TensorDesign td, double[] y, _) = Surface(seed: 31);
+        var penalty = new TensorPenalty(td.NuX, td.NuY);
+        BapsResult newton = new Baps(td.Design, y, penalty).Run(BapsScheme.AnisotropicGibbs, chains: 4, masterSeed: 2, burn: 1000, samples: 1500);
+        BapsResult slice = new Baps(td.Design, y, penalty, componentUpdate: SmoothingVarianceUpdate.Slice)
+            .Run(BapsScheme.AnisotropicGibbs, chains: 4, masterSeed: 2, burn: 1000, samples: 1500);
+        for (int j = 0; j < 2; j++)
+        {
+            double a = newton.ComponentLambdaInterval(j).Median, b = slice.ComponentLambdaInterval(j).Median;
+            _out.WriteLine($"[baps-aniso] λ{j}: Newton {a:E3}, slice {b:E3}");
+            Assert.True(Math.Abs(Math.Log(a / b)) < 0.1, $"component {j}: medians {a:E3} and {b:E3}");
+        }
+        Assert.Equal(1.0, slice.AcceptanceRate);
     }
 
     [Fact]
