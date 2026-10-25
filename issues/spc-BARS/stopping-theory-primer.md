@@ -830,3 +830,29 @@ The SW retention brief (`issues/spc/sw-retention-brief.md`, items S1–S6) preda
     registers at v5: the first premature stop.
   - Fine volleys turn loud again after the stops (toy MagnetizationVariance 4.7 at v5; heat capacity 4.3 and 3.9 at
     v4–v5), as the fits mismodel the noisy peaks.
+
+### 12.15 Discussion: which observable for which job
+
+The user's position: MagnetizationVariance is the detection observable, since it peaks where it should and
+unambiguously. FkReduced gives a smoother bump, which is worse for detection but perhaps better for extracting features.
+Heat capacity is out of scope. Pressure-tested against the 289-point cluster-size histograms:
+- **MagnetizationVariance peaks on the giant's breakup.**
+  - Toy: at T = 0.0141 the giant (≥ 2,048 points) is present in 22% of draws and the 1,024–2,047 bin in 48%: the
+    stripe split, caught in the act.
+  - Iris: at T = 0.0858 the versicolor-plus-virginica cluster (64–127 points) is present in half the draws.
+- **First caveat: it is giant-dominated.** It weights an event by how far it moves the largest colour group. The toy's
+  stripe melts (T ≈ 0.09–0.11) sit at 0.8–4.5% of its peak, so it is blind to the lower levels of a hierarchy. Those
+  show as S₂ steps.
+- **Second caveat: colour collisions raise its baseline.** Separated clusters share a colour with probability 1/q, so
+  N_max still fluctuates on a plateau. On iris it stays at 65% of its peak across the whole setosa-apart plateau
+  (T = 0.03–0.06), so the peak stands only about 35% above it.
+- **FkReduced measures a lifetime, so its span is the clustering window.** On the toy, its bump (FWHM 1.58) is the three
+  stripes' lifetime, bounded by the split and the melts, which suits regime B's windows. But it needs the second
+  cluster to be born by a split. Iris's setosa is a separate component from T = 0 (FkReduced ≈ 50²/150 ≈ 16.7 at the
+  cold end), so iris's FkReduced only declines and has no bump to read.
+- **Neither is covered by C20 the same way.** S₂ bounds FkReduced's excursions (C20), but not MagnetizationVariance's,
+  which follows the colourings as well. In practice its peaks sit inside S₂-flagged runs on both datasets.
+- **So the jobs split three ways:**
+  - MagnetizationVariance locates the giant's transitions;
+  - FkReduced gives spans where a second cluster is born by a split;
+  - S₂'s flags cover every event, the lower hierarchy levels included.
