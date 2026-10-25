@@ -470,9 +470,18 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// Poisson(yᵢ; exp(zᵢβ)); the Whittle model's is the exponential density of a periodogram ordinate with mean exp(zᵢβ),
     /// under Whittle's approximation of independent ordinates. The Gibbs-loss model declines: its likelihood is a
     /// pseudo-likelihood, exp(−η·loss), not a density of a new observation.
+    /// <para>
+    /// <see cref="PointwiseContent.CollapsedPredictive"/> keeps each draw's knots and integrates its coefficients and σ²
+    /// out given the observations outside the unit: ln p(y_U | y_rest, knots), the g-prior's leave-unit-out Student t
+    /// (<see cref="IConditionalFit.LeaveOutLogDensities"/>). The Normal model has it without robust weights. With them it
+    /// would condition on the unit's own fitted weights, which biases leave-one-out, and the other models have no closed
+    /// form; all of these decline.
+    /// </para>
     /// </summary>
     /// <param name="units">The partition of the n observations; null takes each observation as its own unit.</param>
-    public PointwiseLogDensity PointwiseLogDensity(BarsResult result, double[] x, double[] y, UnitPartition? units = null)
+    /// <param name="content">The draw content (<see cref="PointwiseContent"/>); the retained parameters by default.</param>
+    public PointwiseLogDensity PointwiseLogDensity(BarsResult result, double[] x, double[] y, UnitPartition? units = null,
+                                                   PointwiseContent content = PointwiseContent.RetainedParameters)
     {
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(x);
@@ -481,6 +490,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         UnitPartition partition = units ?? UnitPartition.EachObservation(y.Length);
         if (partition.Observations != y.Length)
             throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
+        if (content is not (PointwiseContent.RetainedParameters or PointwiseContent.CollapsedPredictive))
+            throw new ArgumentOutOfRangeException(nameof(content));
+        if (content == PointwiseContent.CollapsedPredictive) return CollapsedPointwise(result, x, y, partition);
         Func<double, double, double, double> term = _model switch   // (yᵢ, ηᵢ = zᵢβ, σ²) → log density
         {
             WeightedNormalModel when _resampler is IWeightResampler resampler
@@ -526,6 +538,36 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned));
             if (_resampler is not null) latents.Add(new LatentReport("robust weights wᵢ", LatentScope.Observation, LatentTreatment.Integrated));
         }
+        return new PointwiseLogDensity(values, partition, latents);
+    }
+
+    // The collapsed content: each draw's knots refitted, and its fit's leave-unit-out predictive per unit.
+    private PointwiseLogDensity CollapsedPointwise(BarsResult result, double[] x, double[] y, UnitPartition partition)
+    {
+        if (_model is not WeightedNormalModel)
+            throw new NotSupportedException($"{_model.GetType().Name} has no closed-form collapsed predictive; use the retained parameters.");
+        if (_resampler is not null)
+            throw new NotSupportedException(
+                "With robust weights the collapsed predictive would condition on each unit's own fitted weights; use the retained parameters, which integrate them.");
+        int draws = 0;
+        foreach (IReadOnlyList<BarsDraw> chain in result.Draws) draws += chain.Count;
+        var values = new double[draws, partition.Units];
+        int row = 0;
+        foreach (IReadOnlyList<BarsDraw> chain in result.Draws)
+            foreach (BarsDraw d in chain)
+            {
+                double[,] z = _basis.Design(d.Knots, x);
+                double[] terms = _model.FitConditional(z, y, null).LeaveOutLogDensities(partition)
+                                 ?? throw new NotSupportedException($"{_model.GetType().Name} returned no collapsed predictive.");
+                for (int u = 0; u < partition.Units; u++) values[row, u] = terms[u];
+                row++;
+            }
+        var latents = new List<LatentReport>
+        {
+            new("knot configuration", LatentScope.Global, LatentTreatment.Conditioned),
+            new("coefficients β", LatentScope.Global, LatentTreatment.IntegratedGivenOthers),
+            new("noise variance σ²", LatentScope.Global, LatentTreatment.IntegratedGivenOthers),
+        };
         return new PointwiseLogDensity(values, partition, latents);
     }
 

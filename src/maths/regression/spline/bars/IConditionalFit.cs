@@ -18,6 +18,13 @@ public interface IConditionalFit
 
     /// <summary>As <see cref="IObservationModel.SampleConditional"/>.</summary>
     ConditionalDraw Sample(Xoshiro256PlusPlus rng);
+
+    /// <summary>
+    /// The collapsed predictive of each unit of the fitted observations (OQ17's second draw content): ln p(y_U | y_rest),
+    /// with the coefficients and noise scale integrated out given the observations outside the unit. Null when the model has
+    /// no closed form for it, the default.
+    /// </summary>
+    double[]? LeaveOutLogDensities(UnitPartition units) => null;
 }
 
 /// <summary>The seam's default for a model that keeps no shared fit: each read calls the model's own method, which fits

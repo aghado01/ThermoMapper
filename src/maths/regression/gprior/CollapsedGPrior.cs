@@ -264,6 +264,50 @@ public sealed class GPriorConditional
     }
 
     /// <summary>
+    /// ln p(y_U | y_rest) for one unit U of the observations this conditional was fitted to (OQ17's collapsed content). β
+    /// and σ² are integrated out, and the prior (its centre, G and τ) is held at the full data's. It is the leave-unit-out
+    /// predictive of y | σ² ~ N(Zμ₀, σ²Q⁻¹), with Q = W − WZA⁻¹ZᵀW and A the posterior precision (A⁻¹ = c·factor⁻¹).
+    /// <list type="bullet">
+    ///   <item>Qr = We, with e = y − Zμ the posterior-mean residual, and rᵀQr = S.</item>
+    ///   <item>The unit's block is Q_UU = W_U − W_U Z_U A⁻¹ Z_Uᵀ W_U: m solves with the factor.</item>
+    ///   <item>The rest follows <see cref="LeaveOutPredictive"/>, a Student t with n − m degrees of freedom under the improper
+    ///   1/σ² prior.</item>
+    /// </list>
+    /// Untempered only. <paramref name="weights"/> are the fit's (null for W = I).
+    /// </summary>
+    public double LeaveOutLogDensity(double[,] design, ReadOnlySpan<double> y, double[]? weights, int[] unit)
+    {
+        ArgumentNullException.ThrowIfNull(design);
+        ArgumentNullException.ThrowIfNull(unit);
+        if (InverseTemperature != 1.0) throw new InvalidOperationException("The leave-out predictive is untempered.");
+        if (design.GetLength(0) != Rows || design.GetLength(1) != Columns || y.Length != Rows)
+            throw new ArgumentException("The design and response must be the ones this conditional was fitted to.", nameof(design));
+        int m = unit.Length, p = Columns;
+        var solved = new double[m][];
+        var row = new double[p];
+        var qr = new double[m];
+        var w = new double[m];
+        for (int a = 0; a < m; a++)
+        {
+            int i = unit[a];
+            double fit = 0.0;
+            for (int j = 0; j < p; j++) { row[j] = design[i, j]; fit += row[j] * _mean[j]; }
+            solved[a] = _precision.Solve(row);
+            w[a] = weights?[i] ?? 1.0;
+            qr[a] = w[a] * (y[i] - fit);
+        }
+        var block = new double[m, m];
+        for (int a = 0; a < m; a++)
+            for (int b = 0; b < m; b++)
+            {
+                double quadratic = 0.0;
+                for (int j = 0; j < p; j++) quadratic += design[unit[a], j] * solved[b][j];
+                block[a, b] = (a == b ? w[a] : 0.0) - w[a] * w[b] * CovarianceScale * quadratic;
+            }
+        return LeaveOutPredictive.StudentT(block, qr, S, Rows);
+    }
+
+    /// <summary>
     /// <c>Var[z(t)ᵀβ | y] = E[σ² | y]·c·z(t)ᵀA⁻¹z(t)</c> for each row z(t) of <paramref name="readoutDesign"/>, with σ²
     /// integrated out. Needs a posterior σ² with finite mean: shape above 1.
     /// </summary>

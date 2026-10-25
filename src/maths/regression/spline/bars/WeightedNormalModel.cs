@@ -115,11 +115,13 @@ public sealed class WeightedNormalModel : IObservationModel
     /// <summary>One knot configuration's conditional, fitted once: the block at BARS's τ = 1/m serves the mean, the
     /// conditional variance and the joint draw above.</summary>
     public IConditionalFit FitConditional(double[,] design, double[] y, double[]? weights)
-        => new NormalConditional(Condition(design, y, weights), design.GetLength(1));
+        => new NormalConditional(Condition(design, y, weights), design, y, weights);
 
     // The three readouts of one block's conditional, or NaN throughout when the design is inadmissible (no block).
-    private sealed class NormalConditional(GPriorConditional? c, int columns) : IConditionalFit
+    private sealed class NormalConditional(GPriorConditional? c, double[,] design, double[] y, double[]? weights) : IConditionalFit
     {
+        private readonly int columns = design.GetLength(1);
+
         public double[] MeanCoefficients() => c is null ? Unavailable(columns) : c.Mean.ToArray();
 
         public double[]? ConditionalVariance(double[,] readoutDesign)
@@ -137,6 +139,18 @@ public sealed class WeightedNormalModel : IObservationModel
             if (!(c.S > 0.0)) return new(beta, double.NaN);
             double sigma2 = c.Sample(null, rng, beta);   // the improper 1/σ² prior
             return new(beta, sigma2);
+        }
+
+        // The g-prior's leave-unit-out Student t (GPriorConditional.LeaveOutLogDensity); NaN throughout without a posterior.
+        public double[]? LeaveOutLogDensities(UnitPartition units)
+        {
+            ArgumentNullException.ThrowIfNull(units);
+            if (units.Observations != y.Length)
+                throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
+            var values = new double[units.Units];
+            if (c is null || !(c.S > 0.0)) { Array.Fill(values, double.NaN); return values; }
+            for (int u = 0; u < units.Units; u++) values[u] = c.LeaveOutLogDensity(design, y, weights, units.Members[u]);
+            return values;
         }
     }
 

@@ -27,6 +27,10 @@ public static class PredictiveChecks
     public static PredictiveCheck Waic(PointwiseLogDensity density)
     {
         ArgumentNullException.ThrowIfNull(density);
+        if (density.LeavesUnitsOut)
+            throw new ArgumentException(
+                "WAIC's terms must condition on each unit's own data; these are leave-unit-out predictives (the collapsed content). Use PsisLoo.",
+                nameof(density));
         double[,] ll = density.Values;
         int s = ll.GetLength(0), units = ll.GetLength(1);
         if (s < 2) throw new ArgumentException("WAIC needs at least two draws.", nameof(density));
@@ -53,6 +57,14 @@ public static class PredictiveChecks
     /// PSIS-LOO: per unit, the importance log-ratios −log p(y_u | θ_s) are Pareto-smoothed in their upper tail (the largest
     /// M = ⌈min(S/5, 3√S)⌉, at least 5 for a fit), truncated at their raw maximum, and normalized; elpd_u is the log of
     /// the weighted mean of p(y_u | θ_s). k̂ is the tail's fitted shape.
+    /// <para>
+    /// With leave-unit-out terms (the collapsed content), the same arithmetic gives the non-factorized model's PSIS-LOO
+    /// (Bürkner, Gabry &amp; Vehtari 2021): the ratios are 1/p(y_u | y_rest, structure), and elpd_u estimates log
+    /// p(y_u | y_rest). The effective number of parameters, lppd − elpd, then has no in-sample lppd to subtract from and is
+    /// NaN. When those ratios vary only with a discrete structure, k̂ is pessimistic (see
+    /// <see cref="PointwiseContent.CollapsedPredictive"/>). A tail whose largest ratios tie has k̂ = −∞: bounded in the
+    /// sample, it is left unsmoothed.
+    /// </para>
     /// </summary>
     public static PredictiveCheck PsisLoo(PointwiseLogDensity density)
     {
@@ -77,7 +89,7 @@ public static class PredictiveChecks
         }
         double total = 0.0;
         foreach (double e in elpd) total += e;
-        return Summarize(elpd, lppdTotal - total, khat);
+        return Summarize(elpd, density.LeavesUnitsOut ? double.NaN : lppdTotal - total, khat);
     }
 
     /// <summary>
@@ -130,7 +142,11 @@ public static class PredictiveChecks
             var keys = (double[])logRatios.Clone();
             Array.Sort(keys, order);
             double cutoff = keys[s - tail - 1];   // the largest value below the tail
-            if (Math.Abs(keys[s - 1] - keys[s - tail]) >= 2.220446049250313e-16 / 100.0)   // a tail flat to rounding cannot be fitted
+            // A tail flat to rounding cannot be fitted, and needs no smoothing: its largest ratios tie, so they are bounded in
+            // the sample and no draw dominates. That is the norm for the collapsed content, whose ratios repeat with the
+            // structure, and k̂ is then −∞. Too few draws for a tail leave k̂ at +∞, undiagnosable.
+            if (!(Math.Abs(keys[s - 1] - keys[s - tail]) >= 2.220446049250313e-16 / 100.0)) khat = double.NegativeInfinity;
+            else
             {
                 double expCutoff = Math.Exp(cutoff);
                 var exceedances = new double[tail];
