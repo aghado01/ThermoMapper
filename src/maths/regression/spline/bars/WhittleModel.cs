@@ -2,6 +2,7 @@ using System;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
+using Maths.Samplers.Blocks;
 
 using Maths.Regression.Spline;
 
@@ -102,14 +103,10 @@ public sealed class WhittleModel : IObservationModel
         public ConditionalDraw Sample(Xoshiro256PlusPlus rng)
         {
             ArgumentNullException.ThrowIfNull(rng);
-            var draw = (double[])beta.Clone();
-            if (rejection != DesignRejection.None) return new(draw, double.NaN);
-            int nu = draw.Length;
-            var z = new double[nu];
-            for (int j = 0; j < nu; j++) z[j] = Normal.SampleStandard(rng);
-            var innov = new double[nu];
-            factor.SampleInnovation(z, innov);
-            for (int j = 0; j < nu; j++) draw[j] += innov[j];
+            if (rejection != DesignRejection.None) return new((double[])beta.Clone(), double.NaN);
+            int nu = beta.Length;
+            var draw = new double[nu];
+            GaussianConditional.Perturb(factor, beta, rng, draw, 1.0, new double[nu], new double[nu]);   // β̂ + v, v ~ N(0, (BᵀB)⁻¹)
             return new(draw, double.NaN);
         }
     }

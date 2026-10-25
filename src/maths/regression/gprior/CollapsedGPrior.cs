@@ -2,6 +2,7 @@ using System;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
+using Maths.Samplers.Blocks;
 
 namespace Maths.Regression.GPrior;
 
@@ -225,11 +226,7 @@ public sealed class GPriorConditional
 
     /// <summary><c>σ² | y ~ IG(g₁ + mb/2, g₂ + S/2)</c>; null <paramref name="sigmaPrior"/> is the improper 1/σ².</summary>
     public InverseGamma Sigma2Posterior(InverseGamma? sigmaPrior)
-    {
-        double shape = 0.5 * Rows * InverseTemperature, scale = 0.5 * S;
-        if (sigmaPrior is InverseGamma prior) { shape += prior.Shape; scale += prior.Scale; }
-        return InverseGamma.ShapeScale(shape, scale);
-    }
+        => ConjugateUpdates.NormalVariance(sigmaPrior?.Shape ?? 0.0, sigmaPrior?.Scale ?? 0.0, Rows * InverseTemperature, S);
 
     /// <summary>
     /// The complete <c>ln p_b(y | Z, τ)</c> with β and σ² integrated out (derivations review §3):
@@ -250,8 +247,9 @@ public sealed class GPriorConditional
     }
 
     /// <summary>
-    /// A composition draw: σ² from its posterior, then <c>β = μ + √(σ²c)·v</c> with v ~ N(0, A⁻¹) from the factor.
-    /// Writes β into <paramref name="beta"/> and returns σ². Scratch for p ≤ 128 lives on the stack.
+    /// A composition draw: σ² from its posterior, then <c>β = μ + √(σ²c)·v</c> with v ~ N(0, A⁻¹) from the factor
+    /// (<see cref="GaussianConditional"/>). Writes β into <paramref name="beta"/> and returns σ². Scratch for p ≤ 128 lives
+    /// on the stack.
     /// </summary>
     public double Sample(InverseGamma? sigmaPrior, Xoshiro256PlusPlus rng, Span<double> beta)
     {
@@ -261,10 +259,7 @@ public sealed class GPriorConditional
         int p = Columns;
         Span<double> z = p <= 128 ? stackalloc double[p] : new double[p];
         Span<double> innovation = p <= 128 ? stackalloc double[p] : new double[p];
-        for (int j = 0; j < p; j++) z[j] = Normal.SampleStandard(rng);
-        _precision.SampleInnovation(z, innovation);
-        double scale = Math.Sqrt(sigma2 * CovarianceScale);
-        for (int j = 0; j < p; j++) beta[j] = _mean[j] + scale * innovation[j];
+        GaussianConditional.Perturb(_precision, _mean, rng, beta, Math.Sqrt(sigma2 * CovarianceScale), z, innovation);
         return sigma2;
     }
 

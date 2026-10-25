@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Maths.Distributions;
 using Maths.Rng;
+using Maths.Samplers.Blocks;
 using Maths.Samplers.Ensemble;
 
 namespace Maths.Regression.Bgp;
@@ -533,7 +534,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
                 return;
             }
             functionals[1] = fit.NoiseRatio;
-            double s2 = InverseGamma.ShapeScale(0.5 * (_o._gp.Count - 1), 0.5 * fit.Quadratic).Sample(_readout);
+            double s2 = ConjugateUpdates.NormalVariance(0.0, 0.0, _o._gp.Count - 1, fit.Quadratic).Sample(_readout);   // IG((n − 1)/2, Q/2)
             var variance = new double[_variance.Length];
             for (int i = 0; i < variance.Length; i++) variance[i] = s2 * _variance[i];
             Draws.Add(new BgpDraw(draw, fit, variance, s2));

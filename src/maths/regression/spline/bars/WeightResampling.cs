@@ -1,6 +1,7 @@
 using System;
 using Maths.Distributions;
 using Maths.Rng;
+using Maths.Samplers.Blocks;
 
 namespace Maths.Regression.Spline.Bars;
 
@@ -44,12 +45,12 @@ public sealed class StudentTWeights : IWeightResampler
         ArgumentNullException.ThrowIfNull(rng);
         if (!(sigma2 > 0.0)) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive.");
 
-        double shape = (_nu + 1.0) / 2.0;
+        // Each weight is one normal term's precision multiplier under its Gamma(ν/2, ν/2) prior: Gamma((ν + 1)/2, (ν + z²)/2).
         var w = new double[residuals.Length];
         for (int i = 0; i < w.Length; i++)
         {
             double z2 = residuals[i] * residuals[i] / sigma2;
-            w[i] = Gamma.ShapeRate(shape, 0.5 * (_nu + z2)).Sample(rng);
+            w[i] = ConjugateUpdates.NormalPrecision(0.5 * _nu, 0.5 * _nu, 1.0, z2).Sample(rng);
         }
         return w;
     }

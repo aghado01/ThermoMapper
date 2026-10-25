@@ -43,13 +43,27 @@ public sealed class GaussianConditional
     public void Perturb(ISpdFactor precision, ReadOnlySpan<double> mean, Xoshiro256PlusPlus rng, Span<double> result,
                         double scale = 1.0)
     {
-        ArgumentNullException.ThrowIfNull(precision);
-        ArgumentNullException.ThrowIfNull(rng);
         int p = _z.Length;
         if (mean.Length != p || result.Length != p)
             throw new ArgumentException($"The mean and the result need {p} entries.", nameof(mean));
-        for (int j = 0; j < p; j++) _z[j] = Normal.SampleStandard(rng);
-        precision.SampleInnovation(_z, _innovation);
-        for (int j = 0; j < p; j++) result[j] = mean[j] + scale * _innovation[j];
+        Perturb(precision, mean, rng, result, scale, _z, _innovation);
+    }
+
+    /// <summary>
+    /// <see cref="Perturb(ISpdFactor, ReadOnlySpan{double}, Xoshiro256PlusPlus, Span{double}, double)"/> on the caller's
+    /// scratch: <paramref name="z"/> receives the standard normals and <paramref name="innovation"/> v. For a caller that
+    /// keeps its scratch on the stack, or reads the normals back, as an independence proposal's density −½zᵀz does.
+    /// </summary>
+    public static void Perturb(ISpdFactor precision, ReadOnlySpan<double> mean, Xoshiro256PlusPlus rng, Span<double> result,
+                               double scale, Span<double> z, Span<double> innovation)
+    {
+        ArgumentNullException.ThrowIfNull(precision);
+        ArgumentNullException.ThrowIfNull(rng);
+        int p = mean.Length;
+        if (result.Length != p || z.Length != p || innovation.Length != p)
+            throw new ArgumentException($"The result and the scratch need {p} entries, as the mean has.", nameof(result));
+        for (int j = 0; j < p; j++) z[j] = Normal.SampleStandard(rng);
+        precision.SampleInnovation(z, innovation);
+        for (int j = 0; j < p; j++) result[j] = mean[j] + scale * innovation[j];
     }
 }

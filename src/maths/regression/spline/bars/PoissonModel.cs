@@ -2,6 +2,7 @@ using System;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
+using Maths.Samplers.Blocks;
 
 using Maths.Regression.Spline;
 
@@ -193,11 +194,10 @@ public sealed class PoissonModel : IObservationModel
             // One proposal draw, with its target and proposal log-densities.
             (double[] Beta, double LogTarget, double LogProposal) Propose()
             {
-                double ss = 0.0;
-                for (int j = 0; j < nu; j++) { z[j] = Normal.SampleStandard(rng); ss += z[j] * z[j]; }
-                chol.SampleInnovation(z, innov);             // innov ~ N(0, H⁻¹)
                 var beta = new double[nu];
-                for (int j = 0; j < nu; j++) beta[j] = betaHat[j] + innov[j];
+                GaussianConditional.Perturb(chol, betaHat, rng, beta, 1.0, z, innov);   // β̂ + v, v ~ N(0, H⁻¹)
+                double ss = 0.0;                             // the proposal's log density is −½zᵀz up to a constant
+                for (int j = 0; j < nu; j++) ss += z[j] * z[j];
                 return (beta, LogPosterior(design, y, beta, prior), -0.5 * ss);
             }
 
