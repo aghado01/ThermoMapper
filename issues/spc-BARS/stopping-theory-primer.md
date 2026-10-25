@@ -1070,3 +1070,33 @@ early (C12). The engine side (OQ7, OQ8) stays parked with the readout design.
     MST-repaired versicolor–virginica link is thin by construction.
   - That points a grid search at the graph's construction parameters, scored by the cut's co-membership against the
     species' own, rather than at the bandwidth alone.
+
+**The neighbour count K** (mutual KNN with MST repair, the default bandwidth rule and 1/K̂; same sweep):
+
+| K | Edges (cut) | Pre-repair components | Cut breaks at T | Versicolor, virginica melt at T | Gap to the first melt | Species window |
+|---|---|---|---|---|---|---|
+| 5 | 262 (13) | 16 | 0.088 | 0.113, 0.102 | +0.15 | 0.14 |
+| 7 | 353 (19) | 8 | 0.095 | 0.113, 0.098 | +0.04 | 0.07 |
+| 10 | 528 (34) | 6 | 0.100 | 0.109, 0.099 | −0.01 | 0 |
+| 15 | 824 (52) | 4 | 0.100 | 0.104, 0.097 | −0.03 | 0 |
+
+- **Sparser graphs open only a sliver.** The cut stays at 7–10% of the two species' edges at every K, and only one cut
+  edge comes from the MST repair. At the cut's half point virginica's own edges hold 0.51–0.61 of the time: virginica
+  is the weak side.
+- **Edge-averaged windows understate the cores, though.** The mean over all internal edges includes the boundary points.
+  BWD 1996's three-way stage left 25 points unclassified, which is to say the cores separate after the boundary sheds.
+  - The size bins show that kind of stage: about 3.2 clusters of 16 or more points per draw at K = 5 and T ≈ 0.06, and
+    about 2.7 at K = 10 and T ≈ 0.097, with many points shed into small clusters.
+  - Whether those are species-pure cores needs BWD's own partition rule (co-membership above ½ on edges, then
+    components) and a purity count. Not yet run.
+
+**The kernel's shape can't help here** (a static check on the K = 10 edge lengths, kernels matched in scale):
+- A cut edge is longer than a virginica edge 51% of the time, and longer than a versicolor edge 70% of the time.
+- A kernel is a monotone map from distance to coupling, so it can only reweight by length. The cut's share of coupling
+  barely moves across kernels: 0.169 and 0.212 (against versicolor's and virginica's interiors) for the Gaussian,
+  0.168 and 0.205 for the Laplace, 0.170 and 0.207 for the Cauchy, and 0.167 and 0.217 for a sharper e^(−r⁴/4).
+- Kernels matter when cut edges are systematically longer, where a sharper kernel buys contrast. They also matter when
+  long internal edges melt a diffuse cluster early, where a heavier tail keeps it whole. Iris's versicolor–virginica cut
+  is neither: the information that separates them isn't in the edge lengths at this scale.
+- **What could carry it:** density, through a density-aware rescaling such as LMP or mutual-reachability distances,
+  which lengthen edges across a density dip; or the features themselves.
