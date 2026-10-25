@@ -2782,3 +2782,39 @@ At the user's request, the two BAPS items the previous report left open: the col
   - None of these blocks a use; each is recorded in `docs/Maths/BayesianRegression.md` ("Anisotropic smoothing").
 
 **Results** under the fact harness: `Maths.Regression.Tests` 360 of 360 (`20261024_175751414`), `Maths.Samplers.Tests` 99 of 99 (`20261024_180219649`). The solution builds.
+
+### Anisotropic smoothing: the Weibull prior, slice sampling, and the collapsed question — 2026-10-24
+
+At the user's request, two of the previous report's "not built" items: the Weibull prior, with a Weibull distribution in `Maths.Distributions`, and a slice-sampling alternative to the update. The user was unsure about a collapsed scheme with several λ; the answer is recorded below.
+
+| Commit | Change |
+|---|---|
+| `b106db6` | `Weibull` in `Maths.Distributions`: moments, inversion sampling, quantile, log-space tails |
+| `bcc0a78` | `ISmoothingVariancePrior`: `InverseGammaVariancePrior` (the default) and `WeibullVariancePrior` with `ScaledTo` (prior scaling); `IAnisotropicPenalty.SamplePrior`, exact for `TensorPenalty` |
+| `5b04a57` | `SliceSampler` in `Maths.Samplers.Blocks` (Neal 2003: stepping out and shrinkage) |
+| `b4c229f` | `SmoothingVarianceUpdate { Slice, Newton }`: the anisotropic schemes' update, selectable |
+| `54db893` | `SmoothingUpdateBenchmark` (`SMOOTHING_BENCH`), with its rule registered before the run |
+| `79d7798` | Slice becomes the default update, by that rule |
+
+- **The Weibull prior.**
+  - **What it is.** W(½, λ) on each τⱼ² is the law of τ² for an exponential τ (Klein & Kneib 2016), the prior Bach & Klein prefer.
+  - **Prior scaling.** τⱼ² = λWⱼ makes a function draw √λ times one at λ = 1, so `ScaledTo` is closed-form given a Monte Carlo quantile: λ = (bound/q)².
+  - **Not the default.** Its scale is a modelling input, so the IG prior stays the default.
+  - **Measured.** A prior scaled to bound 2 at α = 0.05 held the bound with probability 0.9485 on fresh draws. On the asymmetric surface it matched the IG prior's fit error, with λ_y's median at 3.9·10⁻⁴ against 2.1·10⁻⁴.
+  - **Where the scaling came from.** Bach & Klein's appendix with their scaling procedure is not in the arXiv PDF. This rule follows their one-line description, that λ is set so the prior's function draws have a reasonable scale, and is recorded as ours.
+- **The slice update.**
+  - **The update:** one slice update per ln τⱼ², width 1, at most 32 steps out.
+  - **Checks:** it is exact (one update from exact draws leaves the conditional in place under both priors), it visits the upper tail at the conditional's rate (9.64·10⁻³ against 9.56·10⁻³), and its λ medians match the Newton update's within 0.2%.
+- **The default, by the pre-registered rule.**
+  - **The rule:** slice becomes the default only if its ratio to Newton is at least 1.2 somewhere and at least 0.8 everywhere.
+  - **The measure:** worst-component bulk ESS of the log smoothing per second, 3 seeds, 4 chains × (1,000 + 2,000).
+  - **The ratios:** 1.28 (BAPS, IG), 1.37 (BAPS, scaled Weibull), 1.34 (BAPS, ν = 196), 1.31 (BAPS, five times the noise) and 1.05 (`HierarchicalPSpline`). In the four BAPS regimes every slice seed beat every Newton seed.
+  - **The result:** slice is the default, and Newton stays selectable.
+- **A collapsed scheme with several λ.** Not built; this is the reasoning, for the user's call.
+  - **The evidence is not the obstacle:** `AnisotropicTensorSpline` evaluates it at any (λ_x, λ_y).
+  - **The prior is.** The uniform-edf prior that makes the isotropic collapsed scheme proper and scale-free has no cheap version for several λ.
+  - **The route if it is needed** is a partially collapsed sampler (van Dyk & Park 2008). It integrates β but keeps σ², and draws the ln τⱼ² from p(τ | σ², y) under the same component priors. That needs no new prior, one band factorization per evaluation, and values only, which the slice update needs and nothing more.
+  - **Its value would be mixing where β and the smoothings are strongly coupled.** No regime so far shows that: every benchmark regime converged, with R̂ ≤ 1.03 in the tests.
+  - **The proposed trigger** is a measured regime where the anisotropic Gibbs scheme mixes slowly in its smoothing.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 372 of 372 (`20261024_182347373`), `Maths.Samplers.Tests` 105 of 105 (`20261024_182810944`), `Maths.Distributions.Tests` 93 of 93 (`20261024_182920055`). The solution builds.

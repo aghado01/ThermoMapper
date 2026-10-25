@@ -14,6 +14,7 @@ These three small projects sit at the bottom of the [architecture](./Architectur
 | `Gamma` | regression (BAPS local-multiplier draws, BARS robust weights); the sampler behind `Beta`, `InverseGamma` and `StudentT` |
 | `InverseGamma` | regression (the BARS σ² draw, BAPS and hierarchical P-spline variance components) |
 | `Normal` | regression (standard draws behind coefficient and Laplace draws) |
+| `Weibull` | regression (the Weibull smoothing-variance prior and its prior scaling) |
 | `StudentT`, `Truncated<T>` | no callers yet; built for BASS sensitivity input measures and calibration priors |
 | `SpecialFunctions.LogGamma` | geometry, regression (changepoint and BARS priors) |
 | `SpecialFunctions` incomplete gamma and beta | the distributions' CDFs |
@@ -30,7 +31,7 @@ The KL, Jensen–Shannon and `IDivergence` types have no in-repository callers y
 
 ## Design
 
-- **Value types with named factories.** Each distribution is a readonly struct built by a factory that names its parameterization: `Normal.MeanSd`, `Gamma.ShapeRate` or `Gamma.ShapeScale`, `InverseGamma.ShapeScale`, `StudentT.LocationScale`, `Beta.Shapes`.
+- **Value types with named factories.** Each distribution is a readonly struct built by a factory that names its parameterization: `Normal.MeanSd`, `Gamma.ShapeRate` or `Gamma.ShapeScale`, `InverseGamma.ShapeScale`, `Weibull.ShapeScale`, `StudentT.LocationScale`, `Beta.Shapes`.
   - Conjugate updates produce rates, so a caller passes a rate as a rate rather than converting it at the call site. That conversion is where R's BASS τ prior slipped ([BASS derivations review §6](../../issues/regression/bass-derivations-and-integration-review.md#6-d03-finding-rs-default-τ-hyperprior)).
   - The structs allocate nothing and take the generator explicitly. `Normal.SampleStandard` and `Gamma.SampleStandard` are the unit draws.
   - `SpecialFunctions`, `KLDivergence`, `JSDistance` and `Shannon` stay static.
@@ -45,7 +46,7 @@ The KL, Jensen–Shannon and `IDivergence` types have no in-repository callers y
 |---|---|
 | Generator | `Xoshiro256PlusPlus(int? seed)`, `NextUInt64`, `NextDouble`, `NextInt(q)`, `SaveState`, `LoadState`, `Restore` |
 | Seeds | `SeedTree.Derive(master, count)` |
-| Distributions | `Normal.Standard`, `Normal.MeanSd(mean, sd)`, `Normal.MeanVariance`, `Normal.SampleStandard(rng)`, `Normal.StandardQuantile(p)` and `Quantile(p)` (Wichura's AS 241, about 1 part in 10¹⁶; checked against the log-space CDF to p = 10⁻³⁰⁰); `Gamma.ShapeRate(shape, rate)`, `Gamma.ShapeScale(shape, scale)`, `Gamma.SampleStandard(rng, shape)`; `InverseGamma.ShapeScale(shape, scale)`; `StudentT.Standard(ν)`, `StudentT.LocationScale(ν, location, scale)`; `Beta.Shapes(a, b)`. Each has `Sample(rng)`, `LogPdf`, `Cdf`, `Survival`, `LogCdf`, `LogSurvival`, `IntervalProbability`, `LogIntervalProbability` and its moments. `Truncated.Of(parent, lower, upper)`; `IContinuousDistribution` |
+| Distributions | `Normal.Standard`, `Normal.MeanSd(mean, sd)`, `Normal.MeanVariance`, `Normal.SampleStandard(rng)`, `Normal.StandardQuantile(p)` and `Quantile(p)` (Wichura's AS 241, about 1 part in 10¹⁶; checked against the log-space CDF to p = 10⁻³⁰⁰); `Gamma.ShapeRate(shape, rate)`, `Gamma.ShapeScale(shape, scale)`, `Gamma.SampleStandard(rng, shape)`; `InverseGamma.ShapeScale(shape, scale)`; `Weibull.ShapeScale(shape, scale)` with `Quantile(p)`, `Median` and `Mode`; `StudentT.Standard(ν)`, `StudentT.LocationScale(ν, location, scale)`; `Beta.Shapes(a, b)`. Each has `Sample(rng)`, `LogPdf`, `Cdf`, `Survival`, `LogCdf`, `LogSurvival`, `IntervalProbability`, `LogIntervalProbability` and its moments. `Truncated.Of(parent, lower, upper)`; `IContinuousDistribution` |
 | Special functions | `LogGamma`, `LogBeta`; `RegularizedGammaP`, `RegularizedGammaQ` and their logs; `RegularizedBeta`, `LogRegularizedBeta`, `LogRegularizedBetaComplement` |
 | Information | `KLDivergence.Forward(p, q, eps)`, `KLDivergence.Symmetric(p, q, eps)`; `IDivergence<T>`, `KlDivergence(eps)`; `JSDistance.Distance(p, q)`; `Shannon.EntropyNats` (counts or probabilities) |
 
@@ -144,7 +145,7 @@ This is the published xoshiro256++ reference algorithm.
 | Role | Files |
 |---|---|
 | Generator and seeds | `ThermoMapper/src/maths/rng/Xoshiro256PlusPlus.cs`, `SeedTree.cs` |
-| Distributions | `ThermoMapper/src/maths/distributions/Normal.cs`, `Gamma.cs`, `InverseGamma.cs`, `StudentT.cs`, `Beta.cs`, `Truncated.cs`, `IContinuousDistribution.cs`, `SpecialFunctions.cs` |
+| Distributions | `ThermoMapper/src/maths/distributions/Normal.cs`, `Gamma.cs`, `InverseGamma.cs`, `Weibull.cs`, `StudentT.cs`, `Beta.cs`, `Truncated.cs`, `IContinuousDistribution.cs`, `SpecialFunctions.cs` |
 | Information | `ThermoMapper/src/maths/information/Divergences.cs` (`KLDivergence`), `IDivergence.cs`, `JSDistance.cs`, `Shannon.cs` |
 
 **See also:** [Samplers](./Samplers.md) (ensemble seeding) · [BayesianRegression](./BayesianRegression.md) · [DesignPrinciples](./DesignPrinciples.md#6-reproducible-randomness)

@@ -83,6 +83,7 @@ flowchart LR
 - `IBandPenalty` for new banded penalties in `PenalizedSpline` (REML evaluation), `Baps` and `HierarchicalPSpline` (their Gibbs conditionals). `ILocallyAdaptivePenalty` adds the per-difference terms that `BapsScheme.LocallyAdaptiveGibbs` needs; only a penalty whose difference matrix has full row rank can implement it.
 - `IObservationModel.FitConditional` for a model that can serve the conditional mean, variance and draw from one fit.
 - `IAnisotropicPenalty` for a penalty whose components are smoothed separately, $P(\lambda)=\sum_j\lambda_jP_j$, with their joint spectrum (`PenaltySpectrum`). It serves `AnisotropicTensorSpline`'s REML, `BapsScheme.AnisotropicGibbs` and `HierarchicalPSpline`'s anisotropic smoothing.
+- `ISmoothingVariancePrior` for a new prior on the anisotropic smoothing variances: the log density of ln τ² with its first and second derivatives.
 - `IGpKernel` for new radial GP kernels.
 - `ISegmentModel` for new changepoint noise and level models.
 
@@ -92,7 +93,7 @@ flowchart LR
 |---|---|
 | Spline core | `KnotConfig`; `IBasis`; `SplineBasis(degree = 3)`; `StepBasis`; `BSpline.EvaluateBasis`, `BSpline.MakeClampedKnots`; `BandedDesign` (`Accumulate`, `AccumulateRhs`) |
 | BARS | `BarsConfig`; `Bars.Run(config, x, y, grid)` → `BarsResult`; `BarsEnsemble(basis, model, prior, kernel, resampler?, dmgkConstant?, adaptKernelTau?, temperLevels?, temperBetaMin = 0.05, temperPath = Likelihood, temperSchedule = DeterministicEvenOdd, temperAdaptLadder = true)`; `PeakPosterior`, `PeakMode`, `PeakSpan`; `SplineExtrema` (`Argmax`, `SignificantPeaks`, `SignificantPeakSpans`) |
-| BAPS | `IBandPenalty` (`Bandwidth`, `Nullity`, `AccumulateInto`, `Roughness`), `ILocallyAdaptivePenalty` and `IAnisotropicPenalty` (`Components`, `AccumulateComponents`, `ComponentRoughness`, `Spectrum` → `PenaltySpectrum`: `LogPseudoDeterminant`, with its gradient and Hessian in ln λ); `DifferencePenalty(order = 2)`; `PenalizedSpline(design, y, IBandPenalty)` (`Coefficients`, `ProfiledVariance`, `RemlLogEvidence`, `EffectiveDegreesOfFreedom`, `EdfSlope`); `Baps(...).Run(BapsScheme, …)` with `BapsScheme` (`Gibbs`, `Collapsed`, `LocallyAdaptiveGibbs`, `AnisotropicGibbs`) → `BapsResult` (`PosteriorDraws`, `FitBand(design)` → `PointwiseBand`, `Sigma2Interval`, `Tau2Interval`, `ComponentLambdaInterval(j)` → `PosteriorInterval`, `ComponentLogLambdaConvergence`); `HierarchicalPSpline(..., anisotropicSmoothing = false).Run` → `HierarchicalResult` (`PosteriorDraws` per chain, Rao–Blackwellized means, `PopulationBand`, `ReplicateBand`, three variance intervals, `ComponentSmoothingVarianceInterval(j)`, three convergence diagnostics, `ComponentSmoothingVarianceConvergence`, `RHatPopulation`, `Checkpoint`); `HierarchicalStart` (`Overdispersed`, `Fixed`); `HierarchicalScheme` (`Centred`, `CollapsedPopulation`, `Interweaved`, `CollapsedInterweaved`, `ParameterExpanded`); `HalfTDeviationPrior(Degrees, Scale)`; `TensorProductDesign.Build` → `TensorDesign`; `TensorPenalty`; `AnisotropicTensorSpline` (`Coefficients`, `RemlLogEvidence`, `RemlOptimum` → `AnisotropicReml`, `Penalty`) |
+| BAPS | `IBandPenalty` (`Bandwidth`, `Nullity`, `AccumulateInto`, `Roughness`), `ILocallyAdaptivePenalty` and `IAnisotropicPenalty` (`Components`, `AccumulateComponents`, `ComponentRoughness`, `SamplePrior`, `Spectrum` → `PenaltySpectrum`: `LogPseudoDeterminant`, with its gradient and Hessian in ln λ); `ISmoothingVariancePrior` (`LogDensityOfLog`): `InverseGammaVariancePrior(shape, scale)`, `WeibullVariancePrior(scale, shape = ½)` and `WeibullVariancePrior.ScaledTo(design, penalty, bound, tailProbability = 0.01)`; `SmoothingVarianceUpdate` (`Slice`, `Newton`); `DifferencePenalty(order = 2)`; `PenalizedSpline(design, y, IBandPenalty)` (`Coefficients`, `ProfiledVariance`, `RemlLogEvidence`, `EffectiveDegreesOfFreedom`, `EdfSlope`); `Baps(..., componentPrior, componentUpdate).Run(BapsScheme, …)` with `BapsScheme` (`Gibbs`, `Collapsed`, `LocallyAdaptiveGibbs`, `AnisotropicGibbs`) → `BapsResult` (`PosteriorDraws`, `FitBand(design)` → `PointwiseBand`, `Sigma2Interval`, `Tau2Interval`, `ComponentLambdaInterval(j)` → `PosteriorInterval`, `ComponentLogLambdaConvergence`); `HierarchicalPSpline(..., anisotropicSmoothing = false, componentPrior, componentUpdate).Run` → `HierarchicalResult` (`PosteriorDraws` per chain, Rao–Blackwellized means, `PopulationBand`, `ReplicateBand`, three variance intervals, `ComponentSmoothingVarianceInterval(j)`, three convergence diagnostics, `ComponentSmoothingVarianceConvergence`, `RHatPopulation`, `Checkpoint`); `HierarchicalStart` (`Overdispersed`, `Fixed`); `HierarchicalScheme` (`Centred`, `CollapsedPopulation`, `Interweaved`, `CollapsedInterweaved`, `ParameterExpanded`); `HalfTDeviationPrior(Degrees, Scale)`; `TensorProductDesign.Build` → `TensorDesign`; `TensorPenalty`; `AnisotropicTensorSpline` (`Coefficients`, `RemlLogEvidence`, `RemlOptimum` → `AnisotropicReml`, `Penalty`) |
 | BGP | `SquaredExponentialKernel : IGpKernel`; `GpRegression(x, y, sigma2, kernel, scaling = Similarity)` or `GpRegression.WithUnknownScale(x, y, kernel, scaling)` (`NoiseModel`, `Fit(t, η)` for an unknown scale; `Fit(t)` → `GpFit`, `PredictMean`, `PredictVariance`, `KernelAffinity`, `Transform` → `GpTransform`); `EmpiricalBayesBandwidthPrior(gp, …)`; `BgpSampler(gp, prior).Run(...)` → `BgpResult` (`PosteriorMean`, `PosteriorSd`, `BandwidthDraws`) |
 | Changepoint | `ExactChangepoint.Infer(y, σ², ν, ρ², maxSegments)` or `Infer(y, ISegmentModel, maxSegments)` → `ChangepointResult`; `DefaultHyperparameters(y)`; `GaussianSegmentModel`, `CauchySegmentModel`; `ChangepointResult.Posterior.Sample(draws, seed)` → `ChangepointDraw` |
 | Pointwise and predictive checks | `UnitPartition(unitOf, stratumOf)`, `UnitPartition.EachObservation(n)`, `ConsecutiveBlocks(blocks, size)`; `PointwiseLogDensity` (`Values`, `Units`, `Latents`); `LatentReport`, `LatentScope`, `LatentTreatment`; `BarsEnsemble.PointwiseLogDensity(result, x, y, units)`, `HierarchicalPSpline.PointwiseLogDensity(result, units)`, `ChangepointPosterior.PointwiseLogDensity(draws, units)`; `PredictiveChecks.Waic`, `PsisLoo` → `PredictiveCheck`, `FitGeneralizedPareto`; `IWeightResampler.MarginalLogDensity`, `ISegmentModel.LogLikelihood` |
@@ -571,32 +572,50 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
 #### Anisotropic smoothing
 
 `BapsScheme.AnisotropicGibbs`, and `HierarchicalPSpline(…, anisotropicSmoothing: true)` for the population curve under any of its schemes. It follows Bach & Klein (2025, *Statistics and Computing* 35:43; arXiv 2211.16218).
-- **The model.** β's prior is $N(0,K^-)$ with $K=\sum_jP_j/\tau_j^2$, and each $\tau_j^2\sim IG(a,b)$, the prior the other schemes give τ².
+- **The model.** β's prior is $N(0,K^-)$ with $K=\sum_jP_j/\tau_j^2$, and each $\tau_j^2$ has a prior q (`ISmoothingVariancePrior`): IG(a, b) by default, the prior the other schemes give τ², or a Weibull (below).
 - **Why not Gibbs.** K's pseudo-determinant $\prod_l\sum_j\gamma_{jl}/\tau_j^2$ does not factor into the components, so the $\tau_j^2$ have no conjugate conditional. The components share the Kronecker eigenbasis, so it costs O(ν) at any τ (`PenaltySpectrum`; their Theorem 3.1 and Corollary 3.2).
-- **The full conditional** on $\rho_j=\ln\tau_j^2$, with $w_j=1/\tau_j^2$ and $R_j=\beta^\top P_j\beta$, is $\ln p(\rho\mid\beta)=\tfrac12\ln\operatorname{Det}K-\tfrac12\sum_jR_jw_j-\sum_j(a\rho_j+bw_j)$, with a closed-form gradient and Hessian (their eq. 12 and Proposition 3.4). With one component it is the isotropic IG conditional.
-- **The update** (`ComponentSmoothing`), each sweep:
-  1. One Newton-proposal Metropolis step on every $\rho_j$ at once (`NewtonMetropolis`, their update): $\rho'\sim N(\rho+M^{-1}g,\,M^{-1})$, with M the negated Hessian after its eigenvalues are capped at $-\delta$, $\delta=1/\pi$.
-  2. One random-walk Metropolis step on each $\rho_j$ in turn, sd 1.
-- **Why the random-walk steps.** Newton steps alone are exact but stick in the upper tail.
+- **The full conditional** on $\rho_j=\ln\tau_j^2$, with $w_j=1/\tau_j^2$ and $R_j=\beta^\top P_j\beta$, is $\ln p(\rho\mid\beta)=\tfrac12\ln\operatorname{Det}K-\tfrac12\sum_jR_jw_j+\sum_j\ln q(\rho_j)$, with a closed-form gradient and Hessian (their eq. 12 and Proposition 3.4). Under IG(a, b), $\ln q(\rho)=-a\rho-be^{-\rho}$. With one component and the IG prior it is the isotropic IG conditional.
+- **The update** (`ComponentSmoothing`), each sweep, chosen by `SmoothingVarianceUpdate`:
+  - **`Slice`, the default:** one slice-sampling update on each $\rho_j$ in turn (`SliceSampler`, Neal 2003; width 1, at most 32 steps out). It needs values only and never rejects.
+  - **`Newton`,** Bach & Klein's update:
+    1. One Newton-proposal Metropolis step on every $\rho_j$ at once (`NewtonMetropolis`): $\rho'\sim N(\rho+M^{-1}g,\,M^{-1})$, with M the negated Hessian after its eigenvalues are capped at $-\delta$, $\delta=1/\pi$.
+    2. One random-walk Metropolis step on each $\rho_j$ in turn, sd 1.
+- **Why the Newton update has random-walk steps.** Newton steps alone are exact but stick in the upper tail.
   - That tail decays only exponentially, more slowly than the Gaussian proposal. From deep in it, the capped Newton step lands far past the mode and is rejected.
   - On a fixed β, $4\cdot10^6$ Newton steps never reached a region of conditional probability $4.4\cdot10^{-4}$, with rejection runs of $10^4$ steps, and the chain's variance of $\rho_x$ came out 7–10% low.
   - With the random-walk steps the chain visits that region at $4.47\cdot10^{-4}$, and its longest stay at one point is 8 steps.
   - One update from exact draws of the conditional leaves it in place (mean shift $9\cdot10^{-5}$, variance 0.04%, over $8\cdot10^6$ draws), so the composite kernel is exact.
+- **Which update is the default** (`SmoothingUpdateBenchmark`, `SMOOTHING_BENCH`, run 2026-10-24 with 3 seeds).
+  - **The measure:** the worst component's bulk ESS of its log smoothing per second, at 4 chains × (1,000 + 2,000).
+  - **The rule, registered before the run:** slice becomes the default only if its ratio to Newton is at least 1.2 in some regime and at least 0.8 in all.
+  - **The ratios:** 1.28 on BAPS at ν = 81 under the IG prior, 1.37 under a scaled Weibull prior, 1.34 at ν = 196, 1.31 at five times the noise, and 1.05 on `HierarchicalPSpline` with three replicate surfaces. In the four BAPS regimes every slice seed beat every Newton seed.
+  - **So slice is the default,** and Newton stays selectable. Their λ medians on the asymmetric surface agree within 0.2%.
+- **The Weibull prior and prior scaling** (`WeibullVariancePrior`).
+  - **The prior.** $\tau_j^2\sim W(k,\lambda)$, with $\ln q(\rho)=k\rho-e^{k(\rho-\ln\lambda)}$. With k = ½ it is the law of τ² for an exponential τ with rate $1/\sqrt\lambda$: the scale-dependent prior of Klein & Kneib (2016), which Bach & Klein (2025) prefer. Its upper tail in ρ decays doubly exponentially, where the IG's decays like $e^{-a\rho}$.
+  - **Prior scaling** (`ScaledTo`) sets λ so that the prior's draws of the function's penalized part stay within ±bound at every design row with probability 1 − α.
+    - With $\tau_j^2=\lambda W_j$ the draw is $\sqrt\lambda$ times one at λ = 1, so λ = (bound/q)² with q the (1 − α)-quantile of max|f| at λ = 1 from Monte Carlo draws.
+    - The draws are exact: `IAnisotropicPenalty.SamplePrior`, which `TensorPenalty` forms as $(Q_x\otimes Q_y)\tilde z$ in the Kronecker eigenbasis.
+    - The null space has a flat prior and is left out.
+  - **It is opt-in:** its scale is a modelling input, so the IG prior stays the default.
+  - **Measured.** On fresh draws a prior scaled to bound 2 at α = 0.05 held the bound with probability 0.9485. On the asymmetric surface (bound 3) the fit error matched the IG prior's, and λ_y's median rose from 2.1·10⁻⁴ to 3.9·10⁻⁴, the prior capping τ_y².
 - **Reading the draws.**
   - Each draw keeps its $\tau_j^2$. Its λ (BAPS) or τ₀² (`HierarchicalPSpline`) is the geometric mean of the components', so the scalar summaries read the overall smoothing.
   - `ComponentLambdaInterval(j)` and `ComponentSmoothingVarianceInterval(j)` give each component's posterior. The shell monitors every component's log (`ComponentLogLambdaConvergence`, `ComponentSmoothingVarianceConvergence`).
-  - BAPS's `AcceptanceRate` pools the scan's three blocks: it is $(2+a)/3$ for the Newton step's rate a.
-- **Checks** (`BapsAnisotropicTests`, `HierarchicalAnisotropicTests`).
-  - With one component the conditional is the IG, and its derivatives match finite differences.
-  - The one-step check above, and the tail's visit rate against quadrature.
+  - BAPS's `AcceptanceRate` is 1 with the slice update. With the Newton update it pools the scan's three blocks: $(2+a)/3$ for the Newton step's rate a.
+- **Checks** (`BapsAnisotropicTests`, `HierarchicalAnisotropicTests`, `SmoothingVariancePriorTests`).
+  - With one component the conditional is the IG, and its derivatives match finite differences. Each prior's log density in ρ is its distribution's plus the Jacobian.
+  - One update from exact draws leaves the conditional in place, for both updates under both priors. Both updates' chains visit the upper tail at the conditional's rate.
+  - The tensor prior's draws have covariance K⁺ and no null-space component.
   - On a surface gentle in x and fast in y, λ_x's and λ_y's 95% intervals separate. Their medians lie within 4% of the REML optimum, and the fit's error is 23% below the isotropic Gibbs scheme's.
   - On replicate surfaces, `HierarchicalPSpline`'s five schemes agree within 2% on both population variances, with R̂ ≤ 1.009.
   - Resumed runs continue exactly, and the isotropic paths are bit-identical to before.
-- **Alternatives, not built.**
-  - Kneib, Klein, Lang & Umlauf (2019) use a discrete anisotropy parameter (BayesX). By Bach & Klein's account it is fast for three axes but breaks down at four, and it treats the coordinates as two isotropic groups, so it is only partly anisotropic.
-  - bamlss slice-samples the variances (Neal 2003), which Bach & Klein found slow from three axes on. With the O(ν) pseudo-determinant each evaluation is cheap, so slice sampling remains a candidate if the composite step ever mixes poorly.
-  - Bach & Klein prefer a Weibull(½, λ) prior on each $\tau_j^2$ for numerical stability. The IG prior keeps the BAPS convention.
+- **Not built: a discrete anisotropy parameter.** Kneib, Klein, Lang & Umlauf (2019) use one (BayesX). By Bach & Klein's account it is fast for three axes but breaks down at four, and it treats the coordinates as two isotropic groups, so it is only partly anisotropic. Bach & Klein also report bamlss's slice sampling as slow from three axes on; that cost came from the pseudo-determinant, which is O(ν) here.
 - **The collapsed scheme stays isotropic.** Its uniform-edf prior on λ has no cheap anisotropic counterpart: edf as a function of several λ needs the generalized spectrum at each smoothing ratio. For anisotropic smoothing by evidence, use `AnisotropicTensorSpline.RemlOptimum`.
+  - **The route if it is ever needed** is a partially collapsed sampler (van Dyk & Park 2008). It integrates β out but keeps σ², so the component priors stay those of the Gibbs scheme and no new prior is needed.
+    - Each sweep draws the ln τⱼ² from p(τ | σ², y), then β and σ² from their conditionals.
+    - The target is $\tfrac12\ln\operatorname{Det}K-\tfrac12\ln|A|+\tfrac12b^\top A^{-1}b+\sum_j\ln q(\rho_j)$, with $A=Z^\top Z/\sigma^2+K$ and $b=Z^\top y/\sigma^2$.
+    - That is one band factorization per evaluation, and the slice update needs only values.
+  - **Its trigger** would be a measured regime where the anisotropic Gibbs scheme mixes slowly in its smoothing. None has appeared: every regime of the update benchmark converged.
 
 `BapsResult` summarizes λ by quantiles of the pooled draws: `LambdaMedian`, `LambdaLo` (2.5%) and `LambdaHi` (97.5%). It reports a median, not a mean, because λ can be heavy-tailed enough that its posterior mean does not exist. The λ modes use **different priors**, so their λ posteriors, and hence these summaries, are not the same quantity.
 
@@ -920,7 +939,7 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 |---|---|
 | Spline core | `spline/KnotConfig.cs`, `IBasis.cs`, `SplineBasis.cs`, `BSpline.cs`, `BandedDesign.cs` |
 | BARS | `spline/bars/Bars.cs`, `BarsEnsemble.cs`, `SplineTarget.cs`, `KnotMoves.cs`, `KnotKernels.cs`, `AdaptiveLocalBetaKernel.cs`, `DmgkSchedule.cs`, `ComplexityPriors.cs`, `WeightedNormalModel.cs`, `PoissonModel.cs`, `WhittleModel.cs`, `GibbsLossModel.cs`, `WeightResampling.cs`, `StepBasis.cs`, `SplineExtrema.cs`, `IObservationModel.cs`, `IConditionalFit.cs`, `IKnotKernel.cs` |
-| BAPS | `spline/baps/DifferencePenalty.cs`, `IBandPenalty.cs`, `PenalizedSpline.cs`, `Baps.cs`, `HierarchicalPSpline.cs`, `TensorProductDesign.cs`, `TensorPenalty.cs`, `PenaltySpectrum.cs`, `ComponentSmoothing.cs`, `AnisotropicTensorSpline.cs`; `NelderMead.cs` (the REML optimum's search) |
+| BAPS | `spline/baps/DifferencePenalty.cs`, `IBandPenalty.cs`, `PenalizedSpline.cs`, `Baps.cs`, `HierarchicalPSpline.cs`, `TensorProductDesign.cs`, `TensorPenalty.cs`, `PenaltySpectrum.cs`, `ComponentSmoothing.cs`, `SmoothingVariancePriors.cs`, `AnisotropicTensorSpline.cs`; `NelderMead.cs` (the REML optimum's search) |
 | BGP | `bgp/GpKernel.cs`, `GpTransform.cs`, `GpRegression.cs`, `EmpiricalBayesBandwidthPrior.cs`, `BgpSampler.cs` |
 | Changepoint | `changepoint/ExactChangepoint.cs`, `SegmentModels.cs`, `ChangepointPosterior.cs` |
 | Pointwise and predictive checks | `Pointwise.cs`, `PredictiveChecks.cs` |
