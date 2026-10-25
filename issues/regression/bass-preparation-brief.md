@@ -2818,3 +2818,22 @@ At the user's request, two of the previous report's "not built" items: the Weibu
   - **The proposed trigger** is a measured regime where the anisotropic Gibbs scheme mixes slowly in its smoothing.
 
 **Results** under the fact harness: `Maths.Regression.Tests` 372 of 372 (`20261024_182347373`), `Maths.Samplers.Tests` 105 of 105 (`20261024_182810944`), `Maths.Distributions.Tests` 93 of 93 (`20261024_182920055`). The solution builds.
+
+### Prior scaling checked against the sources — 2026-10-24
+
+The user supplied Klein & Kneib's 2016 supplement and Bach & Klein's 2025 supplementary material: their Appendix D and their R code.
+
+- **Verified.** `WeibullVariancePrior.ScaledTo` is Bach & Klein's procedure, step for step (Appendix D; R `prior_scaling_WB`):
+  - prior draws u ~ N(0, Γ₊(τ²)⁻¹) on the non-null modes, with τⱼ² ~ Weibull(½, 1);
+  - the (1 − α)-quantile q of ‖Zu‖∞ over the design rows;
+  - λ = (q/c)².
+  - Their λ is a rate, so it is our 1/scale; their log kernel −√λ e^(ρ/2) + ρ/2 equals ours, now pinned by a test.
+  - This corrects the previous report: the rule was not ours, only unverified.
+- **Aligned** (`cdfaf29`):
+  - α defaults to their 0.05 (was 0.01).
+  - `ScaledToResponse` takes their default bound, ‖y‖∞ on standardized y, which is max|yᵢ − ȳ| in raw units and gives the same prior.
+  - `Rate` exposes their λ.
+  - Draws stay at 2,000 against their 1,000: Monte Carlo precision only.
+  - `SmoothingUpdateBenchmark`'s Weibull regime now scales at α = 0.05; its recorded run used 0.01.
+- **Klein & Kneib's original** (2016, Supplement B) is a pointwise criterion, P(|z′β| ≤ c) ≥ 1 − α at one point, with c = 3 and α = 0.01, by integration in sdPrior. Recorded, not built: the simultaneous version is the one Bach & Klein use.
+- **Open, for the user.** Bach & Klein's default prior is the scaled Weibull (`prior = "WB"`, `prior_scaling = TRUE`), backed by their simulation study (Weibull-PS-10 best; the IG needed the Hessian cap in 10% of runs). Ours stays IG(10⁻³, 10⁻³). With `ScaledToResponse` the Weibull needs no user input, so it could be the anisotropic default.
