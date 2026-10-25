@@ -1,5 +1,6 @@
 import Enthymemata.BgpCovering
 import Enthymemata.BgpGaussianKL
+import Enthymemata.BgpGaussianTails
 import Mathlib.Analysis.InnerProductSpace.PiL2
 import Mathlib.Analysis.SpecialFunctions.Pow.Asymptotics
 import Mathlib.MeasureTheory.Constructions.Pi
@@ -17,20 +18,36 @@ The statement is assembled from:
   (`map_smul_closedBall`, `log_inv_mul_radius_le`), with the [P1] amplitude window and noise slab;
 * the sieve and its remaining mass (UV-3, `prior_compl_sieve_le`);
 * entropy (UV-4, with UV-4a's `isCover_image2_smul` and `exists_isCover_Icc`);
-* the tests (UV-5, `exists_tests`), the forward boundary;
-* the general theorem, `gvdv07_contraction`, a cited axiom (Ghosal & van der Vaart 2007,
-  Theorem 4), in the style of `Stability.lean`.
+* the tests (UV-5, `exists_tests`), proved from the Gaussian tails of `BgpGaussianTails.lean`;
+* the general theorem, as a cited axiom in the style of `Stability.lean`, in two forms.
 
-**What is cited, and how.** TWCD2025's (59)–(61) and Remark A.1 enter as hypotheses of
-`posterior_contraction_unknown_variance`: they are facts about the paper's GP prior and sieve,
-which this file does not construct. Two of them carry the protolemma's "to confirm against the
-paper" checks and are named for it: `h59` (UV-2: the (59) bound uniform over the amplitude box,
-via Remark A.1) and `hRadius` (UV-4: the sieve's sup-norm radius `Rₙ` grows at most
-polynomially). The remaining-mass exponent `C₂` of (60) must exceed the prior-mass exponent `C₁`
-of (59) by `144/σ₀²` (`hC₂`); see the protolemma's correction under UV-3.
+**The general theorem, two ways.**
+* `gvdv07_theorem1` and `gvdv07_lemma1` are Ghosal & van der Vaart (2007), Theorem 1 and Lemma 1,
+  as printed, for independent observations. They give
+  `posterior_contraction_unknown_variance_gvdv07`:
+  contraction at `Mₙ ε̄ₙ` for **every** `Mₙ → ∞`.
+* `fixed_constant_contraction` is the fixed-`M`, two-rate form that TWCD2025 (Theorem 3.1),
+  van der Vaart & van Zanten (2008, Theorem 3.3; 2009, Section 3) and the protolemma state. Its
+  source is Ghosal & van der Vaart (2001, Theorem 2.1), the two-rate version of Ghosal, Ghosh &
+  van der Vaart (2000, Theorem 2.1). For independent non-identically distributed observations,
+  with GvdV07's tests, it is not printed as a theorem. It gives
+  `posterior_contraction_unknown_variance`: contraction at `M ε̄ₙ` for one fixed `M`.
 
-**The forward boundary.** UV-5's tests (`exists_tests`) are the one open obligation, so the
-ledger reads `apologizing(1)`.
+**What is cited from TWCD2025, and how.** The paper's (59)–(61) and Remark A.1 enter as hypotheses:
+they are facts about the paper's GP prior and sieve, which this file does not construct. Two carry
+the protolemma's "to confirm against the paper" checks, both confirmed against Appendix A.1:
+* `h59`: (59) uniform over the amplitude box. Part I uses `f*` only through (A2)'s constants
+  `(ν₁, ν₂)`, and (A2) is monotone in them, so `f*/s` satisfies it with `(ν₁/s_min, ν₂/s_min²)`
+  for every `s` in the box.
+* `hRadius`: the sieve's sup-norm radius is at most `Nₙ (rₙ/δₙ)^{D/2} + εₙ`, polynomial in `n`,
+  since the kernel has `h(0) = 1`.
+
+The remaining-mass exponent `C₂` must exceed `C₁` by a margin (`hC₂`; see the protolemma under
+UV-3). The paper's sieve is tunable, which `posterior_contraction_unknown_variance_of_tunable_sieve`
+records.
+
+**The ledger.** Every proof here is complete, so the ledger reads PROOF-CLOSED. The axioms keep
+the module's results conditional on the cited theorems; `#print axioms` names them per theorem.
 -/
 
 open MeasureTheory ProbabilityTheory InformationTheory Filter Metric Set
@@ -160,7 +177,7 @@ variable [MeasurableSpace E] [BorelSpace E]
 
 /-! ### The general theorem (cited) -/
 
-/-- **AXIOM — the general contraction theorem (Ghosal & van der Vaart 2007, Theorem 4).**
+/-- **AXIOM — the general contraction theorem, fixed-constant two-rate form.**
 For independent, non-identically distributed observations with a dominated model, a prior that
 puts mass at least `exp(−C n εₙ²)` on (a measurable part of) the KL neighbourhood
 `B*ₙ(θ₀, εₙ; 2)`, a sieve `Θₙ` whose complement has mass at most `exp(−(C + 4) n εₙ²)`, a cover
@@ -168,19 +185,23 @@ of the sieve by `exp(n ε̄ₙ²)` balls of radius `ξ ε̄ₙ/2` in a semimetri
 powerful local tests for `d` give a posterior that contracts at rate `M ε̄ₙ` in `d`, in mean under
 the truth.
 
-Cited, not formalized. The form taken here, as TWCD2025 and van der Vaart & van Zanten use it:
-* **two rates**, `εₙ ≤ ε̄ₙ`: `εₙ` for the prior mass and the remaining mass, `ε̄ₙ` for the entropy
-  and the conclusion;
-* **a fixed constant `M`**, from the prior-mass and remaining-mass form of the conditions;
-* **the testing hypothesis** in place of the Hellinger metric. Theorem 4 is the case where `d` is
-  the root average squared Hellinger distance, whose tests exist by Le Cam and Birgé; UV-5 builds
-  the tests for `‖f − f′‖ₙ + |σ − σ′|` directly.
+Cited, not formalized. Checked against the sources (protolemma, UV-6):
+* **The printed Theorem 4 of Ghosal & van der Vaart (2007)** has one rate and concludes for every
+  `Mₙ → ∞`. Its tests may be for any semimetric with Lemma 2's conclusion. That form is
+  `gvdv07_theorem1` with `gvdv07_lemma1`.
+* **The fixed-`M` two-rate form here** is Ghosal & van der Vaart (2001, Theorem 2.1), the two-rate
+  version of Ghosal, Ghosh & van der Vaart (2000, Theorem 2.1). That is the form van der Vaart &
+  van Zanten (2009, Section 3: "a slight generalization of the main result in [GGvdV00],
+  formulated as Theorem 2.1 in [GvdV01]") and TWCD2025 (Appendix A.1) invoke. Van der Vaart &
+  van Zanten (2008, Theorem 3.3) state it for fixed-design GP regression with an unknown scale on
+  `[a, b]`, with the tests left as in GvdV07.
 
-The hypotheses are stated on the strong side, so the axiom stays a consequence of the cited
-theorem: tests at every radius `r > 0`, a global cover of the sieve, measurable sieves and
-neighbourhood parts, and `n εₙ² → ∞`. Whether the printed Theorem 4 states the fixed-`M` form or
-the "every `Mₙ → ∞`" form is a citation detail to confirm at review (protolemma, UV-6). -/
-axiom gvdv07_contraction
+The hypotheses are stated on the strong side, so the axiom stays a consequence of that argument:
+* the tests (GvdV07's (2.2)) at every radius `r > 0`;
+* a global cover of the sieve;
+* measurable sieves and neighbourhood parts;
+* `n εₙ² → ∞`. -/
+axiom fixed_constant_contraction
     (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (prior : Measure (E × ℝ)) [IsProbabilityMeasure prior]
     (hprior_pos : ∀ᵐ θ ∂prior, 0 < θ.2) (θ₀ : E × ℝ) (hθ₀ : 0 < θ₀.2)
     (d : ℕ → E × ℝ → E × ℝ → ℝ) (hd_comm : ∀ n θ θ', d n θ θ' = d n θ' θ)
@@ -205,13 +226,443 @@ axiom gvdv07_contraction
       (fun n => ∫⁻ y, posterior ev prior n y {θ | M * εbar n ≤ d n θ θ₀} ∂dataLaw ev n θ₀)
       atTop (𝓝 0)
 
-/-! ### UV-5 — the tests (the forward boundary) -/
+/-! ### The general theorem as printed: Ghosal & van der Vaart (2007), Theorem 1 and Lemma 1 -/
 
-/-- **UV-5 (OBLIGATION).** Exponentially powerful local tests for `‖f − f′‖ₙ + |σ − σ′|` on a
-compact noise range: if `θ₁` is at distance more than `r` from the truth, one test separates the
-truth from the whole `ξ r`-ball around `θ₁`, with both errors at most `exp(−K n r²)`. When
-`‖f₁ − f*‖ₙ > r/2`, a likelihood-ratio test for the Gaussian means; when `|σ₁ − σ₀| > r/2`, a χ²
-test of the residual scale around `f₁`. The constants depend on `σ_min` and `σ_max`. -/
+/-- **AXIOM — Ghosal & van der Vaart (2007), Theorem 1**, for independent observations, with
+`eₙ = dₙ`, `k = 2`, the parameter set `S` and the KL neighbourhood `B*ₙ(θ₀, εₙ; 2)` in its
+independent-observations form (`klBall`). The hypotheses are the theorem's:
+* (2.2): for every `r > 0` and `θ₁ ∈ S` with `dₙ(θ₁, θ₀) > r`, a test with
+  `P₀φ ≤ e^{−Knr²}` and `Pθ(1 − φ) ≤ e^{−Knr²}` on the `ξr`-ball around `θ₁`;
+* (2.4): the local entropy `log N(ξr/2, {θ ∈ Θₙ : dₙ(θ, θ₀) < r}, dₙ) ≤ nεₙ²` for `r > εₙ`, here
+  by closed balls of radius `ξr/4`;
+* (2.5): `Πₙ(θ ∈ Θₙ : jεₙ < dₙ ≤ 2jεₙ) ≤ e^{Knεₙ²j²/2} Πₙ(B*ₙ(θ₀, εₙ; 2))` for every sufficiently
+  large `j`;
+* `εₙ → 0` and `(nεₙ²)⁻¹ = O(1)`.
+
+The conclusion is the printed one: for every `Mₙ → ∞`, the expected posterior mass of
+`{θ ∈ Θₙ : dₙ(θ, θ₀) ≥ Mₙεₙ}` tends to `0`. Hypotheses are on the strong side: tests for every `n`,
+closed balls at half the radius, measurable sieves and neighbourhood parts, eventually in `n`. -/
+axiom gvdv07_theorem1
+    (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (prior : Measure (E × ℝ)) [IsProbabilityMeasure prior]
+    (S : Set (E × ℝ)) (hS : prior Sᶜ = 0) (hS_pos : ∀ θ ∈ S, 0 < θ.2) (θ₀ : E × ℝ) (hθ₀ : θ₀ ∈ S)
+    (d : ℕ → E × ℝ → E × ℝ → ℝ) (hd_comm : ∀ n θ θ', d n θ θ' = d n θ' θ)
+    (hd_triangle : ∀ n θ θ' θ'', d n θ θ'' ≤ d n θ θ' + d n θ' θ'')
+    (hd_meas : ∀ n θ', Measurable fun θ => d n θ θ')
+    (ε : ℕ → ℝ) (hε : ∀ᶠ n in atTop, 0 < ε n) (hε0 : Tendsto ε atTop (𝓝 0))
+    (hnε : ∃ c > 0, ∀ᶠ n in atTop, c ≤ n * ε n ^ 2)
+    (Θ : ℕ → Set (E × ℝ)) (hΘ : ∀ n, MeasurableSet (Θ n)) (K ξ : ℝ) (hK : 0 < K) (hξ : 0 < ξ)
+    (htests : ∀ n : ℕ, ∀ r > 0, ∀ θ₁ ∈ S, r < d n θ₁ θ₀ →
+      ∃ φ : (Fin n → ℝ) → ℝ, Measurable φ ∧ (∀ y, 0 ≤ φ y ∧ φ y ≤ 1) ∧
+        ∫ y, φ y ∂dataLaw ev n θ₀ ≤ Real.exp (-(K * n * r ^ 2)) ∧
+        ∀ θ ∈ S, d n θ θ₁ ≤ ξ * r →
+          ∫ y, (1 - φ y) ∂dataLaw ev n θ ≤ Real.exp (-(K * n * r ^ 2)))
+    (hentropy : ∀ᶠ n in atTop, ∀ r > ε n, ∃ N : Finset (E × ℝ),
+      (N.card : ℝ) ≤ Real.exp (n * ε n ^ 2) ∧
+        {θ | θ ∈ Θ n ∧ d n θ θ₀ < r} ⊆ ⋃ θ' ∈ N, {θ | d n θ θ' ≤ ξ * r / 4})
+    (hshell : ∃ j₀ : ℕ, ∀ᶠ n in atTop, ∃ B ⊆ klBall ev n θ₀ (ε n), MeasurableSet B ∧
+      ∀ j : ℕ, j₀ ≤ j →
+        prior {θ | θ ∈ Θ n ∧ j * ε n < d n θ θ₀ ∧ d n θ θ₀ ≤ 2 * j * ε n}
+          ≤ ENNReal.ofReal (Real.exp (K * n * ε n ^ 2 * j ^ 2 / 2)) * prior B) :
+    ∀ M : ℕ → ℝ, Tendsto M atTop atTop →
+      Tendsto (fun n => ∫⁻ y, posterior ev prior n y {θ | θ ∈ Θ n ∧ M n * ε n ≤ d n θ θ₀}
+        ∂dataLaw ev n θ₀) atTop (𝓝 0)
+
+/-- **AXIOM — Ghosal & van der Vaart (2007), Lemma 1**, for independent observations and `k = 2`:
+if `Πₙ(Θ ∖ Θₙ)/Πₙ(B*ₙ(θ₀, εₙ; 2)) = o(e^{−2nεₙ²})`, the posterior mass outside the sieve tends to
+`0` in mean. The denominator is taken on a measurable part of the neighbourhood with positive mass,
+which only strengthens the hypothesis. -/
+axiom gvdv07_lemma1
+    (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (prior : Measure (E × ℝ)) [IsProbabilityMeasure prior]
+    (S : Set (E × ℝ)) (hS : prior Sᶜ = 0) (hS_pos : ∀ θ ∈ S, 0 < θ.2) (θ₀ : E × ℝ) (hθ₀ : θ₀ ∈ S)
+    (ε : ℕ → ℝ) (hε : ∀ᶠ n in atTop, 0 < ε n) (hnε : ∃ c > 0, ∀ᶠ n in atTop, c ≤ n * ε n ^ 2)
+    (Θ : ℕ → Set (E × ℝ)) (hΘ : ∀ n, MeasurableSet (Θ n)) (B : ℕ → Set (E × ℝ))
+    (hB : ∀ᶠ n in atTop, B n ⊆ klBall ev n θ₀ (ε n) ∧ MeasurableSet (B n) ∧ 0 < prior (B n))
+    (hratio : Tendsto (fun n => prior (Θ n)ᶜ / prior (B n)
+      * ENNReal.ofReal (Real.exp (2 * n * ε n ^ 2))) atTop (𝓝 0)) :
+    Tendsto (fun n => ∫⁻ y, posterior ev prior n y (Θ n)ᶜ ∂dataLaw ev n θ₀) atTop (𝓝 0)
+
+/-! ### UV-5 — the tests -/
+
+omit [MeasurableSpace E] [BorelSpace E] in
+instance isProbabilityMeasure_dataLaw (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (n : ℕ) (θ : E × ℝ) :
+    IsProbabilityMeasure (dataLaw ev n θ) := by
+  unfold dataLaw
+  infer_instance
+
+omit [MeasurableSpace E] [BorelSpace E] in
+theorem empiricalNorm_sq (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (n : ℕ) (g : E) :
+    empiricalNorm ev n g ^ 2 = (∑ i, ev n i g ^ 2) / n := by
+  rw [empiricalNorm, Real.sq_sqrt (div_nonneg (Finset.sum_nonneg fun i _ => sq_nonneg _)
+    (Nat.cast_nonneg n))]
+
+/-- A rejection set's mass bounds the test `1_R`'s first error. -/
+theorem integral_indicator_le {Ω : Type*} [MeasurableSpace Ω] (P : Measure Ω)
+    {R : Set Ω} (hR : MeasurableSet R) {b : ℝ} (hb : 0 ≤ b) (h : P R ≤ ENNReal.ofReal b) :
+    ∫ y, R.indicator (1 : Ω → ℝ) y ∂P ≤ b := by
+  rw [integral_indicator_one hR]
+  exact ENNReal.toReal_le_of_le_ofReal hb h
+
+/-- The acceptance set's mass bounds the test `1_R`'s second error. -/
+theorem integral_one_sub_indicator_le {Ω : Type*} [MeasurableSpace Ω] (P : Measure Ω)
+    [IsProbabilityMeasure P] {R : Set Ω} (hR : MeasurableSet R) {b : ℝ} (hb : 0 ≤ b)
+    (h : P Rᶜ ≤ ENNReal.ofReal b) :
+    ∫ y, (1 - R.indicator (1 : Ω → ℝ) y) ∂P ≤ b := by
+  have hpt : (fun y => 1 - R.indicator (1 : Ω → ℝ) y) = Rᶜ.indicator (1 : Ω → ℝ) := by
+    funext y
+    by_cases hy : y ∈ R
+    · simp [hy]
+    · simp [hy]
+  rw [hpt]
+  exact integral_indicator_le P hR.compl hb h
+
+/-- `exp(−X) ≤ exp(−Y)` in `ℝ≥0∞` from `Y ≤ X`. -/
+theorem ofReal_exp_neg_le {X Y : ℝ} (h : Y ≤ X) :
+    ENNReal.ofReal (Real.exp (-X)) ≤ ENNReal.ofReal (Real.exp (-Y)) :=
+  ENNReal.ofReal_le_ofReal (Real.exp_le_exp.2 (neg_le_neg h))
+
+/-- The tests' exponent constant, `σ_min²/(1024 σ_max⁴)`. -/
+noncomputable def testConst (σmin σmax : ℝ) : ℝ := σmin ^ 2 / (1024 * σmax ^ 4)
+
+theorem testConst_pos {σmin σmax : ℝ} (hσmin : 0 < σmin) (hσmax : 0 < σmax) :
+    0 < testConst σmin σmax := by
+  unfold testConst
+  positivity
+
+theorem testConst_le {σmin σmax : ℝ} (hσmin : 0 ≤ σmin) (hle : σmin ≤ σmax) (hσmax : 0 < σmax) :
+    testConst σmin σmax ≤ 1 / (1024 * σmax ^ 2) := by
+  unfold testConst
+  rw [div_le_div_iff₀ (by positivity) (by positivity)]
+  have h := mul_le_mul_of_nonneg_right (pow_le_pow_left₀ hσmin hle 2)
+    (by positivity : (0 : ℝ) ≤ 1024 * σmax ^ 2)
+  linarith
+
+theorem testConst_mul {σmin σmax : ℝ} (hσmax : 0 < σmax) :
+    testConst σmin σmax * σmax ^ 4 = σmin ^ 2 / 1024 := by
+  unfold testConst
+  rw [div_mul_eq_mul_div, div_eq_div_iff (by positivity) (by norm_num)]
+  ring
+
+omit [MeasurableSpace E] [BorelSpace E] in
+/-- An empirical-norm bound `‖g‖ₙ ≤ b` bounds the sum of squares by `n b²`. -/
+theorem sum_sq_le_of_empiricalNorm_le (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) {n : ℕ} (hn : 0 < n)
+    {g : E} {b : ℝ} (h : empiricalNorm ev n g ≤ b) : ∑ i, ev n i g ^ 2 ≤ n * b ^ 2 := by
+  have h2 := pow_le_pow_left₀ (empiricalNorm_nonneg ev n g) h 2
+  rw [empiricalNorm_sq, div_le_iff₀ (by exact_mod_cast hn)] at h2
+  linarith
+
+omit [MeasurableSpace E] [BorelSpace E] in
+/-- **UV-5, the mean case.** When `‖f₁ − f*‖ₙ > r/2`, reject when the likelihood-ratio statistic
+`Σ δᵢ(Yᵢ − f*(xᵢ))`, `δ = f₁ − f*`, exceeds `‖δ‖²/2`. Under an alternative with
+`‖f − f₁‖ₙ ≤ r/8` its mean is at least `3‖δ‖²/4`, by Cauchy–Schwarz. -/
+theorem tests_mean_case (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) {σmin σmax σ₀ r : ℝ}
+    (hσmin : 0 < σmin) (hσ₀ : σ₀ ∈ Icc σmin σmax) (hr : 0 < r) {n : ℕ} (hn : 0 < n)
+    (f₀ f₁ : E) (hA : r / 2 < empiricalNorm ev n (f₁ - f₀)) :
+    ∃ R : Set (Fin n → ℝ), MeasurableSet R ∧
+      dataLaw ev n (f₀, σ₀) R
+        ≤ ENNReal.ofReal (Real.exp (-(testConst σmin σmax * n * r ^ 2))) ∧
+      ∀ f σ, σ ∈ Icc σmin σmax → empiricalNorm ev n (f - f₁) ≤ r / 8 →
+        dataLaw ev n (f, σ) Rᶜ
+          ≤ ENNReal.ofReal (Real.exp (-(testConst σmin σmax * n * r ^ 2))) := by
+  obtain ⟨hσ₀lo, hσ₀hi⟩ := hσ₀
+  have hσ₀pos : 0 < σ₀ := hσmin.trans_le hσ₀lo
+  have hσmax : 0 < σmax := hσ₀pos.trans_le hσ₀hi
+  have hnR : (0 : ℝ) < n := by exact_mod_cast hn
+  have hK1 := testConst_le hσmin.le (hσ₀lo.trans hσ₀hi) hσmax
+  obtain ⟨K, hK⟩ : ∃ K, testConst σmin σmax = K := ⟨_, rfl⟩
+  rw [hK] at hK1 ⊢
+  have hK0 : 0 < K := hK ▸ testConst_pos hσmin hσmax
+  obtain ⟨D, hD⟩ : ∃ D, ∑ i, ev n i (f₁ - f₀) ^ 2 = D := ⟨_, rfl⟩
+  have hDgt : n * r ^ 2 < 4 * D := by
+    have h1 : (r / 2) ^ 2 < empiricalNorm ev n (f₁ - f₀) ^ 2 :=
+      pow_lt_pow_left₀ hA (by positivity) two_ne_zero
+    rw [empiricalNorm_sq, hD, lt_div_iff₀ hnR] at h1
+    linarith
+  have hDpos : 0 < D := by
+    have := mul_pos hnR (pow_pos hr 2)
+    linarith
+  -- the common bound K n r² ≤ D/(32 σmax²)
+  have hKD : K * n * r ^ 2 ≤ D / (32 * σmax ^ 2) := by
+    rw [le_div_iff₀ (by positivity)]
+    have h1 : K * (32 * σmax ^ 2) ≤ 1 / 32 := by
+      have := mul_le_mul_of_nonneg_right hK1 (by positivity : (0 : ℝ) ≤ 32 * σmax ^ 2)
+      rw [show 1 / (1024 * σmax ^ 2) * (32 * σmax ^ 2) = 1 / 32 by
+        rw [div_mul_eq_mul_div, one_mul, div_eq_div_iff (by positivity) (by norm_num)]
+        ring] at this
+      exact this
+    have h2 := mul_le_mul_of_nonneg_right h1 (by positivity : (0 : ℝ) ≤ n * r ^ 2)
+    linarith
+  have hR : MeasurableSet {y : Fin n → ℝ | D / 2 ≤ ∑ i, ev n i (f₁ - f₀) * (y i - ev n i f₀)} :=
+    measurableSet_le measurable_const (Finset.measurable_sum _ fun i _ =>
+      measurable_const.mul ((measurable_pi_apply i).sub measurable_const))
+  refine ⟨_, hR, ?_, ?_⟩
+  · -- the truth: P₀(T ≥ D/2) ≤ exp(−D/(8σ₀²))
+    have h := pi_gaussian_linear_tail (fun i => ev n i f₀) (fun i => ev n i (f₁ - f₀))
+      (v := σ₀ ^ 2) (t := D / 2) (by positivity) (by simp only [hD]; exact hDpos) (by linarith)
+    simp only [hD] at h
+    refine h.trans (ofReal_exp_neg_le ?_)
+    have e : (D / 2) ^ 2 / (2 * σ₀ ^ 2 * D) = D / (8 * σ₀ ^ 2) := by
+      rw [div_eq_div_iff (by positivity) (by positivity)]
+      ring
+    have h3 : D / (32 * σmax ^ 2) ≤ D / (8 * σ₀ ^ 2) := by
+      apply div_le_div_of_nonneg_left hDpos.le (by positivity)
+      have := pow_le_pow_left₀ hσ₀pos.le hσ₀hi 2
+      linarith [sq_nonneg σmax]
+    rw [e]
+    linarith
+  · -- an alternative within r/8 of f₁: P(T < D/2) ≤ exp(−D/(32σ²))
+    intro f σ hσ hf1
+    have hσpos : 0 < σ := hσmin.trans_le hσ.1
+    -- the mean of T under (f, σ) is at least 3D/4
+    obtain ⟨mθ, hmθ⟩ : ∃ mθ, ∑ i, ev n i (f₁ - f₀) * (ev n i f - ev n i f₀) = mθ := ⟨_, rfl⟩
+    have hmθ_ge : 3 * D / 4 ≤ mθ := by
+      have hsplit : mθ = D + ∑ i, ev n i (f₁ - f₀) * ev n i (f - f₁) := by
+        rw [← hmθ, ← hD, ← Finset.sum_add_distrib]
+        refine Finset.sum_congr rfl fun i _ => ?_
+        simp only [map_sub]
+        ring
+      have hcs := Finset.sum_mul_sq_le_sq_mul_sq Finset.univ (fun i => ev n i (f₁ - f₀))
+        (fun i => ev n i (f - f₁))
+      rw [hD] at hcs
+      have hUf := sum_sq_le_of_empiricalNorm_le ev hn hf1
+      obtain ⟨s, hs⟩ : ∃ s, ∑ i, ev n i (f₁ - f₀) * ev n i (f - f₁) = s := ⟨_, rfl⟩
+      rw [hs] at hcs hsplit
+      have h1 := mul_le_mul_of_nonneg_left hUf hDpos.le
+      have h2 := mul_lt_mul_of_pos_left hDgt hDpos
+      have hs2 : s ^ 2 < (D / 4) ^ 2 := by nlinarith
+      have := (abs_lt.1 (abs_lt_of_sq_lt_sq hs2 (by positivity))).1
+      linarith
+    have hsub : {y : Fin n → ℝ | D / 2 ≤ ∑ i, ev n i (f₁ - f₀) * (y i - ev n i f₀)}ᶜ
+        ⊆ {y | mθ - D / 2 ≤ ∑ i, (fun i => -ev n i (f₁ - f₀)) i * (y i - ev n i f)} := by
+      intro y hy
+      simp only [Set.mem_compl_iff, Set.mem_setOf_eq, not_le] at hy ⊢
+      have e : ∑ i, -ev n i (f₁ - f₀) * (y i - ev n i f)
+          = mθ - ∑ i, ev n i (f₁ - f₀) * (y i - ev n i f₀) := by
+        rw [← hmθ, ← Finset.sum_sub_distrib]
+        exact Finset.sum_congr rfl fun i _ => by ring
+      rw [e]
+      linarith
+    have hQ : ∑ i, (-ev n i (f₁ - f₀)) ^ 2 = D := by
+      rw [← hD]
+      exact Finset.sum_congr rfl fun i _ => by ring
+    have h := pi_gaussian_linear_tail (fun i => ev n i f) (fun i => -ev n i (f₁ - f₀))
+      (v := σ ^ 2) (t := mθ - D / 2) (by positivity) (by simp only [hQ]; exact hDpos)
+      (by linarith)
+    simp only [hQ] at h
+    refine (measure_mono hsub).trans (h.trans (ofReal_exp_neg_le ?_))
+    have ht : D / 4 ≤ mθ - D / 2 := by linarith
+    have h1 : D / (32 * σ ^ 2) ≤ (mθ - D / 2) ^ 2 / (2 * σ ^ 2 * D) := by
+      rw [div_le_div_iff₀ (by positivity) (by positivity)]
+      have h4 := mul_le_mul_of_nonneg_right (pow_le_pow_left₀ (by positivity) ht 2)
+        (by positivity : (0 : ℝ) ≤ 32 * σ ^ 2)
+      linarith
+    have h4 : D / (32 * σmax ^ 2) ≤ D / (32 * σ ^ 2) := by
+      apply div_le_div_of_nonneg_left hDpos.le (by positivity)
+      have := pow_le_pow_left₀ hσpos.le hσ.2 2
+      linarith
+    linarith
+
+omit [MeasurableSpace E] [BorelSpace E] in
+/-- **UV-5, the scale-up case.** When `σ₁ > σ₀ + r/2`, reject when
+`Σ(Yᵢ − f*(xᵢ))² ≥ nτ`, `τ = σ₀² + 3σ₀r/8`. Under the truth the sum is central; under an
+alternative with `|σ − σ₁| ≤ r/8` only its lower tail matters, where the means drop out. -/
+theorem tests_scale_up_case (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) {σmin σmax σ₀ σ₁ r : ℝ}
+    (hσmin : 0 < σmin) (hσ₀ : σ₀ ∈ Icc σmin σmax) (hσ₁max : σ₁ ≤ σmax) (hr : 0 < r) {n : ℕ}
+    (hn : 0 < n) (f₀ : E) (hB1 : σ₀ + r / 2 < σ₁) :
+    ∃ R : Set (Fin n → ℝ), MeasurableSet R ∧
+      dataLaw ev n (f₀, σ₀) R
+        ≤ ENNReal.ofReal (Real.exp (-(testConst σmin σmax * n * r ^ 2))) ∧
+      ∀ f σ, σ ∈ Icc σmin σmax → |σ - σ₁| ≤ r / 8 →
+        dataLaw ev n (f, σ) Rᶜ
+          ≤ ENNReal.ofReal (Real.exp (-(testConst σmin σmax * n * r ^ 2))) := by
+  obtain ⟨hσ₀lo, hσ₀hi⟩ := hσ₀
+  have hσ₀pos : 0 < σ₀ := hσmin.trans_le hσ₀lo
+  have hσmax : 0 < σmax := hσ₀pos.trans_le hσ₀hi
+  have hnR : (0 : ℝ) < n := by exact_mod_cast hn
+  have hK1 := testConst_le hσmin.le (hσ₀lo.trans hσ₀hi) hσmax
+  have hKe := testConst_mul (σmin := σmin) hσmax
+  obtain ⟨K, hK⟩ : ∃ K, testConst σmin σmax = K := ⟨_, rfl⟩
+  rw [hK] at hK1 hKe ⊢
+  have hK0 : 0 < K := hK ▸ testConst_pos hσmin hσmax
+  have hrmax : r ≤ 2 * σmax := by linarith
+  obtain ⟨τ, hτ⟩ : ∃ τ, σ₀ ^ 2 + 3 / 8 * σ₀ * r = τ := ⟨_, rfl⟩
+  have hτpos : 0 < τ := by rw [← hτ]; positivity
+  have hR : MeasurableSet {y : Fin n → ℝ | n * τ ≤ ∑ i, (y i - ev n i f₀) ^ 2} :=
+    measurableSet_le measurable_const (Finset.measurable_sum _ fun i _ =>
+      ((measurable_pi_apply i).sub measurable_const).pow_const 2)
+  refine ⟨_, hR, ?_, ?_⟩
+  · have hM : ∑ i, (ev n i f₀ - ev n i f₀) ^ 2 = 0 := by simp
+    have hlt : n * σ₀ ^ 2 + ∑ i, (ev n i f₀ - ev n i f₀) ^ 2 < n * τ := by
+      rw [hM, add_zero, ← hτ]
+      have := mul_pos hnR (by positivity : (0 : ℝ) < 3 / 8 * σ₀ * r)
+      linarith
+    have h := pi_gaussian_sq_upper_tail (fun i => ev n i f₀) (fun i => ev n i f₀)
+      (v := σ₀ ^ 2) (τ := τ) (by positivity) hlt
+    simp only [hM, add_zero] at h
+    refine h.trans (ofReal_exp_neg_le ?_)
+    have hτmax : τ ≤ 2 * σmax ^ 2 := by
+      rw [← hτ]
+      have h1 : σ₀ ^ 2 ≤ σmax ^ 2 := pow_le_pow_left₀ hσ₀pos.le hσ₀hi 2
+      have h2 : σ₀ * r ≤ σmax * (2 * σmax) := mul_le_mul hσ₀hi hrmax hr.le hσmax.le
+      nlinarith
+    have h3 : K * τ ≤ 9 / 1024 := by
+      have := mul_le_mul hK1 hτmax hτpos.le (by positivity)
+      rw [show 1 / (1024 * σmax ^ 2) * (2 * σmax ^ 2) = 1 / 512 by
+        rw [div_mul_eq_mul_div, one_mul, div_eq_div_iff (by positivity) (by norm_num)]
+        ring] at this
+      linarith
+    have hτσ : n * τ - n * σ₀ ^ 2 = n * (3 / 8 * σ₀ * r) := by rw [← hτ]; ring
+    rw [hτσ, le_div_iff₀ (by positivity)]
+    have h4 := mul_le_mul_of_nonneg_left h3
+      (by positivity : (0 : ℝ) ≤ 16 * σ₀ ^ 2 * (n : ℝ) ^ 2 * r ^ 2)
+    linarith
+  · intro f σ hσ hs1
+    have hσpos : 0 < σ := hσmin.trans_le hσ.1
+    have hσlow : σ₀ + 3 / 8 * r < σ := by
+      have := (abs_le.1 hs1).1
+      linarith
+    have hsq' : (σ₀ + 3 / 8 * r) ^ 2 < σ ^ 2 := pow_lt_pow_left₀ hσlow (by positivity) two_ne_zero
+    have hgap : 3 / 8 * σ₀ * r ≤ σ ^ 2 - τ := by
+      rw [← hτ]
+      nlinarith [sq_nonneg r]
+    have hτlt : τ < σ ^ 2 := by
+      have := mul_pos hσ₀pos hr
+      linarith
+    have hsub : {y : Fin n → ℝ | n * τ ≤ ∑ i, (y i - ev n i f₀) ^ 2}ᶜ
+        ⊆ {y | ∑ i, (y i - ev n i f₀) ^ 2 ≤ n * τ} := by
+      intro y hy
+      simp only [Set.mem_compl_iff, Set.mem_setOf_eq, not_le] at hy ⊢
+      exact hy.le
+    have h := pi_gaussian_sq_lower_tail (fun i => ev n i f) (fun i => ev n i f₀)
+      (v := σ ^ 2) (τ := τ) (by positivity) hτlt
+    refine (measure_mono hsub).trans (h.trans (ofReal_exp_neg_le ?_))
+    rw [le_div_iff₀ (by positivity)]
+    have hσ4 : (σ ^ 2) ^ 2 ≤ σmax ^ 4 := by
+      have := pow_le_pow_left₀ (by positivity) (pow_le_pow_left₀ hσpos.le hσ.2 2) 2
+      rw [show (σmax ^ 2) ^ 2 = σmax ^ 4 by ring] at this
+      exact this
+    have hsq : (3 / 8 * σ₀ * r) ^ 2 ≤ (σ ^ 2 - τ) ^ 2 := pow_le_pow_left₀ (by positivity) hgap 2
+    have hσ₀2 : σmin ^ 2 ≤ σ₀ ^ 2 := pow_le_pow_left₀ hσmin.le hσ₀lo 2
+    have h1 := mul_le_mul_of_nonneg_left hσ4 (by positivity : (0 : ℝ) ≤ 8 * K * n * r ^ 2)
+    have hKe2 : K * n * r ^ 2 * σmax ^ 4 = σmin ^ 2 / 1024 * (n * r ^ 2) := by
+      rw [show K * n * r ^ 2 * σmax ^ 4 = (K * σmax ^ 4) * (n * r ^ 2) by ring, hKe]
+    have h2 := mul_le_mul_of_nonneg_right hσ₀2 (by positivity : (0 : ℝ) ≤ n * r ^ 2)
+    have h3 := mul_le_mul_of_nonneg_left hsq hnR.le
+    have h0 : 0 ≤ σ₀ ^ 2 * (n * r ^ 2) := by positivity
+    linarith
+
+omit [MeasurableSpace E] [BorelSpace E] in
+/-- **UV-5, the scale-down case.** When `σ₁ < σ₀ − r/2`, reject when
+`Σ(Yᵢ − f₁(xᵢ))² ≤ nτ`, `τ = σ₀² − σ₀r/8`. Under the truth only the lower tail matters; under an
+alternative with `‖f − f₁‖ₙ ≤ r/8` and `|σ − σ₁| ≤ r/8` the means are within `r/8` of `f₁`, and
+`r < 2σ₀` keeps their shift below the scale gap. -/
+theorem tests_scale_down_case (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) {σmin σmax σ₀ σ₁ r : ℝ}
+    (hσmin : 0 < σmin) (hσ₀ : σ₀ ∈ Icc σmin σmax) (hσ₁min : σmin ≤ σ₁) (hr : 0 < r) {n : ℕ}
+    (hn : 0 < n) (f₀ f₁ : E) (hB2 : σ₁ < σ₀ - r / 2) :
+    ∃ R : Set (Fin n → ℝ), MeasurableSet R ∧
+      dataLaw ev n (f₀, σ₀) R
+        ≤ ENNReal.ofReal (Real.exp (-(testConst σmin σmax * n * r ^ 2))) ∧
+      ∀ f σ, σ ∈ Icc σmin σmax → empiricalNorm ev n (f - f₁) ≤ r / 8 → |σ - σ₁| ≤ r / 8 →
+        dataLaw ev n (f, σ) Rᶜ
+          ≤ ENNReal.ofReal (Real.exp (-(testConst σmin σmax * n * r ^ 2))) := by
+  obtain ⟨hσ₀lo, hσ₀hi⟩ := hσ₀
+  have hσ₀pos : 0 < σ₀ := hσmin.trans_le hσ₀lo
+  have hσmax : 0 < σmax := hσ₀pos.trans_le hσ₀hi
+  have hnR : (0 : ℝ) < n := by exact_mod_cast hn
+  have hK1 := testConst_le hσmin.le (hσ₀lo.trans hσ₀hi) hσmax
+  obtain ⟨K, hK⟩ : ∃ K, testConst σmin σmax = K := ⟨_, rfl⟩
+  rw [hK] at hK1 ⊢
+  have hK0 : 0 < K := hK ▸ testConst_pos hσmin hσmax
+  have hr2 : r < 2 * σ₀ := by linarith
+  obtain ⟨τ, hτ⟩ : ∃ τ, σ₀ ^ 2 - σ₀ * r / 8 = τ := ⟨_, rfl⟩
+  have hσr : σ₀ * r < 2 * σ₀ ^ 2 := by nlinarith
+  have hτpos : 0 < τ := by
+    rw [← hτ]
+    linarith [pow_pos hσ₀pos 2]
+  have hτle : τ ≤ σ₀ ^ 2 := by
+    rw [← hτ]
+    have := mul_pos hσ₀pos hr
+    linarith
+  have hR : MeasurableSet {y : Fin n → ℝ | ∑ i, (y i - ev n i f₁) ^ 2 ≤ n * τ} :=
+    measurableSet_le (Finset.measurable_sum _ fun i _ =>
+      ((measurable_pi_apply i).sub measurable_const).pow_const 2) measurable_const
+  refine ⟨_, hR, ?_, ?_⟩
+  · have hτlt : τ < σ₀ ^ 2 := by
+      rw [← hτ]
+      have := mul_pos hσ₀pos hr
+      linarith
+    have h := pi_gaussian_sq_lower_tail (fun i => ev n i f₀) (fun i => ev n i f₁)
+      (v := σ₀ ^ 2) (τ := τ) (by positivity) hτlt
+    refine h.trans (ofReal_exp_neg_le ?_)
+    have hτσ : σ₀ ^ 2 - τ = σ₀ * r / 8 := by rw [← hτ]; ring
+    rw [hτσ, le_div_iff₀ (by positivity)]
+    have h3 : K * σ₀ ^ 2 ≤ 1 / 1024 := by
+      have hσ2 : σ₀ ^ 2 ≤ σmax ^ 2 := pow_le_pow_left₀ hσ₀pos.le hσ₀hi 2
+      have := mul_le_mul hK1 hσ2 (by positivity) (by positivity)
+      rw [show 1 / (1024 * σmax ^ 2) * σmax ^ 2 = 1 / 1024 by
+        rw [div_mul_eq_mul_div, one_mul, div_eq_div_iff (by positivity) (by norm_num)]
+        ring] at this
+      exact this
+    have h4 := mul_le_mul_of_nonneg_right h3
+      (by positivity : (0 : ℝ) ≤ 8 * n * r ^ 2 * σ₀ ^ 2)
+    have h5 : (0 : ℝ) ≤ n * r ^ 2 * σ₀ ^ 2 := by positivity
+    linarith
+  · intro f σ hσ hf1 hs1
+    have hσpos : 0 < σ := hσmin.trans_le hσ.1
+    have hσup : σ < σ₀ - 3 / 8 * r := by
+      have := (abs_le.1 hs1).2
+      linarith
+    obtain ⟨U, hUdef⟩ : ∃ U, ∑ i, (ev n i f - ev n i f₁) ^ 2 = U := ⟨_, rfl⟩
+    have hUle : U ≤ n * (r / 8) ^ 2 := by
+      rw [← hUdef]
+      have := sum_sq_le_of_empiricalNorm_le ev hn hf1
+      simp only [map_sub] at this
+      exact this
+    have hσsq : σ ^ 2 ≤ (σ₀ - 3 / 8 * r) ^ 2 := pow_le_pow_left₀ hσpos.le hσup.le 2
+    have hgap : 5 / 16 * σ₀ * r * n ≤ n * τ - (n * σ ^ 2 + U) := by
+      rw [← hτ]
+      have h1 : r * r < 2 * σ₀ * r := mul_lt_mul_of_pos_right hr2 hr
+      have h2 : (n : ℝ) * σ ^ 2 ≤ n * (σ₀ - 3 / 8 * r) ^ 2 :=
+        mul_le_mul_of_nonneg_left hσsq hnR.le
+      have h3 : (n : ℝ) * (r * r) ≤ n * (2 * σ₀ * r) := mul_le_mul_of_nonneg_left h1.le hnR.le
+      linarith
+    have hlt : n * σ ^ 2 + U < n * τ := by
+      have : 0 < 5 / 16 * σ₀ * r * n := by positivity
+      linarith
+    have hsub : {y : Fin n → ℝ | ∑ i, (y i - ev n i f₁) ^ 2 ≤ n * τ}ᶜ
+        ⊆ {y | n * τ ≤ ∑ i, (y i - ev n i f₁) ^ 2} := by
+      intro y hy
+      simp only [Set.mem_compl_iff, Set.mem_setOf_eq, not_le] at hy ⊢
+      exact hy.le
+    have h := pi_gaussian_sq_upper_tail (fun i => ev n i f) (fun i => ev n i f₁)
+      (v := σ ^ 2) (τ := τ) (by positivity) (by simp only [hUdef]; exact hlt)
+    simp only [hUdef] at h
+    refine (measure_mono hsub).trans (h.trans (ofReal_exp_neg_le ?_))
+    rw [le_div_iff₀ (by positivity)]
+    have hsq : (5 / 16 * σ₀ * r * n) ^ 2 ≤ (n * τ - (n * σ ^ 2 + U)) ^ 2 :=
+      pow_le_pow_left₀ (by positivity) hgap 2
+    have hσ2 : σ ^ 2 ≤ σmax ^ 2 := pow_le_pow_left₀ hσpos.le hσ.2 2
+    have hden := mul_le_mul hσ2 (mul_le_mul_of_nonneg_left hτle hnR.le) (by positivity)
+      (by positivity)
+    have hK2 : K * σmax ^ 2 ≤ 1 / 1024 := by
+      have := mul_le_mul_of_nonneg_right hK1 (by positivity : (0 : ℝ) ≤ σmax ^ 2)
+      rw [show 1 / (1024 * σmax ^ 2) * σmax ^ 2 = 1 / 1024 by
+        rw [div_mul_eq_mul_div, one_mul, div_eq_div_iff (by positivity) (by norm_num)]
+        ring] at this
+      exact this
+    have h1 := mul_le_mul_of_nonneg_left hden (by positivity : (0 : ℝ) ≤ 16 * K * n * r ^ 2)
+    have h2 := mul_le_mul_of_nonneg_right hK2
+      (by positivity : (0 : ℝ) ≤ 16 * (n : ℝ) ^ 2 * r ^ 2 * σ₀ ^ 2)
+    have h3 : (0 : ℝ) ≤ (n : ℝ) ^ 2 * r ^ 2 * σ₀ ^ 2 := by positivity
+    linarith
+
+omit [MeasurableSpace E] [BorelSpace E] in
+/-- **UV-5.** Exponentially powerful local tests for `‖f − f′‖ₙ + |σ − σ′|` on a compact noise
+range: if `θ₁` is at distance more than `r` from the truth, one test separates the truth from the
+whole `r/8`-ball around `θ₁`, with both errors at most `exp(−K n r²)`,
+`K = σ_min²/(1024 σ_max⁴)` (`testConst`). The test is `1_R` for the rejection set of the case
+that applies: `tests_mean_case` when `‖f₁ − f*‖ₙ > r/2`, else `tests_scale_up_case` or
+`tests_scale_down_case` as `σ₁ > σ₀ + r/2` or `σ₁ < σ₀ − r/2`. Each scale test is centred where
+its means do the least harm, which keeps the gap linear in `r` on the whole compact range. -/
 theorem exists_tests (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) {σmin σmax : ℝ} (hσmin : 0 < σmin)
     (f₀ : E) {σ₀ : ℝ} (hσ₀ : σ₀ ∈ Icc σmin σmax) :
     ∃ K ξ : ℝ, 0 < K ∧ 0 < ξ ∧ ∀ n : ℕ, ∀ r > 0,
@@ -220,7 +671,55 @@ theorem exists_tests (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) {σmin σmax
           ∫ y, φ y ∂dataLaw ev n (f₀, σ₀) ≤ Real.exp (-(K * n * r ^ 2)) ∧
           ∀ θ ∈ (univ ×ˢ Icc σmin σmax : Set (E × ℝ)), paramDist ev n θ θ₁ ≤ ξ * r →
             ∫ y, (1 - φ y) ∂dataLaw ev n θ ≤ Real.exp (-(K * n * r ^ 2)) := by
-  sorry -- [UV-5] the tests for ‖f − f′‖ₙ + |σ − σ′|: Gaussian LR tests and a χ² scale test
+  have hσmax : 0 < σmax := hσmin.trans_le (hσ₀.1.trans hσ₀.2)
+  refine ⟨testConst σmin σmax, 1 / 8, testConst_pos hσmin hσmax, by norm_num, ?_⟩
+  intro n r hr θ₁ hθ₁ hd
+  obtain ⟨f₁, σ₁⟩ := θ₁
+  have hσ₁ : σ₁ ∈ Icc σmin σmax := hθ₁.2
+  have hd' : r < empiricalNorm ev n (f₁ - f₀) + |σ₁ - σ₀| := hd
+  have hexp_pos : 0 ≤ Real.exp (-(testConst σmin σmax * n * r ^ 2)) := (Real.exp_pos _).le
+  rcases Nat.eq_zero_or_pos n with rfl | hn
+  · refine ⟨fun _ => 0, measurable_const, fun _ => ⟨le_rfl, zero_le_one⟩, ?_, ?_⟩
+    · simp
+    · intro θ _ _
+      simp
+  -- a rejection set with both bounds gives the test 1_R
+  have key : ∀ R : Set (Fin n → ℝ), MeasurableSet R →
+      dataLaw ev n (f₀, σ₀) R
+        ≤ ENNReal.ofReal (Real.exp (-(testConst σmin σmax * n * r ^ 2))) →
+      (∀ f σ, σ ∈ Icc σmin σmax → paramDist ev n (f, σ) (f₁, σ₁) ≤ 1 / 8 * r →
+        dataLaw ev n (f, σ) Rᶜ
+          ≤ ENNReal.ofReal (Real.exp (-(testConst σmin σmax * n * r ^ 2)))) →
+      ∃ φ : (Fin n → ℝ) → ℝ, Measurable φ ∧ (∀ y, 0 ≤ φ y ∧ φ y ≤ 1) ∧
+        ∫ y, φ y ∂dataLaw ev n (f₀, σ₀) ≤ Real.exp (-(testConst σmin σmax * n * r ^ 2)) ∧
+        ∀ θ ∈ (univ ×ˢ Icc σmin σmax : Set (E × ℝ)), paramDist ev n θ (f₁, σ₁) ≤ 1 / 8 * r →
+          ∫ y, (1 - φ y) ∂dataLaw ev n θ
+            ≤ Real.exp (-(testConst σmin σmax * n * r ^ 2)) := by
+    intro R hR h0 h1
+    refine ⟨R.indicator 1, measurable_one.indicator hR, fun y => ?_,
+      integral_indicator_le _ hR hexp_pos h0, ?_⟩
+    · by_cases hy : y ∈ R
+      · simp [hy]
+      · simp [hy]
+    · rintro ⟨f, σ⟩ hθ hθb
+      exact integral_one_sub_indicator_le _ hR hexp_pos (h1 f σ hθ.2 hθb)
+  have hball : ∀ f σ, paramDist ev n (f, σ) (f₁, σ₁) ≤ 1 / 8 * r →
+      empiricalNorm ev n (f - f₁) ≤ r / 8 ∧ |σ - σ₁| ≤ r / 8 := by
+    intro f σ h
+    have h' : empiricalNorm ev n (f - f₁) + |σ - σ₁| ≤ 1 / 8 * r := h
+    have := empiricalNorm_nonneg ev n (f - f₁)
+    have := abs_nonneg (σ - σ₁)
+    constructor <;> linarith
+  by_cases hA : r / 2 < empiricalNorm ev n (f₁ - f₀)
+  · obtain ⟨R, hR, h0, h1⟩ := tests_mean_case ev hσmin hσ₀ hr hn f₀ f₁ hA
+    exact key R hR h0 fun f σ hσ hb => h1 f σ hσ (hball f σ hb).1
+  · have hσgap : r / 2 < |σ₁ - σ₀| := by linarith [not_lt.mp hA]
+    rcases lt_abs.1 hσgap with hB1 | hB2
+    · obtain ⟨R, hR, h0, h1⟩ := tests_scale_up_case ev hσmin hσ₀ hσ₁.2 hr hn f₀ (by linarith)
+      exact key R hR h0 fun f σ hσ hb => h1 f σ hσ (hball f σ hb).2
+    · obtain ⟨R, hR, h0, h1⟩ :=
+        tests_scale_down_case ev hσmin hσ₀ hσ₁.1 hr hn f₀ f₁ (by linarith)
+      exact key R hR h0 fun f σ hσ hb => h1 f σ hσ (hball f σ hb).1 (hball f σ hb).2
 
 /-! ### Rates: the paper's radius shape `C n^(−a) (log n)^k` -/
 
@@ -774,11 +1273,14 @@ theorem eventually_prior_mass (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (he
     (h59 : ∀ᶠ n : ℕ in atTop, ∀ s ∈ Icc smin smax,
       ENNReal.ofReal (Real.exp (-(C₁ * n * priorMassRadius C₀ a k n ^ 2)))
         ≤ μW (closedBall (s⁻¹ • f₀) (priorMassRadius C₀ a k n / s))) :
-    ∀ᶠ n : ℕ in atTop, ∃ S ⊆ klBall ev n (f₀, σ₀) (priorMassRadius C₀ a k n / (σ₀ / 6)),
-      MeasurableSet S ∧
+    ∀ᶠ n : ℕ in atTop,
+      closedBall f₀ (priorMassRadius C₀ a k n) ×ˢ closedBall σ₀ (priorMassRadius C₀ a k n)
+          ⊆ klBall ev n (f₀, σ₀) (priorMassRadius C₀ a k n / (σ₀ / 6)) ∧
       ENNReal.ofReal (Real.exp (-((C₁ + δ) * (σ₀ / 6) ^ 2 * n
           * (priorMassRadius C₀ a k n / (σ₀ / 6)) ^ 2)))
-        ≤ amplitudeNoisePrior πs μW πη S := by
+        ≤ amplitudeNoisePrior πs μW πη
+          (closedBall f₀ (priorMassRadius C₀ a k n) ×ˢ closedBall σ₀ (priorMassRadius C₀ a k n))
+      := by
   have hσ₀pos : 0 < σ₀ := lt_of_le_of_lt (by positivity) hσ₀.1
   obtain ⟨s₁, s₂, hs₁, hs₁₂, hs₂, hs₂lo, hs₁hi⟩ := exists_amplitude_window hsmin hs hηlo hη hσ₀
   have hs₁pos : 0 < s₁ := hsmin.trans_le hs₁
@@ -798,8 +1300,7 @@ theorem eventually_prior_mass (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (he
   set ρ := priorMassRadius C₀ a k n with hρ_def
   have hρσ : ρ ≤ σ₀ / 2 := hρm.le.trans (min_le_left _ _)
   have hρgap : ρ ≤ s₁ * √ηhi - σ₀ := hρm.le.trans (min_le_right _ _)
-  refine ⟨closedBall f₀ ρ ×ˢ closedBall σ₀ ρ, ?_,
-    measurableSet_closedBall.prod measurableSet_closedBall, ?_⟩
+  refine ⟨?_, ?_⟩
   · have e : σ₀ * (ρ / (σ₀ / 6)) / 6 = ρ := by field_simp
     have h := slab_subset_klBall ev hev n (f₀ := f₀) hσ₀pos (ε := ρ / (σ₀ / 6))
       (by positivity) (by rw [div_le_iff₀ (by positivity)]; linarith)
@@ -852,15 +1353,16 @@ theorem eventually_prior_mass (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (he
 TWCD2025's framework enters through hypotheses, at the paper's radii
 `εₙ = C₀ n^(−a)(log n)^k` and `ε̄ₙ = C̄ n^(−a)(log n)^k̄` (`C̄, k̄` are `Cb, kb`; `k ≤ k̄`,
 `0 < a < 1/2`):
-* `h59`: (59) for `f*/s`, uniformly over the box, via Remark A.1 (**UV-2, to confirm**);
+* `h59`: (59) for `f*/s`, uniformly over the box (UV-2; confirmed against Part I);
 * `h60`: (60), the sieve `Bₙ`'s remaining GP mass, with exponent `C₂ > C₁ + 144/σ₀²`;
 * `h61`: (61), the sieve's sup-norm entropy at any fixed multiple of `ε̄ₙ`;
-* `hRadius`: the sieve's sup-norm radius `Rₙ ≤ n^p` (**UV-4, to confirm**).
+* `hRadius`: the sieve's sup-norm radius `Rₙ ≤ n^p` (UV-4; confirmed against Parts II–III).
 
 Then for some `M`, the expected posterior mass of `{‖f − f*‖ₙ + |σ − σ₀| ≥ M ε̄ₙ}` tends to `0`:
-the known-σ rate. The proof is `gvdv07_contraction` fed by UV-1 + UV-2 (`eventually_prior_mass`),
-UV-3 (`prior_compl_sieve_le`), UV-4 + UV-4a (`eventually_sieve_cover`) and UV-5 (`exists_tests`,
-the open obligation). -/
+the known-σ rate. The proof is `fixed_constant_contraction` fed by UV-1 + UV-2
+(`eventually_prior_mass`), UV-3 (`prior_compl_sieve_le`), UV-4 + UV-4a (`eventually_sieve_cover`)
+and UV-5 (`exists_tests`). `posterior_contraction_unknown_variance_gvdv07` is the same composition
+on the printed general theorem. -/
 theorem posterior_contraction_unknown_variance
     (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (hev : ∀ n i, ‖ev n i‖ ≤ 1) (f₀ : E) {σ₀ : ℝ}
     (μW : Measure E) [IsProbabilityMeasure μW]
@@ -974,17 +1476,365 @@ theorem posterior_contraction_unknown_variance
     have := mul_le_mul_of_nonneg_right hcoef hnρ
     linarith
   -- the general theorem
-  obtain ⟨M, hM⟩ := gvdv07_contraction ev (amplitudeNoisePrior πs μW πη) hpos (f₀, σ₀) hσ₀pos
+  obtain ⟨M, hM⟩ := fixed_constant_contraction ev (amplitudeNoisePrior πs μW πη) hpos (f₀, σ₀)
+    hσ₀pos
     (paramDist ev) (paramDist_comm ev) (paramDist_triangle ev)
     (fun n θ' => (continuous_paramDist ev n θ').measurable)
     (fun n => priorMassRadius C₀ a k n / (σ₀ / 6)) (fun n => L * priorMassRadius Cb a kb n)
     hrate hnε (fun n => closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)))
     (fun n => isClosed_closure.measurableSet) ((C₁ + δ) * (σ₀ / 6) ^ 2) K ξ hK hξ htests'
     (eventually_sieve_cover ev hev B hsmin.le hsmax hCb ha ha' hkb hξ hL1 h61' hR)
-    (eventually_prior_mass ev hev f₀ μW πs hsmin hs hπs_pos πη hηlo hη hπη hσ₀ hC₀ ha ha' hk hδ
-      h59)
+    ((eventually_prior_mass ev hev f₀ μW πs hsmin hs hπs_pos πη hηlo hη hπη hσ₀ hC₀ ha ha' hk hδ
+      h59).mono fun n h => ⟨_, h.1, measurableSet_closedBall.prod measurableSet_closedBall, h.2⟩)
     hrem
   refine ⟨M * L, hM.congr fun n => ?_⟩
   simp only [mul_assoc]
+
+/-! ### Plumbing for the composition from the printed theorem -/
+
+/-- The likelihood is jointly measurable in the data and the parameter. -/
+theorem measurable_likelihood (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (n : ℕ) :
+    Measurable fun p : (Fin n → ℝ) × (E × ℝ) => likelihood ev n p.2 p.1 := by
+  unfold likelihood
+  refine Finset.measurable_prod _ fun i _ => ?_
+  exact measurable_uncurry_gaussianPDF.comp
+    (((ev n i).continuous.measurable.comp (measurable_fst.comp measurable_snd)).prodMk
+      ((measurable_real_toNNReal.comp ((measurable_snd.comp measurable_snd).pow_const 2)).prodMk
+        ((measurable_pi_apply i).comp measurable_fst)))
+
+/-- The posterior mass of a set is a measurable function of the data. -/
+theorem measurable_posterior (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (prior : Measure (E × ℝ))
+    [IsFiniteMeasure prior] (n : ℕ) (A : Set (E × ℝ)) :
+    Measurable fun y => posterior ev prior n y A := by
+  have h1 : Measurable fun y => ∫⁻ θ in A, likelihood ev n θ y ∂prior :=
+    (measurable_likelihood ev n).lintegral_prod_right' (ν := prior.restrict A)
+  have h2 : Measurable fun y => ∫⁻ θ, likelihood ev n θ y ∂prior :=
+    (measurable_likelihood ev n).lintegral_prod_right' (ν := prior)
+  unfold posterior
+  simp only [div_eq_mul_inv]
+  exact h1.mul h2.inv
+
+omit [BorelSpace E] in
+/-- The posterior is subadditive across a sieve and its complement. -/
+theorem posterior_le_add (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (prior : Measure (E × ℝ)) (n : ℕ)
+    (y : Fin n → ℝ) (A Θ : Set (E × ℝ)) :
+    posterior ev prior n y A ≤ posterior ev prior n y (A ∩ Θ) + posterior ev prior n y Θᶜ := by
+  unfold posterior
+  rw [← ENNReal.add_div]
+  apply ENNReal.div_le_div_right
+  calc ∫⁻ θ in A, likelihood ev n θ y ∂prior
+      ≤ ∫⁻ θ in (A ∩ Θ) ∪ Θᶜ, likelihood ev n θ y ∂prior := by
+        refine lintegral_mono_set fun θ hθ => ?_
+        by_cases h : θ ∈ Θ
+        · exact Or.inl ⟨hθ, h⟩
+        · exact Or.inr h
+    _ ≤ _ := lintegral_union_le _ _ _
+
+omit [MeasurableSpace E] [BorelSpace E] in
+/-- The KL neighbourhood grows with its radius. -/
+theorem klBall_mono (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (n : ℕ) (θ₀ : E × ℝ) {ε ε' : ℝ}
+    (h0 : 0 ≤ ε) (h : ε ≤ ε') : klBall ev n θ₀ ε ⊆ klBall ev n θ₀ ε' := by
+  rintro θ ⟨h1, h2⟩
+  have hle : ENNReal.ofReal (n * ε ^ 2) ≤ ENNReal.ofReal (n * ε' ^ 2) :=
+    ENNReal.ofReal_le_ofReal (mul_le_mul_of_nonneg_left (pow_le_pow_left₀ h0 h 2)
+      (Nat.cast_nonneg n))
+  exact ⟨h1.trans hle, h2.trans hle⟩
+
+/-- Under [P1], the noise standard deviation stays in `[σ_min, σ_max]` almost surely. -/
+theorem prior_compl_noiseRange (πs : Measure ℝ) (μW : Measure E) (πη : Measure ℝ)
+    [IsProbabilityMeasure πs] [IsProbabilityMeasure μW] [IsProbabilityMeasure πη]
+    {smin smax ηlo ηhi : ℝ} (hsmin : 0 ≤ smin) (hπs : πs (Icc smin smax)ᶜ = 0)
+    (hπη : πη (Icc ηlo ηhi)ᶜ = 0) :
+    amplitudeNoisePrior πs μW πη (univ ×ˢ Icc (smin * √ηlo) (smax * √ηhi))ᶜ = 0 := by
+  rw [amplitudeNoisePrior, Measure.map_apply measurable_amplitudeNoiseMap
+    (MeasurableSet.univ.prod measurableSet_Icc).compl]
+  refine measure_mono_null (t := (Icc smin smax)ᶜ ×ˢ univ ∪ univ ×ˢ (univ ×ˢ (Icc ηlo ηhi)ᶜ))
+    ?_ (measure_union_null (by simp [Measure.prod_prod, hπs]) (by simp [Measure.prod_prod, hπη]))
+  rintro ⟨s, w, η⟩ hp
+  simp only [mem_preimage, mem_compl_iff, mem_prod, mem_univ, true_and, amplitudeNoiseMap]
+    at hp
+  by_contra hcon
+  simp only [mem_union, mem_prod, mem_compl_iff, mem_univ, and_true, true_and, not_or,
+    not_not] at hcon
+  obtain ⟨hs, hη⟩ := hcon
+  exact hp ⟨mul_le_mul hs.1 (Real.sqrt_le_sqrt hη.1) (Real.sqrt_nonneg _) (hsmin.trans hs.1),
+    mul_le_mul hs.2 (Real.sqrt_le_sqrt hη.2) (Real.sqrt_nonneg _) (hsmin.trans (hs.1.trans hs.2))⟩
+
+/-- The shells condition (2.5) from the prior mass alone: `P(A) ≤ 1 ≤ e^{K n e′² j²/2} e^{−C n e²}`
+once `j ≥ ⌈2|C|/K⌉ + 1` and `0 ≤ e ≤ e′`. -/
+theorem measure_le_exp_mul_of_mass {Ω : Type*} [MeasurableSpace Ω] (P : Measure Ω)
+    [IsProbabilityMeasure P] (A B : Set Ω) {K C e e' : ℝ} {n j : ℕ} (hK : 0 < K)
+    (hj : ⌈2 * |C| / K⌉₊ + 1 ≤ j) (he : 0 ≤ e) (hee : e ≤ e')
+    (hB : ENNReal.ofReal (Real.exp (-(C * n * e ^ 2))) ≤ P B) :
+    P A ≤ ENNReal.ofReal (Real.exp (K * n * e' ^ 2 * j ^ 2 / 2)) * P B := by
+  have hj1 : ((⌈2 * |C| / K⌉₊ + 1 : ℕ) : ℝ) ≤ j := by exact_mod_cast hj
+  push_cast at hj1
+  have h2C : 2 * |C| ≤ ⌈2 * |C| / K⌉₊ * K := (div_le_iff₀ hK).1 (Nat.le_ceil _)
+  have hKj : 2 * |C| + K ≤ j * K := by
+    have := mul_le_mul_of_nonneg_right hj1 hK.le
+    linarith
+  have hj0 : (1 : ℝ) ≤ j := by
+    have := Nat.cast_nonneg (α := ℝ) ⌈2 * |C| / K⌉₊
+    linarith
+  have hjj : (j : ℝ) ≤ j ^ 2 := by nlinarith
+  have hCj : |C| ≤ K * j ^ 2 / 2 := by
+    have := mul_le_mul_of_nonneg_left hjj hK.le
+    linarith [abs_nonneg C]
+  have hn0 : (0 : ℝ) ≤ n := Nat.cast_nonneg n
+  have he2 : e ^ 2 ≤ e' ^ 2 := pow_le_pow_left₀ he hee 2
+  have hexp : 0 ≤ K * n * e' ^ 2 * j ^ 2 / 2 + -(C * n * e ^ 2) := by
+    have h1 : C * (n * e ^ 2) ≤ |C| * (n * e' ^ 2) :=
+      (mul_le_mul_of_nonneg_right (le_abs_self C) (by positivity)).trans
+        (mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_left he2 hn0) (abs_nonneg C))
+    have h2 := mul_le_mul_of_nonneg_right hCj (by positivity : (0 : ℝ) ≤ n * e' ^ 2)
+    linarith
+  calc P A ≤ 1 := prob_le_one
+    _ ≤ ENNReal.ofReal (Real.exp (K * n * e' ^ 2 * j ^ 2 / 2))
+        * ENNReal.ofReal (Real.exp (-(C * n * e ^ 2))) := by
+      rw [← ENNReal.ofReal_mul (Real.exp_pos _).le, ← Real.exp_add]
+      exact ENNReal.one_le_ofReal.2 (Real.one_le_exp hexp)
+    _ ≤ _ := mul_le_mul_right hB _
+
+/-- The ratio in Lemma 1 from exponential bounds: `a/b · e^w ≤ e^z` when `a ≤ e^u`, `e^v ≤ b` and
+`u − v + w ≤ z`. -/
+theorem div_mul_ofReal_exp_le {a b : ℝ≥0∞} {u v w z : ℝ} (ha : a ≤ ENNReal.ofReal (Real.exp u))
+    (hb : ENNReal.ofReal (Real.exp v) ≤ b) (h : u - v + w ≤ z) :
+    a / b * ENNReal.ofReal (Real.exp w) ≤ ENNReal.ofReal (Real.exp z) := by
+  calc a / b * ENNReal.ofReal (Real.exp w)
+      ≤ ENNReal.ofReal (Real.exp u) / ENNReal.ofReal (Real.exp v)
+        * ENNReal.ofReal (Real.exp w) :=
+        mul_le_mul' (ENNReal.div_le_div ha hb) le_rfl
+    _ = ENNReal.ofReal (Real.exp (u - v + w)) := by
+        rw [← ENNReal.ofReal_div_of_pos (Real.exp_pos _),
+          ← ENNReal.ofReal_mul (div_nonneg (Real.exp_pos _).le (Real.exp_pos _).le),
+          ← Real.exp_sub, ← Real.exp_add]
+    _ ≤ ENNReal.ofReal (Real.exp z) := ENNReal.ofReal_le_ofReal (Real.exp_le_exp.2 h)
+
+/-- **UV-6 from the printed general theorem.** The hypotheses of
+`posterior_contraction_unknown_variance`, with the remaining-mass margin `C₂ > C₁ + 72/σ₀²` that
+Lemma 1 of Ghosal & van der Vaart (2007) asks for, give the printed conclusion: for **every**
+`Mₙ → ∞`, the expected posterior mass of `{‖f − f*‖ₙ + |σ − σ₀| ≥ Mₙ ε̄ₙ}` tends to `0`.
+
+The proof applies `gvdv07_theorem1` on the sieve at the entropy rate `L ε̄ₙ` and
+`gvdv07_lemma1` off the sieve at the prior-mass rate `6εₙ/σ₀`, and adds the two
+(`posterior_le_add`). This is the two-rate composition: Theorem 1 needs only the entropy and the
+shells at `ε̄ₙ`, and Lemma 1 only the prior mass at `εₙ`. -/
+theorem posterior_contraction_unknown_variance_gvdv07
+    (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (hev : ∀ n i, ‖ev n i‖ ≤ 1) (f₀ : E) {σ₀ : ℝ}
+    (μW : Measure E) [IsProbabilityMeasure μW]
+    (πs : Measure ℝ) [IsProbabilityMeasure πs] {smin smax : ℝ} (hsmin : 0 < smin)
+    (hs : smin < smax) (hπs_supp : πs (Icc smin smax)ᶜ = 0)
+    (hπs_pos : ∀ a b, smin ≤ a → a < b → b ≤ smax → 0 < πs (Icc a b))
+    (πη : Measure ℝ) [IsProbabilityMeasure πη] {ηlo ηhi : ℝ} (hηlo : 0 < ηlo) (hη : ηlo < ηhi)
+    (hπη_supp : πη (Icc ηlo ηhi)ᶜ = 0)
+    (hπη : ∀ a b, ηlo ≤ a → a ≤ b → b ≤ ηhi →
+      ENNReal.ofReal (Real.log (b / a) / Real.log (ηhi / ηlo)) ≤ πη (Icc a b))
+    (hσ₀ : smin * √ηlo < σ₀ ∧ σ₀ < smax * √ηhi)
+    {C₀ Cb a k kb : ℝ} (hC₀ : 0 < C₀) (hCb : 0 < Cb) (ha : 0 < a) (ha' : a < 1 / 2)
+    (hk : 0 ≤ k) (hkk : k ≤ kb) {C₁ C₂ : ℝ} (hC₂ : C₁ + 72 / σ₀ ^ 2 < C₂)
+    (h59 : ∀ᶠ n : ℕ in atTop, ∀ s ∈ Icc smin smax,
+      ENNReal.ofReal (Real.exp (-(C₁ * n * priorMassRadius C₀ a k n ^ 2)))
+        ≤ μW (closedBall (s⁻¹ • f₀) (priorMassRadius C₀ a k n / s)))
+    (B : ℕ → Set E)
+    (h60 : ∀ᶠ n : ℕ in atTop,
+      μW (B n)ᶜ ≤ ENNReal.ofReal (Real.exp (-(C₂ * n * priorMassRadius C₀ a k n ^ 2))))
+    (h61 : ∀ c > 0, ∃ K₀ : ℝ, ∀ᶠ n : ℕ in atTop, ∃ N : ℕ,
+      externalCoveringNumber (c * priorMassRadius Cb a kb n).toNNReal (B n) ≤ N ∧
+        Real.log N ≤ K₀ * n * priorMassRadius Cb a kb n ^ 2)
+    (hRadius : ∃ p : ℕ, ∀ᶠ n : ℕ in atTop, ∀ g ∈ B n, ‖g‖ ≤ (n : ℝ) ^ p) :
+    ∀ M : ℕ → ℝ, Tendsto M atTop atTop →
+      Tendsto (fun n => ∫⁻ y, posterior ev (amplitudeNoisePrior πs μW πη) n y
+        {θ | M n * priorMassRadius Cb a kb n ≤ paramDist ev n θ (f₀, σ₀)}
+        ∂dataLaw ev n (f₀, σ₀)) atTop (𝓝 0) := by
+  intro M hM
+  haveI := isProbabilityMeasure_amplitudeNoisePrior πs μW πη
+  have hkb : 0 ≤ kb := hk.trans hkk
+  have hσ₀pos : 0 < σ₀ := lt_of_le_of_lt (by positivity) hσ₀.1
+  have hsmax : 0 < smax := hsmin.trans hs
+  have hc : 0 < σ₀ / 6 := by positivity
+  have hσmin : 0 < smin * √ηlo := mul_pos hsmin (Real.sqrt_pos.2 hηlo)
+  obtain ⟨K, ξ, hK, hξ, htests⟩ := exists_tests ev hσmin f₀ (σ₀ := σ₀) ⟨hσ₀.1.le, hσ₀.2.le⟩
+  obtain ⟨K₀, h61'⟩ := h61 (ξ / 2 / (12 * smax)) (by positivity)
+  obtain ⟨p, hR⟩ := hRadius
+  obtain ⟨L, hL⟩ : ∃ L : ℝ, 1 + |K₀| + C₀ / (Cb * (σ₀ / 6)) = L := ⟨_, rfl⟩
+  have hL1 : 1 + |K₀| ≤ L := by
+    have : 0 ≤ C₀ / (Cb * (σ₀ / 6)) := by positivity
+    rw [← hL]
+    linarith
+  have hLpos : 0 < L := by linarith [abs_nonneg K₀]
+  obtain ⟨δ, hδ_def⟩ : ∃ δ : ℝ, (C₂ - C₁ - 72 / σ₀ ^ 2) / 2 = δ := ⟨_, rfl⟩
+  have hδ : 0 < δ := by rw [← hδ_def]; linarith
+  have hC2 : C₂ = C₁ + 72 / σ₀ ^ 2 + 2 * δ := by rw [← hδ_def]; ring
+  -- the parameter set, the sieves, the rates
+  set S : Set (E × ℝ) := univ ×ˢ Icc (smin * √ηlo) (smax * √ηhi) with hS_def
+  have hS : amplitudeNoisePrior πs μW πη Sᶜ = 0 :=
+    prior_compl_noiseRange πs μW πη hsmin.le hπs_supp hπη_supp
+  have hS_pos : ∀ θ ∈ S, 0 < θ.2 := fun θ hθ => hσmin.trans_le hθ.2.1
+  have hθ₀ : (f₀, σ₀) ∈ S := ⟨mem_univ _, hσ₀.1.le, hσ₀.2.le⟩
+  have hρpos := eventually_priorMassRadius_pos C₀ a k hC₀
+  have hrate : ∀ᶠ n : ℕ in atTop, 0 < priorMassRadius C₀ a k n / (σ₀ / 6) ∧
+      priorMassRadius C₀ a k n / (σ₀ / 6) ≤ L * priorMassRadius Cb a kb n := by
+    filter_upwards [hρpos, priorMassRadius_le_mul C₀ Cb a k kb hC₀ hCb hkk,
+      eventually_priorMassRadius_pos Cb a kb hCb] with n h1 h2 h3
+    refine ⟨div_pos h1 hc, ?_⟩
+    rw [div_le_iff₀ hc]
+    have hLc : C₀ / (Cb * (σ₀ / 6)) ≤ L := by rw [← hL]; linarith [abs_nonneg K₀]
+    calc priorMassRadius C₀ a k n ≤ C₀ / Cb * priorMassRadius Cb a kb n := h2
+      _ = C₀ / (Cb * (σ₀ / 6)) * priorMassRadius Cb a kb n * (σ₀ / 6) := by field_simp
+      _ ≤ L * priorMassRadius Cb a kb n * (σ₀ / 6) :=
+          mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right hLc h3.le) hc.le
+  have hnρ := tendsto_n_priorMassRadius_sq C₀ a k hC₀ ha ha' hk
+  have hnεb := tendsto_n_priorMassRadius_sq Cb a kb hCb ha ha' hkb
+  have hsieve : ∀ n, closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)) ⊆ S :=
+    fun n => closure_minimal (prod_mono (subset_univ _) subset_rfl)
+      (isClosed_univ.prod isClosed_Icc)
+  -- Theorem 1, on the sieve, at the rate L ε̄ₙ
+  have hT1 := gvdv07_theorem1 ev (amplitudeNoisePrior πs μW πη) S hS hS_pos (f₀, σ₀) hθ₀
+    (paramDist ev) (paramDist_comm ev) (paramDist_triangle ev)
+    (fun n θ' => (continuous_paramDist ev n θ').measurable)
+    (fun n => L * priorMassRadius Cb a kb n)
+    ((eventually_priorMassRadius_pos Cb a kb hCb).mono fun n h => mul_pos hLpos h)
+    (by simpa using (tendsto_priorMassRadius_zero Cb a kb ha).const_mul L)
+    ⟨1, one_pos, (hnεb.eventually_ge_atTop 1).mono fun n h => by
+      have hL2 : 1 ≤ L ^ 2 := one_le_pow₀ (by linarith [abs_nonneg K₀])
+      have := mul_le_mul hL2 h zero_le_one (by positivity)
+      calc (1 : ℝ) = 1 * 1 := by ring
+        _ ≤ L ^ 2 * (n * priorMassRadius Cb a kb n ^ 2) := this
+        _ = n * (L * priorMassRadius Cb a kb n) ^ 2 := by ring⟩
+    (fun n => closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)))
+    (fun n => isClosed_closure.measurableSet) K ξ hK hξ htests
+    ?hentropy ?hshell
+  case hentropy =>
+    filter_upwards [eventually_sieve_cover ev hev B (σmin := smin * √ηlo) (σmax := smax * √ηhi)
+      hsmin.le hsmax hCb ha ha' hkb (by positivity : 0 < ξ / 2) hL1 h61' hR]
+      with n ⟨N, hcard, hcov⟩
+    intro r hr
+    refine ⟨N, hcard, fun θ hθ => ?_⟩
+    obtain ⟨θ', hθ'N, hθθ'⟩ := mem_iUnion₂.1 (hcov hθ.1)
+    have hθθ'' : paramDist ev n θ θ' ≤ ξ / 2 * (L * priorMassRadius Cb a kb n) / 2 := hθθ'
+    have := mul_lt_mul_of_pos_left hr hξ
+    exact mem_iUnion₂.2 ⟨θ', hθ'N,
+      (le_trans hθθ'' (by linarith) : paramDist ev n θ θ' ≤ ξ * r / 4)⟩
+  case hshell =>
+    obtain ⟨C, hC⟩ : ∃ C : ℝ, (C₁ + δ) * (σ₀ / 6) ^ 2 = C := ⟨_, rfl⟩
+    refine ⟨⌈2 * |C| / K⌉₊ + 1, ?_⟩
+    filter_upwards [eventually_prior_mass ev hev f₀ μW πs hsmin hs hπs_pos πη hηlo hη hπη hσ₀
+      hC₀ ha ha' hk hδ h59, hrate] with n ⟨hBsub, hBmass⟩ ⟨hpos, hle⟩
+    refine ⟨_, hBsub.trans (klBall_mono ev n (f₀, σ₀) hpos.le hle),
+      measurableSet_closedBall.prod measurableSet_closedBall, fun j hj => ?_⟩
+    rw [hC] at hBmass
+    exact measure_le_exp_mul_of_mass _ _ _ hK hj hpos.le hle hBmass
+  -- Lemma 1, off the sieve, at the rate 6εₙ/σ₀
+  have hL1' := gvdv07_lemma1 ev (amplitudeNoisePrior πs μW πη) S hS hS_pos (f₀, σ₀) hθ₀
+    (fun n => priorMassRadius C₀ a k n / (σ₀ / 6)) (hρpos.mono fun n h => div_pos h hc)
+    ⟨1, one_pos, (((hnρ.const_mul_atTop (inv_pos.2 (pow_pos hc 2))).eventually_ge_atTop 1)).mono
+      fun n h => by
+        have e : ((σ₀ / 6) ^ 2)⁻¹ * (n * priorMassRadius C₀ a k n ^ 2)
+            = n * (priorMassRadius C₀ a k n / (σ₀ / 6)) ^ 2 := by rw [div_pow]; ring
+        rw [← e]
+        exact h⟩
+    (fun n => closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)))
+    (fun n => isClosed_closure.measurableSet)
+    (fun n => closedBall f₀ (priorMassRadius C₀ a k n) ×ˢ closedBall σ₀ (priorMassRadius C₀ a k n))
+    ?hB ?hratio
+  case hB =>
+    filter_upwards [eventually_prior_mass ev hev f₀ μW πs hsmin hs hπs_pos πη hηlo hη hπη hσ₀
+      hC₀ ha ha' hk hδ h59] with n ⟨hBsub, hBmass⟩
+    exact ⟨hBsub, measurableSet_closedBall.prod measurableSet_closedBall,
+      lt_of_lt_of_le (ENNReal.ofReal_pos.2 (Real.exp_pos _)) hBmass⟩
+  case hratio =>
+    have hlim : Tendsto (fun n : ℕ => ENNReal.ofReal
+        (Real.exp (-(δ * (n * priorMassRadius C₀ a k n ^ 2))))) atTop (𝓝 0) := by
+      rw [← ENNReal.ofReal_zero]
+      exact ENNReal.tendsto_ofReal (Real.tendsto_exp_atBot.comp
+        (tendsto_neg_atTop_atBot.comp (hnρ.const_mul_atTop hδ)))
+    refine tendsto_of_tendsto_of_tendsto_of_le_of_le' tendsto_const_nhds hlim
+      (Eventually.of_forall fun _ => zero_le) ?_
+    filter_upwards [eventually_prior_mass ev hev f₀ μW πs hsmin hs hπs_pos πη hηlo hη hπη hσ₀
+      hC₀ ha ha' hk hδ h59, h60] with n ⟨_, hBmass⟩ h60n
+    have hrem := (prior_compl_sieve_le πs μW πη hsmin.le hπs_supp hπη_supp (B n)).trans h60n
+    refine div_mul_ofReal_exp_le hrem hBmass ?_
+    have hc0 : (σ₀ / 6) ^ 2 ≠ 0 := pow_ne_zero 2 hc.ne'
+    have hcan : (priorMassRadius C₀ a k n / (σ₀ / 6)) ^ 2 * (σ₀ / 6) ^ 2
+        = priorMassRadius C₀ a k n ^ 2 := by rw [div_pow, div_mul_cancel₀ _ hc0]
+    have hcan2 : (priorMassRadius C₀ a k n / (σ₀ / 6)) ^ 2
+        = 36 * priorMassRadius C₀ a k n ^ 2 / σ₀ ^ 2 := by
+      rw [div_pow, div_eq_div_iff hc0 (pow_ne_zero 2 hσ₀pos.ne')]
+      ring
+    have e1 : (C₁ + δ) * (σ₀ / 6) ^ 2 * n * (priorMassRadius C₀ a k n / (σ₀ / 6)) ^ 2
+        = (C₁ + δ) * (n * priorMassRadius C₀ a k n ^ 2) := by
+      rw [show (C₁ + δ) * (σ₀ / 6) ^ 2 * n * (priorMassRadius C₀ a k n / (σ₀ / 6)) ^ 2
+          = (C₁ + δ) * n * ((priorMassRadius C₀ a k n / (σ₀ / 6)) ^ 2 * (σ₀ / 6) ^ 2) by ring,
+        hcan]
+      ring
+    have e2 : 2 * n * (priorMassRadius C₀ a k n / (σ₀ / 6)) ^ 2
+        = 72 / σ₀ ^ 2 * (n * priorMassRadius C₀ a k n ^ 2) := by
+      rw [hcan2]
+      ring
+    rw [e1, e2, hC2]
+    exact le_of_eq (by ring)
+  -- add the two
+  have hM' : Tendsto (fun n => M n / L) atTop atTop := hM.atTop_div_const hLpos
+  have h1 := hT1 (fun n => M n / L) hM'
+  have h12 := h1.add hL1'
+  rw [add_zero] at h12
+  refine tendsto_of_tendsto_of_tendsto_of_le_of_le tendsto_const_nhds h12
+    (fun _ => zero_le) (fun n => ?_)
+  have hset : {θ | θ ∈ closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)) ∧
+        M n / L * (L * priorMassRadius Cb a kb n) ≤ paramDist ev n θ (f₀, σ₀)}
+      = {θ | M n * priorMassRadius Cb a kb n ≤ paramDist ev n θ (f₀, σ₀)}
+        ∩ closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)) := by
+    have e : M n / L * (L * priorMassRadius Cb a kb n) = M n * priorMassRadius Cb a kb n := by
+      field_simp
+    ext θ
+    simp only [mem_setOf_eq, mem_inter_iff, e]
+    exact and_comm
+  dsimp only
+  rw [hset]
+  calc ∫⁻ y, posterior ev (amplitudeNoisePrior πs μW πη) n y
+        {θ | M n * priorMassRadius Cb a kb n ≤ paramDist ev n θ (f₀, σ₀)} ∂dataLaw ev n (f₀, σ₀)
+      ≤ ∫⁻ y, (posterior ev (amplitudeNoisePrior πs μW πη) n y
+          ({θ | M n * priorMassRadius Cb a kb n ≤ paramDist ev n θ (f₀, σ₀)}
+            ∩ closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)))
+          + posterior ev (amplitudeNoisePrior πs μW πη) n y
+            (closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)))ᶜ)
+          ∂dataLaw ev n (f₀, σ₀) :=
+        lintegral_mono fun y => posterior_le_add ev _ n y _ _
+    _ = _ := lintegral_add_right _ (measurable_posterior ev _ n _)
+
+/-- **UV-6 with the paper's tunable sieve.** TWCD2025's construction (Appendix A.1, Part II, with
+the constants of (80) scaled) gives a sieve for every remaining-mass exponent `C₂`, with (61) at
+the same rate and the same polynomial radius. In that form the margin `hC₂` needs no checking:
+pick `C₂ = C₁ + 144/σ₀² + 1`. -/
+theorem posterior_contraction_unknown_variance_of_tunable_sieve
+    (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (hev : ∀ n i, ‖ev n i‖ ≤ 1) (f₀ : E) {σ₀ : ℝ}
+    (μW : Measure E) [IsProbabilityMeasure μW]
+    (πs : Measure ℝ) [IsProbabilityMeasure πs] {smin smax : ℝ} (hsmin : 0 < smin)
+    (hs : smin < smax) (hπs_supp : πs (Icc smin smax)ᶜ = 0)
+    (hπs_pos : ∀ a b, smin ≤ a → a < b → b ≤ smax → 0 < πs (Icc a b))
+    (πη : Measure ℝ) [IsProbabilityMeasure πη] {ηlo ηhi : ℝ} (hηlo : 0 < ηlo) (hη : ηlo < ηhi)
+    (hπη_supp : πη (Icc ηlo ηhi)ᶜ = 0)
+    (hπη : ∀ a b, ηlo ≤ a → a ≤ b → b ≤ ηhi →
+      ENNReal.ofReal (Real.log (b / a) / Real.log (ηhi / ηlo)) ≤ πη (Icc a b))
+    (hσ₀ : smin * √ηlo < σ₀ ∧ σ₀ < smax * √ηhi)
+    {C₀ Cb a k kb : ℝ} (hC₀ : 0 < C₀) (hCb : 0 < Cb) (ha : 0 < a) (ha' : a < 1 / 2)
+    (hk : 0 ≤ k) (hkk : k ≤ kb) {C₁ : ℝ}
+    (h59 : ∀ᶠ n : ℕ in atTop, ∀ s ∈ Icc smin smax,
+      ENNReal.ofReal (Real.exp (-(C₁ * n * priorMassRadius C₀ a k n ^ 2)))
+        ≤ μW (closedBall (s⁻¹ • f₀) (priorMassRadius C₀ a k n / s)))
+    (hsieve : ∀ C₂ : ℝ, ∃ B : ℕ → Set E,
+      (∀ᶠ n : ℕ in atTop,
+        μW (B n)ᶜ ≤ ENNReal.ofReal (Real.exp (-(C₂ * n * priorMassRadius C₀ a k n ^ 2)))) ∧
+      (∀ c > 0, ∃ K₀ : ℝ, ∀ᶠ n : ℕ in atTop, ∃ N : ℕ,
+        externalCoveringNumber (c * priorMassRadius Cb a kb n).toNNReal (B n) ≤ N ∧
+          Real.log N ≤ K₀ * n * priorMassRadius Cb a kb n ^ 2) ∧
+      (∃ p : ℕ, ∀ᶠ n : ℕ in atTop, ∀ g ∈ B n, ‖g‖ ≤ (n : ℝ) ^ p)) :
+    ∃ M : ℝ, Tendsto (fun n => ∫⁻ y, posterior ev (amplitudeNoisePrior πs μW πη) n y
+        {θ | M * priorMassRadius Cb a kb n ≤ paramDist ev n θ (f₀, σ₀)}
+        ∂dataLaw ev n (f₀, σ₀)) atTop (𝓝 0) := by
+  obtain ⟨B, h60, h61, hRadius⟩ := hsieve (C₁ + 144 / σ₀ ^ 2 + 1)
+  exact posterior_contraction_unknown_variance ev hev f₀ μW πs hsmin hs hπs_supp hπs_pos πη hηlo
+    hη hπη_supp hπη hσ₀ hC₀ hCb ha ha' hk hkk (C₂ := C₁ + 144 / σ₀ ^ 2 + 1) (by linarith) h59 B
+    h60 h61 hRadius
 
 end BGP
