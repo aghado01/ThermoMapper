@@ -1186,6 +1186,40 @@ Final assignments come from tracing clusters across temperatures, and the tree a
   - Design-invariant lifetimes would make that choice explicit, but they wouldn't make it for you. In ln T the merged
     cluster outlives its children by far.
 
+### 12.23 A Mahalanobis metric for iris (static check)
+
+**The question** (the user's): GMMs with full covariance give the best iris results the user knows of, so would SPC on a
+Mahalanobis metric do better?
+- **The reduction.** With a fixed Σ, Mahalanobis distance is Euclidean distance after x → L⁻¹x (Σ = LLᵀ). That makes it
+  a change of the edge set and of the edge lengths, unlike the bandwidth or the kernel's shape.
+- **The check.** Mutual 5-NN geometry, without the MST repair, for five metrics:
+
+| Metric | Cut edges | P(cut edge longer than a versicolor edge, a virginica edge) | Cut's coupling share (against versicolor, virginica) | 1-NN accuracy, versicolor against virginica |
+|---|---|---|---|---|
+| Euclidean | 12 | 0.74, 0.56 | 0.117, 0.134 | 0.94 |
+| Standardized features | 15 | 0.81, 0.58 | 0.133, 0.169 | 0.92 |
+| Global Mahalanobis (all data) | 31 | 0.72, 0.58 | 0.353, 0.466 | 0.87 |
+| Within-core Mahalanobis (SPC's cores, no labels) | 10 | 0.80, 0.60 | 0.090, 0.117 | 0.95 |
+| Within-class Mahalanobis (true labels, oracle) | 10 | 0.81, 0.55 | 0.095, 0.122 | 0.95 |
+
+- **The global covariance hurts.** Its large directions are the ones the species differ along, so whitening by it shrinks
+  exactly the separating directions: the cut grows to 31 edges and its coupling share roughly triples.
+- **The within-cluster covariance helps, modestly.** The cut's coupling share falls by about 23% against versicolor and
+  13% against virginica.
+- **Estimated from SPC's own cores, it matches the label oracle.** The cores are BWD's rule at the start of K = 5's
+  three-species stage: 43, 38 and 36 points. So an unsupervised alternation is viable: SPC, then cores, then their
+  pooled covariance, then SPC again.
+- **It doesn't remove the overlap.** A cut edge is still longer than a virginica edge only about 55–60% of the time.
+  Versicolor and virginica overlap in feature space under any linear metric. Connectivity clustering needs a gap or a
+  density dip, and here there is none to find.
+- **Why a GMM does better here.** It models each class's covariance and assigns the overlap probabilistically, a
+  parametric model of the overlap rather than a connectivity criterion.
+  - That argues for the user's hybrid: SPC for the cores, where connectivity is unambiguous, and the GMM to fill in the
+    overlap.
+  - Per-cluster covariances inside SPC would make the metric move with the clustering: the adaptive scheme the first
+    dyadic discussion warned degenerates. An alternation run a fixed number of rounds keeps clear of that.
+- **Not yet run:** SPC itself on the within-core-whitened features, scored by BWD's rule as in §12.20.
+
 **The kernel's shape can't help here** (a static check on the K = 10 edge lengths, kernels matched in scale):
 - A cut edge is longer than a virginica edge 51% of the time, and longer than a versicolor edge 70% of the time.
 - A kernel is a monotone map from distance to coupling, so it can only reweight by length. The cut's share of coupling
