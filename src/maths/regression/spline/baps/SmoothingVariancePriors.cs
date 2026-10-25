@@ -47,11 +47,17 @@ public sealed record InverseGammaVariancePrior : ISmoothingVariancePrior
 }
 
 /// <summary>
-/// τ² ~ W(shape k, scale λ) (<see cref="Weibull"/>): <c>ln q(ρ) = kρ − e^(k(ρ − ln λ))</c>. With k = ½, the default, it is the
-/// law of τ² for an exponential τ with rate 1/√λ, the scale-dependent prior of Klein &amp; Kneib (2016) that Bach &amp;
+/// τ² ~ W(shape k, scale s) (<see cref="Weibull"/>): <c>ln q(ρ) = kρ − e^(k(ρ − ln s))</c>. With k = ½, the default, it is the
+/// law of τ² for an exponential τ with rate 1/√s, the scale-dependent prior of Klein &amp; Kneib (2016) that Bach &amp;
 /// Klein (2025) prefer for smoothing variances. Its upper tail in ρ decays doubly exponentially, so it holds the variances
 /// within range where the inverse gamma lets them wander, at the price of a scale that means something:
-/// <see cref="ScaledTo"/> sets λ from a bound on the function's size.
+/// <see cref="ScaledTo"/> sets s from a bound on the function's size, and <see cref="ScaledToResponse"/> takes the bound
+/// from the data.
+/// <para>
+/// Parameterizations: Bach &amp; Klein write the prior as Weibull(½, λ) with λ a rate, density ∝ x^(−½) e^(−√(λx)), so their
+/// λ is <see cref="Rate"/> = 1/s (their kernel −√λ e^(ρ/2) + ρ/2 is this one's); Klein &amp; Kneib's θ is the rate of the
+/// exponential τ, θ² = 1/s.
+/// </para>
 /// </summary>
 public sealed record WeibullVariancePrior : ISmoothingVariancePrior
 {
@@ -66,30 +72,39 @@ public sealed record WeibullVariancePrior : ISmoothingVariancePrior
         _logScale = Math.Log(scale);
     }
 
-    /// <summary>Scale λ.</summary>
+    /// <summary>Scale s.</summary>
     public double Scale { get; }
 
     /// <summary>Shape k.</summary>
     public double Shape { get; }
 
+    /// <summary>The rate 1/s: Bach &amp; Klein's λ.</summary>
+    public double Rate => 1.0 / Scale;
+
     public double LogDensityOfLog(double rho, out double first, out double second)
     {
-        double t = Math.Exp(Shape * (rho - _logScale));   // (τ²/λ)^k
+        double t = Math.Exp(Shape * (rho - _logScale));   // (τ²/s)^k
         first = Shape - Shape * t;
         second = -Shape * Shape * t;
         return Shape * rho - t;
     }
 
     /// <summary>
-    /// Prior scaling (Klein &amp; Kneib 2016): the Weibull prior whose function draws stay within ±<paramref name="bound"/>
-    /// at every row of <paramref name="design"/> with probability 1 − <paramref name="tailProbability"/>. Every component's
-    /// τⱼ² is λWⱼ with Wⱼ ~ W(k, 1), so a draw of the function's penalized part, <c>f = Zβ</c> with
-    /// <c>β ~ N(0, K(τ)⁺)</c>, is √λ times one drawn at λ = 1, and λ is <c>(bound/q)²</c> with q the
-    /// (1 − tailProbability)-quantile of <c>max|f|</c> at λ = 1, estimated from <paramref name="draws"/> draws. The
-    /// penalty's null space has a flat prior and is left out: the bound speaks to the penalized part only.
+    /// Prior scaling, Bach &amp; Klein's (2025, Supplement Appendix D; their R function <c>prior_scaling_WB</c>) version of
+    /// Klein &amp; Kneib's (2016): the common scale at which the prior's function draws exceed ±<paramref name="bound"/>
+    /// somewhere on the rows of <paramref name="design"/> with probability <paramref name="tailProbability"/>,
+    /// <c>P(‖f‖∞ ≥ bound) = α</c>. Every component's τⱼ² is sWⱼ with Wⱼ ~ W(k, 1), so a draw of the function's penalized
+    /// part, <c>f = Zβ</c> with <c>β ~ N(0, K(τ)⁺)</c>, is √s times one drawn at s = 1, and s is <c>(bound/q)²</c> with q the
+    /// (1 − α)-quantile of <c>max|f|</c> at s = 1, estimated from <paramref name="draws"/> draws (their λ = (q/c)² is its
+    /// rate). The penalty's null space has a flat prior and is left out: the bound speaks to the penalized part only.
+    /// <para>
+    /// α = 0.05 is their default. They draw 1,000 times; 2,000 here, which only sharpens the quantile. Klein &amp; Kneib's
+    /// original criterion is pointwise, <c>P(|z′β| ≤ c) ≥ 1 − α</c> at one point (c = 3, α = 0.01), computed by integration
+    /// (their R package sdPrior); the simultaneous criterion here is the stricter statement over the design.
+    /// </para>
     /// </summary>
     public static WeibullVariancePrior ScaledTo(double[,] design, IAnisotropicPenalty penalty, double bound,
-                                                double tailProbability = 0.01, double shape = 0.5, int draws = 2000, int seed = 1)
+                                                double tailProbability = 0.05, double shape = 0.5, int draws = 2000, int seed = 1)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(penalty);
@@ -118,5 +133,24 @@ public sealed record WeibullVariancePrior : ISmoothingVariancePrior
         Array.Sort(maxima);
         double q = PosteriorInterval.Quantile(maxima, 1.0 - tailProbability);
         return new WeibullVariancePrior(bound * bound / (q * q), shape);
+    }
+
+    /// <summary>
+    /// <see cref="ScaledTo"/> with Bach &amp; Klein's default bound, the observations' largest absolute value. They
+    /// standardize y first, so in the response's own units the bound is <c>max |yᵢ − ȳ|</c>, which gives the same prior on
+    /// the unstandardized smoothing variances (τ² scales with the response's variance).
+    /// </summary>
+    public static WeibullVariancePrior ScaledToResponse(double[,] design, IAnisotropicPenalty penalty, double[] response,
+                                                        double tailProbability = 0.05, double shape = 0.5, int draws = 2000,
+                                                        int seed = 1)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        if (response.Length == 0) throw new ArgumentException("Need at least one observation.", nameof(response));
+        double mean = 0.0;
+        foreach (double v in response) mean += v / response.Length;
+        double bound = 0.0;
+        foreach (double v in response) bound = Math.Max(bound, Math.Abs(v - mean));
+        if (!(bound > 0.0)) throw new ArgumentException("A constant response gives no bound to scale to.", nameof(response));
+        return ScaledTo(design, penalty, bound, tailProbability, shape, draws, seed);
     }
 }

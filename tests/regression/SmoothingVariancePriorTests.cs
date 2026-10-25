@@ -54,6 +54,24 @@ public sealed class SmoothingVariancePriorTests
     }
 
     [Fact]
+    public void WeibullKernel_IsBachAndKleinsInTheirRateParameterization()
+    {
+        // Their R kernel for Weibull(½, λ) on τ², with λ a rate: −√λ·e^(ρ/2) + ρ/2, gradient −½√λ·e^(ρ/2) + ½,
+        // second derivative −¼√λ·e^(ρ/2) (Supplement Appendix E.2).
+        var prior = new WeibullVariancePrior(0.025);
+        double lambda = prior.Rate;
+        Assert.Equal(40.0, lambda, 12);
+        foreach (double rho in new[] { -4.0, -1.0, 0.5, 3.0 })
+        {
+            double value = prior.LogDensityOfLog(rho, out double first, out double second);
+            double e = Math.Sqrt(lambda) * Math.Exp(rho / 2.0);
+            Assert.Equal(-e + rho / 2.0, value, 12);
+            Assert.Equal(-0.5 * e + 0.5, first, 12);
+            Assert.Equal(-0.25 * e, second, 12);
+        }
+    }
+
+    [Fact]
     public void TensorPriorDraws_HaveCovarianceKPlus_AndNoNullSpaceComponent()
     {
         const int nuX = 4, nuY = 5;
@@ -143,8 +161,14 @@ public sealed class SmoothingVariancePriorTests
             if (max <= 2.0) within++;
         }
         double rate = within / (double)draws;
-        _out.WriteLine($"[prior-scaling] λ = {prior.Scale:E3}; P(max|f| ≤ 2) on fresh draws {rate:F4}");
+        _out.WriteLine($"[prior-scaling] scale = {prior.Scale:E3}; P(max|f| ≤ 2) on fresh draws {rate:F4}");
         Assert.InRange(rate, 0.95 - 0.015, 0.95 + 0.015);
+
+        // The response's bound is its largest absolute deviation from its mean, Bach & Klein's ‖y‖∞ on standardized y.
+        double[] y = Enumerable.Range(0, n).Select(i => 5.0 + Math.Sin(i)).ToArray();
+        double bound = y.Max(v => Math.Abs(v - y.Average()));
+        Assert.Equal(WeibullVariancePrior.ScaledTo(z, penalty, bound, draws: 500).Scale,
+                     WeibullVariancePrior.ScaledToResponse(z, penalty, y, draws: 500).Scale, 12);
     }
 
     [Fact]
@@ -162,7 +186,7 @@ public sealed class SmoothingVariancePriorTests
             for (int p = 0; p < r.Coefficients.Length; p++) fit += z[i, p] * r.Coefficients[p];
             mse += (fit - f[i]) * (fit - f[i]) / f.Length;
         }
-        _out.WriteLine($"[baps-weibull] prior λ {prior.Scale:E3}; λx {lx.Median:E2} [{lx.Lo:E2}, {lx.Hi:E2}] λy {ly.Median:E2} [{ly.Lo:E2}, {ly.Hi:E2}]; " +
+        _out.WriteLine($"[baps-weibull] prior scale {prior.Scale:E3} (rate {prior.Rate:E3}); λx {lx.Median:E2} [{lx.Lo:E2}, {lx.Hi:E2}] λy {ly.Median:E2} [{ly.Lo:E2}, {ly.Hi:E2}]; " +
                        $"MSE {mse:F5}; R̂ {string.Join(", ", r.ComponentLogLambdaConvergence!.Select(c => c.RHat.Value.ToString("F3")))}");
         Assert.True(lx.Lo > ly.Hi, "the 95% intervals separate, λx above λy");
         Assert.All(r.ComponentLogLambdaConvergence!, c => Assert.True(c.RHat.Value < 1.05, $"R̂ {c.RHat}"));
