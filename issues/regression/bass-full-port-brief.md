@@ -246,7 +246,8 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
     - The retained-parameters content for BARS (Normal with robust weights integrated through each resampler's marginal, Poisson, Whittle; Gibbs loss declines), `HierarchicalPSpline` (curve units integrate β_r) and the changepoint draws (whole-segment units integrate the level).
     - The model-free consumers `PredictiveChecks.Waic` and `PsisLoo`.
     - BASS's observation model implements the same contract at its port.
-  - **Not built:** the collapsed-predictive content, BAPS's and BGP's terms, and the conformal consumer (SPC × BARS).
+  - **Built later the same day:** BAPS's retained terms (`78810a7`); the collapsed content for Normal BARS through `IConditionalFit.LeaveOutLogDensities` (`a6e8e5c`); BGP's collapsed terms, and σ²'s prior on `GPriorConditional.LeaveOutLogDensity`, which BASS's collapsed content will read (`a1f56b1`).
+  - **Not built:** the conformal consumer (SPC × BARS), the collapsed content for BAPS, `HierarchicalPSpline` and the changepoint draws, and PSIS's relative efficiency.
 
 ## SMC integration
 
