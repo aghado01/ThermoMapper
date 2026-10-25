@@ -4,6 +4,7 @@ import Enthymemata.Bifiltration
 import Enthymemata.BgpCovering
 import Enthymemata.BgpGaussianKL
 import Enthymemata.BgpUnknownVariance
+import Enthymemata.BgpUnknownVarianceTheorem
 import Enthymemata.CumulativeField
 import Enthymemata.PottsPK
 import Enthymemata.Stability
