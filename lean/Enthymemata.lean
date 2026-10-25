@@ -3,6 +3,7 @@ import Enthymemata.BARS
 import Enthymemata.Bifiltration
 import Enthymemata.BgpCovering
 import Enthymemata.BgpGaussianKL
+import Enthymemata.BgpGaussianTails
 import Enthymemata.BgpUnknownVariance
 import Enthymemata.BgpUnknownVarianceTheorem
 import Enthymemata.CumulativeField
