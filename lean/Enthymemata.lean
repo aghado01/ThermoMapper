@@ -1,6 +1,7 @@
 import Enthymemata.Ascent
 import Enthymemata.BARS
 import Enthymemata.Bifiltration
+import Enthymemata.BgpCovering
 import Enthymemata.BgpGaussianKL
 import Enthymemata.BgpUnknownVariance
 import Enthymemata.CumulativeField
