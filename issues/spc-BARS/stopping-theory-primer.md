@@ -261,6 +261,10 @@ entropy) suit it better.
 | C27 | Registration depends on the lattice's phase as well as its density, so a minimum should plan on the worst phase | §12.14 | Observed (n₀ = 2 against n₀ = 10 lattices) | Shifted lattices at fixed n₀ |
 | C28 | From about 145 points the default BARS fits sit at the replicate noise floor, so tighter fits need replicates, not settings | §12.18 | Observed (against an independent sweep) | More replicates on one curve |
 | C29 | Replicate weights through the robust-weight seam over-shrink, because the unweighted g-prior borrows the weighted σ² | §12.18 | Observed harm; mechanism a hypothesis | A weighted entry point with its own prior scale |
+| C30 | Two rigid blocks joined by total coupling C split, under BWD's rule, at T = C/ln(q + 1), so a graph's stages can be read off its cuts before sampling | §12.27 | Observed: exact to a grid step on a tree of blocks (BlattHierarchy, Cauchy K = 5); 0.5–1 e-fold cold where blocks form loops | Random-cluster connectivity on the block graph instead of the pairwise rule |
+| C31 | One KNN graph shows one hierarchy level per K: K selects by cluster mass, the bandwidth grows with K, and the finer gaps fill with edges | §12.27 | Predicted by C30 across K = 5–320; SW-checked at K = 5 and 10 | SW at K = 40–320 |
+| C32 | A union of KNN scales weighted (a_min/a_s)², a discrete Gaussian scale mixture, puts every level of a hierarchy into one T-stack | §12.27 | Observed on BlattHierarchy; equal weights flood; `HierarchyEom` mixes levels on it | Other spreads and real data; a resolver that reads levels |
+| C33 | On hierarchical data a range-relative bump gate sees only each curve's largest feature; the smaller levels are steps and shoulders | §12.28 | Observed (BlattHierarchy, both graphs) | Scale-relative prominence, or a split-rate channel from each volley's own points |
 
 ---
 
@@ -1361,3 +1365,156 @@ each temperature and follow how it evolves.
   is neither: the information that separates them isn't in the edge lengths at this scale.
 - **What could carry it:** density, through a density-aware rescaling such as LMP or mutual-reachability distances,
   which lengthen edges across a density dip; or the features themselves.
+
+### 12.27 BlattHierarchy: what the graph lets SPC see
+
+**The data.** `BlattHierarchy` at 1,200 points: 2 coarse, 6 medium and 24 fine clusters of 50 points each, in 2-D,
+leaf spread 0.15. Each level's gaps need a different coupling strength, so the graph decides which levels can appear.
+
+**A rigid-block model reads the stages off the graph before any sampling (C30).**
+- Two internally ordered blocks joined by total coupling C share an SW cluster with probability
+  (e^(C/T) − 1)/(e^(C/T) + q − 1), which crosses ½ at T = C/ln(q + 1).
+- Contract the fine clusters to blocks, and at each T join the blocks whose cut exceeds T ln(q + 1). Each level's
+  predicted stage is where the result equals that level's partition.
+- **On the Cauchy K = 5 graph it matches SW to a grid step:**
+
+  | Level | Predicted | Observed (BWD's rule) |
+  |---|---|---|
+  | Coarse | 1.80 e-folds [4.5×10⁻⁶, 2.6×10⁻⁵] | 1.92 [4.9×10⁻⁶, 3.0×10⁻⁵] |
+  | Medium | 4.25 [3.5×10⁻⁵, 2.3×10⁻³] | 4.26 [3.7×10⁻⁵, 2.4×10⁻³] |
+  | Fine | from 7.1×10⁻³ | from 6.2×10⁻³; shedding from about 0.04, dust by 0.2 |
+
+- **On the multi-scale union below it runs 0.5–1 e-fold cold.** The likely reason: the model joins two blocks only
+  through their direct cut. In the union, the three medium clusters inside each coarse cluster are all coupled to each
+  other, so each pair has a second path, and splits happen hotter. Under Cauchy K = 5 the blocks hang on a tree of
+  repair edges.
+
+**One KNN graph shows one level per K (C31).** The user's idea was a larger K, to couple the coarser levels through
+many edges. Block model, mutual KNN with MST repair, q = 20 (the OR rule gives the same picture):
+
+| K | Bandwidth | Edges crossing fine / medium / coarse gaps | Gaussian: clean stages | Cauchy: clean stages |
+|---|---|---|---|---|
+| 5 | 0.07 | 18 / 4 / 1 | medium only below 10⁻⁹; fine from 2×10⁻⁴ | coarse 1.9, medium 4.3, fine from 0.007 |
+| 40 | 0.20 | 44 / 4 / 1 | medium below 4×10⁻⁴; fine from 0.013 | coarse 1.8, medium 4.2, fine from 0.018 |
+| 80 | 0.43 | 11,339 / 4 / 1 | medium up to 0.26; fine gone | coarse 1.8, medium 9.1; fine gone |
+| 160 | 0.85 | 59,728 / 4 / 1 | medium 20 e-folds, up to 1.9 | coarse 1.8, medium 10.1 |
+| 320 | 2.1 | 90,000 / 36,011 / 1 | coarse 20.5 e-folds, up to 0.1 | coarse 9.3, medium 1.6 |
+
+- **K selects by mass, not distance.** Edges cross a gap only once K exceeds the cluster's point count: K = 320 for
+  the 200-point medium clusters; no K here for the 600-point coarse pair. Below that, MST repair edges are the only
+  crossings: 4 between medium clusters and 1 between the coarse pair.
+- **The bandwidth grows with K,** from a mean edge length of 0.07 to 2.1, and the finer gaps fill with edges: 18 cross
+  them at K = 5, 11,339 at K = 80.
+- **The melt barely moves.** Node strength stays near 0.6 at every K through the 1/K̂ normalization, so a finer level
+  whose splits would start above the melt is lost.
+- **So a Gaussian graph shows one level at a time:** fine for K ≤ 40, medium at 80–160, coarse at 320. A larger K does
+  couple a coarser level through many edges, but in one graph it gives up the finer ones. One K is one mass scale, as
+  one bandwidth is one distance scale.
+- **Cauchy at small K shows all three levels.** But each coarser stage rests on single repair edges, whose lengths
+  depend on the two closest points across each gap.
+- **Compiler observation.** The Gaussian graphs keep no edges across the medium and coarse gaps: 0, against 4 and 1
+  under Cauchy with the same topology settings. The repair edges' couplings underflow to zero and are dropped, so MST
+  repair doesn't keep a Gaussian graph connected across wide gaps.
+
+**How a set of K's returns one finished result** (discussion). Each run at one K returns a T-stack, which a resolver
+reads as that K's level. Three routes to one result:
+- **Pick a K by a rule.** The widest stage would pick the coarse pair at K = 320, the least informative answer.
+- **Run several K and merge the partitions** if they nest. This makes K a second axis beside T. One reading is a path
+  through (K, T), which needn't be monotone (the zigzag case), from the 2026-07 working frame.
+- **Build one multi-scale graph,** whose single T-stack the existing resolvers read. This is the route tested below.
+
+**A multi-scale union puts every level into one T-stack (C32).**
+- **The graph.** The union of the mutual-KNN edge sets at K = 5, 40 and 320, with 155,412 edges.
+  - Each scale is coupled by its own Gaussian at its mean edge length a_s (0.083, 0.20 and 2.11) and its own 1/K̂_s.
+  - Each scale's coupling is weighted by w_s and summed per edge.
+- **Equal weights flood, as the block model predicted.** The coarse stage holds 12.6 e-folds, an exact 600/600, up to
+  T = 0.26. Medium and fine never appear, and `HierarchyEom` returns the coarse pair.
+- **With w_s = (a_min/a_s)², every level appears, each joined across many edges.**
+  - The sum is a discrete Gaussian scale mixture whose envelope falls as d⁻², which is how a Cauchy kernel arises as a
+    mixture of Gaussians.
+  - Coarse: 6.5 e-folds, from the grid's cold end to 6×10⁻⁴. Medium: 2.0 [1.0×10⁻³, 6.9×10⁻³]. Fine: 2.45
+    [9.5×10⁻³, 0.099].
+- **The weights place each scale's stages along T but don't set the medium stage's width.** That width is 2.6 e-folds
+  predicted at every exponent from 0 to 3, and comes from the order of cuts inside the K = 320 graph. So the spacing
+  between levels is a design choice; the widths within a scale are the data's.
+- **`HierarchyEom` mixes levels on this T-stack.** By excess of mass it keeps one medium cluster whole, plus about 20
+  fine ones, with 55 points unassigned. The hierarchy is in the T-stack, but this resolver doesn't read it out as
+  levels.
+- **Cost.** About 30 minutes for one 141-temperature, 4-replica sweep at N = 1,200 under load, against seconds for one
+  small-K graph.
+- **One pass, one seed, one spread: exploration, not a basis for defaults.**
+
+### 12.28 The stopping experiments on BlattHierarchy
+
+**The setup.**
+- **The schedule.** n₀ = 10 and V = 5 (289 points) over [10⁻⁶, 0.3], 12.6 e-folds, set from S₂: the cold end sits
+  below the coarse split, the hot end past the melt.
+- **The sampling.** 8 replicas × 2,000 cycles at q = 20, seeds 42 (main) and 4242 (independent).
+- **Two graphs.** Cauchy K = 5, which shows all three levels; and Gaussian K = 10, the pipeline's default graph, which
+  shows only the fine splits' cold tail and the melt.
+- **The readouts.** Default BARS on FkReduced, magnetization variance and heat capacity on every volley. The floor uses
+  n = 5% of N (60), as for toy and iris.
+
+**The curves (Cauchy K = 5).**
+- **Heat capacity is unreadable below about 10⁻⁴.** It's (⟨E²⟩ − ⟨E⟩²)/T² from running sums: the variance is lost
+  to cancellation and then multiplied by 1/T². On the Gaussian graph the readings go negative. The dashboard leaves it
+  out there.
+- **The hierarchy shows mostly as steps.**
+  - Magnetization variance has one big bump, at the coarse split: 0.069 at 4.2–4.8×10⁻⁶. The medium splits leave only
+    a shoulder, and the fine splits don't show, because the variance follows the largest clusters and a fine cluster
+    is 4% of N.
+  - FkReduced climbs to 265 across the coarse and medium splits, sits near 165 across the medium stage, falls to
+    about 48 across the fine splits, then melts.
+  - Heat capacity peaks at the melt (0.114, FWHM 0.97 e-folds), with a shoulder at the fine splits: about 46 at
+    3.2×10⁻³, under 2% of the melt's height.
+- **The spanning-forest S₂ bound is nearly exact,** as blocks on a tree of repair edges would make it: 0.585 against
+  0.594 at 8×10⁻⁶, and 0.1688 against 0.1686 on the medium plateau. 5 of the 289 points sit more than 3 standard
+  errors above S₂, about what t-tails on 7 degrees of freedom give.
+
+**E4 registration.**
+- **The range-relative gate finds one bump per curve.** At 10% of the range and 4 standard errors, it finds:
+  - FkReduced's broad hump at 1.3×10⁻⁵ (FWHM 6.2 e-folds);
+  - the coarse split in magnetization variance at 4.2×10⁻⁶ (1.43);
+  - the melt in heat capacity.
+- **BARS registers all three by volley 1,** at 19 points.
+- **Lowering the gate to 2% adds nothing that registers:** only FkReduced's plateau edge and a 0.05-e-fold shoulder,
+  neither of which BARS registers.
+- **The medium and fine splits never become bumps under a range-relative gate,** because each curve's largest feature
+  sets the range (C33).
+
+**C12, two quiet volleys.** On the Cauchy graph it stops at volley 3 for FkReduced and magnetization variance, and at
+volley 2 for heat capacity. On the Gaussian graph: volleys 3 and 2, and 5 for heat capacity, whose cold-end noise keeps
+it surprised.
+
+**The descending S₂ test.** On the Cauchy graph, the blocks left open at each volley:
+
+| Volley | Open blocks (T range, widest localized event) |
+|---|---|
+| 1 | [10⁻⁶, 2.7×10⁻⁴] 0.70; [0.0011, 0.149] 0.70 |
+| 2 | [10⁻⁶, 1.9×10⁻⁴] 0.35; [0.0011, 0.0128] 0.35; [0.0258, 0.105] 0.35 |
+| 3 | [1.2×10⁻⁶, 1.4×10⁻⁴] 0.18; [0.0013, 0.0076] 0.18 |
+| 4 | [1.3×10⁻⁶, 1.0×10⁻⁴] 0.09; [0.0013, 0.0053] 0.18 |
+| 5 | [1.4×10⁻⁶, 1.0×10⁻⁴] 0.09; [0.0015, 0.0045] 0.18; two narrow undecided blocks either side |
+
+- **Validity.** 287 quiet certifications on the main sweep, none contradicted by the independent sweep. The two sweeps
+  agree on 97% of interval states at volley 5.
+- **The coarse and medium events merge into one block.** Two blocks joined by one edge of coupling C share an SW
+  cluster with probability ≈ C/(qT) once T ≫ C. That tail keeps S₂ falling at about the floor's rate per finest
+  interval right through the short coarse stage.
+- **The fine splits** are localized to 0.18 e-folds by volley 4.
+- **The melt is certified quiet from volley 3.** Each fine cluster's 50 points sit under n = 60, so its dissolving
+  counts as peripheral. A floor set from n = 25 would track it.
+- **On the Gaussian K = 10 graph,** everything is quiet by volley 4.
+
+**What it says about stopping on hierarchical data.**
+- **A bump-based minimum is set by each curve's largest feature.** E4's first registration sees only that. The smaller
+  levels' steps and shoulders would need a scale-relative prominence (on the curve's log, or against a local range), or
+  a split-rate channel −dS₂/d ln T computed from each volley's own points, so that each split gets a bump of its own.
+- **The descending test sees every level as active intervals, but its floor sets which ones count.** With n at 5% of
+  N, the 50-point fine clusters' events are peripheral.
+- **The rules disagree by a volley here.** Two quiet volleys stops at volley 3, one volley before the descending test
+  has localized the fine splits.
+- **A stopping rule can't find what the graph removed.** On the Gaussian K = 10 graph the test goes quiet by volley 4
+  because the coarse and medium levels aren't in the T-stack at all. So the graph choice (§12.27) comes before the
+  stopping rule.
+- **One spread and one seed pair: exploration.**
