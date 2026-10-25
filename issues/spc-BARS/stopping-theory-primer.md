@@ -236,7 +236,7 @@ entropy) suit it better.
 | C2 | Its nearest Fisher zero is at Im β₁ = π/ΔE | Fisher-zeros note | Checked here | Lean (L2) |
 | C3 | Its thermodynamic length is π for any ΔE and ΔS | Fisher-zeros note | Corrected here: π over the whole β-line; 2(arcsin√p₂ − arcsin√p₁) for a traversal, 2.69 for the physical range at q = 20 | Lean (L2) |
 | C4 | A split's width is w_q = 2.2/ln(q − 1), independent of cluster size | Fisher-zeros note | Partly refuted by E1 (§12.9): FkReduced respects it; variance observables at melts and at the toy's background-mediated split run 3–9× narrower | done (E1) |
-| C5 | n_min ≤ 1 + ⌈2E·ln(q − 1)/2.2⌉ on a grid evenly spaced in ln T | Fisher-zeros note | Derived, unverified | E1, E3 |
+| C5 | n_min ≤ 1 + ⌈2E·ln(q − 1)/2.2⌉ on a grid evenly spaced in ln T | Fisher-zeros note | Partly checked (§12.9–12.10): the width floor fails for variance observables (E1); BARS registers bumps at 0.6–2.1 points per FWHM, under the geometric 2 (E4) | E3 |
 | C6 | The dense spacing is h ≈ a·(16ε/5)^(1/4) | Fisher-zeros note | Derived, unverified | Numeric, on a known analytic curve |
 | C7 | Im β₁ can't be estimated before the peak is resolved | Argon notes | Disputed in scope (§4) | Literature on zeros from Monte Carlo data |
 | C8 | D_J is the symmetrized KL divergence between endpoint Gibbs measures | Argon notes | Checked here (standard) | Lean (L1) |
@@ -257,6 +257,7 @@ entropy) suit it better.
 | C23 | A spanning tree's S₂ is a closed-form lower bound on S₂(T) | §12.8 | Checked here (comparison inequality; all 48 grid points on both datasets) | Lean (L4) |
 | C24 | A split through a sparse bridging population frees those spins too, so it is sharper than a bare split, towards a melt | §12.9 | Derived from E1, unverified | Toys that vary the bridge density |
 | C25 | Per-interval ΔS₂ tests lose power at fine volleys; a test that descends the dyadic tree keeps it | §12.9 | Observed (E5, cheap budget); the remedy is derived, unverified | Q4 design |
+| C26 | BARS registers a bump at about one point per FWHM, roughly placed; its prominence gate, not the grid, drops weak bumps | §12.10 | Observed (E4, six bumps, equal weights) | E3; weighted fits |
 
 ---
 
@@ -620,3 +621,46 @@ bracket [0.0129, 1.031].
     toy's v = 6 flags fragment into 17 intervals in four runs, against 28 in three at the main budget.
   - ΔS₂ telescopes over the dyadic tree, so a test that descends from flagged parents keeps the parents' power. That
     bears on Q4.
+
+### 12.10 E4: when BARS first registers each bump
+
+**The run.**
+- **The fits.** BARS (cubic, Poisson(5) knot prior, 4 chains × 4,000 draws after 2,000 burn-in, the default 10%
+  prominence gate) ran on each volley's subsample of the main-budget curves of §12.9: v = 2 to 6, 5 to 65 points.
+  v = 1 has 3 points, too few for a cubic.
+- **Equal weights.** The run API takes no per-point weights, so every point weighs the same (W ≡ I).
+- **Registration.** A bump counts as registered when a peak mode with posterior mass ≥ 0.5 falls inside the dense bump's
+  FWHM. Every registration here reached mass ≥ 0.9 at once.
+
+| Bump | FWHM | First volley | h there | Points per FWHM | Location error | Interval width |
+|---|---|---|---|---|---|---|
+| toy FkReduced, T = 0.025 (the three-stripe lifetime) | 1.57 | 3 | 0.75 | 2.1 | +0.17 | 0.69 |
+| toy MagnetizationVariance, T = 0.014 (the split) | 0.41 | 4 | 0.37 | 1.1 | +0.13 | 0.60 |
+| toy heat capacity, T = 0.110 (the melt) | 0.31 | 4 | 0.37 | 0.8 | +0.16 | 0.27 |
+| iris MagnetizationVariance, T = 0.091 | 0.24 | 5 | 0.19 | 1.3 | −0.06 | 0.36 |
+| iris heat capacity, T = 0.100 | 0.23 | 4 | 0.37 | 0.6 | +0.03 | 0.24 |
+| iris heat capacity, T = 0.160 | 0.15 | never | — | 1.6 at v = 6 | — | — |
+
+Widths, errors and interval widths are in e-folds of ln T.
+
+- **BARS registers a bump at about one point per FWHM** (0.6–2.1). That is below Thread I's geometric two points per
+  FWHM (C5), so on these data the geometric constant is conservative. The closed-form readout does what §1 says: it
+  places a peak between grid points.
+- **At first registration the location is rough:** errors of 0.03–0.17 e-folds, with intervals 0.24–0.69 wide. By v = 5
+  the intervals run 0.09–0.36 wide.
+- **The location intervals cover the dense peak** (to within its own grid quantization, ±h/2) in 12 of 13 fits from
+  first registration on. The exception is iris's heat capacity at v = 5, which misses by about one grid step.
+- **An under-resolved volley can put a mode in the wrong place.** At v = 3 the toy's MagnetizationVariance carries a mode
+  of mass 0.57 at T = 0.024, half an e-fold off the split: enough to report, and misplaced. Its w/h there is 0.55.
+- **The one miss comes from the prominence gate, not the grid.**
+  - Iris's bump at T = 0.160 rises about 5% of the curve's range above its higher neighbour, under BARS's 10% gate, and
+    is one point wide even at v = 6.
+  - It is plausibly setosa's melt: setosa's edges run hotter (median T* 0.037, against 0.026).
+  - S₂'s flagged run at v = 6, [0.027, 0.175], covers it. The certificate doesn't let it hide; the BARS readout just
+    doesn't count it. That is the division of labour of §12.7.
+- **No false bumps.** Apart from the misplaced mode above, no mode with mass ≥ 0.5 falls outside the dense features.
+  Iris's FkReduced, which has no dense bump, never gets a mode above 0.2.
+- **Not yet tested:**
+  - C12's two-quiet-volleys rule, which needs each fit's predictive band at the next volley's midpoints;
+  - an operating curve proper, which needs more than six bumps (E3's synthetic bumps, or more datasets);
+  - the replicate-variance weights of §1, which need a weighted entry point.
