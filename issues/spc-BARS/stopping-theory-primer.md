@@ -243,7 +243,7 @@ entropy) suit it better.
 | C9 | L² ≤ D_J | This primer | Checked here | Lean (L1) |
 | C10 | A bounded mean's excursion is at most ((b − a)/2)√D_J | This primer | Checked here; tightened in §12.2 (C15) | Lean (L1) |
 | C11 | A rigid switch hidden beyond its θ-plateaus forces D_J ≥ ℓ(θ)² | This primer | Checked here, unconditional (§12.1): holds for coupled clusters; θ-plateaus restated against (q − 1)/q | Lean (L1); E2 on toys |
-| C12 | Two quiet volleys reduce aliasing | Argon notes | Heuristic, tested (§12.11): no premature stop on six curves, but one stop came at the very volley the bump first registered, with no surprise flagging it | anytime-valid reformulation (§6); more curves |
+| C12 | Two quiet volleys reduce aliasing | Argon notes | Heuristic, tested (§12.11, §12.14): on the n₀ = 10 schedule it stops once before a bump registers (iris's minor melt) | anytime-valid reformulation (§6); more curves |
 | C13 | The global grid's union is non-uniform after refinement | Early dyadic discussion | Withdrawn (the union stays uniform) | none needed |
 | C14 | Critical slowing down makes regime-A noise heteroscedastic | Early dyadic discussion | Withdrawn (SW suppresses it; replicates measure the rest) | none needed |
 | C15 | A [0, 1] observable's Fisher angle moves at most L ≤ √D_J, so its excursion is at most (b − a)·sin(min(√D_J, π)/2), sharply | §12.1–12.2 | Checked here (proof; enumeration) | Lean (L1) |
@@ -256,8 +256,9 @@ entropy) suit it better.
 | C22 | The toy dump's bracket clips its cold edge | User observation; §12.7 | Checked here (§12.8), and confirmed by the extended run (§12.9): the cold side of the stripe split lies below the old T_lo; not a miscomputed bracket, and not components | done |
 | C23 | A spanning tree's S₂ is a closed-form lower bound on S₂(T) | §12.8 | Checked here (comparison inequality; all 48 grid points on both datasets) | Lean (L4) |
 | C24 | A split through a sparse bridging population frees those spins too, so it is sharper than a bare split, towards a melt | §12.9 | Derived from E1, unverified | Toys that vary the bridge density |
-| C25 | Per-interval ΔS₂ tests lose power at fine volleys; a test that descends the dyadic tree keeps it | §12.9 | Observed (E5, cheap budget); the remedy is derived, unverified | Q4 design |
-| C26 | BARS registers a bump at about one point per FWHM, roughly placed; its prominence gate, not the grid, drops weak bumps | §12.10 | Observed (E4, six bumps, equal weights) | E3; weighted fits |
+| C25 | Per-interval ΔS₂ tests lose power at fine volleys; a test that descends the dyadic tree keeps it | §12.9, §12.14 | Observed on both schedules; a first-cut descending test holds 8 of 9 bump peaks at every volley | Q4 design |
+| C26 | BARS registers a bump at about one point per FWHM, roughly placed; its prominence gate, not the grid, drops weak bumps | §12.10, §12.14 | Observed (E4 on both schedules, equal weights): 0.2–2.4 points per FWHM, the low end from lucky lattice phases | E3; weighted fits |
+| C27 | Registration depends on the lattice's phase as well as its density, so a minimum should plan on the worst phase | §12.14 | Observed (n₀ = 2 against n₀ = 10 lattices) | Shifted lattices at fixed n₀ |
 
 ---
 
@@ -739,4 +740,93 @@ more so the fit can mature.
 - **What stays open.**
   - Setting the minimum before sampling: E1 puts the narrowest bumps at melts and background-mediated splits (0.15–0.41
     e-folds), not at the rigid split's 1.38, so a priori the minimum needs melt widths.
-  - How much of the afterburn's gain the BARS settings could deliver a volley earlier (§12.13).
+  - How much of the afterburn's gain the BARS settings could deliver a volley earlier.
+
+### 12.13 What the stopping work asks of SW retention
+
+The SW retention brief (`issues/spc/sw-retention-brief.md`, items S1–S6) predates this thread. Read against it:
+- **S6, replica spread in `SweepCurves`, comes first.** The certificate's per-interval test runs on SE(ΔS₂) from the
+  replicate spread. The harness had to compute that from the raw runs.
+- **S1 with S3, the per-sweep records,** would serve the certificate twice:
+  - within-run error bars, so a single-replica sweep could carry the certificate's SE;
+  - Ferrenberg–Swendsen reweighting, to predict a midpoint's S₂ or C_v from its endpoints before it is run.
+  The second reaches only so far at this size. Reweighting needs overlapping energy histograms, which is the D_J ≲ 4
+  regime, and E2 found D_J > 4 on most toy intervals even at h = 0.093.
+- **S2, the higher moments,** would put error bars on the heat-capacity peaks of E1 and E4.
+- **Not in the brief: an exact cluster-size histogram.**
+  - The log-binned histogram bounds Σ_k g(c_k) without giving it.
+  - Counts per exact size, summed over sweeps, are a sufficient statistic for the mean of every cluster functional
+    Σ_k g(c_k): S₂, F_n at any size floor, the partition entropy.
+  - It costs N integers per run (13 KB for the toy), far less than S1, and it lets the size floor and the currency of
+    §12.7 be chosen after the run.
+  - S5's partitions would give the same means, at gigabytes.
+  - Added to the brief as S7 (de7bb49).
+
+### 12.14 The experiments on the user's schedule (n₀ = 10)
+
+**The correction.**
+- **What ran before.** §12.9–12.11 ran bisection from S₀ = {0, 1}: n_v = 2^v + 1, so 3, 5, … 65 points.
+- **The user's design.** It starts from n₀ points, 10 in practice, so n_v = (n₀ − 1)·2^v + 1: 10, 19, 37, 73, 145, 289.
+- **Comparing the two.** Match them by spacing, not by volley index.
+
+**The run.**
+- **The grid.** 289 temperatures (9·2⁵ + 1) over the same 5.97 e-folds, so volleys 0–5 are exact subsamples, with h from
+  0.663 to 0.021 e-folds.
+- **The budget.** 8 replicas × (1,000 burn-in, 2,000 cycles), 251 s for the toy. BARS, at its defaults on 6bc5134,
+  fitted every volley.
+
+**The results.**
+- **Monotonicity holds at all 288 steps.** No S₂ reversal exceeds 2 SE on either dataset; one ⟨E⟩ reversal does on
+  iris.
+- **E1 needs a noise-aware bump finder at this density.**
+  - Point to point, heat capacity and all of iris's curves move by about one replicate SE.
+  - Topographic prominence (at least 10% of the range and 4 SE) recovers the 65-point widths: toy 1.58, 0.43, 0.30;
+    iris 0.29, 0.16, 0.09.
+  - It adds a one-point bump at the toy's melt (T = 0.1034), at the noise level.
+- **E2.** The toy still has 16 intervals over D_J = 4 at v5 (h = 0.021, maximum 7.9); iris clears the gate from v4 on.
+- **E5, and C25 at full strength.**
+  - The per-interval test flags one run over the active region at v0–v2, then localizes at v3 (toy: 24 of 72 intervals,
+    in 5 runs).
+  - Then it fragments. At v5 the toy flags 13 of 288 intervals in 8 runs, and the test misses bump peaks it held at
+    coarser volleys: the toy's melt at v4–v5, iris's minor melt at v4–v5.
+  - A first-cut descending test keeps a child flagged when its parent is flagged and the child's own ΔS₂ exceeds 2 SE,
+    without the floor. It holds every bump peak at every volley except iris's main melt at v5, flagging 84 and 90 of 288
+    intervals at v5.
+
+**E4, first registration** (mass ≥ 0.5 inside the dense FWHM):
+
+| Bump | FWHM | First volley | Points per FWHM there |
+|---|---|---|---|
+| toy FkReduced, the three-stripe lifetime | 1.58 | v0 (10 points) | 2.4 |
+| toy MagnetizationVariance, the split | 0.43 | v1 (19) | 1.3 |
+| toy heat capacity, the melt | 0.30 | v0 (10) | 0.4 |
+| toy heat capacity, the one-point bump | 0.02 | never | — |
+| iris MagnetizationVariance | 0.29 | v2 (37) | 1.8 |
+| iris heat capacity, the main melt | 0.16 | v0 (10) | 0.2 |
+| iris heat capacity, the minor melt | 0.09 | v5 (289) | 4.5 |
+
+- **Registration depends on the lattice's phase as well as its density** (C27). The low values (0.2, 0.4 points per
+  FWHM) are lucky landings: the 10-point grid happens to put a point on each melt's shoulder. A minimum set from one
+  lattice can be optimistic. The worst case across phases is the one to plan on, about 1–2 points per FWHM here.
+- **The minimum on this schedule** is volley 1 (19 points) on the toy and volley 2 (37) on iris, or volley 5 to include
+  iris's minor melt. An afterburn then stops at 2 and 3 (or 6).
+- **Iris's minor melt registers here.** It never registered on the 65-point lattice; here it registers at v5, at 4.5
+  points per FWHM.
+- **Location intervals turn overconfident at fine volleys.**
+  - From v3 on, intervals 0.00–0.04 e-folds wide exclude the dense argmax for the toy's melt and both
+    MagnetizationVariance peaks.
+  - The dense argmax is itself noisy at this spacing, so this isn't yet a calibration verdict. That needs an independent
+    dense sweep, at another seed, as the truth.
+- **The default BARS stops mixing on heat capacity.**
+  - From 37 points up, the heat-capacity fits reach knot R̂ of 1.08–1.40 and knot ESS of 8–44. On iris their fit R̂
+    runs 1.45–2.95, and the knot count climbs to 11.6 as the fit chases noise at the melt peaks.
+  - MagnetizationVariance's peak R̂ reaches 1.1–1.2 at 73–145 points.
+  - Equal weights on sharp, noisy peaks is the likely cause. Replicate weights and tempering are what a settings sweep
+    should try first.
+- **C12 on this schedule.**
+  - The two-quiet rule stops at v2–v4: toy FkReduced v2, MagnetizationVariance v3, heat capacity v2; iris FkReduced v2,
+    MagnetizationVariance v3, heat capacity v4.
+  - Every stop comes after the curve's main bump registers. But iris's heat capacity stops at v4, before its minor melt
+    registers at v5: the first premature stop.
+  - Fine volleys turn loud again after the stops (toy MagnetizationVariance 4.7 at v5; heat capacity 4.3 and 3.9 at
+    v4–v5), as the fits mismodel the noisy peaks.
