@@ -1,3 +1,5 @@
+using System;
+
 namespace Maths.Regression.Spline.Baps;
 
 /// <summary>
@@ -40,4 +42,25 @@ public interface ILocallyAdaptivePenalty : IBandPenalty
 
     /// <summary>Writes each local term's square <c>(Dβ)ᵢ²</c> into <paramref name="into"/>.</summary>
     void SquaredDifferencesInto(double[] beta, double[] into);
+}
+
+/// <summary>
+/// A penalty whose components are smoothed separately, <c>P(λ) = Σⱼ λⱼPⱼ</c>: the anisotropic tensor-product penalty,
+/// one component per axis. <see cref="IBandPenalty.AccumulateInto(double[,], int, double)"/> is its isotropic case, every
+/// λⱼ = λ. The components share an eigenbasis (<see cref="Spectrum"/>), so P(λ)'s pseudo-determinant costs O(ν) at any λ;
+/// that is what makes the per-component smoothing selectable by REML and its variances samplable (Bach &amp; Klein 2025).
+/// </summary>
+public interface IAnisotropicPenalty : IBandPenalty
+{
+    /// <summary>The number of components, each with its own smoothing.</summary>
+    int Components { get; }
+
+    /// <summary>Adds <c>Σⱼ λⱼPⱼ</c> into band storage, one smoothing per component.</summary>
+    void AccumulateComponents(double[,] band, int dim, ReadOnlySpan<double> lambdas);
+
+    /// <summary>Component j's roughness <c>βᵀPⱼβ</c>.</summary>
+    double ComponentRoughness(double[] beta, int component);
+
+    /// <summary>The components' joint spectrum.</summary>
+    PenaltySpectrum Spectrum { get; }
 }
