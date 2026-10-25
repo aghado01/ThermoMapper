@@ -189,11 +189,29 @@ public sealed class ConvergenceDiagnosticsTests
     [Fact]
     public void Ess_IsLinearithmic()
     {
-        double[][] chains = Ar1(4, 200_000, 0.9, seed: 5);
-        var clock = Stopwatch.StartNew();
-        ConvergenceDiagnostic d = ChainDiagnostics.Diagnose(chains);
-        double seconds = clock.Elapsed.TotalSeconds;
-        _out.WriteLine($"[ess-cost] 800,000 draws in {seconds:F2} s; bulk {d.BulkEss:F0}");
-        Assert.True(seconds < 10.0, $"diagnostics took {seconds:F1} s");   // the lag-by-lag variogram took minutes here
+        // Four times the draws against one, so the bound holds however loaded the machine: n log n grows about 4.5× here,
+        // the lag-by-lag variogram this replaced (O(n²), minutes at this size) 16×. Each size is measured in the process's
+        // CPU time, which leaves out the time other processes hold the cores (a wall-clock ratio reached 24× while the
+        // regression suite ran), in interleaved rounds after a warm-up, keeping each size's least.
+        double[][] small = Ar1(4, 50_000, 0.9, seed: 5), large = Ar1(4, 200_000, 0.9, seed: 6);
+        ChainDiagnostics.Diagnose(small);
+        double fastestSmall = double.MaxValue, fastestLarge = double.MaxValue;
+        ConvergenceDiagnostic d = default;
+        for (int round = 0; round < 3; round++)
+        {
+            fastestSmall = Math.Min(fastestSmall, Time(small, out _));
+            fastestLarge = Math.Min(fastestLarge, Time(large, out d));
+        }
+        double ratio = fastestLarge / fastestSmall;
+        _out.WriteLine($"[ess-cost] 200,000 draws in {fastestSmall:F3} s of CPU, 800,000 in {fastestLarge:F3} s: ×{ratio:F2}; bulk {d.BulkEss:F0}");
+        // n log n measured 4.4–4.9 alone and up to 6.6 under a full suite's load; n² is 16.
+        Assert.True(ratio < 10.0, $"four times the draws cost {ratio:F1} times as much");
+
+        static double Time(double[][] chains, out ConvergenceDiagnostic diagnostic)
+        {
+            TimeSpan before = Process.GetCurrentProcess().TotalProcessorTime;
+            diagnostic = ChainDiagnostics.Diagnose(chains);
+            return (Process.GetCurrentProcess().TotalProcessorTime - before).TotalSeconds;
+        }
     }
 }
