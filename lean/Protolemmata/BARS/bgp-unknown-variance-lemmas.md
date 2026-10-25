@@ -77,10 +77,19 @@ So with σ₀ fixed, the sup-norm and |σ − σ₀| neighbourhood of radius cε
 - `BGP.scale_ratio_bridge` (UV-1d, added after review): |σ − σ₀| ≤ σ₀/2 puts r = σ₀/σ in [1/2, 2] with
   (r − 1)² ≤ 4(σ − σ₀)²/σ₀². The neighbourhood is stated in |σ − σ₀|, so this lands it where UV-1a and UV-1b apply.
 
+**UV-1c, the closed forms: discharged 2026-10-24** in `Enthymemata/BgpGaussianKL.lean` (PROOF-CLOSED), in the
+`(μ₀, σ₀, μ, σ)` parameterization above, with variances entered as `(σ ^ 2).toNNReal`:
+- `BGP.klDiv_gaussianReal`: K against Mathlib's `InformationTheory.klDiv`, as `ENNReal.ofReal` of the closed form.
+- `BGP.variance_llr_gaussianReal`: V against Mathlib's `variance` of the log-likelihood ratio `llr`;
+  `BGP.evariance_llr_gaussianReal` is the same identity in `ℝ≥0∞`.
+- The pinned Mathlib has no Gaussian fourth moment. `BGP.moments_gaussianReal_zero` reads E y, E y², E y³, E y⁴ of
+  N(0, v) (0, v, 0, 3v²) off the moment-generating function exp(v t²/2), via `iteratedDeriv_mgf_zero`. No gap
+  remains.
+- `BGP.klDiv_le_and_evariance_le_of_slab` is the inclusion above, assembled from UV-1a, UV-1b, UV-1c and UV-1d: the slab
+  |μ − μ₀| ≤ σ₀ε/6, |σ − σ₀| ≤ σ₀ε/6 with ε ≤ 3 gives K ≤ ε²/3 and V ≤ 17ε²/18. So c = σ₀/6.
+
 Notes:
 - The bound is elementary real analysis. It is the best Lean target here.
-- The closed forms need Gaussian moments (Mathlib's `gaussianReal`); worth formalizing once that API is in reach at
-  our pinned version.
 
 ```lean
 import Mathlib.Analysis.SpecialFunctions.Log.Deriv
@@ -143,6 +152,15 @@ By UV-1, this gives the KL-neighbourhood mass the general theorem needs.
     - `BGP.exp_neg_n_radius_sq_le_radius`: exp(−nεₙ²) ≤ εₙ eventually, the form the prior-mass step consumes;
     - `BGP.log_inv_mul_radius_le`: log(1/(c₁εₙ)) ≤ c₂nεₙ² eventually, for the slab width c₁εₙ and the exponent
       budget c₂nεₙ². It applies UV-2b at c·C with c = min(c₁, 1, c₂).
+- **(59′) assembled 2026-10-24** in `Enthymemata/BgpUnknownVarianceTheorem.lean`, with no gap beyond the cited (59):
+  - step 1 is `BGP.exists_amplitude_window`: a window [s₁, s₂] with s₂√η_lo ≤ σ₀ < s₁√η_hi;
+  - step 3 is `BGP.noise_slab_mass`: mass at least εₙ/(σ₀ log(η_hi/η_lo)), since the η-interval has log-length
+    2 log(1 + εₙ/σ₀) ≥ εₙ/σ₀;
+  - steps 2 and 4 are `BGP.prior_slab_mass` (by independence the slab's section at s is a rectangle, and UV-2a turns
+    its W-side into the rescaled ball) and `BGP.eventually_prior_mass`. The exponent is C₁ + δ for any δ > 0, so the
+    slab factor costs an arbitrarily small part of nεₙ², not a whole one.
+  - The "to confirm" item above is the named hypothesis `h59`: (59) uniform over the whole box [s_min, s_max].
+  - Pow.Asymptotics is now cached; `BGP.tendsto_priorMassRadius_zero` uses it.
 
 ```lean
 import Mathlib.MeasureTheory.Measure.Map
@@ -181,6 +199,26 @@ unchanged. σ always lies in its compact range. Nothing new is needed.
 an s-cutoff sₙ with Π(s > sₙ) ≤ exp(−4nεₙ²). For polynomial tails sₙ grows exponentially in nεₙ², and UV-4 then
 fails (UV-8).
 
+**Discharged 2026-10-24** in `Enthymemata/BgpUnknownVarianceTheorem.lean`: `BGP.prior_compl_sieve_le` bounds the
+prior mass outside the closure of B′ₙ by the GP mass outside Bₙ. The closure is closed, so measurable, which the
+general theorem asks of its sieve.
+
+**Correction (2026-10-24, found while composing UV-6): the exponent 4 is not enough by itself.** The general theorem
+compares the remaining mass with the prior mass of the KL neighbourhood, not with a fixed exponent. GvdV07's condition
+asks Π(Θ ∖ Θₙ)/Π(B*ₙ(εₙ)) = o(e^{−2nεₙ²}). The fixed-constant form asks Π(Θ ∖ Θₙ) ≤ e^{−(C+4)nεₙ²} against
+Π(B*ₙ(εₙ)) ≥ e^{−Cnεₙ²}. Both count in units of the KL radius.
+- **(59′)'s C is not 1.** It comes from (59) for f*/s at radius εₙ/s, with s-dependent constants (Remark A.1), plus
+  the slab factor.
+- **The KL radius is the slab radius over c** (UV-1; c = σ₀/6 in the Lean inclusion).
+- **So the composition needs a margin.** Write (59) as e^{−C₁nεₙ²} and (60) as e^{−C₂nεₙ²}, both in units of the slab
+  radius. The composition needs C₂ > C₁ + 4/c² = C₁ + 144/σ₀². This is the Lean statement's `hC₂`. A sharper UV-1
+  constant lowers the margin, but a σ₀-dependent margin is inherent.
+- **The paper's (60) at a fixed 4 suffices only if that margin happens to hold.** The sieve is a proof device and can
+  be enlarged. Borell's inequality gives sieves of the form Mₙℍ₁ + εₙ𝔹₁ at any remaining-mass exponent, at the
+  cost of the entropy constant, as in van der Vaart & van Zanten (2008, Theorem 2.1).
+- **To confirm against the paper:** that TWCD2025's B_{Nₙ,rₙ,δₙ,εₙ} gives (60) at any exponent, with (61) keeping its
+  order. (60′) should then read Π((f, σ) ∉ B′ₙ) ≤ Π(Wᵗ ∉ Bₙ) ≤ exp(−C₂nεₙ²), with C₂ chosen for the margin.
+
 ---
 
 ## UV-4 — entropy (61′)
@@ -212,16 +250,25 @@ Here Rₙ = sup_{g∈Bₙ} ‖g‖∞, and d is the metric the tests use (UV-5).
 - **Lean-worthy:** the covering bound for a scaled family and for an interval (metric-space covering numbers;
   check the Mathlib covering-number API at our pinned version).
 
-```lean
-import Mathlib.Topology.MetricSpace.Bounded
+**UV-4a: discharged 2026-10-24** in `Enthymemata/BgpCovering.lean` (PROOF-CLOSED), over any seminormed space on ℝ, so
+the sup-norm space fits:
+- **The cover.** `BGP.isCover_image2_smul` covers the scaled family at any radius ε ≥ b ε₁ + R ε₂. It needs 0 ≤ a,
+  covers N₁ of B at radius ε₁ and N₂ of [a, b] at radius ε₂, and N₁'s points bounded by R.
+- **Covering numbers.** `BGP.coveringNumber_image2_smul_le` gives N(ε) ≤ N(ε₂, [a, b]) · N(ε₁, B), with the brief's
+  radii ε/(2R) and ε/(2b) in `…_le_half`. Mathlib's internal covering numbers are used, since the product of internal
+  covers lies in the scaled family. `BGP.externalCoveringNumber_image2_smul_le` is the external form, through
+  Mathlib's coveringNumber (2δ) ≤ externalCoveringNumber δ.
+- **The interval.** `BGP.exists_isCover_Icc` and `BGP.coveringNumber_Icc_le` give N(ε, [a, b]) ≤ ⌈(b − a)/(2ε)⌉ + 1
+  for ε > 0.
 
-/-- UV-4a. A cover of `B` at radius ε/(2b) and of `[a, b]` at radius ε/(2R) (R bounding `B`) cover the scaled
-    family `{s • g | s ∈ [a, b], g ∈ B}` at radius ε. Strategy: s•g − s'•g' = s•(g − g') + (s − s')•g'. -/
-theorem scaled_family_cover_card {E : Type*} [NormedAddCommGroup E] [NormedSpace ℝ E] :
-    -- coveringNumber ε (scaled family) ≤ coveringNumber (ε/(2b)) B * coveringNumber (ε/(2R)) (Icc a b)
-    sorry := by
-  sorry
-```
+**(61′) assembled** in `Enthymemata/BgpUnknownVarianceTheorem.lean`:
+- `BGP.closure_sieve_subset_cover` covers the closed sieve in ‖f − f′‖ₙ + |σ − σ′|, which the sup norm dominates
+  when the design evaluations have norm at most 1.
+- `BGP.eventually_sieve_cover` counts the cover: at most exp(n(Lε̄ₙ)²) balls of radius ξLε̄ₙ/2.
+- **(61) enters as a hypothesis**, at any fixed multiple of ε̄ₙ with a constant depending on the multiple. That is
+  the "constant factor in the radius" remark above. It is taken for external covering numbers.
+- **Rₙ ≤ nᵖ is the named hypothesis `hRadius`, not a `sorry`.** It is a property of the paper's sieve, which Lean does
+  not construct. A `sorry` there would assert it for an arbitrary sieve, where it is false.
 
 ---
 
@@ -238,6 +285,13 @@ theorem scaled_family_cover_card {E : Type*} [NormedAddCommGroup E] [NormedSpace
   tests for Gaussian means and a χ² test for the scale, as in the textbook treatment.
 - **Tier: Enthymeme** until that step is written out. It is standard, but it is the one place the extension is more
   than bookkeeping. **Not a Lean target now.**
+- **In the UV-6 enthymema** (2026-10-24), `BGP.exists_tests` states these tests and is the module's one `sorry`. The
+  tests are for ‖f − f′‖ₙ + |σ − σ′| on the compact noise range E × [σ_min, σ_max]. They work at every radius r > 0,
+  separate the truth from the ξr-ball around any θ₁ at distance more than r, and have both errors at most
+  exp(−Knr²). K and ξ depend on the range.
+- **Sketch.** When ‖f₁ − f*‖ₙ > r/2, take the likelihood-ratio test for the means. When |σ₁ − σ₀| > r/2, take a χ²
+  test of the residual scale around f₁. The residual scale is centred at f₁, not at f*, so the mean shift inside the
+  ball cannot mask a scale gap.
 
 ---
 
@@ -261,6 +315,38 @@ theorem scaled_family_cover_card {E : Type*} [NormedAddCommGroup E] [NormedSpace
 
 **Tier:** a theorem composed of cited and proved pieces. As an enthymema it would carry `sorry`s exactly at UV-5 and
 the two "to confirm" checks.
+
+**Enthymema 2026-10-24:** `BGP.posterior_contraction_unknown_variance` in
+`Enthymemata/BgpUnknownVarianceTheorem.lean`, `apologizing(1)`. `#print axioms` shows `sorryAx` (only through
+`exists_tests`) and the cited `BGP.gvdv07_contraction`. Every supporting lemma uses only Lean's standard axioms.
+- **Conclusion.** For some M, the expected posterior mass of {‖f − f*‖ₙ + |σ − σ₀| ≥ M ε̄ₙ} under the truth tends to 0.
+  This is the general theorem's form; for a mass in [0, 1] it is equivalent to convergence in probability. The rate
+  is ε̄ₙ = C̄ n^{−a}(log n)^{k̄}, the shape of (62), with the same a as εₙ and k ≤ k̄: here k₁ = (1+D)/(2+ϱ/s) ≤ D + 1.
+- **The design.** Evaluations at the design points are continuous linear functionals of norm at most 1, so the sup
+  norm dominates ‖·‖ₙ.
+- **TWCD2025's (59)–(61) are hypotheses**, being facts about the paper's GP prior and sieve:
+  - `h59` is (59) for f*/s at radius εₙ/s, uniform over [s_min, s_max]. This is UV-2's "to confirm" check (Remark
+    A.1's constants locally bounded), named.
+  - `h60` is (60), at exponent C₂ with the margin `hC₂` (see the correction under UV-3).
+  - `h61` is (61) (see UV-4).
+  - `hRadius` is UV-4's "to confirm" check, named.
+
+  The two checks are hypotheses rather than `sorry`s for the reason given under UV-4.
+- **[P1] enters by the properties the proof uses**, which [P1] has:
+  - the joint law is the image of πs ⊗ (μW ⊗ πη) under (s, w, η) ↦ (s • w, s√η);
+  - πs lives on [s_min, s_max] and gives positive mass to every subinterval, as a positive density does;
+  - πη lives on [η_lo, η_hi] and gives every subinterval [a, b] at least log(b/a)/log(η_hi/η_lo), which the
+    log-uniform law gives with equality.
+
+  The window [s₁, s₂] of UV-2 step 1 is built from σ₀ ∈ (σ_min, σ_max) (`BGP.exists_amplitude_window`). The noise
+  slab of step 3 has mass at least εₙ/(σ₀ log(η_hi/η_lo)) (`BGP.noise_slab_mass`).
+- **The cited axiom** `BGP.gvdv07_contraction` takes GvdV07 Theorem 4 in the form TWCD2025 and van der Vaart &
+  van Zanten use: two rates (εₙ ≤ ε̄ₙ), a fixed constant M, and a testing hypothesis for a general semimetric in
+  place of the Hellinger one. Its hypotheses are stated on the strong side: measurable sieves and neighbourhood parts,
+  tests at every radius, a global cover, and nεₙ² → ∞. **To confirm at review:** that the printed Theorem 4, or the
+  paper's general testing theorem, states the fixed-M form rather than only "every Mₙ → ∞". The fixed-M form follows
+  from the same proof under the prior-mass/remaining-mass conditions, as in Ghosal, Ghosh & van der Vaart (2000,
+  Theorem 2.1).
 
 ---
 
@@ -302,19 +388,26 @@ frequentist confidence intervals.
 |---|---|---|---|
 | UV-1a | −log r + (r² − 1)/2 ≤ (5/2)(r − 1)² for r ≥ 1/2 | Easy: from 1 − 1/r ≤ log r | **Proved** (`BGP.gaussian_kl_scale_part_le`) |
 | UV-1b | (r² − 1)²/2 ≤ (9/2)(r − 1)² on [1/2, 2] | Easy: algebra | **Proved** (`BGP.gaussian_v_scale_part_le`) |
-| UV-1c | Gaussian KL and log-ratio variance closed forms | Moderate: Gaussian moments in Mathlib | Open; Lemma once the API is in reach |
+| UV-1c | Gaussian KL and log-ratio variance closed forms | Moderate: Gaussian moments in Mathlib | **Proved** (`BGP.klDiv_gaussianReal`, `BGP.variance_llr_gaussianReal`, `BGP.evariance_llr_gaussianReal`; fourth moment from the MGF, `BGP.moments_gaussianReal_zero`; slab inclusion `BGP.klDiv_le_and_evariance_le_of_slab`) |
 | UV-1d | \|σ − σ₀\| ≤ σ₀/2 ⇒ r ∈ [1/2, 2], (r − 1)² ≤ 4(σ − σ₀)²/σ₀² | Easy: algebra | **Proved** (`BGP.scale_ratio_bridge`) |
 | UV-2a | Ball mass under an amplitude rescaling | Easy: preimage of a ball under scaling | **Proved** (`BGP.map_smul_closedBall`) |
 | UV-2b | log(1/εₙ) ≤ nεₙ² eventually, for the paper's εₙ (k ≥ 0) | Easy: elementary asymptotics | **Proved** (`BGP.log_inv_radius_le_n_radius_sq`) |
 | UV-2b′ | εₙ > 0, exp(−nεₙ²) ≤ εₙ, and log(1/(c₁εₙ)) ≤ c₂nεₙ², each eventually | Easy: from UV-2b | **Proved** (`BGP.eventually_priorMassRadius_pos`, `BGP.exp_neg_n_radius_sq_le_radius`, `BGP.log_inv_mul_radius_le`) |
-| UV-4a | Covering a scaled family and an interval | Moderate: the covering-number API | Open |
-| UV-6 | The composed theorem | Heavy; cites GvdV07 and TWCD2025 | Open; an enthymema with `sorry` at UV-5 |
+| UV-4a | Covering a scaled family and an interval | Moderate: the covering-number API | **Proved** (`BGP.isCover_image2_smul`, `BGP.coveringNumber_image2_smul_le` and `…_le_half`, `BGP.externalCoveringNumber_image2_smul_le`, `BGP.exists_isCover_Icc`, `BGP.coveringNumber_Icc_le`) |
+| UV-6 | The composed theorem | Heavy; cites GvdV07 and TWCD2025 | **Enthymema** (`BGP.posterior_contraction_unknown_variance`), `apologizing(1)`: `sorry` at UV-5 (`BGP.exists_tests`); GvdV07 as the axiom `BGP.gvdv07_contraction`; the two "to confirm" checks as the named hypotheses `h59` and `hRadius`; UV-3 proved (`BGP.prior_compl_sieve_le`) |
 
-**Where the proved pieces live.** `Enthymemata/BgpUnknownVariance.lean` compiles with scoped imports and no
-`sorry`. meta-CI's ledger marks it PROOF-CLOSED, which makes it a candidate for semantic review and promotion to
-`Lemmas/`; the names keep their `BGP` namespace on promotion. The 2026-10-23 review
-(`Archeion/Markdown/bpg-review.md`) asked for the UV-2b companions and the UV-1d bridge; both have landed, and the
-module compiles with no warnings under the lakefile's linter options.
+**Where the pieces live.**
+- **`Enthymemata/BgpUnknownVariance.lean`** compiles with scoped imports and no `sorry`. meta-CI's ledger marks it
+  PROOF-CLOSED, which makes it a candidate for semantic review and promotion to `Lemmas/`; the names keep their `BGP`
+  namespace on promotion. The 2026-10-23 review (`Archeion/Markdown/bpg-review.md`) asked for the UV-2b companions and
+  the UV-1d bridge; both have landed, and the module compiles with no warnings under the lakefile's linter options.
+- **`Enthymemata/BgpGaussianKL.lean` (UV-1c)** is PROOF-CLOSED, and so is **`Enthymemata/BgpCovering.lean` (UV-4a)**.
+  Both are candidates for the same review. `BgpGaussianKL` imports `BgpUnknownVariance` for UV-1a, UV-1b and UV-1d, so
+  promoting it means promoting that module too.
+- **`Enthymemata/BgpUnknownVarianceTheorem.lean` (UV-6)** holds the composed statement and its assembly: the model,
+  [P1], UV-2's prior-mass steps, the sieve and its cover, the rate asymptotics, the cited axiom and the UV-5
+  obligation. It stays an enthymema until UV-5 is discharged. Whether a module that rests on a cited axiom then
+  moves to a verified stage, as `Stability.lean`'s would, is the review's call.
 
 UV-1a, UV-1b, UV-2a and UV-2b are the boring load-bearing claims the rigor harness exists for. They are short, they
 carry the whole bookkeeping, and an error in any of them would quietly break the extension.

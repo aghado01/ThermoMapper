@@ -123,3 +123,92 @@ Var_{N(μ₀,σ₀²)}[log p₀/p] = (r² − 1)²/2 + δ² r⁴/σ₀²
 
 *(To be appended by the thread that picks this up: what landed with commit hashes, the ledger state, the gaps recorded
 and why, and anything in the protolemma that needed correcting.)*
+
+### 2026-10-24 — chip thread (UV-1c, UV-4a, UV-6)
+
+**What landed.** These are targeted commits on `main`, in this order:
+- `f08fabe` UV-1c in `Enthymemata/BgpGaussianKL.lean`, PROOF-CLOSED.
+- `7230805` UV-4a in `Enthymemata/BgpCovering.lean`, PROOF-CLOSED.
+- `dcbe6a3` UV-6 in `Enthymemata/BgpUnknownVarianceTheorem.lean`, `apologizing(1)`.
+- The protolemma update and this report, in the commit that adds this text.
+
+Each code commit registers its module in `Enthymemata.lean`, and each builds on its own.
+
+**Ledger.** `pwsh lean/scripts/meta-ci.ps1`: PASS.
+
+| Module | Decls | Sorries | State |
+|---|---|---|---|
+| BgpCovering | 7 | 0 | PROOF-CLOSED |
+| BgpGaussianKL | 24 | 0 | PROOF-CLOSED |
+| BgpUnknownVariance | 9 | 0 | PROOF-CLOSED (unchanged) |
+| BgpUnknownVarianceTheorem | 39 | 1 | apologizing(1) |
+
+- Nothing new is in `Lemmas/` or `Theorems/`, and nothing was promoted.
+- The new modules build with no linter warnings beyond the one `sorry`.
+- `#print axioms BGP.posterior_contraction_unknown_variance` gives `sorryAx` (only through `exists_tests`) and
+  `BGP.gvdv07_contraction`. Every supporting lemma depends only on `propext`, `Classical.choice` and `Quot.sound`.
+
+**UV-1c: no gap.**
+- `klDiv_gaussianReal` states the KL against Mathlib's `klDiv`. `variance_llr_gaussianReal` and
+  `evariance_llr_gaussianReal` state the variance against `variance` and `evariance` of `llr`.
+- Both use the protolemma's `(μ₀, σ₀, μ, σ)`, with the variance written as `(σ ^ 2).toNNReal`.
+- The pinned Mathlib has no Gaussian fourth moment. `moments_gaussianReal_zero` reads it off the MGF, through
+  `iteratedDeriv_mgf_zero` and four explicit derivatives of exp(v t²/2).
+- `klDiv_le_and_evariance_le_of_slab` composes UV-1a, UV-1b, UV-1c and UV-1d into the protolemma's slab inclusion,
+  with c = σ₀/6.
+
+**UV-4a: no gap.**
+- The cover-level lemma is `isCover_image2_smul`. It works with internal covering numbers, since products of
+  internal covers stay inside the scaled family.
+- Also landed: the brief's radii (`…_le_half`), the external form through Mathlib's factor-2 comparison, and the
+  interval bound ⌈(b − a)/(2ε)⌉ + 1.
+- All of it holds over any seminormed space on ℝ.
+
+**UV-6: the statement compiles, and the proof is the composition.** `posterior_contraction_unknown_variance` feeds
+the cited axiom `gvdv07_contraction` from:
+- UV-1 and UV-2: `eventually_prior_mass`, using `exists_amplitude_window`, `noise_slab_mass`, `prior_slab_mass`,
+  UV-2a and UV-2b′;
+- UV-3: `prior_compl_sieve_le`, proved;
+- UV-4 with UV-4a: `eventually_sieve_cover` and `closure_sieve_subset_cover`;
+- UV-5: `exists_tests`, the one `sorry`, commented with its section.
+
+Where this departs from the brief's list of `sorry`s, and why:
+- **UV-4's Rₙ check is the named hypothesis `hRadius`, not a `sorry`.** The same goes for UV-2's "to confirm" check,
+  which is `h59`. Both are properties of the paper's prior and sieve, which Lean does not construct and the theorem
+  takes as hypotheses. A `sorry` would have asserted them for an arbitrary sieve, where they are false. So it would
+  not be a deferred true claim.
+- **UV-3's sieve is discharged**, so it carries no `sorry`.
+- **[P1]'s priors on s and η enter by the properties the proof uses.** These are: support in the box with positive
+  mass on subintervals, and at least the log-uniform mass on subintervals, which the log-uniform law meets with
+  equality. The theorem therefore covers a class of priors that contains [P1].
+- **The axiom's form.** It has two rates, a fixed M, a testing hypothesis for a general semimetric, and hypotheses
+  stated on the strong side (measurable sieves and neighbourhood parts, tests at every radius, nεₙ² → ∞). That keeps
+  the axiom a consequence of the cited theorem.
+  - **To confirm at review:** whether the printed Theorem 4 states the fixed-M form or only "every Mₙ → ∞".
+  - The KL neighbourhood is taken in `ℝ≥0∞`, so a parameter with an infinite divergence is not counted as 0.
+
+**Corrections to the protolemma** (recorded there, not applied silently):
+- **The exponent 4 in (60′) is not enough by itself** (under UV-3). Composed with the general theorem, the
+  remaining-mass exponent must beat (59′)'s prior-mass exponent by a σ₀-dependent margin. In units of the slab
+  radius that is C₂ > C₁ + 144/σ₀² (`hC₂`), and (59′)'s exponent is not 1.
+  - The sieve can be enlarged to meet the margin.
+  - **To confirm against the paper:** that TWCD2025's sieve gives (60) at any exponent with (61) keeping its order.
+  - This is the one place the formal statement departs from the protolemma's text, and it does so through an
+    explicit hypothesis.
+- **A refinement of UV-2 step 4.** The slab factor costs an arbitrarily small fraction of nεₙ², not "one more
+  nεₙ²".
+- **A stale note.** `Pow.Asymptotics` is now in the local cache.
+
+**Environment notes.**
+- Caches were fetched by module: `lake exe cache get Mathlib.Probability.Distributions.Gaussian.Real
+  Mathlib.InformationTheory.KullbackLeibler.Basic Mathlib.Topology.MetricSpace.CoveringNumbers`. The import closure
+  is 3103 files, and `Pow.Asymptotics` and `PiL2` came with it.
+- `Π` is a reserved token, and identifiers with a combining macron (`C̄`) do not parse. The Lean names are `μW`, `Cb`
+  and `kb`.
+
+**Open after this chip:**
+- the UV-5 tests;
+- the three "to confirm" checks against the papers: `h59`, `hRadius`, and (60) at any exponent;
+- the GvdV07 fixed-M citation detail;
+- semantic review of BgpCovering, BgpGaussianKL and BgpUnknownVariance for promotion. BgpGaussianKL imports
+  BgpUnknownVariance.
