@@ -212,3 +212,73 @@ Where this departs from the brief's list of `sorry`s, and why:
 - the GvdV07 fixed-M citation detail;
 - semantic review of BgpCovering, BgpGaussianKL and BgpUnknownVariance for promotion. BgpGaussianKL imports
   BgpUnknownVariance.
+
+### 2026-10-25 — follow-up (UV-5 tests, the paper checks, the GvdV07 check)
+
+**What landed.** These are commits on `main`:
+- `d971edb` UV-5's Gaussian tails in `Enthymemata/BgpGaussianTails.lean`, PROOF-CLOSED and axiom-free.
+- `17aae2c` in `Enthymemata/BgpUnknownVarianceTheorem.lean`:
+  - UV-5 proved (`exists_tests`);
+  - the general theorem re-cited, in two routes;
+  - the composed theorems.
+- This commit: the protolemma update and this report.
+
+**Ledger.** `pwsh lean/scripts/meta-ci.ps1`: PASS. The new BgpGaussianTails is PROOF-CLOSED, and
+BgpUnknownVarianceTheorem goes from `apologizing(1)` to PROOF-CLOSED.
+- No `sorry` is left in the BGP-4 modules, and nothing was promoted.
+- `#print axioms` shows each composed theorem resting only on its own cited axioms plus Lean's standard ones.
+- BgpUnknownVarianceTheorem is PROOF-CLOSED in the ledger, but its theorems are conditional on cited axioms. Whether
+  that module can be promoted is a review question.
+
+**UV-5, the tests.**
+- `exists_tests` holds with K = σ_min²/(1024σ_max⁴) and ξ = 1/8, split into three case lemmas:
+  - the likelihood-ratio mean test;
+  - the scale-up test centred at f*;
+  - the scale-down test centred at f₁.
+- The tails come from completing the square under `gaussianReal`, independence under `Measure.pi` (`iIndepFun_pi`)
+  and Chernoff, all as Lebesgue integrals, so with no integrability side conditions.
+- **A correction to the protolemma's sketch.** Both scale tests cannot be centred at f₁. Under the truth that leaves
+  a mean shift of order r, which can cancel the scale gap when r ~ σ₀. Recorded under UV-5.
+
+**The checks against TWCD2025** (local copy, `graveyard/bibliotecha/.../TWCD2025.md`, Appendix A.1):
+- **`h59`, (59) uniform over the amplitude box: confirmed.** Part I uses f* only through (A2)'s constants, and (A2)
+  is monotone. So f*/s satisfies (A2) with (ν₁/s_min, ν₂/s_min²) for every s in the box, and Part I run once with
+  those constants gives the bound uniformly. That is stronger than the continuity the protolemma asked for.
+- **(60) at any exponent: confirmed.** The exponent 4 comes only from the constants in eq. (80). Scaling rₙ^ϱ and Nₙ²
+  gives any C₂, and Part III's entropy then changes only through C̄₂. That is the tunable form, and
+  `posterior_contraction_unknown_variance_of_tunable_sieve` states it, removing the margin hypothesis.
+- **`hRadius`, Rₙ polynomial: confirmed.** Rₙ ≤ Nₙ(rₙ/δₙ)^{D/2} + εₙ, since the kernel has h(0) = 1, and this is
+  polynomial in n by eq. (80) and δₙ.
+- `h59` and `hRadius` stay hypotheses, because they are facts about objects Lean does not construct. Their docstrings
+  now say "confirmed".
+
+**The GvdV07 check** (arXiv 0708.0491, read from the PDF): **the printed Theorem 4 is not the fixed-M form.**
+- It has one rate and concludes for every Mₙ → ∞. A remark after it allows any semimetric with Lemma 2's test
+  property.
+- The fixed-M two-rate form that the protolemma, TWCD2025 Theorem 3.1 and vdVvZ08b Theorem 3.3 state is Ghosal &
+  van der Vaart (2001, Theorem 2.1). vdVvZ09 §3 says so, calling it "a slight generalization of the main result in
+  [GGvdV00], formulated as Theorem 2.1 in [GvdV01]".
+- For independent, non-identically distributed observations that form is not printed as a theorem.
+
+What changed in Lean as a result:
+- **The old axiom is renamed and re-cited.** `gvdv07_contraction` is now `fixed_constant_contraction`, with the
+  citation above. It still gives `posterior_contraction_unknown_variance`, the protolemma's fixed-C statement.
+- **The printed route is added.** `gvdv07_theorem1` and `gvdv07_lemma1` are the printed Theorem 1 and Lemma 1.
+  `posterior_contraction_unknown_variance_gvdv07` composes them in Lean: Theorem 1 on the sieve at Lε̄ₙ, Lemma 1 off
+  it at 6εₙ/σ₀, glued by `posterior_le_add`. The result is the printed conclusion, every Mₙ → ∞, with the smaller
+  margin C₂ > C₁ + 72/σ₀².
+- **The citation boundary is unchanged, and the finding is recorded.** A dated "Citation check" note sits under it in
+  the protolemma.
+
+**Prior art found on the way.** van der Vaart & van Zanten (2008, Theorem 3.3) is the unknown-σ, fixed-design result
+for a single GP prior with σ on [a, b]. Its proof is a two-line sketch that leaves the unknown-scale tests to the
+reader. BGP-4 is its extension to the hierarchical bandwidth prior and the amplitude/noise-ratio parameterization,
+with those tests now written out.
+
+**Environment note.** This session ran under heavy memory pressure: 63 GB committed on 31.5 GB of RAM. A Lean check
+that loads Mathlib took 8–10 minutes instead of 1–2, so iteration was slow.
+
+**Open after this:**
+- semantic review and promotion: the four PROOF-CLOSED bookkeeping modules, and the axiom-conditional theorem module;
+- whether to keep both routes of the general theorem, or only the printed one;
+- the non-Lean items of UV-6: random design, the posterior mean, the σ Bernstein–von Mises.

@@ -17,6 +17,26 @@ extension and splits it into pieces that are cited, pieces that need a proof, an
   Theorem 4), which the paper's own framework rests on.
 - **Hellinger tests** for independent observations (Le Cam; Birgé).
 
+**Citation check (2026-10-25), recorded rather than applied silently.** The citation boundary is unchanged.
+- **The printed GvdV07 Theorem 4 does not state the fixed-constant conclusion.** It has a single rate εₙ and concludes
+  for every Mₙ → ∞. After it, the paper remarks that the Hellinger dₙ "can be replaced by any other distance dₙ that
+  satisfies (3.2)–(3.3) and for which the conclusion of Lemma 2 holds". The composition with UV-5's tests rests on
+  that remark, through Theorem 1 and Lemma 1.
+- **UV-6's fixed constant C is the fixed-M, two-rate form.** That is Ghosal & van der Vaart (2001, Theorem 2.1), the
+  two-rate version of Ghosal, Ghosh & van der Vaart (2000, Theorem 2.1). van der Vaart & van Zanten (2009, §3) name it
+  as such, and TWCD2025's Appendix A.1 and Theorem 3.1 rely on it.
+- **For independent, non-identically distributed observations the fixed-M form is not printed as a theorem.**
+  van der Vaart & van Zanten (2008, Theorem 3.3) state it for fixed-design GP regression with an unknown σ on [a, b],
+  with the tests left to the reader.
+
+The Lean module takes both routes (UV-6). The Hellinger tests are not needed: UV-5 builds tests for
+‖f − f′‖ₙ + |σ − σ′| directly.
+
+**Prior art.** van der Vaart & van Zanten (2008, Theorem 3.3) is the unknown-σ result for a single GP prior W, with a
+σ prior on [a, b] whose density is bounded below. Their proof says only that the known-σ argument "can be extended to
+the present case of an unknown scale". BGP-4 is the extension to TWCD2025's hierarchical bandwidth prior and to the
+implementation's amplitude and noise-ratio parameterization, with that step written out (UV-5).
+
 **The textbook treatment.** Gaussian regression with an unknown error variance is treated by Ghosal & van der Vaart
 (2017, *Fundamentals of Nonparametric Bayesian Inference*). What follows is that argument specialized to TWCD2025's
 hierarchical GP prior and to the implementation's parameterization.
@@ -139,6 +159,14 @@ By UV-1, this gives the KL-neighbourhood mass the general theorem needs.
 - **To confirm against the paper:** that Part I's constants are continuous, or at least locally bounded, in
   (ν₁, ν₂) and in the radius scaling. Remark A.1 says so in words; the proof's constants C̄₁ and C̄₂ should be read
   once to make sure.
+  - **Confirmed 2026-10-25, by a stronger route than continuity**, against TWCD2025 Appendix A.1, Part I (eqs. 64–74).
+  - Part I uses f* only through (A2): some q_t ∈ H̃_t with ‖q_t − f*‖∞ ≤ ν₁t^{s/2} and ‖q_t‖² ≤ ν₂t^{−ϱ/2}.
+    Here K₃ = ν₂ + C₄, C = 1/ν₁, and K₄, C̄′₁ and C̄₁ are explicit in them.
+  - (A2) is monotone in (ν₁, ν₂). f*/s satisfies it with (ν₁/s, ν₂/s²) via q_t/s, so for every s in the box it
+    satisfies it with the single pair (ν₁/s_min, ν₂/s_min²).
+  - Part I run with that pair therefore gives (59) for every f*/s at once: the same rate constant and the same
+    threshold in n.
+  - It holds at radius εₙ/s once C₀ ≥ s_max·C̄₁(ν₁/s_min, ν₂/s_min²), with C₁ ≤ 1 in the units of `h59`.
 - **Lean-worthy pieces:** the scaling identity (step 2) and the absorption of log(1/εₙ) (step 4). **Both discharged
   2026-10-23** in `Enthymemata/BgpUnknownVariance.lean`:
   - `BGP.map_smul_closedBall`;
@@ -218,6 +246,15 @@ asks Π(Θ ∖ Θₙ)/Π(B*ₙ(εₙ)) = o(e^{−2nεₙ²}). The fixed-constant
   cost of the entropy constant, as in van der Vaart & van Zanten (2008, Theorem 2.1).
 - **To confirm against the paper:** that TWCD2025's B_{Nₙ,rₙ,δₙ,εₙ} gives (60) at any exponent, with (61) keeping its
   order. (60′) should then read Π((f, σ) ∉ B′ₙ) ≤ Π(Wᵗ ∉ Bₙ) ≤ exp(−C₂nεₙ²), with C₂ chosen for the margin.
+  - **Confirmed 2026-10-25** against Appendix A.1, Parts II–III.
+  - The exponent 4 comes only from the free constants in eq. (80): rₙ^ϱ = (8/K₂)nεₙ² and
+    Nₙ² = max{32, 128C₄/K₂}nεₙ²(log)^{1+D}.
+  - The bound (81), P[f^t ∉ Bₙ] ≲ rₙ^{…}e^{−K₂rₙ^ϱ} + e^{−Nₙ²/8}, gives exp(−C₂nεₙ²) once rₙ^ϱ and Nₙ² are scaled
+    up by C₂/4.
+  - Part III's entropy (86) then grows only through the constant C̄₂ of ε̄ₙ, which the paper chooses large, so (61)
+    keeps its order.
+  - van der Vaart & van Zanten (2008, Theorem 2.1) state the same tunability for their sieves ("any C > 1").
+  - In Lean this is `BGP.posterior_contraction_unknown_variance_of_tunable_sieve`.
 
 ---
 
@@ -244,6 +281,9 @@ Here Rₙ = sup_{g∈Bₙ} ‖g‖∞, and d is the metric the tests use (UV-5).
 **Tier: Lemma**, up to the citable (61).
 - **To confirm against the paper:** that Rₙ grows at most polynomially. Sieves of the van der Vaart–van Zanten form
   Mₙ·ℍ₁ + εₙ·𝔹₁ have Rₙ ≲ Mₙ ≍ √n εₙ, and the paper's B_{Nₙ,rₙ,δₙ,εₙ} (proof of Theorem 3.1) should be checked.
+  - **Confirmed 2026-10-25** against eq. (75): Bₙ = (Nₙ(rₙ/δₙ)^{D/2}H̃¹_{rₙ⁻²} + εₙ𝔹₁) ∪ ⋃_{t>δₙ⁻²}(NₙH̃¹_t + εₙ𝔹₁).
+  - The kernel has h_t(x, x) = h(0) = 1, so the RKHS unit balls have sup norm at most 1, and Rₙ ≤ Nₙ(rₙ/δₙ)^{D/2} + εₙ.
+  - With eq. (80) and δₙ = εₙ/(2√Dτ_hNₙ), the ratio rₙ/δₙ = C(Nₙ/εₙ)(nεₙ²)^{1/ϱ} is polynomial in n, and so is Nₙ.
 - **The heavier-tailed variant.** With inverse-gamma tails on σ² instead of a compact range, cover σ on the log
   scale: the location-scale Hellinger distance is controlled by |log σ − log σ′|. An exponentially wide range then
   costs only log(log σ⁺ / ε̄ₙ) = O(log n). This is the textbook route for an unknown variance.
@@ -285,13 +325,25 @@ the sup-norm space fits:
   tests for Gaussian means and a χ² test for the scale, as in the textbook treatment.
 - **Tier: Enthymeme** until that step is written out. It is standard, but it is the one place the extension is more
   than bookkeeping. **Not a Lean target now.**
-- **In the UV-6 enthymema** (2026-10-24), `BGP.exists_tests` states these tests and is the module's one `sorry`. The
-  tests are for ‖f − f′‖ₙ + |σ − σ′| on the compact noise range E × [σ_min, σ_max]. They work at every radius r > 0,
-  separate the truth from the ξr-ball around any θ₁ at distance more than r, and have both errors at most
-  exp(−Knr²). K and ξ depend on the range.
-- **Sketch.** When ‖f₁ − f*‖ₙ > r/2, take the likelihood-ratio test for the means. When |σ₁ − σ₀| > r/2, take a χ²
-  test of the residual scale around f₁. The residual scale is centred at f₁, not at f*, so the mean shift inside the
-  ball cannot mask a scale gap.
+- **Proved 2026-10-25:** `BGP.exists_tests` in `Enthymemata/BgpUnknownVarianceTheorem.lean`. The Gaussian tail
+  bounds are in `Enthymemata/BgpGaussianTails.lean`, which is PROOF-CLOSED.
+  - **What the tests do.** They are for ‖f − f′‖ₙ + |σ − σ′| on the compact noise range E × [σ_min, σ_max] and work at
+    every radius r > 0. Each separates the truth from the r/8-ball around any θ₁ at distance more than r, with both
+    errors at most exp(−Knr²), where K = σ_min²/(1024σ_max⁴) and ξ = 1/8.
+  - **‖f₁ − f*‖ₙ > r/2:** the likelihood-ratio statistic Σδᵢ(Yᵢ − f*(xᵢ)), with δ = f₁ − f*, against ‖δ‖²/2. Cauchy–
+    Schwarz keeps the alternatives' mean above 3‖δ‖²/4.
+  - **σ₁ > σ₀ + r/2:** reject when Σ(Yᵢ − f*(xᵢ))² ≥ nτ, with τ = σ₀² + 3σ₀r/8. Under the truth the sum is central.
+    The alternatives need only its lower tail, where the means drop out.
+  - **σ₁ < σ₀ − r/2:** reject when Σ(Yᵢ − f₁(xᵢ))² ≤ nτ, with τ = σ₀² − σ₀r/8. The truth needs only the lower tail,
+    and the alternatives' means are within r/8 of f₁. Here r < 2σ₀.
+  - **The centring is the point.** Each scale test is centred where its means do the least harm. A single centring at
+    f₁ leaves a mean shift of order r under the truth, which can cancel the scale gap when r is comparable to σ₀.
+    The sketch originally centred both scale tests at f₁, and that is corrected here.
+  - **The tails** come from completing the square under `gaussianReal`, independence under `Measure.pi`, and
+    Chernoff:
+    - the linear tail exp(−t²/(2vΣcᵢ²));
+    - the χ² upper tail exp(−(nτ − A)²/(16v·nτ)), with A = nv + Σ(mᵢ − cᵢ)²;
+    - the χ² lower tail exp(−n(v − τ)²/(8v²)).
 
 ---
 
@@ -316,22 +368,40 @@ the sup-norm space fits:
 **Tier:** a theorem composed of cited and proved pieces. As an enthymema it would carry `sorry`s exactly at UV-5 and
 the two "to confirm" checks.
 
+**2026-10-25: no `sorry` left.** UV-5 is proved, and `Enthymemata/BgpUnknownVarianceTheorem.lean` has no `sorry`.
+It rests on cited axioms, in two routes:
+- **`BGP.posterior_contraction_unknown_variance_gvdv07`, on GvdV07 as printed.**
+  - `BGP.gvdv07_theorem1` (Theorem 1) applies on the sieve at the entropy rate Lε̄ₙ. `BGP.gvdv07_lemma1` (Lemma 1)
+    applies off the sieve at the prior-mass rate 6εₙ/σ₀. The two are added in Lean (`BGP.posterior_le_add`).
+  - The conclusion is the printed one: for every Mₙ → ∞, the expected posterior mass of
+    {‖f − f*‖ₙ + |σ − σ₀| ≥ Mₙε̄ₙ} tends to 0.
+  - Lemma 1 needs the smaller margin C₂ > C₁ + 72/σ₀². The shells condition (2.5) follows from the prior mass, since
+    εₙ ≤ ε̄ₙ.
+- **`BGP.posterior_contraction_unknown_variance`, the protolemma's fixed-C statement,** on the axiom
+  `BGP.fixed_constant_contraction`. This is the fixed-M two-rate form of the citation check above, under its
+  corrected citation.
+- **`BGP.posterior_contraction_unknown_variance_of_tunable_sieve`** is the fixed-C statement with (60)–(61) taken in
+  the paper's tunable form, which removes the margin hypothesis.
+
+`#print axioms` for each theorem should show only its own cited axioms and Lean's standard ones. The record of
+2026-10-24 follows:
+
 **Enthymema 2026-10-24:** `BGP.posterior_contraction_unknown_variance` in
 `Enthymemata/BgpUnknownVarianceTheorem.lean`, `apologizing(1)`. `#print axioms` shows `sorryAx` (only through
-`exists_tests`) and the cited `BGP.gvdv07_contraction`. Every supporting lemma uses only Lean's standard axioms.
+`exists_tests`) and the cited `BGP.gvdv07_contraction`, since renamed `BGP.fixed_constant_contraction`. Every
+supporting lemma uses only Lean's standard axioms.
 - **Conclusion.** For some M, the expected posterior mass of {‖f − f*‖ₙ + |σ − σ₀| ≥ M ε̄ₙ} under the truth tends to 0.
   This is the general theorem's form; for a mass in [0, 1] it is equivalent to convergence in probability. The rate
   is ε̄ₙ = C̄ n^{−a}(log n)^{k̄}, the shape of (62), with the same a as εₙ and k ≤ k̄: here k₁ = (1+D)/(2+ϱ/s) ≤ D + 1.
 - **The design.** Evaluations at the design points are continuous linear functionals of norm at most 1, so the sup
   norm dominates ‖·‖ₙ.
 - **TWCD2025's (59)–(61) are hypotheses**, being facts about the paper's GP prior and sieve:
-  - `h59` is (59) for f*/s at radius εₙ/s, uniform over [s_min, s_max]. This is UV-2's "to confirm" check (Remark
-    A.1's constants locally bounded), named.
+  - `h59` is (59) for f*/s at radius εₙ/s, uniform over [s_min, s_max]: UV-2's check, confirmed (UV-2).
   - `h60` is (60), at exponent C₂ with the margin `hC₂` (see the correction under UV-3).
   - `h61` is (61) (see UV-4).
-  - `hRadius` is UV-4's "to confirm" check, named.
+  - `hRadius` is UV-4's check, confirmed (UV-4).
 
-  The two checks are hypotheses rather than `sorry`s for the reason given under UV-4.
+  The two checks stay hypotheses, now confirmed against the paper, for the reason given under UV-4.
 - **[P1] enters by the properties the proof uses**, which [P1] has:
   - the joint law is the image of πs ⊗ (μW ⊗ πη) under (s, w, η) ↦ (s • w, s√η);
   - πs lives on [s_min, s_max] and gives positive mass to every subinterval, as a positive density does;
@@ -347,6 +417,9 @@ the two "to confirm" checks.
   paper's general testing theorem, states the fixed-M form rather than only "every Mₙ → ∞". The fixed-M form follows
   from the same proof under the prior-mass/remaining-mass conditions, as in Ghosal, Ghosh & van der Vaart (2000,
   Theorem 2.1).
+  - **Resolved 2026-10-25:** it states only the "every Mₙ → ∞" form (see the citation check at the top). The axiom is
+    renamed `BGP.fixed_constant_contraction` and re-cited. The printed route is the separate pair
+    `BGP.gvdv07_theorem1` and `BGP.gvdv07_lemma1`.
 
 ---
 
@@ -394,7 +467,8 @@ frequentist confidence intervals.
 | UV-2b | log(1/εₙ) ≤ nεₙ² eventually, for the paper's εₙ (k ≥ 0) | Easy: elementary asymptotics | **Proved** (`BGP.log_inv_radius_le_n_radius_sq`) |
 | UV-2b′ | εₙ > 0, exp(−nεₙ²) ≤ εₙ, and log(1/(c₁εₙ)) ≤ c₂nεₙ², each eventually | Easy: from UV-2b | **Proved** (`BGP.eventually_priorMassRadius_pos`, `BGP.exp_neg_n_radius_sq_le_radius`, `BGP.log_inv_mul_radius_le`) |
 | UV-4a | Covering a scaled family and an interval | Moderate: the covering-number API | **Proved** (`BGP.isCover_image2_smul`, `BGP.coveringNumber_image2_smul_le` and `…_le_half`, `BGP.externalCoveringNumber_image2_smul_le`, `BGP.exists_isCover_Icc`, `BGP.coveringNumber_Icc_le`) |
-| UV-6 | The composed theorem | Heavy; cites GvdV07 and TWCD2025 | **Enthymema** (`BGP.posterior_contraction_unknown_variance`), `apologizing(1)`: `sorry` at UV-5 (`BGP.exists_tests`); GvdV07 as the axiom `BGP.gvdv07_contraction`; the two "to confirm" checks as the named hypotheses `h59` and `hRadius`; UV-3 proved (`BGP.prior_compl_sieve_le`) |
+| UV-5 | Tests for ‖f − f′‖ₙ + \|σ − σ′\| on the compact noise range | Moderate: Gaussian tails under `Measure.pi` | **Proved** (`BGP.exists_tests`, by `BGP.tests_mean_case`, `BGP.tests_scale_up_case`, `BGP.tests_scale_down_case`; tails `BGP.pi_gaussian_linear_tail`, `BGP.pi_gaussian_sq_upper_tail`, `BGP.pi_gaussian_sq_lower_tail`) |
+| UV-6 | The composed theorem | Heavy; cites GvdV07 and TWCD2025 | **No `sorry`**, conditional on cited axioms. `BGP.posterior_contraction_unknown_variance_gvdv07` rests on GvdV07 as printed (`BGP.gvdv07_theorem1`, `BGP.gvdv07_lemma1`; every Mₙ → ∞). `BGP.posterior_contraction_unknown_variance` gives the fixed C (`BGP.fixed_constant_contraction`; GvdV01 Thm 2.1 form). `…_of_tunable_sieve` is the paper's tunable sieve. `h59` and `hRadius` are confirmed against the paper; UV-3 is proved (`BGP.prior_compl_sieve_le`) |
 
 **Where the pieces live.**
 - **`Enthymemata/BgpUnknownVariance.lean`** compiles with scoped imports and no `sorry`. meta-CI's ledger marks it
@@ -404,10 +478,15 @@ frequentist confidence intervals.
 - **`Enthymemata/BgpGaussianKL.lean` (UV-1c)** is PROOF-CLOSED, and so is **`Enthymemata/BgpCovering.lean` (UV-4a)**.
   Both are candidates for the same review. `BgpGaussianKL` imports `BgpUnknownVariance` for UV-1a, UV-1b and UV-1d, so
   promoting it means promoting that module too.
-- **`Enthymemata/BgpUnknownVarianceTheorem.lean` (UV-6)** holds the composed statement and its assembly: the model,
-  [P1], UV-2's prior-mass steps, the sieve and its cover, the rate asymptotics, the cited axiom and the UV-5
-  obligation. It stays an enthymema until UV-5 is discharged. Whether a module that rests on a cited axiom then
-  moves to a verified stage, as `Stability.lean`'s would, is the review's call.
+- **`Enthymemata/BgpUnknownVarianceTheorem.lean` (UV-6)** holds the composed statements and their assembly: the model,
+  [P1], UV-2's prior-mass steps, the sieve and its cover, the rate asymptotics, the tests (UV-5) and the cited
+  axioms.
+  - Since 2026-10-25 it has no `sorry`, so meta-CI's ledger reads PROOF-CLOSED.
+  - Its theorems are conditional on the cited axioms (`#print axioms`), unlike the three bookkeeping modules.
+  - Whether a module that rests on cited axioms moves to a verified stage, as `Stability.lean`'s would, is the
+    review's call.
+- **`Enthymemata/BgpGaussianTails.lean` (UV-5's tails)** is PROOF-CLOSED and axiom-free: completing the square, the
+  product moment-generating function, Chernoff, and the three tails.
 
 UV-1a, UV-1b, UV-2a and UV-2b are the boring load-bearing claims the rigor harness exists for. They are short, they
 carry the whole bookkeeping, and an error in any of them would quietly break the extension.
