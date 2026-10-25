@@ -54,11 +54,26 @@ The principle, from the user: keep each draw's generative state, derive views fr
 - `SweepCurves.ByTemperature` (`src/clustering/graphical/spc/profiling/SweepCurves.cs`) averages each frame's reduction over the replicas at each T and drops their spread.
 - The runs still carry it, so this is a view change: return the spread (or a standard error) beside each mean.
 
+### S7. An exact cluster-size histogram
+
+- **What:** counts of clusters at each exact size 1..N, summed over the measured sweeps, beside (or in place of) the
+  log-binned histogram, whose bins [2^k, 2^(k+1)) hold counts only.
+- **What it unlocks:** the exact mean of every cluster functional Σ_k g(c_k), since each is linear in those counts.
+  - S₂ = ⟨Σ_k c_k²⟩/N², which is already recorded through Σ|c|².
+  - The size-floored count F_n = ⟨Σ_k (c_k − n)₊⟩/n, at any floor n, chosen after the run.
+  - The expected partition entropy, through ⟨Σ_k c_k ln c_k⟩.
+  - For any superadditive g these means are monotone in β, which makes them endpoint-only certificates for the regime-A
+    stopping rule (`issues/spc-BARS/stopping-theory-primer.md`, §12.4, §12.7 and §12.13). The log-binned histogram only
+    bounds them.
+- **Cost:** N integers per run, about 13 KB at N = 3,200, far less than S1.
+- **Relation to S5:** per-sweep partitions give the same means and much more, at gigabytes. S7 is the cheap route to the
+  means alone.
+
 ## Sequencing
 
 1. **S1 with S3:** one per-sweep record, with the serialization change and resume appending.
 2. **S2:** views over S1, or running sums if S1 is optional.
-3. **S6:** independent and small; it can go any time.
+3. **S6 and S7:** independent and small; either can go any time.
 4. **S4:** follows S1's record shape.
 5. **S5:** waits on the persistence decision; in-memory thinning first if it is wanted sooner.
 
