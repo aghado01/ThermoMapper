@@ -264,6 +264,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             ReadoutRng = new Xoshiro256PlusPlus(readoutSeed),
             Kernel = _adaptKernelTau is double t0 ? new AdaptiveLocalBetaKernel(t0) : _kernel,
         };
+        run.Config = OnSupport(run.Config, rng);
         if (_temperLevels is int levels)
         {
             run.Ladder = NewLadder(run, levels, seeds[1]);
@@ -387,6 +388,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         _startDispersion = startDispersion;
         _peakProminence = peakProminence;
         _spanDropFraction = spanDropFraction;
+        RequireAdmissibleZeroKnots();
 
         (EnsembleRun summary, IReadOnlyList<IChainRun<KnotConfig>> chainRuns) =
             new ChainEnsemble().Run<KnotConfig>(this, chains, masterSeed, burn, samples, rHatTarget, batchSize, minEssPerChain,
@@ -689,6 +691,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     // λ(T) and π(T) are read from those after the run).
     private void AccumulateDraw(BarsChainRun st, KnotConfig draw, Span<double> functionals)
     {
+        // Chains start on the support and never leave it; a draw off it has no conditional posterior to read, and its
+        // NaN or unconverged coefficients would pass into the curve and the peaks unnoticed.
+        if (!(st.RjChain.CurrentLogDensity > double.NegativeInfinity))
+            throw new InvalidOperationException(
+                $"A retained draw ({draw.Count} knots) lies off the posterior's support, so it has no conditional posterior.");
         int g = _grid.Length;
         double[,] zTrain = _basis.Design(draw, _x);
         IConditionalFit conditional = _model.FitConditional(zTrain, _y, st.W);   // one fit for all three readouts
@@ -923,6 +930,42 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         double target = q * total, cum = 0.0;
         for (int j = lo; j <= hi; j++) { cum += w[j]; if (cum >= target) return grid[j]; }
         return grid[hi];
+    }
+
+    // Every count prior admits zero knots, the configuration with the fewest basis functions. If the data refuse even that,
+    // no chain can start on the posterior's support, and the run fails here rather than return draws from off it.
+    private void RequireAdmissibleZeroKnots()
+    {
+        var outcomes = new Tally<DesignRejection>();
+        var target = new SplineTarget(_basis, _model, _prior, _x, _y, null, outcomes, _minColumnMass);
+        if (target.LogPosterior(new KnotConfig([])) > double.NegativeInfinity) return;
+        DesignRejection reason = DesignRejection.None;
+        foreach ((DesignRejection category, long count) in outcomes.Entries)
+            if (count > 0 && category != DesignRejection.None) reason = category;
+        throw new InvalidOperationException(
+            $"BARS cannot start on these {_x.Length} observations: the zero-knot design, the smallest, is refused ({reason}). " +
+            "More observations, a lower-order basis or a smaller minColumnMass would admit it.");
+    }
+
+    // The start moved onto the posterior's support. A chain started off it leaves only by a proposal onto it, and where
+    // every neighbour is off it too, as with more knots than a few observations admit, it never moves and its draws are
+    // not posterior draws. So knots are dropped one at a time, at random, until the configuration is admissible: at worst
+    // zero knots, which Run has checked. A start already on the support is kept, and draws nothing.
+    private KnotConfig OnSupport(KnotConfig start, Xoshiro256PlusPlus rng)
+    {
+        var target = new SplineTarget(_basis, _model, _prior, _x, _y, null, null, _minColumnMass);
+        KnotConfig config = start;
+        while (!(target.LogPosterior(config) > double.NegativeInfinity))
+        {
+            double[] knots = config.InteriorKnots;
+            if (knots.Length == 0) throw new InvalidOperationException("The zero-knot configuration is off the support.");
+            int drop = rng.NextInt(knots.Length);
+            var next = new double[knots.Length - 1];
+            Array.Copy(knots, next, drop);
+            Array.Copy(knots, drop + 1, next, drop, knots.Length - drop - 1);
+            config = new KnotConfig(next);
+        }
+        return config;
     }
 
     private static KnotConfig OverdispersedStart(Xoshiro256PlusPlus rng, int dispersion)
