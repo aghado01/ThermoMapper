@@ -1,5 +1,7 @@
 using System;
+using Maths.Distributions;
 using Maths.LinAlg;
+using Maths.Rng;
 
 namespace Maths.Regression.Spline.Baps;
 
@@ -22,7 +24,7 @@ public sealed class TensorPenalty : IAnisotropicPenalty
     private readonly DifferencePenalty _py;
     private readonly int _nuX;
     private readonly int _nuY;
-    private readonly Lazy<PenaltySpectrum> _spectrum;
+    private readonly Lazy<Eigenbasis> _basis;
 
     /// <param name="nuX">Number of x-direction basis functions (outer index).</param>
     /// <param name="nuY">Number of y-direction basis functions (inner index).</param>
@@ -36,7 +38,7 @@ public sealed class TensorPenalty : IAnisotropicPenalty
         _nuY = nuY;
         _px = new DifferencePenalty(orderX);
         _py = new DifferencePenalty(orderY);
-        _spectrum = new Lazy<PenaltySpectrum>(BuildSpectrum);
+        _basis = new Lazy<Eigenbasis>(BuildBasis);
     }
 
     /// <summary>Two components: the x-penalty (0) and the y-penalty (1).</summary>
@@ -47,7 +49,42 @@ public sealed class TensorPenalty : IAnisotropicPenalty
     /// <c>Q_x ⊗ Q_y</c>, so mode <c>l = i·ν_y + k</c> carries the x-penalty's eigenvalue <c>a_i</c> and the y-penalty's
     /// <c>b_k</c>, each 1-D penalty's null modes set to 0 (Bach &amp; Klein 2025, Theorem 3.1).
     /// </summary>
-    public PenaltySpectrum Spectrum => _spectrum.Value;
+    public PenaltySpectrum Spectrum => _basis.Value.Spectrum;
+
+    /// <summary>
+    /// One draw from <c>N(0, (w_x D_xᵀD_x⊗I + w_y I⊗D_yᵀD_y)⁺)</c>: <c>(Q_x ⊗ Q_y)z̃</c> with <c>z̃ ~ N(0, 1/(w_x a_i + w_y b_k))</c>
+    /// on each non-null mode (i, k) and 0 on the null modes, formed as <c>Q_x Z̃ Q_yᵀ</c> in O(ν_xν_y(ν_x + ν_y)).
+    /// </summary>
+    public void SamplePrior(ReadOnlySpan<double> weights, Xoshiro256PlusPlus rng, Span<double> beta)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (weights.Length != 2) throw new ArgumentException("Need [w_x, w_y].", nameof(weights));
+        if (beta.Length != _nuX * _nuY) throw new ArgumentException($"beta must have nuX·nuY = {_nuX * _nuY} entries.", nameof(beta));
+        Eigenbasis e = _basis.Value;
+        var t = new double[_nuX, _nuY];   // Z̃ Q_yᵀ
+        var z = new double[_nuY];
+        for (int i = 0; i < _nuX; i++)
+        {
+            for (int k = 0; k < _nuY; k++)
+            {
+                double s = weights[0] * e.A[i] + weights[1] * e.B[k];
+                z[k] = s > 0.0 ? Normal.SampleStandard(rng) / Math.Sqrt(s) : 0.0;
+            }
+            for (int k2 = 0; k2 < _nuY; k2++)
+            {
+                double sum = 0.0;
+                for (int k = 0; k < _nuY; k++) sum += z[k] * e.Qy[k][k2];
+                t[i, k2] = sum;
+            }
+        }
+        for (int i2 = 0; i2 < _nuX; i2++)
+            for (int k2 = 0; k2 < _nuY; k2++)
+            {
+                double sum = 0.0;
+                for (int i = 0; i < _nuX; i++) sum += e.Qx[i][i2] * t[i, k2];
+                beta[i2 * _nuY + k2] = sum;
+            }
+    }
 
     /// <summary>Flattened half-bandwidth: <c>order_x·ν_y</c> (the x-penalty's block stride; dominates order_y).</summary>
     public int Bandwidth => Math.Max(_px.Order * _nuY, _py.Order);
@@ -115,15 +152,20 @@ public sealed class TensorPenalty : IAnisotropicPenalty
         return sum;
     }
 
-    private PenaltySpectrum BuildSpectrum()
+    // Each 1-D penalty's eigendecomposition, its eigenvectors as rows: the joint spectrum and the Kronecker eigenbasis.
+    private sealed record Eigenbasis(PenaltySpectrum Spectrum, double[] A, double[] B, double[][] Qx, double[][] Qy);
+
+    private Eigenbasis BuildBasis()
     {
-        double[] a = ClampNull(DenseEigen.DecomposeSymmetric(_px.ToDense(_nuX)).Eigenvalues);
-        double[] b = ClampNull(DenseEigen.DecomposeSymmetric(_py.ToDense(_nuY)).Eigenvalues);
+        EigenResult ex = DenseEigen.DecomposeSymmetric(_px.ToDense(_nuX));
+        EigenResult ey = DenseEigen.DecomposeSymmetric(_py.ToDense(_nuY));
+        double[] a = ClampNull(ex.Eigenvalues);
+        double[] b = ClampNull(ey.Eigenvalues);
         var gx = new double[_nuX * _nuY];
         var gy = new double[_nuX * _nuY];
         for (int i = 0; i < _nuX; i++)
             for (int k = 0; k < _nuY; k++) { gx[i * _nuY + k] = a[i]; gy[i * _nuY + k] = b[k]; }
-        return new PenaltySpectrum([gx, gy]);
+        return new Eigenbasis(new PenaltySpectrum([gx, gy]), a, b, ex.Eigenvectors, ey.Eigenvectors);
     }
 
     // A difference penalty's null modes come out of the eigensolver at rounding level; they are set to exactly 0.

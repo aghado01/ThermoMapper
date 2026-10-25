@@ -215,6 +215,7 @@ public sealed class HierarchicalPSpline
     private readonly double[,] _penaltyDense;   // P, dense
     private readonly IAnisotropicPenalty? _anisotropic;   // set when each penalty component has its own τ_0j²
     private readonly double[][,]? _componentDense;       // each component Pⱼ, dense, for the collapsed population block
+    private readonly ISmoothingVariancePrior _componentPrior;   // the prior on each τ_0j² with anisotropic smoothing
     private readonly HalfTDeviationPrior? _halfT;   // null: the inverse-gamma prior on τ_u²
     private readonly double _halfTScale;        // the half-t prior's resolved scale A
 
@@ -230,9 +231,11 @@ public sealed class HierarchicalPSpline
     /// <param name="anisotropicSmoothing">When true, each component of the penalty, which must be an
     /// <see cref="IAnisotropicPenalty"/>, gets its own population smoothing variance τ_0j², each under the inverse-gamma
     /// prior; false (the default) smooths every component with one τ_0².</param>
+    /// <param name="componentPrior">With anisotropic smoothing, the prior on each τ_0j²; null takes the inverse gamma
+    /// IG(<paramref name="priorShape"/>, <paramref name="priorScale"/>).</param>
     public HierarchicalPSpline(double[,] design, double[][] responses, IBandPenalty penalty,
                                double priorShape = 1e-3, double priorScale = 1e-3, HalfTDeviationPrior? deviationPrior = null,
-                               bool anisotropicSmoothing = false)
+                               bool anisotropicSmoothing = false, ISmoothingVariancePrior? componentPrior = null)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(responses);
@@ -251,6 +254,7 @@ public sealed class HierarchicalPSpline
             if (y.Length != _n) throw new ArgumentException("Every replicate must match the design row count.", nameof(responses));
         _a0 = priorShape;
         _b0 = priorScale;
+        _componentPrior = componentPrior ?? new InverseGammaVariancePrior(priorShape, priorScale);
 
         _gram = new double[_gramBw + 1, _nu];
         _design.Accumulate(null, _gram, null, null);
@@ -556,7 +560,8 @@ public sealed class HierarchicalPSpline
                 foreach (double[] y in owner._responses) f.Add(y);
                 f.Add(owner._a0).Add(owner._b0).Add(owner._halfT is null ? 0 : 1).Add(owner._halfT?.Degrees ?? 0.0)
                  .Add(owner._halfTScale);
-                return f.Add(retainReplicates ? 1 : 0).Add((int)start).Add((int)scheme).Add(owner.Components).ToString();
+                return f.Add(retainReplicates ? 1 : 0).Add((int)start).Add((int)scheme).Add(owner.Components)
+                        .Add(owner._componentPrior.ToString()!).ToString();
             }
         }
 
@@ -889,7 +894,7 @@ public sealed class HierarchicalPSpline
     private sealed class SmoothingBlock(HierarchicalPSpline owner) : IBlock<SweepState>
     {
         private readonly ComponentSmoothing? _components =
-            owner._anisotropic is null ? null : new ComponentSmoothing(owner._anisotropic, owner._a0, owner._b0);
+            owner._anisotropic is null ? null : new ComponentSmoothing(owner._anisotropic, owner._componentPrior);
 
         public string Name => "population smoothing variance";
 

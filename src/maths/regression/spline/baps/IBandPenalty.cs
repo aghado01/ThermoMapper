@@ -1,4 +1,5 @@
 using System;
+using Maths.Rng;
 
 namespace Maths.Regression.Spline.Baps;
 
@@ -63,4 +64,8 @@ public interface IAnisotropicPenalty : IBandPenalty
 
     /// <summary>The components' joint spectrum.</summary>
     PenaltySpectrum Spectrum { get; }
+
+    /// <summary>One draw from the improper prior <c>N(0, (Σⱼ wⱼPⱼ)⁺)</c>, which has no mass on the null space, at precisions
+    /// <paramref name="weights"/> = 1/τⱼ²: what prior scaling (<see cref="WeibullVariancePrior.ScaledTo"/>) draws.</summary>
+    void SamplePrior(ReadOnlySpan<double> weights, Xoshiro256PlusPlus rng, Span<double> beta);
 }

@@ -40,6 +40,7 @@ public sealed class BapsAnisotropicTests
         public double ComponentRoughness(double[] beta, int component) => _d.Roughness(beta);
         public PenaltySpectrum Spectrum { get; } = new([DenseEigen.DecomposeSymmetric(new DifferencePenalty(2).ToDense(nu)).Eigenvalues
                                                          .OrderBy(e => e).Select((e, i) => i < 2 ? 0.0 : e).ToArray()]);
+        public void SamplePrior(ReadOnlySpan<double> weights, Xoshiro256PlusPlus rng, Span<double> beta) => throw new NotSupportedException();
     }
 
     [Fact]
@@ -50,7 +51,7 @@ public sealed class BapsAnisotropicTests
         double[] beta = Enumerable.Range(0, nu).Select(_ => Gaussian(rng)).ToArray();
         const double a = 0.5, b = 0.2;
 
-        var one = new ComponentSmoothing(new OneComponent(nu), a, b);
+        var one = new ComponentSmoothing(new OneComponent(nu), new InverseGammaVariancePrior(a, b));
         one.Update(new double[1], beta, new Xoshiro256PlusPlus(1));   // reads the roughness
         double shape = a + (nu - 2) / 2.0, scale = b + new DifferencePenalty(2).Roughness(beta) / 2.0;
         double LogIg(double rho) => -shape * rho - scale * Math.Exp(-rho);   // IG(shape, scale) on τ², in ρ = ln τ²
@@ -60,7 +61,7 @@ public sealed class BapsAnisotropicTests
 
         var tensor = new TensorPenalty(4, 5);
         double[] surface = Enumerable.Range(0, 20).Select(_ => Gaussian(rng)).ToArray();
-        var two = new ComponentSmoothing(tensor, a, b);
+        var two = new ComponentSmoothing(tensor, new InverseGammaVariancePrior(a, b));
         two.Update(new double[2], surface, new Xoshiro256PlusPlus(1));
         double[] at = [0.4, -0.7];
         var g = new double[2];
@@ -105,19 +106,21 @@ public sealed class BapsAnisotropicTests
         return (r0, r1, cdf);
     }
 
-    private static (ComponentSmoothing Smoothing, double[] Beta) FixedConditional()
+    private static (ComponentSmoothing Smoothing, double[] Beta) FixedConditional(ISmoothingVariancePrior? prior = null)
     {
         var rng = new Xoshiro256PlusPlus(seed: 7);
         double[] beta = Enumerable.Range(0, 30).Select(i => Gaussian(rng) * (i % 2 == 0 ? 0.3 : 1.0)).ToArray();
-        var smoothing = new ComponentSmoothing(new TensorPenalty(5, 6), 1e-3, 1e-3);
+        var smoothing = new ComponentSmoothing(new TensorPenalty(5, 6), prior ?? new InverseGammaVariancePrior());
         smoothing.Update(new double[2], beta, new Xoshiro256PlusPlus(1));   // reads the roughness
         return (smoothing, beta);
     }
 
-    [Fact]
-    public void Update_FromExactDraws_StaysOnTheConditional()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Update_FromExactDraws_StaysOnTheConditional(bool weibull)
     {
-        (ComponentSmoothing smoothing, double[] beta) = FixedConditional();
+        (ComponentSmoothing smoothing, double[] beta) = FixedConditional(weibull ? new WeibullVariancePrior(2.0) : null);
         (double[] r0, double[] r1, double[] cdf) = Grid(smoothing);
         var rng = new Xoshiro256PlusPlus(seed: 9);
         const int n = 500_000;
@@ -132,7 +135,7 @@ public sealed class BapsAnisotropicTests
             a0 += rho[0]; a00 += rho[0] * rho[0]; a1 += rho[1];
         }
         double mb = b0 / n, ma = a0 / n, vb = b00 / n - mb * mb, va = a00 / n - ma * ma;
-        _out.WriteLine($"[aniso-block] exact draws: mean {mb:F5} var {vb:F5}; after one update: mean {ma:F5} var {va:F5}");
+        _out.WriteLine($"[aniso-block] {(weibull ? "Weibull" : "IG")} exact draws: mean {mb:F5} var {vb:F5}; after one update: mean {ma:F5} var {va:F5}");
         double se = Math.Sqrt(vb / n);
         Assert.InRange(ma - mb, -5.0 * se, 5.0 * se);
         Assert.InRange(va / vb, 0.98, 1.02);   // the upper tail is exponential, so the variance estimate is noisy: ±2% is about 4σ here

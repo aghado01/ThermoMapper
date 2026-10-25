@@ -6,11 +6,11 @@ namespace Maths.Regression.Spline.Baps;
 
 /// <summary>
 /// The full conditional of an anisotropic penalty's smoothing variances, on <c>ρⱼ = ln τⱼ²</c>, and its sampler. The
-/// coefficients' prior is <c>N(0, K⁻)</c> with <c>K = Σⱼ Pⱼ/τⱼ²</c>, and each τⱼ² has an IG(a, b) prior. With
-/// <c>wⱼ = 1/τⱼ²</c> and <c>Rⱼ = βᵀPⱼβ</c>,
-/// <c>ln p(ρ | β) = ½ ln Det K − ½ Σⱼ Rⱼwⱼ − Σⱼ (aρⱼ + bwⱼ) + const</c> (Bach &amp; Klein 2025, eq. 12, with the IG prior's
-/// log kernel in ρ). Its gradient and Hessian follow from the spectrum's derivatives in <c>ln w = −ρ</c>
-/// (<see cref="PenaltySpectrum"/>). With one component it is the IG conditional of the isotropic Gibbs scheme.
+/// coefficients' prior is <c>N(0, K⁻)</c> with <c>K = Σⱼ Pⱼ/τⱼ²</c>, and each τⱼ² has the prior q
+/// (<see cref="ISmoothingVariancePrior"/>: the inverse gamma by default, or the Weibull). With <c>wⱼ = 1/τⱼ²</c> and
+/// <c>Rⱼ = βᵀPⱼβ</c>, <c>ln p(ρ | β) = ½ ln Det K − ½ Σⱼ Rⱼwⱼ + Σⱼ ln q(ρⱼ) + const</c> (Bach &amp; Klein 2025, eq. 12). Its
+/// gradient and Hessian follow from the spectrum's derivatives in <c>ln w = −ρ</c> (<see cref="PenaltySpectrum"/>) and
+/// the prior's. With one component and the IG prior it is the IG conditional of the isotropic Gibbs scheme.
 /// <para>
 /// Each update is a Newton-proposal Metropolis step on every ρⱼ at once (<see cref="NewtonMetropolis"/>), Bach &amp;
 /// Klein's update, then one random-walk Metropolis step on each ρⱼ in turn with standard deviation
@@ -28,8 +28,7 @@ internal sealed class ComponentSmoothing
     public const double EscapeStep = 1.0;
 
     private readonly IAnisotropicPenalty _penalty;
-    private readonly double _a;
-    private readonly double _b;
+    private readonly ISmoothingVariancePrior _prior;
     private readonly NewtonMetropolis _step;
     private readonly NewtonMetropolis.LogDensity _density;
     private readonly Func<double, double>[] _coordinate;   // ρ ↦ ln p with only ρⱼ replaced, for the random-walk steps
@@ -39,11 +38,10 @@ internal sealed class ComponentSmoothing
     private readonly double[] _hessian;
     private double[] _current = Array.Empty<double>();
 
-    public ComponentSmoothing(IAnisotropicPenalty penalty, double priorShape, double priorScale)
+    public ComponentSmoothing(IAnisotropicPenalty penalty, ISmoothingVariancePrior prior)
     {
         _penalty = penalty;
-        _a = priorShape;
-        _b = priorScale;
+        _prior = prior;
         int p = penalty.Components;
         _step = new NewtonMetropolis(p);
         _density = LogDensity;
@@ -84,7 +82,7 @@ internal sealed class ComponentSmoothing
     {
         if (!Weights(rho)) return double.NegativeInfinity;
         double value = 0.5 * _penalty.Spectrum.LogPseudoDeterminant(_weights);
-        for (int j = 0; j < rho.Length; j++) value -= 0.5 * _roughness[j] * _weights[j] + _a * rho[j] + _b * _weights[j];
+        for (int j = 0; j < rho.Length; j++) value += _prior.LogDensityOfLog(rho[j], out _, out _) - 0.5 * _roughness[j] * _weights[j];
         return value;
     }
 
@@ -96,10 +94,10 @@ internal sealed class ComponentSmoothing
         double value = 0.5 * _penalty.Spectrum.LogPseudoDeterminant(_weights, _gradient, _hessian);
         for (int j = 0; j < p; j++)
         {
-            double pull = (0.5 * _roughness[j] + _b) * _weights[j];
-            value -= 0.5 * _roughness[j] * _weights[j] + _a * rho[j] + _b * _weights[j];
-            gradient[j] = -0.5 * _gradient[j] + pull - _a;
-            for (int k = 0; k < p; k++) hessian[j * p + k] = 0.5 * _hessian[j * p + k] - (j == k ? pull : 0.0);
+            double pull = 0.5 * _roughness[j] * _weights[j];
+            value += _prior.LogDensityOfLog(rho[j], out double first, out double second) - pull;
+            gradient[j] = -0.5 * _gradient[j] + pull + first;
+            for (int k = 0; k < p; k++) hessian[j * p + k] = 0.5 * _hessian[j * p + k] + (j == k ? second - pull : 0.0);
         }
         return value;
     }
