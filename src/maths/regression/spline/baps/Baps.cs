@@ -633,6 +633,52 @@ public sealed class Baps
         }
     }
 
+    /// <summary>
+    /// log p(y_unit | draw) for every retained draw of a result this model produced and every unit (OQ17), on the data it
+    /// fitted: the retained-parameters content. A draw's coefficients and σ² are global, so every unit conditions on them,
+    /// and its term is N(yᵢ; zᵢβ, σ²) summed over the unit's observations. The smoothing parameters (λ, τ², the local
+    /// multipliers η, the components' τⱼ²) enter only β's prior, not the term.
+    /// </summary>
+    /// <param name="result">A run of this model, whose retained draws are scored.</param>
+    /// <param name="units">The partition of the n observations; null takes each observation as its own unit.</param>
+    public PointwiseLogDensity PointwiseLogDensity(BapsResult result, UnitPartition? units = null)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        UnitPartition partition = units ?? UnitPartition.EachObservation(_n);
+        if (partition.Observations != _n)
+            throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
+        var values = new double[result.Draws, partition.Units];
+        var terms = new double[_n];
+        int row = 0;
+        foreach (IReadOnlyList<BapsDraw> chain in result.PosteriorDraws)
+            foreach (BapsDraw d in chain)
+            {
+                if (d.Coefficients.Length != _nu)
+                    throw new ArgumentException("The result's draws do not fit this model's basis.", nameof(result));
+                double logNorm = -0.5 * Math.Log(2.0 * Math.PI * d.Sigma2);
+                for (int i = 0; i < _n; i++)
+                {
+                    double fit = 0.0;
+                    for (int j = 0; j < _nu; j++) fit += _z[i, j] * d.Coefficients[j];
+                    double r = _y[i] - fit;
+                    terms[i] = logNorm - 0.5 * r * r / d.Sigma2;
+                }
+                for (int u = 0; u < partition.Units; u++)
+                {
+                    double sum = 0.0;
+                    foreach (int i in partition.Members[u]) sum += terms[i];
+                    values[row, u] = sum;
+                }
+                row++;
+            }
+        var latents = new List<LatentReport>
+        {
+            new("coefficients β", LatentScope.Global, LatentTreatment.Conditioned),
+            new("noise variance σ²", LatentScope.Global, LatentTreatment.Conditioned),
+        };
+        return new PointwiseLogDensity(values, partition, latents);
+    }
+
     private double ResidualSS(double[] beta)
     {
         double ss = 0.0;
