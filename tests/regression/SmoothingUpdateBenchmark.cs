@@ -65,9 +65,11 @@ public sealed class SmoothingUpdateBenchmark
         var p1 = new TensorPenalty(r1.NuX, r1.NuY);
         WeibullVariancePrior weibull = WeibullVariancePrior.ScaledTo(r1.Design, p1, bound: 3.0);
 
-        double Baps(TensorDesign td, double[] y, ISmoothingVariancePrior? prior, SmoothingVarianceUpdate update, int seed)
+        double Baps(TensorDesign td, double[] y, ISmoothingVariancePriorChoice? prior, SmoothingVarianceUpdate update, int seed)
         {
-            var model = new Baps(td.Design, y, new TensorPenalty(td.NuX, td.NuY), componentPrior: prior, componentUpdate: update);
+            // The priors of the recorded run: the inverse gamma on σ² and, unless given, on every τⱼ².
+            var model = new Baps(td.Design, y, new TensorPenalty(td.NuX, td.NuY), componentPrior: prior ?? new InverseGammaVariancePrior(),
+                                 componentUpdate: update, noisePrior: NoiseVariancePrior.InverseGamma);
             var clock = Stopwatch.StartNew();
             BapsResult r = model.Run(BapsScheme.AnisotropicGibbs, chains: 4, masterSeed: seed, burn: 1000, samples: 2000);
             return WorstEss(r.ComponentLogLambdaConvergence!) / clock.Elapsed.TotalSeconds;
@@ -75,7 +77,7 @@ public sealed class SmoothingUpdateBenchmark
         double Hierarchical(SmoothingVarianceUpdate update, int seed)
         {
             var model = new HierarchicalPSpline(r4.Design, y4, new TensorPenalty(r4.NuX, r4.NuY), anisotropicSmoothing: true,
-                                                componentUpdate: update);
+                                                componentPrior: new InverseGammaVariancePrior(), componentUpdate: update);
             var clock = Stopwatch.StartNew();
             HierarchicalResult h = model.Run(chains: 4, masterSeed: seed, burn: 1000, samples: 2000);
             return WorstEss(h.ComponentSmoothingVarianceConvergence!) / clock.Elapsed.TotalSeconds;

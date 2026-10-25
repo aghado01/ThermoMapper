@@ -239,6 +239,51 @@ public sealed class BapsAnisotropicTests
     }
 
     [Fact]
+    public void Defaults_AreScaleFree_AcrossNineDecades()
+    {
+        // The scaled Weibull on each τⱼ², Jeffreys on σ² and a start at the response's variance: a change of units only
+        // shifts every ln variance, so the smoothing posteriors and the fit, in its units, stay put.
+        (TensorDesign td, double[] y, double[] f) = Surface(seed: 31);
+        var penalty = new TensorPenalty(td.NuX, td.NuY);
+        Baps Model(double unit) => new Baps(td.Design, y.Select(v => v * unit).ToArray(), penalty);
+        BapsResult Fit(Baps model) => model.Run(BapsScheme.AnisotropicGibbs, chains: 4, masterSeed: 2, burn: 1000, samples: 1500);
+        Baps unitModel = Model(1.0);
+        BapsResult reference = Fit(unitModel);
+        double referenceMse = Mse(td.Design, reference.Coefficients, f);
+        double referenceScale = ((WeibullVariancePrior)unitModel.ComponentPrior!).Scale;
+        foreach (double unit in new[] { 1e-6, 1e-3, 1e3 })
+        {
+            Baps model = Model(unit);
+            BapsResult r = Fit(model);
+            Assert.Equal(unit * unit, ((WeibullVariancePrior)model.ComponentPrior!).Scale / referenceScale, 9);
+            for (int j = 0; j < 2; j++)
+            {
+                double a = reference.ComponentLambdaInterval(j).Median, b = r.ComponentLambdaInterval(j).Median;
+                Assert.True(Math.Abs(Math.Log(b / a)) < 0.1, $"y×{unit:E0}, component {j}: λ median {b:E3} against {a:E3}");
+            }
+            double mse = Mse(td.Design, r.Coefficients.Select(c => c / unit).ToArray(), f);
+            _out.WriteLine($"[units] y×{unit:E0}: λx {r.ComponentLambdaInterval(0).Median:E3} λy {r.ComponentLambdaInterval(1).Median:E3} " +
+                           $"MSE in unit-1 terms {mse:E3} (unit 1: {referenceMse:E3})");
+            Assert.InRange(mse / referenceMse, 0.9, 1.1);
+        }
+    }
+
+    [Fact]
+    public void NoisePrior_IsSelectable_AndTheCollapsedSchemeTakesOnlyJeffreys()
+    {
+        (TensorDesign td, double[] y, _) = Surface(seed: 32);
+        var penalty = new TensorPenalty(td.NuX, td.NuY);
+        Assert.Throws<ArgumentException>(() => new Baps(td.Design, y, penalty, noisePrior: NoiseVariancePrior.InverseGamma)
+            .Run(BapsScheme.Collapsed, chains: 1, burn: 1, samples: 2));
+        BapsResult ig = new Baps(td.Design, y, penalty, noisePrior: NoiseVariancePrior.InverseGamma)
+            .Run(BapsScheme.AnisotropicGibbs, chains: 2, masterSeed: 1, burn: 300, samples: 300);
+        BapsResult jeffreys = new Baps(td.Design, y, penalty, noisePrior: NoiseVariancePrior.Jeffreys)
+            .Run(BapsScheme.Gibbs, chains: 2, masterSeed: 1, burn: 300, samples: 300);
+        Assert.InRange(ig.Sigma2Interval.Median, 0.005, 0.02);   // σ = 0.1 on unit-scale data: either prior finds it
+        Assert.InRange(jeffreys.Sigma2Interval.Median, 0.005, 0.02);
+    }
+
+    [Fact]
     public void SliceUpdate_AgreesWithTheNewtonUpdate()
     {
         (TensorDesign td, double[] y, _) = Surface(seed: 31);

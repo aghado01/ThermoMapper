@@ -42,8 +42,9 @@ public enum BapsScheme
     /// <c>λⱼ = σ²/τⱼ²</c> (Bach &amp; Klein 2025). β and σ² are drawn from their conditionals as in <see cref="Gibbs"/>. The
     /// τⱼ² have no conjugate step, because the prior's pseudo-determinant <c>Πₗ Σⱼ γⱼₗ/τⱼ²</c> does not factor, so their
     /// logs are updated on their full conditional by slice sampling, or by Bach &amp; Klein's Newton-proposal Metropolis
-    /// step (<see cref="SmoothingVarianceUpdate"/>), each under the IG(a, b) prior the other schemes give τ² unless another
-    /// is given (<see cref="ISmoothingVariancePrior"/>).
+    /// step (<see cref="SmoothingVarianceUpdate"/>). Its defaults are scale-free: the Weibull prior scaled to the response on
+    /// each τⱼ² (<see cref="ScaledWeibullPrior"/>) and the Jeffreys prior on σ² (<see cref="NoiseVariancePrior.Jeffreys"/>),
+    /// with the chains started at the response's variance, so the fit does not depend on the response's units.
     /// </summary>
     AnisotropicGibbs
 }
@@ -175,8 +176,11 @@ public sealed class Baps
     private readonly double _priorScale;
     private readonly double _mhLogStep;  // Metropolis log-λ proposal sd (the collapsed scheme)
     private readonly double _phi;        // adaptivity: η_i ~ Gamma(φ, φ); φ→∞ recovers global smoothing
-    private readonly ISmoothingVariancePrior _componentPrior;   // the anisotropic scheme's prior on each τⱼ²
+    private readonly ISmoothingVariancePriorChoice _componentChoice;   // the anisotropic scheme's prior on each τⱼ²,
+    private readonly Lazy<ISmoothingVariancePrior>? _componentPrior;  // resolved when that scheme first runs
     private readonly SmoothingVarianceUpdate _componentUpdate;   // and its update of their logs
+    private readonly NoiseVariancePrior? _noisePrior;   // null: each scheme's default
+    private readonly double _responseVariance;   // the response's sample variance, the anisotropic chains' start
 
     /// <param name="design">The banded design Z (n × ν).</param>
     /// <param name="y">The responses.</param>
@@ -185,12 +189,17 @@ public sealed class Baps
     /// <param name="priorScale">The inverse-gamma prior's scale on σ² and τ².</param>
     /// <param name="mhLogStep">The collapsed scheme's random-walk step on ln λ.</param>
     /// <param name="phi">The locally adaptive scheme's multiplier prior, η ~ Gamma(φ, φ).</param>
-    /// <param name="componentPrior">The anisotropic scheme's prior on each component's τⱼ²; null takes the inverse gamma
-    /// IG(<paramref name="priorShape"/>, <paramref name="priorScale"/>) the other schemes give τ².</param>
+    /// <param name="componentPrior">The anisotropic scheme's prior on each component's τⱼ²; null takes the scale-free
+    /// <see cref="ScaledWeibullPrior"/>. <c>new InverseGammaVariancePrior(priorShape, priorScale)</c> is the prior the other
+    /// schemes give τ².</param>
     /// <param name="componentUpdate">How the anisotropic scheme updates the ln τⱼ² (<see cref="SmoothingVarianceUpdate"/>).</param>
+    /// <param name="noisePrior">The prior on σ² (<see cref="NoiseVariancePrior"/>); null takes each scheme's default: the
+    /// inverse gamma for the isotropic Gibbs schemes, Jeffreys for the anisotropic and collapsed schemes. The collapsed
+    /// scheme takes only Jeffreys, which its evidence assumes.</param>
     public Baps(double[,] design, double[] y, IBandPenalty penalty,
                        double priorShape = 1e-3, double priorScale = 1e-3, double mhLogStep = 0.6, double phi = 1.0,
-                       ISmoothingVariancePrior? componentPrior = null, SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Slice)
+                       ISmoothingVariancePriorChoice? componentPrior = null, SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Slice,
+                       NoiseVariancePrior? noisePrior = null)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -215,11 +224,30 @@ public sealed class Baps
         _priorScale = priorScale;
         _mhLogStep = mhLogStep;
         _phi = phi;
-        _componentPrior = componentPrior ?? new InverseGammaVariancePrior(priorShape, priorScale);
+        _componentChoice = componentPrior ?? new ScaledWeibullPrior();
+        _componentPrior = penalty is IAnisotropicPenalty components
+            ? new Lazy<ISmoothingVariancePrior>(() => _componentChoice.Resolve(design, components, y))
+            : null;
         if (componentUpdate is not (SmoothingVarianceUpdate.Newton or SmoothingVarianceUpdate.Slice))
             throw new ArgumentOutOfRangeException(nameof(componentUpdate));
         _componentUpdate = componentUpdate;
+        if (noisePrior is not (null or NoiseVariancePrior.InverseGamma or NoiseVariancePrior.Jeffreys))
+            throw new ArgumentOutOfRangeException(nameof(noisePrior));
+        _noisePrior = noisePrior;
+        double mean = 0.0, sumSq = 0.0;
+        foreach (double v in y) mean += v / _n;
+        foreach (double v in y) sumSq += (v - mean) * (v - mean);
+        double variance = sumSq / Math.Max(1, _n - 1);
+        _responseVariance = variance > 0.0 && double.IsFinite(variance) ? variance : 1.0;
     }
+
+    /// <summary>The anisotropic scheme's prior on each τⱼ², resolved (for <see cref="ScaledWeibullPrior"/>, by prior
+    /// scaling against this model's design and response); null for a penalty without components.</summary>
+    public ISmoothingVariancePrior? ComponentPrior => _componentPrior?.Value;
+
+    // σ²'s prior under a scheme: the explicit choice, or the scheme's default.
+    private NoiseVariancePrior NoisePriorFor(BapsScheme scheme) => _noisePrior
+        ?? (scheme is BapsScheme.AnisotropicGibbs or BapsScheme.Collapsed ? NoiseVariancePrior.Jeffreys : NoiseVariancePrior.InverseGamma);
 
     /// <param name="scheme">The sampling scheme (<see cref="BapsScheme"/>).</param>
     /// <param name="chains">Independent chains; R̂ and the ESS need at least two.</param>
@@ -249,6 +277,8 @@ public sealed class Baps
         if (scheme == BapsScheme.AnisotropicGibbs && _penalty is not IAnisotropicPenalty)
             throw new ArgumentException(
                 $"The anisotropic scheme smooths penalty components separately; {_penalty.GetType().Name} is not an IAnisotropicPenalty.", nameof(scheme));
+        if (scheme == BapsScheme.Collapsed && _noisePrior == NoiseVariancePrior.InverseGamma)
+            throw new ArgumentException("The collapsed scheme's evidence integrates σ² under the Jeffreys prior.", nameof(scheme));
 
         // The shell gives each chain a kernel stream and a readout stream. Only the collapsed scheme's conditional draws
         // use the readout stream, so the λ chain does not depend on them.
@@ -334,7 +364,8 @@ public sealed class Baps
                                             .Add(owner._penalty.Bandwidth).Add(owner._penalty.GetType().FullName!);
                 foreach (double v in owner._z) f.Add(v);
                 return f.Add(owner._y).Add(owner._priorShape).Add(owner._priorScale).Add(owner._mhLogStep)
-                        .Add(owner._phi).Add(owner._componentPrior.ToString()!).Add((int)owner._componentUpdate).ToString();
+                        .Add(owner._phi).Add(owner._componentChoice.ToString()!).Add((int)owner._componentUpdate)
+                        .Add(owner._noisePrior is NoiseVariancePrior p ? (int)p : -1).ToString();
             }
         }
 
@@ -434,6 +465,12 @@ public sealed class Baps
                 LogComponentTau2 = new double[scheme == BapsScheme.AnisotropicGibbs ? owner._components : 0],
             };
             Array.Fill(state.Eta, 1.0);
+            if (scheme == BapsScheme.AnisotropicGibbs)
+            {
+                // At the response's variance, not 1: a change of units then only shifts every ln variance, and the chain with it.
+                state.Sigma2 = owner._responseVariance;
+                Array.Fill(state.LogComponentTau2, Math.Log(owner._responseVariance));
+            }
             if (scheme == BapsScheme.Collapsed) state.Evidence = owner.MarginalLogTarget(1.0, out state.Solve);
             return state;
         }
@@ -453,13 +490,13 @@ public sealed class Baps
         BapsScheme.Collapsed => new IBlock<BapsState>[] { new LogLambdaBlock(this) },
         BapsScheme.LocallyAdaptiveGibbs => new IBlock<BapsState>[]
         {
-            new CoefficientBlock(this, scheme), new NoiseBlock(this), new PenaltyBlock(this, adaptive: true), new LocalBlock(this),
+            new CoefficientBlock(this, scheme), new NoiseBlock(this, scheme), new PenaltyBlock(this, adaptive: true), new LocalBlock(this),
         },
         BapsScheme.AnisotropicGibbs => new IBlock<BapsState>[]
         {
-            new CoefficientBlock(this, scheme), new NoiseBlock(this), new ComponentSmoothingBlock(this),
+            new CoefficientBlock(this, scheme), new NoiseBlock(this, scheme), new ComponentSmoothingBlock(this),
         },
-        _ => new IBlock<BapsState>[] { new CoefficientBlock(this, scheme), new NoiseBlock(this), new PenaltyBlock(this, adaptive: false) },
+        _ => new IBlock<BapsState>[] { new CoefficientBlock(this, scheme), new NoiseBlock(this, scheme), new PenaltyBlock(this, adaptive: false) },
     };
 
     // β | σ², τ², y ~ N(β̂, σ²A⁻¹) with A = ZᵀZ + λP and λ = σ²/τ², or, in the locally adaptive scheme,
@@ -509,15 +546,17 @@ public sealed class Baps
         }
     }
 
-    // σ² | β from the residual sum of squares, n terms.
-    private sealed class NoiseBlock(Baps owner) : IBlock<BapsState>
+    // σ² | β from the residual sum of squares, n terms, under IG(a, b) or the Jeffreys prior (a = b = 0).
+    private sealed class NoiseBlock(Baps owner, BapsScheme scheme) : IBlock<BapsState>
     {
+        private readonly bool _jeffreys = owner.NoisePriorFor(scheme) == NoiseVariancePrior.Jeffreys;
+
         public string Name => "noise variance";
 
         public bool Update(BapsState state, Xoshiro256PlusPlus rng)
         {
-            state.Sigma2 = ConjugateUpdates.NormalVariance(owner._priorShape, owner._priorScale, owner._n, owner.ResidualSS(state.Beta))
-                                           .Sample(rng);
+            state.Sigma2 = ConjugateUpdates.NormalVariance(_jeffreys ? 0.0 : owner._priorShape, _jeffreys ? 0.0 : owner._priorScale,
+                                                           owner._n, owner.ResidualSS(state.Beta)).Sample(rng);
             return true;
         }
     }
@@ -548,7 +587,7 @@ public sealed class Baps
     // conditional (ComponentSmoothing).
     private sealed class ComponentSmoothingBlock(Baps owner) : IBlock<BapsState>
     {
-        private readonly ComponentSmoothing _smoothing = new((IAnisotropicPenalty)owner._penalty, owner._componentPrior, owner._componentUpdate);
+        private readonly ComponentSmoothing _smoothing = new((IAnisotropicPenalty)owner._penalty, owner._componentPrior!.Value, owner._componentUpdate);
 
         public string Name => "component smoothing variances";
 

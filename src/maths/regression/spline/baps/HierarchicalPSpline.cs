@@ -215,8 +215,10 @@ public sealed class HierarchicalPSpline
     private readonly double[,] _penaltyDense;   // P, dense
     private readonly IAnisotropicPenalty? _anisotropic;   // set when each penalty component has its own τ_0j²
     private readonly double[][,]? _componentDense;       // each component Pⱼ, dense, for the collapsed population block
-    private readonly ISmoothingVariancePrior _componentPrior;   // the prior on each τ_0j² with anisotropic smoothing
+    private readonly ISmoothingVariancePriorChoice _componentChoice;   // the prior on each τ_0j² with anisotropic smoothing,
+    private readonly Lazy<ISmoothingVariancePrior>? _componentPrior;  // resolved when a sweep first needs it
     private readonly SmoothingVarianceUpdate _componentUpdate;   // and the update of their logs
+    private readonly NoiseVariancePrior _noisePrior;
     private readonly HalfTDeviationPrior? _halfT;   // null: the inverse-gamma prior on τ_u²
     private readonly double _halfTScale;        // the half-t prior's resolved scale A
 
@@ -232,14 +234,15 @@ public sealed class HierarchicalPSpline
     /// <param name="anisotropicSmoothing">When true, each component of the penalty, which must be an
     /// <see cref="IAnisotropicPenalty"/>, gets its own population smoothing variance τ_0j², each under the inverse-gamma
     /// prior; false (the default) smooths every component with one τ_0².</param>
-    /// <param name="componentPrior">With anisotropic smoothing, the prior on each τ_0j²; null takes the inverse gamma
-    /// IG(<paramref name="priorShape"/>, <paramref name="priorScale"/>).</param>
+    /// <param name="componentPrior">With anisotropic smoothing, the prior on each τ_0j²; null takes the scale-free
+    /// <see cref="ScaledWeibullPrior"/>, resolved against the design and every replicate's responses pooled.</param>
     /// <param name="componentUpdate">With anisotropic smoothing, how the ln τ_0j² are updated
     /// (<see cref="SmoothingVarianceUpdate"/>).</param>
     public HierarchicalPSpline(double[,] design, double[][] responses, IBandPenalty penalty,
                                double priorShape = 1e-3, double priorScale = 1e-3, HalfTDeviationPrior? deviationPrior = null,
-                               bool anisotropicSmoothing = false, ISmoothingVariancePrior? componentPrior = null,
-                               SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Slice)
+                               bool anisotropicSmoothing = false, ISmoothingVariancePriorChoice? componentPrior = null,
+                               SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Slice,
+                               NoiseVariancePrior noisePrior = NoiseVariancePrior.InverseGamma)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(responses);
@@ -258,7 +261,9 @@ public sealed class HierarchicalPSpline
             if (y.Length != _n) throw new ArgumentException("Every replicate must match the design row count.", nameof(responses));
         _a0 = priorShape;
         _b0 = priorScale;
-        _componentPrior = componentPrior ?? new InverseGammaVariancePrior(priorShape, priorScale);
+        _componentChoice = componentPrior ?? new ScaledWeibullPrior();
+        if (noisePrior is not (NoiseVariancePrior.InverseGamma or NoiseVariancePrior.Jeffreys)) throw new ArgumentOutOfRangeException(nameof(noisePrior));
+        _noisePrior = noisePrior;
         if (componentUpdate is not (SmoothingVarianceUpdate.Newton or SmoothingVarianceUpdate.Slice))
             throw new ArgumentOutOfRangeException(nameof(componentUpdate));
         _componentUpdate = componentUpdate;
@@ -303,6 +308,10 @@ public sealed class HierarchicalPSpline
                 _anisotropic.AccumulateComponents(band, _nu, lambdas);
                 _componentDense[c] = Symmetric(band, _penaltyBw, _nu);
             }
+            IAnisotropicPenalty components = _anisotropic;
+            var pooled = new double[responses.Length * _n];   // every replicate's responses, for the bound
+            for (int rr = 0; rr < responses.Length; rr++) Array.Copy(responses[rr], 0, pooled, rr * _n, _n);
+            _componentPrior = new Lazy<ISmoothingVariancePrior>(() => _componentChoice.Resolve(design, components, pooled));
         }
 
         if (deviationPrior is not null)
@@ -568,7 +577,7 @@ public sealed class HierarchicalPSpline
                 f.Add(owner._a0).Add(owner._b0).Add(owner._halfT is null ? 0 : 1).Add(owner._halfT?.Degrees ?? 0.0)
                  .Add(owner._halfTScale);
                 return f.Add(retainReplicates ? 1 : 0).Add((int)start).Add((int)scheme).Add(owner.Components)
-                        .Add(owner._componentPrior.ToString()!).Add((int)owner._componentUpdate).ToString();
+                        .Add(owner._componentChoice.ToString()!).Add((int)owner._componentUpdate).Add((int)owner._noisePrior).ToString();
             }
         }
 
@@ -874,7 +883,9 @@ public sealed class HierarchicalPSpline
         {
             double sumResid = 0.0;
             for (int rr = 0; rr < state.Replicates.Length; rr++) sumResid += owner.ResidualSS(owner._responses[rr], state.Replicates[rr]);
-            state.Sigma2 = ConjugateUpdates.NormalVariance(owner._a0, owner._b0, state.Replicates.Length * owner._n, sumResid)
+            bool jeffreys = owner._noisePrior == NoiseVariancePrior.Jeffreys;
+            state.Sigma2 = ConjugateUpdates.NormalVariance(jeffreys ? 0.0 : owner._a0, jeffreys ? 0.0 : owner._b0,
+                                                           state.Replicates.Length * owner._n, sumResid)
                                            .Sample(rng);
             return true;
         }
@@ -901,7 +912,7 @@ public sealed class HierarchicalPSpline
     private sealed class SmoothingBlock(HierarchicalPSpline owner) : IBlock<SweepState>
     {
         private readonly ComponentSmoothing? _components =
-            owner._anisotropic is null ? null : new ComponentSmoothing(owner._anisotropic, owner._componentPrior, owner._componentUpdate);
+            owner._anisotropic is null ? null : new ComponentSmoothing(owner._anisotropic, owner._componentPrior!.Value, owner._componentUpdate);
 
         public string Name => "population smoothing variance";
 

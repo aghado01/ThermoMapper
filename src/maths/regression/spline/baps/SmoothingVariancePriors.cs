@@ -17,11 +17,36 @@ public interface ISmoothingVariancePrior
 }
 
 /// <summary>
+/// A choice of prior on the anisotropic smoothing variances, resolved against the model's design, penalty and response
+/// when its sampler first needs it. A fixed prior (<see cref="InverseGammaVariancePrior"/>,
+/// <see cref="WeibullVariancePrior"/>) is its own resolution; <see cref="ScaledWeibullPrior"/>, the default, resolves by
+/// prior scaling.
+/// </summary>
+public interface ISmoothingVariancePriorChoice
+{
+    /// <summary>The prior for a model with this design, penalty and response.</summary>
+    ISmoothingVariancePrior Resolve(double[,] design, IAnisotropicPenalty penalty, double[] response);
+}
+
+/// <summary>
+/// The scale-free default: the Weibull prior scaled to the model's own response (<see cref="WeibullVariancePrior.ScaledToResponse"/>,
+/// Bach &amp; Klein's default), resolved when the sampler first needs it. Rescaling the response by k rescales the resolved
+/// scale by k², so together with the Jeffreys prior on σ² (<see cref="NoiseVariancePrior.Jeffreys"/>) the smoothing
+/// posteriors do not depend on the response's units.
+/// </summary>
+public sealed record ScaledWeibullPrior(double TailProbability = 0.05, double Shape = 0.5, int Draws = 2000, int Seed = 1)
+    : ISmoothingVariancePriorChoice
+{
+    public ISmoothingVariancePrior Resolve(double[,] design, IAnisotropicPenalty penalty, double[] response)
+        => WeibullVariancePrior.ScaledToResponse(design, penalty, response, TailProbability, Shape, Draws, Seed);
+}
+
+/// <summary>
 /// τ² ~ IG(shape a, scale b), the prior the conjugate schemes give τ² and the anisotropic schemes' default:
 /// <c>ln q(ρ) = −aρ − b e^(−ρ)</c>. With small a and b it is nearly flat in ln τ² over a wide range, and its upper tail
 /// in ρ decays only like <c>e^(−aρ)</c>, so the likelihood alone bounds large smoothing variances.
 /// </summary>
-public sealed record InverseGammaVariancePrior : ISmoothingVariancePrior
+public sealed record InverseGammaVariancePrior : ISmoothingVariancePrior, ISmoothingVariancePriorChoice
 {
     public InverseGammaVariancePrior(double shape = 1e-3, double scale = 1e-3)
     {
@@ -36,6 +61,8 @@ public sealed record InverseGammaVariancePrior : ISmoothingVariancePrior
 
     /// <summary>Scale b.</summary>
     public double Scale { get; }
+
+    public ISmoothingVariancePrior Resolve(double[,] design, IAnisotropicPenalty penalty, double[] response) => this;
 
     public double LogDensityOfLog(double rho, out double first, out double second)
     {
@@ -59,7 +86,7 @@ public sealed record InverseGammaVariancePrior : ISmoothingVariancePrior
 /// exponential τ, θ² = 1/s.
 /// </para>
 /// </summary>
-public sealed record WeibullVariancePrior : ISmoothingVariancePrior
+public sealed record WeibullVariancePrior : ISmoothingVariancePrior, ISmoothingVariancePriorChoice
 {
     private readonly double _logScale;
 
@@ -80,6 +107,8 @@ public sealed record WeibullVariancePrior : ISmoothingVariancePrior
 
     /// <summary>The rate 1/s: Bach &amp; Klein's λ.</summary>
     public double Rate => 1.0 / Scale;
+
+    public ISmoothingVariancePrior Resolve(double[,] design, IAnisotropicPenalty penalty, double[] response) => this;
 
     public double LogDensityOfLog(double rho, out double first, out double second)
     {
