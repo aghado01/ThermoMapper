@@ -172,11 +172,12 @@ public sealed class HierarchicalPSpline
 {
     private readonly double[,] _z;
     private readonly double[][] _responses;
-    private readonly DifferencePenalty _penalty;
+    private readonly IBandPenalty _penalty;
     private readonly BandedDesign _design;
     private readonly int _n;
     private readonly int _nu;
-    private readonly int _r;          // penalty null-space dim
+    private readonly int _r;          // the penalty's null-space dimension
+    private readonly int _penaltyBw;  // the penalty's half-bandwidth
     private readonly int _gramBw;
     private readonly double _a0;
     private readonly double _b0;
@@ -193,13 +194,14 @@ public sealed class HierarchicalPSpline
 
     /// <param name="design">The banded design Z shared by every replicate (n × ν).</param>
     /// <param name="responses">The replicates' responses, each of length n.</param>
-    /// <param name="penalty">The difference penalty on the population curve.</param>
+    /// <param name="penalty">The roughness penalty on the population curve: a difference penalty, or any banded
+    /// penalty such as the tensor penalty of a surface.</param>
     /// <param name="priorShape">The inverse-gamma prior's shape on each variance (σ², τ_0², and τ_u² unless
     /// <paramref name="deviationPrior"/> is set).</param>
     /// <param name="priorScale">The inverse-gamma prior's scale on each variance, as <paramref name="priorShape"/>.</param>
     /// <param name="deviationPrior">A half-t prior on τ_u in place of the inverse-gamma prior on τ_u²; null (the
     /// default) keeps the inverse-gamma prior.</param>
-    public HierarchicalPSpline(double[,] design, double[][] responses, DifferencePenalty penalty,
+    public HierarchicalPSpline(double[,] design, double[][] responses, IBandPenalty penalty,
                                double priorShape = 1e-3, double priorScale = 1e-3, HalfTDeviationPrior? deviationPrior = null)
     {
         ArgumentNullException.ThrowIfNull(design);
@@ -212,7 +214,8 @@ public sealed class HierarchicalPSpline
         _design = new BandedDesign(design);
         _n = _design.Rows;
         _nu = _design.Dimension;
-        _r = penalty.Order;
+        _r = penalty.Nullity;
+        _penaltyBw = penalty.Bandwidth;
         _gramBw = _design.Bandwidth;
         foreach (double[] y in responses)
             if (y.Length != _n) throw new ArgumentException("Every replicate must match the design row count.", nameof(responses));
@@ -242,10 +245,10 @@ public sealed class HierarchicalPSpline
         for (int k = 0; k < _nu; k++)
             foreach (double[] zty in _zty)
                 for (int j = 0; j < _nu; j++) _sumZtyInEigenbasis[k] += _gramVectors[k][j] * zty[j];
-        var penaltyBand = new double[_r + 1, _nu];
+        var penaltyBand = new double[_penaltyBw + 1, _nu];
         penalty.AccumulateInto(penaltyBand, _nu, 1.0);
         _penaltyDense = new double[_nu, _nu];
-        for (int d = 0; d <= _r; d++)
+        for (int d = 0; d <= _penaltyBw; d++)
             for (int j = 0; j + d < _nu; j++) { _penaltyDense[j + d, j] = penaltyBand[d, j]; _penaltyDense[j, j + d] = penaltyBand[d, j]; }
 
         if (deviationPrior is not null)
@@ -364,6 +367,7 @@ public sealed class HierarchicalPSpline
     /// ZᵀZ = V diag(λ) Vᵀ the marginal's log-determinant is n·ln σ² + Σ ln(1 + τ_u²λ_k/σ²) and its quadratic
     /// (‖e‖² − Σ (v_kᵀZᵀe)²/(σ²/τ_u² + λ_k))/σ² for e = y_r − Zβ_0.
     /// </summary>
+    /// <param name="result">A run of this model, whose retained draws are scored.</param>
     /// <param name="units">The partition of the R·n observations; null takes each observation as its own unit, and
     /// <see cref="UnitPartition.ConsecutiveBlocks"/>(R, n) takes each curve as one.</param>
     public PointwiseLogDensity PointwiseLogDensity(HierarchicalResult result, UnitPartition? units = null)
@@ -501,7 +505,7 @@ public sealed class HierarchicalPSpline
             get
             {
                 var f = new RunFingerprint().Add("HierarchicalPSpline").Add(owner._n).Add(owner._nu).Add(owner._r)
-                                            .Add(owner._responses.Length);
+                                            .Add(owner._penaltyBw).Add(owner._penalty.GetType().FullName!).Add(owner._responses.Length);
                 foreach (double v in owner._z) f.Add(v);
                 foreach (double[] y in owner._responses) f.Add(y);
                 f.Add(owner._a0).Add(owner._b0).Add(owner._halfT is null ? 0 : 1).Add(owner._halfT?.Degrees ?? 0.0)
@@ -729,8 +733,8 @@ public sealed class HierarchicalPSpline
     // null space.
     private sealed class PopulationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
     {
-        private readonly double[,] _band = new double[owner._r + 1, owner._nu];
-        private readonly BandCholesky _factor = new(owner._nu, owner._r, BandFactorization.Ldlt);
+        private readonly double[,] _band = new double[owner._penaltyBw + 1, owner._nu];
+        private readonly BandCholesky _factor = new(owner._nu, owner._penaltyBw, BandFactorization.Ldlt);
         private readonly double[] _rhs = new double[owner._nu];
         private readonly GaussianConditional _gaussian = new(owner._nu);
 
@@ -925,9 +929,8 @@ public sealed class HierarchicalPSpline
     // R·ZᵀZ/σ² + P/τ_0², banded, and the linear term Σ_r (Zᵀy_r − ξZᵀZη_r)/σ².
     private sealed class ExpandedPopulationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
     {
-        private readonly int _bandwidth = Math.Max(owner._gramBw, owner._r);
-        private readonly double[,] _band = new double[Math.Max(owner._gramBw, owner._r) + 1, owner._nu];
-        private readonly BandCholesky _factor = new(owner._nu, Math.Max(owner._gramBw, owner._r), BandFactorization.Ldlt);
+        private readonly double[,] _band = new double[Math.Max(owner._gramBw, owner._penaltyBw) + 1, owner._nu];
+        private readonly BandCholesky _factor = new(owner._nu, Math.Max(owner._gramBw, owner._penaltyBw), BandFactorization.Ldlt);
         private readonly double[] _rhs = new double[owner._nu];
         private readonly GaussianConditional _gaussian = new(owner._nu);
 

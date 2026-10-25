@@ -12,7 +12,7 @@ namespace Maths.Regression.Spline.Baps;
 /// solve (the Reinsch system). Λ is a per-difference weight: uniform Λ = λI is global smoothing, a varying Λ is the
 /// locally-adaptive penalty.
 /// </summary>
-public sealed class DifferencePenalty : IBandPenalty
+public sealed class DifferencePenalty : ILocallyAdaptivePenalty
 {
     // Difference-operator row coefficients c_l = (−1)^l · C(r, l), l = 0..r (row i couples columns i..i+r).
     private readonly double[] _c;
@@ -100,6 +100,23 @@ public sealed class DifferencePenalty : IBandPenalty
         {
             double d = 0.0;
             for (int l = 0; l <= Order; l++) d += _c[l] * beta[i + l];   // (Δ^r β)_i
+            sum += d * d;
+        }
+        return sum;
+    }
+
+    /// <summary>
+    /// The roughness of the <paramref name="count"/> coefficients at flattened positions <c>offset + i·stride</c>,
+    /// the quadratic matching <see cref="AccumulateStrided"/> at λ = 1.
+    /// </summary>
+    public double RoughnessStrided(double[] beta, int count, int stride, int offset)
+    {
+        ArgumentNullException.ThrowIfNull(beta);
+        double sum = 0.0;
+        for (int i = 0; i + Order < count; i++)
+        {
+            double d = 0.0;
+            for (int l = 0; l <= Order; l++) d += _c[l] * beta[offset + (i + l) * stride];
             sum += d * d;
         }
         return sum;

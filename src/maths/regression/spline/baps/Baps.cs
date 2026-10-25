@@ -129,13 +129,14 @@ public sealed class Baps
 {
     private readonly double[,] _z;
     private readonly double[] _y;
-    private readonly DifferencePenalty _penalty;
+    private readonly IBandPenalty _penalty;
     private readonly BandedDesign _design;
     private readonly PenalizedSpline _model;
     private readonly int _n;
     private readonly int _nu;
     private readonly int _bw;
-    private readonly int _r;
+    private readonly int _nullity;     // the penalty's null-space dimension r: the unpenalized directions
+    private readonly int _localTerms;  // the locally adaptive penalty's local terms (0 for a penalty without them)
     private readonly double[,] _gram0;   // ZᵀZ band — constant across draws
     private readonly double[] _zty;      // Zᵀy — constant
     private readonly double _priorShape; // inverse-gamma hyperprior on each variance component
@@ -143,7 +144,7 @@ public sealed class Baps
     private readonly double _mhLogStep;  // Metropolis log-λ proposal sd (the collapsed scheme)
     private readonly double _phi;        // adaptivity: η_i ~ Gamma(φ, φ); φ→∞ recovers global smoothing
 
-    public Baps(double[,] design, double[] y, DifferencePenalty penalty,
+    public Baps(double[,] design, double[] y, IBandPenalty penalty,
                        double priorShape = 1e-3, double priorScale = 1e-3, double mhLogStep = 0.6, double phi = 1.0)
     {
         ArgumentNullException.ThrowIfNull(design);
@@ -156,10 +157,11 @@ public sealed class Baps
         _model = new PenalizedSpline(design, y, penalty);
         _n = _design.Rows;
         _nu = _design.Dimension;
-        _r = penalty.Order;
+        _nullity = penalty.Nullity;
         if (y.Length != _n)
             throw new ArgumentException("Response length must match the design row count.", nameof(y));
-        _bw = Math.Max(_design.Bandwidth, penalty.Order);
+        _bw = Math.Max(_design.Bandwidth, penalty.Bandwidth);
+        _localTerms = penalty is ILocallyAdaptivePenalty local ? local.DifferenceCount(_nu) : 0;
         _gram0 = new double[_bw + 1, _nu];
         _zty = new double[_nu];
         _design.Accumulate(null, _gram0, y, _zty);   // ZᵀZ and Zᵀy, once
@@ -191,6 +193,9 @@ public sealed class Baps
         if (samples < 2 || burn < 0) throw new ArgumentOutOfRangeException(nameof(samples));
         if (scheme is not (BapsScheme.Gibbs or BapsScheme.Collapsed or BapsScheme.LocallyAdaptiveGibbs))
             throw new ArgumentOutOfRangeException(nameof(scheme));
+        if (scheme == BapsScheme.LocallyAdaptiveGibbs && _penalty is not ILocallyAdaptivePenalty)
+            throw new ArgumentException(
+                $"The locally adaptive scheme reweights local penalty terms; {_penalty.GetType().Name} is not an ILocallyAdaptivePenalty.", nameof(scheme));
 
         // The shell gives each chain a kernel stream and a readout stream. Only the collapsed scheme's conditional draws
         // use the readout stream, so the λ chain does not depend on them.
@@ -205,7 +210,7 @@ public sealed class Baps
         var coef = new double[_nu];
         double sigSum = 0.0;
         var allLam = new double[(int)total];
-        int nLoc = _nu - _r;
+        int nLoc = _localTerms;
         double[]? localField = scheme == BapsScheme.LocallyAdaptiveGibbs && nLoc > 0 ? new double[nLoc] : null;
         var posteriorDraws = new IReadOnlyList<BapsDraw>[chains];
         int idx = 0;
@@ -269,7 +274,8 @@ public sealed class Baps
         {
             get
             {
-                var f = new RunFingerprint().Add("BAPS").Add((int)scheme).Add(owner._n).Add(owner._nu).Add(owner._r);
+                var f = new RunFingerprint().Add("BAPS").Add((int)scheme).Add(owner._n).Add(owner._nu).Add(owner._nullity)
+                                            .Add(owner._penalty.Bandwidth).Add(owner._penalty.GetType().FullName!);
                 foreach (double v in owner._z) f.Add(v);
                 return f.Add(owner._y).Add(owner._priorShape).Add(owner._priorScale).Add(owner._mhLogStep)
                         .Add(owner._phi).ToString();
@@ -328,7 +334,7 @@ public sealed class Baps
 
             double lambda = Math.Exp(state.LogLambda);
             (double[] betaHat, double rssPen, BandCholesky factor) = owner._model.SolveFactored(lambda);
-            double sigma2 = ConjugateUpdates.NormalVariance(0.0, 0.0, owner._n - owner._r, rssPen).Sample(readout);
+            double sigma2 = ConjugateUpdates.NormalVariance(0.0, 0.0, owner._n - owner._nullity, rssPen).Sample(readout);
             var beta = new double[owner._nu];
             _gaussian.Perturb(factor, betaHat, readout, beta, Math.Sqrt(sigma2));   // v ~ N(0, A⁻¹), scaled by σ
             return new BapsDraw(beta, betaHat, lambda, sigma2, sigma2 / lambda, null);
@@ -348,7 +354,7 @@ public sealed class Baps
         // β at 0, σ² = τ² = 1, η at 1 (unadapted, the global smoothing), and log λ = 0.
         public static BapsState Start(Baps owner, BapsScheme scheme)
         {
-            int nLoc = owner._nu - owner._r;
+            int nLoc = owner._localTerms;
             var state = new BapsState { Beta = new double[owner._nu], Eta = new double[nLoc], SquaredDifferences = new double[nLoc] };
             Array.Fill(state.Eta, 1.0);
             if (scheme == BapsScheme.Collapsed) state.Evidence = owner.MarginalLogTarget(1.0);
@@ -380,7 +386,7 @@ public sealed class Baps
     {
         private readonly double[,] _band = new double[owner._bw + 1, owner._nu];
         private readonly BandCholesky _factor = new(owner._nu, owner._bw, BandFactorization.Ldlt);
-        private readonly double[] _weights = new double[owner._nu - owner._r];   // λ_i = (σ²/τ²)·η_i
+        private readonly double[] _weights = new double[owner._localTerms];   // λ_i = (σ²/τ²)·η_i
         private readonly GaussianConditional _gaussian = new(owner._nu);
 
         public string Name => "coefficients";
@@ -393,7 +399,7 @@ public sealed class Baps
             if (adaptive)
             {
                 for (int i = 0; i < _weights.Length; i++) _weights[i] = lambda * state.Eta[i];
-                owner._penalty.AccumulateInto(_band, nu, _weights);
+                ((ILocallyAdaptivePenalty)owner._penalty).AccumulateInto(_band, nu, _weights);
                 _factor.DecomposeBanded(_band);
                 if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
                     throw new InvalidOperationException($"ZᵀZ + Dᵀdiag(λᵢ)D is not numerically positive definite at global λ = {lambda} ({_factor.Status}).");
@@ -432,11 +438,11 @@ public sealed class Baps
         {
             if (!adaptive)
             {
-                state.Tau2 = ConjugateUpdates.NormalVariance(owner._priorShape, owner._priorScale, owner._nu - owner._r,
+                state.Tau2 = ConjugateUpdates.NormalVariance(owner._priorShape, owner._priorScale, owner._nu - owner._nullity,
                                                              owner._penalty.Roughness(state.Beta)).Sample(rng);
                 return true;
             }
-            owner._penalty.SquaredDifferencesInto(state.Beta, state.SquaredDifferences);   // (Δ^rβ)_i²
+            ((ILocallyAdaptivePenalty)owner._penalty).SquaredDifferencesInto(state.Beta, state.SquaredDifferences);   // (Δ^rβ)_i²
             double weightedRough = 0.0;
             for (int i = 0; i < state.Eta.Length; i++) weightedRough += state.Eta[i] * state.SquaredDifferences[i];
             state.Tau2 = ConjugateUpdates.NormalVariance(owner._priorShape, owner._priorScale, state.Eta.Length, weightedRough)

@@ -53,4 +53,16 @@ public sealed class TensorPenalty : IBandPenalty
         for (int k = 0; k < _nuY; k++)                             // D_xᵀD_x ⊗ I_y — across blocks at stride ν_y
             _px.AccumulateStrided(band, _nuX, stride: _nuY, offset: k, lambda);
     }
+
+    /// <summary><c>βᵀ(D_xᵀD_x ⊗ I_y + I_x ⊗ D_yᵀD_y)β</c>: each x-block's y-roughness plus each y-column's x-roughness.</summary>
+    public double Roughness(double[] beta)
+    {
+        ArgumentNullException.ThrowIfNull(beta);
+        if (beta.Length != _nuX * _nuY)
+            throw new ArgumentException($"beta must have nuX·nuY = {_nuX * _nuY} entries.", nameof(beta));
+        double sum = 0.0;
+        for (int j = 0; j < _nuX; j++) sum += _py.RoughnessStrided(beta, _nuY, stride: 1, offset: j * _nuY);
+        for (int k = 0; k < _nuY; k++) sum += _px.RoughnessStrided(beta, _nuX, stride: _nuY, offset: k);
+        return sum;
+    }
 }
