@@ -995,3 +995,39 @@ budget):
 - **The support gate doesn't bind** at these spacings: at 0.5 or 0.25 the errors are unchanged.
 
 This is one pre-scored pass on two datasets: exploration, not a basis for defaults.
+
+### 12.19 The stopping rule as it stands (a synthesis; nothing decided)
+
+**What survived from the original threads.**
+- **Thermal intervals stayed, with a different observable.** The rule still works interval by interval on the
+  temperature grid, from endpoint means only. The size-blind energy quantity (D_J, the thermodynamic length bound) gave
+  way to pair connectivity S₂, which is monotone and weights events by size (§12.3–12.4).
+- **Fisher zeros stayed as explanation and budget, not as a test.** They explain why refinement converges and set the
+  switch widths behind Thread I's a priori count. They can't be estimated from real-axis data in time to stop on (C7).
+  E1 showed the rigid-split widths they imply don't bound melts or background-mediated splits.
+
+**Before volley 0.**
+- Set the bracket so the window holds every significant event. Check its cold edge against the spanning tree's
+  closed-form S₂ lower bound (C23), and against the graph's pre-repair components (C19).
+- Take a minimum volley count from the narrowest feature that matters, planned on the worst lattice phase (C27).
+
+**After each volley.**
+1. **Certify (§12.17).** Classify every interval as quiet, active or open by its drop in S₂ against the size floor,
+   spending α over the levels.
+   - Quiet passes down the tree: nothing of significant size can hide inside a quiet interval.
+   - Active runs are events, each localized at the narrowest interval that still clears the floor.
+   - An open interval needs more replicates there, not more volleys.
+2. **Read (§12.15–12.16).** BARS on the detection curve (MagnetizationVariance) for the giant's transitions, and
+   FkReduced or S₂ for spans and cliffs. Plateaus come out as the certified-quiet runs between active blocks.
+3. **Stop when all of these hold:**
+   - every interval is quiet, or lies inside an active block localized within the regime-B window;
+   - no open interval remains, after adding replicates where the test asks for them;
+   - every active block contains something the readout registered: a peak, a plateau edge or a cliff;
+   - one afterburn volley has run past the last registration (§12.12).
+
+**What a stop certifies.** No merge of two clusters at or above the size floor hides in any quiet interval, with a
+family-wise error at most α at whichever volley the rule stops. It does not certify every χ bump: lifetime peaks sit on
+quiet plateaus by construction, and melts of fragments below the floor go unflagged.
+
+**What sits beside the rule.** The two-quiet-volleys surprise rule stays as a soft check, since it stopped once too
+early (C12). The engine side (OQ7, OQ8) stays parked with the readout design.
