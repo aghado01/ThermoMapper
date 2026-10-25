@@ -1143,6 +1143,49 @@ Final assignments come from tracing clusters across temperatures, and the tree a
   - A lifetime in ln T, or in thermodynamic length, is a property of the lineage rather than of the sampling, and would
     keep persistence comparable across a sparse-plus-dense schedule.
 
+### 12.22 The T-stack resolvers on iris at K = 5
+
+**The run.**
+- **The sweep.** One rich sweep (co-membership and the cluster-size landscape) on 129 log-spaced temperatures from 0.005
+  to 0.3, with 8 replicas × 2,000 cycles.
+- **The resolvers.** `HierarchyEom` (θ = ½, minimum cluster 5) and `LineagePersistence` (θ = ½, minimum 5, no window),
+  each run on subsamples of that same sweep.
+- **Species counts** are written setosa/versicolor/virginica.
+
+| Grid design (levels) | `HierarchyEom` clusters | Unassigned | `LineagePersistence` selection |
+|---|---|---|---|
+| Uniform (129, 65 or 33) | 92 [0/46/46], 49 [49/0/0] | 9 | the merged 87–74 [0/43/44], two 5-point setosa remnants |
+| Dense in [0.04, 0.08], sparse outside (49) | 92, 49 | 9 | merged 74, a 5-point virginica core, setosa remnants |
+| Sparse in [0.04, 0.08], dense outside (113) | 92, 49 | 9 | as uniform |
+| Cold edge at 0.0129, the parity bracket's (99) | 88 [0/44/44], 48 [48/0/0] | 14 | as uniform |
+| Cold edge at 0.025 (78) | 48 [48/0/0], 37 [0/37/0], 21 [0/0/21], 14 [0/3/11], 5 [0/0/5] | 25 | one 5-point setosa lineage (145 unassigned) |
+| Cold edge at 0.035 (68) | 37, 21, 14, 13, 9, 5, 5 (setosa in pieces) | 46 | one 5-point setosa lineage |
+
+- **Neither resolver selects the species on its own.** Persistence and excess of mass both favour the long-lived coarse
+  stage.
+  - The merged versicolor-plus-virginica cluster lives about 2.2 e-folds on this grid, and in truth back to setosa's
+    split near 2×10⁻⁶. Its species children live 0.45–0.65 e-folds: the versicolor core (31–33 points) about 0.45–0.48,
+    the virginica core (15–17) about 0.5–0.65.
+  - The species lineages are all in `LineagePersistence`'s list but never selected.
+- **The grid's cold edge, a bracket choice, decides `HierarchyEom`'s answer.** Starting the grid at 0.025 cuts most of
+  the merged cluster's cold levels. Its children then win on excess of mass: 48/37/21 with 25 unassigned, close to BWD
+  1996's 125 correct and 25 unclassified. Starting at 0.035 cuts into setosa's own stable stage, and setosa fragments.
+- **Density inside the window moves `LineagePersistence`'s ranking.** Densifying [0.04, 0.08] lifts the species
+  lineages' scores (the versicolor core from 3.8 at 4 levels to 15.2 at 16) and changes the selection. Their ln-spans
+  stay put across every design (versicolor 0.45–0.48, merged 2.18–2.24).
+  - Scoring in levels makes the final clustering a function of the sampling design, both its density and its extent.
+    Lifetimes in ln T are design-invariant, as §12.21 expected.
+- **`LineagePersistence` is fragile off its tested grid.** With the cold edge at 0.025 or 0.035 it selects a single
+  5-point lineage and leaves 145 points unassigned. It also represents setosa by a 5-point remnant: its representative
+  is the lineage's least-decided, most eroded level. The parity test passes on its own grid and window.
+- **What it means for the final assignment.** On iris, persistence picks the coarse stage: two clusters, the species
+  merged. The species are a short-lived refinement of it.
+  - Reporting three species means choosing a level, say a leaf-style selection, or a scale of interest. That is a
+    modelling choice, not something a stability criterion settles. Here it was the bracket that made the choice,
+    silently.
+  - Design-invariant lifetimes would make that choice explicit, but they wouldn't make it for you. In ln T the merged
+    cluster outlives its children by far.
+
 **The kernel's shape can't help here** (a static check on the K = 10 edge lengths, kernels matched in scale):
 - A cut edge is longer than a virginica edge 51% of the time, and longer than a versicolor edge 70% of the time.
 - A kernel is a monotone map from distance to coupling, so it can only reweight by length. The cut's share of coupling
