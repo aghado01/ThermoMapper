@@ -251,6 +251,9 @@ entropy) suit it better.
 | C17 | Pair connectivities, so S₂, are monotone in β; ΔS₂ bounds every merge inside an interval | Argon notes (seed); §12.4 | Checked here (Grimmett 3.21; enumeration; parity dump) | Lean (L4) |
 | C18 | Superadditive cluster functionals are monotone; F_n counts significant merges | §12.4 | Checked here (proof; enumeration) | Lean (L4) |
 | C19 | S₂ at the bracket ends bounds the merge mass outside the bracket | §12.5 | Checked here (a corollary of C17); usefulness open | E5, against the graph's components |
+| C20 | S₂ bounds FkReduced: inside an interval, sup \|Δχ_red\| ≤ N·ΔS₂ | §12.7 | Checked here (proof; enumeration) | Lean (L4) |
+| C21 | No monotone cluster functional ignores shedding: merge(n, n) ≤ n·max join(a) over a ∈ [n, 2n) | §12.7 | Checked here (proof) | none needed |
+| C22 | The toy dump's bracket clips its cold edge | User observation; §12.7 | Suspected (S₂ agrees) | Per-edge cut temperatures on the toy graph; size histogram at T_lo |
 
 ---
 
@@ -449,3 +452,48 @@ Edwards–Sokal two-point identity).
   - Its mean is then monotone in β, either by the comparison inequality or by
     d/dβ φ(f) = Σ_e p_e′·Cov(f, ω_e)/(p_e(1 − p_e)) ≥ 0 under positive association.
   - It shares its one axiom with the potts-griffiths chain.
+
+### 12.7 Continued: the toy's bracket, sufficiency, and weighting
+
+- **The toy dump is suspect** (C22). The user saw the toy's cold edge still rising across several observables, and
+  suspects the bracket, possibly through the graph compiler.
+  - S₂ agrees that the edge is clipped. The toy's FK structure sits in the cold 1.5 e-folds of a 4.4 e-fold window:
+    S₂ ≈ 1/N by T ≈ 0.1, both FkReduced peaks lie within 0.75 e-folds of T_lo, and S₂ falls 0.17 in the first grid step.
+    Iris, by comparison, has its events mid-window.
+  - Until the bracket is checked, the toy numbers in 12.4 and 12.5 are illustrations, not evidence.
+- **Two explanations, and they separate.**
+  - Either the couplings sit on a different scale from the one the q-only bracket assumes, which shifts every event
+    cold, or the residue's weak edges let single points detach across the cold edge.
+  - A clipped split is one large step in S₂; shedding is many small ones.
+  - The per-edge cut temperatures T*_e = J_e/ln(q − 1) on the toy graph, read against [T_lo, T_hi], separate them
+    without SW. So does the size histogram at T_lo: mostly singletons, or a second large cluster.
+- **S₂ witnesses FkReduced** (C20).
+  - Under a monotone coupling across an interval (Strassen, for the finite chain β₁ ≤ β ≤ β₂), clusters only merge.
+  - The largest cluster's square then grows by at most 1.5 times Σc²'s growth. The worst case is the largest piece
+    merging with an equal one.
+  - So Σc² − c_max² moves within [−½, 1] times Σc²'s growth, and inside the interval sup |Δχ_red| ≤ N·ΔS₂.
+  - FkCluster is S₂ itself. **Checked here:** enumeration on six random weighted graphs, worst ratio 0.44 against the
+    bound 1.
+- **The magnetization curves aren't witnessed this way.** N_max follows the colourings as well as the clusters. What it
+  shows beyond S₂ is colour fluctuation, including the documented cold-edge artefact of weakly coupled spins: fluctuation
+  without merging, which S₂ leaves unflagged.
+- **The weighting is a choice of currency, and the certificate holds for each.** Every superadditive g gives a monotone
+  ⟨Σ_k g(c_k)⟩ (C18):
+  - g = c² counts pairs: ΔS₂ is the fraction of point pairs disconnected, a Rand-index currency dominated by big
+    clusters;
+  - g = c ln c is the partition entropy, so the expected FK partition entropy is monotone in T (checked by enumeration).
+    It weights a merge by about the smaller side times 1 + ln(larger/smaller);
+  - g = (c − n)₊ is a thresholded count.
+  - On the toy (N = 3200), product weighting makes one residue point leaving a 2,500-point cluster outweigh a merge of two
+    30-point clusters, by about 3 to 1. The concern about product weighting is right for residue-heavy data.
+- **No monotone functional can ignore shedding** (C21).
+  - Telescoping g(2n) − g(n) over single-point joins gives merge(n, n) ≤ n·max over a ∈ [n, 2n) of join(a). So a
+    significant merge weighs at most about n shed points, whatever g is.
+  - On residue-heavy data, every certificate's per-interval total is swamped by shedding once an interval sheds more than
+    about n points.
+  - What tells a split from shedding is concentration: a split is a step about w_q wide, while shedding spreads over the
+    residue's cut temperatures. That is a question of shape across intervals, which is BARS's job, not of per-interval
+    totals.
+- **What is recorded today.** S₂ and ⟨c_max²⟩ exactly, through the FkCluster and FkReduced channels. The SW kernel's size
+  histogram is log-binned (cluster counts in bins [2^k, 2^(k+1))), so it bounds the other functionals without giving
+  them exactly.
