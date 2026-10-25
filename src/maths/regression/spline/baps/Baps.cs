@@ -249,8 +249,10 @@ public sealed class Baps
             localField);
     }
 
-    // log p(u | y) up to a constant on u = ln λ: the profiled evidence plus the uniform-edf prior density |d edf/du|.
-    private double MarginalLogTarget(double lambda) => _model.RemlLogEvidence(lambda) + Math.Log(_model.EdfSlope(lambda));
+    // log p(u | y) up to a constant on u = ln λ: the profiled evidence plus the uniform-edf prior density |d edf/du|, with
+    // the solve behind the evidence.
+    private double MarginalLogTarget(double lambda, out PenalizedSolve solve)
+        => _model.RemlLogEvidence(lambda, out solve) + Math.Log(_model.EdfSlope(lambda));
 
     /// <summary>
     /// The ensemble-shell client for one scheme: it starts and restores chains, fingerprints the run for checkpoints, and
@@ -325,7 +327,8 @@ public sealed class Baps
 
         // The draw at the end of the sweep. The collapsed scheme adds its exact conjugate draws given λ here, on the readout
         // stream: σ² | λ, y ~ IG((n − r)/2, RSS_pen/2) under the Jeffreys prior the evidence assumes, then
-        // β | σ², λ, y ~ N(β̂, σ²A⁻¹), with β̂(λ) kept for the Rao–Blackwellized coefficient mean.
+        // β | σ², λ, y ~ N(β̂, σ²A⁻¹), with β̂(λ) kept for the Rao–Blackwellized coefficient mean. Both read the solve the λ
+        // step left in the state, so a draw factors nothing.
         private BapsDraw Record(BapsState state)
         {
             if (scheme != BapsScheme.Collapsed)
@@ -333,7 +336,7 @@ public sealed class Baps
                                     scheme == BapsScheme.LocallyAdaptiveGibbs ? (double[])state.Eta.Clone() : null);
 
             double lambda = Math.Exp(state.LogLambda);
-            (double[] betaHat, double rssPen, BandCholesky factor) = owner._model.SolveFactored(lambda);
+            (double[] betaHat, double rssPen, BandCholesky factor) = state.Solve ?? owner._model.SolveFactored(lambda);
             double sigma2 = ConjugateUpdates.NormalVariance(0.0, 0.0, owner._n - owner._nullity, rssPen).Sample(readout);
             var beta = new double[owner._nu];
             _gaussian.Perturb(factor, betaHat, readout, beta, Math.Sqrt(sigma2));   // v ~ N(0, A⁻¹), scaled by σ
@@ -343,13 +346,14 @@ public sealed class Baps
 
     /// <summary>
     /// A BAPS chain's state: the coefficients β and the variances σ² and τ² (the Gibbs schemes), the local multipliers η
-    /// and the squared differences they weigh (the locally adaptive scheme), and log λ with its log target (the collapsed
-    /// scheme).
+    /// and the squared differences they weigh (the locally adaptive scheme), and log λ with its log target and the solve
+    /// behind it (the collapsed scheme). Nothing modifies a solve, so copies share it.
     /// </summary>
     private sealed class BapsState
     {
         public double[] Beta = null!, Eta = null!, SquaredDifferences = null!;
         public double Sigma2 = 1.0, Tau2 = 1.0, LogLambda, Evidence;
+        public PenalizedSolve? Solve;
 
         // β at 0, σ² = τ² = 1, η at 1 (unadapted, the global smoothing), and log λ = 0.
         public static BapsState Start(Baps owner, BapsScheme scheme)
@@ -357,14 +361,14 @@ public sealed class Baps
             int nLoc = owner._localTerms;
             var state = new BapsState { Beta = new double[owner._nu], Eta = new double[nLoc], SquaredDifferences = new double[nLoc] };
             Array.Fill(state.Eta, 1.0);
-            if (scheme == BapsScheme.Collapsed) state.Evidence = owner.MarginalLogTarget(1.0);
+            if (scheme == BapsScheme.Collapsed) state.Evidence = owner.MarginalLogTarget(1.0, out state.Solve);
             return state;
         }
 
         public BapsState Copy() => new()
         {
             Beta = (double[])Beta.Clone(), Eta = (double[])Eta.Clone(), SquaredDifferences = (double[])SquaredDifferences.Clone(),
-            Sigma2 = Sigma2, Tau2 = Tau2, LogLambda = LogLambda, Evidence = Evidence,
+            Sigma2 = Sigma2, Tau2 = Tau2, LogLambda = LogLambda, Evidence = Evidence, Solve = Solve,
         };
     }
 
@@ -466,15 +470,28 @@ public sealed class Baps
         }
     }
 
-    // Random-walk Metropolis on log λ against the REML evidence under the uniform-edf prior, β and σ² integrated out.
-    private sealed class LogLambdaBlock(Baps owner) : IBlock<BapsState>
+    // Random-walk Metropolis on log λ against the REML evidence under the uniform-edf prior, β and σ² integrated out. Each
+    // proposal's evaluation factors A once; an accepted proposal's solve moves into the state for the draw at that λ.
+    private sealed class LogLambdaBlock : IBlock<BapsState>
     {
-        private readonly Func<double, double> _target = u => owner.MarginalLogTarget(Math.Exp(u));
+        private readonly Baps _owner;
+        private readonly Func<double, double> _target;
+        private PenalizedSolve? _proposed;   // the last proposal's solve
+
+        public LogLambdaBlock(Baps owner)
+        {
+            _owner = owner;
+            _target = u => owner.MarginalLogTarget(Math.Exp(u), out _proposed);
+        }
 
         public string Name => "log λ (collapsed)";
 
         public bool Update(BapsState state, Xoshiro256PlusPlus rng)
-            => RandomWalkMetropolis.Step(ref state.LogLambda, ref state.Evidence, owner._mhLogStep, _target, rng);
+        {
+            if (!RandomWalkMetropolis.Step(ref state.LogLambda, ref state.Evidence, _owner._mhLogStep, _target, rng)) return false;
+            state.Solve = _proposed;
+            return true;
+        }
     }
 
     private double ResidualSS(double[] beta)

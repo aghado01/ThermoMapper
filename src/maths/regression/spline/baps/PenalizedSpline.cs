@@ -25,6 +25,8 @@ public sealed class PenalizedSpline
     private readonly int _nu;
     private readonly int _bw;
     private readonly double _yy;   // yᵀy
+    private readonly double[,] _gram;   // ZᵀZ band, accumulated once: every solve copies it
+    private readonly double[] _zty;     // Zᵀy
     private readonly Lazy<double[]> _spectrum;   // generalized eigenvalues μ_j of (P, ZᵀZ + P), for edf
 
     public PenalizedSpline(double[,] design, double[] y, IBandPenalty penalty)
@@ -40,6 +42,9 @@ public sealed class PenalizedSpline
         if (y.Length != _n)
             throw new ArgumentException("Response length must match the design row count.", nameof(y));
         _bw = Math.Max(_design.Bandwidth, penalty.Bandwidth);
+        _gram = new double[_bw + 1, _nu];
+        _zty = new double[_nu];
+        _design.Accumulate(null, _gram, y, _zty);
         double yy = 0.0;
         for (int i = 0; i < _n; i++) yy += y[i] * y[i];
         _yy = yy;
@@ -55,27 +60,25 @@ public sealed class PenalizedSpline
     // (β̂, penalized RSS, log|A|) at smoothing λ; A = ZᵀZ + λP factored once and shared by every read-out.
     private (double[] beta, double rssPen, double logDetA) Solve(double lambda)
     {
-        (double[] beta, double rssPen, BandCholesky factor) = SolveFactored(lambda);
-        return (beta, rssPen, factor.LogDet);
+        PenalizedSolve solve = SolveFactored(lambda);
+        return (solve.Beta, solve.RssPen, solve.Factor.LogDet);
     }
 
     /// <summary>β̂(λ) = A⁻¹Zᵀy, RSS_pen(λ) = yᵀy − β̂ᵀZᵀy and the factor of A = ZᵀZ + λP — what an exact conditional draw
     /// of (σ², β) given λ needs.</summary>
-    internal (double[] Beta, double RssPen, BandCholesky Factor) SolveFactored(double lambda)
+    internal PenalizedSolve SolveFactored(double lambda)
     {
-        var band = new double[_bw + 1, _nu];
-        var b = new double[_nu];
-        _design.Accumulate(null, band, _y, b);       // ZᵀZ (band) and Zᵀy
-        _penalty.AccumulateInto(band, _nu, lambda);   // + λ·DᵀD
+        var band = (double[,])_gram.Clone();          // ZᵀZ
+        _penalty.AccumulateInto(band, _nu, lambda);   // + λP
         var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
         chol.DecomposeBanded(band);
         if (chol.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
             throw new InvalidOperationException($"ZᵀZ + λP is not numerically positive definite at λ = {lambda} ({chol.Status}).");
-        double[] beta = chol.Solve(b);
+        double[] beta = chol.Solve(_zty);
 
         double bBeta = 0.0;                            // RSS_pen = yᵀy − β̂ᵀZᵀy
-        for (int p = 0; p < _nu; p++) bBeta += b[p] * beta[p];
-        return (beta, _yy - bBeta, chol);
+        for (int p = 0; p < _nu; p++) bBeta += _zty[p] * beta[p];
+        return new PenalizedSolve(beta, _yy - bBeta, chol);
     }
 
     /// <summary>Posterior-mean (penalized) coefficients <c>β̂(λ) = (ZᵀZ + λP)⁻¹ Zᵀy</c> — the Reinsch solve.</summary>
@@ -90,12 +93,15 @@ public sealed class PenalizedSpline
     /// that selects the smoothing — its interior maximum is the REML-optimal λ, and it is the target for the
     /// marginal-evidence λ sampler.
     /// </summary>
-    public double RemlLogEvidence(double lambda)
+    public double RemlLogEvidence(double lambda) => RemlLogEvidence(lambda, out _);
+
+    // The evidence and the solve behind it, which the collapsed sampler keeps for the accepted λ's conditional draw.
+    internal double RemlLogEvidence(double lambda, out PenalizedSolve solve)
     {
         if (!(lambda > 0.0)) throw new ArgumentOutOfRangeException(nameof(lambda), "Smoothing λ must be positive.");
-        var (_, rssPen, logDetA) = Solve(lambda);
+        solve = SolveFactored(lambda);
         int r = _penalty.Nullity;
-        double minusTwoEll = (_n - r) * Math.Log(rssPen) - (_nu - r) * Math.Log(lambda) + logDetA;
+        double minusTwoEll = (_n - r) * Math.Log(solve.RssPen) - (_nu - r) * Math.Log(lambda) + solve.Factor.LogDet;
         return -0.5 * minusTwoEll;
     }
 
@@ -134,8 +140,7 @@ public sealed class PenalizedSpline
     // smallest belong to the penalty null space and are set to exactly zero.
     private double[] PenaltySpectrum()
     {
-        var band = new double[_bw + 1, _nu];
-        _design.Accumulate(null, band, null, null);   // ZᵀZ
+        var band = (double[,])_gram.Clone();          // ZᵀZ
         _penalty.AccumulateInto(band, _nu, 1.0);      // + P
         var chol = new BandCholesky(_nu, _bw, BandFactorization.Ldlt);
         chol.DecomposeBanded(band);
@@ -191,3 +196,6 @@ public sealed class PenalizedSpline
         return mu;
     }
 }
+
+/// <summary>A penalized solve at one λ: β̂(λ), the penalized residual sum of squares and the factor of A = ZᵀZ + λP.</summary>
+internal sealed record PenalizedSolve(double[] Beta, double RssPen, BandCholesky Factor);
