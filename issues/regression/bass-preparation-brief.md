@@ -457,7 +457,7 @@ Added 2026-10-19. [gemini-additional-bugs.md](gemini-additional-bugs.md) compare
 | ESS computes every lag, O(Cn²) | Confirmed | Step 3.4 |
 | Acceptance rates include burn-in | Confirmed and already documented | Step 3.4 |
 | BGP fits a zero-mean GP to the raw response | Confirmed: `GpRegression.Fit` uses the response as given | The chip, item 2 (the R10 transform policy) |
-| BAPS items: single-chain hierarchical sampler, `IBandPenalty` seam, no anisotropic λ optimizer, repeated factorization in `MarginalEvidence` | The first and third already documented | The chip brief's addendum |
+| BAPS items: single-chain hierarchical sampler, `IBandPenalty` seam, no anisotropic λ optimizer, repeated factorization in `MarginalEvidence` | The first and third already documented | The chip brief's addendum. The hierarchical sampler moved to the shell in OQ18 phase B; the seam was built 2026-10-24 (report "BARS's shared fit and the penalty seam") |
 | `SplineExtrema` switches root finders above degree 3 | Documented design, not a defect | No action |
 | `SpectralNoiseField` is not periodic over the box | Already documented | No action |
 | `ExactChangepoint`: σ² documentation mismatch, Cauchy quadrature cost and truncation | Checked 2026-10-24: the σ² formula was already documented right; the truncation bites only under a narrow user prior; the quadrature also failed to resolve narrow posteriors, which the review did not name | Fixed in `3e29261` and `9617747` (report "ExactChangepoint review and retained posterior") |
@@ -2496,7 +2496,7 @@ At the user's request: retain each BARS draw's knots, β, σ² and weights, with
 - **Measured.** σ² on n = 200 points at σ = 0.1: median 0.0092, 95% interval [0.0076, 0.0113] against 0.01 (4 chains × 500 draws).
 - **Cost.** About (2k + 4) numbers per draw for a cubic spline with k knots, plus n per weight update.
 - **What it enables.** OQ17's retained-parameters option (a plain likelihood per draw), quantile bands and new nonlinear readouts without a rerun, and per-draw σ² for the noise-model calibration check.
-- **Noticed, not changed.** Each draw refits the knots' g-prior block three times: for the conditional mean, the conditional variance and the joint draw. One conditional per draw would serve all three; it is an efficiency item, not a correctness one.
+- **Noticed, not changed.** Each draw refits the knots' g-prior block three times: for the conditional mean, the conditional variance and the joint draw. One conditional per draw would serve all three; it is an efficiency item, not a correctness one. Done in `895e77a` (report "BARS's shared fit and the penalty seam").
 
 **Results** under the fact harness: `Maths.Regression.Tests` 301 of 301 (`20261024_015633005`). The solution builds.
 
@@ -2718,3 +2718,28 @@ At the user's request, the last two items before BASS: the stale baseline line i
 **Results** under the fact harness: `Maths.Regression.Tests` 344 of 344 (`20261024_162722104`), `Maths.Samplers.Tests` 96 of 96 (`20261024_163332636`). The solution builds.
 
 **With this, the preparation pass is complete.** The next step is BASS stage 1: the statistical specification and the decision register (D01–D04 and D06 first), with a fresh baseline rerun before its first integration tests.
+
+### BARS's shared fit and the penalty seam — 2026-10-24
+
+At the user's request, two loose ends from the reports, before the user's own design pass ahead of BASS.
+
+| Commit | Change |
+|---|---|
+| `895e77a` | `IObservationModel.FitConditional` → `IConditionalFit`: BARS's readout fits each draw's knot configuration once, for the conditional mean, the conditional variance and the joint draw |
+| `7ece987` | `Baps` and `HierarchicalPSpline` take any `IBandPenalty`; `ILocallyAdaptivePenalty` for the locally adaptive scheme; `IBandPenalty.Roughness` |
+
+- **The shared fit.**
+  - **What it replaces.** The readout fitted each draw's configuration three times, once each for the conditional mean, the conditional variance and the joint draw (noticed in report "BARS: draw state retained").
+  - **Models.** The interface's default calls the three methods separately, so a new model needs nothing. Normal, Poisson and Whittle override it; Poisson builds its Laplace factor lazily. Gibbs loss returns its mean alone.
+  - **Bit-identity.** A probe matched the previous code byte for byte across eight setups: plain, robust, adaptive τ, tempered, the step basis, Poisson, Whittle and Gibbs loss.
+  - **Speed.** Single-chain wall time fell 12–25%, for example plain 434 → 378 ms and Poisson 836 → 615 ms.
+  - **Considered and declined:** reusing the chain's cached target evaluation as well. It would save about 6% more, but it would tie the readout to the chain's cache.
+- **The penalty seam.**
+  - **What the samplers read.** They take the nullity, bandwidth and roughness βᵀPβ from the penalty, not from a difference order. The band factor's half-bandwidth is the larger of the design's and the penalty's. The fingerprints now include the penalty's type, nullity and bandwidth.
+  - **The locally adaptive scheme** needs one local term per row of a full-row-rank D, so that the η conditionals are Gamma. It therefore takes only an `ILocallyAdaptivePenalty`. `DifferencePenalty` implements it; `TensorPenalty` cannot, because its stacked differences are rank-deficient.
+  - **What it enables.** BAPS and `HierarchicalPSpline` sample the isotropic tensor surface smoother, so replicate surfaces get the hierarchy.
+  - **Bit-identity.** A probe matched the difference-penalty paths byte for byte: BAPS at orders 1–3 under all three schemes, `HierarchicalPSpline` at orders 1–2 under Centred, CollapsedPopulation and ParameterExpanded.
+  - **Checks** (`PenaltySeamTests`): tensor roughness against an explicit Kronecker P; BAPS's first coefficient draw whitened against an independent A; the first τ² and τ₀² draws against their Gamma shapes a + (ν − r)/2; the adaptive scheme's refusal; the hierarchical fit's recovery of a population surface.
+- **Not built:** the triage row's other two BAPS items. There is still no anisotropic λ in the samplers (`AnisotropicTensorSpline` stays REML-only), and `Collapsed` still repeats its factorization.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 348 of 348 (`20261024_165628398`), `Maths.Samplers.Tests` 96 of 96 (`20261024_170335220`). A first Samplers run, under load, failed only `Ess_IsLinearithmic`'s 10 s wall-clock limit (11.9 s); the test takes 1.1 s alone. The solution builds.
