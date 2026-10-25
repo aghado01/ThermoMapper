@@ -722,3 +722,21 @@ Bold marks a volley that wasn't quiet.
 
 The experiments are charted in a dashboard, https://claude.ai/artifact/4a51qGP11a5JH2Qr5V4g3n (private; built from the
 scratch data, not from the repo).
+
+### 12.12 Discussion: a minimum, then one afterburn volley
+
+The user's working practice, recorded as a heuristic rather than a rule: set a minimum number of volleys, then run one
+more so the fit can mature.
+- **What E4 says about it.**
+  - The last first registration comes at volley 4 on the toy and volley 5 on iris, so an afterburn stops at 5 and 6.
+  - One afterburn volley narrows the location intervals 2–7×: toy MagnetizationVariance 0.60 → 0.09 e-folds, heat
+    capacity 0.27 → 0.09, FkReduced 0.72 → 0.36; iris MagnetizationVariance 0.36 → 0.12, heat capacity 0.24 → 0.12.
+- **Why it fits the geometry.** BARS registers a bump at about one point per FWHM (C26), so one more volley gives about
+  two, which is Thread I's geometric constant, h ≤ w/2. The heuristic amounts to that rule, once the minimum is set from
+  the narrowest bump that matters.
+- **Its caution.** Tighter isn't always right. Iris's heat-capacity afterburn fit (v = 5) is the one location interval
+  that missed the dense peak, by about one grid step.
+- **What stays open.**
+  - Setting the minimum before sampling: E1 puts the narrowest bumps at melts and background-mediated splits (0.15–0.41
+    e-folds), not at the rigid split's 1.38, so a priori the minimum needs melt widths.
+  - How much of the afterburn's gain the BARS settings could deliver a volley earlier (§12.13).
