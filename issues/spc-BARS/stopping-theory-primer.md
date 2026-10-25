@@ -1260,6 +1260,65 @@ refinements from iris:
   - Fixed as class models, the narrowest core, virginica's, would lose its boundary points.
   - Used as EM's starting point on all the points instead, the covariances can grow back to the species' spread.
 
+### 12.25 SPC on its own: a first pass over q, K and the coupling
+
+The user's focus: what generalized SPC can do without the hybrid, through choices in modelling the data and building
+the graph.
+
+**The run.**
+- **The grid.** Iris over q ∈ {20, 100, 1000} × K ∈ {5, 7} × four couplings on the mutual-KNN edge set with MST repair.
+  193 temperatures from 10⁻⁴ to 3, 8 replicas × 2,000 cycles, one seed.
+- **The couplings:**
+  - the default Gaussian;
+  - the compiler's LMP rescaling;
+  - shared nearest neighbours, J = max(|N(i) ∩ N(j)|/K, 0.05)/K̂;
+  - mutual reachability, a Gaussian on max(core distance of i, core distance of j, d).
+- **The scores,** fixed before running:
+  - the width of the three-species stage under BWD's rule (§12.20), where at least three clusters of 20 or more points
+    have distinct majority species;
+  - its best correct count and residue;
+  - whether `HierarchyEom` selects three species-led clusters on the whole grid.
+
+**Two cells can't be read as run.**
+- **q = 1000 isn't equilibrated at the cold end.** S₂ at T = 10⁻⁴ is 0.22–0.36 where at least the 0.556 setosa floor
+  belongs. With 1,000 colours a random start almost never aligns neighbours, so SW orders very slowly at low
+  temperature. It needs an ordered start before it says anything.
+- **LMP fragments iris.** Its strongest coupling (0.69) exceeds the Gaussian's (0.29), yet S₂ at T = 10⁻⁴ is only 0.09
+  (K = 5) and 0.15 (K = 7): many edges are driven to near-zero coupling, leaving about ten pieces at any temperature.
+
+**The readable cells:**
+
+| K | Coupling | q | Stage (e-folds) | Best reading under BWD's rule | Correct | Residue | `HierarchyEom` |
+|---|---|---|---|---|---|---|---|
+| 5 | Gaussian | 20 | 0.43 | 43 [43/0/0], 38 [0/38/0], 36 [0/3/33] | 114 | 28 | two clusters |
+| 5 | Gaussian | 100 | 0.38 | 40, 38, 35 [0/3/32] | 110 | 32 | two clusters |
+| 5 | Shared neighbours | 20 | 0.75 | 67 [0/18/49], 34 [34/0/0], 33 [0/32/1] | 115 | 1 | **three:** 67 [0/18/49], 34 [34/0/0], 33 [0/32/1] |
+| 5 | Shared neighbours | 100 | 0.64 | as at q = 20 | 115 | 1 | two clusters |
+| 5 | Mutual reachability | 20 | 0.21 | 41, 36 [0/3/33], 35 [0/35/0] | 109 | 38 | two clusters |
+| 5 | Mutual reachability | 100 | 0.21 | 40, 34, 21 | 95 | 41 | two clusters |
+| 7 | Gaussian | 20, 100 | 0 | — | — | — | two clusters |
+| 7 | Shared neighbours | 20 | 0.16 | 56 [0/43/13], 34 [0/0/34], 25 [25/0/0] | 102 | 17 | two clusters |
+| 7 | Mutual reachability | 20, 100 | 0 | — | — | — | two clusters |
+
+- **q doesn't widen the stage** between 20 and 100: 0.43 to 0.38 for the Gaussian, 0.75 to 0.64 for shared neighbours.
+  - The rigid-split width w_q shrinks with q, but the stage's length is set by the ratio of the split's temperature to
+    the melt's, and both shift together.
+  - The prediction of §12.25's planning fails here. q = 1000 is untested until it is equilibrated.
+- **Shared-nearest-neighbour couplings are the one lever that moved the readings.** At K = 5 and q = 20:
+  - the stage widens to 0.75 e-folds, about a split's own width w_q;
+  - `HierarchyEom` selects three species-led clusters, the only configuration here where it does;
+  - the residue falls to 1.
+  - The cost is in assignment: 18 versicolor sit in the virginica cluster, and setosa splits, with 34 in the real
+    cluster and the rest in a smaller one.
+- **Mutual reachability narrows the stage** (0.21) and sheds more points. Iris's density dip is too shallow for core
+  distances to sharpen it.
+- **K = 7 mostly closes the stage again;** only shared neighbours keep a sliver (0.16).
+- **One pass, one seed: exploration, not a basis for defaults.**
+- **Natural next steps:**
+  - shared-neighbour variants: the neighbour count separate from the graph's K, the floor, Jaccard normalization;
+  - q = 1000 from an ordered start;
+  - the readout's θ and peripheral capture, applied to the shared-neighbour stage.
+
 **The kernel's shape can't help here** (a static check on the K = 10 edge lengths, kernels matched in scale):
 - A cut edge is longer than a virginica edge 51% of the time, and longer than a versicolor edge 70% of the time.
 - A kernel is a monotone map from distance to coupling, so it can only reweight by length. The cut's share of coupling
