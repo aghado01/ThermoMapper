@@ -25,6 +25,10 @@ namespace Maths.Regression.Spline.Baps;
 /// <see cref="RHatPopulation"/> is the classic R̂ of each population coefficient across chains, a consensus map, and
 /// <see cref="RHatPopulationMax"/> its least favourable reading. <see cref="ChainSeeds"/> are the resolved per-chain
 /// seeds, and <see cref="Checkpoint"/> the run's restart state when it was requested.</para>
+/// <para>With anisotropic smoothing each draw's τ_0² is the geometric mean of its components' τ_0j², so the τ_0
+/// summaries read the overall smoothing. Each τ_0j²'s posterior is <see cref="ComponentSmoothingVarianceInterval"/>, and
+/// <see cref="ComponentSmoothingVarianceConvergence"/> holds the shell's diagnostics on each log τ_0j², which also gate
+/// an early stop.</para>
 /// </remarks>
 public sealed record HierarchicalResult(
     double[] PopulationCoefficients,
@@ -42,7 +46,8 @@ public sealed record HierarchicalResult(
     RHatDiagnostic[] RHatPopulation,
     RHatDiagnostic RHatPopulationMax,
     int[] ChainSeeds,
-    EnsembleCheckpoint? Checkpoint)
+    EnsembleCheckpoint? Checkpoint,
+    IReadOnlyList<ConvergenceDiagnostic>? ComponentSmoothingVarianceConvergence = null)
 {
     /// <summary>σ²'s posterior median and 95% interval, read from the retained draws.</summary>
     public PosteriorInterval NoiseVarianceInterval => Interval(d => d.NoiseVariance);
@@ -52,6 +57,17 @@ public sealed record HierarchicalResult(
 
     /// <summary>τ_0²'s posterior median and 95% interval, read from the retained draws.</summary>
     public PosteriorInterval PopulationSmoothingVarianceInterval => Interval(d => d.PopulationSmoothingVariance);
+
+    /// <summary>With anisotropic smoothing, component j's population smoothing variance τ_0j²: its posterior median and
+    /// 95% interval.</summary>
+    public PosteriorInterval ComponentSmoothingVarianceInterval(int component)
+    {
+        if (PosteriorDraws.Count == 0 || PosteriorDraws[0].Count == 0
+            || PosteriorDraws[0][0].ComponentSmoothingVariance is not double[] first)
+            throw new InvalidOperationException("Only a model with anisotropic smoothing has component smoothing variances.");
+        if ((uint)component >= (uint)first.Length) throw new ArgumentOutOfRangeException(nameof(component));
+        return Interval(d => d.ComponentSmoothingVariance![component]);
+    }
 
     /// <summary>The pointwise band on the population curve at the rows of <paramref name="design"/>: the mean is the
     /// design times <see cref="PopulationCoefficients"/>; the sd and 2.5% and 97.5% quantiles are those of the drawn
@@ -92,11 +108,13 @@ public sealed record HierarchicalResult(
 /// variance σ², the deviation variance τ_u² and the population smoothing variance τ_0², all from the end of the sweep.
 /// It also keeps the conditional means the sweep computed on the way: E[β_0 | ·] and each E[β_r | ·], which
 /// Rao–Blackwellized estimates average. <see cref="Replicates"/> and <see cref="ReplicateConditionalMeans"/> are null
-/// when the run did not retain replicate draws.
+/// when the run did not retain replicate draws. With anisotropic smoothing, <see cref="ComponentSmoothingVariance"/> holds
+/// each component's τ_0j², and <see cref="PopulationSmoothingVariance"/> is their geometric mean; otherwise it is null.
 /// </summary>
 public sealed record HierarchicalDraw(
     double[] Population, double[][]? Replicates, double NoiseVariance, double DeviationVariance,
-    double PopulationSmoothingVariance, double[] PopulationConditionalMean, double[][]? ReplicateConditionalMeans);
+    double PopulationSmoothingVariance, double[] PopulationConditionalMean, double[][]? ReplicateConditionalMeans,
+    double[]? ComponentSmoothingVariance = null);
 
 /// <summary>How each chain of a <see cref="HierarchicalPSpline"/> run starts.</summary>
 public enum HierarchicalStart
@@ -167,6 +185,12 @@ public sealed record HalfTDeviationPrior(double Degrees = 1.0, double? Scale = n
 /// would need a sum-to-zero constraint.) As a client of the ensemble shell (<see cref="ChainEnsemble"/>) its chains run
 /// in parallel from one seed tree and overdispersed starts, with rank-normalized R̂ and ESS on the log variances, a
 /// consensus map of classic R̂ on the population curve, an optional early stop, and checkpoints.
+/// <para>
+/// With anisotropic smoothing (an <see cref="IAnisotropicPenalty"/>, such as a surface's x- and y-penalties) the
+/// population curve's prior precision is <c>Σⱼ Pⱼ/τ_0j²</c>, one smoothing variance per component, and their logs are
+/// updated as <see cref="BapsScheme.AnisotropicGibbs"/> updates its smoothing variances: a Newton-proposal Metropolis
+/// step on their full conditional, then a random-walk step on each (Bach &amp; Klein 2025). Every scheme accepts it.
+/// </para>
 /// </summary>
 public sealed class HierarchicalPSpline
 {
@@ -189,6 +213,8 @@ public sealed class HierarchicalPSpline
     private readonly double[][] _gramVectors;   // its eigenvectors v_k, as rows
     private readonly double[] _sumZtyInEigenbasis;   // v_kᵀ Σ_r Zᵀy_r
     private readonly double[,] _penaltyDense;   // P, dense
+    private readonly IAnisotropicPenalty? _anisotropic;   // set when each penalty component has its own τ_0j²
+    private readonly double[][,]? _componentDense;       // each component Pⱼ, dense, for the collapsed population block
     private readonly HalfTDeviationPrior? _halfT;   // null: the inverse-gamma prior on τ_u²
     private readonly double _halfTScale;        // the half-t prior's resolved scale A
 
@@ -201,8 +227,12 @@ public sealed class HierarchicalPSpline
     /// <param name="priorScale">The inverse-gamma prior's scale on each variance, as <paramref name="priorShape"/>.</param>
     /// <param name="deviationPrior">A half-t prior on τ_u in place of the inverse-gamma prior on τ_u²; null (the
     /// default) keeps the inverse-gamma prior.</param>
+    /// <param name="anisotropicSmoothing">When true, each component of the penalty, which must be an
+    /// <see cref="IAnisotropicPenalty"/>, gets its own population smoothing variance τ_0j², each under the inverse-gamma
+    /// prior; false (the default) smooths every component with one τ_0².</param>
     public HierarchicalPSpline(double[,] design, double[][] responses, IBandPenalty penalty,
-                               double priorShape = 1e-3, double priorScale = 1e-3, HalfTDeviationPrior? deviationPrior = null)
+                               double priorShape = 1e-3, double priorScale = 1e-3, HalfTDeviationPrior? deviationPrior = null,
+                               bool anisotropicSmoothing = false)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(responses);
@@ -247,9 +277,22 @@ public sealed class HierarchicalPSpline
                 for (int j = 0; j < _nu; j++) _sumZtyInEigenbasis[k] += _gramVectors[k][j] * zty[j];
         var penaltyBand = new double[_penaltyBw + 1, _nu];
         penalty.AccumulateInto(penaltyBand, _nu, 1.0);
-        _penaltyDense = new double[_nu, _nu];
-        for (int d = 0; d <= _penaltyBw; d++)
-            for (int j = 0; j + d < _nu; j++) { _penaltyDense[j + d, j] = penaltyBand[d, j]; _penaltyDense[j, j + d] = penaltyBand[d, j]; }
+        _penaltyDense = Symmetric(penaltyBand, _penaltyBw, _nu);
+        if (anisotropicSmoothing)
+        {
+            _anisotropic = penalty as IAnisotropicPenalty ?? throw new ArgumentException(
+                $"Anisotropic smoothing gives each penalty component its own variance; {penalty.GetType().Name} is not an IAnisotropicPenalty.",
+                nameof(penalty));
+            _componentDense = new double[_anisotropic.Components][,];
+            for (int c = 0; c < _componentDense.Length; c++)
+            {
+                var lambdas = new double[_anisotropic.Components];
+                lambdas[c] = 1.0;
+                var band = new double[_penaltyBw + 1, _nu];
+                _anisotropic.AccumulateComponents(band, _nu, lambdas);
+                _componentDense[c] = Symmetric(band, _penaltyBw, _nu);
+            }
+        }
 
         if (deviationPrior is not null)
         {
@@ -351,11 +394,13 @@ public sealed class HierarchicalPSpline
             for (int j = 0; j < _nu; j++) repMeans[rr][j] = betaSum[rr][j] / total;
             for (int j = 0; j < _nu; j++) repConditionalMeans[rr][j] = meanSum[rr][j] / total;
         }
-        RHatDiagnostic[] rHatPopulation = summary.FunctionalRHat[3..];
+        int components = Components;
+        RHatDiagnostic[] rHatPopulation = summary.FunctionalRHat[(3 + components)..];
         return new HierarchicalResult(beta0Sum, repMeans, sigSum / total, tauUSum / total, tau0Sum / total, total,
                                       posteriorDraws, mean0Sum, repConditionalMeans,
                                       summary.Monitored[0], summary.Monitored[1], summary.Monitored[2], rHatPopulation,
-                                      RHatDiagnostic.Worst(rHatPopulation), summary.ChainSeeds, summary.Checkpoint);
+                                      RHatDiagnostic.Worst(rHatPopulation), summary.ChainSeeds, summary.Checkpoint,
+                                      _anisotropic is null ? null : summary.Monitored[3..]);
     }
 
     /// <summary>
@@ -474,16 +519,17 @@ public sealed class HierarchicalPSpline
 
     /// <summary>
     /// The ensemble-shell client: it starts and restores chains, fingerprints the run for checkpoints, and names the
-    /// functionals. The three log variances lead and are monitored (split R̂, bulk and tail ESS, the early stop's ESS
-    /// gate); the population curve's coefficients follow with classic R̂, a consensus map an early stop also waits on.
+    /// functionals. The three log variances lead, then with anisotropic smoothing each log τ_0j², all monitored (split R̂,
+    /// bulk and tail ESS, the early stop's ESS gate); the population curve's coefficients follow with classic R̂, a
+    /// consensus map an early stop also waits on.
     /// </summary>
     private sealed class HierarchicalEnsemble(HierarchicalPSpline owner, bool retainReplicates, HierarchicalStart start,
                                               HierarchicalScheme scheme)
         : IEnsembleModel<SweepState>
     {
-        public int FunctionalDim => 3 + owner._nu;
+        public int FunctionalDim => 3 + owner.Components + owner._nu;
 
-        public int MonitoredDim => 3;
+        public int MonitoredDim => 3 + owner.Components;
 
         // One child seed per consumer: the start's draws and the sweep's stream. The model has no readout randomness.
         public IChainRun<SweepState> StartChain(int chainSeed, int readoutSeed)
@@ -491,8 +537,8 @@ public sealed class HierarchicalPSpline
             int[] seeds = SeedTree.Derive(chainSeed, 2);
             int reps = owner._responses.Length;
             SweepState state = start == HierarchicalStart.Fixed
-                ? SweepState.Start(reps, owner._nu)
-                : SweepState.Overdispersed(reps, owner._nu, owner._responseVariance, new Xoshiro256PlusPlus(seeds[0]));
+                ? SweepState.Start(reps, owner._nu, owner.Components)
+                : SweepState.Overdispersed(reps, owner._nu, owner.Components, owner._responseVariance, new Xoshiro256PlusPlus(seeds[0]));
             var scan = new BlockScan<SweepState>(owner.Blocks(scheme), state, new Xoshiro256PlusPlus(seeds[1]), x => x.Copy());
             return new HierarchicalChainRun(scan, retainReplicates, new DrawStore<HierarchicalDraw>(), Zeros(reps, owner._nu),
                                             Zeros(reps, owner._nu));
@@ -510,7 +556,7 @@ public sealed class HierarchicalPSpline
                 foreach (double[] y in owner._responses) f.Add(y);
                 f.Add(owner._a0).Add(owner._b0).Add(owner._halfT is null ? 0 : 1).Add(owner._halfT?.Degrees ?? 0.0)
                  .Add(owner._halfTScale);
-                return f.Add(retainReplicates ? 1 : 0).Add((int)start).Add((int)scheme).ToString();
+                return f.Add(retainReplicates ? 1 : 0).Add((int)start).Add((int)scheme).Add(owner.Components).ToString();
             }
         }
 
@@ -551,7 +597,9 @@ public sealed class HierarchicalPSpline
             functionals[0] = Math.Log(state.Sigma2);
             functionals[1] = Math.Log(state.TauU2);
             functionals[2] = Math.Log(state.Tau02);
-            for (int j = 0; j < state.Population.Length; j++) functionals[3 + j] = state.Population[j];
+            int components = state.LogTau02.Length;
+            for (int c = 0; c < components; c++) functionals[3 + c] = state.LogTau02[c];
+            for (int j = 0; j < state.Population.Length; j++) functionals[3 + components + j] = state.Population[j];
 
             int reps = state.Replicates.Length;
             double[][]? replicates = null, conditionalMeans = null;
@@ -570,12 +618,42 @@ public sealed class HierarchicalPSpline
                         replicateMeanSums[rr][j] += state.ReplicateMeans[rr][j];
                     }
             }
+            double[]? componentTau02 = null;
+            if (components > 0)
+            {
+                componentTau02 = new double[components];
+                for (int c = 0; c < components; c++) componentTau02[c] = Math.Exp(state.LogTau02[c]);
+            }
             draws.Add(new HierarchicalDraw((double[])state.Population.Clone(), replicates, state.Sigma2, state.TauU2,
-                                           state.Tau02, state.PopulationMean, conditionalMeans));
+                                           state.Tau02, state.PopulationMean, conditionalMeans, componentTau02));
         }
 
         public IChainState SaveState() => new HierarchicalChainState(scan.Snapshot(), draws.Copy(),
                                                                      Clone(replicateSums), Clone(replicateMeanSums));
+    }
+
+    // The number of smoothing components with their own variance: 0 for one τ_0².
+    private int Components => _anisotropic?.Components ?? 0;
+
+    // P/τ_0², or with anisotropic smoothing Σⱼ Pⱼ/τ_0j², added into band storage; weights is the caller's scratch.
+    private void AccumulatePopulationPenalty(double[,] band, SweepState state, double[] weights)
+    {
+        if (_anisotropic is null)
+        {
+            _penalty.AccumulateInto(band, _nu, 1.0 / state.Tau02);
+            return;
+        }
+        for (int c = 0; c < weights.Length; c++) weights[c] = Math.Exp(-state.LogTau02[c]);
+        _anisotropic.AccumulateComponents(band, _nu, weights);
+    }
+
+    // A symmetric matrix from its lower-band storage.
+    private static double[,] Symmetric(double[,] band, int bandwidth, int nu)
+    {
+        var m = new double[nu, nu];
+        for (int d = 0; d <= bandwidth; d++)
+            for (int j = 0; j + d < nu; j++) { m[j + d, j] = band[d, j]; m[j, j + d] = band[d, j]; }
+        return m;
     }
 
     private static double[][] Zeros(int rows, int columns)
@@ -638,13 +716,15 @@ public sealed class HierarchicalPSpline
     /// <summary>
     /// The sweep's state: each replicate's curve β_r, the population curve β_0, the three variances, and the conditional
     /// means the last sweep drew around (fresh arrays each sweep, so a retained draw can keep them). The parameter-expanded
-    /// sweep also carries η_r, ξ and σ_η², with β_r = β_0 + ξη_r and τ_u² = ξ²σ_η² kept in step.
+    /// sweep also carries η_r, ξ and σ_η², with β_r = β_0 + ξη_r and τ_u² = ξ²σ_η² kept in step. With anisotropic
+    /// smoothing it carries each ln τ_0j², and τ_0² is their geometric mean.
     /// </summary>
     private sealed class SweepState
     {
         public double[][] Replicates = null!;
         public double[] Population = null!;
         public double Sigma2, TauU2, Tau02;
+        public double[] LogTau02 = null!;
         public double[][] ReplicateMeans = null!;
         public double[] PopulationMean = null!;
         public double[][] Eta = null!;
@@ -652,12 +732,17 @@ public sealed class HierarchicalPSpline
 
         // Overdispersed (HierarchicalStart.Overdispersed): each variance at v·exp(2z) and the population coefficients at
         // N(0, v) draws. The replicate curves are drawn first in every sweep, so their start is never read.
-        public static SweepState Overdispersed(int reps, int nu, double v, Xoshiro256PlusPlus rng)
+        public static SweepState Overdispersed(int reps, int nu, int components, double v, Xoshiro256PlusPlus rng)
         {
-            SweepState state = Start(reps, nu);
+            SweepState state = Start(reps, nu, components);
             state.Sigma2 = v * Math.Exp(2.0 * Normal.SampleStandard(rng));
             state.TauU2 = v * Math.Exp(2.0 * Normal.SampleStandard(rng));
-            state.Tau02 = v * Math.Exp(2.0 * Normal.SampleStandard(rng));
+            if (components == 0) state.Tau02 = v * Math.Exp(2.0 * Normal.SampleStandard(rng));
+            else
+            {
+                for (int c = 0; c < components; c++) state.LogTau02[c] = Math.Log(v) + 2.0 * Normal.SampleStandard(rng);
+                state.Tau02 = GeometricMean(state.LogTau02);
+            }
             state.EtaVariance = state.TauU2;   // ξ = 1, so τ_u² = σ_η²
             double sd = Math.Sqrt(v);
             for (int j = 0; j < nu; j++) state.Population[j] = sd * Normal.SampleStandard(rng);
@@ -665,11 +750,12 @@ public sealed class HierarchicalPSpline
         }
 
         // Every curve at 0 and every variance at 1 (HierarchicalStart.Fixed).
-        public static SweepState Start(int reps, int nu)
+        public static SweepState Start(int reps, int nu, int components)
         {
             var state = new SweepState
             {
                 Replicates = new double[reps][], Population = new double[nu], Sigma2 = 1.0, TauU2 = 1.0, Tau02 = 1.0,
+                LogTau02 = new double[components],
                 ReplicateMeans = new double[reps][], PopulationMean = new double[nu], Eta = new double[reps][],
             };
             for (int rr = 0; rr < reps; rr++)
@@ -686,7 +772,7 @@ public sealed class HierarchicalPSpline
             var copy = new SweepState
             {
                 Replicates = new double[Replicates.Length][], Population = (double[])Population.Clone(),
-                Sigma2 = Sigma2, TauU2 = TauU2, Tau02 = Tau02,
+                Sigma2 = Sigma2, TauU2 = TauU2, Tau02 = Tau02, LogTau02 = (double[])LogTau02.Clone(),
                 ReplicateMeans = new double[ReplicateMeans.Length][], PopulationMean = (double[])PopulationMean.Clone(),
                 Eta = new double[Eta.Length][], Xi = Xi, EtaVariance = EtaVariance,
             };
@@ -697,6 +783,14 @@ public sealed class HierarchicalPSpline
                 copy.Eta[rr] = (double[])Eta[rr].Clone();
             }
             return copy;
+        }
+
+        // exp of the mean log: the geometric mean of the component variances.
+        public static double GeometricMean(double[] logs)
+        {
+            double sum = 0.0;
+            foreach (double l in logs) sum += l;
+            return Math.Exp(sum / logs.Length);
         }
     }
 
@@ -729,10 +823,11 @@ public sealed class HierarchicalPSpline
         }
     }
 
-    // β_0 | · ~ N(Q_0⁻¹ Σβ_r/τ_u², Q_0⁻¹) with Q_0 = (R/τ_u²) I + P/τ_0²: the identity term keeps it proper despite P's
-    // null space.
+    // β_0 | · ~ N(Q_0⁻¹ Σβ_r/τ_u², Q_0⁻¹) with Q_0 = (R/τ_u²) I + P/τ_0², or Σⱼ Pⱼ/τ_0j² with anisotropic smoothing: the
+    // identity term keeps it proper despite P's null space.
     private sealed class PopulationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
     {
+        private readonly double[] _weights = new double[owner.Components];
         private readonly double[,] _band = new double[owner._penaltyBw + 1, owner._nu];
         private readonly BandCholesky _factor = new(owner._nu, owner._penaltyBw, BandFactorization.Ldlt);
         private readonly double[] _rhs = new double[owner._nu];
@@ -745,7 +840,7 @@ public sealed class HierarchicalPSpline
             int nu = owner._nu, reps = state.Replicates.Length;
             Array.Clear(_band);
             for (int j = 0; j < nu; j++) _band[0, j] = reps / state.TauU2;
-            owner._penalty.AccumulateInto(_band, nu, 1.0 / state.Tau02);
+            owner.AccumulatePopulationPenalty(_band, state, _weights);
             _factor.DecomposeBanded(_band);
             if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
                 throw new InvalidOperationException($"(R/τ_u²)I + P/τ_0² is not numerically positive definite ({_factor.Status}).");
@@ -789,13 +884,23 @@ public sealed class HierarchicalPSpline
         }
     }
 
-    // τ_0² | · from the population curve's roughness, ν − r terms (the penalty's rank).
+    // τ_0² | · from the population curve's roughness, ν − r terms (the penalty's rank). With anisotropic smoothing, the
+    // components' ln τ_0j² | β_0 by ComponentSmoothing's Metropolis update instead, and τ_0² is their geometric mean.
     private sealed class SmoothingBlock(HierarchicalPSpline owner) : IBlock<SweepState>
     {
+        private readonly ComponentSmoothing? _components =
+            owner._anisotropic is null ? null : new ComponentSmoothing(owner._anisotropic, owner._a0, owner._b0);
+
         public string Name => "population smoothing variance";
 
         public bool Update(SweepState state, Xoshiro256PlusPlus rng)
         {
+            if (_components is not null)
+            {
+                bool accepted = _components.Update(state.LogTau02, state.Population, rng);
+                state.Tau02 = SweepState.GeometricMean(state.LogTau02);
+                return accepted;
+            }
             state.Tau02 = ConjugateUpdates.NormalVariance(owner._a0, owner._b0, owner._nu - owner._r,
                                                           owner._penalty.Roughness(state.Population)).Sample(rng);
             return true;
@@ -818,8 +923,20 @@ public sealed class HierarchicalPSpline
         public bool Update(SweepState state, Xoshiro256PlusPlus rng)
         {
             int nu = owner._nu, reps = state.Replicates.Length;
-            for (int i = 0; i < nu; i++)
-                for (int j = 0; j < nu; j++) _precision[i, j] = owner._penaltyDense[i, j] / state.Tau02;
+            if (owner._componentDense is null)
+                for (int i = 0; i < nu; i++)
+                    for (int j = 0; j < nu; j++) _precision[i, j] = owner._penaltyDense[i, j] / state.Tau02;
+            else
+            {
+                Array.Clear(_precision);
+                for (int c = 0; c < owner._componentDense.Length; c++)
+                {
+                    double weight = Math.Exp(-state.LogTau02[c]);
+                    double[,] component = owner._componentDense[c];
+                    for (int i = 0; i < nu; i++)
+                        for (int j = 0; j < nu; j++) _precision[i, j] += component[i, j] * weight;
+                }
+            }
             Array.Clear(_rhs);
             for (int k = 0; k < nu; k++)
             {
@@ -929,6 +1046,7 @@ public sealed class HierarchicalPSpline
     // R·ZᵀZ/σ² + P/τ_0², banded, and the linear term Σ_r (Zᵀy_r − ξZᵀZη_r)/σ².
     private sealed class ExpandedPopulationBlock(HierarchicalPSpline owner) : IBlock<SweepState>
     {
+        private readonly double[] _weights = new double[owner.Components];
         private readonly double[,] _band = new double[Math.Max(owner._gramBw, owner._penaltyBw) + 1, owner._nu];
         private readonly BandCholesky _factor = new(owner._nu, Math.Max(owner._gramBw, owner._penaltyBw), BandFactorization.Ldlt);
         private readonly double[] _rhs = new double[owner._nu];
@@ -942,7 +1060,7 @@ public sealed class HierarchicalPSpline
             Array.Clear(_band);
             for (int d = 0; d <= owner._gramBw; d++)
                 for (int j = 0; j < nu; j++) _band[d, j] = reps * owner._gram[d, j] / state.Sigma2;
-            owner._penalty.AccumulateInto(_band, nu, 1.0 / state.Tau02);
+            owner.AccumulatePopulationPenalty(_band, state, _weights);
             _factor.DecomposeBanded(_band);
             if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
                 throw new InvalidOperationException($"R·ZᵀZ/σ² + P/τ_0² is not numerically positive definite ({_factor.Status}).");
