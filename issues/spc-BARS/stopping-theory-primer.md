@@ -1303,7 +1303,8 @@ the graph.
 - **q doesn't widen the stage** between 20 and 100: 0.43 to 0.38 for the Gaussian, 0.75 to 0.64 for shared neighbours.
   - The rigid-split width w_q shrinks with q, but the stage's length is set by the ratio of the split's temperature to
     the melt's, and both shift together.
-  - The prediction of §12.25's planning fails here. q = 1000 is untested until it is equilibrated.
+  - So the hope of a wider stage at larger q, drawn from Thread I's w_q, fails between 20 and 100. q = 1000 is untested
+    until it is equilibrated.
 - **Shared-nearest-neighbour couplings are the one lever that moved the readings.** At K = 5 and q = 20:
   - the stage widens to 0.75 e-folds, about a split's own width w_q;
   - `HierarchyEom` selects three species-led clusters, the only configuration here where it does;
