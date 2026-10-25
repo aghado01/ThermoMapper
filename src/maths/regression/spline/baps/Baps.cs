@@ -34,7 +34,17 @@ public enum BapsScheme
     /// (the prior normalizer factorizes as <c>(Πη_i)|DDᵀ|</c>, giving each <c>η_i</c> a Gamma full conditional). A block
     /// Gibbs scan with a fourth block, the multipliers.
     /// </summary>
-    LocallyAdaptiveGibbs
+    LocallyAdaptiveGibbs,
+
+    /// <summary>
+    /// Anisotropic Gibbs, for a penalty whose components are smoothed separately (<see cref="IAnisotropicPenalty"/>, such
+    /// as a surface's x- and y-penalties): component j has its own smoothing variance τⱼ², so <c>A = ZᵀZ + Σⱼ λⱼPⱼ</c> with
+    /// <c>λⱼ = σ²/τⱼ²</c> (Bach &amp; Klein 2025). β and σ² are drawn from their conditionals as in <see cref="Gibbs"/>. The
+    /// τⱼ² have no conjugate step, because the prior's pseudo-determinant <c>Πₗ Σⱼ γⱼₗ/τⱼ²</c> does not factor, so their
+    /// logs move together by one Newton-proposal Metropolis step (<see cref="NewtonMetropolis"/>) on their full conditional,
+    /// each under the IG(a, b) prior the other schemes give τ²: a Metropolis block within the Gibbs scan.
+    /// </summary>
+    AnisotropicGibbs
 }
 
 /// <summary>Posterior summary of a BAPS run: the Bayes fit coefficients and the smoothing / noise posteriors.</summary>
@@ -48,9 +58,16 @@ public enum BapsScheme
 /// every retained draw (<see cref="BapsDraw"/>), per chain in draw order; every summary above is read from it.
 /// <paramref name="LogLambdaConvergence"/> and <paramref name="LogSigma2Convergence"/> are the ensemble shell's
 /// rank-normalized diagnostics (split R̂, bulk and tail ESS) on log λ and log σ², the functionals an early stop waits
-/// on. <paramref name="AcceptanceRate"/> is the sampling phase's: 1 for the Gibbs schemes, the Metropolis rate on log λ
-/// for the collapsed scheme. <paramref name="ChainSeeds"/> are the resolved per-chain seeds, and
-/// <paramref name="Checkpoint"/> the run's restart state when it was requested.
+/// on. <paramref name="AcceptanceRate"/> is the sampling phase's, pooled over the scan's blocks: 1 for the Gibbs schemes,
+/// the Metropolis rate on log λ for the collapsed scheme, and for the anisotropic scheme (two conjugate blocks and one
+/// Metropolis block) <c>(2 + a)/3</c> with a that block's rate. <paramref name="ChainSeeds"/> are the resolved per-chain
+/// seeds, and <paramref name="Checkpoint"/> the run's restart state when it was requested.
+/// <para>
+/// In <see cref="BapsScheme.AnisotropicGibbs"/> each draw's λ is the geometric mean of its components' λⱼ, so the λ
+/// summaries read the overall smoothing and equal λ itself when the components agree. Each λⱼ's posterior is
+/// <see cref="ComponentLambdaInterval"/>, and <paramref name="ComponentLogLambdaConvergence"/> holds the shell's
+/// diagnostics on each log λⱼ, which also gate an early stop.
+/// </para>
 /// </remarks>
 public sealed record BapsResult(
     double[] Coefficients,
@@ -66,13 +83,23 @@ public sealed record BapsResult(
     double AcceptanceRate,
     int[] ChainSeeds,
     EnsembleCheckpoint? Checkpoint,
-    double[]? LocalSmoothing = null)
+    double[]? LocalSmoothing = null,
+    IReadOnlyList<ConvergenceDiagnostic>? ComponentLogLambdaConvergence = null)
 {
     /// <summary>σ²'s posterior median and 95% interval, read from the retained draws.</summary>
     public PosteriorInterval Sigma2Interval => Interval(d => d.Sigma2);
 
     /// <summary>τ²'s posterior median and 95% interval, read from the retained draws (τ² = σ²/λ in every scheme).</summary>
     public PosteriorInterval Tau2Interval => Interval(d => d.Tau2);
+
+    /// <summary>The anisotropic scheme's component smoothing λⱼ = σ²/τⱼ²: its posterior median and 95% interval.</summary>
+    public PosteriorInterval ComponentLambdaInterval(int component)
+    {
+        if (PosteriorDraws.Count == 0 || PosteriorDraws[0].Count == 0 || PosteriorDraws[0][0].ComponentTau2 is not double[] first)
+            throw new InvalidOperationException("Only the anisotropic scheme's draws have component smoothings.");
+        if ((uint)component >= (uint)first.Length) throw new ArgumentOutOfRangeException(nameof(component));
+        return Interval(d => d.Sigma2 / d.ComponentTau2![component]);
+    }
 
     /// <summary>
     /// The pointwise band on the fitted curve at the rows of <paramref name="design"/> (any rows of the coefficients'
@@ -107,15 +134,18 @@ public sealed record BapsResult(
 ///   <item>The collapsed scheme samples λ, then draws σ² and β exactly from their conditionals given λ, and
 ///   sets τ² = σ²/λ. <see cref="ConditionalMean"/> holds β̂(λ) = E[β | λ, y] beside the draw.</item>
 ///   <item><see cref="Eta"/> is set in the locally adaptive scheme only, where the local smoothing is λᵢ = λ·ηᵢ.</item>
+///   <item><see cref="ComponentTau2"/> is set in the anisotropic scheme only: each component's smoothing variance τⱼ²,
+///   with λⱼ = σ²/τⱼ². There τ² is their geometric mean, so λ = σ²/τ² is the geometric mean of the λⱼ.</item>
 /// </list>
 /// </summary>
 public sealed record BapsDraw(double[] Coefficients, double[]? ConditionalMean, double Lambda, double Sigma2, double Tau2,
-                              double[]? Eta);
+                              double[]? Eta, double[]? ComponentTau2 = null);
 
 /// <summary>
 /// BAPS (Bayesian adaptive P-splines) — the measure-side dual of free-knot BARS. A rich fixed B-spline basis with a
 /// difference penalty whose strength λ is inferred (Lang &amp; Brezger 2004), sampled either by a block Gibbs scan over
-/// the variance components or by collapsed Metropolis against the REML marginal evidence (<see cref="BapsScheme"/>).
+/// the variance components or by collapsed Metropolis against the REML marginal evidence (<see cref="BapsScheme"/>); an
+/// anisotropic penalty's components can each take their own smoothing (<see cref="BapsScheme.AnisotropicGibbs"/>).
 /// Both samplers are built on the shared blocks (<see cref="BlockScan{TState}"/>, <see cref="GaussianConditional"/>,
 /// <see cref="ConjugateUpdates"/>, <see cref="RandomWalkMetropolis"/>), with the model's blocks here. Every inner solve
 /// is banded (<c>A = ZᵀZ + λP</c> via <see cref="BandCholesky"/>'s root-free LDLᵀ, whose factor also supplies the
@@ -137,6 +167,7 @@ public sealed class Baps
     private readonly int _bw;
     private readonly int _nullity;     // the penalty's null-space dimension r: the unpenalized directions
     private readonly int _localTerms;  // the locally adaptive penalty's local terms (0 for a penalty without them)
+    private readonly int _components;  // the anisotropic penalty's components (0 for a penalty without them)
     private readonly double[,] _gram0;   // ZᵀZ band — constant across draws
     private readonly double[] _zty;      // Zᵀy — constant
     private readonly double _priorShape; // inverse-gamma hyperprior on each variance component
@@ -162,6 +193,7 @@ public sealed class Baps
             throw new ArgumentException("Response length must match the design row count.", nameof(y));
         _bw = Math.Max(_design.Bandwidth, penalty.Bandwidth);
         _localTerms = penalty is ILocallyAdaptivePenalty local ? local.DifferenceCount(_nu) : 0;
+        _components = penalty is IAnisotropicPenalty anisotropic ? anisotropic.Components : 0;
         _gram0 = new double[_bw + 1, _nu];
         _zty = new double[_nu];
         _design.Accumulate(null, _gram0, y, _zty);   // ZᵀZ and Zᵀy, once
@@ -191,11 +223,14 @@ public sealed class Baps
     {
         if (chains < 1) throw new ArgumentOutOfRangeException(nameof(chains));
         if (samples < 2 || burn < 0) throw new ArgumentOutOfRangeException(nameof(samples));
-        if (scheme is not (BapsScheme.Gibbs or BapsScheme.Collapsed or BapsScheme.LocallyAdaptiveGibbs))
+        if (scheme is not (BapsScheme.Gibbs or BapsScheme.Collapsed or BapsScheme.LocallyAdaptiveGibbs or BapsScheme.AnisotropicGibbs))
             throw new ArgumentOutOfRangeException(nameof(scheme));
         if (scheme == BapsScheme.LocallyAdaptiveGibbs && _penalty is not ILocallyAdaptivePenalty)
             throw new ArgumentException(
                 $"The locally adaptive scheme reweights local penalty terms; {_penalty.GetType().Name} is not an ILocallyAdaptivePenalty.", nameof(scheme));
+        if (scheme == BapsScheme.AnisotropicGibbs && _penalty is not IAnisotropicPenalty)
+            throw new ArgumentException(
+                $"The anisotropic scheme smooths penalty components separately; {_penalty.GetType().Name} is not an IAnisotropicPenalty.", nameof(scheme));
 
         // The shell gives each chain a kernel stream and a readout stream. Only the collapsed scheme's conditional draws
         // use the readout stream, so the λ chain does not depend on them.
@@ -246,7 +281,7 @@ public sealed class Baps
             PosteriorInterval.Quantile(allLam, 0.975),
             sigSum / total, summary.FunctionalRHat[0], (int)total, posteriorDraws,
             summary.Monitored[0], summary.Monitored[1], summary.AcceptanceRate, summary.ChainSeeds, summary.Checkpoint,
-            localField);
+            localField, scheme == BapsScheme.AnisotropicGibbs ? summary.Monitored[2..] : null);
     }
 
     // log p(u | y) up to a constant on u = ln λ: the profiled evidence plus the uniform-edf prior density |d edf/du|, with
@@ -261,9 +296,10 @@ public sealed class Baps
     /// </summary>
     private sealed class BapsEnsemble(Baps owner, BapsScheme scheme) : IEnsembleModel<BapsState>
     {
-        public int FunctionalDim => 2;
+        // log λ and log σ², then, in the anisotropic scheme, each component's log λⱼ.
+        public int FunctionalDim => 2 + (scheme == BapsScheme.AnisotropicGibbs ? owner._components : 0);
 
-        public int MonitoredDim => 2;
+        public int MonitoredDim => FunctionalDim;
 
         // The kernel stream drives the scan; the readout stream serves the collapsed scheme's conditional draws.
         public IChainRun<BapsState> StartChain(int chainSeed, int readoutSeed) => new BapsChainRun(owner, scheme,
@@ -320,6 +356,8 @@ public sealed class Baps
             BapsDraw draw = Record(state);
             functionals[0] = Math.Log(draw.Lambda);
             functionals[1] = Math.Log(draw.Sigma2);
+            if (draw.ComponentTau2 is not null)
+                for (int j = 0; j < state.LogComponentTau2.Length; j++) functionals[2 + j] = functionals[1] - state.LogComponentTau2[j];
             draws.Add(draw);
         }
 
@@ -331,6 +369,18 @@ public sealed class Baps
         // step left in the state, so a draw factors nothing.
         private BapsDraw Record(BapsState state)
         {
+            if (scheme == BapsScheme.AnisotropicGibbs)
+            {
+                var componentTau2 = new double[state.LogComponentTau2.Length];
+                double meanLog = 0.0;
+                for (int j = 0; j < componentTau2.Length; j++)
+                {
+                    componentTau2[j] = Math.Exp(state.LogComponentTau2[j]);
+                    meanLog += state.LogComponentTau2[j];
+                }
+                double tau2 = Math.Exp(meanLog / componentTau2.Length);   // the geometric mean of the τⱼ²
+                return new BapsDraw((double[])state.Beta.Clone(), null, state.Sigma2 / tau2, state.Sigma2, tau2, null, componentTau2);
+            }
             if (scheme != BapsScheme.Collapsed)
                 return new BapsDraw((double[])state.Beta.Clone(), null, state.Sigma2 / state.Tau2, state.Sigma2, state.Tau2,
                                     scheme == BapsScheme.LocallyAdaptiveGibbs ? (double[])state.Eta.Clone() : null);
@@ -346,20 +396,25 @@ public sealed class Baps
 
     /// <summary>
     /// A BAPS chain's state: the coefficients β and the variances σ² and τ² (the Gibbs schemes), the local multipliers η
-    /// and the squared differences they weigh (the locally adaptive scheme), and log λ with its log target and the solve
-    /// behind it (the collapsed scheme). Nothing modifies a solve, so copies share it.
+    /// and the squared differences they weigh (the locally adaptive scheme), the components' log smoothing variances
+    /// ln τⱼ² (the anisotropic scheme), and log λ with its log target and the solve behind it (the collapsed scheme).
+    /// Nothing modifies a solve, so copies share it.
     /// </summary>
     private sealed class BapsState
     {
-        public double[] Beta = null!, Eta = null!, SquaredDifferences = null!;
+        public double[] Beta = null!, Eta = null!, SquaredDifferences = null!, LogComponentTau2 = null!;
         public double Sigma2 = 1.0, Tau2 = 1.0, LogLambda, Evidence;
         public PenalizedSolve? Solve;
 
-        // β at 0, σ² = τ² = 1, η at 1 (unadapted, the global smoothing), and log λ = 0.
+        // β at 0, σ² = τ² = 1, η at 1 (unadapted, the global smoothing), every τⱼ² = 1, and log λ = 0.
         public static BapsState Start(Baps owner, BapsScheme scheme)
         {
             int nLoc = owner._localTerms;
-            var state = new BapsState { Beta = new double[owner._nu], Eta = new double[nLoc], SquaredDifferences = new double[nLoc] };
+            var state = new BapsState
+            {
+                Beta = new double[owner._nu], Eta = new double[nLoc], SquaredDifferences = new double[nLoc],
+                LogComponentTau2 = new double[scheme == BapsScheme.AnisotropicGibbs ? owner._components : 0],
+            };
             Array.Fill(state.Eta, 1.0);
             if (scheme == BapsScheme.Collapsed) state.Evidence = owner.MarginalLogTarget(1.0, out state.Solve);
             return state;
@@ -368,6 +423,7 @@ public sealed class Baps
         public BapsState Copy() => new()
         {
             Beta = (double[])Beta.Clone(), Eta = (double[])Eta.Clone(), SquaredDifferences = (double[])SquaredDifferences.Clone(),
+            LogComponentTau2 = (double[])LogComponentTau2.Clone(),
             Sigma2 = Sigma2, Tau2 = Tau2, LogLambda = LogLambda, Evidence = Evidence, Solve = Solve,
         };
     }
@@ -379,18 +435,24 @@ public sealed class Baps
         BapsScheme.Collapsed => new IBlock<BapsState>[] { new LogLambdaBlock(this) },
         BapsScheme.LocallyAdaptiveGibbs => new IBlock<BapsState>[]
         {
-            new CoefficientBlock(this, adaptive: true), new NoiseBlock(this), new PenaltyBlock(this, adaptive: true), new LocalBlock(this),
+            new CoefficientBlock(this, scheme), new NoiseBlock(this), new PenaltyBlock(this, adaptive: true), new LocalBlock(this),
         },
-        _ => new IBlock<BapsState>[] { new CoefficientBlock(this, adaptive: false), new NoiseBlock(this), new PenaltyBlock(this, adaptive: false) },
+        BapsScheme.AnisotropicGibbs => new IBlock<BapsState>[]
+        {
+            new CoefficientBlock(this, scheme), new NoiseBlock(this), new ComponentSmoothingBlock(this),
+        },
+        _ => new IBlock<BapsState>[] { new CoefficientBlock(this, scheme), new NoiseBlock(this), new PenaltyBlock(this, adaptive: false) },
     };
 
     // β | σ², τ², y ~ N(β̂, σ²A⁻¹) with A = ZᵀZ + λP and λ = σ²/τ², or, in the locally adaptive scheme,
-    // A = ZᵀZ + Dᵀdiag(λ_i)D with λ_i = λ·η_i; β̂ = A⁻¹Zᵀy.
-    private sealed class CoefficientBlock(Baps owner, bool adaptive) : IBlock<BapsState>
+    // A = ZᵀZ + Dᵀdiag(λ_i)D with λ_i = λ·η_i, or, in the anisotropic scheme, A = ZᵀZ + Σⱼ λⱼPⱼ with λⱼ = σ²/τⱼ²;
+    // β̂ = A⁻¹Zᵀy.
+    private sealed class CoefficientBlock(Baps owner, BapsScheme scheme) : IBlock<BapsState>
     {
         private readonly double[,] _band = new double[owner._bw + 1, owner._nu];
         private readonly BandCholesky _factor = new(owner._nu, owner._bw, BandFactorization.Ldlt);
         private readonly double[] _weights = new double[owner._localTerms];   // λ_i = (σ²/τ²)·η_i
+        private readonly double[] _componentLambdas = new double[owner._components];   // λⱼ = σ²/τⱼ²
         private readonly GaussianConditional _gaussian = new(owner._nu);
 
         public string Name => "coefficients";
@@ -400,7 +462,16 @@ public sealed class Baps
             int nu = owner._nu;
             double lambda = state.Sigma2 / state.Tau2;
             Array.Copy(owner._gram0, _band, owner._gram0.Length);
-            if (adaptive)
+            if (scheme == BapsScheme.AnisotropicGibbs)
+            {
+                for (int j = 0; j < _componentLambdas.Length; j++) _componentLambdas[j] = state.Sigma2 * Math.Exp(-state.LogComponentTau2[j]);
+                ((IAnisotropicPenalty)owner._penalty).AccumulateComponents(_band, nu, _componentLambdas);
+                _factor.DecomposeBanded(_band);
+                if (_factor.Status is not { PositiveDefinite: true, FlooredPivots: 0 })
+                    throw new InvalidOperationException(
+                        $"ZᵀZ + Σⱼ λⱼPⱼ is not numerically positive definite at λ = [{string.Join(", ", _componentLambdas)}] ({_factor.Status}).");
+            }
+            else if (scheme == BapsScheme.LocallyAdaptiveGibbs)
             {
                 for (int i = 0; i < _weights.Length; i++) _weights[i] = lambda * state.Eta[i];
                 ((ILocallyAdaptivePenalty)owner._penalty).AccumulateInto(_band, nu, _weights);
@@ -453,6 +524,17 @@ public sealed class Baps
                                          .Sample(rng);
             return true;
         }
+    }
+
+    // The anisotropic scheme's log smoothing variances ln τⱼ² | β: one Newton-proposal Metropolis step on their full
+    // conditional (ComponentSmoothing).
+    private sealed class ComponentSmoothingBlock(Baps owner) : IBlock<BapsState>
+    {
+        private readonly ComponentSmoothing _smoothing = new((IAnisotropicPenalty)owner._penalty, owner._priorShape, owner._priorScale);
+
+        public string Name => "component smoothing variances";
+
+        public bool Update(BapsState state, Xoshiro256PlusPlus rng) => _smoothing.Update(state.LogComponentTau2, state.Beta, rng);
     }
 
     // η_i | β, τ² ~ Gamma(φ + ½, φ + (Δβ)_i²/(2τ²)), the normal-precision update of one term under the Gamma(φ, φ) prior
