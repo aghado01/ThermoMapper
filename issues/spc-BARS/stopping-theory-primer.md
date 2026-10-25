@@ -1220,6 +1220,35 @@ Mahalanobis metric do better?
     dyadic discussion warned degenerates. An alternation run a fixed number of rounds keeps clear of that.
 - **Not yet run:** SPC itself on the within-core-whitened features, scored by BWD's rule as in §12.20.
 
+### 12.24 Is versicolor–virginica a projection artifact?
+
+**The question** (the user's intuition): two manifolds can look overlapped in one projection and come apart in another,
+so might a non-Euclidean distance or another embedding separate these two species?
+- **There is no hidden dimension.** Fisher's iris has exactly four measurements per flower, and every run here used all
+  four. The petal measurements carry the separation:
+  - Fisher ratios of 4.37 (petal width) and 3.24 (petal length), against 0.65 and 0.21 for the sepals;
+  - even so, 37–38% of the two species fall in the range they share on each petal feature.
+- **Every unsupervised axis of the merged cloud has one mode.** Along each, with errors at the best single threshold (of
+  100 flowers):
+  - its main axis (84% of the variance): 12 errors;
+  - log-size, the first principal component of the log measurements: 6 errors;
+  - the log-shape axes: 32 and 41 errors.
+- **The species nearly separate along one direction.**
+  - Fisher's discriminant, which needs labels, misplaces only 2 of the 100. Even there the density has only a shallow
+    dip, bottoming out at 75% of the lower mode.
+  - Learned from SPC's own cores instead (38 points and 36, without labels), the direction lies within about 12° of
+    the label oracle's (cos 0.979). It misplaces 3, with a dip at 73% of the lower mode.
+- **So it is not a hidden-manifold case.** A nonlinear embedding (geodesic, diffusion or hyperbolic) rearranges the same
+  neighbourhoods; it can't open a gap that the four measurements don't hold. The separation that exists is a thin
+  margin along one direction, with only a mild density dip, which a connectivity method sees as one cluster and a margin
+  or a mixture model reads well.
+- **The biology fits** (cited from memory, to confirm): Anderson (1936), whose measurements these are, proposed
+  *I. versicolor* as an allopolyploid derived from *I. virginica* and *I. setosa*. That would make it morphologically
+  intermediate, on a size continuum with virginica, rather than a separate manifold.
+- **It supports the user's hybrid quantitatively.** SPC's cores already carry nearly all the information needed to
+  learn the separating direction: 3 errors against the oracle's 2. SPC finds the cores, and a discriminant or a GMM
+  trained on them assigns the rest.
+
 **The kernel's shape can't help here** (a static check on the K = 10 edge lengths, kernels matched in scale):
 - A cut edge is longer than a virginica edge 51% of the time, and longer than a versicolor edge 70% of the time.
 - A kernel is a monotone map from distance to coupling, so it can only reweight by length. The cut's share of coupling
