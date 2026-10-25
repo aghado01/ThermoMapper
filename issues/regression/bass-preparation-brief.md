@@ -2875,6 +2875,6 @@ At the user's request, the hand-rolled sites left from OQ18's inventory, and tho
   - **BGP's bandwidth walk:** its skip-the-uniform form would change BGP's stream.
   - **The Poisson and interweaving Metropolis steps:** their acceptance ratios are model-specific.
   - **The contaminated-normal weights:** Bernoulli draws, not a conjugate update.
-- **Noted:** `Ess_IsLinearithmic`, a 10 s wall-clock check, failed a second time under machine load (26 s; about 1 s alone). The rerun was green. It is load-sensitive; a relative timing bound would harden it.
+- **Noted:** `Ess_IsLinearithmic`, a 10 s wall-clock check, failed a second time under machine load (26 s; about 1 s alone). The rerun was green. Hardened in `d0cc789`: four times the draws against one, measured in process CPU time with the least of three interleaved rounds, the ratio under 10. Measured 4.4–4.9 alone and up to 6.6 under a full suite's load, against 16 for the n² regression it guards against. A wall-clock ratio was not enough: it reached 18–24× under the same load.
 
 **Results** under the fact harness: `Maths.Regression.Tests` 375 of 375 (`20261024_193636381`), `Maths.Samplers.Tests` 105 of 105 (`20261024_194505994`; the first run failed only that timing check). The solution builds.
