@@ -1249,6 +1249,17 @@ so might a non-Euclidean distance or another embedding separate these two specie
   learn the separating direction: 3 errors against the oracle's 2. SPC finds the cores, and a discriminant or a GMM
   trained on them assigns the rest.
 
+**The SPC → GMM hybrid, as the user has run it in spike sorting.** A GMM wins on iris because it is given K and fits
+full covariances to a maximum of the likelihood. SPC supplies K, and labels from points near dense cores. Two
+refinements from iris:
+- **K = 3 needs the right level of the hierarchy.** Persistence and excess of mass chose 2 on iris unless the bracket cut
+  the merged cluster (§12.22). The three-species stage lasts about 0.4 e-folds at K = 5 and is absent at K = 10. Spike
+  units are usually better separated, which makes K easier there.
+- **Core covariances are truncated.** Against each full species, the cores' covariance volumes are 0.29× (setosa),
+  0.22× (versicolor) and 0.10× (virginica), with traces of 0.68×, 0.70× and 0.41×.
+  - Fixed as class models, the narrowest core, virginica's, would lose its boundary points.
+  - Used as EM's starting point on all the points instead, the covariances can grow back to the species' spread.
+
 **The kernel's shape can't help here** (a static check on the K = 10 edge lengths, kernels matched in scale):
 - A cut edge is longer than a virginica edge 51% of the time, and longer than a versicolor edge 70% of the time.
 - A kernel is a monotone map from distance to coupling, so it can only reweight by length. The cut's share of coupling
