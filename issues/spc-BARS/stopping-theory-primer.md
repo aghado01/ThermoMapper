@@ -1031,3 +1031,42 @@ quiet plateaus by construction, and melts of fragments below the floor go unflag
 
 **What sits beside the rule.** The two-quiet-volleys surprise rule stays as a soft check, since it stopped once too
 early (C12). The engine side (OQ7, OQ8) stays parked with the readout design.
+
+### 12.20 Iris across bandwidths: does a second axis open the species split?
+
+**The run.**
+- **The slices.** Iris on its fixed edge set (k = 10 mutual KNN with MST repair), with the Gaussian bandwidth scaled by
+  λ ∈ {0.5, 0.7, 1, 1.4, 2}. Since J = e^(−d²/2a²)/K̂, the scaled couplings are exactly J_λ = (K̂·J)^(1/λ²)/K̂; here
+  K̂ = 7.04, and the strongest edge has K̂·J = 1.
+- **The sweep.** 145 temperatures from 10⁻⁴ to 2, 8 replicas × 2,000 cycles, with per-edge co-membership. The
+  accumulator counts each undirected edge on one slot only (the j > i one), so a mean over both slots reads half the
+  true connectivity.
+- **The species window** is where the versicolor–virginica cut edges are mostly broken (mean co-membership < ½) while
+  both species hold (> ½).
+
+| Bandwidth | Cut breaks at T | Versicolor, virginica melt at T | Setosa melts at T | Species window | Most 32–63-point clusters per draw |
+|---|---|---|---|---|---|
+| ×0.5 | 0.020 | 0.030, 0.021 | 0.079 | 0 | 1.83 |
+| ×0.7 | 0.058 | 0.067, 0.057 | 0.120 | 0 | 1.77 |
+| ×1 | 0.100 | 0.109, 0.099 | 0.152 | 0 | 1.65 |
+| ×1.4 | 0.131 | 0.138, 0.130 | 0.167 | 0 | 1.37 |
+| ×2 | 0.153 | 0.159, 0.152 | 0.177 | 0 | 1.13 |
+
+- **No bandwidth opens a species window.** At every scale the cut breaks within 0.05 e-folds of the species' own melts,
+  against a split's width of about 0.75. Three ~50-point clusters never coexist: the 32–63-point bin peaks at 1.1–1.8
+  per draw.
+- **What the bandwidth axis does do is separate clusters of different tightness.** Setosa's edges are short (median
+  d²/2a² = 0.26), so its melt pulls away from the versicolor–virginica event as the bandwidth shrinks: 1.37 e-folds
+  apart at ×0.5, 0.15 at ×2.
+- **Why it can't separate these two.**
+  - The cut edges are as long as the species' own: median d²/2a² of 0.71 for the 34 cut edges, against 0.53
+    (versicolor) and 0.68 (virginica). Scaling the bandwidth scales all of them nearly alike.
+  - The cut is also thick. 27 of the 100 points (13 versicolor, 14 virginica) have an edge across, and the cut carries
+    17–21% of each species' internal coupling.
+  - On this graph, versicolor and virginica are one elongated cluster with a boundary, not two clusters with a bridge.
+- **Where a second axis would have to act instead.**
+  - On the edge set: the neighbour count K, a density-aware scaler, or the feature space itself.
+  - BWD 1996's sparser K ≥ 5 graph found a three-species stage. Plain mutual 5-NN iris has 11 components, so its
+    MST-repaired versicolor–virginica link is thin by construction.
+  - That points a grid search at the graph's construction parameters, scored by the cut's co-membership against the
+    species' own, rather than at the bandwidth alone.
