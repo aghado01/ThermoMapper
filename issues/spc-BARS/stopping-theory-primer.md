@@ -265,6 +265,7 @@ entropy) suit it better.
 | C31 | One KNN graph shows one hierarchy level per K: K selects by cluster mass, the bandwidth grows with K, and the finer gaps fill with edges | §12.27 | Predicted by C30 across K = 5–320; SW-checked at K = 5 and 10 | SW at K = 40–320 |
 | C32 | A union of KNN scales weighted (a_min/a_s)², a discrete Gaussian scale mixture, puts every level of a hierarchy into one T-stack | §12.27 | Observed on BlattHierarchy; equal weights flood; `HierarchyEom` mixes levels on it | Other spreads and real data; a resolver that reads levels |
 | C33 | On hierarchical data a range-relative bump gate sees only each curve's largest feature; the smaller levels are steps and shoulders | §12.28 | Observed (BlattHierarchy, both graphs) | Scale-relative prominence, or a split-rate channel from each volley's own points |
+| C34 | The compiler drops MST repair edges whose coupling underflows, so Gaussian graphs come out disconnected across wide gaps, and a stage that begins at the grid's cold end then measures the grid | §12.27, §12.29 | Observed (edge counts against Cauchy; S₂ at the cold end) | Find where the edges are dropped; keep repair edges at a floor coupling, or report components |
 
 ---
 
@@ -1518,3 +1519,59 @@ it surprised.
   because the coarse and medium levels aren't in the T-stack at all. So the graph choice (§12.27) comes before the
   stopping rule.
 - **One spread and one seed pair: exploration.**
+
+### 12.29 The lever grid beyond iris: AnisotropicGaussian, BlattHierarchy's spreads and Landsat
+
+The user dropped iris as too limited and asked for the same SPC-only levers on the datasets in the repo.
+
+**The run.**
+- **The grid.** K ∈ {5, 10} × five couplings (Gaussian, Cauchy, LMP, shared neighbours, mutual reachability) ×
+  q ∈ {20, 100}. 141 temperatures over [10⁻⁶, 3], 4 replicas × 1,000 cycles, one seed.
+- **The scores, per label level, by BWD's rule.**
+  - **A stage:** the partition has exactly k real clusters, each holding at least 0.4 of the level's smallest class
+    (iris's 20 of 50), with k distinct majority labels.
+  - **Best matched share:** each class is credited once, by its largest real cluster.
+  - **`HierarchyEom`'s pick:** minimum cluster size N/50, and whether its selection matches the level.
+
+**A caveat that changes how the stage widths read (C34).**
+- **The Gaussian graphs lose the MST repair edges whose couplings underflow** (§12.27). The shared-neighbour and
+  mutual-reachability graphs here reuse the Gaussian graph's edge set, so they lose them too.
+- **Where classes are far apart, these graphs start out disconnected** at the grid's cold end: S₂ there is 0.333 for the
+  three isotropic classes and 0.167 for BlattHierarchy's six medium clusters. Their stage begins at the end of the grid,
+  so its width measures the grid, not a coupling.
+- **The Cauchy graphs stay connected** (S₂ = 1 at the cold end) and give the honest widths.
+
+**AnisotropicGaussian.**
+- **The generator's seed.** Generator seed 55 spreads the three mean directions evenly. Seed 42, the default, puts two
+  means 0.53–0.59 apart at radius 4, so at a = 1 two of its classes are the same distribution.
+- **a = 1 (means 6.9σ apart).** Every lever except LMP at K = 5 finds the three classes, with matched 0.998, and EOM
+  picks three. On the connected Cauchy graph the stage is 3.0–4.2 e-folds.
+- **a = 3 and a = 5.** No lever finds three. The best are slivers, with matched 0.55: 0.11 e-folds (mutual
+  reachability, K = 10, a = 3) and 0.21 (shared neighbours, K = 5, a = 5). EOM returns one to three clusters.
+- **Elongated clusters whose long axes reach toward each other leave no density dip at the KNN scale.** This is the
+  GMM's case: it's decided by shape, which a graph built on distances alone doesn't see. The Bayes accuracy under the
+  generator's true model isn't computed yet, so how much of the loss is unavoidable is open.
+
+**BlattHierarchy across leaf spread** (stage e-folds at q = 20; spreads 0.3 and 0.45 read alike):
+
+| Spread | Gaussian K = 5, 10 | Cauchy K = 5, 10 | Others | `HierarchyEom` |
+|---|---|---|---|---|
+| 0.15 | fine 6.0–6.1, from the cold end | coarse 1.9, medium 4.3–4.5, fine 1.9–3.1 | LMP K = 10: fine 12.1; shared neighbours and mutual reachability: medium plus fine | the 24 fine clusters, except LMP K = 5 |
+| 0.3, 0.45 | medium 9.6–11.4; fine gone | coarse 2.1–2.6, medium 5.0–6.4; fine gone | medium 8–12; fine gone | the 6 medium clusters on most graphs |
+
+- **At spread 0.3 the fine clusters stop separating on every graph.** Their centres are 1.13 apart, which is 3.8σ.
+- **Only Cauchy shows the coarse pair,** because it's the only kernel whose repair edges survive.
+- **EOM picks the finest level each graph resolves,** never the coarse pair.
+
+**Landsat** (all 6,435 points, 36 raw features):
+- **No lever finds the six classes, or anything near them, at any temperature.**
+  - Every graph except LMP is connected at the cold end, and that one cluster sheds and melts without splitting.
+  - The best matched share is 0.24–0.41: one giant cluster led by one class.
+  - EOM returns one or two clusters.
+- **The remaining levers are in modelling the data, not the graph.** The 36 features are a 3×3 pixel neighbourhood × 4
+  spectral bands. Candidates: the centre pixel's four bands, standardization, or a projection.
+
+**Across datasets.**
+- q = 100 against 20 moves stage widths by under 10% everywhere, as on iris.
+- LMP at K = 5 fragments every dataset (S₂ 0.01–0.03 at the cold end), as on iris. At K = 10 it behaves.
+- **One pass, one seed: exploration.**
