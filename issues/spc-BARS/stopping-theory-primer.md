@@ -856,3 +856,40 @@ Heat capacity is out of scope. Pressure-tested against the 289-point cluster-siz
   - MagnetizationVariance locates the giant's transitions;
   - FkReduced gives spans where a second cluster is born by a split;
   - S₂'s flags cover every event, the lower hierarchy levels included.
+
+### 12.16 Why iris reads differently, and how BWD and Domany read it
+
+From the 289-point cluster-size histograms (cluster counts per draw by size bin):
+- **The stage-1 plateau starts at about zero temperature.**
+  - From T = 0.0046 to about 0.05, every draw holds exactly one 32–63-point cluster (setosa) and one 64–127-point
+    cluster (versicolor plus virginica).
+  - Setosa splits off through the single MST repair edge at T* ≈ 2×10⁻⁶ (§12.8). So within any sensible bracket there is
+    no ordered phase and no cold peak: the superparamagnetic plateau is already there.
+  - FkReduced therefore reads as a plateau (setosa²/N ≈ 16.7), then a cliff, with no rise. MagnetizationVariance sits at
+    62–71% of its peak across the plateau, from setosa's colour collisions with the larger cluster.
+- **The three-species stage is too short to make a plateau.**
+  - The versicolor-plus-virginica cluster starts breaking near T = 0.05; at T = 0.0858 it is present in half the draws,
+    which is the MagnetizationVariance peak.
+  - By T = 0.10 it is gone, and its pieces are already falling below 32 points. By T = 0.12 the system has melted.
+  - The three species coexist for roughly 0.2–0.3 e-folds, under a split's own width w_q ≈ 0.75. That is Thread I's
+    shoulder case: a cluster that lives less than w_q makes no bump of its own, and here its split overlaps the melt.
+- **How the papers read it,** as recorded in the parity battery (`BwdParityTests.cs`):
+  - **BWD 1996 read stage 1 off the plateau,** not off a peak: setosa clean, versicolor and virginica merged, 125 correct
+    and 25 unclassified. SPC clusters from the spin–spin correlations at a temperature inside a plateau. A peak only
+    marks the passage between two plateaus, and the plateau's hot cliff bounds where to read it.
+  - **Domany 1999 (§3.1) got the species with a second stage:** SPC rerun on the merged cluster alone, about 2
+    unclassified.
+  - **The parity battery** reproduces both with FkReduced's plateau-and-cliff landmarks and with the T-stack dendrogram
+    (CutToK(2) the cold 50/100 stage, CutToK(3) the brief hot three-way).
+- **What it means for regime A's readout.**
+  - Peaks alone miss iris's structure. The readout has to read plateaus and cliffs as well. S₂ carries every event as a
+    step: the steepest points of S₂, the roots of its second derivative, are a closed-form readout the spline already
+    supports. The current readout only reads maxima.
+  - That extension would be engine work, parked with the readout design.
+- **What it means for regime B** (a hypothesis, unverified).
+  - A cluster that lives less than w_q can't be resolved by sampling it more densely: its split overlaps the melt in the
+    physics, whatever the grid.
+  - Domany's second stage changes the system instead. A global rescale of the couplings wouldn't separate the split from
+    the melt, since it moves both temperatures by the same factor. The rebuilt graph's own bandwidth changes the
+    contrast between near and far edges nonlinearly, and that can.
+  - If so, regime B for short-lived clusters is a re-graphed subset, not a denser sweep.
