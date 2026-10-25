@@ -173,6 +173,8 @@ Existing covariance callers may legitimately require regularization or inverse o
 - **Phase C landed (2026-10-24, `d59a0c4`):** `HierarchicalScheme { Centred, CollapsedPopulation, Interweaved, ParameterExpanded }` and `HalfTDeviationPrior`, each a different block list on the same scan. The collapsed block uses the dense path of `GaussianConditional`, and the interweaving's non-centred step is a Metropolis block. The block scan composed all of them without change.
 - **Phase D landed (2026-10-24, `21f6c04`, `6880dcf`, `e9e021b`):** `RandomWalkMetropolis` in `Maths.Samplers.Blocks`; BAPS renamed (`Baps`, `BapsScheme { Gibbs, Collapsed, LocallyAdaptiveGibbs }`) with its Gibbs schemes as a block Gibbs scan and its collapsed scheme as a Metropolis block; BARS's step as a scan of the knot step and the weight block on its cadence. All bit-identical. BGP's walk keeps its own step, since its acceptance skips the uniform when the ratio is at least 1. OQ18's plan is complete; BASS's blocks are the next clients.
 
+- **Chains start on the support (2026-10-24, `6bc5134`).** BARS's overdispersed start sheds knots until the posterior admits it, refuses a run whose zero-knot design is refused, and throws on a retained draw off the support. A chain started off the support can be stranded there for the whole run, so BASS's reversible-jump start over basis functions needs the same rule.
+
 ## Numerical and operation contracts
 
 ### Dense factor maintenance

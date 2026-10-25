@@ -419,6 +419,9 @@ The knot moves integrate β and σ² out given the weights, so the sweep is a va
 ### BARS: orchestration and readouts
 
 **Chain start.** Each chain starts overdispersed: $k\sim U\{0..4\}$ with sorted uniform knots. With `temperLevels` set, each chain is a parallel-tempering ladder, which cannot be combined with the resampler or with `adaptKernelTau`.
+- **On the support.** A start the posterior refuses sheds knots at random until it is admissible; a start it admits is kept and draws nothing. A chain started off the support leaves only by a proposal onto it, so with more knots than a few observations admit it never moved. At 6–9 points a 4-knot start held for the whole run, and its NaN draws made the pooled curve NaN (found by the SPC × BARS work, 2026-10-24).
+- **No admissible start.** If even the zero-knot design is refused, `Run` throws with the reason. Under the default support gate, 5 evenly spaced points refuse even the zero-knot cubic: its interior columns carry 0.94 points' mass. Before, such runs returned NaN curves whose peak modes still came out.
+- **Retained draws stay on the support.** A draw off it throws, instead of passing NaN or unconverged coefficients into the curve and the peaks.
 
 **Readouts, admission outcomes and checkpoints (step 3.4).**
 - **Readouts.** Each chain's readout statistics (`BarsReadout`) merge across chains once ([Samplers](./Samplers.md), "Readouts, traces and checkpoints"):

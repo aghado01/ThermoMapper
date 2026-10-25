@@ -2921,3 +2921,20 @@ At the user's request: the draws' chains in `PointwiseLogDensity`, each unit's r
   - **A k̂ that reads clumped ratios correctly** is not built and has no source yet.
 
 **Results** under the fact harness: `Maths.Samplers.Tests` 109 of 109 (`20261024_224042837`), `Maths.Regression.Tests` 400 of 400 (`20261024_224419932`).
+
+### BARS chains start on the support — 2026-10-24
+
+Raised by the SPC × BARS stopping work, which saw a 5-point BARS fit return an all-NaN curve and noise variance, with the knot count frozen at 2.0 and peak modes still reported (`6bc5134`).
+
+- **The cause: starts off the posterior's support.** The overdispersed start draws up to four knots. On a few points a large start is refused (too few observations for its basis functions, or a column under the support gate's one-point mass).
+  - A chain off the support leaves only by a proposal onto it. Where every neighbour is refused too, it never moves, and its draws are fits at configurations the posterior gives no mass: NaN where the design is rank deficient.
+  - At 5 points nothing is admissible: the zero-knot cubic's interior columns carry 0.94 points' mass. So every chain sat at its start, and the mean knot count was the starts' average.
+  - It reached further than 5 points. At 6, 7 and 9 points a chain started at four knots held them for the whole run, so the pooled curve was NaN although admissible configurations existed.
+- **The fix.**
+  - A start the posterior refuses sheds knots at random until it is admissible. A start it admits is kept and draws nothing, so its chain is bit-identical.
+  - If even the zero-knot design is refused, `Run` throws with the reason.
+  - A retained draw off the support throws, rather than pass NaN or unconverged coefficients into the curve and the peaks.
+- **Tests** (`BarsStartTests`): at 4 and 5 points the run is refused, naming ThinSupport. At 6 and 9 points, with four chains and up to four starting knots, every draw and the curve are finite. Both failed before the fix.
+- **For BASS:** its reversible-jump start needs the same rule (port brief).
+
+**Results** under the fact harness: `Maths.Regression.Tests` 404 of 404 (`20261024_231540640`).
