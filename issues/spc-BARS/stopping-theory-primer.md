@@ -243,7 +243,7 @@ entropy) suit it better.
 | C9 | L² ≤ D_J | This primer | Checked here | Lean (L1) |
 | C10 | A bounded mean's excursion is at most ((b − a)/2)√D_J | This primer | Checked here; tightened in §12.2 (C15) | Lean (L1) |
 | C11 | A rigid switch hidden beyond its θ-plateaus forces D_J ≥ ℓ(θ)² | This primer | Checked here, unconditional (§12.1): holds for coupled clusters; θ-plateaus restated against (q − 1)/q | Lean (L1); E2 on toys |
-| C12 | Two quiet volleys reduce aliasing | Argon notes | Heuristic | E4; anytime-valid reformulation (§6) |
+| C12 | Two quiet volleys reduce aliasing | Argon notes | Heuristic, tested (§12.11): no premature stop on six curves, but one stop came at the very volley the bump first registered, with no surprise flagging it | anytime-valid reformulation (§6); more curves |
 | C13 | The global grid's union is non-uniform after refinement | Early dyadic discussion | Withdrawn (the union stays uniform) | none needed |
 | C14 | Critical slowing down makes regime-A noise heteroscedastic | Early dyadic discussion | Withdrawn (SW suppresses it; replicates measure the rest) | none needed |
 | C15 | A [0, 1] observable's Fisher angle moves at most L ≤ √D_J, so its excursion is at most (b − a)·sin(min(√D_J, π)/2), sharply | §12.1–12.2 | Checked here (proof; enumeration) | Lean (L1) |
@@ -629,6 +629,8 @@ bracket [0.0129, 1.031].
   prominence gate) ran on each volley's subsample of the main-budget curves of §12.9: v = 2 to 6, 5 to 65 points.
   v = 1 has 3 points, too few for a cubic.
 - **Equal weights.** The run API takes no per-point weights, so every point weighs the same (W ≡ I).
+- **v = 2 is degenerate.** At 5 points every fit returns a NaN curve and noise variance, with the knot count frozen at
+  2.0. Nothing registers there, so the table below is unaffected; the first usable fit is v = 3 (9 points).
 - **Registration.** A bump counts as registered when a peak mode with posterior mass ≥ 0.5 falls inside the dense bump's
   FWHM. Every registration here reached mass ≥ 0.9 at once.
 
@@ -664,3 +666,48 @@ Widths, errors and interval widths are in e-folds of ln T.
   - C12's two-quiet-volleys rule, which needs each fit's predictive band at the next volley's midpoints;
   - an operating curve proper, which needs more than six bumps (E3's synthetic bumps, or more datasets);
   - the replicate-variance weights of §1, which need a weighted entry point.
+
+### 12.11 C12: midpoint surprises and the two-quiet-volleys rule
+
+**The run.**
+- **The surprises.** Each volley's fit from §12.10 was read on the full grid. At the next volley's new midpoints,
+  z = (ȳ − f̂)/√(sd_f² + se²), with ȳ the replicate mean, f̂ and sd_f the fit's posterior mean and sd, and se the
+  midpoint's replicate standard error. A second form uses BARS's own noise variance σ̂² in place of se².
+- **The rule.** A volley is quiet when max |z| over its midpoints stays under the Bonferroni threshold
+  Φ⁻¹(1 − 0.05/2m), as the argon notes have it (2.73, 2.96 and 3.16 for 8, 16 and 32 midpoints). The rule stops at the
+  second quiet volley in a row.
+- **The first usable fit is v = 3,** since v = 2 is degenerate. So surprises start at volley 4, and the rule can fire at
+  volley 5 at the earliest.
+
+| Curve | Bumps registered (E4) | max \|z\| at volley 4 / 5 / 6 | Rule fires (replicate z) | Rule fires (model z) |
+|---|---|---|---|---|
+| toy FkReduced | v = 3 | 1.2 / 2.1 / 2.1 | 5 | 5 |
+| toy MagnetizationVariance | v = 4 | **13.7** / 1.0 / 1.4 | 6 | 6 |
+| toy heat capacity | v = 4 | **6.5** / 2.9 / 1.9 | 6 | never by 6 |
+| iris FkReduced | none | **2.9** / 1.8 / 2.4 | 6 | 5 |
+| iris MagnetizationVariance | v = 5 | 1.5 / 2.4 / 2.1 | 5 | 5 |
+| iris heat capacity | v = 4; the T = 0.16 bump never | 1.8 / **5.9** / 2.3 | never by 6 | never by 6 |
+
+Bold marks a volley that wasn't quiet.
+
+- **No stop came before the last registration** on these six curves.
+- **The surprises find features when a midpoint lands on them.**
+  - The toy's MagnetizationVariance volley 4 peaks at T = 0.0141, the split's own peak.
+  - Its heat capacity peaks at T = 0.133, on the melt's shoulder.
+  - Iris's heat capacity volley 5 peaks at T = 0.110, where the v = 4 fit had the melt registered but its shape
+    under-resolved.
+- **But a quiet volley can mean a wide band, not a resolved curve.**
+  - Iris's volley 4 is quiet on MagnetizationVariance and heat capacity, though neither bump had registered in the
+    v = 3 fit.
+  - Iris's MagnetizationVariance is quiet at volleys 4 and 5, so the rule fires at 5: the very volley its bump first
+    registers, with no surprise ever flagging it. One volley less of resolution and the stop would have been premature.
+  - This is the power question §6 left open, now observed: the holdout's power falls where the posterior band is wide.
+- **The minor melt doesn't move the rule either way.** Iris's heat capacity never fires because of the main melt's
+  shoulder at volley 5. The unregistered T = 0.16 bump draws no surprise of its own.
+- **The two noise forms mostly agree.** BARS's homoscedastic σ̂² is smaller than the replicate variance at the heat
+  capacity peaks, which run noisiest. So the model form is louder there (8.3 against 5.9 on iris) and quieter on flat
+  stretches.
+- **Coverage.** At quiet volleys, 88–100% of midpoints fall within ±1.96, against a nominal 95%, on 8 to 32 midpoints.
+- **Where that leaves C12.** The rule is a reasonable heuristic here, not a guarantee, and its failure mode is the one
+  §6 predicted: optional stopping over low-power tests. The S₂ certificate doesn't share it. The flagged runs of §12.9
+  hold every bump of both datasets, the unregistered one included, whatever the surprises say.
