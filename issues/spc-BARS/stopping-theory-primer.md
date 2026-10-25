@@ -1088,7 +1088,26 @@ early (C12). The engine side (OQ7, OQ8) stays parked with the readout design.
   - The size bins show that kind of stage: about 3.2 clusters of 16 or more points per draw at K = 5 and T ≈ 0.06, and
     about 2.7 at K = 10 and T ≈ 0.097, with many points shed into small clusters.
   - Whether those are species-pure cores needs BWD's own partition rule (co-membership above ½ on edges, then
-    components) and a purity count. Not yet run.
+    components) and a purity count; see the purity check below.
+
+**BWD's partition rule through the three-core stage.** Per-edge co-membership, pooled over 8 replicas, at 33
+temperatures from 0.02 to 0.16. Edges above ½ are kept, components taken. A cluster of 20 or more points counts as
+real, residue is the points in clusters under 5, and "correct" is the sum of the real clusters' majority counts.
+- **K = 5 has a three-species stage,** from T = 0.0465 to 0.0687, about 0.39 e-folds.
+  - At its onset: setosa 43 (pure), versicolor 38 (pure), virginica 36 (33 virginica and 3 versicolor). That is 114
+    correct, with residue 28 and 5 more points in small clusters.
+  - BWD 1996 read 45/40/38 with 25 unclassified, so this graph reproduces their stage closely.
+  - Through the stage the virginica core shrinks to 21 points while versicolor holds at 34–38.
+  - Its MagnetizationVariance peak (T = 0.0455) sits at the stage's onset.
+- **K = 10 never reaches it.** The merged cluster sheds from 90 to 67 points (T = 0.02 to 0.089), then loses virginica
+  to fragments: 47 points (38 versicolor, 9 virginica) at T = 0.095. Virginica melts before it separates as a cluster.
+- **So the neighbour count is the second axis that matters for iris, read at the level of cores.**
+  - The split happens between cores once the boundary points have shed, which is why the edge-averaged window above
+    understated it.
+  - On a sparser graph, virginica's core holds together long enough to come apart from versicolor's.
+  - Bandwidth and kernel shape don't reach this: they reweight the same edges by length.
+  - The stage is still narrower than a split's width w_q ≈ 0.75. So in χ it shows as a shoulder rather than its own
+    plateau, and regime A would read it from MagnetizationVariance's peak with a narrow window after it.
 
 **The kernel's shape can't help here** (a static check on the K = 10 edge lengths, kernels matched in scale):
 - A cut edge is longer than a virginica edge 51% of the time, and longer than a versicolor edge 70% of the time.
