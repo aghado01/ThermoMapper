@@ -1320,6 +1320,37 @@ the graph.
   - q = 1000 from an ordered start;
   - the readout's θ and peripheral capture, applied to the shared-neighbour stage.
 
+### 12.26 Per-cluster covariances across temperature
+
+**The idea** (the user's): bring the GMM's insight inside SPC as an observable. Compute each cluster's covariance at
+each temperature and follow how it evolves.
+- **The hypothesis.** Shedding from a cluster's outer edge shrinks its variance in every direction. Shedding from the
+  saddle between two hidden lobes empties the middle, so variance along the axis joining them holds up while the others
+  shrink, until the split.
+- **The data.** BWD's partition at each of 33 temperatures (K = 5, Gaussian couplings, the per-edge co-membership of
+  §12.20), with 4×4 covariances of each cluster of 20 or more points. The label-based separating direction is used only
+  to check.
+
+**What the merged versicolor-plus-virginica lineage does before it splits** (T = 0.020 → 0.044, 90 → 74 points):
+- **Variance along the eventual split axis holds while the rest shrinks.**
+  - Total variance falls by 32%: the top eigenvalue 0.906 → 0.590, the third 0.068 → 0.040.
+  - Variance along the separating direction stays near 0.23–0.26, so its share of the total rises from 0.23 to 0.30.
+  - At the split (T = 0.0465), the children's shares drop to 0.07 (versicolor core) and 0.16 (virginica core).
+- **No single snapshot shows it.** The top axis stays unimodal (bimodality coefficient 0.41–0.44, under the 0.555
+  threshold), and it isn't the split axis (cos 0.45–0.53).
+- **Without labels, the direction is only loosely identified.** The direction where variance holds up best between two
+  temperatures solves C(T₂)v = λC(T₁)v.
+  - Its top ratio barely leads the second (1.07–1.08 against 1.02–1.06), while one direction loses 50–67%.
+  - So the trajectory narrows the split axis to a plane rather than a line. The leading vector's agreement with the
+    label direction wanders with the window (cos 0.44–0.93).
+  - Projected on it, the 100 versicolor and virginica flowers give 11–29 errors at the best threshold, against 3 for
+    the direction learned from the cores after the split. The margin is thin enough that a 20° tilt costs a lot.
+- **What it is good for.**
+  - A split precursor: a lineage whose variance share along some direction rises as it sheds is likely to split. That
+    could tell regime B where to sample densely for hierarchy nodes.
+  - Each lineage's shape becomes a feature tracked across T, which suits the process-visualization ambition.
+  - For assignment, the children's covariances after the split, the cores, still give the sharp direction.
+
 **The kernel's shape can't help here** (a static check on the K = 10 edge lengths, kernels matched in scale):
 - A cut edge is longer than a virginica edge 51% of the time, and longer than a versicolor edge 70% of the time.
 - A kernel is a monotone map from distance to coupling, so it can only reweight by length. The cut's share of coupling
