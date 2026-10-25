@@ -714,5 +714,11 @@ Bold marks a volley that wasn't quiet.
   stretches.
 - **Coverage.** At quiet volleys, 88–100% of midpoints fall within ±1.96, against a nominal 95%, on 8 to 32 midpoints.
 - **Where that leaves C12.** The rule is a reasonable heuristic here, not a guarantee, and its failure mode is the one
-  §6 predicted: optional stopping over low-power tests. The S₂ certificate doesn't share it. The flagged runs of §12.9
-  hold every bump of both datasets, the unregistered one included, whatever the surprises say.
+  §6 predicted: optional stopping over low-power tests. The S₂ certificate doesn't share it.
+  - The flagged runs of §12.9 hold every event bump of both datasets, the unregistered one included, whatever the
+    surprises say.
+  - The toy's FkReduced bump is a lifetime, not an event. Its peak sits on the quiet three-stripe plateau, between the
+    flagged split and melts that bound it, so the flags hold 2 of the toy's 3 bump peaks (and all 3 of iris's).
+
+The experiments are charted in a dashboard, https://claude.ai/artifact/4a51qGP11a5JH2Qr5V4g3n (private; built from the
+scratch data, not from the repo).
