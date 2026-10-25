@@ -241,11 +241,16 @@ entropy) suit it better.
 | C7 | Im β₁ can't be estimated before the peak is resolved | Argon notes | Disputed in scope (§4) | Literature on zeros from Monte Carlo data |
 | C8 | D_J is the symmetrized KL divergence between endpoint Gibbs measures | Argon notes | Checked here (standard) | Lean (L1) |
 | C9 | L² ≤ D_J | This primer | Checked here | Lean (L1) |
-| C10 | A bounded mean's excursion is at most ((b − a)/2)√D_J | This primer | Checked here | Lean (L1) |
-| C11 | A rigid switch hidden beyond its θ-plateaus forces D_J ≥ ℓ(θ)² | This primer | Conditional on additive Var(E) | E2 on toys; theory for coupled clusters |
+| C10 | A bounded mean's excursion is at most ((b − a)/2)√D_J | This primer | Checked here; tightened in §12.2 (C15) | Lean (L1) |
+| C11 | A rigid switch hidden beyond its θ-plateaus forces D_J ≥ ℓ(θ)² | This primer | Checked here, unconditional (§12.1): holds for coupled clusters; θ-plateaus restated against (q − 1)/q | Lean (L1); E2 on toys |
 | C12 | Two quiet volleys reduce aliasing | Argon notes | Heuristic | E4; anytime-valid reformulation (§6) |
 | C13 | The global grid's union is non-uniform after refinement | Early dyadic discussion | Withdrawn (the union stays uniform) | none needed |
 | C14 | Critical slowing down makes regime-A noise heteroscedastic | Early dyadic discussion | Withdrawn (SW suppresses it; replicates measure the rest) | none needed |
+| C15 | A [0, 1] observable's Fisher angle moves at most L ≤ √D_J, so its excursion is at most (b − a)·sin(min(√D_J, π)/2), sharply | §12.1–12.2 | Checked here (proof; enumeration) | Lean (L1) |
+| C16 | D_J is blind to size; its false-alarm floor is about 2.8ρ(Δ ln T)² at q = 20 | §12.3 | Derived, unverified at scale | E2 |
+| C17 | Pair connectivities, so S₂, are monotone in β; ΔS₂ bounds every merge inside an interval | Argon notes (seed); §12.4 | Checked here (Grimmett 3.21; enumeration; parity dump) | Lean (L4) |
+| C18 | Superadditive cluster functionals are monotone; F_n counts significant merges | §12.4 | Checked here (proof; enumeration) | Lean (L4) |
+| C19 | S₂ at the bracket ends bounds the merge mass outside the bracket | §12.5 | Checked here (a corollary of C17); usefulness open | E5, against the graph's components |
 
 ---
 
@@ -315,3 +320,132 @@ These are cited from memory; confirm the details before relying on them.
 6. **What should regime B inherit** from regime A's final grid: the D_J map, the σ_E map, the regions' posterior widths?
    And should regime-B points ever feed back into the curve, which would need the per-point weights to pool
    observations of different provenance?
+
+---
+
+## 12. Findings, 2026-10-24 (exploration thread)
+
+A first pass on §5.3. Nothing here is a decision; §12.5 lists what it changes in §11, for discussion.
+
+**How it was checked.**
+- **Exact enumeration on a 9-spin toy:** two 4-cliques (J = 1) joined by a weak cut (four edges of 0.15), plus a loose
+  point (one edge of 0.03, so it detaches about 3 e-folds colder than the split). Spins are enumerated at q = 3, the
+  random-cluster measure at q = 20. The script is a scratch file, not committed.
+- **The Sep-16 parity profile dump,** `artifacts/parity-profiles.tsv`: the toy (N = 3200) and iris (k = 10), 48 log steps
+  over [0.05, 4]·T_ps, so Δ ln T = 0.093. It carries the FK channels but not MeanEnergy.
+
+### 12.1 C11 holds for coupled clusters (§11 Q1)
+
+- **Where the assumption came from.** 5.3 compared the system's thermodynamic length with the switching cluster's own,
+  which needs the cluster's energy uncorrelated with the rest. Comparing through an observable removes it.
+- **The bound.** Take any observable A with values in [0, 1] and mean μ(β). Bhatia–Davis gives Var(A) ≤ μ(1 − μ), so
+  |μ′| = |Cov(A, E)| ≤ √(μ(1 − μ))·σ_E. Integrating:
+  2|arcsin√μ(β₂) − arcsin√μ(β₁)| ≤ L(β₁, β₂) ≤ √D_J.
+  - The left side is the Fisher–Rao angle between Bernoulli(μ₁) and Bernoulli(μ₂).
+  - So this is data processing for Fisher information: no coarse-graining of the Gibbs path is longer than the path.
+- **The corollary, now unconditional.** For a split, take A = 1{A's and B's majority labels differ}, a function of the
+  whole coupled system. Its traversal forces L ≥ ℓ whatever the coupling. **Checked here:** on the coupled cliques,
+  three traversals give arcsine length ≤ L ≤ √D_J (1.03 ≤ 2.33 ≤ 3.01; 1.32 ≤ 3.26 ≤ 4.66; 0.43 ≤ 0.90 ≤ 0.97).
+- **A correction to the plateaus.** For a split, that indicator's hot plateau is (q − 1)/q, not 1, so θ > 1/q.
+  - At q = 20 the "5% plateaus" case is the T → ∞ limit, so ℓ(0.05)² ≈ 5.0 is never reached at finite T.
+  - 5.3's placement of the argon gate should be read with θ ∈ (1/q, ½).
+
+### 12.2 The sharp excursion bound (C10 tightened)
+
+- **The bound.** From the arcsine form, for A with values in [a, b]:
+  sup over β ∈ [β₁, β₂] of |⟨A⟩_β − ⟨A⟩_{β₁}| ≤ (b − a)·sin(min(L, π)/2) ≤ (b − a)·sin(min(√D_J, π)/2).
+- **It is sharp.** The two-level switch traces a Fisher–Rao geodesic and attains the bound on its own indicator:
+  sin(ℓ(θ)/2) = 1 − 2θ exactly.
+- **It never exceeds the trivial bound** b − a, unlike C10's linear form.
+- **Checked here:** 40 random observables × 300 random intervals, with worst ratios 0.75 (angle against L) and 0.61
+  (excursion against the sine bound). The two-level length over β ∈ [0, 20] at g = 19 is 2.6902, matching C3's
+  corrected closed form.
+
+### 12.3 What D_J cannot do: it is blind to size
+
+- **Every two-level event costs the same length** (C3), whatever the sizes on either side. A significant split and a
+  loose point detaching both cost about 2.7 at q = 20.
+  - Toy, in one-e-fold windows around each event, each about 2/3 traversed: D_J = 2.31 for the 4|4 split and 1.90 for
+    the loose point.
+- **So the false-alarm floor counts events, not mass.**
+  - An event at T* releases a latent heat of about (1 − 1/q)·T*·ln(q − 1). An interval traversing events at density ρ
+    per e-fold then has D_J ≈ (1 − 1/q)·ln(q − 1)·ρ·(Δ ln T)², about 2.8ρ(Δ ln T)² at q = 20.
+  - On a graph with many loose points ρ is of order N/E, so a uniform gate D_J ≤ c² needs spacing of order c/√(2.8ρ).
+    That is 5.1's √N count, reached from the event side.
+  - **Derived, unverified at scale;** E2's false-alarm side measures it.
+- **The θ-guarantee is vacuous for rigid splits after the first volleys.** At q = 20 a 10–90% traversal spans 1.93
+  e-folds in ln T; the 25–75% width is 0.78, matching C1's linearized 0.75. Once h < 1.93, no rigid split can hide at
+  θ = 0.1. The guarantee keeps its force for melts and k-way splits, which are narrower.
+- **And D_J ≤ 4 passes intervals carrying most of a split.** The toy's split window passes at 2.31 with 2/3 of the
+  traversal inside. That isn't a miss, since the split shows at the endpoints, but D_J can't tell it from background.
+  Something else has to read it.
+
+### 12.4 A monotone, size-weighted certificate
+
+The seed is the argon notes' closing remark: the unsubtracted FK mean is monotone, and "acts as an anti-aliasing
+certifier". The monotonicity chain itself is already written up in
+[fable-potts-griffiths-lemmas.md](../../lean/Protolemmata/fable-potts-griffiths-lemmas.md) (Grimmett Thm 3.21 with the
+Edwards–Sokal two-point identity).
+
+- **The fact.** For ferromagnetic Potts (every J_e ≥ 0) with q ≥ 1 on a finite graph, every pair connectivity
+  τ_ij(β) = φ_β(i ↔ j) is non-decreasing in β. That is the random-cluster comparison inequality, with the inhomogeneous
+  p_e = 1 − e^(−βJ_e). The mean of every increasing bond functional is monotone the same way.
+- **The observable is already recorded.** S₂ = ⟨Σ_k c_k²⟩/N² = (1/N²)·Σ_ij τ_ij is SusceptibilityFkCluster/N, the
+  default χ (`SusceptibilityKind.FkCluster`).
+- **The certificate.** Every τ_ij moves one way, so nothing inside an interval can exceed its endpoints. For disjoint
+  vertex sets A and B, the pair-averaged connectivity change at any β in [β₁, β₂] satisfies
+  Δτ̄_AB ≤ N²·ΔS₂/(2|A||B|). It needs endpoint means only: no Cauchy–Schwarz, no rigid clusters, no coupling
+  assumption.
+- **No event hides; an event can only be unlocalized.** An interval either carries a significant ΔS₂ or certifiably
+  contains no significant merge. For this observable, §2's unsampled-feature problem becomes a localization problem.
+- **The weighting is by size.** A merge of clusters of sizes a and b adds 2ab/N². Toy: ΔS₂ = 0.268 for the split against
+  0.131 for the loose point (D_J: 2.31 against 1.90).
+- **It weights by a product, not a minimum.** One point leaving a cluster of size a adds 2a/N², which beats a merge of
+  two n-clusters once a > n².
+  - **A size-floor-aware version.** Any superadditive g makes Σ_k g(c_k) increasing in the bonds. With g(c) = (c − n)₊,
+    a merge of two clusters of size ≥ n adds exactly n, and one point joining adds 1.
+  - So F_n = ⟨Σ_k (c_k − n)₊⟩/n counts significant merges, with shedding weighted 1/n. Toy (n = 3): 0.68 for the split
+    against 0.22.
+  - The SW kernel doesn't accumulate F_n today. It would be one more accumulator: engine work, parked with OQ7 and OQ8.
+- **Checked here.**
+  - Exact random-cluster enumeration at q = 20 over 601 temperatures: S₂, F₃, τ_AB and ⟨E⟩ are monotone throughout.
+  - Real SW data, the parity dump: S₂ has no violations on the toy and two on iris, the larger 0.0025 (noise level).
+- **A preview of the brackets:** ΔS₂ per interval, cold to hot, on stride subsamples of the 48-point grid (stride 16 is
+  Δ ln T ≈ 1.49, stride 4 is 0.37):
+  - toy: 0.460 0.180 0.000 at stride 16; 0.371 0.021 0.017 0.051 0.104 0.072 0.004 0 … at stride 4;
+  - iris: 0.151 0.334 0.001 at stride 16; 0.018 0.020 0.034 0.078 0.099 0.195 0.035 0.005 0.001 0 … at stride 4.
+
+### 12.5 What it changes in §11 (for discussion; nothing decided)
+
+- **Q1** is answered: C11 holds for coupled clusters (12.1).
+- **Q2:** the observable that suits a certificate is a monotone cluster functional, S₂ today or F_n with one
+  accumulator. Energy is its size-blind cousin.
+- **Q3:** with a monotone certificate an unflagged interval certifies itself, so a volley floor isn't needed for safety.
+  Thread I's count becomes a budget prior. The stop would then certify that every flagged interval is narrower than the
+  regime-B window, or resolved by the BARS readout.
+- **Q4:** each interval's decision is a one-sided test on ΔS₂ against a floor such as 2n²/N², with replicate error bars.
+  ΔS₂ telescopes over the dyadic tree: a parent's increment is the sum of its children's. How those tests compose across
+  volleys is still open.
+- **Q5:** the bracket gets an endpoint coverage check.
+  - S₂(0) − S₂(T_lo), with S₂(0) = Σ n_comp²/N² over the graph's connected components, bounds the merge mass colder than
+    the bracket. S₂(T_hi) − 1/N bounds what is hotter.
+  - In the dump, both datasets sit at 1/N on the hot side. On the cold side the toy reads 0.640 and iris 0.493, and the
+    toy's S₂ is still falling steeply at T_lo (0.17 in its first grid step).
+  - Whether that is the graph's component floor or merges colder than the bracket is a direct check against the graph.
+
+### 12.6 Experiments and Lean, refined
+
+- **E1** runs on the dump as it is. Δ ln T = 0.093 is about 8 points per w_q, enough to measure the FWHM in ln T of the
+  FkReduced and MagnetizationVariance bumps.
+- **E2** needs the MeanEnergy channel, which every SweepProfile carries and the dump omits. Stride subsamples (16, 8, 4,
+  2) of the 48-point grid are nested, so they stand in for volleys.
+- **E5, new: the monotone certificate against known inventories** (toy: three stripes and residue; iris: setosa, then
+  versicolor/virginica at stage 2). Score each stride's flagged intervals against the inventory, with ΔS₂'s noise floor
+  taken from replicate spread.
+- **L1 gains one lemma:** the Fisher-angle bound of 12.1 and 12.2 (Bhatia–Davis, then the arcsine substitution). It is
+  elementary.
+- **L4, new: monotone cluster functionals.**
+  - A superadditive g makes Σ_k g(c_k) increasing under adding bonds: finite combinatorics.
+  - Its mean is then monotone in β, either by the comparison inequality or by
+    d/dβ φ(f) = Σ_e p_e′·Cov(f, ω_e)/(p_e(1 − p_e)) ≥ 0 under positive association.
+  - It shares its one axiom with the potts-griffiths chain.
