@@ -188,8 +188,8 @@ public sealed record HalfTDeviationPrior(double Degrees = 1.0, double? Scale = n
 /// <para>
 /// With anisotropic smoothing (an <see cref="IAnisotropicPenalty"/>, such as a surface's x- and y-penalties) the
 /// population curve's prior precision is <c>Σⱼ Pⱼ/τ_0j²</c>, one smoothing variance per component, and their logs are
-/// updated as <see cref="BapsScheme.AnisotropicGibbs"/> updates its smoothing variances: a Newton-proposal Metropolis
-/// step on their full conditional, then a random-walk step on each (Bach &amp; Klein 2025). Every scheme accepts it.
+/// updated as <see cref="BapsScheme.AnisotropicGibbs"/> updates its smoothing variances (<see cref="SmoothingVarianceUpdate"/>:
+/// slice sampling by default, or Bach &amp; Klein's 2025 Newton update). Every scheme accepts it.
 /// </para>
 /// </summary>
 public sealed class HierarchicalPSpline
@@ -239,7 +239,7 @@ public sealed class HierarchicalPSpline
     public HierarchicalPSpline(double[,] design, double[][] responses, IBandPenalty penalty,
                                double priorShape = 1e-3, double priorScale = 1e-3, HalfTDeviationPrior? deviationPrior = null,
                                bool anisotropicSmoothing = false, ISmoothingVariancePrior? componentPrior = null,
-                               SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Newton)
+                               SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Slice)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(responses);

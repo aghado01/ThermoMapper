@@ -4,18 +4,22 @@ using Maths.Samplers.Blocks;
 
 namespace Maths.Regression.Spline.Baps;
 
-/// <summary>How the anisotropic schemes update their log smoothing variances (<see cref="ComponentSmoothing"/>). Both
-/// leave the full conditional invariant.</summary>
+/// <summary>
+/// How the anisotropic schemes update their log smoothing variances (<see cref="ComponentSmoothing"/>). Both leave the full
+/// conditional invariant. Slice is the default: in the pre-registered comparison of 2026-10-24
+/// (<c>SmoothingUpdateBenchmark</c>) it gave 1.28–1.37 times Newton's worst-component ESS per second on four BAPS regimes
+/// and 1.05 times on a hierarchical one.
+/// </summary>
 public enum SmoothingVarianceUpdate
 {
+    /// <summary>One slice-sampling update on each ln τⱼ² in turn (<see cref="SliceSampler"/>, width 1, at most 32
+    /// steps out): values only, no derivatives, and no rejections. The default.</summary>
+    Slice,
+
     /// <summary>Bach &amp; Klein's Newton-proposal Metropolis step on every ln τⱼ² at once (<see cref="NewtonMetropolis"/>),
     /// then one random-walk Metropolis step on each, which reach the tails the Newton step alone visits too
     /// rarely.</summary>
     Newton,
-
-    /// <summary>One slice-sampling update on each ln τⱼ² in turn (<see cref="SliceSampler"/>, width 1, at most 32
-    /// steps out): values only, no derivatives, and no rejections.</summary>
-    Slice,
 }
 
 /// <summary>
@@ -59,7 +63,7 @@ internal sealed class ComponentSmoothing
     private double[] _current = Array.Empty<double>();
 
     public ComponentSmoothing(IAnisotropicPenalty penalty, ISmoothingVariancePrior prior,
-                              SmoothingVarianceUpdate update = SmoothingVarianceUpdate.Newton)
+                              SmoothingVarianceUpdate update = SmoothingVarianceUpdate.Slice)
     {
         if (update is not (SmoothingVarianceUpdate.Newton or SmoothingVarianceUpdate.Slice)) throw new ArgumentOutOfRangeException(nameof(update));
         _penalty = penalty;

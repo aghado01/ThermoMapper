@@ -41,8 +41,9 @@ public enum BapsScheme
     /// as a surface's x- and y-penalties): component j has its own smoothing variance τⱼ², so <c>A = ZᵀZ + Σⱼ λⱼPⱼ</c> with
     /// <c>λⱼ = σ²/τⱼ²</c> (Bach &amp; Klein 2025). β and σ² are drawn from their conditionals as in <see cref="Gibbs"/>. The
     /// τⱼ² have no conjugate step, because the prior's pseudo-determinant <c>Πₗ Σⱼ γⱼₗ/τⱼ²</c> does not factor, so their
-    /// logs move together by one Newton-proposal Metropolis step (<see cref="NewtonMetropolis"/>) on their full conditional,
-    /// each under the IG(a, b) prior the other schemes give τ²: a Metropolis block within the Gibbs scan.
+    /// logs are updated on their full conditional by slice sampling, or by Bach &amp; Klein's Newton-proposal Metropolis
+    /// step (<see cref="SmoothingVarianceUpdate"/>), each under the IG(a, b) prior the other schemes give τ² unless another
+    /// is given (<see cref="ISmoothingVariancePrior"/>).
     /// </summary>
     AnisotropicGibbs
 }
@@ -59,8 +60,8 @@ public enum BapsScheme
 /// <paramref name="LogLambdaConvergence"/> and <paramref name="LogSigma2Convergence"/> are the ensemble shell's
 /// rank-normalized diagnostics (split R̂, bulk and tail ESS) on log λ and log σ², the functionals an early stop waits
 /// on. <paramref name="AcceptanceRate"/> is the sampling phase's, pooled over the scan's blocks: 1 for the Gibbs schemes,
-/// the Metropolis rate on log λ for the collapsed scheme, and for the anisotropic scheme (two conjugate blocks and one
-/// Metropolis block) <c>(2 + a)/3</c> with a that block's rate. <paramref name="ChainSeeds"/> are the resolved per-chain
+/// the Metropolis rate on log λ for the collapsed scheme, and for the anisotropic scheme 1 with the slice update and,
+/// with the Newton update (two conjugate blocks and one Metropolis block), <c>(2 + a)/3</c> with a its Newton step's rate. <paramref name="ChainSeeds"/> are the resolved per-chain
 /// seeds, and <paramref name="Checkpoint"/> the run's restart state when it was requested.
 /// <para>
 /// In <see cref="BapsScheme.AnisotropicGibbs"/> each draw's λ is the geometric mean of its components' λⱼ, so the λ
@@ -189,7 +190,7 @@ public sealed class Baps
     /// <param name="componentUpdate">How the anisotropic scheme updates the ln τⱼ² (<see cref="SmoothingVarianceUpdate"/>).</param>
     public Baps(double[,] design, double[] y, IBandPenalty penalty,
                        double priorShape = 1e-3, double priorScale = 1e-3, double mhLogStep = 0.6, double phi = 1.0,
-                       ISmoothingVariancePrior? componentPrior = null, SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Newton)
+                       ISmoothingVariancePrior? componentPrior = null, SmoothingVarianceUpdate componentUpdate = SmoothingVarianceUpdate.Slice)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);

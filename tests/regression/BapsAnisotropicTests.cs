@@ -243,7 +243,8 @@ public sealed class BapsAnisotropicTests
     {
         (TensorDesign td, double[] y, _) = Surface(seed: 31);
         var penalty = new TensorPenalty(td.NuX, td.NuY);
-        BapsResult newton = new Baps(td.Design, y, penalty).Run(BapsScheme.AnisotropicGibbs, chains: 4, masterSeed: 2, burn: 1000, samples: 1500);
+        BapsResult newton = new Baps(td.Design, y, penalty, componentUpdate: SmoothingVarianceUpdate.Newton)
+            .Run(BapsScheme.AnisotropicGibbs, chains: 4, masterSeed: 2, burn: 1000, samples: 1500);
         BapsResult slice = new Baps(td.Design, y, penalty, componentUpdate: SmoothingVarianceUpdate.Slice)
             .Run(BapsScheme.AnisotropicGibbs, chains: 4, masterSeed: 2, burn: 1000, samples: 1500);
         for (int j = 0; j < 2; j++)
