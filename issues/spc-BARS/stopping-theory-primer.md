@@ -235,7 +235,7 @@ entropy) suit it better.
 | C1 | A switch's width is 2 ln 3/ΔE in β, about 2.2/ΔS in ln T | Fisher-zeros note | Checked here | Lean (L2) |
 | C2 | Its nearest Fisher zero is at Im β₁ = π/ΔE | Fisher-zeros note | Checked here | Lean (L2) |
 | C3 | Its thermodynamic length is π for any ΔE and ΔS | Fisher-zeros note | Corrected here: π over the whole β-line; 2(arcsin√p₂ − arcsin√p₁) for a traversal, 2.69 for the physical range at q = 20 | Lean (L2) |
-| C4 | A split's width is w_q = 2.2/ln(q − 1), independent of cluster size | Fisher-zeros note | Derived, unverified (rigid-cluster model) | E1; dense sweeps |
+| C4 | A split's width is w_q = 2.2/ln(q − 1), independent of cluster size | Fisher-zeros note | Partly refuted by E1 (§12.9): FkReduced respects it; variance observables at melts and at the toy's background-mediated split run 3–9× narrower | done (E1) |
 | C5 | n_min ≤ 1 + ⌈2E·ln(q − 1)/2.2⌉ on a grid evenly spaced in ln T | Fisher-zeros note | Derived, unverified | E1, E3 |
 | C6 | The dense spacing is h ≈ a·(16ε/5)^(1/4) | Fisher-zeros note | Derived, unverified | Numeric, on a known analytic curve |
 | C7 | Im β₁ can't be estimated before the peak is resolved | Argon notes | Disputed in scope (§4) | Literature on zeros from Monte Carlo data |
@@ -247,14 +247,16 @@ entropy) suit it better.
 | C13 | The global grid's union is non-uniform after refinement | Early dyadic discussion | Withdrawn (the union stays uniform) | none needed |
 | C14 | Critical slowing down makes regime-A noise heteroscedastic | Early dyadic discussion | Withdrawn (SW suppresses it; replicates measure the rest) | none needed |
 | C15 | A [0, 1] observable's Fisher angle moves at most L ≤ √D_J, so its excursion is at most (b − a)·sin(min(√D_J, π)/2), sharply | §12.1–12.2 | Checked here (proof; enumeration) | Lean (L1) |
-| C16 | D_J is blind to size; its false-alarm floor is about 2.8ρ(Δ ln T)² at q = 20 | §12.3 | Derived, unverified at scale | E2 |
-| C17 | Pair connectivities, so S₂, are monotone in β; ΔS₂ bounds every merge inside an interval | Argon notes (seed); §12.4 | Checked here (Grimmett 3.21; enumeration; parity dump) | Lean (L4) |
+| C16 | D_J is blind to size; its false-alarm floor is about 2.8ρ(Δ ln T)² at q = 20 | §12.3 | Confirmed by E2 (§12.9): D_J scales with N, and reaches 127 on intervals with no cluster change | done (E2) |
+| C17 | Pair connectivities, so S₂, are monotone in β; ΔS₂ bounds every merge inside an interval | Argon notes (seed); §12.4 | Checked here (Grimmett 3.21; enumeration; parity dump; all 64 steps of the extended run) | Lean (L4) |
 | C18 | Superadditive cluster functionals are monotone; F_n counts significant merges | §12.4 | Checked here (proof; enumeration) | Lean (L4) |
 | C19 | S₂ at the bracket ends bounds the merge mass outside the bracket | §12.5 | Checked here (a corollary of C17); usefulness open | E5, against the graph's components |
 | C20 | S₂ bounds FkReduced: inside an interval, sup \|Δχ_red\| ≤ N·ΔS₂ | §12.7 | Checked here (proof; enumeration) | Lean (L4) |
 | C21 | No monotone cluster functional ignores shedding: merge(n, n) ≤ n·max join(a) over a ∈ [n, 2n) | §12.7 | Checked here (proof) | none needed |
-| C22 | The toy dump's bracket clips its cold edge | User observation; §12.7 | Checked here (§12.8): the cold side of the stripe split lies below T_lo; not a miscomputed bracket, and not components | Rerun with T_lo about an e-fold colder |
+| C22 | The toy dump's bracket clips its cold edge | User observation; §12.7 | Checked here (§12.8), and confirmed by the extended run (§12.9): the cold side of the stripe split lies below the old T_lo; not a miscomputed bracket, and not components | done |
 | C23 | A spanning tree's S₂ is a closed-form lower bound on S₂(T) | §12.8 | Checked here (comparison inequality; all 48 grid points on both datasets) | Lean (L4) |
+| C24 | A split through a sparse bridging population frees those spins too, so it is sharper than a bare split, towards a melt | §12.9 | Derived from E1, unverified | Toys that vary the bridge density |
+| C25 | Per-interval ΔS₂ tests lose power at fine volleys; a test that descends the dyadic tree keeps it | §12.9 | Observed (E5, cheap budget); the remedy is derived, unverified | Q4 design |
 
 ---
 
@@ -545,3 +547,76 @@ bracket [0.0129, 1.031].
 - **The graph-compiler link.** The background's couplings follow from one global bandwidth on data with two densities,
   under mutual KNN. LMP rescaling, off in the parity config, is the codebase's existing fix for density inhomogeneity.
   Whether parity wants it is a question for the graph-compiler work, not for this thread.
+
+### 12.9 E1, E2 and E5 on an extended grid
+
+**The run.**
+- **The grid.** A scratch harness (not committed) reran the toy and iris sweeps on the parity grid extended 11 steps
+  colder and 6 hotter at the same spacing: 65 temperatures from 0.0046 to 1.80, 5.97 e-folds, Δ ln T = 0.093. With 64
+  intervals, the stride-2^(6−v) subsamples are exact dyadic volleys v = 1 to 6.
+- **The budgets.** The main budget is 8 replicas × (1,000 burn-in, 2,000 cycles), 57 s for the toy. A cheap rerun at the
+  parity test's budget, 4 replicas × (200, 400), gives the noise comparison.
+
+**Two checks first.**
+- **Monotonicity (C17) holds on real SW data.** At the main budget, S₂ falls and ⟨E⟩ rises at all 64 steps on both
+  datasets, with no reversal beyond 2 SE. At the cheap budget, one reversal on iris exceeds 2 SE.
+- **The colder bracket holds the stripe split** (C22).
+  - The toy's S₂ is 0.857 at the new T_lo, against 0.564 at the old. The size histogram there shows one giant plus
+    about 36 singletons, 21 pairs and a few small clusters per draw: the stripes are joined, and only the background's
+    shedding tail lies outside.
+  - Iris reaches 0.549, near its floor once setosa's repair edge (T* ≈ 2×10⁻⁶) is excluded: (50² + 100²)/150² = 0.556.
+  - Iris's old T_lo missed about 0.06 of S₂ mass, consistent with small components joining through repair edges at
+    T* = 0.006–0.011.
+
+**E1, the narrowest bump** (C4).
+- **The yardstick.** A rigid split's variance bump p(1 − p) has a full width at half maximum (FWHM) of 1.38 in ln T at
+  q = 20. C4's 0.75 is the switch's 25–75% width, not a bump width.
+- **The measurements:**
+  - **FkReduced:** one bump on the toy, FWHM 1.57 at T = 0.025, which is the three stripes' lifetime. It respects the
+    floor. Iris shows no distinct FkReduced bump.
+  - **MagnetizationVariance:** 0.41 on the toy at T = 0.014, the stripe split itself; 0.24 on iris at T = 0.091.
+  - **Heat capacity:** 0.31 on the toy at the stripes' melt (T = 0.11); 0.23 and 0.15 on iris (T = 0.10 and 0.16).
+- **So C4's floor fails for variance-type observables,** by 3 to 9 times. Two mechanisms are at work, both outside the
+  rigid giant-spin model:
+  - **Melts are sharp** (ΔS ≈ (n_c − 1) ln q), as §3 says. But a melt is a step only in S₂. In the variance
+    observables it is a narrow spike, and a spike can fall between grid points.
+  - **The toy's split runs through the background in the gaps** (C24). It frees the bridging spins as well as cutting
+    bonds, so its entropy jump exceeds ln(q − 1) and the split narrows towards a melt. The width implies an entropy jump
+    of roughly 9 nats, against 2.9 for a bare split.
+- **Bump widths need the main budget.** At the cheap budget noise makes spurious narrow bumps: down to 0.06 in the toy's
+  heat capacity, and six bumps of 0.09–0.36 in iris's MagnetizationVariance.
+- **For Thread I:** at the a priori count's spacing (17 points over 4.6 e-folds, h ≈ 0.29), iris's melt spikes
+  (0.15–0.24) can fall between points in the variance observables. S₂ still shows each one as a step.
+
+**E2, D_J** (C16).
+- **The argon gate fails almost everywhere on the toy.** Even at v = 6 (h = 0.093), 28 of 64 intervals have D_J > 4,
+  with a maximum of 155. Holding D_J ≤ 4 everywhere would need a spacing near 0.015 e-folds, about 400 points.
+- **D_J is extensive.** At v = 6 its maximum is 155 on the toy and 6.5 on iris: a ratio of 24, against an N ratio of 21.
+- **Its false alarms are where the theory puts them.** Of the toy's 28 intervals above 4 at v = 6, 9 have ΔS₂ below the
+  floor:
+  - on the three-stripe plateau (T = 0.023–0.033), D_J ≈ 6 per interval as points shed from the stripes. In
+    2.8ρ(Δ ln T)² terms, that is about 250 events per e-fold;
+  - after the melt (T = 0.12–0.19), D_J falls from 127 to 6 while S₂ is already near 1/N. That is short-range order
+    dissolving, with no cluster mass at all.
+- **The quadrature ratio R** (the argon notes' closure check) runs from 0.24 to 37 at the coarse volleys and sits near 1
+  only on featureless intervals. Its departures follow σ_E²'s curvature at the events, so it doesn't isolate hidden
+  spikes here.
+
+**E5, the monotone certificate** (C17, C19).
+- **At the main budget it recovers the toy's inventory.** v = 6 flags three runs:
+  - the background's shedding tail at the cold edge, [0.0046, 0.0081] (ΔS₂ = 0.043);
+  - the stripe split, [0.0089, 0.0225] (0.545);
+  - the stripes' melts, [0.039, 0.121] (0.227).
+  The quiet stretch between them, [0.0225, 0.039], is the three-stripe window that BWD cluster in.
+- **Iris** flags [0.0272, 0.175] (0.444), where the versicolor/virginica separation and the melts overlap in ln T, plus
+  [0.0081, 0.0089] (0.008), one small component's join through a repair edge.
+- **Localization across volleys.** The toy's flagged share of intervals goes 2/2, 3/4, 5/8, 9/16, 18/32, 28/64. It
+  converges to the share of ln T the events occupy (about 2.6 of 5.97 e-folds), not to zero: a broad event stays
+  flagged at every spacing.
+- **Noise sets the floor's cost.** At the main budget the median SE(ΔS₂) is 0.0003–0.001 on the toy and 0.0006–0.0015
+  on iris, against floors of 0.005 and 0.0057. At the cheap budget iris's SE reaches 0.008 at v = 1, above its floor.
+- **The per-interval test loses power at fine volleys** (C25).
+  - An event spread over several intervals contributes ΔS₂ ∝ h to each, while SE stays fixed. At the cheap budget the
+    toy's v = 6 flags fragment into 17 intervals in four runs, against 28 in three at the main budget.
+  - ΔS₂ telescopes over the dyadic tree, so a test that descends from flagged parents keeps the parents' power. That
+    bears on Q4.
