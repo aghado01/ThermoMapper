@@ -132,7 +132,10 @@ public enum PointwiseContent
     /// content's to 0.006 nats per unit, with 30 units above k̂ = 0.5 against 5. On a BGP fit with a known σ², every unit
     /// was within 0.02 nats of exact LOO by quadrature, and the units above k̂ = 0.7 were within 0.003. PSIS's relative
     /// efficiency, which lengthens a slowly mixing unit's tail, does not repair it: over four seeds it lowered the count on
-    /// some runs and raised it on others. It does make the Monte Carlo errors right.
+    /// some runs and raised it on others. It does make the Monte Carlo errors right. Against brute-force leave-one-out on
+    /// 180 BARS units, every collapsed-flagged unit was within its Monte Carlo error, while the retained content was
+    /// optimistic at the endpoints, the highest-leverage units, where its own k̂ passed. So read the collapsed content's
+    /// Monte Carlo errors, not its k̂.
     /// </summary>
     CollapsedPredictive,
 }

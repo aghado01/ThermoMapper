@@ -2938,3 +2938,18 @@ Raised by the SPC × BARS stopping work, which saw a 5-point BARS fit return an 
 - **For BASS:** its reversible-jump start needs the same rule (port brief).
 
 **Results** under the fact harness: `Maths.Regression.Tests` 404 of 404 (`20261024_231540640`).
+
+### Brute-force leave-one-out for BARS: is collapsed k̂ pessimistic? — 2026-10-24
+
+At the user's request, to settle whether the collapsed content's high k̂ is pessimistic or the retained content's low k̂ a false negative (`LooBenchmark`, `LOO_BENCH=2`; n = 30, a sine, a sine with a narrow bump and a sine with an outlier, two seeds each, 180 units).
+
+- **The reference** samples BARS's knot posterior without unit i under the full data's prior, the target both contents estimate. It uses BARS's moves on a target that subtracts the collapsed leave-out term, and averages the exact leave-out predictive.
+- **The first design failed its control.** Rerunning BARS on y₋ᵢ rebuilds the data-dependent g-prior. Its pre-registered control measured up to 0.43 nats of difference, at the endpoints and the bump and outlier units, against a 0.01 limit. The design above replaced it; the verdict rules are unchanged.
+- **(a) The collapsed k̂ is pessimistic: yes.** All 78 flagged units were within 3 Monte Carlo errors (rule: ≥ 90%), and 65 within 0.02 nats.
+  - The six above 0.05 were all on one bump data set, where the reference itself carried errors of 0.07–0.22.
+  - One was a genuine failure: the bump's peak without its own observation, 1.5 nats low, at k̂ 2.6. Its reported Monte Carlo error (0.94) flagged it.
+- **(b) The retained k̂ is a false negative: not by the rule** (≥ 10% of its passed units beyond 3 errors, or optimism on the units only the collapsed content flags). It had 3 of 169 (2%), and a mean error of 0.0003 ± 0.004 on those 75 units.
+  - All three failures were endpoints, with k̂ 0.54–0.58, optimistic by 0.06–0.15 nats.
+  - Over the endpoints the retained content was optimistic by up to 0.41 nats, while the collapsed content stayed within 0.06. That is the leverage mechanism from the user's note: a retained ratio's tail index is the unit's leverage, and leverage is highest at the boundary.
+- **The collapsed content was the more accurate:** rms z 1.00 against 1.23, and no unit beyond 3 errors against 4. On the collapsed content, read the Monte Carlo errors, not k̂.
+- **Open:** whether Normal BARS's default content should become the collapsed one. The default stays the retained content, as OQ17 decided; this pass was not designed to choose a default.
