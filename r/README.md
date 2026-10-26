@@ -60,6 +60,10 @@ is opt-in), so the normal `dotnet test` run is unaffected.
 | `Maths.Estimators.MxPbf` | `mxpbf_oracle.R` *(todo)* | transcribe paper §2.2 / §3.1 |
 | `Maths.Estimators.RobustDistributedPCA` | *(todo: extend `mom_oracle.R`)* | `maotai` geometric median + the §5.3 rule |
 | `TDA.DimReduction.Spred` | *(composition: component oracles + downstream ISOLET benchmark)* | PH via `tda_oracle.R`; Grassmann median via `mom_oracle.R`; full SPRED composition still indirect |
+| BASS's collapsed g-prior marginal over τ *(port stage 4; not built)* | `bass_marginal_oracle.R` | base `integrate` on log τ; the port brief's D03 propriety conditions |
+| BASS's order-free admission gate *(port stage 4; not built)* | `bass_admission_oracle.R` | base `chol`; R BASS's `getQf` rule for parity |
+
+`scripts/bass_stage1_checks.R` runs both BASS oracles on the port brief's fixtures and reproduces its numbers.
 
 ## Current caveats
 

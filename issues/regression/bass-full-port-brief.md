@@ -416,14 +416,14 @@ Drafted at the user's request as input to the user's design pass. Nothing here i
   - *A proper σ² prior* (g₂ > 0) replaces S(τ) by 2g₂ + S(τ) > 0, and every marginal is finite.
   - *The quadrature.* A 40-point fixture with k = 3 hinge columns spanning 1 and x, the integral taken on log τ with its lower limit moved from 10⁻⁴ to 10⁻⁶⁴:
     - noisy y: converged (log integral 22.77);
-    - exact y: grew by 18 per unit of log(1/τ_lower), the predicted rate (k − N + 1)/2;
+    - exact y: grew by 18 per unit of log(1/τ_lower), the predicted rate (N − k − 1)/2;
     - exact y with g₂ = 10⁻³: converged (110.47);
     - k = N: converged;
     - the Liang convention matched, with a slope of 18 in log g.
 
-    The fixture itself hit the cancellation D06 warns about: yᵀy − Q came out slightly negative for the exact fit, so the residual has to be computed directly. These checks belong in stage 1's reference corpus.
+    The fixture itself hit the cancellation D06 warns about: yᵀy − Q came out slightly negative for the exact fit, so the residual has to be computed directly. These are stage 1's first reference fixtures: [`bass_marginal_oracle.R`](../../r/oracles/bass_marginal_oracle.R), with every number above reproduced by [`bass_stage1_checks.R`](../../r/scripts/bass_stage1_checks.R).
   - *Consequence.* Under the improper σ² default, any admitted structure with k < N that fits y exactly makes the whole posterior improper. Deterministic simulators with piecewise-linear structure can produce one: two opposite hinges at the same knot span x exactly.
-  - *Proposal.* In the improper mode, F excludes structures whose residual is zero to working precision (‖r‖² ≤ c·ε·‖y‖², from the residual itself), and reports the refusal. Deterministic simulators are steered to the proper mode. A zero response (R's convention) or a constant one (Liang's) is refused, as BARS refuses an identically zero response (R13).
+  - *Proposal.* In the improper mode, F excludes structures whose residual is zero to working precision (‖r‖ ≤ c·ε·‖y‖, from the residual itself; the oracle uses c = 10³), and reports the refusal. Deterministic simulators are steered to the proper mode. A zero response (R's convention) or a constant one (Liang's) is refused, as BARS refuses an identically zero response (R13).
   - *The ridge with a sampled τ* has the same structure, and is checked by the same quadrature when it is built.
 - **Still open within D03:** where evidence is reported, which needs D05's proper mode and path sampling.
 
@@ -501,7 +501,8 @@ Here b ∈ (0, 1] is the inverse temperature, as in `Temperature(b, path)`.
   - *Option:* a declared cap on variance inflation (`MaxVarianceInflation`), a statistical support restriction for stable extrapolation. Off by default.
 - **R's rule: a defect fixture and a parity option.** R's `getQf` refuses a design when max_{j≥2} r_jj / min_j r_jj > 10³ ([`getQf`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:118), commented "a hack, otherwise we get huge variance inflation in beta"). That is a pivot-ratio gate at 10⁻⁶ on the squared pivots.
   - It depends on column norms. Like BARS's `PivotRatio` (R15; step 3.7 counted 1,590 refusals against 76 under the scale-free gate), it refuses well-conditioned local terms whose columns are small, and does so more often as n grows.
-  - Fixture: a term orthogonal to the rest, with b nonzero points, refused by R's rule at large n and admitted by the angle gate.
+  - Fixture: a term orthogonal to the rest, with b nonzero points, refused by R's rule at large n and admitted by the angle gate. At n = 40,000, a 20-point local term with values 0.01 gives R's ratio 1291, so R refuses it, while the smallest leave-one-out angle in the design is 0.25.
+- **Reference fixture:** [`bass_admission_oracle.R`](../../r/oracles/bass_admission_oracle.R) emits the leave-one-out angles, the pivots in the given order and R's `getQf` decision. The order counterexample and the large-n fixture are reproduced by [`bass_stage1_checks.R`](../../r/scripts/bass_stage1_checks.R).
   - `BassLiteral` admission reproduces R's rule for posterior comparisons against R, and is never a default.
 - **Count against column mass.** For BARS, Q6 replaced the count with column mass Σᵢ Bⱼ(xᵢ). The draft keeps the count as BASS's default: every BASS source uses it, and Francom et al. 2018 justify it by the edge instability of hinge terms with few nonzero values. Column mass, Σᵢ B_m(xᵢ) with hinges normalized to a maximum of one, is an option, and a fixture compares the predictive variance of edge terms under the two.
 - **A strict rebuild before refusal.** When an incremental update fails the numerical gate, a strict rebuild decides before the candidate is refused (dense factor maintenance, above). Refusals are reported by reason: numerical, support, cap.
