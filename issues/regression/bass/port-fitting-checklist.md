@@ -36,6 +36,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F8** Retention, checkpoints and exact restart.
 - [ ] **F9** Pointwise density producer on the OQ17 seam, with its chains for PSIS's relative efficiency.
 - [ ] **F10** Chains start on the support.
+- [ ] **F11** Direct fits report the residual-dependence check along the output coordinates (proposal).
 
 ### Room for extensions
 
@@ -44,8 +45,13 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-X3** Term types behind one design-kernel contract, with derivatives.
 - [ ] **F-X4** Proposal kernels behind one contract with exact forward and reverse probabilities.
 - [ ] **F-X5** Coefficient priors as a declared set.
+- [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### Andros et al. read — 2026-10-26
+
+From arXiv 2406.18751 and 2602.09351. The direct functional algebra records that covariates known at the output locations enter as further functional variables (R's `xx.func` already allows it), and D01's knot wording now covers several functional variables. A residual-dependence check for direct fits is proposed (F11), and the output-side inner product is declared as prep for correlated residuals (F-X6). The deterministic-simulator profile reads that check.
 
 ### Lineage insights folded in — 2026-10-26
 

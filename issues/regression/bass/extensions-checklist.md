@@ -17,8 +17,13 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E9** Cross-engine evidence.
 - [ ] **E10** Direct-functional BASS for families of SPC sweeps.
 - [ ] **E11** Elastic emulation of misaligned functional outputs.
+- [ ] **E12** Residuals correlated along the output index.
 
 ## Reports
+
+### Andros et al. read — 2026-10-26
+
+From arXiv 2406.18751 and 2602.09351: new entry E12 (correlated residuals along the output index); E9 gains held-out proper scores (the energy and interval scores); E10 notes the functional GP as a comparison point. Sketching and the functional GP are not adopted, with reasons in the hub's register.
 
 ### Elastic emulation added — 2026-10-26
 

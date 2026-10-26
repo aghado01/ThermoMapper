@@ -1,6 +1,6 @@
 # Full BASS port brief
 
-Date: 2026-10-18; updated 2026-10-25. Status: stage 0 is closed and the shared slices of stages 2–3 have landed (the [preparation brief](bass-preparation-brief.md)). Stage 1 has draft resolutions for D01–D09 and a note for D10, awaiting the user's design pass. Source-code implementation is not authorized by this document.
+Date: 2026-10-18; updated 2026-10-26. Status: stage 0 is closed and the shared slices of stages 2–3 have landed (the [preparation brief](bass-preparation-brief.md)). Stage 1 has draft resolutions for D01–D09 and a note for D10, awaiting the user's design pass. Source-code implementation is not authorized by this document.
 
 Add the complete BASS regression capability to `Maths.Regression`, alongside BARS, BAPS, and BGP. Preserve arbitrary predictor dimension, mixed continuous and categorical inputs, scalar and functional responses, posterior prediction, sensitivity analysis, and emulator calibration. Build the C# implementation around explicit statistical targets, owned numerical state, and the repository's existing dependency direction.
 
@@ -154,6 +154,7 @@ Draft resolutions for D01–D09 and a note for D10 (proposals, 2026-10-25) live 
 | Francom and Sansó (2020), *JSS* 94(8) | The count prior as stated, τ's prior as stated, the Wallenius implementation |
 | Rumsey, Francom and Shen, GBMARS (arXiv 2306.01911) | The birth ratio's count factor, τ's stated intent, the ridge prior under weights |
 | Rumsey, Francom et al., KHAOS (arXiv 2510.25036) | The collapsed count intensity; ridge against g-prior by regime |
+| Andros, Guhaniyogi, Francom and Pasqualini, data sketching (arXiv 2406.18751) and functional GPs (arXiv 2602.09351) | Out-of-sample evidence on R BASS's predictive intervals; covariates at output locations; correlated residuals along the index; held-out scores |
 | R BASS 1.3.1 at the pinned commit | What the implementation samples |
 
 ### What the lineage taught
@@ -181,7 +182,12 @@ Reading the lineage turned up places where a later or sibling paper does somethi
 | Complexity penalized in the coefficient prior, with a uniform prior over basis functions | KHAOS | A penalty carried by the count prior and the Occam factor | **Extension** (modified g-prior). BASS's uniform prior per order already corrects for how many terms each order has |
 | Delayed rejection of structurally invalid births | KHAOS | Wasted iterations on invalid proposals | **Not adopted.** KHAOS can condition on its rejected set because its probability (Poisson-binomial) is computable; BASS's births fail on data-dependent support, whose probability is not, so a failed birth counts as a rejection |
 | Dropping basis columns with too little support | He, Yang and Kang's code | Refusing the configuration | **Not adopted.** It breaks the partition of unity and changes the model silently; support refuses (Q6, D06) |
-| Data sketching for many simulation runs; functional GPs with predictors at different scales | Andros, Guhaniyogi, Francom et al. (arXiv 2406.18751, 2602.09351) | Not yet examined | **Open**: BASS appears there as a comparison method; their scaling ideas are unread |
+| A new run's error outside the basis, estimated from cases held out of the basis | Andros et al. 2024's SLOSH comparison (R BASS's 95% intervals covered 0.59, fitted on five runs), read against R's `predict.bassBasis` | R's in-sample truncation residual, which understates that error and is zero at full retention, and which R's prediction omits by default | **Adopted** in the D07 draft: leave-one-case-out by default, R's as an option, their ratio as a basis-stability diagnostic; fixture O-O4 |
+| Covariates known at the output locations and shared by every case (elevation) | Andros et al. 2024, 2026 | Their statement that BASS cannot use them, true of the PCA mode only | **Adopted**, already in scope: further columns of T in direct fits (fitting segment); the outputs segment's reconstruction map declares where it can be evaluated |
+| Residuals correlated along the output index | Andros et al. 2024, 2026 (a Gaussian-process residual per run) | Direct BASS's noise independent across output locations, which over-counts a dense grid when the misfit is smooth | **Extension**; the port reports a residual-dependence check and declares the output-side inner product as prep |
+| Proper scores on held-out runs: the energy score over whole-output draws, the interval score | Andros et al. 2024, after Gneiting and Raftery 2007 | Comparison by RMSE and marginal coverage; evidence as the only comparison across engines | **Extension**, the held-out route in cross-engine evidence; it reads D07's joint draws |
+| A fixed basis in the inputs with Gaussian-process coefficient functions over the output domain (functional GP) | Andros et al. 2026 | Spatially varying linear coefficients | **Not adopted.** It is BASS-PCA's factorization the other way round, and its marginal likelihood is a GP over all n·m outputs; kept as a comparison point for SPC families |
+| Random sketches fitted in parallel and combined by a Wasserstein barycentre | Andros et al. 2024 | Data shards chosen by hand | **Not adopted.** The likelihood is raised to n/m, a pseudo-posterior; length-scales are fixed per sketch; only marginals are combined, which loses joint draws. Direct BASS's separable contractions already avoid forming the full design |
 
 ## Implementation stages
 

@@ -14,6 +14,7 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 - [ ] **O-O1** R defect fixtures: the truncation sampler's indexing, recycled noise, the residual's sign and units, 100% retention, constant columns, draw order and dropped axes, interval quantiles.
 - [ ] **O-O2** Sensitivity defect fixtures: ignored category weights, unclipped truncation bounds, decomposition units, hard-coded effects.
 - [ ] **O-O3** Moments against quadrature and category enumeration, including higher degrees and truncated mixtures.
+- [ ] **O-O4** Truncation residuals: the in-sample residual is zero at full retention; leave-one-case-out equals explicit refits, and the computation in case coordinates equals the one in output space.
 
 ### Build (stages 5, 6, 9)
 
@@ -36,6 +37,10 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 - [ ] **O-X5** The response representation carries a declared reconstruction map (linear now; composition for elastic emulation).
 
 ## Reports
+
+### Truncation residual held out of the basis — 2026-10-26
+
+From reading Andros et al. (arXiv 2406.18751, 2602.09351). D07's draft now proposes leave-one-case-out truncation residuals by default, with R's in-sample residual as an option and their ratio as a basis-stability diagnostic. The scratch check behind it is exploration (one toy family), not a decision; O-O4 is the fixture to build. O-X5's reconstruction map now also declares where it can be evaluated.
 
 ### Prep for elastic emulation — 2026-10-26
 

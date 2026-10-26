@@ -14,6 +14,10 @@ G=(A^\top A)\circ(H^\top H),\qquad h_j=A_j^\top YH_j.
 
 The BASS design layer owns construction and caching of `A` and `H`. General numerical contractions may live in LinAlg. Avoid materializing the full `nm × (M+1)` design. Dense contraction with `Y` still depends on the response-grid size.
 
+**Covariates known at the output locations (2026-10-26).** The output coordinates `T: m × d` may carry, beside the coordinates themselves, covariates known at each output location and shared by every case, such as elevation in Andros et al.'s SLOSH studies (arXiv 2406.18751, 2602.09351). They enter as further functional variables, and direct prediction at new coordinates then needs their values there. R's `xx.func` takes several columns the same way, so the papers' statement that BASS cannot use such covariates holds for the PCA mode only, whose basis absorbs them and cannot carry them to new coordinates.
+
+**Residual dependence along the output index (proposal, 2026-10-26).** D07's noise is independent across output locations. When the misfit is smooth along t, as it is for a deterministic simulator, a dense grid then counts n·m independent observations: intervals come out too narrow, and births are rewarded for absorbing smooth residual. Each direct fit reports a residual-dependence check along the output coordinates (for a one-dimensional index, the lag-one autocorrelation of each case's residual under the posterior mean). Modelling the dependence is an [extension](extensions-brief.md#residuals-correlated-along-the-output-index); its prep is in "Room for extensions" below. Andros et al.'s models carry such a residual, a Gaussian process per run.
+
 ## Posterior ownership and prediction
 
 - Keep immutable retained structures/draws separate from mutable per-chain or per-particle workspaces. Pooled buffers must never back retained samples after reuse.
@@ -88,7 +92,7 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
   - Net, a birth from M carries p(M+1)/p(M) once and no further factor of M+1: λ/(M+1) under the Poisson prior. R's [birth](D:/aghado01/packages/BASS/R/rjmcmc_des.R:36) (`log(lam) − log(nc)`) and GBMARS's S_B agree.
   - The KHAOS manuscript keeps both the death's 1/(M+1) and the labelled prior's, which puts an extra 1/M! on the count prior: the same family as BARS's R01. That ratio becomes a defect fixture.
 - **Repeated terms lie outside the support.** An identical term duplicates a column, so the strict factor refuses it and D06's admission angle is zero. Every admitted collection then has distinct members, which keeps the M! count exact. Interning terms (derivations review §7, item 5) is a storage choice and leaves the measure unchanged.
-- **Knot measure: uniform over each variable's distinct observed values.** Francom et al. 2018 build the prior constant from "the number of unique marginal values", and R draws from them ([`unique.ind`](D:/aghado01/packages/BASS/R/bass.R:218), `vars.len`). The functional variable uses its n_r distinct output locations.
+- **Knot measure: uniform over each variable's distinct observed values.** Francom et al. 2018 build the prior constant from "the number of unique marginal values", and R draws from them ([`unique.ind`](D:/aghado01/packages/BASS/R/bass.R:218), `vars.len`). Each functional variable uses the distinct values in its column of the output coordinates T (the n_r output locations for a one-dimensional index).
   - *Not adopted:* Nott, Kuk and Duc's uniform over the n observations (the 1/n factors in their ratios), which weights tied values by multiplicity; and the continuous Unif(0, 1) written in the JSS and GBMARS texts, which describes the range rather than the measure the code samples.
 - **Prior on a term:** K uniform on {1, …, K_max}, the variable set uniform over the C(p, K) subsets, signs uniform, knots as above. Unconstrained, this is Francom et al.'s constant c_K = (1/2)^K · C(p, K)⁻¹ · Πₖ 1/n_{vₖ}, times 1/K_max for the order.
 - **Support: the term prior is restricted globally to the feasible set F of D02, without per-order normalizers.**
@@ -128,7 +132,7 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
   - *Change move.* Redraws one categorical factor's subset from its prior, which is symmetric (R's [`genBasisChangeCat`](D:/aghado01/packages/BASS/R/rjmcmc_all.R:77)).
   - *Levels.* The training factor's levels. A factor with one level carries no information and is refused at setup.
   - *Complement pairs.* Under D03's Liang convention, a categorical main effect on D and one on its complement have the same centred column up to sign, so they define the same model, and the measure counts each such model twice. This is a tilt to report, not a defect.
-- **The functional variable** uses its own interaction cap (R's `maxInt.func`), as the hub's scope section requires, and its knots are the n_r distinct output locations.
+- **The functional variables** share their own interaction cap (R's `maxInt.func`), as the hub's scope section requires, and each one's knots are its distinct values.
 
 ### D02 (draft): count prior at the capacity limit
 
@@ -292,7 +296,8 @@ Three findings from the lineage and the propriety check point the same way.
 **Proposal:** a named profile, `DeterministicSimulator`, which is not a default:
 - D03's proper σ² mode, with y standardized and the transform recorded;
 - a wider λ prior (h₁ and h₂ well below 10, their values recorded);
-- the ridge with a sampled τ as the alternative to the g-prior.
+- the ridge with a sampled τ as the alternative to the g-prior;
+- in direct functional fits, the residual-dependence check read before any interval is reported, since a deterministic simulator's residual is all misfit and so is smooth along t.
 
 Which coefficient prior the profile uses is left to the pre-registered comparison, not set from KHAOS's study. The improper mode's exact-fit refusal stays, and points users to this profile.
 
@@ -305,3 +310,4 @@ Prep work in this segment, so that the [extensions](extensions-brief.md) plug in
 - **Proposal kernels behind one contract,** each with exact forward and reverse probabilities. The Wallenius variable proposal is the first member; KHAOS's Bernoulli-inclusion proposal, the variable swap and a history-based proposal (D10's policy) join it later.
 - **Coefficient priors as a declared set:** g with a sampled τ, fixed g, `BassLiteral` and a ridge with a sampled τ now, so KHAOS's modified g-prior is one more member.
 - **Pointwise densities per observation,** with per-observation latents integrated under OQ17's scope rule, so the generalized-hyperbolic density is one more case.
+- **A declared inner product on the output side.** The direct contractions are written G = (AᵀA)∘(HᵀQH) and h_j = A_jᵀYQH_j, with Q = I now. A residual correlated along the index, with covariance σ²(I ⊗ R) and Q = R⁻¹, then changes only the output-side factors, plus Σᵢ yᵢᵀQyᵢ and a log|R| term per case in the collapsed marginal. The case side and the separable algebra stay as they are. A Markov residual on a one-dimensional index has a tridiagonal Q, which keeps the cost linear in m.
