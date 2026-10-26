@@ -2953,3 +2953,14 @@ At the user's request, to settle whether the collapsed content's high k̂ is pes
   - Over the endpoints the retained content was optimistic by up to 0.41 nats, while the collapsed content stayed within 0.06. That is the leverage mechanism from the user's note: a retained ratio's tail index is the unit's leverage, and leverage is highest at the boundary.
 - **The collapsed content was the more accurate:** rms z 1.00 against 1.23, and no unit beyond 3 errors against 4. On the collapsed content, read the Monte Carlo errors, not k̂.
 - **Open:** whether Normal BARS's default content should become the collapsed one. The default stays the retained content, as OQ17 decided; this pass was not designed to choose a default.
+
+### The joint-influence total Monte Carlo error — 2026-10-25
+
+At the user's request, as an option beside loo's √Σ total (`eb74196`). It closes the r_eff report's open item, that the total treats the units' errors as independent.
+
+- **What.** `PredictiveCheck.JointMonteCarloError`. Each unit's log error is Σ_s w̃_s(p_s/p̂ − 1), so each draw's influence on the total is Ψ_s = Σ_u w̃_us(p_us/p̂_u − 1). The total's variance is Σ_s Ψ_s²/r_eff, with r_eff the ESS/S of Ψ along the chains (`MeanEss`). It follows the same NaN rule as loo's total. loo's `MonteCarloError` is unchanged, and both are reported.
+- **Checked against the spread of the totals across 200 runs** on the normal-mean fixture with exact AR(1) chains (ρ = 0.8):
+  - **Flat prior:** joint 0.090 against an actual 0.084; loo's √Σ 0.095. The units' linear parts cancel there, since Σ(yᵢ − ȳ) = 0, while their common part adds, so loo's total comes out close.
+  - **Informative prior N(ȳ − 2, 1/20):** the posterior mean sits below every unit's pull, so the errors share a sign. Joint 0.320 against an actual 0.319; loo's √Σ 0.097, 3.3 times too small. Both outcomes were predicted before the run.
+
+**Results** under the fact harness: `Maths.Regression.Tests` 406 of 406 (`20261025_201740635`).
