@@ -31,11 +31,18 @@ extension and splits it into pieces that are cited, pieces that need a proof, an
   - 2026-10-26: GvdV01 Theorem 2.1 and GGV2000 Theorem 2.1 are i.i.d. theorems. So `BGP.fixed_constant_contraction`
     is a consequence of their argument, not of a printed theorem, as its docstring says. The theory doc
     (`docs/Maths/PosteriorContraction.md`) now says the same. **Open lead:** Ghosal & van der Vaart (2017) Theorem
-    8.26, with the tests of Lemma 8.27, is the textbook's theorem for independent observations. Chakraborty & Ghosal
-    (arXiv 2008.01244, proof of Theorem 3.2) apply it to Gaussian regression with an unknown σ. They restrict σ to a
-    small neighbourhood of σ₀ so that Lemma 8.27's tests apply. Its form is unchecked: one rate or two, a fixed M or
-    every Mₙ → ∞. The book is not in the library. If it prints the fixed-M two-rate form, route 2 gets a printed
-    citation.
+    8.26, with the tests of Lemma 8.27. Chakraborty & Ghosal (arXiv 2008.01244, proof of Theorem 3.2) apply it to
+    Gaussian regression with an unknown σ. They restrict σ to a small neighbourhood of σ₀ so that Lemma 8.27's tests
+    apply, and they check its remaining-mass condition (8.33). Its form is unchecked: one rate or two, a fixed M or
+    every Mₙ → ∞. If it prints the fixed-M two-rate form, route 2 gets a printed citation.
+    - The book's chapters are in `codex-scientiae/supellex-private/PDFs/GhosalVanDerVaart2017/`. Chapter 8, the general
+      theory, is missing. Going by the file numbering it would be `9781139029834.009.pdf`. Chapter 9 (`.010`) shows
+      the following:
+      - **§9.5 is about non-i.i.d. models.** Its examples apply Theorems 8.19 and 8.23.
+      - **The i.i.d. examples** check Theorem 8.9's conditions: prior mass (8.4), entropy (8.5) and remaining mass
+        (8.6). That is the GGV2000 form.
+      - **Theorem 8.23** is the form of GvdV07's Theorem 4: a shell condition (8.26) and local entropy (8.27). Theorem
+        9.22 applies it to spline regression with σ known "for simplicity".
 
 The Lean module takes both routes (UV-6). The Hellinger tests are not needed: UV-5 builds tests for
 ‖f − f′‖ₙ + |σ − σ′| directly.
