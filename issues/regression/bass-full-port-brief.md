@@ -312,6 +312,7 @@ Drafted at the user's request as input to the user's design pass. Nothing here i
 |---|---|
 | Nott, Kuk and Duc (2005), *Statistics and Computing* 15, 93–101 | The term measure and its ordering factor, move probabilities at the boundaries, the variable proposals |
 | Francom, Sansó, Kupresanin and Johannesson (2018), *Statistica Sinica* 28, 791–816 | The term prior over admissible terms and its proxy constant, the knot measure, τ's stated intent, support for functional responses |
+| Francom, Sansó, Bulaevskaya, Lucas and Simpson (2019), *JASA*, doi 10.1080/01621459.2018.1562933 | Categorical terms and their support; categorical calibration parameters |
 | Francom and Sansó (2020), *JSS* 94(8) | The count prior as stated, τ's prior as stated, the Wallenius implementation |
 | Rumsey, Francom and Shen, GBMARS (arXiv 2306.01911) | The birth ratio's count factor, τ's stated intent, the ridge prior under weights |
 | Rumsey, Francom et al., KHAOS (arXiv 2510.25036) | The collapsed count intensity; ridge against g-prior by regime |
@@ -349,7 +350,18 @@ Drafted at the user's request as input to the user's design pass. Nothing here i
   - the two boundary ratios;
   - Wallenius probabilities against brute-force sums over draw orders;
   - defect fixtures for R's fixed thirds and KHAOS's double count factor.
-- **Open within D01:** categorical terms (R's subset measure in [`logProbChangeModCat`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:43)), not yet checked against a source; the functional variable's interaction cap and knot set.
+- **Categorical terms** (Francom, Sansó, Bulaevskaya, Lucas and Simpson 2019, §3.3; R's [`genCandBasisCat`](D:/aghado01/packages/BASS/R/rjmcmc_all.R:39) and [`logProbChangeModCat`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:43)):
+  - *The term.* A term's categorical part is Π_{l=1}^{L} 1(z_{u_l} ∈ D_l) over L distinct categorical variables, where each D_l is a proper subset of its variable's levels; L = 0 gives 1. A term multiplies a continuous part of order J and a categorical part of order L, each with its own cap (R's `maxInt` and `maxInt.cat`), and J + L ≥ 1.
+  - *Variables.* As for continuous variables: uniform when L = 1, and Wallenius with the z weights when L ≥ 2.
+  - *Subset measure.* The subset's size is uniform on {1, …, n_v − 1}, then the subset is uniform among those of that size. This is how R samples and scores it, with the proposal and prior factors cancelling, and it mirrors the continuous rule: the order uniform, then the variable set uniform given the order.
+    - The paper states that "each combination of parameters conditional on interaction degree has equal prior probability", which is uniform over the 2^{n_v} − 2 proper subsets.
+    - The two agree up to three levels, which covers every factor in the paper's application (its 162 combinations are 2 · 3⁴). From four levels on they differ, the paper's version putting more mass on mid-sized subsets.
+    - The draft follows R, and the paper's uniform is the named alternative.
+  - *Support.* The combined term needs at least b nonzero points: "each resulting basis function must have at least 20 non-zero points".
+  - *Change move.* Redraws one categorical factor's subset from its prior, which is symmetric (R's [`genBasisChangeCat`](D:/aghado01/packages/BASS/R/rjmcmc_all.R:77)).
+  - *Levels.* The training factor's levels. A factor with one level carries no information and is refused at setup.
+  - *Complement pairs.* Under D03's Liang convention, a categorical main effect on D and one on its complement have the same centred column up to sign, so they define the same model, and the measure counts each such model twice. This is a tilt to report, not a defect.
+- **The functional variable** uses its own interaction cap (R's `maxInt.func`), as the scope section requires, and its knots are the n_r distinct output locations.
 
 #### D02 (draft): count prior at the capacity limit
 
@@ -511,7 +523,7 @@ Sources: the JSS paper (§3), Francom et al. 2018, the inventory's Sobol section
   - *Student components* take a location-scale `scale`, not a marginal standard deviation, as in R. A constructor from a marginal standard deviation converts it, for ν > 2.
 - **Moments: one service for direct and basis sensitivity.**
   - Each term pair's moment is a product of one-dimensional interval moments of hinge powers under each input's measure, split at the knots and clipped to the measure's support. R's basis path ignores the bounds (defect fixture: 0.45 against the integral, 0.1106).
-  - Categorical moments are sums of the supplied probabilities, including intersections, never ratios that can give 0/0.
+  - Categorical moments are sums of the supplied probabilities, including intersections, never ratios that can give 0/0. Francom et al. 2019 give the analytic categorical solutions, in EOF space too, in their supplement, which is not in hand.
   - Every hinge degree is supported. Uniform measures have closed forms. Normal and Student mixtures use closed forms where they are stable, and otherwise Gauss–Legendre quadrature split at the knots with a stated error bound. R restricts these to degree 1. Truncated Student moments exist for every ν, so the closed form's factors in ν − 1 fall back to quadrature at the special values.
 - **Functional responses** have two forms (JSS §3.1):
   - integrate the functional variable as one more input, for a total decomposition, with its measure declared: uniform over its range by default, or the empirical output grid;
@@ -549,6 +561,7 @@ Sources: R's [calibration](D:/aghado01/packages/BASS/R/calib.R:42) and its docum
   - Proposals on log σ² carry their Jacobian.
 - **Tempering** follows D05's likelihood path. R multiplies the variance proposals' Jacobians by the inverse temperature and leaves terms out of its swaps (defect fixture).
 - **Parameter coordinates.** The bounded inputs are sampled in normalized [0, 1] coordinates, and results are reported in physical coordinates with the transform recorded. R returns the normalized values.
+- **Categorical calibration parameters,** an extension beyond R's API, which has no categorical proposal. Francom et al. 2019 sample them jointly from their discrete full conditional: they enumerate every combination (162 in their study), evaluate the conditional posterior at each with the current emulator draw, and precompute each term's categorical part so that a combination costs one product with the continuous part. The port does the same while the combination count allows, and otherwise uses a Metropolis step on one categorical variable at a time.
 - **Cache consistency.** Any change to δ, σ² or the emulator draw invalidates the cached likelihood before the next acceptance test. R's stale likelihood after a discrepancy draw is a defect fixture.
 - **Reference sampler (stage 7): nested conditional.**
   - For s = 1, …, S, draw e_s from the retained emulator draws.
