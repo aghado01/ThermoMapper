@@ -28,6 +28,14 @@ extension and splits it into pieces that are cited, pieces that need a proof, an
 - **For independent, non-identically distributed observations the fixed-M form is not printed as a theorem.**
   van der Vaart & van Zanten (2008, Theorem 3.3) state it for fixed-design GP regression with an unknown σ on [a, b],
   with the tests left to the reader.
+  - 2026-10-26: GvdV01 Theorem 2.1 and GGV2000 Theorem 2.1 are i.i.d. theorems. So `BGP.fixed_constant_contraction`
+    is a consequence of their argument, not of a printed theorem, as its docstring says. The theory doc
+    (`docs/Maths/PosteriorContraction.md`) now says the same. **Open lead:** Ghosal & van der Vaart (2017) Theorem
+    8.26, with the tests of Lemma 8.27, is the textbook's theorem for independent observations. Chakraborty & Ghosal
+    (arXiv 2008.01244, proof of Theorem 3.2) apply it to Gaussian regression with an unknown σ. They restrict σ to a
+    small neighbourhood of σ₀ so that Lemma 8.27's tests apply. Its form is unchecked: one rate or two, a fixed M or
+    every Mₙ → ∞. The book is not in the library. If it prints the fixed-M two-rate form, route 2 gets a printed
+    citation.
 
 The Lean module takes both routes (UV-6). The Hellinger tests are not needed: UV-5 builds tests for
 ‖f − f′‖ₙ + |σ − σ′| directly.
