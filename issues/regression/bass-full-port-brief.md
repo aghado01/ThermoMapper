@@ -400,7 +400,32 @@ Drafted at the user's request as input to the user's design pass. Nothing here i
   - *KHAOS's modified g-prior,* a candidate extension: an n-component g-prior that shrinks each term by its complexity, with per-term factors from its interaction order and degree and a global g₀² under an inverse-gamma prior. Its displayed conditional for g₀² has no data term, so derive it rather than copy it.
   - *Under robust or generalized-hyperbolic noise* (outside the completion contract): the unweighted g-prior as the default, which reduces to Gaussian BASS at unit weights and keeps the latent scales' conditionals in closed form, at one extra factorization per move as in BARS's Q2; the ridge with a sampled τ as the GBMARS-parity option.
 - **Independent checks:** τ's marginal for a fixed structure against one-dimensional quadrature; shifting y leaves τ's posterior unchanged under the Liang convention and moves it under R's (a fixture); `BassLiteral` against R on deterministic statistics.
-- **Open within D03:** the Jeffreys mode's target (R's `beta.jprior.ind`); where evidence is reported; posterior propriety per mode, to verify by quadrature over τ on fixtures with admitted full-rank designs.
+- **R's Jeffreys mode has no single target** (derived from R's source, 2026-10-25).
+  - *What R does.* `beta.prior = "jeffreys"` holds τ at 0 ([start](D:/aghado01/packages/BASS/R/bass.R:334), [update](D:/aghado01/packages/BASS/R/mcmc_update.R:100)), so the coefficient prior is flat, and a is drawn from N(â, σ²G⁻¹).
+  - *Its structure moves* add, for each term, (2π)^{1/2} · σ^{−1} · (|G′|/|G|)^{1/4} ([birth](D:/aghado01/packages/BASS/R/rjmcmc_des.R:39), [death](D:/aghado01/packages/BASS/R/rjmcmc_des.R:80); R's Σ log diag R is ½ log|G|). Its change move adds (|G′|/|G|)^{1/4}.
+  - *Its σ² draw,* with a integrated out, is IG(g₁ + (N − 1)/2, g₂ + (yᵀy − Q)/2) ([σ² shape](D:/aghado01/packages/BASS/R/mcmc_update.R:74)).
+  - *What coherent priors would give.* A flat prior a ∝ c^k gives c · (2πσ²)^{1/2} · (|G′|/|G|)^{−1/2} per term and a σ² shape of g₁ + (N − k)/2. The Jeffreys prior p(a | σ²) ∝ |G|^{1/2} σ^{−k} gives (2π)^{1/2} per term and no |G| factor. R's factors match neither, and its moves and its σ² draw imply different coefficient priors (flat times σ^{−2k}|G|^{3/4} for the moves, σ^{−(k−1)} for the σ² draw).
+  - *So it is not ported as is.* It is an unqualified transition in the scope section's sense, and becomes a defect fixture.
+  - *The root cause is general.* Any improper coefficient prior leaves the posterior over structures undefined, because its normalizing constant changes with the dimension (Bartlett's paradox), so an implementation has to pick an arbitrary constant per term.
+- **The second coefficient mode, for the completion contract: fixed g.** The g-prior with τ held at a declared value, unit information τ = 1/N by default, which is BARS's convention. It keeps the Jeffreys mode's practical intent: coefficients are essentially unshrunk (by the factor N/(N+1)), and structure selection is set by the unit-information Occam factor, about ½·log(N + 1) per term, the BIC penalty. It is coherent: §1's collapsed marginal with no τ block.
+  - *Not adopted:* a flat prior with a declared per-term constant, coherent but arbitrary, which is an information-criterion penalty in disguise.
+- **Posterior propriety** (derived, and checked by quadrature on 2026-10-25).
+  - *Reduction.* The structure space is finite: K ≤ K_max, knots on distinct values, finitely many categorical subsets, M ≤ M_max. So the posterior is proper exactly when every admitted structure's marginal p(y | S) is finite.
+  - *g mode, R's intercept convention, p(σ²) ∝ 1/σ², Zellner–Siow τ.* Integrating a and σ² leaves ∫ p(τ) (τ/(1+τ))^{k/2} (S(τ)/2)^{−N/2} dτ, with S(τ) = ‖r‖² + τQ/(1+τ). It is finite whenever ‖r‖² > 0. When the structure fits y exactly (‖r‖² = 0), the integrand behaves as τ^{(k−N−1)/2} near zero, so it diverges for k < N and is finite at k = N.
+  - *Liang convention.* The same in g = 1/τ: (1+g)^{(N−1−M)/2} (1 + g(1−R²))^{−(N−1)/2} with g ~ IG(1/2, N/2). It is finite for R² < 1 and, when R² = 1, diverges unless M ≥ N − 1.
+  - *A proper σ² prior* (g₂ > 0) replaces S(τ) by 2g₂ + S(τ) > 0, and every marginal is finite.
+  - *The quadrature.* A 40-point fixture with k = 3 hinge columns spanning 1 and x, the integral taken on log τ with its lower limit moved from 10⁻⁴ to 10⁻⁶⁴:
+    - noisy y: converged (log integral 22.77);
+    - exact y: grew by 18 per unit of log(1/τ_lower), the predicted rate (k − N + 1)/2;
+    - exact y with g₂ = 10⁻³: converged (110.47);
+    - k = N: converged;
+    - the Liang convention matched, with a slope of 18 in log g.
+
+    The fixture itself hit the cancellation D06 warns about: yᵀy − Q came out slightly negative for the exact fit, so the residual has to be computed directly. These checks belong in stage 1's reference corpus.
+  - *Consequence.* Under the improper σ² default, any admitted structure with k < N that fits y exactly makes the whole posterior improper. Deterministic simulators with piecewise-linear structure can produce one: two opposite hinges at the same knot span x exactly.
+  - *Proposal.* In the improper mode, F excludes structures whose residual is zero to working precision (‖r‖² ≤ c·ε·‖y‖², from the residual itself), and reports the refusal. Deterministic simulators are steered to the proper mode. A zero response (R's convention) or a constant one (Liang's) is refused, as BARS refuses an identically zero response (R13).
+  - *The ridge with a sampled τ* has the same structure, and is checked by the same quadrature when it is built.
+- **Still open within D03:** where evidence is reported, which needs D05's proper mode and path sampling.
 
 #### D04 (draft): collapsed and conditional update order
 
@@ -461,10 +486,23 @@ Here b ∈ (0, 1] is the inverse temperature, as in `Temperature(b, path)`.
 #### D06 (draft): numerical model admission
 
 - **Two gates, as Q6 decided for BARS** (step 3.7):
-  - *Numerical:* the derivations review's angle rule (§5). A candidate column b enters only when s = sin²θ = ‖(I − P)b‖²/‖b‖² ≥ s_min, computed from the bordered step's own quantities. It is scale-free and reliable when s_min sits well above k·ε. s_min is recorded with its rationale, with BARS's `MinRelativePivot` ≥ 1e-10 as the reference point.
+  - *Numerical:* the derivations review's angle rule (§5), in an order-free form. A structure is admitted only when every column's angle to the span of all the others satisfies s_j = 1/(G_jj (G⁻¹)_jj) ≥ s_min. s_j is the reciprocal of column j's uncentred variance inflation factor. It is scale-free, and the bordered step's s is its value for the new column.
   - *Support:* the nonzero-count rule b_m ≥ b of D01, counted separately for the design and functional parts (`npart`, `npart.func`). It is a prior support restriction inside F, not a numerical test.
 
   Exact duplicates and exact collinearity have s = 0 and fail the numerical gate, which D01's rule on repeated terms relies on.
+- **Why order-free** (checked 2026-10-25).
+  - *The counterexample.* The new column's angle depends on insertion order. With b₁ = e₁, b₂ = e₁ + 10⁻³e₂ and b₃ = e₂ + 10⁻³e₃, the leave-one-out values are (10⁻¹², 10⁻¹², 10⁻⁶). Added last, b₃ shows 10⁻⁶, while b₁ added last shows 10⁻¹². Under a newest-column rule at 10⁻¹⁰, the same set would be admitted or refused depending on its history. F would then not be a set, and the target restricted to it would be undefined.
+  - *The gate is downward closed.* Removing a column only widens the others' angles, so a death never fails the gate. A birth or a change needs the whole vector.
+  - *Updates in O(k²).* On a birth, with w = G⁻¹u, each old entry of diag(G⁻¹) gains w_j²/δ and the new entry is 1/δ (the bordered inverse). On a death of column m, each entry loses (G⁻¹)_{jm}²/(G⁻¹)_{mm}.
+  - *Relation to BARS.* The bordered s is `FactorStatus.MinRelativePivot` (d_j/A_jj) for the new column. Each leave-one-out s_j is at most column j's pivot in any order, so the order-free gate is at least as strict. BARS's columns come in a canonical order (sorted knots), so its `MinRelativePivot` is already a property of the set; BASS's terms are unordered, which is why it needs the leave-one-out form.
+- **s_min = 10⁻¹⁰,** the same threshold as BARS's `MinRelativePivot` gate (step 3.7).
+  - *Numerics.* A computed s_j carries a relative error of order ε·κ(E), where E is the equilibrated Gram. For designs that pass the gate this stays small at the term counts BASS reaches. `EquilibratedCondition()` reports κ₁(E), and a decision within a factor of two of s_min is confirmed by a strict rebuild.
+  - *Statistics.* 1/s_min = 10¹⁰ bounds every coefficient's variance inflation. It is a numerical guard, not a modelling restriction; the marginal's Occam factor already discourages redundant terms.
+  - *Option:* a declared cap on variance inflation (`MaxVarianceInflation`), a statistical support restriction for stable extrapolation. Off by default.
+- **R's rule: a defect fixture and a parity option.** R's `getQf` refuses a design when max_{j≥2} r_jj / min_j r_jj > 10³ ([`getQf`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:118), commented "a hack, otherwise we get huge variance inflation in beta"). That is a pivot-ratio gate at 10⁻⁶ on the squared pivots.
+  - It depends on column norms. Like BARS's `PivotRatio` (R15; step 3.7 counted 1,590 refusals against 76 under the scale-free gate), it refuses well-conditioned local terms whose columns are small, and does so more often as n grows.
+  - Fixture: a term orthogonal to the rest, with b nonzero points, refused by R's rule at large n and admitted by the angle gate.
+  - `BassLiteral` admission reproduces R's rule for posterior comparisons against R, and is never a default.
 - **Count against column mass.** For BARS, Q6 replaced the count with column mass Σᵢ Bⱼ(xᵢ). The draft keeps the count as BASS's default: every BASS source uses it, and Francom et al. 2018 justify it by the edge instability of hinge terms with few nonzero values. Column mass, Σᵢ B_m(xᵢ) with hinges normalized to a maximum of one, is an option, and a fixture compares the predictive variance of edge terms under the two.
 - **A strict rebuild before refusal.** When an incremental update fails the numerical gate, a strict rebuild decides before the candidate is refused (dense factor maintenance, above). Refusals are reported by reason: numerical, support, cap.
 - **A ridge is a prior, never a numerical repair.** Under the g-prior a rank-deficient design lies outside F; a ridge enters only as one of D03's declared coefficient priors.
