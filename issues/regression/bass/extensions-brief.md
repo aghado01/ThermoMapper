@@ -28,7 +28,20 @@ Extensions beyond the port's completion contract, collected from the [full port 
 
   `ContaminatedNormalWeights` is a discrete mixture and stays its own implementation.
 - **Sweep and prior:** D04's robust row and D03's unweighted g-prior, in the [fitting segment](port-fitting-brief.md). GBMARS's own choice, a ridge with a sampled τ, is the parity option. GBMARS calls its λ update approximate under its stated prior; it is exact under D02's.
-- **The global scale.** When β ≠ 0, GBMARS samples w by a modified half-normal step, because the drift puts w in the mean. A candidate to derive, not yet checked: with zᵢ = √w·vᵢ, so that the drift is βzᵢ, and with the coefficient prior scaled by √w, the global scale gets a GIG full conditional for any GIG mixing. That would generalize Kozumi and Kobayashi's (2011) sampler for the asymmetric Laplace. It is a centred against non-centred choice, so the interweaving schemes apply.
+- **The global scale (derived by the user, 2026-10-26).** When β ≠ 0, GBMARS samples w by a modified half-normal step, because the drift puts w in the mean. Put the scale on u = √w instead and set zᵢ = u·vᵢ, so that εᵢ = βzᵢ + √(c·u·zᵢ)·ξᵢ with ξᵢ ~ N(0, 1). Write the mixing as GIG(p, ψ₀, χ₀), so that a stays the coefficients. Given z, the factors involving u are:
+  - the likelihood, u^{−n/2}·exp(−Σ(rᵢ − βzᵢ)²/(2czᵢu));
+  - the mixing density, u^{−np}·exp(−(ψ₀Σzᵢ/u + χ₀u·Σ1/zᵢ)/2);
+  - a coefficient prior whose variance scales as u, u^{−M/2}·exp(−aᵀΣ₀⁻¹a/(2u)).
+
+  Their product is a GIG kernel in u for any GIG mixing, so u has a GIG full conditional under any GIG-family prior on u: Gamma, inverse-gamma, or 1/u (Jeffreys on w). Two conditions:
+  - *The prior goes on u, not on w.* An inverse-gamma prior on w adds exp(−b_w/u²), which falls outside the GIG family.
+  - *The coefficient prior's variance scales as u, or not at all; never as w.* The g-prior's scaling, variance ∝ w = u², adds exp(−aᵀΣ₀⁻¹a/(2u²)) and also falls outside. Variance ∝ u is not scale-equivariant: rescaling y by k scales the prior variance by k, not k². Σ₀, or τ under the g-prior's Σ₀ = G⁻¹/τ, then carries y's units, so D03's Zellner–Siow default acts in raw units. That is OQ19's problem, settled by standardizing y. The scale-equivariant alternative keeps variance ∝ w. u's conditional is then u^{λ−1}·exp(−(A/u + Bu)/2 − Q/(2u²)), which is log-concave in log u, so one step of the `SliceSampler` block samples it.
+
+  This matches Kozumi and Kobayashi (2011), whose σ multiplies the noise linearly and gets an inverse-gamma conditional. Theirs is the case with an unscaled coefficient prior and exponential mixing (χ₀ = 0). Checked numerically (scratch, 2026-10-26):
+  - in the GIG cases, log p(u | ·) fits [1, log u, 1/u, u] to 10⁻¹⁶;
+  - it misses by 2·10⁻² under an inverse-gamma prior on w, and by 3·10⁻³ with variance ∝ u².
+
+  The z and v parameterizations are a centred against non-centred pair, so the interweaving schemes apply, with the same priors in both.
 - **Defect fixtures from the text** (TeX source, checked 2026-10-25):
   - The residual is defined as r = ŷ − y, but the β and w conditionals hold only for r = y − ŷ. Implemented literally, the skew's sign flips. Fixture: recover a known β from skewed synthetic data.
   - Table 1's t(ν) row, GIG(−ν/2, 0, ν/2), gives under the paper's own GIG density a t_ν scaled by 1/√2. A standard t needs b = ν, which is what `StudentTWeights` implements, so the seam's t specialization must reproduce `StudentTWeights` exactly.
