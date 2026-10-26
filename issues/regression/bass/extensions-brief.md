@@ -1,0 +1,106 @@
+# BASS extensions brief
+
+Extensions beyond the port's completion contract, collected from the [full port brief](../bass-full-port-brief.md) and the reviews behind it. Each entry says what it adds, its source, what it needs from the port (each segment's "Room for extensions" section), and its status. Nothing here is scheduled: an entry starts on the user's go-ahead, with its own specification and acceptance criteria. Its checklist, where the reports go, is [extensions-checklist.md](extensions-checklist.md).
+
+| Extension | Source | Needs from the port | Status |
+|---|---|---|---|
+| Generalized-hyperbolic noise (GBMARS) | Rumsey, Francom and Shen, arXiv 2306.01911 | Fitting: the offset seam, the latent slot, per-observation densities. Numerics: conjugate updates as limits. Outputs: the declared surface | Deferred |
+| Robust centring and bases (OQ16) | Gervini 2008; Locantore et al. 1999 | Outputs: the basis contract | Deferred |
+| Free-knot tensor-product surfaces (ABMRS) | He, Yang and Kang, *Biometrics* 2026 | Numerics: the face-splitting contraction, a wide-band factor. Fitting: the design-kernel contract | Parked |
+| Additional proposal kernels | KHAOS, arXiv 2510.25036; Nott and Kohn 2005 | Fitting: the proposal-kernel contract. Numerics: D10's policy | Candidate |
+| KHAOS's modified g-prior | Rumsey, Francom et al., arXiv 2510.25036 | Fitting: the coefficient-prior set | Candidate |
+| Basis-estimation uncertainty | Sartini et al., arXiv 2412.11340 | Outputs: the basis contract's uncertainty slot | Candidate |
+| Moments for piecewise polynomials | Derivations review §7, item 7 | Outputs: the moment service | Candidate |
+| Active-subspace analysis | arXiv 2307.11241, via the PCA-extensions discussion | Outputs: term derivatives | Candidate |
+| Cross-engine evidence | Derivations review §7, item 8 | D05's proper mode and path sampling; D03's evidence rule | Candidate |
+| Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
+
+## Generalized-hyperbolic noise (GBMARS)
+
+**Deferred extension (2026-10-25): generalized-hyperbolic noise (GBMARS).** Rumsey, Francom and Shen (arXiv 2306.01911) extend BASS's noise to a normal variance-mean mixture, εᵢ = √w(βvᵢ + √vᵢ·ζᵢ) with ζᵢ ~ N(0, c) and vᵢ ~ GIG(p, a, b). That covers Student t, Laplace, asymmetric Laplace (quantile regression), normal-inverse Gaussian and variance-gamma noise. It lies outside the completion contract, and generalizes the derivations review's §7 item 4 (robust BASS from BARS's resamplers).
+- **BARS already has the β = 0 half.** [`IWeightResampler`](../../../src/maths/regression/spline/bars/WeightResampling.cs) is a scale mixture with Gamma precision weights, and `StudentTWeights`' conditional is GBMARS's GIG conditional at β = 0 and a = 0. Its sweep is GBMARS's.
+- **What the seam needs:**
+  - a GIG distribution and sampler in `Maths.Distributions` (Hörmann and Leydold 2014, the bounded rejection sampler GBMARS uses; Devroye 2014), and a GIG conjugate update in `Maths.Samplers.Blocks` whose limits b → 0 and a → 0 are `ConjugateUpdates`' Gamma and inverse-gamma updates;
+  - a mean offset: a variance-mean mixture hands the Gaussian core the working response y − β√w·v along with its weights, where a scale mixture hands only the weights;
+  - log Bessel K of real order, for the pointwise density, which integrates each vᵢ because it belongs to one observation (OQ17's scope rule). Nothing in the repository computes it yet.
+
+  `ContaminatedNormalWeights` is a discrete mixture and stays its own implementation.
+- **Sweep and prior:** D04's robust row and D03's unweighted g-prior, in the [fitting segment](port-fitting-brief.md). GBMARS's own choice, a ridge with a sampled τ, is the parity option. GBMARS calls its λ update approximate under its stated prior; it is exact under D02's.
+- **The global scale.** When β ≠ 0, GBMARS samples w by a modified half-normal step, because the drift puts w in the mean. A candidate to derive, not yet checked: with zᵢ = √w·vᵢ, so that the drift is βzᵢ, and with the coefficient prior scaled by √w, the global scale gets a GIG full conditional for any GIG mixing. That would generalize Kozumi and Kobayashi's (2011) sampler for the asymmetric Laplace. It is a centred against non-centred choice, so the interweaving schemes apply.
+- **Defect fixtures from the text** (TeX source, checked 2026-10-25):
+  - The residual is defined as r = ŷ − y, but the β and w conditionals hold only for r = y − ŷ. Implemented literally, the skew's sign flips. Fixture: recover a known β from skewed synthetic data.
+  - Table 1's t(ν) row, GIG(−ν/2, 0, ν/2), gives under the paper's own GIG density a t_ν scaled by 1/√2. A standard t needs b = ν, which is what `StudentTWeights` implements, so the seam's t specialization must reproduce `StudentTWeights` exactly.
+- **Sensitivity:** D08's draft, which declares the decomposed surface.
+- **The BARS side:** quantile and skewed BARS come from the same seam (the preparation brief's OQ20).
+
+## Robust centring and bases for functional responses (OQ16)
+
+**Deferred extension (2026-10-22): robust centring and bases for functional responses.** An extension beyond the parity contract, which uses R's mean centring and SVD. It is the functional counterpart of the preparation brief's OQ15 (the Normal prior's median centre), and is tracked there as OQ16.
+- **A robust curve centre (D03).**
+  - **Why.** In direct functional BASS the level to centre on is a curve. The pointwise median of the curves need not resemble any case, and it is not rotation-equivariant. The geometric (spatial) median in the space of curves is the standard robust functional location (Gervini 2008; Cardot, Cénac and Zitt 2013).
+  - **What it keeps** of the scalar median's properties: it depends only on the data, so a Gibbs step over robust weights stays exact; it is translation-equivariant; and a minority of contaminated curves cannot drag it far (breakdown point 1/2).
+  - **What exists.** `Maths.Geometry`'s `EuclideanMedian` computes it, by weighted Weiszfeld iteration from a warm start.
+- **Robust bases for `bassPCA` (P02, D07).**
+  - **Why.** `bassPCA` centres at the mean and takes an SVD, so one gross curve contaminates both the centre and the leading components.
+  - **The functional-data answer** is spherical PCA (Locantore et al. 1999): centre at the spatial median, then take the eigenvectors of the spatial-sign covariance, Σ vᵢvᵢᵀ/‖vᵢ‖². Its eigenvectors are consistent for the covariance's under elliptical symmetry; its eigenvalues are not, so variance-based rank selection needs its own rule.
+  - **`ComputeWithScatter`'s Weiszfeld scatter** weights each curve by 1/‖vᵢ‖ rather than 1/‖vᵢ‖², so a gross curve's influence still grows linearly with its distance. The spatial-sign form bounds it, so it is the safer basis.
+  - **`MoMPCA`** (median-of-means aggregation of block PCAs on Rᵖ × Gr(r, p)) is a third route for large n.
+- **The metric.** Distances between curves must be the L²(t) norm over the output locations, so each coordinate is scaled by the square root of its quadrature weight (√Δt on a non-uniform grid) before the median or the scatter is computed. `EuclideanMedian`'s weights are per case, not per coordinate.
+- **The dependency to check.** `Maths.Regression` does not reference `Maths.Geometry` today. Geometry depends on LinAlg, Distance and Distributions, so the edge makes no cycle, but it must be checked against the repository's layering rules, or the routines placed where both can reach them.
+- **What it does not do.** A robust centre and basis leave BASS's Normal likelihood non-robust. Downweighting whole contaminated curves needs case-level robust weights, a separate extension.
+
+## Free-knot tensor-product surfaces (ABMRS)
+
+**Parked extension (2026-10-20): free-knot tensor-product surfaces.**
+- **What.** An expensive variant that carries BARS's continuous knot moves (birth, death and relocation per input dimension) to tensor-product spline surfaces, reserved for low-dimensional problems where its cost is tractable.
+- **Pieces it would reuse,** once the BASS upgrades are done: the shared g-prior block, the `IBasis` carrier seam, the reversible-jump engine and the ensemble shell.
+- **Cost.** For scattered data the Gram matrix is block-banded rather than a Kronecker product, so factor cost grows quickly with the per-dimension basis sizes.
+- **Before designing it,** survey prior work on Bayesian free-knot surface splines. This is outside the completion contract.
+- **Prior work found (2026-10-20).** He, Yang and Kang's EBARS (arXiv 2405.13353, 2024), published in *Biometrics* (2026) as ABMRS. The published details were verified against the article's open supplement on 2026-10-21 (preparation brief, step 3.8 checklist). It is the multivariate BARS this extension describes:
+  - a discrete candidate grid on each axis, with tensor-product B-splines;
+  - the same collapsed g-prior marginal (their Lemma 1), though the released code computes the BIC-type ratio;
+  - Green's prior-aware schedule on the EBIC count law;
+  - EBIC plug-ins for non-normal responses, described but not in the released package;
+  - basis columns with at most `npart` = min(20, ⌊0.1·m⌋) supported points dropped from the fit, rather than the configuration refused.
+
+  The rest of the survey stays open.
+- **Design notes from reviewing it:**
+  - **Support.** Step 3.7's column-mass support gate carries over unchanged, as Σᵢ Πₐ Bⱼₐ(xᵢₐ) over tensor columns. Near-empty corner cells are common there.
+  - **Diagnostics.** Track knot counts per axis separately from the basis-column count. A birth on axis j adds Πₐ≠ⱼ(kₐ + pₐ + 1) columns at once, though the move itself is one-dimensional.
+  - **Assembly.** Z's rows are row-wise Kronecker (Khatri–Rao) products with (p+1)^d nonzeros each. Accumulate G sparsely, at O(n·(p+1)^(2d)) rather than O(nν²); a move changes only its axis's one-dimensional basis matrix.
+  - **Factor.** In lexicographic order the Gram is block-banded with half-bandwidth about p·ν₂ + p. Use a wide-band factor or step 2.2's `DenseCholesky`, chosen by size.
+- **Its value here, and its sequencing (2026-10-25):**
+  - *Value: smooth extrema.* BASS's hinges default to degree 1, which Francom et al. 2018 chose because "we often encounter instabilities when q > 1 because of the erratic tail behavior of higher order polynomials", so BASS's maxima sit at knots. ABMRS's cubic tensor B-splines would carry BARS's peak machinery (`SplineExtrema`, peak modes over full draws) to two or three inputs: a peak ridge over (T, θ) from families of SPC sweeps, for example. For peak and ridge readouts ABMRS is the better fit; for many inputs, BASS is (derivations review §7, item 9).
+  - *Sequencing.* Building ABMRS first would not de-risk BASS. BASS's main risks are D01's term measure, the bordered factor maintenance, categorical terms and the functional contractions, and ABMRS touches none of them. It is scheduled on its own merits.
+  - *A shared primitive.* Both designs are face-splitting (row-wise Khatri–Rao) products. Direct-functional BASS gets G = (AᵀA)∘(HᵀH) because cases × output locations form a Cartesian sample. ABMRS on gridded inputs gets a Kronecker Gram, and on scattered inputs accumulates G sparsely. One LinAlg contraction with a Cartesian shortcut serves both.
+
+## Additional proposal kernels
+
+These preserve the target when their forward and reverse probabilities are exact, and are validated before any becomes a default (the hub's modernization table).
+- **Bernoulli-inclusion variable proposal** (KHAOS). Each input's inclusion is an independent coin with probabilities summing to an expected interaction order q₀; the reverse probability sums over q₀, and delayed rejection needs Poisson-binomial densities. It avoids Wallenius' distribution and any hard cap on the interaction order. KHAOS pairs it with a variable-swap mutation whose ratio is stated explicitly.
+- **History-based variable proposal** (Nott and Kohn 2005, *Biometrika* 92). Variables weighted by inclusion frequencies accumulated over the run, aimed at many inert predictors. It is adaptive, so it follows D10's policy.
+- **Residual-informed proposal mixtures** (the hub's modernization table), with exploratory support kept, as BASS's own births keep it.
+
+## KHAOS's modified g-prior
+
+An n-component g-prior that shrinks each term by its complexity: per-term factors from the interaction order and degree, and a global g₀² with an inverse-gamma prior (Rumsey, Francom et al., arXiv 2510.25036). KHAOS found its fixed ridge best on noise-free simulators and its g-prior better on most noisy ones. Its displayed conditional for g₀² has no data term, so the conditional is derived rather than copied.
+
+## Basis-estimation uncertainty
+
+D07 keeps the output basis fixed, so its estimation uncertainty is not integrated out. Fast Bayesian FPCA (Sartini, Zhou, Selvin, Zeger and Crainiceanu, arXiv 2412.11340) is one route to modelling it, through the outputs segment's basis contract.
+
+## Moments for piecewise polynomials
+
+A moment service written over piecewise polynomials rather than hinges only gives BAPS's tensor and anisotropic splines, and ABMRS's B-splines, variance decompositions from the same code as BASS's (derivations review §7, item 7).
+
+## Active-subspace analysis
+
+Posterior active-subspace analysis beside the Sobol stage (arXiv 2307.11241, *Discovering Active Subspaces for High-Dimensional Computer Models*, by overlapping authors; [PCA-extensions discussion](../discussion/astra-grassman-stiefel-pca-extensions.md)). For tensor-product representations, including MARS, the gradient integrals reduce to one-dimensional ones. It needs term derivatives, hinge reference cases, numerical integration checks and gradient-accuracy checks before its directions reduce another model, and it comes before jointly learning projection directions during fitting.
+
+## Cross-engine evidence
+
+Evidence for BARS, BASS and BGP by path sampling (derivations review §7, item 8). It needs D05's proper mode in every engine, the intercept convention settled (D03), and proper priors stated in each engine's units. Under D03's evidence rule, evidence is reported only from proper-mode runs, and the predictive checks already built for OQ17 (WAIC, PSIS-LOO) are the default comparison across engines.
+
+## Direct-functional BASS for families of SPC sweeps
+
+Fitting f(x, T) across families of SPC temperature sweeps (derivations review §7, item 9); BARS remains the engine for a single sweep. For peak and ridge readouts over (T, θ), ABMRS is the better fit (its entry above). An application, outside the completion contract.
