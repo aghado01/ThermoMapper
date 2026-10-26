@@ -377,6 +377,9 @@ It rests on cited axioms, in two routes:
     {‖f − f*‖ₙ + |σ − σ₀| ≥ Mₙε̄ₙ} tends to 0.
   - Lemma 1 needs the smaller margin C₂ > C₁ + 72/σ₀². The shells condition (2.5) follows from the prior mass, since
     εₙ ≤ ε̄ₙ.
+  - 2026-10-26: `BGP.gvdv07_theorem1` takes `Θₙ ⊆ S`, the printed Θₙ ⊂ Θ. The closed sieves lie in the noise range
+    `S`, so the hypothesis comes free. Without it the axiom leaned on an unchecked reduction to Θₙ ∩ S. An outside
+    review (`Archeion/Markdown/argon-review.md`) found the proof of `Θₙ ⊆ S` unused.
 - **`BGP.posterior_contraction_unknown_variance`, the protolemma's fixed-C statement,** on the axiom
   `BGP.fixed_constant_contraction`. This is the fixed-M two-rate form of the citation check above, under its
   corrected citation.

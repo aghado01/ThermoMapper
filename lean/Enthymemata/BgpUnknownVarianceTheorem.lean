@@ -231,6 +231,7 @@ axiom fixed_constant_contraction
 /-- **AXIOM — Ghosal & van der Vaart (2007), Theorem 1**, for independent observations, with
 `eₙ = dₙ`, `k = 2`, the parameter set `S` and the KL neighbourhood `B*ₙ(θ₀, εₙ; 2)` in its
 independent-observations form (`klBall`). The hypotheses are the theorem's:
+* `Θₙ ⊆ S`, the sieves inside the parameter set;
 * (2.2): for every `r > 0` and `θ₁ ∈ S` with `dₙ(θ₁, θ₀) > r`, a test with
   `P₀φ ≤ e^{−Knr²}` and `Pθ(1 − φ) ≤ e^{−Knr²}` on the `ξr`-ball around `θ₁`;
 * (2.4): the local entropy `log N(ξr/2, {θ ∈ Θₙ : dₙ(θ, θ₀) < r}, dₙ) ≤ nεₙ²` for `r > εₙ`, here
@@ -250,7 +251,8 @@ axiom gvdv07_theorem1
     (hd_meas : ∀ n θ', Measurable fun θ => d n θ θ')
     (ε : ℕ → ℝ) (hε : ∀ᶠ n in atTop, 0 < ε n) (hε0 : Tendsto ε atTop (𝓝 0))
     (hnε : ∃ c > 0, ∀ᶠ n in atTop, c ≤ n * ε n ^ 2)
-    (Θ : ℕ → Set (E × ℝ)) (hΘ : ∀ n, MeasurableSet (Θ n)) (K ξ : ℝ) (hK : 0 < K) (hξ : 0 < ξ)
+    (Θ : ℕ → Set (E × ℝ)) (hΘ : ∀ n, MeasurableSet (Θ n)) (hΘS : ∀ n, Θ n ⊆ S)
+    (K ξ : ℝ) (hK : 0 < K) (hξ : 0 < ξ)
     (htests : ∀ n : ℕ, ∀ r > 0, ∀ θ₁ ∈ S, r < d n θ₁ θ₀ →
       ∃ φ : (Fin n → ℝ) → ℝ, Measurable φ ∧ (∀ y, 0 ≤ φ y ∧ φ y ≤ 1) ∧
         ∫ y, φ y ∂dataLaw ev n θ₀ ≤ Real.exp (-(K * n * r ^ 2)) ∧
@@ -1702,7 +1704,7 @@ theorem posterior_contraction_unknown_variance_gvdv07
         _ ≤ L ^ 2 * (n * priorMassRadius Cb a kb n ^ 2) := this
         _ = n * (L * priorMassRadius Cb a kb n) ^ 2 := by ring⟩
     (fun n => closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)))
-    (fun n => isClosed_closure.measurableSet) K ξ hK hξ htests
+    (fun n => isClosed_closure.measurableSet) hsieve K ξ hK hξ htests
     ?hentropy ?hshell
   case hentropy =>
     filter_upwards [eventually_sieve_cover ev hev B (σmin := smin * √ηlo) (σmax := smax * √ηhi)
