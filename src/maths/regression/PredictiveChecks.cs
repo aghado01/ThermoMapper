@@ -13,13 +13,19 @@ namespace Maths.Regression;
 /// <see cref="PredictiveChecks.ParetoKThreshold"/> that unit's estimate is unreliable (Vehtari et al. 2024). Null for
 /// WAIC.</param>
 /// <param name="MonteCarloError">PSIS-LOO only: the Monte Carlo standard error of <see cref="Elpd"/>, √Σ of the units'
-/// squared errors; NaN when any unit's k̂ is above the threshold, as in loo, and for WAIC.</param>
+/// squared errors, as in loo, which treats the units' errors as independent; NaN when any unit's k̂ is above the
+/// threshold, as in loo, and for WAIC.</param>
 /// <param name="MonteCarloErrors">PSIS-LOO only: each unit's Monte Carlo standard error. Null for WAIC.</param>
 /// <param name="RelativeEfficiency">PSIS-LOO only: each unit's relative efficiency r_eff = ESS/S, 1 for independent
 /// draws. Null for WAIC.</param>
+/// <param name="JointMonteCarloError">PSIS-LOO only: the Monte Carlo standard error of <see cref="Elpd"/> from the draws'
+/// joint influence, which keeps the correlation between units that share the draws (see
+/// <see cref="PredictiveChecks.PsisLoo"/>); NaN under the same rule as <see cref="MonteCarloError"/>, and for
+/// WAIC.</param>
 public sealed record PredictiveCheck(double Elpd, double StandardError, double EffectiveParameters, double[] PerUnit,
                                      double[]? ParetoK, double MonteCarloError = double.NaN,
-                                     double[]? MonteCarloErrors = null, double[]? RelativeEfficiency = null);
+                                     double[]? MonteCarloErrors = null, double[]? RelativeEfficiency = null,
+                                     double JointMonteCarloError = double.NaN);
 
 /// <summary>
 /// Model-free consumers of a <see cref="PointwiseLogDensity"/> (OQ17): they read the draws × units matrix and know no
@@ -75,6 +81,14 @@ public static class PredictiveChecks
     /// by a log-normal's moments, √log(1 + that).
     /// </para>
     /// <para>
+    /// The total's error comes two ways. loo's, <see cref="PredictiveCheck.MonteCarloError"/>, is √Σ of the units'
+    /// squared errors, which treats the units' errors as independent. But every unit reads the same draws, so their errors
+    /// correlate: they cancel where units pull a shared parameter opposite ways and add where they pull it the same way.
+    /// <see cref="PredictiveCheck.JointMonteCarloError"/> keeps that correlation to first order: each unit's log error is
+    /// Σ_s w̃_s(p_s/p̂ − 1), so the total's is Σ_s Ψ_s, with Ψ_s = Σ_u w̃_us(p_us/p̂_u − 1) the draw's influence on the
+    /// total. Its variance is Σ_s Ψ_s²/r_eff, with r_eff the ESS/S of Ψ along the chains (1 for independent draws).
+    /// </para>
+    /// <para>
     /// With leave-unit-out terms (the collapsed content), the same arithmetic gives the non-factorized model's PSIS-LOO
     /// (Bürkner, Gabry &amp; Vehtari 2021): the ratios are 1/p(y_u | y_rest, structure), and elpd_u estimates log
     /// p(y_u | y_rest). The effective number of parameters, lppd − elpd, then has no in-sample lppd to subtract from and is
@@ -97,11 +111,15 @@ public static class PredictiveChecks
         var logRatios = new double[s];
         var column = new double[s];
         var weighted = new double[s];
+        var likelihood = new double[s];
+        var influence = new double[s];   // Ψ_s, each draw's influence on the total
         for (int u = 0; u < units; u++)
         {
-            for (int d = 0; d < s; d++) { column[d] = ll[d, u]; logRatios[d] = -ll[d, u]; }
+            double maxLl = double.NegativeInfinity;
+            for (int d = 0; d < s; d++) { column[d] = ll[d, u]; logRatios[d] = -ll[d, u]; maxLl = Math.Max(maxLl, column[d]); }
             lppdTotal += LogSumExp(column) - Math.Log(s);
-            rEff[u] = RelativeEfficiency(column, density.ChainLengths);
+            for (int d = 0; d < s; d++) likelihood[d] = Math.Exp(column[d] - maxLl);   // scaled by its largest, which the ESS ignores
+            rEff[u] = RelativeEfficiency(likelihood, density.ChainLengths);
             int tail = (int)Math.Ceiling(Math.Min(0.2 * s, 3.0 * Math.Sqrt(s / rEff[u])));
             khat[u] = SmoothLogWeights(logRatios, tail);   // logRatios now holds the smoothed log weights
             double logNorm = LogSumExp(logRatios);
@@ -117,10 +135,13 @@ public static class PredictiveChecks
             {
                 double t = Math.Exp(logRatios[d]) * double.ExpM1(column[d] - e);   // w̃_s(p_s/p̂ − 1), within [−1, 1]: no overflow
                 relativeVariance += t * t;
+                influence[d] += t;
             }
             mcse[u] = double.IsNegativeInfinity(e) ? double.NaN : Math.Sqrt(double.LogP1(relativeVariance / rEff[u]));
         }
-        double total = 0.0, mcVariance = 0.0, threshold = ParetoKThreshold(s);
+        double total = 0.0, mcVariance = 0.0, jointVariance = 0.0, threshold = ParetoKThreshold(s);
+        foreach (double v in influence) jointVariance += v * v;
+        jointVariance /= RelativeEfficiency(influence, density.ChainLengths);
         bool reliable = true;
         for (int u = 0; u < units; u++)
         {
@@ -134,6 +155,7 @@ public static class PredictiveChecks
             MonteCarloError = reliable ? Math.Sqrt(mcVariance) : double.NaN,
             MonteCarloErrors = mcse,
             RelativeEfficiency = rEff,
+            JointMonteCarloError = reliable ? Math.Sqrt(jointVariance) : double.NaN,
         };
     }
 
@@ -148,21 +170,19 @@ public static class PredictiveChecks
         return Math.Min(1.0 - 1.0 / Math.Log10(draws), 0.7);
     }
 
-    // A unit's r_eff = ESS/S of its likelihoods within the chains: 1 for independent draws or an ESS that cannot be
-    // estimated. The likelihoods are scaled by their largest, which the ESS ignores; unequal chains are cut to the shortest.
-    private static double RelativeEfficiency(double[] logLik, IReadOnlyList<int>? chainLengths)
+    // r_eff = ESS/S of per-draw values within the chains: a unit's likelihoods, or the draws' influence on the total. It is
+    // 1 for independent draws or an ESS that cannot be estimated; unequal chains are cut to the shortest.
+    private static double RelativeEfficiency(double[] values, IReadOnlyList<int>? chainLengths)
     {
         if (chainLengths is null) return 1.0;
         int m = chainLengths.Count, length = int.MaxValue;
         foreach (int c in chainLengths) length = Math.Min(length, c);
-        double max = double.NegativeInfinity;
-        foreach (double v in logLik) max = Math.Max(max, v);
         var chains = new double[m][];
         int start = 0;
         for (int j = 0; j < m; j++)
         {
             chains[j] = new double[length];
-            for (int i = 0; i < length; i++) chains[j][i] = Math.Exp(logLik[start + i] - max);
+            Array.Copy(values, start, chains[j], 0, length);
             start += chainLengths[j];
         }
         EssDiagnostic ess = ChainDiagnostics.MeanEss(chains);

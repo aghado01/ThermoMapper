@@ -35,11 +35,13 @@ public sealed class PsisRelativeEfficiencyTests
         return Enumerable.Range(0, N).Select(_ => 0.5 + Gaussian(rng)).ToArray();
     }
 
-    // Chains of exact posterior draws with lag-one autocorrelation rho, scored as log N(y_i; θ_d, 1).
-    private static PointwiseLogDensity Density(double[] y, double rho, int chains, int length, int seed)
+    // Chains of exact posterior draws with lag-one autocorrelation rho, scored as log N(y_i; θ_d, 1). The posterior is the
+    // flat prior's, N(ȳ, 1/n), unless a mean and sd are given.
+    private static PointwiseLogDensity Density(double[] y, double rho, int chains, int length, int seed,
+                                               double? posteriorMean = null, double? posteriorSd = null)
     {
         var rng = new Xoshiro256PlusPlus(seed);
-        double mean = y.Average(), sd = 1.0 / Math.Sqrt(N), step = sd * Math.Sqrt(1.0 - rho * rho);
+        double mean = posteriorMean ?? y.Average(), sd = posteriorSd ?? 1.0 / Math.Sqrt(N), step = sd * Math.Sqrt(1.0 - rho * rho);
         var ll = new double[chains * length, N];
         int row = 0;
         for (int c = 0; c < chains; c++)
@@ -89,9 +91,10 @@ public sealed class PsisRelativeEfficiencyTests
 
     /// <summary>
     /// Across 200 independent runs of four chains of 250 autocorrelated draws, each unit's reported Monte Carlo error
-    /// matches the spread of its estimates. Read as independent draws, the same terms understate it by √r_eff, the exact one. The
-    /// total's error, √Σ of the units', assumes the units' errors independent, as loo's does; they share the draws, so the
-    /// test reports how the total fares without asserting it.
+    /// matches the spread of its estimates. Read as independent draws, the same terms understate it by √r_eff, the exact one.
+    /// The total's joint-influence error matches the spread of the totals too. loo's √Σ total, which assumes the units' errors
+    /// independent, is reported beside it: here their linear parts cancel, since Σ(y_i − ȳ) = 0, while the part common to
+    /// every unit adds, so the two nearly offset.
     /// </summary>
     [Fact]
     public void MonteCarloError_MatchesTheSpreadAcrossRuns()
@@ -103,6 +106,7 @@ public sealed class PsisRelativeEfficiencyTests
         var asIndependent = new double[runs, N];
         var totals = new double[runs];
         var totalErrors = new double[runs];
+        var jointErrors = new double[runs];
         for (int r = 0; r < runs; r++)
         {
             PointwiseLogDensity density = Density(y, rho: 0.8, chains: 4, length: 250, seed: 1000 + r);
@@ -116,6 +120,7 @@ public sealed class PsisRelativeEfficiencyTests
             }
             totals[r] = loo.Elpd;
             totalErrors[r] = loo.MonteCarloError;
+            jointErrors[r] = loo.JointMonteCarloError;
         }
 
         static double Sd(double[] v)
@@ -135,9 +140,39 @@ public sealed class PsisRelativeEfficiencyTests
             naive[i] = Rms(Column(asIndependent, i)) / spread / Math.Sqrt(ExactRelativeEfficiency(y[i] - y.Average(), 0.8));
         }
         _out.WriteLine($"reported/actual, with r_eff: {ratio.Min():F2}–{ratio.Max():F2}; as independent, over √r_eff: {naive.Min():F2}–{naive.Max():F2}");
-        _out.WriteLine($"total: reported {totalErrors.Average():F4} against an actual spread of {Sd(totals):F4}");
+        _out.WriteLine($"total: actual spread {Sd(totals):F4}; joint {Rms(jointErrors):F4}, loo's √Σ {Rms(totalErrors):F4}");
         Assert.All(ratio, q => Assert.InRange(q, 0.8, 1.25));
         Assert.All(naive, q => Assert.InRange(q, 0.8, 1.25));
+        Assert.InRange(Rms(jointErrors) / Sd(totals), 0.8, 1.25);
+    }
+
+    /// <summary>
+    /// An informative prior, N(ȳ − 2, 1/20), pulls the posterior mean m below every unit's pull: Σ(y_i − m) = 20, so the
+    /// units' errors share a sign and add. The joint-influence total matches the totals' spread across 200 runs; loo's √Σ
+    /// total, which treats them as independent, understates it.
+    /// </summary>
+    [Fact]
+    public void JointTotal_KeepsTheCorrelationBetweenUnits()
+    {
+        double[] y = Data();
+        const int runs = 200;
+        double precision = N + 20.0, mean = (N * y.Average() + 20.0 * (y.Average() - 2.0)) / precision;
+        var totals = new double[runs];
+        var quadrature = new double[runs];
+        var joint = new double[runs];
+        for (int r = 0; r < runs; r++)
+        {
+            PredictiveCheck loo = PredictiveChecks.PsisLoo(
+                Density(y, rho: 0.8, chains: 4, length: 250, seed: 3000 + r, posteriorMean: mean, posteriorSd: 1.0 / Math.Sqrt(precision)));
+            totals[r] = loo.Elpd;
+            quadrature[r] = loo.MonteCarloError;
+            joint[r] = loo.JointMonteCarloError;
+        }
+        double m = totals.Average(), spread = Math.Sqrt(totals.Sum(v => (v - m) * (v - m)) / (runs - 1));
+        double Rms(double[] v) => Math.Sqrt(v.Average(x => x * x));
+        _out.WriteLine($"total: actual spread {spread:F4}; joint {Rms(joint):F4} ({Rms(joint) / spread:F2}), loo's √Σ {Rms(quadrature):F4} ({Rms(quadrature) / spread:F2})");
+        Assert.InRange(Rms(joint) / spread, 0.8, 1.25);
+        Assert.True(Rms(quadrature) / spread < 0.8, $"loo's total over the spread {Rms(quadrature) / spread:F2}");
     }
 
     [Fact]
