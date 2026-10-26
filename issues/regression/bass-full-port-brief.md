@@ -1,6 +1,6 @@
 # Full BASS port brief
 
-Date: 2026-10-18; updated 2026-10-25. Status: stage 0 is closed and the shared slices of stages 2–3 have landed (the [preparation brief](bass-preparation-brief.md)). Stage 1 has draft resolutions for D01–D04 and D06, awaiting the user's design pass. Source-code implementation is not authorized by this document.
+Date: 2026-10-18; updated 2026-10-25. Status: stage 0 is closed and the shared slices of stages 2–3 have landed (the [preparation brief](bass-preparation-brief.md)). Stage 1 has draft resolutions for D01–D09 and a note for D10, awaiting the user's design pass. Source-code implementation is not authorized by this document.
 
 Add the complete BASS regression capability to `Maths.Regression`, alongside BARS, BAPS, and BGP. Preserve arbitrary predictor dimension, mixed continuous and categorical inputs, scalar and functional responses, posterior prediction, sensitivity analysis, and emulator calibration. Build the C# implementation around explicit statistical targets, owned numerical state, and the repository's existing dependency direction.
 
@@ -293,18 +293,18 @@ These decisions remain open until their density, base measure, transitions, and 
 | D02 | Count prior at the capacity limit | Choose a conditionally normalized truncated Poisson with an independent intensity prior, or a globally truncated joint prior. Derive the intensity update; the first choice does not retain a simple Gamma conditional without its cap normalizer. | Before count/intensity updates. | Drafted below, from the derivations review §4. |
 | D03 | Coefficient-prior modes and posterior propriety | Derive both `g` and `jeffreys` targets, including intercept treatment, dimension-dependent constants, and variance/precision parameterization. State where posterior sampling and evidence reporting are defined. | Before target and initialization APIs. | Drafted below, from the derivations review §6. Bears on OQ19 (units). |
 | D04 | Collapsed and conditional update order | Prefer a coefficient-marginal target with valid hyperparameter transitions and conditional coefficient draws for retained predictions. If partial collapse is retained, justify the complete scan. State which current values each conditional uses and when cached statistics/densities refresh. Do not copy the stale-statistic or plug-in-conditioning patterns identified in R03-R04. | Before complete BASS sweeps. | Drafted below, from the derivations review §2, with λ integrated out (D02). Sets the pointwise-density default (OQ17). |
-| D05 | Tempering and SMC target paths | Specify which density is powered, internal-coordinate Jacobians, a valid initial distribution, and cross-target swap/incremental-weight formulas. Marginalization and tempering must not be assumed to commute. | Before hot replicas or SMC. | Proposal in the derivations review §3. A declared path per engine, no house default (Q5, OQ6); the exact reference rung is OQ2. |
+| D05 | Tempering and SMC target paths | Specify which density is powered, internal-coordinate Jacobians, a valid initial distribution, and cross-target swap/incremental-weight formulas. Marginalization and tempering must not be assumed to commute. | Before hot replicas or SMC. | Drafted below, from the derivations review §3. A declared path per engine, no house default (Q5, OQ6); the exact reference rung is OQ2. |
 | D06 | Numerical model admission | Define the relationship between rank/support restrictions and the model space, relative tolerances, rebuild criteria, and rejection reasons. Ridge regularization must be an explicit prior choice. | Before optimized factor updates. | Drafted below, from the derivations review §5, in Q6's two-gate form. |
-| D07 | Response units and uncertainty | Fix PCA/basis scaling, residual orientation, empirical truncation distribution, independence across cases, and covariance transformation into physical units. Include conditional coefficient uncertainty; a mixture of conditional means is not the full posterior distribution. Keep basis-estimation uncertainty outside the baseline unless explicitly modeled. | Before predictive uncertainty and calibration. | Open. Sets the pointwise-density default for supplied-basis fits (OQ17); robust bases are OQ16. |
-| D08 | Sensitivity measures and moments | Specify independent input measures, category probabilities, mixture/truncation conventions, Student scale/degree edge cases, and zero-variance behavior. Qualify moments against quadrature/enumeration, including higher hinge degrees. | Before sensitivity release. | Open. Note below on the surface functional. |
-| D09 | Calibration target and covariance formulations | Choose and document cut versus other inference semantics; use the cut formulation as the initial candidate matching the modular workflow. Make both covariance formulations and each variance-group prior explicit. Derive discrepancy/noise updates and enforce cache/unit consistency. | Before calibration reference and cut SMC. | Open. |
+| D07 | Response units and uncertainty | Fix PCA/basis scaling, residual orientation, empirical truncation distribution, independence across cases, and covariance transformation into physical units. Include conditional coefficient uncertainty; a mixture of conditional means is not the full posterior distribution. Keep basis-estimation uncertainty outside the baseline unless explicitly modeled. | Before predictive uncertainty and calibration. | Drafted below. Sets the pointwise-density default for supplied-basis fits (OQ17); robust bases are OQ16. |
+| D08 | Sensitivity measures and moments | Specify independent input measures, category probabilities, mixture/truncation conventions, Student scale/degree edge cases, and zero-variance behavior. Qualify moments against quadrature/enumeration, including higher hinge degrees. | Before sensitivity release. | Drafted below. |
+| D09 | Calibration target and covariance formulations | Choose and document cut versus other inference semantics; use the cut formulation as the initial candidate matching the modular workflow. Make both covariance formulations and each variance-group prior explicit. Derive discrepancy/noise updates and enforce cache/unit consistency. | Before calibration reference and cut SMC. | Drafted below. |
 | D10 | Diagnostic and stopping semantics | Choose invariant functionals, minimum trace/population requirements, handling of undefined/infinite diagnostics and constant functionals, and method-appropriate uncertainty estimates. Carry the repaired stopping/display policy from B01 into new adapters. Distinguish posterior uncertainty, Monte Carlo error, and outer data/bootstrap uncertainty. | Before automatic stopping or performance claims. | Open. B01's stopping policy carries over; adaptation policy below. |
 
 Each resolution should record the chosen specification, equations, rationale, scope of any approximation, and an independent check. Preserve rejected alternatives when they explain a consequential tradeoff. Update the relevant design notes before code relies on the decision.
 
 ### Draft resolutions and notes (proposals, 2026-10-25)
 
-Drafted at the user's request as input to the user's design pass. Nothing here is decided. Each draft gives the specification, the rationale, the alternatives not adopted, any approximation, and an independent check. The derivations review's proposals are the starting point: global truncation (§4), the τ finding (§6), full collapse (§2) and admission by angle (§5). D04 and D06 were drafted the same day as D01–D03, to keep them consistent with those drafts, together with notes for D08 and D10.
+Drafted at the user's request as input to the user's design pass. Nothing here is decided. Each draft gives the specification, the rationale, the alternatives not adopted, any approximation, and an independent check. The derivations review's proposals are the starting point: global truncation (§4), the τ finding (§6), full collapse (§2) and admission by angle (§5). D04–D09 were drafted the same day as D01–D03, to keep them consistent with those drafts, together with a note for D10.
 
 **Sources checked.** Where they disagree, each draft says which one it follows.
 
@@ -412,6 +412,40 @@ Drafted at the user's request as input to the user's design pass. Nothing here i
   τ stays before a so that it can stay collapsed. Under weights its collapsed density needs both the weighted and the unweighted Gram (D03's unweighted g-prior), so τ given a is the cheap alternative, at the cost of τ–a coupling; the interweaving of `HierarchicalPSpline`'s phase C is the in-house remedy. This is the shape of BARS's robust sweep ([`IWeightResampler`](../../src/maths/regression/spline/bars/WeightResampling.cs)): knots given the weights with β and σ² integrated, then (σ², β), then the weights.
 - **Independent checks:** §2's, for a fixed structure τ's marginal against quadrature and, on a tiny enumerable model, composition draws against a long joint-Gibbs reference; and the retained λ draws against D02's check.
 
+#### D05 (draft): tempering and SMC target paths
+
+Here b ∈ (0, 1] is the inverse temperature, as in `Temperature(b, path)`.
+- **Default path: likelihood-tempered** (derivations review §3; also BARS's default under Q5). π_b ∝ prior(structure, τ) · p_b(y | structure, τ), where p_b is §3's closed-form tempered marginal with a and σ² integrated out. The count prior, the term measure and τ's prior are untempered at every rung.
+- **Why this path:**
+  - *Swaps are cheap.* The prior factors are identical across rungs and cancel, so a swap needs only ℓ_b = log p_b, O(1) from cached statistics (§3).
+  - *Hot replicas stay meaningful.* They approach the actual prior over structures, where a powered posterior flattens it.
+  - *No reference-measure dependence.* A powered density on a space of varying dimension depends on the reference measure of its coordinates. With D01's discrete knot measure the structures are countable, so they carry counting measure on either path, but τ is continuous, and powering its density depends on whether τ or log τ is the coordinate. The likelihood path's b = 0 member is the prior under any parameterization.
+  - *An exact reference rung (OQ2).* At b = 0 the target is the prior, which can be drawn exactly: M and the terms from the unconstrained measure, accepted when they lie in F (rejection from the globally truncated measure is exact), and τ from its prior. This needs D03's proper mode.
+- **The powered path stays selectable** (Q5), with τ powered in log τ coordinates and that choice recorded. Its b → 0 limit is its reference measure, which is not normalizable here, so it has no exact reference rung.
+- **Which priors each use needs.** Parallel tempering with b_min > 0 runs under the default improper priors on σ² and the intercept. Each rung's collapsed marginal is finite for b > 0, and the improper prior's arbitrary constant appears with both signs in every within-rung ratio and every swap, so it cancels. The b = 0 rung, SMC started from the prior and path-sampling evidence need D03's proper mode, whose units question is OQ19's.
+- **Moves at rung b** use ℓ_b(new) − ℓ_b(old), plus the untempered prior and proposal ratios. τ is slice-sampled on log τ from p(τ)·(τ/(τ+b))^{k/2}·(g₂ + b·S_b/2)^{−(g₁ + Nb/2)} (§3).
+- **R's tempering is a defect fixture, not an option.**
+  - R multiplies the prior and proposal factors of birth and death by the inverse temperature ([birth](D:/aghado01/packages/BASS/R/rjmcmc_des.R:34)).
+  - Its swap density ([`lp`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:64)) leaves out the term-prior blocks.
+  
+  Together these have no single target. Fixture: swap detailed balance on an enumerable structure space.
+- **Schedule and ladder.** The non-reversible DEO schedule (step 3.3) and the adaptive ladder are reused; the ladder's adaptation follows D10's policy and freezes after burn-in.
+- **Default: untempered.** R defaults to a single temperature (`temp.ladder` = 1). Francom et al. 2018 (§3.3) describe BMARS posteriors as often highly multimodal, but BARS found that tempering helped only where chains were stuck (OQ4). So BASS starts untempered, with tempering a declared option, until its own pre-registered measurement says otherwise.
+- **SMC (stage 8)** uses the same sequence, b₀ = 0 < … < b_S = 1, started from the prior in the proper mode.
+  - Each particle's incremental weight is ℓ_{b′} − ℓ_b, which costs O(1).
+  - Mutations are D04's sweep at the stage's b.
+  - Stages are placed adaptively by conditional ESS (Zhou, Johansen and Aston 2016).
+  - Resampling uses independent offspring streams.
+  
+  The normalizer estimate is the evidence only in the proper mode, starting from a normalized prior.
+- **Evidence:** path sampling over the same rungs or stages, with ∂_b ℓ_b in closed form (§3).
+- **Independent checks:**
+  - the endpoints: b = 1 gives D04's target, and b = 0 gives the prior;
+  - swap detailed balance on an enumerable structure space;
+  - the SMC normalizer against enumeration with proper priors;
+  - exact reference draws against D02's count law;
+  - the R defect fixtures above.
+
 #### D06 (draft): numerical model admission
 
 - **Two gates, as Q6 decided for BARS** (step 3.7):
@@ -425,13 +459,114 @@ Drafted at the user's request as input to the user's design pass. Nothing here i
 - **Shared state.** The residual r and δ serve the factor border, the numerical gate and informed proposals (§5). r is updated on each accepted birth, recomputed after deaths and on a cadence, and S is computed from r rather than as yᵀy − Q/(1+τ), whose cancellation bites when τ is small (§5).
 - **Independent checks:** §5's, randomized insert and delete sequences against fresh factorizations, residual drift against recomputation and s against the SVD's principal angle; plus one constructed case for each refusal reason.
 
-#### D08 (note): which surface sensitivity decomposes
+#### D07 (draft): response units and uncertainty
 
-- **Gaussian BASS:** the Sobol indices decompose Ba, which is the mean surface.
-- **Skewed noise** (GBMARS with β ≠ 0): E[y | x] = Ba + √w·β·E[v]. The offset is constant in x, so the mean's indices equal Ba's.
-- **Fixed-β asymmetric Laplace:** Ba is the q-quantile surface, and indices per quantile (GBMARS's SIR example) decompose a different functional for each q.
+Sources: the inventory's PCA, prediction and defect sections, and R's [`bassPCA` setup](D:/aghado01/packages/BASS/R/bassPCA.R:88) and [basis prediction](D:/aghado01/packages/BASS/R/bassPCA.R:218).
+- **Scalar and direct functional responses.** The noise is Gaussian, independent across cases and output locations, with one variance. A predictive draw is f(x, t) under the draw plus noise drawn independently for each case and location. The pointwise unit defaults to a case (a whole curve), with the product of its locations' densities given the draw (D04's retained-parameters content).
+- **Decomposition** (`bassPCA`):
+  - Centre by y_m (default: the mean) and scale by y_s (default: 1).
+  - Take a thin SVD of the standardized responses, Y_cᵀ = U D Vᵀ. The basis is K = U_r D_r, and the coefficient responses are W = V_rᵀ, with rows of unit norm. This is R's convention, kept because the priors and the meaning of each component's noise depend on it.
+  - The rank is the smallest r whose cumulative variance share is at least the target, capped at the numerical rank. R's strict comparison fails at 100%; that becomes a defect fixture. Full retention means the numerical rank and zero truncation.
+  - A constant output column is centred and gets y_s = 1, never a division by zero.
+  - Each component's sign is fixed by a convention for comparisons only. Where singular values repeat, comparisons use reconstructions or subspaces.
+- **Truncation residuals.**
+  - A training case's residual is e_i = y_{c,i} − K wᵢ, observed minus reconstructed, in standardized units.
+  - A predictive draw adds y_s ∘ e, in physical units. e is a whole training-case vector, which keeps its within-output correlation, drawn uniformly over the training cases independently for each prediction case and draw.
+  - R stores reconstructed minus observed, adds it after restoring physical units, and indexes columns with the row count: three defect fixtures.
+- **Component noise.** Each component's ε_k ~ N(0, σ_k²) is drawn for each prediction case and posterior draw. R draws one per posterior draw and reuses it across cases (defect fixture).
+- **The predictive draw** for a case is y = y_m + y_s ∘ (K(w(x) + ε) + e). The latent draw omits ε and e. Latent draws include coefficient variation through D04's composition draws, so a mixture of conditional means is never reported as the full posterior.
+- **Joint draws across components.** The components are fitted independently on separate coefficient responses, so their posteriors are independent and equal-weight MCMC draws pair validly by index. Weighted draws, from SMC, are resampled within each component before pairing; pairing them by index is invalid.
+- **Covariance in physical units** is diag(y_s)·Cov·diag(y_s). Calibration (D09) and basis sensitivity (D08) apply the same transform. R's calibration uses the unscaled basis and truncation covariance (defect fixture).
+- **Pointwise density for supplied-basis fits (OQ17).** The default unit is a case and the content is Σ_k log N(w_ik | w_k(xᵢ), σ_k²) in coefficient space. For a fixed basis this differs from the density in y-space by a constant and a residual term that are the same for every fit, so it is exact for comparing fits that share a basis. Comparing across bases or engines needs a model of the truncation residual. A Gaussian with diagonal empirical truncation variance (calibration's functional form) is offered as a declared approximation, not as the default.
+- **Inputs.** One fitted transform is reused everywhere.
+  - A constant training column maps to 0. R's training helper allows it, while its prediction helper divides by the zero span (defect fixture).
+  - An unseen category is refused by default.
+  - Continuous extrapolation is allowed, with each case flagged when it lies outside the training range.
+- **Axes and order.** Draw × case × output axes are always explicit, including singletons, and the requested draw order is kept. R reorders by model group and drops axes (defect fixture).
+- **Intervals** are quantiles of the predictive mixture from draws, not quantiles of each draw's Gaussian interval endpoints, which R's diagnostic plot uses.
+- **Not in the baseline:** basis-estimation uncertainty (Fast Bayesian FPCA, arXiv 2412.11340, is one route if it is ever modelled) and robust bases (OQ16).
+- **Independent checks:**
+  - the training reconstruction y = y_m + y_s ∘ (K W + e) holds exactly;
+  - the edge cases: 100% retention, full rank, constant columns;
+  - the residual's sign, on an asymmetric fixture;
+  - independence of noise across prediction cases;
+  - draw order and singleton axes;
+  - the covariance transform against a dense computation.
 
-The sensitivity contract therefore takes the decomposed surface as a declared input, the mean by default, rather than assuming Ba is the mean.
+#### D08 (draft): sensitivity measures and moments
+
+Sources: the JSS paper (§3), Francom et al. 2018, the inventory's Sobol section and its defect table, and R's [`sobol`](D:/aghado01/packages/BASS/R/sobol_normTmix.R:194).
+- **What is decomposed.** The latent surface's variance under a declared independent product measure over the inputs, computed for each posterior draw, which gives a posterior distribution of indices. Observation noise is not in the denominator.
+- **Which surface:**
+  - *Gaussian BASS:* the indices decompose Ba, which is the mean surface.
+  - *Skewed noise* (GBMARS with β ≠ 0): E[y | x] = Ba + √w·β·E[v]. The offset is constant in x, so the mean's indices equal Ba's.
+  - *Fixed-β asymmetric Laplace:* Ba is the q-quantile surface, and indices per quantile (GBMARS's SIR example) decompose a different functional for each q.
+
+  The contract takes the decomposed surface as a declared input, the mean by default, rather than assuming Ba is the mean.
+- **Input measures,** one per input:
+  - *continuous:* uniform on an interval (by default, the training range in transformed units), or a finite mixture of truncated normal and Student t components;
+  - *categorical:* supplied level probabilities, uniform over the observed levels by default. R ignores supplied weights and always uses uniform moments (defect fixture: a level with probability 0.9 gives a second moment of 0.5).
+- **Mixture conventions:**
+  - *Truncation.* By default the weights are those before truncation and the whole mixture is truncated and renormalized, as in R. Weights conditional on truncation are the other named form.
+  - *Student components* take a location-scale `scale`, not a marginal standard deviation, as in R. A constructor from a marginal standard deviation converts it, for ν > 2.
+- **Moments: one service for direct and basis sensitivity.**
+  - Each term pair's moment is a product of one-dimensional interval moments of hinge powers under each input's measure, split at the knots and clipped to the measure's support. R's basis path ignores the bounds (defect fixture: 0.45 against the integral, 0.1106).
+  - Categorical moments are sums of the supplied probabilities, including intersections, never ratios that can give 0/0.
+  - Every hinge degree is supported. Uniform measures have closed forms. Normal and Student mixtures use closed forms where they are stable, and otherwise Gauss–Legendre quadrature split at the knots with a stated error bound. R restricts these to degree 1. Truncated Student moments exist for every ν, so the closed form's factors in ν − 1 fall back to quadrature at the special values.
+- **Functional responses** have two forms (JSS §3.1):
+  - integrate the functional variable as one more input, for a total decomposition, with its measure declared: uniform over its range by default, or the empirical output grid;
+  - condition on one functional coordinate, for indices as functions of t.
+
+  Both report main and total indices. R's functional path omits the totals.
+- **Basis sensitivity.**
+  - The variance of the reconstructed output includes cross-component covariances under the input measure; fitting the components independently does not remove them.
+  - Indices are dimensionless, and variance contributions are in output units (y_s applied). R reports decomposition units (defect fixture).
+  - Enumerating subsets up to `int.order` drives the cost. R's `nind` filters after computation; the port exposes a budget instead.
+- **Zero total variance:** the indices are undefined and reported with a status, never 0 or 1. A small negative component variance from rounding is clamped only within a tolerance relative to the total variance, and reported beyond it.
+- **Effect functions:** main and two-way effects for the declared measure and degree, or an explicit refusal. R hard-codes uniform expressions and degree 1 (defect fixture).
+- **Independent checks:**
+  - moments against quadrature and category enumeration, including higher degrees, truncated mixtures and Student components with small ν;
+  - the Sobol identities: indices over all orders sum to 1, and totals are at least the main effects;
+  - cross-component moments against Monte Carlo;
+  - draw order and zero variance;
+  - the R defect fixtures above.
+
+#### D09 (draft): calibration target and covariance formulations
+
+Sources: R's [calibration](D:/aghado01/packages/BASS/R/calib.R:42) and its documentation (a "modular Bayesian calibration model"), the inventory's calibration section, Mathews et al. (arXiv 2406.07555), and Francom et al.'s elastic calibration (arXiv 2305.08834), which pairs BMARS emulators with modular calibration.
+- **The target is the cut posterior,** p_cut(e, θ | D_sim, y) = p(e | D_sim) · p(θ | y, e).
+  - e is a retained emulator draw: structure, coefficients and component noise variances.
+  - θ collects the calibration inputs, the measurement variances and the discrepancy.
+  - The observations do not update the emulator. This matches R's design and the lineage's practice.
+  - *Not adopted:* plug-in calibration on a single emulator point estimate, which understates uncertainty; and fully joint calibration, a different inferential object that the cut is meant to avoid under misspecification.
+- **The model, in physical units (D07):** y = y_m + y_s ∘ K w_e(θ) + δ + ε.
+- **The covariance formulation is a declared type, with validated dimensions.** R picks its main branch by whether ncol(`discrep.mat`) < length(y), while `type` picks the truncation covariance (defect fixture).
+  - *Functional* (R's type 1): Σ = diag(truncation variance + σ²_{g(j)}) + (y_s∘K)·diag(σ²_{e,k})·(y_s∘K)ᵀ, with the discrepancy δ = D·v on a supplied basis and v drawn from its Gaussian conditional. R fixes v's prior precision at 1, so the port declares v's prior and its units. Solves and log-determinants go through the factor of I + UᵀD⁻¹U, the stage-2 diagonal-plus-low-rank path, without forming m × m inverses.
+  - *Multivariate* (R's type 2): Σ = Σ_trunc + diag(σ_g)·R·diag(σ_g) + Σ_δ + (y_s∘K)·diag(σ²_{e,k})·(y_s∘K)ᵀ, with a supplied correlation R over variance groups, a fixed discrepancy covariance Σ_δ and a fixed mean shift. It uses the strict dense factor.
+- **Variance groups.**
+  - Each group declares its prior. The default is R's IG(ν_g/2, (ν_g/2)·ŝ_g²) from `sd.est` and `s2.df`.
+  - R switches every group to a −log(1 + σ²) kernel when any `s2.df` is 0. The port makes that choice per group.
+  - Proposals on log σ² carry their Jacobian.
+- **Tempering** follows D05's likelihood path. R multiplies the variance proposals' Jacobians by the inverse temperature and leaves terms out of its swaps (defect fixture).
+- **Parameter coordinates.** The bounded inputs are sampled in normalized [0, 1] coordinates, and results are reported in physical coordinates with the transform recorded. R returns the normalized values.
+- **Cache consistency.** Any change to δ, σ² or the emulator draw invalidates the cached likelihood before the next acceptance test. R's stale likelihood after a discrepancy draw is a defect fixture.
+- **Reference sampler (stage 7): nested conditional.**
+  - For s = 1, …, S, draw e_s from the retained emulator draws.
+  - Run a chain on p(θ | y, e_s) to stationarity, with its own diagnostics, and keep its draws.
+  - Measure the error from finite inner runs by varying their length.
+  
+  R refreshes e uniformly every iteration and takes a few θ steps, which does not equilibrate under each e, so it is not this sampler.
+- **Cut SMC (stage 8)**, following Mathews et al.:
+  - carry particles through μ_s = p(θ | y, e_s) over independent e_s, reweighting by the ratio of conditional densities, then resampling and mutating with the inner kernel;
+  - order the e_s so that successive conditionals stay close (their ordering by a travelling-salesman path, here by distances between the draws' predictions);
+  - bridge successive conditionals through their induced densities, p(θ | y, e_{s−1})^{1−t}·p(θ | y, e_s)^t, because emulator draws are discrete and their term arrays cannot be interpolated. Mathews et al.'s linear tempering interpolates a continuous cut parameter and does not apply directly.
+- **Outputs:** θ in physical coordinates, the variances, the discrepancy and the emulator index for each draw, with burn-in, thinning and diagnostics applied explicitly.
+- **Independent checks:**
+  - the dense covariance against the low-rank path;
+  - units: scaled and unscaled y give the same physical posterior;
+  - recovery of known θ on synthetic simulators;
+  - the nested reference's error against inner run length;
+  - the R defect fixtures above.
 
 #### D10 (note): a policy for adaptive kernels
 
@@ -526,7 +661,7 @@ Benchmark by case count, predictor count, active terms, interaction order, respo
 - **Defect fixtures from the text** (TeX source, checked 2026-10-25):
   - The residual is defined as r = ŷ − y, but the β and w conditionals hold only for r = y − ŷ. Implemented literally, the skew's sign flips. Fixture: recover a known β from skewed synthetic data.
   - Table 1's t(ν) row, GIG(−ν/2, 0, ν/2), gives under the paper's own GIG density a t_ν scaled by 1/√2. A standard t needs b = ν, which is what `StudentTWeights` implements, so the seam's t specialization must reproduce `StudentTWeights` exactly.
-- **Sensitivity:** D08's note.
+- **Sensitivity:** D08's draft, which declares the decomposed surface.
 - **The BARS side:** quantile and skewed BARS come from the same seam (the preparation brief's OQ20).
 
 **Parked extension (2026-10-20): free-knot tensor-product surfaces.**
