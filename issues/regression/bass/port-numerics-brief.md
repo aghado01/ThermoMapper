@@ -78,6 +78,8 @@ Establish a strict full-factorization implementation as the reference. Then add 
 
 Use relative finite/rank/conditioning checks and periodic or triggered full rebuilds. A fixed absolute `1e-12` threshold alone is not a scale-aware admission policy. When an incremental update fails because of accumulated numerical error, check a strict rebuild before deciding that the candidate is inadmissible. Singular g-prior designs cannot be made mathematically defined merely by hiding a ridge inside the factorization. A different proper coefficient prior may admit a rank-deficient design; LinAlg must not impose a universal statistical rejection policy.
 
+Data cross-products, the Gram's entries, are summed pairwise or with compensation, not left to right. On a near-constant column (a categorical indicator true for all but a few cases), left-to-right summation adds many equal centred values after one large one, and they round the same way every time. In D06's fixture F-O7 that cost 10⁻³ relative in the admission angle near the gate, where pairwise summation reached ε·κ. Under D03's Liang convention the strict rebuild also forms the centred Gram without the rank-one downdate (D06).
+
 Candidate numerical work remains private until acceptance. Rejection leaves the accepted state unchanged. Coefficients are drawn using precision-factor triangular solves, not a materialized inverse. Factor maintenance can cost `O(M²)` while term evaluation and data cross-products retain separate data-dependent costs.
 
 ## D10 (note): a policy for adaptive kernels

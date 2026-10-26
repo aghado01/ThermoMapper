@@ -19,6 +19,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [ ] **N7** Face-splitting design contraction with the Cartesian (Hadamard) shortcut.
 - [ ] **N8** Generic SMC core in `samplers/smc` (optional; specified in the calibration segment).
 - [ ] **N9** Qualified baseline rerun after the shared changes, before the first BASS integration tests.
+- [ ] **N10** Cross-products summed pairwise or with compensation. F-O7's near-constant design is the acceptance case: its left-to-right error is 10⁻³ relative in s.
 
 ### Room for extensions
 
@@ -27,6 +28,10 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [ ] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update.
 
 ## Reports
+
+### Cross-product summation — 2026-10-26
+
+New item N10, from D06's fixture F-O7. On a design with a near-constant column, left-to-right summation of the Gram gave 7·10⁻⁴ to 2·10⁻³ relative error in s ≈ 10⁻⁹. Pairwise summation gave 2·10⁻⁷ to 3·10⁻⁷, which is ε·κ. Nothing in `src/maths/linalg` sums with compensation yet.
 
 ### Adaptation policy drafted — 2026-10-25
 
