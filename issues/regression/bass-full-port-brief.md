@@ -289,9 +289,9 @@ These decisions remain open until their density, base measure, transitions, and 
 
 | ID | Decision | Recommended direction and required evidence | Gate |
 |---|---|---|---|
-| D01 | Term representation and prior measure | Specify ordered/unordered terms, repeated-term policy, support constraints, distinct variables within terms, and exact forward/reverse subset probabilities. Include boundary birth/death/change selection probabilities. Use tiny enumerable cases and count-law checks under a constant likelihood. Derive BASS's measure independently of the BARS correction in R01. | Before structural moves. |
-| D02 | Count prior at the capacity limit | Choose a conditionally normalized truncated Poisson with an independent intensity prior, or a globally truncated joint prior. Derive the intensity update; the first choice does not retain a simple Gamma conditional without its cap normalizer. | Before count/intensity updates. |
-| D03 | Coefficient-prior modes and posterior propriety | Derive both `g` and `jeffreys` targets, including intercept treatment, dimension-dependent constants, and variance/precision parameterization. State where posterior sampling and evidence reporting are defined. | Before target and initialization APIs. |
+| D01 | Term representation and prior measure | Specify ordered/unordered terms, repeated-term policy, support constraints, distinct variables within terms, and exact forward/reverse subset probabilities. Include boundary birth/death/change selection probabilities. Use tiny enumerable cases and count-law checks under a constant likelihood. Derive BASS's measure independently of the BARS correction in R01. | Before structural moves. Draft below. |
+| D02 | Count prior at the capacity limit | Choose a conditionally normalized truncated Poisson with an independent intensity prior, or a globally truncated joint prior. Derive the intensity update; the first choice does not retain a simple Gamma conditional without its cap normalizer. | Before count/intensity updates. Draft below. |
+| D03 | Coefficient-prior modes and posterior propriety | Derive both `g` and `jeffreys` targets, including intercept treatment, dimension-dependent constants, and variance/precision parameterization. State where posterior sampling and evidence reporting are defined. | Before target and initialization APIs. Draft below. |
 | D04 | Collapsed and conditional update order | Prefer a coefficient-marginal target with valid hyperparameter transitions and conditional coefficient draws for retained predictions. If partial collapse is retained, justify the complete scan. State which current values each conditional uses and when cached statistics/densities refresh. Do not copy the stale-statistic or plug-in-conditioning patterns identified in R03-R04. | Before complete BASS sweeps. |
 | D05 | Tempering and SMC target paths | Specify which density is powered, internal-coordinate Jacobians, a valid initial distribution, and cross-target swap/incremental-weight formulas. Marginalization and tempering must not be assumed to commute. | Before hot replicas or SMC. |
 | D06 | Numerical model admission | Define the relationship between rank/support restrictions and the model space, relative tolerances, rebuild criteria, and rejection reasons. Ridge regularization must be an explicit prior choice. | Before optimized factor updates. |
@@ -301,6 +301,93 @@ These decisions remain open until their density, base measure, transitions, and 
 | D10 | Diagnostic and stopping semantics | Choose invariant functionals, minimum trace/population requirements, handling of undefined/infinite diagnostics and constant functionals, and method-appropriate uncertainty estimates. Carry the repaired stopping/display policy from B01 into new adapters. Distinguish posterior uncertainty, Monte Carlo error, and outer data/bootstrap uncertainty. | Before automatic stopping or performance claims. |
 
 Each resolution should record the chosen specification, equations, rationale, scope of any approximation, and an independent check. Preserve rejected alternatives when they explain a consequential tradeoff. Update the relevant design notes before code relies on the decision.
+
+### Draft resolutions for D01–D03 (proposals, 2026-10-25)
+
+Drafted at the user's request as input to the user's design pass. Nothing here is decided. Each draft gives the specification, the rationale, the alternatives not adopted, any approximation, and an independent check. Two earlier proposals are the starting point: the derivations review's global truncation (§4) and its finding on R's τ hyperprior (§6).
+
+**Sources checked.** Where they disagree, each draft says which one it follows.
+
+| Source | What it settles here |
+|---|---|
+| Nott, Kuk and Duc (2005), *Statistics and Computing* 15, 93–101 | The term measure and its ordering factor, move probabilities at the boundaries, the variable proposals |
+| Francom, Sansó, Kupresanin and Johannesson (2018), *Statistica Sinica* 28, 791–816 | The term prior over admissible terms and its proxy constant, the knot measure, τ's stated intent, support for functional responses |
+| Francom and Sansó (2020), *JSS* 94(8) | The count prior as stated, τ's prior as stated, the Wallenius implementation |
+| Rumsey, Francom and Shen, GBMARS (arXiv 2306.01911) | The birth ratio's count factor, τ's stated intent, the ridge prior under weights |
+| Rumsey, Francom et al., KHAOS (arXiv 2510.25036) | The collapsed count intensity; ridge against g-prior by regime |
+| R BASS 1.3.1 at the pinned commit | What the implementation samples |
+
+#### D01 (draft): term representation and prior measure
+
+- **A term** is an interaction order K ∈ {1, …, K_max}, a set of K distinct variables, and a sign and a knot for each variable. A model holds an unordered collection of M terms.
+- **The measure on the collection** is the prior on labelled terms times the M! orderings. Nott, Kuk and Duc's prior ratio carries (m+1)!/m!, "a term which accounts for the different ways of ordering the basis functions", and a death picks its term uniformly.
+  - Net, a birth from M carries p(M+1)/p(M) once and no further factor of M+1: λ/(M+1) under the Poisson prior. R's [birth](D:/aghado01/packages/BASS/R/rjmcmc_des.R:36) (`log(lam) − log(nc)`) and GBMARS's S_B agree.
+  - The KHAOS manuscript keeps both the death's 1/(M+1) and the labelled prior's, which puts an extra 1/M! on the count prior: the same family as BARS's R01. That ratio becomes a defect fixture.
+- **Repeated terms lie outside the support.** An identical term duplicates a column, so the strict factor refuses it and D06's admission angle is zero. Every admitted collection then has distinct members, which keeps the M! count exact. Interning terms (derivations review §7, item 5) is a storage choice and leaves the measure unchanged.
+- **Knot measure: uniform over each variable's distinct observed values.** Francom et al. 2018 build the prior constant from "the number of unique marginal values", and R draws from them ([`unique.ind`](D:/aghado01/packages/BASS/R/bass.R:218), `vars.len`). The functional variable uses its n_r distinct output locations.
+  - *Not adopted:* Nott, Kuk and Duc's uniform over the n observations (the 1/n factors in their ratios), which weights tied values by multiplicity; and the continuous Unif(0, 1) written in the JSS and GBMARS texts, which describes the range rather than the measure the code samples.
+- **Prior on a term:** K uniform on {1, …, K_max}, the variable set uniform over the C(p, K) subsets, signs uniform, knots as above. Unconstrained, this is Francom et al.'s constant c_K = (1/2)^K · C(p, K)⁻¹ · Πₖ 1/n_{vₖ}, times 1/K_max for the order.
+- **Support: the term prior is restricted globally to the feasible set F of D02, without per-order normalizers.**
+  - *The sources.* Francom et al. state the per-order version, where c_K is one over the number of admissible order-K terms, and recommend the unconstrained constant "as a conservative proxy" where counting them is infeasible. R uses the proxy ([`logProbChangeMod`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:22)). The global reading is what the implementation samples, stated as a prior.
+  - *The tilt.* The order's marginal becomes π(K) ∝ P(admissible | K)/K_max under the unconstrained measure. Products of hinges have more zeros and fail the support count more often, so high orders get less mass than under the per-order version. Report the support-rejection rate per order so the tilt stays visible.
+  - *The support rule* is the nonzero-count rule b_m ≥ b of every source (R's `npart`). For direct functional responses the design part and the functional part are counted separately (`npart`, `npart.func`), as Francom et al. suggest. Whether Q6's column-mass form suits hinge products is D06's question.
+  - *Not adopted as the default:* the per-order normalization. No implementation samples it, and its constant needs a data-dependent count of admissible terms. It stays computable on enumerable fixtures, to measure the tilt.
+- **Move-type probabilities depend on the state:** equal probability over the moves available at M (Nott, Kuk and Duc). Birth only at M = 0; death and change ½ each at M_max; ⅓ each in between. A birth's ratio uses d_{M+1}/b_M and a death's b_{M−1}/d_M.
+  - R's move *selection* already follows this rule ([selection](D:/aghado01/packages/BASS/R/mcmc_update.R:16)), but its *ratios* use fixed thirds ([constants](D:/aghado01/packages/BASS/R/bass.R:250)). Under a constant likelihood that makes π(1)/π(0) three times the correct value and π(M_max)/π(M_max − 1) two-thirds of it (derivations review §4). It is a defect fixture, not an option.
+- **Birth proposal** (Nott, Kuk and Duc, extended by BASS to K ≤ 3):
+  - the order from I(K | M) ∝ w₁ + (number of order-K terms);
+  - for K = 1, the variable uniformly over the p predictors ([R](D:/aghado01/packages/BASS/R/rjmcmc_all.R:21));
+  - for K ≥ 2, the variables by weighted sampling without replacement, with weights z_u ∝ w₂ + (appearances of u);
+  - signs uniformly, knots from the knot measure.
+
+  A death's reverse probability is that birth's probability for the removed term under the reduced model's counts. w₁ > 0 keeps it positive for every order, and w₂ > 0 for interaction terms.
+- **The variable-set probability** is Wallenius' noncentral hypergeometric with one ball per variable: P(S) = ∫₀¹ Π_{i∈S}(1 − t^{αᵢ}) dt, with αᵢ = zᵢ / Σ_{k∉S} zₖ. R's [`dmwnchBass`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:12) evaluates it exactly by inclusion–exclusion over the 2^K subsets; Nott, Kuk and Duc's pair formula is the case K = 2. The port uses inclusion–exclusion up to K = 3 and quadrature of the positive integrand above that, where the alternating sum loses digits.
+- **Change move:** pick a term uniformly and one of its factors uniformly, then redraw that factor's sign and knot from their prior. The proposal is symmetric, so the ratio is the likelihood ratio alone (R's [change](D:/aghado01/packages/BASS/R/rjmcmc_des.R:95)).
+- **Additional kernel, not the default:** KHAOS's Bernoulli-inclusion proposal for the variable set, with its variable-swap mutation, offered beside the Wallenius proposal once validated.
+- **Independent checks:**
+  - on a tiny enumerable model (p = 2, a few distinct values, K_max = 2, small M_max) under a constant likelihood, the count law and the order law against enumeration of the globally truncated measure;
+  - the two boundary ratios;
+  - Wallenius probabilities against brute-force sums over draw orders;
+  - defect fixtures for R's fixed thirds and KHAOS's double count factor.
+- **Open within D01:** categorical terms (R's subset measure in [`logProbChangeModCat`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:43)), not yet checked against a source; the functional variable's interaction cap and knot set.
+
+#### D02 (draft): count prior at the capacity limit
+
+- **Prior:** the derivations review's global truncation (§4) with D01's term measure: π(λ, M, terms) ∝ Gamma(λ; h₁, rate h₂) · Pois(M; λ) · M! · Πₘ π(termₘ) · 1_F, where F is the cap, the support constraints and numerical admission (D06).
+- **λ is integrated out**, as in KHAOS. The normalizer is one global constant, so λ's integral stays closed-form: p(M) ∝ Γ(h₁ + M)/(M! (h₂ + 1)^M), and a birth's count factor is (M + h₁)/((M + 1)(h₂ + 1)), restricted to F. λ leaves the chain and the sweep loses a block.
+  - For each retained draw, λ | M ~ Gamma(h₁ + M, rate h₂ + 1), which is exact under global truncation. R and GBMARS update λ in this form; GBMARS calls it approximate because its stated prior is the conditionally normalized one.
+- **This changes the model the papers state.** JSS and Francom et al. 2018 write the Poisson truncated and renormalized for each λ. Under that prior the Gamma update needs the cap's normalizer, a regularized incomplete gamma function: tractable for the cap alone, intractable once support and admission join F. The draft takes the global reading because it is what R and GBMARS sample, and one mechanism then covers the cap, support and admission.
+- **The tilt:** λ's marginal is its Gamma prior tilted by P_λ(F). At R's defaults (h₁ = h₂ = 10, `maxBasis` = min(1000, n), [bass.R:267](D:/aghado01/packages/BASS/R/bass.R:267)) the cap rarely binds. Report the posterior mass at the cap and the support and admission rejection rates.
+- **Defaults:** h₁ = h₂ = 10, from R and Nott, Kuk and Duc's Gamma(10, 10). Francom et al. 2018 name λ's prior as the main control on overfitting, and the docs should say so.
+- **Independent check:** under a constant likelihood on D01's fixture, the count law against the negative binomial restricted to F by enumeration, and the retained λ draws against the Gamma mixture.
+
+#### D03 (draft): coefficient-prior modes and the τ hyperprior
+
+- **g mode:** a | σ², τ, B ~ N(0, σ² (BᵀB)⁻¹/τ), with τ the precision multiplier as in R, JSS and Francom et al., and p(σ²) ∝ 1/σ² by default (g₁ = g₂ = 0). R's selectable modes are `g` and `jeffreys`; it also ships a ridge sampler (`rjmcmc_des_ridge.R`) that `bass()` never reaches.
+- **τ hyperprior default: Zellner–Siow,** τ ~ Gamma(1/2, rate n/2), equivalently g = 1/τ ~ IG(1/2, n/2) (Liang et al. 2008), with E[τ] = 1/n.
+
+  | Source | Prior as written | Stated intent | E[τ] as written |
+  |---|---|---|---|
+  | Francom et al. 2018 | Gamma(1/N, 1) | "centered over the unit information prior" | 1/N |
+  | R documentation ([b.tau](D:/aghado01/packages/BASS/R/bass.R:34)) | rate "one over the number of observations", shape 1/2 | "centers … on the unit information prior" | n/2 |
+  | JSS 2020 | Gamma(1/2, 2/n), "(shape and rate)" | "the Zellner–Siow Cauchy prior" | n/4 |
+  | GBMARS | g ~ IG(1/2, 2/n) on the variance multiplier, under its own conjugate update | "leads to the Zellner–Siow Cauchy prior" | n/4 |
+  | R code ([default](D:/aghado01/packages/BASS/R/bass.R:287)) | Gamma(1/2, rate 2/n) | none | n/4 |
+
+  Every stated intent centres τ on unit information, and two sources name Zellner–Siow, which does. The written 2/n gives Zellner–Siow only when read as a scale. The code's rate contradicts every stated intent, so the derivations review's rate/scale reading now rests on documented intent rather than inference.
+  - Named options: `BassLiteral`, Gamma(1/2, rate 2/n), for parity tests against R; and `Francom2018`, Gamma(1/N, 1). Each states its rate explicitly, since C#'s Gamma takes a scale (derivations review §6).
+- **n counts observations.** For direct functional responses n = n_x · n_r, as in Francom et al.'s N and R's [`data$n`](D:/aghado01/packages/BASS/R/bass.R:248). Each fit to a supplied-basis or PCA component has n = n_x coefficient responses.
+- **Intercept: the Liang et al. convention as the default, R's as a parity option.** The intercept gets a flat prior, the remaining columns are centred and get the g-prior, and k = M in the τ/(1+τ) factor.
+  - *Why.* R keeps the intercept inside the g-prior (k = M + 1). The prior then shrinks the fitted level towards zero, and τ's conditional reads the uncentred fit, whose intercept share n·ȳ² grows with y's level, so τ's posterior and model-size selection depend on where y sits. Under the Liang convention τ's posterior is invariant to shifting y, and the improper prior falls only on a parameter every model shares, so Bayes factors across models are defined (derivations review §7, item 8).
+  - *Cost.* The centred Gram is the uncentred one minus a rank-one term, n·b̄b̄ᵀ, so the bordered updates and the functional Hadamard form carry over.
+  - *It changes the model relative to R,* so it is the item in D03 that most needs the user's judgment.
+- **Proper-prior mode, for D05.** The β = 0 rung of the likelihood-tempered path and SMC initialization need proper priors on σ² and, under the Liang convention, on the intercept. A proper IG(g₁, g₂) with g₂ > 0 acts in y's raw units (OQ19's problem), so this mode either standardizes y and records the transform or uses a scale-free proper prior. D05 chooses.
+- **Other coefficient priors**, recorded so the contract leaves room for them:
+  - *A ridge with a sampled τ* (GBMARS), an option.
+  - *A ridge with a fixed scale,* an option only with the scale stated as part of the model: every added term then carries a factor in that scale, so the penalty on model size is set by it (Nott, Kuk and Duc's diffuse N(0, σ²/ε)). KHAOS found its fixed ridge best on noise-free simulators and its g-prior better on most noisy ones, which supports keeping both selectable. Defaults per regime come from a pre-registered comparison of our own.
+  - *Under robust or generalized-hyperbolic noise* (outside the completion contract): the unweighted g-prior as the default, which reduces to Gaussian BASS at unit weights and keeps the latent scales' conditionals in closed form, at one extra factorization per move as in BARS's Q2; the ridge with a sampled τ as the GBMARS-parity option.
+- **Independent checks:** τ's marginal for a fixed structure against one-dimensional quadrature; shifting y leaves τ's posterior unchanged under the Liang convention and moves it under R's (a fixture); `BassLiteral` against R on deterministic statistics.
+- **Open within D03:** the Jeffreys mode's target (R's `beta.jprior.ind`); where evidence is reported; posterior propriety per mode, to verify by quadrature over τ on fixtures with admitted full-rank designs.
 
 ## Implementation stages
 
