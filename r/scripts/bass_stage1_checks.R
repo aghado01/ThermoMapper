@@ -1,5 +1,5 @@
-# bass_stage1_checks.R — reproduces the BASS port brief's stage-1 checks (D03 propriety, D06 admission) by
-# running the two BASS oracles on fixed fixtures, exactly as the C# bridge would.
+# bass_stage1_checks.R — reproduces the BASS port brief's stage-1 checks (D03 propriety, D06 admission, D07
+# truncation residuals) by running the BASS oracles on fixed fixtures, exactly as the C# bridge would.
 #
 # Usage (cwd = r/):  Rscript scripts/bass_stage1_checks.R
 
@@ -53,3 +53,36 @@ B_local <- cbind(1, xl, local)
 res <- run("bass_admission_oracle.R", B_local)
 cat(sprintf("\nD06 R's getQf rule at n = %d: ratio %.0f, refuses = %s; leave-one-out min = %.3f\n", n,
             res$getqf_ratio, res$getqf_refuses, res$min_loo))
+
+# D07 (O-O4): truncation residuals, on curves whose phase and amplitude move with two inputs.
+curves <- function(n, m = 200) {
+  t <- seq(0, 1, length.out = m)
+  z <- matrix(runif(2 * n), n, 2)
+  y <- t(sapply(seq_len(n), function(i) sin(2 * pi * (t - 0.3 * z[i, 1])) * (1 + z[i, 2]) + 0.5 * z[i, 2] * t^2))
+  y + matrix(rnorm(n * m, 0, 0.01), n)
+}
+verdict <- function(ok) if (isTRUE(ok)) "pass" else "FAIL"
+show_truncation <- function(label, Y, ...) {
+  res <- run("bass_truncation_oracle.R", Y, ...)
+  scale <- max(abs(sweep(Y, 2, colMeans(Y))))
+  coords <- max(res$coords_vs_output_in_sample, res$coords_vs_output_loo) / scale
+  ratio <- if (is.null(res$ratio)) "undefined" else sprintf("%.2f", res$ratio)
+  cat(sprintf("  %-26s r=%2d of %2d: RMS in-sample %.4f, leave-one-out %.4f, ratio %-9s coords vs output %.0e %s\n",
+              label, res$r, res$centred_rank, res$in_sample_rms, res$loo_rms, ratio, coords, verdict(coords <= 1e-10)))
+  invisible(res)
+}
+
+cat("\nD07 truncation residuals (O-O4)\n")
+set.seed(2)
+Y5 <- curves(5)
+show_truncation("n = 5, 99%", Y5)
+for (n_cases in c(10, 40)) show_truncation(sprintf("n = %d, 99%%", n_cases), curves(n_cases))
+full <- show_truncation("n = 5, full retention", Y5, "100")
+cat(sprintf("    in-sample max |e| %.1e within tolerance %.1e: %s; leave-one-out ranks %s (capped at n - 2)\n",
+            full$in_sample_max_abs, full$zero_tolerance, verdict(full$in_sample_max_abs <= full$zero_tolerance),
+            paste(full$loo_rank, collapse = " ")))
+Y2 <- curves(2)
+two <- show_truncation("n = 2", Y2)
+gap <- max(abs(two$loo[1, ] - (Y2[1, ] - Y2[2, ])), abs(two$loo[2, ] - (Y2[2, ] - Y2[1, ])))
+cat(sprintf("    leave-one-out equals the difference of the two cases: %.0e %s\n", gap,
+            verdict(gap <= 1e-12 * max(abs(Y2)))))
