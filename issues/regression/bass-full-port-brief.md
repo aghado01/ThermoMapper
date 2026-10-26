@@ -1,6 +1,6 @@
 # Full BASS port brief
 
-Date: 2026-10-18. Status: planning brief. Source-code implementation is not authorized by this document.
+Date: 2026-10-18; updated 2026-10-25. Status: stage 0 is closed and the shared slices of stages 2–3 have landed (the [preparation brief](bass-preparation-brief.md)). Stage 1 has draft resolutions for D01–D04 and D06, awaiting the user's design pass. Source-code implementation is not authorized by this document.
 
 Add the complete BASS regression capability to `Maths.Regression`, alongside BARS, BAPS, and BGP. Preserve arbitrary predictor dimension, mixed continuous and categorical inputs, scalar and functional responses, posterior prediction, sensitivity analysis, and emulator calibration. Build the C# implementation around explicit statistical targets, owned numerical state, and the repository's existing dependency direction.
 
@@ -109,19 +109,19 @@ Generic contracts belong to the consuming lower-level algorithm. Upper-level imp
 
 ## Reuse and shared renovations
 
-| Existing surface | Treatment | Concrete work |
-|---|---|---|
-| [ReversibleJumpChain and proposal machinery](../../src/maths/samplers/rjmcmc/ReversibleJumpChain.cs) | Reuse with targeted expansion | Preserve proposal/Jacobian/reverse-selection accounting and telemetry. BASS supplies its own state/moves. Make cache refresh and state replacement safe after hyperparameter or target-stage changes. |
-| [IRjTarget](../../src/maths/samplers/rjmcmc/IRjTarget.cs) | Generalize | Move its model-neutral log-density responsibility into a neutral sampler target contract usable by RJ, tempering, and SMC. Migrate callers cleanly. |
-| [ParallelTempering](../../src/maths/samplers/rjmcmc/ParallelTempering.cs) | Expand and relocate | Replace concrete RJ-chain construction with per-replica kernel factories and explicit state exchange. Put general replica exchange in `samplers/tempering`; retain RJ mechanics in `samplers/rjmcmc`. |
-| [IChain](../../src/maths/samplers/ensemble/IChain.cs), [IEnsembleModel](../../src/maths/samplers/ensemble/IEnsembleModel.cs), ensemble execution | Reuse after qualification | A complete BASS sweep presents as a chain. BASS supplies invariant readouts and its rich posterior accumulators. Construct private mutable kernels/workspaces and preserve cumulative statistics across state or target replacement. |
-| [ChainEnsemble](../../src/maths/samplers/ensemble/ChainEnsemble.cs), [ChainDiagnostics](../../src/maths/samplers/ensemble/ChainDiagnostics.cs) | Repair in stage 0, then expand | Undefined/infinite R-hat must not count as convergence or be displayed as zero. Qualify minimum-data and constant-functional policies first. Add trace-based rank-normalized split/folded diagnostics and appropriate bulk/tail ESS in the shared renovation stage. Particle diagnostics remain separate. |
-| [CholeskyDecomposition](../../src/maths/linalg/Cholesky.cs) | Add a strict factorization path | Explicit status, rank/conditioning information, solves into buffers, bordered insertion, deletion/replacement, and rebuild checks. Do not silently inherit pivot flooring or eager inverse construction. |
-| [MatrixOps](../../src/maths/linalg/MatrixOps.cs) | Reuse and expand | Reuse dot products and column-oriented Gram operations; add general contractions as needed. Term evaluation and cache semantics stay in BASS. |
-| [PCA](../../src/maths/linalg/PCA.cs) | Expand | Add stable thin SVD and numerical-rank handling in LinAlg. BASS owns response scaling and its coefficient convention. SVD implementation/provider selection is a numerical design task. |
-| Covariance solve/log-determinant operations | Add in LinAlg | Diagonal-plus-low-rank operations for functional calibration, plus the strict dense path for full covariance. Calibration supplies the covariance components. |
-| [Normal](../../src/maths/distributions/Normal.cs), [Gamma](../../src/maths/distributions/Gamma.cs), [Beta](../../src/maths/distributions/Beta.cs), [SpecialFunctions](../../src/maths/distributions/SpecialFunctions.cs) | Reuse and expand | Add inverse-gamma/truncation support and stable normal/Student interval probabilities and moments. Make rate versus scale explicit. |
-| [Xoshiro256PlusPlus](../../src/maths/rng/Xoshiro256PlusPlus.cs), [SeedTree](../../src/maths/rng/SeedTree.cs) | Reuse and expand where needed | Preserve RNG capture/restore. Supply reproducible independent offspring streams for resampling and stable component/replica identities. |
+| Existing surface | Treatment | Concrete work | Status (2026-10-25) |
+|---|---|---|---|
+| [ReversibleJumpChain and proposal machinery](../../src/maths/samplers/rjmcmc/ReversibleJumpChain.cs) | Reuse with targeted expansion | Preserve proposal/Jacobian/reverse-selection accounting and telemetry. BASS supplies its own state/moves. Make cache refresh and state replacement safe after hyperparameter or target-stage changes. | Done: steps 0.2 (target refresh in place) and 3.1 (`SetState`, `ReplaceTarget`). |
+| `IRjTarget` | Generalize | Move its model-neutral log-density responsibility into a neutral sampler target contract usable by RJ, tempering, and SMC. Migrate callers cleanly. | Done: step 3.1 replaced it with [`ISamplingTarget<TState>`](../../src/maths/samplers/targets/SamplingTarget.cs). |
+| [ParallelTempering](../../src/maths/samplers/rjmcmc/ParallelTempering.cs) | Expand and relocate | Replace concrete RJ-chain construction with per-replica kernel factories and explicit state exchange. Put general replica exchange in `samplers/tempering`; retain RJ mechanics in `samplers/rjmcmc`. | Expanded: steps 3.1–3.3 (per-replica move factories, declared tempering paths, the non-reversible swap schedule). Not relocated; it remains in `samplers/rjmcmc/`. |
+| [IChain](../../src/maths/samplers/ensemble/IChain.cs), [IEnsembleModel](../../src/maths/samplers/ensemble/IEnsembleModel.cs), ensemble execution | Reuse after qualification | A complete BASS sweep presents as a chain. BASS supplies invariant readouts and its rich posterior accumulators. Construct private mutable kernels/workspaces and preserve cumulative statistics across state or target replacement. | Qualified: steps 0.2–0.3 and 3.4. BAPS, BGP and `HierarchicalPSpline` also run on it. |
+| [ChainEnsemble](../../src/maths/samplers/ensemble/ChainEnsemble.cs), [ChainDiagnostics](../../src/maths/samplers/ensemble/ChainDiagnostics.cs) | Repair in stage 0, then expand | Undefined/infinite R-hat must not count as convergence or be displayed as zero. Qualify minimum-data and constant-functional policies first. Add trace-based rank-normalized split/folded diagnostics and appropriate bulk/tail ESS in the shared renovation stage. Particle diagnostics remain separate. | Done: steps 0.1 and 3.4 (rank-normalized diagnostics, bulk and tail ESS). The external reference is pending (OQ9). |
+| [CholeskyDecomposition](../../src/maths/linalg/Cholesky.cs) | Add a strict factorization path | Explicit status, rank/conditioning information, solves into buffers, bordered insertion, deletion/replacement, and rebuild checks. Do not silently inherit pivot flooring or eager inverse construction. | Strict reference done: step 2.2, [`DenseCholesky`](../../src/maths/linalg/DenseCholesky.cs). Bordered insertion, deletion and replacement remain (stage 2). |
+| [MatrixOps](../../src/maths/linalg/MatrixOps.cs) | Reuse and expand | Reuse dot products and column-oriented Gram operations; add general contractions as needed. Term evaluation and cache semantics stay in BASS. | Unchanged; contractions land with BASS. |
+| [PCA](../../src/maths/linalg/PCA.cs) | Expand | Add stable thin SVD and numerical-rank handling in LinAlg. BASS owns response scaling and its coefficient convention. SVD implementation/provider selection is a numerical design task. | Not started. |
+| Covariance solve/log-determinant operations | Add in LinAlg | Diagonal-plus-low-rank operations for functional calibration, plus the strict dense path for full covariance. Calibration supplies the covariance components. | Not started. |
+| [Normal](../../src/maths/distributions/Normal.cs), [Gamma](../../src/maths/distributions/Gamma.cs), [Beta](../../src/maths/distributions/Beta.cs), [SpecialFunctions](../../src/maths/distributions/SpecialFunctions.cs) | Reuse and expand | Add inverse-gamma/truncation support and stable normal/Student interval probabilities and moments. Make rate versus scale explicit. | Done: step 2.1 (`InverseGamma`, `StudentT`, `Truncated`, CDFs and interval probabilities; rate and scale named at construction). |
+| [Xoshiro256PlusPlus](../../src/maths/rng/Xoshiro256PlusPlus.cs), [SeedTree](../../src/maths/rng/SeedTree.cs) | Reuse and expand where needed | Preserve RNG capture/restore. Supply reproducible independent offspring streams for resampling and stable component/replica identities. | Unchanged; offspring streams for resampling wait for the SMC core. |
 
 The generalized sampling contracts affect existing `SplineTarget`, `BarsEnsemble`, and sampler tests. First record the intended statistical corrections in the existing-engine repair track. Then migrate callers against that qualified baseline without further incidental model changes. Do not preserve a known incorrect distribution merely to keep old expectations green. During refactoring, follow the repository's staged replacement and final cleanup discipline; the end state has no compatibility aliases.
 
@@ -268,7 +268,7 @@ The generic module needs log-weight normalization; resampling methods; a populat
 
 Keep weight ESS, ancestry/family diversity, and population diagnostics separate from independent-chain R-hat and autocorrelation ESS. Equal weights after resampling do not establish independent particles. A normalizer ratio becomes Bayesian model evidence only when the model and starting normalization justify that interpretation.
 
-The current [TemperedTarget](../../src/maths/samplers/rjmcmc/TemperedTarget.cs) powers the whole log posterior. A likelihood bridge, a powered collapsed posterior, and a marginalized powered joint model are different paths. BASS must declare its path; replica swaps and all mutation blocks must preserve the corresponding stage target. A general replica-exchange implementation should evaluate the required cross-target densities rather than assume every path has the current simple power form.
+Step 3.2 replaced the whole-posterior `TemperedTarget` with declared paths, `TemperingPath.Powered` and `TemperingPath.Likelihood` on [`ISamplingTarget`](../../src/maths/samplers/targets/SamplingTarget.cs), and each engine declares its own (Q5). A likelihood bridge, a powered collapsed posterior, and a marginalized powered joint model are different paths. BASS must declare its path (D05); replica swaps and all mutation blocks must preserve the corresponding stage target, and swaps evaluate the cross-target densities rather than assume a simple power form.
 
 **Exact reference rung (tracked as OQ2 in the preparation brief).** The same machinery gives parallel tempering a β = 0 rung drawn exactly from a normalized reference, which turns each annealed restart into an independent draw, the setting of Syed et al.'s round-trip analysis. BARS has one on both paths: the knot prior on the likelihood path (with a proper variance prior for the Normal model), and k ~ Poisson(1) with uniform ordered locations on the powered path. Build it here, then rerun the preparation brief's OQ1 tempering comparison.
 
@@ -287,24 +287,24 @@ where `theta` includes calibration, noise, and discrepancy parameters as applica
 
 These decisions remain open until their density, base measure, transitions, and validation references are recorded. The directions below are recommendations, not settled mathematical specifications.
 
-| ID | Decision | Recommended direction and required evidence | Gate |
-|---|---|---|---|
-| D01 | Term representation and prior measure | Specify ordered/unordered terms, repeated-term policy, support constraints, distinct variables within terms, and exact forward/reverse subset probabilities. Include boundary birth/death/change selection probabilities. Use tiny enumerable cases and count-law checks under a constant likelihood. Derive BASS's measure independently of the BARS correction in R01. | Before structural moves. Draft below. |
-| D02 | Count prior at the capacity limit | Choose a conditionally normalized truncated Poisson with an independent intensity prior, or a globally truncated joint prior. Derive the intensity update; the first choice does not retain a simple Gamma conditional without its cap normalizer. | Before count/intensity updates. Draft below. |
-| D03 | Coefficient-prior modes and posterior propriety | Derive both `g` and `jeffreys` targets, including intercept treatment, dimension-dependent constants, and variance/precision parameterization. State where posterior sampling and evidence reporting are defined. | Before target and initialization APIs. Draft below. |
-| D04 | Collapsed and conditional update order | Prefer a coefficient-marginal target with valid hyperparameter transitions and conditional coefficient draws for retained predictions. If partial collapse is retained, justify the complete scan. State which current values each conditional uses and when cached statistics/densities refresh. Do not copy the stale-statistic or plug-in-conditioning patterns identified in R03-R04. | Before complete BASS sweeps. |
-| D05 | Tempering and SMC target paths | Specify which density is powered, internal-coordinate Jacobians, a valid initial distribution, and cross-target swap/incremental-weight formulas. Marginalization and tempering must not be assumed to commute. | Before hot replicas or SMC. |
-| D06 | Numerical model admission | Define the relationship between rank/support restrictions and the model space, relative tolerances, rebuild criteria, and rejection reasons. Ridge regularization must be an explicit prior choice. | Before optimized factor updates. |
-| D07 | Response units and uncertainty | Fix PCA/basis scaling, residual orientation, empirical truncation distribution, independence across cases, and covariance transformation into physical units. Include conditional coefficient uncertainty; a mixture of conditional means is not the full posterior distribution. Keep basis-estimation uncertainty outside the baseline unless explicitly modeled. | Before predictive uncertainty and calibration. |
-| D08 | Sensitivity measures and moments | Specify independent input measures, category probabilities, mixture/truncation conventions, Student scale/degree edge cases, and zero-variance behavior. Qualify moments against quadrature/enumeration, including higher hinge degrees. | Before sensitivity release. |
-| D09 | Calibration target and covariance formulations | Choose and document cut versus other inference semantics; use the cut formulation as the initial candidate matching the modular workflow. Make both covariance formulations and each variance-group prior explicit. Derive discrepancy/noise updates and enforce cache/unit consistency. | Before calibration reference and cut SMC. |
-| D10 | Diagnostic and stopping semantics | Choose invariant functionals, minimum trace/population requirements, handling of undefined/infinite diagnostics and constant functionals, and method-appropriate uncertainty estimates. Carry the repaired stopping/display policy from B01 into new adapters. Distinguish posterior uncertainty, Monte Carlo error, and outer data/bootstrap uncertainty. | Before automatic stopping or performance claims. |
+| ID | Decision | Recommended direction and required evidence | Gate | Status (2026-10-25) |
+|---|---|---|---|---|
+| D01 | Term representation and prior measure | Specify ordered/unordered terms, repeated-term policy, support constraints, distinct variables within terms, and exact forward/reverse subset probabilities. Include boundary birth/death/change selection probabilities. Use tiny enumerable cases and count-law checks under a constant likelihood. Derive BASS's measure independently of the BARS correction in R01. | Before structural moves. | Drafted below. Constrained by Q6's support gate and the rule that chains start on the support. |
+| D02 | Count prior at the capacity limit | Choose a conditionally normalized truncated Poisson with an independent intensity prior, or a globally truncated joint prior. Derive the intensity update; the first choice does not retain a simple Gamma conditional without its cap normalizer. | Before count/intensity updates. | Drafted below, from the derivations review §4. |
+| D03 | Coefficient-prior modes and posterior propriety | Derive both `g` and `jeffreys` targets, including intercept treatment, dimension-dependent constants, and variance/precision parameterization. State where posterior sampling and evidence reporting are defined. | Before target and initialization APIs. | Drafted below, from the derivations review §6. Bears on OQ19 (units). |
+| D04 | Collapsed and conditional update order | Prefer a coefficient-marginal target with valid hyperparameter transitions and conditional coefficient draws for retained predictions. If partial collapse is retained, justify the complete scan. State which current values each conditional uses and when cached statistics/densities refresh. Do not copy the stale-statistic or plug-in-conditioning patterns identified in R03-R04. | Before complete BASS sweeps. | Drafted below, from the derivations review §2, with λ integrated out (D02). Sets the pointwise-density default (OQ17). |
+| D05 | Tempering and SMC target paths | Specify which density is powered, internal-coordinate Jacobians, a valid initial distribution, and cross-target swap/incremental-weight formulas. Marginalization and tempering must not be assumed to commute. | Before hot replicas or SMC. | Proposal in the derivations review §3. A declared path per engine, no house default (Q5, OQ6); the exact reference rung is OQ2. |
+| D06 | Numerical model admission | Define the relationship between rank/support restrictions and the model space, relative tolerances, rebuild criteria, and rejection reasons. Ridge regularization must be an explicit prior choice. | Before optimized factor updates. | Drafted below, from the derivations review §5, in Q6's two-gate form. |
+| D07 | Response units and uncertainty | Fix PCA/basis scaling, residual orientation, empirical truncation distribution, independence across cases, and covariance transformation into physical units. Include conditional coefficient uncertainty; a mixture of conditional means is not the full posterior distribution. Keep basis-estimation uncertainty outside the baseline unless explicitly modeled. | Before predictive uncertainty and calibration. | Open. Sets the pointwise-density default for supplied-basis fits (OQ17); robust bases are OQ16. |
+| D08 | Sensitivity measures and moments | Specify independent input measures, category probabilities, mixture/truncation conventions, Student scale/degree edge cases, and zero-variance behavior. Qualify moments against quadrature/enumeration, including higher hinge degrees. | Before sensitivity release. | Open. Note below on the surface functional. |
+| D09 | Calibration target and covariance formulations | Choose and document cut versus other inference semantics; use the cut formulation as the initial candidate matching the modular workflow. Make both covariance formulations and each variance-group prior explicit. Derive discrepancy/noise updates and enforce cache/unit consistency. | Before calibration reference and cut SMC. | Open. |
+| D10 | Diagnostic and stopping semantics | Choose invariant functionals, minimum trace/population requirements, handling of undefined/infinite diagnostics and constant functionals, and method-appropriate uncertainty estimates. Carry the repaired stopping/display policy from B01 into new adapters. Distinguish posterior uncertainty, Monte Carlo error, and outer data/bootstrap uncertainty. | Before automatic stopping or performance claims. | Open. B01's stopping policy carries over; adaptation policy below. |
 
 Each resolution should record the chosen specification, equations, rationale, scope of any approximation, and an independent check. Preserve rejected alternatives when they explain a consequential tradeoff. Update the relevant design notes before code relies on the decision.
 
-### Draft resolutions for D01–D03 (proposals, 2026-10-25)
+### Draft resolutions and notes (proposals, 2026-10-25)
 
-Drafted at the user's request as input to the user's design pass. Nothing here is decided. Each draft gives the specification, the rationale, the alternatives not adopted, any approximation, and an independent check. Two earlier proposals are the starting point: the derivations review's global truncation (§4) and its finding on R's τ hyperprior (§6).
+Drafted at the user's request as input to the user's design pass. Nothing here is decided. Each draft gives the specification, the rationale, the alternatives not adopted, any approximation, and an independent check. The derivations review's proposals are the starting point: global truncation (§4), the τ finding (§6), full collapse (§2) and admission by angle (§5). D04 and D06 were drafted the same day as D01–D03, to keep them consistent with those drafts, together with notes for D08 and D10.
 
 **Sources checked.** Where they disagree, each draft says which one it follows.
 
@@ -330,7 +330,7 @@ Drafted at the user's request as input to the user's design pass. Nothing here i
 - **Support: the term prior is restricted globally to the feasible set F of D02, without per-order normalizers.**
   - *The sources.* Francom et al. state the per-order version, where c_K is one over the number of admissible order-K terms, and recommend the unconstrained constant "as a conservative proxy" where counting them is infeasible. R uses the proxy ([`logProbChangeMod`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:22)). The global reading is what the implementation samples, stated as a prior.
   - *The tilt.* The order's marginal becomes π(K) ∝ P(admissible | K)/K_max under the unconstrained measure. Products of hinges have more zeros and fail the support count more often, so high orders get less mass than under the per-order version. Report the support-rejection rate per order so the tilt stays visible.
-  - *The support rule* is the nonzero-count rule b_m ≥ b of every source (R's `npart`). For direct functional responses the design part and the functional part are counted separately (`npart`, `npart.func`), as Francom et al. suggest. Whether Q6's column-mass form suits hinge products is D06's question.
+  - *The support rule* is the nonzero-count rule b_m ≥ b of every source (R's `npart`). For direct functional responses the design part and the functional part are counted separately (`npart`, `npart.func`), as Francom et al. suggest. D06's draft keeps the count as the default and offers Q6's column-mass form as an option.
   - *Not adopted as the default:* the per-order normalization. No implementation samples it, and its constant needs a data-dependent count of admissible terms. It stays computable on enumerable fixtures, to measure the tilt.
 - **Move-type probabilities depend on the state:** equal probability over the moves available at M (Nott, Kuk and Duc). Birth only at M = 0; death and change ½ each at M_max; ⅓ each in between. A birth's ratio uses d_{M+1}/b_M and a death's b_{M−1}/d_M.
   - R's move *selection* already follows this rule ([selection](D:/aghado01/packages/BASS/R/mcmc_update.R:16)), but its *ratios* use fixed thirds ([constants](D:/aghado01/packages/BASS/R/bass.R:250)). Under a constant likelihood that makes π(1)/π(0) three times the correct value and π(M_max)/π(M_max − 1) two-thirds of it (derivations review §4). It is a defect fixture, not an option.
@@ -385,9 +385,65 @@ Drafted at the user's request as input to the user's design pass. Nothing here i
 - **Other coefficient priors**, recorded so the contract leaves room for them:
   - *A ridge with a sampled τ* (GBMARS), an option.
   - *A ridge with a fixed scale,* an option only with the scale stated as part of the model: every added term then carries a factor in that scale, so the penalty on model size is set by it (Nott, Kuk and Duc's diffuse N(0, σ²/ε)). KHAOS found its fixed ridge best on noise-free simulators and its g-prior better on most noisy ones, which supports keeping both selectable. Defaults per regime come from a pre-registered comparison of our own.
+  - *KHAOS's modified g-prior,* a candidate extension: an n-component g-prior that shrinks each term by its complexity, with per-term factors from its interaction order and degree and a global g₀² under an inverse-gamma prior. Its displayed conditional for g₀² has no data term, so derive it rather than copy it.
   - *Under robust or generalized-hyperbolic noise* (outside the completion contract): the unweighted g-prior as the default, which reduces to Gaussian BASS at unit weights and keeps the latent scales' conditionals in closed form, at one extra factorization per move as in BARS's Q2; the ridge with a sampled τ as the GBMARS-parity option.
 - **Independent checks:** τ's marginal for a fixed structure against one-dimensional quadrature; shifting y leaves τ's posterior unchanged under the Liang convention and moves it under R's (a fixture); `BassLiteral` against R on deterministic statistics.
 - **Open within D03:** the Jeffreys mode's target (R's `beta.jprior.ind`); where evidence is reported; posterior propriety per mode, to verify by quadrature over τ on fixtures with admitted full-rank designs.
+
+#### D04 (draft): collapsed and conditional update order
+
+- **The rule.** Integrate the coefficients a, and σ² where it is conjugate, out of every block up to their own draw, and draw them immediately before the first block that conditions on them. Every block then samples a conditional of the same joint posterior, and no block reads a statistic from a stale draw. R's τ update is the pattern this rules out: it reads ‖Rβ‖² from a coefficient draw made before σ² was redrawn (the inventory's partially collapsed ordering, derivations review §2).
+- **Gaussian BASS.** The chain state is (structure, τ).
+  1. Birth, death and change on p(y | structure, τ), with a and σ² integrated out (derivations review §1.2).
+  2. τ by slice sampling on log τ, with its Jacobian, each evaluation O(1) from the cached (‖r‖², Q, k, N) (§2).
+
+  No block conditions on a, σ² or λ, so each retained draw gets them by composition: σ² from its collapsed conditional, a given σ², and λ | M (D02). These are exact draws given the chain state, so no argument about scan order is needed.
+  - *What changed from §2:* its third block, λ from the conjugate conditional, leaves the chain, because D02's draft integrates λ out. It returns as a draw at retention.
+  - Under D03's intercept convention, k = M and the statistics are centred.
+- **Retention.** Each retained draw keeps the structure, τ, σ², a and λ: every draw's generative state.
+- **Pointwise density default (OQ17).** OQ17's scope rule conditions on latents whose dependents span several units, and a and σ² are global, so the default is the retained-parameters content: the Normal density at each draw's (a, σ²). The collapsed predictive, Student t with a and σ² integrated through the g-prior block's `LeaveOutLogDensity`, stays selectable. BARS's brute-force leave-one-out found its collapsed k̂ pessimistic under clumping (preparation brief), so BASS's collapsed content gets the same check before a comparison relies on it.
+- **Robust and generalized-hyperbolic modes** (outside the completion contract; see the GBMARS extension). Per-observation latent scales read the residuals, so a is drawn every sweep, just before them:
+  1. the structure given the latents, with a integrated out (and σ² too when the noise is a pure scale mixture);
+  2. τ;
+  3. a;
+  4. the latent scales;
+  5. σ², when it is not integrated, and the skew.
+
+  τ stays before a so that it can stay collapsed. Under weights its collapsed density needs both the weighted and the unweighted Gram (D03's unweighted g-prior), so τ given a is the cheap alternative, at the cost of τ–a coupling; the interweaving of `HierarchicalPSpline`'s phase C is the in-house remedy. This is the shape of BARS's robust sweep ([`IWeightResampler`](../../src/maths/regression/spline/bars/WeightResampling.cs)): knots given the weights with β and σ² integrated, then (σ², β), then the weights.
+- **Independent checks:** §2's, for a fixed structure τ's marginal against quadrature and, on a tiny enumerable model, composition draws against a long joint-Gibbs reference; and the retained λ draws against D02's check.
+
+#### D06 (draft): numerical model admission
+
+- **Two gates, as Q6 decided for BARS** (step 3.7):
+  - *Numerical:* the derivations review's angle rule (§5). A candidate column b enters only when s = sin²θ = ‖(I − P)b‖²/‖b‖² ≥ s_min, computed from the bordered step's own quantities. It is scale-free and reliable when s_min sits well above k·ε. s_min is recorded with its rationale, with BARS's `MinRelativePivot` ≥ 1e-10 as the reference point.
+  - *Support:* the nonzero-count rule b_m ≥ b of D01, counted separately for the design and functional parts (`npart`, `npart.func`). It is a prior support restriction inside F, not a numerical test.
+
+  Exact duplicates and exact collinearity have s = 0 and fail the numerical gate, which D01's rule on repeated terms relies on.
+- **Count against column mass.** For BARS, Q6 replaced the count with column mass Σᵢ Bⱼ(xᵢ). The draft keeps the count as BASS's default: every BASS source uses it, and Francom et al. 2018 justify it by the edge instability of hinge terms with few nonzero values. Column mass, Σᵢ B_m(xᵢ) with hinges normalized to a maximum of one, is an option, and a fixture compares the predictive variance of edge terms under the two.
+- **A strict rebuild before refusal.** When an incremental update fails the numerical gate, a strict rebuild decides before the candidate is refused (dense factor maintenance, above). Refusals are reported by reason: numerical, support, cap.
+- **A ridge is a prior, never a numerical repair.** Under the g-prior a rank-deficient design lies outside F; a ridge enters only as one of D03's declared coefficient priors.
+- **Shared state.** The residual r and δ serve the factor border, the numerical gate and informed proposals (§5). r is updated on each accepted birth, recomputed after deaths and on a cadence, and S is computed from r rather than as yᵀy − Q/(1+τ), whose cancellation bites when τ is small (§5).
+- **Independent checks:** §5's, randomized insert and delete sequences against fresh factorizations, residual drift against recomputation and s against the SVD's principal angle; plus one constructed case for each refusal reason.
+
+#### D08 (note): which surface sensitivity decomposes
+
+- **Gaussian BASS:** the Sobol indices decompose Ba, which is the mean surface.
+- **Skewed noise** (GBMARS with β ≠ 0): E[y | x] = Ba + √w·β·E[v]. The offset is constant in x, so the mean's indices equal Ba's.
+- **Fixed-β asymmetric Laplace:** Ba is the q-quantile surface, and indices per quantile (GBMARS's SIR example) decompose a different functional for each q.
+
+The sensitivity contract therefore takes the decomposed surface as a declared input, the mean by default, rather than assuming Ba is the mean.
+
+#### D10 (note): a policy for adaptive kernels
+
+- **BASS's own proposals are not adaptive.** I(K | M) and the variable weights follow the current model's terms, not the chain's history, so they are ordinary Metropolis–Hastings proposals that depend on the state. They need exact, positive reverse probabilities (D01), not adaptation theory.
+- **Adaptive kernels follow one policy.** These include mutation-type weights tuned from acceptance rates (as KHAOS does), tempering ladders, and a history-based variable proposal. The policy follows Nott and Kohn (2005, *Biometrika* 92, Theorems 1–2, for finite and compact state spaces) and Roberts and Rosenthal (2007, for general spaces):
+  - tune only from the past, so that each step's kernel leaves the posterior invariant;
+  - keep a floor on every component, a uniform minorization such as KHAOS's 10% floor on each mutation type;
+  - let the adaptation diminish (changes of order 1/n, as running averages give) or freeze it after burn-in, the simplest sufficient route and the default;
+  - store the adaptation state in checkpoints and replay it on restart.
+
+  Adaptation that continues past burn-in leaves the diagnostics' Markov assumption only approximately true, which is a further reason freezing is the default.
+- **A candidate kernel:** a birth proposal that weights variables by inclusion frequencies accumulated over the run, aimed at Nott and Kohn's setting of many inert predictors. It is an option to measure under this policy, not a default.
 
 ## Implementation stages
 
@@ -438,8 +494,8 @@ Benchmark by case count, predictor count, active terms, interaction order, respo
 | Distinct statistical model or representation extensions | Sparse Dirichlet priors, learned projections/directional hinges, intrinsic-dimension restrictions, new likelihoods, dependent-input sensitivity, or basis-estimation uncertainty. Give each its own specification and acceptance criteria. |
 
 **Exploratory support in BASS's own births** (added 2026-10-21).
-- **What BASS does.** Its births draw knots from observed values. They choose interaction orders and variables with weights `w1` and `w2` (both 5) added to the current model's counts.
-- **Why the pseudo-counts matter.** A death's acceptance carries the reverse birth's probability of the removed term, given the reduced model. With `w1` or `w2` at 0, a variable used only by the removed term would have proposal probability 0 there, so its death could never be accepted.
+- **What BASS does.** Its births draw knots from observed values. They choose the interaction order with weight `w1` added to the current model's counts. A main-effect birth picks its variable uniformly; an interaction birth weights variables by `w2` added to their counts. Both weights default to 5.
+- **Why the pseudo-counts matter.** A death's acceptance carries the reverse birth's probability of the removed term, given the reduced model. With `w1` at 0, an order used only by the removed term would have proposal probability 0 there; with `w2` at 0, so would a variable used only by a removed interaction term. Either death could then never be accepted.
 - **What the port does.** It keeps both weights positive and validates them as such, never offering 0.
 - **The evidence.** BARS lacked such a component: its births were local only. A 10% uniform component cut its knot count's autocorrelation time 12× and about 20× on two fits (preparation brief, OQ11 and step 3.9).
 
@@ -456,6 +512,22 @@ Benchmark by case count, predictor count, active terms, interaction order, respo
 - **The metric.** Distances between curves must be the L²(t) norm over the output locations, so each coordinate is scaled by the square root of its quadrature weight (√Δt on a non-uniform grid) before the median or the scatter is computed. `EuclideanMedian`'s weights are per case, not per coordinate.
 - **The dependency to check.** `Maths.Regression` does not reference `Maths.Geometry` today. Geometry depends on LinAlg, Distance and Distributions, so the edge makes no cycle, but it must be checked against the repository's layering rules, or the routines placed where both can reach them.
 - **What it does not do.** A robust centre and basis leave BASS's Normal likelihood non-robust. Downweighting whole contaminated curves needs case-level robust weights, a separate extension.
+
+**Deferred extension (2026-10-25): generalized-hyperbolic noise (GBMARS).** Rumsey, Francom and Shen (arXiv 2306.01911) extend BASS's noise to a normal variance-mean mixture, εᵢ = √w(βvᵢ + √vᵢ·ζᵢ) with ζᵢ ~ N(0, c) and vᵢ ~ GIG(p, a, b). That covers Student t, Laplace, asymmetric Laplace (quantile regression), normal-inverse Gaussian and variance-gamma noise. It lies outside the completion contract, and generalizes the derivations review's §7 item 4 (robust BASS from BARS's resamplers).
+- **BARS already has the β = 0 half.** [`IWeightResampler`](../../src/maths/regression/spline/bars/WeightResampling.cs) is a scale mixture with Gamma precision weights, and `StudentTWeights`' conditional is GBMARS's GIG conditional at β = 0 and a = 0. Its sweep is GBMARS's.
+- **What the seam needs:**
+  - a GIG distribution and sampler in `Maths.Distributions` (Hörmann and Leydold 2014, the bounded rejection sampler GBMARS uses; Devroye 2014), and a GIG conjugate update in `Maths.Samplers.Blocks` whose limits b → 0 and a → 0 are `ConjugateUpdates`' Gamma and inverse-gamma updates;
+  - a mean offset: a variance-mean mixture hands the Gaussian core the working response y − β√w·v along with its weights, where a scale mixture hands only the weights;
+  - log Bessel K of real order, for the pointwise density, which integrates each vᵢ because it belongs to one observation (OQ17's scope rule). Nothing in the repository computes it yet.
+
+  `ContaminatedNormalWeights` is a discrete mixture and stays its own implementation.
+- **Sweep and prior:** D04's robust row and D03's unweighted g-prior. GBMARS's own choice, a ridge with a sampled τ, is the parity option. GBMARS calls its λ update approximate under its stated prior; it is exact under D02's.
+- **The global scale.** When β ≠ 0, GBMARS samples w by a modified half-normal step, because the drift puts w in the mean. A candidate to derive, not yet checked: with zᵢ = √w·vᵢ, so that the drift is βzᵢ, and with the coefficient prior scaled by √w, the global scale gets a GIG full conditional for any GIG mixing. That would generalize Kozumi and Kobayashi's (2011) sampler for the asymmetric Laplace. It is a centred against non-centred choice, so the interweaving schemes apply.
+- **Defect fixtures from the text** (TeX source, checked 2026-10-25):
+  - The residual is defined as r = ŷ − y, but the β and w conditionals hold only for r = y − ŷ. Implemented literally, the skew's sign flips. Fixture: recover a known β from skewed synthetic data.
+  - Table 1's t(ν) row, GIG(−ν/2, 0, ν/2), gives under the paper's own GIG density a t_ν scaled by 1/√2. A standard t needs b = ν, which is what `StudentTWeights` implements, so the seam's t specialization must reproduce `StudentTWeights` exactly.
+- **Sensitivity:** D08's note.
+- **The BARS side:** quantile and skewed BARS come from the same seam (the preparation brief's OQ20).
 
 **Parked extension (2026-10-20): free-knot tensor-product surfaces.**
 - **What.** An expensive variant that carries BARS's continuous knot moves (birth, death and relocation per input dimension) to tensor-product spline surfaces, reserved for low-dimensional problems where its cost is tractable.
@@ -475,6 +547,10 @@ Benchmark by case count, predictor count, active terms, interaction order, respo
   - **Diagnostics.** Track knot counts per axis separately from the basis-column count. A birth on axis j adds Πₐ≠ⱼ(kₐ + pₐ + 1) columns at once, though the move itself is one-dimensional.
   - **Assembly.** Z's rows are row-wise Kronecker (Khatri–Rao) products with (p+1)^d nonzeros each. Accumulate G sparsely, at O(n·(p+1)^(2d)) rather than O(nν²); a move changes only its axis's one-dimensional basis matrix.
   - **Factor.** In lexicographic order the Gram is block-banded with half-bandwidth about p·ν₂ + p. Use a wide-band factor or step 2.2's `DenseCholesky`, chosen by size.
+- **Its value here, and its sequencing (2026-10-25):**
+  - *Value: smooth extrema.* BASS's hinges default to degree 1, which Francom et al. 2018 chose because "we often encounter instabilities when q > 1 because of the erratic tail behavior of higher order polynomials", so BASS's maxima sit at knots. ABMRS's cubic tensor B-splines would carry BARS's peak machinery (`SplineExtrema`, peak modes over full draws) to two or three inputs: a peak ridge over (T, θ) from families of SPC sweeps, for example. For peak and ridge readouts ABMRS is the better fit; for many inputs, BASS is (derivations review §7, item 9).
+  - *Sequencing.* Building ABMRS first would not de-risk BASS. BASS's main risks are D01's term measure, the bordered factor maintenance, categorical terms and the functional contractions, and ABMRS touches none of them. It is scheduled on its own merits.
+  - *A shared primitive.* Both designs are face-splitting (row-wise Khatri–Rao) products. Direct-functional BASS gets G = (AᵀA)∘(HᵀH) because cases × output locations form a Cartesian sample. ABMRS on gridded inputs gets a Kronecker Gram, and on scattered inputs accumulates G sparsely. One LinAlg contraction with a Cartesian shortcut serves both.
 
 Do not make AVX2 mandatory, equate a single `ulong` with complete categorical support, use marginal residual correlations to exclude interaction-only signals, or silently bound interaction order by an intrinsic-dimension estimate. A new prior is not merely a faster proposal. The [prerequisites review](bass-adaptation-prerequisites-review.md#corrections-to-bass-modernization-claims) supersedes unsupported fixed speedup, acceptance-rate, and branch-misprediction assumptions in the earlier notes: R's positive-part helper already uses `(abs(x)+x)/2`, and BASS already weights interaction orders and multi-variable proposals. Neither a 50% branch-misprediction rate nor a universal acceptance threshold at 20 predictors is established. Locally balanced proposal normalizers and sparse subset priors need their own derivations.
 
@@ -484,6 +560,7 @@ Do not make AVX2 mandatory, equate a single `ulong` with complete categorical su
 - [BASS adaptation prerequisites review](bass-adaptation-prerequisites-review.md): verified current behavior, corrections to the digest, and the separate B01-B06 existing-engine repair/qualification register.
 - [BASS derivations and integration review](bass-derivations-and-integration-review.md): proposed resolutions for D02, D04, D05 and D06, a D03 finding on R's τ hyperprior, the collapsed g-prior target shared with BARS, and ranked integration opportunities.
 - [SMC and architecture discussion](astra-smc-in-thermomapper.md): distinction between inference targets, sampling mechanics, and SPC consumers.
+- The draft resolutions' table of sources: the BASS lineage's papers and the R code, as checked on 2026-10-25.
 - [Initial adaptation notes](discussion/gemini-bass-adaptation-notes.md) and [BASS 2.0 ideas](discussion/gemini-bass-2.0.md): proposals reconciled with source evidence and the decision register; preserve as discussion inputs.
 - [Regression issue digest](discussion/gemini-regression-bugs-digest.md): background concerns assessed by the prerequisites review; its historical and theoretical claims must retain the review's qualifications.
 - [Bayesian Regression documentation](../../docs/Maths/BayesianRegression.md) and [Samplers documentation](../../docs/Maths/Samplers.md): update when the corresponding contracts and implementations land.

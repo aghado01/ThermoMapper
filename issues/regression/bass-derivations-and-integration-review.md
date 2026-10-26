@@ -103,6 +103,8 @@ The chain state is `(structure, τ, λ)`. One sweep:
 2. τ by slice sampling on `log τ` (with its Jacobian). The density is `p(τ) · (τ/(1+τ))^{k/2} · (g2 + S(τ)/2)^{−(g1+N/2)}`, and each evaluation is O(1) from the cached `(‖r‖², Q, k, N)`.
 3. λ from its exact conjugate conditional (§4).
 
+Update (2026-10-25): the port brief's D02 draft integrates λ out, so step 3 becomes a draw at retention. The port brief's D04 draft carries this sweep forward.
+
 For each retained sample, draw `σ²` and then `a` from the §1.2 conditionals. These are exact conditionals given the chain state. Because `σ²` and `a` are not part of the chain, no scan-order invariance argument is needed, which settles D04's partial-collapse question by construction. Collapsing typically improves mixing as well (Liu, Wong and Kong 1994).
 
 Source context: as traced in the inventory, R draws coefficients, then σ² from the collapsed conditional, then updates τ using `qf2 = ‖Rβ‖²` from the earlier coefficient draw together with the new σ² ([qf2](D:/aghado01/packages/BASS/R/mcmc_update.R:67), [τ update](D:/aghado01/packages/BASS/R/mcmc_update.R:97)). That is the partially collapsed ordering the inventory flags.
@@ -186,11 +188,13 @@ where θ is the angle between `b` and the current span.
 
 Independent check: randomized insert/delete sequences against fresh factorizations; residual drift against recomputation; `s` against the SVD-computed principal angle.
 
+Update (2026-10-25): the port brief's D06 draft splits this rule into Q6's two gates, the angle as the numerical gate and the nonzero count as the support gate.
+
 ## 6. D03 finding: R's default τ hyperprior
 
 R sets `τ ~ Gamma(0.5, rate 2/n)` ([τ default](D:/aghado01/packages/BASS/R/bass.R:285)). Two places confirm the rate semantics: the conjugate update ([τ update](D:/aghado01/packages/BASS/R/mcmc_update.R:97)) and the prior term in the log posterior used for swaps ([log posterior](D:/aghado01/packages/BASS/R/mcmc_funcs.R:75)). The parameter documentation says the default is `1/n` and that it centers the coefficient prior on the unit-information prior ([b.tau](D:/aghado01/packages/BASS/R/bass.R:34)).
 
-Under the rate reading, `E[τ] = n/4`, whereas unit information is `τ = 1/n`. Read as a scale, `2/n` gives `Gamma(1/2, rate n/2)`, which is exactly the Zellner–Siow prior (`g ~ IG(1/2, n/2)`; Liang et al. 2008). That is consistent with a rate/scale slip, though the source cannot prove intent.
+Under the rate reading, `E[τ] = n/4`, whereas unit information is `τ = 1/n`. Read as a scale, `2/n` gives `Gamma(1/2, rate n/2)`, which is exactly the Zellner–Siow prior (`g ~ IG(1/2, n/2)`; Liang et al. 2008). That is consistent with a rate/scale slip, though the source cannot prove intent. (2026-10-25: four sources state the intent, Francom et al. 2018, R's documentation, the JSS paper and GBMARS; see the port brief's D03 draft.)
 
 The impact depends on signal strength. The τ conditional's rate is `b_τ + aᵀGa/(2σ²)`, and the data term is about `n·SNR/2`. The two priors agree when the signal-to-noise ratio is large and diverge for weak signals, which is where model-size selection is most sensitive.
 
@@ -219,7 +223,7 @@ Ranked by cost, given the code that already exists.
 
 - The inventory's seven-stage sequence predates the brief's stages 0–9; the inventory now points to the brief's stage table.
 - **Stage-0 gate scope.** The brief justifies gating BASS integration on all of B01–B06 by confounding ([brief](bass-full-port-brief.md#existing-engine-baseline-before-integration)). B01, B02 and B06 sit on BASS's code path: shared diagnostics, mutable sampler state and LinAlg factors. B03 partly does, because generalizing `IRjTarget` migrates the BARS callers; if the shared block of §1.3 is adopted, B03's singular-design and conditional-mean items join that path as well. B04 (BAPS) and B05 (BGP) have no code path into BASS and confound only cross-engine comparisons. Either gate B04 and B05 on the first cross-engine comparison, or state the gate as a discipline rule (reviewed defects close before a new engine lands) instead of resting it on confounding.
-- An empty `src/maths/regression/bass/` directory exists, while the brief places BASS at `regression/spline/bass/`.
+- An empty `src/maths/regression/bass/` directory exists, while the brief places BASS at `regression/spline/bass/`. (Resolved by 2026-10-25: the folder is at `regression/spline/bass/`.)
 - Brief line 274 states its modernization constraints as prohibitions. A positive restatement: dispatch SIMD by hardware with a scalar fallback; represent categories with a bitset that scales past 64 levels; score candidate terms by fitted gain so interaction-only signals stay visible; let dimension estimates inform proposals while the interaction cap remains a declared control.
 - The brief's `WeightedNormalModel` reuse row can reference §1.3 once the shared block is adopted.
 
