@@ -16,7 +16,10 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E8** Active-subspace analysis.
 - [ ] **E9** Cross-engine evidence.
 - [ ] **E10** Direct-functional BASS for families of SPC sweeps.
+- [ ] **E11** Elastic emulation of misaligned functional outputs.
 
 ## Reports
 
-None yet.
+### Elastic emulation added — 2026-10-26
+
+New entry from Francom, Tucker, Huerta, Shuler and Ries (arXiv 2305.08834), with its prep in the outputs segment (O-X5).

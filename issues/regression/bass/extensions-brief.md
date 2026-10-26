@@ -13,6 +13,7 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Moments for piecewise polynomials | Derivations review §7, item 7 | Outputs: the moment service | Candidate |
 | Active-subspace analysis | arXiv 2307.11241, via the PCA-extensions discussion | Outputs: term derivatives | Candidate |
 | Cross-engine evidence | Derivations review §7, item 8 | D05's proper mode and path sampling; D03's evidence rule | Candidate |
+| Elastic emulation of misaligned functional outputs | Francom, Tucker, Huerta, Shuler and Ries, arXiv 2305.08834 | Outputs: a representation with a declared reconstruction map. Calibration: D09's likelihood over both parts | Candidate |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
 
 ## Generalized-hyperbolic noise (GBMARS)
@@ -101,6 +102,18 @@ Posterior active-subspace analysis beside the Sobol stage (arXiv 2307.11241, *Di
 
 Evidence for BARS, BASS and BGP by path sampling (derivations review §7, item 8). It needs D05's proper mode in every engine, the intercept convention settled (D03), and proper priors stated in each engine's units. Under D03's evidence rule, evidence is reported only from proper-mode runs, and the predictive checks already built for OQ17 (WAIC, PSIS-LOO) are the default comparison across engines.
 
+## Elastic emulation of misaligned functional outputs
+
+From *Elastic Bayesian Model Calibration* (Francom, Tucker, Huerta, Shuler and Ries, arXiv 2305.08834).
+- **The problem.** When functional outputs differ in phase, so that their features move along t, PCA on the raw curves mixes phase with amplitude. It needs more components, and its averages blur features that each run has sharply.
+- **Their method.** They align the runs in the square-root-velocity framework, which splits each curve into an aligned curve and a warping function. They represent each warping function by its shooting vector: the inverse exponential map of its square-root-slope function on the unit Hilbert sphere. They then emulate the aligned curves and the shooting vectors with separate BMARS emulators, and calibrate modularly on both.
+- **What it needs here.**
+  - The outputs segment's representation with a declared, nonlinear reconstruction map (composition with the warping).
+  - Two ordinary BASS basis fits, one for the aligned curves and one for the shooting vectors.
+  - D09's cut likelihood over both parts.
+  - The alignment itself, which is new code; the sphere and its exponential map relate to `Maths.Geometry`.
+- **Why it matters here.** A susceptibility peak whose temperature moves with a control parameter is exactly this situation. It is a second route to families of SPC sweeps, beside ABMRS's peak readouts (next entry).
+
 ## Direct-functional BASS for families of SPC sweeps
 
-Fitting f(x, T) across families of SPC temperature sweeps (derivations review §7, item 9); BARS remains the engine for a single sweep. For peak and ridge readouts over (T, θ), ABMRS is the better fit (its entry above). An application, outside the completion contract.
+Fitting f(x, T) across families of SPC temperature sweeps (derivations review §7, item 9); BARS remains the engine for a single sweep. For peak and ridge readouts over (T, θ), ABMRS is the better fit (its entry above), and elastic emulation handles peaks that move with θ. An application, outside the completion contract.

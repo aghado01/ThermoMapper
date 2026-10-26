@@ -33,8 +33,13 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 - [ ] **O-X2** The moment service is written over piecewise polynomials.
 - [ ] **O-X3** The basis contract admits robust bases, an uncertainty slot and a declared truncation model.
 - [ ] **O-X4** Term derivatives are available to sensitivity.
+- [ ] **O-X5** The response representation carries a declared reconstruction map (linear now; composition for elastic emulation).
 
 ## Reports
+
+### Prep for elastic emulation — 2026-10-26
+
+"Room for extensions" gains the representation with a declared reconstruction map (O-X5), from Francom, Tucker et al.'s elastic calibration (arXiv 2305.08834).
 
 ### D07 and D08 drafted — 2026-10-25
 

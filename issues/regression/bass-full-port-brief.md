@@ -156,6 +156,33 @@ Draft resolutions for D01–D09 and a note for D10 (proposals, 2026-10-25) live 
 | Rumsey, Francom et al., KHAOS (arXiv 2510.25036) | The collapsed count intensity; ridge against g-prior by regime |
 | R BASS 1.3.1 at the pinned commit | What the implementation samples |
 
+### What the lineage taught
+
+Reading the lineage turned up places where a later or sibling paper does something better than R BASS, or where comparing papers exposed a slip. This register records each insight and where it landed, so that an insight parked as an extension or rejected stays visible with its reason.
+
+| Insight | Source | What it improves on | Where it lands |
+|---|---|---|---|
+| Integrate the count intensity λ out: the count prior becomes negative binomial | KHAOS | R and GBMARS sample λ, with an update GBMARS calls approximate under truncation | **Adopted**, D02: exact under global truncation, λ drawn at retention |
+| Move probabilities set per state, equal over the moves available | Nott, Kuk and Duc | R's fixed thirds in the ratios | **Adopted**, D01 |
+| Terms as an unordered set, with an explicit ordering factor, so a birth carries one (M+1) | Nott, Kuk and Duc | The KHAOS manuscript's double count | **Adopted**, D01; KHAOS's form is a defect fixture |
+| Knots on distinct values, and the unconstrained "proxy" constant, which amounts to global truncation | Francom et al. 2018 | Nott, Kuk and Duc's ties; the continuous wording of JSS and GBMARS | **Adopted**, D01, D02 |
+| τ is meant to be Zellner–Siow, centred on unit information | Francom et al. 2018, R's documentation, JSS, GBMARS | R's rate 2/n | **Adopted**, D03 |
+| Ridge for noise-free simulators, g-prior with noise | KHAOS | One coefficient prior for every regime | **Adopted as options**, D03; with GBMARS's λ advice and D03's propriety result it forms the deterministic-simulator profile (fitting segment) |
+| A weight-dependent g-prior complicates the latent scales' conditionals | GBMARS | Q2's open question for a sampled τ | **Adopted**, D03's robust row |
+| Categorical calibration parameters from an enumerated discrete conditional | Francom et al. 2019 | R's calibration, which has no categorical proposal | **Adopted**, D09 |
+| Cut posteriors computed by SMC over ordered draws | Mathews et al. | R's emulator refresh each iteration | **Adopted**, D09, with induced-density bridges for discrete draws |
+| Validity conditions for adaptive proposals | Nott and Kohn 2005 | KHAOS's open-ended adaptation, stated without them | **Adopted**, D10 |
+| A schedule that cancels the count prior from births and deaths | Green 1995, as used by BARS and by He, Yang and Kang | Fixed or equal move probabilities | **Option**, D01, to be measured: BARS found the winner depends on the regime (OQ14) |
+| Bernoulli-inclusion variable proposal, with exact product probabilities | KHAOS | Wallenius' cost at high interaction orders | **Extension**. R's Wallenius formula is exact and cheap up to K = 3 (D01), so the gain is at higher orders |
+| A variable-swap mutation | KHAOS | Changing a term's variables only by a death and a birth | **Extension** |
+| Normal variance-mean mixtures with coefficients still collapsed | GBMARS | Gaussian-only noise | **Extension**, GBMARS |
+| Phase and amplitude emulated separately for misaligned functional outputs | Francom, Tucker et al. (arXiv 2305.08834) | PCA on curves whose features move | **Extension**, elastic emulation; prep in the outputs segment |
+| Response-sensitive input directions from the fitted surface | arXiv 2307.11241 | Sobol indices alone | **Extension**, active subspaces |
+| Complexity penalized in the coefficient prior, with a uniform prior over basis functions | KHAOS | A penalty carried by the count prior and the Occam factor | **Extension** (modified g-prior). BASS's uniform prior per order already corrects for how many terms each order has |
+| Delayed rejection of structurally invalid births | KHAOS | Wasted iterations on invalid proposals | **Not adopted.** KHAOS can condition on its rejected set because its probability (Poisson-binomial) is computable; BASS's births fail on data-dependent support, whose probability is not, so a failed birth counts as a rejection |
+| Dropping basis columns with too little support | He, Yang and Kang's code | Refusing the configuration | **Not adopted.** It breaks the partition of unity and changes the model silently; support refuses (Q6, D06) |
+| Data sketching for many simulation runs; functional GPs with predictors at different scales | Andros, Guhaniyogi, Francom et al. (arXiv 2406.18751, 2602.09351) | Not yet examined | **Open**: BASS appears there as a comparison method; their scaling ideas are unread |
+
 ## Implementation stages
 
 Repair and verify the existing engine first, then qualify shared additions, then integrate BASS. Engine correctness is established with analytic, enumerated, numerical, and oracle references before application integration. Specification and reference design can proceed independently of stage 0. The generic SMC core may be developed during stage 3; its BASS adapters wait for the baseline, their target and reference calculations.

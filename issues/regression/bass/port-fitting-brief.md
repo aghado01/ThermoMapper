@@ -98,6 +98,7 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
   - *Not adopted as the default:* the per-order normalization. No implementation samples it, and its constant needs a data-dependent count of admissible terms. It stays computable on enumerable fixtures, to measure the tilt.
 - **Move-type probabilities depend on the state:** equal probability over the moves available at M (Nott, Kuk and Duc). Birth only at M = 0; death and change ½ each at M_max; ⅓ each in between. A birth's ratio uses d_{M+1}/b_M and a death's b_{M−1}/d_M.
   - R's move *selection* already follows this rule ([selection](D:/aghado01/packages/BASS/R/mcmc_update.R:16)), but its *ratios* use fixed thirds ([constants](D:/aghado01/packages/BASS/R/bass.R:250)). Under a constant likelihood that makes π(1)/π(0) three times the correct value and π(M_max)/π(M_max − 1) two-thirds of it (derivations review §4). It is a defect fixture, not an option.
+  - *Option: a prior-cancelling schedule* (Green 1995; used by BARS's DMGK schedule and by He, Yang and Kang). It sets b_M ∝ min(1, p(M+1)/p(M)) and d_{M+1} ∝ min(1, p(M)/p(M+1)), so the count prior cancels from births and deaths; with λ integrated out (D02), p(M+1)/p(M) = (M + h₁)/((M + 1)(h₂ + 1)). BARS found that the best schedule depends on the regime (preparation brief, OQ14), so it is an option to measure in a pre-registered comparison, not a default.
 - **Birth proposal** (Nott, Kuk and Duc, extended by BASS to K ≤ 3):
   - the order from I(K | M) ∝ w₁ + (number of order-K terms);
   - for K = 1, the variable uniformly over the p predictors ([R](D:/aghado01/packages/BASS/R/rjmcmc_all.R:21));
@@ -108,6 +109,9 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
 - **The variable-set probability** is Wallenius' noncentral hypergeometric with one ball per variable: P(S) = ∫₀¹ Π_{i∈S}(1 − t^{αᵢ}) dt, with αᵢ = zᵢ / Σ_{k∉S} zₖ. R's [`dmwnchBass`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:12) evaluates it exactly by inclusion–exclusion over the 2^K subsets; Nott, Kuk and Duc's pair formula is the case K = 2. The port uses inclusion–exclusion up to K = 3 and quadrature of the positive integrand above that, where the alternating sum loses digits.
 - **Change move:** pick a term uniformly and one of its factors uniformly, then redraw that factor's sign and knot from their prior. The proposal is symmetric, so the ratio is the likelihood ratio alone (R's [change](D:/aghado01/packages/BASS/R/rjmcmc_des.R:95)).
 - **Additional kernel, not the default:** KHAOS's Bernoulli-inclusion proposal for the variable set, with its variable-swap mutation, offered beside the Wallenius proposal once validated ([extensions brief](extensions-brief.md#additional-proposal-kernels)).
+- **Considered, not adopted** (the hub's lineage register):
+  - *Delayed rejection of structurally invalid births* (KHAOS). KHAOS can condition on its rejected set because that set's probability, a Poisson-binomial, is computable. BASS's births fail on data-dependent support, whose probability is not, so a failed birth counts as a rejection.
+  - *A uniform prior over basis functions* (KHAOS), with complexity penalized through per-term shrinkage instead. BASS's prior, uniform over the order and then over the terms of that order, already corrects for how many terms each order has; KHAOS's route is the modified g-prior extension.
 - **Independent checks:**
   - on a tiny enumerable model (p = 2, a few distinct values, K_max = 2, small M_max) under a constant likelihood, the count law and the order law against enumeration of the globally truncated measure;
   - the two boundary ratios;
@@ -277,6 +281,20 @@ Here b ∈ (0, 1] is the inverse temperature, as in `Temperature(b, path)`.
 - **A ridge is a prior, never a numerical repair.** Under the g-prior a rank-deficient design lies outside F; a ridge enters only as one of D03's declared coefficient priors.
 - **Shared state.** The residual r and δ serve the factor border, the numerical gate and informed proposals (§5). r is updated on each accepted birth, recomputed after deaths and on a cadence, and S is computed from r rather than as yᵀy − Q/(1+τ), whose cancellation bites when τ is small (§5).
 - **Independent checks:** §5's, randomized insert and delete sequences against fresh factorizations, residual drift against recomputation and s against the SVD's principal angle; plus one constructed case for each refusal reason.
+
+## Regime note: deterministic simulators (proposal, 2026-10-26)
+
+Three findings from the lineage and the propriety check point the same way.
+- **KHAOS:** its fixed ridge did best on noise-free simulators, its g-prior on most noisy ones.
+- **GBMARS's review of BMARS:** a_λ and b_λ smaller than the usual 10 suit deterministic surrogates, which need more terms to interpolate.
+- **D03's propriety result:** under the improper σ² prior, a structure with k < N that fits y exactly makes the whole posterior improper, and deterministic data are where exact fits happen.
+
+**Proposal:** a named profile, `DeterministicSimulator`, which is not a default:
+- D03's proper σ² mode, with y standardized and the transform recorded;
+- a wider λ prior (h₁ and h₂ well below 10, their values recorded);
+- the ridge with a sampled τ as the alternative to the g-prior.
+
+Which coefficient prior the profile uses is left to the pre-registered comparison, not set from KHAOS's study. The improper mode's exact-fit refusal stays, and points users to this profile.
 
 ## Room for extensions
 
