@@ -748,10 +748,10 @@ $\ell_p$ equals, up to a constant, the log evidence with σ² integrated out und
     - **A short burn-in leaves the adaptive step at the fixed one.** It needs some hundreds of burn-in steps to learn.
   - **s² is weakly identified:** median 87 with a 95% interval [16, 1263] on the amplitude-6 data. For squared-exponential kernels the signal variance and the bandwidth trade off, and only a combination of them is well determined (compare Zhang 2004 for Matérn variance and range). The fit is unaffected, but the bands can run conservative: the 100% coverage above is a sign of it.
   - **The η range matters at its ends.** A posterior piled against either bound means the range is too narrow.
-  - **Outside the paper's theory, with an extension drafted.** TWCD2025's contraction analysis assumes σ is known; the unknown-scale model is a full-Bayes extension it mentions but does not analyse. The extension is drafted as a protolemma, `lean/Protolemmata/BARS/bgp-unknown-variance-lemmas.md` (BGP-4).
+  - **Outside the paper's theory, with an extension proved.** TWCD2025's contraction analysis assumes σ is known; the unknown-scale model is a full-Bayes extension it mentions but does not analyse. The extension is derived in [PosteriorContraction](./PosteriorContraction.md) and checked in Lean (BGP-4), conditional on the cited general contraction theorem and on TWCD2025's framework inequalities.
     - **The result:** with a proper, compactly supported prior on s (for example 1/s² restricted to a box) and σ₀ inside the induced σ range, the known-σ rate holds jointly for f and σ.
-    - **The argument:** the authors' Remark A.1 rescaling carries the prior-mass bound to f*/s; their sieve and entropy bounds carry over with O(log n) extra terms.
-    - **Open:** the tests for ‖f − f*‖ₙ + |σ − σ₀|, a heavy-tailed amplitude prior, and a σ Bernstein–von Mises result (de Jonge & van Zanten 2013).
+    - **The argument:** the authors' Remark A.1 rescaling carries the prior-mass bound to f*/s; their sieve and entropy bounds carry over with O(log n) extra terms; the tests for ‖f − f*‖ₙ + |σ − σ₀| are built from Gaussian tails. The paper's (60) must hold at an exponent above the prior-mass one by a σ₀-dependent margin, which its sieve can be tuned to give.
+    - **Open:** a heavy-tailed amplitude prior, the posterior-mean analogue of the paper's Theorem 3.2, and a σ Bernstein–von Mises result (de Jonge & van Zanten 2013).
     - **The bridge to the improper 1/s²:** the posterior mass of s² outside such a box is measurable from a run's own draws.
 - **Checked** (`BgpUnknownScaleTests`):
   - the closed-form marginal agrees with quadrature over s² against a dense reference to 10⁻⁸;
