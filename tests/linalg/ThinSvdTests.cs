@@ -121,6 +121,41 @@ public sealed class ThinSvdTests
         Assert.Equal(0.0, svd.SingularValues[3]);
     }
 
+    [Fact]
+    public void ParallelColumnsFarApartInScale_Converge()
+    {
+        // The Grassmann exp map's input that stalled the first version: two parallel columns of norms 1.8·10⁻¹⁶¹ and
+        // 0.115, whose squared norm is subnormal and whose rotation angle overflowed ζ² to infinity.
+        var a = new double[,] { { 1.778206999588062E-161, 0.11534899039256702 }, { 0.0, 0.0 } };
+        ThinSvdResult svd = ThinSvd.Decompose(a);
+        AssertValid(a, svd);
+        Assert.Equal(1, svd.NumericalRank);
+        Assert.True(Math.Abs(svd.SingularValues[0] - 0.11534899039256702) <= 2 * Epsilon * 0.11534899039256702);
+    }
+
+    [Fact]
+    public void ExtremeColumnScales_NeitherOverflowNorUnderflow()
+    {
+        var rng = new Xoshiro256PlusPlus(seed: 815);
+        double[,] a = RandomMatrix(6, 3, rng);
+        for (int i = 0; i < 6; i++)
+        {
+            a[i, 0] *= 1e150;
+            a[i, 2] *= 1e-150;
+        }
+        ThinSvdResult svd = ThinSvd.Decompose(a);
+        AssertValid(a, svd);
+        Assert.Equal(1, svd.NumericalRank);
+        foreach (double s in svd.SingularValues) Assert.True(double.IsFinite(s));
+    }
+
+    [Fact]
+    public void NonFiniteEntry_IsRefused()
+    {
+        Assert.Throws<ArgumentException>(() => ThinSvd.Decompose(new double[,] { { 1.0, double.NaN } }));
+        Assert.Throws<ArgumentException>(() => ThinSvd.Decompose(new double[,] { { double.PositiveInfinity }, { 1.0 } }));
+    }
+
     private static void AssertValid(double[,] a, ThinSvdResult svd)
     {
         int m = a.GetLength(0), n = a.GetLength(1), k = Math.Min(m, n);

@@ -65,6 +65,49 @@ public sealed class PairwiseSumTests
         Assert.True(Bound(n) <= n * UnitRoundoff / 1000.0);
     }
 
+    [Theory]
+    [InlineData(5)]
+    [InlineData(131)]
+    [InlineData(10_007)]
+    public void VectorLanes_GiveTheScalarAccumulatorsBits(int n)
+    {
+        var rng = new Xoshiro256PlusPlus(seed: 950 + n);
+        var a = new double[n];
+        var b = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            a[i] = rng.NextDouble() - 0.5;
+            b[i] = rng.NextDouble() - 0.5;
+        }
+        Assert.Equal(ScalarPairwise(a, null), PairwiseSum.Of(a));
+        Assert.Equal(ScalarPairwise(a, b), PairwiseSum.Dot(a, b));
+    }
+
+    // The same tree with the four accumulators as scalars, over a[offset..offset+n); b = null sums a.
+    private static double ScalarPairwise(double[] a, double[]? b) => ScalarPairwise(a, b, 0, a.Length);
+
+    private static double ScalarPairwise(double[] a, double[]? b, int offset, int n)
+    {
+        if (n > PairwiseSum.Block)
+        {
+            int half = Math.Max(PairwiseSum.Block, n / 2 / PairwiseSum.Block * PairwiseSum.Block);
+            return ScalarPairwise(a, b, offset, half) + ScalarPairwise(a, b, offset + half, n - half);
+        }
+        double s0 = 0.0, s1 = 0.0, s2 = 0.0, s3 = 0.0;
+        int i = 0;
+        for (; i + 3 < n; i += 4)
+        {
+            s0 += Term(a, b, offset + i);
+            s1 += Term(a, b, offset + i + 1);
+            s2 += Term(a, b, offset + i + 2);
+            s3 += Term(a, b, offset + i + 3);
+        }
+        for (; i < n; i++) s0 += Term(a, b, offset + i);
+        return (s0 + s1) + (s2 + s3);
+    }
+
+    private static double Term(double[] a, double[]? b, int i) => b is null ? a[i] : a[i] * b[i];
+
     private static double Bound(int n) =>
         (PairwiseSum.Block / 4 + Math.Ceiling(Math.Log2(Math.Max(1.0, (double)n / PairwiseSum.Block))) + 3) * UnitRoundoff;
 

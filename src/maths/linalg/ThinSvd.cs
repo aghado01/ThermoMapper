@@ -1,4 +1,6 @@
 using System;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 
 namespace Maths.LinAlg
 {
@@ -17,8 +19,9 @@ namespace Maths.LinAlg
     /// <summary>
     /// Thin SVD by Householder QR and one-sided Jacobi rotations on the triangular factor (Hestenes 1958; Drmač and
     /// Veselić 2008). It never forms AᵀA, so singular values far below σ₁ keep their absolute accuracy of about
-    /// ε·σ₁ rather than the √ε·σ₁ a Gram eigendecomposition leaves them. Left vectors whose singular value is exactly
-    /// zero are completed to an orthonormal set. The response decomposition under BASS's PCA basis reads its rank from
+    /// ε·σ₁ rather than the √ε·σ₁ a Gram eigendecomposition leaves them. A column of R below ε·‖R‖_F is zero to
+    /// working precision: rotations leave it alone, and its left vector is completed to an orthonormal set rather than
+    /// read from its rounding noise. Norms and rotation angles are computed without underflow or overflow. The response decomposition under BASS's PCA basis reads its rank from
     /// <see cref="ThinSvdResult.NumericalRank"/>.
     /// </summary>
     public static class ThinSvd
@@ -31,6 +34,8 @@ namespace Maths.LinAlg
         {
             ArgumentNullException.ThrowIfNull(a);
             int m = a.GetLength(0), n = a.GetLength(1);
+            foreach (double value in a)
+                if (!double.IsFinite(value)) throw new ArgumentException("The matrix has a non-finite entry.", nameof(a));
             if (m >= n)
             {
                 var columns = new double[n][];
@@ -61,12 +66,15 @@ namespace Maths.LinAlg
             for (int j = 0; j < cols; j++)
             {
                 double[] xj = x[j];
-                double norm = Math.Sqrt(PairwiseSum.Dot(xj.AsSpan(j), xj.AsSpan(j)));
+                double norm = Norm(xj.AsSpan(j));
                 if (norm == 0.0) continue;
                 double alpha = xj[j] >= 0.0 ? -norm : norm;
                 var v = new double[rows - j];
                 xj.AsSpan(j).CopyTo(v);
                 v[0] -= alpha;                                 // x_j − α, with no cancellation
+                double scale = 0.0;                            // the reflector does not see v's scale, so keep vᵀv in range
+                foreach (double e in v) scale = Math.Max(scale, Math.Abs(e));
+                for (int i = 0; i < v.Length; i++) v[i] /= scale;
                 double vv = PairwiseSum.Dot(v, v);
                 reflectors[j] = v;
                 xj[j] = alpha;
@@ -85,6 +93,13 @@ namespace Maths.LinAlg
                 vt[j][j] = 1.0;
             }
             double orthogonal = cols * MachineEpsilon;      // |cos| of the angle below which a pair counts as orthogonal
+            // A column below ε·‖R‖_F is zero to working precision: rotating it only chases rounding noise, and its
+            // direction carries none of A. ‖R‖_F is invariant under the rotations.
+            double frobenius = 0.0;
+            foreach (double[] column in w) frobenius = double.Hypot(frobenius, Norm(column));
+            double negligible = MachineEpsilon * frobenius;
+            var scratchP = new double[cols];
+            var scratchQ = new double[cols];
             bool converged = false;
             for (int sweep = 0; sweep < MaxSweeps && !converged; sweep++)
             {
@@ -92,25 +107,30 @@ namespace Maths.LinAlg
                 for (int p = 0; p < cols - 1; p++)
                     for (int q = p + 1; q < cols; q++)
                     {
-                        double alpha = PairwiseSum.Dot(w[p], w[p]);
-                        double beta = PairwiseSum.Dot(w[q], w[q]);
-                        double gamma = PairwiseSum.Dot(w[p], w[q]);
-                        if (alpha == 0.0 || beta == 0.0 || Math.Abs(gamma) <= orthogonal * Math.Sqrt(alpha) * Math.Sqrt(beta))
-                            continue;
-                        converged = false;
-                        double zeta = (beta - alpha) / (2.0 * gamma);
-                        double t = (zeta >= 0.0 ? 1.0 : -1.0) / (Math.Abs(zeta) + Math.Sqrt(1.0 + zeta * zeta));
+                        double np = Norm(w[p]), nq = Norm(w[q]);
+                        if (np <= negligible || nq <= negligible) continue;
+                        double cos = Cosine(w[p], np, w[q], nq, scratchP, scratchQ);
+                        if (Math.Abs(cos) <= orthogonal) continue;
+                        // The rotation that diagonalizes the pair's 2 × 2 Gram: t = tan θ solves t² + 2ζt − 1 = 0 with
+                        // ζ = (‖w_q‖² − ‖w_p‖²)/(2·w_pᵀw_q). Written through ρ = min/max of the two norms,
+                        // t = sign(ζ)·ρ/(|ζρ| + hypot(ρ, ζρ)), nothing overflows however far apart the norms are.
+                        double rho = Math.Min(np, nq) / Math.Max(np, nq);
+                        double zetaRho = (1.0 - rho * rho) / (2.0 * Math.Abs(cos));
+                        double sign = (nq >= np) == (cos > 0.0) ? 1.0 : -1.0;
+                        double t = sign * rho / (zetaRho + double.Hypot(rho, zetaRho));
                         double c = 1.0 / Math.Sqrt(1.0 + t * t);
                         double s = c * t;
+                        if (s == 0.0) continue;                    // below what a rotation can resolve
+                        converged = false;
                         Rotate(w[p], w[q], c, s);
                         Rotate(vt[p], vt[q], c, s);
                     }
             }
             if (!converged) throw new InvalidOperationException($"One-sided Jacobi did not converge in {MaxSweeps} sweeps.");
 
-            // σ_j = ‖w_j‖, in descending order; the left vectors of R are w_j/σ_j.
+            // σ_j = ‖w_j‖, in descending order; the left vectors of R are w_j/σ_j, except for negligible columns.
             var sigma = new double[cols];
-            for (int j = 0; j < cols; j++) sigma[j] = Math.Sqrt(PairwiseSum.Dot(w[j], w[j]));
+            for (int j = 0; j < cols; j++) sigma[j] = Norm(w[j]);
             var order = new int[cols];
             for (int j = 0; j < cols; j++) order[j] = j;
             Array.Sort(order, (i, j) => sigma[j].CompareTo(sigma[i]) != 0 ? sigma[j].CompareTo(sigma[i]) : i.CompareTo(j));
@@ -125,7 +145,7 @@ namespace Maths.LinAlg
                 singularValues[k] = sigma[j];
                 right[k] = vt[j];
                 var u = new double[cols];
-                if (sigma[j] > 0.0)
+                if (sigma[j] > negligible)
                     for (int i = 0; i < cols; i++) u[i] = w[j][i] / sigma[j];
                 else if (completeFrom == cols)
                     completeFrom = k;
@@ -155,16 +175,56 @@ namespace Maths.LinAlg
                 : new ThinSvdResult(singularValues, left, right, rank, tolerance);
         }
 
+        // ‖x‖ without underflow or overflow: the plain sum of squares when it sits well inside the normal range,
+        // otherwise the sum for x/max|x_i|.
+        private static double Norm(ReadOnlySpan<double> x)
+        {
+            double squares = PairwiseSum.Dot(x, x);
+            if (squares > 1e-280 && squares < 1e280) return Math.Sqrt(squares);
+            double max = 0.0;
+            foreach (double e in x) max = Math.Max(max, Math.Abs(e));
+            if (max == 0.0) return 0.0;
+            var scaled = new double[x.Length];
+            for (int i = 0; i < x.Length; i++) scaled[i] = x[i] / max;
+            return max * Math.Sqrt(PairwiseSum.Dot(scaled, scaled));
+        }
+
+        // The cosine of the angle between x and y, given their norms: the plain dot product when both norms are well
+        // inside the normal range, otherwise the dot product of the normalized vectors.
+        private static double Cosine(double[] x, double nx, double[] y, double ny, double[] sx, double[] sy)
+        {
+            if (nx > 1e-140 && nx < 1e140 && ny > 1e-140 && ny < 1e140) return PairwiseSum.Dot(x, y) / nx / ny;
+            for (int i = 0; i < x.Length; i++)
+            {
+                sx[i] = x[i] / nx;
+                sy[i] = y[i] / ny;
+            }
+            return PairwiseSum.Dot(sx, sy);
+        }
+
         // y ← (I − 2vvᵀ/vᵀv)·y.
         private static void Reflect(double[] v, double vv, Span<double> y)
         {
             double f = 2.0 * PairwiseSum.Dot(v, y) / vv;
-            for (int i = 0; i < v.Length; i++) y[i] -= f * v[i];
+            MatrixOps.ScaledSubtract(y, v, f, v.Length);
         }
 
+        // (p, q) ← (c·p − s·q, s·p + c·q), elementwise, so vector width does not change the bits.
         private static void Rotate(double[] p, double[] q, double c, double s)
         {
-            for (int i = 0; i < p.Length; i++)
+            int n = p.Length, i = 0;
+            ref double pr = ref MemoryMarshal.GetArrayDataReference(p);
+            ref double qr = ref MemoryMarshal.GetArrayDataReference(q);
+            var vc = Vector256.Create(c);
+            var vs = Vector256.Create(s);
+            for (; i + 3 < n; i += 4)
+            {
+                var a = Vector256.LoadUnsafe(ref pr, (nuint)i);
+                var b = Vector256.LoadUnsafe(ref qr, (nuint)i);
+                Vector256.Subtract(Vector256.Multiply(vc, a), Vector256.Multiply(vs, b)).StoreUnsafe(ref pr, (nuint)i);
+                Vector256.Add(Vector256.Multiply(vs, a), Vector256.Multiply(vc, b)).StoreUnsafe(ref qr, (nuint)i);
+            }
+            for (; i < n; i++)
             {
                 double a = p[i], b = q[i];
                 p[i] = c * a - s * b;
