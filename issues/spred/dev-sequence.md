@@ -256,6 +256,15 @@ cluster (the general product-median theory `2505.18844` beyond the PCA use, the 
 approaches of `2605.08001`, the Wasserstein-median line `2209.03318`) not yet in code. Treat the reuse
 as "lean on the primitive, validate as part of this sub-track" — not "it's done".
 
+**`MoMPCA`'s result (2026-10-27).** `ComputeMoM` returns `MoMPcaResult(Mean, Basis, Alpha)`: μ̂, an orthonormal
+basis of Û and the calibrated α̂. It used to return a `PcaResult` whose components were whatever frame the median
+ended on and whose "eigenvalues" were variances along that frame over all the data, corrupted blocks included. The
+paper settles what the estimator is: θ = (μ, U) ∈ ℝᵖ × Gr(r, p) (§2.1). It chooses the Grassmann formulation
+because PCA identifies "a subspace, not a particular signed, ordered, or oriented orthonormal basis", estimates no
+eigenvalues, and aligns its embeddings by Procrustes (§7.3). §5.3 is the α calibration, already in place. Ordered
+axes and robust variances within Û would be an extension beyond the paper; the natural candidate is a median over
+the blocks' covariances projected into Û, then its eigendecomposition. Not built.
+
 ## Validation & measures
 Per `validation-independence`: ground truth must originate outside the estimator's own model. The
 `r/` sub-project is that channel — a recently-introduced R-oracle harness (C# `ROracle` bridge; PCA

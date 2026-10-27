@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using Maths.LinAlg;
 using Maths.Geometry;
 using Maths.Geometry.Estimators.Intrinsic;
@@ -18,14 +17,20 @@ namespace Maths.Geometry.DimReduction
         /// <para>The product metric is scale-calibrated (paper §5.3): d²_α = α·d_Eucl² + (2−α)·d_Grass²
         /// with α̂ = 2·τ̂_U/(τ̂_μ + τ̂_U) from the per-tangent-dimension robust block scales — so a noisy
         /// subspace (weak eigengap) is automatically down-weighted relative to the mean.</para>
+        ///
+        /// <para>Returns the paper's estimate of (μ, U) and nothing more (<see cref="MoMPcaResult"/>): no
+        /// eigenvalues, and no ordering or sign within the subspace.</para>
         /// </summary>
         /// <param name="data">The full dataset</param>
         /// <param name="kBlocks">Number of blocks to split the data into</param>
-        /// <param name="numComponents">Number of principal components to extract</param>
-        /// <returns>A PcaResult representing the robust aggregation</returns>
-        public static PcaResult ComputeMoM(double[][] data, int kBlocks, int numComponents)
+        /// <param name="numComponents">Dimension r of the principal subspace</param>
+        public static MoMPcaResult ComputeMoM(double[][] data, int kBlocks, int numComponents)
         {
-            if (kBlocks <= 1) return Pca.Compute(data, numComponents, center: true, whiten: false);
+            if (kBlocks <= 1)
+            {
+                PcaResult pca = Pca.Compute(data, numComponents, center: true, whiten: false);
+                return new MoMPcaResult(pca.Mean, pca.Components, double.NaN);
+            }
             int n = data.Length;
             int d = data[0].Length;
             int r = numComponents;
@@ -92,32 +97,13 @@ namespace Maths.Geometry.DimReduction
 
             // 5. Unpack the robust mean and subspace.
             double[] robustMean = productMedian[..d];
-            double[][] robustSubspace = new double[r][];
+            double[][] basis = new double[r][];
             for (int c = 0; c < r; c++)
             {
-                robustSubspace[c] = new double[d];
-                Array.Copy(productMedian, d + c * d, robustSubspace[c], 0, d);
+                basis[c] = new double[d];
+                Array.Copy(productMedian, d + c * d, basis[c], 0, d);
             }
-
-            // 6. Eigenvalues = variance of the centered data captured along each robust component.
-            double[] eigenvalues = new double[r];
-            for (int c = 0; c < r; c++)
-            {
-                double varSum = 0;
-                for (int i = 0; i < n; i++)
-                {
-                    double dot = 0;
-                    for (int j = 0; j < d; j++) dot += (data[i][j] - robustMean[j]) * robustSubspace[c][j];
-                    varSum += dot * dot;
-                }
-                eigenvalues[c] = varSum / n;
-            }
-
-            double totalVar = eigenvalues.Sum(); // variance captured, not total data variance
-            double[] explained = new double[r];
-            for (int c = 0; c < r; c++) explained[c] = totalVar > 0 ? eigenvalues[c] / totalVar : 0;
-
-            return new PcaResult(robustSubspace, explained, eigenvalues, robustMean, false);
+            return new MoMPcaResult(robustMean, basis, alpha);
         }
 
         // PCA components (r vectors of length d) → column-major d×r Grassmann frame [v0 | v1 | …].
@@ -176,4 +162,16 @@ namespace Maths.Geometry.DimReduction
             return m % 2 == 1 ? sorted[m / 2] : 0.5 * (sorted[m / 2 - 1] + sorted[m / 2]);
         }
     }
+
+    /// <summary>
+    /// The scale-calibrated median-of-means estimate of θ = (μ, U) ∈ ℝᵖ × Gr(r, p), You (arXiv 2605.20681, §2.1).
+    /// The paper's target is the principal subspace itself, "not a particular signed, ordered, or oriented
+    /// orthonormal basis", so the estimate carries one orthonormal basis of Û and no eigenvalues: any rotation of
+    /// <see cref="Basis"/> within its span is the same estimate.
+    /// </summary>
+    /// <param name="Mean">μ̂, the mean factor of the product median.</param>
+    /// <param name="Basis">r orthonormal vectors of length p spanning Û, the subspace factor.</param>
+    /// <param name="Alpha">The calibrated scale α̂ ∈ (0, 2) of the product metric (§5.3); NaN for a single block,
+    /// where there is nothing to aggregate and the estimate is the full-data PCA's mean and leading subspace.</param>
+    public sealed record MoMPcaResult(double[] Mean, double[][] Basis, double Alpha);
 }

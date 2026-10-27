@@ -25,9 +25,9 @@ public sealed class MoMPCATests
         idx = AddBlock(data, idx, perBlock, 5.0, 20.0, 1.0);   // corrupted node
         idx = AddBlock(data, idx, perBlock, 5.0, 20.0, 1.0);   // corrupted node
 
-        PcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 1);
+        MoMPcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 1);
 
-        double[] axis = mom.Components[0];
+        double[] axis = mom.Basis[0];
         Assert.True(
             Math.Abs(axis[0]) > 0.9,
             $"Expected the robust axis near (1,0); |x|={Math.Abs(axis[0]):F4} (corrupted (1,1) would give ~0.707).");
@@ -53,13 +53,13 @@ public sealed class MoMPCATests
         idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitY);
         idx = AddCircleBlock(data, idx, perBlock, UnitY, UnitZ); // corrupted trailing block: yz plane
 
-        PcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 2);
+        MoMPcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 2);
 
-        double toXy = SubspaceDistance(mom.Components, [UnitX, UnitY]);
+        double toXy = SubspaceDistance(mom.Basis, [UnitX, UnitY]);
 
         Assert.InRange(toXy, 0.0, 0.1);
-        Assert.True(toXy < SubspaceDistance(mom.Components, [UnitX, UnitZ]));
-        Assert.True(toXy < SubspaceDistance(mom.Components, [UnitY, UnitZ]));
+        Assert.True(toXy < SubspaceDistance(mom.Basis, [UnitX, UnitZ]));
+        Assert.True(toXy < SubspaceDistance(mom.Basis, [UnitY, UnitZ]));
     }
 
     /// <summary>
@@ -83,26 +83,60 @@ public sealed class MoMPCATests
         idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitY);
         idx = AddCircleBlock(data, idx, perBlock, UnitY, UnitZ);  // corrupted trailing block: yz plane
 
-        PcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 2);
+        MoMPcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 2);
 
-        double toXy = SubspaceDistance(mom.Components, [UnitX, UnitY]);
+        double toXy = SubspaceDistance(mom.Basis, [UnitX, UnitY]);
 
         Assert.InRange(toXy, 0.0, 0.1);
-        Assert.True(toXy < SubspaceDistance(mom.Components, [UnitX, UnitZ]));
-        Assert.True(toXy < SubspaceDistance(mom.Components, [UnitY, UnitZ]));
+        Assert.True(toXy < SubspaceDistance(mom.Basis, [UnitX, UnitZ]));
+        Assert.True(toXy < SubspaceDistance(mom.Basis, [UnitY, UnitZ]));
+    }
+
+    /// <summary>
+    /// The estimate is (μ, U) and the calibrated scale: an orthonormal basis of the subspace factor and α̂ strictly
+    /// inside (0, 2), on the corrupted-blocks fixture.
+    /// </summary>
+    [Fact]
+    public void ComputeMoM_ReturnsAnOrthonormalBasis_AndTheCalibratedScale()
+    {
+        const int perBlock = 24;
+        double[] tilted = [0.0, Math.Sin(0.3), Math.Cos(0.3)];
+        double[][] data = new double[5 * perBlock][];
+        int idx = 0;
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, tilted);
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitY);
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitY);
+        idx = AddCircleBlock(data, idx, perBlock, UnitX, UnitY);
+        AddCircleBlock(data, idx, perBlock, UnitY, UnitZ);
+
+        MoMPcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 2);
+
+        Assert.Equal(3, mom.Mean.Length);
+        Assert.Equal(2, mom.Basis.Length);
+        for (int i = 0; i < 2; i++)
+            for (int j = 0; j <= i; j++)
+            {
+                double dot = 0.0;
+                for (int t = 0; t < 3; t++) dot += mom.Basis[i][t] * mom.Basis[j][t];
+                Assert.True(Math.Abs(dot - (i == j ? 1.0 : 0.0)) <= 1e-12, $"basis[{i}]·basis[{j}] = {dot:R}");
+            }
+        Assert.InRange(mom.Alpha, 1e-6, 2.0 - 1e-6);
     }
 
     [Fact]
-    public void ComputeMoM_SingleBlock_DelegatesToPca()
+    public void ComputeMoM_SingleBlock_IsTheFullDataPca()
     {
         var rng = new Random(99);
         double[][] data = new double[24][];
         for (int i = 0; i < data.Length; i++)
             data[i] = new[] { rng.NextDouble(), rng.NextDouble(), rng.NextDouble() };
 
-        PcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 1, numComponents: 2);
+        MoMPcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 1, numComponents: 2);
+        PcaResult pca = Pca.Compute(data, numComponents: 2, center: true, whiten: false);
 
-        Assert.Equal(2, mom.Components.Length);
+        Assert.Equal(pca.Mean, mom.Mean);
+        Assert.Equal(pca.Components, mom.Basis);
+        Assert.True(double.IsNaN(mom.Alpha));
     }
 
     private static double[] UnitX => [1.0, 0.0, 0.0];
