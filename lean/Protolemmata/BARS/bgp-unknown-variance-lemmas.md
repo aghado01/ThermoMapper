@@ -72,6 +72,12 @@ extension and splits it into pieces that are cited, pieces that need a proof, an
         - Restating `BGP.fixed_constant_contraction` with tests on S closes the gap. It would take S, prior Sᶜ = 0 and
           Θₙ ⊆ S, as `BGP.gvdv07_theorem1` does, and the book's Θₙ is then S.
         - With that change the axiom is a consequence of the printed Theorems 8.19(b) and 8.20.
+        - **Closed 2026-10-26.** `BGP.fixed_constant_contraction` now takes S, `hS : prior Sᶜ = 0`, `hS_pos`,
+          `θ₀ ∈ S`, `Θₙ ⊆ S` and tests on S for every n. It is re-cited to GvdV 2017 Theorems 8.19(b) and 8.20,
+          with GvdV01 Theorem 2.1 as the i.i.d. original.
+          - `hprior_pos` is dropped, since `hS` and `hS_pos` imply it.
+          - The route-2 composition passes UV-5's tests on the noise range directly and drops the restricted copy.
+          - `BGP.prior_compl_noiseRange` moved ahead of it.
 
 The Lean module takes both routes (UV-6). The Hellinger tests are not needed: UV-5 builds tests for
 ‖f − f′‖ₙ + |σ − σ′| directly.
@@ -515,7 +521,7 @@ frequentist confidence intervals.
 | UV-2b′ | εₙ > 0, exp(−nεₙ²) ≤ εₙ, and log(1/(c₁εₙ)) ≤ c₂nεₙ², each eventually | Easy: from UV-2b | **Proved** (`BGP.eventually_priorMassRadius_pos`, `BGP.exp_neg_n_radius_sq_le_radius`, `BGP.log_inv_mul_radius_le`) |
 | UV-4a | Covering a scaled family and an interval | Moderate: the covering-number API | **Proved** (`BGP.isCover_image2_smul`, `BGP.coveringNumber_image2_smul_le` and `…_le_half`, `BGP.externalCoveringNumber_image2_smul_le`, `BGP.exists_isCover_Icc`, `BGP.coveringNumber_Icc_le`) |
 | UV-5 | Tests for ‖f − f′‖ₙ + \|σ − σ′\| on the compact noise range | Moderate: Gaussian tails under `Measure.pi` | **Proved** (`BGP.exists_tests`, by `BGP.tests_mean_case`, `BGP.tests_scale_up_case`, `BGP.tests_scale_down_case`; tails `BGP.pi_gaussian_linear_tail`, `BGP.pi_gaussian_sq_upper_tail`, `BGP.pi_gaussian_sq_lower_tail`) |
-| UV-6 | The composed theorem | Heavy; cites GvdV07 and TWCD2025 | **No `sorry`**, conditional on cited axioms. `BGP.posterior_contraction_unknown_variance_gvdv07` rests on GvdV07 as printed (`BGP.gvdv07_theorem1`, `BGP.gvdv07_lemma1`; every Mₙ → ∞). `BGP.posterior_contraction_unknown_variance` gives the fixed C (`BGP.fixed_constant_contraction`; GvdV01 Thm 2.1 form). `…_of_tunable_sieve` is the paper's tunable sieve. `h59` and `hRadius` are confirmed against the paper; UV-3 is proved (`BGP.prior_compl_sieve_le`) |
+| UV-6 | The composed theorem | Heavy; cites GvdV07 and TWCD2025 | **No `sorry`**, conditional on cited axioms. `BGP.posterior_contraction_unknown_variance_gvdv07` rests on GvdV07 as printed (`BGP.gvdv07_theorem1`, `BGP.gvdv07_lemma1`; every Mₙ → ∞). `BGP.posterior_contraction_unknown_variance` gives the fixed C (`BGP.fixed_constant_contraction`; GvdV 2017 Thms 8.19(b) + 8.20, the GvdV01 Thm 2.1 form). `…_of_tunable_sieve` is the paper's tunable sieve. `h59` and `hRadius` are confirmed against the paper; UV-3 is proved (`BGP.prior_compl_sieve_le`) |
 
 **Where the pieces live.**
 - **`Enthymemata/BgpUnknownVariance.lean`** compiles with scoped imports and no `sorry`. meta-CI's ledger marks it

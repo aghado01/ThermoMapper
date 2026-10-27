@@ -104,15 +104,37 @@ Then $\mathbb E_0\,\Pi(\theta\in\Theta_n : d_n(\theta,\theta_0) \ge M_n\varepsil
 
 **Lemma 1 of Ghosal & van der Vaart (2007), as cited** (`gvdv07_lemma1`). If $\Pi(\Theta_n^c)/\Pi(B_n^*(\theta_0,\varepsilon_n;2)) = o(e^{-2n\varepsilon_n^2})$, then $\mathbb E_0\,\Pi(\Theta_n^c \mid Y) \to 0$.
 
-**The fixed-constant form, as cited** (`fixed_constant_contraction`). Two rates εₙ ≤ ε̄ₙ with nεₙ² → ∞; tests as in (2.2) on the sieve; a cover of the sieve by at most $e^{n\bar\varepsilon_n^2}$ balls of radius ξε̄ₙ/2; prior mass $\Pi(B_n^*(\theta_0,\varepsilon_n;2)) \ge e^{-Cn\varepsilon_n^2}$; and remaining mass $\Pi(\Theta_n^c) \le e^{-(C+4)n\varepsilon_n^2}$. Then for some M, $\mathbb E_0\,\Pi(d_n(\theta,\theta_0) \ge M\bar\varepsilon_n \mid Y) \to 0$. Ghosal & van der Vaart (2001, Theorem 2.1) print this form for i.i.d. observations, as the two-rate version of Ghosal, Ghosh & van der Vaart (2000, Theorem 2.1). The axiom is their argument applied to independent, non-identically distributed observations, with the tests taken as a hypothesis. Van der Vaart & van Zanten (2008, Theorem 3.3) assert that extension for fixed-design GP regression with an unknown scale. TWCD2025's Theorem 3.1 and van der Vaart & van Zanten (2009, §3) use the form.
+**The fixed-constant form, as cited** (`fixed_constant_contraction`). Let S carry the whole prior, the truth and the tests, and let Θₙ ⊆ S. Suppose there are two rates εₙ ≤ ε̄ₙ with nεₙ² → ∞, and:
+- tests as in (2.2) on S;
+- a cover of the sieve by at most $e^{n\bar\varepsilon_n^2}$ balls of radius ξε̄ₙ/2;
+- prior mass $\Pi(B_n^*(\theta_0,\varepsilon_n;2)) \ge e^{-Cn\varepsilon_n^2}$;
+- remaining mass $\Pi(\Theta_n^c) \le e^{-(C+4)n\varepsilon_n^2}$.
 
-**Why two routes.** TWCD2025 cite Theorem 4 of Ghosal & van der Vaart (2007) for independent observations. As printed, it has a single rate and concludes for every Mₙ → ∞, not for a fixed M. For independent, non-identically distributed observations the fixed-M form is not printed as a theorem. So the Lean module proves the result both ways: once on Theorem 1 and Lemma 1 as printed, once on the fixed-M form, which rests on the argument rather than on a theorem printed for these observations. Each theorem's `#print axioms` names only its own route's axioms.
+Then for some M, $\mathbb E_0\,\Pi(d_n(\theta,\theta_0) \ge M\bar\varepsilon_n \mid Y) \to 0$.
 
-**How the axioms are stated.** Each axiom is specialized to this model (`dataLaw`, `posterior`), with hypotheses on the strong side of its source's. The axioms for Theorem 1 and Lemma 1 then stay consequences of the printed theorems. The fixed-constant axiom stays a consequence of the argument behind its i.i.d. sources, applied to independent observations. The strong-side choices:
-- the tests hold at every radius and for every n;
+This is Ghosal & van der Vaart (2017), Theorems 8.19(b) and 8.20. Both are printed for general observations, which include independent, non-identically distributed ones, and here they are taken with k = 2:
+- **Theorem 8.19(b)** handles the sieve, at the rate ε̄ₙ. It assumes tests, shells and local entropy, with the KL neighbourhood $B_n^*(\theta_0,\varepsilon;2)$. It concludes that $\Pi(\theta\in\Theta_n : d_n(\theta,\theta_0) \ge M\bar\varepsilon_n \mid Y) = O_P(e^{-n\bar\varepsilon_n^2})$ for sufficiently large M, once nε̄ₙ² → ∞.
+  - The shells follow from the prior mass, because εₙ ≤ ε̄ₙ.
+  - The local entropy follows from the cover.
+- **Theorem 8.20** handles the remaining mass, at a rate of its own, here εₙ. It needs $\Pi(\Theta_n^c)/\Pi(B_n^*(\theta_0,\varepsilon_n;2)) = o(e^{-2n\varepsilon_n^2})$. The prior and remaining masses make that ratio at most $e^{-4n\varepsilon_n^2}$.
+- **From probability to mean.** The book concludes in probability. The posterior is at most 1 almost surely (see the posterior in ℝ≥0∞, below), so its mean converges too.
+
+The i.i.d. original is Ghosal & van der Vaart (2001, Theorem 2.1), the two-rate version of Ghosal, Ghosh & van der Vaart (2000, Theorem 2.1). TWCD2025's Theorem 3.1 and van der Vaart & van Zanten (2008, Theorem 3.3; 2009, §3) use the form.
+
+**Why two routes.** TWCD2025 cite Theorem 4 of Ghosal & van der Vaart (2007) for independent observations. As printed, it has a single rate and concludes for every Mₙ → ∞, not for a fixed M. The fixed-M form for these observations is printed in Ghosal & van der Vaart (2017). So the Lean module proves the result both ways:
+- once on Theorem 1 and Lemma 1 of the 2007 paper, the route TWCD2025 cite, for every Mₙ → ∞;
+- once on Theorems 8.19(b) and 8.20 of the book, for a fixed M.
+
+Each theorem's `#print axioms` names only its own route's axioms.
+
+**How the axioms are stated.** Each axiom is specialized to this model (`dataLaw`, `posterior`), with hypotheses on the strong side of the printed ones, so that it stays a consequence of the printed theorem:
+- the tests hold at every radius and for every n, on the whole parameter set S;
 - Theorem 1's covers use closed balls of half the printed radius. A cover with arbitrary centres then converts to one with centres in the covered set at the printed radius, where the tests apply.
+- the fixed-constant form's cover is global, at half the radius, and its prior mass is an absolute lower bound. Both imply the book's local conditions.
 - the sieves are measurable, and the KL neighbourhood enters through a measurable part of it with positive mass, which only weakens the prior-mass side;
-- Θₙ ⊆ S, as printed. This was added on 2026-10-26, after an outside review found that the proof of it went unused.
+- Θₙ ⊆ S, as printed.
+  - Theorem 1's axiom gained it on 2026-10-26, after an outside review found that the proof of it went unused.
+  - The fixed-constant axiom gained it the same day, together with tests on S rather than on the sieve. The book's (8.17) asks for tests on the whole parameter set.
 
 **The posterior in ℝ≥0∞.** Lean's posterior is Bayes' formula in the extended nonnegative reals (`posterior`),
 
@@ -276,7 +298,7 @@ $$P\Big(\sum_i (Y_i-c_i)^2 \le n\tau\Big) \le e^{-n(v-\tau)^2/(8v^2)}.$$
 
 **Route 2: the fixed constant** (`posterior_contraction_unknown_variance`). The same pieces feed `fixed_constant_contraction` directly:
 - the rates ε′ₙ ≤ Lε̄ₙ;
-- UV-5's tests, restricted to the sieve;
+- UV-5's tests, on the noise range S, which carries the prior and the sieve;
 - UV-4's cover;
 - UV-2's prior mass;
 - UV-3's remaining mass with the margin C₂ > C₁ + 144/σ₀².
@@ -293,7 +315,13 @@ $$P\Big(\sum_i (Y_i-c_i)^2 \le n\tau\Big) \le e^{-n(v-\tau)^2/(8v^2)}.$$
 - **The flat prior on the constant mean**, which the implementation integrates out, is a separate delta, a candidate BGP-5.
 - **An empirical-Bayes σ** would fall under Rousseau & Szabó (2017), not under this argument.
 
-**Prior art.** van der Vaart & van Zanten (2008, Theorem 3.3) prove the unknown-σ result for a single GP prior with a σ prior on [a, b] whose density is bounded below. Their proof says only that the known-σ argument extends. The result here extends it to TWCD2025's hierarchical bandwidth prior and to the implementation's amplitude and noise-ratio parameterization, with the tests written out. Ghosal & van der Vaart (2017) treat Gaussian regression with an unknown variance in the textbook setting.
+**Prior art.** van der Vaart & van Zanten (2008, Theorem 3.3) prove the unknown-σ result for a single GP prior with a σ prior on [a, b] whose density is bounded below. Their proof says only that the known-σ argument extends.
+
+Ghosal & van der Vaart (2017) state the extension for fixed-design Gaussian regression, in the remark after their Theorem 8.26:
+- If the prior of σ has bounded support, their Theorem 8.19 applies with d_n a multiple of ‖f − f′‖ₙ + |σ − σ′|.
+- The tests are those of their Lemma 8.27(ii): a likelihood-ratio test for the mean and an ℓ¹ statistic for the scale, with a universal constant.
+
+The result here extends this to TWCD2025's hierarchical bandwidth prior and to the implementation's amplitude and noise-ratio parameterization. Its tests (UV-5) are different: centred χ² statistics with an explicit constant.
 
 **Status of the Lean.**
 - All five modules are proof-closed enthymemata: every proof is complete, and meta-CI's ledger reads PROOF-CLOSED.

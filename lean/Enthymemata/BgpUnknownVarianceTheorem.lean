@@ -28,9 +28,9 @@ The statement is assembled from:
   contraction at `Mₙ ε̄ₙ` for **every** `Mₙ → ∞`.
 * `fixed_constant_contraction` is the fixed-`M`, two-rate form that TWCD2025 (Theorem 3.1),
   van der Vaart & van Zanten (2008, Theorem 3.3; 2009, Section 3) and the protolemma state. Its
-  source is Ghosal & van der Vaart (2001, Theorem 2.1), the two-rate version of Ghosal, Ghosh &
-  van der Vaart (2000, Theorem 2.1). For independent non-identically distributed observations,
-  with GvdV07's tests, it is not printed as a theorem. It gives
+  source is Ghosal & van der Vaart (2017), Theorems 8.19(b) and 8.20, as printed, for general
+  observations. Its i.i.d. original is Ghosal & van der Vaart (2001, Theorem 2.1), the two-rate
+  version of Ghosal, Ghosh & van der Vaart (2000, Theorem 2.1). It gives
   `posterior_contraction_unknown_variance`: contraction at `M ε̄ₙ` for one fixed `M`.
 
 **What is cited from TWCD2025, and how.** The paper's (59)–(61) and Remark A.1 enter as hypotheses:
@@ -178,42 +178,53 @@ variable [MeasurableSpace E] [BorelSpace E]
 /-! ### The general theorem (cited) -/
 
 /-- **AXIOM — the general contraction theorem, fixed-constant two-rate form.**
-For independent, non-identically distributed observations with a dominated model, a prior that
+For independent, non-identically distributed observations on the parameter set `S`, a prior that
 puts mass at least `exp(−C n εₙ²)` on (a measurable part of) the KL neighbourhood
-`B*ₙ(θ₀, εₙ; 2)`, a sieve `Θₙ` whose complement has mass at most `exp(−(C + 4) n εₙ²)`, a cover
-of the sieve by `exp(n ε̄ₙ²)` balls of radius `ξ ε̄ₙ/2` in a semimetric `d`, and exponentially
-powerful local tests for `d` give a posterior that contracts at rate `M ε̄ₙ` in `d`, in mean under
-the truth.
+`B*ₙ(θ₀, εₙ; 2)`, a sieve `Θₙ ⊆ S` whose complement has mass at most `exp(−(C + 4) n εₙ²)`, a
+cover of the sieve by `exp(n ε̄ₙ²)` balls of radius `ξ ε̄ₙ/2` in a semimetric `d`, and
+exponentially powerful local tests for `d` on `S` give a posterior that contracts at rate `M ε̄ₙ`
+in `d`, in mean under the truth.
 
-Cited, not formalized. Checked against the sources (protolemma, UV-6):
-* **The printed Theorem 4 of Ghosal & van der Vaart (2007)** has one rate and concludes for every
-  `Mₙ → ∞`. Its tests may be for any semimetric with Lemma 2's conclusion. That form is
-  `gvdv07_theorem1` with `gvdv07_lemma1`.
-* **The fixed-`M` two-rate form here** is Ghosal & van der Vaart (2001, Theorem 2.1), the two-rate
-  version of Ghosal, Ghosh & van der Vaart (2000, Theorem 2.1). That is the form van der Vaart &
-  van Zanten (2009, Section 3: "a slight generalization of the main result in [GGvdV00],
-  formulated as Theorem 2.1 in [GvdV01]") and TWCD2025 (Appendix A.1) invoke. Van der Vaart &
-  van Zanten (2008, Theorem 3.3) state it for fixed-design GP regression with an unknown scale on
-  `[a, b]`, with the tests left as in GvdV07.
+Cited, not formalized. The source is Ghosal & van der Vaart (2017), Theorems 8.19(b) and 8.20,
+for general observations, with `dₙ = eₙ = d`, `k = 2` and the book's parameter set `S`
+(protolemma, UV-6):
+* **Theorem 8.19(b)** on the sieve, at the rate `ε̄ₙ`. The tests (8.17), the shells (8.20) with
+  `B_{n,2}` and the local entropy (8.21) give `Πₙ(θ ∈ Θₙ : dₙ ≥ M ε̄ₙ | Y) = O_P(e^{−nε̄ₙ²})` for
+  sufficiently large `M`, since `nε̄ₙ² → ∞`. The prior mass at `εₙ ≤ ε̄ₙ` gives the shells, and the
+  cover gives the local entropy.
+* **Theorem 8.20(iii′)** off the sieve, at the rate `εₙ`. The remaining mass over the prior mass
+  is at most `e^{−4nεₙ²} = o(e^{−2nεₙ²})`.
+* The book concludes in probability. The posterior is at most `1`, `P₀`-almost surely, so the
+  conclusion holds in mean.
 
-The hypotheses are stated on the strong side, so the axiom stays a consequence of that argument:
-* the tests (GvdV07's (2.2)) at every radius `r > 0`;
-* a global cover of the sieve;
+The i.i.d. original is Ghosal & van der Vaart (2001, Theorem 2.1), the two-rate version of
+Ghosal, Ghosh & van der Vaart (2000, Theorem 2.1). That is the form van der Vaart & van Zanten
+(2009, Section 3: "a slight generalization of the main result in [GGvdV00], formulated as
+Theorem 2.1 in [GvdV01]") and TWCD2025 (Appendix A.1) invoke. Van der Vaart & van Zanten (2008,
+Theorem 3.3) state it for fixed-design GP regression with an unknown scale on `[a, b]`. The
+printed Theorem 4 of Ghosal & van der Vaart (2007) has one rate and concludes for every
+`Mₙ → ∞`; that form is `gvdv07_theorem1` with `gvdv07_lemma1`.
+
+The hypotheses are on the strong side of the book's:
+* the tests (8.17) for every `n`, at every radius `r > 0`, on closed `ξr`-balls;
+* a global cover of the sieve at half the radius;
+* the prior mass as an absolute lower bound;
 * measurable sieves and neighbourhood parts;
 * `n εₙ² → ∞`. -/
 axiom fixed_constant_contraction
     (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (prior : Measure (E × ℝ)) [IsProbabilityMeasure prior]
-    (hprior_pos : ∀ᵐ θ ∂prior, 0 < θ.2) (θ₀ : E × ℝ) (hθ₀ : 0 < θ₀.2)
+    (S : Set (E × ℝ)) (hS : prior Sᶜ = 0) (hS_pos : ∀ θ ∈ S, 0 < θ.2) (θ₀ : E × ℝ) (hθ₀ : θ₀ ∈ S)
     (d : ℕ → E × ℝ → E × ℝ → ℝ) (hd_comm : ∀ n θ θ', d n θ θ' = d n θ' θ)
     (hd_triangle : ∀ n θ θ' θ'', d n θ θ'' ≤ d n θ θ' + d n θ' θ'')
     (hd_meas : ∀ n θ', Measurable fun θ => d n θ θ')
     (ε εbar : ℕ → ℝ) (hε : ∀ᶠ n in atTop, 0 < ε n ∧ ε n ≤ εbar n)
     (hnε : Tendsto (fun n : ℕ => n * ε n ^ 2) atTop atTop)
-    (Θ : ℕ → Set (E × ℝ)) (hΘ : ∀ n, MeasurableSet (Θ n)) (C K ξ : ℝ) (hK : 0 < K) (hξ : 0 < ξ)
-    (htests : ∀ᶠ n in atTop, ∀ r > 0, ∀ θ₁ ∈ Θ n, r < d n θ₁ θ₀ →
+    (Θ : ℕ → Set (E × ℝ)) (hΘ : ∀ n, MeasurableSet (Θ n)) (hΘS : ∀ n, Θ n ⊆ S)
+    (C K ξ : ℝ) (hK : 0 < K) (hξ : 0 < ξ)
+    (htests : ∀ n : ℕ, ∀ r > 0, ∀ θ₁ ∈ S, r < d n θ₁ θ₀ →
       ∃ φ : (Fin n → ℝ) → ℝ, Measurable φ ∧ (∀ y, 0 ≤ φ y ∧ φ y ≤ 1) ∧
         ∫ y, φ y ∂dataLaw ev n θ₀ ≤ Real.exp (-(K * n * r ^ 2)) ∧
-        ∀ θ ∈ Θ n, d n θ θ₁ ≤ ξ * r →
+        ∀ θ ∈ S, d n θ θ₁ ≤ ξ * r →
           ∫ y, (1 - φ y) ∂dataLaw ev n θ ≤ Real.exp (-(K * n * r ^ 2)))
     (hentropy : ∀ᶠ n in atTop, ∃ N : Finset (E × ℝ),
       (N.card : ℝ) ≤ Real.exp (n * εbar n ^ 2) ∧
@@ -1342,6 +1353,26 @@ theorem eventually_prior_mass (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (he
           rw [hc₁]
           ring
 
+/-- Under [P1], the noise standard deviation stays in `[σ_min, σ_max]` almost surely. -/
+theorem prior_compl_noiseRange (πs : Measure ℝ) (μW : Measure E) (πη : Measure ℝ)
+    [IsProbabilityMeasure πs] [IsProbabilityMeasure μW] [IsProbabilityMeasure πη]
+    {smin smax ηlo ηhi : ℝ} (hsmin : 0 ≤ smin) (hπs : πs (Icc smin smax)ᶜ = 0)
+    (hπη : πη (Icc ηlo ηhi)ᶜ = 0) :
+    amplitudeNoisePrior πs μW πη (univ ×ˢ Icc (smin * √ηlo) (smax * √ηhi))ᶜ = 0 := by
+  rw [amplitudeNoisePrior, Measure.map_apply measurable_amplitudeNoiseMap
+    (MeasurableSet.univ.prod measurableSet_Icc).compl]
+  refine measure_mono_null (t := (Icc smin smax)ᶜ ×ˢ univ ∪ univ ×ˢ (univ ×ˢ (Icc ηlo ηhi)ᶜ))
+    ?_ (measure_union_null (by simp [Measure.prod_prod, hπs]) (by simp [Measure.prod_prod, hπη]))
+  rintro ⟨s, w, η⟩ hp
+  simp only [mem_preimage, mem_compl_iff, mem_prod, mem_univ, true_and, amplitudeNoiseMap]
+    at hp
+  by_contra hcon
+  simp only [mem_union, mem_prod, mem_compl_iff, mem_univ, and_true, true_and, not_or,
+    not_not] at hcon
+  obtain ⟨hs, hη⟩ := hcon
+  exact hp ⟨mul_le_mul hs.1 (Real.sqrt_le_sqrt hη.1) (Real.sqrt_nonneg _) (hsmin.trans hs.1),
+    mul_le_mul hs.2 (Real.sqrt_le_sqrt hη.2) (Real.sqrt_nonneg _) (hsmin.trans (hs.1.trans hs.2))⟩
+
 /-! ### UV-6 — the composed theorem -/
 
 /-- **UV-6 (the extended theorem).** Fixed design with `‖ev n i‖ ≤ 1` (the sup norm dominates
@@ -1364,7 +1395,7 @@ Then for some `M`, the expected posterior mass of `{‖f − f*‖ₙ + |σ − 
 the known-σ rate. The proof is `fixed_constant_contraction` fed by UV-1 + UV-2
 (`eventually_prior_mass`), UV-3 (`prior_compl_sieve_le`), UV-4 + UV-4a (`eventually_sieve_cover`)
 and UV-5 (`exists_tests`). `posterior_contraction_unknown_variance_gvdv07` is the same composition
-on the printed general theorem. -/
+on GvdV07's Theorem 1 and Lemma 1. -/
 theorem posterior_contraction_unknown_variance
     (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (hev : ∀ n i, ‖ev n i‖ ≤ 1) (f₀ : E) {σ₀ : ℝ}
     (μW : Measure E) [IsProbabilityMeasure μW]
@@ -1412,22 +1443,13 @@ theorem posterior_contraction_unknown_variance
   have hsieve : ∀ n, closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi))
       ⊆ (univ ×ˢ Icc (smin * √ηlo) (smax * √ηhi) : Set (E × ℝ)) := fun n =>
     closure_minimal (prod_mono (subset_univ _) subset_rfl) (isClosed_univ.prod isClosed_Icc)
-  -- σ > 0 almost surely under the prior
-  have hpos : ∀ᵐ θ ∂amplitudeNoisePrior πs μW πη, 0 < θ.2 := by
-    rw [amplitudeNoisePrior, ae_map_iff measurable_amplitudeNoiseMap.aemeasurable
-      (measurableSet_lt measurable_const measurable_snd), ae_iff]
-    refine measure_mono_null (t := (Icc smin smax)ᶜ ×ˢ univ ∪ univ ×ˢ (univ ×ˢ (Icc ηlo ηhi)ᶜ))
-      ?_ (measure_union_null ?_ ?_)
-    · rintro ⟨s, w, η⟩ hp
-      simp only [mem_setOf_eq, amplitudeNoiseMap, not_lt] at hp
-      by_contra hcon
-      simp only [mem_union, mem_prod, mem_compl_iff, mem_univ, and_true, true_and, not_or,
-        not_not] at hcon
-      obtain ⟨hs', hη'⟩ := hcon
-      have : 0 < s * √η := mul_pos (hsmin.trans_le hs'.1) (Real.sqrt_pos.2 (hηlo.trans_le hη'.1))
-      linarith
-    · simp [Measure.prod_prod, hπs_supp]
-    · simp [Measure.prod_prod, hπη_supp]
+  -- the parameter set: the compact noise range carries the prior, the truth and the tests
+  have hS : amplitudeNoisePrior πs μW πη (univ ×ˢ Icc (smin * √ηlo) (smax * √ηhi))ᶜ = 0 :=
+    prior_compl_noiseRange πs μW πη hsmin.le hπs_supp hπη_supp
+  have hS_pos : ∀ θ ∈ (univ ×ˢ Icc (smin * √ηlo) (smax * √ηhi) : Set (E × ℝ)), 0 < θ.2 :=
+    fun θ hθ => hσmin.trans_le hθ.2.1
+  have hθ₀ : ((f₀, σ₀) : E × ℝ) ∈ (univ ×ˢ Icc (smin * √ηlo) (smax * √ηhi) : Set (E × ℝ)) :=
+    ⟨mem_univ _, hσ₀.1.le, hσ₀.2.le⟩
   -- the rates
   have hrate : ∀ᶠ n : ℕ in atTop, 0 < priorMassRadius C₀ a k n / (σ₀ / 6) ∧
       priorMassRadius C₀ a k n / (σ₀ / 6) ≤ L * priorMassRadius Cb a kb n := by
@@ -1446,18 +1468,6 @@ theorem posterior_contraction_unknown_variance
     refine ((tendsto_n_priorMassRadius_sq C₀ a k hC₀ ha ha' hk).const_mul_atTop
       (inv_pos.2 (pow_pos hc 2))).congr fun n => ?_
     field_simp
-  -- UV-5 on the sieve
-  have htests' : ∀ᶠ n : ℕ in atTop, ∀ r > 0,
-      ∀ θ₁ ∈ closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)),
-      r < paramDist ev n θ₁ (f₀, σ₀) →
-      ∃ φ : (Fin n → ℝ) → ℝ, Measurable φ ∧ (∀ y, 0 ≤ φ y ∧ φ y ≤ 1) ∧
-        ∫ y, φ y ∂dataLaw ev n (f₀, σ₀) ≤ Real.exp (-(K * n * r ^ 2)) ∧
-        ∀ θ ∈ closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)),
-          paramDist ev n θ θ₁ ≤ ξ * r →
-          ∫ y, (1 - φ y) ∂dataLaw ev n θ ≤ Real.exp (-(K * n * r ^ 2)) :=
-    Eventually.of_forall fun n r hr θ₁ hθ₁ hd => by
-      obtain ⟨φ, h1, h2, h3, h4⟩ := htests n r hr θ₁ (hsieve n hθ₁) hd
-      exact ⟨φ, h1, h2, h3, fun θ hθ hθθ₁ => h4 θ (hsieve n hθ) hθθ₁⟩
   -- UV-3: the remaining mass, in the exponent the general theorem asks for
   have hrem : ∀ᶠ n : ℕ in atTop, amplitudeNoisePrior πs μW πη
       (closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)))ᶜ
@@ -1478,13 +1488,13 @@ theorem posterior_contraction_unknown_variance
     have := mul_le_mul_of_nonneg_right hcoef hnρ
     linarith
   -- the general theorem
-  obtain ⟨M, hM⟩ := fixed_constant_contraction ev (amplitudeNoisePrior πs μW πη) hpos (f₀, σ₀)
-    hσ₀pos
+  obtain ⟨M, hM⟩ := fixed_constant_contraction ev (amplitudeNoisePrior πs μW πη) _ hS hS_pos
+    (f₀, σ₀) hθ₀
     (paramDist ev) (paramDist_comm ev) (paramDist_triangle ev)
     (fun n θ' => (continuous_paramDist ev n θ').measurable)
     (fun n => priorMassRadius C₀ a k n / (σ₀ / 6)) (fun n => L * priorMassRadius Cb a kb n)
     hrate hnε (fun n => closure (sieve (B n) smin smax (smin * √ηlo) (smax * √ηhi)))
-    (fun n => isClosed_closure.measurableSet) ((C₁ + δ) * (σ₀ / 6) ^ 2) K ξ hK hξ htests'
+    (fun n => isClosed_closure.measurableSet) hsieve ((C₁ + δ) * (σ₀ / 6) ^ 2) K ξ hK hξ htests
     (eventually_sieve_cover ev hev B hsmin.le hsmax hCb ha ha' hkb hξ hL1 h61' hR)
     ((eventually_prior_mass ev hev f₀ μW πs hsmin hs hπs_pos πη hηlo hη hπη hσ₀ hC₀ ha ha' hk hδ
       h59).mono fun n h => ⟨_, h.1, measurableSet_closedBall.prod measurableSet_closedBall, h.2⟩)
@@ -1541,26 +1551,6 @@ theorem klBall_mono (ev : (n : ℕ) → Fin n → E →L[ℝ] ℝ) (n : ℕ) (θ
     ENNReal.ofReal_le_ofReal (mul_le_mul_of_nonneg_left (pow_le_pow_left₀ h0 h 2)
       (Nat.cast_nonneg n))
   exact ⟨h1.trans hle, h2.trans hle⟩
-
-/-- Under [P1], the noise standard deviation stays in `[σ_min, σ_max]` almost surely. -/
-theorem prior_compl_noiseRange (πs : Measure ℝ) (μW : Measure E) (πη : Measure ℝ)
-    [IsProbabilityMeasure πs] [IsProbabilityMeasure μW] [IsProbabilityMeasure πη]
-    {smin smax ηlo ηhi : ℝ} (hsmin : 0 ≤ smin) (hπs : πs (Icc smin smax)ᶜ = 0)
-    (hπη : πη (Icc ηlo ηhi)ᶜ = 0) :
-    amplitudeNoisePrior πs μW πη (univ ×ˢ Icc (smin * √ηlo) (smax * √ηhi))ᶜ = 0 := by
-  rw [amplitudeNoisePrior, Measure.map_apply measurable_amplitudeNoiseMap
-    (MeasurableSet.univ.prod measurableSet_Icc).compl]
-  refine measure_mono_null (t := (Icc smin smax)ᶜ ×ˢ univ ∪ univ ×ˢ (univ ×ˢ (Icc ηlo ηhi)ᶜ))
-    ?_ (measure_union_null (by simp [Measure.prod_prod, hπs]) (by simp [Measure.prod_prod, hπη]))
-  rintro ⟨s, w, η⟩ hp
-  simp only [mem_preimage, mem_compl_iff, mem_prod, mem_univ, true_and, amplitudeNoiseMap]
-    at hp
-  by_contra hcon
-  simp only [mem_union, mem_prod, mem_compl_iff, mem_univ, and_true, true_and, not_or,
-    not_not] at hcon
-  obtain ⟨hs, hη⟩ := hcon
-  exact hp ⟨mul_le_mul hs.1 (Real.sqrt_le_sqrt hη.1) (Real.sqrt_nonneg _) (hsmin.trans hs.1),
-    mul_le_mul hs.2 (Real.sqrt_le_sqrt hη.2) (Real.sqrt_nonneg _) (hsmin.trans (hs.1.trans hs.2))⟩
 
 /-- The shells condition (2.5) from the prior mass alone: `P(A) ≤ 1 ≤ e^{K n e′² j²/2} e^{−C n e²}`
 once `j ≥ ⌈2|C|/K⌉ + 1` and `0 ≤ e ≤ e′`. -/
