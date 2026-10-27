@@ -33,16 +33,45 @@ extension and splits it into pieces that are cited, pieces that need a proof, an
     (`docs/Maths/PosteriorContraction.md`) now says the same. **Open lead:** Ghosal & van der Vaart (2017) Theorem
     8.26, with the tests of Lemma 8.27. Chakraborty & Ghosal (arXiv 2008.01244, proof of Theorem 3.2) apply it to
     Gaussian regression with an unknown σ. They restrict σ to a small neighbourhood of σ₀ so that Lemma 8.27's tests
-    apply, and they check its remaining-mass condition (8.33). Its form is unchecked: one rate or two, a fixed M or
-    every Mₙ → ∞. If it prints the fixed-M two-rate form, route 2 gets a printed citation.
-    - The book's chapters are in `codex-scientiae/supellex-private/PDFs/GhosalVanDerVaart2017/`. Chapter 8, the general
-      theory, is missing. Going by the file numbering it would be `9781139029834.009.pdf`. Chapter 9 (`.010`) shows
-      the following:
+    apply, and they check its remaining-mass condition (8.33). Its form was unchecked: one rate or two, a fixed M or
+    every Mₙ → ∞. If it prints the fixed-M two-rate form, route 2 gets a printed citation. Resolved below.
+    - The book's chapters are in `codex-scientiae/supellex-private/PDFs/GhosalVanDerVaart2017/`. Chapter 8 (general
+      theory) is `.009`, and Chapter 9 (examples) is `.010`. Chapter 9 shows the following:
       - **§9.5 is about non-i.i.d. models.** Its examples apply Theorems 8.19 and 8.23.
       - **The i.i.d. examples** check Theorem 8.9's conditions: prior mass (8.4), entropy (8.5) and remaining mass
         (8.6). That is the GGV2000 form.
       - **Theorem 8.23** is the form of GvdV07's Theorem 4: a shell condition (8.26) and local entropy (8.27). Theorem
         9.22 applies it to spline regression with σ known "for simplicity".
+    - **Resolved 2026-10-26 from Chapter 8.**
+      - **Definition 8.1.** A rate means "for every Mₙ → ∞". The text after the definition says Mₙ can usually be
+        fixed to a single large constant M in infinite-dimensional models.
+      - **Theorem 8.9** is the i.i.d. two-rate (C + 4) form. Its fixed-M version is left as an exercise
+        (Problem 8.7).
+      - **Theorem 8.26** (Gaussian regression) has σ known, one rate and the every-Mₙ conclusion. It does not cite
+        route 2.
+      - **Theorem 8.19, for general observations, prints the fixed-M form.** It has tests (8.17) for semimetrics dₙ
+        and eₙ, a shell condition (8.20) and local entropy (8.21).
+        - Clause (b) applies when (8.20) holds with B_{n,k}, k > 1. It reads: "If nεₙ² → ∞, then Πₙ(θ ∈ Θₙ,₁ :
+          dₙ(θ, θₙ,₀) ≥ Mεₙ | X⁽ⁿ⁾) = O_P(e^{−nεₙ²}), for sufficiently large M".
+        - Theorem 8.20 handles the remaining mass "for arbitrary εₙ". Its condition (iii′) is
+          Πₙ(Θₙ,₂)/Πₙ(B_{n,k}(θ₀, εₙ)) = o(e^{−2nεₙ²}).
+        - Route 2 is therefore 8.19(b) at the entropy rate ε̄ₙ plus 8.20(iii′) at the prior-mass rate εₙ, with k = 2.
+          The axiom's (C + 4) mass gives the ratio e^{−4nεₙ²}, which is o(e^{−2nεₙ²}). The book's conclusion holds
+          in probability. Convergence in mean follows because the posterior is at most 1, which holds P₀-a.s. by the
+          ℝ≥0∞ argument in the theory doc.
+      - **The remark after Theorem 8.26 prints the unknown-σ extension.** "If the prior of σ has bounded support
+        [0, σ̄]", Theorem 8.19 applies with dₙ = eₙ equal to a multiple of ‖θ₁ − θ₂‖₂,ₙ + |σ₁ − σ₂|, which is our
+        metric.
+        - The tests are those of Lemma 8.27(ii): a likelihood-ratio test for the mean and an ℓ¹ statistic for the
+          scale, whichever gap dominates. Their constant is universal and ξ = 1/2.
+        - UV-5 builds different tests (centred χ² statistics, ξ = 1/8, explicit K).
+        - This is the printed prior art that vdV & vZ (2008, Theorem 3.3) only assert.
+      - **The one gap.** (8.17) asks for tests at every θ₁ in the whole parameter set Θₙ, with type II over Θₙ. The
+        axiom takes tests on the sieve only.
+        - The proof uses only the sieve's tests, but as printed the hypothesis is the stronger one.
+        - Restating `BGP.fixed_constant_contraction` with tests on S closes the gap. It would take S, prior Sᶜ = 0 and
+          Θₙ ⊆ S, as `BGP.gvdv07_theorem1` does, and the book's Θₙ is then S.
+        - With that change the axiom is a consequence of the printed Theorems 8.19(b) and 8.20.
 
 The Lean module takes both routes (UV-6). The Hellinger tests are not needed: UV-5 builds tests for
 ‖f − f′‖ₙ + |σ − σ′| directly.
