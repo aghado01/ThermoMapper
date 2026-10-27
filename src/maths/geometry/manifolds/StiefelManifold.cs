@@ -50,7 +50,7 @@ namespace Maths.Geometry
             double[] m = MulAtB(p, n, r, q, r);
 
             // QR of M for the horizontal component (principal angles)
-            ThinSvd(m, r, r, out double[] u, out double[] s, out double[] v);
+            Svd(m, r, r, out double[] u, out double[] s, out double[] v);
 
             // Vertical component: (I − YYᵀ)Z = Z − Y(YᵀZ)
             double[] zMinusYM = new double[n * r];
@@ -93,7 +93,7 @@ namespace Maths.Geometry
             double[] m = MulAtB(p, n, r, q, r);
 
             // Horizontal tangent: Y · log(M) via SVD
-            ThinSvd(m, r, r, out double[] u, out double[] s, out double[] v);
+            Svd(m, r, r, out double[] u, out double[] s, out double[] v);
 
             // Compute log(M) = U·diag(log Σ)·Vᵀ
             double[] logM = new double[r * r];
@@ -217,39 +217,24 @@ namespace Maths.Geometry
             return c;
         }
 
-        // Thin SVD via symmetric eigendecomposition of AᵀA.
-        private static void ThinSvd(ReadOnlySpan<double> a, int rows, int r,
+        // Thin SVD A = U diag(S) Vᵀ of a column-major rows×r A by Maths.LinAlg's ThinSvd, never forming AᵀA.
+        // S descending; V (r×r) right vectors as columns; U (rows×r) left vectors as columns, left zero where
+        // S_i < 1e-12. At the cut locus (a principal angle of π/2) that direction's sign is arbitrary, and a zero
+        // column makes the log map's two choices cancel instead of picking one.
+        private static void Svd(ReadOnlySpan<double> a, int rows, int r,
             out double[] u, out double[] s, out double[] v)
         {
-            var gram = new double[r, r];
-            for (int i = 0; i < r; i++)
-                for (int j = i; j < r; j++)
-                {
-                    double dot = 0.0;
-                    int ai = i * rows, aj = j * rows;
-                    for (int k = 0; k < rows; k++) dot += a[ai + k] * a[aj + k];
-                    gram[i, j] = gram[j, i] = dot;
-                }
-
-            var eig = DenseEigen.DecomposeSymmetric(gram);
-            s = new double[r];
-            v = new double[r * r];
-            for (int i = 0; i < r; i++)
-            {
-                s[i] = Math.Sqrt(Math.Max(eig.Eigenvalues[i], 0.0));
-                double[] vi = eig.Eigenvectors[i];
-                for (int row = 0; row < r; row++) v[row + i * r] = vi[row];
-            }
-
-            // U = A·V·Σ⁻¹
-            double[] av = Mul(a, rows, r, v, r);
+            var m = new double[rows, r];
+            for (int j = 0; j < r; j++)
+                for (int i = 0; i < rows; i++) m[i, j] = a[i + j * rows];
+            ThinSvdResult svd = ThinSvd.Decompose(m);
+            s = svd.SingularValues;
             u = new double[rows * r];
-            for (int i = 0; i < r; i++)
+            v = new double[r * r];
+            for (int k = 0; k < r; k++)
             {
-                if (s[i] < 1e-12) continue;
-                int col = i * rows;
-                double inv = 1.0 / s[i];
-                for (int row = 0; row < rows; row++) u[col + row] = av[col + row] * inv;
+                if (s[k] >= 1e-12) svd.LeftVectors[k].CopyTo(u, k * rows);
+                svd.RightVectors[k].CopyTo(v, k * r);
             }
         }
     }

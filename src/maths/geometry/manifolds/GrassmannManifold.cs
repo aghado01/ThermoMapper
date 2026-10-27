@@ -11,9 +11,8 @@ namespace Maths.Geometry
     /// the same point for any r×r orthogonal Q.
     ///
     /// <para>Geometry follows Edelman, Arias &amp; Smith (1998) and Bendokat–Zimmermann–Absil
-    /// (2020). The geodesic distance is the 2-norm of the principal angles; Log/Exp use a thin
-    /// SVD built here from the symmetric eigendecomposition of the r×r Gram matrix
-    /// (<see cref="DenseEigen"/>). The canonical metric gives ‖log_Y(Z)‖_F = d(Y, Z), mirroring
+    /// (2020). The geodesic distance is the 2-norm of the principal angles; Log/Exp use the thin
+    /// SVD of <see cref="ThinSvd"/>, which never forms the r×r Gram matrix. The canonical metric gives ‖log_Y(Z)‖_F = d(Y, Z), mirroring
     /// the embedded <see cref="SphericalManifold"/>.</para>
     ///
     /// <para><b>Domain.</b> Log is defined inside the injectivity radius — principal angles &lt; π/2
@@ -67,7 +66,7 @@ namespace Maths.Geometry
         {
             int n = _n, r = _r;
             double[] m = MulAtB(p, n, r, q, r);            // M = YᵀZ (r×r)
-            ThinSvd(m, r, r, out double[] u1, out double[] c, out double[] v1);  // M = U₁ diag(c) V₁ᵀ
+            Svd(m, r, r, out double[] u1, out double[] c, out double[] v1);  // M = U₁ diag(c) V₁ᵀ
 
             double[] zv1 = Mul(q, n, r, v1, r);            // Z V₁ (n×r) → b_i
             double[] yu1 = Mul(p, n, r, u1, r);            // Y U₁ (n×r) → a_i
@@ -93,7 +92,7 @@ namespace Maths.Geometry
         public void ExpMap(ReadOnlySpan<double> p, ReadOnlySpan<double> v, Span<double> dst)
         {
             int n = _n, r = _r;
-            ThinSvd(v, n, r, out double[] u, out double[] sig, out double[] vmat);  // Δ = U diag(sig) Vᵀ
+            Svd(v, n, r, out double[] u, out double[] sig, out double[] vmat);  // Δ = U diag(sig) Vᵀ
 
             double[] yv = Mul(p, n, r, vmat, r);           // Y V (n×r)
             double[] term = new double[n * r];
@@ -170,38 +169,31 @@ namespace Maths.Geometry
             return c;
         }
 
-        // Singular values (descending) of a column-major rows×r matrix, via the r×r Gram.
+        // Singular values (descending) of a column-major r×r matrix.
         private static double[] SingularValues(ReadOnlySpan<double> a, int r)
         {
-            var eig = DenseEigen.DecomposeSymmetric(Gram(a, r, r));
-            var s = new double[r];
-            for (int i = 0; i < r; i++) s[i] = Math.Sqrt(Math.Max(eig.Eigenvalues[i], 0.0));
+            Svd(a, r, r, out _, out double[] s, out _);
             return s;
         }
 
-        // Thin SVD A = U diag(S) Vᵀ for column-major A (rows×r, rows ≥ r) via G = AᵀA.
-        // S descending; V (r×r) right vectors as columns; U (rows×r) left vectors as columns
-        // (U column left zero where S_i ≈ 0).
-        private static void ThinSvd(ReadOnlySpan<double> a, int rows, int r,
+        // Thin SVD A = U diag(S) Vᵀ of a column-major rows×r A by Maths.LinAlg's ThinSvd, never forming AᵀA.
+        // S descending; V (r×r) right vectors as columns; U (rows×r) left vectors as columns, left zero where
+        // S_i < 1e-12. At the cut locus (a principal angle of π/2) that direction's sign is arbitrary, and a zero
+        // column makes the log map's two choices cancel instead of picking one.
+        private static void Svd(ReadOnlySpan<double> a, int rows, int r,
             out double[] u, out double[] s, out double[] v)
         {
-            var eig = DenseEigen.DecomposeSymmetric(Gram(a, rows, r));   // descending
-            s = new double[r];
-            v = new double[r * r];
-            for (int i = 0; i < r; i++)
-            {
-                s[i] = Math.Sqrt(Math.Max(eig.Eigenvalues[i], 0.0));
-                double[] vi = eig.Eigenvectors[i];                       // i-th right singular vector
-                for (int row = 0; row < r; row++) v[row + i * r] = vi[row];
-            }
-            double[] av = Mul(a, rows, r, v, r);                         // A V (rows×r)
+            var m = new double[rows, r];
+            for (int j = 0; j < r; j++)
+                for (int i = 0; i < rows; i++) m[i, j] = a[i + j * rows];
+            ThinSvdResult svd = ThinSvd.Decompose(m);
+            s = svd.SingularValues;
             u = new double[rows * r];
-            for (int i = 0; i < r; i++)
+            v = new double[r * r];
+            for (int k = 0; k < r; k++)
             {
-                if (s[i] < 1e-12) continue;
-                int col = i * rows;
-                double inv = 1.0 / s[i];
-                for (int row = 0; row < rows; row++) u[col + row] = av[col + row] * inv;
+                if (s[k] >= 1e-12) svd.LeftVectors[k].CopyTo(u, k * rows);
+                svd.RightVectors[k].CopyTo(v, k * r);
             }
         }
 

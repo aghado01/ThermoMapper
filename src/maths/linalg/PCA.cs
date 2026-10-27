@@ -6,7 +6,9 @@ namespace Maths.LinAlg
     public static class Pca
     {
         /// <summary>
-        /// Compute PCA. Returns projection basis + diagnostics.
+        /// Principal components from the thin SVD of the centred data (<see cref="ThinSvd"/>), without forming the
+        /// covariance or the Gram matrix: component i is the i-th right singular vector, signed so that its
+        /// largest-magnitude entry is positive, and its eigenvalue is σ_i²/n, the variance with the n denominator.
         /// </summary>
         public static PcaResult Compute(double[][] data, int numComponents = 1, bool center = true, bool whiten = false)
         {
@@ -16,57 +18,23 @@ namespace Maths.LinAlg
             int d = data[0].Length;
 
             double[] mean = center ? ComputeMean(data) : new double[d];
-            var centered = center ? Center(data, mean) : data;
+            var x = new double[n, d];
+            for (int i = 0; i < n; i++)
+                for (int j = 0; j < d; j++) x[i, j] = data[i][j] - mean[j];
+            ThinSvdResult svd = ThinSvd.Decompose(x);
 
-            int k = Math.Min(numComponents, Math.Min(n, d));
+            double totalVar = 0.0;
+            foreach (double s in svd.SingularValues) totalVar += s * s / n;
+
+            int k = Math.Max(0, Math.Min(numComponents, Math.Min(n, d)));
             var components = new double[k][];
             var explained = new double[k];
             var eigenvalues = new double[k];
-            double totalVar = 0.0;
-
-            if (d <= n)
+            for (int i = 0; i < k; i++)
             {
-                // Standard PCA: O(n d^2) Covariance matrix
-                double[,] cov = ComputeCovariance(centered, n);
-                var eig = DenseEigen.DecomposeSymmetric(cov);
-
-                totalVar = eig.Eigenvalues.Where(val => val > 0).Sum();
-                for (int i = 0; i < k; i++)
-                {
-                    components[i] = eig.Eigenvectors[i];
-                    eigenvalues[i] = eig.Eigenvalues[i];
-                    explained[i] = totalVar > 0 && eigenvalues[i] > 0 ? eigenvalues[i] / totalVar : 0;
-                }
-            }
-            else
-            {
-                // Fast Dual PCA (SVD equivalent): O(d n^2) Gram matrix
-                double[,] gram = ComputeGramMatrix(centered, n);
-                var eig = DenseEigen.DecomposeSymmetric(gram);
-
-                totalVar = eig.Eigenvalues.Where(val => val > 0).Sum();
-                for (int i = 0; i < k; i++)
-                {
-                    eigenvalues[i] = eig.Eigenvalues[i];
-                    explained[i] = totalVar > 0 && eigenvalues[i] > 0 ? eigenvalues[i] / totalVar : 0;
-                    
-                    double[] v = new double[d];
-                    double lambda = eigenvalues[i];
-                    
-                    if (lambda > 1e-12)
-                    {
-                        double scale = 1.0 / Math.Sqrt(n * lambda);
-                        for (int row = 0; row < n; row++)
-                        {
-                            double u_val = eig.Eigenvectors[i][row];
-                            for (int col = 0; col < d; col++)
-                            {
-                                v[col] += centered[row][col] * u_val * scale;
-                            }
-                        }
-                    }
-                    components[i] = v;
-                }
+                components[i] = Signed((double[])svd.RightVectors[i].Clone());
+                eigenvalues[i] = svd.SingularValues[i] * svd.SingularValues[i] / n;
+                explained[i] = totalVar > 0 && eigenvalues[i] > 0 ? eigenvalues[i] / totalVar : 0;
             }
 
             var result = new PcaResult(components, explained, eigenvalues, mean, whiten);
@@ -75,6 +43,16 @@ namespace Maths.LinAlg
                 WhitenInPlace(result); // scale to unit variance
 
             return result;
+        }
+
+        // Signs v so that its largest-magnitude entry (the first, on ties) is positive.
+        private static double[] Signed(double[] v)
+        {
+            int best = 0;
+            for (int j = 1; j < v.Length; j++) if (Math.Abs(v[j]) > Math.Abs(v[best])) best = j;
+            if (v.Length > 0 && v[best] < 0.0)
+                for (int j = 0; j < v.Length; j++) v[j] = -v[j];
+            return v;
         }
 
         public static Func<double[], double[]> MakeProjector(PcaResult pca)
