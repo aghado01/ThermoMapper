@@ -79,12 +79,13 @@ flowchart LR
 
 | Area | Entry points |
 |---|---|
-| Targets | `ISamplingTarget<T>` (`Evaluate`); `ITargetEvaluation` (`LogPrior`, `LogLikelihood(b)`); `Temperature(b, path)` with `LogDensity(evaluation)`, static `Posterior` and `LogPosterior(evaluation)`; `TemperingPath` (`Powered`, `Likelihood`); `SamplingTarget.FromLogDensity`, `SamplingTarget.Separable`, and the extension `target.LogPosterior(state)`; `SeparableEvaluation` |
+| Targets | `ISamplingTarget<T>` (`Evaluate`); `ITargetEvaluation` (`LogPrior`, `LogLikelihood(b)`, `LogLikelihoodSlope(b)`, which by default refuses); `Temperature(b, path)` with `LogDensity(evaluation)`, `LogDensitySlope(evaluation)`, static `Posterior` and `LogPosterior(evaluation)`; `TemperingPath` (`Powered`, `Likelihood`); `SamplingTarget.FromLogDensity`, `SamplingTarget.Separable`, and the extension `target.LogPosterior(state)`; `SeparableEvaluation` |
 | Reversible jump | `ReversibleJumpChain<T>(moves, target, start, rng, temperature = null)` with `Step()`, `Current`, `Temperature`, `CurrentEvaluation`, `CurrentLogDensity`, `Attempts`, `Accepted`, `MoveStats()`, `SetState(state, evaluation)`, `ReplaceTarget(target)`; `IRjMove<T>` (`Key`, `ReverseKey`, `Weight`, `Propose`); `Proposal<T>`; `MoveStat`; `ScheduledMove<T>` |
-| Tempering | `ParallelTempering<T>(movesForReplica, target, start, betas, path, masterSeed, schedule = DeterministicEvenOdd)` with `Step()`, `Path`, `Schedule`, `Betas`, `Cold`, `ColdChain`, `Replicas`, `Scans`, `RoundTrips`, `AnnealedRestarts`, `PairStats`, `SwapAttempts`, `SwapAccepts`, `AdaptLadder()`, and static `GeometricLadder(levels, betaMin)`; `SwapSchedule` (`DeterministicEvenOdd`, `StochasticEvenOdd`, `Sequential`); `SwapPairStat`; `TemperingLadder` (`Barrier`, `IdealRoundTripRate`, `Equalize`, `RecommendedLevels`) |
+| Tempering | `ParallelTempering<T>(movesForReplica, target, start, betas, path, masterSeed, schedule = DeterministicEvenOdd)` with `Step()`, `Path`, `Schedule`, `Betas`, `Cold`, `ColdChain`, `Replicas`, `Scans`, `RoundTrips`, `AnnealedRestarts`, `PairStats`, `SwapAttempts`, `SwapAccepts`, `AdaptLadder()`, `TraceRungs()`, `RungTraces`, `TracesSlopes`, and static `GeometricLadder(levels, betaMin)`, `ReferenceLadder(levels, betaMin)`; `RungFunctional` (`Slope`, `LogRatio`); `SwapSchedule` (`DeterministicEvenOdd`, `StochasticEvenOdd`, `Sequential`); `SwapPairStat`; `TemperingLadder` (`Barrier`, `IdealRoundTripRate`, `Equalize`, `RecommendedLevels`) |
 | Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0, minEssPerChain = 100, checkpoint = false, resumeFrom = null)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.Diagnose` → `ConvergenceDiagnostic` (`RHat`, `BulkRHat`, `TailRHat`, `BulkEss`, `TailEss`, `Ess`); `ChainDiagnostics.MeanEss` → `EssDiagnostic`; `ChainDiagnostics.RHat`; `RHatDiagnostic`, `EssDiagnostic`, `DiagnosticState`; `IChain<T>`, `IEnsembleModel<T>` (`FunctionalDim`, `MonitoredDim`, `Fingerprint`, `RestoreChain`), `IChainRun<T>`, `EnsembleRun` |
 | Readouts, traces, checkpoints | `IMergeable<T>`; `RunningMoments` (`Add(x, weight)`, `Merge`, `Of`), `WeightedSums` (`Add`, `AddSparse`, `Mean`), `DrawSample` (`Add`, `Quantile`), `Tally<TEnum>`; `ChainTrace` (`Add`, `Draws`, `Copy`); `DrawStore<T>(every = 1)` (`Add`, `AppendFrom`, `Copy`, `Every`, `Offered`), each engine's retained draws; `EnsembleCheckpoint`, `ChainCheckpoint`, `RunIdentity`, `IChainState`, `IResumableChainRun<T>`, `RunFingerprint`; `ReversibleJumpChain.Snapshot`/`Restore` (`ChainSnapshot<T>`), `ParallelTempering.Snapshot`/`Restore` (`LadderSnapshot<T>`) |
 | Blocks | `BlockScan<T>(blocks, state, rng, copy)` with `Step()`, `State`, `Steps`, `Attempts`, `Accepted`, `BlockStats()`, `Snapshot()` and static `Restore(blocks, snapshot, copy)` (`BlockScanSnapshot<T>`); `IBlock<T>` (`Name`, `Every`, `Update`); `GaussianConditional(dimension)` with `Draw(factor, rhs, rng, result, scale = 1)` and `Perturb(factor, mean, rng, result, scale = 1)`, and static `GaussianConditional.Perturb(factor, mean, rng, result, scale, z, innovation)` on the caller's scratch; `ConjugateUpdates.NormalVariance`, `ConjugateUpdates.NormalPrecision`; `RandomWalkMetropolis.Step(ref x, ref logTarget, step, logDensity, rng)`; `NewtonMetropolis(dimension, delta = 1/π)` with `Step(x, logDensity, rng)` and the `LogDensity(x, gradient, hessian)` delegate; `SliceSampler.Step(ref x, ref logTarget, width, maxSteps, logDensity, rng)` → evaluations |
+| Evidence | `LadderEvidence.SteppingStone(b, logRatios)`, `LadderEvidence.PathSampling(b, slopes)`, `LadderEvidence.FromLadders(ladders, method = DefaultEstimator)` → `LadderEstimate` (`Method`, `LogRatio`, `MonteCarloError`, `DiscretizationError`, `Rungs` of `RungEstimate`); `RungDraws.FromChains(chains)`, `RungDraws.FromPopulation(values, weights = null)`; `LadderEstimator` (`SteppingStone`, `PathSampling`) |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
 ## Algorithms
@@ -182,6 +183,73 @@ $$\tau_{\text{DEO}}=\frac{1}{2+2E},\qquad \tau_{\text{SEO}}=\frac{1}{2N+2E}.$$
 - Drawing every time keeps the swap stream independent of it, so a last-bit change in the target cannot shift later swaps.
 - Before 2026-10-20 the draw was skipped when $\log A\ge0$, and step 2.3's cancellation-free scale moved a tempered BARS run through exactly this tie.
 - The within-replica Metropolis step still skips the draw when $\log\alpha\ge0$. A tie there needs a candidate whose target equals the current one to rounding, which continuous knots do not produce.
+
+### Evidence over a ladder (N11, 2026-10-27)
+
+`LadderEvidence` estimates $\ln Z(b_{\max})-\ln Z(b_{\min})$ from per-rung draws on a ladder, in either order. It is an evidence when the lowest rung is a normalized reference (b = 0 under a proper prior on the likelihood path) and the target's values are complete. It knows nothing about models: it reduces per-rung scalar draws, `RungDraws`, which come in two kinds.
+- **Ordered chains** (`RungDraws.FromChains`), one array per chain, whose effective sample size is `ChainDiagnostics.MeanEss`'s.
+- **A weighted population** (`RungDraws.FromPopulation`), as an SMC stage leaves it, whose effective sample size is the weights' (`SmcWeights.EffectiveSampleSize`). Resampled offspring share ancestors, which the weights do not see, so that ESS is an upper bound.
+
+**Per-rung traces.** `ParallelTempering.TraceRungs()` is opt-in, called after burn-in. From the next scan on, every `Step` records at each rung, on the state it holds after the scan's swaps, two `RungFunctional`s read from the evaluations the rungs already hold:
+- `Slope`: $\partial_b\ln q_b$ at the rung's own b (`Temperature.LogDensitySlope`). On the powered path that is $\ln p+\ell_1$. On the likelihood path it is the target's `ITargetEvaluation.LogLikelihoodSlope(b)`: $\ell_1$ for a separable model, a closed form for a collapsed one. The interface's default refuses, and the ladder then records NaN, probed once.
+- `LogRatio`: $\ln q_c-\ln q_b$, with c the next colder rung's b. It is NaN at the cold rung.
+
+While traced, the ladder is fixed (`AdaptLadder` refuses). `LadderSnapshot` carries copies of the traces, so a resumed ladder continues them. `LadderEvidence.FromLadders(ladders, method)` takes one or more ladders on the same rungs, each one chain per rung.
+
+**Stepping-stone** (Xie, Lewis, Fan, Kuo and Chen 2011). With $d=\ln q_{k+1}(x)-\ln q_k(x)$ for $x\sim q_k$,
+
+$$\ln\frac{Z_{k+1}}{Z_k}\approx c_k+\ln\overline{e^{d-c_k}},\qquad c_k=\max d.$$
+
+Each ratio's estimate is unbiased for $Z_{k+1}/Z_k$ at any spacing. The log adds a Jensen bias of order $\operatorname{Var}_k/(2\,\mathrm{ESS}_k)$, and its error is the delta method's, $\operatorname{Var}(w)/(\mathrm{ESS}\cdot\bar w^2)$ with $w=e^{d-c_k}$.
+
+**Path sampling** (Gelman and Meng 1998; Friel and Pettitt 2008). The trapezoid over the rungs of each rung's mean slope $\bar U_k$:
+
+$$\ln\frac{Z_K}{Z_0}\approx\sum_k\tfrac{\Delta_k}{2}(\bar U_k+\bar U_{k+1}),\qquad \Delta_k=b_{k+1}-b_k.$$
+
+Its discretization diagnostic (`DiscretizationError`) is Friel, Hurn and Wyse's (2014) correction, $-\sum_k\tfrac{\Delta_k^2}{12}(V_{k+1}-V_k)$, with $V_k$ the slope's variance at rung k. It estimates the truth minus the trapezoid, and adding it gives their corrected trapezoid.
+- **What it assumes.** It reads $V_k$ as the mean slope's derivative in b. That holds where $\ln q_b$ is linear in b: the powered path, or a separable likelihood. A collapsed likelihood adds $E_b[\partial_b^2\ell_b]$, which it does not see.
+- **What the checks show.** On a b-linear path it tracks the error closely from 8 intervals of Friel and Pettitt's $(k/K)^5$ schedule (table below). At 4 intervals it overshoots (2.53 against an error of 1.44). On the test's enumerable target, whose $\ell_b$ is not linear in b, the trapezoid's bias is +0.669 while the diagnostic reads 0.094.
+
+| Intervals | Trapezoid error | Diagnostic | Corrected error |
+|---|---|---|---|
+| 4 | −1.439 | 2.528 | 1.089 |
+| 8 | −0.341 | 0.403 | 0.062 |
+| 16 | −0.0839 | 0.0875 | 0.0037 |
+| 32 | −0.0209 | 0.0211 | 0.00023 |
+| 64 | −0.0052 | 0.0052 | 0.000014 |
+
+(Conjugate Normal, x ~ N(0, 3²) and one observation 1.5 ~ N(x, 0.25²), each rung's exact law as a three-point Gauss–Hermite population.)
+
+**The Monte Carlo error** is read two ways, and the larger is reported.
+- **Rungs taken as independent.** Each rung's variance enters over its own effective sample size. This misses the covariance that swaps leave between rungs.
+- **The joint reading,** for draws that are chains of one shape, as a ladder's traces are. Scan t's contributions are summed across rungs, and the error is that sum's mean's. This counts the covariance, but one autocorrelation truncation over a sum of fast and slow rungs can stop short of the slow rung's tail.
+- **Evidence.** On the enumerable target, 400 replicates of two traced ladders (`ReferenceLadder(8, 0.01)`, 3000 scans, slope ESS down to 1% of the draws), coverage of ±1.96 errors and mean z²:
+
+| Reading | Stepping-stone | Path sampling |
+|---|---|---|
+| Rungs taken as independent | 0.955, 0.96 | 0.935, 1.23 |
+| Joint | 0.917, 1.22 | 0.950, 1.09 |
+| The larger (shipped) | 0.960, 0.95 | 0.953, 1.06 |
+
+Path sampling's rungs are positively correlated through swaps, which only the joint reading sees. Stepping-stone's joint reading under-reads.
+
+**Default: stepping-stone** (`LadderEvidence.DefaultEstimator`, what `FromLadders` uses unless told otherwise). Path sampling stays selectable (`LadderEstimator.PathSampling`).
+1. **It reads only $\ell_b$ at the rungs,** which every `ITargetEvaluation` supplies. Path sampling on the likelihood path needs $\partial_b\ell_b$, which only a target that implements `LogLikelihoodSlope` supplies; BARS's evaluations do not today.
+2. **It has no discretization bias.** The trapezoid's bias is O(Δ²), and on a path not linear in b its diagnostic does not see it. In the tests:
+   - conjugate Normal, 16 intervals of $(k/K)^5$, 1000 exact draws per rung, 400 replicates: stepping-stone's bias was −0.0023 against a mean error of 0.030, and the trapezoid's −0.084 against 0.036;
+   - the enumerable target: stepping-stone's bias was −0.004 against 0.035, and the trapezoid's +0.669 against 0.036.
+   This agrees with Xie et al., who found stepping-stone less biased than thermodynamic integration on the same rungs, and with Friel, Hurn and Wyse, whose correction closes much of the gap on b-linear paths.
+3. **It is the SMC normalizer's estimator.** Each increment is SMC's reweighting step, so a ladder evidence and an SMC evidence compare term by term.
+
+**Trade-offs.**
+- **Stepping-stone's weak point.** Its importance weights $q_{k+1}/q_k$ grow heavy-tailed when adjacent rungs are far apart. Its variance can then be large or infinite, and the delta-method error understates it. Each rung's `RungEstimate` (its value, error and ESS) shows where.
+- **Path sampling's strengths.** Its integrand has finite variance wherever the slope does, and its diagnostic says where rungs are missing on a b-linear path. Its error was slightly larger at equal draws in the tests.
+
+**Checks** (`LadderEvidenceTests`):
+- the discretization table above, with the error falling at every doubling and the corrected error below 0.2× the trapezoid's from 8 intervals on;
+- exact draws on the conjugate Normal, 400 replicates: coverage 0.963 and 0.953, mean z² 0.98 and 0.96, path sampling against the exact trapezoid of its rungs;
+- traced ladders on the enumerable target, 200 replicates, both estimators calibrated as above;
+- the traces' values against the rungs' states every scan, AdaptLadder's refusal, resumption with the traces, a target without a slope (NaN slopes, path sampling refused, stepping-stone served; the powered path always has a slope), input validation, and a ladder given in either order.
 
 ### Ensemble shell
 
@@ -307,11 +375,17 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | `ChainEnsemble.Run` minEssPerChain | `ChainEnsemble.MinEssPerChain` = 100 | Bulk and tail ESS per chain every monitored functional needs before an R̂ target may stop sampling |
 | `GeometricLadder` levels / betaMin | (required) | L ≥ 2; $\beta_{\min}\in(0,1)$ |
 | `ParallelTempering` schedule | `DeterministicEvenOdd` | Non-reversible even-odd swaps |
+| `LadderEvidence.FromLadders` method | `SteppingStone` (`LadderEvidence.DefaultEstimator`) | Reads $\ell_b$ at the rungs only, with no discretization bias; path sampling is selectable |
 | `SpectralNoiseField` presets | White 0 / Pink 1 / Brown 2 | Spectral exponent β |
 
 ## Status and caveats
 
 - **Only the monitored functionals get rank-normalized diagnostics.** The rest (BARS's per-grid fit) keep classic R̂ from streaming moments, which costs no stored draws but does not see differences in scale or behave for heavy tails.
+- **The ladder evidence's limits.**
+  - The discretization diagnostic misses a collapsed likelihood's curvature term, $E_b[\partial_b^2\ell_b]$.
+  - A population's ESS ignores shared ancestry.
+  - `SmcRun` does not yet expose per-stage readouts, so feeding its stages to `LadderEvidence` means re-reading each particle.
+  - No engine reports an evidence yet.
 - **`SpectralNoiseField` is not periodic.** Its documentation describes the grid as periodic, but queries map the box to nodes 0..N−1, so the sampled field is not periodic over the box.
 
 ## Source map
@@ -321,9 +395,10 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | Targets | `targets/SamplingTarget.cs` |
 | Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `ParallelTempering.cs`, `TemperingLadder.cs` |
 | Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `ConvergenceDiagnostics.cs`, `RHatDiagnostic.cs`, `RunningMoments.cs`, `Readouts.cs`, `ChainTrace.cs`, `DrawStore.cs`, `Checkpoint.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
+| Evidence | `evidence/LadderEvidence.cs` |
 | Blocks | `blocks/BlockScan.cs`, `GaussianConditional.cs`, `ConjugateUpdates.cs`, `RandomWalkMetropolis.cs`, `NewtonMetropolis.cs`, `SliceSampler.cs` |
 | i.i.d. and fields | `iid/InverseTransform.cs`; `SpectralNoiseField.cs` (at the `samplers/` root) |
 
-**Tests:** `tests/Maths.Samplers.Tests` (sources in `tests/samplers/`) owns the samplers' own checks, with targets built from `Maths.Samplers` alone: chain contracts, the reversible-jump generality check, the target contract, parallel tempering (each rung's law on both paths, ladder validation), swap schedules against Theorem 1, ladder adaptation, the diagnostics policy, and the block primitives and scan.
+**Tests:** `tests/Maths.Samplers.Tests` (sources in `tests/samplers/`) owns the samplers' own checks, with targets built from `Maths.Samplers` alone: chain contracts, the reversible-jump generality check, the target contract, parallel tempering (each rung's law on both paths, ladder validation), swap schedules against Theorem 1, ladder adaptation, ladder evidence, the diagnostics policy, and the block primitives and scan.
 
 **See also:** [BayesianRegression](./BayesianRegression.md) (BARS, BGP) · [ProbabilityAndInformation](./ProbabilityAndInformation.md) · [DesignPrinciples](./DesignPrinciples.md)

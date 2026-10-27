@@ -8,15 +8,33 @@ namespace Maths.Samplers.Rjmcmc;
 /// <summary>
 /// A ladder's restart state: every replica's <see cref="ChainSnapshot{TState}"/> (its rung is its temperature), the
 /// swap stream, the scan count, which state each rung holds, the round-trip bookkeeping and the swap statistics,
-/// including those gathered since the last adaptation, and, for a ladder with an exact reference rung, that rung's
-/// stream.
+/// including those gathered since the last adaptation, for a ladder with an exact reference rung, that rung's
+/// stream, and, for a ladder tracing its rungs, copies of the traces.
 /// </summary>
 public sealed record LadderSnapshot<TState>(
     IReadOnlyList<ChainSnapshot<TState>> Replicas, TemperingPath Path, SwapSchedule Schedule,
     ulong SwapRng0, ulong SwapRng1, ulong SwapRng2, ulong SwapRng3,
     long Scans, long SwapAttempts, long SwapAccepts, long RoundTrips, long AnnealedRestarts,
     int[] LabelAt, sbyte[] LastEnd, long[] PairAttempts, long[] PairAccepts, double[] RejectionSum,
-    double[] RoundRejectionSum, long RoundScans, (ulong, ulong, ulong, ulong)? ReferenceRng = null);
+    double[] RoundRejectionSum, long RoundScans, (ulong, ulong, ulong, ulong)? ReferenceRng = null,
+    IReadOnlyList<ChainTrace>? RungTraces = null, bool TracesSlopes = false);
+
+/// <summary>
+/// The functionals a ladder records at every rung once it traces them (<see cref="ParallelTempering{TState}.TraceRungs"/>),
+/// the per-rung draws a ladder evidence estimate reads (<see cref="Evidence.LadderEvidence"/>).
+/// </summary>
+public static class RungFunctional
+{
+    /// <summary>∂_b log q_b at the rung's own b (<see cref="Temperature.LogDensitySlope"/>), path sampling's integrand;
+    /// NaN when the target supplies no slope.</summary>
+    public const int Slope = 0;
+
+    /// <summary><c>log q_c − log q_b</c> with c the next colder rung's b, stepping-stone's log importance ratio; NaN at
+    /// the cold rung.</summary>
+    public const int LogRatio = 1;
+
+    internal const int Count = 2;
+}
 
 /// <summary>
 /// Parallel tempering (replica exchange) over a ladder of reversible-jump chains at inverse temperatures
@@ -31,6 +49,8 @@ public sealed record LadderSnapshot<TState>(
 /// <para>With an <see cref="IReferenceSampler{TState}"/> the hot end is β = 0 and its rung takes an exact independent
 /// draw from the reference every scan instead of a local step, so each state reaching the hot end is regenerated
 /// (OQ2). On the powered path this is the only way to place a rung at β = 0, the normalized reference measure.</para>
+/// <para>After burn-in a ladder can trace its rungs (<see cref="TraceRungs"/>): each rung's slope and log ratio to the
+/// next rung, every scan, from the evaluations it already holds, for an evidence over the ladder.</para>
 /// As an <see cref="IChain{TState}"/> the ladder presents as a single chain whose draw is the cold state and whose
 /// acceptance is the cold replica's, so the ensemble shell can drive a tempered replica like any other.
 /// </summary>
@@ -47,6 +67,8 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     private long _roundScans;
     private readonly int[] _labelAt;               // which state (by its starting rung) each rung holds
     private readonly sbyte[] _lastEnd;             // per state: +1 last at the hot end, −1 at the cold end, 0 neither yet
+    private ChainTrace[]? _rungTraces;             // per rung, cold first, once traced
+    private bool _tracesSlopes;
 
     /// <summary>Adjacent-pair swap attempts so far.</summary>
     public long SwapAttempts { get; private set; }
@@ -135,7 +157,7 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         return new LadderSnapshot<TState>(replicas, Path, Schedule, s0, s1, s2, s3, Scans, SwapAttempts, SwapAccepts,
             RoundTrips, AnnealedRestarts, (int[])_labelAt.Clone(), (sbyte[])_lastEnd.Clone(), (long[])_pairAttempts.Clone(),
             (long[])_pairAccepts.Clone(), (double[])_rejectionSum.Clone(), (double[])_roundRejectionSum.Clone(), _roundScans,
-            _referenceRng?.SaveState());
+            _referenceRng?.SaveState(), _rungTraces is null ? null : Array.ConvertAll(_rungTraces, t => t.Copy()), _tracesSlopes);
     }
 
     /// <summary>
@@ -174,6 +196,13 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         snapshot.RejectionSum.CopyTo(ladder._rejectionSum, 0);
         snapshot.RoundRejectionSum.CopyTo(ladder._roundRejectionSum, 0);
         ladder._roundScans = snapshot.RoundScans;
+        if (snapshot.RungTraces is IReadOnlyList<ChainTrace> traces)
+        {
+            if (traces.Count != levels) throw new ArgumentException("One rung trace per replica is required.", nameof(snapshot));
+            ladder._rungTraces = new ChainTrace[levels];
+            for (int i = 0; i < levels; i++) ladder._rungTraces[i] = traces[i].Copy();
+            ladder._tracesSlopes = snapshot.TracesSlopes;
+        }
         return ladder;
     }
 
@@ -210,6 +239,27 @@ public sealed class ParallelTempering<TState> : IChain<TState>
 
     /// <summary>Scans so far: one <see cref="Step"/> each.</summary>
     public long Scans { get; private set; }
+
+    /// <summary>Each rung's trace of the <see cref="RungFunctional"/>s, cold first, one draw per scan since
+    /// <see cref="TraceRungs"/>; null until then.</summary>
+    public IReadOnlyList<ChainTrace>? RungTraces => _rungTraces;
+
+    /// <summary>Whether the traces hold slopes: always on the powered path, and on the likelihood path when the target
+    /// supplies ∂ℓ_b/∂b.</summary>
+    public bool TracesSlopes => _rungTraces is not null && _tracesSlopes;
+
+    /// <summary>
+    /// Opt in to per-rung traces, after burn-in: from the next scan on, every <see cref="Step"/> records at each rung, on
+    /// the state it holds after the scan's swaps, the <see cref="RungFunctional"/>s, read from the evaluations the rungs
+    /// already hold. A second call starts the traces afresh. The ladder is then fixed, so <see cref="AdaptLadder"/>
+    /// refuses. Whether the target supplies the slope is probed once, on the cold rung's state.
+    /// </summary>
+    public void TraceRungs()
+    {
+        _tracesSlopes = Path == TemperingPath.Powered || SuppliesSlope(_chains[0]);
+        _rungTraces = new ChainTrace[_chains.Length];
+        for (int i = 0; i < _rungTraces.Length; i++) _rungTraces[i] = new ChainTrace(RungFunctional.Count);
+    }
 
     /// <summary>
     /// Round trips so far, summed over states: a state that leaves the hot end, reaches the cold end and returns
@@ -275,6 +325,7 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         }
 
         TrackEnds();
+        if (_rungTraces is not null) RecordRungs();
         return _chains[0].Current;
     }
 
@@ -286,6 +337,7 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// </summary>
     public double AdaptLadder()
     {
+        if (_rungTraces is not null) throw new InvalidOperationException("The ladder is fixed while its rungs are traced.");
         if (_roundScans == 0) throw new InvalidOperationException("No scans since the last adaptation.");
         int pairs = _chains.Length - 1;
         var rejection = new double[pairs];
@@ -356,6 +408,34 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         a.SetState(xb, eb);
         b.SetState(xa, ea);
         (_labelAt[i], _labelAt[i + 1]) = (_labelAt[i + 1], _labelAt[i]);
+    }
+
+    // Each rung's slope at its own b and its log ratio to the next colder rung, on the state it now holds.
+    private void RecordRungs()
+    {
+        Span<double> values = stackalloc double[RungFunctional.Count];
+        for (int i = 0; i < _chains.Length; i++)
+        {
+            ReversibleJumpChain<TState> rung = _chains[i];
+            values[RungFunctional.Slope] = _tracesSlopes ? rung.Temperature.LogDensitySlope(rung.CurrentEvaluation) : double.NaN;
+            values[RungFunctional.LogRatio] = i == 0
+                ? double.NaN
+                : _chains[i - 1].Temperature.LogDensity(rung.CurrentEvaluation) - rung.CurrentLogDensity;
+            _rungTraces![i].Add(values);
+        }
+    }
+
+    private static bool SuppliesSlope(ReversibleJumpChain<TState> chain)
+    {
+        try
+        {
+            _ = chain.Temperature.LogDensitySlope(chain.CurrentEvaluation);
+            return true;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
     }
 
     // A state at the hot end that was last at the cold end completes a round trip; one at the cold end that was last

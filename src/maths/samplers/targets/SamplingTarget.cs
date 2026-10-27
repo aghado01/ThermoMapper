@@ -31,6 +31,15 @@ public interface ITargetEvaluation
     /// or b = 0 when a nuisance prior is improper (<see cref="ArgumentOutOfRangeException"/>).
     /// </summary>
     double LogLikelihood(double inverseTemperature);
+
+    /// <summary>
+    /// ∂ℓ_b/∂b at <paramref name="inverseTemperature"/>: the integrand of path sampling on the likelihood path
+    /// (<see cref="Temperature.LogDensitySlope"/>). A separable model's is ℓ₁ at every b; a collapsed model supplies its
+    /// closed form. The default refuses (<see cref="NotSupportedException"/>), which leaves stepping-stone, needing ℓ_b
+    /// alone, as the evidence such a target can give.
+    /// </summary>
+    double LogLikelihoodSlope(double inverseTemperature)
+        => throw new NotSupportedException($"{GetType().Name} does not supply the log likelihood's slope in b.");
 }
 
 /// <summary>Which tempered density a replica samples.</summary>
@@ -79,6 +88,19 @@ public readonly struct Temperature : IEquatable<Temperature>
         if (Path == TemperingPath.Likelihood) return prior + evaluation.LogLikelihood(InverseTemperature);
         double untempered = prior + evaluation.LogLikelihood(1.0);
         return double.IsNegativeInfinity(untempered) ? double.NegativeInfinity : InverseTemperature * untempered;
+    }
+
+    /// <summary>
+    /// <c>∂/∂b</c> of <see cref="LogDensity"/> at this temperature: <c>ln prior + ℓ₁</c> on the powered path,
+    /// <see cref="ITargetEvaluation.LogLikelihoodSlope"/> on the likelihood path. Its mean under each rung, integrated
+    /// over b, is the log normalizer's change (path sampling).
+    /// </summary>
+    public double LogDensitySlope(ITargetEvaluation evaluation)
+    {
+        ArgumentNullException.ThrowIfNull(evaluation);
+        if (Path == TemperingPath.Likelihood) return evaluation.LogLikelihoodSlope(InverseTemperature);
+        double prior = evaluation.LogPrior;
+        return double.IsNegativeInfinity(prior) ? double.NegativeInfinity : prior + evaluation.LogLikelihood(1.0);
     }
 
     /// <summary>The untempered log posterior <c>ln prior + ℓ₁</c>.</summary>
@@ -152,4 +174,7 @@ public sealed class SeparableEvaluation : ITargetEvaluation
     /// <summary><c>b·ℓ₁</c>; a zero likelihood stays −∞ at any b, so the support survives b = 0.</summary>
     public double LogLikelihood(double inverseTemperature)
         => double.IsNegativeInfinity(_logLikelihood) ? double.NegativeInfinity : inverseTemperature * _logLikelihood;
+
+    /// <summary>ℓ₁, at every b.</summary>
+    public double LogLikelihoodSlope(double inverseTemperature) => _logLikelihood;
 }
