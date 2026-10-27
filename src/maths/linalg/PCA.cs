@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 
 namespace Maths.LinAlg
 {
@@ -71,7 +70,6 @@ namespace Maths.LinAlg
             };
         }
 
-        // Helper methods (mean, center, cov) — standard and efficient
         private static double[] ComputeMean(double[][] data)
         {
             int n = data.Length, d = data[0].Length;
@@ -81,50 +79,6 @@ namespace Maths.LinAlg
                     mean[j] += data[i][j];
             for (int j = 0; j < d; j++) mean[j] /= n;
             return mean;
-        }
-
-        private static double[][] Center(double[][] data, double[] mean)
-        {
-            int n = data.Length, d = data[0].Length;
-            var c = new double[n][];
-            for (int i = 0; i < n; i++)
-            {
-                c[i] = new double[d];
-                for (int j = 0; j < d; j++)
-                    c[i][j] = data[i][j] - mean[j];
-            }
-            return c;
-        }
-
-        private static double[,] ComputeGramMatrix(double[][] centered, int n)
-        {
-            var gram = new double[n, n];
-            for (int i = 0; i < n; i++)
-            {
-                for (int j = i; j < n; j++)
-                {
-                    double sum = MatrixOps.Dot(centered[i], centered[j]);
-                    gram[i, j] = gram[j, i] = sum / n;
-                }
-            }
-            return gram;
-        }
-
-        private static double[,] ComputeCovariance(double[][] centered, int n)
-        {
-            int d = centered[0].Length;
-            var cov = new double[d, d];
-            for (int i = 0; i < d; i++)
-            {
-                for (int j = i; j < d; j++) // symmetry
-                {
-                    double sum = 0;
-                    for (int k = 0; k < n; k++)
-                        sum += centered[k][i] * centered[k][j];
-                    cov[i, j] = cov[j, i] = sum / n;
-                }
-            }
-            return cov;
         }
 
         private static void WhitenInPlace(PcaResult pca)

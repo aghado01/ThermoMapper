@@ -197,19 +197,5 @@ namespace Maths.Geometry
             }
         }
 
-        // AᵀA as a dense [r,r] for the symmetric eigensolver. A is column-major rows×r.
-        private static double[,] Gram(ReadOnlySpan<double> a, int rows, int r)
-        {
-            var g = new double[r, r];
-            for (int i = 0; i < r; i++)
-                for (int j = i; j < r; j++)
-                {
-                    double dot = 0.0;
-                    int ai = i * rows, aj = j * rows;
-                    for (int k = 0; k < rows; k++) dot += a[ai + k] * a[aj + k];
-                    g[i, j] = g[j, i] = dot;
-                }
-            return g;
-        }
     }
 }
