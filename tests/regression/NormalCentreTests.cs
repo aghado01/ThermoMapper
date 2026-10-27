@@ -169,11 +169,13 @@ public sealed class NormalCentreTests
     [Fact]
     public void ConstantResponses_AreRefused_AsZeroCentredResponses()
     {
-        // A constant response has nothing left once centred on the null fit, so under the improper σ² prior it has no
+        // A constant response has nothing left once centred on the null fit, so under the Jeffreys prior it has no
         // posterior and is refused as ZeroResponse. Before the exact handling, a projected constant left roundoff of
-        // about 1e-16, admitted with marginals near 1,300 (the external review's 40-point cubic fixture).
+        // about 1e-16, admitted with marginals near 1,300 (the external review's 40-point cubic fixture). The default
+        // scaled prior finds no spread to scale to, and refuses it as well.
         double[] x = Even(40);
-        var model = new WeightedNormalModel();
+        var model = new WeightedNormalModel(sigma2Prior: Sigma2Prior.Jeffreys);
+        var scaled = new WeightedNormalModel();
         double[] w = x.Select((_, i) => i % 5 == 2 ? 0.01 : 1.0 + 0.5 * (i % 3)).ToArray();
         foreach (double[] knots in new[] { Array.Empty<double>(), new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 } })
         {
@@ -187,6 +189,7 @@ public sealed class NormalCentreTests
                     {
                         Assert.Equal(DesignRejection.ZeroResponse, model.TemperedMarginal(design, y, weights).Rejection);
                         Assert.Equal(double.NegativeInfinity, model.LogMarginalLikelihood(design, y, weights));
+                        Assert.Equal(DesignRejection.ZeroResponse, scaled.TemperedMarginal(design, y, weights).Rejection);
                     }
                 // The fit is the constant itself.
                 double[] beta = model.PosteriorMeanCoefficients(z, y, null);

@@ -1,4 +1,5 @@
 using System;
+using Maths.Distributions;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
@@ -61,8 +62,15 @@ public sealed class WeightedNormalMarginalTests
         double expectedA = yy / (m + 1);
         double expected = -0.5 * nu * Math.Log(m + 1) - 0.5 * m * Math.Log(expectedA);
 
-        double actual = new WeightedNormalModel(centre).LogMarginalLikelihood(z, y, null);
+        double actual = new WeightedNormalModel(centre, sigma2Prior: Sigma2Prior.Jeffreys).LogMarginalLikelihood(z, y, null);
         Assert.Equal(expected, actual, 6);
+
+        // The default IG(g₁, g₁·ỹᵀỹ/m) integrates σ² in closed form: the exact fit's complete marginal.
+        const double g1 = 1e-3;
+        double g2 = g1 * yy / m;
+        double complete = -0.5 * m * Math.Log(2.0 * Math.PI) - 0.5 * nu * Math.Log(m + 1) + g1 * Math.Log(g2)
+                          + SpecialFunctions.LogGamma(g1 + 0.5 * m) - SpecialFunctions.LogGamma(g1) - (g1 + 0.5 * m) * Math.Log(g2 + 0.5 * expectedA);
+        Assert.Equal(complete, new WeightedNormalModel(centre).LogMarginalLikelihood(z, y, null), 6);
     }
 
     [Fact]

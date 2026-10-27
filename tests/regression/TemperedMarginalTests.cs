@@ -12,9 +12,10 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// The observation model's marginal at an inverse temperature b (step 3.1), the likelihood half of the spline
-/// target's evaluation. The Normal model's omits a constant that may depend on b and the sample size but not on the
-/// design; the complete marginal from the collapsed g-prior block checks that, across designs of different sizes.
-/// Models without a tempered closed form serve b = 1 only.
+/// target's evaluation. Under its default σ² prior, IG(10⁻³, 10⁻³·s²), the Normal model's is the collapsed g-prior
+/// block's complete marginal. Under the Jeffreys prior it omits a constant that may depend on b and the sample size but
+/// not on the design; the complete marginal checks that, across designs of different sizes. Models without a tempered
+/// closed form serve b = 1 only.
 /// </summary>
 public sealed class TemperedMarginalTests
 {
@@ -28,7 +29,7 @@ public sealed class TemperedMarginalTests
         double tau = 1.0 / x.Length;
         foreach (GPriorCentre centre in new[] { GPriorCentre.Median, GPriorCentre.Mean, GPriorCentre.Zero })
         {
-            var model = new WeightedNormalModel(centre);
+            var model = new WeightedNormalModel(centre, sigma2Prior: Sigma2Prior.Jeffreys);
             double? offset = null;
             foreach (double[] knots in new[] { Array.Empty<double>(), new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 } })
             {
@@ -57,26 +58,31 @@ public sealed class TemperedMarginalTests
     [Fact]
     public void Normal_LinearForm_IsTheUntemperedMarginalTimesB()
     {
-        // The linear form is b·ℓ₁, defined at b = 0 under the improper 1/σ² prior; at b = 1 it is the integrated form.
+        // The linear form is b·ℓ₁, defined at b = 0 under either σ² prior; at b = 1 it is the integrated form. The
+        // integrated form reaches b = 0 under the default proper prior and not under the Jeffreys prior.
         (double[] x, double[] y) = Data(60);
-        var integrated = new WeightedNormalModel();
-        var linear = new WeightedNormalModel(form: TemperedForm.Linear);
-        Assert.False(integrated.CanTemperToPrior);
-        Assert.True(linear.CanTemperToPrior);
-        foreach (double[] knots in new[] { Array.Empty<double>(), new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 } })
+        foreach (Sigma2Prior prior in new[] { Sigma2Prior.ScaledToResponse(), Sigma2Prior.Jeffreys })
         {
-            double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
-            double atOne = integrated.TemperedMarginal(z, y, null).LogMarginalLikelihood(1.0);
-            ITemperedMarginal m = linear.TemperedMarginal(z, y, null);
-            Assert.Equal(atOne, m.LogMarginalLikelihood(1.0));
-            Assert.Equal(0.0, m.LogMarginalLikelihood(0.0));
-            Assert.Equal(0.3 * atOne, m.LogMarginalLikelihood(0.3));
-            Assert.Equal(DesignRejection.None, m.Rejection);
+            var integrated = new WeightedNormalModel(sigma2Prior: prior);
+            var linear = new WeightedNormalModel(form: TemperedForm.Linear, sigma2Prior: prior);
+            Assert.Equal(prior.IsProper, integrated.CanTemperToPrior);
+            Assert.True(linear.CanTemperToPrior);
+            foreach (double[] knots in new[] { Array.Empty<double>(), new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 } })
+            {
+                double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
+                double atOne = integrated.TemperedMarginal(z, y, null).LogMarginalLikelihood(1.0);
+                ITemperedMarginal m = linear.TemperedMarginal(z, y, null);
+                Assert.Equal(atOne, m.LogMarginalLikelihood(1.0));
+                Assert.Equal(0.0, m.LogMarginalLikelihood(0.0));
+                Assert.Equal(0.3 * atOne, m.LogMarginalLikelihood(0.3));
+                Assert.Equal(DesignRejection.None, m.Rejection);
+            }
+            double[,] overKnotted = new SplineBasis(3).Design(new KnotConfig([0.1, 0.2, 0.3, 0.4, 0.5, 0.6]), x[..9]);
+            ITemperedMarginal refused = linear.TemperedMarginal(overKnotted, y[..9], null);
+            Assert.Equal(DesignRejection.TooFewObservations, refused.Rejection);
+            Assert.Equal(double.NegativeInfinity, refused.LogMarginalLikelihood(0.0));
         }
-        double[,] overKnotted = new SplineBasis(3).Design(new KnotConfig([0.1, 0.2, 0.3, 0.4, 0.5, 0.6]), x[..9]);
-        ITemperedMarginal refused = linear.TemperedMarginal(overKnotted, y[..9], null);
-        Assert.Equal(DesignRejection.TooFewObservations, refused.Rejection);
-        Assert.Equal(double.NegativeInfinity, refused.LogMarginalLikelihood(0.0));
+        Assert.Equal(Sigma2Prior.ScaledToResponse().ToString(), new WeightedNormalModel().Sigma2Prior.ToString());
     }
 
     [Fact]
@@ -84,14 +90,14 @@ public sealed class TemperedMarginalTests
     {
         (double[] x, double[] y) = Data(40);
         double[,] z = new SplineBasis(3).Design(new KnotConfig([0.4]), x);
-        var model = new WeightedNormalModel();
+        var jeffreys = new WeightedNormalModel(sigma2Prior: Sigma2Prior.Jeffreys);
         var w = new double[x.Length];
         Array.Fill(w, 2.0);
 
-        Assert.Throws<NotSupportedException>(() => model.TemperedMarginal(z, y, w).LogMarginalLikelihood(0.5));
-        Assert.Throws<ArgumentOutOfRangeException>(() => model.TemperedMarginal(z, y, null).LogMarginalLikelihood(0.0));
+        Assert.Throws<NotSupportedException>(() => jeffreys.TemperedMarginal(z, y, w).LogMarginalLikelihood(0.5));
+        Assert.Throws<ArgumentOutOfRangeException>(() => jeffreys.TemperedMarginal(z, y, null).LogMarginalLikelihood(0.0));
 
-        var proper = new WeightedNormalModel(sigma2Prior: Sigma2Prior.ScaledToResponse());
+        var proper = new WeightedNormalModel();
         Assert.Throws<NotSupportedException>(() => proper.TemperedMarginal(z, y, w).LogMarginalLikelihood(0.0));
         Assert.Throws<ArgumentOutOfRangeException>(() => proper.TemperedMarginal(z, y, null).LogMarginalLikelihood(-0.1));
         Assert.Throws<ArgumentOutOfRangeException>(() => proper.TemperedMarginal(z, y, null).LogMarginalLikelihood(1.5));
@@ -180,8 +186,8 @@ public sealed class TemperedMarginalTests
         // IG(10⁻³, 10⁻³·s²) adds 10⁻³·s² to S/2 and 10⁻³ to the shape: about a·s²/σ̂² nats off each configuration, nearly
         // alike, so at this signal-to-noise the differences, all that the posterior over knots reads, move by hundredths.
         (double[] x, double[] y) = Data(60);
-        var jeffreys = new WeightedNormalModel();
-        var vague = new WeightedNormalModel(sigma2Prior: Sigma2Prior.ScaledToResponse());
+        var jeffreys = new WeightedNormalModel(sigma2Prior: Sigma2Prior.Jeffreys);
+        var vague = new WeightedNormalModel();
         double[,] z0 = new SplineBasis(3).Design(new KnotConfig([]), x);
         foreach (double[] knots in new[] { new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 }, new[] { 0.1, 0.3, 0.5, 0.7, 0.9 } })
         {
@@ -201,9 +207,9 @@ public sealed class TemperedMarginalTests
         var y = new double[x.Length];
         Array.Fill(y, 2.5);
         double[,] z = new SplineBasis(3).Design(new KnotConfig([0.4]), x);
-        Assert.Equal(DesignRejection.ZeroResponse, new WeightedNormalModel().TemperedMarginal(z, y, null).Rejection);
         Assert.Equal(DesignRejection.ZeroResponse,
-                     new WeightedNormalModel(sigma2Prior: Sigma2Prior.ScaledToResponse()).TemperedMarginal(z, y, null).Rejection);
+                     new WeightedNormalModel(sigma2Prior: Sigma2Prior.Jeffreys).TemperedMarginal(z, y, null).Rejection);
+        Assert.Equal(DesignRejection.ZeroResponse, new WeightedNormalModel().TemperedMarginal(z, y, null).Rejection);
         ITemperedMarginal fixedPrior = new WeightedNormalModel(sigma2Prior: Sigma2Prior.InverseGamma(2.0, 0.05)).TemperedMarginal(z, y, null);
         Assert.Equal(DesignRejection.None, fixedPrior.Rejection);
         Assert.True(double.IsFinite(fixedPrior.LogMarginalLikelihood(1.0)));

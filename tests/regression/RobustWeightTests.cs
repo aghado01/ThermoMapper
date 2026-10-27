@@ -1,4 +1,5 @@
 using System;
+using Maths.Distributions;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
@@ -10,7 +11,8 @@ namespace Maths.Regression.Tests;
 /// <summary>
 /// R04 / Q2: under robust weights the coefficient prior is the <i>unweighted</i> g-prior β ~ N(0, mσ²(ZᵀZ)⁻¹), so the
 /// prior on the curve does not depend on the weights. Checked against a dense reference:
-/// log p(y | Z, w) = ½log|G/m| − ½log|Zᵀ(W + I/m)Z| + ½Σ log wᵢ − (m/2)·log S, S = yᵀWy − hᵀ(Zᵀ(W + I/m)Z)⁻¹h, h = ZᵀWy.
+/// log p(y | Z, w) = ½log|G/m| − ½log|Zᵀ(W + I/m)Z| + ½Σ log wᵢ − (m/2)·log S, S = yᵀWy − hᵀ(Zᵀ(W + I/m)Z)⁻¹h, h = ZᵀWy,
+/// under the Jeffreys prior; under the default IG(g₁, g₂) the σ² integral's closed form replaces −(m/2)·log S.
 /// </summary>
 public sealed class RobustWeightTests
 {
@@ -22,11 +24,19 @@ public sealed class RobustWeightTests
     {
         (double[,] z, double[] y, double[] w) = Problem();
         Dense d = Dense.Of(z, y, w, centre);
+        int m = y.Length;
+        double determinants = 0.5 * (d.LogDetG - z.GetLength(1) * Math.Log(m)) - 0.5 * d.LogDetA + 0.5 * d.SumLogW;
 
-        double expected = 0.5 * (d.LogDetG - z.GetLength(1) * Math.Log(y.Length)) - 0.5 * d.LogDetA
-                          + 0.5 * d.SumLogW - 0.5 * y.Length * Math.Log(d.S);
+        double jeffreys = determinants - 0.5 * m * Math.Log(d.S);   // up to the improper prior's constant
+        Assert.Equal(jeffreys, new WeightedNormalModel(centre, sigma2Prior: Sigma2Prior.Jeffreys).LogMarginalLikelihood(z, y, w), 9);
 
-        Assert.Equal(expected, new WeightedNormalModel(centre).LogMarginalLikelihood(z, y, w), 9);
+        // The default IG(g₁, g₁·s²), s² the unweighted mean square about the centre level: the complete marginal.
+        const double g1 = 1e-3;
+        double level = NormalCentreTests.Level(y, centre), g2 = 0.0;
+        foreach (double v in y) g2 += g1 * (v - level) * (v - level) / m;
+        double complete = -0.5 * m * Math.Log(2.0 * Math.PI) + determinants + g1 * Math.Log(g2) + SpecialFunctions.LogGamma(g1 + 0.5 * m)
+                          - SpecialFunctions.LogGamma(g1) - (g1 + 0.5 * m) * Math.Log(g2 + 0.5 * d.S);
+        Assert.Equal(complete, new WeightedNormalModel(centre).LogMarginalLikelihood(z, y, w), 9);
     }
 
     [Theory]

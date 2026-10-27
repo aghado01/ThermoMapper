@@ -14,7 +14,7 @@ namespace Maths.Regression.GPrior;
 /// rescaling y rescales s², and the posterior over designs is unchanged (OQ19's route b). a = 10⁻³ is the vague
 /// IG(10⁻³, 10⁻³) on the standardized response that Bach &amp; Klein's (2025) code uses; a = ½ is a unit-information
 /// prior, one observation's worth at the null fit's variance, which pulls σ² towards the response's own spread when the
-/// fit is close.</item>
+/// fit is close. Normal BARS's default, at a = 10⁻³.</item>
 /// <item><see cref="InverseGamma"/>: IG(a, b) in the response's own units, so b is small or large depending on them
 /// (OQ19); for parity with an analysis that fixes it.</item>
 /// </list>

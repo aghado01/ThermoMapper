@@ -15,8 +15,8 @@ namespace Maths.Regression.Tests;
 /// integrated out.
 /// <list type="bullet">
 ///   <item>Through the seam, it equals the multivariate-t conditional of the g-prior's joint marginal,
-///   y | σ² ~ N(Zμ₀, σ²(W⁻¹ + ZG⁻¹Zᵀ/τ)) under 1/σ², computed densely. This holds for zero and median centres, unit and
-///   general weights, and units of one and of four observations.</item>
+///   y | σ² ~ N(Zμ₀, σ²(W⁻¹ + ZG⁻¹Zᵀ/τ)), computed densely, under the default IG(10⁻³, 10⁻³·s²) and under 1/σ². This
+///   holds for zero and median centres, unit and general weights, and units of one and of four observations.</item>
 ///   <item>On a BARS run its PSIS-LOO agrees with the retained parameters' and has smaller Pareto k̂.</item>
 ///   <item>WAIC refuses it, and the models without a closed form decline it.</item>
 /// </list>
@@ -148,11 +148,18 @@ public sealed class CollapsedPredictiveTests
         double centreValue = centre == GPriorCentre.Median ? 0.5 * (sorted[n / 2 - 1] + sorted[n / 2]) : 0.0;
         double[] mean = Enumerable.Repeat(centreValue, n).ToArray();
 
-        IConditionalFit fit = new WeightedNormalModel(centre).FitConditional(z, y, w);
-        double[] single = fit.LeaveOutLogDensities(UnitPartition.EachObservation(n))!;
-        for (int i = 0; i < n; i += 3) Assert.Equal(DenseLeaveOut(sigma, mean, y, [i]), single[i], 1e-9);
-        double[] blocks = fit.LeaveOutLogDensities(UnitPartition.ConsecutiveBlocks(10, 4))!;
-        for (int u = 0; u < 10; u += 2) Assert.Equal(DenseLeaveOut(sigma, mean, y, [4 * u, 4 * u + 1, 4 * u + 2, 4 * u + 3]), blocks[u], 1e-9);
+        // Through the model, under its default IG(10⁻³, 10⁻³·s²), s² the full response's mean square about the centre, and
+        // under the Jeffreys prior (shape and scale 0).
+        double s2 = y.Select(v => (v - centreValue) * (v - centreValue)).Average();
+        foreach ((Sigma2Prior sigma2, double g1, double g2) in new[] { (Sigma2Prior.ScaledToResponse(), 1e-3, 1e-3 * s2), (Sigma2Prior.Jeffreys, 0.0, 0.0) })
+        {
+            IConditionalFit fit = new WeightedNormalModel(centre, sigma2Prior: sigma2).FitConditional(z, y, w);
+            double[] single = fit.LeaveOutLogDensities(UnitPartition.EachObservation(n))!;
+            for (int i = 0; i < n; i += 3) Assert.Equal(DenseLeaveOut(sigma, mean, y, [i], g1, g2), single[i], 1e-9);
+            double[] blocks = fit.LeaveOutLogDensities(UnitPartition.ConsecutiveBlocks(10, 4))!;
+            for (int u = 0; u < 10; u += 2)
+                Assert.Equal(DenseLeaveOut(sigma, mean, y, [4 * u, 4 * u + 1, 4 * u + 2, 4 * u + 3], g1, g2), blocks[u], 1e-9);
+        }
 
         // A proper σ² prior adds 2a degrees of freedom and 2b to the scale's sum of squares.
         GPriorConditional conditional = (weighted

@@ -13,9 +13,10 @@ namespace Maths.Regression.Spline.Bars;
 /// Kass 2001, eq. 6; analytic form in He, Yang &amp; Kang 2024, Lemma 1): with β, σ integrated out,
 /// <c>p(y|Z) ∝ (m+1)^(−ν/2) · a^(−m/2)</c> where
 /// <c>a = ỹᵀỹ − (m/(m+1)) · (Zᵀỹ)ᵀ (ZᵀZ)⁻¹ (Zᵀỹ)</c> and <c>ỹ = y − Zμ₀</c> is the response less the prior's centre.
-/// Under the default Jeffreys prior on σ² it is returned up to the σ-integration constant, which depends only on m and
-/// so cancels in ratios. Under a proper prior (<see cref="Sigma2Prior"/>) it is complete: <c>ln p(y | Z)</c>, an
-/// evidence, defined at every inverse temperature down to b = 0 and finite for an exact fit.
+/// Under the default σ² prior, IG(10⁻³, 10⁻³·s²) scaled to the response (<see cref="Sigma2Prior.ScaledToResponse"/>), it
+/// is complete: <c>ln p(y | Z)</c>, an evidence, defined at every inverse temperature down to b = 0 and finite for an
+/// exact fit. Under the Jeffreys prior (<see cref="Sigma2Prior.Jeffreys"/>) it is returned up to the σ-integration
+/// constant, which depends only on m and so cancels in ratios.
 /// <para>The prior is <c>β ~ N(μ₀, mσ²(ZᵀZ)⁻¹)</c>. By default it is centred on the response's median level
 /// (<see cref="GPriorCentre.Median"/>, <c>Zμ₀ = med(y)·1</c> for B-splines). So a constant shift of the response moves only
 /// the fit's level and changes neither the marginal nor the knots, and an outlier that robust weights discount cannot move
@@ -32,8 +33,7 @@ namespace Maths.Regression.Spline.Bars;
 /// Built on the collapsed g-prior block (<see cref="CollapsedGPrior"/>) at τ = 1/m and inverse temperature 1, with
 /// <see cref="BandedGPrior"/> factoring the banded Gram matrices (a root-free LDLᵀ; no inverse is formed). The block
 /// computes the scale from the explicit residual, <c>‖y − Zβ̂‖² + Q/(m+1)</c>, the cancellation-free form of
-/// <c>a</c>. This model adds the m ≤ ν rule and the admission policy, and keeps its marginal up to the
-/// σ-integration constant.
+/// <c>a</c>. This model adds the m ≤ ν rule, the admission policy and the σ² prior's scale.
 /// </remarks>
 public sealed class WeightedNormalModel : IObservationModel
 {
@@ -41,10 +41,11 @@ public sealed class WeightedNormalModel : IObservationModel
     /// DMGK's original.</param>
     /// <param name="form">The likelihood path's tempered marginal: <see cref="TemperedForm.Integrated"/> (the default),
     /// σ² integrated against the tempered likelihood, or <see cref="TemperedForm.Linear"/>, b times the untempered
-    /// marginal, which is defined at b = 0 under the improper 1/σ² prior and so admits an exact reference rung.</param>
-    /// <param name="sigma2Prior">The prior on σ²: <see cref="Sigma2Prior.Jeffreys"/> (null, the default), or a proper
-    /// one, under which both forms reach b = 0 and the marginal is complete. <see cref="Sigma2Prior.ScaledToResponse"/>
-    /// reads its scale about this model's <paramref name="centre"/>.</param>
+    /// marginal, which is defined at b = 0 under either σ² prior and so admits an exact reference rung.</param>
+    /// <param name="sigma2Prior">The prior on σ²: <see cref="Sigma2Prior.ScaledToResponse"/>() (null, the default), which
+    /// reads its scale about this model's <paramref name="centre"/>, or another proper one, under which both forms reach
+    /// b = 0 and the marginal is complete; or <see cref="Sigma2Prior.Jeffreys"/>, DMGK's improper 1/σ², under which the
+    /// integrated form needs b &gt; 0 and the marginal omits its constant.</param>
     public WeightedNormalModel(GPriorCentre centre = GPriorCentre.Median, TemperedForm form = TemperedForm.Integrated,
                                Sigma2Prior? sigma2Prior = null)
     {
@@ -52,7 +53,7 @@ public sealed class WeightedNormalModel : IObservationModel
         if (form is not (TemperedForm.Integrated or TemperedForm.Linear)) throw new ArgumentOutOfRangeException(nameof(form));
         Centre = centre;
         Form = form;
-        Sigma2Prior = sigma2Prior ?? Sigma2Prior.Jeffreys;
+        Sigma2Prior = sigma2Prior ?? Sigma2Prior.ScaledToResponse();
     }
 
     /// <summary>Where the coefficient prior is centred.</summary>
@@ -86,12 +87,12 @@ public sealed class WeightedNormalModel : IObservationModel
         => TemperedMarginal(design, y, weights).LogMarginalLikelihood(1.0);
 
     /// <summary>
-    /// The marginal at inverse temperature b, from the block at τ = 1/m. Integrated, under the Jeffreys prior:
-    /// <c>LDT_b − (mb/2)·ln S_b</c>, dropping the σ-integration constant, which depends on m and b only; unweighted, any
-    /// b in (0, 1], with b = 0 refused, since the improper 1/σ² prior then leaves σ unidentified. Under a proper prior:
-    /// the complete marginal, any b in [0, 1], exactly 0 at b = 0. Weighted: b = 1 only (the block is built at one τ and
-    /// b). Linear: b times the b = 1 value, any b in [0, 1]. A configuration with m ≤ ν, an inadmissible design, or a
-    /// response with no spread (a zero centred response under the Jeffreys prior, or no scale for the scaled prior) is
+    /// The marginal at inverse temperature b, from the block at τ = 1/m. Integrated, under a proper prior (the default):
+    /// the complete marginal, any b in [0, 1], exactly 0 at b = 0. Under the Jeffreys prior: <c>LDT_b − (mb/2)·ln S_b</c>,
+    /// dropping the σ-integration constant, which depends on m and b only; unweighted, any b in (0, 1], with b = 0
+    /// refused, since the improper 1/σ² prior then leaves σ unidentified. Weighted: b = 1 only (the block is built at one
+    /// τ and b). Linear: b times the b = 1 value, any b in [0, 1]. A configuration with m ≤ ν, an inadmissible design, or
+    /// a response with no spread (no scale for the scaled prior, or a zero centred response under the Jeffreys prior) is
     /// −∞ at every b.
     /// </summary>
     public ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights)

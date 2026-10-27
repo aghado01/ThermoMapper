@@ -103,9 +103,9 @@ public sealed class TemperingTests
     [InlineData(TemperingPath.Likelihood, TemperedForm.Integrated, true)]
     public void ReferenceRungLadder_RecoversThePeak(TemperingPath path, TemperedForm form, bool proper)
     {
-        // Each ladder ends at an exact reference rung (OQ2): the powered path's Poisson(1) reference for the default
-        // Normal model, or the knot prior on the likelihood path, for the Normal model's linear form, or for its integrated
-        // form under the proper scaled σ² prior.
+        // Each ladder ends at an exact reference rung (OQ2): the powered path's Poisson(1) reference, or the knot prior on
+        // the likelihood path, for the Normal model's linear form under the Jeffreys prior, or for its integrated form under
+        // the default proper σ² prior.
         var rng = new Xoshiro256PlusPlus(seed: 11);
         int n = 150;
         const double truePeak = 0.4;
@@ -117,7 +117,7 @@ public sealed class TemperingTests
             y[i] = Math.Exp(-120.0 * (x[i] - truePeak) * (x[i] - truePeak)) + 0.05 * Gaussian(rng);
         }
         BarsResult result = new BarsEnsemble(
-                new SplineBasis(3), new WeightedNormalModel(form: form, sigma2Prior: proper ? Sigma2Prior.ScaledToResponse() : null),
+                new SplineBasis(3), new WeightedNormalModel(form: form, sigma2Prior: proper ? null : Sigma2Prior.Jeffreys),
                 new PoissonPrior(5.0), new LocalBetaKernel(50.0),
                 temperLevels: 5, temperBetaMin: 0.1, temperPath: path, temperReferenceRung: true)
             .Run(x, y, grid: x, chains: 4, masterSeed: 3, burn: 1500, samples: 2000);
@@ -137,14 +137,15 @@ public sealed class TemperingTests
         IBasis basis = new SplineBasis(3);
         var prior = new PoissonPrior(5.0);
         var kernel = new LocalBetaKernel(50.0);
-        Assert.Throws<ArgumentException>(() => new BarsEnsemble(basis, new WeightedNormalModel(), prior, kernel,
-            temperLevels: 4, temperReferenceRung: true));                       // the integrated form refuses b = 0
+        Assert.Throws<ArgumentException>(() => new BarsEnsemble(basis, new WeightedNormalModel(sigma2Prior: Sigma2Prior.Jeffreys),
+            prior, kernel, temperLevels: 4, temperReferenceRung: true));        // the integrated form under Jeffreys refuses b = 0
         Assert.Throws<ArgumentOutOfRangeException>(() => new BarsEnsemble(basis, new WeightedNormalModel(), prior, kernel,
             temperLevels: 2, temperPath: TemperingPath.Powered, temperReferenceRung: true));
         Assert.Throws<ArgumentException>(() => new BarsEnsemble(basis, new WeightedNormalModel(), prior, kernel, temperReferenceRung: true));
-        _ = new BarsEnsemble(basis, new WeightedNormalModel(form: TemperedForm.Linear), prior, kernel, temperLevels: 4, temperReferenceRung: true);
-        _ = new BarsEnsemble(basis, new WeightedNormalModel(sigma2Prior: Sigma2Prior.ScaledToResponse()), prior, kernel, temperLevels: 4,
-                             temperReferenceRung: true);                       // the integrated form under a proper σ² prior
+        _ = new BarsEnsemble(basis, new WeightedNormalModel(form: TemperedForm.Linear, sigma2Prior: Sigma2Prior.Jeffreys), prior, kernel,
+                             temperLevels: 4, temperReferenceRung: true);
+        _ = new BarsEnsemble(basis, new WeightedNormalModel(), prior, kernel, temperLevels: 4,
+                             temperReferenceRung: true);                       // the integrated form under the default proper σ² prior
         _ = new BarsEnsemble(basis, new PoissonModel(), prior, kernel, temperLevels: 4, temperReferenceRung: true);
     }
 

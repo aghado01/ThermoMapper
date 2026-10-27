@@ -9,8 +9,8 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// R12 / Q1: the Normal model's coefficient draws come from the exact conditional posterior given the knots —
-/// σ² ~ IG(m/2, a/2), then β ~ N(μ, σ²·(m/(m+1))·A⁻¹) — checked against a dense reference that shares no code with
-/// the band factor.
+/// σ² ~ IG(g + m/2, g·s² + a/2) under the default IG(g, g·s²), g = 10⁻³ (IG(m/2, a/2) under the Jeffreys prior), then
+/// β ~ N(μ, σ²·(m/(m+1))·A⁻¹) — checked against a dense reference that shares no code with the band factor.
 /// </summary>
 public sealed class CoefficientDrawTests
 {
@@ -22,7 +22,7 @@ public sealed class CoefficientDrawTests
     {
         (double[,] z, double[] y) = Problem();
         int m = y.Length, nu = z.GetLength(1);
-        (double[] mu, double[,] cov) = Reference(z, y, centre);
+        (double[] mu, double[,] cov) = Reference(z, y, centre, DefaultShape);
 
         IObservationModel model = new WeightedNormalModel(centre);
         var rng = new Xoshiro256PlusPlus(seed: 77);
@@ -60,14 +60,16 @@ public sealed class CoefficientDrawTests
     public void NormalConditionalVariance_MatchesTheDenseReference(GPriorCentre centre)
     {
         (double[,] z, double[] y) = Problem();
-        (_, double[,] cov) = Reference(z, y, centre);
         double[,] readout = new SplineBasis(3).Design(new KnotConfig(new[] { 0.5 }), new[] { 0.05, 0.37, 0.5, 0.81, 0.99 });
+        foreach ((Sigma2Prior prior, double shape) in new[] { (Sigma2Prior.ScaledToResponse(), DefaultShape), (Sigma2Prior.Jeffreys, 0.0) })
+        {
+            (_, double[,] cov) = Reference(z, y, centre, shape);
+            double[]? v = new WeightedNormalModel(centre, sigma2Prior: prior).ConditionalVariance(z, y, null, readout);
 
-        double[]? v = new WeightedNormalModel(centre).ConditionalVariance(z, y, null, readout);
-
-        Assert.NotNull(v);
-        for (int t = 0; t < v!.Length; t++)
-            Assert.Equal(QuadraticForm(readout, t, cov), v[t], 12);
+            Assert.NotNull(v);
+            for (int t = 0; t < v!.Length; t++)
+                Assert.Equal(QuadraticForm(readout, t, cov), v[t], 12);
+        }
     }
 
     [Fact]
@@ -179,10 +181,15 @@ public sealed class CoefficientDrawTests
         return (new SplineBasis(3).Design(new KnotConfig(new[] { 0.5 }), x), y);
     }
 
+    // The model's default σ² prior is IG(g, g·s²) at this shape.
+    private const double DefaultShape = 1e-3;
+
     // The unit-information conditional posterior from a dense Gauss–Jordan inverse of A = ZᵀZ:
-    // μ = μ₀ + (m/(m+1))A⁻¹Zᵀỹ and, with σ² integrated out, Cov β = (a/(m−2))·(m/(m+1))·A⁻¹, where ỹ = y − Zμ₀. Under a
+    // μ = μ₀ + (m/(m+1))A⁻¹Zᵀỹ and, with σ² integrated out, Cov β = E[σ²]·(m/(m+1))·A⁻¹, where ỹ = y − Zμ₀. Under
+    // IG(g, g·s²), s² = ỹᵀỹ/m, E[σ²] = (g·s² + a/2)/(g + m/2 − 1); g = 0 is the Jeffreys prior, E[σ²] = a/(m−2). Under a
     // median or mean centre c, μ₀ = c·1, since the cubic B-splines here sum to one, so ỹ = y − c; under zero, ỹ = y.
-    internal static (double[] Mu, double[,] Cov) Reference(double[,] z, double[] y0, GPriorCentre centre = GPriorCentre.Zero)
+    internal static (double[] Mu, double[,] Cov) Reference(double[,] z, double[] y0, GPriorCentre centre = GPriorCentre.Zero,
+                                                           double priorShape = 0.0)
     {
         int m = y0.Length, nu = z.GetLength(1);
         double level = NormalCentreTests.Level(y0, centre);
@@ -212,7 +219,7 @@ public sealed class CoefficientDrawTests
             quad += b[p] * s;
         }
         double aScalar = yy - shrink * quad;
-        double scale = aScalar / (m - 2) * shrink;
+        double scale = (priorShape * yy / m + 0.5 * aScalar) / (priorShape + 0.5 * m - 1.0) * shrink;
         var cov = new double[nu, nu];
         for (int p = 0; p < nu; p++) for (int q = 0; q < nu; q++) cov[p, q] = scale * inv[p, q];
         return (mu, cov);

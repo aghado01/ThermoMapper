@@ -1,4 +1,5 @@
 using System;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
@@ -244,9 +245,12 @@ public sealed class CountLawTests
                 Assert.True(double.IsFinite(target.LogPosterior(config)));
             }
         }
-        var normal = new SplineTarget(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(4.0), x, x);
-        Assert.Throws<InvalidOperationException>(() => normal.Reference(TemperingPath.Likelihood));
-        _ = normal.Reference(TemperingPath.Powered);
+        var jeffreys = new SplineTarget(new SplineBasis(3), new WeightedNormalModel(sigma2Prior: Sigma2Prior.Jeffreys),
+                                        new PoissonPrior(4.0), x, x);
+        Assert.Throws<InvalidOperationException>(() => jeffreys.Reference(TemperingPath.Likelihood));
+        _ = jeffreys.Reference(TemperingPath.Powered);
+        _ = new SplineTarget(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(4.0), x, x)
+            .Reference(TemperingPath.Likelihood);   // the default proper σ² prior reaches b = 0
     }
 
     [Fact]
