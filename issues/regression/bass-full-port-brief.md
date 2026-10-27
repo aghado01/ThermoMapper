@@ -22,6 +22,8 @@ The port is carried out in four segment briefs and one extensions brief, each wi
 | Calibration and SMC backends | 7, 8 | D09 | [port-calibration-brief.md](bass/port-calibration-brief.md) | [checklist](bass/port-calibration-checklist.md) |
 | Extensions, beyond the completion contract | none | none | [extensions-brief.md](bass/extensions-brief.md) | [checklist](bass/extensions-checklist.md) |
 
+Two chip briefs run beside the segments (2026-10-27), for work that does not wait on the design pass: [reference-fixtures-brief.md](bass/reference-fixtures-brief.md) (the decision-independent stage-1 fixtures) and [shared-infrastructure-brief.md](bass/shared-infrastructure-brief.md) (N11–N13).
+
 Each segment ends with "Room for extensions": the prep work it does now so that the extensions plug in later. Stage 1's specification work is spread across the segments' decision drafts and reference fixtures; the register below tracks it.
 
 ## Scope and completion contract
