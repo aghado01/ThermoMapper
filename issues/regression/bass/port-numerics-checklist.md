@@ -17,8 +17,8 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N5** Stable thin SVD with numerical-rank handling in LinAlg: `ThinSvd`.
 - [x] **N6** Diagonal-plus-low-rank solves and log-determinants, without m × m inverses: `DiagonalPlusLowRank`.
 - [x] **N7** Face-splitting design contraction with the Cartesian (Hadamard) shortcut: `KhatriRao`, both intercept conventions.
-- [ ] **N8** Generic SMC core in `samplers/smc` (optional; specified in the calibration segment).
-- [ ] **N9** Qualified baseline rerun after the shared changes, before the first BASS integration tests.
+- [x] **N8** Generic SMC core in `samplers/smc` (optional; specified in the calibration segment): `SmcRun`, `SmcSampler`.
+- [x] **N9** Qualified baseline rerun after the shared changes, before the first BASS integration tests: requalified at `3a04601`.
 - [x] **N10** Cross-products summed pairwise or with compensation: `PairwiseSum`. F-O7's near-constant design is the acceptance case: its left-to-right error is 10⁻³ relative in s.
 
 ### Room for extensions
@@ -28,6 +28,67 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [ ] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update.
 
 ## Reports
+
+### Baseline requalified (N9) — 2026-10-27
+
+**Qualified revision:** `3a04601`, the step 3.5 baseline (`2efa134`) plus 84 engine commits. The toolchain is step 3.5's: .NET SDK 10.0.201, `net10.0`, Release, on the same machine.
+
+**Suites** (`scripts/fact-harness.ps1 -Project`, each case its own `dotnet test` process):
+
+| Suite | Cases | Passed | Run |
+|---|---|---|---|
+| `Maths.Regression.Tests` | 406 | 406 | `20261027_020935664` |
+| `Maths.Samplers.Tests` | 119 | 119 | `20261027_021721150` |
+| `Maths.LinAlg.Tests` | 118 | 118 | `20261027_021924460` |
+| `Maths.Distributions.Tests` | 93 | 93 | `20261027_022127437` |
+
+**Downstream consumers:**
+- `Maths.Geometry.Tests` passes 51 of 51 and `Synthetic.Tests` 38 of 38, under plain `dotnet test`.
+- `Clustering.Graphical.SPC` builds.
+- Earlier the same day the Pca migration also ran Mapper 28/28, Oracle 5/5, VizCore 240 (2 skipped by design) and DimReduction 83/83.
+
+**The drift record.** Every one of the 84 engine commits since `2efa134` (in `regression`, `samplers`, `linalg`, `distributions` and `rng`) has a recorded account of what it changes:
+- 76 are named in the preparation brief's or this segment's reports, each with its probe or its declared path change;
+- 7 are this segment's N-series, recorded by commit range above, which add new code beside the engines;
+- `87397fb` changed only a doc comment in `Pointwise.cs`; its report is in the preparation brief under its title.
+
+**Seed sweep** (`SEED_SWEEP=50`):
+- **Hold counts.** Regression's `20261027_023326165` matches the last sweep (`20261022_182007796`) claim by claim, except the adaptive-kernel comparison on the data axis, which went from 49 to 50 of 50. Samplers' `20261027_023344333` is identical to `20261021_195902630`.
+- **Per-seed values.** To trace those, the sweep was rerun on the source of `6bc5134^` (`bc51934`, extracted with `git archive`, scratch) and split there:
+  - *Oct 22 → `bc51934`:* every `HierarchicalPSpline` row changed, and nothing else. That is `d2db820`'s declared path change, the ensemble shell with overdispersed starts, whose agreement in distribution with the single chain is in its report.
+  - *`bc51934` → HEAD:* 20–56% of the rows of the five BARS claims changed, and nothing else: adaptive kernel, EBIC, Gibbs loss, Student-t and contaminated-normal weights. That is `6bc5134`, which sheds knots from a start the posterior refuses. The later commits in that span change a doc comment, a PSIS readout and code outside the BARS sampler.
+  - *Unchanged throughout:* BAPS, the anisotropic and tensor splines, the penalty and REML claims and the changepoint claim.
+- **The 49 → 50.** It is seed 46 (data seed 372476911). On Oct 22 the too-tight fixed kernel reported a peak-location bulk ESS of 4,586, the signature of a chain held at a refused start. It now reports 9.7, against the adaptive kernel's 359.
+
+**Unlike step 3.5,** this rerun did not rebuild a field-by-field output probe across revisions. Its drift evidence is each step's own recorded probe, plus the seed sweep's per-seed table split at `6bc5134^`.
+
+**Gate status:** closed at `3a04601`. The first BASS integration tests measure against this baseline.
+
+### The generic SMC core (N8) — 2026-10-27
+
+`3a04601`, in `src/maths/samplers/smc/`. No existing code changed. The calibration segment's list, item by item:
+- **Contracts.**
+  - *`SmcStage<TState>`* is a target at a temperature, so a tempered run walks one target from b = 0 to 1 and a cut run walks different conditional targets.
+  - *`ISmcParticles<TState>`* draws from the first stage, which must be normalized, and forks a particle for resampling's offspring.
+  - *`ISmcKernel<TState>`* is a stage-invariant move. It gets a `Prepare` call with the population before the stage's moves, so it can tune from the past while staying fixed during the stage, as D10's policy asks.
+  - Densities come through `ISamplingTarget`: moving to another temperature of the same target queries each particle's evaluation instead of repeating its work.
+- **Weights** (`SmcWeights`): log-sum-exp normalization, ESS, the conditional ESS (Zhou, Johansen and Aston 2016), and the log-normalizer increment.
+- **Resampling:** multinomial, stratified, systematic and residual. A zero-weight particle is never chosen.
+- **Driver** (`SmcRun`, stage by stage): reweight, resample when ESS/N falls below a fraction, then mutate, each particle on its own `SeedTree` stream. `SmcSampler` runs a fixed sequence, or tempers adaptively by choosing each next b through a bisection on the conditional ESS.
+- **Diagnostics, kept apart from chain R̂ and autocorrelation ESS:** per stage, the ESS, conditional ESS, whether the population resampled, distinct ancestors, surviving families (distinct initial lineages), acceptance, and the log-normalizer increment.
+- **Checkpoints** resume the uninterrupted run bit for bit, because every stream is derived by position.
+- **`RandomWalkKernel`:** Gaussian random-walk Metropolis for real vectors, scaled per coordinate from the population's spread.
+
+**Tests** (`tests/samplers/SmcTests.cs`, 10):
+- the weights at extreme scales;
+- each resampling scheme's offspring averaging N·W_i over 20,000 repetitions, with systematic and residual keeping their deterministic parts;
+- a conjugate Gaussian: the posterior moments and the closed-form evidence. Over 20 seeds (scratch) the log-evidence error had mean −0.0003 and sd 0.039;
+- a bimodal likelihood, whose modes' masses (0.3 and 0.7) are recovered;
+- without resampling or moves, the evidence telescoping to plain importance sampling exactly;
+- results independent of parallelism;
+- checkpoint resume.
+
+**Not done:** BASS's fitting and cut-calibration adapters (stage 8), the cut SMC's bridges, OQ2's exact reference rung for parallel tempering (and the OQ1 rerun it enables), and SPC population annealing.
 
 ### N6, N7, and the SVD callers moved — 2026-10-27
 

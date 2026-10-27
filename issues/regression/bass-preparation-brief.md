@@ -2933,6 +2933,7 @@ Raised by the SPC × BARS stopping work, which saw a 5-point BARS fit return an 
   - It reached further than 5 points. At 6, 7 and 9 points a chain started at four knots held them for the whole run, so the pooled curve was NaN although admissible configurations existed.
 - **The fix.**
   - A start the posterior refuses sheds knots at random until it is admissible. A start it admits is kept and draws nothing, so its chain is bit-identical.
+  - *Scope, measured 2026-10-27 (N9).* Refused starts were common beyond tiny data. In the 50-seed sweep, 20–56% of the runs of the five BARS claims had one, so their trajectories changed at this commit, while their claims' hold counts did not (except one degenerate run, now fixed).
   - If even the zero-knot design is refused, `Run` throws with the reason.
   - A retained draw off the support throws, rather than pass NaN or unconverged coefficients into the curve and the peaks.
 - **Tests** (`BarsStartTests`): at 4 and 5 points the run is refused, naming ThinSupport. At 6 and 9 points, with four chains and up to four starting knots, every draw and the curve are finite. Both failed before the fix.
