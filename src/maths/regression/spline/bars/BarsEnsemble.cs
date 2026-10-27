@@ -191,7 +191,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// <param name="temperReferenceRung">When true, each ladder ends at β = 0 with an exact reference rung
     /// (<see cref="SplineTarget.Reference"/>, OQ2): its hot replica draws independently from the path's b = 0 member every
     /// scan. It needs at least three levels, and on the likelihood path a model that
-    /// <see cref="IObservationModel.CanTemperToPrior"/>.</param>
+    /// <see cref="IObservationModel.CanTemperToPrior"/>. Off by default: at equal work it did not pay at 4 or 8 levels on
+    /// unimodal fits or on separated modes, where a ladder that spans to the prior is too short to carry its
+    /// regenerations to the cold chain (OQ2, preparation brief).</param>
     public BarsEnsemble(IBasis basis, IObservationModel model, IComplexityPrior prior, IKnotKernel kernel,
                         IWeightResampler? resampler = null, double? dmgkConstant = null, double? adaptKernelTau = null,
                         int? temperLevels = null, double temperBetaMin = 0.05,

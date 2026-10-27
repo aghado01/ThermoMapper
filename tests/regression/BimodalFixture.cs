@@ -12,9 +12,11 @@ namespace Maths.Regression.Tests;
 /// invariant under ξ ↦ 1 − ξ, which swaps the two allocations, so each mode holds exactly half the mass, a ground
 /// truth from outside any estimator. The better-fitted bump carries the curve's maximum, so the peak location's side
 /// of ½ names the mode.
-/// <para>The death barrier, from a mode's best configuration to its best single deletion, grows with n: about 49 nats
-/// at n = 200 and 200 at n = 800 under the default Normal model (calibrated 2026-10-27). Untempered chains did not
-/// cross in 20,000 steps at either size.</para>
+/// <para>A third basin is symmetric on its own: two knots on each bump and a spare near ½, where the bumps fit alike
+/// and the peak alternates sides freely. Its share is ½ either way, so the truth stands, but a chain held there reads as
+/// mixed. Under the default Normal model, the drop from an allocation's best configuration to its best single deletion
+/// is about 49 nats at n = 200 and 200 at n = 800. At fixed b on the likelihood path, the allocations exchange at
+/// b = 0.2 for n = 200, and not at 0.2 or above for n = 800 (2026-10-27).</para>
 /// </summary>
 internal static class BimodalFixture
 {
