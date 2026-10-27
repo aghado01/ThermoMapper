@@ -3029,3 +3029,47 @@ At the user's request: BARS's exact reference rungs on both paths, the Normal mo
 - The linear form is the better-conditioned tempered form for Normal BARS on peaked fits, by the barrier, and no worse elsewhere. It stays an option, because its efficiency edge (about 1.2×) is below the pre-registered threshold.
 - The exact rung is correct and cheap, but at equal work it does not pay on these fits, none of which needs tempering. Its value is the one OQ2 named, regeneration: independent restarts, the setting of Syed et al.'s analysis, and an exact start for SMC. It should be judged on a multimodal posterior, which this study did not include.
 - For BASS (D05), the result is evidence on the linear form's side: its hot rungs are no worse, and only it reaches b = 0 under the improper priors.
+
+### Separated modes: the reference rung on a bimodal fixture (OQ2) — 2026-10-27
+
+At the user's request: a BARS fixture with two well-separated modes of near-equal mass, and the rung arms run against the no-rung arms on it, pre-registered as the OQ1 rerun was.
+
+**The fixture** (`tests/regression/BimodalFixture.cs`). It was calibrated on its own properties before this pre-registration; no tempered arm was run.
+- *Data.* Two equal bumps exp(−300(x − c)²) at c = ¼ and ¾, with noise 0.06 mirrored so the data are exactly symmetric about ½. It uses the default Normal model and a flat count prior capped at 5 knots.
+- *The modes.* Under the cap the posterior puts three knots on one bump and two on the other, and the better-fitted bump carries the curve's maximum. The reflection ξ ↦ 1 − ξ swaps the two allocations, so each holds exactly half the mass: a truth fixed by symmetry, from outside any estimator. `TemperingTests.BimodalFixture_IsMirrorSymmetric` checks the invariance in both tempered forms.
+- *Calibration.* The pilot ran 4 untempered chains × 20,000 steps per setting.
+  - Caps of 3, 4 and 6, and wider bumps exp(−120(x − c)²), gave either a state fitting both bumps alike, with the maximum hopping between them, or modes the chains crossed.
+  - Cap 5 with the narrow bumps gave two allocation modes, each chain's peak share exactly 0 or 1, and no crossings.
+- *The barrier.* The death barrier is measured from a mode's best configuration to its best single deletion, the route a birth on the other bump completes.
+  - It is about 26 nats at noise 0.19 and 49 at 0.06 for n = 200. Under the integrated σ² it saturates in the noise, since the marginal goes as (n/2)·log RSS.
+  - It grows with n: about 100 nats at n = 400 and 200 at n = 800.
+- *Two separations.*
+  - **bimodal-200:** about 49 nats at b = 1, so about 2.5 at the deepest no-rung hot end, 0.05.
+  - **bimodal-800:** about 200 nats, so about 10 at 0.05.
+
+  Both are well separated for the untempered chain; only the second stays separated at every no-rung rung of the arms.
+
+#### Pre-registration (written before any run)
+
+**Question.** Where the posterior has separated modes of equal mass, does an exact reference rung pay at equal work? And does the answer depend on whether the deepest no-rung hot end can bridge the barrier?
+
+**Design.** `TemperingBenchmark.ReferenceRungs_OnSeparatedModes` (`TEMPER_BENCH_BIMODAL`), on bimodal-200 and bimodal-800.
+- *Arms:* the OQ1 rerun's Normal arms, unchanged. L-int and L-lin at β_min 0.05, 0.2, 0.35 and 0.5; L-lin-ref; P at 0.05; P-ref.
+- *Runs:* as the rerun. 4 and 8 rungs; adapted DEO over 4,095 burn scans; 20,000 measured scans; 8 ladders × 2 groups, with seeds 1000·(group + 1) + c.
+- *Baseline:* in the same run, untempered chains as many as a group's replicas (8 × L), each as long, in two groups, with seeds 5000 + 1000·group + c.
+- *Primary metric: the mode share against its truth.*
+  - For each ladder, or baseline chain, p̂ is the share of measured cold draws whose peak location lies below ½.
+  - With the truth ½, MSE is the mean of (p̂ − ½)² over the group's chains, and the pooled share's ESS is chains·¼/MSE, per 1,000 replica-steps. A chain stuck in one mode contributes ¼, one draw's worth.
+  - The error is measured against the symmetric truth, not estimated from the chains, so chains that agree on one mode cannot pass as mixed.
+- *Secondary metric:* the rank-normalized bulk ESS of the peak location per kilo-work, as before.
+- *Reported only:* knot-count ESS (the cap pins k at 5, and the count does not tell the modes apart), Λ̂, round trips per scan, and the mean share.
+- *Work:* as before. A reference rung's scan costs its draw's attempts.
+
+**Rules.**
+- *Scoring.* As the rerun's: an arm's score on a fixture is its better level by the pooled score. An arm *beats* a comparator at a ratio of at least 1.25 in both groups, and *loses* at most 1/1.25 in both; anything else is a tie.
+- *The rung pays on a fixture* iff the best rung arm (L-lin-ref or P-ref) beats the best no-rung arm (any L-int, L-lin or P arm) on mode-share ESS, and does not lose to the best no-rung arm on peak ESS. L-lin-ref against the best L-lin, and P-ref against P, are reported beside it.
+- *Tempering on separated modes.* The best tempered arm against the baseline on mode-share ESS, reported as beats, ties or loses.
+- *Decisions.* No default changes on this study. `temperReferenceRung` stays opt-in under the rerun's rule, which needs three of four fits; one fixture is a partial study, and the same holds for OQ4. The outcome sets only two things:
+  - *The recommendation in `temperReferenceRung`'s documentation.* If the rung pays on both fixtures: use it when the posterior may have separated modes. If on bimodal-800 only: use it when the barrier is beyond what the hot end flattens, β_min times the barrier above a few nats. If on neither: no recommendation, and its use stays the SMC start.
+  - *OQ2's status.*
+- *Predictions, not rules.* On bimodal-200 the 0.05 no-rung arms bridge the modes, and the rung ties or loses as on the unimodal fits. On bimodal-800 the no-rung arms stay nearly stuck, and the rung beats where its ladder completes round trips.
