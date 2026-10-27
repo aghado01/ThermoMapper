@@ -121,6 +121,45 @@ public sealed class MoMPCATests
                 Assert.True(Math.Abs(dot - (i == j ? 1.0 : 0.0)) <= 1e-12, $"basis[{i}]·basis[{j}] = {dot:R}");
             }
         Assert.InRange(mom.Alpha, 1e-6, 2.0 - 1e-6);
+        Assert.Equal(2, mom.Variances.Length);
+        Assert.True(mom.Variances[0] >= mom.Variances[1] && mom.Variances[1] >= 0.0);
+        foreach (double[] axis in mom.Basis)
+        {
+            int largest = 0;
+            for (int t = 1; t < 3; t++) if (Math.Abs(axis[t]) > Math.Abs(axis[largest])) largest = t;
+            Assert.True(axis[largest] > 0.0);
+        }
+    }
+
+    /// <summary>
+    /// Every block is an ellipse in the xy plane, so the robust subspace is xy. Three clean blocks have semi-axes near
+    /// (2, 1), variances near (2, 0.5); two corrupted blocks stretch y to 20, variance near 200. Over all the data y
+    /// carries the most variance, so plain PCA puts y first. The median of the blocks' projected covariances keeps the
+    /// clean variances, so x comes first. The geometric median is pulled toward the outliers by about the clean blocks'
+    /// own spread, not by the outliers' size: the clean x-variances spread over 1.9–2.1, which puts the y-variance near
+    /// 0.56, where all the data give about 76.
+    /// </summary>
+    [Fact]
+    public void ComputeMoM_InflatedVarianceBlocks_KeepTheCleanAxesAndVariances()
+    {
+        const int perBlock = 40;
+        double[][] data = new double[5 * perBlock][];
+        int idx = 0;
+        idx = AddEllipseBlock(data, idx, perBlock, 2.00, 1.00);
+        idx = AddEllipseBlock(data, idx, perBlock, 2.05, 1.02);
+        idx = AddEllipseBlock(data, idx, perBlock, 1.95, 0.98);
+        idx = AddEllipseBlock(data, idx, perBlock, 2.00, 20.0);
+        AddEllipseBlock(data, idx, perBlock, 2.00, 19.0);
+
+        PcaResult plain = Pca.Compute(data, numComponents: 2, center: true, whiten: false);
+        Assert.True(Math.Abs(plain.Components[0][1]) > 0.99, "plain PCA should put y first here");
+
+        MoMPcaResult mom = MoMPCA.ComputeMoM(data, kBlocks: 5, numComponents: 2);
+        Assert.True(mom.Basis[0][0] > 0.999, $"first axis {string.Join(", ", mom.Basis[0])}");
+        Assert.True(mom.Basis[1][1] > 0.999, $"second axis {string.Join(", ", mom.Basis[1])}");
+        Assert.InRange(mom.Variances[0], 1.8, 2.2);
+        Assert.InRange(mom.Variances[1], 0.4, 0.65);
+        Assert.True(mom.Variances[1] < 0.01 * plain.Eigenvalues[0], $"robust {mom.Variances[1]:R} vs all-data {plain.Eigenvalues[0]:R}");
     }
 
     [Fact]
@@ -136,6 +175,7 @@ public sealed class MoMPCATests
 
         Assert.Equal(pca.Mean, mom.Mean);
         Assert.Equal(pca.Components, mom.Basis);
+        Assert.Equal(pca.Eigenvalues, mom.Variances);
         Assert.True(double.IsNaN(mom.Alpha));
     }
 
@@ -153,6 +193,17 @@ public sealed class MoMPCATests
             for (int j = 0; j < 3; j++)
                 point[j] = Math.Cos(t) * u[j] + Math.Sin(t) * v[j];
             data[start + i] = point;
+        }
+        return start + count;
+    }
+
+    // A contiguous block of `count` points on the ellipse with semi-axes a along x and b along y, centred at 0.
+    private static int AddEllipseBlock(double[][] data, int start, int count, double a, double b)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            double t = 2.0 * Math.PI * i / count;
+            data[start + i] = [a * Math.Cos(t), b * Math.Sin(t), 0.0];
         }
         return start + count;
     }

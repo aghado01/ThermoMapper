@@ -261,9 +261,16 @@ basis of Û and the calibrated α̂. It used to return a `PcaResult` whose compo
 ended on and whose "eigenvalues" were variances along that frame over all the data, corrupted blocks included. The
 paper settles what the estimator is: θ = (μ, U) ∈ ℝᵖ × Gr(r, p) (§2.1). It chooses the Grassmann formulation
 because PCA identifies "a subspace, not a particular signed, ordered, or oriented orthonormal basis", estimates no
-eigenvalues, and aligns its embeddings by Procrustes (§7.3). §5.3 is the α calibration, already in place. Ordered
-axes and robust variances within Û would be an extension beyond the paper; the natural candidate is a median over
-the blocks' covariances projected into Û, then its eigendecomposition. Not built.
+eigenvalues, and aligns its embeddings by Procrustes (§7.3). §5.3 is the α calibration, already in place.
+
+**Robust axes within Û (2026-10-27, an extension beyond the paper).** `MoMPcaResult` gained `Variances`, and its
+`Basis` now holds principal axes: the geometric median (Frobenius norm) of the blocks' covariances projected into Û,
+each about its block's mean with the n denominator, then its eigenvectors, in descending order and signed as `Pca`
+signs its components (`Pca.Orient`, now shared). The median resists a minority of blocks with inflated variance; its
+pull toward them is of the order of the clean blocks' own spread, not of the outliers' size (in the test, two of
+five blocks with y-variance near 200 move the robust y-variance from about 0.5 to 0.56, where all the data give
+76). Where the median's eigenvalues tie, the axes between them are arbitrary, which is the instability the paper
+cites for not estimating a basis.
 
 ## Validation & measures
 Per `validation-independence`: ground truth must originate outside the estimator's own model. The

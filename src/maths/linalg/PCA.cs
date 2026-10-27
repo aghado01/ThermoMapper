@@ -31,7 +31,8 @@ namespace Maths.LinAlg
             var eigenvalues = new double[k];
             for (int i = 0; i < k; i++)
             {
-                components[i] = Signed((double[])svd.RightVectors[i].Clone());
+                components[i] = (double[])svd.RightVectors[i].Clone();
+                Orient(components[i]);
                 eigenvalues[i] = svd.SingularValues[i] * svd.SingularValues[i] / n;
                 explained[i] = totalVar > 0 && eigenvalues[i] > 0 ? eigenvalues[i] / totalVar : 0;
             }
@@ -44,14 +45,16 @@ namespace Maths.LinAlg
             return result;
         }
 
-        // Signs v so that its largest-magnitude entry (the first, on ties) is positive.
-        private static double[] Signed(double[] v)
+        /// <summary>
+        /// Signs a principal axis in place so that its largest-magnitude entry (the first, on ties) is positive: the
+        /// convention <see cref="Compute"/> uses, shared with estimators that return principal axes of their own.
+        /// </summary>
+        public static void Orient(double[] axis)
         {
             int best = 0;
-            for (int j = 1; j < v.Length; j++) if (Math.Abs(v[j]) > Math.Abs(v[best])) best = j;
-            if (v.Length > 0 && v[best] < 0.0)
-                for (int j = 0; j < v.Length; j++) v[j] = -v[j];
-            return v;
+            for (int j = 1; j < axis.Length; j++) if (Math.Abs(axis[j]) > Math.Abs(axis[best])) best = j;
+            if (axis.Length > 0 && axis[best] < 0.0)
+                for (int j = 0; j < axis.Length; j++) axis[j] = -axis[j];
         }
 
         public static Func<double[], double[]> MakeProjector(PcaResult pca)

@@ -18,8 +18,11 @@ namespace Maths.Geometry.DimReduction
         /// with α̂ = 2·τ̂_U/(τ̂_μ + τ̂_U) from the per-tangent-dimension robust block scales — so a noisy
         /// subspace (weak eigengap) is automatically down-weighted relative to the mean.</para>
         ///
-        /// <para>Returns the paper's estimate of (μ, U) and nothing more (<see cref="MoMPcaResult"/>): no
-        /// eigenvalues, and no ordering or sign within the subspace.</para>
+        /// <para>The paper estimates (μ, U) and no more. Within Û this implementation adds principal axes and
+        /// robust variances: the geometric median, in the Frobenius norm, of the blocks' covariances projected into Û,
+        /// and its eigendecomposition. The median resists a minority of blocks with inflated variance as the subspace
+        /// median resists tilted ones; where its eigenvalues tie, the axes between them are arbitrary, as in any
+        /// PCA.</para>
         /// </summary>
         /// <param name="data">The full dataset</param>
         /// <param name="kBlocks">Number of blocks to split the data into</param>
@@ -29,7 +32,7 @@ namespace Maths.Geometry.DimReduction
             if (kBlocks <= 1)
             {
                 PcaResult pca = Pca.Compute(data, numComponents, center: true, whiten: false);
-                return new MoMPcaResult(pca.Mean, pca.Components, double.NaN);
+                return new MoMPcaResult(pca.Mean, pca.Components, pca.Eigenvalues, double.NaN);
             }
             int n = data.Length;
             int d = data[0].Length;
@@ -103,7 +106,62 @@ namespace Maths.Geometry.DimReduction
                 basis[c] = new double[d];
                 Array.Copy(productMedian, d + c * d, basis[c], 0, d);
             }
-            return new MoMPcaResult(robustMean, basis, alpha);
+
+            // 6. Principal axes within Û (beyond the paper): the median of the blocks' projected covariances,
+            //    then its eigenvectors, ordered by eigenvalue and signed as Pca signs its components.
+            var projected = new double[kBlocks][];
+            for (int k = 0; k < kBlocks; k++)
+            {
+                int start = k * blockSize;
+                int end = (k == kBlocks - 1) ? n : start + blockSize;
+                projected[k] = ProjectedCovariance(data, start, end, blockMeans[k], basis, r);
+            }
+            double[] covarianceMedian = ArithmeticMean(projected, r * r);
+            GeometricMedian.Compute(new EuclideanVectorManifold(r * r), projected, weights, covarianceMedian);
+            var median = new double[r, r];
+            for (int a = 0; a < r; a++)
+                for (int b = 0; b < r; b++)
+                    median[a, b] = 0.5 * (covarianceMedian[a * r + b] + covarianceMedian[b * r + a]);
+            EigenResult eig = DenseEigen.DecomposeSymmetric(median);
+
+            var order = new int[r];
+            for (int i = 0; i < r; i++) order[i] = i;
+            Array.Sort(order, (i, j) => eig.Eigenvalues[j].CompareTo(eig.Eigenvalues[i]));
+            var axes = new double[r][];
+            var variances = new double[r];
+            for (int i = 0; i < r; i++)
+            {
+                double[] q = eig.Eigenvectors[order[i]];
+                axes[i] = new double[d];
+                for (int c = 0; c < r; c++)
+                    for (int j = 0; j < d; j++) axes[i][j] += q[c] * basis[c][j];
+                Pca.Orient(axes[i]);
+                variances[i] = Math.Max(eig.Eigenvalues[order[i]], 0.0);
+            }
+            return new MoMPcaResult(robustMean, axes, variances, alpha);
+        }
+
+        // Block k's covariance about its own mean, projected into the subspace: (1/n_k)·Σ_i z_i z_iᵀ with
+        // z_i = Uᵀ(x_i − μ_k), the n_k denominator Pca uses; flattened row-major, r × r.
+        private static double[] ProjectedCovariance(double[][] data, int start, int end, double[] mean, double[][] basis, int r)
+        {
+            int d = mean.Length;
+            var s = new double[r * r];
+            var z = new double[r];
+            for (int i = start; i < end; i++)
+            {
+                for (int c = 0; c < r; c++)
+                {
+                    double dot = 0.0;
+                    for (int j = 0; j < d; j++) dot += (data[i][j] - mean[j]) * basis[c][j];
+                    z[c] = dot;
+                }
+                for (int a = 0; a < r; a++)
+                    for (int b = 0; b < r; b++) s[a * r + b] += z[a] * z[b];
+            }
+            int count = end - start;
+            for (int t = 0; t < s.Length; t++) s[t] /= count;
+            return s;
         }
 
         // PCA components (r vectors of length d) → column-major d×r Grassmann frame [v0 | v1 | …].
@@ -164,14 +222,18 @@ namespace Maths.Geometry.DimReduction
     }
 
     /// <summary>
-    /// The scale-calibrated median-of-means estimate of θ = (μ, U) ∈ ℝᵖ × Gr(r, p), You (arXiv 2605.20681, §2.1).
-    /// The paper's target is the principal subspace itself, "not a particular signed, ordered, or oriented
-    /// orthonormal basis", so the estimate carries one orthonormal basis of Û and no eigenvalues: any rotation of
-    /// <see cref="Basis"/> within its span is the same estimate.
+    /// The scale-calibrated median-of-means estimate of θ = (μ, U) ∈ ℝᵖ × Gr(r, p), You (arXiv 2605.20681, §2.1),
+    /// with principal axes and robust variances within Û. The paper's target is the subspace itself, "not a
+    /// particular signed, ordered, or oriented orthonormal basis"; the axes and variances are this implementation's
+    /// extension, from the median of the blocks' covariances projected into Û.
     /// </summary>
     /// <param name="Mean">μ̂, the mean factor of the product median.</param>
-    /// <param name="Basis">r orthonormal vectors of length p spanning Û, the subspace factor.</param>
+    /// <param name="Basis">r orthonormal principal axes spanning Û, the subspace factor, in descending order of
+    /// <paramref name="Variances"/>, each signed so its largest-magnitude entry is positive (as <see cref="Pca"/>
+    /// signs its components).</param>
+    /// <param name="Variances">The eigenvalues of the median projected block covariance, descending: each axis's
+    /// variance, with the n denominator, robust to a minority of blocks.</param>
     /// <param name="Alpha">The calibrated scale α̂ ∈ (0, 2) of the product metric (§5.3); NaN for a single block,
-    /// where there is nothing to aggregate and the estimate is the full-data PCA's mean and leading subspace.</param>
-    public sealed record MoMPcaResult(double[] Mean, double[][] Basis, double Alpha);
+    /// where there is nothing to aggregate and the estimate is the full-data PCA.</param>
+    public sealed record MoMPcaResult(double[] Mean, double[][] Basis, double[] Variances, double Alpha);
 }
