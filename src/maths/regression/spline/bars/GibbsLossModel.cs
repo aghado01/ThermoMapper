@@ -76,6 +76,9 @@ public sealed class GibbsLossModel : IObservationModel
     public bool CanTemperLikelihood => true;
 
     /// <inheritdoc/>
+    public bool CanTemperToPrior => true;
+
+    /// <inheritdoc/>
     public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
     {
         ArgumentNullException.ThrowIfNull(design);

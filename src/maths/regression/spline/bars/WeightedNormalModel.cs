@@ -36,14 +36,22 @@ public sealed class WeightedNormalModel : IObservationModel
 {
     /// <param name="centre">Where the coefficient prior is centred: the response's median (default), its mean, or zero,
     /// DMGK's original.</param>
-    public WeightedNormalModel(GPriorCentre centre = GPriorCentre.Median)
+    /// <param name="form">The likelihood path's tempered marginal: <see cref="TemperedForm.Integrated"/> (the default),
+    /// σ² integrated against the tempered likelihood, or <see cref="TemperedForm.Linear"/>, b times the untempered
+    /// marginal, which is defined at b = 0 under the improper 1/σ² prior and so admits an exact reference rung.</param>
+    public WeightedNormalModel(GPriorCentre centre = GPriorCentre.Median, TemperedForm form = TemperedForm.Integrated)
     {
         if (centre is not (GPriorCentre.Median or GPriorCentre.Mean or GPriorCentre.Zero)) throw new ArgumentOutOfRangeException(nameof(centre));
+        if (form is not (TemperedForm.Integrated or TemperedForm.Linear)) throw new ArgumentOutOfRangeException(nameof(form));
         Centre = centre;
+        Form = form;
     }
 
     /// <summary>Where the coefficient prior is centred.</summary>
     public GPriorCentre Centre { get; }
+
+    /// <summary>The likelihood path's tempered marginal.</summary>
+    public TemperedForm Form { get; }
 
     /// <inheritdoc/>
     public int EffectiveDimension(double[,] design, double[]? weights)
@@ -58,16 +66,19 @@ public sealed class WeightedNormalModel : IObservationModel
     /// <inheritdoc/>
     public bool CanTemperLikelihood => true;
 
+    /// <summary>True in the linear form, whose b = 0 member is the knot prior.</summary>
+    public bool CanTemperToPrior => Form == TemperedForm.Linear;
+
     /// <inheritdoc/>
     public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights)
         => TemperedMarginal(design, y, weights).LogMarginalLikelihood(1.0);
 
     /// <summary>
-    /// The marginal at inverse temperature b, from the block at τ = 1/m: <c>LDT_b − (mb/2)·ln S_b</c>, dropping
-    /// the σ-integration constant, which depends on m and b only. Unweighted, any b in (0, 1]; b = 0 is refused,
-    /// since the improper 1/σ² prior then leaves σ unidentified. Weighted, b = 1 only (the block is built at one τ
-    /// and b). A configuration with m ≤ ν, an inadmissible design or a zero centred response (a constant response,
-    /// under the median or mean centre) is −∞ at every b.
+    /// The marginal at inverse temperature b, from the block at τ = 1/m. Integrated: <c>LDT_b − (mb/2)·ln S_b</c>,
+    /// dropping the σ-integration constant, which depends on m and b only; unweighted, any b in (0, 1], with b = 0
+    /// refused, since the improper 1/σ² prior then leaves σ unidentified; weighted, b = 1 only (the block is built at
+    /// one τ and b). Linear: b times the b = 1 value, any b in [0, 1]. A configuration with m ≤ ν, an inadmissible
+    /// design or a zero centred response (a constant response, under the median or mean centre) is −∞ at every b.
     /// </summary>
     public ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights)
     {
@@ -81,7 +92,8 @@ public sealed class WeightedNormalModel : IObservationModel
         (CollapsedGPrior? block, double tau) = Fit(design, y, weights);
         if (block is null)   // rank-deficient or ill-conditioned design ⇒ outside the support
             return new ImpossibleMarginal(DesignRejection.Inadmissible);
-        return new NormalMarginal(block, tau);
+        var marginal = new NormalMarginal(block, tau);
+        return Form == TemperedForm.Linear ? LinearMarginal.Of(marginal.LogMarginalLikelihood(1.0), marginal.Rejection) : marginal;
     }
 
     /// <summary>

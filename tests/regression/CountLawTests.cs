@@ -195,6 +195,60 @@ public sealed class CountLawTests
         }
     }
 
+    [Theory]
+    [InlineData(TemperingPath.Likelihood)]
+    [InlineData(TemperingPath.Powered)]
+    public void ReferenceRung_FollowsItsPathsCountLaw(TemperingPath path)
+    {
+        // The exact reference rung at β = 0 (OQ2): on the likelihood path the knot prior, Poisson(λ); on the powered path
+        // the normalized reference measure, Poisson(1) = Poisson(λ⁰), with uniform locations on both. Every rung above it
+        // keeps its path's law.
+        const double lambda = 4.0;
+        var prior = new PoissonPrior(lambda);
+        IKnotKernel kernel = new LocalBetaKernel(5.0);
+        double[] betas = [1.0, 0.5, 0.25, 0.0];
+        var target = new SplineTarget(new SplineBasis(3), new FlatModel(), prior, x: [0.5], y: [0.0], minColumnMass: 0.0);
+        Func<int, double> LawAt(int rung) => path == TemperingPath.Likelihood
+            ? prior.LogPrior
+            : new PoissonPrior(Math.Pow(lambda, betas[rung])).LogPrior;
+
+        CountLaw.Result[] rungs = CountLaw.SampleLadder(
+            _ => [new KnotBirthMove(kernel), new KnotDeathMove(kernel), new KnotRelocateMove(kernel)], target,
+            new KnotConfig([]), s => s.Count, betas, path, LawAt, bins: 10, burn: 10_000, steps: 300_000, batches: 30,
+            seed: 43, reference: target.Reference(path));
+
+        for (int r = 0; r < rungs.Length; r++)
+        {
+            string label = $"{path} β={betas[r]}";
+            _out.WriteLine($"[count-law-reference] {label}:{rungs[r].Describe()}");
+            Assert.True(rungs[r].Agrees(z: 5.0, floor: 0.002), $"{label}:{rungs[r].Describe()}");
+        }
+    }
+
+    [Fact]
+    public void Reference_DrawsOnlyAdmittedConfigurations()
+    {
+        // With the support gate on, the reference is the b = 0 law restricted by rejection: every draw is admitted.
+        double[] x = new double[30];
+        for (int i = 0; i < x.Length; i++) x[i] = (i + 0.5) / x.Length;
+        var target = new SplineTarget(new SplineBasis(3), new FlatModel(), new PoissonPrior(4.0), x, new double[x.Length]);
+        var rng = new Xoshiro256PlusPlus(seed: 29);
+        foreach (TemperingPath path in new[] { TemperingPath.Likelihood, TemperingPath.Powered })
+        {
+            IReferenceSampler<KnotConfig> reference = target.Reference(path);
+            Assert.Equal(path, reference.Path);
+            for (int d = 0; d < 2_000; d++)
+            {
+                (KnotConfig config, ITargetEvaluation e) = reference.Draw(rng);
+                Assert.True(double.IsFinite(new Temperature(0.0, path).LogDensity(e)));
+                Assert.True(double.IsFinite(target.LogPosterior(config)));
+            }
+        }
+        var normal = new SplineTarget(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(4.0), x, x);
+        Assert.Throws<InvalidOperationException>(() => normal.Reference(TemperingPath.Likelihood));
+        _ = normal.Reference(TemperingPath.Powered);
+    }
+
     [Fact]
     public void Target_OffTheCountPriorsSupport_BuildsNoDesign()
     {
@@ -220,6 +274,7 @@ public sealed class CountLawTests
     {
         public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights) => 0.0;
         public bool CanTemperLikelihood => true;
+        public bool CanTemperToPrior => true;
         public ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights) => Constant.Zero;
         public int EffectiveDimension(double[,] design, double[]? weights) => design.GetLength(1);
         public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)

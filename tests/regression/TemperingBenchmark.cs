@@ -29,6 +29,10 @@ namespace Maths.Regression.Tests;
 /// estimate pools 8 ladders, and two independent groups show its noise.</item>
 /// <item><c>TEMPER_BENCH_BASE</c>: the equal-work baseline, untempered chains as many as the ladders' replicas
 /// (8 × L), each run as long.</item>
+/// <item><c>TEMPER_BENCH_OQ2</c>: the OQ1 rerun with exact reference rungs (OQ2), pre-registered in the preparation
+/// brief: the Normal model's integrated and linear tempered forms at the four hot ends, each path ending at its exact
+/// reference rung, and the powered path at 0.05, by the same cold-chain ESS, with each arm's communication barrier and
+/// round trips beside it.</item>
 /// </list>
 /// Work is counted in replica-steps of the measured phase, which tempered and untempered runs spend alike; seconds are
 /// reported beside it. Each variable names the TSV file written; <c>TEMPER_BENCH_FITS</c> (comma-separated) restricts the
@@ -163,15 +167,59 @@ public sealed class TemperingBenchmark
     private const string EssHeader = "data\tpath\tbeta_min\tlevels\tgroup\tchains\tess_knots_bulk\tess_knots_tail\t" +
                                      "ess_energy_bulk\tess_peak_bulk\tess_peak_tail\trhat_knots\trhat_peak\tmean_knots\t" +
                                      "mean_peak\tseconds\twork\tess_knots_per_kwork\tess_peak_per_kwork\tess_knots_per_second\t" +
-                                     "ess_peak_per_second";
+                                     "ess_peak_per_second\tbarrier\ttrips_per_scan";
 
-    private sealed record RunResult(string Row, KnotConfig[] Configs, double[] Energy, double Seconds);
+    /// <summary>
+    /// The OQ1 rerun with exact reference rungs (OQ2), pre-registered in the preparation brief. Adapted DEO ladders of
+    /// 4 and 8 rungs, 8 ladders × 2 groups per arm, judged by the cold chain's ESS per unit work as
+    /// <see cref="HotEnds_ByColdChainEss"/> is, with the arms' barriers and round trips beside it. Guarded by
+    /// <c>TEMPER_BENCH_OQ2</c>; <c>TEMPER_BENCH_FITS</c> splits the fits across processes.
+    /// </summary>
+    [Fact]
+    public void ReferenceRungs_ByColdChainEss()
+    {
+        if (Environment.GetEnvironmentVariable("TEMPER_BENCH_OQ2") is not string path) return;   // heavy; set TEMPER_BENCH_OQ2 to run
+
+        const int chains = 8;
+        double[] hotEnds = [0.05, 0.2, 0.35, 0.5];
+        var ess = new StringBuilder(EssHeader + "\tarm\n");
+        foreach (Fit fit in Fits("peak", "sine", "counts", "oscillatory"))
+        {
+            bool normal = fit.Model is WeightedNormalModel;
+            var arms = new List<(string Name, TemperingPath Path, IObservationModel Model, bool Reference, double BetaMin)>();
+            IObservationModel linear = normal ? new WeightedNormalModel(form: TemperedForm.Linear) : fit.Model;
+            foreach (double b in hotEnds) arms.Add((normal ? "L-int" : "L", TemperingPath.Likelihood, fit.Model, false, b));
+            if (normal) foreach (double b in hotEnds) arms.Add(("L-lin", TemperingPath.Likelihood, linear, false, b));
+            arms.Add((normal ? "L-lin-ref" : "L-ref", TemperingPath.Likelihood, linear, true, 0.05));
+            arms.Add(("P", TemperingPath.Powered, fit.Model, false, 0.05));
+            arms.Add(("P-ref", TemperingPath.Powered, fit.Model, true, 0.05));
+            foreach ((string name, TemperingPath tp, IObservationModel model, bool reference, double betaMin) in arms)
+                foreach (int levels in new[] { 4, 8 })
+                    for (int group = 0; group < 2; group++)
+                    {
+                        var series = new Series(chains);
+                        for (int c = 0; c < chains; c++)
+                        {
+                            RunResult r = Run(fit with { Model = model }, tp, SwapSchedule.DeterministicEvenOdd, adapt: true, levels,
+                                              betaMin, seed: 1000 * (group + 1) + c, reference);
+                            series.Add(c, fit, r, levels);
+                        }
+                        ess.AppendLine(series.Row(fit.Name, tp.ToString(), reference ? 0.0 : betaMin, levels, group) + "\t" + name);
+                        File.WriteAllText(path, ess.ToString());   // partial results survive an interrupted run
+                    }
+        }
+    }
+
+    // Work is replica-steps of the measured phase, a reference rung's scan counted at its draw's attempts; NaN takes
+    // levels × scans.
+    private sealed record RunResult(string Row, KnotConfig[] Configs, double[] Energy, double Seconds, double Barrier = double.NaN,
+                                    double TripsPerScan = double.NaN, double Work = double.NaN);
 
     // The cold chains' series, pooled into one set of rank-normalized diagnostics with the work they took.
     private sealed class Series(int chains)
     {
         private readonly double[][] _knots = new double[chains][], _energy = new double[chains][], _peak = new double[chains][];
-        private double _seconds, _work;
+        private double _seconds, _work, _barrier, _trips;
 
         public void Add(int c, Fit fit, RunResult r, int levels)
         {
@@ -179,7 +227,9 @@ public sealed class TemperingBenchmark
             _energy[c] = r.Energy;
             _peak[c] = PeakLocations(fit, r.Configs);
             _seconds += r.Seconds;
-            _work += (double)levels * r.Configs.Length;
+            _work += double.IsNaN(r.Work) ? (double)levels * r.Configs.Length : r.Work;
+            _barrier += r.Barrier / chains;
+            _trips += r.TripsPerScan / chains;
         }
 
         public string Row(string name, string path, double betaMin, int levels, int group)
@@ -191,7 +241,8 @@ public sealed class TemperingBenchmark
             return string.Join('\t', name, path, G(betaMin), levels, group, _knots.Length, G(k.BulkEss.Value), G(k.TailEss.Value),
                                G(e.BulkEss.Value), G(p.BulkEss.Value), G(p.TailEss.Value), G(k.RHat.Value), G(p.RHat.Value),
                                G(_knots.SelectMany(s => s).Average()), G(_peak.SelectMany(s => s).Average()), G(_seconds), G(_work),
-                               G(k.Ess.Value / kilo), G(p.Ess.Value / kilo), G(k.Ess.Value / _seconds), G(p.Ess.Value / _seconds));
+                               G(k.Ess.Value / kilo), G(p.Ess.Value / kilo), G(k.Ess.Value / _seconds), G(p.Ess.Value / _seconds),
+                               G(_barrier), G(_trips));
         }
     }
 
@@ -215,11 +266,16 @@ public sealed class TemperingBenchmark
         return peaks;
     }
 
-    private static RunResult Run(Fit fit, TemperingPath tp, SwapSchedule schedule, bool adapt, int levels, double betaMin, int seed)
+    private static RunResult Run(Fit fit, TemperingPath tp, SwapSchedule schedule, bool adapt, int levels, double betaMin, int seed,
+                                 bool reference = false)
     {
         var target = new SplineTarget(new SplineBasis(3), fit.Model, new PoissonPrior(fit.PriorMean), fit.X, fit.Y);
+        double[] betas = reference
+            ? ParallelTempering<KnotConfig>.ReferenceLadder(levels, betaMin)
+            : ParallelTempering<KnotConfig>.GeometricLadder(levels, betaMin);
+        IReferenceSampler<KnotConfig>? referenceSampler = reference ? target.Reference(tp) : null;
         var pt = new ParallelTempering<KnotConfig>(
-            _ => Moves(), target, new KnotConfig([]), ParallelTempering<KnotConfig>.GeometricLadder(levels, betaMin), tp, seed, schedule);
+            _ => Moves(), target, new KnotConfig([]), betas, tp, seed, schedule, referenceSampler);
 
         if (adapt)
             for (int round = 1; round <= 2048; round *= 2)
@@ -231,6 +287,7 @@ public sealed class TemperingBenchmark
             for (int i = 0; i < Burn; i++) pt.Step();
 
         long trips0 = pt.RoundTrips, scans0 = pt.Scans, swaps0 = pt.SwapAccepts, attempts0 = pt.SwapAttempts;
+        long referenceAttempts0 = referenceSampler?.Attempts ?? 0;
         var before = new double[levels - 1];
         for (int i = 0; i < before.Length; i++) before[i] = pt.PairStats[i].MeanRejection * scans0;
         double coldKnots = 0.0, hotKnots = 0.0;
@@ -256,7 +313,10 @@ public sealed class TemperingBenchmark
                            F(trips / seconds), F(TemperingLadder.Barrier(rejection)), F(ideal), F(coldKnots / Measured),
                            F(hotKnots / Measured), F((double)(pt.SwapAccepts - swaps0) / (pt.SwapAttempts - attempts0)),
                            string.Join(',', Array.ConvertAll(pt.Betas, b => b.ToString("F4", CultureInfo.InvariantCulture))));
-        return new RunResult(row, configs, energySeries, seconds);
+        double work = referenceSampler is null
+            ? (double)levels * Measured
+            : (double)(levels - 1) * Measured + (referenceSampler.Attempts - referenceAttempts0);
+        return new RunResult(row, configs, energySeries, seconds, TemperingLadder.Barrier(rejection), trips / Measured, work);
     }
 
     // The refactor probe's fit: a sine with 0.15 noise and an outlier every 17th point.

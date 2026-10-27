@@ -143,6 +143,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private readonly TemperingPath _temperPath;
     private readonly SwapSchedule _temperSchedule;
     private readonly bool _temperAdaptLadder;
+    private readonly bool _temperReferenceRung;
     private readonly double _minColumnMass;
     private readonly double _birthExploration;
     private readonly BirthBase _birthBase;
@@ -169,7 +170,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// this many replicas, and the cold (β = 1) replica supplies the draws — so the readout is unchanged but the
     /// chain can cross modal barriers (a multi-peak T_c posterior). Mutually exclusive with the resampler and with
     /// adaptive-τ in this version (a plain fixed-kernel tempered ladder).</param>
-    /// <param name="temperBetaMin">The hot end of the geometric β-ladder (default 0.05), in (0, 1).</param>
+    /// <param name="temperBetaMin">The hot end of the geometric β-ladder (default 0.05), in (0, 1); with
+    /// <paramref name="temperReferenceRung"/>, the lowest rung above the reference.</param>
     /// <param name="temperPath">The ladder's tempering path. The default, the likelihood-tempered path (Q5), keeps the
     /// knot prior whole, so hot replicas approach the prior itself; it needs a model that
     /// <see cref="IObservationModel.CanTemperLikelihood"/>. The powered path tempers prior and likelihood together and
@@ -186,13 +188,17 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// an existing knot (<see cref="KnotBirthDensity"/>). The default 1 draws every birth from the base, which step 3.9's
     /// benchmark found best or tied on every fit; values below 1 restore DMGK's local births in part, and 0 entirely.</param>
     /// <param name="birthBase">The base measure of the exploratory births and of the first knot.</param>
+    /// <param name="temperReferenceRung">When true, each ladder ends at β = 0 with an exact reference rung
+    /// (<see cref="SplineTarget.Reference"/>, OQ2): its hot replica draws independently from the path's b = 0 member every
+    /// scan. It needs at least three levels, and on the likelihood path a model that
+    /// <see cref="IObservationModel.CanTemperToPrior"/>.</param>
     public BarsEnsemble(IBasis basis, IObservationModel model, IComplexityPrior prior, IKnotKernel kernel,
                         IWeightResampler? resampler = null, double? dmgkConstant = null, double? adaptKernelTau = null,
                         int? temperLevels = null, double temperBetaMin = 0.05,
                         TemperingPath temperPath = TemperingPath.Likelihood,
                         SwapSchedule temperSchedule = SwapSchedule.DeterministicEvenOdd, bool temperAdaptLadder = true,
                         double minColumnMass = SplineTarget.DefaultMinColumnMass,
-                        double birthExploration = 1.0, BirthBase birthBase = BirthBase.Uniform)
+                        double birthExploration = 1.0, BirthBase birthBase = BirthBase.Uniform, bool temperReferenceRung = false)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(model);
@@ -218,7 +224,15 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
                     $"{model.GetType().Name} has no tempered marginal; temper it on the powered path.", nameof(temperPath));
             if (temperSchedule is not (SwapSchedule.DeterministicEvenOdd or SwapSchedule.StochasticEvenOdd or SwapSchedule.Sequential))
                 throw new ArgumentOutOfRangeException(nameof(temperSchedule));
+            if (temperReferenceRung && lv < 3)
+                throw new ArgumentOutOfRangeException(nameof(temperLevels), "A reference rung needs at least three levels.");
+            if (temperReferenceRung && temperPath == TemperingPath.Likelihood && !model.CanTemperToPrior)
+                throw new ArgumentException(
+                    $"{model.GetType().Name} does not serve b = 0 on the likelihood path; use its linear form or the powered path.",
+                    nameof(temperReferenceRung));
         }
+        else if (temperReferenceRung)
+            throw new ArgumentException("A reference rung needs a tempered ladder.", nameof(temperReferenceRung));
         _basis = basis;
         _model = model;
         _prior = prior;
@@ -231,6 +245,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         _temperPath = temperPath;
         _temperSchedule = temperSchedule;
         _temperAdaptLadder = temperAdaptLadder;
+        _temperReferenceRung = temperReferenceRung;
         if (!(minColumnMass >= 0.0 && double.IsFinite(minColumnMass)))
             throw new ArgumentOutOfRangeException(nameof(minColumnMass), "The minimum column mass must be finite and non-negative.");
         _minColumnMass = minColumnMass;
@@ -288,7 +303,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         .Add(_basis.GetType().FullName!).Add(_model.GetType().FullName!).Add(_prior.GetType().FullName!)
         .Add(_kernel.GetType().FullName!).Add(_resampler?.GetType().FullName ?? "")
         .Add(_dmgkConstant ?? double.NaN).Add(_adaptKernelTau ?? double.NaN).Add(_temperLevels ?? 0).Add(_temperBetaMin)
-        .Add((int)_temperPath).Add((int)_temperSchedule).Add(_temperAdaptLadder ? 1 : 0).Add(_minColumnMass).Add(_birthExploration).Add((int)_birthBase).ToString();
+        .Add((int)_temperPath).Add((int)_temperSchedule).Add(_temperAdaptLadder ? 1 : 0).Add(_minColumnMass).Add(_birthExploration).Add((int)_birthBase)
+        .Add(_temperReferenceRung ? 1 : 0).Add((_model as WeightedNormalModel)?.Form.ToString() ?? "").ToString();
 
     /// <summary>
     /// Rebuild one chain from its saved restart state (<see cref="BarsChainState"/>): the chain or ladder, every RNG
@@ -313,7 +329,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var target = new SplineTarget(_basis, _model, _prior, _x, _y, run.W, run.Readout.Evaluations, _minColumnMass);
         if (s.Ladder is LadderSnapshot<KnotConfig> ladder)
         {
-            run.Ladder = ParallelTempering<KnotConfig>.Restore(_ => Moves(run.Kernel), target, ladder);
+            run.Ladder = ParallelTempering<KnotConfig>.Restore(_ => Moves(run.Kernel), target, ladder,
+                _temperReferenceRung ? target.Reference(_temperPath) : null);
             run.SetChain(run.Ladder.ColdChain);
         }
         else
@@ -760,9 +777,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private ParallelTempering<KnotConfig> NewLadder(BarsChainRun st, int levels, int seed)
     {
         var target = new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations, _minColumnMass);
-        double[] betas = ParallelTempering<KnotConfig>.GeometricLadder(levels, _temperBetaMin);
+        double[] betas = _temperReferenceRung
+            ? ParallelTempering<KnotConfig>.ReferenceLadder(levels, _temperBetaMin)
+            : ParallelTempering<KnotConfig>.GeometricLadder(levels, _temperBetaMin);
         return new ParallelTempering<KnotConfig>(_ => Moves(st.Kernel), target, st.Config, betas, _temperPath, seed,
-                                                 _temperSchedule);
+                                                 _temperSchedule, _temperReferenceRung ? target.Reference(_temperPath) : null);
     }
 
     private IRjMove<KnotConfig>[] Moves(IKnotKernel kernel)

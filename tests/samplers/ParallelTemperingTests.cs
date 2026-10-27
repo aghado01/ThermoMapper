@@ -123,6 +123,67 @@ public sealed class ParallelTemperingTests
         }
     }
 
+    [Theory]
+    [InlineData(TemperingPath.Likelihood)]
+    [InlineData(TemperingPath.Powered)]
+    public void EveryRung_SamplesItsPathsLaw_WithAReferenceRung(TemperingPath path)
+    {
+        // The hot rung at β = 0 takes an exact draw every scan: the prior on the likelihood path, the uniform reference
+        // measure on the powered path. Every rung, the cold one included, still samples its own path's law.
+        double[] betas = [1.0, 0.5, 0.2, 0.0];
+        IRjMove<int>[] MovesFor(int replica) => [new UnitStep("up", "down", +1), new UnitStep("down", "up", -1)];
+        var target = new SixStates();
+        var pt = new ParallelTempering<int>(MovesFor, target, 0, betas, path, masterSeed: 13, reference: new SixStatesReference(target, path));
+        Assert.True(pt.HasReferenceRung);
+        for (int i = 0; i < 5_000; i++) pt.Step();
+
+        const int n = 400_000;
+        var counts = new double[betas.Length, SixStates.States];
+        for (int i = 0; i < n; i++)
+        {
+            pt.Step();
+            for (int r = 0; r < betas.Length; r++) counts[r, pt.Replicas[r].Current] += 1.0;
+        }
+        for (int r = 0; r < betas.Length; r++)
+        {
+            double[] expected = SixStates.Law(betas[r], path);
+            for (int k = 0; k < SixStates.States; k++)
+                Assert.True(Math.Abs(counts[r, k] / n - expected[k]) < 0.01,
+                    $"{path} rung β = {betas[r]}, state {k}: {counts[r, k] / n:F4} vs {expected[k]:F4}");
+        }
+    }
+
+    [Fact]
+    public void ReferenceRung_IsValidated_AndResumesExactly()
+    {
+        IRjMove<int>[] MovesFor(int replica) => [new UnitStep("up", "down", +1), new UnitStep("down", "up", -1)];
+        var target = new SixStates();
+        var powered = new SixStatesReference(target, TemperingPath.Powered);
+        Assert.Throws<ArgumentException>(() => new ParallelTempering<int>(MovesFor, target, 0, [1.0, 0.5, 0.1], TemperingPath.Powered, 1, reference: powered));
+        Assert.Throws<ArgumentException>(() => new ParallelTempering<int>(MovesFor, target, 0, [1.0, 0.5, 0.0], TemperingPath.Likelihood, 1, reference: powered));
+        Assert.Equal([1.0, Math.Sqrt(0.1), 0.1, 0.0], ParallelTempering<int>.ReferenceLadder(4, 0.1));
+
+        double[] betas = ParallelTempering<int>.ReferenceLadder(4, 0.1);
+        var straight = new ParallelTempering<int>(MovesFor, target, 0, betas, TemperingPath.Powered, 7, reference: powered);
+        var first = new ParallelTempering<int>(MovesFor, target, 0, betas, TemperingPath.Powered, 7, reference: powered);
+        for (int i = 0; i < 300; i++)
+        {
+            straight.Step();
+            first.Step();
+        }
+        LadderSnapshot<int> snapshot = first.Snapshot();
+        Assert.NotNull(snapshot.ReferenceRng);
+        Assert.Throws<ArgumentException>(() => ParallelTempering<int>.Restore(MovesFor, target, snapshot));
+        ParallelTempering<int> resumed = ParallelTempering<int>.Restore(MovesFor, target, snapshot, powered);
+        for (int i = 0; i < 300; i++)
+        {
+            straight.Step();
+            resumed.Step();
+            for (int r = 0; r < betas.Length; r++) Assert.Equal(straight.Replicas[r].Current, resumed.Replicas[r].Current);
+        }
+        Assert.Equal(straight.RoundTrips, resumed.RoundTrips);
+    }
+
     public static TheoryData<double[], TemperingPath> InvalidLadders => new()
     {
         { new[] { 1.0 }, TemperingPath.Likelihood },               // one rung
@@ -193,6 +254,28 @@ public sealed class ParallelTemperingTests
             public double LogPrior => _k is >= 0 and < States ? Math.Log(Prior[_k]) : double.NegativeInfinity;
             public double LogLikelihood(double inverseTemperature)
                 => _k is >= 0 and < States ? SixStates.LogLikelihood(_k, inverseTemperature) : double.NegativeInfinity;
+        }
+    }
+
+    // Exact draws from SixStates' β = 0 member: the prior on the likelihood path, uniform on the powered path.
+    private sealed class SixStatesReference(SixStates target, TemperingPath path) : IReferenceSampler<int>
+    {
+        public TemperingPath Path => path;
+
+        public long Attempts { get; private set; }
+
+        public (int State, ITargetEvaluation Evaluation) Draw(Xoshiro256PlusPlus rng)
+        {
+            Attempts++;
+            double[] law = SixStates.Law(0.0, path);
+            double u = rng.NextDouble(), cumulative = 0.0;
+            int k = 0;
+            for (; k < SixStates.States - 1; k++)
+            {
+                cumulative += law[k];
+                if (u < cumulative) break;
+            }
+            return (k, target.Evaluate(k));
         }
     }
 

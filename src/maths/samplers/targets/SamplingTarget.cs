@@ -68,16 +68,17 @@ public readonly struct Temperature : IEquatable<Temperature>
 
     /// <summary>
     /// The log density of an evaluated state at this temperature: <c>b·(ln prior + ℓ₁)</c> on the powered path,
-    /// <c>ln prior + ℓ_b</c> on the likelihood path. A state off the support is −∞ without any likelihood work.
+    /// <c>ln prior + ℓ_b</c> on the likelihood path. A state off the support is −∞ without any likelihood work, and
+    /// stays −∞ at b = 0 on the powered path, whose density there is the support's indicator.
     /// </summary>
     public double LogDensity(ITargetEvaluation evaluation)
     {
         ArgumentNullException.ThrowIfNull(evaluation);
         double prior = evaluation.LogPrior;
         if (double.IsNegativeInfinity(prior)) return double.NegativeInfinity;
-        return Path == TemperingPath.Powered
-            ? InverseTemperature * (prior + evaluation.LogLikelihood(1.0))
-            : prior + evaluation.LogLikelihood(InverseTemperature);
+        if (Path == TemperingPath.Likelihood) return prior + evaluation.LogLikelihood(InverseTemperature);
+        double untempered = prior + evaluation.LogLikelihood(1.0);
+        return double.IsNegativeInfinity(untempered) ? double.NegativeInfinity : InverseTemperature * untempered;
     }
 
     /// <summary>The untempered log posterior <c>ln prior + ℓ₁</c>.</summary>

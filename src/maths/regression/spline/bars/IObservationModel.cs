@@ -36,6 +36,10 @@ public interface IObservationModel
     /// be tempered on the likelihood path. The default serves b = 1 only.</summary>
     bool CanTemperLikelihood => false;
 
+    /// <summary>True when <see cref="TemperedMarginal"/> also serves b = 0, where the likelihood path's member is the
+    /// knot prior itself: what an exact reference rung on that path needs. The default serves b = 1 only.</summary>
+    bool CanTemperToPrior => false;
+
     /// <summary>Effective number of parameters for the complexity penalty (ν for the Normal model).</summary>
     int EffectiveDimension(double[,] design, double[]? weights);
 

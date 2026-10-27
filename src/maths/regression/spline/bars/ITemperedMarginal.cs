@@ -2,6 +2,19 @@ using System;
 
 namespace Maths.Regression.Spline.Bars;
 
+/// <summary>Which tempered marginal a model serves on the likelihood path (<see cref="ITemperedMarginal"/>).</summary>
+public enum TemperedForm
+{
+    /// <summary>The coefficients and scale integrated against the tempered likelihood <c>p(y | β, σ)^b</c>. Under an
+    /// improper scale prior it is undefined at b = 0.</summary>
+    Integrated,
+
+    /// <summary><c>b·ℓ₁</c>: the untempered marginal raised to b. Defined at b = 0 whatever the scale prior, because the
+    /// prior is integrated inside ℓ₁, so its b = 0 member is the knot prior and the ladder can end at an exact reference
+    /// rung.</summary>
+    Linear,
+}
+
 /// <summary>
 /// One design's log marginal likelihood as a function of the likelihood's inverse temperature b, built once by
 /// <see cref="IObservationModel.TemperedMarginal"/>. It comes in two forms, both of which run from the prior at b = 0

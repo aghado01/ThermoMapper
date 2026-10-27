@@ -8,14 +8,15 @@ namespace Maths.Samplers.Rjmcmc;
 /// <summary>
 /// A ladder's restart state: every replica's <see cref="ChainSnapshot{TState}"/> (its rung is its temperature), the
 /// swap stream, the scan count, which state each rung holds, the round-trip bookkeeping and the swap statistics,
-/// including those gathered since the last adaptation.
+/// including those gathered since the last adaptation, and, for a ladder with an exact reference rung, that rung's
+/// stream.
 /// </summary>
 public sealed record LadderSnapshot<TState>(
     IReadOnlyList<ChainSnapshot<TState>> Replicas, TemperingPath Path, SwapSchedule Schedule,
     ulong SwapRng0, ulong SwapRng1, ulong SwapRng2, ulong SwapRng3,
     long Scans, long SwapAttempts, long SwapAccepts, long RoundTrips, long AnnealedRestarts,
     int[] LabelAt, sbyte[] LastEnd, long[] PairAttempts, long[] PairAccepts, double[] RejectionSum,
-    double[] RoundRejectionSum, long RoundScans);
+    double[] RoundRejectionSum, long RoundScans, (ulong, ulong, ulong, ulong)? ReferenceRng = null);
 
 /// <summary>
 /// Parallel tempering (replica exchange) over a ladder of reversible-jump chains at inverse temperatures
@@ -27,6 +28,9 @@ public sealed record LadderSnapshot<TState>(
 /// scaffolding. For multimodal targets (e.g. a multi-peak T_c posterior) where a single chain would lock into one mode.
 /// <para>The ladder reports what Syed et al. (2022) measure it by: round trips of states from the hot end to the cold
 /// end and back, and each pair's rejection rate, from which <see cref="AdaptLadder"/> equalizes the rungs.</para>
+/// <para>With an <see cref="IReferenceSampler{TState}"/> the hot end is β = 0 and its rung takes an exact independent
+/// draw from the reference every scan instead of a local step, so each state reaching the hot end is regenerated
+/// (OQ2). On the powered path this is the only way to place a rung at β = 0, the normalized reference measure.</para>
 /// As an <see cref="IChain{TState}"/> the ladder presents as a single chain whose draw is the cold state and whose
 /// acceptance is the cold replica's, so the ensemble shell can drive a tempered replica like any other.
 /// </summary>
@@ -34,6 +38,8 @@ public sealed class ParallelTempering<TState> : IChain<TState>
 {
     private readonly ReversibleJumpChain<TState>[] _chains;
     private readonly Xoshiro256PlusPlus _swapRng;
+    private readonly IReferenceSampler<TState>? _reference;
+    private readonly Xoshiro256PlusPlus? _referenceRng;
     private readonly double[] _logA;              // this scan's log swap ratio per pair
     private readonly long[] _pairAttempts, _pairAccepts;
     private readonly double[] _rejectionSum;       // Σ (1 − α) per pair, every scan
@@ -52,31 +58,42 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// per replica, so any mutable move or kernel state is private to that replica.</param>
     /// <param name="target">The target; replica i samples it at <c>Temperature(β_i, path)</c>.</param>
     /// <param name="start">Common initial state for all replicas.</param>
-    /// <param name="betas">The ladder: finite, strictly descending, cold value exactly 1 at index 0. The hot end is
-    /// above 0 on the powered path, where β = 0 would be the bare reference measure; on the likelihood path β = 0 is
-    /// the prior, which a target with an improper nuisance prior refuses. The array is not retained.</param>
+    /// <param name="betas">The ladder: finite, strictly descending, cold value exactly 1 at index 0. With a
+    /// <paramref name="reference"/> the hot end is exactly 0. Without one the hot end is above 0 on the powered path,
+    /// where β = 0 is the reference measure itself; on the likelihood path β = 0 is the prior, sampled by local moves,
+    /// which a target with an improper nuisance prior refuses. The array is not retained.</param>
     /// <param name="path">The tempering path every replica takes.</param>
-    /// <param name="masterSeed">Seeds the per-replica streams and the swap stream via the <see cref="SeedTree"/>.</param>
+    /// <param name="masterSeed">Seeds the per-replica streams, the swap stream and the reference rung's stream via the
+    /// <see cref="SeedTree"/>; the first two are those of a ladder without a reference.</param>
     /// <param name="schedule">Which pairs each scan attempts; deterministic even-odd by default.</param>
+    /// <param name="reference">Exact draws from the target's β = 0 member on <paramref name="path"/>, which the hot rung
+    /// takes every scan in place of its local moves.</param>
     public ParallelTempering(Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica, ISamplingTarget<TState> target,
                              TState start, double[] betas, TemperingPath path, int masterSeed,
-                             SwapSchedule schedule = SwapSchedule.DeterministicEvenOdd)
+                             SwapSchedule schedule = SwapSchedule.DeterministicEvenOdd, IReferenceSampler<TState>? reference = null)
     {
         ArgumentNullException.ThrowIfNull(movesForReplica);
         ArgumentNullException.ThrowIfNull(target);
-        ValidateLadder(betas, path);
+        ValidateLadder(betas, path, reference);
         if (schedule is not (SwapSchedule.DeterministicEvenOdd or SwapSchedule.StochasticEvenOdd or SwapSchedule.Sequential))
             throw new ArgumentOutOfRangeException(nameof(schedule));
 
         Path = path;
         Schedule = schedule;
         int levels = betas.Length;
-        int[] seeds = SeedTree.Derive(masterSeed, levels + 1);
+        int[] seeds = SeedTree.Derive(masterSeed, levels + 2);   // prefix-stable: the first levels + 1 are unchanged
         _chains = new ReversibleJumpChain<TState>[levels];
         for (int i = 0; i < levels; i++)
             _chains[i] = new ReversibleJumpChain<TState>(
                 movesForReplica(i), target, start, new Xoshiro256PlusPlus(seeds[i]), new Temperature(betas[i], path));
         _swapRng = new Xoshiro256PlusPlus(seeds[levels]);
+        if (reference is not null)
+        {
+            _reference = reference;
+            _referenceRng = new Xoshiro256PlusPlus(seeds[levels + 1]);
+            (TState x, ITargetEvaluation e) = reference.Draw(_referenceRng);   // the hot rung starts on an exact draw
+            _chains[levels - 1].SetState(x, e);
+        }
 
         _logA = new double[levels - 1];
         _pairAttempts = new long[levels - 1];
@@ -91,10 +108,12 @@ public sealed class ParallelTempering<TState> : IChain<TState>
 
     // A ladder rebuilt from a snapshot: the replicas and swap stream are restored, the bookkeeping copied after.
     private ParallelTempering(ReversibleJumpChain<TState>[] chains, Xoshiro256PlusPlus swapRng, TemperingPath path,
-                              SwapSchedule schedule)
+                              SwapSchedule schedule, IReferenceSampler<TState>? reference, Xoshiro256PlusPlus? referenceRng)
     {
         _chains = chains;
         _swapRng = swapRng;
+        _reference = reference;
+        _referenceRng = referenceRng;
         Path = path;
         Schedule = schedule;
         int levels = chains.Length;
@@ -115,25 +134,32 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         (ulong s0, ulong s1, ulong s2, ulong s3) = _swapRng.SaveState();
         return new LadderSnapshot<TState>(replicas, Path, Schedule, s0, s1, s2, s3, Scans, SwapAttempts, SwapAccepts,
             RoundTrips, AnnealedRestarts, (int[])_labelAt.Clone(), (sbyte[])_lastEnd.Clone(), (long[])_pairAttempts.Clone(),
-            (long[])_pairAccepts.Clone(), (double[])_rejectionSum.Clone(), (double[])_roundRejectionSum.Clone(), _roundScans);
+            (long[])_pairAccepts.Clone(), (double[])_rejectionSum.Clone(), (double[])_roundRejectionSum.Clone(), _roundScans,
+            _referenceRng?.SaveState());
     }
 
     /// <summary>
-    /// A ladder that continues exactly where <paramref name="snapshot"/>'s left off, over the move sets and target it
-    /// ran with. Each replica's current state is evaluated once, against <paramref name="target"/>.
+    /// A ladder that continues exactly where <paramref name="snapshot"/>'s left off, over the move sets, target and
+    /// reference it ran with. Each replica's current state is evaluated once, against <paramref name="target"/>.
     /// </summary>
     public static ParallelTempering<TState> Restore(Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica,
-                                                    ISamplingTarget<TState> target, LadderSnapshot<TState> snapshot)
+                                                    ISamplingTarget<TState> target, LadderSnapshot<TState> snapshot,
+                                                    IReferenceSampler<TState>? reference = null)
     {
         ArgumentNullException.ThrowIfNull(movesForReplica);
         ArgumentNullException.ThrowIfNull(snapshot);
+        if ((reference is null) != (snapshot.ReferenceRng is null))
+            throw new ArgumentException("The ladder ran " + (reference is null ? "with" : "without") + " a reference rung.", nameof(reference));
         int levels = snapshot.Replicas.Count;
         var chains = new ReversibleJumpChain<TState>[levels];
         for (int i = 0; i < levels; i++)
             chains[i] = ReversibleJumpChain<TState>.Restore(movesForReplica(i), target, snapshot.Replicas[i]);
+        Xoshiro256PlusPlus? referenceRng = snapshot.ReferenceRng is (ulong, ulong, ulong, ulong) r
+            ? Xoshiro256PlusPlus.Restore(r.Item1, r.Item2, r.Item3, r.Item4)
+            : null;
         var ladder = new ParallelTempering<TState>(chains,
             Xoshiro256PlusPlus.Restore(snapshot.SwapRng0, snapshot.SwapRng1, snapshot.SwapRng2, snapshot.SwapRng3),
-            snapshot.Path, snapshot.Schedule)
+            snapshot.Path, snapshot.Schedule, reference, referenceRng)
         {
             Scans = snapshot.Scans,
             SwapAttempts = snapshot.SwapAttempts,
@@ -153,6 +179,9 @@ public sealed class ParallelTempering<TState> : IChain<TState>
 
     /// <summary>The path every replica takes.</summary>
     public TemperingPath Path { get; }
+
+    /// <summary>Whether the hot rung draws exactly from a reference at β = 0.</summary>
+    public bool HasReferenceRung => _reference is not null;
 
     /// <summary>Which pairs each scan attempts.</summary>
     public SwapSchedule Schedule { get; }
@@ -214,7 +243,14 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// </summary>
     public TState Step()
     {
-        for (int i = 0; i < _chains.Length; i++) _chains[i].Step();
+        int last = _chains.Length - 1;
+        for (int i = 0; i < last; i++) _chains[i].Step();
+        if (_reference is null) _chains[last].Step();
+        else
+        {
+            (TState x, ITargetEvaluation e) = _reference.Draw(_referenceRng!);
+            _chains[last].SetState(x, e);
+        }
         Scans++;
         _roundScans++;
         int pairs = _chains.Length - 1;
@@ -255,7 +291,7 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         var rejection = new double[pairs];
         for (int i = 0; i < pairs; i++) rejection[i] = _roundRejectionSum[i] / _roundScans;
         double[] next = TemperingLadder.Equalize(Betas, rejection);
-        ValidateLadder(next, Path);
+        ValidateLadder(next, Path, _reference);
         for (int i = 0; i < _chains.Length; i++) _chains[i].SetTemperature(new Temperature(next[i], Path));
         Array.Clear(_roundRejectionSum);
         _roundScans = 0;
@@ -275,6 +311,19 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         var b = new double[levels];
         for (int i = 0; i < levels; i++)
             b[i] = Math.Pow(betaMin, i / (double)(levels - 1));   // 1 … β_min
+        return b;
+    }
+
+    /// <summary>
+    /// A ladder ending at an exact reference rung: <paramref name="levels"/> − 1 geometric rungs from 1 down to
+    /// <paramref name="betaMin"/>, then β = 0.
+    /// </summary>
+    public static double[] ReferenceLadder(int levels, double betaMin)
+    {
+        if (levels < 3) throw new ArgumentOutOfRangeException(nameof(levels), "A reference ladder needs at least three levels.");
+        double[] geometric = GeometricLadder(levels - 1, betaMin);
+        var b = new double[levels];
+        geometric.CopyTo(b, 0);
         return b;
     }
 
@@ -324,7 +373,7 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         }
     }
 
-    private static void ValidateLadder(double[] betas, TemperingPath path)
+    private static void ValidateLadder(double[] betas, TemperingPath path, IReferenceSampler<TState>? reference)
     {
         ArgumentNullException.ThrowIfNull(betas);
         if (betas.Length < 2) throw new ArgumentException("Tempering needs at least two levels.", nameof(betas));
@@ -333,9 +382,15 @@ public sealed class ParallelTempering<TState> : IChain<TState>
             if (!(betas[i] < betas[i - 1]))
                 throw new ArgumentException("The ladder must be strictly descending.", nameof(betas));
         double hot = betas[^1];
+        if (reference is not null)
+        {
+            if (reference.Path != path) throw new ArgumentException("The reference samples another path's β = 0.", nameof(reference));
+            if (hot != 0.0) throw new ArgumentException("A ladder with a reference rung ends at exactly β = 0.", nameof(betas));
+            return;
+        }
         if (!(path == TemperingPath.Powered ? hot > 0.0 : hot >= 0.0))
             throw new ArgumentException(path == TemperingPath.Powered
-                ? "On the powered path every β must be positive."
+                ? "On the powered path every β must be positive, unless the hot rung draws from a reference."
                 : "Every β must be non-negative.", nameof(betas));
     }
 }

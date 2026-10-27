@@ -53,6 +53,31 @@ public sealed class TemperedMarginalTests
     }
 
     [Fact]
+    public void Normal_LinearForm_IsTheUntemperedMarginalTimesB()
+    {
+        // The linear form is b·ℓ₁, defined at b = 0 under the improper 1/σ² prior; at b = 1 it is the integrated form.
+        (double[] x, double[] y) = Data(60);
+        var integrated = new WeightedNormalModel();
+        var linear = new WeightedNormalModel(form: TemperedForm.Linear);
+        Assert.False(integrated.CanTemperToPrior);
+        Assert.True(linear.CanTemperToPrior);
+        foreach (double[] knots in new[] { Array.Empty<double>(), new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 } })
+        {
+            double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
+            double atOne = integrated.TemperedMarginal(z, y, null).LogMarginalLikelihood(1.0);
+            ITemperedMarginal m = linear.TemperedMarginal(z, y, null);
+            Assert.Equal(atOne, m.LogMarginalLikelihood(1.0));
+            Assert.Equal(0.0, m.LogMarginalLikelihood(0.0));
+            Assert.Equal(0.3 * atOne, m.LogMarginalLikelihood(0.3));
+            Assert.Equal(DesignRejection.None, m.Rejection);
+        }
+        double[,] overKnotted = new SplineBasis(3).Design(new KnotConfig([0.1, 0.2, 0.3, 0.4, 0.5, 0.6]), x[..9]);
+        ITemperedMarginal refused = linear.TemperedMarginal(overKnotted, y[..9], null);
+        Assert.Equal(DesignRejection.TooFewObservations, refused.Rejection);
+        Assert.Equal(double.NegativeInfinity, refused.LogMarginalLikelihood(0.0));
+    }
+
+    [Fact]
     public void Normal_RefusesWhatItCannotTemper()
     {
         (double[] x, double[] y) = Data(40);

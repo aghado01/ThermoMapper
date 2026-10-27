@@ -96,6 +96,52 @@ public sealed class TemperingTests
             .Run(x, y, grid: x, chains: 2, masterSeed: 4, burn: 100, samples: 100).Tempering);
     }
 
+    [Theory]
+    [InlineData(TemperingPath.Powered, TemperedForm.Integrated)]
+    [InlineData(TemperingPath.Likelihood, TemperedForm.Linear)]
+    public void ReferenceRungLadder_RecoversThePeak(TemperingPath path, TemperedForm form)
+    {
+        // Each ladder ends at an exact reference rung (OQ2): the powered path's Poisson(1) reference for the default
+        // Normal model, or the knot prior for the Normal model's linear form on the likelihood path.
+        var rng = new Xoshiro256PlusPlus(seed: 11);
+        int n = 150;
+        const double truePeak = 0.4;
+        var x = new double[n];
+        var y = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            x[i] = (i + 0.5) / n;
+            y[i] = Math.Exp(-120.0 * (x[i] - truePeak) * (x[i] - truePeak)) + 0.05 * Gaussian(rng);
+        }
+        BarsResult result = new BarsEnsemble(
+                new SplineBasis(3), new WeightedNormalModel(form: form), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
+                temperLevels: 5, temperBetaMin: 0.1, temperPath: path, temperReferenceRung: true)
+            .Run(x, y, grid: x, chains: 4, masterSeed: 3, burn: 1500, samples: 2000);
+        PeakPosterior p = result.Peak;
+        TemperingReadout t = result.Tempering!;
+        _out.WriteLine($"[reference-rung] {path}/{form}: peak={p.LocationMean:F3} [{p.LocationLo:F3},{p.LocationHi:F3}] " +
+                       $"knots={result.MeanKnots:F2} trips/scan {t.RoundTripsPerScan:F4} (ideal {t.IdealRoundTripRate:F4}), Λ̂ {t.Barrier:F3}");
+
+        Assert.True(Math.Abs(p.LocationMean - truePeak) < 0.06, $"peak {p.LocationMean:F3} off {truePeak}");
+        Assert.All(t.Ladders, ladder => Assert.Equal(0.0, ladder[^1]));
+        Assert.True(t.RoundTripsPerScan > 0.0);
+    }
+
+    [Fact]
+    public void ReferenceRung_IsRejected_WhereItCannotBeDrawn()
+    {
+        IBasis basis = new SplineBasis(3);
+        var prior = new PoissonPrior(5.0);
+        var kernel = new LocalBetaKernel(50.0);
+        Assert.Throws<ArgumentException>(() => new BarsEnsemble(basis, new WeightedNormalModel(), prior, kernel,
+            temperLevels: 4, temperReferenceRung: true));                       // the integrated form refuses b = 0
+        Assert.Throws<ArgumentOutOfRangeException>(() => new BarsEnsemble(basis, new WeightedNormalModel(), prior, kernel,
+            temperLevels: 2, temperPath: TemperingPath.Powered, temperReferenceRung: true));
+        Assert.Throws<ArgumentException>(() => new BarsEnsemble(basis, new WeightedNormalModel(), prior, kernel, temperReferenceRung: true));
+        _ = new BarsEnsemble(basis, new WeightedNormalModel(form: TemperedForm.Linear), prior, kernel, temperLevels: 4, temperReferenceRung: true);
+        _ = new BarsEnsemble(basis, new PoissonModel(), prior, kernel, temperLevels: 4, temperReferenceRung: true);
+    }
+
     [Fact]
     public void LikelihoodPath_IsRejected_ForAModelWithoutATemperedMarginal()
     {

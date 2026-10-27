@@ -2,6 +2,7 @@ using System;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
+using Maths.Samplers;
 using Maths.Samplers.Ensemble;
 using Xunit;
 
@@ -31,7 +32,7 @@ public sealed class BarsResumeTests
         return (x, y);
     }
 
-    public static TheoryData<string> Setups => new() { "plain", "robust", "adaptive", "tempered" };
+    public static TheoryData<string> Setups => new() { "plain", "robust", "adaptive", "tempered", "reference-powered", "reference-linear" };
 
     private static BarsEnsemble Ensemble(string setup) => setup switch
     {
@@ -41,6 +42,10 @@ public sealed class BarsResumeTests
                                        adaptKernelTau: 20.0),
         "tempered" => new BarsEnsemble(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
                                        temperLevels: 3),
+        "reference-powered" => new BarsEnsemble(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
+                                                temperLevels: 4, temperPath: TemperingPath.Powered, temperReferenceRung: true),
+        "reference-linear" => new BarsEnsemble(new SplineBasis(3), new WeightedNormalModel(form: TemperedForm.Linear), new PoissonPrior(5.0),
+                                               new LocalBetaKernel(50.0), temperLevels: 4, temperReferenceRung: true),
         _ => new BarsEnsemble(new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0)),
     };
 

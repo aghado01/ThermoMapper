@@ -74,6 +74,9 @@ public sealed class WhittleModel : IObservationModel
     public bool CanTemperLikelihood => true;
 
     /// <inheritdoc/>
+    public bool CanTemperToPrior => true;
+
+    /// <inheritdoc/>
     public double[] PosteriorMeanCoefficients(double[,] design, double[] y, double[]? weights)
         => FitConditional(design, y, weights).MeanCoefficients();
 
