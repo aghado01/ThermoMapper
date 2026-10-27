@@ -1,4 +1,5 @@
 using System;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
 using Maths.Regression.Spline.Bars;
 using Maths.Rng;
@@ -97,12 +98,14 @@ public sealed class TemperingTests
     }
 
     [Theory]
-    [InlineData(TemperingPath.Powered, TemperedForm.Integrated)]
-    [InlineData(TemperingPath.Likelihood, TemperedForm.Linear)]
-    public void ReferenceRungLadder_RecoversThePeak(TemperingPath path, TemperedForm form)
+    [InlineData(TemperingPath.Powered, TemperedForm.Integrated, false)]
+    [InlineData(TemperingPath.Likelihood, TemperedForm.Linear, false)]
+    [InlineData(TemperingPath.Likelihood, TemperedForm.Integrated, true)]
+    public void ReferenceRungLadder_RecoversThePeak(TemperingPath path, TemperedForm form, bool proper)
     {
         // Each ladder ends at an exact reference rung (OQ2): the powered path's Poisson(1) reference for the default
-        // Normal model, or the knot prior for the Normal model's linear form on the likelihood path.
+        // Normal model, or the knot prior on the likelihood path, for the Normal model's linear form, or for its integrated
+        // form under the proper scaled σ² prior.
         var rng = new Xoshiro256PlusPlus(seed: 11);
         int n = 150;
         const double truePeak = 0.4;
@@ -114,12 +117,13 @@ public sealed class TemperingTests
             y[i] = Math.Exp(-120.0 * (x[i] - truePeak) * (x[i] - truePeak)) + 0.05 * Gaussian(rng);
         }
         BarsResult result = new BarsEnsemble(
-                new SplineBasis(3), new WeightedNormalModel(form: form), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
+                new SplineBasis(3), new WeightedNormalModel(form: form, sigma2Prior: proper ? Sigma2Prior.ScaledToResponse() : null),
+                new PoissonPrior(5.0), new LocalBetaKernel(50.0),
                 temperLevels: 5, temperBetaMin: 0.1, temperPath: path, temperReferenceRung: true)
             .Run(x, y, grid: x, chains: 4, masterSeed: 3, burn: 1500, samples: 2000);
         PeakPosterior p = result.Peak;
         TemperingReadout t = result.Tempering!;
-        _out.WriteLine($"[reference-rung] {path}/{form}: peak={p.LocationMean:F3} [{p.LocationLo:F3},{p.LocationHi:F3}] " +
+        _out.WriteLine($"[reference-rung] {path}/{form}{(proper ? "/proper" : "")}: peak={p.LocationMean:F3} [{p.LocationLo:F3},{p.LocationHi:F3}] " +
                        $"knots={result.MeanKnots:F2} trips/scan {t.RoundTripsPerScan:F4} (ideal {t.IdealRoundTripRate:F4}), Λ̂ {t.Barrier:F3}");
 
         Assert.True(Math.Abs(p.LocationMean - truePeak) < 0.06, $"peak {p.LocationMean:F3} off {truePeak}");
@@ -139,6 +143,8 @@ public sealed class TemperingTests
             temperLevels: 2, temperPath: TemperingPath.Powered, temperReferenceRung: true));
         Assert.Throws<ArgumentException>(() => new BarsEnsemble(basis, new WeightedNormalModel(), prior, kernel, temperReferenceRung: true));
         _ = new BarsEnsemble(basis, new WeightedNormalModel(form: TemperedForm.Linear), prior, kernel, temperLevels: 4, temperReferenceRung: true);
+        _ = new BarsEnsemble(basis, new WeightedNormalModel(sigma2Prior: Sigma2Prior.ScaledToResponse()), prior, kernel, temperLevels: 4,
+                             temperReferenceRung: true);                       // the integrated form under a proper σ² prior
         _ = new BarsEnsemble(basis, new PoissonModel(), prior, kernel, temperLevels: 4, temperReferenceRung: true);
     }
 

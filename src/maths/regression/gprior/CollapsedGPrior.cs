@@ -138,15 +138,17 @@ public sealed class CollapsedGPrior
 
     /// <summary>
     /// The conditional posterior at prior precision <paramref name="tau"/> and likelihood inverse temperature
-    /// <paramref name="inverseTemperature"/>. Unweighted: any τ &gt; 0 and b &gt; 0, at O(1) beyond the mean vector.
+    /// <paramref name="inverseTemperature"/>. Unweighted: any τ &gt; 0 and b ≥ 0, at O(1) beyond the mean vector. At b = 0
+    /// the likelihood is gone (S = 0, the mean is μ₀): a proper σ² prior's marginal there is exactly 0, the start of an
+    /// SMC run or an exact reference rung, and the improper prior's is undefined.
     /// Weighted: only the τ the block was built at, and b = 1, since P_a depends on both.
     /// </summary>
     public GPriorConditional At(double tau, double inverseTemperature = 1.0)
     {
         CheckTau(tau);
         double b = inverseTemperature;
-        if (!(b > 0.0) || double.IsPositiveInfinity(b))
-            throw new ArgumentOutOfRangeException(nameof(inverseTemperature), "The inverse temperature must be positive and finite.");
+        if (!(b >= 0.0) || double.IsPositiveInfinity(b))
+            throw new ArgumentOutOfRangeException(nameof(inverseTemperature), "The inverse temperature must be non-negative and finite.");
 
         int p = Columns;
         if (_posterior is ISpdFactor posterior)
@@ -240,7 +242,9 @@ public sealed class GPriorConditional
         double half = 0.5 * S;
         double common = -nb * Log2Pi + LogDeterminantTerm;
         if (sigmaPrior is InverseGamma prior)
-            return common + prior.Shape * Math.Log(prior.Scale) + SpecialFunctions.LogGamma(prior.Shape + nb)
+            return InverseTemperature == 0.0
+                ? 0.0   // no likelihood, and a proper prior integrates to one; the terms below cancel only to rounding
+                : common + prior.Shape * Math.Log(prior.Scale) + SpecialFunctions.LogGamma(prior.Shape + nb)
                  - SpecialFunctions.LogGamma(prior.Shape) - (prior.Shape + nb) * Math.Log(prior.Scale + half);
         if (!(S > 0.0)) throw new InvalidOperationException("The improper σ² prior needs S > 0.");
         return common + SpecialFunctions.LogGamma(nb) - nb * Math.Log(half);

@@ -306,7 +306,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         .Add(_kernel.GetType().FullName!).Add(_resampler?.GetType().FullName ?? "")
         .Add(_dmgkConstant ?? double.NaN).Add(_adaptKernelTau ?? double.NaN).Add(_temperLevels ?? 0).Add(_temperBetaMin)
         .Add((int)_temperPath).Add((int)_temperSchedule).Add(_temperAdaptLadder ? 1 : 0).Add(_minColumnMass).Add(_birthExploration).Add((int)_birthBase)
-        .Add(_temperReferenceRung ? 1 : 0).Add((_model as WeightedNormalModel)?.Form.ToString() ?? "").ToString();
+        .Add(_temperReferenceRung ? 1 : 0).Add((_model as WeightedNormalModel)?.Form.ToString() ?? "")
+        .Add((_model as WeightedNormalModel)?.Sigma2Prior.ToString() ?? "").ToString();
 
     /// <summary>
     /// Rebuild one chain from its saved restart state (<see cref="BarsChainState"/>): the chain or ladder, every RNG

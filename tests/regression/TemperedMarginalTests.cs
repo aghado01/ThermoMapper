@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
@@ -88,6 +90,123 @@ public sealed class TemperedMarginalTests
 
         Assert.Throws<NotSupportedException>(() => model.TemperedMarginal(z, y, w).LogMarginalLikelihood(0.5));
         Assert.Throws<ArgumentOutOfRangeException>(() => model.TemperedMarginal(z, y, null).LogMarginalLikelihood(0.0));
+
+        var proper = new WeightedNormalModel(sigma2Prior: Sigma2Prior.ScaledToResponse());
+        Assert.Throws<NotSupportedException>(() => proper.TemperedMarginal(z, y, w).LogMarginalLikelihood(0.0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => proper.TemperedMarginal(z, y, null).LogMarginalLikelihood(-0.1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => proper.TemperedMarginal(z, y, null).LogMarginalLikelihood(1.5));
+        Assert.True(double.IsFinite(proper.TemperedMarginal(z, y, w).LogMarginalLikelihood(1.0)));
+    }
+
+    public static TheoryData<string> ProperPriors => new() { "scaled", "unit", "fixed" };
+
+    [Theory]
+    [MemberData(nameof(ProperPriors))]
+    public void Normal_ProperPrior_IsTheCompleteMarginal_DownToZero(string name)
+    {
+        // Under a proper σ² prior the model returns the block's complete marginal in either form, at every b in [0, 1],
+        // exactly 0 at b = 0. The scaled prior's scale is the response's mean square about the centre level, computed here
+        // from a sort of y, apart from the model's helper.
+        (double[] x, double[] y) = Data(60);
+        double tau = 1.0 / x.Length;
+        foreach (GPriorCentre centre in new[] { GPriorCentre.Median, GPriorCentre.Mean, GPriorCentre.Zero })
+        {
+            double[] sorted = (double[])y.Clone();
+            Array.Sort(sorted);
+            double level = centre switch
+            {
+                GPriorCentre.Median => 0.5 * (sorted[29] + sorted[30]),
+                GPriorCentre.Mean => y.Average(),
+                _ => 0.0,
+            };
+            double meanSquare = y.Select(v => (v - level) * (v - level)).Average();
+            (Sigma2Prior prior, InverseGamma ig) = name switch
+            {
+                "scaled" => (Sigma2Prior.ScaledToResponse(), InverseGamma.ShapeScale(1e-3, 1e-3 * meanSquare)),
+                "unit" => (Sigma2Prior.ScaledToResponse(0.5), InverseGamma.ShapeScale(0.5, 0.5 * meanSquare)),
+                _ => (Sigma2Prior.InverseGamma(2.0, 0.05), InverseGamma.ShapeScale(2.0, 0.05)),
+            };
+            var integrated = new WeightedNormalModel(centre, sigma2Prior: prior);
+            var linear = new WeightedNormalModel(centre, TemperedForm.Linear, prior);
+            Assert.True(integrated.CanTemperToPrior);
+            foreach (double[] knots in new[] { Array.Empty<double>(), new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 } })
+            {
+                double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
+                CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite, centre)!;
+                ITemperedMarginal m = integrated.TemperedMarginal(z, y, null);
+                foreach (double b in new[] { 1.0, 0.7, 0.3, 1e-6 })
+                    Assert.Equal(block.At(tau, b).LogMarginal(ig), m.LogMarginalLikelihood(b), 1e-9);
+                Assert.Equal(0.0, m.LogMarginalLikelihood(0.0));
+                double atOne = m.LogMarginalLikelihood(1.0);
+                Assert.Equal(0.3 * atOne, linear.TemperedMarginal(z, y, null).LogMarginalLikelihood(0.3));
+            }
+        }
+    }
+
+    [Fact]
+    public void Normal_ScaledPrior_IsScaleFree_WhereARawUnitPriorIsNot()
+    {
+        // Rescaling y by c shifts every configuration's marginal by the same −(mb/2)·ln c² under the scaled prior, as under
+        // the Jeffreys prior, so the posterior over knots is unchanged across twelve decades. IG(10⁻³, 10⁻³) in raw units
+        // is not (OQ19): at y × 10⁻³ its scale outweighs the residuals.
+        (double[] x, double[] y) = Data(60);
+        double[][] knots = [[], [0.5], [0.2, 0.45, 0.7]];
+        double[] Differences(WeightedNormalModel model, double scale, double b)
+        {
+            double[] ys = y.Select(v => scale * v + 3.0 * scale).ToArray();
+            double[] lm = knots.Select(k => model.TemperedMarginal(new SplineBasis(3).Design(new KnotConfig(k), x), ys, null)
+                                                 .LogMarginalLikelihood(b)).ToArray();
+            return [lm[1] - lm[0], lm[2] - lm[0]];
+        }
+
+        var scaled = new WeightedNormalModel(sigma2Prior: Sigma2Prior.ScaledToResponse());
+        foreach (double b in new[] { 1.0, 0.4 })
+        {
+            double[] reference = Differences(scaled, 1.0, b);
+            foreach (double scale in new[] { 1e-6, 1e-3, 1e3, 1e6 })
+            {
+                double[] d = Differences(scaled, scale, b);
+                for (int j = 0; j < d.Length; j++) Assert.Equal(reference[j], d[j], 1e-7 * Math.Abs(reference[j]) + 1e-9);
+            }
+        }
+        var raw = new WeightedNormalModel(sigma2Prior: Sigma2Prior.InverseGamma(1e-3, 1e-3));
+        double[] rawAtOne = Differences(raw, 1.0, 1.0), rawSmall = Differences(raw, 1e-3, 1.0);
+        Assert.True(Math.Abs(rawSmall[1] - rawAtOne[1]) > 1.0, $"the raw-unit prior moved the evidence by only {rawSmall[1] - rawAtOne[1]:G3}");
+    }
+
+    [Fact]
+    public void Normal_VagueScaledPrior_KeepsTheJeffreysPosterior()
+    {
+        // IG(10⁻³, 10⁻³·s²) adds 10⁻³·s² to S/2 and 10⁻³ to the shape: about a·s²/σ̂² nats off each configuration, nearly
+        // alike, so at this signal-to-noise the differences, all that the posterior over knots reads, move by hundredths.
+        (double[] x, double[] y) = Data(60);
+        var jeffreys = new WeightedNormalModel();
+        var vague = new WeightedNormalModel(sigma2Prior: Sigma2Prior.ScaledToResponse());
+        double[,] z0 = new SplineBasis(3).Design(new KnotConfig([]), x);
+        foreach (double[] knots in new[] { new[] { 0.5 }, new[] { 0.2, 0.45, 0.7 }, new[] { 0.1, 0.3, 0.5, 0.7, 0.9 } })
+        {
+            double[,] z = new SplineBasis(3).Design(new KnotConfig(knots), x);
+            double dj = jeffreys.LogMarginalLikelihood(z, y, null) - jeffreys.LogMarginalLikelihood(z0, y, null);
+            double dv = vague.LogMarginalLikelihood(z, y, null) - vague.LogMarginalLikelihood(z0, y, null);
+            Assert.True(Math.Abs(dv - dj) < 0.05, $"knots {knots.Length}: {dv:G6} vs {dj:G6}");
+        }
+    }
+
+    [Fact]
+    public void Normal_ConstantResponse_HasAMarginalOnlyUnderAFixedProperPrior()
+    {
+        // A constant response centres to zero (S = 0): the Jeffreys prior has no posterior for σ, the scaled prior no
+        // scale, and a fixed proper prior a finite marginal, an exact fit it can weigh.
+        (double[] x, _) = Data(40);
+        var y = new double[x.Length];
+        Array.Fill(y, 2.5);
+        double[,] z = new SplineBasis(3).Design(new KnotConfig([0.4]), x);
+        Assert.Equal(DesignRejection.ZeroResponse, new WeightedNormalModel().TemperedMarginal(z, y, null).Rejection);
+        Assert.Equal(DesignRejection.ZeroResponse,
+                     new WeightedNormalModel(sigma2Prior: Sigma2Prior.ScaledToResponse()).TemperedMarginal(z, y, null).Rejection);
+        ITemperedMarginal fixedPrior = new WeightedNormalModel(sigma2Prior: Sigma2Prior.InverseGamma(2.0, 0.05)).TemperedMarginal(z, y, null);
+        Assert.Equal(DesignRejection.None, fixedPrior.Rejection);
+        Assert.True(double.IsFinite(fixedPrior.LogMarginalLikelihood(1.0)));
     }
 
     [Fact]

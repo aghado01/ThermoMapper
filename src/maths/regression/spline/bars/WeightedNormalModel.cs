@@ -1,4 +1,5 @@
 using System;
+using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
 
@@ -12,7 +13,9 @@ namespace Maths.Regression.Spline.Bars;
 /// Kass 2001, eq. 6; analytic form in He, Yang &amp; Kang 2024, Lemma 1): with β, σ integrated out,
 /// <c>p(y|Z) ∝ (m+1)^(−ν/2) · a^(−m/2)</c> where
 /// <c>a = ỹᵀỹ − (m/(m+1)) · (Zᵀỹ)ᵀ (ZᵀZ)⁻¹ (Zᵀỹ)</c> and <c>ỹ = y − Zμ₀</c> is the response less the prior's centre.
-/// Returned up to the σ-integration constant that depends only on m and so cancels in ratios.
+/// Under the default Jeffreys prior on σ² it is returned up to the σ-integration constant, which depends only on m and
+/// so cancels in ratios. Under a proper prior (<see cref="Sigma2Prior"/>) it is complete: <c>ln p(y | Z)</c>, an
+/// evidence, defined at every inverse temperature down to b = 0 and finite for an exact fit.
 /// <para>The prior is <c>β ~ N(μ₀, mσ²(ZᵀZ)⁻¹)</c>. By default it is centred on the response's median level
 /// (<see cref="GPriorCentre.Median"/>, <c>Zμ₀ = med(y)·1</c> for B-splines). So a constant shift of the response moves only
 /// the fit's level and changes neither the marginal nor the knots, and an outlier that robust weights discount cannot move
@@ -39,12 +42,17 @@ public sealed class WeightedNormalModel : IObservationModel
     /// <param name="form">The likelihood path's tempered marginal: <see cref="TemperedForm.Integrated"/> (the default),
     /// σ² integrated against the tempered likelihood, or <see cref="TemperedForm.Linear"/>, b times the untempered
     /// marginal, which is defined at b = 0 under the improper 1/σ² prior and so admits an exact reference rung.</param>
-    public WeightedNormalModel(GPriorCentre centre = GPriorCentre.Median, TemperedForm form = TemperedForm.Integrated)
+    /// <param name="sigma2Prior">The prior on σ²: <see cref="Sigma2Prior.Jeffreys"/> (null, the default), or a proper
+    /// one, under which both forms reach b = 0 and the marginal is complete. <see cref="Sigma2Prior.ScaledToResponse"/>
+    /// reads its scale about this model's <paramref name="centre"/>.</param>
+    public WeightedNormalModel(GPriorCentre centre = GPriorCentre.Median, TemperedForm form = TemperedForm.Integrated,
+                               Sigma2Prior? sigma2Prior = null)
     {
         if (centre is not (GPriorCentre.Median or GPriorCentre.Mean or GPriorCentre.Zero)) throw new ArgumentOutOfRangeException(nameof(centre));
         if (form is not (TemperedForm.Integrated or TemperedForm.Linear)) throw new ArgumentOutOfRangeException(nameof(form));
         Centre = centre;
         Form = form;
+        Sigma2Prior = sigma2Prior ?? Sigma2Prior.Jeffreys;
     }
 
     /// <summary>Where the coefficient prior is centred.</summary>
@@ -52,6 +60,9 @@ public sealed class WeightedNormalModel : IObservationModel
 
     /// <summary>The likelihood path's tempered marginal.</summary>
     public TemperedForm Form { get; }
+
+    /// <summary>The prior on σ².</summary>
+    public Sigma2Prior Sigma2Prior { get; }
 
     /// <inheritdoc/>
     public int EffectiveDimension(double[,] design, double[]? weights)
@@ -66,19 +77,22 @@ public sealed class WeightedNormalModel : IObservationModel
     /// <inheritdoc/>
     public bool CanTemperLikelihood => true;
 
-    /// <summary>True in the linear form, whose b = 0 member is the knot prior.</summary>
-    public bool CanTemperToPrior => Form == TemperedForm.Linear;
+    /// <summary>True in the linear form, and in either form under a proper σ² prior: their b = 0 member is the knot
+    /// prior.</summary>
+    public bool CanTemperToPrior => Form == TemperedForm.Linear || Sigma2Prior.IsProper;
 
     /// <inheritdoc/>
     public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights)
         => TemperedMarginal(design, y, weights).LogMarginalLikelihood(1.0);
 
     /// <summary>
-    /// The marginal at inverse temperature b, from the block at τ = 1/m. Integrated: <c>LDT_b − (mb/2)·ln S_b</c>,
-    /// dropping the σ-integration constant, which depends on m and b only; unweighted, any b in (0, 1], with b = 0
-    /// refused, since the improper 1/σ² prior then leaves σ unidentified; weighted, b = 1 only (the block is built at
-    /// one τ and b). Linear: b times the b = 1 value, any b in [0, 1]. A configuration with m ≤ ν, an inadmissible
-    /// design or a zero centred response (a constant response, under the median or mean centre) is −∞ at every b.
+    /// The marginal at inverse temperature b, from the block at τ = 1/m. Integrated, under the Jeffreys prior:
+    /// <c>LDT_b − (mb/2)·ln S_b</c>, dropping the σ-integration constant, which depends on m and b only; unweighted, any
+    /// b in (0, 1], with b = 0 refused, since the improper 1/σ² prior then leaves σ unidentified. Under a proper prior:
+    /// the complete marginal, any b in [0, 1], exactly 0 at b = 0. Weighted: b = 1 only (the block is built at one τ and
+    /// b). Linear: b times the b = 1 value, any b in [0, 1]. A configuration with m ≤ ν, an inadmissible design, or a
+    /// response with no spread (a zero centred response under the Jeffreys prior, or no scale for the scaled prior) is
+    /// −∞ at every b.
     /// </summary>
     public ITemperedMarginal TemperedMarginal(double[,] design, double[] y, double[]? weights)
     {
@@ -89,16 +103,37 @@ public sealed class WeightedNormalModel : IObservationModel
         if (design.GetLength(0) <= design.GetLength(1))
             return new ImpossibleMarginal(DesignRejection.TooFewObservations);
 
-        (CollapsedGPrior? block, double tau) = Fit(design, y, weights);
+        bool resolved = Resolve(y, out InverseGamma? prior, out double? level);
+        (CollapsedGPrior? block, double tau) = Fit(design, y, weights, level);
         if (block is null)   // rank-deficient or ill-conditioned design ⇒ outside the support
             return new ImpossibleMarginal(DesignRejection.Inadmissible);
-        var marginal = new NormalMarginal(block, tau);
+        if (!resolved) return new ImpossibleMarginal(DesignRejection.ZeroResponse);
+        var marginal = new NormalMarginal(block, tau, prior);
         return Form == TemperedForm.Linear ? LinearMarginal.Of(marginal.LogMarginalLikelihood(1.0), marginal.Rejection) : marginal;
     }
 
+    // The σ² prior for this response, or false when the scaled prior finds no spread to scale to. The scaled prior reads
+    // the centre's level, which the block's centring then reuses: one median per evaluation, as without it.
+    private bool Resolve(double[] y, out InverseGamma? prior, out double? level)
+    {
+        level = null;
+        if (!Sigma2Prior.ReadsResponse)
+        {
+            prior = Sigma2Prior.For(double.NaN);
+            return true;
+        }
+        ArgumentNullException.ThrowIfNull(y);
+        double c = BandedGPrior.Level(y, Centre), sum = 0.0;
+        foreach (double v in y) sum += (v - c) * (v - c);
+        level = c;
+        prior = Sigma2Prior.For(sum / y.Length);
+        return prior is not null;
+    }
+
     /// <summary>
-    /// A draw from the exact conditional posterior given the knots: <c>σ² ~ IG(m/2, S/2)</c>, then β from its Normal
-    /// conditional through the band factor's precision draw. At unit weights <c>S = a</c> and
+    /// A draw from the exact conditional posterior given the knots: <c>σ² ~ IG(m/2, S/2)</c>, or <c>IG(g₁ + m/2,
+    /// g₂ + S/2)</c> under a proper prior, then β from its Normal conditional through the band factor's precision draw.
+    /// At unit weights <c>S = a</c> and
     /// <c>β ~ N((m/(m+1))(ZᵀZ)⁻¹Zᵀy, σ²·(m/(m+1))·(ZᵀZ)⁻¹)</c>; with weights, <c>β ~ N(Pa⁻¹h, σ²Pa⁻¹)</c> with
     /// <c>Pa = Zᵀ(W + I/m)Z</c>. Falls back to the mean when the response is zero; NaN when the design is
     /// inadmissible, which has no posterior. σ² is NaN whenever no draw is possible. The robust weight update
@@ -110,7 +145,8 @@ public sealed class WeightedNormalModel : IObservationModel
     /// <summary>
     /// <c>Var[f(t) | knots] = E[σ²]·z(t)ᵀ Cov z(t)</c> at each readout row z(t), with σ integrated out (the Student-t
     /// predictive's variance): <c>(a/(m−2))·(m/(m+1))·z(t)ᵀ(ZᵀZ)⁻¹z(t)</c> at unit weights, and
-    /// <c>(S/(m−2))·z(t)ᵀPa⁻¹z(t)</c> with weights. NaN entries when the design is inadmissible or m ≤ 2.
+    /// <c>(S/(m−2))·z(t)ᵀPa⁻¹z(t)</c> with weights; under a proper prior E[σ²] is <c>(g₂ + S/2)/(g₁ + m/2 − 1)</c>. NaN
+    /// entries when the design is inadmissible or m ≤ 2.
     /// </summary>
     public double[]? ConditionalVariance(double[,] design, double[] y, double[]? weights, double[,] readoutDesign)
         => FitConditional(design, y, weights).ConditionalVariance(readoutDesign);
@@ -127,20 +163,27 @@ public sealed class WeightedNormalModel : IObservationModel
     /// <summary>One knot configuration's conditional, fitted once: the block at BARS's τ = 1/m serves the mean, the
     /// conditional variance and the joint draw above.</summary>
     public IConditionalFit FitConditional(double[,] design, double[] y, double[]? weights)
-        => new NormalConditional(Condition(design, y, weights), design, y, weights);
+    {
+        Resolve(y, out InverseGamma? prior, out double? level);
+        return new NormalConditional(Condition(design, y, weights, level), prior, design, y, weights);
+    }
 
-    // The three readouts of one block's conditional, or NaN throughout when the design is inadmissible (no block).
-    private sealed class NormalConditional(GPriorConditional? c, double[,] design, double[] y, double[]? weights) : IConditionalFit
+    // The three readouts of one block's conditional, or NaN throughout when the design is inadmissible (no block). σ² has
+    // a posterior under a proper prior, or under the Jeffreys prior (null) when S > 0.
+    private sealed class NormalConditional(GPriorConditional? c, InverseGamma? prior, double[,] design, double[] y, double[]? weights)
+        : IConditionalFit
     {
         private readonly int columns = design.GetLength(1);
+
+        private bool HasSigmaPosterior => c is not null && (prior is not null || c.S > 0.0);
 
         public double[] MeanCoefficients() => c is null ? Unavailable(columns) : c.Mean.ToArray();
 
         public double[]? ConditionalVariance(double[,] readoutDesign)
         {
             ArgumentNullException.ThrowIfNull(readoutDesign);
-            if (c is null || !(c.S > 0.0) || c.Rows <= 2) return ReadoutQuadratics.Unavailable(readoutDesign);
-            return c.ConditionalVariance(null, readoutDesign);
+            if (!HasSigmaPosterior || c!.Rows <= 2) return ReadoutQuadratics.Unavailable(readoutDesign);
+            return c.ConditionalVariance(prior, readoutDesign);
         }
 
         public ConditionalDraw Sample(Xoshiro256PlusPlus rng)
@@ -148,8 +191,8 @@ public sealed class WeightedNormalModel : IObservationModel
             ArgumentNullException.ThrowIfNull(rng);
             if (c is null) return new(Unavailable(columns), double.NaN);
             double[] beta = c.Mean.ToArray();
-            if (!(c.S > 0.0)) return new(beta, double.NaN);
-            double sigma2 = c.Sample(null, rng, beta);   // the improper 1/σ² prior
+            if (!HasSigmaPosterior) return new(beta, double.NaN);
+            double sigma2 = c.Sample(prior, rng, beta);
             return new(beta, sigma2);
         }
 
@@ -160,21 +203,22 @@ public sealed class WeightedNormalModel : IObservationModel
             if (units.Observations != y.Length)
                 throw new ArgumentException("The partition must cover the fitted observations.", nameof(units));
             var values = new double[units.Units];
-            if (c is null || !(c.S > 0.0)) { Array.Fill(values, double.NaN); return values; }
-            for (int u = 0; u < units.Units; u++) values[u] = c.LeaveOutLogDensity(null, design, y, weights, units.Members[u]);
+            if (!HasSigmaPosterior) { Array.Fill(values, double.NaN); return values; }
+            for (int u = 0; u < units.Units; u++) values[u] = c!.LeaveOutLogDensity(prior, design, y, weights, units.Members[u]);
             return values;
         }
     }
 
     // One knot configuration's conditional posterior at BARS's τ = 1/m, untempered; null when it is inadmissible.
-    private GPriorConditional? Condition(double[,] design, double[] y, double[]? weights)
+    private GPriorConditional? Condition(double[,] design, double[] y, double[]? weights, double? level)
     {
-        (CollapsedGPrior? block, double tau) = Fit(design, y, weights);
+        (CollapsedGPrior? block, double tau) = Fit(design, y, weights, level);
         return block?.At(tau);
     }
 
-    // The block for one knot configuration at BARS's τ = 1/m, centred as set, or null when admission refuses G's factor.
-    private (CollapsedGPrior? Block, double Tau) Fit(double[,] design, double[] y, double[]? weights)
+    // The block for one knot configuration at BARS's τ = 1/m, centred as set (on level, when known), or null when admission
+    // refuses G's factor.
+    private (CollapsedGPrior? Block, double Tau) Fit(double[,] design, double[] y, double[]? weights, double? level)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -187,8 +231,8 @@ public sealed class WeightedNormalModel : IObservationModel
         var banded = new BandedDesign(design);
         double tau = 1.0 / m;
         CollapsedGPrior? block = weights is null
-            ? BandedGPrior.Fit(banded, y, Admits, Centre)
-            : BandedGPrior.Fit(banded, y, weights, tau, Admits, Centre);
+            ? BandedGPrior.Fit(banded, y, Admits, Centre, level)
+            : BandedGPrior.Fit(banded, y, weights, tau, Admits, Centre, level);
         return (block, tau);
     }
 
@@ -207,12 +251,14 @@ public sealed class WeightedNormalModel : IObservationModel
     {
         private readonly CollapsedGPrior _block;
         private readonly double _tau;
+        private readonly InverseGamma? _prior;   // null: the Jeffreys prior
         private readonly double _atOne;
 
-        public NormalMarginal(CollapsedGPrior block, double tau)
+        public NormalMarginal(CollapsedGPrior block, double tau, InverseGamma? prior)
         {
             _block = block;
             _tau = tau;
+            _prior = prior;
             _atOne = At(block.At(tau));
         }
 
@@ -223,14 +269,20 @@ public sealed class WeightedNormalModel : IObservationModel
             if (inverseTemperature == 1.0) return _atOne;
             if (_block.IsWeighted)
                 throw new NotSupportedException("The weighted marginal is untempered: P_a is built at b = 1.");
-            if (!(inverseTemperature > 0.0 && inverseTemperature <= 1.0))
+            if (_prior is null && !(inverseTemperature > 0.0 && inverseTemperature <= 1.0))
                 throw new ArgumentOutOfRangeException(nameof(inverseTemperature),
                     "Under the improper 1/σ² prior the tempered marginal needs b in (0, 1].");
+            if (!(inverseTemperature >= 0.0 && inverseTemperature <= 1.0))
+                throw new ArgumentOutOfRangeException(nameof(inverseTemperature), "The tempered marginal needs b in [0, 1].");
             return At(_block.At(_tau, inverseTemperature));
         }
 
-        // A zero centred response (a constant one, under the median or mean centre) has S = 0 at every b: no posterior for σ.
-        private static double At(GPriorConditional c)
-            => c.S > 0.0 ? c.LogDeterminantTerm - 0.5 * c.Rows * c.InverseTemperature * Math.Log(c.S) : double.NegativeInfinity;
+        // Under a proper prior, the complete marginal, finite even for an exact fit. Under the Jeffreys prior a zero centred
+        // response (a constant one, under the median or mean centre) has S = 0 at every b: no posterior for σ.
+        private double At(GPriorConditional c)
+        {
+            if (_prior is InverseGamma prior) return c.LogMarginal(prior);
+            return c.S > 0.0 ? c.LogDeterminantTerm - 0.5 * c.Rows * c.InverseTemperature * Math.Log(c.S) : double.NegativeInfinity;
+        }
     }
 }

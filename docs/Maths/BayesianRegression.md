@@ -310,15 +310,32 @@ with $P_a=Z^\top(W+I/m)Z$, $h=Z^\top W\tilde y$ and $S=\tilde y^\top W\tilde y-h
 
 $$\ell_b(Z)=\tfrac{\nu}{2}\log\tfrac{\tau}{\tau+b}-\tfrac{mb}{2}\log S_b,\qquad S_b=b\big(\lVert \tilde y-Z\hat\beta\rVert^2+\tfrac{\tau}{\tau+b}\lVert Z\hat\beta\rVert^2\big).$$
 
-- **The omitted constant.** $\ell_b$ is the complete improper-prior marginal less $\log\Gamma(mb/2)-\tfrac{mb}{2}\log\pi$, which depends on m and b only. It cancels in Metropolis ratios, in swaps between rungs and in normalized SMC weights; an evidence estimate must restore it. `TemperedMarginalTests` checks that the difference is the same across designs of different sizes.
+- **The omitted constant.** $\ell_b$ is the complete improper-prior marginal less $\log\Gamma(mb/2)-\tfrac{mb}{2}\log\pi$, which depends on m and b only. It cancels in Metropolis ratios, in swaps between rungs and in normalized SMC weights; an evidence estimate must restore it. `TemperedMarginalTests` checks that the difference is the same across designs of different sizes. Under a proper σ² prior nothing is omitted: the model returns the block's complete marginal.
 - **At b = 1** it is exactly `LogMarginalLikelihood`, computed once per design, since every chain and swap reads it.
-- **b = 0 is refused.** Under the improper 1/σ² prior, σ² has no posterior at $b=0$. The block's `LogMarginal` takes a proper inverse-gamma prior, which would allow it; BARS keeps the improper prior, so a likelihood-tempered ladder's hottest rung needs $b>0$ (step 3.2).
+- **b = 0 needs a proper σ² prior.** Under the default Jeffreys prior, σ² has no posterior at $b=0$, so the integrated form's hottest rung needs $b>0$ (step 3.2); the linear form reaches 0 regardless. Under a proper prior (`Sigma2Prior`, below) the block allows $b=0$, the marginal there is exactly 0, and either form takes an exact reference rung.
 - **The weighted marginal serves b = 1 only**, because $P_a$ depends on b. Tempering therefore stays incompatible with the robust resampler, which `BarsEnsemble` already enforces.
 - **Poisson, Whittle and Gibbs-loss temper linearly,** $\ell_b=b\,\ell_1$: their Laplace (or pseudo-) marginal raised to $b$, with the knot prior untempered. Integrating β against the tempered likelihood would need an IRLS fit at every rung and at every swap. The linear form also runs to the posterior from $b=0$, where it is 0. A marginal of −∞ stays −∞ at every $b$, $b=0$ included, so that endpoint is the prior restricted to the configurations the model admits, not the prior itself (OQ2 splits the refusal reasons an exact reference must treat).
   - **Two forms, one path.** Both are likelihood-tempered: the prior is whole and the hot measure is the same in every representation. They differ in how hard a hot rung charges for dimension. The integrated form's Occam factor per basis function is $(1+mb)^{-1/2}$, about 0.97 nats at $b=0.05$, $m=120$; the linear form charges $b$ times its untempered penalty, $b\cdot\tfrac12\log m$ for the BIC term, about 0.12 nats there.
   - **Measured** (ladder 1 → 0.05, Poisson(5) count prior, 20,000 sweeps): the Normal model's rungs average 3.10, 1.68, 1.51 and 1.97 knots; Poisson's, on count data, 0.58, 2.19, 3.66 and 4.37, close to the prior mean. On the powered path both head for Poisson(5^β) ≈ 1.08 knots at $β=0.05$ (1.03 and 1.10).
   - **The interface default** still serves $b=1$ only, so a custom model must opt in (`TemperedMarginal`, `CanTemperLikelihood`).
 - **m ≤ ν, an inadmissible design or a zero response** is −∞ at every b, so admission does not depend on the temperature.
+
+**The σ² prior** (`Sigma2Prior`, 2026-10-27). `WeightedNormalModel(sigma2Prior: …)` takes one of three, from the g-prior namespace that BASS will share:
+- **`Jeffreys`**, the default: $p(\sigma^2)\propto1/\sigma^2$. It is scale-free, but the marginal is known only up to a constant. So there is no evidence and no $b=0$ in the integrated form, and a configuration that fits the response exactly has no posterior.
+- **`ScaledToResponse(a)`**: IG($a$, $a\,s^2$), with $s^2=\tfrac1m\sum_i(y_i-c)^2$ about the centre's level $c$ (the median, mean or zero). It reads the data alone, never the robust weights, and is the same for every design.
+  - *Scale-free.* Rescaling y by k scales $s^2$ by $k^2$ and shifts every configuration's marginal by the same $-\tfrac{mb}{2}\ln k^2$, so the posterior over knots is unchanged. This is OQ19's route (b); `TemperedMarginalTests` checks it over twelve decades, against a raw-unit IG(10⁻³, 10⁻³) that moves.
+  - *$a=10^{-3}$, the default shape,* is IG(10⁻³, 10⁻³) on the standardized response, the setting Bach & Klein's code uses. Against the Jeffreys prior it lowers a configuration's marginal by about $a\,s^2/\hat\sigma^2$ nats, nearly alike across configurations: differences move by that times the relative gap in their residual variances, hundredths of a nat at ordinary signal-to-noise. Near an exact fit it keeps σ² off 0, which is its point.
+  - *$a=\tfrac12$* is a unit-information prior: one observation's worth at the null fit's variance. It is informative where the fit is close, since S gains $s^2$ against $m\hat\sigma^2$, which pulls σ² towards the response's own spread.
+- **`InverseGamma(a, b)`**, in the response's raw units (OQ19's caveat), for parity with an analysis that fixes it.
+- **What a proper prior buys.**
+  - The marginal is complete: an evidence.
+  - It is defined at every $b\in[0,1]$ and is exactly 0 at $b=0$, so the integrated form takes an exact reference rung and SMC can start at the prior.
+  - It is finite for an exact fit, so the posterior over designs stays proper.
+  - A constant response still has no posterior under the scaled prior, which finds no spread (`ZeroResponse`); a fixed IG admits it.
+- **Trade-offs.**
+  - The scaled prior reads the response, as the median centre does. That empirical scale leaves the posterior over knots alone and is invariant to units, but it enters the evidence through $a\ln(a\,s^2)$, as every proper prior's constants do.
+  - The evidence also depends on $a$, by about $\ln(1/a)$ at small $a$. That term is common to all designs, so it cancels within one fit and between engines that share the prior, but not between engines that do not.
+  - The scaled prior costs one pass over y per evaluation; the centre's median is shared with the block's centring (`BandedGPrior.Level`).
 
 **Laplace/BIC-type models.** `WhittleModel` and `GibbsLossModel` return (log-likelihood at the estimate) $-\tfrac\nu2\log m$. So does `PoissonModel` on its BIC pathway, while its default is the Laplace marginal under a g-prior:
 

@@ -267,8 +267,22 @@ public sealed class CollapsedGPriorTests
         (double[,] z, double[] y) = CoefficientDrawTests.Problem();
         CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite)!;
         Assert.Throws<ArgumentOutOfRangeException>(() => block.At(0.0));
-        Assert.Throws<ArgumentOutOfRangeException>(() => block.At(0.1, 0.0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => block.At(0.1, -0.1));
         Assert.Throws<ArgumentOutOfRangeException>(() => block.At(double.NaN));
+    }
+
+    [Fact]
+    public void AtZero_TheProperPriorsMarginalIsZero_AndTheImpropersIsUndefined()
+    {
+        // b = 0 drops the likelihood: S = 0 and the mean is the prior's centre. A proper σ² prior integrates to one, so
+        // the marginal is exactly 0; the improper 1/σ² has no marginal there.
+        (double[,] z, double[] y) = CoefficientDrawTests.Problem();
+        CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite, GPriorCentre.Median)!;
+        GPriorConditional c = block.At(0.1, 0.0);
+        Assert.Equal(0.0, c.S);
+        Assert.Equal(0.0, c.LogMarginal(InverseGamma.ShapeScale(2.0, 0.5)));
+        Assert.Equal(0.0, c.LogMarginal(InverseGamma.ShapeScale(1e-3, 1e-3)));
+        Assert.Throws<InvalidOperationException>(() => c.LogMarginal(null));
     }
 
     private static bool PositiveDefinite(ISpdFactor factor) => factor.Status.PositiveDefinite;

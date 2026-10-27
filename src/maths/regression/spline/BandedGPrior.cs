@@ -19,9 +19,11 @@ namespace Maths.Regression.Spline;
 public static class BandedGPrior
 {
     /// <summary>The unweighted block: G = ZᵀZ factored, β_OLS, <c>‖ỹ − Zβ_OLS‖²</c> and <c>Q = ‖Zβ_OLS‖²</c> for the
-    /// response centred by <paramref name="centre"/>; null when <paramref name="admits"/> refuses G's factor.</summary>
+    /// response centred by <paramref name="centre"/>; null when <paramref name="admits"/> refuses G's factor. A caller
+    /// that already holds the centre's <see cref="Level"/> passes it as <paramref name="level"/>, which saves the median's
+    /// sort.</summary>
     public static CollapsedGPrior? Fit(BandedDesign design, double[] y, Func<ISpdFactor, bool> admits,
-                                       GPriorCentre centre = GPriorCentre.Zero)
+                                       GPriorCentre centre = GPriorCentre.Zero, double? level = null)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -35,7 +37,7 @@ public static class BandedGPrior
         var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         gram.DecomposeBanded(band);
         if (!admits(gram)) return null;
-        (double[]? priorMean, double[] response) = Centre(design, gram, y, centre);
+        (double[]? priorMean, double[] response) = Centre(design, gram, y, centre, level);
         if (priorMean is not null)
         {
             Array.Clear(b);
@@ -65,7 +67,8 @@ public static class BandedGPrior
     /// is a numerical defect, raised as an exception.</para>
     /// </summary>
     public static CollapsedGPrior? Fit(BandedDesign design, double[] y, double[] weights, double tau,
-                                       Func<ISpdFactor, bool> admits, GPriorCentre centre = GPriorCentre.Zero)
+                                       Func<ISpdFactor, bool> admits, GPriorCentre centre = GPriorCentre.Zero,
+                                       double? level = null)
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
@@ -80,7 +83,7 @@ public static class BandedGPrior
         var gram = new BandCholesky(nu, design.Bandwidth, BandFactorization.Ldlt, strict: true);
         gram.DecomposeBanded(gBand);
         if (!admits(gram)) return null;
-        (double[]? priorMean, double[] response) = Centre(design, gram, y, centre);
+        (double[]? priorMean, double[] response) = Centre(design, gram, y, centre, level);
 
         var wPlus = new double[m];
         double sumLogW = 0.0;
@@ -119,14 +122,13 @@ public static class BandedGPrior
     // reproduces 1 to 1e-10), a constant response's centred value is zero by definition and is set so, rather than left
     // as the projection's roundoff, which the improper σ² prior would read as a near-perfect fit.
     private static (double[]? PriorMean, double[] Response) Centre(BandedDesign design, ISpdFactor gram, double[] y,
-                                                                  GPriorCentre centre)
+                                                                  GPriorCentre centre, double? level)
     {
         if (centre == GPriorCentre.Zero) return (null, y);
         if (centre is not (GPriorCentre.Median or GPriorCentre.Mean)) throw new ArgumentOutOfRangeException(nameof(centre));
         int m = design.Rows, nu = design.Dimension;
-        bool constant = true;
-        for (int i = 1; i < m && constant; i++) constant = y[i] == y[0];
-        double mean = constant ? y[0] : centre == GPriorCentre.Median ? Median(y) : Average(y);
+        bool constant = Constant(y);
+        double mean = level ?? Level(y, centre);
 
         var unit = new double[nu];
         Array.Fill(unit, 1.0);
@@ -158,6 +160,32 @@ public static class BandedGPrior
         if (!(constant && spansConstant))
             for (int i = 0; i < m; i++) response[i] = y[i] - mean * projected[i];
         return (priorMean, response);
+    }
+
+    /// <summary>
+    /// The level <paramref name="centre"/> centres the response on: zero, its median or its mean, and a constant
+    /// response's own value exactly. It reads the data alone, so it is the same for every design. About it, the
+    /// response's mean square <c>Σ(yᵢ − c)²/m</c> is the scale <see cref="Sigma2Prior.ScaledToResponse"/> takes.
+    /// </summary>
+    public static double Level(double[] y, GPriorCentre centre)
+    {
+        ArgumentNullException.ThrowIfNull(y);
+        if (y.Length == 0) throw new ArgumentException("The response is empty.", nameof(y));
+        return centre switch
+        {
+            GPriorCentre.Zero => 0.0,
+            GPriorCentre.Median or GPriorCentre.Mean when Constant(y) => y[0],
+            GPriorCentre.Median => Median(y),
+            GPriorCentre.Mean => Average(y),
+            _ => throw new ArgumentOutOfRangeException(nameof(centre)),
+        };
+    }
+
+    private static bool Constant(double[] y)
+    {
+        for (int i = 1; i < y.Length; i++)
+            if (y[i] != y[0]) return false;
+        return true;
     }
 
     private static double Median(double[] y)
