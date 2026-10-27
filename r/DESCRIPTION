@@ -6,7 +6,9 @@ Description: Project-local dependency manifest for ThermoMapper's R validation
     oracles.
 Imports:
     jsonlite,
+    loo,
     maotai,
+    posterior,
     Rdimtools,
     Riemann,
     SHT,
