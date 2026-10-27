@@ -2966,3 +2966,39 @@ At the user's request, as an option beside loo's √Σ total (`eb74196`). It clo
   - **Informative prior N(ȳ − 2, 1/20):** the posterior mean sits below every unit's pull, so the errors share a sign. Joint 0.320 against an actual 0.319; loo's √Σ 0.097, 3.3 times too small. Both outcomes were predicted before the run.
 
 **Results** under the fact harness: `Maths.Regression.Tests` 406 of 406 (`20261025_201740635`).
+
+### Exact reference rungs for BARS, and the OQ1 rerun (OQ2) — 2026-10-27
+
+At the user's request: BARS's exact reference rungs on both paths, the Normal model's linear form on the likelihood path, then the open question on mixing and the OQ1 rerun.
+
+**Built** (before the study; tests below):
+- **`IReferenceSampler<TState>`** (`Maths.Samplers`): exact draws from a target's b = 0 member on one path.
+- **`ParallelTempering`'s reference rung.** With a reference, the hot end is β = 0 and its rung takes an exact draw every scan in place of local moves. Its stream is a further `SeedTree` child, prefix-stable, so a ladder without a reference keeps its streams. `ReferenceLadder(levels, βmin)` builds the ladder, and snapshots carry the rung's stream. `Temperature.LogDensity` stays −∞ off the support at b = 0 on the powered path, where 0·(−∞) was NaN.
+- **`SplineTarget.Reference(path)`.** Locations are uniform order statistics on both paths; the count law differs by path, and draws are restricted to the target's support by rejection.
+  - *Powered:* k ~ Poisson(1), the base measure normalized. It serves every model.
+  - *Likelihood:* the count prior, normalized by tabulation to e^−60.
+- **`TemperedForm`.** `WeightedNormalModel(form: TemperedForm.Linear)` tempers b·ℓ₁, defined at b = 0 under the improper σ² prior; the integrated form stays the default. `IObservationModel.CanTemperToPrior` marks the models whose likelihood path reaches b = 0: the Laplace models, and the Normal model in its linear form.
+- **`BarsEnsemble(temperReferenceRung: true)`.**
+
+#### Pre-registration (written before any run)
+
+**Questions.**
+1. *Mixing.* On Normal BARS's likelihood path, which tempered form has the smaller communication barrier: the integrated p_b or the linear b·ℓ₁? And what does an exact reference rung cost or buy in barrier and round trips?
+2. *OQ1 rerun.* With exact rungs available, does any tempered configuration beat the current tempered default: the likelihood path, the integrated form for Normal fits, and the hot end that suits the fit?
+
+**Design.** `TemperingBenchmark.ReferenceRungs_ByColdChainEss` (`TEMPER_BENCH_OQ2`), on OQ1's fits: peak, sine, counts, oscillatory.
+- *Normal-fit arms:* L-int at β_min 0.05, 0.2, 0.35 and 0.5; L-lin at the same four; L-lin-ref, ending at 0; P at 0.05; P-ref, ending at 0.
+- *Counts arms:* L at the four hot ends, L-ref, P and P-ref.
+- *Runs:* 4 and 8 rungs; adapted DEO (Algorithm 4's rounds over 4,095 burn scans); 20,000 measured scans; 8 ladders × 2 groups, seeds 1000·(group + 1) + c.
+- *Baseline:* `Untempered_EqualWorkBaseline` (`TEMPER_BENCH_BASE`), rerun at the same revision.
+- *Metrics:* the cold chain's bulk ESS of the knot count, the peak location and the energy, per 1,000 replica-steps of the measured phase. Λ̂ is the sum of the pair rejection rates over the measured phase, averaged over the 8 ladders. Round trips are counted per scan.
+- *Work:* a reference rung's scan costs its draw's attempts, each one evaluation, not one step.
+
+**Rules.**
+- *Scoring.* An arm's score on a fit and metric is its better level (4 or 8) by pooled ESS per kilo-work. An arm *beats* a comparator when the ratio is at least 1.25 in both groups, and *loses* when it is at most 1/1.25 in both; anything else is a tie.
+- *Q1, the barrier.* Λ̂ is reported for L-int against L-lin at each β_min and level. A form "has the smaller barrier" on a fit only where its Λ̂ is lower in both groups at every β_min there; otherwise there is no consistent difference.
+- *The rung default.* `temperReferenceRung` becomes true by default iff the rung arms beat their best no-rung arms on the same path and form (L-lin-ref against the best L-lin on the three Normal fits, L-ref against the best L on counts) on knot-count ESS on at least 3 of the 4 fits, and lose on peak ESS on none.
+- *The form default.* `WeightedNormalModel`'s tempered form becomes Linear iff the best L-lin arm, L-lin-ref included, beats the best L-int arm on knot-count ESS on at least 2 of the 3 Normal fits, and loses on peak ESS on none.
+- *Scope of both switches.* They affect tempered runs only: the linear form equals the integrated one at b = 1, and the rung is off unless a ladder is asked for.
+- *The path default.* The likelihood path stays BARS's tempering path unless P-ref beats the best likelihood-path arm on knot-count ESS on at least 3 of the 4 fits and loses on peak on none.
+- *OQ4.* BARS stays untempered by default unless a tempered arm beats the equal-work baseline on knot-count ESS on at least 3 of the 4 fits.
