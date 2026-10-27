@@ -143,6 +143,51 @@ public sealed class TemperingTests
     }
 
     [Fact]
+    public void BimodalFixture_IsMirrorSymmetric()
+    {
+        // The fixture's ground truth, each mode at exactly half the mass, rests on the target's invariance under
+        // ξ ↦ 1 − ξ: a configuration and its mirror evaluate alike in both tempered forms, and the mirror's curve peaks
+        // at the mirrored location, so the peak's side of ½ has a symmetric law.
+        (double[] x, double[] y) = BimodalFixture.Data(200);
+        var basis = new SplineBasis(3);
+        var rng = new Xoshiro256PlusPlus(seed: 5);
+        foreach (TemperedForm form in new[] { TemperedForm.Integrated, TemperedForm.Linear })
+        {
+            var model = new WeightedNormalModel(form: form);
+            var target = new SplineTarget(basis, model, BimodalFixture.Prior(), x, y);
+            int admitted = 0;
+            for (int trial = 0; trial < 300; trial++)
+            {
+                var knots = new double[1 + trial % BimodalFixture.Cap];
+                for (int j = 0; j < knots.Length; j++) knots[j] = rng.NextDouble();
+                Array.Sort(knots);
+                var config = new KnotConfig(knots);
+                KnotConfig mirror = BimodalFixture.Mirror(config);
+                ITargetEvaluation e = target.Evaluate(config), m = target.Evaluate(mirror);
+                Assert.Equal(e.LogPrior, m.LogPrior);
+                if (double.IsNegativeInfinity(e.LogLikelihood(1.0)))
+                {
+                    Assert.True(double.IsNegativeInfinity(m.LogLikelihood(1.0)));
+                    continue;
+                }
+                admitted++;
+                foreach (double b in new[] { 1.0, 0.3 })
+                    Assert.Equal(e.LogLikelihood(b), m.LogLikelihood(b), 1e-9 * Math.Abs(e.LogLikelihood(b)));
+
+                double[] coef = model.PosteriorMeanCoefficients(basis.Design(config, x), y, null);
+                double[] mirrorCoef = model.PosteriorMeanCoefficients(basis.Design(mirror, x), y, null);
+                (double location, double height) = SplineExtrema.Argmax(config, coef, basis);
+                double[,] at = basis.Design(mirror, [1.0 - location]);
+                double mirrored = 0.0;
+                for (int j = 0; j < mirrorCoef.Length; j++) mirrored += at[0, j] * mirrorCoef[j];
+                Assert.Equal(height, SplineExtrema.Argmax(mirror, mirrorCoef, basis).Height, 1e-9);
+                Assert.Equal(height, mirrored, 1e-9);
+            }
+            Assert.True(admitted > 150, $"only {admitted} configurations admitted");
+        }
+    }
+
+    [Fact]
     public void LikelihoodPath_IsRejected_ForAModelWithoutATemperedMarginal()
     {
         Assert.Throws<ArgumentException>(() => new BarsEnsemble(

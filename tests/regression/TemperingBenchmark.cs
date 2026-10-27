@@ -33,6 +33,9 @@ namespace Maths.Regression.Tests;
 /// brief: the Normal model's integrated and linear tempered forms at the four hot ends, each path ending at its exact
 /// reference rung, and the powered path at 0.05, by the same cold-chain ESS, with each arm's communication barrier and
 /// round trips beside it.</item>
+/// <item><c>TEMPER_BENCH_BIMODAL</c>: the same arms on a posterior with two separated modes of equal mass
+/// (<see cref="BimodalFixture"/>) at two separations, judged by the mode share's error against its exact ½,
+/// pre-registered in the preparation brief, with its own equal-work baseline.</item>
 /// </list>
 /// Work is counted in replica-steps of the measured phase, which tempered and untempered runs spend alike; seconds are
 /// reported beside it. Each variable names the TSV file written; <c>TEMPER_BENCH_FITS</c> (comma-separated) restricts the
@@ -43,7 +46,12 @@ public sealed class TemperingBenchmark
     private const int Burn = 4095;      // 1 + 2 + … + 2048: Algorithm 4's rounds exactly
     private const int Measured = 20_000;
 
-    private sealed record Fit(string Name, IObservationModel Model, double[] X, double[] Y, double PriorMean);
+    // A fit's count prior is Poisson(PriorMean) unless it declares its own.
+    private sealed record Fit(string Name, IObservationModel Model, double[] X, double[] Y, double PriorMean,
+                              IComplexityPrior? Prior = null)
+    {
+        public IComplexityPrior CountPrior => Prior ?? new PoissonPrior(PriorMean);
+    }
 
     private static Fit[] Fits(params string[] names)
     {
@@ -51,12 +59,16 @@ public sealed class TemperingBenchmark
         (double[] px, double[] py) = Peak();
         (double[] cx, double[] cy) = Counts();
         (double[] ox, double[] oy) = Oscillatory();
+        (double[] b2x, double[] b2y) = BimodalFixture.Data(200);
+        (double[] b8x, double[] b8y) = BimodalFixture.Data(800);
         Fit[] all =
         [
             new("peak", new WeightedNormalModel(), px, py, 5.0),
             new("sine", new WeightedNormalModel(), sx, sy, 5.0),
             new("counts", new PoissonModel(), cx, cy, 5.0),
             new("oscillatory", new WeightedNormalModel(), ox, oy, 15.0),
+            new("bimodal-200", new WeightedNormalModel(), b2x, b2y, double.NaN, BimodalFixture.Prior()),
+            new("bimodal-800", new WeightedNormalModel(), b8x, b8y, double.NaN, BimodalFixture.Prior()),
         ];
         string[]? only = Environment.GetEnvironmentVariable("TEMPER_BENCH_FITS")?.Split(',');
         return all.Where(f => names.Contains(f.Name) && (only is null || only.Contains(f.Name))).ToArray();
@@ -144,24 +156,27 @@ public sealed class TemperingBenchmark
             {
                 int chains = 8 * levels;
                 var series = new Series(chains);
-                for (int c = 0; c < chains; c++)
-                {
-                    var target = new SplineTarget(new SplineBasis(3), fit.Model, new PoissonPrior(fit.PriorMean), fit.X, fit.Y);
-                    var chain = new ReversibleJumpChain<KnotConfig>(Moves(), target, new KnotConfig([]), new Xoshiro256PlusPlus(5000 + c));
-                    for (int i = 0; i < Burn; i++) chain.Step();
-                    var configs = new KnotConfig[Measured];
-                    var energy = new double[Measured];
-                    var clock = Stopwatch.StartNew();
-                    for (int i = 0; i < Measured; i++)
-                    {
-                        configs[i] = chain.Step();
-                        energy[i] = chain.CurrentEvaluation.LogLikelihood(1.0);
-                    }
-                    series.Add(c, fit, new RunResult("", configs, energy, clock.Elapsed.TotalSeconds), 1);
-                }
+                for (int c = 0; c < chains; c++) series.Add(c, fit, Untempered(fit, 5000 + c), 1);
                 ess.AppendLine(series.Row(fit.Name, "Untempered", double.NaN, levels, -1));
                 File.WriteAllText(path, ess.ToString());
             }
+    }
+
+    // One untempered chain from the empty configuration, burned in as long as the ladders.
+    private static RunResult Untempered(Fit fit, int seed)
+    {
+        var target = new SplineTarget(new SplineBasis(3), fit.Model, fit.CountPrior, fit.X, fit.Y);
+        var chain = new ReversibleJumpChain<KnotConfig>(Moves(), target, new KnotConfig([]), new Xoshiro256PlusPlus(seed));
+        for (int i = 0; i < Burn; i++) chain.Step();
+        var configs = new KnotConfig[Measured];
+        var energy = new double[Measured];
+        var clock = Stopwatch.StartNew();
+        for (int i = 0; i < Measured; i++)
+        {
+            configs[i] = chain.Step();
+            energy[i] = chain.CurrentEvaluation.LogLikelihood(1.0);
+        }
+        return new RunResult("", configs, energy, clock.Elapsed.TotalSeconds);
     }
 
     private const string EssHeader = "data\tpath\tbeta_min\tlevels\tgroup\tchains\tess_knots_bulk\tess_knots_tail\t" +
@@ -180,35 +195,85 @@ public sealed class TemperingBenchmark
     {
         if (Environment.GetEnvironmentVariable("TEMPER_BENCH_OQ2") is not string path) return;   // heavy; set TEMPER_BENCH_OQ2 to run
 
-        const int chains = 8;
-        double[] hotEnds = [0.05, 0.2, 0.35, 0.5];
         var ess = new StringBuilder(EssHeader + "\tarm\n");
         foreach (Fit fit in Fits("peak", "sine", "counts", "oscillatory"))
-        {
-            bool normal = fit.Model is WeightedNormalModel;
-            var arms = new List<(string Name, TemperingPath Path, IObservationModel Model, bool Reference, double BetaMin)>();
-            IObservationModel linear = normal ? new WeightedNormalModel(form: TemperedForm.Linear) : fit.Model;
-            foreach (double b in hotEnds) arms.Add((normal ? "L-int" : "L", TemperingPath.Likelihood, fit.Model, false, b));
-            if (normal) foreach (double b in hotEnds) arms.Add(("L-lin", TemperingPath.Likelihood, linear, false, b));
-            arms.Add((normal ? "L-lin-ref" : "L-ref", TemperingPath.Likelihood, linear, true, 0.05));
-            arms.Add(("P", TemperingPath.Powered, fit.Model, false, 0.05));
-            arms.Add(("P-ref", TemperingPath.Powered, fit.Model, true, 0.05));
-            foreach ((string name, TemperingPath tp, IObservationModel model, bool reference, double betaMin) in arms)
+            foreach ((string name, TemperingPath tp, IObservationModel model, bool reference, double betaMin) in ReferenceArms(fit))
                 foreach (int levels in new[] { 4, 8 })
                     for (int group = 0; group < 2; group++)
                     {
-                        var series = new Series(chains);
-                        for (int c = 0; c < chains; c++)
-                        {
-                            RunResult r = Run(fit with { Model = model }, tp, SwapSchedule.DeterministicEvenOdd, adapt: true, levels,
-                                              betaMin, seed: 1000 * (group + 1) + c, reference);
-                            series.Add(c, fit, r, levels);
-                        }
+                        Series series = ArmSeries(fit with { Model = model }, tp, reference, betaMin, levels, group);
                         ess.AppendLine(series.Row(fit.Name, tp.ToString(), reference ? 0.0 : betaMin, levels, group) + "\t" + name);
                         File.WriteAllText(path, ess.ToString());   // partial results survive an interrupted run
                     }
+    }
+
+    /// <summary>
+    /// The rung where regeneration matters (OQ2): the OQ1 rerun's Normal arms on <see cref="BimodalFixture"/> at n = 200
+    /// and 800, pre-registered in the preparation brief. Judged by the mode share's error against its exact ½, with the
+    /// rank-normalized ESS of the peak location beside it, and the equal-work untempered baseline run in two groups as
+    /// the arms are. Guarded by <c>TEMPER_BENCH_BIMODAL</c>; <c>TEMPER_BENCH_FITS</c> splits the fits across processes.
+    /// </summary>
+    [Fact]
+    public void ReferenceRungs_OnSeparatedModes()
+    {
+        if (Environment.GetEnvironmentVariable("TEMPER_BENCH_BIMODAL") is not string path) return;   // heavy; set TEMPER_BENCH_BIMODAL to run
+
+        var ess = new StringBuilder(EssHeader + "\tarm" + ModeHeader + "\n");
+        foreach (Fit fit in Fits("bimodal-200", "bimodal-800"))
+        {
+            foreach (int levels in new[] { 4, 8 })
+                for (int group = 0; group < 2; group++)
+                {
+                    int chains = ArmLadders * levels;
+                    var series = new Series(chains);
+                    for (int c = 0; c < chains; c++) series.Add(c, fit, Untempered(fit, 5000 + 1000 * group + c), 1);
+                    ess.AppendLine(series.Row(fit.Name, "Untempered", double.NaN, levels, group) + "\tU" + series.ModeColumns());
+                    File.WriteAllText(path, ess.ToString());
+                }
+            foreach ((string name, TemperingPath tp, IObservationModel model, bool reference, double betaMin) in ReferenceArms(fit))
+                foreach (int levels in new[] { 4, 8 })
+                    for (int group = 0; group < 2; group++)
+                    {
+                        Series series = ArmSeries(fit with { Model = model }, tp, reference, betaMin, levels, group);
+                        ess.AppendLine(series.Row(fit.Name, tp.ToString(), reference ? 0.0 : betaMin, levels, group) + "\t" + name +
+                                       series.ModeColumns());
+                        File.WriteAllText(path, ess.ToString());
+                    }
         }
     }
+
+    private const int ArmLadders = 8;
+
+    // The OQ2 arms on a fit: the likelihood path at four hot ends (both tempered forms for the Normal model), its exact
+    // reference rung (the linear form for the Normal model), and the powered path at 0.05 with and without its rung.
+    private static List<(string Name, TemperingPath Path, IObservationModel Model, bool Reference, double BetaMin)> ReferenceArms(Fit fit)
+    {
+        double[] hotEnds = [0.05, 0.2, 0.35, 0.5];
+        bool normal = fit.Model is WeightedNormalModel;
+        var arms = new List<(string Name, TemperingPath Path, IObservationModel Model, bool Reference, double BetaMin)>();
+        IObservationModel linear = normal ? new WeightedNormalModel(form: TemperedForm.Linear) : fit.Model;
+        foreach (double b in hotEnds) arms.Add((normal ? "L-int" : "L", TemperingPath.Likelihood, fit.Model, false, b));
+        if (normal) foreach (double b in hotEnds) arms.Add(("L-lin", TemperingPath.Likelihood, linear, false, b));
+        arms.Add((normal ? "L-lin-ref" : "L-ref", TemperingPath.Likelihood, linear, true, 0.05));
+        arms.Add(("P", TemperingPath.Powered, fit.Model, false, 0.05));
+        arms.Add(("P-ref", TemperingPath.Powered, fit.Model, true, 0.05));
+        return arms;
+    }
+
+    // One group of an arm: ArmLadders adapted DEO ladders, seeds 1000·(group + 1) + c.
+    private static Series ArmSeries(Fit fit, TemperingPath tp, bool reference, double betaMin, int levels, int group)
+    {
+        var series = new Series(ArmLadders);
+        for (int c = 0; c < ArmLadders; c++)
+        {
+            RunResult r = Run(fit, tp, SwapSchedule.DeterministicEvenOdd, adapt: true, levels, betaMin, seed: 1000 * (group + 1) + c,
+                              reference);
+            series.Add(c, fit, r, levels);
+        }
+        return series;
+    }
+
+    private const string ModeHeader = "\tmode_share\tmode_mse\tess_mode\tess_mode_per_kwork";
 
     // Work is replica-steps of the measured phase, a reference rung's scan counted at its draw's attempts; NaN takes
     // levels × scans.
@@ -219,6 +284,7 @@ public sealed class TemperingBenchmark
     private sealed class Series(int chains)
     {
         private readonly double[][] _knots = new double[chains][], _energy = new double[chains][], _peak = new double[chains][];
+        private readonly double[] _share = new double[chains];
         private double _seconds, _work, _barrier, _trips;
 
         public void Add(int c, Fit fit, RunResult r, int levels)
@@ -226,6 +292,7 @@ public sealed class TemperingBenchmark
             _knots[c] = r.Configs.Select(k => (double)k.Count).ToArray();
             _energy[c] = r.Energy;
             _peak[c] = PeakLocations(fit, r.Configs);
+            _share[c] = _peak[c].Count(p => p < 0.5) / (double)_peak[c].Length;
             _seconds += r.Seconds;
             _work += double.IsNaN(r.Work) ? (double)levels * r.Configs.Length : r.Work;
             _barrier += r.Barrier / chains;
@@ -243,6 +310,17 @@ public sealed class TemperingBenchmark
                                G(_knots.SelectMany(s => s).Average()), G(_peak.SelectMany(s => s).Average()), G(_seconds), G(_work),
                                G(k.Ess.Value / kilo), G(p.Ess.Value / kilo), G(k.Ess.Value / _seconds), G(p.Ess.Value / _seconds),
                                G(_barrier), G(_trips));
+        }
+
+        // The mode share against its exact ½ (BimodalFixture): the mean of the chains' shares of draws peaking below ½,
+        // their mean squared error, the ESS that error implies for the pooled share, chains·¼/MSE, and that per
+        // kilo-work. Stuck chains give MSE ¼, one draw each.
+        public string ModeColumns()
+        {
+            string G(double v) => v.ToString("G5", CultureInfo.InvariantCulture);
+            double mse = _share.Select(s => (s - 0.5) * (s - 0.5)).Average();
+            double ess = _share.Length * 0.25 / mse;
+            return "\t" + string.Join('\t', G(_share.Average()), G(mse), G(ess), G(ess / (_work / 1000.0)));
         }
     }
 
@@ -269,7 +347,7 @@ public sealed class TemperingBenchmark
     private static RunResult Run(Fit fit, TemperingPath tp, SwapSchedule schedule, bool adapt, int levels, double betaMin, int seed,
                                  bool reference = false)
     {
-        var target = new SplineTarget(new SplineBasis(3), fit.Model, new PoissonPrior(fit.PriorMean), fit.X, fit.Y);
+        var target = new SplineTarget(new SplineBasis(3), fit.Model, fit.CountPrior, fit.X, fit.Y);
         double[] betas = reference
             ? ParallelTempering<KnotConfig>.ReferenceLadder(levels, betaMin)
             : ParallelTempering<KnotConfig>.GeometricLadder(levels, betaMin);
