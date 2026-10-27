@@ -20,8 +20,8 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N8** Generic SMC core in `samplers/smc` (optional; specified in the calibration segment): `SmcRun`, `SmcSampler`.
 - [x] **N9** Qualified baseline rerun after the shared changes, before the first BASS integration tests: requalified at `3a04601`.
 - [x] **N10** Cross-products summed pairwise or with compensation: `PairwiseSum`. F-O7's near-constant design is the acceptance case: its left-to-right error is 10⁻³ relative in s.
-- [ ] **N11** Evidence over a tempering ladder: path sampling and stepping-stone from per-rung traces, with Monte Carlo error (D03, D05). Chip: [shared-infrastructure-brief.md](shared-infrastructure-brief.md).
-- [ ] **N12** The g-prior's log marginal at (τ, b) as one scalar, without the mean vector (D04's τ slice, D05's swaps). Same chip.
+- [x] **N11** Evidence over a tempering ladder: path sampling and stepping-stone from per-rung traces, with Monte Carlo error (D03, D05). Chip: [shared-infrastructure-brief.md](shared-infrastructure-brief.md). `LadderEvidence` with stepping-stone as the default; `ParallelTempering.TraceRungs` (`84c173f`).
+- [x] **N12** The g-prior's log marginal at (τ, b) as one scalar, without the mean vector (D04's τ slice, D05's swaps). Same chip. `CollapsedGPrior.MarginalAt` → `GPriorMarginal`, bit-identical to `At`'s (`0afe33d`).
 - [ ] **N13** External reference for the rank-normalized and PSIS diagnostics against R `posterior` and `loo` (OQ9; D10's gate). Same chip; needs the user's approval for the download.
 
 ### Room for extensions
@@ -31,6 +31,41 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [ ] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update.
 
 ## Reports
+
+### Ladder evidence (N11) and the g-prior's mean-free marginal (N12) — 2026-10-27
+
+From the shared-infrastructure chip ([shared-infrastructure-brief.md](shared-infrastructure-brief.md)). Commits: `0afe33d` (N12), `84c173f` (N11).
+
+**N12: `CollapsedGPrior.MarginalAt(τ, b)`.** It returns a `GPriorMarginal` value holding S, the determinant term and m, with `LogMarginal(prior)` and `Sigma2Posterior(prior)`, and it allocates nothing.
+- `At(τ, b)` builds its conditional from the same value, and `GPriorConditional`'s `S`, `LogDeterminantTerm`, `LogMarginal` and `Sigma2Posterior` read through it, so the two paths cannot drift apart. The domain is `At`'s: unweighted at any (τ, b), weighted at its own τ and b = 1.
+- Normal BARS's tempered marginal (`WeightedNormalModel.NormalMarginal`, at b = 1 and at every rung) now reads `MarginalAt`. `NormalConditional` keeps `At`, since it needs the mean.
+- **Evidence.**
+  - A before/after dump of 1,233 values was bit-identical: block and BARS marginals over 3 centres, 3 knot sets, 4 σ² priors, τ ∈ [10⁻⁶, 10³] and b ∈ {0, 10⁻⁶, 0.3, 0.7, 1}, the weighted b = 1 and the exception types included.
+  - The new test checks `MarginalAt` against `At`'s log marginal bit for bit under the Jeffreys, `ScaledToResponse()` and IG(2, 0.05) priors, at b ∈ {0, 0.3, 1} and 11 values of τ from 10⁻⁶ to 10³, and on the weighted block. It also checks zero allocation (`GC.GetAllocatedBytesForCurrentThread`).
+  - Regression: 427 of 427.
+
+**N11: `Maths.Samplers.Evidence.LadderEvidence`.** It estimates ln Z(b_max) − ln Z(b_min) from per-rung draws (`RungDraws`): ordered chains, whose ESS is `ChainDiagnostics.MeanEss`'s, or a weighted SMC population, whose ESS is Kish's.
+- *Stepping-stone* (the default) and *path sampling* (selectable), with a Monte Carlo error. Path sampling also carries Friel, Hurn and Wyse's correction as its discretization diagnostic.
+- *The error* is the larger of the rungs-as-independent reading and the joint reading, which sums each scan across rungs (rationale and calibration table in `docs/Maths/Samplers.md`, "Evidence over a ladder").
+- *The target contract.* `ITargetEvaluation.LogLikelihoodSlope(b)` is a default interface member that refuses. `SeparableEvaluation` returns ℓ₁, and `Temperature.LogDensitySlope` gives ∂_b ln q_b on either path.
+- *Per-rung readouts.* `ParallelTempering.TraceRungs()` is opt-in, after burn-in. Each scan it records every rung's slope and its log ratio to the next colder rung, from the evaluations the rungs already hold. `RungTraces` and `TracesSlopes` expose them, the snapshot carries them, and `AdaptLadder` refuses while tracing. `FromLadders(ladders, method)` reads one or more traced ladders.
+- **Evidence** (`LadderEvidenceTests`, 7 tests; Samplers 129 of 129, Regression 427 of 427):
+  - *Exact draws, conjugate Normal* (16 intervals of (k/K)⁵, 1000 draws per rung, 400 replicates):
+    - stepping-stone: coverage 0.963, mean z² 0.98, bias −0.0023 against an error of 0.030;
+    - path sampling: coverage 0.953, mean z² 0.96 against the exact trapezoid, whose own bias is −0.084.
+  - *Discretization.* The trapezoid's error falls about 4× per doubling from 4 to 64 intervals. The diagnostic leaves 0.18× the error at 8 intervals and 0.003× at 64, and overshoots at 4.
+  - *Traced ladders, enumerable target* with a likelihood that is not linear in b (`ReferenceLadder(8, 0.01)`, two ladders × 3000 scans, slope ESS down to 1–3% of the draws). At 200 replicates:
+    - stepping-stone: coverage 0.955, mean z² 0.90;
+    - path sampling: coverage 0.975, mean z² 1.01.
+  - *Each reading alone,* at 400 replicates: the independent one under-reads path sampling (z² 1.23) and the joint one stepping-stone (z² 1.22); the larger reads 0.95 and 1.06.
+- **Default: stepping-stone.** It reads ℓ_b only, which every target supplies, and it has no discretization bias: −0.004 against the trapezoid's +0.669 on the nonlinear target. It is also the SMC normalizer's estimator. The trade-offs are documented.
+- **Limits.**
+  - The diagnostic reads V_k as the mean slope's derivative, so on a collapsed likelihood it misses E_b[∂²ℓ_b]. On the test's nonlinear target it read 0.094 against a bias of 0.669.
+  - A population's Kish ESS ignores shared ancestry.
+  - `SmcRun` exposes no per-stage readouts.
+- **Follow-ups.**
+  - Whether Normal BARS reports an evidence under its proper σ² prior and exact reference rung is a consumer decision. Its evaluations supply no slope, so it would use stepping-stone, which `MarginalAt` makes O(1) per rung.
+  - For D05's path sampling, BASS should supply ∂_b ℓ_b and, for a valid diagnostic, E_b[∂²ℓ_b] (the latter has no seam yet).
 
 ### Baseline requalified (N9) — 2026-10-27
 
