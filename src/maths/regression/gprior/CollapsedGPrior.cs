@@ -40,8 +40,9 @@ public enum GPriorCentre
 /// holds are then those of the centred response <c>ỹ = y − Zμ₀</c>, and μ₀ is added back to every mean and draw.
 /// <list type="bullet">
 /// <item><b>Unweighted (W = I).</b> The block holds the statistics of the least-squares fit that depend on neither τ
-/// nor b: the factor of G, β_OLS, <c>‖r_OLS‖²</c> and <c>Q = ‖Zβ_OLS‖²</c>. Any (τ, b) then costs O(1) plus the mean
-/// vector (<see cref="At"/>), which is what BASS's τ updates and tempered swaps need. The scale
+/// nor b: the factor of G, β_OLS, <c>‖r_OLS‖²</c> and <c>Q = ‖Zβ_OLS‖²</c>. Any (τ, b) then costs O(1) for the marginal
+/// (<see cref="MarginalAt"/>), which is what BASS's τ updates and tempered swaps need, and the mean vector beyond it for
+/// the conditional (<see cref="At"/>). The scale
 /// <c>S = b·(‖r‖² + τ/(τ+b)·Q)</c> is a sum of non-negative terms from the explicit residual, so a small τ on a close
 /// fit keeps its digits where <c>b·yᵀy − b²Q/(τ+b)</c> would not.</item>
 /// <item><b>Weighted.</b> The robust BARS path (decision Q2): the prior stays on the unweighted G, and the posterior
@@ -141,9 +142,31 @@ public sealed class CollapsedGPrior
     /// <paramref name="inverseTemperature"/>. Unweighted: any τ &gt; 0 and b ≥ 0, at O(1) beyond the mean vector. At b = 0
     /// the likelihood is gone (S = 0, the mean is μ₀): a proper σ² prior's marginal there is exactly 0, the start of an
     /// SMC run or an exact reference rung, and the improper prior's is undefined.
-    /// Weighted: only the τ the block was built at, and b = 1, since P_a depends on both.
+    /// Weighted: only the τ the block was built at, and b = 1, since P_a depends on both. Its marginal is
+    /// <see cref="MarginalAt"/>'s.
     /// </summary>
     public GPriorConditional At(double tau, double inverseTemperature = 1.0)
+    {
+        GPriorMarginal marginal = MarginalAt(tau, inverseTemperature);
+        int p = Columns;
+        var mean = new double[p];
+        if (_posterior is ISpdFactor posterior)
+        {
+            for (int j = 0; j < p; j++) mean[j] = (_priorMean?[j] ?? 0.0) + _coefficients[j];
+            return new GPriorConditional(posterior, mean, marginal, 1.0, p);
+        }
+
+        double b = inverseTemperature, shrink = b / (tau + b);
+        for (int j = 0; j < p; j++) mean[j] = (_priorMean?[j] ?? 0.0) + shrink * _coefficients[j];
+        return new GPriorConditional(_gram, mean, marginal, 1.0 / (tau + b), p);
+    }
+
+    /// <summary>
+    /// The marginal at (<paramref name="tau"/>, <paramref name="inverseTemperature"/>) without the conditional mean: S and
+    /// the determinant term at O(1), and nothing allocated, for the τ updates and tempered swaps that evaluate it many
+    /// times per sweep. The same domain as <see cref="At"/>.
+    /// </summary>
+    public GPriorMarginal MarginalAt(double tau, double inverseTemperature = 1.0)
     {
         CheckTau(tau);
         double b = inverseTemperature;
@@ -156,16 +179,11 @@ public sealed class CollapsedGPrior
             if (tau != _tau) throw new ArgumentException($"The weighted block was built at τ = {_tau}; P_a depends on τ.", nameof(tau));
             if (b != 1.0) throw new ArgumentException("The weighted block is untempered.", nameof(inverseTemperature));
             double logDet = 0.5 * (_gram.LogDet + p * Math.Log(tau)) - 0.5 * posterior.LogDet + 0.5 * _sumLogWeights;
-            var weightedMean = new double[p];
-            for (int j = 0; j < p; j++) weightedMean[j] = (_priorMean?[j] ?? 0.0) + _coefficients[j];
-            return new GPriorConditional(posterior, weightedMean, _scale, logDet, 1.0, Rows, p, tau, b);
+            return new GPriorMarginal(_scale, logDet, Rows, tau, b);
         }
 
-        double shrink = b / (tau + b);
-        var mean = new double[p];
-        for (int j = 0; j < p; j++) mean[j] = (_priorMean?[j] ?? 0.0) + shrink * _coefficients[j];
         double s = b * (_rss + tau / (tau + b) * _fitted);
-        return new GPriorConditional(_gram, mean, s, 0.5 * p * Math.Log(tau / (tau + b)), 1.0 / (tau + b), Rows, p, tau, b);
+        return new GPriorMarginal(s, 0.5 * p * Math.Log(tau / (tau + b)), Rows, tau, b);
     }
 
     private static void CheckTau(double tau)
@@ -176,35 +194,25 @@ public sealed class CollapsedGPrior
 }
 
 /// <summary>
-/// The block's answer at one (τ, b): <c>β | σ², y ~ N(μ, σ²·c·A⁻¹)</c> with A the factored precision (G, or P_a when
-/// weighted) and c = <see cref="CovarianceScale"/>, and <c>σ² | y ~ IG(g₁ + mb/2, g₂ + S/2)</c> under a σ² prior
-/// IG(g₁, g₂), or the improper <c>π(σ²) ∝ 1/σ²</c> (g₁ = g₂ = 0) that BARS uses.
+/// The block's marginal at one (τ, b), without the conditional mean: the scale S, the determinant term and the row count,
+/// which are all that the log marginal and σ²'s posterior read. A value, so the τ updates and tempered swaps that
+/// evaluate it many times per sweep allocate nothing; the <see cref="GPriorConditional"/> at the same (τ, b) carries it.
 /// </summary>
-public sealed class GPriorConditional
+public readonly struct GPriorMarginal
 {
     private static readonly double Log2Pi = Math.Log(2.0 * Math.PI);
-    private readonly ISpdFactor _precision;
-    private readonly double[] _mean;
 
-    internal GPriorConditional(ISpdFactor precision, double[] mean, double s, double logDeterminantTerm, double covarianceScale,
-                               int rows, int columns, double tau, double inverseTemperature)
+    internal GPriorMarginal(double s, double logDeterminantTerm, int rows, double tau, double inverseTemperature)
     {
-        _precision = precision;
-        _mean = mean;
         S = s;
         LogDeterminantTerm = logDeterminantTerm;
-        CovarianceScale = covarianceScale;
         Rows = rows;
-        Columns = columns;
         Tau = tau;
         InverseTemperature = inverseTemperature;
     }
 
     /// <summary>Observations m.</summary>
     public int Rows { get; }
-
-    /// <summary>Coefficients p.</summary>
-    public int Columns { get; }
 
     /// <summary>Prior precision τ.</summary>
     public double Tau { get; }
@@ -219,12 +227,6 @@ public sealed class GPriorConditional
     /// <summary>The coefficient integral's determinant term: <c>(p/2)·ln(τ/(τ+b))</c> unweighted;
     /// <c>½ln|τG| − ½ln|P_a| + ½Σ ln wᵢ</c> weighted.</summary>
     public double LogDeterminantTerm { get; }
-
-    /// <summary>c in <c>Cov(β | σ²) = σ²·c·A⁻¹</c>: <c>1/(τ+b)</c> unweighted, 1 weighted.</summary>
-    public double CovarianceScale { get; }
-
-    /// <summary>The conditional posterior mean μ.</summary>
-    public ReadOnlySpan<double> Mean => _mean;
 
     /// <summary><c>σ² | y ~ IG(g₁ + mb/2, g₂ + S/2)</c>; null <paramref name="sigmaPrior"/> is the improper 1/σ².</summary>
     public InverseGamma Sigma2Posterior(InverseGamma? sigmaPrior)
@@ -249,6 +251,58 @@ public sealed class GPriorConditional
         if (!(S > 0.0)) throw new InvalidOperationException("The improper σ² prior needs S > 0.");
         return common + SpecialFunctions.LogGamma(nb) - nb * Math.Log(half);
     }
+}
+
+/// <summary>
+/// The block's answer at one (τ, b): <c>β | σ², y ~ N(μ, σ²·c·A⁻¹)</c> with A the factored precision (G, or P_a when
+/// weighted) and c = <see cref="CovarianceScale"/>, and <c>σ² | y ~ IG(g₁ + mb/2, g₂ + S/2)</c> under a σ² prior
+/// IG(g₁, g₂), or the improper <c>π(σ²) ∝ 1/σ²</c> (g₁ = g₂ = 0) that BARS uses. Its marginal is the
+/// <see cref="GPriorMarginal"/> at the same (τ, b).
+/// </summary>
+public sealed class GPriorConditional
+{
+    private readonly ISpdFactor _precision;
+    private readonly double[] _mean;
+    private readonly GPriorMarginal _marginal;
+
+    internal GPriorConditional(ISpdFactor precision, double[] mean, GPriorMarginal marginal, double covarianceScale, int columns)
+    {
+        _precision = precision;
+        _mean = mean;
+        _marginal = marginal;
+        CovarianceScale = covarianceScale;
+        Columns = columns;
+    }
+
+    /// <inheritdoc cref="GPriorMarginal.Rows"/>
+    public int Rows => _marginal.Rows;
+
+    /// <summary>Coefficients p.</summary>
+    public int Columns { get; }
+
+    /// <inheritdoc cref="GPriorMarginal.Tau"/>
+    public double Tau => _marginal.Tau;
+
+    /// <inheritdoc cref="GPriorMarginal.InverseTemperature"/>
+    public double InverseTemperature => _marginal.InverseTemperature;
+
+    /// <inheritdoc cref="GPriorMarginal.S"/>
+    public double S => _marginal.S;
+
+    /// <inheritdoc cref="GPriorMarginal.LogDeterminantTerm"/>
+    public double LogDeterminantTerm => _marginal.LogDeterminantTerm;
+
+    /// <summary>c in <c>Cov(β | σ²) = σ²·c·A⁻¹</c>: <c>1/(τ+b)</c> unweighted, 1 weighted.</summary>
+    public double CovarianceScale { get; }
+
+    /// <summary>The conditional posterior mean μ.</summary>
+    public ReadOnlySpan<double> Mean => _mean;
+
+    /// <inheritdoc cref="GPriorMarginal.Sigma2Posterior"/>
+    public InverseGamma Sigma2Posterior(InverseGamma? sigmaPrior) => _marginal.Sigma2Posterior(sigmaPrior);
+
+    /// <inheritdoc cref="GPriorMarginal.LogMarginal"/>
+    public double LogMarginal(InverseGamma? sigmaPrior) => _marginal.LogMarginal(sigmaPrior);
 
     /// <summary>
     /// A composition draw: σ² from its posterior, then <c>β = μ + √(σ²c)·v</c> with v ~ N(0, A⁻¹) from the factor

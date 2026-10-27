@@ -260,7 +260,7 @@ public sealed class WeightedNormalModel : IObservationModel
             _block = block;
             _tau = tau;
             _prior = prior;
-            _atOne = At(block.At(tau));
+            _atOne = At(block.MarginalAt(tau));
         }
 
         public DesignRejection Rejection => double.IsNegativeInfinity(_atOne) ? DesignRejection.ZeroResponse : DesignRejection.None;
@@ -275,12 +275,12 @@ public sealed class WeightedNormalModel : IObservationModel
                     "Under the improper 1/σ² prior the tempered marginal needs b in (0, 1].");
             if (!(inverseTemperature >= 0.0 && inverseTemperature <= 1.0))
                 throw new ArgumentOutOfRangeException(nameof(inverseTemperature), "The tempered marginal needs b in [0, 1].");
-            return At(_block.At(_tau, inverseTemperature));
+            return At(_block.MarginalAt(_tau, inverseTemperature));
         }
 
         // Under a proper prior, the complete marginal, finite even for an exact fit. Under the Jeffreys prior a zero centred
         // response (a constant one, under the median or mean centre) has S = 0 at every b: no posterior for σ.
-        private double At(GPriorConditional c)
+        private double At(GPriorMarginal c)
         {
             if (_prior is InverseGamma prior) return c.LogMarginal(prior);
             return c.S > 0.0 ? c.LogDeterminantTerm - 0.5 * c.Rows * c.InverseTemperature * Math.Log(c.S) : double.NegativeInfinity;

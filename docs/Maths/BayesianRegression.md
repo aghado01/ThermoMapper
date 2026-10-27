@@ -240,6 +240,7 @@ with the likelihood raised to an inverse temperature $b$ (1 is untempered).
 - **Unweighted, W = I.**
   - The block caches the statistics that depend on neither τ nor $b$: the factor of $G$, $\hat\beta_{\text{OLS}}$, $\lVert r\rVert^2=\lVert y-Z\hat\beta\rVert^2$ and $Q=\lVert Z\hat\beta\rVert^2$.
   - `At(τ, b)` then costs O(1), plus the mean vector: $S=b\,(\lVert r\rVert^2+\tfrac{\tau}{\tau+b}Q)$, the determinant term $\tfrac p2\ln\tfrac{\tau}{\tau+b}$, mean $\tfrac{b}{\tau+b}\hat\beta$, and $\operatorname{Cov}(\beta\mid\sigma^2)=\sigma^2G^{-1}/(\tau+b)$.
+  - `MarginalAt(τ, b)` is the same marginal without the mean: a `GPriorMarginal` value holding $S$, the determinant term and $m$, so a τ update or a tempered swap allocates nothing (N12). `At` carries the same value, so the two return the same double; the Normal model's tempered marginal reads it.
   - Because $S$ is a sum of non-negative terms from the explicit residual, a small τ on a close fit keeps its digits. The subtracted form $b\,y^\top y-b^2Q/(\tau+b)$ loses about $\log_{10}((1+\tau)/\tau)$ of them.
 - **Weighted (the robust path, Q2).** The posterior precision $P_a=Z^\top(W+\tau I)Z$ depends on τ, so this form is built at one τ and $b=1$. Its scale is $S=\lVert y-Z\tilde\beta\rVert_W^2+\tau\lVert Z\tilde\beta\rVert^2$.
 - **σ².** The prior is IG($g_1, g_2$), which BARS takes by default scaled to the response (`Sigma2Prior`, below), or the improper $1/\sigma^2$. The posterior is $\sigma^2\mid y\sim\mathrm{IG}(g_1+mb/2,\ g_2+S/2)$.
@@ -254,7 +255,8 @@ with the likelihood raised to an inverse temperature $b$ (1 is untempered).
   - draw moments at a tempered rung;
   - conditional variances;
   - a constructed near-interpolating fit, where the subtracted form loses its digits and the block keeps them;
-  - the median- and mean-centred blocks against the zero-centred block on $y-c$, at offsets 0, 5 and −300, with and without weights.
+  - the median- and mean-centred blocks against the zero-centred block on $y-c$, at offsets 0, 5 and −300, with and without weights;
+  - `MarginalAt` against `At`'s log marginal bit for bit, under the Jeffreys, scaled and fixed priors, $b\in\{0, 0.3, 1\}$ and τ from $10^{-6}$ to $10^3$, with no allocation.
 
 ### BARS: observation models
 

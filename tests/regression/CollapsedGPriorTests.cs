@@ -262,6 +262,49 @@ public sealed class CollapsedGPriorTests
     }
 
     [Fact]
+    public void MarginalAt_IsTheConditionalsLogMarginal_BitForBit_WithoutAllocating()
+    {
+        // The mean-free path (N12) must return the very double the conditional does, under the Jeffreys, scaled and fixed
+        // priors, at b ∈ {0, 0.3, 1} (b = 0 under proper priors only) and τ over nine decades; the weighted block at its τ.
+        (double[,] z, double[] y) = CoefficientDrawTests.Problem();
+        double[] sorted = (double[])y.Clone();
+        Array.Sort(sorted);
+        double level = sorted.Length % 2 == 1 ? sorted[sorted.Length / 2] : 0.5 * (sorted[sorted.Length / 2 - 1] + sorted[sorted.Length / 2]);
+        double meanSquare = 0.0;
+        foreach (double v in y) meanSquare += (v - level) * (v - level) / y.Length;
+        InverseGamma?[] priors = [null, Sigma2Prior.ScaledToResponse().For(meanSquare), InverseGamma.ShapeScale(2.0, 0.05)];
+        Assert.NotNull(priors[1]);
+        CollapsedGPrior block = BandedGPrior.Fit(new BandedDesign(z), y, PositiveDefinite, GPriorCentre.Median)!;
+        double[] taus = [1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1.0 / y.Length, 0.1, 1.0, 10.0, 100.0, 1e3];
+        foreach (InverseGamma? prior in priors)
+            foreach (double tau in taus)
+                foreach (double b in new[] { 0.0, 0.3, 1.0 })
+                {
+                    if (prior is null && b == 0.0) continue;
+                    double conditional = block.At(tau, b).LogMarginal(prior), marginal = block.MarginalAt(tau, b).LogMarginal(prior);
+                    Assert.True(BitConverter.DoubleToInt64Bits(conditional) == BitConverter.DoubleToInt64Bits(marginal),
+                                $"τ = {tau:R}, b = {b:R}: {conditional:R} vs {marginal:R}");
+                }
+
+        var w = new double[y.Length];
+        for (int i = 0; i < w.Length; i++) w[i] = 0.5 + (i % 3) * 0.25;
+        CollapsedGPrior weighted = BandedGPrior.Fit(new BandedDesign(z), y, w, 0.1, PositiveDefinite, GPriorCentre.Median)!;
+        foreach (InverseGamma? prior in priors)
+            Assert.Equal(BitConverter.DoubleToInt64Bits(weighted.At(0.1).LogMarginal(prior)),
+                         BitConverter.DoubleToInt64Bits(weighted.MarginalAt(0.1).LogMarginal(prior)));
+        Assert.Throws<ArgumentException>(() => weighted.MarginalAt(0.2));
+        Assert.Throws<ArgumentException>(() => weighted.MarginalAt(0.1, 0.5));
+        Assert.Throws<ArgumentOutOfRangeException>(() => block.MarginalAt(0.0));
+
+        double sink = 0.0;
+        for (int k = 0; k < 2; k++) sink += block.MarginalAt(0.3, 0.7).LogMarginal(priors[1]);   // warm up
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        foreach (double tau in taus) sink += block.MarginalAt(tau, 0.7).LogMarginal(priors[1]);
+        Assert.Equal(before, GC.GetAllocatedBytesForCurrentThread());
+        Assert.True(double.IsFinite(sink));
+    }
+
+    [Fact]
     public void Settings_AreValidated()
     {
         (double[,] z, double[] y) = CoefficientDrawTests.Problem();
