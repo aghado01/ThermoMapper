@@ -15,8 +15,8 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N3** Strict rebuild: periodic and on failure, with drift checks against fresh factorizations: `BorderedCholesky.Rebuild`, `FactorDrift`.
 - [x] **N4** diag(G⁻¹) maintained through births and deaths, for D06's order-free gate: `BorderedCholesky.LeaveOneOutPivot`.
 - [x] **N5** Stable thin SVD with numerical-rank handling in LinAlg: `ThinSvd`.
-- [ ] **N6** Diagonal-plus-low-rank solves and log-determinants, without m × m inverses.
-- [ ] **N7** Face-splitting design contraction with the Cartesian (Hadamard) shortcut.
+- [x] **N6** Diagonal-plus-low-rank solves and log-determinants, without m × m inverses: `DiagonalPlusLowRank`.
+- [x] **N7** Face-splitting design contraction with the Cartesian (Hadamard) shortcut: `KhatriRao`, both intercept conventions.
 - [ ] **N8** Generic SMC core in `samplers/smc` (optional; specified in the calibration segment).
 - [ ] **N9** Qualified baseline rerun after the shared changes, before the first BASS integration tests.
 - [x] **N10** Cross-products summed pairwise or with compensation: `PairwiseSum`. F-O7's near-constant design is the acceptance case: its left-to-right error is 10⁻³ relative in s.
@@ -28,6 +28,33 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [ ] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update.
 
 ## Reports
+
+### N6, N7, and the SVD callers moved — 2026-10-27
+
+Commits `09572c6`..`28fec55`.
+
+- **`DiagonalPlusLowRank`** (N6): Σ = D + U·diag(s)·Uᵀ.
+  - The factor of I + WᵀW (W = D^(−½)·U·diag(√s)) is taken as the thin SVD of W. That makes bᵀΣ⁻¹b and ln|Σ| sums of nonnegative terms, and nothing m × m is formed.
+  - Solves and draws from N(0, Σ) and N(0, Σ⁻¹) each cost O(m·r).
+  - Along a heavy direction (weight 10¹⁶) it keeps the quadratic form to 10⁻¹⁰ relative. The Woodbury subtraction loses all of it; the test checks both.
+- **`KhatriRao`** (N7): the direct functional design X = A ⊙ H, through its factors.
+  - It provides the Hadamard Gram, birth borders and response cross-products, for R's convention and centred for the Liang convention (the three-term form), so N7 does not wait on the intercept call.
+  - It also accumulates over scattered (case, location) samples through a pairwise cascade.
+  - *Terminology:* BASS's design is the column-wise Khatri–Rao product. Its rows are Hadamard products of factor rows, and its transpose is the face-splitting product. ABMRS's rows are face-splitting products themselves. The brief's "Room for extensions" paragraph now says so.
+- **`ThinSvd` fixed.** The Grassmann exp map gave it two parallel columns of norms 1.8·10⁻¹⁶¹ and 0.115. ζ² overflowed, the rotation became the identity, and the Jacobi never converged. Three changes fix it:
+  - rotation angles are now computed through the ratio of the norms, and norms and cosines are rescaled outside the normal range;
+  - columns below ε·‖R‖_F are left alone, and their left vectors are completed;
+  - non-finite input is refused.
+
+  Regression tests cover that case and extreme column scales. `PairwiseSum`'s accumulators are now vector lanes, bit-identical to the scalar form.
+- **Callers moved onto `ThinSvd`:**
+  - *`Pca`* now reads the SVD of the centred data, at 8.0 s against 22.3 s on a random 6,238 × 617 matrix, with eigenvalues agreeing to 2·10⁻¹³. Wide inputs are slower: 0.53 s against 0.32 s at 300 × 2,000. Components are now signed so that their largest entry is positive.
+  - *`StiefelManifold` and `GrassmannManifold`* use it in place of their private Gram-route SVDs. They keep their rule of zero left vectors where σ < 10⁻¹²: at the cut locus that direction's sign is arbitrary, and the corrupted-block tests of MoMPCA and SPRED depend on the two choices cancelling.
+- **Suites:**
+  - LinAlg 118/118, Geometry 49/49, Mapper 28/28, Oracle 5/5, VizCore 240 passed with its 2 by-design skips, DimReduction 83/83.
+  - Before the fix, the manifold change broke 8 tests: 2 MoMPCA, 4 DistributedSpred and 2 SpredCylinder.
+  - SPRED's ISOLET pilot reruns its warm start to 10⁻¹⁴. Its annealed objectives move at 10⁻⁵ relative, because the annealer's trajectory diverges from bit-level differences. The pilot JSONs that the suite rewrites in `issues/spred/pilot/` were restored to their committed versions.
+- **Noticed:** Maths.Oracle failed 2 of 5 once at baseline and then passed on a rerun with no change in between.
 
 ### Decision-free stage 2 numerics (N1–N5, N10) — 2026-10-26
 
