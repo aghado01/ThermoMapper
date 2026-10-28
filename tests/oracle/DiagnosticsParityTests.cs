@@ -17,9 +17,9 @@ namespace Maths.Oracle.Tests;
 /// posterior package's <c>rhat</c>, <c>ess_bulk</c>, <c>ess_tail</c> and <c>ess_mean</c>, and
 /// <see cref="PredictiveChecks.PsisLoo"/> against the loo package's k̂, <c>relative_eff</c> and Monte Carlo errors, on the
 /// same fixtures (<c>oracles/diagnostics_oracle.R</c>). Both sides implement the same algorithms, so they agree to
-/// rounding. One convention differs: posterior takes the tail diagnostics' median and 5% and 95% quantiles over all
-/// draws, the C# over the split chains, which drop an odd middle draw. At an even length they coincide; at an odd one the
-/// C# matches the oracle's split-chain variant to rounding instead.
+/// rounding, at odd chain lengths too: the tail diagnostics take their median and quantiles over all draws, as posterior
+/// does. One convention differs on purpose, and is asserted as such: a PSIS tail whose largest ratios tie is k̂ = −∞ here
+/// (<see cref="ParetoTail.Tied"/>) and +∞ in loo, which then withholds the total's Monte Carlo error.
 /// </summary>
 public sealed class DiagnosticsParityTests
 {
@@ -40,21 +40,15 @@ public sealed class DiagnosticsParityTests
         {
             JsonElement r = ROracle.Run("oracles/diagnostics_oracle.R", csv, "chains");
             ConvergenceDiagnostic d = ChainDiagnostics.Diagnose(chains);
-            bool even = chains[0].Length % 2 == 0;
             _out.WriteLine($"{name}: R̂ {d.RHat.Value:R} (bulk {d.BulkRHat.Value:R}, tail {d.TailRHat.Value:R}), bulk ESS {d.BulkEss.Value:R}, tail ESS {d.TailEss.Value:R}");
-            _out.WriteLine($"  posterior: rhat_tail {Number(r, "rhat_tail"):R}, ess_tail {Number(r, "ess_tail"):R}; split-chain variant {Number(r, "rhat_tail_split"):R}, {Number(r, "ess_tail_split"):R}");
+            _out.WriteLine($"  posterior: rhat_tail {Number(r, "rhat_tail"):R}, ess_tail {Number(r, "ess_tail"):R}");
 
+            Close(Number(r, "rhat"), d.RHat.Value, "R̂");
             Close(Number(r, "rhat_bulk"), d.BulkRHat.Value, "bulk R̂");
+            Close(Number(r, "rhat_tail"), d.TailRHat.Value, "tail R̂");
             Close(Number(r, "ess_bulk"), d.BulkEss.Value, "bulk ESS");
+            Close(Number(r, "ess_tail"), d.TailEss.Value, "tail ESS");
             Close(Number(r, "ess_mean"), ChainDiagnostics.MeanEss(chains).Value, "ESS of the mean");
-            Close(Number(r, "rhat_tail_split"), d.TailRHat.Value, "tail R̂ (split-chain median)");
-            Close(Number(r, "ess_tail_split"), d.TailEss.Value, "tail ESS (split-chain quantiles)");
-            if (even)
-            {
-                Close(Number(r, "rhat_tail"), d.TailRHat.Value, "tail R̂");
-                Close(Number(r, "ess_tail"), d.TailEss.Value, "tail ESS");
-                Close(Number(r, "rhat"), d.RHat.Value, "R̂");
-            }
         }
         finally
         {
@@ -62,7 +56,7 @@ public sealed class DiagnosticsParityTests
         }
     }
 
-    public static TheoryData<string> LooFixtures => new() { "independent", "chains", "influential" };
+    public static TheoryData<string> LooFixtures => new() { "independent", "chains", "influential", "tied", "nofit" };
 
     [Theory]
     [MemberData(nameof(LooFixtures))]
@@ -89,15 +83,33 @@ public sealed class DiagnosticsParityTests
             for (int u = 0; u < units; u++)
             {
                 Close(elpd[u], c.PerUnit[u], $"unit {u}'s elpd");
-                Close(k[u], c.ParetoK![u], $"unit {u}'s k̂", absolute: 1e-9);
                 Close(mcse[u], c.MonteCarloErrors![u], $"unit {u}'s Monte Carlo error");
                 Close(rEff[u], c.RelativeEfficiency![u], $"unit {u}'s r_eff");
+                if (c.ParetoTails![u] == ParetoTail.Tied)
+                {
+                    // The convention that differs: loo cannot fit a tied tail and calls it +∞.
+                    Assert.Equal(double.PositiveInfinity, k[u]);
+                    Assert.Equal(double.NegativeInfinity, c.ParetoK![u]);
+                }
+                else Close(k[u], c.ParetoK![u], $"unit {u}'s k̂", absolute: 1e-9);
             }
+            ParetoTail[] expected = name switch
+            {
+                "tied" => [ParetoTail.Tied, ParetoTail.Fitted],
+                "nofit" => [ParetoTail.NoFit, ParetoTail.Fitted],
+                _ => Array.ConvertAll(new int[units], _ => ParetoTail.Fitted),
+            };
+            Assert.Equal(expected, c.ParetoTails);
             double total = Number(r, "mcse");
-            if (double.IsNaN(total)) Assert.True(double.IsNaN(c.MonteCarloError), "loo withholds the total's error above the threshold");
+            if (name == "tied")
+            {
+                Assert.True(double.IsNaN(total), "loo withholds the total's error, its k̂ being +∞");
+                Assert.True(double.IsFinite(c.MonteCarloError), "a tied tail counts as reliable here");
+            }
+            else if (double.IsNaN(total)) Assert.True(double.IsNaN(c.MonteCarloError), "loo withholds the total's error above the threshold");
             else Close(total, c.MonteCarloError, "the total's Monte Carlo error");
-            if (name == "influential") Assert.True(Max(k) > Number(r, "threshold"), "the influential unit's k̂ should exceed the threshold");
-            else Assert.True(double.IsFinite(total), "the total's Monte Carlo error should be compared");
+            if (name is "influential" or "nofit") Assert.True(Max(k) > Number(r, "threshold"), "a unit's k̂ should exceed the threshold");
+            else if (name != "tied") Assert.True(double.IsFinite(total), "the total's Monte Carlo error should be compared");
             if (name == "chains") Assert.True(Array.Exists(rEff, v => v < 1.0), "some unit's r_eff should be below 1");
         }
         finally
@@ -137,6 +149,7 @@ public sealed class DiagnosticsParityTests
     // prior on (μ, log σ): independent, or four AR(1) chains in μ at ρ = 0.8, laid out chain by chain.
     private static (double[,] LogLikelihood, int Chains) LogLikelihood(string name)
     {
+        if (name is "tied" or "nofit") return (TwoUnits(name), 0);
         var rng = new Xoshiro256PlusPlus(Seed(name));
         const int units = 30, draws = 4000;
         var y = new double[units];
@@ -163,6 +176,25 @@ public sealed class DiagnosticsParityTests
         return (ll, chains);
     }
 
+    // Two units over 400 draws, whose tail of M = 60 log ratios the Pareto fit cannot read; the second unit varies smoothly.
+    // "tied": three values, as a collapsed predictive over three structures takes; the largest ratio, 1/p = e², is held by
+    // 200 draws, so the whole tail ties. "nofit": 355 draws share ratio e and 45 exceed it, so the tail's lowest 15 sit at
+    // the cutoff and its first quartile is its minimum (posterior's gpdfit guard).
+    private static double[,] TwoUnits(string name)
+    {
+        var rng = new Xoshiro256PlusPlus(Seed(name));
+        var ll = new double[400, 2];
+        for (int d = 0; d < 400; d++)
+        {
+            ll[d, 0] = name == "tied"
+                ? d < 200 ? -2.0 : d < 300 ? -1.0 : -0.5
+                : d < 355 ? -1.0 : -1.0 - 0.02 * (d - 354);
+            double mu = 0.1 * Normal.SampleStandard(rng);
+            ll[d, 1] = -0.5 * Math.Log(2.0 * Math.PI) - 0.5 * (0.3 - mu) * (0.3 - mu);
+        }
+        return ll;
+    }
+
     private static int Seed(string name)
     {
         int h = 17;
@@ -185,24 +217,35 @@ public sealed class DiagnosticsParityTests
     }
 
     private static void Close(double expected, double actual, string what, double absolute = 0.0)
-        => Assert.True(Math.Abs(actual - expected) <= Math.Max(absolute, Relative * Math.Abs(expected)),
+        => Assert.True(double.IsInfinity(expected)
+                           ? actual == expected
+                           : Math.Abs(actual - expected) <= Math.Max(absolute, Relative * Math.Abs(expected)),
                        $"{what}: C# {actual:R} vs R {expected:R}");
 
-    // A JSON number, with null as NaN.
-    private static double Number(JsonElement root, string name)
-    {
-        JsonElement e = root.GetProperty(name);
-        return e.ValueKind == JsonValueKind.Number ? e.GetDouble() : double.NaN;
-    }
+    // A JSON number; the oracle writes non-finite values as "Inf", "-Inf", "NaN" and "NA" (NA is NaN here).
+    private static double Number(JsonElement root, string name) => Value(root.GetProperty(name));
 
     private static double[] Numbers(JsonElement root, string name)
     {
         JsonElement e = root.GetProperty(name);
         var a = new double[e.GetArrayLength()];
         int i = 0;
-        foreach (JsonElement v in e.EnumerateArray()) a[i++] = v.ValueKind == JsonValueKind.Number ? v.GetDouble() : double.NaN;
+        foreach (JsonElement v in e.EnumerateArray()) a[i++] = Value(v);
         return a;
     }
+
+    private static double Value(JsonElement e) => e.ValueKind switch
+    {
+        JsonValueKind.Number => e.GetDouble(),
+        JsonValueKind.String => e.GetString() switch
+        {
+            "Inf" => double.PositiveInfinity,
+            "-Inf" => double.NegativeInfinity,
+            "NaN" or "NA" => double.NaN,
+            var other => throw new FormatException($"Unexpected oracle value '{other}'."),
+        },
+        _ => throw new FormatException($"Unexpected oracle value kind {e.ValueKind}."),
+    };
 
     private static string WriteCsv(int rows, int columns, Func<int, int, double> value)
     {

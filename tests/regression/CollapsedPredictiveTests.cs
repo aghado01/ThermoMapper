@@ -208,6 +208,8 @@ public sealed class CollapsedPredictiveTests
                                               [new LatentReport("structure", LatentScope.Global, LatentTreatment.Conditioned)]);
         PredictiveCheck loo = PredictiveChecks.PsisLoo(density);
         Assert.Equal(double.NegativeInfinity, loo.ParetoK![0]);
+        Assert.Equal([ParetoTail.Tied], loo.ParetoTails);   // loo calls it +∞ and withholds the total's error
+        Assert.True(double.IsFinite(loo.MonteCarloError));
         // Unsmoothed, the estimate is the harmonic mean of the densities: 400 / (200e² + 100e + 100e^0.5).
         Assert.Equal(Math.Log(400.0 / (200.0 * Math.Exp(2.0) + 100.0 * Math.Exp(1.0) + 100.0 * Math.Exp(0.5))), loo.Elpd, 12);
     }

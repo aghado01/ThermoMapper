@@ -6,13 +6,11 @@
 #
 # Usage (cwd = r/):
 #   Rscript oracles/diagnostics_oracle.R <draws.csv> <out.json> chains
-#     draws.csv: iterations x chains. Emits rhat, rhat_bulk, rhat_tail, ess_bulk, ess_tail, ess_q05, ess_q95, ess_mean,
-#     plus rhat_tail_split and ess_tail_split: the tail diagnostics with the median and the 5% and 95% quantiles taken
-#     over the split chains (an odd middle draw dropped), the convention of the C# port. posterior takes them over all
-#     draws; the two agree whenever the chains have an even length.
+#     draws.csv: iterations x chains. Emits rhat, rhat_bulk, rhat_tail, ess_bulk, ess_tail, ess_q05, ess_q95, ess_mean.
 #   Rscript oracles/diagnostics_oracle.R <loglik.csv> <out.json> loo <chains>
 #     loglik.csv: draws x units, each chain's draws contiguous; chains = 0 for independent draws. Emits elpd, se, p_loo,
-#     the pointwise elpd_i, mcse_i and pareto_k, r_eff, threshold, and mcse (null when a k-hat is above the threshold).
+#     the pointwise elpd_i, mcse_i and pareto_k, r_eff, threshold, and mcse ("NA" when a k-hat is above the threshold).
+#   Non-finite numbers are written as strings: "Inf", "-Inf", "NaN", "NA".
 
 source("oracles/_common.R")
 
@@ -27,24 +25,17 @@ if (mode == "chains") {
   rhat_bulk <- posterior:::.rhat(posterior:::z_scale(split))
   rhat_tail <- posterior:::.rhat(posterior:::z_scale(posterior:::.split_chains(posterior:::fold_draws(X))))
 
-  # The C# convention: the median and the tail quantiles over the split chains.
-  folded_split <- abs(split - median(split))
-  rhat_tail_split <- posterior:::.rhat(posterior:::z_scale(folded_split))
-  ess_q_split <- sapply(c(0.05, 0.95), function(p) posterior:::.ess(split <= quantile(split, p)))
-
   q <- posterior::ess_quantile(X, c(0.05, 0.95))
   emit_json(list(
-    rhat            = posterior::rhat(X),
-    rhat_bulk       = rhat_bulk,
-    rhat_tail       = rhat_tail,
-    ess_bulk        = posterior::ess_bulk(X),
-    ess_tail        = posterior::ess_tail(X),
-    ess_q05         = unname(q[1]),
-    ess_q95         = unname(q[2]),
-    ess_mean        = posterior::ess_mean(X),
-    rhat_tail_split = rhat_tail_split,
-    ess_tail_split  = min(ess_q_split)
-  ), args[2], na = "null")
+    rhat      = posterior::rhat(X),
+    rhat_bulk = rhat_bulk,
+    rhat_tail = rhat_tail,
+    ess_bulk  = posterior::ess_bulk(X),
+    ess_tail  = posterior::ess_tail(X),
+    ess_q05   = unname(q[1]),
+    ess_q95   = unname(q[2]),
+    ess_mean  = posterior::ess_mean(X)
+  ), args[2], na = "string")
 } else if (mode == "loo") {
   chains <- if (length(args) >= 4) as.integer(args[4]) else 0L
   S <- nrow(X)
@@ -65,7 +56,7 @@ if (mode == "chains") {
     r_eff     = unname(r_eff),
     threshold = loo:::ps_khat_threshold(S),
     mcse      = loo:::mcse_loo(fit)
-  ), args[2], na = "null")
+  ), args[2], na = "string")
 } else {
   stop("mode must be 'chains' or 'loo'")
 }

@@ -39,6 +39,35 @@ public sealed class PredictiveChecksTests
         Assert.InRange(sigma, scale * 0.9, scale * 1.1);
     }
 
+    [Fact]
+    public void ParetoTails_ReportHowEachUnitWasTreated()
+    {
+        // posterior's gpdfit guard: the grid's scale is the tail's first quartile, so a tail whose lowest quarter sits at
+        // its minimum has no fit.
+        (double k, double sigma) = PredictiveChecks.FitGeneralizedPareto([0.0, 0.0, 0.0, 0.0, 0.1, 0.4, 0.9, 1.6]);
+        Assert.True(double.IsNaN(k) && double.IsNaN(sigma));
+
+        // Unit 0: 355 of 400 log ratios share one value and 45 exceed it, so the tail of 60 starts with 15 at the cutoff:
+        // no fit, k̂ = +∞, as in loo. Unit 1 varies smoothly and is fitted. Twenty draws give a tail of 4: too short.
+        var rng = new Xoshiro256PlusPlus(seed: 3);
+        var values = new double[400, 2];
+        for (int d = 0; d < 400; d++)
+        {
+            values[d, 0] = d < 355 ? -1.0 : -1.0 - 0.02 * (d - 354);
+            values[d, 1] = -0.5 * Math.Pow(0.3 - 0.1 * Gaussian(rng), 2);
+        }
+        PredictiveCheck check = PredictiveChecks.PsisLoo(new PointwiseLogDensity(values, UnitPartition.EachObservation(2), []));
+        Assert.Equal([ParetoTail.NoFit, ParetoTail.Fitted], check.ParetoTails);
+        Assert.Equal(double.PositiveInfinity, check.ParetoK![0]);
+        Assert.True(double.IsNaN(check.MonteCarloError), "an unfitted tail is above the threshold, so the total's error is withheld");
+
+        var few = new double[20, 1];
+        for (int d = 0; d < 20; d++) few[d, 0] = -0.5 * Math.Pow(Gaussian(rng), 2);
+        PredictiveCheck shortTail = PredictiveChecks.PsisLoo(new PointwiseLogDensity(few, UnitPartition.EachObservation(1), []));
+        Assert.Equal([ParetoTail.TooShort], shortTail.ParetoTails);
+        Assert.Equal(double.PositiveInfinity, shortTail.ParetoK![0]);
+    }
+
     // y = Xβ + ε with ε ~ N(0, σ²) known and β ~ N(0, τ²I): the posterior is N(m, V), V = (XᵀX/σ² + I/τ²)⁻¹, m = VXᵀy/σ²,
     // and leaving observation i out gives the predictive N(xᵢᵀm₋ᵢ, σ² + xᵢᵀV₋ᵢxᵢ) from the precision without xᵢxᵢᵀ/σ².
     private const double Sigma2 = 0.25, Tau2 = 4.0;

@@ -111,7 +111,8 @@ public static partial class ChainDiagnostics
         RHatDiagnostic bulkRHat = ClassicRHat(z);
         EssDiagnostic bulkEss = StanEss(z);
 
-        double median = PooledQuantile(split, 0.5);
+        // The median and the tail quantiles are the unsplit draws', as in posterior, so an odd middle draw counts.
+        double median = PooledQuantile(chains, 0.5);
         double[][] folded = Map(split, v => Math.Abs(v - median));
         RHatDiagnostic tailRHat = Spread(folded) switch
         {
@@ -120,7 +121,7 @@ public static partial class ChainDiagnostics
             _ => ClassicRHat(RankNormalize(folded)),
         };
 
-        double q05 = PooledQuantile(split, 0.05), q95 = PooledQuantile(split, 0.95);
+        double q05 = PooledQuantile(chains, 0.05), q95 = PooledQuantile(chains, 0.95);
         EssDiagnostic tailEss = EssDiagnostic.Worst(IndicatorEss(split, q05), IndicatorEss(split, q95));
 
         ReadOnlySpan<RHatDiagnostic> both = [bulkRHat, tailRHat];

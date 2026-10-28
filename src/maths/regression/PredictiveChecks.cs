@@ -22,10 +22,34 @@ namespace Maths.Regression;
 /// joint influence, which keeps the correlation between units that share the draws (see
 /// <see cref="PredictiveChecks.PsisLoo"/>); NaN under the same rule as <see cref="MonteCarloError"/>, and for
 /// WAIC.</param>
+/// <param name="ParetoTails">PSIS-LOO only: how each unit's Pareto fit went, which says what its k̂ means. Null for
+/// WAIC.</param>
 public sealed record PredictiveCheck(double Elpd, double StandardError, double EffectiveParameters, double[] PerUnit,
                                      double[]? ParetoK, double MonteCarloError = double.NaN,
                                      double[]? MonteCarloErrors = null, double[]? RelativeEfficiency = null,
-                                     double JointMonteCarloError = double.NaN);
+                                     double JointMonteCarloError = double.NaN, ParetoTail[]? ParetoTails = null);
+
+/// <summary>How one unit's PSIS tail was treated (<see cref="PredictiveCheck.ParetoTails"/>), and what its k̂ then is.</summary>
+public enum ParetoTail
+{
+    /// <summary>Fitted: k̂ is the generalized Pareto shape, as in loo.</summary>
+    Fitted,
+
+    /// <summary>
+    /// The tail's largest ratios tie to rounding, so at least M draws hold the largest ratio: the sample's tail is bounded
+    /// and no draw dominates. k̂ = −∞, the tail is left unsmoothed, and the unit counts as reliable. loo reports k̂ = +∞
+    /// here, warns that it cannot fit, and withholds the total's Monte Carlo error. Ties are the norm for the collapsed
+    /// content, whose ratios repeat with the structure.
+    /// </summary>
+    Tied,
+
+    /// <summary>Too few draws for a tail of five: k̂ = +∞, unsmoothed, as in loo.</summary>
+    TooShort,
+
+    /// <summary>No fit: the tail's first quartile is its smallest value (posterior's <c>gpdfit</c> guard), or the fit gives
+    /// no number. k̂ = +∞, unsmoothed, as in loo.</summary>
+    NoFit,
+}
 
 /// <summary>
 /// Model-free consumers of a <see cref="PointwiseLogDensity"/> (OQ17): they read the draws × units matrix and know no
@@ -107,6 +131,7 @@ public static class PredictiveChecks
         var khat = new double[units];
         var mcse = new double[units];
         var rEff = new double[units];
+        var tails = new ParetoTail[units];
         double lppdTotal = 0.0;
         var logRatios = new double[s];
         var column = new double[s];
@@ -121,7 +146,7 @@ public static class PredictiveChecks
             for (int d = 0; d < s; d++) likelihood[d] = Math.Exp(column[d] - maxLl);   // scaled by its largest, which the ESS ignores
             rEff[u] = RelativeEfficiency(likelihood, density.ChainLengths);
             int tail = (int)Math.Ceiling(Math.Min(0.2 * s, 3.0 * Math.Sqrt(s / rEff[u])));
-            khat[u] = SmoothLogWeights(logRatios, tail);   // logRatios now holds the smoothed log weights
+            (khat[u], tails[u]) = SmoothLogWeights(logRatios, tail);   // logRatios now holds the smoothed log weights
             double logNorm = LogSumExp(logRatios);
             for (int d = 0; d < s; d++)
             {
@@ -156,6 +181,7 @@ public static class PredictiveChecks
             MonteCarloErrors = mcse,
             RelativeEfficiency = rEff,
             JointMonteCarloError = reliable ? Math.Sqrt(jointVariance) : double.NaN,
+            ParetoTails = tails,
         };
     }
 
@@ -193,7 +219,8 @@ public static class PredictiveChecks
     /// The generalized Pareto distribution fitted to exceedances by Zhang &amp; Stephens' (2009) empirical Bayes estimator,
     /// with the loo package's weakly informative adjustment of the shape toward ½: k̂ ← (n·k̂ + 5)/(n + 10). Returns the
     /// shape k (positive for a heavy tail) and scale σ. <paramref name="exceedances"/> must be sorted ascending and
-    /// positive.
+    /// positive. As posterior's <c>gpdfit</c>: no fit, (NaN, NaN), when the first quartile is the smallest value, and
+    /// (+∞, NaN) when the fit's arithmetic gives no number.
     /// </summary>
     public static (double Shape, double Scale) FitGeneralizedPareto(ReadOnlySpan<double> exceedances)
     {
@@ -203,35 +230,37 @@ public static class PredictiveChecks
         int m = 30 + (int)Math.Floor(Math.Sqrt(n));
         double xStar = exceedances[(int)Math.Floor(n / 4.0 + 0.5) - 1];   // the first quartile
         double xMax = exceedances[n - 1];
+        if (!(xStar > exceedances[0])) return (double.NaN, double.NaN);   // the grid's scale would be the minimum's
         var theta = new double[m];
         var logLik = new double[m];
         for (int j = 0; j < m; j++)
         {
             theta[j] = 1.0 / xMax + (1.0 - Math.Sqrt(m / (j + 0.5))) / prior / xStar;
             double k = 0.0;
-            foreach (double x in exceedances) k += Math.Log(1.0 - theta[j] * x);
+            foreach (double x in exceedances) k += double.LogP1(-theta[j] * x);
             k /= n;
             logLik[j] = n * (Math.Log(-theta[j] / k) - k - 1.0);   // the profile log-likelihood
         }
         double norm = LogSumExp(logLik), thetaHat = 0.0;
         for (int j = 0; j < m; j++) thetaHat += theta[j] * Math.Exp(logLik[j] - norm);
         double shape = 0.0;
-        foreach (double x in exceedances) shape += Math.Log(1.0 - thetaHat * x);
+        foreach (double x in exceedances) shape += double.LogP1(-thetaHat * x);
         shape /= n;
         double scale = -shape / thetaHat;
         shape = (n * shape + 10.0 * 0.5) / (n + 10.0);
-        return (shape, scale);
+        return double.IsNaN(shape) ? (double.PositiveInfinity, double.NaN) : (shape, scale);
     }
 
-    // Pareto-smooth the upper tail of one unit's log ratios in place, then truncate at their raw maximum; returns k̂, or
-    // +∞ when the tail is too short or flat to fit.
-    private static double SmoothLogWeights(double[] logRatios, int tail)
+    // Pareto-smooth the upper tail of one unit's log ratios in place, then truncate at their raw maximum; returns k̂ and
+    // how the tail was treated (ParetoTail).
+    private static (double Khat, ParetoTail Tail) SmoothLogWeights(double[] logRatios, int tail)
     {
         int s = logRatios.Length;
         double max = double.NegativeInfinity;
         foreach (double v in logRatios) max = Math.Max(max, v);
         for (int d = 0; d < s; d++) logRatios[d] -= max;
         double khat = double.PositiveInfinity;
+        ParetoTail treated = ParetoTail.TooShort;
         if (tail >= 5 && tail < s)
         {
             var order = new int[s];
@@ -242,9 +271,14 @@ public static class PredictiveChecks
             // A tail flat to rounding cannot be fitted, and needs no smoothing: its largest ratios tie, so they are bounded in
             // the sample and no draw dominates. That is the norm for the collapsed content, whose ratios repeat with the
             // structure, and k̂ is then −∞. Too few draws for a tail leave k̂ at +∞, undiagnosable.
-            if (!(Math.Abs(keys[s - 1] - keys[s - tail]) >= 2.220446049250313e-16 / 100.0)) khat = double.NegativeInfinity;
+            if (!(Math.Abs(keys[s - 1] - keys[s - tail]) >= 2.220446049250313e-16 / 100.0))
+            {
+                khat = double.NegativeInfinity;
+                treated = ParetoTail.Tied;
+            }
             else
             {
+                treated = ParetoTail.NoFit;
                 double expCutoff = Math.Exp(cutoff);
                 var exceedances = new double[tail];
                 for (int t = 0; t < tail; t++) exceedances[t] = Math.Exp(keys[s - tail + t]) - expCutoff;
@@ -260,11 +294,12 @@ public static class PredictiveChecks
                         logRatios[order[s - tail + t]] = Math.Log(q + expCutoff);
                     }
                     khat = shape;
+                    treated = ParetoTail.Fitted;
                 }
             }
         }
         for (int d = 0; d < s; d++) logRatios[d] = Math.Min(logRatios[d], 0.0) + max;   // truncate at the raw maximum
-        return khat;
+        return (khat, treated);
     }
 
     private static PredictiveCheck Summarize(double[] perUnit, double effectiveParameters, double[]? paretoK)
