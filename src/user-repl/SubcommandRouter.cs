@@ -33,6 +33,7 @@ public static class SubcommandRouter
         {
             "spc"          => SpcCommand.Run(rest),
             "hdbscan"      => HdbscanCommand.Run(rest),
+            "cumulative-field" => CumulativeFieldCommand.Run(rest),
             "extract"      => ExtractCommand.Run(rest),
             "graph-health" => GraphHealthCommand.Run(rest),
             _ => UnknownSubcommand(subcommand),
@@ -56,6 +57,7 @@ public static class SubcommandRouter
         Console.WriteLine("Subcommands:");
         Console.WriteLine("  spc       Run an SPC clustering session (adaptive or fixed-grid sweep)");
         Console.WriteLine("  hdbscan   Run HDBSCAN on the same dataset shapes the SPC subcommand accepts");
+        Console.WriteLine("  cumulative-field  Run the deterministic cumulative-field clusterer on a coupling graph");
         Console.WriteLine("  extract   Rebuild CSVs from an existing checkpoint directory without re-running the sampler");
         Console.WriteLine("  graph-health  Re-evaluate and refresh <run-dir>/graph_health.json from manifest.json");
         Console.WriteLine();

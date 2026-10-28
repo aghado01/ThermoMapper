@@ -6,7 +6,7 @@ namespace UserRepl.Commands;
 
 internal static class SpcCommandHelp
 {
-    public static void PrintHelp(IReadOnlyList<string> datasetKinds)
+    public static void PrintHelp()
     {
         Console.WriteLine("Usage: userrepl spc --dataset <generator> [options]");
         Console.WriteLine("       userrepl spc --dataset-file <path> [options]");
@@ -18,47 +18,12 @@ internal static class SpcCommandHelp
         Console.WriteLine("                                the corresponding preset entry. Multiple --config");
         Console.WriteLine("                                files stack in argv order (later wins).");
         Console.WriteLine();
-        Console.WriteLine("Available synthetic generators:");
-        foreach (var kind in datasetKinds) Console.WriteLine($"  {kind}");
-        Console.WriteLine();
-        Console.WriteLine("Dataset:");
-        Console.WriteLine("  --dataset <name>              Synthetic generator (see list above)");
-        Console.WriteLine("  --param <name>=<value>        Per-generator parameter; may repeat");
-        Console.WriteLine("  --list-generators             Print generators and exit");
-        Console.WriteLine("  --generator-schema <name>     Print a generator's parameter schema and exit");
-        Console.WriteLine("  --dataset-file <path>         CSV input instead of synthetic data");
-        Console.WriteLine("  --label-column <name|idx>     Label column (default: last)");
-        Console.WriteLine("  --delimiter <char|tab>        CSV separator (default: ,)");
-        Console.WriteLine("  --no-header                   Treat CSV as having no header row");
-        Console.WriteLine("  --seed <int>                  RNG seed (default: 42)");
-        Console.WriteLine();
-        Console.WriteLine("Output:");
-        Console.WriteLine("  --base-dir <path>             Run-root base directory (default: artifacts/spc-user)");
-        Console.WriteLine("  --run-name <name>             Subdirectory name (default: dataset kind)");
+        GraphRun.PrintHelp();
+        Console.WriteLine("SPC output:");
         Console.WriteLine("  --no-guid                     Don't append a GUID to the run folder");
         Console.WriteLine("  --checkpoint-dir <path>       Persist per-task .spcx/.spce here for resume.");
         Console.WriteLine("                                Defaults to <runDir>/checkpoints. Pointing at an");
         Console.WriteLine("                                existing dir resumes any completed work.");
-        Console.WriteLine();
-        Console.WriteLine("Graph topology:");
-        Console.WriteLine("  --topology <knn|epsilon>            Graph topology kind (default: knn)");
-        Console.WriteLine("  --filter <or_rule|mutualknn>        Graph filter kind (default: or_rule)");
-        Console.WriteLine("  --k <int>                             KNN k (default: 10)");
-        Console.WriteLine("  --epsilon <double>                    Epsilon-ball radius (epsilon mode only)");
-        Console.WriteLine("  --distance-metric <spec>              euclidean | manhattan | minkowski:p=N");
-        Console.WriteLine("                                        | poincare | cosine | hamming.");
-        Console.WriteLine("                                        Default: euclidean (inline, no metric obj).");
-        Console.WriteLine("  --ensure-connected                    MST-repair the graph (Blatt: typically on)");
-        Console.WriteLine("  --lmp                                 Apply Local Mutual Proximity scaling");
-        Console.WriteLine();
-        Console.WriteLine("Coupling kernel:");
-        Console.WriteLine("  --kernel <gaussian|cauchy|laplacian|linear>   Single-kernel coupling (default: gaussian)");
-        Console.WriteLine("  --bandwidth <double>                          Kernel bandwidth (0=auto)");
-        Console.WriteLine("  --mixture <spec>                              Kernel mixture weights, e.g.");
-        Console.WriteLine("                                                'gauss=0.5,cauchy=0.3,laplace=0.2'.");
-        Console.WriteLine("                                                When set, overrides --kernel.");
-        Console.WriteLine("  --mixture-bandwidth <spec>                    Per-component bandwidths, same format.");
-        Console.WriteLine("                                                Omit to auto-estimate per component.");
         Console.WriteLine();
         Console.WriteLine("Schedule:");
         Console.WriteLine("  --schedule <fixed-grid>              Default: fixed-grid (adaptive is parked)");

@@ -12,7 +12,7 @@
 - `Clustering.Dendrograms`: the threshold-and-connect close `AffinityThreshold.Connect`;
 - `Archivory`: the run bundle's artifact scope and tabular writing.
 
-Its `Affinities` and `Landscape` outputs are the same currencies Swendsen–Wang produces, so the shared resolvers in [SPC analysis](./SpcAnalysis.md) and [ClusterResolution](./ClusterResolution.md) consume them unchanged. The REPL reaches it through `spc --solver cumulative-field`.
+Its `Affinities` and `Landscape` outputs are the same currencies Swendsen–Wang produces, so the shared resolvers in [SPC analysis](./SpcAnalysis.md) and [ClusterResolution](./ClusterResolution.md) consume them unchanged. The REPL runs it as `userrepl cumulative-field`, which shares the dataset and coupling-graph flags with `spc` and writes its bundle under the `cumulative_field` run family.
 
 ```mermaid
 flowchart LR
@@ -93,7 +93,6 @@ flowchart LR
 - **Coupling graphs only.** `Prepare` rejects any `weightKind` other than `EdgeWeightKind.Coupling`; it trusts the declared kind and does not inspect the weights.
 - **`EstimateBracket` ignores the rule and θ.** It brackets the unsymmetrized directed ladder values and always divides by $\ln 2$, so for `Local` fields and for θ ≠ ½ the bracket is approximate.
 - **The `Mean` rule averages after the exponential.** The effective score is a temperature-dependent soft minimum of the two directed values, so θ reorders edges rather than only rescaling the temperature axis.
-- **REPL placement.** The REPL still dispatches through the `spc` command (`--solver cumulative-field`), so its bundle lands under the `spc` run family.
 
 ## Source map
 

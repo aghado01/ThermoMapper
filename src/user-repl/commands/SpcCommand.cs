@@ -25,9 +25,6 @@ using Graphs.Primitives;
 
 using Graphs.Models.Potts;
 
-using Clustering.Graphical.CumulativeField;
-using Clustering.Graphical.CumulativeField.Export;
-using SolverField = Clustering.Graphical.CumulativeField.Field;
 
 namespace UserRepl.Commands;
 
@@ -38,15 +35,12 @@ namespace UserRepl.Commands;
 /// </summary>
 public static class SpcCommand
 {
-    private static readonly IReadOnlyList<string> DatasetKinds =
-        SpcUserSession.ListAvailableSyntheticGeneratorNames();
-
     public static int Run(string[] args)
     {
         try
         {
             var options = ParseArguments(args);
-            if (options.ShowHelp) { SpcCommandHelp.PrintHelp(DatasetKinds); return 0; }
+            if (options.ShowHelp) { SpcCommandHelp.PrintHelp(); return 0; }
             if (options.ListGenerators) { SpcCommandHelp.PrintGeneratorList(); return 0; }
             if (!string.IsNullOrWhiteSpace(options.GeneratorSchema))
             {
@@ -56,20 +50,9 @@ public static class SpcCommand
 
             string baseDirectory = options.BaseDirectory ?? "artifacts";
 
-            SpcUserDataset dataset = LoadDataset(options);
-
-            var graphConfig = BuildGraphConfig(options);
-            IDistanceMetric? distanceMetric = string.IsNullOrWhiteSpace(options.DistanceMetricSpec)
-                ? null
-                : DistanceMetricFactory.Create(options.DistanceMetricSpec);
-
-            string datasetFingerprint = GraphConstructionPersistence.ComputeDatasetFingerprint(
-                dataset, distanceMetric);
-            string graphConfigFingerprint = GraphConstructionPersistence.ComputeConfigFingerprint(graphConfig);
-            // Graph cache is orthogonal to the run tree: a content-addressed sibling
-            // under artifacts/graph_cache/, never a parent of the run.
-            string datasetRoot = GraphConstructionPersistence.ChooseDatasetRoot(
-                Path.Combine(baseDirectory, "graph_cache"), dataset, datasetFingerprint, graphConfigFingerprint);
+            SpcUserDataset dataset = GraphRun.LoadDataset(options);
+            var graphConfig = GraphRun.BuildGraphConfig(options);
+            IDistanceMetric? distanceMetric = GraphRun.DistanceMetric(options);
 
             ISignalAnalyzer analyzer = BuildAnalyzer(options.AnalyzerKind);
             IPartitionStrategy partitionStrategy = BuildPartitionStrategy(
@@ -114,22 +97,7 @@ public static class SpcCommand
 
             Console.WriteLine($"Run directory      : {runDirectory}");
             Console.WriteLine($"Checkpoint dir     : {checkpointDirectory}");
-            // Each kernel descriptor is a record that already renders itself
-            // (e.g. "Gaussian { Bandwidth = 0.5 }"); no kernel-variant switch here.
-            // Distance mode has no kernel — fall back to the projection's name.
-            IKernelDescriptor? displayKernel = (graphConfig.Projection as CouplingProjection)?.Kernel;
-            string kernelDesc = displayKernel?.ToString() ?? graphConfig.Projection.GetType().Name;
-
-            string topologyDesc = graphConfig.Topology.Kind == TopologyKind.EpsilonBall
-                ? $"epsilon (ε={graphConfig.Topology.Epsilon:G6})"
-                : $"knn (k={graphConfig.Topology.K ?? 10})";
-
-            Console.WriteLine(
-                $"Graph              : {topologyDesc}, " +
-                $"Kernel={kernelDesc}, " +
-                $"DistanceMetric={(options.DistanceMetricSpec ?? "EuclideanDefault")}, " +
-                $"MST-repair={(graphConfig.Repair.Kind == RepairKind.MstMin)}, " +
-                $"LMP={((graphConfig.Projection as CouplingProjection)?.LmpRescale == true)}");
+            GraphRun.PrintGraphSummary(options, graphConfig);
             Console.WriteLine($"Schedule           : {options.Schedule}");
             Console.WriteLine($"Analyzer           : {analyzer.GetType().Name}");
             Console.WriteLine($"PartitionStrategy  : {partitionStrategy.GetType().Name} (theta={options.Theta})");
@@ -152,48 +120,9 @@ public static class SpcCommand
                 new BondConductance(),
             };
 
-            // Load a persisted graph artifact when available to avoid
-            // rebuilding the same graph repeatedly for SPC sweep runs.
-            CsrGraph prebuiltGraph;
-            GraphConstructionManifest? graphManifest = null;
-            if (GraphConstructionPersistence.TryLoadGraphArtifact(datasetRoot, out var persistedGraph, out var persistedManifest))
-            {
-                prebuiltGraph = persistedGraph;
-                graphManifest = persistedManifest;
-                Console.WriteLine($"Loaded persisted graph artifact from {datasetRoot}");
-                Console.WriteLine($"Graph artifact : {GraphConstructionPersistence.GetGraphPath(datasetRoot)}");
-                Console.WriteLine($"Graph manifest : {GraphConstructionPersistence.GetManifestPath(datasetRoot)}");
-                Console.WriteLine($"Graph manifest contains {graphManifest?.Diagnostics.Messages.Count ?? 0} diagnostic entries.");
-            }
-            else
-            {
-                GraphBuildResult buildResult = SpcGraphBuilder.BuildResult(
-                    dataset.Features, graphConfig, distanceMetric,
-                    protectedEdges: TDA.Ph.H1CycleEdges.FromDistanceGraph);
+            // Load the persisted graph artifact when available, else compile and cache it.
+            CsrGraph prebuiltGraph = GraphRun.LoadOrBuildGraph(options, dataset, graphConfig, baseDirectory, runDirectory);
 
-                graphManifest = GraphConstructionPersistence.MaterializeManifest(
-                    graphConfig, buildResult, datasetFingerprint);
-                GraphConstructionPersistence.WriteGraphArtifact(datasetRoot, buildResult, graphManifest);
-                prebuiltGraph = buildResult.Graph;
-
-                Console.WriteLine($"Persisted graph artifact : {GraphConstructionPersistence.GetGraphPath(datasetRoot)}");
-                Console.WriteLine($"Persisted graph manifest : {GraphConstructionPersistence.GetManifestPath(datasetRoot)}");
-
-                GraphHealthReport health = GraphHealth.Evaluate(buildResult, k: graphConfig.Topology.K ?? 0);
-                string graphHealthPath = GraphHealthFile.WriteTo(runDirectory, health);
-                if (!string.IsNullOrEmpty(health.Verdict.PrimaryRecommendation))
-                {
-                    Console.WriteLine();
-                    Console.WriteLine($"Graph health       : {health.Verdict.PrimaryRecommendation}");
-                    Console.WriteLine();
-                }
-
-                Console.WriteLine($"Graph health JSON  : {graphHealthPath}");
-            }
-
-            // Shared schedule envelope: both siblings ride the identical grid
-            // (same bracket, same q-anchor). The fork is below — SW runs the
-            // MC sweep strategy; the cumulative field runs the closed-form solver session.
             (double[] temperatures, string temperaturesResolved) = ResolveTemperatureGrid(options, prebuiltGraph);
 
             // Rewrite the manifest with the resolved temperature grid provenance
@@ -202,41 +131,6 @@ public static class SpcCommand
                 Sweep = manifest.Sweep! with { TemperaturesResolved = temperaturesResolved }
             };
             manifest.WriteTo(runDirectory);
-
-            if (options.Solver == SolverKind.CumulativeField)
-            {
-                SolverField field = options.Field ?? SolverField.Mean;
-                Console.WriteLine($"Solver             : cumulative-field (field={field}, symmetrization={options.Symmetrization})");
-                Console.WriteLine($"Resolver           : thermal-eom (periphery={options.PeripheryCompletion}, min-size={options.MinClusterSize})");
-                Console.WriteLine($"Temperatures       : {temperaturesResolved}");
-
-                CumulativeFieldUserRunResult fieldRun = CumulativeFieldUserSession.Run(
-                    dataset,
-                    new CumulativeFieldRunPaths(runPaths.Scope),
-                    prebuiltGraph,
-                    EdgeWeightKind.Coupling,
-                    field,
-                    options.Symmetrization,
-                    temperatures,
-                    options.Theta,
-                    options.MinClusterSize,
-                    options.PeripheryCompletion,
-                    options.CutTemperature,
-                    externalEvaluators,
-                    spcEvaluators,
-                    dataset.Labels);
-
-                Console.WriteLine("Session finished.");
-                Console.WriteLine($"Thermal EOM        : {fieldRun.ClusterCount} clusters; abstained: {fieldRun.Abstained}");
-                Console.WriteLine($"Sweep CSV          : {fieldRun.SweepCsvPath}");
-                Console.WriteLine($"Partition CSV      : {fieldRun.PartitionCsvPath}");
-                if (fieldRun.EdgeCurrenciesCsvPath is not null)
-                    Console.WriteLine($"Edge currencies    : {fieldRun.EdgeCurrenciesCsvPath} (T={fieldRun.RepresentativeTemperature:G6})");
-                Console.WriteLine($"Summary JSON       : {fieldRun.SummaryJsonPath}");
-                foreach (var kv in fieldRun.EvaluatorScores)
-                    Console.WriteLine($"  {kv.Key,-24}: {kv.Value:F4}");
-                return 0;
-            }
 
             ISweepStrategy sweepStrategy = BuildSweepStrategy(options, checkpointDirectory, temperatures);
             Console.WriteLine($"Sweep strategy     : {sweepStrategy.GetType().Name} (temperatures: {temperaturesResolved})");
@@ -315,111 +209,14 @@ public static class SpcCommand
         }
     }
 
-    // ── Dataset loading ──────────────────────────────────────────────────
-    private static SpcUserDataset LoadDataset(Options options)
-    {
-        if (!string.IsNullOrWhiteSpace(options.DatasetFile))
-        {
-            Console.WriteLine($"Loading dataset    : CSV {options.DatasetFile}");
-            return SpcUserSession.FromCsv(
-                options.DatasetFile, options.LabelColumn, options.HasHeader, options.Delimiter);
-        }
-
-        Console.WriteLine($"Loading dataset    : synthetic '{options.DatasetKind}'");
-        var generatorParameters = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["seed"] = options.Seed,
-        };
-        foreach (var kvp in options.GeneratorParameters)
-            generatorParameters[kvp.Key] = kvp.Value;
-        return SpcUserSession.GenerateDataset(options.DatasetKind, generatorParameters);
-    }
-
-    // ── Graph config assembly ────────────────────────────────────────────
-    private static GraphCompilerConfig BuildGraphConfig(Options options)
-    {
-        IDistanceMetric? distanceMetric = string.IsNullOrWhiteSpace(options.DistanceMetricSpec)
-            ? null
-            : DistanceMetricFactory.Create(options.DistanceMetricSpec);
-
-        IKernelDescriptor kernel = string.IsNullOrWhiteSpace(options.MixtureSpec)
-            ? options.KernelType switch
-            {
-                KernelType.Gaussian  => new Gaussian(options.Bandwidth),
-                KernelType.Cauchy    => new Cauchy(options.Bandwidth),
-                KernelType.Laplacian => new Laplacian(options.Bandwidth),
-                KernelType.Linear    => new Linear(options.Bandwidth),
-                _ => throw new NotSupportedException($"Unsupported kernel type {options.KernelType}.")
-            }
-            : new Mixture(
-                GaussianWeight:  MixtureSpecParser.ParseWeights(options.MixtureSpec).Gaussian,
-                CauchyWeight:    MixtureSpecParser.ParseWeights(options.MixtureSpec).Cauchy,
-                LaplacianWeight: MixtureSpecParser.ParseWeights(options.MixtureSpec).Laplacian,
-                GaussianBandwidth: options.MixtureBandwidthSpec is null ? 0.0 : MixtureSpecParser.ParseBandwidth(options.MixtureBandwidthSpec).Gaussian,
-                CauchyBandwidth:   options.MixtureBandwidthSpec is null ? 0.0 : MixtureSpecParser.ParseBandwidth(options.MixtureBandwidthSpec).Cauchy,
-                LaplacianBandwidth: options.MixtureBandwidthSpec is null ? 0.0 : MixtureSpecParser.ParseBandwidth(options.MixtureBandwidthSpec).Laplacian);
-
-        return new GraphCompilerConfig
-        {
-            Topology = options.TopologyKind == TopologyKind.EpsilonBall
-                ? new TopologyConfig { Kind = TopologyKind.EpsilonBall, Epsilon = options.Epsilon }
-                : new TopologyConfig { Kind = TopologyKind.Knn, K = options.K },
-            Filter = new FilterConfig
-            {
-                Kind = options.FilterKind,
-            },
-            Repair = new RepairConfig
-            {
-                Kind = options.EnsureConnected ? RepairKind.MstMin : RepairKind.NoRepair,
-            },
-            Refinement = new RefinementConfig { Kind = RefinementKind.Auto },
-            Projection = new CouplingProjection
-            {
-                Kernel = kernel,
-                LmpRescale = options.ApplyLmp,
-                BandwidthOverride = options.BandwidthStrategy,
-            },
-            Interrupts = new PathologyInterruptConfig(),
-        };
-    }
-
     // ── Manifest construction ────────────────────────────────────────────
     private static RunManifest BuildManifest(
         Options options, GraphCompilerConfig graphConfig,
         string runDirectory, string checkpointDirectory, string[] args, RunIdentity identity,
         string? temperaturesResolved)
     {
-        DatasetSpec dataset = !string.IsNullOrWhiteSpace(options.DatasetFile)
-            ? new DatasetSpec(
-                Source:              "csv",
-                GeneratorName:       null,
-                GeneratorParameters: null,
-                Seed:                null,
-                CsvPath:             Path.GetFullPath(options.DatasetFile),
-                LabelColumn:         options.LabelColumn,
-                HasHeader:           options.HasHeader,
-                Delimiter:           options.Delimiter == '\t' ? "tab" : options.Delimiter.ToString())
-            : new DatasetSpec(
-                Source:              "synthetic",
-                GeneratorName:       options.DatasetKind,
-                GeneratorParameters: new Dictionary<string, object?>(options.GeneratorParameters, StringComparer.OrdinalIgnoreCase),
-                Seed:                options.Seed,
-                CsvPath:             null,
-                LabelColumn:         null,
-                HasHeader:           null,
-                Delimiter:           null);
-
-            // The projection (kernel + LMP + bandwidth, or distance pass-through) is
-            // embedded in the manifest as-is and round-trips polymorphically — no kernel
-            // flattening switch to keep in sync with ManifestMaterialization.ToConfig.
-            var graph = new GraphSpec(
-                TopologyKind:    graphConfig.Topology.Kind == TopologyKind.EpsilonBall ? "epsilon" : "knn",
-                FilterKind:      graphConfig.Filter.Kind == FilterKind.MutualKnn ? "mutualknn" : "or_rule",
-                K:               graphConfig.Topology.K ?? 0,
-                Epsilon:         graphConfig.Topology.Epsilon ?? 0.0,
-                DistanceMetric:  options.DistanceMetricSpec,
-                EnsureConnected: graphConfig.Repair.Kind == RepairKind.MstMin,
-                Projection:      graphConfig.Projection);
+        DatasetSpec dataset = GraphRun.DatasetSpec(options);
+        GraphSpec graph = GraphRun.GraphSpec(options, graphConfig);
 
         var sweep = new SweepSpec(
             Schedule:          options.Schedule.ToString(),
@@ -436,21 +233,21 @@ public static class SpcCommand
         return new RunManifest(
             SchemaVersion: RunManifest.CurrentSchemaVersion,
             CreatedUtc:    DateTime.UtcNow,
-            Algorithm:     options.Solver == SolverKind.CumulativeField ? "cumulative-field" : "spc-sw",
+            Algorithm:     "spc-sw",
             CommandLine:   string.Join(" ", args),
             Dataset:       dataset,
             Graph:         graph,
             Sweep:         sweep,
             Hdbscan:       null,
+            CumulativeField: null,
             Output:        new OutputSpec(RunDirectory: runDirectory, CheckpointDirectory: checkpointDirectory),
             Identity:      new RunIdentitySpec(identity.Family, identity.Source, identity.Requested));
     }
 
     // ── Sweep strategy assembly ──────────────────────────────────────────
     /// <summary>
-    /// Resolve the temperature grid — the LAST step shared by both siblings.
-    /// SW and the cumulative-field solver ride the identical bracket so the solver is a true
-    /// apples-to-apples (zero-variance) probe of the SW schedule.
+    /// Resolve the temperature grid: an explicit spec, or the auto bracket the
+    /// coupling construction declares (T_ps(q) under 1/K̂, else the data heuristic).
     /// </summary>
     private static (double[] Temperatures, string Resolved) ResolveTemperatureGrid(Options options, CsrGraph graph)
     {
@@ -463,18 +260,6 @@ public static class SpcCommand
         if (spec.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
             double lo, hi;
-
-            // The analytical solver brackets off its OWN cumulative-energy ladder:
-            // T is a single-linkage cut height (Hcum = T·ln2), so the only
-            // temperatures that change anything span [min,max] Hcum / ln2. q-free
-            // and gauge-free — no borrowed Potts T_ps(q) (the solver has no
-            // susceptibility transition to anchor on).
-            if (options.Solver == SolverKind.CumulativeField)
-            {
-                (lo, hi) = CumulativeFieldSolver.EstimateBracket(
-                    graph, EdgeWeightKind.Coupling, options.Field ?? SolverField.Mean, options.Symmetrization);
-                return (SpcScheduleHelpers.LogSpaceGrid(lo, hi, 48), $"logspace:{lo:G6},{hi:G6},48 (cumulative-field)");
-            }
 
             // The Potts sampler's coupling construction declares its T-estimate:
             // under the 1/K̂-normalized replication kernel (MeanEdgeDistance) the
@@ -532,55 +317,26 @@ public static class SpcCommand
 
         for (int i = 0; i < args.Length; i++)
         {
+            if (GraphRun.TryParse(options, args, ref i)) continue;
             string arg = args[i];
             string? next = i + 1 < args.Length ? args[i + 1] : null;
             switch (arg.ToLowerInvariant())
             {
                 case "--help": case "-h": options.ShowHelp = true; return options;
                 case "--config": i++; break;   // already consumed in pre-pass
-                case "--list-generators": options.ListGenerators = true; break;
-                case "--generator-schema": options.GeneratorSchema = RequireValue(next, arg); i++; break;
-
-                // Dataset
-                case "--dataset": options.DatasetKind = ParseDatasetKind(RequireValue(next, arg)); i++; break;
-                case "--param": ParseGeneratorParameter(RequireValue(next, arg), options.GeneratorParameters); i++; break;
-                case "--dataset-file": options.DatasetFile = RequireValue(next, arg); i++; break;
-                case "--label-column": options.LabelColumn = RequireValue(next, arg); i++; break;
-                case "--delimiter": options.Delimiter = ParseDelimiter(RequireValue(next, arg)); i++; break;
-                case "--no-header": options.HasHeader = false; break;
 
                 // Output
-                case "--base-dir": options.BaseDirectory = RequireValue(next, arg); i++; break;
-                case "--run-name": options.RunName = RequireValue(next, arg); i++; break;
                 case "--no-guid": options.NoGuid = true; break;
                 case "--checkpoint-dir": options.CheckpointDir = RequireValue(next, arg); i++; break;
-
-                // Reproducibility
-                case "--seed": options.Seed = ParseInt(RequireValue(next, arg)); i++; break;
-
-                // Graph topology
-                case "--k": options.K = ParseInt(RequireValue(next, arg)); i++; break;
-                case "--epsilon": options.Epsilon = ParseDouble(RequireValue(next, arg)); i++; break;
-                case "--topology": options.TopologyKind = ParseTopologyKind(RequireValue(next, arg)); i++; break;
-                case "--filter": options.FilterKind = ParseFilterKind(RequireValue(next, arg)); i++; break;
-                case "--distance-metric": options.DistanceMetricSpec = RequireValue(next, arg); i++; break;
-                case "--ensure-connected": options.EnsureConnected = true; break;
-                case "--lmp": options.ApplyLmp = true; break;
-
-                // Coupling kernel
-                case "--kernel": options.KernelType = ParseKernelType(RequireValue(next, arg)); i++; break;
-                case "--bandwidth": options.Bandwidth = ParseDouble(RequireValue(next, arg)); i++; break;
-                case "--mixture": options.MixtureSpec = RequireValue(next, arg); i++; break;
-                case "--mixture-bandwidth": options.MixtureBandwidthSpec = RequireValue(next, arg); i++; break;
 
                 // Schedule
                 case "--schedule": options.Schedule = ParseScheduleMode(RequireValue(next, arg)); i++; break;
                 case "--temperatures": options.TemperaturesSpec = RequireValue(next, arg); i++; break;
-                case "--replicas": options.Replicas = ParseInt(RequireValue(next, arg)); i++; break;
+                case "--replicas": options.Replicas = GraphRun.ParseInt(RequireValue(next, arg)); i++; break;
                 case "--sweep": options.SweepBudget = ParseRunBudget(RequireValue(next, arg), arg); i++; break;
                 case "--equilibrium": options.EquilibriumBudget = ParseRunBudget(RequireValue(next, arg), arg); i++; break;
                 case "--accumulation": options.Accumulation = ParseAccumulationSpec(RequireValue(next, arg)); i++; break;
-                case "--q": options.Q = ParseInt(RequireValue(next, arg)); i++; break;
+                case "--q": options.Q = GraphRun.ParseInt(RequireValue(next, arg)); i++; break;
 
                 // Profile analyzer + cut policy
                 case "--analyzer": options.AnalyzerKind = ParseAnalyzerKind(RequireValue(next, arg)); i++; break;
@@ -591,19 +347,10 @@ public static class SpcCommand
                 case "--hierarchical-strategy":
                     options.HierarchicalStrategyKind = ParseHierarchicalStrategyKind(RequireValue(next, arg));
                     i++; break;
-                case "--theta": options.Theta = ParseDouble(RequireValue(next, arg)); i++; break;
+                case "--theta": options.Theta = GraphRun.ParseDouble(RequireValue(next, arg)); i++; break;
                 case "--susceptibility":
                     options.SusceptibilityKind = ParseSusceptibilityKind(RequireValue(next, arg)); i++; break;
-                case "--bandwidth-strategy":
-                    options.BandwidthStrategy = ParseBandwidthStrategy(RequireValue(next, arg)); i++; break;
 
-                // Inference method (sampler vs analytic solver)
-                case "--solver": options.Solver = ParseSolverKind(RequireValue(next, arg)); i++; break;
-                case "--field": options.Field = ParseSolverField(RequireValue(next, arg)); i++; break;
-                case "--symmetrization":
-                    options.Symmetrization = ParseSymmetrization(RequireValue(next, arg)); i++; break;
-                case "--cut-temperature":
-                    options.CutTemperature = ParseDouble(RequireValue(next, arg)); i++; break;
                 case "--resolver":
                     options.Resolver = RequireValue(next, arg).Trim().ToLowerInvariant() switch
                     {
@@ -616,7 +363,7 @@ public static class SpcCommand
                     };
                     i++; break;
                 case "--min-cluster-size":
-                    options.MinClusterSize = ParseInt(RequireValue(next, arg)); i++; break;
+                    options.MinClusterSize = GraphRun.ParseInt(RequireValue(next, arg)); i++; break;
                 case "--periphery":
                     options.PeripheryCompletion = RequireValue(next, arg).Trim().ToLowerInvariant() switch
                     {
@@ -641,12 +388,6 @@ public static class SpcCommand
     }
 
     // ── Parsing primitives ───────────────────────────────────────────────
-    private static int ParseInt(string s)
-        => int.Parse(s, CultureInfo.InvariantCulture);
-
-    private static double ParseDouble(string s)
-        => double.Parse(s, CultureInfo.InvariantCulture);
-
     internal static RunBudget ParseRunBudget(string s, string argName)
     {
         int burnIn = 0, cycles = 0;
@@ -658,9 +399,9 @@ public static class SpcCommand
             string key = part[..eq].Trim();
             string val = part[(eq + 1)..].Trim();
             if (key.Equals("burnin", StringComparison.OrdinalIgnoreCase))
-                burnIn = ParseInt(val);
+                burnIn = GraphRun.ParseInt(val);
             else if (key.Equals("cycles", StringComparison.OrdinalIgnoreCase))
-                cycles = ParseInt(val);
+                cycles = GraphRun.ParseInt(val);
             else
                 throw new ArgumentException($"'{argName}': unknown key '{key}'. Expected burnin=N,cycles=N.");
         }
@@ -697,37 +438,6 @@ public static class SpcCommand
         };
     }
 
-    internal static string ParseDatasetKind(string value)
-    {
-        var match = DatasetKinds.FirstOrDefault(name => string.Equals(name, value, StringComparison.OrdinalIgnoreCase));
-        if (match is not null) return match;
-        throw new ArgumentException($"Unknown dataset kind '{value}'. Valid: {string.Join(", ", DatasetKinds)}.");
-    }
-
-    internal static KernelType ParseKernelType(string value) => value.ToLowerInvariant() switch
-    {
-        "gaussian"  => KernelType.Gaussian,
-        "cauchy"    => KernelType.Cauchy,
-        "laplacian" => KernelType.Laplacian,
-        "linear"    => KernelType.Linear,
-        _ => throw new ArgumentException($"Unknown kernel '{value}'. Valid: gaussian, cauchy, laplacian, linear."),
-    };
-
-    internal static TopologyKind ParseTopologyKind(string value) => value.ToLowerInvariant() switch
-    {
-        "knn"     => TopologyKind.Knn,
-        "epsilon" => TopologyKind.EpsilonBall,
-        _ => throw new ArgumentException($"Unknown topology kind '{value}'. Valid: knn, epsilon."),
-    };
-
-    internal static FilterKind ParseFilterKind(string value) => value.ToLowerInvariant() switch
-    {
-        "or_rule"   => FilterKind.OrRule,
-        "or"        => FilterKind.OrRule,
-        "mutualknn" => FilterKind.MutualKnn,
-        _ => throw new ArgumentException($"Unknown filter kind '{value}'. Valid: or_rule, mutualknn."),
-    };
-
     internal static AnalyzerKind ParseAnalyzerKind(string value) => value.ToLowerInvariant() switch
     {
         "chi-peak"               => AnalyzerKind.ChiPeak,
@@ -745,38 +455,6 @@ public static class SpcCommand
         "magnetization-variance" => SusceptibilityKind.MagnetizationVariance,
         _ => throw new ArgumentException(
             $"Unknown susceptibility '{value}'. Valid: fk-cluster, fk-reduced, magnetization, magnetization-variance."),
-    };
-
-    internal static Graphs.Distance.BandwidthStrategy ParseBandwidthStrategy(string value) => value.ToLowerInvariant() switch
-    {
-        "mad"                  => Graphs.Distance.BandwidthStrategy.MadConsistencyFactor,
-        "quantile-normalized"  => Graphs.Distance.BandwidthStrategy.QuantileNormalized,
-        "log-scale-hyperbolic" => Graphs.Distance.BandwidthStrategy.LogScaleHyperbolic,
-        "mean-edge-distance"   => Graphs.Distance.BandwidthStrategy.MeanEdgeDistance,
-        _ => throw new ArgumentException(
-            $"Unknown bandwidth strategy '{value}'. Valid: mad, quantile-normalized, log-scale-hyperbolic, mean-edge-distance."),
-    };
-
-    internal static SolverKind ParseSolverKind(string value) => value.ToLowerInvariant() switch
-    {
-        "sw" or "swendsen-wang" or "swendsenwang" => SolverKind.SwendsenWang,
-        "cumulative-field"           => SolverKind.CumulativeField,
-        _ => throw new ArgumentException($"Unknown solver '{value}'. Valid: sw, cumulative-field."),
-    };
-
-    internal static SolverField ParseSolverField(string value) => value.ToLowerInvariant() switch
-    {
-        "mean"  => SolverField.Mean,
-        "local" => SolverField.Local,
-        _ => throw new ArgumentException($"Unknown field '{value}'. Valid: mean, local."),
-    };
-
-    internal static SymmetrizationRule ParseSymmetrization(string value) => value.ToLowerInvariant() switch
-    {
-        "mutual"    => SymmetrizationRule.Mutual,
-        "inclusive" => SymmetrizationRule.Inclusive,
-        "mean"      => SymmetrizationRule.Mean,
-        _ => throw new ArgumentException($"Unknown symmetrization '{value}'. Valid: mutual, inclusive, mean."),
     };
 
     internal static PartitionStrategyKind ParsePartitionStrategyKind(string value) => value.ToLowerInvariant() switch
@@ -802,24 +480,6 @@ public static class SpcCommand
             "(e.g. logspace:0.001,1.0,80 | linspace:0.01,0.5,100)."),
         _ => throw new ArgumentException($"Unknown schedule '{value}'. Valid: fixed-grid."),
     };
-
-    internal static char ParseDelimiter(string value) => value.Trim() switch
-    {
-        "tab" or "\\t" => '\t',
-        var s when s.Length == 1 => s[0],
-        _ => throw new ArgumentException($"Invalid delimiter '{value}'. Use a single character or 'tab'."),
-    };
-
-    private static void ParseGeneratorParameter(string token, IDictionary<string, object?> parameters)
-    {
-        int eq = token.IndexOf('=');
-        if (eq <= 0) throw new ArgumentException($"Generator parameter must be name=value: '{token}'");
-        string key = token[..eq].Trim();
-        string val = token[(eq + 1)..].Trim();
-        if (string.IsNullOrWhiteSpace(key))
-            throw new ArgumentException($"Generator parameter name cannot be empty: '{token}'");
-        parameters[key] = val;
-    }
 
     // ── Analyzer / partition factory ─────────────────────────────────────
     private static ISignalAnalyzer BuildAnalyzer(AnalyzerKind kind) => kind switch
@@ -898,7 +558,6 @@ public static class SpcCommand
 
     // ── Enums ────────────────────────────────────────────────────────────
     public enum ScheduleMode { FixedGrid }
-    public enum SolverKind { SwendsenWang, CumulativeField }
     public enum AnalyzerKind { ChiPeak }
     public enum PartitionStrategyKind { CoMembership, SpinAgreement, BondFrequency }
     public enum HierarchicalStrategyKind { None, Blatt }
@@ -912,54 +571,11 @@ public static class SpcCommand
     public enum ResolverKind { None, ThermalEom, Hierarchy, LineagePersistence }
 
     // ── Options bag ──────────────────────────────────────────────────────
-    internal sealed class Options
+    internal sealed class Options : GraphRunOptions
     {
-        public bool ShowHelp { get; set; }
-        public bool ListGenerators { get; set; }
-        public string? GeneratorSchema { get; set; }
-
-        // Dataset
-        public string DatasetKind { get; set; } = DatasetKinds.FirstOrDefault() ?? "unknown";
-        public string? DatasetFile { get; set; }
-        public string? LabelColumn { get; set; }
-        public bool HasHeader { get; set; } = true;
-        public char Delimiter { get; set; } = ',';
-        public Dictionary<string, object?> GeneratorParameters { get; } = new(StringComparer.OrdinalIgnoreCase);
-
-        // Output / reproducibility
-        public string? BaseDirectory { get; set; }
-        public string? RunName { get; set; }
+        // Output (SPC-only: run-folder GUID, checkpoint resume)
         public bool NoGuid { get; set; }
         public string? CheckpointDir { get; set; }
-        public int Seed { get; set; } = 42;
-
-        // Graph topology
-        public int K { get; set; } = 10;
-        public double Epsilon { get; set; } = 0.0;
-        public TopologyKind TopologyKind { get; set; } = TopologyKind.Knn;
-        public FilterKind FilterKind { get; set; } = FilterKind.OrRule;
-        public string? DistanceMetricSpec { get; set; }
-        public bool EnsureConnected { get; set; }
-        public bool ApplyLmp { get; set; }
-
-        // Coupling kernel
-        public KernelType KernelType { get; set; } = KernelType.Gaussian;
-        public double Bandwidth { get; set; } = 0.0;
-        public string? MixtureSpec { get; set; }
-        public string? MixtureBandwidthSpec { get; set; }
-
-        // Inference method (sampler vs analytic solver)
-        public SolverKind Solver { get; set; } = SolverKind.SwendsenWang;
-
-        /// <summary>Cumulative-field energy-ladder field (null defaults to Mean). Inert for SW.</summary>
-        public SolverField? Field { get; set; }
-
-        /// <summary>Directed-field reconciliation for the cumulative-field LocalField. Inert for SW / MeanField.</summary>
-        public SymmetrizationRule Symmetrization { get; set; } = SymmetrizationRule.Mutual;
-
-        /// <summary>Explicit single-cut temperature for the cumulative-field solver; null = longest
-        /// cluster-count plateau (the solver's native stability signal).</summary>
-        public double? CutTemperature { get; set; }
 
         // Schedule
         public ScheduleMode Schedule { get; set; } = ScheduleMode.FixedGrid;
@@ -977,11 +593,6 @@ public static class SpcCommand
         public double Theta { get; set; } = 0.5;
         public bool PeripheralCapture { get; set; } = false;
         public SusceptibilityKind SusceptibilityKind { get; set; } = SusceptibilityKind.FkCluster;
-
-        /// <summary>Null = resolve from metric properties / the MAD default;
-        /// <c>MeanEdgeDistance</c> selects the BWD replication kernel
-        /// (mean-pair <c>a</c> + 1/K̂) and the q-only auto bracket.</summary>
-        public Graphs.Distance.BandwidthStrategy? BandwidthStrategy { get; set; }
 
         /// <summary>Post-sweep T-stack resolver run over the rich sweep frames
         /// after the flat session. Non-<c>None</c> requires comembership +

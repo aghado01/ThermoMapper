@@ -98,13 +98,13 @@ public sealed record SpcPreset
     internal void ApplyTo(SpcCommand.Options options)
     {
         // Dataset
-        if (Dataset is not null)          options.DatasetKind          = SpcCommand.ParseDatasetKind(Dataset);
+        if (Dataset is not null)          options.DatasetKind          = GraphRun.ParseDatasetKind(Dataset);
         if (Params is not null)
             foreach (var kvp in Params)   options.GeneratorParameters[kvp.Key] = kvp.Value;
         if (DatasetFile is not null)      options.DatasetFile          = DatasetFile;
         if (LabelColumn is not null)      options.LabelColumn          = LabelColumn;
         if (HasHeader.HasValue)           options.HasHeader            = HasHeader.Value;
-        if (Delimiter is not null)        options.Delimiter            = SpcCommand.ParseDelimiter(Delimiter);
+        if (Delimiter is not null)        options.Delimiter            = GraphRun.ParseDelimiter(Delimiter);
         if (Seed.HasValue)                options.Seed                 = Seed.Value;
 
         // Output
@@ -114,8 +114,8 @@ public sealed record SpcPreset
         if (CheckpointDir is not null)    options.CheckpointDir        = CheckpointDir;
 
         // Graph topology
-        if (Topology is not null)         options.TopologyKind         = SpcCommand.ParseTopologyKind(Topology);
-        if (Filter is not null)           options.FilterKind           = SpcCommand.ParseFilterKind(Filter);
+        if (Topology is not null)         options.TopologyKind         = GraphRun.ParseTopologyKind(Topology);
+        if (Filter is not null)           options.FilterKind           = GraphRun.ParseFilterKind(Filter);
         if (K.HasValue)                   options.K                    = K.Value;
         if (Epsilon.HasValue)             options.Epsilon              = Epsilon.Value;
         if (DistanceMetric is not null)   options.DistanceMetricSpec   = DistanceMetric;
@@ -123,7 +123,7 @@ public sealed record SpcPreset
         if (Lmp.HasValue)                 options.ApplyLmp             = Lmp.Value;
 
         // Coupling kernel
-        if (Kernel is not null)           options.KernelType           = SpcCommand.ParseKernelType(Kernel);
+        if (Kernel is not null)           options.KernelType           = GraphRun.ParseKernelType(Kernel);
         if (Bandwidth.HasValue)           options.Bandwidth            = Bandwidth.Value;
         if (Mixture is not null)          options.MixtureSpec          = Mixture;
         if (MixtureBandwidth is not null) options.MixtureBandwidthSpec = MixtureBandwidth;
@@ -138,7 +138,7 @@ public sealed record SpcPreset
         if (Q.HasValue)                   options.Q                    = Q.Value;
 
         // Kernel bandwidth + landmark channel
-        if (BandwidthStrategy is not null)    options.BandwidthStrategy        = SpcCommand.ParseBandwidthStrategy(BandwidthStrategy);
+        if (BandwidthStrategy is not null)    options.BandwidthStrategy        = GraphRun.ParseBandwidthStrategy(BandwidthStrategy);
         if (Susceptibility is not null)       options.SusceptibilityKind       = SpcCommand.ParseSusceptibilityKind(Susceptibility);
 
         // Profile analyzer + cut

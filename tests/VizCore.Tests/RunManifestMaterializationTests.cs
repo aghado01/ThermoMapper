@@ -39,6 +39,7 @@ public sealed class RunManifestMaterializationTests
             Graph: null,
             Sweep: null,
             Hdbscan: null,
+            CumulativeField: null,
             Output: new OutputSpec(
                 RunDirectory: "artifacts/test",
                 CheckpointDirectory: null));

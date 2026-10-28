@@ -140,6 +140,7 @@ public static class HdbscanCommand
             Graph:         null,
             Sweep:         null,
             Hdbscan:       hdbscan,
+            CumulativeField: null,
             Output:        new OutputSpec(RunDirectory: runDirectory, CheckpointDirectory: null));
     }
 

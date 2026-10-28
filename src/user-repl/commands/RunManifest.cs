@@ -29,12 +29,13 @@ namespace UserRepl.Commands;
 public sealed record RunManifest(
     string                    SchemaVersion,
     DateTime                  CreatedUtc,
-    string                    Algorithm,        // "spc" | "hdbscan"
+    string                    Algorithm,        // "spc-sw" | "cumulative-field" | "hdbscan"
     string                    CommandLine,
     DatasetSpec               Dataset,
     GraphSpec?                Graph,            // null for hdbscan
-    SweepSpec?                Sweep,            // null for hdbscan
-    HdbscanSpec?              Hdbscan,          // null for spc
+    SweepSpec?                Sweep,            // spc only
+    HdbscanSpec?              Hdbscan,          // hdbscan only
+    CumulativeFieldSpec?      CumulativeField,  // cumulative-field only
     OutputSpec                Output,
     RunIdentitySpec?          Identity = null)  // null in pre-Phase-C manifests
 {
@@ -102,6 +103,18 @@ public sealed record SweepSpec(
     string                              Analyzer,
     string                              PartitionStrategy,
     double                              Theta,
+    string?                             TemperaturesResolved = null);
+
+/// <summary>Cumulative-field configuration: the ladder, its reconciliation, the
+/// temperature grid, and the thermal-EOM resolution settings.</summary>
+public sealed record CumulativeFieldSpec(
+    string                              Field,                  // "Mean" | "Local"
+    string                              Symmetrization,         // "Mutual" | "Inclusive" | "Mean"
+    double                              Theta,
+    string?                             TemperaturesSpec,       // raw --temperatures string ("auto" by default)
+    int                                 MinClusterSize,
+    string                              Periphery,              // "None" | "Ascend"
+    double?                             CutTemperature,
     string?                             TemperaturesResolved = null);
 
 /// <summary>HDBSCAN configuration.</summary>
