@@ -166,6 +166,17 @@ Wang 2020; computes the closed form instead of Monte Carlo"*).
 - **Oracles over consumers.** Engine correctness is established against its
   own spec: R oracles (`r/oracles`), brute-force references, and property
   checks — not by wiring up a downstream application.
+- **Sources are checked, not trusted.** A design from a paper or from its
+  code is adopted only when it survives our checks, and an oracle is a parity
+  target only where it is right. A design shown flawed (incoherent, failing
+  its own stated intent, silently changing the model, or dominated in a
+  pre-registered comparison) is corrected, never reproduced as an option; a
+  regime-dependent trade-off stays an option with a measured default. Each
+  correction is recorded with its evidence: the regression engines' in
+  [BayesianRegression.md](docs/Maths/BayesianRegression.md#corrections-to-the-sources),
+  BASS's lineage in the
+  [port hub's register](issues/regression/bass-full-port-brief.md#what-the-lineage-taught),
+  whose validation section states the full rule.
 - **Test layout.** xUnit test projects live in `tests/` mirroring the
   `projects/` split (`Maths.LinAlg.Tests`, …). The parallel fact runner
   (`src/test-harness`, invoked per [AGENTS.md](AGENTS.md)) drops per-suite

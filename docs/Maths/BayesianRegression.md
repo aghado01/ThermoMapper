@@ -298,7 +298,7 @@ with $P_a=Z^\top(W+I/m)Z$, $h=Z^\top W\tilde y$ and $S=\tilde y^\top W\tilde y-h
     - **Left open:** a flat intercept (Liang et al. 2008), the exact form, which changes the block's closed forms, and robust centring more generally. Both are for a later look at robust statistics (OQ15).
   - **σ² gets m, not m − 1, degrees of freedom.** The level is centred on the data's own mean at no charge, where a flat intercept would spend one. Bayes factors differ from the flat-intercept form only as m does from m − 1 in one exponent.
 - **Alternatives considered.**
-  - **Zero, DMGK's original:** kept as `GPriorCentre.Zero`, with the defect above.
+  - **Zero, DMGK's original:** kept as `GPriorCentre.Zero` on its own terms, for a response whose level is known to be zero; on any other it carries the defect above ([Corrections to the sources](#corrections-to-the-sources)).
   - **A flat intercept with a centred design** (Liang et al. 2008): the same comparisons up to the m − 1 above. It needs the constant split out of the basis, which B-splines do not do.
   - **Centring the response outside the model:** equivalent for B-splines, but every caller would have to remember it, and a basis that does not sum to one would then need the projection anyway.
 - **Effect on step 3.7's fits,** whose response averages about 0.6 against noise 0.1, an offset of 6σ:
@@ -991,6 +991,24 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 | `BgpSampler.Run` draws / burn / proposalSd / chains / seed | 600 / 200 / 0.4 / 2 / 0 | — |
 | `BgpSampler` noise-ratio prior; `Run` noiseRatioProposalSd / proposal | 10⁻⁶ to 10²; 0.4 / `Adaptive` | Unknown scale only; the adaptive step is learned in burn-in and frozen |
 | `CauchySegmentModel` gridPoints | null: automatic, at least 512 (a value: minimum 8) | Quadrature nodes on $[\min(\nu,y_{\min})-6\rho,\ \max(\nu,y_{\max})+6\rho]$ |
+
+## Corrections to the sources
+
+Every source is checked, papers and their code included (the user's decision, 2026-10-27; the criteria are in the BASS port hub's [validation section](../../issues/regression/bass-full-port-brief.md#validation-and-performance-qualification)). Where a source's design is shown flawed, the engine does the thing right, and the table records each correction with its evidence. Most of the BASS preparation's repairs fixed this repository's own code; those are in the preparation brief's step reports, not here. BASS's lineage keeps its own register, in the port hub.
+
+| Source | Its design | What our check found | The correction | Still selectable |
+|---|---|---|---|---|
+| DiMatteo, Genovese and Kass 2001 | The g-prior centred at zero, the level included | The fit depends on the response's origin. On a sine with noise 0.15, an offset of 3 halved the knot count (1.80 → 0.82); at 300 the fit kept 0.40 knots, with MSE 8.9 | The median centre, translation equivariant (OQ15; `3ac0755`, `c2eb203`, `73ed8c0`) | `GPriorCentre.Zero`, on its own terms: a response whose level is known to be zero |
+| DiMatteo, Genovese and Kass 2001 | Births local to the existing knots | A death carries the reverse birth's density, so an isolated knot is all but never removed (e⁻³⁷). Locality did not pay even on the clustered knots it was designed for: the jump's knot-count ESS rose 13× under uniform births | Births from the uniform base, ε = 1 (step 3.9, `62e8d6e`) | ε < 1, a measured dial; ε = 0 restores DMGK's moves exactly. Whether ε = 0 stays is the user's call under the rule |
+| DiMatteo, Genovese and Kass 2001 | Poisson responses scored by a BIC-type marginal at the MLE | Over runs of zero counts the MLE lies at −∞ while the BIC term stays near the knot-free one, so such configurations take real mass, with posterior-mean log-intensity down to −10³ | The unit-information g-prior's Laplace marginal, centred on the null fit, by default (step 3.10, `1e6aec2`) | `PoissonMarginal.Bic`, kept as DMGK's original. Lineage alone does not keep an option under the rule, so whether it stays is the user's call |
+| He, Yang and Kang 2026 (ABMRS): their code against their paper | (1) A BIC-type Normal marginal, where their Lemma 1 is exact; (2) thin basis columns dropped silently, with a 10⁻⁸ ridge; (3) coefficients drawn at the OLS σ̂; (4) at k = 0, a forced birth carries b₀ while the reverse death omits 1/b₀ | (1) An approximation where the exact form is cheap; (2) a silent model change, which breaks the partition of unity; (3) σ's uncertainty dropped; (4) k = 0 undersampled whenever one knot is favoured (our reading; their code not run) | BARS keeps the exact marginal, refuses unsupported configurations (step 3.7), draws σ² and then β (step 0.5c), and keeps the count law at every k (`CountLawTests`) | None. `EbicPrior` reproduces their count law, which paper and code share (step 3.8) |
+| loo (Vehtari et al.) | A tail whose largest ratios tie gets k̂ = +∞, a warning, and no Monte Carlo error for the total | A tied tail is bounded, so no draw dominates, which is what k̂ exists to detect. Ties are the norm for collapsed content: on three structures holding ½, ¼ and ¼ of 400 draws, the unsmoothed estimate is the exact harmonic mean | `ParetoTail.Tied`: k̂ = −∞, unsmoothed, with the total's error kept (OQ17; `DiagnosticsParityTests` asserts the divergence) | None |
+
+**Changed, but not corrections.** These moved a default or the scope, and none shows a flaw in its source:
+- **DMGK's Jeffreys σ² prior** gave way to `Sigma2Prior.ScaledToResponse()` as the Normal default (2026-10-27), for an evidence, an exact reference rung and propriety at exact fits. Jeffreys is coherent for the posterior over knots and stays selectable.
+- **TWCD2025's known σ.** The unknown-scale model is an extension beyond the paper's theory (BGP, above); known σ stays the default.
+- **Friel, Hurn and Wyse's discretization diagnostic** assumes ln q_b is linear in b. A collapsed likelihood adds E_b[∂²ℓ_b], which it cannot see ([Samplers](./Samplers.md)). That is outside its assumptions, not a flaw; the missing term needs a seam, which is open.
+- **Bach and Klein's priors.** The anisotropic defaults now follow their own, the scaled Weibull. The raw-unit IG(10⁻³, 10⁻³) left in the isotropic schemes departs from their standardized response; that departure is this engine's, not theirs (OQ19).
 
 ## Status and caveats
 
