@@ -66,3 +66,53 @@ Work on `main` with targeted commits of your own paths only: `git add <your new 
 ## Report
 
 Append the report here when the work lands, newest first: date, commits, test evidence, the default chosen in S1 and why, S3's outcome (or why it was skipped), limits, and follow-ups.
+
+### 2026-10-27 — S1, S2 and S3 landed
+
+**Commits.**
+
+| Commit | What |
+|---|---|
+| `0afe33d` | S2, N12 |
+| `84c173f` | S1, N11 |
+| `a315bd9` | N11 and N12 reports |
+| `5eecbc1` | R environment |
+| `ee8b97f` | S3, N13, and the OQ9 row |
+
+This entry and the N13 report are in the commit that follows them. Full reports are under "Reports" in [port-numerics-checklist.md](port-numerics-checklist.md).
+
+**S2.** `CollapsedGPrior.MarginalAt(τ, b)` returns a `GPriorMarginal` value (S, the determinant term and m) and allocates nothing.
+- `At` builds on it, so the two give the same double.
+- Normal BARS's tempered marginal reads it.
+- Evidence: a before/after dump of 1,233 marginals is bit-identical, and a new test checks bit-identity and zero allocation over Jeffreys, scaled and IG priors, b ∈ {0, 0.3, 1} and τ from 10⁻⁶ to 10³.
+
+**S1.** `Maths.Samplers.Evidence.LadderEvidence` does stepping-stone and path sampling over per-rung draws. The draws are chains (`MeanEss`) or SMC populations (Kish).
+- *The error* is the larger of the rungs-as-independent and joint (scan-summed) readings: each alone under-read one estimator on traced ladders.
+- *The diagnostic.* Path sampling carries Friel–Hurn–Wyse's correction as its discretization diagnostic.
+- *The readout.* `ParallelTempering.TraceRungs()` records each rung's slope and log ratio every scan, and the snapshot carries the traces.
+- *The slope seam.* `ITargetEvaluation.LogLikelihoodSlope(b)` defaults to refusing, and `SeparableEvaluation` returns ℓ₁.
+- *Tests:* 7. Samplers 129/129, Regression 427/427.
+
+**Default: stepping-stone.**
+- It reads only ℓ_b, which every target supplies.
+- It has no discretization bias. With exact draws at 16 intervals its bias was −0.002, against the trapezoid's −0.084 (MC errors 0.03). On a target whose likelihood is not linear in b it was −0.004 against +0.669.
+- It is the SMC normalizer's estimator.
+- Path sampling stays selectable. The trade-offs are in `docs/Maths/Samplers.md`, "Evidence over a ladder".
+
+**S3.** Done, with the download approved by the user.
+- `posterior` 1.7.0 and `loo` 2.10.1 are in renv.
+- `r/oracles/diagnostics_oracle.R` and `tests/oracle/DiagnosticsParityTests.cs` (9 cases) agree to 10⁻⁹ relative on R̂, bulk and tail ESS, `ess_mean`, k̂, r_eff, the per-unit and total MCSE, elpd, SE and p_loo.
+- One convention differs and is recorded, not aligned: the tail median and quantiles over all draws versus split chains, 2.8·10⁻⁵ in tail R̂ at an odd length.
+- OQ9 is closed in the preparation brief.
+
+**Limits.**
+- The discretization diagnostic misses a collapsed likelihood's E_b[∂²ℓ_b]. On the nonlinear test target it read 0.094 against a bias of 0.669.
+- A population's Kish ESS ignores ancestry.
+- `SmcRun` exposes no per-stage readouts.
+- `r/README.md`'s oracle map lacks the new oracle's row; that file is outside this chip's ownership.
+
+**Follow-ups.**
+- Whether Normal BARS reports an evidence (stepping-stone, via `MarginalAt`) is a consumer decision.
+- D05's path sampling needs BASS to supply ∂_b ℓ_b, and E_b[∂²ℓ_b] for a valid diagnostic; there is no seam for the latter yet.
+- Per-stage readouts on `SmcRun`.
+- The README row.

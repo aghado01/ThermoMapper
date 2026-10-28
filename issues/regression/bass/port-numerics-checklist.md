@@ -22,7 +22,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N10** Cross-products summed pairwise or with compensation: `PairwiseSum`. F-O7's near-constant design is the acceptance case: its left-to-right error is 10⁻³ relative in s.
 - [x] **N11** Evidence over a tempering ladder: path sampling and stepping-stone from per-rung traces, with Monte Carlo error (D03, D05). Chip: [shared-infrastructure-brief.md](shared-infrastructure-brief.md). `LadderEvidence` with stepping-stone as the default; `ParallelTempering.TraceRungs` (`84c173f`).
 - [x] **N12** The g-prior's log marginal at (τ, b) as one scalar, without the mean vector (D04's τ slice, D05's swaps). Same chip. `CollapsedGPrior.MarginalAt` → `GPriorMarginal`, bit-identical to `At`'s (`0afe33d`).
-- [ ] **N13** External reference for the rank-normalized and PSIS diagnostics against R `posterior` and `loo` (OQ9; D10's gate). Same chip; needs the user's approval for the download.
+- [x] **N13** External reference for the rank-normalized and PSIS diagnostics against R `posterior` and `loo` (OQ9; D10's gate). Same chip; needs the user's approval for the download. Approved; `diagnostics_oracle.R` and `DiagnosticsParityTests` agree to 10⁻⁹ (`5eecbc1`, `ee8b97f`).
 
 ### Room for extensions
 
@@ -31,6 +31,37 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [ ] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update.
 
 ## Reports
+
+### External reference for the diagnostics (N13, OQ9) — 2026-10-27
+
+From the shared-infrastructure chip. The user approved the CRAN download. Commits: `5eecbc1` (environment), `ee8b97f` (oracle, parity tests, docs, OQ9 row).
+
+**Environment.** R `posterior` 1.7.0 and `loo` 2.10.1 are in `r/DESCRIPTION` and `r/renv.lock`, with eight dependencies not pinned before: abind, distributional, matrixStats, numDeriv, pillar, tensorA, tibble and utf8. They are Windows binaries, 6.1 MB, and the lockfile diff is those ten packages alone.
+
+**Oracle.** `r/oracles/diagnostics_oracle.R` has two modes.
+- *`chains`* emits posterior's R̂, bulk and tail R̂, bulk ESS, tail ESS (with q05 and q95) and `ess_mean`. Bulk and tail R̂ are taken from `rhat.default`'s two halves through posterior's internals. It also emits a split-chain variant of the tail diagnostics, for the convention below.
+- *`loo`* emits elpd, SE, p_loo, per-unit elpd, k̂ and Monte Carlo error, `relative_eff` (from `exp(ll)` and the chain ids), the threshold and `mcse_loo`.
+
+**Parity** (`tests/oracle/DiagnosticsParityTests.cs`, 9 cases; Oracle suite 14 of 14). The tolerance is 10⁻⁹ relative, with k̂ also allowed 10⁻⁹ absolute; observed differences are of order 10⁻¹⁴ relative.
+- *Convergence:* AR(1) at φ = 0.9 and −0.3, one chain at three times the scale, one shifted by half a standard deviation, Cauchy draws, and AR(1) at an odd length (4 × 999).
+- *PSIS-LOO:* 30 Normal units with one influential unit, 4000 draws of (μ, σ).
+  - Independent draws: largest k̂ 0.58.
+  - Four AR(1) chains: r_eff below 1, k̂ 0.59, and the total's Monte Carlo error compared.
+  - An outlier at 9: k̂ 1.45; both withhold the total's error.
+
+**Where they differ, and why.**
+- **Tail-diagnostic convention.** `posterior` takes the median (`fold_draws`) and the 5% and 95% quantiles (`.ess_quantile`) over all draws. The C# takes them over the split chains, which drop an odd middle draw.
+  - At even lengths the two coincide.
+  - At 4 × 999 the tail R̂ is 1.0121491 here and 1.0121767 in `posterior`. The C# matches the oracle's split-chain variant to 3·10⁻¹⁶.
+  - It is kept and recorded in `docs/Maths/Samplers.md`, not aligned.
+- **Not exercised by these fixtures, read from the sources.**
+  - Constant draws are NA in `posterior` and `Constant` here.
+  - A PSIS tail that is flat to rounding: `loo` leaves k̂ = +∞ and warns, while the C# sets −∞ and leaves the tail unsmoothed, as documented in `PredictiveChecks`.
+  - `posterior::gpdfit` returns no fit when the tail's first quartile equals its minimum; the C# has no such guard.
+
+**Limits.**
+- R stays opt-in: without the toolchain the parity tests return early.
+- `r/README.md`'s oracle map has no row for this oracle yet. That file is outside this chip's ownership, so the row is a follow-up.
 
 ### Ladder evidence (N11) and the g-prior's mean-free marginal (N12) — 2026-10-27
 
