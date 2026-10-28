@@ -40,7 +40,7 @@ At the user's request, after D05's fourth point (the Kish error under-covers at 
 - **The kernel.** A population-tuned kernel (`RandomWalkKernel`) adds a dependence the genealogy does not see: 5% low at N = 16, invisible at N = 1000. The unbiasedness check uses a fixed-step kernel.
 - **Checks** (`SmcTests`, `LadderEvidenceTests`): a hand case and the one-family case; importance sampling's (N·ΣW² − 1)/(N − 1) without resampling; unbiasedness over 20,000 replicates at N = 16 (0.020 ± 0.013, with the exponent R rejected at 0.081 ± 0.012); coverage at one and five moves under multinomial resampling; NaN after a systematic resampling, kept through a resume taken just after it (the checkpoint carries `GenealogyHolds`, since that stage's own report is still finite). The SMC evidence test now resamples multinomially, so the path-sampling numbers `Samplers.md` quotes moved (−2.273, diagnostic +0.149). Samplers 137/137, Regression 432/432.
 - **Not built.** An error for path sampling over SMC stages, which a sum of stage means needs; the fixed-lag variant for long runs whose lineages collapse (Olsson and Douc 2019).
-- **Open for the user.** Whether `SmcOptions` should default to multinomial resampling. On this target the lower-variance schemes did not lower the spread of ln Ẑ, and only multinomial resampling makes it estimable; one target is not a default study.
+- **The default stays systematic** (the user's call, 2026-10-27). On this target the lower-variance schemes did not lower the spread of ln Ẑ, and only multinomial resampling makes it estimable, but one target is not a default study. Runs that report an evidence declare multinomial resampling, as D05 says.
 
 ### The linear form's path sampling, and the evidence's priors — 2026-10-27
 
