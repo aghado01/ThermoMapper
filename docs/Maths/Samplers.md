@@ -350,6 +350,12 @@ Streaming moments keep $W$ exactly zero for constant chains; running sums and su
 **The mean ESS** (`ChainDiagnostics.MeanEss`): the same estimator on split chains without rank normalization, the posterior package's `ess_mean`. It measures how precisely the draws estimate a mean, so unlike the bulk ESS it changes under a nonlinear monotone map. PSIS-LOO's relative efficiency reads it, as loo's does. Its failure policy is the bulk ESS's, except that split chains each constant at different values give an estimate, about half their number.
 - **Checked:** within 2% of the AR(1) value at φ = 0, 0.9 and −0.5; unchanged by an affine map; and for eˣ of a standard AR(1), whose lag-k correlation is (e^{φᵏ} − 1)/(e − 1), within 2% of S/τ, while the bulk ESS stays unchanged.
 
+**External reference** (N13, OQ9, 2026-10-27). `DiagnosticsParityTests` (`tests/oracle`, opt-in R) run the same draws through R `posterior` 1.7.0 (`r/oracles/diagnostics_oracle.R`).
+- **What agrees.** R̂, bulk and tail R̂, bulk and tail ESS and `ess_mean` agree to 10⁻⁹ relative on five fixtures of 4 × 1000 draws: AR(1) chains at φ = 0.9 and −0.3, a chain at three times the others' scale, one shifted by half a standard deviation, and Cauchy draws. The two implementations are one algorithm: the split, the rank normalization, the FFT autocovariance, Geyer's sequence and the τ bound match term for term.
+- **One convention differs.** posterior takes the tail R̂'s median and the tail ESS's 5% and 95% quantiles over all draws (`fold_draws`, `.ess_quantile`). The C# takes them over the split chains, which drop an odd middle draw. At even lengths they coincide. At 4 × 999 AR(1) draws the tail R̂ differs by 2.8·10⁻⁵ (1.0121491 against 1.0121767), and the C# matches the oracle's split-chain variant to rounding. It is kept as is.
+- **Constant draws** are NA in posterior and `Constant` here.
+- **PSIS-LOO** (`PredictiveChecks.PsisLoo`) is checked against R `loo` 2.10.1 in the same tests ([BayesianRegression](./BayesianRegression.md) documents it).
+
 **Classic ESS** (`ChainDiagnostics.Ess`, the BDA3 variogram estimator with a non-standard pairing and $O(Cn^2)$ cost) was replaced in step 3.4 and deleted in step 3.6.
 
 ### Inverse transform and spectral noise fields
