@@ -31,7 +31,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 
 ### Build (stage 4)
 
-Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-plan-proposal-2026-10-28), a proposal of 2026-10-28: steps S1–S10, with three shared additions (Wallenius in Distributions, a per-replica block in `ParallelTempering`, the flat-intercept form in `CollapsedGPrior`).
+Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-plan-decided-2026-10-28), decided 2026-10-28: steps S1–S10, with three shared additions (Wallenius in Distributions, a per-replica block in `ParallelTempering`, the flat-intercept form in `CollapsedGPrior`).
 
 - [ ] **F1** Term representation: continuous, categorical and functional parts, with interned terms.
 - [ ] **F2** Design layer and the direct functional contractions.
@@ -55,6 +55,17 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### S1: the contracts — 2026-10-28
+
+In `src/maths/regression/spline/bass/` (namespace `Maths.Regression.Spline.Bass`):
+- **`BassData`** with `ContinuousPredictor`, `CategoricalPredictor`, `ScalarResponse` and `FunctionalResponse`. Each copies its values and refuses its defects with a reason: no predictor, a name used twice (output variables included), mismatched lengths, a constant continuous column (no knot), a non-finite value, a code outside the levels, a repeated level, a factor taking fewer than two levels.
+- **`BassInputTransform`**: R's range scaling to [0, 1] with exact ends and linear beyond, `Contains` for prediction's flag, and each factor's training levels (the declared levels some case takes, by name).
+- **`BassConfig`** and its records, all values, with the decided defaults. `ToJson` and `FromJson` use canonical options (enums by name), and `Validate` names the field in every refusal; a manifest is checked on load. `SampledG`/`FixedG` and `EqualOverAvailable`/`PriorCancelling` are polymorphic records with a `Kind` discriminator.
+- **`Bass.Fingerprint`**: `RunFingerprint` over the canonical JSON and the data's exact bits.
+- **`BassResolved`**: N = n_x·n_r, the basis cap min(1000, N − 1), the interaction caps by the predictors of each kind, the support thresholds min(20, 0.1·n) per part, the centre's level, s², σ²'s prior as resolved, τ's prior Gamma(a, rate a·N) or the fixed τ (1/N by default), and the automation log of every auto-pick with its reason. It refuses a zero response under the zero centre, a constant one under level centring or the flat intercept, and a support threshold no term could meet.
+
+The refinements to the decided sketch are recorded under the fitting segment's contract choices ("Refined in S1"). Tests: `BassContractTests` (12), each refusal, the copies, the transform's edges, JSON round trips by value, the fingerprint's sensitivity to a setting and to one ulp of data, and the resolved values against direct computation. Regression suite 450/450 (438 before, 12 new).
 
 ### Stage 4 planned (a proposal) — 2026-10-28
 

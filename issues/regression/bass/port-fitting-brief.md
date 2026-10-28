@@ -2,7 +2,7 @@
 
 A segment of the [full port brief](../bass-full-port-brief.md), which holds the scope and completion contract, the dependency boundaries, the stage table and the decision register. This segment covers stage 4, complete mixed-predictor scalar and direct-functional fitting, and the stage-1 decisions it consumes, D01–D06. It builds on the [numerics segment](port-numerics-brief.md). Its checklist, where the reports go as work lands, is [port-fitting-checklist.md](port-fitting-checklist.md).
 
-D01–D06 were decided in the user's design pass (2026-10-27), and the contract shapes on 2026-10-28; each section says so. The stage-4 plan (2026-10-28) is a proposal. The register, with each decision's status, and the table of sources the drafts were drawn from are in the hub's [decisions section](../bass-full-port-brief.md#statistical-decisions-to-settle).
+D01–D06 were decided in the user's design pass (2026-10-27), and the contract shapes on 2026-10-28; each section says so. The stage-4 plan was taken on 2026-10-28 too. The register, with each decision's status, and the table of sources the drafts were drawn from are in the hub's [decisions section](../bass-full-port-brief.md#statistical-decisions-to-settle).
 
 ## Direct functional algebra
 
@@ -415,7 +415,7 @@ public sealed record BassConfig
 {
     public BassStructureSpec Structure { get; init; } = new();                       // D01, D06
     public BassCountPrior Count { get; init; } = new();                              // D02
-    public BassCoefficientPrior Coefficients { get; init; } = new GPrior();          // D03
+    public BassCoefficientPrior Coefficients { get; init; } = new SampledG();        // D03
     public Sigma2Prior Sigma2 { get; init; } = Sigma2Prior.ScaledToResponse(1e-3);  // D03
     public GPriorCentre Intercept { get; init; } = GPriorCentre.Mean;                // D03
     public BassSampling Sampling { get; init; } = new();                             // D04, D05, D10
@@ -427,7 +427,7 @@ public sealed record BassStructureSpec
     public int MaxInteraction { get; init; } = 3;
     public int MaxCategoricalInteraction { get; init; } = 3;
     public int MaxFunctionalInteraction { get; init; } = 3;
-    public int? MaxBasis { get; init; }                                  // null: min(1000, n)
+    public int? MaxBasis { get; init; }                                  // null: min(1000, N − 1)
     public SupportRule Support { get; init; } = new();
     public double AngleFloor { get; init; } = 1e-10;                     // D06's s_min
     public double? MaxVarianceInflation { get; init; }                   // off
@@ -435,15 +435,14 @@ public sealed record BassStructureSpec
     public double OrderWeight { get; init; } = 5;                        // w1, kept positive
     public double VariableWeight { get; init; } = 5;                     // w2, kept positive
 }
-public sealed record SupportRule(SupportKind Kind = SupportKind.Count, int? MinNonzero = null, int? MinNonzeroFunctional = null);
+public sealed record SupportRule(SupportKind Kind = SupportKind.Count, double? Minimum = null, double? MinimumFunctional = null);
                                                                          // null: min(20, 0.1·n) per part, R's default
 public sealed record BassCountPrior(double Shape = 10, double Rate = 10);  // h1, h2; λ integrated out
 
 public abstract record BassCoefficientPrior;
-public sealed record GPrior(double TauShape = 0.5) : BassCoefficientPrior;   // τ ~ Gamma(a, rate a·n); a = ½ is Zellner–Siow
+public sealed record SampledG(double TauShape = 0.5) : BassCoefficientPrior; // τ ~ Gamma(a, rate a·n); a = ½ is Zellner–Siow
 public sealed record FixedG(double? Tau = null) : BassCoefficientPrior;      // null: unit information, 1/n
-public sealed record Ridge(double TauShape = 0.5) : BassCoefficientPrior;    // GBMARS's sampled-τ ridge, an option
-public sealed record FixedRidge(double Scale) : BassCoefficientPrior;        // its scale stated as part of the model
+// Ridge (GBMARS's sampled-τ ridge) and FixedRidge (its scale stated as part of the model) join when built (stage 4's choice 1)
 
 public sealed record BassSampling
 {
@@ -456,8 +455,8 @@ public sealed record BassSampling
     public int BatchSize { get; init; }
     public double MinEssPerChain { get; init; } = 100;
     public MoveSchedule Moves { get; init; } = new EqualOverAvailable();   // or PriorCancelling(C = 0.4)
-    public TemperingSpec? Tempering { get; init; }           // null: untempered (D05)
-    public SmcSpec? Smc { get; init; }                       // stage 8; null: MCMC
+    public TemperingSpec? Tempering { get; init; }           // null: untempered (D05); joins with S8
+    public SmcSpec? Smc { get; init; }                       // null: MCMC; joins with stage 8
     public bool ReportEvidence { get; init; } = true;
 }
 ```
@@ -500,11 +499,21 @@ public readonly record struct BassStructure(int[] TermIds);   // sorted ids into
 4. *Sampling defaults.* R's 9,000 burn-in and 1,000 kept draws, provisional until BASS's own pre-registered measurement, as BARS's are (OQ14).
 5. *Unseen levels at prediction* are refused by default; `UnseenLevel.OutsideEverySubset` is declared on the prediction call.
 
+**Refined in S1** (2026-10-28, building the contracts):
+- `GPrior` is `SampledG`: the name collides with the namespace `Maths.Regression.GPrior`, which code in `Maths.Regression` resolves first. The pair reads as the g-prior with τ sampled or fixed.
+- The support thresholds are `Minimum` and `MinimumFunctional`, doubles: R's own default, min(20, 0.1·n), is fractional, and under the column-mass option the threshold is a mass.
+- The data's arrays are copied at construction and exposed read-only (`ReadOnlyMemory<T>`), so a fit, its fingerprint and its draws never see a value change; the constructors still take arrays.
+- A setting joins with the code that reads it: `Tempering` with S8, `Smc` with stage 8, the ridge priors when built.
+- The median centre is refused with its reason: D03 offers level centring, Liang and the zero centre, and keeps the median for the noise extensions' weights.
+- The basis cap defaults to min(1000, N − 1), since the intercept counts toward the dimension bound (the hub's scope); R's min(maxBasis, n) allows one column too many.
+- A declared level no training case takes is left out of the training levels and logged; one-level factors are judged on the levels the cases take.
+- The unions' discriminator is `Kind`, as `Sigma2Prior`'s field is, so the manifest reads one way throughout.
+
 Choices 2 and 3 changed shared code before stage 4's first fit (F-C2, landed 2026-10-28): `Sigma2Prior` is a record of its kind and parameters, which BARS's Normal model holds, and `GPriorCentre.Flat` exists, refused by BARS with its reason.
 
-## Stage 4 plan (proposal, 2026-10-28)
+## Stage 4 plan (decided 2026-10-28)
 
-Drafted after the baseline was requalified at `cf37584`, for the user's review. It sequences F1–F11 into ten steps, each landing with its tests and a report in the checklist, and names what each reuses, what it adds to shared code and which fixtures check it. Source code waits on the user's go-ahead (the hub's authorization line).
+Drafted after the baseline was requalified at `cf37584`, and taken by the user the same day with its four recommendations (below). It sequences F1–F11 into ten steps, each landing with its tests and a report in the checklist, and names what each reuses, what it adds to shared code and which fixtures check it. The user's go-ahead authorizes its source code, S1 first.
 
 **What it builds on.**
 - *Factors and contractions:* `BorderedCholesky` (N1–N4), an `ISpdFactor`, so `CollapsedGPrior.FromLeastSquares` takes it and `MarginalAt` (N12) gives the marginal at any (τ, b) in O(1); `KhatriRao` (N7); `PairwiseSum` (N10).
@@ -541,11 +550,11 @@ The order is S1 → S2 → S3 and S4 → S5 → S6 → S7 → S8 → S9 → S10.
 - `posterior`: the exact posterior over an enumerable structure space with data, τ integrated by quadrature;
 - the ladder's evidence on that space, against its normalizer.
 
-**Choices for the user** (the recommendation first in each):
-1. *The ridge priors.* The contract lists `Ridge` and `FixedRidge`, and the completion contract asks for the g and fixed-g modes. Recommended: build those two in stage 4, and let the ridge records join the closed set when they are built with their own marginal, which needs |G + τI| rather than the g-form and a refactoring per τ.
-2. *τ under tempering.* The per-replica block, which keeps D04's slice step and serves any hybrid replica; or τ as a Metropolis move inside the palette, which changes D04's block.
-3. *Starts.* Exact prior draws; or R's M = 0.
-4. *Where the work runs.* The steps depend on one another, so one sequence runs them, here or in one chip. Two side pieces with files of their own could run beside it as chips: the three shared additions, and the R oracle modes.
+**The choices** (taken by the user, 2026-10-28, as recommended):
+1. *The ridge priors are deferred.* Stage 4 builds the g and fixed-g modes, which the completion contract asks for. `Ridge` and `FixedRidge` join the closed set when they are built with their own marginal, which needs |G + τI| rather than the g-form and a refactoring per τ.
+2. *τ under tempering takes the per-replica block,* which keeps D04's slice step and serves any hybrid replica. The alternative, τ as a Metropolis move inside the palette, would have changed D04's block.
+3. *Chains start from exact prior draws,* not R's M = 0.
+4. *One sequence runs the steps,* in the session that planned them.
 
 **Not in stage 4.** F-M1 and F-R1, the pre-registered comparisons, need the running engine and follow it. Supplied-basis and PCA fits, and prediction at new inputs, are stage 5.
 
