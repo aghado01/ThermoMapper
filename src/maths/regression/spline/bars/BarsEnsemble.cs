@@ -8,6 +8,7 @@ using Maths.Samplers.Ensemble;
 using Maths.Samplers.Evidence;
 using Maths.Samplers.Rjmcmc;
 
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
 
 namespace Maths.Regression.Spline.Bars;
@@ -72,11 +73,40 @@ public sealed record TemperingReadout(
 
 /// <summary>
 /// A run's evidence ln p(y): the data's marginal likelihood under the knot prior restricted to its support (the support
-/// gate and admission). Each chain's tempering ladder gives a stepping-stone estimate (<see cref="LadderEvidence"/>), since
-/// each chain adapts its own rungs; the run's is their mean, with Monte Carlo error √Σ err_c² / C. The chains' spread
-/// checks the errors.
+/// gate and admission). Stepping-stone gives <see cref="LogEvidence"/> (the default, <see cref="LadderEvidence"/>), and
+/// path sampling reads the same draws too where the run's evaluations supply the slope in b: the Normal model's linear
+/// form, whose slope is ℓ₁ and on which path sampling's discretization diagnostic holds, since ℓ_b is linear in b. Their
+/// difference then reads path sampling's discretization error against an estimator that has none. <see cref="Priors"/>
+/// says what the value depends on beyond the data.
 /// </summary>
-public sealed record BarsEvidence(double LogEvidence, double MonteCarloError, IReadOnlyList<LadderEstimate> Chains);
+public sealed record BarsEvidence(BarsEvidenceEstimate SteppingStone, BarsEvidenceEstimate? PathSampling, BarsEvidencePriors Priors)
+{
+    /// <summary>The run's evidence, by stepping-stone.</summary>
+    public double LogEvidence => SteppingStone.LogEvidence;
+
+    /// <summary>Its Monte Carlo error.</summary>
+    public double MonteCarloError => SteppingStone.MonteCarloError;
+}
+
+/// <summary>
+/// One estimator's evidence over a run's ladders. Each chain adapts its own rungs, so each gives its own estimate
+/// (<see cref="LadderEvidence.FromLadders{TState}"/>); the run's is their mean, with Monte Carlo error √Σ err_c² / C and the mean
+/// of their discretization diagnostics (NaN for stepping-stone, which has none). The chains' spread checks the errors.
+/// </summary>
+public sealed record BarsEvidenceEstimate(
+    LadderEstimator Method, double LogEvidence, double MonteCarloError, double DiscretizationError, IReadOnlyList<LadderEstimate> Chains);
+
+/// <summary>
+/// What an evidence depends on beyond the data, carried with it because the marginal likelihood is sensitive to prior
+/// scales in a way the posterior is not (D05). The σ² prior and the centre set constants that every configuration shares,
+/// so two evidences on the same data compare as a Bayes factor, between count priors or bases, only where these agree.
+/// Both are read from the response: <see cref="CentreLevel"/> is the coefficient prior's centre (the median, by default),
+/// and <see cref="Sigma2"/> is the σ² prior as resolved, IG(a, a·s²) under the scaled default with s² about that centre.
+/// <see cref="MinColumnMass"/> is the support gate, which truncates the knot prior.
+/// </summary>
+public sealed record BarsEvidencePriors(
+    IComplexityPrior CountPrior, double MinColumnMass, GPriorCentre Centre, double CentreLevel, Sigma2Prior Sigma2Prior,
+    InverseGamma Sigma2);
 
 /// <summary>
 /// The pooled posterior fit of a BARS run plus its convergence diagnostics, all on the reported functionals
@@ -209,10 +239,9 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// regenerations to the cold chain (OQ2, preparation brief).</param>
     /// <param name="evidence">When true (the default), a run that can estimate its evidence reports it
     /// (<see cref="BarsResult.Evidence"/>): one tempered on the likelihood path down to an exact reference rung
-    /// (<paramref name="temperReferenceRung"/>), under a model whose marginal is complete
-    /// (<see cref="IObservationModel.HasCompleteMarginal"/>: the Normal model under a proper σ² prior). Each ladder then
-    /// traces its rungs from the end of burn-in, at one extra marginal per rung per scan. Other runs report none, and
-    /// cost nothing.</param>
+    /// (<paramref name="temperReferenceRung"/>), under the Normal model with a proper σ² prior
+    /// (<see cref="WeightedNormalModel.HasCompleteMarginal"/>). Each ladder then traces its rungs from the end of burn-in,
+    /// at one extra marginal per rung per scan. Other runs report none, and cost nothing.</param>
     public BarsEnsemble(IBasis basis, IObservationModel model, IComplexityPrior prior, IKnotKernel kernel,
                         IWeightResampler? resampler = null, double? dmgkConstant = null, double? adaptKernelTau = null,
                         int? temperLevels = null, double temperBetaMin = 0.05,
@@ -281,10 +310,11 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
     /// <summary>
     /// Whether runs report an evidence: asked for (the default), and possible, which takes a likelihood-path ladder that
-    /// ends at a reference rung and a model whose marginal is complete.
+    /// ends at a reference rung and the Normal model under a proper σ² prior, whose priors <see cref="BarsEvidencePriors"/>
+    /// describes.
     /// </summary>
     public bool ReportsEvidence => _evidence && _temperLevels is not null && _temperReferenceRung
-                                   && _temperPath == TemperingPath.Likelihood && _model.HasCompleteMarginal;
+                                   && _temperPath == TemperingPath.Likelihood && _model is WeightedNormalModel { HasCompleteMarginal: true };
 
     /// <summary>Functionals R̂ runs on: knot count (index 0) + each fitted grid value (the per-grid consensus map).</summary>
     public int FunctionalDim => 1 + _grid.Length;
@@ -512,20 +542,32 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, retained, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations, summary.Checkpoint, Evidence(bars));
     }
 
-    // Each chain's stepping-stone over its own traced ladder, and their mean; null when the run reports none.
+    // Stepping-stone, and path sampling where the traces hold slopes, each over every chain's own ladder; null when the
+    // run reports none.
     private BarsEvidence? Evidence(BarsChainRun[] states)
     {
         if (!ReportsEvidence) return null;
+        var normal = (WeightedNormalModel)_model;
+        (InverseGamma? sigma2, double level) = normal.ResolvedPriors(_y);
+        var priors = new BarsEvidencePriors(_prior, _minColumnMass, normal.Centre, level, normal.Sigma2Prior,
+            sigma2 ?? throw new InvalidOperationException("The σ² prior did not resolve for this response."));
+        BarsEvidenceEstimate? pathSampling = states[0].Ladder!.TracesSlopes ? Pooled(states, LadderEstimator.PathSampling) : null;
+        return new BarsEvidence(Pooled(states, LadderEstimator.SteppingStone), pathSampling, priors);
+    }
+
+    private static BarsEvidenceEstimate Pooled(BarsChainRun[] states, LadderEstimator method)
+    {
         var chains = new LadderEstimate[states.Length];
-        double sum = 0.0, variance = 0.0;
+        double sum = 0.0, variance = 0.0, discretization = 0.0;
         for (int ci = 0; ci < states.Length; ci++)
         {
-            chains[ci] = LadderEvidence.FromLadders([states[ci].Ladder!]);
+            chains[ci] = LadderEvidence.FromLadders([states[ci].Ladder!], method);
             sum += chains[ci].LogRatio;
             variance += chains[ci].MonteCarloError * chains[ci].MonteCarloError;
+            discretization += chains[ci].DiscretizationError;
         }
         int c = states.Length;
-        return new BarsEvidence(sum / c, Math.Sqrt(variance) / c, chains);
+        return new BarsEvidenceEstimate(method, sum / c, Math.Sqrt(variance) / c, discretization / c, chains);
     }
 
     /// <summary>

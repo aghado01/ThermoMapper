@@ -36,6 +36,12 @@ public interface ITemperedMarginal
 
     /// <summary>Why the design is outside the model's support, or <see cref="DesignRejection.None"/> when it is admitted.</summary>
     DesignRejection Rejection => DesignRejection.None;
+
+    /// <summary>∂/∂b of <see cref="LogMarginalLikelihood"/>: path sampling's integrand
+    /// (<see cref="Maths.Samplers.ITargetEvaluation.LogLikelihoodSlope"/>). The linear form's is ℓ₁ at every b. The default
+    /// refuses, which leaves stepping-stone as the evidence a ladder can give.</summary>
+    double LogMarginalLikelihoodSlope(double inverseTemperature)
+        => throw new NotSupportedException($"{GetType().Name} does not supply its slope in b.");
 }
 
 /// <summary>
@@ -98,6 +104,15 @@ internal sealed class LinearMarginal : ITemperedMarginal
         if (!(inverseTemperature >= 0.0 && inverseTemperature <= 1.0))
             throw new ArgumentOutOfRangeException(nameof(inverseTemperature), "The inverse temperature must lie in [0, 1].");
         return double.IsNegativeInfinity(_value) ? double.NegativeInfinity : inverseTemperature * _value;
+    }
+
+    // ℓ₁ at every b. ℓ_b is linear in b, so path sampling's discretization diagnostic, which reads the slope's variance
+    // as the integrand's derivative, holds exactly on this form.
+    public double LogMarginalLikelihoodSlope(double inverseTemperature)
+    {
+        if (!(inverseTemperature >= 0.0 && inverseTemperature <= 1.0))
+            throw new ArgumentOutOfRangeException(nameof(inverseTemperature), "The inverse temperature must lie in [0, 1].");
+        return _value;
     }
 }
 

@@ -219,5 +219,10 @@ public sealed class SplineTarget : ISamplingTarget<KnotConfig>
 
         public double LogLikelihood(double inverseTemperature)
             => _marginal?.LogMarginalLikelihood(inverseTemperature) ?? double.NegativeInfinity;
+
+        public double LogLikelihoodSlope(double inverseTemperature)
+            => _marginal is null
+                ? throw new NotSupportedException("A configuration off the support has no slope in b.")
+                : _marginal.LogMarginalLikelihoodSlope(inverseTemperature);
     }
 }

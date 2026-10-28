@@ -40,10 +40,6 @@ public interface IObservationModel
     /// knot prior itself: what an exact reference rung on that path needs. The default serves b = 1 only.</summary>
     bool CanTemperToPrior => false;
 
-    /// <summary>True when the tempered marginal omits no constant, so a likelihood-path ladder from b = 0 to 1 estimates
-    /// the evidence ln p(y), as <see cref="BarsEnsemble"/> reports it. The default omits one, or does not say.</summary>
-    bool HasCompleteMarginal => false;
-
     /// <summary>Effective number of parameters for the complexity penalty (ν for the Normal model).</summary>
     int EffectiveDimension(double[,] design, double[]? weights);
 

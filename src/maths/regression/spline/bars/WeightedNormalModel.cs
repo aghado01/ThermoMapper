@@ -82,9 +82,23 @@ public sealed class WeightedNormalModel : IObservationModel
     /// prior.</summary>
     public bool CanTemperToPrior => Form == TemperedForm.Linear || Sigma2Prior.IsProper;
 
-    /// <summary>True under a proper σ² prior, in either form; the Jeffreys prior's marginal omits its σ-integration
-    /// constant.</summary>
+    /// <summary>True under a proper σ² prior, in either form: the tempered marginal omits no constant, so a
+    /// likelihood-path ladder from b = 0 to 1 estimates the evidence ln p(y), as <see cref="BarsEnsemble"/> reports it.
+    /// The Jeffreys prior's marginal omits its σ-integration constant.</summary>
     public bool HasCompleteMarginal => Sigma2Prior.IsProper;
+
+    /// <summary>
+    /// The priors this model resolves for <paramref name="y"/>, from the data alone: the σ² prior as an inverse gamma
+    /// (null for the Jeffreys prior, or for a response the scaled prior finds no spread in), and the level the
+    /// coefficient prior is centred on. With the knot prior, they are what its evidence depends on beyond the data
+    /// (<see cref="BarsEvidencePriors"/>).
+    /// </summary>
+    public (InverseGamma? Sigma2, double CentreLevel) ResolvedPriors(double[] y)
+    {
+        ArgumentNullException.ThrowIfNull(y);
+        Resolve(y, out InverseGamma? prior, out double? level);
+        return (prior, level ?? BandedGPrior.Level(y, Centre));
+    }
 
     /// <inheritdoc/>
     public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights)

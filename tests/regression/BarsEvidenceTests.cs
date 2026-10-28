@@ -13,7 +13,7 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// BARS's evidence (<see cref="BarsResult.Evidence"/>): stepping-stone over each chain's traced ladder, on by default for a
-/// run that can give one. The truth comes from outside the ladder. With at most one knot the knot prior is a count and
+/// run that can give one, and path sampling beside it on the linear form, whose slope is ℓ₁. The truth comes from outside the ladder. With at most one knot the knot prior is a count and
 /// one uniform position, restricted to the support, so ln p(y) = ln Z₁ − ln Z₀ is a quadrature over the knot's position;
 /// with no knots it is the empty design's marginal.
 /// </summary>
@@ -44,12 +44,53 @@ public sealed class BarsEvidenceTests
         BarsResult r = Tempered(model, prior).Run(x, y, grid: x, chains: 2, masterSeed: 11, burn: 1000, samples: 4000);
         BarsEvidence e = r.Evidence!;
         _out.WriteLine($"quadrature {truth:F5}; BARS {e.LogEvidence:F5} ± {e.MonteCarloError:F5}; chains " +
-                       string.Join(", ", Array.ConvertAll([.. e.Chains], c => $"{c.LogRatio:F5} ± {c.MonteCarloError:F5}")));
-        Assert.Equal(2, e.Chains.Count);
+                       string.Join(", ", Array.ConvertAll([.. e.SteppingStone.Chains], c => $"{c.LogRatio:F5} ± {c.MonteCarloError:F5}")));
+        Assert.Equal(2, e.SteppingStone.Chains.Count);
         Assert.True(e.MonteCarloError > 0.0);
         Assert.True(Math.Abs(e.LogEvidence - truth) < 4.0 * e.MonteCarloError, $"BARS {e.LogEvidence:F5} against {truth:F5}");
-        foreach (LadderEstimate c in e.Chains)
+        foreach (LadderEstimate c in e.SteppingStone.Chains)
             Assert.True(Math.Abs(c.LogRatio - truth) < 4.0 * c.MonteCarloError, $"chain {c.LogRatio:F5} against {truth:F5}");
+        Assert.Null(e.PathSampling);   // the integrated form supplies no slope in b
+    }
+
+    [Fact]
+    public void LinearForm_PathSamplingJoinsSteppingStone_BothMatchQuadrature()
+    {
+        // The evidence is a functional of ℓ₁ alone, so both forms share the quadrature's truth; only the path differs.
+        (double[] x, double[] y) = Data();
+        var model = new WeightedNormalModel(form: TemperedForm.Linear);
+        var prior = new UniformPrior(1);
+        double truth = QuadratureEvidence(model, prior, x, y, points: 20_000);
+        BarsResult r = Tempered(model, prior, levels: 10).Run(x, y, grid: x, chains: 2, masterSeed: 11, burn: 1000, samples: 4000);
+        BarsEvidence e = r.Evidence!;
+        BarsEvidenceEstimate ss = e.SteppingStone, ps = e.PathSampling!;
+        _out.WriteLine($"quadrature {truth:F5}; stepping-stone {ss.LogEvidence:F5} ± {ss.MonteCarloError:F5}; " +
+                       $"path sampling {ps.LogEvidence:F5} ± {ps.MonteCarloError:F5}, diagnostic {ps.DiscretizationError:F5}");
+        Assert.Equal(LadderEstimator.SteppingStone, ss.Method);
+        Assert.Equal(LadderEstimator.PathSampling, ps.Method);
+        Assert.True(double.IsNaN(ss.DiscretizationError));
+        Assert.True(Math.Abs(ss.LogEvidence - truth) < 4.0 * ss.MonteCarloError, $"stepping-stone {ss.LogEvidence:F5} against {truth:F5}");
+        double corrected = ps.LogEvidence + ps.DiscretizationError;
+        Assert.True(Math.Abs(corrected - truth) < 4.0 * ps.MonteCarloError + 0.25 * Math.Abs(ps.DiscretizationError),
+                    $"corrected path sampling {corrected:F5} against {truth:F5}");
+    }
+
+    [Fact]
+    public void Evidence_CarriesThePriorsItDependsOn()
+    {
+        (double[] x, double[] y) = Data();
+        var model = new WeightedNormalModel();
+        var prior = new UniformPrior(0);
+        BarsEvidencePriors p = Tempered(model, prior).Run(x, y, grid: x, chains: 1, masterSeed: 3, burn: 50, samples: 50).Evidence!.Priors;
+        double level = BandedGPrior.Level(y, GPriorCentre.Median), meanSquare = 0.0;
+        foreach (double v in y) meanSquare += (v - level) * (v - level) / y.Length;
+        Assert.Same(prior, p.CountPrior);
+        Assert.Equal(SplineTarget.DefaultMinColumnMass, p.MinColumnMass);
+        Assert.Equal(GPriorCentre.Median, p.Centre);
+        Assert.Equal(level, p.CentreLevel);
+        Assert.Same(model.Sigma2Prior, p.Sigma2Prior);
+        Assert.Equal(1e-3, p.Sigma2.Shape);
+        Assert.Equal(1e-3 * meanSquare, p.Sigma2.Scale, 1e-12);
     }
 
     [Fact]
@@ -73,8 +114,8 @@ public sealed class BarsEvidenceTests
         Assert.Null(Tempered(model, new UniformPrior(0), evidence: false).Run(x, y, grid: x, chains: 1, masterSeed: 2, burn: 50, samples: 50).Evidence);
     }
 
-    private static BarsEnsemble Tempered(IObservationModel model, IComplexityPrior prior, bool evidence = true)
-        => new(new SplineBasis(3), model, prior, new LocalBetaKernel(50.0), temperLevels: 5, temperReferenceRung: true,
+    private static BarsEnsemble Tempered(IObservationModel model, IComplexityPrior prior, bool evidence = true, int levels = 5)
+        => new(new SplineBasis(3), model, prior, new LocalBetaKernel(50.0), temperLevels: levels, temperReferenceRung: true,
                evidence: evidence);
 
     // ln Z₁ − ln Z₀ for a count prior on {0, 1}: Z_b = p(0)·e^{ℓ_b(∅)} + p(1)·∫ 1[t on the support] e^{ℓ_b(t)} dt, by the
