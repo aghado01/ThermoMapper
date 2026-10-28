@@ -52,10 +52,10 @@ flowchart LR
   - `IPseudoTransitionDetector.Detect(SweepProfile) → double[]`
 
   `ISignalAnalyzer.Analyze(SweepProfile) → ProfileCriteria` is a fourth.
-- **One partition kernel.** All three flat strategies and `DenseTStack` delegate to one internal threshold-and-connect routine. They differ only in which field they pass it.
-- **Producer-agnostic cores.** `DenseTStack`, `HierarchyEom`, `LineagePersistence` and `ThermalEom` each have two overloads:
-  - one taking frames (the Swendsen–Wang path: pool the frames, then call the core);
-  - one taking explicit columns, a stack or a landscape, so a closed-form solver such as the [cumulative-field solver](./CumulativeField.md) can feed the same resolver.
+- **One partition kernel.** All three flat strategies and `DenseTStack` delegate to one threshold-and-connect routine, `AffinityThreshold.Connect` in `Clustering.Dendrograms`. They differ only in which field they pass it.
+- **Producer-agnostic cores.** `DenseTStack`, `HierarchyEom`, `LineagePersistence` and `ThermalEom` each have two entry points:
+  - an SPC adapter taking frames (`SweepDenseTStack`, `SweepHierarchyEom`, `SweepLineagePersistence`, `SweepThermalEom`: pool the frames, then call the core);
+  - the core itself, in `Clustering.Dendrograms` ([ClusterResolution](./ClusterResolution.md)), taking explicit columns, a stack or a landscape, so a closed-form solver such as the [cumulative-field solver](./CumulativeField.md) can feed the same resolver.
 - **Pool, then reduce.**
   - Linear per-frame reductions are averaged across replicas.
   - Nonlinear quantities pool their sufficient statistics first: label entropy (pooled histograms), $\bar\delta$ (pooled counts and draws), landscapes (pooled sums), bond entropy (pooled bond counts).
@@ -79,12 +79,12 @@ flowchart LR
 |---|---|
 | Session | `SpcClusteringSession.Run(graph, partitionStrategy?, analyzer?, sweepStrategy, hierarchicalStrategy?, externalEvaluators?, spcEvaluators?, referenceLabels?)` (`sweepStrategy` is declared optional, but null throws `ArgumentNullException`); a features overload `Run(features, metric?, graphConfig?, …)` that also builds the graph; `SpcSessionResult` |
 | Flat cuts | `ThresholdSpinAgreement`, `ThresholdBondFrequency`, `ThresholdCoMembership`, each with `{ Theta, PeripheralCapture }` |
-| Blatt hierarchy | `BlattPartitionStrategy(BlattPartitionConfig?)`; `MagnetizationPeakDetector`; `PartitionHierarchy`, `HierarchyLevel`, `PartitionNesting.Holds` |
-| Dense resolvers | `DenseTStack.Build`; `HierarchyEom.Resolve` → `HierarchyEomResult`; `LineagePersistence.Resolve` → `LineagePersistenceResult` (`ClusterLineage`); `ThermalEom.Resolve` → `ThermalEomResult`; `PartitionHierarchyDendrogram.ToDendrogram` (cost axis `"temperature"`) |
+| Blatt hierarchy | `BlattPartitionStrategy(BlattPartitionConfig?)`; `MagnetizationPeakDetector`; `PartitionHierarchy`, `HierarchyLevel`, `PartitionNesting.Holds` (in `Clustering.Dendrograms`) |
+| Dense resolvers | Swendsen–Wang adapters over frames: `SweepDenseTStack.Build`, `SweepHierarchyEom.Resolve`, `SweepLineagePersistence.Resolve`, `SweepThermalEom.Resolve`. Cores in `Clustering.Dendrograms`: `DenseTStack.Build`; `HierarchyEom.Resolve` → `HierarchyEomResult`; `LineagePersistence.Resolve` → `LineagePersistenceResult` (`ClusterLineage`); `ThermalEom.Resolve` → `ThermalEomResult`; `PartitionHierarchyDendrogram.ToDendrogram` (cost axis `"temperature"`) |
 | Profiling | `SweepProfile.From(runs, kind)`, `SweepCurves.ByTemperature`, `SweepEdgeCurves.CoMembershipDelta`, `SweepLandscapes.FromFrames`, `LabelEntropyCurve.From`; `SpcProfileAnalysis` (`SpPlateau`, `ComputeHalfMaximumBand`, `PickPeakTemperature`, `ComputeStability`); `ChiPeakSignalAnalyzer`; `SusceptibilityKind` |
 | Export | `SpcCsvWriter.Write*`, `WriteAllToDirectory`, `WriteEquilibriumEdges`; `SpcTabularProjections.Create*Projection`; `SpcRunLayout`, `SpcRunPaths`; `SpcOutputPathHelper` (legacy) |
 
-`HierarchyEom`, `LineagePersistence` and `ThermalEom` are static resolvers over frames. The session does not call them; it accepts only an `IHierarchicalPartitionStrategy`, which in this project means Blatt.
+The frame adapters and their cores are static resolvers. The session does not call them; it accepts only an `IHierarchicalPartitionStrategy`, which in this project means Blatt.
 
 ## Algorithms
 
@@ -217,9 +217,9 @@ Columns derived from dictionaries (channels, enrichments, scores) follow the fix
 | `BlattPartitionConfig` Q / EquilibriumBudget / Accumulation | 20 / (1000, 5000) / `Currencies` | Equilibrium per phase |
 | `BlattPartitionConfig` Detector / CutPolicy / BaseSeed | `MagnetizationPeakDetector` / `ThresholdSpinAgreement { Theta = 0.5 }` / null | — |
 | `MagnetizationPeakDetector` SignalChannelName / MinProminence | `"MagnetizationVariance"` / 0.1 | — |
-| `HierarchyEom.Resolve` theta / sink / minClusterSize / restoreNesting / completion | 0.5 / `MeanClusterSize` / 1 / true / `None` | Track 1 |
-| `LineagePersistence.Resolve` theta / minClusterSize / splitShare / temperatureWindow / selectTopK | 0.5 / 3 / gap rule (fallback 0.3) / full grid / gap rule | Track 2 |
-| `ThermalEom.Resolve` theta / sink / minClusterSize / completion | 0.5 / `MeanClusterSize` / 1 / `None` | — |
+| `SweepHierarchyEom.Resolve` theta / sink / minClusterSize / restoreNesting / completion | 0.5 / `MeanClusterSize` / 1 / true / `None` | Track 1 |
+| `SweepLineagePersistence.Resolve` theta / minClusterSize / splitShare / temperatureWindow / selectTopK | 0.5 / 3 / gap rule (fallback 0.3) / full grid / gap rule | Track 2 |
+| `SweepThermalEom.Resolve` theta / sink / minClusterSize / completion | 0.5 / `MeanClusterSize` / 1 / `None` | — |
 | `SweepProfile.From` kind | `FkCluster` | Primary χ |
 | SP-plateau departure fraction | 0.8 | Fixed |
 
@@ -241,8 +241,8 @@ Columns derived from dictionaries (channels, enrichments, scores) follow the fix
 | Role | Files (`ThermoMapper/src/clustering/graphical/spc/`) |
 |---|---|
 | Session | `SpcClusteringSession.cs` |
-| Flat cuts | `partitions/IPartitionStrategy.cs`, `partitions/strategies/Threshold*.cs`, `partitions/strategies/AffinityThreshold.cs`, `partitions/strategies/UnionFindLabeler.cs` |
-| Hierarchy | `partitions/hierarchical/*.cs` (`BlattPartitionStrategy`, `DenseTStack`, `HierarchyEom`, `LineagePersistence`, `PartitionHierarchy`, `PartitionHierarchyDendrogram`, `MagnetizationPeakDetector`, …), `partitions/thermal/ThermalEom.cs` |
+| Flat cuts | `partitions/IPartitionStrategy.cs`, `partitions/strategies/Threshold*.cs` |
+| Hierarchy | `partitions/hierarchical/*.cs` (`BlattPartitionStrategy`, `MagnetizationPeakDetector`, `SweepDenseTStack`, `SweepHierarchyEom`, `SweepLineagePersistence`, …), `partitions/thermal/SweepThermalEom.cs`; the cores are in `ThermoMapper/src/clustering/dendrogram/` (see [ClusterResolution](./ClusterResolution.md)) |
 | Profiling | `profiling/*.cs`, `profiling/signals/*.cs` |
 | Export | `export/SpcCsvWriter.cs`, `export/SpcTabularProjections.cs`, `export/SpcRunLayout.cs`, `export/SpcRunPaths.cs`, `export/SpcOutputPathHelper.cs` |
 

@@ -75,6 +75,8 @@ flowchart LR
 | `Condensation`, `CondensedTree` | `Condense(dendrogram, minClusterSize, costToLambda?)`; `SelectByExcessOfMass`, `SelectByLeaf`, `SelectByEpsilon`, `ResolveLabeled`, `ToAssignment` |
 | `LandscapeWalk`, `ClusterWalkReport` | `ClusterProfiles(dendrogram, landscape)`, `SelectByExcessOfMass(dendrogram, mass, allowRoot = false, minClusterSize = 1)`, `ToAssignment(dendrogram, selected)` |
 | `PeripheryPolicies` | `Ascend(partial, graph, landscapeSlice)`, `Capture(partial, graph, edgeField)` |
+| `AffinityThreshold`, `UnionFindLabeler` | `Connect(graph, g, theta, peripheralCapture = false)` → `Assignment` (the flat single-linkage cut of an edge field); `Densify(uf, nodeCount)` |
+| Temperature-stack resolvers | `DenseTStack.Build(graph, temperatures, deltaByGridPoint, theta)` → `PartitionHierarchy` (`HierarchyLevel`, `PartitionNesting.Holds`); `PartitionHierarchyDendrogram.ToDendrogram`; `ThermalEom.Resolve(graph, dendrogram, landscape, …)`, `HierarchyEom.Resolve(graph, stack, landscape, …)`, `LineagePersistence.Resolve(graph, stack, deltaByGridPoint, q, …)`; algorithms and Swendsen–Wang adapters in [SpcAnalysis](./SpcAnalysis.md) |
 
 ## Algorithms
 
@@ -196,6 +198,7 @@ With $L\equiv1$, the mass is $|C|\times$ the grid-quantized lifetime on the *lan
 |---|---|
 | Carriers | `ThermoMapper/src/clustering/primitives/Assignment.cs`, `Groups.cs`, `Landscape.cs` |
 | Merge trees | `ThermoMapper/src/clustering/dendrogram/Dendrogram.cs`, `DendrogramNode.cs`, `DendrogramBuilder.cs`, `SingleLinkage.cs`, `ThermalDendrogram.cs` |
-| Selection and completion | `ThermoMapper/src/clustering/dendrogram/Condensation.cs`, `LandscapeWalk.cs`, `PeripheryPolicies.cs` |
+| Selection and completion | `ThermoMapper/src/clustering/dendrogram/Condensation.cs`, `LandscapeWalk.cs`, `PeripheryPolicies.cs`, `AffinityThreshold.cs`, `UnionFindLabeler.cs` |
+| Temperature-stack resolvers | `ThermoMapper/src/clustering/dendrogram/DenseTStack.cs`, `PartitionHierarchy.cs`, `PartitionHierarchyDendrogram.cs`, `ThermalEom.cs`, `HierarchyEom.cs`, `LineagePersistence.cs` |
 
 **See also:** [Hdbscan](./Hdbscan.md) · [SpcAnalysis](./SpcAnalysis.md) (thermal EOM, hierarchy EOM) · [GaussianMixtures](./GaussianMixtures.md) (entropy dendrogram) · [Concepts](./Concepts.md#resolution-carriers)
