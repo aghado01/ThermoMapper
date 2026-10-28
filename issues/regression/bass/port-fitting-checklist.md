@@ -23,6 +23,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-O4** Boundary ratios π(1)/π(0) and π(M_max)/π(M_max − 1), and R's fixed thirds as a defect fixture.
 - [x] **F-O5** Wallenius probabilities against brute-force sums over draw orders: `r/oracles/bass_wallenius_oracle.R`.
 - [x] **F-O6** Defect fixtures: R's tempering and swap density, R's Jeffreys mode, KHAOS's double count factor: `r/oracles/bass_enumeration_oracle.R` (modes `swap` and `count`) and `r/oracles/bass_jeffreys_oracle.R`.
+- [x] **F-O9** Intercept conventions: Liang's flat intercept against level centring, with R's zero centre beside them, `r/oracles/bass_intercept_oracle.R`. Checks: on F-O8's grid, level centring's extra credit against Liang (positive, 0.4–0.5 nats for one term, 0.2–0.3 between structures one term apart, flat in N); on an explicit 40-point design, the level marginal against the g-form identity, and the three conventions' Bayes factors at offsets 0, 10 and −250.
 - [x] **F-O8** τ's prior: the unit-information Gamma family, Zellner–Siow against Francom et al. 2018's shape 1/N, `r/oracles/bass_tau_prior_oracle.R`. Checks: the log-moments by quadrature against ψ and ψ′; Zellner–Siow's offset from unit information is the same at every N; the null-exit penalty and its growth; the near-cancellation between structures that both carry τ.
 - [x] **F-O7** Centred admission angles for the Liang default, as the `centred` and `hadamard` modes of `r/oracles/bass_admission_oracle.R`. Checks: uncentred s_j = centred s_j · ρ_j; the downdate's accuracy on a near-constant column; and the centred Hadamard form against explicit centring.
 
@@ -51,10 +52,20 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 
 ## Reports
 
+### Intercept conventions fixture (F-O9) — 2026-10-27
+
+At the user's request, so the D03 alternative's numbers reproduce from the repository: `r/oracles/bass_intercept_oracle.R`, run by `bass_stage1_checks.R` (every check passes).
+- *Grid mode.* Liang's and level centring's Bayes factors against the intercept-only structure on F-O8's grid, converged over twice the range to 10⁻⁸. Level centring's extra credit is 0.43–0.47 nats for one term and 0.68–0.69 for two, and between structures one term apart 0.230, 0.237 and 0.241 at N = 40, 100 and 1000.
+- *Design mode,* on a 40-point design with one and two hinges:
+  - the explicit level marginal (R's τ form on y − ȳ over the uncentred Gram) equals the g-form identity, N in place of N − 1 in one exponent, to 10⁻⁸;
+  - level centring (9.023 and 8.065 nats) and Liang (8.559 and 7.369) do not move at offsets 0, 10 and −250;
+  - R's zero centre does: the two-hinge structure's Bayes factor goes from 5.56 to 2.16 and −3.87 nats. This also serves the shift fixture the current D03 draft lists, read on Bayes factors rather than on τ's posterior.
+- *A numerical note.* The first run failed in `integrate()` on the zero centre at offset −250, where y'y and Q agree to six digits; the oracle now takes the residual directly, as D03 warns.
+
 ### D03's proper-defaults alternative — 2026-10-27
 
 At the user's request after the readiness review, drafted beside D03 for the design pass, not decided: `Sigma2Prior.ScaledToResponse()` for σ² and level centring (`GPriorCentre.Mean`) for the intercept, so that every default prior is proper. The Liang convention, the zero centre and Jeffreys σ² stay selectable.
-- *The cost, by scratch quadrature on F-O8's grid.* Level centring's marginal is Liang's with N in place of N − 1 in one exponent. Against Liang it favours a structure over the intercept-only one by 0.43–0.47 nats at M = 1 and 1.06–1.08 at M = 5, and two structures one term apart by 0.23–0.24, at N = 40, 100 and 1000.
+- *The cost, on F-O8's grid (fixture F-O9 since).* Level centring's marginal is Liang's with N in place of N − 1 in one exponent. Against Liang it favours a structure over the intercept-only one by 0.43–0.47 nats at M = 1 and 1.06–1.08 at M = 5, and two structures one term apart by 0.23–0.24, at N = 40, 100 and 1000.
 - *What it buys:* evidence by default, proper exact fits, the reference rung and SMC from the prior without a separate mode, OQ19 settled for BASS, and R's uncentred numerics.
 - *Knock-on edits* to D03–D06, the calibration brief and the regime note are listed in the alternative and not applied.
 - *Found by the review, independent of the choice.* The calibration brief says the improper default cannot start a prior-to-posterior SMC run, while D05's linear form starts one from the prior over (structure, τ), which is proper under the improper σ² and intercept priors. The alternative removes the paragraph; under the current draft it needs the linear-form exception.

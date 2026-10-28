@@ -218,7 +218,7 @@ Beside the draft above, for the design pass to compare (the user asked for it, 2
   - *Shift-equivariant.* ỹ does not move when y shifts, so neither does the posterior over structures and τ.
   - *Mean rather than median under Gaussian noise.* With the mean, the level's own energy is exactly zero (n·mean(ỹ)² = 0), so τ's conditional reads no level at all. `Median`, BARS's default (OQ15), is the robust choice once the noise extensions bring weights.
   - *The Liang convention stays selectable* as the form that is exact in the level but improper, and the zero centre stays selectable on its own terms.
-- **What it costs against Liang.** Level centring reads the level from the data at no charge, so σ² gets N degrees of freedom, not N − 1. Under the Jeffreys limit its marginal is Liang's with −N/2 in place of −(N − 1)/2 on (1 + g(1 − R²)), and the intercept-only structure gains the constant ∫p(g)(1 + g)^{−1/2}. A scratch quadrature on F-O8's grid (N = 40, 100, 1000), against Liang's Bayes factors:
+- **What it costs against Liang.** Level centring reads the level from the data at no charge, so σ² gets N degrees of freedom, not N − 1. Under the Jeffreys limit its marginal is Liang's with −N/2 in place of −(N − 1)/2 on (1 + g(1 − R²)), and the intercept-only structure gains the constant ∫p(g)(1 + g)^{−1/2}. Fixture F-O9 (`bass_intercept_oracle.R`) checks that identity on an explicit design to 10⁻⁸, and on F-O8's grid (N = 40, 100, 1000), against Liang's Bayes factors:
   - against the intercept-only structure, level centring favours a structure by 0.43–0.47 nats more at M = 1, 0.67–0.69 at M = 2 and 1.06–1.08 at M = 5;
   - between two structures one term apart (M = 2 at R² = 0.25 against M = 1 at R² = 0.2), by 0.23–0.24 nats more, at every N.
 
@@ -236,7 +236,7 @@ Beside the draft above, for the design pass to compare (the user asked for it, 2
   - *D06:* the gate reads R's uncentred Gram with the intercept column. There a hinge's s_j is its centred value times ‖z_j − z̄_j‖²/‖z_j‖², so the gate is stricter for columns with a large mean, and s_min is set against that form (F-O7 covers both).
   - *The calibration brief:* its paragraph on the improper default goes, since the default then starts a prior-to-posterior SMC run.
   - *The regime note:* its propriety bullet holds for the improper options only.
-  - *Fixtures:* the quadrature above becomes F-O9, beside the shift-invariance fixture D03 already lists.
+  - *Fixtures:* F-O9 is built (2026-10-27). On its 40-point design, level centring and Liang hold at offsets 0, 10 and −250, while R's zero centre moves the two-hinge structure's Bayes factor from 5.56 to 2.16 and −3.87 nats.
 
 ### D04 (draft): collapsed and conditional update order
 

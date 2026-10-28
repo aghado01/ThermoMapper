@@ -522,3 +522,39 @@ for (N in c(40, 100, 1000)) {
 }
 cat(sprintf("  Francom's prior penalizes leaving the null, more as N grows: %s; between structures that both carry tau it nearly cancels (< 0.3 nats): %s\n",
             verdict(null_ok), verdict(pair_ok)))
+
+cat("\nD03 intercept: Liang's flat intercept against level centring (F-O9, the D03 alternative)\n")
+int_cases <- rbind(c(40, 1, 0.05), c(40, 1, 0.2), c(40, 1, 0.5), c(40, 2, 0.25),
+                   c(100, 1, 0.05), c(100, 1, 0.2), c(100, 1, 0.5), c(100, 2, 0.25),
+                   c(1000, 1, 0.05), c(1000, 1, 0.2), c(1000, 1, 0.5), c(1000, 2, 0.25))
+ic <- run("bass_intercept_oracle.R", int_cases, "grid")
+cat(sprintf("  Bayes factors converged over twice the range (<= 1e-8): %s\n",
+            verdict(all(abs(c(ic$liang - ic$liang_wide, ic$level - ic$level_wide)) <= 1e-8))))
+credit <- ic$level - ic$liang
+for (N in c(40, 100, 1000)) {
+  j <- which(ic$N == N)
+  cat(sprintf("  N = %4d: level centring's extra credit against the null, one term at R2 = .05/.2/.5: %s; two terms at .25: %.2f\n",
+              N, paste(sprintf("%.2f", credit[j][ic$k[j] == 1]), collapse = "/"), credit[j][ic$k[j] == 2]))
+}
+pair_credit <- sapply(c(40, 100, 1000), function(N) {
+  credit[ic$N == N & ic$k == 2] - credit[ic$N == N & ic$k == 1 & ic$R2 == 0.2]
+})
+cat(sprintf("  between two structures one term apart (2 at R2 = 0.25 against 1 at 0.20): %s nats more, at N = 40, 100, 1000\n",
+            paste(sprintf("%.3f", pair_credit), collapse = ", ")))
+cat(sprintf("  positive everywhere, 0.4-0.5 for one term, 0.2-0.3 between structures, flat in N (spread <= 0.02): %s\n",
+            verdict(all(credit > 0) && all(credit[ic$k == 1] > 0.4 & credit[ic$k == 1] < 0.5) &&
+                    all(pair_credit > 0.2 & pair_credit < 0.3) && diff(range(pair_credit)) <= 0.02)))
+
+set.seed(9)
+xd <- sort(runif(40)); yd <- 2 + 0.8 * sin(2 * pi * xd) + rnorm(40, sd = 0.3)
+idd <- run("bass_intercept_oracle.R", cbind(xd, yd), "design")
+for (i in seq_len(nrow(idd))) {
+  cat(sprintf("  design, offset %6.0f: level %s | liang %s | zero %s (one hinge, two hinges)\n", idd$offset[i],
+              paste(sprintf("%7.3f", idd$level[[i]]), collapse = " "), paste(sprintf("%7.3f", idd$liang[[i]]), collapse = " "),
+              paste(sprintf("%8.3f", idd$zero[[i]]), collapse = " ")))
+}
+lev <- do.call(rbind, idd$level); lg <- do.call(rbind, idd$level_g); li <- do.call(rbind, idd$liang); ze <- do.call(rbind, idd$zero)
+cat(sprintf("  the explicit design's level marginal equals the g-form identity (<= 1e-8): %s\n", verdict(max(abs(lev - lg)) <= 1e-8)))
+cat(sprintf("  level centring and Liang do not move with y's offset (<= 1e-8); R's zero centre does (> 1 nat at -250): %s\n",
+            verdict(max(abs(sweep(lev, 2, lev[1, ]))) <= 1e-8 && max(abs(sweep(li, 2, li[1, ]))) <= 1e-8 &&
+                    max(abs(ze[3, ] - ze[1, ])) > 1)))
