@@ -161,7 +161,7 @@ Draft resolutions for D01–D09 and a note for D10 (proposals, 2026-10-25) live 
 
 ### What the lineage taught
 
-Reading the lineage turned up places where a later or sibling paper does something better than R BASS, or where comparing papers exposed a slip. This register records each insight and where it landed, so that an insight parked as an extension or rejected stays visible with its reason.
+Reading the lineage turned up places where a later or sibling paper does something better than R BASS, or where comparing papers exposed a slip. This register records each insight and where it landed, so that an insight parked as an extension or rejected stays visible with its reason. A **Corrected** entry is a source's design shown flawed by our own check (the rule under [validation](#validation-and-performance-qualification)): the implementation does the thing right, and the flawed version is not kept as an option.
 
 | Insight | Source | What it improves on | Where it lands |
 |---|---|---|---|
@@ -169,6 +169,7 @@ Reading the lineage turned up places where a later or sibling paper does somethi
 | Move probabilities set per state, equal over the moves available | Nott, Kuk and Duc | R's fixed thirds in the ratios | **Adopted**, D01 |
 | Terms as an unordered set, with an explicit ordering factor, so a birth carries one (M+1) | Nott, Kuk and Duc | The KHAOS manuscript's double count | **Adopted**, D01; KHAOS's form is a defect fixture |
 | Knots on distinct values, and the unconstrained "proxy" constant, which amounts to global truncation | Francom et al. 2018 | Nott, Kuk and Duc's ties; the continuous wording of JSS and GBMARS | **Adopted**, D01, D02 |
+| τ's shape must not shrink with N: Gamma(1/N, 1) has mean 1/N but E[ln τ] ≈ −N and sd(ln τ) ≈ N, and penalizes leaving the intercept-only structure by 1.4–5.1 nats more than Zellner–Siow, growing with N | Our check, F-O8 (`bass_tau_prior_oracle.R`) | Francom et al. 2018's own prior, Gamma(1/N, 1), the unit-information Gamma family's member a = 1/N | **Corrected**, D03: the family Gamma(a, rate a·n) with a fixed shape, a = ½ (Zellner–Siow) by default |
 | τ is meant to be Zellner–Siow, centred on unit information | Francom et al. 2018, R's documentation, JSS, GBMARS | R's rate 2/n | **Adopted**, D03 |
 | Ridge for noise-free simulators, g-prior with noise | KHAOS | One coefficient prior for every regime | **Adopted as options**, D03; with GBMARS's λ advice and D03's propriety result it forms the deterministic-simulator profile (fitting segment) |
 | A weight-dependent g-prior complicates the latent scales' conditionals | GBMARS | Q2's open question for a sampled τ | **Adopted**, D03's robust row |
@@ -230,6 +231,14 @@ Use deterministic R comparisons for basis evaluation, sufficient statistics, pre
 - **The corrected reference where R is wrong.** The C# test asserts the corrected value alone. The R oracle keeps R's value beside it and checks that the two differ as predicted, which shows that the fixture's case would expose the defect.
 - **No option exists to match R.** An alternative stays selectable only on its own statistical merits. So R's τ rate (D03) and its `getQf` admission (D06) are not ported, and R's zero-centred intercept is selectable as DiMatteo, Genovese and Kass's prior, not for parity. R's tempering and Jeffreys mode were already defect fixtures (D05, D03).
 - **Comparisons with R's posteriors at scale are exploration.** R's own chain is off its target (F-O6: the fixed ⅓ move probabilities alone, 0.020 in total variation), so agreement with it is agreement within its defect. Posterior correctness rests on enumerable spaces and controlled recovery.
+
+**Every source is checked, papers included** (the user's decision, 2026-10-27). A design from a paper or from its code is adopted only when it survives our checks. Where one is shown flawed, the implementation does the thing right, and the flawed version is not kept beside it.
+- **What establishes a flaw:** incoherence (no single target, impropriety, failed detailed balance); failing the source's own stated intent; a silent model change, such as ABMRS's dropped columns (the preparation brief's step 3.8); or being dominated in a pre-registered comparison across the regimes the design is meant for.
+- **What does not:** a regime-dependent trade-off. It stays an option with a measured per-engine default, and one data set's result is calibration, not a flaw.
+- **The evidence:** closed forms and exact numerics (quadrature, enumeration) by default; Lean for the derivations a decision rests on, where a long argument could hide a slip; a pre-registered comparison for a claim that one design is inferior.
+- **The check decides, not the artifact.** Where code improves on its paper, the better one is followed: Francom et al. 2018's distinct knots over Nott, Kuk and Duc's ties; R's global truncation over GBMARS's stated prior.
+- **Before overruling a hard-coded detail,** find what it repairs, and repair that properly: ABMRS's 10⁻⁸ ridge stands in for D06's refusal.
+- **The record.** Each correction lands in the register as **Corrected**, with its evidence. A correction costs comparability with published numbers, so where that matters the paper's headline result is reproduced with its own design, as an exploration.
 
 Independent checks must cover boundary proposal ratios, enumerable model spaces, Gaussian conditionals, precision sampling, empirical covariance, functional contractions, sensitivity identities, and calibration targets. SMC tests include a known initial distribution, incremental weights, normalizer ratios, resampling, state ownership, and populations whose modes are known. Numerical agreement with a fresh factorization is necessary but not sufficient for a correct statistical target.
 

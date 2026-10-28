@@ -483,3 +483,42 @@ cat(sprintf("  units: standardized minus physical log-likelihood %.6f = sum log 
             verdict(un$loglik_difference_spread <= 1e-10 && abs(un$loglik_difference_mean - un$sum_log_y_s) <= 1e-10 &&
                     un$max_abs_posterior_physical_vs_standardized <= 1e-12),
             un$tv_physical_vs_r_units, un$posterior_mean[[3]], un$posterior_mean[[1]]))
+
+# D03's tau prior: the unit-information Gamma family Gamma(a, rate a*N), Zellner-Siow (a = 1/2) against Francom et
+# al. 2018's shape a = 1/N, which the correction replaces by a shape independent of N.
+cat("\nD03 tau prior: Gamma(a, rate a*N), Zellner-Siow a = 1/2 against Francom 2018's a = 1/N\n")
+tau_cases <- rbind(c(40, 1, 0.05), c(40, 1, 0.2), c(40, 1, 0.5), c(40, 2, 0.25),
+                   c(100, 1, 0.05), c(100, 1, 0.2), c(100, 1, 0.5), c(100, 2, 0.25),
+                   c(1000, 1, 0.05), c(1000, 1, 0.2), c(1000, 1, 0.5), c(1000, 2, 0.25))
+tp <- run("bass_tau_prior_oracle.R", tau_cases)
+zs <- tp$zs; fr <- tp$francom
+moments_ok <- all(abs(c(zs$mass, fr$mass) - 1) <= 1e-10) &&
+  all(abs(c(zs$log_mean - zs$log_mean_closed, fr$log_mean - fr$log_mean_closed)) <= 1e-8 * pmax(1, abs(c(zs$log_mean, fr$log_mean)))) &&
+  all(abs(c(zs$log_sd - zs$log_sd_closed, fr$log_sd - fr$log_sd_closed)) <= 1e-8 * c(zs$log_sd, fr$log_sd))
+cat(sprintf("  log-moments by quadrature against psi and psi': %s\n", verdict(moments_ok)))
+for (N in c(40, 100, 1000)) {
+  i <- which(zs$N == N)[1]
+  cat(sprintf("  N = %4d: E[ln tau] - ln(1/N): ZS %6.2f, Francom %8.2f | sd(ln tau): ZS %.2f, Francom %7.2f | median: ZS %.1e, Francom e^%.0f\n",
+              N, zs$log_mean[i] + log(N), fr$log_mean[i] + log(N), zs$log_sd[i], fr$log_sd[i], exp(zs$log_median[i]), fr$log_median[i]))
+}
+zs_offset <- zs$log_mean + log(zs$N); fr_offset <- fr$log_mean + log(fr$N)
+cat(sprintf("  ZS's offset from unit information is the same at every N (%.2f, within 1.3 nats); Francom's exceeds 0.9 N nats: %s\n",
+            zs_offset[1], verdict(diff(range(zs_offset)) <= 1e-10 && all(abs(zs_offset) <= 1.3) && all(abs(fr_offset) >= 0.9 * fr$N))))
+cat(sprintf("  Bayes factors converged over twice the range (<= 1e-8): %s\n",
+            verdict(all(abs(c(zs$ln_bf - zs$ln_bf_wide, fr$ln_bf - fr$ln_bf_wide)) <= 1e-8))))
+gap <- zs$ln_bf - fr$ln_bf
+null_ok <- TRUE; pair_ok <- TRUE
+for (R2 in c(0.05, 0.2, 0.5)) {
+  j <- which(zs$k == 1 & zs$R2 == R2)
+  cat(sprintf("  leaving the null, one term at R2 = %.2f: Francom's extra penalty %s nats at N = 40, 100, 1000\n",
+              R2, paste(sprintf("%.2f", gap[j]), collapse = ", ")))
+  null_ok <- null_ok && all(gap[j] > 0) && all(diff(gap[j]) > 0)
+}
+for (N in c(40, 100, 1000)) {
+  one <- which(zs$N == N & zs$k == 1 & zs$R2 == 0.2); two <- which(zs$N == N & zs$k == 2)
+  pair <- gap[two] - gap[one]
+  cat(sprintf("  between two structures (2 terms at R2 = 0.25 against 1 at 0.20), N = %4d: the priors differ by %.2f nats\n", N, pair))
+  pair_ok <- pair_ok && abs(pair) < 0.3 && abs(pair) < gap[one]
+}
+cat(sprintf("  Francom's prior penalizes leaving the null, more as N grows: %s; between structures that both carry tau it nearly cancels (< 0.3 nats): %s\n",
+            verdict(null_ok), verdict(pair_ok)))

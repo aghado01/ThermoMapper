@@ -23,6 +23,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-O4** Boundary ratios π(1)/π(0) and π(M_max)/π(M_max − 1), and R's fixed thirds as a defect fixture.
 - [x] **F-O5** Wallenius probabilities against brute-force sums over draw orders: `r/oracles/bass_wallenius_oracle.R`.
 - [x] **F-O6** Defect fixtures: R's tempering and swap density, R's Jeffreys mode, KHAOS's double count factor: `r/oracles/bass_enumeration_oracle.R` (modes `swap` and `count`) and `r/oracles/bass_jeffreys_oracle.R`.
+- [x] **F-O8** τ's prior: the unit-information Gamma family, Zellner–Siow against Francom et al. 2018's shape 1/N, `r/oracles/bass_tau_prior_oracle.R`. Checks: the log-moments by quadrature against ψ and ψ′; Zellner–Siow's offset from unit information is the same at every N; the null-exit penalty and its growth; the near-cancellation between structures that both carry τ.
 - [x] **F-O7** Centred admission angles for the Liang default, as the `centred` and `hadamard` modes of `r/oracles/bass_admission_oracle.R`. Checks: uncentred s_j = centred s_j · ρ_j; the downdate's accuracy on a near-constant column; and the centred Hadamard form against explicit centring.
 
 ### Build (stage 4)
@@ -49,6 +50,16 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### τ's prior corrected (F-O8) — 2026-10-27
+
+The user's decision: every source is checked, papers included, and a design shown flawed is corrected (the hub's validation section; the register gains a **Corrected** outcome). Francom et al. 2018's Gamma(1/N, 1) is the first entry. D03 now states the τ prior as the unit-information Gamma family Gamma(a, rate a·n), default a = ½ (Zellner–Siow), with the shape a declared constant; Francom's prior is the member a = 1/N.
+
+`bass_tau_prior_oracle.R`, run by `bass_stage1_checks.R` (all checks pass):
+- *Log-moments.* Quadrature matches ψ and ψ′ to 10⁻⁸. E[ln τ] − ln(1/N) is −1.27 at every N under Zellner–Siow, and −36.9, −96.0 and −993.7 at N = 40, 100 and 1000 under Francom's shape; sd(ln τ) is 2.22 against 40, 100 and 1000. Francom's median is e⁻²⁸, e⁻⁷⁰ and e⁻⁶⁹⁴.
+- *Leaving the intercept-only structure* (Liang convention, one term): Francom's prior costs 1.37–1.96 nats more at N = 40, 2.05–2.82 at N = 100 and 4.24–5.08 at N = 1000, over R² from 0.05 to 0.5.
+- *Between two structures that both carry τ* (two terms at R² = 0.25 against one at 0.20): the priors differ by 0.17–0.22 nats.
+- *Limits.* The Bayes factors are quadrature only, checked for convergence over twice the range; the cases are a grid, not a study. R's convention, where every structure carries τ, is covered only through the near-cancellation case.
 
 ### The parity rule — 2026-10-27
 
