@@ -78,7 +78,7 @@ is opt-in), so the normal `dotnet test` run is unaffected.
 | BASS calibration's defects and covariance formulations (D09, C-O1, C-O2) *(port stage 7; not built)* | `bass_calibration_defects_oracle.R`, `bass_covariance_oracle.R` | dense eigen and Cholesky references; R BASS's Woodbury helpers for parity |
 
 `scripts/bass_stage1_checks.R` runs the BASS oracles on the port brief's fixtures and reproduces their numbers (about two minutes).
-`scripts/bass_stage4_checks.R` runs the stage-4 oracle modes (the posterior, its rungs, R's statistics) on the stage-4 oracle brief's fixtures and prints PASS or FAIL for each self-check (about four minutes).
+`scripts/bass_stage4_checks.R` runs the stage-4 oracle modes (the posterior, its rungs, R's statistics) on the stage-4 oracle brief's fixtures and prints PASS or FAIL for each self-check (about five minutes).
 
 ## Current caveats
 
