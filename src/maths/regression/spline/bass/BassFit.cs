@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Maths.Samplers.Ensemble;
 
@@ -12,7 +13,9 @@ namespace Maths.Regression.Spline.Bass;
 /// scheduled.</item>
 /// <item><see cref="DrawWeights"/> is null: MCMC's draws weigh equally (SMC's carry weights when it joins).</item>
 /// <item><see cref="ResidualDependence"/> is the direct functional fit's residual-dependence check along the output
-/// index (<see cref="BassResidualDependence"/>); the run leaves it null.</item>
+/// index (<see cref="BassResidualDependence"/>, F11) under the posterior mean, computed at the end of the run; null for a
+/// scalar response and, until an index is declared, for several output variables.</item>
+/// <item><see cref="PointwiseLogDensity"/> is OQ17's matrix over the draws (S9), from the data the fit was run on.</item>
 /// <item><see cref="Checkpoint"/> is the run's restart state when <see cref="BassRunOptions.Checkpoint"/> asked for it,
 /// beside the posterior, never inside it; <see cref="Bass.Resume"/> continues it.</item>
 /// </list>
@@ -24,4 +27,20 @@ public sealed record BassFit(
     double[]? DrawWeights,
     BassDiagnostics Diagnostics,
     ResidualDependence? ResidualDependence,
-    EnsembleCheckpoint? Checkpoint);
+    EnsembleCheckpoint? Checkpoint)
+{
+    /// <summary>
+    /// The draws × units log density (OQ17; <see cref="BassPointwise.LogDensity"/>) on <paramref name="data"/>, which
+    /// must be the data the fit was run on: the fit holds the config and the draws, not the data, and the terms' knot and
+    /// level indices refer to that data's inputs, so data with another fingerprint are refused.
+    /// </summary>
+    public PointwiseLogDensity PointwiseLogDensity(BassData data, UnitPartition? units = null,
+                                                   PointwiseContent content = PointwiseContent.RetainedParameters)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        string fingerprint = Bass.Fingerprint(Config, data);
+        if (fingerprint != Identity.Fingerprint)
+            throw new ArgumentException($"The fit was run on other data: its fingerprint is {Identity.Fingerprint}, theirs {fingerprint}.", nameof(data));
+        return BassPointwise.LogDensity(BassModel.Create(Config, data), Terms, Draws, units, content);
+    }
+}

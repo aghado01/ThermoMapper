@@ -139,7 +139,8 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         BassConfig config = _model.Config;
         return new BassFit(config, _model.Resolved, _model.Transform,
                            new RunIdentity(config.Sampling.MasterSeed, config.Sampling.Chains, Fingerprint),
-                           terms, draws, null, Diagnostics(summary, runs), null, summary.Checkpoint);
+                           terms, draws, null, Diagnostics(summary, runs),
+                           BassResidualDependence.Of(_model, terms, draws), summary.Checkpoint);
     }
 
     private BassDiagnostics Diagnostics(EnsembleRun summary, BassChainRun[] runs)

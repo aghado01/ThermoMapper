@@ -40,10 +40,10 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [x] **F5** D04's sweep, with composition draws at retention (S6).
 - [ ] **F6** Parallel tempering on the likelihood path, with the exact reference rung (D03's proper defaults supply it).
 - [x] **F7** D06's two gates and refusal reasons (S4).
-- [ ] **F8** Retention, checkpoints and exact restart.
-- [ ] **F9** Pointwise density producer on the OQ17 seam, with its chains for PSIS's relative efficiency.
-- [ ] **F10** Chains start on the support.
-- [ ] **F11** Direct fits report the residual-dependence check along the output coordinates (proposal).
+- [x] **F8** Retention, checkpoints and exact restart (S7, chip A).
+- [x] **F9** Pointwise density producer on the OQ17 seam, with its chains for PSIS's relative efficiency (S9, chip B; `BassFit.PointwiseLogDensity`).
+- [x] **F10** Chains start on the support: exact prior draws on F (S7, chip A).
+- [x] **F11** Direct fits report the residual-dependence check along the output coordinates (S9, chip B; one output variable, several open).
 
 ### Room for extensions
 
@@ -55,6 +55,43 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### S7, S9 and the docs section landed (chips A, B, C) — 2026-10-28
+
+The three chips' commits are on `main`, each brief carrying its report and its review passes.
+- *Chip A, the run* ([report](stage4-run-brief.md#reports)): `6609985`, `b5bca5c`, `87b23bc`, `759136d`, review fixes `b14c84d`, `7ac76ae`, `a402b14`.
+- *Chip B, the density* ([report](stage4-density-brief.md#reports)): `60dba78`, `b819126`, review fixes `fd107f4`, `2db92dd`.
+- *Chip C, the docs* ([report](stage4-docs-brief.md#reports)): `a8cfa36`, `96f5f10`.
+
+**Verified here** at the chips' state: Regression 683/683, Distributions 129/129, Samplers 146/146, LinAlg 120/120, the BASS oracle tests 27/27.
+
+**Chip A touched shared code and one file outside its list,** each reported and tested in its host:
+- `ChainEnsemble.Run` takes `ParallelOptions`;
+- `BorderedCholesky.Copy`;
+- `BassDesign.Snapshot` and `Restore`, which bit-identical resume needs: a strict reload differs from the incrementally updated design in the last bits.
+
+**Wired here:**
+- The run fills `BassFit.ResidualDependence` at its end (null for a scalar response).
+- `BassFit.PointwiseLogDensity(data, units, content)` rebuilds the model from the fit's config and refuses data with another fingerprint.
+- `BassFitViewsTests` (3) check both against the entry points on a run's own draws. Regression 686/686.
+
+The check evaluates every draw over all N, about one sweep's cost per draw. A cheaper route, accumulating the coefficients per term id, is noted for S10's cost baseline.
+
+**Brief fixes from chip C's review:**
+- D06's shared-state bullet now gives the built residual rule;
+- D03's figure at M = 2 now matches the F-O9 report;
+- D06's column-mass fixture is noted as owed to S10;
+- D04's Jacobian now sits in the target's density on u;
+- S6's report says its fixture A is another draw of A's recipe.
+
+**Open questions for the user** (each implemented reversibly by the chips):
+1. *Monitored points* for fitted-value diagnostics. Default: up to three training cases at the data's quartile positions; for a direct fit, at the middle output location. Chip A recommends a declared `BassSampling.MonitoredPoints`.
+2. *`Resume`'s type.* It takes `EnsembleCheckpoint`, the fit's own field, where the contract shapes say `BassCheckpoint`, a type that does not exist. Chip A recommends amending the contract text.
+3. *Residual dependence with several output variables* returns null. Chip B recommends an index declared on the call, and Moran's I over neighbours for d ≥ 2.
+4. *r₁'s centring:* about each case's own mean, the textbook form. Chip B keeps it.
+5. *D04's elpd-level check of the collapsed content.* BARS's brute-force leave-one-out, which found its collapsed k̂ pessimistic, has not been run for BASS. Chip B recommends running it before a comparison relies on the collapsed content.
+
+**Smaller cleanups left** (chip A's report): `BassStructurePrior`'s subset draw repeats `BassTermProposal`'s private one; the R̂ stop's two-chain rule could move into `BassConfig.Validate`.
 
 ### Chips for S7, S9 and the docs section — 2026-10-28
 
@@ -118,7 +155,7 @@ What landed:
     - *Each schedule's boundary weights,* with b_M p(M) = d_{M+1} p(M+1).
     - *A retained draw's sorted ids and uncentred coefficients* against the same draw in the centred basis, to 10⁻¹².
   - `BassChainParityTests` (2, `Maths.Oracle.Tests`): four chains of 40,000 sweeps from the intercept alone, against the oracle's exact posterior.
-    - Fixture A at M_max = 3: the count law M = 1–3 at 0.165, 0.762, 0.073 against 0.176, 0.751, 0.073 (± 0.009); E[τ] 0.01537 against 0.01548 (± 0.00007); all 48 terms' inclusions, tied ones included, within a third of their allowance.
+    - Fixture A at M_max = 3 (the C# bridge writes its own data from A's recipe, so these oracle values are another draw of A than the oracle-modes report's 0.7719, 0.1757, 0.0525): the count law M = 1–3 at 0.165, 0.762, 0.073 against 0.176, 0.751, 0.073 (± 0.009); E[τ] 0.01537 against 0.01548 (± 0.00007); all 48 terms' inclusions, tied ones included, within a third of their allowance.
     - Fixture C, with its categorical predictor, at M_max = 2: the count law, E[τ] 0.04996 against 0.04999, and all 90 inclusions.
   - Suites: Regression 553/553; the BASS and Wallenius oracle tests 21/21.
 - **For S7.** The chain's streams are the caller's: moves, τ's block, and a third for composition, so the trajectory does not depend on how often draws are retained. `BlockScan`'s copy is the identity, so snapshots are S7's to build from the state and the streams. Starts come from exact prior draws (the stage-4 plan); `BassStructureMoves` refuses a start outside F.
