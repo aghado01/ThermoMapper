@@ -1,6 +1,6 @@
 # Full BASS port brief
 
-Date: 2026-10-18; updated 2026-10-27. Status: stage 0 is closed, and stages 2–3 have landed, the shared infrastructure included (N1–N13). Stage 1: the user decided D01–D06 in the design pass on 2026-10-27 and adopted D10's adaptation note; D07–D09 remain drafts, and D10's stopping semantics stays open. F-O3 and F-O4 landed; stage 1's remaining item is the contract shapes, drafted 2026-10-28 for the user's review. A baseline rerun then opens stage 4. Source-code implementation is not authorized by this document.
+Date: 2026-10-18; updated 2026-10-27. Status: stage 0 is closed, and stages 2–3 have landed, the shared infrastructure included (N1–N13). Stage 1: the user decided D01–D06 in the design pass on 2026-10-27 and adopted D10's adaptation note; D07–D09 remain drafts, and D10's stopping semantics stays open. F-O3 and F-O4 landed, and the contract shapes were decided on 2026-10-28, so stage 1 is complete. A baseline rerun opens stage 4, after the two shared-code changes the contracts need (the fitting checklist's F-C2). Source-code implementation is not authorized by this document.
 
 Add the complete BASS regression capability to `Maths.Regression`, alongside BARS, BAPS, and BGP. Preserve arbitrary predictor dimension, mixed continuous and categorical inputs, scalar and functional responses, posterior prediction, sensitivity analysis, and emulator calibration. Build the C# implementation around explicit statistical targets, owned numerical state, and the repository's existing dependency direction.
 

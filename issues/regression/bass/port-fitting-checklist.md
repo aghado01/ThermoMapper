@@ -12,7 +12,8 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [x] **F-D04** Collapsed and conditional update order: decided 2026-10-27 as drafted, with k = M + 1 under level centring.
 - [x] **F-D05** Tempering and SMC target paths: decided 2026-10-27; the integrated form by default, the linear form selectable.
 - [x] **F-D06** Numerical model admission: decided 2026-10-27; the count as the support default, the centred angles under every convention.
-- [ ] **F-C1** Contract shapes: data, config and result, drafted 2026-10-28 as a proposal; five open choices await the user's review.
+- [x] **F-C1** Contract shapes: data, config and result, decided 2026-10-28 as recommended.
+- [ ] **F-C2** The shared-code changes the contracts need, before stage 4's first fit: `Sigma2Prior` as a serializable record, shared with BARS's config; `GPriorCentre.Flat` for the Liang convention, refused by BARS until the shared block supports it.
 - [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison.
 - [ ] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison.
 
@@ -52,6 +53,10 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### Contract shapes decided (F-C1); stage 1 complete — 2026-10-28
+
+The user took the five recommendations: values throughout; `GPriorCentre` gains `Flat`; `Sigma2Prior` becomes a shared serializable record; R's 9,000 and 1,000 as provisional sampling defaults; unseen levels refused by default. The two shared-code changes are F-C2, before stage 4's first fit. With D01–D06 decided and every stage-1 fixture built, stage 1 is complete; the baseline rerun opens stage 4.
 
 ### Contract shapes drafted (F-C1) — 2026-10-28
 

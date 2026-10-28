@@ -2,7 +2,7 @@
 
 A segment of the [full port brief](../bass-full-port-brief.md), which holds the scope and completion contract, the dependency boundaries, the stage table and the decision register. This segment covers stage 4, complete mixed-predictor scalar and direct-functional fitting, and the stage-1 decisions it consumes, D01–D06. It builds on the [numerics segment](port-numerics-brief.md). Its checklist, where the reports go as work lands, is [port-fitting-checklist.md](port-fitting-checklist.md).
 
-D01–D06 were decided in the user's design pass (2026-10-27), and each section says so; the contract shapes below are a proposal. The register, with each decision's status, and the table of sources the drafts were drawn from are in the hub's [decisions section](../bass-full-port-brief.md#statistical-decisions-to-settle).
+D01–D06 were decided in the user's design pass (2026-10-27), and the contract shapes on 2026-10-28; each section says so. The register, with each decision's status, and the table of sources the drafts were drawn from are in the hub's [decisions section](../bass-full-port-brief.md#statistical-decisions-to-settle).
 
 ## Direct functional algebra
 
@@ -367,9 +367,9 @@ Decided by the user on 2026-10-27, as drafted, with the count as the support def
 - **Shared state.** The residual r and δ serve the factor border, the numerical gate and informed proposals (§5). r is updated on each accepted birth, recomputed after deaths and on a cadence, and S is computed from r rather than as yᵀy − Q/(1+τ), whose cancellation bites when τ is small (§5).
 - **Independent checks:** §5's, randomized insert and delete sequences against fresh factorizations, residual drift against recomputation and s against the SVD's principal angle; plus one constructed case for each refusal reason.
 
-## Contract shapes (proposal, 2026-10-28)
+## Contract shapes (decided 2026-10-28)
 
-Stage 1's last deliverable: the data, config and result contracts for fitting, drafted after D01–D06 were decided and consuming them. They are proposals for the user's review, not decisions. They follow CONTRIBUTING's strict core: one immutable config record, a static entry point, and delegates and live objects on the call, never in the config. Placement is the hub's: `Maths.Regression.Spline.Bass`, under `src/maths/regression/spline/bass/`.
+Stage 1's last deliverable: the data, config and result contracts for fitting, drafted after D01–D06 were decided and consuming them. The user took the recommendations on 2026-10-28; the choices are recorded at the end of the section. They follow CONTRIBUTING's strict core: one immutable config record, a static entry point, and delegates and live objects on the call, never in the config. Placement is the hub's: `Maths.Regression.Spline.Bass`, under `src/maths/regression/spline/bass/`.
 
 **Entry points.**
 
@@ -493,12 +493,14 @@ public readonly record struct BassStructure(int[] TermIds);   // sorted ids into
 - *The checkpoint* rides beside the posterior, never inside it.
 - *Derived operations* on the fit, each a function of the draws: `PointwiseLogDensity(UnitPartition, PointwiseContent)`, the shared OQ17 seam, with retained parameters by default (D04); `Predict` (stage 5, the outputs segment); `Sensitivity` (stage 6).
 
-**Open choices in the shapes, for the user.**
-1. *Closed sets as records, values throughout.* Recommended above. The alternative is `BarsConfig`'s instances, which leave the fingerprint partial.
-2. *The intercept enum.* Extend the shared `GPriorCentre` with `Flat` for the Liang convention (BARS refuses it until the shared block supports it), or give BASS its own enum. Recommended: extend the shared one, one shape per pattern.
-3. *σ²'s prior as a value.* Make the shared `Sigma2Prior` a serializable record, which BARS's config then shares, or map a BASS-local spec onto it at entry. Recommended: the shared record.
-4. *Sampling defaults.* R's 9,000 burn-in and 1,000 kept draws, provisional until BASS's own pre-registered measurement (as BARS's are, OQ14), or BARS's 2,000 and 2,000 with the R̂ stop.
-5. *Unseen levels at prediction.* Refuse by default (recommended), or place them outside every subset.
+**The choices** (decided by the user, 2026-10-28, as recommended).
+1. *Closed sets as records, values throughout,* not `BarsConfig`'s instances, so the fingerprint covers the whole config.
+2. *The intercept enum.* The shared `GPriorCentre` gains `Flat` for the Liang convention, one shape per pattern; BARS refuses it until the shared block supports the Liang form.
+3. *σ²'s prior as a value.* The shared `Sigma2Prior` becomes a serializable record, which BARS's config then shares.
+4. *Sampling defaults.* R's 9,000 burn-in and 1,000 kept draws, provisional until BASS's own pre-registered measurement, as BARS's are (OQ14).
+5. *Unseen levels at prediction* are refused by default; `UnseenLevel.OutsideEverySubset` is declared on the prediction call.
+
+Choices 2 and 3 change shared code, and land before stage 4's first fit (F-C2).
 
 ## Regime note: deterministic simulators (proposal, 2026-10-26)
 
