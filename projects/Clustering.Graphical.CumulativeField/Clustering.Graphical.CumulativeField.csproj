@@ -18,5 +18,7 @@
     <ProjectReference Include="../Graphs.Observables/Graphs.Observables.csproj" />
     <ProjectReference Include="../Maths.Rng/Maths.Rng.csproj" />
     <ProjectReference Include="../Maths.Samplers/Maths.Samplers.csproj" />
+    <ProjectReference Include="../Archivory/Archivory.csproj" />
+    <ProjectReference Include="../Archivory.Tabular/Archivory.Tabular.csproj" />
   </ItemGroup>
 </Project>

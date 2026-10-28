@@ -39,6 +39,7 @@
     <ProjectReference Include="..\..\projects\Clustering.Dendrograms\Clustering.Dendrograms.csproj" />
     <ProjectReference Include="..\..\projects\Clustering.Graphical.HdbScan\Clustering.Graphical.HdbScan.csproj" />
     <ProjectReference Include="..\..\projects\Clustering.Graphical.CumulativeField\Clustering.Graphical.CumulativeField.csproj" />
+    <ProjectReference Include="..\..\projects\Clustering.Export\Clustering.Export.csproj" />
     <ProjectReference Include="..\..\projects\Clustering.Statistical.GMM\Clustering.Statistical.GMM.csproj" />
     <ProjectReference Include="..\..\projects\Archivory.Tabular\Archivory.Tabular.csproj" />
   </ItemGroup>

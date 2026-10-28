@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using Clustering.Export;
 using Clustering.Graphical.SPC.Export;
 using Clustering.Graphical.SPC.Profiling;
 using Clustering.Graphical.SPC.Profiling.Signals;
@@ -117,7 +118,7 @@ public static class ExtractCommand
                     ? null : SwCurrencies.ToAlignments(partitionResult.Accumulator);
                 CoMembership? coMembership = partitionResult.Accumulator.CoMembershipCount is null
                     ? null : SwCurrencies.ToCoMembership(partitionResult.Accumulator);
-                equilibriumEdgesWritten = SpcCsvWriter.WriteEquilibriumEdges(
+                equilibriumEdgesWritten = CurrencyCsvWriter.WriteEdgeCurrencies(
                     partitionResult.Graph, affinities, alignments, equilibriumEdgesPath,
                     coMembership: coMembership);
             }

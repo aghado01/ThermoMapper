@@ -9,6 +9,7 @@ using Clustering.Graphical.SPC.Runtime.Core.Sampler;
 using Clustering.Graphical.SPC.Runtime.Scheduling;
 using Graphs.Primitives;
 using Archivory.Tabular;
+using Clustering.Export;
 
 namespace Clustering.Graphical.SPC.Export;
 
@@ -16,7 +17,9 @@ namespace Clustering.Graphical.SPC.Export;
 /// Canonical SPC CSV writer. Owns the per-output filename conventions and
 /// the convenience batch shape ("write all standard CSVs to one directory").
 /// Each <c>Write*</c> method is intentionally thin: pull a projection from
-/// <see cref="SpcTabularProjections"/>, write atomically, return the path.
+/// <see cref="SpcTabularProjections"/>, write atomically, return the path. The
+/// shared currency tables (partition, edge currencies) are written with
+/// <see cref="CurrencyCsvWriter"/> under the SPC file names declared here.
 /// </summary>
 /// <remarks>
 /// <para>Two-tier access pattern:</para>
@@ -51,16 +54,6 @@ public static class SpcCsvWriter
             throw new ArgumentException("Path cannot be null or whitespace.", nameof(path));
 
         SpcTabularProjections.CreateSweepProfileProjection(profile, "spc_sweep").WriteToFile(path);
-        return path;
-    }
-
-    public static string WritePartition(Assignment partition, string path, double[][]? features = null, int[]? trueLabels = null)
-    {
-        ArgumentNullException.ThrowIfNull(partition);
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path cannot be null or whitespace.", nameof(path));
-
-        SpcTabularProjections.CreatePartitionProjection(partition, features, trueLabels, "spc_partition").WriteToFile(path);
         return path;
     }
 
@@ -125,31 +118,6 @@ public static class SpcCsvWriter
     }
 
     /// <summary>
-    /// One row per undirected edge at the chosen-T equilibrium, carrying
-    /// source/target/weight + bond_frequency + spin_agreement. The flat
-    /// counterpart to the binary <c>.spce</c> sidecar — preferred for
-    /// Python-side edge-weight inspection. Returns the written path; or
-    /// <see langword="null"/> when <paramref name="affinities"/> is null
-    /// (e.g. a Standard-tier final pass that didn't request edge
-    /// observables).
-    /// </summary>
-    public static string? WriteEquilibriumEdges(
-        CsrGraph graph,
-        Affinities? affinities,
-        Alignments? alignments,
-        string path,
-        CoMembership? coMembership = null)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            throw new ArgumentException("Path cannot be null or whitespace.", nameof(path));
-
-        if (affinities is null || affinities.G.Length == 0) return null;
-
-        SpcTabularProjections.CreateEquilibriumEdgesProjection(graph, affinities, alignments, coMembership: coMembership).WriteToFile(path);
-        return path;
-    }
-
-    /// <summary>
     /// Write the canonical SPC CSV bundle for one session to
     /// <paramref name="runDirectory"/>. Each CSV is written atomically with
     /// its canonical filename (see the <c>*FileName</c> constants). Optional
@@ -176,7 +144,7 @@ public static class SpcCsvWriter
         Directory.CreateDirectory(runDirectory);
 
         WriteSweepProfile(result.Profile, Path.Combine(runDirectory, SweepFileName));
-        WritePartition(result.Partition, Path.Combine(runDirectory, PartitionFileName), features, trueLabels);
+        CurrencyCsvWriter.WritePartition(result.Partition, Path.Combine(runDirectory, PartitionFileName), features, trueLabels);
         WriteCriteria(result.ProfileCriteria, Path.Combine(runDirectory, CriteriaFileName));
         WriteSessionSummary(result, Path.Combine(runDirectory, SessionFileName));
 

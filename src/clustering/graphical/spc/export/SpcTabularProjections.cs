@@ -46,43 +46,6 @@ public static class SpcTabularProjections
             .Build();
     }
 
-    public static TabularProjection CreatePartitionProjection(
-        Assignment partition,
-        double[][]? features = null,
-        int[]? trueLabels = null,
-        string tableName = "spc_partition")
-    {
-        if (partition is null)
-            throw new ArgumentNullException(nameof(partition));
-        if (features is not null && features.Length != partition.Labels.Length)
-            throw new ArgumentException("Feature rows must match partition node count.", nameof(features));
-        if (trueLabels is not null && trueLabels.Length != partition.Labels.Length)
-            throw new ArgumentException("True label length must match partition node count.", nameof(trueLabels));
-
-        int dimension = features?.Length > 0 ? features[0].Length : 0;
-        if (features is not null)
-        {
-            foreach (var featureRow in features)
-            {
-                if (featureRow.Length != dimension)
-                    throw new ArgumentException("All feature rows must have the same length.", nameof(features));
-            }
-        }
-
-        var featureCols = features is null
-            ? Array.Empty<(string Name, Func<int, object?> Selector)>()
-            : Enumerable.Range(0, dimension)
-                .Select(d => ($"x{d}", (Func<int, object?>)(i => features[i][d])))
-                .ToArray();
-
-        return TabularProjectionFactory.CreateIndexed(tableName, partition.Labels.Length)
-            .Column("node_index", i => i)
-            .Columns(featureCols)
-            .ColumnIf(trueLabels is not null, "true_label", i => trueLabels![i])
-            .Column("spc_label", i => partition.Labels[i])
-            .Build();
-    }
-
     public static TabularProjection CreateDatasetProjection(
         double[][] features,
         int[] labels,
@@ -295,59 +258,4 @@ public static class SpcTabularProjections
     private static double MagVariance(Accumulator f)
         => Graphs.Models.Potts.Observables.Magnetization.Reduce(
             f.RunningSumMag, f.RunningSumMagSq, f.DrawCount).Variance;
-
-    /// <summary>
-    /// One row per undirected edge of the input graph, carrying the
-    /// CSR weight + the equilibrium bond-frequency and spin-agreement
-    /// rates the chosen-T final pass measured. The natural "edge view"
-    /// for Python-side inspection — same data the threshold partition
-    /// strategies see, surfaced as a flat CSV instead of a
-    /// per-checkpoint <c>.spce</c> binary.
-    /// </summary>
-    /// <remarks>
-    /// <para><b>Upper-triangle only.</b> The CSR stores each undirected
-    /// edge twice (once per endpoint); this projection emits only
-    /// <c>i &lt; j</c> to match the convention threshold partition
-    /// strategies use.</para>
-    ///
-    /// <para><b>Columns.</b> <c>source</c>, <c>target</c>, <c>weight</c>,
-    /// <c>bond_frequency</c> (<c>BondFormedCount/CycleCount</c>),
-    /// <c>spin_agreement</c> (<c>SpinAgreementCount/CycleCount</c>).</para>
-    /// </remarks>
-    public static TabularProjection CreateEquilibriumEdgesProjection(
-        CsrGraph graph,
-        Affinities affinities,
-        Alignments? alignments,
-        CoMembership? coMembership = null,
-        string tableName = "spc_equilibrium_edges")
-    {
-        ArgumentNullException.ThrowIfNull(affinities);
-        if (affinities.G.Length != graph.Targets.Length)
-            throw new ArgumentException(
-                $"Affinities.G length ({affinities.G.Length}) does not match " +
-                $"CSR slot count ({graph.Targets.Length}).", nameof(affinities));
-
-        // Pre-walk the CSR to build the upper-triangle slot list.
-        var rows = new List<(int Slot, int I, int J)>(graph.Targets.Length / 2);
-        int n = graph.NodeCount;
-        for (int i = 0; i < n; i++)
-        {
-            int rowEnd = graph.RowPointers[i + 1];
-            for (int e = graph.RowPointers[i]; e < rowEnd; e++)
-            {
-                int j = graph.Targets[e];
-                if (j <= i) continue;
-                rows.Add((e, i, j));
-            }
-        }
-
-        return TabularProjectionFactory.CreateIndexed(tableName, rows.Count)
-            .Column("source",         k => rows[k].I)
-            .Column("target",         k => rows[k].J)
-            .Column("weight",         k => graph.Weights[rows[k].Slot])
-            .Column("bond_frequency", k => affinities.G[rows[k].Slot])
-            .Column("spin_agreement", k => alignments    is null ? double.NaN : alignments.G[rows[k].Slot])
-            .Column("co_membership",  k => coMembership  is null ? double.NaN : coMembership.G[rows[k].Slot])
-            .Build();
-    }
 }

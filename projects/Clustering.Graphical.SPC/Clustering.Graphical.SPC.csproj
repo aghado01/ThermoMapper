@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="../Clustering.Primitives/Clustering.Primitives.csproj" />
     <ProjectReference Include="../Clustering.Dendrograms/Clustering.Dendrograms.csproj" />
+    <ProjectReference Include="../Clustering.Export/Clustering.Export.csproj" />
     <ProjectReference Include="../Graphs.Primitives/Graphs.Primitives.csproj" />
     <ProjectReference Include="../Graphs.Distance/Graphs.Distance.csproj" />
     <ProjectReference Include="../Graphs.Proximity/Graphs.Proximity.csproj" />

@@ -26,6 +26,7 @@ using Graphs.Primitives;
 using Graphs.Models.Potts;
 
 using Clustering.Graphical.CumulativeField;
+using Clustering.Graphical.CumulativeField.Export;
 using SolverField = Clustering.Graphical.CumulativeField.Field;
 
 namespace UserRepl.Commands;
@@ -211,7 +212,7 @@ public static class SpcCommand
 
                 CumulativeFieldUserRunResult fieldRun = CumulativeFieldUserSession.Run(
                     dataset,
-                    runPaths,
+                    new CumulativeFieldRunPaths(runPaths.Scope),
                     prebuiltGraph,
                     EdgeWeightKind.Coupling,
                     field,
@@ -229,8 +230,8 @@ public static class SpcCommand
                 Console.WriteLine($"Thermal EOM        : {fieldRun.ClusterCount} clusters; abstained: {fieldRun.Abstained}");
                 Console.WriteLine($"Sweep CSV          : {fieldRun.SweepCsvPath}");
                 Console.WriteLine($"Partition CSV      : {fieldRun.PartitionCsvPath}");
-                if (fieldRun.EquilibriumEdgesCsvPath is not null)
-                    Console.WriteLine($"Equilibrium edges  : {fieldRun.EquilibriumEdgesCsvPath} (T={fieldRun.RepresentativeTemperature:G6})");
+                if (fieldRun.EdgeCurrenciesCsvPath is not null)
+                    Console.WriteLine($"Edge currencies    : {fieldRun.EdgeCurrenciesCsvPath} (T={fieldRun.RepresentativeTemperature:G6})");
                 Console.WriteLine($"Summary JSON       : {fieldRun.SummaryJsonPath}");
                 foreach (var kv in fieldRun.EvaluatorScores)
                     Console.WriteLine($"  {kv.Key,-24}: {kv.Value:F4}");

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Clustering.Evaluation.External;
 using Clustering.Graphical.SPC;
+using Clustering.Export;
 using Clustering.Graphical.SPC.Export;
 using Clustering.Graphical.SPC.Runtime.Execution;
 using Clustering.Graphical.SPC.Runtime.Scheduling;
@@ -56,7 +57,7 @@ public sealed class SpcSharedRunDirectoryFacts
         string sessionPath = SpcOutputPathHelper.GetSessionCsvPath(runDirectory);
 
         SpcCsvWriter.WriteSweepProfile(result.Profile, sweepPath);
-        SpcCsvWriter.WritePartition(result.Partition, partitionPath, features: dataset.Features, trueLabels: dataset.Labels);
+        CurrencyCsvWriter.WritePartition(result.Partition, partitionPath, features: dataset.Features, trueLabels: dataset.Labels);
         SpcCsvWriter.WriteCriteria(result.ProfileCriteria, criteriaPath);
         SpcCsvWriter.WriteSessionSummary(result, sessionPath);
 

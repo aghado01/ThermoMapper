@@ -5,8 +5,9 @@ using System.Text.Json.Nodes;
 using Clustering.Dendrograms;
 using Clustering.Evaluation.External;
 using Clustering.Evaluation.Internal;
-using Clustering.Graphical.SPC.Export;
+using Clustering.Export;
 using Clustering.Graphical.CumulativeField;
+using Clustering.Graphical.CumulativeField.Export;
 using Clustering.Primitives;
 using Graphs;
 using Graphs.Observables;
@@ -34,10 +35,10 @@ namespace UserRepl;
 /// peak to key a single chosen-T on — the resolution is cross-temperature, which
 /// is the solver's strength.</para>
 ///
-/// <para><b>Export parity.</b> The currency-typed exports are written with the
-/// IDENTICAL writers as SW: <see cref="SpcCsvWriter.WritePartition"/> over the
-/// resolved <see cref="Assignment"/>, <see cref="SpcCsvWriter.WriteEquilibriumEdges"/>
-/// over a representative single-T <see cref="Affinities"/> slice (the coldest /
+/// <para><b>Export.</b> The run writes its own bundle (<see cref="CumulativeFieldRunPaths"/>).
+/// The currency tables use the same shared writer as SW:
+/// <see cref="CurrencyCsvWriter.WritePartition"/> over the resolved
+/// <see cref="Assignment"/>, <see cref="CurrencyCsvWriter.WriteEdgeCurrencies"/> over a representative single-T <see cref="Affinities"/> slice (the coldest /
 /// most-coupled column, or <paramref name="cutTemperature"/>). The MC-only
 /// exports (susceptibility profile, criteria, replica traces) have no closed-form
 /// analog and are absent; in their place the solver writes a thin per-temperature
@@ -47,7 +48,7 @@ public static class CumulativeFieldUserSession
 {
     public static CumulativeFieldUserRunResult Run(
         SpcUserDataset dataset,
-        SpcRunPaths paths,
+        CumulativeFieldRunPaths paths,
         CsrGraph graph,
         EdgeWeightKind weightKind,
         Field field,
@@ -69,9 +70,9 @@ public static class CumulativeFieldUserSession
 
         string runDirectory = paths.Scope.EnsureDirectory().Dir;
         var csv = paths.Csv.EnsureDirectory();
-        string sweepPath     = csv.File(SpcCsvWriter.SweepFileName);
-        string partitionPath = csv.File(SpcCsvWriter.PartitionFileName);
-        string edgesPath     = csv.File(SpcCsvWriter.EquilibriumEdgesFileName);
+        string sweepPath     = csv.File(CumulativeFieldCsvWriter.SweepFileName);
+        string partitionPath = csv.File(CumulativeFieldCsvWriter.PartitionFileName);
+        string edgesPath     = csv.File(CumulativeFieldCsvWriter.EdgeCurrenciesFileName);
 
         // Prepare the energy ladder once; one closed-form pass yields both the
         // per-T affinity (the edge currency) and the per-T cluster count.
@@ -87,7 +88,7 @@ public static class CumulativeFieldUserSession
         }
 
         // Solver-native sweep diagnostic (caller order): per-T cluster count.
-        WriteSweepCounts(sweepPath, temperatures, counts);
+        CumulativeFieldCsvWriter.WriteSweep(temperatures, counts, sweepPath);
 
         // Ascending view for the thermal resolution (FromEdgeCurves requires a
         // strictly ascending grid; column 0 is then the coldest/most-coupled).
@@ -124,9 +125,9 @@ public static class CumulativeFieldUserSession
         Affinities repAffinities = affinities[repIdx];
 
         // Currency-typed exports — identical writers/formats as the SW path.
-        SpcCsvWriter.WritePartition(
+        CurrencyCsvWriter.WritePartition(
             partition, partitionPath, features: dataset.Features, trueLabels: dataset.Labels);
-        string? edgesWritten = SpcCsvWriter.WriteEquilibriumEdges(
+        string? edgesWritten = CurrencyCsvWriter.WriteEdgeCurrencies(
             graph, repAffinities, alignments: null, edgesPath);
 
         // Evaluator scores on the resolved cut (method-agnostic indices —
@@ -162,7 +163,7 @@ public static class CumulativeFieldUserSession
             ["runDirectory"]           = runDirectory,
             ["sweepCsv"]               = sweepPath,
             ["partitionCsv"]           = partitionPath,
-            ["equilibriumEdgesCsv"]    = edgesWritten,
+            ["edgeCurrenciesCsv"]      = edgesWritten,
         };
         string summaryPath = paths.Summary;
         File.WriteAllText(summaryPath, summary.ToJsonString(s_jsonOptions));
@@ -171,7 +172,7 @@ public static class CumulativeFieldUserSession
             RunDirectory:            runDirectory,
             SweepCsvPath:            sweepPath,
             PartitionCsvPath:        partitionPath,
-            EquilibriumEdgesCsvPath: edgesWritten,
+            EdgeCurrenciesCsvPath:   edgesWritten,
             SummaryJsonPath:         summaryPath,
             ClusterCount:            partition.Count,
             Abstained:               abstained,
@@ -180,14 +181,6 @@ public static class CumulativeFieldUserSession
     }
 
     private static readonly System.Text.Json.JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
-
-    private static void WriteSweepCounts(string path, IReadOnlyList<double> temps, int[] counts)
-    {
-        var lines = new List<string>(temps.Count + 1) { "temperature,cluster_count" };
-        for (int i = 0; i < temps.Count; i++)
-            lines.Add(FormattableString.Invariant($"{temps[i]:G9},{counts[i]}"));
-        File.WriteAllLines(path, lines);
-    }
 
     private static int CountAbstained(int[] labels)
     {
@@ -223,7 +216,7 @@ public sealed record CumulativeFieldUserRunResult(
     string RunDirectory,
     string SweepCsvPath,
     string PartitionCsvPath,
-    string? EquilibriumEdgesCsvPath,
+    string? EdgeCurrenciesCsvPath,
     string SummaryJsonPath,
     int ClusterCount,
     int Abstained,

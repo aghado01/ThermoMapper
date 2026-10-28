@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Clustering.Export</RootNamespace>
+    <AssemblyName>Clustering.Export</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/clustering/export/**/*.cs" Link="export/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Clustering.Primitives/Clustering.Primitives.csproj" />
+    <ProjectReference Include="../Graphs.Primitives/Graphs.Primitives.csproj" />
+    <ProjectReference Include="../Archivory.Tabular/Archivory.Tabular.csproj" />
+  </ItemGroup>
+</Project>

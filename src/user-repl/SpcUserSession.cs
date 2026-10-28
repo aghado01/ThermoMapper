@@ -13,6 +13,7 @@ using Clustering.Graphical.SPC;
 using Clustering.Evaluation.Internal;
 using Clustering.Graphical.SPC.Runtime.Execution;
 using Clustering.Graphical.SPC.Runtime.Scheduling;
+using Clustering.Export;
 using Clustering.Graphical.SPC.Export;
 using Clustering.Graphical.SPC.Partitions;
 using Clustering.Graphical.SPC.Partitions.Hierarchical;
@@ -118,13 +119,13 @@ public static class SpcUserSession
                 referenceLabels: referenceLabels);
 
         SpcCsvWriter.WriteSweepProfile(result.Profile, sweepPath);
-        SpcCsvWriter.WritePartition(result.Partition, partitionPath, features: dataset.Features, trueLabels: dataset.Labels);
+        CurrencyCsvWriter.WritePartition(result.Partition, partitionPath, features: dataset.Features, trueLabels: dataset.Labels);
         SpcCsvWriter.WriteCriteria(result.ProfileCriteria, criteriaPath);
         SpcCsvWriter.WriteSessionSummary(result, sessionPath);
         SpcCsvWriter.WriteReplicaTraces(result.SweepRuns, replicaTracesPath);
 
         // Chosen-T edge currencies — returns null on a trivial graph (G[].Length == 0).
-        string? equilibriumEdgesWritten = SpcCsvWriter.WriteEquilibriumEdges(
+        string? equilibriumEdgesWritten = CurrencyCsvWriter.WriteEdgeCurrencies(
             result.Graph, result.ChosenAffinities, result.ChosenAlignments, equilibriumEdgesPath,
             coMembership: result.ChosenCoMembership);
 
