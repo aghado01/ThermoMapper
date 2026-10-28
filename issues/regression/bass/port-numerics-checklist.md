@@ -6,7 +6,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 
 ### Decisions
 
-- [ ] **N-D10** Adaptation policy for adaptive kernels (note): drafted 2026-10-25 as a proposal; settles at the user's design pass.
+- [x] **N-D10** Adaptation policy for adaptive kernels (note): adopted 2026-10-27 in the user's design pass; D10's stopping semantics stays open.
 
 ### Build (stages 2–3)
 

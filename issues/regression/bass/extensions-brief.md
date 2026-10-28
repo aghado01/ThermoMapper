@@ -12,7 +12,7 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Basis-estimation uncertainty | Sartini et al., arXiv 2412.11340 | Outputs: the basis contract's uncertainty slot | Candidate |
 | Moments for piecewise polynomials | Derivations review §7, item 7 | Outputs: the moment service | Candidate |
 | Active-subspace analysis | arXiv 2307.11241, via the PCA-extensions discussion | Outputs: term derivatives | Candidate |
-| Cross-engine evidence | Derivations review §7, item 8; Gneiting and Raftery 2007 for held-out scores | D05's proper mode and path sampling; D03's evidence rule. Outputs: D07's joint draws | Candidate |
+| Cross-engine evidence | Derivations review §7, item 8; Gneiting and Raftery 2007 for held-out scores | D03's proper defaults and D05's ladder evidence; D03's evidence rule. Outputs: D07's joint draws | Candidate |
 | Elastic emulation of misaligned functional outputs | Francom, Tucker, Huerta, Shuler and Ries, arXiv 2305.08834 | Outputs: a representation with a declared reconstruction map. Calibration: D09's likelihood over both parts | Candidate |
 | Residuals correlated along the output index | Andros, Guhaniyogi, Francom and Pasqualini, arXiv 2406.18751, 2602.09351 | Fitting: the output-side inner product; the residual-dependence check | Candidate |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
@@ -114,7 +114,7 @@ Posterior active-subspace analysis beside the Sobol stage (arXiv 2307.11241, *Di
 
 ## Cross-engine evidence
 
-Evidence for BARS, BASS and BGP by path sampling (derivations review §7, item 8). It needs D05's proper mode in every engine, the intercept convention settled (D03), and proper priors stated in each engine's units. Under D03's evidence rule, evidence is reported only from proper-mode runs, and the predictive checks already built for OQ17 (WAIC, PSIS-LOO) are the default comparison across engines.
+Evidence for BARS, BASS and BGP by path sampling (derivations review §7, item 8). It needs proper priors in every engine, stated in each engine's units. BASS has them by default since D03 was decided (2026-10-27: σ² scaled to the response, the intercept level-centred), as Normal BARS has. Under D03's evidence rule, evidence is reported from any run that can give one, empirical-Bayes in the level and scale, and the predictive checks already built for OQ17 (WAIC, PSIS-LOO) are the default comparison across engines.
 
 **Held-out runs (added 2026-10-26).** Where runs are held out, proper scores compare any engines that produce predictive draws, with no evidence and no shared prior: the energy score over whole-output draws, and the interval score for marginal intervals (Gneiting and Raftery 2007, as used by Andros et al., arXiv 2406.18751). The energy score rewards the cross-output dependence that D07's joint draws keep, and it is where a missing truncation residual or an independent-noise model shows up. The scorers read draws only and know no model, like the OQ17 consumers.
 

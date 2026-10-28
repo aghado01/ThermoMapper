@@ -85,7 +85,9 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
 
 ## Decision drafts: D01–D06
 
-### D01 (draft): term representation and prior measure
+### D01 (decided 2026-10-27): term representation and prior measure
+
+Decided by the user on 2026-10-27, as drafted. The categorical subset measure follows R, with the paper's uniform over subsets selectable; the prior-cancelling move schedule stays an option for F-M1.
 
 - **A term** is an interaction order K ∈ {1, …, K_max}, a set of K distinct variables, and a sign and a knot for each variable. A model holds an unordered collection of M terms.
 - **The measure on the collection** is the prior on labelled terms times the M! orderings. Nott, Kuk and Duc's prior ratio carries (m+1)!/m!, "a term which accounts for the different ways of ordering the basis functions", and a death picks its term uniformly.
@@ -127,14 +129,16 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
   - *Subset measure.* The subset's size is uniform on {1, …, n_v − 1}, then the subset is uniform among those of that size. This is how R samples and scores it, with the proposal and prior factors cancelling, and it mirrors the continuous rule: the order uniform, then the variable set uniform given the order.
     - The paper states that "each combination of parameters conditional on interaction degree has equal prior probability", which is uniform over the 2^{n_v} − 2 proper subsets.
     - The two agree up to three levels, which covers every factor in the paper's application (its 162 combinations are 2 · 3⁴). From four levels on they differ, the paper's version putting more mass on mid-sized subsets.
-    - The draft follows R, and the paper's uniform is the named alternative.
+    - R's measure is the default (decided 2026-10-27), and the paper's uniform is selectable. Both are coherent, so this is a divergence between paper and code, not a correction (the hub's register).
   - *Support.* The combined term needs at least b nonzero points: "each resulting basis function must have at least 20 non-zero points".
   - *Change move.* Redraws one categorical factor's subset from its prior, which is symmetric (R's [`genBasisChangeCat`](D:/aghado01/packages/BASS/R/rjmcmc_all.R:77)).
   - *Levels.* The training factor's levels. A factor with one level carries no information and is refused at setup.
-  - *Complement pairs.* Under D03's Liang convention, a categorical main effect on D and one on its complement have the same centred column up to sign, so they define the same model, and the measure counts each such model twice. This is a tilt to report, not a defect.
+  - *Complement pairs.* With the intercept in every model (D03), a categorical main effect on D and one on its complement span the same space together with it, so they define the same model, and the measure counts each such model twice. This is a tilt to report, not a defect.
 - **The functional variables** share their own interaction cap (R's `maxInt.func`), as the hub's scope section requires, and each one's knots are its distinct values.
 
-### D02 (draft): count prior at the capacity limit
+### D02 (decided 2026-10-27): count prior at the capacity limit
+
+Decided by the user on 2026-10-27, as drafted.
 
 - **Prior:** the derivations review's global truncation (§4) with D01's term measure: π(λ, M, terms) ∝ Gamma(λ; h₁, rate h₂) · Pois(M; λ) · M! · Πₘ π(termₘ) · 1_F, where F is the cap, the support constraints and numerical admission (D06).
 - **λ is integrated out**, as in KHAOS. The normalizer is one global constant, so λ's integral stays closed-form: p(M) ∝ Γ(h₁ + M)/(M! (h₂ + 1)^M), and a birth's count factor is (M + h₁)/((M + 1)(h₂ + 1)), restricted to F. λ leaves the chain and the sweep loses a block.
@@ -144,9 +148,11 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
 - **Defaults:** h₁ = h₂ = 10, from R and Nott, Kuk and Duc's Gamma(10, 10). Francom et al. 2018 name λ's prior as the main control on overfitting, and the docs should say so.
 - **Independent check:** under a constant likelihood on D01's fixture, the count law against the negative binomial restricted to F by enumeration, and the retained λ draws against the Gamma mixture.
 
-### D03 (draft): coefficient-prior modes and the τ hyperprior
+### D03 (decided 2026-10-27): coefficient-prior modes and the τ hyperprior
 
-- **g mode:** a | σ², τ, B ~ N(0, σ² (BᵀB)⁻¹/τ), with τ the precision multiplier as in R, JSS and Francom et al., and p(σ²) ∝ 1/σ² by default (g₁ = g₂ = 0). R's selectable modes are `g` and `jeffreys`; it also ships a ridge sampler (`rjmcmc_des_ridge.R`) that `bass()` never reaches.
+Decided by the user on 2026-10-27, taking the proper-defaults alternative: σ² scaled to the response and the intercept level-centred, so every default prior is proper. The record of that choice, its cost and the options kept selectable is [the subsection below](#d03-the-proper-defaults-decision-2026-10-27).
+
+- **g mode:** a | σ², τ, B ~ N(μ₀, σ² (BᵀB)⁻¹/τ), with τ the precision multiplier as in R, JSS and Francom et al., and μ₀ the intercept's centre (below). σ² ~ IG(c, c·s²) by default (`Sigma2Prior.ScaledToResponse`, c = 10⁻³, s² the response's mean square about its level; c, since a names the coefficients and τ's shape); the Jeffreys p(σ²) ∝ 1/σ² (g₁ = g₂ = 0, R's default) is selectable. R's selectable modes are `g` and `jeffreys`; it also ships a ridge sampler (`rjmcmc_des_ridge.R`) that `bass()` never reaches.
 - **τ hyperprior: the unit-information Gamma family,** τ ~ Gamma(a, rate a·n), whose mean is 1/n for every shape a. The default is a = ½, Zellner–Siow: τ ~ Gamma(1/2, rate n/2), equivalently g = 1/τ ~ IG(1/2, n/2) (Liang et al. 2008). The shape is a declared constant, never a function of n: E[ln τ] − ln(1/n) = ψ(a) − ln a at every n, −1.27 at a = ½, and a larger a tightens τ towards unit information, with the fixed-g mode below as its limit a → ∞.
 
   | Source | Prior as written | Stated intent | E[τ] as written |
@@ -162,18 +168,18 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
   - The family's rate is stated explicitly, since C#'s Gamma takes a scale (derivations review §6).
   - *R's code rate is not ported* ([the parity rule](../bass-full-port-brief.md#validation-and-performance-qualification), 2026-10-27). Gamma(1/2, rate 2/n) contradicts every stated intent, R's documentation included, so it is a defect rather than a choice. It would buy no parity either: τ's prior does not enter the deterministic statistics, which are compared at a fixed τ, and stochastic updates are not matched across languages.
 - **n counts observations.** For direct functional responses n = n_x · n_r, as in Francom et al.'s N and R's [`data$n`](D:/aghado01/packages/BASS/R/bass.R:248). Each fit to a supplied-basis or PCA component has n = n_x coefficient responses.
-- **Intercept: the Liang et al. convention as the default; R's zero centre selectable as DiMatteo, Genovese and Kass's prior (`GPriorCentre.Zero`), on its own terms.** The intercept gets a flat prior, the remaining columns are centred and get the g-prior, and k = M in the τ/(1+τ) factor.
-  - *Why.* R keeps the intercept inside the g-prior (k = M + 1). The prior then shrinks the fitted level towards zero, and τ's conditional reads the uncentred fit, whose intercept share n·ȳ² grows with y's level, so τ's posterior and model-size selection depend on where y sits. Under the Liang convention τ's posterior is invariant to shifting y. (Bayes factors across models are defined under both conventions, since each puts its improper priors only on parameters every model shares; invariance is the difference.)
-  - *How much it matters.* A y far from zero relative to its noise pushes τ small under R's convention, and a small τ makes every term's Occam factor, about (τ/(1+τ))^{1/2}, harsher, so fits come out sparser than the data warrant. R's own advice, a commented-out stop in its σ² update, is to centre y. The Liang convention is the Bayesian version of centring: it integrates the level instead of subtracting an estimate. For supplied-basis and PCA fits the coefficient responses already have zero mean across cases, so there the two conventions nearly coincide; the choice bites for scalar and direct-functional fits.
-  - *Cost.* The centred Gram is the uncentred one minus a rank-one term, n·b̄b̄ᵀ, so the bordered updates and the functional Hadamard form carry over. D06 says where that downdate loses accuracy, and which cancellation-free form the strict rebuild uses instead. In the proper mode the flat intercept needs a proper prior too, which the same standardization that settles σ²'s units supplies (next bullet); R's convention needs only σ²'s.
-  - *It changes the model relative to R,* so it is the item in D03 that most needs the user's judgment.
-- **Proper-prior mode, for D05.** The β = 0 rung of the likelihood-tempered path and SMC initialization need proper priors on σ² and, under the Liang convention, on the intercept. A proper IG(g₁, g₂) with g₂ > 0 acts in y's raw units (OQ19's problem), so this mode either standardizes y and records the transform or uses a scale-free proper prior. D05 chooses. The scale-free option exists in the shared g-prior namespace: `Sigma2Prior.ScaledToResponse(a)`, IG(a, a·s²) about the centre's level, built for Normal BARS on 2026-10-27 and its default since; under the Liang convention BASS would still need a proper intercept prior.
+- **Intercept: level centring (`GPriorCentre.Mean`) by default; the Liang et al. convention and R's zero centre selectable.** Under level centring the intercept stays a column inside the g-prior (k = M + 1 in the τ/(1+τ) factor) and the prior is centred on the level, μ₀ = ȳ·e₀: R's convention on y − ȳ. Under the Liang convention the intercept gets a flat prior, the remaining columns are centred and get the g-prior, and k = M. R's zero centre, μ₀ = 0, is DiMatteo, Genovese and Kass's prior, selectable on its own terms (`GPriorCentre.Zero`).
+  - *Why.* R keeps the intercept inside the g-prior (k = M + 1). The prior then shrinks the fitted level towards zero, and τ's conditional reads the uncentred fit, whose intercept share n·ȳ² grows with y's level, so τ's posterior and model-size selection depend on where y sits. Under level centring and under the Liang convention τ's posterior is invariant to shifting y (F-O9). (Bayes factors across models are defined under both conventions, since each puts its improper priors only on parameters every model shares; invariance is the difference.)
+  - *How much it matters.* A y far from zero relative to its noise pushes τ small under R's convention, and a small τ makes every term's Occam factor, about (τ/(1+τ))^{1/2}, harsher, so fits come out sparser than the data warrant. R's own advice, a commented-out stop in its σ² update, is to centre y. Level centring builds that advice into a proper prior; the Liang convention integrates the level instead, under a flat prior. For supplied-basis and PCA fits the coefficient responses already have zero mean across cases, so there the two conventions nearly coincide; the choice bites for scalar and direct-functional fits.
+  - *Computation.* Under every convention the marginal depends only on the column space of [1, Z], so it is computed in the centred basis [1, Z_c], whose Gram is n ⊕ Z_cᵀZ_c: the intercept is orthogonal to every centred column. The centred Gram is the uncentred one minus a rank-one term, n·b̄b̄ᵀ, so the bordered updates and the functional Hadamard form carry over; D06 says where that downdate loses accuracy, and which cancellation-free form the strict rebuild uses instead. The uncentred Gram, R's, serves comparisons with R's deterministic statistics.
+  - *It changes the model relative to R,* whose default is the zero centre: decided by the user, 2026-10-27.
+- **Propriety by default.** Every default prior is proper: σ² (scaled), the intercept (level-centred), τ (Zellner–Siow) and D02's count prior. So the β = 0 rung of either tempered form, SMC started from the prior, and evidence need no separate mode (D05), and no raw-unit prior remains among the defaults (OQ19 settled for BASS). The improper options, Jeffreys σ² and the Liang flat intercept, give up the absolute marginal and, on the integrated form, the β = 0 rung.
 - **Other coefficient priors**, recorded so the contract leaves room for them:
   - *A ridge with a sampled τ* (GBMARS), an option.
   - *A ridge with a fixed scale,* an option only with the scale stated as part of the model: every added term then carries a factor in that scale, so the penalty on model size is set by it (Nott, Kuk and Duc's diffuse N(0, σ²/ε)). KHAOS found its fixed ridge best on noise-free simulators and its g-prior better on most noisy ones, which supports keeping both selectable. Defaults per regime come from a pre-registered comparison of our own.
   - *KHAOS's modified g-prior,* a candidate extension ([extensions brief](extensions-brief.md#khaoss-modified-g-prior)): an n-component g-prior that shrinks each term by its complexity, with per-term factors from its interaction order and degree and a global g₀² under an inverse-gamma prior. Its displayed conditional for g₀² has no data term, so derive it rather than copy it.
   - *Under robust or generalized-hyperbolic noise* (outside the completion contract): the unweighted g-prior as the default, which reduces to Gaussian BASS at unit weights and keeps the latent scales' conditionals in closed form, at one extra factorization per move as in BARS's Q2; the ridge with a sampled τ as the GBMARS-parity option.
-- **Independent checks:** τ's marginal for a fixed structure against one-dimensional quadrature; shifting y leaves τ's posterior unchanged under the Liang convention and moves it under R's (a fixture); the marginal at a fixed τ, under R's intercept convention, against R's deterministic statistics.
+- **Independent checks:** τ's marginal for a fixed structure against one-dimensional quadrature; Bayes factors that hold under shifts of y for level centring and the Liang convention and move under R's zero centre, and the level-against-Liang identity (F-O9); invariance to rescaling y under the scaled σ² prior; the complete marginal against quadrature over σ² and τ; the marginal at a fixed τ, under R's intercept convention, against R's deterministic statistics.
 - **R's Jeffreys mode has no single target** (derived from R's source, 2026-10-25).
   - *What R does.* `beta.prior = "jeffreys"` holds τ at 0 ([start](D:/aghado01/packages/BASS/R/bass.R:334), [update](D:/aghado01/packages/BASS/R/mcmc_update.R:100)), so the coefficient prior is flat, and a is drawn from N(â, σ²G⁻¹).
   - *Its structure moves* add, for each term, (2π)^{1/2} · σ^{−1} · (|G′|/|G|)^{1/4} ([birth](D:/aghado01/packages/BASS/R/rjmcmc_des.R:39), [death](D:/aghado01/packages/BASS/R/rjmcmc_des.R:80); R's Σ log diag R is ½ log|G|). Its change move adds (|G′|/|G|)^{1/4}.
@@ -196,22 +202,31 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
     - the Liang convention matched, with a slope of 18 in log g.
 
     The fixture itself hit the cancellation D06 warns about: yᵀy − Q came out slightly negative for the exact fit, so the residual has to be computed directly. These are stage 1's first reference fixtures: [`bass_marginal_oracle.R`](../../../r/oracles/bass_marginal_oracle.R), with every number above reproduced by [`bass_stage1_checks.R`](../../../r/scripts/bass_stage1_checks.R).
-  - *Consequence.* Under the improper σ² default, any admitted structure with k < N that fits y exactly makes the whole posterior improper. Deterministic simulators with piecewise-linear structure can produce one: two opposite hinges at the same knot span x exactly.
-  - *Proposal.* In the improper mode, F excludes structures whose residual is zero to working precision (‖r‖ ≤ c·ε·‖y‖, from the residual itself; the oracle uses c = 10³), and reports the refusal. Deterministic simulators are steered to the proper mode. A zero response (R's convention) or a constant one (Liang's) is refused, as BARS refuses an identically zero response (R13).
+  - *Consequence.* Under the Jeffreys σ² option, any admitted structure with k < N that fits y exactly makes the whole posterior improper. Deterministic simulators with piecewise-linear structure can produce one: two opposite hinges at the same knot span x exactly.
+  - *Rule.* Under the Jeffreys σ² option, F excludes structures whose residual is zero to working precision (‖r‖ ≤ c·ε·‖y‖, from the residual itself; the oracle uses c = 10³), and reports the refusal. The default's proper σ² makes every marginal finite, so it needs no such rule. A zero response (R's convention) or a constant one (Liang's and level centring's) is refused, as BARS refuses an identically zero response (R13).
   - *The ridge with a sampled τ* has the same structure, and is checked by the same quadrature when it is built.
-- **Evidence: where it is reported** (proposal, 2026-10-25).
-  - *Only from proper-mode runs:* the SMC normalizer (stage 8) or a ladder estimate over the tempering rungs (D05's evidence bullet). It is an optional result field, carried with its Monte Carlo error and with the priors and transforms it depends on, since the marginal likelihood is sensitive to prior scales in a way the posterior is not.
-  - *Default runs report none.* Their improper priors leave the absolute marginal undefined. Within one fit the posterior over structures already carries the Bayes factors between its models, which is what model-size readouts report.
+- **Evidence: where it is reported** (decided 2026-10-27).
+  - *From any run that can give one:* the SMC normalizer (stage 8) or a ladder estimate over the tempering rungs (D05's evidence bullet). It is a result field, carried with its Monte Carlo error and with the priors and transforms it depends on, since the marginal likelihood is sensitive to prior scales in a way the posterior is not. The defaults read the level and the scale from y, so it is empirical-Bayes there and comparable only on the same data.
+  - *Runs under the improper options report none.* Their priors leave the absolute marginal undefined. Within one fit the posterior over structures already carries the Bayes factors between its models, which is what model-size readouts report.
   - *Comparison across configurations and engines* defaults to the predictive checks built for OQ17 (WAIC and PSIS-LOO), which need no proper prior and no shared prior scales.
-  - *Cross-engine evidence* is an extension ([extensions brief](extensions-brief.md#cross-engine-evidence)), since it needs a proper mode in every engine.
+  - *Cross-engine evidence* is an extension ([extensions brief](extensions-brief.md#cross-engine-evidence)), since it needs proper priors in every engine.
 
-### D03, alternative (draft, 2026-10-27): proper defaults
+#### D03: the proper-defaults decision (2026-10-27)
 
-Beside the draft above, for the design pass to compare (the user asked for it, 2026-10-27). It changes two defaults, σ²'s prior and the intercept's, and keeps the rest of D03: τ's family and default, n's meaning, the fixed-g mode, the Jeffreys-mode defect fixture and the other coefficient priors.
+Drafted beside D03 at the user's request and taken by the user in the design pass, 2026-10-27; D03 above now states it. It changed two defaults, σ²'s prior and the intercept's, and kept the rest: τ's family and default, n's meaning, the fixed-g mode, the Jeffreys-mode defect fixture and the other coefficient priors.
+- **The choice.** For the intercept, shift-invariance, a proper prior and no double use of the data cannot all hold, since a proper prior on a location is shift-invariant only if it reads the data:
 
-- **σ²: `Sigma2Prior.ScaledToResponse(a = 10⁻³)`,** IG(a, a·s²) with s² the response's mean square about the centre's level. It is Normal BARS's default since 2026-10-27, in the g-prior namespace BASS shares.
+  | Convention | Shift-invariant | Proper | No double use of the data |
+  |---|---|---|---|
+  | Liang (flat intercept) | yes | no | yes |
+  | Level centring (mean), the default | yes | yes | no: about 0.23 nats of extra credit per added term |
+  | R's zero centre | no: up to 9 nats across offsets on F-O9's design | yes | yes |
+
+  Level centring was taken for propriety, for one convention across BARS and BASS through the shared block, and because it is R with y centred, as R's own code advises. Liang with the scaled σ² prior was the coherent runner-up.
+
+- **σ²: `Sigma2Prior.ScaledToResponse`, c = 10⁻³,** IG(c, c·s²) with s² the response's mean square about the centre's level. It is Normal BARS's default since 2026-10-27, in the g-prior namespace BASS shares.
   - *Scale-free.* Rescaling y moves every structure's marginal by the same amount, which is OQ19's route (b); BARS checks this from y × 10⁻⁶ to × 10⁶.
-  - *Close to Jeffreys.* At a = 10⁻³ the differences between structures sit within 0.05 nats of the Jeffreys prior's on BARS's sine fit.
+  - *Close to Jeffreys.* At c = 10⁻³ the differences between structures sit within 0.05 nats of the Jeffreys prior's on BARS's sine fit.
   - *`Jeffreys` stays selectable,* as the reference prior that reads nothing from y.
 - **Intercept: level centring, `GPriorCentre.Mean`.** This is R's convention applied to ỹ = y − ȳ: the intercept stays a column inside the g-prior (k = M + 1), and the prior is centred on the level, μ₀ = ȳ·G⁻¹Zᵀ1, which is ȳ·e₀ for an explicit intercept column. The shared block already takes a prior mean (`CollapsedGPrior`, `GPriorCentre`).
   - *Proper* given σ² and τ.
@@ -228,17 +243,19 @@ Beside the draft above, for the design pass to compare (the user asked for it, 2
   - *Exact fits are proper.* The propriety bullet's exclusion of zero-residual structures is needed only under the improper options, and the deterministic-simulator profile no longer has to steer to a proper mode.
   - *The exact reference rung and SMC from the prior* on either tempered form, with no separate proper mode.
   - *OQ19 settled for BASS:* no raw-unit prior remains among the defaults.
-  - *R's numerics.* The uncentred Gram and its bordered updates are R's, so the centred Gram's rank-one downdate, whose accuracy D06 has to manage, is not needed; N7's face-splitting contraction already serves R's convention.
-- **What changes elsewhere if this is adopted** (listed, not applied):
+  - *Comparisons with R.* Level centring is R's convention on y − ȳ, so R's deterministic statistics compare directly on the centred response. The draft also claimed it spared the centred Gram's downdate. It need not: the marginal depends only on the column space of [1, Z], so the centred basis computes it exactly under every convention (the design pass's correction).
+- **Applied in the design pass** (2026-10-27):
   - *D03:* the g mode's σ² default; the intercept bullet (level centring by default, Liang and the zero centre as options); the proper-prior-mode bullet goes, its content now the defaults; the propriety bullet's exclusion applies to the improper options only; the evidence bullet becomes "default runs report evidence where the run can give one", with the predictive checks still the default for comparisons across engines; the independent checks gain shift and scale invariance under the defaults, and the complete marginal against quadrature over σ² and τ.
-  - *D04:* σ²'s conjugate draw becomes IG(a + N/2, a·s² + S/2); the chain state is unchanged.
+  - *D04:* σ²'s conjugate draw becomes IG(c + N/2, c·s² + S/2); the chain state is unchanged.
   - *D05:* "Which priors each use needs" collapses, since every use has proper priors by default. The linear form's propriety advantage holds for the improper options only, so the choice between the forms is efficiency alone, the ground on which BARS kept the integrated form.
-  - *D06:* the gate reads R's uncentred Gram with the intercept column. There a hinge's s_j is its centred value times ‖z_j − z̄_j‖²/‖z_j‖², so the gate is stricter for columns with a large mean, and s_min is set against that form (F-O7 covers both).
+  - *D06:* unchanged in substance. The draft said the gate would read R's uncentred Gram, stricter by ρ_j = ‖z_j − z̄_j‖²/‖z_j‖²; the design pass corrected that: the marginal depends only on the column space of [1, Z], so the gate reads the centred angles under every convention, and D06 no longer depends on the intercept choice.
   - *The calibration brief:* its paragraph on the improper default goes, since the default then starts a prior-to-posterior SMC run.
   - *The regime note:* its propriety bullet holds for the improper options only.
   - *Fixtures:* F-O9 is built (2026-10-27). On its 40-point design, level centring and Liang hold at offsets 0, 10 and −250, while R's zero centre moves the two-hinge structure's Bayes factor from 5.56 to 2.16 and −3.87 nats.
 
-### D04 (draft): collapsed and conditional update order
+### D04 (decided 2026-10-27): collapsed and conditional update order
+
+Decided by the user on 2026-10-27, as drafted, with D03's level centring.
 
 - **The rule.** Integrate the coefficients a, and σ² where it is conjugate, out of every block up to their own draw, and draw them immediately before the first block that conditions on them. Every block then samples a conditional of the same joint posterior, and no block reads a statistic from a stale draw. R's τ update is the pattern this rules out: it reads ‖Rβ‖² from a coefficient draw made before σ² was redrawn (the inventory's partially collapsed ordering, derivations review §2).
 - **Gaussian BASS.** The chain state is (structure, τ).
@@ -247,7 +264,7 @@ Beside the draft above, for the design pass to compare (the user asked for it, 2
 
   No block conditions on a, σ² or λ, so each retained draw gets them by composition: σ² from its collapsed conditional, a given σ², and λ | M (D02). These are exact draws given the chain state, so no argument about scan order is needed.
   - *What changed from §2:* its third block, λ from the conjugate conditional, leaves the chain, because D02's draft integrates λ out. It returns as a draw at retention.
-  - Under D03's intercept convention, k = M and the statistics are centred.
+  - Under D03's level centring, k = M + 1 and the statistics are those of y − ȳ, computed in the centred basis. σ²'s draw at retention is IG(c + N/2, c·s² + S/2) under the default scaled prior (D03's c).
 - **Retention.** Each retained draw keeps the structure, τ, σ², a and λ: every draw's generative state.
 - **Pointwise density default (OQ17).** OQ17's scope rule conditions on latents whose dependents span several units, and a and σ² are global, so the default is the retained-parameters content: the Normal density at each draw's (a, σ²). The collapsed predictive, Student t with a and σ² integrated through the g-prior block's `LeaveOutLogDensity`, stays selectable. BARS's brute-force leave-one-out found its collapsed k̂ pessimistic under clumping (preparation brief), so BASS's collapsed content gets the same check before a comparison relies on it.
 - **Robust and generalized-hyperbolic modes** (outside the completion contract; see the [GBMARS extension](extensions-brief.md#generalized-hyperbolic-noise-gbmars)). Per-observation latent scales read the residuals, so a is drawn every sweep, just before them:
@@ -260,7 +277,9 @@ Beside the draft above, for the design pass to compare (the user asked for it, 2
   τ stays before a so that it can stay collapsed. Under weights its collapsed density needs both the weighted and the unweighted Gram (D03's unweighted g-prior), so τ given a is the cheap alternative, at the cost of τ–a coupling; the interweaving of `HierarchicalPSpline`'s phase C is the in-house remedy. This is the shape of BARS's robust sweep ([`IWeightResampler`](../../../src/maths/regression/spline/bars/WeightResampling.cs)): knots given the weights with β and σ² integrated, then (σ², β), then the weights.
 - **Independent checks:** §2's, for a fixed structure τ's marginal against quadrature and, on a tiny enumerable model, composition draws against a long joint-Gibbs reference; and the retained λ draws against D02's check.
 
-### D05 (draft): tempering and SMC target paths
+### D05 (decided 2026-10-27): tempering and SMC target paths
+
+Decided by the user on 2026-10-27, as drafted: the likelihood path, untempered by default; the integrated form as the default tempered form, the linear form selectable; the exact reference rung opt-in; SMC on multinomial resampling; stepping-stone evidence.
 
 Here b ∈ (0, 1] is the inverse temperature, as in `Temperature(b, path)`.
 - **Default path: likelihood-tempered** (derivations review §3; also BARS's default under Q5). π_b ∝ prior(structure, τ) · p_b(y | structure, τ), where p_b is §3's closed-form tempered marginal with a and σ² integrated out. The count prior, the term measure and τ's prior are untempered at every rung.
@@ -268,13 +287,13 @@ Here b ∈ (0, 1] is the inverse temperature, as in `Temperature(b, path)`.
   - *Swaps are cheap.* The prior factors are identical across rungs and cancel, so a swap needs only ℓ_b = log p_b, O(1) from cached statistics (§3).
   - *Hot replicas stay meaningful.* They approach the actual prior over structures, where a powered posterior flattens it.
   - *No reference-measure dependence.* A powered density on a space of varying dimension depends on the reference measure of its coordinates. With D01's discrete knot measure the structures are countable, so they carry counting measure on either path, but τ is continuous, and powering its density depends on whether τ or log τ is the coordinate. The likelihood path's b = 0 member is the prior under any parameterization.
-  - *An exact reference rung (OQ2).* At b = 0 the target is the prior, which can be drawn exactly: M and the terms from the unconstrained measure, accepted when they lie in F (rejection from the globally truncated measure is exact), and τ from its prior. This needs D03's proper mode.
+  - *An exact reference rung (OQ2).* At b = 0 the target is the prior, which can be drawn exactly: M and the terms from the unconstrained measure, accepted when they lie in F (rejection from the globally truncated measure is exact), and τ from its prior. D03's proper defaults supply it.
 - **The powered path stays selectable** (Q5), with τ powered in log τ coordinates and that choice recorded. Its b → 0 limit is its reference measure, which is not normalizable here, so it has no exact reference rung.
-- **A second tempered form on the likelihood path (proposal, 2026-10-27).** Beside p_b, the linear form ℓ_b = b·log p₁(y | structure, τ): the collapsed marginal powered as a whole.
-  - *What it buys.* Its b = 0 member is the prior over (structure, τ), which is proper even under the improper σ² and intercept priors, since those sit inside p₁. So an exact reference rung and an SMC start need no proper mode; only the evidence still does.
+- **A second tempered form on the likelihood path, selectable** (decided 2026-10-27; the integrated form stays the default). Beside p_b, the linear form ℓ_b = b·log p₁(y | structure, τ): the collapsed marginal powered as a whole.
+  - *What it buys.* Its b = 0 member is the prior over (structure, τ), which is proper even under D03's improper options, since those sit inside p₁. So under those options it keeps an exact reference rung and an SMC start; only the evidence is lost.
   - *BARS evidence* (preparation brief, OQ2's rerun). On Normal BARS the linear form had the smaller communication barrier on two of three fits, by up to 37% at a deep hot end, and no consistent difference on the third. Its efficiency edge, about 1.2×, fell short of the pre-registered threshold, so BARS keeps the integrated default.
-  - *BASS.* BASS's knots sit at data values, so its powered path has no useful reference (the counting measure concentrates at the cap), and only the linear form reaches b = 0 under the default priors.
-- **Which priors each use needs.** Parallel tempering with b_min > 0 runs under the default improper priors on σ² and the intercept. Each rung's collapsed marginal is finite for b > 0, and the improper prior's arbitrary constant appears with both signs in every within-rung ratio and every swap, so it cancels. The b = 0 rung, SMC started from the prior and ladder evidence need D03's proper mode, whose units question is OQ19's.
+  - *BASS.* BASS's knots sit at data values, so its powered path has no useful reference (the counting measure concentrates at the cap), and under D03's improper options only the linear form reaches b = 0.
+- **Which priors each use needs.** Under D03's proper defaults every use has them: parallel tempering at any b_min, the b = 0 rung on either form, SMC started from the prior, and ladder evidence. Under the improper options parallel tempering with b_min > 0 still runs, since each rung's collapsed marginal is finite for b > 0 and the improper prior's arbitrary constant appears with both signs in every within-rung ratio and every swap; the b = 0 rung and SMC from the prior then need the linear form, and there is no evidence.
 - **Moves at rung b** use ℓ_b(new) − ℓ_b(old), plus the untempered prior and proposal ratios. τ is slice-sampled on log τ from p(τ)·(τ/(τ+b))^{k/2}·(g₂ + b·S_b/2)^{−(g₁ + Nb/2)} (§3).
 - **R's tempering is a defect fixture, not an option.**
   - R multiplies the prior and proposal factors of birth and death by the inverse temperature ([birth](D:/aghado01/packages/BASS/R/rjmcmc_des.R:34)).
@@ -283,14 +302,14 @@ Here b ∈ (0, 1] is the inverse temperature, as in `Temperature(b, path)`.
   Together these have no single target. Fixture: swap detailed balance on an enumerable structure space.
 - **Schedule and ladder.** The non-reversible DEO schedule (step 3.3) and the adaptive ladder are reused; the ladder's adaptation follows D10's policy and freezes after burn-in.
 - **Default: untempered.** R defaults to a single temperature (`temp.ladder` = 1). Francom et al. 2018 (§3.3) describe BMARS posteriors as often highly multimodal, but BARS found that tempering helped only where chains were stuck (OQ4). So BASS starts untempered, with tempering a declared option, until its own pre-registered measurement says otherwise.
-- **SMC (stage 8)** uses the same sequence, b₀ = 0 < … < b_S = 1, started from the prior in the proper mode.
+- **SMC (stage 8)** uses the same sequence, b₀ = 0 < … < b_S = 1, started from the prior.
   - Each particle's incremental weight is ℓ_{b′} − ℓ_b, which costs O(1).
   - Mutations are D04's sweep at the stage's b.
   - Stages are placed adaptively by conditional ESS (Zhou, Johansen and Aston 2016).
   - Resampling uses independent offspring streams.
   
-  The normalizer estimate is the evidence only in the proper mode, starting from a normalized prior.
-- **Evidence (revised 2026-10-27 from the built seam; inputs for the design pass).** `LadderEvidence` (N11) estimates it over the same rungs or SMC stages: stepping-stone by default, and path sampling where the slope is supplied. Four points from reading that seam against this draft:
+  The normalizer estimate is the evidence under D03's proper defaults, starting from the normalized prior; under the improper options it is not.
+- **Evidence (revised 2026-10-27 from the built seam; decided with D05).** `LadderEvidence` (N11) estimates it over the same rungs or SMC stages: stepping-stone by default, and path sampling where the slope is supplied. Four points from reading that seam against this draft:
   1. *The estimator follows the tempered form.* On the integrated form p_b, ∂_b ℓ_b has a closed form (§3), but ℓ_b is not linear in b, so Friel, Hurn and Wyse's discretization diagnostic misses E_b[∂²ℓ_b]: on the seam's nonlinear test target it read 0.094 against a bias of 0.669. Stepping-stone reads ℓ_b only and has no discretization bias, so it is that form's estimator.
   2. *On the linear form, path sampling is free.* Its slope is ℓ₁, already computed for every move, so path sampling runs beside stepping-stone over the same draws, the diagnostic is valid there, and the two estimates' difference reads the trapezoid's error. Rehearsed on BARS (`1fdaacf`): one knot, 10 levels, stepping-stone −1.6313 ± 0.0047 and path sampling −1.6322 ± 0.0049, against a quadrature of −1.6231, with a diagnostic of 0.0010.
   3. *The priors record* (D03's evidence field). BARS's `BarsEvidencePriors` carries the count prior, the support gate, the centre and its resolved level, and the σ² prior as specified and as resolved. BASS's would add τ's prior (D03's shape a and its rate), the term measure (D01), M's count prior (D02) and the interaction cap. Where a prior is resolved from the response (the centre's level, `ScaledToResponse`'s s²), the evidence is empirical-Bayes, and a comparison is licensed only on the same data.
@@ -302,11 +321,13 @@ Here b ∈ (0, 1] is the inverse temperature, as in `Temperature(b, path)`.
   - exact reference draws against D02's count law;
   - the R defect fixtures above.
 
-### D06 (draft): numerical model admission
+### D06 (decided 2026-10-27): numerical model admission
+
+Decided by the user on 2026-10-27, as drafted, with the count as the support default; the gate reads the centred angles under every intercept convention (D03's computation).
 
 - **Two gates, as Q6 decided for BARS** (step 3.7):
-  - *Numerical:* the derivations review's angle rule (§5), in an order-free form. A structure is admitted only when every column's angle to the span of all the others satisfies s_j = 1/(G_jj (G⁻¹)_jj) ≥ s_min, read from the Gram that D03's intercept convention maintains. It is scale-free, and the bordered step's s is its value for the new column.
-    - *Which Gram (added 2026-10-26, from the user's review).* Under the Liang default, G is the centred Gram and the intercept is not a column. s_j is then the reciprocal of column j's usual, centred, variance inflation factor. Under R's convention the intercept is a column of G, and s_j is the reciprocal of the uncentred factor.
+  - *Numerical:* the derivations review's angle rule (§5), in an order-free form. A structure is admitted only when every column's angle to the span of all the others satisfies s_j = 1/(G_jj (G⁻¹)_jj) ≥ s_min, read from the centred Gram (below). It is scale-free, and the bordered step's s is its value for the new column.
+    - *Which Gram (2026-10-26; settled 2026-10-27).* The marginal depends only on the column space of [1, Z] under every intercept convention, so the gate reads the centred basis [1, Z_c], whose Gram is n ⊕ Z_cᵀZ_c: s_j is the reciprocal of column j's usual, centred, variance inflation factor, and the intercept's own s is 1. R's uncentred Gram, with the intercept as a column, gives the uncentred factor, which serves comparisons with R.
     - *How the two compare.* Both start from the same residual: b_j projected off the span of the other columns and 1. The centred s_j divides it by ‖b_j − b̄_j·1‖², the uncentred one by ‖b_j‖². So uncentred s_j = centred s_j · ρ_j, with ρ_j = ‖b_j − b̄_j·1‖²/‖b_j‖² ≤ 1.
     - *Which is stricter.* The uncentred gate is, most of all for columns whose mean is large against their spread. A full hinge on uniform data has ρ = 1/4; a categorical indicator true for all but a few cases has ρ near zero. Both gates are downward closed, and near s_min they admit slightly different sets. F-O7 has an example: an indicator true for all but one case in 10⁵, nearly collinear with a second column once both are centred. Its centred s is 10⁻⁹, which the Liang gate admits; its uncentred s is 10⁻¹⁴, which R's convention refuses.
     - *R's `getQf` rule,* which reads the uncentred factor's pivots rather than s_j, is not ported; it stays a defect fixture (below).
@@ -328,7 +349,7 @@ Here b ∈ (0, 1] is the inverse temperature, as in `Temperature(b, path)`.
     - *The centred Gram's accuracy.* D03's rank-one downdate, BᵀB − N·b̄b̄ᵀ, cancels for columns with small ρ_j: their diagonal entry loses about ε/ρ_j relative, however the cross-products are summed. F-O7's numbers, both forms summed pairwise:
       - an indicator true for all but one case in 10⁵ (ρ = 10⁻⁵): relative error 3·10⁻³ from the downdate, against 3·10⁻⁷ from explicitly centred columns, so still inside the band;
       - one true for all but a thousand (ρ = 10⁻²): the two agree, at 4·10⁻⁸ and 2·10⁻⁷.
-    - *What uses which.* Incremental updates may downdate. The strict rebuild under the Liang convention forms the centred Gram without cancellation:
+    - *What uses which.* Incremental updates may downdate. The strict rebuild forms the centred Gram without cancellation, under every convention:
       - scalar fits use explicitly centred columns;
       - direct fits use the centred Hadamard form G_c = (A_cᵀA_c)∘(H_cᵀH_c) + n·(āāᵀ)∘(H_cᵀH_c) + m·(h̄h̄ᵀ)∘(A_cᵀA_c). A_c and H_c are the centred case-side and output-side factors, and ā and h̄ their means. It is a sum of three positive semidefinite terms, so its diagonal forms without cancellation, and it keeps the separable structure. In F-O7, with factors whose means are large against their spread, plus one design-only and one functional-only term, it matched explicit centring to 2·10⁻¹⁶ in the Gram and 3·10⁻¹⁶ in s. The downdate gave 4·10⁻¹³ and 1·10⁻¹³.
   - *Statistics.* 1/s_min = 10¹⁰ bounds every coefficient's variance inflation. It is a numerical guard, not a modelling restriction; the marginal's Occam factor already discourages redundant terms.
@@ -336,11 +357,11 @@ Here b ∈ (0, 1] is the inverse temperature, as in `Temperature(b, path)`.
 - **R's rule: a defect fixture, not ported.** R's `getQf` refuses a design when max_{j≥2} r_jj / min_j r_jj > 10³ ([`getQf`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:118), commented "a hack, otherwise we get huge variance inflation in beta"). That is a pivot-ratio gate at 10⁻⁶ on the squared pivots.
   - It depends on column norms. Like BARS's `PivotRatio` (R15; step 3.7 counted 1,590 refusals against 76 under the scale-free gate), it refuses well-conditioned local terms whose columns are small, and does so more often as n grows.
   - Fixture: a term orthogonal to the rest, with b nonzero points, refused by R's rule at large n and admitted by the angle gate. At n = 40,000, a 20-point local term with values 0.01 gives R's ratio 1291, so R refuses it, while the smallest leave-one-out angle in the design is 0.25.
-- **Reference fixture:** [`bass_admission_oracle.R`](../../../r/oracles/bass_admission_oracle.R) emits the leave-one-out angles, the pivots in the given order and R's `getQf` decision. Its default mode reads the uncentred Gram, with the intercept as a column. Its other modes (F-O7) cover the Liang default:
+- **Reference fixture:** [`bass_admission_oracle.R`](../../../r/oracles/bass_admission_oracle.R) emits the leave-one-out angles, the pivots in the given order and R's `getQf` decision. Its default mode reads the uncentred Gram, with the intercept as a column. Its other modes (F-O7) cover the centred angles the gate reads:
   - `centred` gives the centred angles by QR, ρ and the uncentred angles, and the centred Gram formed explicitly (summed pairwise and left to right) and by the downdate;
   - `hadamard` gives the same for direct fits from A and H, with the three-term form. The order counterexample and the large-n fixture are reproduced by [`bass_stage1_checks.R`](../../../r/scripts/bass_stage1_checks.R).
   - It is not kept as an option for comparisons with R's posterior ([the parity rule](../bass-full-port-brief.md#validation-and-performance-qualification)). Those comparisons could decide nothing, since R's own chain is off its target: the fixed ⅓ move probabilities alone put it 0.020 off in total variation on F-O6's enumerable space.
-- **Count against column mass.** For BARS, Q6 replaced the count with column mass Σᵢ Bⱼ(xᵢ). The draft keeps the count as BASS's default: every BASS source uses it, and Francom et al. 2018 justify it by the edge instability of hinge terms with few nonzero values. Column mass, Σᵢ B_m(xᵢ) with hinges normalized to a maximum of one, is an option, and a fixture compares the predictive variance of edge terms under the two.
+- **Count against column mass.** For BARS, Q6 replaced the count with column mass Σᵢ Bⱼ(xᵢ). The count is BASS's default (decided 2026-10-27): every BASS source uses it, and Francom et al. 2018 justify it by the edge instability of hinge terms with few nonzero values. Column mass, Σᵢ B_m(xᵢ) with hinges normalized to a maximum of one, is an option, and a fixture compares the predictive variance of edge terms under the two.
 - **A strict rebuild before refusal.** When an incremental update fails the numerical gate, a strict rebuild decides before the candidate is refused (the [numerics segment's](port-numerics-brief.md#dense-factor-maintenance) dense factor maintenance). Refusals are reported by reason: numerical, support, cap.
 - **A ridge is a prior, never a numerical repair.** Under the g-prior a rank-deficient design lies outside F; a ridge enters only as one of D03's declared coefficient priors.
 - **Shared state.** The residual r and δ serve the factor border, the numerical gate and informed proposals (§5). r is updated on each accepted birth, recomputed after deaths and on a cadence, and S is computed from r rather than as yᵀy − Q/(1+τ), whose cancellation bites when τ is small (§5).
@@ -351,15 +372,15 @@ Here b ∈ (0, 1] is the inverse temperature, as in `Temperature(b, path)`.
 Three findings from the lineage and the propriety check point the same way.
 - **KHAOS:** its fixed ridge did best on noise-free simulators, its g-prior on most noisy ones.
 - **GBMARS's review of BMARS:** a_λ and b_λ smaller than the usual 10 suit deterministic surrogates, which need more terms to interpolate.
-- **D03's propriety result:** under the improper σ² prior, a structure with k < N that fits y exactly makes the whole posterior improper, and deterministic data are where exact fits happen.
+- **D03's propriety result:** under the improper σ² prior, a structure with k < N that fits y exactly makes the whole posterior improper, and deterministic data are where exact fits happen. D03's default σ² prior is proper, so this binds only under the Jeffreys option.
 
 **Proposal:** a named profile, `DeterministicSimulator`, which is not a default:
-- D03's proper σ² mode, with y standardized and the transform recorded;
+- D03's default proper σ² prior, scaled to the response, which needs no standardization;
 - a wider λ prior (h₁ and h₂ well below 10, their values recorded);
 - the ridge with a sampled τ as the alternative to the g-prior;
 - in direct functional fits, the residual-dependence check read before any interval is reported, since a deterministic simulator's residual is all misfit and so is smooth along t.
 
-Which coefficient prior the profile uses is left to the pre-registered comparison, not set from KHAOS's study. The improper mode's exact-fit refusal stays, and points users to this profile.
+Which coefficient prior the profile uses is left to the pre-registered comparison, not set from KHAOS's study. Under the Jeffreys option the exact-fit refusal stays, and points users to this profile.
 
 ## Room for extensions
 

@@ -6,12 +6,12 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 
 ### Decisions (stage 1)
 
-- [ ] **F-D01** Term representation and prior measure: drafted 2026-10-25 as a proposal; settles at the user's design pass.
-- [ ] **F-D02** Count prior at the capacity limit: drafted 2026-10-25 as a proposal; settles at the user's design pass.
-- [ ] **F-D03** Coefficient-prior modes and the τ hyperprior: drafted 2026-10-25 as a proposal; settles at the user's design pass. The intercept convention is the user's call. An alternative with proper defaults (scaled σ², level centring) is drafted beside it, 2026-10-27.
-- [ ] **F-D04** Collapsed and conditional update order: drafted 2026-10-25 as a proposal; settles at the user's design pass.
-- [ ] **F-D05** Tempering and SMC target paths: drafted 2026-10-25 as a proposal; settles at the user's design pass.
-- [ ] **F-D06** Numerical model admission: drafted 2026-10-25 as a proposal; settles at the user's design pass.
+- [x] **F-D01** Term representation and prior measure: decided 2026-10-27 as drafted; R's categorical subset measure by default, the paper's selectable.
+- [x] **F-D02** Count prior at the capacity limit: decided 2026-10-27 as drafted (global truncation, λ integrated out, h₁ = h₂ = 10).
+- [x] **F-D03** Coefficient-prior modes and the τ hyperprior: decided 2026-10-27 with proper defaults, σ² scaled to the response and the intercept level-centred (F-O9); Jeffreys σ², Liang and the zero centre selectable.
+- [x] **F-D04** Collapsed and conditional update order: decided 2026-10-27 as drafted, with k = M + 1 under level centring.
+- [x] **F-D05** Tempering and SMC target paths: decided 2026-10-27; the integrated form by default, the linear form selectable.
+- [x] **F-D06** Numerical model admission: decided 2026-10-27; the count as the support default, the centred angles under every convention.
 - [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison.
 - [ ] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison.
 
@@ -34,7 +34,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F3** Collapsed g-prior target under both intercept conventions, with the fixed-g mode.
 - [ ] **F4** Birth, death and change moves with exact boundary probabilities.
 - [ ] **F5** D04's sweep, with composition draws at retention.
-- [ ] **F6** Parallel tempering on the likelihood path, with the exact reference rung in the proper mode.
+- [ ] **F6** Parallel tempering on the likelihood path, with the exact reference rung (D03's proper defaults supply it).
 - [ ] **F7** D06's two gates and refusal reasons.
 - [ ] **F8** Retention, checkpoints and exact restart.
 - [ ] **F9** Pointwise density producer on the OQ17 seam, with its chains for PSIS's relative efficiency.
@@ -51,6 +51,15 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### The design pass: D01–D06 decided — 2026-10-27
+
+The user's design pass took every recommendation, and adopted D10's adaptation note.
+- **D03, proper defaults.** σ² ~ IG(10⁻³, 10⁻³·s²) scaled to the response, and the intercept level-centred on the mean, so every default prior is proper: evidence by default, exact fits proper, the reference rung and SMC from the prior on either form, OQ19 settled for BASS. Jeffreys σ², the Liang convention and R's zero centre stay selectable. The cost is about 0.23 nats of extra credit per added term against Liang (F-O9).
+- **A correction made in the pass.** The marginal depends only on the column space of [1, Z] under every intercept convention, so the centred basis [1, Z_c] computes it exactly. The alternative's knock-on for D06 (a stricter gate on R's uncentred Gram) and its claim to spare the centred downdate were wrong: D06 reads the centred angles under every convention and no longer depends on the intercept choice.
+- **D01:** as drafted; R's categorical subset measure by default, the paper's uniform selectable, recorded in the register as a divergence between paper and code. **D02, D04:** as drafted (k = M + 1 under level centring). **D05:** the integrated form by default, the linear form selectable. **D06:** the count as the support default, column mass an option.
+- **Applied:** D01–D06 and the regime note in this segment, the calibration brief's SMC paragraph, D10's note in the numerics segment, the hub's status, decision table and register.
+- **What remains of stage 1:** F-O3 and F-O4 (now unblocked), and the contract shapes. A baseline rerun then opens stage 4.
 
 ### Intercept conventions fixture (F-O9) — 2026-10-27
 

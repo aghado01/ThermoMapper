@@ -24,7 +24,7 @@ Step 3.2 replaced the whole-posterior `TemperedTarget` with declared paths, `Tem
 
 **Exact reference rung (tracked as OQ2 in the preparation brief).** The same machinery gives parallel tempering a β = 0 rung drawn exactly from a normalized reference, which turns each annealed restart into an independent draw, the setting of Syed et al.'s round-trip analysis. BARS has one on both paths: the knot prior on the likelihood path (with a proper variance prior for the Normal model), and k ~ Poisson(1) with uniform ordered locations on the powered path. Build it here, then rerun the preparation brief's OQ1 tempering comparison.
 
-BASS's default improper variance prior cannot initialize a prior-to-posterior SMC run. Select a proper-prior mode or a specified normalized reference distribution with appropriate support. A proper final posterior alone does not make the prior a valid initial particle distribution or establish a marginal likelihood.
+BASS's default priors are proper (D03, decided 2026-10-27): σ² scaled to the response, the intercept level-centred, Zellner–Siow τ and the negative-binomial count prior. A prior-to-posterior SMC run therefore starts from the prior, and its normalizer is the evidence. Under D03's improper options (Jeffreys σ², the Liang flat intercept) it starts from the prior over (structure, τ) on D05's linear form, and the normalizer is then no evidence. A proper final posterior alone does not make a prior a valid initial particle distribution or establish a marginal likelihood.
 
 For cut calibration, the intended form to investigate is
 

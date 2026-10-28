@@ -82,7 +82,7 @@ Data cross-products, the Gram's entries, are summed pairwise or with compensatio
 
 Candidate numerical work remains private until acceptance. Rejection leaves the accepted state unchanged. Coefficients are drawn using precision-factor triangular solves, not a materialized inverse. Factor maintenance can cost `O(M²)` while term evaluation and data cross-products retain separate data-dependent costs.
 
-## D10 (note): a policy for adaptive kernels
+## D10 (note, adopted 2026-10-27): a policy for adaptive kernels
 
 - **BASS's own proposals are not adaptive.** I(K | M) and the variable weights follow the current model's terms, not the chain's history, so they are ordinary Metropolis–Hastings proposals that depend on the state. They need exact, positive reverse probabilities (D01), not adaptation theory.
 - **Adaptive kernels follow one policy.** These include mutation-type weights tuned from acceptance rates (as KHAOS does), tempering ladders, and a history-based variable proposal. The policy follows Nott and Kohn (2005, *Biometrika* 92, Theorems 1–2, for finite and compact state spaces) and Roberts and Rosenthal (2007, for general spaces):
