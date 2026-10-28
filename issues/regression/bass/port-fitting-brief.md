@@ -87,7 +87,7 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
 
 ### D01 (decided 2026-10-27): term representation and prior measure
 
-Decided by the user on 2026-10-27, as drafted. The categorical subset measure follows R, with the paper's uniform over subsets selectable; the prior-cancelling move schedule stays an option for F-M1.
+Decided by the user on 2026-10-27, as drafted. The categorical subset measure follows R, with the paper's uniform over subsets selectable; the prior-cancelling move schedule stays an option for F-M1. The order prior for terms of several parts was decided on 2026-10-28 (under *Prior on a term*).
 
 - **A term** is an interaction order K ∈ {1, …, K_max}, a set of K distinct variables, and a sign and a knot for each variable. A model holds an unordered collection of M terms.
 - **The measure on the collection** is the prior on labelled terms times the M! orderings. Nott, Kuk and Duc's prior ratio carries (m+1)!/m!, "a term which accounts for the different ways of ordering the basis functions", and a death picks its term uniformly.
@@ -97,6 +97,8 @@ Decided by the user on 2026-10-27, as drafted. The categorical subset measure fo
 - **Knot measure: uniform over each variable's distinct observed values.** Francom et al. 2018 build the prior constant from "the number of unique marginal values", and R draws from them ([`unique.ind`](D:/aghado01/packages/BASS/R/bass.R:218), `vars.len`). Each functional variable uses the distinct values in its column of the output coordinates T (the n_r output locations for a one-dimensional index).
   - *Not adopted:* Nott, Kuk and Duc's uniform over the n observations (the 1/n factors in their ratios), which weights tied values by multiplicity; and the continuous Unif(0, 1) written in the JSS and GBMARS texts, which describes the range rather than the measure the code samples.
 - **Prior on a term:** K uniform on {1, …, K_max}, the variable set uniform over the C(p, K) subsets, signs uniform, knots as above. Unconstrained, this is Francom et al.'s constant c_K = (1/2)^K · C(p, K)⁻¹ · Πₖ 1/n_{vₖ}, times 1/K_max for the order.
+  - *Terms of several parts* (decided by the user on 2026-10-28, the stage-4 oracle chip's reading). When a fit has more than one part (continuous, categorical, functional), each part's order is uniform on {0, …, its cap}, independently, and the term whose parts are all empty is the intercept, outside F. With one part this is the 1/K_max above. The births match: each part's order is drawn from I on {0, …, cap}, and the empty draw is a failed birth, as in R.
+  - *R's scoring here is a defect, not an option.* It samples each part's order on {0, …, cap}, but `logProbChangeMod` scores order 0 by its proposal weight, which moves with the counts, and each order J ≥ 1 at 1/cap, so the orders' masses sum past one.
 - **Support: the term prior is restricted globally to the feasible set F of D02, without per-order normalizers.**
   - *The sources.* Francom et al. state the per-order version, where c_K is one over the number of admissible order-K terms, and recommend the unconstrained constant "as a conservative proxy" where counting them is infeasible. R uses the proxy ([`logProbChangeMod`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:22)). The global reading is what the implementation samples, stated as a prior.
   - *The tilt.* The order's marginal becomes π(K) ∝ P(admissible | K)/K_max under the unconstrained measure. Products of hinges have more zeros and fail the support count more often, so high orders get less mass than under the per-order version. Report the support-rejection rate per order so the tilt stays visible.
@@ -112,7 +114,7 @@ Decided by the user on 2026-10-27, as drafted. The categorical subset measure fo
   - signs uniformly, knots from the knot measure.
 
   A death's reverse probability is that birth's probability for the removed term under the reduced model's counts. w₁ > 0 keeps it positive for every order, and w₂ > 0 for interaction terms.
-- **The variable-set probability** is Wallenius' noncentral hypergeometric with one ball per variable: P(S) = ∫₀¹ Π_{i∈S}(1 − t^{αᵢ}) dt, with αᵢ = zᵢ / Σ_{k∉S} zₖ. R's [`dmwnchBass`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:12) evaluates it exactly by inclusion–exclusion over the 2^K subsets; Nott, Kuk and Duc's pair formula is the case K = 2. The port uses inclusion–exclusion up to K = 3 and quadrature of the positive integrand above that, where the alternating sum loses digits.
+- **The variable-set probability** is Wallenius' noncentral hypergeometric with one ball per variable: P(S) = ∫₀¹ Π_{i∈S}(1 − t^{αᵢ}) dt, with αᵢ = zᵢ / Σ_{k∉S} zₖ. R's [`dmwnchBass`](D:/aghado01/packages/BASS/R/mcmc_funcs.R:12) evaluates it exactly by inclusion–exclusion over the 2^K subsets; Nott, Kuk and Duc's pair formula is the case K = 2. The alternating sum loses digits under skewed weights, so the port does not use it (amended 2026-10-28, when the shared addition landed, `a2034ea`): up to K = 10 it sums over draw orders by the recursion G(U) = Σ_{i∈U} zᵢ·G(U∖i)/(R + Z_U), every term and denominator a sum of positives, exact to a few ulps at any weights; above that, quadrature of the positive integrand.
 - **Change move:** pick a term uniformly and one of its factors uniformly, then redraw that factor's sign and knot from their prior. The proposal is symmetric, so the ratio is the likelihood ratio alone (R's [change](D:/aghado01/packages/BASS/R/rjmcmc_des.R:95)).
 - **Additional kernel, not the default:** KHAOS's Bernoulli-inclusion proposal for the variable set, with its variable-swap mutation, offered beside the Wallenius proposal once validated ([extensions brief](extensions-brief.md#additional-proposal-kernels)).
 - **Considered, not adopted** (the hub's lineage register):
@@ -522,7 +524,7 @@ Drafted after the baseline was requalified at `cf37584`, and taken by the user t
 - *The run:* the chain ensemble, `DrawStore`, `RunIdentity` and checkpoints; `UnitPartition` and `PointwiseLogDensity` (OQ17).
 
 **Shared-code additions** (each generic, tested in its own host, landed before its first BASS use):
-- *Wallenius' multivariate probability* with one ball per variable, in Distributions: inclusion–exclusion up to K = 3 and quadrature of the positive integrand above (D01), checked against F-O5.
+- *Wallenius' multivariate probability* with one ball per variable, in Distributions, checked against F-O5. Drafted as inclusion–exclusion up to K = 3; it landed as the draw-order recursion up to K = 10 and quadrature above (D01 as amended).
 - *A per-replica block in `ParallelTempering`:* a kernel that leaves π_b invariant, run on each replica at its own b between swap rounds. A replica takes reversible-jump moves only today, so τ's slice step (D04) has no seat under tempering. Tested on an analytic target with a continuous coordinate.
 - *The flat-intercept form in `CollapsedGPrior`* (Liang: k = M, N − 1 degrees of freedom), for `GPriorCentre.Flat`. BARS keeps refusing it, for its basis.
 

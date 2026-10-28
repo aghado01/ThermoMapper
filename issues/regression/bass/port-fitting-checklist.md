@@ -36,7 +36,7 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [x] **F1** Term representation: continuous, categorical and functional parts, with interned terms (S2).
 - [x] **F2** Design layer and the direct functional contractions: the terms' factors (S2) and `BassDesign` (S4).
 - [ ] **F3** Collapsed g-prior target under both intercept conventions, with the fixed-g mode.
-- [ ] **F4** Birth, death and change moves with exact boundary probabilities.
+- [ ] **F4** Birth, death and change moves with exact boundary probabilities. The proposals and their within-move ratios landed with S3; the moves on D01's schedule land with S6.
 - [ ] **F5** D04's sweep, with composition draws at retention.
 - [ ] **F6** Parallel tempering on the likelihood path, with the exact reference rung (D03's proper defaults supply it).
 - [x] **F7** D06's two gates and refusal reasons (S4).
@@ -55,6 +55,57 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### S3: the term measure and proposals — 2026-10-28
+
+Two classes in `src/maths/regression/spline/bass/`:
+- `BassStructurePrior` (`BassStructurePrior.cs`): the prior on structures (D01, D02), with `BassTermCounts`, a structure's counts by part.
+- `BassTermProposal` (`BassTermProposal.cs`): D01's births, deaths and changes over that prior's term space.
+
+What landed:
+- **The order prior for terms of several parts,** decided today and recorded in D01:
+  - each part's order is uniform on {0, …, cap};
+  - the term whose parts are all empty is the intercept, outside F;
+  - with one part this is D01's 1/K_max;
+  - births draw each part's order from I over the same range, and an empty draw is a failed birth, as in R.
+
+  D01's Wallenius bullet was amended to the landed method in the same edit.
+- **The prior.**
+  - *Per term,* ln π(term) sums, for each part: the order; the variable set, −ln C(p, K); each hinge's −ln 2 − ln n_v; and each subset under R's measure (the default) or the paper's.
+  - *The count prior,* with λ integrated out, in two forms:
+    - `LogCollectionWeight(M)` = ln Γ(h₁ + M) − ln Γ(h₁) − M ln(h₂ + 1), the weight of a collection of M terms with its orderings;
+    - `LogCountRatio(M)`, D02's (M + h₁)/((M + 1)(h₂ + 1)), which the prior-cancelling schedule reads.
+  - *A structure's log prior* is its collection weight plus its terms' ln π, on F. The target holds it (S5, S6).
+- **The proposals.** Each move returns its within-move log ratio, which the chain adds to its target and selection ratios:
+  - a birth's, ln[1/(M + 1)] − ln q_b(t | S);
+  - a death's, ln q_b(t | S∖t) + ln M, the reverse birth under the reduced counts, read without copying them;
+  - a change's, ln q(back)/q(forward). For a subset this is the redrawn subset's prior ratio, which cancels the target's prior ratio; for a hinge it is 0.
+
+  The proposal object keeps no scratch state, so one serves every chain.
+- **Exact discrete draws.** Knots, single variables, subset sizes and shuffles use Lemire's multiply-shift with rejection, which is exactly uniform.
+  - The generator's `NextInt` is biased by q/2³². Knot draws over thousands of distinct values would feel that bias in the proposal law the acceptance ratio assumes.
+  - The exact draw is a candidate for the RNG audit to adopt.
+- **Tests.**
+  - `BassProposalTests` (31). Six term spaces, from one part to all three, under both subset measures and with up to 8,294 terms. The test enumerates each space itself, from the definitions. Checks:
+    - the prior sums to one with the empty combination's mass (worst error 2·10⁻¹³);
+    - D01's constant by hand, for one part and for several, under both measures;
+    - the birth proposal sums to one, the empty draw included, at count states up to M = 7 (worst error 1.9·10⁻¹³);
+    - 400,000 births per space against their stated probabilities: Pearson's χ² on 490 to 8,295 cells, every z below 1.6;
+    - one birth's probability by hand, with Wallenius by brute force, and against `logProbChangeMod`'s form, which is coherent with one part;
+    - every death's ratio reverses its birth's, within 10⁻¹³ over 200 random pairs per space;
+    - change draws against the exact law (χ²), and each change's ratio against that law both ways and against the prior's;
+    - the count prior: the negative binomial sums to one, and the ratio is D02's;
+    - refusals: a term outside the space, counts that hold no such term, counts over another prior;
+    - the exact draws.
+  - `WalleniusParityTests` (2, `Maths.Oracle.Tests`): every subset of orders 1 to 6 against F-O5's brute force over draw orders, within 1.1·10⁻¹⁴ relative. Two weight sets:
+    - BASS's default w₂ = 5 with skewed counts;
+    - w₂ = 0.01 with counts in the hundreds.
+
+    On the same subsets, R's `dmwnchBass` has a worst relative error of 2.2·10⁻⁹ on the first set and 2.8·10⁴ on the second, at K = 5.
+  - Suites: Regression 530/530; the BASS and Wallenius oracle tests 8/8.
+- **For S6.**
+  - The sweep owns the move-selection schedule (equal over the available moves, prior-cancelling selectable) and the death's pick; `BassDraws.Below` makes that pick exactly.
+  - R counts an empty draw as a rejected birth. The chain's stay-on-null convention leaves it uncounted, which changes the acceptance tallies, not the law.
 
 ### S4: the design layer and admission — 2026-10-28
 
