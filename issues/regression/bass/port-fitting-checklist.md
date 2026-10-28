@@ -36,8 +36,8 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [x] **F1** Term representation: continuous, categorical and functional parts, with interned terms (S2).
 - [x] **F2** Design layer and the direct functional contractions: the terms' factors (S2) and `BassDesign` (S4).
 - [x] **F3** Collapsed g-prior target under both intercept conventions, with the fixed-g mode (S5).
-- [ ] **F4** Birth, death and change moves with exact boundary probabilities. The proposals and their within-move ratios landed with S3; the moves on D01's schedule land with S6.
-- [ ] **F5** D04's sweep, with composition draws at retention.
+- [x] **F4** Birth, death and change moves with exact boundary probabilities: the proposals and their within-move ratios (S3), the moves on D01's schedule (S6).
+- [x] **F5** D04's sweep, with composition draws at retention (S6).
 - [ ] **F6** Parallel tempering on the likelihood path, with the exact reference rung (D03's proper defaults supply it).
 - [x] **F7** D06's two gates and refusal reasons (S4).
 - [ ] **F8** Retention, checkpoints and exact restart.
@@ -55,6 +55,50 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### S6: the sweep — 2026-10-28
+
+D04's sweep, in `src/maths/regression/spline/bass/`:
+- `BassStructureMoves` (`BassSweep.cs`): one chain's design, counts and the birth, death and change moves, as a reversible-jump palette.
+- `BassTauBlock`: τ's slice step.
+- `BassChain`: a lone chain, the moves then τ as a `BlockScan` over the `ReversibleJumpChain`.
+- `BassModel` (`BassModel.cs`): one fit's immutable parts, assembled once from the config and the data.
+- `BassState`, `BassStructure` and `BassDraw` (`BassState.cs`). `BassTarget` is now the chain's `ISamplingTarget<BassState>`.
+
+What landed:
+- **The schedule as move weights.**
+  - The equal schedule: birth only at M = 0, death and change at M_max, all three between.
+  - The prior-cancelling schedule: b_M = C·min(1, p(M+1)/p(M)) and d_M = C·min(1, p(M−1)/p(M)). The change keeps 1 − b − d even at M = 0, where it proposes nothing, so the weights sum to one and the count prior cancels at the boundary too (BARS's DMGK convention).
+
+  The chain owns the selection ratio, so R's fixed thirds have no place to enter.
+- **The design follows the chain.** A proposal leaves its candidate pending in the design.
+  - When the chain next shows a state holding that candidate's structure, the chain accepted it, and the design commits it.
+  - A τ update shares the structure, so it needs nothing.
+  - Any other structure, such as a replica's handed over by a swap (S8) or a restored one, is loaded whole.
+
+  A state's structure identity is its terms' array.
+- **Moves.**
+  - A birth draws D01's term. An empty draw is no move, and is counted.
+  - A death or a change picks a term uniformly. The design moves a changed term to the end, so the candidate's terms follow it, and a change to the same term is the same state.
+  - Candidates refused by the design, or by the target's exact-fit rule, are scored off the support and tallied by reason (`Tally<BassRefusal>`).
+- **τ's block** slices u = ln τ at the chain's own temperature: width 1, 32 steps, as BAPS's component smoothing does. The density is already on u, so no Jacobian is added. As a chain block, it serves a tempering replica unchanged (S8).
+- **Composition at retention.** Each part is an exact draw given (structure, τ), so the scan order needs no argument:
+  - σ² and then the coefficients, from the shared block's conditional on the accepted design;
+  - λ | M ~ Gamma(h₁ + M, rate h₂ + 1).
+
+  `BassDraw` keeps the structure as sorted ids into a `BassTermTable`, τ, σ², the coefficients and λ. The coefficients are uncentred, R's basis: the intercept, then one per id, so f = a₀ + Σ aⱼBⱼ, with the centring's means recomputed exactly as the design formed them. Prediction (stage 5) and the pointwise density (S9) then read the basis directly.
+- **Tests.**
+  - `BassSweepTests` (6):
+    - *Under a constant likelihood, on both schedules,* the chain against the prior on F, which the test enumerates through the design: 2,263 states, the count law 0.6037, 0.3049, 0.0781, 0.0132 (the oracle's fixture A has the same F). Four chains of 60,000 sweeps match the count law within five batch-means errors, and π(1)/π(0) within 5%, where R's thirds would triple it (F-O4). They also match the order law, τ's prior (E[ln τ] = ψ(½) − ln(N/2)), and λ's retained mean against the Gamma(h₁ + M, h₂ + 1) mixture.
+    - *For a fixed structure,* the collapsed sweep's E[τ] against quadrature of its marginal. Its composed τ, σ², σ⁴, coefficients and a₁² against a joint-Gibbs reference that draws a, σ² and τ in turn on the explicit design [1, Z_c], 400,000 sweeps; all within five errors.
+    - *The design follows the chain* through 4,000 sweeps and a swapped-in state: statistics against a fresh load to 10⁻¹⁰, the order, and the term prior.
+    - *Each schedule's boundary weights,* with b_M p(M) = d_{M+1} p(M+1).
+    - *A retained draw's sorted ids and uncentred coefficients* against the same draw in the centred basis, to 10⁻¹².
+  - `BassChainParityTests` (2, `Maths.Oracle.Tests`): four chains of 40,000 sweeps from the intercept alone, against the oracle's exact posterior.
+    - Fixture A at M_max = 3: the count law M = 1–3 at 0.165, 0.762, 0.073 against 0.176, 0.751, 0.073 (± 0.009); E[τ] 0.01537 against 0.01548 (± 0.00007); all 48 terms' inclusions, tied ones included, within a third of their allowance.
+    - Fixture C, with its categorical predictor, at M_max = 2: the count law, E[τ] 0.04996 against 0.04999, and all 90 inclusions.
+  - Suites: Regression 553/553; the BASS and Wallenius oracle tests 21/21.
+- **For S7.** The chain's streams are the caller's: moves, τ's block, and a third for composition, so the trajectory does not depend on how often draws are retained. `BlockScan`'s copy is the identity, so snapshots are S7's to build from the state and the streams. Starts come from exact prior draws (the stage-4 plan); `BassStructureMoves` refuses a start outside F.
 
 ### S5 reviewed — 2026-10-28
 

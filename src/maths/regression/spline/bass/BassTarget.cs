@@ -49,7 +49,7 @@ public readonly record struct BassStructureFit(int Terms, double LogTermPrior, d
 /// intercept they hold up to that prior's constant, which cancels from every within-rung ratio and every swap.
 /// Immutable: one serves every chain.
 /// </summary>
-public sealed class BassTarget
+public sealed class BassTarget : ISamplingTarget<BassState>
 {
     private const double ExactFitMultiple = 1e3;
     private const double MachineEpsilon = 2.220446049250313e-16;   // 2⁻⁵², not double.Epsilon, the least subnormal
@@ -171,6 +171,15 @@ public sealed class BassTarget
         double tau = FixedTau ?? throw new InvalidOperationException("The g mode samples τ; evaluate the structure with it.");
         return new BassEvaluation(this, fit, tau, LogStructurePrior(fit), Refusal(fit));
     }
+
+    /// <summary>A chain's state: its structure's fit with its τ in the g mode, or with the held one under fixed g.</summary>
+    public BassEvaluation Evaluate(BassState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return SamplesTau ? Evaluate(state.Fit, state.LogTau) : Evaluate(state.Fit);
+    }
+
+    ITargetEvaluation ISamplingTarget<BassState>.Evaluate(BassState state) => Evaluate(state);
 }
 
 /// <summary>

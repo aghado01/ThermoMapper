@@ -37,7 +37,7 @@ public sealed class BassTargetParityTests
     private readonly ITestOutputHelper _out;
     public BassTargetParityTests(ITestOutputHelper output) => _out = output;
 
-    private static bool Available => ROracle.IsAvailable && Directory.Exists(BassSource);
+    internal static bool Available => ROracle.IsAvailable && Directory.Exists(BassSource);
 
     private static double Hinge(double x, double knot, int sign) => Math.Max(sign * (x - knot), 0.0);
 
@@ -45,7 +45,7 @@ public sealed class BassTargetParityTests
         => Math.Sqrt(-2 * Math.Log(1 - rng.NextDouble())) * Math.Cos(2 * Math.PI * rng.NextDouble());
 
     // Rows of (y, x₁, x₂[, z]).
-    private static double[][] FixtureA(bool exact = false)
+    internal static double[][] FixtureA(bool exact = false)
     {
         var rng = new Xoshiro256PlusPlus(seed: 11);
         var rows = new List<double[]>();
@@ -74,7 +74,7 @@ public sealed class BassTargetParityTests
         return [.. rows];
     }
 
-    private static double[][] FixtureC()
+    internal static double[][] FixtureC()
     {
         var rng = new Xoshiro256PlusPlus(seed: 21);
         var rows = new List<double[]>();
@@ -88,7 +88,7 @@ public sealed class BassTargetParityTests
         return [.. rows];
     }
 
-    private static BassData Data(double[][] rows, bool categorical = false)
+    internal static BassData Data(double[][] rows, bool categorical = false)
     {
         var predictors = new List<BassPredictor>
         {
@@ -99,7 +99,7 @@ public sealed class BassTargetParityTests
         return new BassData(predictors, new ScalarResponse([.. rows.Select(r => r[0])]));
     }
 
-    private static JsonElement Posterior(double[][] rows, params string[] options)
+    internal static JsonElement Posterior(double[][] rows, params string[] options)
     {
         string csv = Path.Combine(Path.GetTempPath(), $"bass_posterior_{Guid.NewGuid():N}.csv");
         File.WriteAllText(csv, Csv(rows));
@@ -121,12 +121,12 @@ public sealed class BassTargetParityTests
     }
 
     // The oracle's terms, in the C# conventions it emits.
-    private static BassTerm[] Terms(JsonElement r) => [.. r.GetProperty("terms").EnumerateArray().Select(t => new BassTerm(
+    internal static BassTerm[] Terms(JsonElement r) => [.. r.GetProperty("terms").EnumerateArray().Select(t => new BassTerm(
         Items(t.GetProperty("cont")).Select(f => new HingeFactor(f[0].GetInt32(), f[1].GetInt32(), f[2].GetInt32())),
         Items(t.GetProperty("cat")).Select(f => new CategoricalFactor(f[0].GetInt32(), Items(f[1]).Select(l => l.GetInt32())))))];
 
     // R's split names the states, so jsonlite writes them as an object whose values are in state order.
-    private static int[][] States(JsonElement r)
+    internal static int[][] States(JsonElement r)
     {
         JsonElement states = r.GetProperty("states");
         IEnumerable<JsonElement> each = states.ValueKind == JsonValueKind.Object
@@ -173,7 +173,7 @@ public sealed class BassTargetParityTests
         return new(data, config, resolved, prior, basis, fits, logPrior);
     }
 
-    private static BassConfig Config(GPriorCentre centre = GPriorCentre.Mean, bool jeffreys = false, bool fixedG = false, int maxInteraction = 2)
+    internal static BassConfig Config(GPriorCentre centre = GPriorCentre.Mean, bool jeffreys = false, bool fixedG = false, int maxInteraction = 2)
         => new()
         {
             Structure = new BassStructureSpec { MaxInteraction = maxInteraction, Support = new SupportRule(Minimum: 3) },
