@@ -182,6 +182,36 @@ public sealed class BassRunDiagnosticsTests
     }
 
     [Fact]
+    public void DefaultPoints_SpreadThroughTheCases()
+    {
+        BassResolved resolved = Bass.Fit(BassRunTests.Config(chains: 1, burn: 0, samples: 1), BassSweepTests.Data()).Resolved;
+        static int[] Cases(BassResolved r) => [.. BassDiagnostics.DefaultPoints(r, false).Select(p => p.Case)];
+        Assert.Equal([0], Cases(resolved with { Cases = 1 }));
+        Assert.Equal([0, 1], Cases(resolved with { Cases = 2 }));
+        Assert.Equal([1, 2], Cases(resolved with { Cases = 3 }));   // ½ and 1½ round away from zero; 1 is the middle
+        Assert.Equal([4, 9, 13], Cases(resolved));                  // 18 cases
+        Assert.All(BassDiagnostics.DefaultPoints(resolved, false), p => Assert.Null(p.Location));
+        Assert.All(BassDiagnostics.DefaultPoints(resolved with { Locations = 6 }, true), p => Assert.Equal(2, p.Location));
+        Assert.All(BassDiagnostics.DefaultPoints(resolved with { Locations = 1 }, true), p => Assert.Equal(0, p.Location));
+    }
+
+    [Fact]
+    public void SupportTally_MergesOnlyItsOwnOrders()
+    {
+        var one = BassModel.Create(BassRunTests.Config(), BassSweepTests.Data());
+        var mixed = BassModel.Create(BassRunTests.Config(), BassPriorSamplerTests.MixedData());
+        var tally = new BassSupportTally(one.Prior);
+        tally.Add(new BassTerm([new HingeFactor(0, 1, 0), new HingeFactor(1, -1, 2)]), true);
+        tally.MergeFrom(tally.Copy());
+        Assert.Equal(2, tally.Attempts(BassPart.Continuous, 2));
+        Assert.Equal(2, tally.Refused(BassPart.Continuous, 2));
+        Assert.Equal([1, 2], tally.Entries.Select(e => e.Order));   // one part: no order 0
+        Assert.Throws<ArgumentException>(() => tally.MergeFrom(new BassSupportTally(mixed.Prior)));
+        tally.Clear();
+        Assert.All(tally.Entries, e => Assert.True(e.Attempts == 0 && double.IsNaN(e.RefusalRate)));
+    }
+
+    [Fact]
     public void FixedG_HasNoTauDiagnostic()
     {
         BassConfig config = BassRunTests.Config() with { Coefficients = new FixedG() };

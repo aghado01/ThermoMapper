@@ -94,6 +94,8 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
         ArgumentNullException.ThrowIfNull(rng);
         BassStructurePrior prior = _model.Prior;
         BassTarget target = _model.Target;
+        long intercepts = InterceptTerms;
+        Tally<BassRefusal> before = Refusals.Copy();
         for (long attempt = 0; attempt < MaxAttempts; attempt++)
         {
             Attempts++;
@@ -129,10 +131,11 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
             Accepted++;
             return (state, evaluation);
         }
+        var refused = Refusals.Entries.Select(e => (e.Category, Count: e.Count - before.Count(e.Category))).Where(e => e.Count > 0);
         throw new InvalidOperationException(
-            $"No collection in F after {MaxAttempts} draws from the prior ({InterceptTerms} with an intercept term; refusals " +
-            $"{string.Join(", ", Refusals.Entries.Where(e => e.Count > 0).Select(e => $"{e.Category} {e.Count}"))}): F holds " +
-            "too little of the prior's mass. Loosen the support rule or the caps, or move the count prior towards fewer terms.");
+            $"No collection in F after {MaxAttempts} draws from the prior ({InterceptTerms - intercepts} with an intercept term; refusals " +
+            $"{string.Join(", ", refused.Select(e => $"{e.Category} {e.Count}"))}): F holds too little of the prior's mass. Loosen the " +
+            "support rule or the caps, or move the count prior towards fewer terms.");
     }
 
     // M from the count law truncated at the cap, by inversion.

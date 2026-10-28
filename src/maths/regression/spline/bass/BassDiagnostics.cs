@@ -86,6 +86,7 @@ public sealed class BassSupportTally : IMergeable<BassSupportTally>
 {
     private readonly long[][] _attempts = new long[3][];
     private readonly long[][] _refused = new long[3][];
+    private readonly int[] _minimum = new int[3];   // each part's smallest order
 
     /// <summary>An empty tally over <paramref name="prior"/>'s parts and orders.</summary>
     public BassSupportTally(BassStructurePrior prior)
@@ -96,6 +97,7 @@ public sealed class BassSupportTally : IMergeable<BassSupportTally>
             int orders = prior.Has((BassPart)p) ? prior.Cap((BassPart)p) + 1 : 0;
             _attempts[p] = new long[orders];
             _refused[p] = new long[orders];
+            _minimum[p] = prior.MinimumOrder((BassPart)p);
         }
     }
 
@@ -105,6 +107,7 @@ public sealed class BassSupportTally : IMergeable<BassSupportTally>
         {
             _attempts[p] = (long[])source._attempts[p].Clone();
             _refused[p] = (long[])source._refused[p].Clone();
+            _minimum[p] = source._minimum[p];
         }
     }
 
@@ -127,14 +130,14 @@ public sealed class BassSupportTally : IMergeable<BassSupportTally>
     /// <summary>Those of them refused for support.</summary>
     public long Refused(BassPart part, int order) => _refused[(int)part][order];
 
-    /// <summary>Every part the fit has, by order.</summary>
+    /// <summary>Every part the fit has, by each order its terms can take.</summary>
     public IReadOnlyList<BassOrderSupport> Entries
     {
         get
         {
             var entries = new List<BassOrderSupport>();
             for (int p = 0; p < 3; p++)
-                for (int k = 0; k < _attempts[p].Length; k++) entries.Add(new BassOrderSupport((BassPart)p, k, _attempts[p][k], _refused[p][k]));
+                for (int k = _minimum[p]; k < _attempts[p].Length; k++) entries.Add(new BassOrderSupport((BassPart)p, k, _attempts[p][k], _refused[p][k]));
             return entries;
         }
     }
@@ -145,7 +148,8 @@ public sealed class BassSupportTally : IMergeable<BassSupportTally>
         ArgumentNullException.ThrowIfNull(other);
         for (int p = 0; p < 3; p++)
         {
-            if (other._attempts[p].Length != _attempts[p].Length) throw new ArgumentException("The tallies count different orders.", nameof(other));
+            if (other._attempts[p].Length != _attempts[p].Length || other._minimum[p] != _minimum[p])
+                throw new ArgumentException("The tallies count different orders.", nameof(other));
             for (int k = 0; k < _attempts[p].Length; k++)
             {
                 _attempts[p][k] += other._attempts[p][k];

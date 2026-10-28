@@ -239,6 +239,41 @@ public sealed class BassPriorSamplerTests
     }
 
     [Fact]
+    public void Draws_MatchThePriorOnF_ForADirectFunctionalFit()
+    {
+        // Two parts, each term's case side and output side counted apart for support (npart, npart.func).
+        var model = BassModel.Create(new BassConfig
+        {
+            Structure = new BassStructureSpec { MaxInteraction = 1, MaxFunctionalInteraction = 1, MaxBasis = 2 },
+        }, FunctionalData());
+        List<(BassTerm[] Terms, double LogPrior)> f = BassTermSpace.F(model);
+        (Dictionary<string, double> law, double[] countLaw) = Law(f, model.MaxBasis);
+        var sampler = new BassPriorSampler(model);
+        const int draws = 150_000;
+        var states = new Dictionary<string, long>();
+        var counts = new long[countLaw.Length];
+        var rng = new Xoshiro256PlusPlus(47);
+        for (int d = 0; d < draws; d++)
+        {
+            BassState s = sampler.Draw(rng).State;
+            states[Key(s.Terms)] = states.GetValueOrDefault(Key(s.Terms)) + 1;
+            counts[s.Count]++;
+        }
+        _out.WriteLine($"{f.Count} states in F; acceptance {sampler.AcceptanceRate:F4}; refusals " +
+                       string.Join(", ", sampler.Refusals.Entries.Where(e => e.Count > 0).Select(e => $"{e.Category} {e.Count}")));
+        Assert.True(sampler.Refusals.Count(BassRefusal.Support) > 0, "hinges facing their end of the output range have no support");
+        for (int m = 0; m < countLaw.Length; m++)
+        {
+            double observed = (double)counts[m] / draws, error = Math.Sqrt(countLaw[m] * (1 - countLaw[m]) / draws);
+            Assert.True(Math.Abs(observed - countLaw[m]) <= 5 * error, $"M = {m}: {observed:F4} against {countLaw[m]:F4}");
+        }
+        Assert.True(states.Keys.All(law.ContainsKey));
+        (double chi2, int df) = ChiSquare([.. f.Select(s => law[Key(s.Terms)] * draws)], [.. f.Select(s => states.GetValueOrDefault(Key(s.Terms)))]);
+        _out.WriteLine($"χ² over F's {f.Count} states: {chi2:F1} on {df}");
+        Assert.True(chi2 <= df + 6 * Math.Sqrt(2.0 * df), $"χ² = {chi2:F1} on {df}");
+    }
+
+    [Fact]
     public void Jeffreys_DrawsNoExactFit()
     {
         BassConfig config = BassSweepTests.Config() with { Sigma2 = Sigma2Prior.Jeffreys };
@@ -319,9 +354,13 @@ public sealed class BassPriorSamplerTests
         var e = Assert.Throws<InvalidOperationException>(() => sampler.Draw(new Xoshiro256PlusPlus(43)));
         _out.WriteLine(e.Message);
         Assert.Contains("500 draws", e.Message);
-        Assert.Contains("Support", e.Message);
+        Assert.Contains("Support 500", e.Message);
         Assert.Equal(500, sampler.Attempts);
         Assert.Equal(0, sampler.Accepted);
+        // A second refusal reports its own attempts, not the sampler's whole history.
+        e = Assert.Throws<InvalidOperationException>(() => sampler.Draw(new Xoshiro256PlusPlus(44)));
+        Assert.Contains("Support 500", e.Message);
+        Assert.Equal(1000, sampler.Attempts);
         Assert.Throws<ArgumentOutOfRangeException>(() => new BassPriorSampler(model, maxAttempts: 0));
     }
 
