@@ -34,12 +34,12 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-plan-decided-2026-10-28), decided 2026-10-28: steps S1–S10, with three shared additions (Wallenius in Distributions, a per-replica block in `ParallelTempering`, the flat-intercept form in `CollapsedGPrior`).
 
 - [x] **F1** Term representation: continuous, categorical and functional parts, with interned terms (S2).
-- [ ] **F2** Design layer and the direct functional contractions. The terms' case-side and output-side factors landed with S2; the design layer lands with S4.
+- [x] **F2** Design layer and the direct functional contractions: the terms' factors (S2) and `BassDesign` (S4).
 - [ ] **F3** Collapsed g-prior target under both intercept conventions, with the fixed-g mode.
 - [ ] **F4** Birth, death and change moves with exact boundary probabilities.
 - [ ] **F5** D04's sweep, with composition draws at retention.
 - [ ] **F6** Parallel tempering on the likelihood path, with the exact reference rung (D03's proper defaults supply it).
-- [ ] **F7** D06's two gates and refusal reasons.
+- [x] **F7** D06's two gates and refusal reasons (S4).
 - [ ] **F8** Retention, checkpoints and exact restart.
 - [ ] **F9** Pointwise density producer on the OQ17 seam, with its chains for PSIS's relative efficiency.
 - [ ] **F10** Chains start on the support.
@@ -55,6 +55,25 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### S4: the design layer and admission — 2026-10-28
+
+`BassDesign` (`src/maths/regression/spline/bass/BassDesign.cs`), one per chain, with `BassAdmission` (the rules, resolved from the config), `BassRefusal` (cap, support, numerical, variance inflation) and `DesignProposal` (a candidate's account).
+- **The centred basis.** The design holds Z_c and ỹ = y − ȳ under every intercept convention (D03's computation): scalar fits keep explicitly centred columns, and direct fits keep the case-side and output-side factors with Gram entries from the centred Hadamard form. Every entry and inner product is formed without cancellation and summed pairwise (N10). Its statistics are ‖r‖² and Q_c = b_cᵀG_c⁻¹b_c; each convention adds its own pieces in S5.
+- **Moves.** Births, deaths and changes go through `BorderedCholesky`'s private proposals; a change's new column goes last. `Load` builds a structure wholesale and strictly, for starts and restores (S7).
+- **Admission (D06),** in order: the cap; a repeated term (a duplicated column, s = 0); the support threshold per part, by count or, as the option, by mass; the order-free gate, every leave-one-out angle at least s_min; the declared variance inflation cap. A death needs no gate. When the bordered factor fails the gate or comes within a factor of two of s_min, a strict factorization of the candidate's Gram decides, and an admitted candidate is accepted from it.
+- **Statistics.** A candidate's ‖r′‖² updates the current residual's: a birth removes (zᵀr)²/δ, a death adds β̂_m²/(G⁻¹)_mm, and a change does both through the reduced model, with zᵀr_reduced = zᵀr + β̂_m·uᵀG⁻¹e_m/(G⁻¹)_mm. These lose digits only when one move explains nearly all the residual (below 10⁻⁸ of it), where the candidate's residual is formed explicitly. Taking ‖ỹ‖² − Q′ instead would lose them on every good fit. On each acceptance β̂ is solved and the residual recomputed explicitly, r = ỹ − Z_cβ̂, so it cannot drift. That replaces D06's update-then-cadence wording with something at least as accurate and no costlier, since acceptances are rare next to proposals. The factor still rebuilds strictly on its cadence.
+- **Tests.**
+  - `BassDesignTests` (10) check against a reference that shares nothing with the bordered factor: the explicitly centred design, its least squares and its leave-one-out angles from a thin SVD.
+    - Random sequences of 400 proposals on scalar and direct data, at s_min = 10⁻¹⁰ and at a binding 3·10⁻³: about 300 proposals compared per run, every decision equal (except within 5% of the floor), ‖r′‖² and Q′ within 10⁻⁸, the angles within 10⁻⁶, and each accepted state's residual, ‖r‖² and Q.
+    - The binding floor refused 15 and 6 proposals on the angle gate and admitted 24 within a factor of two of it, where the strict factorization decided.
+    - F-O2's order-freedom with three hinges at neighbouring knots: the smallest angle is 5.5·10⁻⁵; h₂ after h₁ shows 1.6·10⁻³, and h₃ added last 2.2·10⁻⁴. At a floor of 1.1·10⁻⁴ every one of the six orders refuses the third birth, where a newest-column rule would admit the set in four of them.
+    - One case per refusal reason, including a categorical subset and its complement, which span one space with the intercept (D01's complement pairs).
+    - Column mass as the option; `Load` against the incremental path; a near-exact fit through the explicit path (‖r′‖² ≤ 10⁻²⁴‖ỹ‖²).
+    - 1,500 accepted moves on direct data: the residual within 10⁻⁹, then a rebuild finding a factor drift of 3·10⁻¹⁵ at M = 11.
+  - `BassAdmissionParityTests` (3, `Maths.Oracle.Tests`): the design's angles against `bass_admission_oracle.R`'s QR of the explicitly centred design, within 10⁻⁶ relative (F-O7): random scalar terms to 5·10⁻¹²; direct terms by the three-term form against the materialized design to 3·10⁻¹³; and F-O7's hard case to 3·10⁻⁹ at an angle of 10⁻⁶. That case is an indicator true for all but one of 10⁵ cases, nearly collinear with a hinge once centred.
+  - Suites: Regression 471/471; Oracle 22/22, two TDA transport tests passing on a rerun after timing out under the chips' load (their R oracle runs near the bridge's 120-second limit alone).
+- **For S10's cost baseline.** `KhatriRao.CentredBorder` re-centres every current factor on each call, so a direct proposal allocates O(M(n + m)). That is correct, but a candidate for keeping the centred factors in the design.
 
 ### S2: terms and the basis — 2026-10-28
 
