@@ -39,6 +39,30 @@ public static class SpecialFunctions
         return 0.5 * Math.Log(2.0 * Math.PI) + (x + 0.5) * Math.Log(t) - t + Math.Log(a);
     }
 
+    /// <summary>
+    /// The digamma function ψ(x) = d ln Γ(x)/dx. For x &gt; 0 it climbs by ψ(x) = ψ(x + 1) − 1/x to x ≥ 15, where the
+    /// asymptotic series ln x − 1/(2x) − Σ B₂ₖ/(2k x²ᵏ), to k = 5, is within 2·10⁻¹⁶ of ψ, so ψ keeps about 10⁻¹⁵ absolute
+    /// accuracy, the recurrence's rounding. Below zero it reflects, ψ(x) = ψ(1 − x) − π/tan(πx). NaN at the poles 0, −1,
+    /// −2, ….
+    /// </summary>
+    public static double Digamma(double x)
+    {
+        if (double.IsNaN(x) || double.IsNegativeInfinity(x)) return double.NaN;
+        if (double.IsPositiveInfinity(x)) return double.PositiveInfinity;
+        if (x <= 0.0)
+            return x == Math.Floor(x) ? double.NaN : Digamma(1.0 - x) - Math.PI / Math.Tan(Math.PI * x);
+
+        double result = 0.0;
+        while (x < 15.0)
+        {
+            result -= 1.0 / x;
+            x += 1.0;
+        }
+        double f = 1.0 / (x * x);
+        return result + Math.Log(x) - 0.5 / x
+               - f * (1.0 / 12 - f * (1.0 / 120 - f * (1.0 / 252 - f * (1.0 / 240 - f * (1.0 / 132)))));
+    }
+
     /// <summary><c>ln B(a, b) = ln Γ(a) + ln Γ(b) − ln Γ(a + b)</c>.</summary>
     public static double LogBeta(double a, double b) => LogGamma(a) + LogGamma(b) - LogGamma(a + b);
 

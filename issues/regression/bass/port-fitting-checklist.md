@@ -35,7 +35,7 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 - [x] **F1** Term representation: continuous, categorical and functional parts, with interned terms (S2).
 - [x] **F2** Design layer and the direct functional contractions: the terms' factors (S2) and `BassDesign` (S4).
-- [ ] **F3** Collapsed g-prior target under both intercept conventions, with the fixed-g mode.
+- [x] **F3** Collapsed g-prior target under both intercept conventions, with the fixed-g mode (S5).
 - [ ] **F4** Birth, death and change moves with exact boundary probabilities. The proposals and their within-move ratios landed with S3; the moves on D01's schedule land with S6.
 - [ ] **F5** D04's sweep, with composition draws at retention.
 - [ ] **F6** Parallel tempering on the likelihood path, with the exact reference rung (D03's proper defaults supply it).
@@ -55,6 +55,56 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### S5: the collapsed target — 2026-10-28
+
+`BassTarget` (`src/maths/regression/spline/bass/BassTarget.cs`) is D03's collapsed target over (structure, τ), the coefficients and σ² integrated out. Beside it:
+- `BassStructureFit`: a structure's M, its terms' ln π, and ‖r‖² and Q_c from the design, or the design's refusal;
+- `BassEvaluation`: one state's `ITargetEvaluation`.
+
+What landed:
+- **The prior,** untempered on the likelihood path:
+  - D02's count weight and D01's term measure;
+  - in the g mode, τ's Gamma(a, rate a·N) as a density on u = ln τ, the coordinate τ's slice step moves (D04). The powered path therefore powers τ in log τ, D05's recorded choice.
+
+  Fixed g holds τ (1/N by default), so its state has no τ coordinate. Each mode has its own `Evaluate`, and each refuses the other's call.
+- **The likelihood** comes from the shared g-prior block, under:
+  - each intercept convention: level centring, Liang's flat intercept, R's zero centre;
+  - each σ² prior: scaled, Jeffreys, or a declared inverse gamma.
+
+  Its forms: the integrated form p_b, the default, and the linear form b·ln p₁. Both supply their slope in b, so path sampling can run beside stepping-stone (S8).
+
+  `Defines(b)` reports where the integrated form exists. It is defined everywhere on [0, 1] under the proper defaults, for b > 0 under Jeffreys, and for g₁ + (Nb − 1)/2 > 0 under the flat intercept. Outside that, the evaluation throws `ArgumentOutOfRangeException`, as `ITargetEvaluation` specifies.
+- **The support.** The design's refusals carry through. Under the Jeffreys σ² prior, a new refusal reason, `BassRefusal.ExactFit`, excludes structures with ‖r‖ ≤ 10³·ε·‖y − level‖: D03's propriety rule, with the oracle's constant.
+  - `BassResolved` refuses a constant response under the zero centre with Jeffreys, since the intercept alone fits it exactly.
+  - `BassResolved` gains ȳ (`ResponseMean`), which the zero centre's level energy Nȳ² reads.
+- **Shared additions.**
+  - `CollapsedGPrior.CentredMarginalAt`: the centred block's marginal from the fit's statistics alone. A candidate structure has those before it has a factor. The block's own `MarginalAt` shares the computation, and BARS's arithmetic is unchanged operation for operation.
+  - `GPriorMarginal.LogMarginalSlope`: the integrated form's ∂/∂b, from ∂S/∂b = ‖r‖² + (τ/(τ+b))²Q and the determinant term's slope.
+  - `SpecialFunctions.Digamma`: the recurrence up to 15, then the asymptotic series to B₁₀, with reflection below 0. It is accurate to about 10⁻¹⁵ absolute.
+- **Tests.**
+  - `BassTargetTests` (15):
+    - the slope against central differences under every convention and σ² prior, and one-sidedly at b = 0;
+    - `CentredMarginalAt` bit-identical to the block's `MarginalAt`;
+    - τ's density on u: it integrates to one, E[τ] = 1/N and E[ln τ] = ψ(a) − ln(aN) (F-O8's identities), at a = ½ and 2;
+    - the prior's pieces in each mode;
+    - the forms agree at b = 1, and the linear form is b·ℓ₁;
+    - the endpoints: the integrated form gives 0 at b = 0 under the defaults and throws there under Jeffreys or flat, while the linear form reaches b = 0 under flat + Jeffreys;
+    - the powered path;
+    - exact fits refused under Jeffreys only;
+    - shift invariance (F-O9): offsets 0, 10 and −250 move no marginal under level centring or Liang (10⁻⁹), while the zero centre's Bayes factors move by more than a nat;
+    - scale invariance: y × 10⁻⁶, 10³ and 10⁶ moves every marginal by exactly −N ln c.
+  - `DigammaTests` (10, `Maths.Distributions.Tests`): Gauss's closed values, the recurrence and the reflection, the small-x series, the large-x asymptote, and the derivative of ln Γ.
+  - `BassTargetParityTests` (10, `Maths.Oracle.Tests`). Each of the stage-4 oracle's states is loaded into a `BassDesign` from its emitted terms, and the marginal is integrated over u by the test's own Gauss–Legendre rule.
+    - Fixture A at M_max = 2 (299 states), under each of the six options (level centring, flat, zero, Jeffreys, flat + Jeffreys, fixed g). Every state is admitted. Worst errors: ‖r‖² 5·10⁻¹⁶ and Q 3·10⁻¹⁵ (of ‖y − level‖²), the structure prior 2·10⁻¹⁴, the marginal 7·10⁻¹⁴ (relative to a reference state under the improper options).
+    - Fixture C, with its categorical predictor (1,949 states): the mixed order prior decided today matches to 9·10⁻¹⁴, and the marginals to 10⁻¹⁴.
+    - Fixture E's exact fits: Jeffreys refuses 27 of 299 states, exactly the oracle's 27.
+    - Fixture B's rungs b = 0, 0.1, 0.5, 1 on both forms: log Z_b to 10⁻⁹, and the slope's mean wherever the oracle gives one. At b = 0 on the integrated form it is infinite in expectation under Zellner–Siow; our quadrature gives −5·10¹⁸ there, and the oracle gives null.
+    - R's own statistics under its zero centre at τ = 0.05 (`bass_statistics_oracle.R`): qf, yᵀy and ‖r‖² to 2·10⁻¹⁶ relative, and S/2 against `s2_rate_direct` to 4·10⁻¹⁶. R's `s2.rate` as written agrees on this fixture.
+  - Suites: Regression 545/545; Distributions 129/129; the BASS and Wallenius oracle tests 18/18.
+- **For S6.**
+  - The chain's state carries a `BassStructureFit` and, in the g mode, u = ln τ. Moves build the candidate's fit from the design's `DesignProposal`.
+  - σ²'s draw at retention reads `BassEvaluation.Marginal().Sigma2Posterior(Sigma2)`. The coefficients' draw takes the block from `FromCentredLeastSquares` on the accepted design.
 
 ### S3: the term measure and proposals — 2026-10-28
 

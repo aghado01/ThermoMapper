@@ -18,6 +18,10 @@ public enum BassRefusal
 
     /// <summary>A column's variance inflation exceeds the declared cap, a statistical restriction (D06's option).</summary>
     VarianceInflation,
+
+    /// <summary>Under the Jeffreys σ² prior, the structure fits the response exactly, which would make the posterior
+    /// improper (D03's propriety rule); the collapsed target refuses it.</summary>
+    ExactFit,
 }
 
 /// <summary>The admission rules a design applies, resolved from the config on the data.</summary>

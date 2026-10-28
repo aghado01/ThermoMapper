@@ -145,19 +145,42 @@ public sealed class CollapsedGPrior
             throw new ArgumentException("One coefficient per centred column is required.", nameof(centredCoefficients));
         if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
         if (!(centredFittedSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(centredFittedSumOfSquares));
+        (double fitted, double level) = CentredFit(centredFittedSumOfSquares, rows, responseMean, intercept);
+        return new CollapsedGPrior(centredGram, null, centredCoefficients, residualSumOfSquares, fitted,
+                                   double.NaN, 0.0, double.NaN, rows, null, intercept, responseMean, level);
+    }
+
+    /// <summary>
+    /// The marginal of <see cref="FromCentredLeastSquares"/>'s block at (<paramref name="tau"/>,
+    /// <paramref name="inverseTemperature"/>), from the fit's statistics alone: <paramref name="centredColumns"/> centred
+    /// columns beside the intercept, ‖r‖² and Q_c. A design that weighs a candidate structure has these before it has
+    /// a factor or coefficients, and the marginal reads nothing else.
+    /// </summary>
+    public static GPriorMarginal CentredMarginalAt(int centredColumns, double residualSumOfSquares, double centredFittedSumOfSquares,
+                                                   int rows, double responseMean, GPriorCentre intercept, double tau,
+                                                   double inverseTemperature = 1.0)
+    {
+        if (centredColumns < 0) throw new ArgumentOutOfRangeException(nameof(centredColumns));
+        if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
+        (double fitted, _) = CentredFit(centredFittedSumOfSquares, rows, responseMean, intercept);
+        return Unweighted(centredColumns + 1, residualSumOfSquares, fitted, rows, intercept, tau, inverseTemperature);
+    }
+
+    // The fitted energy the centred block's convention reads, and the intercept's centre.
+    private static (double Fitted, double Level) CentredFit(double centredFitted, int rows, double responseMean, GPriorCentre intercept)
+    {
+        if (!(centredFitted >= 0.0)) throw new ArgumentOutOfRangeException(nameof(centredFitted));
         if (rows < 1) throw new ArgumentOutOfRangeException(nameof(rows));
         if (!double.IsFinite(responseMean)) throw new ArgumentOutOfRangeException(nameof(responseMean));
-        (double fitted, double level) = intercept switch
+        return intercept switch
         {
-            GPriorCentre.Mean or GPriorCentre.Flat => (centredFittedSumOfSquares, responseMean),
-            GPriorCentre.Zero => (centredFittedSumOfSquares + rows * responseMean * responseMean, 0.0),
+            GPriorCentre.Mean or GPriorCentre.Flat => (centredFitted, responseMean),
+            GPriorCentre.Zero => (centredFitted + rows * responseMean * responseMean, 0.0),
             GPriorCentre.Median => throw new ArgumentException(
                 "The median centre is the robust path's, on a basis that carries the constant; a design with its intercept "
                 + "apart takes the mean, the zero centre or the flat intercept.", nameof(intercept)),
             _ => throw new ArgumentOutOfRangeException(nameof(intercept)),
         };
-        return new CollapsedGPrior(centredGram, null, centredCoefficients, residualSumOfSquares, fitted,
-                                   double.NaN, 0.0, double.NaN, rows, null, intercept, responseMean, level);
     }
 
     /// <summary>
@@ -243,30 +266,37 @@ public sealed class CollapsedGPrior
     /// </summary>
     public GPriorMarginal MarginalAt(double tau, double inverseTemperature = 1.0)
     {
-        CheckTau(tau);
-        double b = inverseTemperature;
-        if (!(b >= 0.0) || double.IsPositiveInfinity(b))
-            throw new ArgumentOutOfRangeException(nameof(inverseTemperature), "The inverse temperature must be non-negative and finite.");
-
-        int p = Columns;
         if (_posterior is ISpdFactor posterior)
         {
+            CheckTau(tau);
+            double b = inverseTemperature;
             if (tau != _tau) throw new ArgumentException($"The weighted block was built at τ = {_tau}; P_a depends on τ.", nameof(tau));
             if (b != 1.0) throw new ArgumentException("The weighted block is untempered.", nameof(inverseTemperature));
-            double logDet = 0.5 * (_gram.LogDet + p * Math.Log(tau)) - 0.5 * posterior.LogDet + 0.5 * _sumLogWeights;
+            double logDet = 0.5 * (_gram.LogDet + Columns * Math.Log(tau)) - 0.5 * posterior.LogDet + 0.5 * _sumLogWeights;
             return new GPriorMarginal(_scale, logDet, Rows, tau, b);
         }
+        return Unweighted(Columns, _rss, _fitted, Rows, Intercept, tau, inverseTemperature);
+    }
 
-        double s = b * (_rss + tau / (tau + b) * _fitted);
-        if (Intercept != GPriorCentre.Flat)
-            return new GPriorMarginal(s, 0.5 * p * Math.Log(tau / (tau + b)), Rows, tau, b);
+    // The unweighted marginal at (τ, b), with S and the determinant term's slopes in b beside them:
+    // ∂S/∂b = ‖r‖² + (τ/(τ+b))²·Q and ∂/∂b (k/2)ln(τ/(τ+b)) = −(k/2)/(τ+b).
+    private static GPriorMarginal Unweighted(int columns, double rss, double fitted, int rows, GPriorCentre? intercept,
+                                             double tau, double b)
+    {
+        CheckTau(tau);
+        if (!(b >= 0.0) || double.IsPositiveInfinity(b))
+            throw new ArgumentOutOfRangeException(nameof(b), "The inverse temperature must be non-negative and finite.");
+        double shrink = tau / (tau + b);
+        double s = b * (rss + shrink * fitted), sSlope = rss + shrink * shrink * fitted;
+        if (intercept != GPriorCentre.Flat)
+            return new GPriorMarginal(s, 0.5 * columns * Math.Log(shrink), rows, tau, b, 0, sSlope, -0.5 * columns / (tau + b));
 
         // α's integral, (2πσ²/(Nb))^½: ½ln 2π moves into the count's 2π term, −½ln(Nb) stays here.
         if (!(b > 0.0))
-            throw new ArgumentOutOfRangeException(nameof(inverseTemperature),
+            throw new ArgumentOutOfRangeException(nameof(b),
                 "b = 0 is out of reach on the flat intercept's integrated form, whose (2πσ²/(Nb))^½ diverges there.");
-        double flatLogDet = 0.5 * (p - 1) * Math.Log(tau / (tau + b)) - 0.5 * Math.Log(Rows * b);
-        return new GPriorMarginal(s, flatLogDet, Rows, tau, b, spent: 1);
+        double flatLogDet = 0.5 * (columns - 1) * Math.Log(shrink) - 0.5 * Math.Log(rows * b);
+        return new GPriorMarginal(s, flatLogDet, rows, tau, b, 1, sSlope, -0.5 * (columns - 1) / (tau + b) - 0.5 / b);
     }
 
     private static void CheckTau(double tau)
@@ -286,9 +316,10 @@ public readonly struct GPriorMarginal
     private static readonly double Log2Pi = Math.Log(2.0 * Math.PI);
 
     private readonly int _spent;   // observations a flat intercept's integral spends: 0 or 1
+    private readonly double _sSlope, _logDeterminantSlope;   // ∂/∂b of S and of the determinant term; NaN when weighted
 
     internal GPriorMarginal(double s, double logDeterminantTerm, int rows, double tau, double inverseTemperature,
-                            int spent = 0)
+                            int spent = 0, double sSlope = double.NaN, double logDeterminantSlope = double.NaN)
     {
         S = s;
         LogDeterminantTerm = logDeterminantTerm;
@@ -296,6 +327,8 @@ public readonly struct GPriorMarginal
         Tau = tau;
         InverseTemperature = inverseTemperature;
         _spent = spent;
+        _sSlope = sSlope;
+        _logDeterminantSlope = logDeterminantSlope;
     }
 
     /// <summary>Observations m.</summary>
@@ -348,6 +381,30 @@ public readonly struct GPriorMarginal
         if (!(S > 0.0)) throw new InvalidOperationException("The improper σ² prior needs S > 0.");
         if (!(nb > 0.0)) throw new InvalidOperationException("The improper σ² prior needs ν > 0.");
         return common + SpecialFunctions.LogGamma(nb) - nb * Math.Log(half);
+    }
+
+    /// <summary>
+    /// <c>∂/∂b</c> of <see cref="LogMarginal"/> at this b, the integrated form's slope on the likelihood path (path
+    /// sampling's integrand), with ν' = m:
+    /// <c>−(m/2)ln 2π + ∂LogDeterminantTerm + (m/2)ψ(g₁ + ν/2) − (m/2)ln(g₂ + S/2) − (g₁ + ν/2)(S'/2)/(g₂ + S/2)</c>.
+    /// The same domain as <see cref="LogMarginal"/>, b = 0 included under a proper prior, where it carries
+    /// −(k/2)/τ; unweighted blocks only.
+    /// </summary>
+    public double LogMarginalSlope(InverseGamma? sigmaPrior)
+    {
+        if (double.IsNaN(_sSlope)) throw new NotSupportedException("The weighted block is untempered, so it has no slope in b.");
+        double nb = 0.5 * Rows * InverseTemperature - 0.5 * _spent, m = 0.5 * Rows;
+        double half = 0.5 * S;
+        double common = -m * Log2Pi + _logDeterminantSlope;
+        double shape = sigmaPrior?.Shape ?? 0.0, scale = sigmaPrior?.Scale ?? 0.0;
+        if (sigmaPrior is null)
+        {
+            if (!(S > 0.0)) throw new InvalidOperationException("The improper σ² prior needs S > 0.");
+            if (!(nb > 0.0)) throw new InvalidOperationException("The improper σ² prior needs ν > 0.");
+        }
+        else if (!(shape + nb > 0.0)) throw new InvalidOperationException("σ²'s posterior shape g₁ + ν/2 is not positive.");
+        return common + m * SpecialFunctions.Digamma(shape + nb) - m * Math.Log(scale + half)
+               - (shape + nb) * 0.5 * _sSlope / (scale + half);
     }
 }
 

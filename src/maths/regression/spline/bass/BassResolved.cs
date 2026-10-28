@@ -48,6 +48,10 @@ public sealed record BassResolved
     /// <summary>The level the coefficient prior is centred on: the response's mean, or zero under the zero centre.</summary>
     public required double CentreLevel { get; init; }
 
+    /// <summary>ȳ, the response's mean over all N observations, whatever the centre; the zero centre's level energy
+    /// Nȳ² reads it.</summary>
+    public required double ResponseMean { get; init; }
+
     /// <summary>s², the response's mean square about <see cref="CentreLevel"/>, which the scaled σ² prior reads.</summary>
     public required double ResponseMeanSquare { get; init; }
 
@@ -83,17 +87,19 @@ public sealed record BassResolved
         ReadOnlySpan<double> y = response.Values;
         bool constant = true, zero = y[0] == 0.0;
         for (int i = 1; i < y.Length && constant; i++) constant = y[i] == y[0];
-        double level;
+        double mean = PairwiseSum.Of(y) / n, level;
         if (config.Intercept == GPriorCentre.Zero)
         {
             if (constant && zero) throw new ArgumentException("The response is zero, which leaves σ no posterior (D03).", nameof(data));
+            if (constant && !config.Sigma2.IsProper)
+                throw new ArgumentException("Under the Jeffreys σ² prior a constant response is fitted exactly by the intercept, which leaves the posterior improper (D03).", nameof(data));
             level = 0.0;
             log.Add(new("CentreLevel", "0", "the zero centre"));
         }
         else
         {
             if (constant) throw new ArgumentException("The response is constant, which the intercept absorbs whole, leaving no spread to fit (D03).", nameof(data));
-            level = PairwiseSum.Of(y) / n;
+            level = mean;
             log.Add(new("CentreLevel", Text(level), config.Intercept == GPriorCentre.Flat ? "the response's mean, the flat intercept's estimate" : "the response's mean, level centring"));
         }
         var squares = new double[n];
@@ -161,7 +167,7 @@ public sealed record BassResolved
             Cases = cases, Locations = locations, Observations = n, MaxBasis = maxBasis,
             MaxInteraction = maxInteraction, MaxCategoricalInteraction = maxCategorical, MaxFunctionalInteraction = maxFunctional,
             SupportMinimum = support, SupportMinimumFunctional = supportFunctional,
-            CentreLevel = level, ResponseMeanSquare = meanSquare, Sigma2 = sigma2, TauPrior = tauPrior, FixedTau = fixedTau,
+            ResponseMean = mean, CentreLevel = level, ResponseMeanSquare = meanSquare, Sigma2 = sigma2, TauPrior = tauPrior, FixedTau = fixedTau,
             AutoPicks = log.AsReadOnly(),
         };
     }
