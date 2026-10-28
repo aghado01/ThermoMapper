@@ -19,6 +19,18 @@ public static class Bass
     /// </summary>
     public static BassFit Fit(BassConfig config, BassData data, BassRunOptions? run = null) => Run(config, data, run, null);
 
+    /// <summary>
+    /// Continues <paramref name="checkpoint"/>'s run (a fit's <see cref="BassFit.Checkpoint"/>) for
+    /// <see cref="BassSampling.Samples"/> more draws per chain, or fewer when the R̂ stop is met, exactly as the
+    /// uninterrupted run would have gone on; the fit covers every draw since burn-in. <paramref name="config"/> and
+    /// <paramref name="data"/> must be those the checkpoint was taken on: one whose fingerprint differs is refused.
+    /// </summary>
+    public static BassFit Resume(EnsembleCheckpoint checkpoint, BassConfig config, BassData data, BassRunOptions? run = null)
+    {
+        ArgumentNullException.ThrowIfNull(checkpoint);
+        return Run(config, data, run, checkpoint);
+    }
+
     private static BassFit Run(BassConfig config, BassData data, BassRunOptions? run, EnsembleCheckpoint? resumeFrom)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -33,6 +45,10 @@ public static class Bass
             throw new ArgumentException("Sampling.Chains must be at least 2 for the R̂ stop (Sampling.RHatTarget).", nameof(config));
 
         string fingerprint = Fingerprint(config, data);
+        if (resumeFrom is not null && resumeFrom.Identity.Fingerprint != fingerprint)
+            throw new ArgumentException(
+                $"The checkpoint was taken on another config or data: its fingerprint is {resumeFrom.Identity.Fingerprint}, theirs {fingerprint}.",
+                "checkpoint");
         long planned = sampling.Chains * ((resumeFrom is null ? sampling.BurnIn : 0L) + (long)sampling.Samples * sampling.Thin);
         var ensemble = new BassEnsemble(model, fingerprint, options, planned, (resumeFrom?.DrawsPerChain ?? 0) + sampling.Samples);
         var parallel = new ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism, CancellationToken = options.Cancellation };

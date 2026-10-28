@@ -230,6 +230,25 @@ namespace Maths.LinAlg
         }
 
         /// <summary>
+        /// An independent copy of the accepted factor: L, the kept matrix and diag(A⁻¹) with the capacity, the rebuild
+        /// interval, the updates since the last rebuild and the status, so the copy's later updates and rebuilds match
+        /// this one's bit for bit. A pending proposal is not copied. Restart state takes it, since a factor grown by
+        /// deaths and changes differs in its last bits from a strict refactorization of the same matrix.
+        /// </summary>
+        public BorderedCholesky Copy()
+        {
+            var copy = new BorderedCholesky(Capacity, RebuildInterval);
+            copy._accepted.CopyFrom(_accepted);
+            copy._valid = _valid;
+            copy.Status = Status;
+            copy.LogDet = LogDet;
+            copy.FailedAt = FailedAt;
+            copy.UpdatesSinceRebuild = UpdatesSinceRebuild;
+            copy.LastDrift = LastDrift;
+            return copy;
+        }
+
+        /// <summary>
         /// Refactors the kept matrix strictly and recomputes diag(A⁻¹), replacing the incremental factor when the
         /// matrix is still numerically positive definite and keeping it otherwise. Returns, and records as
         /// <see cref="LastDrift"/>, how far the incremental factor had drifted. O(n³).

@@ -58,7 +58,27 @@ public sealed class BassStructureMoves
         Moves = [new Birth(this), new Death(this), new Change(this)];
     }
 
-    /// <summary>The start's state.</summary>
+    // The moves restored at `current` from `snapshot` (Snapshot): the design as it was, the counts from the structure,
+    // the tallies; they continue bit for bit.
+    internal BassStructureMoves(BassModel model, BassState current, BassMovesSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        _model = model;
+        _design = model.NewDesign();
+        _design.Restore(snapshot.Design);
+        if (!_design.Terms.SequenceEqual(current.Terms)) throw new ArgumentException("The snapshot's design holds another structure.", nameof(snapshot));
+        Start = current;
+        _counts = CountsOf(current.TermArray);
+        _committed = current;
+        Refusals.Assign(snapshot.Refusals);
+        EmptyBirths = snapshot.EmptyBirths;
+        Support = snapshot.Support.Copy();
+        Moves = [new Birth(this), new Death(this), new Change(this)];
+    }
+
+    /// <summary>The state these moves started from: the chain's start, or the state they were restored at.</summary>
     public BassState Start { get; }
 
     /// <summary>The birth, death and change moves, keyed "birth", "death" and "change".</summary>
@@ -81,6 +101,13 @@ public sealed class BassStructureMoves
         Refusals.Assign(new Tally<BassRefusal>());
         EmptyBirths = 0;
         Support.Clear();
+    }
+
+    // The restart state at `current`, which the design is first synced to: the design's own, and the tallies.
+    internal BassMovesSnapshot Snapshot(BassState current)
+    {
+        Sync(current);
+        return new BassMovesSnapshot(_design.Snapshot(), Refusals.Copy(), EmptyBirths, Support.Copy());
     }
 
     /// <summary>The chain's design, holding <paramref name="state"/>'s structure.</summary>
@@ -339,9 +366,50 @@ public sealed class BassChain
         Structure = new BassStructureMoves(model, start, logTau);
         ISamplingTarget<BassState> sampled = target ?? model.Target;
         Moves = new ReversibleJumpChain<BassState>(Structure.Moves, sampled, Structure.Start, moveRng);
+        Scan = new BlockScan<ReversibleJumpChain<BassState>>(Blocks(model, sampled), Moves, blockRng, chain => chain);
+    }
+
+    private BassChain(BassStructureMoves structure, ReversibleJumpChain<BassState> moves, BlockScan<ReversibleJumpChain<BassState>> scan)
+    {
+        Structure = structure;
+        Moves = moves;
+        Scan = scan;
+    }
+
+    // The scan's blocks: the moves, then τ in the g mode.
+    private static List<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassModel model, ISamplingTarget<BassState> target)
+    {
         List<IBlock<ReversibleJumpChain<BassState>>> blocks = [new MoveStep<BassState>()];
-        if (model.Target.SamplesTau) blocks.Add(new BassTauBlock(sampled));
-        Scan = new BlockScan<ReversibleJumpChain<BassState>>(blocks, Moves, blockRng, chain => chain);
+        if (model.Target.SamplesTau) blocks.Add(new BassTauBlock(target));
+        return blocks;
+    }
+
+    /// <summary>
+    /// The chain's restart state, the chain unchanged: the reversible-jump chain's snapshot (state, temperature, move
+    /// stream, counters), the moves' (the design as it is, the tallies) and the scan's (τ's stream, step count and block
+    /// counters).
+    /// </summary>
+    internal BassChainSnapshot Snapshot()
+    {
+        BlockScanSnapshot<ReversibleJumpChain<BassState>> scan = Scan.Snapshot();
+        return new BassChainSnapshot(Moves.Snapshot(), Structure.Snapshot(Current), (scan.Rng0, scan.Rng1, scan.Rng2, scan.Rng3),
+                                     scan.Steps, scan.BlockAttempts, scan.BlockAccepts);
+    }
+
+    /// <summary>A chain of <paramref name="model"/> that continues bit for bit where <paramref name="snapshot"/>'s left
+    /// off, sampling <paramref name="target"/> (the model's by default), which must be the one it ran with.</summary>
+    internal static BassChain Restore(BassModel model, BassChainSnapshot snapshot, ISamplingTarget<BassState>? target = null)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        var structure = new BassStructureMoves(model, snapshot.Chain.Current, snapshot.Structure);
+        ISamplingTarget<BassState> sampled = target ?? model.Target;
+        var moves = ReversibleJumpChain<BassState>.Restore(structure.Moves, sampled, snapshot.Chain);
+        (ulong r0, ulong r1, ulong r2, ulong r3) = snapshot.BlockRng;
+        var scan = BlockScan<ReversibleJumpChain<BassState>>.Restore(Blocks(model, sampled),
+            new BlockScanSnapshot<ReversibleJumpChain<BassState>>(moves, r0, r1, r2, r3, snapshot.Steps, snapshot.BlockAttempts,
+                                                                  snapshot.BlockAccepts), chain => chain);
+        return new BassChain(structure, moves, scan);
     }
 
     /// <summary>The chain's structure moves, design and tallies.</summary>
@@ -366,3 +434,12 @@ public sealed class BassChain
     /// <summary>The retained draw at the current state (<see cref="BassStructureMoves.Compose"/>).</summary>
     public BassDraw Compose(Xoshiro256PlusPlus rng, BassTermTable terms) => Structure.Compose(Current, rng, terms);
 }
+
+/// <summary>A chain's structure moves' restart state: the design's, and the tallies.</summary>
+internal sealed record BassMovesSnapshot(BassDesignSnapshot Design, Tally<BassRefusal> Refusals, long EmptyBirths, BassSupportTally Support);
+
+/// <summary>A <see cref="BassChain"/>'s restart state: the reversible-jump chain's snapshot, the moves', and the scan's
+/// stream (τ's block), step count and block counters.</summary>
+internal sealed record BassChainSnapshot(
+    ChainSnapshot<BassState> Chain, BassMovesSnapshot Structure, (ulong, ulong, ulong, ulong) BlockRng, long Steps,
+    long[] BlockAttempts, long[] BlockAccepts);

@@ -24,6 +24,11 @@ public enum BassRefusal
     ExactFit,
 }
 
+/// <summary>A design's restart state (<see cref="BassDesign.Snapshot"/>): its terms in column order, a copy of its
+/// factor, and its coefficients, residual and statistics.</summary>
+internal sealed record BassDesignSnapshot(BassTerm[] Terms, BorderedCholesky Factor, double[] Beta, double[] Residual,
+                                          double ResidualSquares, double FittedSquares);
+
 /// <summary>The admission rules a design applies, resolved from the config on the data.</summary>
 public sealed record BassAdmission(
     int MaxBasis, SupportKind Support, double SupportMinimum, double? SupportMinimumFunctional, double AngleFloor,
@@ -286,6 +291,41 @@ public sealed class BassDesign
         for (int j = 0; j < columns.Count; j++) _b.Add(CrossResponse(columns[j], _functional ? outputs[j] : null));
         Refit();
         return null;
+    }
+
+    /// <summary>
+    /// The restart state: the terms in column order, an exact copy of the factor, and the coefficients, residual and its
+    /// statistics as held. A strict refactorization would not reproduce the factor's incremental updates bit for bit, so
+    /// <see cref="Restore"/> takes them as they are and re-evaluates only the columns, which are functions of the terms.
+    /// </summary>
+    internal BassDesignSnapshot Snapshot()
+        => new([.. _terms], _factor.Copy(), (double[])_beta.Clone(), (double[])_residual.Clone(), ResidualSquares, FittedSquares);
+
+    /// <summary>Replaces the structure with <paramref name="snapshot"/>'s, every statistic as the design it was taken from
+    /// held it, so the two continue bit for bit.</summary>
+    internal void Restore(BassDesignSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (snapshot.Factor.Dimension != snapshot.Terms.Length || snapshot.Beta.Length != snapshot.Terms.Length || snapshot.Residual.Length != _rows)
+            throw new ArgumentException("The snapshot is not a design's over these data.", nameof(snapshot));
+        _pending = null;
+        _terms.Clear();
+        _a.Clear();
+        _h.Clear();
+        _b.Clear();
+        foreach (BassTerm term in snapshot.Terms)
+        {
+            if (Evaluate(term) is not var (column, output)) throw new ArgumentException($"The snapshot holds {term}, which lacks support here.", nameof(snapshot));
+            _terms.Add(term);
+            _a.Add(column);
+            if (_functional) _h.Add(output!);
+            _b.Add(CrossResponse(column, output));
+        }
+        _factor = snapshot.Factor.Copy();
+        _beta = (double[])snapshot.Beta.Clone();
+        snapshot.Residual.CopyTo(_residual, 0);
+        ResidualSquares = snapshot.ResidualSquares;
+        FittedSquares = snapshot.FittedSquares;
     }
 
     /// <summary>Refactors the Gram strictly and refits; returns the drift the rebuild removed.</summary>

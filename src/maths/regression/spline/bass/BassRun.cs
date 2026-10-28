@@ -21,6 +21,9 @@ namespace Maths.Regression.Spline.Bass;
 /// sampling phase.</item>
 /// <item><b>Terms.</b> Each chain interns its draws' terms in its own <see cref="BassTermTable"/>; <see cref="Assemble"/>
 /// merges them in chain order.</item>
+/// <item><b>Restart state.</b> Each chain saves its chain's snapshot (the state, the design as it is, the three
+/// streams, the counters and tallies), its composition stream, its term table, its draws, its start and its move counts at
+/// the end of burn-in, so a restored chain continues bit for bit.</item>
 /// </list>
 /// The model is shared read-only; each chain owns its design, streams and stores.
 /// </summary>
@@ -90,6 +93,20 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         var chain = new BassChain(_model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(seeds[1]), new Xoshiro256PlusPlus(seeds[2]));
         return new BassChainRun(this, chain, new Xoshiro256PlusPlus(readoutSeed), new BassTermTable(), new DrawStore<BassDraw>(),
                                 new BassStart(start.Terms, _model.Target.FixedTau ?? start.Tau, sampler.Attempts));
+    }
+
+    /// <summary>Rebuilds a chain from the restart state its run saved (<see cref="BassChainState"/>).</summary>
+    public IChainRun<BassState> RestoreChain(IChainState state)
+    {
+        if (state is not BassChainState s) throw new ArgumentException("Not a BASS chain's restart state.", nameof(state));
+        BassChain chain = BassChain.Restore(_model, s.Chain);
+        (ulong c0, ulong c1, ulong c2, ulong c3) = s.Composition;
+        var terms = new BassTermTable();
+        foreach (BassTerm term in s.Terms) terms.Intern(term);
+        return new BassChainRun(this, chain, Xoshiro256PlusPlus.Restore(c0, c1, c2, c3), terms, s.Draws.Copy(), s.Start)
+        {
+            BurnMoves = s.BurnMoves,
+        };
     }
 
     /// <summary>The final progress report, unless the last sweep made one.</summary>
@@ -238,11 +255,17 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         return cache[id] = values;
     }
 
+    /// <summary>One chain's restart state: its <see cref="BassChain"/>'s snapshot, the composition stream's words, its
+    /// term table's terms in id order, its draws, its start and its move counts at the end of burn-in.</summary>
+    private sealed record BassChainState(
+        BassChainSnapshot Chain, (ulong, ulong, ulong, ulong) Composition, BassTerm[] Terms, DrawStore<BassDraw> Draws, BassStart Start,
+        IReadOnlyList<MoveStat> BurnMoves) : IChainState;
+
     /// <summary>One chain: its <see cref="BassChain"/>, composition stream, term table, retained draws and start, and its
     /// move counts at the end of burn-in. As the shell's <see cref="IChain{TDraw}"/>, a step is
     /// <see cref="BassSampling.Thin"/> sweeps, and its acceptance counts the structure moves only.</summary>
     private sealed class BassChainRun(BassEnsemble owner, BassChain chain, Xoshiro256PlusPlus composition, BassTermTable terms,
-                                      DrawStore<BassDraw> draws, BassStart start) : IChainRun<BassState>, IChain<BassState>
+                                      DrawStore<BassDraw> draws, BassStart start) : IResumableChainRun<BassState>, IChain<BassState>
     {
         public BassChain Chain { get; } = chain;
         public Xoshiro256PlusPlus Composition { get; } = composition;
@@ -250,7 +273,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         public DrawStore<BassDraw> Draws { get; } = draws;
         public BassStart Start { get; } = start;
         public List<double[]?> PointValues { get; } = [];
-        public IReadOnlyList<MoveStat> BurnMoves { get; private set; } = [];
+        public IReadOnlyList<MoveStat> BurnMoves { get; set; } = [];
 
         IChain<BassState> IChainRun<BassState>.Chain => this;
         public long Accepted => Chain.Moves.Accepted;
@@ -271,5 +294,13 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         }
 
         public void Accumulate(in BassState draw, Span<double> functionals) => owner.Accumulate(this, draw, functionals);
+
+        // A snapshot of everything above; the live chain is unchanged and continues as if none were taken.
+        public IChainState SaveState()
+        {
+            var terms = new BassTerm[Terms.Count];
+            for (int id = 0; id < terms.Length; id++) terms[id] = Terms[id];
+            return new BassChainState(Chain.Snapshot(), Composition.SaveState(), terms, Draws.Copy(), Start, BurnMoves);
+        }
     }
 }
