@@ -1,12 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Clustering.Graphical.SPC.Profiling;
-using Clustering.Graphical.SPC.Runtime.Core.Sampler;
 using Clustering.Primitives;
 using Graphs.Primitives;
 
-namespace Clustering.Graphical.SPC.Partitions.Hierarchical;
+namespace Clustering.Dendrograms;
 
 /// <summary>One cluster lineage tracked across the T-stack: the chain of
 /// clusters at successive temperatures that are the SAME cluster (eroding
@@ -84,42 +82,8 @@ public sealed record LineagePersistenceResult(
 public static class LineagePersistence
 {
     /// <summary>
-    /// Resolve a rich sweep's frames by lineage persistence. Requires
-    /// <c>AccumulationSpec.CoMembership</c> (the per-edge co-membership counts —
-    /// the partition columns AND the decidedness field). No landscape needed.
-    /// </summary>
-    /// <param name="minClusterSize">Clusters below this size are ignored when
-    /// building lineages (the overclustering-tail filter; default 3).</param>
-    /// <param name="splitShare">Second-successor share above which a step is a
-    /// split, not erosion. Null ⇒ gap-based on the observed distribution
-    /// (fallback 0.25).</param>
-    /// <param name="temperatureWindow">Restrict to [Lo, Hi] — the SP-plateau
-    /// bound (regime border: T_fs/T_ps from <see cref="SpcProfileAnalysis.SpPlateau"/>).
-    /// Null ⇒ the full grid.</param>
-    /// <param name="selectTopK">Force exactly this many lineages instead of the
-    /// gap rule. Null ⇒ gap-based selection.</param>
-    public static LineagePersistenceResult Resolve(
-        CsrGraph graph,
-        IReadOnlyList<Accumulator> frames,
-        double theta = 0.5,
-        int minClusterSize = 3,
-        double? splitShare = null,
-        (double Lo, double Hi)? temperatureWindow = null,
-        int? selectTopK = null)
-    {
-        ArgumentNullException.ThrowIfNull(graph);
-        ArgumentNullException.ThrowIfNull(frames);
-
-        int q = frames[0].Q;
-        var (temperatures, delta) = SweepEdgeCurves.CoMembershipDelta(frames);
-        PartitionHierarchy stack = DenseTStack.Build(graph, temperatures, delta, theta);
-
-        return Resolve(graph, stack, delta, q, minClusterSize, splitShare, temperatureWindow, selectTopK);
-    }
-
-    /// <summary>
     /// Producer-agnostic core: resolve a dense stack + its δ̄ columns. SW supplies
-    /// pooled sampled columns (the overload above); a solver / BARS-monotonized
+    /// pooled sampled columns (SPC's <c>SweepLineagePersistence</c>); a solver / BARS-monotonized
     /// columns feed this directly.
     /// </summary>
     public static LineagePersistenceResult Resolve(

@@ -1,10 +1,9 @@
 using System;
 using System.Collections.Generic;
-using Clustering.Dendrograms;
 using Clustering.Primitives;
 using Graphs.Primitives;
 
-namespace Clustering.Graphical.SPC.Partitions.Hierarchical;
+namespace Clustering.Dendrograms;
 
 /// <summary>
 /// The <b>nested-degenerate bridge</b>: projects a strictly-nested SPC T-stack

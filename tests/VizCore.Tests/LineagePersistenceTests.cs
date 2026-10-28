@@ -1,4 +1,5 @@
 using System.Linq;
+using Clustering.Dendrograms;
 using Clustering.Graphical.SPC.Partitions.Hierarchical;
 using Clustering.Primitives;
 using Graphs.Primitives;

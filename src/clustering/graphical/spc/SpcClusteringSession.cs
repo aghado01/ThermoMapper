@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Clustering.Dendrograms;
 using Clustering.Evaluation.External;
 using Clustering.Evaluation.Internal;
 using Clustering.Primitives;

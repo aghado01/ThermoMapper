@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using Clustering.Dendrograms;
 using Archivory;
 using Clustering.Evaluation.External;
 using Clustering.Evaluation.Internal;
@@ -273,7 +274,7 @@ public static class SpcCommand
                 (Clustering.Primitives.Assignment assignment, string label, string csvStub) = options.Resolver switch
                 {
                     ResolverKind.ThermalEom => (
-                        Clustering.Graphical.SPC.Partitions.Thermal.ThermalEom.Resolve(
+                        Clustering.Graphical.SPC.Partitions.Thermal.SweepThermalEom.Resolve(
                             resolverGraph, frames, options.Theta,
                             minClusterSize: options.MinClusterSize,
                             completion: options.PeripheryCompletion).Assignment,
@@ -618,8 +619,8 @@ public static class SpcCommand
                 case "--periphery":
                     options.PeripheryCompletion = RequireValue(next, arg).Trim().ToLowerInvariant() switch
                     {
-                        "ascend" => Clustering.Graphical.SPC.Partitions.Thermal.ThermalPeripheryCompletion.Ascend,
-                        "none"   => Clustering.Graphical.SPC.Partitions.Thermal.ThermalPeripheryCompletion.None,
+                        "ascend" => Clustering.Dendrograms.ThermalPeripheryCompletion.Ascend,
+                        "none"   => Clustering.Dendrograms.ThermalPeripheryCompletion.None,
                         var v => throw new ArgumentException($"Unknown periphery completion '{v}'. Valid: none, ascend."),
                     };
                     i++; break;
@@ -851,7 +852,7 @@ public static class SpcCommand
     private static (Clustering.Primitives.Assignment, string, string) ResolveHierarchy(
         CsrGraph graph, Accumulator[] frames, Options options)
     {
-        HierarchyEomResult result = HierarchyEom.Resolve(
+        HierarchyEomResult result = SweepHierarchyEom.Resolve(
             graph, frames, options.Theta,
             minClusterSize: options.MinClusterSize,
             completion: options.PeripheryCompletion);
@@ -874,7 +875,7 @@ public static class SpcCommand
         var plateau = SpcProfileAnalysis.SpPlateau(session.Profile);
         (double, double)? window = plateau.CliffFound ? (plateau.TFs, plateau.TPs) : null;
 
-        LineagePersistenceResult result = LineagePersistence.Resolve(
+        LineagePersistenceResult result = SweepLineagePersistence.Resolve(
             graph, frames, options.Theta,
             minClusterSize: Math.Max(options.MinClusterSize, 1),
             temperatureWindow: window);
@@ -990,7 +991,7 @@ public static class SpcCommand
         public int MinClusterSize { get; set; } = 1;
 
         /// <summary>Periphery completion for the thermal resolver's abstains.</summary>
-        public Clustering.Graphical.SPC.Partitions.Thermal.ThermalPeripheryCompletion PeripheryCompletion { get; set; }
-            = Clustering.Graphical.SPC.Partitions.Thermal.ThermalPeripheryCompletion.None;
+        public Clustering.Dendrograms.ThermalPeripheryCompletion PeripheryCompletion { get; set; }
+            = Clustering.Dendrograms.ThermalPeripheryCompletion.None;
     }
 }

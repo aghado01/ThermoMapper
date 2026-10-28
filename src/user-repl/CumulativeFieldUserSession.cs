@@ -6,7 +6,6 @@ using Clustering.Dendrograms;
 using Clustering.Evaluation.External;
 using Clustering.Evaluation.Internal;
 using Clustering.Graphical.SPC.Export;
-using Clustering.Graphical.SPC.Partitions.Thermal;
 using Clustering.Graphical.CumulativeField;
 using Clustering.Primitives;
 using Graphs;

@@ -291,7 +291,7 @@ public sealed class BwdParityTests
         var graph = session.Graph;
         int[] trueLabels = dataset.Labels;   // 0 = setosa
 
-        HierarchyEomResult hres = HierarchyEom.Resolve(graph, frames, theta: 0.5, minClusterSize: 5);
+        HierarchyEomResult hres = SweepHierarchyEom.Resolve(graph, frames, theta: 0.5, minClusterSize: 5);
 
         // The bridge succeeds on the (restored) nested stack. A handful of Iris
         // periphery / duplicate-row points never co-cluster with the bulk at any
@@ -386,7 +386,7 @@ public sealed class BwdParityTests
         var plateau = Clustering.Graphical.SPC.Profiling.SpcProfileAnalysis.SpPlateau(session.Profile);
         (double Lo, double Hi)? window = plateau.CliffFound ? (plateau.TFs, double.PositiveInfinity) : null;
 
-        LineagePersistenceResult result = LineagePersistence.Resolve(
+        LineagePersistenceResult result = SweepLineagePersistence.Resolve(
             session.Graph, frames, theta: 0.5, minClusterSize: 5, temperatureWindow: window);
 
         var sizes = Sizes(result.Assignment.Labels);
@@ -451,7 +451,7 @@ public sealed class BwdParityTests
         (double Lo, double Hi)? window = plateau.CliffFound ? (plateau.TFs, double.PositiveInfinity) : null;
 
         // Stripes are ~900; minClusterSize filters the sparse background clumps.
-        LineagePersistenceResult result = LineagePersistence.Resolve(
+        LineagePersistenceResult result = SweepLineagePersistence.Resolve(
             session.Graph, frames, theta: 0.5, minClusterSize: 50, temperatureWindow: window);
 
         var sizes = Sizes(result.Assignment.Labels);
@@ -489,7 +489,7 @@ public sealed class BwdParityTests
     /// <paramref name="realClusters"/>; returns the level index and the
     /// descending real-cluster sizes (or (-1, null) if none).</summary>
     private static (int Level, List<int>? Sizes) FindStage(
-        Clustering.Graphical.SPC.Partitions.Hierarchical.PartitionHierarchy stack, int realClusters, int minReal)
+        Clustering.Dendrograms.PartitionHierarchy stack, int realClusters, int minReal)
     {
         for (int li = 0; li < stack.Count; li++)
         {
@@ -605,7 +605,7 @@ public sealed class BwdParityTests
         var frames = session.SweepRuns.Select(r => r.Accumulator).ToArray();
         var plateau = Clustering.Graphical.SPC.Profiling.SpcProfileAnalysis.SpPlateau(session.Profile);
         (double Lo, double Hi)? window = plateau.CliffFound ? (plateau.TFs, double.PositiveInfinity) : null;
-        LineagePersistenceResult res = LineagePersistence.Resolve(
+        LineagePersistenceResult res = SweepLineagePersistence.Resolve(
             session.Graph, frames, theta: 0.5, minClusterSize: 50, temperatureWindow: window);
         var (purity, count, covered) = BigClusterPurity(res.Assignment.Labels, tl, minSize: 50);
 

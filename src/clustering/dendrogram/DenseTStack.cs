@@ -1,13 +1,9 @@
 using System;
 using System.Collections.Generic;
-using Clustering.Dendrograms;
-using Clustering.Graphical.SPC.Partitions.Strategies;
-using Clustering.Graphical.SPC.Profiling;
-using Clustering.Graphical.SPC.Runtime.Core.Sampler;
 using Clustering.Primitives;
 using Graphs.Primitives;
 
-namespace Clustering.Graphical.SPC.Partitions.Hierarchical;
+namespace Clustering.Dendrograms;
 
 /// <summary>
 /// The shared substrate of the two classical SPC T-stack resolvers: cut the
@@ -15,7 +11,7 @@ namespace Clustering.Graphical.SPC.Partitions.Hierarchical;
 /// phase-midpoints) from a rich sweep's pooled per-T co-membership columns,
 /// yielding a <b>dense</b> <see cref="PartitionHierarchy"/> — one level per
 /// grid temperature. The structure-side reading
-/// <see cref="BlattPartitionStrategy"/> only sampled at phase representatives;
+/// SPC's <c>BlattPartitionStrategy</c> only sampled at phase representatives;
 /// this completes it to the canonical dendrogram-across-T reading.
 /// </summary>
 /// <remarks>
@@ -26,10 +22,10 @@ namespace Clustering.Graphical.SPC.Partitions.Hierarchical;
 /// widths.</para>
 ///
 /// <para><b>The cut.</b> Each grid temperature's pooled eq-4 discriminant
-/// column δ̄_ij(T) = ((q−1)⟨n_ij⟩+1)/q (from <see cref="SweepEdgeCurves"/>) is
+/// column δ̄_ij(T) = ((q−1)⟨n_ij⟩+1)/q (from SPC's <c>SweepEdgeCurves</c>) is
 /// thresholded at <paramref name="theta"/> and closed into connected
 /// components — the identical threshold-and-connect step the chosen-T
-/// <see cref="ThresholdCoMembership"/> cut applies, run at every T. Peripheral
+/// SPC's <c>ThresholdCoMembership</c> cut applies, run at every T. Peripheral
 /// capture (Domany step 2) is available per-level via the same shared
 /// <see cref="AffinityThreshold"/> path.</para>
 ///
@@ -42,34 +38,9 @@ namespace Clustering.Graphical.SPC.Partitions.Hierarchical;
 public static class DenseTStack
 {
     /// <summary>
-    /// Build the dense per-T partition stack from rich sweep frames. Requires
-    /// <c>AccumulationSpec.CoMembership</c> (the per-edge co-membership counts);
-    /// frames are pooled across replicas per temperature inside
-    /// <see cref="SweepEdgeCurves.CoMembershipDelta"/>.
-    /// </summary>
-    /// <param name="graph">The CSR graph the frames were sampled on; its edge
-    /// slots index the δ̄ columns.</param>
-    /// <param name="frames">A rich sweep's accumulators (one or more per T).</param>
-    /// <param name="theta">Bond threshold on δ̄ (BWD step g; default 0.5).</param>
-    /// <param name="peripheralCapture">Domany step 2 — union each node with its
-    /// max-δ̄ neighbor regardless of θ, applied per level. Default off.</param>
-    public static PartitionHierarchy Build(
-        CsrGraph graph,
-        IReadOnlyList<Accumulator> frames,
-        double theta = 0.5,
-        bool peripheralCapture = false)
-    {
-        ArgumentNullException.ThrowIfNull(graph);
-        ArgumentNullException.ThrowIfNull(frames);
-
-        var (temperatures, deltaByGridPoint) = SweepEdgeCurves.CoMembershipDelta(frames);
-        return Build(graph, temperatures, deltaByGridPoint, theta, peripheralCapture);
-    }
-
-    /// <summary>
     /// Producer-agnostic core: cut a dense stack from explicit ascending
     /// temperatures and their grid-major per-edge δ̄ columns (CSR-slot indexed).
-    /// SW supplies pooled sampled columns (the overload above); a solver
+    /// SW supplies pooled sampled columns (SPC's <c>SweepDenseTStack</c>); a solver
     /// supplies its closed-form columns; BARS substitutes monotonized posterior
     /// columns upstream — all share this cut.
     /// </summary>

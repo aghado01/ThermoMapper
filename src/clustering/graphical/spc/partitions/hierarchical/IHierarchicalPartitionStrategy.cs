@@ -1,3 +1,4 @@
+using Clustering.Dendrograms;
 using Clustering.Graphical.SPC.Runtime.Scheduling;
 using Graphs.Primitives;
 

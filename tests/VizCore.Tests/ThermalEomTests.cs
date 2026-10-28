@@ -1,4 +1,5 @@
 using System;
+using Clustering.Dendrograms;
 using Clustering.Graphical.SPC.Partitions.Thermal;
 using Clustering.Graphical.SPC.Profiling;
 using Clustering.Graphical.SPC.Runtime.Core.Sampler;
@@ -96,7 +97,7 @@ public sealed class ThermalEomTests
         //   abstains.
         var graph = PathGraph();
 
-        ThermalEomResult result = ThermalEom.Resolve(graph, Frames(graph), theta: 0.5, graphId: "test");
+        ThermalEomResult result = SweepThermalEom.Resolve(graph, Frames(graph), theta: 0.5, graphId: "test");
 
         Assert.Equal("temperature", result.Dendrogram.CostAxis);
         Assert.Equal(3.0, result.Dendrogram.Merges[0].Distance, precision: 12);
@@ -120,7 +121,7 @@ public sealed class ThermalEomTests
         // neighbor): the abstain is completed, count unchanged.
         var graph = PathGraph();
 
-        ThermalEomResult result = ThermalEom.Resolve(
+        ThermalEomResult result = SweepThermalEom.Resolve(
             graph, Frames(graph), theta: 0.5,
             completion: ThermalPeripheryCompletion.Ascend);
 

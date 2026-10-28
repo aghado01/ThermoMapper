@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Clustering.Primitives;
 
-namespace Clustering.Graphical.SPC.Partitions.Hierarchical;
+namespace Clustering.Dendrograms;
 
 /// <summary>
 /// Shared nesting check for any cold→hot stack of partitions — the
@@ -10,7 +10,7 @@ namespace Clustering.Graphical.SPC.Partitions.Hierarchical;
 /// <c>Clustering.Dendrograms.Dendrogram</c> (the degenerate-nested
 /// projection) or stays its own member (the lineage-persistence-resolved
 /// <see cref="PartitionHierarchy"/>). Hoisted out of
-/// <see cref="BlattPartitionStrategy"/> so the per-phase reading and the
+/// SPC's <c>BlattPartitionStrategy</c> so the per-phase reading and the
 /// dense per-T reading (<c>DenseTStack</c>) check nesting one way.
 /// </summary>
 public static class PartitionNesting
@@ -64,7 +64,7 @@ public sealed record HierarchyLevel(
 /// Ordered sequence of <see cref="HierarchyLevel"/>s spanning the
 /// temperature axis from cold (ordered phase, few large clusters) to
 /// hot (paramagnetic, many small or singleton clusters). The
-/// hierarchical output of an <see cref="IHierarchicalPartitionStrategy"/>.
+/// hierarchical output of an SPC <c>IHierarchicalPartitionStrategy</c>.
 /// </summary>
 /// <remarks>
 /// <para><b>Ordering.</b> <see cref="Levels"/> is sorted ascending in
