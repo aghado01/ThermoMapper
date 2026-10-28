@@ -21,8 +21,8 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [x] **F-O2** Order-free admission and R's `getQf` rule: `r/oracles/bass_admission_oracle.R`.
 - [ ] **F-O3** Count and order laws under a constant likelihood, by enumeration (D01, D02).
 - [ ] **F-O4** Boundary ratios π(1)/π(0) and π(M_max)/π(M_max − 1), and R's fixed thirds as a defect fixture.
-- [ ] **F-O5** Wallenius probabilities against brute-force sums over draw orders.
-- [ ] **F-O6** Defect fixtures: R's tempering and swap density, R's Jeffreys mode, KHAOS's double count factor.
+- [x] **F-O5** Wallenius probabilities against brute-force sums over draw orders: `r/oracles/bass_wallenius_oracle.R`.
+- [x] **F-O6** Defect fixtures: R's tempering and swap density, R's Jeffreys mode, KHAOS's double count factor: `r/oracles/bass_enumeration_oracle.R` (modes `swap` and `count`) and `r/oracles/bass_jeffreys_oracle.R`.
 - [x] **F-O7** Centred admission angles for the Liang default, as the `centred` and `hadamard` modes of `r/oracles/bass_admission_oracle.R`. Checks: uncentred s_j = centred s_j · ρ_j; the downdate's accuracy on a near-constant column; and the centred Hadamard form against explicit centring.
 
 ### Build (stage 4)
@@ -49,6 +49,30 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### Wallenius and defect fixtures (F-O5, F-O6) — 2026-10-27
+
+From the reference-fixtures chip ([brief](reference-fixtures-brief.md)), `a6960f0`. Three oracles, run by `r/scripts/bass_stage1_checks.R`, all checks passing. They source the pinned R BASS checkout (`2671014`) through `_common.R`'s `bass_source`, and evaluate R's expressions as written, extracted from the function bodies, rather than transcriptions of them.
+- **F-O5,** `r/oracles/bass_wallenius_oracle.R`. The reference is brute force over the K! draw orders. It sums to 1 over every enumerated order and equals 1/C(p, K) under equal weights, to 3·10⁻¹⁶. Its denominators sum the weights left in the urn: subtracting the drawn ones from the total, as a first version did, cost 9·10⁻¹³ with weights spanning five decades. R's own `sample(prob = z, replace = FALSE)` draws that law (largest |z| 2.8 over 20,000 draws per order).
+  - *R's range.* `dmwnchBass` is exact at K = 2, 3: 5·10⁻¹⁵ with equal weights (p = 6), 1.4·10⁻¹³ with R-like counts (p = 8), 1.6·10⁻¹² with p = 50.
+  - *Beyond it* the alternating sum loses digits: 5·10⁻¹³ at K = 4, 5 (p = 8) and 4·10⁻⁹ at K = 5 (p = 50). With weights spanning five decades it loses them from K = 2: 1·10⁻⁷ at K = 2, 3·10⁻⁵ at K = 3, 3·10⁻⁴ at K = 4, 8·10⁻³ at K = 5. Quadrature of the positive integrand (on t = e^{−u}) stays within 2·10⁻¹⁵ of brute force everywhere.
+  - *At K = 1* `dmwnchBass` returns twice the probability, because its loop runs over `1:0`. R never calls it there (`logProbChangeMod` scores the uniform 1/p it samples), so this is a trap for a literal port, not an R defect.
+- **F-O6 (a),** `r/oracles/bass_enumeration_oracle.R`, mode `swap`. The structure space is p = 2 with N = 24 on a 4 × 3 grid, K_max = 2 and M_max = 2: 62 terms, 30 with at least 3 nonzero values, 464 states and 6930 moving transitions. The continuous parameters are fixed at σ² = 0.1, τ = 1/N, λ = 2, the slice on which R's structure moves act. Stationary laws come from each kernel's transition matrix by GTH elimination, which keeps every component's relative accuracy (a dense solve left the corrected swap's spread at 10⁻⁶).
+  - *Validity.* R's `getQf` agrees with the strict rank in both column orders on every state. R's `alpha` is exactly b times its b = 1 value. At b = 1, R's kernel with the state's move probabilities in place of its fixed thirds is the posterior to 2·10⁻¹⁴. With the thirds it is 0.020 off in total variation: F-O4's defect, measured in passing.
+  - *R's tempered kernel targets none of the candidate laws.* At b = 0.5 and 0.2 its total variation is 0.086 and 0.145 from D05's likelihood path (prior times p_b), 0.036 and 0.078 from the prior times p_1^b, 0.26 and 0.51 from the powered collapsed path, and 0.32 and 0.58 from the joint over (structure, a) powered and then integrated.
+  - *Swaps.* R's swap fails balance against its own rung laws: the spread of log s₁ − log s₂ − (b₁ − b₂)·lp is 1.78 (1 ↔ 0.5) and 1.07 (0.5 ↔ 0.2), where balance needs 0. Against the four candidate families it is 0.82 to 5.26. D05's corrected kernels reach their target to 4·10⁻¹⁶, and D05's swap balances on them to 5·10⁻¹⁵.
+- **F-O6 (b),** `r/oracles/bass_jeffreys_oracle.R`. N = 40, an intercept and two hinges, σ² = 0.04. A tensor Gauss–Legendre rule for the integral over a matches the Gaussian closed form to 2·10⁻¹⁴. That confirms D03's coherent factors per birth, c(2πσ²)^{1/2}(|G′|/|G|)^{−1/2} (flat) and (2π)^{1/2} (Jeffreys), and its σ² shapes, g₁ + (N − k)/2 and g₁ + N/2.
+  - *R's factors,* evaluated as written: the births give 2.667 and 2.272 on the log scale, against −0.967 and −0.179 (flat) and 0.919 (Jeffreys). The change move gives −0.047 against 0.093 and 0. The σ² shape is 19.5 against 19 and 20.
+  - *The implied priors are confirmed by quadrature.* σ^{−2k}|G|^{3/4} reproduces R's birth, death and change factors, and σ^{−(k−1)} reproduces its σ² shape, each to 1·10⁻¹⁴. Two different priors, so no single target, as D03 says.
+- **F-O6 (c),** `bass_enumeration_oracle.R`, mode `count`. A constant likelihood, p = 2 with two knots per variable, K_max = 2, M_max = 3, λ = 2: 24 terms and 2325 states. D01's birth ratio gives the stated count law (0.165, 0.330, 0.315, 0.190 for M = 0–3) to 6·10⁻¹⁴ in total variation. KHAOS's double count gives the stated law times 1/M! (0.241, 0.482, 0.230, 0.046) to 6·10⁻¹⁴, 0.229 from the stated one.
+- **Findings for the drafts** (the briefs are not edited):
+  - *D01, the inclusion–exclusion cut.* The cut at K ≤ 3 holds at R's default w₂ = 5, where the weights stay within a small factor of each other. With a small w₂ or skewed counts, the sum loses digits from K = 2 (above). Choosing by an error estimate, about ε·2^K/P(S), rather than by K alone would cover both. A port that routes K = 1 through the Wallenius formula must not copy R's loop.
+  - *D05, R's lp.* `lp` departs from the collapsed log posterior by more than the term priors. It is the log joint density at a's conditional mode, so it also carries ½ log|G| − (k/2) log(2πσ²/(1 + τ)), which depends on the structure and on R's column scaling (`const`). The spreads above include both.
+- **Not covered:**
+  - The enumeration has p = 2, so every interaction draws the one pair and the Wallenius factor is 1.
+  - R's tempered draws of λ, σ² and τ are held fixed on the slice.
+  - Categorical and functional terms, and the robust modes.
+  - The Jeffreys fixture is one design at one σ².
 
 ### Centred admission fixture (F-O7) — 2026-10-26
 

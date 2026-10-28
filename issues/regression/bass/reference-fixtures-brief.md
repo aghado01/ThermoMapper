@@ -51,3 +51,21 @@ Briefs and checklists use LF line endings; R files keep theirs. For multi-line s
 ## Report
 
 Append the report here when the work lands, newest first: date, commits, each fixture's evidence and limits, anything that contradicts a draft, and blockers.
+
+### Report — 2026-10-27
+
+`a6960f0` (oracles, `_common.R`, checks). Every item has its oracle and its checks pass under `Rscript scripts/bass_stage1_checks.R`:
+- F-O5: `bass_wallenius_oracle.R`.
+- F-O6: `bass_enumeration_oracle.R` (modes `swap` and `count`) and `bass_jeffreys_oracle.R`.
+- O-O1 to O-O3: `bass_output_defects_oracle.R`, `bass_sensitivity_defects_oracle.R` and `bass_moments_oracle.R`.
+- C-O1 and C-O2: `bass_calibration_defects_oracle.R` and `bass_covariance_oracle.R`.
+
+The full evidence and each fixture's limits are in the [fitting](port-fitting-checklist.md), [outputs](port-outputs-checklist.md) and [calibration](port-calibration-checklist.md) checklists' reports of today.
+
+- **How the oracles reach R.** `_common.R` gains `bass_source`, which checks that the pinned checkout is at `2671014` and sources the named files into an environment. It also gains `source_calls` and `source_assignment`, which pull an expression out of a function body so that R's code is evaluated as written, and `gauss_legendre`. Base R and `jsonlite` only.
+- **No draft is contradicted.** Each R behaviour the drafts call a defect reproduces, and each corrected expectation holds. Refinements for the planning session:
+  - *D01.* The inclusion–exclusion cut at K ≤ 3 is safe at R's default w₂ but not with skewed weights, which lose digits from K = 2 (1·10⁻⁷ at K = 2, 3·10⁻⁵ at K = 3 with weights spanning five decades). An error estimate would choose better than K alone. `dmwnchBass` doubles the probability at K = 1, a path R never takes.
+  - *D05.* R's `lp` is the log joint at a's conditional mode, so beyond the missing term priors it carries ½ log|G| − (k/2) log(2πσ²/(1 + τ)). R's tempered kernel alone, before any swap, targets none of the candidate laws.
+  - *D09.* R's Woodbury helpers match the low-rank route's accuracy, so the case against m × m inverses is cost alone. At κ = 9·10¹³ no dense reference certifies either route (the two dense algorithms disagree by 10⁻³); both stay backward stable.
+  - *F-O4,* by the way: R's fixed thirds put the b = 1 chain 0.020 in total variation off the posterior on F-O6's enumerable space.
+- **Blockers:** none. R's Student moments could not be compared (they need `hypergeo`); the quadrature references cover them.
