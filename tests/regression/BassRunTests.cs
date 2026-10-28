@@ -103,6 +103,19 @@ public sealed class BassRunTests
     }
 
     [Fact]
+    public void Fit_DoesNotDependOnTheRunsOtherOptions()
+    {
+        BassConfig config = Config(chains: 3, samples: 100);
+        BassData data = BassSweepTests.Data(large: true);
+        BassFit plain = Bass.Fit(config, data);
+        Assert.Null(plain.ResidualDependence);
+        var options = new BassRunOptions { Checkpoint = true, Progress = new Inline(_ => { }), ProgressInterval = 7 };
+        BassFit other = Bass.Fit(config, data, options);
+        Assert.NotNull(other.Checkpoint);
+        AssertSameFit(plain, other);
+    }
+
+    [Fact]
     public void Thinning_KeepsTheTrajectory()
     {
         BassData data = BassSweepTests.Data(large: true);

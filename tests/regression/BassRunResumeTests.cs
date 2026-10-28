@@ -165,6 +165,28 @@ public sealed class BassRunResumeTests
         for (int i = 0; i < 200; i++) Assert.Equal(again.Step().Fit, later.Step().Fit);
     }
 
+    [Fact]
+    public void Restore_RefusesAForeignState()
+    {
+        BassConfig config = Config("defaults", 1);
+        var model = BassModel.Create(config, Data("defaults"));
+        var ensemble = new BassEnsemble(model, Bass.Fingerprint(config, Data("defaults")), new BassRunOptions(), 0, 1);
+        Assert.Throws<ArgumentException>(() => ensemble.RestoreChain(new Foreign()));
+
+        var chain = new BassChain(model, [], Math.Log(1.0 / 75), new Xoshiro256PlusPlus(1), new Xoshiro256PlusPlus(2));
+        for (int i = 0; i < 300; i++) chain.Step();
+        BassChainSnapshot snapshot = chain.Snapshot();
+        // A state the snapshot's design does not hold.
+        BassState other = new BassPriorSampler(model).Draw(new Xoshiro256PlusPlus(9)).State;
+        Assert.False(other.Terms.SequenceEqual(chain.Current.Terms));
+        Assert.Throws<ArgumentException>(() => new BassStructureMoves(model, other, snapshot.Structure));
+        // A design over other data.
+        var small = BassModel.Create(BassSweepTests.Config(), BassSweepTests.Data());
+        Assert.Throws<ArgumentException>(() => small.NewDesign().Restore(snapshot.Structure.Design));
+    }
+
+    private sealed class Foreign : Maths.Samplers.Ensemble.IChainState { }
+
     private sealed class Inline(Action<BassProgress> report) : IProgress<BassProgress>
     {
         public void Report(BassProgress value) => report(value);
