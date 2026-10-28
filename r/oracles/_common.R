@@ -11,8 +11,10 @@ emit_json <- function(obj, path, ...) {
 }
 
 # The pinned R BASS source (BASS 1.3.1, github.com/lanl/BASS), sourced rather than installed: R BASS is not in the
-# project's renv, and its imports (truncdist, hypergeo) sit on paths the oracles do not call. BASS_R_SOURCE locates
-# the checkout (default D:/aghado01/packages/BASS), which must be at the pinned commit.
+# project's renv. Of its imports, hypergeo is in the renv and truncdist sits on a path the oracles do not call.
+# BASS_R_SOURCE locates the checkout (default D:/aghado01/packages/BASS), which must be at the pinned commit. R BASS
+# calls browser() on numerical anomalies, which under Rscript reads stdin; inside the sourced environment it is a
+# no-op, so an oracle never waits on input and records what R computes.
 bass_pinned_commit <- "26710146c623a258854162367a939041efedd091"
 
 bass_source <- function(files, root = Sys.getenv("BASS_R_SOURCE", "D:/aghado01/packages/BASS")) {
@@ -21,6 +23,7 @@ bass_source <- function(files, root = Sys.getenv("BASS_R_SOURCE", "D:/aghado01/p
   if (!identical(as.vector(head), bass_pinned_commit))
     stop("the R BASS checkout at ", root, " is not at the pinned commit ", bass_pinned_commit)
   env <- new.env(parent = globalenv())
+  assign("browser", function(...) invisible(NULL), envir = env)
   for (f in files) sys.source(file.path(root, "R", f), envir = env)
   env
 }
@@ -54,4 +57,18 @@ gauss_legendre <- function(n, a = -1, b = 1) {
   e <- eigen(J, symmetric = TRUE)
   o <- order(e$values)
   list(x = (a + b) / 2 + (b - a) / 2 * e$values[o], w = (b - a) / 2 * 2 * e$vectors[1, o]^2)
+}
+
+# The stationary law of a row-stochastic matrix by GTH elimination (Grassmann, Taksar and Heyman 1985), which avoids
+# subtraction and so keeps every component's relative accuracy, even for states of tiny probability. O(n^3).
+stationary_gth <- function(P) {
+  n <- nrow(P)
+  for (k in n:2) {
+    i <- seq_len(k - 1)
+    P[i, k] <- P[i, k] / sum(P[k, i])
+    P[i, i] <- P[i, i] + outer(P[i, k], P[k, i])
+  }
+  x <- numeric(n); x[1] <- 1
+  for (k in 2:n) x[k] <- sum(x[seq_len(k - 1)] * P[seq_len(k - 1), k])
+  x / sum(x)
 }

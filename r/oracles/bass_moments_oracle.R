@@ -12,9 +12,19 @@
 #     normalizer taken the same way;
 #   gauss_legendre: a composite Gauss-Legendre rule, 64 subpanels of 20 nodes between consecutive breakpoints, as a
 #     second, independent quadrature; max_rel_quadrature_vs_gl is their largest relative difference.
-#   r: R's own moments, C1 and C2 (sobol_normTmix.R), times const() to undo R's scaling, where R supports the
-#     measure; r_error records why not (R refuses normal degrees above 1, and its Student moments need hypergeo,
-#     which is not installed). max_rel_r_vs_quadrature over the supported cases.
+#   r: R's own moments, C1 and C2 (sobol_normTmix.R), times const() to undo R's scaling, for every measure R has
+#     (all but the conditional mixture); r_error records the first error R raises for the measure. C1 and C2 return
+#     0 without evaluating anything when a hinge misses the measure's interval, so R "covers" such cases trivially.
+#     r_covered and r_max_rel count R's finite values and give its largest relative error per measure, for first and
+#     cross moments at degrees 1-3 (null where R has none); max_rel_r_vs_quadrature is the largest over the uniform
+#     and normal measures.
+#   r_repaired: R's Student forms (intx1Student, intx2Student) with only the 2F1 evaluator replaced. As written,
+#     robust2f1 calls hypergeo::f15.3.8, the Abramowitz-Stegun 15.3.8 transformation: for |x| < 1 it returns a
+#     complex value, which fails C1's and C2's sign checks, and for |x| >= 1 R passes it the Pfaff-transformed
+#     argument in (0, 1), where it returns NA (the commented-out code used gsl::hyperg_2F1 there; hypergeo's general
+#     hypergeo() does not converge at these arguments either). The repair keeps R's branches, Pfaff transform
+#     included, and sums the Gauss series, which converges for |x| < 1, to relative 1e-17. It separates R's
+#     evaluator from its formula: repaired_covered and repaired_max_rel as above.
 # Measures: uniform_unit U(0, 1); uniform_inner U(0.25, 0.75); normal_mix, weights (0.4, 0.6), means (0.3, 0.7), sds
 # (0.1, 0.2) on [0, 1], weights before truncation and the whole mixture renormalized (R's convention, D08's default);
 # normal_mix_conditional, the same with each component renormalized on [0, 1] (D08's other named form);
@@ -25,8 +35,10 @@
 # Categorical references, by enumeration: P(D_i) and P(D_i and D_j) as sums of the supplied probabilities, beside
 # R's subset size (or intersection size) over the level count, which ignores the probabilities.
 #
-# Emits continuous: { measures, cases, quadrature, gauss_legendre, r, r_error, max_rel_quadrature_vs_gl,
-#         max_rel_r_vs_quadrature } (matrices are cases x measures; null where R does not support the measure);
+# Emits continuous: { measures, cases, quadrature, gauss_legendre, r, r_error, groups, r_covered, r_max_rel,
+#         r_repaired, repaired_covered, repaired_max_rel, max_rel_quadrature_vs_gl, max_rel_r_vs_quadrature }
+#         (matrices are cases x measures; the summaries are measures x groups, a group being first or cross moments
+#         at one degree; null where R has no value);
 #       categorical: { probabilities, subsets, P, P_joint, r_P, r_P_joint }.
 
 source("oracles/_common.R")
@@ -48,6 +60,18 @@ if (mode == "categorical") {
 }
 
 bass <- bass_source(c("basis_funcs.R", "sobol_normTmix.R"))
+repaired <- bass_source(c("basis_funcs.R", "sobol_normTmix.R"))
+gauss_series <- function(a, b, c, x) {                         # 2F1(a, b; c; x) for |x| < 1
+  term <- 1; total <- 1; n <- 0
+  repeat {
+    term <- term * (a + n) * (b + n) / ((c + n) * (n + 1)) * x
+    total <- total + term; n <- n + 1
+    if (abs(term) <= 1e-17 * abs(total) || n >= 1e6) break
+  }
+  total
+}
+assign("robust2f1", function(a, b, c, x)
+  if (abs(x) < 1) gauss_series(a, b, c, x) else gauss_series(a, c - b, c, 1 - 1 / (1 - x)) / (1 - x)^a, envir = repaired)
 mixture <- function(name, dist, lo, hi, weights = NULL, mean = NULL, sd = NULL, df = NULL, conditional = FALSE)
   list(name = name, dist = dist, trunc = c(lo, hi), weights = weights, mean = mean, sd = sd, df = df, conditional = conditional)
 measures <- list(
@@ -92,22 +116,24 @@ by_gauss_legendre <- function(f, b) sum(vapply(seq_len(length(b) - 1), function(
   sum(w * f(x))
 }, 0))
 
-# R's moments: the measure as sobol() hands it to C1/C2 (normal weights divided by the truncated mass), and the
-# result times const() to undo R's hinge scaling.
+# R's moments: the measure as sobol() hands it to C1/C2 (weights divided by the truncated mass), and the result times
+# const() to undo R's hinge scaling.
 r_prior <- function(mu) {
   if (mu$dist == "uniform") return(structure(list(trunc = mu$trunc), class = "uniform"))
-  z <- pnorm(mu$trunc[2], mu$mean, mu$sd) - pnorm(mu$trunc[1], mu$mean, mu$sd)
-  structure(list(trunc = mu$trunc, mean = mu$mean, sd = mu$sd, weights = mu$weights / sum(mu$weights * z)), class = "normal")
+  z <- if (mu$dist == "normal") pnorm(mu$trunc[2], mu$mean, mu$sd) - pnorm(mu$trunc[1], mu$mean, mu$sd) else
+    pt((mu$trunc[2] - mu$mean) / mu$sd, mu$df) - pt((mu$trunc[1] - mu$mean) / mu$sd, mu$df)
+  structure(list(trunc = mu$trunc, mean = mu$mean, sd = mu$sd, df = mu$df, weights = mu$weights / sum(mu$weights * z)),
+            class = mu$dist)
 }
-r_moment <- function(mu, cs) {
+r_moment <- function(mu, cs, env = bass) {
   tl <- list(q = cs[5], t = matrix(c(cs[1], cs[3]), 2, 1), s = matrix(c(cs[2], cs[4]), 2, 1), prior = list(r_prior(mu)))
-  if (cs[4] == 0) return(bass$C1(1, 1, tl) * bass$const(cs[2], cs[1], cs[5]))
-  bass$C2(1, 2, 1, tl) * bass$const(c(cs[2], cs[4]), c(cs[1], cs[3]), cs[5])
+  if (cs[4] == 0) return(env$C1(1, 1, tl) * env$const(cs[2], cs[1], cs[5]))
+  env$C2(1, 2, 1, tl) * env$const(c(cs[2], cs[4]), c(cs[1], cs[3]), cs[5])
 }
-r_supported <- function(mu) mu$dist == "uniform" || (mu$dist == "normal" && !mu$conditional)
+r_supported <- function(mu) !mu$conditional
 
 cases <- C
-quad <- glm_ <- r <- matrix(NA_real_, nrow(cases), length(measures))
+quad <- glm_ <- r <- rep_ <- matrix(NA_real_, nrow(cases), length(measures))
 r_error <- rep(NA_character_, length(measures))
 for (j in seq_along(measures)) {
   mu <- measures[[j]]
@@ -120,15 +146,37 @@ for (j in seq_along(measures)) {
     quad[i, j] <- by_quadrature(g, b) / Zq
     glm_[i, j] <- by_gauss_legendre(g, b) / Zg
     if (r_supported(mu)) {
-      val <- tryCatch(r_moment(mu, cs), error = function(e) conditionMessage(e))
+      val <- tryCatch(suppressWarnings(r_moment(mu, cs)), error = function(e) conditionMessage(e))
+      if (is.complex(val)) val <- "a complex value"
       if (is.character(val)) { if (is.na(r_error[j])) r_error[j] <- val } else r[i, j] <- val
     }
+    if (mu$dist == "student") {
+      rep_[i, j] <- tryCatch(r_moment(mu, cs, repaired), error = function(e) NA_real_)
+    }
   }
-  if (!r_supported(mu)) r_error[j] <- if (mu$dist == "student") "Student moments need hypergeo (not installed)" else
-    "R has no form with weights conditional on truncation"
+  if (!r_supported(mu)) r_error[j] <- "R has no form with weights conditional on truncation"
 }
 rel <- function(a, b) { d <- abs(a - b); s <- pmax(abs(a), abs(b)); ifelse(s == 0, 0, d / s) }
+groups <- paste0(ifelse(cases[, 4] == 0, "first", "cross"), "_q", cases[, 5])
+group_names <- sort(unique(groups))
+measure_names <- vapply(measures, `[[`, "", "name")
+summarize <- function(values) {
+  finite <- ifelse(is.finite(values), values, NA)
+  err <- rel(finite, quad)
+  cell <- function(f) {
+    out <- t(vapply(seq_along(measures), function(j) vapply(group_names, function(g) f(err[groups == g, j]), 0),
+                    numeric(length(group_names))))
+    dimnames(out) <- list(measure_names, group_names)
+    out
+  }
+  list(values = finite, covered = cell(function(v) sum(!is.na(v))),
+       max_rel = cell(function(v) if (all(is.na(v))) NA_real_ else max(v, na.rm = TRUE)), err = err)
+}
+rs <- summarize(r); rr <- summarize(rep_)
+uniform_normal <- vapply(measures, function(mu) mu$dist %in% c("uniform", "normal"), TRUE)
 emit_json(list(measures = lapply(measures, function(mu) mu[!vapply(mu, is.null, TRUE)]), cases = cases,
-               quadrature = quad, gauss_legendre = glm_, r = r, r_error = r_error,
+               quadrature = quad, gauss_legendre = glm_, r = rs$values, r_error = r_error,
+               groups = group_names, r_covered = rs$covered, r_max_rel = rs$max_rel, r_repaired = rr$values,
+               repaired_covered = rr$covered, repaired_max_rel = rr$max_rel,
                max_rel_quadrature_vs_gl = max(rel(quad, glm_)),
-               max_rel_r_vs_quadrature = max(rel(r, quad), na.rm = TRUE)), args[2], na = "null")
+               max_rel_r_vs_quadrature = max(rs$err[, uniform_normal], na.rm = TRUE)), args[2], na = "null")

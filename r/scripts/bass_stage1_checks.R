@@ -183,30 +183,44 @@ set.seed(7)
 grid12 <- expand.grid(x1 = c(0, 1 / 3, 2 / 3, 1), x2 = c(0, 0.5, 1))
 grid12 <- rbind(grid12, grid12)
 y_swap <- 1 + 1.5 * pmax(grid12$x1 - 1 / 3, 0) - pmax(0.5 - grid12$x2, 0) + rnorm(nrow(grid12), sd = 0.3)
-sw <- run("bass_enumeration_oracle.R", cbind(y_swap, grid12$x1, grid12$x2), "swap")
-s <- sw$swap
-cat(sprintf("  p = 2, N = %d, K_max = 2, M_max = 2, sigma^2 = 0.1, tau = 1/N, lambda = 2: %d terms (%d with >= 3 nonzero values), %d states, %d moving transitions\n",
-            sw$n, sw$n_terms, sw$n_supported, sw$n_states, s$n_transitions))
-cat(sprintf("    getQf agrees with the strict rank in both column orders (%d mismatches): %s; R's alpha is b times its b = 1 value (gap %.0e): %s\n",
-            s$getqf_mismatches, verdict(s$getqf_mismatches == 0), s$alpha_linear_in_b_gap,
-            verdict(s$alpha_linear_in_b_gap <= 1e-12)))
-cat(sprintf("    at b = 1 R's kernel with the state's move probabilities is the posterior (TV %.0e): %s; with R's fixed thirds, TV %.3f (F-O4's defect)\n",
-            s$tv_r_isolated_b1_posterior, verdict(s$tv_r_isolated_b1_posterior <= 1e-12), s$tv_r_literal_b1_posterior))
-for (i in seq_len(nrow(s$rung))) {
-  tv <- s$rung$tv_r_to[i, ]
-  cat(sprintf("    b = %.1f: D05's kernel vs its target TV %.0e; R's kernel vs like_int %.3f, like_lin %.3f, pow_coll %.3f, pow_joint %.3f\n",
-              s$rung$b[i], s$rung$tv_corrected_target[i], tv$like_int, tv$like_lin, tv$pow_coll, tv$pow_joint))
+show_swap <- function(label, sw) {
+  s <- sw$swap
+  cat(sprintf("  %s, N = %d, K_max = 2, M_max = 2, sigma^2 = 0.1, tau = 1/N, lambda = 2: %d terms (%d with >= %d nonzero values), %d states, %d moving transitions\n",
+              label, sw$n, sw$n_terms, sw$n_supported, sw$options$npart, sw$n_states, s$n_transitions))
+  cat(sprintf("    getQf agrees with the strict rank in both column orders (%d mismatches): %s; R's alpha is b times its b = 1 value (gap %.0e): %s\n",
+              s$getqf_mismatches, verdict(s$getqf_mismatches == 0), s$alpha_linear_in_b_gap,
+              verdict(s$alpha_linear_in_b_gap <= 1e-12)))
+  cat(sprintf("    at b = 1 R's kernel with the state's move probabilities is the posterior (TV %.0e): %s; with R's fixed thirds, TV %.3f (F-O4's defect)\n",
+              s$tv_r_isolated_b1_posterior, verdict(s$tv_r_isolated_b1_posterior <= 1e-12), s$tv_r_literal_b1_posterior))
+  for (i in seq_len(nrow(s$rung))) {
+    tv <- s$rung$tv_r_to[i, ]
+    cat(sprintf("    b = %.1f: D05's kernel vs its target TV %.0e; R's kernel vs like_int %.3f, like_lin %.3f, pow_coll %.3f, pow_joint %.3f; reversibility gap R %.0e, D05 %.0e\n",
+                s$rung$b[i], s$rung$tv_corrected_target[i], tv$like_int, tv$like_lin, tv$pow_coll, tv$pow_joint,
+                s$rung$reversibility_r[i], s$rung$reversibility_corrected[i]))
+  }
+  for (i in seq_len(nrow(s$pairs))) {
+    pr <- s$pairs[i, ]; fam <- pr$r_swap_vs_family
+    cat(sprintf("    swap %.1f <-> %.1f, spread of log s1 - log s2 - (b1 - b2) lp: R's kernels %.2f; like_int %.2f, like_lin %.2f, pow_coll %.2f, pow_joint %.2f; D05's swap on its kernels %.0e\n",
+                pr$b1, pr$b2, pr$r_swap_vs_r_kernels, fam$like_int, fam$like_lin, fam$pow_coll, fam$pow_joint,
+                pr$corrected_swap_vs_corrected_kernels))
+  }
+  cat(sprintf("    R's swap fails balance against its own kernels and every candidate target (spread >= 0.1): %s; D05's swap balances (<= 1e-10): %s; D05's kernels reach their target and are reversible (<= 1e-12): %s\n",
+              verdict(min(s$pairs$r_swap_vs_r_kernels, unlist(s$pairs$r_swap_vs_family)) >= 0.1),
+              verdict(max(s$pairs$corrected_swap_vs_corrected_kernels) <= 1e-10),
+              verdict(max(s$rung$tv_corrected_target, s$rung$reversibility_corrected) <= 1e-12)))
+  invisible(s)
 }
-for (i in seq_len(nrow(s$pairs))) {
-  pr <- s$pairs[i, ]; fam <- pr$r_swap_vs_family
-  cat(sprintf("    swap %.1f <-> %.1f, spread of log s1 - log s2 - (b1 - b2) lp: R's kernels %.2f; like_int %.2f, like_lin %.2f, pow_coll %.2f, pow_joint %.2f; D05's swap on its kernels %.0e\n",
-              pr$b1, pr$b2, pr$r_swap_vs_r_kernels, fam$like_int, fam$like_lin, fam$pow_coll, fam$pow_joint,
-              pr$corrected_swap_vs_corrected_kernels))
-}
-cat(sprintf("    R's swap fails balance against its own kernels and every candidate target (spread >= 0.1): %s; D05's swap balances (<= 1e-10): %s; D05's kernels reach their target (<= 1e-12): %s\n",
-            verdict(min(s$pairs$r_swap_vs_r_kernels, unlist(s$pairs$r_swap_vs_family)) >= 0.1),
-            verdict(max(s$pairs$corrected_swap_vs_corrected_kernels) <= 1e-10),
-            verdict(max(s$rung$tv_corrected_target) <= 1e-12)))
+s2p <- show_swap("p = 2", run("bass_enumeration_oracle.R", cbind(y_swap, grid12$x1, grid12$x2), "swap"))
+cat(sprintf("    with p = 2 every interaction draws the one pair, and R's tempered kernel is reversible (gap <= 1e-12): %s\n",
+            verdict(max(s2p$rung$reversibility_r) <= 1e-12)))
+set.seed(8)
+grid27 <- expand.grid(x1 = c(0, 0.5, 1), x2 = c(0, 0.5, 1), x3 = c(0, 0.5, 1))
+y_swap3 <- 1 + 1.5 * pmax(grid27$x1 - 0.5, 0) - pmax(0.5 - grid27$x2, 0) + 0.8 * grid27$x3 * grid27$x1 +
+  rnorm(nrow(grid27), sd = 0.3)
+s3p <- show_swap("p = 3", run("bass_enumeration_oracle.R", cbind(y_swap3, grid27$x1, grid27$x2, grid27$x3), "swap", "npart=4"))
+cat(sprintf("    with p = 3 the Wallenius factor enters R's tempered acceptance as (q_rev / q_fwd)^b, and its kernel loses reversibility below b = 1 (gaps %s): %s\n",
+            paste(sprintf("%.0e", s3p$rung$reversibility_r[s3p$rung$b < 1]), collapse = ", "),
+            verdict(min(s3p$rung$reversibility_r[s3p$rung$b < 1]) >= 1e-9 && s3p$rung$reversibility_r[s3p$rung$b == 1] <= 1e-12)))
 
 # F-O6 (b) (D03): R's Jeffreys mode against the flat and Jeffreys priors' coherent factors.
 cat("\nD03 R's Jeffreys mode (F-O6 b)\n")
@@ -241,15 +255,20 @@ cat(sprintf("    R matches neither coherent prior (smallest gap %.2f): %s\n", mi
 # F-O6 (c) (D01): the count law each birth ratio implies under a constant likelihood.
 cat("\nD01 the count law of each birth ratio (F-O6 c)\n")
 grid4 <- expand.grid(x1 = c(0, 1), x2 = c(0, 1))
-cl <- run("bass_enumeration_oracle.R", cbind(0, grid4$x1, grid4$x2), "count", "M_max=3")
-cn <- cl$count
-cat(sprintf("  p = 2, two knots per variable, K_max = 2, M_max = 3, lambda = 2: %d terms, %d states\n", cl$n_terms, cl$n_states))
-cat(sprintf("    count law M = 0..3: stated %s | D01's ratio %s | KHAOS's %s | stated x 1/M! %s\n",
-            paste(sprintf("%.4f", cn$stated), collapse = " "), paste(sprintf("%.4f", cn$d01), collapse = " "),
-            paste(sprintf("%.4f", cn$khaos), collapse = " "), paste(sprintf("%.4f", cn$stated_over_factorial), collapse = " ")))
-cat(sprintf("    D01's ratio gives the stated law (TV %.0e): %s; KHAOS's gives it times 1/M! (TV %.0e): %s, not the stated law (TV %.3f): %s\n",
-            cn$tv_d01_stated, verdict(cn$tv_d01_stated <= 1e-12), cn$tv_khaos_over_factorial,
-            verdict(cn$tv_khaos_over_factorial <= 1e-12), cn$tv_khaos_stated, verdict(cn$tv_khaos_stated >= 0.1)))
+show_count <- function(label, cl) {
+  cn <- cl$count
+  cat(sprintf("  %s, two knots per variable, K_max = 2, M_max = %d, lambda = 2: %d terms, %d states\n", label,
+              max(cn$M), cl$n_terms, cl$n_states))
+  cat(sprintf("    count law M = 0..%d: stated %s | D01's ratio %s | KHAOS's %s | stated x 1/M! %s\n", max(cn$M),
+              paste(sprintf("%.4f", cn$stated), collapse = " "), paste(sprintf("%.4f", cn$d01), collapse = " "),
+              paste(sprintf("%.4f", cn$khaos), collapse = " "), paste(sprintf("%.4f", cn$stated_over_factorial), collapse = " ")))
+  cat(sprintf("    D01's ratio gives the stated law (TV %.0e): %s; KHAOS's gives it times 1/M! (TV %.0e): %s, not the stated law (TV %.3f): %s\n",
+              cn$tv_d01_stated, verdict(cn$tv_d01_stated <= 1e-12), cn$tv_khaos_over_factorial,
+              verdict(cn$tv_khaos_over_factorial <= 1e-12), cn$tv_khaos_stated, verdict(cn$tv_khaos_stated >= 0.1)))
+}
+show_count("p = 2", run("bass_enumeration_oracle.R", cbind(0, grid4$x1, grid4$x2), "count", "M_max=3"))
+grid8 <- expand.grid(x1 = c(0, 1), x2 = c(0, 1), x3 = c(0, 1))
+show_count("p = 3", run("bass_enumeration_oracle.R", cbind(0, grid8$x1, grid8$x2, grid8$x3), "count", "M_max=2"))
 
 # O-O1 (D07): R's output-path defects.
 cat("\nD07 R's output-path defects (O-O1)\n")
@@ -351,15 +370,33 @@ cat(sprintf("  %d cases (first moments with knots inside and outside [0, 1]; cro
             nrow(mo$cases), length(names_m)))
 cat(sprintf("    adaptive quadrature vs composite Gauss-Legendre: %.0e: %s\n", mo$max_rel_quadrature_vs_gl,
             verdict(mo$max_rel_quadrature_vs_gl <= 1e-12)))
-for (j in seq_along(names_m)) {
-  covered <- sum(!is.na(mo$r[, j]))
-  err <- if (covered > 0) max(abs(mo$r[, j] - mo$quadrature[, j]) / pmax(abs(mo$quadrature[, j]), 1e-300), na.rm = TRUE)
-  cat(sprintf("    %-23s R covers %3d cases%s%s\n", names_m[j], covered,
-              if (covered > 0) sprintf(", max rel. error %.0e", err) else "",
-              if (!is.na(mo$r_error[j])) sprintf(" (%s)", mo$r_error[j]) else ""))
+groups_m <- mo$groups
+show_table <- function(title, covered, maxrel, rows = seq_along(names_m)) {
+  cat(sprintf("    %s: covered cases (largest relative error) for %s\n", title, paste(groups_m, collapse = ", ")))
+  for (k in seq_along(rows)) {
+    j <- rows[k]
+    cells <- vapply(seq_along(groups_m), function(g)
+      if (covered[k, g] == 0) "    -          " else sprintf("%3d (%-8s)", covered[k, g], sprintf("%.0e", maxrel[k, g])), "")
+    cat(sprintf("      %-23s %s%s\n", names_m[j], paste(cells, collapse = " "),
+                if (!is.na(mo$r_error[j]) && title == "R as written") sprintf("  [%s]", mo$r_error[j]) else ""))
+  }
 }
+show_table("R as written", mo$r_covered, mo$r_max_rel)
+student <- grep("^student", names_m)
+show_table("R's Student forms with a working 2F1", mo$repaired_covered[student, , drop = FALSE],
+           mo$repaired_max_rel[student, , drop = FALSE], student)
 cat(sprintf("    R's uniform moments (every degree) and normal moments (degree 1) match quadrature (%.0e): %s\n",
             mo$max_rel_r_vs_quadrature, verdict(mo$max_rel_r_vs_quadrature <= 1e-12)))
+trivial_only <- all(vapply(student, function(j) all(mo$quadrature[!is.na(mo$r[, j]), j] == 0), TRUE))
+cat(sprintf("    R's Student moments as written give a value only where a hinge misses the interval (the rest fail on hypergeo's complex or NA results): %s\n",
+            verdict(trivial_only)))
+g1 <- match(c("first_q1", "cross_q1"), groups_m); g23 <- match(c("cross_q2", "cross_q3"), groups_m)
+rep_nu23 <- mo$repaired_max_rel[match(c("student_nu2", "student_nu3"), names_m), , drop = FALSE]
+nu1 <- match("student_nu1", names_m)
+cat(sprintf("    with a working 2F1: degree 1 matches at nu = 2, 3 (%.0e): %s; degrees 2-3 of the cross moment come out as the degree-1 value (errors >= %.2f): %s; nu = 1 divides by nu - 1: %s\n",
+            max(rep_nu23[, g1]), verdict(max(rep_nu23[, g1]) <= 1e-11), min(rep_nu23[, g23]),
+            verdict(min(rep_nu23[, g23]) >= 0.5),
+            verdict(all(mo$quadrature[!is.na(mo$r_repaired[, nu1]), nu1] == 0))))
 mc <- run("bass_moments_oracle.R", rbind(c(0, 0.2, 0.3, 0.5), c(1, 0, 0, 0), c(1, 1, 0, 0), c(0, 1, 1, 0), c(0, 0, 1, 1)),
           "categorical")
 cat(sprintf("  categories with probabilities (%s): P(D) %s by enumeration, R's ratios %s; P(D1 & D3) %.2f (R %.2f): %s\n",
@@ -397,6 +434,29 @@ cat(sprintf("  s2.df = (0, 10): group 2's log prior kernel at sigma^2 = %s is R 
             paste(sprintf("%.2f", s2s$corrected_group2), collapse = " "),
             verdict(max(abs(s2s$r_group2 + log1p(s2s$sigma2))) <= 1e-15 &&
                     max(abs(s2s$r_group2_when_all_positive - s2s$corrected_group2)) <= 1e-12)))
+tp <- cd$tempering
+cat(sprintf("  tempering (ladder %s): R's variance alpha is b times likelihood + prior + Jacobian (gap %.0e): %s\n",
+            paste(tp$ladder, collapse = ", "), tp$alpha_linear_gap, verdict(tp$alpha_linear_gap <= 1e-12)))
+for (i in seq_len(nrow(tp$rungs))) {
+  rg <- tp$rungs[i, ]
+  cat(sprintf("    b = %.1f, log sigma^2 grid: R's kernel vs its powered target TV %.0e, vs the likelihood path %.3f; D09's kernel vs the likelihood path %.0e\n",
+              rg$b, rg$tv_r_vs_powered, rg$tv_r_vs_likelihood_path, rg$tv_corrected_vs_likelihood_path))
+}
+for (i in seq_len(nrow(tp$swaps))) {
+  sp <- tp$swaps[i, ]
+  cat(sprintf("    swap %.1f <-> %.1f, largest gap from detailed balance over all state pairs: R vs its own kernels %.2f (= (b1 - b2) x the grid's log sigma^2 range %.2f), vs the likelihood path %.0f; D09's swap vs its kernels %.0e\n",
+              sp$b1, sp$b2, sp$r_vs_r_kernels, (sp$b1 - sp$b2) * tp$log_sigma2_range, sp$r_vs_likelihood_path,
+              sp$corrected_vs_corrected_kernels))
+}
+dc <- tp$discrepancy_covariance
+cat(sprintf("    discrepancy draw at b = %s: R's covariance vs the powered conditional %s, vs the likelihood path's %s; R's swap misses its own target's discrepancy prior by up to %.2f\n",
+            paste(dc$b, collapse = ", "), paste(sprintf("%.0e", dc$r_vs_powered), collapse = ", "),
+            paste(sprintf("%.3f", dc$r_vs_likelihood_path), collapse = ", "), tp$swap_vs_powered_v_prior_gap))
+cat(sprintf("    R's moves are exact for its powered target and its swap leaves it (gaps >= 0.1): %s; D09's likelihood path balances (<= 1e-10): %s\n",
+            verdict(max(tp$rungs$tv_r_vs_powered, dc$r_vs_powered) <= 1e-12 &&
+                    min(tp$swaps$r_vs_r_kernels, tp$swap_vs_powered_v_prior_gap) >= 0.1),
+            verdict(max(tp$rungs$tv_corrected_vs_likelihood_path) <= 1e-12 &&
+                    max(tp$swaps$corrected_vs_corrected_kernels) <= 1e-10)))
 
 # C-O2 (D09): dense against low-rank covariance; units.
 cat("\nD09 covariance formulations and units (C-O2)\n")

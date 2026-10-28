@@ -36,7 +36,9 @@
 # `lp` (mcmc_funcs.R). It satisfies detailed balance for a pair of rung laws (s1, s2) exactly when
 # D(S) = log s1(S) - log s2(S) - (b1 - b2) lp(S) is constant over S; swap_spread reports max D - min D for R's own
 # stationary laws and for each candidate family (0 to rounding is balance). D05's swap uses log p_b in place of
-# lp, and its spread is reported against the corrected kernels' stationary laws.
+# lp, and its spread is reported against the corrected kernels' stationary laws. reversibility_r and
+# reversibility_corrected measure each kernel's detailed balance with its own stationary law; with p >= 3 the
+# Wallenius factor of R's proposal enters R's tempered acceptance, raised to the power b - 1 (rungs must include 1).
 #
 # mode = count (F-O6 (c)). A constant likelihood and F = distinct terms with M <= M_max (no support or rank rule).
 # Kernels: d01, a birth ratio of lambda pi(t) / (M + 1) times d_{M+1} / (b_M q(t)) (R's and D01's); khaos, the same
@@ -197,15 +199,7 @@ stationary <- function(P) {
     s <- solve(A, c(rep(0, n_states - 1), 1))
     return(s / sum(s))
   }
-  A <- P
-  for (k in n_states:2) {
-    i <- seq_len(k - 1)
-    A[i, k] <- A[i, k] / sum(A[k, i])
-    A[i, i] <- A[i, i] + outer(A[i, k], A[k, i])
-  }
-  x <- numeric(n_states); x[1] <- 1
-  for (k in 2:n_states) x[k] <- sum(x[seq_len(k - 1)] * A[seq_len(k - 1), k])
-  x / sum(x)
+  stationary_gth(P)
 }
 normalize_log <- function(l) { w <- exp(l - max(l)); w / sum(w) }
 tv <- function(a, b) 0.5 * sum(abs(a - b))
@@ -298,13 +292,21 @@ if (mode == "swap") {
     pow_coll = b * (log_prior + log_pb(1)),
     pow_joint = b * (log_prior - N / 2 * log(2 * pi * s2) + k / 2 * log(tau / (2 * pi * s2)) + ldh) -
       b * (rss + qf * tau / (1 + tau)) / (2 * s2) + k / 2 * log(2 * pi * s2 / (b * (1 + tau))) - ldh)
+  # Detailed balance of a kernel with its own stationary law: the largest |s_x P_xy - s_y P_yx| relative to the
+  # largest flow s_x P_xy between distinct states. Zero to rounding means the kernel is reversible.
+  reversibility_gap <- function(P, st) {
+    Fl <- st * P; diag(Fl) <- 0
+    max(abs(Fl - t(Fl))) / max(Fl)
+  }
   rung <- lapply(rungs, function(b) {
-    s_r <- stationary(kernel(b * alpha1_iso))
-    s_c <- stationary(kernel(dl(log_pb(b)) + pp))
+    P_r <- kernel(b * alpha1_iso); P_c <- kernel(dl(log_pb(b)) + pp)
+    s_r <- stationary(P_r); s_c <- stationary(P_c)
     tg <- lapply(targets(b), normalize_log)
     list(b = b, r_isolated = s_r, corrected = s_c, tv_corrected_target = tv(s_c, tg$like_int),
-         tv_r_to = lapply(tg, function(g) tv(s_r, g)))
+         tv_r_to = lapply(tg, function(g) tv(s_r, g)),
+         reversibility_r = reversibility_gap(P_r, s_r), reversibility_corrected = reversibility_gap(P_c, s_c))
   })
+  b1_rung <- rung[[match(1, rungs)]]
   spread <- function(d) max(d) - min(d)
   pairs <- lapply(seq_len(length(rungs) - 1), function(a) {
     b1 <- rungs[a]; b2 <- rungs[a + 1]
@@ -317,9 +319,9 @@ if (mode == "swap") {
   })
   result$swap <- list(
     getqf_mismatches = getqf_mismatches, rungs = rungs, n_transitions = length(moving), alpha_linear_in_b_gap = linear_gap,
-    tv_r_isolated_b1_posterior = tv(stationary(kernel(alpha1_iso)), posterior),
+    tv_r_isolated_b1_posterior = tv(b1_rung$r_isolated, posterior),
     tv_r_literal_b1_posterior = tv(stationary(kernel(alpha1_lit)), posterior),
-    rung = lapply(rung, function(x) x[c("b", "tv_corrected_target", "tv_r_to")]),
+    rung = lapply(rung, function(x) x[c("b", "tv_corrected_target", "tv_r_to", "reversibility_r", "reversibility_corrected")]),
     corrected_target = lapply(rungs, function(b) normalize_log(log_prior + log_pb(b))),
     pairs = pairs, lp_r = lp_r)
 }

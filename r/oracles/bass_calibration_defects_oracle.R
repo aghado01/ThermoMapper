@@ -28,8 +28,25 @@
 #     component variances. Corrected: the physical one.
 #   s2_df_switch: the `if (any(s2.df == 0))` statement evaluated as written: with s2.df = (0, 10) the second group's
 #     log prior kernel is -log(1 + sigma^2) instead of its IG(5, 5 sd^2) kernel, -(a + 1) log sigma^2 - b / sigma^2.
+#   tempering: R's variance move, discrepancy draw and swap at inverse temperature b, on one variance group (the
+#     outputs' noise, IG(5, 0.05)) with theta at theta*, the discrepancy at 0 and the covariance at diag(v_trunc +
+#     sigma^2) + K diag(0.01, 0.01) K'. Ladder 1, 2, 5 (b = 1, 0.5, 0.2).
+#     - The variance move's `alpha`, evaluated as written, is b times (log likelihood + log prior kernel + log
+#       Jacobian): R tempers the Jacobian and the prior with the likelihood. D09's likelihood path tempers the
+#       likelihood alone. alpha_linear_gap checks the scaling.
+#     - On a grid of 61 values of u = log sigma^2 in [log 1e-4, 0], the variance move as a random walk to the
+#       neighbouring values, with R's acceptance and with D09's; each kernel's stationary law by GTH, against R's
+#       powered target exp(b (llik + ldig + u)) and the likelihood path's exp(b llik + ldig + u).
+#     - R's swap, evaluated as written over every pair of grid states at neighbouring rungs, against the log ratio
+#       detailed balance needs for R's own rung laws and for the likelihood path's; D09's swap,
+#       (b1 - b2)(llik(x2) - llik(x1)), against its kernels' laws. R's swap leaves out the Jacobian and the
+#       discrepancy prior, which its own moves temper.
+#     - The discrepancy draw's covariance, R's `discrep.S / itl[t]` evaluated as written, against the conditional
+#       covariances of the powered target, S / b, and of the likelihood path, (I / tau + b D' Sigma^-1 D)^-1, with
+#       S = (I / tau + D' Sigma^-1 D)^-1 and R's tau = 1; and R's swap between states that differ only in the
+#       discrepancy v, against the ratio its powered target needs (the gap is the omitted v prior).
 #
-# Emits { m, theta_star, stale_likelihood, branch_by_shape, coordinates, unit_mismatch, s2_df_switch }.
+# Emits { m, theta_star, stale_likelihood, branch_by_shape, coordinates, unit_mismatch, s2_df_switch, tempering }.
 
 source("oracles/_common.R")
 
@@ -118,5 +135,94 @@ s2_df_switch <- list(s2_df = c(0, 10), sigma2 = s2_grid,
                      corrected_group2 = -(a[2] + 1) * log(s2_grid) - b[2] / s2_grid,
                      r_group2_when_all_positive = kernel_for(c(10, 10))(s2_grid, a[2], b[2]))
 
+# ---- tempering ------------------------------------------------------------------------------------------------------
+fn <- bass$calibrate.bassBasis
+alpha_calls <- source_calls(fn, function(e) as.character(e[[1]])[1] %in% c("<-", "=") && identical(e[[2]], as.name("alpha")))
+alpha_text <- vapply(alpha_calls, function(e) paste(deparse(e[[3]]), collapse = ""), "")
+variance_alpha <- alpha_calls[[which(grepl("ldig.kern(cand$s2", alpha_text, fixed = TRUE))[1]]][[3]]
+swap_alpha <- alpha_calls[[which(grepl("sw[2]", alpha_text, fixed = TRUE))[1]]][[3]]
+discrep_cov <- source_calls(fn, function(e) identical(e[[1]], as.name("rmnorm")) &&
+                              grepl("discrep.S", paste(deparse(e), collapse = ""), fixed = TRUE))[[1]][[3]]
+itl <- 1 / c(1, 2, 5)
+ldig <- kernel_for(10)
+a1 <- 5; b1 <- 5 * 0.1^2
+e_emu <- c(0.01, 0.01)
+resid0 <- y - y_m - y_s * c(K %*% (coef %*% c(1, theta_star)))
+Sigma_at <- function(s2) diag(v_trunc + s2) + K %*% diag(e_emu) %*% t(K)
+llik_at <- function(s2, v = c(0, 0)) {
+  r <- resid0 - c(D_narrow %*% v); L <- chol(Sigma_at(s2))
+  -sum(log(diag(L))) - 0.5 * sum(forwardsolve(t(L), r)^2)
+}
+u <- seq(log(1e-4), 0, length.out = 61)
+ll <- vapply(exp(u), llik_at, 0)
+lk <- ldig(exp(u), a1, b1)
+state <- function(i) list(llik = ll[i], s2 = exp(u[i]))
+r_variance <- function(t, i, j) {
+  curr <- vector("list", 3); curr[[t]] <- state(i)
+  c(eval(variance_alpha, list2env(list(itl = itl, t = t, cand = state(j), curr = curr, ldig.kern = ldig, a = a1, b = b1))))
+}
+walk_kernel <- function(accept) {                     # accept(i, j): log acceptance of the move i -> j
+  n <- length(u); P <- matrix(0, n, n)
+  for (i in seq_len(n)) for (j in c(i - 1, i + 1)) if (j >= 1 && j <= n) P[i, j] <- 0.5 * min(1, exp(accept(i, j)))
+  diag(P) <- 1 - rowSums(P)
+  P
+}
+normalize <- function(l) { w <- exp(l - max(l)); w / sum(w) }
+tv <- function(p, q) 0.5 * sum(abs(p - q))
+rungs <- lapply(1:3, function(t) {
+  b <- itl[t]
+  s_r <- stationary_gth(walk_kernel(function(i, j) r_variance(t, i, j)))
+  s_c <- stationary_gth(walk_kernel(function(i, j) b * (ll[j] - ll[i]) + lk[j] - lk[i] + u[j] - u[i]))
+  list(b = b, s_r = s_r, s_c = s_c,
+       tv_r_vs_powered = tv(s_r, normalize(b * (ll + lk + u))), tv_r_vs_likelihood_path = tv(s_r, normalize(b * ll + lk + u)),
+       tv_corrected_vs_likelihood_path = tv(s_c, normalize(b * ll + lk + u)))
+})
+alpha_linear_gap <- max(abs(vapply(1:60, function(i) r_variance(2, i, i + 1) - itl[2] * r_variance(1, i, i + 1), 0)))
+r_swap <- function(t1, t2, i, j) {                   # rung t1 holds state i, rung t2 holds state j
+  curr <- vector("list", 3); curr[[t1]] <- state(i); curr[[t2]] <- state(j)
+  c(eval(swap_alpha, list2env(list(itl = itl, sw = c(t1, t2), curr = curr, ldig.kern = ldig, a = a1, b = b1))))
+}
+# Detailed balance for a swap between rung laws s1 (rung t1, state i) and s2 (rung t2, state j) needs the log ratio
+# log s1(j) + log s2(i) - log s1(i) - log s2(j).
+swap_gap <- function(s1, s2, ratio) {
+  n <- length(u); g <- 0
+  for (i in seq_len(n)) for (j in seq_len(n))
+    g <- max(g, abs(ratio(i, j) - (log(s1[j]) + log(s2[i]) - log(s1[i]) - log(s2[j]))))
+  g
+}
+swaps <- lapply(1:2, function(t1) {
+  t2 <- t1 + 1
+  lp <- function(t) normalize(itl[t] * ll + lk + u)
+  list(b1 = itl[t1], b2 = itl[t2],
+       r_vs_r_kernels = swap_gap(rungs[[t1]]$s_r, rungs[[t2]]$s_r, function(i, j) r_swap(t1, t2, i, j)),
+       r_vs_likelihood_path = swap_gap(lp(t1), lp(t2), function(i, j) r_swap(t1, t2, i, j)),
+       corrected_vs_corrected_kernels = swap_gap(rungs[[t1]]$s_c, rungs[[t2]]$s_c,
+                                                 function(i, j) (itl[t1] - itl[t2]) * (ll[j] - ll[i])))
+})
+Sig <- Sigma_at(0.01)
+G <- t(D_narrow) %*% solve(Sig, D_narrow)
+S_d <- solve(diag(2) + G)
+discrepancy <- lapply(2:3, function(t) {
+  b <- itl[t]
+  r_cov <- eval(discrep_cov, list2env(list(discrep.S = S_d, itl = itl, t = t)))
+  list(b = b, r_vs_powered = max(abs(r_cov - S_d / b)) / max(abs(S_d / b)),
+       r_vs_likelihood_path = max(abs(r_cov - solve(diag(2) + b * G))) / max(abs(S_d / b)))
+})
+# R's swap between states that differ only in v (sigma^2 = 0.01 in both), rungs 1 and 2.
+v_pairs <- list(c(0, 0), c(1, -1), c(0.5, 2))
+log_powered <- function(t, v) itl[t] * (llik_at(0.01, v) + ldig(0.01, a1, b1) + log(0.01) - 0.5 * sum(v^2))
+v_gap <- max(vapply(v_pairs[-1], function(v2) {
+  v1 <- v_pairs[[1]]
+  curr <- vector("list", 3)
+  curr[[1]] <- list(llik = llik_at(0.01, v1), s2 = 0.01); curr[[2]] <- list(llik = llik_at(0.01, v2), s2 = 0.01)
+  r <- c(eval(swap_alpha, list2env(list(itl = itl, sw = c(1, 2), curr = curr, ldig.kern = ldig, a = a1, b = b1))))
+  abs(r - (log_powered(1, v2) + log_powered(2, v1) - log_powered(1, v1) - log_powered(2, v2)))
+}, 0))
+tempering <- list(
+  ladder = 1 / itl, log_sigma2_range = diff(range(u)), alpha_linear_gap = alpha_linear_gap,
+  rungs = lapply(rungs, function(x) x[c("b", "tv_r_vs_powered", "tv_r_vs_likelihood_path", "tv_corrected_vs_likelihood_path")]),
+  swaps = swaps, discrepancy_covariance = discrepancy, swap_vs_powered_v_prior_gap = v_gap)
+
 emit_json(list(m = m, theta_star = theta_star, stale_likelihood = stale_likelihood, branch_by_shape = branch_by_shape,
-               coordinates = coordinates, unit_mismatch = unit_mismatch, s2_df_switch = s2_df_switch), args[2])
+               coordinates = coordinates, unit_mismatch = unit_mismatch, s2_df_switch = s2_df_switch,
+               tempering = tempering), args[2])
