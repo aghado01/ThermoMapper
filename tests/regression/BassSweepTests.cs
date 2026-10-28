@@ -30,7 +30,7 @@ public sealed class BassSweepTests
     public BassSweepTests(ITestOutputHelper output) => _out = output;
 
     // x₀ and x₁ on {0, ½, 1}, the grid twice (N = 18), or on a five-value grid three times (N = 75).
-    private static BassData Data(bool large = false, int seed = 5, bool exact = false)
+    internal static BassData Data(bool large = false, int seed = 5, bool exact = false)
     {
         var rng = new Xoshiro256PlusPlus(seed);
         int levels = large ? 5 : 3, reps = large ? 3 : 2;
@@ -74,7 +74,7 @@ public sealed class BassSweepTests
                             new FunctionalResponse(y, [new ContinuousPredictor("t", t)]));
     }
 
-    private static BassConfig Config(MoveSchedule? moves = null, int maxBasis = 3)
+    internal static BassConfig Config(MoveSchedule? moves = null, int maxBasis = 3)
         => new()
         {
             Structure = new BassStructureSpec { MaxInteraction = 2, MaxBasis = maxBasis },
@@ -93,7 +93,7 @@ public sealed class BassSweepTests
     }
 
     // Every structure of at most M_max distinct terms in F, by the design's own admission, with its prior weight.
-    private static List<(BassTerm[] Terms, double LogPrior)> EnumerateF(BassModel model)
+    internal static List<(BassTerm[] Terms, double LogPrior)> EnumerateF(BassModel model)
     {
         BassStructurePrior prior = model.Prior;
         var terms = new List<BassTerm>();

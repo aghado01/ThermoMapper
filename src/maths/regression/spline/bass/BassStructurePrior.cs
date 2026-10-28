@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Maths.Distributions;
+using Maths.Rng;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -27,7 +28,8 @@ public enum BassPart
 /// uniform over its variable's distinct values; each categorical subset by the declared measure, R's (its size uniform
 /// on {1, …, n − 1}, then uniform among the subsets of that size) or the paper's (uniform over the 2ⁿ − 2 proper
 /// subsets). One part and K ≤ K_max make this Francom et al.'s c_K/K_max.</para>
-/// <para>Immutable, so one serves every chain of a fit.</para>
+/// <para><see cref="LogPrior"/> scores the term measure and <see cref="DrawTerm"/> draws from it. Immutable, so one
+/// serves every chain of a fit.</para>
 /// </summary>
 public sealed class BassStructurePrior
 {
@@ -111,6 +113,61 @@ public sealed class BassStructurePrior
             lp += p.LogFactors(term);
         }
         return lp;
+    }
+
+    /// <summary>
+    /// A term drawn from the term measure, the law <see cref="LogPrior"/> scores: each part's order uniform, its
+    /// variables a uniform subset of that size, each hinge's sign and knot uniform, each subset from the declared
+    /// measure. Null is the intercept, the draw whose parts all came out empty; it has mass only when the fit has several
+    /// parts, and it lies outside F.
+    /// </summary>
+    public BassTerm? DrawTerm(Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        Span<int> orders = stackalloc int[3];
+        bool empty = true;
+        for (int index = 0; index < 3; index++)
+        {
+            if (_parts[index] is not { } p) continue;
+            orders[index] = p.MinimumOrder + BassDraws.Below(rng, p.OrderCount);
+            empty &= orders[index] == 0;
+        }
+        if (empty) return null;
+
+        HingeFactor[]? continuous = null, functional = null;
+        CategoricalFactor[]? categorical = null;
+        for (int index = 0; index < 3; index++)
+        {
+            int k = orders[index];
+            if (k == 0) continue;
+            Part p = _parts[index]!;
+            int[] variables = UniformSubset(rng, p.Sizes.Length, k);
+            if (p.Kind == BassPart.Categorical)
+            {
+                categorical = new CategoricalFactor[k];
+                for (int f = 0; f < k; f++) categorical[f] = p.DrawSubset(rng, variables[f], Subsets);
+                continue;
+            }
+            var hinges = new HingeFactor[k];
+            for (int f = 0; f < k; f++)
+                hinges[f] = new HingeFactor(variables[f], BassDraws.Sign(rng), BassDraws.Below(rng, p.Sizes[variables[f]]));
+            if (p.Kind == BassPart.Continuous) continuous = hinges;
+            else functional = hinges;
+        }
+        return new BassTerm(continuous, categorical, functional);
+    }
+
+    // k of the p variables, uniformly among the C(p, k) subsets: a partial Fisher–Yates shuffle.
+    private static int[] UniformSubset(Xoshiro256PlusPlus rng, int p, int k)
+    {
+        var pool = new int[p];
+        for (int v = 0; v < p; v++) pool[v] = v;
+        for (int i = 0; i < k; i++)
+        {
+            int j = i + BassDraws.Below(rng, p - i);
+            (pool[i], pool[j]) = (pool[j], pool[i]);
+        }
+        return pool[..k];
     }
 
     /// <summary>
@@ -266,6 +323,43 @@ public sealed class BassStructurePrior
             else
                 foreach (HingeFactor h in BassStructurePrior.Hinges(term, Kind)) lp += LogHinge![h.Variable];
             return lp;
+        }
+
+        /// <summary>
+        /// A proper, nonempty subset of <paramref name="variable"/>'s levels from <paramref name="measure"/>: R's, its
+        /// size uniform on {1, …, n − 1} and then a uniform subset of that size (a partial shuffle); or the paper's,
+        /// each level in with probability ½, the empty and full sets refused. The categorical part only.
+        /// </summary>
+        public CategoricalFactor DrawSubset(Xoshiro256PlusPlus rng, int variable, CategoricalSubsetMeasure measure)
+        {
+            int n = Sizes[variable];
+            Span<int> pool = n <= 256 ? stackalloc int[n] : new int[n];
+            int size;
+            if (measure == CategoricalSubsetMeasure.SizeUniform)
+            {
+                size = 1 + BassDraws.Below(rng, n - 1);
+                for (int i = 0; i < n; i++) pool[i] = i;
+                for (int i = 0; i < size; i++)
+                {
+                    int j = i + BassDraws.Below(rng, n - i);
+                    (pool[i], pool[j]) = (pool[j], pool[i]);
+                }
+            }
+            else
+            {
+                do
+                {
+                    size = 0;
+                    ulong word = 0;
+                    for (int level = 0; level < n; level++)
+                    {
+                        if ((level & 63) == 0) word = rng.NextUInt64();
+                        if ((word & 1) != 0) pool[size++] = level;
+                        word >>= 1;
+                    }
+                } while (size == 0 || size == n);
+            }
+            return new CategoricalFactor(variable, pool[..size].ToArray());
         }
 
         private static double LogChoose(int n, int k)
