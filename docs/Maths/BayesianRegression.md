@@ -299,7 +299,7 @@ with $P_a=Z^\top(W+I/m)Z$, $h=Z^\top W\tilde y$ and $S=\tilde y^\top W\tilde y-h
   - **σ² gets m, not m − 1, degrees of freedom.** The level is centred on the data's own mean at no charge, where a flat intercept would spend one. Bayes factors differ from the flat-intercept form only as m does from m − 1 in one exponent.
 - **Alternatives considered.**
   - **Zero, DMGK's original:** kept as `GPriorCentre.Zero` on its own terms, for a response whose level is known to be zero; on any other it carries the defect above ([Corrections to the sources](#corrections-to-the-sources)).
-  - **A flat intercept with a centred design** (Liang et al. 2008): the same comparisons up to the m − 1 above. It needs the constant split out of the basis, which B-splines do not do.
+  - **A flat intercept with a centred design** (Liang et al. 2008): the same comparisons up to the m − 1 above. It needs the constant split out of the basis, which B-splines do not do. `GPriorCentre.Flat` names it (2026-10-28) for BASS's option; BARS refuses it with that reason, at the model and at the block's builder.
   - **Centring the response outside the model:** equivalent for B-splines, but every caller would have to remember it, and a basis that does not sum to one would then need the projection anyway.
 - **Effect on step 3.7's fits,** whose response averages about 0.6 against noise 0.1, an offset of 6σ:
   - knot counts rose 3–20% (dense 5.61 → 5.78, gap 0.72 → 0.79, sparse gap 0.85 → 0.96, robust gap 0.66 → 0.79);
@@ -322,7 +322,7 @@ $$\ell_b(Z)=\tfrac{\nu}{2}\log\tfrac{\tau}{\tau+b}-\tfrac{mb}{2}\log S_b,\qquad 
   - **The interface default** still serves $b=1$ only, so a custom model must opt in (`TemperedMarginal`, `CanTemperLikelihood`).
 - **m ≤ ν, an inadmissible design or a zero response** is −∞ at every b, so admission does not depend on the temperature.
 
-**The σ² prior** (`Sigma2Prior`, 2026-10-27). `WeightedNormalModel(sigma2Prior: …)` takes one of three, from the g-prior namespace that BASS will share. The default is `ScaledToResponse()`; the Jeffreys prior, the default before, stays selectable.
+**The σ² prior** (`Sigma2Prior`, 2026-10-27). `WeightedNormalModel(sigma2Prior: …)` takes one of three, from the g-prior namespace that BASS will share. The default is `ScaledToResponse()`; the Jeffreys prior, the default before, stays selectable. It is a value (2026-10-28, BASS's F-C2): a record of its kind and that kind's parameters, compared by value and serializable, with a parameter the kind does not take null rather than NaN. Its constructor checks the parameters against the kind, so a prior read back from JSON is checked as a built one is.
 - **`Jeffreys`**, DMGK's: $p(\sigma^2)\propto1/\sigma^2$. It is scale-free, but the marginal is known only up to a constant. So there is no evidence and no $b=0$ in the integrated form, and a configuration that fits the response exactly has no posterior.
 - **`ScaledToResponse(a)`**, the default at $a=10^{-3}$: IG($a$, $a\,s^2$), with $s^2=\tfrac1m\sum_i(y_i-c)^2$ about the centre's level $c$ (the median, mean or zero). It reads the data alone, never the robust weights, and is the same for every design.
   - *Scale-free.* Rescaling y by k scales $s^2$ by $k^2$ and shifts every configuration's marginal by the same $-\tfrac{mb}{2}\ln k^2$, so the posterior over knots is unchanged. This is OQ19's route (b); `TemperedMarginalTests` checks it over twelve decades, against a raw-unit IG(10⁻³, 10⁻³) that moves.

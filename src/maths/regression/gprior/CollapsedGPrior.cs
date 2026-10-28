@@ -30,6 +30,14 @@ public enum GPriorCentre
     /// the level's energy enters the scale S, so a response far from zero against its noise is under-fitted.
     /// </summary>
     Zero,
+
+    /// <summary>
+    /// Liang et al.'s (2008) flat intercept: the intercept takes a flat prior and is integrated out, the other columns are
+    /// centred and take the g-prior, and k counts them alone. Shift-invariant with no double use of the data, at the cost
+    /// of a proper prior (BASS's D03 trilemma); BASS selects it as an option. It needs the constant split out of the basis
+    /// and the block's flat-intercept form, which the block does not have yet, so BARS refuses it.
+    /// </summary>
+    Flat,
 }
 
 /// <summary>

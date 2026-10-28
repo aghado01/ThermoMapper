@@ -235,4 +235,25 @@ public sealed class NormalCentreTests
         Assert.True(zeroShifted.MeanKnots < 0.5 * zeroPlain.MeanKnots,
             $"zero centre: {zeroShifted.MeanKnots:F3} knots shifted against {zeroPlain.MeanKnots:F3}");
     }
+
+    // The flat intercept is BASS's option; BARS refuses it at each entry, with its reason, before any work.
+    [Fact]
+    public void FlatCentre_IsRefused_WithItsReason()
+    {
+        double[] x = Even(20), y = x.Select(t => Math.Sin(2.0 * Math.PI * t)).ToArray();
+        var design = new BandedDesign(new SplineBasis(3).Design(new KnotConfig([0.5]), x));
+        var reasons = new[]
+        {
+            Assert.Throws<ArgumentException>(() => new WeightedNormalModel(GPriorCentre.Flat)),
+            Assert.Throws<ArgumentException>(() => BandedGPrior.Level(y, GPriorCentre.Flat)),
+            Assert.Throws<ArgumentException>(() => BandedGPrior.Fit(design, y, _ => true, GPriorCentre.Flat)),
+            Assert.Throws<ArgumentException>(() => BandedGPrior.Fit(design, y, Enumerable.Repeat(1.0, y.Length).ToArray(), 0.05,
+                                                                    _ => true, GPriorCentre.Flat)),
+        };
+        foreach (ArgumentException e in reasons)
+        {
+            Assert.Equal("centre", e.ParamName);
+            Assert.Contains("flat-intercept form", e.Message);
+        }
+    }
 }

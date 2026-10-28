@@ -1,6 +1,20 @@
 using System;
+using System.Text.Json.Serialization;
 
 namespace Maths.Regression.GPrior;
+
+/// <summary>Which prior on σ² a <see cref="Sigma2Prior"/> is; there, the parameters each kind takes.</summary>
+public enum Sigma2PriorKind
+{
+    /// <summary>IG(a, a·s²), s² read from the response: the default.</summary>
+    ScaledToResponse,
+
+    /// <summary>The improper p(σ²) ∝ 1/σ².</summary>
+    Jeffreys,
+
+    /// <summary>IG(a, b) in the response's own units.</summary>
+    InverseGamma,
+}
 
 /// <summary>
 /// The prior on the noise variance σ² of the collapsed g-prior engines (BARS now, BASS next). It resolves, per response,
@@ -21,67 +35,86 @@ namespace Maths.Regression.GPrior;
 /// A proper prior makes the marginal complete: defined at every b in [0, 1], where b = 0 gives exactly 0, finite for an
 /// exact fit, and absolute, so it is an evidence. The scaled prior's evidence depends on a and on s², as every proper
 /// prior's does on its constants.
+/// <para>A value: its kind and that kind's parameters, compared by value and serialized as they stand, so a config that
+/// holds it serializes and fingerprints whole (the BASS contract shapes, F-C2). A parameter the kind does not take is
+/// null, not NaN, so the JSON conventions that refuse named floats read it too. The constructor checks the parameters
+/// against the kind, so a prior read back from JSON is checked as a built one is.</para>
 /// </summary>
-public sealed class Sigma2Prior
+public sealed record Sigma2Prior
 {
-    private enum Kind { Jeffreys, Scaled, Fixed }
-
-    private readonly Kind _kind;
-
-    private Sigma2Prior(Kind kind, double shape, double scale)
+    /// <summary>
+    /// The prior of kind <paramref name="kind"/>: <see cref="Sigma2PriorKind.Jeffreys"/> takes no parameter,
+    /// <see cref="Sigma2PriorKind.ScaledToResponse"/> a shape, and <see cref="Sigma2PriorKind.InverseGamma"/> a shape and
+    /// a scale, each positive and finite.
+    /// </summary>
+    public Sigma2Prior(Sigma2PriorKind kind, double? shape = null, double? scale = null)
     {
-        _kind = kind;
+        switch (kind)
+        {
+            case Sigma2PriorKind.Jeffreys:
+                if (shape is not null || scale is not null) throw new ArgumentException("The Jeffreys prior takes no parameter.");
+                break;
+            case Sigma2PriorKind.ScaledToResponse:
+                if (shape is not (> 0.0 and < double.PositiveInfinity))
+                    throw new ArgumentOutOfRangeException(nameof(shape), "The shape must be positive and finite.");
+                if (scale is not null) throw new ArgumentException("The scaled prior reads its scale from the response.", nameof(scale));
+                break;
+            case Sigma2PriorKind.InverseGamma:
+                if (shape is not { } a || scale is not { } b) throw new ArgumentException("The inverse gamma takes a shape and a scale.");
+                _ = Distributions.InverseGamma.ShapeScale(a, b);   // validates both
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind));
+        }
+        Kind = kind;
         Shape = shape;
         Scale = scale;
     }
 
     /// <summary>The improper p(σ²) ∝ 1/σ².</summary>
-    public static Sigma2Prior Jeffreys { get; } = new(Kind.Jeffreys, double.NaN, double.NaN);
+    public static Sigma2Prior Jeffreys { get; } = new(Sigma2PriorKind.Jeffreys);
 
     /// <summary>IG(<paramref name="shape"/>, shape·s²), s² the response's mean square about the centre level.</summary>
-    public static Sigma2Prior ScaledToResponse(double shape = 1e-3)
-    {
-        if (!(shape > 0.0) || double.IsPositiveInfinity(shape))
-            throw new ArgumentOutOfRangeException(nameof(shape), "The shape must be positive and finite.");
-        return new Sigma2Prior(Kind.Scaled, shape, double.NaN);
-    }
+    public static Sigma2Prior ScaledToResponse(double shape = 1e-3) => new(Sigma2PriorKind.ScaledToResponse, shape);
 
     /// <summary>IG(<paramref name="shape"/>, <paramref name="scale"/>) in the response's own units.</summary>
-    public static Sigma2Prior InverseGamma(double shape, double scale)
-    {
-        _ = Distributions.InverseGamma.ShapeScale(shape, scale);   // validates both
-        return new Sigma2Prior(Kind.Fixed, shape, scale);
-    }
+    public static Sigma2Prior InverseGamma(double shape, double scale) => new(Sigma2PriorKind.InverseGamma, shape, scale);
 
-    /// <summary>True for every prior but <see cref="Jeffreys"/>.</summary>
-    public bool IsProper => _kind != Kind.Jeffreys;
+    /// <summary>Which prior this is.</summary>
+    public Sigma2PriorKind Kind { get; }
 
-    /// <summary>The shape a; NaN for <see cref="Jeffreys"/>.</summary>
-    public double Shape { get; }
+    /// <summary>The shape a; null for <see cref="Jeffreys"/>.</summary>
+    public double? Shape { get; }
 
-    /// <summary>The fixed scale b of <see cref="InverseGamma"/>; NaN otherwise.</summary>
-    public double Scale { get; }
+    /// <summary>The fixed scale b of <see cref="InverseGamma"/>; null otherwise.</summary>
+    public double? Scale { get; }
+
+    /// <summary>True for every prior but <see cref="Jeffreys"/>; read from the kind, so not serialized.</summary>
+    [JsonIgnore]
+    public bool IsProper => Kind != Sigma2PriorKind.Jeffreys;
 
     /// <summary>
     /// The prior for a response whose mean square about the centre level is <paramref name="meanSquare"/>: null for
     /// <see cref="Jeffreys"/>, the fixed IG, or IG(a, a·s²). The scaled prior has none for a response with no spread
     /// (s² = 0), which has no posterior for σ either; it returns null there and the caller refuses the response.
     /// </summary>
-    public Distributions.InverseGamma? For(double meanSquare) => _kind switch
+    public Distributions.InverseGamma? For(double meanSquare) => (Kind, Shape, Scale) switch
     {
-        Kind.Fixed => Distributions.InverseGamma.ShapeScale(Shape, Scale),
-        Kind.Scaled when meanSquare > 0.0 && double.IsFinite(meanSquare) => Distributions.InverseGamma.ShapeScale(Shape, Shape * meanSquare),
+        (Sigma2PriorKind.InverseGamma, { } a, { } b) => Distributions.InverseGamma.ShapeScale(a, b),
+        (Sigma2PriorKind.ScaledToResponse, { } a, _) when meanSquare > 0.0 && double.IsFinite(meanSquare)
+            => Distributions.InverseGamma.ShapeScale(a, a * meanSquare),
         _ => null,
     };
 
-    /// <summary>Whether <see cref="For"/> reads the response's mean square.</summary>
-    public bool ReadsResponse => _kind == Kind.Scaled;
+    /// <summary>Whether <see cref="For"/> reads the response's mean square; read from the kind, so not serialized.</summary>
+    [JsonIgnore]
+    public bool ReadsResponse => Kind == Sigma2PriorKind.ScaledToResponse;
 
-    /// <inheritdoc/>
-    public override string ToString() => _kind switch
+    /// <summary>The spelling BARS's checkpoint fingerprint reads.</summary>
+    public override string ToString() => Kind switch
     {
-        Kind.Jeffreys => "Jeffreys",
-        Kind.Scaled => FormattableString.Invariant($"ScaledToResponse({Shape:R})"),
+        Sigma2PriorKind.Jeffreys => "Jeffreys",
+        Sigma2PriorKind.ScaledToResponse => FormattableString.Invariant($"ScaledToResponse({Shape:R})"),
         _ => FormattableString.Invariant($"InverseGamma({Shape:R}, {Scale:R})"),
     };
 }

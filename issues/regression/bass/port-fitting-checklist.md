@@ -13,7 +13,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [x] **F-D05** Tempering and SMC target paths: decided 2026-10-27; the integrated form by default, the linear form selectable.
 - [x] **F-D06** Numerical model admission: decided 2026-10-27; the count as the support default, the centred angles under every convention.
 - [x] **F-C1** Contract shapes: data, config and result, decided 2026-10-28 as recommended.
-- [ ] **F-C2** The shared-code changes the contracts need, before stage 4's first fit: `Sigma2Prior` as a serializable record, shared with BARS's config; `GPriorCentre.Flat` for the Liang convention, refused by BARS until the shared block supports it.
+- [x] **F-C2** The shared-code changes the contracts need, before stage 4's first fit: `Sigma2Prior` as a serializable record, shared with BARS's config; `GPriorCentre.Flat` for the Liang convention, refused by BARS until the shared block supports it.
 - [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison.
 - [ ] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison.
 
@@ -53,6 +53,12 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### F-C2: the shared-code changes — 2026-10-28
+
+- **`Sigma2Prior` is a value.** A sealed record of `Sigma2PriorKind` (`ScaledToResponse`, `Jeffreys`, `InverseGamma`) and that kind's parameters, the kind-plus-parameters shape CONTRIBUTING gives sub-configs. A parameter the kind does not take is null, not NaN, so the JSON conventions that refuse named floats read it. The constructor checks the parameters against the kind, so a prior read from JSON is checked as a built one is. `IsProper` and `ReadsResponse` are read from the kind and not serialized. The factories and `ToString` are unchanged, so BARS's call sites and its checkpoint fingerprint are too. Its first `System.Text.Json` attribute (`JsonIgnore`) enters the maths layer; BASS's config unions will need the same namespace.
+- **`GPriorCentre.Flat`,** appended after `Zero` so the existing values keep their numbers. BARS refuses it at `WeightedNormalModel`'s constructor, both `BandedGPrior.Fit` overloads and `BandedGPrior.Level`, before any work, with the reason: B-splines do not split the constant out of the basis, and the block has no flat-intercept form yet.
+- **Tests:** `Sigma2PriorTests` (JSON round trip under plain and snake-case, string-enum options; value equality; refusals built and read back; the fingerprint's spelling; resolution) and `NormalCentreTests.FlatCentre_IsRefused_WithItsReason`. Regression suite 438/438 (432 before, 6 new). Samplers does not reference Regression and was not rerun.
 
 ### Contract shapes decided (F-C1); stage 1 complete — 2026-10-28
 

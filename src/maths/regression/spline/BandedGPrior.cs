@@ -28,6 +28,7 @@ public static class BandedGPrior
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(y);
         ArgumentNullException.ThrowIfNull(admits);
+        RefuseFlat(centre);
         int m = design.Rows, nu = design.Dimension;
         if (y.Length != m) throw new ArgumentException("Response length must match the design row count.", nameof(y));
 
@@ -74,6 +75,7 @@ public static class BandedGPrior
         ArgumentNullException.ThrowIfNull(y);
         ArgumentNullException.ThrowIfNull(weights);
         ArgumentNullException.ThrowIfNull(admits);
+        RefuseFlat(centre);
         int m = design.Rows, nu = design.Dimension;
         if (y.Length != m) throw new ArgumentException("Response length must match the design row count.", nameof(y));
         if (weights.Length != m) throw new ArgumentException("Weights length must match the design row count.", nameof(weights));
@@ -171,6 +173,7 @@ public static class BandedGPrior
     {
         ArgumentNullException.ThrowIfNull(y);
         if (y.Length == 0) throw new ArgumentException("The response is empty.", nameof(y));
+        RefuseFlat(centre);
         return centre switch
         {
             GPriorCentre.Zero => 0.0,
@@ -179,6 +182,15 @@ public static class BandedGPrior
             GPriorCentre.Mean => Average(y),
             _ => throw new ArgumentOutOfRangeException(nameof(centre)),
         };
+    }
+
+    // The flat intercept needs the constant split out of the basis, which B-splines do not do, and the block's
+    // flat-intercept form, which it does not have yet; BASS selects it as an option once the block does.
+    internal static void RefuseFlat(GPriorCentre centre)
+    {
+        if (centre == GPriorCentre.Flat)
+            throw new ArgumentException("The flat intercept (GPriorCentre.Flat) needs the constant split out of the basis "
+                                        + "and the block's flat-intercept form; BARS has neither.", nameof(centre));
     }
 
     private static bool Constant(double[] y)

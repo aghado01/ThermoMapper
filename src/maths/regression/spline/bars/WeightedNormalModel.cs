@@ -38,7 +38,8 @@ namespace Maths.Regression.Spline.Bars;
 public sealed class WeightedNormalModel : IObservationModel
 {
     /// <param name="centre">Where the coefficient prior is centred: the response's median (default), its mean, or zero,
-    /// DMGK's original.</param>
+    /// DMGK's original. The flat intercept (<see cref="GPriorCentre.Flat"/>) is refused: B-splines do not split the
+    /// constant out of the basis.</param>
     /// <param name="form">The likelihood path's tempered marginal: <see cref="TemperedForm.Integrated"/> (the default),
     /// σ² integrated against the tempered likelihood, or <see cref="TemperedForm.Linear"/>, b times the untempered
     /// marginal, which is defined at b = 0 under either σ² prior and so admits an exact reference rung.</param>
@@ -49,6 +50,7 @@ public sealed class WeightedNormalModel : IObservationModel
     public WeightedNormalModel(GPriorCentre centre = GPriorCentre.Median, TemperedForm form = TemperedForm.Integrated,
                                Sigma2Prior? sigma2Prior = null)
     {
+        BandedGPrior.RefuseFlat(centre);
         if (centre is not (GPriorCentre.Median or GPriorCentre.Mean or GPriorCentre.Zero)) throw new ArgumentOutOfRangeException(nameof(centre));
         if (form is not (TemperedForm.Integrated or TemperedForm.Linear)) throw new ArgumentOutOfRangeException(nameof(form));
         Centre = centre;
