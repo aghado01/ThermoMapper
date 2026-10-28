@@ -45,9 +45,14 @@ public sealed record SmcOptions
 /// loss of diversity. Equal weights do not make the particles independent; this says how many lineages remain.</param>
 /// <param name="AcceptanceRate">The kernel's acceptance over the stage's moves; NaN at stage 0 or with no moves.</param>
 /// <param name="LogNormalizerIncrement">log(Z_stage/Z_previous) as the reweighting estimates it; 0 at stage 0.</param>
+/// <param name="NormalizerRelativeVariance">The genealogy estimate of Var(Ẑ)/Z² for log(Z_stage/Z_first), read after
+/// the reweighting and before any resampling (<see cref="SmcWeights.GenealogyRelativeVariance"/>); 0 at stage 0. NaN
+/// from the stage after the population was first resampled by a scheme other than multinomial, whose offspring the
+/// estimate's factors do not describe.</param>
 public readonly record struct SmcStageReport(
     int Index, Temperature Temperature, double EffectiveSampleSize, double ConditionalEss, bool Resampled,
-    int DistinctAncestors, int Families, double AcceptanceRate, double LogNormalizerIncrement);
+    int DistinctAncestors, int Families, double AcceptanceRate, double LogNormalizerIncrement,
+    double NormalizerRelativeVariance);
 
 /// <summary>
 /// One stage's population, recorded when the run traces its stages (<see cref="SmcOptions.TraceStages"/>), as the stage
@@ -73,12 +78,20 @@ public sealed record SmcStageTrace(Temperature Temperature, bool NewTarget, doub
 /// otherwise.</param>
 public sealed record SmcResult<TState>(
     IReadOnlyList<TState> Particles, double[] Weights, double LogNormalizerRatio, IReadOnlyList<SmcStageReport> Stages,
-    IReadOnlyList<SmcStageTrace>? StageTraces = null);
+    IReadOnlyList<SmcStageTrace>? StageTraces = null)
+{
+    /// <summary>The standard error of <see cref="LogNormalizerRatio"/>, from the last stage's genealogy estimate
+    /// (<see cref="SmcStageReport.NormalizerRelativeVariance"/>, <see cref="SmcWeights.LogNormalizerError"/>): NaN unless
+    /// every resampling was multinomial.</summary>
+    public double LogNormalizerError => SmcWeights.LogNormalizerError(Stages[^1].NormalizerRelativeVariance);
+}
 
-/// <summary>Everything a run needs to continue: restarting from it reproduces the uninterrupted run bit for bit.</summary>
+/// <summary>Everything a run needs to continue: restarting from it reproduces the uninterrupted run bit for bit.
+/// <paramref name="GenealogyHolds"/> says no resampling so far was by a scheme other than multinomial, so the genealogy
+/// estimate continues.</summary>
 public sealed record SmcCheckpoint<TState>(
     int Seed, int StagesDone, SmcStage<TState> Stage, TState[] Particles, ITargetEvaluation[] Evaluations,
-    double[] Weights, int[] Families, double LogNormalizerRatio, SmcStageReport[] Reports,
+    double[] Weights, int[] Families, double LogNormalizerRatio, SmcStageReport[] Reports, bool GenealogyHolds,
     SmcStageTrace[]? StageTraces = null);
 
 /// <summary>
@@ -86,7 +99,9 @@ public sealed record SmcCheckpoint<TState>(
 /// invitation of Dai, Heng, Jacob and Whiteley 2022): reweight by the ratio of consecutive stage densities, resample
 /// when the weights concentrate, then mutate every particle with a kernel that leaves the new stage invariant. It
 /// reweights through <see cref="ITargetEvaluation"/>s, so moving to another temperature of the same target queries
-/// each particle's evaluation instead of repeating its work.
+/// each particle's evaluation instead of repeating its work. Each stage reports the normalizer's relative variance
+/// from the particles' genealogy (Lee and Whiteley 2018), which sees the correlation that shared ancestors leave,
+/// while every resampling has been multinomial.
 /// <para>Every random draw comes from a stream derived from the run's seed by position (<see cref="SeedTree"/>): one
 /// per initial particle, then, at each stage, one for resampling and one per particle. The result therefore does not
 /// depend on how many particles move at once, and a checkpoint restarts the uninterrupted run exactly.</para>
@@ -105,11 +120,13 @@ public sealed class SmcRun<TState>
     private double[] _logDensity;
     private double[] _weights;
     private int[] _families;
+    private int _resamplings;   // resampling events so far, the genealogy estimate's R
+    private bool _genealogyHolds;   // no resampling so far by a scheme other than multinomial
     private double _logNormalizer;
 
     private SmcRun(ISmcParticles<TState> particles, ISmcKernel<TState> kernel, SmcOptions options, int seed,
                    SmcStage<TState> stage, TState[] state, ITargetEvaluation[] evaluations, double[] weights,
-                   int[] families, int stagesDone, double logNormalizer, List<SmcStageReport> reports,
+                   int[] families, int stagesDone, double logNormalizer, List<SmcStageReport> reports, bool genealogyHolds,
                    List<SmcStageTrace>? traces)
     {
         _particles = particles;
@@ -125,6 +142,9 @@ public sealed class SmcRun<TState>
         StagesDone = stagesDone;
         _logNormalizer = logNormalizer;
         _reports = reports;
+        foreach (SmcStageReport report in reports)
+            if (report.Resampled) _resamplings++;
+        _genealogyHolds = genealogyHolds;
         _traces = traces;
         _logDensity = new double[state.Length];
         for (int i = 0; i < state.Length; i++) _logDensity[i] = stage.LogDensity(evaluations[i]);
@@ -171,9 +191,9 @@ public sealed class SmcRun<TState>
         Array.Fill(weights, 1.0 / n);
         var families = new int[n];
         for (int i = 0; i < n; i++) families[i] = i;
-        var reports = new List<SmcStageReport> { new(0, first.Temperature, n, n, false, n, n, double.NaN, 0.0) };
+        var reports = new List<SmcStageReport> { new(0, first.Temperature, n, n, false, n, n, double.NaN, 0.0, 0.0) };
         var run = new SmcRun<TState>(particles, kernel, options, seed, first, state, evaluations, weights, families, 0, 0.0, reports,
-                                     options.TraceStages ? [] : null);
+                                     genealogyHolds: true, options.TraceStages ? [] : null);
         run.RecordStage(newTarget: false);
         return run;
     }
@@ -194,7 +214,7 @@ public sealed class SmcRun<TState>
         return new SmcRun<TState>(particles, kernel, options, checkpoint.Seed, checkpoint.Stage, state,
             (ITargetEvaluation[])checkpoint.Evaluations.Clone(), (double[])checkpoint.Weights.Clone(),
             (int[])checkpoint.Families.Clone(), checkpoint.StagesDone, checkpoint.LogNormalizerRatio,
-            new List<SmcStageReport>(checkpoint.Reports),
+            new List<SmcStageReport>(checkpoint.Reports), checkpoint.GenealogyHolds,
             checkpoint.StageTraces is null ? null : new List<SmcStageTrace>(checkpoint.StageTraces));
     }
 
@@ -235,6 +255,7 @@ public sealed class SmcRun<TState>
         for (int i = 0; i < n; i++) logWeights[i] = Math.Log(_weights[i]) + increments[i];
         SmcWeights.Normalize(logWeights, _weights);
         double ess = SmcWeights.EffectiveSampleSize(_weights);
+        double relativeVariance = _genealogyHolds ? SmcWeights.GenealogyRelativeVariance(_weights, _families, _resamplings) : double.NaN;
         _evaluations = evaluations;
         _logDensity = density;
         Stage = next;
@@ -274,6 +295,8 @@ public sealed class SmcRun<TState>
             _logDensity = logDensity;
             _families = families;
             Array.Fill(_weights, 1.0 / n);
+            _resamplings++;
+            if (_options.Resampling != ResamplingScheme.Multinomial) _genealogyHolds = false;
         }
 
         // Mutate, each particle on its own stream; particles of zero weight are left as they are.
@@ -306,7 +329,7 @@ public sealed class SmcRun<TState>
         }
         var lineages = new HashSet<int>(_families);
         _reports.Add(new SmcStageReport(StagesDone, next.Temperature, ess, conditionalEss, resampled, distinct, lineages.Count,
-            attempted > 0 ? (double)acceptedTotal / attempted : double.NaN, logIncrement));
+            attempted > 0 ? (double)acceptedTotal / attempted : double.NaN, logIncrement, relativeVariance));
         RecordStage(newTarget);
     }
 
@@ -316,7 +339,8 @@ public sealed class SmcRun<TState>
         var particles = new TState[_state.Length];
         for (int i = 0; i < particles.Length; i++) particles[i] = _particles.Fork(_state[i]);
         return new SmcCheckpoint<TState>(_seed, StagesDone, Stage, particles, (ITargetEvaluation[])_evaluations.Clone(),
-            (double[])_weights.Clone(), (int[])_families.Clone(), _logNormalizer, _reports.ToArray(), _traces?.ToArray());
+            (double[])_weights.Clone(), (int[])_families.Clone(), _logNormalizer, _reports.ToArray(), _genealogyHolds,
+            _traces?.ToArray());
     }
 
     /// <summary>The population as it stands.</summary>

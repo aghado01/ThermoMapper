@@ -5,6 +5,7 @@ using Maths.Rng;
 using Maths.Samplers;
 using Maths.Samplers.Smc;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Maths.Samplers.Tests;
 
@@ -14,9 +15,14 @@ namespace Maths.Samplers.Tests;
 /// Gaussian the adaptive tempered run recovers the closed-form posterior and evidence; on a bimodal likelihood it
 /// recovers the modes' masses. Without resampling or moves the evidence telescopes to the plain importance-sampling
 /// estimate exactly. Results do not depend on parallelism, and a checkpoint resumes the uninterrupted run bit for bit.
+/// The genealogy estimate of the normalizer's variance reduces to importance sampling's without resampling, and is
+/// unbiased under multinomial resampling at every stage.
 /// </summary>
 public sealed class SmcTests
 {
+    private readonly ITestOutputHelper _out;
+    public SmcTests(ITestOutputHelper output) => _out = output;
+
     [Fact]
     public void Weights_NormalizeAtExtremeScales()
     {
@@ -185,6 +191,87 @@ public sealed class SmcTests
         AssertSame(run.Result(), resumed.Result());
     }
 
+    [Fact]
+    public void GenealogyVariance_ReadsEachFamilysWeight()
+    {
+        // Families {0, 1} and {2, 3} hold 0.3 and 0.7 after one resampling: 1 − (4/3)²·(1 − 0.3² − 0.7²).
+        Assert.Equal(1.0 - 16.0 / 9.0 * 0.42, SmcWeights.GenealogyRelativeVariance([0.1, 0.2, 0.3, 0.4], [0, 0, 2, 2], 1), 12);
+        // One family left: 1, whatever the weights.
+        Assert.Equal(1.0, SmcWeights.GenealogyRelativeVariance([0.1, 0.2, 0.3, 0.4], [3, 3, 3, 3], 5), 12);
+        Assert.True(double.IsNaN(SmcWeights.GenealogyRelativeVariance([1.0], [0], 0)));
+        Assert.Equal(0.0, SmcWeights.LogNormalizerError(-0.2));
+        Assert.Equal(Math.Sqrt(Math.Log(1.5)), SmcWeights.LogNormalizerError(0.5), 15);
+    }
+
+    [Fact]
+    public void GenealogyVariance_IsImportanceSamplings_WithoutResampling()
+    {
+        // With no resampling the normalizer is the mean of each particle's accumulated weight, moves or not, and the
+        // estimate is importance sampling's (N·ΣW² − 1)/(N − 1).
+        (ISamplingTarget<double[]> target, _) = Conjugate();
+        var stages = new List<SmcStage<double[]>>();
+        foreach (double b in new[] { 0.0, 0.1, 0.3, 0.6, 1.0 }) stages.Add(new SmcStage<double[]>(target, new Temperature(b, TemperingPath.Likelihood)));
+        var options = new SmcOptions { Particles = 500, MutationSteps = 2, ResampleBelow = 0.0 };
+        SmcResult<double[]> result = SmcSampler.Run(stages, new GaussianParticles(3, 1.0), new RandomWalkKernel(), options, seed: 1207);
+
+        Assert.Equal(0.0, result.Stages[0].NormalizerRelativeVariance);
+        Assert.All(result.Stages, s => Assert.False(s.Resampled));
+        double squares = 0.0;
+        foreach (double w in result.Weights) squares += w * w;
+        double expected = (500 * squares - 1.0) / 499.0;
+        Assert.Equal(expected, result.Stages[^1].NormalizerRelativeVariance, 1e-12);
+        Assert.Equal(Math.Sqrt(Math.Log(1.0 + expected)), result.LogNormalizerError, 12);
+    }
+
+    [Fact]
+    public void GenealogyVariance_IsUnbiased_UnderMultinomialResamplingAtEveryStage()
+    {
+        // Lee and Whiteley's identity: E[Ẑ²·V̂] = Var(Ẑ) when every stage resamples multinomially on a fixed schedule.
+        // With Ẑ taken relative to the closed-form evidence, d = Ẑ²·V̂ − (Ẑ − 1)² has mean exactly 0. The exponent R + 1
+        // matters: R in its place moves V̂ by (1 − V̂)/N, which the replicates must reject. The kernel's step is fixed: a
+        // kernel tuned from the population makes the particles depend on each other beyond their ancestry.
+        (ISamplingTarget<double[]> target, double[] y) = Conjugate();
+        double logZ = 0.0;
+        foreach (double yj in y) logZ += -0.5 * Math.Log(2.0 * Math.PI * 1.25) - yj * yj / (2.0 * 1.25);
+        var stages = new List<SmcStage<double[]>>();
+        foreach (double b in new[] { 0.0, 0.25, 0.5, 0.75, 1.0 }) stages.Add(new SmcStage<double[]>(target, new Temperature(b, TemperingPath.Likelihood)));
+        const int n = 16, reps = 20_000;
+        var options = new SmcOptions { Particles = n, MutationSteps = 1, ResampleBelow = 1.0, Resampling = ResamplingScheme.Multinomial };
+
+        var d = new double[reps];
+        var dShort = new double[reps];   // the same with exponent R
+        double actual = 0.0, estimated = 0.0;
+        int[] seeds = SeedTree.Derive(1208, reps);
+        for (int r = 0; r < reps; r++)
+        {
+            SmcResult<double[]> result = SmcSampler.Run(stages, new GaussianParticles(3, 1.0), new FixedWalk(0.4), options, seeds[r]);
+            double z = Math.Exp(result.LogNormalizerRatio - logZ);
+            double v = result.Stages[^1].NormalizerRelativeVariance;
+            double vShort = 1.0 - (1.0 - v) * (n - 1) / n;
+            d[r] = z * z * v - (z - 1.0) * (z - 1.0);
+            dShort[r] = z * z * vShort - (z - 1.0) * (z - 1.0);
+            actual += (z - 1.0) * (z - 1.0);
+            estimated += z * z * v;
+        }
+        (double mean, double se) = MeanAndError(d);
+        (double meanShort, double seShort) = MeanAndError(dShort);
+        _out.WriteLine($"Var(Ẑ)/Z²: {actual / reps:F4} over the replicates, {estimated / reps:F4} estimated; " +
+                       $"d = {mean:F5} ± {se:F5}; with exponent R, {meanShort:F5} ± {seShort:F5}");
+        Assert.True(actual / reps > 0.05, $"the case should carry a real variance, not {actual / reps:F4}");
+        Assert.True(Math.Abs(mean) <= 4.0 * se, $"E[Ẑ²V̂ − (Ẑ − 1)²] = {mean:F5} ± {se:F5}");
+        Assert.True(Math.Abs(meanShort) > 4.0 * seShort, $"exponent R should be rejected: {meanShort:F5} ± {seShort:F5}");
+
+        static (double Mean, double Error) MeanAndError(double[] values)
+        {
+            double m = 0.0;
+            foreach (double v in values) m += v;
+            m /= values.Length;
+            double ss = 0.0;
+            foreach (double v in values) ss += (v - m) * (v - m);
+            return (m, Math.Sqrt(ss / (values.Length - 1) / values.Length));
+        }
+    }
+
     private static (ISamplingTarget<double[]> Target, double[] Y) Conjugate()
     {
         double[] y = [1.0, -0.5, 2.0];
@@ -224,6 +311,20 @@ public sealed class SmcTests
         for (int i = 0; i < a.Particles.Count; i++) Assert.Equal(a.Particles[i], b.Particles[i]);
         Assert.Equal(a.Stages.Count, b.Stages.Count);
         for (int s = 0; s < a.Stages.Count; s++) Assert.Equal(a.Stages[s], b.Stages[s]);
+    }
+
+    // Random-walk Metropolis with a fixed step, untouched by the population.
+    private sealed class FixedWalk(double step) : ISmcKernel<double[]>
+    {
+        public SmcMove<double[]> Move(double[] state, ITargetEvaluation evaluation, SmcStage<double[]> stage, Xoshiro256PlusPlus rng)
+        {
+            var proposal = new double[state.Length];
+            for (int j = 0; j < state.Length; j++) proposal[j] = state[j] + step * Normal.SampleStandard(rng);
+            ITargetEvaluation proposed = stage.Target.Evaluate(proposal);
+            return Math.Log(rng.NextDouble()) < stage.LogDensity(proposed) - stage.LogDensity(evaluation)
+                ? new SmcMove<double[]>(proposal, proposed, true)
+                : new SmcMove<double[]>(state, evaluation, false);
+        }
     }
 
     // Particles drawn from N(0, sd²·I_d).

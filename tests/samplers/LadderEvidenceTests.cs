@@ -154,7 +154,7 @@ public sealed class LadderEvidenceTests
         // normalizer, term for term, and path sampling over the same stages estimates the same evidence.
         double truth = Normal1.LogZ(1.0) - Normal1.LogZ(0.0);
         SmcResult<double[]> result = SmcSampler.RunTempered(ConjugateTarget, TemperingPath.Likelihood, 0.9, new PriorParticles(),
-            new RandomWalkKernel(), new SmcOptions { Particles = 2000, MutationSteps = 5, TraceStages = true }, seed: 31);
+            new RandomWalkKernel(), new SmcOptions { Particles = 2000, MutationSteps = 5, Resampling = ResamplingScheme.Multinomial, TraceStages = true }, seed: 31);
         IReadOnlyList<SmcStageTrace> stages = result.StageTraces!;
         Assert.Equal(result.Stages.Count, stages.Count);
         for (int k = 0; k < stages.Count; k++)
@@ -172,6 +172,70 @@ public sealed class LadderEvidenceTests
                     $"path sampling {ps.LogRatio:F5} (diagnostic {ps.DiscretizationError:F5}) against {truth:F5}");
         Assert.Throws<InvalidOperationException>(() => LadderEvidence.FromSmc(SmcSampler.RunTempered(ConjugateTarget, TemperingPath.Likelihood, 0.9,
             new PriorParticles(), new RandomWalkKernel(), new SmcOptions { Particles = 200 }, seed: 31)));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(5)]
+    public void SmcNormalizerError_SeesSharedAncestry_AndCovers(int moves)
+    {
+        // The probe that found the stages' weights blind to shared ancestry (Kish: coverage 0.795 at one move per stage),
+        // rerun with the genealogy error: the conjugate Normal tempered from its prior at a conditional ESS of 0.9, 1000
+        // particles, multinomial resampling below half the population, 200 seeds. The Kish reading is logged beside it.
+        double truth = Normal1.LogZ(1.0) - Normal1.LogZ(0.0);
+        var genealogy = new Calibration(truth);
+        var kish = new Calibration(truth);
+        foreach (int seed in SeedTree.Derive(2027, 200))
+        {
+            SmcResult<double[]> result = SmcSampler.RunTempered(ConjugateTarget, TemperingPath.Likelihood, 0.9, new PriorParticles(),
+                new RandomWalkKernel(), new SmcOptions { Particles = 1000, MutationSteps = moves, Resampling = ResamplingScheme.Multinomial, TraceStages = true }, seed);
+            LadderEstimate ss = LadderEvidence.FromSmc(result);
+            Assert.Equal(result.LogNormalizerError, ss.MonteCarloError);
+            genealogy.Add(ss);
+            double weightsOnly = 0.0;   // the stages' own errors combined as independent: the Kish reading
+            foreach (RungEstimate rung in ss.Rungs) weightsOnly += rung.MonteCarloError * rung.MonteCarloError;
+            kish.Add(ss.LogRatio, Math.Sqrt(weightsOnly));
+        }
+        _out.WriteLine($"{moves} moves per stage. Genealogy: {genealogy}. Kish: {kish}.");
+        genealogy.AssertCalibrated("the genealogy error");
+    }
+
+    [Fact]
+    public void SmcNormalizerError_IsNaN_AfterAResamplingItDoesNotDescribe()
+    {
+        // Systematic resampling's offspring are not multinomial's, so the estimate stops at the first such resampling,
+        // and a run resumed from just after it keeps it stopped whatever its options.
+        var options = new SmcOptions { Particles = 300, MutationSteps = 1, TraceStages = true };
+        SmcRun<double[]> run = SmcRun<double[]>.Start(Stage(0.0), new PriorParticles(), new RandomWalkKernel(), options, seed: 9);
+        int first = -1;
+        SmcCheckpoint<double[]>? atFirst = null;
+        for (int s = 1; s <= 10; s++)
+        {
+            run.Advance(Stage(s / 10.0));
+            SmcStageReport report = run.Reports[^1];
+            if (first < 0)
+            {
+                Assert.True(double.IsFinite(report.NormalizerRelativeVariance), $"stage {s}, before any resampling");
+                if (report.Resampled)
+                {
+                    first = s;
+                    atFirst = run.Checkpoint();
+                }
+            }
+            else Assert.True(double.IsNaN(report.NormalizerRelativeVariance), $"stage {s}, after the first resampling at {first}");
+        }
+        Assert.True(first is > 0 and < 10, $"the case should resample before its last stage, not at {first}");
+        Assert.True(double.IsNaN(run.Result().LogNormalizerError));
+        Assert.True(double.IsNaN(LadderEvidence.FromSmc(run.Result()).MonteCarloError));
+
+        Assert.False(atFirst!.GenealogyHolds);
+        Assert.True(double.IsFinite(atFirst.Reports[^1].NormalizerRelativeVariance));   // read before that stage's resampling
+        SmcRun<double[]> resumed = SmcRun<double[]>.Resume(atFirst, new PriorParticles(), new RandomWalkKernel(),
+            options with { Resampling = ResamplingScheme.Multinomial });
+        resumed.Advance(Stage(1.0));
+        Assert.True(double.IsNaN(resumed.Reports[^1].NormalizerRelativeVariance));
+
+        static SmcStage<double[]> Stage(double b) => new(ConjugateTarget, new Temperature(b, TemperingPath.Likelihood));
     }
 
     [Fact]

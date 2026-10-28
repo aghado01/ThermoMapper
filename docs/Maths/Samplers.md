@@ -203,17 +203,28 @@ While traced, the ladder is fixed (`AdaptLadder` refuses). `LadderSnapshot` carr
 - each particle's log ratio to the next stage, the increments the next reweighting reads, filled in when the run advances.
 
 They ride in `SmcResult.StageTraces`, `SmcRun.StageTraces` and the checkpoint, and a resumed run continues them exactly. `LadderEvidence.FromSmc(result, method)` reads each stage as a weighted rung (`RungDraws.FromPopulation`) and needs a run on one target and path.
-- **Stepping-stone reproduces the run's own `LogNormalizerRatio`,** term for term (to 10⁻¹⁰ in the test), and adds an error.
-- **Path sampling** over the same adaptive stages leans on its diagnostic. On the conjugate Normal at a conditional ESS of 0.9 (11 stages), the trapezoid was −2.269 against a truth of −2.145, and the diagnostic, +0.152, brought it to −2.117.
-- **The error uses each stage's weights (Kish), which do not see shared ancestry.** It is close when the mutation mixes the population and too small when it does not. Conjugate Normal, 1000 particles, 200 seeds, coverage of ±1.96 errors and mean z²:
+- **Stepping-stone reproduces the run's own `LogNormalizerRatio`,** term for term (to 10⁻¹⁰ in the test), with the run's genealogy error (below).
+- **Path sampling** over the same adaptive stages leans on its diagnostic. On the conjugate Normal at a conditional ESS of 0.9 (11 stages), the trapezoid was −2.273 against a truth of −2.145, and the diagnostic, +0.149, brought it to −2.124.
+- **The normalizer's error comes from the genealogy** (Lee and Whiteley 2018). Particles that share an initial ancestor are correlated through it, which each stage's weights do not see. Each stage reports, after its reweighting and before any resampling, `SmcStageReport.NormalizerRelativeVariance`:
 
-| Mutation | Coverage | Mean z² | Reported error vs actual sd |
-|---|---|---|---|
-| 5 moves per stage | 0.935 | 1.14 | 0.036 vs 0.039 |
-| 5 moves, never resampled | 0.930 | 1.19 | 0.041 vs 0.044 |
-| 1 move per stage | 0.795 | 2.15 | 0.037 vs 0.053 |
+  $$\widehat{\operatorname{Var}}(\hat Z)/\hat Z^2=1-\Big(\tfrac{N}{N-1}\Big)^{R+1}\sum_{i,j:\,E_i\ne E_j}W_iW_j,$$
 
-  A genealogy-based variance estimate of the normalizer (Lee and Whiteley 2018) would see the ancestry; it is not built.
+  with $E_i$ particle i's initial ancestor (its Eve index, the `Families` count's lineage), $W$ the normalized weights and R the resamplings so far (`SmcWeights.GenealogyRelativeVariance`). Between resamplings the weights carry the accumulated potentials, so the stages between two resamplings are one step of their particle system. `SmcResult.LogNormalizerError` turns it into an error on $\ln\hat Z$, $\sqrt{\ln(1+v)}$, the log-normal reading (Bérard, Del Moral and Doucet 2014), which is the delta method's $\sqrt v$ for small v. `FromSmc`'s stepping-stone takes that error; its rungs keep their own weights' errors.
+  - **Where it holds.** Times $\hat Z^2$ it is unbiased for $\operatorname{Var}(\hat Z)$ under multinomial resampling at fixed times with kernels that do not read the population; Du and Guyader (2021) carry its consistency to adaptive schedules. Its $N/(N-1)$ factors are multinomial resampling's. The lower-variance schemes merge lineages more slowly, and it reads too small under them, so it is NaN from the stage after the first resampling by another scheme, and a resumed run keeps it so (`SmcCheckpoint.GenealogyHolds`). Without resampling it is importance sampling's $(N\sum W^2-1)/(N-1)$.
+  - **Its blind spots.** A kernel tuned from the population, as `RandomWalkKernel` is, links the particles beyond their ancestry: at N = 16 the estimate ran 5% low (1.032 against 1.088), and at N = 1000 nothing was visible. When every lineage has collapsed into one it reads 1, whatever the run; `Families` says when.
+  - **Path sampling** over SMC stages keeps the stages' own errors, which ignore shared ancestry: the genealogy covers the normalizer, not a sum of stage means.
+  - **Evidence.** Conjugate Normal, adaptive at a conditional ESS of 0.9, 1000 particles, resampling below half the population, 200 seeds; coverage of ±1.96 errors and mean z²:
+
+| Resampling, moves per stage | Genealogy | Each stage's weights (Kish) |
+|---|---|---|
+| Multinomial, 1 | 0.950, 0.98 | 0.790, 2.37 |
+| Multinomial, 5 | 0.965, 0.85 | 0.950, 0.97 |
+| Systematic, 1 | 0.905, 1.38 | 0.795, 2.26 |
+| Systematic, 5 | 0.795, 2.07 | 0.950, 1.00 |
+| Stratified, 1 | 0.905, 1.44 | 0.780, 2.46 |
+| Residual, 1 | 0.900, 1.37 | 0.795, 2.47 |
+
+  On this target the lower-variance schemes did not lower the actual spread of $\ln\hat Z$: at one move, 0.055 under systematic against 0.057 under multinomial; at five, 0.036 under both. Unbiasedness itself is checked against 20,000 replicates at N = 16 with a fixed-step kernel: $E[\hat Z^2\hat V-(\hat Z-1)^2]=0.020\pm0.013$, while the exponent R in place of R + 1 gives $0.081\pm0.012$.
 
 **Stepping-stone** (Xie, Lewis, Fan, Kuo and Chen 2011). With $d=\ln q_{k+1}(x)-\ln q_k(x)$ for $x\sim q_k$,
 
@@ -408,7 +419,7 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 - **Only the monitored functionals get rank-normalized diagnostics.** The rest (BARS's per-grid fit) keep classic R̂ from streaming moments, which costs no stored draws but does not see differences in scale or behave for heavy tails.
 - **The ladder evidence's limits.**
   - The discretization diagnostic misses a collapsed likelihood's curvature term, $E_b[\partial_b^2\ell_b]$.
-  - A population's ESS ignores shared ancestry. With poorly mixing mutations the SMC stages' error is too small (coverage 0.80 at one move per stage).
+  - A population's ESS ignores shared ancestry. The SMC normalizer's genealogy error sees it, under multinomial resampling only; path sampling over SMC stages does not.
 - **`SpectralNoiseField` is not periodic.** Its documentation describes the grid as periodic, but queries map the box to nodes 0..N−1, so the sampled field is not periodic over the box.
 
 ## Source map

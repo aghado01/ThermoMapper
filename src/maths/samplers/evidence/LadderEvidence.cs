@@ -325,8 +325,10 @@ public static class LadderEvidence
     /// <summary>
     /// The estimate from a tempered SMC run that traced its stages (<see cref="SmcOptions.TraceStages"/>), on one target
     /// and path: each stage is a rung, its population weighted as the stage left it. Stepping-stone reproduces the run's
-    /// <see cref="SmcResult{TState}.LogNormalizerRatio"/> and gives it an error from the stages' weights, which ignore
-    /// shared ancestry; path sampling needs slopes.
+    /// <see cref="SmcResult{TState}.LogNormalizerRatio"/>, and its error is the run's genealogy estimate
+    /// (<see cref="SmcResult{TState}.LogNormalizerError"/>), which sees shared ancestry and is NaN unless every
+    /// resampling was multinomial; its rungs' errors are their own weights'. Path sampling needs slopes, and its error is from the stages' weights, which ignore shared ancestry:
+    /// the genealogy estimate covers the normalizer, not a sum of stage means.
     /// </summary>
     public static LadderEstimate FromSmc<TState>(SmcResult<TState> result, LadderEstimator method = DefaultEstimator)
     {
@@ -353,7 +355,7 @@ public static class LadderEvidence
         }
         return method switch
         {
-            LadderEstimator.SteppingStone => SteppingStone(b, rungs),
+            LadderEstimator.SteppingStone => SteppingStone(b, rungs) with { MonteCarloError = result.LogNormalizerError },
             LadderEstimator.PathSampling => PathSampling(b, rungs!),
             _ => throw new ArgumentOutOfRangeException(nameof(method)),
         };

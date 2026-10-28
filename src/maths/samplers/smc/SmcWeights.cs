@@ -80,4 +80,41 @@ public static class SmcWeights
             if (weights[i] > 0.0) sum += weights[i] * Math.Exp(logIncrements[i] - max);
         return max + Math.Log(sum);
     }
+
+    /// <summary>
+    /// Lee and Whiteley's (2018) genealogy estimate of the normalizer's relative variance Var(Ẑ)/Z², from normalized
+    /// weights, each particle's initial ancestor (its Eve index, <paramref name="families"/>) and the number of
+    /// resampling events behind them: <c>1 − (N/(N−1))^{R+1}·Σ_{i,j: E_i ≠ E_j} W_i W_j</c>. Particles that share an
+    /// initial ancestor are correlated through it, which the weights alone do not see. Between resamplings the
+    /// weights carry the accumulated potentials, so the stages between two resamplings are one step of Lee and
+    /// Whiteley's particle system. Times Ẑ², it is unbiased for Var(Ẑ) under multinomial resampling at fixed times
+    /// with kernels that do not read the population; Du and Guyader (2021) carry its consistency to adaptive
+    /// schedules. Its N/(N−1) factors are multinomial resampling's: the lower-variance schemes (systematic, stratified,
+    /// residual) merge lineages more slowly, and it then reads too small. At R = 0 it is importance sampling's
+    /// (N·ΣW² − 1)/(N − 1). It can be negative, and when every lineage has collapsed into one it reads 1, whatever the
+    /// run: the families count says when. NaN for one particle.
+    /// </summary>
+    public static double GenealogyRelativeVariance(ReadOnlySpan<double> weights, ReadOnlySpan<int> families, int resamplings)
+    {
+        if (weights.Length != families.Length) throw new ArgumentException("The two spans must have the same length.", nameof(families));
+        if (resamplings < 0) throw new ArgumentOutOfRangeException(nameof(resamplings));
+        int n = weights.Length;
+        if (n < 2) return double.NaN;
+        var family = new double[n];   // each family's weight; Eve indices are initial positions, 0 … N−1
+        double total = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            family[families[i]] += weights[i];
+            total += weights[i];
+        }
+        double within = 0.0;
+        foreach (double s in family) within += s * s;
+        double across = (total * total - within) / (total * total);   // Σ_{E_i ≠ E_j} W_i W_j, renormalized
+        return 1.0 - Math.Exp((resamplings + 1) * Math.Log((double)n / (n - 1))) * across;
+    }
+
+    /// <summary>The standard error of ln Ẑ from a relative variance v: √ln(1 + v), the log-normal reading (Bérard,
+    /// Del Moral and Doucet 2014), which is the delta method's √v for small v. A negative v reads 0.</summary>
+    public static double LogNormalizerError(double relativeVariance)
+        => double.IsNaN(relativeVariance) ? double.NaN : Math.Sqrt(Math.Log(1.0 + Math.Max(relativeVariance, 0.0)));
 }
