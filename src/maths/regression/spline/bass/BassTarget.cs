@@ -109,15 +109,18 @@ public sealed class BassTarget
     /// <summary>ȳ, which the zero centre's level energy reads.</summary>
     public double ResponseMean { get; }
 
-    /// <summary>The log density of u = ln τ under τ's prior, a ln(rate) − ln Γ(a) + a·u − rate·eᵘ; the g mode only.</summary>
+    /// <summary>
+    /// The log density of u = ln τ under τ's prior, a ln(rate) − ln Γ(a) + a·u − rate·eᵘ; the g mode only. Where eᵘ
+    /// leaves the doubles, rounding to 0 or overflowing, τ is outside the support: −∞, a mass below e⁻³⁷⁰ of the prior's.
+    /// </summary>
     public double LogTauDensity(double logTau)
     {
-        Gamma tau = TauPrior ?? throw new InvalidOperationException("Fixed g holds τ; the state has no τ coordinate.");
+        Gamma prior = TauPrior ?? throw new InvalidOperationException("Fixed g holds τ; the state has no τ coordinate.");
         if (double.IsNaN(logTau)) throw new ArgumentOutOfRangeException(nameof(logTau));
-        double rate = tau.Rate * Math.Exp(logTau);
-        return double.IsNegativeInfinity(logTau) || double.IsPositiveInfinity(rate)
-            ? double.NegativeInfinity
-            : _logTauConstant + tau.Shape * logTau - rate;
+        double tau = Math.Exp(logTau), rate = prior.Rate * tau;
+        return tau > 0.0 && double.IsFinite(rate)
+            ? _logTauConstant + prior.Shape * logTau - rate
+            : double.NegativeInfinity;
     }
 
     /// <summary>Why <paramref name="fit"/> lies outside F, or null: the design's refusal, or an exact fit under the
@@ -200,10 +203,13 @@ public sealed class BassEvaluation : ITargetEvaluation
     /// <inheritdoc/>
     public double LogPrior { get; }
 
-    /// <summary>ln p₁(y | structure, τ), the untempered collapsed marginal.</summary>
-    public double LogMarginal => _untempered ??= Refusal is null
-        ? _target.Marginal(Fit, Tau).LogMarginal(_target.Sigma2)
-        : double.NegativeInfinity;
+    /// <summary>Whether the state lies off the support: refused, or its τ outside the prior's.</summary>
+    public bool OffSupport => double.IsNegativeInfinity(LogPrior);
+
+    /// <summary>ln p₁(y | structure, τ), the untempered collapsed marginal; −∞ off the support.</summary>
+    public double LogMarginal => _untempered ??= OffSupport
+        ? double.NegativeInfinity
+        : _target.Marginal(Fit, Tau).LogMarginal(_target.Sigma2);
 
     /// <summary>The g-prior block's marginal at <paramref name="inverseTemperature"/>, for σ²'s posterior.</summary>
     public GPriorMarginal Marginal(double inverseTemperature = 1.0) => _target.Marginal(Fit, Tau, inverseTemperature);
@@ -212,7 +218,7 @@ public sealed class BassEvaluation : ITargetEvaluation
     public double LogLikelihood(double inverseTemperature)
     {
         double b = Check(inverseTemperature);
-        if (Refusal is not null) return double.NegativeInfinity;
+        if (OffSupport) return double.NegativeInfinity;
         if (_target.Form == TemperedForm.Linear) return b * LogMarginal;
         return b == 1.0 ? LogMarginal : _target.Marginal(Fit, Tau, b).LogMarginal(_target.Sigma2);
     }
@@ -221,7 +227,7 @@ public sealed class BassEvaluation : ITargetEvaluation
     public double LogLikelihoodSlope(double inverseTemperature)
     {
         double b = Check(inverseTemperature);
-        if (Refusal is { } reason) throw new InvalidOperationException($"The structure lies outside F ({reason}); it has no likelihood.");
+        if (OffSupport) throw new InvalidOperationException($"The state lies off the support ({Refusal?.ToString() ?? "τ"}); it has no likelihood.");
         return _target.Form == TemperedForm.Linear
             ? LogMarginal
             : _target.Marginal(Fit, Tau, b).LogMarginalSlope(_target.Sigma2);

@@ -285,7 +285,7 @@ public sealed class CollapsedGPrior
     {
         CheckTau(tau);
         if (!(b >= 0.0) || double.IsPositiveInfinity(b))
-            throw new ArgumentOutOfRangeException(nameof(b), "The inverse temperature must be non-negative and finite.");
+            throw new ArgumentOutOfRangeException("inverseTemperature", "The inverse temperature must be non-negative and finite.");
         double shrink = tau / (tau + b);
         double s = b * (rss + shrink * fitted), sSlope = rss + shrink * shrink * fitted;
         if (intercept != GPriorCentre.Flat)
@@ -293,7 +293,7 @@ public sealed class CollapsedGPrior
 
         // α's integral, (2πσ²/(Nb))^½: ½ln 2π moves into the count's 2π term, −½ln(Nb) stays here.
         if (!(b > 0.0))
-            throw new ArgumentOutOfRangeException(nameof(b),
+            throw new ArgumentOutOfRangeException("inverseTemperature",
                 "b = 0 is out of reach on the flat intercept's integrated form, whose (2πσ²/(Nb))^½ diverges there.");
         double flatLogDet = 0.5 * (columns - 1) * Math.Log(shrink) - 0.5 * Math.Log(rows * b);
         return new GPriorMarginal(s, flatLogDet, rows, tau, b, 1, sSlope, -0.5 * (columns - 1) / (tau + b) - 0.5 / b);

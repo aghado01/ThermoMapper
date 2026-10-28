@@ -363,14 +363,21 @@ public sealed class BassTargetParityTests
         Assert.True(refused > 0);
     }
 
-    [Fact]
-    public void Rungs_MatchTheOraclesLadder()
+    // Under flat + Jeffreys the integrated form is undefined at b = 0 and the evidence is null, but the rungs' laws, and
+    // so the slope's mean, are defined wherever the form is.
+    [Theory]
+    [InlineData("defaults")]
+    [InlineData("flat + jeffreys")]
+    public void Rungs_MatchTheOraclesLadder(string option)
     {
         if (!Available) return;
+        bool improper = option != "defaults";
         double[][] rows = FixtureB();
         double[] rungs = [0.0, 0.1, 0.5, 1.0];
-        JsonElement r = Posterior(rows, "M_max=2", "rungs=" + string.Join(",", rungs.Select(b => b.ToString(CultureInfo.InvariantCulture))));
-        BassConfig config = Config();
+        string[] args = ["M_max=2", "rungs=" + string.Join(",", rungs.Select(b => b.ToString(CultureInfo.InvariantCulture))),
+                         .. improper ? new[] { "centre=flat", "sigma2_prior=jeffreys" } : []];
+        JsonElement r = Posterior(rows, args);
+        BassConfig config = improper ? Config(GPriorCentre.Flat, jeffreys: true) : Config();
         Side ours = Ours(Data(rows), config, Terms(r), States(r));
         List<(double U, double LogW)> nodes = TauNodes(ours.Resolved.Observations);
         JsonElement tempered = r.GetProperty("posterior").GetProperty("tempered");
@@ -382,6 +389,12 @@ public sealed class BassTargetParityTests
             {
                 double b = rungs[k];
                 Assert.Equal(reference[k].GetProperty("defined").GetBoolean(), target.Defines(b));
+                if (!target.Defines(b))
+                {
+                    Assert.Throws<ArgumentOutOfRangeException>(() => target.Evaluate(ours.Fits[0], nodes[0].U).LogLikelihood(b));
+                    _out.WriteLine($"{option}, {key}, b = {b}: undefined on both sides");
+                    continue;
+                }
                 var lm = new double[ours.Fits.Length];
                 var meanSlope = new double[ours.Fits.Length];
                 var weights = new double[nodes.Count];
@@ -394,10 +407,11 @@ public sealed class BassTargetParityTests
                 double logZ = LogSumExp([.. ours.LogPrior.Zip(lm, (a, c) => a + c)]);
                 double slope = 0;
                 for (int s = 0; s < lm.Length; s++) slope += Math.Exp(ours.LogPrior[s] + lm[s] - logZ) * meanSlope[s];
-                double expectedZ = reference[k].GetProperty("log_Z").GetDouble();
+                JsonElement expectedZ = reference[k].GetProperty("log_Z");
                 JsonElement expectedSlope = reference[k].GetProperty("mean_slope");
-                _out.WriteLine($"{key}, b = {b}: log Z {logZ:F9} against {expectedZ:F9}; E[slope] {slope:F6} against {(expectedSlope.ValueKind == JsonValueKind.Null ? "null" : expectedSlope.GetDouble().ToString("F6"))}");
-                Assert.True(Math.Abs(logZ - expectedZ) <= 1e-8, $"{key}, b = {b}: log Z {logZ:R} against {expectedZ:R}");
+                _out.WriteLine($"{option}, {key}, b = {b}: log Z {logZ:F9} against {(expectedZ.ValueKind == JsonValueKind.Null ? "null" : expectedZ.GetDouble().ToString("F9"))}; E[slope] {slope:F6} against {(expectedSlope.ValueKind == JsonValueKind.Null ? "null" : expectedSlope.GetDouble().ToString("F6"))}");
+                if (improper) Assert.Equal(JsonValueKind.Null, expectedZ.ValueKind);
+                else Assert.True(Math.Abs(logZ - expectedZ.GetDouble()) <= 1e-8, $"{key}, b = {b}: log Z {logZ:R} against {expectedZ.GetDouble():R}");
                 if (expectedSlope.ValueKind != JsonValueKind.Null)
                     Assert.True(Math.Abs(slope - expectedSlope.GetDouble()) <= 1e-7 * Math.Max(1.0, Math.Abs(slope)),
                                 $"{key}, b = {b}: E[slope] {slope:R} against {expectedSlope.GetDouble():R}");

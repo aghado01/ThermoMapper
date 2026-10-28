@@ -56,6 +56,16 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ## Reports
 
+### S5 reviewed — 2026-10-28
+
+A fresh read of `f620d71` found no correctness errors on the main path, and four smaller findings, all fixed:
+1. *τ beyond the doubles' range threw.* At u below about −745, τ = eᵘ rounds to 0. `LogTauDensity` still returned a finite value, so the marginal threw on τ = 0, where `ITargetEvaluation` wants −∞ for prior and likelihood alike. Now τ outside (0, ∞) is off the support, a prior mass below e⁻³⁷⁰, and `BassEvaluation` scores −∞ wherever its prior is −∞.
+2. *A misnamed exception parameter.* The shared block's exceptions named its private helper's `b`; they name `inverseTemperature` again.
+3. *The declared inverse-gamma σ² prior was untested end to end.* It now reaches the target unchanged and gives the block's marginal; rescaling y moves its structures unequally, as a prior in y's units should.
+4. *The integrated form under the improper options was untested against the oracle below b = 1.* Fixture B's rungs now run under flat + Jeffreys too: the `defined` flags agree (b = 0 undefined on the integrated form), the evidence is null on both sides, and the slope's mean matches at every defined rung on both forms.
+
+Regression 547/547; the BASS oracle tests 19/19.
+
 ### S5: the collapsed target — 2026-10-28
 
 `BassTarget` (`src/maths/regression/spline/bass/BassTarget.cs`) is D03's collapsed target over (structure, τ), the coefficients and σ² integrated out. Beside it:

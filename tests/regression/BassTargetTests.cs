@@ -286,6 +286,48 @@ public sealed class BassTargetTests
         }
     }
 
+    [Fact]
+    public void DeclaredInverseGamma_ReachesTheTarget()
+    {
+        // A declared IG(g₁, g₂) is held as given, reading nothing from y, and the marginal is the block's under it.
+        BassData data = Data();
+        Built built = Build(data, Config(sigma2: Sigma2Prior.InverseGamma(2.0, 3.0)));
+        InverseGamma sigma = Assert.NotNull(built.Target.Sigma2);
+        Assert.Equal(2.0, sigma.Shape);
+        Assert.Equal(3.0, sigma.Scale);
+        BassStructureFit fit = built.Fit(Structures[2]);
+        double tau = 0.04;
+        double expected = CollapsedGPrior.CentredMarginalAt(fit.Terms, fit.ResidualSquares, fit.FittedSquares, 75, built.Resolved.ResponseMean,
+                                                            GPriorCentre.Mean, tau).LogMarginal(InverseGamma.ShapeScale(2.0, 3.0));
+        Assert.Equal(expected, built.Target.Evaluate(fit, Math.Log(tau)).LogMarginal);
+        Assert.True(built.Target.Defines(0.0));
+
+        // Unlike the scaled prior it is in y's units, so rescaling y moves structures unequally.
+        Built scaled = Build(Data(scale: 1e3), Config(sigma2: Sigma2Prior.InverseGamma(2.0, 3.0)));
+        double Gap(Built b) => b.Target.Evaluate(b.Fit(Structures[2]), Math.Log(tau)).LogMarginal - b.Target.Evaluate(b.Fit(Structures[0]), Math.Log(tau)).LogMarginal;
+        Assert.True(Math.Abs(Gap(scaled) - Gap(built)) > 1.0);
+    }
+
+    [Fact]
+    public void TauOutsideTheDoubles_IsOffTheSupport()
+    {
+        // e^u rounds to 0 below u ≈ −745 and overflows above ≈ 709: −∞ for the prior and the likelihood alike, as
+        // ITargetEvaluation requires off the support, rather than a throw from the marginal.
+        Built built = Build(Data(), Config());
+        BassStructureFit fit = built.Fit(Structures[2]);
+        foreach (double u in new[] { -800.0, 800.0, double.NegativeInfinity })
+        {
+            BassEvaluation ev = built.Target.Evaluate(fit, u);
+            Assert.True(ev.OffSupport, $"u = {u}");
+            Assert.Equal(double.NegativeInfinity, ev.LogPrior);
+            Assert.Equal(double.NegativeInfinity, ev.LogLikelihood(1.0));
+            Assert.Equal(double.NegativeInfinity, ev.LogLikelihood(0.5));
+            Assert.Equal(double.NegativeInfinity, Temperature.LogPosterior(ev));
+            Assert.Throws<InvalidOperationException>(() => ev.LogLikelihoodSlope(0.5));
+        }
+        Assert.False(built.Target.Evaluate(fit, -700.0).OffSupport);
+    }
+
     // Composite 12-point Gauss–Legendre on panels of width ½ over [lo, hi].
     internal static IEnumerable<(double U, double W)> Nodes(double lo, double hi)
     {
