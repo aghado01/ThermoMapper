@@ -67,6 +67,18 @@ Work on `main` with targeted commits of your own paths only: `git add <your new 
 
 Append the report here when the work lands, newest first: date, commits, test evidence, the default chosen in S1 and why, S3's outcome (or why it was skipped), limits, and follow-ups.
 
+### 2026-10-27 — the user's follow-ups
+
+The user asked to shore up the gaps, to surface and reconcile differences from R, to give SMC per-stage readouts, and to have Normal BARS report evidence by default with a knob.
+
+| Commit | What |
+|---|---|
+| `128fd1f` | Pareto guard; tail states; tied-tail divergence kept and asserted; odd lengths aligned to posterior |
+| `ae82374` | SMC stage traces and `LadderEvidence.FromSmc`; the Kish error's calibration probed |
+| `00eb9da` | BARS evidence, on wherever a run can give one |
+
+The full report is in [port-numerics-checklist.md](port-numerics-checklist.md), "Follow-ups: conventions reconciled, SMC stage traces, BARS evidence".
+
 ### 2026-10-27 — S1, S2 and S3 landed
 
 **Commits.**

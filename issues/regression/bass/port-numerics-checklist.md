@@ -32,6 +32,33 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 
 ## Reports
 
+### Follow-ups: conventions reconciled, SMC stage traces, BARS evidence — 2026-10-27
+
+The user's follow-up to N11–N13: shore up the gaps, surface and reconcile differences from R instead of leaving them silent, give SMC per-stage readouts, and have Normal BARS report evidence by default behind a knob. Commits: `128fd1f` (conventions), `ae82374` (SMC), `00eb9da` (BARS).
+
+- **posterior's Pareto guard.** `FitGeneralizedPareto` returns (NaN, NaN) when the tail's first quartile is its minimum, as `gpdfit` returns NA, and uses log1p as `gpdfit` does. PSIS reads that as `NoFit`, k̂ = +∞, as loo does. It was +∞ before too, but by NaN arithmetic. The parity `nofit` fixture agrees with loo: +∞ on both sides, and both withhold the total's error.
+- **Tail treatment surfaced.** `PredictiveCheck.ParetoTails` gives each unit's `ParetoTail`: `Fitted`, `Tied`, `TooShort` or `NoFit`.
+  - *The tied tail keeps k̂ = −∞, after weighing loo's +∞.* A tie means at least M draws hold the largest ratio: the sample's tail is bounded and no draw dominates, which is what k̂ detects. Ties are the norm for the collapsed content. On the three-structure case the unsmoothed estimate is the exact harmonic mean, which loo would refuse.
+  - *The divergence is asserted.* The parity `tied` fixture checks loo's +∞ and its NA total against the C#'s −∞ and its finite total.
+- **Odd lengths aligned.** The tail R̂'s median and the tail ESS's quantiles are taken over all draws, as posterior and ArviZ take them. At 4 × 999 the C# now matches posterior to rounding (it differed by 2.8·10⁻⁵ before). The oracle's split-chain variant is gone.
+- **SMC per-stage readouts.**
+  - `SmcOptions.TraceStages` records an `SmcStageTrace` per stage: weights, slopes, and the log ratios to the next stage. They ride in the result, the run and the checkpoint, and resume is exact.
+  - `LadderEvidence.FromSmc`: stepping-stone reproduces the run's `LogNormalizerRatio` to 10⁻¹⁰, and path sampling works over the same stages.
+  - `RungDraws.FromPopulation` drops zero-weight draws.
+  - *Settled by a probe* (200 seeds, 1000 particles). The Kish-based error covers 0.935 (z² 1.14) with 5 moves per stage, and 0.795 (z² 2.15) with 1 move: shared ancestry the weights miss. A genealogy-based estimate (Lee and Whiteley 2018) is the fix, not built.
+- **Normal BARS evidence.** `BarsResult.Evidence` (`BarsEvidence`) is on by default (`evidence = true`, `ReportsEvidence`) wherever a run can give one: a likelihood-path ladder to an exact reference rung, and `IObservationModel.HasCompleteMarginal`, the Normal model under a proper σ² prior.
+  - *How.* Each chain's ladder traces its rungs after burn-in. The estimate is the mean of the chains' stepping-stone estimates, since each chain adapts its own rungs, with the per-chain estimates kept.
+  - *Checks.* With no knots it is the empty design's marginal exactly. With at most one, −1.6165 ± 0.0059 against a quadrature of −1.6231.
+  - *The default BARS run is untempered,* and the reference rung is opt-in (OQ2), so the default reports none. Making evidence default for every run would mean tempering every run, which is the user's call.
+- **Tests.**
+  - Samplers 131/131 and Regression 431/431.
+  - Oracle `DiagnosticsParityTests` 11/11 (odd length direct, `tied`, `nofit`).
+- **Open.**
+  - Path sampling for BARS needs the Normal model's ∂_b ℓ_b, which has a closed form.
+  - D05's diagnostic needs E_b[∂²ℓ_b]; there is no seam for it yet.
+  - The SMC genealogy variance.
+  - The `r/README.md` oracle row.
+
 ### External reference for the diagnostics (N13, OQ9) — 2026-10-27
 
 From the shared-infrastructure chip. The user approved the CRAN download. Commits: `5eecbc1` (environment), `ee8b97f` (oracle, parity tests, docs, OQ9 row).
