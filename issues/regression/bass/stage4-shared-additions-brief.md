@@ -45,3 +45,83 @@ Read first: [AGENTS.md](../../../AGENTS.md) and [CONTRIBUTING.md](../../../CONTR
   - Every existing parallel-tempering test passes unchanged, and BARS stays bit-identical: the Samplers and Regression suites, with the seed sweep's per-seed values unchanged (`SEED_SWEEP=50`, compared against `artifacts/test-runs/SeedSweep/20261028_015051357…` and `20261028_015056249…`).
 
 ## Reports
+
+### The three additions (2026-10-28)
+
+Commits: `a2034ea` (Task A), `e0995be` (Task B), `5ce7453` (Task C). Suites at `5ce7453`: Distributions 119/119, Samplers 144/144, Regression 499/499. The Regression count includes the main session's uncommitted `BassDesignTests`, which compiled in the shared tree.
+
+**BARS bit-identical.** The seed sweep (`SEED_SWEEP=50`) matches the references byte for byte, table and summary:
+- Regression at `e0995be`: `20261028_035946474…` against `015051357…`, 1,370 rows.
+- Samplers at `5ce7453`: `20261028_040411118…` against `015056249…`, 154 rows.
+- Regression at `5ce7453`: `20261028_041239296…` against `015051357…`, 1,370 rows.
+
+**Task A: Wallenius (`Maths.Distributions.Wallenius`).**
+- *API.* `LogProbability(weights, set, method = Auto)`, `Probability(…)` and `Sample(rng, weights, set)`, with `WalleniusMethod` {`Auto`, `DrawOrders`, `Quadrature`}. The weights are all p of them; the set holds K distinct indices, in any order, K ≥ 1.
+- *A deviation from the brief and from D01: no inclusion–exclusion.* The default evaluation is the brute-force sum over the K! draw orders, accumulated by a recursion over the 2^K subsets of S: G(U) = Σ_{i∈U} zᵢ·G(U∖i)/(R + Z_U), with R the weight left out of S.
+  - Every term and every denominator is a sum of positives, so it is exact to a few ulps at any weights, in O(K·2^K). No error estimate is needed, and the choice the brief asked for goes.
+  - Scaled by Π min(zᵢ/R, 1) it stays within [1/(K+1)!, K!], so log P keeps its digits below double range (tested at P ≈ 10⁻³⁵⁰).
+  - *Why.* The brief's fallback, quadrature, costs 40–85 µs a call against 0.1–0.5 µs for the recursion at K ≤ 5 (Release). Inclusion–exclusion's own estimate, ε·Σ|terms|/P, already rejects at p = 50 with equal weights at K = 2 (about 10⁻¹²). So births at moderate p would have paid the quadrature on every proposal and on every death's reverse.
+- *R's alternating sum is not ported.* It loses up to 7.7·10⁻³ under F-O5's five decades, which the tests assert corrected. Where R is right (R's weights, K = 2 and 3) the recursion agrees with it to its own error.
+- *Quadrature.* Adaptive G7–K15 of Chesson's positive integrand on v = ln u, relative 10⁻¹⁴, in log space. It is selectable, and `Auto` takes it above K = 10. The explicit recursion runs to K = 20.
+- *Boundaries.* K = 1 is zᵢ/Σz, by −log1p(R/zᵢ); R's `dmwnchBass` doubles it there. The whole set has probability 1.
+- *Tests.* `WalleniusTests`, 26 (the commit message says 24):
+  - brute force over the draw orders at R's default weights and at five decades, K = 1…5, both evaluations;
+  - sums to one over every K-subset;
+  - 1/C(p, K) at p = 50 and at K = 11;
+  - F-O5's values, pinned from `bass_wallenius_oracle.R` runs;
+  - the two evaluations against each other at twelve decades;
+  - P near 1 and below underflow;
+  - the sampler's law;
+  - refusals.
+- *For S3.* `Wallenius.LogProbability(z, set)` with z = w₂ + appearances is the variable-set factor of a birth, and of a death's reverse. `Wallenius.Sample` draws that law, if the birth wants it from here. D01's bullet ("inclusion–exclusion up to K = 3 and quadrature above") no longer describes the code; amending it is the fitting segment's business.
+
+**Task B: the flat intercept, in the block's centred form.**
+- *Shape: a factory over the centred design, selected by the convention.* `CollapsedGPrior.FromCentredLeastSquares(centredGram, centredCoefficients, residualSumOfSquares, centredFittedSumOfSquares, rows, responseMean, intercept)`.
+  - *Why this shape.* S4's `BassDesign` holds the factor of G_c alone, with ȳ apart. Its `Factor`, `Coefficients`, `ResidualSquares`, `FittedSquares`, `Observations` and `ResponseMean` map one to one onto the arguments, and the config carries the convention as a `GPriorCentre`. `FromLeastSquares` would have needed the intercept bordered into the factor.
+  - *Beyond the brief.* The factory takes `Mean` and `Zero` as well as `Flat`, so S5 builds every convention's block alike. Through it, `Mean` equals `FromLeastSquares` on the explicit [1, Z_c] with μ₀ = ȳ·e₀ (10⁻¹²). `Zero` adds Nȳ² to Q itself, so pass ỹ's statistics under every convention. `Median` is refused.
+  - The coefficients are (α, β_c), the intercept first (`Columns` = M + 1). `Intercept` reports the convention; it is null from the existing factories.
+- *The flat form.* k = M, and ν = Nb − 1, which `GPriorMarginal.DegreesOfFreedom` carries into σ²'s shape and the 2π term. The determinant term is (M/2)·ln(τ/(τ+b)) − ½·ln(Nb).
+  - b = 0 throws `ArgumentOutOfRangeException`. The linear form there is the consumer's: b times the b = 1 marginal.
+  - The improper σ² prior needs ν > 0, and a proper one needs g₁ + ν/2 > 0; both refuse otherwise.
+  - The marginal is relative, so read `block.Intercept == GPriorCentre.Flat` as "no evidence".
+- *Conditionals.* σ² | y ~ IG(g₁ + ν/2, g₂ + S/2).
+  - `Sample` draws σ², then β_c through the factor, then α ~ N(ȳ, σ²/(Nb)), apart from β_c. `InterceptCovarianceScale` is c₀ = 1/b under Flat and 1/(τ+b) inside the g-prior.
+  - `LeaveOutLogDensity` and `ConditionalVariance` take the design [1, Z_c], column 0 the intercept's, and carry its variance. The leave-out's Student t has ν = N − 1 under Flat.
+- *Existing paths.* `FromLeastSquares` and `FromWeighted` are unchanged bit for bit; the sweep and the existing bit-for-bit test say so.
+- *BARS.* BARS still refuses `Flat`. Its reason in `BandedGPrior.cs` is reworded, keeping the phrase `NormalCentreTests` reads, so that test is unchanged.
+- *Docs.* `BayesianRegression.md`: the block section and its checks, the "Left open" note and the alternatives bullet.
+- *Tests.* `CollapsedGPriorInterceptTests`, 28:
+  - dense algebra on [1, Z_c] at four (τ, b), and on the uncentred [1, H] for the two g-prior conventions;
+  - level centring against the explicit column;
+  - the flat marginal and E[σ²] against quadrature over α and σ², at b = 1, 0.5 and 0.2, under both priors;
+  - Liang's and level centring's Bayes factors under Zellner–Siow against F-O9's oracle on F-O8's grid (values pinned from a grid run), to 10⁻⁸;
+  - on a hinge design, shift invariance at offsets 10 and −250 (the zero centre moves), with the g-forms;
+  - draws, leave-out densities and readout variances against dense counterparts;
+  - `MarginalAt` bit for bit, without allocating;
+  - refusals.
+
+**Task C: per-replica blocks in `ParallelTempering`.**
+- *The contract is `IBlock` itself, over the replica chain: `IBlock<ReversibleJumpChain<TState>>`.*
+  - A block reads `chain.Current`, `chain.CurrentEvaluation` and `chain.Temperature` (its rung now, after any adaptation). It updates the state leaving `Temperature.LogDensity` invariant, with log τ's Jacobian if it slices on log τ, and hands the state back with its evaluation through `SetState`, so the swaps read a current evaluation.
+  - *Why over the chain, not the state.* A reversible-jump state is immutable and shared, by swaps and by the common start, and the chain caches its evaluation; so the block works through the chain. `IBlock` over a mutable model state (BAPS, HPS) is unchanged.
+  - *One contract for both cases.* `MoveStep<T>`, the chain's own step as a block, lets a lone chain run the same blocks in `BlockScan<ReversibleJumpChain<T>>([new MoveStep<T>(), tau], chain, rng, c => c)`. BARS's pattern, the engine's run object holding the chain, serves too.
+- *API.*
+  - The constructor and `Restore` take `blocksForReplica`, called once per replica, as `movesForReplica` is. `Restore` refuses a mismatch.
+  - `HasBlocks` and `BlockStats(replica)` report them.
+  - `LadderSnapshot` gains `BlockRngs`, `BlockAttempts` and `BlockAccepts`, all null without blocks.
+- *Order and streams.*
+  - Each scan runs every replica's moves, then its blocks in order on their cadence (counted by scan from 1), then the swaps. The exact reference rung runs none.
+  - The streams are `SeedTree.Derive(masterSeed, 2L + 2)`: the first L + 2 as before, and replica i's block stream at L + 2 + i. A ladder without blocks derives only L + 2.
+  - Mutable block state, such as an adaptive width, is the engine's to save, as for `BlockScan`.
+- *Docs.* `Samplers.md`: the API rows, a "Per-replica blocks" paragraph, the step order and the source map.
+- *Tests.* `ParallelTemperingBlockTests`, 7. The state is (k, θ): an index moved only by reversible-jump moves, and θ only by a slice block.
+  - Each rung's P(k) and E[θ | k] against enumeration and quadrature, on both paths.
+  - Each pair's swap rejection against its expectation under the product of the rung laws, to within 10⁻³ of it (tolerance 0.01). Stale evaluations or an unbalanced swap would move it.
+  - Bit-identical resume, and the mismatch refusals.
+  - A block that draws nothing leaves the trajectory bit for bit; it keeps its cadence, and does not run on the reference rung.
+  - The lone chain through `BlockScan` samples the posterior.
+  - Validation.
+
+**Notes.**
+- Each seed sweep writes a new timestamped directory under `artifacts/test-runs/SeedSweep/`. Those runs (`035946474`, `040411118`, `041239296`) were left there as evidence.
+- A hand-over note for S3, S5 and S8 sits in the session group's shared notes folder (`stage4-shared-additions-handover.md`).
