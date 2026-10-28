@@ -24,6 +24,7 @@ public sealed class EvaluatorUnassignedTests
         new Purity(),
         new NormalizedMutualInformation(),
         new AdjustedRandIndex(),
+        new RandIndex(),
         new Homogeneity(),
         new Completeness(),
         new VMeasure(),
@@ -179,5 +180,62 @@ public sealed class EvaluatorUnassignedTests
             double score = e.Evaluate(graph, graph.Weights, labels, clusterCount: 2);
             Assert.Equal(0.0, score, 10);
         }
+    }
+
+    // ---- Graph external (predicted vs reference on edges) --------------------
+
+    private static IGraphExternalClusterEvaluator[] GraphExternals() => new IGraphExternalClusterEvaluator[]
+    {
+        new LinkOverlap(),
+        new LinkOverlap(weighted: true),
+    };
+
+    [Fact]
+    public void GraphExternal_SkipsEdgesWithUnassignedEndpoint_MatchesPhysicalRemoval()
+    {
+        // Node 4 is unassigned in the prediction; its reference label (1) agrees
+        // with node 3 so its edges would score as agreement were they kept.
+        var full = CsrGraph.FromEdges(new[]
+        {
+            new Edge(0, 1, 1.0),
+            new Edge(1, 2, 0.5),
+            new Edge(2, 3, 1.0),
+            new Edge(0, 4, 0.3),
+            new Edge(3, 4, 0.7),
+        }, nodeCount: 5);
+        int[] predFull = { 0, 0, 0, 1, Assignment.Unassigned };
+        int[] refFull  = { 0, 0, 1, 1, 1 };
+
+        var sub = CsrGraph.FromEdges(new[]
+        {
+            new Edge(0, 1, 1.0),
+            new Edge(1, 2, 0.5),
+            new Edge(2, 3, 1.0),
+        }, nodeCount: 4);
+        int[] predSub = { 0, 0, 0, 1 };
+        int[] refSub  = { 0, 0, 1, 1 };
+
+        foreach (var e in GraphExternals())
+        {
+            double scoreFull = e.Evaluate(full, predFull, refFull);
+            double scoreSub  = e.Evaluate(sub, predSub, refSub);
+            Assert.Equal(scoreSub, scoreFull, 10);
+        }
+    }
+
+    [Fact]
+    public void GraphExternal_AllUnassigned_ScoresZero()
+    {
+        var graph = CsrGraph.FromEdges(new[]
+        {
+            new Edge(0, 1, 1.0),
+            new Edge(1, 2, 0.5),
+            new Edge(2, 0, 0.7),
+        }, nodeCount: 3);
+        int[] pred = { Assignment.Unassigned, Assignment.Unassigned, Assignment.Unassigned };
+        int[] reference = { 0, 1, 0 };
+
+        foreach (var e in GraphExternals())
+            Assert.Equal(0.0, e.Evaluate(graph, pred, reference), 10);
     }
 }

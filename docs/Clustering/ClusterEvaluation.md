@@ -15,19 +15,21 @@
 
 ## Design
 
-**Three interfaces.** Each evaluator is a stateless sealed class behind one of them:
+**Four interfaces.** Each evaluator is a stateless sealed class behind one of them:
 
 | Interface | Signature | Implementations |
 |---|---|---|
-| `IExternalClusterEvaluator` | `double Evaluate(int[] predictedLabels, int[] referenceLabels)` | `AdjustedRandIndex`, `NormalizedMutualInformation`, `Homogeneity`, `Completeness`, `VMeasure`, `Purity` |
+| `IExternalClusterEvaluator` | `double Evaluate(int[] predictedLabels, int[] referenceLabels)` | `AdjustedRandIndex`, `RandIndex`, `NormalizedMutualInformation`, `Homogeneity`, `Completeness`, `VMeasure`, `Purity` |
 | `IInternalClusterEvaluator` | `double Evaluate(double[][] data, int[] labels)` | `SilhouetteEvaluator`, `CalinskiHarabaszEvaluator`, `DaviesBouldinEvaluator` |
 | `IGraphPartitionEvaluator` | `double Evaluate(CsrGraph graph, double[] edgeWeight, int[] labels, int clusterCount)` | `BondModularity`, `BondConductance`, `BondCoverage` |
+| `IGraphExternalClusterEvaluator` | `double Evaluate(CsrGraph graph, int[] predictedLabels, int[] referenceLabels)` | `LinkOverlap` |
 
 ```mermaid
 flowchart LR
-  E1["predicted, reference"] --> E2["drop predicted −1, densify"] --> E3["contingency counts"] --> E4["ARI · NMI · Homogeneity · Completeness · V-measure · Purity"]
+  E1["predicted, reference"] --> E2["drop predicted −1, densify"] --> E3["contingency counts"] --> E4["ARI · RI · NMI · Homogeneity · Completeness · V-measure · Purity"]
   I1["data, labels"] --> I2["validate, drop −1, densify"] --> I3["Silhouette · Calinski–Harabasz · Davies–Bouldin"]
   G1["CsrGraph, edgeWeight, labels"] --> G2["upper-half edges, skip −1 endpoints"] --> G3["BondModularity · BondConductance · BondCoverage"]
+  X1["CsrGraph, predicted, reference"] --> X2["upper-half edges, skip predicted −1 endpoints"] --> X3["LinkOverlap"]
 ```
 
 **Names.**
@@ -45,6 +47,7 @@ flowchart LR
 | Evaluator | `Name` | Direction |
 |---|---|---|
 | `AdjustedRandIndex` | ARI | higher is better (1 = identical) |
+| `RandIndex` | RI | higher is better, in [0, 1] |
 | `NormalizedMutualInformation` | NMI | higher is better, in [0, 1] |
 | `Homogeneity` / `Completeness` / `VMeasure` | Homogeneity / Completeness / VMeasure | higher is better, in [0, 1] |
 | `Purity` (+ static `Purity.Compute`) | Purity | higher is better, in [0, 1] |
@@ -54,6 +57,7 @@ flowchart LR
 | `BondModularity` | BondModularity | higher is better |
 | `BondConductance` | BondConductance | lower is better |
 | `BondCoverage` | BondCoverage | higher is better |
+| `LinkOverlap` (`weighted` option) | LinkOverlap / LinkOverlapWeighted | higher is better, in [0, 1] |
 
 ## Algorithms
 
@@ -64,6 +68,7 @@ These are computed on the assigned subset, from the contingency counts $n_{rc}$ 
 | Index | Formula | Degenerate values |
 |---|---|---|
 | ARI | $\dfrac{\sum_{rc}\binom{n_{rc}}2-E}{\tfrac12(A+B)-E}$, where $A=\sum_r\binom{a_r}2$, $B=\sum_c\binom{b_c}2$ and $E=AB/\binom n2$ | n = 0 → 0; n = 1 → 1; zero denominator → 1 |
+| RI | $1+\dfrac{2\sum_{rc}\binom{n_{rc}}2-A-B}{\binom n2}$, the fraction of point pairs on which the two labelings agree (together in both or apart in both) | n = 0 → 0; n = 1 → 1 |
 | NMI | $\dfrac{2I(U;V)}{H(U)+H(V)}$ (arithmetic-mean normalization) | n = 0 → 0; both entropies 0 → 1; clamped to [0, 1] |
 | Homogeneity | $1-H(C\mid K)/H(C)$ | n = 0 → 0; $H(C)\le0$ → 1; clamped to [0, 1] |
 | Completeness | $1-H(K\mid C)/H(K)$ | n = 0 → 0; $H(K)\le0$ → 1; clamped to [0, 1] |
@@ -95,6 +100,18 @@ Each index walks every undirected edge once, using its upper-half slot, so self-
 
 **Cost.** $O(n+\text{nnz}+\text{clusterCount})$.
 
+### Graph external index
+
+`LinkOverlap` compares a predicted and a reference labeling on the graph's edges rather than over all point pairs. Each undirected edge is read once from its upper-half slot and scored unless an endpoint's *predicted* label is −1. An edge agrees when its endpoints are together in both labelings or apart in both:
+
+$$Q=\frac{\sum_e w_e\,[\text{same}_A(e)=\text{same}_B(e)]}{\sum_e w_e},$$
+
+with $w_e=1$ by default, or the coupling `CsrGraph.Weights` when `weighted`.
+
+- **Relation to Rand.** On the complete graph Q equals the Rand index. On a sparse coupling graph it reads where two partitions draw their boundaries, which all-pairs indices average away. It is the spin-glass link overlap of two Potts states (Hed and Domany 2007).
+- **Degenerate values.** 0 when no edge is scored. Not chance-corrected.
+- **Cost.** $O(n+\text{nnz})$.
+
 ## Configuration
 
 The evaluators take no configuration. The only convention is the sentinel `Assignment.Unassigned = −1`.
@@ -114,8 +131,9 @@ The evaluators take no configuration. The only convention is the sentinel `Assig
 | Role | Files (`ThermoMapper/src/clustering/evaluation/`) |
 |---|---|
 | Shared helpers | `EvaluationHelpers.cs`, `external/ContingencyTable.cs` |
-| External | `external/IExternalClusterEvaluator.cs`, `AdjustedRandIndex.cs`, `NormalizedMutualInformation.cs`, `Homogeneity.cs`, `Completeness.cs`, `VMeasure.cs`, `Purity.cs` |
+| External | `external/IExternalClusterEvaluator.cs`, `AdjustedRandIndex.cs`, `RandIndex.cs`, `NormalizedMutualInformation.cs`, `Homogeneity.cs`, `Completeness.cs`, `VMeasure.cs`, `Purity.cs` |
 | Internal (point) | `internal/IInternalClusterEvaluator.cs`, `SilhouetteEvaluator.cs`, `CalinskiHarabaszEvaluator.cs`, `DaviesBouldinEvaluator.cs` |
 | Internal (graph) | `internal/IGraphPartitionEvaluator.cs`, `BondModularity.cs`, `BondConductance.cs`, `BondCoverage.cs` |
+| External (graph) | `external/IGraphExternalClusterEvaluator.cs`, `LinkOverlap.cs` |
 
 **See also:** [ClusterResolution](./ClusterResolution.md) (`Assignment`) · [Hdbscan](./Hdbscan.md) · [SpcAnalysis](./SpcAnalysis.md) · [GaussianMixtures](./GaussianMixtures.md)
