@@ -21,7 +21,8 @@ public sealed class BassTemperingResumeTests
 
     public static TheoryData<string> Options => new()
     {
-        "reference", "linear", "powered", "fixed ladder", "fixed g", "functional", "categorical", "flat + jeffreys", "thinned",
+        "reference", "linear", "powered", "fixed ladder", "fixed g", "functional", "categorical", "flat + jeffreys", "thinned", "two rungs",
+        "three rungs, reference",
     };
 
     [Theory]
@@ -36,7 +37,7 @@ public sealed class BassTemperingResumeTests
         Assert.Equal(400, resumed.Diagnostics.SamplesUsed);
         BassRunTests.AssertSameFit(full, resumed);
         AssertSameTempering(full, resumed);
-        Assert.Equal(option is "reference" or "linear" or "fixed ladder" or "thinned", full.Evidence is not null);
+        Assert.Equal(option is "reference" or "linear" or "fixed ladder" or "thinned" or "three rungs, reference", full.Evidence is not null);
         _out.WriteLine($"{option}: {full.Terms.Count} terms, round trips {full.Diagnostics.Tempering!.RoundTripsPerScan:F4}/scan, " +
                        $"evidence {full.Evidence?.LogEvidence.ToString("F4") ?? "null"}");
     }

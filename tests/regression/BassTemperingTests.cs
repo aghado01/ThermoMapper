@@ -17,8 +17,8 @@ namespace Maths.Regression.Tests;
 /// BASS's tempering (stage 4's S8): <see cref="TemperingSpec"/>'s contract and refusals, <see cref="BassLadder"/>'s
 /// replicas, swaps and design hand-over, its rungs' laws against enumeration, the run's tempering readout, and its
 /// evidence against the exact ln Z.
-/// <para>The exact references enumerate F (<see cref="BassSweepTests.EnumerateF"/>) on the small fixture at M_max = 2 and
-/// integrate τ by the trapezoid on u = ln τ through the target's own ℓ_b, which S5's parity tests check against R. The
+/// <para>The exact references enumerate F (<c>BassTermSpace.F</c>) on small fixtures at M_max = 2 and integrate τ by the
+/// trapezoid on u = ln τ through the target's own ℓ_b, which S5's parity tests check against R. The
 /// oracle's parity tests (<c>BassTemperingParityTests</c>) check the rungs and the evidence against R's own enumeration.</para>
 /// </summary>
 public sealed class BassTemperingTests
@@ -45,7 +45,7 @@ public sealed class BassTemperingTests
     private static RungLaw[] Enumerate(BassModel model, double[] rungs, double lowest, Func<BassEvaluation, double, double> logDensity, bool withLogZ)
     {
         BassTarget target = model.Target;
-        List<(BassTerm[] Terms, double LogPrior)> states = BassSweepTests.EnumerateF(model);
+        List<(BassTerm[] Terms, double LogPrior)> states = BassTermSpace.F(model);
         BassDesign design = model.NewDesign();
         const double step = 0.05;
         double[] nodes = target.SamplesTau
@@ -235,7 +235,11 @@ public sealed class BassTemperingTests
             Assert.Equal(l.Fit, r.Fit);
         }
         AssertSameDesign(giver.DesignAt(left.Current), receiver.DesignAt(right.Current));
+
+        // A design for another structure is refused before anything changes.
         Assert.Throws<ArgumentException>(() => receiver.Adopt(b, giver.DesignFor(left.Current)));
+        Assert.True(receiver.Holds(right.Current));
+        AssertSameDesign(giver.DesignAt(left.Current), receiver.DesignAt(right.Current));
     }
 
     internal static void AssertSameDesign(BassDesign a, BassDesign b)
@@ -259,17 +263,21 @@ public sealed class BassTemperingTests
         BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(5)).State;
         var ladder = new BassLadder(model, spec, start.Terms, start.LogTau, seed: 6);
         BassDesign fresh = model.NewDesign();
-        int moving = reference ? spec.Levels - 1 : spec.Levels;
-        long fromReference = 0;
+        long fromReference = 0, handedToHot = 0;
         for (int t = 0; t < 1500; t++)
         {
             ladder.Step();
-            for (int i = 0; i < moving; i++)
+            for (int i = 0; i < spec.Levels; i++)
             {
+                // A replica holds its state's design, or the state is a reference draw, whose design no replica holds.
                 BassState state = ladder.Tempering.Replicas[i].Current;
                 bool held = ladder.Structures[i].Holds(state);
-                if (!held) fromReference++;
-                Assert.True(held || reference, $"replica {i} holds a state it was not handed with its design");
+                if (!held)
+                {
+                    fromReference++;
+                    Assert.True(reference && ladder.Structures.All(s => !s.Holds(state)), $"replica {i} holds a state it was not handed with its design");
+                }
+                else if (reference && i == spec.Levels - 1) handedToHot++;
                 BassDesign design = ladder.Structures[i].DesignAt(state);
                 Assert.Null(fresh.Load(state.Terms));
                 double scale = fresh.ResidualSquares + fresh.FittedSquares;
@@ -279,9 +287,9 @@ public sealed class BassTemperingTests
             }
         }
         _out.WriteLine($"reference {reference}, fixed g {fixedG}: {ladder.Tempering.SwapAccepts} swaps of {ladder.Tempering.SwapAttempts}, " +
-                       $"{fromReference} states from the reference rung loaded whole");
+                       $"{fromReference} reference draws, {handedToHot} states handed up to the reference rung");
         Assert.True(ladder.Tempering.SwapAccepts > 300);
-        if (reference) Assert.True(fromReference > 0);
+        if (reference) Assert.True(fromReference > 0 && handedToHot > 0);
         Assert.Equal(1.0, ladder.Tempering.Betas[0]);
     }
 
@@ -293,6 +301,7 @@ public sealed class BassTemperingTests
         { "linear, flat + jeffreys", [1.0, 0.4, 0.0] },
         { "fixed g", [1.0, 0.4, 0.0] },
         { "powered", [1.0, 0.6, 0.3] },
+        { "flat, near the limit", [1.0, 0.3, 0.06] },   // the integrated form needs b > (1 − 2c)/N = 0.0554 here
     };
 
     // Each rung's law, from the ladder's own replicas, against enumeration: b = 1 the posterior and b = 0 the prior on F,
@@ -305,11 +314,13 @@ public sealed class BassTemperingTests
         bool reference = option.Contains("reference"), powered = option == "powered";
         var spec = new TemperingSpec
         {
-            Form = option.Contains("linear") ? TemperedForm.Linear : TemperedForm.Integrated, Levels = betas.Length, HotEnd = betas[^2],
+            Form = option.Contains("linear") ? TemperedForm.Linear : TemperedForm.Integrated, Levels = betas.Length,
+            HotEnd = betas[^1] > 0.0 ? betas[^1] : betas[^2],
             ReferenceRung = reference, Path = powered ? TemperingPath.Powered : TemperingPath.Likelihood,
         };
         BassConfig config = Config(spec);
-        if (option.Contains("flat")) config = config with { Intercept = GPriorCentre.Flat, Sigma2 = Sigma2Prior.Jeffreys };
+        if (option.Contains("flat")) config = config with { Intercept = GPriorCentre.Flat };
+        if (option.Contains("jeffreys")) config = config with { Sigma2 = Sigma2Prior.Jeffreys };
         if (option == "fixed g") config = config with { Coefficients = new FixedG() };
         BassModel model = BassModel.Create(config, BassSweepTests.Data());
         const int ladders = 4, burn = 2_000, scans = 40_000, batches = 20;
@@ -382,7 +393,11 @@ public sealed class BassTemperingTests
         Assert.Equal("spec", form.ParamName);
         Assert.Throws<ArgumentNullException>(() => new BassLadder(model, null!, start.Terms, start.LogTau, 2));
         Assert.Throws<ArgumentNullException>(() => new BassLadder(null!, spec, start.Terms, start.LogTau, 2));
-        Assert.Throws<ArgumentException>(() => new BassLadder(model, spec, [0.9, 0.5, 0.0], start.Terms, start.LogTau, 2));
+        foreach (TemperingSpec bad in new[] { spec with { Levels = 2 }, spec with { HotEnd = 0.0 }, spec with { HotEnd = 1.0 }, spec with { Path = TemperingPath.Powered } })
+            Assert.Equal("spec", Assert.Throws<ArgumentException>(() => new BassLadder(model, bad, start.Terms, start.LogTau, 2)).ParamName);
+        Assert.Equal("betas", Assert.Throws<ArgumentException>(() => new BassLadder(model, spec, [1.0, 0.5, 0.0], start.Terms, start.LogTau, 2)).ParamName);
+        Assert.Throws<ArgumentException>(() => new BassLadder(model, spec, [0.9, 0.5, 0.1, 0.0], start.Terms, start.LogTau, 2));
+        Assert.Throws<InvalidOperationException>(() => BassTemperingReadout.Of([ladder]));   // burn-in has not ended
 
         // Adaptation runs before burn-in ends, and only then; burn-in ends once.
         for (int t = 0; t < 20; t++) ladder.Step();
@@ -401,12 +416,17 @@ public sealed class BassTemperingTests
         Assert.Throws<ArgumentException>(() => BassLadder.Restore(model, spec with { ReferenceRung = false }, snapshot));
         Assert.Throws<ArgumentException>(() => BassLadder.Restore(model, spec with { Path = TemperingPath.Powered, ReferenceRung = false }, snapshot));
         Assert.Throws<ArgumentNullException>(() => BassLadder.Restore(model, spec, null!));
+        Assert.Throws<ArgumentException>(() => BassLadder.Restore(model, spec, snapshot with { Structures = snapshot.Structures[..^1] }));
         Assert.True(BassLadder.Restore(model, spec, snapshot).Frozen);
     }
 
     // ── The run ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-    public static TheoryData<string> RunOptions => new() { "reference", "linear", "powered", "fixed ladder", "fixed g", "functional", "categorical" };
+    public static TheoryData<string> RunOptions => new()
+    {
+        "reference", "linear", "powered", "fixed ladder", "fixed g", "functional", "categorical", "two rungs", "three rungs, reference",
+        "early stop",
+    };
 
     internal static (BassConfig Config, BassData Data) RunCase(string option, int samples = 200)
     {
@@ -419,6 +439,8 @@ public sealed class BassTemperingTests
             "fixed ladder" => spec with { Adaptive = false, ReferenceRung = true },
             "flat + jeffreys" => spec with { Form = TemperedForm.Linear, ReferenceRung = true },
             "thinned" => spec with { ReferenceRung = true },
+            "two rungs" => spec with { Levels = 2, HotEnd = 0.2 },
+            "three rungs, reference" => spec with { Levels = 3, HotEnd = 0.2, ReferenceRung = true },
             _ => spec,
         };
         BassConfig config = Config(spec, maxBasis: 6, samples: samples);
@@ -427,6 +449,7 @@ public sealed class BassTemperingTests
             "fixed g" => config with { Coefficients = new FixedG() },
             "flat + jeffreys" => config with { Intercept = GPriorCentre.Flat, Sigma2 = Sigma2Prior.Jeffreys },
             "thinned" => config with { Sampling = config.Sampling with { Thin = 2 } },
+            "early stop" => config with { Sampling = config.Sampling with { RHatTarget = 1.5, BatchSize = 50, MinEssPerChain = 5 } },
             _ => config,
         };
         BassData data = option switch
@@ -475,10 +498,27 @@ public sealed class BassTemperingTests
         Assert.True(readout.RoundTripsPerScan >= 0 && readout.AnnealedRestartsPerScan >= 0);
         if (spec.ReferenceRung) Assert.True(readout.ReferenceAttemptsPerDraw >= 1.0);
         else Assert.True(double.IsNaN(readout.ReferenceAttemptsPerDraw));
-        Assert.All(fit.Draws, d => Assert.Equal(config.Sampling.Samples, d.Count));
+        Assert.All(fit.Draws, d => Assert.Equal(fit.Diagnostics.SamplesUsed, d.Count));
+        Assert.Equal(option == "early stop", fit.Diagnostics.StoppedEarly);
         _out.WriteLine($"{option}: round trips {readout.RoundTripsPerScan:F4}/scan (ideal {readout.IdealRoundTripRate:F4}), barrier {readout.Barrier:F2}, " +
                        $"acceptance [{string.Join(", ", readout.PairAcceptance.Select(a => a.ToString("F2")))}], evidence {fit.Evidence?.LogEvidence.ToString("F3") ?? "null"}");
         Assert.Null(Bass.Fit(config with { Sampling = config.Sampling with { Tempering = null } }, data).Diagnostics.Tempering);
+    }
+
+    [Fact]
+    public void Fit_CountsALaddersScanAsOneSweep()
+    {
+        (BassConfig config, BassData data) = RunCase("reference", samples: 40);
+        config = config with { Sampling = config.Sampling with { BurnIn = 30, Thin = 2 } };
+        var reports = new List<BassProgress>();
+        Bass.Fit(config, data, new BassRunOptions { Progress = new Inline(p => { lock (reports) reports.Add(p); }), ProgressInterval = 7 });
+        long planned = config.Sampling.Chains * (30 + 40L * 2);
+        Assert.Equal(new BassProgress(planned, planned), reports.MaxBy(r => r.Sweeps));
+    }
+
+    private sealed class Inline(Action<BassProgress> report) : IProgress<BassProgress>
+    {
+        public void Report(BassProgress value) => report(value);
     }
 
     // ── The evidence ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -536,6 +576,42 @@ public sealed class BassTemperingTests
         Assert.Equal((config.Structure.Support, r.SupportMinimum, r.SupportMinimumFunctional, config.Structure.AngleFloor, config.Structure.MaxVarianceInflation),
                      (p.Support, p.SupportMinimum, p.SupportMinimumFunctional, p.AngleFloor, p.MaxVarianceInflation));
         Assert.Equal((config.Intercept, r.CentreLevel, config.Sigma2, r.Sigma2!.Value), (p.Centre, p.CentreLevel, p.Sigma2Prior, p.Sigma2));
+    }
+
+    // A direct functional response small enough to enumerate: x on {0, ½, 1} three times (n = 9), t on four locations
+    // (N = 36), Y = 1 + 2x + 1.5·t·x + 2(x − ½)₊(t − ½)₊ + noise.
+    internal static BassData SmallFunctionalData()
+    {
+        var rng = new Xoshiro256PlusPlus(17);
+        double[] x = [.. Enumerable.Range(0, 9).Select(i => (i % 3) / 2.0)];
+        double[] t = [0.0, 1 / 3.0, 2 / 3.0, 1.0];
+        var y = new double[x.Length, t.Length];
+        for (int i = 0; i < x.Length; i++)
+            for (int r = 0; r < t.Length; r++)
+            {
+                double noise = Math.Sqrt(-2 * Math.Log(1 - rng.NextDouble())) * Math.Cos(2 * Math.PI * rng.NextDouble());
+                y[i, r] = 1 + 2 * x[i] + 1.5 * t[r] * x[i] + 2 * Math.Max(x[i] - 0.5, 0) * Math.Max(t[r] - 0.5, 0) + 0.3 * noise;
+            }
+        return new BassData([new ContinuousPredictor("x", x)], new FunctionalResponse(y, [new ContinuousPredictor("t", t)]));
+    }
+
+    [Theory]
+    [InlineData("integrated")]
+    [InlineData("linear")]
+    public void Evidence_MatchesTheExactLogZ_OnADirectFunctionalResponse(string form)
+    {
+        BassData data = SmallFunctionalData();
+        var spec = new TemperingSpec { Form = form == "linear" ? TemperedForm.Linear : TemperedForm.Integrated, ReferenceRung = true };
+        BassConfig config = Config(spec, chains: 4, burn: 1_000, samples: 4_000);
+        BassModel model = BassModel.Create(config, data);
+        double exact = Exact(model, 1.0)[0].LogZ;
+        BassEvidence evidence = Bass.Fit(config, data).Evidence!;
+        _out.WriteLine($"{form}: stepping-stone {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4}, exact {exact:F4} over " +
+                       $"{BassTermSpace.F(model).Count} structures");
+        Assert.True(Math.Abs(evidence.LogEvidence - exact) <= 4 * evidence.MonteCarloError + 0.01,
+                    $"{evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against {exact:F4}");
+        Assert.Equal(1, evidence.Priors.MaxFunctionalInteraction);
+        Assert.NotNull(evidence.Priors.SupportMinimumFunctional);
     }
 
     [Theory]

@@ -31,7 +31,7 @@ namespace Maths.Oracle.Tests;
 /// oracle's <c>swap</c> slice (F-O6), R's swap misses balance against its own rung laws and against every candidate
 /// family, where D05's balances to rounding.</item>
 /// <item><b>The evidence:</b> the ladder's stepping-stone, and path sampling on the linear form, against the oracle's
-/// exact ln Z on fixture B under the proper defaults.</item>
+/// exact ln Z under the proper defaults, on fixture B and on fixture C with its categorical predictor.</item>
 /// </list>
 /// Opt-in: it runs where the R toolchain and the BASS checkout are present.
 /// </summary>
@@ -40,9 +40,10 @@ public sealed class BassTemperingParityTests
     private readonly ITestOutputHelper _out;
     public BassTemperingParityTests(ITestOutputHelper output) => _out = output;
 
-    private static BassConfig Config(int maxBasis, TemperingSpec? tempering, int chains = 4, int burn = 2_000, int samples = 20_000)
+    private static BassConfig Config(int maxBasis, TemperingSpec? tempering, int chains = 4, int burn = 2_000, int samples = 20_000,
+                                     int maxInteraction = 2)
     {
-        BassConfig config = BassTargetParityTests.Config();
+        BassConfig config = BassTargetParityTests.Config(maxInteraction: maxInteraction);
         return config with
         {
             Structure = config.Structure with { MaxBasis = maxBasis },
@@ -241,14 +242,19 @@ public sealed class BassTemperingParityTests
     [Theory]
     [InlineData("integrated")]
     [InlineData("linear")]
+    [InlineData("categorical")]
     public void Evidence_MatchesTheOraclesLogZ(string form)
     {
         if (!BassTargetParityTests.Available) return;
-        double[][] rows = BassTargetParityTests.FixtureB();
-        JsonElement r = BassTargetParityTests.Posterior(rows, "M_max=2");
+        bool categorical = form == "categorical";
+        double[][] rows = categorical ? BassTargetParityTests.FixtureC() : BassTargetParityTests.FixtureB();
+        JsonElement r = categorical
+            ? BassTargetParityTests.Posterior(rows, "M_max=2", "K_max=1", "categorical=1")
+            : BassTargetParityTests.Posterior(rows, "M_max=2");
         double logZ = r.GetProperty("posterior").GetProperty("log_Z").GetDouble();
         var spec = new TemperingSpec { Form = form == "linear" ? TemperedForm.Linear : TemperedForm.Integrated, ReferenceRung = true };
-        BassFit fit = Bass.Fit(Config(2, spec, burn: 1_000, samples: 5_000), BassTargetParityTests.Data(rows));
+        BassFit fit = Bass.Fit(Config(2, spec, burn: 1_000, samples: 5_000, maxInteraction: categorical ? 1 : 2),
+                               BassTargetParityTests.Data(rows, categorical));
         BassEvidence evidence = fit.Evidence!;
         _out.WriteLine($"{form}: stepping-stone {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against the oracle's {logZ:F4}");
         Assert.True(Math.Abs(evidence.LogEvidence - logZ) <= 4 * evidence.MonteCarloError + 0.01,
