@@ -307,7 +307,8 @@ public sealed record BassSampling
 /// form b·ln p₁. The linear form reaches b = 0 under the improper options too.</item>
 /// <item><see cref="Levels"/> and <see cref="HotEnd"/>: the replicas, geometric from 1 down to the hot end, then b = 0
 /// with the reference rung. An <see cref="Adaptive"/> ladder (the default) re-spaces its interior rungs during burn-in to
-/// equalize the swap rejections, from that start, and is frozen after it (D10); its ends never move.</item>
+/// equalize the swap rejections, from that start, and is frozen after it (D10). Its ends never move: b = 1 and the hot
+/// end, or b = 0 with the reference rung, above which the hot end is an interior rung and moves too.</item>
 /// <item><see cref="Schedule"/>: DEO, the non-reversible even-odd swaps (Syed et al. 2022), swapped after every sweep.</item>
 /// <item><see cref="ReferenceRung"/>: the hot replica draws exactly from the prior on F every scan (OQ2), opt-in. A run
 /// reports its evidence only with it (D03), under the proper priors.</item>
@@ -325,7 +326,8 @@ public sealed record TemperingSpec
     /// <summary>The replicas, b = 1 and, with the reference rung, b = 0 included.</summary>
     public int Levels { get; init; } = 8;
 
-    /// <summary>The ladder's lowest positive b, in (0, 1): its hot end, or with the reference rung the rung above b = 0.</summary>
+    /// <summary>The ladder's lowest positive b, in (0, 1): its hot end, or with the reference rung the rung above b = 0, where
+    /// an adaptive ladder starts it.</summary>
     public double HotEnd { get; init; } = 1e-3;
 
     /// <summary>Whether the ladder re-spaces its interior rungs during burn-in; it is frozen after it either way (D10).</summary>

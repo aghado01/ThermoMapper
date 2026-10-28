@@ -133,8 +133,9 @@ public sealed class BassStructureMoves
     internal void Adopt(BassState state, BassDesignSnapshot design)
     {
         ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(design);
+        if (!design.Terms.AsSpan().SequenceEqual(state.TermArray)) throw new ArgumentException("The design holds another structure.", nameof(design));
         _design.Restore(design);
-        if (!_design.Terms.SequenceEqual(state.Terms)) throw new ArgumentException("The design holds another structure.", nameof(design));
         _candidate = null;
         _counts = CountsOf(state.TermArray);
         _committed = state;

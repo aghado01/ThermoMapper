@@ -69,7 +69,8 @@ public sealed record BassDiagnostics(
 /// <summary>
 /// What a tempered run's ladders did over the sampling phase (D05, D10), averaged over chains as BARS's readout is: the
 /// round-trip and annealed-restart rates per scan; each adjacent pair's mean swap rejection, cold first (Rao–Blackwellized:
-/// 1 − α every scan, attempted or not), and its swap acceptance (accepted over attempted swaps, the chains' counts summed);
+/// 1 − α every scan, attempted or not), and its swap acceptance (accepted over attempted swaps, the chains' counts summed;
+/// NaN for a pair DEO never reached, as in a one-scan sampling phase);
 /// the barrier estimate Λ̂, the rejections' sum; the round-trip rate Syed et al.'s (2022) Theorem 1 predicts under ideal
 /// local exploration, against which the observed rate measures the replicas' own mixing; each chain's frozen ladder, cold
 /// first; and with the reference rung, its sampler's attempts per exact draw, the rung's cost at equal work (NaN without

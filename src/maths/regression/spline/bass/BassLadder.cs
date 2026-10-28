@@ -19,7 +19,8 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>Swaps.</b> After every sweep, DEO's adjacent pairs, each accepted on the likelihood path on ℓ_b alone, since
 /// the prior cancels (D05). A state a swap hands over brings its design: the receiving replica adopts an exact copy of
 /// the giver's, so a structure one replica admitted by incremental updates is neither refactored nor re-admitted by
-/// another. A state from the reference rung, whose sampler loaded it whole, is loaded whole.</item>
+/// another, the reference rung's replica included, whose design a checkpoint saves. A state from the reference rung,
+/// whose sampler loaded it whole, is loaded whole, by the same admission.</item>
 /// <item><b>The ladder.</b> Geometric from 1 down to the hot end, then b = 0 with the exact reference rung, whose replica
 /// draws from <see cref="BassPriorSampler"/> every scan in place of its sweep. <see cref="Adapt"/> re-spaces the
 /// interior rungs during burn-in; <see cref="EndBurnIn"/> freezes the ladder, restarts the tallies and, for an evidence,
@@ -27,7 +28,8 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>Streams.</b> One seed fans out, through the shared ladder's <see cref="SeedTree"/>, into each replica's move
 /// stream, the swap stream, the reference rung's stream and each replica's τ stream.</item>
 /// </list>
-/// The model is shared read-only. Not thread-safe: one per chain.
+/// Step and adapt it through its own <see cref="Step"/> and <see cref="Adapt"/>: the shared ladder's, called directly, would
+/// skip the hand-over and the freeze. The model is shared read-only. Not thread-safe: one per chain.
 /// </summary>
 public sealed class BassLadder
 {
@@ -190,7 +192,7 @@ public sealed class BassLadder
     // The declared ladder: geometric from 1 to the hot end, then b = 0 with the reference rung.
     private static double[] Rungs(TemperingSpec spec)
     {
-        ArgumentNullException.ThrowIfNull(spec);
+        CheckSpec(spec);
         return spec.ReferenceRung
             ? ParallelTempering<BassState>.ReferenceLadder(spec.Levels, spec.HotEnd)
             : ParallelTempering<BassState>.GeometricLadder(spec.Levels, spec.HotEnd);
@@ -199,37 +201,52 @@ public sealed class BassLadder
     private static void Check(BassModel model, TemperingSpec spec)
     {
         ArgumentNullException.ThrowIfNull(model);
-        ArgumentNullException.ThrowIfNull(spec);
+        CheckSpec(spec);
         if (spec.Path == TemperingPath.Likelihood && model.Target.Form != spec.Form)
             throw new ArgumentException($"The model's target is in the {model.Target.Form} form; the ladder declares the {spec.Form}.", nameof(spec));
+    }
+
+    // What the shared ladder would refuse in its own parameters' names, refused in the spec's (BassConfig.Validate's rules).
+    private static void CheckSpec(TemperingSpec spec)
+    {
+        ArgumentNullException.ThrowIfNull(spec);
+        if (spec.Levels < (spec.ReferenceRung ? 3 : 2))
+            throw new ArgumentException($"The ladder needs at least {(spec.ReferenceRung ? 3 : 2)} levels, not {spec.Levels}.", nameof(spec));
+        if (!(spec.HotEnd > 0.0 && spec.HotEnd < 1.0)) throw new ArgumentException($"The hot end {spec.HotEnd} lies outside (0, 1).", nameof(spec));
+        if (spec.ReferenceRung && spec.Path != TemperingPath.Likelihood)
+            throw new ArgumentException("The reference rung needs the likelihood path.", nameof(spec));
     }
 
     // Each replica's τ block in the g mode; none under fixed g.
     private static Func<int, IReadOnlyList<IBlock<ReversibleJumpChain<BassState>>>>? Blocks(BassModel model)
         => model.Target.SamplesTau ? _ => [new BassTauBlock(model.Target)] : null;
 
-    // Each replica a swap handed a state it does not hold adopts the giver's design for it. The givers' copies are all
-    // taken before any replica adopts one, since a giver is usually a receiver too. A state no replica holds came from
-    // the reference rung, and its replica loads it whole when it next moves. The reference rung's replica takes no moves,
-    // so it needs no design.
+    // Each replica a swap handed a state it does not hold adopts the giver's design for it, the reference rung's too,
+    // which takes no moves but saves its design in a checkpoint. The givers' copies are all taken before any replica
+    // adopts one, since a giver is usually a receiver too. A giver that hands over its pending candidate commits it, so
+    // while replicas share one structure's array (their start) it can stop holding its own state; another holder of that
+    // structure then hands it back in a further round. A state no replica holds came from the reference rung, and its
+    // replica loads it whole when it next needs it, by the admission the reference sampler's own load passed.
     private void HandOver()
     {
         IReadOnlyList<ReversibleJumpChain<BassState>> replicas = Tempering.Replicas;
-        int moving = Reference is null ? replicas.Count : replicas.Count - 1;
-        List<(int Receiver, BassState State, BassDesignSnapshot Design)>? handed = null;
-        for (int i = 0; i < moving; i++)
+        for (int round = 0; round < replicas.Count; round++)
         {
-            BassState state = replicas[i].Current;
-            if (_structures[i].Holds(state)) continue;
-            for (int j = 0; j < _structures.Length; j++)
-                if (j != i && _structures[j].Holds(state))
-                {
-                    (handed ??= []).Add((i, state, _structures[j].DesignFor(state)));
-                    break;
-                }
+            List<(int Receiver, BassState State, BassDesignSnapshot Design)>? handed = null;
+            for (int i = 0; i < replicas.Count; i++)
+            {
+                BassState state = replicas[i].Current;
+                if (_structures[i].Holds(state)) continue;
+                for (int j = 0; j < _structures.Length; j++)
+                    if (j != i && _structures[j].Holds(state))
+                    {
+                        (handed ??= []).Add((i, state, _structures[j].DesignFor(state)));
+                        break;
+                    }
+            }
+            if (handed is null) return;
+            foreach ((int receiver, BassState state, BassDesignSnapshot design) in handed) _structures[receiver].Adopt(state, design);
         }
-        if (handed is null) return;
-        foreach ((int receiver, BassState state, BassDesignSnapshot design) in handed) _structures[receiver].Adopt(state, design);
     }
 }
 
