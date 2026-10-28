@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Maths.Samplers.Ensemble;
 
@@ -15,7 +17,8 @@ public static class Bass
     /// <summary>
     /// Fits <paramref name="config"/> to <paramref name="data"/>: <see cref="BassSampling.BurnIn"/> sweeps per chain, then
     /// <see cref="BassSampling.Samples"/> retained draws <see cref="BassSampling.Thin"/> sweeps apart, or fewer when the
-    /// R̂ stop is met. <paramref name="run"/>'s options never change the result.
+    /// R̂ stop is met. <paramref name="run"/>'s options never change the result. A failure the chains share, such as a
+    /// start the prior sampler refuses, is thrown as itself rather than wrapped by the fan-out.
     /// </summary>
     public static BassFit Fit(BassConfig config, BassData data, BassRunOptions? run = null) => Run(config, data, run, null);
 
@@ -52,11 +55,27 @@ public static class Bass
         long planned = sampling.Chains * ((resumeFrom is null ? sampling.BurnIn : 0L) + (long)sampling.Samples * sampling.Thin);
         var ensemble = new BassEnsemble(model, fingerprint, options, planned, (resumeFrom?.DrawsPerChain ?? 0) + sampling.Samples);
         var parallel = new ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism, CancellationToken = options.Cancellation };
-        (EnsembleRun summary, IReadOnlyList<IChainRun<BassState>> chains) = new ChainEnsemble().Run(
-            ensemble, sampling.Chains, sampling.MasterSeed, sampling.BurnIn, sampling.Samples, sampling.RHatTarget, sampling.BatchSize,
-            sampling.MinEssPerChain, options.Checkpoint, resumeFrom, parallel);
+        EnsembleRun summary;
+        IReadOnlyList<IChainRun<BassState>> chains;
+        try
+        {
+            (summary, chains) = new ChainEnsemble().Run(ensemble, sampling.Chains, sampling.MasterSeed, sampling.BurnIn, sampling.Samples,
+                sampling.RHatTarget, sampling.BatchSize, sampling.MinEssPerChain, options.Checkpoint, resumeFrom, parallel);
+        }
+        catch (AggregateException e) when (Shared(e) is { } failure)
+        {
+            ExceptionDispatchInfo.Throw(failure);
+            throw;
+        }
         ensemble.ReportEnd();
         return ensemble.Assemble(summary, chains);
+    }
+
+    // The chains' one kind of failure, which the parallel fan-out wraps: the first, when every inner exception has its type.
+    private static Exception? Shared(AggregateException e)
+    {
+        IReadOnlyList<Exception> inner = e.Flatten().InnerExceptions;
+        return inner.Count > 0 && inner.All(x => x.GetType() == inner[0].GetType()) ? inner[0] : null;
     }
 
     /// <summary>

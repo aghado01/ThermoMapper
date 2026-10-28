@@ -207,6 +207,21 @@ public sealed class BassRunTests
     }
 
     [Fact]
+    public void Fit_ThrowsTheChainsSharedFailure()
+    {
+        // F is the intercept alone, about 6·10⁻⁹ of the proposal (BassPriorSamplerTests' attempt-limit fixture), so every
+        // chain's start refuses; the caller sees the sampler's refusal, not the fan-out's wrapper.
+        BassConfig config = BassSweepTests.Config() with
+        {
+            Count = new BassCountPrior(1000, 1e-3),
+            Structure = BassSweepTests.Config().Structure with { Support = new SupportRule(Minimum: 18) },
+            Sampling = new BassSampling { Chains = 2, BurnIn = 1, Samples = 1 },
+        };
+        var e = Assert.Throws<InvalidOperationException>(() => Bass.Fit(config, BassSweepTests.Data()));
+        Assert.Contains("No collection in F", e.Message);
+    }
+
+    [Fact]
     public void Fit_StopsOnCancellation()
     {
         BassData data = BassSweepTests.Data();
