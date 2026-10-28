@@ -260,7 +260,7 @@ public sealed class BassPointwiseTests
         Assert.Equal(partition.Units, retained.Values.GetLength(1));
         Assert.Equal(draws.Select(c => c.Count), retained.ChainLengths!);
         Assert.Equal(draws.Select(c => c.Count), collapsed.ChainLengths!);
-        Assert.Same(units ?? retained.Units, retained.Units);
+        if (units is not null) Assert.Same(units, retained.Units);
 
         double[] y = model.Data.Response.Values.ToArray();
         int structures = pooled.Select(d => string.Join(",", d.Structure.TermIds)).Distinct().Count();
@@ -394,6 +394,19 @@ public sealed class BassPointwiseTests
     }
 
     [Fact]
+    public void AFitsDraws_FeedBothEntryPoints()
+    {
+        // The run's own output: its merged table and per-chain stores, on the model rebuilt from its config and data.
+        BassData data = Data(Kind.Functional);
+        BassConfig config = Config() with { Sampling = new BassSampling { Chains = 2, BurnIn = 100, Samples = 6, MasterSeed = 3 } };
+        BassFit fit = Bass.Fit(config, data);
+        var model = BassModel.Create(config, data);
+        CheckBoth(model, fit.Terms, fit.Draws, null, "a fit's draws");
+        ResidualDependence check = BassResidualDependence.Of(model, fit.Terms, fit.Draws, fit.DrawWeights)!;
+        Assert.Equal(12, check.LagOne.Length);
+    }
+
+    [Fact]
     public void Latents_SayWhatWasConditionedAndWhatIntegrated()
     {
         (BassModel model, BassTermTable table, List<List<BassDraw>> draws) = Run(Config(), Data(Kind.Scalar), seed: 31, kept: 3);
@@ -462,10 +475,12 @@ public sealed class BassPointwiseTests
         Assert.Throws<ArgumentException>("draws", () => BassPointwise.LogDensity(model, table, []));
         Assert.Throws<ArgumentException>("draws", () => BassPointwise.LogDensity(model, table, [draws[0], []]));
         Assert.Throws<ArgumentException>("draws", () => BassPointwise.LogDensity(model, table, [[null!]]));
+        Assert.Throws<ArgumentException>("draws", () => BassPointwise.LogDensity(model, table, [draws[0], null!]));
 
         void Refused(BassDraw bad, PointwiseContent content = PointwiseContent.RetainedParameters)
             => Assert.Throws<ArgumentException>("draws", () => BassPointwise.LogDensity(model, table, [[good, bad]], content: content));
         int[] two = table.Count >= 2 ? [0, 1] : throw new InvalidOperationException("The fixture needs two terms.");
+        Refused(good with { Structure = default });
         Refused(good with { Structure = new BassStructure([table.Count]), Coefficients = [1.0, 1.0] });
         Refused(good with { Structure = new BassStructure([1, 0]), Coefficients = [1.0, 1.0, 1.0] });
         Refused(good with { Structure = new BassStructure([0, 0]), Coefficients = [1.0, 1.0, 1.0] });
