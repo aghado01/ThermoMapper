@@ -16,7 +16,7 @@ namespace Maths.Regression.Spline.Bass;
 /// <param name="Probabilities">The probabilities of <paramref name="Quantiles"/>.</param>
 /// <param name="Quantiles">The type-7 quantiles of <paramref name="LagOne"/> over the cases where it is defined; NaN when
 /// none is.</param>
-public sealed record ResidualDependence(double[] LagOne, double Mean, IReadOnlyList<double> Probabilities, double[] Quantiles)
+public sealed record ResidualDependence(double[] LagOne, double Mean, double[] Probabilities, double[] Quantiles)
 {
     /// <summary>The summary's default probabilities: 5%, 25%, 50%, 75% and 95%.</summary>
     public static IReadOnlyList<double> DefaultProbabilities { get; } = Array.AsReadOnly(new[] { 0.05, 0.25, 0.5, 0.75, 0.95 });
@@ -24,8 +24,8 @@ public sealed record ResidualDependence(double[] LagOne, double Mean, IReadOnlyL
     /// <summary>
     /// The check of the cases' residuals <paramref name="residuals"/> (cases × locations) along the locations ordered by
     /// <paramref name="index"/>, ties kept in location order, summarized at <paramref name="probabilities"/> (null:
-    /// <see cref="DefaultProbabilities"/>). Refused: no case, fewer than two locations, an index of another length or with
-    /// a non-finite value, and a probability outside [0, 1].
+    /// <see cref="DefaultProbabilities"/>). Refused: no case, fewer than two locations, a non-finite residual, an index of
+    /// another length or with a non-finite value, and a probability outside [0, 1].
     /// </summary>
     public static ResidualDependence Of(double[,] residuals, ReadOnlySpan<double> index, IReadOnlyList<double>? probabilities = null)
     {
@@ -33,6 +33,8 @@ public sealed record ResidualDependence(double[] LagOne, double Mean, IReadOnlyL
         int n = residuals.GetLength(0), m = residuals.GetLength(1);
         if (n < 1) throw new ArgumentException("The check needs a case.", nameof(residuals));
         if (m < 2) throw new ArgumentException("A lag needs at least two locations.", nameof(residuals));
+        foreach (double v in residuals)
+            if (!double.IsFinite(v)) throw new ArgumentException("A residual is not finite.", nameof(residuals));
         if (index.Length != m) throw new ArgumentException("The index needs one value per location.", nameof(index));
         foreach (double t in index)
             if (!double.IsFinite(t)) throw new ArgumentException("The index has a non-finite value.", nameof(index));
@@ -74,7 +76,7 @@ public sealed record ResidualDependence(double[] LagOne, double Mean, IReadOnlyL
             for (int q = 0; q < p.Length; q++) quantiles[q] = PosteriorInterval.Quantile(sorted, p[q]);
         }
         else Array.Fill(quantiles, double.NaN);
-        return new ResidualDependence(lagOne, average, Array.AsReadOnly(p), quantiles);
+        return new ResidualDependence(lagOne, average, p, quantiles);
     }
 
     /// <summary>A copy of <paramref name="probabilities"/> (null: <see cref="DefaultProbabilities"/>), each checked to lie

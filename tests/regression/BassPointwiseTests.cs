@@ -6,6 +6,7 @@ using Maths.LinAlg;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
+using Maths.Samplers.Ensemble;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -249,7 +250,7 @@ public sealed class BassPointwiseTests
         => Assert.True(Math.Abs(expected - actual) <= tolerance * Math.Max(1.0, Math.Abs(expected)), $"{what}: {actual:R} against {expected:R}");
 
     // Checks both contents of every draw against the dense references, on the partition given.
-    private void CheckBoth(BassModel model, BassTermTable table, List<List<BassDraw>> draws, UnitPartition? units, string label)
+    private void CheckBoth(BassModel model, BassTermTable table, IReadOnlyList<IReadOnlyList<BassDraw>> draws, UnitPartition? units, string label)
     {
         UnitPartition partition = units ?? BassPointwise.DefaultUnits(model);
         PointwiseLogDensity retained = BassPointwise.LogDensity(model, table, draws, units);
@@ -345,6 +346,54 @@ public sealed class BassPointwiseTests
     }
 
     [Fact]
+    public void ExactFits_RefusedUnderJeffreysAndMatchedUnderTheScaledDefault()
+    {
+        // y = 1 + 2(x₀ − ½)₊ exactly, which the hinge at x₀ = ½ spans. Under Jeffreys that structure lies outside F (D03's
+        // propriety rule), so the collapsed content refuses its draw; under the scaled default it is proper, and both
+        // contents match their references there: the deterministic-simulator regime.
+        var x0 = new double[25];
+        var x1 = new double[25];
+        var y = new double[25];
+        for (int i = 0; i < 25; i++)
+        {
+            x0[i] = (i / 5) / 4.0;
+            x1[i] = (i % 5) / 4.0;
+            y[i] = 1 + 2 * Math.Max(x0[i] - 0.5, 0);
+        }
+        var data = new BassData([new ContinuousPredictor("x0", x0), new ContinuousPredictor("x1", x1)], new ScalarResponse(y));
+        var hinge = new BassTerm([new HingeFactor(0, 1, 2)]);
+        var jeffreys = BassModel.Create(Config(sigma2: Sigma2Prior.Jeffreys), data);
+        var table = new BassTermTable();
+        table.Intern(hinge);
+        var exact = new BassDraw(new BassStructure([0]), 0.05, 1e-6, [1.0, 1.0], 1.0);
+        Assert.Throws<ArgumentException>("draws", () => BassPointwise.LogDensity(jeffreys, table, [[exact]], content: PointwiseContent.CollapsedPredictive));
+        BassPointwise.LogDensity(jeffreys, table, [[exact]]);   // the retained content reads the draw as given
+
+        var scaled = BassModel.Create(Config(), data);
+        var moves = new BassStructureMoves(scaled, [hinge], Math.Log(0.05));
+        var composed = new BassTermTable();
+        var rng = new Xoshiro256PlusPlus(4);
+        CheckBoth(scaled, composed, [[moves.Compose(moves.Start, rng, composed), moves.Compose(moves.Start, rng, composed)]], null, "exact fit, scaled σ²");
+    }
+
+    [Fact]
+    public void DrawStores_WithUnequalChains()
+    {
+        // The fit's own shape, a list of DrawStore per chain, here of 5, 4 and 3 draws.
+        (BassModel model, BassTermTable table, List<List<BassDraw>> draws) = Run(Config(), Data(Kind.Categorical), seed: 33, chains: 3, kept: 5);
+        List<DrawStore<BassDraw>> stores = [.. draws.Select((chain, k) =>
+        {
+            var store = new DrawStore<BassDraw>();
+            foreach (BassDraw d in chain.Take(5 - k)) store.Add(d);
+            return store;
+        })];
+        CheckBoth(model, table, stores, null, "categorical, unequal chains");
+        PointwiseLogDensity collapsed = BassPointwise.LogDensity(model, table, stores, content: PointwiseContent.CollapsedPredictive);
+        Assert.Equal([5, 4, 3], collapsed.ChainLengths!);
+        Assert.True(double.IsFinite(PredictiveChecks.PsisLoo(collapsed).Elpd));
+    }
+
+    [Fact]
     public void Latents_SayWhatWasConditionedAndWhatIntegrated()
     {
         (BassModel model, BassTermTable table, List<List<BassDraw>> draws) = Run(Config(), Data(Kind.Scalar), seed: 31, kept: 3);
@@ -421,6 +470,8 @@ public sealed class BassPointwiseTests
         Refused(good with { Structure = new BassStructure([1, 0]), Coefficients = [1.0, 1.0, 1.0] });
         Refused(good with { Structure = new BassStructure([0, 0]), Coefficients = [1.0, 1.0, 1.0] });
         Refused(good with { Structure = new BassStructure(two), Coefficients = [1.0, 1.0] });
+        Refused(good with { Coefficients = [.. good.Coefficients.Select((a, j) => j == 0 ? double.NaN : a)] });
+        Refused(good with { Coefficients = [.. good.Coefficients.Select((a, j) => j == good.Coefficients.Length - 1 ? double.PositiveInfinity : a)] });
         Refused(good with { Sigma2 = 0.0 });
         Refused(good with { Sigma2 = double.NaN });
         Refused(good with { Sigma2 = double.PositiveInfinity });

@@ -53,6 +53,7 @@ public static class BassPointwise
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(terms);
+        ArgumentNullException.ThrowIfNull(draws);
         if (content is not (PointwiseContent.RetainedParameters or PointwiseContent.CollapsedPredictive))
             throw new ArgumentOutOfRangeException(nameof(content));
         UnitPartition partition = units ?? DefaultUnits(model);
@@ -180,8 +181,9 @@ internal sealed class BassDrawFit
 
     /// <summary>
     /// The draws of every chain, pooled in chain order, with each chain's length; refused: no chain, an empty chain, a
-    /// null draw, ids outside the table or not ascending and distinct (an unordered collection, D01), one coefficient
-    /// per term plus the intercept, a σ² that is not positive and finite and, where τ is read, a τ that is not.
+    /// null draw, ids outside the table or not ascending and distinct (an unordered collection, D01), other than one
+    /// finite coefficient per term plus the intercept's, a σ² that is not positive and finite and, where τ is read, a τ
+    /// that is not.
     /// </summary>
     public static (List<BassDraw> Pooled, int[] Chains) Pool(IReadOnlyList<IReadOnlyList<BassDraw>> draws, BassTermTable terms,
                                                             bool readsTau, string parameter)
@@ -215,6 +217,8 @@ internal sealed class BassDrawFit
         }
         if (draw.Coefficients is null || draw.Coefficients.Length != ids.Length + 1)
             throw new ArgumentException("A draw needs one coefficient per term and the intercept's.", parameter);
+        foreach (double a in draw.Coefficients)
+            if (!double.IsFinite(a)) throw new ArgumentException("A draw's coefficients must be finite.", parameter);
         if (!(draw.Sigma2 > 0.0) || double.IsPositiveInfinity(draw.Sigma2))
             throw new ArgumentException("A draw's σ² must be positive and finite.", parameter);
         if (readsTau && (!(draw.Tau > 0.0) || double.IsPositiveInfinity(draw.Tau)))

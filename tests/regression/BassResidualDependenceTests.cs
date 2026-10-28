@@ -83,6 +83,8 @@ public sealed class BassResidualDependenceTests
         Assert.Equal(0.25, check.Quantiles[2], 15);
         Assert.Equal(ResidualDependence.DefaultProbabilities, ResidualDependence.Of(new double[,] { { 1, 2 } }, [0, 1]).Probabilities);
 
+        Assert.Empty(ResidualDependence.Of(new double[,] { { 1, 2 } }, [0, 1], []).Quantiles);
+
         ResidualDependence none = ResidualDependence.Of(new double[,] { { 2, 2, 2 } }, [0, 1, 2]);
         Assert.True(double.IsNaN(none.Mean));
         Assert.All(none.Quantiles, q => Assert.True(double.IsNaN(q)));
@@ -209,6 +211,8 @@ public sealed class BassResidualDependenceTests
         Assert.Throws<ArgumentNullException>("residuals", () => ResidualDependence.Of(null!, [0, 1]));
         Assert.Throws<ArgumentException>("residuals", () => ResidualDependence.Of(new double[0, 2], [0, 1]));
         Assert.Throws<ArgumentException>("residuals", () => ResidualDependence.Of(new double[2, 1], [0]));
+        Assert.Throws<ArgumentException>("residuals", () => ResidualDependence.Of(new double[,] { { 1, double.NaN } }, [0, 1]));
+        Assert.Throws<ArgumentException>("residuals", () => ResidualDependence.Of(new double[,] { { 1, double.PositiveInfinity } }, [0, 1]));
         Assert.Throws<ArgumentException>("index", () => ResidualDependence.Of(new double[2, 3], [0, 1]));
         Assert.Throws<ArgumentException>("index", () => ResidualDependence.Of(new double[2, 3], [0, double.NaN, 1]));
         Assert.Throws<ArgumentOutOfRangeException>("probabilities", () => ResidualDependence.Of(new double[2, 3], [0, 1, 2], [0.5, 1.5]));
