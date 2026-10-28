@@ -184,13 +184,14 @@ public static class BandedGPrior
         };
     }
 
-    // The flat intercept needs the constant split out of the basis, which B-splines do not do, and the block's
-    // flat-intercept form, which it does not have yet; BASS selects it as an option once the block does.
+    // The flat intercept needs the constant split out of the basis, as the block's centred form takes it; B-splines do
+    // not split it out, so BARS refuses it and BASS selects it as an option.
     internal static void RefuseFlat(GPriorCentre centre)
     {
         if (centre == GPriorCentre.Flat)
-            throw new ArgumentException("The flat intercept (GPriorCentre.Flat) needs the constant split out of the basis "
-                                        + "and the block's flat-intercept form; BARS has neither.", nameof(centre));
+            throw new ArgumentException("The flat intercept (GPriorCentre.Flat) needs the constant split out of the basis, "
+                                        + "which BARS's B-splines do not do; the block's flat-intercept form takes a centred "
+                                        + "design (CollapsedGPrior.FromCentredLeastSquares).", nameof(centre));
     }
 
     private static bool Constant(double[] y)

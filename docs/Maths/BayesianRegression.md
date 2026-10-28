@@ -243,11 +243,20 @@ with the likelihood raised to an inverse temperature $b$ (1 is untempered).
   - `MarginalAt(τ, b)` is the same marginal without the mean: a `GPriorMarginal` value holding $S$, the determinant term and $m$, so a τ update or a tempered swap allocates nothing (N12). `At` carries the same value, so the two return the same double; the Normal model's tempered marginal reads it.
   - Because $S$ is a sum of non-negative terms from the explicit residual, a small τ on a close fit keeps its digits. The subtracted form $b\,y^\top y-b^2Q/(\tau+b)$ loses about $\log_{10}((1+\tau)/\tau)$ of them.
 - **Weighted (the robust path, Q2).** The posterior precision $P_a=Z^\top(W+\tau I)Z$ depends on τ, so this form is built at one τ and $b=1$. Its scale is $S=\lVert y-Z\tilde\beta\rVert_W^2+\tau\lVert Z\tilde\beta\rVert^2$.
-- **σ².** The prior is IG($g_1, g_2$), which BARS takes by default scaled to the response (`Sigma2Prior`, below), or the improper $1/\sigma^2$. The posterior is $\sigma^2\mid y\sim\mathrm{IG}(g_1+mb/2,\ g_2+S/2)$.
+- **Centred, with the intercept apart (BASS, D03).** `FromCentredLeastSquares` takes the design BASS holds: columns $Z_c$ centred over all $N$ rows, so the constant is orthogonal to them and its Gram entry $N$ stands apart, with the factor of $G_c=Z_c^\top Z_c$, the least-squares fit of $\tilde y=y-\bar y$ on $Z_c$ and $\bar y$. The coefficients are $(\alpha,\beta_c)$, the intercept first, and the convention (`Intercept`, a `GPriorCentre`) places $\alpha$:
+  - *Level centring* (`Mean`): inside the g-prior, centred on $\bar y$, with $k=M+1$. The explicit column, $[1, Z_c]$ with $\mu_0=\bar y\,e_0$ through `FromLeastSquares`, gives the same block.
+  - *The zero centre* (`Zero`): inside the g-prior at 0, with $k=M+1$ and $\alpha$'s fitted energy $N\bar y^2$ added to $Q$.
+  - *The flat intercept* (`Flat`, Liang et al. 2008): $\alpha$ under a flat prior, integrated out, with $k=M$. At inverse temperature $b$ the integral is $(2\pi\sigma^2/(Nb))^{1/2}$, which spends one observation.
+    - So $\nu=Nb-1$, and the determinant term gains $-\tfrac12\ln(Nb)$. Under the Jeffreys limit the marginal is $(1+g)^{(N-1-M)/2}(1+g(1-R^2))^{-(N-1)/2}$, $g=1/\tau$ (D03).
+    - $b=0$ is out of reach on this form, which refuses it; the linear form reaches it (D05).
+    - The marginal is defined up to the flat prior's constant. That constant cancels from every within-rung ratio and every swap, so the form gives no evidence.
+    - Given σ², $\alpha\sim N(\bar y,\sigma^2/(Nb))$, apart from $\beta_c$. `Sample` draws it after $\beta_c$. `LeaveOutLogDensity` and `ConditionalVariance` carry its variance, and the leave-out's Student t has $\nu=N-1$.
+  - *Why a factory that takes the convention.* BASS's design layer holds the factor of $G_c$ alone, with $\bar y$ apart, and its config carries the convention as a `GPriorCentre`. One call then builds every convention's block from the same statistics, where `FromLeastSquares` would need the intercept bordered into the factor. The median centre is refused there: it is the robust path's, on a basis that carries the constant.
+- **σ².** The prior is IG($g_1, g_2$), which BARS takes by default scaled to the response (`Sigma2Prior`, below), or the improper $1/\sigma^2$. The posterior is $\sigma^2\mid y\sim\mathrm{IG}(g_1+\nu/2,\ g_2+S/2)$, with $\nu=mb$, or $mb-1$ under the flat intercept (below).
   - `LogMarginal` is the complete $\ln p_b(y\mid Z,\tau)$ (derivations review §3), comparable across τ and $b$. Under the improper prior it is defined up to that prior's constant.
   - `Sample` is a composition draw: σ² first, then β through the factor's precision draw.
   - `ConditionalVariance` returns $E[\sigma^2\mid y]\,z^\top\operatorname{Cov}z$.
-- **Seams.** The factor is any `ISpdFactor`. `BandedGPrior` builds the block from a banded spline design; BASS's dense or incremental design layer will build it through `FromLeastSquares`. The block does not decide admission (it reports the factors' statuses) and knows nothing about the basis.
+- **Seams.** The factor is any `ISpdFactor`. `BandedGPrior` builds the block from a banded spline design; BASS's design layer builds it through `FromCentredLeastSquares`. The block does not decide admission (it reports the factors' statuses) and knows nothing about the basis.
 - **Admission comes before the fit.** `BandedGPrior.Fit` takes the caller's admission rule and applies it to each factor as soon as it exists, before anything is solved with it; a refused factor gives no block. A factor that breaks down can solve to NaN, from which no least-squares statistic may be formed. Until 2026-10-21 the Normal model judged the factor after building the block, so such a design threw instead of scoring −∞ (register R17; a likelihood-tempered hot rung found it).
 - **Checks** (`CollapsedGPriorTests`):
   - scale, mean and determinant term against dense algebra at four (τ, $b$) settings;
@@ -257,6 +266,14 @@ with the likelihood raised to an inverse temperature $b$ (1 is untempered).
   - a constructed near-interpolating fit, where the subtracted form loses its digits and the block keeps them;
   - the median- and mean-centred blocks against the zero-centred block on $y-c$, at offsets 0, 5 and −300, with and without weights;
   - `MarginalAt` against `At`'s log marginal bit for bit, under the Jeffreys, scaled and fixed priors, $b\in\{0, 0.3, 1\}$ and τ from $10^{-6}$ to $10^3$, with no allocation.
+- **Checks of the centred forms** (`CollapsedGPriorInterceptTests`):
+  - dense algebra on $[1, Z_c]$ at four (τ, $b$) settings, and for the g-prior conventions on the uncentred $[1, H]$, whose column space is the same;
+  - level centring against the explicit column through `FromLeastSquares`;
+  - the flat marginal and σ²'s posterior mean against quadrature over $\alpha$ and σ², at $b$ = 1, 0.5 and 0.2, under the improper and a proper prior;
+  - Liang's and level centring's Bayes factors, τ integrated under Zellner–Siow, against F-O9's oracle on F-O8's grid to $10^{-8}$;
+  - on a hinge design, the g-forms, and invariance to shifting y by 10 and −250 under both conventions, while the zero centre moves;
+  - draws, leave-out densities and readout variances against their dense counterparts;
+  - `MarginalAt` against `At` bit for bit, with no allocation, and the refusals ($b=0$, a shape the improper prior cannot integrate, the median centre).
 
 ### BARS: observation models
 
@@ -295,11 +312,11 @@ with $P_a=Z^\top(W+I/m)Z$, $h=Z^\top W\tilde y$ and $S=\tilde y^\top W\tilde y-h
     - **A robust BARS fit** of a sine under noise 0.15 with one reading at 10⁶, with Student-t weights, reaches MSE 0.00328 under the median centre against 0.00296 without the glitch. Under the mean centre it reaches 6,790.
     - **Translation equivariance** holds as for the mean: the median shifts with the response.
     - **Clean asymmetric responses** cost the median only its distance from the mean. For a basis that sums to one the conditional-mean fit is $\tfrac{m}{m+1}f_{\text{OLS}}+c/(m+1)$, so the two centres' fits differ by exactly (median − mean)/(m + 1). On a narrow peak over a flat baseline (median 0.013, mean 0.155, n = 150) that is 0.0009, against noise of 0.05. Over the chains: 5.50 against 5.60 knots, and MSE 0.000309 against 0.000282 on one seed.
-    - **Left open:** a flat intercept (Liang et al. 2008), the exact form, which changes the block's closed forms, and robust centring more generally. Both are for a later look at robust statistics (OQ15).
+    - **Left open:** robust centring more generally, for a later look at robust statistics (OQ15). The flat intercept (Liang et al. 2008), the exact form, has its closed forms in the block since 2026-10-28 (its centred form, above), for BASS; BARS cannot take it (below).
   - **σ² gets m, not m − 1, degrees of freedom.** The level is centred on the data's own mean at no charge, where a flat intercept would spend one. Bayes factors differ from the flat-intercept form only as m does from m − 1 in one exponent.
 - **Alternatives considered.**
   - **Zero, DMGK's original:** kept as `GPriorCentre.Zero` on its own terms, for a response whose level is known to be zero; on any other it carries the defect above ([Corrections to the sources](#corrections-to-the-sources)).
-  - **A flat intercept with a centred design** (Liang et al. 2008): the same comparisons up to the m − 1 above. It needs the constant split out of the basis, which B-splines do not do. `GPriorCentre.Flat` names it (2026-10-28) for BASS's option; BARS refuses it with that reason, at the model and at the block's builder.
+  - **A flat intercept with a centred design** (Liang et al. 2008): the same comparisons up to the m − 1 above. It needs the constant split out of the basis, which B-splines do not do. `GPriorCentre.Flat` names it (2026-10-28) for BASS's option, and the block's centred form computes it; BARS refuses it with that reason, at the model and at the block's builder.
   - **Centring the response outside the model:** equivalent for B-splines, but every caller would have to remember it, and a basis that does not sum to one would then need the projection anyway.
 - **Effect on step 3.7's fits,** whose response averages about 0.6 against noise 0.1, an offset of 6σ:
   - knot counts rose 3–20% (dense 5.61 → 5.78, gap 0.72 → 0.79, sparse gap 0.85 → 0.96, robust gap 0.66 → 0.79);
