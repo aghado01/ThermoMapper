@@ -31,6 +31,8 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 
 ### Build (stage 4)
 
+Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-plan-proposal-2026-10-28), a proposal of 2026-10-28: steps S1–S10, with three shared additions (Wallenius in Distributions, a per-replica block in `ParallelTempering`, the flat-intercept form in `CollapsedGPrior`).
+
 - [ ] **F1** Term representation: continuous, categorical and functional parts, with interned terms.
 - [ ] **F2** Design layer and the direct functional contractions.
 - [ ] **F3** Collapsed g-prior target under both intercept conventions, with the fixed-g mode.
@@ -53,6 +55,10 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### Stage 4 planned (a proposal) — 2026-10-28
+
+After the baseline was requalified at `cf37584`, the fitting segment gained a stage-4 plan: F1–F11 in ten steps, with what each reuses, the three shared additions it needs and the fixtures that check each. Four choices are put to the user: the ridge priors deferred, τ under tempering through a per-replica block, starts from exact prior draws, and where the work runs.
 
 ### F-C2: the shared-code changes — 2026-10-28
 

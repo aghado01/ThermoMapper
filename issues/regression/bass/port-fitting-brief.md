@@ -2,7 +2,7 @@
 
 A segment of the [full port brief](../bass-full-port-brief.md), which holds the scope and completion contract, the dependency boundaries, the stage table and the decision register. This segment covers stage 4, complete mixed-predictor scalar and direct-functional fitting, and the stage-1 decisions it consumes, D01–D06. It builds on the [numerics segment](port-numerics-brief.md). Its checklist, where the reports go as work lands, is [port-fitting-checklist.md](port-fitting-checklist.md).
 
-D01–D06 were decided in the user's design pass (2026-10-27), and the contract shapes on 2026-10-28; each section says so. The register, with each decision's status, and the table of sources the drafts were drawn from are in the hub's [decisions section](../bass-full-port-brief.md#statistical-decisions-to-settle).
+D01–D06 were decided in the user's design pass (2026-10-27), and the contract shapes on 2026-10-28; each section says so. The stage-4 plan (2026-10-28) is a proposal. The register, with each decision's status, and the table of sources the drafts were drawn from are in the hub's [decisions section](../bass-full-port-brief.md#statistical-decisions-to-settle).
 
 ## Direct functional algebra
 
@@ -501,6 +501,53 @@ public readonly record struct BassStructure(int[] TermIds);   // sorted ids into
 5. *Unseen levels at prediction* are refused by default; `UnseenLevel.OutsideEverySubset` is declared on the prediction call.
 
 Choices 2 and 3 changed shared code before stage 4's first fit (F-C2, landed 2026-10-28): `Sigma2Prior` is a record of its kind and parameters, which BARS's Normal model holds, and `GPriorCentre.Flat` exists, refused by BARS with its reason.
+
+## Stage 4 plan (proposal, 2026-10-28)
+
+Drafted after the baseline was requalified at `cf37584`, for the user's review. It sequences F1–F11 into ten steps, each landing with its tests and a report in the checklist, and names what each reuses, what it adds to shared code and which fixtures check it. Source code waits on the user's go-ahead (the hub's authorization line).
+
+**What it builds on.**
+- *Factors and contractions:* `BorderedCholesky` (N1–N4), an `ISpdFactor`, so `CollapsedGPrior.FromLeastSquares` takes it and `MarginalAt` (N12) gives the marginal at any (τ, b) in O(1); `KhatriRao` (N7); `PairwiseSum` (N10).
+- *Priors:* `Sigma2Prior` and `GPriorCentre` (F-C2); `Gamma`.
+- *Sampling:* `ReversibleJumpChain`, which owns the state-dependent selection ratio, so D01's schedule is move weights (`ScheduledMove`); `BlockScan` and `SliceSampler`; `ParallelTempering` with the reference rung and `TraceRungs`; `LadderEvidence` (N11).
+- *The run:* the chain ensemble, `DrawStore`, `RunIdentity` and checkpoints; `UnitPartition` and `PointwiseLogDensity` (OQ17).
+
+**Shared-code additions** (each generic, tested in its own host, landed before its first BASS use):
+- *Wallenius' multivariate probability* with one ball per variable, in Distributions: inclusion–exclusion up to K = 3 and quadrature of the positive integrand above (D01), checked against F-O5.
+- *A per-replica block in `ParallelTempering`:* a kernel that leaves π_b invariant, run on each replica at its own b between swap rounds. A replica takes reversible-jump moves only today, so τ's slice step (D04) has no seat under tempering. Tested on an analytic target with a continuous coordinate.
+- *The flat-intercept form in `CollapsedGPrior`* (Liang: k = M, N − 1 degrees of freedom), for `GPriorCentre.Flat`. BARS keeps refusing it, for its basis.
+
+**Steps.**
+
+| Step | Delivers | Checklist | Checks |
+|---|---|---|---|
+| S1 | Contracts: `BassData` and its refusals, `BassInputTransform`, `BassConfig` serialized with its closed sets as polymorphic records, the fingerprint, `BassResolved` | (F-C1's shapes) | JSON round trip; each refusal; the transform at the training range's edges |
+| S2 | Terms: hinge factors of any positive degree, categorical subsets, functional factors; the interned term table; column evaluation, case side A and output side H; support counts per part | F1, F2 (in part) | basis evaluation against R (a new oracle mode); a tiny functional design's explicit nm × k columns against the separable form |
+| S3 | D01's term measure and proposals with D02's count factor: births (w₁, w₂, Wallenius), deaths with the reverse birth's probability, the change move; R's categorical subset measure, the paper's uniform selectable | F1, F4 (in part) | proposal probabilities summing to one over enumerable spaces; Wallenius against F-O5 |
+| S4 | The design layer and admission: the centred Gram (explicitly centred columns for scalar fits, the three-term Hadamard form for direct ones), pairwise cross-products, bordered updates, the order-free angle gate with a strict rebuild near s_min, the support gate, refusals by reason, the residual on its cadence; column mass and `MaxVarianceInflation` as options | F2, F7 | randomized insert and delete sequences against fresh factorizations; F-O7; F-O2's order counterexample; one constructed case per refusal reason; residual drift |
+| S5 | The collapsed target: level centring (default), the zero centre and Liang; the g and fixed-g modes; σ² scaled (default), Jeffreys with the exact-fit exclusion, and a fixed IG; the integrated and linear tempered forms on the likelihood path, and the powered path | F3 | F-O1's quadrature; F-O9's identities and shift invariance; scale invariance; F-O8; R's deterministic statistics at fixed τ under its zero centre (parity) |
+| S6 | D04's sweep: the reversible-jump palette on D01's schedule (prior-cancelling selectable), τ's slice block on log τ, composition at retention (σ², a, λ), `BassDraw` | F4, F5 | F-O3's and F-O4's laws from the chain under a constant likelihood, with R's thirds asserted corrected; an enumerable posterior with data (a new oracle mode); composition draws against a long joint-Gibbs reference; λ against the Gamma mixture |
+| S7 | The run: `Bass.Fit` and `Bass.Resume` on the chain ensemble, each chain's draws in a `DrawStore`, starts on the support, the diagnostics (R̂ and ESS for M, τ, σ² and declared fitted values; acceptance per move; refusal tallies; support rejection per order; mass at the cap), the R̂ stop | F8, F10 | resume bit-identical; results independent of parallelism; every start in F |
+| S8 | Tempering: the per-replica block, the likelihood-path ladder (integrated form by default, linear selectable), the exact reference rung (opt-in), DEO swaps and the adaptive ladder frozen after burn-in, the evidence with `BassEvidencePriors` | F6 | the endpoints b = 0 and 1; swap detailed balance on an enumerable space, with R's swap density asserted corrected (F-O6); the ladder's evidence against enumeration under proper priors |
+| S9 | The pointwise density (retained parameters by default, the collapsed predictive selectable; case units for direct fits; chains for r_eff) and the residual-dependence readout | F9, F11 | against dense computation; WAIC and PSIS-LOO read it |
+| S10 | Qualification: controlled recovery on simulated surfaces (scalar continuous, mixed categorical, direct functional), a cost baseline by n, p and M, the docs section with the decisions and their trade-offs, the suites | | recovery within the posterior's intervals; R's posteriors as exploration only (the parity rule) |
+
+The order is S1 → S2 → S3 and S4 → S5 → S6 → S7 → S8 → S9 → S10. The shared additions land with S3 (Wallenius), S5 (the flat-intercept form) and S8 (the per-replica block).
+
+**Starts.** Each chain starts from an exact draw of the prior restricted to F, the sampler the reference rung uses (D05). The starts are then dispersed, which R̂ needs, and on the support by construction (F10). R starts every chain at M = 0.
+
+**New oracle modes** (R, under `r/oracles`, reproduced by a stage-4 checks script):
+- basis evaluation and the deterministic statistics at fixed τ, against R's own functions on the pinned checkout (parity where R is right);
+- `posterior`: the exact posterior over an enumerable structure space with data, τ integrated by quadrature;
+- the ladder's evidence on that space, against its normalizer.
+
+**Choices for the user** (the recommendation first in each):
+1. *The ridge priors.* The contract lists `Ridge` and `FixedRidge`, and the completion contract asks for the g and fixed-g modes. Recommended: build those two in stage 4, and let the ridge records join the closed set when they are built with their own marginal, which needs |G + τI| rather than the g-form and a refactoring per τ.
+2. *τ under tempering.* The per-replica block, which keeps D04's slice step and serves any hybrid replica; or τ as a Metropolis move inside the palette, which changes D04's block.
+3. *Starts.* Exact prior draws; or R's M = 0.
+4. *Where the work runs.* The steps depend on one another, so one sequence runs them, here or in one chip. Two side pieces with files of their own could run beside it as chips: the three shared additions, and the R oracle modes.
+
+**Not in stage 4.** F-M1 and F-R1, the pre-registered comparisons, need the running engine and follow it. Supplied-basis and PCA fits, and prediction at new inputs, are stage 5.
 
 ## Regime note: deterministic simulators (proposal, 2026-10-26)
 
