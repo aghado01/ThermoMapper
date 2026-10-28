@@ -205,6 +205,39 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
   - *Comparison across configurations and engines* defaults to the predictive checks built for OQ17 (WAIC and PSIS-LOO), which need no proper prior and no shared prior scales.
   - *Cross-engine evidence* is an extension ([extensions brief](extensions-brief.md#cross-engine-evidence)), since it needs a proper mode in every engine.
 
+### D03, alternative (draft, 2026-10-27): proper defaults
+
+Beside the draft above, for the design pass to compare (the user asked for it, 2026-10-27). It changes two defaults, σ²'s prior and the intercept's, and keeps the rest of D03: τ's family and default, n's meaning, the fixed-g mode, the Jeffreys-mode defect fixture and the other coefficient priors.
+
+- **σ²: `Sigma2Prior.ScaledToResponse(a = 10⁻³)`,** IG(a, a·s²) with s² the response's mean square about the centre's level. It is Normal BARS's default since 2026-10-27, in the g-prior namespace BASS shares.
+  - *Scale-free.* Rescaling y moves every structure's marginal by the same amount, which is OQ19's route (b); BARS checks this from y × 10⁻⁶ to × 10⁶.
+  - *Close to Jeffreys.* At a = 10⁻³ the differences between structures sit within 0.05 nats of the Jeffreys prior's on BARS's sine fit.
+  - *`Jeffreys` stays selectable,* as the reference prior that reads nothing from y.
+- **Intercept: level centring, `GPriorCentre.Mean`.** This is R's convention applied to ỹ = y − ȳ: the intercept stays a column inside the g-prior (k = M + 1), and the prior is centred on the level, μ₀ = ȳ·G⁻¹Zᵀ1, which is ȳ·e₀ for an explicit intercept column. The shared block already takes a prior mean (`CollapsedGPrior`, `GPriorCentre`).
+  - *Proper* given σ² and τ.
+  - *Shift-equivariant.* ỹ does not move when y shifts, so neither does the posterior over structures and τ.
+  - *Mean rather than median under Gaussian noise.* With the mean, the level's own energy is exactly zero (n·mean(ỹ)² = 0), so τ's conditional reads no level at all. `Median`, BARS's default (OQ15), is the robust choice once the noise extensions bring weights.
+  - *The Liang convention stays selectable* as the form that is exact in the level but improper, and the zero centre stays selectable on its own terms.
+- **What it costs against Liang.** Level centring reads the level from the data at no charge, so σ² gets N degrees of freedom, not N − 1. Under the Jeffreys limit its marginal is Liang's with −N/2 in place of −(N − 1)/2 on (1 + g(1 − R²)), and the intercept-only structure gains the constant ∫p(g)(1 + g)^{−1/2}. A scratch quadrature on F-O8's grid (N = 40, 100, 1000), against Liang's Bayes factors:
+  - against the intercept-only structure, level centring favours a structure by 0.43–0.47 nats more at M = 1, 0.67–0.69 at M = 2 and 1.06–1.08 at M = 5;
+  - between two structures one term apart (M = 2 at R² = 0.25 against M = 1 at R² = 0.2), by 0.23–0.24 nats more, at every N.
+
+  A term's Occam factor is about ½·log(1 + g), 1.8–3.5 nats at these N, so the extra credit is a small fraction of it, but systematic and not shrinking with N.
+- **What it buys.** Every default prior is proper: σ², the intercept, τ under Zellner–Siow, and D02's count prior.
+  - *Evidence by default,* wherever a run can give one (a ladder with a reference rung, the SMC normalizer). It carries the priors it read from y (D05's priors record), so it is empirical-Bayes in the level and the scale, and comparable only on the same data.
+  - *Exact fits are proper.* The propriety bullet's exclusion of zero-residual structures is needed only under the improper options, and the deterministic-simulator profile no longer has to steer to a proper mode.
+  - *The exact reference rung and SMC from the prior* on either tempered form, with no separate proper mode.
+  - *OQ19 settled for BASS:* no raw-unit prior remains among the defaults.
+  - *R's numerics.* The uncentred Gram and its bordered updates are R's, so the centred Gram's rank-one downdate, whose accuracy D06 has to manage, is not needed; N7's face-splitting contraction already serves R's convention.
+- **What changes elsewhere if this is adopted** (listed, not applied):
+  - *D03:* the g mode's σ² default; the intercept bullet (level centring by default, Liang and the zero centre as options); the proper-prior-mode bullet goes, its content now the defaults; the propriety bullet's exclusion applies to the improper options only; the evidence bullet becomes "default runs report evidence where the run can give one", with the predictive checks still the default for comparisons across engines; the independent checks gain shift and scale invariance under the defaults, and the complete marginal against quadrature over σ² and τ.
+  - *D04:* σ²'s conjugate draw becomes IG(a + N/2, a·s² + S/2); the chain state is unchanged.
+  - *D05:* "Which priors each use needs" collapses, since every use has proper priors by default. The linear form's propriety advantage holds for the improper options only, so the choice between the forms is efficiency alone, the ground on which BARS kept the integrated form.
+  - *D06:* the gate reads R's uncentred Gram with the intercept column. There a hinge's s_j is its centred value times ‖z_j − z̄_j‖²/‖z_j‖², so the gate is stricter for columns with a large mean, and s_min is set against that form (F-O7 covers both).
+  - *The calibration brief:* its paragraph on the improper default goes, since the default then starts a prior-to-posterior SMC run.
+  - *The regime note:* its propriety bullet holds for the improper options only.
+  - *Fixtures:* the quadrature above becomes F-O9, beside the shift-invariance fixture D03 already lists.
+
 ### D04 (draft): collapsed and conditional update order
 
 - **The rule.** Integrate the coefficients a, and σ² where it is conjugate, out of every block up to their own draw, and draw them immediately before the first block that conditions on them. Every block then samples a conditional of the same joint posterior, and no block reads a statistic from a stale draw. R's τ update is the pattern this rules out: it reads ‖Rβ‖² from a coefficient draw made before σ² was redrawn (the inventory's partially collapsed ordering, derivations review §2).

@@ -8,7 +8,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 
 - [ ] **F-D01** Term representation and prior measure: drafted 2026-10-25 as a proposal; settles at the user's design pass.
 - [ ] **F-D02** Count prior at the capacity limit: drafted 2026-10-25 as a proposal; settles at the user's design pass.
-- [ ] **F-D03** Coefficient-prior modes and the τ hyperprior: drafted 2026-10-25 as a proposal; settles at the user's design pass. The intercept convention is the user's call.
+- [ ] **F-D03** Coefficient-prior modes and the τ hyperprior: drafted 2026-10-25 as a proposal; settles at the user's design pass. The intercept convention is the user's call. An alternative with proper defaults (scaled σ², level centring) is drafted beside it, 2026-10-27.
 - [ ] **F-D04** Collapsed and conditional update order: drafted 2026-10-25 as a proposal; settles at the user's design pass.
 - [ ] **F-D05** Tempering and SMC target paths: drafted 2026-10-25 as a proposal; settles at the user's design pass.
 - [ ] **F-D06** Numerical model admission: drafted 2026-10-25 as a proposal; settles at the user's design pass.
@@ -50,6 +50,14 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### D03's proper-defaults alternative — 2026-10-27
+
+At the user's request after the readiness review, drafted beside D03 for the design pass, not decided: `Sigma2Prior.ScaledToResponse()` for σ² and level centring (`GPriorCentre.Mean`) for the intercept, so that every default prior is proper. The Liang convention, the zero centre and Jeffreys σ² stay selectable.
+- *The cost, by scratch quadrature on F-O8's grid.* Level centring's marginal is Liang's with N in place of N − 1 in one exponent. Against Liang it favours a structure over the intercept-only one by 0.43–0.47 nats at M = 1 and 1.06–1.08 at M = 5, and two structures one term apart by 0.23–0.24, at N = 40, 100 and 1000.
+- *What it buys:* evidence by default, proper exact fits, the reference rung and SMC from the prior without a separate mode, OQ19 settled for BASS, and R's uncentred numerics.
+- *Knock-on edits* to D03–D06, the calibration brief and the regime note are listed in the alternative and not applied.
+- *Found by the review, independent of the choice.* The calibration brief says the improper default cannot start a prior-to-posterior SMC run, while D05's linear form starts one from the prior over (structure, τ), which is proper under the improper σ² and intercept priors. The alternative removes the paragraph; under the current draft it needs the linear-form exception.
 
 ### D05's evidence inputs from the shared infrastructure — 2026-10-27
 
