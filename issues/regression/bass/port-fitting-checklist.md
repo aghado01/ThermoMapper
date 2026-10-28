@@ -50,6 +50,10 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 
 ## Reports
 
+### The parity rule — 2026-10-27
+
+The user's decision: the C# preserves no R defect to align with a fixture (the hub's validation section). The `BassLiteral` options are gone from D03 (R's τ rate 2/n) and D06 (R's `getQf` admission), and from the declared set of coefficient priors. R's zero-centred intercept stays selectable as DiMatteo, Genovese and Kass's prior, `GPriorCentre.Zero`, not as a parity option. Earlier reports that mention `BassLiteral` record the drafts as they stood.
+
 ### F-O6 at three predictors, and reversibility — 2026-10-27
 
 From the reference-fixtures chip's follow-up, `f7acf2a`. The enumeration oracle now reports each kernel's detailed balance with its own stationary law. The checks add p = 3 to the swap and count fixtures, so the Wallenius factor of R's proposal varies with the state. All checks pass.

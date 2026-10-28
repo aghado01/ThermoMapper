@@ -225,6 +225,12 @@ Tests follow ownership:
 
 Use deterministic R comparisons for basis evaluation, sufficient statistics, prediction, reconstruction, and sensitivity formulas where the R result is qualified. Where the inventory identifies an R defect, use corrected mathematical expectations and retain a regression fixture for the defect. Do not require identical random trajectories across languages.
 
+**The parity rule** (the user's decision, 2026-10-27). The C# implements coherent specifications only, and preserves no R defect to align with a fixture.
+- **Parity where R is right.** C# is compared with R only where R's result is qualified: basis evaluation, sufficient statistics, the qualified moments, `dmwnchBass` at R's weights, the Woodbury solves, the truncation residuals.
+- **The corrected reference where R is wrong.** The C# test asserts the corrected value alone. The R oracle keeps R's value beside it and checks that the two differ as predicted, which shows that the fixture's case would expose the defect.
+- **No option exists to match R.** An alternative stays selectable only on its own statistical merits. So R's τ rate (D03) and its `getQf` admission (D06) are not ported, and R's zero-centred intercept is selectable as DiMatteo, Genovese and Kass's prior, not for parity. R's tempering and Jeffreys mode were already defect fixtures (D05, D03).
+- **Comparisons with R's posteriors at scale are exploration.** R's own chain is off its target (F-O6: the fixed ⅓ move probabilities alone, 0.020 in total variation), so agreement with it is agreement within its defect. Posterior correctness rests on enumerable spaces and controlled recovery.
+
 Independent checks must cover boundary proposal ratios, enumerable model spaces, Gaussian conditionals, precision sampling, empirical covariance, functional contractions, sensitivity identities, and calibration targets. SMC tests include a known initial distribution, incremental weights, normalizer ratios, resampling, state ownership, and populations whose modes are known. Numerical agreement with a fresh factorization is necessary but not sufficient for a correct statistical target.
 
 Essential edge cases include intercept-only models; one predictor, response component, case, or draw; constant columns/responses; nearly dependent terms; more than 64 category levels; category probabilities of zero; bounded/truncated input measures; full PCA rank; and rejected proposals that leave the current state untouched.

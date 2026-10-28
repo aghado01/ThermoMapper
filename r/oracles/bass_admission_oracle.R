@@ -13,7 +13,7 @@
 #   in_order[j] = d_j / G_jj, the Cholesky pivots in the given order over the diagonal (FactorStatus's
 #     MinRelativePivot); each is at least loo[j], and the last equals it.
 #   getqf_ratio = max_{j >= 2} r_jj / min_j r_jj for R = chol(G), and getqf_refuses = getqf_ratio > 1e3: R BASS's
-#     admission rule in getQf (mcmc_funcs.R), which depends on column norms; D06's BassLiteral option.
+#     admission rule in getQf (mcmc_funcs.R), which depends on column norms; a defect fixture, not ported (D06).
 #
 # centred emits { mode, positive_definite, rho, loo, min_loo, in_order, min_in_order, loo_uncentred,
 #                 loo_explicit, explicit_rel_error, loo_explicit_recursive, explicit_recursive_rel_error,

@@ -27,7 +27,7 @@ Extensions beyond the port's completion contract, collected from the [full port 
   - log Bessel K of real order, for the pointwise density, which integrates each vᵢ because it belongs to one observation (OQ17's scope rule). Nothing in the repository computes it yet.
 
   `ContaminatedNormalWeights` is a discrete mixture and stays its own implementation.
-- **Sweep and prior:** D04's robust row and D03's unweighted g-prior, in the [fitting segment](port-fitting-brief.md). GBMARS's own choice, a ridge with a sampled τ, is the parity option. GBMARS calls its λ update approximate under its stated prior; it is exact under D02's.
+- **Sweep and prior:** D04's robust row and D03's unweighted g-prior, in the [fitting segment](port-fitting-brief.md). GBMARS's own choice, a ridge with a sampled τ, stays selectable. GBMARS calls its λ update approximate under its stated prior; it is exact under D02's.
 - **The global scale (derived by the user, 2026-10-26).** When β ≠ 0, GBMARS samples w by a modified half-normal step, because the drift puts w in the mean. Put the scale on u = √w instead and set zᵢ = u·vᵢ, so that εᵢ = βzᵢ + √(c·u·zᵢ)·ξᵢ with ξᵢ ~ N(0, 1). Write the mixing as GIG(p, ψ₀, χ₀), so that a stays the coefficients. Given z, the factors involving u are:
   - the likelihood, u^{−n/2}·exp(−Σ(rᵢ − βzᵢ)²/(2czᵢu));
   - the mixing density, u^{−np}·exp(−(ψ₀Σzᵢ/u + χ₀u·Σ1/zᵢ)/2);
