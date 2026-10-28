@@ -38,12 +38,21 @@ public sealed record BassConfig
     /// <summary>The run: chains, seeds, lengths, the R̂ stop and the move schedule.</summary>
     public BassSampling Sampling { get; init; } = new();
 
-    /// <summary>The canonical JSON options: enums by name, compact. The fingerprint hashes this serialization.</summary>
+    /// <summary>
+    /// The canonical JSON options: enums by name, compact. The fingerprint hashes this serialization. Reading, a field
+    /// the config does not have is refused, so a misspelled setting cannot fall back to its default unnoticed; a field
+    /// left out takes its default; a variant's <c>Kind</c> may stand anywhere among its fields.
+    /// </summary>
     public static JsonSerializerOptions JsonOptions { get; } = CreateJsonOptions();
 
     private static JsonSerializerOptions CreateJsonOptions()
     {
-        var options = new JsonSerializerOptions { Converters = { new JsonStringEnumConverter() } };
+        var options = new JsonSerializerOptions
+        {
+            Converters = { new JsonStringEnumConverter() },
+            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+            AllowOutOfOrderMetadataProperties = true,
+        };
         options.MakeReadOnly(populateMissingResolver: true);
         return options;
     }

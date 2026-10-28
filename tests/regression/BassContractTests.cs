@@ -201,6 +201,23 @@ public sealed class BassContractTests
     }
 
     [Fact]
+    public void Json_RefusesAMisspelledField_AndReadsAVariantInAnyOrder()
+    {
+        string json = new BassConfig().ToJson();
+        string typo = json.Replace("\"Degree\":1", "\"Degre\":2");
+        Assert.Contains("Degre", Assert.ThrowsAny<System.Text.Json.JsonException>(() => BassConfig.FromJson(typo)).Message);
+        string sigmaTypo = json.Replace("\"Shape\":0.001", "\"Shap\":0.001");
+        Assert.ThrowsAny<System.Text.Json.JsonException>(() => BassConfig.FromJson(sigmaTypo));
+
+        string reordered = json.Replace("{\"Kind\":\"SampledG\",\"TauShape\":0.5}", "{\"TauShape\":0.25,\"Kind\":\"SampledG\"}");
+        Assert.Equal(new SampledG(0.25), BassConfig.FromJson(reordered).Coefficients);
+
+        // A field left out takes its default.
+        BassConfig partial = BassConfig.FromJson("{\"Sampling\":{\"Chains\":2}}");
+        Assert.Equal(new BassConfig { Sampling = new BassSampling { Chains = 2 } }, partial);
+    }
+
+    [Fact]
     public void Fingerprint_MovesWithAnySetting_AndAnyDataBit()
     {
         BassData data = Scalar(30, i => Math.Exp(-i / 10.0));
