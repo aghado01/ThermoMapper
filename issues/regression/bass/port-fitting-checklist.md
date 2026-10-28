@@ -33,8 +33,8 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 
 Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-plan-decided-2026-10-28), decided 2026-10-28: steps S1–S10, with three shared additions (Wallenius in Distributions, a per-replica block in `ParallelTempering`, the flat-intercept form in `CollapsedGPrior`).
 
-- [ ] **F1** Term representation: continuous, categorical and functional parts, with interned terms.
-- [ ] **F2** Design layer and the direct functional contractions.
+- [x] **F1** Term representation: continuous, categorical and functional parts, with interned terms (S2).
+- [ ] **F2** Design layer and the direct functional contractions. The terms' case-side and output-side factors landed with S2; the design layer lands with S4.
 - [ ] **F3** Collapsed g-prior target under both intercept conventions, with the fixed-g mode.
 - [ ] **F4** Birth, death and change moves with exact boundary probabilities.
 - [ ] **F5** D04's sweep, with composition draws at retention.
@@ -55,6 +55,17 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### S2: terms and the basis — 2026-10-28
+
+In `src/maths/regression/spline/bass/`:
+- **Terms** (`BassTerm`). A continuous, a categorical and a functional part, each of distinct variables, with at least one factor. Terms are canonical, each part sorted by variable, and compare by value, so a model's terms form a set (D01's M! count). `HingeFactor(Variable, Sign, Knot)`; `CategoricalFactor` holds its subset as sorted level indices, so a factor of any number of levels is one value (the hub's edge case of more than 64 levels). `BassTermTable` interns terms in the order first seen, one writer at a time; a run keeps one per chain and merges them in chain order (S7).
+- **Inputs** (`BassInputs`). The scaled columns through the transform; each variable's knots, its distinct scaled values (R's `unique` on the scaled column); the categorical training-level indices, −1 outside them; each predictor's place in the data. `CaseInputs` and `OutputInputs` also carry prediction's new inputs. The S1 review's note to take knots from the raw values is withdrawn: a hinge reads only the scaled knot, so raw values that scale to one double are one knot location, and counting them twice would bend D01's knot measure.
+- **The basis** (`BassBasis`), R's construction. The case side is Π hinges^q / c times the indicators, with c the hinge product's peak on [0, 1], and c = 1 where that is 0 (R's guard for a hinge facing its end of the range); the output side is the functional hinges, normalized the same way. Powers follow R's `^`: x·x at 2, the library power above. `Validate` refuses an index outside the inputs, a subset holding every level, and a functional factor on a scalar response. `Support` counts each part's nonzero values and mass.
+- **Tests.**
+  - `BassBasisTests` (10): canonical terms; the table; knots and level indices; hinges by hand at degrees 1 and 2; the zero-constant guard; interactions peaking at one; categorical indicators with an unseen level; support per part; and at degrees 1–3, a direct functional design's separable form against an explicit nm × k design from an independent evaluator, with the Khatri–Rao Gram against the explicit one.
+  - `BassBasisParityTests` (3, `Maths.Oracle.Tests`): 60 random terms mixing every part, at degrees 1, 2 and 3, on tied predictors, against R BASS's own `makeBasis`, `makeBasisCat` and `scale_range` at the pinned commit (`r/oracles/bass_basis_oracle.R`, new): within 10⁻¹⁴, and the scaled columns within 10⁻¹⁵. A hand-checked two-term fixture confirms the oracle runs and gives the expected values.
+  - Suites: Regression 461/461, Oracle 19/19.
 
 ### S1: the contracts — 2026-10-28
 
