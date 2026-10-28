@@ -4,9 +4,12 @@
 #
 # Usage (cwd = r/):  Rscript oracles/bass_enumeration_oracle.R <data.csv> <out.json> <mode> [key=value ...]
 #   data: headerless CSV, y in the first column, then the inputs x_1..x_p in [0, 1] (R's scaled inputs).
-#   mode: swap | count | laws.
+#   mode: swap | count | laws | posterior.
 #   keys (defaults): M_max (2), K_max (2), npart (3), w1 (5), w2 (5), lambda (2), sigma2 (0.1), tau (1/N),
 #     rungs (1,0.5,0.2), g1 (0), g2 (0), h1 (10), h2 (10), s_min (1e-10), c (0.4).
+#   posterior mode's own keys, refusing any it does not know: coef (sampled | fixed), centre (mean | flat | zero),
+#     sigma2_prior (scaled | jeffreys), sigma2_shape (1e-3), tau_shape (0.5), likelihood (collapsed | constant),
+#     exact_fit_c (1e3); tau is fixed-g's tau.
 #
 # The structure space. A term is an order K <= K_max, K distinct variables, a sign and a knot per variable, the knots
 # ranging over each variable's distinct values (D01's knot measure; R's unique.ind). Its prior is R's unconstrained
@@ -60,28 +63,65 @@
 # kernels' order law at M = 1 (the tilt D01 reports); and lambda's marginal at retention, the mixture of
 # Gamma(h1 + M, rate h2 + 1) over the count law, against the prior Gamma(h1, rate h2) tilted by F in closed form.
 #
+# mode = posterior (stage 4's S6). The exact posterior over the laws mode's F given y. A state's prior is the
+# laws target, Gamma(h1 + M)/(h2 + 1)^M prod pi(t), normalized over F. Its likelihood is D03's collapsed marginal,
+# a and sigma^2 integrated out and tau integrated against its prior by composite Gauss-Legendre on u = log tau
+# (16 nodes per unit panel, from log(1/N) - 37/a to log(1/N) + log(80/a)). Every intercept convention reads the same
+# column space, so the marginal is computed on its own design: centre = mean (default, GPriorCentre.Mean) reads
+# y~ = y - mean(y) on [1, Z_c], k = M + 1; zero (R's, GPriorCentre.Zero) reads y on [1, Z], k = M + 1; flat
+# (Liang, GPriorCentre.Flat) reads y~ on Z_c, k = M, its flat intercept integrated with density 1. With r the
+# residual (computed directly, never as y'y - Q) and Q the fit energy of that response on that design, and at
+# inverse temperature b (b = 1 is the posterior), D05's integrated form is
+#   log p_b(y | S, tau) = C - (n_b/2) log(2 pi) - [flat] log(bN)/2 + lgamma(d) + (k/2) log(tau/(tau + b))
+#                         - d log(g2 + b S_b/2),   S_b = |r|^2 + Q tau/(tau + b),   d = g1 + n_b/2,
+# with n_b = Nb (Nb - 1 under flat) and sigma^2 ~ IG(g1, g2), C = g1 log g2 - lgamma(g1): scaled (default),
+# g1 = sigma2_shape, g2 = g1 s^2 with s^2 the mean square about the level (mean(y) under mean and flat, 0 under
+# zero); jeffreys, p(sigma^2) = 1/sigma^2 as written (g1 = g2 = 0, C = 0), whose F excludes exact fits,
+# |r| <= exact_fit_c eps |y~| (D03; refusals counted). tau ~ Gamma(tau_shape, rate tau_shape N), Zellner-Siow at
+# 1/2; coef = fixed holds tau at the tau key (1/N, unit information). Only the defaults' proper priors make the
+# marginal absolute; under flat or jeffreys log_Z is null and log_marginal is relative. likelihood = constant puts
+# log p_b = 0, the laws mode's target. The scale of a column (R's basis normalization) does not move the marginal:
+# a g-prior reads the column space only.
+# Each closed form is checked in the oracle at the posterior's most probable state of each size, at b = 1 and 1/2
+# and three tau (the fixed one under fixed-g): against quadrature over log sigma^2 of the Gaussian integral over a
+# on the explicit uncentred design [1, Z] with y as given (prior mean mean(y) e_0 under mean; the flat intercept
+# and the centred columns' g-prior under flat), and the composite rule against integrate() over log tau.
+# Emits, beside the shared fields, in the C# conventions (0-based throughout): terms as { cont: [[var, sign, knot]],
+# cat: [], func: [] }, knot an index into the variable's ascending distinct values (BassInputs' knots), and states
+# as sorted indices into terms; supported (per term); data { y, x }; response { centre, level, s2, sigma2_shape,
+# sigma2_rate, n_eff, absolute }; tau_prior { shape, rate } or { fixed }; n_gate_refused, n_exact_fit_refused;
+# per state: M, k, rss, Q, log_prior, log_marginal, posterior, tau_mean (E[tau | S, y]); count { M, prior,
+# posterior }; order { levels (the per-order term counts n_1..n_Kmax), prior, posterior }; inclusion (per term);
+# tau { mean, log_mean, log_sd, levels, quantiles } (null under fixed-g); log_Z; quadrature { states, sigma2_gap,
+# tau_gap }.
+#
 # Emits { mode, n, p, n_terms, n_states, ... } with the mode's fields; states are listed as sorted term indices into
 # `terms` (K, vars, signs, knots).
 
 source("oracles/_common.R")
 
 args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 3) stop("usage: bass_enumeration_oracle.R <data.csv> <out.json> <swap|count> [key=value ...]")
+if (length(args) < 3) stop("usage: bass_enumeration_oracle.R <data.csv> <out.json> <swap|count|laws|posterior> [key=value ...]")
 D <- read_matrix(args[1])
 mode <- args[3]
 y <- D[, 1]; X <- D[, -1, drop = FALSE]
 N <- length(y); p <- ncol(X)
 opt <- list(M_max = 2, K_max = 2, npart = 3, w1 = 5, w2 = 5, lambda = 2, sigma2 = 0.1, tau = 1 / N, rungs = "1,0.5,0.2",
             g1 = 0, g2 = 0, h1 = 10, h2 = 10, s_min = 1e-10, c = 0.4)
+if (mode == "posterior")
+  opt[c("coef", "centre", "sigma2_prior", "sigma2_shape", "tau_shape", "likelihood", "exact_fit_c")] <-
+    list("sampled", "mean", "scaled", 1e-3, 0.5, "collapsed", 1e3)
+string_keys <- c("rungs", "coef", "centre", "sigma2_prior", "likelihood")
 for (kv in args[-(1:3)]) {
   parts <- strsplit(kv, "=", fixed = TRUE)[[1]]
-  opt[[parts[1]]] <- if (parts[1] == "rungs") parts[2] else as.numeric(parts[2])
+  if (mode == "posterior" && !parts[1] %in% names(opt)) stop("unknown key ", parts[1])
+  opt[[parts[1]]] <- if (parts[1] %in% string_keys) parts[2] else as.numeric(parts[2])
 }
 M_max <- opt$M_max; K_max <- min(opt$K_max, p)
 bass <- bass_source(c("basis_funcs.R", "mcmc_funcs.R", "rjmcmc_des.R"))
 
 # ---- terms -------------------------------------------------------------------------------------------------------
-knot_values <- lapply(seq_len(p), function(v) unique(X[, v]))
+knot_values <- lapply(seq_len(p), function(v) if (mode == "posterior") sort(unique(X[, v])) else unique(X[, v]))
 n_v <- lengths(knot_values)
 terms <- list()
 for (K in seq_len(K_max)) for (vars in split(combn(p, K), col(combn(p, K)))) {
@@ -99,7 +139,7 @@ term_key <- vapply(terms, function(t) paste(t$K, paste(t$vars, collapse = ","), 
 term_index <- new.env()
 for (i in seq_len(n_terms)) assign(term_key[i], i, envir = term_index)
 basis <- sapply(terms, function(t) bass$makeBasis(t$signs, t$vars, t$knots, t(X), 1))
-supported <- if (mode %in% c("swap", "laws")) colSums(basis != 0) >= opt$npart else rep(TRUE, n_terms)
+supported <- if (mode %in% c("swap", "laws", "posterior")) colSums(basis != 0) >= opt$npart else rep(TRUE, n_terms)
 log_prior_term <- vapply(terms, function(t) -log(K_max) - lchoose(p, t$K) - t$K * log(2) - sum(log(n_v[t$vars])), 0)
 
 # ---- proposals ----------------------------------------------------------------------------------------------------
@@ -149,7 +189,7 @@ ssy <- sum(y^2)
 describe <- function(S) {
   B <- design(S)
   if (mode == "count") return(list(valid = TRUE))
-  if (mode == "laws") {   # D06's numerical gate on the centred columns
+  if (mode %in% c("laws", "posterior")) {   # D06's numerical gate on the centred columns
     if (length(S) == 0) return(list(valid = TRUE))
     Bc <- scale(basis[, S, drop = FALSE], scale = FALSE)
     if (qr(Bc, tol = 1e-12)$rank < length(S)) return(list(valid = FALSE))
@@ -208,9 +248,11 @@ rows_of <- function(i) {
   }
   out
 }
-tr <- do.call(rbind, lapply(seq_len(n_states), rows_of))
-from <- as.integer(tr[, 1]); to <- as.integer(tr[, 2]); prob <- tr[, 3]
-type <- type_names[tr[, 4]]; term <- as.integer(tr[, 5]); lq_fwd <- tr[, 6]
+if (mode != "posterior") {   # the posterior is enumerated directly, without a kernel
+  tr <- do.call(rbind, lapply(seq_len(n_states), rows_of))
+  from <- as.integer(tr[, 1]); to <- as.integer(tr[, 2]); prob <- tr[, 3]
+  type <- type_names[tr[, 4]]; term <- as.integer(tr[, 5]); lq_fwd <- tr[, 6]
+}
 
 kernel <- function(log_accept) {
   a <- ifelse(type == "self", 1, pmin(1, exp(log_accept)))
@@ -410,6 +452,187 @@ if (mode == "swap") {
     rung = lapply(rung, function(x) x[c("b", "tv_corrected_target", "tv_r_to", "reversibility_r", "reversibility_corrected")]),
     corrected_target = lapply(rungs, function(b) normalize_log(log_prior + log_pb(b))),
     pairs = pairs, lp_r = lp_r)
+}
+
+if (mode == "posterior") {
+  centre <- opt$centre; flat <- centre == "flat"; jeffreys <- opt$sigma2_prior == "jeffreys"
+  fixed_g <- opt$coef == "fixed"; constant <- opt$likelihood == "constant"
+  if (!centre %in% c("mean", "flat", "zero")) stop("centre must be mean, flat or zero")
+  if (!opt$sigma2_prior %in% c("scaled", "jeffreys")) stop("sigma2_prior must be scaled or jeffreys")
+  if (!opt$coef %in% c("sampled", "fixed")) stop("coef must be sampled or fixed")
+  if (!opt$likelihood %in% c("collapsed", "constant")) stop("likelihood must be collapsed or constant")
+  level <- if (centre == "zero") 0 else mean(y)
+  if (!constant && (if (centre == "zero") all(y == 0) else all(y == y[1])))
+    stop("a zero response (zero centre) or a constant one (mean, flat) is refused (D03)")
+  yt <- y - level
+  s2 <- mean(yt^2)
+  g1 <- if (jeffreys) 0 else opt$sigma2_shape
+  g2 <- g1 * s2
+  ig_const <- if (jeffreys) 0 else g1 * log(g2) - lgamma(g1)
+  lse <- function(l) { m <- max(l); m + log(sum(exp(l - m))) }
+  row_lse <- function(A) { m <- A[cbind(seq_len(nrow(A)), max.col(A, "first"))]; m + log(rowSums(exp(A - m))) }
+
+  # Each state's fit of the response its convention reads, on that convention's design.
+  design_of <- function(S) {
+    Z <- basis[, S, drop = FALSE]
+    if (centre == "zero") return(cbind(1, Z))
+    Zc <- Z - rep(colMeans(Z), each = N)
+    if (flat) Zc else cbind(1, Zc)
+  }
+  fit_stats <- t(vapply(state_sets, function(S) {
+    Bs <- design_of(S)
+    if (ncol(Bs) == 0) return(c(rss = sum(yt^2), Q = 0))
+    fitted <- qr.fitted(qr(Bs, tol = 0), yt)
+    c(rss = sum((yt - fitted)^2), Q = sum(fitted^2))
+  }, c(rss = 0, Q = 0)))
+  exact_fit <- if (jeffreys && !constant) sqrt(fit_stats[, "rss"]) <= opt$exact_fit_c * .Machine$double.eps * sqrt(sum(yt^2))
+               else rep(FALSE, n_states)
+  state_sets <- state_sets[!exact_fit]; fit_stats <- fit_stats[!exact_fit, , drop = FALSE]
+  n_states <- length(state_sets); M_of <- lengths(state_sets)
+  rss <- fit_stats[, "rss"]; Q <- fit_stats[, "Q"]; k <- M_of + !flat
+
+  log_target <- vapply(state_sets, function(S) lgamma(opt$h1 + length(S)) - length(S) * log(opt$h2 + 1) +
+                         sum(log_prior_term[S]), 0)
+  log_prior_F <- log_target - lse(log_target)
+
+  # tau's quadrature on u = log tau, with the prior's density on u folded into the weights; fixed-g is a point.
+  a_tau <- opt$tau_shape; r_tau <- a_tau * N
+  log_density_u <- function(u) a_tau * (u + log(r_tau)) - r_tau * exp(u) - lgamma(a_tau)
+  if (fixed_g) {
+    u <- log(opt$tau); logw <- 0; panel <- 1
+  } else {
+    lo <- log(1 / N) - 37 / a_tau; hi <- log(1 / N) + log(80 / a_tau)
+    if (hi - lo > 4000) stop("tau's prior is too diffuse for the quadrature")
+    edges <- seq(lo, hi, length.out = ceiling(hi - lo) + 1)
+    gl <- gauss_legendre(16)
+    width <- diff(edges)
+    u <- as.vector(outer((gl$x + 1) / 2, width) + rep(edges[-length(edges)], each = 16))
+    logw <- log(as.vector(outer(gl$w / 2, width))) + log_density_u(u)
+    panel <- rep(seq_along(width), each = 16)
+  }
+  tau <- exp(u)
+
+  # log p_b(y | S, tau) at the states idx and the points tt (states by points).
+  defined <- function(b) constant || (g1 + (N * b - flat) / 2 > 0 && (b > 0 || !(jeffreys || flat)))
+  lp <- function(b, tt = tau, idx = seq_len(n_states)) {
+    if (constant) return(matrix(0, length(idx), length(tt)))
+    d <- g1 + (N * b - flat) / 2
+    shrink <- tt / (tt + b)
+    Tb <- b * (rss[idx] + outer(Q[idx], shrink))
+    ig_const - (N * b - flat) / 2 * log(2 * pi) - (if (flat) 0.5 * log(b * N) else 0) + lgamma(d) +
+      outer(k[idx] / 2, log(shrink)) - d * log(g2 + Tb / 2)
+  }
+  count_law <- function(s) vapply(0:M_max, function(M) sum(s[M_of == M]), 0)
+  orders <- matrix(vapply(state_sets, function(S) tabulate(vapply(S, function(i) terms[[i]]$K, 0), K_max), numeric(K_max)),
+                   ncol = K_max, byrow = TRUE)
+  order_key <- apply(orders, 1, paste, collapse = ",")
+  order_levels <- unique(order_key[order(rowSums(orders), order_key)])
+  order_law <- function(s) vapply(order_levels, function(kk) sum(s[order_key == kk]), 0, USE.NAMES = FALSE)
+  absolute <- constant || !(jeffreys || flat)
+
+  # The law over F at inverse temperature b, with each state's marginal and tau | S, y as weights over the nodes.
+  rung_at <- function(b) {
+    A <- sweep(lp(b), 2, logw, "+")
+    logm <- row_lse(A)
+    W <- exp(A - logm)
+    law <- exp(log_prior_F + logm - lse(log_prior_F + logm))
+    list(log_Z = if (absolute) lse(log_prior_F + logm) else NA, law = law, log_marginal = logm, W = W)
+  }
+
+  post <- rung_at(1)
+  pst <- post$law; logm <- post$log_marginal; W <- post$W
+  tau_given_S <- rowSums(W * rep(tau, each = n_states))
+  incl <- numeric(n_terms)
+  incl_sum <- rowsum(rep(pst, M_of), unlist(state_sets))
+  incl[as.integer(rownames(incl_sum))] <- incl_sum[, 1]
+
+  tau_summary <- NA   # null in the JSON
+  if (!fixed_g) {
+    mix <- colSums(pst * W)                  # the posterior of u on the nodes, mixed over states
+    log_mean <- sum(mix * u)
+    mix_density <- function(uu) colSums(pst * exp(sweep(lp(1, exp(uu)), 2, log_density_u(uu), "+") - logm))
+    cum <- c(0, cumsum(tapply(mix, panel, sum)))
+    cdf <- function(uq) {
+      j <- findInterval(uq, edges, rightmost.closed = TRUE)
+      nodes <- edges[j] + (gl$x + 1) / 2 * (uq - edges[j])
+      cum[j] + sum(gl$w / 2 * (uq - edges[j]) * mix_density(nodes))
+    }
+    levels <- c(0.025, 0.05, 0.25, 0.5, 0.75, 0.95, 0.975)
+    quantiles <- vapply(levels, function(q) {
+      j <- findInterval(q, cum, rightmost.closed = TRUE)
+      exp(uniroot(function(uq) cdf(uq) - q, c(edges[j], edges[j + 1]), tol = 1e-13)$root)
+    }, 0)
+    tau_summary <- list(mean = sum(pst * tau_given_S), log_mean = log_mean, log_sd = sqrt(sum(mix * (u - log_mean)^2)),
+                        levels = levels, quantiles = quantiles)
+  }
+
+  # The closed forms against quadrature over sigma^2 of the explicit Gaussian integral over a, on [1, Z] with y as
+  # given, and the composite rule over tau against integrate(), at the posterior's most probable state of each size.
+  explicit_lpb <- function(S, b, t0) {
+    Z <- basis[, S, drop = FALSE]; Xd <- cbind(1, Z); kx <- ncol(Xd); G <- crossprod(Xd); Xty <- crossprod(Xd, y)
+    if (flat) {
+      P0 <- matrix(0, kx, kx)
+      if (length(S)) P0[-1, -1] <- t0 * crossprod(Z - rep(colMeans(Z), each = N))
+      mu0 <- rep(0, kx)
+      prior_ld <- function(s2v) if (length(S)) 0.5 * c(determinant(P0[-1, -1, drop = FALSE] / s2v)$modulus) -
+        (kx - 1) / 2 * log(2 * pi) else 0
+    } else {
+      P0 <- t0 * G
+      mu0 <- c(level, rep(0, kx - 1))
+      prior_ld <- function(s2v) 0.5 * c(determinant(P0 / s2v)$modulus) - kx / 2 * log(2 * pi) -
+        0.5 * c(t(mu0) %*% P0 %*% mu0) / s2v
+    }
+    f <- function(v) vapply(v, function(vv) {
+      s2v <- exp(vv)
+      A <- (b * G + P0) / s2v; h <- (b * Xty + P0 %*% mu0) / s2v
+      ll <- -(N * b / 2) * log(2 * pi * s2v) - b * sum(y^2) / (2 * s2v) + kx / 2 * log(2 * pi) -
+        0.5 * c(determinant(A)$modulus) + 0.5 * c(crossprod(h, solve(A, h))) + prior_ld(s2v)
+      ll + (if (jeffreys) -vv else g1 * log(g2) - lgamma(g1) - (g1 + 1) * vv - g2 / s2v) + vv
+    }, 0)
+    grid <- seq(log(s2) - 60, log(s2) + 40, length.out = 401)
+    peak_at <- grid[which.max(f(grid))]; peak <- f(peak_at)
+    pieces <- seq(peak_at - 25, peak_at + 25, length.out = 11)
+    total <- sum(vapply(1:10, function(i) integrate(function(v) exp(f(v) - peak), pieces[i], pieces[i + 1],
+                                                    rel.tol = 1e-12, abs.tol = 0, subdivisions = 1000L)$value, 0))
+    peak + log(total)
+  }
+  quadrature <- NA
+  if (!constant) {
+    reps <- vapply(0:M_max, function(M) { i <- which(M_of == M); if (length(i)) i[which.max(pst[i])] else NA_integer_ }, 0L)
+    reps <- reps[!is.na(reps)]
+    tau_points <- if (fixed_g) opt$tau else c(0.1, 1, 10) / N
+    bs <- Filter(defined, c(1, 0.5))
+    sigma2_gap <- max(unlist(lapply(reps, function(i) lapply(bs, function(b) vapply(tau_points, function(t0)
+      abs(lp(b, t0, i)[1, 1] - explicit_lpb(state_sets[[i]], b, t0)), 0)))))
+    tau_gap <- 0
+    if (!fixed_g) tau_gap <- max(unlist(lapply(reps, function(i) lapply(bs, function(b) {
+      g <- function(uu) c(lp(b, exp(uu), i)) + log_density_u(uu)
+      peak <- max(g(u))
+      pieces <- seq(lo, hi, length.out = 41)
+      total <- sum(vapply(1:40, function(j) integrate(function(uu) exp(g(uu) - peak), pieces[j], pieces[j + 1],
+                                                      rel.tol = 1e-13, abs.tol = 0, subdivisions = 1000L)$value, 0))
+      abs(row_lse(sweep(lp(b, tau, i), 2, logw, "+")) - (peak + log(total)))
+    }))))
+    quadrature <- list(states = I(as.integer(reps - 1L)), sigma2_gap = sigma2_gap, tau_gap = tau_gap)
+  }
+
+  cs_term <- function(t) list(cont = lapply(seq_len(t$K), function(f) as.integer(c(t$vars[f] - 1, t$signs[f], t$knot_index[f] - 1))),
+                              cat = list(), func = list())
+  result$terms <- lapply(terms, cs_term)
+  result$states <- lapply(state_sets, function(S) I(as.integer(S - 1L)))
+  result$n_states <- n_states
+  result$posterior <- list(
+    supported = supported, data = list(y = y, x = X),
+    response = list(centre = centre, level = level, s2 = s2, sigma2_shape = g1, sigma2_rate = g2,
+                    n_eff = N - flat, absolute = absolute),
+    tau_prior = if (fixed_g) list(fixed = opt$tau) else list(shape = a_tau, rate = r_tau),
+    n_gate_refused = sum(!keep), n_exact_fit_refused = sum(exact_fit),
+    M = M_of, k = k, rss = rss, Q = Q, log_prior = log_prior_F, log_marginal = logm, posterior = pst,
+    tau_mean = tau_given_S,
+    count = list(M = 0:M_max, prior = count_law(exp(log_prior_F)), posterior = count_law(pst)),
+    order = list(levels = lapply(strsplit(order_levels, ","), function(v) I(as.integer(v))),
+                 prior = order_law(exp(log_prior_F)), posterior = order_law(pst)),
+    inclusion = incl, tau = tau_summary, log_Z = post$log_Z, quadrature = quadrature)
 }
 
 emit_json(result, args[2])
