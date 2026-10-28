@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
+using Maths.Samplers.Evidence;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
 using Xunit.Abstractions;
@@ -9,8 +10,8 @@ using Xunit.Abstractions;
 namespace Maths.Regression.Tests;
 
 /// <summary>
-/// A tempered run's restart state (stage 4's S8): resuming a checkpoint continues the run bit for bit, its ladders and
-/// their readout included; a ladder restored from its snapshot continues bit for bit before burn-in ends and
+/// A tempered run's restart state (stage 4's S8): resuming a checkpoint continues the run bit for bit, its ladders, their
+/// readout and its evidence included; a ladder restored from its snapshot continues bit for bit before burn-in ends and
 /// after; and the result does not depend on the parallelism bound.
 /// </summary>
 public sealed class BassTemperingResumeTests
@@ -35,7 +36,9 @@ public sealed class BassTemperingResumeTests
         Assert.Equal(400, resumed.Diagnostics.SamplesUsed);
         BassRunTests.AssertSameFit(full, resumed);
         AssertSameTempering(full, resumed);
-        _out.WriteLine($"{option}: {full.Terms.Count} terms, round trips {full.Diagnostics.Tempering!.RoundTripsPerScan:F4}/scan");
+        Assert.Equal(option is "reference" or "linear" or "fixed ladder" or "thinned", full.Evidence is not null);
+        _out.WriteLine($"{option}: {full.Terms.Count} terms, round trips {full.Diagnostics.Tempering!.RoundTripsPerScan:F4}/scan, " +
+                       $"evidence {full.Evidence?.LogEvidence.ToString("F4") ?? "null"}");
     }
 
     [Fact]
@@ -49,6 +52,7 @@ public sealed class BassTemperingResumeTests
         BassFit resumed = Bass.Resume(second.Checkpoint!, third, data);
         BassRunTests.AssertSameFit(full, resumed);
         AssertSameTempering(full, resumed);
+        Assert.NotNull(resumed.Evidence!.PathSampling);
 
         // A tempered checkpoint does not resume an untempered run, nor one on another ladder.
         Assert.Contains("fingerprint", Assert.Throws<ArgumentException>(() =>
@@ -137,7 +141,7 @@ public sealed class BassTemperingResumeTests
                 Assert.Equal(x.RungTraces[i].Draws(f), y.RungTraces![i].Draws(f));
     }
 
-    /// <summary>The tempering readouts of two fits agree bit for bit.</summary>
+    /// <summary>The tempering readouts and the evidences of two fits agree bit for bit.</summary>
     internal static void AssertSameTempering(BassFit a, BassFit b)
     {
         BassTemperingReadout? x = a.Diagnostics.Tempering, y = b.Diagnostics.Tempering;
@@ -151,6 +155,24 @@ public sealed class BassTemperingResumeTests
             Assert.Equal(x.PairAcceptance, y.PairAcceptance);
             Assert.Equal(x.Ladders.Length, y.Ladders.Length);
             for (int c = 0; c < x.Ladders.Length; c++) Assert.Equal(x.Ladders[c], y.Ladders[c]);
+        }
+        Assert.Equal(a.Evidence is null, b.Evidence is null);
+        if (a.Evidence is not { } e) return;
+        AssertSameEstimate(e.SteppingStone, b.Evidence!.SteppingStone);
+        Assert.Equal(e.PathSampling is null, b.Evidence.PathSampling is null);
+        if (e.PathSampling is { } ps) AssertSameEstimate(ps, b.Evidence.PathSampling!);
+        Assert.Equal(e.Priors, b.Evidence.Priors);
+    }
+
+    private static void AssertSameEstimate(BassEvidenceEstimate a, BassEvidenceEstimate b)
+    {
+        Assert.Equal((a.Method, a.LogEvidence, a.MonteCarloError, a.DiscretizationError), (b.Method, b.LogEvidence, b.MonteCarloError, b.DiscretizationError));
+        Assert.Equal(a.Chains.Count, b.Chains.Count);
+        for (int c = 0; c < a.Chains.Count; c++)
+        {
+            LadderEstimate x = a.Chains[c], y = b.Chains[c];
+            Assert.Equal((x.Method, x.LogRatio, x.MonteCarloError, x.DiscretizationError), (y.Method, y.LogRatio, y.MonteCarloError, y.DiscretizationError));
+            Assert.Equal(x.Rungs, y.Rungs);
         }
     }
 }

@@ -12,6 +12,8 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><see cref="Terms"/> merges the chains' own tables in chain order, so ids never depend on how the chains were
 /// scheduled.</item>
 /// <item><see cref="DrawWeights"/> is null: MCMC's draws weigh equally (SMC's carry weights when it joins).</item>
+/// <item><see cref="Evidence"/> is the run's ln p(y) with its Monte Carlo error and the priors it depends on, from a run
+/// tempered down to an exact reference rung under proper priors (<see cref="BassEvidence"/>); null otherwise.</item>
 /// <item><see cref="ResidualDependence"/> is the direct functional fit's residual-dependence check along the output
 /// index (<see cref="BassResidualDependence"/>, F11) under the posterior mean, computed at the end of the run; null for a
 /// scalar response and, until an index is declared, for several output variables.</item>
@@ -26,6 +28,7 @@ public sealed record BassFit(
     IReadOnlyList<DrawStore<BassDraw>> Draws,
     double[]? DrawWeights,
     BassDiagnostics Diagnostics,
+    BassEvidence? Evidence,
     ResidualDependence? ResidualDependence,
     EnsembleCheckpoint? Checkpoint)
 {

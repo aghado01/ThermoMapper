@@ -30,6 +30,8 @@ namespace Maths.Oracle.Tests;
 /// and ℓ_b the C#'s, which is the swap's balance. R's swap density is a defect fixture, asserted corrected: on the
 /// oracle's <c>swap</c> slice (F-O6), R's swap misses balance against its own rung laws and against every candidate
 /// family, where D05's balances to rounding.</item>
+/// <item><b>The evidence:</b> the ladder's stepping-stone, and path sampling on the linear form, against the oracle's
+/// exact ln Z on fixture B under the proper defaults.</item>
 /// </list>
 /// Opt-in: it runs where the R toolchain and the BASS checkout are present.
 /// </summary>
@@ -234,6 +236,29 @@ public sealed class BassTemperingParityTests
         }
         foreach (JsonElement rung in swap.GetProperty("rung").EnumerateArray())
             Assert.True(rung.GetProperty("tv_corrected_target").GetDouble() <= 1e-10);
+    }
+
+    [Theory]
+    [InlineData("integrated")]
+    [InlineData("linear")]
+    public void Evidence_MatchesTheOraclesLogZ(string form)
+    {
+        if (!BassTargetParityTests.Available) return;
+        double[][] rows = BassTargetParityTests.FixtureB();
+        JsonElement r = BassTargetParityTests.Posterior(rows, "M_max=2");
+        double logZ = r.GetProperty("posterior").GetProperty("log_Z").GetDouble();
+        var spec = new TemperingSpec { Form = form == "linear" ? TemperedForm.Linear : TemperedForm.Integrated, ReferenceRung = true };
+        BassFit fit = Bass.Fit(Config(2, spec, burn: 1_000, samples: 5_000), BassTargetParityTests.Data(rows));
+        BassEvidence evidence = fit.Evidence!;
+        _out.WriteLine($"{form}: stepping-stone {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against the oracle's {logZ:F4}");
+        Assert.True(Math.Abs(evidence.LogEvidence - logZ) <= 4 * evidence.MonteCarloError + 0.01,
+                    $"{evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against {logZ:F4}");
+        if (evidence.PathSampling is { } ps)
+        {
+            _out.WriteLine($"{form}: path sampling {ps.LogEvidence:F4} ± {ps.MonteCarloError:F4}, diagnostic {ps.DiscretizationError:F4}");
+            Assert.True(Math.Abs(ps.LogEvidence + ps.DiscretizationError - logZ) <= 4 * ps.MonteCarloError + 0.5 * Math.Abs(ps.DiscretizationError) + 0.01);
+        }
+        Assert.Equal(form == "linear", evidence.PathSampling is not null);
     }
 
     private static double[] Doubles(JsonElement e) => [.. e.EnumerateArray().Select(v => v.GetDouble())];

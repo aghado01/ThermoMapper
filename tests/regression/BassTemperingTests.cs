@@ -6,6 +6,7 @@ using Maths.Regression.Spline.Bars;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Maths.Samplers;
+using Maths.Samplers.Evidence;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
 using Xunit.Abstractions;
@@ -14,7 +15,8 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// BASS's tempering (stage 4's S8): <see cref="TemperingSpec"/>'s contract and refusals, <see cref="BassLadder"/>'s
-/// replicas, swaps and design hand-over, its rungs' laws against enumeration, and the run's tempering readout.
+/// replicas, swaps and design hand-over, its rungs' laws against enumeration, the run's tempering readout, and its
+/// evidence against the exact ln Z.
 /// <para>The exact references enumerate F (<see cref="BassSweepTests.EnumerateF"/>) on the small fixture at M_max = 2 and
 /// integrate τ by the trapezoid on u = ln τ through the target's own ℓ_b, which S5's parity tests check against R. The
 /// oracle's parity tests (<c>BassTemperingParityTests</c>) check the rungs and the evidence against R's own enumeration.</para>
@@ -475,7 +477,91 @@ public sealed class BassTemperingTests
         else Assert.True(double.IsNaN(readout.ReferenceAttemptsPerDraw));
         Assert.All(fit.Draws, d => Assert.Equal(config.Sampling.Samples, d.Count));
         _out.WriteLine($"{option}: round trips {readout.RoundTripsPerScan:F4}/scan (ideal {readout.IdealRoundTripRate:F4}), barrier {readout.Barrier:F2}, " +
-                       $"acceptance [{string.Join(", ", readout.PairAcceptance.Select(a => a.ToString("F2")))}]");
+                       $"acceptance [{string.Join(", ", readout.PairAcceptance.Select(a => a.ToString("F2")))}], evidence {fit.Evidence?.LogEvidence.ToString("F3") ?? "null"}");
         Assert.Null(Bass.Fit(config with { Sampling = config.Sampling with { Tempering = null } }, data).Diagnostics.Tempering);
+    }
+
+    // ── The evidence ──────────────────────────────────────────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData("integrated")]
+    [InlineData("linear")]
+    [InlineData("zero centre")]
+    [InlineData("fixed g")]
+    [InlineData("declared σ²")]
+    public void Evidence_MatchesTheExactLogZ(string option)
+    {
+        var spec = new TemperingSpec { ReferenceRung = true, Form = option == "linear" ? TemperedForm.Linear : TemperedForm.Integrated };
+        BassConfig config = Config(spec, chains: 4, burn: 1_000, samples: 4_000);
+        config = option switch
+        {
+            "zero centre" => config with { Intercept = GPriorCentre.Zero },
+            "fixed g" => config with { Coefficients = new FixedG() },
+            "declared σ²" => config with { Sigma2 = Sigma2Prior.InverseGamma(2.0, 0.5) },
+            _ => config,
+        };
+        BassData data = BassSweepTests.Data();
+        double exact = Exact(BassModel.Create(config, data), 1.0)[0].LogZ;
+        BassFit fit = Bass.Fit(config, data);
+        BassEvidence evidence = fit.Evidence!;
+        _out.WriteLine($"{option}: stepping-stone {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4}, exact {exact:F4}; per chain " +
+                       string.Join(", ", evidence.SteppingStone.Chains.Select(c => $"{c.LogRatio:F3} ± {c.MonteCarloError:F3}")));
+        Assert.Equal(LadderEstimator.SteppingStone, evidence.SteppingStone.Method);
+        Assert.Equal(evidence.SteppingStone.LogEvidence, evidence.LogEvidence);
+        Assert.Equal(evidence.SteppingStone.MonteCarloError, evidence.MonteCarloError);
+        Assert.Equal(4, evidence.SteppingStone.Chains.Count);
+        Assert.Equal(evidence.SteppingStone.Chains.Average(c => c.LogRatio), evidence.LogEvidence, 12);
+        Assert.Equal(Math.Sqrt(evidence.SteppingStone.Chains.Sum(c => c.MonteCarloError * c.MonteCarloError)) / 4, evidence.MonteCarloError, 12);
+        Assert.True(double.IsNaN(evidence.SteppingStone.DiscretizationError));
+        Assert.True(Math.Abs(evidence.LogEvidence - exact) <= 4 * evidence.MonteCarloError + 0.01,
+                    $"{evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against {exact:F4}");
+
+        if (spec.Form == TemperedForm.Linear)
+        {
+            BassEvidenceEstimate ps = evidence.PathSampling!;
+            _out.WriteLine($"{option}: path sampling {ps.LogEvidence:F4} ± {ps.MonteCarloError:F4}, diagnostic {ps.DiscretizationError:F4}");
+            Assert.Equal(LadderEstimator.PathSampling, ps.Method);
+            // The diagnostic reads the trapezoid's error on the linear form, where ℓ_b is linear in b.
+            Assert.True(Math.Abs(ps.LogEvidence + ps.DiscretizationError - exact) <= 4 * ps.MonteCarloError + 0.5 * Math.Abs(ps.DiscretizationError) + 0.01,
+                        $"{ps.LogEvidence:F4} + {ps.DiscretizationError:F4} against {exact:F4}");
+        }
+        else Assert.Null(evidence.PathSampling);
+
+        BassResolved r = fit.Resolved;
+        BassEvidencePriors p = evidence.Priors;
+        Assert.Equal(BassEvidencePriors.Of(config, r), p);
+        Assert.Equal((config.Coefficients, r.TauPrior, r.FixedTau, config.Count, r.MaxBasis), (p.Coefficients, p.TauPrior, p.FixedTau, p.Count, p.MaxBasis));
+        Assert.Equal((config.Structure.CategoricalSubsets, r.MaxInteraction, r.MaxCategoricalInteraction, r.MaxFunctionalInteraction),
+                     (p.CategoricalSubsets, p.MaxInteraction, p.MaxCategoricalInteraction, p.MaxFunctionalInteraction));
+        Assert.Equal((config.Structure.Support, r.SupportMinimum, r.SupportMinimumFunctional, config.Structure.AngleFloor, config.Structure.MaxVarianceInflation),
+                     (p.Support, p.SupportMinimum, p.SupportMinimumFunctional, p.AngleFloor, p.MaxVarianceInflation));
+        Assert.Equal((config.Intercept, r.CentreLevel, config.Sigma2, r.Sigma2!.Value), (p.Centre, p.CentreLevel, p.Sigma2Prior, p.Sigma2));
+    }
+
+    [Theory]
+    [InlineData("jeffreys")]
+    [InlineData("flat")]
+    [InlineData("not asked")]
+    [InlineData("no reference rung")]
+    [InlineData("powered")]
+    [InlineData("untempered")]
+    public void Evidence_IsNullWhereUndefinedOrUnasked(string option)
+    {
+        var spec = new TemperingSpec { Levels = 4, HotEnd = 0.1, ReferenceRung = true, Form = TemperedForm.Linear };
+        BassConfig config = Config(spec, samples: 50, burn: 50);
+        config = option switch
+        {
+            "jeffreys" => config with { Sigma2 = Sigma2Prior.Jeffreys },
+            "flat" => config with { Intercept = GPriorCentre.Flat },
+            "not asked" => config with { Sampling = config.Sampling with { ReportEvidence = false } },
+            "no reference rung" => config with { Sampling = config.Sampling with { Tempering = spec with { ReferenceRung = false } } },
+            "powered" => config with { Sampling = config.Sampling with { Tempering = spec with { ReferenceRung = false, Path = TemperingPath.Powered, Form = TemperedForm.Integrated } } },
+            _ => config with { Sampling = config.Sampling with { Tempering = null } },
+        };
+        BassFit fit = Bass.Fit(config, BassSweepTests.Data());
+        Assert.Null(fit.Evidence);
+        Assert.Equal(option == "untempered", fit.Diagnostics.Tempering is null);
+        if (option is "jeffreys" or "flat")
+            Assert.Throws<ArgumentException>(() => BassEvidencePriors.Of(config with { Sigma2 = Sigma2Prior.Jeffreys }, fit.Resolved with { Sigma2 = null }));
     }
 }
