@@ -94,6 +94,7 @@ The section is not done when it is written. Before the report, review it as a se
   - nine rows in "Corrections to the sources": R's fixed thirds, τ rate, Jeffreys mode, mixed order scoring, `dmwnchBass`, `getQf` and tempering; Francom et al. 2018's τ shape; KHAOS's double count. Three "changed, not corrected" items: the per-λ truncation, R's intercept and σ² defaults, the subset measure;
   - two status bullets (built through the sweep, not the run; what waits on measurement) and two source-map rows.
 - **Described as not built:** the run, tempering and evidence, the pointwise density, qualification, and stages 5–8. The status bullet lists them, and each section names the step (S7–S10) where a decision's consumer lands. When those steps land, their paragraphs replace these pointers: the status bullet, the config rows marked "read by the run (S7)" and the tempering row's "the ladder lands with S8".
+- **Amended after the review** (the commit after this report's): S7 (`6609985`, `b5bca5c`) and S9 (`60dba78`, `b819126`, with review fixes) landed while the section was written, so its intro and status bullet now say they began landing and are described once their reports do, and only S8 and S10 stay "not yet built". Their behaviour is not described, since the reports were not in when this chip finished.
 
 **Review.** Four passes over the diff, each claim checked against its decision, its report or the code.
 1. *Accuracy.* Fixed:
