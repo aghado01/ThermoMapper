@@ -35,7 +35,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
     private readonly int _plannedDraws;
     private readonly IReadOnlyList<BassMonitoredPoint> _points;
     private readonly CaseInputs _pointCases;         // the monitored cases' inputs
-    private readonly OutputInputs? _pointLocation;   // the monitored location's, for a direct functional response
+    private readonly OutputInputs? _pointLocation;   // each monitored point's location, for a direct functional response
     private long _sweeps;
 
     /// <summary>The client for <paramref name="model"/>'s run: <paramref name="plannedSweeps"/> over every chain, ending
@@ -48,7 +48,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         _plannedSweeps = plannedSweeps;
         _plannedDraws = plannedDraws;
         BassInputs inputs = model.Inputs;
-        _points = BassDiagnostics.DefaultPoints(model.Resolved, inputs.Outputs is not null);
+        _points = model.Resolved.MonitoredPoints;
 
         CaseInputs cases = inputs.Cases;
         var continuous = new double[cases.ContinuousCount][];
@@ -64,10 +64,14 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
             for (int p = 0; p < _points.Count; p++) categorical[v][p] = cases.Categorical(v)[_points[p].Case];
         }
         _pointCases = new CaseInputs(continuous, categorical);
-        if (inputs.Outputs is { } outputs && _points[0].Location is int location)
+        if (inputs.Outputs is { } outputs)
         {
             var at = new double[outputs.Count][];
-            for (int v = 0; v < at.Length; v++) at[v] = [outputs.Variable(v)[location]];
+            for (int v = 0; v < at.Length; v++)
+            {
+                at[v] = new double[_points.Count];
+                for (int p = 0; p < _points.Count; p++) at[v][p] = outputs.Variable(v)[_points[p].Location!.Value];
+            }
             _pointLocation = new OutputInputs(at);
         }
     }
@@ -237,8 +241,8 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         }
     }
 
-    // The chain's term `id` at each monitored point: its case side there, times its output side at the monitored
-    // location; cached by the chain's own ids.
+    // The chain's term `id` at each monitored point: its case side at the point's case, times its output side at the
+    // point's location; cached by the chain's own ids.
     private double[] PointValues(BassChainRun run, int id)
     {
         List<double[]?> cache = run.PointValues;
@@ -249,9 +253,9 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         _model.Basis.CaseColumn(term, _pointCases, values);
         if (_pointLocation is { } at)
         {
-            Span<double> h = stackalloc double[1];
+            var h = new double[_points.Count];
             _model.Basis.OutputColumn(term, at, h);
-            for (int p = 0; p < values.Length; p++) values[p] *= h[0];
+            for (int p = 0; p < values.Length; p++) values[p] *= h[p];
         }
         return cache[id] = values;
     }

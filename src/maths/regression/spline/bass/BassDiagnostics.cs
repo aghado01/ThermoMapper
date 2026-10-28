@@ -35,18 +35,26 @@ public sealed record BassDiagnostics(
     IReadOnlyList<BassChainAccount> Chains)
 {
     /// <summary>
-    /// The points whose fitted values are monitored when the config declares none, which it cannot yet: up to three
-    /// training cases spread through the data's order, at its quartile positions; for a direct functional response,
-    /// each at the middle output location.
+    /// The points whose fitted values are monitored when the config declares none
+    /// (<see cref="BassSampling.MonitoredPoints"/>): up to three training cases spread through the data's order, at its
+    /// quartile positions; for a direct functional response, each at the middle output location.
     /// </summary>
     public static IReadOnlyList<BassMonitoredPoint> DefaultPoints(BassResolved resolved, bool functional)
     {
         ArgumentNullException.ThrowIfNull(resolved);
-        int? location = functional ? (resolved.Locations - 1) / 2 : null;
+        return DefaultPoints(resolved.Cases, functional ? resolved.Locations : null);
+    }
+
+    /// <summary>The defaults for <paramref name="cases"/> cases and, for a direct functional response,
+    /// <paramref name="locations"/> output locations.</summary>
+    public static IReadOnlyList<BassMonitoredPoint> DefaultPoints(int cases, int? locations)
+    {
+        if (cases < 1) throw new ArgumentOutOfRangeException(nameof(cases));
+        int? location = locations is int m ? (m - 1) / 2 : null;
         var points = new List<BassMonitoredPoint>(3);
         foreach (double q in (ReadOnlySpan<double>)[0.25, 0.5, 0.75])
         {
-            int i = (int)Math.Round((resolved.Cases - 1) * q, MidpointRounding.AwayFromZero);
+            int i = (int)Math.Round((cases - 1) * q, MidpointRounding.AwayFromZero);
             if (points.Count == 0 || points[^1].Case != i) points.Add(new BassMonitoredPoint(i, location));
         }
         return points;

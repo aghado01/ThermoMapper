@@ -56,6 +56,21 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ## Reports
 
+### The chips' open questions decided — 2026-10-28
+
+The user took the five recommendations.
+1. *Monitored points are declared.* `BassSampling.MonitoredPoints` holds cases, each with an output location for a direct response, and is fingerprinted with the config.
+   - Null takes chip A's defaults, logged as an auto-pick.
+   - `BassResolved` checks the points against the data, and a direct response's missing location takes the middle one.
+   - The run reads each point at its own case and location, where it had read one shared location.
+   - Built here, with `BassMonitoredPointsTests` (3). Regression 689/689.
+2. *`Resume` takes `EnsembleCheckpoint`,* the fit's own field. The contract text is amended.
+3. *Residual dependence with several output variables:* an index declared on the call, and Moran's I over neighbours for d ≥ 2. Recorded in the fitting segment, and owed to S10.
+4. *r₁ keeps the textbook centring,* about each case's own mean.
+5. *D04's brute-force leave-one-out check of the collapsed density* is owed to S10, before any comparison relies on the collapsed k̂.
+
+S10's row in the stage-4 plan now lists what it owes: these two, D06's column-mass fixture, and a per-term route to the residual check's posterior mean.
+
 ### S7, S9 and the docs section landed (chips A, B, C) — 2026-10-28
 
 The three chips' commits are on `main`, each brief carrying its report and its review passes.

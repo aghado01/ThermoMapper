@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Maths.Regression.GPrior;
@@ -127,6 +129,12 @@ public sealed record BassConfig
             throw Bad("Sampling.RHatTarget", "must be 0, no early stop, or a finite target above 1");
         if (run.BatchSize < 0) throw Bad("Sampling.BatchSize", "must not be negative");
         if (!(run.MinEssPerChain >= 0.0 && double.IsFinite(run.MinEssPerChain))) throw Bad("Sampling.MinEssPerChain", "must be finite and not negative");
+        if (run.MonitoredPoints is { } points)
+        {
+            if (points.Count == 0) throw Bad("Sampling.MonitoredPoints", "must hold a point, or be null for the defaults");
+            if (points.Any(p => p.Case < 0 || p.Location < 0)) throw Bad("Sampling.MonitoredPoints", "must hold indices, not negative");
+            if (points.Distinct().Count() != points.Count) throw Bad("Sampling.MonitoredPoints", "must not repeat a point");
+        }
         switch (run.Moves)
         {
             case PriorCancelling p when !(p.C > 0.0 && p.C <= 0.5):
@@ -260,6 +268,13 @@ public sealed record BassSampling
 
     /// <summary>Whether a run that can give an evidence reports it (D03, D05).</summary>
     public bool ReportEvidence { get; init; } = true;
+
+    /// <summary>
+    /// The training points whose fitted values the diagnostics monitor (R̂ and ESS): a case and, for a direct functional
+    /// response, an output location (null takes the middle one). Null takes the defaults
+    /// (<see cref="BassDiagnostics.DefaultPoints(int, int?)"/>), logged as an auto-pick (decided 2026-10-28).
+    /// </summary>
+    public IReadOnlyList<BassMonitoredPoint>? MonitoredPoints { get; init; }
 }
 
 /// <summary>How a state's move types are chosen (D01).</summary>

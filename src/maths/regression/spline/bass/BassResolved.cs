@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Regression.GPrior;
@@ -63,6 +64,10 @@ public sealed record BassResolved
 
     /// <summary>τ's value when it is fixed; null when it is sampled.</summary>
     public required double? FixedTau { get; init; }
+
+    /// <summary>The training points whose fitted values the diagnostics monitor: the config's, a direct response's
+    /// missing locations at the middle one, or the defaults.</summary>
+    public required IReadOnlyList<BassMonitoredPoint> MonitoredPoints { get; init; }
 
     /// <summary>Every auto-pick, with its reason.</summary>
     public required IReadOnlyList<BassAutoPick> AutoPicks { get; init; }
@@ -145,6 +150,8 @@ public sealed record BassResolved
             ? Threshold(rule.MinimumFunctional, locations, "Structure.Support.MinimumFunctional", "SupportMinimumFunctional", "n_r", log)
             : null;
 
+        IReadOnlyList<BassMonitoredPoint> points = ResolvePoints(config.Sampling.MonitoredPoints, cases, functional ? locations : null, log);
+
         Gamma? tauPrior = null;
         double? fixedTau = null;
         switch (config.Coefficients)
@@ -167,9 +174,39 @@ public sealed record BassResolved
             Cases = cases, Locations = locations, Observations = n, MaxBasis = maxBasis,
             MaxInteraction = maxInteraction, MaxCategoricalInteraction = maxCategorical, MaxFunctionalInteraction = maxFunctional,
             SupportMinimum = support, SupportMinimumFunctional = supportFunctional,
-            ResponseMean = mean, CentreLevel = level, ResponseMeanSquare = meanSquare, Sigma2 = sigma2, TauPrior = tauPrior, FixedTau = fixedTau,
+            MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, ResponseMeanSquare = meanSquare, Sigma2 = sigma2, TauPrior = tauPrior, FixedTau = fixedTau,
             AutoPicks = log.AsReadOnly(),
         };
+    }
+
+    // The declared points, checked against the data, or the defaults; a direct response's missing location is the middle one.
+    private static IReadOnlyList<BassMonitoredPoint> ResolvePoints(IReadOnlyList<BassMonitoredPoint>? declared, int cases, int? locations,
+                                                                     List<BassAutoPick> log)
+    {
+        if (declared is null)
+        {
+            IReadOnlyList<BassMonitoredPoint> defaults = BassDiagnostics.DefaultPoints(cases, locations);
+            log.Add(new("MonitoredPoints", string.Join("; ", defaults), "training cases at the quartile positions of the data's order" +
+                        (locations is null ? "" : ", at the middle output location")));
+            return defaults;
+        }
+        var points = new BassMonitoredPoint[declared.Count];
+        for (int k = 0; k < points.Length; k++)
+        {
+            BassMonitoredPoint p = declared[k];
+            if (p.Case >= cases) throw new ArgumentException($"Sampling.MonitoredPoints holds case {p.Case}; the data have {cases}.", "config");
+            if (locations is not int m)
+            {
+                if (p.Location is not null) throw new ArgumentException("Sampling.MonitoredPoints gives a location, but the response is scalar.", "config");
+                points[k] = p;
+                continue;
+            }
+            if (p.Location >= m) throw new ArgumentException($"Sampling.MonitoredPoints holds location {p.Location}; the response has {m}.", "config");
+            points[k] = p with { Location = p.Location ?? (m - 1) / 2 };
+        }
+        if (points.Distinct().Count() != points.Length)
+            throw new ArgumentException("Sampling.MonitoredPoints names one point twice once the middle location fills a missing one.", "config");
+        return points;
     }
 
     // A cap at most the count of its variables, as R caps maxInt by pdes, pcat and pfunc.

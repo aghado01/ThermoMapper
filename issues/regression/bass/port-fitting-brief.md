@@ -17,6 +17,8 @@ The BASS design layer owns construction and caching of `A` and `H`. General nume
 **Covariates known at the output locations (2026-10-26).** The output coordinates `T: m × d` may carry, beside the coordinates themselves, covariates known at each output location and shared by every case, such as elevation in Andros et al.'s SLOSH studies (arXiv 2406.18751, 2602.09351). They enter as further functional variables, and direct prediction at new coordinates then needs their values there. R's `xx.func` takes several columns the same way, so the papers' statement that BASS cannot use such covariates holds for the PCA mode only, whose basis absorbs them and cannot carry them to new coordinates.
 
 **Residual dependence along the output index (proposal, 2026-10-26).** D07's noise is independent across output locations. When the misfit is smooth along t, as it is for a deterministic simulator, a dense grid then counts n·m independent observations: intervals come out too narrow, and births are rewarded for absorbing smooth residual. Each direct fit reports a residual-dependence check along the output coordinates (for a one-dimensional index, the lag-one autocorrelation of each case's residual under the posterior mean). Modelling the dependence is an [extension](extensions-brief.md#residuals-correlated-along-the-output-index); its prep is in "Room for extensions" below. Andros et al.'s models carry such a residual, a Gaussian process per run.
+- *Built for one output variable* (S9, chip B): r₁ per case about its own mean residual, the textbook centring (decided 2026-10-28), so a constant offset in a case does not read as dependence along t.
+- *Several output variables* (decided 2026-10-28, as chip B recommended, not built yet): the index is declared on the call, an output variable or an explicit location order, and r₁ is read along it. For d ≥ 2 coordinates the check is Moran's I per case over each location's k nearest neighbours in the scaled coordinates, reported like r₁. Until it is built, the check returns null there.
 
 ## Posterior ownership and prediction
 
@@ -379,11 +381,11 @@ Stage 1's last deliverable: the data, config and result contracts for fitting, d
 public static class Bass
 {
     public static BassFit Fit(BassConfig config, BassData data, BassRunOptions? run = null);
-    public static BassFit Resume(BassCheckpoint checkpoint, BassConfig config, BassData data, BassRunOptions? run = null);
+    public static BassFit Resume(EnsembleCheckpoint checkpoint, BassConfig config, BassData data, BassRunOptions? run = null);
 }
 ```
 - `BassRunOptions` carries what is not the model: one bound on parallelism over chains, replicas, particles and workers (the posterior-ownership rules above), a cancellation token, a checkpoint request and progress callbacks. It is neither serialized nor fingerprinted.
-- `Resume` refuses a checkpoint whose fingerprint differs from that of `config` and `data`.
+- `Resume` refuses a checkpoint whose fingerprint differs from that of `config` and `data`. It takes the fit's own `EnsembleCheckpoint` (`BassFit.Checkpoint`), so a fit's checkpoint resumes as it is; the drafted `BassCheckpoint` was never a separate type (amended 2026-10-28, as chip A recommended).
 
 **Data.**
 
@@ -460,6 +462,7 @@ public sealed record BassSampling
     public TemperingSpec? Tempering { get; init; }           // null: untempered (D05); joins with S8
     public SmcSpec? Smc { get; init; }                       // null: MCMC; joins with stage 8
     public bool ReportEvidence { get; init; } = true;
+    public IReadOnlyList<BassMonitoredPoint>? MonitoredPoints { get; init; }   // null: defaults (decided 2026-10-28)
 }
 ```
 - `TemperingSpec` holds D05's choices: the path (likelihood by default, powered selectable), the tempered form (integrated by default, linear selectable), the ladder (levels, hot end, swap schedule, adaptation frozen after burn-in, D10) and the exact reference rung (opt-in). `SmcSpec` holds the particle count, the resampling scheme (multinomial by default), the adaptive schedule's conditional-ESS target and the sweeps per stage.
@@ -541,7 +544,7 @@ Drafted after the baseline was requalified at `cf37584`, and taken by the user t
 | S7 | The run: `Bass.Fit` and `Bass.Resume` on the chain ensemble, each chain's draws in a `DrawStore`, starts on the support, the diagnostics (R̂ and ESS for M, τ, σ² and declared fitted values; acceptance per move; refusal tallies; support rejection per order; mass at the cap), the R̂ stop | F8, F10 | resume bit-identical; results independent of parallelism; every start in F |
 | S8 | Tempering: the per-replica block, the likelihood-path ladder (integrated form by default, linear selectable), the exact reference rung (opt-in), DEO swaps and the adaptive ladder frozen after burn-in, the evidence with `BassEvidencePriors` | F6 | the endpoints b = 0 and 1; swap detailed balance on an enumerable space, with R's swap density asserted corrected (F-O6); the ladder's evidence against enumeration under proper priors |
 | S9 | The pointwise density (retained parameters by default, the collapsed predictive selectable; case units for direct fits; chains for r_eff) and the residual-dependence readout | F9, F11 | against dense computation; WAIC and PSIS-LOO read it |
-| S10 | Qualification: controlled recovery on simulated surfaces (scalar continuous, mixed categorical, direct functional), a cost baseline by n, p and M, the docs section with the decisions and their trade-offs, the suites | | recovery within the posterior's intervals; R's posteriors as exploration only (the parity rule) |
+| S10 | Qualification: controlled recovery on simulated surfaces (scalar continuous, mixed categorical, direct functional), a cost baseline by n, p and M, the docs section with the decisions and their trade-offs, the suites. Owed to it since (2026-10-28): D06's column-mass fixture; D04's brute-force leave-one-out check of the collapsed density; the residual check for several output variables; a per-term route to the residual check's posterior mean | | recovery within the posterior's intervals; R's posteriors as exploration only (the parity rule) |
 
 The order is S1 → S2 → S3 and S4 → S5 → S6 → S7 → S8 → S9 → S10. The shared additions land with S3 (Wallenius), S5 (the flat-intercept form) and S8 (the per-replica block).
 
