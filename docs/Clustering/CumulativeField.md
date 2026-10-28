@@ -9,7 +9,8 @@
 - [`Graphs.Primitives`](./GraphSubstrate.md): the CSR graph, the `Affinities` currency and endpoint symmetrization;
 - `Graphs.Models.Potts`: the bond kernel `FkKernel.BondProbability`;
 - `Graphs.Observables`: the per-node marginals that feed landscapes;
-- `Clustering.Dendrograms`: the threshold-and-connect close `AffinityThreshold.Connect`.
+- `Clustering.Dendrograms`: the threshold-and-connect close `AffinityThreshold.Connect`;
+- `Archivory`: the run bundle's artifact scope and tabular writing.
 
 Its `Affinities` and `Landscape` outputs are the same currencies Swendsen–Wang produces, so the shared resolvers in [SPC analysis](./SpcAnalysis.md) and [ClusterResolution](./ClusterResolution.md) consume them unchanged. The REPL reaches it through `spc --solver cumulative-field`.
 
@@ -44,6 +45,7 @@ flowchart LR
 | Solver | `CumulativeFieldSolver.Prepare(graph, weightKind, field, rule = Mutual)` → `CumulativeFieldContext`; `Solve(context, T)` → `Affinities`; `Cluster(context, T, theta = 0.5)` → `Assignment`; `EstimateBracket` |
 | Sweep | `CumulativeFieldSweep.Run(graph, weightKind, temperatures, field, rule, theta)` → `CumulativeFieldSweepResult` |
 | Landscapes | `CumulativeFieldLandscapes.OverGrid(context, temperatures, sink)`; `CumulativeFieldLandscapeSink` (`BondMass`, `LocalEnergy`) |
+| Export | `CumulativeFieldRunLayout`, `CumulativeFieldRunPaths(scope)`; `CumulativeFieldCsvWriter.WriteSweep`; partition and edge currencies via `Clustering.Export`'s `CurrencyCsvWriter` |
 | Demo | `MonteCarloAffinityDemo.Sample(context, T, draws, seed?)` (not for production use) |
 
 ## Algorithms
@@ -68,6 +70,14 @@ flowchart LR
 
 **Monte Carlo demonstration.** `MonteCarloAffinityDemo` estimates $G_e$ by averaging exponential energy-budget draws, the estimator of Wang et al. (2020). It converges to `Solve` as the draw count grows; the closed form is that limit with zero variance.
 
+**Run bundle.** `CumulativeFieldRunLayout` names `manifest.json`, `summary.json`, `graph_health.json` and a `csv/` sub-directory; `CumulativeFieldRunPaths` resolves them against an Archivory `ArtifactScope`. The CSV names belong to `CumulativeFieldCsvWriter`:
+
+| CSV file | Columns |
+|---|---|
+| `sweep.csv` | `temperature`, `cluster_count`, one row per grid temperature in caller order |
+| `partition.csv` | the shared partition schema: `node_index`, `x0…x{d−1}`, `true_label` (optional), `label` |
+| `edge_currencies.csv` | the shared edge schema at one representative temperature: `source`, `target`, `weight`, `affinity`, `alignment` and `co_membership` (NaN: the solver mints affinities only) |
+
 ## Configuration
 
 | Setting | Default | Meaning |
@@ -83,7 +93,7 @@ flowchart LR
 - **Coupling graphs only.** `Prepare` rejects any `weightKind` other than `EdgeWeightKind.Coupling`; it trusts the declared kind and does not inspect the weights.
 - **`EstimateBracket` ignores the rule and θ.** It brackets the unsymmetrized directed ladder values and always divides by $\ln 2$, so for `Local` fields and for θ ≠ ½ the bracket is approximate.
 - **The `Mean` rule averages after the exponential.** The effective score is a temperature-dependent soft minimum of the two directed values, so θ reorders edges rather than only rescaling the temperature axis.
-- **REPL placement.** The REPL still dispatches through the `spc` command (`--solver cumulative-field`).
+- **REPL placement.** The REPL still dispatches through the `spc` command (`--solver cumulative-field`), so its bundle lands under the `spc` run family.
 
 ## Source map
 
@@ -91,6 +101,7 @@ flowchart LR
 |---|---|
 | Solver | `ThermoMapper/src/clustering/graphical/cumulative-field/` (`CumulativeFieldSolver.cs`, `CumulativeFieldContext.cs`, `Field.cs`, `IField.cs`, `MeanField.cs`, `LocalField.cs`) |
 | Sweep and landscapes | `…/cumulative-field/` (`CumulativeFieldSweep.cs`, `CumulativeFieldSweepResult.cs`, `CumulativeFieldLandscapes.cs`) |
+| Export | `…/cumulative-field/export/` (`CumulativeFieldRunLayout.cs`, `CumulativeFieldRunPaths.cs`, `CumulativeFieldCsvWriter.cs`); shared tables in `ThermoMapper/src/clustering/export/` (`CurrencyProjections.cs`, `CurrencyCsvWriter.cs`) |
 | Demo | `…/cumulative-field/demos/MonteCarloAffinityDemo.cs` |
 | Threshold close | `ThermoMapper/src/clustering/dendrogram/AffinityThreshold.cs`, `UnionFindLabeler.cs` |
 

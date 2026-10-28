@@ -62,7 +62,7 @@ flowchart LR
 - **Honest abstention.** Resolvers return `Unassigned` rather than force labels, with completion available as an opt-in.
 - **The "don't-warp" gate.** A T-stack is converted to a dendrogram only if it nests. Otherwise the conversion throws, and `HierarchyEom` either restores nesting or abstains.
 - **Export as projections.**
-  - `SpcTabularProjections` maps domain objects to tables.
+  - `SpcTabularProjections` maps SPC's own domain objects to tables; the partition and edge-currency tables every method shares come from `CurrencyProjections` in `Clustering.Export`.
   - `SpcCsvWriter` owns file naming and writes each table atomically through Archivory's `WriteToFile`.
   - `SpcRunLayout` and `SpcRunPaths` own the directory layout.
 - **Extension points.**
@@ -82,7 +82,7 @@ flowchart LR
 | Blatt hierarchy | `BlattPartitionStrategy(BlattPartitionConfig?)`; `MagnetizationPeakDetector`; `PartitionHierarchy`, `HierarchyLevel`, `PartitionNesting.Holds` (in `Clustering.Dendrograms`) |
 | Dense resolvers | Swendsen–Wang adapters over frames: `SweepDenseTStack.Build`, `SweepHierarchyEom.Resolve`, `SweepLineagePersistence.Resolve`, `SweepThermalEom.Resolve`. Cores in `Clustering.Dendrograms`: `DenseTStack.Build`; `HierarchyEom.Resolve` → `HierarchyEomResult`; `LineagePersistence.Resolve` → `LineagePersistenceResult` (`ClusterLineage`); `ThermalEom.Resolve` → `ThermalEomResult`; `PartitionHierarchyDendrogram.ToDendrogram` (cost axis `"temperature"`) |
 | Profiling | `SweepProfile.From(runs, kind)`, `SweepCurves.ByTemperature`, `SweepEdgeCurves.CoMembershipDelta`, `SweepLandscapes.FromFrames`, `LabelEntropyCurve.From`; `SpcProfileAnalysis` (`SpPlateau`, `ComputeHalfMaximumBand`, `PickPeakTemperature`, `ComputeStability`); `ChiPeakSignalAnalyzer`; `SusceptibilityKind` |
-| Export | `SpcCsvWriter.Write*`, `WriteAllToDirectory`, `WriteEquilibriumEdges`; `SpcTabularProjections.Create*Projection`; `SpcRunLayout`, `SpcRunPaths`; `SpcOutputPathHelper` (legacy) |
+| Export | `SpcCsvWriter.Write*`, `WriteAllToDirectory`; `SpcTabularProjections.Create*Projection`; shared `CurrencyCsvWriter.WritePartition` / `WriteEdgeCurrencies` (`Clustering.Export`); `SpcRunLayout`, `SpcRunPaths`; `SpcOutputPathHelper` (legacy) |
 
 The frame adapters and their cores are static resolvers. The session does not call them; it accepts only an `IHierarchicalPartitionStrategy`, which in this project means Blatt.
 
@@ -189,13 +189,13 @@ If the peak falls in the last two points, or χ never drops below the threshold,
 | Projection (CSV file) | Columns |
 |---|---|
 | Sweep (`spc_sweep.csv`) | `T`, `Chi` (the primary susceptibility), `Cv`, `LabelEntropy`, `BondEntropy` (if present), then the channels |
-| Partition (`spc_partition.csv`) | `node_index`, `x0…x{d−1}` (if features given), `true_label` (optional), `spc_label` |
+| Partition (`spc_partition.csv`, shared schema) | `node_index`, `x0…x{d−1}` (if features given), `true_label` (optional), `label` |
 | Dataset (`spc_dataset.csv`) | `Index`, `x0…`, `label` |
 | Criteria (`spc_criteria.csv`) | `AnchorTemperature`, `AnchorBandLo`, `AnchorBandHi`, `RefinedTemperature`, `CorroborationScore`, then the enrichments |
 | Session (`spc_session.csv`) | 5 criteria columns, `ClusterCount`, 7 sweep-summary columns, `BondEntropyAtChosenT` (if present), then enrichments and evaluator scores |
 | Partition schedule (`spc_partition_schedule.csv`) | `T`, `replicas`, `clusters`, `pooled_cycles`, `purity_{level}` |
 | Replica traces (`spc_replica_traces.csv`) | `temperature`, `replica_index`, `cycle_count`, `chi_fk`, `cv`, `label_entropy`, `mean_energy`, `mean_magnetization`, `magnetization_variance` |
-| Equilibrium edges (`spc_equilibrium_edges.csv`) | `source`, `target`, `weight`, `bond_frequency`, `spin_agreement`, `co_membership` (NaN when absent); one row per upper-half edge |
+| Equilibrium edges (`spc_equilibrium_edges.csv`, shared schema) | `source`, `target`, `weight`, `affinity` (bond frequency), `alignment` (spin agreement), `co_membership` (NaN when absent); one row per upper-half edge |
 
 Columns derived from dictionaries (channels, enrichments, scores) follow the fixed columns in ordinal key order.
 

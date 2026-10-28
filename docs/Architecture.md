@@ -45,7 +45,7 @@ A project's layer is the length of its longest `ProjectReference` chain to an in
 | 1 | `Maths.LinAlg`, `Maths.Distributions`, `Archivory.Jso` |
 | 2 | `Maths.Distance`, `Maths.Samplers` |
 | 3 | `Graphs.Primitives`, `Maths.Geometry`, `Maths.Regression` |
-| 4 | `Graphs.Distance`, `Graphs.Observables`, `Graphs.Spectral`, `Clustering.Dendrograms`, `Clustering.Evaluation`, `Synthetic` |
+| 4 | `Graphs.Distance`, `Graphs.Observables`, `Graphs.Spectral`, `Clustering.Dendrograms`, `Clustering.Evaluation`, `Clustering.Export`, `Synthetic` |
 | 5 | `Graphs.Proximity`, `Clustering.Graphical.HdbScan`, `Clustering.Statistical.GMM`, `TDA.Ph` |
 | 6 | `Clustering.Graphical.SPC`, `Clustering.Graphical.CumulativeField`, `TDA.DimReduction` |
 | 7 | `TDA.Mapper` |
@@ -70,14 +70,15 @@ flowchart BT
     SMP & DSTR --> REG[Maths.Regression]
     GP --> GD[Graphs.Distance] & GO[Graphs.Observables] & GS[Graphs.Spectral] & DEN[Clustering.Dendrograms] & EVA[Clustering.Evaluation]
     GEO --> SYN[Synthetic]
+    GP & CPR & ARC --> EXP[Clustering.Export]
   end
   subgraph L5_7[Layers 5–7: engines]
     GD & GO & CPL & GEO --> PRX[Graphs.Proximity]
     DEN & GD --> HDB[Clustering.Graphical.HdbScan]
     DEN & GEO --> GMM[Clustering.Statistical.GMM]
     GS & TOP --> PH[TDA.Ph]
-    PRX & POT & DEN & EVA & ARC --> SPC[Clustering.Graphical.SPC]
-    PRX & POT & DEN & GO --> CF[Clustering.Graphical.CumulativeField]
+    PRX & POT & DEN & EVA & EXP & ARC --> SPC[Clustering.Graphical.SPC]
+    PRX & POT & DEN & GO & ARC --> CF[Clustering.Graphical.CumulativeField]
     PH & PRX & GEO --> DR[TDA.DimReduction]
     SPC & HDB & GMM & KM & PH --> MAP[TDA.Mapper]
   end
@@ -111,6 +112,7 @@ The diagram shows the main edges only; the `ProjectReference` items in each `.cs
 | | `Clustering.Graphical.HdbScan` | HDBSCAN | [Hdbscan](./Hdbscan.md) |
 | | `Clustering.Statistical.GMM`, `.Geometric.KMeans` | Gaussian mixtures, modal merging, k-means++ | [GaussianMixtures](./GaussianMixtures.md) |
 | | `Clustering.Evaluation` | External, internal and graph validity indices | [ClusterEvaluation](./ClusterEvaluation.md) |
+| | `Clustering.Export` | Shared currency tables (partition, edge currencies) for every method's run bundle | [SpcAnalysis](./SpcAnalysis.md#export-bundle), [CumulativeField](./CumulativeField.md) |
 | | `Clustering.Graphical.SPC` | Swendsen–Wang engine, sweeps, profiles, cuts, hierarchies, export | [SpcEngine](./SpcEngine.md), [SpcAnalysis](./SpcAnalysis.md) |
 | | `Clustering.Graphical.CumulativeField` | Deterministic cumulative-field solver, sweeps, landscapes | [CumulativeField](./CumulativeField.md) |
 | **tda** | `TDA.Ph` | Standard, cohomology and involuted persistence; zigzag engines; nerve sweeps | [PersistentHomology](./PersistentHomology.md), [ZigzagPersistence](./ZigzagPersistence.md) |
@@ -135,7 +137,7 @@ flowchart LR
   SR -->|optional BlattPartitionStrategy| H[PartitionHierarchy]
   SW -->|rich frames| TS[DenseTStack → HierarchyEom / LineagePersistence]
   SW -->|rich frames| TE[SweepEdgeCurves → ThermalDendrogram → ThermalEom]
-  A & H --> E[SpcTabularProjections → CSV / SpcRunPaths]
+  A & H --> E[SpcTabularProjections + CurrencyProjections → CSV / SpcRunPaths]
 ```
 
 1. [Graph construction](./GraphConstruction.md) turns the data into a coupling graph. It selects kNN neighbors, filters, repairs, optionally refines, then applies the kernel. The bandwidth is estimated from the k-th-neighbor sample when the descriptor's δ is 0; the default config of `SpcClusteringSession.Run(features)` instead uses `Gaussian(0.5)`, a fixed δ.
