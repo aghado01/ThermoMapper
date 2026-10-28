@@ -19,7 +19,8 @@ run_files <- function(oracle, csv, ...) {
   res <- jsonlite::read_json(out, simplifyVector = TRUE)
   raw <- jsonlite::read_json(out, simplifyVector = FALSE)
   if (!is.null(raw$posterior)) {
-    res$terms <- lapply(raw$terms, function(t) matrix(unlist(t$cont), ncol = 3, byrow = TRUE))
+    res$terms <- lapply(raw$terms, function(t) list(cont = matrix(as.numeric(unlist(t$cont)), ncol = 3, byrow = TRUE),
+                                                    cat = lapply(t$cat, function(f) list(var = f[[1]], levels = unlist(f[[2]])))))
     res$states <- lapply(raw$states, function(s) as.integer(unlist(s)))
     res$posterior$tempered <- raw$posterior$tempered
   }
@@ -42,16 +43,44 @@ rung_law <- function(res, form, b) {
 }
 
 # A state's columns from its terms, read in the C# conventions the posterior mode emits (0-based variables, knots
-# indexing each variable's ascending distinct values), as plain hinges: the marginal reads the column space only.
+# indexing each variable's ascending distinct values, levels indexing each factor's), as plain hinges times
+# indicators: the marginal reads the column space only.
 columns_of <- function(res, S) {
-  X <- res$posterior$data$x
+  X <- res$posterior$data$x; Z <- res$posterior$data$z
   knots <- lapply(seq_len(ncol(X)), function(v) sort(unique(X[, v])))
   B <- matrix(1, nrow(X), length(S))
   for (j in seq_along(S)) {
-    cont <- res$terms[[S[j] + 1]]
+    cont <- res$terms[[S[j] + 1]]$cont
     for (f in seq_len(nrow(cont))) B[, j] <- B[, j] * hinge(X[, cont[f, 1] + 1], knots[[cont[f, 1] + 1]][cont[f, 3] + 1], cont[f, 2])
+    for (f in res$terms[[S[j] + 1]]$cat) {
+      levels <- sort(unique(Z[, f$var + 1]))
+      B[, j] <- B[, j] * (Z[, f$var + 1] %in% levels[f$levels + 1])
+    }
   }
   B
+}
+# D01's term measure, recomputed from the emitted terms: J uniform on {0..K_max} beside a categorical part (on
+# {1..K_max} without one), L uniform on {0..L_max}, variable sets uniform, signs and knots uniform, and each subset
+# by its measure; the state's prior Gamma(h1 + M)/(h2 + 1)^M prod pi(t), normalized over the emitted F.
+log_prior_of <- function(res, K_max, h1 = 10, h2 = 10) {
+  X <- res$posterior$data$x; Z <- res$posterior$data$z; cg <- res$posterior$categorical
+  n_v <- vapply(seq_len(ncol(X)), function(v) length(unique(X[, v])), 0)
+  mixed <- is.list(cg)
+  lt <- vapply(res$terms, function(t) {
+    J <- nrow(t$cont); L <- length(t$cat)
+    v <- -(if (mixed) log(K_max + 1) else log(K_max)) - lchoose(ncol(X), J) - J * log(2) - sum(log(n_v[t$cont[, 1] + 1]))
+    if (mixed) {
+      n_l <- vapply(seq_len(ncol(Z)), function(u) length(unique(Z[, u])), 0)
+      v <- v - log(cg$L_max + 1) - lchoose(ncol(Z), L)
+      for (f in t$cat) {
+        n <- n_l[f$var + 1]
+        v <- v + if (cg$subsets == "uniform") -log(2^n - 2) else -log(n - 1) - lchoose(n, length(f$levels))
+      }
+    }
+    v
+  }, 0)
+  ls <- vapply(res$states, function(S) lgamma(h1 + length(S)) - length(S) * log(h2 + 1) + sum(lt[S + 1]), 0)
+  ls - lse(ls)
 }
 map_of_size <- function(res, M) { i <- which(res$posterior$M == M); i[which.max(res$posterior$posterior[i])] }
 
@@ -90,6 +119,8 @@ gap <- max(abs(sum(P$posterior) - 1), abs(sum(exp(P$log_prior)) - 1), abs(sum(P$
 report(sprintf("the posterior and prior normalize, and the count, order and inclusion laws are views of it (%.0e)", gap), gap <= 1e-12)
 gap <- abs(lse(P$log_prior + P$log_marginal) - P$log_Z)
 report(sprintf("log Z equals the direct sum over the states (%.0e)", gap), gap <= 1e-12)
+gap <- max(abs(log_prior_of(A, 2) - P$log_prior))
+report(sprintf("the prior equals D01's measure and D02's count prior recomputed from the emitted terms (%.0e)", gap), gap <= 1e-12)
 report(sprintf("the closed forms against quadrature over sigma^2 (%.0e) and the tau rule against integrate() (%.0e)",
                P$quadrature$sigma2_gap, P$quadrature$tau_gap), max(P$quadrature$sigma2_gap, P$quadrature$tau_gap) <= 1e-9)
 
@@ -183,6 +214,60 @@ report(sprintf("count and order laws equal the laws mode's target (%.0e), on %d 
 q_tau <- qgamma(C$tau$levels, 0.5, rate = flat_like$n / 2)
 gap <- max(abs(C$tau$quantiles / q_tau - 1), abs(C$tau$mean * flat_like$n - 1))
 report(sprintf("tau's law is its prior: mean 1/N and qgamma's quantiles (%.0e relative)", gap), gap <= 1e-10)
+
+# ---- Task E: a categorical predictor (S6's mixed chain) --------------------------------------------------------
+cat("\nA categorical predictor beside the continuous ones (S6's mixed chain)\n")
+gc <- expand.grid(x1 = c(0, 0.5, 1), x2 = c(0, 0.5, 1), z = 0:2)
+set.seed(21)
+FC <- cbind(1 + 1.5 * gc$x1 + 1.5 * hinge(gc$x2, 0.5, 1) * (gc$z == 0) + rnorm(nrow(gc), sd = 0.4), gc$x1, gc$x2, gc$z)
+Cm <- run("bass_enumeration_oracle.R", FC, "posterior", "M_max=2", "K_max=1", "categorical=1"); P <- Cm$posterior
+cat(sprintf("  fixture C (x1, x2 on three values, a three-level factor, N = %d, K_max = 1, L_max = 1, M_max = 2): %d terms, %d supported, %d states in F (%d refused by the gate)\n",
+            Cm$n, Cm$n_terms, Cm$n_supported, Cm$n_states, P$n_gate_refused))
+type_mass <- vapply(seq_len(nrow(P$order$types)), function(j) sum(P$order$posterior[P$order$levels[, j] > 0]), 0)
+cat(sprintf("    count law M = 0..2: prior %s | posterior %s; posterior mass with a term of type (J, L): %s; log Z = %.6f\n",
+            paste(sprintf("%.4f", P$count$prior), collapse = " "), paste(sprintf("%.4f", P$count$posterior), collapse = " "),
+            paste(sprintf("(%s) %.4f", apply(P$order$types, 1, paste, collapse = ","), type_mass), collapse = " "), P$log_Z))
+gap <- max(abs(sum(P$posterior) - 1), P$quadrature$sigma2_gap, P$quadrature$tau_gap)
+report(sprintf("normalizes, and the closed forms hold against quadrature (%.0e)", gap), gap <= 1e-9)
+gap <- max(abs(log_prior_of(Cm, 1) - P$log_prior))
+report(sprintf("the prior equals D01's measure recomputed from the emitted terms, the subsets size-uniform (%.0e)", gap), gap <= 1e-12)
+nonzero <- colSums(columns_of(Cm, seq_len(Cm$n_terms) - 1) != 0)
+in_F <- sort(unique(unlist(Cm$states)))
+report(sprintf("support counts the continuous part times the categorical part: terms in F have >= 3 nonzero values, the %d refused of %d fewer",
+               sum(!P$supported), Cm$n_terms),
+       all(nonzero[in_F + 1] >= 3) && all((nonzero >= 3) == P$supported))
+mains <- which(vapply(Cm$terms, function(t) nrow(t$cont) == 0 && length(t$cat) == 1, TRUE)) - 1
+levels_of <- function(t) Cm$terms[[t + 1]]$cat[[1]]$levels
+single <- function(t) which(vapply(Cm$states, function(S) length(S) == 1 && S == t, TRUE))
+pair_gap <- max(vapply(mains, function(t) {
+  u <- mains[vapply(mains, function(v) setequal(levels_of(v), setdiff(0:2, levels_of(t))), TRUE)]
+  abs(P$log_marginal[single(t)] - P$log_marginal[single(u)])
+}, 0))
+both <- any(vapply(Cm$states, function(S) length(S) == 2 && all(S %in% mains) &&
+                     setequal(c(levels_of(S[1]), levels_of(S[2])), 0:2) && !length(intersect(levels_of(S[1]), levels_of(S[2]))), TRUE))
+report(sprintf("a main effect on D and one on its complement define one model: equal marginals (%.0e), and F holds no state with both",
+               pair_gap), pair_gap <= 1e-10 && !both)
+has_cat <- vapply(Cm$states, function(S) any(vapply(Cm$terms[S + 1], function(t) length(t$cat) > 0, TRUE)), TRUE)
+i <- which(has_cat)[which.max(P$posterior[has_cat])]
+m <- run("bass_marginal_oracle.R", cbind(P$data$y - mean(P$data$y), 1, columns_of(Cm, Cm$states[[i]])), "r",
+         P$response$sigma2_shape, P$response$sigma2_rate)
+g1 <- P$response$sigma2_shape; g2 <- P$response$sigma2_rate
+gap <- abs(P$log_marginal[i] - (g1 * log(g2) - lgamma(g1) - Cm$n / 2 * log(2 * pi) + lgamma(g1 + Cm$n / 2) + m$log_integral[5]))
+report(sprintf("the most probable state with a categorical part, rebuilt from its terms, against bass_marginal_oracle.R (%.0e)", gap), gap <= 1e-7)
+
+cat("  the subset measures under a constant likelihood, M_max = 1\n")
+g4l <- expand.grid(x1 = c(0, 0.5, 1), z = 0:3)[rep(1:12, 2), ]
+F4 <- cbind(0, g4l$x1, g4l$z)
+s4 <- run("bass_enumeration_oracle.R", F4, "posterior", "M_max=1", "likelihood=constant", "categorical=1")
+u4 <- run("bass_enumeration_oracle.R", F4, "posterior", "M_max=1", "likelihood=constant", "categorical=1", "subsets=uniform")
+s3 <- run("bass_enumeration_oracle.R", cbind(0, FC[, -1]), "posterior", "M_max=1", "K_max=1", "likelihood=constant", "categorical=1")
+u3 <- run("bass_enumeration_oracle.R", cbind(0, FC[, -1]), "posterior", "M_max=1", "K_max=1", "likelihood=constant", "categorical=1", "subsets=uniform")
+gap <- max(abs(log_prior_of(s4, 1) - s4$posterior$log_prior), abs(log_prior_of(u4, 1) - u4$posterior$log_prior),
+           abs(log_prior_of(s3, 1) - s3$posterior$log_prior), abs(log_prior_of(u3, 1) - u3$posterior$log_prior))
+report(sprintf("both measures equal D01's recomputed from the terms, at three and four levels (%.0e)", gap), gap <= 1e-12)
+report(sprintf("they agree at three levels (%.0e) and differ at four (largest log-prior gap %.3f)",
+               max(abs(s3$posterior$log_prior - u3$posterior$log_prior)), max(abs(s4$posterior$log_prior - u4$posterior$log_prior))),
+       max(abs(s3$posterior$log_prior - u3$posterior$log_prior)) <= 1e-12 && max(abs(s4$posterior$log_prior - u4$posterior$log_prior)) >= 0.01)
 
 # ---- Task C: the evidence and tempered laws (S8) -----------------------------------------------------------------
 cat("\nThe evidence and tempered laws on F (S8)\n")

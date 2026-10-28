@@ -9,7 +9,8 @@
 #     rungs (1,0.5,0.2), g1 (0), g2 (0), h1 (10), h2 (10), s_min (1e-10), c (0.4).
 #   posterior mode's own keys, refusing any it does not know: coef (sampled | fixed), centre (mean | flat | zero),
 #     sigma2_prior (scaled | jeffreys), sigma2_shape (1e-3), tau_shape (0.5), likelihood (collapsed | constant),
-#     exact_fit_c (1e3), rungs (0,0.05,0.2,0.5,1); tau is fixed-g's tau.
+#     exact_fit_c (1e3), rungs (0,0.05,0.2,0.5,1), categorical (0), L_max (3), subsets (size | uniform); tau is
+#     fixed-g's tau.
 #
 # The structure space. A term is an order K <= K_max, K distinct variables, a sign and a knot per variable, the knots
 # ranging over each variable's distinct values (D01's knot measure; R's unique.ind). Its prior is R's unconstrained
@@ -91,12 +92,28 @@
 # undefined (defined: false) where p_b's sigma^2 integral diverges: b = 0 under jeffreys or flat, b <= (1 - 2 g1)/N
 # under flat. mean_slope and var_slope are E_b and Var_b of dl_b/db over (S, tau): the closed-form derivative of
 # log p_b on the integrated form, log p_1 on the linear one, so that d log Z_b / db = mean_slope.
+# Categorical predictors (D01's categorical part): categorical = n reads the last n input columns as factor codes,
+# their levels the distinct codes the cases take, ascending (a one-level factor is refused). A term is then a
+# continuous part of order J in {0..K_max} times a categorical part of order L in {0..L_max}, the product
+# prod_l 1(z_l in D_l) over L distinct factors with each D_l a proper nonempty subset of its levels; J = L = 0 is the
+# intercept, outside F. Its prior: J and L each uniform over their range, D01's continuous measure given J, the
+# factors uniform over the C(p_cat, L) sets, and each subset by the size-uniform measure (default: the size uniform
+# on {1..n_l - 1}, then the subset uniform given the size; R's) or uniform over the 2^n_l - 2 proper subsets (the
+# paper's; the two agree up to three levels). D01 leaves the mixed order prior open and R's has none (its zero-order
+# part scores lbmcmp = 0, its prior then the proposal's weight): the uniform order on {0..cap} for each part is this
+# oracle's reading of "each with its own cap", flagged for the decision. Support counts the nonzero values of the
+# whole product (R's birth_des_cat); D06's gate as before, which refuses a factor's main effect on D beside one on
+# its complement (they span 1 with the intercept). Wallenius' variable-set probability is the proposal's at L >= 2
+# and does not enter the posterior.
 # Emits, beside the shared fields, in the C# conventions (0-based throughout): terms as { cont: [[var, sign, knot]],
-# cat: [], func: [] }, knot an index into the variable's ascending distinct values (BassInputs' knots), and states
+# cat: [[var, [levels]]], func: [] }, var the position among the continuous or the categorical predictors, knot an
+# index into the variable's ascending distinct values (BassInputs' knots), levels indices into its levels, and states
 # as sorted indices into terms; supported (per term); data { y, x }; response { centre, level, s2, sigma2_shape,
-# sigma2_rate, n_eff, absolute }; tau_prior { shape, rate } or { fixed }; n_gate_refused, n_exact_fit_refused;
+# sigma2_rate, n_eff, absolute }; categorical { count, levels, L_max, subsets } (null without one); tau_prior
+# { shape, rate } or { fixed }; n_gate_refused, n_exact_fit_refused;
 # per state: M, k, rss, Q, log_prior, log_marginal, posterior, tau_mean (E[tau | S, y]); count { M, prior,
-# posterior }; order { levels (the per-order term counts n_1..n_Kmax), prior, posterior }; inclusion (per term);
+# posterior }; order { types (each term type's [J, L], L = 0 without categorical predictors), levels (the
+# per-type term counts; n_1..n_Kmax without them), prior, posterior }; inclusion (per term);
 # tau { mean, log_mean, log_sd, levels, quantiles } (null under fixed-g); log_Z; quadrature { states, sigma2_gap,
 # tau_gap }; tempered { rungs, integrated, linear }, each rung { b, defined, log_Z, law, count, order, tau_mean,
 # mean_slope, var_slope }.
@@ -115,13 +132,20 @@ N <- length(y); p <- ncol(X)
 opt <- list(M_max = 2, K_max = 2, npart = 3, w1 = 5, w2 = 5, lambda = 2, sigma2 = 0.1, tau = 1 / N, rungs = "1,0.5,0.2",
             g1 = 0, g2 = 0, h1 = 10, h2 = 10, s_min = 1e-10, c = 0.4)
 if (mode == "posterior")
-  opt[c("coef", "centre", "sigma2_prior", "sigma2_shape", "tau_shape", "likelihood", "exact_fit_c", "rungs")] <-
-    list("sampled", "mean", "scaled", 1e-3, 0.5, "collapsed", 1e3, "0,0.05,0.2,0.5,1")
-string_keys <- c("rungs", "coef", "centre", "sigma2_prior", "likelihood")
+  opt[c("coef", "centre", "sigma2_prior", "sigma2_shape", "tau_shape", "likelihood", "exact_fit_c", "rungs",
+        "categorical", "L_max", "subsets")] <-
+    list("sampled", "mean", "scaled", 1e-3, 0.5, "collapsed", 1e3, "0,0.05,0.2,0.5,1", 0, 3, "size")
+string_keys <- c("rungs", "coef", "centre", "sigma2_prior", "likelihood", "subsets")
 for (kv in args[-(1:3)]) {
   parts <- strsplit(kv, "=", fixed = TRUE)[[1]]
   if (mode == "posterior" && !parts[1] %in% names(opt)) stop("unknown key ", parts[1])
   opt[[parts[1]]] <- if (parts[1] %in% string_keys) parts[2] else as.numeric(parts[2])
+}
+n_cat <- if (mode == "posterior") opt$categorical else 0   # the last n_cat input columns are factor codes
+if (n_cat > 0) {
+  if (n_cat >= p) stop("the categorical predictors need a continuous one beside them")
+  Z_cat <- X[, p - n_cat + seq_len(n_cat), drop = FALSE]
+  X <- X[, seq_len(p - n_cat), drop = FALSE]; p <- ncol(X)
 }
 M_max <- opt$M_max; K_max <- min(opt$K_max, p)
 bass <- bass_source(c("basis_funcs.R", "mcmc_funcs.R", "rjmcmc_des.R"))
@@ -147,6 +171,39 @@ for (i in seq_len(n_terms)) assign(term_key[i], i, envir = term_index)
 basis <- sapply(terms, function(t) bass$makeBasis(t$signs, t$vars, t$knots, t(X), 1))
 supported <- if (mode %in% c("swap", "laws", "posterior")) colSums(basis != 0) >= opt$npart else rep(TRUE, n_terms)
 log_prior_term <- vapply(terms, function(t) -log(K_max) - lchoose(p, t$K) - t$K * log(2) - sum(log(n_v[t$vars])), 0)
+if (n_cat > 0) {   # every continuous part (J = 0 included) times every categorical part, less the intercept
+  cat_levels <- lapply(seq_len(n_cat), function(v) sort(unique(Z_cat[, v])))
+  n_lev <- lengths(cat_levels)
+  if (any(n_lev < 2)) stop("a factor with one level is refused (D01)")
+  if (!opt$subsets %in% c("size", "uniform")) stop("subsets must be size or uniform")
+  L_max <- min(opt$L_max, n_cat)
+  columns_of <- function(m) split(m, col(m))
+  proper_subsets <- function(n) unlist(lapply(seq_len(n - 1), function(s) columns_of(combn(n, s))), recursive = FALSE)
+  log_subset <- function(n, size) if (opt$subsets == "uniform") -log(2^n - 2) else -log(n - 1) - lchoose(n, size)
+  cat_parts <- list(list(vars = integer(0), subsets = list()))
+  for (L in seq_len(L_max)) for (vars in columns_of(combn(n_cat, L))) {
+    choices <- lapply(vars, function(v) proper_subsets(n_lev[v]))
+    pick <- as.matrix(expand.grid(lapply(choices, seq_along)))
+    for (r in seq_len(nrow(pick)))
+      cat_parts[[length(cat_parts) + 1]] <- list(vars = vars, subsets = lapply(seq_along(vars), function(l) choices[[l]][[pick[r, l]]]))
+  }
+  cat_basis <- sapply(cat_parts, function(cp) {
+    col <- rep(1, N)
+    for (l in seq_along(cp$vars)) col <- col * (Z_cat[, cp$vars[l]] %in% cat_levels[[cp$vars[l]]][cp$subsets[[l]]])
+    col
+  })
+  cat_lp <- vapply(cat_parts, function(cp) -log(L_max + 1) - lchoose(n_cat, length(cp$vars)) +
+                     sum(vapply(seq_along(cp$vars), function(l) log_subset(n_lev[cp$vars[l]], length(cp$subsets[[l]])), 0)), 0)
+  cont_parts <- c(list(list(K = 0, vars = integer(0), signs = numeric(0), knot_index = integer(0), knots = numeric(0))), terms)
+  cont_lp <- c(-log(K_max + 1), log_prior_term + log(K_max) - log(K_max + 1))   # J uniform on {0..K_max}
+  pairs <- expand.grid(c = seq_along(cont_parts), k = seq_along(cat_parts))[-1, ]
+  terms <- lapply(seq_len(nrow(pairs)), function(r) c(cont_parts[[pairs$c[r]]],
+                                                      list(cat_vars = cat_parts[[pairs$k[r]]]$vars, cat_subsets = cat_parts[[pairs$k[r]]]$subsets)))
+  basis <- cbind(1, basis)[, pairs$c, drop = FALSE] * cat_basis[, pairs$k, drop = FALSE]
+  log_prior_term <- cont_lp[pairs$c] + cat_lp[pairs$k]
+  n_terms <- length(terms)
+  supported <- colSums(basis != 0) >= opt$npart   # the whole product's nonzero values (R's birth_des_cat)
+}
 
 # ---- proposals ----------------------------------------------------------------------------------------------------
 permutations <- function(v) {
@@ -539,8 +596,11 @@ if (mode == "posterior") {
   }
 
   count_law <- function(s) vapply(0:M_max, function(M) sum(s[M_of == M]), 0)
-  orders <- matrix(vapply(state_sets, function(S) tabulate(vapply(S, function(i) terms[[i]]$K, 0), K_max), numeric(K_max)),
-                   ncol = K_max, byrow = TRUE)
+  JL <- t(vapply(terms, function(t) c(t$K, length(t$cat_vars)), c(0, 0)))   # each term's (J, L)
+  types <- unique(JL); types <- types[order(rowSums(types), types[, 1]), , drop = FALSE]
+  type_of <- match(paste(JL[, 1], JL[, 2]), paste(types[, 1], types[, 2]))
+  orders <- matrix(vapply(state_sets, function(S) tabulate(type_of[S], nrow(types)), numeric(nrow(types))),
+                   ncol = nrow(types), byrow = TRUE)
   order_key <- apply(orders, 1, paste, collapse = ",")
   order_levels <- unique(order_key[order(rowSums(orders), order_key)])
   order_law <- function(s) vapply(order_levels, function(kk) sum(s[order_key == kk]), 0, USE.NAMES = FALSE)
@@ -646,20 +706,23 @@ if (mode == "posterior") {
 
   strip <- function(r) r[setdiff(names(r), c("log_marginal", "W"))]
   cs_term <- function(t) list(cont = lapply(seq_len(t$K), function(f) as.integer(c(t$vars[f] - 1, t$signs[f], t$knot_index[f] - 1))),
-                              cat = list(), func = list())
+                              cat = lapply(seq_along(t$cat_vars), function(l) list(as.integer(t$cat_vars[l] - 1),
+                                                                                   I(as.integer(t$cat_subsets[[l]] - 1)))),
+                              func = list())
   result$terms <- lapply(terms, cs_term)
   result$states <- lapply(state_sets, function(S) I(as.integer(S - 1L)))
   result$n_states <- n_states
   result$posterior <- list(
-    supported = supported, data = list(y = y, x = X),
+    supported = supported, data = if (n_cat > 0) list(y = y, x = X, z = Z_cat) else list(y = y, x = X),
     response = list(centre = centre, level = level, s2 = s2, sigma2_shape = g1, sigma2_rate = g2,
                     n_eff = N - flat, absolute = absolute),
+    categorical = if (n_cat > 0) list(count = n_cat, levels = lapply(cat_levels, I), L_max = L_max, subsets = opt$subsets) else NA,
     tau_prior = if (fixed_g) list(fixed = opt$tau) else list(shape = a_tau, rate = r_tau),
     n_gate_refused = sum(!keep), n_exact_fit_refused = sum(exact_fit),
     M = M_of, k = k, rss = rss, Q = Q, log_prior = log_prior_F, log_marginal = logm, posterior = pst,
     tau_mean = tau_given_S,
     count = list(M = 0:M_max, prior = count_law(exp(log_prior_F)), posterior = count_law(pst)),
-    order = list(levels = lapply(strsplit(order_levels, ","), function(v) I(as.integer(v))),
+    order = list(types = types, levels = lapply(strsplit(order_levels, ","), function(v) I(as.integer(v))),
                  prior = order_law(exp(log_prior_F)), posterior = order_law(pst)),
     inclusion = incl, tau = tau_summary, log_Z = post$log_Z, quadrature = quadrature,
     tempered = list(rungs = rungs,
