@@ -67,6 +67,14 @@ Work on `main` with targeted commits of your own paths only: `git add <your new 
 
 Append the report here when the work lands, newest first: date, commits, test evidence, the default chosen in S1 and why, S3's outcome (or why it was skipped), limits, and follow-ups.
 
+### 2026-10-27 — the linear form rehearsed on BARS
+
+`1fdaacf`:
+- path sampling beside stepping-stone on BARS's linear form, whose slope is ℓ₁;
+- `BarsEvidencePriors` carried on the evidence, as D05 asks.
+
+One knot, 10 levels: −1.6313 ± 0.0047 and −1.6322 ± 0.0049, against a quadrature of −1.6231. The full report is in [port-numerics-checklist.md](port-numerics-checklist.md), "The linear form's path sampling, and the evidence's priors". The D05 inputs are in the planning session's shared notes.
+
 ### 2026-10-27 — the user's follow-ups
 
 The user asked to shore up the gaps, to surface and reconcile differences from R, to give SMC per-stage readouts, and to have Normal BARS report evidence by default with a knob.

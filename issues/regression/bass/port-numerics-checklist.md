@@ -32,6 +32,26 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 
 ## Reports
 
+### The linear form's path sampling, and the evidence's priors — 2026-10-27
+
+The user's call after the seam was read against D05 (`port-fitting-brief.md`): rehearse the linear-form route on BARS before BASS relies on it, and carry the priors as D05 asks. Commit `1fdaacf`.
+
+- **Path sampling on the linear form.**
+  - `ITemperedMarginal.LogMarginalLikelihoodSlope` returns ℓ₁ at every b on the linear form. Its default refuses, and the integrated form keeps that default.
+  - Runs on `TemperedForm.Linear` therefore report `BarsEvidence.PathSampling` beside stepping-stone, over the same draws.
+  - ℓ_b is linear in b there, so the Friel–Hurn–Wyse diagnostic reads the integrand's true derivative. Path sampling minus stepping-stone reads the trapezoid's error against an estimator that has none.
+- **The integrated form stays stepping-stone only.** Its ∂_b ℓ_b has a closed form, but its diagnostic would also need E_b[∂²ℓ_b].
+- **Priors carried** (D05). `BarsEvidencePriors` holds:
+  - the count prior and the support gate;
+  - the centre and its resolved level;
+  - the σ² prior as specified and as resolved, through `WeightedNormalModel.ResolvedPriors`.
+
+  Both resolved pieces read the response, so the default evidence is empirical-Bayes. A comparison is licensed only on the same data, where they agree.
+- **The gate names the Normal model.** It is now `WeightedNormalModel { HasCompleteMarginal: true }`, since only the Normal model's priors are described. `IObservationModel.HasCompleteMarginal` is gone.
+- **Checks** (`BarsEvidenceTests`). One knot, linear form, 10 levels: stepping-stone −1.6313 ± 0.0047 and path sampling −1.6322 ± 0.0049, against a quadrature of −1.6231, with a diagnostic of 0.0010. The test also covers the priors carried, and the integrated form's missing path sampling.
+- **Tests.** Regression 432/432.
+- **For D05:** recorded in the shared notes for the planning session (the chip does not edit the segment briefs). Four points: the estimator follows the form; the linear form makes path sampling free; BASS's priors record would add τ's prior, the term measure, M's count prior and the interaction cap; and the SMC error under-covers at one sweep per stage.
+
 ### Follow-ups: conventions reconciled, SMC stage traces, BARS evidence — 2026-10-27
 
 The user's follow-up to N11–N13: shore up the gaps, surface and reconcile differences from R instead of leaving them silent, give SMC per-stage readouts, and have Normal BARS report evidence by default behind a knob. Commits: `128fd1f` (conventions), `ae82374` (SMC), `00eb9da` (BARS).
