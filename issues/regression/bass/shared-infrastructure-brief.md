@@ -73,7 +73,7 @@ Append the report here when the work lands, newest first: date, commits, test ev
 - path sampling beside stepping-stone on BARS's linear form, whose slope is ℓ₁;
 - `BarsEvidencePriors` carried on the evidence, as D05 asks.
 
-One knot, 10 levels: −1.6313 ± 0.0047 and −1.6322 ± 0.0049, against a quadrature of −1.6231. The full report is in [port-numerics-checklist.md](port-numerics-checklist.md), "The linear form's path sampling, and the evidence's priors". The D05 inputs are in the planning session's shared notes.
+One knot, 10 levels: −1.6313 ± 0.0047 and −1.6322 ± 0.0049, against a quadrature of −1.6231. The full report is in [port-numerics-checklist.md](port-numerics-checklist.md), "The linear form's path sampling, and the evidence's priors". The D05 inputs are in the D05 draft's evidence bullet ([port-fitting-brief.md](port-fitting-brief.md#d05-draft-tempering-and-smc-target-paths)).
 
 ### 2026-10-27 — the user's follow-ups
 

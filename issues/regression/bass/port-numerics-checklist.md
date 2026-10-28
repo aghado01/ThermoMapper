@@ -50,7 +50,7 @@ The user's call after the seam was read against D05 (`port-fitting-brief.md`): r
 - **The gate names the Normal model.** It is now `WeightedNormalModel { HasCompleteMarginal: true }`, since only the Normal model's priors are described. `IObservationModel.HasCompleteMarginal` is gone.
 - **Checks** (`BarsEvidenceTests`). One knot, linear form, 10 levels: stepping-stone −1.6313 ± 0.0047 and path sampling −1.6322 ± 0.0049, against a quadrature of −1.6231, with a diagnostic of 0.0010. The test also covers the priors carried, and the integrated form's missing path sampling.
 - **Tests.** Regression 432/432.
-- **For D05:** recorded in the shared notes for the planning session (the chip does not edit the segment briefs). Four points: the estimator follows the form; the linear form makes path sampling free; BASS's priors record would add τ's prior, the term measure, M's count prior and the interaction cap; and the SMC error under-covers at one sweep per stage.
+- **For D05:** folded into the D05 draft's evidence bullet ([port-fitting-brief.md](port-fitting-brief.md#d05-draft-tempering-and-smc-target-paths)) by the planning session, 2026-10-27. Four points: the estimator follows the form; the linear form makes path sampling free; BASS's priors record would add τ's prior, the term measure, M's count prior and the interaction cap; and the SMC error under-covers at one sweep per stage.
 
 ### Follow-ups: conventions reconciled, SMC stage traces, BARS evidence — 2026-10-27
 

@@ -51,6 +51,10 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 
 ## Reports
 
+### D05's evidence inputs from the shared infrastructure — 2026-10-27
+
+At the user's request, the shared-infrastructure session's four points are folded into the D05 draft's evidence bullet as inputs for the design pass, not decisions: the estimator follows the tempered form; the linear form makes path sampling free; BASS's priors record adds τ's prior, the term measure, M's count prior and the interaction cap; and SMC's error under-covers at one sweep per stage. Their evidence is in the numerics checklist's reports ("The linear form's path sampling, and the evidence's priors"; "Follow-ups"). D03's evidence bullet now points at D05's rather than naming path sampling.
+
 ### τ's prior corrected (F-O8) — 2026-10-27
 
 The user's decision: every source is checked, papers included, and a design shown flawed is corrected (the hub's validation section; the register gains a **Corrected** outcome). Francom et al. 2018's Gamma(1/N, 1) is the first entry. D03 now states the τ prior as the unit-information Gamma family Gamma(a, rate a·n), default a = ½ (Zellner–Siow), with the shape a declared constant; Francom's prior is the member a = 1/N.
