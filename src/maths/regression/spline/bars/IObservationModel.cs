@@ -5,8 +5,8 @@ namespace Maths.Regression.Spline.Bars;
 /// <summary>
 /// The likelihood component of the free-knot model: given a design matrix it returns the log marginal
 /// likelihood with the spline coefficients and scale integrated out — the only quantity the marginalized
-/// (k,ξ) chain consumes. The single seam behind which the Normal model (exact), Poisson/Whittle (Laplace-BIC)
-/// and the two robustness routes sit. <see cref="EffectiveDimension"/> is model-reported so the complexity
+/// (k,ξ) chain consumes. The single seam behind which the Normal model (exact), Poisson (the g-prior's Laplace
+/// marginal), Whittle (Laplace-BIC) and the two robustness routes sit. <see cref="EffectiveDimension"/> is model-reported so the complexity
 /// prior can charge the right penalty (ν for Normal, a robust trace for bounded-loss) without assuming it
 /// equals the spline dimension.
 /// </summary>

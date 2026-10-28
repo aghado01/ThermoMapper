@@ -41,18 +41,15 @@ public sealed class PoissonGPriorTests
     }
 
     [Fact]
-    public void Separation_TheGPriorModeStaysBounded_WhereBicRunsToTheClamp()
+    public void Separation_TheGPriorModeStaysBounded()
     {
+        // The MLE lies at −∞ in the separated direction (DMGK's BIC pathway, retired, ran IRLS to the η clamp there).
         (double[,] design, double[] y) = Separated();
         double[] gPrior = new PoissonModel().PosteriorMeanCoefficients(design, y, null);
-        double[] bic = new PoissonModel(PoissonMarginal.Bic).PosteriorMeanCoefficients(design, y, null);
         _out.WriteLine($"[separation] g-prior β = [{string.Join(", ", gPrior.Select(b => b.ToString("F3")))}]");
-        _out.WriteLine($"[separation] BIC β = [{string.Join(", ", bic.Select(b => b.ToString("F1")))}]");
 
         Assert.All(gPrior, b => Assert.InRange(b, -15.0, 5.0));
         Assert.True(double.IsFinite(new PoissonModel().LogMarginalLikelihood(design, y, null)));
-        // BIC's documented caveat: the MLE lies at −∞ in the separated direction, and IRLS stops at the η clamp.
-        Assert.True(bic.Min() < -100.0, $"the BIC pathway's separated coefficient was {bic.Min():F1}");
 
         // The mode is the stationary point of the log posterior: Bᵀ(y − μ̂) − Λ(β̂ − β₀) = 0.
         double[] gradient = Gradient(design, y, gPrior);
@@ -67,7 +64,7 @@ public sealed class PoissonGPriorTests
         var model = new PoissonModel();
         Assert.Equal(DesignRejection.ZeroResponse, model.TemperedMarginal(design, zeros, null).Rejection);
         Assert.Equal(double.NegativeInfinity, model.LogMarginalLikelihood(design, zeros, null));
-        // Without a g-prior the draw falls back to the fit, as when H is refused, rather than to BIC's ridge target.
+        // Without a g-prior the draw falls back to the fit, as when H is refused.
         Assert.Equal(model.PosteriorMeanCoefficients(design, zeros, null),
                      model.SampleCoefficients(design, zeros, new Xoshiro256PlusPlus(seed: 1)));
         Assert.Equal(DesignRejection.None, model.TemperedMarginal(design, y, null).Rejection);

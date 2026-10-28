@@ -3143,3 +3143,11 @@ At the user's request, after the bimodal study. The details, alternatives and tr
   The refusal tests now refuse under the Jeffreys prior and admit under the default: the reference rung (`TemperingTests`, `CountLawTests`) and b = 0 (`TemperedMarginalTests`). Every statistical BARS test passed unchanged.
 - **Suites.** Regression 426/426 and Samplers 122/122; the solution builds.
 - **Earlier results ran under the Jeffreys prior:** the tempering, mixing, birth and LOO benchmarks and the bimodal rung study. Their conclusions read differences between configurations, which the switch moves by hundredths of a nat; a rerun would be a check, not a correction.
+
+### Poisson's BIC pathway retired — 2026-10-27
+
+The user's call, under the rule that every source is checked (the port hub's validation section). `PoissonMarginal.Bic` was kept only as DiMatteo, Genovese and Kass's original, and over runs of zero counts it gives configurations whose MLE lies at −∞ real posterior mass (OQ12). Lineage alone does not keep an option, so it is gone: `PoissonModel` has one marginal, the g-prior's Laplace marginal of step 3.10, and the `PoissonMarginal` enum and the constructor setting are deleted.
+- **Code.** The BIC branch of the score, the N(0, 100) ridge in the draw's target and the MLE start of IRLS are deleted; the g-prior is the only prior, and a refused prior (ȳ = 0 or BᵀB inadmissible) still rejects with its reason.
+- **Tests.** `SkewedPoissonTests` and `CoefficientDrawTests` keep their g-prior cases; `PoissonGPriorTests`' separation check keeps the g-prior's bounded mode and drops the comparison with BIC's clamp.
+- **Kept.** Births at ε = 0, DMGK's local moves, stay selectable as the end of a measured dial (the user's call, the same day).
+- **Docs.** `BayesianRegression.md`: the Poisson model, the draw table, the configuration table, the limitations and "Corrections to the sources".

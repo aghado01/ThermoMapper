@@ -10,18 +10,16 @@ namespace Maths.Regression.Tests;
 /// <summary>
 /// The skewed-Poisson β refinement (WLS2008 §5.4): for small Poisson means the conditional posterior of the
 /// log-rate is skewed, so the Laplace/normal approximation (centered at the mode) misplaces its mean. The
-/// independence-MH correction in <c>PoissonModel.SampleCoefficients</c> recovers the true posterior mean, on either
-/// pathway's target. Tested on an intercept-only model where the 1-D posterior mean is available by quadrature.
+/// independence-MH correction in <c>PoissonModel.SampleCoefficients</c> recovers the true posterior mean. Tested on an
+/// intercept-only model where the 1-D posterior mean is available by quadrature.
 /// </summary>
 public sealed class SkewedPoissonTests
 {
     private readonly ITestOutputHelper _out;
     public SkewedPoissonTests(ITestOutputHelper output) => _out = output;
 
-    [Theory]
-    [InlineData(PoissonMarginal.GPrior)]
-    [InlineData(PoissonMarginal.Bic)]
-    public void SkewedPoisson_BetaDraw_RecoversTruePosteriorMean(PoissonMarginal marginal)
+    [Fact]
+    public void SkewedPoisson_BetaDraw_RecoversTruePosteriorMean()
     {
         const int n = 12;
         var design = new double[n, 1];
@@ -30,13 +28,10 @@ public sealed class SkewedPoissonTests
         double s = 0.0;
         foreach (double v in y) s += v;
 
-        // True posterior over β: π(β) ∝ exp(Sβ − n·e^β) × prior, the target SampleCoefficients uses. Under the g-prior
-        // the prior is N(log ȳ, 1/ȳ), since Λ = (ȳ/n)·BᵀB = ȳ for an intercept; under BIC it is the weak ridge
-        // N(0, 100). Mean by fine quadrature.
+        // True posterior over β: π(β) ∝ exp(Sβ − n·e^β) × prior, the target SampleCoefficients uses. The g-prior is
+        // N(log ȳ, 1/ȳ), since Λ = (ȳ/n)·BᵀB = ȳ for an intercept. Mean by fine quadrature.
         double mean = s / n;
-        double LogPost(double b) => s * b - n * Math.Exp(b) - (marginal == PoissonMarginal.GPrior
-            ? 0.5 * mean * (b - Math.Log(mean)) * (b - Math.Log(mean))
-            : 0.5 * b * b / 100.0);
+        double LogPost(double b) => s * b - n * Math.Exp(b) - 0.5 * mean * (b - Math.Log(mean)) * (b - Math.Log(mean));
         const double lo = -8.0, hi = 3.0;
         const int g = 200_000;
         double dh = (hi - lo) / g;
@@ -54,7 +49,7 @@ public sealed class SkewedPoissonTests
         double mle = Math.Log(s / n);   // the MLE; the g-prior's mode too, since its prior is centred there
 
         // Full independence-MH (suspect shortcut disabled via +∞ threshold) ⇒ draws from the true posterior.
-        var model = new PoissonModel(marginal);
+        var model = new PoissonModel();
         var rng = new Xoshiro256PlusPlus(seed: 7);
         const int draws = 20_000;
         double sum = 0.0;
@@ -62,7 +57,7 @@ public sealed class SkewedPoissonTests
             sum += model.SampleCoefficients(design, y, rng, mhIterations: 30)[0];
         double mhMean = sum / draws;
 
-        _out.WriteLine($"[skew-poisson] {marginal}: trueMean={trueMean:F4} MLE(β̂)={mle:F4} MH mean={mhMean:F4} " +
+        _out.WriteLine($"[skew-poisson] trueMean={trueMean:F4} MLE(β̂)={mle:F4} MH mean={mhMean:F4} " +
                        $"(|MH−true|={Math.Abs(mhMean - trueMean):F4}, |MLE−true|={Math.Abs(mle - trueMean):F4})");
 
         // The MH-corrected mean is closer to the true (skewed) posterior mean than the MLE/normal-approx center,
