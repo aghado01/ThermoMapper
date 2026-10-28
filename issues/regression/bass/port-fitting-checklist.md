@@ -56,6 +56,19 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ## Reports
 
+### S6 reviewed — 2026-10-28
+
+A fresh read of `fecb996` found no correctness errors. It checked the moves' ratios, the schedules at both ends, the design's sync through accepts, rejects, τ updates and swapped-in states, the composition's centring and the τ block. One known approximation stands: an accepted state keeps its candidate's statistics from the update formulas, while the design refits explicitly, about 10⁻¹² apart.
+
+It found three coverage gaps, now closed:
+1. *Direct functional fits.*
+   - The design-follows-chain test now also runs on a direct functional fixture (n = 25, m = 7, N = 175).
+   - A new alignment test checks a case-only, an output-only and a mixed term. The draw's a₀ + Σ aⱼ·aⱼ(xᵢ)hⱼ(t_r) equals the centred α + Σ βⱼ(aⱼhⱼ − āⱼh̄ⱼ) at all 175 observations to 10⁻¹², and the output-only term's case side is 1.
+2. *The options in a chain.* `BassChainParityTests` now runs fixture A at M_max = 2 under fixed g (no τ block; τ stays the held 1/N), the flat intercept and the Jeffreys σ² prior. The count laws, τ and all 48 inclusions match the oracle's exact posteriors, the worst gap under a third of its allowance. A chain under Jeffreys on the exact fixture refuses 246 exact-fit candidates by reason and never holds one. The scaled default, on the same data, visits the exact fits.
+3. *The prior-cancelling schedule with data.* On A at M_max = 2 it matches the posterior, with its count law 2.2 and τ 2.5 batch errors off: inside the allowance, and consistent with the slower dimension mixing D01's register expects of it.
+
+Regression 556/556; the BASS oracle tests 25/25.
+
 ### S6: the sweep — 2026-10-28
 
 D04's sweep, in `src/maths/regression/spline/bass/`:

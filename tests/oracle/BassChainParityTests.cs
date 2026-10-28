@@ -15,8 +15,11 @@ namespace Maths.Oracle.Tests;
 /// intercept alone, against the exact count law, τ's posterior mean and every term's inclusion probability. Fixture A
 /// at M_max = 3 (its mass spread over M = 1–3, with exactly tied states: x and 1 − x span one space with the
 /// intercept, so tied terms' inclusions are compared each, the chain moving between them by changes), and fixture C
-/// with its categorical predictor at M_max = 2. Batch means across the chains give each comparison's error. Opt-in: it
-/// runs where the R toolchain and the BASS checkout are present.
+/// with its categorical predictor at M_max = 2. The options run on fixture A at M_max = 2: fixed g (no τ block, the
+/// composition at the held τ), Liang's flat intercept and the Jeffreys σ² prior (whose posteriors over structures
+/// normalize though their marginals are relative), and the prior-cancelling schedule, whose law is the defaults'.
+/// Batch means across the chains give each comparison's error. Opt-in: it runs where the R toolchain and the BASS
+/// checkout are present.
 /// </summary>
 public sealed class BassChainParityTests
 {
@@ -26,24 +29,45 @@ public sealed class BassChainParityTests
     private const int Chains = 4, Burn = 3_000, Sweeps = 40_000, Batches = 20;
 
     [Theory]
-    [InlineData("A")]
-    [InlineData("C")]
-    public void Chain_MatchesTheOraclesPosterior(string fixture)
+    [InlineData("A", "defaults")]
+    [InlineData("C", "defaults")]
+    [InlineData("A", "fixed g")]
+    [InlineData("A", "flat")]
+    [InlineData("A", "jeffreys")]
+    [InlineData("A", "cancelling")]
+    public void Chain_MatchesTheOraclesPosterior(string fixture, string option)
     {
         if (!BassTargetParityTests.Available) return;
-        bool categorical = fixture == "C";
+        bool categorical = fixture == "C", defaults = option == "defaults";
         double[][] rows = categorical ? BassTargetParityTests.FixtureC() : BassTargetParityTests.FixtureA();
+        string[] args = option switch
+        {
+            "fixed g" => ["coef=fixed"],
+            "flat" => ["centre=flat"],
+            "jeffreys" => ["sigma2_prior=jeffreys"],
+            _ => [],
+        };
+        int maxBasis = categorical || !defaults ? 2 : 3;
         JsonElement r = categorical
             ? BassTargetParityTests.Posterior(rows, "M_max=2", "K_max=1", "categorical=1")
-            : BassTargetParityTests.Posterior(rows, "M_max=3");
-        BassConfig config = BassTargetParityTests.Config(maxInteraction: categorical ? 1 : 2);
-        config = config with { Structure = config.Structure with { MaxBasis = categorical ? 2 : 3 } };
-        var model = BassModel.Create(config, BassTargetParityTests.Data(rows, categorical));
+            : BassTargetParityTests.Posterior(rows, [$"M_max={maxBasis}", .. args]);
+        BassConfig config = option switch
+        {
+            "fixed g" => BassTargetParityTests.Config(fixedG: true),
+            "flat" => BassTargetParityTests.Config(Maths.Regression.GPrior.GPriorCentre.Flat),
+            "jeffreys" => BassTargetParityTests.Config(jeffreys: true),
+            _ => BassTargetParityTests.Config(maxInteraction: categorical ? 1 : 2),
+        };
+        config = config with { Structure = config.Structure with { MaxBasis = maxBasis } };
+        if (option == "cancelling") config = config with { Sampling = config.Sampling with { Moves = new PriorCancelling(0.4) } };
+        fixture = $"{fixture} ({option})";
 
+        var model = BassModel.Create(config, BassTargetParityTests.Data(rows, categorical));
         JsonElement p = r.GetProperty("posterior");
         double[] countLaw = [.. p.GetProperty("count").GetProperty("posterior").EnumerateArray().Select(v => v.GetDouble())];
         double[] inclusion = [.. p.GetProperty("inclusion").EnumerateArray().Select(v => v.GetDouble())];
-        double tauMean = p.GetProperty("tau").GetProperty("mean").GetDouble();
+        bool fixedG = option == "fixed g";
+        double tauMean = fixedG ? model.Target.FixedTau!.Value : p.GetProperty("tau").GetProperty("mean").GetDouble();
         BassTerm[] terms = BassTargetParityTests.Terms(r);
         var index = terms.Select((t, i) => (t, i)).ToDictionary(e => e.t, e => e.i);
         Assert.Equal(model.MaxBasis + 1, countLaw.Length);
@@ -81,7 +105,8 @@ public sealed class BassChainParityTests
         }
         (double tau, double tauError) = Summary(tauBatches);
         _out.WriteLine($"{fixture}, E[τ]: {tau:G5} against {tauMean:G5} (± {tauError:G2})");
-        Assert.True(Math.Abs(tau - tauMean) <= 5 * tauError, $"E[τ] {tau:G5} against {tauMean:G5} (± {tauError:G2})");
+        if (fixedG) Assert.Equal(tauMean, tau, 12);   // held: no τ block runs
+        else Assert.True(Math.Abs(tau - tauMean) <= 5 * tauError, $"E[τ] {tau:G5} against {tauMean:G5} (± {tauError:G2})");
         double worst = 0;
         for (int j = 0; j < terms.Length; j++)
         {

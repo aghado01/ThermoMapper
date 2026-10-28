@@ -30,7 +30,7 @@ public sealed class BassSweepTests
     public BassSweepTests(ITestOutputHelper output) => _out = output;
 
     // x₀ and x₁ on {0, ½, 1}, the grid twice (N = 18), or on a five-value grid three times (N = 75).
-    private static BassData Data(bool large = false, int seed = 5)
+    private static BassData Data(bool large = false, int seed = 5, bool exact = false)
     {
         var rng = new Xoshiro256PlusPlus(seed);
         int levels = large ? 5 : 3, reps = large ? 3 : 2;
@@ -45,9 +45,33 @@ public sealed class BassSweepTests
                     x0.Add(a);
                     x1.Add(b);
                     double noise = Math.Sqrt(-2 * Math.Log(1 - rng.NextDouble())) * Math.Cos(2 * Math.PI * rng.NextDouble());
-                    y.Add(1 + 2 * a + 3 * Math.Max(a - 0.5, 0) * Math.Max(0.5 - b, 0) + 0.3 * noise);
+                    y.Add(exact ? 1 + 2 * Math.Max(a - 0.5, 0) : 1 + 2 * a + 3 * Math.Max(a - 0.5, 0) * Math.Max(0.5 - b, 0) + 0.3 * noise);
                 }
         return new BassData([new ContinuousPredictor("x0", [.. x0]), new ContinuousPredictor("x1", [.. x1])], new ScalarResponse([.. y]));
+    }
+
+    // A direct functional response: x₀ and x₁ on a five-value grid (n = 25), one output variable t on seven locations
+    // (N = 175), Y = 1 + 2x₀ + 1.5·t·x₁ + 2(x₀ − ½)₊(t − ½)₊ + noise.
+    private static BassData FunctionalData(int seed = 13)
+    {
+        var rng = new Xoshiro256PlusPlus(seed);
+        const int n = 25, m = 7;
+        double[] t = [.. Enumerable.Range(0, m).Select(r => r / (m - 1.0))];
+        var x0 = new double[n];
+        var x1 = new double[n];
+        var y = new double[n, m];
+        for (int i = 0; i < n; i++)
+        {
+            x0[i] = (i / 5) / 4.0;
+            x1[i] = (i % 5) / 4.0;
+            for (int r = 0; r < m; r++)
+            {
+                double noise = Math.Sqrt(-2 * Math.Log(1 - rng.NextDouble())) * Math.Cos(2 * Math.PI * rng.NextDouble());
+                y[i, r] = 1 + 2 * x0[i] + 1.5 * t[r] * x1[i] + 2 * Math.Max(x0[i] - 0.5, 0) * Math.Max(t[r] - 0.5, 0) + 0.2 * noise;
+            }
+        }
+        return new BassData([new ContinuousPredictor("x0", x0), new ContinuousPredictor("x1", x1)],
+                            new FunctionalResponse(y, [new ContinuousPredictor("t", t)]));
     }
 
     private static BassConfig Config(MoveSchedule? moves = null, int maxBasis = 3)
@@ -385,10 +409,12 @@ public sealed class BassSweepTests
         return w;
     }
 
-    [Fact]
-    public void Design_FollowsTheChain()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Design_FollowsTheChain(bool functional)
     {
-        BassData data = Data(large: true);
+        BassData data = functional ? FunctionalData() : Data(large: true);
         var model = BassModel.Create(Config(maxBasis: 12), data);
         var chain = new BassChain(model, [], Math.Log(0.02), new Xoshiro256PlusPlus(1), new Xoshiro256PlusPlus(2));
         var other = new BassChain(model, [], Math.Log(0.02), new Xoshiro256PlusPlus(3), new Xoshiro256PlusPlus(4));
@@ -455,6 +481,66 @@ public sealed class BassSweepTests
                 foreach (double[] w in new[] { w0, w1, w2 }) Assert.Equal(1.0, w.Sum(), 15);
             }
         }
+    }
+
+    [Fact]
+    public void Compose_AlignsOnDirectFunctionalData()
+    {
+        // A case-only term, an output-only term (its case side is 1) and a mixed one: the draw's a₀ + Σ aⱼ·aⱼ(xᵢ)hⱼ(t_r)
+        // against the same draw in the centred basis, α + Σ βⱼ(aⱼ(xᵢ)hⱼ(t_r) − āⱼh̄ⱼ), at all N = n·m observations.
+        BassData data = FunctionalData();
+        var model = BassModel.Create(Config(maxBasis: 10), data);
+        BassTerm[] structure = [new BassTerm([new HingeFactor(0, 1, 2)]), new BassTerm(functional: [new HingeFactor(0, 1, 3)]),
+                                new BassTerm([new HingeFactor(1, -1, 3)], functional: [new HingeFactor(0, -1, 4)])];
+        var moves = new BassStructureMoves(model, structure, Math.Log(0.01));
+        var table = new BassTermTable();
+        table.Intern(structure[2]);
+        BassDraw draw = moves.Compose(moves.Start, new Xoshiro256PlusPlus(5), table);
+
+        BassDesign design = moves.DesignAt(moves.Start);
+        CollapsedGPrior block = CollapsedGPrior.FromCentredLeastSquares(design.Factor, design.Coefficients.ToArray(), design.ResidualSquares,
+                                                                         design.FittedSquares, design.Observations, design.ResponseMean, GPriorCentre.Mean);
+        var centred = new double[4];
+        Assert.Equal(block.At(moves.Start.Tau).Sample(model.Resolved.Sigma2, new Xoshiro256PlusPlus(5), centred), draw.Sigma2);
+        int n = model.Inputs.Cases.Cases, m = model.Inputs.Outputs!.Locations;
+        double[][] a = [.. design.Terms.Select(t => { var c = new double[n]; model.Basis.CaseColumn(t, model.Inputs.Cases, c); return c; })];
+        double[][] h = [.. design.Terms.Select(t => { var c = new double[m]; model.Basis.OutputColumn(t, model.Inputs.Outputs!, c); return c; })];
+        Assert.All(a[1], v => Assert.Equal(1.0, v));
+        for (int i = 0; i < n; i++)
+            for (int r = 0; r < m; r++)
+            {
+                double viaCentred = centred[0], viaDraw = draw.Coefficients[0];
+                for (int j = 0; j < 3; j++) viaCentred += centred[j + 1] * (a[j][i] * h[j][r] - a[j].Average() * h[j].Average());
+                for (int q = 0; q < 3; q++)
+                {
+                    int j = design.Terms.ToList().IndexOf(table[draw.Structure.TermIds[q]]);
+                    viaDraw += draw.Coefficients[q + 1] * a[j][i] * h[j][r];
+                }
+                Assert.True(Math.Abs(viaCentred - viaDraw) <= 1e-12 * Math.Max(1, Math.Abs(viaCentred)), $"({i}, {r}): {viaDraw:R} against {viaCentred:R}");
+            }
+    }
+
+    [Fact]
+    public void Jeffreys_RefusesExactFitsInTheChain()
+    {
+        // y = 1 + 2(x₀ − ½)₊ exactly: under Jeffreys every structure that spans it lies outside F, so the chain refuses
+        // those candidates by reason and never holds one; the scaled default keeps them, with finite marginals.
+        BassData data = Data(large: true, exact: true);
+        BassConfig jeffreys = Config(maxBasis: 4) with { Sigma2 = Sigma2Prior.Jeffreys };
+        var model = BassModel.Create(jeffreys, data);
+        var chain = new BassChain(model, [], Math.Log(0.02), new Xoshiro256PlusPlus(21), new Xoshiro256PlusPlus(22));
+        for (int i = 0; i < 4_000; i++)
+            Assert.Null(model.Target.Refusal(chain.Step().Fit));
+        long refused = chain.Structure.Refusals.Count(BassRefusal.ExactFit);
+        _out.WriteLine($"Jeffreys: {refused} exact fits refused; final M = {chain.Current.Count}");
+        Assert.True(refused > 0);
+
+        var scaled = BassModel.Create(Config(maxBasis: 4), data);
+        var kept = new BassChain(scaled, [], Math.Log(0.02), new Xoshiro256PlusPlus(21), new Xoshiro256PlusPlus(22));
+        double smallest = double.PositiveInfinity;
+        for (int i = 0; i < 4_000; i++) smallest = Math.Min(smallest, kept.Step().Fit.ResidualSquares);
+        Assert.Equal(0, kept.Structure.Refusals.Count(BassRefusal.ExactFit));
+        Assert.True(smallest < 1e-20, $"the scaled chain's smallest ‖r‖² is {smallest:E2}");
     }
 
     [Fact]
