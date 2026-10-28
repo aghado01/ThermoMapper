@@ -56,6 +56,16 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ## Reports
 
+### Chips for S7, S9 and the docs section — 2026-10-28
+
+The rest of stage 4 is divided. S8 lives inside the run loop (BARS keeps both in `BarsEnsemble`), so it follows S7. S9 reads only retained draws and the model, whose shapes are fixed. The docs record decisions that are already settled.
+- *Chip A, the run (S7):* the exact prior sampler on F, `Bass.Fit` and `Resume`, the diagnostics, and checkpoints ([brief](stage4-run-brief.md)).
+- *Chip B, the density (S9):* the pointwise log density and the residual-dependence check, as entry points over draws ([brief](stage4-density-brief.md)).
+- *Chip C, the docs:* BASS in `docs/Maths/BayesianRegression.md`, D01–D06 as built in S1–S6 ([brief](stage4-docs-brief.md)).
+- *After A:* chip D, tempering and evidence (S8). Then S10's recovery studies and cost baseline, and the hookup of B's density into `BassFit`, in the main session.
+
+Each brief ends its work with a review pass before its report: a fresh reread of the whole change for correctness, a hunt for untested options and paths, fixes, and another pass until one finds nothing. The reviews of S5 and S6 each found defects or gaps, so review is part of every step now.
+
 ### S6 reviewed — 2026-10-28
 
 A fresh read of `fecb996` found no correctness errors. It checked the moves' ratios, the schedules at both ends, the design's sync through accepts, rejects, τ updates and swapped-in states, the composition's centring and the τ block. One known approximation stands: an accepted state keeps its candidate's statistics from the update formulas, while the design refits explicitly, about 10⁻¹² apart.
