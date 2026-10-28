@@ -50,6 +50,19 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 
 ## Reports
 
+### F-O6 at three predictors, and reversibility — 2026-10-27
+
+From the reference-fixtures chip's follow-up, `f7acf2a`. The enumeration oracle now reports each kernel's detailed balance with its own stationary law. The checks add p = 3 to the swap and count fixtures, so the Wallenius factor of R's proposal varies with the state. All checks pass.
+- **Swap at p = 3.** N = 27 on a 3 × 3 × 3 grid, a support rule of 4 nonzero values: 126 terms, 48 supported, 1174 states, 14,160 moving transitions.
+  - *Validity.* R's `getQf` agrees with the strict rank on every state, and R's `alpha` is b times its b = 1 value. At b = 1 R's kernel, with the state's move probabilities, is the posterior to 7·10⁻¹⁵. With its fixed thirds it is 0.100 off in total variation (F-O4's defect, larger here than at p = 2).
+  - *Targets.* At b = 0.5 and 0.2, R's kernel is 0.077 and 0.143 in total variation from D05's likelihood path, 0.055 and 0.081 from the prior times p_1^b, and 0.41 to 0.65 from the two powered paths.
+  - *Swaps.* R's swap misses balance against its own rung laws by spreads of 1.88 and 1.14, and against the candidate families by 0.88 to 6.18. D05's kernels reach their target to 7·10⁻¹⁶, and its swap balances on them to 1·10⁻¹⁴.
+- **R's tempered kernel is not reversible at p = 3.** Its gap from detailed balance with its own stationary law is 5·10⁻⁷ at b = 0.5 and 1·10⁻³ at b = 0.2, against 2·10⁻¹⁶ at b = 1 and at most 7·10⁻¹⁶ for D05's kernels. At p = 2, where every interaction draws the one pair, R's kernel stays reversible at every rung (at most 5·10⁻¹⁶).
+  - *Why.* R's acceptance is the untempered ratio to the power b, so the proposal ratio enters as (q_rev/q_fwd)^b. The kernel then has a detailed-balance target only if that factor's (1 − b) power is a ratio of state functions. At p = 3 the Wallenius factor's is not.
+  - *So below b = 1* R's within-rung moves balance against no law at all, before any swap. That sharpens D05's "no single target".
+- **Count law at p = 3.** A constant likelihood, two knots per variable, M_max = 2: 60 terms and 1831 states. D01's ratio gives the stated law (0.202, 0.404, 0.394) to 6·10⁻¹⁴. KHAOS's gives the stated law times 1/M! (0.252, 0.503, 0.245) to 4·10⁻¹⁴, 0.149 from the stated law.
+- **Not covered:** p ≥ 4, and K_max = 3, where the Wallenius factor takes three-variable sets. Both grow the state space past dense GTH.
+
 ### Wallenius and defect fixtures (F-O5, F-O6) — 2026-10-27
 
 From the reference-fixtures chip ([brief](reference-fixtures-brief.md)), `a6960f0`. Three oracles, run by `r/scripts/bass_stage1_checks.R`, all checks passing. They source the pinned R BASS checkout (`2671014`) through `_common.R`'s `bass_source`, and evaluate R's expressions as written, extracted from the function bodies, rather than transcriptions of them.

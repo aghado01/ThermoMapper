@@ -28,6 +28,18 @@ Companion to [port-calibration-brief.md](port-calibration-brief.md). An item is 
 
 ## Reports
 
+### R's calibration tempering (C-O1) — 2026-10-27
+
+From the reference-fixtures chip's follow-up, `f7acf2a`: a `tempering` section in `r/oracles/bass_calibration_defects_oracle.R`. One variance group, IG(5, 0.05), with θ at θ* and the discrepancy at 0, on the ladder 1, 2, 5. All checks pass.
+- **R's moves are exact for a powered target.** The variance move's `alpha`, evaluated as written, is exactly b times (log likelihood + log prior kernel + log Jacobian). On a 61-point grid of log σ², R's kernel reaches exp(b(ℓ + log prior + log σ²)), the target powered in log σ² coordinates, to 5·10⁻¹⁶ in total variation. The discrepancy draw's covariance, `discrep.S / itl[t]`, is exactly that target's conditional, S/b.
+- **R's swap leaves that target.** It omits the Jacobian and the discrepancy prior. Its largest gap from detailed balance against its own rung laws is (b₁ − b₂) times the grid's log σ² range, 4.61 and 2.76. Between states that differ only in the discrepancy, the omitted prior costs up to 1.06.
+- **Against D09's likelihood path** R is far off: total variation 0.12 and 0.27 at b = 0.5 and 0.2, swap gaps of 234 and 140, and discrepancy covariances 1.4% and 5.2% off (I/τ + b DᵀΣ⁻¹D)⁻¹. D09's kernels reach the likelihood path to 1·10⁻¹⁵, and its swap, (b₁ − b₂)(ℓ(x₂) − ℓ(x₁)), balances on them to 1·10⁻¹³.
+- **For D09:** tempering the Jacobian is not by itself the defect. R's variance move and discrepancy draw are consistent with a target powered in log σ², which is what D05 calls the powered path in log coordinates; the swap alone breaks it. D09's correction to the likelihood path stands on D05's reasons, not on that inconsistency.
+- **Not covered:**
+  - The emulator draw shared across temperatures.
+  - Several variance groups on the grid.
+  - The stale likelihood's interaction with the swap.
+
 ### Calibration defects and covariance references (C-O1, C-O2) — 2026-10-27
 
 From the reference-fixtures chip ([brief](reference-fixtures-brief.md)), `a6960f0`. Two oracles, run by `r/scripts/bass_stage1_checks.R`, all checks passing.

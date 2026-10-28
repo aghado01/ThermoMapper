@@ -38,6 +38,19 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 
 ## Reports
 
+### R's Student moments (O-O3) — 2026-10-27
+
+From the reference-fixtures chip's follow-up. `976ac0c` installs `hypergeo` 1.2-15 (with `contfrac` and `elliptic`) in the oracle environment, and `f7acf2a` runs R BASS's Student moments in `r/oracles/bass_moments_oracle.R`. All checks pass.
+- **As written, R's Student moments fail.** They give a value only where a hinge misses the interval, which `C1` and `C2` return as 0 without evaluating anything; every other case errors.
+  - `robust2f1` calls `hypergeo::f15.3.8`, the Abramowitz–Stegun 15.3.8 transformation. For |x| < 1 it returns a complex value, which fails `C1`'s and `C2`'s sign checks ("invalid comparison with complex values").
+  - For |x| ≥ 1, R passes it the Pfaff-transformed argument in (0, 1), where it returns NA. R's commented-out code used `gsl::hyperg_2F1` there.
+  - `hypergeo`'s general `hypergeo()` does not converge at these arguments either.
+- **With only the 2F1 evaluator repaired:** R's own branches, Pfaff transform included, evaluated by the Gauss series summed to relative 10⁻¹⁷.
+  - At degree 1 R's forms match quadrature at ν = 2 and 3 (first moments 8·10⁻¹⁴, cross moments 3·10⁻¹³).
+  - At degrees 2 and 3, `intabq2.student` has no degree check and returns the degree-1 cross moment (relative error 1). `intabq1.student` refuses degrees above 1.
+  - At ν = 1 the forms divide by ν − 1 and give NaN, and so does the ν = (1, 3) mixture.
+- **For D08:** with a working 2F1, R's closed form is usable at degree 1 for ν ≠ 1. ν = 1 needs D08's quadrature fallback, and degrees above 1 have no R form to port. The quadrature references cover all of them.
+
 ### Output, sensitivity and moment fixtures (O-O1, O-O2, O-O3) — 2026-10-27
 
 From the reference-fixtures chip ([brief](reference-fixtures-brief.md)), `a6960f0`. Three oracles, run by `r/scripts/bass_stage1_checks.R`, all checks passing. Each runs the pinned R code (`2671014`) as written, on mocks where a fitted object is needed, beside the corrected expectation.

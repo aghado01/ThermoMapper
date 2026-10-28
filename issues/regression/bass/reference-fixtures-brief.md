@@ -52,6 +52,18 @@ Briefs and checklists use LF line endings; R files keep theirs. For multi-line s
 
 Append the report here when the work lands, newest first: date, commits, each fixture's evidence and limits, anything that contradicts a draft, and blockers.
 
+### Follow-up report — 2026-10-27
+
+At the user's request: `hypergeo`, the calibration tempering defects, and the enumeration at three predictors. `976ac0c` installs `hypergeo` (the lockfile and `r/DESCRIPTION`, now that the shared-infrastructure chip has finished); `f7acf2a` holds the oracles and checks. All checks pass under `Rscript scripts/bass_stage1_checks.R`; the evidence is in today's follow-up reports in the three checklists.
+- **O-O3, R's Student moments.** As written they fail: `hypergeo::f15.3.8` returns complex values on one branch and NA on the other. With only the 2F1 evaluator repaired, degree 1 matches quadrature at ν = 2 and 3. At degrees 2 and 3 the cross moment comes back as the degree-1 value, and ν = 1 is NaN.
+- **C-O1, R's calibration tempering.** R's variance move and discrepancy draw are exact for a target powered in log σ². Its swap omits the Jacobian and the discrepancy prior, and misses balance by (b₁ − b₂)Δlog σ² and the v prior. D09's likelihood path balances to 10⁻¹³.
+- **F-O6 at p = 3.** Every p = 2 result replicates. Below b = 1 R's tempered kernel is also not reversible (gaps 5·10⁻⁷ and 1·10⁻³), so it balances against no law even before its swap; at p = 2 it stays reversible.
+- **Refinements for the planning session:**
+  - *D05:* R's within-rung tempering has no detailed-balance target once the Wallenius factor varies.
+  - *D09:* the inconsistency is in R's swap, not in its tempered Jacobian.
+  - *D08:* R's Student closed form is portable at degree 1 for ν ≠ 1 only with a working 2F1.
+- **Also:** `bass_source` now makes R BASS's `browser()` a no-op, after one fired and read stdin under Rscript. `_common.R` gains `stationary_gth`.
+
 ### Report — 2026-10-27
 
 `a6960f0` (oracles, `_common.R`, checks). Every item has its oracle and its checks pass under `Rscript scripts/bass_stage1_checks.R`:
