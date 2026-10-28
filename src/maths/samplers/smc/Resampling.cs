@@ -6,14 +6,16 @@ namespace Maths.Samplers.Smc;
 /// <summary>How a weighted population is resampled to equal weights (Douc, Cappé and Moulines 2005).</summary>
 public enum ResamplingScheme
 {
-    /// <summary>N independent draws from the weights: unbiased, the highest variance.</summary>
+    /// <summary>N independent draws from the weights: unbiased, the highest variance. <see cref="SmcOptions"/>' default,
+    /// since it is the scheme the SMC limit theory and the normalizer's genealogy error describe.</summary>
     Multinomial,
 
     /// <summary>One uniform in each of N equal strata of [0, 1).</summary>
     Stratified,
 
     /// <summary>One uniform, shifted across the N strata: the lowest variance in practice, and each particle gets
-    /// ⌊N·W_i⌋ or ⌈N·W_i⌉ offspring.</summary>
+    /// ⌊N·W_i⌋ or ⌈N·W_i⌉ offspring, but without the general convergence theory the other schemes have (Gerber,
+    /// Chopin and Whiteley 2019).</summary>
     Systematic,
 
     /// <summary>⌊N·W_i⌋ offspring each, then the remainder drawn multinomially from the residual weights.</summary>

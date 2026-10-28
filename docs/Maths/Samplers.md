@@ -224,7 +224,7 @@ They ride in `SmcResult.StageTraces`, `SmcRun.StageTraces` and the checkpoint, a
 | Stratified, 1 | 0.905, 1.44 | 0.780, 2.46 |
 | Residual, 1 | 0.900, 1.37 | 0.795, 2.47 |
 
-  On this target the lower-variance schemes did not lower the actual spread of $\ln\hat Z$: at one move, 0.055 under systematic against 0.057 under multinomial; at five, 0.036 under both. Unbiasedness itself is checked against 20,000 replicates at N = 16 with a fixed-step kernel: $E[\hat Z^2\hat V-(\hat Z-1)^2]=0.020\pm0.013$, while the exponent R in place of R + 1 gives $0.081\pm0.012$.
+  On this target the lower-variance schemes did not lower the actual spread of $\ln\hat Z$: at one move, 0.055 under systematic against 0.057 under multinomial; at five, 0.036 under both. So multinomial is `SmcOptions`' default (the user's call, 2026-10-27): every default run then reports its normalizer's error, at no measured cost in precision and none in time, since the sorted uniforms come from exponential spacings in O(N). Systematic, stratified and residual stay selectable for runs that need only posterior expectations, where their lower resampling noise can pay; such a run reports no normalizer error. Unbiasedness itself is checked against 20,000 replicates at N = 16 with a fixed-step kernel: $E[\hat Z^2\hat V-(\hat Z-1)^2]=0.020\pm0.013$, while the exponent R in place of R + 1 gives $0.081\pm0.012$.
 
 **Stepping-stone** (Xie, Lewis, Fan, Kuo and Chen 2011). With $d=\ln q_{k+1}(x)-\ln q_k(x)$ for $x\sim q_k$,
 

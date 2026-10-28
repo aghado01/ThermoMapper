@@ -11,8 +11,10 @@ public sealed record SmcOptions
     /// <summary>The population size N.</summary>
     public required int Particles { get; init; }
 
-    /// <summary>How the population is resampled.</summary>
-    public ResamplingScheme Resampling { get; init; } = ResamplingScheme.Systematic;
+    /// <summary>How the population is resampled. Multinomial by default: the scheme whose offspring the normalizer's
+    /// genealogy error describes (<see cref="SmcStageReport.NormalizerRelativeVariance"/>). The lower-variance schemes
+    /// stay selectable for runs that need only posterior expectations, and leave that error NaN.</summary>
+    public ResamplingScheme Resampling { get; init; } = ResamplingScheme.Multinomial;
 
     /// <summary>Resample when ESS/N falls below this fraction: 1 resamples at every stage, 0 never.</summary>
     public double ResampleBelow { get; init; } = 0.5;

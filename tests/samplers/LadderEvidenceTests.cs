@@ -205,7 +205,7 @@ public sealed class LadderEvidenceTests
     {
         // Systematic resampling's offspring are not multinomial's, so the estimate stops at the first such resampling,
         // and a run resumed from just after it keeps it stopped whatever its options.
-        var options = new SmcOptions { Particles = 300, MutationSteps = 1, TraceStages = true };
+        var options = new SmcOptions { Particles = 300, MutationSteps = 1, Resampling = ResamplingScheme.Systematic, TraceStages = true };
         SmcRun<double[]> run = SmcRun<double[]>.Start(Stage(0.0), new PriorParticles(), new RandomWalkKernel(), options, seed: 9);
         int first = -1;
         SmcCheckpoint<double[]>? atFirst = null;
