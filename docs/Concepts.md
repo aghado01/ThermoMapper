@@ -5,7 +5,7 @@ ThermoMapper's modules communicate through a small set of shared data types, its
 ```mermaid
 flowchart LR
   X[points or metric] -->|GraphCompiler| G[CsrGraph<br/>distance or coupling weights]
-  G -->|Swendsen–Wang / PKWang at T| C[per-edge currencies<br/>Affinities · Alignments · CoMembership]
+  G -->|Swendsen–Wang / cumulative field at T| C[per-edge currencies<br/>Affinities · Alignments · CoMembership]
   G & C -->|signals, observables| L[node Landscapes]
   C -->|cuts, trees| D[Dendrogram + CostAxis]
   D & L -->|walks, condensation| A[Assignment / Groups]
@@ -52,7 +52,7 @@ A **currency** is a per-edge field evaluated at one temperature. It is produced 
 
 | Currency | $G_{ij}$ | Produced by | Typical consumers |
 |---|---|---|---|
-| `Affinities` | bond activity or edge survival, in [0, 1] | **every** sampler: Swendsen–Wang, and the PKWang direct solver | affinity signals, cuts, thermal dendrograms |
+| `Affinities` | bond activity or edge survival, in [0, 1] | **every** sampler: Swendsen–Wang, and the deterministic cumulative-field solver | affinity signals, cuts, thermal dendrograms |
 | `Alignments` | spin agreement $\langle\delta(\sigma_i,\sigma_j)\rangle$ | Swendsen–Wang only | spin-agreement cuts, eigencentrality |
 | `CoMembership` | same-cluster frequency $\langle n_{ij}\rangle$ (a raw fraction); also carries the Potts `Q` | Swendsen–Wang only | co-membership cuts, the eq-4 discriminant |
 
@@ -76,7 +76,7 @@ Currencies are per-edge fields ("1-forms"). **Landscapes** are per-node fields (
   - optional `LandscapeProvenance(Sink, GraphId, GaugeNote)`.
 
   `Landscape.Create` validates the shape.
-- Typical landscapes over the temperature axis are the mean Fortuin–Kasteleyn cluster size and giant-cluster participation. Producers include `SweepLandscapes.FromFrames` for Swendsen–Wang and `PKWangLandscapes.OverGrid`.
+- Typical landscapes over the temperature axis are the mean Fortuin–Kasteleyn cluster size and giant-cluster participation. Producers include `SweepLandscapes.FromFrames` for Swendsen–Wang and `CumulativeFieldLandscapes.OverGrid` for the cumulative field.
 - A landscape is the *height* that the selectors in [Cluster Resolution](./ClusterResolution.md#landscape-walks) integrate along a tree.
 
 ## Resolution carriers

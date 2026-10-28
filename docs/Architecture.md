@@ -47,7 +47,7 @@ A project's layer is the length of its longest `ProjectReference` chain to an in
 | 3 | `Graphs.Primitives`, `Maths.Geometry`, `Maths.Regression` |
 | 4 | `Graphs.Distance`, `Graphs.Observables`, `Graphs.Spectral`, `Clustering.Dendrograms`, `Clustering.Evaluation`, `Synthetic` |
 | 5 | `Graphs.Proximity`, `Clustering.Graphical.HdbScan`, `Clustering.Statistical.GMM`, `TDA.Ph` |
-| 6 | `Clustering.Graphical.SPC`, `TDA.DimReduction` |
+| 6 | `Clustering.Graphical.SPC`, `Clustering.Graphical.CumulativeField`, `TDA.DimReduction` |
 | 7 | `TDA.Mapper` |
 
 ```mermaid
@@ -77,6 +77,7 @@ flowchart BT
     DEN & GEO --> GMM[Clustering.Statistical.GMM]
     GS & TOP --> PH[TDA.Ph]
     PRX & POT & DEN & EVA & ARC --> SPC[Clustering.Graphical.SPC]
+    PRX & POT & DEN & GO --> CF[Clustering.Graphical.CumulativeField]
     PH & PRX & GEO --> DR[TDA.DimReduction]
     SPC & HDB & GMM & KM & PH --> MAP[TDA.Mapper]
   end
@@ -110,7 +111,8 @@ The diagram shows the main edges only; the `ProjectReference` items in each `.cs
 | | `Clustering.Graphical.HdbScan` | HDBSCAN | [Hdbscan](./Hdbscan.md) |
 | | `Clustering.Statistical.GMM`, `.Geometric.KMeans` | Gaussian mixtures, modal merging, k-means++ | [GaussianMixtures](./GaussianMixtures.md) |
 | | `Clustering.Evaluation` | External, internal and graph validity indices | [ClusterEvaluation](./ClusterEvaluation.md) |
-| | `Clustering.Graphical.SPC` | Swendsen–Wang and PKWang engines, sweeps, profiles, cuts, hierarchies, export | [SpcEngine](./SpcEngine.md), [SpcAnalysis](./SpcAnalysis.md) |
+| | `Clustering.Graphical.SPC` | Swendsen–Wang engine, sweeps, profiles, cuts, hierarchies, export | [SpcEngine](./SpcEngine.md), [SpcAnalysis](./SpcAnalysis.md) |
+| | `Clustering.Graphical.CumulativeField` | Deterministic cumulative-field solver, sweeps, landscapes | [CumulativeField](./CumulativeField.md) |
 | **tda** | `TDA.Ph` | Standard, cohomology and involuted persistence; zigzag engines; nerve sweeps | [PersistentHomology](./PersistentHomology.md), [ZigzagPersistence](./ZigzagPersistence.md) |
 | | `TDA.Mapper` | Mapper and its diagnostics | [Mapper](./Mapper.md) |
 | | `TDA.DimReduction` | SPRED | [Spred](./Spred.md) |
@@ -232,7 +234,7 @@ The following projects consume or support the library. They are documented as pl
 
 | Source folder | Projects | Role | Uses |
 |---|---|---|---|
-| `src/user-repl` | `UserRepl.Commands`, `UserRepl`, `UserRepl.Publish` | Interactive REPL for SPC (including PKWang) and HDBSCAN runs, datasets and run manifests | SPC, dendrograms, HDBSCAN, evaluation, graphs, `TDA.Ph`, `Synthetic`, all three `Archivory` projects |
+| `src/user-repl` | `UserRepl.Commands`, `UserRepl`, `UserRepl.Publish` | Interactive REPL for SPC, cumulative-field and HDBSCAN runs, datasets and run manifests | SPC, cumulative field, dendrograms, HDBSCAN, evaluation, graphs, `TDA.Ph`, `Synthetic`, all three `Archivory` projects |
 | `src/viz-core` | `VizCore` | Scene building and HTML rendering for datasets and mixtures | `Synthetic`, `Maths.LinAlg`, `Maths.Geometry`, `Clustering.Statistical.GMM` |
 | `src/viz` | `Viz.Contracts`, `Viz.Scene` | Visualization contracts and scene types | — |
 | — | `VizApi` | Visualization host | `VizCore`, `Synthetic`, `Graphs.Proximity`, `Graphs.Spectral`, `Maths.Geometry`, `Graphs.Distance` |

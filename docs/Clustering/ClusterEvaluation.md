@@ -11,7 +11,7 @@
 - **The assigned-only rule.** A label of `Assignment.Unassigned` (−1) marks a point the clusterer declined to place, such as HDBSCAN noise or an SPC abstention. Every evaluator scores only the **assigned subset**.
   - For external indices, only points whose *predicted* label is −1 are dropped. Reference labels are not filtered.
   - As a result, the documented symmetries hold exactly only when neither labeling contains −1: ARI, NMI and V-measure are symmetric, and $\mathrm{Completeness}(p,t)=\mathrm{Homogeneity}(t,p)$.
-- **The edge weight is any per-edge field.** Graph indices take a slot-indexed `double[]`, such as the `G` array of an [`Affinities`](./Concepts.md#per-edge-currencies) currency (Swendsen–Wang bond activity or the PKWang closed-form affinity). One implementation therefore scores every method's output with the same formula; scores are comparable across methods only when the fields share a scale.
+- **The edge weight is any per-edge field.** Graph indices take a slot-indexed `double[]`, such as the `G` array of an [`Affinities`](./Concepts.md#per-edge-currencies) currency (Swendsen–Wang bond activity or the cumulative-field closed-form affinity). One implementation therefore scores every method's output with the same formula; scores are comparable across methods only when the fields share a scale.
 
 ## Design
 

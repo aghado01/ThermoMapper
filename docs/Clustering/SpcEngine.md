@@ -1,6 +1,6 @@
 # SPC Engine
 
-> The computational core of **superparamagnetic clustering (SPC)**, after Blatt, Wiseman and Domany. A coupling-weighted graph is treated as a ferromagnetic q-state Potts model. The engine samples it with the Swendsen–Wang cluster algorithm, or replaces sampling with the PKWang direct solver, a deterministic closed-form surrogate built on a cumulative-energy ladder. It accumulates thermodynamic statistics and the per-edge currencies used for clustering, and runs temperature sweeps in parallel with checkpointing and reproducible seeding. · **Projects:** `Clustering.Graphical.SPC` (`runtime/**`), `Graphs.Models.Potts` · **Maturity:** core
+> The computational core of **superparamagnetic clustering (SPC)**, after Blatt, Wiseman and Domany. A coupling-weighted graph is treated as a ferromagnetic q-state Potts model. The engine samples it with the Swendsen–Wang cluster algorithm. It accumulates thermodynamic statistics and the per-edge currencies used for clustering, and runs temperature sweeps in parallel with checkpointing and reproducible seeding. · **Projects:** `Clustering.Graphical.SPC` (`runtime/**`), `Graphs.Models.Potts` · **Maturity:** core
 
 ## Overview
 
@@ -14,7 +14,6 @@ flowchart LR
   subgraph Core[runtime/core]
     SPEC[SwRunSpec + AccumulationSpec] --> RUN[SwRunner] --> SW["SwendsenWang&lt;TConfig&gt;"] --> ACC[Accumulator]
     ACC --> CUR[SwCurrencies] ; ACC <--> SER[AccumulatorSerializer: SPCX]
-    PK[PKWang.Prepare] --> CTX[PKWangContext] --> SOL[PKWang.Solve / Cluster] ; CTX --> PKL[PKWangLandscapes]
   end
   subgraph Exec[runtime/execution + scheduling]
     FG[FixedGridSweepStrategy] --> EX[SpcExecutor] --> SINK[IFrameSink]
@@ -44,7 +43,7 @@ flowchart LR
 
 **Currencies (per-edge "1-forms").** Model-agnostic per-edge fields indexed by CSR slot, meaningful only at the j > i slot (see [Concepts](./Concepts.md#per-edge-currencies)):
 
-- **Affinities:** bond survival. Universal; the PKWang solver produces it too.
+- **Affinities:** bond survival. Universal; the deterministic [cumulative-field solver](./CumulativeField.md) produces it too.
 - **Alignments:** spin agreement. Swendsen–Wang only.
 - **CoMembership:** same-cluster frequency. Swendsen–Wang only.
 
@@ -60,16 +59,15 @@ flowchart LR
   - Four `readonly struct`s fold them to constants: `NoCurrencies`, `AffinitiesOnly`, `AlignmentsOnly`, `BothCurrencies`.
   - `SwendsenWang<TConfig>` guards its per-edge writes with `if (TConfig.Alignments)` and `if (TConfig.Affinities)`, which the JIT removes when false.
   - The code's own rule: only an inner-loop scatter write earns a compile-time flag. $O(N)$ or $O(E)$ post-passes (landscapes, co-membership) are checked at run time.
-  - PKWang reuses the pattern with `IField`.
+  - The [cumulative-field solver](./CumulativeField.md) reuses the pattern with `IField`.
 - **Type erasure at the boundary.** The internal `ISwEngine` hides the generic parameter, so virtual dispatch costs one call per run, not one per draw.
-- **Currencies as the narrow waist.** Swendsen–Wang (through `SwCurrencies`) and PKWang (through `Solve`) both produce `Affinities`. Once produced, a currency carries no trace of which solver made it.
+- **Currencies as the narrow waist.** Swendsen–Wang (through `SwCurrencies`) and the cumulative-field solver (through `Solve`) both produce `Affinities`. Once produced, a currency carries no trace of which solver made it.
 - **Capability = nullability.** An optional accumulator array is present exactly when its gate was on. The SPCX format writes a presence flag for each optional array.
 - **Planner and dumb runner.** `WorkerBudgetResolver` decides how many workers to use. `SpcExecutor` only runs `Parallel.For` behind a single dispatch point.
 - **Persistence through a sink.** An `IFrameSink` owns both "already done?" and "what to do with a result". The executor loop is the same for disk, memory and no-op sinks.
 - **Extension points.**
   - new `ISweepStrategy` implementations (an adaptive strategy is referenced as parked);
   - new `IFrameSink`s;
-  - new `Field` values, each backed by an internal `IField` struct and a case in `PKWang.Prepare`;
   - new `ISwConfig` structs, whose mapping lives in `SwRunner.CreateModel`.
 
 ## API at a glance
@@ -80,7 +78,6 @@ flowchart LR
 | Single run | `SwRunner.Run(SwRunSpec)` → `SwRunResult`; `SwRunSpec`, `RunBudget`, `AccumulationSpec` (`None`, `Currencies`, …), `Accumulator` |
 | Reductions | `SwCurrencies.ToAffinities` / `ToAlignments` / `ToCoMembership`; `SwLandscapes.MeanClusterSize` / `GiantParticipation` |
 | Checkpoints | `AccumulatorSerializer.Instance` (SPCX v7, `.spcx`) |
-| PKWang | `PKWang.Prepare(graph, weightKind, field, rule = Mutual)` → `PKWangContext`; `PKWang.Solve`, `PKWang.Cluster`, `PKWang.EstimateBracket`; `PKWangSweep.Run`; `PKWangLandscapes.OverGrid`; `Field` (`Mean`, `Local`) |
 | Execution | `ISpcExecutor` / `SpcExecutor` (`BuildTaskList`, `Run`, `RunBatch`, `ExecuteAll`, `ExecuteBatch`, `ExecuteTask`); `SpcTaskSpec`, `SpcBatchResult`, `SpcExecutionOptions`, `SpcRunResult`; sinks `InMemoryFrameSink`, `NullFrameSink`, `SpcxDiskFrameSink`; `WorkerBudgetPolicy`, `WorkerBudgetResolver`; `SpcGraphBuilder.BuildResult` |
 | Scheduling | `ISweepStrategy`; `FixedGridSweepStrategy(FixedGridSweepConfig).Run(graph, analyzer?)` → `SweepResult`; `AutoGridFixedSweep.BuildConfig`; `SpcScheduleHelpers` (`LogSpaceGrid`, `Estimate`, `EstimateBracket`); `SpcSeedHelper.Derive`; `SweepKernel` |
 
@@ -90,7 +87,7 @@ flowchart LR
 
 $$H(\sigma)=-\sum_{\{i,j\}\in E}J_{ij}\,\delta_{\sigma_i\sigma_j},\qquad p_e=1-e^{-J_e/T}.$$
 
-Swendsen–Wang passes the raw coupling to the bond kernel. PKWang passes a cumulative energy instead (below). The critical-temperature anchor is $T_{ps}(q)=\tfrac{e^{-1/2}}{4}\ln(1+\sqrt q)$. It holds for the $1/\hat K$-normalized Gaussian kernel and requires $q\ge2$.
+Swendsen–Wang passes the raw coupling to the bond kernel; the [cumulative-field solver](./CumulativeField.md) passes a cumulative energy instead. The critical-temperature anchor is $T_{ps}(q)=\tfrac{e^{-1/2}}{4}\ln(1+\sqrt q)$. It holds for the $1/\hat K$-normalized Gaussian kernel and requires $q\ge2$.
 
 ### One Swendsen–Wang draw
 
@@ -148,31 +145,7 @@ With D retained draws:
   - CoMembership from the co-membership counts, as a raw fraction with no $(q-1)/q$ rescaling.
 
   In expectation, $E[S_e/D]=\langle\delta_{\sigma_i\sigma_j}\rangle$ and $E[B_e/D]=p_e\langle\delta\rangle$.
-- **Landscapes.** Two producers create `Landscape` objects: `SweepLandscapes.FromFrames` for Swendsen–Wang (in the analysis layer) and `PKWangLandscapes.OverGrid`. `SwLandscapes` is a per-accumulator helper that returns raw per-node arrays, and nothing in the source currently calls it.
-
-### PKWang direct solver
-
-PKWang is a deterministic, non-Monte-Carlo alternative to Swendsen–Wang. It sorts couplings into a **cumulative-energy ladder** $H^{\text{cum}}$ and evaluates the affinities in closed form.
-
-**Building the ladder.**
-
-- **`Field.Mean`:** sort the M undirected couplings in ascending order. Each edge's upper-half slot receives the rank-inclusive cumulative sum $H^{\text{cum}}_{(r)}=\sum_{s\le r}J_{(s)}$.
-- **`Field.Local`:** each row sorts its own couplings and writes its rank-inclusive cumulative sums into its own outgoing slots, so the two directed slots of an edge carry values from each endpoint's ranking.
-
-**Kernel.** $G_e(T)=1-e^{-H^{\text{cum}}_e/T}$ when $H^{\text{cum}}_e>0$, otherwise 0. For `Local`, the two directed values are then reconciled into the upper-half slot: `Mutual` takes the minimum (the default), `Inclusive` the maximum, and `Mean` the average.
-
-**Clustering.** `PKWang.Cluster` thresholds G at θ (default ½) and takes connected components. θ must lie in [0, 1]; other values throw `InvalidOperationException`.
-
-- For `Field.Mean`, $G_e>\theta\iff H^{\text{cum}}_e>-T\ln(1-\theta)$. Each edge is active below its cut temperature $T^*_e=-H^{\text{cum}}_e/\ln(1-\theta)$, which is $H^{\text{cum}}_e/\ln2$ at the default θ = ½, and because $H^{\text{cum}}$ increases with coupling rank, the partition equals **single linkage on couplings**.
-- For `Field.Local`, the cut applies to the reconciled value:
-  - under `Mutual` or `Inclusive`, the minimum or maximum of the two directed $H$ values;
-  - under the `Mean` rule, no single-$H$ form exists.
-
-  Partitions remain nested in T in every case.
-
-**Bracket.** `PKWang.EstimateBracket` takes quantiles 2% and 98% of the positive $H^{\text{cum}}$ values, divides by $\ln 2$, and pads by factors 0.5 and 2.
-
-**Limits.** PKWang produces Affinities only. Its temperature axis is in $H^{\text{cum}}$ units and is not comparable with the Swendsen–Wang temperature. `Prepare` rejects any `weightKind` other than `EdgeWeightKind.Coupling`; it trusts the declared kind and does not inspect the weights.
+- **Landscapes.** Two producers create `Landscape` objects: `SweepLandscapes.FromFrames` for Swendsen–Wang (in the analysis layer) and `CumulativeFieldLandscapes.OverGrid` ([CumulativeField](./CumulativeField.md)). `SwLandscapes` is a per-accumulator helper that returns raw per-node arrays, and nothing in the source currently calls it.
 
 ### Sweeps
 
@@ -224,7 +197,6 @@ PKWang is a deterministic, non-Monte-Carlo alternative to Swendsen–Wang. It so
 | `FixedGridSweepConfig` SusceptibilityKind / BaseSeed / CheckpointDirectory | `FkCluster` / null / null | Primary χ; OS entropy; no checkpoints (`NullFrameSink`) |
 | `FixedGridSweepConfig` Sampler / Parallelism | `new PottsModelConfig()` / `new WorkerBudgetPolicy()` | — |
 | `AutoGridFixedSweep.BuildConfig` | 12 steps, cold 0.05, hot 5.0, sweep (200, 400), equilibrium (1000, 5000) | — |
-| `PKWang` rule / θ / bracket | `Mutual` / 0.5 / quantiles 0.02–0.98, pads 0.5 and 2.0 | — |
 | `SpcExecutionOptions` FrameSink / BaseSeed / TemperatureQuantizationFactor | null (disk sink) / null / 1000 | — |
 | `WorkerBudgetPolicy` MaxWorkers / ReservedCores | null (auto) / 2 | — |
 
@@ -244,8 +216,7 @@ The fixed-grid sweep builds its own execution options. It pre-derives seeds with
 |---|---|
 | Potts model | `ThermoMapper/src/graphs/models/potts/FkKernel.cs`, `PottsModelConfig.cs`, `BwdPottsCriticalEstimate.cs`, `observables/*.cs` |
 | Sampler | `ThermoMapper/src/clustering/graphical/spc/runtime/core/sampler/` (`SwendsenWang.cs`, `SwRunner.cs`, `Accumulator.cs`, `AccumulationSpec.cs`, `ISwConfig.cs`, `SwCurrencies.cs`, `SwLandscapes.cs`, `SwRunSerialization.cs`, …) |
-| PKWang | `…/runtime/core/solver/` (`PKWang.cs`, `PKWangContext.cs`, `Field.cs`, `MeanField.cs`, `LocalField.cs`, `PKWangSweep.cs`, `PKWangLandscapes.cs`) |
 | Execution | `…/runtime/execution/` (`SpcExecutor.cs`, `SpcTaskSpec.cs`, `SpcBatchResult.cs`, `SpcGraphBuilder.cs`, `sinks/*`) |
 | Scheduling | `…/runtime/scheduling/` (`FixedGridSweepStrategy.cs`, `AutoGridFixedSweep.cs`, `SpcScheduleHelpers.cs`, `SpcSeedHelper.cs`, `SweepKernel.cs`, `SweepResult.cs`, `WorkerBudget*.cs`) |
 
-**See also:** [SpcAnalysis](./SpcAnalysis.md) · [GraphSubstrate](./GraphSubstrate.md) (currency types) · [GraphConstruction](./GraphConstruction.md) · [Concepts](./Concepts.md)
+**See also:** [SpcAnalysis](./SpcAnalysis.md) · [CumulativeField](./CumulativeField.md) · [GraphSubstrate](./GraphSubstrate.md) (currency types) · [GraphConstruction](./GraphConstruction.md) · [Concepts](./Concepts.md)

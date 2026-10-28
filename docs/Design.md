@@ -184,7 +184,7 @@ public static Barcode Compute(ZigzagFiltration f, int maxDimension = 0, bool rep
 - **`GraphZigzag` Reference vs Fast.** A dense barcode forest vs a sparse forest backed by HDT.
 - **Zigzag oracles.** The naive generalized-rank oracle (`ZigzagBarcodeNaive`), `ZigzagMapBarcode` and the strong-collapse references cross-check `FastZigzag` and the graph engines; `ReflectionZigzag` is a partial alternative engine ([Zigzag Persistence](./ZigzagPersistence.md)).
 - **Standard persistence.** `PersistentHomology`'s plain column reduction is the reference for the cohomology and involuted fast paths ([Persistent Homology](./PersistentHomology.md)).
-- **SPC.** The deterministic PKWang direct solver sits beside Monte Carlo Swendsen–Wang as an alternative producer of `Affinities`. Its temperature axis is in cumulative-energy units, so it is not a numerical reference for Swendsen–Wang ([SPC Engine](./SpcEngine.md)).
+- **Cumulative field.** The deterministic [cumulative-field solver](./CumulativeField.md) is a sibling of Monte Carlo Swendsen–Wang and another producer of `Affinities`. Its temperature axis is in cumulative-energy units, so it is not a numerical reference for Swendsen–Wang ([SPC Engine](./SpcEngine.md)).
 
 **Trade-offs.**
 

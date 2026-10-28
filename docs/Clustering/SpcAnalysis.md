@@ -1,6 +1,6 @@
 # SPC Analysis
 
-> What superparamagnetic clustering does after sampling. It turns per-temperature sampler frames into a **temperature profile** of thermodynamic signals, picks a **chosen temperature**, cuts a flat **partition** there, and can build and resolve a multi-temperature **hierarchy**. It also writes a CSV and run-layout **export** bundle. `SpcClusteringSession` is the end-to-end entry point. · **Project:** `Clustering.Graphical.SPC` (partitions, profiling, export, session, demos) · **Maturity:** core; `WangMonteCarloDemo` is a demonstration, and `SpcOutputPathHelper` has been superseded by `SpcRunPaths`
+> What superparamagnetic clustering does after sampling. It turns per-temperature sampler frames into a **temperature profile** of thermodynamic signals, picks a **chosen temperature**, cuts a flat **partition** there, and can build and resolve a multi-temperature **hierarchy**. It also writes a CSV and run-layout **export** bundle. `SpcClusteringSession` is the end-to-end entry point. · **Project:** `Clustering.Graphical.SPC` (partitions, profiling, export, session) · **Maturity:** core; `SpcOutputPathHelper` has been superseded by `SpcRunPaths`
 
 ## Overview
 
@@ -55,7 +55,7 @@ flowchart LR
 - **One partition kernel.** All three flat strategies and `DenseTStack` delegate to one internal threshold-and-connect routine. They differ only in which field they pass it.
 - **Producer-agnostic cores.** `DenseTStack`, `HierarchyEom`, `LineagePersistence` and `ThermalEom` each have two overloads:
   - one taking frames (the Swendsen–Wang path: pool the frames, then call the core);
-  - one taking explicit columns, a stack or a landscape, so a closed-form solver such as PKWang can feed the same resolver.
+  - one taking explicit columns, a stack or a landscape, so a closed-form solver such as the [cumulative-field solver](./CumulativeField.md) can feed the same resolver.
 - **Pool, then reduce.**
   - Linear per-frame reductions are averaged across replicas.
   - Nonlinear quantities pool their sufficient statistics first: label entropy (pooled histograms), $\bar\delta$ (pooled counts and draws), landscapes (pooled sums), bond entropy (pooled bond counts).
@@ -83,7 +83,6 @@ flowchart LR
 | Dense resolvers | `DenseTStack.Build`; `HierarchyEom.Resolve` → `HierarchyEomResult`; `LineagePersistence.Resolve` → `LineagePersistenceResult` (`ClusterLineage`); `ThermalEom.Resolve` → `ThermalEomResult`; `PartitionHierarchyDendrogram.ToDendrogram` (cost axis `"temperature"`) |
 | Profiling | `SweepProfile.From(runs, kind)`, `SweepCurves.ByTemperature`, `SweepEdgeCurves.CoMembershipDelta`, `SweepLandscapes.FromFrames`, `LabelEntropyCurve.From`; `SpcProfileAnalysis` (`SpPlateau`, `ComputeHalfMaximumBand`, `PickPeakTemperature`, `ComputeStability`); `ChiPeakSignalAnalyzer`; `SusceptibilityKind` |
 | Export | `SpcCsvWriter.Write*`, `WriteAllToDirectory`, `WriteEquilibriumEdges`; `SpcTabularProjections.Create*Projection`; `SpcRunLayout`, `SpcRunPaths`; `SpcOutputPathHelper` (legacy) |
-| Demo | `WangMonteCarloDemo.Sample(context, T, draws, seed?)` (not for production use) |
 
 `HierarchyEom`, `LineagePersistence` and `ThermalEom` are static resolvers over frames. The session does not call them; it accepts only an `IHierarchicalPartitionStrategy`, which in this project means Blatt.
 
@@ -246,6 +245,5 @@ Columns derived from dictionaries (channels, enrichments, scores) follow the fix
 | Hierarchy | `partitions/hierarchical/*.cs` (`BlattPartitionStrategy`, `DenseTStack`, `HierarchyEom`, `LineagePersistence`, `PartitionHierarchy`, `PartitionHierarchyDendrogram`, `MagnetizationPeakDetector`, …), `partitions/thermal/ThermalEom.cs` |
 | Profiling | `profiling/*.cs`, `profiling/signals/*.cs` |
 | Export | `export/SpcCsvWriter.cs`, `export/SpcTabularProjections.cs`, `export/SpcRunLayout.cs`, `export/SpcRunPaths.cs`, `export/SpcOutputPathHelper.cs` |
-| Demo | `demos/WangMonteCarloDemo.cs` |
 
 **See also:** [SpcEngine](./SpcEngine.md) · [ClusterResolution](./ClusterResolution.md) · [ClusterEvaluation](./ClusterEvaluation.md) · [Archivory](./Archivory.md) · [Architecture](./Architecture.md#workflows)

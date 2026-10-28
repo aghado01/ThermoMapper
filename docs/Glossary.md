@@ -35,6 +35,7 @@ Terms as ThermoMapper's code uses them, in alphabetical order. The last column n
 | **Coupling fidelity** | How curvature enters the kernel: `GeodesicLinear` (flat kernel on geodesic distance) or `Intrinsic` (manifold heat kernel) | [GraphConstruction](./GraphConstruction.md) |
 | **Cover** | Overlapping bins over a Mapper lens's range: `Cover.Uniform`, `Cover.Balanced` (quantile) or `ProductCover` | [Mapper](./Mapper.md) |
 | **CSR graph** | `CsrGraph`: symmetric compressed-sparse-row adjacency storing each undirected edge in both endpoint rows | [Concepts](./Concepts.md#the-csr-graph) |
+| **Cumulative field** | Deterministic graphical clusterer that evaluates edge-survival affinities in closed form from a cumulative-energy ladder, without Monte Carlo | [CumulativeField](./CumulativeField.md) |
 | **Currency** | A shared data type passed between modules; specifically, a per-edge field at one temperature (Affinities, Alignments, CoMembership) | [Concepts](./Concepts.md) |
 
 ## D–H
@@ -104,7 +105,6 @@ Terms as ThermoMapper's code uses them, in alphabetical order. The last column n
 | **Pathology interrupt** | Configured threshold that makes a graph build throw `GraphPathologyException` | [GraphConstruction](./GraphConstruction.md) |
 | **Periphery completion** | Policies that fill unassigned points without relabelling assigned ones | [ClusterResolution](./ClusterResolution.md) |
 | **Persistence** | Bar length `Death − Birth` | [PersistentHomology](./PersistentHomology.md) |
-| **PKWang** | Deterministic direct solver that evaluates affinities in closed form from a cumulative-energy ladder, without Monte Carlo | [SpcEngine](./SpcEngine.md#pkwang-direct-solver) |
 | **Poincaré ball** | Unit-ball model of hyperbolic space (curvature −1) used by hyperbolic metrics, kernels and datasets | [RiemannianGeometry](./RiemannianGeometry.md) |
 | **Potts model** | q-state spin model on a coupling graph whose superparamagnetic phase reveals clusters | [SpcEngine](./SpcEngine.md) |
 | **Protect set** | Edges (typically H1 loop edges) that local mutual proximity must leave untouched; supplied by a `ProtectedEdgeSource` | [PersistentHomology](./PersistentHomology.md#cycle-representatives-and-the-h1-protect-set) |
