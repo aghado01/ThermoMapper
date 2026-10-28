@@ -244,7 +244,36 @@ public sealed class BassRunTests
                 Assert.Equal(x.Lambda, y.Lambda);
             }
         }
-        Assert.Equal(a.Diagnostics, b.Diagnostics);
+        AssertSameDiagnostics(a.Diagnostics, b.Diagnostics);
+    }
+
+    internal static void AssertSameDiagnostics(BassDiagnostics a, BassDiagnostics b)
+    {
+        Assert.Equal(a.Count, b.Count);
+        Assert.Equal(a.Tau, b.Tau);
+        Assert.Equal(a.Sigma2, b.Sigma2);
+        Assert.Equal(a.Fitted, b.Fitted);
+        Assert.Equal(a.Moves, b.Moves);
+        Assert.Equal(a.AcceptanceRate, b.AcceptanceRate);
+        Assert.Equal(a.Refusals.Entries, b.Refusals.Entries);
+        Assert.Equal(a.EmptyBirths, b.EmptyBirths);
+        Assert.Equal(a.Support.Entries, b.Support.Entries);
+        Assert.Equal(a.MassAtCap, b.MassAtCap);
+        Assert.Equal(a.SamplesUsed, b.SamplesUsed);
+        Assert.Equal(a.StoppedEarly, b.StoppedEarly);
+        Assert.Equal(a.Chains.Count, b.Chains.Count);
+        for (int c = 0; c < a.Chains.Count; c++)
+        {
+            BassChainAccount x = a.Chains[c], y = b.Chains[c];
+            Assert.Equal(x.Start.Terms, y.Start.Terms);
+            Assert.Equal(x.Start.Tau, y.Start.Tau);
+            Assert.Equal(x.Start.Attempts, y.Start.Attempts);
+            Assert.Equal(x.Moves, y.Moves);
+            Assert.Equal(x.Refusals.Entries, y.Refusals.Entries);
+            Assert.Equal(x.EmptyBirths, y.EmptyBirths);
+            Assert.Equal(x.Support.Entries, y.Support.Entries);
+            Assert.Equal(x.MassAtCap, y.MassAtCap);
+        }
     }
 
     // Reports on the calling thread, as the run's callers see them.

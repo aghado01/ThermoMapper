@@ -27,7 +27,8 @@ namespace Maths.Regression.Spline.Bass;
 /// shows a state holding that candidate's structure it was accepted, and the design commits it. Any other structure
 /// (a swapped-in replica's, a restored one) is loaded whole.</item>
 /// </list>
-/// Refusals are tallied by reason, the target's exact-fit refusal included. Not thread-safe: one per chain.
+/// Refusals are tallied by reason, the target's exact-fit refusal included, and each birth's and change's candidate term
+/// by its orders with its support outcome (D01's tilt). Not thread-safe: one per chain.
 /// </summary>
 public sealed class BassStructureMoves
 {
@@ -53,6 +54,7 @@ public sealed class BassStructureMoves
         if (model.Target.Refusal(Start.Fit) is { } exact) throw new ArgumentException($"The start lies outside F ({exact}).", nameof(terms));
         _counts = CountsOf(loaded);
         _committed = Start;
+        Support = new BassSupportTally(model.Prior);
         Moves = [new Birth(this), new Death(this), new Change(this)];
     }
 
@@ -68,6 +70,18 @@ public sealed class BassStructureMoves
 
     /// <summary>Births whose draw left every part empty, the intercept: no move (D01).</summary>
     public long EmptyBirths { get; private set; }
+
+    /// <summary>Each birth's and change's candidate term by its orders, refused for support or not (D01's tilt).</summary>
+    public BassSupportTally Support { get; }
+
+    /// <summary>Clears the tallies (<see cref="Refusals"/>, <see cref="EmptyBirths"/>, <see cref="Support"/>), so they
+    /// count from here: a run's sampling phase.</summary>
+    public void ResetTallies()
+    {
+        Refusals.Assign(new Tally<BassRefusal>());
+        EmptyBirths = 0;
+        Support.Clear();
+    }
 
     /// <summary>The chain's design, holding <paramref name="state"/>'s structure.</summary>
     public BassDesign DesignAt(BassState state)
@@ -171,6 +185,7 @@ public sealed class BassStructureMoves
     private BassState Candidate(BassState current, BassTerm[] terms, DesignProposal proposal, Kind kind, BassTerm? added, BassTerm? removed)
     {
         BassStructureFit fit = BassStructureFit.Of(proposal, proposal.Admitted ? LogTermPrior(terms) : double.NaN);
+        if (added is not null) Support.Add(added, proposal.Refusal == BassRefusal.Support);
         var candidate = new BassState(terms, fit, current.LogTau);
         if (_model.Target.Refusal(fit) is { } reason)
         {
@@ -254,7 +269,11 @@ public sealed class BassStructureMoves
             BassTerm old = current.TermArray[index];
             BassTerm term = owner._model.Proposal.DrawChange(rng, old, out double logRatio);
             owner._candidate = null;
-            if (term.Equals(old)) return new Proposal<BassState>(current, 0.0, 0.0);   // the same state
+            if (term.Equals(old))   // the same state, whose term has its support
+            {
+                owner.Support.Add(term, false);
+                return new Proposal<BassState>(current, 0.0, 0.0);
+            }
             DesignProposal proposal = owner._design.ProposeChange(index, term);
             // The design moves a changed term to the end, so the candidate's order follows it.
             BassTerm[] terms = [.. current.TermArray[..index], .. current.TermArray[(index + 1)..], term];

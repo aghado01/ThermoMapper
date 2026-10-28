@@ -34,7 +34,7 @@ public static class Bass
 
         string fingerprint = Fingerprint(config, data);
         long planned = sampling.Chains * ((resumeFrom is null ? sampling.BurnIn : 0L) + (long)sampling.Samples * sampling.Thin);
-        var ensemble = new BassEnsemble(model, fingerprint, options, planned);
+        var ensemble = new BassEnsemble(model, fingerprint, options, planned, (resumeFrom?.DrawsPerChain ?? 0) + sampling.Samples);
         var parallel = new ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism, CancellationToken = options.Cancellation };
         (EnsembleRun summary, IReadOnlyList<IChainRun<BassState>> chains) = new ChainEnsemble().Run(
             ensemble, sampling.Chains, sampling.MasterSeed, sampling.BurnIn, sampling.Samples, sampling.RHatTarget, sampling.BatchSize,
