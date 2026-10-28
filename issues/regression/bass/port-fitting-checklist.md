@@ -12,6 +12,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [x] **F-D04** Collapsed and conditional update order: decided 2026-10-27 as drafted, with k = M + 1 under level centring.
 - [x] **F-D05** Tempering and SMC target paths: decided 2026-10-27; the integrated form by default, the linear form selectable.
 - [x] **F-D06** Numerical model admission: decided 2026-10-27; the count as the support default, the centred angles under every convention.
+- [ ] **F-C1** Contract shapes: data, config and result, drafted 2026-10-28 as a proposal; five open choices await the user's review.
 - [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison.
 - [ ] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison.
 
@@ -51,6 +52,14 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### Contract shapes drafted (F-C1) — 2026-10-28
+
+At the user's request, stage 1's last item: the data, config and result contracts for fitting, in the segment's "Contract shapes" section, consuming D01–D06 as decided.
+- *Data:* named predictor columns, continuous and categorical; scalar and functional responses, with output variables for the coordinates and the covariates known at them; refusals at entry; one input transform fitted from the training data.
+- *Config:* values only, so it serializes and fingerprints whole, unlike `BarsConfig`'s instances (OQ10); the decisions' closed sets as records; R's defaults where the decisions leave a number open, the sampling lengths provisional.
+- *Result:* every draw's generative state in per-chain draw stores over an interned term table, SMC weights, diagnostics including D01's and D02's tilts and D06's refusals by reason, the evidence with its priors, the checkpoint beside it; fitted values, the pointwise density, prediction and sensitivity as views.
+- *Open for the user:* values throughout; extending `GPriorCentre` with `Flat`; `Sigma2Prior` as a shared serializable record; the sampling defaults; the unseen-level policy.
 
 ### Count, order and λ laws and the boundary ratios (F-O3, F-O4) — 2026-10-27
 

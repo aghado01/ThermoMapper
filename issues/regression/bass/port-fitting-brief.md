@@ -2,7 +2,7 @@
 
 A segment of the [full port brief](../bass-full-port-brief.md), which holds the scope and completion contract, the dependency boundaries, the stage table and the decision register. This segment covers stage 4, complete mixed-predictor scalar and direct-functional fitting, and the stage-1 decisions it consumes, D01–D06. It builds on the [numerics segment](port-numerics-brief.md). Its checklist, where the reports go as work lands, is [port-fitting-checklist.md](port-fitting-checklist.md).
 
-The decision drafts here are proposals for the user's design pass, not decisions. The register, with each decision's status, and the table of sources the drafts were drawn from are in the hub's [decisions section](../bass-full-port-brief.md#statistical-decisions-to-settle).
+D01–D06 were decided in the user's design pass (2026-10-27), and each section says so; the contract shapes below are a proposal. The register, with each decision's status, and the table of sources the drafts were drawn from are in the hub's [decisions section](../bass-full-port-brief.md#statistical-decisions-to-settle).
 
 ## Direct functional algebra
 
@@ -83,7 +83,7 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
 - **What the port does.** It keeps both weights positive and validates them as such, never offering 0.
 - **The evidence.** BARS lacked such a component: its births were local only. A 10% uniform component cut its knot count's autocorrelation time 12× and about 20× on two fits (preparation brief, OQ11 and step 3.9).
 
-## Decision drafts: D01–D06
+## Decisions: D01–D06
 
 ### D01 (decided 2026-10-27): term representation and prior measure
 
@@ -366,6 +366,139 @@ Decided by the user on 2026-10-27, as drafted, with the count as the support def
 - **A ridge is a prior, never a numerical repair.** Under the g-prior a rank-deficient design lies outside F; a ridge enters only as one of D03's declared coefficient priors.
 - **Shared state.** The residual r and δ serve the factor border, the numerical gate and informed proposals (§5). r is updated on each accepted birth, recomputed after deaths and on a cadence, and S is computed from r rather than as yᵀy − Q/(1+τ), whose cancellation bites when τ is small (§5).
 - **Independent checks:** §5's, randomized insert and delete sequences against fresh factorizations, residual drift against recomputation and s against the SVD's principal angle; plus one constructed case for each refusal reason.
+
+## Contract shapes (proposal, 2026-10-28)
+
+Stage 1's last deliverable: the data, config and result contracts for fitting, drafted after D01–D06 were decided and consuming them. They are proposals for the user's review, not decisions. They follow CONTRIBUTING's strict core: one immutable config record, a static entry point, and delegates and live objects on the call, never in the config. Placement is the hub's: `Maths.Regression.Spline.Bass`, under `src/maths/regression/spline/bass/`.
+
+**Entry points.**
+
+```csharp
+public static class Bass
+{
+    public static BassFit Fit(BassConfig config, BassData data, BassRunOptions? run = null);
+    public static BassFit Resume(BassCheckpoint checkpoint, BassConfig config, BassData data, BassRunOptions? run = null);
+}
+```
+- `BassRunOptions` carries what is not the model: one bound on parallelism over chains, replicas, particles and workers (the posterior-ownership rules above), a cancellation token, a checkpoint request and progress callbacks. It is neither serialized nor fingerprinted.
+- `Resume` refuses a checkpoint whose fingerprint differs from that of `config` and `data`.
+
+**Data.**
+
+```csharp
+public sealed record BassData(IReadOnlyList<BassPredictor> Predictors, BassResponse Response);
+
+public abstract record BassPredictor(string Name);
+public sealed record ContinuousPredictor(string Name, double[] Values) : BassPredictor(Name);
+public sealed record CategoricalPredictor(string Name, int[] Codes, IReadOnlyList<string> Levels) : BassPredictor(Name);
+
+public abstract record BassResponse;
+public sealed record ScalarResponse(double[] Y) : BassResponse;
+public sealed record FunctionalResponse(double[,] Y, IReadOnlyList<ContinuousPredictor> OutputVariables) : BassResponse;   // Y is n × m
+```
+- *Predictors are named columns* in the caller's order, which the fit keeps, so results, sensitivity indices and predictions refer to them by name and position. Mixed types are first-class, and categorical codes index `Levels`.
+- *A functional response* shares one set of m output locations across cases (the hub's representation table). The output variables describe them: the coordinates, and any covariates known at each location (the direct functional algebra section), each a further functional variable.
+- *Refused at entry, with a reason:* a constant continuous column, which has no knot; a factor with one level; a non-finite response; a zero or constant response (D03); mismatched lengths.
+- *Supplied-basis and PCA responses are not a fitting input.* The outputs segment fits each coefficient response as a `ScalarResponse` and keeps the basis beside the component fits (stage 5).
+- *Room for the noise extensions:* an offset and observation weights join `BassData` with them (F-X1), and are absent now.
+
+**The input transform** (`BassInputTransform`), fitted once from the training data and kept in the fit:
+- continuous predictors and output variables: R's range scaling to [0, 1], stored as each column's (min, max); knots are the scaled distinct values (D01);
+- categorical predictors: the training levels, by name.
+
+At prediction, a value outside the training range extrapolates the hinges linearly and is flagged per case. An unseen level is refused by default, or placed outside every subset (`UnseenLevel.OutsideEverySubset`), declared on the prediction call.
+
+**Config.** Every field is a value, so the record serializes to JSON and is its own manifest.
+
+```csharp
+public sealed record BassConfig
+{
+    public BassStructureSpec Structure { get; init; } = new();                       // D01, D06
+    public BassCountPrior Count { get; init; } = new();                              // D02
+    public BassCoefficientPrior Coefficients { get; init; } = new GPrior();          // D03
+    public Sigma2Prior Sigma2 { get; init; } = Sigma2Prior.ScaledToResponse(1e-3);  // D03
+    public GPriorCentre Intercept { get; init; } = GPriorCentre.Mean;                // D03
+    public BassSampling Sampling { get; init; } = new();                             // D04, D05, D10
+}
+
+public sealed record BassStructureSpec
+{
+    public int Degree { get; init; } = 1;
+    public int MaxInteraction { get; init; } = 3;
+    public int MaxCategoricalInteraction { get; init; } = 3;
+    public int MaxFunctionalInteraction { get; init; } = 3;
+    public int? MaxBasis { get; init; }                                  // null: min(1000, n)
+    public SupportRule Support { get; init; } = new();
+    public double AngleFloor { get; init; } = 1e-10;                     // D06's s_min
+    public double? MaxVarianceInflation { get; init; }                   // off
+    public CategoricalSubsetMeasure CategoricalSubsets { get; init; } = CategoricalSubsetMeasure.SizeUniform;
+    public double OrderWeight { get; init; } = 5;                        // w1, kept positive
+    public double VariableWeight { get; init; } = 5;                     // w2, kept positive
+}
+public sealed record SupportRule(SupportKind Kind = SupportKind.Count, int? MinNonzero = null, int? MinNonzeroFunctional = null);
+                                                                         // null: min(20, 0.1·n) per part, R's default
+public sealed record BassCountPrior(double Shape = 10, double Rate = 10);  // h1, h2; λ integrated out
+
+public abstract record BassCoefficientPrior;
+public sealed record GPrior(double TauShape = 0.5) : BassCoefficientPrior;   // τ ~ Gamma(a, rate a·n); a = ½ is Zellner–Siow
+public sealed record FixedG(double? Tau = null) : BassCoefficientPrior;      // null: unit information, 1/n
+public sealed record Ridge(double TauShape = 0.5) : BassCoefficientPrior;    // GBMARS's sampled-τ ridge, an option
+public sealed record FixedRidge(double Scale) : BassCoefficientPrior;        // its scale stated as part of the model
+
+public sealed record BassSampling
+{
+    public int Chains { get; init; } = 4;
+    public int MasterSeed { get; init; }
+    public int BurnIn { get; init; } = 9000;                 // R's split of 10,000; provisional
+    public int Samples { get; init; } = 1000;
+    public int Thin { get; init; } = 1;
+    public double RHatTarget { get; init; }                  // 0: no early stop
+    public int BatchSize { get; init; }
+    public double MinEssPerChain { get; init; } = 100;
+    public MoveSchedule Moves { get; init; } = new EqualOverAvailable();   // or PriorCancelling(C = 0.4)
+    public TemperingSpec? Tempering { get; init; }           // null: untempered (D05)
+    public SmcSpec? Smc { get; init; }                       // stage 8; null: MCMC
+    public bool ReportEvidence { get; init; } = true;
+}
+```
+- `TemperingSpec` holds D05's choices: the path (likelihood by default, powered selectable), the tempered form (integrated by default, linear selectable), the ladder (levels, hot end, swap schedule, adaptation frozen after burn-in, D10) and the exact reference rung (opt-in). `SmcSpec` holds the particle count, the resampling scheme (multinomial by default), the adaptive schedule's conditional-ESS target and the sweeps per stage.
+- *Why values, not component instances.* `BarsConfig` holds instances (`IObservationModel`, priors, kernels), so it neither serializes nor fingerprints whole; that is how BARS's checkpoint identity came to cover component types and not their parameters (OQ10). BASS's choices are closed sets that the decisions enumerate, so values cover them, the manifest is the config, and the fingerprint is a hash of its serialization and of the data. A new prior or kernel joins its closed set with its decision.
+- *Auto-picks* (the basis cap, the support counts, n, s² and the centre's level) are resolved at entry and reported in the fit's `Resolved` record, the automation log CONTRIBUTING asks for.
+- *Not carried:* R's `s2.lower` (a truncated σ² prior, which would have to be stated as one) and `beta.prior = "jeffreys"` (a defect fixture, D03). R's `save.yhat` and `small` become a view and the draw store's thinning.
+
+**Result.** The retained posterior and its account, immutable.
+
+```csharp
+public sealed record BassFit(
+    BassConfig Config, BassResolved Resolved, BassInputTransform Transform, RunIdentity Identity,
+    BassTermTable Terms,                                 // interned terms
+    IReadOnlyList<DrawStore<BassDraw>> Draws,            // per chain, in draw order
+    double[]? DrawWeights,                               // SMC; null: equal
+    BassDiagnostics Diagnostics, BassEvidence? Evidence, ResidualDependence? ResidualDependence,
+    EnsembleCheckpoint? Checkpoint);
+
+public sealed record BassDraw(BassStructure Structure, double Tau, double Sigma2, double[] Coefficients, double Lambda);
+public readonly record struct BassStructure(int[] TermIds);   // sorted ids into Terms: an unordered collection (D01)
+```
+- *Every draw's generative state* (D04): the structure, τ, σ², the coefficients and λ. Fitted values, posterior means and intervals are views over it, computed on demand. Training fits are a cached view only on request (R's `save.yhat`), stored apart from the draws.
+- *Interned terms.* A `BassTermTable` shared by every draw holds each term's continuous factors (variable, sign, knot), categorical factors (variable, level subset) and functional factors (output variable, sign, knot), with the fit's degree. Structures hold ids, so a retained draw never aliases mutable state.
+- *Weighted draws.* SMC's draws carry their weights, and every view (prediction, sensitivity, summaries) takes weights, equal ones for MCMC.
+- *Diagnostics* (`BassDiagnostics`):
+  - rank-normalized R̂ and ESS for the monitored functionals: M, τ, σ², and fitted values at declared points;
+  - acceptance per move type;
+  - refusals by reason (`Tally<BassRefusal>`: cap, support, numerical; D06);
+  - the support-rejection rate per order (D01's tilt) and the posterior mass at the cap (D02's);
+  - the tempering readout when tempered, and SMC's stage reports with the genealogy error when SMC ran.
+- *Evidence* (`BassEvidence`): stepping-stone, and path sampling where the slope comes free, with their Monte Carlo errors, and `BassEvidencePriors` (D05's point 3): the coefficient prior and τ's shape, the count prior, the term measure and interaction caps, the support rule, the centre and its resolved level, and σ²'s prior as specified and as resolved. Null under the improper options.
+- *The checkpoint* rides beside the posterior, never inside it.
+- *Derived operations* on the fit, each a function of the draws: `PointwiseLogDensity(UnitPartition, PointwiseContent)`, the shared OQ17 seam, with retained parameters by default (D04); `Predict` (stage 5, the outputs segment); `Sensitivity` (stage 6).
+
+**Open choices in the shapes, for the user.**
+1. *Closed sets as records, values throughout.* Recommended above. The alternative is `BarsConfig`'s instances, which leave the fingerprint partial.
+2. *The intercept enum.* Extend the shared `GPriorCentre` with `Flat` for the Liang convention (BARS refuses it until the shared block supports it), or give BASS its own enum. Recommended: extend the shared one, one shape per pattern.
+3. *σ²'s prior as a value.* Make the shared `Sigma2Prior` a serializable record, which BARS's config then shares, or map a BASS-local spec onto it at entry. Recommended: the shared record.
+4. *Sampling defaults.* R's 9,000 burn-in and 1,000 kept draws, provisional until BASS's own pre-registered measurement (as BARS's are, OQ14), or BARS's 2,000 and 2,000 with the R̂ stop.
+5. *Unseen levels at prediction.* Refuse by default (recommended), or place them outside every subset.
 
 ## Regime note: deterministic simulators (proposal, 2026-10-26)
 
