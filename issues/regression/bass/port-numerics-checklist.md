@@ -18,7 +18,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N6** Diagonal-plus-low-rank solves and log-determinants, without m × m inverses: `DiagonalPlusLowRank`.
 - [x] **N7** Face-splitting design contraction with the Cartesian (Hadamard) shortcut: `KhatriRao`, both intercept conventions.
 - [x] **N8** Generic SMC core in `samplers/smc` (optional; specified in the calibration segment): `SmcRun`, `SmcSampler`.
-- [x] **N9** Qualified baseline rerun after the shared changes, before the first BASS integration tests: requalified at `3a04601`.
+- [x] **N9** Qualified baseline rerun after the shared changes, before the first BASS integration tests: requalified at `3a04601`, and again at `cf37584` before stage 4 (2026-10-28).
 - [x] **N10** Cross-products summed pairwise or with compensation: `PairwiseSum`. F-O7's near-constant design is the acceptance case: its left-to-right error is 10⁻³ relative in s.
 - [x] **N11** Evidence over a tempering ladder: path sampling and stepping-stone from per-rung traces, with Monte Carlo error (D03, D05). Chip: [shared-infrastructure-brief.md](shared-infrastructure-brief.md). `LadderEvidence` with stepping-stone as the default; `ParallelTempering.TraceRungs` (`84c173f`).
 - [x] **N12** The g-prior's log marginal at (τ, b) as one scalar, without the mean vector (D04's τ slice, D05's swaps). Same chip. `CollapsedGPrior.MarginalAt` → `GPriorMarginal`, bit-identical to `At`'s (`0afe33d`).
@@ -31,6 +31,57 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [ ] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update.
 
 ## Reports
+
+### Baseline requalified before stage 4 — 2026-10-28
+
+**Qualified revision:** `cf37584`, N9's baseline (`3a04601`) plus 14 engine commits, all in `regression` and `samplers`; `linalg`, `distributions` and `rng` are unchanged since. The toolchain is N9's: .NET SDK 10.0.201, `net10.0`, Release, on the same machine.
+
+**Suites** (`scripts/fact-harness.ps1 -Project`, each case its own `dotnet test` process):
+
+| Suite | Cases | Passed | Run |
+|---|---|---|---|
+| `Maths.Regression.Tests` | 438 | 438 | `20261028_013448602` |
+| `Maths.Samplers.Tests` | 137 | 137 | `20261028_014037203` |
+| `Maths.LinAlg.Tests` | 118 | 118 | `20261028_014345840` |
+| `Maths.Distributions.Tests` | 93 | 93 | `20261028_014552996` |
+
+**Downstream consumers** of the changed code: `Synthetic.Tests` 38 of 38 and `Maths.Oracle.Tests` 16 of 16 under plain `dotnet test`; `Clustering.Graphical.SPC` builds. `Maths.Geometry.Tests` reads `linalg` alone, unchanged, and was not rerun.
+
+**The drift record.** Each of the 14 commits has a recorded account of what it changes:
+- *One declared path change:* `c7f8626` makes the scaled σ² prior Normal BARS's default ([BayesianRegression](../../../docs/Maths/BayesianRegression.md), the σ² prior). Every default Normal BARS fit's marginal moves by a near-constant amount across configurations, so its accept decisions can differ.
+- *Options and readouts that leave the default paths:*
+  - `fe70b32` adds the σ² prior with Jeffreys still the default;
+  - `92540de` adds exact reference rungs, and ladders without one keep their streams (preparation brief, OQ2);
+  - `00eb9da` and `1fdaacf` report the evidence only on a likelihood-path ladder to a reference rung;
+  - `128fd1f` reconciles the PSIS and tail-diagnostic conventions; the bulk diagnostics are untouched;
+  - `a1971e1` adds the genealogy error as a readout;
+  - `cf37584` (F-C2) keeps the σ² prior's factories and its fingerprint spelling.
+- *New code beside the engines:* `84c173f` (N11), `0afe33d` (N12, bit-identical to `At`'s), `ae82374` (SMC traces and `FromSmc`).
+- *Paths outside the sweep's claims:*
+  - `70ea7b5` deletes Poisson's BIC-only code (the score, its ridge, its MLE start), leaving the g-prior path as it was, and no claim uses Poisson;
+  - `d798961` makes SMC resampling multinomial by default, which changes SMC runs' draws, and no claim uses SMC.
+- `66f6171` changes a doc comment and the bimodal fixture.
+
+**Seed sweep** (`SEED_SWEEP=50`):
+- **Hold counts.** Regression's `20261028_015051357` matches N9's `20261027_023326165` claim by claim. Samplers' `20261028_015056249` matches `20261027_023344333` row for row.
+- **Per-seed values.** The regression rows changed only in the claims that run Normal BARS:
+  - the adaptive kernel: 101 of 101 rows;
+  - Student-t weights: 101 of 101;
+  - the model-preference claim: 51 of 51;
+  - contaminated-normal weights: 65 of 101;
+  - EBIC: 15 of 101, its mean knot counts being coarse;
+  - one Gibbs-loss row, through its least-squares comparator, which is Normal BARS (MSE 0.0825453 → 0.0825456).
+- **Split at `c7f8626`.** To attribute those changes, the sweep was rerun on the source of `c7f8626^` (`3690061`) and of `c7f8626`, extracted with `git archive` (scratch). The comparisons:
+  - `3a04601` → `3690061`: no row changed;
+  - `3690061` → `c7f8626`: every change above;
+  - `c7f8626` → `cf37584`: no row changed.
+  So the default σ² prior accounts for all the drift, and the other 13 commits leave every claim's per-seed values exactly as they were.
+- **Sizes.**
+  - *The adaptive kernel:* the chain axis's worst ratio went from 0.67 to 0.76, and its worst margin from 14.4 to 9.3 in ESS, still 50 of 50.
+  - *The robust claims' margins* moved in the fourth digit.
+  - *The model-preference claim:* the margin held at 3.05 nats on the data axis, while the median ratio went from 0.934 to 0.969. The complete marginal adds the same constant to both sides, which moves the ratio but not the difference.
+
+**Gate status:** closed at `cf37584`. Stage 4's first integration tests measure against this baseline.
 
 ### The SMC normalizer's genealogy error (Lee and Whiteley 2018) — 2026-10-27
 
