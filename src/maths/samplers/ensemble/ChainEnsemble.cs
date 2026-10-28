@@ -42,13 +42,16 @@ public sealed class ChainEnsemble
     /// <paramref name="samples"/> more draws per chain are collected. The checkpoint's identity must match
     /// <paramref name="masterSeed"/>, <paramref name="chains"/> and the model's <see cref="IEnsembleModel{TDraw}.Fingerprint"/>.
     /// A run resumed from a checkpoint continues exactly as the uninterrupted run would have.</param>
+    /// <param name="parallel">Bounds the fan-out over chains (<see cref="ParallelOptions.MaxDegreeOfParallelism"/>) and
+    /// carries its cancellation; null runs every chain at once. Chains share nothing, so neither changes a result.</param>
     /// <returns>The pooled <see cref="EnsembleRun"/> plus the per-chain handles, so the client can pool its own sinks.</returns>
     public (EnsembleRun Summary, IReadOnlyList<IChainRun<TDraw>> Chains) Run<TDraw>(
         IEnsembleModel<TDraw> model, int chains, int masterSeed, int burn, int samples,
         double rHatTarget = 0.0, int batchSize = 0, double minEssPerChain = MinEssPerChain,
-        bool checkpoint = false, EnsembleCheckpoint? resumeFrom = null)
+        bool checkpoint = false, EnsembleCheckpoint? resumeFrom = null, ParallelOptions? parallel = null)
     {
         ArgumentNullException.ThrowIfNull(model);
+        parallel ??= new ParallelOptions();
         if (chains < 1) throw new ArgumentOutOfRangeException(nameof(chains));
         if (rHatTarget > 0.0 && chains < 2)
             throw new ArgumentOutOfRangeException(nameof(chains), "An R̂ stopping target needs at least two chains.");
@@ -79,7 +82,7 @@ public sealed class ChainEnsemble
 
         if (resumeFrom is null)
         {
-            Parallel.For(0, chains, ci =>
+            Parallel.For(0, chains, parallel, ci =>
             {
                 IChainRun<TDraw> run = model.StartChain(seeds[ci], readoutSeeds[ci]);
                 run.Burn(burn);
@@ -114,7 +117,7 @@ public sealed class ChainEnsemble
         while (collected < total)
         {
             int step = Math.Min(effBatch, total - collected);
-            Parallel.For(0, chains, ci =>
+            Parallel.For(0, chains, parallel, ci =>
             {
                 IChain<TDraw> chain = runs[ci].Chain;
                 RunningMoments[] cm = moments[ci];
