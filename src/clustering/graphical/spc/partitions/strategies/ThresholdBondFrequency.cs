@@ -1,4 +1,5 @@
 using System;
+using Clustering.Dendrograms;
 using Clustering.Primitives;
 using Graphs.Primitives;
 

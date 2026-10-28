@@ -108,26 +108,5 @@ public sealed record Dendrogram(
         uf.Union(FirstLeafBelow(m.LeftChild), FirstLeafBelow(m.RightChild));
     }
 
-    /// <summary>
-    /// Densifies a <see cref="UnionFind"/>'s sparse root ids into dense
-    /// labels in <c>[0, clusterCount)</c>. Mirrors the SPC partition
-    /// helper but kept local to avoid the cross-namespace dependency.
-    /// </summary>
-    private static int[] Densify(UnionFind uf, int n)
-    {
-        var labels   = new int[n];
-        var labelMap = new Dictionary<int, int>();
-        int next = 0;
-        for (int i = 0; i < n; i++)
-        {
-            int root = uf.Find(i);
-            if (!labelMap.TryGetValue(root, out int dense))
-            {
-                dense = next++;
-                labelMap[root] = dense;
-            }
-            labels[i] = dense;
-        }
-        return labels;
-    }
+    private static int[] Densify(UnionFind uf, int n) => UnionFindLabeler.Densify(uf, n).Labels;
 }

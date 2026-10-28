@@ -2,18 +2,18 @@ using System;
 using Clustering.Primitives;
 using Graphs.Primitives;
 
-namespace Clustering.Graphical.SPC.Partitions.Strategies;
+namespace Clustering.Dendrograms;
 
 /// <summary>
 /// The shared affinity→partition close: connected components of the active-bond
 /// subgraph (<c>g[e] &gt; theta</c>) over a per-edge affinity field, densified
-/// into a <see cref="Assignment"/>. Every inference method's affinity — SW's
-/// bond-frequency reduction, PKWang's closed-form field — is partitioned
+/// into a <see cref="Assignment"/> — the flat single-linkage cut of the field at
+/// <c>theta</c>. Every method's affinity (Swendsen–Wang's bond-frequency
+/// reduction, the cumulative-field solver's closed form) is partitioned
 /// identically here, decoupling the partition close from how the affinity was
-/// produced. The single home of the threshold-and-connect step the per-T sweep
-/// loop closes on.
+/// produced.
 /// </summary>
-internal static class AffinityThreshold
+public static class AffinityThreshold
 {
     /// <summary>
     /// Union every undirected edge whose affinity <paramref name="g"/> exceeds
@@ -27,7 +27,7 @@ internal static class AffinityThreshold
     /// (Domany1999 step 2 — captures cluster periphery whose density decreases
     /// toward the perimeter). O(E) extra pass; default off.
     /// </param>
-    internal static Assignment Connect(CsrGraph graph, double[] g, double theta, bool peripheralCapture = false)
+    public static Assignment Connect(CsrGraph graph, double[] g, double theta, bool peripheralCapture = false)
     {
         if (theta < 0.0 || theta > 1.0)
             throw new InvalidOperationException($"theta ({theta}) must lie in [0, 1].");

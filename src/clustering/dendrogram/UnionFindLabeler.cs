@@ -2,17 +2,17 @@ using System.Collections.Generic;
 using Clustering.Primitives;
 using Graphs.Primitives;
 
-namespace Clustering.Graphical.SPC.Partitions.Strategies;
+namespace Clustering.Dendrograms;
 
 /// <summary>
-/// Internal helper that collapses a <see cref="UnionFind"/>'s sparse
-/// root ids into a densely-labeled <see cref="Assignment"/> (labels in
-/// <c>[0, Count)</c>). Shared across threshold-style partition
-/// strategies that build their cluster structure via union-find.
+/// Collapses a <see cref="UnionFind"/>'s sparse root ids into a densely-labeled
+/// <see cref="Assignment"/> (labels in <c>[0, Count)</c>, first-seen order).
+/// Shared by every union-find partition close: threshold-style cuts and
+/// <see cref="Dendrogram"/> cuts.
 /// </summary>
-internal static class UnionFindLabeler
+public static class UnionFindLabeler
 {
-    internal static Assignment Densify(UnionFind uf, int nodeCount)
+    public static Assignment Densify(UnionFind uf, int nodeCount)
     {
         var labels   = new int[nodeCount];
         var labelMap = new Dictionary<int, int>();

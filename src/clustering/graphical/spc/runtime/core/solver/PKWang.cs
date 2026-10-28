@@ -1,6 +1,6 @@
 using System;
 using Clustering.Graphical.SPC.Partitions;
-using Clustering.Graphical.SPC.Partitions.Strategies;
+using Clustering.Dendrograms;
 using Clustering.Primitives;
 using Graphs;
 using Graphs.Models.Potts;

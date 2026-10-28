@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Clustering.Dendrograms;
 using Clustering.Evaluation.External;
 using Clustering.Graphical.SPC.Partitions.Strategies;
 using Clustering.Graphical.SPC.Runtime.Core.Sampler;
