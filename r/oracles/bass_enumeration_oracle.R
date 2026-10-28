@@ -9,7 +9,7 @@
 #     rungs (1,0.5,0.2), g1 (0), g2 (0), h1 (10), h2 (10), s_min (1e-10), c (0.4).
 #   posterior mode's own keys, refusing any it does not know: coef (sampled | fixed), centre (mean | flat | zero),
 #     sigma2_prior (scaled | jeffreys), sigma2_shape (1e-3), tau_shape (0.5), likelihood (collapsed | constant),
-#     exact_fit_c (1e3); tau is fixed-g's tau.
+#     exact_fit_c (1e3), rungs (0,0.05,0.2,0.5,1); tau is fixed-g's tau.
 #
 # The structure space. A term is an order K <= K_max, K distinct variables, a sign and a knot per variable, the knots
 # ranging over each variable's distinct values (D01's knot measure; R's unique.ind). Its prior is R's unconstrained
@@ -63,7 +63,7 @@
 # kernels' order law at M = 1 (the tilt D01 reports); and lambda's marginal at retention, the mixture of
 # Gamma(h1 + M, rate h2 + 1) over the count law, against the prior Gamma(h1, rate h2) tilted by F in closed form.
 #
-# mode = posterior (stage 4's S6). The exact posterior over the laws mode's F given y. A state's prior is the
+# mode = posterior (stage 4's S6 and S8). The exact posterior over the laws mode's F given y. A state's prior is the
 # laws target, Gamma(h1 + M)/(h2 + 1)^M prod pi(t), normalized over F. Its likelihood is D03's collapsed marginal,
 # a and sigma^2 integrated out and tau integrated against its prior by composite Gauss-Legendre on u = log tau
 # (16 nodes per unit panel, from log(1/N) - 37/a to log(1/N) + log(80/a)). Every intercept convention reads the same
@@ -86,6 +86,11 @@
 # and three tau (the fixed one under fixed-g): against quadrature over log sigma^2 of the Gaussian integral over a
 # on the explicit uncentred design [1, Z] with y as given (prior mean mean(y) e_0 under mean; the flat intercept
 # and the centred columns' g-prior under flat), and the composite rule against integrate() over log tau.
+# Rungs (D05, for S8): the integrated form p_b above, and the linear form, the collapsed marginal p_1(y | S, tau)
+# powered by b with tau's prior untempered; each rung's law over F is prior(S) int p(tau) exp(l_b) dtau. A rung is
+# undefined (defined: false) where p_b's sigma^2 integral diverges: b = 0 under jeffreys or flat, b <= (1 - 2 g1)/N
+# under flat. mean_slope and var_slope are E_b and Var_b of dl_b/db over (S, tau): the closed-form derivative of
+# log p_b on the integrated form, log p_1 on the linear one, so that d log Z_b / db = mean_slope.
 # Emits, beside the shared fields, in the C# conventions (0-based throughout): terms as { cont: [[var, sign, knot]],
 # cat: [], func: [] }, knot an index into the variable's ascending distinct values (BassInputs' knots), and states
 # as sorted indices into terms; supported (per term); data { y, x }; response { centre, level, s2, sigma2_shape,
@@ -93,7 +98,8 @@
 # per state: M, k, rss, Q, log_prior, log_marginal, posterior, tau_mean (E[tau | S, y]); count { M, prior,
 # posterior }; order { levels (the per-order term counts n_1..n_Kmax), prior, posterior }; inclusion (per term);
 # tau { mean, log_mean, log_sd, levels, quantiles } (null under fixed-g); log_Z; quadrature { states, sigma2_gap,
-# tau_gap }.
+# tau_gap }; tempered { rungs, integrated, linear }, each rung { b, defined, log_Z, law, count, order, tau_mean,
+# mean_slope, var_slope }.
 #
 # Emits { mode, n, p, n_terms, n_states, ... } with the mode's fields; states are listed as sorted term indices into
 # `terms` (K, vars, signs, knots).
@@ -109,8 +115,8 @@ N <- length(y); p <- ncol(X)
 opt <- list(M_max = 2, K_max = 2, npart = 3, w1 = 5, w2 = 5, lambda = 2, sigma2 = 0.1, tau = 1 / N, rungs = "1,0.5,0.2",
             g1 = 0, g2 = 0, h1 = 10, h2 = 10, s_min = 1e-10, c = 0.4)
 if (mode == "posterior")
-  opt[c("coef", "centre", "sigma2_prior", "sigma2_shape", "tau_shape", "likelihood", "exact_fit_c")] <-
-    list("sampled", "mean", "scaled", 1e-3, 0.5, "collapsed", 1e3)
+  opt[c("coef", "centre", "sigma2_prior", "sigma2_shape", "tau_shape", "likelihood", "exact_fit_c", "rungs")] <-
+    list("sampled", "mean", "scaled", 1e-3, 0.5, "collapsed", 1e3, "0,0.05,0.2,0.5,1")
 string_keys <- c("rungs", "coef", "centre", "sigma2_prior", "likelihood")
 for (kv in args[-(1:3)]) {
   parts <- strsplit(kv, "=", fixed = TRUE)[[1]]
@@ -461,6 +467,7 @@ if (mode == "posterior") {
   if (!opt$sigma2_prior %in% c("scaled", "jeffreys")) stop("sigma2_prior must be scaled or jeffreys")
   if (!opt$coef %in% c("sampled", "fixed")) stop("coef must be sampled or fixed")
   if (!opt$likelihood %in% c("collapsed", "constant")) stop("likelihood must be collapsed or constant")
+  rungs <- as.numeric(strsplit(opt$rungs, ",")[[1]])
   level <- if (centre == "zero") 0 else mean(y)
   if (!constant && (if (centre == "zero") all(y == 0) else all(y == y[1])))
     stop("a zero response (zero centre) or a constant one (mean, flat) is refused (D03)")
@@ -512,7 +519,7 @@ if (mode == "posterior") {
   }
   tau <- exp(u)
 
-  # log p_b(y | S, tau) at the states idx and the points tt (states by points).
+  # log p_b(y | S, tau) and its b-derivative, at the states idx and the points tt (states by points).
   defined <- function(b) constant || (g1 + (N * b - flat) / 2 > 0 && (b > 0 || !(jeffreys || flat)))
   lp <- function(b, tt = tau, idx = seq_len(n_states)) {
     if (constant) return(matrix(0, length(idx), length(tt)))
@@ -522,6 +529,15 @@ if (mode == "posterior") {
     ig_const - (N * b - flat) / 2 * log(2 * pi) - (if (flat) 0.5 * log(b * N) else 0) + lgamma(d) +
       outer(k[idx] / 2, log(shrink)) - d * log(g2 + Tb / 2)
   }
+  dlp <- function(b, tt = tau) {
+    if (constant) return(matrix(0, n_states, length(tt)))
+    d <- g1 + (N * b - flat) / 2
+    shrink <- tt / (tt + b)
+    Tb <- b * (rss + outer(Q, shrink)); dTb <- rss + outer(Q, shrink^2)
+    -(N / 2) * log(2 * pi) - (if (flat) 1 / (2 * b) else 0) + (N / 2) * digamma(d) - outer(k / 2, 1 / (tt + b)) -
+      (N / 2) * log(g2 + Tb / 2) - d * (dTb / 2) / (g2 + Tb / 2)
+  }
+
   count_law <- function(s) vapply(0:M_max, function(M) sum(s[M_of == M]), 0)
   orders <- matrix(vapply(state_sets, function(S) tabulate(vapply(S, function(i) terms[[i]]$K, 0), K_max), numeric(K_max)),
                    ncol = K_max, byrow = TRUE)
@@ -530,16 +546,28 @@ if (mode == "posterior") {
   order_law <- function(s) vapply(order_levels, function(kk) sum(s[order_key == kk]), 0, USE.NAMES = FALSE)
   absolute <- constant || !(jeffreys || flat)
 
-  # The law over F at inverse temperature b, with each state's marginal and tau | S, y as weights over the nodes.
-  rung_at <- function(b) {
-    A <- sweep(lp(b), 2, logw, "+")
+  # One rung: the per-state tempered marginal, the law over F, and the slope's moments over (S, tau).
+  rung_at <- function(b, form) {
+    if (form == "integrated" && !defined(b)) return(list(b = b, defined = FALSE, log_Z = NA))
+    l1 <- if (form == "linear") lp(1) else NULL
+    A <- sweep(if (form == "linear") b * l1 else lp(b), 2, logw, "+")
     logm <- row_lse(A)
-    W <- exp(A - logm)
+    W <- exp(A - logm)                       # tau | S, y at rung b, as weights over the nodes
     law <- exp(log_prior_F + logm - lse(log_prior_F + logm))
-    list(log_Z = if (absolute) lse(log_prior_F + logm) else NA, law = law, log_marginal = logm, W = W)
+    slope <- if (form == "linear") l1 else dlp(b)
+    s1 <- rowSums(W * slope); s2_ <- rowSums(W * slope^2)
+    mean_slope <- sum(law * s1); var_slope <- sum(law * s2_) - mean_slope^2
+    # At b = 0 the integrated slope carries -(k/2)/tau, whose prior moments E[1/tau] and E[1/tau^2] are infinite for
+    # tau shapes up to 1 and 2: null there, not the truncated quadrature's number.
+    singular <- form == "integrated" && b == 0 && !fixed_g && !constant
+    if (singular && a_tau <= 1) mean_slope <- NA
+    if (singular && a_tau <= 2) var_slope <- NA
+    list(b = b, defined = TRUE, log_Z = if (absolute) lse(log_prior_F + logm) else NA, law = law,
+         count = count_law(law), order = order_law(law), tau_mean = sum(law * rowSums(W * rep(tau, each = n_states))),
+         mean_slope = mean_slope, var_slope = var_slope, log_marginal = logm, W = W)
   }
 
-  post <- rung_at(1)
+  post <- rung_at(1, "integrated")
   pst <- post$law; logm <- post$log_marginal; W <- post$W
   tau_given_S <- rowSums(W * rep(tau, each = n_states))
   incl <- numeric(n_terms)
@@ -616,6 +644,7 @@ if (mode == "posterior") {
     quadrature <- list(states = I(as.integer(reps - 1L)), sigma2_gap = sigma2_gap, tau_gap = tau_gap)
   }
 
+  strip <- function(r) r[setdiff(names(r), c("log_marginal", "W"))]
   cs_term <- function(t) list(cont = lapply(seq_len(t$K), function(f) as.integer(c(t$vars[f] - 1, t$signs[f], t$knot_index[f] - 1))),
                               cat = list(), func = list())
   result$terms <- lapply(terms, cs_term)
@@ -632,7 +661,10 @@ if (mode == "posterior") {
     count = list(M = 0:M_max, prior = count_law(exp(log_prior_F)), posterior = count_law(pst)),
     order = list(levels = lapply(strsplit(order_levels, ","), function(v) I(as.integer(v))),
                  prior = order_law(exp(log_prior_F)), posterior = order_law(pst)),
-    inclusion = incl, tau = tau_summary, log_Z = post$log_Z, quadrature = quadrature)
+    inclusion = incl, tau = tau_summary, log_Z = post$log_Z, quadrature = quadrature,
+    tempered = list(rungs = rungs,
+                    integrated = lapply(rungs, function(b) strip(rung_at(b, "integrated"))),
+                    linear = lapply(rungs, function(b) strip(rung_at(b, "linear")))))
 }
 
 emit_json(result, args[2])
