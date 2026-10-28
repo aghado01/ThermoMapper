@@ -4,9 +4,9 @@
 #
 # Usage (cwd = r/):  Rscript oracles/bass_enumeration_oracle.R <data.csv> <out.json> <mode> [key=value ...]
 #   data: headerless CSV, y in the first column, then the inputs x_1..x_p in [0, 1] (R's scaled inputs).
-#   mode: swap | count.
+#   mode: swap | count | laws.
 #   keys (defaults): M_max (2), K_max (2), npart (3), w1 (5), w2 (5), lambda (2), sigma2 (0.1), tau (1/N),
-#     rungs (1,0.5,0.2), g1 (0), g2 (0), h1 (10), h2 (10).
+#     rungs (1,0.5,0.2), g1 (0), g2 (0), h1 (10), h2 (10), s_min (1e-10), c (0.4).
 #
 # The structure space. A term is an order K <= K_max, K distinct variables, a sign and a knot per variable, the knots
 # ranging over each variable's distinct values (D01's knot measure; R's unique.ind). Its prior is R's unconstrained
@@ -45,6 +45,21 @@
 # with a further 1/(M + 1), the KHAOS manuscript's double count. The count law of each kernel's stationary law
 # against the stated prior's, by enumeration of lambda^M prod pi(t) over F, and against that law times 1/M!.
 #
+# mode = laws (F-O3, F-O4), D01 and D02 as decided (2026-10-27). A constant likelihood; F = terms with at least npart
+# nonzero values, and sets whose centred columns pass D06's order-free angle gate, s_j = 1/(G_jj (G^-1)_jj) >= s_min
+# on the centred Gram (the intercept orthogonal to them). The count prior has lambda integrated out: a state's weight
+# is Gamma(h1 + M) / (h2 + 1)^M times prod pi(t), restricted to F (global truncation), so a birth from M carries
+# (M + h1)/(h2 + 1) for the count. Kernels, each from its own transition matrix:
+#   d01: D01's move probabilities, equal over the moves available, in selection and ratio;
+#   cancel: the prior-cancelling schedule, b_M = c min(1, r_M), d_{M+1} = c min(1, 1/r_M), the rest change, with
+#     r_M = (M + h1)/((M + 1)(h2 + 1)), in selection and ratio (the option D01 keeps for F-M1);
+#   thirds: D01's selection with R's fixed thirds in the ratios (F-O4's defect).
+# Emits the count law and the joint law of term orders (n_1, ..., n_Kmax) of each against the target's enumeration;
+# the boundary ratios pi(1)/pi(0) and pi(M_max)/pi(M_max - 1), and pi(2)/pi(1) when M_max >= 3, each kernel's over
+# the target's; the admitted prior mass of each order, sum of pi(t | K) over single-term states in F, against the
+# kernels' order law at M = 1 (the tilt D01 reports); and lambda's marginal at retention, the mixture of
+# Gamma(h1 + M, rate h2 + 1) over the count law, against the prior Gamma(h1, rate h2) tilted by F in closed form.
+#
 # Emits { mode, n, p, n_terms, n_states, ... } with the mode's fields; states are listed as sorted term indices into
 # `terms` (K, vars, signs, knots).
 
@@ -57,7 +72,7 @@ mode <- args[3]
 y <- D[, 1]; X <- D[, -1, drop = FALSE]
 N <- length(y); p <- ncol(X)
 opt <- list(M_max = 2, K_max = 2, npart = 3, w1 = 5, w2 = 5, lambda = 2, sigma2 = 0.1, tau = 1 / N, rungs = "1,0.5,0.2",
-            g1 = 0, g2 = 0, h1 = 10, h2 = 10)
+            g1 = 0, g2 = 0, h1 = 10, h2 = 10, s_min = 1e-10, c = 0.4)
 for (kv in args[-(1:3)]) {
   parts <- strsplit(kv, "=", fixed = TRUE)[[1]]
   opt[[parts[1]]] <- if (parts[1] == "rungs") parts[2] else as.numeric(parts[2])
@@ -84,7 +99,7 @@ term_key <- vapply(terms, function(t) paste(t$K, paste(t$vars, collapse = ","), 
 term_index <- new.env()
 for (i in seq_len(n_terms)) assign(term_key[i], i, envir = term_index)
 basis <- sapply(terms, function(t) bass$makeBasis(t$signs, t$vars, t$knots, t(X), 1))
-supported <- if (mode == "swap") colSums(basis != 0) >= opt$npart else rep(TRUE, n_terms)
+supported <- if (mode %in% c("swap", "laws")) colSums(basis != 0) >= opt$npart else rep(TRUE, n_terms)
 log_prior_term <- vapply(terms, function(t) -log(K_max) - lchoose(p, t$K) - t$K * log(2) - sum(log(n_v[t$vars])), 0)
 
 # ---- proposals ----------------------------------------------------------------------------------------------------
@@ -109,7 +124,14 @@ log_q_term <- function(i, cnt) {   # birth proposal of term i given the counts
   v <- if (t$K == 1) 1 / p else wallenius(cnt$z, t$vars)
   log(cnt$I[t$K]) + log(v) - t$K * log(2) - sum(log(n_v[t$vars]))
 }
+schedule <- "equal"   # laws mode also builds the prior-cancelling schedule
+count_ratio <- function(M) (M + opt$h1) / ((M + 1) * (opt$h2 + 1))   # p(M+1)/p(M) with lambda integrated out
 move_probs <- function(M) {
+  if (schedule == "cancel") {
+    b <- if (M < M_max) opt$c * min(1, count_ratio(M)) else 0
+    d <- if (M > 0) opt$c * min(1, 1 / count_ratio(M - 1)) else 0
+    return(c(birth = b, death = d, change = 1 - b - d))
+  }
   if (M == 0) return(c(birth = 1, death = 0, change = 0))
   if (M == M_max) return(c(birth = 0, death = 0.5, change = 0.5))
   c(birth = 1, death = 1, change = 1) / 3
@@ -127,6 +149,14 @@ ssy <- sum(y^2)
 describe <- function(S) {
   B <- design(S)
   if (mode == "count") return(list(valid = TRUE))
+  if (mode == "laws") {   # D06's numerical gate on the centred columns
+    if (length(S) == 0) return(list(valid = TRUE))
+    Bc <- scale(basis[, S, drop = FALSE], scale = FALSE)
+    if (qr(Bc, tol = 1e-12)$rank < length(S)) return(list(valid = FALSE))
+    G <- crossprod(Bc)
+    s_j <- 1 / (diag(G) * diag(solve(G)))
+    return(list(valid = all(s_j >= opt$s_min)))
+  }
   qf_list <- bass$getQf(crossprod(B), crossprod(B, y))
   Brev <- B[, c(1, rev(seq_len(ncol(B))[-1])), drop = FALSE]
   rev_ok <- !is.null(bass$getQf(crossprod(Brev), crossprod(Brev, y)))
@@ -194,7 +224,7 @@ kernel <- function(log_accept) {
 # which keeps every component's relative accuracy; count mode's laws are absolute quantities, and a dense solve
 # serves its larger space.
 stationary <- function(P) {
-  if (mode == "count") {
+  if (mode %in% c("count", "laws")) {
     A <- t(P) - diag(n_states); A[n_states, ] <- 1
     s <- solve(A, c(rep(0, n_states - 1), 1))
     return(s / sum(s))
@@ -205,18 +235,20 @@ normalize_log <- function(l) { w <- exp(l - max(l)); w / sum(w) }
 tv <- function(a, b) 0.5 * sum(abs(a - b))
 
 # The prior-and-proposal part of each move's log ratio, untempered, with the state's actual move probabilities:
-# birth lambda pi(t) d_{M+1} / ((M + 1) b_M q(t)); death its reciprocal from the smaller state; change 0.
-prior_proposal <- function(extra_birth = function(M) 0) {
+# birth rate(M) pi(t) d_{M+1} / ((M + 1) b_M q(t)); death its reciprocal from the smaller state; change 0. The count
+# factor is lambda by default, (M + h1)/(h2 + 1) with lambda integrated out; ratio_probs supplies the move
+# probabilities the ratio reads, which a defect may hold fixed while selection follows the state.
+prior_proposal <- function(extra_birth = function(M) 0, log_rate = function(M) log(opt$lambda), ratio_probs = move_probs) {
   vapply(seq_along(from), function(r) {
     if (type[r] %in% c("self", "change")) return(0)
     Mf <- M_of[from[r]]
     if (type[r] == "birth") {
-      mp_to <- move_probs(Mf + 1)
-      return(log(opt$lambda) + log_prior_term[term[r]] + log(mp_to[["death"]] / (Mf + 1)) -
-               log(move_probs(Mf)[["birth"]]) - lq_fwd[r] + extra_birth(Mf))
+      mp_to <- ratio_probs(Mf + 1)
+      return(log_rate(Mf) + log_prior_term[term[r]] + log(mp_to[["death"]] / (Mf + 1)) -
+               log(ratio_probs(Mf)[["birth"]]) - lq_fwd[r] + extra_birth(Mf))
     }
-    mp_to <- move_probs(Mf - 1)
-    -(log(opt$lambda) + log_prior_term[term[r]] + log(move_probs(Mf)[["death"]] / Mf) - log(mp_to[["birth"]]) -
+    mp_to <- ratio_probs(Mf - 1)
+    -(log_rate(Mf - 1) + log_prior_term[term[r]] + log(ratio_probs(Mf)[["death"]] / Mf) - log(mp_to[["birth"]]) -
         lq_fwd[r] + extra_birth(Mf - 1))
   }, 0)
 }
@@ -237,6 +269,60 @@ if (mode == "count") {
                        stated_over_factorial = count_law(stated_over_factorial),
                        tv_d01_stated = tv(s_d01, stated), tv_khaos_stated = tv(s_khaos, stated),
                        tv_khaos_over_factorial = tv(s_khaos, stated_over_factorial))
+}
+
+if (mode == "laws") {
+  h1 <- opt$h1; h2 <- opt$h2
+  nb_rate <- function(M) log((M + h1) / (h2 + 1))
+  thirds <- function(M) c(birth = 1, death = 1, change = 1) / 3
+  log_target <- vapply(state_sets, function(S) lgamma(h1 + length(S)) - length(S) * log(h2 + 1) + sum(log_prior_term[S]), 0)
+  target <- normalize_log(log_target)
+  count_law <- function(s) vapply(0:M_max, function(M) sum(s[M_of == M]), 0)
+  orders <- t(vapply(state_sets, function(S) tabulate(vapply(S, function(i) terms[[i]]$K, 0), K_max), numeric(K_max)))
+  order_key <- apply(orders, 1, paste, collapse = ",")
+  order_levels <- unique(order_key[order(rowSums(orders), order_key)])
+  order_law <- function(s) vapply(order_levels, function(k) sum(s[order_key == k]), 0)
+
+  s_d01 <- stationary(kernel(prior_proposal(log_rate = nb_rate)))
+  s_thirds <- stationary(kernel(prior_proposal(log_rate = nb_rate, ratio_probs = thirds)))
+  schedule <- "cancel"   # rebuild the transitions with the prior-cancelling selection probabilities
+  tr <- do.call(rbind, lapply(seq_len(n_states), rows_of))
+  from <- as.integer(tr[, 1]); to <- as.integer(tr[, 2]); prob <- tr[, 3]
+  type <- type_names[tr[, 4]]; term <- as.integer(tr[, 5]); lq_fwd <- tr[, 6]
+  s_cancel <- stationary(kernel(prior_proposal(log_rate = nb_rate)))
+  schedule <- "equal"
+  # The prior-cancelling selection probabilities are themselves proper: every one in [0, 1], summing to 1.
+  cancel_probs <- t(vapply(0:M_max, function(M) { schedule <<- "cancel"; v <- move_probs(M); schedule <<- "equal"; v }, numeric(3)))
+
+  ratio_at <- function(s, M) { cl <- count_law(s); cl[M + 1] / cl[M] }
+  tc <- count_law(target)
+  boundary <- function(s) c(low = ratio_at(s, 1) / ratio_at(target, 1), high = ratio_at(s, M_max) / ratio_at(target, M_max),
+                            middle = if (M_max >= 3) ratio_at(s, 2) / ratio_at(target, 2) else NA)
+
+  # The tilt: the admitted prior mass of each order among single-term states, against the order law at M = 1.
+  single <- which(M_of == 1)
+  single_K <- vapply(state_sets[single], function(S) terms[[S]]$K, 0)
+  admitted <- vapply(seq_len(K_max), function(K) sum(exp(log_prior_term[unlist(state_sets[single][single_K == K])] + log(K_max))), 0)
+  order_at_one <- function(s) vapply(seq_len(K_max), function(K) sum(s[single][single_K == K]), 0) / sum(s[single])
+
+  # lambda at retention: the mixture over the count law against the prior tilted by F, in closed form.
+  c_M <- vapply(0:M_max, function(M) sum(exp(vapply(state_sets[M_of == M], function(S) sum(log_prior_term[S]), 0))), 0)
+  log_Z <- log(sum(c_M * exp(lgamma(h1 + 0:M_max) - (h1 + 0:M_max) * log(h2 + 1)))) + h1 * log(h2) - lgamma(h1)
+  lambda_grid <- c(0.25, 0.5, 1, 2, 5, 10, 20)
+  tilted <- vapply(lambda_grid, function(l) exp(h1 * log(h2) - lgamma(h1) + (h1 - 1) * log(l) - (h2 + 1) * l +
+                                                  log(sum(c_M * l^(0:M_max))) - log_Z), 0)
+  mixture <- vapply(lambda_grid, function(l) sum(count_law(s_d01) * dgamma(l, h1 + 0:M_max, rate = h2 + 1)), 0)
+
+  result$laws <- list(
+    M = 0:M_max, n_gate_refused = sum(!keep),
+    count = list(target = tc, d01 = count_law(s_d01), cancel = count_law(s_cancel), thirds = count_law(s_thirds)),
+    tv = list(d01 = tv(s_d01, target), cancel = tv(s_cancel, target), thirds = tv(s_thirds, target)),
+    order = list(levels = order_levels, target = order_law(target), d01 = order_law(s_d01), cancel = order_law(s_cancel)),
+    tv_order = list(d01 = tv(order_law(s_d01), order_law(target)), cancel = tv(order_law(s_cancel), order_law(target))),
+    boundary = list(d01 = boundary(s_d01), cancel = boundary(s_cancel), thirds = boundary(s_thirds)),
+    cancel_probs = cancel_probs,
+    admitted_mass = admitted, order_at_one = list(target = order_at_one(target), d01 = order_at_one(s_d01)),
+    lambda = list(grid = lambda_grid, mixture = mixture, tilted = tilted))
 }
 
 if (mode == "swap") {

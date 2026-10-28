@@ -118,7 +118,7 @@ Decided by the user on 2026-10-27, as drafted. The categorical subset measure fo
 - **Considered, not adopted** (the hub's lineage register):
   - *Delayed rejection of structurally invalid births* (KHAOS). KHAOS can condition on its rejected set because that set's probability, a Poisson-binomial, is computable. BASS's births fail on data-dependent support, whose probability is not, so a failed birth counts as a rejection.
   - *A uniform prior over basis functions* (KHAOS), with complexity penalized through per-term shrinkage instead. BASS's prior, uniform over the order and then over the terms of that order, already corrects for how many terms each order has; KHAOS's route is the modified g-prior extension.
-- **Independent checks:**
+- **Independent checks** (F-O3 and F-O4, built 2026-10-27):
   - on a tiny enumerable model (p = 2, a few distinct values, K_max = 2, small M_max) under a constant likelihood, the count law and the order law against enumeration of the globally truncated measure;
   - the two boundary ratios;
   - Wallenius probabilities against brute-force sums over draw orders;
@@ -146,7 +146,7 @@ Decided by the user on 2026-10-27, as drafted.
 - **This changes the model the papers state.** JSS and Francom et al. 2018 write the Poisson truncated and renormalized for each λ. Under that prior the Gamma update needs the cap's normalizer, a regularized incomplete gamma function: tractable for the cap alone, intractable once support and admission join F. The draft takes the global reading because it is what R and GBMARS sample, and one mechanism then covers the cap, support and admission.
 - **The tilt:** λ's marginal is its Gamma prior tilted by P_λ(F). At R's defaults (h₁ = h₂ = 10, `maxBasis` = min(1000, n), [bass.R:267](D:/aghado01/packages/BASS/R/bass.R:267)) the cap rarely binds. Report the posterior mass at the cap and the support and admission rejection rates.
 - **Defaults:** h₁ = h₂ = 10, from R and Nott, Kuk and Duc's Gamma(10, 10). Francom et al. 2018 name λ's prior as the main control on overfitting, and the docs should say so.
-- **Independent check:** under a constant likelihood on D01's fixture, the count law against the negative binomial restricted to F by enumeration, and the retained λ draws against the Gamma mixture.
+- **Independent check** (F-O3, built 2026-10-27): under a constant likelihood on D01's fixture, the count law against the negative binomial restricted to F by enumeration, and the retained λ draws against the Gamma mixture.
 
 ### D03 (decided 2026-10-27): coefficient-prior modes and the τ hyperprior
 

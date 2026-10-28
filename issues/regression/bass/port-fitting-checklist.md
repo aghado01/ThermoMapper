@@ -19,8 +19,8 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 
 - [x] **F-O1** Propriety of the collapsed marginal over τ: `r/oracles/bass_marginal_oracle.R`.
 - [x] **F-O2** Order-free admission and R's `getQf` rule: `r/oracles/bass_admission_oracle.R`.
-- [ ] **F-O3** Count and order laws under a constant likelihood, by enumeration (D01, D02).
-- [ ] **F-O4** Boundary ratios π(1)/π(0) and π(M_max)/π(M_max − 1), and R's fixed thirds as a defect fixture.
+- [x] **F-O3** Count and order laws under a constant likelihood, by enumeration (D01, D02): `bass_enumeration_oracle.R`'s `laws` mode. Checks: D01's kernel and the prior-cancelling schedule against the target's state, count and order laws; the order tilt at M = 1 against the admitted prior mass; λ at retention against the prior tilted by F.
+- [x] **F-O4** Boundary ratios π(1)/π(0) and π(M_max)/π(M_max − 1), and R's fixed thirds as a defect fixture: the same mode. Checks: both schedules exact; R's thirds 3× at the bottom, 2/3 at the top, right in the middle.
 - [x] **F-O5** Wallenius probabilities against brute-force sums over draw orders: `r/oracles/bass_wallenius_oracle.R`.
 - [x] **F-O6** Defect fixtures: R's tempering and swap density, R's Jeffreys mode, KHAOS's double count factor: `r/oracles/bass_enumeration_oracle.R` (modes `swap` and `count`) and `r/oracles/bass_jeffreys_oracle.R`.
 - [x] **F-O9** Intercept conventions: Liang's flat intercept against level centring, with R's zero centre beside them, `r/oracles/bass_intercept_oracle.R`. Checks: on F-O8's grid, level centring's extra credit against Liang (positive, 0.4–0.5 nats for one term, 0.2–0.3 between structures one term apart, flat in N); on an explicit 40-point design, the level marginal against the g-form identity, and the three conventions' Bayes factors at offsets 0, 10 and −250.
@@ -51,6 +51,15 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### Count, order and λ laws and the boundary ratios (F-O3, F-O4) — 2026-10-27
+
+`bass_enumeration_oracle.R` gains a `laws` mode for D01 and D02 as decided: a constant likelihood; F = the support rule and D06's centred angle gate; the count prior with λ integrated out (h₁ = h₂ = 10), so a birth from M carries (M + h₁)/(h₂ + 1). Three kernels, each from its own transition matrix: D01's equal-over-available move probabilities; the prior-cancelling schedule (c = 0.4), the option kept for F-M1; and D01's selection with R's fixed thirds in the ratios. Run by `bass_stage1_checks.R`; every check passes, F-O6's included, since the refactor keeps the earlier modes' defaults.
+- *Fixtures.* p = 3 on {0, 1}³, M_max = 3, npart = 2: 60 terms, 18 supported, 913 states in F, 75 refused by the gate (the Wallenius proposal active, and a middle state). p = 2 on a four-level grid, M_max = 2, npart = 3: 80 terms, 36 supported, 665 states, 2 refused.
+- *F-O3.* D01's kernel and the cancelling schedule match the target's state, count and order laws to 10⁻¹² (TV). The tilt is visible: at M = 1 the order law is 2/3 and 1/3 against the unconstrained ½ and ½, equal to the admitted prior mass per order (0.50 and 0.25 on p = 3; 0.75 and 0.375 on p = 2). λ at retention, Gamma(h₁ + M, h₂ + 1) mixed over the count law, equals the prior tilted by F to 2·10⁻¹⁴: D02's "exact under global truncation".
+- *F-O4.* Both schedules give the boundary ratios exactly. R's thirds give π(1)/π(0) three times the target's and π(M_max)/π(M_max − 1) two-thirds of it, and are right in the middle (π(2)/π(1) at M_max = 3); their state law is 0.25–0.26 off in total variation.
+- *The cancelling schedule's move probabilities* are proper at every M.
+- **Stage 1 now has the contract shapes left.**
 
 ### The design pass: D01–D06 decided — 2026-10-27
 

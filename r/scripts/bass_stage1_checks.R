@@ -558,3 +558,43 @@ cat(sprintf("  the explicit design's level marginal equals the g-form identity (
 cat(sprintf("  level centring and Liang do not move with y's offset (<= 1e-8); R's zero centre does (> 1 nat at -250): %s\n",
             verdict(max(abs(sweep(lev, 2, lev[1, ]))) <= 1e-8 && max(abs(sweep(li, 2, li[1, ]))) <= 1e-8 &&
                     max(abs(ze[3, ] - ze[1, ])) > 1)))
+
+# F-O3 and F-O4 (D01, D02 as decided): count, order and lambda laws, and the boundary ratios, under a constant
+# likelihood with the support rule and D06's centred angle gate.
+cat("\nD01/D02 laws under a constant likelihood (F-O3) and the boundary ratios (F-O4)\n")
+show_laws <- function(label, lw_run) {
+  lw <- lw_run$laws
+  cat(sprintf("  %s: %d terms, %d supported, %d states in F (%d refused by the angle gate)\n", label, lw_run$n_terms,
+              lw_run$n_supported, lw_run$n_states, lw$n_gate_refused))
+  cat(sprintf("    count law M = 0..%d: target %s | D01 %s | prior-cancelling %s | R's thirds %s\n", max(lw$M),
+              paste(sprintf("%.4f", lw$count$target), collapse = " "), paste(sprintf("%.4f", lw$count$d01), collapse = " "),
+              paste(sprintf("%.4f", lw$count$cancel), collapse = " "), paste(sprintf("%.4f", lw$count$thirds), collapse = " ")))
+  laws_ok <- max(lw$tv$d01, lw$tv$cancel, lw$tv_order$d01, lw$tv_order$cancel) <= 1e-12
+  cat(sprintf("    D01 and the prior-cancelling schedule give the target's state, count and order laws (TV <= 1e-12): %s; R's thirds do not (TV %.3f): %s\n",
+              verdict(laws_ok), lw$tv$thirds, verdict(lw$tv$thirds >= 0.05)))
+  b <- lw$boundary
+  fmt <- function(v) paste(sprintf("%.6f", v[!is.na(v)]), collapse = " ")
+  cat(sprintf("    boundary ratios over the target's (low, high%s): D01 %s | cancelling %s | R's thirds %s\n",
+              if (max(lw$M) >= 3) ", middle" else "", fmt(b$d01), fmt(b$cancel), fmt(b$thirds)))
+  exact <- c(b$d01, b$cancel); exact <- exact[!is.na(exact)]
+  th <- b$thirds   # low, high, middle (NA below M_max = 3); JSON keeps the order, not the names
+  thirds_ok <- abs(th[1] - 3) <= 1e-9 && abs(th[2] - 2 / 3) <= 1e-9 && (is.na(th[3]) || abs(th[3] - 1) <= 1e-9)
+  cat(sprintf("    D01's and the cancelling schedule's are exact (<= 1e-9): %s; R's thirds give 3 at the bottom and 2/3 at the top%s: %s\n",
+              verdict(max(abs(exact - 1)) <= 1e-9), if (max(lw$M) >= 3) ", and are right in the middle" else "", verdict(thirds_ok)))
+  probs_ok <- all(lw$cancel_probs >= 0 & lw$cancel_probs <= 1) && max(abs(rowSums(lw$cancel_probs) - 1)) <= 1e-12
+  cat(sprintf("    the cancelling schedule's move probabilities are proper at every M: %s\n", verdict(probs_ok)))
+  share <- lw$admitted_mass / sum(lw$admitted_mass)
+  tilt_ok <- max(abs(lw$order_at_one$target - share), abs(lw$order_at_one$d01 - share)) <= 1e-12
+  cat(sprintf("    the tilt at M = 1: admitted prior mass per order %s, order law %s, against the unconstrained %s: %s\n",
+              paste(sprintf("%.4f", lw$admitted_mass), collapse = "/"), paste(sprintf("%.4f", lw$order_at_one$d01), collapse = "/"),
+              paste(sprintf("%.4f", rep(1 / length(share), length(share))), collapse = "/"),
+              verdict(tilt_ok && max(abs(share - 1 / length(share))) >= 0.01)))
+  lam_gap <- max(abs(lw$lambda$mixture / lw$lambda$tilted - 1))
+  cat(sprintf("    lambda at retention, Gamma(h1 + M, h2 + 1) over the count law, is the prior tilted by F (%.0e): %s\n",
+              lam_gap, verdict(lam_gap <= 1e-10)))
+}
+show_laws("p = 3, {0, 1}^3, K_max = 2, M_max = 3, npart = 2",
+          run("bass_enumeration_oracle.R", cbind(0, grid8$x1, grid8$x2, grid8$x3), "laws", "M_max=3", "npart=2"))
+grid16 <- expand.grid(x1 = c(0, 1, 2, 3) / 3, x2 = c(0, 1, 2, 3) / 3)
+show_laws("p = 2, four levels per variable, K_max = 2, M_max = 2, npart = 3",
+          run("bass_enumeration_oracle.R", cbind(0, grid16$x1, grid16$x2), "laws", "M_max=2", "npart=3"))
