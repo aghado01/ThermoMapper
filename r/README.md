@@ -60,11 +60,18 @@ is opt-in), so the normal `dotnet test` run is unaffected.
 | `Maths.Estimators.MxPbf` | `mxpbf_oracle.R` *(todo)* | transcribe paper §2.2 / §3.1 |
 | `Maths.Estimators.RobustDistributedPCA` | *(todo: extend `mom_oracle.R`)* | `maotai` geometric median + the §5.3 rule |
 | `TDA.DimReduction.Spred` | *(composition: component oracles + downstream ISOLET benchmark)* | PH via `tda_oracle.R`; Grassmann median via `mom_oracle.R`; full SPRED composition still indirect |
+| `Maths.Samplers.Ensemble.ChainDiagnostics` (rank-normalized split R̂, bulk and tail ESS, ESS of the mean) + `Maths.Regression.PredictiveChecks.PsisLoo` (k̂, r_eff, the elpd's Monte Carlo error) | `diagnostics_oracle.R` | `posterior` and `loo` (OQ9, N13); the tail diagnostics' split-chain convention is emitted beside posterior's |
 | BASS's collapsed g-prior marginal over τ *(port stage 4; not built)* | `bass_marginal_oracle.R` | base `integrate` on log τ; the port brief's D03 propriety conditions |
 | BASS's order-free admission gate, under R's intercept convention and the Liang default (centred, and the direct-functional centred Hadamard form) *(port stage 4; not built)* | `bass_admission_oracle.R` | base `chol`; QR of the explicitly centred design for the centred modes; R BASS's `getQf` rule for parity |
 | BASS's truncation residuals, in-sample and leave-one-case-out *(port stage 5; not built)* | `bass_truncation_oracle.R` | base `svd`; explicit refits are the reference, the case-coordinate computation is checked against them |
+| BASS's variable-set proposal probabilities (D01, F-O5) *(port stage 4; not built)* | `bass_wallenius_oracle.R` | brute-force sums over draw orders; R BASS's `dmwnchBass` for parity |
+| BASS's tempering, swap and birth-ratio count laws (D01, D05, F-O6) *(port stage 4; not built)* | `bass_enumeration_oracle.R` | enumeration of a small structure space; R BASS's kernels and `lp` as defect fixtures |
+| R BASS's Jeffreys mode (D03, F-O6) *(defect fixture)* | `bass_jeffreys_oracle.R` | the coherent flat and Jeffreys coefficient priors' factors |
+| BASS's output path and sensitivity (D07, D08, O-O1, O-O2) *(port stages 5–6; not built)* | `bass_output_defects_oracle.R`, `bass_sensitivity_defects_oracle.R` | corrected expectations beside R BASS's behaviour |
+| BASS's hinge-product moments (D08, O-O3) *(port stage 6; not built)* | `bass_moments_oracle.R` | Gauss–Legendre quadrature and category enumeration |
+| BASS calibration's defects and covariance formulations (D09, C-O1, C-O2) *(port stage 7; not built)* | `bass_calibration_defects_oracle.R`, `bass_covariance_oracle.R` | dense eigen and Cholesky references; R BASS's Woodbury helpers for parity |
 
-`scripts/bass_stage1_checks.R` runs the three BASS oracles on the port brief's fixtures and reproduces its numbers.
+`scripts/bass_stage1_checks.R` runs the BASS oracles on the port brief's fixtures and reproduces their numbers (about two minutes).
 
 ## Current caveats
 
