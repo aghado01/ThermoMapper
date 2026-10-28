@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Maths.Distributions;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bars;
 using Maths.Regression.Spline.Bass;
@@ -301,6 +302,7 @@ public sealed class BassTemperingTests
         { "linear, flat + jeffreys", [1.0, 0.4, 0.0] },
         { "fixed g", [1.0, 0.4, 0.0] },
         { "powered", [1.0, 0.6, 0.3] },
+        { "powered, flat + jeffreys", [1.0, 0.6, 0.3] },   // the improper constants cancel from b·(prior + ℓ₁)'s ratios
         { "flat, near the limit", [1.0, 0.3, 0.06] },   // the integrated form needs b > (1 − 2c)/N = 0.0554 here
     };
 
@@ -311,7 +313,7 @@ public sealed class BassTemperingTests
     [MemberData(nameof(RungCases))]
     public void Ladder_EachRungSamplesItsTemperedLaw(string option, double[] betas)
     {
-        bool reference = option.Contains("reference"), powered = option == "powered";
+        bool reference = option.Contains("reference"), powered = option.StartsWith("powered");
         var spec = new TemperingSpec
         {
             Form = option.Contains("linear") ? TemperedForm.Linear : TemperedForm.Integrated, Levels = betas.Length,
@@ -361,6 +363,9 @@ public sealed class BassTemperingTests
                 Assert.True(Math.Abs(mean - exact[r].Count[m]) <= 5 * error + 0.004, $"b = {betas[r]}, M = {m}: {mean:F4} against {exact[r].Count[m]:F4} (± {error:F4})");
             }
             if (!model.Target.SamplesTau) continue;
+            // At b = 0 τ's law is its prior, Gamma(a, rate aN): E[ln τ] = ψ(a) − ln(aN), which the enumeration's rule reproduces.
+            if (betas[r] == 0.0)
+                Assert.Equal(SpecialFunctions.Digamma(0.5) - Math.Log(0.5 * model.Target.Observations), exact[r].LogTauMean, 1e-9);
             (double u, double uError) = Summary(logTau[r]);
             _out.WriteLine($"{option}, b = {betas[r]:G3}, E[ln τ]: {u:F4} against {exact[r].LogTauMean:F4} (± {uError:F4})");
             Assert.True(Math.Abs(u - exact[r].LogTauMean) <= 5 * uError + 0.01, $"b = {betas[r]}, E[ln τ] {u:F4} against {exact[r].LogTauMean:F4} (± {uError:F4})");
