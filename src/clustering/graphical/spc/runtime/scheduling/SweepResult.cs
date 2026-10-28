@@ -54,7 +54,7 @@ public sealed class SweepSummary
 /// </summary>
 /// <remarks>
 /// Sampler-agnostic and strategy-agnostic — any <see cref="ISweepStrategy"/>
-/// (SW, PKWang, future estimators) populates the same shape.
+/// (SW, the cumulative-field solver, future estimators) populates the same shape.
 /// <see cref="ChosenAlignments"/> is <see langword="null"/> when the sweep
 /// did not collect spin-agreement counts (i.e.
 /// <see cref="Core.Sampler.AccumulationSpec.Alignments"/> was false).

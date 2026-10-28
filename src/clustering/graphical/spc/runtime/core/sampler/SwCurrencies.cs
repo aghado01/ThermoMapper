@@ -8,7 +8,7 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler;
 /// reductions that collapse the SW edge counts to the model-agnostic currencies the graph-tier
 /// observables consume. <c>BondFormedCount / draws → </c><see cref="Affinities"/> (bond-survival,
 /// the universal currency); <c>SpinAgreementCount / draws → </c><see cref="Alignments"/>
-/// (co-association, SW-native). A solver (PKWang) writes <see cref="Affinities"/> directly from the
+/// (co-association, SW-native). A solver (the cumulative field) writes <see cref="Affinities"/> directly from the
 /// closed-form survival kernel and never lands here; having no spin ensemble, it mints no
 /// <see cref="Alignments"/> at all.
 /// </summary>

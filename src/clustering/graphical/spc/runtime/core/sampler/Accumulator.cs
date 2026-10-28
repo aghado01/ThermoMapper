@@ -9,7 +9,7 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler;
 /// (<see cref="Graphs.Models.Potts.Observables.Susceptibility"/> &amp; siblings) reduce the scalar
 /// moments to χ/Cv/M/⟨E⟩; the optional per-edge counts reduce to the
 /// <see cref="Graphs.Primitives.Affinities"/> / <see cref="Graphs.Primitives.Alignments"/>
-/// currencies. A solver (PKWang) has no accumulator — no stream to fold.
+/// currencies. A solver (the cumulative field) has no accumulator — no stream to fold.
 /// </summary>
 /// <remarks>
 /// Replaces the old <c>PottsModelCoreObservables</c> + <c>PottsModelEdgeObservables</c> pair — the

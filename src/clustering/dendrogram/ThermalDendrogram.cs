@@ -18,7 +18,7 @@ namespace Clustering.Dendrograms;
 /// does not apply — cut thermally with <see cref="Dendrogram.CutToK"/>.
 /// </summary>
 /// <remarks>
-/// Producer-agnostic over the currency: feed PKWang's exact closed-form G(T)
+/// Producer-agnostic over the currency: feed the cumulative-field solver's exact closed-form G(T)
 /// columns or SW's sampled co-membership/affinity columns. Sampled Ĝ(T) is
 /// only noisily monotone — the BARS monotonizer slots in UPSTREAM (replace
 /// the raw columns with monotonized posterior curves; same signature).

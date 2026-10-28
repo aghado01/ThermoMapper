@@ -1,6 +1,6 @@
 using Graphs.Primitives;
 
-namespace Clustering.Graphical.SPC.Runtime.Core.Solver;
+namespace Clustering.Graphical.CumulativeField;
 
 /// <summary>
 /// Static-abstract struct interface (mirrors <c>ISwConfig</c>) carrying the

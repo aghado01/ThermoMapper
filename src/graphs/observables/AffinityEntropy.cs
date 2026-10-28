@@ -18,7 +18,7 @@ namespace Graphs.Observables;
 ///
 /// <para><b>Reads the minted currency only</b> — never a sampler's draw stream. The entropy is a
 /// nonlinear reduction applied <i>once</i> to the already-reduced field (Swendsen–Wang's
-/// <c>BondFormedCount/draws</c> or PKWang's closed form), so the non-commutative
+/// <c>BondFormedCount/draws</c> or the cumulative-field solver's closed form), so the non-commutative
 /// accumulate-entropy-per-draw hazard is structurally inexpressible at this tier.</para>
 /// </remarks>
 public static class AffinityEntropy

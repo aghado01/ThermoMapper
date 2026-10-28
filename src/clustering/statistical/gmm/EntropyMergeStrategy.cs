@@ -144,7 +144,7 @@ namespace Clustering.Statistical.GMM
         /// </summary>
         /// <remarks>
         /// GMM is the third <see cref="Dendrogram"/> producer (HDBSCAN condensed,
-        /// PKWang/SW thermal single-linkage, GMM agglomerative). Landed ALONGSIDE
+        /// cumulative-field/SW thermal single-linkage, GMM agglomerative). Landed ALONGSIDE
         /// the flatten path; rewiring <see cref="Merge"/> onto a shared cut is
         /// fresh-look cleanup (post-unification ledger).
         /// </remarks>

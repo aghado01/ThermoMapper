@@ -2,28 +2,26 @@ using System;
 using System.Collections.Generic;
 using Clustering.Dendrograms;
 using Clustering.Primitives;
-using Clustering.Graphical.SPC.Runtime.Core.Sampler;
-using Clustering.Graphical.SPC.Runtime.Core.Solver;
+using Clustering.Graphical.CumulativeField;
 using Graphs.Primitives;
 using Xunit;
 
-using Clustering.Graphical.SPC.Runtime.Core;
 
 using Graphs;
 
-using Clustering.Graphical.SPC.Demos;
+using Clustering.Graphical.CumulativeField.Demos;
 
-namespace Clustering.Graphical.SPC.Tests.Sampler;
+namespace Clustering.Graphical.CumulativeField.Tests;
 
 /// <summary>
-/// Empirical adjudication of the Wang 2020 reduction: the paper's M-draw Monte
-/// Carlo estimates a quantity with a closed form, and the clustering it induces
+/// Empirical adjudication of the mean-field reduction: the M-draw Monte
+/// Carlo of Wang et al. 2020 estimates a quantity with a closed form, and the clustering it induces
 /// is thermal single-linkage. Both reference computations here — the M-draw
 /// inverse-transform MC and the Kruskal single-linkage — are reimplemented
-/// independently of the PKWang kernel, so agreement is genuine cross-validation,
+/// independently of the solver kernel, so agreement is genuine cross-validation,
 /// not a tautology (validation independence).
 /// </summary>
-public sealed class PKWangMeanFieldTests
+public sealed class MeanFieldTests
 {
     // Two well-separated triplets {0,1,2} and {3,4,5} joined by one weak bridge
     // (2,3). DISTINCT couplings → unambiguous edge ranking (no ties). Coupling J
@@ -91,10 +89,10 @@ public sealed class PKWangMeanFieldTests
     {
         CsrGraph g = BuildGraph();
         const double T = 6.0;
-        PKWangContext ctx = PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Mean);
+        CumulativeFieldContext ctx = CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Mean);
 
-        Affinities closed = PKWang.Solve(ctx, T);
-        Affinities mc = WangMonteCarloDemo.Sample(ctx, T, draws: 200_000, seed: 20260607);
+        Affinities closed = CumulativeFieldSolver.Solve(ctx, T);
+        Affinities mc = MonteCarloAffinityDemo.Sample(ctx, T, draws: 200_000, seed: 20260607);
 
         // Method equivalence (draws vs CDF) at every edge — the empirical
         // statement that the paper's Monte Carlo was estimating a closed form —
@@ -116,8 +114,8 @@ public sealed class PKWangMeanFieldTests
         const double T = 9.0;
         double cut = T * Math.Log(2.0);
 
-        PKWangContext ctx = PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Mean);
-        Affinities corr = PKWang.Solve(ctx, T);
+        CumulativeFieldContext ctx = CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Mean);
+        Affinities corr = CumulativeFieldSolver.Solve(ctx, T);
 
         foreach (var (i, j, hcum) in IndependentLadder(g))
         {
@@ -135,15 +133,15 @@ public sealed class PKWangMeanFieldTests
     public void MeanField_EqualsSingleLinkage(double T)
     {
         CsrGraph g = BuildGraph();
-        Assignment pk = PKWang.Cluster(PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Mean), T);
+        Assignment solved = CumulativeFieldSolver.Cluster(CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Mean), T);
 
         // Independent cross-subsystem oracle: the canonical MST → dendrogram
-        // single-linkage, cut to the same cluster count PKWang produced. The
-        // theorem says PKWang's family IS the single-linkage family, so the two
+        // single-linkage, cut to the same cluster count the solver produced. The
+        // theorem says the solver's family IS the single-linkage family, so the two
         // k-partitions must coincide (distinct couplings ⇒ a unique k-cut).
-        int[] singleLinkage = SingleLinkage.FromCouplingGraph(g).CutToK(pk.Count);
+        int[] singleLinkage = SingleLinkage.FromCouplingGraph(g).CutToK(solved.Count);
 
-        Assert.True(SamePartition(pk.Labels, singleLinkage),
+        Assert.True(SamePartition(solved.Labels, singleLinkage),
             $"MeanField partition diverged from single-linkage at T={T}.");
     }
 
@@ -151,12 +149,12 @@ public sealed class PKWangMeanFieldTests
     public void ClusterCount_IsMonotoneInTemperature()
     {
         CsrGraph g = BuildGraph();
-        PKWangContext ctx = PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Mean);
+        CumulativeFieldContext ctx = CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Mean);
 
         int prev = 0;
         foreach (double T in new[] { 0.7, 4.5, 14.0, 36.0, 72.0 })
         {
-            int count = PKWang.Cluster(ctx, T).Count;
+            int count = CumulativeFieldSolver.Cluster(ctx, T).Count;
             Assert.True(count >= prev, $"Cluster count fell from {prev} to {count} at T={T}.");
             prev = count;
         }

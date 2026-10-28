@@ -7,7 +7,7 @@ namespace Graphs.Observables;
 /// Per-node marginals of the per-edge affinity currency — degree-0 node
 /// fields summing the edge field over each node's incident edges.
 /// Producer-agnostic by the currency seam: the same definitions read SW's
-/// sampled <see cref="Affinities"/> and PKWang's closed-form ones.
+/// sampled <see cref="Affinities"/> and the cumulative-field solver's closed-form ones.
 /// </summary>
 public static class AffinityNodeMarginals
 {
@@ -31,7 +31,7 @@ public static class AffinityNodeMarginals
     /// <summary>
     /// Local energy per node: Σ_{j∈N(i)} J_ij·(1 − G_ij) — the frustration
     /// field (descend: low inside coherent cores, high on contested
-    /// boundaries). The equilibrium recapture of PKWang's <c>Hcum</c> idea:
+    /// boundaries). The equilibrium recapture of the cumulative-field solver's <c>Hcum</c> idea:
     /// for the solver it is exact; for SW it carries the sampled correlations.
     /// </summary>
     public static double[] LocalEnergy(CsrGraph graph, Affinities affinities)

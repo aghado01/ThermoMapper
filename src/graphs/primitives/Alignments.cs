@@ -13,7 +13,7 @@ namespace Graphs.Primitives;
 /// model leaves a point→state map unidentified, but the pairwise <c>δ(sᵢ,sⱼ)</c> is invariant under
 /// relabelling (it is equally McLachlan's fuzzy classification matrix / Bishop's responsibilities made
 /// label-switch-safe). Swendsen–Wang mints it from <c>SpinAgreementCount / draws</c>; it is
-/// <b>SW-native</b> — a forward solver (PKWang) draws no spins and has no analog, so unlike
+/// <b>SW-native</b> — a forward solver (the cumulative field) draws no spins and has no analog, so unlike
 /// <see cref="Affinities"/> this currency is not universal across samplers. Only the <c>j &gt; i</c>
 /// CSR slots carry meaning; the mirror half stays zero.
 /// </remarks>

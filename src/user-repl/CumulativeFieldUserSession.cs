@@ -7,7 +7,7 @@ using Clustering.Evaluation.External;
 using Clustering.Evaluation.Internal;
 using Clustering.Graphical.SPC.Export;
 using Clustering.Graphical.SPC.Partitions.Thermal;
-using Clustering.Graphical.SPC.Runtime.Core.Solver;
+using Clustering.Graphical.CumulativeField;
 using Clustering.Primitives;
 using Graphs;
 using Graphs.Observables;
@@ -16,16 +16,16 @@ using Graphs.Primitives;
 namespace UserRepl;
 
 /// <summary>
-/// PKWang solver session — the analytic sibling of <see cref="SpcUserSession"/>.
+/// Cumulative-field solver session — the analytic sibling of <see cref="SpcUserSession"/>.
 /// Consumes the SAME shared envelope the SW path does (a Coupling-weighted
 /// <see cref="CsrGraph"/> built by the graph engine + the shared temperature
 /// grid) and reduces to fewer knobs by construction. Built against the stable
-/// <see cref="PKWang.Prepare"/>/<see cref="PKWang.Solve"/>/<see cref="PKWang.Cluster"/>
+/// <see cref="CumulativeFieldSolver.Prepare"/>/<see cref="CumulativeFieldSolver.Solve"/>/<see cref="CumulativeFieldSolver.Cluster"/>
 /// lip only.
 /// </summary>
 /// <remarks>
 /// <para><b>Resolution.</b> The single partition is the thermodynamic-EOM
-/// resolution — the EXACT twin of SW's <c>--resolver thermal-eom</c>. PKWang
+/// resolution — the EXACT twin of SW's <c>--resolver thermal-eom</c>. The solver
 /// mints the two producer-agnostic inputs from its closed form (the thermal
 /// single-linkage dendrogram from per-T affinity columns, the bond-mass
 /// landscape) and feeds the shared <see cref="ThermalEom.Resolve(CsrGraph,
@@ -44,9 +44,9 @@ namespace UserRepl;
 /// analog and are absent; in their place the solver writes a thin per-temperature
 /// cluster-count sweep.</para>
 /// </remarks>
-public static class PKWangUserSession
+public static class CumulativeFieldUserSession
 {
-    public static PKWangUserRunResult Run(
+    public static CumulativeFieldUserRunResult Run(
         SpcUserDataset dataset,
         SpcRunPaths paths,
         CsrGraph graph,
@@ -76,15 +76,15 @@ public static class PKWangUserSession
 
         // Prepare the energy ladder once; one closed-form pass yields both the
         // per-T affinity (the edge currency) and the per-T cluster count.
-        PKWangContext context = PKWang.Prepare(graph, weightKind, field, symmetrization);
+        CumulativeFieldContext context = CumulativeFieldSolver.Prepare(graph, weightKind, field, symmetrization);
 
         int tCount = temperatures.Count;
         var affinities = new Affinities[tCount];
         var counts = new int[tCount];
         for (int i = 0; i < tCount; i++)
         {
-            affinities[i] = PKWang.Solve(context, temperatures[i]);
-            counts[i] = PKWang.Cluster(context, temperatures[i], theta).Count;
+            affinities[i] = CumulativeFieldSolver.Solve(context, temperatures[i]);
+            counts[i] = CumulativeFieldSolver.Cluster(context, temperatures[i], theta).Count;
         }
 
         // Solver-native sweep diagnostic (caller order): per-T cluster count.
@@ -112,7 +112,7 @@ public static class PKWangUserSession
             axis: "temperature",
             grid: ascTemps,
             valuesByGridPoint: bondColumns,
-            provenance: new LandscapeProvenance("BondMass", GraphId: "pkwang", GaugeNote: "pkwang:closed-form"));
+            provenance: new LandscapeProvenance("BondMass", GraphId: "cumulative-field", GaugeNote: "cumulative-field:closed-form"));
 
         ThermalEomResult eom = ThermalEom.Resolve(graph, dendrogram, landscape, minClusterSize, completion);
         Assignment partition = eom.Assignment;
@@ -131,7 +131,7 @@ public static class PKWangUserSession
             graph, repAffinities, alignments: null, edgesPath);
 
         // Evaluator scores on the resolved cut (method-agnostic indices —
-        // IGraphPartitionEvaluator explicitly scores PKWang's affinity currency).
+        // IGraphPartitionEvaluator explicitly scores the cumulative-field affinity currency).
         var evaluatorScores = new Dictionary<string, double>(StringComparer.Ordinal);
         if (referenceLabels is not null && referenceLabels.Length == partition.Labels.Length)
             foreach (var ev in externalEvaluators ?? Array.Empty<IExternalClusterEvaluator>())
@@ -140,13 +140,13 @@ public static class PKWangUserSession
             evaluatorScores[ev.Name] = ev.Evaluate(
                 graph, repAffinities.G, partition.Labels, partition.Count);
 
-        // Summary JSON — PKWang-native shape. JsonObject keeps it reflection- and
+        // Summary JSON — cumulative-field-native shape. JsonObject keeps it reflection- and
         // source-gen-free (no dependency on the SW summary's serializer context).
         var scoresNode = new JsonObject();
         foreach (var kv in evaluatorScores) scoresNode[kv.Key] = kv.Value;
         var summary = new JsonObject
         {
-            ["algorithm"]              = "spc-pkwang",
+            ["algorithm"]              = "cumulative-field",
             ["resolver"]               = "thermal-eom",
             ["field"]                  = field.ToString(),
             ["symmetrization"]         = symmetrization.ToString(),
@@ -168,7 +168,7 @@ public static class PKWangUserSession
         string summaryPath = paths.Summary;
         File.WriteAllText(summaryPath, summary.ToJsonString(s_jsonOptions));
 
-        return new PKWangUserRunResult(
+        return new CumulativeFieldUserRunResult(
             RunDirectory:            runDirectory,
             SweepCsvPath:            sweepPath,
             PartitionCsvPath:        partitionPath,
@@ -219,8 +219,8 @@ public static class PKWangUserSession
     }
 }
 
-/// <summary>Paths and headline figures from one <see cref="PKWangUserSession.Run"/> call.</summary>
-public sealed record PKWangUserRunResult(
+/// <summary>Paths and headline figures from one <see cref="CumulativeFieldUserSession.Run"/> call.</summary>
+public sealed record CumulativeFieldUserRunResult(
     string RunDirectory,
     string SweepCsvPath,
     string PartitionCsvPath,

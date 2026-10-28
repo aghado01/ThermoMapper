@@ -1,5 +1,5 @@
 using System;
-using Clustering.Graphical.SPC.Runtime.Core.Solver;
+using Clustering.Graphical.CumulativeField;
 using Clustering.Primitives;
 using Graphs;
 using Graphs.Observables;
@@ -9,12 +9,12 @@ using Xunit;
 namespace VizCore.Tests;
 
 /// <summary>
-/// R1: the solver-side landscape mint (PKWang closed form → per-node
+/// R1: the solver-side landscape mint (cumulative-field closed form → per-node
 /// marginals → Landscape) and the producer-agnostic affinity node marginals.
 /// Marginal oracles are hand-computed; the OverGrid test pins wiring,
 /// provenance, and the closed form's monotonicity in T.
 /// </summary>
-public sealed class PKWangLandscapeTests
+public sealed class CumulativeFieldLandscapeTests
 {
     // Path 0 —(J=2)— 1 —(J=4)— 2.
     private static CsrGraph PathGraph() => CsrGraph.FromEdges(
@@ -61,16 +61,16 @@ public sealed class PKWangLandscapeTests
     public void OverGrid_MintsThermalLandscapeFromTheClosedForm()
     {
         var graph = PathGraph();
-        PKWangContext context = PKWang.Prepare(graph, EdgeWeightKind.Coupling, Field.Mean);
+        CumulativeFieldContext context = CumulativeFieldSolver.Prepare(graph, EdgeWeightKind.Coupling, Field.Mean);
         var grid = new[] { 0.5, 1.0, 2.0 };
 
-        Landscape landscape = PKWangLandscapes.OverGrid(context, grid, PKWangLandscapeSink.BondMass, graphId: "test");
+        Landscape landscape = CumulativeFieldLandscapes.OverGrid(context, grid, CumulativeFieldLandscapeSink.BondMass, graphId: "test");
 
         Assert.Equal("temperature", landscape.Axis);
         Assert.Equal(grid, landscape.Grid);
         Assert.Equal(3, landscape.NodeCount);
         Assert.Equal("BondMass", landscape.Provenance!.Sink);
-        Assert.Equal("pkwang:closed-form", landscape.Provenance.GaugeNote);
+        Assert.Equal("cumulative-field:closed-form", landscape.Provenance.GaugeNote);
 
         // G = 1 − exp(−Hcum/T) falls strictly as T rises wherever Hcum > 0,
         // so every node's bond mass is strictly decreasing along the grid.
@@ -81,7 +81,7 @@ public sealed class PKWangLandscapeTests
         }
 
         // Column consistency: the mint's column IS the marginal of Solve at that T.
-        double[] direct = AffinityNodeMarginals.BondMass(graph, PKWang.Solve(context, 1.0));
+        double[] direct = AffinityNodeMarginals.BondMass(graph, CumulativeFieldSolver.Solve(context, 1.0));
         Assert.Equal(direct, landscape.ValuesByGridPoint[1]);
     }
 
@@ -89,10 +89,10 @@ public sealed class PKWangLandscapeTests
     public void OverGrid_LocalEnergyRisesWithTemperature()
     {
         var graph = PathGraph();
-        PKWangContext context = PKWang.Prepare(graph, EdgeWeightKind.Coupling, Field.Mean);
+        CumulativeFieldContext context = CumulativeFieldSolver.Prepare(graph, EdgeWeightKind.Coupling, Field.Mean);
 
-        Landscape landscape = PKWangLandscapes.OverGrid(
-            context, new[] { 0.5, 2.0 }, PKWangLandscapeSink.LocalEnergy);
+        Landscape landscape = CumulativeFieldLandscapes.OverGrid(
+            context, new[] { 0.5, 2.0 }, CumulativeFieldLandscapeSink.LocalEnergy);
 
         for (int node = 0; node < 3; node++)
             Assert.True(landscape.ValuesByGridPoint[1][node] > landscape.ValuesByGridPoint[0][node]);

@@ -1,19 +1,19 @@
 using System;
 using Graphs.Primitives;
 
-namespace Clustering.Graphical.SPC.Runtime.Core.Solver;
+namespace Clustering.Graphical.CumulativeField;
 
 /// <summary>
-/// Wang 2020 mean field: one global ascending sort of the undirected couplings,
+/// Mean field: one global ascending sort of the undirected couplings,
 /// cumulative-summed into a single energy ladder, scattered back to each edge's
-/// CSR slot. The cut <c>Hcum &gt; T·ln2</c> reduces to thermal single-linkage
-/// (Lemma B; see the spc-samplers note).
+/// CSR slot. The cut <c>Hcum &gt; T·ln2</c> reduces to thermal single-linkage.
+/// The global ladder follows Wang et al. 2020.
 /// </summary>
 /// <remarks>
-/// Parity variant: ranks each undirected edge once (the <c>j &gt; i</c> half of
-/// the symmetric CSR), not the paper's directed <c>N·K</c> sort which
-/// double-counts every edge and rescales <c>T</c> by ~2. The clustering family
-/// is identical either way — only the temperature axis is reparametrized.
+/// Ranks each undirected edge once (the <c>j &gt; i</c> half of the symmetric
+/// CSR), correcting the paper's directed <c>N·K</c> sort, which double-counts
+/// every edge and rescales <c>T</c> by ~2. The clustering family is identical
+/// either way — only the temperature axis is reparametrized.
 /// </remarks>
 internal readonly struct MeanField : IField
 {

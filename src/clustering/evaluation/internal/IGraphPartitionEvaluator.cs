@@ -8,7 +8,7 @@ namespace Clustering.Evaluation.Internal;
 /// point/distance-based). Scores a labeling using only the graph, a per-edge
 /// weight field, and the labels — no ground truth, no domain types. The edge
 /// weight is whatever the producer commits to its currency (SW bond frequency,
-/// PKWang closed-form affinity, …), so a single implementation scores every
+/// cumulative-field closed-form affinity, …), so a single implementation scores every
 /// inference method's output identically.
 /// </summary>
 public interface IGraphPartitionEvaluator

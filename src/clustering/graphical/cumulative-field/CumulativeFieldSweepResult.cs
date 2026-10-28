@@ -1,17 +1,16 @@
 using Clustering.Primitives;
 using Graphs.Primitives;
 
-namespace Clustering.Graphical.SPC.Runtime.Core.Solver;
+namespace Clustering.Graphical.CumulativeField;
 
 /// <summary>
-/// Result of a focused PKWang temperature sweep: the per-temperature partitions
-/// produced by one prepared context, plus the configuration that produced them
-/// (declared/traced provenance). PKWang-native — it carries no Swendsen–Wang
-/// thermodynamic observables (χ, specific heat, magnetization), which are moot by
-/// construction for PKWang: there is no global spin configuration and no Monte
-/// Carlo to average.
+/// Result of a focused cumulative-field temperature sweep: the per-temperature
+/// partitions produced by one prepared context, plus the configuration that produced
+/// them (declared/traced provenance). It carries no Swendsen–Wang thermodynamic
+/// observables (χ, specific heat, magnetization), which are moot by construction:
+/// there is no global spin configuration and no Monte Carlo to average.
 /// </summary>
-public sealed record PKWangSweepResult
+public sealed record CumulativeFieldSweepResult
 {
     /// <summary>Field the sweep was run with.</summary>
     public required Field Field { get; init; }

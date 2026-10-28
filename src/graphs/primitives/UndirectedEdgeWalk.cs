@@ -29,7 +29,7 @@ public readonly struct UndirectedEdge
 /// </summary>
 /// <remarks>
 /// Adoption note: safe wherever the walk is the outer structure. **Hot fused
-/// loops (SW <c>Draw</c>, PKWang <c>BuildHcum</c>/<c>Solve</c>) keep their
+/// loops (SW <c>Draw</c>, cumulative-field <c>BuildHcum</c>/<c>Solve</c>) keep their
 /// hand-rolled loops until a benchmark confirms this lowers identically** — the
 /// loop is intricate and perf-critical, and "zero-cost" is asserted here, not yet
 /// measured.

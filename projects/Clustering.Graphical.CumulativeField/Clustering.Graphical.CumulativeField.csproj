@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Clustering.Graphical.CumulativeField</RootNamespace>
+    <AssemblyName>Clustering.Graphical.CumulativeField</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/clustering/graphical/cumulative-field/**/*.cs" Link="cumulative-field/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Clustering.Primitives/Clustering.Primitives.csproj" />
+    <ProjectReference Include="../Clustering.Dendrograms/Clustering.Dendrograms.csproj" />
+    <ProjectReference Include="../Graphs.Primitives/Graphs.Primitives.csproj" />
+    <ProjectReference Include="../Graphs.Proximity/Graphs.Proximity.csproj" />
+    <ProjectReference Include="../Graphs.Models.Potts/Graphs.Models.Potts.csproj" />
+    <ProjectReference Include="../Graphs.Observables/Graphs.Observables.csproj" />
+    <ProjectReference Include="../Maths.Rng/Maths.Rng.csproj" />
+    <ProjectReference Include="../Maths.Samplers/Maths.Samplers.csproj" />
+  </ItemGroup>
+</Project>

@@ -14,9 +14,9 @@ namespace Clustering.Dendrograms;
 /// <remarks>
 /// Thin composition over the canonical pipeline (<see cref="Kruskal"/> →
 /// <see cref="DendrogramBuilder.BuildSingleLinkageDendrogram"/>); it exists so
-/// callers — and the PKWang sampler's validation harness — have one reusable
+/// callers — and the cumulative-field solver's validation harness — have one reusable
 /// entry point rather than re-deriving the MST→dendrogram chain. This is the
-/// ground-truth method PKWang's MeanField rung reduces to (Lemma B).
+/// ground-truth method the cumulative field's MeanField rung reduces to (Lemma B).
 /// </remarks>
 public static class SingleLinkage
 {

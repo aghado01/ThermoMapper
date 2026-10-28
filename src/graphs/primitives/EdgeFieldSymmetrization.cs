@@ -8,7 +8,7 @@ namespace Graphs.Primitives;
 /// <c>j &gt; i</c> slot, per a <see cref="SymmetrizationRule"/>. The mirror map
 /// (<see cref="CsrGraph.BuildReverseSlotMap"/>) pairs each CSR slot with its
 /// reverse direction. The value-level twin of the set-level kNN symmetrization
-/// in <c>Graphs.Neighbors</c>; lifted out of PKWang so any directed-field method
+/// in <c>Graphs.Neighbors</c>; lifted out of the cumulative-field solver so any directed-field method
 /// shares it.
 /// </summary>
 public static class EdgeFieldSymmetrization

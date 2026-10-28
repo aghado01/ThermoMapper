@@ -7,7 +7,7 @@ namespace Graphs.Observables;
 /// Per-node sum of incident affinities:
 /// <c>D_i = Σ_{j ∈ N(i)} G(i,j)</c>. The expected weighted degree of node
 /// <c>i</c> in the affinity-weighted subgraph at the equilibrium temperature —
-/// for Swendsen–Wang the random subgraph of formed bonds, for PKWang the
+/// for Swendsen–Wang the random subgraph of formed bonds, for the cumulative-field solver the
 /// closed-form survival-weighted subgraph.
 /// </summary>
 /// <remarks>

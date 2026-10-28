@@ -9,6 +9,7 @@
     <ProjectReference Include="..\..\projects\Clustering.Graphical.SPC\Clustering.Graphical.SPC.csproj" />
     <ProjectReference Include="..\..\projects\Clustering.Dendrograms\Clustering.Dendrograms.csproj" />
     <ProjectReference Include="..\..\projects\Clustering.Graphical.HdbScan\Clustering.Graphical.HdbScan.csproj" />
+    <ProjectReference Include="..\..\projects\Clustering.Graphical.CumulativeField\Clustering.Graphical.CumulativeField.csproj" />
     <ProjectReference Include="..\..\projects\Clustering.Evaluation\Clustering.Evaluation.csproj" />
     <ProjectReference Include="..\..\projects\Synthetic\Synthetic.csproj" />
     <ProjectReference Include="..\..\projects\Archivory.Tabular\Archivory.Tabular.csproj" />

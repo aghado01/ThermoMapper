@@ -15,7 +15,7 @@ namespace Graphs.Observables;
 /// <remarks>
 /// <para><b>Currency.</b> Consumes <see cref="Alignments"/>, the SW-native
 /// spin-alignment channel <c>⟨δ(s_i,s_j)⟩</c> — <i>not</i>
-/// <see cref="Affinities"/> (bond-survival). A forward solver (PKWang) draws no
+/// <see cref="Affinities"/> (bond-survival). A forward solver (the cumulative field) draws no
 /// spins and mints no alignment, so this signal is meaningful only for
 /// samplers that materialize a spin ensemble.</para>
 ///

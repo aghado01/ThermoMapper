@@ -199,7 +199,7 @@ public sealed class SpcDiagnosticsTests
             SpinAgreementCount = new[] { 4, 0 },   // agreed on every draw    → alignment 1.0
         };
 
-        // The SW realization of the currencies (PKWang mints Affinities directly; no Alignments).
+        // The SW realization of the currencies (the cumulative-field solver mints Affinities directly; no Alignments).
         Affinities affinities = SwCurrencies.ToAffinities(accumulator);
         Alignments alignments = SwCurrencies.ToAlignments(accumulator);
 

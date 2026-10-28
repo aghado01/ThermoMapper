@@ -1,16 +1,14 @@
 using System;
 using System.Collections.Generic;
 using Clustering.Primitives;
-using Clustering.Graphical.SPC.Runtime.Core.Sampler;
-using Clustering.Graphical.SPC.Runtime.Core.Solver;
+using Clustering.Graphical.CumulativeField;
 using Graphs.Primitives;
 using Xunit;
 
-using Clustering.Graphical.SPC.Runtime.Core;
 
 using Graphs;
 
-namespace Clustering.Graphical.SPC.Tests.Sampler;
+namespace Clustering.Graphical.CumulativeField.Tests;
 
 /// <summary>
 /// LocalField (per-site energy ladder) tests: implementation correctness against
@@ -18,7 +16,7 @@ namespace Clustering.Graphical.SPC.Tests.Sampler;
 /// mode semantics, and a demonstration that LocalField genuinely diverges from
 /// MeanField (i.e. it is not a relabeled global sort).
 /// </summary>
-public sealed class PKWangLocalFieldTests
+public sealed class LocalFieldTests
 {
     // Triangle {0,1,2} + bridge to a pair {3,4}; distinct couplings.
     private static CsrGraph TripletGraph()
@@ -97,8 +95,8 @@ public sealed class PKWangLocalFieldTests
         const double T = 6.0;
         double[] hcum = IndependentPerSiteHcum(g);
 
-        PKWangContext ctx = PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Mutual);
-        Affinities corr = PKWang.Solve(ctx, T);
+        CumulativeFieldContext ctx = CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Mutual);
+        Affinities corr = CumulativeFieldSolver.Solve(ctx, T);
 
         for (int i = 0; i < g.NodeCount; i++)
         {
@@ -123,9 +121,9 @@ public sealed class PKWangLocalFieldTests
         CsrGraph g = TripletGraph();
         const double T = 6.0;
 
-        int inclusive = PKWang.Cluster(PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Inclusive), T).Count;
-        int mean = PKWang.Cluster(PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Mean), T).Count;
-        int mutual = PKWang.Cluster(PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Mutual), T).Count;
+        int inclusive = CumulativeFieldSolver.Cluster(CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Inclusive), T).Count;
+        int mean = CumulativeFieldSolver.Cluster(CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Mean), T).Count;
+        int mutual = CumulativeFieldSolver.Cluster(CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Mutual), T).Count;
 
         // max G ≥ mean G ≥ min G ⇒ Inclusive keeps the most edges (fewest
         // clusters), Mutual the fewest (most clusters).
@@ -137,12 +135,12 @@ public sealed class PKWangLocalFieldTests
     public void ClusterCount_IsMonotoneInTemperature()
     {
         CsrGraph g = TripletGraph();
-        PKWangContext ctx = PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Mutual);
+        CumulativeFieldContext ctx = CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Mutual);
 
         int prev = 0;
         foreach (double T in new[] { 0.7, 3.0, 8.0, 20.0, 60.0 })
         {
-            int count = PKWang.Cluster(ctx, T).Count;
+            int count = CumulativeFieldSolver.Cluster(ctx, T).Count;
             Assert.True(count >= prev, $"Cluster count fell from {prev} to {count} at T={T}.");
             prev = count;
         }
@@ -154,8 +152,8 @@ public sealed class PKWangLocalFieldTests
         CsrGraph g = IncreasingPath();
         const double T = 3.6; // T·ln2 ≈ 2.50
 
-        Assignment mean = PKWang.Cluster(PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Mean), T);
-        Assignment local = PKWang.Cluster(PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Mutual), T);
+        Assignment mean = CumulativeFieldSolver.Cluster(CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Mean), T);
+        Assignment local = CumulativeFieldSolver.Cluster(CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Local, SymmetrizationRule.Mutual), T);
 
         // MeanField cumulates globally → keeps (1,2),(2,3),(3,4): {0}|{1,2,3,4}.
         // LocalField cumulates per-site → also cuts (1,2): {0}|{1}|{2,3,4}.

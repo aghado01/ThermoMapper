@@ -74,7 +74,7 @@ public static class ThermalEom
     /// into an excess-of-mass assignment, optionally completing the periphery by
     /// modal ascent on the coldest (most-coupled) landscape column. The structure
     /// and height are currencies, not frames — SW builds them from sampled
-    /// accumulators (the overload above); the PKWang solver builds them exactly
+    /// accumulators (the overload above); the cumulative-field solver builds them exactly
     /// from its closed form. Both share this one walk.
     /// </summary>
     public static ThermalEomResult Resolve(

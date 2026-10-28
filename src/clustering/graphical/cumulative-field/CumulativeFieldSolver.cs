@@ -1,27 +1,27 @@
 using System;
-using Clustering.Graphical.SPC.Partitions;
 using Clustering.Dendrograms;
 using Clustering.Primitives;
 using Graphs;
 using Graphs.Models.Potts;
 using Graphs.Primitives;
 
-namespace Clustering.Graphical.SPC.Runtime.Core.Solver;
+namespace Clustering.Graphical.CumulativeField;
 
 /// <summary>
-/// Pan Ke Wang's 2020 direct (non-Monte-Carlo) SPC solver. Computes the
-/// closed-form bond-activity affinity <c>G = 1 − exp(−Hcum/T)</c> — the
-/// <c>M→∞</c> limit of the paper's inverse-transform draws — instead of
-/// averaging M samples. Exact, zero-variance, and the clustering it induces is
-/// thermal single-linkage (Lemma B).
+/// The cumulative-field solver: builds the temperature-independent
+/// cumulative-energy ladder <c>Hcum</c> once, then evaluates the edge-survival
+/// affinity <c>G = 1 − exp(−Hcum/T)</c> in closed form at any temperature —
+/// solving straight to the <see cref="Affinities"/> currency, exact and
+/// zero-variance. At a fixed threshold the induced clustering is thermal
+/// single-linkage over the ladder.
 /// </summary>
 /// <remarks>
-/// Credit: Wang et al. 2020 for the mean-field construction. This computes the
-/// closed form the paper left on the table (it kept the inherited Monte-Carlo
-/// wrapper). Reduction and prior-art live in
-/// <c>.discussion/issues/spc-samplers/</c>, not here.
+/// The cumulative-ladder construction with an exponential energy budget is due
+/// to Wang et al. 2020, who estimated this affinity by Monte Carlo; the closed
+/// form and the per-site <see cref="Field.Local"/> ladder are ThermoMapper's.
+/// Derivations live in <c>lean/Protolemmata/CumulativeField/design.md</c>.
 /// </remarks>
-public static class PKWang
+public static class CumulativeFieldSolver
 {
     /// <summary>
     /// Build the temperature-independent <c>Hcum</c> ladder once for the chosen
@@ -29,7 +29,7 @@ public static class PKWang
     /// fields (LocalField); MeanField ignores it. The returned context is reused
     /// across an entire temperature sweep.
     /// </summary>
-    public static PKWangContext Prepare(
+    public static CumulativeFieldContext Prepare(
         CsrGraph graph,
         EdgeWeightKind weightKind,
         Field field,
@@ -41,7 +41,7 @@ public static class PKWang
             throw new ArgumentException("Graph CSR arrays are not initialized.", nameof(graph));
         if (weightKind != EdgeWeightKind.Coupling)
             throw new ArgumentException(
-                $"PKWang's survival kernel consumes couplings; got {weightKind}-weighted edges " +
+                $"The cumulative-field survival kernel consumes couplings; got {weightKind}-weighted edges " +
                 "(a Distance-weighted graph would silently feed distances to the kernel). " +
                 "Feed a Coupling-weighted graph (GraphBuildResult.WeightKind == Coupling).",
                 nameof(weightKind));
@@ -54,12 +54,12 @@ public static class PKWang
         };
     }
 
-    private static PKWangContext Build<TField>(CsrGraph graph, SymmetrizationRule rule)
+    private static CumulativeFieldContext Build<TField>(CsrGraph graph, SymmetrizationRule rule)
         where TField : struct, IField
     {
         double[] hcum = TField.BuildHcum(graph);
         int[]? mirror = TField.DirectedSymmetrize ? graph.BuildReverseSlotMap() : null;
-        return new PKWangContext(graph, hcum, TField.DirectedSymmetrize, rule, mirror);
+        return new CumulativeFieldContext(graph, hcum, TField.DirectedSymmetrize, rule, mirror);
     }
 
     /// <summary>
@@ -124,7 +124,7 @@ public static class PKWang
     /// fields the two directions are reconciled per the context's
     /// <see cref="SymmetrizationRule"/>, written into the <c>j &gt; i</c> slot.
     /// </summary>
-    public static Affinities Solve(PKWangContext context, double T, int replicaIndex = 0)
+    public static Affinities Solve(CumulativeFieldContext context, double T, int replicaIndex = 0)
     {
         ArgumentNullException.ThrowIfNull(context);
         if (T <= 0.0)
@@ -150,7 +150,7 @@ public static class PKWang
     /// components. One temperature → one partition; the thermomapper backend
     /// sweeps <c>T</c> over this.
     /// </summary>
-    public static Assignment Cluster(PKWangContext context, double T, double theta = 0.5)
+    public static Assignment Cluster(CumulativeFieldContext context, double T, double theta = 0.5)
     {
         Affinities affinity = Solve(context, T);
         return AffinityThreshold.Connect(context.Graph, affinity.G, theta);

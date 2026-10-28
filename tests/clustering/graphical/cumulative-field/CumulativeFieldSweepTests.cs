@@ -1,20 +1,19 @@
 using Clustering.Primitives;
-using Clustering.Graphical.SPC.Runtime.Core.Solver;
+using Clustering.Graphical.CumulativeField;
 using Graphs.Primitives;
 using Xunit;
 
-using Clustering.Graphical.SPC.Runtime.Core;
 
 using Graphs;
 
-namespace Clustering.Graphical.SPC.Tests.Sampler;
+namespace Clustering.Graphical.CumulativeField.Tests;
 
 /// <summary>
-/// The focused PKWang sweep backend: consistency with the single-temperature
+/// The focused cumulative-field sweep backend: consistency with the single-temperature
 /// path, monotone fragmentation over an ascending grid, the geometric grid
 /// helper, and traced provenance on the result.
 /// </summary>
-public sealed class PKWangSweepTests
+public sealed class CumulativeFieldSweepTests
 {
     // Triangle {0,1,2} + pair {3,4,5} joined by a weak bridge (2,3); connected,
     // distinct couplings.
@@ -38,12 +37,12 @@ public sealed class PKWangSweepTests
         CsrGraph g = BuildGraph();
         double[] grid = { 0.7, 4.5, 14.0, 36.0, 72.0 };
 
-        PKWangSweepResult result = PKWangSweep.Run(g, EdgeWeightKind.Coupling, grid, Field.Mean);
+        CumulativeFieldSweepResult result = CumulativeFieldSweep.Run(g, EdgeWeightKind.Coupling, grid, Field.Mean);
 
-        PKWangContext ctx = PKWang.Prepare(g, EdgeWeightKind.Coupling, Field.Mean);
+        CumulativeFieldContext ctx = CumulativeFieldSolver.Prepare(g, EdgeWeightKind.Coupling, Field.Mean);
         for (int i = 0; i < grid.Length; i++)
         {
-            Assignment expected = PKWang.Cluster(ctx, grid[i]);
+            Assignment expected = CumulativeFieldSolver.Cluster(ctx, grid[i]);
             Assert.Equal(expected.Count, result.Partitions[i].Count);
             Assert.Equal(expected.Labels, result.Partitions[i].Labels);
         }
@@ -56,7 +55,7 @@ public sealed class PKWangSweepTests
         CsrGraph g = BuildGraph();
         double[] grid = new[] { 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 100.0 };
 
-        int[] counts = PKWangSweep.Run(g, EdgeWeightKind.Coupling, grid, Field.Local, SymmetrizationRule.Mutual).ClusterCounts();
+        int[] counts = CumulativeFieldSweep.Run(g, EdgeWeightKind.Coupling, grid, Field.Local, SymmetrizationRule.Mutual).ClusterCounts();
 
         for (int i = 1; i < counts.Length; i++)
             Assert.True(counts[i] >= counts[i - 1], $"Cluster count fell at index {i} (T={grid[i]}).");
@@ -67,7 +66,7 @@ public sealed class PKWangSweepTests
     {
         CsrGraph g = BuildGraph();
 
-        PKWangSweepResult result = PKWangSweep.Run(
+        CumulativeFieldSweepResult result = CumulativeFieldSweep.Run(
             g, EdgeWeightKind.Coupling, new[] { 5.0 }, Field.Local, SymmetrizationRule.Inclusive, theta: 0.4);
 
         Assert.Equal(Field.Local, result.Field);

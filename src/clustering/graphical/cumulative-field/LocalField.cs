@@ -1,7 +1,7 @@
 using System;
 using Graphs.Primitives;
 
-namespace Clustering.Graphical.SPC.Runtime.Core.Solver;
+namespace Clustering.Graphical.CumulativeField;
 
 /// <summary>
 /// Per-site field: each node sorts its own incident couplings and cumulative-

@@ -24,8 +24,8 @@ using Graphs.Primitives;
 
 using Graphs.Models.Potts;
 
-using Clustering.Graphical.SPC.Runtime.Core.Solver;
-using SolverField = Clustering.Graphical.SPC.Runtime.Core.Solver.Field;
+using Clustering.Graphical.CumulativeField;
+using SolverField = Clustering.Graphical.CumulativeField.Field;
 
 namespace UserRepl.Commands;
 
@@ -191,7 +191,7 @@ public static class SpcCommand
 
             // Shared schedule envelope: both siblings ride the identical grid
             // (same bracket, same q-anchor). The fork is below — SW runs the
-            // MC sweep strategy; PKWang runs the closed-form solver session.
+            // MC sweep strategy; the cumulative field runs the closed-form solver session.
             (double[] temperatures, string temperaturesResolved) = ResolveTemperatureGrid(options, prebuiltGraph);
 
             // Rewrite the manifest with the resolved temperature grid provenance
@@ -201,14 +201,14 @@ public static class SpcCommand
             };
             manifest.WriteTo(runDirectory);
 
-            if (options.Solver == SolverKind.PKWang)
+            if (options.Solver == SolverKind.CumulativeField)
             {
                 SolverField field = options.Field ?? SolverField.Mean;
-                Console.WriteLine($"Solver             : PKWang (field={field}, symmetrization={options.Symmetrization})");
+                Console.WriteLine($"Solver             : cumulative-field (field={field}, symmetrization={options.Symmetrization})");
                 Console.WriteLine($"Resolver           : thermal-eom (periphery={options.PeripheryCompletion}, min-size={options.MinClusterSize})");
                 Console.WriteLine($"Temperatures       : {temperaturesResolved}");
 
-                PKWangUserRunResult pk = PKWangUserSession.Run(
+                CumulativeFieldUserRunResult fieldRun = CumulativeFieldUserSession.Run(
                     dataset,
                     runPaths,
                     prebuiltGraph,
@@ -225,13 +225,13 @@ public static class SpcCommand
                     dataset.Labels);
 
                 Console.WriteLine("Session finished.");
-                Console.WriteLine($"Thermal EOM        : {pk.ClusterCount} clusters; abstained: {pk.Abstained}");
-                Console.WriteLine($"Sweep CSV          : {pk.SweepCsvPath}");
-                Console.WriteLine($"Partition CSV      : {pk.PartitionCsvPath}");
-                if (pk.EquilibriumEdgesCsvPath is not null)
-                    Console.WriteLine($"Equilibrium edges  : {pk.EquilibriumEdgesCsvPath} (T={pk.RepresentativeTemperature:G6})");
-                Console.WriteLine($"Summary JSON       : {pk.SummaryJsonPath}");
-                foreach (var kv in pk.EvaluatorScores)
+                Console.WriteLine($"Thermal EOM        : {fieldRun.ClusterCount} clusters; abstained: {fieldRun.Abstained}");
+                Console.WriteLine($"Sweep CSV          : {fieldRun.SweepCsvPath}");
+                Console.WriteLine($"Partition CSV      : {fieldRun.PartitionCsvPath}");
+                if (fieldRun.EquilibriumEdgesCsvPath is not null)
+                    Console.WriteLine($"Equilibrium edges  : {fieldRun.EquilibriumEdgesCsvPath} (T={fieldRun.RepresentativeTemperature:G6})");
+                Console.WriteLine($"Summary JSON       : {fieldRun.SummaryJsonPath}");
+                foreach (var kv in fieldRun.EvaluatorScores)
                     Console.WriteLine($"  {kv.Key,-24}: {kv.Value:F4}");
                 return 0;
             }
@@ -434,7 +434,7 @@ public static class SpcCommand
         return new RunManifest(
             SchemaVersion: RunManifest.CurrentSchemaVersion,
             CreatedUtc:    DateTime.UtcNow,
-            Algorithm:     options.Solver == SolverKind.PKWang ? "spc-pkwang" : "spc-sw",
+            Algorithm:     options.Solver == SolverKind.CumulativeField ? "cumulative-field" : "spc-sw",
             CommandLine:   string.Join(" ", args),
             Dataset:       dataset,
             Graph:         graph,
@@ -447,7 +447,7 @@ public static class SpcCommand
     // ── Sweep strategy assembly ──────────────────────────────────────────
     /// <summary>
     /// Resolve the temperature grid — the LAST step shared by both siblings.
-    /// SW and PKWang ride the identical bracket so PKWang is a true
+    /// SW and the cumulative-field solver ride the identical bracket so the solver is a true
     /// apples-to-apples (zero-variance) probe of the SW schedule.
     /// </summary>
     private static (double[] Temperatures, string Resolved) ResolveTemperatureGrid(Options options, CsrGraph graph)
@@ -467,11 +467,11 @@ public static class SpcCommand
             // temperatures that change anything span [min,max] Hcum / ln2. q-free
             // and gauge-free — no borrowed Potts T_ps(q) (the solver has no
             // susceptibility transition to anchor on).
-            if (options.Solver == SolverKind.PKWang)
+            if (options.Solver == SolverKind.CumulativeField)
             {
-                (lo, hi) = PKWang.EstimateBracket(
+                (lo, hi) = CumulativeFieldSolver.EstimateBracket(
                     graph, EdgeWeightKind.Coupling, options.Field ?? SolverField.Mean, options.Symmetrization);
-                return (SpcScheduleHelpers.LogSpaceGrid(lo, hi, 48), $"logspace:{lo:G6},{hi:G6},48 (pkwang-hcum)");
+                return (SpcScheduleHelpers.LogSpaceGrid(lo, hi, 48), $"logspace:{lo:G6},{hi:G6},48 (cumulative-field)");
             }
 
             // The Potts sampler's coupling construction declares its T-estimate:
@@ -758,8 +758,8 @@ public static class SpcCommand
     internal static SolverKind ParseSolverKind(string value) => value.ToLowerInvariant() switch
     {
         "sw" or "swendsen-wang" or "swendsenwang" => SolverKind.SwendsenWang,
-        "pkwang" or "pk-wang" or "wang"           => SolverKind.PKWang,
-        _ => throw new ArgumentException($"Unknown solver '{value}'. Valid: sw, pkwang."),
+        "cumulative-field"           => SolverKind.CumulativeField,
+        _ => throw new ArgumentException($"Unknown solver '{value}'. Valid: sw, cumulative-field."),
     };
 
     internal static SolverField ParseSolverField(string value) => value.ToLowerInvariant() switch
@@ -896,7 +896,7 @@ public static class SpcCommand
 
     // ── Enums ────────────────────────────────────────────────────────────
     public enum ScheduleMode { FixedGrid }
-    public enum SolverKind { SwendsenWang, PKWang }
+    public enum SolverKind { SwendsenWang, CumulativeField }
     public enum AnalyzerKind { ChiPeak }
     public enum PartitionStrategyKind { CoMembership, SpinAgreement, BondFrequency }
     public enum HierarchicalStrategyKind { None, Blatt }
@@ -949,13 +949,13 @@ public static class SpcCommand
         // Inference method (sampler vs analytic solver)
         public SolverKind Solver { get; set; } = SolverKind.SwendsenWang;
 
-        /// <summary>PKWang energy-ladder field (null defaults to Mean). Inert for SW.</summary>
+        /// <summary>Cumulative-field energy-ladder field (null defaults to Mean). Inert for SW.</summary>
         public SolverField? Field { get; set; }
 
-        /// <summary>Directed-field reconciliation for PKWang LocalField. Inert for SW / MeanField.</summary>
+        /// <summary>Directed-field reconciliation for the cumulative-field LocalField. Inert for SW / MeanField.</summary>
         public SymmetrizationRule Symmetrization { get; set; } = SymmetrizationRule.Mutual;
 
-        /// <summary>Explicit single-cut temperature for the PKWang solver; null = longest
+        /// <summary>Explicit single-cut temperature for the cumulative-field solver; null = longest
         /// cluster-count plateau (the solver's native stability signal).</summary>
         public double? CutTemperature { get; set; }
 

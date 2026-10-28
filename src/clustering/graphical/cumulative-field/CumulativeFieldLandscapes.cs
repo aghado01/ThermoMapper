@@ -4,10 +4,10 @@ using Clustering.Primitives;
 using Graphs.Observables;
 using Graphs.Primitives;
 
-namespace Clustering.Graphical.SPC.Runtime.Core.Solver;
+namespace Clustering.Graphical.CumulativeField;
 
 /// <summary>Which per-node marginal supplies the height field.</summary>
-public enum PKWangLandscapeSink
+public enum CumulativeFieldLandscapeSink
 {
     /// <summary>Σ_j G_ij(T) — the attachment field; ascend.</summary>
     BondMass,
@@ -17,28 +17,27 @@ public enum PKWangLandscapeSink
 }
 
 /// <summary>
-/// The solver-side <see cref="Landscape"/> producer: evaluates PKWang's
+/// The solver-side <see cref="Landscape"/> producer: evaluates the cumulative-field
 /// closed-form affinity at each requested temperature and reduces it to a
 /// per-node marginal column — no draws, no accumulator, exact. The second
-/// independent mint of the landscape currency (SW's
+/// independent mint of the landscape currency (Swendsen–Wang's
 /// <c>SweepLandscapes.FromFrames</c> is the sampled one), proving the
 /// two-producer seam in code.
 /// </summary>
 /// <remarks>
-/// Deliberately written against the stable <see cref="PKWang.Prepare"/> /
-/// <see cref="PKWang.Solve"/> lip only — the solver's internals can be
-/// rebuilt under it (see
-/// <c>.discussion/issues/spc-samplers/pkwang-solver-review-followup.md</c>).
+/// Deliberately written against the stable <see cref="CumulativeFieldSolver.Prepare"/> /
+/// <see cref="CumulativeFieldSolver.Solve"/> lip only — the solver's internals can be
+/// rebuilt under it.
 /// </remarks>
-public static class PKWangLandscapes
+public static class CumulativeFieldLandscapes
 {
     /// <summary>
     /// Mints the thermal landscape over an ascending temperature grid.
     /// </summary>
     public static Landscape OverGrid(
-        PKWangContext context,
+        CumulativeFieldContext context,
         IReadOnlyList<double> temperatures,
-        PKWangLandscapeSink sink,
+        CumulativeFieldLandscapeSink sink,
         string graphId = "unspecified")
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -52,11 +51,11 @@ public static class PKWangLandscapes
         var columns = new double[grid.Length][];
         for (int t = 0; t < grid.Length; t++)
         {
-            Affinities affinities = PKWang.Solve(context, grid[t]);
+            Affinities affinities = CumulativeFieldSolver.Solve(context, grid[t]);
             columns[t] = sink switch
             {
-                PKWangLandscapeSink.BondMass    => AffinityNodeMarginals.BondMass(context.Graph, affinities),
-                PKWangLandscapeSink.LocalEnergy => AffinityNodeMarginals.LocalEnergy(context.Graph, affinities),
+                CumulativeFieldLandscapeSink.BondMass    => AffinityNodeMarginals.BondMass(context.Graph, affinities),
+                CumulativeFieldLandscapeSink.LocalEnergy => AffinityNodeMarginals.LocalEnergy(context.Graph, affinities),
                 _ => throw new ArgumentOutOfRangeException(nameof(sink)),
             };
         }
@@ -65,6 +64,6 @@ public static class PKWangLandscapes
             axis: "temperature",
             grid: grid,
             valuesByGridPoint: columns,
-            provenance: new LandscapeProvenance(sink.ToString(), graphId, GaugeNote: "pkwang:closed-form"));
+            provenance: new LandscapeProvenance(sink.ToString(), graphId, GaugeNote: "cumulative-field:closed-form"));
     }
 }

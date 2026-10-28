@@ -10,7 +10,7 @@ namespace Graphs.Primitives;
 /// </summary>
 /// <remarks>
 /// Every sampler emits this tier, computed however it likes: Swendsen–Wang derives
-/// it from FK bond/cycle counts (a same-cluster bond frequency); PKWang writes it
+/// it from FK bond/cycle counts (a same-cluster bond frequency); the cumulative-field solver writes it
 /// directly from the closed-form survival kernel <c>G = 1 − exp(−Hcum/T)</c> — no
 /// Monte-Carlo draws. It is <i>not</i> the spin–spin correlation
 /// <c>⟨δ(sᵢ,sⱼ)⟩</c> (that is the separate <see cref="Alignments"/> channel);
@@ -26,6 +26,6 @@ public sealed record Affinities
     /// <summary>Per-CSR-slot affinity G; meaningful at the <c>j &gt; i</c> slots.</summary>
     public required double[] G { get; init; }
 
-    /// <summary>Replica index for metadata/seed provenance (PKWang is replica-free; defaults 0).</summary>
+    /// <summary>Replica index for metadata/seed provenance (the cumulative-field solver is replica-free; defaults 0).</summary>
     public int ReplicaIndex { get; init; }
 }

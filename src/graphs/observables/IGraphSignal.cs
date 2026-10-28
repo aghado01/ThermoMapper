@@ -14,7 +14,7 @@ namespace Graphs.Observables;
 /// <para><b>Tier.</b> Graph-intrinsic by signature: a signal reads only the
 /// model-agnostic currency and the graph, never the sampler's accumulator or
 /// run result. Any inference strategy that mints the currency (Swendsen–Wang,
-/// PKWang, a GMM/HDBSCAN ensemble) feeds the same signal — that is what living
+/// the cumulative-field solver, a GMM/HDBSCAN ensemble) feeds the same signal — that is what living
 /// in <c>graphs/observables</c> buys.</para>
 ///
 /// <para><b>Pattern role.</b> Unlike a partition strategy (alternatives — pick

@@ -10,9 +10,9 @@ namespace Maths.Samplers.Iid;
 /// distribution you can invert" routine.
 /// </summary>
 /// <remarks>
-/// SPC's Wang sampler inherited the Boltzmann energy draw <c>H = −T·ln(1−r)</c>
-/// — exponential inverse-transform sampling — from the Swendsen–Wang framework.
-/// The closed-form correlation makes that draw unnecessary <i>there</i>, which
+/// Wang et al. 2020 drew the Boltzmann energy <c>H = −T·ln(1−r)</c> —
+/// exponential inverse-transform sampling — to estimate the cumulative-field
+/// affinity by Monte Carlo. Its closed form makes that draw unnecessary <i>there</i>, which
 /// is exactly why the machinery belongs here as a general tool rather than bolted
 /// onto the sampler: a pocket capability, reusable wherever a known quantile and
 /// a stream of uniforms meet.
