@@ -5,6 +5,7 @@ using Maths.Rng;
 using Maths.Samplers;
 using Maths.Samplers.Blocks;
 using Maths.Samplers.Ensemble;
+using Maths.Samplers.Evidence;
 using Maths.Samplers.Rjmcmc;
 
 using Maths.Regression.Spline;
@@ -70,6 +71,14 @@ public sealed record TemperingReadout(
     double[] PairRejection, double Barrier, double IdealRoundTripRate, double[][] Ladders);
 
 /// <summary>
+/// A run's evidence ln p(y): the data's marginal likelihood under the knot prior restricted to its support (the support
+/// gate and admission). Each chain's tempering ladder gives a stepping-stone estimate (<see cref="LadderEvidence"/>), since
+/// each chain adapts its own rungs; the run's is their mean, with Monte Carlo error √Σ err_c² / C. The chains' spread
+/// checks the errors.
+/// </summary>
+public sealed record BarsEvidence(double LogEvidence, double MonteCarloError, IReadOnlyList<LadderEstimate> Chains);
+
+/// <summary>
 /// The pooled posterior fit of a BARS run plus its convergence diagnostics, all on the reported functionals
 /// (knot count, fitted grid values) — the quantities you read, monitored for convergence.
 /// <see cref="Fit"/> averages each draw's conditional mean curve (exact for this affine readout, and lower in variance
@@ -97,6 +106,8 @@ public sealed record TemperingReadout(
 /// <see cref="Draws"/> keeps every retained draw's state (<see cref="BarsDraw"/>), per chain in draw order: its knots,
 /// its coefficient and σ² draw, its robust weights, and its exact peak readout (the closed-form locations, heights,
 /// crossings and clipping flags that λ and π count on the grid).
+/// <see cref="Evidence"/> is the run's evidence when the ensemble reports one (<see cref="BarsEnsemble.ReportsEvidence"/>),
+/// and null otherwise.
 /// </summary>
 public sealed record BarsResult(
     double[] Grid,
@@ -119,7 +130,8 @@ public sealed record BarsResult(
     CoefficientUncertainty Uncertainty,
     TemperingReadout? Tempering,
     Tally<DesignRejection> Evaluations,
-    EnsembleCheckpoint? Checkpoint);
+    EnsembleCheckpoint? Checkpoint,
+    BarsEvidence? Evidence = null);
 
 /// <summary>
 /// The BARS client of the kernel-agnostic ensemble shell (<see cref="ChainEnsemble"/>): it knows how to start one
@@ -144,6 +156,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private readonly SwapSchedule _temperSchedule;
     private readonly bool _temperAdaptLadder;
     private readonly bool _temperReferenceRung;
+    private readonly bool _evidence;
     private readonly double _minColumnMass;
     private readonly double _birthExploration;
     private readonly BirthBase _birthBase;
@@ -194,13 +207,20 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// <see cref="IObservationModel.CanTemperToPrior"/>. Off by default: at equal work it did not pay at 4 or 8 levels on
     /// unimodal fits or on separated modes, where a ladder that spans to the prior is too short to carry its
     /// regenerations to the cold chain (OQ2, preparation brief).</param>
+    /// <param name="evidence">When true (the default), a run that can estimate its evidence reports it
+    /// (<see cref="BarsResult.Evidence"/>): one tempered on the likelihood path down to an exact reference rung
+    /// (<paramref name="temperReferenceRung"/>), under a model whose marginal is complete
+    /// (<see cref="IObservationModel.HasCompleteMarginal"/>: the Normal model under a proper σ² prior). Each ladder then
+    /// traces its rungs from the end of burn-in, at one extra marginal per rung per scan. Other runs report none, and
+    /// cost nothing.</param>
     public BarsEnsemble(IBasis basis, IObservationModel model, IComplexityPrior prior, IKnotKernel kernel,
                         IWeightResampler? resampler = null, double? dmgkConstant = null, double? adaptKernelTau = null,
                         int? temperLevels = null, double temperBetaMin = 0.05,
                         TemperingPath temperPath = TemperingPath.Likelihood,
                         SwapSchedule temperSchedule = SwapSchedule.DeterministicEvenOdd, bool temperAdaptLadder = true,
                         double minColumnMass = SplineTarget.DefaultMinColumnMass,
-                        double birthExploration = 1.0, BirthBase birthBase = BirthBase.Uniform, bool temperReferenceRung = false)
+                        double birthExploration = 1.0, BirthBase birthBase = BirthBase.Uniform, bool temperReferenceRung = false,
+                        bool evidence = true)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(model);
@@ -248,6 +268,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         _temperSchedule = temperSchedule;
         _temperAdaptLadder = temperAdaptLadder;
         _temperReferenceRung = temperReferenceRung;
+        _evidence = evidence;
         if (!(minColumnMass >= 0.0 && double.IsFinite(minColumnMass)))
             throw new ArgumentOutOfRangeException(nameof(minColumnMass), "The minimum column mass must be finite and non-negative.");
         _minColumnMass = minColumnMass;
@@ -257,6 +278,13 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         _birthExploration = birthExploration;
         _birthBase = birthBase;
     }
+
+    /// <summary>
+    /// Whether runs report an evidence: asked for (the default), and possible, which takes a likelihood-path ladder that
+    /// ends at a reference rung and a model whose marginal is complete.
+    /// </summary>
+    public bool ReportsEvidence => _evidence && _temperLevels is not null && _temperReferenceRung
+                                   && _temperPath == TemperingPath.Likelihood && _model.HasCompleteMarginal;
 
     /// <summary>Functionals R̂ runs on: knot count (index 0) + each fitted grid value (the per-grid consensus map).</summary>
     public int FunctionalDim => 1 + _grid.Length;
@@ -307,7 +335,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         .Add(_dmgkConstant ?? double.NaN).Add(_adaptKernelTau ?? double.NaN).Add(_temperLevels ?? 0).Add(_temperBetaMin)
         .Add((int)_temperPath).Add((int)_temperSchedule).Add(_temperAdaptLadder ? 1 : 0).Add(_minColumnMass).Add(_birthExploration).Add((int)_birthBase)
         .Add(_temperReferenceRung ? 1 : 0).Add((_model as WeightedNormalModel)?.Form.ToString() ?? "")
-        .Add((_model as WeightedNormalModel)?.Sigma2Prior.ToString() ?? "").ToString();
+        .Add((_model as WeightedNormalModel)?.Sigma2Prior.ToString() ?? "").Add(ReportsEvidence ? 1 : 0).ToString();
 
     /// <summary>
     /// Rebuild one chain from its saved restart state (<see cref="BarsChainState"/>): the chain or ladder, every RNG
@@ -481,7 +509,23 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var peakModes = ExtractModes(grid, peakIntensity, spanCoverage, chainLambda);
         var retained = new IReadOnlyList<BarsDraw>[chains];
         for (int ci = 0; ci < chains; ci++) retained[ci] = bars[ci].Readout.Draws.ToArray();
-        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, retained, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations, summary.Checkpoint);
+        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, retained, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations, summary.Checkpoint, Evidence(bars));
+    }
+
+    // Each chain's stepping-stone over its own traced ladder, and their mean; null when the run reports none.
+    private BarsEvidence? Evidence(BarsChainRun[] states)
+    {
+        if (!ReportsEvidence) return null;
+        var chains = new LadderEstimate[states.Length];
+        double sum = 0.0, variance = 0.0;
+        for (int ci = 0; ci < states.Length; ci++)
+        {
+            chains[ci] = LadderEvidence.FromLadders([states[ci].Ladder!]);
+            sum += chains[ci].LogRatio;
+            variance += chains[ci].MonteCarloError * chains[ci].MonteCarloError;
+        }
+        int c = states.Length;
+        return new BarsEvidence(sum / c, Math.Sqrt(variance) / c, chains);
     }
 
     /// <summary>
@@ -1053,6 +1097,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             IReadOnlyList<SwapPairStat> stats = ladder.PairStats;
             BurnRejection = new double[stats.Count];
             for (int i = 0; i < stats.Count; i++) BurnRejection[i] = ladder.Scans > 0 ? stats[i].MeanRejection * ladder.Scans : 0.0;
+            if (_owner.ReportsEvidence) ladder.TraceRungs();   // after the ladder's adaptation, which tracing ends
         }
         public void Accumulate(in KnotConfig draw, Span<double> functionals) => _owner.AccumulateDraw(this, draw, functionals);
         public IChainState SaveState() => _owner.Save(this);

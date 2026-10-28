@@ -82,6 +82,10 @@ public sealed class WeightedNormalModel : IObservationModel
     /// prior.</summary>
     public bool CanTemperToPrior => Form == TemperedForm.Linear || Sigma2Prior.IsProper;
 
+    /// <summary>True under a proper σ² prior, in either form; the Jeffreys prior's marginal omits its σ-integration
+    /// constant.</summary>
+    public bool HasCompleteMarginal => Sigma2Prior.IsProper;
+
     /// <inheritdoc/>
     public double LogMarginalLikelihood(double[,] design, double[] y, double[]? weights)
         => TemperedMarginal(design, y, weights).LogMarginalLikelihood(1.0);
