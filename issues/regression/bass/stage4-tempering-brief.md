@@ -112,3 +112,101 @@ A task is not done when its tests pass. Before the report, review the work as a 
 5. **Record it** in your report: what each pass found, what was fixed, and anything left, with the reason.
 
 ## Reports
+
+### Chip D: S8, tempering and evidence — 2026-10-28
+
+**Landed.** Both tasks, then the review cycle, all on `main`: `58fdeb2` (task 1, the tempered run), `8c1bb66` (task 2, the evidence), `fb22f73` and `f2d7149` (review pass 1), `aaf46b6` (pass 2).
+
+**Task 1: the tempered run.**
+- *`TemperingSpec`* in `BassSampling`, null by default (untempered, D05), a values-only record, serialized and fingerprinted with the config:
+  - `Path`: likelihood by default, powered selectable;
+  - `Form`: integrated by default, linear selectable;
+  - `Levels` (8) and `HotEnd` (10⁻³): geometric from 1, then b = 0 with the reference rung;
+  - `Adaptive` (true): re-spaced during burn-in, frozen after it;
+  - `Schedule`: DEO;
+  - `ReferenceRung` (false).
+- *Refusals.*
+  - `Validate` refuses an unknown path or form, the linear form on the powered path, the reference rung off the likelihood path, too few levels (2, or 3 with the rung), a hot end outside (0, 1), and any schedule but DEO.
+  - `BassResolved` refuses a hot end where the integrated form is undefined (under the flat intercept, b ≤ (1 − 2c)/N), and the reference rung where the integrated form has no b = 0 (Jeffreys or the flat intercept). It reads a static `BassTarget.Defines(form, intercept, σ², N, b)`, which the instance method now calls.
+  - `BassModel.Create` takes the config's form when none is passed.
+- *`BassLadder`* (new) turns a chain into a ladder:
+  - one `ParallelTempering` per chain, and per replica its own `BassStructureMoves` and `BassTauBlock`;
+  - swaps on ℓ_b alone, the prior cancelling;
+  - the reference rung drawing from its own `BassPriorSampler`;
+  - an adaptive ladder re-spaced after rounds of 1, 2, 4, … sweeps (BARS's schedule), then frozen: `Adapt` refuses after `EndBurnIn`;
+  - its seed from a fourth `SeedTree` child of the chain seed. The children are prefix-stable, so untempered runs are unchanged bit for bit.
+- *One departure from S6's plan: designs travel with swapped states.* S6 loads a swapped-in state whole.
+  - A whole load differs in the last bits from the giver's incremental design. Near D06's angle floor it could even refuse a structure the giver admitted, which would throw mid-run.
+  - So the receiving replica adopts an exact copy of the giver's design (internal `BassStructureMoves.Holds`, `DesignFor`, `Adopt`), at O(N·M + M²) against a load's O(N·M² + M³).
+  - Only reference draws are loaded whole, by the same `Load` that admitted them in the sampler.
+- *Retention and diagnostics.*
+  - Draws are composed from the b = 1 replica, and the moves, refusals and support account are that replica's.
+  - `BassDiagnostics.Tempering` is a `BassTemperingReadout`, following BARS's: path, form, schedule, the reference flag, round trips and annealed restarts per scan, each pair's mean rejection (Rao–Blackwellized) and realized swap acceptance, the barrier Λ̂, Theorem 1's ideal round-trip rate, each chain's frozen ladder, and the reference sampler's attempts per draw.
+- *Checkpoints* carry the shared `LadderSnapshot` (each replica's state, rung, streams and counters, the swap and reference streams, the adaptation's state and the traces), every replica's moves (its design as it is), the reference sampler's account and the burn-in marks. Resume is bit-identical.
+
+**Task 2: the evidence.**
+- *When.* `BassFit.Evidence`, between `Diagnostics` and `ResidualDependence`, is reported when `ReportEvidence` is set, the ladder ends at the reference rung, and the priors are proper. It is null under the flat intercept or Jeffreys σ², without the rung, on the powered path, and untempered.
+- *The estimators.*
+  - Stepping-stone gives `LogEvidence`. Each chain's ladder gives an estimate over the rungs it froze, and the chains pool as BARS pools them: the mean, with error √Σ err_c² / C.
+  - Path sampling runs beside it on the linear form, where the slope is ℓ₁ and the discretization diagnostic holds.
+  - *On the integrated form path sampling is left out:* its slope at b = 0 carries −(k/2)·E[1/τ], infinite under Zellner–Siow, so the trapezoid's end has no finite mean; elsewhere its diagnostic misses E_b[∂²ℓ_b/∂b²] (D05's first point). Docstring on `BassEvidence`.
+- *`BassEvidencePriors`* records the coefficient prior as declared and as resolved (τ's Gamma or the held τ), the count prior with the M cap, the subset measure and the resolved interaction caps, the support rule with its resolved thresholds and D06's gates (they define F, where the prior is normalized), the centre and its level, and σ²'s prior as declared and as resolved.
+
+**Tests.**
+- *`BassTemperingTests`* (52 cases):
+  - the spec's contract and every refusal;
+  - adoption bit for bit, and every replica holding its state's design;
+  - each rung's law against enumeration, over 8 options: both forms and paths, the reference rung, fixed g, flat + Jeffreys on the linear form and on the powered path, and a rung at the flat intercept's limit. Each b = 0 rung's τ matches the prior's closed form;
+  - the readout over 10 options: two and three rungs, a fixed ladder, functional, categorical, the R̂ stop;
+  - a ladder's scan as one sweep;
+  - the evidence against enumeration's exact ln Z under 5 proper options and on a direct functional response, both forms;
+  - the evidence null where it is undefined or not asked for.
+- *`BassTemperingResumeTests`* (15): resume over 11 options, resume twice, the parallelism bound, and a ladder's snapshot before and after burn-in.
+- *`BassTemperingParityTests`* (10, oracle):
+  - *The b = 1 end on fixture A, both forms:* tempered fits against the exact posterior, all 48 inclusions within allowance.
+  - *Each rung on fixture B (b = 1, 0.316, 0.1, 0), both forms:* the count law, E[τ] and every inclusion against the oracle's tempered laws, within five batch errors.
+  - *The swap's exact balance (fixed g, fixture A, 299 states, both forms):* ln π_b₁ − ln π_b₂ − (ℓ_b₁ − ℓ_b₂) spreads at most 3.2·10⁻¹⁴ over F against the oracle's laws.
+  - *R's swap density, a defect fixture:* on the `swap` slice it misses its own rung laws by 1.88 (1 ↔ 0.5) and 1.13 (0.5 ↔ 0.2), and the four candidate families by 1.10–5.08, where D05's misses its own by 1.4·10⁻¹⁴.
+  - *The evidence:* fixture B, integrated −28.551 ± 0.058 and linear −28.596 ± 0.060 (path sampling −28.681 ± 0.066, diagnostic 0.078) against −28.589; fixture C, categorical, −30.935 ± 0.040 against −30.903.
+- *Suites,* in `artifacts\chip-tempering\` (deleted since): Regression 756/756 (67 new), Samplers 146/146, the BASS oracle tests 35/35 (10 new).
+
+**Review passes.**
+1. *Pass 1* found four defects and several gaps.
+   - *The defects* (`fb22f73`):
+     - the reference rung's replica was handed no design, so a checkpoint reloaded a state swapped up to it whole;
+     - while replicas share their start's structure, a giver that handed over its pending candidate lost its own state's design (now a second round);
+     - `Adopt` replaced the design before checking it;
+     - `BassLadder` refused a bad spec in `ParallelTempering`'s parameter names.
+
+     The docs now say that the hot end moves with the reference rung, and that an unreached pair reads NaN.
+   - *The gaps* (`f2d7149`): two- and three-rung ladders, the R̂ stop, progress counting, a rung at the flat intercept's limit, the evidence on a direct functional response, and categorical evidence against the oracle.
+   - *A finding, not a defect.* With the default 8 levels on the N = 175 functional fixture (`BassRunTests.FunctionalData`, at its cap of 3), adjacent pairs rejected 0.96–1.00 of swaps.
+     - The chains' stepping-stone estimates spread from 122 to 183 against errors of 2–5, and the two forms differed by 130 nats in a short run.
+     - At 16 and 32 levels both forms agreed near 180–186.
+     - So the reported Monte Carlo error under-covers when rungs barely overlap, and a fixed level count does not scale with the data (open question 1).
+2. *Pass 2* found no defect. Its two gaps, the powered path under the improper options and the b = 0 τ against the prior's closed form, are closed in `aaf46b6`.
+3. *Pass 3,* over that delta and the whole change, found nothing.
+
+**Outside my listed files.** No change to `Maths.Samplers`. Edited:
+- `BassTarget.cs`: the static `Defines`;
+- `BassResolved.cs`: the rung refusals;
+- `BassModel.cs`: the form from the config;
+- `BassPriorSampler.cs`: an internal save and restore of its account;
+- `BassSweep.cs`: the hand-over's three internal methods;
+- `tests/oracle/BassTargetParityTests.cs`: `FixtureB` private → internal.
+
+The config's JSON now carries `"Tempering":null`, so every fingerprint moved. That is pre-release, and no test pinned one.
+
+**Open questions for the main session** (each implemented as a reversible default):
+1. *The default levels and hot end,* 8 and 10⁻³.
+   - On the small fixtures Λ̂ was 1.5–1.9, where Syed et al.'s N ≈ 2Λ asks about 5 rungs, and stepping-stone was within its error at 6–16 levels.
+   - The functional finding above shows a fixed count fails as N grows.
+   - I recommend an auto-pick from the burn-in's barrier, `TemperingLadder.RecommendedLevels(Λ̂)`, logged in `Resolved`. It needs a decision on how burn-in grows the ladder.
+   - As a cheaper guard, the evidence could be flagged when a pair's rejection nears 1.
+2. *Swap cadence:* after every sweep. It is `ParallelTempering`'s only cadence and BARS's, and the spec has no field for it.
+3. *Path sampling on the integrated form:* left out, for the reasons above. Restoring it needs a curvature seam, E_b[∂²ℓ_b], for its diagnostic, and a finite end in place of b = 0.
+4. *The schedule's closed set* holds DEO only, as D05 decided; SEO and the sequential schedule are refused, though BARS exposes them.
+5. *The linear form on the powered path is refused,* since the form is the likelihood path's. The default integrated form is accepted there and ignored.
+6. *With the reference rung, an adaptive ladder moves the hot end* (only b = 1 and b = 0 are fixed), as BARS's does. `HotEnd` is then the start.
+7. *The integrated form's slope is traced at every rung every scan,* since `ParallelTempering` traces slopes whenever the target supplies them, though the evidence does not read it there. That costs one marginal per rung per scan; a trace switch in the shared ladder would save it.
+8. *The diagnostics' defensive check* that a checkpoint's chain ran tempered as the config does is unreachable through `Bass.Resume`, since the fingerprint covers the config. It stays untested.
