@@ -27,6 +27,10 @@ public sealed record SmcOptions
     /// <summary>Particles moved concurrently. Every particle has its own stream, so the result does not depend on
     /// this.</summary>
     public int MaxDegreeOfParallelism { get; init; } = 1;
+
+    /// <summary>Record each stage's population (<see cref="SmcStageTrace"/>), for an evidence over the stages. Off by
+    /// default.</summary>
+    public bool TraceStages { get; init; }
 }
 
 /// <summary>What one stage did. Stage 0 is the initial draw.</summary>
@@ -45,6 +49,19 @@ public readonly record struct SmcStageReport(
     int Index, Temperature Temperature, double EffectiveSampleSize, double ConditionalEss, bool Resampled,
     int DistinctAncestors, int Families, double AcceptanceRate, double LogNormalizerIncrement);
 
+/// <summary>
+/// One stage's population, recorded when the run traces its stages (<see cref="SmcOptions.TraceStages"/>), as the stage
+/// left it, after its mutation: the per-stage draws a ladder evidence reads (<see cref="Evidence.LadderEvidence"/>).
+/// </summary>
+/// <param name="Temperature">The stage's temperature.</param>
+/// <param name="NewTarget">Whether the stage's target differs from the previous stage's.</param>
+/// <param name="Weights">The particles' normalized weights.</param>
+/// <param name="Slopes">Each particle's ∂_b log q_b at the stage (<see cref="Temperature.LogDensitySlope"/>); NaN
+/// throughout when the target supplies no slope.</param>
+/// <param name="LogRatios">Each particle's log q_next − log q_stage, the increments the next reweighting reads; null
+/// until the run advances past the stage.</param>
+public sealed record SmcStageTrace(Temperature Temperature, bool NewTarget, double[] Weights, double[] Slopes, double[]? LogRatios);
+
 /// <summary>A run's population and its account.</summary>
 /// <param name="Particles">The current particles.</param>
 /// <param name="Weights">Their normalized weights.</param>
@@ -52,13 +69,17 @@ public readonly record struct SmcStageReport(
 /// as the targets supply them. It is a model evidence only when those densities are complete and the first stage is a
 /// normalized prior.</param>
 /// <param name="Stages">One report per stage, the initial draw first.</param>
+/// <param name="StageTraces">One population per stage, the initial draw first, when the run traced them; null
+/// otherwise.</param>
 public sealed record SmcResult<TState>(
-    IReadOnlyList<TState> Particles, double[] Weights, double LogNormalizerRatio, IReadOnlyList<SmcStageReport> Stages);
+    IReadOnlyList<TState> Particles, double[] Weights, double LogNormalizerRatio, IReadOnlyList<SmcStageReport> Stages,
+    IReadOnlyList<SmcStageTrace>? StageTraces = null);
 
 /// <summary>Everything a run needs to continue: restarting from it reproduces the uninterrupted run bit for bit.</summary>
 public sealed record SmcCheckpoint<TState>(
     int Seed, int StagesDone, SmcStage<TState> Stage, TState[] Particles, ITargetEvaluation[] Evaluations,
-    double[] Weights, int[] Families, double LogNormalizerRatio, SmcStageReport[] Reports);
+    double[] Weights, int[] Families, double LogNormalizerRatio, SmcStageReport[] Reports,
+    SmcStageTrace[]? StageTraces = null);
 
 /// <summary>
 /// A sequential Monte Carlo population carried through a sequence of stages (Del Moral, Doucet and Jasra 2006; the
@@ -78,6 +99,7 @@ public sealed class SmcRun<TState>
     private readonly int _seed;
     private readonly int[] _stageSeeds;
     private readonly List<SmcStageReport> _reports;
+    private readonly List<SmcStageTrace>? _traces;   // when the run traces its stages
     private TState[] _state;
     private ITargetEvaluation[] _evaluations;
     private double[] _logDensity;
@@ -87,7 +109,8 @@ public sealed class SmcRun<TState>
 
     private SmcRun(ISmcParticles<TState> particles, ISmcKernel<TState> kernel, SmcOptions options, int seed,
                    SmcStage<TState> stage, TState[] state, ITargetEvaluation[] evaluations, double[] weights,
-                   int[] families, int stagesDone, double logNormalizer, List<SmcStageReport> reports)
+                   int[] families, int stagesDone, double logNormalizer, List<SmcStageReport> reports,
+                   List<SmcStageTrace>? traces)
     {
         _particles = particles;
         _kernel = kernel;
@@ -102,6 +125,7 @@ public sealed class SmcRun<TState>
         StagesDone = stagesDone;
         _logNormalizer = logNormalizer;
         _reports = reports;
+        _traces = traces;
         _logDensity = new double[state.Length];
         for (int i = 0; i < state.Length; i++) _logDensity[i] = stage.LogDensity(evaluations[i]);
     }
@@ -117,6 +141,9 @@ public sealed class SmcRun<TState>
 
     /// <summary>One report per stage, the initial draw first.</summary>
     public IReadOnlyList<SmcStageReport> Reports => _reports;
+
+    /// <summary>One population per stage, the initial draw first, when the run traces its stages; null otherwise.</summary>
+    public IReadOnlyList<SmcStageTrace>? StageTraces => _traces;
 
     /// <summary>The population size.</summary>
     public int Count => _state.Length;
@@ -145,7 +172,10 @@ public sealed class SmcRun<TState>
         var families = new int[n];
         for (int i = 0; i < n; i++) families[i] = i;
         var reports = new List<SmcStageReport> { new(0, first.Temperature, n, n, false, n, n, double.NaN, 0.0) };
-        return new SmcRun<TState>(particles, kernel, options, seed, first, state, evaluations, weights, families, 0, 0.0, reports);
+        var run = new SmcRun<TState>(particles, kernel, options, seed, first, state, evaluations, weights, families, 0, 0.0, reports,
+                                     options.TraceStages ? [] : null);
+        run.RecordStage(newTarget: false);
+        return run;
     }
 
     /// <summary>Continues a checkpointed run; the checkpoint itself stays reusable.</summary>
@@ -157,12 +187,15 @@ public sealed class SmcRun<TState>
         Validate(options);
         if (checkpoint.Particles.Length != options.Particles)
             throw new ArgumentException("The checkpoint's population size differs from the options'.", nameof(options));
+        if (options.TraceStages != checkpoint.StageTraces is not null)
+            throw new ArgumentException("The checkpoint's run " + (options.TraceStages ? "did not trace" : "traced") + " its stages.", nameof(options));
         var state = new TState[checkpoint.Particles.Length];
         for (int i = 0; i < state.Length; i++) state[i] = particles.Fork(checkpoint.Particles[i]);
         return new SmcRun<TState>(particles, kernel, options, checkpoint.Seed, checkpoint.Stage, state,
             (ITargetEvaluation[])checkpoint.Evaluations.Clone(), (double[])checkpoint.Weights.Clone(),
             (int[])checkpoint.Families.Clone(), checkpoint.StagesDone, checkpoint.LogNormalizerRatio,
-            new List<SmcStageReport>(checkpoint.Reports));
+            new List<SmcStageReport>(checkpoint.Reports),
+            checkpoint.StageTraces is null ? null : new List<SmcStageTrace>(checkpoint.StageTraces));
     }
 
     /// <summary>
@@ -196,6 +229,8 @@ public sealed class SmcRun<TState>
         }
         double logIncrement = SmcWeights.LogNormalizerIncrement(_weights, increments);
         double conditionalEss = SmcWeights.ConditionalEss(_weights, increments);
+        bool newTarget = !ReferenceEquals(next.Target, Stage.Target);
+        if (_traces is not null) _traces[^1] = _traces[^1] with { LogRatios = (double[])increments.Clone() };
         var logWeights = new double[n];
         for (int i = 0; i < n; i++) logWeights[i] = Math.Log(_weights[i]) + increments[i];
         SmcWeights.Normalize(logWeights, _weights);
@@ -272,6 +307,7 @@ public sealed class SmcRun<TState>
         var lineages = new HashSet<int>(_families);
         _reports.Add(new SmcStageReport(StagesDone, next.Temperature, ess, conditionalEss, resampled, distinct, lineages.Count,
             attempted > 0 ? (double)acceptedTotal / attempted : double.NaN, logIncrement));
+        RecordStage(newTarget);
     }
 
     /// <summary>An independent copy of the run's state, forking every particle.</summary>
@@ -280,11 +316,37 @@ public sealed class SmcRun<TState>
         var particles = new TState[_state.Length];
         for (int i = 0; i < particles.Length; i++) particles[i] = _particles.Fork(_state[i]);
         return new SmcCheckpoint<TState>(_seed, StagesDone, Stage, particles, (ITargetEvaluation[])_evaluations.Clone(),
-            (double[])_weights.Clone(), (int[])_families.Clone(), _logNormalizer, _reports.ToArray());
+            (double[])_weights.Clone(), (int[])_families.Clone(), _logNormalizer, _reports.ToArray(), _traces?.ToArray());
     }
 
     /// <summary>The population as it stands.</summary>
-    public SmcResult<TState> Result() => new((TState[])_state.Clone(), (double[])_weights.Clone(), _logNormalizer, _reports.ToArray());
+    public SmcResult<TState> Result() => new((TState[])_state.Clone(), (double[])_weights.Clone(), _logNormalizer, _reports.ToArray(),
+                                             _traces?.ToArray());
+
+    // The stage's population as it now stands, when the run traces its stages. Its arrays are never written again.
+    private void RecordStage(bool newTarget)
+    {
+        if (_traces is null) return;
+        int n = _state.Length;
+        Temperature t = Stage.Temperature;
+        var slopes = new double[n];
+        if (SuppliesSlope(t, _evaluations[0])) for (int i = 0; i < n; i++) slopes[i] = t.LogDensitySlope(_evaluations[i]);
+        else Array.Fill(slopes, double.NaN);
+        _traces.Add(new SmcStageTrace(t, newTarget, (double[])_weights.Clone(), slopes, null));
+    }
+
+    private static bool SuppliesSlope(Temperature t, ITargetEvaluation evaluation)
+    {
+        try
+        {
+            _ = t.LogDensitySlope(evaluation);
+            return true;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+    }
 
     // The particles' evaluations under the next stage's target: reused when the target is the current one.
     private ITargetEvaluation[] EvaluationsFor(SmcStage<TState> next)

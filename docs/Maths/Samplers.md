@@ -85,7 +85,7 @@ flowchart LR
 | Ensemble | `new ChainEnsemble().Run<T>(model, chains, masterSeed, burn, samples, rHatTarget = 0, batchSize = 0, minEssPerChain = 100, checkpoint = false, resumeFrom = null)` (an instance method on a stateless class) → `(EnsembleRun, chain runs)`; `ChainDiagnostics.Diagnose` → `ConvergenceDiagnostic` (`RHat`, `BulkRHat`, `TailRHat`, `BulkEss`, `TailEss`, `Ess`); `ChainDiagnostics.MeanEss` → `EssDiagnostic`; `ChainDiagnostics.RHat`; `RHatDiagnostic`, `EssDiagnostic`, `DiagnosticState`; `IChain<T>`, `IEnsembleModel<T>` (`FunctionalDim`, `MonitoredDim`, `Fingerprint`, `RestoreChain`), `IChainRun<T>`, `EnsembleRun` |
 | Readouts, traces, checkpoints | `IMergeable<T>`; `RunningMoments` (`Add(x, weight)`, `Merge`, `Of`), `WeightedSums` (`Add`, `AddSparse`, `Mean`), `DrawSample` (`Add`, `Quantile`), `Tally<TEnum>`; `ChainTrace` (`Add`, `Draws`, `Copy`); `DrawStore<T>(every = 1)` (`Add`, `AppendFrom`, `Copy`, `Every`, `Offered`), each engine's retained draws; `EnsembleCheckpoint`, `ChainCheckpoint`, `RunIdentity`, `IChainState`, `IResumableChainRun<T>`, `RunFingerprint`; `ReversibleJumpChain.Snapshot`/`Restore` (`ChainSnapshot<T>`), `ParallelTempering.Snapshot`/`Restore` (`LadderSnapshot<T>`) |
 | Blocks | `BlockScan<T>(blocks, state, rng, copy)` with `Step()`, `State`, `Steps`, `Attempts`, `Accepted`, `BlockStats()`, `Snapshot()` and static `Restore(blocks, snapshot, copy)` (`BlockScanSnapshot<T>`); `IBlock<T>` (`Name`, `Every`, `Update`); `GaussianConditional(dimension)` with `Draw(factor, rhs, rng, result, scale = 1)` and `Perturb(factor, mean, rng, result, scale = 1)`, and static `GaussianConditional.Perturb(factor, mean, rng, result, scale, z, innovation)` on the caller's scratch; `ConjugateUpdates.NormalVariance`, `ConjugateUpdates.NormalPrecision`; `RandomWalkMetropolis.Step(ref x, ref logTarget, step, logDensity, rng)`; `NewtonMetropolis(dimension, delta = 1/π)` with `Step(x, logDensity, rng)` and the `LogDensity(x, gradient, hessian)` delegate; `SliceSampler.Step(ref x, ref logTarget, width, maxSteps, logDensity, rng)` → evaluations |
-| Evidence | `LadderEvidence.SteppingStone(b, logRatios)`, `LadderEvidence.PathSampling(b, slopes)`, `LadderEvidence.FromLadders(ladders, method = DefaultEstimator)` → `LadderEstimate` (`Method`, `LogRatio`, `MonteCarloError`, `DiscretizationError`, `Rungs` of `RungEstimate`); `RungDraws.FromChains(chains)`, `RungDraws.FromPopulation(values, weights = null)`; `LadderEstimator` (`SteppingStone`, `PathSampling`) |
+| Evidence | `LadderEvidence.SteppingStone(b, logRatios)`, `LadderEvidence.PathSampling(b, slopes)`, `LadderEvidence.FromLadders(ladders, method = DefaultEstimator)`, `LadderEvidence.FromSmc(result, method = DefaultEstimator)` with `SmcOptions.TraceStages` and `SmcStageTrace` (`Temperature`, `NewTarget`, `Weights`, `Slopes`, `LogRatios`) → `LadderEstimate` (`Method`, `LogRatio`, `MonteCarloError`, `DiscretizationError`, `Rungs` of `RungEstimate`); `RungDraws.FromChains(chains)`, `RungDraws.FromPopulation(values, weights = null)`; `LadderEstimator` (`SteppingStone`, `PathSampling`) |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
 ## Algorithms
@@ -195,6 +195,25 @@ $$\tau_{\text{DEO}}=\frac{1}{2+2E},\qquad \tau_{\text{SEO}}=\frac{1}{2N+2E}.$$
 - `LogRatio`: $\ln q_c-\ln q_b$, with c the next colder rung's b. It is NaN at the cold rung.
 
 While traced, the ladder is fixed (`AdaptLadder` refuses). `LadderSnapshot` carries copies of the traces, so a resumed ladder continues them. `LadderEvidence.FromLadders(ladders, method)` takes one or more ladders on the same rungs, each one chain per rung.
+
+**Per-stage traces (SMC, 2026-10-27).** `SmcOptions.TraceStages` is opt-in. Each stage records an `SmcStageTrace` as the stage leaves it, after its mutation:
+- its temperature, and whether its target is new;
+- the population's normalized weights;
+- each particle's slope (NaN throughout when the target supplies none, probed per stage);
+- each particle's log ratio to the next stage, the increments the next reweighting reads, filled in when the run advances.
+
+They ride in `SmcResult.StageTraces`, `SmcRun.StageTraces` and the checkpoint, and a resumed run continues them exactly. `LadderEvidence.FromSmc(result, method)` reads each stage as a weighted rung (`RungDraws.FromPopulation`) and needs a run on one target and path.
+- **Stepping-stone reproduces the run's own `LogNormalizerRatio`,** term for term (to 10⁻¹⁰ in the test), and adds an error.
+- **Path sampling** over the same adaptive stages leans on its diagnostic. On the conjugate Normal at a conditional ESS of 0.9 (11 stages), the trapezoid was −2.269 against a truth of −2.145, and the diagnostic, +0.152, brought it to −2.117.
+- **The error uses each stage's weights (Kish), which do not see shared ancestry.** It is close when the mutation mixes the population and too small when it does not. Conjugate Normal, 1000 particles, 200 seeds, coverage of ±1.96 errors and mean z²:
+
+| Mutation | Coverage | Mean z² | Reported error vs actual sd |
+|---|---|---|---|
+| 5 moves per stage | 0.935 | 1.14 | 0.036 vs 0.039 |
+| 5 moves, never resampled | 0.930 | 1.19 | 0.041 vs 0.044 |
+| 1 move per stage | 0.795 | 2.15 | 0.037 vs 0.053 |
+
+  A genealogy-based variance estimate of the normalizer (Lee and Whiteley 2018) would see the ancestry; it is not built.
 
 **Stepping-stone** (Xie, Lewis, Fan, Kuo and Chen 2011). With $d=\ln q_{k+1}(x)-\ln q_k(x)$ for $x\sim q_k$,
 
@@ -389,9 +408,7 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 - **Only the monitored functionals get rank-normalized diagnostics.** The rest (BARS's per-grid fit) keep classic R̂ from streaming moments, which costs no stored draws but does not see differences in scale or behave for heavy tails.
 - **The ladder evidence's limits.**
   - The discretization diagnostic misses a collapsed likelihood's curvature term, $E_b[\partial_b^2\ell_b]$.
-  - A population's ESS ignores shared ancestry.
-  - `SmcRun` does not yet expose per-stage readouts, so feeding its stages to `LadderEvidence` means re-reading each particle.
-  - No engine reports an evidence yet.
+  - A population's ESS ignores shared ancestry. With poorly mixing mutations the SMC stages' error is too small (coverage 0.80 at one move per stage).
 - **`SpectralNoiseField` is not periodic.** Its documentation describes the grid as periodic, but queries map the box to nodes 0..N−1, so the sampled field is not periodic over the box.
 
 ## Source map

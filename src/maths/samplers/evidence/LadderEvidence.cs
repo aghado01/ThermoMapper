@@ -59,8 +59,8 @@ public sealed class RungDraws
     }
 
     /// <summary>
-    /// A population with its weights (null: equal), as an SMC stage leaves it. Resampled offspring share ancestors,
-    /// which weights do not see, so its effective sample size is an upper bound.
+    /// A population with its weights (null: equal), as an SMC stage leaves it; draws of zero weight are dropped.
+    /// Resampled offspring share ancestors, which weights do not see, so its effective sample size is an upper bound.
     /// </summary>
     public static RungDraws FromPopulation(double[] values, double[]? weights = null)
     {
@@ -78,8 +78,11 @@ public sealed class RungDraws
             total += w[i];
         }
         if (!(total > 0.0)) throw new ArgumentException("The weights carry no mass.", nameof(weights));
-        for (int i = 0; i < w.Length; i++) w[i] /= total;
-        return new RungDraws(null, (double[])values.Clone(), w);
+        var kept = new List<double>(w.Length);
+        var keptWeights = new List<double>(w.Length);
+        for (int i = 0; i < w.Length; i++)
+            if (w[i] > 0.0) { kept.Add(values[i]); keptWeights.Add(w[i] / total); }
+        return new RungDraws(null, kept.ToArray(), keptWeights.ToArray());
     }
 
     /// <summary>The draws held.</summary>
@@ -315,6 +318,43 @@ public static class LadderEvidence
         {
             LadderEstimator.SteppingStone => SteppingStone(betas, rungs),
             LadderEstimator.PathSampling => PathSampling(betas, rungs!),
+            _ => throw new ArgumentOutOfRangeException(nameof(method)),
+        };
+    }
+
+    /// <summary>
+    /// The estimate from a tempered SMC run that traced its stages (<see cref="SmcOptions.TraceStages"/>), on one target
+    /// and path: each stage is a rung, its population weighted as the stage left it. Stepping-stone reproduces the run's
+    /// <see cref="SmcResult{TState}.LogNormalizerRatio"/> and gives it an error from the stages' weights, which ignore
+    /// shared ancestry; path sampling needs slopes.
+    /// </summary>
+    public static LadderEstimate FromSmc<TState>(SmcResult<TState> result, LadderEstimator method = DefaultEstimator)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        IReadOnlyList<SmcStageTrace> stages = result.StageTraces
+            ?? throw new InvalidOperationException("The run did not trace its stages (SmcOptions.TraceStages).");
+        var b = new double[stages.Count];
+        var rungs = new RungDraws?[stages.Count];
+        for (int k = 0; k < stages.Count; k++)
+        {
+            SmcStageTrace stage = stages[k];
+            if (stage.NewTarget || stage.Temperature.Path != stages[0].Temperature.Path)
+                throw new ArgumentException("A ladder evidence needs a run on one target and path.", nameof(result));
+            b[k] = stage.Temperature.InverseTemperature;
+            if (method == LadderEstimator.PathSampling)
+            {
+                if (double.IsNaN(stage.Slopes[0]))
+                    throw new InvalidOperationException(
+                        "The target supplies no slope in b (ITargetEvaluation.LogLikelihoodSlope); stepping-stone needs none.");
+                rungs[k] = RungDraws.FromPopulation(stage.Slopes, stage.Weights);
+            }
+            else if (k + 1 < stages.Count)
+                rungs[k] = RungDraws.FromPopulation(stage.LogRatios!, stage.Weights);
+        }
+        return method switch
+        {
+            LadderEstimator.SteppingStone => SteppingStone(b, rungs),
+            LadderEstimator.PathSampling => PathSampling(b, rungs!),
             _ => throw new ArgumentOutOfRangeException(nameof(method)),
         };
     }

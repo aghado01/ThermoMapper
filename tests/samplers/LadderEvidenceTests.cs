@@ -4,6 +4,7 @@ using Maths.Distributions;
 using Maths.Rng;
 using Maths.Samplers.Evidence;
 using Maths.Samplers.Rjmcmc;
+using Maths.Samplers.Smc;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -144,6 +145,69 @@ public sealed class LadderEvidenceTests
         Assert.True(smallestEssFraction < 0.5, $"the rung traces should be autocorrelated (ESS/draws {smallestEssFraction:F3})");
         ss.AssertCalibrated("stepping-stone", coverageFloor: 0.88);
         ps.AssertCalibrated("path sampling", coverageFloor: 0.88);
+    }
+
+    [Fact]
+    public void SmcStages_ReproduceTheRunsNormalizer_AndEstimateTheEvidence()
+    {
+        // The conjugate Normal tempered by SMC from its prior: stepping-stone over the traced stages is the run's own
+        // normalizer, term for term, and path sampling over the same stages estimates the same evidence.
+        double truth = Normal1.LogZ(1.0) - Normal1.LogZ(0.0);
+        SmcResult<double[]> result = SmcSampler.RunTempered(ConjugateTarget, TemperingPath.Likelihood, 0.9, new PriorParticles(),
+            new RandomWalkKernel(), new SmcOptions { Particles = 2000, MutationSteps = 5, TraceStages = true }, seed: 31);
+        IReadOnlyList<SmcStageTrace> stages = result.StageTraces!;
+        Assert.Equal(result.Stages.Count, stages.Count);
+        for (int k = 0; k < stages.Count; k++)
+        {
+            Assert.Equal(result.Stages[k].Temperature, stages[k].Temperature);
+            Assert.Equal(k + 1 < stages.Count, stages[k].LogRatios is not null);
+        }
+
+        LadderEstimate ss = LadderEvidence.FromSmc(result), ps = LadderEvidence.FromSmc(result, LadderEstimator.PathSampling);
+        _out.WriteLine($"{stages.Count} stages; truth {truth:F5}; SMC normalizer {result.LogNormalizerRatio:F5}; " +
+                       $"stepping-stone {ss.LogRatio:F5} ± {ss.MonteCarloError:F5}; path sampling {ps.LogRatio:F5} ± {ps.MonteCarloError:F5}, diagnostic {ps.DiscretizationError:F5}");
+        Assert.Equal(result.LogNormalizerRatio, ss.LogRatio, 1e-10);
+        Assert.True(Math.Abs(ss.LogRatio - truth) < 4.0 * ss.MonteCarloError, $"stepping-stone {ss.LogRatio:F5} against {truth:F5}");
+        Assert.True(Math.Abs(ps.LogRatio + ps.DiscretizationError - truth) < 4.0 * ps.MonteCarloError + 0.25 * Math.Abs(ps.DiscretizationError),
+                    $"path sampling {ps.LogRatio:F5} (diagnostic {ps.DiscretizationError:F5}) against {truth:F5}");
+        Assert.Throws<InvalidOperationException>(() => LadderEvidence.FromSmc(SmcSampler.RunTempered(ConjugateTarget, TemperingPath.Likelihood, 0.9,
+            new PriorParticles(), new RandomWalkKernel(), new SmcOptions { Particles = 200 }, seed: 31)));
+    }
+
+    [Fact]
+    public void SmcStageTraces_ResumeExactly()
+    {
+        var options = new SmcOptions { Particles = 300, MutationSteps = 2, TraceStages = true };
+        SmcRun<double[]> straight = SmcRun<double[]>.Start(Stage(0.0), new PriorParticles(), new RandomWalkKernel(), options, seed: 8);
+        SmcRun<double[]> first = SmcRun<double[]>.Start(Stage(0.0), new PriorParticles(), new RandomWalkKernel(), options, seed: 8);
+        foreach (double b in new[] { 0.01, 0.05 }) { straight.Advance(Stage(b)); first.Advance(Stage(b)); }
+        SmcCheckpoint<double[]> checkpoint = first.Checkpoint();
+        Assert.Throws<ArgumentException>(() => SmcRun<double[]>.Resume(checkpoint, new PriorParticles(), new RandomWalkKernel(),
+                                                                        options with { TraceStages = false }));
+        SmcRun<double[]> resumed = SmcRun<double[]>.Resume(checkpoint, new PriorParticles(), new RandomWalkKernel(), options);
+        foreach (double b in new[] { 0.2, 1.0 }) { straight.Advance(Stage(b)); resumed.Advance(Stage(b)); }
+        Assert.Equal(straight.StageTraces!.Count, resumed.StageTraces!.Count);
+        for (int k = 0; k < straight.StageTraces.Count; k++)
+        {
+            SmcStageTrace a = straight.StageTraces[k], c = resumed.StageTraces[k];
+            Assert.Equal(a.Temperature, c.Temperature);
+            Assert.Equal(a.Weights, c.Weights);
+            Assert.Equal(a.Slopes, c.Slopes);
+            Assert.Equal(a.LogRatios, c.LogRatios);
+        }
+        Assert.Equal(LadderEvidence.FromSmc(straight.Result()).LogRatio, LadderEvidence.FromSmc(resumed.Result()).LogRatio);
+
+        static SmcStage<double[]> Stage(double b) => new(ConjugateTarget, new Temperature(b, TemperingPath.Likelihood));
+    }
+
+    // Normal1 on real-vector particles, for SMC: x[0] ~ N(0, 3²), one observation 1.5 ~ N(x, 0.25²), separable.
+    private static readonly ISamplingTarget<double[]> ConjugateTarget = SamplingTarget.Separable<double[]>(
+        x => -0.5 * Math.Log(2.0 * Math.PI * 9.0) - x[0] * x[0] / 18.0, x => Normal1.LogLikelihood(x[0]));
+
+    private sealed class PriorParticles : ISmcParticles<double[]>
+    {
+        public double[] Draw(Xoshiro256PlusPlus rng) => [3.0 * Normal.SampleStandard(rng)];
+        public double[] Fork(double[] state) => (double[])state.Clone();
     }
 
     [Fact]
