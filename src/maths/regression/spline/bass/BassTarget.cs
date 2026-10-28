@@ -146,14 +146,21 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// proper defaults; b &gt; 0 under Jeffreys; and under the flat intercept, whose α integral spends one observation,
     /// g₁ + (Nb − 1)/2 &gt; 0. The linear form is defined on all of [0, 1].
     /// </summary>
-    public bool Defines(double inverseTemperature)
+    public bool Defines(double inverseTemperature) => Defines(Form, Intercept, Sigma2, Observations, inverseTemperature);
+
+    /// <summary>
+    /// <see cref="Defines(double)"/> for a target in <paramref name="form"/> under <paramref name="intercept"/> and σ²'s
+    /// resolved prior <paramref name="sigma2"/> (null: Jeffreys) on <paramref name="observations"/> observations, before
+    /// the target is built: what <see cref="BassResolved"/> checks a ladder's rungs by.
+    /// </summary>
+    public static bool Defines(TemperedForm form, GPriorCentre intercept, InverseGamma? sigma2, int observations, double inverseTemperature)
     {
         double b = inverseTemperature;
         if (!(b >= 0.0 && b <= 1.0)) return false;
-        if (Form == TemperedForm.Linear) return true;
-        double shape = Sigma2?.Shape ?? 0.0;
-        if (Intercept == GPriorCentre.Flat) return b > 0.0 && shape + 0.5 * (Observations * b - 1) > 0.0;
-        return b > 0.0 || Sigma2 is not null;
+        if (form == TemperedForm.Linear) return true;
+        double shape = sigma2?.Shape ?? 0.0;
+        if (intercept == GPriorCentre.Flat) return b > 0.0 && shape + 0.5 * (observations * b - 1) > 0.0;
+        return b > 0.0 || sigma2 is not null;
     }
 
     /// <summary>A g-mode state: <paramref name="fit"/> with τ = e^<paramref name="logTau"/>.</summary>

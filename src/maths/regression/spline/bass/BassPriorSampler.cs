@@ -81,6 +81,18 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
     /// have them.</summary>
     public long InterceptTerms { get; private set; }
 
+    // The account's counters, for a ladder's restart state (BassLadder): the draws depend on the stream alone.
+    internal BassPriorSamplerCounts SaveCounts() => new(Attempts, Accepted, Refusals.Copy(), InterceptTerms);
+
+    internal void RestoreCounts(BassPriorSamplerCounts counts)
+    {
+        ArgumentNullException.ThrowIfNull(counts);
+        Attempts = counts.Attempts;
+        Accepted = counts.Accepted;
+        Refusals.Assign(counts.Refusals);
+        InterceptTerms = counts.InterceptTerms;
+    }
+
     /// <summary>One exact draw of (structure, τ) from the prior on F, with its evaluation under the model's target.</summary>
     public (BassState State, ITargetEvaluation Evaluation) Draw(Xoshiro256PlusPlus rng)
     {
@@ -164,3 +176,6 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
         return u;
     }
 }
+
+/// <summary>A <see cref="BassPriorSampler"/>'s account: attempts, acceptances, refusals by reason and intercept terms.</summary>
+internal sealed record BassPriorSamplerCounts(long Attempts, long Accepted, Tally<BassRefusal> Refusals, long InterceptTerms);

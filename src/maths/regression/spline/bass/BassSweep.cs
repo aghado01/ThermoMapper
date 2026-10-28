@@ -24,8 +24,9 @@ namespace Maths.Regression.Spline.Bass;
 /// pick a term uniformly. Each candidate carries its fit from the design, or the design's refusal, which the target
 /// scores off the support, and its within-move ratio from <see cref="BassTermProposal"/>.</item>
 /// <item><b>The design follows the chain.</b> A proposal leaves the design's candidate pending; when the chain next
-/// shows a state holding that candidate's structure it was accepted, and the design commits it. Any other structure
-/// (a swapped-in replica's) is loaded whole. A chain restored from its snapshot gets its design back as it was.</item>
+/// shows a state holding that candidate's structure it was accepted, and the design commits it. A replica handed a
+/// state by a swap adopts its giver's design (<see cref="BassLadder"/>); any other structure is loaded whole. A chain
+/// restored from its snapshot gets its design back as it was.</item>
 /// </list>
 /// Refusals are tallied by reason, the target's exact-fit refusal included, and each birth's and change's candidate term
 /// by its orders with its support outcome (D01's tilt). Not thread-safe: one per chain.
@@ -115,6 +116,28 @@ public sealed class BassStructureMoves
     {
         Sync(state);
         return _design;
+    }
+
+    // Whether the design can show `state`'s structure without a load: the committed one, or the pending candidate.
+    internal bool Holds(BassState state) => state.SharesStructure(_committed) || _candidate is { } c && state.SharesStructure(c.State);
+
+    // An exact copy of the design at `state`, which it is first synced to, for another replica to adopt (BassLadder).
+    internal BassDesignSnapshot DesignFor(BassState state)
+    {
+        Sync(state);
+        return _design.Snapshot();
+    }
+
+    // Takes over `state`, which a swap handed to these moves, with the design its giver held for it (DesignFor): the
+    // design as the giver's, bit for bit, so the structure is neither refactored nor re-admitted here.
+    internal void Adopt(BassState state, BassDesignSnapshot design)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        _design.Restore(design);
+        if (!_design.Terms.SequenceEqual(state.Terms)) throw new ArgumentException("The design holds another structure.", nameof(design));
+        _candidate = null;
+        _counts = CountsOf(state.TermArray);
+        _committed = state;
     }
 
     /// <summary>

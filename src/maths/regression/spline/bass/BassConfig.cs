@@ -4,7 +4,10 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Maths.Regression.GPrior;
+using Maths.Regression.Spline.Bars;
+using Maths.Samplers;
 using Maths.Samplers.Ensemble;
+using Maths.Samplers.Rjmcmc;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -13,8 +16,8 @@ namespace Maths.Regression.Spline.Bass;
 /// serializes to JSON whole and is its own manifest, and the run's fingerprint hashes that serialization with the data;
 /// <c>BarsConfig</c>'s component instances fingerprint their types only (OQ10). The defaults are D01–D06's. The
 /// auto-picks (the basis cap, the support thresholds, N, s² and the centre's level) are resolved at entry and reported
-/// in <see cref="BassResolved"/>. A setting joins with the code that reads it: tempering with stage 4's S8, SMC with
-/// stage 8, the ridge priors when they are built.
+/// in <see cref="BassResolved"/>. A setting joins with the code that reads it: SMC with stage 8, the ridge priors when
+/// they are built.
 /// </summary>
 public sealed record BassConfig
 {
@@ -146,6 +149,20 @@ public sealed record BassConfig
             default:
                 throw Bad("Sampling.Moves", "is not a known schedule");
         }
+        if (run.Tempering is { } t)
+        {
+            if (t.Path is not (TemperingPath.Likelihood or TemperingPath.Powered)) throw Bad("Sampling.Tempering.Path", "is not a known path");
+            if (t.Form is not (TemperedForm.Integrated or TemperedForm.Linear)) throw Bad("Sampling.Tempering.Form", "is not a known form");
+            if (t.Path == TemperingPath.Powered && t.Form == TemperedForm.Linear)
+                throw Bad("Sampling.Tempering.Form", "is the likelihood path's; the powered path powers the untempered marginal whole (D05)");
+            if (t.ReferenceRung && t.Path != TemperingPath.Likelihood)
+                throw Bad("Sampling.Tempering.ReferenceRung", "needs the likelihood path, whose b = 0 member is the prior; the powered path's is not normalizable (D05)");
+            if (t.Levels < (t.ReferenceRung ? 3 : 2))
+                throw Bad("Sampling.Tempering.Levels", t.ReferenceRung ? "must be at least 3 with a reference rung: b = 1, the hot end and b = 0" : "must be at least 2");
+            if (!(t.HotEnd > 0.0 && t.HotEnd < 1.0)) throw Bad("Sampling.Tempering.HotEnd", "must lie in (0, 1)");
+            if (t.Schedule != SwapSchedule.DeterministicEvenOdd)
+                throw Bad("Sampling.Tempering.Schedule", "is DEO, the schedule D05 decided; another joins with its decision");
+        }
     }
 
     private static ArgumentException Bad(string field, string reason) => new($"{field} {reason}.", "config");
@@ -266,6 +283,9 @@ public sealed record BassSampling
     /// <summary>The move-type schedule: equal over the available moves by default (D01).</summary>
     public MoveSchedule Moves { get; init; } = new EqualOverAvailable();
 
+    /// <summary>Parallel tempering within each chain; null, the default, runs untempered (D05).</summary>
+    public TemperingSpec? Tempering { get; init; }
+
     /// <summary>Whether a run that can give an evidence reports it (D03, D05).</summary>
     public bool ReportEvidence { get; init; } = true;
 
@@ -275,6 +295,47 @@ public sealed record BassSampling
     /// (<see cref="BassDiagnostics.DefaultPoints(int, int?)"/>), logged as an auto-pick (decided 2026-10-28).
     /// </summary>
     public IReadOnlyList<BassMonitoredPoint>? MonitoredPoints { get; init; }
+}
+
+/// <summary>
+/// Parallel tempering within each chain (D05, D10): a ladder of replicas of D04's sweep, the b = 1 replica the sampler
+/// (<see cref="BassLadder"/>).
+/// <list type="bullet">
+/// <item><see cref="Path"/>: the likelihood path, prior · p_b, by default; the powered path, (prior · p₁)^b with τ powered
+/// in log τ, selectable.</item>
+/// <item><see cref="Form"/>: the likelihood path's tempered marginal, the integrated form p_b by default or the linear
+/// form b·ln p₁. The linear form reaches b = 0 under the improper options too.</item>
+/// <item><see cref="Levels"/> and <see cref="HotEnd"/>: the replicas, geometric from 1 down to the hot end, then b = 0
+/// with the reference rung. An <see cref="Adaptive"/> ladder (the default) re-spaces its interior rungs during burn-in to
+/// equalize the swap rejections, from that start, and is frozen after it (D10); its ends never move.</item>
+/// <item><see cref="Schedule"/>: DEO, the non-reversible even-odd swaps (Syed et al. 2022), swapped after every sweep.</item>
+/// <item><see cref="ReferenceRung"/>: the hot replica draws exactly from the prior on F every scan (OQ2), opt-in. A run
+/// reports its evidence only with it (D03), under the proper priors.</item>
+/// </list>
+/// The levels and hot end's defaults are provisional, until BASS's own measurement.
+/// </summary>
+public sealed record TemperingSpec
+{
+    /// <summary>The tempering path: likelihood by default (D05).</summary>
+    public TemperingPath Path { get; init; } = TemperingPath.Likelihood;
+
+    /// <summary>The likelihood path's tempered form: integrated by default (D05).</summary>
+    public TemperedForm Form { get; init; } = TemperedForm.Integrated;
+
+    /// <summary>The replicas, b = 1 and, with the reference rung, b = 0 included.</summary>
+    public int Levels { get; init; } = 8;
+
+    /// <summary>The ladder's lowest positive b, in (0, 1): its hot end, or with the reference rung the rung above b = 0.</summary>
+    public double HotEnd { get; init; } = 1e-3;
+
+    /// <summary>Whether the ladder re-spaces its interior rungs during burn-in; it is frozen after it either way (D10).</summary>
+    public bool Adaptive { get; init; } = true;
+
+    /// <summary>The swap schedule: DEO (D05).</summary>
+    public SwapSchedule Schedule { get; init; } = SwapSchedule.DeterministicEvenOdd;
+
+    /// <summary>Whether the hot replica sits at b = 0 and draws exactly from the prior on F; off by default (D05).</summary>
+    public bool ReferenceRung { get; init; }
 }
 
 /// <summary>How a state's move types are chosen (D01).</summary>

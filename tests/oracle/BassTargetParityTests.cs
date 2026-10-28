@@ -60,7 +60,7 @@ public sealed class BassTargetParityTests
         return [.. rows];
     }
 
-    private static double[][] FixtureB()
+    internal static double[][] FixtureB()
     {
         var rng = new Xoshiro256PlusPlus(seed: 7);
         var rows = new List<double[]>();

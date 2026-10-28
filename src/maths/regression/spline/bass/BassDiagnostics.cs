@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Maths.Regression.Spline.Bars;
+using Maths.Samplers;
 using Maths.Samplers.Ensemble;
 using Maths.Samplers.Rjmcmc;
 
@@ -16,6 +18,8 @@ namespace Maths.Regression.Spline.Bass;
 /// births whose draw came out the intercept, and each candidate term's support outcome by its orders, which keeps D01's
 /// tilt visible.</item>
 /// <item><b>The cap.</b> The share of retained draws at M_max (D02).</item>
+/// <item><b>Tempering.</b> The ladders' readout when the run was tempered (<see cref="BassTemperingReadout"/>), null
+/// otherwise. A tempered chain's moves, refusals and support account are its b = 1 replica's.</item>
 /// </list>
 /// The totals are the chains' sums, and <see cref="Chains"/> keeps each chain's own, with its start.
 /// </summary>
@@ -32,7 +36,8 @@ public sealed record BassDiagnostics(
     double MassAtCap,
     int SamplesUsed,
     bool StoppedEarly,
-    IReadOnlyList<BassChainAccount> Chains)
+    IReadOnlyList<BassChainAccount> Chains,
+    BassTemperingReadout? Tempering)
 {
     /// <summary>
     /// The points whose fitted values are monitored when the config declares none
@@ -58,6 +63,60 @@ public sealed record BassDiagnostics(
             if (points.Count == 0 || points[^1].Case != i) points.Add(new BassMonitoredPoint(i, location));
         }
         return points;
+    }
+}
+
+/// <summary>
+/// What a tempered run's ladders did over the sampling phase (D05, D10), averaged over chains as BARS's readout is: the
+/// round-trip and annealed-restart rates per scan; each adjacent pair's mean swap rejection, cold first (Rao–Blackwellized:
+/// 1 − α every scan, attempted or not), and its swap acceptance (accepted over attempted swaps, the chains' counts summed);
+/// the barrier estimate Λ̂, the rejections' sum; the round-trip rate Syed et al.'s (2022) Theorem 1 predicts under ideal
+/// local exploration, against which the observed rate measures the replicas' own mixing; each chain's frozen ladder, cold
+/// first; and with the reference rung, its sampler's attempts per exact draw, the rung's cost at equal work (NaN without
+/// it). The rungs are those burn-in left (<see cref="TemperingSpec.Adaptive"/>), so each chain's may differ.
+/// </summary>
+public sealed record BassTemperingReadout(
+    TemperingPath Path, TemperedForm Form, SwapSchedule Schedule, bool ReferenceRung,
+    double RoundTripsPerScan, double AnnealedRestartsPerScan, double[] PairRejection, double[] PairAcceptance, double Barrier,
+    double IdealRoundTripRate, double[][] Ladders, double ReferenceAttemptsPerDraw)
+{
+    // The readout of `ladders`, one per chain, each past its burn-in.
+    internal static BassTemperingReadout Of(IReadOnlyList<BassLadder> ladders)
+    {
+        TemperingSpec spec = ladders[0].Spec;
+        int pairs = spec.Levels - 1, c = ladders.Count;
+        double trips = 0.0, restarts = 0.0, referenceAttempts = 0.0;
+        var rejection = new double[pairs];
+        var attempts = new long[pairs];
+        var accepts = new long[pairs];
+        var rungs = new double[c][];
+        for (int k = 0; k < c; k++)
+        {
+            ParallelTempering<BassState> ladder = ladders[k].Tempering;
+            BassLadderMarks burn = ladders[k].BurnMarks ?? throw new InvalidOperationException("A ladder's burn-in has not ended.");
+            double scans = ladder.Scans - burn.Scans;
+            trips += (ladder.RoundTrips - burn.RoundTrips) / scans;
+            restarts += (ladder.AnnealedRestarts - burn.AnnealedRestarts) / scans;
+            IReadOnlyList<SwapPairStat> stats = ladder.PairStats;
+            for (int i = 0; i < pairs; i++)
+            {
+                rejection[i] += (stats[i].MeanRejection * ladder.Scans - burn.Rejection[i]) / scans;
+                attempts[i] += stats[i].Attempts - burn.PairAttempts[i];
+                accepts[i] += stats[i].Accepts - burn.PairAccepts[i];
+            }
+            if (ladders[k].Reference is { } reference) referenceAttempts += (reference.Attempts - burn.ReferenceAttempts) / scans;
+            rungs[k] = ladder.Betas;
+        }
+        var acceptance = new double[pairs];
+        for (int i = 0; i < pairs; i++)
+        {
+            rejection[i] /= c;
+            acceptance[i] = attempts[i] > 0 ? (double)accepts[i] / attempts[i] : double.NaN;
+        }
+        double ideal = spec.Schedule == SwapSchedule.Sequential ? double.NaN : TemperingLadder.IdealRoundTripRate(rejection, spec.Schedule);
+        return new BassTemperingReadout(spec.Path, ladders[0].Model.Target.Form, spec.Schedule, spec.ReferenceRung, trips / c, restarts / c,
+                                        rejection, acceptance, TemperingLadder.Barrier(rejection), ideal, rungs,
+                                        spec.ReferenceRung ? referenceAttempts / c : double.NaN);
     }
 }
 

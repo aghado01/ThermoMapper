@@ -5,6 +5,8 @@ using System.Linq;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Regression.GPrior;
+using Maths.Regression.Spline.Bars;
+using Maths.Samplers;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -75,7 +77,8 @@ public sealed record BassResolved
     /// <summary>
     /// <paramref name="config"/> resolved on <paramref name="data"/>, after <see cref="BassConfig.Validate"/>. Refused:
     /// a zero response under the zero centre, and a constant one under level centring or the flat intercept, which
-    /// leave no spread to fit (D03); a support threshold above its part's size, which no term could meet.
+    /// leave no spread to fit (D03); a support threshold above its part's size, which no term could meet; and a ladder
+    /// with a rung where its tempered form is undefined (D05), its hot end or the reference rung's b = 0.
     /// </summary>
     public static BassResolved Resolve(BassConfig config, BassData data)
     {
@@ -113,6 +116,20 @@ public sealed record BassResolved
         InverseGamma? sigma2 = config.Sigma2.For(meanSquare);
         if (config.Sigma2.ReadsResponse)
             log.Add(new("ResponseMeanSquare", Text(meanSquare), "s², the response's mean square about the centre level, which the scaled σ² prior reads"));
+
+        // A ladder's rungs where its tempered form exists (D05): the integrated form loses b = 0 under the improper options,
+        // and under the flat intercept every b up to (1 − 2c)/N.
+        if (config.Sampling.Tempering is { Path: TemperingPath.Likelihood } tempering)
+        {
+            string improper = config.Intercept == GPriorCentre.Flat ? "the flat intercept" : "the Jeffreys σ² prior";
+            if (!BassTarget.Defines(tempering.Form, config.Intercept, sigma2, n, tempering.HotEnd))
+                throw new ArgumentException(
+                    $"Sampling.Tempering.HotEnd is {Text(tempering.HotEnd)}, where the integrated form is undefined under {improper}, which needs " +
+                    $"b > (1 − 2c)/N = {Text((1.0 - 2.0 * (sigma2?.Shape ?? 0.0)) / n)}; raise it, or take the linear form (D05).", "config");
+            if (tempering.ReferenceRung && !BassTarget.Defines(tempering.Form, config.Intercept, sigma2, n, 0.0))
+                throw new ArgumentException(
+                    $"Sampling.Tempering.ReferenceRung needs b = 0, where the integrated form is undefined under {improper}; the linear form reaches it (D05).", "config");
+        }
 
         // The caps, by the predictors of each kind.
         int continuous = 0, categorical = 0;
