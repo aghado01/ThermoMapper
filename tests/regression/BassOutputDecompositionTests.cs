@@ -259,6 +259,36 @@ public sealed class BassOutputDecompositionTests
     }
 
     [Fact]
+    public void RepeatedSingularValues_ComparedBySubspaceAndReconstruction()
+    {
+        // Y_cᵀ = 3u₁v₁ᵀ + 3u₂v₂ᵀ + ½u₃v₃ᵀ, the v's orthogonal to 1: the first two singular values tie, so only their
+        // subspace is defined. K Kᵀ = 9(u₁u₁ᵀ + u₂u₂ᵀ) and K W = 3u₁v₁ᵀ + 3u₂v₂ᵀ do not depend on the rotation within it.
+        double r2 = Math.Sqrt(2), r6 = Math.Sqrt(6), r12 = Math.Sqrt(12);
+        double[][] u = [[1 / r2, 1 / r2, 0, 0, 0, 0], [0, 0, 1 / r2, 1 / r2, 0, 0], [0, 0, 0, 0, 1, 0]];
+        double[][] v = [[1 / r2, -1 / r2, 0, 0, 0], [1 / r6, 1 / r6, -2 / r6, 0, 0], [1 / r12, 1 / r12, 1 / r12, -3 / r12, 0]];
+        double[] d = [3, 3, 0.5];
+        var y = new double[5, 6];
+        for (int i = 0; i < 5; i++)
+            for (int l = 0; l < 6; l++)
+                y[i, l] = 0.1 * l + Enumerable.Range(0, 3).Sum(k => d[k] * u[k][l] * v[k][i]);
+        BassDecomposition dec = BassDecomposition.FromPca(y, new BassPcaSpec { Rank = 2, Residual = TruncationResidual.InSample });
+        for (int l = 0; l < 6; l++)
+        {
+            for (int q = 0; q < 6; q++)
+            {
+                double kk = Enumerable.Range(0, 2).Sum(k => dec.Map.Basis(l, k) * dec.Map.Basis(q, k));
+                Assert.Equal(9 * (u[0][l] * u[0][q] + u[1][l] * u[1][q]), kk, 12);
+            }
+            for (int i = 0; i < 5; i++)
+            {
+                double kw = Enumerable.Range(0, 2).Sum(k => dec.Map.Basis(l, k) * dec.Coefficient(k, i));
+                Assert.Equal(3 * (u[0][l] * v[0][i] + u[1][l] * v[1][i]), kw, 12);
+                Assert.Equal(0.5 * u[2][l] * v[2][i], dec.Truncation.Values[i, l], 12);
+            }
+        }
+    }
+
+    [Fact]
     public void TwoCases_LeaveOneOutIsTheirDifference()
     {
         double[,] y = Curves(2, 30);

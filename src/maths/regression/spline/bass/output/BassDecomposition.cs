@@ -292,7 +292,7 @@ public sealed record BassPcaAccount(double[] SingularValues, int NumericalRank, 
 /// <item><b>A supplied basis</b> (<see cref="FromBasis"/>): K, nonorthogonal allowed, with prepared coefficient responses,
 /// offsets and scales. The coefficients are not solved for here.</item>
 /// <item><b>Truncation residuals</b> (<see cref="TruncationResiduals"/>): leave-one-case-out by default, computed in case
-/// coordinates from the one SVD at O(n⁴), independent of m, each case's rank capped at the other cases' numerical rank
+/// coordinates from the one SVD, the n refits at O(n⁴) independent of m and the map back at O(nmρ), each case's rank capped at the other cases' numerical rank
 /// judged at the same tolerance; the in-sample residual is the option. The scales stay the full data's, so every
 /// residual is in the decomposition's standardized units.</item>
 /// </list>
