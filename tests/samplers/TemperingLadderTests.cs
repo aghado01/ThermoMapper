@@ -149,6 +149,8 @@ public sealed class TemperingLadderTests
         // Without a reading the nearest in b decides, and a tie there goes to the colder rung.
         Assert.Equal([0, 2, 3, 3], TemperingLadder.Sources(betas, [0.0, 0.0, 0.0], [1.0, 0.3, 0.1, 0.05]));
         Assert.Equal([0, 1, 2], TemperingLadder.Sources([1.0, 0.5, 0.25], [0.0, 0.0], [1.0, 0.375, 0.25]));
+        // Beyond the current ends the barrier holds its end's value: a rung below the hot end starts from the hottest.
+        Assert.Equal([0, 2], TemperingLadder.Sources([1.0, 0.5, 0.2], [0.3, 0.4], [1.0, 0.01]));
         // A flat pair ties on the barrier: the nearer in b takes it.
         Assert.Equal([0, 0, 1, 2], TemperingLadder.Sources([1.0, 0.5, 0.25], [0.0, 0.5], [1.0, 0.875, 0.625, 0.25]));
         Assert.Throws<ArgumentException>(() => TemperingLadder.Sources(betas, [0.1], betas));

@@ -134,12 +134,13 @@ public sealed class ParallelTemperingResizeTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void AfterAResize_EveryRungSamplesItsTemperedLaw(bool reference)
+    [InlineData(false, TemperingPath.Likelihood)]
+    [InlineData(true, TemperingPath.Likelihood)]
+    [InlineData(false, TemperingPath.Powered)]
+    public void AfterAResize_EveryRungSamplesItsTemperedLaw(bool reference, TemperingPath path)
     {
         var target = new IndexAndCoordinate();
-        ParallelTempering<State> ladder = Ladder(blocks: true, reference, seed: 23);
+        ParallelTempering<State> ladder = Ladder(blocks: true, reference, seed: 23, path);
         for (int t = 0; t < 200; t++) ladder.Step();
         ladder.Resize(Grown(ladder, reference ? 8 : 7), Sources(ladder, reference ? 8 : 7), s => s, _ => Moves, _ => [new CoordinateSlice(target)]);
         double[] betas = ladder.Betas;
@@ -160,7 +161,7 @@ public sealed class ParallelTemperingResizeTests
         }
         for (int r = 0; r < betas.Length; r++)
         {
-            (double[] law, double[] conditionalMean) = IndexAndCoordinate.Law(betas[r], TemperingPath.Likelihood);
+            (double[] law, double[] conditionalMean) = IndexAndCoordinate.Law(betas[r], path);
             for (int k = 0; k < IndexAndCoordinate.Indices; k++)
             {
                 double observed = counts[r, k] / n, mean = sums[r, k] / counts[r, k];
@@ -168,7 +169,7 @@ public sealed class ParallelTemperingResizeTests
                 Assert.True(Math.Abs(mean - conditionalMean[k]) < 0.04, $"b = {betas[r]:F4}, E[θ | k = {k}]: {mean:F4} vs {conditionalMean[k]:F4}");
             }
         }
-        _out.WriteLine($"reference {reference}: {betas.Length} rungs [{string.Join(", ", betas.Select(b => b.ToString("F4")))}], " +
+        _out.WriteLine($"{path}, reference {reference}: {betas.Length} rungs [{string.Join(", ", betas.Select(b => b.ToString("F4")))}], " +
                        $"rejection [{string.Join(", ", ladder.PairStats.Select(p => p.MeanRejection.ToString("F2")))}]");
     }
 
@@ -304,11 +305,11 @@ public sealed class ParallelTemperingResizeTests
     private static int[] Sources(ParallelTempering<State> ladder, int levels)
         => TemperingLadder.Sources(ladder.Betas, ladder.RoundRejection, Grown(ladder, levels));
 
-    private static ParallelTempering<State> Ladder(bool blocks, bool reference, int seed)
+    private static ParallelTempering<State> Ladder(bool blocks, bool reference, int seed, TemperingPath path = TemperingPath.Likelihood)
     {
         var target = new IndexAndCoordinate();
         double[] betas = reference ? [1.0, 0.5, 0.2, 0.05, 0.0] : [1.0, 0.5, 0.2, 0.05];
-        return new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), betas, TemperingPath.Likelihood, seed,
+        return new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), betas, path, seed,
                                             reference: reference ? new PriorDraw(target) : null,
                                             blocksForReplica: blocks ? _ => [new CoordinateSlice(target)] : null);
     }
