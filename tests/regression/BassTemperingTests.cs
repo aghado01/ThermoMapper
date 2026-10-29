@@ -118,7 +118,7 @@ public sealed class BassTemperingTests
 
         BassConfig config = Config(spec with { Form = TemperedForm.Linear, ReferenceRung = true, Levels = 6, HotEnd = 0.02, Adaptive = false });
         string json = config.ToJson();
-        Assert.Contains("\"Tempering\":{\"Path\":\"Likelihood\",\"Form\":\"Linear\",\"Levels\":6,\"MaxLevels\":64,\"HotEnd\":0.02,\"Adaptive\":false,\"Schedule\":\"DeterministicEvenOdd\",\"ReferenceRung\":true}", json);
+        Assert.Contains("\"Tempering\":{\"Path\":\"Likelihood\",\"Form\":\"Linear\",\"Levels\":6,\"MaxLevels\":64,\"HotEnd\":0.02,\"Adaptive\":false,\"Schedule\":\"DeterministicEvenOdd\",\"ReferenceRung\":true,\"Split\":null}", json);
         Assert.Equal(config, BassConfig.FromJson(json));
         Assert.Equal(Config(spec), BassConfig.FromJson(Config(spec).ToJson()));
         Assert.Equal(new TemperingSpec { ReferenceRung = true }, BassConfig.FromJson("{\"Sampling\":{\"Tempering\":{\"ReferenceRung\":true}}}").Sampling.Tempering);
