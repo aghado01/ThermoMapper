@@ -1,6 +1,6 @@
 # BASS: the local moves' mixing (F-M2 design brief)
 
-Date: 2026-10-28. Status: a draft for the user's design pass; nothing in it is decided except who ran Phase 0. Phase 0 was measured on 2026-10-28; its readings are below, and they correct the draft in three places (marked *Corrected by Phase 0*). It opens the fitting checklist's F-M2, which the user created on 2026-10-28 (the checklist's report "S10's questions decided"). The local moves' mixing is its own design item, before the efficiency pass; the run lengths and the ladder's sizing follow it.
+Date: 2026-10-28. Status: a draft for the user's design pass. Phase 1's levers, the pass's arms and its rule were decided on 2026-10-29 (Phase 1's decisions); the rest stays a draft. Phase 0 was measured on 2026-10-28; its readings are below, and they correct the draft in three places (marked *Corrected by Phase 0*). It opens the fitting checklist's F-M2, which the user created on 2026-10-28 (the checklist's report "S10's questions decided"). The local moves' mixing is its own design item, before the efficiency pass; the run lengths and the ladder's sizing follow it.
 
 ## What S10 found
 
@@ -106,6 +106,7 @@ What the readings change in the levers below:
 
 - *Options first.* Each lever is an option beside the current kernel, off by default until the pass (Phase 2) decides. The current kernels stay selectable whatever it decides, as per-engine defaults keep their originals.
 - *Each keeps the target exact.* The ratios below are the only changes to D01's.
+- *Decided 2026-10-29* (Phase 1's decisions): lever 2 and lever 4's split rule are built; levers 1 and 3 are withdrawn.
 
 ### Lever 1: several structure moves per sweep
 
@@ -172,7 +173,7 @@ What the readings change in the levers below:
 - *Its measure* is the ideal round-trip rate at the settled count, against the rungs' cost. M5 says which option can work.
 - *How it relates to levers 1–3.* The ideal it raises is multiplied by the efficiency the other levers set. A raised ideal with an efficiency near 0 still completes no round trip.
 
-## After Phase 0: proposals (2026-10-29, not decided)
+## After Phase 0: proposals (2026-10-29; decided in Phase 1's decisions)
 
 Talked through with the user on 2026-10-29. Each item is a proposal for the design pass; the follow-on measurements ([their brief](mode-exit-pricing-brief.md)) price the hypotheses before Phase 1 is chosen.
 - *The problem is moving between representations, not the births.*
@@ -228,13 +229,41 @@ What the readings say for Phase 1, as a reading (the choice is the user's):
 - *Neither opens Friedman's worse modes in one or two steps.* Tempering does not either: the band's rungs are frozen for deaths, and the local steps it still accepts do not remove terms.
 - *Pair deaths add nothing.*
 
+## Phase 1's decisions (2026-10-29)
+
+Decided by the user on 2026-10-29, taking the recommendations laid out after the pricing. They answer questions 1–5, 7 and 10–12.
+- *Withdrawn:*
+  - lever 1, untempered, being close to `Thin` = k. As a tempered knob (local moves per swap) it is not built; it is a candidate only if the tempered arms read efficiency-bound;
+  - lever 3, 3a and 3b, so question 2 is moot: births lose to the Occam cost, not to inert inputs (M2);
+  - the pair death: no pair of terms is redundant (P1).
+  - F-X4's seam waits for its next kernel, KHAOS's (the extensions brief), since lever 3 was to be its first.
+- *Lever 2, local steps,* as the lever's section defines them: ρ = ½, w = max(1, ⌈0.02·n_v⌉), δ uniform on {±1, …, ±w}. A categorical factor's step toggles one level, under the subset measure's ratio.
+  - M3: steps of 1–3 accept 0.93–0.97, and 4–15 accept 0.6–0.8, on Friedman and the mixed fit.
+  - A 2% window is 6–10 steps there, and 1–2 on the functional fit's 20–60 values.
+- *The fixed-M family* (question 7): factor prune and grow, and a factor's variable change, as options. The exchange move is not built separately; the variable change is its one-factor case.
+  - *Selection* (question 10): a term uniformly; prune or grow with ½ each; then a part uniformly among the fit's P parts. A prune from an empty part, or a grow into a full one, is a null move. The part's probability, 1/P, is the same both ways, so the selection adds no state-dependent ratio.
+  - *A part's only factor* (question 11) may be pruned while the term keeps another part: it is the reverse of a grow into an empty part. Only a prune that would empty the whole term is refused, since the empty term is the intercept, outside F.
+  - *A variable change with no unused variable in its part* (question 12), a part with one variable included, is a null move.
+  - *The ratio* is the prior's and the proposals' exact log ratio, plus Δℓ. It cancels to Δℓ where this draft derives it (a prune or grow with K ≥ 1 left in the part, and the variable change). A part's K = 1 → 0 is derived from the term prior, not assumed to cancel.
+  - *Their share of the schedule,* a call made with the build brief (reversible; the recommendations did not settle it). The family shares the change's slot, so the births' and deaths' shares stay the move schedule's alone (F-M1). With the family on, the slot splits in thirds: a factor's redraw or local step (lever 2 inside), a prune or grow, a variable change. A fixed mixture of invariant kernels stays invariant.
+- *Lever 4: 4b, the split rule* (question 5). A pair whose rejection exceeds 0.9 gains a rung at its barrier midpoint each adaptation round, up to `MaxLevels`.
+  - M5 found that h(r) over-reads, and that the band resolves with denser rungs.
+  - A ladder that never resizes, BARS's included, stays bit-identical.
+- *The pass* (questions 1, 3 and 4):
+  - F-M1 is folded in: the prior-cancelling schedule is an arm.
+  - Tempering is an arm, at equal work. P4 found the band's rungs frozen for deaths, but the new moves may change that, and the pass is where it shows.
+  - Eight arms: the baseline; lever 2; the fixed-M family; both; prior-cancelling on the baseline and on both; tempered with 4b, on the baseline and on both.
+  - Four fixtures: S10's three, plus Friedman at n = 2,000. Five master seeds × four chains.
+  - The rule, fixed before any run: against the baseline, an arm's change becomes the default when its geometric-mean ratio of the minimum ESS per second, over the fixtures, is at least 1.5 and no fixture falls below 0.8. Among arms that clear it, the highest geometric mean wins. Otherwise each stays an option.
+- *Who builds it.* Phase 1 runs as one chip, [its brief](local-move-options-brief.md). The pass (Phase 2) follows once its report is verified.
+
 ## Phase 1: build the options
 
-- *The order:*
-  1. F-X4's seam, with D01's kernel as its first implementation, bit-identical.
-  2. Levers 1, 2 and 3a, as options.
-  3. Lever 4's chosen option, after M5.
-- *Exactness, checked against ground truth from outside the sampler, for each new kernel:*
+- *The order* (Phase 1's decisions):
+  1. Lever 2, as an option.
+  2. The fixed-M family, as options.
+  3. 4b, in the shared `TemperingLadder`, as an option.
+- *Exactness, checked against ground truth from outside the sampler, for each new kernel and each part it acts on:*
   - under a constant likelihood, the count and order laws against F-O3's enumeration (`bass_enumeration_oracle.R`, the `laws` mode);
   - with the likelihood, on oracle A's 2,263-state fixture at a fixed τ, the structure kernel's transition probabilities between every pair of states, enumerated: π(S | τ, y)K(S, S′) = π(S′ | τ, y)K(S′, S) to rounding, which is detailed balance exactly;
   - and the chain's visit frequencies against the exact posterior, within their Monte Carlo error.
@@ -242,19 +271,17 @@ What the readings say for Phase 1, as a reading (the choice is the user's):
 
 ## Phase 2: one pre-registered comparison
 
-- *Arms:*
-  - the baseline;
-  - each lever alone (1, 2, 3a);
-  - all on, and all on less each one;
-  - F-M1's two schedules (equal over available, prior-cancelling), on the baseline and on all on (question 1);
-  - tempered against untempered at equal work (question 4).
+- *Arms* (decided 2026-10-29):
+  - the baseline, lever 2, the fixed-M family, and both;
+  - F-M1's prior-cancelling schedule, on the baseline and on both;
+  - tempered with 4b, on the baseline and on both, at equal work.
 - *Fixtures:* S10's three, plus Friedman at n = 2,000. The Occam cost per term grows as about ½ ln N, so the moves' acceptance shifts with n.
 - *Seeds:* five master seeds per fixture and arm, four chains each, from exact prior draws (S7's starts).
 - *What it reads:*
   - the rank-normalized bulk ESS per second of M, σ², the log posterior and the fitted values at the monitored points, and the minimum of them;
   - R̂ of each;
   - tempered, the round trips per scan and observed over ideal.
-- *The decision rule, fixed before any run.* For example, a lever becomes the default when its geometric-mean ratio of the minimum ESS per second, over the fixtures, clears a threshold and no fixture falls below a floor. Otherwise it stays an option. The thresholds are the user's (question 3).
+- *The decision rule, fixed before any run* (decided 2026-10-29). Against the baseline, an arm's change becomes the default when its geometric-mean ratio of the minimum ESS per second, over the fixtures, is at least 1.5 and no fixture falls below 0.8. Among arms that clear it, the highest geometric mean wins. Otherwise each stays an option.
 - *After the pass:*
   - the run lengths (S10's question 3), sized from the winner's ESS per sweep to a target ESS, with the R̂ stop;
   - then the ladder's other sizing question: it settles above need on the functional fixture.
@@ -268,20 +295,20 @@ What the readings say for Phase 1, as a reading (the choice is the user's):
 
 ## Open questions for the user
 
-1. *Fold F-M1 into this pass?* I recommend it. The move schedule changes the births' and deaths' share, the quantity levers 1 and 3 change, and one pass avoids two readings that could disagree.
-2. *3b in scope?* I recommend building it only on M2's evidence, given BARS's.
-3. *The pass's thresholds and fixture set.*
-4. *Tempering as an arm for the default?* D05 set untempered as the default until BASS's own comparison says otherwise. Tempered Friedman passed σ's criterion where untempered failed, at the cost of about 20 rungs.
-5. *Lever 4's option,* after M5.
+1. *Fold F-M1 into this pass?* I recommend it. The move schedule changes the births' and deaths' share, the quantity levers 1 and 3 change, and one pass avoids two readings that could disagree. Decided by the user on 2026-10-29: folded in; the prior-cancelling schedule is an arm.
+2. *3b in scope?* I recommend building it only on M2's evidence, given BARS's. Moot since 2026-10-29: lever 3 is withdrawn.
+3. *The pass's thresholds and fixture set.* Decided by the user on 2026-10-29: eight arms, four fixtures, five seeds × four chains; a geometric mean of at least 1.5 with no fixture below 0.8 (Phase 1's decisions).
+4. *Tempering as an arm for the default?* D05 set untempered as the default until BASS's own comparison says otherwise. Tempered Friedman passed σ's criterion where untempered failed, at the cost of about 20 rungs. Decided by the user on 2026-10-29: yes, at equal work, with 4b.
+5. *Lever 4's option,* after M5. Decided by the user on 2026-10-29: 4b, the split rule.
 6. *Who runs it.* I recommend Phase 0 as one chip (harness only, no production change), then Phase 1 after you read its report. Decided by the user on 2026-10-28: Phase 0 runs as one chip, [its brief](local-move-measurements-brief.md).
-7. *A move that leaves a local mode* (added after Phase 0). M4's chains sit in modes 12–42 nats apart whose terms are each load-bearing, so single-term moves pay tens of nats to leave them, and lever 2 only refines within them. The exchange move (Not in scope) is the simplest compound move; whether it, or tempering's round trips once the efficiency factor rises, is the route belongs to your design pass.
+7. *A move that leaves a local mode* (added after Phase 0). M4's chains sit in modes 12–42 nats apart whose terms are each load-bearing, so single-term moves pay tens of nats to leave them, and lever 2 only refines within them. The exchange move (Not in scope) is the simplest compound move; whether it, or tempering's round trips once the efficiency factor rises, is the route belongs to your design pass. Decided by the user on 2026-10-29: the fixed-M family (prune and grow, a factor's variable change), as options.
 8. *The composition's column means* (added after Phase 0): cache them before the pass. Decided by the user on 2026-10-29: cached, bit-identical by construction. Done in `9ed600a`: five fits hashed identical against the code before it, and the Regression (828) and BASS oracle (35) suites pass. Caching changes every arm's cost alike, but lever 1's price, the structure share s, rises with it, so the pass should run on the cached cost. It is the efficiency pass's change, brought forward; whether it can be made bit-identical depends on matching the current sum's order.
 
 9. *Price the mode exits before choosing Phase 1* (2026-10-29). Decided by the user: a chip measures P1–P4, [its brief](mode-exit-pricing-brief.md).
 
-10. *Factor moves under several parts* (raised by the pricing chip): how the move picks its part and its factor, the pricing harness's matched selection being one choice.
-11. *Pruning a part's only factor* while the term keeps another part (K = 1 → 0 in that part), the reverse of a grow into an empty part. It was the functional fit's only prune.
-12. *A variable change in a part with one variable,* which has no unused variable to move to: refused, or the move unavailable there.
+10. *Factor moves under several parts* (raised by the pricing chip): how the move picks its part and its factor, the pricing harness's matched selection being one choice. Decided by the user on 2026-10-29: a term uniformly, prune or grow with ½ each, then a part uniformly among the fit's parts; an empty or full part is a null move.
+11. *Pruning a part's only factor* while the term keeps another part (K = 1 → 0 in that part), the reverse of a grow into an empty part. It was the functional fit's only prune. Decided by the user on 2026-10-29: allowed; only a prune that would empty the whole term is refused.
+12. *A variable change in a part with one variable,* which has no unused variable to move to: refused, or the move unavailable there. Decided by the user on 2026-10-29: a null move.
 
 ## Reports
 

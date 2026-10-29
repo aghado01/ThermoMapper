@@ -15,8 +15,8 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [x] **F-C1** Contract shapes: data, config and result, decided 2026-10-28 as recommended.
 - [x] **F-C2** The shared-code changes the contracts need, before stage 4's first fit: `Sigma2Prior` as a serializable record, shared with BARS's config; `GPriorCentre.Flat` for the Liang convention, refused by BARS until the shared block supports it.
 - [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison.
-- [ ] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison.
-- [ ] **F-M2** The local moves' mixing, its own design item before the efficiency pass (S10, decided 2026-10-28); the design draft is [local-move-mixing-brief.md](local-move-mixing-brief.md). Births and deaths accept about 1.5% on Friedman, and the chains hold their own bands of M. Levers: several structure moves per sweep, a local knot move inside a change, active-variable births on F-X4's seam. The run lengths and the ladder's sizing, its censored steep band included, follow it.
+- [ ] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison. Folded into F-M2's pass on 2026-10-29: the prior-cancelling schedule is one of its arms.
+- [ ] **F-M2** The local moves' mixing, its own design item before the efficiency pass (S10, decided 2026-10-28); the design draft is [local-move-mixing-brief.md](local-move-mixing-brief.md). Births and deaths accept about 1.5% on Friedman, and the chains hold their own bands of M. Levers: several structure moves per sweep, a local knot move inside a change, active-variable births on F-X4's seam. The run lengths and the ladder's sizing, its censored steep band included, follow it. Phase 1 was decided on 2026-10-29 (the draft's "Phase 1's decisions"): local knot steps, the fixed-M factor moves and the ladder's split rule, built as options by a chip ([its brief](local-move-options-brief.md)); levers 1 and 3 are withdrawn.
 
 ### Reference fixtures (stage 1)
 
@@ -51,7 +51,7 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X1** Observation-model seam carries an offset with the weights.
 - [ ] **F-X2** The sweep has a latent slot.
 - [ ] **F-X3** Term types behind one design-kernel contract, with derivatives.
-- [ ] **F-X4** Proposal kernels behind one contract with exact forward and reverse probabilities.
+- [ ] **F-X4** Proposal kernels behind one contract with exact forward and reverse probabilities. Its first second kernel, F-M2's lever 3, was withdrawn on 2026-10-29, so it waits for KHAOS's.
 - [ ] **F-X5** Coefficient priors as a declared set.
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
