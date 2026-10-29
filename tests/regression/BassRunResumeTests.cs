@@ -165,6 +165,49 @@ public sealed class BassRunResumeTests
         for (int i = 0; i < 200; i++) Assert.Equal(again.Step().Fit, later.Step().Fit);
     }
 
+    [Theory]
+    [InlineData("defaults")]
+    [InlineData("functional")]
+    public void Design_RestoredWithSharedColumns_IsTheReevaluatedRestore(string option)
+    {
+        // A swap's hand-over shares the giver's columns (Snapshot(shareColumns: true)); a checkpoint's restore
+        // re-evaluates them from the terms. The two designs hold the same statistics and propose alike, bit for bit.
+        BassConfig config = Config(option, 1);
+        var model = BassModel.Create(config, Data(option));
+        BassState start = new BassPriorSampler(model).Draw(new Xoshiro256PlusPlus(3)).State;
+        var live = new BassChain(model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(4), new Xoshiro256PlusPlus(5));
+        for (int i = 0; i < 1500; i++) live.Step();
+        BassDesign design = live.Structure.DesignAt(live.Current);
+        Assert.True(design.Count > 0);
+        BassDesignSnapshot shared = design.Snapshot(shareColumns: true), plain = design.Snapshot();
+        Assert.NotNull(shared.Columns);
+        Assert.Null(plain.Columns);
+        BassDesign a = model.NewDesign(), b = model.NewDesign();
+        a.Restore(shared);
+        b.Restore(plain);
+        Assert.Equal(b.ResidualSquares, a.ResidualSquares);
+        Assert.Equal(b.FittedSquares, a.FittedSquares);
+        Assert.Equal(b.Coefficients.ToArray(), a.Coefficients.ToArray());
+        Assert.Equal(b.Residual.ToArray(), a.Residual.ToArray());
+        var rng = new Xoshiro256PlusPlus(8);
+        for (int k = 0; k < 20; k++)
+        {
+            if (model.Prior.DrawTerm(rng) is not { } term) continue;
+            Assert.Equal(b.ProposeBirth(term), a.ProposeBirth(term));
+            int index = k % design.Count;
+            Assert.Equal(b.ProposeDeath(index), a.ProposeDeath(index));
+            Assert.Equal(b.ProposeChange(index, term), a.ProposeChange(index, term));
+        }
+
+        // Columns that are not the snapshot's terms' are refused.
+        BassDesignColumns columns = shared.Columns!;
+        Assert.Throws<ArgumentException>(() => model.NewDesign().Restore(shared with { Columns = columns with { CrossResponses = [] } }));
+        Assert.Throws<ArgumentException>(() => model.NewDesign().Restore(shared with { Columns = columns with { Cases = [] } }));
+        Assert.Throws<ArgumentException>(() => model.NewDesign().Restore(shared with { Columns = columns with { Cases = [.. columns.Cases.Select(c => c[..^1])] } }));
+        Assert.Throws<ArgumentException>(() => model.NewDesign().Restore(
+            shared with { Columns = columns with { Outputs = columns.Outputs is null ? [.. columns.Cases] : null } }));
+    }
+
     [Fact]
     public void Restore_RefusesAForeignState()
     {

@@ -121,15 +121,16 @@ public sealed class BassStructureMoves
     // Whether the design can show `state`'s structure without a load: the committed one, or the pending candidate.
     internal bool Holds(BassState state) => state.SharesStructure(_committed) || _candidate is { } c && state.SharesStructure(c.State);
 
-    // An exact copy of the design at `state`, which it is first synced to, for another replica to adopt (BassLadder).
+    // An exact copy of the design at `state`, which it is first synced to, for another replica to adopt (BassLadder): the
+    // factor and the fit copied, the columns shared.
     internal BassDesignSnapshot DesignFor(BassState state)
     {
         Sync(state);
-        return _design.Snapshot();
+        return _design.Snapshot(shareColumns: true);
     }
 
     // Takes over `state`, which a swap handed to these moves, with the design its giver held for it (DesignFor): the
-    // design as the giver's, bit for bit, so the structure is neither refactored nor re-admitted here.
+    // design as the giver's, bit for bit, so the structure is neither refactored, re-admitted nor re-evaluated here.
     internal void Adopt(BassState state, BassDesignSnapshot design)
     {
         ArgumentNullException.ThrowIfNull(state);

@@ -25,9 +25,15 @@ public enum BassRefusal
 }
 
 /// <summary>A design's restart state (<see cref="BassDesign.Snapshot"/>): its terms in column order, a copy of its
-/// factor, and its coefficients, residual and statistics.</summary>
+/// factor, and its coefficients, residual and statistics; for an in-memory hand-over, also its evaluated columns, shared
+/// (null in a checkpoint, which restores them from the terms).</summary>
 internal sealed record BassDesignSnapshot(BassTerm[] Terms, BorderedCholesky Factor, double[] Beta, double[] Residual,
-                                          double ResidualSquares, double FittedSquares);
+                                          double ResidualSquares, double FittedSquares, BassDesignColumns? Columns = null);
+
+/// <summary>A design's evaluated columns in column order: each term's case side, its output side for a direct response,
+/// and its cross product with the response. A design never writes into a column once evaluated, so designs over the
+/// same data can share them.</summary>
+internal sealed record BassDesignColumns(double[][] Cases, double[][]? Outputs, double[] CrossResponses);
 
 /// <summary>The admission rules a design applies, resolved from the config on the data.</summary>
 public sealed record BassAdmission(
@@ -296,24 +302,40 @@ public sealed class BassDesign
     /// <summary>
     /// The restart state: the terms in column order, an exact copy of the factor, and the coefficients, residual and its
     /// statistics as held. A strict refactorization would not reproduce the factor's incremental updates bit for bit, so
-    /// <see cref="Restore"/> takes them as they are and re-evaluates only the columns, which are functions of the terms.
+    /// <see cref="Restore"/> takes them as they are. The columns are functions of the terms: a checkpoint's snapshot leaves
+    /// them out and <see cref="Restore"/> re-evaluates them, while a hand-over between replicas
+    /// (<paramref name="shareColumns"/>) carries this design's own, which the receiver shares.
     /// </summary>
-    internal BassDesignSnapshot Snapshot()
-        => new([.. _terms], _factor.Copy(), (double[])_beta.Clone(), (double[])_residual.Clone(), ResidualSquares, FittedSquares);
+    internal BassDesignSnapshot Snapshot(bool shareColumns = false)
+        => new([.. _terms], _factor.Copy(), (double[])_beta.Clone(), (double[])_residual.Clone(), ResidualSquares, FittedSquares,
+               shareColumns ? new BassDesignColumns([.. _a], _functional ? [.. _h] : null, [.. _b]) : null);
 
     /// <summary>Replaces the structure with <paramref name="snapshot"/>'s, every statistic as the design it was taken from
-    /// held it, so the two continue bit for bit.</summary>
+    /// held it, so the two continue bit for bit; its columns shared when it carries them, else re-evaluated.</summary>
     internal void Restore(BassDesignSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         if (snapshot.Factor.Dimension != snapshot.Terms.Length || snapshot.Beta.Length != snapshot.Terms.Length || snapshot.Residual.Length != _rows)
             throw new ArgumentException("The snapshot is not a design's over these data.", nameof(snapshot));
+        if (snapshot.Columns is { } shared
+            && (shared.Cases.Length != snapshot.Terms.Length || shared.CrossResponses.Length != snapshot.Terms.Length
+                || (shared.Outputs is null) == _functional || shared.Outputs is { } o && o.Length != snapshot.Terms.Length
+                || Array.Exists(shared.Cases, c => c.Length != _cases)
+                || shared.Outputs is { } h && Array.Exists(h, c => c.Length != _locations)))
+            throw new ArgumentException("The snapshot's columns are not its terms' over these data.", nameof(snapshot));
         _pending = null;
         _terms.Clear();
         _a.Clear();
         _h.Clear();
         _b.Clear();
-        foreach (BassTerm term in snapshot.Terms)
+        if (snapshot.Columns is { } columns)
+        {
+            _terms.AddRange(snapshot.Terms);
+            _a.AddRange(columns.Cases);
+            if (_functional) _h.AddRange(columns.Outputs!);
+            _b.AddRange(columns.CrossResponses);
+        }
+        else foreach (BassTerm term in snapshot.Terms)
         {
             if (Evaluate(term) is not var (column, output)) throw new ArgumentException($"The snapshot holds {term}, which lacks support here.", nameof(snapshot));
             _terms.Add(term);
