@@ -165,7 +165,7 @@ public sealed class BassMixingExitLadderTests
     {
         _out.WriteLine("");
         _out.WriteLine($"Chain {chain}, {rungs.Length} rungs: rung | b | M | births α | deaths α: mean (largest) | median | terms over {Negligible:G0} | changes α | " +
-                       "steps α, |δ| 1, 2, 3 | prunes α (n) | deaths' median Δℓ_b | median b·Δℓ₁ | median Δℓ₁");
+                       "steps α at δ = ±1, ±2, ±3 | prunes α (n) | deaths' median Δℓ_b | median b·Δℓ₁ | median Δℓ₁");
         _out.WriteLine("--- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---");
         for (int i = 0; i < rungs.Length; i++)
         {
@@ -183,7 +183,7 @@ public sealed class BassMixingExitLadderTests
     {
         _out.WriteLine("");
         _out.WriteLine($"chain | rungs | coldest b with deaths' mean α > {Negligible:G0} | with a death's α > {Negligible:G0} | with the median term's α > {Negligible:G0} | " +
-                       $"band [{Bottom}, {Top}], pooled: M range | births α | deaths α | term deaths over {Negligible:G0} | changes α | steps α, |δ| 1, 2, 3 | prunes α (n) | " +
+                       $"band [{Bottom}, {Top}], pooled: M range | births α | deaths α | term deaths over {Negligible:G0} | changes α | steps α at δ = ±1, ±2, ±3 | prunes α (n) | " +
                        $"rungs whose median term's death α ≤ {Negligible:G0}");
         _out.WriteLine("--- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---");
         for (int c = 0; c < rungs.Length; c++)
