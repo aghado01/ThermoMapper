@@ -26,7 +26,9 @@ namespace Maths.Regression.Tests;
 ///   surface the share of draws using an inert input.</item>
 /// </list>
 /// Pre-registered criteria: σ's interval covers the truth, and the pointwise intervals cover at least 80% of the
-/// training points; the rest is read. A qualification run (<see cref="BassQualification.Enabled"/>).
+/// training points; the rest is read. A qualification run (<see cref="BassQualification.Enabled"/>). Untempered
+/// Friedman fails its σ criterion, a failure the user kept as registered on 2026-10-28: its test stays red until the
+/// local moves mix better (the fitting checklist's F-M2).
 /// </summary>
 public sealed class BassQualificationRecoveryTests
 {

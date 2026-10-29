@@ -264,7 +264,7 @@ The ladder reads the barrier high during burn-in: on the functional fixture the 
 - *S8's docs paragraph* can now describe the self-sizing ladder, the auto-picked hot end, the per-chain readout and the evidence's flags.
 - Nothing in your files needs changing.
 
-**Open questions** (each implemented as a reversible default):
+**Open questions** (each implemented as a reversible default; the user took 1–6 as built on 2026-10-28, the fitting checklist's report):
 1. *The initial count, 8.* Kept. The sizing rule moves away from it within a few rounds either way.
 2. *The minimum count: the structural 2, or 3 with the reference rung.* Round 1's single scan reads low, since every replica starts from one state (Λ̂ 0.7–2.6 on the functional fixture, against the 11–17 it settles at). So the first sizing can drop to the minimum, then regrow by about a third each round (3 → 4 → 5 → 7 → 9 → 12 → 14). With R's 9,000-sweep burn-in there are 12 sizing rounds, and the dip costs nothing measurable. A short burn-in keeps a small ladder (7 sweeps: 4 and 6 rungs). I recommend keeping it. If short burn-ins matter, the cheap fix is a floor at `InitialLevels / 2`, or skipping the first round's shrink.
 3. *The deadband: one rung,* as proposed. On the functional fixture it held 15 rungs through two rounds that asked for 14, then shrank when a round asked for 13.

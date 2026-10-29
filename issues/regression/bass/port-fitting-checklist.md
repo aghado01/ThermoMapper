@@ -16,6 +16,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [x] **F-C2** The shared-code changes the contracts need, before stage 4's first fit: `Sigma2Prior` as a serializable record, shared with BARS's config; `GPriorCentre.Flat` for the Liang convention, refused by BARS until the shared block supports it.
 - [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison.
 - [ ] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison.
+- [ ] **F-M2** The local moves' mixing, its own design item before the efficiency pass (S10, decided 2026-10-28). Births and deaths accept about 1.5% on Friedman, and the chains hold their own bands of M. Levers: several structure moves per sweep, a local knot move inside a change, active-variable births on F-X4's seam. The run lengths and the ladder's sizing, its censored steep band included, follow it.
 
 ### Reference fixtures (stage 1)
 
@@ -55,6 +56,15 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### S10's questions decided — 2026-10-28
+
+The user took the five recommendations:
+1. *Friedman's σ criterion* stays as registered, a recorded failure of the untempered defaults. Its test fails under `BASS_QUALIFICATION` = 1 until the mixing improves, and its docstring says so.
+2. *The local moves' mixing* is its own design item, F-M2, before the efficiency pass.
+3. *The run lengths* stay provisional (9,000 + 1,000) until F-M2.
+4. *Chip E's six constants* stand as built (its brief's questions 1–6).
+5. *The ladder's sizing,* the censored steep band included, waits for F-M2.
 
 ### Circle-back: argon's notes on S7–S10 — 2026-10-28
 
@@ -108,7 +118,7 @@ So the retained content's k̂ is the one to read under either g, as BARS found.
 
 *The cost baseline* (`BassQualificationCostTests`; µs per sweep, one thread, untempered, composition included): at p = 2, n = 200: 68 (M 5), 129–154 (M 20); n = 1,000: 89, 190, 376 (M 45); n = 5,000: 186, 465, 1,184 (M 50). Linear in N·M at large n over a fixed 50–60 µs; with p = 10, somewhat more at the same M. R BASS ran about 630 µs per sweep on Friedman (n = 500, M ≈ 10), against about 100 here. A pushed count prior was tried first and its exact starts refused (F held too little prior mass), as the sampler should.
 
-*Open questions for the user:*
+*Open questions for the user* (decided 2026-10-28 as recommended, in the report above):
 1. *Friedman's failed σ criterion.* Untempered BASS (and R) under the defaults fails it at 5,000 + 2,000 sweeps; tempered BASS passes. Keep it as a recorded failure of the untempered defaults, or ask more of the defaults.
 2. *The local moves' mixing.* Births and deaths at about 1.5% bound both runs. Improving them is beyond R and beyond stage 4: data-informed births, more moves per sweep, or a block move over a term's knot. I recommend its own design item before the efficiency pass (F-M1). Argon's levers, in the circle-back, are the same three.
 3. *The run lengths.* The provisional 9,000 + 1,000 come from R's single-chain practice; across four chains R̂ shows they do not converge on these surfaces. The R̂ stop exists; whether the defaults should lean on it is open.
