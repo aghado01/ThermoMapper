@@ -57,76 +57,19 @@ internal static class BassMixing
     /// <summary>S10's fixture <paramref name="name"/>, tempered by <paramref name="tempering"/> when given.</summary>
     internal static Fixture Get(string name, TemperingSpec? tempering = null) => name switch
     {
-        Friedman => new(name, FriedmanData(), Config(53, tempering), t => t.Continuous.Any(h => h.Variable >= 5)),
-        Mixed => new(name, MixedData(), Config(57, tempering), null),
-        Functional => new(name, FunctionalData(), Config(61, tempering), null),
+        Friedman => new(name, BassQualificationRecoveryTests.Friedman().Data, Recovery(53, tempering), t => t.Continuous.Any(h => h.Variable >= 5)),
+        Mixed => new(name, BassQualificationRecoveryTests.Mixed().Data, Recovery(57, tempering), null),
+        Functional => new(name, BassQualificationRecoveryTests.Functional().Data, Recovery(61, tempering), null),
         _ => throw new ArgumentOutOfRangeException(nameof(name)),
     };
 
-    // BassQualificationRecoveryTests' config: the defaults, four chains of 5,000 and 2,000.
-    private static BassConfig Config(int seed, TemperingSpec? tempering) => new()
+    // BassQualificationRecoveryTests' config, whose lengths are BurnIn and Samples.
+    private static BassConfig Recovery(int seed, TemperingSpec? tempering)
     {
-        Sampling = new BassSampling { Chains = 4, MasterSeed = seed, BurnIn = BurnIn, Samples = Samples, Tempering = tempering },
-    };
-
-    // BassQualificationRecoveryTests' surfaces, draw for draw.
-    private static BassData FriedmanData()
-    {
-        var rng = new Xoshiro256PlusPlus(seed: 51);
-        const int n = 500, p = 10;
-        var x = new double[p][];
-        for (int v = 0; v < p; v++) x[v] = new double[n];
-        var y = new double[n];
-        for (int i = 0; i < n; i++)
-        {
-            for (int v = 0; v < p; v++) x[v][i] = rng.NextDouble();
-            double truth = 10 * Math.Sin(Math.PI * x[0][i] * x[1][i]) + 20 * Math.Pow(x[2][i] - 0.5, 2) + 10 * x[3][i] + 5 * x[4][i];
-            y[i] = truth + BassQualification.Gaussian(rng);
-        }
-        return new BassData([.. Enumerable.Range(0, p).Select(v => (BassPredictor)new ContinuousPredictor($"x{v + 1}", x[v]))], new ScalarResponse(y));
-    }
-
-    private static BassData MixedData()
-    {
-        var rng = new Xoshiro256PlusPlus(seed: 55);
-        const int n = 300;
-        var x = new double[3][];
-        for (int v = 0; v < 3; v++) x[v] = new double[n];
-        var z = new int[n];
-        var y = new double[n];
-        for (int i = 0; i < n; i++)
-        {
-            for (int v = 0; v < 3; v++) x[v][i] = rng.NextDouble();
-            z[i] = (int)(3 * rng.NextDouble());
-            double truth = 2 * x[0][i] + (z[i] != 2 ? 3 * x[1][i] : 2 * Math.Sin(2 * Math.PI * x[2][i]));
-            y[i] = truth + 0.5 * BassQualification.Gaussian(rng);
-        }
-        return new BassData(
-            [new ContinuousPredictor("x1", x[0]), new ContinuousPredictor("x2", x[1]), new ContinuousPredictor("x3", x[2]),
-             new CategoricalPredictor("z", z, ["a", "b", "c"])],
-            new ScalarResponse(y));
-    }
-
-    private static BassData FunctionalData()
-    {
-        var rng = new Xoshiro256PlusPlus(seed: 59);
-        const int n = 60, m = 20;
-        double[] t = [.. Enumerable.Range(0, m).Select(r => r / (m - 1.0))];
-        var x0 = new double[n];
-        var x1 = new double[n];
-        var y = new double[n, m];
-        for (int i = 0; i < n; i++)
-        {
-            x0[i] = rng.NextDouble();
-            x1[i] = rng.NextDouble();
-            for (int r = 0; r < m; r++)
-            {
-                double f = 1 + 2 * x0[i] + 1.5 * t[r] * x1[i] + 3 * Math.Max(x0[i] - 0.5, 0) * Math.Sin(Math.PI * t[r]);
-                y[i, r] = f + 0.2 * BassQualification.Gaussian(rng);
-            }
-        }
-        return new BassData([new ContinuousPredictor("x0", x0), new ContinuousPredictor("x1", x1)],
-                            new FunctionalResponse(y, [new ContinuousPredictor("t", t)]));
+        BassConfig config = BassQualificationRecoveryTests.Config(seed, tempering);
+        if (config.Sampling.BurnIn != BurnIn || config.Sampling.Samples != Samples)
+            throw new InvalidOperationException("S10's recovery lengths moved; BassMixing's BurnIn and Samples must follow.");
+        return config;
     }
 
     /// <summary>Chain <paramref name="chain"/>'s start and its four streams' seeds, as the run takes them: the shell's

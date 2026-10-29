@@ -35,7 +35,7 @@ public sealed class BassQualificationRecoveryTests
     private readonly ITestOutputHelper _out;
     public BassQualificationRecoveryTests(ITestOutputHelper output) => _out = output;
 
-    private static BassConfig Config(int seed, TemperingSpec? tempering = null) => new()
+    internal static BassConfig Config(int seed, TemperingSpec? tempering = null) => new()
     {
         Sampling = new BassSampling { Chains = 4, MasterSeed = seed, BurnIn = 5000, Samples = 2000, Tempering = tempering },
     };
@@ -61,7 +61,8 @@ public sealed class BassQualificationRecoveryTests
         Recover("Friedman, tempered", data, truth, sigma: 1.0, Config(53, new TemperingSpec()));
     }
 
-    private static (BassData Data, double[] Truth) Friedman()
+    // The surfaces, each with its truth at the training points; F-M2's measurements (BassMixing) read them too.
+    internal static (BassData Data, double[] Truth) Friedman()
     {
         var rng = new Xoshiro256PlusPlus(seed: 51);
         const int n = 500, p = 10;
@@ -82,6 +83,12 @@ public sealed class BassQualificationRecoveryTests
     public void MixedCategorical()
     {
         if (!BassQualification.Enabled) return;   // heavy
+        (BassData data, double[] truth) = Mixed();
+        Recover("mixed categorical", data, truth, sigma: 0.5, Config(57));
+    }
+
+    internal static (BassData Data, double[] Truth) Mixed()
+    {
         var rng = new Xoshiro256PlusPlus(seed: 55);
         const int n = 300;
         var x = new double[3][];
@@ -100,13 +107,21 @@ public sealed class BassQualificationRecoveryTests
             [new ContinuousPredictor("x1", x[0]), new ContinuousPredictor("x2", x[1]), new ContinuousPredictor("x3", x[2]),
              new CategoricalPredictor("z", z, ["a", "b", "c"])],
             new ScalarResponse(y));
-        Recover("mixed categorical", data, truth, sigma: 0.5, Config(57));
+        return (data, truth);
     }
 
     [Fact]
     public void DirectFunctional()
     {
         if (!BassQualification.Enabled) return;   // heavy
+        (BassData data, double[] truth) = Functional();
+        BassFit fit = Recover("direct functional", data, truth, sigma: 0.2, Config(61));
+        ResidualDependence? check = fit.ResidualDependence;
+        _out.WriteLine($"direct functional: residual r₁ mean {check?.Mean:F3} against {check?.Expected:F3}");
+    }
+
+    internal static (BassData Data, double[] Truth) Functional()
+    {
         var rng = new Xoshiro256PlusPlus(seed: 59);
         const int n = 60, m = 20;
         double[] t = [.. Enumerable.Range(0, m).Select(r => r / (m - 1.0))];
@@ -127,9 +142,7 @@ public sealed class BassQualificationRecoveryTests
         }
         var data = new BassData([new ContinuousPredictor("x0", x0), new ContinuousPredictor("x1", x1)],
                                 new FunctionalResponse(y, [new ContinuousPredictor("t", t)]));
-        BassFit fit = Recover("direct functional", data, truth, sigma: 0.2, Config(61));
-        ResidualDependence? check = fit.ResidualDependence;
-        _out.WriteLine($"direct functional: residual r₁ mean {check?.Mean:F3} against {check?.Expected:F3}");
+        return (data, truth);
     }
 
     // Fits the defaults, reads the recovery and checks the pre-registered criteria.
