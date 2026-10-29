@@ -40,6 +40,7 @@ public sealed class BassStructureMoves
     private BassTermCounts _counts;
     private BassState _committed;
     private (BassState State, Kind Kind, BassTerm? Added, BassTerm? Removed)? _candidate;
+    private readonly Dictionary<BassTerm, double> _columnMeans = [];
 
     /// <summary>The moves of a chain started at <paramref name="terms"/>, which must lie in F, with u =
     /// <paramref name="logTau"/> (the held τ's log under fixed g).</summary>
@@ -177,8 +178,17 @@ public sealed class BassStructureMoves
         return new BassDraw(new BassStructure([.. order.Select(j => ids[j])]), tau, sigma2, coefficients, lambda);
     }
 
-    // The mean of the term's column over all N observations, the design's centring: a case column's mean, or āh̄.
+    // The mean of the term's column over all N observations, the design's centring: a case column's mean, or āh̄. Kept
+    // by term, since retained draws repeat their structures; the value is the one evaluation's, so draws are unchanged.
     private double ColumnMean(BassTerm term)
+    {
+        if (_columnMeans.TryGetValue(term, out double cached)) return cached;
+        double mean = EvaluateColumnMean(term);
+        _columnMeans.Add(term, mean);
+        return mean;
+    }
+
+    private double EvaluateColumnMean(BassTerm term)
     {
         BassBasis basis = _model.Basis;
         var a = new double[basis.Inputs.Cases.Cases];
