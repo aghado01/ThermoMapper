@@ -56,6 +56,31 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ## Reports
 
+### S8 verified; chip D's questions decided — 2026-10-28
+
+*Verified here.* Chip D's commits (`58fdeb2`, `8c1bb66`, `fb22f73`, `f2d7149`, `aaf46b6`, report `25cb47f`) were read and the suites rerun: Regression 756/756, Samplers 146/146, Distributions 129/129, LinAlg 120/120, the BASS and Wallenius oracle tests 37/37.
+
+*Q1, the ladder's size, decided by the user* after a discussion with a second reviewer's suggestions folded in. It runs as chip E ([its brief](stage4-ladder-sizing-brief.md)).
+- *Why a fixed count fails.* On the functional fixture (N = 175), 8 levels rejected 0.96–1.00 of swaps per pair, and the chains' evidence spread 122–183 against errors of 2–5. For a power posterior the barrier grows as Λ ≈ √(d/2π)·ln N (a Bernstein–von Mises heuristic). Collapsing shrinks BASS's effective d, since swaps read the collapsed ℓ_b, but the shape stands.
+- *A self-sizing ladder.* `Levels` null, the default, sizes the ladder during burn-in by Syed et al.'s N ≈ 2Λ (`TemperingLadder.RecommendedLevels`):
+  - it grows at once when the barrier asks for more, since a saturated ladder under-reads its barrier;
+  - it shrinks only past a deadband, since early rounds over-read;
+  - the count is settled one round before burn-in ends, so the last round equalizes it.
+
+  `MaxLevels` (64) is a compute budget, flagged when it binds; M_max is no proxy, since it defaults to min(1000, N − 1). An explicit `Levels` fixes the count as now.
+- *The shared resize* goes in `ParallelTempering`, with the placement from the caller and Syed's equal-rejection rule as the default policy. SPC on parallel tempering needs the same primitive (`issues/spc/opus-spin-glass-threads.md`, threads 5 and 6), and its rung placement may follow acquisition, not mixing. New replicas draw their streams from one growth stream appended after the seed layout, so a ladder that never resizes, BARS's included, stays bit-identical.
+- *The hot end* `HotEnd` null, the default, auto-picks 1/N.
+  - At b = E[τ] = 1/N the shrinkage τ/(τ + b) is ½: the tempered likelihood weighs one observation, as the unit-information prior does.
+  - It is 2/N where the integrated form's pole needs the margin (the flat intercept: ν = Nb − 1 = 1), and min(τ, 1/N) under fixed g.
+  - It is logged as an auto-pick. With the reference rung it is the adaptation's start, as before.
+- *Clone-safe replicas.* A new replica takes its own copy of the source's term array and adopts the source's design. A structure identified by a shared array that both holders leave would otherwise be reloaded whole, which differs in the last bits and near D06's angle floor could be refused. The start is safe only because it was loaded whole.
+- *An honest evidence error.* The reported error is the larger of the within-chain error √Σs²/C and the between-chain error, the standard error of the chains' mean. Both are reported, with the largest pair rejection and the cap's flag. The pooling moves to `LadderEvidence`, and BARS takes it too: its within-chain-only pooling under-covers the same way. BARS's defaults are unchanged.
+- *The readout* keeps each chain's pair rejections and acceptances, since chains freeze at different counts, and pools the barrier.
+
+*Q2–Q8 accepted as built.* Swaps after every sweep; no path sampling on the integrated form; DEO only; the linear form refused on the powered path; the hot end moving with the reference rung; the defensive resume check untested. Q7's slope trace gets its switch from chip E, since it touches `TraceRungs`, and the linear form alone traces slopes.
+
+*S10 runs here beside chip E* on files chip E does not touch. S8's docs paragraph waits for chip E.
+
 ### The chips' open questions decided — 2026-10-28
 
 The user took the five recommendations.
