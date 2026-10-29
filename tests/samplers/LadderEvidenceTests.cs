@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Maths.Distributions;
 using Maths.Rng;
 using Maths.Samplers.Evidence;
@@ -368,6 +369,77 @@ public sealed class LadderEvidenceTests
         Assert.Throws<ArgumentException>(() => RungDraws.FromChains([1.0, 2.0], [1.0]));
         Assert.Throws<ArgumentException>(() => RungDraws.FromPopulation([1.0, 2.0], [0.5]));
         Assert.Throws<ArgumentException>(() => RungDraws.FromPopulation([1.0, 2.0], [0.0, 0.0]));
+    }
+
+    // ── Pooling chains ────────────────────────────────────────────────────────────────────────────────────────────
+
+    private static LadderEstimate Chain(double logRatio, double error, LadderEstimator method = LadderEstimator.SteppingStone,
+                                        double discretization = double.NaN)
+        => new(method, logRatio, error, discretization, []);
+
+    [Fact]
+    public void Pool_ReportsTheLargerOfTheWithinAndBetweenChainErrors()
+    {
+        // Chains that disagree beyond their own errors: the spread decides.
+        PooledLadderEstimate apart = LadderEvidence.Pool([Chain(1.0, 0.1), Chain(2.0, 0.1), Chain(4.0, 0.1)]);
+        Assert.Equal(7.0 / 3, apart.LogRatio, 14);
+        Assert.Equal(Math.Sqrt(0.03) / 3, apart.WithinChainError, 14);
+        Assert.Equal(Math.Sqrt(42.0 / 9 / 6), apart.BetweenChainError, 14);
+        Assert.Equal(apart.BetweenChainError, apart.MonteCarloError);
+        Assert.Equal(apart.BetweenChainError / apart.WithinChainError, apart.BetweenToWithin);
+        Assert.Equal(3, apart.Chains.Count);
+        Assert.True(double.IsNaN(apart.DiscretizationError));
+
+        // Chains that agree within their own errors: those decide.
+        PooledLadderEstimate together = LadderEvidence.Pool([Chain(1.0, 0.5), Chain(1.01, 0.5), Chain(0.99, 0.5)]);
+        Assert.Equal(Math.Sqrt(0.75) / 3, together.WithinChainError, 14);
+        Assert.Equal(Math.Sqrt(0.0002 / 6), together.BetweenChainError, 14);
+        Assert.Equal(together.WithinChainError, together.MonteCarloError);
+
+        // Two chains: half their difference; one chain: its own error, no spread to read.
+        PooledLadderEstimate two = LadderEvidence.Pool([Chain(-3.0, 0.2), Chain(-2.0, 0.1)]);
+        Assert.Equal(-2.5, two.LogRatio);
+        Assert.Equal(0.5, two.BetweenChainError, 14);
+        Assert.Equal(Math.Sqrt(0.05) / 2, two.WithinChainError, 14);
+        Assert.Equal(two.BetweenChainError, two.MonteCarloError);
+        PooledLadderEstimate one = LadderEvidence.Pool([Chain(-3.0, 0.2, LadderEstimator.PathSampling, 0.04)]);
+        Assert.Equal((-3.0, 0.04), (one.LogRatio, one.DiscretizationError));
+        Assert.Equal(0.2, one.WithinChainError, 14);
+        Assert.Equal(one.WithinChainError, one.MonteCarloError);
+        Assert.True(double.IsNaN(one.BetweenChainError));
+        Assert.True(double.IsNaN(one.BetweenToWithin));
+
+        // Path sampling's diagnostics average; an unknown chain error leaves the reported one unknown.
+        Assert.Equal(0.03, LadderEvidence.Pool([Chain(1.0, 0.1, LadderEstimator.PathSampling, 0.02), Chain(1.1, 0.1, LadderEstimator.PathSampling, 0.04)])
+                                         .DiscretizationError, 14);
+        Assert.True(double.IsNaN(LadderEvidence.Pool([Chain(1.0, double.NaN), Chain(1.5, 0.1)]).MonteCarloError));
+
+        Assert.Throws<ArgumentNullException>(() => LadderEvidence.Pool(null!));
+        Assert.Equal("chains", Assert.Throws<ArgumentException>(() => LadderEvidence.Pool([])).ParamName);
+        Assert.Equal("chains", Assert.Throws<ArgumentException>(() => LadderEvidence.Pool([Chain(1.0, 0.1), null!])).ParamName);
+        Assert.Equal("chains", Assert.Throws<ArgumentException>(() => LadderEvidence.Pool([null!])).ParamName);
+        Assert.Equal("chains", Assert.Throws<ArgumentException>(() =>
+            LadderEvidence.Pool([Chain(1.0, 0.1), Chain(1.0, 0.1, LadderEstimator.PathSampling)])).ParamName);
+    }
+
+    [Fact]
+    public void Pool_CoversWhereTheChainsOwnErrorsDoNot()
+    {
+        // Four chains whose estimates spread with sd 1 while each reports 0.1, as chains on ladders whose rungs barely
+        // communicate do: the within-chain error covers a fraction of the time, the reported error about as a t on 3
+        // degrees of freedom does (0.855 at ±1.96).
+        var rng = new Xoshiro256PlusPlus(71);
+        var within = new Calibration(0.0);
+        var reported = new Calibration(0.0);
+        for (int replicate = 0; replicate < 4_000; replicate++)
+        {
+            PooledLadderEstimate pooled = LadderEvidence.Pool([.. Enumerable.Range(0, 4).Select(_ => Chain(Normal.SampleStandard(rng), 0.1))]);
+            within.Add(pooled.LogRatio, pooled.WithinChainError);
+            reported.Add(pooled.LogRatio, pooled.MonteCarloError);
+        }
+        _out.WriteLine($"within: {within}; reported: {reported}");
+        Assert.True(within.Coverage < 0.2, $"within {within.Coverage:F3}");   // P(|Z| ≤ 0.196) = 0.155
+        Assert.InRange(reported.Coverage, 0.82, 0.89);
     }
 
     private static readonly EstimateComparer Equivalent = new();

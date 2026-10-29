@@ -192,6 +192,29 @@ public sealed record LadderEstimate(
     LadderEstimator Method, double LogRatio, double MonteCarloError, double DiscretizationError, IReadOnlyList<RungEstimate> Rungs);
 
 /// <summary>
+/// Independent chains' ladder estimates of one log normalizer ratio pooled into one (<see cref="LadderEvidence.Pool"/>),
+/// each chain on its own ladder. Each chain's error reads its own draws only, so where its rungs barely communicate it
+/// under-covers, and the chains' spread shows it; the reported error is the larger of the two readings.
+/// </summary>
+/// <param name="Method">The chains' estimator.</param>
+/// <param name="LogRatio">The chains' mean, z̄.</param>
+/// <param name="MonteCarloError">The reported error: the larger of <paramref name="WithinChainError"/> and
+/// <paramref name="BetweenChainError"/>, or the within-chain error alone for one chain; NaN when either is.</param>
+/// <param name="WithinChainError">The chains' own errors pooled, √Σ s_c² / C.</param>
+/// <param name="BetweenChainError">The standard error of the chains' mean from their spread,
+/// √(Σ(ẑ_c − z̄)² / (C(C − 1))); NaN for one chain.</param>
+/// <param name="DiscretizationError">The chains' mean discretization diagnostic; NaN for stepping-stone.</param>
+/// <param name="Chains">Each chain's estimate.</param>
+public sealed record PooledLadderEstimate(
+    LadderEstimator Method, double LogRatio, double MonteCarloError, double WithinChainError, double BetweenChainError,
+    double DiscretizationError, IReadOnlyList<LadderEstimate> Chains)
+{
+    /// <summary>The between-chain error over the within-chain one: well above 1 where the chains' own errors
+    /// under-cover; NaN for one chain.</summary>
+    public double BetweenToWithin => BetweenChainError / WithinChainError;
+}
+
+/// <summary>
 /// Evidence over a tempering ladder: <c>ln Z(b_max) − ln Z(b_min)</c> from per-rung draws, by stepping-stone or path
 /// sampling (<see cref="LadderEstimator"/>). It knows nothing about models: it reduces the ladder's per-rung scalar
 /// draws, which a traced <see cref="ParallelTempering{TState}"/> records (<see cref="RungFunctional"/>) and an SMC run's
@@ -201,6 +224,8 @@ public sealed record LadderEstimate(
 /// covariance swaps leave between rungs. When every rung's draws are chains of one shape, as a ladder's traces are, scan
 /// t's contributions are also summed across rungs and the error of that sum's mean is read, which counts the covariance,
 /// but one autocorrelation truncation over the sum can stop short of a slowly mixing rung's tail.</para>
+/// <para>Independent chains, each on its own ladder, pool by <see cref="Pool"/>, whose error also reads the chains'
+/// spread.</para>
 /// </summary>
 public static class LadderEvidence
 {
@@ -320,6 +345,37 @@ public static class LadderEvidence
             LadderEstimator.PathSampling => PathSampling(betas, rungs!),
             _ => throw new ArgumentOutOfRangeException(nameof(method)),
         };
+    }
+
+    /// <summary>
+    /// Independent chains' estimates by one estimator, each over its own ladder, pooled (<see cref="PooledLadderEstimate"/>):
+    /// their mean, the within-chain error √Σ s_c² / C, the between-chain error √(Σ(ẑ_c − z̄)² / (C(C − 1))) for C ≥ 2, the
+    /// larger of the two reported (the within-chain error alone for one chain), and their mean discretization diagnostic.
+    /// </summary>
+    public static PooledLadderEstimate Pool(IReadOnlyList<LadderEstimate> chains)
+    {
+        ArgumentNullException.ThrowIfNull(chains);
+        if (chains.Count < 1) throw new ArgumentException("At least one chain's estimate is required.", nameof(chains));
+        LadderEstimator method = (chains[0] ?? throw new ArgumentException("A chain's estimate is missing.", nameof(chains))).Method;
+        double sum = 0.0, variance = 0.0, discretization = 0.0;
+        foreach (LadderEstimate chain in chains)
+        {
+            if (chain is null) throw new ArgumentException("A chain's estimate is missing.", nameof(chains));
+            if (chain.Method != method) throw new ArgumentException("Every chain's estimate must come from one estimator.", nameof(chains));
+            sum += chain.LogRatio;
+            variance += chain.MonteCarloError * chain.MonteCarloError;
+            discretization += chain.DiscretizationError;
+        }
+        int c = chains.Count;
+        double mean = sum / c, within = Math.Sqrt(variance) / c, between = double.NaN;
+        if (c >= 2)
+        {
+            double spread = 0.0;
+            foreach (LadderEstimate chain in chains) spread += (chain.LogRatio - mean) * (chain.LogRatio - mean);
+            between = Math.Sqrt(spread / (c * (c - 1.0)));
+        }
+        return new PooledLadderEstimate(method, mean, c >= 2 ? Math.Max(within, between) : within, within, between, discretization / c,
+                                        [.. chains]);
     }
 
     /// <summary>

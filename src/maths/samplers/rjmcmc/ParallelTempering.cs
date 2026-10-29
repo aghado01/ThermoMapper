@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Maths.Rng;
 using Maths.Samplers.Blocks;
 using Maths.Samplers.Ensemble;
@@ -7,9 +8,10 @@ using Maths.Samplers.Ensemble;
 namespace Maths.Samplers.Rjmcmc;
 
 /// <summary>
-/// A ladder's restart state: every replica's <see cref="ChainSnapshot{TState}"/> (its rung is its temperature), the
-/// swap stream, the scan count, which state each rung holds, the round-trip bookkeeping and the swap statistics,
-/// including those gathered since the last adaptation, for a ladder with an exact reference rung, that rung's
+/// A ladder's restart state: every replica's <see cref="ChainSnapshot{TState}"/> (its rung is its temperature, so a
+/// resized ladder's rungs ride here), the swap stream, the scan count, which state each rung holds, the round-trip
+/// bookkeeping and the swap statistics with the scans they cover, including those gathered since the last adaptation,
+/// the growth stream new replicas draw their streams from, for a ladder with an exact reference rung, that rung's
 /// stream, for a ladder tracing its rungs, copies of the traces, and, for a ladder with per-replica blocks, each
 /// replica's block stream and block counters.
 /// </summary>
@@ -17,8 +19,8 @@ public sealed record LadderSnapshot<TState>(
     IReadOnlyList<ChainSnapshot<TState>> Replicas, TemperingPath Path, SwapSchedule Schedule,
     ulong SwapRng0, ulong SwapRng1, ulong SwapRng2, ulong SwapRng3,
     long Scans, long SwapAttempts, long SwapAccepts, long RoundTrips, long AnnealedRestarts,
-    int[] LabelAt, sbyte[] LastEnd, long[] PairAttempts, long[] PairAccepts, double[] RejectionSum,
-    double[] RoundRejectionSum, long RoundScans, (ulong, ulong, ulong, ulong)? ReferenceRng = null,
+    int[] LabelAt, sbyte[] LastEnd, long[] PairAttempts, long[] PairAccepts, double[] RejectionSum, long PairScans,
+    double[] RoundRejectionSum, long RoundScans, (ulong, ulong, ulong, ulong) GrowthRng, (ulong, ulong, ulong, ulong)? ReferenceRng = null,
     IReadOnlyList<ChainTrace>? RungTraces = null, bool TracesSlopes = false,
     IReadOnlyList<(ulong, ulong, ulong, ulong)>? BlockRngs = null, long[][]? BlockAttempts = null,
     long[][]? BlockAccepts = null);
@@ -62,27 +64,34 @@ public static class RungFunctional
 /// a stream of their own, after the ladder's others in the <see cref="SeedTree"/>, so a ladder without blocks keeps every
 /// stream. The same blocks serve a lone chain through a <see cref="BlockScan{TState}"/> beside its
 /// <see cref="MoveStep{TState}"/>.</para>
+/// <para>During burn-in a ladder can be resized (<see cref="Resize"/>) to rungs its caller places, by the barrier
+/// (<see cref="TemperingLadder.Place"/>) or for a readout's resolution: kept replicas keep their states and streams, and
+/// new ones start from forks of their sources' states on streams drawn from one growth stream, the last in the
+/// <see cref="SeedTree"/>, so a ladder that never resizes keeps every stream.</para>
 /// As an <see cref="IChain{TState}"/> the ladder presents as a single chain whose draw is the cold state and whose
 /// acceptance is the cold replica's, so the ensemble shell can drive a tempered replica like any other.
 /// </summary>
 public sealed class ParallelTempering<TState> : IChain<TState>
 {
-    private readonly ReversibleJumpChain<TState>[] _chains;
+    private ReversibleJumpChain<TState>[] _chains;
+    private readonly ISamplingTarget<TState> _target;   // new replicas' (Resize)
     private readonly Xoshiro256PlusPlus _swapRng;
+    private readonly Xoshiro256PlusPlus _growthRng;     // new replicas' move and block streams are drawn from it
     private readonly IReferenceSampler<TState>? _reference;
     private readonly Xoshiro256PlusPlus? _referenceRng;
-    private readonly double[] _logA;              // this scan's log swap ratio per pair
-    private readonly long[] _pairAttempts, _pairAccepts;
-    private readonly double[] _rejectionSum;       // Σ (1 − α) per pair, every scan
-    private readonly double[] _roundRejectionSum;  // the same since the last adaptation
+    private double[] _logA;                        // this scan's log swap ratio per pair
+    private long[] _pairAttempts, _pairAccepts;
+    private double[] _rejectionSum;                // Σ (1 − α) per pair, every scan since the rungs' count was set
+    private long _pairScans;                       // the scans it covers
+    private double[] _roundRejectionSum;           // the same since the last adaptation or resize
     private long _roundScans;
-    private readonly int[] _labelAt;               // which state (by its starting rung) each rung holds
-    private readonly sbyte[] _lastEnd;             // per state: +1 last at the hot end, −1 at the cold end, 0 neither yet
+    private int[] _labelAt;                        // which state (by its starting rung) each rung holds
+    private sbyte[] _lastEnd;                      // per state: +1 last at the hot end, −1 at the cold end, 0 neither yet
     private ChainTrace[]? _rungTraces;             // per rung, cold first, once traced
     private bool _tracesSlopes;
-    private readonly IReadOnlyList<IBlock<ReversibleJumpChain<TState>>>[]? _blocks;   // per replica, when given
-    private readonly Xoshiro256PlusPlus[]? _blockRngs;
-    private readonly long[][]? _blockAttempts, _blockAccepts;
+    private IReadOnlyList<IBlock<ReversibleJumpChain<TState>>>[]? _blocks;   // per replica, when given
+    private Xoshiro256PlusPlus[]? _blockRngs;
+    private long[][]? _blockAttempts, _blockAccepts;
 
     /// <summary>Adjacent-pair swap attempts so far.</summary>
     public long SwapAttempts { get; private set; }
@@ -99,8 +108,9 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// where β = 0 is the reference measure itself; on the likelihood path β = 0 is the prior, sampled by local moves,
     /// which a target with an improper nuisance prior refuses. The array is not retained.</param>
     /// <param name="path">The tempering path every replica takes.</param>
-    /// <param name="masterSeed">Seeds the per-replica streams, the swap stream, the reference rung's stream and the
-    /// per-replica block streams via the <see cref="SeedTree"/>; each prefix is that of a ladder without what follows.</param>
+    /// <param name="masterSeed">Seeds the per-replica streams, the swap stream, the reference rung's stream, the
+    /// per-replica block streams and the growth stream via the <see cref="SeedTree"/>; each prefix is that of a ladder
+    /// without what follows.</param>
     /// <param name="schedule">Which pairs each scan attempts; deterministic even-odd by default.</param>
     /// <param name="reference">Exact draws from the target's β = 0 member on <paramref name="path"/>, which the hot rung
     /// takes every scan in place of its local moves.</param>
@@ -120,14 +130,17 @@ public sealed class ParallelTempering<TState> : IChain<TState>
 
         Path = path;
         Schedule = schedule;
+        _target = target;
         int levels = betas.Length;
-        // Prefix-stable: the replica streams, the swap stream and the reference stream come first, as without blocks.
-        int[] seeds = SeedTree.Derive(masterSeed, levels + 2 + (blocksForReplica is null ? 0 : levels));
+        // Prefix-stable: the replica streams, the swap stream and the reference stream come first, as without blocks, and
+        // the growth stream last, which a ladder that never resizes never draws.
+        int[] seeds = SeedTree.Derive(masterSeed, levels + 2 + (blocksForReplica is null ? 0 : levels) + 1);
         _chains = new ReversibleJumpChain<TState>[levels];
         for (int i = 0; i < levels; i++)
             _chains[i] = new ReversibleJumpChain<TState>(
                 movesForReplica(i), target, start, new Xoshiro256PlusPlus(seeds[i]), new Temperature(betas[i], path));
         _swapRng = new Xoshiro256PlusPlus(seeds[levels]);
+        _growthRng = new Xoshiro256PlusPlus(seeds[^1]);
         if (blocksForReplica is not null)
         {
             (_blocks, _blockAttempts, _blockAccepts) = BuildBlocks(blocksForReplica, levels);
@@ -141,26 +154,20 @@ public sealed class ParallelTempering<TState> : IChain<TState>
             (TState x, ITargetEvaluation e) = reference.Draw(_referenceRng);   // the hot rung starts on an exact draw
             _chains[levels - 1].SetState(x, e);
         }
-
-        _logA = new double[levels - 1];
-        _pairAttempts = new long[levels - 1];
-        _pairAccepts = new long[levels - 1];
-        _rejectionSum = new double[levels - 1];
-        _roundRejectionSum = new double[levels - 1];
-        _labelAt = new int[levels];
-        _lastEnd = new sbyte[levels];
-        for (int i = 0; i < levels; i++) _labelAt[i] = i;
-        _lastEnd[levels - 1] = +1;   // a state's first round trip starts at its first visit to the hot end
+        Restart(levels);
     }
 
-    // A ladder rebuilt from a snapshot: the replicas and swap stream are restored, the bookkeeping copied after.
-    private ParallelTempering(ReversibleJumpChain<TState>[] chains, Xoshiro256PlusPlus swapRng, TemperingPath path,
-                              SwapSchedule schedule, IReferenceSampler<TState>? reference, Xoshiro256PlusPlus? referenceRng,
-                              Func<int, IReadOnlyList<IBlock<ReversibleJumpChain<TState>>>>? blocksForReplica = null,
+    // A ladder rebuilt from a snapshot: the replicas and the swap and growth streams are restored, the bookkeeping copied
+    // after.
+    private ParallelTempering(ReversibleJumpChain<TState>[] chains, ISamplingTarget<TState> target, Xoshiro256PlusPlus swapRng,
+                              Xoshiro256PlusPlus growthRng, TemperingPath path, SwapSchedule schedule, IReferenceSampler<TState>? reference,
+                              Xoshiro256PlusPlus? referenceRng, Func<int, IReadOnlyList<IBlock<ReversibleJumpChain<TState>>>>? blocksForReplica = null,
                               Xoshiro256PlusPlus[]? blockRngs = null)
     {
         _chains = chains;
+        _target = target;
         _swapRng = swapRng;
+        _growthRng = growthRng;
         _reference = reference;
         _referenceRng = referenceRng;
         Path = path;
@@ -171,13 +178,7 @@ public sealed class ParallelTempering<TState> : IChain<TState>
             (_blocks, _blockAttempts, _blockAccepts) = BuildBlocks(blocksForReplica, levels);
             _blockRngs = blockRngs;
         }
-        _logA = new double[levels - 1];
-        _pairAttempts = new long[levels - 1];
-        _pairAccepts = new long[levels - 1];
-        _rejectionSum = new double[levels - 1];
-        _roundRejectionSum = new double[levels - 1];
-        _labelAt = new int[levels];
-        _lastEnd = new sbyte[levels];
+        Restart(levels);
     }
 
     /// <summary>This ladder's restart state; the ladder itself is unchanged.</summary>
@@ -188,8 +189,8 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         (ulong s0, ulong s1, ulong s2, ulong s3) = _swapRng.SaveState();
         return new LadderSnapshot<TState>(replicas, Path, Schedule, s0, s1, s2, s3, Scans, SwapAttempts, SwapAccepts,
             RoundTrips, AnnealedRestarts, (int[])_labelAt.Clone(), (sbyte[])_lastEnd.Clone(), (long[])_pairAttempts.Clone(),
-            (long[])_pairAccepts.Clone(), (double[])_rejectionSum.Clone(), (double[])_roundRejectionSum.Clone(), _roundScans,
-            _referenceRng?.SaveState(), _rungTraces is null ? null : Array.ConvertAll(_rungTraces, t => t.Copy()), _tracesSlopes,
+            (long[])_pairAccepts.Clone(), (double[])_rejectionSum.Clone(), _pairScans, (double[])_roundRejectionSum.Clone(), _roundScans,
+            _growthRng.SaveState(), _referenceRng?.SaveState(), _rungTraces is null ? null : Array.ConvertAll(_rungTraces, t => t.Copy()), _tracesSlopes,
             _blockRngs is null ? null : Array.ConvertAll(_blockRngs, r => r.SaveState()),
             _blockAttempts is null ? null : Array.ConvertAll(_blockAttempts, a => (long[])a.Clone()),
             _blockAccepts is null ? null : Array.ConvertAll(_blockAccepts, a => (long[])a.Clone()));
@@ -197,7 +198,8 @@ public sealed class ParallelTempering<TState> : IChain<TState>
 
     /// <summary>
     /// A ladder that continues exactly where <paramref name="snapshot"/>'s left off, over the move sets, target,
-    /// reference and blocks it ran with. Each replica's current state is evaluated once, against <paramref name="target"/>.
+    /// reference and blocks it ran with, on the rungs it held, after any resize. Each replica's current state is evaluated
+    /// once, against <paramref name="target"/>.
     /// </summary>
     public static ParallelTempering<TState> Restore(Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica,
                                                     ISamplingTarget<TState> target, LadderSnapshot<TState> snapshot,
@@ -226,9 +228,10 @@ public sealed class ParallelTempering<TState> : IChain<TState>
             blockRngs = new Xoshiro256PlusPlus[levels];
             for (int i = 0; i < levels; i++) blockRngs[i] = Xoshiro256PlusPlus.Restore(words[i].Item1, words[i].Item2, words[i].Item3, words[i].Item4);
         }
-        var ladder = new ParallelTempering<TState>(chains,
+        (ulong g0, ulong g1, ulong g2, ulong g3) = snapshot.GrowthRng;
+        var ladder = new ParallelTempering<TState>(chains, target,
             Xoshiro256PlusPlus.Restore(snapshot.SwapRng0, snapshot.SwapRng1, snapshot.SwapRng2, snapshot.SwapRng3),
-            snapshot.Path, snapshot.Schedule, reference, referenceRng, blocksForReplica, blockRngs)
+            Xoshiro256PlusPlus.Restore(g0, g1, g2, g3), snapshot.Path, snapshot.Schedule, reference, referenceRng, blocksForReplica, blockRngs)
         {
             Scans = snapshot.Scans,
             SwapAttempts = snapshot.SwapAttempts,
@@ -241,6 +244,7 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         snapshot.PairAttempts.CopyTo(ladder._pairAttempts, 0);
         snapshot.PairAccepts.CopyTo(ladder._pairAccepts, 0);
         snapshot.RejectionSum.CopyTo(ladder._rejectionSum, 0);
+        ladder._pairScans = snapshot.PairScans;
         snapshot.RoundRejectionSum.CopyTo(ladder._roundRejectionSum, 0);
         ladder._roundScans = snapshot.RoundScans;
         if (snapshot.RungTraces is IReadOnlyList<ChainTrace> traces)
@@ -299,19 +303,21 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// <see cref="TraceRungs"/>; null until then.</summary>
     public IReadOnlyList<ChainTrace>? RungTraces => _rungTraces;
 
-    /// <summary>Whether the traces hold slopes: always on the powered path, and on the likelihood path when the target
-    /// supplies ∂ℓ_b/∂b.</summary>
+    /// <summary>Whether the traces hold slopes: when asked for (<see cref="TraceRungs"/>), always on the powered path,
+    /// and on the likelihood path when the target supplies ∂ℓ_b/∂b.</summary>
     public bool TracesSlopes => _rungTraces is not null && _tracesSlopes;
 
     /// <summary>
     /// Opt in to per-rung traces, after burn-in: from the next scan on, every <see cref="Step"/> records at each rung, on
     /// the state it holds after the scan's swaps, the <see cref="RungFunctional"/>s, read from the evaluations the rungs
-    /// already hold. A second call starts the traces afresh. The ladder is then fixed, so <see cref="AdaptLadder"/>
-    /// refuses. Whether the target supplies the slope is probed once, on the cold rung's state.
+    /// already hold. With <paramref name="traceSlopes"/> false the slopes are not read and trace as NaN, for an estimator
+    /// that reads only the log ratios: a slope costs the target a query per rung per scan. A second call starts the traces
+    /// afresh. The ladder is then fixed, so <see cref="AdaptLadder"/> and <see cref="Resize"/> refuse. Whether the target
+    /// supplies the slope is probed once, on the cold rung's state.
     /// </summary>
-    public void TraceRungs()
+    public void TraceRungs(bool traceSlopes = true)
     {
-        _tracesSlopes = Path == TemperingPath.Powered || SuppliesSlope(_chains[0]);
+        _tracesSlopes = traceSlopes && (Path == TemperingPath.Powered || SuppliesSlope(_chains[0]));
         _rungTraces = new ChainTrace[_chains.Length];
         for (int i = 0; i < _rungTraces.Length; i++) _rungTraces[i] = new ChainTrace(RungFunctional.Count);
     }
@@ -327,7 +333,8 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// the hot rungs explored down to the posterior.</summary>
     public long AnnealedRestarts { get; private set; }
 
-    /// <summary>Per adjacent pair, cold first: attempts, accepts and the mean rejection probability over every scan.</summary>
+    /// <summary>Per adjacent pair, cold first: attempts, accepts and the mean rejection probability over every scan since
+    /// the ladder took its count of rungs (<see cref="PairScans"/>): its start, or its last <see cref="Resize"/>.</summary>
     public IReadOnlyList<SwapPairStat> PairStats
     {
         get
@@ -335,8 +342,26 @@ public sealed class ParallelTempering<TState> : IChain<TState>
             var stats = new SwapPairStat[_chains.Length - 1];
             for (int i = 0; i < stats.Length; i++)
                 stats[i] = new SwapPairStat(_chains[i].Temperature.InverseTemperature, _chains[i + 1].Temperature.InverseTemperature,
-                                            _pairAttempts[i], _pairAccepts[i], Scans > 0 ? _rejectionSum[i] / Scans : double.NaN);
+                                            _pairAttempts[i], _pairAccepts[i], _pairScans > 0 ? _rejectionSum[i] / _pairScans : double.NaN);
             return stats;
+        }
+    }
+
+    /// <summary>The scans <see cref="PairStats"/> covers: every scan, or those since the last <see cref="Resize"/>.</summary>
+    public long PairScans => _pairScans;
+
+    /// <summary>
+    /// Per adjacent pair, cold first, the mean rejection probability over the scans since the last adaptation or resize:
+    /// the round <see cref="AdaptLadder"/> equalizes from, and a caller places a resize's rungs from
+    /// (<see cref="TemperingLadder.Place"/>). NaN before a scan.
+    /// </summary>
+    public double[] RoundRejection
+    {
+        get
+        {
+            var rejection = new double[_chains.Length - 1];
+            for (int i = 0; i < rejection.Length; i++) rejection[i] = _roundScans > 0 ? _roundRejectionSum[i] / _roundScans : double.NaN;
+            return rejection;
         }
     }
 
@@ -380,6 +405,7 @@ public sealed class ParallelTempering<TState> : IChain<TState>
             _chains[last].SetState(x, e);
         }
         Scans++;
+        _pairScans++;
         _roundScans++;
         int pairs = _chains.Length - 1;
 
@@ -417,15 +443,112 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     {
         if (_rungTraces is not null) throw new InvalidOperationException("The ladder is fixed while its rungs are traced.");
         if (_roundScans == 0) throw new InvalidOperationException("No scans since the last adaptation.");
-        int pairs = _chains.Length - 1;
-        var rejection = new double[pairs];
-        for (int i = 0; i < pairs; i++) rejection[i] = _roundRejectionSum[i] / _roundScans;
+        double[] rejection = RoundRejection;
         double[] next = TemperingLadder.Equalize(Betas, rejection);
         ValidateLadder(next, Path, _reference);
         for (int i = 0; i < _chains.Length; i++) _chains[i].SetTemperature(new Temperature(next[i], Path));
         Array.Clear(_roundRejectionSum);
         _roundScans = 0;
         return TemperingLadder.Barrier(rejection);
+    }
+
+    /// <summary>
+    /// Resize the ladder during burn-in to <paramref name="betas"/>, which its caller places: by the barrier
+    /// (<see cref="TemperingLadder.Place"/> from <see cref="RoundRejection"/>, with <see cref="TemperingLadder.Sources"/>)
+    /// or for a readout's resolution.
+    /// <list type="bullet">
+    /// <item><b>Kept replicas.</b> A replica that a new rung names in <paramref name="sources"/> is kept, with its state,
+    /// streams, moves, blocks and counters, at the naming rung nearest its own β (the colder on a tie), and moves there as
+    /// <see cref="AdaptLadder"/> moves rungs, by a query on its cached evaluation. A replica no rung names is dropped.</item>
+    /// <item><b>New replicas.</b> Each further rung that names a replica starts a new one from a fork of its state, with
+    /// moves and blocks built for it, and its move stream, then its block stream, seeded by the next draws of the growth
+    /// stream, cold first. It samples the ladder's target, evaluated once at the fork.</item>
+    /// <item><b>Statistics.</b> The pairs' swap statistics, the round-trip labels and the adaptation round restart, since
+    /// the old pairs do not map onto the new ones; the totals (scans, swaps, round trips, annealed restarts) carry on.</item>
+    /// </list>
+    /// Refused while the rungs are traced, as <see cref="AdaptLadder"/> is; the burn-in's freeze is the caller's to keep.
+    /// A refused resize leaves the ladder as it was. Returns, per new rung, cold first, the replica (by its old rung) kept
+    /// there, or −1 where a new one started.
+    /// </summary>
+    /// <param name="betas">The new ladder, valid as the constructor's: strictly descending from exactly 1, and with a
+    /// reference rung ending at exactly 0. The array is not retained.</param>
+    /// <param name="sources">Per new rung, cold first, the current rung whose state it starts from: the cold rung for the
+    /// cold rung and, with a reference rung, the reference rung for the last.</param>
+    /// <param name="fork">An independent copy of a state, which can be mutated without touching the original, as
+    /// resampling's offspring are (<see cref="Smc.ISmcParticles{TState}.Fork"/>).</param>
+    /// <param name="movesForReplica">Builds a new replica's move set, called with its new rung, as the constructor's is.</param>
+    /// <param name="blocksForReplica">Builds a new replica's blocks, as the constructor's does: given exactly when the
+    /// ladder runs blocks.</param>
+    public int[] Resize(double[] betas, int[] sources, Func<TState, TState> fork, Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica,
+                        Func<int, IReadOnlyList<IBlock<ReversibleJumpChain<TState>>>>? blocksForReplica = null)
+    {
+        if (_rungTraces is not null) throw new InvalidOperationException("The ladder is fixed while its rungs are traced.");
+        ArgumentNullException.ThrowIfNull(sources);
+        ArgumentNullException.ThrowIfNull(fork);
+        ArgumentNullException.ThrowIfNull(movesForReplica);
+        ValidateLadder(betas, Path, _reference);
+        if ((blocksForReplica is null) != (_blocks is null))
+            throw new ArgumentException("The ladder runs " + (_blocks is null ? "no" : "per-replica") + " blocks.", nameof(blocksForReplica));
+        int levels = betas.Length, current = _chains.Length;
+        if (sources.Length != levels) throw new ArgumentException("One source per new rung is required.", nameof(sources));
+        foreach (int s in sources)
+            if ((uint)s >= (uint)current) throw new ArgumentOutOfRangeException(nameof(sources), $"The ladder has {current} rungs, not a rung {s}.");
+        if (sources[0] != 0) throw new ArgumentException("The cold rung keeps the cold replica.", nameof(sources));
+        if (_reference is not null && sources[^1] != current - 1)
+            throw new ArgumentException("The reference rung keeps the reference rung's replica.", nameof(sources));
+
+        // Each named replica is kept at the naming rung nearest its own β, the colder on a tie.
+        var keptAt = new int[current];
+        Array.Fill(keptAt, -1);
+        for (int k = 0; k < levels; k++)
+        {
+            int s = sources[k];
+            double b = _chains[s].Temperature.InverseTemperature;
+            if (keptAt[s] < 0 || Math.Abs(betas[k] - b) < Math.Abs(betas[keptAt[s]] - b)) keptAt[s] = k;
+        }
+        var kept = new int[levels];
+        Array.Fill(kept, -1);
+        for (int s = 0; s < current; s++)
+            if (keptAt[s] >= 0) kept[keptAt[s]] = s;
+
+        var chains = new ReversibleJumpChain<TState>[levels];
+        IReadOnlyList<IBlock<ReversibleJumpChain<TState>>>[]? blocks = _blocks is null ? null : new IReadOnlyList<IBlock<ReversibleJumpChain<TState>>>[levels];
+        Xoshiro256PlusPlus[]? blockRngs = _blocks is null ? null : new Xoshiro256PlusPlus[levels];
+        long[][]? blockAttempts = _blocks is null ? null : new long[levels][], blockAccepts = _blocks is null ? null : new long[levels][];
+        (ulong, ulong, ulong, ulong) growth = _growthRng.SaveState();
+        try
+        {
+            for (int k = 0; k < levels; k++)
+            {
+                if (kept[k] is int s and >= 0)
+                {
+                    chains[k] = _chains[s];
+                    if (blocks is not null)
+                        (blocks[k], blockRngs![k], blockAttempts![k], blockAccepts![k]) = (_blocks![s], _blockRngs![s], _blockAttempts![s], _blockAccepts![s]);
+                    continue;
+                }
+                TState start = fork(_chains[sources[k]].Current);
+                var moveRng = new Xoshiro256PlusPlus(NextGrowthSeed());
+                chains[k] = new ReversibleJumpChain<TState>(movesForReplica(k), _target, start, moveRng, new Temperature(betas[k], Path));
+                if (blocks is null) continue;
+                blockRngs![k] = new Xoshiro256PlusPlus(NextGrowthSeed());
+                blocks[k] = BlockSet(blocksForReplica!, k);
+                blockAttempts![k] = new long[blocks[k].Count];
+                blockAccepts![k] = new long[blocks[k].Count];
+            }
+        }
+        catch
+        {
+            _growthRng.LoadState(growth.Item1, growth.Item2, growth.Item3, growth.Item4);
+            throw;
+        }
+
+        for (int k = 0; k < levels; k++)
+            if (kept[k] >= 0) chains[k].SetTemperature(new Temperature(betas[k], Path));
+        _chains = chains;
+        (_blocks, _blockRngs, _blockAttempts, _blockAccepts) = (blocks, blockRngs, blockAttempts, blockAccepts);
+        Restart(levels);
+        return kept;
     }
 
     // IChain view: the ladder advances by one swept Step; its acceptance is the cold replica's own move acceptance
@@ -457,6 +580,28 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         return b;
     }
 
+    // The per-pair and per-state bookkeeping of a ladder of `levels` rungs, from scratch: no swap statistics, no round yet,
+    // and every state at its starting rung, the hottest's first round trip starting at its first visit to the hot end.
+    [MemberNotNull(nameof(_logA), nameof(_pairAttempts), nameof(_pairAccepts), nameof(_rejectionSum), nameof(_roundRejectionSum),
+                   nameof(_labelAt), nameof(_lastEnd))]
+    private void Restart(int levels)
+    {
+        _logA = new double[levels - 1];
+        _pairAttempts = new long[levels - 1];
+        _pairAccepts = new long[levels - 1];
+        _rejectionSum = new double[levels - 1];
+        _pairScans = 0;
+        _roundRejectionSum = new double[levels - 1];
+        _roundScans = 0;
+        _labelAt = new int[levels];
+        _lastEnd = new sbyte[levels];
+        for (int i = 0; i < levels; i++) _labelAt[i] = i;
+        _lastEnd[levels - 1] = +1;
+    }
+
+    // A new replica's stream seed, the growth stream's next draw (its high 32 bits).
+    private int NextGrowthSeed() => unchecked((int)(_growthRng.NextUInt64() >> 32));
+
     // Replica i's blocks whose cadence falls due on the scan being taken, in order, on its block stream.
     private void RunBlocks(int i)
     {
@@ -479,18 +624,24 @@ public sealed class ParallelTempering<TState> : IChain<TState>
         var accepts = new long[levels][];
         for (int i = 0; i < levels; i++)
         {
-            IReadOnlyList<IBlock<ReversibleJumpChain<TState>>> set = blocksForReplica(i)
-                ?? throw new ArgumentException($"Replica {i} has no block set.", nameof(blocksForReplica));
-            foreach (IBlock<ReversibleJumpChain<TState>> block in set)
-            {
-                ArgumentNullException.ThrowIfNull(block, nameof(blocksForReplica));
-                if (block.Every < 1) throw new ArgumentException($"Block '{block.Name}' has a cadence below 1.", nameof(blocksForReplica));
-            }
-            blocks[i] = set;
-            attempts[i] = new long[set.Count];
-            accepts[i] = new long[set.Count];
+            blocks[i] = BlockSet(blocksForReplica, i);
+            attempts[i] = new long[blocks[i].Count];
+            accepts[i] = new long[blocks[i].Count];
         }
         return (blocks, attempts, accepts);
+    }
+
+    private static IReadOnlyList<IBlock<ReversibleJumpChain<TState>>> BlockSet(
+        Func<int, IReadOnlyList<IBlock<ReversibleJumpChain<TState>>>> blocksForReplica, int i)
+    {
+        IReadOnlyList<IBlock<ReversibleJumpChain<TState>>> set = blocksForReplica(i)
+            ?? throw new ArgumentException($"Replica {i} has no block set.", nameof(blocksForReplica));
+        foreach (IBlock<ReversibleJumpChain<TState>> block in set)
+        {
+            ArgumentNullException.ThrowIfNull(block, nameof(blocksForReplica));
+            if (block.Every < 1) throw new ArgumentException($"Block '{block.Name}' has a cadence below 1.", nameof(blocksForReplica));
+        }
+        return set;
     }
 
     // Pair i's log swap ratio on the current states, with its rejection probability recorded.

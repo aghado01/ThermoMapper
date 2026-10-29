@@ -34,9 +34,16 @@ public sealed record SwapPairStat(double ColderBeta, double HotterBeta, long Att
 /// <item>for a fixed number of rungs, equal rejection rates minimise E, and N ≈ 2Λ pairs is near the best use of the
 /// rungs (their §5.1 and §5.3).</item>
 /// </list>
+/// A self-sizing ladder reads Λ̂ after each burn-in round, takes the count <see cref="Size"/> gives, places that many rungs
+/// on the barrier (<see cref="Place"/>) and starts each new one from the nearest current rung (<see cref="Sources"/>); the
+/// shared ladder's <see cref="ParallelTempering{TState}.Resize"/> takes the placement from its caller.
 /// </summary>
 public static class TemperingLadder
 {
+    /// <summary>The rungs <see cref="Size"/> lets a reading ask for below the current count before the ladder shrinks:
+    /// it shrinks only when <see cref="RecommendedLevels"/> asks for at least this many plus one fewer.</summary>
+    public const int ShrinkDeadband = 1;
+
     /// <summary>The global communication barrier estimate Λ̂ = Σ r_i.</summary>
     public static double Barrier(ReadOnlySpan<double> rejection)
     {
@@ -71,46 +78,151 @@ public static class TemperingLadder
     }
 
     /// <summary>
+    /// The rung count a self-sizing ladder of <paramref name="current"/> rungs takes after a round that read the barrier
+    /// <paramref name="barrier"/>, by <see cref="RecommendedLevels"/>: it grows at once to the reading when that asks for
+    /// more, since a saturated ladder reads Λ̂ ≤ its pairs and so under-reads, and keeps growing until the reading stops
+    /// asking; it shrinks to the reading only past <see cref="ShrinkDeadband"/>, since early rounds over-read; either way
+    /// it is clamped to [<paramref name="minimum"/>, <paramref name="maximum"/>].
+    /// </summary>
+    public static int Size(double barrier, int current, int minimum, int maximum)
+    {
+        if (current < 2) throw new ArgumentOutOfRangeException(nameof(current), "A ladder has at least two rungs.");
+        if (minimum < 2) throw new ArgumentOutOfRangeException(nameof(minimum), "A ladder has at least two rungs.");
+        if (maximum < minimum) throw new ArgumentOutOfRangeException(nameof(maximum), "The maximum lies below the minimum.");
+        int asked = RecommendedLevels(barrier);
+        int next = asked > current || asked < current - ShrinkDeadband ? asked : current;
+        return Math.Clamp(next, minimum, maximum);
+    }
+
+    /// <summary>
     /// A ladder with the same rungs and endpoints whose adjacent rejection rates are equal, to the accuracy of the
-    /// estimates: the cumulative barrier Λ(β), interpolated from the observed rates by a monotone cubic (Fritsch and
-    /// Carlson 1980), is inverted at equal steps (Syed et al.'s Algorithms 2 and 3). <paramref name="betas"/> is
-    /// descending from the cold rung; <paramref name="rejection"/>[i] is pair (i, i+1)'s rate. A ladder with no
-    /// rejections, or only two rungs, comes back unchanged.
+    /// estimates: <see cref="Place"/> at the current count. <paramref name="betas"/> is descending from the cold rung;
+    /// <paramref name="rejection"/>[i] is pair (i, i+1)'s rate. A ladder with no rejections, or only two rungs, comes
+    /// back unchanged.
     /// </summary>
     public static double[] Equalize(double[] betas, ReadOnlySpan<double> rejection)
     {
         ArgumentNullException.ThrowIfNull(betas);
+        return Place(betas, rejection, betas.Length);
+    }
+
+    /// <summary>
+    /// <paramref name="levels"/> rungs on <paramref name="betas"/>' endpoints whose adjacent rejection rates are equal, to
+    /// the accuracy of the estimates: the cumulative barrier Λ(β), interpolated from the observed rates by a monotone cubic
+    /// (Fritsch and Carlson 1980), is inverted at <paramref name="levels"/> − 1 equal steps (Syed et al.'s Algorithms 2 and
+    /// 3, at any count). <paramref name="betas"/> is descending from the cold rung; <paramref name="rejection"/>[i] is pair
+    /// (i, i+1)'s rate. Where the rates cannot place the rungs (none rejected, or estimates too coarse to keep the rungs
+    /// strictly descending), the current count comes back unchanged, as <see cref="Equalize"/> does, and another count is
+    /// placed as though every pair rejected alike, by the rungs' index.
+    /// </summary>
+    public static double[] Place(double[] betas, ReadOnlySpan<double> rejection, int levels)
+    {
+        ArgumentNullException.ThrowIfNull(betas);
         int n = betas.Length;
-        if (rejection.Length != n - 1)
+        CheckRates(n, rejection);
+        if (levels == n && n <= 2) return (double[])betas.Clone();
+        if (levels < 2) throw new ArgumentOutOfRangeException(nameof(levels), "A ladder has at least two rungs.");
+        if (n < 2) throw new ArgumentException("Placing rungs needs a ladder with two ends.", nameof(betas));
+
+        (double[] x, double[] y) = Cumulative(betas, rejection);
+        if (y[n - 1] > 0.0 && Placed(x, y, levels) is { } placed) return placed;
+        if (levels == n) return (double[])betas.Clone();
+        for (int j = 0; j < n; j++) y[j] = j;   // no reading to place by: every pair alike
+        return Placed(x, y, levels) ?? throw new ArgumentException($"The rungs lie too close to place {levels} between them.", nameof(betas));
+    }
+
+    /// <summary>
+    /// For each rung of <paramref name="placed"/>, the rung of <paramref name="betas"/> whose state it should start from
+    /// in a resize (<see cref="ParallelTempering{TState}.Resize"/>): the nearest on the cumulative barrier Λ(β), read from
+    /// <paramref name="rejection"/> by the monotone cubic <see cref="Place"/> inverts, so the new rung starts from the state
+    /// a swap would hand it most readily; on a tie the nearest in β, and on a further tie the colder. With no rejection the
+    /// barrier is flat and the nearest in β decides. A ladder placed on the same ends maps each end to itself.
+    /// </summary>
+    public static int[] Sources(double[] betas, ReadOnlySpan<double> rejection, double[] placed)
+    {
+        ArgumentNullException.ThrowIfNull(betas);
+        ArgumentNullException.ThrowIfNull(placed);
+        int n = betas.Length;
+        CheckRates(n, rejection);
+        if (n < 1) throw new ArgumentException("A ladder needs a rung.", nameof(betas));
+        foreach (double b in placed)
+            if (!double.IsFinite(b)) throw new ArgumentException("Every placed b must be finite.", nameof(placed));
+
+        double[]? x = null, y = null, slope = null;
+        if (n >= 2)
+        {
+            (x, y) = Cumulative(betas, rejection);
+            if (y[n - 1] > 0.0) slope = MonotoneSlopes(x, y);
+        }
+        var sources = new int[placed.Length];
+        for (int k = 0; k < placed.Length; k++)
+        {
+            double b = placed[k], at = slope is null ? 0.0 : BarrierAt(x!, y!, slope, b);
+            int best = 0;
+            double bestBarrier = double.PositiveInfinity, bestBeta = double.PositiveInfinity;
+            for (int i = 0; i < n; i++)
+            {
+                double barrier = slope is null ? 0.0 : Math.Abs(at - y![n - 1 - i]), beta = Math.Abs(b - betas[i]);
+                if (barrier < bestBarrier || barrier == bestBarrier && beta < bestBeta)
+                    (best, bestBarrier, bestBeta) = (i, barrier, beta);
+            }
+            sources[k] = best;
+        }
+        return sources;
+    }
+
+    private static void CheckRates(int rungs, ReadOnlySpan<double> rejection)
+    {
+        if (rejection.Length != rungs - 1)
             throw new ArgumentException("One rejection rate per adjacent pair is required.", nameof(rejection));
         foreach (double r in rejection)
             if (!(r >= 0.0 && r <= 1.0)) throw new ArgumentOutOfRangeException(nameof(rejection), "Rejection rates lie in [0, 1].");
-        var result = (double[])betas.Clone();
-        if (n <= 2) return result;
+    }
 
-        // Ascending from the hot end: x_j = β, y_j = the cumulative barrier from the hottest rung.
+    // Ascending from the hot end: x_j = β, y_j = the cumulative barrier from the hottest rung.
+    private static (double[] X, double[] Y) Cumulative(double[] betas, ReadOnlySpan<double> rejection)
+    {
+        int n = betas.Length;
         var x = new double[n];
         var y = new double[n];
         for (int j = 0; j < n; j++) x[j] = betas[n - 1 - j];
         for (int j = 0; j + 1 < n; j++) y[j + 1] = y[j] + rejection[n - 2 - j];
-        double total = y[n - 1];
-        if (!(total > 0.0)) return result;
+        return (x, y);
+    }
 
+    // `levels` rungs, descending, on the ends of x, the cubic through (x, y) inverted at equal steps of y; null when the
+    // inversion does not keep them strictly descending.
+    private static double[]? Placed(double[] x, double[] y, int levels)
+    {
+        int n = x.Length;
+        double total = y[n - 1];
         double[] slope = MonotoneSlopes(x, y);
-        var ascending = new double[n];
+        var ascending = new double[levels];
         ascending[0] = x[0];
-        ascending[n - 1] = x[n - 1];
+        ascending[levels - 1] = x[n - 1];
         int segment = 0;
-        for (int k = 1; k < n - 1; k++)
+        for (int k = 1; k < levels - 1; k++)
         {
-            double level = total * k / (n - 1);
+            double level = total * k / (levels - 1);
             while (segment < n - 2 && !(y[segment + 1] > level)) segment++;
             ascending[k] = Invert(x, y, slope, segment, level);
         }
-        for (int i = 0; i < n; i++) result[i] = ascending[n - 1 - i];
-        for (int i = 1; i < n; i++)
-            if (!(result[i] < result[i - 1])) return (double[])betas.Clone();   // estimates too coarse to place the rungs
+        var result = new double[levels];
+        for (int i = 0; i < levels; i++) result[i] = ascending[levels - 1 - i];
+        for (int i = 1; i < levels; i++)
+            if (!(result[i] < result[i - 1])) return null;   // estimates too coarse to place the rungs
         return result;
+    }
+
+    // Λ at b, the cubic through (x, y), held at its ends outside them.
+    private static double BarrierAt(double[] x, double[] y, double[] m, double b)
+    {
+        int n = x.Length;
+        if (!(b > x[0])) return y[0];
+        if (!(b < x[n - 1])) return y[n - 1];
+        int j = 0;
+        while (j < n - 2 && !(x[j + 1] > b)) j++;
+        return Hermite(x, y, m, j, b);
     }
 
     // Fritsch–Carlson tangents for non-decreasing data: the interpolant never leaves [y_j, y_{j+1}] on a segment.

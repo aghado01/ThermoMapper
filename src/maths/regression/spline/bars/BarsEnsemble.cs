@@ -90,11 +90,14 @@ public sealed record BarsEvidence(BarsEvidenceEstimate SteppingStone, BarsEviden
 
 /// <summary>
 /// One estimator's evidence over a run's ladders. Each chain adapts its own rungs, so each gives its own estimate
-/// (<see cref="LadderEvidence.FromLadders{TState}"/>); the run's is their mean, with Monte Carlo error √Σ err_c² / C and the mean
-/// of their discretization diagnostics (NaN for stepping-stone, which has none). The chains' spread checks the errors.
+/// (<see cref="LadderEvidence.FromLadders{TState}"/>); the run's is their mean (<see cref="LadderEvidence.Pool"/>), with the
+/// within-chain error √Σ err_c² / C, the between-chain error from the chains' spread, the larger of the two as its Monte
+/// Carlo error (the within-chain error alone for one chain), and the mean of their discretization diagnostics (NaN for
+/// stepping-stone, which has none).
 /// </summary>
 public sealed record BarsEvidenceEstimate(
-    LadderEstimator Method, double LogEvidence, double MonteCarloError, double DiscretizationError, IReadOnlyList<LadderEstimate> Chains);
+    LadderEstimator Method, double LogEvidence, double MonteCarloError, double WithinChainError, double BetweenChainError,
+    double DiscretizationError, IReadOnlyList<LadderEstimate> Chains);
 
 /// <summary>
 /// What an evidence depends on beyond the data, carried with it because the marginal likelihood is sensitive to prior
@@ -558,16 +561,10 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private static BarsEvidenceEstimate Pooled(BarsChainRun[] states, LadderEstimator method)
     {
         var chains = new LadderEstimate[states.Length];
-        double sum = 0.0, variance = 0.0, discretization = 0.0;
-        for (int ci = 0; ci < states.Length; ci++)
-        {
-            chains[ci] = LadderEvidence.FromLadders([states[ci].Ladder!], method);
-            sum += chains[ci].LogRatio;
-            variance += chains[ci].MonteCarloError * chains[ci].MonteCarloError;
-            discretization += chains[ci].DiscretizationError;
-        }
-        int c = states.Length;
-        return new BarsEvidenceEstimate(method, sum / c, Math.Sqrt(variance) / c, discretization / c, chains);
+        for (int ci = 0; ci < states.Length; ci++) chains[ci] = LadderEvidence.FromLadders([states[ci].Ladder!], method);
+        PooledLadderEstimate pooled = LadderEvidence.Pool(chains);
+        return new BarsEvidenceEstimate(method, pooled.LogRatio, pooled.MonteCarloError, pooled.WithinChainError, pooled.BetweenChainError,
+                                        pooled.DiscretizationError, pooled.Chains);
     }
 
     /// <summary>

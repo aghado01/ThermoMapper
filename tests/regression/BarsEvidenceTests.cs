@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Maths.Distributions;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline;
@@ -32,6 +33,7 @@ public sealed class BarsEvidenceTests
         Assert.NotNull(r.Evidence);
         Assert.Equal(exact, r.Evidence!.LogEvidence, 1e-9);
         Assert.Equal(0.0, r.Evidence.MonteCarloError);
+        Assert.Equal((0.0, 0.0), (r.Evidence.SteppingStone.WithinChainError, r.Evidence.SteppingStone.BetweenChainError));
     }
 
     [Fact]
@@ -47,6 +49,12 @@ public sealed class BarsEvidenceTests
                        string.Join(", ", Array.ConvertAll([.. e.SteppingStone.Chains], c => $"{c.LogRatio:F5} ± {c.MonteCarloError:F5}")));
         Assert.Equal(2, e.SteppingStone.Chains.Count);
         Assert.True(e.MonteCarloError > 0.0);
+        // The reported error is the larger of the chains' own errors pooled and the standard error of their mean.
+        double[] z = [.. e.SteppingStone.Chains.Select(c => c.LogRatio)], s = [.. e.SteppingStone.Chains.Select(c => c.MonteCarloError)];
+        Assert.Equal(Math.Sqrt(s[0] * s[0] + s[1] * s[1]) / 2, e.SteppingStone.WithinChainError, 15);
+        Assert.Equal(Math.Abs(z[0] - z[1]) / 2, e.SteppingStone.BetweenChainError, 15);
+        Assert.Equal(Math.Max(e.SteppingStone.WithinChainError, e.SteppingStone.BetweenChainError), e.MonteCarloError);
+        _out.WriteLine($"within {e.SteppingStone.WithinChainError:F5}, between {e.SteppingStone.BetweenChainError:F5}");
         Assert.True(Math.Abs(e.LogEvidence - truth) < 4.0 * e.MonteCarloError, $"BARS {e.LogEvidence:F5} against {truth:F5}");
         foreach (LadderEstimate c in e.SteppingStone.Chains)
             Assert.True(Math.Abs(c.LogRatio - truth) < 4.0 * c.MonteCarloError, $"chain {c.LogRatio:F5} against {truth:F5}");

@@ -193,13 +193,13 @@ public sealed class ParallelTemperingBlockTests
             TemperingPath.Likelihood, 1, blocksForReplica: _ => []).BlockStats(2));
     }
 
-    private static readonly IRjMove<State>[] Moves = [new IndexStep("up", "down", +1), new IndexStep("down", "up", -1)];
+    internal static readonly IRjMove<State>[] Moves = [new IndexStep("up", "down", +1), new IndexStep("down", "up", -1)];
 
-    private readonly record struct State(int K, double Theta);
+    internal readonly record struct State(int K, double Theta);
 
     // k ∈ {0, 1, 2, 3} with prior p_k, θ ~ N(0, 2²); ℓ_b = 3·ln(1 + b·a_k) − b·c_k − 2b(θ − μ_k)², not linear in b. Off
     // the index range the state is off the support.
-    private sealed class IndexAndCoordinate : ISamplingTarget<State>
+    internal sealed class IndexAndCoordinate : ISamplingTarget<State>
     {
         public const int Indices = 4;
         private static readonly double[] Prior = [0.4, 0.2, 0.3, 0.1];
@@ -278,7 +278,7 @@ public sealed class ParallelTemperingBlockTests
     }
 
     // θ by one slice step at the replica's own temperature, the index held: π_b-invariant, handed back with its evaluation.
-    private sealed class CoordinateSlice(ISamplingTarget<State> target) : IBlock<ReversibleJumpChain<State>>
+    internal sealed class CoordinateSlice(ISamplingTarget<State> target) : IBlock<ReversibleJumpChain<State>>
     {
         public string Name => "theta";
 
@@ -303,7 +303,7 @@ public sealed class ParallelTemperingBlockTests
     }
 
     // The likelihood path's b = 0 member exactly: k from its prior, θ from N(0, 2²).
-    private sealed class PriorDraw(IndexAndCoordinate target) : IReferenceSampler<State>
+    internal sealed class PriorDraw(IndexAndCoordinate target) : IReferenceSampler<State>
     {
         private static readonly double[] Prior = [0.4, 0.2, 0.3, 0.1];
         public TemperingPath Path => TemperingPath.Likelihood;
@@ -325,7 +325,7 @@ public sealed class ParallelTemperingBlockTests
     }
 
     // k ± 1 with θ held; off the index range the candidate is off the support.
-    private sealed class IndexStep(string key, string reverseKey, int delta) : IRjMove<State>
+    internal sealed class IndexStep(string key, string reverseKey, int delta) : IRjMove<State>
     {
         public string Key => key;
         public string ReverseKey => reverseKey;
