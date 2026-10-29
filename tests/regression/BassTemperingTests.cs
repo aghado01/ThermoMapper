@@ -266,10 +266,12 @@ public sealed class BassTemperingTests
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(false, true)]
-    public void Ladder_EveryReplicasDesignFollowsItsState(bool reference, bool fixedG)
+    [InlineData(true, false, "all")]   // F-M2's options: the local steps and the fixed-M family
+    public void Ladder_EveryReplicasDesignFollowsItsState(bool reference, bool fixedG, string options = "none")
     {
         BassConfig config = Config(null, maxBasis: 8);
         if (fixedG) config = config with { Coefficients = new FixedG() };
+        config = config with { Sampling = BassLocalStepTests.OptionsFor(options)(config.Sampling) };
         BassModel model = BassModel.Create(config, BassSweepTests.Data(large: true));
         var spec = new TemperingSpec { Levels = 5, HotEnd = 0.01, ReferenceRung = reference };
         BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(5)).State;
@@ -298,7 +300,7 @@ public sealed class BassTemperingTests
                 Assert.True(Math.Abs(state.Fit.ResidualSquares - fresh.ResidualSquares) <= 1e-10 * scale);
             }
         }
-        _out.WriteLine($"reference {reference}, fixed g {fixedG}: {ladder.Tempering.SwapAccepts} swaps of {ladder.Tempering.SwapAttempts}, " +
+        _out.WriteLine($"reference {reference}, fixed g {fixedG}, options {options}: {ladder.Tempering.SwapAccepts} swaps of {ladder.Tempering.SwapAttempts}, " +
                        $"{fromReference} reference draws, {handedToHot} states handed up to the reference rung");
         Assert.True(ladder.Tempering.SwapAccepts > 300);
         if (reference) Assert.True(fromReference > 0 && handedToHot > 0);

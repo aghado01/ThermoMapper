@@ -348,6 +348,7 @@ public sealed record BassSampling
 /// <see cref="MaxLevels"/>, and settles a round before burn-in ends, so the last round equalizes it; and its hot end is
 /// auto-picked on the data (<see cref="BassResolved.HotEnd"/>).</item>
 /// <item><see cref="Schedule"/>: DEO, the non-reversible even-odd swaps (Syed et al. 2022), swapped after every sweep.</item>
+/// <item><see cref="Split"/>: the split rule (F-M2's lever 4b) for a self-sizing ladder, opt-in.</item>
 /// <item><see cref="ReferenceRung"/>: the hot replica draws exactly from the prior on F every scan (OQ2), opt-in. A run
 /// reports its evidence only with it (D03), under the proper priors.</item>
 /// </list>

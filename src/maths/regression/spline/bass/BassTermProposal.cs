@@ -19,6 +19,10 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>Change.</b> A term uniformly (the caller's draw), then one of its factors uniformly, whose sign and knot,
 /// or subset, is redrawn from the prior; with the local steps on (F-M2's lever 2), with probability ρ stepped locally
 /// instead (<see cref="ProposeChange"/>).</item>
+/// <item><b>The fixed-M family</b> (F-M2's Phase 1). A term (the caller's draw), then a part uniformly among the fit's:
+/// a factor of it pruned (<see cref="ProposePrune"/>), a factor grown into it on an unused variable
+/// (<see cref="ProposeGrow"/>), or a factor's variable exchanged for an unused one (<see cref="ProposeVariableChange"/>),
+/// each new factor from its variable's prior.</item>
 /// </list>
 /// Each move reports its within-move log ratio, ln q(reverse)/q(forward), which a reversible-jump chain adds to its
 /// target ratio (the target holding the structure prior) and its move-selection ratio. A birth's and a death's carry the
