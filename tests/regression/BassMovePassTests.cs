@@ -37,7 +37,7 @@ namespace Maths.Regression.Tests;
 /// within each (fixture, seed) by a fixed seed; A0 reruns at the end for each fixture's first seed, a timing control.
 /// BASS_PASS_SCALE divides the lengths and BASS_PASS_SEEDS keeps the first seeds, for the dry run. The per-fit CSV and the
 /// verdict's tables land under <c>artifacts/test-runs/BassMovePass/</c>. The pass and the log posterior's check are
-/// qualification runs (<see cref="BassQualification.Enabled"/>); the arms' and the data's checks run always.
+/// qualification runs (<see cref="BassQualification.Enabled"/>); the arms', the data's and the minimum's checks run always.
 /// </summary>
 public sealed class BassMovePassTests
 {
@@ -464,6 +464,26 @@ public sealed class BassMovePassTests
             if (ess.Value < least) (least, which) = (ess.Value, label);
         }
         return (least, which, string.Join(";", constant));
+    }
+
+    /// <summary>The minimum's edge cases on synthetic chains: a constant quantity is left out and named; a frozen M (each
+    /// split chain constant, at different values) reads the ESS of its mean; any other reading without an estimate stops.</summary>
+    [Fact]
+    public void Minimum_LeavesAConstantOut_AndReadsAFrozenMByItsMean()
+    {
+        var rng = new Xoshiro256PlusPlus(seed: 7);
+        double[][] Chains(Func<int, int, double> value) => [.. Enumerable.Range(0, 4).Select(c => Enumerable.Range(0, 100).Select(s => value(c, s)).ToArray())];
+        double[][] noise = Chains((_, _) => rng.NextDouble()), constant = Chains((_, _) => 5.0), frozen = Chains((c, s) => c + (s < 50 ? 0 : 10));
+        ConvergenceDiagnostic moving = ChainDiagnostics.Diagnose(noise), still = ChainDiagnostics.Diagnose(constant), stuck = ChainDiagnostics.Diagnose(frozen);
+        Assert.Equal(DiagnosticState.Constant, still.BulkEss.State);
+        Assert.Equal(DiagnosticState.Frozen, stuck.BulkEss.State);
+
+        Assert.Equal((moving.BulkEss.Value, "sigma2", "M"), Minimum([("M", still), ("sigma2", moving)], constant));
+        EssDiagnostic mean = ChainDiagnostics.MeanEss(frozen);
+        Assert.Equal(DiagnosticState.Estimated, mean.State);
+        Assert.True(mean.Value < moving.BulkEss.Value);
+        Assert.Equal((mean.Value, "M (frozen)", ""), Minimum([("M", stuck), ("sigma2", moving)], frozen));
+        Assert.Throws<InvalidOperationException>(() => Minimum([("M", moving), ("sigma2", stuck)], noise));
     }
 
     // Each chain's start, an exact prior draw: its terms, τ and attempts.
