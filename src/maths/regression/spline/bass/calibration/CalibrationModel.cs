@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.Distributions;
 using Maths.Rng;
 using Maths.Samplers;
 
@@ -109,6 +110,26 @@ public sealed class CalibrationModel
         return new CalibrationState(unit, levels, variances, new double[Coefficients]);
     }
 
+    /// <summary>
+    /// A state drawn exactly from the prior, as an SMC population's first stage needs: θ and the levels uniform, each
+    /// variance from its group's prior, v ~ N(0, s_v²·I). <see cref="Start"/> instead puts v at 0, a chain's start. Refused
+    /// when a variance group's prior is improper.
+    /// </summary>
+    public CalibrationState DrawPrior(Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (!PriorsProper) throw new InvalidOperationException("A variance group's prior is improper: there is no prior to draw from.");
+        var unit = new double[Layout.Continuous.Count];
+        for (int i = 0; i < unit.Length; i++) unit[i] = rng.NextDouble();
+        var levels = new int[Layout.Categorical.Count];
+        for (int j = 0; j < levels.Length; j++) levels[j] = rng.NextInt(Layout.Categorical[j].Levels.Length);
+        var variances = new double[Measurement.Groups];
+        Measurement.SamplePrior(rng, variances);
+        var coefficients = new double[Coefficients];
+        for (int k = 0; k < coefficients.Length; k++) coefficients[k] = DiscrepancyScale * Normal.SampleStandard(rng);
+        return new CalibrationState(unit, levels, variances, coefficients);
+    }
+
     /// <summary>θ's continuous part of <paramref name="state"/> in physical coordinates, through each parameter's recorded
     /// transform (<see cref="ContinuousParameter.ToPhysical"/>).</summary>
     public double[] Physical(CalibrationState state)
@@ -173,8 +194,9 @@ public sealed class CalibrationModel
 /// A state of the conditional chain, immutable: θ's continuous part in [0, 1] coordinates, its levels, the group
 /// variances σ² and the discrepancy coefficients v. A change makes a new state, which a target evaluates afresh, so no
 /// likelihood outlives the values it was computed from. The prediction and the covariance factor are kept with the state
-/// for its target and draw: a change to v keeps both, to σ² keeps the prediction, to θ keeps the factor, and a state
-/// read by another target (another emulator draw) recomputes both (C-O1's stale likelihood, corrected by construction).
+/// for the last two targets (emulator draws) that read it, so a bridge between two draws reads both from the cache: a
+/// change to v keeps both, to σ² keeps the prediction, to θ keeps the factor, and a state read by a third target
+/// recomputes both (C-O1's stale likelihood, corrected by construction).
 /// </summary>
 public sealed class CalibrationState
 {
@@ -234,10 +256,34 @@ public sealed class CalibrationState
     // With levels whose prediction the caller has computed for `owner` (the categorical enumeration's).
     internal CalibrationState WithLevels(int[] levels, CalibrationTarget owner, double[] prediction)
         => new(_unit, (int[])levels.Clone(), _variances, _coefficients, new PredictionCache(owner, prediction), Factor);
+
+    // With levels whose predictions the caller has computed, for one target or two (a bridge's enumeration).
+    internal CalibrationState WithLevels(int[] levels, PredictionCache prediction)
+        => new(_unit, (int[])levels.Clone(), _variances, _coefficients, prediction, Factor);
+
+    // A distinct state with the same values and caches: an SMC offspring, whose later cache writes stay its own.
+    internal CalibrationState Fork() => new(_unit, _levels, _variances, _coefficients, Prediction, Factor);
 }
 
-internal sealed record PredictionCache(CalibrationTarget Owner, double[] Values);
-internal sealed record FactorCache(CalibrationTarget Owner, CovarianceFactor Factor);
+// A target's prediction for a state, keeping the previous target's beside it (Other has no Other of its own).
+internal sealed record PredictionCache(CalibrationTarget Owner, double[] Values, PredictionCache? Other = null)
+{
+    public double[]? For(CalibrationTarget owner)
+        => ReferenceEquals(Owner, owner) ? Values : Other is { } other && ReferenceEquals(other.Owner, owner) ? other.Values : null;
+
+    public static PredictionCache Add(PredictionCache? cache, CalibrationTarget owner, double[] values)
+        => new(owner, values, cache is null ? null : cache with { Other = null });
+}
+
+// A target's covariance factor for a state, keeping the previous target's beside it.
+internal sealed record FactorCache(CalibrationTarget Owner, CovarianceFactor Factor, FactorCache? Other = null)
+{
+    public CovarianceFactor? For(CalibrationTarget owner)
+        => ReferenceEquals(Owner, owner) ? Factor : Other is { } other && ReferenceEquals(other.Owner, owner) ? other.Factor : null;
+
+    public static FactorCache Add(FactorCache? cache, CalibrationTarget owner, CovarianceFactor factor)
+        => new(owner, factor, cache is null ? null : cache with { Other = null });
+}
 
 /// <summary>
 /// The conditional target p(θ, σ², v | y, e_s) for one emulator draw (<see cref="CalibrationModel.Target"/>), as an
@@ -281,21 +327,23 @@ public sealed class CalibrationTarget : ISamplingTarget<CalibrationState>
     /// <summary>The prediction at <paramref name="state"/>'s θ under this draw, physical units; kept with the state.</summary>
     public double[] Prediction(CalibrationState state)
     {
-        if (state.Prediction is { } cached && ReferenceEquals(cached.Owner, this)) return cached.Values;
+        PredictionCache? cache = state.Prediction;
+        if (cache?.For(this) is { } cached) return cached;
         var prediction = new double[Model.Outputs];
         Model.Emulator.Predict(Draw, Model.Physical(state), state.Levels, prediction);
         foreach (double v in prediction)
             if (!double.IsFinite(v)) throw new InvalidOperationException("The emulator predicted a value that is not finite.");
-        state.Prediction = new PredictionCache(this, prediction);
+        state.Prediction = PredictionCache.Add(cache, this, prediction);
         return prediction;
     }
 
     /// <summary>Σ at <paramref name="state"/>'s variances under this draw, factored; kept with the state.</summary>
     public CovarianceFactor Factor(CalibrationState state)
     {
-        if (state.Factor is { } cached && ReferenceEquals(cached.Owner, this)) return cached.Factor;
+        FactorCache? cache = state.Factor;
+        if (cache?.For(this) is { } cached) return cached;
         CovarianceFactor factor = Model.Covariance.Factor(state.Variances, Noise);
-        state.Factor = new FactorCache(this, factor);
+        state.Factor = FactorCache.Add(cache, this, factor);
         return factor;
     }
 

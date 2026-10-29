@@ -100,43 +100,60 @@ public sealed class DiscrepancyBlock : CalibrationBlock
     /// <summary>v's conditional at <paramref name="state"/> and rung <paramref name="b"/>: its precision, factored, and
     /// the right-hand side whose solve is its mean.</summary>
     internal (DenseCholesky Precision, double[] Rhs) Conditional(CalibrationState state, double b)
+        => Conditional(Target.Model, state, [new LikelihoodTerm(Target, b)]);
+
+    /// <summary>
+    /// v's conditional under the weighted likelihoods Σ_k w_k·ℓ_k and v's whole prior: precision I/s_v² + Σ_k w_k·DᵀΣ_k⁻¹D
+    /// and right-hand side Σ_k w_k·DᵀΣ_k⁻¹(y − prediction_k − μ_δ). Each ℓ_k is quadratic in v, so the sum stays Gaussian:
+    /// one term at rung b is the likelihood path's, two at 1 − t and t a bridge's between emulator draws.
+    /// </summary>
+    internal static (DenseCholesky Precision, double[] Rhs) Conditional(CalibrationModel model, CalibrationState state, ReadOnlySpan<LikelihoodTerm> terms)
     {
-        CalibrationModel model = Target.Model;
         double[,] d = model.Discrepancy!;
         int m = model.Outputs, q = d.GetLength(1);
-        CovarianceFactor factor = Target.Factor(state);
-        double[] prediction = Target.Prediction(state);
         ReadOnlySpan<double> y = model.Observations;
-        var r0 = new double[m];
-        for (int j = 0; j < m; j++) r0[j] = y[j] - prediction[j] - (model.Covariance.Mean?[j] ?? 0.0);
-        var solved = new double[q][];   // Σ⁻¹D's columns
-        var column = new double[m];
-        for (int k = 0; k < q; k++)
-        {
-            for (int j = 0; j < m; j++) column[j] = d[j, k];
-            solved[k] = factor.Solve(column);
-        }
-        double inverseScale2 = 1.0 / (model.DiscrepancyScale * model.DiscrepancyScale);
         var precision = new double[q, q];
         var rhs = new double[q];
-        for (int k = 0; k < q; k++)
+        var r0 = new double[m];
+        var solved = new double[q][];   // Σ_k⁻¹D's columns
+        var column = new double[m];
+        foreach (LikelihoodTerm term in terms)
         {
-            double s = 0.0;
-            for (int j = 0; j < m; j++) s += solved[k][j] * r0[j];
-            rhs[k] = b * s;
-            for (int l = 0; l <= k; l++)
+            CovarianceFactor factor = term.Target.Factor(state);
+            double[] prediction = term.Target.Prediction(state);
+            for (int j = 0; j < m; j++) r0[j] = y[j] - prediction[j] - (model.Covariance.Mean?[j] ?? 0.0);
+            for (int k = 0; k < q; k++)
             {
-                double g = 0.0;
-                for (int j = 0; j < m; j++) g += d[j, l] * solved[k][j];
-                precision[k, l] = precision[l, k] = b * g + (k == l ? inverseScale2 : 0.0);
+                for (int j = 0; j < m; j++) column[j] = d[j, k];
+                solved[k] = factor.Solve(column);
+            }
+            double w = term.Weight;
+            for (int k = 0; k < q; k++)
+            {
+                double s = 0.0;
+                for (int j = 0; j < m; j++) s += solved[k][j] * r0[j];
+                rhs[k] += w * s;
+                for (int l = 0; l <= k; l++)
+                {
+                    double g = 0.0;
+                    for (int j = 0; j < m; j++) g += d[j, l] * solved[k][j];
+                    precision[k, l] += w * g;
+                }
             }
         }
+        double inverseScale2 = 1.0 / (model.DiscrepancyScale * model.DiscrepancyScale);
+        for (int k = 0; k < q; k++)
+            for (int l = 0; l <= k; l++) precision[k, l] = precision[l, k] = precision[k, l] + (k == l ? inverseScale2 : 0.0);
         var factored = new DenseCholesky(q);
         factored.Decompose(precision);
         if (!factored.Status.PositiveDefinite) throw new InvalidOperationException("The discrepancy's conditional precision did not factor.");
         return (factored, rhs);
     }
 }
+
+/// <summary>One emulator draw's likelihood ℓ_k with its weight w_k in a conditional's Σ_k w_k·ℓ_k: the rung b alone on
+/// D05's likelihood path, or 1 − t and t on a bridge between two draws (<see cref="CalibrationBridge"/>).</summary>
+internal readonly record struct LikelihoodTerm(CalibrationTarget Target, double Weight);
 
 /// <summary>
 /// Each variance group's σ²_g by a random-walk Metropolis step on u = ln σ²_g, whose target carries the Jacobian of the
@@ -295,26 +312,41 @@ public sealed class CategoricalBlock : CalibrationBlock
     private (double[] Probabilities, double[,] Predictions) Enumerate(CalibrationState state, double b)
     {
         if (_combinations is null) throw new InvalidOperationException("The combinations exceed the cap: the conditional is not enumerated.");
-        CalibrationModel model = Target.Model;
-        int m = model.Outputs, count = _combinations.Length;
-        var predictions = new double[count, m];
-        model.Emulator.PredictLevels(Target.Draw, model.Physical(state), _combinations, predictions);
-        CovarianceFactor factor = Target.Factor(state);
+        (double[] probabilities, double[][,] predictions) = Enumerate(Target.Model, state, [new LikelihoodTerm(Target, b)], _combinations);
+        return (probabilities, predictions[0]);
+    }
+
+    /// <summary>The level combinations of <paramref name="state"/>'s θ under the weighted likelihoods Σ_k w_k·ℓ_k: each
+    /// combination's probability, the uniform prior cancelling, and each term's predictions (one row per combination).</summary>
+    internal static (double[] Probabilities, double[][,] Predictions) Enumerate(CalibrationModel model, CalibrationState state,
+                                                                             ReadOnlySpan<LikelihoodTerm> terms, int[][] combinations)
+    {
+        int m = model.Outputs, count = combinations.Length;
+        double[] physical = model.Physical(state);
         double[] delta = model.Delta(state);
         ReadOnlySpan<double> y = model.Observations;
         var logWeight = new double[count];
+        var predictions = new double[terms.Length][,];
         var r = new double[m];
-        double max = double.NegativeInfinity;
-        for (int c = 0; c < count; c++)
+        for (int t = 0; t < terms.Length; t++)
         {
-            for (int j = 0; j < m; j++)
+            CalibrationTarget target = terms[t].Target;
+            double[,] predicted = predictions[t] = new double[count, m];
+            model.Emulator.PredictLevels(target.Draw, physical, combinations, predicted);
+            CovarianceFactor factor = target.Factor(state);
+            for (int c = 0; c < count; c++)
             {
-                if (!double.IsFinite(predictions[c, j])) throw new InvalidOperationException("The emulator predicted a value that is not finite.");
-                r[j] = y[j] - predictions[c, j] - delta[j];
+                for (int j = 0; j < m; j++)
+                {
+                    if (!double.IsFinite(predicted[c, j])) throw new InvalidOperationException("The emulator predicted a value that is not finite.");
+                    r[j] = y[j] - predicted[c, j] - delta[j];
+                }
+                double part = -0.5 * terms[t].Weight * factor.InverseQuadraticForm(r);
+                logWeight[c] = t == 0 ? part : logWeight[c] + part;
             }
-            logWeight[c] = -0.5 * b * factor.InverseQuadraticForm(r);
-            max = Math.Max(max, logWeight[c]);
         }
+        double max = double.NegativeInfinity;
+        for (int c = 0; c < count; c++) max = Math.Max(max, logWeight[c]);
         double total = 0.0;
         for (int c = 0; c < count; c++) total += logWeight[c] = Math.Exp(logWeight[c] - max);
         for (int c = 0; c < count; c++) logWeight[c] /= total;
