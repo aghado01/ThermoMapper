@@ -201,6 +201,33 @@ Talked through with the user on 2026-10-29. Each item is a proposal for the desi
   - Each is beyond R. Their value is priced by P1 and P2.
 - *The composition's column means are cached first* (question 8): `9ed600a`, bit-identical. A sweep at n = 5,000, M ≈ 50 went from 694 to 148 µs, so M1's shares, taken before it, understate the structure move's share s.
 
+## The mode-exit pricing's readings (2026-10-29)
+
+The chip's report, with every table, is in [its brief](mode-exit-pricing-brief.md#reports): commits `17f8b5f`–`811360e`, report `f90c3cf`. It reads one fixed state per chain at fixed τ; Friedman chain 3's burned state lay below its whole sampling phase, so it was read at its most frequent structure.
+- *P1, pair deaths: none is redundant.*
+  - No jointly redundant pair exists in any state. The cheapest pair costs 57–354 nats, and every pair costs more than its cheaper single.
+  - The co-adaptation is substitution: each term does what the other cannot do without it.
+  - The pair death is withdrawn.
+- *P2, structural moves at fixed M: exits on two fixtures, none on Friedman.*
+  - The prior and proposal ratios cancel exactly, as derived, so each move's ratio is Δℓ alone.
+  - *Mixed chain 2* (22 nats below the others): pruning x2 from x2 · x3 · z{2} costs 3.7 nats (α 0.026), and then its twin dies with Δℓ +2.5. The two steps cost 1.2 nats in all and reach the other chains' level.
+  - *Functional chain 3*: changing a factor's variable, x0 → x1, costs 3.3 nats (α up to 0.038), and then two terms die together with Δℓ +7.7. The path gains 4.3 nats.
+  - *Friedman's worse chains 0 and 3* have no cheap exit: their cheapest prune, grow or change costs 9.8 and 19.2 nats (α ≤ 6·10⁻⁵).
+  - Each exit rests on one state.
+- *P3, drift endpoints exist; their distance differs.*
+  - Against each state's own profile (a sampled state is not its knots' optimum, being 1.4–17.2 nats below it), Friedman's x1 · x2 block is re-representable in every chain: 3–6 terms die within 20 nats once the remaining knots re-optimize. The x3, x4 and x5 terms stay load-bearing.
+  - The endpoints are far, 137–1,237 distinct-value steps over 500 values per input. On the functional fit's worse chains they are close, 14–53 steps.
+  - This is an optimization diagnostic: it bounds where a drift could end, not that a path exists.
+- *P4, the band's rungs are frozen for deaths, as b·Δℓ predicted.*
+  - The median term's death α stays at or below 10⁻³ on 30–31 of the 31 rungs in [0.10, 0.40], and becomes non-negligible only at b = 0.08–0.14.
+  - Births (0.025–0.028), change redraws (0.15–0.17) and prunes on surplus terms loosen there. Local knot steps accept 0.83–1.00 on every rung.
+
+What the readings say for Phase 1, as a reading (the choice is the user's):
+- *Lever 2* is cheap and accepted everywhere. Its drift endpoints are near on the functional fit and far on Friedman. At 0.6% of distinct values per step, 137–1,237 steps is a long random walk.
+- *The fixed-M family* (prune and grow, a factor's variable change) opens near-free two-step exits where the worse mode differs by a factor's variable or a redundant factor.
+- *Neither opens Friedman's worse modes in one or two steps.* Tempering does not either: the band's rungs are frozen for deaths, and the local steps it still accepts do not remove terms.
+- *Pair deaths add nothing.*
+
 ## Phase 1: build the options
 
 - *The order:*
@@ -251,6 +278,10 @@ Talked through with the user on 2026-10-29. Each item is a proposal for the desi
 8. *The composition's column means* (added after Phase 0): cache them before the pass. Decided by the user on 2026-10-29: cached, bit-identical by construction. Done in `9ed600a`: five fits hashed identical against the code before it, and the Regression (828) and BASS oracle (35) suites pass. Caching changes every arm's cost alike, but lever 1's price, the structure share s, rises with it, so the pass should run on the cached cost. It is the efficiency pass's change, brought forward; whether it can be made bit-identical depends on matching the current sum's order.
 
 9. *Price the mode exits before choosing Phase 1* (2026-10-29). Decided by the user: a chip measures P1–P4, [its brief](mode-exit-pricing-brief.md).
+
+10. *Factor moves under several parts* (raised by the pricing chip): how the move picks its part and its factor, the pricing harness's matched selection being one choice.
+11. *Pruning a part's only factor* while the term keeps another part (K = 1 → 0 in that part), the reverse of a grow into an empty part. It was the functional fit's only prune.
+12. *A variable change in a part with one variable,* which has no unused variable to move to: refused, or the move unavailable there.
 
 ## Reports
 
