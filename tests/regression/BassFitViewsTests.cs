@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Maths.Regression.Spline.Bass;
+using Maths.Regression.Spline.Bass.Sensitivity;
 using Maths.Rng;
 using Xunit;
 
@@ -9,7 +10,8 @@ namespace Maths.Regression.Tests;
 /// <summary>
 /// The fit's views over its draws, wired from S9 into S7's <see cref="BassFit"/>: the residual-dependence check the run
 /// fills at its end (F11), null for a scalar response, and the pointwise log density on the fit's own data (OQ17), the
-/// same matrix as <see cref="BassPointwise.LogDensity"/> on a rebuilt model, with data of another fingerprint refused.
+/// same matrix as <see cref="BassPointwise.LogDensity"/> on a rebuilt model, with data of another fingerprint refused; and
+/// stage 6's sensitivity and effects, wired as views, the static entries' results on the fit's own data.
 /// </summary>
 public sealed class BassFitViewsTests
 {
@@ -78,5 +80,27 @@ public sealed class BassFitViewsTests
 
         var ex = Assert.Throws<ArgumentException>(() => fit.PointwiseLogDensity(Functional(shift: 1.0), content: content));
         Assert.Contains("other data", ex.Message);
+    }
+
+    [Fact]
+    public void SensitivityAndEffects_AreTheStaticEntriesOnTheFitsOwnData()
+    {
+        BassData data = Scalar();
+        BassFit fit = Bass.Fit(Config(), data);
+        SobolAnalysis view = fit.Sensitivity(data);
+        SobolAnalysis direct = BassSensitivity.Of(fit, data);
+        Assert.Equal(direct.MaxOrder, view.MaxOrder);
+        SobolDecomposition a = Assert.Single(view.Decompositions), b = Assert.Single(direct.Decompositions);
+        Assert.Equal(b.Variance, a.Variance);
+        Assert.Equal(b.MeanTotalIndices(), a.MeanTotalIndices());
+
+        EffectAnalysis effects = fit.Effects(data);
+        EffectAnalysis expected = BassSensitivity.Effects(fit, data);
+        Assert.Equal(expected.At[0].Mean, effects.At[0].Mean);
+        Assert.Equal(expected.At[0].Effects.Count, effects.At[0].Effects.Count);
+
+        BassData other = Functional();
+        Assert.Throws<ArgumentException>(() => fit.Sensitivity(other));
+        Assert.Throws<ArgumentException>(() => fit.Effects(other));
     }
 }

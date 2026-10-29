@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.Regression.Spline.Bass.Sensitivity;
 using Maths.Samplers.Ensemble;
 
 namespace Maths.Regression.Spline.Bass;
@@ -19,6 +20,8 @@ namespace Maths.Regression.Spline.Bass;
 /// scalar response and for several output variables, where <see cref="ResidualDependenceFor"/> takes a declared
 /// index.</item>
 /// <item><see cref="PointwiseLogDensity"/> is OQ17's matrix over the draws (S9), from the data the fit was run on.</item>
+/// <item><see cref="Predict"/> (stage 5, D07), <see cref="Sensitivity"/> and <see cref="Effects"/> (stage 6, D08) are views
+/// over the draws too, each on the data the fit was run on.</item>
 /// <item><see cref="Checkpoint"/> is the run's restart state when <see cref="BassRunOptions.Checkpoint"/> asked for it,
 /// beside the posterior, never inside it; <see cref="Bass.Resume"/> continues it.</item>
 /// </list>
@@ -68,6 +71,21 @@ public sealed record BassFit(
         BassModel model = ModelOn(data);
         return BassDirectPrediction.Predict(model, Terms, Draws, DrawWeights, cases, options ?? new BassPredictOptions());
     }
+
+    /// <summary>
+    /// The Sobol decomposition of the draws (D08, stage 6; <see cref="BassSensitivity.Of"/>) under <paramref name="spec"/>'s
+    /// product measure, the training range's uniform by default. <paramref name="data"/> must be the data the fit was run
+    /// on, whose knots and levels the terms index and whose values the empirical measure reads; data with another
+    /// fingerprint are refused.
+    /// </summary>
+    public SobolAnalysis Sensitivity(BassData data, SensitivitySpec? spec = null) => BassSensitivity.Of(this, data, spec);
+
+    /// <summary>
+    /// The main and two-way effect functions of the draws (D08, stage 6; <see cref="BassSensitivity.Effects"/>) under
+    /// <paramref name="spec"/>'s measure, on the data the fit was run on; data with another fingerprint are refused.
+    /// </summary>
+    public EffectAnalysis Effects(BassData data, SensitivitySpec? spec = null, EffectSpec? effects = null)
+        => BassSensitivity.Effects(this, data, spec, effects);
 
     // The model on `data`, refused when they are not the data the fit was run on.
     private BassModel ModelOn(BassData data)
