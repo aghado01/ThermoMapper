@@ -16,7 +16,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [x] **F-C2** The shared-code changes the contracts need, before stage 4's first fit: `Sigma2Prior` as a serializable record, shared with BARS's config; `GPriorCentre.Flat` for the Liang convention, refused by BARS until the shared block supports it.
 - [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison.
 - [ ] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison.
-- [ ] **F-M2** The local moves' mixing, its own design item before the efficiency pass (S10, decided 2026-10-28). Births and deaths accept about 1.5% on Friedman, and the chains hold their own bands of M. Levers: several structure moves per sweep, a local knot move inside a change, active-variable births on F-X4's seam. The run lengths and the ladder's sizing, its censored steep band included, follow it.
+- [ ] **F-M2** The local moves' mixing, its own design item before the efficiency pass (S10, decided 2026-10-28); the design draft is [local-move-mixing-brief.md](local-move-mixing-brief.md). Births and deaths accept about 1.5% on Friedman, and the chains hold their own bands of M. Levers: several structure moves per sweep, a local knot move inside a change, active-variable births on F-X4's seam. The run lengths and the ladder's sizing, its censored steep band included, follow it.
 
 ### Reference fixtures (stage 1)
 
