@@ -21,8 +21,9 @@ public enum SwapSchedule
     Sequential,
 }
 
-/// <summary>One adjacent pair's swap statistics: attempts, accepts, and the mean rejection probability over every scan,
-/// attempted or not (Rao–Blackwellized: 1 − α from the cached evaluations, rather than the 0/1 outcomes).</summary>
+/// <summary>One adjacent pair's swap statistics: attempts, accepts, and the mean rejection probability over every scan
+/// since the ladder took its count of rungs (<see cref="ParallelTempering{TState}.PairScans"/>), attempted or not
+/// (Rao–Blackwellized: 1 − α from the cached evaluations, rather than the 0/1 outcomes).</summary>
 public sealed record SwapPairStat(double ColderBeta, double HotterBeta, long Attempts, long Accepts, double MeanRejection);
 
 /// <summary>

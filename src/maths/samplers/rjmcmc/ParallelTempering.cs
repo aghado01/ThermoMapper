@@ -435,7 +435,7 @@ public sealed class ParallelTempering<TState> : IChain<TState>
 
     /// <summary>
     /// Re-space the interior rungs so that adjacent rejection rates are equal (<see cref="TemperingLadder.Equalize"/>),
-    /// from the rates observed since the last adaptation, and return those rates' barrier estimate Λ̂. The cold and hot
+    /// from the rates observed since the last adaptation or resize, and return those rates' barrier estimate Λ̂. The cold and hot
     /// ends stay where they are. Retempering is a query on each replica's cached evaluation: no state is re-evaluated.
     /// Adapt during burn-in only; a ladder that keeps changing does not leave the posterior invariant.
     /// </summary>
