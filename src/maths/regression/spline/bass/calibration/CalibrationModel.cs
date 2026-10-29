@@ -124,10 +124,17 @@ public sealed class CalibrationModel
     public double[] Delta(CalibrationState state)
     {
         ArgumentNullException.ThrowIfNull(state);
+        return Delta(state.Coefficients);
+    }
+
+    /// <summary>The discrepancy δ = μ_δ + D·v at coefficients <paramref name="coefficients"/>, as a kept draw holds them.</summary>
+    public double[] Delta(ReadOnlySpan<double> coefficients)
+    {
+        if (coefficients.Length != Coefficients) throw new ArgumentException($"The discrepancy has {Coefficients} coefficients.", nameof(coefficients));
         var delta = Covariance.Mean is { } mean ? (double[])mean.Clone() : new double[Outputs];
         if (Discrepancy is { } d)
             for (int j = 0; j < Outputs; j++)
-                for (int k = 0; k < d.GetLength(1); k++) delta[j] += d[j, k] * state.Coefficients[k];
+                for (int k = 0; k < d.GetLength(1); k++) delta[j] += d[j, k] * coefficients[k];
         return delta;
     }
 

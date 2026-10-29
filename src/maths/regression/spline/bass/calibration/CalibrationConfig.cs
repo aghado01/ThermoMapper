@@ -25,6 +25,9 @@ public sealed record CalibrationConfig
     /// above Francom et al.'s 162); above it, single-site updates take over.</summary>
     public int EnumerationCap { get; init; } = 1024;
 
+    /// <summary>The conditional sampler's settings.</summary>
+    public CalibrationSampling Sampling { get; init; } = new();
+
     /// <summary>The canonical JSON options, <see cref="BassConfig.JsonOptions"/>' settings: enums by name, compact, an
     /// unknown field refused, a missing one defaulted (a required one refused), a variant's <c>Kind</c> anywhere.</summary>
     public static JsonSerializerOptions JsonOptions { get; } = CreateJsonOptions();
@@ -96,6 +99,7 @@ public sealed record CalibrationConfig
                 throw Bad("Covariance", "is missing or of no known kind");
         }
         if (EnumerationCap < 1) throw Bad("EnumerationCap", "must be at least 1");
+        (Sampling ?? throw Bad("Sampling", "is missing")).Validate();
     }
 
     private static ArgumentException Bad(string field, string reason) => new($"CalibrationConfig.{field}: {reason}");

@@ -77,6 +77,26 @@ public sealed class DiscrepancyBlock : CalibrationBlock
         return true;
     }
 
+    /// <summary>v's conditional mean and covariance at <paramref name="state"/> and rung <paramref name="b"/>, the moments a
+    /// Rao–Blackwellized discrepancy estimate averages.</summary>
+    public (double[] Mean, double[,] Covariance) Moments(CalibrationState state, double b)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (!(b >= 0.0 && b <= 1.0)) throw new ArgumentOutOfRangeException(nameof(b));
+        (DenseCholesky precision, double[] rhs) = Conditional(state, b);
+        int q = rhs.Length;
+        var covariance = new double[q, q];
+        var unit = new double[q];
+        for (int k = 0; k < q; k++)
+        {
+            Array.Clear(unit);
+            unit[k] = 1.0;
+            double[] column = precision.Solve(unit);
+            for (int l = 0; l < q; l++) covariance[l, k] = column[l];
+        }
+        return (precision.Solve(rhs), covariance);
+    }
+
     /// <summary>v's conditional at <paramref name="state"/> and rung <paramref name="b"/>: its precision, factored, and
     /// the right-hand side whose solve is its mean.</summary>
     internal (DenseCholesky Precision, double[] Rhs) Conditional(CalibrationState state, double b)

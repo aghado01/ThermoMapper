@@ -166,6 +166,88 @@ public sealed class BassCalibrationDefectsParityTests
     }
 
     [Fact]
+    public void Tempering_TheKernelsAndTheSwapReachTheLikelihoodPath()
+    {
+        if (!Available) return;
+        JsonElement o = Oracle.Value, tp = o.GetProperty("tempering"), inputs = o.GetProperty("inputs");
+        // R, as recorded: its variance move is b·(log likelihood + log prior + log Jacobian), exact for its powered target and
+        // off the likelihood path; its swap leaves its own target; its discrepancy draw is the powered path's.
+        Assert.InRange(tp.GetProperty("alpha_linear_gap").GetDouble(), 0, 1e-12);
+        foreach (JsonElement rung in tp.GetProperty("rungs").EnumerateArray())
+        {
+            Assert.InRange(rung.GetProperty("tv_r_vs_powered").GetDouble(), 0, 1e-12);
+            if (rung.GetProperty("b").GetDouble() < 1) Assert.True(rung.GetProperty("tv_r_vs_likelihood_path").GetDouble() > 0.05);
+        }
+        foreach (JsonElement swap in tp.GetProperty("swaps").EnumerateArray()) Assert.True(swap.GetProperty("r_vs_r_kernels").GetDouble() > 0.1);
+        foreach (JsonElement d in tp.GetProperty("discrepancy_covariance").EnumerateArray()) Assert.True(d.GetProperty("r_vs_likelihood_path").GetDouble() > 0.01);
+
+        // This side, on the section's setup: one group IG(5, 0.05) over every output, θ at θ*, v at 0, and the covariance
+        // diag(v_trunc + σ²) + K diag(0.01, 0.01) Kᵀ in the section's own units (K and the residuals unscaled).
+        (double[] offset, double[] scale, double[,] basis) = BassCalibrationCovarianceParityTests.Pieces();
+        double[][] coef = Rows(inputs.GetProperty("coef")), trunc = Rows(inputs.GetProperty("trunc_error"));
+        int m = offset.Length, n = trunc[0].Length;
+        var raw = new double[n, m];
+        for (int i = 0; i < n; i++)
+            for (int l = 0; l < m; l++) raw[i, l] = trunc[l][i];
+        ContinuousParameter t1 = new("theta1", 10, 20), t2 = new("theta2", -1, 1);
+        var emulator = new OracleEmulator([t1, t2], offset, scale, basis, (theta, _) => [.. coef.Select(c => c[0] + c[1] * theta[0] + c[2] * theta[1])],
+                                          [[0.01, 0.01]], raw, factor: basis);
+        var config = new CalibrationConfig
+        {
+            Parameters = [t1, t2],
+            Measurement = new GaussianMeasurement([new VarianceGroup([.. Enumerable.Range(0, m)], new InverseGammaVariance(10, 0.1))]),
+            Covariance = new FunctionalFormulation
+            {
+                Truncation = TruncationTerm.Diagonal,
+                Discrepancy = new FunctionalDiscrepancy(Rows(inputs.GetProperty("D_narrow")), 1.0),
+            },
+        };
+        var model = new CalibrationModel(config, Vector(inputs.GetProperty("y")), emulator);
+        CalibrationTarget target = model.Target(0);
+        double[] thetaStar = Vector(o.GetProperty("theta_star"));
+        var at = new CalibrationState([t1.ToUnit(thetaStar[0]), t2.ToUnit(thetaStar[1])], [], [0.01], [0.0, 0.0]);
+
+        JsonElement grid = tp.GetProperty("grid");
+        double[] u = Vector(grid.GetProperty("u")), ll = Vector(grid.GetProperty("llik")), lk = Vector(grid.GetProperty("log_prior_kernel"));
+        CalibrationEvaluation[] e = [.. u.Select(x => target.EvaluateState(at.WithVariances([Math.Exp(x)])))];
+        double[] ladder = Vector(tp.GetProperty("ladder"));   // temperatures 1, 2, 5
+        double moveGap = 0.0, swapGap = 0.0;
+        for (int r = 0; r < ladder.Length; r++)
+        {
+            var b = new Temperature(1.0 / ladder[r], TemperingPath.Likelihood);
+            // The variance move's acceptance between neighbouring grid states: the target's ratio with the Jacobian untempered.
+            for (int i = 0; i + 1 < u.Length; i++)
+            {
+                double ours = b.LogDensity(e[i + 1]) + u[i + 1] - b.LogDensity(e[i]) - u[i];
+                double path = b.InverseTemperature * (ll[i + 1] - ll[i]) + lk[i + 1] - lk[i] + u[i + 1] - u[i];
+                moveGap = Math.Max(moveGap, Math.Abs(ours - path));
+            }
+            if (r + 1 == ladder.Length) continue;
+            var c = new Temperature(1.0 / ladder[r + 1], TemperingPath.Likelihood);
+            for (int i = 0; i < u.Length; i += 3)
+                for (int j = 0; j < u.Length; j += 3)
+                {
+                    double ours = b.LogDensity(e[j]) + c.LogDensity(e[i]) - b.LogDensity(e[i]) - c.LogDensity(e[j]);
+                    swapGap = Math.Max(swapGap, Math.Abs(ours - (b.InverseTemperature - c.InverseTemperature) * (ll[j] - ll[i])));
+                }
+        }
+        double covarianceGap = 0.0;
+        var block = new DiscrepancyBlock(target);
+        foreach (JsonElement d in tp.GetProperty("discrepancy_covariance").EnumerateArray())
+        {
+            double[][] reference = Rows(d.GetProperty("likelihood_path"));
+            (_, double[,] covariance) = block.Moments(at, d.GetProperty("b").GetDouble());
+            for (int k = 0; k < 2; k++)
+                for (int l = 0; l < 2; l++) covarianceGap = Math.Max(covarianceGap, Math.Abs(covariance[k, l] - reference[k][l]) / Math.Abs(reference[k][k]));
+        }
+        _out.WriteLine($"this side against the likelihood path: the variance move's ratio ≤ {moveGap:E1}, the swap's ≤ {swapGap:E1}, " +
+                       $"the discrepancy's covariance ≤ {covarianceGap:E1}; R's swap gaps {string.Join(", ", tp.GetProperty("swaps").EnumerateArray().Select(s => s.GetProperty("r_vs_likelihood_path").GetDouble().ToString("F0")))}");
+        Assert.InRange(moveGap, 0, 1e-9);
+        Assert.InRange(swapGap, 0, 1e-9);
+        Assert.InRange(covarianceGap, 0, 1e-10);
+    }
+
+    [Fact]
     public void S2DfSwitch_EachGroupKeepsItsOwnProperPrior()
     {
         if (!Available) return;

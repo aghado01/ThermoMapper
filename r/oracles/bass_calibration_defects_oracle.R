@@ -43,8 +43,9 @@
 #       discrepancy prior, which its own moves temper.
 #     - The discrepancy draw's covariance, R's `discrep.S / itl[t]` evaluated as written, against the conditional
 #       covariances of the powered target, S / b, and of the likelihood path, (I / tau + b D' Sigma^-1 D)^-1, with
-#       S = (I / tau + D' Sigma^-1 D)^-1 and R's tau = 1; and R's swap between states that differ only in the
-#       discrepancy v, against the ratio its powered target needs (the gap is the omitted v prior).
+#       S = (I / tau + D' Sigma^-1 D)^-1 and R's tau = 1 (the likelihood path's matrix emitted as likelihood_path);
+#       and R's swap between states that differ only in the discrepancy v, against the ratio its powered target needs
+#       (the gap is the omitted v prior).
 #
 #   inputs: what the C# parity tests rebuild the setup from: y, the residuals, the emulator's 50 draws of component
 #     variances, the coefficients, the bounds, the groups and the discrepancy basis; run: the functional run's state per
@@ -213,7 +214,8 @@ discrepancy <- lapply(2:3, function(t) {
   b <- itl[t]
   r_cov <- eval(discrep_cov, list2env(list(discrep.S = S_d, itl = itl, t = t)))
   list(b = b, r_vs_powered = max(abs(r_cov - S_d / b)) / max(abs(S_d / b)),
-       r_vs_likelihood_path = max(abs(r_cov - solve(diag(2) + b * G))) / max(abs(S_d / b)))
+       r_vs_likelihood_path = max(abs(r_cov - solve(diag(2) + b * G))) / max(abs(S_d / b)),
+       likelihood_path = solve(diag(2) + b * G))
 })
 # R's swap between states that differ only in v (sigma^2 = 0.01 in both), rungs 1 and 2.
 v_pairs <- list(c(0, 0), c(1, -1), c(0.5, 2))
