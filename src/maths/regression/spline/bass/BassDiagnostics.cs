@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Maths.Regression.Spline.Bars;
 using Maths.Samplers;
 using Maths.Samplers.Ensemble;
@@ -13,7 +14,9 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>Convergence.</b> Rank-normalized R̂ with bulk and tail ESS (<see cref="ChainDiagnostics"/>) for M, τ (null
 /// under fixed g, which holds it), σ², and the fitted value f = a₀ + Σⱼ aⱼBⱼ of each draw at <see cref="Fitted"/>'s
 /// points. <see cref="SamplesUsed"/> and <see cref="StoppedEarly"/> read the R̂ stop.</item>
-/// <item><b>Moves.</b> Attempts and acceptances per move type, and the moves' pooled acceptance rate.</item>
+/// <item><b>Moves.</b> Attempts and acceptances per move type, and the moves' pooled acceptance rate; and per move kind
+/// (<see cref="MoveKinds"/>), attempts, acceptances, null moves and refusals, F-M2's local steps and fixed-M family beside
+/// D01's birth, death and redraw.</item>
 /// <item><b>Support.</b> Refused candidates by reason (cap, support, numerical, variance inflation, exact fit), the
 /// births whose draw came out the intercept, and each candidate term's support outcome by its orders, which keeps D01's
 /// tilt visible.</item>
@@ -30,6 +33,7 @@ public sealed record BassDiagnostics(
     IReadOnlyList<BassMonitoredValue> Fitted,
     IReadOnlyList<MoveStat> Moves,
     double AcceptanceRate,
+    BassMoveTally MoveKinds,
     Tally<BassRefusal> Refusals,
     long EmptyBirths,
     BassSupportTally Support,
@@ -139,11 +143,90 @@ public sealed record BassMonitoredValue(BassMonitoredPoint Point, ConvergenceDia
 /// <summary>A chain's start: an exact draw of the prior on F, its terms and τ, and the attempts the draw took.</summary>
 public sealed record BassStart(IReadOnlyList<BassTerm> Terms, double Tau, long Attempts);
 
-/// <summary>One chain's account over the sampling phase, with its start: moves, refusals, empty births, support by
-/// order and its share of draws at the cap.</summary>
+/// <summary>One chain's account over the sampling phase, with its start: moves, by type and by kind, refusals, empty
+/// births, support by order and its share of draws at the cap.</summary>
 public sealed record BassChainAccount(
-    BassStart Start, IReadOnlyList<MoveStat> Moves, Tally<BassRefusal> Refusals, long EmptyBirths, BassSupportTally Support,
-    double MassAtCap);
+    BassStart Start, IReadOnlyList<MoveStat> Moves, BassMoveTally MoveKinds, Tally<BassRefusal> Refusals, long EmptyBirths,
+    BassSupportTally Support, double MassAtCap);
+
+/// <summary>One move kind's account: its proposals attempted, accepted, null and refused; the rest were rejected on their
+/// ratio.</summary>
+public readonly record struct BassKindCount(BassMoveKind Kind, long Attempts, long Accepted, long Null, long Refused)
+{
+    /// <summary>Proposals the ratio rejected: neither accepted, null nor refused.</summary>
+    public long Rejected => Attempts - Accepted - Null - Refused;
+
+    /// <summary>Accepted over attempted; NaN without an attempt.</summary>
+    public double AcceptanceRate => Attempts > 0 ? (double)Accepted / Attempts : double.NaN;
+}
+
+/// <summary>
+/// The structure moves by kind (F-M2's Phase 1): D01's birth, death and redraw, lever 2's local step and toggle, and the
+/// fixed-M family's prune, grow and variable change, each with its attempts, acceptances, null moves and refusals.
+/// <list type="bullet">
+/// <item>An attempt is a proposal the chain weighs: a birth whose draw came out the intercept is no attempt
+/// (<see cref="BassStructureMoves.EmptyBirths"/>), nor is a change with no term to pick.</item>
+/// <item>A null move proposes nothing: a step off the knots, a toggle to an empty or full subset, a prune from an empty
+/// part, a grow into a full one, a variable change with no unused variable, the family at M = 0.</item>
+/// <item>A refusal is a candidate outside F, by the design's or the target's reason (tallied by reason in
+/// <see cref="BassStructureMoves.Refusals"/>), or a prune of a term's only factor, which would leave the intercept.</item>
+/// </list>
+/// The kinds of one palette move add up to the chain's count for it (<see cref="MoveStat"/>): the redraw, the local step
+/// and the toggle to the change's. A redraw that draws its factor back is the same state, accepted, as the chain counts it.
+/// </summary>
+public sealed class BassMoveTally : IMergeable<BassMoveTally>
+{
+    private static readonly int Kinds = Enum.GetValues<BassMoveKind>().Length;
+    private readonly long[] _attempts = new long[Kinds], _accepted = new long[Kinds], _null = new long[Kinds], _refused = new long[Kinds];
+
+    /// <summary>An empty tally.</summary>
+    public BassMoveTally() { }
+
+    private BassMoveTally(BassMoveTally source)
+    {
+        _attempts = (long[])source._attempts.Clone();
+        _accepted = (long[])source._accepted.Clone();
+        _null = (long[])source._null.Clone();
+        _refused = (long[])source._refused.Clone();
+    }
+
+    /// <summary><paramref name="kind"/>'s account.</summary>
+    public BassKindCount this[BassMoveKind kind]
+        => new(kind, _attempts[(int)kind], _accepted[(int)kind], _null[(int)kind], _refused[(int)kind]);
+
+    /// <summary>Every kind's account, in <see cref="BassMoveKind"/>'s order.</summary>
+    public IReadOnlyList<BassKindCount> Entries => [.. Enum.GetValues<BassMoveKind>().Select(k => this[k])];
+
+    internal void Attempted(BassMoveKind kind) => _attempts[(int)kind]++;
+    internal void Accepted(BassMoveKind kind) => _accepted[(int)kind]++;
+    internal void Nulled(BassMoveKind kind) => _null[(int)kind]++;
+    internal void Refused(BassMoveKind kind) => _refused[(int)kind]++;
+
+    /// <inheritdoc/>
+    public void MergeFrom(BassMoveTally other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        for (int k = 0; k < Kinds; k++)
+        {
+            _attempts[k] += other._attempts[k];
+            _accepted[k] += other._accepted[k];
+            _null[k] += other._null[k];
+            _refused[k] += other._refused[k];
+        }
+    }
+
+    /// <summary>An independent copy.</summary>
+    public BassMoveTally Copy() => new(this);
+
+    /// <summary>Zeroes every count.</summary>
+    public void Clear()
+    {
+        Array.Clear(_attempts);
+        Array.Clear(_accepted);
+        Array.Clear(_null);
+        Array.Clear(_refused);
+    }
+}
 
 /// <summary>One part and order's support outcomes: candidate terms of that order in that part, and those refused for
 /// support.</summary>

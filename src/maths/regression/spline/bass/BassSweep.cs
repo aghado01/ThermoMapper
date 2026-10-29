@@ -34,8 +34,9 @@ namespace Maths.Regression.Spline.Bass;
 /// state by a swap adopts its giver's design, and a resize's new replica its source's (<see cref="BassLadder"/>); any
 /// other structure is loaded whole. A chain restored from its snapshot gets its design back as it was.</item>
 /// </list>
-/// Refusals are tallied by reason, the target's exact-fit refusal included, and each birth's and change's candidate term
-/// by its orders with its support outcome (D01's tilt). Not thread-safe: one per chain.
+/// Refusals are tallied by reason, the target's exact-fit refusal included; each birth's and change's candidate term by
+/// its orders with its support outcome (D01's tilt); and every proposal by its kind (<see cref="Kinds"/>). Not thread-safe:
+/// one per chain.
 /// </summary>
 public sealed class BassStructureMoves
 {
@@ -45,9 +46,13 @@ public sealed class BassStructureMoves
     private readonly BassDesign _design;
     private BassTermCounts _counts;
     private BassState _committed;
-    private (BassState State, Kind Kind, BassTerm? Added, BassTerm? Removed)? _candidate;
+    private Pending? _candidate;
     private readonly Dictionary<BassTerm, double> _columnMeans = [];
     private readonly BassFactorShares? _shares;   // the fixed-M family's shares of the change's slot; null when off
+
+    // A proposal the design admitted, pending until the chain shows its structure: its kind, its terms in and out, and
+    // whether its acceptance counts in the kinds' tally (not when the tallies restarted after it was proposed).
+    private readonly record struct Pending(BassState State, BassMoveKind Kind, BassTerm? Added, BassTerm? Removed, bool Tallied);
 
     /// <summary>The moves of a chain started at <paramref name="terms"/>, which must lie in F, with u =
     /// <paramref name="logTau"/> (the held τ's log under fixed g).</summary>
@@ -64,6 +69,7 @@ public sealed class BassStructureMoves
         _counts = CountsOf(loaded);
         _committed = Start;
         Support = new BassSupportTally(model.Prior);
+        Kinds = new BassMoveTally();
         _shares = model.Resolved.FactorShares;
         Moves = Palette();
     }
@@ -85,6 +91,7 @@ public sealed class BassStructureMoves
         Refusals.Assign(snapshot.Refusals);
         EmptyBirths = snapshot.EmptyBirths;
         Support = snapshot.Support.Copy();
+        Kinds = snapshot.Kinds.Copy();
         _shares = model.Resolved.FactorShares;
         Moves = Palette();
     }
@@ -109,23 +116,30 @@ public sealed class BassStructureMoves
     /// <summary>Births whose draw left every part empty, the intercept: no move (D01).</summary>
     public long EmptyBirths { get; private set; }
 
-    /// <summary>Each birth's and change's candidate term by its orders, refused for support or not (D01's tilt).</summary>
+    /// <summary>Each birth's and change's candidate term by its orders, refused for support or not (D01's tilt), the
+    /// fixed-M family's included.</summary>
     public BassSupportTally Support { get; }
 
-    /// <summary>Clears the tallies (<see cref="Refusals"/>, <see cref="EmptyBirths"/>, <see cref="Support"/>), so they
-    /// count from here: a run's sampling phase.</summary>
+    /// <summary>The moves by kind: attempts, acceptances, null moves and refusals (<see cref="BassMoveTally"/>).</summary>
+    public BassMoveTally Kinds { get; }
+
+    /// <summary>Clears the tallies (<see cref="Refusals"/>, <see cref="EmptyBirths"/>, <see cref="Support"/>,
+    /// <see cref="Kinds"/>), so they count from here: a run's sampling phase. A proposal still pending was attempted
+    /// before, so its acceptance does not count after.</summary>
     public void ResetTallies()
     {
         Refusals.Assign(new Tally<BassRefusal>());
         EmptyBirths = 0;
         Support.Clear();
+        Kinds.Clear();
+        if (_candidate is { } c) _candidate = c with { Tallied = false };
     }
 
     // The restart state at `current`, which the design is first synced to: the design's own, and the tallies.
     internal BassMovesSnapshot Snapshot(BassState current)
     {
         Sync(current);
-        return new BassMovesSnapshot(_design.Snapshot(), Refusals.Copy(), EmptyBirths, Support.Copy());
+        return new BassMovesSnapshot(_design.Snapshot(), Refusals.Copy(), EmptyBirths, Support.Copy(), Kinds.Copy());
     }
 
     /// <summary>The chain's design, holding <paramref name="state"/>'s structure.</summary>
@@ -231,6 +245,7 @@ public sealed class BassStructureMoves
             _design.Accept();
             if (c.Removed is { } removed) _counts.Remove(removed);
             if (c.Added is { } added) _counts.Add(added);
+            if (c.Tallied) Kinds.Accepted(c.Kind);
             _candidate = null;
             _committed = state;
             return;
@@ -258,19 +273,21 @@ public sealed class BassStructureMoves
         return sum;
     }
 
-    // The candidate for a proposal the design has weighed: admitted, it is pending until the chain shows it; refused,
-    // by the design or the target, it is tallied and scored off the support.
-    private BassState Candidate(BassState current, BassTerm[] terms, DesignProposal proposal, Kind kind, BassTerm? added, BassTerm? removed)
+    // The candidate for a proposal the design has weighed, an attempt of its kind: admitted, it is pending until the chain
+    // shows it; refused, by the design or the target, it is tallied and scored off the support.
+    private BassState Candidate(BassState current, BassTerm[] terms, DesignProposal proposal, BassMoveKind kind, BassTerm? added, BassTerm? removed)
     {
         BassStructureFit fit = BassStructureFit.Of(proposal, proposal.Admitted ? LogTermPrior(terms) : double.NaN);
         if (added is not null) Support.Add(added, proposal.Refusal == BassRefusal.Support);
         var candidate = new BassState(terms, fit, current.LogTau);
+        Kinds.Attempted(kind);
         if (_model.Target.Refusal(fit) is { } reason)
         {
             Refusals.Add(reason);
+            Kinds.Refused(kind);
             _candidate = null;
         }
-        else _candidate = (candidate, kind, added, removed);
+        else _candidate = new Pending(candidate, kind, added, removed, true);
         return candidate;
     }
 
@@ -320,7 +337,7 @@ public sealed class BassStructureMoves
             double logRatio = owner._model.Proposal.LogBirthRatio(term, owner._counts);
             DesignProposal proposal = owner._design.ProposeBirth(term);
             BassTerm[] terms = [.. current.TermArray, term];
-            return new Proposal<BassState>(owner.Candidate(current, terms, proposal, Kind.Birth, term, null), logRatio, 0.0);
+            return new Proposal<BassState>(owner.Candidate(current, terms, proposal, BassMoveKind.Birth, term, null), logRatio, 0.0);
         }
     }
 
@@ -339,7 +356,7 @@ public sealed class BassStructureMoves
             double logRatio = owner._model.Proposal.LogDeathRatio(term, owner._counts);
             DesignProposal proposal = owner._design.ProposeDeath(index);
             BassTerm[] terms = [.. current.TermArray[..index], .. current.TermArray[(index + 1)..]];
-            return new Proposal<BassState>(owner.Candidate(current, terms, proposal, Kind.Death, null, term), logRatio, 0.0);
+            return new Proposal<BassState>(owner.Candidate(current, terms, proposal, BassMoveKind.Death, null, term), logRatio, 0.0);
         }
     }
 
@@ -371,18 +388,16 @@ public sealed class BassStructureMoves
         public Proposal<BassState>? Propose(BassState current, Xoshiro256PlusPlus rng)
         {
             owner.Sync(current);
+            BassMoveKind counted = kind switch { Kind.Prune => BassMoveKind.Prune, Kind.Grow => BassMoveKind.Grow, _ => BassMoveKind.VariableChange };
             if (current.Count == 0)
-            {
-                owner._candidate = null;
-                return new Proposal<BassState>(current, double.NegativeInfinity, 0.0);
-            }
+                return owner.Replace(current, -1, new BassTermMove(counted, null, double.NaN));
             int index = BassDraws.Below(rng, current.Count);
             BassTerm old = current.TermArray[index];
             BassTermProposal proposal = owner._model.Proposal;
-            BassTermMove move = kind switch
+            BassTermMove move = counted switch
             {
-                Kind.Prune => proposal.ProposePrune(rng, old),
-                Kind.Grow => proposal.ProposeGrow(rng, old),
+                BassMoveKind.Prune => proposal.ProposePrune(rng, old),
+                BassMoveKind.Grow => proposal.ProposeGrow(rng, old),
                 _ => proposal.ProposeVariableChange(rng, old),
             };
             return owner.Replace(current, index, move);
@@ -390,22 +405,30 @@ public sealed class BassStructureMoves
     }
 
     // Term `index` of `current` replaced as `move` proposes, at fixed M. A null move, or a prune that would leave the
-    // intercept, proposes the state itself with a ratio of −∞: attempted and rejected, the state and the design untouched.
-    // A term drawn back unchanged is the same state, whose term has its support, accepted as it always was.
+    // intercept (a refusal), proposes the state itself with a ratio of −∞: attempted and rejected, the state and the design
+    // untouched. A term drawn back unchanged is the same state, whose term has its support, accepted as it always was.
     private Proposal<BassState> Replace(BassState current, int index, BassTermMove move)
     {
         _candidate = null;
-        if (move.Term is not { } term) return new Proposal<BassState>(current, double.NegativeInfinity, 0.0);
+        if (move.Term is not { } term)
+        {
+            Kinds.Attempted(move.Kind);
+            if (move.LeavesIntercept) Kinds.Refused(move.Kind);
+            else Kinds.Nulled(move.Kind);
+            return new Proposal<BassState>(current, double.NegativeInfinity, 0.0);
+        }
         BassTerm old = current.TermArray[index];
         if (term.Equals(old))
         {
             Support.Add(term, false);
+            Kinds.Attempted(move.Kind);
+            Kinds.Accepted(move.Kind);
             return new Proposal<BassState>(current, 0.0, 0.0);
         }
         DesignProposal proposal = _design.ProposeChange(index, term);
         // The design moves a changed term to the end, so the candidate's order follows it.
         BassTerm[] terms = [.. current.TermArray[..index], .. current.TermArray[(index + 1)..], term];
-        return new Proposal<BassState>(Candidate(current, terms, proposal, Kind.Change, term, old), move.LogProposalRatio, 0.0);
+        return new Proposal<BassState>(Candidate(current, terms, proposal, move.Kind, term, old), move.LogProposalRatio, 0.0);
     }
 }
 
@@ -536,7 +559,8 @@ public sealed class BassChain
 }
 
 /// <summary>A chain's structure moves' restart state: the design's, and the tallies.</summary>
-internal sealed record BassMovesSnapshot(BassDesignSnapshot Design, Tally<BassRefusal> Refusals, long EmptyBirths, BassSupportTally Support);
+internal sealed record BassMovesSnapshot(BassDesignSnapshot Design, Tally<BassRefusal> Refusals, long EmptyBirths, BassSupportTally Support,
+                                         BassMoveTally Kinds);
 
 /// <summary>A <see cref="BassChain"/>'s restart state: the reversible-jump chain's snapshot, the moves', and the scan's
 /// stream (τ's block), step count and block counters.</summary>

@@ -1,18 +1,31 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Maths.Regression.Spline.Bass;
+using Maths.Rng;
+using Maths.Samplers.Rjmcmc;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Maths.Regression.Tests;
 
 /// <summary>
-/// F-M2's Phase 1 options as configuration (the local-move options brief, Step 1): the local steps and the fixed-M
-/// factor moves on <see cref="BassSampling"/>, the split rule on <see cref="TemperingSpec"/>. Each is off by default and
-/// its record's defaults are the decided values; each validates by name, resolves on the data and round-trips through
-/// JSON.
+/// F-M2's Phase 1 options as configuration and in the diagnostics (the local-move options brief, Steps 1 and 5).
+/// <list type="bullet">
+/// <item>The local steps and the fixed-M factor moves on <see cref="BassSampling"/>, the split rule on
+/// <see cref="TemperingSpec"/>: each off by default, its record's defaults the decided values; each validates by name,
+/// resolves on the data and round-trips through JSON.</item>
+/// <item>The moves by kind (<see cref="BassMoveTally"/>): the kinds of each palette move add up to the chain's own count of
+/// its attempts and acceptances, chain by chain and untempered or at a ladder's b = 1; refusals by kind match the
+/// reasons' tally; a duplicate term and a term short of support are refused as their kind; a null move leaves the state,
+/// the design and the tallies consistent; and a resumed run keeps them.</item>
+/// </list>
 /// </summary>
 public sealed class BassMoveOptionsTests
 {
+    private readonly ITestOutputHelper _out;
+    public BassMoveOptionsTests(ITestOutputHelper output) => _out = output;
+
     [Fact]
     public void Options_AreOffByDefault_AndTheirRecordsCarryTheDecidedValues()
     {
@@ -124,5 +137,159 @@ public sealed class BassMoveOptionsTests
         string baseline = Bass.Fingerprint(new BassConfig(), data);
         Assert.NotEqual(baseline, Bass.Fingerprint(new BassConfig { Sampling = new BassSampling { LocalSteps = new LocalSteps() } }, data));
         Assert.NotEqual(baseline, Bass.Fingerprint(new BassConfig { Sampling = new BassSampling { FactorMoves = new FactorMoves() } }, data));
+    }
+
+    // Every palette move's kinds against the chain's own count of it: the redraw, the local step and the toggle make the
+    // change; a birth, a death, a prune, a grow and a variable change are their own.
+    private static void AssertKindsAddUp(IReadOnlyList<MoveStat> moves, BassMoveTally kinds)
+    {
+        BassMoveKind[] For(string key) => key switch
+        {
+            "birth" => [BassMoveKind.Birth],
+            "death" => [BassMoveKind.Death],
+            "change" => [BassMoveKind.Redraw, BassMoveKind.LocalStep, BassMoveKind.Toggle],
+            "prune" => [BassMoveKind.Prune],
+            "grow" => [BassMoveKind.Grow],
+            _ => [BassMoveKind.VariableChange],
+        };
+        foreach (MoveStat m in moves)
+        {
+            BassKindCount[] counts = [.. For(m.Key).Select(k => kinds[k])];
+            Assert.Equal(m.Attempts, counts.Sum(c => c.Attempts));
+            Assert.Equal(m.Accepted, counts.Sum(c => c.Accepted));
+        }
+        Assert.All(kinds.Entries, c => Assert.True(c.Rejected >= 0, $"{c.Kind}: {c.Rejected} rejected"));
+        Assert.Equal(moves.Sum(m => m.Attempts), kinds.Entries.Sum(c => c.Attempts));
+    }
+
+    [Theory]
+    [InlineData("continuous", "none", false)]
+    [InlineData("continuous", "all", false)]
+    [InlineData("categorical, R's measure", "all", false)]
+    [InlineData("functional", "all", false)]
+    [InlineData("continuous", "all", true)]
+    [InlineData("categorical, uniform", "all", true)]
+    public void Kinds_AddUpToTheChainsMoveCounts(string fixture, string options, bool tempered)
+    {
+        (BassConfig config, BassData data) = BassLocalStepTests.Fixture(fixture, "equal", BassLocalStepTests.OptionsFor(options));
+        config = config with
+        {
+            Coefficients = new SampledG(),
+            Sampling = config.Sampling with
+            {
+                Chains = 2, MasterSeed = 9, BurnIn = 400, Samples = 600,
+                Tempering = tempered ? new TemperingSpec { Split = new SplitRule() } : null,
+            },
+        };
+        BassFit fit = Bass.Fit(config, data);
+        BassDiagnostics d = fit.Diagnostics;
+        foreach (BassChainAccount chain in d.Chains) AssertKindsAddUp(chain.Moves, chain.MoveKinds);
+        AssertKindsAddUp(d.Moves, d.MoveKinds);
+        _out.WriteLine($"{fixture}, {options}, tempered {tempered}: " + string.Join("; ", d.MoveKinds.Entries.Where(c => c.Attempts > 0)
+            .Select(c => $"{c.Kind} {c.Accepted}/{c.Attempts} (null {c.Null}, refused {c.Refused})")));
+        if (options == "none")
+        {
+            Assert.All(new[] { BassMoveKind.LocalStep, BassMoveKind.Toggle, BassMoveKind.Prune, BassMoveKind.Grow, BassMoveKind.VariableChange },
+                       k => Assert.Equal(0, d.MoveKinds[k].Attempts));
+            Assert.All(d.MoveKinds.Entries, c => Assert.Equal(0, c.Null));
+            return;
+        }
+        Assert.True(d.MoveKinds[BassMoveKind.LocalStep].Attempts > 0);
+        Assert.True(d.MoveKinds[BassMoveKind.Prune].Attempts > 0 && d.MoveKinds[BassMoveKind.Grow].Attempts > 0 && d.MoveKinds[BassMoveKind.VariableChange].Attempts > 0);
+        if (fixture.StartsWith("categorical", StringComparison.Ordinal)) Assert.True(d.MoveKinds[BassMoveKind.Toggle].Attempts > 0);
+        Assert.True(d.MoveKinds.Entries.Sum(c => c.Null) > 0);
+    }
+
+    [Fact]
+    public void Refusals_ByKind_MatchTheReasons()
+    {
+        // Without prunes, whose refusal of a term's only factor has no design reason, every refusal is by a reason.
+        (BassConfig config, BassData data) = BassLocalStepTests.Fixture("categorical, R's measure", "equal",
+                                                                        s => s with { LocalSteps = new LocalSteps(), FactorMoves = new FactorMoves(1, 0, 1) });
+        var model = BassModel.Create(config, data);
+        var chain = new BassChain(model, [], Math.Log(model.Target.FixedTau!.Value), new Xoshiro256PlusPlus(71), new Xoshiro256PlusPlus(72));
+        for (int i = 0; i < 20_000; i++) chain.Step();
+        BassStructureMoves moves = chain.Structure;
+        Assert.Equal(moves.Refusals.Total, moves.Kinds.Entries.Sum(c => c.Refused));
+        Assert.True(moves.Refusals.Count(BassRefusal.Support) > 0 && moves.Refusals.Count(BassRefusal.Numerical) > 0);
+        AssertKindsAddUp(chain.Moves.MoveStats(), moves.Kinds);
+
+        // With them, a prune of a term's only factor is refused as a prune, beyond the reasons.
+        (config, data) = BassLocalStepTests.Fixture("continuous", "equal", s => s with { FactorMoves = new FactorMoves() });
+        model = BassModel.Create(config, data);
+        chain = new BassChain(model, [], Math.Log(model.Target.FixedTau!.Value), new Xoshiro256PlusPlus(73), new Xoshiro256PlusPlus(74));
+        for (int i = 0; i < 20_000; i++) chain.Step();
+        moves = chain.Structure;
+        Assert.True(moves.Kinds[BassMoveKind.Prune].Refused > 0);
+        Assert.True(moves.Kinds.Entries.Sum(c => c.Refused) > moves.Refusals.Total);
+        AssertKindsAddUp(chain.Moves.MoveStats(), moves.Kinds);
+    }
+
+    [Fact]
+    public void DuplicateAndSupport_AreRefusedAsTheirKind_TheDesignUntouched()
+    {
+        // x0+ at knot 1 beside x1+ at knot 1 on the 2,263-state fixture: changing x0 to x1 can draw the held term, a
+        // duplicate; a step of x0+ to knot 2, the largest value, leaves no support.
+        (BassConfig config, BassData data) = BassLocalStepTests.Fixture("continuous", "equal",
+                                                                        s => s with { LocalSteps = new LocalSteps(1.0, 0.02), FactorMoves = new FactorMoves() });
+        var model = BassModel.Create(config, data);
+        BassTerm a = new([new HingeFactor(0, 1, 1)]), b = new([new HingeFactor(1, 1, 1)]);
+        IRjMove<BassState> Move(BassStructureMoves moves, string key) => moves.Moves.Single(m => m.Key == key);
+        (BassRefusal Reason, BassMoveKind Kind, string Key)[] cases =
+            [(BassRefusal.Numerical, BassMoveKind.VariableChange, "variable"), (BassRefusal.Support, BassMoveKind.LocalStep, "change")];
+        foreach ((BassRefusal reason, BassMoveKind kind, string key) in cases)
+        {
+            bool seen = false;
+            for (int seed = 0; seed < 400 && !seen; seed++)
+            {
+                var moves = new BassStructureMoves(model, [a, b], 0);
+                BassState start = moves.Start;
+                BassTerm[] before = [.. moves.DesignAt(start).Terms];
+                Proposal<BassState> p = Move(moves, key).Propose(start, new Xoshiro256PlusPlus(seed))!.Value;
+                if (p.Candidate.Fit.Refusal != reason) continue;
+                seen = true;
+                Assert.Equal(1, moves.Refusals.Count(reason));
+                Assert.Equal((1L, 1L, 0L), (moves.Kinds[kind].Attempts, moves.Kinds[kind].Refused, moves.Kinds[kind].Accepted));
+                Assert.True(double.IsNegativeInfinity(model.Target.Evaluate(p.Candidate).LogPrior));
+                Assert.Equal(before, moves.DesignAt(start).Terms);
+                Assert.False(moves.Holds(p.Candidate));
+            }
+            Assert.True(seen, $"no {kind} was refused for {reason}");
+        }
+    }
+
+    [Fact]
+    public void NullMoves_LeaveTheStateTheDesignAndTheTalliesConsistent()
+    {
+        // x0·x1 alone on the 2,263-state fixture: its part is full, so a variable change, its own reverse, is a null move.
+        (BassConfig config, BassData data) = BassLocalStepTests.Fixture("continuous", "equal", s => s with { FactorMoves = new FactorMoves() });
+        var model = BassModel.Create(config, data);
+        var full = new BassTerm([new HingeFactor(0, 1, 0), new HingeFactor(1, -1, 2)]);
+        var moves = new BassStructureMoves(model, [full], 0);
+        BassState start = moves.Start;
+        IRjMove<BassState>[] nullMoves = [.. moves.Moves.Where(m => m.Key is "variable")];
+        var chain = new ReversibleJumpChain<BassState>(nullMoves, model.Target, start, new Xoshiro256PlusPlus(5));
+        for (int i = 0; i < 100; i++) Assert.Same(start, chain.Step());
+        Assert.Equal((100L, 0L), (chain.Attempts, chain.Accepted));
+        Assert.Equal((100L, 100L), (moves.Kinds[BassMoveKind.VariableChange].Attempts, moves.Kinds[BassMoveKind.VariableChange].Null));
+        Assert.Equal(0, moves.Kinds.Entries.Sum(c => c.Accepted + c.Refused));
+        Assert.Equal(0, moves.Refusals.Total);
+        Assert.True(moves.Holds(start));
+        Assert.Equal([full], moves.DesignAt(start).Terms);
+        AssertKindsAddUp(chain.MoveStats(), moves.Kinds);
+    }
+
+    [Fact]
+    public void Resume_KeepsTheKinds()
+    {
+        (BassConfig config, BassData data) = BassLocalStepTests.Fixture("categorical, R's measure", "equal", BassLocalStepTests.OptionsFor("all"));
+        config = config with { Coefficients = new SampledG(), Sampling = config.Sampling with { Chains = 2, MasterSeed = 3, BurnIn = 200, Samples = 400 } };
+        BassFit whole = Bass.Fit(config, data);
+        BassConfig half = config with { Sampling = config.Sampling with { Samples = 200 } };
+        BassFit first = Bass.Fit(half, data, new BassRunOptions { Checkpoint = true });
+        BassFit resumed = Bass.Resume(first.Checkpoint!, half, data);
+        BassRunTests.AssertSameFit(whole, resumed);
+        Assert.Equal(whole.Diagnostics.MoveKinds.Entries, resumed.Diagnostics.MoveKinds.Entries);
+        for (int c = 0; c < 2; c++) Assert.Equal(whole.Diagnostics.Chains[c].MoveKinds.Entries, resumed.Diagnostics.Chains[c].MoveKinds.Entries);
     }
 }

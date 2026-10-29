@@ -176,7 +176,7 @@ public sealed class BassLadder
         int[] kept = Tempering.Resize(inverseTemperatures, sources, Fork, k =>
         {
             int s = sources[k];
-            built[k] = new BassStructureMoves(Model, states[s], new BassMovesSnapshot(DesignOf(s), new Tally<BassRefusal>(), 0, new BassSupportTally(Model.Prior)));
+            built[k] = new BassStructureMoves(Model, states[s], new BassMovesSnapshot(DesignOf(s), new Tally<BassRefusal>(), 0, new BassSupportTally(Model.Prior), new BassMoveTally()));
             return built[k].Moves;
         }, Blocks(Model));
         var structures = new BassStructureMoves[levels];

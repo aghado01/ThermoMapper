@@ -177,6 +177,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         var accounts = new BassChainAccount[runs.Length];
         var refusals = new Tally<BassRefusal>();
         var support = new BassSupportTally(_model.Prior);
+        var kinds = new BassMoveTally();
         long emptyBirths = 0, atCap = 0, retained = 0;
         MoveStat[]? moves = null;
         for (int c = 0; c < runs.Length; c++)
@@ -196,8 +197,9 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
                 if (d.Structure.TermIds.Length == _model.MaxBasis) chainAtCap++;
             atCap += chainAtCap;
             retained += run.Draws.Count;
-            accounts[c] = new BassChainAccount(run.Start, sampling, structure.Refusals.Copy(), structure.EmptyBirths, structure.Support.Copy(),
-                                               (double)chainAtCap / run.Draws.Count);
+            accounts[c] = new BassChainAccount(run.Start, sampling, structure.Kinds.Copy(), structure.Refusals.Copy(), structure.EmptyBirths,
+                                               structure.Support.Copy(), (double)chainAtCap / run.Draws.Count);
+            kinds.MergeFrom(structure.Kinds);
             refusals.MergeFrom(structure.Refusals);
             emptyBirths += structure.EmptyBirths;
             support.MergeFrom(structure.Support);
@@ -209,7 +211,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         ConvergenceDiagnostic sigma2 = summary.Monitored[f++];
         var fitted = new BassMonitoredValue[_points.Count];
         for (int p = 0; p < fitted.Length; p++) fitted[p] = new BassMonitoredValue(_points[p], summary.Monitored[f++]);
-        return new BassDiagnostics(count, tau, sigma2, fitted, moves!, summary.AcceptanceRate, refusals, emptyBirths, support,
+        return new BassDiagnostics(count, tau, sigma2, fitted, moves!, summary.AcceptanceRate, kinds, refusals, emptyBirths, support,
                                    (double)atCap / retained, summary.SamplesUsed, summary.SamplesUsed < _plannedDraws, accounts,
                                    ladders is null ? null : BassTemperingReadout.Of(ladders));
     }
