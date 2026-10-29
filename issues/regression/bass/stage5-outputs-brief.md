@@ -129,3 +129,93 @@ Under "Reports" below, newest first:
 ## Reports
 
 Newest first.
+
+### Stage 5 built: O1–O4 — 2026-10-29
+
+**What landed** (new code in `bass/output/` and `bass/posterior/`, namespace `Maths.Regression.Spline.Bass`):
+- `2fec1ee` O1. `BassDecomposition.FromPca` and `FromBasis`, with `BassPcaSpec`, `BassPcaAccount`, `TruncationResiduals`, the O-X5 map (`ReconstructionMap`, `LinearReconstruction`, `ReconstructionDomain`) and the O-X3 slot (`BasisUncertainty`, always null).
+  - The rank is the smallest reaching the share (≥), capped at the numerical rank at max(n, m)·ε·d₁; a share of 1 is the numerical rank itself, whatever rounding does to the last shares.
+  - Leave-one-case-out residuals in case coordinates, under the mean centre (n/(n−1)·cᵢ and cⱼ + cᵢ/(n−1)) and under a fixed centre (cᵢ and cⱼ).
+- `29e7e23` O3, direct prediction.
+  - `BassFit.Predict(data, cases, options)` returns `BassPrediction`, with `BassPredictOptions`, the inputs `PredictionCases`, `ContinuousColumn`, `CategoricalColumn` and `UnseenLevel`, and `PredictiveMixture` (the Gaussian mixture's exact quantile, and the weighted empirical one).
+  - Internal: `BassSurface` evaluates draws at any inputs with `BassDrawFit.Evaluate`'s accumulation, and `BassConditionalMeans` gives the Rao–Blackwellized coefficients.
+- `bb065c6` O2, with O3's basis half.
+  - `BassComponents.Fit` and `Assemble` return a `BassBasisFit`, and `BassJointDraws.Pair` pairs the draws.
+  - `BassBasisFit.Predict` returns a `BassBasisPrediction`, with the covariance in physical units, quantiles and the mean surface.
+- `502fb0f` O4: `BassBasisFit.PointwiseLogDensity(units, BasisDensitySpace)`. Coefficient space is the default; the diagonal Gaussian in physical units is the declared option, through `DiagonalPlusLowRank`.
+- `dd533be`: the O-O1 parity tests. `2fec1ee` carries O-O4's.
+- `ac4730e`: the review's fixes.
+
+**Tests.**
+- New:
+  - `BassOutputDecompositionTests` (19);
+  - `BassPredictTests` (13);
+  - `BassOutputComponentsTests` (7);
+  - `BassPredictBasisTests` (8);
+  - `BassOutputDensityTests` (3);
+  - oracle `BassOutputTruncationParityTests` (5);
+  - oracle `BassOutputDefectsParityTests` (7).
+- Suites:
+  - Maths.Regression.Tests 897/898 at `ac4730e`. The one failure is `BassSensitivityMomentTests.Resolution_RefusesUnknownNamesAndWrongKinds`, in the stage-6 chip's uncommitted tests that the build picked up; every stage-5 test passes.
+  - Maths.Oracle.Tests' BASS parity 47/47, with R present.
+  - The oracle run built into a second root, `artifacts\chip-stage5-oracle\`, so as not to contend with the background build. It is deleted with `chip-stage5\`.
+- Evidence:
+  - O-O4: rank, ranks and both residual sets match the oracle to 2·10⁻¹⁴ at n = 2, 5, 10 and 40, and at full retention. The stability ratios match too: 2.810, 1.654 and 1.096, null at n = 2 and at full retention.
+  - O-O1: R's reconstruction misses Y by 3.09, this side's by 2·10⁻¹⁶. The skewness is 3.785, against R's −3.785.
+  - O-O1: the mixture intervals are ±2.771 and ±2.644, against R's ±3.912 and ±5.201. The residuals were drawn from all 8 cases. The component noise has correlation 0.006 across cases, where R's is 1.
+  - Prediction at the training inputs equals `BassDrawFit`'s fitted values bit for bit (scalar, categorical and direct functional).
+  - The R̂-stopped components ran 800, 2000 and 2000 draws per chain and were paired over 800.
+
+**Changes outside my files:** none. `BassFit.cs` gained `Predict` only, and `ThinSvd` is unchanged.
+
+**Questions left as reversible defaults:**
+1. *`Predict` takes the training data,* as `PointwiseLogDensity` does: the term table holds knot and level indices, and the fit keeps neither the knots nor the inputs. If the fit carried its prepared inputs, the argument would go.
+2. *Basis intervals are weighted quantiles of the predictive draws,* the mixture's quantile up to Monte Carlo error. Direct fits solve their Gaussian mixture exactly. A basis mixture runs over draws × training residuals, so an exact root costs S·n per evaluation.
+3. *Leave-one-out keeps the full data's y_s* under the column-sd option, so every residual is in one set of standardized units. Under a supplied centre it does not recentre. D07 states neither choice.
+4. *Sign convention:* each component's largest |K| entry is positive.
+5. *Even thinning* keeps draw ⌊(2j + 1)L/(2L')⌋, which is the identity when L' = L. Equal-weight components must share their chain count, and are refused with the reason otherwise, so the joint draws keep chains for PSIS.
+6. *Weighted pairing:*
+   - multinomial resampling, `SmcSpec`'s default, as a parameter;
+   - to the smallest component's count, then shuffled, so that the sorted ancestors do not pair particle orders across components;
+   - an equal-weight component beside weighted ones is thinned over its pooled draws.
+7. *Seeds:* component k takes child k of the master seed, and the pairing's stream takes child r. With per-component configs, the seed tree replaces each config's `MasterSeed`.
+8. *One bound:* max(1, ⌊P/C⌋) components run at once, each with min(P, C) chains. Progress is reported per component.
+9. *Supplied basis:* its residuals are the in-sample ones from the training responses, which a basis fixed in advance did not see, or are supplied as given. Leave-one-out is not offered, because there is no construction to refit.
+10. *Diagonal Gaussian density:*
+    - the residual set's mean ē enters the mean, and its uniform-draw variance the diagonal;
+    - a unit must hold whole cases;
+    - it is refused where v = 0 (a constant column, or in-sample residuals at full retention) and for supplied residuals.
+11. *Prediction columns* are matched by name; categorical values are given by level name.
+12. *O-O1's constant-input fixture* still records R's training mapping to 0 as the "corrected" value, which predates D07's amendment. The parity test asserts the refusal. The fixture's field is the main session's to update.
+
+**Review pass** (fresh eyes, after O4):
+- *Correctness.* I re-read units and orientation at each step:
+  - e is in standardized units, added before y_s;
+  - the y-space density subtracts Σ log y_s;
+  - the covariance is diag(y_s)·C·diag(y_s);
+  - noise is drawn per draw and case (and per location, direct), and e whole;
+  - the pairing and its thinning are within chains;
+  - the axes are kept.
+
+  The leave-one-out cost was stated as O(n⁴) independent of m: the refits are, but the map back costs O(nmρ). The docstring is corrected.
+- *Coverage.*
+  - Repeated singular values were untested. A tie is now compared by K Kᵀ and K W.
+  - Already covered: n = 2, r = n − 1, full rank with m < n, one output location (decomposition and basis prediction), singleton draw and case, and a refusal with its reason for each input.
+
+**For the main session:**
+- *Docs* (`docs/Maths`):
+  - leave-one-out in case coordinates under both centres;
+  - the rank rule;
+  - the joint draws (thinning, resampling and shuffling);
+  - the predictive draw and its covariance;
+  - the Rao–Blackwellized mean (ȳ + (ŷ_OLS − ȳ)/(1 + τ) at the training inputs under the mean centre);
+  - the two density spaces.
+
+  Checklist: O1–O4, and the O-X3 and O-X5 slots.
+- *For O7:*
+  - `BassBasisFit.Decomposition.Map` (y_m, y_s, K, `Physical`);
+  - `Components[k]`, whose term tables share one transform and one set of knots;
+  - `JointDraws.Draw(k, j)`, with the joint draws weighing equally;
+  - `ComponentData(k)`, and the internal `Model(k)`.
+
+  A note is in the shared session notes (`stage5-outputs-handover.md`).
