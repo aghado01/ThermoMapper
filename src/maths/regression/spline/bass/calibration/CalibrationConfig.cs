@@ -21,6 +21,10 @@ public sealed record CalibrationConfig
     /// <summary>The covariance formulation, declared (C1): functional or multivariate.</summary>
     public required CovarianceFormulation Covariance { get; init; }
 
+    /// <summary>The most categorical level combinations whose joint conditional is enumerated whole (D09: 1,024, well
+    /// above Francom et al.'s 162); above it, single-site updates take over.</summary>
+    public int EnumerationCap { get; init; } = 1024;
+
     /// <summary>The canonical JSON options, <see cref="BassConfig.JsonOptions"/>' settings: enums by name, compact, an
     /// unknown field refused, a missing one defaulted (a required one refused), a variant's <c>Kind</c> anywhere.</summary>
     public static JsonSerializerOptions JsonOptions { get; } = CreateJsonOptions();
@@ -91,6 +95,7 @@ public sealed record CalibrationConfig
             default:
                 throw Bad("Covariance", "is missing or of no known kind");
         }
+        if (EnumerationCap < 1) throw Bad("EnumerationCap", "must be at least 1");
     }
 
     private static ArgumentException Bad(string field, string reason) => new($"CalibrationConfig.{field}: {reason}");
