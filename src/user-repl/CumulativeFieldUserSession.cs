@@ -39,7 +39,7 @@ namespace UserRepl;
 /// The currency tables use the same shared writer as SW:
 /// <see cref="CurrencyCsvWriter.WritePartition"/> over the resolved
 /// <see cref="Assignment"/>, <see cref="CurrencyCsvWriter.WriteEdgeCurrencies"/> over a representative single-T <see cref="Affinities"/> slice (the coldest /
-/// most-coupled column, or <paramref name="cutTemperature"/>). The MC-only
+/// most-coupled column, or <c>Run</c>'s <c>cutTemperature</c>). The MC-only
 /// exports (susceptibility profile, criteria, replica traces) have no closed-form
 /// analog and are absent; in their place the solver writes a thin per-temperature
 /// cluster-count sweep.</para>
