@@ -5,8 +5,8 @@ namespace Clustering.Evaluation.External;
 /// partitions agree — together in both, or apart in both.
 /// <code>RI = (C(n,2) + 2·Σ C(n_ij,2) − Σ C(a_i,2) − Σ C(b_j,2)) / C(n,2)</code>
 /// computed from the contingency table. It is the Potts link overlap of the two
-/// partitions taken over the complete graph; <see cref="LinkOverlap"/> is the same
-/// count restricted to a graph's edges.
+/// partitions taken over the complete graph; <c>Graphs.Observables.LinkOverlap</c> is the
+/// same count restricted to a graph's edges.
 /// </summary>
 /// <remarks>
 /// <para><b>Range.</b> <c>[0, 1]</c>; <c>1.0</c> = identical partitions.

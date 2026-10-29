@@ -65,7 +65,7 @@ flowchart LR
 | Algorithms | `UnionFind`; `BfsShells` → `BfsShellsResult` (`Distances`, `Shells`, `SeedNode`, `MaxDepth`, `ReachableNodeCount`); `BoundedMinHeap` over `Neighbor`; `TriangleCount.OnCsrGraph`; `Statistics`; `Dijkstra.ComputeBoundedDistances` (plus a target-mask overload) |
 | MST | `Prim.ComputeMutualReachabilityMst<TMetric>`; `Boruvka.AddMinimalBridges` → `BridgeEdge` list; `Kruskal.BuildMinimumSpanningTree`; `CoreDistances.Compute<TMetric>`; `MstEdge` |
 | Coupling | `Gaussian`, `Cauchy`, `Laplacian`, `Linear` (each `Bandwidth = 0`), `Mixture` (+ `MixtureWeights`, `MixtureBandwidth`); `*Kernel.Evaluate`; `Kernels.*` factories |
-| Observables | signals `AffinityDegree`, `AffinityBinaryEntropySum`, `AlignmentEigenCentrality` (`IGraphSignal<T>`); `AffinityNodeMarginals`, `AffinityEntropy`, `ClusterSizeEntropy`; diagnostics `Connectivity`, `Degree`, `EdgeWeights`, `Cycles`, `AlgebraicConnectivity` |
+| Observables | signals `AffinityDegree`, `AffinityBinaryEntropySum`, `AlignmentEigenCentrality` (`IGraphSignal<T>`); `AffinityNodeMarginals`, `AffinityEntropy`, `ClusterSizeEntropy`, `LinkOverlap`; diagnostics `Connectivity`, `Degree`, `EdgeWeights`, `Cycles`, `AlgebraicConnectivity` |
 
 ## Algorithms
 
@@ -114,6 +114,8 @@ The mixture is $J=w_GK_G(d;\delta_G)+w_CK_C(d;\delta_C)+w_LK_L(d;\delta_L)$. The
 
 **Scalar entropies.** `AffinityEntropy` computes the Shannon entropy of the normalized G over **all** slots. It therefore relies on the mirror slots being zero. `ClusterSizeEntropy` computes the entropy of a histogram of cluster sizes. Both are in nats.
 
+**Partition comparison.** `LinkOverlap.Compute(graph, a, b, weighted = false)` compares two node labelings on the graph's edges: $Q=\sum_e w_e[\text{same}_a(e)=\text{same}_b(e)]/\sum_e w_e$, with $w_e=1$ or the coupling when `weighted`. It is the spin-glass link overlap of two Potts states (Hed and Domany 2007): it compares where two partitions draw their boundaries, and on the complete graph it equals the Rand index. Uses include two methods, two settings, two sampler replicas at one temperature, or a result against a reference. A negative label marks an unplaced node, and an edge touching one in either labeling is not counted, so Q is symmetric; it is 0 when no edge counts.
+
 **Structural diagnostics.**
 
 - **`Connectivity.Validate`** returns components, isolated nodes and the largest-component coverage.
@@ -152,6 +154,6 @@ The mixture is $J=w_GK_G(d;\delta_G)+w_CK_C(d;\delta_C)+w_LK_L(d;\delta_L)$. The
 | Currencies | `primitives/Affinities.cs`, `primitives/Alignments.cs`, `primitives/CoMembership.cs` |
 | Algorithms | `primitives/UnionFind.cs`, `primitives/BfsShells.cs`, `primitives/BoundedMinHeap.cs`, `primitives/TriangleCount.cs`, `primitives/Statistics.cs`, `primitives/traversal/Dijkstra.cs`, `primitives/mst/Prim.cs`, `primitives/mst/Boruvka.cs`, `primitives/mst/Kruskal.cs`, `primitives/mst/CoreDistances.cs`, `primitives/mst/MstEdge.cs` |
 | Coupling | `coupling/Gaussian.cs`, `coupling/Cauchy.cs`, `coupling/Laplacian.cs`, `coupling/Linear.cs`, `coupling/Mixture.cs`, `coupling/MixtureTypes.cs`, `coupling/Kernels.cs`, `coupling/IKernelDescriptor.cs` |
-| Observables | `observables/*.cs` (12 files) |
+| Observables | `observables/*.cs` (13 files) |
 
 **See also:** [Concepts](./Concepts.md) · [DistanceMetrics](./DistanceMetrics.md) · [GraphConstruction](./GraphConstruction.md) · [SpcEngine](./SpcEngine.md) (currency producers)

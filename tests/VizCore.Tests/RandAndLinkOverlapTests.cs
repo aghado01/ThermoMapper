@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Clustering.Evaluation.External;
+using Graphs.Observables;
 using Graphs.Primitives;
 using Xunit;
 
@@ -90,7 +91,7 @@ public sealed class RandAndLinkOverlapTests
     public void LinkOverlap_OnCompleteGraph_EqualsRandIndex(int[] a, int[] b)
         => Assert.Equal(
             new RandIndex().Evaluate(a, b),
-            new LinkOverlap().Evaluate(Complete(a.Length), a, b), 12);
+            LinkOverlap.Compute(Complete(a.Length), a, b), 12);
 
     [Fact]
     public void LinkOverlap_ReadsBoundaries_NotVolume()
@@ -103,7 +104,7 @@ public sealed class RandAndLinkOverlapTests
         int[] a = { 0, 0, 0, 1, 1, 1 };
         int[] b = { 0, 0, 1, 1, 1, 1 };
 
-        Assert.Equal(0.6, new LinkOverlap().Evaluate(graph, a, b), 12);
+        Assert.Equal(0.6, LinkOverlap.Compute(graph, a, b), 12);
         Assert.Equal(10.0 / 15.0, new RandIndex().Evaluate(a, b), 12);
     }
 
@@ -116,7 +117,7 @@ public sealed class RandAndLinkOverlapTests
         int[] a = { 0, 0, 0, 1, 1, 1 };
         int[] b = { 0, 0, 1, 1, 1, 1 };
 
-        Assert.Equal(3.0 / 3.5, new LinkOverlap(weighted: true).Evaluate(graph, a, b), 12);
+        Assert.Equal(3.0 / 3.5, LinkOverlap.Compute(graph, a, b, weighted: true), 12);
     }
 
     [Theory]
@@ -137,7 +138,7 @@ public sealed class RandAndLinkOverlapTests
 
         Assert.Equal(
             BruteLinkOverlap(edges, a, b, weighted),
-            new LinkOverlap(weighted).Evaluate(graph, a, b), 12);
+            LinkOverlap.Compute(graph, a, b, weighted), 12);
     }
 
     [Fact]
@@ -145,6 +146,51 @@ public sealed class RandAndLinkOverlapTests
     {
         var graph = CsrGraph.FromEdges(PathEdges(), nodeCount: 6);
         Assert.Throws<ArgumentException>(
-            () => new LinkOverlap().Evaluate(graph, new[] { 0, 0, 0 }, new[] { 0, 0, 0, 1, 1, 1 }));
+            () => LinkOverlap.Compute(graph, new[] { 0, 0, 0 }, new[] { 0, 0, 0, 1, 1, 1 }));
+    }
+
+    [Fact]
+    public void LinkOverlap_IsSymmetric_WithUnplacedNodes()
+    {
+        // Unplaced (negative) labels in either labeling drop the same edges either way round.
+        Edge[] edges = PathEdges();
+        var graph = CsrGraph.FromEdges(edges, nodeCount: 6);
+        int[] a = { 0, 0, -1, 1, 1, 1 };
+        int[] b = { 0, 0, 1, 1, 1, -1 };
+
+        Assert.Equal(LinkOverlap.Compute(graph, a, b), LinkOverlap.Compute(graph, b, a), 12);
+    }
+
+    [Fact]
+    public void LinkOverlap_SkipsEdgesTouchingUnplacedNodes_MatchesPhysicalRemoval()
+    {
+        // Node 5 is unplaced in b only; node 0 in a only. Their edges (0,1) and (4,5) drop,
+        // leaving the path 1-2-3-4: a cuts (2,3), b cuts (1,2), so they disagree on both and
+        // agree only on (3,4): Q = 1/3.
+        var full = CsrGraph.FromEdges(PathEdges(), nodeCount: 6);
+        int[] a = { -1, 0, 0, 1, 1, 1 };
+        int[] b = { 0, 0, 1, 1, 1, -1 };
+
+        var sub = CsrGraph.FromEdges(new[]
+        {
+            new Edge(0, 1, 0.25),   // old (1,2)
+            new Edge(1, 2, 0.25),   // old (2,3)
+            new Edge(2, 3, 1.0),    // old (3,4)
+        }, nodeCount: 4);
+        int[] aSub = { 0, 0, 1, 1 };
+        int[] bSub = { 0, 1, 1, 1 };
+
+        Assert.Equal(1.0 / 3.0, LinkOverlap.Compute(full, a, b), 12);
+        Assert.Equal(LinkOverlap.Compute(sub, aSub, bSub), LinkOverlap.Compute(full, a, b), 12);
+        Assert.Equal(LinkOverlap.Compute(sub, aSub, bSub, weighted: true),
+                     LinkOverlap.Compute(full, a, b, weighted: true), 12);
+    }
+
+    [Fact]
+    public void LinkOverlap_AllUnplaced_IsZero()
+    {
+        var graph = CsrGraph.FromEdges(PathEdges(), nodeCount: 6);
+        int[] unplaced = { -1, -1, -1, -1, -1, -1 };
+        Assert.Equal(0.0, LinkOverlap.Compute(graph, unplaced, new[] { 0, 0, 0, 1, 1, 1 }), 12);
     }
 }

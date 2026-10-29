@@ -151,10 +151,11 @@ Where it stops being an analogy. Sketch only.
 ## Candidate work (unbriefed)
 
 1. **Rand index + graph-restricted link overlap** in `Clustering.Evaluation`
-   (Thread 2). **Done 2026-10-28:** `RandIndex` (`IExternalClusterEvaluator`) and
-   `LinkOverlap` (uniform or coupling-weighted) behind a new
-   `IGraphExternalClusterEvaluator` (graph, predicted, reference). Not yet wired
-   into the REPL evaluator lists; replica overlaps (Thread 4) would reuse it.
+   (Thread 2). **Done 2026-10-28:** `RandIndex` is an external quality index in
+   `Clustering.Evaluation`. `LinkOverlap` is an observable, not an evaluator: it
+   compares any two node labelings, so it lives in `Graphs.Observables`
+   (`LinkOverlap.Compute(graph, a, b, weighted)`, symmetric, negative labels =
+   unplaced). Replica overlaps (Thread 4) reuse it directly.
 2. **Ultrametricity test** (triplet K distribution across top splits, block
    uniformity) as a dendrogram faithfulness diagnostic (Thread 1). Moderate;
    placement decision.
