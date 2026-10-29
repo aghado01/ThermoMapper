@@ -192,6 +192,7 @@ public sealed class BassContractTests
         Assert.StartsWith("Coefficients.Tau", Reason(new BassConfig { Coefficients = new FixedG(-1) }));
         Assert.StartsWith("Intercept", Reason(new BassConfig { Intercept = GPriorCentre.Median }));
         Assert.StartsWith("Sampling.RHatTarget", Reason(new BassConfig { Sampling = new BassSampling { RHatTarget = 0.9 } }));
+        Assert.StartsWith("Sampling.Chains", Reason(new BassConfig { Sampling = new BassSampling { Chains = 1, RHatTarget = 1.1 } }));
         Assert.StartsWith("Sampling.Moves.C", Reason(new BassConfig { Sampling = new BassSampling { Moves = new PriorCancelling(0.6) } }));
         Assert.StartsWith("Sampling", Reason(new BassConfig { Sampling = null! }));
 

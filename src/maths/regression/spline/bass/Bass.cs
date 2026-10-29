@@ -44,8 +44,6 @@ public static class Bass
         if (options.ProgressInterval < 1) throw new ArgumentOutOfRangeException(nameof(run), "ProgressInterval must be at least 1.");
         BassModel model = BassModel.Create(config, data);
         BassSampling sampling = config.Sampling;
-        if (sampling.RHatTarget > 0.0 && sampling.Chains < 2)
-            throw new ArgumentException("Sampling.Chains must be at least 2 for the R̂ stop (Sampling.RHatTarget).", nameof(config));
 
         string fingerprint = Fingerprint(config, data);
         if (resumeFrom is not null && resumeFrom.Identity.Fingerprint != fingerprint)

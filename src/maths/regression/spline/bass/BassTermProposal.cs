@@ -117,7 +117,7 @@ public sealed class BassTermProposal
             if (kind == BassPart.Categorical)
             {
                 categorical = new CategoricalFactor[k];
-                for (int f = 0; f < k; f++) categorical[f] = DrawSubset(rng, variables[f], part.Sizes[variables[f]]);
+                for (int f = 0; f < k; f++) categorical[f] = part.DrawSubset(rng, variables[f], Prior.Subsets);
                 continue;
             }
             var hinges = new HingeFactor[k];
@@ -153,7 +153,7 @@ public sealed class BassTermProposal
             BassStructurePrior.Part part = Prior[BassPart.Categorical]!;
             CategoricalFactor[] subsets = term.Categorical.ToArray();
             CategoricalFactor old = subsets[pick];
-            subsets[pick] = DrawSubset(rng, old.Variable, part.Sizes[old.Variable]);
+            subsets[pick] = part.DrawSubset(rng, old.Variable, Prior.Subsets);
             double[] log = part.LogSubset![old.Variable];
             logProposalRatio = log[old.Levels.Count] - log[subsets[pick].Levels.Count];
             return new BassTerm(term.Continuous, subsets, term.Functional);
@@ -237,40 +237,6 @@ public sealed class BassTermProposal
 
     private static HingeFactor DrawHinge(Xoshiro256PlusPlus rng, BassStructurePrior.Part part, int variable)
         => new(variable, BassDraws.Sign(rng), BassDraws.Below(rng, part.Sizes[variable]));
-
-    // A proper, nonempty subset of n levels from the prior's measure: R's, its size uniform on {1, …, n − 1} and then
-    // a uniform subset of that size (a partial shuffle); or the paper's, each level in with probability ½, the empty
-    // and full sets refused.
-    private CategoricalFactor DrawSubset(Xoshiro256PlusPlus rng, int variable, int n)
-    {
-        Span<int> pool = n <= StackLimit ? stackalloc int[n] : new int[n];
-        int size;
-        if (Prior.Subsets == CategoricalSubsetMeasure.SizeUniform)
-        {
-            size = 1 + BassDraws.Below(rng, n - 1);
-            for (int i = 0; i < n; i++) pool[i] = i;
-            for (int i = 0; i < size; i++)
-            {
-                int j = i + BassDraws.Below(rng, n - i);
-                (pool[i], pool[j]) = (pool[j], pool[i]);
-            }
-        }
-        else
-        {
-            do
-            {
-                size = 0;
-                ulong word = 0;
-                for (int level = 0; level < n; level++)
-                {
-                    if ((level & 63) == 0) word = rng.NextUInt64();
-                    if ((word & 1) != 0) pool[size++] = level;
-                    word >>= 1;
-                }
-            } while (size == 0 || size == n);
-        }
-        return new CategoricalFactor(variable, pool[..size].ToArray());
-    }
 
     private void Check(BassTermCounts counts)
     {

@@ -130,6 +130,7 @@ public sealed record BassConfig
         if (run.Thin < 1) throw Bad("Sampling.Thin", "must be at least 1");
         if (!(run.RHatTarget == 0.0 || (run.RHatTarget > 1.0 && double.IsFinite(run.RHatTarget))))
             throw Bad("Sampling.RHatTarget", "must be 0, no early stop, or a finite target above 1");
+        if (run.RHatTarget > 0.0 && run.Chains < 2) throw Bad("Sampling.Chains", "must be at least 2 for the R̂ stop (Sampling.RHatTarget)");
         if (run.BatchSize < 0) throw Bad("Sampling.BatchSize", "must not be negative");
         if (!(run.MinEssPerChain >= 0.0 && double.IsFinite(run.MinEssPerChain))) throw Bad("Sampling.MinEssPerChain", "must be finite and not negative");
         if (run.MonitoredPoints is { } points)
