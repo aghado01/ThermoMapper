@@ -16,8 +16,8 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | The free-energy curve over the ladder | Farhi et al. 2013; Watanabe 2013; Bissiri, Holmes and Walker 2016 | D05's ladder with the reference rung, its rungs' draws kept; the integrated form's per-draw slope | Candidate |
 | Elastic emulation of misaligned functional outputs | Francom, Tucker, Huerta, Shuler and Ries, arXiv 2305.08834 | Outputs: a representation with a declared reconstruction map. Calibration: D09's likelihood over both parts | Candidate |
 | Residuals correlated along the output index | Andros, Guhaniyogi, Francom and Pasqualini, arXiv 2406.18751, 2602.09351 | Fitting: the output-side inner product; the residual-dependence check | Candidate |
-| Semi-modular calibration | Carmona and Nicholls 2020 (named from memory); Bissiri, Holmes and Walker 2016, §4.2 | Calibration: D09's cut posterior and its emulator interface. Stage 8: the cut SMC's induced-density bridges | Candidate |
-| Calibrated intervals for loss-based posteriors | Bissiri, Holmes and Walker 2016, §3.4, and its follow-ups (named from memory) | BARS: `GibbsLossModel`. Any engine that weights a likelihood or a loss | Candidate |
+| Semi-modular calibration | Carmona and Nicholls 2020, arXiv 2003.06804; Bissiri, Holmes and Walker 2016, §4.2 | Calibration: D09's cut posterior and its emulator interface. Stage 8: the cut SMC's induced-density bridges | Candidate |
+| Calibrated intervals for loss-based posteriors | Bissiri, Holmes and Walker 2016, §3.4; Holmes and Walker 2017; Lyddon, Holmes and Walker 2019; Syring and Martin 2019 | BARS: `GibbsLossModel`. Any engine that weights a likelihood or a loss | Candidate |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
 
 ## Generalized-hyperbolic noise (GBMARS)
@@ -165,7 +165,7 @@ From Andros, Guhaniyogi, Francom and Pasqualini (arXiv 2406.18751, 2602.09351), 
 ## Semi-modular calibration
 
 D09 takes the cut posterior: the observations update θ given each emulator draw, and never feed back into the emulator. Bissiri, Holmes and Walker's partial-information update (2016, *JRSS B* 78, §4.2) is its coherence argument. Updating θ on only the part of the information that bears on it is a valid belief update, though it is no joint model's posterior.
-- **The extension.** Semi-modular inference (Carmona and Nicholls 2020, *AISTATS*; named from memory, not yet read here) puts a power η on the feedback term. η = 0 is the cut and η = 1 the joint posterior, with η chosen by a predictive criterion.
+- **The extension.** Semi-modular inference (Carmona and Nicholls, "Semi-Modular Inference: enhanced learning in multi-modular models by tempering the influence of components", *AISTATS* 2020, PMLR 108:4226–4235; arXiv 2003.06804; not yet read here) puts a power η on the feedback term. Its follow-up, "Scalable Semi-Modular Inference with Variational Meta-Posteriors" (arXiv 2204.00296), fits the whole η family at once. η = 0 is the cut and η = 1 the joint posterior, with η chosen by a predictive criterion.
 - **Why it is cheap here.** Stage 8's cut SMC already bridges successive conditionals through induced densities, and a path in η is one more bridge sequence on the same machinery.
 - **Needs.** D09's emulator interface (C-X2) and stage 8's cut SMC (C5). The joint end, η = 1, also needs the emulator's likelihood under the observations, which the cut never forms.
 
@@ -174,16 +174,17 @@ D09 takes the cut posterior: the observations update θ given each emulator draw
 BARS's `GibbsLossModel` is a Gibbs posterior on Tukey's bisquare loss, and its docstring says its credible intervals have no calibrated interpretation.
 - *Its scale is already set.* Its normalization, ρ(u) ≈ u²/2 on residuals scaled by a robust σ̂, is effectively Bissiri et al.'s unit-information weight (§3.2), which for squared loss gives w = 1/(2σ²), the Gaussian case.
 - *Its coverage is not.* A unit-information weight fixes the loss's scale, not the intervals' coverage.
-- **The extension.** Set the loss weight w so that credible intervals reach frequentist coverage: Bissiri et al.'s operational calibration (§3.4). The algorithms that do it are its follow-ups, named from memory and not yet read here:
-  - Holmes and Walker (2017, *Biometrika*), on assigning a value to a power likelihood;
-  - Lyddon, Holmes and Walker's loss-likelihood bootstrap (2019, *Biometrika*);
-  - Syring and Martin's calibration of general posterior credible regions (2019, *Biometrika*).
+- **The extension.** Set the loss weight w so that credible intervals reach frequentist coverage: Bissiri et al.'s operational calibration (§3.4). The algorithms that do it are its follow-ups, their details checked on 2026-10-29 and not yet read here:
+  - Holmes and Walker, "Assigning a value to a power likelihood in a general Bayesian model", *Biometrika* 104(2):497–503 (2017), doi 10.1093/biomet/asx010, arXiv 1701.08515: the power set by matching Fisher information;
+  - Lyddon, Holmes and Walker, "General Bayesian updating and the loss-likelihood bootstrap", *Biometrika* 106(2):465–478 (2019), doi 10.1093/biomet/asz006, arXiv 1709.07616: a bootstrap sampler for loss minimizers, which also calibrates the weight;
+  - Syring and Martin, "Calibrating general posterior credible regions", *Biometrika* 106(2):479–486 (2019), doi 10.1093/biomet/asy054, arXiv 1509.00922: general posterior calibration (GPC), which tunes the weight by bootstrap until the regions reach nominal coverage;
+  - Wu and Martin, "A comparison of learning rate selection methods in generalized Bayesian inference", arXiv 2012.11349: a survey of these and others.
 - **Where it applies.** BARS's Gibbs-loss route first, then any engine that weights a likelihood for robustness, such as a power posterior under misspecification. BASS's tempered rungs are outside it: they are a path to b = 1, not a posterior to report.
 - **When.** Only if the Gibbs-loss route is used for intervals, rather than the scale-mixture resamplers BARS prefers.
 
 ## General-Bayes readings for the port
 
-Bissiri, Holmes and Walker (2016) were read against the port on 2026-10-29. Most of the paper is already absorbed:
+Bissiri, Holmes and Walker, "A general framework for updating belief distributions", *JRSS B* 78(5):1103–1130 (2016), arXiv 1306.6430, were read against the port on 2026-10-29. Most of the paper is already absorbed:
 - each tempered rung as its power-likelihood update (§3.1, eq. 8), in the free-energy entry above;
 - BARS's `GibbsLossModel`, a loss-based update on a unit-information scale (§3.2).
 
