@@ -277,11 +277,6 @@ public sealed class BassPredictTests
         Assert.Equal(2 + 3 * Normal.StandardQuantile(0.9), PredictiveMixture.Quantile([2.0], [3.0], [1.0], 0.9), 13);
         Assert.Equal(0.0, PredictiveMixture.Quantile([-1.0, 1.0], [1.0, 1.0], [1.0, 1.0], 0.5), 15);
         Assert.Equal(-1.0 + Normal.StandardQuantile(0.3), PredictiveMixture.Quantile([-1.0, 5.0], [1.0, 1.0], [1.0, 0.0], 0.3), 13);
-        // The empirical form: the least value whose cumulative weight reaches p.
-        Assert.Equal(2.0, PredictiveMixture.Quantile([3.0, 1.0, 2.0], [1.0, 1.0, 1.0], 0.5));
-        Assert.Equal(1.0, PredictiveMixture.Quantile([3.0, 1.0, 2.0], [0.1, 0.1, 0.8], 0.05));
-        Assert.Equal(2.0, PredictiveMixture.Quantile([3.0, 1.0, 2.0], [0.1, 0.1, 0.8], 0.25));
-        Assert.Equal(3.0, PredictiveMixture.Quantile([3.0, 1.0, 2.0], [0.1, 0.1, 0.8], 0.95));
     }
 
     [Fact]

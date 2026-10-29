@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Maths.Distributions;
 using Maths.Rng;
+using Maths.Samplers.Ensemble;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -16,8 +17,8 @@ namespace Maths.Regression.Spline.Bass;
 /// set in standardized units, added before y_s.</item>
 /// <item><see cref="Covariance"/>: the predictive mixture's covariance over the locations at one case,
 /// diag(y_s)·(K(Cov[w] + E[diag σ²])Kᵀ + Cov[e])·diag(y_s), or the latent K·Cov[w]·Kᵀ under the same transform.</item>
-/// <item><see cref="Quantile"/>: the weighted quantile of the predictive draws, the predictive mixture's quantile up to
-/// Monte Carlo error.</item>
+/// <item><see cref="Quantile"/>: the weighted quantile of the predictive draws (<see cref="DrawSample.Quantile"/>, type 7
+/// under the joint draws' equal weights), the predictive mixture's quantile up to Monte Carlo error.</item>
 /// </list>
 /// </summary>
 public sealed class BassBasisPrediction
@@ -76,21 +77,20 @@ public sealed class BassBasisPrediction
     /// <summary>The posterior mean of the latent output, case × location.</summary>
     public double[,] Mean() => Draws3.WeightedMean(Latent, Weights);
 
-    /// <summary>The <paramref name="probability"/> quantile of the weighted predictive draws at each case and location,
-    /// case × location; refused when the predictive draws were not asked for.</summary>
+    /// <summary>The <paramref name="probability"/> quantile of the weighted predictive draws at each case and location
+    /// (<see cref="DrawSample.Quantile"/>), case × location; refused when the predictive draws were not asked for.</summary>
     public double[,] Quantile(double probability)
     {
         double[,,] draws = Predictive ?? throw new InvalidOperationException("The predictive draws were not asked for.");
+        if (!(probability > 0.0 && probability < 1.0)) throw new ArgumentOutOfRangeException(nameof(probability), "The probability lies in (0, 1).");
         int s = DrawCount, n = Cases, m = Locations;
-        var weights = new double[s];
-        for (int d = 0; d < s; d++) weights[d] = Weights[d];
-        var values = new double[s];
         var q = new double[n, m];
         for (int i = 0; i < n; i++)
             for (int l = 0; l < m; l++)
             {
-                for (int d = 0; d < s; d++) values[d] = draws[d, i, l];
-                q[i, l] = PredictiveMixture.Quantile(values, weights, probability);
+                var sample = new DrawSample();
+                for (int d = 0; d < s; d++) sample.Add(draws[d, i, l], Weights[d]);
+                q[i, l] = sample.Quantile(probability);
             }
         return q;
     }

@@ -195,6 +195,7 @@ public sealed class BassPredictBasisTests
     [Fact]
     public void Quantile_IsTheWeightedDrawsQuantile()
     {
+        // The joint draws weigh equally, so the shared weighted quantile is type 7 over the predictive draws.
         BassBasisFit fit = BassOutputComponentsTests.FitOf();
         BassBasisPrediction p = fit.Predict(Four, new BassPredictOptions { Seed = 8 });
         double[,] q = p.Quantile(0.9);
@@ -202,7 +203,10 @@ public sealed class BassPredictBasisTests
             for (int l = 0; l < p.Locations; l += 4)
             {
                 double[] sorted = [.. Enumerable.Range(0, p.DrawCount).Select(j => p.Predictive![j, i, l]).Order()];
-                Assert.Equal(sorted[(int)Math.Ceiling(0.9 * p.DrawCount) - 1], q[i, l]);
+                double position = 0.9 * (p.DrawCount - 1);
+                int lo = (int)Math.Floor(position);
+                double type7 = sorted[lo] + (position - lo) * (sorted[Math.Min(lo + 1, sorted.Length - 1)] - sorted[lo]);
+                Assert.Equal(type7, q[i, l], 12);
             }
         Assert.Throws<InvalidOperationException>(() => fit.Predict(Four, new BassPredictOptions { Predictive = false }).Quantile(0.9));
     }
