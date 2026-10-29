@@ -507,33 +507,75 @@ public sealed class GPriorConditional
     {
         ArgumentNullException.ThrowIfNull(design);
         ArgumentNullException.ThrowIfNull(unit);
+        return LeaveOutLogDensity(sigmaPrior, design, y, weights, LeaveOutQuadratics(design, unit));
+    }
+
+    /// <summary>
+    /// The unit's rows' quadratic forms zᵤᵀA⁻¹z_v in the precision A, the part of <see cref="LeaveOutLogDensity(InverseGamma?, double[,], ReadOnlySpan{double}, double[], int[])"/>
+    /// that τ does not touch when the block is unweighted (A is the Gram, τ entering through c and μ alone). Taken once
+    /// per unit, they serve every conditional of the block at another τ, through the overload that takes them, with the
+    /// same arithmetic as the call without them.
+    /// </summary>
+    public LeaveOutQuadratics LeaveOutQuadratics(double[,] design, int[] unit)
+    {
+        ArgumentNullException.ThrowIfNull(design);
+        ArgumentNullException.ThrowIfNull(unit);
+        if (InverseTemperature != 1.0) throw new InvalidOperationException("The leave-out predictive is untempered.");
+        if (design.GetLength(0) != Rows || design.GetLength(1) != Columns)
+            throw new ArgumentException("The design must be the one this conditional was fitted to.", nameof(design));
+        int m = unit.Length, p = Columns, offset = InterceptCovarianceScale is null ? 0 : 1;
+        var solved = new double[m][];
+        var row = new double[p - offset];
+        for (int a = 0; a < m; a++)
+        {
+            for (int j = offset; j < p; j++) row[j - offset] = design[unit[a], j];
+            solved[a] = _precision.Solve(row);
+        }
+        var quadratic = new double[m, m];
+        for (int a = 0; a < m; a++)
+            for (int b = 0; b < m; b++)
+            {
+                double q = 0.0;
+                for (int j = offset; j < p; j++) q += design[unit[a], j] * solved[b][j - offset];
+                quadratic[a, b] = q;
+            }
+        return new LeaveOutQuadratics(_precision, design, (int[])unit.Clone(), quadratic);
+    }
+
+    /// <summary>
+    /// <see cref="LeaveOutLogDensity(InverseGamma?, double[,], ReadOnlySpan{double}, double[], int[])"/> with the unit's
+    /// quadratic forms taken beforehand (<see cref="LeaveOutQuadratics(double[,], int[])"/>), from this block in the same
+    /// precision over the same design: the same value, bit for bit, without the unit's solves.
+    /// </summary>
+    public double LeaveOutLogDensity(InverseGamma? sigmaPrior, double[,] design, ReadOnlySpan<double> y, double[]? weights,
+                                     LeaveOutQuadratics quadratics)
+    {
+        ArgumentNullException.ThrowIfNull(design);
+        ArgumentNullException.ThrowIfNull(quadratics);
         if (InverseTemperature != 1.0) throw new InvalidOperationException("The leave-out predictive is untempered.");
         if (design.GetLength(0) != Rows || design.GetLength(1) != Columns || y.Length != Rows)
             throw new ArgumentException("The design and response must be the ones this conditional was fitted to.", nameof(design));
-        int m = unit.Length, p = Columns, offset = InterceptCovarianceScale is null ? 0 : 1;
-        var solved = new double[m][];
-        var row = new double[p];
+        if (!ReferenceEquals(quadratics.Precision, _precision) || !ReferenceEquals(quadratics.Design, design))
+            throw new ArgumentException("The quadratic forms were taken in another precision or over another design.", nameof(quadratics));
+        int[] unit = quadratics.Unit;
+        int m = unit.Length, p = Columns;
         var qr = new double[m];
         var w = new double[m];
         for (int a = 0; a < m; a++)
         {
             int i = unit[a];
             double fit = 0.0;
-            for (int j = 0; j < p; j++) { row[j] = design[i, j]; fit += row[j] * _mean[j]; }
-            solved[a] = _precision.Solve(row.AsSpan(offset));
+            for (int j = 0; j < p; j++) fit += design[i, j] * _mean[j];
             w[a] = weights?[i] ?? 1.0;
             qr[a] = w[a] * (y[i] - fit);
         }
+        double[,] quadratic = quadratics.Values;
         var block = new double[m, m];
         for (int a = 0; a < m; a++)
             for (int b = 0; b < m; b++)
-            {
-                double quadratic = 0.0;
-                for (int j = offset; j < p; j++) quadratic += design[unit[a], j] * solved[b][j - offset];
                 block[a, b] = InterceptCovarianceScale is double c0
-                    ? (a == b ? w[a] : 0.0) - w[a] * w[b] * (CovarianceScale * quadratic + c0 / Rows * design[unit[a], 0] * design[unit[b], 0])
-                    : (a == b ? w[a] : 0.0) - w[a] * w[b] * CovarianceScale * quadratic;
-            }
+                    ? (a == b ? w[a] : 0.0) - w[a] * w[b] * (CovarianceScale * quadratic[a, b] + c0 / Rows * design[unit[a], 0] * design[unit[b], 0])
+                    : (a == b ? w[a] : 0.0) - w[a] * w[b] * CovarianceScale * quadratic[a, b];
         return LeaveOutPredictive.StudentT(block, qr, S, _marginal.DegreesOfFreedom, sigmaPrior?.Shape ?? 0.0, sigmaPrior?.Scale ?? 0.0);
     }
 
@@ -559,4 +601,30 @@ public sealed class GPriorConditional
         for (int t = 0; t < g; t++) variance[t] += posterior.Mean * c0 / Rows * readoutDesign[t, 0] * readoutDesign[t, 0];
         return variance;
     }
+}
+
+/// <summary>
+/// A unit's quadratic forms zᵤᵀA⁻¹z_v (<see cref="GPriorConditional.LeaveOutQuadratics"/>), with the precision and the
+/// design they were taken in, which <see cref="GPriorConditional.LeaveOutLogDensity(InverseGamma?, double[,], ReadOnlySpan{double}, double[], LeaveOutQuadratics)"/>
+/// checks by reference: the conditionals of one unweighted block at any τ share the Gram as their precision.
+/// </summary>
+public sealed class LeaveOutQuadratics
+{
+    internal LeaveOutQuadratics(ISpdFactor precision, double[,] design, int[] unit, double[,] values)
+    {
+        Precision = precision;
+        Design = design;
+        Unit = unit;
+        Values = values;
+    }
+
+    internal ISpdFactor Precision { get; }
+
+    internal double[,] Design { get; }
+
+    /// <summary>The unit's rows.</summary>
+    public int[] Unit { get; }
+
+    /// <summary>The forms, unit row by unit row.</summary>
+    public double[,] Values { get; }
 }

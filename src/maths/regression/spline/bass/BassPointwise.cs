@@ -135,11 +135,25 @@ public static class BassPointwise
             CollapsedGPrior block = CollapsedGPrior.FromCentredLeastSquares(design.Factor, design.Coefficients.ToArray(), design.ResidualSquares,
                                                                              design.FittedSquares, design.Observations, design.ResponseMean, target.Intercept);
             double[,] x = fit.CentredDesign(ids);
+            // The units' quadratic forms are τ-free, taken once per structure; a draw at a τ already seen copies its row.
+            LeaveOutQuadratics[]? quadratics = null;
+            var seen = new Dictionary<double, int>();
             foreach (int s in rows)
             {
+                if (seen.TryGetValue(pooled[s].Tau, out int first))
+                {
+                    for (int u = 0; u < partition.Units; u++) values[s, u] = values[first, u];
+                    continue;
+                }
+                seen.Add(pooled[s].Tau, s);
                 GPriorConditional conditional = block.At(pooled[s].Tau);
+                if (quadratics is null)
+                {
+                    quadratics = new LeaveOutQuadratics[partition.Units];
+                    for (int u = 0; u < partition.Units; u++) quadratics[u] = conditional.LeaveOutQuadratics(x, partition.Members[u]);
+                }
                 for (int u = 0; u < partition.Units; u++)
-                    values[s, u] = conditional.LeaveOutLogDensity(target.Sigma2, x, y, null, partition.Members[u]);
+                    values[s, u] = conditional.LeaveOutLogDensity(target.Sigma2, x, y, null, quadratics[u]);
             }
         }
         return values;

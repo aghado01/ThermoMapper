@@ -291,6 +291,40 @@ public sealed class CollapsedGPriorInterceptTests
     }
 
     [Fact]
+    public void LeaveOutQuadratics_ServeTheBlockAtEveryTau_BitForBit()
+    {
+        // The unit's quadratic forms in the Gram are τ-free: taken from the block at one τ, they give every other τ's
+        // leave-out density exactly as the call without them does.
+        Design d = Design.Hinges(offset: 2.0);
+        double[,] x = d.Explicit();
+        InverseGamma proper = InverseGamma.ShapeScale(2.0, 0.05);
+        foreach (GPriorCentre convention in Conventions)
+        {
+            CollapsedGPrior block = d.Block(convention);
+            foreach (int[] unit in new[] { new[] { 3 }, new[] { 5, 17 } })
+            {
+                LeaveOutQuadratics q = block.At(0.08).LeaveOutQuadratics(x, unit);
+                Assert.Equal(unit, q.Unit);
+                foreach (double tau in new[] { 1e-4, 0.08, 1.0, 30.0 })
+                {
+                    GPriorConditional c = block.At(tau);
+                    foreach (InverseGamma? prior in new[] { proper, (InverseGamma?)null })
+                        Assert.Equal(c.LeaveOutLogDensity(prior, x, d.Y, null, unit), c.LeaveOutLogDensity(prior, x, d.Y, null, q));
+                }
+            }
+
+            // Forms from another block's precision, or over another design array, are refused; so is a tempered conditional.
+            LeaveOutQuadratics own = block.At(0.08).LeaveOutQuadratics(x, [3]);
+            LeaveOutQuadratics other = d.Block(convention).At(0.08).LeaveOutQuadratics(x, [3]);
+            Assert.Throws<ArgumentException>("quadratics", () => block.At(0.5).LeaveOutLogDensity(proper, x, d.Y, null, other));
+            Assert.Throws<ArgumentException>("quadratics", () => block.At(0.5).LeaveOutLogDensity(proper, (double[,])x.Clone(), d.Y, null, own));
+            Assert.Throws<ArgumentNullException>("quadratics", () => block.At(0.5).LeaveOutLogDensity(proper, x, d.Y, null, (LeaveOutQuadratics)null!));
+            Assert.Throws<InvalidOperationException>(() => block.At(0.5, 0.5).LeaveOutQuadratics(x, [3]));
+            Assert.Throws<InvalidOperationException>(() => block.At(0.5, 0.5).LeaveOutLogDensity(proper, x, d.Y, null, own));
+        }
+    }
+
+    [Fact]
     public void FlatMarginalAt_IsTheConditionalsBitForBit_WithoutAllocating()
     {
         Design d = Design.Hinges(offset: 2.0);
