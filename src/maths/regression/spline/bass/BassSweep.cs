@@ -329,18 +329,27 @@ public sealed class BassStructureMoves
             if (current.Count == 0) return null;
             int index = BassDraws.Below(rng, current.Count);
             BassTerm old = current.TermArray[index];
-            BassTerm term = owner._model.Proposal.DrawChange(rng, old, out double logRatio);
-            owner._candidate = null;
-            if (term.Equals(old))   // the same state, whose term has its support
-            {
-                owner.Support.Add(term, false);
-                return new Proposal<BassState>(current, 0.0, 0.0);
-            }
-            DesignProposal proposal = owner._design.ProposeChange(index, term);
-            // The design moves a changed term to the end, so the candidate's order follows it.
-            BassTerm[] terms = [.. current.TermArray[..index], .. current.TermArray[(index + 1)..], term];
-            return new Proposal<BassState>(owner.Candidate(current, terms, proposal, Kind.Change, term, old), logRatio, 0.0);
+            return owner.Replace(current, index, owner._model.Proposal.ProposeChange(rng, old));
         }
+    }
+
+    // Term `index` of `current` replaced as `move` proposes, at fixed M. A null move, or a prune that would leave the
+    // intercept, proposes the state itself with a ratio of −∞: attempted and rejected, the state and the design untouched.
+    // A term drawn back unchanged is the same state, whose term has its support, accepted as it always was.
+    private Proposal<BassState> Replace(BassState current, int index, BassTermMove move)
+    {
+        _candidate = null;
+        if (move.Term is not { } term) return new Proposal<BassState>(current, double.NegativeInfinity, 0.0);
+        BassTerm old = current.TermArray[index];
+        if (term.Equals(old))
+        {
+            Support.Add(term, false);
+            return new Proposal<BassState>(current, 0.0, 0.0);
+        }
+        DesignProposal proposal = _design.ProposeChange(index, term);
+        // The design moves a changed term to the end, so the candidate's order follows it.
+        BassTerm[] terms = [.. current.TermArray[..index], .. current.TermArray[(index + 1)..], term];
+        return new Proposal<BassState>(Candidate(current, terms, proposal, Kind.Change, term, old), move.LogProposalRatio, 0.0);
     }
 }
 

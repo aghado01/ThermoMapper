@@ -142,13 +142,17 @@ public sealed class BassSweepTests
         return Math.Sqrt(means.Sum(m => (m - mean) * (m - mean)) / (means.Count - 1) / means.Count);
     }
 
+    // With F-M2's options on (BassLocalStepTests.OptionsFor), alone and together, the target is still the prior on F.
     [Theory]
-    [InlineData("equal")]
-    [InlineData("cancelling")]
-    public void ConstantLikelihood_SamplesThePriorOnF(string schedule)
+    [InlineData("equal", "none")]
+    [InlineData("cancelling", "none")]
+    [InlineData("equal", "steps")]
+    [InlineData("cancelling", "steps")]
+    public void ConstantLikelihood_SamplesThePriorOnF(string schedule, string options)
     {
         BassData data = Data();
-        var model = BassModel.Create(Config(schedule == "equal" ? new EqualOverAvailable() : new PriorCancelling(0.4)), data);
+        BassConfig config = Config(schedule == "equal" ? new EqualOverAvailable() : new PriorCancelling(0.4));
+        var model = BassModel.Create(config with { Sampling = BassLocalStepTests.OptionsFor(options)(config.Sampling) }, data);
         List<(BassTerm[] Terms, double LogPrior)> f = EnumerateF(model);
         double z = f.Max(s => s.LogPrior);
         double total = f.Sum(s => Math.Exp(s.LogPrior - z));
@@ -197,7 +201,7 @@ public sealed class BassSweepTests
             Assert.True(chain.Structure.Refusals.Total > 0);
         }
 
-        _out.WriteLine($"{schedule}: {f.Count} states in F");
+        _out.WriteLine($"{schedule}, {options}: {f.Count} states in F");
         for (int m = 0; m < countLaw.Length; m++)
         {
             double observed = countTraces[m].Sum(t => t.Sum()) / (chains * sweeps), error = BatchError(countTraces[m]);
@@ -410,12 +414,15 @@ public sealed class BassSweepTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void Design_FollowsTheChain(bool functional)
+    [InlineData(false, "none")]
+    [InlineData(true, "none")]
+    [InlineData(false, "steps")]
+    [InlineData(true, "steps")]
+    public void Design_FollowsTheChain(bool functional, string options)
     {
         BassData data = functional ? FunctionalData() : Data(large: true);
-        var model = BassModel.Create(Config(maxBasis: 12), data);
+        BassConfig config = Config(maxBasis: 12);
+        var model = BassModel.Create(config with { Sampling = BassLocalStepTests.OptionsFor(options)(config.Sampling) }, data);
         var chain = new BassChain(model, [], Math.Log(0.02), new Xoshiro256PlusPlus(1), new Xoshiro256PlusPlus(2));
         var other = new BassChain(model, [], Math.Log(0.02), new Xoshiro256PlusPlus(3), new Xoshiro256PlusPlus(4));
         int checks = 0;
