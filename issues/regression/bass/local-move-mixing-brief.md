@@ -199,7 +199,7 @@ Talked through with the user on 2026-10-29. Each item is a proposal for the desi
     - The reverse draws two D01 births in sequence, q(t₁ | S)·q(t₂ | S + t₁) + q(t₂ | S)·q(t₁ | S + t₂), with S the reduced structure.
     - The count prior's two-step ratio enters through the target. A jointly redundant pair gains back about two terms' Occam cost, where either alone costs hundreds of nats.
   - Each is beyond R. Their value is priced by P1 and P2.
-- *The composition's column means are cached first* (question 8; done in the main session).
+- *The composition's column means are cached first* (question 8): `9ed600a`, bit-identical. A sweep at n = 5,000, M ≈ 50 went from 694 to 148 µs, so M1's shares, taken before it, understate the structure move's share s.
 
 ## Phase 1: build the options
 
@@ -248,7 +248,7 @@ Talked through with the user on 2026-10-29. Each item is a proposal for the desi
 5. *Lever 4's option,* after M5.
 6. *Who runs it.* I recommend Phase 0 as one chip (harness only, no production change), then Phase 1 after you read its report. Decided by the user on 2026-10-28: Phase 0 runs as one chip, [its brief](local-move-measurements-brief.md).
 7. *A move that leaves a local mode* (added after Phase 0). M4's chains sit in modes 12–42 nats apart whose terms are each load-bearing, so single-term moves pay tens of nats to leave them, and lever 2 only refines within them. The exchange move (Not in scope) is the simplest compound move; whether it, or tempering's round trips once the efficiency factor rises, is the route belongs to your design pass.
-8. *The composition's column means* (added after Phase 0): cache them before the pass. Decided by the user on 2026-10-29: cached, bit-identical by construction. Caching changes every arm's cost alike, but lever 1's price, the structure share s, rises with it, so the pass should run on the cached cost. It is the efficiency pass's change, brought forward; whether it can be made bit-identical depends on matching the current sum's order.
+8. *The composition's column means* (added after Phase 0): cache them before the pass. Decided by the user on 2026-10-29: cached, bit-identical by construction. Done in `9ed600a`: five fits hashed identical against the code before it, and the Regression (828) and BASS oracle (35) suites pass. Caching changes every arm's cost alike, but lever 1's price, the structure share s, rises with it, so the pass should run on the cached cost. It is the efficiency pass's change, brought forward; whether it can be made bit-identical depends on matching the current sum's order.
 
 9. *Price the mode exits before choosing Phase 1* (2026-10-29). Decided by the user: a chip measures P1–P4, [its brief](mode-exit-pricing-brief.md).
 

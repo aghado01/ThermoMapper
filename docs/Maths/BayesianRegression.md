@@ -923,6 +923,8 @@ So the retained content's k̂ is the diagnostic to read under either g, as BARS 
 
 The time grows about linearly in N·M at large n, over a fixed 50–60 µs per sweep (τ's slice, composition, bookkeeping). With p = 10 the realized M stayed below its cap at n ≤ 1,000 (3 and 11 terms), and at n = 5,000 a sweep cost somewhat more at the same M (544–659 against 465 at M ≈ 20). R BASS took about 630 µs per sweep on Friedman at n = 500, M ≈ 10, where this baseline puts C# near 100. A tempered run costs about its rung count times this.
 
+Most of that N·M was the composition's: each retained draw re-evaluated every term's column for its mean (F-M2's Phase 0, M1). Since `9ed600a` the chain's moves keep each term's mean, and every draw is bit-identical. Rerun back to back on one machine (p = 2), a sweep at n = 5,000 went from 117, 358 and 694 µs to 69, 88 and 148 (M ≈ 5, 20, 50), and at n = 1,000, M = 20, from 207 to 88; at n = 200 the gain is 1.2–2×. The rerun's earlier times sit below the table's (694 against 1,184), so compare within the rerun.
+
 ### BAPS: penalized splines
 
 **Penalty.** The order-r difference operator has coefficients $c_l=(-1)^l\binom rl$ and penalty $P=D^\top D$, which has half-bandwidth r and null space of dimension r. The default is $r=2$. `AccumulateStrided` writes the penalty at a stride, which lets two 1-D penalties compose a Kronecker penalty.
