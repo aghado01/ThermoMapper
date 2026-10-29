@@ -10,9 +10,14 @@ namespace Maths.Distributions;
 /// The tails are <c>P(T &gt; t) = ½·I_x(ν/2, ½)</c> with <c>x = ν/(ν + t²)</c>, evaluated from <c>x</c> and
 /// <c>1 − x</c> each formed without cancellation and in log space, so <c>t = 10²⁰⁰</c> under ν = 1 keeps its
 /// digits. Accuracy degrades for very large ν, where <c>ln B(ν/2, ½)</c> cancels; use <see cref="Normal"/> there.
+/// <para>Interval moments are by <see cref="GaussLegendre"/> at every ν, ν = 1 included, over a finite interval: panels
+/// split at the location and graded geometrically away from it, so each panel stays three half-widths from the density's
+/// poles at location ± i·scale·√ν, with 20 nodes per panel, and the error estimated by the 40-node rule's difference.</para>
 /// </summary>
-public readonly struct StudentT : IContinuousDistribution
+public readonly struct StudentT : IContinuousDistribution, IIntervalMoments
 {
+    private const int QuadratureNodes = 20;
+
     private readonly double _logNormalizer;   // ln Γ((ν+1)/2) − ln Γ(ν/2) − ½ ln(νπ) − ln scale
 
     /// <summary>Degrees of freedom ν.</summary>
@@ -92,6 +97,59 @@ public readonly struct StudentT : IContinuousDistribution
         if (a >= 0.0) return SameTail(TailLogs(a).LogUpper, TailLogs(b).LogUpper);     // S(a) − S(b)
         if (b <= 0.0) return SameTail(TailLogs(-b).LogUpper, TailLogs(-a).LogUpper);   // F(b) − F(a)
         return Math.Log(0.5 * (Math.Exp(TailLogs(-a).LogCentral) + Math.Exp(TailLogs(b).LogCentral)));
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>The interval must be finite: truncate the distribution to one. The moments are the 40-node rule's.</remarks>
+    public double IntervalMoments(double lower, double upper, double centre, double logScale, Span<double> moments)
+    {
+        moments.Clear();
+        if (Tails.IsEmpty(lower, upper) || moments.IsEmpty) return 0.0;
+        if (!double.IsFinite(lower) || !double.IsFinite(upper))
+            throw new ArgumentException($"Student-t interval moments integrate over a finite interval, got [{lower}, {upper}]; truncate the distribution.");
+
+        // Breakpoints in t: the interval's ends, 0, and ±g·2ᵏ with g = ½·min(√ν, 1), so a panel [g·2ᵏ, g·2ᵏ⁺¹] is three
+        // half-widths from the poles at ±i√ν and the central panels four.
+        double a = (lower - Location) / Scale, b = (upper - Location) / Scale;
+        double g = 0.5 * Math.Min(Math.Sqrt(DegreesOfFreedom), 1.0), far = Math.Max(Math.Abs(a), Math.Abs(b));
+        var breaks = new System.Collections.Generic.List<double> { a, b };
+        if (a < 0.0 && b > 0.0) breaks.Add(0.0);
+        for (double r = g; r < far; r *= 2.0)
+        {
+            if (r > a && r < b) breaks.Add(r);
+            if (-r > a && -r < b) breaks.Add(-r);
+        }
+        breaks.Sort();
+
+        int n = moments.Length;
+        Span<double> coarse = n <= 32 ? stackalloc double[n] : new double[n];
+        coarse.Clear();
+        for (int p = 0; p + 1 < breaks.Count; p++)
+        {
+            double x0 = Location + Scale * breaks[p], x1 = Location + Scale * breaks[p + 1];
+            Panel(GaussLegendre.Of(QuadratureNodes), x0, x1, centre, logScale, coarse);
+            Panel(GaussLegendre.Of(2 * QuadratureNodes), x0, x1, centre, logScale, moments);
+        }
+        double error = 0.0;
+        for (int k = 0; k < n; k++) error = Math.Max(error, Math.Abs(moments[k] - coarse[k]));
+        return error;
+    }
+
+    // Adds the rule's ∫ (x − c)ᵏ f(x)·e^(−logScale) dx over [x0, x1] into sums.
+    private void Panel(GaussLegendre rule, double x0, double x1, double centre, double logScale, Span<double> sums)
+    {
+        double mid = 0.5 * (x0 + x1), half = 0.5 * (x1 - x0);
+        ReadOnlySpan<double> nodes = rule.Nodes, weights = rule.Weights;
+        for (int i = 0; i < nodes.Length; i++)
+        {
+            double x = mid + half * nodes[i];
+            double w = half * weights[i] * Math.Exp(LogPdf(x) - logScale), d = x - centre;
+            for (int k = 0; k < sums.Length; k++)
+            {
+                sums[k] += w;
+                w *= d;
+            }
+        }
     }
 
     // For t ≥ 0: ln P(T > t) = ln ½ + ln I_x(ν/2, ½), and ln P(|T| < t) = ln I_y(½, ν/2), with x = ν/(ν + t²) and

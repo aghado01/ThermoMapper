@@ -9,10 +9,19 @@ namespace Maths.Distributions;
 /// Marsaglia–Tsang <see cref="Gamma"/> sampler. The tails come from <c>Φ(−z) = ½·Q(½, z²/2)</c> in log space, so
 /// <c>ln Φ(−40)</c> is exact where <c>Φ(−40)</c> underflows, and an interval straddling the mean is the sum of
 /// two error functions rather than a difference of CDFs near ½. A readonly value type: zero-alloc in inner loops.
+/// <para>Interval moments are analytic at every power: the density's Taylor series about the centre of each short
+/// stretch of the interval, φ(z + u) = φ(z)·Σₙ (−1)ⁿHeₙ(z)uⁿ/n!, integrated term by term and summed to convergence. A
+/// stretch's half-width h keeps h·(1 + |z|) ≤ 1, so the series never cancels by more than e³, where the moments' recurrence
+/// in Φ and φ loses every digit on a narrow interval.</para>
 /// </summary>
-public readonly struct Normal : IContinuousDistribution
+public readonly struct Normal : IContinuousDistribution, IIntervalMoments
 {
     private static readonly double LogSqrt2Pi = 0.5 * Math.Log(2.0 * Math.PI);
+
+    // Where the density falls below e^−Reach of its largest value on an interval, the rest of the interval is left out
+    // of the moments.
+    private const double Reach = 92.0;
+    private const int MaxSeriesTerms = 400;
 
     /// <summary>The mean.</summary>
     public double Mean { get; }
@@ -80,6 +89,81 @@ public readonly struct Normal : IContinuousDistribution
         if (a >= 0.0) return SameTail(LogLowerTail(a), LogLowerTail(b));      // Φ(−a) − Φ(−b)
         if (b <= 0.0) return SameTail(LogLowerTail(-b), LogLowerTail(-a));    // Φ(b) − Φ(a)
         return Math.Log(0.5 * (Erf(-a) + Erf(b)));                             // straddles the mean
+    }
+
+    /// <inheritdoc/>
+    public double IntervalMoments(double lower, double upper, double centre, double logScale, Span<double> moments)
+    {
+        moments.Clear();
+        if (Tails.IsEmpty(lower, upper) || moments.IsEmpty) return 0.0;
+        double a = (lower - Mean) / Sd, b = (upper - Mean) / Sd;
+        double near = a > 0.0 ? a : b < 0.0 ? b : 0.0;
+        double reach = Math.Sqrt(near * near + 2.0 * Reach);
+        a = Math.Max(a, -reach);
+        b = Math.Min(b, reach);
+        if (!(b > a)) return 0.0;
+
+        int n = moments.Length;
+        Span<double> piece = n <= 32 ? stackalloc double[n] : new double[n];
+        Span<double> powers = n <= 32 ? stackalloc double[n] : new double[n];
+        double zc = (centre - Mean) / Sd;
+        for (double z0 = a; z0 < b;)
+        {
+            double h = Math.Min(1.0, 1.0 / (1.0 + Math.Max(Math.Abs(z0), Math.Abs(z0 + 2.0))));
+            double z1 = z0 + 2.0 * h;
+            if (!(z1 > z0)) throw new ArithmeticException($"The interval [{lower}, {upper}] lies too far in the tail of N({Mean}, {Sd}²) for its moments.");
+            if (z1 > b) z1 = b;
+            double zm = 0.5 * (z0 + z1), half = 0.5 * (z1 - z0);
+            double weight = Math.Exp(-0.5 * zm * zm - LogSqrt2Pi - logScale);
+            z0 = z1;
+            if (weight == 0.0) continue;
+            SeriesPiece(zm, half, piece);
+            // ∫ (z − zc)ᵏ φ over the stretch = Σₘ C(k, m)·dᵏ⁻ᵐ·∫ (z − zm)ᵐ φ, with d = zm − zc.
+            double d = zm - zc;
+            powers[0] = 1.0;
+            for (int k = 1; k < n; k++) powers[k] = powers[k - 1] * d;
+            for (int k = 0; k < n; k++)
+            {
+                double sum = 0.0, binomial = 1.0;
+                for (int m = 0; m <= k; m++)
+                {
+                    sum += binomial * powers[k - m] * piece[m];
+                    binomial = binomial * (k - m) / (m + 1);
+                }
+                moments[k] += weight * sum;
+            }
+        }
+        double scale = 1.0;
+        for (int k = 0; k < n; k++)
+        {
+            moments[k] *= scale;
+            scale *= Sd;
+        }
+        return 0.0;
+    }
+
+    // piece[m] = ∫ uᵐ φ(zm + u)/φ(zm) du over [−h, h] = (−1)ᵐ hᵐ⁺¹ Σⱼ Hⱼ·2/(m + j + 1), over j of m's parity, with
+    // Hⱼ = Heⱼ(zm)hʲ/j! by Heⱼ₊₁ = z·Heⱼ − j·Heⱼ₋₁.
+    private static void SeriesPiece(double zm, double h, Span<double> piece)
+    {
+        int n = piece.Length;
+        piece.Clear();
+        double previous = 0.0, current = 1.0;
+        for (int j = 0; ; j++)
+        {
+            for (int m = j & 1; m < n; m += 2) piece[m] += current * 2.0 / (m + j + 1);
+            double next = (zm * h * current - h * h * previous) / (j + 1);
+            previous = current;
+            current = next;
+            if (j >= n && Math.Abs(previous) + Math.Abs(current) <= 1e-20) break;
+            if (j >= MaxSeriesTerms) throw new ArithmeticException($"The normal moment series did not converge at z = {zm}, h = {h}.");
+        }
+        double power = h;
+        for (int m = 0; m < n; m++)
+        {
+            piece[m] *= (m & 1) == 0 ? power : -power;
+            power *= h;
+        }
     }
 
     /// <summary>The quantile function: the x with <c>P(X ≤ x) = p</c>; −∞ at 0, +∞ at 1, NaN outside [0, 1].</summary>

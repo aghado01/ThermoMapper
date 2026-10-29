@@ -7,9 +7,10 @@ namespace Maths.Distributions;
 /// as the normalizer. Because that probability comes from the parent's log tails, a far-tail truncation such as
 /// N(0, 1) on [10, ∞) has the right density, φ(x)/Q(10), where 1 − Φ(10) would be 0. Generic over any
 /// <see cref="IContinuousDistribution"/> value type, so it adds no allocation; build it with
-/// <see cref="Truncated.Of{T}"/>. It has no sampler yet: no caller draws from a truncated law.
+/// <see cref="Truncated.Of{T}"/>. It has no sampler yet: no caller draws from a truncated law. Its interval moments are the
+/// parent's on the interval clipped to the bounds, scaled by the log mass, for a parent that has them.
 /// </summary>
-public readonly struct Truncated<T> : IContinuousDistribution where T : struct, IContinuousDistribution
+public readonly struct Truncated<T> : IContinuousDistribution, IIntervalMoments where T : struct, IContinuousDistribution
 {
     /// <summary>The untruncated distribution.</summary>
     public T Parent { get; }
@@ -52,6 +53,18 @@ public readonly struct Truncated<T> : IContinuousDistribution where T : struct, 
         double lo = Math.Max(lower, Lower), hi = Math.Min(upper, Upper);
         if (!(hi > lo)) return double.NegativeInfinity;
         return Parent.LogIntervalProbability(lo, hi) - LogMass;
+    }
+
+    /// <inheritdoc/>
+    public double IntervalMoments(double lower, double upper, double centre, double logScale, Span<double> moments)
+    {
+        if (Parent is not IIntervalMoments parent)
+            throw new NotSupportedException($"{typeof(T).Name} has no interval moments.");
+        moments.Clear();
+        if (Tails.IsEmpty(lower, upper)) return 0.0;
+        double lo = Math.Max(lower, Lower), hi = Math.Min(upper, Upper);
+        if (!(hi > lo)) return 0.0;
+        return parent.IntervalMoments(lo, hi, centre, logScale + LogMass, moments);
     }
 }
 
