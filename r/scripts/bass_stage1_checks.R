@@ -299,7 +299,7 @@ cat(sprintf("  perc.var = 100: R stops (\"%s\"), its n.pc expression gives %s (l
             fr$r_error, if (is.null(fr$r_n_pc)) "NA" else fr$r_n_pc, fr$cumulative_share_last_minus_100, fr$corrected_rank,
             verdict(!is.null(fr$r_error) && is.null(fr$r_n_pc) && fr$corrected_rank == nrow(Y_out) - 1)))
 cc <- od$constant_columns
-cat(sprintf("  constant input: training %g, prediction %s, corrected 0 (the new value flagged); constant output: R stops (\"%s\", y_s = %g), corrected y_s = 1: %s\n",
+cat(sprintf("  constant input: training %g, prediction %s, corrected: refused at entry; constant output: R stops (\"%s\", y_s = %g), corrected y_s = 1: %s\n",
             cc$input$r_training, paste(cc$input$r_prediction, collapse = " and "), cc$output$r_error, cc$output$r_y_s,
             verdict(cc$input$r_training == 0 && all(cc$input$r_prediction %in% c("NaN", "Inf")) && !is.null(cc$output$r_error))))
 do <- od$draw_order

@@ -20,8 +20,8 @@
 #     evaluated as written; the corrected rank is the numerical rank of the centred data at max(n, m) eps d_1.
 #   constant_columns: a constant input through scale_range (training) and scale_range_mat (prediction), at the
 #     training value and at a new one (R's prediction values as strings, since NaN and Inf are not JSON); a constant
-#     output column through bassPCAsetup(scale = TRUE). Corrected: the input maps to 0 (and a new value is flagged
-#     as outside the training range); the output column gets y_s = 1.
+#     output column through bassPCAsetup(scale = TRUE). Corrected (D07, decided 2026-10-29): the input is refused at
+#     entry, since it has no knot, as a one-level factor is; the output column gets y_s = 1.
 #   draw_order: predict.bass on a mock fit whose mult function writes each draw's index, mcmc.use = (4, 1, 5, 2) over
 #     model groups (1, 1, 2, 2, 3): the rows R returns, the dimensions it keeps for 4 x 3, 4 x 1 and 1 x 1 requests,
 #     and with nugget = TRUE (s2 = 0 except draw 2) which rows carry noise. Corrected: requested order, explicit
@@ -104,7 +104,7 @@ r_predict <- c(bass$scale_range_mat(matrix(c(0.3, 0.5), 2, 1), range_mat))
 Y_const <- Y; Y_const[, 2] <- 7
 constant_columns <- list(
   input = list(training_value = 0.3, new_value = 0.5, r_training = r_train[1], r_prediction = as.character(r_predict),
-               corrected = c(0, 0), corrected_outside_range = c(FALSE, TRUE)),
+               corrected = "refused"),
   output = list(r_error = error_of(bass$bassPCAsetup(xx, Y_const, perc.var = 90, scale = TRUE)),
                 r_y_s = apply(Y_const, 2, sd)[2], corrected_y_s = 1))
 

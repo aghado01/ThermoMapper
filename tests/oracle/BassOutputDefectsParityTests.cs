@@ -172,7 +172,8 @@ public sealed class BassOutputDefectsParityTests
         JsonElement input = cc.GetProperty("input");
         Assert.Equal(0.0, input.GetProperty("r_training").GetDouble());
         Assert.Equal(["NaN", "Inf"], input.GetProperty("r_prediction").EnumerateArray().Select(v => v.GetString()));
-        // The fixture's corrected mapping to 0 predates D07's amendment (2026-10-29): a constant training column is refused.
+        // D07 (decided 2026-10-29): a constant training column is refused at entry.
+        Assert.Equal("refused", input.GetProperty("corrected").GetString());
         Assert.Contains("constant", Assert.Throws<ArgumentException>(() => new ContinuousPredictor("x", [.. Enumerable.Repeat(0.3, 8)])).Message);
 
         JsonElement output = cc.GetProperty("output");
