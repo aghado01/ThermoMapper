@@ -57,6 +57,18 @@ public sealed record BassFit(
         return BassResidualDependence.Of(model, Terms, Draws, index, DrawWeights, probabilities)!;
     }
 
+    /// <summary>
+    /// Prediction at <paramref name="cases"/> (D07, stage 5; <see cref="BassPrediction"/>): latent and predictive draws as
+    /// draw × case × location arrays in the requested draw order, the inputs through the fit's transform with
+    /// extrapolation flagged, and new output locations for a direct functional fit. <paramref name="data"/> must be the
+    /// data the fit was run on, whose knots and levels the terms index; data with another fingerprint are refused.
+    /// </summary>
+    public BassPrediction Predict(BassData data, PredictionCases cases, BassPredictOptions? options = null)
+    {
+        BassModel model = ModelOn(data);
+        return BassDirectPrediction.Predict(model, Terms, Draws, DrawWeights, cases, options ?? new BassPredictOptions());
+    }
+
     // The model on `data`, refused when they are not the data the fit was run on.
     private BassModel ModelOn(BassData data)
     {
