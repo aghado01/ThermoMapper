@@ -39,7 +39,7 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [x] **F3** Collapsed g-prior target under both intercept conventions, with the fixed-g mode (S5).
 - [x] **F4** Birth, death and change moves with exact boundary probabilities: the proposals and their within-move ratios (S3), the moves on D01's schedule (S6).
 - [x] **F5** D04's sweep, with composition draws at retention (S6).
-- [ ] **F6** Parallel tempering on the likelihood path, with the exact reference rung (D03's proper defaults supply it).
+- [x] **F6** Parallel tempering on the likelihood path, with the exact reference rung (D03's proper defaults supply it) (S8, chip D; its ladder sizing, chip E).
 - [x] **F7** D06's two gates and refusal reasons (S4).
 - [x] **F8** Retention, checkpoints and exact restart (S7, chip A).
 - [x] **F9** Pointwise density producer on the OQ17 seam, with its chains for PSIS's relative efficiency (S9, chip B; `BassFit.PointwiseLogDensity`).
