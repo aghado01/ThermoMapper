@@ -24,7 +24,7 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 - [x] **O4** Pointwise density for supplied-basis fits (`502fb0f`).
 - [x] **O5** One moment service for direct and basis sensitivity (stage 6 chip, `17dfe2d`, `2fa7ad6`).
 - [x] **O6** Direct sensitivity, including both functional forms (`835a310`).
-- [ ] **O7** Basis sensitivity with cross-component terms and a subset budget.
+- [x] **O7** Basis sensitivity with cross-component terms and a subset budget (O7 chip, `f1d53ab`).
 - [x] **O8** Effect functions for the declared measure and degree (`835a310`).
 - [ ] **O9** Presentation data above maths (stage 9).
 
@@ -37,6 +37,21 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 - [x] **O-X5** The response representation carries a declared reconstruction map (linear now; composition for elastic emulation) (`ReconstructionMap`, `ReconstructionDomain`).
 
 ## Reports
+
+### O7 verified: stage 6 complete — 2026-10-29
+
+The O7 chip built basis sensitivity ([its report](stage6-basis-sensitivity-brief.md#reports)), read and verified here.
+- *Commits:* `f1d53ab`, and the report `4f6b4af`. Outside its files, both behaviour-free and named:
+  - `BassSensitivity.Subsets` takes the terms' variable lists, so direct and basis sensitivity share one enumeration;
+  - O-O2's oracle emits three arrays it already computed, so the units section is checked per location.
+- *Suites on the combined tree:* Regression 920/920, the BASS oracle tests 54/54 with R, and R's stage-1 checks (64 passing, none failing). Distributions is untouched by O7 (148/148 at the previous verification).
+- *What it is:*
+  - each joint draw keeps its components' r × r covariance matrices per subset, free of ℓ;
+  - the per-location view (R's) and the integrated view (the location as one more input) both weight them;
+  - contributions are in output units, where R's are a factor of y_s² too small (O-O2, now asserted).
+- *Docs:* the sensitivity section of `docs/Maths/BayesianRegression.md` gains "Basis sensitivity".
+- *Reversible defaults,* nine in its report. The one with meaning for users: the integrated view includes the mean curve y_m in the location's effect, so a strongly varying mean curve dominates it; decomposing y_s·Kw alone is the alternative.
+- *Not built:* effect functions for basis fits. R has none; the report notes they come nearly free (effects are linear, with no cross terms).
 
 ### Stage 5 and stage 6's first part verified — 2026-10-29
 
