@@ -150,6 +150,22 @@ public sealed record BassConfig
             default:
                 throw Bad("Sampling.Moves", "is not a known schedule");
         }
+        if (run.LocalSteps is { } steps)
+        {
+            if (!(steps.Probability > 0.0 && steps.Probability <= 1.0)) throw Bad("Sampling.LocalSteps.Probability", "must lie in (0, 1]; null turns the steps off");
+            if (!(steps.WindowFraction > 0.0 && steps.WindowFraction <= 1.0)) throw Bad("Sampling.LocalSteps.WindowFraction", "must lie in (0, 1]");
+        }
+        if (run.FactorMoves is { } family)
+        {
+            if (!(family.Change >= 0.0 && double.IsFinite(family.Change))) throw Bad("Sampling.FactorMoves.Change", "must be finite and not negative");
+            if (!(family.PruneOrGrow >= 0.0 && double.IsFinite(family.PruneOrGrow))) throw Bad("Sampling.FactorMoves.PruneOrGrow", "must be finite and not negative");
+            if (!(family.VariableChange >= 0.0 && double.IsFinite(family.VariableChange)))
+                throw Bad("Sampling.FactorMoves.VariableChange", "must be finite and not negative");
+            if (!(family.PruneOrGrow + family.VariableChange > 0.0))
+                throw Bad("Sampling.FactorMoves", "must weigh a prune or grow or a variable change; null turns the family off");
+            if (run.LocalSteps is not null && !(family.Change > 0.0))
+                throw Bad("Sampling.FactorMoves.Change", "must be positive with local steps, which run inside the change");
+        }
         if (run.Tempering is { } t)
         {
             if (t.Path is not (TemperingPath.Likelihood or TemperingPath.Powered)) throw Bad("Sampling.Tempering.Path", "is not a known path");
@@ -168,6 +184,11 @@ public sealed record BassConfig
             if (t.HotEnd is double hot && !(hot > 0.0 && hot < 1.0)) throw Bad("Sampling.Tempering.HotEnd", "must lie in (0, 1)");
             if (t.Schedule != SwapSchedule.DeterministicEvenOdd)
                 throw Bad("Sampling.Tempering.Schedule", "is DEO, the schedule D05 decided; another joins with its decision");
+            if (t.Split is { } split)
+            {
+                if (!(split.Threshold > 0.0 && split.Threshold < 1.0)) throw Bad("Sampling.Tempering.Split.Threshold", "must lie in (0, 1)");
+                if (t.Levels is not null) throw Bad("Sampling.Tempering.Split", "needs a self-sizing ladder (Levels null), since it adds rungs");
+            }
         }
     }
 
@@ -289,6 +310,13 @@ public sealed record BassSampling
     /// <summary>The move-type schedule: equal over the available moves by default (D01).</summary>
     public MoveSchedule Moves { get; init; } = new EqualOverAvailable();
 
+    /// <summary>Local steps inside a change (F-M2's lever 2); null, the default, keeps D01's redraw alone.</summary>
+    public LocalSteps? LocalSteps { get; init; }
+
+    /// <summary>The fixed-M factor moves in the change's slot (F-M2's Phase 1); null, the default, keeps the change
+    /// alone.</summary>
+    public FactorMoves? FactorMoves { get; init; }
+
     /// <summary>Parallel tempering within each chain; null, the default, runs untempered (D05).</summary>
     public TemperingSpec? Tempering { get; init; }
 
@@ -357,6 +385,10 @@ public sealed record TemperingSpec
     /// <summary>Whether the hot replica sits at b = 0 and draws exactly from the prior on F; off by default (D05).</summary>
     public bool ReferenceRung { get; init; }
 
+    /// <summary>A self-sizing ladder's split rule (F-M2's lever 4b), which adds a rung inside each pair that rejects past
+    /// its threshold; null, the default, sizes by the barrier alone.</summary>
+    public SplitRule? Split { get; init; }
+
     /// <summary>The fewest rungs a ladder takes: b = 1 and the hot end, and b = 0 with the reference rung.</summary>
     public static int MinimumLevels(bool referenceRung) => referenceRung ? 3 : 2;
 
@@ -382,3 +414,39 @@ public sealed record EqualOverAvailable : MoveSchedule;
 /// the count prior cancels from births and deaths; an option for F-M1's comparison.
 /// </summary>
 public sealed record PriorCancelling(double C = 0.4) : MoveSchedule;
+
+/// <summary>
+/// Local steps inside a change (F-M2's lever 2, decided 2026-10-29): with probability <see cref="Probability"/> (ρ) a
+/// change steps its factor locally instead of redrawing it from the prior. A hinge, continuous or functional, moves its
+/// knot j′ = j + δ over its variable's distinct values, its sign kept, with |δ| uniform on {1, …, w} and the sign of δ
+/// ±1, w = max(1, ⌈ω·n_v⌉) for the fraction ω = <see cref="WindowFraction"/>; a categorical factor toggles one level,
+/// uniform among its n_v. A step off the knots, or to an empty or full subset, is a null move. The proposal is symmetric,
+/// so the ratio is Δℓ and, for a toggle, the subset measure's prior ratio.
+/// </summary>
+public sealed record LocalSteps(double Probability = 0.5, double WindowFraction = 0.02)
+{
+    /// <summary>
+    /// w = max(1, ⌈ω·n⌉) over a variable of <paramref name="values"/> distinct values, ω·n taken in decimal so that a
+    /// multiple of ω's decimal places does not round up a step.
+    /// </summary>
+    public int Window(int values)
+    {
+        if (values < 1) throw new ArgumentOutOfRangeException(nameof(values));
+        return Math.Max(1, (int)Math.Ceiling((decimal)WindowFraction * values));
+    }
+}
+
+/// <summary>
+/// The fixed-M factor moves (F-M2's Phase 1, decided 2026-10-29), sharing the change's slot of the move schedule by these
+/// relative weights, thirds by default: <see cref="Change"/>, a factor's redraw or local step; <see cref="PruneOrGrow"/>,
+/// a factor pruned from a term's part or grown into it, ½ each; <see cref="VariableChange"/>, a factor's variable
+/// exchanged for one the part does not use. The births' and deaths' shares are the schedule's alone.
+/// </summary>
+public sealed record FactorMoves(double Change = 1, double PruneOrGrow = 1, double VariableChange = 1);
+
+/// <summary>
+/// A self-sizing ladder's split rule (F-M2's lever 4b, decided 2026-10-29): each adaptation round, every adjacent pair
+/// whose swap rejection exceeds <see cref="Threshold"/> gains a rung halfway along its barrier, within
+/// <see cref="TemperingSpec.MaxLevels"/>.
+/// </summary>
+public sealed record SplitRule(double Threshold = 0.9);

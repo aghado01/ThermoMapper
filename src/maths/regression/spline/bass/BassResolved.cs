@@ -77,6 +77,18 @@ public sealed record BassResolved
     /// </summary>
     public required double? HotEnd { get; init; }
 
+    /// <summary>
+    /// The local steps' windows w = max(1, ⌈ω·n_v⌉) over each hinge variable's n_v knots, continuous and functional
+    /// (<see cref="LocalSteps.Window"/>); null when the steps are off.
+    /// </summary>
+    public required BassStepWindows? StepWindows { get; init; }
+
+    /// <summary>The fixed-M factor moves' shares of the change's slot; null when the family is off.</summary>
+    public required BassFactorShares? FactorShares { get; init; }
+
+    /// <summary>A tempered run's split threshold (<see cref="SplitRule"/>); null when the rule is off or the run untempered.</summary>
+    public required double? SplitThreshold { get; init; }
+
     /// <summary>Every auto-pick, with its reason.</summary>
     public required IReadOnlyList<BassAutoPick> AutoPicks { get; init; }
 
@@ -212,13 +224,31 @@ public sealed record BassResolved
             }
         }
 
+        BassStepWindows? windows = null;
+        if (config.Sampling.LocalSteps is { } steps)
+        {
+            // Each hinge variable's knots, as the prior counts them: its distinct scaled values.
+            BassInputs inputs = BassInputs.Prepare(data, BassInputTransform.Fit(data));
+            int[] Windows(int count, Func<int, int> knots)
+            {
+                var w = new int[count];
+                for (int v = 0; v < count; v++) w[v] = steps.Window(knots(v));
+                return w;
+            }
+            windows = new BassStepWindows(Windows(inputs.Cases.ContinuousCount, v => inputs.ContinuousKnots(v).Length),
+                                          Windows(inputs.Outputs?.Count ?? 0, v => inputs.FunctionalKnots(v).Length));
+            log.Add(new("LocalSteps windows", windows.ToString(), $"max(1, ⌈ω·n_v⌉) over each hinge variable's n_v knots, ω = {Text(steps.WindowFraction)}"));
+        }
+        BassFactorShares? shares = config.Sampling.FactorMoves is { } family ? BassFactorShares.Of(family) : null;
+
         return new BassResolved
         {
             Cases = cases, Locations = locations, Observations = n, MaxBasis = maxBasis,
             MaxInteraction = maxInteraction, MaxCategoricalInteraction = maxCategorical, MaxFunctionalInteraction = maxFunctional,
             SupportMinimum = support, SupportMinimumFunctional = supportFunctional,
             MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, ResponseMeanSquare = meanSquare, Sigma2 = sigma2, TauPrior = tauPrior, FixedTau = fixedTau,
-            HotEnd = hotEnd, AutoPicks = log.AsReadOnly(),
+            HotEnd = hotEnd, StepWindows = windows, FactorShares = shares, SplitThreshold = config.Sampling.Tempering?.Split?.Threshold,
+            AutoPicks = log.AsReadOnly(),
         };
     }
 
@@ -299,4 +329,28 @@ public sealed record BassResolved
 
     private static string Text(double value) => value.ToString("R", CultureInfo.InvariantCulture);
     private static string Text(int value) => value.ToString(CultureInfo.InvariantCulture);
+}
+
+/// <summary>The local steps' window w per hinge variable (<see cref="LocalSteps.Window"/>): the continuous predictors', then
+/// the output variables'.</summary>
+public sealed record BassStepWindows(int[] Continuous, int[] Functional)
+{
+    /// <inheritdoc/>
+    public override string ToString()
+        => $"continuous [{string.Join(", ", Continuous)}]" + (Functional.Length > 0 ? $"; functional [{string.Join(", ", Functional)}]" : "");
+}
+
+/// <summary>
+/// The fixed-M factor moves' shares of the change's slot (<see cref="FactorMoves"/>), each its weight over their sum:
+/// a factor's redraw or local step, a prune, a grow (half the prune-or-grow weight each) and a variable change.
+/// </summary>
+public sealed record BassFactorShares(double Change, double Prune, double Grow, double VariableChange)
+{
+    /// <summary>The shares <paramref name="family"/>'s weights give.</summary>
+    public static BassFactorShares Of(FactorMoves family)
+    {
+        ArgumentNullException.ThrowIfNull(family);
+        double total = family.Change + family.PruneOrGrow + family.VariableChange;
+        return new(family.Change / total, 0.5 * family.PruneOrGrow / total, 0.5 * family.PruneOrGrow / total, family.VariableChange / total);
+    }
 }
