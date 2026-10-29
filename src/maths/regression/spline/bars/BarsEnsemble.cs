@@ -574,7 +574,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// contaminated-normal mixture) replaces the Normal term N(yᵢ; zᵢβ, σ²). The Poisson model's term is
     /// Poisson(yᵢ; exp(zᵢβ)); the Whittle model's is the exponential density of a periodogram ordinate with mean exp(zᵢβ),
     /// under Whittle's approximation of independent ordinates. The Gibbs-loss model declines: its likelihood is a
-    /// pseudo-likelihood, exp(−η·loss), not a density of a new observation.
+    /// pseudo-likelihood, exp(−loss), not a density of a new observation.
     /// <para>
     /// <see cref="PointwiseContent.CollapsedPredictive"/> keeps each draw's knots and integrates its coefficients and σ²
     /// out given the observations outside the unit: ln p(y_U | y_rest, knots), the g-prior's leave-unit-out Student t
