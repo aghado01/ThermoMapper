@@ -60,6 +60,13 @@ public sealed class BassBasisFit
     /// </summary>
     public BassBasisPrediction Predict(PredictionCases cases, BassPredictOptions? options = null)
         => BassBasisPredictor.Predict(this, cases, options ?? new BassPredictOptions());
+
+    /// <summary>
+    /// The draws × units log density over the joint draws (OQ17; <see cref="BassBasisDensity"/>): in coefficient space by
+    /// default, each case its own unit; or in physical units under the declared diagonal Gaussian truncation model.
+    /// </summary>
+    public PointwiseLogDensity PointwiseLogDensity(UnitPartition? units = null, BasisDensitySpace space = BasisDensitySpace.Coefficients)
+        => BassBasisDensity.LogDensity(this, units, space);
 }
 
 /// <summary>
