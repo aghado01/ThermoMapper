@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.Regression.Spline.Bass.Presentation;
 using Maths.Regression.Spline.Bass.Sensitivity;
 using Maths.Samplers.Ensemble;
 
@@ -22,6 +23,9 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><see cref="PointwiseLogDensity"/> is OQ17's matrix over the draws (S9), from the data the fit was run on.</item>
 /// <item><see cref="Predict"/> (stage 5, D07), <see cref="Sensitivity"/> and <see cref="Effects"/> (stage 6, D08) are views
 /// over the draws too, each on the data the fit was run on.</item>
+/// <item><see cref="Traces"/>, <see cref="TrainingFit"/>, <see cref="Metadata"/>, <see cref="Summary"/> and
+/// <see cref="SensitivitySummary"/> (stage 9) are the presentation data, values only: what R's <c>plot</c>, <c>print</c>
+/// and <c>summary</c> show, with rendering and formatting left to adapters above maths.</item>
 /// <item><see cref="Checkpoint"/> is the run's restart state when <see cref="BassRunOptions.Checkpoint"/> asked for it,
 /// beside the posterior, never inside it; <see cref="Bass.Resume"/> continues it.</item>
 /// </list>
@@ -86,6 +90,33 @@ public sealed record BassFit(
     /// </summary>
     public EffectAnalysis Effects(BassData data, SensitivitySpec? spec = null, EffectSpec? effects = null)
         => BassSensitivity.Effects(this, data, spec, effects);
+
+    /// <summary>Each chain's traces of M, σ², τ and λ in draw order (stage 9, P09; <see cref="BassTraces"/>).</summary>
+    public BassTraces Traces() => BassTraces.Of(this);
+
+    /// <summary>
+    /// Fitted against observed at the training cases (stage 9, P10; <see cref="BassTrainingFit"/>): the posterior mean, the
+    /// predictive mixture's quantiles at <paramref name="probabilities"/> (each in (0, 1);
+    /// <see cref="PosteriorSummary.DefaultProbabilities"/> when null) and the residuals, through <see cref="Predict"/> on
+    /// <paramref name="data"/>, the data the fit was run on; data with another fingerprint are refused.
+    /// </summary>
+    public BassTrainingFit TrainingFit(BassData data, IReadOnlyList<double>? probabilities = null)
+        => BassTrainingFit.Of(this, data, probabilities);
+
+    /// <summary>The fit's metadata (stage 9, P12; <see cref="BassMetadata"/>): the data's shape, the config and what it
+    /// resolved to, the run's identity, lengths and account.</summary>
+    public BassMetadata Metadata() => BassMetadata.Of(this);
+
+    /// <summary>The metadata with the posterior summaries of M, σ², τ and λ at <paramref name="probabilities"/> (stage 9,
+    /// P14; <see cref="BassSummary"/>), under the draw weights.</summary>
+    public BassSummary Summary(IReadOnlyList<double>? probabilities = null) => BassSummary.Of(this, probabilities);
+
+    /// <summary>
+    /// The posterior summary of <see cref="Sensitivity"/>'s indices and variances at <paramref name="probabilities"/>
+    /// (stage 9, P11; <see cref="SobolAnalysisSummary"/>), on the data the fit was run on.
+    /// </summary>
+    public SobolAnalysisSummary SensitivitySummary(BassData data, SensitivitySpec? spec = null, IReadOnlyList<double>? probabilities = null)
+        => SobolAnalysisSummary.Of(this, Sensitivity(data, spec), probabilities);
 
     // The model on `data`, refused when they are not the data the fit was run on.
     private BassModel ModelOn(BassData data)

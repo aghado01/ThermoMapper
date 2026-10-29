@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
+using Maths.Regression.Spline.Bass.Presentation;
 using Maths.Regression.Spline.Bass.Sensitivity;
 using Maths.Rng;
 
@@ -82,6 +83,31 @@ public sealed class BassBasisFit
     /// the locations, in output units.
     /// </summary>
     public BasisEffectAnalysis Effects(SensitivitySpec? spec = null, EffectSpec? effects = null) => BassBasisEffects.Of(this, spec, effects);
+
+    /// <summary>Each component's traces, in component order (stage 9, P09; <see cref="BassTraces"/>), R's per-component
+    /// trace panels.</summary>
+    public IReadOnlyList<BassTraces> Traces() => [.. _components.Select(c => c.Traces())];
+
+    /// <summary>
+    /// Fitted against observed at the training cases in physical units (stage 9, P11; <see cref="BassTrainingFit"/>): the
+    /// posterior mean of the latent output and the quantiles at <paramref name="probabilities"/> (each in (0, 1);
+    /// <see cref="PosteriorSummary.DefaultProbabilities"/> when null) of the predictive draws <see cref="Predict"/> makes from
+    /// <paramref name="seed"/>, with the residuals.
+    /// </summary>
+    public BassTrainingFit TrainingFit(IReadOnlyList<double>? probabilities = null, int seed = 0) => BassTrainingFit.Of(this, probabilities, seed);
+
+    /// <summary>The basis fit's metadata (stage 9, P13; <see cref="BassBasisMetadata"/>): the data's shape, the
+    /// decomposition, the joint draws and each component's metadata.</summary>
+    public BassBasisMetadata Metadata() => BassBasisMetadata.Of(this);
+
+    /// <summary>The metadata with each component's posterior summaries at <paramref name="probabilities"/> (stage 9, P15;
+    /// <see cref="BassBasisSummary"/>).</summary>
+    public BassBasisSummary Summary(IReadOnlyList<double>? probabilities = null) => BassBasisSummary.Of(this, probabilities);
+
+    /// <summary>The posterior summary of <see cref="Sensitivity"/>'s indices and variances, per location and integrated, at
+    /// <paramref name="probabilities"/> (stage 9, P11; <see cref="BasisSobolSummary"/>).</summary>
+    public BasisSobolSummary SensitivitySummary(SensitivitySpec? spec = null, IReadOnlyList<double>? probabilities = null)
+        => BasisSobolSummary.Of(Sensitivity(spec), probabilities);
 }
 
 /// <summary>
