@@ -94,6 +94,66 @@ Candidate numerical work remains private until acceptance. Rejection leaves the 
   Adaptation that continues past burn-in leaves the diagnostics' Markov assumption only approximately true, which is a further reason freezing is the default.
 - **A candidate kernel:** a birth proposal that weights variables by inclusion frequencies accumulated over the run, aimed at Nott and Kohn's setting of many inert predictors. It is an option to measure under this policy, not a default ([extensions brief](extensions-brief.md#additional-proposal-kernels)).
 
+## D10 (draft, 2026-10-29): stopping and convergence semantics
+
+A proposal for the user's design pass. Sources:
+- Vehtari, Gelman, Simpson, Carpenter and Bürkner (2021), on rank-normalized R̂ and bulk and tail ESS;
+- B01's repaired stopping mechanics (`ChainEnsemble`'s R̂ stop);
+- F-M2's pass (2026-10-29, the fitting checklist's reports), whose untempered chains never agreed at S10's lengths;
+- argon's notes (`issues/regression/argon-bass-qa.md`, 2026-10-29), weighed in the main session.
+
+- **The gap.** `ChainEnsemble` checks its R̂ stop between rounds, never after the last.
+  - `StoppedEarly` is false both when no target is set and when a target runs out of budget, so a fit never says it did not converge.
+  - On untempered Friedman, M's R̂ near 2 shows only to a reader of the per-quantity diagnostics.
+- **A verdict on every run, in the shared ensemble.** `EnsembleRun` gains a convergence verdict, read at the end of every run whether or not a target was set, by the rules the stop already uses. BARS and BASS read it alike, which is why D10 sits in this segment.
+  - *The target:* `RHatTarget` when set; otherwise 1.01, Vehtari et al.'s threshold for rank-normalized R̂.
+  - *The ESS gate:* `MinEssPerChain`, 100 per chain in the bulk and the tails, as now.
+  - *B01's rules, unchanged:* a frozen or unavailable reading fails, and a constant functional passes but cannot certify the verdict alone.
+  - *Three outcomes:* converged; not converged, naming each failing quantity with its R̂ and ESS; and undetermined, when nothing could be estimated (one chain, or every functional constant).
+  - *A fit is always returned.* Not converging is a reported state, never an exception or a null, and the checkpoint lets the caller extend the run (`Bass.Resume`).
+- **Three agreement groups.** The engine declares the grouping of its monitored quantities; the verdict is generic. For BASS:
+  - *predictive:* σ² and the fitted values at the monitored points. Do the chains predict the same surface and noise?
+  - *posterior level:* each retained draw's log posterior, the collapsed log π(structure, u | y) at b = 1, as F-M2's pass computed it. Do the chains sit in regions of the same mass? This draft adds it to the monitored quantities: the pass found it set the minimum ESS in many fits.
+  - *structural:* M, and τ in the g mode. Do the chains agree on the representation? In an overcomplete hinge basis M is not identified by the surface. So structural disagreement beside predictive and level agreement means non-identifiability, and the verdict reports it rather than hiding it.
+  - Each group gets its own verdict, and the run's verdict is their conjunction by default.
+  - *The pass, read this way.*
+    - On untempered Friedman every group fails: the fitted values reach R̂ 1.84, and the log posterior and M sit near 2.
+    - On the mixed and functional fits σ² agrees (R̂ 1.00–1.01), but one monitored point does not (1.45 and 1.48), and the log posterior and M do not. That is genuine disagreement, not only non-identifiability.
+    - Tempered, every group's median R̂ is at most 1.38 and no fit reads above 1.61, still short of 1.01.
+- **The stop's scope** (`StoppingScope` on `BassSampling`; in the ensemble, a set of groups): which groups an R̂ target gates.
+  - The default is every group.
+  - The option is predictive only, for an emulator user who needs the surface and the noise and accepts a reported structural disagreement. The verdict still reports every group.
+  - A predictive-only stop can end a run whose chains sit at different posterior levels, so it is a declared choice, not the default.
+- **Run lengths are a budget.** `BurnIn` and `Samples` stay R's 9,000 + 1,000, provisional, as the most a run spends. An R̂ target may stop sooner, and the verdict says whether the budget sufficed.
+  - F-M2's pass gives no basis for sizing them from ESS per sweep: no arm cleared, and every untempered fit read the ESS floor.
+  - So they stay R's until a sizing has a converged reading to start from.
+- **Mode-separation readings,** reported beside R̂. Once chains sit in separate modes, R̂ and bulk ESS saturate, with the ESS clamping near the split chains' count over two. These readings measure how far apart the modes are:
+  - the gap between the chains' mean log posteriors, the largest minus the smallest (12–42 nats in Phase 0's M4);
+  - the largest distance between two chains' posterior-mean surfaces at the monitored points.
+  - The verdict reports them. No stop reads them in this draft, since they have no calibrated threshold yet.
+- **Friedman's worse modes and stage 8.** Move work on them is parked.
+  - A mode 12–42 nats below the best carries about e⁻¹² of its mass or less, so a correct sampler all but never sits there.
+  - SMC's resampling along D05's path weights particles by those ratios, which MCMC chains without round trips cannot. Stage 8's fitting adapter (C4) is the test, recorded as a qualification question: does a population of a given size find the better representation, and keep it?
+  - *The caveat:* births are bounded by the Occam cost, so some particles must reach that representation at low b. The particle count is the variable to read.
+  - Any later move work reads the agreement time from dispersed starts: the sweeps or seconds until every chain's mean log posterior lies within Δ nats of the leader's. It does not read ESS per second.
+- **Not adopted:**
+  - argon's 1.05 as the reference target, which is looser than the threshold the shared R̂ was built against; a caller can still declare 1.05;
+  - a stop on the mode-separation readings, until they have a threshold;
+  - an exception on non-convergence: a fit that can be inspected and extended serves better.
+- **What it changes:**
+  - `EnsembleRun` gains the verdict, and `BassDiagnostics` carries it by group; BARS's diagnostics display it under B01's display policy.
+  - Adding the log posterior to BASS's monitored quantities enters the R̂ stop's gate, so a run with a target may stop later. A run without a target is unaffected, and so are the draws.
+- **Independent checks:**
+  - a synthetic ensemble whose chains sit at two levels: the verdict fails the right groups and names the failing quantities, and constant and frozen functionals follow B01's rules;
+  - the end-of-run verdict agrees with the stop's rule applied to the same traces;
+  - the log posterior against the chains' own density, as F-M2's pass checked it (to 10⁻¹¹);
+  - bit-identity: the verdict reads the run and changes nothing in it, so the existing hashes hold.
+- **For the design pass:**
+  - the reference target, 1.01;
+  - adding the log posterior to the monitored quantities;
+  - every group gating the stop by default;
+  - R's budget as the provisional default.
+
 ## Room for extensions
 
 Prep work in this segment, so that the [extensions](extensions-brief.md) plug in without reworking the port:
