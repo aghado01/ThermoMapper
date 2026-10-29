@@ -196,7 +196,7 @@ public abstract class CalibrationCovariance
 internal sealed class FunctionalCovariance : CalibrationCovariance
 {
     private readonly double[]? _truncationDiagonal;     // the diagonal option's y_s² ∘ var(e)
-    private readonly double[,]? _truncationColumns;     // the residual set's (y_s ∘ eᵢ)/√n as columns, m × n
+    private readonly double[,]? _truncationColumns;     // the residual set's second moment as columns: its thin SVD's Q·diag(λ), m × rank
     private readonly double[,]? _discrepancy;
     private readonly double _scale;
     private Assembled? _assembled;                       // the last component factor, with the truncation columns beside it
@@ -210,14 +210,7 @@ internal sealed class FunctionalCovariance : CalibrationCovariance
         if (residuals is not null)
         {
             if (declaration.Truncation == TruncationTerm.Diagonal) _truncationDiagonal = SampleVariance(residuals);
-            else
-            {
-                int n = residuals.GetLength(0);
-                double root = Math.Sqrt(n);
-                _truncationColumns = new double[m, n];
-                for (int i = 0; i < n; i++)
-                    for (int j = 0; j < m; j++) _truncationColumns[j, i] = residuals[i, j] / root;
-            }
+            else _truncationColumns = Compressed(residuals);
         }
         if (declaration.Discrepancy is { } d)
         {
@@ -230,6 +223,31 @@ internal sealed class FunctionalCovariance : CalibrationCovariance
 
     public override double[,]? DiscrepancyBasis => _discrepancy;
     public override double DiscrepancyScale => _scale;
+
+    /// <summary>The residual set's term (1/n)·Σᵢ rᵢrᵢᵀ as columns C with CCᵀ equal to it: the thin SVD of [r₁ … r_n]/√n,
+    /// Q·diag(λ) over its numerical rank, at most min(m, n) columns, taken once. A direction below the rank tolerance,
+    /// max(m, n)·ε·λ₁, contributes under the term's own rounding. Null when the residuals are zero.</summary>
+    internal static double[,]? Compressed(double[,] residuals)
+    {
+        int n = residuals.GetLength(0), m = residuals.GetLength(1);
+        double root = Math.Sqrt(n);
+        var a = new double[m, n];
+        bool any = false;
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < m; j++)
+            {
+                a[j, i] = residuals[i, j] / root;
+                any |= a[j, i] != 0.0;
+            }
+        if (!any) return null;
+        ThinSvdResult svd = ThinSvd.Decompose(a);
+        int rank = svd.NumericalRank;
+        if (rank == 0) return null;
+        var columns = new double[m, rank];
+        for (int k = 0; k < rank; k++)
+            for (int j = 0; j < m; j++) columns[j, k] = svd.LeftVectors[k][j] * svd.SingularValues[k];
+        return columns;
+    }
 
     public override CovarianceFactor Factor(ReadOnlySpan<double> groupVariances, EmulatorNoise noise)
     {

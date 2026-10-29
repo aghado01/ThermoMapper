@@ -28,6 +28,9 @@ public sealed record CalibrationConfig
     /// <summary>The conditional sampler's settings.</summary>
     public CalibrationSampling Sampling { get; init; } = new();
 
+    /// <summary>The nested reference sampler's settings: the outer draws and each inner run's ensemble.</summary>
+    public ReferenceSampling Reference { get; init; } = new();
+
     /// <summary>The canonical JSON options, <see cref="BassConfig.JsonOptions"/>' settings: enums by name, compact, an
     /// unknown field refused, a missing one defaulted (a required one refused), a variant's <c>Kind</c> anywhere.</summary>
     public static JsonSerializerOptions JsonOptions { get; } = CreateJsonOptions();
@@ -100,6 +103,7 @@ public sealed record CalibrationConfig
         }
         if (EnumerationCap < 1) throw Bad("EnumerationCap", "must be at least 1");
         (Sampling ?? throw Bad("Sampling", "is missing")).Validate();
+        (Reference ?? throw Bad("Reference", "is missing")).Validate();
     }
 
     private static ArgumentException Bad(string field, string reason) => new($"CalibrationConfig.{field}: {reason}");
