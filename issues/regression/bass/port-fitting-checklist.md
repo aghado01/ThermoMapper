@@ -56,6 +56,21 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ## Reports
 
+### Circle-back: argon's notes on S7–S10 — 2026-10-28
+
+*Built* (argon's earlier suggestions, then its QA notes, `issues/regression/argon-bass-qa.md`, the user's):
+- `e515220`: a swap's hand-over shares the giver's evaluated columns, immutable once evaluated, and copies the factor, β and residual; a restore refuses mismatched shapes. Tempered Friedman 20.8 s to 15.3 s, bit-identical.
+- `013015c`: `GPriorConditional.LeaveOutQuadratics`, the units' τ-free quadratic forms zᵤᵀG⁻¹z_v, taken once per structure; the collapsed content copies a repeated τ's row.
+- `eec4c50`: one subset draw (the proposal calls the part's own), and the R̂ stop's two-chain rule in `BassConfig.Validate`.
+- Suites after these three: Regression 816/816, Samplers 186/186, Distributions 129/129, LinAlg 120/120, Oracle 37/37.
+- `f239081`: the exact leave-one-out reference on width-2 panels (its structure sums agreeing with width ½ to 1e-11 on 150 structures of each response, at a quarter of the nodes), its structures in parallel. F holds 464,094 structures on fixture A's design, not argon's 2,263, so even with `013015c` the serial reference projected to about 7.5 hours. The fixed-g verdicts reproduce S10's exactly; sampled g's are in S10's report.
+- `e69d8f0`: the recovery readout prints each chain's pairs above 0.9 rejection by their rungs.
+
+*Argon's QA notes, weighed.* Its five answers match S10's recommendations.
+- *Λ̂ is censored at a steep band* (its finding A): confirmed. On tempered Friedman each chain's ladder holds one steep band, in the same place: chain 0 [0.319, 0.222] at 1.000 and [0.222, 0.169] at 0.937; chain 1 [0.232, 0.195] at 0.991; chain 2 [0.192, 0.156] at 0.997; chain 3 [0.251, 0.205] at 0.999. The median pair rejection is 0.34–0.44 and the hot end 0.002. The rejections are Rao–Blackwellized (1 − α every scan), so 1.000 means α below about 5·10⁻⁴ at every scan. A pair counts at most 1 in Λ̂, so the self-sizing places too few rungs in the band, and splitting it to Δb ≈ 0.04 does not relieve it. This corrects S10's "not the ladder": the ladder bounds the round trips too. Whether denser rungs there suffice, or the path itself needs changing, belongs to open question 5.
+- *The leave-one-out cost* (its finding B): the mechanism was right and `013015c` had removed it; the remaining cost was F's size.
+- *Two corrections to its levers:* knots are drawn uniformly over a variable's distinct observed values, not over [0, 1]; and only main-effect births pick their variable uniformly (half of them inert on Friedman), while interaction births already weight variables by use (w₂ + terms using u).
+
 ### S10: the qualification, and chip E verified — 2026-10-28
 
 *Chip E verified here* ([its report](stage4-ladder-sizing-brief.md#reports)): commits `ec565f6`, `d64ee4e`, `66c66be`, `abf16cf`, `36ce26a`, report `c388461`, read; the suites rerun: Regression 812/812, Samplers 186/186, Distributions 129/129, LinAlg 120/120, the BASS and Wallenius oracle tests 37/37. Its six constants (the initial 8 levels, the minimum 2 or 3, the one-rung deadband, the 0.9 flag, a new rung's source, the kept-replica rule) are implemented as reversible defaults and wait on the user, with its reasons in its report.
@@ -68,7 +83,11 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - the retained content's k̂ is no false negative: none of its 80 passed units misses by |z| > 3 (largest 2.5);
 - the collapsed content's k̂ is pessimistic: 72 of 81 units flagged, all 72 within |z| ≤ 3.
 
-So the retained content's k̂ is the one to read, as BARS found. Under sampled g, the default: [pending, recorded when its run ends].
+Under sampled g, the default (recorded in the circle-back, on its parallel reference, 38 minutes):
+- the retained content's k̂ is no false negative: none of its 79 passed units misses by |z| > 3 (largest 2.19); its 2 flagged units are within |z| ≤ 3;
+- the collapsed content's k̂ is pessimistic, less so: 21 of 81 flagged, all 21 within |z| ≤ 3; none of its 60 passed units misses (largest 1.60).
+
+So the retained content's k̂ is the one to read under either g, as BARS found.
 
 *Recovery* (`BassQualificationRecoveryTests`; the defaults, four chains of 5,000 and 2,000):
 
@@ -82,7 +101,7 @@ So the retained content's k̂ is the one to read, as BARS found. Under sampled g
 - *A pre-registered criterion failed:* untempered Friedman's σ interval misses the truth. It is kept as registered, not moved.
 - *Why.* Each chain holds a narrow band of M (10–12, 8–10, 10–12, 9–11 over 2,000 draws): births and deaths accept 1.5% and changes 5%. The posterior absorbs the fit's bias into σ (1 + 0.33² gives σ ≈ 1.05).
 - *R BASS 1.3.1 alike* (exploration only, its own Friedman sample, four seeds, `truncdist` replaced by the same law's inverse CDF since it is not installed): chains at M 10–12, 8–11, 9–10, 9–10, three of four σ intervals missing 1. The method under its defaults, not the port.
-- *Tempering* (the tempered row, added after the untempered read) brings R̂ of M to 1.45 and covers σ, but completes no round trip, one pair rejecting every swap. As chip E saw on its fixture, the cold rungs' local moves bound the mixing, not the ladder.
+- *Tempering* (the tempered row, added after the untempered read) brings R̂ of M to 1.45 and covers σ, but completes no round trip. Two things bound it (the second read in the circle-back, which corrects "not the ladder" here): the cold rungs' local moves, as chip E saw on its fixture, and one steep band of every chain's ladder, b ≈ 0.16–0.32, rejecting 0.94–1.000 at Δb down to 0.04.
 - The direct functional fit's residual r₁ reads −0.106 against −0.050.
 
 *D06's column-mass fixture* (`BassQualificationColumnMassTests`). n = 200, a smooth surface and an edge kink of 24 points (count admits it, mass about 12 refuses it), noise sd 0.3, then 0.02 (added after the first read separated nothing). The edge sd is the same under both rules (0.06, 0.006), the RMSEs within about 0.01, and column mass uses about one more term. Neither expectation held; the count default stands.
@@ -91,10 +110,10 @@ So the retained content's k̂ is the one to read, as BARS found. Under sampled g
 
 *Open questions for the user:*
 1. *Friedman's failed σ criterion.* Untempered BASS (and R) under the defaults fails it at 5,000 + 2,000 sweeps; tempered BASS passes. Keep it as a recorded failure of the untempered defaults, or ask more of the defaults.
-2. *The local moves' mixing.* Births and deaths at about 1.5% bound both runs. Improving them is beyond R and beyond stage 4: data-informed births, more moves per sweep, or a block move over a term's knot. I recommend its own design item before the efficiency pass (F-M1).
+2. *The local moves' mixing.* Births and deaths at about 1.5% bound both runs. Improving them is beyond R and beyond stage 4: data-informed births, more moves per sweep, or a block move over a term's knot. I recommend its own design item before the efficiency pass (F-M1). Argon's levers, in the circle-back, are the same three.
 3. *The run lengths.* The provisional 9,000 + 1,000 come from R's single-chain practice; across four chains R̂ shows they do not converge on these surfaces. The R̂ stop exists; whether the defaults should lean on it is open.
 4. *Chip E's six constants,* above: I recommend taking them as built.
-5. *The ladder settles above need* (11–16 rungs where about 9 do on the functional fixture), since burn-in reads the barrier high. Safe, at a cost; sizing from a later round's reading is an option.
+5. *The ladder's sizing.* It settles above need (11–16 rungs where about 9 do on the functional fixture), since burn-in reads the barrier high: safe, at a cost; sizing from a later round's reading is an option. And it settles below need at a steep band (tempered Friedman, in the circle-back), where Λ̂ reads each saturated pair as at most 1.
 
 ### S8 verified; chip D's questions decided — 2026-10-28
 
