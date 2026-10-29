@@ -75,6 +75,13 @@ public sealed class BassBasisFit
     /// cross-component covariances kept. The components share this fit's predictors, so no data is passed.
     /// </summary>
     public BasisSobolAnalysis Sensitivity(SensitivitySpec? spec = null) => BassBasisSensitivity.Of(this, spec);
+
+    /// <summary>
+    /// The main and two-way effect functions of the reconstructed output over the joint draws (O8 for basis fits;
+    /// <see cref="BassBasisEffects.Of"/>) under <paramref name="spec"/>'s measure: per output location and integrated over
+    /// the locations, in output units.
+    /// </summary>
+    public BasisEffectAnalysis Effects(SensitivitySpec? spec = null, EffectSpec? effects = null) => BassBasisEffects.Of(this, spec, effects);
 }
 
 /// <summary>
