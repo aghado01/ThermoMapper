@@ -260,14 +260,35 @@ Where it stops being an analogy. Sketch only.
 
 ## Reading leads (verify before citing)
 
+### In D:/aghado01/codex-scientiae/supellex-private/PDFs/Domany
 - Bansal, Blum, Chawla, *Correlation Clustering* (Machine Learning 2004).
 - Reichardt, Bornholdt, *Statistical mechanics of community detection* (PRE 2006):
   modularity as a Potts spin-glass ground state with resolution γ.
-- Ronhovde, Nussinov: replica-correlation multiresolution community detection
-  (PRE 2009); local resolution-limit-free "Absolute Potts Model" (PRE 2010).
 - Wang, Swendsen, Kotecký, antiferromagnetic Potts cluster algorithm (PRL 1989).
 - Swendsen, Wang, *Replica Monte Carlo simulation of spin glasses* (PRL 1986);
-  Houdayer, two-replica cluster algorithm (EPJ B 2001).
-- Davis 1967 (weak balance / clusterability); Harary 1953 (structural balance).
+- Houdayer, two-replica cluster algorithm (EPJ B 2001).
 - Domany, Hed, Palassini, Young, PRB 64, 224406 (2001): the earlier
   state-clustering paper the 2004 and 2007 work builds on (not in the folder).
+- Ronhovde, Nussinov: replica-correlation multiresolution community detection
+  (PRE 2009); 
+
+  ### In codex-scientiae/supellex-private/staging
+- Ronhovde, Nussinov: local resolution-limit-free "Absolute Potts Model" (PRE 2010).
+
+  ### Not Acquired 
+- Davis 1967 (weak balance / clusterability); 
+- Harary 1953 (structural balance).
+
+
+# Notes 
+
+
+# Belief updating  
+
+SPC at each temperature is the paper’s loss-based posterior over partitions, so EdgeCorrelation is its co-clustering probability. That makes each temperature a valid belief update, with no likelihood of the data needed.
+SPC already has a partition prior, implicitly. In the Fortuin–Kasteleyn random-cluster form, the q^{k(ω)} factor weights the number of SW clusters, so q is a prior choice as well as a resolution knob.
+What the paper adds:
+a temperature rule for discrete structures, recorded with the corrected formula and a note that SPC would need a permutation null for H rather than the F reference;
+an explicit partition prior;
+the co-clustering matrix read as a posterior probability at a calibrated temperature.
+New candidate work item 6: temperature calibration by posterior odds, to be compared with the susceptibility peak and the entropy plateau on the Domany battery.

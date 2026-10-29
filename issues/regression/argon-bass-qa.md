@@ -1,50 +1,49 @@
-Analyzed bass-questions.md:L1-65
-Analyzed port-fitting-checklist.md:L1-250
-Analyzed BassQualificationRecoveryTests.cs:L1-171
-Analyzed BassQualificationLooTests.cs:L1-194
+ Because untempered chains sit in distinct bands of $M$, Vehtari et al.’s split-chain bulk ESS is algebraically clamped near $C/2 \approx 4$ whenever between-chain variance $B$ dominates within-chain variance $W$—so `min-ESS/s` at a fixed 5,000 + 2,000 budget was measuring wall-clock speed against a clamped numerator of ~5.
 
-All five recommendations in S10’s report ([port-fitting-checklist.md](file:///D:/aghado01/ThermoMapper/issues/regression/bass/port-fitting-checklist.md#L92-L97)) are sound—here is my take on each, plus two technical findings from reading [`BassQualificationRecoveryTests.cs`](file:///D:/aghado01/ThermoMapper/tests/regression/BassQualificationRecoveryTests.cs) and [`BassQualificationLooTests.cs`](file:///D:/aghado01/ThermoMapper/tests/regression/BassQualificationLooTests.cs).
+Here is how I would lock in **Run Lengths + D10**, frame **Friedman’s worse modes**, and close **D09** to launch Stage 7.
 
 ---
 
-### 1. The Five S10 Decisions
+### 1. Run Lengths & D10: What a Fit Reports When Chains Never Agree
 
-1. **Friedman’s failed $\sigma$ criterion under untempered defaults:** **Keep as a recorded failure of the untempered defaults.**
-   - Untempered BASS gives $\sigma \in [1.013, 1.161]$ (missing $1.0$ by $0.013$) with $\hat{R}_M = 2.35$, because at $M \approx 9.6$ piecewise-linear hinges on Friedman’s smooth surface leave $\text{RMSE} \approx 0.335$ of structural bias, which the residual sum of squares absorbs ($\sqrt{1^2 + 0.335^2} \approx 1.055$).
-   - Tempered BASS (`new TemperingSpec()`) drops $\text{RMSE}$ to $0.282$, cuts $\hat{R}_M$ to $1.45$, raises $f$-coverage from $91.6\%$ to $97.2\%$, and covers $\sigma \in [0.991, 1.139]$. Keeping the pre-registered criterion untouched and showing that R `BASS` 1.3.1 fails the same way (while S8/Chip E tempering fixes $\sigma$ coverage) is the cleanest possible record.
+Keeping `BurnIn = 9000, Samples = 1000` as the default budget and folding convergence accounting into **D10** is the right call. Right now, [`BassDiagnostics`](file:///D:/aghado01/ThermoMapper/src/maths/regression/spline/bass/BassDiagnostics.cs#L26-L40) only records `StoppedEarly` (`SamplesUsed < Samples`), which is `false` both when `RHatTarget == 0` (the default) and when `RHatTarget > 1` runs out of budget without converging—and in [`ChainEnsemble.Run`](file:///D:/aghado01/ThermoMapper/src/maths/samplers/ensemble/ChainEnsemble.cs#L136), `MayStop` isn't even evaluated on the final batch (`collected == total`).
 
-2. **Slow local moves (1.5% birth/death acceptance, 5% change acceptance):** **Open as its own design item (`F-M1` / efficiency pass) rather than patching in Stage 4.**
-   - Stage 4’s job was a faithful, verified foundation with proper priors, exact boundaries, and tempering.
-   - When you open that design item, the three highest-leverage levers are:
-     1. **Multiple RJ structure steps per sweep** before running $\tau$ / swaps / composition (since proposing and rejecting a birth/death takes only a rank-1 bordered Cholesky test once a column is evaluated, whereas swaps and composition pay per-sweep overhead).
-     2. **Local knot/sign proposals inside `Change`** alongside full prior redraws, so existing terms can slide their knots without having to draw from $[0, 1]$ blind.
-     3. **Data-informed / active-variable birth proposals** (with exact forward/reverse density ratios via `F-X4`'s proposal-kernel seam), since on Friedman 5 of 10 variables are inert and uniform/Wallenius births waste half their proposals on inert coordinates.
+For **D10**, I recommend three concrete rules when chains do not agree by the end of `Samples`:
 
-3. **Provisional run lengths (`BurnIn = 9000`, `Samples = 1000`):** **Leave to the efficiency pass.** Lengthening the defaults before improving local move efficiency only scales wall time against the same 1.5% birth/death bottleneck.
-
-4. **Chip E’s six constants:** **Accept as built.**
-
-5. **Self-sizing ladder settling counts:** **Leave to the efficiency pass** (see Finding A below for why `FunctionalData` over-settles slightly while `Friedman` stops at 20–23 rungs with one saturated pair).
+1. **Always return the fit (never throw or null it), with an explicit convergence verdict on [`BassDiagnostics`](file:///D:/aghado01/ThermoMapper/src/maths/regression/spline/bass/BassDiagnostics.cs):**
+   - Checkpoints (`fit.Checkpoint`) and `Bass.Resume` exist so a caller can inspect or extend an unconverged run.
+   - Add explicit summary properties to `BassDiagnostics` (or a small `BassConvergenceSummary` record):
+     - `MaxRHat` and `MinEss` across the monitored quantities;
+     - `Converged` (whether every monitored functional has `RHat.MeetsTarget(target)` and `Ess.MeetsMinimum(C * MinEssPerChain)` at the end of the run, evaluated against `RHatTarget` when $> 1$, or a standard reference threshold of $1.05$ when `RHatTarget == 0`).
+2. **Separate *predictive* agreement from *structural* agreement:**
+   - Look at Phase 2’s $\hat{R}$ table ([local-move-pass-brief.md](file:///D:/aghado01/ThermoMapper/issues/regression/bass/local-move-pass-brief.md#L224-L258)): on `mixed` and `functional`, $\hat{R}_M$ is $2.15\text{–}2.50$, **yet $\hat{R}_{\sigma^2}$ is $1.00\text{–}1.01$, $95\%$ surface coverage is $98\text{–}99\%$, and $\sigma$ is covered in $5/5$ seeds.**
+   - Why? Because an overcomplete hinge basis is not structurally identifiable: one chain can represent the same surface $f(x)$ with $M = 5$ terms while another uses $M = 7$ co-adapted terms.
+   - If D10 reports both **Predictive $\hat{R}$** ($\max \hat{R}$ over $\sigma^2$ and `Fitted` at the monitored points) and **Structural $\hat{R}$** ($\max \hat{R}$ over $M$ and $\tau$), a user can immediately distinguish:
+     - *Representation non-identifiability* (`PredictiveRHat` $\le 1.05$, `StructuralRHat` $> 1.1$): chains agree on the surface $f(x)$ and noise $\sigma^2$, and only differ in how they factored $f$ into hinges.
+     - *Genuine mode disagreement* (`PredictiveRHat` $> 1.05$, as on untempered Friedman where `Fitted` $\hat{R}$ is $1.32\text{–}1.73$ and $\sigma^2$ $\hat{R}$ is $1.08$): chains are predicting different surfaces.
+3. **Allow choosing which scope `RHatTarget` gates:**
+   - A small enum or option on `BassSampling` (e.g., `StoppingScope.AllMonitored` by default vs `StoppingScope.PredictiveOnly` for $\sigma^2$ + `Fitted`) lets callers who care about surface predictions stop when $f$ and $\sigma^2$ agree without waiting for $M$ to mix across equivalent representations.
 
 ---
 
-### 2. Two Technical Findings from the S10 Runs
+### 2. Friedman’s Worse Modes: The Right Metric (and Stage 8’s Role)
 
-#### A. Why Tempered Friedman Stopped at 20–23 Rungs with One Saturated Pair ($r_{i^*} = 1.000$)
-In [bass-questions.md](file:///D:/aghado01/ThermoMapper/issues/regression/bass-questions.md#L24), the chip noted:
-> *"The tempered run settles at 20–23 rungs, but one pair still rejects every swap, and no complete round trip happened."*
+Park further MCMC move work on Friedman’s worse modes for now, and record two points for when you revisit it:
+1. **The right mode-crossing metrics:**
+   - **Between-chain log-posterior spread** $\operatorname{sd}_c(\overline{\ln\pi}_c)$ (or the gap $\max_c \overline{\ln\pi}_c - \min_c \overline{\ln\pi}_c$, which was 12–42 nats in M4) and **between-chain surface $L_2$ distance** $\max_{c, c'} \|\bar{f}_c - \bar{f}_{c'}\|_2$. Unlike split-$\hat{R}$ / bulk ESS (which saturates at $\text{ESS} \approx C/2$ as soon as chains sit in separate modes), both measure how far apart the modes are in function and density space.
+   - **Hitting / agreement time** from dispersed prior starts: sweeps or seconds until all chains enter within $\Delta$ nats of the leading chain (or until `PredictiveRHat` drops below $1.10$).
+2. **Stage 8’s Fitting SMC (`C4`) will test this directly without new local moves:**
+   - In MCMC without round trips, a chain that settles into a worse co-adapted representation of $x_1 x_2$ during burn-in is trapped there forever unless it simultaneously tears down 3–5 load-bearing terms.
+   - In tempered SMC along D05’s path $b \in [0, 1]$, particles that fall 12–42 nats behind the leading representation are **eliminated by resampling weights** as $b$ increases—so Stage 8 will tell you whether population resampling solves Friedman’s mode trapping on the existing local kernel.
 
-Why didn't [`TemperingLadder.Size`](file:///D:/aghado01/ThermoMapper/src/maths/samplers/rjmcmc/TemperingLadder.cs#L88-L96) grow the ladder past 20–23 rungs toward `MaxLevels = 64` when a pair was still rejecting $100\%$ of swaps?
-- **Right-censoring of $r_i$ at $1.0$ in $\hat{\Lambda} = \sum_i r_i$:**
-  When *every* pair is saturated ($r_i \approx 1$), $\hat{\Lambda} \approx L - 1$, so $2\hat{\Lambda} + 1 \approx 2L - 1$ doubles the ladder.
-  **But when the barrier is localized in one narrow temperature interval**—so **one** pair has $r_{i^*} = 1.000$ while the other $\sim 19$ pairs have already equalized to $r_i \approx 0.48$—that single saturated pair is capped at contributing at most $+1.0$ to $\hat{\Lambda} = \sum_i r_i$:
-  $$\hat{\Lambda} = 1.0 + 19 \times 0.48 \approx 10.1 \implies \text{RecommendedLevels}(\hat{\Lambda}) = \lceil 2 \times 10.1 \rceil + 1 = 22$$
-  Because $r_{i^*}$ cannot exceed $1.0$, $\hat{\Lambda}$ stops growing at $\sim 10$ and [`TemperingLadder.Place`](file:///D:/aghado01/ThermoMapper/src/maths/samplers/rjmcmc/TemperingLadder.cs#L119-L133) only assigns $1.0 / 10.1 \approx 10\%$ of the rungs (~2 intervals) across that cliff!
-- Worth noting for the efficiency pass: if `max(r_i) > 0.95` while $L < \text{MaxLevels}$, either `Size` can add extra rungs for any right-censored pair ($r_i \to 1$), or `Place` can inflate the effective barrier increment of pairs near $1.0$ (e.g., via the Gaussian inverse $-2\Phi^{-1}((1 - r_i)/2)$) so new rungs concentrate where the cliff actually is.
+---
 
-#### B. Why `Psis_UnderSampledG_IsNoFalseNegative` Took So Long to Run
-Look at [`BassQualificationLooTests.ExactLoo`](file:///D:/aghado01/ThermoMapper/tests/regression/BassQualificationLooTests.cs#L106-L153):
-- For each of the 3 datasets (`"surface"`, `"outlier"`, `"spike"`) and each of the $|\mathcal{F}| = 2{,}263$ enumerated structures, it builds an array of $2{,}112$ quadrature nodes in $u = \ln\tau$ (all sharing the same structure $k$) and calls:
-  [`BassPointwise.LogDensity(model, table, [draws], content: PointwiseContent.CollapsedPredictive)`](file:///D:/aghado01/ThermoMapper/tests/regression/BassQualificationLooTests.cs#L137)
-- Inside [`BassPointwise.Collapsed`](file:///D:/aghado01/ThermoMapper/src/maths/regression/spline/bass/BassPointwise.cs#L135-L143), even though all $2{,}112$ draws share the same structure $k$, the inner loop calls [`conditional.LeaveOutLogDensity(...)`](file:///D:/aghado01/ThermoMapper/src/maths/regression/gprior/CollapsedGPrior.cs#L505-L600) from scratch for every node $i \in \{1 \dots 2112\}$ and unit $u \in \{1 \dots 27\}$.
-- That executes $3 \times 2{,}263 \times 2{,}112 \times 27 \approx 3.87 \times 10^8$ calls to `LeaveOutLogDensity`, each repeating the $\tau$-independent Cholesky solve $G_c^{-1} Z_U^\top$ and heap-allocating scratch arrays. Hoisting the structure-only solve $G_c^{-1} Z_U^\top$ and OLS projections out of the per-$\tau$ loop in `CollapsedGPrior` / `BassPointwise.Collapsed` will cut both `ExactLoo` and normal `SampledG` `CollapsedPredictive` calls by more than an order of magnitude when draws share structures.
+### 3. Ready-to-Decide Summary for D09 (Unblocking Stage 7)
+
+To kick off Stage 7 right now, here is the complete D09 decision set ([port-calibration-brief.md](file:///D:/aghado01/ThermoMapper/issues/regression/bass/port-calibration-brief.md#L38-L83)):
+- **Target:** Cut posterior $p_{\text{cut}}(e, \theta \mid D_{\text{sim}}, y) = p(e \mid D_{\text{sim}})\,p(\theta \mid y, e)$, with emulator draws behind an interface (**C-X2** built in Stage 7).
+- **Formulations:** Declared `Functional` (routed through [`DiagonalPlusLowRank`](file:///D:/aghado01/ThermoMapper/src/maths/linalg/DiagonalPlusLowRank.cs)) and `Multivariate` (routed through [`DenseCholesky`](file:///D:/aghado01/ThermoMapper/src/maths/linalg/DenseCholesky.cs)), all in physical units (`C-O2`).
+- **Variance-group priors:** Declared per group; default $\text{IG}(\nu_g/2, (\nu_g/2)\hat{s}_g^2)$, with the heavy-tailed $(1 + \sigma_g^2 / s_{0,g}^2)^{-1}$ kernel selectable per group (marked `IsProper = false` so $b = 0$ on the likelihood path is refused).
+- **Discrepancy prior (`Functional`):** $\delta = \mu_\delta + D v$ with $v \sim \mathcal{N}(0, \sigma_v^2 I_q)$, declared with default $\sigma_v = 1.0$ ($\tau_v = 1$, so $D$ defaults to the physical square-root factor $\Sigma_\delta = D D^\top$, while `PriorSd` $\sigma_v$ scales a dimensionless basis $D$).
+- **Categorical calibration parameters:** Exact joint discrete conditional by enumeration up to a combination cap (e.g. $1{,}024$), single-site Metropolis/Gibbs above it.
+- **Stage 7 reference sampler:** Nested conditional MCMC ($S$ outer draws $e_s$, inner chain on $p(\theta \mid y, e_s)$ to stationarity, inner-length error measured).

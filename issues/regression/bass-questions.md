@@ -1,65 +1,69 @@
-Chip E reports done. I'm checking its commits and report and rerunning the suites myself, then continuing S10 with the tempered recovery, the cost baseline and the docs.
+Gathered the hub and checklists; now checking your three untracked BASS question files for open items.
 
-Chip E's report confirms my Friedman finding: round trips are ~100x below ideal because cold-rung local moves, not the ladder, bottleneck mixing. While the suites run, I'll check whether the sampled-g leave-one-out run is still alive.
+BASS's fitting, outputs and presentation data are built and verified. The local-move comparison pass is running, and calibration (stage 7) and SMC (stage 8) haven't started. I went through the hub, the five checklists, the segment briefs, the F-M2 records and your three untracked question files. Your files hold nothing open: argon's notes were all handled in the 2026-10-28 circle-back, and the S10 questions were decided.
 
-The suites are running in my artifacts root, so the tempered Friedman run waits until they finish. Meanwhile I'm reading the existing BASS docs so the new sections match their style.
+## Where BASS stands
 
-I'll draft the docs once the last numbers are in: the sampled-g leave-one-out run, the tempered Friedman run and the cost baseline. The suites are still running.
+| Stage | Status |
+|---|---|
+| 0–3: baseline, spec, numerics, sampler infrastructure | Done. Numerics checklist 14/17; the 3 open items are extension prep. |
+| 4: fitting (MCMC, tempering, restart) | Done and qualified by S10. Fitting checklist 28/37; open: F-M2, F-M1 (now inside F-M2's pass), F-R1, and seams F-X1–X6. |
+| F-M2: local-move mixing | Phase 1 options landed; **Phase 2 pass running**. |
+| 5–6: basis/PCA, prediction, sensitivity, effects | Done. Outputs checklist 19/20; only seam O-X4 is open. |
+| 7: calibration | **Not started.** It waits on D09, which is still a draft. Calibration checklist 2/10. |
+| 8: SMC (fitting adapter, then cut-calibration SMC) | **Not started.** |
+| 9: presentation | The data is done. Rendering waits for a consumer above maths and for viz v2's contracts. |
+| Extensions E1–E13 | All candidates; none scheduled. |
 
-The suites still hold my artifacts root, so I'm running the tempered Friedman recovery from a third root, in parallel.
+## Open questions
 
-Three runs are going: the suites on chip E's work, the sampled-g leave-one-out run, and Friedman tempered and untempered. I'll carry on with the cost baseline and the docs as they finish.
+**Waiting on your decision**
+1. **D09, the calibration design.** It blocks stage 7. The draft's choices:
+   - the cut posterior as the target, against plug-in or fully joint calibration;
+   - the functional and multivariate covariance formulations as declared types;
+   - variance-group priors, defaulting to R's IG(ν/2, ν·ŝ²/2), with R's heavy-tailed kernel chosen per group;
+   - **the discrepancy's prior.** R fixes its precision at 1; the draft says to declare it but names no default.
+   - categorical calibration parameters, which R's API lacks;
+   - a nested reference sampler that measures the error from finite inner runs.
+2. **D10's stopping semantics.** Still open. It decides what "converged" means beyond today's opt-in R̂ stop, and it gates the run-length defaults.
+3. **F-R1, the deterministic-simulator profile.** Drafted 2026-10-26. Its coefficient prior (ridge against g-prior for noise-free simulators) is to be set by a pre-registered comparison that hasn't been designed.
 
-Tempering roughly halves the disagreement on Friedman, though it doesn't cure it:
+**Answered by the pass, or following it**
 
-| | untempered | tempered (self-sized) |
-|---|---|---|
-| R̂ of M | 2.35 | 1.45 |
-| R̂ of fitted values | 1.3–1.96 | 1.03–1.10 |
-| RMSE | 0.33 | 0.28 |
-| coverage | 91.6% | 97.2% |
-| σ's interval | misses 1 | [0.99, 1.14], covers 1 |
-| time | 0.9 s | 55 s |
+4. **Which mixing option becomes the default.** This is decided by the fixed rule. I'll verify the verdict and carry it out.
+5. **Run lengths.** They're still R's provisional 9,000 burn-in + 1,000 draws, to be sized from the winning option's ESS per sweep.
+6. **The ladder's sizing.** On the functional fixture it settles above need, and on Friedman a steep band remains.
+7. **Friedman's worse modes.** No option opens them, and neither does tempering. If the pass confirms this, the candidates are:
+   - several moves per swap on tempered runs (lever 1, kept as a knob);
+   - the variational reference for tempering;
+   - a compound move that replaces a load-bearing term at once.
+8. **The efficiency pass,** the cost work held until F-M2 closes.
 
-The tempered run settles at 20–23 rungs, but one pair still rejects every swap, and no complete round trip happened. As chip E found, the local moves limit mixing, not the ladder. Still waiting on the suites and the leave-one-out run.
+**Defaults chips set as reversible, never put to you**
 
-All of Chip E's test suites pass (Regression 812/812, Samplers 186/186, Distributions 129/129, LinAlg 120/120, BASS/Wallenius 37/37), though regression ran slower than before likely due to parallel load—I'll recheck that on a quiet machine. Next I'll establish the cost baseline on a single thread, with only the leave-one-out run on another core.
+9. A choice of mine: the factor moves share the change's slot in thirds.
+10. From stage 6: the output mean y_m is placed in the location effect for basis sensitivity.
+11. From stage 9:
+    - Sobol indices are summarized over the defined draws;
+    - `NoiseSd` = E[σ];
+    - the trace axis counts a ladder's scan as one sweep;
+    - basis training-fit intervals take one predictive draw per joint draw.
 
-The forced cap on the count prior backfired—concentrating starts at M=50 makes the support rule nearly impossible to satisfy on 200 points, so the sampler correctly bails after 10⁶ draws. I'll revert to the default count prior and instead let a rich, low-noise surface naturally call for more terms, checking the resulting M against each cap.
+**For stage 8**
 
-Cost scales roughly linearly in N·M at large n (e.g., 186/465/1,184 µs for M=5/20/50 at n=5,000), with ~50–60 µs fixed overhead at small n, and the realized M stays under the cap with 10 inputs. Next I'll pull the exact text of the config and status rows to place the docs pass.
+12. The shared weighted quantile jumps between exactly equal and nearly equal weights. Once SMC brings unequal weights, a weighted type 7 through Kish's effective sample size is the fix.
+13. OQ2: an exact reference rung on long ladders is still open. The 4- and 8-rung study showed no payoff.
 
-I have all results except the sampled-g leave-one-out run, so I'll proceed with the docs pass: adding four new BASS sections plus updates to the intro, API, config, status, source-map, and samplers docs.
+**Parked prep and extensions**
 
-The docs pass is in. Now the S10 report in the fitting checklist and the hub's status line, then the commits. The sampled-g leave-one-out verdict goes in once its run finishes.
+14. **Seams:** F-X1–X6, C-X1/X2, N-X1–X3, O-X4. C-X1 (a declared measurement-error model) and C-X2 (emulator draws behind an interface) fit naturally into stage 7 itself.
+15. **Extensions E1–E13:** robust noise, ABMRS, KHAOS, active subspaces, cross-engine evidence and the rest. None has a trigger yet.
 
-Both commits are in: the qualification runs (`1e3d3f5`) and the docs with S10's report (`bdf248f`). Now the project memory.
+**Stale labels in the records**
 
-S10 is done and chip E's self-sizing ladder is checked: both are on `main`, with one result still running.
+16. Two section headers still read "Open (2026-10-23)" although the work has landed:
+    - OQ17 in the fitting brief;
+    - OQ18 in the numerics brief.
+17. The hub's decision table is headed "Status (2026-10-27)" but carries updates through 10-29.
 
-**Chip E checked.** I read its commits (`ec565f6`…`c388461`) and reran the suites: Regression 812, Samplers 186, Distributions 129, LinAlg 120 and the BASS and Wallenius oracle tests 37, all passing. On the functional fixture where 8 fixed levels had failed, the ladder now settles at 11–16 rungs and the two forms' evidence estimates agree. The between-chain error now shows what the old within-chain error hid.
-
-**What S10 built:**
-- **The residual check (`3b5fcc0`).** You declare an index on the call: an output variable, an explicit order, or Moran's I over nearest neighbours. With several output variables the default stays null until you declare one. The posterior mean is now computed per term, not per draw.
-- **Qualification runs (`1e3d3f5`)** in `tests/regression/`, behind `BASS_QUALIFICATION=1`.
-- **Docs (`bdf248f`).** Four new BASS sections in [BayesianRegression.md](docs/Maths/BayesianRegression.md), chip E's shared members in [Samplers.md](docs/Maths/Samplers.md), and S10's report in the fitting checklist.
-
-**What the qualification found:**
-- **Leave-one-out check.** I scored PSIS against the exact leave-one-out density from enumerating every structure (fixed g). The retained content's k̂ can be trusted: no unit it passed was wrong. The collapsed content's k̂ is too pessimistic: it flagged 72 of 81 units, and all 72 estimates were accurate. That matches BARS. The same check under sampled g, the default, is still running, and I'll add its verdict to the report when it lands.
-- **Recovery, and the main finding.** BASS mixes slowly between structures under its defaults.
-  - Births and deaths are accepted about 1.5% of the time, so each chain stays in a narrow band of M. R̂ of M is 1.5–2.5 on all three surfaces.
-  - R's BASS on its own Friedman sample behaves the same, so this is the method, not the port.
-  - Untempered Friedman fails the σ criterion I registered: its interval is [1.013, 1.161] against a true 1. I kept the criterion as registered rather than move it.
-  - Tempered, Friedman passes (σ covered, R̂ 1.45), but still completes no round trip. Chip E saw the same: the local moves, not the ladder, limit mixing.
-  - The categorical and functional surfaces meet their criteria (coverage 98–99%), though their R̂ is high too.
-- **Column mass vs count.** The two support rules give the same predictive spread at the edges, at both noise levels, so the count default stands.
-- **Cost.** A sweep costs about linearly in N·M, from 68 µs (n = 200, M = 5) to 1,184 µs (n = 5,000, M = 50). That's roughly 6 times faster than R; my earlier "13 times" came from wall time with chains in parallel.
-
-**Five open questions, with my recommendations:**
-1. **Friedman's failed σ criterion:** keep it recorded as a failure of the untempered defaults.
-2. **Slow local moves:** open this as its own design item before the efficiency pass. Improving the moves goes beyond what R does.
-3. **The provisional run lengths:** leave them to the efficiency pass.
-4. **Chip E's six constants:** take them as built.
-5. **The ladder settling above what it needs:** it errs on the safe side, so leave it to the efficiency pass.
-
-The full Regression suite took 5 minutes, against 1.5 earlier, while two benchmarks were also running. I'll re-time it once the machine is quiet.
+My recommendation: take D09 next while the pass runs, since it unblocks stage 7 and doesn't touch the pass's files. D10 can follow once the pass's ESS numbers give the stopping rule something concrete to target.
