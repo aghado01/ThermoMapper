@@ -133,6 +133,7 @@ public sealed record BassConfig
         if (run.RHatTarget > 0.0 && run.Chains < 2) throw Bad("Sampling.Chains", "must be at least 2 for the R̂ stop (Sampling.RHatTarget)");
         if (run.BatchSize < 0) throw Bad("Sampling.BatchSize", "must not be negative");
         if (!(run.MinEssPerChain >= 0.0 && double.IsFinite(run.MinEssPerChain))) throw Bad("Sampling.MinEssPerChain", "must be finite and not negative");
+        if (run.StoppingScope is not (BassStoppingScope.All or BassStoppingScope.Predictive)) throw Bad("Sampling.StoppingScope", "is not a known scope");
         if (run.MonitoredPoints is { } points)
         {
             if (points.Count == 0) throw Bad("Sampling.MonitoredPoints", "must hold a point, or be null for the defaults");
@@ -242,6 +243,22 @@ public enum SupportKind
     ColumnMass,
 }
 
+/// <summary>
+/// The groups of monitored quantities an R̂ stop waits on (D10): every group by default, or the predictive group alone.
+/// The verdict reports every group either way (<see cref="BassDiagnostics.Verdict"/>).
+/// </summary>
+public enum BassStoppingScope
+{
+    /// <summary>Every group: predictive, level and structural, so the chains agree on the surface and the noise, on the
+    /// posterior level, and on the representation. The default.</summary>
+    All,
+
+    /// <summary>The predictive group alone, σ² and the fitted values, for an emulator user who needs the surface and the
+    /// noise and accepts a reported structural disagreement. A stop on it can end a run whose chains sit at different
+    /// posterior levels, so it is a declared choice.</summary>
+    Predictive,
+}
+
 /// <summary>The measure on a categorical factor's level subset (D01).</summary>
 public enum CategoricalSubsetMeasure
 {
@@ -289,7 +306,8 @@ public sealed record BassSampling
     /// <summary>The seed every chain's streams derive from.</summary>
     public int MasterSeed { get; init; }
 
-    /// <summary>Sweeps discarded per chain; R's 9,000 of 10,000, provisional until BASS's own measurement.</summary>
+    /// <summary>Sweeps discarded per chain; R's 9,000 of 10,000, provisional until BASS's own measurement. With
+    /// <see cref="Samples"/> a budget, the most a run spends (D10).</summary>
     public int BurnIn { get; init; } = 9000;
 
     /// <summary>Draws kept per chain; R's 1,000, provisional likewise.</summary>
@@ -298,7 +316,9 @@ public sealed record BassSampling
     /// <summary>Sweeps per kept draw.</summary>
     public int Thin { get; init; } = 1;
 
-    /// <summary>0, no early stop; above 1, stop once R̂ and ESS meet their targets, as BARS's stop reads them.</summary>
+    /// <summary>0, no early stop; above 1, stop once R̂ and ESS meet their targets in the groups
+    /// <see cref="StoppingScope"/> names, as BARS's stop reads them. The verdict reads this target, or 1.01 when it is 0
+    /// (<see cref="ChainEnsemble.ReferenceRHatTarget"/>).</summary>
     public double RHatTarget { get; init; }
 
     /// <summary>Draws per chain between stopping checks; 0 for one round of <see cref="Samples"/>.</summary>
@@ -306,6 +326,9 @@ public sealed record BassSampling
 
     /// <summary>The ESS per chain the early stop also needs.</summary>
     public double MinEssPerChain { get; init; } = ChainEnsemble.MinEssPerChain;
+
+    /// <summary>The groups an R̂ stop waits on (D10): every group by default (<see cref="BassStoppingScope"/>).</summary>
+    public BassStoppingScope StoppingScope { get; init; } = BassStoppingScope.All;
 
     /// <summary>The move-type schedule: equal over the available moves by default (D01).</summary>
     public MoveSchedule Moves { get; init; } = new EqualOverAvailable();

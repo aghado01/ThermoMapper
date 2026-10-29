@@ -12,8 +12,12 @@ namespace Maths.Regression.Spline.Bass;
 /// A BASS run's account (the contract shapes), over the sampling phase: everything after burn-in.
 /// <list type="bullet">
 /// <item><b>Convergence.</b> Rank-normalized R̂ with bulk and tail ESS (<see cref="ChainDiagnostics"/>) for M, τ (null
-/// under fixed g, which holds it), σ², and the fitted value f = a₀ + Σⱼ aⱼBⱼ of each draw at <see cref="Fitted"/>'s
-/// points. <see cref="SamplesUsed"/> and <see cref="StoppedEarly"/> read the R̂ stop.</item>
+/// under fixed g, which holds it), each draw's log posterior, σ², and the fitted value f = a₀ + Σⱼ aⱼBⱼ of each draw at
+/// <see cref="Fitted"/>'s points. <see cref="SamplesUsed"/> and <see cref="StoppedEarly"/> read the R̂ stop.</item>
+/// <item><b>The verdict</b> (D10): the run's <see cref="ConvergenceVerdict"/> on three groups, <see cref="PredictiveGroup"/>
+/// (σ² and the fitted values), <see cref="LevelGroup"/> (the log posterior) and <see cref="StructuralGroup"/> (M, and τ
+/// when it is sampled), against the run's R̂ target or 1.01; and beside it the <see cref="ModeSeparation"/> readings,
+/// which no stop reads.</item>
 /// <item><b>Moves.</b> Attempts and acceptances per move type, and the moves' pooled acceptance rate; and per move kind
 /// (<see cref="MoveKinds"/>), attempts, acceptances, null moves and refusals, F-M2's local steps and fixed-M family beside
 /// D01's birth, death and redraw.</item>
@@ -29,6 +33,7 @@ namespace Maths.Regression.Spline.Bass;
 public sealed record BassDiagnostics(
     ConvergenceDiagnostic Count,
     ConvergenceDiagnostic? Tau,
+    ConvergenceDiagnostic LogPosterior,
     ConvergenceDiagnostic Sigma2,
     IReadOnlyList<BassMonitoredValue> Fitted,
     IReadOnlyList<MoveStat> Moves,
@@ -40,9 +45,30 @@ public sealed record BassDiagnostics(
     double MassAtCap,
     int SamplesUsed,
     bool StoppedEarly,
+    ConvergenceVerdict Verdict,
+    BassModeSeparation ModeSeparation,
     IReadOnlyList<BassChainAccount> Chains,
     BassTemperingReadout? Tempering)
 {
+    /// <summary>The predictive group: σ² and the fitted values. Do the chains predict the same surface and noise?</summary>
+    public const string PredictiveGroup = "predictive";
+
+    /// <summary>The level group: each draw's log posterior. Do the chains sit in regions of the same mass?</summary>
+    public const string LevelGroup = "level";
+
+    /// <summary>The structural group: M, and τ when it is sampled. Do the chains agree on the representation? In an
+    /// overcomplete hinge basis M is not identified by the surface, so disagreement here beside agreement in the other
+    /// groups reads as non-identifiability.</summary>
+    public const string StructuralGroup = "structural";
+
+    /// <summary>The groups an R̂ stop waits on under <paramref name="scope"/>.</summary>
+    public static IReadOnlyList<string> StoppingGroups(BassStoppingScope scope) => scope switch
+    {
+        BassStoppingScope.All => [PredictiveGroup, LevelGroup, StructuralGroup],
+        BassStoppingScope.Predictive => [PredictiveGroup],
+        _ => throw new ArgumentOutOfRangeException(nameof(scope)),
+    };
+
     /// <summary>
     /// The points whose fitted values are monitored when the config declares none
     /// (<see cref="BassSampling.MonitoredPoints"/>): up to three training cases spread through the data's order, at its
@@ -131,6 +157,43 @@ public sealed record BassTemperingReadout(
                                         rejection, acceptance, barrier / c, worst,
                                         spec.Schedule == SwapSchedule.Sequential ? double.NaN : ideal / c, rungs, levels, atMax,
                                         spec.ReferenceRung ? referenceAttempts / c : double.NaN);
+    }
+}
+
+/// <summary>
+/// How far apart the chains sit (D10), reported beside the verdict: once chains sit in separate modes, R̂ and bulk ESS
+/// saturate, and these measure the distance. No stop reads them; they have no calibrated threshold yet.
+/// <list type="bullet">
+/// <item><see cref="LogPosteriorGap"/>: the largest chain's mean log posterior minus the smallest's, in nats;</item>
+/// <item><see cref="FittedDistance"/>: the largest Euclidean distance between two chains' mean fitted values at the
+/// monitored points.</item>
+/// </list>
+/// Both are NaN with one chain.
+/// </summary>
+public sealed record BassModeSeparation(double LogPosteriorGap, double FittedDistance)
+{
+    // The readings from each chain's mean log posterior and mean fitted values, one row per chain.
+    internal static BassModeSeparation Of(IReadOnlyList<double> logPosterior, IReadOnlyList<double[]> fitted)
+    {
+        int c = logPosterior.Count;
+        if (c < 2) return new BassModeSeparation(double.NaN, double.NaN);
+        double lo = double.PositiveInfinity, hi = double.NegativeInfinity, widest = 0.0;
+        for (int i = 0; i < c; i++)
+        {
+            lo = Math.Min(lo, logPosterior[i]);
+            hi = Math.Max(hi, logPosterior[i]);
+            for (int j = i + 1; j < c; j++)
+            {
+                double squares = 0.0;
+                for (int p = 0; p < fitted[i].Length; p++)
+                {
+                    double d = fitted[i][p] - fitted[j][p];
+                    squares += d * d;
+                }
+                widest = Math.Max(widest, Math.Sqrt(squares));
+            }
+        }
+        return new BassModeSeparation(hi - lo, widest);
     }
 }
 

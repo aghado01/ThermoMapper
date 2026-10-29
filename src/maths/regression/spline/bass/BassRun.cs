@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Maths.Regression.GPrior;
 using Maths.Rng;
+using Maths.Samplers;
 using Maths.Samplers.Ensemble;
 using Maths.Samplers.Rjmcmc;
 
@@ -12,8 +13,9 @@ namespace Maths.Regression.Spline.Bass;
 /// BASS's client of the ensemble shell (<see cref="ChainEnsemble"/>; stage 4's S7 and S8): one <see cref="BassChain"/>
 /// per chain, or with <see cref="BassSampling.Tempering"/> one <see cref="BassLadder"/>, started from an exact draw of
 /// the prior on F (<see cref="BassPriorSampler"/>), each retained state composed into a <see cref="BassDraw"/>, kept in
-/// the chain's <see cref="DrawStore{TDraw}"/>, and reduced to the functionals the shell monitors: M, τ in the g mode, σ²,
-/// and the draw's fitted value at each monitored point. A ladder's draws are its b = 1 replica's.
+/// the chain's <see cref="DrawStore{TDraw}"/>, and reduced to the functionals the shell monitors: M, τ in the g mode, the
+/// log posterior, σ², and the draw's fitted value at each monitored point, in D10's three groups (structural, level,
+/// predictive). A ladder's draws are its b = 1 replica's.
 /// <list type="bullet">
 /// <item><b>Streams.</b> The shell's chain seed fans out into four: the start's draws, the moves, τ's block and a
 /// ladder's own seed, of which an untempered chain uses the first three and a ladder the first and the last. Its readout
@@ -88,8 +90,44 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
     /// <summary>Every functional is monitored.</summary>
     public int FunctionalDim => MonitoredDim;
 
-    /// <summary>M, τ in the g mode, σ², and the fitted value at each monitored point, in that order.</summary>
-    public int MonitoredDim => (_model.Target.SamplesTau ? 3 : 2) + _points.Count;
+    /// <summary>M, τ in the g mode, the log posterior, σ², and the fitted value at each monitored point, in that order: the
+    /// structural group, then the level group, then the predictive group.</summary>
+    public int MonitoredDim => (_model.Target.SamplesTau ? 4 : 3) + _points.Count;
+
+    /// <summary>"M", "tau", "log_posterior", "sigma2", and "fitted[i]" at case i, or "fitted[i,r]" at case i and output
+    /// location r, in the functionals' order.</summary>
+    public IReadOnlyList<string> FunctionalNames
+    {
+        get
+        {
+            var names = new List<string>(MonitoredDim) { "M" };
+            if (_model.Target.SamplesTau) names.Add("tau");
+            names.Add("log_posterior");
+            names.Add("sigma2");
+            foreach (BassMonitoredPoint p in _points)
+                names.Add(p.Location is int r ? $"fitted[{p.Case},{r}]" : $"fitted[{p.Case}]");
+            return names;
+        }
+    }
+
+    /// <summary>D10's groups: <see cref="BassDiagnostics.PredictiveGroup"/> (σ² and the fitted values),
+    /// <see cref="BassDiagnostics.LevelGroup"/> (the log posterior) and <see cref="BassDiagnostics.StructuralGroup"/> (M, and τ
+    /// when it is sampled).</summary>
+    public IReadOnlyList<FunctionalGroup> Groups
+    {
+        get
+        {
+            int level = _model.Target.SamplesTau ? 2 : 1;
+            var predictive = new int[1 + _points.Count];
+            for (int k = 0; k < predictive.Length; k++) predictive[k] = level + 1 + k;
+            return
+            [
+                new FunctionalGroup(BassDiagnostics.PredictiveGroup, predictive),
+                new FunctionalGroup(BassDiagnostics.LevelGroup, [level]),
+                new FunctionalGroup(BassDiagnostics.StructuralGroup, _model.Target.SamplesTau ? [0, 1] : [0]),
+            ];
+        }
+    }
 
     /// <summary><see cref="Bass.Fingerprint"/> of the config and data.</summary>
     public string Fingerprint { get; }
@@ -208,12 +246,38 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         int f = 0;
         ConvergenceDiagnostic count = summary.Monitored[f++];
         ConvergenceDiagnostic? tau = _model.Target.SamplesTau ? summary.Monitored[f++] : null;
+        int level = f;
+        ConvergenceDiagnostic logPosterior = summary.Monitored[f++];
         ConvergenceDiagnostic sigma2 = summary.Monitored[f++];
+        int first = f;
         var fitted = new BassMonitoredValue[_points.Count];
         for (int p = 0; p < fitted.Length; p++) fitted[p] = new BassMonitoredValue(_points[p], summary.Monitored[f++]);
-        return new BassDiagnostics(count, tau, sigma2, fitted, moves!, summary.AcceptanceRate, kinds, refusals, emptyBirths, support,
-                                   (double)atCap / retained, summary.SamplesUsed, summary.SamplesUsed < _plannedDraws, accounts,
+        return new BassDiagnostics(count, tau, logPosterior, sigma2, fitted, moves!, summary.AcceptanceRate, kinds, refusals, emptyBirths,
+                                   support, (double)atCap / retained, summary.SamplesUsed, summary.SamplesUsed < _plannedDraws,
+                                   summary.Verdict, Separation(summary.Traces, level, first), accounts,
                                    ladders is null ? null : BassTemperingReadout.Of(ladders));
+    }
+
+    // The mode-separation readings from each chain's trace: its mean log posterior (functional `level`), and its mean fitted
+    // values (the functionals from `first` on).
+    private BassModeSeparation Separation(IReadOnlyList<ChainTrace> traces, int level, int first)
+    {
+        var logPosterior = new double[traces.Count];
+        var fitted = new double[traces.Count][];
+        for (int c = 0; c < traces.Count; c++)
+        {
+            logPosterior[c] = Mean(traces[c].Draws(level));
+            fitted[c] = new double[_points.Count];
+            for (int p = 0; p < _points.Count; p++) fitted[c][p] = Mean(traces[c].Draws(first + p));
+        }
+        return BassModeSeparation.Of(logPosterior, fitted);
+
+        static double Mean(double[] draws)
+        {
+            double sum = 0.0;
+            foreach (double d in draws) sum += d;
+            return sum / draws.Length;
+        }
     }
 
     // A draw's ids through `map`, sorted, with its coefficients (the intercept, then one per id) following them.
@@ -250,8 +314,9 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
             progress.Report(new BassProgress(done, _plannedSweeps));
     }
 
-    // The retained draw at `state`, kept, and its functionals: M, τ (g mode), σ², then the fitted value
-    // f = a₀ + Σⱼ aⱼBⱼ at each monitored point.
+    // The retained draw at `state`, kept, and its functionals: M, τ (g mode), the log posterior, σ², then the fitted value
+    // f = a₀ + Σⱼ aⱼBⱼ at each monitored point. The log posterior is the collapsed ln π(structure, u | y) at b = 1, the
+    // state's prior and log marginal, which is the chain's own density there (a ladder's b = 1 replica's).
     private void Accumulate(BassChainRun run, BassState state, Span<double> functionals)
     {
         BassDraw draw = run.Structure.Compose(state, run.Composition, run.Terms);
@@ -259,6 +324,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         int f = 0;
         functionals[f++] = state.Count;
         if (_model.Target.SamplesTau) functionals[f++] = draw.Tau;
+        functionals[f++] = Temperature.LogPosterior(_model.Target.Evaluate(state));
         functionals[f++] = draw.Sigma2;
         Span<double> fitted = functionals[f..];
         fitted.Fill(draw.Coefficients[0]);

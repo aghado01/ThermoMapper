@@ -58,7 +58,8 @@ public static class Bass
         try
         {
             (summary, chains) = new ChainEnsemble().Run(ensemble, sampling.Chains, sampling.MasterSeed, sampling.BurnIn, sampling.Samples,
-                sampling.RHatTarget, sampling.BatchSize, sampling.MinEssPerChain, options.Checkpoint, resumeFrom, parallel);
+                sampling.RHatTarget, sampling.BatchSize, sampling.MinEssPerChain, options.Checkpoint, resumeFrom, parallel,
+                stoppingScope: model.Resolved.StoppingGroups);
         }
         catch (AggregateException e) when (Shared(e) is { } failure)
         {

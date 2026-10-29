@@ -279,8 +279,11 @@ public sealed class BassRunTests
     {
         Assert.Equal(a.Count, b.Count);
         Assert.Equal(a.Tau, b.Tau);
+        Assert.Equal(a.LogPosterior, b.LogPosterior);
         Assert.Equal(a.Sigma2, b.Sigma2);
         Assert.Equal(a.Fitted, b.Fitted);
+        Assert.Equal(a.ModeSeparation, b.ModeSeparation);
+        VerdictAssert.Same(a.Verdict, b.Verdict);
         Assert.Equal(a.Moves, b.Moves);
         Assert.Equal(a.AcceptanceRate, b.AcceptanceRate);
         Assert.Equal(a.Refusals.Entries, b.Refusals.Entries);

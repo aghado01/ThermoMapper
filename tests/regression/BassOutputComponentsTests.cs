@@ -132,10 +132,12 @@ public sealed class BassOutputComponentsTests
         (double[,] y, BassPredictor[] predictors) = Problem();
         BassDecomposition d = BassDecomposition.FromPca(y, new BassPcaSpec { Rank = 3 });
         BassConfig config = Config(chains: 3, samples: 2000) is var c
-            ? c with { Sampling = c.Sampling with { RHatTarget = 1.1, BatchSize = 50, MinEssPerChain = 10 } } : null!;
+            ? c with { Sampling = c.Sampling with { RHatTarget = 1.1, BatchSize = 50, MinEssPerChain = 10, StoppingScope = BassStoppingScope.Predictive } }
+            : null!;
         BassBasisFit fit = BassComponents.Fit(d, predictors, config);
         int[] counts = [.. fit.Components.Select(f => f.Draws[0].Count)];
         _out.WriteLine($"draws per chain under the R̂ stop: {string.Join(", ", counts)}");
+        Assert.True(counts.Min() < counts.Max(), "the components should stop at different lengths, or the pairing is not exercised");
         BassJointDraws joint = fit.JointDraws;
         int shortest = counts.Min();
         Assert.Equal([shortest, shortest, shortest], joint.ChainLengths!);

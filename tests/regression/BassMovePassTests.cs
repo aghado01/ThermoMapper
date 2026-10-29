@@ -47,8 +47,9 @@ public sealed class BassMovePassTests
     /// <summary>The rule's thresholds: the score an arm must reach, and the least r_f it may hold.</summary>
     internal const double Clears = 1.5, Floor = 0.8;
 
-    // S10's Friedman data at n = 500, hashed before Friedman took its sample size.
-    private const string S10Friedman = "6b52ce789967ee0c";
+    // S10's Friedman data at n = 500, hashed before Friedman took its sample size. The hash reads the default config's JSON
+    // too: 6b52ce789967ee0c until N14 added Sampling.StoppingScope to it, the data unchanged (the old JSON still gives it).
+    private const string S10Friedman = "e38c2c6c05ff8dbc";
 
 #if DEBUG
     private const string Configuration = "Debug";

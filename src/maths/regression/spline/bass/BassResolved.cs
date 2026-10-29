@@ -71,6 +71,10 @@ public sealed record BassResolved
     /// missing locations at the middle one, or the defaults.</summary>
     public required IReadOnlyList<BassMonitoredPoint> MonitoredPoints { get; init; }
 
+    /// <summary>The groups an R̂ stop waits on, by name (<see cref="BassSampling.StoppingScope"/>): every group, or the
+    /// predictive group alone. The verdict reports every group either way.</summary>
+    public required IReadOnlyList<string> StoppingGroups { get; init; }
+
     /// <summary>
     /// A tempered run's hot end, its lowest positive b: declared, or auto-picked (<see cref="AutoHotEnd"/>); null when the
     /// run is untempered.
@@ -247,6 +251,7 @@ public sealed record BassResolved
             MaxInteraction = maxInteraction, MaxCategoricalInteraction = maxCategorical, MaxFunctionalInteraction = maxFunctional,
             SupportMinimum = support, SupportMinimumFunctional = supportFunctional,
             MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, ResponseMeanSquare = meanSquare, Sigma2 = sigma2, TauPrior = tauPrior, FixedTau = fixedTau,
+            StoppingGroups = BassDiagnostics.StoppingGroups(config.Sampling.StoppingScope),
             HotEnd = hotEnd, StepWindows = windows, FactorShares = shares, SplitThreshold = config.Sampling.Tempering?.Split?.Threshold,
             AutoPicks = log.AsReadOnly(),
         };
