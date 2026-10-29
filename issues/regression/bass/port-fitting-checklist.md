@@ -16,7 +16,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [x] **F-C2** The shared-code changes the contracts need, before stage 4's first fit: `Sigma2Prior` as a serializable record, shared with BARS's config; `GPriorCentre.Flat` for the Liang convention, refused by BARS until the shared block supports it.
 - [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison.
 - [ ] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison. Folded into F-M2's pass on 2026-10-29: the prior-cancelling schedule is one of its arms.
-- [ ] **F-M2** The local moves' mixing, its own design item before the efficiency pass (S10, decided 2026-10-28); the design draft is [local-move-mixing-brief.md](local-move-mixing-brief.md). Births and deaths accept about 1.5% on Friedman, and the chains hold their own bands of M. Levers: several structure moves per sweep, a local knot move inside a change, active-variable births on F-X4's seam. The run lengths and the ladder's sizing, its censored steep band included, follow it. Phase 1 was decided on 2026-10-29 (the draft's "Phase 1's decisions"): local knot steps, the fixed-M factor moves and the ladder's split rule, built as options by a chip ([its brief](local-move-options-brief.md)); levers 1 and 3 are withdrawn.
+- [ ] **F-M2** The local moves' mixing, its own design item before the efficiency pass (S10, decided 2026-10-28); the design draft is [local-move-mixing-brief.md](local-move-mixing-brief.md). Births and deaths accept about 1.5% on Friedman, and the chains hold their own bands of M. Levers: several structure moves per sweep, a local knot move inside a change, active-variable births on F-X4's seam. The run lengths and the ladder's sizing, its censored steep band included, follow it. Phase 1 was decided on 2026-10-29 (the draft's "Phase 1's decisions"): local knot steps, the fixed-M factor moves and the ladder's split rule, built as options by a chip ([its brief](local-move-options-brief.md)), landed and verified the same day; levers 1 and 3 are withdrawn. Phase 2, the pass, is next.
 
 ### Reference fixtures (stage 1)
 
@@ -56,6 +56,32 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### F-M2 Phase 1 verified: the local-move options — 2026-10-29
+
+A chip built Phase 1 ([its report](local-move-options-brief.md#reports)), and it was read and verified here.
+- *Commits:* `cf431c0`–`8217eba`, with the report in `9a0d277`.
+- *What landed:* three options, each off by default:
+  - the local steps (`BassSampling.LocalSteps`: ρ = ½, ω = 0.02);
+  - the fixed-M family (`BassSampling.FactorMoves`: prune and grow, a factor's variable change, in the change's slot by thirds);
+  - the split rule (`TemperingSpec.Split`: threshold 0.9, self-sizing ladders only), generic in `TemperingLadder.Split`.
+- *Read here:*
+  - the selection matches the decisions: the part uniform at 1/P, null moves for an empty or full part, and the intercept refused;
+  - each ratio is built from both ways' proposals;
+  - the enumeration's forward probabilities come from the test's own statement, the production code supplying only the weights, the target and the ratios;
+  - the bit-identity hashes were committed once, in `cf431c0`, before any production edit;
+  - BARS's ladder path is untouched.
+- *Suites rerun here:* Regression 1,030/1,030, Samplers 194/194, the BASS oracle classes 54/54.
+- *Docs:*
+  - `docs/Maths/BayesianRegression.md` gains "BASS: the local-move options (F-M2)", the split rule in the tempering section, and the API, configuration and status rows;
+  - `docs/Maths/Samplers.md` gains `TemperingLadder.Split`.
+- *What the smoke reading shows* (one seed, exploration):
+  - local steps accept 0.83 of admitted proposals on Friedman and the mixed fit, and 0.39–0.40 on the functional fit;
+  - the family accepts at most 0.03;
+  - M's R̂ moves both ways across options;
+  - the split rule raises Friedman's ideal round-trip rate 6.5-fold, with no round trip completed either way.
+  - None of this is a default; the pass decides.
+- *Next:* F-M2's Phase 2, the pre-registered pass, as the draft's "Phase 1's decisions" fixes it.
 
 ### S10's questions decided — 2026-10-28
 

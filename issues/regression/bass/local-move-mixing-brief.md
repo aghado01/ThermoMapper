@@ -259,6 +259,7 @@ Decided by the user on 2026-10-29, taking the recommendations laid out after the
 
 ## Phase 1: build the options
 
+- *Built 2026-10-29* (`cf431c0`–`8217eba`; the Reports below).
 - *The order* (Phase 1's decisions):
   1. Lever 2, as an option.
   2. The fixed-M family, as options.
@@ -313,3 +314,9 @@ Decided by the user on 2026-10-29, taking the recommendations laid out after the
 ## Reports
 
 Newest first.
+
+### Phase 1 built and verified — 2026-10-29
+
+- *Built:* the local steps, the fixed-M family and the split rule, each an option off by default and bit-identical, in `cf431c0`–`8217eba`. The chip's report is in [its brief](local-move-options-brief.md#reports), and the verification is in the fitting checklist's reports.
+- *Exactness:* detailed balance holds by enumeration on three fixtures (continuous, categorical and functional), at b = 1 and 0.3 and on both schedules, the worst gap 5.7·10⁻¹⁴ in logs. Negative controls fail the check, and visit frequencies match the exact posterior.
+- *Next:* Phase 2, as decided above.
