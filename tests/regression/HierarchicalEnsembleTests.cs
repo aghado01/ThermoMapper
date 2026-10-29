@@ -252,6 +252,7 @@ public sealed class HierarchicalEnsembleTests
         Assert.Equal(a.DeviationVarianceConvergence, b.DeviationVarianceConvergence);
         Assert.Equal(a.PopulationSmoothingVarianceConvergence, b.PopulationSmoothingVarianceConvergence);
         Assert.Equal(a.RHatPopulation, b.RHatPopulation);
+        VerdictAssert.Same(a.Verdict, b.Verdict);
         Assert.Equal(a.ChainSeeds, b.ChainSeeds);
         for (int c = 0; c < a.PosteriorDraws.Count; c++)
             for (int i = 0; i < a.PosteriorDraws[c].Count; i++)

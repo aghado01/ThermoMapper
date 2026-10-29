@@ -90,6 +90,7 @@ public sealed class BarsResumeTests
         Assert.Equal(a.MeanKnots, b.MeanKnots);
         Assert.Equal(a.Knots, b.Knots);
         Assert.Equal(a.RHatFit, b.RHatFit);
+        VerdictAssert.Same(a.Verdict, b.Verdict);
         Assert.Equal(a.PeakCountMean, b.PeakCountMean);
         Assert.Equal(a.PeakIntensity, b.PeakIntensity);
         Assert.Equal(a.SpanCoverage, b.SpanCoverage);

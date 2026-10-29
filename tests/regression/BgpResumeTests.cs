@@ -94,6 +94,7 @@ public sealed class BgpResumeTests
         Assert.Equal(a.Bandwidth, b.Bandwidth);
         Assert.Equal(a.BandwidthOriginal, b.BandwidthOriginal);
         Assert.Equal(a.BandwidthConvergence, b.BandwidthConvergence);
+        VerdictAssert.Same(a.Verdict, b.Verdict);
         Assert.Equal(a.AcceptanceRate, b.AcceptanceRate);
         for (int c = 0; c < a.BandwidthDraws.Count; c++)
         {

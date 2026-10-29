@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Rng;
@@ -23,7 +24,8 @@ namespace Maths.Regression.Spline.Baps;
 /// <see cref="PopulationSmoothingVarianceConvergence"/> are the ensemble shell's rank-normalized diagnostics (split R̂,
 /// bulk and tail ESS) on log σ², log τ_u² and log τ_0², the functionals an early stop waits on.
 /// <see cref="RHatPopulation"/> is the classic R̂ of each population coefficient across chains, a consensus map, and
-/// <see cref="RHatPopulationMax"/> its least favourable reading. <see cref="ChainSeeds"/> are the resolved per-chain
+/// <see cref="RHatPopulationMax"/> its least favourable reading. <see cref="Verdict"/> is the run's convergence verdict
+/// (D10) on all of them, the population curve on classic R̂. <see cref="ChainSeeds"/> are the resolved per-chain
 /// seeds, and <see cref="Checkpoint"/> the run's restart state when it was requested.</para>
 /// <para>With anisotropic smoothing each draw's τ_0² is the geometric mean of its components' τ_0j², so the τ_0
 /// summaries read the overall smoothing. Each τ_0j²'s posterior is <see cref="ComponentSmoothingVarianceInterval"/>, and
@@ -45,6 +47,7 @@ public sealed record HierarchicalResult(
     ConvergenceDiagnostic PopulationSmoothingVarianceConvergence,
     RHatDiagnostic[] RHatPopulation,
     RHatDiagnostic RHatPopulationMax,
+    ConvergenceVerdict Verdict,
     int[] ChainSeeds,
     EnsembleCheckpoint? Checkpoint,
     IReadOnlyList<ConvergenceDiagnostic>? ComponentSmoothingVarianceConvergence = null)
@@ -419,7 +422,7 @@ public sealed class HierarchicalPSpline
         return new HierarchicalResult(beta0Sum, repMeans, sigSum / total, tauUSum / total, tau0Sum / total, total,
                                       posteriorDraws, mean0Sum, repConditionalMeans,
                                       summary.Monitored[0], summary.Monitored[1], summary.Monitored[2], rHatPopulation,
-                                      RHatDiagnostic.Worst(rHatPopulation), summary.ChainSeeds, summary.Checkpoint,
+                                      RHatDiagnostic.Worst(rHatPopulation), summary.Verdict, summary.ChainSeeds, summary.Checkpoint,
                                       _anisotropic is null ? null : summary.Monitored[3..]);
     }
 
@@ -550,6 +553,18 @@ public sealed class HierarchicalPSpline
         public int FunctionalDim => 3 + owner.Components + owner._nu;
 
         public int MonitoredDim => 3 + owner.Components;
+
+        // "log_sigma2", "log_tau_u2", "log_tau_02", each component's "log_tau_02[c]", then "population[j]".
+        public IReadOnlyList<string> FunctionalNames
+        {
+            get
+            {
+                var names = new List<string>(FunctionalDim) { "log_sigma2", "log_tau_u2", "log_tau_02" };
+                for (int c = 0; c < owner.Components; c++) names.Add("log_tau_02[" + c.ToString(CultureInfo.InvariantCulture) + "]");
+                for (int j = 0; j < owner._nu; j++) names.Add("population[" + j.ToString(CultureInfo.InvariantCulture) + "]");
+                return names;
+            }
+        }
 
         // One child seed per consumer: the start's draws and the sweep's stream. The model has no readout randomness.
         public IChainRun<SweepState> StartChain(int chainSeed, int readoutSeed)

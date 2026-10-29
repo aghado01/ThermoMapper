@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Maths.Distributions;
 using Maths.Rng;
 using Maths.Samplers;
@@ -123,8 +124,11 @@ public sealed record BarsEvidencePriors(
 /// <see cref="RHatFit"/> is the per-grid-point consensus map: where it is elevated the chains disagree on the
 /// fit (multimodality / under-determination), where it is ≈1 the fit is settled; <see cref="RHatFitMax"/> is its
 /// least favourable reading (<see cref="RHatDiagnostic.Worst"/>). <see cref="Knots"/> holds the knot count's
-/// rank-normalized diagnostics (split R̂, bulk and tail ESS), and <see cref="AcceptanceRate"/> counts the sampling
-/// phase only. <see cref="Tempering"/> reports the ladders when the run was tempered, and is null otherwise.
+/// rank-normalized diagnostics (split R̂, bulk and tail ESS). <see cref="Verdict"/> is the run's convergence verdict (D10)
+/// on two groups, <see cref="BarsEnsemble.PredictiveGroup"/> (the fitted grid values, on classic R̂) and
+/// <see cref="BarsEnsemble.StructuralGroup"/> (the knot count), against the run's R̂ target or 1.01; its readings keep
+/// their states, so a frozen or unavailable R̂ reads as such, never as a number. <see cref="AcceptanceRate"/> counts the
+/// sampling phase only. <see cref="Tempering"/> reports the ladders when the run was tempered, and is null otherwise.
 /// <see cref="Evaluations"/> counts every evaluated knot configuration of every chain and ladder rung, burn-in
 /// included, by admission outcome (<see cref="DesignRejection.None"/> for admitted), so the truncation the support
 /// rules and admission impose stays visible. <see cref="Checkpoint"/> is the run's restart state when it was requested
@@ -153,6 +157,7 @@ public sealed record BarsResult(
     double[] SpanCoverage,
     ConvergenceDiagnostic Knots,
     RHatDiagnostic RHatFitMax,
+    ConvergenceVerdict Verdict,
     PeakPosterior Peak,
     IReadOnlyList<PeakMode> PeakModes,
     IReadOnlyList<IReadOnlyList<BarsDraw>> Draws,
@@ -324,6 +329,39 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
 
     /// <summary>Only the knot count (index 0) gets ESS — the per-grid sequences would be a needless O(n²)·g blow-up.</summary>
     public int MonitoredDim => 1;
+
+    /// <summary>The verdict's group of the fitted grid values: do the chains fit the same curve?</summary>
+    public const string PredictiveGroup = "predictive";
+
+    /// <summary>The verdict's group of the knot count: do the chains agree on the representation? The curve does not
+    /// identify the count, so disagreement here beside agreement on the fit reads as non-identifiability.</summary>
+    public const string StructuralGroup = "structural";
+
+    /// <summary>"knots", then "fit[g]" for each grid index g.</summary>
+    public IReadOnlyList<string> FunctionalNames
+    {
+        get
+        {
+            var names = new string[FunctionalDim];
+            names[0] = "knots";
+            for (int g = 0; g < _grid.Length; g++) names[1 + g] = "fit[" + g.ToString(CultureInfo.InvariantCulture) + "]";
+            return names;
+        }
+    }
+
+    /// <summary><see cref="PredictiveGroup"/>, the fitted grid values, and <see cref="StructuralGroup"/>, the knot count, as
+    /// D10 groups BASS's; an empty grid leaves the structural group alone.</summary>
+    public IReadOnlyList<FunctionalGroup> Groups
+    {
+        get
+        {
+            var structural = new FunctionalGroup(StructuralGroup, [0]);
+            if (_grid.Length == 0) return [structural];
+            var fit = new int[_grid.Length];
+            for (int g = 0; g < fit.Length; g++) fit[g] = 1 + g;
+            return [new FunctionalGroup(PredictiveGroup, fit), structural];
+        }
+    }
 
     /// <summary>
     /// Start one reversible-jump replica from the shell's seeds. <paramref name="chainSeed"/> fans out into three
@@ -542,7 +580,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         var peakModes = ExtractModes(grid, peakIntensity, spanCoverage, chainLambda);
         var retained = new IReadOnlyList<BarsDraw>[chains];
         for (int ci = 0; ci < chains; ci++) retained[ci] = bars[ci].Readout.Draws.ToArray();
-        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, peak, peakModes, retained, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations, summary.Checkpoint, Evidence(bars));
+        return new BarsResult(grid, fit, fitSd, rHatFit, meanK, peakCountMean, peakIntensity, spanCoverage, knots, rHatFitMax, summary.Verdict, peak, peakModes, retained, collected, summary.AcceptanceRate, summary.ChainSeeds, moveStats, _model.Uncertainty, Tempering(bars), pooled.Evaluations, summary.Checkpoint, Evidence(bars));
     }
 
     // Stepping-stone, and path sampling where the traces hold slopes, each over every chain's own ladder; null when the

@@ -120,6 +120,7 @@ public sealed class BapsEnsembleTests
         Assert.Equal(a.RHatLogLambda, b.RHatLogLambda);
         Assert.Equal(a.LogLambdaConvergence, b.LogLambdaConvergence);
         Assert.Equal(a.LogSigma2Convergence, b.LogSigma2Convergence);
+        VerdictAssert.Same(a.Verdict, b.Verdict);
         Assert.Equal(a.AcceptanceRate, b.AcceptanceRate);
         Assert.Equal(a.LocalSmoothing, b.LocalSmoothing);
         for (int c = 0; c < a.PosteriorDraws.Count; c++)

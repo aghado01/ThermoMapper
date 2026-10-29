@@ -69,6 +69,7 @@ public sealed record BgpDraw(double Bandwidth, GpFit Fit, double[] ConditionalVa
 /// <param name="Checkpoint">The run's restart state when it was requested, and null otherwise.</param>
 /// <param name="NoiseRatioConvergence">For an unknown scale, the noise ratio η's rank-normalized diagnostics (it is
 /// monitored beside t and gates an early stop); null for a known σ².</param>
+/// <param name="Verdict">The run's convergence verdict (D10) on its one group, "all": t, and η for an unknown scale.</param>
 public sealed record BgpResult(
     double[] PosteriorMean,
     double[] PosteriorSd,
@@ -77,7 +78,8 @@ public sealed record BgpResult(
     ConvergenceDiagnostic BandwidthConvergence, int[] ChainSeeds, double InputScale,
     IReadOnlyList<IReadOnlyList<BgpDraw>> BandwidthDraws,
     EnsembleCheckpoint? Checkpoint,
-    ConvergenceDiagnostic? NoiseRatioConvergence)
+    ConvergenceDiagnostic? NoiseRatioConvergence,
+    ConvergenceVerdict Verdict)
 {
     /// <summary>The noise variance σ²'s posterior median and 95% interval (a point for a known σ²).</summary>
     public PosteriorInterval NoiseVarianceInterval => Interval(d => d.NoiseVariance);
@@ -150,6 +152,9 @@ public sealed class BgpSampler : IEnsembleModel<double>
 
     /// <summary>ESS on each functional.</summary>
     public int MonitoredDim => FunctionalDim;
+
+    /// <summary>"bandwidth", and "noise_ratio" for an unknown scale.</summary>
+    public IReadOnlyList<string> FunctionalNames => _unknownScale ? ["bandwidth", "noise_ratio"] : ["bandwidth"];
 
     /// <summary>Warm-start one chain at the starting bandwidth (and noise ratio). <paramref name="readoutSeed"/> drives the
     /// signal variance's exact draws for an unknown scale; a known σ² never uses it.</summary>
@@ -301,7 +306,7 @@ public sealed class BgpSampler : IEnsembleModel<double>
                              summary.AcceptanceRate, chains * summary.SamplesUsed,
                              summary.Monitored[0], summary.ChainSeeds,
                              _gp.Transform.InputScale, bandwidthDraws, summary.Checkpoint,
-                             _unknownScale ? summary.Monitored[1] : null);
+                             _unknownScale ? summary.Monitored[1] : null, summary.Verdict);
     }
 
     /// <summary>

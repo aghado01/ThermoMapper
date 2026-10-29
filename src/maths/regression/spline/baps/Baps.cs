@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using Maths.LinAlg;
 using Maths.Rng;
 using Maths.Samplers.Blocks;
@@ -60,7 +61,8 @@ public enum BapsScheme
 /// every retained draw (<see cref="BapsDraw"/>), per chain in draw order; every summary above is read from it.
 /// <paramref name="LogLambdaConvergence"/> and <paramref name="LogSigma2Convergence"/> are the ensemble shell's
 /// rank-normalized diagnostics (split R̂, bulk and tail ESS) on log λ and log σ², the functionals an early stop waits
-/// on. <paramref name="AcceptanceRate"/> is the sampling phase's, pooled over the scan's blocks: 1 for the Gibbs schemes,
+/// on, and <paramref name="Verdict"/> the run's convergence verdict on them (D10). <paramref name="AcceptanceRate"/> is the
+/// sampling phase's, pooled over the scan's blocks: 1 for the Gibbs schemes,
 /// the Metropolis rate on log λ for the collapsed scheme, and for the anisotropic scheme 1 with the slice update and,
 /// with the Newton update (two conjugate blocks and one Metropolis block), <c>(2 + a)/3</c> with a its Newton step's rate. <paramref name="ChainSeeds"/> are the resolved per-chain
 /// seeds, and <paramref name="Checkpoint"/> the run's restart state when it was requested.
@@ -82,6 +84,7 @@ public sealed record BapsResult(
     IReadOnlyList<IReadOnlyList<BapsDraw>> PosteriorDraws,
     ConvergenceDiagnostic LogLambdaConvergence,
     ConvergenceDiagnostic LogSigma2Convergence,
+    ConvergenceVerdict Verdict,
     double AcceptanceRate,
     int[] ChainSeeds,
     EnsembleCheckpoint? Checkpoint,
@@ -328,7 +331,7 @@ public sealed class Baps
             coef, PosteriorInterval.Quantile(allLam, 0.5), PosteriorInterval.Quantile(allLam, 0.025),
             PosteriorInterval.Quantile(allLam, 0.975),
             sigSum / total, summary.FunctionalRHat[0], (int)total, posteriorDraws,
-            summary.Monitored[0], summary.Monitored[1], summary.AcceptanceRate, summary.ChainSeeds, summary.Checkpoint,
+            summary.Monitored[0], summary.Monitored[1], summary.Verdict, summary.AcceptanceRate, summary.ChainSeeds, summary.Checkpoint,
             localField, scheme == BapsScheme.AnisotropicGibbs ? summary.Monitored[2..] : null);
     }
 
@@ -348,6 +351,19 @@ public sealed class Baps
         public int FunctionalDim => 2 + (scheme == BapsScheme.AnisotropicGibbs ? owner._components : 0);
 
         public int MonitoredDim => FunctionalDim;
+
+        // "log_lambda", "log_sigma2", then each component's "log_lambda[j]".
+        public IReadOnlyList<string> FunctionalNames
+        {
+            get
+            {
+                var names = new string[FunctionalDim];
+                names[0] = "log_lambda";
+                names[1] = "log_sigma2";
+                for (int j = 2; j < names.Length; j++) names[j] = "log_lambda[" + (j - 2).ToString(CultureInfo.InvariantCulture) + "]";
+                return names;
+            }
+        }
 
         // The kernel stream drives the scan; the readout stream serves the collapsed scheme's conditional draws.
         public IChainRun<BapsState> StartChain(int chainSeed, int readoutSeed) => new BapsChainRun(owner, scheme,
