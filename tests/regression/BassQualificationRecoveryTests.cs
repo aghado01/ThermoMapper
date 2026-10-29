@@ -161,6 +161,14 @@ public sealed class BassQualificationRecoveryTests
         if (diagnostics.Tempering is { } t)
             _out.WriteLine($"{name}: levels {string.Join(", ", t.Levels)}, largest pair rejection {t.MaxPairRejection:F3}, barrier {t.Barrier:F2}, " +
                            $"round trips per scan {t.RoundTripsPerScan:G3} against the ideal {t.IdealRoundTripRate:G3}");
+        // Where a ladder's barrier sits: each chain's pairs above 0.9 rejection, by their rungs b.
+        for (int c = 0; c < (diagnostics.Tempering?.PairRejection.Length ?? 0); c++)
+        {
+            double[] r = diagnostics.Tempering!.PairRejection[c], b = diagnostics.Tempering.Ladders[c];
+            string steep = string.Join(", ", Enumerable.Range(0, r.Length).Where(i => r[i] > 0.9).Select(i => $"[{b[i]:G3}, {b[i + 1]:G3}] {r[i]:F3}"));
+            _out.WriteLine($"{name}: chain {c}: pair rejection median {r.Order().ElementAt(r.Length / 2):F3}, hot end b {b[^1]:G3}; " +
+                           $"pairs above 0.9 {(steep.Length == 0 ? "none" : steep)}");
+        }
         foreach ((DrawStore<BassDraw> chain, int c) in fit.Draws.Select((chain, c) => (chain, c)))
             _out.WriteLine($"{name}: chain {c}: mean M {chain.Average(d => d.Structure.TermIds.Length):F2}, mean σ {chain.Average(d => Math.Sqrt(d.Sigma2)):F4}, " +
                            $"mean τ {chain.Average(d => d.Tau):G3}, M range {chain.Min(d => d.Structure.TermIds.Length)}–{chain.Max(d => d.Structure.TermIds.Length)}");
