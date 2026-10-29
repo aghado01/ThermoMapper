@@ -19,8 +19,21 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E11** Elastic emulation of misaligned functional outputs.
 - [ ] **E12** Residuals correlated along the output index.
 - [ ] **E13** The free-energy curve over the ladder.
+- [ ] **E14** Semi-modular calibration.
+- [ ] **E15** Calibrated intervals for loss-based posteriors (BARS's Gibbs-loss route first).
 
 ## Reports
+
+### Bissiri, Holmes and Walker read — 2026-10-29
+
+*A general framework for updating belief distributions* (2016, *JRSS B* 78; arXiv 1306.6430), read against the port.
+- *Already absorbed:* the tempered rungs as power-likelihood updates (E13), and BARS's `GibbsLossModel` on a unit-information scale.
+- *New entries:*
+  - E14, semi-modular calibration, from §4.2's partial-information update, which is also the cut posterior's coherence argument;
+  - E15, calibrated intervals for loss-based posteriors, from §3.4, for BARS's Gibbs-loss route first.
+- *A framing for F-R1:* §3.3's hierarchical loss reads a deterministic simulator's σ² as a learned loss weight.
+- *The follow-ups* the entries name (Carmona and Nicholls 2020; Holmes and Walker 2017; Lyddon, Holmes and Walker 2019; Syring and Martin 2019) were named from memory and are to be read before either entry starts.
+- *Not here:* §5.2's model-free clustering, which belongs to SPC.
 
 ### Temperature integration read — 2026-10-28
 

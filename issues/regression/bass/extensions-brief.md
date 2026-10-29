@@ -16,6 +16,8 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | The free-energy curve over the ladder | Farhi et al. 2013; Watanabe 2013; Bissiri, Holmes and Walker 2016 | D05's ladder with the reference rung, its rungs' draws kept; the integrated form's per-draw slope | Candidate |
 | Elastic emulation of misaligned functional outputs | Francom, Tucker, Huerta, Shuler and Ries, arXiv 2305.08834 | Outputs: a representation with a declared reconstruction map. Calibration: D09's likelihood over both parts | Candidate |
 | Residuals correlated along the output index | Andros, Guhaniyogi, Francom and Pasqualini, arXiv 2406.18751, 2602.09351 | Fitting: the output-side inner product; the residual-dependence check | Candidate |
+| Semi-modular calibration | Carmona and Nicholls 2020 (named from memory); Bissiri, Holmes and Walker 2016, §4.2 | Calibration: D09's cut posterior and its emulator interface. Stage 8: the cut SMC's induced-density bridges | Candidate |
+| Calibrated intervals for loss-based posteriors | Bissiri, Holmes and Walker 2016, §3.4, and its follow-ups (named from memory) | BARS: `GibbsLossModel`. Any engine that weights a likelihood or a loss | Candidate |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
 
 ## Generalized-hyperbolic noise (GBMARS)
@@ -159,6 +161,46 @@ From Andros, Guhaniyogi, Francom and Pasqualini (arXiv 2406.18751, 2602.09351), 
 - **The model.** Residual covariance σ²(I ⊗ R_θ): independent across cases, correlated along the index. Because R acts only on the output side, the direct contractions keep their separable form with Q = R⁻¹ (the fitting segment's output-side inner product). The collapsed marginal gains a log|R| term per case, and the g-prior is taken in the same inner product.
 - **Cost.** For a Markov residual on a one-dimensional index, Q is tridiagonal and every output-side product is linear in m. Sampling θ recomputes the output-side Gram for the current terms, O(M² m) with a banded Q.
 - **Not covered.** The PCA mode's residual is the empirical truncation residual, whole-vector, so it already keeps within-output dependence (D07); this entry concerns direct fits.
+
+## Semi-modular calibration
+
+D09 takes the cut posterior: the observations update θ given each emulator draw, and never feed back into the emulator. Bissiri, Holmes and Walker's partial-information update (2016, *JRSS B* 78, §4.2) is its coherence argument. Updating θ on only the part of the information that bears on it is a valid belief update, though it is no joint model's posterior.
+- **The extension.** Semi-modular inference (Carmona and Nicholls 2020, *AISTATS*; named from memory, not yet read here) puts a power η on the feedback term. η = 0 is the cut and η = 1 the joint posterior, with η chosen by a predictive criterion.
+- **Why it is cheap here.** Stage 8's cut SMC already bridges successive conditionals through induced densities, and a path in η is one more bridge sequence on the same machinery.
+- **Needs.** D09's emulator interface (C-X2) and stage 8's cut SMC (C5). The joint end, η = 1, also needs the emulator's likelihood under the observations, which the cut never forms.
+
+## Calibrated intervals for loss-based posteriors
+
+BARS's `GibbsLossModel` is a Gibbs posterior on Tukey's bisquare loss, and its docstring says its credible intervals have no calibrated interpretation.
+- *Its scale is already set.* Its normalization, ρ(u) ≈ u²/2 on residuals scaled by a robust σ̂, is effectively Bissiri et al.'s unit-information weight (§3.2), which for squared loss gives w = 1/(2σ²), the Gaussian case.
+- *Its coverage is not.* A unit-information weight fixes the loss's scale, not the intervals' coverage.
+- **The extension.** Set the loss weight w so that credible intervals reach frequentist coverage: Bissiri et al.'s operational calibration (§3.4). The algorithms that do it are its follow-ups, named from memory and not yet read here:
+  - Holmes and Walker (2017, *Biometrika*), on assigning a value to a power likelihood;
+  - Lyddon, Holmes and Walker's loss-likelihood bootstrap (2019, *Biometrika*);
+  - Syring and Martin's calibration of general posterior credible regions (2019, *Biometrika*).
+- **Where it applies.** BARS's Gibbs-loss route first, then any engine that weights a likelihood for robustness, such as a power posterior under misspecification. BASS's tempered rungs are outside it: they are a path to b = 1, not a posterior to report.
+- **When.** Only if the Gibbs-loss route is used for intervals, rather than the scale-mixture resamplers BARS prefers.
+
+## General-Bayes readings for the port
+
+Bissiri, Holmes and Walker (2016) were read against the port on 2026-10-29. Most of the paper is already absorbed:
+- each tempered rung as its power-likelihood update (§3.1, eq. 8), in the free-energy entry above;
+- BARS's `GibbsLossModel`, a loss-based update on a unit-information scale (§3.2).
+
+Two readings frame decisions without changing them.
+- **D09's cut posterior** is §4.2's partial-information update; see semi-modular calibration, above.
+- **The deterministic-simulator profile (F-R1).**
+  - *The weight is a precision.* §3.3's hierarchical loss with l(w) = log w gives w^ξ·exp{−w·l}·π: a Gamma prior on a precision.
+  - *So σ² is a loss weight.* For a noise-free simulator, BASS's sampled σ² is a learned weight on the squared-error loss, not a noise variance.
+  - *And the update is valid.* §4.1 makes updating on non-stochastic data a valid update.
+  - *What it means for F-R1:* it supports keeping σ² sampled in the profile, and it reads the exact-fit impropriety under Jeffreys as w → ∞.
+
+Not taken:
+- §4.1's loss-based expert statements, with no current need;
+- §3.5's conjugate loss prior, since BASS's priors are already conjugate;
+- the supplement's joint quantiles, which would become a quantile-emulation entry only if wanted.
+
+§5.2's model-free clustering belongs to SPC.
 
 ## Direct-functional BASS for families of SPC sweeps
 
