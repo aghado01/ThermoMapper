@@ -149,3 +149,204 @@ Under "Reports" below, newest first:
 ## Reports
 
 Newest first.
+
+### Stage 7 built, Steps 1–6 — 2026-10-29
+
+From the stage-7 chip. N14 had landed (`e8547d3`, `EnsembleRun.Verdict`) before Step 6, so all six steps are built. Nothing is pushed.
+
+**Commits.**
+- `066a054`: Step 1, the emulator contract (C-X2).
+- `3e935b5`: Step 2, the measurement-error model (C-X1).
+- `24014cd`: Step 3, the covariance formulations (C1).
+- `50565b9`: Step 4, the conditional model, discrepancy and categorical parameters (C2).
+- `d3af6a3`: Step 5, the conditional sampler and its tempering.
+- `ab14608`: Step 6, the nested reference sampler (C3).
+
+**API** (`src/maths/regression/spline/bass/calibration/`, namespace `Maths.Regression.Spline.Bass.Calibration`).
+- *Emulator* (`CalibrationEmulator.cs`, `BassEmulators.cs`):
+  - `ICalibrationEmulator` holds the parameters, `DrawCount`, `DrawWeights`, `Outputs`, `Noise(s)` and `TruncationResiduals()`, all in physical units (y_s ∘ eᵢ).
+  - `Predict(s, continuous, levels, output)` takes θ in physical coordinates. `PredictLevels` evaluates every level combination in one call.
+  - `EmulatorNoise` is `ComponentNoise(Factor = y_s ∘ K, Variances)` or `IndependentNoise(σ²_e)`.
+  - `BassFitEmulator(fit, data, parameters, fixedInputs?, outputLocations?)` serves a scalar or direct functional fit. `BassBasisEmulator(basisFit, parameters, fixedInputs?)` serves a basis fit.
+  - Each predictor of the fit is either a parameter, matched by name, or a fixed input carried by the observations' cases.
+  - Each term's continuous part is evaluated once per θ, and its categorical part once per combination.
+- *Parameters* (`CalibrationParameter.cs`): `ContinuousParameter(Name, Lower, Upper)` records the transform: `ToPhysical` and `ToUnit`. `CategoricalParameter(Name, Levels)`. `ParameterLayout` splits them by kind and enumerates the combinations.
+- *Measurement* (`MeasurementModel.cs`): `GaussianMeasurement(Groups)` with `VarianceGroup(Outputs, Prior)`. The prior is `InverseGammaVariance(ν, ŝ)` or `HalfCauchyDeviation(ŝ)`. `MeasurementModel` validates the groups as a partition of the outputs.
+- *Covariance* (`CalibrationCovariance.cs`):
+  - `FunctionalFormulation { Truncation, Discrepancy = FunctionalDiscrepancy(Basis, Scale, Mean) }`.
+  - `MultivariateFormulation(Correlation, DiscrepancyCovariance, DiscrepancyMean)`.
+  - `TruncationTerm { ResidualSet, Diagonal }`.
+  - `CalibrationCovariance.Create(...)` validates, and `.Factor(σ², noise)` returns a `CovarianceFactor` (log-determinant, solve, quadratic form).
+- *Model* (`CalibrationModel.cs`):
+  - `CalibrationModel(config, y, emulator)` binds the config to the data. `.Target(s)` is a `CalibrationTarget`, an `ISamplingTarget` on the likelihood path, whose `CalibrationEvaluation` carries ℓ₁.
+  - `CalibrationState` is immutable: (unit θ, levels, σ², v).
+  - `Physical(state)` and `Delta(v)` give θ in physical coordinates and the discrepancy.
+- *Blocks* (`CalibrationBlocks.cs`): `DiscrepancyBlock` (with `.Moments(state, b)`), `VarianceBlock`, `CategoricalBlock`.
+- *Sampler* (`CalibrationSampler.cs`): `ThetaWalk` (the move), `ThetaAdaptation`, `ThetaDecorrelation`, `CalibrationChain` (an `IChain`), and `CalibrationSampler.Run`, which returns a `ConditionalRun` of `CalibrationDraw`s (emulator draw, physical θ, levels, σ², v, ℓ).
+- *Reference* (`NestedCalibration.cs`): `NestedCalibrationSampler.Run(model)` returns a `NestedCalibration`:
+  - `Runs` of `InnerRun` (emulator draw, `ConvergenceVerdict`, each chain's draws, burn-in, thinning, kept draws per chain);
+  - `NotConverged`;
+  - `Pooled(includeNotConverged = false)`, which weights each run's draws 1/(S′·n_s).
+- *Configuration*: `CalibrationConfig` is values only, in `BassConfig`'s JSON style, with `ToJson`, `FromJson` and `Validate`. Its fields:
+  - `Parameters`, `Measurement` and `Covariance`, all required;
+  - `EnumerationCap` (1,024);
+  - `Sampling`: seed, `BurnIn` 2,000, `Samples` 2,000, `Thin` 1, `DecorrelationEvery` 100, and `Tempering`, a ladder or null;
+  - `Reference`: `OuterDraws` (null takes every draw), `Chains` 4, `MaxSamples` 4,000, `BatchSize` 250, `RHatTarget` 1.01, `MinEssPerChain` 100.
+- *Outside `calibration/`*: `Maths.Distributions.HalfCauchy` (C⁺(0, s), with exact tails, quantiles and draws). No accessor was added to `BassFit.cs` or `output/BassBasisFit.cs`: the adapters read existing internals (`BassDrawFit.Pool`, `BassBasisFit.Model`, `PredictionCases.Prepare`, `BassSurface`'s accumulation).
+
+**What `calib.R` does, and where this port differs.**
+- *Its API:* `calibrate.bassBasis(y, mod, type, sd.est, s2.df, s2.ind, meas.error.cor, bounds, discrep.mean, discrep.mat, nmcmc = 10000, temperature.ladder = 1.05^(0:30), decor.step.every = 100)`.
+- *Its outputs:* θ (iterations × rungs × p, in [0, 1]), s2, discrep.vars, ii (the emulator draws), count, count.decor, tau, curr and dat.
+- *The emulator.* Every emulator input is θ: `func` predicts at the transformed θ with one emulator draw, without nugget or truncation error, and R draws that emulator draw afresh, uniformly, every iteration.
+  - The port fixes e_s for each inner run of the nested sampler (D09).
+  - Its adapters also take fixed inputs per observation case (the brief's "any fixed inputs the observations carry").
+- *θ.*
+  - R: a uniform prior on the bounds, sampled in [0, 1] from a uniform start. Adaptive Metropolis per rung: S = 10⁻⁶·I until iteration 300, then (2.4²/p)(cov + ε)·e^τ, with τ moved every 100 iterations by min(0.1, 5/√i) towards 23/100. A proposal outside the box is rejected. The decorrelation step is a uniform independence proposal on each coordinate.
+  - Kept as R has it: the prior, the walk, its 23% target and scale schedule, the 300-scan switch and the decorrelation step.
+  - Changed:
+    - the walk starts at 0.1² on each coordinate, since R's 10⁻⁶ hardly moves for 300 iterations;
+    - adaptation stops at the end of burn-in, so the kept draws come from one fixed kernel;
+    - θ is reported in physical coordinates, through each parameter's recorded transform (C-O1).
+- *σ².*
+  - R: a joint adaptive walk on log σ² with its Jacobian, from a start at 1. The prior is the IG kernel, or −log(1 + σ²) for every group when any `s2.df` is 0. R tempers the whole acceptance ratio.
+  - Here: a random-walk step per group on ln σ², its scale adapted towards 0.44 during burn-in. The Jacobian stays untempered (D05's likelihood path). Each group declares its own proper prior. The start is a prior draw.
+- *v.* R draws v from a Gibbs conditional with precision 1 and covariance `discrep.S/itl`, the powered path's. Here v's conditional is the likelihood path's, I/s_v² + b·DᵀΣ⁻¹D, with s_v declared.
+- *Tempering.*
+  - R tempers by default on 31 rungs and swaps random pairs after iteration 1,000, with a swap ratio that leaves its own target (C-O1).
+  - Here tempering is an option with no default ladder. It runs through `ParallelTempering` on the likelihood path, with its even-odd adjacent swaps, whose ratio is (b₁ − b₂)(ℓ(x₂) − ℓ(x₁)).
+- *Corrected, not ported:*
+  - the stale likelihood: states are immutable and every change is evaluated afresh;
+  - the branch by shape: the formulation is declared, and a mismatch is refused;
+  - normalized coordinates in the output;
+  - R's units: the covariance is in physical units;
+  - the all-groups `s2.df` switch and its improper kernel;
+  - the tempering path.
+
+**Checks and tolerances** (54 calibration tests in `Maths.Regression.Tests`, 9 parity tests in `Maths.Oracle.Tests`).
+- *Step 1:*
+  - the adapters' prediction equals each fit's own `Predict` bit for bit, at random θ and draws: a scalar fit with fixed inputs, a categorical θ, a fixed categorical input, a direct functional fit at declared locations, a basis fit, and a basis fit with a categorical θ;
+  - `PredictLevels` equals `Predict` per level;
+  - the noise and the residuals are in physical units;
+  - weights pass through, and declarations that do not match the fit are refused.
+- *Step 2:*
+  - the IG density against its closed form, to 10⁻¹²;
+  - both priors normalized by trapezoid in ln σ², to 10⁻⁹;
+  - scale-equivariance, to 10⁻¹¹ (half-Cauchy) and 10⁻¹⁰ (IG);
+  - the half-Cauchy's CDF and quantile, to 10⁻¹², with draws within 4 binomial SE;
+  - the partition refusals.
+- *Step 3, low rank against dense:*
+  - functional residual set, ln|Σ| and solves to 10⁻¹¹, and to 10⁻¹⁰ with n > m;
+  - the diagonal option, as R's centred sample variance, to 10⁻¹¹;
+  - σ²_e·I in both formulations, to 10⁻¹¹;
+  - multivariate dense, with both truncation options, to 10⁻¹¹;
+  - units: c-scaled outputs move ℓ by −m ln c, to 10⁻⁹.
+- *Step 3, C-O2:*
+  - well case through the formulation: ln|Σ| 2.8·10⁻¹⁴, solve 6.6·10⁻¹⁵ (tolerance 10⁻¹²);
+  - moderate (κ 9·10⁷): 1.0·10⁻⁹ and 6.0·10⁻¹⁰ (tolerance 10⁻⁸);
+  - extreme: backward error 7.1·10⁻¹⁶ (tolerance 10⁻¹⁴);
+  - multivariate: 5·10⁻¹⁴ and 8·10⁻¹⁵ (tolerance 10⁻¹⁰);
+  - units: ℓ against R's physical one 4.6·10⁻¹⁴ (tolerance 10⁻⁹), and posteriors against the physical and standardized ones 1.6·10⁻¹⁶ (tolerance 10⁻¹²); R's units give TV 0.96.
+- *Step 3, C-O1:*
+  - the branch by shape: a functional formulation with a square basis keeps 20 coefficients, and a multivariate one with a two-column discrepancy covariance is refused;
+  - units: ln|Σ| against the dense physical one ≤ 1.1·10⁻¹⁵ (tolerance 10⁻¹⁰), and ≥ 0.447 from R's.
+- *Step 4, the target:* against dense Gaussians with every prior written out, to 10⁻¹⁰, in both formulations and with σ²_e·I. The caches keep and rebuild exactly by what changed, counted by emulator calls.
+- *Step 4, the conditionals:*
+  - v against the joint-Gaussian (Kalman) form at b = 1, 0.35 and 0: mean to 10⁻¹⁰, covariance to 10⁻¹¹, draws within 5 SE;
+  - ln σ² against quadrature (5 MCSE plus the grid) at b = 1 with the IG, and at b = 1, 0.4 and 0 with the half-Cauchy. For example, the IG at b = 1 gives −4.795 against −4.800, MCSE 0.005;
+  - the categorical enumeration against brute force, to 10⁻¹², with frequencies within 5 SE;
+  - single-site updates above the cap reach the enumerated law (5 MCSE + 0.002). Their mixing: acceptance 0.15, integrated autocorrelation 12.4 scans, ESS 4,857 of 60,000.
+- *Step 4, the propriety rule:* b = 0 refuses an improper prior.
+- *Step 4, R's kernel as a defect fixture:*
+  - its mass over [0, X] is ln(1 + X), within 2·10⁻³;
+  - the posterior median of σ in the original units is 0.2691 against 0.2386 with the data in units c = 10⁻³ against 10³;
+  - the half-Cauchy gives 0.2362 in both.
+- *Step 4, C-O1:*
+  - the stale likelihood: R's rung 5 is off by 0.674; here cached minus fresh is 0 across R's iteration on every rung;
+  - the coordinates: the emulator's calls equal the reported physical θ, inside the bounds;
+  - the `s2.df` switch: R's −log1p(σ²) is asserted (10⁻¹⁵). Group 2's IG matches R's corrected kernel to 10⁻¹⁰, and a group with ν = 0 is refused and pointed to the half-Cauchy.
+- *Step 5, the chain's laws against quadrature with v integrated out* (5 MCSE plus the grid):
+  - untempered with a categorical: E[θ] 0.5364 against 0.5349, MCSE 0.0016;
+  - multivariate: 0.5017 against 0.5012;
+  - a ladder 1, 0.6, 0.25, 0, every rung matching (b = 1: 0.4739 against 0.4740), with swap acceptance 0.48 and 2,205 round trips.
+- *Step 5, the rest:*
+  - the swap's ratio, to 10⁻⁹;
+  - the propriety rule for a ladder that reaches 0;
+  - outputs physical, reproducible and thinned.
+- *Step 5, C-O1's tempering section:*
+  - the variance move's ratio reaches the likelihood path to 8.5·10⁻¹⁴, and the swap to 1.2·10⁻¹³ (tolerance 10⁻⁹);
+  - the discrepancy's covariance matches R's likelihood-path matrix, now emitted by the oracle, to 3.2·10⁻¹⁵ (tolerance 10⁻¹⁰);
+  - R's swap gaps are 234 and 140.
+- *Step 6:*
+  - the pooled cut posterior against the exact equal mixture of the conditionals by quadrature: E[θ] 0.5386 against 0.5340, MCSE 0.0037 (tempered inner runs, all three converged);
+  - NotConverged is reported and left out of the pool unless asked;
+  - the outer draws, plain and weighted;
+  - the config's JSON round trip.
+
+**Recovery** (`BassCalibrationRecoveryTests`).
+- *Setup:*
+  - η(t; θ) = θ₁·sin(2π(t + θ₂/4)) + θ₂·t/2 on 20 locations, run on a 6 × 6 grid;
+  - BASS fitted on a PCA basis (rank 3, 200 joint draws) and directly;
+  - field data at θ* = (1.3, 0.4) with noise sd 0.05;
+  - the nested sampler with 6 outer draws, 2 chains, R̂ 1.05, ESS 50 per chain and at most 1,500 draws;
+  - five seeds per case.
+- *Coverage of θ* by the 95% intervals:*
+  - basis: 5/5 and 5/5;
+  - direct: 4/5 and 5/5. Its θ₁ means are 1.41–1.47, with intervals about ±0.16 wide: the direct emulator is the less accurate one;
+  - with a discrepancy 0.1 + 0.1(t − ½) in the field data, declared on [1, t − ½] with s_v = 0.2: 5/5 and 5/5;
+  - two groups, with noise sd 0.03 and 0.08, under an IG and a half-Cauchy: 5/5 and 5/5.
+- *Convergence:* 3 to 6 of the 6 inner runs converged per seed within that budget, and the rest were reported and not pooled.
+
+**The inner-run error** (`InnerLength_TheErrorItLeaves`). Fixed inner lengths: the ESS gate is set unreachable, and every run is pooled explicitly. Each length runs 2 chains × 3 emulator draws × 3 seeds, against the exact mixture's E[θ] = 0.4911 (unit coordinates, posterior sd 0.057).
+
+| Kept draws per chain | RMS error of the pooled E[θ] | Pooled sd |
+|---|---|---|
+| 25 | 0.0115 | 0.0489 |
+| 100 | 0.0015 | 0.0566 |
+| 400 | 0.0023 | 0.0566 |
+| 1,600 | 0.0009 | 0.0573 |
+
+At 25 draws per chain the pooled spread is 15% low and the mean off by 0.2 sd. From 100 on, both sit at Monte Carlo noise.
+
+**Suites.**
+- Regression (`Maths.Regression.Tests`, whole): 1,101 passed, 0 failed (5 min 8 s).
+- BASS and calibration oracle classes (`Maths.Oracle.Tests`, filter `Bass`): 63 passed, 0 failed (4 min 8 s).
+- R's stage-1 checks: 97 verdicts pass, none fail, after both oracle additions. The oracles now also emit their inputs at 17 significant digits, and C-O1 its likelihood-path discrepancy covariance.
+
+**Review passes and their fixes.**
+- *Step 1:* added a fixed categorical input and weighted draws.
+- *Step 2:* nothing to fix.
+- *Step 3:*
+  - the cache of the concatenated factor became a record swapped whole, since a value tuple can tear under concurrent chains;
+  - added the residual set wider than the outputs (n > m) and the multivariate diagonal option.
+- *Step 4:*
+  - widened the quadrature grid for the half-Cauchy's tails at b = 0;
+  - moved the unit-dependence check to units where R's kernel bites;
+  - added the target under the multivariate formulation and with σ²_e·I, and the config's JSON round trip;
+  - fixed two test bugs of mine: an exact slope comparison, and a call count that missed the check's own evaluation.
+- *Step 5:* added the multivariate chain law.
+- *Step 6:*
+  - the e₂ run of the pooled-posterior test missed the θ gate untempered (R̂ 1.033 within 6,000 draws on a θ–level-coupled fixture), and the test now runs its inner runs on a ladder, the gate unchanged;
+  - added the weighted outer draws and the config's round trip.
+- *Whole change:*
+  - every R defect corrected, none ported;
+  - units physical throughout;
+  - y never updates the emulator;
+  - the Jacobians untempered;
+  - every change evaluated afresh;
+  - b = 0 needs proper priors;
+  - the coverage list met.
+
+**For the main session.**
+- *The cost of `DiagonalPlusLowRank` (finding).* Its factor is a Jacobi thin SVD of the m × (r + n) factor on every σ² proposal: 1.4 ms at m = 20 with 39 columns.
+  - The residual-set term is now compressed once to its thin SVD's numerical rank (at most min(m, n) columns, Σ unchanged to rounding), which made it 33 µs on the recovery problem, whose residuals are rounding noise.
+  - In general the cost per proposal stays O(m·(r + min(m, n))²) with Jacobi's constant.
+  - If real sizes make that binding, C-O2's own low-rank route, the Cholesky factor of I + E^{½}UᵀD⁻¹UE^{½}, costs O(m·k² + k³) with a small constant. It could join `DiagonalPlusLowRank` as an option. I did not change the linalg file.
+- *Choices the brief left open:*
+  - The multivariate truncation term. It defaults to the residual set's second moment about zero, as the functional one does; R's type 2 uses the centred n − 1 covariance. The C-O2 parity test reproduces R's by feeding the centred residuals scaled by √(n/(n − 1)).
+  - The diagonal option is R's centred n − 1 sample variance, so it reproduces R. D07's density code reads the 1/n centred one.
+  - The multivariate correlation is over the outputs (m × m, R's `meas.error.cor`), where D09's wording says "over variance groups".
+  - Above the cap, single-site updates are Metropolis steps to a uniformly chosen other level, as D09's text has it. A per-site Gibbs draw would need no rejection.
+  - `Pooled` excludes Undetermined runs as well as NotConverged ones.
+  - `ReferenceSampling` defaults to N14's gate (R̂ 1.01, ESS 100 per chain). The recovery tests declare 1.05 and 50 for runtime.
+  - There is no default tempering ladder.
+- *Not done:* `docs/Maths`, the checklists and D09's text, which are the main session's.
