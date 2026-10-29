@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
+using Maths.Regression.Spline.Bass.Sensitivity;
 using Maths.Rng;
 
 namespace Maths.Regression.Spline.Bass;
@@ -67,6 +68,13 @@ public sealed class BassBasisFit
     /// </summary>
     public PointwiseLogDensity PointwiseLogDensity(UnitPartition? units = null, BasisDensitySpace space = BasisDensitySpace.Coefficients)
         => BassBasisDensity.LogDensity(this, units, space);
+
+    /// <summary>
+    /// The Sobol decomposition of the reconstructed output over the joint draws (D08, O7; <see cref="BassBasisSensitivity.Of"/>)
+    /// under <paramref name="spec"/>'s measure: per output location and integrated over the locations, in output units, the
+    /// cross-component covariances kept. The components share this fit's predictors, so no data is passed.
+    /// </summary>
+    public BasisSobolAnalysis Sensitivity(SensitivitySpec? spec = null) => BassBasisSensitivity.Of(this, spec);
 }
 
 /// <summary>

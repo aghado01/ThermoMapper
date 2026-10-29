@@ -27,7 +27,7 @@ public static class BassSensitivity
         spec ??= new SensitivitySpec();
         Setup s = Setup.Of(fit, data, spec);
         int maxOrder = spec.MaxOrder ?? Math.Max(1, s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id]).Count).DefaultIfEmpty(0).Max());
-        int[][] subsets = Subsets(s, maxOrder, spec.SubsetBudget);
+        int[][] subsets = Subsets(s.TermIds.Select(id => s.Moments.Variables(fit.Terms[id])), maxOrder, spec.SubsetBudget);
         var index = new Dictionary<int[], int>(subsets.Length, SubsetComparer.Instance);
         for (int k = 0; k < subsets.Length; k++) index[subsets[k]] = k;
 
@@ -240,14 +240,13 @@ public static class BassSensitivity
     }
 
     // The nonempty subsets, up to maxOrder, of each posterior term's variables: smaller first, then lexicographic.
-    private static int[][] Subsets(Setup s, int maxOrder, int budget)
+    internal static int[][] Subsets(IEnumerable<IReadOnlyList<int>> terms, int maxOrder, int budget)
     {
         if (maxOrder < 1) throw new ArgumentOutOfRangeException(nameof(maxOrder), "The order is a positive integer.");
         if (budget < 1) throw new ArgumentOutOfRangeException(nameof(budget), "The subset budget is a positive integer.");
         var found = new HashSet<int[]>(SubsetComparer.Instance);
-        foreach (int id in s.TermIds)
+        foreach (IReadOnlyList<int> v in terms)
         {
-            IReadOnlyList<int> v = s.Moments.Variables(s.Fit.Terms[id]);
             for (int mask = 1; mask < 1 << v.Count; mask++)
             {
                 if (System.Numerics.BitOperations.PopCount((uint)mask) > maxOrder) continue;
@@ -270,7 +269,7 @@ public static class BassSensitivity
     // A term pair's cached contributions: its covariance, its moment magnitude, and its shares by subset index and input.
     private sealed record PairPlan(double Covariance, double Magnitude, int[] Mains, double[] MainValues, int[] Totals, double[] TotalValues);
 
-    private sealed class SubsetComparer : IEqualityComparer<int[]>
+    internal sealed class SubsetComparer : IEqualityComparer<int[]>
     {
         public static readonly SubsetComparer Instance = new();
 

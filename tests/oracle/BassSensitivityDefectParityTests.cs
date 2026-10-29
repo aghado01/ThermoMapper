@@ -22,9 +22,11 @@ namespace Maths.Oracle.Tests;
 /// integrates over the training range;</item>
 /// <item><b>effects use the declared measure and degree:</b> the mean's term moments match quadrature under each measure,
 /// where R's effects take the U(0, 1) moment, and a degree-2 term's effect curve is the degree-2 hinge, where R's is the
-/// degree-1 one.</item>
+/// degree-1 one;</item>
+/// <item><b>basis sensitivity is in output units</b> (O7): on R's mock two-component fit, each location's variance and
+/// effects are the physical reference, y_s² times R's decomposition-unit values, and the indices match the unit-free
+/// reference.</item>
 /// </list>
-/// The fixture's fourth section, physical units, needs basis fits and waits for basis sensitivity (O7).
 /// </summary>
 public sealed class BassSensitivityDefectParityTests
 {
@@ -35,12 +37,8 @@ public sealed class BassSensitivityDefectParityTests
         if (!ROracle.IsAvailable || !Directory.Exists(BassSource)) return null;
         // The check script's basis: y_m, y_s, then two basis columns at 12 locations.
         var text = new StringBuilder();
-        for (int r = 0; r < 12; r++)
-        {
-            double t = r / 11.0;
-            double[] row = [10 + t, 2 + 3 * t, Math.Sin(Math.PI * t), Math.Cos(Math.PI * t)];
-            text.AppendLine(string.Join(",", row.Select(v => v.ToString("R", CultureInfo.InvariantCulture))));
-        }
+        for (int r = 0; r < Locations; r++)
+            text.AppendLine(string.Join(",", BasisRow(r).Select(v => v.ToString("R", CultureInfo.InvariantCulture))));
         string csv = Path.Combine(Path.GetTempPath(), $"bass_sensitivity_{Guid.NewGuid():N}.csv");
         File.WriteAllText(csv, text.ToString());
         try
@@ -160,6 +158,98 @@ public sealed class BassSensitivityDefectParityTests
         Assert.True(gap1 > 0.1, $"the degree-2 effect sits {gap1} from the degree-1 one");
         Assert.Equal(0.7 * 0.7 * 0.7 / 3 / 0.49, e.Mean[0], 1e-14);
     }
+
+    [Fact]
+    public void DecompositionUnits_AreThePhysicalOnes()
+    {
+        if (Fixture.Value is not { } r) return;
+        JsonElement du = r.GetProperty("decomposition_units");
+        double[] ys = Doubles(du.GetProperty("y_s"));
+        double[] physical = Doubles(du.GetProperty("reference_var_total_physical"));
+        double[] decomposition = Doubles(du.GetProperty("reference_var_total_decomposition"));
+        double[] rTotal = [.. du.GetProperty("r_var_total").EnumerateArray().Select(v => v[0].GetDouble())];
+        double[][] reference = Rows(du.GetProperty("reference_effects_decomposition"));
+        double[][] rEffects = Rows(du.GetProperty("r_effects"));
+        double[][] rIndices = Rows(du.GetProperty("r_indices"));
+        Assert.Equal(new[] { "1", "2", "1x2", "other" }, du.GetProperty("names").EnumerateArray().Select(v => v.GetString()));
+
+        // R's mock: on x1, x2 with R's scaled degree-1 hinges and the default uniform measures,
+        // w_1 = 0.5 + 1.2·h(x1; +, 0.3) − 0.8·h(x2; −, 0.6) and w_2 = −0.2 + 0.9·h(x1; +, 0.3)·h(x2; +, 0.4) + 0.5·h(x2; +, 0.2).
+        BasisSobolAnalysis analysis = UnitsFit().Sensitivity();
+        Assert.Equal(new[] { new[] { 0 }, new[] { 1 }, new[] { 0, 1 } }, analysis.Subsets);
+        for (int l = 0; l < Locations; l++)
+        {
+            SobolDecomposition at = analysis.AtLocation(l);
+            double v = at.Variance[0], scale = ys[l] * ys[l];
+            Assert.Equal(physical[l], v, 1e-13 * physical[l]);
+            // R's variances are the decomposition-unit ones, a factor y_s² below.
+            Assert.Equal(decomposition[l], rTotal[l], 1e-13 * decomposition[l]);
+            Assert.Equal(v, scale * rTotal[l], 1e-13 * v);
+            for (int u = 0; u < 3; u++)
+            {
+                Assert.Equal(scale * reference[l][u], at.MainVariance[0, u], 1e-13 * v);
+                Assert.Equal(reference[l][u], rEffects[l][u], 1e-13 * decomposition[l]);
+                // The indices are unit-free: the port's and R's both match the reference.
+                Assert.Equal(reference[l][u] / decomposition[l], at.MainIndex(0, u), 1e-13);
+                Assert.Equal(reference[l][u] / decomposition[l], rIndices[l][u], 1e-13);
+            }
+            Assert.Equal(v, at.TotalVariance[0, 0] + reference[l][1] * scale, 1e-13 * v);
+        }
+        Assert.True(du.GetProperty("max_rel_r_vs_physical").GetDouble() > 0.9);
+    }
+
+    private const int Locations = 12;
+
+    // Location r's y_m, y_s and basis row: t = r/11, y_m = 10 + t, y_s = 2 + 3t, K = (sin πt, cos πt).
+    private static double[] BasisRow(int r)
+    {
+        double t = r / 11.0;
+        return [10 + t, 2 + 3 * t, Math.Sin(Math.PI * t), Math.Cos(Math.PI * t)];
+    }
+
+    // The fixture's mock as a basis fit: each component run briefly on its coefficient response, then given R's terms and
+    // one draw; x2 holds X reversed, so both inputs have X's knots.
+    private static BassBasisFit UnitsFit()
+    {
+        var k = new double[Locations, 2];
+        var ym = new double[Locations];
+        var ys = new double[Locations];
+        for (int l = 0; l < Locations; l++)
+        {
+            double[] row = BasisRow(l);
+            (ym[l], ys[l], k[l, 0], k[l, 1]) = (row[0], row[1], row[2], row[3]);
+        }
+        BassPredictor[] predictors = [new ContinuousPredictor("x1", X), new ContinuousPredictor("x2", [.. X.Reverse()])];
+        int n = X.Length;
+        var w = new double[2, n];
+        for (int c = 0; c < 2; c++)
+            for (int i = 0; i < n; i++) w[c, i] = Math.Sin(1.0 + i + 2.0 * c);
+        BassDecomposition decomposition = BassDecomposition.FromBasis(k, w, ym, ys, residuals: new double[n, Locations]);
+        static HingeFactor H(int variable, int sign, double knot) => new(variable, sign, Array.IndexOf(X, knot));
+        (BassTerm[] Terms, double[] Beta)[] components =
+        [
+            ([new([H(0, 1, 0.3)]), new([H(1, -1, 0.6)])], [0.5, 1.2, -0.8]),
+            ([new([H(0, 1, 0.3), H(1, 1, 0.4)]), new([H(1, 1, 0.2)])], [-0.2, 0.9, 0.5]),
+        ];
+        var config = new BassConfig
+        {
+            Structure = new BassStructureSpec { MaxBasis = 2 },
+            Sampling = new BassSampling { Chains = 1, MasterSeed = 5, BurnIn = 20, Samples = 2 },
+        };
+        var fits = new BassFit[2];
+        for (int c = 0; c < 2; c++)
+        {
+            BassFit run = Bass.Fit(config, new BassData(predictors, new ScalarResponse(decomposition.CoefficientResponse(c))));
+            var table = new BassTermTable();
+            int[] ids = [.. components[c].Terms.Select(table.Intern)];
+            var store = new DrawStore<BassDraw>();
+            store.Add(new BassDraw(new BassStructure(ids), 1.0, 1.0, components[c].Beta, 1.0));
+            fits[c] = run with { Terms = table, Draws = [store], DrawWeights = null };
+        }
+        return BassComponents.Assemble(decomposition, predictors, fits, 7);
+    }
+
+    private static double[][] Rows(JsonElement e) => [.. e.EnumerateArray().Select(Doubles)];
 
     private static BassData Continuous()
         => new([new ContinuousPredictor("x", X)], new ScalarResponse([.. X.Select(v => v * v)]));

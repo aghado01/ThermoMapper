@@ -141,7 +141,8 @@ decomposition_units <- list(
   max_rel_r_vs_physical = max(abs(sob$Var.tot / (y_s^2 * var_dec) - 1)),
   max_rel_effects_r_vs_decomposition = max(abs(r_var[, 1:3] - ref_dec)) / max(var_dec),
   max_rel_effects_r_vs_physical = max(abs(r_var[, 1:3] - y_s^2 * ref_dec)) / max(y_s^2 * var_dec),
-  max_abs_indices_r_vs_reference = max(abs(r_S[, 1:3] - ref_dec / var_dec)))
+  max_abs_indices_r_vs_reference = max(abs(r_S[, 1:3] - ref_dec / var_dec)),
+  reference_effects_decomposition = ref_dec, r_effects = r_var[, 1:3], r_indices = r_S[, 1:3])
 
 # ---- effects --------------------------------------------------------------------------------------------------------
 sobol_des <- bass$sobol_des
