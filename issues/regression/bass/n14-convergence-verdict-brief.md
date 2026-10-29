@@ -143,3 +143,114 @@ Under "Reports" below, newest first:
 ## Reports
 
 Newest first.
+
+### N14 report (2026-10-29): the verdict landed, shared, on BASS, BARS and the other clients
+
+*What landed,* on `main`, nothing pushed:
+- `e8547d3` the shared verdict (step 2), committed first for stage 7's C3;
+- `e88b33e` BASS: the log posterior, the three groups, `StoppingScope`, the verdict and the mode-separation readings (step 3);
+- `1c26dcd` BARS's two groups and the verdict on BARS, BGP, BAPS and `HierarchicalPSpline` (step 4).
+
+`BassBitIdentityTests`' eight hashes held at `27b7cf3` before the work and after every commit. No draw changed.
+
+*The API as built,* against the fixed names (all in `Maths.Samplers.Ensemble`):
+- **As fixed:**
+  - `ConvergenceOutcome { Converged, NotConverged, Undetermined }`;
+  - `ConvergenceVerdict(Outcome, Target, MinEssPerChain, Groups)`;
+  - `GroupVerdict(Name, Outcome, GatesStop, Failing)`;
+  - `ChainEnsemble.ReferenceRHatTarget = 1.01`, beside `MinEssPerChain`;
+  - `EnsembleRun.Verdict`;
+  - `IEnsembleModel<TDraw>.FunctionalNames` ("f0", "f1", … by default) and `.Groups` (one group "all" by default).
+- **Shapes of my own:**
+  - `FunctionalReading(Index, Name, RHat, Ess)`, one per failing functional. `Ess` is null for an unmonitored functional, which has classic R̂ only.
+  - `FunctionalGroup(Name, Functionals)`, with `FunctionalGroup.AllName` and `FunctionalGroup.All(n)`. A model with no functionals declares no group, and its verdict is `Undetermined`.
+  - `ConvergenceVerdict.Group(name)`, a lookup that throws `KeyNotFoundException`.
+  - `Run(…, ParallelOptions? parallel = null, IReadOnlyCollection<string>? stoppingScope = null)`. The scope is the last parameter, so no positional caller broke; pass it by name. Null takes every group. An empty scope or an unknown name is refused (`ArgumentException`, parameter "stoppingScope"). A target needs a monitored functional in a gating group, the old check widened to the scope.
+  - The declarations are checked at entry: one name per functional, and distinct, non-blank group names. Each group is non-empty, and each functional sits in exactly one group.
+- **One rule:** `ConvergenceVerdict.Of`, read by the stop between rounds and by the verdict at the end, on the same readings (classic R̂ for every functional, the rank-normalized diagnostics for the monitored ones). Under the default scope, the conjunction over groups is the old `MayStop` exactly, which is deleted. So a model that declares nothing stops as before.
+- **Frozen fails; the brief disagrees with itself here.** The API bullet gives `Undetermined` for "every gating functional constant *or frozen*". The rules section and D10 say a frozen reading fails. I built the rules: frozen and unavailable readings fail (`NotConverged`), and only one chain, or every gating functional constant, gives `Undetermined`. One chain is undetermined even though split R̂ exists for it: there is no between-chain reading.
+
+*BASS:*
+- **The log posterior:** `Temperature.LogPosterior(Target.Evaluate(state))` at b = 1, a ladder's b = 1 replica's state. It equals the chain's own density (`Moves.CurrentLogDensity` of the chain replayed as the run takes it) **bit for bit** at three draws per chain, untempered and tempered (`LogPosterior_IsTheChainsOwnDensity`). It costs one `Evaluate` per retained draw.
+- **The order and names:** M, τ (g mode), log posterior, σ², the fitted values; named "M", "tau", "log_posterior", "sigma2", "fitted[i]" or "fitted[i,r]". So the groups run contiguously: structural, then level, then predictive. `MonitoredDim` is 4 + points (3 + points under fixed g).
+- **The groups:** `BassDiagnostics.PredictiveGroup` = "predictive", `LevelGroup` = "level" and `StructuralGroup` = "structural", declared in that order.
+- **`BassStoppingScope { All, Predictive }`:** `BassSampling.StoppingScope`, `All` by default. It is validated ("Sampling.StoppingScope"), in the config's JSON ("StoppingScope":"All"), and echoed resolved as `BassResolved.StoppingGroups`, the group names the run passes to the ensemble.
+- **`BassDiagnostics`** gains `LogPosterior` (its diagnostic), `Verdict` and `ModeSeparation` = `BassModeSeparation(LogPosteriorGap, FittedDistance)`, read from the chains' traces. Both readings are NaN with one chain, and nothing stops on them. `StoppedEarly` and `SamplesUsed` are as they were.
+- **`Bass.cs` needed one line,** passing `stoppingScope: model.Resolved.StoppingGroups`. The brief's file list does not name it, and neither chip owns it.
+
+*BARS and the other clients:*
+- **BARS declares two groups:** "predictive" (the fitted grid values, `fit[g]`, on classic R̂) and "structural" (`knots`), as D10 groups BASS's. They read better than "all": a knot count the curve does not identify shows as structural disagreement beside predictive agreement.
+  - With both gating, their conjunction is the old rule, so BARS's stop is unchanged (`Bars_Tempered` keeps its hash).
+  - `BarsResult.Verdict` sits beside `Knots` and `RHatFitMax`. Its readings keep their `DiagnosticState`, B01's display policy.
+  - No stopping scope is exposed on `BarsConfig`.
+- **BGP, BAPS and `HierarchicalPSpline`:** all three results already carried the ensemble's diagnostics, so all three now carry `Verdict` (`BgpResult`, `BapsResult`, `HierarchicalResult`). Each keeps the one group "all", with its functionals named:
+  - BGP: "bandwidth", "noise_ratio";
+  - BAPS: "log_lambda", "log_sigma2", "log_lambda[j]";
+  - `HierarchicalPSpline`: "log_sigma2", "log_tau_u2", "log_tau_02", "log_tau_02[c]", "population[j]".
+
+  No client is left without the verdict.
+
+*The verdicts on S10's fits* (F-M2's A0 at k = 0 untempered, and A6 for Friedman tempered; `S10_Fits_FailEveryGroup`, gated). Every quantity's R̂ equals the pass's CSV value. Every fit is `NotConverged`, with every group `NotConverged`:
+
+| Fit | Predictive failing (R̂, ESS) | Level | Structural | Gap (nats) | Fitted distance |
+|---|---|---|---|---|---|
+| Friedman | σ² 1.083 (30), f1 1.747 (6), f2 1.317 (10), f3 1.962 (5) | 2.050 (5) | M 2.348 (5), τ 1.013 (417) | 42.8 | 1.282 |
+| mixed | f1 1.299 (17), f2 1.012 (388), f3 1.087 (29); σ² passes | 1.646 (7) | M 1.537 (6) | 21.8 | 0.164 |
+| functional | σ² 1.023 (153), f1 1.134 (20), f2 1.497 (8), f3 1.140 (20) | 2.393 (5) | M 2.548 (5), τ 1.042 (61) | 30.9 | 0.050 |
+| Friedman, tempered (A6) | σ² 1.077 (33), f1 1.235 (12), f2 1.189 (15), f3 1.049 (55) | 1.264 (11) | M 1.490 (7), τ 1.011 (2005) | 27.0 | 0.552 |
+
+The mixed fit's σ² passes (R̂ 1.007, ESS 1,136) inside a failing predictive group, as the pass read it. Tempered τ fails on R̂ alone, 1.011 against 1.01.
+
+*`StoppingScope.Predictive` against `All`,* on a target 1.05 fit (`BassSweepTests.Data(large)`, 3 chains, `MinEssPerChain` 50):
+- predictive stops at 300 draws per chain, against 700 for every group;
+- its verdict is `Converged`, and it still reports the non-gating groups: level fails (log_posterior R̂ 1.005, ESS 119), and structural fails (M R̂ 1.011, ESS 65);
+- the predictive run's draws are the all-groups run's first ones.
+
+*The tests that changed, and why:*
+- **`BassOutputComponentsTests.RHatStoppedComponents_PairOverTheShortest`:** the log posterior in the gate kept its first component from stopping.
+  - Under the old gate the components stopped at 800, 2000 and 2000; now all three run to 2000. The test still passed, but trivially: pairing over the shortest was no longer exercised.
+  - It now sets `StoppingScope.Predictive` (700, 2000, 2000) and asserts the lengths differ.
+- **`BassMovePassTests.Friedman_AtN500_IsS10s`:** its pin moved from `6b52ce789967ee0c` to `e38c2c6c05ff8dbc`, a deliberate regeneration.
+  - The data hash reads `Bass.Fingerprint(new BassConfig(), data)`, which includes the config's JSON, now longer by `,"StoppingScope":"All"`.
+  - With those 22 characters stripped, a probe reproduced `6b52ce789967ee0c` exactly, so the data are unchanged. The constant's comment says so.
+- **Unchanged in outcome:**
+  - `BassRunDiagnosticsTests.RHatStop_EndsTheRunEarly` stops at 300 draws under both gates.
+  - `BassTemperingTests`' "early stop" stops at 150 of 200 under both.
+  - No existing `ChainEnsemble` test changed.
+- **Helpers:** `BassRunTests.AssertSameDiagnostics` and the resume helpers of BARS, BGP, BAPS and `HierarchicalPSpline` now compare the verdicts too, through `VerdictAssert.Same`. So every resume test checks that a resumed run's verdict, log posterior and mode separation are the uninterrupted run's.
+
+*New tests:*
+- `tests/samplers/ConvergenceVerdictTests.cs` (10). Its rule-agreement test runs 24 randomized ensembles (AR(1) noise, chain offsets, random scopes and targets). Each is replayed for j rounds in one, unchecked. Its verdict is `Converged` at the stop's round and not before; the trials held both early stops and exhausted budgets.
+- `tests/regression/BassVerdictTests.cs` (7, the S10 test gated);
+- `tests/regression/ClientVerdictTests.cs` (5);
+- `tests/regression/VerdictAssert.cs`, the shared checks.
+
+*The suites:*
+- Samplers 204/204, after step 2 and again on the final commit;
+- Regression 1,068/1,068 with steps 3 and 4 in place, then the bit-identity and verdict classes 20/20 on the final commit;
+- the BASS oracle classes (`Maths.Oracle.Tests`, `~.Bass`): 54/54 after step 3, and 59/59 on the final commit, whose filter also picks up stage 7's new calibration parity classes;
+- the gated S10 verdict test 1/1 (`BASS_QUALIFICATION=1`).
+
+*The review passes and their fixes:*
+- **Step 2:**
+  - the rule against the old `MayStop`: identical under one group;
+  - the stop's and the verdict's readings come from one helper (`Readings`);
+  - the brief's frozen discrepancy, resolved by the rules;
+  - in the tests, a frozen-and-unavailable case meant to read an unmonitored functional had it monitored (fixed), and a local function shadowed the test's chain type (renamed).
+- **Step 3:**
+  - a coverage gap: nothing checked that a resumed fit keeps its verdict and log posterior. Fixed in the shared resume helper.
+  - probing the existing target-bearing tests under the old and new gates found the components test gone trivial. Fixed as above.
+  - an over-long initializer line in `BassResolved` was split.
+- **Step 4:**
+  - `VerdictAssert` moved to its own file, so each commit's tests stand alone;
+  - every client's resume helper now compares verdicts.
+
+*For the main session and the stage 7 chip:*
+- **Every BASS fingerprint changed:** the config's JSON now holds `StoppingScope`. A checkpoint taken before `e88b33e` will not resume, and any other pin that hashes `Bass.Fingerprint` moves the same way; I found only the one above.
+- **For C3:**
+  - the verdict reads 1.01 when a run sets no target;
+  - one chain is always `Undetermined`;
+  - pass `stoppingScope:` by name;
+  - the API summary is in the shared notes folder (`n14-verdict-api-handover.md`).
+- **Left for the main session, as the brief says:** `docs/Maths`, the checklists and D10's text.
+- **Not built:** a stopping scope for BARS (`BarsConfig`), and any stop on the mode-separation readings.
