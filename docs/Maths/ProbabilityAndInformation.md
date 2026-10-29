@@ -15,7 +15,8 @@ These three small projects sit at the bottom of the [architecture](./Architectur
 | `InverseGamma` | regression (the BARS σ² draw, BAPS and hierarchical P-spline variance components) |
 | `Normal` | regression (standard draws behind coefficient and Laplace draws) |
 | `Weibull` | regression (the Weibull smoothing-variance prior and its prior scaling) |
-| `StudentT`, `Truncated<T>` | no callers yet; built for BASS sensitivity input measures and calibration priors |
+| `StudentT`, `Truncated<T>`, `Uniform`, `Mixture`, `Empirical` | BASS sensitivity's input measures, through their interval moments (regression, stage 6); calibration priors later |
+| `IIntervalMoments`, `GaussLegendre` | BASS sensitivity's moment service; `GaussLegendre` behind `StudentT`'s interval moments |
 | `SpecialFunctions.LogGamma` | geometry, regression (changepoint and BARS priors) |
 | `SpecialFunctions` incomplete gamma and beta | the distributions' CDFs |
 | `Shannon` | SPC profiling, graph observables |
@@ -46,7 +47,7 @@ The KL, Jensen–Shannon and `IDivergence` types have no in-repository callers y
 |---|---|
 | Generator | `Xoshiro256PlusPlus(int? seed)`, `NextUInt64`, `NextDouble`, `NextInt(q)`, `SaveState`, `LoadState`, `Restore` |
 | Seeds | `SeedTree.Derive(master, count)` |
-| Distributions | `Normal.Standard`, `Normal.MeanSd(mean, sd)`, `Normal.MeanVariance`, `Normal.SampleStandard(rng)`, `Normal.StandardQuantile(p)` and `Quantile(p)` (Wichura's AS 241, about 1 part in 10¹⁶; checked against the log-space CDF to p = 10⁻³⁰⁰); `Gamma.ShapeRate(shape, rate)`, `Gamma.ShapeScale(shape, scale)`, `Gamma.SampleStandard(rng, shape)`; `InverseGamma.ShapeScale(shape, scale)`; `Weibull.ShapeScale(shape, scale)` with `Quantile(p)`, `Median` and `Mode`; `StudentT.Standard(ν)`, `StudentT.LocationScale(ν, location, scale)`; `Beta.Shapes(a, b)`. Each has `Sample(rng)`, `LogPdf`, `Cdf`, `Survival`, `LogCdf`, `LogSurvival`, `IntervalProbability`, `LogIntervalProbability` and its moments. `Truncated.Of(parent, lower, upper)`; `IContinuousDistribution` |
+| Distributions | `Normal.Standard`, `Normal.MeanSd(mean, sd)`, `Normal.MeanVariance`, `Normal.SampleStandard(rng)`, `Normal.StandardQuantile(p)` and `Quantile(p)` (Wichura's AS 241, about 1 part in 10¹⁶; checked against the log-space CDF to p = 10⁻³⁰⁰); `Gamma.ShapeRate(shape, rate)`, `Gamma.ShapeScale(shape, scale)`, `Gamma.SampleStandard(rng, shape)`; `InverseGamma.ShapeScale(shape, scale)`; `Weibull.ShapeScale(shape, scale)` with `Quantile(p)`, `Median` and `Mode`; `StudentT.Standard(ν)`, `StudentT.LocationScale(ν, location, scale)`; `Beta.Shapes(a, b)`. Each has `Sample(rng)`, `LogPdf`, `Cdf`, `Survival`, `LogCdf`, `LogSurvival`, `IntervalProbability`, `LogIntervalProbability` and its moments. `Truncated.Of(parent, lower, upper)`; `IContinuousDistribution`; `Uniform.On(lower, upper)`, `Mixture.Of(components, weights)`, `Empirical.Of(sample)`; `IIntervalMoments.IntervalMoments(lower, upper, centre, logScale, moments)`, implemented by `Normal`, `StudentT`, `Truncated<T>`, `Uniform`, `Mixture` and `Empirical`; `GaussLegendre.Of(n)` |
 | Special functions | `LogGamma`, `LogBeta`; `RegularizedGammaP`, `RegularizedGammaQ` and their logs; `RegularizedBeta`, `LogRegularizedBeta`, `LogRegularizedBetaComplement` |
 | Information | `KLDivergence.Forward(p, q, eps)`, `KLDivergence.Symmetric(p, q, eps)`; `IDivergence<T>`, `KlDivergence(eps)`; `JSDistance.Distance(p, q)`; `Shannon.EntropyNats` (counts or probabilities) |
 
@@ -95,6 +96,14 @@ This is the published xoshiro256++ reference algorithm.
 - **Interval probabilities.**
   - An interval above the median is $S(a)-S(b)$ and one below is $F(b)-F(a)$, each computed in log space, so neither subtracts from 1.
   - An interval across the median is $1-F(a)-S(b)$ in general. The normal uses $\tfrac12[\operatorname{erf}(|\alpha|/\sqrt2)+\operatorname{erf}(\beta/\sqrt2)]$ instead, and the Student-t $\tfrac12[P(|T|<|\alpha|)+P(|T|<\beta)]$. Both stay accurate for an interval narrow around the centre.
+- **Interval moments** (`IIntervalMoments`, 2026-10-29, for BASS's D08): e^(−logScale)·∫ (x − c)ᵏ dF over (lower, upper], with an error estimate.
+  - *The interval is half-open,* as the interval probabilities are, so consecutive intervals count an atom once.
+  - *The log scale* lets a truncation pass its log mass down, so moments far in a tail keep their digits.
+  - *A centre inside the interval* keeps the powers from cancelling.
+  - *`Uniform`* has the closed form; *`Empirical`* takes compensated sums over its atoms; *`Mixture`* sums its components' moments by weight.
+  - *`Normal`* integrates the density's Taylor series on stretches with h·(1 + |z|) ≤ 1, summed to convergence: analytic, with no quadrature error. The Φ/φ recurrence was rejected because on a narrow piece it loses a factor of about 1/h² per power, which costs every digit by degree 2–3 for knots 0.0015 apart under σ = 0.2. Stretches below e⁻⁹² of the interval's peak density are dropped, and an interval beyond about 10⁸ sd is refused.
+  - *`StudentT`* uses Gauss–Legendre at every ν, on a finite interval (truncated first), with panels graded geometrically from the location so that each stays three half-widths or more from the poles at location ± i·scale·√ν. It returns the 40-node values, and their difference from the 20-node ones is the error estimate.
+  - *`Truncated<T>`* clips the interval and passes its log mass on as the scale. `Truncated.Of(mixture)` is R's mixture convention (weights before truncation); a mixture of truncated components is the conditional one.
 - **Truncation.** `Truncated<T>` has density $f(x)/P(\text{lower}\le X\le\text{upper})$ on the interval, with the normaliser taken from the parent's log interval probability. N(0, 1) on $[10,\infty)$ therefore has density $\varphi(x)/Q(10)$, where $1-\Phi(10)$ is exactly 0 in double precision.
 - **Accuracy**, checked against mpmath at 50–60 digits (`DistributionReferenceTests`):
   - **LogGamma** is within $2\times10^{-14}\max(1,|\ln\Gamma|)$ at ten points from $10^{-8}$ to $10^{5}$.
@@ -135,7 +144,6 @@ This is the published xoshiro256++ reference algorithm.
 - **Unbounded rejection loop.** The Gamma rejection loop has no iteration cap. This is standard for Marsaglia–Tsang, whose acceptance rate is above 95%.
 - **Integer draws are slightly biased.** `NextInt` has no rejection step. The bias is negligible for small q.
 - **No truncated sampler and no quantiles.** `Truncated<T>` cannot draw, and no distribution has a quantile function. No caller needs either yet.
-- **No interval moments.** BASS sensitivity needs truncated means and higher raw moments (port brief D08). They are not implemented.
 - **Large shapes.** Accuracy falls as $\varepsilon S$ with the prefactor's size (see Algorithms). For a Student-t with very large ν, use `Normal`.
 - **`default` structs are invalid.** `default(Gamma)` and the other `default` values have zero parameters. Build distributions with their factories.
 - **Partial divergence abstraction.** `IDivergence<T>` is a partial abstraction with a single adapter and no consumers.

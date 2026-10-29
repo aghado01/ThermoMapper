@@ -110,6 +110,8 @@ flowchart LR
 | Spline core | `KnotConfig`; `IBasis`; `SplineBasis(degree = 3)`; `StepBasis`; `BSpline.EvaluateBasis`, `BSpline.MakeClampedKnots`; `BandedDesign` (`Accumulate`, `AccumulateRhs`) |
 | BARS | `BarsConfig`; `Bars.Run(config, x, y, grid)` → `BarsResult`; `BarsEnsemble(basis, model, prior, kernel, resampler?, dmgkConstant?, adaptKernelTau?, temperLevels?, temperHotEnd = 0.05, temperPath = Likelihood, temperSchedule = DeterministicEvenOdd, temperAdaptLadder = true, …, temperReferenceRung = false, evidence = true)` with `ReportsEvidence`; `BarsResult.Evidence` → `BarsEvidence` (`SteppingStone`, `PathSampling`, `Priors`, `LogEvidence`, `MonteCarloError`), `BarsEvidenceEstimate`, `BarsEvidencePriors`; `WeightedNormalModel.HasCompleteMarginal`, `ResolvedPriors`; `ITemperedMarginal.LogMarginalLikelihoodSlope`; `PeakPosterior`, `PeakMode`, `PeakSpan`; `SplineExtrema` (`Argmax`, `SignificantPeaks`, `SignificantPeakSpans`) |
 | BASS (stage 4) | `BassConfig` (`ToJson`, `FromJson`, `Validate`) with `BassStructureSpec`, `SupportRule` (`SupportKind`), `CategoricalSubsetMeasure`, `BassCountPrior`, `SampledG` / `FixedG`, `BassSampling`, `EqualOverAvailable` / `PriorCancelling`; `BassData(predictors, response)` with `ContinuousPredictor`, `CategoricalPredictor`, `ScalarResponse`, `FunctionalResponse`; `BassResolved.Resolve(config, data)` (`AutoPicks`); `Bass.Fingerprint(config, data)`; `BassModel.Create(config, data, form)`; `BassInputTransform.Fit`, `BassInputs.Prepare`; `BassTerm`, `HingeFactor`, `CategoricalFactor`, `BassTermTable`; `BassBasis` (`CaseColumn`, `OutputColumn`, `Support`); `BassStructurePrior` (`LogPrior`, `LogCollectionWeight`, `LogCountRatio`) and `BassTermCounts`; `BassTermProposal` (`DrawBirth`, `DrawChange`, `LogBirth`, `LogBirthRatio`, `LogDeathRatio`); `BassDesign` (`ProposeBirth`, `ProposeDeath`, `ProposeChange`, `Accept`, `Load`, `Rebuild`, `Angle`, `MinAngle`) → `DesignProposal`, with `BassAdmission` and `BassRefusal`; `BassTarget` (`Evaluate`, `Defines`, `Marginal`, `LogTauDensity`, `Refusal`) → `BassEvaluation`, `BassStructureFit`; `BassChain` (`Step`, `Compose`), `BassStructureMoves` (`Refusals`, `EmptyBirths`), `BassTauBlock`; `BassState`, `BassDraw`, `BassStructure`; `Bass.Fit(config, data, run)` and `Bass.Resume(checkpoint, config, data, run)` → `BassFit` (`PointwiseLogDensity(data, units, content)`, `ResidualDependenceFor(data, index)`), with `BassRunOptions`, `BassDiagnostics` (`BassMonitoredPoint`), `BassPriorSampler`; `TemperingSpec`, `BassLadder`, `BassTemperingReadout`, `BassEvidence` (`BassEvidenceEstimate`, `BassEvidencePriors`); `BassPointwise` (`LogDensity`, `DefaultUnits`); `BassResidualDependence.Of`, `ResidualDependence` (`LagOne`, `MoransI`), `ResidualIndex` (`AlongVariable`, `AlongOrder`, `NearestNeighbours`), `ResidualStatistic` |
+| BASS (stage 5) | `BassDecomposition.FromPca(y, BassPcaSpec)`, `FromBasis(K, W, offsets, scales, …)` with `TruncationResiduals` (`TruncationResidual.LeaveOneCaseOut` / `InSample`) and `ReconstructionMap` / `LinearReconstruction`; `BassComponents.Fit(decomposition, predictors, config)` → `BassBasisFit` (`Decomposition`, `Components`, `JointDraws`, `Predict`, `PointwiseLogDensity(units, BasisDensitySpace)`); `BassJointDraws.Pair`; `BassFit.Predict(data, PredictionCases, BassPredictOptions)` → `BassPrediction` (`Latent`, `Predictive`, `MeanSurface`, the range flags); `PredictionCases`, `ContinuousColumn`, `CategoricalColumn`, `UnseenLevel`; `PredictiveMixture.Quantile` |
+| BASS (stage 6) | `BassFit.Sensitivity(data, SensitivitySpec)` → `SobolAnalysis` of `SobolDecomposition` (`MainIndex`, `TotalIndex`, `MeanMainIndices`, `MeanTotalIndices`, `Status`); `BassFit.Effects(data, spec, EffectSpec)` → `EffectAnalysis`; measures `UniformMeasure`, `MixtureMeasure` (`NormalComponent`, `StudentComponent`, `MixtureWeighting`), `EmpiricalMeasure`, `CategoricalMeasure`; `FunctionalForm`; `BassMoments.On(inputs, degree, measure)` (`Mean`, `Cross`, `Pair` → `TermPairMoments`); `PiecewisePolynomial` |
 | BAPS | `IBandPenalty` (`Bandwidth`, `Nullity`, `AccumulateInto`, `Roughness`), `ILocallyAdaptivePenalty` and `IAnisotropicPenalty` (`Components`, `AccumulateComponents`, `ComponentRoughness`, `SamplePrior`, `Spectrum` → `PenaltySpectrum`: `LogPseudoDeterminant`, with its gradient and Hessian in ln λ); `ISmoothingVariancePrior` (`LogDensityOfLog`) and `ISmoothingVariancePriorChoice` (`Resolve`): `ScaledWeibullPrior(tailProbability = 0.05)`, `InverseGammaVariancePrior(shape, scale)`, `WeibullVariancePrior(scale, shape = ½)` (`Rate`), `WeibullVariancePrior.ScaledTo(design, penalty, bound, tailProbability = 0.05)` and `ScaledToResponse(design, penalty, y)`; `SmoothingVarianceUpdate` (`Slice`, `Newton`); `NoiseVariancePrior` (`InverseGamma`, `Jeffreys`); `DifferencePenalty(order = 2)`; `PenalizedSpline(design, y, IBandPenalty)` (`Coefficients`, `ProfiledVariance`, `RemlLogEvidence`, `EffectiveDegreesOfFreedom`, `EdfSlope`); `Baps(..., componentPrior, componentUpdate, noisePrior).Run(BapsScheme, …)` (`ComponentPrior`) with `BapsScheme` (`Gibbs`, `Collapsed`, `LocallyAdaptiveGibbs`, `AnisotropicGibbs`) → `BapsResult` (`PosteriorDraws`, `FitBand(design)` → `PointwiseBand`, `Sigma2Interval`, `Tau2Interval`, `ComponentLambdaInterval(j)` → `PosteriorInterval`, `ComponentLogLambdaConvergence`); `HierarchicalPSpline(..., anisotropicSmoothing = false, componentPrior, componentUpdate, noisePrior).Run` (`ComponentPrior`) → `HierarchicalResult` (`PosteriorDraws` per chain, Rao–Blackwellized means, `PopulationBand`, `ReplicateBand`, three variance intervals, `ComponentSmoothingVarianceInterval(j)`, three convergence diagnostics, `ComponentSmoothingVarianceConvergence`, `RHatPopulation`, `Checkpoint`); `HierarchicalStart` (`Overdispersed`, `Fixed`); `HierarchicalScheme` (`Centred`, `CollapsedPopulation`, `Interweaved`, `CollapsedInterweaved`, `ParameterExpanded`); `HalfTDeviationPrior(Degrees, Scale)`; `TensorProductDesign.Build` → `TensorDesign`; `TensorPenalty`; `AnisotropicTensorSpline` (`Coefficients`, `RemlLogEvidence`, `RemlOptimum` → `AnisotropicReml`, `Penalty`) |
 | BGP | `SquaredExponentialKernel : IGpKernel`; `GpRegression(x, y, sigma2, kernel, scaling = Similarity)` or `GpRegression.WithUnknownScale(x, y, kernel, scaling)` (`NoiseModel`, `Fit(t, η)` for an unknown scale; `Fit(t)` → `GpFit`, `PredictMean`, `PredictVariance`, `KernelAffinity`, `Transform` → `GpTransform`); `EmpiricalBayesBandwidthPrior(gp, …)`; `BgpSampler(gp, prior).Run(...)` → `BgpResult` (`PosteriorMean`, `PosteriorSd`, `BandwidthDraws`) |
 | Changepoint | `ExactChangepoint.Infer(y, σ², ν, ρ², maxSegments)` or `Infer(y, ISegmentModel, maxSegments)` → `ChangepointResult`; `DefaultHyperparameters(y)`; `GaussianSegmentModel`, `CauchySegmentModel`; `ChangepointResult.Posterior.Sample(draws, seed)` → `ChangepointDraw` |
@@ -925,6 +927,130 @@ The time grows about linearly in N·M at large n, over a fixed 50–60 µs per s
 
 Most of that N·M was the composition's: each retained draw re-evaluated every term's column for its mean (F-M2's Phase 0, M1). Since `9ed600a` the chain's moves keep each term's mean, and every draw is bit-identical. Rerun back to back on one machine (p = 2), a sweep at n = 5,000 went from 117, 358 and 694 µs to 69, 88 and 148 (M ≈ 5, 20, 50), and at n = 1,000, M = 20, from 207 to 88; at n = 200 the gain is 1.2–2×. The rerun's earlier times sit below the table's (694 against 1,184), so compare within the rerun.
 
+### BASS: decomposition, components and prediction
+
+Stage 5 (2026-10-29, D07) adds R's `bassPCA`, `bassBasis` and `predict`. The code is under `spline/bass/output/` and `spline/bass/posterior/`.
+
+**Decomposition** (`BassDecomposition.FromPca(y, BassPcaSpec)`, `FromBasis(K, W, offsets, scales, …)`):
+- *PCA.* The responses are centred by their column means y_m and scaled by y_s: 1 by default, or the column sds with `ScaleByColumnSd`.
+  - The thin SVD Y_cᵀ = U D Vᵀ gives the basis K = U_r D_r and the coefficient responses W = V_rᵀ, R's convention.
+  - Under D03's scale-free defaults a component's fit does not depend on W's scale. The convention only fixes the units each component's σ_k is read in.
+- *The rank.*
+  - It is the smallest r whose cumulative variance share reaches `VarianceShare`, capped at the numerical rank. The comparison is ≥, where R's strict one fails at 100%.
+  - Every rank is judged against one tolerance, max(n, m)·ε·d₁, and a share of 1 is the numerical rank itself.
+  - A constant output column is centred, with y_s = 1.
+  - For comparisons, each component's sign makes its largest |K| entry positive. Ties in the singular values are compared through K Kᵀ and K W.
+- *A supplied basis.* K is m × r and may be nonorthogonal. It comes with prepared coefficient responses W, offsets and scales.
+- *The representation* is a `ReconstructionMap`; only `LinearReconstruction` is built.
+  - It reconstructs y = y_m + y_s ∘ (K w + e).
+  - Its `ReconstructionDomain` says where it can be evaluated: a PCA basis exists only at the training locations.
+  - It keeps a `BasisUncertainty` slot, null for now.
+
+**Truncation residuals** (D07). A predictive draw needs a new case's error outside the basis.
+- *The default, `LeaveOneCaseOut`.*
+  - Case i's residual is taken against the rank-r basis built without it, centred by the other cases' mean, with the rank capped at the other cases' numerical rank.
+  - Every quantity lies in the span of the training cases, so the n refits run in case coordinates from the one SVD: O(n⁴) for the refits, then O(n·m·ρ) to map back.
+  - Under the mean centre, the left-out case's coordinates are n/(n − 1)·cᵢ and the others' cⱼ + cᵢ/(n − 1).
+- *`InSample`,* R's, measures each case against a basis it helped build. It understates the error, and at full retention it is zero.
+- *The diagnostic.* The ratio of the two RMS values is the basis-stability diagnostic: near 1 when the basis is settled (1.10 at n = 40 on O-O4's fixture), large as r nears n − 1 (2.81 at n = 5).
+- *A supplied basis* takes in-sample residuals from its training responses, or residuals given with it, since it has no construction to refit.
+
+**Components** (`BassComponents.Fit(decomposition, predictors, config, …)` → `BassBasisFit`):
+- *Each coefficient response* is fitted by `Bass.Fit` as a `ScalarResponse` on the shared predictors.
+  - All components share one config by default; a list of configs is the option.
+  - Component k takes child k of the master seed.
+  - Components, chains and replicas share one parallelism bound P: max(1, ⌊P/C⌋) components run at once, each with min(P, C) chains.
+- *Joint draws* (`BassJointDraws`).
+  - Independent fits' equal-weight draws pair by index.
+  - Under the R̂ stop the fits end at different lengths, so each is thinned evenly to the shortest, keeping draw ⌊(2j + 1)L/(2L′)⌋ within each chain. The components must share their chain count.
+  - Weighted draws (SMC, stage 8) are resampled within each component, multinomially by default, down to the smallest count. They are then shuffled, so that the ancestors' sorted order does not pair across components.
+
+**Prediction** (`BassFit.Predict(data, cases, options)` → `BassPrediction`; `BassBasisFit.Predict` → `BassBasisPrediction`):
+- *Latent draws* evaluate each draw's composition coefficients (D04) at the cases.
+  - That is f(x), or f(x, t) for a direct functional fit, at the training output locations or at new ones (`OutputLocations`).
+  - Arrays are draw × case × location, in the requested draw order, with singleton axes kept.
+  - At the training inputs they equal the stage-4 fitted values, bit for bit.
+- *Predictive draws* add the noise.
+  - For a direct fit: N(0, σ²) independently for each case, location and draw.
+  - For a basis fit: y = y_m + y_s ∘ (K(w(x) + ε) + e). Here ε_k ~ N(0, σ_k²) for each case and draw, and e is a whole training residual vector drawn uniformly for each case and draw, which keeps its within-output correlation.
+  - R reuses one ε across cases and indexes its residuals by the row count (O-O1).
+- *Inputs* pass through the fit's transform, with columns matched by name.
+  - Values outside the training range extrapolate the hinges linearly and are flagged per case; new output coordinates outside the range are flagged per location.
+  - An unseen level is refused, or placed outside every subset (`UnseenLevel`).
+- *Intervals* are quantiles of the predictive mixture.
+  - For a direct fit, the Gaussian mixture's exact quantile.
+  - For a basis fit, the weighted quantile of its draws, since its mixture runs over draws × residuals.
+  - A basis fit's covariance in physical units is diag(y_s)·C·diag(y_s).
+- *The mean surface* (`MeanSurface`, off by default) averages each draw's conditional mean E[f | S, τ, y].
+  - At the training inputs under the mean centre that mean is ȳ + (ŷ_OLS − ȳ)/(1 + τ).
+  - The average is a Rao–Blackwellized estimate of the posterior mean, never a draw.
+- *A call takes its own `Seed`,* and every operation takes the draw weights.
+
+**The density for basis fits** (OQ17; `BassBasisFit.PointwiseLogDensity(units, space)`) is by case.
+- *By default, in coefficient space:* Σ_k log N(w_ik | w_k(xᵢ), σ_k²). It is exact for comparing fits that share a basis.
+- *`BasisDensitySpace.Physical`* is the declared approximation for comparing across bases.
+  - It adds a diagonal Gaussian for the truncation residual, whose mean is the residuals' mean and whose variance is their uniform-draw variance, and subtracts Σ log y_s.
+  - It is refused where that variance is zero.
+
+**Checks**, against O-O1's and O-O4's corrected expectations:
+- the reconstruction reproduces Y to 2·10⁻¹⁶, where R's misses by 3.09;
+- the mixture intervals are ±2.77 and ±2.64, against R's ±3.91 and ±5.20;
+- the component noise is uncorrelated across cases (correlation 0.006, R's 1);
+- both residual sets match the oracle to 2·10⁻¹⁴ at n = 2, 5, 10 and 40, and at full retention.
+
+### BASS: sensitivity
+
+Stage 6's first part (2026-10-29, D08) adds R's `sobol` for direct fits, under `spline/bass/sensitivity/`. Basis sensitivity (`sobolBasis`, O7) follows stage 5's basis fits.
+
+**What is decomposed.** For each posterior draw, the variance of the latent mean surface under a declared product measure over the inputs, with observation noise outside it. That gives each index a posterior distribution. The surface is a declared input (`DecomposedSurface`); only the mean is built.
+
+**Measures** (`SensitivitySpec.Measures`), by predictor name and in each input's own units, as R declares them.
+- *Continuous inputs:*
+  - `UniformMeasure`, by default over the training range;
+  - `MixtureMeasure` of `NormalComponent` and `StudentComponent`, truncated to its interval. A Student component takes a location-scale `Scale`, with a constructor from a marginal sd for ν > 2. The weights apply before truncation by default (R's convention), or `ConditionalOnTruncation`;
+  - `EmpiricalMeasure`: the training values, equally weighted.
+- *Categorical inputs:* `CategoricalMeasure`, level probabilities by name, uniform over the training levels by default. R ignores supplied probabilities (O-O2).
+- *A support beyond the training range* is allowed, and flagged.
+- *Functional responses.*
+  - `FunctionalForm.Integrate` treats the output variables as more inputs. Their `OutputMeasures` are uniform over each range by default, or `EmpiricalMeasure` for the training grid, taken as the product of each variable's marginal.
+  - `Condition` decomposes at declared output coordinates, by default the training locations. The coefficients become aⱼ·hⱼ(t), and each coordinate has its own decomposition.
+  - Both forms report main and total indices; R's functional path omits the totals.
+
+**Moments** (`BassMoments`):
+- *A term is κ·Π_v φ_v,* a product of one-variable factors: hinge powers and subset indicators.
+  - Each factor is a `PiecewisePolynomial`, split at its knots and integrated piece by piece against the measure's interval moments, about the centre of each piece clipped to the support.
+  - Centred products are built directly, so a covariance is integrated as one polynomial, never as E[φφ′] − E[φ]E[φ′].
+- *Under the product measure,* a term's component on a subset u of inputs is Π_{v∈u}(φ_v − Eφ_v)·Π_{v∉u}Eφ_v. Two terms' components therefore covary only on subsets of their shared variables, with Cov_u = κκ′·Π_{v∈u}Cov(φ_v, φ′_v)·Π_{v∉u}Eφ_v·Eφ′_v.
+  - The variance, each subset's main variance and each input's total are sums of aⱼaₗ times these cached pair shares. An input's total sums the subsets that hold it.
+  - Draws repeat their structures, so factor, term and pair moments are cached across draws, and a draw costs one pass over its pairs.
+- *Categorical moments* are sums of the supplied probabilities, intersections included. Under (0.9, 0.05, 0.05) the subsets {a} and {a, b} and their intersection have moments 0.9, 0.95 and 0.9, where R gives ⅓, ⅔ and ⅓ (O-O2).
+- *Every hinge degree* is covered.
+  - Uniform, normal and empirical measures give interval moments with no quadrature error. Student components use Gauss–Legendre at every ν (Distributions; see [Probability and Information](./ProbabilityAndInformation.md)).
+  - An analysis reports its largest quadrature error estimate (`MomentError`).
+  - R's Student closed form needs a 2F1 evaluator, covers degree 1 only and is NaN at ν = 1.
+
+**Order, budget and zero variance:**
+- *Main indices* are reported for every subset up to `MaxOrder`. By default that is the posterior's largest term, counted in variables over all parts, so the mains sum to 1.
+- *Only subsets inside some term are enumerated;* every other subset's main is exactly 0. More than `SubsetBudget` subsets (10,000) refuses the call before anything is computed.
+- *Zero variance.* A draw whose total variance is zero (at most the rounding tolerance times its moment magnitudes, such as an intercept-only draw) has status `ZeroVariance` and NaN indices. It is left out of the means rather than counted as 0.
+- *Rounding.* A negative contribution above −tolerance × total is clamped, and below it flagged.
+- *Posterior summaries.* The indices' posterior means are weighted over the defined draws. Their quantiles wait for stage 9, since the repo has no weighted quantile yet.
+
+**Effect functions** (`BassFit.Effects`):
+- *What they are:* the main and two-way effects E[f | x_v] − f₀ and E[f | x_v, x_w] − f_v − f_w − f₀, under the declared measure at the fit's degree.
+- *Grids:* `GridPoints` (100) values over the measure's support, or the levels of a categorical input. By default every main effect, and every pair a posterior term holds (R's `combs`).
+- *A cell budget* of 10⁷.
+- *R's effects* use the U(0, 1) moments at degree 1, whatever the measure (O-O2).
+
+**Checks:**
+- O-O3's 156 moment cases under 9 measures, to 6·10⁻¹⁵ relative;
+- term moments at degrees 1–3 against a tensor quadrature of the design's columns, to 10⁻¹²;
+- the empirical measure against the columns' averages, to 10⁻¹⁴;
+- the Sobol identities on every draw, to 10⁻¹²;
+- the variance, mains, totals and pair variances within 5 standard errors of pick-freeze Monte Carlo (Saltelli 2010 for the mains, Jansen for the totals) at N = 200,000;
+- the law of total variance between the two functional forms, to 10⁻¹¹;
+- effects at degree 2 against quadrature, to 10⁻¹¹.
+
 ### BAPS: penalized splines
 
 **Penalty.** The order-r difference operator has coefficients $c_l=(-1)^l\binom rl$ and penalty $P=D^\top D$, which has half-bandwidth r and null space of dimension r. The default is $r=2$. `AccumulateStrided` writes the penalty at a stride, which lets two 1-D penalties compose a Kronecker penalty.
@@ -1348,6 +1474,11 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 | `BassSampling` Moves | `EqualOverAvailable` | D01's schedule; `PriorCancelling(C = 0.4)`, C ∈ (0, ½], the option |
 | `BassSampling` MonitoredPoints | null: up to three cases at the quartiles, a direct response's at its middle location | The fitted values R̂ and ESS monitor; declared points are checked against the data (decided 2026-10-28) |
 | `BassSampling` Tempering | null: untempered | `TemperingSpec`: the likelihood path, the integrated form, `Levels` null (self-sizing from `InitialLevels` 8 within `MaxLevels` 64), `HotEnd` null (1/N; 2/N under the flat intercept's integrated form; min(τ, ·) under fixed g), adaptive, DEO, no reference rung (decided 2026-10-28) |
+| `BassPcaSpec` VarianceShare / ScaleByColumnSd / Residual | 0.99 / false / `LeaveOneCaseOut` | The rank's variance share (reached, ≥), capped at the numerical rank; y_s = 1 or the column sds; the truncation residual (D07, decided 2026-10-29) |
+| `BassPredictOptions` Draws / Predictive / Seed / UnseenLevels / OutputLocations / MeanSurface | all / true / 0 / `Refuse` / null / false | The draws in their order; noise added; the call's seed; an unseen level refused (`OutsideEverySubset` the option); a direct functional fit's training locations; no Rao–Blackwellized mean |
+| `SensitivitySpec` Measures / OutputMeasures / MaxOrder / SubsetBudget | null / null / null / 10,000 | Uniform over each training range and uniform level probabilities; uniform output ranges; the posterior's largest term; refused beyond the budget |
+| `SensitivitySpec` Surface / Functional / Coordinates / RoundingTolerance | `Mean` / `Integrate` / null / 10⁻¹⁰ | The decomposed surface; output variables integrated as inputs (`Condition` the option); the training locations when conditioned; zero-variance and clamping tolerance |
+| `EffectSpec` GridPoints / CellBudget | 100 / 10⁷ | Points per continuous effect grid; refused beyond the budget |
 | `Baps` priorShape / priorScale / mhLogStep / phi | 1e-3 / 1e-3 / 0.6 / 1.0 | IG hyperprior; random-walk step on ln λ; adaptivity |
 | `Baps.Run` chains / masterSeed / burn / samples / rHatTarget / batchSize | 4 / 1 / 500 / 1500 / 0 / 0 | No early stop unless an R̂ target is set; it then waits on ln λ and ln σ² (split R̂ and 100 bulk and tail ESS per chain) |
 | `HierarchicalPSpline.Run` chains / masterSeed / burn / samples / start / scheme / rHatTarget / batchSize | 4 / 1 / 1000 / 2000 / `Overdispersed` / the prior's own / 0 / 0 | No early stop unless an R̂ target is set; it then waits on the three log variances (split R̂ and 100 bulk and tail ESS per chain) and on the population coefficients' classic R̂ |
@@ -1398,7 +1529,8 @@ Every source is checked, papers and their code included (the user's decision, 20
 
 ## Status and caveats
 
-- **This section describes BASS through stage 4** (S1–S10, 2026-10-28).
+- **This section describes BASS through stage 4** (S1–S10, 2026-10-28), **with stage 5 and stage 6's direct sensitivity** (2026-10-29). Basis sensitivity (O7), calibration (stage 7), SMC (stage 8) and presentation (stage 9) are not built.
+  - *Stage 5 and 6's choices left as reversible defaults* are listed in their chips' reports (`issues/regression/bass/stage5-outputs-brief.md`, `stage6-sensitivity-brief.md`). Among them: `Predict`, `Sensitivity` and `Effects` take the training data, since the fit keeps neither its knots nor its inputs; a basis fit's intervals are weighted quantiles of its draws.
   - *Open from the qualification:* the defaults mix slowly between structures. R̂ of M read 1.5–2.5 on the recovery surfaces at 5,000 + 2,000 sweeps, as R BASS's chains do, with births and deaths accepting about 1.5%; tempering lowers it, but the local moves bound it. Friedman's σ reads high untempered for that reason and for the fit's bias.
   - *Built:* the contracts and their refusals, the terms and the basis, the structure prior and the proposals, the design and admission, the collapsed target, the sweep, the run with its diagnostics and checkpoints, the self-sizing tempered ladder and the evidence, the pointwise density and the residual check, and the qualification runs.
   - *Not yet built:* prediction, supplied bases and PCA (stage 5), sensitivity (6), calibration (7) and SMC (8). The ridge coefficient priors are deferred until they are built with their own marginal.
@@ -1440,8 +1572,8 @@ Every source is checked, papers and their code included (the user's decision, 20
 |---|---|
 | Spline core | `spline/KnotConfig.cs`, `IBasis.cs`, `SplineBasis.cs`, `BSpline.cs`, `BandedDesign.cs` |
 | BARS | `spline/bars/Bars.cs`, `BarsEnsemble.cs`, `SplineTarget.cs`, `KnotMoves.cs`, `KnotKernels.cs`, `AdaptiveLocalBetaKernel.cs`, `DmgkSchedule.cs`, `ComplexityPriors.cs`, `WeightedNormalModel.cs`, `PoissonModel.cs`, `WhittleModel.cs`, `GibbsLossModel.cs`, `WeightResampling.cs`, `StepBasis.cs`, `SplineExtrema.cs`, `IObservationModel.cs`, `IConditionalFit.cs`, `IKnotKernel.cs` |
-| BASS | `spline/bass/Bass.cs` (the fit, resume and the fingerprint), `BassRun.cs`, `BassRunOptions.cs`, `BassFit.cs`, `BassDiagnostics.cs`, `BassPriorSampler.cs`, `BassLadder.cs`, `BassEvidence.cs`, `BassPointwise.cs`, `BassResidualDependence.cs`, `BassConfig.cs`, `BassData.cs`, `BassResolved.cs`, `BassInputTransform.cs`, `BassInputs.cs`, `BassTerm.cs`, `BassBasis.cs`, `BassStructurePrior.cs`, `BassTermProposal.cs`, `BassDesign.cs`, `BassTarget.cs`, `BassModel.cs`, `BassState.cs`, `BassSweep.cs` |
-| BASS's shared pieces | `gprior/CollapsedGPrior.cs` (`FromCentredLeastSquares`, `CentredMarginalAt`, `GPriorMarginal.LogMarginalSlope`), `gprior/Sigma2Prior.cs`; under `src/maths/`: `distributions/Wallenius.cs`, `distributions/SpecialFunctions.cs` (`Digamma`), `linalg/BorderedCholesky.cs`, `linalg/KhatriRao.cs`, `linalg/PairwiseSum.cs`, `samplers/rjmcmc/ReversibleJumpChain.cs`, `samplers/rjmcmc/ParallelTempering.cs` (the per-replica blocks, for S8), `samplers/blocks/BlockScan.cs`, `samplers/blocks/SliceSampler.cs` |
+| BASS | `spline/bass/Bass.cs` (the fit, resume and the fingerprint), `BassRun.cs`, `BassRunOptions.cs`, `BassFit.cs`, `BassDiagnostics.cs`, `BassPriorSampler.cs`, `BassLadder.cs`, `BassEvidence.cs`, `BassPointwise.cs`, `BassResidualDependence.cs`, `BassConfig.cs`, `BassData.cs`, `BassResolved.cs`, `BassInputTransform.cs`, `BassInputs.cs`, `BassTerm.cs`, `BassBasis.cs`, `BassStructurePrior.cs`, `BassTermProposal.cs`, `BassDesign.cs`, `BassTarget.cs`, `BassModel.cs`, `BassState.cs`, `BassSweep.cs`; stage 5: `spline/bass/output/` (`BassDecomposition.cs`, `BassComponents.cs`) and `spline/bass/posterior/` (`BassPrediction.cs`, `BassPredictionInputs.cs`, `BassSurface.cs`, `PredictiveMixture.cs`, `BassJointDraws.cs`, `BassBasisPrediction.cs`, `BassBasisDensity.cs`); stage 6: `spline/bass/sensitivity/` (`BassSensitivity.cs`, `SobolDecomposition.cs`, `EffectFunctions.cs`, `BassMoments.cs`, `PiecewisePolynomial.cs`, `InputMeasures.cs`) |
+| BASS's shared pieces | `gprior/CollapsedGPrior.cs` (`FromCentredLeastSquares`, `CentredMarginalAt`, `GPriorMarginal.LogMarginalSlope`), `gprior/Sigma2Prior.cs`; under `src/maths/`: `distributions/Wallenius.cs`, `distributions/SpecialFunctions.cs` (`Digamma`), `linalg/BorderedCholesky.cs`, `linalg/KhatriRao.cs`, `linalg/PairwiseSum.cs`, `samplers/rjmcmc/ReversibleJumpChain.cs`, `samplers/rjmcmc/ParallelTempering.cs` (the per-replica blocks, for S8), `samplers/blocks/BlockScan.cs`, `samplers/blocks/SliceSampler.cs`; for stage 6, `distributions/IIntervalMoments.cs` with `Uniform.cs`, `Mixture.cs`, `Empirical.cs`, `GaussLegendre.cs` and the interval moments of `Normal`, `StudentT` and `Truncated<T>` |
 | BAPS | `spline/baps/DifferencePenalty.cs`, `IBandPenalty.cs`, `PenalizedSpline.cs`, `Baps.cs`, `HierarchicalPSpline.cs`, `TensorProductDesign.cs`, `TensorPenalty.cs`, `PenaltySpectrum.cs`, `ComponentSmoothing.cs`, `SmoothingVariancePriors.cs`, `AnisotropicTensorSpline.cs`; `NelderMead.cs` (the REML optimum's search) |
 | BGP | `bgp/GpKernel.cs`, `GpTransform.cs`, `GpRegression.cs`, `EmpiricalBayesBandwidthPrior.cs`, `BgpSampler.cs` |
 | Changepoint | `changepoint/ExactChangepoint.cs`, `SegmentModels.cs`, `ChangepointPosterior.cs` |

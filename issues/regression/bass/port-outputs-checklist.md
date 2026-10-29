@@ -18,25 +18,45 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 
 ### Build (stages 5, 6, 9)
 
-- [ ] **O1** PCA and supplied-basis decomposition on the thin SVD.
-- [ ] **O2** Component execution and joint draws across components.
-- [ ] **O3** Prediction: latent and predictive draws, component noise, truncation residuals, physical units.
-- [ ] **O4** Pointwise density for supplied-basis fits.
-- [ ] **O5** One moment service for direct and basis sensitivity.
-- [ ] **O6** Direct sensitivity, including both functional forms.
+- [x] **O1** PCA and supplied-basis decomposition on the thin SVD (stage 5 chip, `2fec1ee`).
+- [x] **O2** Component execution and joint draws across components (`bb065c6`).
+- [x] **O3** Prediction: latent and predictive draws, component noise, truncation residuals, physical units (`29e7e23`, `bb065c6`).
+- [x] **O4** Pointwise density for supplied-basis fits (`502fb0f`).
+- [x] **O5** One moment service for direct and basis sensitivity (stage 6 chip, `17dfe2d`, `2fa7ad6`).
+- [x] **O6** Direct sensitivity, including both functional forms (`835a310`).
 - [ ] **O7** Basis sensitivity with cross-component terms and a subset budget.
-- [ ] **O8** Effect functions for the declared measure and degree.
+- [x] **O8** Effect functions for the declared measure and degree (`835a310`).
 - [ ] **O9** Presentation data above maths (stage 9).
 
 ### Room for extensions
 
-- [ ] **O-X1** The decomposed surface is a declared input.
-- [ ] **O-X2** The moment service is written over piecewise polynomials.
-- [ ] **O-X3** The basis contract admits robust bases, an uncertainty slot and a declared truncation model.
+- [x] **O-X1** The decomposed surface is a declared input (`DecomposedSurface`, the mean built).
+- [x] **O-X2** The moment service is written over piecewise polynomials (`PiecewisePolynomial`).
+- [x] **O-X3** The basis contract admits robust bases, an uncertainty slot and a declared truncation model (`FromBasis`, `BasisUncertainty`, `TruncationResidual`).
 - [ ] **O-X4** Term derivatives are available to sensitivity.
-- [ ] **O-X5** The response representation carries a declared reconstruction map (linear now; composition for elastic emulation).
+- [x] **O-X5** The response representation carries a declared reconstruction map (linear now; composition for elastic emulation) (`ReconstructionMap`, `ReconstructionDomain`).
 
 ## Reports
+
+### Stage 5 and stage 6's first part verified — 2026-10-29
+
+Two chips built them beside each other on the shared checkout ([stage 5's report](stage5-outputs-brief.md#reports), [stage 6's](stage6-sensitivity-brief.md#reports)). Read and verified here.
+- *Commits.*
+  - Stage 5: `2fec1ee`, `29e7e23`, `bb065c6`, `502fb0f`, `dd533be`, `ac4730e`, and its report `cf0cc3a`.
+  - Stage 6: `17dfe2d`, `2fa7ad6`, `835a310`, and its report `853b61f`.
+  - Each touched only its own files. Stage 5 added only `Predict` to `BassFit.cs`. Stage 6's Distributions additions are generic (`IIntervalMoments`, `Uniform`, `Mixture`, `Empirical`, `GaussLegendre`, and interval moments on `Normal`, `StudentT` and `Truncated<T>`).
+- *The suites on the combined tree,* with the main session's wiring: Regression 911/911, Distributions 148/148, Samplers 186/186, LinAlg 120/120, and the BASS oracle tests (below).
+- *Wired here.* `BassFit.Sensitivity(data, spec)` and `BassFit.Effects(data, spec, effects)` call stage 6's static entries. A views test checks that they match the entries and refuse data of another fingerprint.
+- *O-O1's constant-input field* now records D07's refusal: `corrected = "refused"`, which the parity test asserts. The stage-1 checks say the same.
+- *Docs:*
+  - `docs/Maths/BayesianRegression.md` gains the sections "BASS: decomposition, components and prediction" and "BASS: sensitivity", the API, configuration, status and source-map rows.
+  - `docs/Maths/ProbabilityAndInformation.md` gains the interval moments.
+- *Left as reversible defaults,* 12 in each chip's report; none re-opens D07 or D08. The main ones:
+  - `Predict`, `Sensitivity` and `Effects` take the training data, since the fit keeps neither its knots nor its inputs;
+  - a basis fit's intervals are weighted draw quantiles;
+  - the normal's interval moments come from the density's Taylor series, not the Φ/φ recurrence, which loses every digit on narrow pieces by degree 2–3;
+  - the indices' posterior quantiles wait for stage 9's weighted quantile.
+- *Next:* O7, basis sensitivity, on stage 5's `BassBasisFit` and stage 6's `BassMoments.Pair`. O-O2's units section is its parity check.
 
 ### D07 and D08 decided — 2026-10-29
 
