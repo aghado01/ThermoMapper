@@ -26,7 +26,7 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 - [x] **O6** Direct sensitivity, including both functional forms (`835a310`).
 - [x] **O7** Basis sensitivity with cross-component terms and a subset budget (O7 chip, `f1d53ab`).
 - [x] **O8** Effect functions for the declared measure and degree (`835a310`).
-- [ ] **O9** Presentation data above maths (stage 9).
+- [x] **O9** Presentation data above maths (stage 9 chip, `4892ae2`; rendering and formatting wait for a consumer above maths).
 
 ### Room for extensions
 
@@ -37,6 +37,25 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 - [x] **O-X5** The response representation carries a declared reconstruction map (linear now; composition for elastic emulation) (`ReconstructionMap`, `ReconstructionDomain`).
 
 ## Reports
+
+### O9 verified: stage 9's presentation data — 2026-10-29
+
+The stage 9 chip built it ([its report](stage9-presentation-brief.md#reports)), read and verified here.
+- *Commits:*
+  - `6d37bab`, the shared fix;
+  - `c564f56`, one weighted quantile;
+  - `f6652b8`, effect functions for basis fits, closing stage 6's gap;
+  - `4892ae2`, the presentation records and views;
+  - `0592d94`, its report.
+- *The shared fix,* `DrawSample.Quantile`: equal weights at any scale now give type 7, as its stated invariance to a common rescaling requires.
+  - No existing result moves: BARS's `SummarisePeak`, the only other caller, adds unit weights.
+  - Stage 5's step-CDF quantile is deleted, so basis predictive quantiles move from type 1 to type 7, within their Monte Carlo error.
+- *Suites:* Regression 943/943, Samplers 187/187 and the BASS oracle tests 54/54 with R, on the combined tree.
+- *Docs:*
+  - `docs/Maths/BayesianRegression.md` gains "BASS: presentation" and the basis effects, the API and source rows, and corrects the two lines the report named;
+  - `docs/Maths/Samplers.md` gains `DrawSample`'s rule.
+- *A limitation for stage 8:* the quantile jumps between equal and near-equal weights. A weighted type 7 (through Kish's effective size) is the alternative, once SMC brings unequal weights.
+- *Not built:* rendering and text formatting, which wait for a consumer above maths and viz v2's contracts. The report lists what an adapter needs.
 
 ### O7 verified: stage 6 complete — 2026-10-29
 
