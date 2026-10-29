@@ -449,7 +449,7 @@ public sealed class BassMixingCostTests
         Dictionary<string, double> median = Interleave(timers);
         double scan = median["scan"], ratio = median["ratio"], sweep = median["sweep"], accepted = (double)swaps / scans;
         double handOver = givers.Average(j => median[$"hand-over {j}"]);
-        string[] giverRows = [.. givers.Select(j => $"rung {j} (b {tempering.Betas[j]:G3}, M {tempering.Replicas[j].Current.Count}) {median[$"hand-over {j}"]:F1} µs")];
+        string[] giverRows = [.. givers.Select(j => $"rung {j} (b {tempering.InverseTemperatures[j]:G3}, M {tempering.Replicas[j].Current.Count}) {median[$"hand-over {j}"]:F1} µs")];
         double replicas = scan - pairs * ratio - 2 * accepted * handOver;
 
         Assert.True(double.IsFinite(sink));

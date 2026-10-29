@@ -171,26 +171,26 @@ public sealed class CountLawTests
     public void TemperedRungs_FollowTheirPathsCountLaw(TemperingPath path)
     {
         // Under a constant likelihood the likelihood path's every rung samples the knot prior itself. The powered path's
-        // rung β samples (p(k)·k!)^β on the ordered simplex, whose volume is 1/k!, so for a Poisson(λ) count prior its
-        // knot count is Poisson(λ^β): a powered density on a space of varying dimension depends on the reference measure
+        // rung b samples (p(k)·k!)^b on the ordered simplex, whose volume is 1/k!, so for a Poisson(λ) count prior its
+        // knot count is Poisson(λ^b): a powered density on a space of varying dimension depends on the reference measure
         // of each subspace, and its hot rungs leave the prior (Q5).
         const double lambda = 4.0;
         var prior = new PoissonPrior(lambda);
         IKnotKernel kernel = new LocalBetaKernel(5.0);
-        double[] betas = [1.0, 0.5, 0.25];
+        double[] inverseTemperatures = [1.0, 0.5, 0.25];
         var target = new SplineTarget(new SplineBasis(3), new FlatModel(), prior, x: [0.5], y: [0.0], minColumnMass: 0.0);
         Func<int, double> LawAt(int rung) => path == TemperingPath.Likelihood
             ? prior.LogPrior
-            : new PoissonPrior(Math.Pow(lambda, betas[rung])).LogPrior;
+            : new PoissonPrior(Math.Pow(lambda, inverseTemperatures[rung])).LogPrior;
 
         CountLaw.Result[] rungs = CountLaw.SampleLadder(
             _ => [new KnotBirthMove(kernel), new KnotDeathMove(kernel), new KnotRelocateMove(kernel)], target,
-            new KnotConfig([]), s => s.Count, betas, path, LawAt, bins: 10, burn: 10_000, steps: 300_000, batches: 30,
+            new KnotConfig([]), s => s.Count, inverseTemperatures, path, LawAt, bins: 10, burn: 10_000, steps: 300_000, batches: 30,
             seed: 41);
 
         for (int r = 0; r < rungs.Length; r++)
         {
-            string label = $"{path} β={betas[r]}";
+            string label = $"{path} b={inverseTemperatures[r]}";
             _out.WriteLine($"[count-law-ladder] {label}:{rungs[r].Describe()}");
             Assert.True(rungs[r].Agrees(z: 5.0, floor: 0.002), $"{label}:{rungs[r].Describe()}");
         }
@@ -201,26 +201,26 @@ public sealed class CountLawTests
     [InlineData(TemperingPath.Powered)]
     public void ReferenceRung_FollowsItsPathsCountLaw(TemperingPath path)
     {
-        // The exact reference rung at β = 0 (OQ2): on the likelihood path the knot prior, Poisson(λ); on the powered path
+        // The exact reference rung at b = 0 (OQ2): on the likelihood path the knot prior, Poisson(λ); on the powered path
         // the normalized reference measure, Poisson(1) = Poisson(λ⁰), with uniform locations on both. Every rung above it
         // keeps its path's law.
         const double lambda = 4.0;
         var prior = new PoissonPrior(lambda);
         IKnotKernel kernel = new LocalBetaKernel(5.0);
-        double[] betas = [1.0, 0.5, 0.25, 0.0];
+        double[] inverseTemperatures = [1.0, 0.5, 0.25, 0.0];
         var target = new SplineTarget(new SplineBasis(3), new FlatModel(), prior, x: [0.5], y: [0.0], minColumnMass: 0.0);
         Func<int, double> LawAt(int rung) => path == TemperingPath.Likelihood
             ? prior.LogPrior
-            : new PoissonPrior(Math.Pow(lambda, betas[rung])).LogPrior;
+            : new PoissonPrior(Math.Pow(lambda, inverseTemperatures[rung])).LogPrior;
 
         CountLaw.Result[] rungs = CountLaw.SampleLadder(
             _ => [new KnotBirthMove(kernel), new KnotDeathMove(kernel), new KnotRelocateMove(kernel)], target,
-            new KnotConfig([]), s => s.Count, betas, path, LawAt, bins: 10, burn: 10_000, steps: 300_000, batches: 30,
+            new KnotConfig([]), s => s.Count, inverseTemperatures, path, LawAt, bins: 10, burn: 10_000, steps: 300_000, batches: 30,
             seed: 43, reference: target.Reference(path));
 
         for (int r = 0; r < rungs.Length; r++)
         {
-            string label = $"{path} β={betas[r]}";
+            string label = $"{path} b={inverseTemperatures[r]}";
             _out.WriteLine($"[count-law-reference] {label}:{rungs[r].Describe()}");
             Assert.True(rungs[r].Agrees(z: 5.0, floor: 0.002), $"{label}:{rungs[r].Describe()}");
         }

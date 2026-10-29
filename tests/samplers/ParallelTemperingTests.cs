@@ -10,8 +10,8 @@ namespace Maths.Samplers.Tests;
 /// Parallel tempering on its own terms. On a well-separated bimodal target a single chain started in one mode can't
 /// cross the barrier and stays stuck; the tempered ladder's hot replicas traverse it freely and ferry the cold replica
 /// between modes, so the cold chain visits both ≈ equally. Swaps exchange the replicas' cached evaluations: no state
-/// is re-evaluated for a swap. On an enumerable space with a likelihood that is not linear in β, every rung samples its
-/// own path's law exactly, which the β-linear swap shortcut does not achieve on the likelihood path.
+/// is re-evaluated for a swap. On an enumerable space with a likelihood that is not linear in b, every rung samples its
+/// own path's law exactly, which the b-linear swap shortcut does not achieve on the likelihood path.
 /// </summary>
 public sealed class ParallelTemperingTests
 {
@@ -61,8 +61,8 @@ public sealed class ParallelTemperingTests
         double singleFrac = (double)singleRight / draws;
 
         // Tempered ladder — the cold replica visits both modes.
-        double[] betas = ParallelTempering<double>.GeometricLadder(levels: 6, betaMin: 0.02);
-        var pt = new ParallelTempering<double>(_ => moves, target, -3.0, betas, TemperingPath.Powered, masterSeed: ladderSeed);
+        double[] inverseTemperatures = ParallelTempering<double>.GeometricLadder(levels: 6, hotEnd: 0.02);
+        var pt = new ParallelTempering<double>(_ => moves, target, -3.0, inverseTemperatures, TemperingPath.Powered, masterSeed: ladderSeed);
         for (int i = 0; i < 5_000; i++) pt.Step();
         int tempRight = 0;
         for (int i = 0; i < draws; i++) if (pt.Step() > 0.0) tempRight++;
@@ -75,8 +75,8 @@ public sealed class ParallelTemperingTests
         int evaluations = 0;
         ISamplingTarget<int> target = SamplingTarget.FromLogDensity<int>(s => { evaluations++; return -0.3 * Math.Abs(s); });
         IRjMove<int>[] MovesFor(int replica) => [new UnitStep("up", "down", +1), new UnitStep("down", "up", -1)];
-        double[] betas = ParallelTempering<int>.GeometricLadder(levels: 4, betaMin: 0.05);
-        var pt = new ParallelTempering<int>(MovesFor, target, 0, betas, TemperingPath.Powered, masterSeed: 5);
+        double[] inverseTemperatures = ParallelTempering<int>.GeometricLadder(levels: 4, hotEnd: 0.05);
+        var pt = new ParallelTempering<int>(MovesFor, target, 0, inverseTemperatures, TemperingPath.Powered, masterSeed: 5);
         Assert.Equal(4, evaluations);   // each replica's start
 
         const int steps = 2000;
@@ -93,33 +93,33 @@ public sealed class ParallelTemperingTests
     [InlineData(TemperingPath.Powered)]
     public void EveryRung_SamplesItsPathsLaw(TemperingPath path)
     {
-        // States 0..5 under a prior p and a likelihood ℓ_β = 3·ln(1 + β·a) − β·c, which is not linear in β (as for a
-        // collapsed model). Rung β's law is p·e^{ℓ_β} on the likelihood path and (p·e^{ℓ₁})^β on the powered path.
-        double[] betas = path == TemperingPath.Likelihood ? [1.0, 0.5, 0.2, 0.0] : [1.0, 0.5, 0.2, 0.05];
+        // States 0..5 under a prior p and a likelihood ℓ_b = 3·ln(1 + b·a) − b·c, which is not linear in b (as for a
+        // collapsed model). Rung b's law is p·e^{ℓ_b} on the likelihood path and (p·e^{ℓ₁})^b on the powered path.
+        double[] inverseTemperatures = path == TemperingPath.Likelihood ? [1.0, 0.5, 0.2, 0.0] : [1.0, 0.5, 0.2, 0.05];
         IRjMove<int>[] MovesFor(int replica) => [new UnitStep("up", "down", +1), new UnitStep("down", "up", -1)];
-        var pt = new ParallelTempering<int>(MovesFor, new SixStates(), 0, betas, path, masterSeed: 13);
+        var pt = new ParallelTempering<int>(MovesFor, new SixStates(), 0, inverseTemperatures, path, masterSeed: 13);
         for (int i = 0; i < 5_000; i++) pt.Step();
 
         const int n = 400_000;
-        var counts = new double[betas.Length, SixStates.States];
+        var counts = new double[inverseTemperatures.Length, SixStates.States];
         for (int i = 0; i < n; i++)
         {
             pt.Step();
-            for (int r = 0; r < betas.Length; r++) counts[r, pt.Replicas[r].Current] += 1.0;
+            for (int r = 0; r < inverseTemperatures.Length; r++) counts[r, pt.Replicas[r].Current] += 1.0;
         }
 
-        for (int r = 0; r < betas.Length; r++)
+        for (int r = 0; r < inverseTemperatures.Length; r++)
         {
-            double[] expected = SixStates.Law(betas[r], path);
+            double[] expected = SixStates.Law(inverseTemperatures[r], path);
             double tv = 0.0;
             for (int k = 0; k < SixStates.States; k++)
             {
                 double observed = counts[r, k] / n;
                 tv += 0.5 * Math.Abs(observed - expected[k]);
                 Assert.True(Math.Abs(observed - expected[k]) < 0.01,
-                    $"{path} rung β = {betas[r]}, state {k}: {observed:F4} vs {expected[k]:F4}");
+                    $"{path} rung b = {inverseTemperatures[r]}, state {k}: {observed:F4} vs {expected[k]:F4}");
             }
-            _out.WriteLine($"[pt-law] {path} β={betas[r]}: TV={tv:F4}");
+            _out.WriteLine($"[pt-law] {path} b={inverseTemperatures[r]}: TV={tv:F4}");
         }
     }
 
@@ -128,28 +128,28 @@ public sealed class ParallelTemperingTests
     [InlineData(TemperingPath.Powered)]
     public void EveryRung_SamplesItsPathsLaw_WithAReferenceRung(TemperingPath path)
     {
-        // The hot rung at β = 0 takes an exact draw every scan: the prior on the likelihood path, the uniform reference
+        // The hot rung at b = 0 takes an exact draw every scan: the prior on the likelihood path, the uniform reference
         // measure on the powered path. Every rung, the cold one included, still samples its own path's law.
-        double[] betas = [1.0, 0.5, 0.2, 0.0];
+        double[] inverseTemperatures = [1.0, 0.5, 0.2, 0.0];
         IRjMove<int>[] MovesFor(int replica) => [new UnitStep("up", "down", +1), new UnitStep("down", "up", -1)];
         var target = new SixStates();
-        var pt = new ParallelTempering<int>(MovesFor, target, 0, betas, path, masterSeed: 13, reference: new SixStatesReference(target, path));
+        var pt = new ParallelTempering<int>(MovesFor, target, 0, inverseTemperatures, path, masterSeed: 13, reference: new SixStatesReference(target, path));
         Assert.True(pt.HasReferenceRung);
         for (int i = 0; i < 5_000; i++) pt.Step();
 
         const int n = 400_000;
-        var counts = new double[betas.Length, SixStates.States];
+        var counts = new double[inverseTemperatures.Length, SixStates.States];
         for (int i = 0; i < n; i++)
         {
             pt.Step();
-            for (int r = 0; r < betas.Length; r++) counts[r, pt.Replicas[r].Current] += 1.0;
+            for (int r = 0; r < inverseTemperatures.Length; r++) counts[r, pt.Replicas[r].Current] += 1.0;
         }
-        for (int r = 0; r < betas.Length; r++)
+        for (int r = 0; r < inverseTemperatures.Length; r++)
         {
-            double[] expected = SixStates.Law(betas[r], path);
+            double[] expected = SixStates.Law(inverseTemperatures[r], path);
             for (int k = 0; k < SixStates.States; k++)
                 Assert.True(Math.Abs(counts[r, k] / n - expected[k]) < 0.01,
-                    $"{path} rung β = {betas[r]}, state {k}: {counts[r, k] / n:F4} vs {expected[k]:F4}");
+                    $"{path} rung b = {inverseTemperatures[r]}, state {k}: {counts[r, k] / n:F4} vs {expected[k]:F4}");
         }
     }
 
@@ -163,9 +163,9 @@ public sealed class ParallelTemperingTests
         Assert.Throws<ArgumentException>(() => new ParallelTempering<int>(MovesFor, target, 0, [1.0, 0.5, 0.0], TemperingPath.Likelihood, 1, reference: powered));
         Assert.Equal([1.0, Math.Sqrt(0.1), 0.1, 0.0], ParallelTempering<int>.ReferenceLadder(4, 0.1));
 
-        double[] betas = ParallelTempering<int>.ReferenceLadder(4, 0.1);
-        var straight = new ParallelTempering<int>(MovesFor, target, 0, betas, TemperingPath.Powered, 7, reference: powered);
-        var first = new ParallelTempering<int>(MovesFor, target, 0, betas, TemperingPath.Powered, 7, reference: powered);
+        double[] inverseTemperatures = ParallelTempering<int>.ReferenceLadder(4, 0.1);
+        var straight = new ParallelTempering<int>(MovesFor, target, 0, inverseTemperatures, TemperingPath.Powered, 7, reference: powered);
+        var first = new ParallelTempering<int>(MovesFor, target, 0, inverseTemperatures, TemperingPath.Powered, 7, reference: powered);
         for (int i = 0; i < 300; i++)
         {
             straight.Step();
@@ -179,7 +179,7 @@ public sealed class ParallelTemperingTests
         {
             straight.Step();
             resumed.Step();
-            for (int r = 0; r < betas.Length; r++) Assert.Equal(straight.Replicas[r].Current, resumed.Replicas[r].Current);
+            for (int r = 0; r < inverseTemperatures.Length; r++) Assert.Equal(straight.Replicas[r].Current, resumed.Replicas[r].Current);
         }
         Assert.Equal(straight.RoundTrips, resumed.RoundTrips);
     }
@@ -193,33 +193,33 @@ public sealed class ParallelTemperingTests
         { new[] { 1.0, 0.3, 0.5 }, TemperingPath.Likelihood },     // not descending
         { new[] { 1.0, 0.5, 0.5 }, TemperingPath.Powered },        // not strictly descending
         { new[] { 1.0, -0.1 }, TemperingPath.Likelihood },
-        { new[] { 1.0, 0.0 }, TemperingPath.Powered },             // β = 0 is the bare reference measure
+        { new[] { 1.0, 0.0 }, TemperingPath.Powered },             // b = 0 is the bare reference measure
     };
 
     [Theory]
     [MemberData(nameof(InvalidLadders))]
-    public void Ladder_Invalid_IsRejected(double[] betas, TemperingPath path)
+    public void Ladder_Invalid_IsRejected(double[] inverseTemperatures, TemperingPath path)
     {
         IRjMove<int>[] MovesFor(int replica) => [new UnitStep("up", "down", +1), new UnitStep("down", "up", -1)];
         Assert.Throws<ArgumentException>(() => new ParallelTempering<int>(
-            MovesFor, SamplingTarget.FromLogDensity<int>(_ => 0.0), 0, betas, path, masterSeed: 1));
+            MovesFor, SamplingTarget.FromLogDensity<int>(_ => 0.0), 0, inverseTemperatures, path, masterSeed: 1));
     }
 
     [Fact]
     public void Ladder_DeclaresItsPathOnEveryRung()
     {
         IRjMove<int>[] MovesFor(int replica) => [new UnitStep("up", "down", +1), new UnitStep("down", "up", -1)];
-        double[] betas = [1.0, 0.5, 0.0];   // β = 0 is the prior on the likelihood path
-        var pt = new ParallelTempering<int>(MovesFor, SamplingTarget.FromLogDensity<int>(_ => 0.0), 0, betas,
+        double[] inverseTemperatures = [1.0, 0.5, 0.0];   // b = 0 is the prior on the likelihood path
+        var pt = new ParallelTempering<int>(MovesFor, SamplingTarget.FromLogDensity<int>(_ => 0.0), 0, inverseTemperatures,
                                             TemperingPath.Likelihood, masterSeed: 1);
         Assert.Equal(TemperingPath.Likelihood, pt.Path);
-        Assert.Equal(betas.Length, pt.Replicas.Count);
-        for (int r = 0; r < betas.Length; r++)
-            Assert.Equal(new Temperature(betas[r], TemperingPath.Likelihood), pt.Replicas[r].Temperature);
+        Assert.Equal(inverseTemperatures.Length, pt.Replicas.Count);
+        for (int r = 0; r < inverseTemperatures.Length; r++)
+            Assert.Equal(new Temperature(inverseTemperatures[r], TemperingPath.Likelihood), pt.Replicas[r].Temperature);
         Assert.Same(pt.ColdChain, pt.Replicas[0]);
     }
 
-    // States 0..5; a likelihood that is not linear in β.
+    // States 0..5; a likelihood that is not linear in b.
     private sealed class SixStates : ISamplingTarget<int>
     {
         public const int States = 6;
@@ -227,11 +227,11 @@ public sealed class ParallelTemperingTests
         private static readonly double[] A = [0.0, 5.0, 20.0, 1.0, 50.0, 2.0];
         private static readonly double[] C = [0.0, 2.0, 6.0, 0.5, 9.0, 1.0];
 
-        private static double LogLikelihood(int k, double beta) => 3.0 * Math.Log(1.0 + beta * A[k]) - beta * C[k];
+        private static double LogLikelihood(int k, double b) => 3.0 * Math.Log(1.0 + b * A[k]) - b * C[k];
 
         public ITargetEvaluation Evaluate(int k) => new Evaluation(k);
 
-        public static double[] Law(double beta, TemperingPath path)
+        public static double[] Law(double b, TemperingPath path)
         {
             var w = new double[States];
             double total = 0.0;
@@ -239,8 +239,8 @@ public sealed class ParallelTemperingTests
             {
                 double logPrior = Math.Log(Prior[k]);
                 w[k] = Math.Exp(path == TemperingPath.Likelihood
-                    ? logPrior + LogLikelihood(k, beta)
-                    : beta * (logPrior + LogLikelihood(k, 1.0)));
+                    ? logPrior + LogLikelihood(k, b)
+                    : b * (logPrior + LogLikelihood(k, 1.0)));
                 total += w[k];
             }
             for (int k = 0; k < States; k++) w[k] /= total;
@@ -257,7 +257,7 @@ public sealed class ParallelTemperingTests
         }
     }
 
-    // Exact draws from SixStates' β = 0 member: the prior on the likelihood path, uniform on the powered path.
+    // Exact draws from SixStates' b = 0 member: the prior on the likelihood path, uniform on the powered path.
     private sealed class SixStatesReference(SixStates target, TemperingPath path) : IReferenceSampler<int>
     {
         public TemperingPath Path => path;
@@ -279,7 +279,7 @@ public sealed class ParallelTemperingTests
         }
     }
 
-    // Symmetric random walk; too small to jump the barrier at β = 1.
+    // Symmetric random walk; too small to jump the barrier at b = 1.
     private sealed class RandomWalk : IRjMove<double>
     {
         private readonly double _sd;

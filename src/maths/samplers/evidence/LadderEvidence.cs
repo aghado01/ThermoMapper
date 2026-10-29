@@ -318,12 +318,12 @@ public static class LadderEvidence
     {
         ArgumentNullException.ThrowIfNull(ladders);
         if (ladders.Count < 1) throw new ArgumentException("At least one ladder is required.", nameof(ladders));
-        double[] betas = ladders[0].Betas;
+        double[] inverseTemperatures = ladders[0].InverseTemperatures;
         for (int l = 0; l < ladders.Count; l++)
         {
             ParallelTempering<TState> ladder = ladders[l];
             if (ladder.RungTraces is null) throw new InvalidOperationException($"Ladder {l} does not trace its rungs (TraceRungs).");
-            if (ladder.Path != ladders[0].Path || !ladder.Betas.AsSpan().SequenceEqual(betas))
+            if (ladder.Path != ladders[0].Path || !ladder.InverseTemperatures.AsSpan().SequenceEqual(inverseTemperatures))
                 throw new ArgumentException("Every ladder must run on the same rungs and path.", nameof(ladders));
             if (method == LadderEstimator.PathSampling && !ladder.TracesSlopes)
                 throw new InvalidOperationException(
@@ -331,8 +331,8 @@ public static class LadderEvidence
         }
 
         int functional = method == LadderEstimator.PathSampling ? RungFunctional.Slope : RungFunctional.LogRatio;
-        var rungs = new RungDraws?[betas.Length];
-        for (int i = 0; i < betas.Length; i++)
+        var rungs = new RungDraws?[inverseTemperatures.Length];
+        for (int i = 0; i < inverseTemperatures.Length; i++)
         {
             if (method == LadderEstimator.SteppingStone && i == 0) continue;   // the cold rung, b_max, has no ratio
             var chains = new double[ladders.Count][];
@@ -341,8 +341,8 @@ public static class LadderEvidence
         }
         return method switch
         {
-            LadderEstimator.SteppingStone => SteppingStone(betas, rungs),
-            LadderEstimator.PathSampling => PathSampling(betas, rungs!),
+            LadderEstimator.SteppingStone => SteppingStone(inverseTemperatures, rungs),
+            LadderEstimator.PathSampling => PathSampling(inverseTemperatures, rungs!),
             _ => throw new ArgumentOutOfRangeException(nameof(method)),
         };
     }

@@ -173,7 +173,7 @@ public sealed class BassTemperingResumeTests
     private static void AssertSameLadder(BassLadder a, BassLadder b)
     {
         ParallelTempering<BassState> x = a.Tempering, y = b.Tempering;
-        Assert.Equal(x.Betas, y.Betas);
+        Assert.Equal(x.InverseTemperatures, y.InverseTemperatures);
         Assert.Equal((x.Scans, x.SwapAttempts, x.SwapAccepts, x.RoundTrips, x.AnnealedRestarts),
                      (y.Scans, y.SwapAttempts, y.SwapAccepts, y.RoundTrips, y.AnnealedRestarts));
         Assert.Equal(x.PairStats, y.PairStats);

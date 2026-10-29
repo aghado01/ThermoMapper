@@ -91,13 +91,13 @@ internal static class BassMixing
     }
 
     /// <summary>Chain <paramref name="chain"/>'s ladder under <paramref name="spec"/>, started as the run starts it; on the
-    /// declared rungs <paramref name="betas"/> when given.</summary>
-    internal static BassLadder Ladder(BassModel model, int chain, TemperingSpec spec, double[]? betas = null)
+    /// declared rungs <paramref name="inverseTemperatures"/> when given.</summary>
+    internal static BassLadder Ladder(BassModel model, int chain, TemperingSpec spec, double[]? inverseTemperatures = null)
     {
         (BassState start, int[] seeds) = Start(model, chain);
-        return betas is null
+        return inverseTemperatures is null
             ? new BassLadder(model, spec, start.Terms, start.LogTau, seeds[3])
-            : new BassLadder(model, spec, betas, start.Terms, start.LogTau, seeds[3]);
+            : new BassLadder(model, spec, inverseTemperatures, start.Terms, start.LogTau, seeds[3]);
     }
 
     /// <summary>Every chain of <paramref name="model"/> burned as the run burns it, in parallel: its sweeps, then its

@@ -41,10 +41,10 @@ public sealed class TemperingTests
             y[i] = Math.Exp(-120.0 * (x[i] - truePeak) * (x[i] - truePeak)) + 0.05 * Gaussian(rng);
         }
 
-        // Each "chain" is a 5-replica tempering ladder; the readout reads its cold (β = 1) replica unchanged.
+        // Each "chain" is a 5-replica tempering ladder; the readout reads its cold (b = 1) replica unchanged.
         BarsResult result = new BarsEnsemble(
                 new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
-                temperLevels: 5, temperBetaMin: 0.05)
+                temperLevels: 5, temperHotEnd: 0.05)
             .Run(x, y, grid: x, chains: 4, masterSeed: 3, burn: 1500, samples: 2000);
         PeakPosterior p = result.Peak;
 
@@ -119,7 +119,7 @@ public sealed class TemperingTests
         BarsResult result = new BarsEnsemble(
                 new SplineBasis(3), new WeightedNormalModel(form: form, sigma2Prior: proper ? null : Sigma2Prior.Jeffreys),
                 new PoissonPrior(5.0), new LocalBetaKernel(50.0),
-                temperLevels: 5, temperBetaMin: 0.1, temperPath: path, temperReferenceRung: true)
+                temperLevels: 5, temperHotEnd: 0.1, temperPath: path, temperReferenceRung: true)
             .Run(x, y, grid: x, chains: 4, masterSeed: 3, burn: 1500, samples: 2000);
         PeakPosterior p = result.Peak;
         TemperingReadout t = result.Tempering!;
@@ -238,11 +238,11 @@ public sealed class TemperingTests
     [Theory]
     [InlineData(0.0)]
     [InlineData(1.0)]
-    public void HotEnd_OutsideTheOpenUnitInterval_IsRejected(double betaMin)
+    public void HotEnd_OutsideTheOpenUnitInterval_IsRejected(double hotEnd)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new BarsEnsemble(
             new SplineBasis(3), new WeightedNormalModel(), new PoissonPrior(5.0), new LocalBetaKernel(50.0),
-            temperLevels: 3, temperBetaMin: betaMin));
+            temperLevels: 3, temperHotEnd: hotEnd));
     }
 
     [Fact]

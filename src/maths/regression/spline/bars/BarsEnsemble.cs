@@ -184,7 +184,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private readonly double? _dmgkConstant;     // null ⇒ equal birth/death/relocate weights
     private readonly double? _adaptKernelTau;    // set ⇒ each chain tunes an AdaptiveLocalBetaKernel in burn-in
     private readonly int? _temperLevels;        // set ⇒ each chain is a parallel-tempering ladder (cold = the sample)
-    private readonly double _temperBetaMin;
+    private readonly double _temperHotEnd;
     private readonly TemperingPath _temperPath;
     private readonly SwapSchedule _temperSchedule;
     private readonly bool _temperAdaptLadder;
@@ -213,10 +213,10 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// started at this τ and tunes it to the relocate target during burn-in (then freezes) — robust to a
     /// mis-scaled proposal. Overrides <paramref name="kernel"/> for proposals.</param>
     /// <param name="temperLevels">When set (≥ 2), each "chain" becomes a <see cref="ParallelTempering{T}"/> ladder of
-    /// this many replicas, and the cold (β = 1) replica supplies the draws — so the readout is unchanged but the
+    /// this many replicas, and the cold (b = 1) replica supplies the draws — so the readout is unchanged but the
     /// chain can cross modal barriers (a multi-peak T_c posterior). Mutually exclusive with the resampler and with
     /// adaptive-τ in this version (a plain fixed-kernel tempered ladder).</param>
-    /// <param name="temperBetaMin">The hot end of the geometric β-ladder (default 0.05), in (0, 1); with
+    /// <param name="temperHotEnd">The hot end of the geometric ladder (default 0.05), in (0, 1); with
     /// <paramref name="temperReferenceRung"/>, the lowest rung above the reference.</param>
     /// <param name="temperPath">The ladder's tempering path. The default, the likelihood-tempered path (Q5), keeps the
     /// knot prior whole, so hot replicas approach the prior itself; it needs a model that
@@ -226,7 +226,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// default (Syed et al. 2022).</param>
     /// <param name="temperAdaptLadder">When true (the default), each ladder re-spaces its interior rungs during burn-in
     /// to equalize adjacent rejection rates, in rounds of doubling length, and then holds them fixed for sampling.
-    /// The geometric ladder from <paramref name="temperBetaMin"/> is the start; the endpoints never move.</param>
+    /// The geometric ladder from <paramref name="temperHotEnd"/> is the start; the endpoints never move.</param>
     /// <param name="minColumnMass">The support gate: every basis function needs column mass Σᵢ Bⱼ(xᵢ) at least this
     /// (one data point's worth by default; 0 turns it off). A declared restriction of the knot prior's support
     /// (<see cref="SplineTarget.MinColumnMass"/>).</param>
@@ -234,7 +234,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// an existing knot (<see cref="KnotBirthDensity"/>). The default 1 draws every birth from the base, which step 3.9's
     /// benchmark found best or tied on every fit; values below 1 restore DMGK's local births in part, and 0 entirely.</param>
     /// <param name="birthBase">The base measure of the exploratory births and of the first knot.</param>
-    /// <param name="temperReferenceRung">When true, each ladder ends at β = 0 with an exact reference rung
+    /// <param name="temperReferenceRung">When true, each ladder ends at b = 0 with an exact reference rung
     /// (<see cref="SplineTarget.Reference"/>, OQ2): its hot replica draws independently from the path's b = 0 member every
     /// scan. It needs at least three levels, and on the likelihood path a model that
     /// <see cref="IObservationModel.CanTemperToPrior"/>. Off by default: at equal work it did not pay at 4 or 8 levels on
@@ -247,7 +247,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     /// at one extra marginal per rung per scan. Other runs report none, and cost nothing.</param>
     public BarsEnsemble(IBasis basis, IObservationModel model, IComplexityPrior prior, IKnotKernel kernel,
                         IWeightResampler? resampler = null, double? dmgkConstant = null, double? adaptKernelTau = null,
-                        int? temperLevels = null, double temperBetaMin = 0.05,
+                        int? temperLevels = null, double temperHotEnd = 0.05,
                         TemperingPath temperPath = TemperingPath.Likelihood,
                         SwapSchedule temperSchedule = SwapSchedule.DeterministicEvenOdd, bool temperAdaptLadder = true,
                         double minColumnMass = SplineTarget.DefaultMinColumnMass,
@@ -269,8 +269,8 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             if (lv < 2) throw new ArgumentOutOfRangeException(nameof(temperLevels), "Tempering needs ≥ 2 levels.");
             if (resampler is not null || adaptKernelTau is not null)
                 throw new ArgumentException("Tempering is mutually exclusive with the resampler and adaptive-τ.", nameof(temperLevels));
-            if (!(temperBetaMin > 0.0 && temperBetaMin < 1.0))
-                throw new ArgumentOutOfRangeException(nameof(temperBetaMin), "The hot end of the ladder must lie in (0, 1).");
+            if (!(temperHotEnd > 0.0 && temperHotEnd < 1.0))
+                throw new ArgumentOutOfRangeException(nameof(temperHotEnd), "The hot end of the ladder must lie in (0, 1).");
             if (temperPath is not (TemperingPath.Powered or TemperingPath.Likelihood))
                 throw new ArgumentOutOfRangeException(nameof(temperPath));
             if (temperPath == TemperingPath.Likelihood && !model.CanTemperLikelihood)
@@ -295,7 +295,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         _dmgkConstant = dmgkConstant;
         _adaptKernelTau = adaptKernelTau;
         _temperLevels = temperLevels;
-        _temperBetaMin = temperBetaMin;
+        _temperHotEnd = temperHotEnd;
         _temperPath = temperPath;
         _temperSchedule = temperSchedule;
         _temperAdaptLadder = temperAdaptLadder;
@@ -346,7 +346,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         if (_temperLevels is int levels)
         {
             run.Ladder = NewLadder(run, levels, seeds[1]);
-            run.SetChain(run.Ladder.ColdChain);   // the cold (β = 1) replica is the sampler; its draws are the posterior
+            run.SetChain(run.Ladder.ColdChain);   // the cold (b = 1) replica is the sampler; its draws are the posterior
         }
         else
         {
@@ -365,7 +365,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
         .Add(_weightEvery).Add(_startDispersion).Add(_peakProminence).Add(_spanDropFraction)
         .Add(_basis.GetType().FullName!).Add(_model.GetType().FullName!).Add(_prior.GetType().FullName!)
         .Add(_kernel.GetType().FullName!).Add(_resampler?.GetType().FullName ?? "")
-        .Add(_dmgkConstant ?? double.NaN).Add(_adaptKernelTau ?? double.NaN).Add(_temperLevels ?? 0).Add(_temperBetaMin)
+        .Add(_dmgkConstant ?? double.NaN).Add(_adaptKernelTau ?? double.NaN).Add(_temperLevels ?? 0).Add(_temperHotEnd)
         .Add((int)_temperPath).Add((int)_temperSchedule).Add(_temperAdaptLadder ? 1 : 0).Add(_minColumnMass).Add(_birthExploration).Add((int)_birthBase)
         .Add(_temperReferenceRung ? 1 : 0).Add((_model as WeightedNormalModel)?.Form.ToString() ?? "")
         .Add((_model as WeightedNormalModel)?.Sigma2Prior.ToString() ?? "").Add(ReportsEvidence ? 1 : 0).ToString();
@@ -694,7 +694,7 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
             for (int i = 0; i < pairs; i++) rejection[i] += (stats[i].MeanRejection * ladder.Scans - st.BurnRejection![i]) / scans;
         }
         for (int i = 0; i < pairs; i++) rejection[i] /= c;
-        for (int ci = 0; ci < c; ci++) ladders[ci] = states[ci].Ladder!.Betas;
+        for (int ci = 0; ci < c; ci++) ladders[ci] = states[ci].Ladder!.InverseTemperatures;
         double ideal = _temperSchedule == SwapSchedule.Sequential ? double.NaN
                      : TemperingLadder.IdealRoundTripRate(rejection, _temperSchedule);
         return new TemperingReadout(_temperPath, _temperSchedule, trips / c, restarts / c, rejection,
@@ -863,10 +863,10 @@ public sealed class BarsEnsemble : IEnsembleModel<KnotConfig>
     private ParallelTempering<KnotConfig> NewLadder(BarsChainRun st, int levels, int seed)
     {
         var target = new SplineTarget(_basis, _model, _prior, _x, _y, st.W, st.Readout.Evaluations, _minColumnMass);
-        double[] betas = _temperReferenceRung
-            ? ParallelTempering<KnotConfig>.ReferenceLadder(levels, _temperBetaMin)
-            : ParallelTempering<KnotConfig>.GeometricLadder(levels, _temperBetaMin);
-        return new ParallelTempering<KnotConfig>(_ => Moves(st.Kernel), target, st.Config, betas, _temperPath, seed,
+        double[] inverseTemperatures = _temperReferenceRung
+            ? ParallelTempering<KnotConfig>.ReferenceLadder(levels, _temperHotEnd)
+            : ParallelTempering<KnotConfig>.GeometricLadder(levels, _temperHotEnd);
+        return new ParallelTempering<KnotConfig>(_ => Moves(st.Kernel), target, st.Config, inverseTemperatures, _temperPath, seed,
                                                  _temperSchedule, _temperReferenceRung ? target.Reference(_temperPath) : null);
     }
 

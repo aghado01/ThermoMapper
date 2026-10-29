@@ -302,7 +302,7 @@ public sealed class BassTemperingTests
                        $"{fromReference} reference draws, {handedToHot} states handed up to the reference rung");
         Assert.True(ladder.Tempering.SwapAccepts > 300);
         if (reference) Assert.True(fromReference > 0 && handedToHot > 0);
-        Assert.Equal(1.0, ladder.Tempering.Betas[0]);
+        Assert.Equal(1.0, ladder.Tempering.InverseTemperatures[0]);
     }
 
     public static TheoryData<string, double[]> RungCases => new()
@@ -322,13 +322,13 @@ public sealed class BassTemperingTests
     // that missed ℓ_b, or moves that tempered the prior, would shift.
     [Theory]
     [MemberData(nameof(RungCases))]
-    public void Ladder_EachRungSamplesItsTemperedLaw(string option, double[] betas)
+    public void Ladder_EachRungSamplesItsTemperedLaw(string option, double[] inverseTemperatures)
     {
         bool reference = option.Contains("reference"), powered = option.StartsWith("powered");
         var spec = new TemperingSpec
         {
-            Form = option.Contains("linear") ? TemperedForm.Linear : TemperedForm.Integrated, Levels = betas.Length,
-            HotEnd = betas[^1] > 0.0 ? betas[^1] : betas[^2],
+            Form = option.Contains("linear") ? TemperedForm.Linear : TemperedForm.Integrated, Levels = inverseTemperatures.Length,
+            HotEnd = inverseTemperatures[^1] > 0.0 ? inverseTemperatures[^1] : inverseTemperatures[^2],
             ReferenceRung = reference, Path = powered ? TemperingPath.Powered : TemperingPath.Likelihood,
         };
         BassConfig config = Config(spec);
@@ -337,7 +337,7 @@ public sealed class BassTemperingTests
         if (option == "fixed g") config = config with { Coefficients = new FixedG() };
         BassModel model = BassModel.Create(config, BassSweepTests.Data());
         const int ladders = 4, burn = 2_000, scans = 40_000, batches = 20;
-        int levels = betas.Length;
+        int levels = inverseTemperatures.Length;
         var count = new double[levels][,];
         var logTau = new double[levels][];
         for (int r = 0; r < levels; r++)
@@ -349,7 +349,7 @@ public sealed class BassTemperingTests
         for (int l = 0; l < ladders; l++)
         {
             BassState start = sampler.DrawState(new Xoshiro256PlusPlus(100 + l)).State;
-            var ladder = new BassLadder(model, spec, betas, start.Terms, start.LogTau, seed: 200 + l);
+            var ladder = new BassLadder(model, spec, inverseTemperatures, start.Terms, start.LogTau, seed: 200 + l);
             for (int t = 0; t < burn; t++) ladder.Step();
             for (int t = 0; t < scans; t++)
             {
@@ -364,22 +364,22 @@ public sealed class BassTemperingTests
             }
         }
 
-        RungLaw[] exact = powered ? ExactPowered(model, betas) : Exact(model, betas);
+        RungLaw[] exact = powered ? ExactPowered(model, inverseTemperatures) : Exact(model, inverseTemperatures);
         for (int r = 0; r < levels; r++)
         {
             for (int m = 0; m <= model.MaxBasis; m++)
             {
                 (double mean, double error) = Summary([.. Enumerable.Range(0, ladders * batches).Select(k => count[r][m, k])]);
-                _out.WriteLine($"{option}, b = {betas[r]:G3}, M = {m}: {mean:F4} against {exact[r].Count[m]:F4} (± {error:F4})");
-                Assert.True(Math.Abs(mean - exact[r].Count[m]) <= 5 * error + 0.004, $"b = {betas[r]}, M = {m}: {mean:F4} against {exact[r].Count[m]:F4} (± {error:F4})");
+                _out.WriteLine($"{option}, b = {inverseTemperatures[r]:G3}, M = {m}: {mean:F4} against {exact[r].Count[m]:F4} (± {error:F4})");
+                Assert.True(Math.Abs(mean - exact[r].Count[m]) <= 5 * error + 0.004, $"b = {inverseTemperatures[r]}, M = {m}: {mean:F4} against {exact[r].Count[m]:F4} (± {error:F4})");
             }
             if (!model.Target.SamplesTau) continue;
             // At b = 0 τ's law is its prior, Gamma(a, rate aN): E[ln τ] = ψ(a) − ln(aN), which the enumeration's rule reproduces.
-            if (betas[r] == 0.0)
+            if (inverseTemperatures[r] == 0.0)
                 Assert.Equal(SpecialFunctions.Digamma(0.5) - Math.Log(0.5 * model.Target.Observations), exact[r].LogTauMean, 1e-9);
             (double u, double uError) = Summary(logTau[r]);
-            _out.WriteLine($"{option}, b = {betas[r]:G3}, E[ln τ]: {u:F4} against {exact[r].LogTauMean:F4} (± {uError:F4})");
-            Assert.True(Math.Abs(u - exact[r].LogTauMean) <= 5 * uError + 0.01, $"b = {betas[r]}, E[ln τ] {u:F4} against {exact[r].LogTauMean:F4} (± {uError:F4})");
+            _out.WriteLine($"{option}, b = {inverseTemperatures[r]:G3}, E[ln τ]: {u:F4} against {exact[r].LogTauMean:F4} (± {uError:F4})");
+            Assert.True(Math.Abs(u - exact[r].LogTauMean) <= 5 * uError + 0.01, $"b = {inverseTemperatures[r]}, E[ln τ] {u:F4} against {exact[r].LogTauMean:F4} (± {uError:F4})");
         }
     }
 
@@ -411,7 +411,7 @@ public sealed class BassTemperingTests
         Assert.Throws<ArgumentNullException>(() => new BassLadder(null!, spec, start.Terms, start.LogTau, 2));
         foreach (TemperingSpec bad in new[] { spec with { Levels = 2 }, spec with { HotEnd = 0.0 }, spec with { HotEnd = 1.0 }, spec with { Path = TemperingPath.Powered } })
             Assert.Equal("spec", Assert.Throws<ArgumentException>(() => new BassLadder(model, bad, start.Terms, start.LogTau, 2)).ParamName);
-        Assert.Equal("betas", Assert.Throws<ArgumentException>(() => new BassLadder(model, spec, [1.0, 0.5, 0.0], start.Terms, start.LogTau, 2)).ParamName);
+        Assert.Equal("inverseTemperatures", Assert.Throws<ArgumentException>(() => new BassLadder(model, spec, [1.0, 0.5, 0.0], start.Terms, start.LogTau, 2)).ParamName);
         Assert.Throws<ArgumentException>(() => new BassLadder(model, spec, [0.9, 0.5, 0.1, 0.0], start.Terms, start.LogTau, 2));
         Assert.Throws<InvalidOperationException>(() => BassTemperingReadout.Of([ladder]));   // burn-in has not ended
 

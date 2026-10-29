@@ -27,20 +27,20 @@ public sealed class ParallelTemperingBlockTests
     [InlineData(TemperingPath.Powered)]
     public void EveryRung_SamplesItsTemperedLaw_TheIndexByMovesAndTheCoordinateByTheBlock(TemperingPath path)
     {
-        double[] betas = path == TemperingPath.Likelihood ? [1.0, 0.5, 0.2, 0.0] : [1.0, 0.5, 0.2, 0.05];
+        double[] inverseTemperatures = path == TemperingPath.Likelihood ? [1.0, 0.5, 0.2, 0.0] : [1.0, 0.5, 0.2, 0.05];
         var target = new IndexAndCoordinate();
-        var pt = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), betas, path, masterSeed: 17,
+        var pt = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), inverseTemperatures, path, masterSeed: 17,
                                               blocksForReplica: _ => [new CoordinateSlice(target)]);
         Assert.True(pt.HasBlocks);
         for (int i = 0; i < 5_000; i++) pt.Step();
 
         const int n = 200_000;
-        var counts = new double[betas.Length, IndexAndCoordinate.Indices];
-        var sums = new double[betas.Length, IndexAndCoordinate.Indices];
+        var counts = new double[inverseTemperatures.Length, IndexAndCoordinate.Indices];
+        var sums = new double[inverseTemperatures.Length, IndexAndCoordinate.Indices];
         for (int i = 0; i < n; i++)
         {
             pt.Step();
-            for (int r = 0; r < betas.Length; r++)
+            for (int r = 0; r < inverseTemperatures.Length; r++)
             {
                 State s = pt.Replicas[r].Current;
                 counts[r, s.K] += 1.0;
@@ -48,15 +48,15 @@ public sealed class ParallelTemperingBlockTests
             }
         }
 
-        for (int r = 0; r < betas.Length; r++)
+        for (int r = 0; r < inverseTemperatures.Length; r++)
         {
-            (double[] law, double[] conditionalMean) = IndexAndCoordinate.Law(betas[r], path);
+            (double[] law, double[] conditionalMean) = IndexAndCoordinate.Law(inverseTemperatures[r], path);
             for (int k = 0; k < IndexAndCoordinate.Indices; k++)
             {
                 double observed = counts[r, k] / n;
-                Assert.True(Math.Abs(observed - law[k]) < 0.01, $"{path} b = {betas[r]}, P(k = {k}): {observed:F4} vs {law[k]:F4}");
+                Assert.True(Math.Abs(observed - law[k]) < 0.01, $"{path} b = {inverseTemperatures[r]}, P(k = {k}): {observed:F4} vs {law[k]:F4}");
                 double mean = sums[r, k] / counts[r, k];
-                Assert.True(Math.Abs(mean - conditionalMean[k]) < 0.03, $"{path} b = {betas[r]}, E[θ | k = {k}]: {mean:F4} vs {conditionalMean[k]:F4}");
+                Assert.True(Math.Abs(mean - conditionalMean[k]) < 0.03, $"{path} b = {inverseTemperatures[r]}, E[θ | k = {k}]: {mean:F4} vs {conditionalMean[k]:F4}");
             }
             IReadOnlyList<MoveStat> stats = pt.BlockStats(r);
             Assert.Equal(5_000 + n, stats[0].Attempts);
@@ -70,24 +70,24 @@ public sealed class ParallelTemperingBlockTests
         // In stationarity the replicas are independent, each at its rung's law, and every scan records each pair's
         // rejection 1 − min(1, e^{log α}) on them before any swap. Its long-run mean is then the expectation under the
         // product law, by quadrature over both rungs' (k, θ); stale evaluations or an unbalanced swap would move it.
-        double[] betas = [1.0, 0.6, 0.3, 0.1];
+        double[] inverseTemperatures = [1.0, 0.6, 0.3, 0.1];
         const TemperingPath path = TemperingPath.Likelihood;
         var target = new IndexAndCoordinate();
-        var burnIn = new ParallelTempering<State>(_ => Moves, target, new State(1, 0.0), betas, path, masterSeed: 29,
+        var burnIn = new ParallelTempering<State>(_ => Moves, target, new State(1, 0.0), inverseTemperatures, path, masterSeed: 29,
                                                   blocksForReplica: _ => [new CoordinateSlice(target)]);
         for (int i = 0; i < 5_000; i++) burnIn.Step();
         // PairStats averages over every scan, so the measured run restarts from the burnt-in ladder with them cleared.
         var restarted = ParallelTempering<State>.Restore(_ => Moves, target, burnIn.Snapshot() with
         {
-            Scans = 0, RejectionSum = new double[betas.Length - 1], RoundRejectionSum = new double[betas.Length - 1], RoundScans = 0,
+            Scans = 0, RejectionSum = new double[inverseTemperatures.Length - 1], RoundRejectionSum = new double[inverseTemperatures.Length - 1], RoundScans = 0,
         }, blocksForReplica: _ => [new CoordinateSlice(target)]);
         for (int i = 0; i < 200_000; i++) restarted.Step();
 
         IReadOnlyList<SwapPairStat> stats = restarted.PairStats;
-        for (int p = 0; p < betas.Length - 1; p++)
+        for (int p = 0; p < inverseTemperatures.Length - 1; p++)
         {
-            double expected = IndexAndCoordinate.ExpectedRejection(betas[p], betas[p + 1], path);
-            _out.WriteLine($"[pt-block] pair {betas[p]}–{betas[p + 1]}: rejection {stats[p].MeanRejection:F4} vs {expected:F4}");
+            double expected = IndexAndCoordinate.ExpectedRejection(inverseTemperatures[p], inverseTemperatures[p + 1], path);
+            _out.WriteLine($"[pt-block] pair {inverseTemperatures[p]}–{inverseTemperatures[p + 1]}: rejection {stats[p].MeanRejection:F4} vs {expected:F4}");
             Assert.True(Math.Abs(stats[p].MeanRejection - expected) < 0.01, $"pair {p}: {stats[p].MeanRejection:F4} vs {expected:F4}");
         }
     }
@@ -95,12 +95,12 @@ public sealed class ParallelTemperingBlockTests
     [Fact]
     public void Resume_IsBitIdentical_AndTheBlocksMustMatchTheSnapshot()
     {
-        double[] betas = [1.0, 0.4, 0.1];
+        double[] inverseTemperatures = [1.0, 0.4, 0.1];
         var target = new IndexAndCoordinate();
         IReadOnlyList<IBlock<ReversibleJumpChain<State>>> Blocks(int replica) => [new CoordinateSlice(target)];
-        var straight = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), betas, TemperingPath.Likelihood, 5,
+        var straight = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), inverseTemperatures, TemperingPath.Likelihood, 5,
                                                     SwapSchedule.StochasticEvenOdd, blocksForReplica: Blocks);
-        var first = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), betas, TemperingPath.Likelihood, 5,
+        var first = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), inverseTemperatures, TemperingPath.Likelihood, 5,
                                                  SwapSchedule.StochasticEvenOdd, blocksForReplica: Blocks);
         for (int i = 0; i < 400; i++)
         {
@@ -115,17 +115,17 @@ public sealed class ParallelTemperingBlockTests
         {
             straight.Step();
             resumed.Step();
-            for (int r = 0; r < betas.Length; r++)
+            for (int r = 0; r < inverseTemperatures.Length; r++)
             {
                 Assert.Equal(straight.Replicas[r].Current.K, resumed.Replicas[r].Current.K);
                 Assert.Equal(BitConverter.DoubleToInt64Bits(straight.Replicas[r].Current.Theta),
                              BitConverter.DoubleToInt64Bits(resumed.Replicas[r].Current.Theta));
             }
         }
-        for (int r = 0; r < betas.Length; r++) Assert.Equal(straight.BlockStats(r), resumed.BlockStats(r));
+        for (int r = 0; r < inverseTemperatures.Length; r++) Assert.Equal(straight.BlockStats(r), resumed.BlockStats(r));
         Assert.Equal(straight.SwapAccepts, resumed.SwapAccepts);
 
-        var plain = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), betas, TemperingPath.Likelihood, 5);
+        var plain = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), inverseTemperatures, TemperingPath.Likelihood, 5);
         Assert.Throws<ArgumentException>(() => ParallelTempering<State>.Restore(_ => Moves, target, plain.Snapshot(), blocksForReplica: Blocks));
         Assert.Empty(plain.BlockStats(0));
     }
@@ -135,23 +135,23 @@ public sealed class ParallelTemperingBlockTests
     {
         // The block streams come after the ladder's others, so the replica, swap and reference streams are those of a
         // ladder without blocks. The block runs on every second scan, and not at all on the exact reference rung.
-        double[] betas = [1.0, 0.5, 0.2, 0.0];
+        double[] inverseTemperatures = [1.0, 0.5, 0.2, 0.0];
         var target = new IndexAndCoordinate();
         var reference = new PriorDraw(target);
-        var plain = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.5), betas, TemperingPath.Likelihood, 3,
+        var plain = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.5), inverseTemperatures, TemperingPath.Likelihood, 3,
                                                  reference: reference);
-        var idle = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.5), betas, TemperingPath.Likelihood, 3,
+        var idle = new ParallelTempering<State>(_ => Moves, target, new State(0, 0.5), inverseTemperatures, TemperingPath.Likelihood, 3,
                                                 reference: reference, blocksForReplica: _ => [new Idle(every: 2)]);
         const int scans = 1_000;
         for (int i = 0; i < scans; i++)
         {
             plain.Step();
             idle.Step();
-            for (int r = 0; r < betas.Length; r++) Assert.Equal(plain.Replicas[r].Current, idle.Replicas[r].Current);
+            for (int r = 0; r < inverseTemperatures.Length; r++) Assert.Equal(plain.Replicas[r].Current, idle.Replicas[r].Current);
         }
         Assert.Equal(plain.SwapAccepts, idle.SwapAccepts);
-        for (int r = 0; r < betas.Length - 1; r++) Assert.Equal(scans / 2, idle.BlockStats(r)[0].Attempts);
-        Assert.Equal(0, idle.BlockStats(betas.Length - 1)[0].Attempts);
+        for (int r = 0; r < inverseTemperatures.Length - 1; r++) Assert.Equal(scans / 2, idle.BlockStats(r)[0].Attempts);
+        Assert.Equal(0, idle.BlockStats(inverseTemperatures.Length - 1)[0].Attempts);
     }
 
     [Fact]
@@ -184,12 +184,12 @@ public sealed class ParallelTemperingBlockTests
     public void BlockSets_AreValidated()
     {
         var target = new IndexAndCoordinate();
-        double[] betas = [1.0, 0.5];
-        Assert.Throws<ArgumentException>(() => new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), betas,
+        double[] inverseTemperatures = [1.0, 0.5];
+        Assert.Throws<ArgumentException>(() => new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), inverseTemperatures,
             TemperingPath.Likelihood, 1, blocksForReplica: _ => null!));
-        Assert.Throws<ArgumentException>(() => new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), betas,
+        Assert.Throws<ArgumentException>(() => new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), inverseTemperatures,
             TemperingPath.Likelihood, 1, blocksForReplica: _ => [new Idle(every: 0)]));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), betas,
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), inverseTemperatures,
             TemperingPath.Likelihood, 1, blocksForReplica: _ => []).BlockStats(2));
     }
 

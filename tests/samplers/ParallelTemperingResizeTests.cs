@@ -59,19 +59,19 @@ public sealed class ParallelTemperingResizeTests
         LadderSnapshot<State> before = ladder.Snapshot();
         ReversibleJumpChain<State>[] old = [.. ladder.Replicas];
         double[] rejection = ladder.RoundRejection;
-        double[] betas = TemperingLadder.Place(ladder.Betas, rejection, 2 * levels - 1);
-        int[] sources = TemperingLadder.Sources(ladder.Betas, rejection, betas);
+        double[] inverseTemperatures = TemperingLadder.Place(ladder.InverseTemperatures, rejection, 2 * levels - 1);
+        int[] sources = TemperingLadder.Sources(ladder.InverseTemperatures, rejection, inverseTemperatures);
         var forked = new List<State>();
-        int[] kept = ladder.Resize(betas, sources, s => { forked.Add(s); return s; }, _ => Moves, blocks ? _ => [new CoordinateSlice(new IndexAndCoordinate())] : null);
+        int[] kept = ladder.Resize(inverseTemperatures, sources, s => { forked.Add(s); return s; }, _ => Moves, blocks ? _ => [new CoordinateSlice(new IndexAndCoordinate())] : null);
         LadderSnapshot<State> after = ladder.Snapshot();
 
-        Assert.Equal(betas, ladder.Betas);
-        Assert.Equal(betas.Length, ladder.Replicas.Count);
+        Assert.Equal(inverseTemperatures, ladder.InverseTemperatures);
+        Assert.Equal(inverseTemperatures.Length, ladder.Replicas.Count);
         Assert.Equal(0, kept[0]);
         if (reference) Assert.Equal(levels - 1, kept[^1]);
         Xoshiro256PlusPlus growth = Xoshiro256PlusPlus.Restore(before.GrowthRng.Item1, before.GrowthRng.Item2, before.GrowthRng.Item3, before.GrowthRng.Item4);
         int f = 0;
-        for (int k = 0; k < betas.Length; k++)
+        for (int k = 0; k < inverseTemperatures.Length; k++)
         {
             ChainSnapshot<State> now = after.Replicas[k];
             if (kept[k] is int s and >= 0)
@@ -108,8 +108,8 @@ public sealed class ParallelTemperingResizeTests
         Assert.Equal(0, ladder.PairScans);
         Assert.All(ladder.PairStats, p => Assert.Equal((0L, 0L, double.NaN), (p.Attempts, p.Accepts, p.MeanRejection)));
         Assert.All(ladder.RoundRejection, r => Assert.True(double.IsNaN(r)));
-        Assert.Equal(Enumerable.Range(0, betas.Length), after.LabelAt);
-        Assert.Equal(new sbyte[betas.Length - 1].Append((sbyte)1), after.LastEnd);
+        Assert.Equal(Enumerable.Range(0, inverseTemperatures.Length), after.LabelAt);
+        Assert.Equal(new sbyte[inverseTemperatures.Length - 1].Append((sbyte)1), after.LastEnd);
         ladder.Step();
         Assert.Equal(1, ladder.PairScans);
         Assert.Equal(scans + 1, ladder.Scans);
@@ -143,33 +143,33 @@ public sealed class ParallelTemperingResizeTests
         ParallelTempering<State> ladder = Ladder(blocks: true, reference, seed: 23, path);
         for (int t = 0; t < 200; t++) ladder.Step();
         ladder.Resize(Grown(ladder, reference ? 8 : 7), Sources(ladder, reference ? 8 : 7), s => s, _ => Moves, _ => [new CoordinateSlice(target)]);
-        double[] betas = ladder.Betas;
+        double[] inverseTemperatures = ladder.InverseTemperatures;
         for (int t = 0; t < 5_000; t++) ladder.Step();
 
         const int n = 150_000;
-        var counts = new double[betas.Length, IndexAndCoordinate.Indices];
-        var sums = new double[betas.Length, IndexAndCoordinate.Indices];
+        var counts = new double[inverseTemperatures.Length, IndexAndCoordinate.Indices];
+        var sums = new double[inverseTemperatures.Length, IndexAndCoordinate.Indices];
         for (int i = 0; i < n; i++)
         {
             ladder.Step();
-            for (int r = 0; r < betas.Length; r++)
+            for (int r = 0; r < inverseTemperatures.Length; r++)
             {
                 State s = ladder.Replicas[r].Current;
                 counts[r, s.K] += 1.0;
                 sums[r, s.K] += s.Theta;
             }
         }
-        for (int r = 0; r < betas.Length; r++)
+        for (int r = 0; r < inverseTemperatures.Length; r++)
         {
-            (double[] law, double[] conditionalMean) = IndexAndCoordinate.Law(betas[r], path);
+            (double[] law, double[] conditionalMean) = IndexAndCoordinate.Law(inverseTemperatures[r], path);
             for (int k = 0; k < IndexAndCoordinate.Indices; k++)
             {
                 double observed = counts[r, k] / n, mean = sums[r, k] / counts[r, k];
-                Assert.True(Math.Abs(observed - law[k]) < 0.012, $"b = {betas[r]:F4}, P(k = {k}): {observed:F4} vs {law[k]:F4}");
-                Assert.True(Math.Abs(mean - conditionalMean[k]) < 0.04, $"b = {betas[r]:F4}, E[θ | k = {k}]: {mean:F4} vs {conditionalMean[k]:F4}");
+                Assert.True(Math.Abs(observed - law[k]) < 0.012, $"b = {inverseTemperatures[r]:F4}, P(k = {k}): {observed:F4} vs {law[k]:F4}");
+                Assert.True(Math.Abs(mean - conditionalMean[k]) < 0.04, $"b = {inverseTemperatures[r]:F4}, E[θ | k = {k}]: {mean:F4} vs {conditionalMean[k]:F4}");
             }
         }
-        _out.WriteLine($"{path}, reference {reference}: {betas.Length} rungs [{string.Join(", ", betas.Select(b => b.ToString("F4")))}], " +
+        _out.WriteLine($"{path}, reference {reference}: {inverseTemperatures.Length} rungs [{string.Join(", ", inverseTemperatures.Select(b => b.ToString("F4")))}], " +
                        $"rejection [{string.Join(", ", ladder.PairStats.Select(p => p.MeanRejection.ToString("F2")))}]");
     }
 
@@ -228,21 +228,21 @@ public sealed class ParallelTemperingResizeTests
         Func<int, IReadOnlyList<IBlock<ReversibleJumpChain<State>>>> blockSet = _ => [new CoordinateSlice(target)];
         for (int t = 0; t < 10; t++) ladder.Step();
         LadderSnapshot<State> before = ladder.Snapshot();
-        double[] betas = [1.0, 0.7, 0.4, 0.1, 0.0];
+        double[] inverseTemperatures = [1.0, 0.7, 0.4, 0.1, 0.0];
         int[] sources = [0, 1, 2, 3, 4];
 
         Assert.Throws<ArgumentNullException>(() => ladder.Resize(null!, sources, s => s, _ => Moves, blockSet));
-        Assert.Throws<ArgumentNullException>(() => ladder.Resize(betas, null!, s => s, _ => Moves, blockSet));
-        Assert.Throws<ArgumentNullException>(() => ladder.Resize(betas, sources, null!, _ => Moves, blockSet));
-        Assert.Throws<ArgumentNullException>(() => ladder.Resize(betas, sources, s => s, null!, blockSet));
-        Assert.Equal("betas", Assert.Throws<ArgumentException>(() => ladder.Resize([1.0, 0.5, 0.1], [0, 1, 4], s => s, _ => Moves, blockSet)).ParamName);   // no b = 0
-        Assert.Equal("betas", Assert.Throws<ArgumentException>(() => ladder.Resize([0.9, 0.5, 0.0], [0, 1, 4], s => s, _ => Moves, blockSet)).ParamName);
-        Assert.Equal("blocksForReplica", Assert.Throws<ArgumentException>(() => ladder.Resize(betas, sources, s => s, _ => Moves)).ParamName);
-        Assert.Equal("sources", Assert.Throws<ArgumentException>(() => ladder.Resize(betas, [0, 1, 4], s => s, _ => Moves, blockSet)).ParamName);
-        Assert.Equal("sources", Assert.Throws<ArgumentOutOfRangeException>(() => ladder.Resize(betas, [0, 1, 2, 5, 4], s => s, _ => Moves, blockSet)).ParamName);
-        Assert.Equal("sources", Assert.Throws<ArgumentOutOfRangeException>(() => ladder.Resize(betas, [0, -1, 2, 3, 4], s => s, _ => Moves, blockSet)).ParamName);
-        Assert.Equal("sources", Assert.Throws<ArgumentException>(() => ladder.Resize(betas, [1, 1, 2, 3, 4], s => s, _ => Moves, blockSet)).ParamName);
-        Assert.Equal("sources", Assert.Throws<ArgumentException>(() => ladder.Resize(betas, [0, 1, 2, 3, 3], s => s, _ => Moves, blockSet)).ParamName);
+        Assert.Throws<ArgumentNullException>(() => ladder.Resize(inverseTemperatures, null!, s => s, _ => Moves, blockSet));
+        Assert.Throws<ArgumentNullException>(() => ladder.Resize(inverseTemperatures, sources, null!, _ => Moves, blockSet));
+        Assert.Throws<ArgumentNullException>(() => ladder.Resize(inverseTemperatures, sources, s => s, null!, blockSet));
+        Assert.Equal("inverseTemperatures", Assert.Throws<ArgumentException>(() => ladder.Resize([1.0, 0.5, 0.1], [0, 1, 4], s => s, _ => Moves, blockSet)).ParamName);   // no b = 0
+        Assert.Equal("inverseTemperatures", Assert.Throws<ArgumentException>(() => ladder.Resize([0.9, 0.5, 0.0], [0, 1, 4], s => s, _ => Moves, blockSet)).ParamName);
+        Assert.Equal("blocksForReplica", Assert.Throws<ArgumentException>(() => ladder.Resize(inverseTemperatures, sources, s => s, _ => Moves)).ParamName);
+        Assert.Equal("sources", Assert.Throws<ArgumentException>(() => ladder.Resize(inverseTemperatures, [0, 1, 4], s => s, _ => Moves, blockSet)).ParamName);
+        Assert.Equal("sources", Assert.Throws<ArgumentOutOfRangeException>(() => ladder.Resize(inverseTemperatures, [0, 1, 2, 5, 4], s => s, _ => Moves, blockSet)).ParamName);
+        Assert.Equal("sources", Assert.Throws<ArgumentOutOfRangeException>(() => ladder.Resize(inverseTemperatures, [0, -1, 2, 3, 4], s => s, _ => Moves, blockSet)).ParamName);
+        Assert.Equal("sources", Assert.Throws<ArgumentException>(() => ladder.Resize(inverseTemperatures, [1, 1, 2, 3, 4], s => s, _ => Moves, blockSet)).ParamName);
+        Assert.Equal("sources", Assert.Throws<ArgumentException>(() => ladder.Resize(inverseTemperatures, [0, 1, 2, 3, 3], s => s, _ => Moves, blockSet)).ParamName);
         // A factory that throws for a new replica leaves the ladder, its growth stream included, as it was.
         // The new rungs are 1 and 3, so the second's blocks fail after the first drew its streams.
         Assert.ThrowsAny<ArgumentException>(() => ladder.Resize([1.0, 0.7, 0.5, 0.3, 0.2, 0.05, 0.0], [0, 1, 1, 2, 2, 3, 4], s => s, _ => Moves,
@@ -300,23 +300,23 @@ public sealed class ParallelTemperingResizeTests
     private static int Seed(Xoshiro256PlusPlus growth) => unchecked((int)(growth.NextUInt64() >> 32));
 
     // `levels` rungs on the ladder's barrier from its round's rejections, and their sources.
-    private static double[] Grown(ParallelTempering<State> ladder, int levels) => TemperingLadder.Place(ladder.Betas, ladder.RoundRejection, levels);
+    private static double[] Grown(ParallelTempering<State> ladder, int levels) => TemperingLadder.Place(ladder.InverseTemperatures, ladder.RoundRejection, levels);
 
     private static int[] Sources(ParallelTempering<State> ladder, int levels)
-        => TemperingLadder.Sources(ladder.Betas, ladder.RoundRejection, Grown(ladder, levels));
+        => TemperingLadder.Sources(ladder.InverseTemperatures, ladder.RoundRejection, Grown(ladder, levels));
 
     private static ParallelTempering<State> Ladder(bool blocks, bool reference, int seed, TemperingPath path = TemperingPath.Likelihood)
     {
         var target = new IndexAndCoordinate();
-        double[] betas = reference ? [1.0, 0.5, 0.2, 0.05, 0.0] : [1.0, 0.5, 0.2, 0.05];
-        return new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), betas, path, seed,
+        double[] inverseTemperatures = reference ? [1.0, 0.5, 0.2, 0.05, 0.0] : [1.0, 0.5, 0.2, 0.05];
+        return new ParallelTempering<State>(_ => Moves, target, new State(0, 0.0), inverseTemperatures, path, seed,
                                             reference: reference ? new PriorDraw(target) : null,
                                             blocksForReplica: blocks ? _ => [new CoordinateSlice(target)] : null);
     }
 
     private static void AssertSame(ParallelTempering<State> a, ParallelTempering<State> b)
     {
-        Assert.Equal(a.Betas, b.Betas);
+        Assert.Equal(a.InverseTemperatures, b.InverseTemperatures);
         Assert.Equal((a.Scans, a.SwapAttempts, a.SwapAccepts, a.RoundTrips, a.AnnealedRestarts, a.PairScans),
                      (b.Scans, b.SwapAttempts, b.SwapAccepts, b.RoundTrips, b.AnnealedRestarts, b.PairScans));
         Assert.Equal(a.PairStats, b.PairStats);

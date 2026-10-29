@@ -105,8 +105,8 @@ public sealed class BassTemperingParityTests
         {
             Form = form == "linear" ? TemperedForm.Linear : TemperedForm.Integrated, Levels = 4, HotEnd = 0.1, ReferenceRung = true, Adaptive = false,
         };
-        double[] betas = ParallelTempering<BassState>.ReferenceLadder(spec.Levels!.Value, spec.HotEnd!.Value);
-        JsonElement r = BassTargetParityTests.Posterior(rows, "M_max=2", Rungs(betas));
+        double[] inverseTemperatures = ParallelTempering<BassState>.ReferenceLadder(spec.Levels!.Value, spec.HotEnd!.Value);
+        JsonElement r = BassTargetParityTests.Posterior(rows, "M_max=2", Rungs(inverseTemperatures));
         BassTerm[] terms = BassTargetParityTests.Terms(r);
         int[][] states = BassTargetParityTests.States(r);
         var index = terms.Select((t, i) => (t, i)).ToDictionary(e => e.t, e => e.i);
@@ -114,7 +114,7 @@ public sealed class BassTemperingParityTests
 
         BassModel model = BassModel.Create(Config(2, spec), BassTargetParityTests.Data(rows));
         const int ladders = 4, burn = 2_000, scans = 30_000, batches = 20, perBatch = scans / batches;
-        int levels = betas.Length;
+        int levels = inverseTemperatures.Length;
         var count = new double[levels][,];
         var included = new double[levels][,];
         var tau = new double[levels][];
@@ -146,15 +146,15 @@ public sealed class BassTemperingParityTests
 
         for (int k = 0; k < levels; k++)
         {
-            Assert.Equal(betas[k], rung[k].GetProperty("b").GetDouble());
+            Assert.Equal(inverseTemperatures[k], rung[k].GetProperty("b").GetDouble());
             double[] law = Doubles(rung[k].GetProperty("law"));
             double[] countLaw = Doubles(rung[k].GetProperty("count"));
             var inclusion = new double[terms.Length];
             for (int s = 0; s < states.Length; s++)
                 foreach (int j in states[s]) inclusion[j] += law[s];
-            for (int m = 0; m < countLaw.Length; m++) Check($"{form}, b = {betas[k]:G3}, M = {m}", Row(count[k], m), countLaw[m], 0.004);
-            Check($"{form}, b = {betas[k]:G3}, E[τ]", tau[k], rung[k].GetProperty("tau_mean").GetDouble(), 0.0);
-            for (int j = 0; j < terms.Length; j++) Check($"{form}, b = {betas[k]:G3}, {terms[j]}", Row(included[k], j), inclusion[j], 0.005, quiet: true);
+            for (int m = 0; m < countLaw.Length; m++) Check($"{form}, b = {inverseTemperatures[k]:G3}, M = {m}", Row(count[k], m), countLaw[m], 0.004);
+            Check($"{form}, b = {inverseTemperatures[k]:G3}, E[τ]", tau[k], rung[k].GetProperty("tau_mean").GetDouble(), 0.0);
+            for (int j = 0; j < terms.Length; j++) Check($"{form}, b = {inverseTemperatures[k]:G3}, {terms[j]}", Row(included[k], j), inclusion[j], 0.005, quiet: true);
         }
     }
 

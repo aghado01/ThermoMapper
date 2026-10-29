@@ -24,7 +24,7 @@ namespace Maths.Regression.Tests;
 /// a ladder's own ends, which differ by path, and the sequential sweep's cascades let a state cross several rungs with no
 /// local step between.</item>
 /// <item><c>TEMPER_BENCH_ESS</c>: the decision study for OQ1 and OQ4. Adapted DEO ladders on the likelihood path with
-/// the hot end at β_min = 0.05, 0.2, 0.35 and 0.5, and on the powered path at 0.05, judged by the cold chain's ESS of the
+/// the hot end at b = 0.05, 0.2, 0.35 and 0.5, and on the powered path at 0.05, judged by the cold chain's ESS of the
 /// knot count, the energy (its log likelihood) and the peak location (the argmax of the conditional-mean curve). Each
 /// estimate pools 8 ladders, and two independent groups show its noise.</item>
 /// <item><c>TEMPER_BENCH_BASE</c>: the equal-work baseline, untempered chains as many as the ladders' replicas
@@ -109,7 +109,7 @@ public sealed class TemperingBenchmark
     }
 
     /// <summary>
-    /// The decision study for OQ1 and OQ4: adapted DEO ladders on the likelihood path with the hot end at four β_min,
+    /// The decision study for OQ1 and OQ4: adapted DEO ladders on the likelihood path with the hot end at four values,
     /// and on the powered path, by the cold chain's ESS per unit work. Guarded by <c>TEMPER_BENCH_ESS</c>.
     /// </summary>
     [Fact]
@@ -125,18 +125,18 @@ public sealed class TemperingBenchmark
         ];
         var ess = new StringBuilder(EssHeader + "\n");
         foreach (Fit fit in Fits("peak", "sine", "counts", "oscillatory"))
-            foreach ((TemperingPath tp, double betaMin) in arms)
+            foreach ((TemperingPath tp, double hotEnd) in arms)
                 foreach (int levels in new[] { 4, 8 })
                     for (int group = 0; group < 2; group++)
                     {
                         var series = new Series(chains);
                         for (int c = 0; c < chains; c++)
                         {
-                            RunResult r = Run(fit, tp, SwapSchedule.DeterministicEvenOdd, adapt: true, levels, betaMin,
+                            RunResult r = Run(fit, tp, SwapSchedule.DeterministicEvenOdd, adapt: true, levels, hotEnd,
                                               seed: 1000 * (group + 1) + c);
                             series.Add(c, fit, r, levels);
                         }
-                        ess.AppendLine(series.Row(fit.Name, tp.ToString(), betaMin, levels, group));
+                        ess.AppendLine(series.Row(fit.Name, tp.ToString(), hotEnd, levels, group));
                         File.WriteAllText(path, ess.ToString());   // partial results survive an interrupted run
                     }
     }
@@ -197,12 +197,12 @@ public sealed class TemperingBenchmark
 
         var ess = new StringBuilder(EssHeader + "\tarm\n");
         foreach (Fit fit in Fits("peak", "sine", "counts", "oscillatory"))
-            foreach ((string name, TemperingPath tp, IObservationModel model, bool reference, double betaMin) in ReferenceArms(fit))
+            foreach ((string name, TemperingPath tp, IObservationModel model, bool reference, double hotEnd) in ReferenceArms(fit))
                 foreach (int levels in new[] { 4, 8 })
                     for (int group = 0; group < 2; group++)
                     {
-                        Series series = ArmSeries(fit with { Model = model }, tp, reference, betaMin, levels, group);
-                        ess.AppendLine(series.Row(fit.Name, tp.ToString(), reference ? 0.0 : betaMin, levels, group) + "\t" + name);
+                        Series series = ArmSeries(fit with { Model = model }, tp, reference, hotEnd, levels, group);
+                        ess.AppendLine(series.Row(fit.Name, tp.ToString(), reference ? 0.0 : hotEnd, levels, group) + "\t" + name);
                         File.WriteAllText(path, ess.ToString());   // partial results survive an interrupted run
                     }
     }
@@ -230,12 +230,12 @@ public sealed class TemperingBenchmark
                     ess.AppendLine(series.Row(fit.Name, "Untempered", double.NaN, levels, group) + "\tU" + series.ModeColumns());
                     File.WriteAllText(path, ess.ToString());
                 }
-            foreach ((string name, TemperingPath tp, IObservationModel model, bool reference, double betaMin) in ReferenceArms(fit))
+            foreach ((string name, TemperingPath tp, IObservationModel model, bool reference, double hotEnd) in ReferenceArms(fit))
                 foreach (int levels in new[] { 4, 8 })
                     for (int group = 0; group < 2; group++)
                     {
-                        Series series = ArmSeries(fit with { Model = model }, tp, reference, betaMin, levels, group);
-                        ess.AppendLine(series.Row(fit.Name, tp.ToString(), reference ? 0.0 : betaMin, levels, group) + "\t" + name +
+                        Series series = ArmSeries(fit with { Model = model }, tp, reference, hotEnd, levels, group);
+                        ess.AppendLine(series.Row(fit.Name, tp.ToString(), reference ? 0.0 : hotEnd, levels, group) + "\t" + name +
                                        series.ModeColumns());
                         File.WriteAllText(path, ess.ToString());
                     }
@@ -261,12 +261,12 @@ public sealed class TemperingBenchmark
     }
 
     // One group of an arm: ArmLadders adapted DEO ladders, seeds 1000·(group + 1) + c.
-    private static Series ArmSeries(Fit fit, TemperingPath tp, bool reference, double betaMin, int levels, int group)
+    private static Series ArmSeries(Fit fit, TemperingPath tp, bool reference, double hotEnd, int levels, int group)
     {
         var series = new Series(ArmLadders);
         for (int c = 0; c < ArmLadders; c++)
         {
-            RunResult r = Run(fit, tp, SwapSchedule.DeterministicEvenOdd, adapt: true, levels, betaMin, seed: 1000 * (group + 1) + c,
+            RunResult r = Run(fit, tp, SwapSchedule.DeterministicEvenOdd, adapt: true, levels, hotEnd, seed: 1000 * (group + 1) + c,
                               reference);
             series.Add(c, fit, r, levels);
         }
@@ -299,13 +299,13 @@ public sealed class TemperingBenchmark
             _trips += r.TripsPerScan / chains;
         }
 
-        public string Row(string name, string path, double betaMin, int levels, int group)
+        public string Row(string name, string path, double hotEnd, int levels, int group)
         {
             ConvergenceDiagnostic k = ChainDiagnostics.Diagnose(_knots), e = ChainDiagnostics.Diagnose(_energy),
                                   p = ChainDiagnostics.Diagnose(_peak);
             string G(double v) => v.ToString("G5", CultureInfo.InvariantCulture);
             double kilo = _work / 1000.0;
-            return string.Join('\t', name, path, G(betaMin), levels, group, _knots.Length, G(k.BulkEss.Value), G(k.TailEss.Value),
+            return string.Join('\t', name, path, G(hotEnd), levels, group, _knots.Length, G(k.BulkEss.Value), G(k.TailEss.Value),
                                G(e.BulkEss.Value), G(p.BulkEss.Value), G(p.TailEss.Value), G(k.RHat.Value), G(p.RHat.Value),
                                G(_knots.SelectMany(s => s).Average()), G(_peak.SelectMany(s => s).Average()), G(_seconds), G(_work),
                                G(k.Ess.Value / kilo), G(p.Ess.Value / kilo), G(k.Ess.Value / _seconds), G(p.Ess.Value / _seconds),
@@ -344,16 +344,16 @@ public sealed class TemperingBenchmark
         return peaks;
     }
 
-    private static RunResult Run(Fit fit, TemperingPath tp, SwapSchedule schedule, bool adapt, int levels, double betaMin, int seed,
+    private static RunResult Run(Fit fit, TemperingPath tp, SwapSchedule schedule, bool adapt, int levels, double hotEnd, int seed,
                                  bool reference = false)
     {
         var target = new SplineTarget(new SplineBasis(3), fit.Model, fit.CountPrior, fit.X, fit.Y);
-        double[] betas = reference
-            ? ParallelTempering<KnotConfig>.ReferenceLadder(levels, betaMin)
-            : ParallelTempering<KnotConfig>.GeometricLadder(levels, betaMin);
+        double[] inverseTemperatures = reference
+            ? ParallelTempering<KnotConfig>.ReferenceLadder(levels, hotEnd)
+            : ParallelTempering<KnotConfig>.GeometricLadder(levels, hotEnd);
         IReferenceSampler<KnotConfig>? referenceSampler = reference ? target.Reference(tp) : null;
         var pt = new ParallelTempering<KnotConfig>(
-            _ => Moves(), target, new KnotConfig([]), betas, tp, seed, schedule, referenceSampler);
+            _ => Moves(), target, new KnotConfig([]), inverseTemperatures, tp, seed, schedule, referenceSampler);
 
         if (adapt)
             for (int round = 1; round <= 2048; round *= 2)
@@ -390,7 +390,7 @@ public sealed class TemperingBenchmark
         string row = string.Join('\t', fit.Name, tp, schedule, adapt, levels, seed, F(trips / Measured), F(trips / Measured / levels),
                            F(trips / seconds), F(TemperingLadder.Barrier(rejection)), F(ideal), F(coldKnots / Measured),
                            F(hotKnots / Measured), F((double)(pt.SwapAccepts - swaps0) / (pt.SwapAttempts - attempts0)),
-                           string.Join(',', Array.ConvertAll(pt.Betas, b => b.ToString("F4", CultureInfo.InvariantCulture))));
+                           string.Join(',', Array.ConvertAll(pt.InverseTemperatures, b => b.ToString("F4", CultureInfo.InvariantCulture))));
         double work = referenceSampler is null
             ? (double)levels * Measured
             : (double)(levels - 1) * Measured + (referenceSampler.Attempts - referenceAttempts0);

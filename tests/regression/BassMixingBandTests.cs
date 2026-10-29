@@ -34,7 +34,7 @@ public sealed class BassMixingBandTests
     public BassMixingBandTests(ITestOutputHelper output) => _out = output;
 
     // One ladder's sampling phase: its rungs, each rung's running moments of M and ℓ, and each pair's rejection.
-    private sealed record Rungs(double[] Betas, RunningMoments[] M, RunningMoments[] LogLikelihood, double[] Rejection, double RoundTrips, double Ideal);
+    private sealed record Rungs(double[] InverseTemperatures, RunningMoments[] M, RunningMoments[] LogLikelihood, double[] Rejection, double RoundTrips, double Ideal);
 
     [Fact]
     public void SteepBand_FrozenAndDenseLadders()
@@ -58,9 +58,9 @@ public sealed class BassMixingBandTests
         var dense = new Rungs[chains];
         Parallel.For(0, chains, c =>
         {
-            double[] betas = Dense(coarse[c].Betas);
-            var spec = new TemperingSpec { Levels = betas.Length, Adaptive = false, MaxLevels = Math.Max(64, betas.Length) };
-            BassLadder ladder = BassMixing.Ladder(model, c, spec, betas);
+            double[] inverseTemperatures = Dense(coarse[c].InverseTemperatures);
+            var spec = new TemperingSpec { Levels = inverseTemperatures.Length, Adaptive = false, MaxLevels = Math.Max(64, inverseTemperatures.Length) };
+            BassLadder ladder = BassMixing.Ladder(model, c, spec, inverseTemperatures);
             BassMixing.Burn(ladder);
             dense[c] = Sample(ladder);
         });
@@ -96,7 +96,7 @@ public sealed class BassMixingBandTests
         double[] rejection = readout.PairRejection[0];
         Assert.All(rejection, r => Assert.InRange(r, 0.0, 1.0 + 1e-12));
         Assert.All(m, x => Assert.Equal(BassMixing.Samples, x.Count));
-        return new Rungs(ladder.Tempering.Betas, m, ell, rejection, readout.RoundTripsPerScan, readout.IdealRoundTripRate);
+        return new Rungs(ladder.Tempering.InverseTemperatures, m, ell, rejection, readout.RoundTripsPerScan, readout.IdealRoundTripRate);
     }
 
     // The chain's own rungs above the window, the window at Δb = 0.01, then its own rungs below it.
@@ -111,13 +111,13 @@ public sealed class BassMixingBandTests
     private void Table(string label, Rungs rungs)
     {
         _out.WriteLine("");
-        _out.WriteLine($"{label}: {rungs.Betas.Length} rungs, round trips per scan {rungs.RoundTrips:G3} against the ideal {rungs.Ideal:G3}, Λ̂ = Σr {rungs.Rejection.Sum():F2}, Σh {rungs.Rejection.Sum(H):F2}");
+        _out.WriteLine($"{label}: {rungs.InverseTemperatures.Length} rungs, round trips per scan {rungs.RoundTrips:G3} against the ideal {rungs.Ideal:G3}, Λ̂ = Σr {rungs.Rejection.Sum():F2}, Σh {rungs.Rejection.Sum(H):F2}");
         _out.WriteLine("rung | b | M mean | M sd | ℓ mean | ℓ sd | pair to the next | r | h(r)");
         _out.WriteLine("--- | --- | --- | --- | --- | --- | --- | --- | ---");
-        for (int i = 0; i < rungs.Betas.Length; i++)
+        for (int i = 0; i < rungs.InverseTemperatures.Length; i++)
         {
-            string pair = i + 1 < rungs.Betas.Length ? $"[{rungs.Betas[i + 1]:G3}, {rungs.Betas[i]:G3}] | {rungs.Rejection[i]:F3} | {H(rungs.Rejection[i]):F2}" : "— | — | —";
-            _out.WriteLine($"{i} | {rungs.Betas[i]:G4} | {rungs.M[i].Mean:F2} | {rungs.M[i].Sd:F2} | {rungs.LogLikelihood[i].Mean:F1} | {rungs.LogLikelihood[i].Sd:F1} | {pair}");
+            string pair = i + 1 < rungs.InverseTemperatures.Length ? $"[{rungs.InverseTemperatures[i + 1]:G3}, {rungs.InverseTemperatures[i]:G3}] | {rungs.Rejection[i]:F3} | {H(rungs.Rejection[i]):F2}" : "— | — | —";
+            _out.WriteLine($"{i} | {rungs.InverseTemperatures[i]:G4} | {rungs.M[i].Mean:F2} | {rungs.M[i].Sd:F2} | {rungs.LogLikelihood[i].Mean:F1} | {rungs.LogLikelihood[i].Sd:F1} | {pair}");
         }
     }
 
@@ -132,11 +132,11 @@ public sealed class BassMixingBandTests
         {
             Rungs a = coarse[c], d = dense[c];
             int[] steep = [.. Enumerable.Range(0, a.Rejection.Length).Where(i => a.Rejection[i] > 0.9)];
-            string pairs = steep.Length == 0 ? "none" : string.Join(", ", steep.Select(i => $"[{a.Betas[i + 1]:G3}, {a.Betas[i]:G3}] {a.Rejection[i]:F3}"));
-            (double lo, double hi) = steep.Length == 0 ? (double.NaN, double.NaN) : (steep.Min(i => a.Betas[i + 1]), steep.Max(i => a.Betas[i]));
+            string pairs = steep.Length == 0 ? "none" : string.Join(", ", steep.Select(i => $"[{a.InverseTemperatures[i + 1]:G3}, {a.InverseTemperatures[i]:G3}] {a.Rejection[i]:F3}"));
+            (double lo, double hi) = steep.Length == 0 ? (double.NaN, double.NaN) : (steep.Min(i => a.InverseTemperatures[i + 1]), steep.Max(i => a.InverseTemperatures[i]));
             string over(Rungs r, double l, double u) => double.IsNaN(l) ? "—" : $"{Sum(r, l, u, x => x):F2}, {Sum(r, l, u, H):F2}";
             int[] denseSteep = [.. Enumerable.Range(0, d.Rejection.Length).Where(i => d.Rejection[i] > 0.9)];
-            string densePairs = denseSteep.Length == 0 ? "none" : string.Join(", ", denseSteep.Select(i => $"[{d.Betas[i + 1]:G3}, {d.Betas[i]:G3}] {d.Rejection[i]:F3}"));
+            string densePairs = denseSteep.Length == 0 ? "none" : string.Join(", ", denseSteep.Select(i => $"[{d.InverseTemperatures[i + 1]:G3}, {d.InverseTemperatures[i]:G3}] {d.Rejection[i]:F3}"));
             _out.WriteLine($"{c} | {pairs} | {(steep.Length == 0 ? "—" : $"[{lo:G3}, {hi:G3}]")} | {over(a, lo, hi)} | {over(d, lo, hi)} | {densePairs} | " +
                            $"{over(a, Bottom, Top)} | {over(d, Bottom, Top)}");
         }
@@ -148,7 +148,7 @@ public sealed class BassMixingBandTests
         double sum = 0.0;
         for (int i = 0; i < rungs.Rejection.Length; i++)
         {
-            double upper = rungs.Betas[i], lower = rungs.Betas[i + 1];
+            double upper = rungs.InverseTemperatures[i], lower = rungs.InverseTemperatures[i + 1];
             double inside = Math.Min(upper, hi) - Math.Max(lower, lo);
             if (inside > 0.0) sum += inside / (upper - lower) * f(rungs.Rejection[i]);
         }

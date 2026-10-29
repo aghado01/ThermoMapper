@@ -119,7 +119,7 @@ public sealed record BassTemperingReadout(
             barrier += TemperingLadder.Barrier(rejection[k]);
             if (spec.Schedule != SwapSchedule.Sequential) ideal += TemperingLadder.IdealRoundTripRate(rejection[k], spec.Schedule);
             if (ladders[k].Reference is { } reference) referenceAttempts += (reference.Attempts - burn.ReferenceAttempts) / scans;
-            rungs[k] = ladder.Betas;
+            rungs[k] = ladder.InverseTemperatures;
             levels[k] = rungs[k].Length;
             atMax |= ladders[k].SizesItself && levels[k] == spec.MaxLevels;
         }

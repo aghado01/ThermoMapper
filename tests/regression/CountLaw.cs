@@ -82,16 +82,16 @@ internal static class CountLaw
     /// </summary>
     public static Result[] SampleLadder<TState>(
         Func<int, IReadOnlyList<IRjMove<TState>>> movesForReplica, ISamplingTarget<TState> target, TState start,
-        Func<TState, int> dimension, double[] betas, TemperingPath path, Func<int, Func<int, double>> logLawForRung,
+        Func<TState, int> dimension, double[] inverseTemperatures, TemperingPath path, Func<int, Func<int, double>> logLawForRung,
         int bins, int burn, int steps, int batches, int seed, IReferenceSampler<TState>? reference = null)
     {
         if (bins < 2) throw new ArgumentOutOfRangeException(nameof(bins));
         if (batches < 2 || steps % batches != 0) throw new ArgumentOutOfRangeException(nameof(batches));
 
-        var ladder = new ParallelTempering<TState>(movesForReplica, target, start, betas, path, seed, reference: reference);
+        var ladder = new ParallelTempering<TState>(movesForReplica, target, start, inverseTemperatures, path, seed, reference: reference);
         for (int i = 0; i < burn; i++) ladder.Step();
 
-        int rungs = betas.Length, batchLength = steps / batches;
+        int rungs = inverseTemperatures.Length, batchLength = steps / batches;
         var batchFreq = new double[rungs][,];
         for (int r = 0; r < rungs; r++) batchFreq[r] = new double[batches, bins];
         for (int b = 0; b < batches; b++)

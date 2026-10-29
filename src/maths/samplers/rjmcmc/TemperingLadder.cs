@@ -24,7 +24,7 @@ public enum SwapSchedule
 /// <summary>One adjacent pair's swap statistics: attempts, accepts, and the mean rejection probability over every scan
 /// since the ladder took its count of rungs (<see cref="ParallelTempering{TState}.PairScans"/>), attempted or not
 /// (Rao–Blackwellized: 1 − α from the cached evaluations, rather than the 0/1 outcomes).</summary>
-public sealed record SwapPairStat(double ColderBeta, double HotterBeta, long Attempts, long Accepts, double MeanRejection);
+public sealed record SwapPairStat(double ColderInverseTemperature, double HotterInverseTemperature, long Attempts, long Accepts, double MeanRejection);
 
 /// <summary>
 /// Ladder arithmetic from swap rejection rates (Syed et al. 2022). With r_i the rejection rate of adjacent pair i:
@@ -97,62 +97,62 @@ public static class TemperingLadder
 
     /// <summary>
     /// A ladder with the same rungs and endpoints whose adjacent rejection rates are equal, to the accuracy of the
-    /// estimates: <see cref="Place"/> at the current count. <paramref name="betas"/> is descending from the cold rung;
+    /// estimates: <see cref="Place"/> at the current count. <paramref name="inverseTemperatures"/> is descending from the cold rung;
     /// <paramref name="rejection"/>[i] is pair (i, i+1)'s rate. A ladder with no rejections, or only two rungs, comes
     /// back unchanged.
     /// </summary>
-    public static double[] Equalize(double[] betas, ReadOnlySpan<double> rejection)
+    public static double[] Equalize(double[] inverseTemperatures, ReadOnlySpan<double> rejection)
     {
-        ArgumentNullException.ThrowIfNull(betas);
-        return Place(betas, rejection, betas.Length);
+        ArgumentNullException.ThrowIfNull(inverseTemperatures);
+        return Place(inverseTemperatures, rejection, inverseTemperatures.Length);
     }
 
     /// <summary>
-    /// <paramref name="levels"/> rungs on <paramref name="betas"/>' endpoints whose adjacent rejection rates are equal, to
-    /// the accuracy of the estimates: the cumulative barrier Λ(β), interpolated from the observed rates by a monotone cubic
+    /// <paramref name="levels"/> rungs on <paramref name="inverseTemperatures"/>' endpoints whose adjacent rejection rates are equal, to
+    /// the accuracy of the estimates: the cumulative barrier Λ(b), interpolated from the observed rates by a monotone cubic
     /// (Fritsch and Carlson 1980), is inverted at <paramref name="levels"/> − 1 equal steps (Syed et al.'s Algorithms 2 and
-    /// 3, at any count). <paramref name="betas"/> is descending from the cold rung; <paramref name="rejection"/>[i] is pair
+    /// 3, at any count). <paramref name="inverseTemperatures"/> is descending from the cold rung; <paramref name="rejection"/>[i] is pair
     /// (i, i+1)'s rate. Where the rates cannot place the rungs (none rejected, or estimates too coarse to keep the rungs
     /// strictly descending), the current count comes back unchanged, as <see cref="Equalize"/> does, and another count is
     /// placed as though every pair rejected alike, by the rungs' index.
     /// </summary>
-    public static double[] Place(double[] betas, ReadOnlySpan<double> rejection, int levels)
+    public static double[] Place(double[] inverseTemperatures, ReadOnlySpan<double> rejection, int levels)
     {
-        ArgumentNullException.ThrowIfNull(betas);
-        int n = betas.Length;
+        ArgumentNullException.ThrowIfNull(inverseTemperatures);
+        int n = inverseTemperatures.Length;
         CheckRates(n, rejection);
-        if (levels == n && n <= 2) return (double[])betas.Clone();
+        if (levels == n && n <= 2) return (double[])inverseTemperatures.Clone();
         if (levels < 2) throw new ArgumentOutOfRangeException(nameof(levels), "A ladder has at least two rungs.");
-        if (n < 2) throw new ArgumentException("Placing rungs needs a ladder with two ends.", nameof(betas));
+        if (n < 2) throw new ArgumentException("Placing rungs needs a ladder with two ends.", nameof(inverseTemperatures));
 
-        (double[] x, double[] y) = Cumulative(betas, rejection);
+        (double[] x, double[] y) = Cumulative(inverseTemperatures, rejection);
         if (y[n - 1] > 0.0 && Placed(x, y, levels) is { } placed) return placed;
-        if (levels == n) return (double[])betas.Clone();
+        if (levels == n) return (double[])inverseTemperatures.Clone();
         for (int j = 0; j < n; j++) y[j] = j;   // no reading to place by: every pair alike
-        return Placed(x, y, levels) ?? throw new ArgumentException($"The rungs lie too close to place {levels} between them.", nameof(betas));
+        return Placed(x, y, levels) ?? throw new ArgumentException($"The rungs lie too close to place {levels} between them.", nameof(inverseTemperatures));
     }
 
     /// <summary>
-    /// For each rung of <paramref name="placed"/>, the rung of <paramref name="betas"/> whose state it should start from
-    /// in a resize (<see cref="ParallelTempering{TState}.Resize"/>): the nearest on the cumulative barrier Λ(β), read from
+    /// For each rung of <paramref name="placed"/>, the rung of <paramref name="inverseTemperatures"/> whose state it should start from
+    /// in a resize (<see cref="ParallelTempering{TState}.Resize"/>): the nearest on the cumulative barrier Λ(b), read from
     /// <paramref name="rejection"/> by the monotone cubic <see cref="Place"/> inverts, so the new rung starts from the state
-    /// a swap would hand it most readily; on a tie the nearest in β, and on a further tie the colder. With no rejection the
-    /// barrier is flat and the nearest in β decides. A ladder placed on the same ends maps each end to itself.
+    /// a swap would hand it most readily; on a tie the nearest in b, and on a further tie the colder. With no rejection the
+    /// barrier is flat and the nearest in b decides. A ladder placed on the same ends maps each end to itself.
     /// </summary>
-    public static int[] Sources(double[] betas, ReadOnlySpan<double> rejection, double[] placed)
+    public static int[] Sources(double[] inverseTemperatures, ReadOnlySpan<double> rejection, double[] placed)
     {
-        ArgumentNullException.ThrowIfNull(betas);
+        ArgumentNullException.ThrowIfNull(inverseTemperatures);
         ArgumentNullException.ThrowIfNull(placed);
-        int n = betas.Length;
+        int n = inverseTemperatures.Length;
         CheckRates(n, rejection);
-        if (n < 1) throw new ArgumentException("A ladder needs a rung.", nameof(betas));
+        if (n < 1) throw new ArgumentException("A ladder needs a rung.", nameof(inverseTemperatures));
         foreach (double b in placed)
             if (!double.IsFinite(b)) throw new ArgumentException("Every placed b must be finite.", nameof(placed));
 
         double[]? x = null, y = null, slope = null;
         if (n >= 2)
         {
-            (x, y) = Cumulative(betas, rejection);
+            (x, y) = Cumulative(inverseTemperatures, rejection);
             if (y[n - 1] > 0.0) slope = MonotoneSlopes(x, y);
         }
         var sources = new int[placed.Length];
@@ -160,12 +160,12 @@ public static class TemperingLadder
         {
             double b = placed[k], at = slope is null ? 0.0 : BarrierAt(x!, y!, slope, b);
             int best = 0;
-            double bestBarrier = double.PositiveInfinity, bestBeta = double.PositiveInfinity;
+            double bestBarrier = double.PositiveInfinity, bestDistance = double.PositiveInfinity;
             for (int i = 0; i < n; i++)
             {
-                double barrier = slope is null ? 0.0 : Math.Abs(at - y![n - 1 - i]), beta = Math.Abs(b - betas[i]);
-                if (barrier < bestBarrier || barrier == bestBarrier && beta < bestBeta)
-                    (best, bestBarrier, bestBeta) = (i, barrier, beta);
+                double barrier = slope is null ? 0.0 : Math.Abs(at - y![n - 1 - i]), distance = Math.Abs(b - inverseTemperatures[i]);
+                if (barrier < bestBarrier || barrier == bestBarrier && distance < bestDistance)
+                    (best, bestBarrier, bestDistance) = (i, barrier, distance);
             }
             sources[k] = best;
         }
@@ -180,13 +180,13 @@ public static class TemperingLadder
             if (!(r >= 0.0 && r <= 1.0)) throw new ArgumentOutOfRangeException(nameof(rejection), "Rejection rates lie in [0, 1].");
     }
 
-    // Ascending from the hot end: x_j = β, y_j = the cumulative barrier from the hottest rung.
-    private static (double[] X, double[] Y) Cumulative(double[] betas, ReadOnlySpan<double> rejection)
+    // Ascending from the hot end: x_j = b, y_j = the cumulative barrier from the hottest rung.
+    private static (double[] X, double[] Y) Cumulative(double[] inverseTemperatures, ReadOnlySpan<double> rejection)
     {
-        int n = betas.Length;
+        int n = inverseTemperatures.Length;
         var x = new double[n];
         var y = new double[n];
-        for (int j = 0; j < n; j++) x[j] = betas[n - 1 - j];
+        for (int j = 0; j < n; j++) x[j] = inverseTemperatures[n - 1 - j];
         for (int j = 0; j + 1 < n; j++) y[j + 1] = y[j] + rejection[n - 2 - j];
         return (x, y);
     }
@@ -251,7 +251,7 @@ public static class TemperingLadder
         return m;
     }
 
-    // The β in segment j at which the monotone cubic reaches level, by bisection.
+    // The b in segment j at which the monotone cubic reaches level, by bisection.
     private static double Invert(double[] x, double[] y, double[] m, int j, double level)
     {
         double lo = x[j], hi = x[j + 1];

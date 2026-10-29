@@ -112,10 +112,10 @@ public sealed class LadderEvidenceTests
         // Unit-step moves leave the rung traces autocorrelated; the errors divide by effective sample sizes. The likelihood
         // is not linear in b, so the trapezoid's bias is far larger than its diagnostic reads (the curvature term).
         const int replicates = 200, scans = 3000;
-        double[] betas = ParallelTempering<int>.ReferenceLadder(8, 0.01);
+        double[] inverseTemperatures = ParallelTempering<int>.ReferenceLadder(8, 0.01);
         double truth = Bumps.LogZ(1.0) - Bumps.LogZ(0.0), trapezoid = 0.0;
-        for (int k = 0; k + 1 < betas.Length; k++)
-            trapezoid += 0.5 * (betas[k] - betas[k + 1]) * (Bumps.MeanSlope(betas[k]) + Bumps.MeanSlope(betas[k + 1]));
+        for (int k = 0; k + 1 < inverseTemperatures.Length; k++)
+            trapezoid += 0.5 * (inverseTemperatures[k] - inverseTemperatures[k + 1]) * (Bumps.MeanSlope(inverseTemperatures[k]) + Bumps.MeanSlope(inverseTemperatures[k + 1]));
 
         var ss = new Calibration(truth);
         var ps = new Calibration(trapezoid);
@@ -127,7 +127,7 @@ public sealed class LadderEvidenceTests
             var ladders = new ParallelTempering<int>[2];
             for (int l = 0; l < 2; l++)
             {
-                ladders[l] = Bumps.Ladder(betas, ladderSeeds[l]);
+                ladders[l] = Bumps.Ladder(inverseTemperatures, ladderSeeds[l]);
                 for (int i = 0; i < 500; i++) ladders[l].Step();
                 ladders[l].TraceRungs();
                 for (int i = 0; i < scans; i++) ladders[l].Step();
@@ -278,8 +278,8 @@ public sealed class LadderEvidenceTests
     [Fact]
     public void TraceRungs_RecordsEachRungsSlopeAndLogRatio_AfterTheScansSwaps()
     {
-        double[] betas = ParallelTempering<int>.ReferenceLadder(5, 0.05);
-        ParallelTempering<int> ladder = Bumps.Ladder(betas, 3);
+        double[] inverseTemperatures = ParallelTempering<int>.ReferenceLadder(5, 0.05);
+        ParallelTempering<int> ladder = Bumps.Ladder(inverseTemperatures, 3);
         for (int i = 0; i < 50; i++) ladder.Step();
         Assert.Null(ladder.RungTraces);
         ladder.TraceRungs();
@@ -288,15 +288,15 @@ public sealed class LadderEvidenceTests
         for (int i = 0; i < 200; i++)
         {
             ladder.Step();
-            for (int r = 0; r < betas.Length; r++)
+            for (int r = 0; r < inverseTemperatures.Length; r++)
             {
                 ReversibleJumpChain<int> rung = ladder.Replicas[r];
                 double[] slope = ladder.RungTraces![r].Draws(RungFunctional.Slope);
                 double[] ratio = ladder.RungTraces[r].Draws(RungFunctional.LogRatio);
                 Assert.Equal(i + 1, slope.Length);
-                Assert.Equal(Bumps.Slope(rung.Current, betas[r]), slope[^1], 1e-12);
+                Assert.Equal(Bumps.Slope(rung.Current, inverseTemperatures[r]), slope[^1], 1e-12);
                 if (r == 0) Assert.True(double.IsNaN(ratio[^1]));
-                else Assert.Equal(Bumps.LogLikelihood(rung.Current, betas[r - 1]) - Bumps.LogLikelihood(rung.Current, betas[r]), ratio[^1], 1e-12);
+                else Assert.Equal(Bumps.LogLikelihood(rung.Current, inverseTemperatures[r - 1]) - Bumps.LogLikelihood(rung.Current, inverseTemperatures[r]), ratio[^1], 1e-12);
             }
         }
     }
@@ -304,15 +304,15 @@ public sealed class LadderEvidenceTests
     [Fact]
     public void TracedLadder_ResumesWithItsTraces()
     {
-        double[] betas = ParallelTempering<int>.ReferenceLadder(5, 0.05);
-        ParallelTempering<int> straight = Bumps.Ladder(betas, 11), first = Bumps.Ladder(betas, 11);
+        double[] inverseTemperatures = ParallelTempering<int>.ReferenceLadder(5, 0.05);
+        ParallelTempering<int> straight = Bumps.Ladder(inverseTemperatures, 11), first = Bumps.Ladder(inverseTemperatures, 11);
         straight.TraceRungs();
         first.TraceRungs();
         for (int i = 0; i < 300; i++) { straight.Step(); first.Step(); }
         ParallelTempering<int> resumed = ParallelTempering<int>.Restore(Bumps.Moves, new Bumps(), first.Snapshot(), new Bumps.Prior());
         for (int i = 0; i < 300; i++) { straight.Step(); resumed.Step(); }
         Assert.True(resumed.TracesSlopes);
-        for (int r = 0; r < betas.Length; r++)
+        for (int r = 0; r < inverseTemperatures.Length; r++)
             for (int f = 0; f < 2; f++)
                 Assert.Equal(straight.RungTraces![r].Draws(f), resumed.RungTraces![r].Draws(f));
         Assert.Equal(LadderEvidence.FromLadders([straight]).LogRatio, LadderEvidence.FromLadders([resumed]).LogRatio);
@@ -323,10 +323,10 @@ public sealed class LadderEvidenceTests
     {
         // A likelihood-path target whose evaluations refuse the slope: the traces hold NaN there and path sampling refuses;
         // stepping-stone reads ℓ_b alone. On the powered path the slope is ln prior + ℓ₁, which every target has.
-        double[] betas = [1.0, 0.5, 0.1, 0.0];
+        double[] inverseTemperatures = [1.0, 0.5, 0.1, 0.0];
         foreach (TemperingPath path in new[] { TemperingPath.Likelihood, TemperingPath.Powered })
         {
-            double[] ladderBetas = path == TemperingPath.Powered ? [1.0, 0.5, 0.1] : betas;
+            double[] ladderBetas = path == TemperingPath.Powered ? [1.0, 0.5, 0.1] : inverseTemperatures;
             var ladder = new ParallelTempering<int>(Bumps.Moves, new SlopeFree(), 5, ladderBetas, path, masterSeed: 2);
             ladder.TraceRungs();
             for (int i = 0; i < 100; i++) ladder.Step();
@@ -339,7 +339,7 @@ public sealed class LadderEvidenceTests
             }
             else Assert.True(double.IsFinite(LadderEvidence.FromLadders([ladder], LadderEstimator.PathSampling).LogRatio));
         }
-        Assert.Throws<InvalidOperationException>(() => LadderEvidence.FromLadders([Bumps.Ladder(betas, 1)]));   // untraced
+        Assert.Throws<InvalidOperationException>(() => LadderEvidence.FromLadders([Bumps.Ladder(inverseTemperatures, 1)]));   // untraced
     }
 
     [Fact]
@@ -552,8 +552,8 @@ public sealed class LadderEvidenceTests
 
         public static IReadOnlyList<IRjMove<int>> Moves(int replica) => [new UnitStep("up", "down", +1), new UnitStep("down", "up", -1)];
 
-        public static ParallelTempering<int> Ladder(double[] betas, int seed)
-            => new(Moves, new Bumps(), 5, betas, TemperingPath.Likelihood, seed, reference: betas[^1] == 0.0 ? new Prior() : null);
+        public static ParallelTempering<int> Ladder(double[] inverseTemperatures, int seed)
+            => new(Moves, new Bumps(), 5, inverseTemperatures, TemperingPath.Likelihood, seed, reference: inverseTemperatures[^1] == 0.0 ? new Prior() : null);
 
         public ITargetEvaluation Evaluate(int k) => new Evaluation(k);
 

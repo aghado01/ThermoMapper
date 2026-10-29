@@ -52,24 +52,24 @@ public sealed class BassLadder
     {
     }
 
-    // A ladder on the declared rungs `betas` (cold first, b = 0 last with the reference rung), for tests that place them.
-    internal BassLadder(BassModel model, TemperingSpec spec, double[] betas, IReadOnlyList<BassTerm> start, double logTau, int seed)
+    // A ladder on the declared rungs `inverseTemperatures` (cold first, b = 0 last with the reference rung), for tests that place them.
+    internal BassLadder(BassModel model, TemperingSpec spec, double[] inverseTemperatures, IReadOnlyList<BassTerm> start, double logTau, int seed)
     {
         Check(model, spec);
-        ArgumentNullException.ThrowIfNull(betas);
-        CheckCount(spec, betas.Length, nameof(betas));
+        ArgumentNullException.ThrowIfNull(inverseTemperatures);
+        CheckCount(spec, inverseTemperatures.Length, nameof(inverseTemperatures));
         Model = model;
         Spec = spec;
         var cold = new BassStructureMoves(model, start, logTau);
         BassMovesSnapshot copy = cold.Snapshot(cold.Start);
-        _structures = new BassStructureMoves[betas.Length];
+        _structures = new BassStructureMoves[inverseTemperatures.Length];
         _structures[0] = cold;
         // Every replica starts on the cold one's state and a copy of its design, so the start is one structure throughout.
         // Sharing its term array is safe only because the start was itself loaded whole: a replica that reloads it whole
         // gets its design bit for bit. No mid-run array is shared (Resize).
         IReadOnlyList<IRjMove<BassState>> ReplicaMoves(int i) => (_structures[i] ??= new BassStructureMoves(model, cold.Start, copy)).Moves;
         Reference = spec.ReferenceRung ? new BassPriorSampler(model) : null;
-        Tempering = new ParallelTempering<BassState>(ReplicaMoves, model.Target, cold.Start, betas, spec.Path, seed, spec.Schedule, Reference,
+        Tempering = new ParallelTempering<BassState>(ReplicaMoves, model.Target, cold.Start, inverseTemperatures, spec.Path, seed, spec.Schedule, Reference,
                                                      Blocks(model));
     }
 
@@ -155,8 +155,8 @@ public sealed class BassLadder
         int levels = TemperingLadder.Size(barrier, current, TemperingSpec.MinimumLevels(Spec.ReferenceRung), Spec.MaxLevels);
         if (levels == current) return Tempering.AdaptLadder();
 
-        double[] betas = TemperingLadder.Place(Tempering.Betas, rejection, levels);
-        int[] sources = TemperingLadder.Sources(Tempering.Betas, rejection, betas);
+        double[] inverseTemperatures = TemperingLadder.Place(Tempering.InverseTemperatures, rejection, levels);
+        int[] sources = TemperingLadder.Sources(Tempering.InverseTemperatures, rejection, inverseTemperatures);
         BassStructureMoves[] old = _structures;
         var states = new BassState[current];
         var designs = new BassDesignSnapshot?[current];
@@ -164,7 +164,7 @@ public sealed class BassLadder
         BassDesignSnapshot DesignOf(int i) => designs[i] ??= old[i].DesignFor(states[i]);
         // A new replica's moves start on its source's state and design; once it holds its fork, it adopts the design for it.
         var built = new BassStructureMoves[levels];
-        int[] kept = Tempering.Resize(betas, sources, Fork, k =>
+        int[] kept = Tempering.Resize(inverseTemperatures, sources, Fork, k =>
         {
             int s = sources[k];
             built[k] = new BassStructureMoves(Model, states[s], new BassMovesSnapshot(DesignOf(s), new Tally<BassRefusal>(), 0, new BassSupportTally(Model.Prior)));

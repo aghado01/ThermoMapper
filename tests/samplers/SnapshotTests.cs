@@ -49,13 +49,13 @@ public sealed class SnapshotTests
         var restored = ParallelTempering<int>.Restore(Moves, Peaked, live.Snapshot());
 
         for (int i = 0; i < 400; i++) Assert.Equal(live.Step(), restored.Step());
-        Assert.Equal(live.Betas, restored.Betas);
+        Assert.Equal(live.InverseTemperatures, restored.InverseTemperatures);
         Assert.Equal(live.RoundTrips, restored.RoundTrips);
         Assert.Equal(live.AnnealedRestarts, restored.AnnealedRestarts);
         Assert.Equal(live.SwapAccepts, restored.SwapAccepts);
         Assert.Equal(live.PairStats, restored.PairStats);
         Assert.Equal(live.AdaptLadder(), restored.AdaptLadder());   // the post-adaptation statistics were restored too
-        Assert.Equal(live.Betas, restored.Betas);
+        Assert.Equal(live.InverseTemperatures, restored.InverseTemperatures);
         for (int r = 0; r < 4; r++) Assert.Equal(live.Replicas[r].Current, restored.Replicas[r].Current);
     }
 

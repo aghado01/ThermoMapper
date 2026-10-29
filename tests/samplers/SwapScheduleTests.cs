@@ -29,12 +29,12 @@ public sealed class SwapScheduleTests
     private static readonly ISamplingTarget<double> Gaussian = SamplingTarget.Separable<double>(
         x => -0.5 * x * x, x => -(x - Mu) * (x - Mu) / (2.0 * S2));
 
-    private static ParallelTempering<double> ExactLadder(double[] betas, SwapSchedule schedule, int seed)
+    private static ParallelTempering<double> ExactLadder(double[] inverseTemperatures, SwapSchedule schedule, int seed)
     {
         ParallelTempering<double>? pt = null;
         pt = new ParallelTempering<double>(
             i => [new ExactDraw(() => pt!.Replicas[i].Temperature.InverseTemperature)],
-            Gaussian, 0.0, betas, TemperingPath.Likelihood, seed, schedule);
+            Gaussian, 0.0, inverseTemperatures, TemperingPath.Likelihood, seed, schedule);
         return pt;
     }
 
@@ -65,8 +65,8 @@ public sealed class SwapScheduleTests
     [InlineData(SwapSchedule.StochasticEvenOdd)]
     public void RoundTripRate_MatchesTheorem1_UnderExactLocalExploration(SwapSchedule schedule)
     {
-        double[] betas = [1.0, 0.55, 0.3, 0.16, 0.08, 0.035, 0.01, 0.0];
-        (double observed, double ideal, double[] r) = Measure(ExactLadder(betas, schedule, seed: 21), scans: 200_000);
+        double[] inverseTemperatures = [1.0, 0.55, 0.3, 0.16, 0.08, 0.035, 0.01, 0.0];
+        (double observed, double ideal, double[] r) = Measure(ExactLadder(inverseTemperatures, schedule, seed: 21), scans: 200_000);
         _out.WriteLine($"[round-trips] {schedule}: observed {observed:F4}, Theorem 1 {ideal:F4}, Λ̂ = {TemperingLadder.Barrier(r):F3}");
         Assert.InRange(observed / ideal, 0.94, 1.06);
     }
@@ -128,7 +128,7 @@ public sealed class SwapScheduleTests
     // uniform ladder, its adapted rungs, and their rejection rates.
     internal static (double[] Before, double[] Adapted, double[] After) AdaptAndMeasure(int measureSeed, int adaptSeed)
     {
-        double[] start = [1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125, 0.0];   // uniform: most barrier near β = 0
+        double[] start = [1.0, 0.875, 0.75, 0.625, 0.5, 0.375, 0.25, 0.125, 0.0];   // uniform: most barrier near b = 0
         (_, _, double[] before) = Measure(ExactLadder(start, SwapSchedule.DeterministicEvenOdd, seed: measureSeed), scans: 60_000);
         double[] adapted = Adapted(start, seed: adaptSeed);
         (_, _, double[] after) = Measure(ExactLadder(adapted, SwapSchedule.DeterministicEvenOdd, seed: measureSeed), scans: 60_000);
@@ -174,11 +174,11 @@ public sealed class SwapScheduleTests
     [Fact]
     public void Equalize_InvertsAKnownBarrier()
     {
-        // Λ(β) = 2√β, observed on an uneven ladder: equal steps of Λ put rung k at β = (1 − k/8)².
-        double[] betas = [1.0, 0.8, 0.6, 0.45, 0.3, 0.2, 0.1, 0.04, 0.0];
-        var r = new double[betas.Length - 1];
-        for (int i = 0; i < r.Length; i++) r[i] = (2.0 * Math.Sqrt(betas[i]) - 2.0 * Math.Sqrt(betas[i + 1])) / 4.0;   // scaled into [0, 1]
-        double[] next = TemperingLadder.Equalize(betas, r);
+        // Λ(b) = 2√b, observed on an uneven ladder: equal steps of Λ put rung k at b = (1 − k/8)².
+        double[] inverseTemperatures = [1.0, 0.8, 0.6, 0.45, 0.3, 0.2, 0.1, 0.04, 0.0];
+        var r = new double[inverseTemperatures.Length - 1];
+        for (int i = 0; i < r.Length; i++) r[i] = (2.0 * Math.Sqrt(inverseTemperatures[i]) - 2.0 * Math.Sqrt(inverseTemperatures[i + 1])) / 4.0;   // scaled into [0, 1]
+        double[] next = TemperingLadder.Equalize(inverseTemperatures, r);
         for (int k = 0; k < next.Length; k++)
             Assert.Equal(Math.Pow(1.0 - k / 8.0, 2), next[k], 0.02);
         Assert.Equal(1.0, next[0]);
@@ -188,11 +188,11 @@ public sealed class SwapScheduleTests
     [Fact]
     public void Equalize_LeavesWhatItCannotImprove()
     {
-        double[] betas = [1.0, 0.5, 0.1];
-        Assert.Equal(betas, TemperingLadder.Equalize(betas, [0.0, 0.0]));        // no rejections: no barrier to spread
+        double[] inverseTemperatures = [1.0, 0.5, 0.1];
+        Assert.Equal(inverseTemperatures, TemperingLadder.Equalize(inverseTemperatures, [0.0, 0.0]));        // no rejections: no barrier to spread
         Assert.Equal([1.0, 0.2], TemperingLadder.Equalize([1.0, 0.2], [0.4]));   // no interior rung
-        Assert.Throws<ArgumentException>(() => TemperingLadder.Equalize(betas, [0.1]));
-        Assert.Throws<ArgumentOutOfRangeException>(() => TemperingLadder.Equalize(betas, [0.1, 1.5]));
+        Assert.Throws<ArgumentException>(() => TemperingLadder.Equalize(inverseTemperatures, [0.1]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TemperingLadder.Equalize(inverseTemperatures, [0.1, 1.5]));
     }
 
     [Fact]
@@ -219,7 +219,7 @@ public sealed class SwapScheduleTests
             for (int i = 0; i < round; i++) pt.Step();
             pt.AdaptLadder();
         }
-        return pt.Betas;
+        return pt.InverseTemperatures;
     }
 
     internal static double Spread(double[] r)
@@ -232,14 +232,14 @@ public sealed class SwapScheduleTests
     // An independence proposal from the replica's own tempered law, so every move is an exact draw (always accepted).
     private sealed class ExactDraw : IRjMove<double>
     {
-        private readonly Func<double> _beta;
-        public ExactDraw(Func<double> beta) => _beta = beta;
+        private readonly Func<double> _inverseTemperature;
+        public ExactDraw(Func<double> inverseTemperature) => _inverseTemperature = inverseTemperature;
         public string Key => "draw";
         public string ReverseKey => "draw";
         public double Weight(double state) => 1.0;
         public Proposal<double>? Propose(double current, Xoshiro256PlusPlus rng)
         {
-            double b = _beta();
+            double b = _inverseTemperature();
             double precision = 1.0 + b / S2, mean = b * Mu / S2 / precision;
             double u1 = 1.0 - rng.NextDouble(), u2 = rng.NextDouble();
             double z = Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);

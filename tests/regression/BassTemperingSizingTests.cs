@@ -146,8 +146,8 @@ public sealed class BassTemperingSizingTests
         // The ladder's own pick, on a model resolved without it, is the same.
         BassModel model = BassModel.Create(With(null!) with { Coefficients = new FixedG(0.01) }, data);
         BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(1)).State;
-        Assert.Equal(0.01, new BassLadder(model, new TemperingSpec(), start.Terms, start.LogTau, 2).Tempering.Betas[^1]);
-        Assert.Equal(0.01, new BassLadder(model, new TemperingSpec { ReferenceRung = true }, start.Terms, start.LogTau, 2).Tempering.Betas[^2]);
+        Assert.Equal(0.01, new BassLadder(model, new TemperingSpec(), start.Terms, start.LogTau, 2).Tempering.InverseTemperatures[^1]);
+        Assert.Equal(0.01, new BassLadder(model, new TemperingSpec { ReferenceRung = true }, start.Terms, start.LogTau, 2).Tempering.InverseTemperatures[^2]);
     }
 
     [Fact]
@@ -165,7 +165,7 @@ public sealed class BassTemperingSizingTests
         BassModel untempered = BassModel.Create(flat with { Sampling = flat.Sampling with { Tempering = null } }, tiny);
         BassState start = new BassPriorSampler(untempered).DrawState(new Xoshiro256PlusPlus(1)).State;
         Assert.Equal("spec", Assert.Throws<ArgumentException>(() => new BassLadder(untempered, new TemperingSpec(), start.Terms, start.LogTau, 2)).ParamName);
-        Assert.Equal(1.0, new BassLadder(untempered, new TemperingSpec { HotEnd = 0.5 }, start.Terms, start.LogTau, 2).Tempering.Betas[0]);
+        Assert.Equal(1.0, new BassLadder(untempered, new TemperingSpec { HotEnd = 0.5 }, start.Terms, start.LogTau, 2).Tempering.InverseTemperatures[0]);
 
         // Under fixed g a held τ below the flat intercept's pole takes the hot end there, which the integrated form lacks.
         BassData data = BassSweepTests.Data();
@@ -200,14 +200,14 @@ public sealed class BassTemperingSizingTests
         // The spec's own refusals, in its name; a count outside the budget; a snapshot of a count the spec does not run.
         foreach (TemperingSpec bad in new[] { spec with { Adaptive = false }, spec with { MaxLevels = 2 }, new TemperingSpec { Levels = 6, MaxLevels = 5 } })
             Assert.Equal("spec", Assert.Throws<ArgumentException>(() => new BassLadder(model, bad, start.Terms, start.LogTau, 2)).ParamName);
-        Assert.Equal("betas", Assert.Throws<ArgumentException>(() =>
+        Assert.Equal("inverseTemperatures", Assert.Throws<ArgumentException>(() =>
             new BassLadder(model, spec with { MaxLevels = 4 }, [1.0, 0.5, 0.2, 0.1, 0.0], start.Terms, start.LogTau, 2)).ParamName);
-        Assert.Equal("betas", Assert.Throws<ArgumentException>(() => new BassLadder(model, spec, [1.0, 0.0], start.Terms, start.LogTau, 2)).ParamName);
+        Assert.Equal("inverseTemperatures", Assert.Throws<ArgumentException>(() => new BassLadder(model, spec, [1.0, 0.0], start.Terms, start.LogTau, 2)).ParamName);
         var snapshot = ladder.Snapshot();
         Assert.Throws<ArgumentException>(() => BassLadder.Restore(model, spec with { MaxLevels = ladder.Tempering.Replicas.Count - 1 }, snapshot));
         Assert.Throws<ArgumentException>(() => BassLadder.Restore(model, spec with { Levels = ladder.Tempering.Replicas.Count + 1 }, snapshot));
-        Assert.Equal(ladder.Tempering.Betas, BassLadder.Restore(model, spec, snapshot).Tempering.Betas);
-        Assert.Equal(ladder.Tempering.Betas, BassLadder.Restore(model, spec with { Levels = ladder.Tempering.Replicas.Count }, snapshot).Tempering.Betas);
+        Assert.Equal(ladder.Tempering.InverseTemperatures, BassLadder.Restore(model, spec, snapshot).Tempering.InverseTemperatures);
+        Assert.Equal(ladder.Tempering.InverseTemperatures, BassLadder.Restore(model, spec with { Levels = ladder.Tempering.Replicas.Count }, snapshot).Tempering.InverseTemperatures);
     }
 
     [Theory]
@@ -249,10 +249,10 @@ public sealed class BassTemperingSizingTests
                                 $"round {round}: replicas {j} and {i} share a mid-run term array");
             }
             // The rungs stay a ladder on the spec's ends.
-            double[] betas = ladder.Tempering.Betas;
-            Assert.Equal(1.0, betas[0]);
-            if (reference) Assert.Equal(0.0, betas[^1]);
-            else Assert.Equal(betas[^1], model.Resolved.HotEnd ?? 1.0 / model.Resolved.Observations);
+            double[] inverseTemperatures = ladder.Tempering.InverseTemperatures;
+            Assert.Equal(1.0, inverseTemperatures[0]);
+            if (reference) Assert.Equal(0.0, inverseTemperatures[^1]);
+            else Assert.Equal(inverseTemperatures[^1], model.Resolved.HotEnd ?? 1.0 / model.Resolved.Observations);
         }
         _out.WriteLine($"reference {reference}, fixed g {fixedG}: counts [{string.Join(", ", counts)}], {resized} resizes, " +
                        $"{ladder.Tempering.SwapAccepts} swaps of {ladder.Tempering.SwapAttempts}");
@@ -364,7 +364,7 @@ public sealed class BassTemperingSizingTests
             }
         }
         Assert.Equal(sizingRounds, sized);
-        Assert.Equal(fit.Diagnostics.Tempering.Ladders[0], ladder.Tempering.Betas);
+        Assert.Equal(fit.Diagnostics.Tempering.Ladders[0], ladder.Tempering.InverseTemperatures);
     }
 
     [Theory]
