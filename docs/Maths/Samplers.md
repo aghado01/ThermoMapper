@@ -303,6 +303,12 @@ Path sampling's rungs are positively correlated through swaps, which only the jo
 3. Run sampling rounds of `batchSize` steps. The default is a single round of `samples` steps. Each draw is reduced to a functional vector, whose streaming moments (Welford's update) are accumulated per chain. The draws of the leading `MonitoredDim` functionals are kept.
 4. If `rHatTarget > 0`, stop after the first round in which every functional's R̂ meets the target (rank-normalized for the monitored functionals, classic for the rest), at least one is an estimate, and every monitored functional's bulk and tail ESS reach `minEssPerChain` per chain (100 by default, Vehtari et al. 2021). An R̂ target needs at least two chains and one monitored functional.
    - **The ESS gate replaced a 100-draw floor** (step 3.4). A draw count bounds the effective sample size only from above. BARS's knot count, for one, has an autocorrelation time of about 450 steps on a test fit (Stan's estimator and batch means agree), where an R̂ of 1.5 is met within 500 draws.
+   - **A verdict on every run** (D10, decided 2026-10-29; not built, N14).
+     - *The gap.* The stop is checked between rounds, never after the last. So a run that ends without meeting its target, or that has none, reports no verdict.
+     - *The rule.* D10 adds a verdict to `EnsembleRun`: the stop's rules applied at the end of every run, against the target, or 1.01 when none is set (Vehtari et al. 2021).
+     - *Three outcomes:* converged; not converged, naming the failing functionals; and undetermined.
+     - *Groups.* The engine declares groups of its functionals, the verdict reports each apart, and a stop can be scoped to a declared subset. BASS's groups are predictive (σ², the fitted values), posterior level (the log posterior) and structural (M, τ), all gating by default.
+     - *The trade-off.* A predictive-only stop ends sooner on an overcomplete basis, whose structure need not be identified, but it can end a run whose chains sit at different posterior levels. So it is a declared choice, and the verdict still reports every group.
 5. Pool the results:
    - means over $C\cdot n$ draws;
    - population variances over all $C\cdot n$ draws (`FunctionalVariance`), from the per-chain streaming moments merged by Chan's parallel update (`RunningMoments.Merge`, which is associative and commutative);

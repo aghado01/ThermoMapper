@@ -6,7 +6,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 
 ### Decisions
 
-- [x] **N-D10** Adaptation policy for adaptive kernels (note): adopted 2026-10-27 in the user's design pass; D10's stopping semantics stays open, drafted 2026-10-29 (the brief's "D10 (draft, 2026-10-29)").
+- [x] **N-D10** Adaptation policy for adaptive kernels (note): adopted 2026-10-27 in the user's design pass; D10's stopping semantics was drafted and decided on 2026-10-29 (the brief's D10 section).
 
 ### Build (stages 2–3)
 
@@ -23,6 +23,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N11** Evidence over a tempering ladder: path sampling and stepping-stone from per-rung traces, with Monte Carlo error (D03, D05). Chip: [shared-infrastructure-brief.md](shared-infrastructure-brief.md). `LadderEvidence` with stepping-stone as the default; `ParallelTempering.TraceRungs` (`84c173f`).
 - [x] **N12** The g-prior's log marginal at (τ, b) as one scalar, without the mean vector (D04's τ slice, D05's swaps). Same chip. `CollapsedGPrior.MarginalAt` → `GPriorMarginal`, bit-identical to `At`'s (`0afe33d`).
 - [x] **N13** External reference for the rank-normalized and PSIS diagnostics against R `posterior` and `loo` (OQ9; D10's gate). Same chip; needs the user's approval for the download. Approved; `diagnostics_oracle.R` and `DiagnosticsParityTests` agree to 10⁻⁹ (`5eecbc1`, `ee8b97f`).
+- [ ] **N14** D10's convergence verdict: read at the end of every run in the shared ensemble, with the engine's agreement groups and a declared stopping scope; BASS's three groups, the log posterior among its monitored quantities (decided 2026-10-29).
 
 ### Room for extensions
 
@@ -31,6 +32,16 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [ ] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update.
 
 ## Reports
+
+### D10's stopping semantics decided — 2026-10-29
+
+The user took the draft as written, with its four points:
+- the reference target is 1.01;
+- the log posterior joins the monitored quantities;
+- every group gates the stop by default;
+- R's budget stays the provisional default.
+
+N14 builds it. The verdict belongs to the shared ensemble, so BARS gets it with BASS.
 
 ### Baseline requalified before stage 4 — 2026-10-28
 

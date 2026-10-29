@@ -94,9 +94,9 @@ Candidate numerical work remains private until acceptance. Rejection leaves the 
   Adaptation that continues past burn-in leaves the diagnostics' Markov assumption only approximately true, which is a further reason freezing is the default.
 - **A candidate kernel:** a birth proposal that weights variables by inclusion frequencies accumulated over the run, aimed at Nott and Kohn's setting of many inert predictors. It is an option to measure under this policy, not a default ([extensions brief](extensions-brief.md#additional-proposal-kernels)).
 
-## D10 (draft, 2026-10-29): stopping and convergence semantics
+## D10 (decided 2026-10-29): stopping and convergence semantics
 
-A proposal for the user's design pass. Sources:
+Drafted and decided on 2026-10-29: the user took the draft as written, with its four points. Sources:
 - Vehtari, Gelman, Simpson, Carpenter and Bürkner (2021), on rank-normalized R̂ and bulk and tail ESS;
 - B01's repaired stopping mechanics (`ChainEnsemble`'s R̂ stop);
 - F-M2's pass (2026-10-29, the fitting checklist's reports), whose untempered chains never agreed at S10's lengths;
@@ -148,9 +148,9 @@ A proposal for the user's design pass. Sources:
   - the end-of-run verdict agrees with the stop's rule applied to the same traces;
   - the log posterior against the chains' own density, as F-M2's pass checked it (to 10⁻¹¹);
   - bit-identity: the verdict reads the run and changes nothing in it, so the existing hashes hold.
-- **For the design pass:**
+- **Decided with it** (the user, 2026-10-29):
   - the reference target, 1.01;
-  - adding the log posterior to the monitored quantities;
+  - the log posterior added to the monitored quantities;
   - every group gating the stop by default;
   - R's budget as the provisional default.
 
