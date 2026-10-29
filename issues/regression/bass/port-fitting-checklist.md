@@ -56,6 +56,46 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ## Reports
 
+### S10: the qualification, and chip E verified — 2026-10-28
+
+*Chip E verified here* ([its report](stage4-ladder-sizing-brief.md#reports)): commits `ec565f6`, `d64ee4e`, `66c66be`, `abf16cf`, `36ce26a`, report `c388461`, read; the suites rerun: Regression 812/812, Samplers 186/186, Distributions 129/129, LinAlg 120/120, the BASS and Wallenius oracle tests 37/37. Its six constants (the initial 8 levels, the minimum 2 or 3, the one-rung deadband, the 0.9 flag, a new rung's source, the kept-replica rule) are implemented as reversible defaults and wait on the user, with its reasons in its report.
+
+*Built in S10.*
+- `3b5fcc0`: the residual check along a declared index (`ResidualIndex`: an output variable, an explicit order, or Moran's I over nearest neighbours in output coordinates), several output variables null until one is declared (`BassFit.ResidualDependenceFor`), and the posterior mean by term, O(S·M + T·N).
+- The qualification runs, `tests/regression/BassQualification*Tests.cs`, behind `BASS_QUALIFICATION` = 1; and the docs (BASS's run, tempering and evidence, pointwise and residual, and qualification sections in `docs/Maths/BayesianRegression.md`; chip E's shared members in `docs/Maths/Samplers.md`).
+
+*D04's leave-one-out check* (`BassQualificationLooTests`). On fixture A's design (N = 27), where F enumerates, the exact leave-one-out predictive scores PSIS on both contents unit by unit with no error in the reference, the prior held at the full data's. Three responses (the surface, an outlier, a corner spike), four chains of 1,000 and 2,000, BARS's pre-registered verdicts. Under fixed g:
+- the retained content's k̂ is no false negative: none of its 80 passed units misses by |z| > 3 (largest 2.5);
+- the collapsed content's k̂ is pessimistic: 72 of 81 units flagged, all 72 within |z| ≤ 3.
+
+So the retained content's k̂ is the one to read, as BARS found. Under sampled g, the default: [pending, recorded when its run ends].
+
+*Recovery* (`BassQualificationRecoveryTests`; the defaults, four chains of 5,000 and 2,000):
+
+| surface | N | RMSE | 95% coverage of f | σ's 95% interval | mean M | largest R̂ |
+| --- | --- | --- | --- | --- | --- | --- |
+| Friedman, p = 10 (5 inert), σ = 1 | 500 | 0.335 | 91.6% | [1.013, 1.161], **misses 1** | 9.6 | 2.35 (M) |
+| Friedman, tempered (self-sized, 20–23 rungs) | 500 | 0.282 | 97.2% | [0.991, 1.139] | 10.2 | 1.45 (M) |
+| mixed categorical, σ = 0.5 | 300 | 0.107 | 98.0% | [0.472, 0.558] | 5.8 | 1.54 |
+| direct functional, σ = 0.2 | 1,200 | 0.021 | 99.0% | [0.188, 0.203] | 6.1 | 2.55 |
+
+- *A pre-registered criterion failed:* untempered Friedman's σ interval misses the truth. It is kept as registered, not moved.
+- *Why.* Each chain holds a narrow band of M (10–12, 8–10, 10–12, 9–11 over 2,000 draws): births and deaths accept 1.5% and changes 5%. The posterior absorbs the fit's bias into σ (1 + 0.33² gives σ ≈ 1.05).
+- *R BASS 1.3.1 alike* (exploration only, its own Friedman sample, four seeds, `truncdist` replaced by the same law's inverse CDF since it is not installed): chains at M 10–12, 8–11, 9–10, 9–10, three of four σ intervals missing 1. The method under its defaults, not the port.
+- *Tempering* (the tempered row, added after the untempered read) brings R̂ of M to 1.45 and covers σ, but completes no round trip, one pair rejecting every swap. As chip E saw on its fixture, the cold rungs' local moves bound the mixing, not the ladder.
+- The direct functional fit's residual r₁ reads −0.106 against −0.050.
+
+*D06's column-mass fixture* (`BassQualificationColumnMassTests`). n = 200, a smooth surface and an edge kink of 24 points (count admits it, mass about 12 refuses it), noise sd 0.3, then 0.02 (added after the first read separated nothing). The edge sd is the same under both rules (0.06, 0.006), the RMSEs within about 0.01, and column mass uses about one more term. Neither expectation held; the count default stands.
+
+*The cost baseline* (`BassQualificationCostTests`; µs per sweep, one thread, untempered, composition included): at p = 2, n = 200: 68 (M 5), 129–154 (M 20); n = 1,000: 89, 190, 376 (M 45); n = 5,000: 186, 465, 1,184 (M 50). Linear in N·M at large n over a fixed 50–60 µs; with p = 10, somewhat more at the same M. R BASS ran about 630 µs per sweep on Friedman (n = 500, M ≈ 10), against about 100 here. A pushed count prior was tried first and its exact starts refused (F held too little prior mass), as the sampler should.
+
+*Open questions for the user:*
+1. *Friedman's failed σ criterion.* Untempered BASS (and R) under the defaults fails it at 5,000 + 2,000 sweeps; tempered BASS passes. Keep it as a recorded failure of the untempered defaults, or ask more of the defaults.
+2. *The local moves' mixing.* Births and deaths at about 1.5% bound both runs. Improving them is beyond R and beyond stage 4: data-informed births, more moves per sweep, or a block move over a term's knot. I recommend its own design item before the efficiency pass (F-M1).
+3. *The run lengths.* The provisional 9,000 + 1,000 come from R's single-chain practice; across four chains R̂ shows they do not converge on these surfaces. The R̂ stop exists; whether the defaults should lean on it is open.
+4. *Chip E's six constants,* above: I recommend taking them as built.
+5. *The ladder settles above need* (11–16 rungs where about 9 do on the functional fixture), since burn-in reads the barrier high. Safe, at a cost; sizing from a later round's reading is an option.
+
 ### S8 verified; chip D's questions decided — 2026-10-28
 
 *Verified here.* Chip D's commits (`58fdeb2`, `8c1bb66`, `fb22f73`, `f2d7149`, `aaf46b6`, report `25cb47f`) were read and the suites rerun: Regression 756/756, Samplers 146/146, Distributions 129/129, LinAlg 120/120, the BASS and Wallenius oracle tests 37/37.
