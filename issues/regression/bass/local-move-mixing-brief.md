@@ -315,6 +315,12 @@ Decided by the user on 2026-10-29, taking the recommendations laid out after the
 
 Newest first.
 
+### Phase 2 run and verified: no arm clears — 2026-10-29
+
+- *The verdict:* no arm clears the rule, so every option stays an option and the defaults stay D01's. The best score is the fixed-M family's, 1.031, and tempering's is 0.078. The chip's report is in [its brief](local-move-pass-brief.md#reports), and the verification, with an independent rescoring, is in the fitting checklist's reports.
+- *The instrument's floor.* At S10's lengths the untempered chains hold their own bands of M, so the minimum ESS reads about four in every untempered fit, and the ratios compare times. Tempering moves the chains toward agreement (R̂ of M at most 1.55, σ covered in 40 of 40 fits) at 24–43 times the cost.
+- *After the pass,* as above, the run lengths were to be sized from the winner's ESS per sweep. There is no winner, so that step is the user's to redefine.
+
 ### Phase 1 built and verified — 2026-10-29
 
 - *Built:* the local steps, the fixed-M family and the split rule, each an option off by default and bit-identical, in `cf431c0`–`8217eba`. The chip's report is in [its brief](local-move-options-brief.md#reports), and the verification is in the fitting checklist's reports.

@@ -15,8 +15,8 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [x] **F-C1** Contract shapes: data, config and result, decided 2026-10-28 as recommended.
 - [x] **F-C2** The shared-code changes the contracts need, before stage 4's first fit: `Sigma2Prior` as a serializable record, shared with BARS's config; `GPriorCentre.Flat` for the Liang convention, refused by BARS until the shared block supports it.
 - [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison.
-- [ ] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison. Folded into F-M2's pass on 2026-10-29: the prior-cancelling schedule is one of its arms.
-- [ ] **F-M2** The local moves' mixing, its own design item before the efficiency pass (S10, decided 2026-10-28); the design draft is [local-move-mixing-brief.md](local-move-mixing-brief.md). Births and deaths accept about 1.5% on Friedman, and the chains hold their own bands of M. Levers: several structure moves per sweep, a local knot move inside a change, active-variable births on F-X4's seam. The run lengths and the ladder's sizing, its censored steep band included, follow it. Phase 1 was decided on 2026-10-29 (the draft's "Phase 1's decisions"): local knot steps, the fixed-M factor moves and the ladder's split rule, built as options by a chip ([its brief](local-move-options-brief.md)), landed and verified the same day; levers 1 and 3 are withdrawn. Phase 2, the pass, is next.
+- [x] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison. Folded into F-M2's pass on 2026-10-29, which ran it the same day: prior-cancelling did not clear (0.864), so D01's schedule stays the default and prior-cancelling an option.
+- [ ] **F-M2** The local moves' mixing, its own design item before the efficiency pass (S10, decided 2026-10-28); the design draft is [local-move-mixing-brief.md](local-move-mixing-brief.md). Births and deaths accept about 1.5% on Friedman, and the chains hold their own bands of M. Levers: several structure moves per sweep, a local knot move inside a change, active-variable births on F-X4's seam. The run lengths and the ladder's sizing, its censored steep band included, follow it. Phase 1 was decided on 2026-10-29 (the draft's "Phase 1's decisions"): local knot steps, the fixed-M factor moves and the ladder's split rule, built as options by a chip ([its brief](local-move-options-brief.md)), landed and verified the same day; levers 1 and 3 are withdrawn. Phase 2, the pass, ran the same day: no arm clears, so the defaults stay D01's, with the untempered chains read at the bulk-ESS floor (this checklist's report). The run lengths, the worse modes and D10's treatment of chains that never agree are the user's next calls.
 
 ### Reference fixtures (stage 1)
 
@@ -56,6 +56,22 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### F-M2 Phase 2 verified: no arm clears — 2026-10-29
+
+The pass chip ran it ([its report](local-move-pass-brief.md#reports)), and it was verified here.
+- *Commits:* `6f1e99a` (the harness, and `Friedman`'s sample size), `e45cdc0` (the per-fit CSV and the minimum's edge cases), `60f4637` (the report). No production file changed.
+- *Rescored here* with a separate script, from the CSV's per-quantity ESS and each fit's seconds. It reproduces every r_f and score; the minima and rates agree row by row; with CPU time in place of wall time the scores move by at most 0.02.
+- *Suites rerun here:* Regression 1,035/1,035 (the pass's always-run checks included).
+- *The verdict, carried out:* no arm clears, so every option stays an option and the defaults stay D01's. F-M1 is answered with it: prior-cancelling did not clear.
+- *What the verdict means.* At S10's lengths the untempered chains never leave their own bands of M, so their minimum ESS sits at the estimator's floor (about four) and the rule's ratios mostly compare times.
+  - The verdict says no lever earns the default by this rule. It does not show that the levers do nothing: the instrument cannot see within-mode gains while the chains disagree between modes.
+  - Tempering is the one arm that moves the chains toward agreement: M's R̂ at most 1.55, σ covered in all 40 fits. It does so at 24–43 times the cost, with no round trip.
+- *Left for the user* (the next decisions):
+  - the run lengths: the draft sizes them from the winner's ESS per sweep, and there is no winner, while A0's ESS per sweep is floor-bound too;
+  - whether to pursue Friedman's worse modes further, and with what instrument;
+  - how D10's stopping semantics should treat chains that never agree.
+- *Docs:* `docs/Maths/BayesianRegression.md` gains the verdict in "BASS: the local-move options (F-M2)", prior-cancelling's result, the configuration rows' status, and the pass's Release timing beside the cost table.
 
 ### F-M2 Phase 1 verified: the local-move options — 2026-10-29
 
