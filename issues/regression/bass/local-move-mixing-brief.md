@@ -172,6 +172,35 @@ What the readings change in the levers below:
 - *Its measure* is the ideal round-trip rate at the settled count, against the rungs' cost. M5 says which option can work.
 - *How it relates to levers 1–3.* The ideal it raises is multiplied by the efficiency the other levers set. A raised ideal with an efficiency near 0 still completes no round trip.
 
+## After Phase 0: proposals (2026-10-29, not decided)
+
+Talked through with the user on 2026-10-29. Each item is a proposal for the design pass; the follow-on measurements ([their brief](mode-exit-pricing-brief.md)) price the hypotheses before Phase 1 is chosen.
+- *The problem is moving between representations, not the births.*
+  - At a mode the residual is mostly noise, so a random birth gains about −½ ln N and is rightly rejected, and a data-informed birth would mostly find noise.
+  - M4's chains hold different representations of one surface: on Friedman, chain 1 (M = 8) carries x1·x2 with two interactions beside x1 and x2 main effects, while chain 0 (M ≈ 10) carries it with five interactions and no x2 main effect.
+  - The worse modes carry co-adapted terms, each load-bearing given the others.
+- *Lever 1 withdrawn as an untempered default candidate.* Composition runs only on retained sweeps, so k moves per retained draw is close to `Thin` = k, with τ updated less often. It remains a tempered knob, local moves per swap, which also spreads the hand-overs' quarter of a scan.
+- *Lever 3 withdrawn for sampling,* by M2 and the reframe.
+  - A burn-in-only greedy variant (D10 allows adapting during burn-in) would steer chains to good modes faster.
+  - But the chains would then agree because their starts stopped being dispersed, which weakens what R̂ reports. It is kept as a thought, not a lever.
+- *Lever 2 kept, with a hypothesis.* The coefficients are integrated out, so sliding knots let the fit redistribute. Two co-adapted terms could drift until one is redundant, and its death then becomes cheap. Whether such a drift path exists between the modes is untested (pricing measurement P3).
+- *Lever 4: resolvable, probably not the fix* (a hypothesis).
+  - Likelihood tempering softens a load-bearing term only as b·Δℓ: a death costing 234 nats at b = 1 still costs about 70 at b = 0.3.
+  - So the mid-ladder rungs may be frozen too, and states cannot be adapted as they travel (P4).
+- *A new family: structural moves at fixed M.* With proposals matched to the prior, the first two have ratio Δℓ alone, as today's change does.
+  - *Factor prune and grow within a term.* Prune drops one of the term's K factors, uniformly. Grow adds a factor: its variable uniform among the p − K variables the term does not use, its sign and knot from the prior.
+    - The term prior's ratio for the prune is [C(p, K)/C(p, K − 1)]·2·n_v, where v is the dropped factor's variable.
+    - The proposals' ratio is K/((p − K + 1)·2·n_v), and C(p, K)/C(p, K − 1) = (p − K + 1)/K, so they cancel.
+    - Prune at K = 1 and grow at the cap are refusals; choosing grow or prune with probability ½ each keeps the selection symmetric.
+    - Under several parts, the same holds within each part, the categorical part with its subset measure in place of a sign and knot.
+  - *A factor's variable change.* v → v′, uniform among the p − K unused variables, with the knot from v′'s prior: the prior's n_v/n_v′ cancels the proposals' n_v′/n_v.
+  - *A pair death, and its pair birth.*
+    - The death picks an unordered pair uniformly, 1/C(M, 2).
+    - The reverse draws two D01 births in sequence, q(t₁ | S)·q(t₂ | S + t₁) + q(t₂ | S)·q(t₁ | S + t₂), with S the reduced structure.
+    - The count prior's two-step ratio enters through the target. A jointly redundant pair gains back about two terms' Occam cost, where either alone costs hundreds of nats.
+  - Each is beyond R. Their value is priced by P1 and P2.
+- *The composition's column means are cached first* (question 8; done in the main session).
+
 ## Phase 1: build the options
 
 - *The order:*
@@ -219,7 +248,9 @@ What the readings change in the levers below:
 5. *Lever 4's option,* after M5.
 6. *Who runs it.* I recommend Phase 0 as one chip (harness only, no production change), then Phase 1 after you read its report. Decided by the user on 2026-10-28: Phase 0 runs as one chip, [its brief](local-move-measurements-brief.md).
 7. *A move that leaves a local mode* (added after Phase 0). M4's chains sit in modes 12–42 nats apart whose terms are each load-bearing, so single-term moves pay tens of nats to leave them, and lever 2 only refines within them. The exchange move (Not in scope) is the simplest compound move; whether it, or tempering's round trips once the efficiency factor rises, is the route belongs to your design pass.
-8. *The composition's column means* (added after Phase 0): cache them before the pass. Caching changes every arm's cost alike, but lever 1's price, the structure share s, rises with it, so the pass should run on the cached cost. It is the efficiency pass's change, brought forward; whether it can be made bit-identical depends on matching the current sum's order.
+8. *The composition's column means* (added after Phase 0): cache them before the pass. Decided by the user on 2026-10-29: cached, bit-identical by construction. Caching changes every arm's cost alike, but lever 1's price, the structure share s, rises with it, so the pass should run on the cached cost. It is the efficiency pass's change, brought forward; whether it can be made bit-identical depends on matching the current sum's order.
+
+9. *Price the mode exits before choosing Phase 1* (2026-10-29). Decided by the user: a chip measures P1–P4, [its brief](mode-exit-pricing-brief.md).
 
 ## Reports
 
