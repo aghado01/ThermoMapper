@@ -18,8 +18,13 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E10** Direct-functional BASS for families of SPC sweeps.
 - [ ] **E11** Elastic emulation of misaligned functional outputs.
 - [ ] **E12** Residuals correlated along the output index.
+- [ ] **E13** The free-energy curve over the ladder.
 
 ## Reports
+
+### Temperature integration read — 2026-10-28
+
+From Farhi, Hed, Bon, Caticha, Mak and Domany (2013, *Physica A* 392), read for SPC (`issues/spc/opus-spin-glass-threads.md`, Thread 5). BASS's evidence already has the paper's shape, and its reference rung carried back to SPC as the closure at β = 0. New entry E13 (the free-energy curve over the ladder: tempered posteriors, WBIC, the real log canonical threshold). E9 gains why the engines compare at all and the Bayes-factor route under the improper options. Nothing built.
 
 ### GBMARS's global scale derived — 2026-10-26
 

@@ -12,7 +12,8 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Basis-estimation uncertainty | Sartini et al., arXiv 2412.11340 | Outputs: the basis contract's uncertainty slot | Candidate |
 | Moments for piecewise polynomials | Derivations review §7, item 7 | Outputs: the moment service | Candidate |
 | Active-subspace analysis | arXiv 2307.11241, via the PCA-extensions discussion | Outputs: term derivatives | Candidate |
-| Cross-engine evidence | Derivations review §7, item 8; Gneiting and Raftery 2007 for held-out scores | D03's proper defaults and D05's ladder evidence; D03's evidence rule. Outputs: D07's joint draws | Candidate |
+| Cross-engine evidence | Derivations review §7, item 8; Gneiting and Raftery 2007 for held-out scores; Liang et al. 2008 and Farhi et al. 2013 for Bayes factors under the improper options | D03's proper defaults and D05's ladder evidence; D03's evidence rule. Outputs: D07's joint draws | Candidate |
+| The free-energy curve over the ladder | Farhi et al. 2013; Watanabe 2013; Bissiri, Holmes and Walker 2016 | D05's ladder with the reference rung, its rungs' draws kept; the integrated form's per-draw slope | Candidate |
 | Elastic emulation of misaligned functional outputs | Francom, Tucker, Huerta, Shuler and Ries, arXiv 2305.08834 | Outputs: a representation with a declared reconstruction map. Calibration: D09's likelihood over both parts | Candidate |
 | Residuals correlated along the output index | Andros, Guhaniyogi, Francom and Pasqualini, arXiv 2406.18751, 2602.09351 | Fitting: the output-side inner product; the residual-dependence check | Candidate |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
@@ -117,6 +118,26 @@ Posterior active-subspace analysis beside the Sobol stage (arXiv 2307.11241, *Di
 Evidence for BARS, BASS and BGP by path sampling (derivations review §7, item 8). It needs proper priors in every engine, stated in each engine's units. BASS has them by default since D03 was decided (2026-10-27: σ² scaled to the response, the intercept level-centred), as Normal BARS has. Under D03's evidence rule, evidence is reported from any run that can give one, empirical-Bayes in the level and scale, and the predictive checks already built for OQ17 (WAIC, PSIS-LOO) are the default comparison across engines.
 
 **Held-out runs (added 2026-10-26).** Where runs are held out, proper scores compare any engines that produce predictive draws, with no evidence and no shared prior: the energy score over whole-output draws, and the interval score for marginal intervals (Gneiting and Raftery 2007, as used by Andros et al., arXiv 2406.18751). The energy score rewards the cross-output dependence that D07's joint draws keep, and it is where a missing truncation residual or an independent-noise model shows up. The scorers read draws only and know no model, like the OQ17 consumers.
+
+**Why the engines compare at all (added 2026-10-28).** Farhi, Hed, Bon, Caticha, Mak and Domany (2013, *Physica A* 392, *Temperature Integration*) compute the free-energy difference between two systems by integrating each one's energy over temperature from a common high-temperature limit. That needs the two to share a phase space, so that Z agrees there. Evidence needs less: a normalized prior gives Z(0) = 1 in any dimension, so BARS, BASS and BGP compare without sharing a parameter space. BASS's evidence already has the paper's shape: D05's ladder doubles as the integration points, and its reference rung closes the integral at b = 0 exactly. SPC's notes adopt that closure (`issues/spc/opus-spin-glass-threads.md`, Thread 5).
+
+**Bayes factors under the improper options (added 2026-10-28).** D03 reports a run's evidence only under proper priors, and that stands. A Bayes factor between two runs is a narrower quantity. Liang, Paulo, Molina, Clyde and Berger (2008, *JASA* 103) put 1/σ² and a flat intercept on the parameters every model shares, because their arbitrary constants cancel in Bayes factors. Farhi et al.'s energy cutoff is the computational form of that argument: the same truncation in both systems, wide enough not to matter at the temperature of interest, and checked for insensitivity to where it sits.
+- Here: truncate the improper priors identically in both runs, run each ladder to its reference rung, take the difference of the evidences, and widen the truncation until the difference stops moving.
+- It holds only between models whose improper parameters mean the same thing: the same response, the same intercept convention.
+- Cost: a truncated σ² or intercept changes the collapsed integrated form (incomplete-gamma and normal-CDF terms in place of the closed form).
+- It is an option, not a gap: D03's proper defaults already give evidence.
+
+## The free-energy curve over the ladder
+
+The ladder's evidence is one point, b = 1, of a curve: ln Z(b) at every rung, the free energy of each tempered posterior π(F)·p_b. Farhi et al. read ΔF at any temperature of interest, and three readouts sit on the curve here.
+- **Tempered posteriors.** A posterior with likelihood weight b < 1 is a generalized-Bayes posterior with learning rate η = b (Bissiri, Holmes and Walker 2016, *JRSS B* 78), used for robustness to misspecification. ln Z(η) is not by itself a rule for choosing η; SafeBayes, for one, chooses by sequential predictive loss. What the ladder gives without new sampling is each rung's tempered posterior, so the sensitivity of any readout to η is a view over the ladder once its rungs' draws are kept. This is unrelated to GBMARS, whose "generalized" is the noise family (first entry).
+- **WBIC** (Watanabe 2013, *JMLR* 14). The free energy from a single rung, E_b[−ℓ] at b = 1/ln N with ℓ the log-likelihood, valid for singular models, where BIC is not. With the hot end at 1/N that rung lies inside the ladder (at N = 200, 1/N = 0.005 and 1/ln N ≈ 0.19), and the ladder's own ln Z(1) checks it.
+- **The real log canonical threshold λ.** At large Nb, E_b[−ℓ] ≈ −ℓ(w₀) + λ/b plus lower-order terms, so the slope of E_b[−ℓ] against 1/b, between rungs near 1/ln N, estimates λ; Watanabe (2013) gives the two-rung estimator. λ is the Bayesian effective dimension of a singular model. Adaptive splines are singular: a term whose coefficient is zero leaves its knots and variables unidentified, so λ, not the basis count, measures their complexity. Which decision it would inform (calibrating the basis-count prior, comparing engines) is open.
+
+**Needs.**
+- D05's ladder with the reference rung, and its rungs' draws kept, beyond the scalar traces evidence reads.
+- The integrated form's per-draw slope ∂_b ln p_b at a rung. BASS does not produce it today: in `BassEvidence` only the linear form's slope comes free, and on the integrated form it is infinite at b = 0 under Zellner–Siow, though finite at 1/ln N.
+- A rung pinned at 1/ln N, or a rule for reading between rungs, since an adaptive ladder places its interior rungs by swap rejections.
 
 ## Elastic emulation of misaligned functional outputs
 
