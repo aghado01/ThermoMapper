@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Xunit;
@@ -34,8 +35,9 @@ namespace Maths.Regression.Tests;
 /// <para>
 /// Both are qualification runs (<see cref="BassQualification.Enabled"/>), whose verdicts the fitting checklist records. Under
 /// fixed g (about a minute) the collapsed ratios 1/p(yᵢ | y₋ᵢ, S) repeat exactly within a structure, the clumping that
-/// made BARS's collapsed k̂ pessimistic; sampled g, the default, is heavier, each structure's quadrature in u taking
-/// 2,112 nodes. A total's Monte Carlo error is NaN whenever a unit is flagged, as loo reports it.
+/// made BARS's collapsed k̂ pessimistic; sampled g, the default, is heavier: F holds 464,094 structures here, each
+/// with its quadrature in u, so the structures run in parallel. A total's Monte Carlo error is NaN whenever a unit is
+/// flagged, as loo reports it.
 /// </para>
 /// </summary>
 public sealed class BassQualificationLooTests
@@ -102,23 +104,24 @@ public sealed class BassQualificationLooTests
         }
     }
 
-    // log p(yᵢ | y₋ᵢ) for every observation, exact over F and, under sampled g, by quadrature in u.
+    // log p(yᵢ | y₋ᵢ) for every observation, exact over F and, under sampled g, by quadrature in u: panels of width 2,
+    // whose structure sums agreed with BassTargetTests' ½ to 1e-11 on 150 structures of each response, at a quarter of
+    // the nodes. The structures run in parallel, each worker with its own term table; the sums over F run in order.
     private static double[] ExactLoo(BassModel model)
     {
         BassTarget target = model.Target;
         int n = model.Resolved.Observations;
         List<(double U, double W)> nodes = target.SamplesTau
-            ? [.. BassTargetTests.Nodes(Math.Log(1.0 / n) - 80, Math.Log(1.0 / n) + 8)]
+            ? [.. BassTargetTests.Nodes(Math.Log(1.0 / n) - 80, Math.Log(1.0 / n) + 8, width: 2.0)]
             : [(double.NaN, 1.0)];
         List<(BassTerm[] Terms, double LogPrior)> f = BassSweepTests.EnumerateF(model);
         var numerators = new double[f.Count];
         var denominators = new double[f.Count, n];
-        var table = new BassTermTable();
-        var logw = new double[nodes.Count];
-        var column = new double[nodes.Count];
-        for (int k = 0; k < f.Count; k++)
+        Parallel.For(0, f.Count, () => new BassTermTable(), (k, _, table) =>
         {
             (BassTerm[] terms, double logPrior) = f[k];
+            var logw = new double[nodes.Count];
+            var column = new double[nodes.Count];
             BassDesign design = model.NewDesign();
             Assert.Null(design.Load(terms));
             BassStructureFit fit = BassStructureFit.Of(design, 0.0);
@@ -140,7 +143,8 @@ public sealed class BassQualificationLooTests
                 for (int i = 0; i < nodes.Count; i++) column[i] = logw[i] - leaveOut[i, unit];
                 denominators[k, unit] = LogSumExp(column);
             }
-        }
+            return table;
+        }, _ => { });
         double numerator = LogSumExp(numerators);
         var reference = new double[n];
         var structures = new double[f.Count];

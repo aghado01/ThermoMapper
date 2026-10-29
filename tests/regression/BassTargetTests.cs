@@ -328,15 +328,15 @@ public sealed class BassTargetTests
         Assert.False(built.Target.Evaluate(fit, -700.0).OffSupport);
     }
 
-    // Composite 12-point Gauss–Legendre on panels of width ½ over [lo, hi].
-    internal static IEnumerable<(double U, double W)> Nodes(double lo, double hi)
+    // Composite 12-point Gauss–Legendre on panels of width at most `width` (½ by default) over [lo, hi].
+    internal static IEnumerable<(double U, double W)> Nodes(double lo, double hi, double width = 0.5)
     {
         (double[] x, double[] w) = GaussLegendre(12);
-        int panels = (int)Math.Ceiling((hi - lo) / 0.5);
-        double width = (hi - lo) / panels;
+        int panels = (int)Math.Ceiling((hi - lo) / width);
+        double step = (hi - lo) / panels;
         for (int p = 0; p < panels; p++)
             for (int i = 0; i < x.Length; i++)
-                yield return (lo + width * (p + 0.5 * (x[i] + 1)), 0.5 * width * w[i]);
+                yield return (lo + step * (p + 0.5 * (x[i] + 1)), 0.5 * step * w[i]);
     }
 
     // Nodes and weights of the n-point rule on [−1, 1], by Newton's method on Pₙ.
