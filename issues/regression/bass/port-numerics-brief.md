@@ -96,7 +96,7 @@ Candidate numerical work remains private until acceptance. Rejection leaves the 
 
 ## D10 (decided 2026-10-29): stopping and convergence semantics
 
-Drafted and decided on 2026-10-29: the user took the draft as written, with its four points. Sources:
+Drafted and decided on 2026-10-29: the user took the draft as written, with its four points. Built the same day by N14 (`e8547d3`, `e88b33e`, `1c26dcd`; the numerics checklist's report). Sources:
 - Vehtari, Gelman, Simpson, Carpenter and Bürkner (2021), on rank-normalized R̂ and bulk and tail ESS;
 - B01's repaired stopping mechanics (`ChainEnsemble`'s R̂ stop);
 - F-M2's pass (2026-10-29, the fitting checklist's reports), whose untempered chains never agreed at S10's lengths;
