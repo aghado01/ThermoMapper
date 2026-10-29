@@ -148,6 +148,10 @@ public sealed class BassSweepTests
     [InlineData("cancelling", "none")]
     [InlineData("equal", "steps")]
     [InlineData("cancelling", "steps")]
+    [InlineData("equal", "family")]
+    [InlineData("cancelling", "family")]
+    [InlineData("equal", "all")]
+    [InlineData("cancelling", "all")]
     public void ConstantLikelihood_SamplesThePriorOnF(string schedule, string options)
     {
         BassData data = Data();
@@ -418,6 +422,8 @@ public sealed class BassSweepTests
     [InlineData(true, "none")]
     [InlineData(false, "steps")]
     [InlineData(true, "steps")]
+    [InlineData(false, "all")]
+    [InlineData(true, "all")]
     public void Design_FollowsTheChain(bool functional, string options)
     {
         BassData data = functional ? FunctionalData() : Data(large: true);

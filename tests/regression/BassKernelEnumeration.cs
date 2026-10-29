@@ -430,6 +430,119 @@ internal static class BassKernelEnumeration
         }
     }
 
+    /// <summary>
+    /// The fixed-M family as Phase 1's decisions state it, by its keys "prune", "grow" and "variable": a term 1/M, a part
+    /// 1/P among the fit's parts; a prune's factor 1/K (an empty part a null move, a term left empty refused); a grow's
+    /// variable 1/(p − K) among the unused, at its cap or with none unused a null move; a variable change's factor 1/K and
+    /// its new variable 1/(p − K), an empty part or none unused a null move; each new factor from its variable's prior,
+    /// a sign and knot at 1/(2n_v) or a subset at the measure's probability. Every term at M = 0 is a null move.
+    /// </summary>
+    internal static IEnumerable<Enumerated> Family(Space space, string key, State s)
+    {
+        BassModel model = space.Model;
+        BassTermProposal proposal = model.Proposal;
+        int m = s.Terms.Length;
+        if (m == 0) yield break;
+        BassPart[] parts = [.. Enum.GetValues<BassPart>().Where(model.Prior.Has)];
+        foreach (BassTerm t in s.Terms)
+        {
+            BassTerm[] others = [.. s.Terms.Where(u => !u.Equals(t))];
+            foreach (BassPart part in parts)
+            {
+                double logPick = -Math.Log(m) - Math.Log(parts.Length);
+                int k = BassStructurePrior.Order(t, part), cap = model.Prior.Cap(part);
+                HashSet<int> used = [.. BassTermCounts.Variables(t, part)];
+                int[] unused = [.. Enumerable.Range(0, model.Prior.Variables(part)).Where(v => !used.Contains(v))];
+                switch (key)
+                {
+                    case "prune":
+                        for (int f = 0; f < k; f++)
+                        {
+                            BassTermMove move = proposal.Pruned(t, part, f);
+                            if (Factors(t).Count == 1)
+                            {
+                                Assert.True(move.LeavesIntercept, $"pruning {t}'s only factor leaves the intercept");
+                                continue;
+                            }
+                            BassTerm pruned = Removed(t, part, f);
+                            Assert.Equal(pruned, move.Term);
+                            yield return new Enumerated(PruneGrow, [.. others, pruned], logPick - Math.Log(k), move.LogProposalRatio);
+                        }
+                        break;
+                    case "grow":
+                        if (k >= cap || unused.Length == 0) break;
+                        foreach (int v in unused)
+                            foreach ((HingeFactor hinge, CategoricalFactor? subset, double logFactor) in FactorsOf(model, part, v))
+                            {
+                                BassTermMove move = subset is null ? proposal.Grown(t, part, hinge) : proposal.Grown(t, part, subset);
+                                BassTerm grown = Added(t, part, hinge, subset);
+                                Assert.Equal(grown, move.Term);
+                                yield return new Enumerated(PruneGrow, [.. others, grown], logPick - Math.Log(unused.Length) + logFactor, move.LogProposalRatio);
+                            }
+                        break;
+                    case "variable":
+                        if (k == 0 || unused.Length == 0) break;
+                        for (int f = 0; f < k; f++)
+                            foreach (int v in unused)
+                                foreach ((HingeFactor hinge, CategoricalFactor? subset, double logFactor) in FactorsOf(model, part, v))
+                                {
+                                    BassTermMove move = subset is null ? proposal.Exchanged(t, part, f, hinge) : proposal.Exchanged(t, part, f, subset);
+                                    BassTerm changed = Replaced(t, part, f, hinge, subset);
+                                    Assert.Equal(changed, move.Term);
+                                    yield return new Enumerated(VariableChange, [.. others, changed],
+                                                                logPick - Math.Log(k) - Math.Log(unused.Length) + logFactor, move.LogProposalRatio);
+                                }
+                        break;
+                }
+            }
+        }
+    }
+
+    /// <summary>D01's moves with the local steps <paramref name="steps"/> when on, and the fixed-M family by its keys.</summary>
+    internal static IEnumerable<Enumerated> All(Space space, string key, State s, LocalSteps? steps)
+        => key is "prune" or "grow" or "variable" ? Family(space, key, s) : D01(space, key, s, steps);
+
+    /// <summary>Each factor variable <paramref name="v"/> of <paramref name="part"/> can take, with its prior's log
+    /// probability as D01 states it: every sign and knot at 1/(2n_v), or every proper subset at the measure's.</summary>
+    internal static IEnumerable<(HingeFactor Hinge, CategoricalFactor? Subset, double LogProbability)> FactorsOf(BassModel model, BassPart part, int v)
+    {
+        if (part == BassPart.Categorical)
+        {
+            int levels = model.Inputs.LevelCount(v);
+            foreach (int[] subset in ProperSubsets(levels))
+                yield return (default, new CategoricalFactor(v, subset), LogSubsetMeasure(model.Prior.Subsets, levels, subset.Length));
+            yield break;
+        }
+        int knots = part == BassPart.Continuous ? model.Inputs.ContinuousKnots(v).Length : model.Inputs.FunctionalKnots(v).Length;
+        foreach (int sign in new[] { -1, 1 })
+            for (int knot = 0; knot < knots; knot++) yield return (new HingeFactor(v, sign, knot), null, -Math.Log(2.0 * knots));
+    }
+
+    /// <summary><paramref name="t"/> without factor <paramref name="index"/> of <paramref name="part"/>; it must keep a factor.</summary>
+    internal static BassTerm Removed(BassTerm t, BassPart part, int index) => part switch
+    {
+        BassPart.Continuous => new BassTerm(t.Continuous.Where((_, i) => i != index), t.Categorical, t.Functional),
+        BassPart.Categorical => new BassTerm(t.Continuous, t.Categorical.Where((_, i) => i != index), t.Functional),
+        _ => new BassTerm(t.Continuous, t.Categorical, t.Functional.Where((_, i) => i != index)),
+    };
+
+    /// <summary><paramref name="t"/> with a factor added to <paramref name="part"/>: <paramref name="subset"/> for the
+    /// categorical part, else <paramref name="hinge"/>.</summary>
+    internal static BassTerm Added(BassTerm t, BassPart part, HingeFactor hinge, CategoricalFactor? subset) => part switch
+    {
+        BassPart.Continuous => new BassTerm([.. t.Continuous, hinge], t.Categorical, t.Functional),
+        BassPart.Categorical => new BassTerm(t.Continuous, [.. t.Categorical, subset!], t.Functional),
+        _ => new BassTerm(t.Continuous, t.Categorical, [.. t.Functional, hinge]),
+    };
+
+    /// <summary><paramref name="t"/> with factor <paramref name="index"/> of <paramref name="part"/> replaced:
+    /// <paramref name="subset"/> for the categorical part, else <paramref name="hinge"/>.</summary>
+    internal static BassTerm Replaced(BassTerm t, BassPart part, int index, HingeFactor hinge, CategoricalFactor? subset) => part switch
+    {
+        BassPart.Categorical => WithSubset(t, index, subset!),
+        _ => WithHinge(t, part, index, hinge),
+    };
+
     /// <summary>A term's factors as the change counts them: continuous, categorical, then functional.</summary>
     internal static List<(BassPart Part, int Index)> Factors(BassTerm t)
         => [.. Enumerable.Range(0, t.Continuous.Count).Select(i => (BassPart.Continuous, i)),

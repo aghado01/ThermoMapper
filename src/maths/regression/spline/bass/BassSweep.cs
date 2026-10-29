@@ -23,6 +23,12 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>The proposals.</b> A birth draws its term from D01's proposal (an empty draw is no move); a death and a change
 /// pick a term uniformly. Each candidate carries its fit from the design, or the design's refusal, which the target
 /// scores off the support, and its within-move ratio from <see cref="BassTermProposal"/>.</item>
+/// <item><b>F-M2's options.</b> With <see cref="BassSampling.LocalSteps"/> a change steps its factor locally with
+/// probability ρ. With <see cref="BassSampling.FactorMoves"/> the prune, the grow and the variable change join the palette
+/// at fixed M, sharing the change's slot by <see cref="BassResolved.FactorShares"/>, so the births' and deaths' weights
+/// are the schedule's alone. A null move (a step off the knots, a prune from an empty part, a grow into a full one, any of
+/// the family at M = 0) is attempted and rejected, the state and the design untouched. Off, the palette and its draws are
+/// D01's.</item>
 /// <item><b>The design follows the chain.</b> A proposal leaves the design's candidate pending; when the chain next
 /// shows a state holding that candidate's structure it was accepted, and the design commits it. A replica handed a
 /// state by a swap adopts its giver's design, and a resize's new replica its source's (<see cref="BassLadder"/>); any
@@ -33,7 +39,7 @@ namespace Maths.Regression.Spline.Bass;
 /// </summary>
 public sealed class BassStructureMoves
 {
-    private enum Kind { Birth, Death, Change }
+    private enum Kind { Birth, Death, Change, Prune, Grow, VariableChange }
 
     private readonly BassModel _model;
     private readonly BassDesign _design;
@@ -41,6 +47,7 @@ public sealed class BassStructureMoves
     private BassState _committed;
     private (BassState State, Kind Kind, BassTerm? Added, BassTerm? Removed)? _candidate;
     private readonly Dictionary<BassTerm, double> _columnMeans = [];
+    private readonly BassFactorShares? _shares;   // the fixed-M family's shares of the change's slot; null when off
 
     /// <summary>The moves of a chain started at <paramref name="terms"/>, which must lie in F, with u =
     /// <paramref name="logTau"/> (the held τ's log under fixed g).</summary>
@@ -57,7 +64,8 @@ public sealed class BassStructureMoves
         _counts = CountsOf(loaded);
         _committed = Start;
         Support = new BassSupportTally(model.Prior);
-        Moves = [new Birth(this), new Death(this), new Change(this)];
+        _shares = model.Resolved.FactorShares;
+        Moves = Palette();
     }
 
     // The moves restored at `current` from `snapshot` (Snapshot): the design as it was, the counts from the structure,
@@ -77,14 +85,22 @@ public sealed class BassStructureMoves
         Refusals.Assign(snapshot.Refusals);
         EmptyBirths = snapshot.EmptyBirths;
         Support = snapshot.Support.Copy();
-        Moves = [new Birth(this), new Death(this), new Change(this)];
+        _shares = model.Resolved.FactorShares;
+        Moves = Palette();
     }
 
     /// <summary>The state these moves started from: the chain's start, or the state they were restored at.</summary>
     public BassState Start { get; }
 
-    /// <summary>The birth, death and change moves, keyed "birth", "death" and "change".</summary>
+    /// <summary>The birth, death and change moves, keyed "birth", "death" and "change"; with the fixed-M family on, then
+    /// the prune, the grow and the variable change, keyed "prune", "grow" and "variable".</summary>
     public IReadOnlyList<IRjMove<BassState>> Moves { get; }
+
+    // D01's palette, and the fixed-M family when it is on.
+    private IRjMove<BassState>[] Palette() => _shares is null
+        ? [new Birth(this), new Death(this), new Change(this)]
+        : [new Birth(this), new Death(this), new Change(this),
+           new FactorMove(this, Kind.Prune), new FactorMove(this, Kind.Grow), new FactorMove(this, Kind.VariableChange)];
 
     /// <summary>Refused candidates by reason: the design's (cap, support, numerical, variance inflation) and the
     /// target's exact fits.</summary>
@@ -258,8 +274,18 @@ public sealed class BassStructureMoves
         return candidate;
     }
 
-    // D01's schedule: each move's weight at M, normalized by the chain over the palette.
+    // D01's schedule: each move's weight at M, normalized by the chain over the palette. With the fixed-M family on, the
+    // change's slot is shared by the shares: the change's, the prune's, the grow's and the variable change's.
     private double Weight(Kind kind, int m)
+    {
+        if (kind is Kind.Birth or Kind.Death) return ScheduleWeight(kind, m);
+        double slot = ScheduleWeight(Kind.Change, m);
+        if (_shares is not { } shares) return slot;
+        return slot * kind switch { Kind.Change => shares.Change, Kind.Prune => shares.Prune, Kind.Grow => shares.Grow, _ => shares.VariableChange };
+    }
+
+    // The schedule's birth, death and change weights at M.
+    private double ScheduleWeight(Kind kind, int m)
     {
         int cap = _model.MaxBasis;
         bool birth = m < cap, other = m > 0;
@@ -330,6 +356,36 @@ public sealed class BassStructureMoves
             int index = BassDraws.Below(rng, current.Count);
             BassTerm old = current.TermArray[index];
             return owner.Replace(current, index, owner._model.Proposal.ProposeChange(rng, old));
+        }
+    }
+
+    // The fixed-M family's prune, grow and variable change: a term uniformly, then its proposal. At M = 0, which only the
+    // prior-cancelling schedule gives the family weight, each is a null move. The prune and the grow reverse each other at
+    // equal weights, so the selection is matched; the variable change reverses itself.
+    private sealed class FactorMove(BassStructureMoves owner, Kind kind) : IRjMove<BassState>
+    {
+        public string Key => kind switch { Kind.Prune => "prune", Kind.Grow => "grow", _ => "variable" };
+        public string ReverseKey => kind switch { Kind.Prune => "grow", Kind.Grow => "prune", _ => "variable" };
+        public double Weight(BassState state) => owner.Weight(kind, state.Count);
+
+        public Proposal<BassState>? Propose(BassState current, Xoshiro256PlusPlus rng)
+        {
+            owner.Sync(current);
+            if (current.Count == 0)
+            {
+                owner._candidate = null;
+                return new Proposal<BassState>(current, double.NegativeInfinity, 0.0);
+            }
+            int index = BassDraws.Below(rng, current.Count);
+            BassTerm old = current.TermArray[index];
+            BassTermProposal proposal = owner._model.Proposal;
+            BassTermMove move = kind switch
+            {
+                Kind.Prune => proposal.ProposePrune(rng, old),
+                Kind.Grow => proposal.ProposeGrow(rng, old),
+                _ => proposal.ProposeVariableChange(rng, old),
+            };
+            return owner.Replace(current, index, move);
         }
     }
 

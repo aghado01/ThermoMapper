@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Maths.Distributions;
 using Maths.Rng;
@@ -29,6 +30,7 @@ public sealed class BassTermProposal
     private const int StackLimit = 256;
 
     private readonly int[]?[] _windows = new int[]?[3];   // the local steps' w by hinge variable, per hinge part
+    private readonly BassPart[] _parts;                    // the fit's parts, among which the fixed-M family picks
 
     /// <summary>Proposals over <paramref name="prior"/>'s term space with the pseudo-counts w₁ and w₂, both positive, and
     /// the local steps <paramref name="steps"/> inside a change (null for D01's redraw alone).</summary>
@@ -45,6 +47,7 @@ public sealed class BassTermProposal
         OrderWeight = orderWeight;
         VariableWeight = variableWeight;
         Steps = steps;
+        _parts = [.. Enum.GetValues<BassPart>().Where(prior.Has)];
         if (steps is null) return;
         foreach (BassPart kind in (ReadOnlySpan<BassPart>)[BassPart.Continuous, BassPart.Functional])
         {
@@ -264,6 +267,196 @@ public sealed class BassTermProposal
         outputs[pick - continuous - categorical] = DrawHinge(rng, Prior[BassPart.Functional]!, outputs[pick - continuous - categorical].Variable);
         return new BassTerm(term.Continuous, term.Categorical, outputs);
     }
+
+    /// <summary>
+    /// The fixed-M family's prune (F-M2's Phase 1, decided 2026-10-29): a part uniformly among the fit's P parts, then one
+    /// of its K factors uniformly, removed (<see cref="Pruned"/>). An empty part is a null move.
+    /// </summary>
+    public BassTermMove ProposePrune(Xoshiro256PlusPlus rng, BassTerm term)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        Prior.Validate(term);
+        BassPart part = DrawPart(rng);
+        int k = BassStructurePrior.Order(term, part);
+        return k == 0 ? new BassTermMove(BassMoveKind.Prune, null, double.NaN) : Pruned(term, part, BassDraws.Below(rng, k));
+    }
+
+    /// <summary>
+    /// The fixed-M family's grow: a part uniformly among the fit's P parts, then a variable uniformly among the part's
+    /// unused ones, with its sign and knot, or its subset, from the prior (<see cref="Grown(BassTerm, BassPart, HingeFactor)"/>).
+    /// A full part, at its cap or using every variable, is a null move.
+    /// </summary>
+    public BassTermMove ProposeGrow(Xoshiro256PlusPlus rng, BassTerm term)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        Prior.Validate(term);
+        BassPart part = DrawPart(rng);
+        BassStructurePrior.Part p = Prior[part]!;
+        int k = BassStructurePrior.Order(term, part);
+        if (k >= p.Cap || k >= p.Sizes.Length) return new BassTermMove(BassMoveKind.Grow, null, double.NaN);
+        int[] unused = Unused(term, part);
+        int v = unused[BassDraws.Below(rng, unused.Length)];
+        return part == BassPart.Categorical ? Grown(term, part, p.DrawSubset(rng, v, Prior.Subsets)) : Grown(term, part, DrawHinge(rng, p, v));
+    }
+
+    /// <summary>
+    /// The fixed-M family's variable change: a part uniformly among the fit's P parts, one of its K factors uniformly,
+    /// then a variable v′ uniformly among the part's unused ones, with its sign and knot, or its subset, from v′'s prior
+    /// (<see cref="Exchanged(BassTerm, BassPart, int, HingeFactor)"/>). An empty part, or one with no unused variable, is a
+    /// null move.
+    /// </summary>
+    public BassTermMove ProposeVariableChange(Xoshiro256PlusPlus rng, BassTerm term)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        Prior.Validate(term);
+        BassPart part = DrawPart(rng);
+        BassStructurePrior.Part p = Prior[part]!;
+        int k = BassStructurePrior.Order(term, part);
+        if (k == 0 || k >= p.Sizes.Length) return new BassTermMove(BassMoveKind.VariableChange, null, double.NaN);
+        int index = BassDraws.Below(rng, k);
+        int[] unused = Unused(term, part);
+        int v = unused[BassDraws.Below(rng, unused.Length)];
+        return part == BassPart.Categorical
+            ? Exchanged(term, part, index, p.DrawSubset(rng, v, Prior.Subsets))
+            : Exchanged(term, part, index, DrawHinge(rng, p, v));
+    }
+
+    /// <summary>
+    /// <paramref name="term"/> with factor <paramref name="index"/> of <paramref name="part"/> removed, and its log ratio
+    /// (<see cref="LogPruneRatio"/>); a term left with no factor is the intercept, outside F, which the move refuses.
+    /// </summary>
+    internal BassTermMove Pruned(BassTerm term, BassPart part, int index)
+    {
+        int k = BassStructurePrior.Order(term, part);
+        if ((uint)index >= (uint)k) throw new ArgumentOutOfRangeException(nameof(index));
+        if (FactorCount(term) == 1) return new BassTermMove(BassMoveKind.Prune, null, double.NaN, LeavesIntercept: true);
+        BassTerm pruned = part == BassPart.Categorical
+            ? new BassTerm(term.Continuous, Without(term.Categorical, index), term.Functional)
+            : WithHinges(term, part, Without(BassStructurePrior.Hinges(term, part), index));
+        return new BassTermMove(BassMoveKind.Prune, pruned, LogPruneRatio(term, part, index));
+    }
+
+    /// <summary><paramref name="term"/> with <paramref name="hinge"/> grown into <paramref name="part"/>, a hinge part whose
+    /// order lies below its cap and which does not use the hinge's variable, and its log ratio (<see cref="LogGrowRatio"/>).</summary>
+    internal BassTermMove Grown(BassTerm term, BassPart part, HingeFactor hinge)
+    {
+        CheckGrow(term, part, hinge.Variable);
+        BassTerm grown = WithHinges(term, part, [.. BassStructurePrior.Hinges(term, part), hinge]);
+        return new BassTermMove(BassMoveKind.Grow, grown, LogGrowRatio(term, part, LogFactorProposal(part, hinge.Variable, 0)));
+    }
+
+    /// <summary><paramref name="term"/> with <paramref name="subset"/> grown into its categorical part, and its log ratio.</summary>
+    internal BassTermMove Grown(BassTerm term, BassPart part, CategoricalFactor subset)
+    {
+        if (part != BassPart.Categorical) throw new ArgumentException("A subset grows into the categorical part.", nameof(part));
+        CheckGrow(term, part, subset.Variable);
+        var grown = new BassTerm(term.Continuous, [.. term.Categorical, subset], term.Functional);
+        return new BassTermMove(BassMoveKind.Grow, grown, LogGrowRatio(term, part, LogFactorProposal(part, subset.Variable, subset.Levels.Count)));
+    }
+
+    /// <summary><paramref name="term"/> with factor <paramref name="index"/> of <paramref name="part"/>, a hinge part,
+    /// exchanged for <paramref name="hinge"/> on a variable the part does not use, and its log ratio
+    /// (<see cref="LogVariableChangeRatio"/>).</summary>
+    internal BassTermMove Exchanged(BassTerm term, BassPart part, int index, HingeFactor hinge)
+    {
+        if (part == BassPart.Categorical) throw new ArgumentException("A hinge belongs to a hinge part.", nameof(part));
+        IReadOnlyList<HingeFactor> hinges = BassStructurePrior.Hinges(term, part);
+        CheckExchange(term, part, index, hinge.Variable);
+        HingeFactor[] changed = [.. hinges];
+        changed[index] = hinge;
+        return new BassTermMove(BassMoveKind.VariableChange, WithHinges(term, part, changed),
+                                LogVariableChangeRatio(LogFactorProposal(part, hinges[index].Variable, 0), LogFactorProposal(part, hinge.Variable, 0)));
+    }
+
+    /// <summary><paramref name="term"/>'s categorical factor <paramref name="index"/> exchanged for <paramref name="subset"/>
+    /// on a variable the part does not use, and its log ratio.</summary>
+    internal BassTermMove Exchanged(BassTerm term, BassPart part, int index, CategoricalFactor subset)
+    {
+        if (part != BassPart.Categorical) throw new ArgumentException("A subset belongs to the categorical part.", nameof(part));
+        CheckExchange(term, part, index, subset.Variable);
+        CategoricalFactor[] changed = [.. term.Categorical];
+        CategoricalFactor old = changed[index];
+        changed[index] = subset;
+        return new BassTermMove(BassMoveKind.VariableChange, new BassTerm(term.Continuous, changed, term.Functional),
+                                LogVariableChangeRatio(LogFactorProposal(part, old.Variable, old.Levels.Count),
+                                                       LogFactorProposal(part, subset.Variable, subset.Levels.Count)));
+    }
+
+    /// <summary>
+    /// A prune's within-move log ratio, ln q(grow back | t′) − ln q(prune | t), from the proposals both ways: the prune
+    /// picks the part (1/P) and the factor (1/K); the grow back picks the part (1/P), the variable among the
+    /// p − K + 1 the pruned term leaves unused, and the factor from its prior. The target's prior ratio cancels it for
+    /// K ≥ 2 by C(p, K)/C(p, K − 1) = (p − K + 1)/K, and for K = 1 → 0 by each part's order being uniform on
+    /// {0, …, cap} with C(p, 1) = p.
+    /// </summary>
+    internal double LogPruneRatio(BassTerm term, BassPart part, int index)
+    {
+        int k = BassStructurePrior.Order(term, part), p = Prior[part]!.Sizes.Length;
+        double forward = -Math.Log(_parts.Length) - Math.Log(k);
+        double reverse = -Math.Log(_parts.Length) - Math.Log(p - k + 1) + LogFactorProposal(term, part, index);
+        return reverse - forward;
+    }
+
+    /// <summary>
+    /// A grow's within-move log ratio, ln q(prune back | t′) − ln q(grow | t), from the proposals both ways: the grow picks
+    /// the part (1/P), the variable among the p − K unused, and the factor from its prior (log probability
+    /// <paramref name="logFactor"/>); the prune back picks the part (1/P) and the grown factor among K + 1.
+    /// </summary>
+    internal double LogGrowRatio(BassTerm term, BassPart part, double logFactor)
+    {
+        int k = BassStructurePrior.Order(term, part), p = Prior[part]!.Sizes.Length;
+        double forward = -Math.Log(_parts.Length) - Math.Log(p - k) + logFactor;
+        double reverse = -Math.Log(_parts.Length) - Math.Log(k + 1);
+        return reverse - forward;
+    }
+
+    /// <summary>
+    /// A variable change's within-move log ratio: both ways pick the part (1/P), the factor (1/K) and the variable among the
+    /// p − K unused, so it is the factors' prior probabilities, the old's (<paramref name="logOld"/>) over the new's
+    /// (<paramref name="logNew"/>), which the target's prior ratio cancels.
+    /// </summary>
+    internal static double LogVariableChangeRatio(double logOld, double logNew) => logOld - logNew;
+
+    // ln of a factor's draw from its variable's prior, as a grow or a variable change makes it: a hinge's sign and knot
+    // uniform, 1/(2n_v); a subset of `size` from the declared measure, which DrawSubset samples.
+    private double LogFactorProposal(BassPart part, int variable, int size)
+    {
+        BassStructurePrior.Part p = Prior[part]!;
+        return part == BassPart.Categorical ? p.LogSubset![variable][size] : -Math.Log(2.0) - Math.Log(p.Sizes[variable]);
+    }
+
+    private double LogFactorProposal(BassTerm term, BassPart part, int index) => part == BassPart.Categorical
+        ? LogFactorProposal(part, term.Categorical[index].Variable, term.Categorical[index].Levels.Count)
+        : LogFactorProposal(part, BassStructurePrior.Hinges(term, part)[index].Variable, 0);
+
+    // A part uniformly among the fit's P parts.
+    private BassPart DrawPart(Xoshiro256PlusPlus rng) => _parts[BassDraws.Below(rng, _parts.Length)];
+
+    // The part's variables the term does not use, ascending.
+    private int[] Unused(BassTerm term, BassPart part)
+    {
+        var used = new HashSet<int>(BassTermCounts.Variables(term, part));
+        return [.. Enumerable.Range(0, Prior[part]!.Sizes.Length).Where(v => !used.Contains(v))];
+    }
+
+    private void CheckGrow(BassTerm term, BassPart part, int variable)
+    {
+        BassStructurePrior.Part p = Prior[part] ?? throw new ArgumentException($"The fit has no {part} part.", nameof(part));
+        if (BassStructurePrior.Order(term, part) >= p.Cap) throw new ArgumentException("The part is at its cap.", nameof(term));
+        if (!Unused(term, part).Contains(variable)) throw new ArgumentException($"The part uses variable {variable} already, or has no such variable.", nameof(variable));
+    }
+
+    private void CheckExchange(BassTerm term, BassPart part, int index, int variable)
+    {
+        if (Prior[part] is null) throw new ArgumentException($"The fit has no {part} part.", nameof(part));
+        if ((uint)index >= (uint)BassStructurePrior.Order(term, part)) throw new ArgumentOutOfRangeException(nameof(index));
+        if (!Unused(term, part).Contains(variable)) throw new ArgumentException($"The part uses variable {variable} already, or has no such variable.", nameof(variable));
+    }
+
+    private static T[] Without<T>(IReadOnlyList<T> factors, int index) => [.. factors.Where((_, i) => i != index)];
+
+    private static BassTerm WithHinges(BassTerm term, BassPart part, HingeFactor[] hinges)
+        => part == BassPart.Continuous ? new BassTerm(hinges, term.Categorical, term.Functional) : new BassTerm(term.Continuous, term.Categorical, hinges);
 
     private static int FactorCount(BassTerm term) => term.Continuous.Count + term.Categorical.Count + term.Functional.Count;
 
