@@ -10,7 +10,7 @@ decided; the "Candidate work" list is what could be briefed.
 |---|---|---|
 | `PhysRevLett.92.157201` | Hed, Young, Domany 2004, *Lack of ultrametricity in the low-T phase of 3D Ising spin glasses* | ultrametricity test conditioned on a clustering |
 | `PhysRevB.76.132408` | Hed, Domany 2007, *Nontrivial link overlap distribution in 3D Ising spin glasses* | link overlap, cross-cluster conditioning |
-| `j.physa.2013.07.036` | Farhi, Hed, …, Domany 2013, *Temperature Integration* | ln Z differences along a tempering ladder |
+| `j.physa.2013.07.036` | Farhi, Hed, …, Domany 2013, *Temperature Integration* | ln Z along a tempering ladder; ΔF between systems with equal Z(0); the energy cutoff |
 | `bioinformatics_19_9_1153` | Getz, Domany 2003, *Coupled two-way clustering server* | SPC stability index in biclustering (not pursued) |
 | `PhysRevD.98.063511` | Leclercq 2018, *Bayesian optimization for likelihood-free cosmological inference* (not Domany) | GP-surrogate acquisition under a simulation budget |
 
@@ -68,7 +68,8 @@ clustering conditions the diagnostic.
   states. The ThermoMapper analogue is clustering retained Swendsen–Wang draws by
   a partition distance (VI, or Thread 2's link overlap) to expose the structure of
   the sampler's own posterior over partitions near a transition. This touches the
-  parked consensus and soft-membership work.
+  parked consensus and soft-membership work. It needs per-sweep partitions: SW
+  retention S5 (`issues/spc/sw-retention-brief.md`).
 
 ## Thread 4: thermodynamic clustering with frustration
 
@@ -129,9 +130,23 @@ Where it stops being an analogy. Sketch only.
   2. **The SPC temperature grid is a tempering ladder without swaps.** Adding
      replica exchange makes it parallel tempering, which frustrated SPC needs and
      which also speeds ferromagnetic SPC near transitions.
-  3. **Free energy.** `LadderEvidence` over the sweep gives ln Z(T) − N ln q.
-     Swendsen–Wang sweeps already accumulate ⟨E⟩(T), so a path-sampling F(T)
-     curve is computable from existing output.
+  3. **Free energy by temperature integration** (Farhi et al. 2013).
+     ln Z(β) − N ln q = −∫₀^β ⟨H⟩ dβ′, with the SPC grid's temperatures as the
+     intermediates. Z(0) = qᴺ for every coupling graph on the same nodes and the
+     Potts energy is bounded, so no cutoff is needed and the result is the
+     absolute free energy. The SW cycle records H = −Σ J δ once per undirected
+     edge, the Hamiltonian it samples.
+     - A trapezoid over the running ⟨E⟩(T) sums works from existing output.
+       `LadderEvidence` (stepping-stone, path sampling with a Monte Carlo error)
+       needs per-sweep energies: SW retention S1.
+     - **Grid closure.** The integral starts at β = 0 and the grid does not.
+       Either add cheap high-T rungs (SW forms few bonds there and mixes in a
+       sweep), or close the top analytically with the forest term
+       ln Z ≈ N ln q + Σₑ ln(1 + (e^{βJₑ} − 1)/q). It is exact on a forest;
+       cycles add corrections at order (e^{βJ} − 1)^girth.
+     - **Equilibrium.** The method assumes converged parallel tempering. SPC's
+       fixed-T chains have no swaps, so ⟨E⟩ can be biased near transitions. R-hat
+       across replicas (S1) marks the rungs to distrust; plank 2 removes the cause.
 - **Temperature placement.** The rejection-rate ladder concentrates rungs where
   the energy distribution changes fastest (the communication barrier tracks energy
   dispersion ∝ √C_v). That is SPC's transitions, which ties tempering theory to the
@@ -139,6 +154,18 @@ Where it stops being an analogy. Sketch only.
 - **Caution.** ΔF between two coupling graphs is not model evidence for the graph
   construction: there is no likelihood of the data given the couplings. It compares
   thermodynamic potentials, not fits.
+- **Two systems.** Two Potts systems on the same nodes and q share Z(0), so ΔF(T)
+  between them is two temperature integrals and needs no λ-path. Between coupling
+  graphs it is dominated by the total coupling scale unless the couplings are
+  normalized (the parked coupling-normalization family). Two pairings may mean
+  more; both are speculative:
+  - **Signed vs unsigned couplings** on the same nodes (Thread 4): the free-energy
+    cost of the repulsions at each T.
+  - **Constrained vs free.** A must-link or cannot-link constraint is an infinite
+    energy term; the paper's cutoff makes it finite so both systems share Z at
+    high T. ΔF = −T ln P(the constraint holds at T): the cost of forcing a split or
+    merge. It reaches probabilities too small to count from samples, as at low T,
+    where direct counting fails.
 
 ## Thread 6: acquisition under a simulation budget (Leclercq)
 
@@ -159,8 +186,10 @@ Where it stops being an analogy. Sketch only.
 2. **Ultrametricity test** (triplet K distribution across top splits, block
    uniformity) as a dendrogram faithfulness diagnostic (Thread 1). Moderate;
    placement decision.
-3. **Free-energy curve from existing SW output** (path sampling over ⟨E⟩(T)
-   through `LadderEvidence`) (Thread 5). Small, no new sampling.
+3. **Free-energy curve by temperature integration** (Thread 5). A trapezoid over
+   the existing ⟨E⟩(T) sums needs no new sampling; the `LadderEvidence` route
+   (Monte Carlo error, stepping-stone) depends on SW retention S1. Either needs the
+   grid closure at β = 0. Small once S1 lands.
 4. **SW as a replica inside `ParallelTempering`** (Thread 5, prerequisite for
    Thread 4). Moderate; needs a Potts state type fitting the ladder's replica
    contract.
