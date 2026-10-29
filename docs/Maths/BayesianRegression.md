@@ -855,7 +855,7 @@ F-M2's Phase 1 (decided 2026-10-29; built by a chip, [its report](../../issues/r
   - For a prune at K ≥ 2, by C(p, K)/C(p, K − 1) = (p − K + 1)/K.
   - For a part's K = 1 → 0, allowed while the term keeps another part, because each part's order is uniform on {0, …, cap} and C(p, 1) = p.
   - For the variable change, the prior's n_v/n_v′ cancels the proposals' n_v′/n_v.
-- *The schedule.* The family shares the change's slot, by the weights' shares (`BassResolved.FactorShares`, thirds by default), so the births' and deaths' weights stay the schedule's own. The prune and the grow reverse each other at equal weights, and the variable change reverses itself.
+- *The schedule.* The family shares the change's slot, by the weights' shares (`BassResolved.FactorShares`, thirds by default, confirmed by the user on 2026-10-29), so the births' and deaths' weights stay the schedule's own. The prune and the grow reverse each other at equal weights, and the variable change reverses itself.
   - The alternative, a slot of its own in the schedule, would lower the births' share and confound the family's reading with F-M1's.
 - *Trade-off.* The pricing found near-free two-step exits where a worse mode differs from a better one by a factor's variable or a redundant factor: the mixed fit's chain 2, and the functional fit's chain 3.
   - It found none on Friedman's worse modes, whose cheapest exit costs 9.8–19.2 nats.
@@ -1180,7 +1180,7 @@ Stage 9 (2026-10-29) builds the data R's `plot`, `print` and `summary` methods s
 - *One weighted quantile.* `DrawSample.Quantile` (see [Samplers](./Samplers.md)) serves every summary and a basis fit's predictive quantiles. Stage 5's step-CDF form (R's type 1) is gone, and a direct fit keeps the Gaussian mixture's exact quantile.
   - Under equal weights at any scale it is type 7; under unequal weights, the weighted ECDF's midpoint rule.
   - The jump between equal and near-equal weights is inherent to pairing the two. It will matter when SMC's unequal weights arrive (stage 8). A weighted type-7 generalization through Kish's effective size is the alternative.
-- *Defaults left reversible* (the stage 9 chip's report):
+- *Defaults* (the stage 9 chip's report; confirmed by the user on 2026-10-29):
   - indices are summarized over the defined draws, variances over every draw;
   - `NoiseSd` is E[σ], as R's code computes it;
   - the trace axis counts sweeps after burn-in, a ladder's scan counting as one;
@@ -1669,8 +1669,8 @@ Every source is checked, papers and their code included (the user's decision, 20
 
 ## Status and caveats
 
-- **This section describes BASS through stage 4** (S1–S10, 2026-10-28), **with stages 5 and 6** (2026-10-29). Calibration (stage 7) and SMC (stage 8) are not built. Stage 9 builds the presentation data; rendering and text formatting wait for a consumer above maths.
-  - *Stage 5 and 6's choices left as reversible defaults* are listed in their chips' reports (`issues/regression/bass/stage5-outputs-brief.md`, `stage6-sensitivity-brief.md`). Among them: basis sensitivity's integrated form includes the mean curve y_m in the location's effect; `Predict`, `Sensitivity` and `Effects` take the training data, since the fit keeps neither its knots nor its inputs; a basis fit's intervals are weighted quantiles of its draws.
+- **This section describes BASS through stage 4** (S1–S10, 2026-10-28), **with stages 5 and 6** (2026-10-29). Calibration (stage 7) and SMC (stage 8) are not built; calibration's design, D09, was decided on 2026-10-29. Stage 9 builds the presentation data; rendering and text formatting wait for a consumer above maths.
+  - *Stage 5 and 6's choices left as reversible defaults* are listed in their chips' reports (`issues/regression/bass/stage5-outputs-brief.md`, `stage6-sensitivity-brief.md`). Among them: basis sensitivity's integrated form includes the mean curve y_m in the location's effect (confirmed by the user on 2026-10-29; the centred anomaly y − y_m would be a later option); `Predict`, `Sensitivity` and `Effects` take the training data, since the fit keeps neither its knots nor its inputs; a basis fit's intervals are weighted quantiles of its draws.
   - *Open from the qualification:* the defaults mix slowly between structures. R̂ of M read 1.5–2.5 on the recovery surfaces at 5,000 + 2,000 sweeps, as R BASS's chains do, with births and deaths accepting about 1.5%; tempering lowers it, but the local moves bound it. Friedman's σ reads high untempered for that reason and for the fit's bias.
   - *Built:* the contracts and their refusals, the terms and the basis, the structure prior and the proposals, the design and admission, the collapsed target, the sweep, the run with its diagnostics and checkpoints, the self-sizing tempered ladder and the evidence, the pointwise density and the residual check, the qualification runs, and F-M2's local-move options (Phase 1).
   - *Not yet built:* prediction, supplied bases and PCA (stage 5), sensitivity (6), calibration (7) and SMC (8). The ridge coefficient priors are deferred until they are built with their own marginal.

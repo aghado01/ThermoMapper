@@ -35,7 +35,7 @@ Existing covariance callers may legitimately require regularization or inverse o
 
 ### Shared Gibbs building blocks (OQ18)
 
-**Open (2026-10-23): shared Gibbs building blocks, and separating samplers from model classes.** Tracked as the preparation brief's OQ18. The user's direction: this kind of unification is the ideal, and samplers should be separate from model classes where that is not unwieldy.
+**Settled: shared Gibbs building blocks, and separating samplers from model classes** (opened 2026-10-23; the plan completed 2026-10-24, phases A–D below). Tracked as the preparation brief's OQ18. The user's direction: this kind of unification is the ideal, and samplers should be separate from model classes where that is not unwieldy.
 - **The observation.** The engines hand-roll the same conjugate steps: 21 sites across 7 files in `Maths.Regression`.
   - **Banded Gaussian conditional draws:** factor a precision band, solve for the mean, add a `SampleInnovation` draw. They appear in BAPS's Gibbs and adaptive sweeps and its marginal-mode β, in `HierarchicalPSpline`'s β_r and β₀, and in the g-prior block's coefficient draw.
   - **Inverse-gamma updates from a sum of squares:** σ², τ², τ_u², τ₀², and the σ² behind BARS's robust weights.

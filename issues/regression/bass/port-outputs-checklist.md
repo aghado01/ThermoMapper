@@ -38,6 +38,16 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 
 ## Reports
 
+### Reversible defaults confirmed — 2026-10-29
+
+The user confirmed these defaults as built (the open-questions review's items 10 and 11):
+- *Basis sensitivity* (O7): the integrated view puts the mean curve y_m in the location's effect. Sensitivity of the centred anomaly y − y_m would be a later option, not a change of default.
+- *The presentation data* (O9):
+  - indices summarized over the defined draws, variances over every draw;
+  - `NoiseSd` = E[σ];
+  - a ladder's scan counted as one sweep on the trace axis;
+  - a basis fit's training-fit intervals from one predictive draw per joint draw.
+
 ### O9 verified: stage 9's presentation data — 2026-10-29
 
 The stage 9 chip built it ([its report](stage9-presentation-brief.md#reports)), read and verified here.

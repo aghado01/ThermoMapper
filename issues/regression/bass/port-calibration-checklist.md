@@ -6,7 +6,7 @@ Companion to [port-calibration-brief.md](port-calibration-brief.md). An item is 
 
 ### Decisions (stage 1)
 
-- [ ] **C-D09** Calibration target and covariance formulations: drafted 2026-10-25 as a proposal; settles at the user's design pass.
+- [x] **C-D09** Calibration target and covariance formulations: drafted 2026-10-25 as a proposal; decided by the user on 2026-10-29 (the brief's D09, amendments marked).
 
 ### Reference fixtures
 
@@ -23,10 +23,30 @@ Companion to [port-calibration-brief.md](port-calibration-brief.md). An item is 
 
 ### Room for extensions
 
-- [ ] **C-X1** The measurement-error model is a declared component.
-- [ ] **C-X2** Emulator draws behind an interface.
+- [ ] **C-X1** The measurement-error model is a declared component. Built in stage 7 itself (D09, 2026-10-29).
+- [ ] **C-X2** Emulator draws behind an interface. Built in stage 7 itself (D09, 2026-10-29).
 
 ## Reports
+
+### D09 decided — 2026-10-29
+
+The user took D09 with argon's resolutions and four amendments from the main session, each marked *(2026-10-29)* in [the brief](port-calibration-brief.md#d09-decided-2026-10-29-calibration-target-and-covariance-formulations).
+- *Adopted as drafted:*
+  - the cut posterior;
+  - the declared covariance formulations, functional on `DiagonalPlusLowRank` and multivariate on the dense factor;
+  - per-group variance priors with R's inverse gamma as the default;
+  - categorical calibration parameters;
+  - the nested conditional reference sampler.
+- *Argon's resolutions:*
+  - C-X2's emulator interface and C-X1's declared measurement model are built in stage 7 itself;
+  - shapes and positive definiteness are validated at construction;
+  - categorical enumeration is capped at 1,024 combinations, with single-site updates above the cap.
+- *The four amendments:*
+  - an emulator without a basis adds σ²_e·I on the diagonal;
+  - the functional formulation carries D07's truncation residuals as a low-rank term, with R's diagonal as an option;
+  - the heavy-tailed variance prior is a half-Cauchy on σ_g with scale ŝ_g, and R's improper, unit-dependent kernel is a defect fixture;
+  - the discrepancy's scale s_v is a required declaration, s_v = 1 reproducing R.
+- *Stage 7 is open.* C1–C3 build against this, with C-X1 and C-X2.
 
 ### R's calibration tempering (C-O1) — 2026-10-27
 

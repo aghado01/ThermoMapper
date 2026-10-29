@@ -35,7 +35,7 @@ Prediction, sensitivity, and summary operations must support weighted posterior 
 
 ## Per-observation log density per draw (OQ17)
 
-**Open (2026-10-23): per-observation log density per draw.** Tracked as the preparation brief's OQ17.
+**Settled: per-observation log density per draw** (opened 2026-10-23 as the preparation brief's OQ17; built 2026-10-24, its report "OQ17 built"; BASS's terms in S9, 2026-10-28).
 - **What.** The observation-model seam that BARS and BASS will share should return log p(yᵢ | xᵢ, draw) for each observation and each retained draw: the n × S pointwise matrix. For functional responses the unit is a case (a whole curve), and its density keeps the within-case correlation.
 - **Who uses it.**
   - **Conformal Bayes** (Fong and Holmes 2021). Add-one-in importance weights, wₛ ∝ p(y | x, θₛ), turn the existing draws into conformal prediction sets. Their coverage holds in finite samples under exchangeability, up to Monte Carlo error, with no refits and whether or not the noise model is right. The weights are bounded wherever the density is, unlike leave-one-out's 1/p. Its consumer is the SPC × BARS work, and it is deferred to there.
