@@ -53,6 +53,10 @@ Sources: R's [calibration](D:/aghado01/packages/BASS/R/calib.R:42) and its docum
   - *Multivariate* (R's type 2): Σ = Σ_trunc + diag(σ_g)·R·diag(σ_g) + Σ_δ + (y_s∘K)·diag(σ²_{e,k})·(y_s∘K)ᵀ, with a supplied correlation R over variance groups, a fixed discrepancy covariance Σ_δ and a fixed mean shift. It uses the strict dense factor.
   - *(2026-10-29)* An emulator without a basis, a scalar or direct functional fit, adds its noise variance on the diagonal, σ²_e·I. A rank-1 term would assert one error shared by every output.
   - *(2026-10-29)* Shapes and positive definiteness are validated when the formulation is constructed, and a mismatch is refused, never resolved by switching branches (C-O1).
+- *(2026-10-29, as built)* Where the text above was loose, stage 7 settled it:
+  - the multivariate R is an m × m correlation over the outputs, as R's `meas.error.cor` is;
+  - the multivariate truncation term defaults to the residual set's second moment about zero, like the functional one;
+  - the diagonal option is R's centred n − 1 variance.
 - **Variance groups.**
   - Each group declares its prior. The default is R's IG(ν_g/2, (ν_g/2)·ŝ_g²) from `sd.est` and `s2.df`.
   - R switches every group to a −log(1 + σ²) kernel when any `s2.df` is 0. The port makes that choice per group.

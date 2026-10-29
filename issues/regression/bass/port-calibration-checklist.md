@@ -15,18 +15,41 @@ Companion to [port-calibration-brief.md](port-calibration-brief.md). An item is 
 
 ### Build (stages 7–8)
 
-- [ ] **C1** Typed covariance formulations: functional and multivariate.
-- [ ] **C2** Variance groups, discrepancy, and categorical calibration parameters.
-- [ ] **C3** Nested conditional reference sampler, with inner-run error measured.
+- [x] **C1** Typed covariance formulations: functional and multivariate (stage 7 chip, `24014cd`).
+- [x] **C2** Variance groups, discrepancy, and categorical calibration parameters (`50565b9`; the conditional sampler `d3af6a3`).
+- [x] **C3** Nested conditional reference sampler, with inner-run error measured (`ab14608`).
 - [ ] **C4** Fitting SMC adapter on D05's sequence.
 - [ ] **C5** Cut-calibration SMC adapter, with ordering and induced-density bridges.
 
 ### Room for extensions
 
-- [ ] **C-X1** The measurement-error model is a declared component. Built in stage 7 itself (D09, 2026-10-29).
-- [ ] **C-X2** Emulator draws behind an interface. Built in stage 7 itself (D09, 2026-10-29).
+- [x] **C-X1** The measurement-error model is a declared component. Built in stage 7 itself (D09, 2026-10-29; `3e935b5`).
+- [x] **C-X2** Emulator draws behind an interface. Built in stage 7 itself (D09, 2026-10-29; `066a054`).
 
 ## Reports
+
+### Stage 7 verified: calibration — 2026-10-29
+
+The stage 7 chip built it ([its report](stage7-calibration-brief.md#reports)), and it was read and verified here.
+- *Commits:* `066a054` (C-X2), `3e935b5` (C-X1), `24014cd` (C1), `50565b9` (C2), `d3af6a3` (the conditional sampler), `ab14608` (C3) and `c92255e` (the report). Outside `calibration/`, it added `Maths.Distributions.HalfCauchy` and extended the two R oracles. No accessor was added to BASS's fits.
+- *Read here:*
+  - the variance move's Jacobian stays untempered (the log target is the current density plus u);
+  - weighted outer draws are resampled by weight, then each run is weighted equally;
+  - the half-Cauchy's density, CDF and quantile are right;
+  - the cut holds structurally: each inner run fixes its emulator draw.
+- *Suites rerun here:* Regression 1,101/1,101, Distributions 148/148, the BASS and calibration oracle classes 63/63, and R's stage-1 checks, 97 verdicts passing (run from r/).
+- *As built, where D09's text was loose* (recorded in D09 as built):
+  - the multivariate correlation is over the outputs, m × m, as R's `meas.error.cor` is;
+  - the multivariate truncation term defaults to the residual set's second moment about zero, like the functional one;
+  - the diagonal option is R's centred n − 1 variance;
+  - above the cap, single-site steps are Metropolis;
+  - `Pooled` also leaves out undetermined runs.
+- *Open, for later:*
+  - how often inner runs converge under the default gate (R̂ 1.01, ESS 100 per chain): the recovery runs declared 1.05 and 50, and 3–6 of 6 converged per seed;
+  - `DiagonalPlusLowRank`'s per-proposal thin SVD (N15);
+  - a per-site Gibbs draw above the cap.
+- *Docs:* `docs/Maths/BayesianRegression.md` gains "BASS: calibration" and its API, configuration, status and source rows; `docs/Maths/ProbabilityAndInformation.md` gains `HalfCauchy`.
+- *Next:* stage 8, C4 and C5.
 
 ### D09 decided — 2026-10-29
 

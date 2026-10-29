@@ -16,6 +16,7 @@ These three small projects sit at the bottom of the [architecture](./Architectur
 | `Normal` | regression (standard draws behind coefficient and Laplace draws) |
 | `Weibull` | regression (the Weibull smoothing-variance prior and its prior scaling) |
 | `StudentT`, `Truncated<T>`, `Uniform`, `Mixture`, `Empirical` | BASS sensitivity's input measures, through their interval moments (regression, stage 6); calibration priors later |
+| `HalfCauchy` | BASS calibration's heavy-tailed variance-group prior, C⁺(0, s) on σ_g (regression, stage 7) |
 | `IIntervalMoments`, `GaussLegendre` | BASS sensitivity's moment service; `GaussLegendre` behind `StudentT`'s interval moments |
 | `SpecialFunctions.LogGamma` | geometry, regression (changepoint and BARS priors) |
 | `SpecialFunctions` incomplete gamma and beta | the distributions' CDFs |
@@ -47,7 +48,7 @@ The KL, Jensen–Shannon and `IDivergence` types have no in-repository callers y
 |---|---|
 | Generator | `Xoshiro256PlusPlus(int? seed)`, `NextUInt64`, `NextDouble`, `NextInt(q)`, `SaveState`, `LoadState`, `Restore` |
 | Seeds | `SeedTree.Derive(master, count)` |
-| Distributions | `Normal.Standard`, `Normal.MeanSd(mean, sd)`, `Normal.MeanVariance`, `Normal.SampleStandard(rng)`, `Normal.StandardQuantile(p)` and `Quantile(p)` (Wichura's AS 241, about 1 part in 10¹⁶; checked against the log-space CDF to p = 10⁻³⁰⁰); `Gamma.ShapeRate(shape, rate)`, `Gamma.ShapeScale(shape, scale)`, `Gamma.SampleStandard(rng, shape)`; `InverseGamma.ShapeScale(shape, scale)`; `Weibull.ShapeScale(shape, scale)` with `Quantile(p)`, `Median` and `Mode`; `StudentT.Standard(ν)`, `StudentT.LocationScale(ν, location, scale)`; `Beta.Shapes(a, b)`. Each has `Sample(rng)`, `LogPdf`, `Cdf`, `Survival`, `LogCdf`, `LogSurvival`, `IntervalProbability`, `LogIntervalProbability` and its moments. `Truncated.Of(parent, lower, upper)`; `IContinuousDistribution`; `Uniform.On(lower, upper)`, `Mixture.Of(components, weights)`, `Empirical.Of(sample)`; `IIntervalMoments.IntervalMoments(lower, upper, centre, logScale, moments)`, implemented by `Normal`, `StudentT`, `Truncated<T>`, `Uniform`, `Mixture` and `Empirical`; `GaussLegendre.Of(n)` |
+| Distributions | `Normal.Standard`, `Normal.MeanSd(mean, sd)`, `Normal.MeanVariance`, `Normal.SampleStandard(rng)`, `Normal.StandardQuantile(p)` and `Quantile(p)` (Wichura's AS 241, about 1 part in 10¹⁶; checked against the log-space CDF to p = 10⁻³⁰⁰); `Gamma.ShapeRate(shape, rate)`, `Gamma.ShapeScale(shape, scale)`, `Gamma.SampleStandard(rng, shape)`; `InverseGamma.ShapeScale(shape, scale)`; `Weibull.ShapeScale(shape, scale)` with `Quantile(p)`, `Median` and `Mode`; `StudentT.Standard(ν)`, `StudentT.LocationScale(ν, location, scale)`; `Beta.Shapes(a, b)`. Each has `Sample(rng)`, `LogPdf`, `Cdf`, `Survival`, `LogCdf`, `LogSurvival`, `IntervalProbability`, `LogIntervalProbability` and its moments. `Truncated.Of(parent, lower, upper)`; `IContinuousDistribution`; `Uniform.On(lower, upper)`, `Mixture.Of(components, weights)`, `Empirical.Of(sample)`; `IIntervalMoments.IntervalMoments(lower, upper, centre, logScale, moments)`, implemented by `Normal`, `StudentT`, `Truncated<T>`, `Uniform`, `Mixture` and `Empirical`; `GaussLegendre.Of(n)`; `HalfCauchy.WithScale(s)` (density, CDF, quantile, exact tails, draws) |
 | Special functions | `LogGamma`, `LogBeta`; `RegularizedGammaP`, `RegularizedGammaQ` and their logs; `RegularizedBeta`, `LogRegularizedBeta`, `LogRegularizedBetaComplement` |
 | Information | `KLDivergence.Forward(p, q, eps)`, `KLDivergence.Symmetric(p, q, eps)`; `IDivergence<T>`, `KlDivergence(eps)`; `JSDistance.Distance(p, q)`; `Shannon.EntropyNats` (counts or probabilities) |
 
@@ -153,7 +154,7 @@ This is the published xoshiro256++ reference algorithm.
 | Role | Files |
 |---|---|
 | Generator and seeds | `ThermoMapper/src/maths/rng/Xoshiro256PlusPlus.cs`, `SeedTree.cs` |
-| Distributions | `ThermoMapper/src/maths/distributions/Normal.cs`, `Gamma.cs`, `InverseGamma.cs`, `Weibull.cs`, `StudentT.cs`, `Beta.cs`, `Truncated.cs`, `IContinuousDistribution.cs`, `SpecialFunctions.cs` |
+| Distributions | `ThermoMapper/src/maths/distributions/Normal.cs`, `Gamma.cs`, `InverseGamma.cs`, `Weibull.cs`, `HalfCauchy.cs`, `StudentT.cs`, `Beta.cs`, `Truncated.cs`, `IContinuousDistribution.cs`, `SpecialFunctions.cs` |
 | Information | `ThermoMapper/src/maths/information/Divergences.cs` (`KLDivergence`), `IDivergence.cs`, `JSDistance.cs`, `Shannon.cs` |
 
 **See also:** [Samplers](./Samplers.md) (ensemble seeding) · [BayesianRegression](./BayesianRegression.md) · [DesignPrinciples](./DesignPrinciples.md#6-reproducible-randomness)

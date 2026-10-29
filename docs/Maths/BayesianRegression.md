@@ -115,6 +115,7 @@ flowchart LR
 | BASS (stage 9) | `BassFit.Traces()`, `TrainingFit(data, probabilities)`, `Metadata()`, `Summary(probabilities)`, `SensitivitySummary(data, spec, probabilities)`; the same on `BassBasisFit`, with `Effects(spec, effects)` → `BasisEffectAnalysis`; records `BassTraces`, `BassChainTrace`, `BassTrainingFit`, `BassMetadata`, `BassBasisMetadata`, `BassSummary`, `BassBasisSummary`, `BassPosteriorSummary`, `PosteriorSummary`, `SobolSummary`, `SobolAnalysisSummary`, `BasisSobolSummary` |
 | BASS (F-M2 Phase 1) | `BassSampling.LocalSteps` (`LocalSteps`, `Window(n)`), `BassSampling.FactorMoves` (`FactorMoves`), `TemperingSpec.Split` (`SplitRule`); `BassResolved` (`StepWindows`, `FactorShares`, `SplitThreshold`); `BassTermProposal` (`ProposeChange`, `ProposePrune`, `ProposeGrow`, `ProposeVariableChange`, `Window`) → `BassTermMove`, `BassMoveKind`; `BassStructureMoves.Kinds`, `BassDiagnostics.MoveKinds` (`BassMoveTally`, `BassKindCount`); `TemperingLadder.Split` |
 | Verdicts (D10, N14) | `BassSampling.StoppingScope` (`BassStoppingScope`), `BassResolved.StoppingGroups`; `BassDiagnostics` (`LogPosterior`, `Verdict`, `ModeSeparation` → `BassModeSeparation`, `PredictiveGroup`, `LevelGroup`, `StructuralGroup`); `BarsResult.Verdict`, `BgpResult.Verdict`, `BapsResult.Verdict`, `HierarchicalResult.Verdict` |
+| BASS calibration (stage 7) | `ICalibrationEmulator`, `BassBasisEmulator`, `BassFitEmulator`, `EmulatorNoise` (`ComponentNoise`, `IndependentNoise`); `ContinuousParameter`, `CategoricalParameter`, `ParameterLayout`; `GaussianMeasurement`, `VarianceGroup`, `InverseGammaVariance`, `HalfCauchyDeviation`, `MeasurementModel`; `FunctionalFormulation` (`TruncationTerm`, `FunctionalDiscrepancy`), `MultivariateFormulation`, `CalibrationCovariance` (`Create`, `Factor`) → `CovarianceFactor`; `CalibrationModel` (`Target`, `Physical`, `Delta`), `CalibrationTarget`, `CalibrationState`; `CalibrationSampler.Run` → `ConditionalRun` of `CalibrationDraw`; `NestedCalibrationSampler.Run` → `NestedCalibration` (`Runs`, `NotConverged`, `Pooled`); `CalibrationConfig` (`ToJson`, `FromJson`, `Validate`) |
 | BAPS | `IBandPenalty` (`Bandwidth`, `Nullity`, `AccumulateInto`, `Roughness`), `ILocallyAdaptivePenalty` and `IAnisotropicPenalty` (`Components`, `AccumulateComponents`, `ComponentRoughness`, `SamplePrior`, `Spectrum` → `PenaltySpectrum`: `LogPseudoDeterminant`, with its gradient and Hessian in ln λ); `ISmoothingVariancePrior` (`LogDensityOfLog`) and `ISmoothingVariancePriorChoice` (`Resolve`): `ScaledWeibullPrior(tailProbability = 0.05)`, `InverseGammaVariancePrior(shape, scale)`, `WeibullVariancePrior(scale, shape = ½)` (`Rate`), `WeibullVariancePrior.ScaledTo(design, penalty, bound, tailProbability = 0.05)` and `ScaledToResponse(design, penalty, y)`; `SmoothingVarianceUpdate` (`Slice`, `Newton`); `NoiseVariancePrior` (`InverseGamma`, `Jeffreys`); `DifferencePenalty(order = 2)`; `PenalizedSpline(design, y, IBandPenalty)` (`Coefficients`, `ProfiledVariance`, `RemlLogEvidence`, `EffectiveDegreesOfFreedom`, `EdfSlope`); `Baps(..., componentPrior, componentUpdate, noisePrior).Run(BapsScheme, …)` (`ComponentPrior`) with `BapsScheme` (`Gibbs`, `Collapsed`, `LocallyAdaptiveGibbs`, `AnisotropicGibbs`) → `BapsResult` (`PosteriorDraws`, `FitBand(design)` → `PointwiseBand`, `Sigma2Interval`, `Tau2Interval`, `ComponentLambdaInterval(j)` → `PosteriorInterval`, `ComponentLogLambdaConvergence`); `HierarchicalPSpline(..., anisotropicSmoothing = false, componentPrior, componentUpdate, noisePrior).Run` (`ComponentPrior`) → `HierarchicalResult` (`PosteriorDraws` per chain, Rao–Blackwellized means, `PopulationBand`, `ReplicateBand`, three variance intervals, `ComponentSmoothingVarianceInterval(j)`, three convergence diagnostics, `ComponentSmoothingVarianceConvergence`, `RHatPopulation`, `Checkpoint`); `HierarchicalStart` (`Overdispersed`, `Fixed`); `HierarchicalScheme` (`Centred`, `CollapsedPopulation`, `Interweaved`, `CollapsedInterweaved`, `ParameterExpanded`); `HalfTDeviationPrior(Degrees, Scale)`; `TensorProductDesign.Build` → `TensorDesign`; `TensorPenalty`; `AnisotropicTensorSpline` (`Coefficients`, `RemlLogEvidence`, `RemlOptimum` → `AnisotropicReml`, `Penalty`) |
 | BGP | `SquaredExponentialKernel : IGpKernel`; `GpRegression(x, y, sigma2, kernel, scaling = Similarity)` or `GpRegression.WithUnknownScale(x, y, kernel, scaling)` (`NoiseModel`, `Fit(t, η)` for an unknown scale; `Fit(t)` → `GpFit`, `PredictMean`, `PredictVariance`, `KernelAffinity`, `Transform` → `GpTransform`); `EmpiricalBayesBandwidthPrior(gp, …)`; `BgpSampler(gp, prior).Run(...)` → `BgpResult` (`PosteriorMean`, `PosteriorSd`, `BandwidthDraws`) |
 | Changepoint | `ExactChangepoint.Infer(y, σ², ν, ρ², maxSegments)` or `Infer(y, ISegmentModel, maxSegments)` → `ChangepointResult`; `DefaultHyperparameters(y)`; `GaussianSegmentModel`, `CauchySegmentModel`; `ChangepointResult.Posterior.Sample(draws, seed)` → `ChangepointDraw` |
@@ -1168,6 +1169,77 @@ Stage 6 (2026-10-29, D08) adds R's `sobol` for direct fits and `sobolBasis` for 
 - the law of total variance between the two functional forms, to 10⁻¹¹;
 - effects at degree 2 against quadrature, to 10⁻¹¹.
 
+### BASS: calibration
+
+Stage 7 (2026-10-29) builds D09's calibration under `spline/bass/calibration/`. It samples the cut posterior p(e | D_sim)·p(θ | y, e) of the calibration inputs θ, the measurement variances and the discrepancy, given emulator draws e that the observations never update. R's `calibrate.bassBasis` is the reference for the API and the θ kernel; its defects (C-O1) are corrected, none ported.
+
+**The emulator** (`ICalibrationEmulator`, C-X2).
+- *What it serves:* retained draws (weighted, when they are), and predictions in physical units at θ in physical coordinates.
+- *Each draw's noise:* `ComponentNoise(y_s ∘ K, σ²_e,k)` for a basis fit, `IndependentNoise(σ²_e)`, on the diagonal, otherwise.
+- *D07's truncation residuals,* in physical units.
+- *Adapters:* `BassBasisEmulator` and `BassFitEmulator` serve BASS's fits. Each predictor is a calibration parameter, matched by name, or a fixed input carried by the observations.
+- A non-BASS emulator implements the same contract.
+
+**Parameters.** `ContinuousParameter(Name, Lower, Upper)` is sampled in [0, 1] and reported in physical coordinates through its recorded transform. `CategoricalParameter(Name, Levels)`.
+
+**The measurement model** (`GaussianMeasurement`, C-X1). Variance groups partition the outputs, and each declares its prior:
+- `InverseGammaVariance(ν, ŝ)`, R's IG(ν/2, (ν/2)·ŝ²), with ν > 0;
+- or `HalfCauchyDeviation(ŝ)`, a half-Cauchy on σ_g (Gelman 2006), which is proper and scale-equivariant.
+- *R's −log(1 + σ²) kernel is a defect fixture.* It is improper, and its scale, fixed at 1, makes the posterior depend on y's units. Between data in units 10⁻³ and 10³, σ's posterior median moves from 0.2691 to 0.2386, where the half-Cauchy gives 0.2362 in both.
+
+**The covariance** (C1), declared and validated at construction.
+- *Functional* (R's type 1): diag(σ²_{g(j)}) + the emulator's noise + the truncation term.
+  - The truncation term is `TruncationTerm.ResidualSet` by default: (1/n)·Σᵢ (y_s ∘ eᵢ)(y_s ∘ eᵢ)ᵀ, the covariance of D07's uniform draw over its residual vectors. It is low rank, and compressed once to its numerical rank.
+  - `Diagonal` is R's option: the centred n − 1 variances.
+  - Solves and log-determinants go through `DiagonalPlusLowRank`.
+  - The discrepancy enters the mean: δ = μ_δ + D·v, v ~ N(0, s_v²·I), with s_v a required declaration. v is drawn from its conditional on the likelihood path, with precision I/s_v² + b·DᵀΣ⁻¹D.
+- *Multivariate* (R's type 2): Σ_trunc + diag(σ_g)·R·diag(σ_g) + Σ_δ + the emulator's noise, on the dense factor.
+  - R is an m × m correlation over the outputs, as R's `meas.error.cor` is.
+  - Σ_δ and the mean shift are fixed.
+  - The truncation term defaults to the residual set's second moment about zero, as in the functional form.
+
+**Categorical parameters** (C2).
+- *Below the cap:* the discrete conditional is enumerated whole, up to `EnumerationCap` = 1,024 combinations, with each term's categorical part evaluated once per combination.
+- *Above it:* single-site Metropolis steps. On the fixture they accept 0.15, with an integrated autocorrelation of 12.4 scans.
+- *The alternative:* a per-site Gibbs draw, which needs no rejection.
+
+**The conditional sampler** (`CalibrationSampler`): a block scan for θ and the rest, given one emulator draw.
+- *θ:* R's adaptive random walk in [0, 1], with its 23% target, its scale schedule, its 300-scan switch and its every-100-scans independence decorrelation step.
+  - It starts at 0.1² per coordinate rather than R's 10⁻⁶, which hardly moves.
+  - It freezes at the end of burn-in, under D10's adaptation policy.
+- *Each variance group:* a random-walk step on ln σ²_g with its Jacobian untempered, adapted towards 0.44 acceptance in burn-in.
+- *The categorical block, and the discrepancy's Gaussian draw.*
+- *Tempering* is an option with no default ladder. It runs through `ParallelTempering` on D05's likelihood path:
+  - ℓ_b = b·ℓ₁, with even-odd adjacent swaps whose ratio is (b₁ − b₂)(ℓ(x₂) − ℓ(x₁));
+  - a b = 0 rung is refused unless every prior is proper;
+  - R, by contrast, tempers its variance Jacobians and swaps off its own target (C-O1: swap gaps of 234 and 140).
+
+**The nested reference sampler** (`NestedCalibrationSampler`, C3).
+- *The outer draws:* S emulator draws, every retained draw by default, or by weight with replacement when the draws are weighted.
+- *Each inner run:* an ensemble on p(θ | y, e_s), run until N14's verdict reads converged (R̂ 1.01 and ESS 100 per chain by default), within `MaxSamples`. Each inner run's verdict is reported.
+- *Pooling:* `Pooled` weights each converged run's draws 1/(S′·n_s), so every emulator draw counts once. It leaves out not-converged and undetermined runs unless asked.
+- *The inner-run error.* On a fixture whose exact mixture E[θ] is known, the pooled mean's RMS error is 0.0115 at 25 kept draws per chain, with its spread 15% low. From 100 on it is Monte Carlo noise: 0.0015, 0.0023 and 0.0009 at 100, 400 and 1,600.
+
+**Recovery.** The simulator is η(t; θ) = θ₁ sin(2π(t + θ₂/4)) + θ₂t/2 on 20 locations, run on a 6 × 6 design, with θ* = (1.3, 0.4), noise sd 0.05, and five seeds. The 95% intervals cover θ*:
+- 5/5 and 5/5 on a PCA basis fit;
+- 4/5 and 5/5 on a direct fit, the less accurate emulator, whose θ₁ means are 1.41–1.47;
+- 5/5 with a declared discrepancy, and with two variance groups under each prior.
+- At a declared gate of R̂ 1.05, ESS 50 per chain and 1,500 draws, 3 to 6 of the 6 inner runs converged per seed. The rest were reported and not pooled. How often inner runs converge under the default gate is not yet measured.
+
+**Checked** (54 calibration tests, 9 parity tests):
+- the adapters' predictions equal the fits' own, bit for bit;
+- the low-rank covariance against dense (10⁻¹¹), C-O2's references at its conditionings, and the units (c-scaled outputs move ℓ by −m ln c);
+- the target against dense Gaussians with every prior written out (10⁻¹⁰);
+- v's conditional against the joint Gaussian at b = 1, 0.35 and 0;
+- ln σ² against quadrature;
+- the categorical enumeration against brute force;
+- the chain's laws against quadrature: untempered, multivariate, and on a four-rung ladder;
+- each of C-O1's defects asserted with its correction.
+
+**A cost to watch.** `DiagonalPlusLowRank` factors by a Jacobi thin SVD of the m × k low-rank factor on every σ² proposal. That took 1.4 ms at m = 20 with 39 columns before the residual set's compression, and 33 µs after. Where sizes make it binding, the Cholesky factor of the capacitance matrix, O(m·k² + k³), is the cheaper route (N15).
+
+**Not built:** cut SMC and the fitting SMC adapter (stage 8: C4, C5).
+
 ### BASS: presentation
 
 Stage 9 (2026-10-29) builds the data R's `plot`, `print` and `summary` methods show, as values in `Maths.Regression`, under `spline/bass/presentation/`. Rendering and text formatting belong above maths (the layer order). No consumer above maths takes BASS yet, and viz v2's contract shapes are open, so neither is built.
@@ -1616,6 +1688,10 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 | `BassSampling` Chains / MasterSeed / BurnIn / Samples / Thin | 4 / 0 / 9000 / 1000 / 1 | R's split of 10,000, provisional; read by the run (S7) |
 | `BassSampling` RHatTarget / BatchSize / MinEssPerChain / ReportEvidence | 0 / 0 / 100 / true | No early stop; read by the run (S7) and the ladder (S8) |
 | `BassSampling` StoppingScope | `All` | The groups an R̂ target gates: every group, or `Predictive` alone (D10, decided 2026-10-29) |
+| `CalibrationConfig` Parameters / Measurement / Covariance | required | The calibration inputs, the variance groups with their priors, and the declared formulation (D09) |
+| `CalibrationConfig` EnumerationCap | 1,024 | Categorical combinations enumerated whole; single-site steps above |
+| `CalibrationConfig` Sampling | `BurnIn` 2,000, `Samples` 2,000, `Thin` 1, `DecorrelationEvery` 100, `Tempering` null | The conditional sampler; no default ladder |
+| `CalibrationConfig` Reference | `OuterDraws` null (every draw), `Chains` 4, `MaxSamples` 4,000, `BatchSize` 250, `RHatTarget` 1.01, `MinEssPerChain` 100 | The nested reference sampler, gated by N14's verdict |
 | `BassSampling` Moves | `EqualOverAvailable` | D01's schedule; `PriorCancelling(C = 0.4)`, C ∈ (0, ½], the option |
 | `BassSampling` LocalSteps | null: off | `LocalSteps(Probability = 0.5, WindowFraction = 0.02)`: local knot steps and level toggles inside a change (F-M2; the pass made it no default, 2026-10-29) |
 | `BassSampling` FactorMoves | null: off | `FactorMoves(Change = 1, PruneOrGrow = 1, VariableChange = 1)`: the fixed-M family in the change's slot, by these shares (F-M2; the pass made it no default, 2026-10-29) |
@@ -1677,7 +1753,7 @@ Every source is checked, papers and their code included (the user's decision, 20
 
 ## Status and caveats
 
-- **This section describes BASS through stage 4** (S1–S10, 2026-10-28), **with stages 5 and 6** (2026-10-29). Calibration (stage 7) and SMC (stage 8) are not built; calibration's design, D09, was decided on 2026-10-29. Stage 9 builds the presentation data; rendering and text formatting wait for a consumer above maths.
+- **This section describes BASS through stage 4** (S1–S10, 2026-10-28), **with stages 5 and 6** (2026-10-29). Calibration (stage 7) is built to D09, decided on 2026-10-29; SMC (stage 8) is not. Stage 9 builds the presentation data; rendering and text formatting wait for a consumer above maths.
   - *Stage 5 and 6's choices left as reversible defaults* are listed in their chips' reports (`issues/regression/bass/stage5-outputs-brief.md`, `stage6-sensitivity-brief.md`). Among them: basis sensitivity's integrated form includes the mean curve y_m in the location's effect (confirmed by the user on 2026-10-29; the centred anomaly y − y_m would be a later option); `Predict`, `Sensitivity` and `Effects` take the training data, since the fit keeps neither its knots nor its inputs; a basis fit's intervals are weighted quantiles of its draws.
   - *Open from the qualification:* the defaults mix slowly between structures. R̂ of M read 1.5–2.5 on the recovery surfaces at 5,000 + 2,000 sweeps, as R BASS's chains do, with births and deaths accepting about 1.5%; tempering lowers it, but the local moves bound it. Friedman's σ reads high untempered for that reason and for the fit's bias.
   - *Built:* the contracts and their refusals, the terms and the basis, the structure prior and the proposals, the design and admission, the collapsed target, the sweep, the run with its diagnostics and checkpoints, the self-sizing tempered ladder and the evidence, the pointwise density and the residual check, the qualification runs, and F-M2's local-move options (Phase 1).
@@ -1720,7 +1796,7 @@ Every source is checked, papers and their code included (the user's decision, 20
 |---|---|
 | Spline core | `spline/KnotConfig.cs`, `IBasis.cs`, `SplineBasis.cs`, `BSpline.cs`, `BandedDesign.cs` |
 | BARS | `spline/bars/Bars.cs`, `BarsEnsemble.cs`, `SplineTarget.cs`, `KnotMoves.cs`, `KnotKernels.cs`, `AdaptiveLocalBetaKernel.cs`, `DmgkSchedule.cs`, `ComplexityPriors.cs`, `WeightedNormalModel.cs`, `PoissonModel.cs`, `WhittleModel.cs`, `GibbsLossModel.cs`, `WeightResampling.cs`, `StepBasis.cs`, `SplineExtrema.cs`, `IObservationModel.cs`, `IConditionalFit.cs`, `IKnotKernel.cs` |
-| BASS | `spline/bass/Bass.cs` (the fit, resume and the fingerprint), `BassRun.cs`, `BassRunOptions.cs`, `BassFit.cs`, `BassDiagnostics.cs`, `BassPriorSampler.cs`, `BassLadder.cs`, `BassEvidence.cs`, `BassPointwise.cs`, `BassResidualDependence.cs`, `BassConfig.cs`, `BassData.cs`, `BassResolved.cs`, `BassInputTransform.cs`, `BassInputs.cs`, `BassTerm.cs`, `BassBasis.cs`, `BassStructurePrior.cs`, `BassTermProposal.cs`, `BassDesign.cs`, `BassTarget.cs`, `BassModel.cs`, `BassState.cs`, `BassSweep.cs`; stage 5: `spline/bass/output/` (`BassDecomposition.cs`, `BassComponents.cs`) and `spline/bass/posterior/` (`BassPrediction.cs`, `BassPredictionInputs.cs`, `BassSurface.cs`, `PredictiveMixture.cs`, `BassJointDraws.cs`, `BassBasisPrediction.cs`, `BassBasisDensity.cs`); stage 6: `spline/bass/sensitivity/` (`BassSensitivity.cs`, `BassBasisSensitivity.cs`, `BassBasisEffects.cs`, `SobolDecomposition.cs`, `EffectFunctions.cs`, `BassMoments.cs`, `PiecewisePolynomial.cs`, `InputMeasures.cs`); stage 9: `spline/bass/presentation/` (`BassSummary.cs`, `BassTraces.cs`, `BassTrainingFit.cs`, `PosteriorSummary.cs`, `SobolSummary.cs`) |
+| BASS | `spline/bass/Bass.cs` (the fit, resume and the fingerprint), `BassRun.cs`, `BassRunOptions.cs`, `BassFit.cs`, `BassDiagnostics.cs`, `BassPriorSampler.cs`, `BassLadder.cs`, `BassEvidence.cs`, `BassPointwise.cs`, `BassResidualDependence.cs`, `BassConfig.cs`, `BassData.cs`, `BassResolved.cs`, `BassInputTransform.cs`, `BassInputs.cs`, `BassTerm.cs`, `BassBasis.cs`, `BassStructurePrior.cs`, `BassTermProposal.cs`, `BassDesign.cs`, `BassTarget.cs`, `BassModel.cs`, `BassState.cs`, `BassSweep.cs`; stage 5: `spline/bass/output/` (`BassDecomposition.cs`, `BassComponents.cs`) and `spline/bass/posterior/` (`BassPrediction.cs`, `BassPredictionInputs.cs`, `BassSurface.cs`, `PredictiveMixture.cs`, `BassJointDraws.cs`, `BassBasisPrediction.cs`, `BassBasisDensity.cs`); stage 6: `spline/bass/sensitivity/` (`BassSensitivity.cs`, `BassBasisSensitivity.cs`, `BassBasisEffects.cs`, `SobolDecomposition.cs`, `EffectFunctions.cs`, `BassMoments.cs`, `PiecewisePolynomial.cs`, `InputMeasures.cs`); stage 9: `spline/bass/presentation/` (`BassSummary.cs`, `BassTraces.cs`, `BassTrainingFit.cs`, `PosteriorSummary.cs`, `SobolSummary.cs`); stage 7: `spline/bass/calibration/` (`BassEmulators.cs`, `CalibrationBlocks.cs`, `CalibrationConfig.cs`, `CalibrationCovariance.cs`, `CalibrationEmulator.cs`, `CalibrationModel.cs`, `CalibrationParameter.cs`, `CalibrationSampler.cs`, `MeasurementModel.cs`, `NestedCalibration.cs`) |
 | BASS's shared pieces | `gprior/CollapsedGPrior.cs` (`FromCentredLeastSquares`, `CentredMarginalAt`, `GPriorMarginal.LogMarginalSlope`), `gprior/Sigma2Prior.cs`; under `src/maths/`: `distributions/Wallenius.cs`, `distributions/SpecialFunctions.cs` (`Digamma`), `linalg/BorderedCholesky.cs`, `linalg/KhatriRao.cs`, `linalg/PairwiseSum.cs`, `samplers/rjmcmc/ReversibleJumpChain.cs`, `samplers/rjmcmc/ParallelTempering.cs` (the per-replica blocks, for S8), `samplers/blocks/BlockScan.cs`, `samplers/blocks/SliceSampler.cs`; for stage 6, `distributions/IIntervalMoments.cs` with `Uniform.cs`, `Mixture.cs`, `Empirical.cs`, `GaussLegendre.cs` and the interval moments of `Normal`, `StudentT` and `Truncated<T>` |
 | BAPS | `spline/baps/DifferencePenalty.cs`, `IBandPenalty.cs`, `PenalizedSpline.cs`, `Baps.cs`, `HierarchicalPSpline.cs`, `TensorProductDesign.cs`, `TensorPenalty.cs`, `PenaltySpectrum.cs`, `ComponentSmoothing.cs`, `SmoothingVariancePriors.cs`, `AnisotropicTensorSpline.cs`; `NelderMead.cs` (the REML optimum's search) |
 | BGP | `bgp/GpKernel.cs`, `GpTransform.cs`, `GpRegression.cs`, `EmpiricalBayesBandwidthPrior.cs`, `BgpSampler.cs` |
