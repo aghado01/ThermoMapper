@@ -157,9 +157,14 @@ public sealed record BassConfig
                 throw Bad("Sampling.Tempering.Form", "is the likelihood path's; the powered path powers the untempered marginal whole (D05)");
             if (t.ReferenceRung && t.Path != TemperingPath.Likelihood)
                 throw Bad("Sampling.Tempering.ReferenceRung", "needs the likelihood path, whose b = 0 member is the prior; the powered path's is not normalizable (D05)");
-            if (t.Levels < (t.ReferenceRung ? 3 : 2))
+            int minimum = TemperingSpec.MinimumLevels(t.ReferenceRung);
+            if (t.Levels < minimum)
                 throw Bad("Sampling.Tempering.Levels", t.ReferenceRung ? "must be at least 3 with a reference rung: b = 1, the hot end and b = 0" : "must be at least 2");
-            if (!(t.HotEnd > 0.0 && t.HotEnd < 1.0)) throw Bad("Sampling.Tempering.HotEnd", "must lie in (0, 1)");
+            if (t.Levels is null && !t.Adaptive)
+                throw Bad("Sampling.Tempering.Adaptive", "must be true for a self-sizing ladder (Levels null), which sizes itself as it adapts; a fixed ladder declares Levels");
+            if (t.MaxLevels < minimum) throw Bad("Sampling.Tempering.MaxLevels", $"must be at least {minimum}, the fewest rungs a ladder takes");
+            if (t.MaxLevels < t.Levels) throw Bad("Sampling.Tempering.MaxLevels", "must not lie below the declared Levels");
+            if (t.HotEnd is double hot && !(hot > 0.0 && hot < 1.0)) throw Bad("Sampling.Tempering.HotEnd", "must lie in (0, 1)");
             if (t.Schedule != SwapSchedule.DeterministicEvenOdd)
                 throw Bad("Sampling.Tempering.Schedule", "is DEO, the schedule D05 decided; another joins with its decision");
         }
@@ -309,26 +314,38 @@ public sealed record BassSampling
 /// with the reference rung. An <see cref="Adaptive"/> ladder (the default) re-spaces its interior rungs during burn-in to
 /// equalize the swap rejections, from that start, and is frozen after it (D10). Its ends never move: b = 1 and the hot
 /// end, or b = 0 with the reference rung, above which the hot end is an interior rung and moves too.</item>
+/// <item>By default the ladder sizes itself (decided 2026-10-28): from <see cref="InitialLevels"/> it grows or shrinks
+/// during burn-in to Syed et al.'s N ≈ 2Λ pairs by the barrier it reads (<see cref="TemperingLadder.Size"/>), within
+/// <see cref="MaxLevels"/>, and settles a round before burn-in ends, so the last round equalizes it; and its hot end is
+/// auto-picked on the data (<see cref="BassResolved.HotEnd"/>).</item>
 /// <item><see cref="Schedule"/>: DEO, the non-reversible even-odd swaps (Syed et al. 2022), swapped after every sweep.</item>
 /// <item><see cref="ReferenceRung"/>: the hot replica draws exactly from the prior on F every scan (OQ2), opt-in. A run
 /// reports its evidence only with it (D03), under the proper priors.</item>
 /// </list>
-/// The levels and hot end's defaults are provisional, until BASS's own measurement.
 /// </summary>
 public sealed record TemperingSpec
 {
+    /// <summary>The rungs a self-sizing ladder starts from, b = 1 and, with the reference rung, b = 0 included.</summary>
+    public const int InitialLevels = 8;
+
     /// <summary>The tempering path: likelihood by default (D05).</summary>
     public TemperingPath Path { get; init; } = TemperingPath.Likelihood;
 
     /// <summary>The likelihood path's tempered form: integrated by default (D05).</summary>
     public TemperedForm Form { get; init; } = TemperedForm.Integrated;
 
-    /// <summary>The replicas, b = 1 and, with the reference rung, b = 0 included.</summary>
-    public int Levels { get; init; } = 8;
+    /// <summary>The replicas, b = 1 and, with the reference rung, b = 0 included: a count fixes them, and null (the default)
+    /// sizes the ladder during burn-in, from <see cref="InitialLevels"/> within <see cref="MaxLevels"/>, which needs
+    /// <see cref="Adaptive"/>.</summary>
+    public int? Levels { get; init; }
+
+    /// <summary>The most replicas a self-sizing ladder takes, a compute budget: 64 by default. A ladder that reaches it is
+    /// flagged (<see cref="BassTemperingReadout.AtMaxLevels"/>).</summary>
+    public int MaxLevels { get; init; } = 64;
 
     /// <summary>The ladder's lowest positive b, in (0, 1): its hot end, or with the reference rung the rung above b = 0, where
-    /// an adaptive ladder starts it.</summary>
-    public double HotEnd { get; init; } = 1e-3;
+    /// an adaptive ladder starts it. Null (the default) auto-picks it on the data (<see cref="BassResolved.HotEnd"/>).</summary>
+    public double? HotEnd { get; init; }
 
     /// <summary>Whether the ladder re-spaces its interior rungs during burn-in; it is frozen after it either way (D10).</summary>
     public bool Adaptive { get; init; } = true;
@@ -338,6 +355,13 @@ public sealed record TemperingSpec
 
     /// <summary>Whether the hot replica sits at b = 0 and draws exactly from the prior on F; off by default (D05).</summary>
     public bool ReferenceRung { get; init; }
+
+    /// <summary>The fewest rungs a ladder takes: b = 1 and the hot end, and b = 0 with the reference rung.</summary>
+    public static int MinimumLevels(bool referenceRung) => referenceRung ? 3 : 2;
+
+    /// <summary>The rungs a chain's ladder starts on: <see cref="Levels"/>, or a self-sizing ladder's
+    /// <see cref="InitialLevels"/> within [<see cref="MinimumLevels"/>, <see cref="MaxLevels"/>].</summary>
+    public int StartLevels() => Levels ?? Math.Clamp(InitialLevels, MinimumLevels(ReferenceRung), MaxLevels);
 }
 
 /// <summary>How a state's move types are chosen (D01).</summary>

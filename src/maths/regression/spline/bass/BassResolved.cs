@@ -71,6 +71,12 @@ public sealed record BassResolved
     /// missing locations at the middle one, or the defaults.</summary>
     public required IReadOnlyList<BassMonitoredPoint> MonitoredPoints { get; init; }
 
+    /// <summary>
+    /// A tempered run's hot end, its lowest positive b: declared, or auto-picked (<see cref="AutoHotEnd"/>); null when the
+    /// run is untempered.
+    /// </summary>
+    public required double? HotEnd { get; init; }
+
     /// <summary>Every auto-pick, with its reason.</summary>
     public required IReadOnlyList<BassAutoPick> AutoPicks { get; init; }
 
@@ -78,7 +84,8 @@ public sealed record BassResolved
     /// <paramref name="config"/> resolved on <paramref name="data"/>, after <see cref="BassConfig.Validate"/>. Refused:
     /// a zero response under the zero centre, and a constant one under level centring or the flat intercept, which
     /// leave no spread to fit (D03); a support threshold above its part's size, which no term could meet; and a ladder
-    /// with a rung where its tempered form is undefined (D05), its hot end or the reference rung's b = 0.
+    /// with a rung where its tempered form is undefined (D05), its hot end, declared or auto-picked, or the reference
+    /// rung's b = 0, and an auto-picked hot end outside (0, 1), which tiny data give.
     /// </summary>
     public static BassResolved Resolve(BassConfig config, BassData data)
     {
@@ -116,20 +123,6 @@ public sealed record BassResolved
         InverseGamma? sigma2 = config.Sigma2.For(meanSquare);
         if (config.Sigma2.ReadsResponse)
             log.Add(new("ResponseMeanSquare", Text(meanSquare), "s², the response's mean square about the centre level, which the scaled σ² prior reads"));
-
-        // A ladder's rungs where its tempered form exists (D05): the integrated form loses b = 0 under the improper options,
-        // and under the flat intercept every b up to (1 − 2c)/N.
-        if (config.Sampling.Tempering is { Path: TemperingPath.Likelihood } tempering)
-        {
-            string improper = config.Intercept == GPriorCentre.Flat ? "the flat intercept" : "the Jeffreys σ² prior";
-            if (!BassTarget.Defines(tempering.Form, config.Intercept, sigma2, n, tempering.HotEnd))
-                throw new ArgumentException(
-                    $"Sampling.Tempering.HotEnd is {Text(tempering.HotEnd)}, where the integrated form is undefined under {improper}, which needs " +
-                    $"b > (1 − 2c)/N = {Text((1.0 - 2.0 * (sigma2?.Shape ?? 0.0)) / n)}; raise it, or take the linear form (D05).", "config");
-            if (tempering.ReferenceRung && !BassTarget.Defines(tempering.Form, config.Intercept, sigma2, n, 0.0))
-                throw new ArgumentException(
-                    $"Sampling.Tempering.ReferenceRung needs b = 0, where the integrated form is undefined under {improper}; the linear form reaches it (D05).", "config");
-        }
 
         // The caps, by the predictors of each kind.
         int continuous = 0, categorical = 0;
@@ -186,14 +179,71 @@ public sealed record BassResolved
                 break;
         }
 
+        double? hotEnd = null;
+        if (config.Sampling.Tempering is { } tempering)
+        {
+            if (tempering.Levels is null)
+                log.Add(new("Tempering.Levels", $"{tempering.StartLevels()}, self-sizing within {tempering.MaxLevels}",
+                            "Levels null: the ladder sizes itself during burn-in by its barrier, N ≈ 2Λ pairs"));
+            hotEnd = tempering.HotEnd;
+            if (hotEnd is null)
+            {
+                double picked = AutoHotEnd(tempering, config.Intercept, n, fixedTau);
+                if (!(picked > 0.0 && picked < 1.0))
+                    throw new ArgumentException($"Sampling.Tempering.HotEnd auto-picks {Text(picked)} on N = {n} observations, outside (0, 1); set it.", "config");
+                hotEnd = picked;
+                log.Add(new("Tempering.HotEnd", Text(picked), AutoHotEndReason(tempering, config.Intercept, fixedTau, picked)));
+            }
+
+            // A ladder's rungs where its tempered form exists (D05): the integrated form loses b = 0 under the improper
+            // options, and under the flat intercept every b up to (1 − 2c)/N.
+            if (tempering.Path == TemperingPath.Likelihood)
+            {
+                string improper = config.Intercept == GPriorCentre.Flat ? "the flat intercept" : "the Jeffreys σ² prior";
+                bool setHotEnd = tempering.HotEnd is not null;
+                if (!BassTarget.Defines(tempering.Form, config.Intercept, sigma2, n, hotEnd.Value))
+                    throw new ArgumentException(
+                        $"Sampling.Tempering.HotEnd {(setHotEnd ? "is" : "auto-picks")} {Text(hotEnd.Value)}, where the integrated form is undefined under " +
+                        $"{improper}, which needs b > (1 − 2c)/N = {Text((1.0 - 2.0 * (sigma2?.Shape ?? 0.0)) / n)}; " +
+                        $"{(setHotEnd ? "raise it" : "set it above")}, or take the linear form (D05).", "config");
+                if (tempering.ReferenceRung && !BassTarget.Defines(tempering.Form, config.Intercept, sigma2, n, 0.0))
+                    throw new ArgumentException(
+                        $"Sampling.Tempering.ReferenceRung needs b = 0, where the integrated form is undefined under {improper}; the linear form reaches it (D05).", "config");
+            }
+        }
+
         return new BassResolved
         {
             Cases = cases, Locations = locations, Observations = n, MaxBasis = maxBasis,
             MaxInteraction = maxInteraction, MaxCategoricalInteraction = maxCategorical, MaxFunctionalInteraction = maxFunctional,
             SupportMinimum = support, SupportMinimumFunctional = supportFunctional,
             MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, ResponseMeanSquare = meanSquare, Sigma2 = sigma2, TauPrior = tauPrior, FixedTau = fixedTau,
-            AutoPicks = log.AsReadOnly(),
+            HotEnd = hotEnd, AutoPicks = log.AsReadOnly(),
         };
+    }
+
+    /// <summary>
+    /// The hot end a ladder auto-picks on <paramref name="observations"/> observations (decided 2026-10-28): 1/N, the b at
+    /// which E[τ] = 1/N makes the shrinkage τ/(τ + b) one half, so the tempered likelihood weighs one observation, as the
+    /// unit-information prior does; 2/N on the likelihood path's integrated form under the flat intercept, whose pole at
+    /// (1 − 2c)/N it clears with ν = Nb − 1 = 1; and under fixed g the smaller of the held τ and these.
+    /// </summary>
+    internal static double AutoHotEnd(TemperingSpec tempering, GPriorCentre intercept, int observations, double? fixedTau)
+    {
+        double unit = (Pole(tempering, intercept) ? 2.0 : 1.0) / observations;
+        return fixedTau is double tau ? Math.Min(tau, unit) : unit;
+    }
+
+    private static bool Pole(TemperingSpec tempering, GPriorCentre intercept)
+        => tempering.Path == TemperingPath.Likelihood && tempering.Form == TemperedForm.Integrated && intercept == GPriorCentre.Flat;
+
+    private static string AutoHotEndReason(TemperingSpec tempering, GPriorCentre intercept, double? fixedTau, double picked)
+    {
+        string unit = Pole(tempering, intercept)
+            ? "2/N, past the integrated form's pole under the flat intercept at (1 − 2c)/N, with ν = Nb − 1 = 1"
+            : "1/N, where E[τ] = 1/N halves the shrinkage τ/(τ + b): the tempered likelihood weighs one observation, as the unit-information prior does";
+        if (fixedTau is not double tau) return unit;
+        return picked == tau ? $"the held τ under fixed g, at most {unit}" : $"{unit}, below the held τ";
     }
 
     // The declared points, checked against the data, or the defaults; a direct response's missing location is the middle one.

@@ -22,8 +22,9 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>Lengths.</b> Burn-in runs <see cref="BassSampling.BurnIn"/> sweeps, a ladder's scan counting as one; each
 /// retained draw follows <see cref="BassSampling.Thin"/> more. An adaptive ladder re-spaces its rungs after rounds of 1,
 /// 2, 4, … sweeps while the burn-in lasts (Syed et al.'s Algorithm 4, as BARS's ladders do) and runs the rest on the last
-/// ladder, which sampling keeps (D10). At the end of burn-in a chain's tallies restart, so the account covers the sampling
-/// phase, and a ladder that reports an evidence starts tracing its rungs.</item>
+/// ladder, which sampling keeps (D10). A self-sizing ladder sizes itself after every round but the last, the longest,
+/// which equalizes the count it settled on. At the end of burn-in a chain's tallies restart, so the account covers the
+/// sampling phase, and a ladder that reports an evidence starts tracing its rungs.</item>
 /// <item><b>Terms.</b> Each chain interns its draws' terms in its own <see cref="BassTermTable"/>; <see cref="Assemble"/>
 /// merges them in chain order.</item>
 /// <item><b>Restart state.</b> Each chain saves its chain's snapshot (the state, the design as it is, the three
@@ -163,10 +164,11 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
 
         BassConfig config = _model.Config;
         BassLadder[]? ladders = _tempering is null ? null : Array.ConvertAll(runs, r => r.Ladder!);
+        BassDiagnostics diagnostics = Diagnostics(summary, runs, ladders);
         return new BassFit(config, _model.Resolved, _model.Transform,
                            new RunIdentity(config.Sampling.MasterSeed, config.Sampling.Chains, Fingerprint),
-                           terms, draws, null, Diagnostics(summary, runs, ladders),
-                           ReportsEvidence ? BassEvidence.Of(_model, ladders!) : null,
+                           terms, draws, null, diagnostics,
+                           ReportsEvidence ? BassEvidence.Of(_model, ladders!, diagnostics.Tempering!) : null,
                            BassResidualDependence.Of(_model, terms, draws), summary.Checkpoint);
     }
 
@@ -324,8 +326,9 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
             return Current;
         }
 
-        // The burn-in's sweeps, an adaptive ladder re-spaced after each round of 1, 2, 4, … while the burn-in lasts; then
-        // the ladder freezes, the tallies restart and the move counts are kept, so the account covers sampling.
+        // The burn-in's sweeps, an adaptive ladder re-spaced after each round of 1, 2, 4, … while the burn-in lasts, a
+        // self-sizing one sized after every round but the last, which equalizes the count it settled on; then the ladder
+        // freezes, the tallies restart and the move counts are kept, so the account covers sampling.
         public void Burn(int steps)
         {
             int done = 0;
@@ -334,7 +337,8 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
                 {
                     for (int k = 0; k < round; k++) owner.Sweep(this);
                     done += round;
-                    adaptive.Adapt();
+                    if (adaptive.SizesItself && done + 2 * round <= steps) adaptive.Resize();
+                    else adaptive.Adapt();
                 }
             for (; done < steps; done++) owner.Sweep(this);
             if (Ladder is { } ladder) ladder.EndBurnIn(owner.ReportsEvidence);

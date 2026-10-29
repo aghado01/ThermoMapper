@@ -25,8 +25,8 @@ namespace Maths.Regression.Spline.Bass;
 /// scores off the support, and its within-move ratio from <see cref="BassTermProposal"/>.</item>
 /// <item><b>The design follows the chain.</b> A proposal leaves the design's candidate pending; when the chain next
 /// shows a state holding that candidate's structure it was accepted, and the design commits it. A replica handed a
-/// state by a swap adopts its giver's design (<see cref="BassLadder"/>); any other structure is loaded whole. A chain
-/// restored from its snapshot gets its design back as it was.</item>
+/// state by a swap adopts its giver's design, and a resize's new replica its source's (<see cref="BassLadder"/>); any
+/// other structure is loaded whole. A chain restored from its snapshot gets its design back as it was.</item>
 /// </list>
 /// Refusals are tallied by reason, the target's exact-fit refusal included, and each birth's and change's candidate term
 /// by its orders with its support outcome (D01's tilt). Not thread-safe: one per chain.

@@ -91,7 +91,7 @@ public sealed class BassTemperingParityTests
         for (int j = 0; j < terms.Length; j++) Check($"{form}, {terms[j]}", Row(included, j), inclusion[j], 0.005, quiet: true);
         BassTemperingReadout readout = fit.Diagnostics.Tempering!;
         _out.WriteLine($"{form}: {terms.Length} inclusions within their allowance; round trips {readout.RoundTripsPerScan:F4}/scan, " +
-                       $"swap acceptance [{string.Join(", ", readout.PairAcceptance.Select(a => a.ToString("F2")))}]");
+                       $"swap acceptance [{string.Join("; ", readout.PairAcceptance.Select(c => string.Join(", ", c.Select(a => a.ToString("F2")))))}]");
     }
 
     [Theory]
@@ -105,7 +105,7 @@ public sealed class BassTemperingParityTests
         {
             Form = form == "linear" ? TemperedForm.Linear : TemperedForm.Integrated, Levels = 4, HotEnd = 0.1, ReferenceRung = true, Adaptive = false,
         };
-        double[] betas = ParallelTempering<BassState>.ReferenceLadder(spec.Levels, spec.HotEnd);
+        double[] betas = ParallelTempering<BassState>.ReferenceLadder(spec.Levels!.Value, spec.HotEnd!.Value);
         JsonElement r = BassTargetParityTests.Posterior(rows, "M_max=2", Rungs(betas));
         BassTerm[] terms = BassTargetParityTests.Terms(r);
         int[][] states = BassTargetParityTests.States(r);
@@ -256,7 +256,14 @@ public sealed class BassTemperingParityTests
         BassFit fit = Bass.Fit(Config(2, spec, burn: 1_000, samples: 5_000, maxInteraction: categorical ? 1 : 2),
                                BassTargetParityTests.Data(rows, categorical));
         BassEvidence evidence = fit.Evidence!;
-        _out.WriteLine($"{form}: stepping-stone {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against the oracle's {logZ:F4}");
+        // The default ladder sizes itself from the hot end it auto-picks, 1/N.
+        Assert.Equal(1.0 / fit.Resolved.Observations, fit.Resolved.HotEnd);
+        BassTemperingReadout readout = fit.Diagnostics.Tempering!;
+        _out.WriteLine($"{form}: stepping-stone {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} (within {evidence.SteppingStone.WithinChainError:F4}, " +
+                       $"between {evidence.SteppingStone.BetweenChainError:F4}) against the oracle's {logZ:F4}; N = {fit.Resolved.Observations}, settled levels " +
+                       $"[{string.Join(", ", readout.Levels)}], max rejection {evidence.MaxPairRejection:F3}, cold chain's mean M " +
+                       $"{fit.Draws[0].Average(d => d.Structure.TermIds.Length):F3}");
+        Assert.False(evidence.Saturated || evidence.AtMaxLevels);
         Assert.True(Math.Abs(evidence.LogEvidence - logZ) <= 4 * evidence.MonteCarloError + 0.01,
                     $"{evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against {logZ:F4}");
         if (evidence.PathSampling is { } ps)

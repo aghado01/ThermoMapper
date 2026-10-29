@@ -23,52 +23,75 @@ namespace Maths.Regression.Spline.Bass;
 /// first point).</item>
 /// </list>
 /// <see cref="Priors"/> says what the value depends on beyond the data.
+/// <para>The evidence carries its flags, and a flagged one is still reported (decided 2026-10-28): the largest pair
+/// rejection over the chains' sampling phases (<see cref="MaxPairRejection"/>, <see cref="Saturated"/> above
+/// <see cref="RejectionThreshold"/>), where stepping-stone's importance weights grow heavy-tailed and its delta-method error
+/// stops reading them; whether a self-sizing ladder reached its budget (<see cref="AtMaxLevels"/>), where the count the
+/// barrier asked for may not have been taken; and the between-to-within ratio of the errors
+/// (<see cref="BassEvidenceEstimate.BetweenToWithin"/>), well above 1 where the chains disagree beyond their own errors.</para>
 /// </summary>
-public sealed record BassEvidence(BassEvidenceEstimate SteppingStone, BassEvidenceEstimate? PathSampling, BassEvidencePriors Priors)
+public sealed record BassEvidence(BassEvidenceEstimate SteppingStone, BassEvidenceEstimate? PathSampling, BassEvidencePriors Priors,
+                                  double MaxPairRejection, bool AtMaxLevels)
 {
+    /// <summary>
+    /// The pair rejection above which the evidence is flagged <see cref="Saturated"/>. Under a Gaussian reading of the swap,
+    /// a pair rejecting r has stepping-stone weights of relative variance e^{σ²/2} − 1 with r = 1 − 2Φ(−σ/2): about 220 at
+    /// 0.9 and 2,200 at 0.95, against a rung's few hundred to few thousand effective draws, so past 0.9 the weights' mean
+    /// may not yet have seen its tail and the delta-method error may not read it. An equalized ladder of N ≈ 2Λ pairs
+    /// rejects about half; S8's saturated ladder rejected 0.96–1.00.
+    /// </summary>
+    public const double RejectionThreshold = 0.9;
+
     /// <summary>The run's evidence, by stepping-stone.</summary>
     public double LogEvidence => SteppingStone.LogEvidence;
 
-    /// <summary>Its Monte Carlo error.</summary>
+    /// <summary>Its Monte Carlo error: the larger of the within- and between-chain errors.</summary>
     public double MonteCarloError => SteppingStone.MonteCarloError;
+
+    /// <summary>Whether a pair's rejection rose above <see cref="RejectionThreshold"/>.</summary>
+    public bool Saturated => MaxPairRejection > RejectionThreshold;
 
     /// <summary>
     /// The evidence over <paramref name="ladders"/>, one per chain, each traced since burn-in ended
-    /// (<see cref="BassLadder.EndBurnIn"/>) down to its reference rung: stepping-stone, and path sampling on the linear form.
+    /// (<see cref="BassLadder.EndBurnIn"/>) down to its reference rung, with the flags of their <paramref name="readout"/>:
+    /// stepping-stone, and path sampling on the linear form.
     /// </summary>
-    internal static BassEvidence Of(BassModel model, IReadOnlyList<BassLadder> ladders)
+    internal static BassEvidence Of(BassModel model, IReadOnlyList<BassLadder> ladders, BassTemperingReadout readout)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(ladders);
+        ArgumentNullException.ThrowIfNull(readout);
         if (ladders.Count < 1) throw new ArgumentException("At least one ladder is required.", nameof(ladders));
         BassEvidenceEstimate? pathSampling = model.Target.Form == TemperedForm.Linear ? Pooled(ladders, LadderEstimator.PathSampling) : null;
-        return new BassEvidence(Pooled(ladders, LadderEstimator.SteppingStone), pathSampling, BassEvidencePriors.Of(model.Config, model.Resolved));
+        return new BassEvidence(Pooled(ladders, LadderEstimator.SteppingStone), pathSampling, BassEvidencePriors.Of(model.Config, model.Resolved),
+                                readout.MaxPairRejection, readout.AtMaxLevels);
     }
 
-    // Each chain's own ladder gives its estimate (each adapted its own rungs); the run's is their mean, as BARS pools.
+    // Each chain's own ladder gives its estimate (each adapted its own rungs); the run's pools them as BARS's does.
     private static BassEvidenceEstimate Pooled(IReadOnlyList<BassLadder> ladders, LadderEstimator method)
     {
         var chains = new LadderEstimate[ladders.Count];
-        double sum = 0.0, variance = 0.0, discretization = 0.0;
-        for (int c = 0; c < chains.Length; c++)
-        {
-            chains[c] = LadderEvidence.FromLadders([ladders[c].Tempering], method);
-            sum += chains[c].LogRatio;
-            variance += chains[c].MonteCarloError * chains[c].MonteCarloError;
-            discretization += chains[c].DiscretizationError;
-        }
-        int n = chains.Length;
-        return new BassEvidenceEstimate(method, sum / n, Math.Sqrt(variance) / n, discretization / n, chains);
+        for (int c = 0; c < chains.Length; c++) chains[c] = LadderEvidence.FromLadders([ladders[c].Tempering], method);
+        PooledLadderEstimate pooled = LadderEvidence.Pool(chains);
+        return new BassEvidenceEstimate(method, pooled.LogRatio, pooled.MonteCarloError, pooled.WithinChainError, pooled.BetweenChainError,
+                                        pooled.DiscretizationError, pooled.Chains);
     }
 }
 
 /// <summary>
 /// One estimator's evidence over a run's ladders: each chain's own estimate (<see cref="LadderEvidence.FromLadders{TState}"/>,
-/// over the rungs it froze), and their mean, with Monte Carlo error √Σ err_c² / C and the mean of their discretization
-/// diagnostics (NaN for stepping-stone, which has none). The chains' spread checks the errors.
+/// over the rungs it froze), and their mean (<see cref="LadderEvidence.Pool"/>), with the within-chain error √Σ err_c² / C,
+/// the between-chain error from the chains' spread, the larger of the two as its Monte Carlo error (the within-chain error
+/// alone for one chain), and the mean of their discretization diagnostics (NaN for stepping-stone, which has none).
 /// </summary>
 public sealed record BassEvidenceEstimate(
-    LadderEstimator Method, double LogEvidence, double MonteCarloError, double DiscretizationError, IReadOnlyList<LadderEstimate> Chains);
+    LadderEstimator Method, double LogEvidence, double MonteCarloError, double WithinChainError, double BetweenChainError,
+    double DiscretizationError, IReadOnlyList<LadderEstimate> Chains)
+{
+    /// <summary>The between-chain error over the within-chain one: well above 1 where the chains' own errors under-cover;
+    /// NaN for one chain.</summary>
+    public double BetweenToWithin => BetweenChainError / WithinChainError;
+}
 
 /// <summary>
 /// What an evidence depends on beyond the data, carried with it because the marginal likelihood is sensitive to prior

@@ -22,7 +22,8 @@ public sealed class BassTemperingResumeTests
     public static TheoryData<string> Options => new()
     {
         "reference", "linear", "powered", "fixed ladder", "fixed g", "functional", "categorical", "flat + jeffreys", "thinned", "two rungs",
-        "three rungs, reference",
+        "three rungs, reference", "self-sizing", "self-sizing, linear", "self-sizing, powered", "self-sizing, fixed g", "self-sizing, functional",
+        "self-sizing, categorical", "self-sizing, flat",
     };
 
     [Theory]
@@ -37,7 +38,9 @@ public sealed class BassTemperingResumeTests
         Assert.Equal(400, resumed.Diagnostics.SamplesUsed);
         BassRunTests.AssertSameFit(full, resumed);
         AssertSameTempering(full, resumed);
-        Assert.Equal(option is "reference" or "linear" or "fixed ladder" or "thinned" or "three rungs, reference", full.Evidence is not null);
+        Assert.Equal(option is "reference" or "linear" or "fixed ladder" or "thinned" or "three rungs, reference"
+                     || option.StartsWith("self-sizing", StringComparison.Ordinal) && option is not ("self-sizing, powered" or "self-sizing, flat"),
+                     full.Evidence is not null);
         _out.WriteLine($"{option}: {full.Terms.Count} terms, round trips {full.Diagnostics.Tempering!.RoundTripsPerScan:F4}/scan, " +
                        $"evidence {full.Evidence?.LogEvidence.ToString("F4") ?? "null"}");
     }
@@ -116,6 +119,54 @@ public sealed class BassTemperingResumeTests
         Assert.True(ladder.Tempering.SwapAccepts > 200);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SelfSizingLadder_RestoredAcrossItsResizes_ContinuesBitForBit(bool reference)
+    {
+        BassModel model = BassModel.Create(BassTemperingTests.Config(null, maxBasis: 8), BassSweepTests.Data(large: true));
+        var spec = new TemperingSpec { ReferenceRung = reference, MaxLevels = 20 };
+        BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(5)).State;
+        var ladder = new BassLadder(model, spec, start.Terms, start.LogTau, seed: 6);
+        var counts = new System.Collections.Generic.List<int> { ladder.Tempering.Replicas.Count };
+        for (int round = 1; round <= 32; round *= 2)
+        {
+            for (int t = 0; t < round; t++) ladder.Step();
+            ladder.Resize();
+            counts.Add(ladder.Tempering.Replicas.Count);
+        }
+
+        // Before a sizing round, and after it: the restored ladder sizes, places and equalizes as the original does.
+        BassLadder restored = BassLadder.Restore(model, spec, ladder.Snapshot());
+        void Both(int scans)
+        {
+            for (int t = 0; t < scans; t++)
+            {
+                ladder.Step();
+                restored.Step();
+            }
+        }
+        Both(64);
+        Assert.Equal(ladder.Resize(), restored.Resize());
+        counts.Add(ladder.Tempering.Replicas.Count);
+        AssertSameLadder(ladder, restored);
+        restored = BassLadder.Restore(model, spec, ladder.Snapshot());
+        Both(128);
+        Assert.Equal(ladder.Adapt(), restored.Adapt());
+        AssertSameLadder(ladder, restored);
+
+        // After burn-in, with the rungs traced.
+        Both(50);
+        ladder.EndBurnIn(traceRungs: true);
+        restored.EndBurnIn(traceRungs: true);
+        Both(100);
+        restored = BassLadder.Restore(model, spec, ladder.Snapshot());
+        Both(300);
+        AssertSameLadder(ladder, restored);
+        _out.WriteLine($"reference {reference}: counts [{string.Join(", ", counts)}]");
+        Assert.True(counts.Distinct().Count() > 1, "the ladder never resized");
+    }
+
     private static void AssertSameLadder(BassLadder a, BassLadder b)
     {
         ParallelTempering<BassState> x = a.Tempering, y = b.Tempering;
@@ -123,6 +174,7 @@ public sealed class BassTemperingResumeTests
         Assert.Equal((x.Scans, x.SwapAttempts, x.SwapAccepts, x.RoundTrips, x.AnnealedRestarts),
                      (y.Scans, y.SwapAttempts, y.SwapAccepts, y.RoundTrips, y.AnnealedRestarts));
         Assert.Equal(x.PairStats, y.PairStats);
+        Assert.Equal(x.Snapshot().GrowthRng, y.Snapshot().GrowthRng);
         for (int i = 0; i < x.Replicas.Count; i++)
         {
             BassState s = x.Replicas[i].Current, t = y.Replicas[i].Current;
@@ -150,12 +202,16 @@ public sealed class BassTemperingResumeTests
         if (x is not null)
         {
             Assert.Equal((x.Path, x.Form, x.Schedule, x.ReferenceRung), (y!.Path, y.Form, y.Schedule, y.ReferenceRung));
-            Assert.Equal((x.RoundTripsPerScan, x.AnnealedRestartsPerScan, x.Barrier, x.IdealRoundTripRate, x.ReferenceAttemptsPerDraw),
-                         (y.RoundTripsPerScan, y.AnnealedRestartsPerScan, y.Barrier, y.IdealRoundTripRate, y.ReferenceAttemptsPerDraw));
-            Assert.Equal(x.PairRejection, y.PairRejection);
-            Assert.Equal(x.PairAcceptance, y.PairAcceptance);
+            Assert.Equal((x.RoundTripsPerScan, x.AnnealedRestartsPerScan, x.Barrier, x.MaxPairRejection, x.IdealRoundTripRate, x.AtMaxLevels, x.ReferenceAttemptsPerDraw),
+                         (y.RoundTripsPerScan, y.AnnealedRestartsPerScan, y.Barrier, y.MaxPairRejection, y.IdealRoundTripRate, y.AtMaxLevels, y.ReferenceAttemptsPerDraw));
+            Assert.Equal(x.Levels, y.Levels);
             Assert.Equal(x.Ladders.Length, y.Ladders.Length);
-            for (int c = 0; c < x.Ladders.Length; c++) Assert.Equal(x.Ladders[c], y.Ladders[c]);
+            for (int c = 0; c < x.Ladders.Length; c++)
+            {
+                Assert.Equal(x.Ladders[c], y.Ladders[c]);
+                Assert.Equal(x.PairRejection[c], y.PairRejection[c]);
+                Assert.Equal(x.PairAcceptance[c], y.PairAcceptance[c]);
+            }
         }
         Assert.Equal(a.Evidence is null, b.Evidence is null);
         if (a.Evidence is not { } e) return;
@@ -163,11 +219,13 @@ public sealed class BassTemperingResumeTests
         Assert.Equal(e.PathSampling is null, b.Evidence.PathSampling is null);
         if (e.PathSampling is { } ps) AssertSameEstimate(ps, b.Evidence.PathSampling!);
         Assert.Equal(e.Priors, b.Evidence.Priors);
+        Assert.Equal((e.MaxPairRejection, e.AtMaxLevels), (b.Evidence.MaxPairRejection, b.Evidence.AtMaxLevels));
     }
 
     private static void AssertSameEstimate(BassEvidenceEstimate a, BassEvidenceEstimate b)
     {
-        Assert.Equal((a.Method, a.LogEvidence, a.MonteCarloError, a.DiscretizationError), (b.Method, b.LogEvidence, b.MonteCarloError, b.DiscretizationError));
+        Assert.Equal((a.Method, a.LogEvidence, a.MonteCarloError, a.WithinChainError, a.BetweenChainError, a.DiscretizationError),
+                     (b.Method, b.LogEvidence, b.MonteCarloError, b.WithinChainError, b.BetweenChainError, b.DiscretizationError));
         Assert.Equal(a.Chains.Count, b.Chains.Count);
         for (int c = 0; c < a.Chains.Count; c++)
         {

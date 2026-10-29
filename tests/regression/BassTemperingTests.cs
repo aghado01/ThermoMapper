@@ -109,14 +109,18 @@ public sealed class BassTemperingTests
     public void Spec_HasD05sDefaults_RoundTrips_AndMovesTheFingerprint()
     {
         var spec = new TemperingSpec();
-        Assert.Equal((TemperingPath.Likelihood, TemperedForm.Integrated, 8, 1e-3, true, SwapSchedule.DeterministicEvenOdd, false),
-                     (spec.Path, spec.Form, spec.Levels, spec.HotEnd, spec.Adaptive, spec.Schedule, spec.ReferenceRung));
+        Assert.Equal((TemperingPath.Likelihood, TemperedForm.Integrated, (int?)null, 64, (double?)null, true, SwapSchedule.DeterministicEvenOdd, false),
+                     (spec.Path, spec.Form, spec.Levels, spec.MaxLevels, spec.HotEnd, spec.Adaptive, spec.Schedule, spec.ReferenceRung));
+        Assert.Equal(8, TemperingSpec.InitialLevels);
+        Assert.Equal((2, 3), (TemperingSpec.MinimumLevels(false), TemperingSpec.MinimumLevels(true)));
         Assert.Null(new BassSampling().Tempering);
+        Assert.Contains("\"Tempering\":{\"Path\":\"Likelihood\",\"Form\":\"Integrated\",\"Levels\":null,\"MaxLevels\":64,\"HotEnd\":null,", Config(spec).ToJson());
 
         BassConfig config = Config(spec with { Form = TemperedForm.Linear, ReferenceRung = true, Levels = 6, HotEnd = 0.02, Adaptive = false });
         string json = config.ToJson();
-        Assert.Contains("\"Tempering\":{\"Path\":\"Likelihood\",\"Form\":\"Linear\",\"Levels\":6,\"HotEnd\":0.02,\"Adaptive\":false,\"Schedule\":\"DeterministicEvenOdd\",\"ReferenceRung\":true}", json);
+        Assert.Contains("\"Tempering\":{\"Path\":\"Likelihood\",\"Form\":\"Linear\",\"Levels\":6,\"MaxLevels\":64,\"HotEnd\":0.02,\"Adaptive\":false,\"Schedule\":\"DeterministicEvenOdd\",\"ReferenceRung\":true}", json);
         Assert.Equal(config, BassConfig.FromJson(json));
+        Assert.Equal(Config(spec), BassConfig.FromJson(Config(spec).ToJson()));
         Assert.Equal(new TemperingSpec { ReferenceRung = true }, BassConfig.FromJson("{\"Sampling\":{\"Tempering\":{\"ReferenceRung\":true}}}").Sampling.Tempering);
         Assert.ThrowsAny<System.Text.Json.JsonException>(() => BassConfig.FromJson("{\"Sampling\":{\"Tempering\":{\"Rungs\":4}}}"));
 
@@ -126,7 +130,7 @@ public sealed class BassTemperingTests
         foreach (TemperingSpec other in new[]
                  {
                      spec with { Path = TemperingPath.Powered }, spec with { Form = TemperedForm.Linear }, spec with { Levels = 9 },
-                     spec with { HotEnd = 2e-3 }, spec with { Adaptive = false }, spec with { ReferenceRung = true },
+                     spec with { MaxLevels = 32 }, spec with { HotEnd = 2e-3 }, spec with { Levels = 8, Adaptive = false }, spec with { ReferenceRung = true },
                  })
             Assert.NotEqual(baseline, Bass.Fingerprint(Config(other), data));
     }
@@ -143,6 +147,10 @@ public sealed class BassTemperingTests
         { "Sampling.Tempering.HotEnd", new TemperingSpec { HotEnd = 1.0 } },
         { "Sampling.Tempering.HotEnd", new TemperingSpec { HotEnd = -0.1 } },
         { "Sampling.Tempering.HotEnd", new TemperingSpec { HotEnd = double.NaN } },
+        { "Sampling.Tempering.Adaptive", new TemperingSpec { Adaptive = false } },
+        { "Sampling.Tempering.MaxLevels", new TemperingSpec { MaxLevels = 1 } },
+        { "Sampling.Tempering.MaxLevels", new TemperingSpec { MaxLevels = 2, ReferenceRung = true } },
+        { "Sampling.Tempering.MaxLevels", new TemperingSpec { Levels = 10, MaxLevels = 9 } },
         { "Sampling.Tempering.Schedule", new TemperingSpec { Schedule = SwapSchedule.StochasticEvenOdd } },
         { "Sampling.Tempering.Schedule", new TemperingSpec { Schedule = SwapSchedule.Sequential } },
     };
@@ -157,6 +165,9 @@ public sealed class BassTemperingTests
         Assert.Throws<ArgumentException>(() => Bass.Fit(Config(spec), BassSweepTests.Data()));
         Config(new TemperingSpec { Levels = 2 }).Validate();
         Config(new TemperingSpec { Levels = 3, ReferenceRung = true }).Validate();
+        Config(new TemperingSpec { Levels = 4, Adaptive = false }).Validate();
+        Config(new TemperingSpec { MaxLevels = 3, ReferenceRung = true }).Validate();
+        Config(new TemperingSpec { Levels = 70, MaxLevels = 70 }).Validate();
     }
 
     [Fact]
@@ -430,7 +441,8 @@ public sealed class BassTemperingTests
     public static TheoryData<string> RunOptions => new()
     {
         "reference", "linear", "powered", "fixed ladder", "fixed g", "functional", "categorical", "two rungs", "three rungs, reference",
-        "early stop",
+        "early stop", "self-sizing", "self-sizing, linear", "self-sizing, powered", "self-sizing, fixed g", "self-sizing, functional",
+        "self-sizing, categorical", "self-sizing, flat",
     };
 
     internal static (BassConfig Config, BassData Data) RunCase(string option, int samples = 200)
@@ -446,21 +458,26 @@ public sealed class BassTemperingTests
             "thinned" => spec with { ReferenceRung = true },
             "two rungs" => spec with { Levels = 2, HotEnd = 0.2 },
             "three rungs, reference" => spec with { Levels = 3, HotEnd = 0.2, ReferenceRung = true },
+            "self-sizing, linear" => new TemperingSpec { Form = TemperedForm.Linear, ReferenceRung = true },
+            "self-sizing, powered" => new TemperingSpec { Path = TemperingPath.Powered },
+            "self-sizing, flat" => new TemperingSpec(),
+            _ when option.StartsWith("self-sizing", StringComparison.Ordinal) => new TemperingSpec { ReferenceRung = true },
             _ => spec,
         };
         BassConfig config = Config(spec, maxBasis: 6, samples: samples);
         config = option switch
         {
-            "fixed g" => config with { Coefficients = new FixedG() },
+            "fixed g" or "self-sizing, fixed g" => config with { Coefficients = new FixedG() },
             "flat + jeffreys" => config with { Intercept = GPriorCentre.Flat, Sigma2 = Sigma2Prior.Jeffreys },
+            "self-sizing, flat" => config with { Intercept = GPriorCentre.Flat },
             "thinned" => config with { Sampling = config.Sampling with { Thin = 2 } },
             "early stop" => config with { Sampling = config.Sampling with { RHatTarget = 1.5, BatchSize = 50, MinEssPerChain = 5 } },
             _ => config,
         };
         BassData data = option switch
         {
-            "functional" => BassRunTests.FunctionalData(),
-            "categorical" => BassPriorSamplerTests.MixedData(),
+            "functional" or "self-sizing, functional" => BassRunTests.FunctionalData(),
+            "categorical" or "self-sizing, categorical" => BassPriorSamplerTests.MixedData(),
             _ => BassSweepTests.Data(large: true),
         };
         return (config, data);
@@ -476,37 +493,52 @@ public sealed class BassTemperingTests
         BassTemperingReadout readout = fit.Diagnostics.Tempering!;
         Assert.Equal((spec.Path, spec.Schedule, spec.ReferenceRung), (readout.Path, readout.Schedule, readout.ReferenceRung));
         Assert.Equal(spec.Path == TemperingPath.Likelihood ? spec.Form : TemperedForm.Integrated, readout.Form);
-        Assert.Equal(config.Sampling.Chains, readout.Ladders.Length);
+        int chains = config.Sampling.Chains;
+        Assert.Equal(chains, readout.Ladders.Length);
+        BassResolved resolved = fit.Resolved;
+        double hot = spec.HotEnd ?? resolved.HotEnd!.Value;
+        Assert.Equal(hot, resolved.HotEnd);
+        int start = spec.Levels ?? TemperingSpec.InitialLevels;
         double[] declared = spec.ReferenceRung
-            ? ParallelTempering<BassState>.ReferenceLadder(spec.Levels, spec.HotEnd)
-            : ParallelTempering<BassState>.GeometricLadder(spec.Levels, spec.HotEnd);
-        foreach (double[] ladder in readout.Ladders)
+            ? ParallelTempering<BassState>.ReferenceLadder(start, hot)
+            : ParallelTempering<BassState>.GeometricLadder(start, hot);
+        Assert.Equal(chains, readout.Levels.Length);
+        Assert.Equal((chains, chains), (readout.PairRejection.Length, readout.PairAcceptance.Length));
+        double worst = 0.0, ideal = 0.0;
+        for (int c = 0; c < chains; c++)
         {
-            Assert.Equal(spec.Levels, ladder.Length);
+            double[] ladder = readout.Ladders[c];
+            Assert.Equal(readout.Levels[c], ladder.Length);
+            if (spec.Levels is int levels) Assert.Equal(levels, ladder.Length);
+            else Assert.InRange(ladder.Length, TemperingSpec.MinimumLevels(spec.ReferenceRung), spec.MaxLevels);
             Assert.Equal(1.0, ladder[0]);
             Assert.Equal(declared[^1], ladder[^1]);
             for (int i = 1; i < ladder.Length; i++) Assert.True(ladder[i] < ladder[i - 1]);
             if (!spec.Adaptive) Assert.Equal(declared, ladder);
+            Assert.Equal((ladder.Length - 1, ladder.Length - 1), (readout.PairRejection[c].Length, readout.PairAcceptance[c].Length));
+            for (int i = 0; i < ladder.Length - 1; i++)
+            {
+                double rejection = readout.PairRejection[c][i], acceptance = readout.PairAcceptance[c][i];
+                Assert.InRange(rejection, 0.0, 1.0);
+                Assert.InRange(acceptance, 0.0, 1.0);
+                // Rao–Blackwellized and realized acceptance read the same rate.
+                Assert.True(Math.Abs(acceptance - (1 - rejection)) <= 0.2, $"chain {c}, pair {i}: acceptance {acceptance:F3}, rejection {rejection:F3}");
+                worst = Math.Max(worst, rejection);
+            }
+            ideal += TemperingLadder.IdealRoundTripRate(readout.PairRejection[c], spec.Schedule);
         }
-        Assert.Equal(spec.Levels - 1, readout.PairRejection.Length);
-        Assert.Equal(spec.Levels - 1, readout.PairAcceptance.Length);
-        for (int i = 0; i < readout.PairRejection.Length; i++)
-        {
-            Assert.InRange(readout.PairRejection[i], 0.0, 1.0);
-            Assert.InRange(readout.PairAcceptance[i], 0.0, 1.0);
-            // Rao–Blackwellized and realized acceptance read the same rate.
-            Assert.True(Math.Abs(readout.PairAcceptance[i] - (1 - readout.PairRejection[i])) <= 0.12,
-                        $"pair {i}: acceptance {readout.PairAcceptance[i]:F3}, rejection {readout.PairRejection[i]:F3}");
-        }
-        Assert.Equal(readout.PairRejection.Sum(), readout.Barrier, 12);
-        Assert.Equal(TemperingLadder.IdealRoundTripRate(readout.PairRejection, spec.Schedule), readout.IdealRoundTripRate);
+        Assert.Equal(readout.PairRejection.Average(r => r.Sum()), readout.Barrier, 12);
+        Assert.Equal(worst, readout.MaxPairRejection);
+        Assert.Equal(ideal / chains, readout.IdealRoundTripRate, 15);
+        Assert.False(readout.AtMaxLevels);
         Assert.True(readout.RoundTripsPerScan >= 0 && readout.AnnealedRestartsPerScan >= 0);
         if (spec.ReferenceRung) Assert.True(readout.ReferenceAttemptsPerDraw >= 1.0);
         else Assert.True(double.IsNaN(readout.ReferenceAttemptsPerDraw));
         Assert.All(fit.Draws, d => Assert.Equal(fit.Diagnostics.SamplesUsed, d.Count));
         Assert.Equal(option == "early stop", fit.Diagnostics.StoppedEarly);
         _out.WriteLine($"{option}: round trips {readout.RoundTripsPerScan:F4}/scan (ideal {readout.IdealRoundTripRate:F4}), barrier {readout.Barrier:F2}, " +
-                       $"acceptance [{string.Join(", ", readout.PairAcceptance.Select(a => a.ToString("F2")))}], evidence {fit.Evidence?.LogEvidence.ToString("F3") ?? "null"}");
+                       $"levels [{string.Join(", ", readout.Levels)}], acceptance [{string.Join("; ", readout.PairAcceptance.Select(c => string.Join(", ", c.Select(a => a.ToString("F2")))))}], " +
+                       $"evidence {fit.Evidence?.LogEvidence.ToString("F3") ?? "null"}");
         Assert.Null(Bass.Fit(config with { Sampling = config.Sampling with { Tempering = null } }, data).Diagnostics.Tempering);
     }
 
@@ -556,7 +588,17 @@ public sealed class BassTemperingTests
         Assert.Equal(evidence.SteppingStone.MonteCarloError, evidence.MonteCarloError);
         Assert.Equal(4, evidence.SteppingStone.Chains.Count);
         Assert.Equal(evidence.SteppingStone.Chains.Average(c => c.LogRatio), evidence.LogEvidence, 12);
-        Assert.Equal(Math.Sqrt(evidence.SteppingStone.Chains.Sum(c => c.MonteCarloError * c.MonteCarloError)) / 4, evidence.MonteCarloError, 12);
+        // The reported error is the larger of the chains' own errors pooled and the standard error of their mean.
+        double within = Math.Sqrt(evidence.SteppingStone.Chains.Sum(c => c.MonteCarloError * c.MonteCarloError)) / 4;
+        double between = Math.Sqrt(evidence.SteppingStone.Chains.Sum(c => Math.Pow(c.LogRatio - evidence.LogEvidence, 2)) / 12);
+        Assert.Equal(within, evidence.SteppingStone.WithinChainError, 12);
+        Assert.Equal(between, evidence.SteppingStone.BetweenChainError, 12);
+        Assert.Equal(Math.Max(evidence.SteppingStone.WithinChainError, evidence.SteppingStone.BetweenChainError), evidence.MonteCarloError);
+        // The default ladder sizes itself, from the hot end it auto-picks: 1/N, and under fixed g the held τ, 1/N too.
+        Assert.Equal(1.0 / 18, fit.Resolved.HotEnd);
+        _out.WriteLine($"{option}: N = {fit.Resolved.Observations}, settled levels [{string.Join(", ", fit.Diagnostics.Tempering!.Levels)}], cold chain's mean M " +
+                       $"{fit.Draws[0].Average(d => d.Structure.TermIds.Length):F3}, max rejection {evidence.MaxPairRejection:F3}, " +
+                       $"between/within {evidence.SteppingStone.BetweenToWithin:F2}");
         Assert.True(double.IsNaN(evidence.SteppingStone.DiscretizationError));
         Assert.True(Math.Abs(evidence.LogEvidence - exact) <= 4 * evidence.MonteCarloError + 0.01,
                     $"{evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against {exact:F4}");
