@@ -93,8 +93,8 @@ public sealed class WeightedSums : IMergeable<WeightedSums>
 
 /// <summary>
 /// A weighted multiset of scalar draws, for readouts no fixed-size statistic answers: quantiles and credible
-/// intervals. Merging is multiset union. Its order of insertion means nothing; the ordered draws diagnostics need
-/// are a <see cref="ChainTrace"/>.
+/// intervals, by one weighted quantile that is type 7 at equal weights (<see cref="Quantile"/>). Merging is multiset
+/// union. Its order of insertion means nothing; the ordered draws diagnostics need are a <see cref="ChainTrace"/>.
 /// </summary>
 public sealed class DrawSample : IMergeable<DrawSample>
 {
@@ -137,12 +137,19 @@ public sealed class DrawSample : IMergeable<DrawSample>
     }
 
     /// <summary>
-    /// The <paramref name="p"/> quantile. Zero weights carry no mass and are dropped. Under equal weights, unit or any
-    /// other common weight, it is the type-7 estimator, linear interpolation between order statistics at position
-    /// <c>p(n − 1)</c>. Under unequal weights it is linear interpolation of the weighted ECDF between the midpoints of each
-    /// distinct value's weight, tied values pooling their weight. So the answer depends on the weighted multiset alone, not
-    /// on the order its draws arrived or merged in, nor on a common rescaling of the weights. NaN for an empty sample or
-    /// one with no mass.
+    /// The <paramref name="p"/> quantile, by Akinshin's (2023, §6) weighted type 7: with n* = (Σw)²/Σw², Kish's effective
+    /// size, and h = (n* − 1)p + 1, the mean of the weighted quantile function over [(h − 1)/n*, h/n*]. Zero weights carry
+    /// no mass and are dropped, and tied values pool their weight; n* counts the draws.
+    /// <list type="bullet">
+    /// <item>Under equal weights, unit or any other common weight, n* = n and it is exactly type 7, linear interpolation
+    /// between order statistics at position <c>p(n − 1)</c>.</item>
+    /// <item>It is continuous in the weights, a weight going to 0 included, so a negligible draw moves no quantile. Under
+    /// unequal weights it is therefore not anchored: Q(0) and Q(1) lie inside the extremes once the end draws' weights fall
+    /// below 1/n*.</item>
+    /// <item>It depends on the weighted multiset alone, not on the order its draws arrived or merged in, nor on a common
+    /// rescaling of the weights.</item>
+    /// </list>
+    /// NaN for an empty sample or one with no mass.
     /// </summary>
     public double Quantile(double p)
     {
@@ -169,33 +176,41 @@ public sealed class DrawSample : IMergeable<DrawSample>
             return Type7(kept, p);
         }
 
-        // Sorted by value, then weight, so that tied weights are pooled in one order and the sums are reproducible.
+        // Sorted by value, then weight, so that tied weights are pooled in one order and the sums are reproducible; the
+        // weights are taken relative to the largest, so their sums neither overflow nor depend on a common scale.
         var draws = new (double Value, double Weight)[n];
-        for (int i = 0; i < n; i++) draws[i] = (_values[i], _weights[i]);
+        double largest = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            draws[i] = (_values[i], _weights[i]);
+            largest = Math.Max(largest, _weights[i]);
+        }
         Array.Sort(draws, (a, b) => a.Value != b.Value ? a.Value.CompareTo(b.Value) : a.Weight.CompareTo(b.Weight));
         var distinct = new List<(double Value, double Weight)>(n);
-        double total = 0.0;
+        double total = 0.0, squares = 0.0;
         foreach ((double value, double weight) in draws)
         {
             if (weight == 0.0) continue;
-            if (distinct.Count > 0 && distinct[^1].Value == value) distinct[^1] = (value, distinct[^1].Weight + weight);
-            else distinct.Add((value, weight));
-            total += weight;
+            double w = weight / largest;
+            if (distinct.Count > 0 && distinct[^1].Value == value) distinct[^1] = (value, distinct[^1].Weight + w);
+            else distinct.Add((value, w));
+            total += w;
+            squares += w * w;
         }
-        double target = p * total, below = 0.0, previousMid = double.NaN;
-        for (int i = 0; i < distinct.Count; i++)
+
+        // The window's uniform CDF at the cumulative weight t is F(t) = n*·t − (n* − 1)p, clamped to [0, 1]; each distinct
+        // value takes the window's share of its step of the weighted quantile function.
+        double effective = total * total / squares, offset = (effective - 1.0) * p;
+        double quantile = 0.0, below = 0.0, previous = 0.0;
+        for (int i = 0; i < distinct.Count && previous < 1.0; i++)
         {
-            double mid = below + 0.5 * distinct[i].Weight;
-            if (target <= mid)
-            {
-                if (i == 0) return distinct[0].Value;
-                double t = (target - previousMid) / (mid - previousMid);
-                return distinct[i - 1].Value + t * (distinct[i].Value - distinct[i - 1].Value);
-            }
-            previousMid = mid;
             below += distinct[i].Weight;
+            double t = i == distinct.Count - 1 ? 1.0 : below / total;
+            double f = Math.Clamp(effective * t - offset, 0.0, 1.0);
+            quantile += (f - previous) * distinct[i].Value;
+            previous = f;
         }
-        return distinct[^1].Value;
+        return Math.Clamp(quantile, distinct[0].Value, distinct[^1].Value);
     }
 
     // The type-7 quantile of `values`, sorted in place.

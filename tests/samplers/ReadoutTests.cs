@@ -90,14 +90,17 @@ public sealed class ReadoutTests
     }
 
     [Fact]
-    public void DrawSample_Weighted_InterpolatesTheWeightedEcdf_AndMergesWithUnitWeights()
+    public void DrawSample_Weighted_IsAkinshinsType7_AndMergesWithUnitWeights()
     {
+        // (0, 1) and (1, 3): n* = 4²/10 = 1.6, and the window's CDF at the first draw's cumulative weight ¼ is
+        // F = 1.6·¼ − 0.6p, the share of the window the value 0 takes.
         var s = new DrawSample();
         s.Add(0.0, 1.0);
-        s.Add(1.0, 3.0);   // midpoints of the weights at 0.5 and 2.5 out of 4
-        Assert.Equal(0.75, s.Quantile(0.5), 12);
-        Assert.Equal(0.0, s.Quantile(0.1));
-        Assert.Equal(1.0, s.Quantile(0.9));
+        s.Add(1.0, 3.0);
+        Assert.Equal(0.9, s.Quantile(0.5), 12);    // F = 0.1
+        Assert.Equal(0.66, s.Quantile(0.1), 12);   // F = 0.34
+        Assert.Equal(1.0, s.Quantile(0.9), 12);    // F = 0
+        Assert.Equal(0.6, s.Quantile(0.0), 12);    // not anchored: the least draw holds less than 1/n* of the weight
 
         var unit = new DrawSample();
         unit.Add(2.0);
@@ -109,15 +112,16 @@ public sealed class ReadoutTests
     [Fact]
     public void DrawSample_Weighted_PoolsTiesAndDropsZeroMass()
     {
-        // The external review's cases. Ties: (0, 1), (0, 3), (1, 1) in either order is (0, 4), (1, 1), whose weight
-        // midpoints are 2 and 4.5 of 5, so the 70th percentile is 0.6.
+        // Ties: (0, 1), (0, 3), (1, 1) in either order is the quantile function of (0, 4), (1, 1), with n* = 5²/11 over
+        // the draws. At p = 0.7, F at the cumulative weight 4/5 is (25/11)(4/5) − (14/11)(0.7) = 10.2/11, so the quantile is
+        // the value 1's share, 0.8/11.
         foreach (double[] order in new[] { new[] { 1.0, 3.0 }, new[] { 3.0, 1.0 } })
         {
             var tied = new DrawSample();
             tied.Add(0.0, order[0]);
             tied.Add(0.0, order[1]);
             tied.Add(1.0, 1.0);
-            Assert.Equal(0.6, tied.Quantile(0.7), 12);
+            Assert.Equal(0.8 / 11.0, tied.Quantile(0.7), 12);
         }
         // A zero weight carries no mass: every quantile lies within the positive mass's range, and the equal weights
         // left give the type-7 quantile of their draws.
@@ -147,9 +151,87 @@ public sealed class ReadoutTests
             var scaled = new DrawSample();
             foreach (double v in values) scaled.Add(v, scale);
             scaled.Add(-50.0, 0.0);
-            foreach (double p in ps) Assert.Equal(unit.Quantile(p), scaled.Quantile(p), 12);
+            foreach (double p in ps) Assert.Equal(unit.Quantile(p), scaled.Quantile(p));
         }
         Assert.Equal(4.0, unit.Quantile(0.6), 12);   // sorted 1, 2, 3, 4, 4, 5 at position 0.6 · 5 = 3
+    }
+
+    [Fact]
+    public void DrawSample_Weighted_IsContinuousAsOneWeightLeavesEqual()
+    {
+        // One draw's weight moved from the common 1/4 by a relative ε, for the least, an inner and the largest draw: every
+        // quantile stays within O(ε) of type 7 (n·ε·range bounds the window's shift), so the rule has no jump between equal
+        // and near-equal weights.
+        double[] values = [5.0, 1.0, 4.0, 2.0, 3.0, 4.0, 7.5];
+        double[] ps = [0.0, 0.1, 0.25, 0.5, 0.6, 0.9, 1.0];
+        var equal = new DrawSample();
+        foreach (double v in values) equal.Add(v, 0.25);
+        foreach (int moved in new[] { 1, 0, 6 })
+            foreach (double epsilon in new[] { 1e-2, -1e-2, 1e-5, 1e-8, -1e-11 })
+            {
+                var s = new DrawSample();
+                for (int i = 0; i < values.Length; i++) s.Add(values[i], i == moved ? 0.25 * (1.0 + epsilon) : 0.25);
+                foreach (double p in ps)
+                    Assert.True(Math.Abs(s.Quantile(p) - equal.Quantile(p)) <= values.Length * Math.Abs(epsilon) * 6.5 + 1e-12,
+                                $"draw {moved}, ε {epsilon}, p {p}: {s.Quantile(p)} against {equal.Quantile(p)}");
+            }
+    }
+
+    [Fact]
+    public void DrawSample_Weighted_StaysInRange_AndANegligibleDrawMovesNoQuantile()
+    {
+        // The midpoint rule's failures (stage 8's brief): with (0, ½) and (1, ½), a 100 at weight 10⁻⁹ read Q(0.99) = 97.03,
+        // and with (0, ½) and (10, ½), a 1 at 10⁻⁹ read Q(0.4) = 0.80. Without the negligible draw both are type 7: 0.99 and 4.
+        DrawSample With(double extra, double weight, double low, double high)
+        {
+            var s = new DrawSample();
+            s.Add(low, 0.5);
+            s.Add(high, 0.5);
+            if (weight > 0.0) s.Add(extra, weight);
+            return s;
+        }
+        Assert.Equal(0.99, With(100.0, 1e-9, 0.0, 1.0).Quantile(0.99), 6);
+        Assert.Equal(4.0, With(1.0, 1e-9, 0.0, 10.0).Quantile(0.4), 6);
+
+        // As the draw's weight goes to 0, every quantile approaches the one without it, within O(w).
+        double[] ps = [0.0, 0.01, 0.4, 0.5, 0.99, 1.0];
+        foreach ((double extra, double low, double high) in new[] { (100.0, 0.0, 1.0), (1.0, 0.0, 10.0), (-30.0, 2.0, 3.0) })
+        {
+            DrawSample without = With(extra, 0.0, low, high);
+            foreach (double w in new[] { 1e-3, 1e-6, 1e-9, 1e-12, 1e-300 })
+                foreach (double p in ps)
+                {
+                    double moved = Math.Abs(With(extra, w, low, high).Quantile(p) - without.Quantile(p));
+                    Assert.True(moved <= 10.0 * w * (Math.Abs(extra) + Math.Abs(high)) + 1e-12, $"w {w}, p {p}: moved {moved}");
+                }
+        }
+
+        // Random unequal weights, some zero: every quantile lies within the weighted draws' range and rises with p.
+        var rng = new Maths.Rng.Xoshiro256PlusPlus(seed: 23);
+        for (int trial = 0; trial < 50; trial++)
+        {
+            var s = new DrawSample();
+            double min = double.PositiveInfinity, max = double.NegativeInfinity;
+            int n = 1 + (int)(rng.NextDouble() * 12);
+            for (int i = 0; i < n; i++)
+            {
+                double value = rng.NextDouble() * 20.0 - 10.0, weight = rng.NextDouble() < 0.2 ? 0.0 : Math.Pow(rng.NextDouble(), 4);
+                s.Add(value, weight);
+                if (weight > 0.0) (min, max) = (Math.Min(min, value), Math.Max(max, value));
+            }
+            double previous = double.NegativeInfinity;
+            for (int k = 0; k <= 40; k++)
+            {
+                double q = s.Quantile(k / 40.0);
+                if (double.IsInfinity(min)) Assert.True(double.IsNaN(q));
+                else
+                {
+                    Assert.InRange(q, min, max);
+                    Assert.True(q >= previous - 1e-12, $"Q falls at p = {k / 40.0}");
+                    previous = q;
+                }
+            }
+        }
     }
 
     [Fact]

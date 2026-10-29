@@ -13,7 +13,7 @@ namespace Maths.Regression.Tests;
 /// <summary>
 /// A direct fit's presentation data (stage 9, O9; P09, P10, P12, P14) against direct computations: the traces against the
 /// draw stores and their thinning; the posterior summaries' means, sds, extremes and quantiles from the draws under equal and
-/// unequal weights, the quantiles against independent type-7 and weighted-ECDF computations; fitted and residual data
+/// unequal weights, the quantiles against independent type-7 and weighted type-7 (Akinshin's) computations; fitted and residual data
 /// against <see cref="BassFit.Predict"/> at the training inputs, the intervals the predictive mixture's (O-O1's construction,
 /// where R's per-draw endpoints differ); the metadata round-tripping the fit's config, resolution, identity, account and
 /// evidence; and the refusals.
@@ -34,22 +34,21 @@ public sealed class BassPresentationTests
         return sorted[lo] + (position - lo) * (sorted[Math.Min(lo + 1, sorted.Length - 1)] - sorted[lo]);
     }
 
-    // The weighted ECDF interpolated between the midpoints of each distinct value's weight, by hand.
-    internal static double WeightedMidpoint(IReadOnlyList<double> values, IReadOnlyList<double> weights, double p)
+    // Akinshin's weighted type 7 by hand, written apart from DrawSample's: the draws unpooled in value order, each holding
+    // its slice [c₋, c] of the normalized cumulative weight, and taking its overlap with the window [(h − 1)/n*, h/n*],
+    // h = (n* − 1)p + 1, over the window's width 1/n*.
+    internal static double WeightedType7(IReadOnlyList<double> values, IReadOnlyList<double> weights, double p)
     {
-        var pooled = values.Zip(weights).Where(x => x.Second > 0).GroupBy(x => x.First).Select(g => (Value: g.Key, Weight: g.Sum(x => x.Second)))
-                           .OrderBy(x => x.Value).ToArray();
-        double total = pooled.Sum(x => x.Weight), target = p * total, below = 0.0;
-        double[] mids = new double[pooled.Length];
-        for (int i = 0; i < pooled.Length; i++)
+        var kept = values.Zip(weights).Where(x => x.Second > 0).OrderBy(x => x.First).ToArray();
+        double total = kept.Sum(x => x.Second), effective = total * total / kept.Sum(x => x.Second * x.Second);
+        double h = (effective - 1) * p + 1, lo = (h - 1) / effective, hi = h / effective, below = 0.0, quantile = 0.0;
+        foreach ((double value, double weight) in kept)
         {
-            mids[i] = below + pooled[i].Weight / 2;
-            below += pooled[i].Weight;
+            double from = below / total, to = (below + weight) / total;
+            below += weight;
+            quantile += Math.Max(0.0, Math.Min(to, hi) - Math.Max(from, lo)) * effective * value;
         }
-        if (target <= mids[0]) return pooled[0].Value;
-        if (target >= mids[^1]) return pooled[^1].Value;
-        int k = Array.FindIndex(mids, m => m >= target);
-        return pooled[k - 1].Value + (target - mids[k - 1]) / (mids[k] - mids[k - 1]) * (pooled[k].Value - pooled[k - 1].Value);
+        return quantile;
     }
 
     // A summary against its draws: the mean, sd and extremes under the weights, and each quantile by `quantile`.
@@ -69,7 +68,7 @@ public sealed class BassPresentationTests
     internal static double Reference(IReadOnlyList<double> values, IReadOnlyList<double>? weights, double p)
         => weights is null || weights.Where(w => w > 0).Distinct().Count() == 1
             ? Type7(values.Where((_, d) => weights is null || weights[d] > 0), p)
-            : WeightedMidpoint(values, weights, p);
+            : WeightedType7(values, weights, p);
 
     [Fact]
     public void PosteriorSummary_MatchesItsDraws_UnderEqualAndUnequalWeights()
