@@ -236,7 +236,7 @@ Decided by the user on 2026-10-29, taking the recommendations laid out after the
   - lever 1, untempered, being close to `Thin` = k. As a tempered knob (local moves per swap) it is not built; it is a candidate only if the tempered arms read efficiency-bound;
   - lever 3, 3a and 3b, so question 2 is moot: births lose to the Occam cost, not to inert inputs (M2);
   - the pair death: no pair of terms is redundant (P1).
-  - F-X4's seam waits for its next kernel, KHAOS's (the extensions brief), since lever 3 was to be its first.
+  - F-X4's seam is built with KHAOS's Bernoulli-inclusion proposal (the extensions brief, where KHAOS stays a candidate), not with lever 3.
 - *Lever 2, local steps,* as the lever's section defines them: ρ = ½, w = max(1, ⌈0.02·n_v⌉), δ uniform on {±1, …, ±w}. A categorical factor's step toggles one level, under the subset measure's ratio.
   - M3: steps of 1–3 accept 0.93–0.97, and 4–15 accept 0.6–0.8, on Friedman and the mixed fit.
   - A 2% window is 6–10 steps there, and 1–2 on the functional fit's 20–60 values.

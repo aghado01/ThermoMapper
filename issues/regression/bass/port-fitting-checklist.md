@@ -51,7 +51,7 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X1** Observation-model seam carries an offset with the weights.
 - [ ] **F-X2** The sweep has a latent slot.
 - [ ] **F-X3** Term types behind one design-kernel contract, with derivatives.
-- [ ] **F-X4** Proposal kernels behind one contract with exact forward and reverse probabilities. Its first second kernel, F-M2's lever 3, was withdrawn on 2026-10-29, so it waits for KHAOS's.
+- [ ] **F-X4** Proposal kernels behind one contract with exact forward and reverse probabilities. Built with KHAOS's Bernoulli-inclusion proposal (the extensions brief), not with F-M2's lever 3, which was withdrawn on 2026-10-29.
 - [ ] **F-X5** Coefficient priors as a declared set.
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
