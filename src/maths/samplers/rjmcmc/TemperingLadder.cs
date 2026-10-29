@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Maths.Samplers.Rjmcmc;
 
@@ -36,8 +37,9 @@ public sealed record SwapPairStat(double ColderInverseTemperature, double Hotter
 /// rungs (their §5.1 and §5.3).</item>
 /// </list>
 /// A self-sizing ladder reads Λ̂ after each burn-in round, takes the count <see cref="Size"/> gives, places that many rungs
-/// on the barrier (<see cref="Place"/>) and starts each new one from the nearest current rung (<see cref="Sources"/>); the
-/// shared ladder's <see cref="ParallelTempering{TState}.Resize"/> takes the placement from its caller.
+/// on the barrier (<see cref="Place"/>) and starts each new one from the nearest current rung (<see cref="Sources"/>); with
+/// the split rule, a round with a pair past its threshold splits the steep pairs instead (<see cref="Split"/>). The shared
+/// ladder's <see cref="ParallelTempering{TState}.Resize"/> takes the placement from its caller.
 /// </summary>
 public static class TemperingLadder
 {
@@ -130,6 +132,48 @@ public static class TemperingLadder
         if (levels == n) return (double[])inverseTemperatures.Clone();
         for (int j = 0; j < n; j++) y[j] = j;   // no reading to place by: every pair alike
         return Placed(x, y, levels) ?? throw new ArgumentException($"The rungs lie too close to place {levels} between them.", nameof(inverseTemperatures));
+    }
+
+    /// <summary>
+    /// The split rule (F-M2's lever 4b): <paramref name="inverseTemperatures"/> with a rung added inside each adjacent pair
+    /// whose rejection exceeds <paramref name="threshold"/>, halfway along the pair's barrier on <see cref="Place"/>'s
+    /// interpolation (the monotone cubic through the cumulative barrier, inverted at the pair's midpoint level), every
+    /// current rung kept where it is. A pair's rejection is a censored reading, at most 1 however steep the band between
+    /// its rungs, so a split reads the band where re-placing would spread an under-read barrier. The steepest pairs split
+    /// first while the ladder stays within <paramref name="maximum"/> rungs, the colder on a tie. A ladder with no such
+    /// pair, or already at its maximum, comes back unchanged; so does a pair whose rungs lie too close to place one
+    /// between them.
+    /// </summary>
+    public static double[] Split(double[] inverseTemperatures, ReadOnlySpan<double> rejection, double threshold, int maximum)
+    {
+        ArgumentNullException.ThrowIfNull(inverseTemperatures);
+        int n = inverseTemperatures.Length;
+        CheckRates(n, rejection);
+        if (!(threshold > 0.0 && threshold < 1.0)) throw new ArgumentOutOfRangeException(nameof(threshold), "The threshold lies in (0, 1).");
+        if (maximum < 2) throw new ArgumentOutOfRangeException(nameof(maximum), "A ladder has at least two rungs.");
+        if (n < 2) throw new ArgumentException("Splitting needs a ladder with two ends.", nameof(inverseTemperatures));
+
+        var steep = new List<int>();
+        for (int i = 0; i < n - 1; i++)
+            if (rejection[i] > threshold) steep.Add(i);
+        int budget = Math.Max(0, maximum - n);
+        if (steep.Count == 0 || budget == 0) return (double[])inverseTemperatures.Clone();
+        double[] rates = rejection.ToArray();
+        steep.Sort((a, b) => rates[b] != rates[a] ? rates[b].CompareTo(rates[a]) : a.CompareTo(b));
+
+        (double[] x, double[] y) = Cumulative(inverseTemperatures, rejection);
+        double[] slope = MonotoneSlopes(x, y);
+        var rungs = new List<double>(inverseTemperatures);
+        foreach (int i in steep)
+        {
+            if (rungs.Count >= maximum) break;
+            // Pair (i, i + 1), cold first, is segment j = n − 2 − i ascending from the hot end.
+            int j = n - 2 - i;
+            double b = Invert(x, y, slope, j, 0.5 * (y[j] + y[j + 1]));
+            if (b > x[j] && b < x[j + 1]) rungs.Add(b);
+        }
+        rungs.Sort((a, b) => b.CompareTo(a));
+        return [.. rungs];
     }
 
     /// <summary>

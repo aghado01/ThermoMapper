@@ -140,9 +140,12 @@ public sealed class BassLadder
     /// A self-sizing ladder's round: reads the barrier Λ̂ from the swap rejections since the last call, takes the count
     /// <see cref="TemperingLadder.Size"/> gives within [<see cref="TemperingSpec.MinimumLevels"/>,
     /// <see cref="TemperingSpec.MaxLevels"/>], and places it on the barrier (<see cref="TemperingLadder.Place"/>); at an
-    /// unchanged count this is <see cref="Adapt"/>. Each new replica starts from a copy of the nearest rung's state
+    /// unchanged count this is <see cref="Adapt"/>. With the split rule (<see cref="TemperingSpec.Split"/>), a round in
+    /// which a pair rejects past the threshold, and the budget allows a rung, splits the steep pairs instead
+    /// (<see cref="TemperingLadder.Split"/>), every rung kept where it is; once no pair does, the ladder sizes as above on
+    /// the finer pairs' readings. Each new replica starts from a copy of the nearest rung's state
     /// (<see cref="TemperingLadder.Sources"/>), its own copy of the term array, with that rung's design adopted. Burn-in
-    /// only; returns Λ̂.
+    /// only; returns Λ̂. The run's last round adapts and never resizes, so a split ladder is equalized before it freezes.
     /// </summary>
     public double Resize()
     {
@@ -152,10 +155,16 @@ public sealed class BassLadder
         if (double.IsNaN(rejection[0])) throw new InvalidOperationException("No scans since the last adaptation.");
         double barrier = TemperingLadder.Barrier(rejection);
         int current = Tempering.Replicas.Count;
-        int levels = TemperingLadder.Size(barrier, current, TemperingSpec.MinimumLevels(Spec.ReferenceRung), Spec.MaxLevels);
-        if (levels == current) return Tempering.AdaptLadder();
-
-        double[] inverseTemperatures = TemperingLadder.Place(Tempering.InverseTemperatures, rejection, levels);
+        double[]? split = Spec.Split is { } rule ? TemperingLadder.Split(Tempering.InverseTemperatures, rejection, rule.Threshold, Spec.MaxLevels) : null;
+        double[] inverseTemperatures;
+        if (split is not null && split.Length > current) inverseTemperatures = split;
+        else
+        {
+            int count = TemperingLadder.Size(barrier, current, TemperingSpec.MinimumLevels(Spec.ReferenceRung), Spec.MaxLevels);
+            if (count == current) return Tempering.AdaptLadder();
+            inverseTemperatures = TemperingLadder.Place(Tempering.InverseTemperatures, rejection, count);
+        }
+        int levels = inverseTemperatures.Length;
         int[] sources = TemperingLadder.Sources(Tempering.InverseTemperatures, rejection, inverseTemperatures);
         BassStructureMoves[] old = _structures;
         var states = new BassState[current];

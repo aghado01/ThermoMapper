@@ -9,8 +9,8 @@ namespace Maths.Samplers.Tests;
 /// <summary>
 /// A self-sizing ladder's policy (<see cref="TemperingLadder"/>): rungs placed on a known barrier profile take equal
 /// increments of it at any count, and at the current count the placement is <see cref="TemperingLadder.Equalize"/>; the
-/// sizing rule's grow, deadband and clamp cases; and each placed rung's source, against a brute-force reading of the
-/// barrier.
+/// sizing rule's grow, deadband and clamp cases; each placed rung's source, against a brute-force reading of the
+/// barrier; and the split rule (F-M2's lever 4b) on synthetic rejection profiles with a known steep band.
 /// </summary>
 public sealed class TemperingLadderTests
 {
@@ -156,5 +156,115 @@ public sealed class TemperingLadderTests
         Assert.Throws<ArgumentException>(() => TemperingLadder.Sources(inverseTemperatures, [0.1], inverseTemperatures));
         Assert.Throws<ArgumentException>(() => TemperingLadder.Sources(inverseTemperatures, rejection, [1.0, double.NaN]));
         Assert.Throws<ArgumentNullException>(() => TemperingLadder.Sources(inverseTemperatures, rejection, null!));
+    }
+
+    [Fact]
+    public void Split_PlacesEachSteepPairsMidpoint_AndKeepsEveryRung()
+    {
+        // Equal spacing and equal rejections make the cumulative barrier linear in b, so each midpoint is the pair's own.
+        double[] ladder = [1.0, 0.8, 0.6, 0.4, 0.2];
+        double[] split = TemperingLadder.Split(ladder, [0.95, 0.95, 0.95, 0.95], 0.9, 64);
+        Assert.Equal(9, split.Length);
+        double[] expected = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2];
+        for (int i = 0; i < expected.Length; i++) Assert.Equal(expected[i], split[i], 1e-12);
+        Assert.All(ladder, b => Assert.Contains(b, split));
+
+        // A steep pair between gentle ones splits inside itself, on the monotone cubic, every current rung kept.
+        double[] uneven = [1.0, 0.7, 0.5, 0.3, 0.1];
+        double[] one = TemperingLadder.Split(uneven, [0.2, 0.97, 0.3, 0.1], 0.9, 64);
+        Assert.Equal(6, one.Length);
+        Assert.All(uneven, b => Assert.Contains(b, one));
+        double added = one.Except(uneven).Single();
+        Assert.InRange(added, 0.5 + 1e-9, 0.7 - 1e-9);
+        for (int i = 1; i < one.Length; i++) Assert.True(one[i] < one[i - 1]);
+
+        // With a reference rung the pair above b = 0 splits as any other, and b = 0 stays the last rung.
+        double[] reference = TemperingLadder.Split([1.0, 0.5, 0.1, 0.0], [0.3, 0.4, 0.99], 0.9, 64);
+        Assert.Equal(5, reference.Length);
+        Assert.Equal(0.0, reference[^1]);
+        Assert.InRange(reference[3], 1e-12, 0.1 - 1e-12);
+    }
+
+    [Fact]
+    public void Split_TheSteepestFirst_NeverPastTheMaximum()
+    {
+        double[] ladder = [1.0, 0.7, 0.5, 0.3, 0.1];
+        double[] rejection = [0.2, 0.95, 0.99, 0.92];
+        double[] six = TemperingLadder.Split(ladder, rejection, 0.9, 6);   // room for one: the 0.99 pair
+        Assert.Equal(6, six.Length);
+        Assert.InRange(six.Except(ladder).Single(), 0.3 + 1e-9, 0.5 - 1e-9);
+        double[] seven = TemperingLadder.Split(ladder, rejection, 0.9, 7);   // then the 0.95 pair
+        Assert.Equal(7, seven.Length);
+        Assert.Single(seven.Except(ladder), b => b > 0.5 && b < 0.7);
+        Assert.Equal(8, TemperingLadder.Split(ladder, rejection, 0.9, 64).Length);
+        // Equal rejections tie: the colder pair first.
+        double[] tie = TemperingLadder.Split([1.0, 0.8, 0.6, 0.4], [0.95, 0.95, 0.95], 0.9, 5);
+        Assert.InRange(tie.Except([1.0, 0.8, 0.6, 0.4]).Single(), 0.8 + 1e-9, 1.0 - 1e-9);
+        // At the maximum, or above it, nothing splits.
+        Assert.Equal(ladder, TemperingLadder.Split(ladder, rejection, 0.9, 5));
+        Assert.Equal(ladder, TemperingLadder.Split(ladder, rejection, 0.9, 3));
+    }
+
+    [Fact]
+    public void Split_LeavesALadderWithNoSteepPairUnchanged()
+    {
+        double[] ladder = [1.0, 0.6, 0.3, 0.1, 0.03];
+        foreach (double[] r in new[] { new[] { 0.1, 0.2, 0.9, 0.3 }, [0.0, 0.0, 0.0, 0.0], [0.89, 0.9, 0.5, 0.2] })
+        {
+            double[] split = TemperingLadder.Split(ladder, r, 0.9, 64);
+            Assert.NotSame(ladder, split);
+            Assert.Equal(ladder.Select(BitConverter.DoubleToInt64Bits), split.Select(BitConverter.DoubleToInt64Bits));
+        }
+        Assert.Throws<ArgumentOutOfRangeException>(() => TemperingLadder.Split(ladder, [0.1, 0.2, 0.9, 0.3], 1.0, 64));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TemperingLadder.Split(ladder, [0.1, 0.2, 0.9, 0.3], 0.0, 64));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TemperingLadder.Split(ladder, [0.1, 0.2, 0.9, 0.3], 0.9, 1));
+        Assert.Throws<ArgumentException>(() => TemperingLadder.Split(ladder, [0.1, 0.2], 0.9, 64));
+    }
+
+    // A barrier with a steep band: a gentle ramp in ln b from the hot end 0.01, and a step of 6 near b = 0.2, which a pair's
+    // censored rejection r = 1 − e^(−ΔΛ) reads as at most 1.
+    private static double SteepBand(double b)
+        => 0.4 * Math.Log(b / 0.01) + 3.0 * (Erf((Math.Log(b) - Math.Log(0.2)) / 0.05) - Erf((Math.Log(0.01) - Math.Log(0.2)) / 0.05));
+
+    private static double[] Censored(double[] ladder)
+        => [.. Enumerable.Range(0, ladder.Length - 1).Select(i => 1.0 - Math.Exp(-(SteepBand(ladder[i]) - SteepBand(ladder[i + 1]))))];
+
+    [Theory]
+    [InlineData(64)]
+    [InlineData(12)]
+    public void Split_OverRounds_ResolvesAKnownSteepBand_WithinTheMaximum(int maximum)
+    {
+        double[] ladder = ParallelTempering<int>.GeometricLadder(8, 0.01);
+        double[] r = Censored(ladder);
+        double before = TemperingLadder.Barrier(r), truth = SteepBand(1.0);
+        Assert.True(r.Max() > 0.99);
+        int rounds = 0;
+        while (r.Max() > 0.9 && rounds < 30)
+        {
+            double[] next = TemperingLadder.Split(ladder, r, 0.9, maximum);
+            if (next.Length == ladder.Length) break;
+            Assert.All(ladder, b => Assert.Contains(b, next));
+            Assert.True(next.Length <= maximum);
+            ladder = next;
+            r = Censored(ladder);
+            rounds++;
+        }
+        double after = TemperingLadder.Barrier(r);
+        int inBand = ladder.Count(b => b > 0.18 && b < 0.22);
+        _out.WriteLine($"max {maximum}: {rounds} rounds to {ladder.Length} rungs, {inBand} in the band; Σr {before:F2} → {after:F2} against Λ = {truth:F2}; " +
+                       $"largest r {r.Max():F3}");
+        Assert.True(ladder.Length <= maximum);
+        Assert.True(after > before, "the finer pairs read more of the barrier");
+        if (maximum == 64)
+        {
+            Assert.True(r.Max() <= 0.9, $"the band still rejects {r.Max():F3}");
+            Assert.True(inBand >= 4, $"{inBand} rungs in the band");
+        }
+        else Assert.Equal(maximum, ladder.Length);
+        // A gentle profile, every pair below the threshold, is left as it was.
+        double[] gentle = ParallelTempering<int>.GeometricLadder(8, 0.5);
+        double[] g = Censored(gentle);
+        Assert.True(g.Max() <= 0.9);
+        Assert.Equal(gentle, TemperingLadder.Split(gentle, g, 0.9, 64));
     }
 }

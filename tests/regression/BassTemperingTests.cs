@@ -305,6 +305,63 @@ public sealed class BassTemperingTests
         Assert.Equal(1.0, ladder.Tempering.InverseTemperatures[0]);
     }
 
+    // The split rule (F-M2's 4b) on the N = 175 functional fixture, where S8's eight rungs rejected 0.96–1.00: each sizing
+    // round with a pair past 0.9 splits it, every rung and replica kept with its design; the others size by the barrier;
+    // the ladder stays within MaxLevels, the last round adapts it, and every replica holds its state's design throughout.
+    [Theory]
+    [InlineData(false, 24)]
+    [InlineData(true, 24)]
+    [InlineData(true, 11)]
+    public void Ladder_SplitRule_SplitsSteepPairs_WithinTheBudget(bool reference, int maxLevels)
+    {
+        var spec = new TemperingSpec { ReferenceRung = reference, Split = new SplitRule(), MaxLevels = maxLevels };
+        BassConfig config = Config(spec, maxBasis: 3, chains: 1);
+        BassModel model = BassModel.Create(config, BassRunTests.FunctionalData());
+        BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(7)).State;
+        var ladder = new BassLadder(model, spec, start.Terms, start.LogTau, seed: 8);
+        BassDesign fresh = model.NewDesign();
+        const int steps = 1_000;
+        int done = 0, splits = 0, sized = 0;
+        for (int round = 1; done + round <= steps; round *= 2)
+        {
+            for (int k = 0; k < round; k++) ladder.Step();
+            done += round;
+            if (done + 2L * round > steps)
+            {
+                ladder.Adapt();   // the last round equalizes the settled count
+                continue;
+            }
+            double[] before = ladder.Tempering.InverseTemperatures, rejection = ladder.Tempering.RoundRejection;
+            BassStructureMoves[] held = [.. ladder.Structures];
+            double[] expected = TemperingLadder.Split(before, rejection, 0.9, maxLevels);
+            ladder.Resize();
+            double[] after = ladder.Tempering.InverseTemperatures;
+            Assert.True(after.Length <= maxLevels);
+            if (expected.Length > before.Length)
+            {
+                splits++;
+                Assert.Equal(expected, after);
+                for (int i = 0; i < before.Length; i++) Assert.Same(held[i], ladder.Structures[Array.IndexOf(after, before[i])]);
+            }
+            else if (after.Length != before.Length) sized++;
+            for (int i = 0; i < after.Length; i++)
+            {
+                BassState state = ladder.Tempering.Replicas[i].Current;
+                BassDesign design = ladder.Structures[i].DesignAt(state);
+                Assert.Null(fresh.Load(state.Terms));
+                Assert.True(Math.Abs(design.ResidualSquares - fresh.ResidualSquares) <= 1e-10 * (fresh.ResidualSquares + fresh.FittedSquares));
+            }
+        }
+        for (; done < steps; done++) ladder.Step();
+        ladder.EndBurnIn(traceRungs: false);
+        int levels = ladder.Tempering.InverseTemperatures.Length;
+        _out.WriteLine($"reference {reference}, max {maxLevels}: {splits} split rounds, {sized} sized rounds, settled at {levels} rungs; " +
+                       $"rungs [{string.Join(", ", ladder.Tempering.InverseTemperatures.Select(b => b.ToString("G3")))}]");
+        Assert.True(splits > 0, "no round split");
+        Assert.True(levels <= maxLevels);
+        Assert.True(ladder.Frozen);
+    }
+
     public static TheoryData<string, double[]> RungCases => new()
     {
         { "integrated", [1.0, 0.4, 0.0] },

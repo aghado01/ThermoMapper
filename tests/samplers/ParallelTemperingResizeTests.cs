@@ -133,6 +133,38 @@ public sealed class ParallelTemperingResizeTests
         Assert.Equal([0, 2, -1, 3], ladder.Resize([1.0, 0.5625, 0.3125, 0.1], [0, 2, 2, 3], s => s, _ => Moves));
     }
 
+    // The split rule's resize (TemperingLadder.Split, F-M2's 4b): every rung stays where it is, so every replica is kept
+    // at its own rung, untouched, and only the split rungs start new replicas, each from a neighbour of its pair.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Resize_ToASplitLadder_KeepsEveryReplicaAtItsOwnRung(bool reference)
+    {
+        ParallelTempering<State> ladder = Ladder(blocks: true, reference, seed: 43);
+        for (int t = 0; t < 40; t++) ladder.Step();
+        ReversibleJumpChain<State>[] old = [.. ladder.Replicas];
+        double[] before = ladder.InverseTemperatures;
+        double[] rejection = [.. ladder.RoundRejection.Select((r, i) => i == 1 ? 0.97 : Math.Min(r, 0.5))];   // pair 1 read as steep
+        double[] split = TemperingLadder.Split(before, rejection, 0.9, 64);
+        Assert.Equal(before.Length + 1, split.Length);
+        int[] sources = TemperingLadder.Sources(before, rejection, split);
+        int[] kept = ladder.Resize(split, sources, s => s, _ => Moves, _ => [new CoordinateSlice(new IndexAndCoordinate())]);
+        for (int k = 0, i = 0; k < split.Length; k++)
+        {
+            if (i < before.Length && split[k] == before[i])
+            {
+                Assert.Equal(i, kept[k]);
+                Assert.Same(old[i], ladder.Replicas[k]);
+                Assert.Equal(before[i], ladder.Replicas[k].Temperature.InverseTemperature);
+                i++;
+                continue;
+            }
+            Assert.Equal(-1, kept[k]);
+            Assert.InRange(split[k], before[2], before[1]);
+            Assert.Contains(sources[k], new[] { 1, 2 });
+        }
+    }
+
     [Theory]
     [InlineData(false, TemperingPath.Likelihood)]
     [InlineData(true, TemperingPath.Likelihood)]
