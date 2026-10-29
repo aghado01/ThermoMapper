@@ -31,12 +31,22 @@ In the code:
 
 These are the main session's recommendations, taken by the user on starting this chip.
 - **The first population** is tempered from the prior to μ_1 on D05's likelihood path, with stages by conditional ESS, as fitting SMC does. Every default prior here is proper.
-- **The ordering:** a tour over the S emulator draws, nearest neighbour then 2-opt, on the L₂ distance between the draws' predictions at a fixed space-filling design of 64 points in the unit θ box: a Sobol sequence if the repo has one, else a seeded Latin hypercube, with each categorical combination where there are few.
-  - Record the alternative, the distance read at the first population's particles, which adapts to the posterior but depends on the path.
+- **The ordering:** a tour over the S emulator draws, nearest neighbour then 2-opt, on d(s, s′), the spread of the log-likelihood difference ℓ(θ; e_s) − ℓ(θ; e_s′) over the first leg's final particles, weighted.
+  - This is the quantity a bridge's conditional ESS falls with, so the tour minimizes what the bridges pay.
+  - It costs one S × N evaluation of those particles, kept as an S × N matrix, then S² × N arithmetic.
+  - Any order gives a valid estimator, since each μ_s is targeted exactly, so letting the ordering depend on the population changes efficiency only.
+  - *The fallback,* recorded: the L₂ distance between the draws' predictions at a fixed space-filling design of 64 points in the unit θ box. It is cheaper, but it measures closeness where the posterior has no mass.
   - The random order is the comparison.
 - **The bridges:** between e_{s−1} and e_s, the geometric bridge (1 − t)·log p̃_{s−1} + t·log p̃_s. t is placed by conditional ESS, at the same target as the first leg.
   - The incremental weight at a step from t to t′ is (t′ − t)·(log p̃_s − log p̃_{s−1}), evaluated at the particle.
   - The unnormalized densities' constants cancel in the normalized weights.
+  - *The bridge as a target on the likelihood path:* log π(θ) + ℓ_{s−1} + t·Δ, with Δ = ℓ_s − ℓ_{s−1}. Its base is the previous conditional, and Δ plays the likelihood, so `SmcSampler.TemperToPosterior` walks t to 1 on it (argon's note, 2026-10-29).
+  - *Its first step* moves to a new target, and `SmcRun.ConditionalEss` re-evaluates the whole population on every call for a new target, so a bisection through it would cost about 60N evaluations. Instead:
+    - evaluate e_s on the particles once;
+    - bisect t₁ with `SmcWeights.ConditionalEss` on the cached t·Δ;
+    - `Advance` to the bridge at t₁;
+    - then `TemperToPosterior`, which reuses the evaluations.
+  - *One `SmcRun` across the first leg and every bridge,* so `Families` tracks the initial lineages over the whole tour. Its `SmcOptions.MaxStages`, whose stage seeds are derived at `Start`, scales with S: a per-bridge cap times S, plus the first leg's.
 - **The mutation** at a bridge stage is the conditional sampler's block scan, aimed at the bridge. Each block must leave the bridge invariant:
   - the θ walk and the variance steps are Metropolis on the bridged density;
   - the categorical block enumerates the bridged conditional;
@@ -61,7 +71,7 @@ These are the main session's recommendations, taken by the user on starting this
 - **Build and test into your own artifacts root:** add `-p:ArtifactsRoot=D:\aghado01\ThermoMapper\artifacts\chip-c5\` to every `dotnet build` and `dotnet test`. Do not run `scripts/fact-harness.ps1`. Delete `artifacts\chip-c5\` when you finish.
 - **Your files:**
   - `src/maths/regression/spline/bass/calibration/`, existing and new;
-  - `src/maths/samplers/smc/`, for accessors only; name each one;
+  - `src/maths/samplers/smc/` stays as it is: its public API (`SmcRun.Start`, `Stage`, `ConditionalEss`, `Advance`, `SmcSampler.RunTempered`, `TemperToPosterior`, `NextInverseTemperature`, `SmcWeights`) is enough. Name any further need in the report rather than edit it;
   - new tests `tests/regression/BassCalibration*Tests.cs`;
   - this brief's Reports section.
 - **Commit your own files only, by explicit path,** one commit per step, in the repo's message style, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
@@ -99,6 +109,7 @@ Each step lands with its checks and ends with a fresh-eyes review of its own cod
 **Step 4. The comparison.** This is exploration: it reads and recommends nothing. On stage 7's recovery fixture:
 - the tour against a random order: total bridge stages, the least ESS, families left;
 - cut SMC against C3 at matched error: the time each takes to reach the same Monte Carlo error on E[θ];
+- C3's inner runs under the default gate (R̂ 1.01, ESS 100 per chain, `MaxSamples` 4,000): how many converge. This is stage 7's open item;
 - θ*'s coverage over five seeds, as stage 7 read it.
 
 Report what the readings show, kept apart from the numbers.

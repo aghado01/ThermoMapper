@@ -36,26 +36,34 @@ In the code:
 These are the main session's recommendations, taken by the user on starting this chip.
 - **`SmcSpec`** on `BassSampling.Smc`, null meaning MCMC. Its values are provisional per-engine defaults, read in the qualification and not tuned:
   - `Particles` 1,000;
+  - `Replicates` 4;
   - `TargetConditionalEss` 0.99;
   - `MutationSteps` 5 sweeps per stage;
   - `ResampleBelow` 0.5;
   - multinomial resampling (D05).
-- **`Chains` counts independent SMC runs** (replicates), 4 by default, run in parallel within `MaxDegreeOfParallelism`.
+- **`Replicates` counts independent SMC runs,** run in parallel within `MaxDegreeOfParallelism`. The name is true of SMC; "chains" is not (names follow methods).
   - *Refused with `Smc` set:* `Tempering`, since SMC is its own tempering, and `RHatTarget` > 0, since SMC ends when b reaches 1.
-  - `BurnIn`, `Samples` and `Thin` are not read under SMC, and the resolved configuration says so.
+  - `Chains`, `BurnIn`, `Samples` and `Thin` are not read under SMC, and the resolved configuration says so.
 - **Weights are kept.** Each replicate's final population, with its weights, is the fit's draws, through `BassFit.DrawWeights` (retain, don't discard).
   - `PointwiseLogDensity` takes the weights inside its log ratios, exactly. Check that against an equal-weight resample.
-- **`DrawSample` becomes one continuous weighted quantile.** It is a weighted type 7 that equals type 7 at equal weights at any scale, varies continuously with the weights, and gives the minimum at p = 0 and the maximum at p = 1.
-  - Read Akinshin's weighted type 7 (*Weighted quantile estimators*, arXiv 2304.07265, §3's effective sample size and §6) and build it, or a form you show equivalent.
-  - Argon's node formula is not it: under weights (0.45, 0.45, 0.1) its last node lands at 1.27, so Q(1) is not the maximum.
+  - *Particles share ancestry,* so errors computed as though the draws were independent read optimistic: `PointwiseLogDensity`'s Monte Carlo errors, and any Kish ESS. Report the families beside them, and never present them as calibrated. The replicates carry the honest error.
+- **`DrawSample` becomes one continuous weighted quantile:** Akinshin's weighted type 7 (*Weighted quantile estimators*, arXiv 2304.07265, §6). It averages the weighted quantile function over the window [(h − 1)/n*, h/n*], with h = (n* − 1)p + 1 and n* Kish's effective size.
+  - It equals type 7 exactly at equal weights at any scale.
+  - It is continuous in the weights, including as a weight goes to 0, so a negligible particle moves no quantile.
+  - It does not anchor Q(1) at the maximum under unequal weights. No rule can do both: the maximum over the positive weights jumps when the top atom's weight reaches 0, so anchoring and continuity are incompatible. Continuity wins, since SMC's populations carry many negligible weights.
+  - *The rejected alternative,* argon's note: today's midpoint rule with p mapped onto the span of the midpoints. It is exact at equal weights and anchored at both ends, but a negligible weight acts as a full node.
+    - Atoms at 0 and 1 (weight ½ each) plus one at 100 with weight 10⁻⁹: Q(0.99) reads 97.03, against 0.99 without it.
+    - Atoms at 0 and 10 with one at 1 of weight 10⁻⁹: Q(0.4) reads 0.80, against 4.00.
+    - Akinshin's form gives 0.99 and 4.00 (the main session's check, 2026-10-29).
+    - Today's midpoint rule has the same flaw. It never bit, since every weight so far is equal.
   - BARS's unit-weight calls stay bit-identical, through the equal-weights path.
-- **The between-run reading.** Across replicates, report R̂ of the monitored quantities over their final populations, resampled to equal weights, as a between-run reading. Keep each replicate's ESS and families beside it, never merged with chain R̂ (the SMC integration section), and with no stop rule.
+- **The between-run reading.** For each monitored quantity, the spread of the replicates' posterior means, in posterior-sd units: SD over replicates of the weighted mean, over the pooled posterior sd. Split R̂ is meaningless here, because a population has no order to split, and an unsplit R̂ would invite comparison with D10's 1.01, which assumes autocorrelated chains. Keep each replicate's ESS and families beside it, with no stop rule.
 - **The evidence.**
   - Each replicate's normalizer, with its genealogy error.
   - Stepping-stone over the stage traces, when traced.
   - Pooled across replicates by `LadderEvidence.Pool`'s rule, the larger of the within-run and between-run errors.
   - Reported under D03's proper defaults only, as the ladder's is.
-- **Resume:** an SMC fit resumes from its checkpoint (`SmcCheckpoint`), bit-identically, like an MCMC fit.
+- **Resume:** an SMC fit resumes from its checkpoint (`SmcCheckpoint`), bit-identically, if that fits `BassFit.Checkpoint` without reworking its type. Otherwise defer it and say so. It is the most droppable item, since an SMC run reaches b = 1 in one pass.
 
 ## Working rules (a shared checkout, with a parallel chip)
 
@@ -65,7 +73,7 @@ These are the main session's recommendations, taken by the user on starting this
 - **Your files:**
   - in `src/maths/regression/spline/bass/`: `Bass.cs`, `BassConfig.cs`, `BassResolved.cs`, `BassRun.cs`, `BassDiagnostics.cs`, `BassFit.cs`, `BassPointwise.cs`, `BassEvidence.cs`, and new files for the adapter;
   - `src/maths/samplers/ensemble/Readouts.cs` (`DrawSample`);
-  - `src/maths/samplers/smc/`, for accessors only; name each one;
+  - `src/maths/samplers/smc/` stays as it is: its public API (`SmcRun.Start`, `Stage`, `ConditionalEss`, `Advance`, `SmcSampler.RunTempered`, `TemperToPosterior`, `NextInverseTemperature`, `SmcWeights`) is enough. Name any further need in the report rather than edit it;
   - their tests and new ones;
   - this brief's Reports section.
 - **Commit your own files only, by explicit path,** one commit per step, in the repo's message style, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
@@ -81,7 +89,7 @@ Each step lands with its checks and ends with a fresh-eyes review of its own cod
 **Step 1. The weighted quantile** (`DrawSample`). Build it as decided above, and check:
 - type 7 exactly at equal weights at three scales;
 - continuity as one weight moves from equal;
-- Q(0) = min and Q(1) = max under unequal weights;
+- every value within [min, max] under unequal weights, and continuity as a weight goes to 0, the negligible-atom cases above included;
 - tied values pooled, zero weights dropped, and independence from insertion order;
 - BARS's peak summaries bit-identical.
 
@@ -97,7 +105,7 @@ Each step lands with its checks and ends with a fresh-eyes review of its own cod
 
 **Step 3. The adapter and the fit.** `Bass.Fit` with `Smc` set runs `Chains` replicates of `SmcSampler.RunTempered` from the prior to b = 1, with the stage seeds from the seed tree.
 - Compose each final particle as a retained draw is composed (σ², the coefficients, λ), with its weight.
-- Carry the population's diagnostics on `BassDiagnostics`: per replicate, the stage count, each stage's ESS, conditional ESS, families and acceptance; across replicates, the between-run R̂.
+- Carry the population's diagnostics on `BassDiagnostics`: per replicate, the stage count, each stage's ESS, conditional ESS, families and acceptance; across replicates, the spread of their posterior means.
 - Evidence as decided, with `BassEvidencePriors`; resume from the checkpoint.
 - *Checks:*
   - on the oracle's enumerable fixtures, with proper priors: the normalizer against the exact ln Z on fixtures B and C (the ladder evidence's references: −28.589 and −30.903), within its genealogy error; and on fixture A, the posterior count law, inclusions and E[τ] against the exact posterior (`BassChainParityTests`'s references);
@@ -110,7 +118,7 @@ Each step lands with its checks and ends with a fresh-eyes review of its own cod
 **Step 4. The qualification** (D10's stage 8 question). This is exploration: it reads, and changes no default. Behind `BASS_QUALIFICATION` = 1, on S10's Friedman, mixed and functional fixtures, at N = 250, 1,000 and 4,000, with four replicates and S10's master seeds. Per fixture and N:
 - the stage count and time;
 - the final population's mean log posterior per replicate, against S10's best MCMC chain's median (Friedman −892.4) and its worse chains. The question is whether the population finds the better representation and keeps it;
-- the between-run R̂ of M, σ², the log posterior and the fitted values;
+- the replicates' spread of the posterior means of M, σ², the log posterior and the fitted values, in posterior-sd units;
 - the families left;
 - the evidence and its pooled error, against the tempered ladder's evidence on the same fixture where S10 or the pass recorded one;
 - σ's coverage on Friedman.
