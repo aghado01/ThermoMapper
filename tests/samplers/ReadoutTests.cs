@@ -119,17 +119,37 @@ public sealed class ReadoutTests
             tied.Add(1.0, 1.0);
             Assert.Equal(0.6, tied.Quantile(0.7), 12);
         }
-        // A zero weight carries no mass: every quantile lies within the positive mass's range.
+        // A zero weight carries no mass: every quantile lies within the positive mass's range, and the equal weights
+        // left give the type-7 quantile of their draws.
         var zero = new DrawSample();
         zero.Add(10.0, 0.5);
         zero.Add(20.0, 0.5);
         zero.Add(-100.0, 0.0);
-        Assert.Equal(10.0, zero.Quantile(0.05));
+        Assert.Equal(10.5, zero.Quantile(0.05), 12);
         Assert.Equal(15.0, zero.Quantile(0.5), 12);
         // No mass at all: no quantile.
         var none = new DrawSample();
         none.Add(123.0, 0.0);
         Assert.True(double.IsNaN(none.Quantile(0.5)));
+    }
+
+    [Fact]
+    public void DrawSample_EqualWeights_AtAnyScale_GiveTheType7Quantile()
+    {
+        // Equal weights are unit weights up to a common scale: normalized MCMC weights (1/n each) must not move the
+        // quantile off type 7, with or without zero-weight draws beside them.
+        double[] values = [5.0, 1.0, 4.0, 2.0, 3.0, 4.0];
+        double[] ps = [0.0, 0.1, 0.25, 0.5, 0.9, 1.0];
+        var unit = new DrawSample();
+        foreach (double v in values) unit.Add(v);
+        foreach (double scale in new[] { 1.0 / values.Length, 0.2, 3.7 })
+        {
+            var scaled = new DrawSample();
+            foreach (double v in values) scaled.Add(v, scale);
+            scaled.Add(-50.0, 0.0);
+            foreach (double p in ps) Assert.Equal(unit.Quantile(p), scaled.Quantile(p), 12);
+        }
+        Assert.Equal(4.0, unit.Quantile(0.6), 12);   // sorted 1, 2, 3, 4, 4, 5 at position 0.6 · 5 = 3
     }
 
     [Fact]

@@ -137,26 +137,36 @@ public sealed class DrawSample : IMergeable<DrawSample>
     }
 
     /// <summary>
-    /// The <paramref name="p"/> quantile. Under unit weights it is the type-7 estimator, linear interpolation between
-    /// order statistics at position <c>p(n − 1)</c>. Under general weights it is linear interpolation of the weighted ECDF
-    /// between the midpoints of each distinct value's weight: zero weights carry no mass and are dropped, and tied values
-    /// pool their weight, so the answer depends on the weighted multiset alone, not on the order its draws arrived or
-    /// merged in. NaN for an empty sample or one with no mass.
+    /// The <paramref name="p"/> quantile. Zero weights carry no mass and are dropped. Under equal weights, unit or any
+    /// other common weight, it is the type-7 estimator, linear interpolation between order statistics at position
+    /// <c>p(n − 1)</c>. Under unequal weights it is linear interpolation of the weighted ECDF between the midpoints of each
+    /// distinct value's weight, tied values pooling their weight. So the answer depends on the weighted multiset alone, not
+    /// on the order its draws arrived or merged in, nor on a common rescaling of the weights. NaN for an empty sample or
+    /// one with no mass.
     /// </summary>
     public double Quantile(double p)
     {
         if (!(p >= 0.0 && p <= 1.0)) throw new ArgumentOutOfRangeException(nameof(p));
         int n = _values.Count;
         if (n == 0) return double.NaN;
-        if (_weights is null)
+        if (_weights is null) return Type7(_values.ToArray(), p);
+
+        double common = 0.0;
+        bool equal = true;
+        int positive = 0;
+        foreach (double w in _weights)
         {
-            var sorted = _values.ToArray();
-            Array.Sort(sorted);
-            if (n == 1) return sorted[0];
-            double pos = p * (n - 1);
-            int lo = (int)Math.Floor(pos);
-            double frac = pos - lo;
-            return lo + 1 < n ? sorted[lo] * (1.0 - frac) + sorted[lo + 1] * frac : sorted[lo];
+            if (w == 0.0) continue;
+            if (positive++ == 0) common = w;
+            else equal &= w == common;
+        }
+        if (positive == 0) return double.NaN;   // no mass
+        if (equal)
+        {
+            var kept = new double[positive];
+            for (int i = 0, k = 0; i < n; i++)
+                if (_weights[i] != 0.0) kept[k++] = _values[i];
+            return Type7(kept, p);
         }
 
         // Sorted by value, then weight, so that tied weights are pooled in one order and the sums are reproducible.
@@ -172,8 +182,6 @@ public sealed class DrawSample : IMergeable<DrawSample>
             else distinct.Add((value, weight));
             total += weight;
         }
-        if (distinct.Count == 0) return double.NaN;   // no mass
-
         double target = p * total, below = 0.0, previousMid = double.NaN;
         for (int i = 0; i < distinct.Count; i++)
         {
@@ -188,6 +196,18 @@ public sealed class DrawSample : IMergeable<DrawSample>
             below += distinct[i].Weight;
         }
         return distinct[^1].Value;
+    }
+
+    // The type-7 quantile of `values`, sorted in place.
+    private static double Type7(double[] values, double p)
+    {
+        Array.Sort(values);
+        int n = values.Length;
+        if (n == 1) return values[0];
+        double pos = p * (n - 1);
+        int lo = (int)Math.Floor(pos);
+        double frac = pos - lo;
+        return lo + 1 < n ? values[lo] * (1.0 - frac) + values[lo + 1] * frac : values[lo];
     }
 
     private static List<double> Ones(int count)
