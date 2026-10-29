@@ -13,6 +13,7 @@ decided; the "Candidate work" list is what could be briefed.
 | `j.physa.2013.07.036` | Farhi, Hed, …, Domany 2013, *Temperature Integration* | ln Z along a tempering ladder; ΔF between systems with equal Z(0); the energy cutoff |
 | `bioinformatics_19_9_1153` | Getz, Domany 2003, *Coupled two-way clustering server* | SPC stability index in biclustering (not pursued) |
 | `PhysRevD.98.063511` | Leclercq 2018, *Bayesian optimization for likelihood-free cosmological inference* (not Domany) | GP-surrogate acquisition under a simulation budget |
+| `gauntlet/bayesian/1306.6430v2` | Bissiri, Holmes, Walker 2016, *A general framework for updating belief distributions* (*JRSS B* 78, not Domany; read 2026-10-29) | SPC as a general-Bayes update over partitions; calibrating the temperature (Thread 7) |
 
 **The shared move in both spin-glass papers.** A global statistic over an
 equilibrium ensemble is dominated by its least informative mode (pairs inside the
@@ -185,6 +186,51 @@ Where it stops being an analogy. Sketch only.
   ladder rule: tempering decides rung spacing for mixing; acquisition decides where
   the *readout* needs resolution.
 
+## Thread 7: SPC as a general-Bayes update over partitions (Bissiri et al.)
+
+- **The reading.** Bissiri, Holmes and Walker's model-free clustering (2016, §5.2)
+  is P(S | x) ∝ π(S)·exp{−w·l(S, x)} over partitions S, with a loss l and a
+  weight w. Its readout is the co-clustering matrix, P(i and j in one cluster).
+  - The Potts family at β is that update, with the loss H and w = β. SPC's pair
+    correlation (`EdgeCorrelation`) is their co-clustering probability.
+  - Thread 5's power-posterior path is their annealing (§3.1).
+  - Under their framework each SPC temperature is a valid belief update about the
+    partition, not only a physical ensemble, and that needs no likelihood of the
+    data given the couplings (Thread 5's caution).
+- **SPC already has a prior on partitions, implicitly.** In the Fortuin–Kasteleyn
+  random-cluster form, Z ∝ Σ_ω Π_{e∈ω} p_e Π_{e∉ω} (1 − p_e) · q^{k(ω)}, with
+  p_e = 1 − e^{−βJ_e} and k(ω) the bond configuration's cluster count.
+  - The q^{k(ω)} factor is a prior weight on the number of SW clusters, so q is a
+    prior choice as well as a resolution knob.
+  - Bissiri et al. state theirs explicitly: a Poisson prior on the number of
+    groups.
+- **What it adds:**
+  1. **A temperature rule for discrete structures** (§5.2). Choose w so that a
+     partition whose loss reduction from the single cluster sits at the α tail of
+     random allocation's null gets posterior odds R against the single cluster.
+     - It fixes T by what reduction should count as a real clustering: an
+       evidence-based alternative to the susceptibility peak and to the
+       fuzzy-entropy plateau the SW→f-SPC handoff reads.
+     - *The printed rule is inverted.* The last bullet of §5.2 reads
+       w = −log(R)·l(S, x)·f*(k − 1)/(n − k). From the odds equation it is
+       w = −ln R·(1 + c)/(c·l(S₀, x)), with c = f*_α(k − 1)/(n − k) and S₀ the
+       single cluster. Only this form reproduces the paper's own numbers: w falls
+       from 0.0036 to 0.0012 as α rises from 0.99 to 0.999.
+     - *The null does not carry over as it stands.* The paper's F reference holds
+       for a within-cluster sum of squares. SPC's loss is H on a coupling graph, so
+       the null of H's reduction under random allocation would come from
+       permutations, empirically. Its cost is unmeasured.
+  2. **An explicit prior on partitions,** beside or instead of q's implicit one.
+  3. **The joint allocation's uncertainty as the primary readout:** the
+     co-clustering matrix at a calibrated temperature, read as a posterior
+     probability rather than a thermodynamic observable. It is the same number
+     `EdgeCorrelation` already gives; what changes is how the temperature is
+     chosen and what the readout is taken to mean.
+- **Caution.** A weight calibrated on one coupling graph does not transfer to
+  another, since the loss's scale moves with the couplings (the parked
+  coupling-normalization family). Comparisons between graphs stay thermodynamic
+  (Thread 5).
+
 ## Candidate work (unbriefed)
 
 1. **Rand index + graph-restricted link overlap** in `Clustering.Evaluation`
@@ -206,6 +252,11 @@ Where it stops being an analogy. Sketch only.
 5. **Frustrated SPC prototype** (Thread 4). Research-scale: signed couplings from
    one source (null-model subtraction is the simplest), local updates in PT,
    replica link-overlap observables, zigzag/lineage output.
+6. **Temperature calibration by posterior odds** (Thread 7). Fix T by the odds a
+   significant clustering should get against the single cluster, with a
+   permutation null of H's reduction. Compare it with the susceptibility peak and
+   the entropy plateau on the Domany battery. Research-scale; first measure the
+   null's cost.
 
 ## Reading leads (verify before citing)
 
