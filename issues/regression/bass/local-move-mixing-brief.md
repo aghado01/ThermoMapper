@@ -183,7 +183,7 @@ Each measurement is a test-side harness on the existing internals, which the tes
 3. *The pass's thresholds and fixture set.*
 4. *Tempering as an arm for the default?* D05 set untempered as the default until BASS's own comparison says otherwise. Tempered Friedman passed σ's criterion where untempered failed, at the cost of about 20 rungs.
 5. *Lever 4's option,* after M5.
-6. *Who runs it.* I recommend Phase 0 as one chip (harness only, no production change), then Phase 1 after you read its report.
+6. *Who runs it.* I recommend Phase 0 as one chip (harness only, no production change), then Phase 1 after you read its report. Decided by the user on 2026-10-28: Phase 0 runs as one chip, [its brief](local-move-measurements-brief.md).
 
 ## Reports
 
