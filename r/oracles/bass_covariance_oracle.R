@@ -25,9 +25,14 @@
 #     by the constant sum log y_s, so the normalized posteriors agree. For contrast, R's mismatch (C-O1): the
 #     physical residual with the covariance in R's units, diag(v_trunc + s2_g) + K diag(e) K'.
 #
+#   inputs: what the C# parity tests rebuild the covariances from: the residuals te (m x 10), the group variances, the
+#     vector v, each functional case's d and e, the multivariate case's R and Sigma_delta, and the units section's y and
+#     log-likelihoods on the grid. Written at 17 significant digits, so every double round-trips.
+#
 # Emits { m, functional: [ { case, condition, reference: { ldet, solve }, eigen_vs_reference, r_woodbury, low_rank,
 #         backward_error } ],
-#         multivariate: { ldet, solve, eigen_vs_reference }, units: { ... } }; errors are relative (ldet absolute).
+#         multivariate: { ldet, solve, eigen_vs_reference }, units: { ... }, inputs: { ... } }; errors are relative (ldet
+#         absolute).
 
 source("oracles/_common.R")
 
@@ -87,8 +92,9 @@ functional_case <- function(name, d, e) {
 }
 d_well <- y_s^2 * v_trunc + s2_g[groups]
 with_small <- function(level) { d <- d_well; d[seq(1, m, by = 4)] <- level; d }
-functional <- list(functional_case("well", d_well, c(0.3, 0.7)), functional_case("moderate", with_small(1e-4), c(100, 300)),
-                   functional_case("extreme", with_small(1e-8), c(1e4, 3e4)))
+case_inputs <- list(well = list(d = d_well, e = c(0.3, 0.7)), moderate = list(d = with_small(1e-4), e = c(100, 300)),
+                    extreme = list(d = with_small(1e-8), e = c(1e4, 3e4)))
+functional <- lapply(names(case_inputs), function(name) functional_case(name, case_inputs[[name]]$d, case_inputs[[name]]$e))
 
 ar1 <- function(n, rho) rho^abs(outer(seq_len(n), seq_len(n), "-"))
 R_groups <- matrix(0, m, m)
@@ -122,4 +128,11 @@ units <- list(theta = grid, posterior_physical = post(ll_phys), posterior_standa
               posterior_mean = c(physical = sum(grid * post(ll_phys)), standardized = sum(grid * post(ll_std)),
                                  r_units = sum(grid * post(ll_r))))
 
-emit_json(list(m = m, functional = functional, multivariate = multivariate, units = units), args[2])
+units$y <- y
+units$loglik_physical <- ll_phys
+units$loglik_standardized <- ll_std
+units$loglik_r_units <- ll_r
+inputs <- list(te = te, s2_g = s2_g, groups = groups, v = v, cases = case_inputs, R_groups = R_groups, Sigma_delta = Sigma_delta,
+               e_units = e_units)
+jsonlite::write_json(list(m = m, functional = functional, multivariate = multivariate, units = units, inputs = inputs), args[2],
+                     digits = I(17), auto_unbox = TRUE, pretty = TRUE)

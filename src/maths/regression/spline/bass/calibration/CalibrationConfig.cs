@@ -18,6 +18,9 @@ public sealed record CalibrationConfig
     /// <summary>The measurement-error model (C-X1).</summary>
     public required MeasurementErrorModel Measurement { get; init; }
 
+    /// <summary>The covariance formulation, declared (C1): functional or multivariate.</summary>
+    public required CovarianceFormulation Covariance { get; init; }
+
     /// <summary>The canonical JSON options, <see cref="BassConfig.JsonOptions"/>' settings: enums by name, compact, an
     /// unknown field refused, a missing one defaulted (a required one refused), a variant's <c>Kind</c> anywhere.</summary>
     public static JsonSerializerOptions JsonOptions { get; } = CreateJsonOptions();
@@ -48,7 +51,8 @@ public sealed record CalibrationConfig
 
     /// <summary>
     /// Checks every field that needs no data, naming it in the reason; the checks against the observations and the
-    /// emulator (the outputs' count, the groups' coverage, the shapes) are the model's, at construction.
+    /// emulator (the outputs' count, the groups' coverage, the shapes, positive definiteness) are the built pieces', at
+    /// construction (<see cref="MeasurementModel"/>, <see cref="CalibrationCovariance.Create"/>).
     /// </summary>
     public void Validate()
     {
@@ -68,6 +72,24 @@ public sealed record CalibrationConfig
         catch (ArgumentException e)
         {
             throw Bad("Measurement", e.Message);
+        }
+        switch (Covariance)
+        {
+            case FunctionalFormulation f:
+                if (f.Truncation is not (TruncationTerm.ResidualSet or TruncationTerm.Diagonal)) throw Bad("Covariance.Truncation", "is not a known term");
+                if (f.Discrepancy is { } d)
+                {
+                    if (d.Basis is null || d.Basis.Length == 0) throw Bad("Covariance.Discrepancy.Basis", "is missing");
+                    if (d.Scale is not { } s) throw Bad("Covariance.Discrepancy.Scale", "has no default: declare s_v (1 reproduces R)");
+                    if (!(s > 0.0 && double.IsFinite(s))) throw Bad("Covariance.Discrepancy.Scale", "must be positive and finite");
+                }
+                break;
+            case MultivariateFormulation v:
+                if (v.Truncation is not (TruncationTerm.ResidualSet or TruncationTerm.Diagonal)) throw Bad("Covariance.Truncation", "is not a known term");
+                if (v.Correlation is null || v.Correlation.Length == 0) throw Bad("Covariance.Correlation", "is missing");
+                break;
+            default:
+                throw Bad("Covariance", "is missing or of no known kind");
         }
     }
 

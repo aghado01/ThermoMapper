@@ -46,7 +46,14 @@
 #       S = (I / tau + D' Sigma^-1 D)^-1 and R's tau = 1; and R's swap between states that differ only in the
 #       discrepancy v, against the ratio its powered target needs (the gap is the omitted v prior).
 #
-# Emits { m, theta_star, stale_likelihood, branch_by_shape, coordinates, unit_mismatch, s2_df_switch, tempering }.
+#   inputs: what the C# parity tests rebuild the setup from: y, the residuals, the emulator's 50 draws of component
+#     variances, the coefficients, the bounds, the groups and the discrepancy basis; run: the functional run's state per
+#     rung (theta at the start and the end, normalized, the emulator draw, the variances, the component variances, the
+#     discrepancy coefficients, the cached log-likelihood and log-determinant); and the tempering grid's u, llik and log
+#     prior kernel. Written at 17 significant digits, so every double round-trips.
+#
+# Emits { m, theta_star, stale_likelihood, branch_by_shape, coordinates, unit_mismatch, s2_df_switch, tempering, inputs,
+#         run }.
 
 source("oracles/_common.R")
 
@@ -223,6 +230,15 @@ tempering <- list(
   rungs = lapply(rungs, function(x) x[c("b", "tv_r_vs_powered", "tv_r_vs_likelihood_path", "tv_corrected_vs_likelihood_path")]),
   swaps = swaps, discrepancy_covariance = discrepancy, swap_vs_powered_v_prior_gap = v_gap)
 
-emit_json(list(m = m, theta_star = theta_star, stale_likelihood = stale_likelihood, branch_by_shape = branch_by_shape,
-               coordinates = coordinates, unit_mismatch = unit_mismatch, s2_df_switch = s2_df_switch,
-               tempering = tempering), args[2])
+tempering$grid <- list(u = u, llik = ll, log_prior_kernel = lk)
+inputs <- list(y = y, trunc_error = emulator$dat$trunc.error, emu_s2 = sapply(emulator$mod.list, function(k) k$s2), coef = coef,
+               bounds = bounds, groups = groups, D_narrow = D_narrow, sd_est = c(0.1, 0.1), s2_df = c(10, 10))
+run_state <- lapply(seq_len(ntemps), function(t) {
+  cur <- run$curr[[t]]
+  list(theta_start = run$theta[1, t, ], theta_end = run$theta[2, t, ], ii = run$ii[2], s2 = cur$s2, emu_vars = cur$emu.vars,
+       discrep_vars = c(cur$discrep.vars), pred = cur$pred, llik_cached = c(cur$llik), ldet = c(cur$cov$ldet))
+})
+jsonlite::write_json(list(m = m, theta_star = theta_star, stale_likelihood = stale_likelihood, branch_by_shape = branch_by_shape,
+                          coordinates = coordinates, unit_mismatch = unit_mismatch, s2_df_switch = s2_df_switch,
+                          tempering = tempering, inputs = inputs, run = run_state), args[2],
+                     digits = I(17), auto_unbox = TRUE, pretty = TRUE)

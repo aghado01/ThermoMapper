@@ -163,6 +163,7 @@ public sealed class BassCalibrationMeasurementTests
         {
             Parameters = [new ContinuousParameter("theta", 10, 20), new CategoricalParameter("mode", ["a", "b", "c"])],
             Measurement = TwoGroups(new InverseGammaVariance(10, 0.1), new HalfCauchyDeviation(0.2)),
+            Covariance = new FunctionalFormulation(),
         };
         string json = config.ToJson();
         CalibrationConfig back = CalibrationConfig.FromJson(json);
