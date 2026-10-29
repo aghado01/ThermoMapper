@@ -29,7 +29,7 @@ The principle, from the user: keep each draw's generative state, derive views fr
   - the free energy by temperature integration (Farhi, Hed, Bon, Caticha, Mak and Domany 2013): ln Z(β) − N ln q = −∫₀^β ⟨H⟩ dβ′, with the grid's own temperatures as the intermediates.
     - For Potts, Z(0) = qᴺ for every coupling graph on the same nodes, and H is bounded, so the integral gives the absolute free energy and needs no cutoff. The cycle records H = −Σ J δ once per undirected edge, the Hamiltonian it samples.
     - A trapezoid over the running ⟨E⟩ sums works today. Stepping-stone, and path sampling with a Monte Carlo error, need the per-sweep energies.
-    - The integral starts at β = 0, which the grid does not reach; the closure is in the threads note, Thread 5;
+    - The integral starts at β = 0, which the grid does not reach. The closure is a reference rung, as BASS has: iid uniform spins are exact β = 0 draws, and stepping-stone from them up through a few hot rungs closes the integral (threads note, Thread 5);
   - equilibration checks on the measured stretch.
 - **Cost:** four doubles per sweep, about 0.3 MB per run at 10⁴ sweeps. Over a sweep that is the temperature count × the replica count × that, about 60 MB at 48 temperatures and 4 replicas.
 - **Reuse:**
@@ -104,7 +104,7 @@ Validation ground truth from outside the estimator's own model:
 - **Binder crossing:** on the 2D q-state Potts lattice with q ≤ 4 (q = 2 or 3), the crossing against the exact T_c = 1/ln(1 + √q) (J = 1, k_B = 1). For q > 4 the transition is first-order and the cumulant dips instead of crossing; SPC's default q = 20 is in that regime.
 - **Autocorrelation:** τ_int from the series against batch means on the same run.
 - **Temperature integration:**
-  - On any tree graph, ln Z is exact for every q: Z = qᴺ Πₑ (1 + (e^{βJₑ} − 1)/q).
+  - On any tree graph, ln Z is exact for every q: Z = qᴺ Πₑ (1 + (e^{βJₑ} − 1)/q). It checks the reference-rung closure.
   - For q = 2 on an L × L torus, Kaufman's exact finite-lattice Ising partition function (Potts J corresponds to Ising J/2, plus a constant −J/2 per edge in H, so ln Z shifts by βJ/2 per edge).
 
 ## Open questions

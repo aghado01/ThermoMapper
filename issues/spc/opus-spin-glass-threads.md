@@ -138,12 +138,22 @@ Where it stops being an analogy. Sketch only.
      edge, the Hamiltonian it samples.
      - A trapezoid over the running ⟨E⟩(T) sums works from existing output.
        `LadderEvidence` (stepping-stone, path sampling with a Monte Carlo error)
-       needs per-sweep energies: SW retention S1.
-     - **Grid closure.** The integral starts at β = 0 and the grid does not.
-       Either add cheap high-T rungs (SW forms few bonds there and mixes in a
-       sweep), or close the top analytically with the forest term
-       ln Z ≈ N ln q + Σₑ ln(1 + (e^{βJₑ} − 1)/q). It is exact on a forest;
-       cycles add corrections at order (e^{βJ} − 1)^girth.
+       needs per-sweep energies: SW retention S1. The Potts slope is bounded
+       (⟨H⟩ = −Σ J/q at β = 0), so path sampling is safe here, unlike BASS's
+       integrated form, whose slope at b = 0 is infinite under Zellner–Siow.
+     - **Grid closure: a reference rung**, as BASS has (`BassEvidence`: an exact
+       prior draw every scan at b = 0). The regression side already runs this
+       shape of evidence, so the design flows from there to SPC. The Potts β = 0
+       member is iid uniform spins, drawn exactly, so stepping-stone from it up
+       through a few cheap hot rungs (SW forms few bonds there and mixes in a
+       sweep) closes the integral with no approximation.
+       - Under uniform spins the edge agreements are pairwise independent, so
+         Var(H) = Σₑ Jₑ²(1/q)(1 − 1/q). A step from β = 0 to β stays well
+         conditioned while β²·Var(H) is of order 1: the analogue of the hot end
+         BASS auto-picks at 1/N.
+     - **Forest term, as a check.** ln Z ≈ N ln q + Σₑ ln(1 + (e^{βJₑ} − 1)/q) is
+       exact on a forest; cycles add corrections at order (e^{βJ} − 1)^girth. It
+       checks the reference-rung closure on trees and approximates it elsewhere.
      - **Equilibrium.** The method assumes converged parallel tempering. SPC's
        fixed-T chains have no swaps, so ⟨E⟩ can be biased near transitions. R-hat
        across replicas (S1) marks the rungs to distrust; plank 2 removes the cause.
@@ -189,7 +199,7 @@ Where it stops being an analogy. Sketch only.
 3. **Free-energy curve by temperature integration** (Thread 5). A trapezoid over
    the existing ⟨E⟩(T) sums needs no new sampling; the `LadderEvidence` route
    (Monte Carlo error, stepping-stone) depends on SW retention S1. Either needs the
-   grid closure at β = 0. Small once S1 lands.
+   reference-rung closure at β = 0. Small once S1 lands.
 4. **SW as a replica inside `ParallelTempering`** (Thread 5, prerequisite for
    Thread 4). Moderate; needs a Potts state type fitting the ladder's replica
    contract.
