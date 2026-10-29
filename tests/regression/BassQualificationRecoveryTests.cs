@@ -14,7 +14,7 @@ namespace Maths.Regression.Tests;
 /// exploration only (the parity rule); the reference here is the generating surface.
 /// <list type="bullet">
 ///   <item><b>Scalar continuous:</b> Friedman's surface, 10 sin(πx₁x₂) + 20(x₃ − ½)² + 10x₄ + 5x₅, over p = 10 uniform
-///   inputs of which five are inert, n = 500, σ = 1.</item>
+///   inputs of which five are inert, n = 500 (F-M2's pass reads n = 2,000 too), σ = 1.</item>
 ///   <item><b>Mixed categorical:</b> 2x₁ + 3x₂·[z ≠ c] + 2 sin(2πx₃)·[z = c] over three uniform inputs and a factor z on
 ///   {a, b, c}, n = 300, σ = 0.5.</item>
 ///   <item><b>Direct functional:</b> 1 + 2x₀ + 1.5·t·x₁ + 3(x₀ − ½)₊·sin(πt) over n = 60 cases and t on 20 locations
@@ -61,11 +61,12 @@ public sealed class BassQualificationRecoveryTests
         Recover("Friedman, tempered", data, truth, sigma: 1.0, Config(53, new TemperingSpec()));
     }
 
-    // The surfaces, each with its truth at the training points; F-M2's measurements (BassMixing) read them too.
-    internal static (BassData Data, double[] Truth) Friedman()
+    // The surfaces, each with its truth at the training points; F-M2's measurements (BassMixing) read them too. Friedman's
+    // takes its sample size n, S10's 500 by default; its cases come in stream order, so a larger n extends S10's.
+    internal static (BassData Data, double[] Truth) Friedman(int n = 500)
     {
         var rng = new Xoshiro256PlusPlus(seed: 51);
-        const int n = 500, p = 10;
+        const int p = 10;
         var x = new double[p][];
         for (int v = 0; v < p; v++) x[v] = new double[n];
         var truth = new double[n];
