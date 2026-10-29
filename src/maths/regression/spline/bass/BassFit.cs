@@ -14,9 +14,10 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><see cref="DrawWeights"/> is null: MCMC's draws weigh equally (SMC's carry weights when it joins).</item>
 /// <item><see cref="Evidence"/> is the run's ln p(y) with its Monte Carlo error and the priors it depends on, from a run
 /// tempered down to an exact reference rung under proper priors (<see cref="BassEvidence"/>); null otherwise.</item>
-/// <item><see cref="ResidualDependence"/> is the direct functional fit's residual-dependence check along the output
-/// index (<see cref="BassResidualDependence"/>, F11) under the posterior mean, computed at the end of the run; null for a
-/// scalar response and, until an index is declared, for several output variables.</item>
+/// <item><see cref="ResidualDependence"/> is the direct functional fit's residual-dependence check along its one output
+/// variable (<see cref="BassResidualDependence"/>, F11) under the posterior mean, computed at the end of the run; null for a
+/// scalar response and for several output variables, where <see cref="ResidualDependenceFor"/> takes a declared
+/// index.</item>
 /// <item><see cref="PointwiseLogDensity"/> is OQ17's matrix over the draws (S9), from the data the fit was run on.</item>
 /// <item><see cref="Checkpoint"/> is the run's restart state when <see cref="BassRunOptions.Checkpoint"/> asked for it,
 /// beside the posterior, never inside it; <see cref="Bass.Resume"/> continues it.</item>
@@ -40,10 +41,29 @@ public sealed record BassFit(
     public PointwiseLogDensity PointwiseLogDensity(BassData data, UnitPartition? units = null,
                                                    PointwiseContent content = PointwiseContent.RetainedParameters)
     {
+        BassModel model = ModelOn(data);
+        return BassPointwise.LogDensity(model, Terms, Draws, units, content);
+    }
+
+    /// <summary>
+    /// The residual-dependence check (<see cref="BassResidualDependence.Of"/>) along a declared <paramref name="index"/>
+    /// on <paramref name="data"/>, which must be the data the fit was run on, summarized at
+    /// <paramref name="probabilities"/>: for several output variables, or another index than the default's.
+    /// </summary>
+    public ResidualDependence ResidualDependenceFor(BassData data, ResidualIndex index, IReadOnlyList<double>? probabilities = null)
+    {
+        ArgumentNullException.ThrowIfNull(index);
+        BassModel model = ModelOn(data);
+        return BassResidualDependence.Of(model, Terms, Draws, index, DrawWeights, probabilities)!;
+    }
+
+    // The model on `data`, refused when they are not the data the fit was run on.
+    private BassModel ModelOn(BassData data)
+    {
         ArgumentNullException.ThrowIfNull(data);
         string fingerprint = Bass.Fingerprint(Config, data);
         if (fingerprint != Identity.Fingerprint)
             throw new ArgumentException($"The fit was run on other data: its fingerprint is {Identity.Fingerprint}, theirs {fingerprint}.", nameof(data));
-        return BassPointwise.LogDensity(BassModel.Create(Config, data), Terms, Draws, units, content);
+        return BassModel.Create(Config, data);
     }
 }

@@ -402,8 +402,8 @@ public sealed class BassPointwiseTests
         BassFit fit = Bass.Fit(config, data);
         var model = BassModel.Create(config, data);
         CheckBoth(model, fit.Terms, fit.Draws, null, "a fit's draws");
-        ResidualDependence check = BassResidualDependence.Of(model, fit.Terms, fit.Draws, fit.DrawWeights)!;
-        Assert.Equal(12, check.LagOne.Length);
+        ResidualDependence check = BassResidualDependence.Of(model, fit.Terms, fit.Draws, weights: fit.DrawWeights)!;
+        Assert.Equal(12, check.PerCase.Length);
     }
 
     [Fact]

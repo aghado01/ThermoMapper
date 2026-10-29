@@ -55,9 +55,9 @@ public sealed class BassFitViewsTests
         BassFit fit = Bass.Fit(Config(), data);
         ResidualDependence check = Assert.IsType<ResidualDependence>(fit.ResidualDependence);
         ResidualDependence expected = BassResidualDependence.Of(BassModel.Create(fit.Config, data), fit.Terms, fit.Draws)!;
-        Assert.Equal(expected.LagOne, check.LagOne);
+        Assert.Equal(expected.PerCase, check.PerCase);
         Assert.Equal(expected.Quantiles, check.Quantiles);
-        Assert.Equal(20, check.LagOne.Length);
+        Assert.Equal(20, check.PerCase.Length);
 
         Assert.Null(Bass.Fit(Config(), Scalar()).ResidualDependence);
     }
