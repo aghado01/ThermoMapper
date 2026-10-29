@@ -120,11 +120,14 @@ public sealed class BassTemperingResumeTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void SelfSizingLadder_RestoredAcrossItsResizes_ContinuesBitForBit(bool reference)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void SelfSizingLadder_RestoredAcrossItsResizes_ContinuesBitForBit(bool reference, bool fixedG)
     {
-        BassModel model = BassModel.Create(BassTemperingTests.Config(null, maxBasis: 8), BassSweepTests.Data(large: true));
+        BassConfig config = BassTemperingTests.Config(null, maxBasis: 8);
+        if (fixedG) config = config with { Coefficients = new FixedG() };
+        BassModel model = BassModel.Create(config, BassSweepTests.Data(large: true));
         var spec = new TemperingSpec { ReferenceRung = reference, MaxLevels = 20 };
         BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(5)).State;
         var ladder = new BassLadder(model, spec, start.Terms, start.LogTau, seed: 6);
@@ -163,7 +166,7 @@ public sealed class BassTemperingResumeTests
         restored = BassLadder.Restore(model, spec, ladder.Snapshot());
         Both(300);
         AssertSameLadder(ladder, restored);
-        _out.WriteLine($"reference {reference}: counts [{string.Join(", ", counts)}]");
+        _out.WriteLine($"reference {reference}, fixed g {fixedG}: counts [{string.Join(", ", counts)}]");
         Assert.True(counts.Distinct().Count() > 1, "the ladder never resized");
     }
 

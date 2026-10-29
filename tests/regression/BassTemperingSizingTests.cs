@@ -138,6 +138,9 @@ public sealed class BassTemperingSizingTests
         Assert.Equal(0.02, declared.HotEnd);
         Assert.DoesNotContain(declared.AutoPicks, p => p.Setting is "Tempering.HotEnd" or "Tempering.Levels");
         Assert.Contains(BassResolved.Resolve(With(new TemperingSpec()), data).AutoPicks, p => p.Setting == "Tempering.Levels" && p.Value == "8, self-sizing within 64");
+        Assert.Contains(BassResolved.Resolve(With(new TemperingSpec { MaxLevels = 5 }), data).AutoPicks, p => p.Setting == "Tempering.Levels" && p.Value == "5, self-sizing within 5");
+        Assert.Equal((5, 3, 6), (new TemperingSpec { MaxLevels = 5 }.StartLevels(), new TemperingSpec { MaxLevels = 3, ReferenceRung = true }.StartLevels(),
+                                 new TemperingSpec { Levels = 6 }.StartLevels()));
         Assert.Null(BassResolved.Resolve(With(null!), data).HotEnd);
 
         // The ladder's own pick, on a model resolved without it, is the same.

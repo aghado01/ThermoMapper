@@ -337,7 +337,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
                 {
                     for (int k = 0; k < round; k++) owner.Sweep(this);
                     done += round;
-                    if (adaptive.SizesItself && done + 2 * round <= steps) adaptive.Resize();
+                    if (adaptive.SizesItself && done + 2L * round <= steps) adaptive.Resize();
                     else adaptive.Adapt();
                 }
             for (; done < steps; done++) owner.Sweep(this);
