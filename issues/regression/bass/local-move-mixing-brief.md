@@ -1,6 +1,6 @@
 # BASS: the local moves' mixing (F-M2 design brief)
 
-Date: 2026-10-28. Status: a draft for the user's design pass; nothing in it is decided. It opens the fitting checklist's F-M2, which the user created on 2026-10-28 (the checklist's report "S10's questions decided"). The local moves' mixing is its own design item, before the efficiency pass; the run lengths and the ladder's sizing follow it.
+Date: 2026-10-28. Status: a draft for the user's design pass; nothing in it is decided except who ran Phase 0. Phase 0 was measured on 2026-10-28; its readings are below, and they correct the draft in three places (marked *Corrected by Phase 0*). It opens the fitting checklist's F-M2, which the user created on 2026-10-28 (the checklist's report "S10's questions decided"). The local moves' mixing is its own design item, before the efficiency pass; the run lengths and the ladder's sizing follow it.
 
 ## What S10 found
 
@@ -68,7 +68,39 @@ Each measurement is a test-side harness on the existing internals, which the tes
 **M5. The steep band.**
 - *Per rung along the frozen ladder,* the mean and spread of M and ℓ: whether the band is where the tempered posterior's M changes regime.
 - *A dense fixed ladder through b ∈ [0.1, 0.4],* with no adaptation, read at Δb ≈ 0.005–0.01. Either the band's pairs fall below 0.9, a finite barrier that the sizing under-reads, so lever 4 suffices; or they stay near 1, because the band's own rungs cannot move between regimes, so levers 1–3 must act there too.
-- *Under the Gaussian reading* (lever 4a), chain 0's band, two pairs at 1.000 and 0.937, holds a barrier of at least 4.2, where Λ̂ counts 1.94.
+- *Under the Gaussian reading* (lever 4a), chain 0's band, two pairs at 1.000 and 0.937, holds a barrier of at least 4.2, where Λ̂ counts 1.94. *Corrected by Phase 0:* the dense ladder read it at 2.90.
+
+## Phase 0's readings (2026-10-28)
+
+The chip's report, with every table, is in [its brief](local-move-measurements-brief.md#reports): commits `fc88448`–`a13eb80`, report `7f76190`, reproduced here line for line on M2–M4.
+- *M1, cost.*
+  - At Thin = 1 the composition takes 34–94% of a sweep, above 65% wherever n ≥ 1,000: each retained draw re-evaluates every term's column for its mean (`BassStructureMoves.ColumnMean`), O(N·M).
+  - The structure move takes 6–23%, and τ's block above 5% only at n = 200.
+  - So k moves per sweep cost about 1 + (k − 1)·s sweeps, with s between 0.06 and 0.23, and s grows once the column means are cached.
+  - Cost does not bound the levers; acceptance does. The prefix-sum cross products are worth 0–2.7% of a sweep.
+- *M2, births.*
+  - Births are lost to the Occam cost, not to the inputs. An admitted birth's Δℓ has its median near −½ ln N (−3.1 at N = 500), and the prior and proposal parts ask about 2 nats more, so a random birth carries a log ratio near −5.
+  - Active and inert main effects accept alike: 0.0163 against 0.0141.
+  - Knot placement within an active input varies acceptance about five-fold, but its best cell accepts under 5%.
+- *M2, deaths.* Every term is load-bearing: 38 of Friedman's 41 terms have death α below 10⁻⁶, at a median Δℓ of −234.
+- *M3, changes.*
+  - A knot step of 1–3 distinct values, sign kept, accepts 0.93–0.97 on Friedman and the mixed fit, against today's redraw at 0.04.
+  - On the functional fit it is coarser: 0.62 for one step of x's 60 values, 0.37 for one of t's 20.
+  - Sign flips accept at most 0.02. These are acceptances, not mixing.
+- *M4, modes.* The chains hold local modes, not one diffuse mode.
+  - On Friedman and the functional fit, three of four chains sit 12–42 nats below the best chain's median. They hold structures that carry the surface on different interactions, and they never reach the best chain's level.
+  - Leaving such a mode means replacing a load-bearing term with its substitute at once.
+- *M5, the band.*
+  - It is a finite barrier that the sizing under-reads, a steep but resolvable change of regime: M falls by about two terms, and ℓ's spread peaks at b ≈ 0.24.
+  - At Δb = 0.01 no pair in [0.10, 0.40] rejects above 0.46, and over that window Σr reads 4.7–5.2 against the coarse ladders' 4.0–4.3.
+  - With the band opened, the ideal round-trip rate rose to 0.030–0.034 per scan, about 60 round trips in 2,000 scans, and all four chains completed none. The efficiency factor is the binding one.
+
+What the readings change in the levers below:
+- lever 2 is supported (in acceptance);
+- lever 1 is cheap at Thin = 1;
+- lever 3a's gain is small (×1.07 pooled);
+- lever 4a's increment over-reads;
+- and M4 makes a move that leaves a local mode, which this draft left out of scope, a candidate (question 7).
 
 ## The levers
 
@@ -114,6 +146,7 @@ Each measurement is a test-side harness on the existing internals, which the tes
     - It is exact and costs nothing: the probability is a function of the state's counts.
     - It is positive for every variable since w₂ > 0, so it may run alone, ε = 0.
     - At D01's w₂ = 5 the tilt is mild unless the counts are large; M2 bounds its gain.
+    - *Corrected by Phase 0:* the gain is −7% to +24% per chain and ×1.07 pooled. this draft's M2 bounded it by "at most double", which assumed inert births never accept; M2 measured that they accept as often as active ones.
   - *3b, residual-screened hinges.* For K = 1, (v, s, j) is drawn with probability ∝ exp(κ·g(v, s, j | r_S)), where g is the single hinge's score against the current residual: the RSS reduction a lone hinge h would give, ⟨r, h⟩²/‖h‖².
     - Prefix sums over each variable's sorted values give every knot's score in O(N), so a birth costs O(p·N) more.
     - A death's reverse needs the score under the reduced structure's residual r_{S∖dying}: O(N·M) more per death.
@@ -133,6 +166,7 @@ Each measurement is a test-side harness on the existing internals, which the tes
     - The increment h(r) = σ(r)/√(2π) = √(2/π)·Φ⁻¹((1 + r)/2) equals r to first order and grows without bound as r → 1: h(0.9) = 1.31, h(0.99) = 2.06, h(0.999) = 2.63.
     - `Size` and `Place` use h in place of r.
     - A Rao–Blackwellized r̂ of exactly 1 needs a floor, such as 1 − r̂ ≥ 1/(2·scans).
+    - *Corrected by Phase 0:* h does not predict the finer ladder's Σr better than Σr does. Over the window it over-reads by 0.6–1.8 where Σr under-reads by 0.7–0.9, and a saturated pair's h is the floor's value, not the barrier's.
   - *4b, a split rule.* Any pair above a threshold (0.9, the evidence's flag) gains a rung at its barrier midpoint each round, up to `MaxLevels`.
   - *4c, thermodynamic length.* Rungs are placed by ∫ sd_β(ℓ) dβ, from each rung's own ℓ trace (`TraceRungs` keeps the slopes under the linear form), which no pair's rejection censors. But a rung holding one regime of a two-regime band reads its sd low, so this under-reads the band the other way.
 - *Its measure* is the ideal round-trip rate at the settled count, against the rungs' cost. M5 says which option can work.
@@ -173,7 +207,7 @@ Each measurement is a test-side harness on the existing internals, which the tes
 
 - *The efficiency pass's cost work,* such as prefix-sum cross products and allocations, beyond M1's reading, unless M1 shows that cost rather than acceptance bounds the levers.
 - *A variational reference for tempering* (Surjanovic et al. 2022), which shortens the barrier by changing the path rather than the rungs. It is a later option if lever 4 cannot open the band.
-- *An exchange move:* one term for another of the same order, at fixed dimension, with ratio Δℓ + ln π(new) − ln π(old) + ln q(old | S ∖ old) − ln q(new | S ∖ old). It is named here, but not proposed before M2.
+- *An exchange move:* one term for another of the same order, at fixed dimension, with ratio Δℓ + ln π(new) − ln π(old) + ln q(old | S ∖ old) − ln q(new | S ∖ old). It is named here, but not proposed before M2. M4's local modes make it, or another move that replaces a load-bearing term at once, a candidate (question 7).
 - *SMC* (stage 8) and *F-R1.*
 
 ## Open questions for the user
@@ -184,6 +218,8 @@ Each measurement is a test-side harness on the existing internals, which the tes
 4. *Tempering as an arm for the default?* D05 set untempered as the default until BASS's own comparison says otherwise. Tempered Friedman passed σ's criterion where untempered failed, at the cost of about 20 rungs.
 5. *Lever 4's option,* after M5.
 6. *Who runs it.* I recommend Phase 0 as one chip (harness only, no production change), then Phase 1 after you read its report. Decided by the user on 2026-10-28: Phase 0 runs as one chip, [its brief](local-move-measurements-brief.md).
+7. *A move that leaves a local mode* (added after Phase 0). M4's chains sit in modes 12–42 nats apart whose terms are each load-bearing, so single-term moves pay tens of nats to leave them, and lever 2 only refines within them. The exchange move (Not in scope) is the simplest compound move; whether it, or tempering's round trips once the efficiency factor rises, is the route belongs to your design pass.
+8. *The composition's column means* (added after Phase 0): cache them before the pass. Caching changes every arm's cost alike, but lever 1's price, the structure share s, rises with it, so the pass should run on the cached cost. It is the efficiency pass's change, brought forward; whether it can be made bit-identical depends on matching the current sum's order.
 
 ## Reports
 
