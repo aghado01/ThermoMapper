@@ -6,8 +6,8 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 
 ### Decisions (stage 1)
 
-- [ ] **O-D07** Response units and uncertainty: drafted 2026-10-25 as a proposal; settles at the user's design pass.
-- [ ] **O-D08** Sensitivity measures and moments: drafted 2026-10-25 as a proposal; settles at the user's design pass.
+- [x] **O-D07** Response units and uncertainty: decided 2026-10-29, as recommended (the report below).
+- [x] **O-D08** Sensitivity measures and moments: decided 2026-10-29, as recommended (the report below).
 
 ### Reference fixtures
 
@@ -37,6 +37,20 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 - [ ] **O-X5** The response representation carries a declared reconstruction map (linear now; composition for elastic emulation).
 
 ## Reports
+
+### D07 and D08 decided — 2026-10-29
+
+The user took the recommendations of a review against the built stage-4 engine. The segment brief marks each change *(2026-10-29)*.
+- *D07, the choice:* leave-one-case-out truncation residuals by default, R's in-sample residual the named option `InSample`, their RMS ratio reported as a basis-stability diagnostic.
+- *D07, amended:* a constant training column is refused at entry (the contract shapes; S1 refuses it), not mapped to 0; R's W = V_rᵀ convention kept for comparability, since D03's scale-free defaults make a component's fit independent of W's scale.
+- *D07, added:*
+  - components whose draw counts differ under the R̂ stop are thinned evenly to the shortest before pairing;
+  - direct functional prediction at new output coordinates, flagged outside the training range;
+  - a Rao–Blackwellized mean surface as an option, never a draw;
+  - every operation takes the draw weights.
+- *D08, the choices:* R's uniform default kept, the empirical marginal added as an option; Student moments by quadrature only, at every ν and degree, uniform and normal in closed form at every degree.
+- *D08, placement:* interval moments in Distributions, hinge products and ANOVA in BASS (the hub's boundary rules).
+- *Launch:* stage 5 (O1–O4) and direct sensitivity (O5, O6, O8) as two chips, [stage5-outputs-brief.md](stage5-outputs-brief.md) and [stage6-sensitivity-brief.md](stage6-sensitivity-brief.md); basis sensitivity (O7) after stage 5's basis fits land.
 
 ### R's Student moments (O-O3) — 2026-10-27
 

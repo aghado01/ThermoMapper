@@ -2,7 +2,7 @@
 
 A segment of the [full port brief](../bass-full-port-brief.md), which holds the scope and completion contract, the dependency boundaries, the stage table and the decision register. This segment covers stages 5, 6 and 9: supplied-basis and PCA fits, prediction and uncertainty, sensitivity, and the presentation data above maths, with the stage-1 decisions D07 and D08. Its checklist, where the reports go as work lands, is [port-outputs-checklist.md](port-outputs-checklist.md).
 
-The decision drafts here are proposals for the user's design pass, not decisions. The register, with each decision's status, and the table of sources the drafts were drawn from are in the hub's [decisions section](../bass-full-port-brief.md#statistical-decisions-to-settle).
+D07 and D08 were decided by the user on 2026-10-29, as recommended after a review against the built stage-4 engine; the amendments and additions that review made are marked *(2026-10-29)*. The register, with each decision's status, and the table of sources the drafts were drawn from are in the hub's [decisions section](../bass-full-port-brief.md#statistical-decisions-to-settle).
 
 ## Response basis conventions
 
@@ -12,19 +12,19 @@ Handle rank, constant output columns, full variance retention, component signs, 
 
 ## Decision drafts: D07, D08
 
-### D07 (draft): response units and uncertainty
+### D07 (decided 2026-10-29): response units and uncertainty
 
 Sources: the inventory's PCA, prediction and defect sections, and R's [`bassPCA` setup](D:/aghado01/packages/BASS/R/bassPCA.R:88) and [basis prediction](D:/aghado01/packages/BASS/R/bassPCA.R:218).
 - **Scalar and direct functional responses.** The noise is Gaussian, independent across cases and output locations, with one variance. A predictive draw is f(x, t) under the draw plus noise drawn independently for each case and location. The pointwise unit defaults to a case (a whole curve), with the product of its locations' densities given the draw (D04's retained-parameters content).
 - **Decomposition** (`bassPCA`):
   - Centre by y_m (default: the mean) and scale by y_s (default: 1).
-  - Take a thin SVD of the standardized responses, Y_cᵀ = U D Vᵀ. The basis is K = U_r D_r, and the coefficient responses are W = V_rᵀ, with rows of unit norm. This is R's convention, kept because the priors and the meaning of each component's noise depend on it.
+  - Take a thin SVD of the standardized responses, Y_cᵀ = U D Vᵀ. The basis is K = U_r D_r, and the coefficient responses are W = V_rᵀ, with rows of unit norm. This is R's convention, kept for comparability with R and its fixtures. *(2026-10-29)* Under D03's scale-free defaults (σ² scaled to each coefficient response, and the g-prior), a component's fit no longer depends on W's scale, as it did under R's raw-unit priors; the convention fixes only the units each component's σ_k is read in.
   - The rank is the smallest r whose cumulative variance share is at least the target, capped at the numerical rank. R's strict comparison fails at 100%; that becomes a defect fixture. Full retention means the numerical rank and zero truncation.
   - A constant output column is centred and gets y_s = 1, never a division by zero.
   - Each component's sign is fixed by a convention for comparisons only. Where singular values repeat, comparisons use reconstructions or subspaces.
 - **Truncation residuals.**
   - A training case's residual is e_i = y_{c,i} − K wᵢ, observed minus reconstructed, in standardized units.
-  - **Which residual (proposal, 2026-10-26): leave-one-case-out by default.** A predictive draw needs a new case's error outside the basis. The in-sample residual measures each case against a basis it helped build, so it understates that error, and at full retention (r equal to the centred rank, at most n − 1 for n cases) it is exactly zero. The default residual for case i is taken against the rank-r basis built without it, after centring by the mean of the other cases; the rank is capped at the other cases' numerical rank, judged at the scale of all the data, so at full retention it is r − 1, and with two cases the residual is their difference. R's in-sample residual is the named option `InSample`. Every quantity lies in the span of the training cases, so the n refits run in n-dimensional coordinates from the one thin SVD: O(n⁴), independent of the output size.
+  - **Which residual (decided 2026-10-29): leave-one-case-out by default.** A predictive draw needs a new case's error outside the basis. The in-sample residual measures each case against a basis it helped build, so it understates that error, and at full retention (r equal to the centred rank, at most n − 1 for n cases) it is exactly zero. The default residual for case i is taken against the rank-r basis built without it, after centring by the mean of the other cases; the rank is capped at the other cases' numerical rank, judged at the scale of all the data, so at full retention it is r − 1, and with two cases the residual is their difference. R's in-sample residual is the named option `InSample`. Every quantity lies in the span of the training cases, so the n refits run in n-dimensional coordinates from the one thin SVD: O(n⁴), independent of the output size.
   - *What prompted it.* Andros et al. (arXiv 2406.18751) report R BASS's 95% predictive intervals covering 0.59 of held-out SLOSH runs, fitted on five runs. R's `predict.bassBasis` defaults to `trunc.error = FALSE`, and with five runs the in-sample residual understates the error even when it is included; their report cannot separate this from the small number of runs.
   - *Exploration, not a decision.* A scratch check (one toy family, 30 seeds, R's 99% rank rule) put the in-sample residual's error at a median 0.24 of new runs' actual out-of-span error at n = 5, 0.61 at n = 10 and 0.90 at n = 40. At full retention it was 0 for n = 5 and 10, and 0.18 at n = 40 with r ≈ 36. Leave-one-case-out gave 1.25, 1.05 and 0.99, erring high when cases are few.
   - The ratio of the two residuals' RMS (leave-one-case-out over in-sample) is reported with each decomposition as a basis-stability diagnostic: near 1 when the basis is settled, large as r approaches n − 1.
@@ -34,14 +34,18 @@ Sources: the inventory's PCA, prediction and defect sections, and R's [`bassPCA`
 - **Component noise.** Each component's ε_k ~ N(0, σ_k²) is drawn for each prediction case and posterior draw. R draws one per posterior draw and reuses it across cases (defect fixture).
 - **The predictive draw** for a case is y = y_m + y_s ∘ (K(w(x) + ε) + e). The latent draw omits ε and e. Latent draws include coefficient variation through D04's composition draws, so a mixture of conditional means is never reported as the full posterior.
 - **Joint draws across components.** The components are fitted independently on separate coefficient responses, so their posteriors are independent and equal-weight MCMC draws pair validly by index. Weighted draws, from SMC, are resampled within each component before pairing; pairing them by index is invalid.
+  - *(2026-10-29) Unequal counts.* Under the R̂ stop each component's fit ends on its own, so their draw counts can differ. Each component's draws are then thinned evenly to the shortest count before pairing. The fits are independent, so any subset fixed in advance pairs validly, and even thinning keeps each fit's whole run.
 - **Covariance in physical units** is diag(y_s)·Cov·diag(y_s). Calibration (D09) and basis sensitivity (D08) apply the same transform. R's calibration uses the unscaled basis and truncation covariance (defect fixture).
 - **Pointwise density for supplied-basis fits (OQ17).** The default unit is a case and the content is Σ_k log N(w_ik | w_k(xᵢ), σ_k²) in coefficient space. For a fixed basis this differs from the density in y-space by a constant and a residual term that are the same for every fit, so it is exact for comparing fits that share a basis. Comparing across bases or engines needs a model of the truncation residual. A Gaussian with diagonal empirical truncation variance (calibration's functional form) is offered as a declared approximation, not as the default.
-- **Inputs.** One fitted transform is reused everywhere.
-  - A constant training column maps to 0. R's training helper allows it, while its prediction helper divides by the zero span (defect fixture).
+- **Inputs.** One fitted transform is reused everywhere (`BassInputTransform`, built in S1).
+  - *(2026-10-29)* A constant training column is refused at entry, as the contract shapes decided: it has no knot, and a one-level factor is refused alike. R's training helper allows it, while its prediction helper divides by the zero span (defect fixture).
   - An unseen category is refused by default.
   - Continuous extrapolation is allowed, with each case flagged when it lies outside the training range.
+  - *(2026-10-29) New output coordinates* (direct functional fits, P07). The output factors are evaluated at the new coordinates through the training transform, and a coordinate outside the training range is flagged per location, as x is per case. A PCA basis has no such evaluation: it exists only at the training locations (O-X5).
 - **Axes and order.** Draw × case × output axes are always explicit, including singletons, and the requested draw order is kept. R reorders by model group and drops axes (defect fixture).
 - **Intervals** are quantiles of the predictive mixture from draws, not quantiles of each draw's Gaussian interval endpoints, which R's diagnostic plot uses.
+- *(2026-10-29) A Rao–Blackwellized mean surface,* an option off by default: each draw's conditional mean E[f | S, τ, y], the g-prior's posterior mean of the coefficients given its structure and τ, averaged over the draws. It is a lower-variance point estimate of the posterior mean beside the draws, never itself a draw.
+- **Weights.** Every operation takes the fit's draw weights, equal ones for MCMC (the contract shapes), so SMC's fits (stage 8) plug in unchanged.
 - **Not in the baseline:** basis-estimation uncertainty (Fast Bayesian FPCA, arXiv 2412.11340, is one route if it is ever modelled) and robust bases (OQ16). Both are in the [extensions brief](extensions-brief.md).
 - **Independent checks:**
   - the training reconstruction y = y_m + y_s ∘ (K W + e) holds exactly;
@@ -51,7 +55,7 @@ Sources: the inventory's PCA, prediction and defect sections, and R's [`bassPCA`
   - draw order and singleton axes;
   - the covariance transform against a dense computation.
 
-### D08 (draft): sensitivity measures and moments
+### D08 (decided 2026-10-29): sensitivity measures and moments
 
 Sources: the JSS paper (§3), Francom et al. 2018, the inventory's Sobol section and its defect table, and R's [`sobol`](D:/aghado01/packages/BASS/R/sobol_normTmix.R:194).
 - **What is decomposed.** The latent surface's variance under a declared independent product measure over the inputs, computed for each posterior draw, which gives a posterior distribution of indices. Observation noise is not in the denominator.
@@ -62,7 +66,7 @@ Sources: the JSS paper (§3), Francom et al. 2018, the inventory's Sobol section
 
   The contract takes the decomposed surface as a declared input, the mean by default, rather than assuming Ba is the mean.
 - **Input measures,** one per input:
-  - *continuous:* uniform on an interval (by default, the training range in transformed units), or a finite mixture of truncated normal and Student t components;
+  - *continuous:* uniform on an interval (by default, the training range in transformed units), or a finite mixture of truncated normal and Student t components, or *(2026-10-29)* the empirical marginal: the input's training values, equally weighted, whose hinge moments are exact sums over them at any degree. It suits observational data, where a uniform measure misdescribes the inputs; the measure stays a product, so the inputs' dependence is still ignored;
   - *categorical:* supplied level probabilities, uniform over the observed levels by default. R ignores supplied weights and always uses uniform moments (defect fixture: a level with probability 0.9 gives a second moment of 0.5).
 - **Mixture conventions:**
   - *Truncation.* By default the weights are those before truncation and the whole mixture is truncated and renormalized, as in R. Weights conditional on truncation are the other named form.
@@ -70,7 +74,9 @@ Sources: the JSS paper (§3), Francom et al. 2018, the inventory's Sobol section
 - **Moments: one service for direct and basis sensitivity.**
   - Each term pair's moment is a product of one-dimensional interval moments of hinge powers under each input's measure, split at the knots and clipped to the measure's support. R's basis path ignores the bounds (defect fixture: 0.45 against the integral, 0.1106).
   - Categorical moments are sums of the supplied probabilities, including intersections, never ratios that can give 0/0. Francom et al. 2019 give the analytic categorical solutions, in EOF space too, in their supplement, which is not in hand.
-  - Every hinge degree is supported. Uniform measures have closed forms. Normal and Student mixtures use closed forms where they are stable, and otherwise Gauss–Legendre quadrature split at the knots with a stated error bound. R restricts these to degree 1. Truncated Student moments exist for every ν, so the closed form's factors in ν − 1 fall back to quadrature at the special values.
+  - Every hinge degree is supported. Uniform and normal measures have closed forms at every degree; R restricts the normal to degree 1.
+  - *(2026-10-29) Student components use quadrature only:* Gauss–Legendre split at the knots and at the truncation bounds, at every ν and degree, its error reported by doubling the nodes. R's closed form needs a 2F1 evaluator, covers degree 1 only and is NaN at ν = 1 (O-O3's report on R's Student moments).
+  - *Placement* (the hub's boundary rules): a measure's interval moments ∫ₐᵇ xᵏ dF are Distributions'; the hinge products and their ANOVA structure are BASS's.
 - **Functional responses** have two forms (JSS §3.1):
   - integrate the functional variable as one more input, for a total decomposition, with its measure declared: uniform over its range by default, or the empirical output grid;
   - condition on one functional coordinate, for indices as functions of t.
