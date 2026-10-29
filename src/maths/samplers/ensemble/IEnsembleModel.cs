@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 
 namespace Maths.Samplers.Ensemble;
 
@@ -23,6 +25,25 @@ public interface IEnsembleModel<TDraw>
     /// count at index 0). 0 ≤ MonitoredDim ≤ <see cref="FunctionalDim"/>.
     /// </summary>
     int MonitoredDim { get; }
+
+    /// <summary>Each functional's name, which the verdict reports its failing functionals by; "f0", "f1", … by default.</summary>
+    IReadOnlyList<string> FunctionalNames
+    {
+        get
+        {
+            var names = new string[FunctionalDim];
+            for (int f = 0; f < names.Length; f++) names[f] = "f" + f.ToString(CultureInfo.InvariantCulture);
+            return names;
+        }
+    }
+
+    /// <summary>
+    /// The groups of functionals whose agreement the verdict reads together (<see cref="ConvergenceVerdict"/>), each
+    /// functional in exactly one; by default one group, <see cref="FunctionalGroup.AllName"/>, holding every functional,
+    /// which reads B01's rule over the whole set. A stopping scope names the groups that gate an R̂ stop
+    /// (<see cref="ChainEnsemble.Run"/>).
+    /// </summary>
+    IReadOnlyList<FunctionalGroup> Groups => FunctionalDim == 0 ? [] : [FunctionalGroup.All(FunctionalDim)];
 
     /// <summary>
     /// Build one replica + its sink from the two decorrelated seeds the shell derived for this chain.

@@ -9,9 +9,10 @@ namespace Maths.Samplers.Ensemble;
 /// <see cref="DiagnosticState"/> so a client reports it as is; <see cref="FunctionalVariance"/> is the population
 /// variance over every pooled draw. <see cref="Monitored"/> holds the rank-normalized diagnostics of the leading
 /// <see cref="IEnsembleModel{TDraw}.MonitoredDim"/> functionals, read from <see cref="Traces"/>, one per chain.
-/// <see cref="AcceptanceRate"/> counts the sampling
-/// phase only. <see cref="ChainSeeds"/> is the run's reproducibility provenance (the resolved children of the master
-/// seed). <see cref="Checkpoint"/> is the run's restart state when it was requested, and null otherwise. The client
+/// <see cref="Verdict"/> is the run's convergence verdict, read at its end whether or not it set an R̂ target
+/// (<see cref="ConvergenceVerdict"/>). <see cref="AcceptanceRate"/> counts the sampling phase only.
+/// <see cref="ChainSeeds"/> is the run's reproducibility provenance (the resolved children of the master seed).
+/// <see cref="Checkpoint"/> is the run's restart state when it was requested, and null otherwise. The client
 /// assembles its domain result from these plus the per-chain <see cref="IChainRun{TDraw}"/> handles the shell hands
 /// back alongside this record.
 /// </summary>
@@ -24,4 +25,5 @@ public sealed record EnsembleRun(
     int SamplesUsed,
     double AcceptanceRate,
     int[] ChainSeeds,
+    ConvergenceVerdict Verdict,
     EnsembleCheckpoint? Checkpoint = null);
