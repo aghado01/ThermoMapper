@@ -113,8 +113,11 @@ public sealed record SweepProfile(
         for (int i = 0; i < energyCumulant.Length; i++)
             energyCumulant[i] = PottsObs.EnergyCumulant.Reduce(meanEnergySq[i], energyFourthMoment[i]);
 
-        // C_v's Monte Carlo error, from the per-draw energy record and the replicas' effective sample size.
-        var (_, specificHeatError) = SpecificHeatMonteCarloError.ByTemperature(frames);
+        // Monte Carlo errors from the per-draw record and the replicas' effective sample size: C_v's, the detection
+        // curve Var(m)'s, and χ_FK's, which over N is the pair connectivity S₂'s.
+        var (_, specificHeatError) = MonteCarloError.SpecificHeat(frames);
+        var (_, magVarianceError) = MonteCarloError.MagnetizationVariance(frames);
+        var (_, chiError) = MonteCarloError.SusceptibilityFkCluster(frames);
 
         // The configured kind drives peak-finding; all three ride along as channels below for
         // free comparison (FK vs magnetization disagree only in edge cases — now testable).
@@ -140,6 +143,8 @@ public sealed record SweepProfile(
             ["BinderCumulant"] = binder,
             ["EnergyCumulant"] = energyCumulant,
             ["SpecificHeatMonteCarloError"] = specificHeatError,
+            ["MagnetizationVarianceMonteCarloError"] = magVarianceError,
+            ["SusceptibilityFkClusterMonteCarloError"] = chiError,
         };
 
         // Bond entropy: the dispersion of the bond-survival field. Mint the
