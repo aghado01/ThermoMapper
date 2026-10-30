@@ -166,6 +166,43 @@ public sealed class CollapsedGPrior
         return Unweighted(centredColumns + 1, residualSumOfSquares, fitted, rows, intercept, tau, inverseTemperature);
     }
 
+    /// <summary>
+    /// The normalized ridge's marginal (<see cref="CollapsedRidgePrior"/>) at (<paramref name="tau"/>,
+    /// <paramref name="inverseTemperature"/>), from the centred columns' terms (<paramref name="columns"/>, a decomposed
+    /// design or a bordered candidate of one) and the least-squares fit's ‖r‖² over <paramref name="rows"/> observations.
+    /// The intercept, a unit-RMS column already, is one more direction with λ₀ = N: under level centring it adds
+    /// ½ln(τ/(bN + τ)) and no energy, under the zero centre also the energy Nȳ² shrunk by τ/(bN + τ), and under the flat
+    /// intercept its integral (2πσ²/(Nb))^½, as <see cref="CentredMarginalAt"/> places it. Then S = b(‖r‖² + shrinkage), a sum
+    /// of non-negative terms; the same domain as the g-form's.
+    /// </summary>
+    public static GPriorMarginal CentredRidgeMarginalAt(RidgeColumns columns, double residualSumOfSquares, int rows, double responseMean,
+                                                        GPriorCentre intercept, double tau, double inverseTemperature = 1.0)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+        if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
+        double level = CentredLevel(rows, responseMean, intercept), b = inverseTemperature;
+        RidgeTerms terms = columns.At(tau, b);
+        double logDet = terms.LogDeterminant, shrink = terms.Shrinkage, logDetSlope = terms.LogDeterminantSlope, shrinkSlope = terms.ShrinkageSlope;
+        if (intercept == GPriorCentre.Flat)
+        {
+            if (!(b > 0.0))
+                throw new ArgumentOutOfRangeException(nameof(inverseTemperature),
+                    "b = 0 is out of reach on the flat intercept's integrated form, whose (2πσ²/(Nb))^½ diverges there.");
+            return new GPriorMarginal(b * (residualSumOfSquares + shrink), logDet - 0.5 * Math.Log(rows * b), rows, tau, b, 1,
+                                      residualSumOfSquares + shrinkSlope, logDetSlope - 0.5 / b);
+        }
+        double bn = b * rows, h = tau / (bn + tau), energy = rows * (responseMean - level) * (responseMean - level);
+        logDet -= 0.5 * LogFunctions.Log1p(bn / tau);
+        logDetSlope -= 0.5 * rows / (bn + tau);
+        shrink += energy * h;
+        shrinkSlope += energy * h * h;
+        return new GPriorMarginal(b * (residualSumOfSquares + shrink), logDet, rows, tau, b, 0, residualSumOfSquares + shrinkSlope, logDetSlope);
+    }
+
+    /// <summary>The centre level an intercept apart from the centred columns reads: ȳ under level centring and the flat
+    /// intercept, 0 under the zero centre; the median refused.</summary>
+    internal static double CentredLevel(int rows, double responseMean, GPriorCentre intercept) => CentredFit(0.0, rows, responseMean, intercept).Level;
+
     // The fitted energy the centred block's convention reads, and the intercept's centre.
     private static (double Fitted, double Level) CentredFit(double centredFitted, int rows, double responseMean, GPriorCentre intercept)
     {
@@ -345,11 +382,13 @@ public readonly struct GPriorMarginal
     public double InverseTemperature { get; }
 
     /// <summary>The scale <c>b·S_b</c> that σ²'s posterior adds half of: <c>b(‖r‖² + τ/(τ+b)·Q)</c> unweighted,
+    /// <c>b(‖r‖² + Σⱼ qⱼτ/(bλⱼ + τ))</c> under the normalized ridge (<see cref="RidgeTerms"/>),
     /// <c>‖y − Zβ̃‖²_W + τ‖Zβ̃‖²</c> weighted.</summary>
     public double S { get; }
 
     /// <summary>The coefficient integral's determinant term: <c>(k/2)·ln(τ/(τ+b))</c> unweighted, k the g-prior's
-    /// columns, less <c>½ln(mb)</c> under the flat intercept; <c>½ln|τG| − ½ln|P_a| + ½Σ ln wᵢ</c> weighted.</summary>
+    /// columns, or <c>½Σⱼ ln(τ/(bλⱼ + τ))</c> over the normalized ridge's directions, less <c>½ln(mb)</c> under the flat
+    /// intercept; <c>½ln|τG| − ½ln|P_a| + ½Σ ln wᵢ</c> weighted.</summary>
     public double LogDeterminantTerm { get; }
 
     /// <summary><c>σ² | y ~ IG(g₁ + ν/2, g₂ + S/2)</c>, ν = <see cref="DegreesOfFreedom"/>; null
@@ -627,4 +666,522 @@ public sealed class LeaveOutQuadratics
 
     /// <summary>The forms, unit row by unit row.</summary>
     public double[,] Values { get; }
+}
+
+/// <summary>
+/// The centred columns' part of a ridge marginal at one (τ, b) (<see cref="RidgeColumns.At"/>). With the normalized Gram
+/// G̃ = D^(−½)G_cD^(−½) = VΛVᵀ, D = diag(G_c)/N, the posterior precision of the normalized coefficients is bG̃ + τI; qⱼ is
+/// the least-squares fit's energy along eigendirection j, Σⱼ qⱼ = Q_c.
+/// <list type="bullet">
+/// <item><see cref="LogDeterminant"/> = ½Σⱼ ln(τ/(bλⱼ + τ)), the coefficients' integral.</item>
+/// <item><see cref="Shrinkage"/> = Σⱼ qⱼτ/(bλⱼ + τ), the fitted energy the prior shrinks away: S = b(‖r‖² + Shrinkage), a
+/// sum of non-negative terms, so a small τ on a close fit keeps its digits.</item>
+/// <item>Their slopes in b: <see cref="LogDeterminantSlope"/> = −½Σⱼ λⱼ/(bλⱼ + τ), and <see cref="ShrinkageSlope"/> =
+/// Σⱼ qⱼτ²/(bλⱼ + τ)², with ∂S/∂b = ‖r‖² + ShrinkageSlope.</item>
+/// </list>
+/// </summary>
+public readonly record struct RidgeTerms(double LogDeterminant, double Shrinkage, double LogDeterminantSlope, double ShrinkageSlope);
+
+/// <summary>
+/// A centred design's columns under the normalized ridge, β | σ², τ ~ N(0, σ²(τD)⁻¹) with D = diag(G_c)/N: the
+/// generalized ridge on the raw centred columns, which is σ²I/τ on the columns scaled to unit root mean square. Its
+/// terms (<see cref="At"/>) depend on the columns only through the normalized Gram and the normalized cross products, so
+/// the marginal does not depend on the scale the columns are stated in. A decomposed design is a
+/// <see cref="RidgeSpectrum"/>; a birth, death or change proposed against one is a bordered candidate of it, evaluated
+/// through its eigenvectors at O(M) per (τ, b) after an O(M²) start, with no factorization of its own.
+/// </summary>
+public abstract class RidgeColumns
+{
+    private protected RidgeColumns() { }
+
+    /// <summary>M, the centred columns.</summary>
+    public abstract int Count { get; }
+
+    /// <summary>The columns' terms at prior precision <paramref name="tau"/> and inverse temperature
+    /// <paramref name="inverseTemperature"/>: τ positive and finite, b non-negative and finite.</summary>
+    public RidgeTerms At(double tau, double inverseTemperature = 1.0)
+    {
+        if (!(tau > 0.0) || double.IsPositiveInfinity(tau)) throw new ArgumentOutOfRangeException(nameof(tau), "τ must be positive and finite.");
+        if (!(inverseTemperature >= 0.0) || double.IsPositiveInfinity(inverseTemperature))
+            throw new ArgumentOutOfRangeException(nameof(inverseTemperature), "The inverse temperature must be non-negative and finite.");
+        return Evaluate(tau, inverseTemperature);
+    }
+
+    private protected abstract RidgeTerms Evaluate(double tau, double b);
+}
+
+/// <summary>
+/// A centred design under the normalized ridge, decomposed: the eigenvalues λⱼ and eigenvectors of its normalized Gram
+/// G̃ = D^(−½)G_cD^(−½) (diagonal N), the normalized cross products w = VᵀD^(−½)Z_cᵀỹ and the energies qⱼ = wⱼ²/λⱼ. Any
+/// (τ, b) then costs O(M) (<see cref="RidgeColumns.At"/>), which τ's slice step and the tempered rungs read; a candidate
+/// structure one column away (<see cref="Birth"/>, <see cref="Death"/>, <see cref="Change"/>) is evaluated through the
+/// eigenvectors without a decomposition of its own. The normalized Gram is decomposed through its unit-diagonal scaling
+/// G̃/N by cyclic Jacobi (<see cref="DenseEigen"/>) at an absolute off-diagonal tolerance of 10⁻¹⁵, so λⱼ = N·μⱼ.
+/// Immutable: a design's current structure shares one with every state that holds it.
+/// </summary>
+public sealed class RidgeSpectrum : RidgeColumns
+{
+    private const double JacobiTolerance = 1e-15;
+
+    private readonly double[] _lambda;      // eigenvalues of G̃, descending
+    private readonly double[][] _vectors;   // _vectors[j][i]: component i of eigenvector j
+    private readonly double[] _root;        // √dᵢ, dᵢ = G_ii/N
+    private readonly double[] _w;           // Vᵀc̃, c̃ = D^(−½)c
+    private readonly double[] _q;           // wⱼ²/λⱼ
+
+    private RidgeSpectrum(int rows, double[] lambda, double[][] vectors, double[] root, double[] w)
+    {
+        Rows = rows;
+        _lambda = lambda;
+        _vectors = vectors;
+        _root = root;
+        _w = w;
+        _q = new double[lambda.Length];
+        for (int j = 0; j < lambda.Length; j++) _q[j] = w[j] * w[j] / lambda[j];
+    }
+
+    /// <summary>
+    /// The spectrum of the centred design whose Gram is <paramref name="centredGram"/> (G_c = Z_cᵀZ_c, positive definite)
+    /// and cross products <paramref name="crossResponse"/> (Z_cᵀỹ), over <paramref name="rows"/> observations; an empty Gram
+    /// is the intercept-only structure.
+    /// </summary>
+    public static RidgeSpectrum Of(double[,] centredGram, ReadOnlySpan<double> crossResponse, int rows)
+    {
+        ArgumentNullException.ThrowIfNull(centredGram);
+        int m = centredGram.GetLength(0);
+        if (centredGram.GetLength(1) != m) throw new ArgumentException("The Gram must be square.", nameof(centredGram));
+        if (crossResponse.Length != m) throw new ArgumentException("One cross product per column is required.", nameof(crossResponse));
+        if (rows < 1) throw new ArgumentOutOfRangeException(nameof(rows));
+        var root = new double[m];
+        for (int i = 0; i < m; i++)
+        {
+            double g = centredGram[i, i];
+            if (!(g > 0.0 && double.IsFinite(g))) throw new ArgumentException($"Column {i} has no spread.", nameof(centredGram));
+            root[i] = Math.Sqrt(g / rows);
+        }
+        if (m == 0) return new RidgeSpectrum(rows, [], [], [], []);
+        var unit = new double[m * m];   // G̃/N, symmetric, so its row- and column-major layouts agree
+        for (int i = 0; i < m; i++)
+            for (int j = 0; j < m; j++)
+                unit[i * m + j] = i == j ? 1.0 : centredGram[i, j] / (Math.Sqrt(centredGram[i, i]) * Math.Sqrt(centredGram[j, j]));
+        EigenResult eigen = DenseEigen.DecomposeSymmetric(unit, m, tol: JacobiTolerance);
+        var lambda = new double[m];
+        var w = new double[m];
+        for (int j = 0; j < m; j++)
+        {
+            lambda[j] = rows * eigen.Eigenvalues[j];
+            if (!(lambda[j] > 0.0)) throw new ArgumentException("The Gram is not positive definite: the structure lies outside F.", nameof(centredGram));
+            double[] v = eigen.Eigenvectors[j];
+            double sum = 0.0;
+            for (int i = 0; i < m; i++) sum += v[i] * crossResponse[i] / root[i];
+            w[j] = sum;
+        }
+        return new RidgeSpectrum(rows, lambda, eigen.Eigenvectors, root, w);
+    }
+
+    /// <summary>N, the observations D's normalization reads.</summary>
+    public int Rows { get; }
+
+    /// <inheritdoc/>
+    public override int Count => _lambda.Length;
+
+    /// <summary>The normalized Gram's eigenvalues λⱼ, descending; their sum is N·M.</summary>
+    public ReadOnlySpan<double> Eigenvalues => _lambda;
+
+    /// <summary>Q_c = Σⱼ qⱼ, the least-squares fit's energy as the spectrum reads it.</summary>
+    public double FittedSquares
+    {
+        get
+        {
+            double sum = 0.0;
+            foreach (double q in _q) sum += q;
+            return sum;
+        }
+    }
+
+    private protected override RidgeTerms Evaluate(double tau, double b)
+    {
+        double logDet = 0.0, shrink = 0.0, logDetSlope = 0.0, shrinkSlope = 0.0;
+        for (int j = 0; j < _lambda.Length; j++)
+        {
+            double bl = b * _lambda[j], h = tau / (bl + tau);
+            logDet -= LogFunctions.Log1p(bl / tau);
+            shrink += _q[j] * h;
+            logDetSlope -= _lambda[j] / (bl + tau);
+            shrinkSlope += _q[j] * h * h;
+        }
+        return new RidgeTerms(0.5 * logDet, shrink, 0.5 * logDetSlope, shrinkSlope);
+    }
+
+    /// <summary>
+    /// The candidate with one column added last: <paramref name="border"/> its Gram entries against the current columns,
+    /// <paramref name="diagonal"/> its own, <paramref name="cross"/> its cross product with ỹ.
+    /// </summary>
+    public RidgeColumns Birth(ReadOnlySpan<double> border, double diagonal, double cross)
+    {
+        if (border.Length != Count) throw new ArgumentException("One border entry per current column is required.", nameof(border));
+        return new Bordered(this, -1, border, diagonal, cross);
+    }
+
+    /// <summary>The candidate with column <paramref name="index"/> removed.</summary>
+    public RidgeColumns Death(int index)
+    {
+        if ((uint)index >= (uint)Count) throw new ArgumentOutOfRangeException(nameof(index));
+        return new Bordered(this, index, default, double.NaN, double.NaN);
+    }
+
+    /// <summary>
+    /// The candidate with column <paramref name="index"/> replaced by a new one, last: <paramref name="border"/> its Gram
+    /// entries against every current column (entry <paramref name="index"/> is not read), <paramref name="diagonal"/> its
+    /// own, <paramref name="cross"/> its cross product with ỹ.
+    /// </summary>
+    public RidgeColumns Change(int index, ReadOnlySpan<double> border, double diagonal, double cross)
+    {
+        if ((uint)index >= (uint)Count) throw new ArgumentOutOfRangeException(nameof(index));
+        if (border.Length != Count) throw new ArgumentException("One border entry per current column is required.", nameof(border));
+        return new Bordered(this, index, border, diagonal, cross);
+    }
+
+    // Eigenbasis coordinates to the raw centred coordinates, D^(−½)V·x: result_i = Σⱼ vⱼ[i]·xⱼ / √dᵢ.
+    private void Raw(ReadOnlySpan<double> eigenCoordinates, Span<double> result)
+    {
+        int m = Count;
+        for (int i = 0; i < m; i++)
+        {
+            double sum = 0.0;
+            for (int j = 0; j < m; j++) sum += _vectors[j][i] * eigenCoordinates[j];
+            result[i] = sum / _root[i];
+        }
+    }
+
+    /// <summary>The precision bG_c + τD in the raw centred coordinates, as a factor read through the eigenvectors.</summary>
+    internal ISpdFactor Factor(double tau, double b) => new SpectralFactor(this, tau, b);
+
+    /// <summary>The posterior mean b(bG_c + τD)⁻¹Z_cᵀỹ in the raw centred coordinates, into <paramref name="mean"/>.</summary>
+    internal void PosteriorMean(double tau, double b, Span<double> mean)
+    {
+        int m = Count;
+        Span<double> x = m <= 128 ? stackalloc double[m] : new double[m];
+        for (int j = 0; j < m; j++) x[j] = b * _w[j] / (b * _lambda[j] + tau);
+        Raw(x, mean);
+    }
+
+    // A candidate one column away from its parent spectrum: a birth (none removed), a death (none added) or a change. In
+    // the parent's eigenbasis, padded at the removed coordinate, the candidate's precision is the parent's Schur-reduced
+    // by the removed column, then bordered by the new one; the posterior mean x̃ and the candidate's Gram's inverse forms
+    // follow in O(M) per (τ, b). S's shrinkage is τ(τ·x̃ᵀG̃′⁻¹x̃ + b·x̃ᵀx̃), the non-negative form.
+    private sealed class Bordered : RidgeColumns
+    {
+        private readonly RidgeSpectrum _parent;
+        private readonly int _removed;          // −1 for a birth
+        private readonly bool _added;
+        private readonly double[] _r = [];      // the removed coordinate in the eigenbasis: Vᵀe_m
+        private readonly double[] _a = [];      // the new column's normalized border in the eigenbasis
+        private readonly double[] _w;           // the normalized cross products, the removed column's zeroed, in the eigenbasis
+        private readonly double _cross;         // the new column's normalized cross product
+        private readonly double _rho;           // (G̃⁻¹)_mm = Σⱼ rⱼ²/λⱼ
+        private readonly double _schur;         // s₀ = N − ãᵀG̃_r⁻¹ã, the new column's Schur complement in G̃′
+
+        public Bordered(RidgeSpectrum parent, int removed, ReadOnlySpan<double> border, double diagonal, double cross)
+        {
+            _parent = parent;
+            _removed = removed;
+            _added = !double.IsNaN(diagonal);
+            int m = parent.Count;
+            _w = (double[])parent._w.Clone();
+            if (removed >= 0)
+            {
+                _r = new double[m];
+                double crossRemoved = 0.0;   // c̃_m, recovered from w through V
+                for (int j = 0; j < m; j++)
+                {
+                    _r[j] = parent._vectors[j][removed];
+                    crossRemoved += _r[j] * parent._w[j];
+                }
+                for (int j = 0; j < m; j++)
+                {
+                    _w[j] -= _r[j] * crossRemoved;
+                    _rho += _r[j] * _r[j] / parent._lambda[j];
+                }
+            }
+            if (!_added) return;
+            if (!(diagonal > 0.0 && double.IsFinite(diagonal))) throw new ArgumentException("The new column has no spread.", nameof(diagonal));
+            double root = Math.Sqrt(diagonal / parent.Rows);
+            var normalized = new double[m];
+            for (int i = 0; i < m; i++) normalized[i] = i == removed ? 0.0 : border[i] / (parent._root[i] * root);
+            _a = new double[m];
+            for (int j = 0; j < m; j++)
+            {
+                double sum = 0.0;
+                double[] v = parent._vectors[j];
+                for (int i = 0; i < m; i++) sum += v[i] * normalized[i];
+                _a[j] = sum;
+            }
+            _cross = cross / root;
+            _schur = parent.Rows - ReducedInverseForm(_a, _a);
+        }
+
+        public override int Count => _parent.Count - (_removed >= 0 ? 1 : 0) + (_added ? 1 : 0);
+
+        // uᵀG̃_r⁻¹v for vectors padded at the removed coordinate, in the eigenbasis: the parent's inverse form less the
+        // removed column's Schur term.
+        private double ReducedInverseForm(double[] u, double[] v)
+        {
+            double[] lambda = _parent._lambda;
+            double uv = 0.0, ru = 0.0, rv = 0.0;
+            for (int j = 0; j < lambda.Length; j++)
+            {
+                uv += u[j] * v[j] / lambda[j];
+                if (_removed < 0) continue;
+                ru += _r[j] * u[j] / lambda[j];
+                rv += _r[j] * v[j] / lambda[j];
+            }
+            return _removed < 0 ? uv : uv - ru * rv / _rho;
+        }
+
+        private protected override RidgeTerms Evaluate(double tau, double b)
+        {
+            double[] lambda = _parent._lambda;
+            int m = lambda.Length, n = _parent.Rows;
+            var h = new double[m];
+            double logDet = 0.0, trace = 0.0;
+            for (int j = 0; j < m; j++)
+            {
+                double bl = b * lambda[j];
+                h[j] = 1.0 / (bl + tau);
+                logDet -= LogFunctions.Log1p(bl / tau);
+                trace += lambda[j] * h[j];
+            }
+
+            // R = (bG̃_r + τI)⁻¹ on padded vectors: Rv = H(v − κ_v r), κ_v = rᵀHv/P, P = rᵀHr; ln|bG̃_r + τI| gains ln P
+            // and tr(RG̃_r) loses rᵀH²Λr/P.
+            double p = 0.0;
+            if (_removed >= 0)
+            {
+                double r2l = 0.0;
+                for (int j = 0; j < m; j++)
+                {
+                    p += _r[j] * _r[j] * h[j];
+                    r2l += _r[j] * _r[j] * h[j] * h[j] * lambda[j];
+                }
+                logDet -= Math.Log(tau * p);
+                trace -= r2l / p;
+            }
+            double[] xw = Reduce(_w, h, p);   // R·w̃
+            if (!_added) return Terms(xw, 0.0, tau, b, logDet, trace);
+
+            // The new column borders R: its Schur complement s = bN + τ − b²ãᵀRã, then x̃ = (R(w̃ − bãt), t).
+            double[] xa = Reduce(_a, h, p);   // R·ã
+            double sA = 0.0, tA = 0.0, zGz = 0.0;
+            for (int j = 0; j < m; j++)
+            {
+                sA += _a[j] * xa[j];
+                tA += _a[j] * xw[j];
+                zGz += xa[j] * xa[j] * lambda[j];
+            }
+            double excess = Math.Max(n - b * sA, 0.0);   // (s − τ)/b, at least s₀ ≥ 0
+            double s = tau + b * excess;
+            double t = (_cross - b * tA) / s;
+            var x = new double[m];
+            for (int j = 0; j < m; j++) x[j] = xw[j] - b * t * xa[j];
+            logDet -= LogFunctions.Log1p(b * excess / tau);
+            trace += (b * b * zGz - 2.0 * b * sA + n) / s;
+            return Terms(x, t, tau, b, logDet, trace);
+        }
+
+        // R·v on a padded vector, in the eigenbasis.
+        private double[] Reduce(double[] v, double[] h, double p)
+        {
+            int m = v.Length;
+            var x = new double[m];
+            double kappa = 0.0;
+            if (_removed >= 0)
+            {
+                for (int j = 0; j < m; j++) kappa += _r[j] * h[j] * v[j];
+                kappa /= p;
+            }
+            for (int j = 0; j < m; j++) x[j] = h[j] * (_removed >= 0 ? v[j] - kappa * _r[j] : v[j]);
+            return x;
+        }
+
+        // The terms from the posterior mean x̃ = (x, t): x̃ᵀx̃, and x̃ᵀG̃′⁻¹x̃ by the bordered inverse of the candidate's
+        // normalized Gram; then the shrinkage τ(τ·x̃ᵀG̃′⁻¹x̃ + b·x̃ᵀx̃) and its slope τ²·x̃ᵀG̃′⁻¹x̃.
+        private RidgeTerms Terms(double[] x, double t, double tau, double b, double logDet, double trace)
+        {
+            double y = t * t, inverse = ReducedInverseForm(x, x);
+            for (int j = 0; j < x.Length; j++) y += x[j] * x[j];
+            if (_added)
+            {
+                double residual = t - ReducedInverseForm(_a, x);
+                inverse += residual * residual / _schur;
+            }
+            return new RidgeTerms(0.5 * logDet, tau * (tau * inverse + b * y), -0.5 * trace, tau * tau * inverse);
+        }
+    }
+
+    // bG_c + τD = D^(½)V(bΛ + τ)VᵀD^(½) in the raw centred coordinates, solved and drawn from through the eigenvectors.
+    private sealed class SpectralFactor : ISpdFactor
+    {
+        private readonly RidgeSpectrum _spectrum;
+        private readonly double[] _precision;   // bλⱼ + τ
+
+        public SpectralFactor(RidgeSpectrum spectrum, double tau, double b)
+        {
+            _spectrum = spectrum;
+            int m = spectrum.Count;
+            _precision = new double[m];
+            double logDet = 0.0, min = double.PositiveInfinity, max = double.NegativeInfinity;
+            for (int j = 0; j < m; j++)
+            {
+                _precision[j] = b * spectrum._lambda[j] + tau;
+                logDet += Math.Log(_precision[j]);
+                min = Math.Min(min, _precision[j]);
+                max = Math.Max(max, _precision[j]);
+            }
+            for (int i = 0; i < m; i++) logDet += 2.0 * Math.Log(spectrum._root[i]);
+            LogDet = logDet;
+            // The normalized precision's eigenvalues stand in for pivots; its diagonal is bN + τ.
+            Status = new FactorStatus(true, 0, min, max, m == 0 ? 1.0 : min / (b * spectrum.Rows + tau));
+        }
+
+        public int Dimension => _spectrum.Count;
+
+        public FactorStatus Status { get; }
+
+        public double LogDet { get; }
+
+        public double[] Solve(ReadOnlySpan<double> b)
+        {
+            double[] x = b.ToArray();
+            SolveInPlace(x);
+            return x;
+        }
+
+        public void SolveInPlace(Span<double> x)
+        {
+            int m = Dimension;
+            if (x.Length != m) throw new ArgumentException("The right-hand side must have the factor's order.", nameof(x));
+            Span<double> z = m <= 128 ? stackalloc double[m] : new double[m];
+            for (int j = 0; j < m; j++)
+            {
+                double sum = 0.0;
+                double[] v = _spectrum._vectors[j];
+                for (int i = 0; i < m; i++) sum += v[i] * x[i] / _spectrum._root[i];
+                z[j] = sum / _precision[j];
+            }
+            _spectrum.Raw(z, x);
+        }
+
+        public void SampleInnovation(ReadOnlySpan<double> z, Span<double> result)
+        {
+            int m = Dimension;
+            if (z.Length != m || result.Length != m) throw new ArgumentException("The draw must have the factor's order.");
+            Span<double> scaled = m <= 128 ? stackalloc double[m] : new double[m];
+            for (int j = 0; j < m; j++) scaled[j] = z[j] / Math.Sqrt(_precision[j]);
+            _spectrum.Raw(scaled, result);
+        }
+
+        public double EquilibratedCondition()
+        {
+            // Exact: E = S·A·S with S = diag(A)^(−½), and E⁻¹ = S⁻¹A⁻¹S⁻¹, both formed through the eigenvectors.
+            int m = Dimension;
+            if (m == 0) return 1.0;
+            var a = new double[m, m];
+            var inverse = new double[m, m];
+            for (int i = 0; i < m; i++)
+                for (int k = 0; k < m; k++)
+                {
+                    double forward = 0.0, backward = 0.0;
+                    for (int j = 0; j < m; j++)
+                    {
+                        double vv = _spectrum._vectors[j][i] * _spectrum._vectors[j][k];
+                        forward += vv * _precision[j];
+                        backward += vv / _precision[j];
+                    }
+                    a[i, k] = forward * _spectrum._root[i] * _spectrum._root[k];
+                    inverse[i, k] = backward / (_spectrum._root[i] * _spectrum._root[k]);
+                }
+            double normE = 0.0, normInverse = 0.0;
+            for (int k = 0; k < m; k++)
+            {
+                double column = 0.0, columnInverse = 0.0;
+                for (int i = 0; i < m; i++)
+                {
+                    double scale = Math.Sqrt(a[i, i] * a[k, k]);
+                    column += Math.Abs(a[i, k]) / scale;
+                    columnInverse += Math.Abs(inverse[i, k]) * scale;
+                }
+                normE = Math.Max(normE, column);
+                normInverse = Math.Max(normInverse, columnInverse);
+            }
+            return normE * normInverse;
+        }
+    }
+}
+
+/// <summary>
+/// The collapsed normalized-ridge block (D03's ridge, decided 2026-10-29): for a centred design under
+/// β | σ², τ ~ N(0, σ²(τD)⁻¹), D = diag(G_c)/N, with the intercept apart, the closed forms of
+/// <see cref="CollapsedGPrior"/>'s centred block with the ridge's covariance in place of the g-prior's. The intercept, a
+/// unit-RMS column already, takes the same prior: under level centring and the zero centre α | σ² ~ N(level, σ²/τ), k
+/// counting it, and under Liang's flat intercept a flat prior, integrated out. Unweighted, any (τ, b) in O(M) from the
+/// design's <see cref="RidgeSpectrum"/>.
+/// </summary>
+public sealed class CollapsedRidgePrior
+{
+    private readonly RidgeSpectrum _spectrum;
+    private readonly double _rss, _responseMean, _level;
+
+    private CollapsedRidgePrior(RidgeSpectrum spectrum, double rss, double responseMean, GPriorCentre intercept, double level)
+    {
+        _spectrum = spectrum;
+        _rss = rss;
+        _responseMean = responseMean;
+        _level = level;
+        Intercept = intercept;
+    }
+
+    /// <summary>
+    /// The block for the centred design decomposed as <paramref name="spectrum"/>, whose least-squares fit of ỹ = y − ȳ
+    /// leaves <paramref name="residualSumOfSquares"/>, with ȳ = <paramref name="responseMean"/> and the intercept placed by
+    /// <paramref name="intercept"/> (the median centre refused, as <see cref="CollapsedGPrior.FromCentredLeastSquares"/>
+    /// refuses it).
+    /// </summary>
+    public static CollapsedRidgePrior FromCentred(RidgeSpectrum spectrum, double residualSumOfSquares, double responseMean, GPriorCentre intercept)
+    {
+        ArgumentNullException.ThrowIfNull(spectrum);
+        if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
+        double level = CollapsedGPrior.CentredLevel(spectrum.Rows, responseMean, intercept);
+        return new CollapsedRidgePrior(spectrum, residualSumOfSquares, responseMean, intercept, level);
+    }
+
+    /// <summary>Observations N.</summary>
+    public int Rows => _spectrum.Rows;
+
+    /// <summary>Coefficients: the intercept, then the centred columns.</summary>
+    public int Columns => _spectrum.Count + 1;
+
+    /// <summary>The intercept's convention.</summary>
+    public GPriorCentre Intercept { get; }
+
+    /// <summary>The marginal at (<paramref name="tau"/>, <paramref name="inverseTemperature"/>)
+    /// (<see cref="CollapsedGPrior.CentredRidgeMarginalAt"/>).</summary>
+    public GPriorMarginal MarginalAt(double tau, double inverseTemperature = 1.0)
+        => CollapsedGPrior.CentredRidgeMarginalAt(_spectrum, _rss, Rows, _responseMean, Intercept, tau, inverseTemperature);
+
+    /// <summary>
+    /// The conditional posterior at (<paramref name="tau"/>, <paramref name="inverseTemperature"/>): β_c | σ² ~
+    /// N(b·A⁻¹Z_cᵀỹ, σ²A⁻¹) with A = bG_c + τD, a factor read through the spectrum; α | σ² ~ N(level + bN(ȳ − level)/(bN + τ),
+    /// σ²/(bN + τ)) inside the ridge, N(ȳ, σ²/(bN)) under the flat intercept.
+    /// </summary>
+    public GPriorConditional At(double tau, double inverseTemperature = 1.0)
+    {
+        GPriorMarginal marginal = MarginalAt(tau, inverseTemperature);
+        double b = inverseTemperature, bn = b * Rows;
+        var mean = new double[Columns];
+        bool flat = Intercept == GPriorCentre.Flat;
+        mean[0] = flat ? _responseMean : _level + bn / (bn + tau) * (_responseMean - _level);
+        _spectrum.PosteriorMean(tau, b, mean.AsSpan(1));
+        return new GPriorConditional(_spectrum.Factor(tau, b), mean, marginal, 1.0, Columns, flat ? 1.0 / b : Rows / (bn + tau));
+    }
 }

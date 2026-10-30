@@ -9,8 +9,8 @@
 #     rungs (1,0.5,0.2), g1 (0), g2 (0), h1 (10), h2 (10), s_min (1e-10), c (0.4).
 #   posterior mode's own keys, refusing any it does not know: coef (sampled | fixed), centre (mean | flat | zero),
 #     sigma2_prior (scaled | jeffreys), sigma2_shape (1e-3), tau_shape (0.5), likelihood (collapsed | constant),
-#     exact_fit_c (1e3), rungs (0,0.05,0.2,0.5,1), categorical (0), L_max (3), subsets (size | uniform); tau is
-#     fixed-g's tau.
+#     exact_fit_c (1e3), rungs (0,0.05,0.2,0.5,1), categorical (0), L_max (3), subsets (size | uniform),
+#     form (g | ridge); tau is the held tau (1/N, unit information, under the g-form; declared under the ridge).
 #
 # The structure space. A term is an order K <= K_max, K distinct variables, a sign and a knot per variable, the knots
 # ranging over each variable's distinct values (D01's knot measure; R's unique.ind). Its prior is R's unconstrained
@@ -83,6 +83,14 @@
 # marginal absolute; under flat or jeffreys log_Z is null and log_marginal is relative. likelihood = constant puts
 # log p_b = 0, the laws mode's target. The scale of a column (R's basis normalization) does not move the marginal:
 # a g-prior reads the column space only.
+# form = ridge (the normalized ridge, decided 2026-10-29): beta | sigma^2, tau ~ N(0, sigma^2 (tau D)^-1) on the centred
+# columns, D = diag(Z_c'Z_c)/N, so sigma^2 I/tau on the columns scaled to unit root mean square; the intercept, a unit-RMS
+# column already, takes sigma^2/tau about its level inside it (mean, zero) or stays flat. Each state's design ([1, Z_c],
+# or Z_c under flat) is scaled to unit RMS and its Gram decomposed by eigen(); with lambda_j its eigenvalues and q_j the
+# fit energy of the convention's response along eigenvector j, (k/2) log(tau/(tau + b)) becomes
+# sum_j (1/2) log(tau/(tau + b lambda_j)) and Q tau/(tau + b) becomes sum_j q_j tau/(tau + b lambda_j). tau's prior is
+# Gamma(tau_shape, rate tau_shape), its unit information 1; a held ridge's tau must be declared (D03). The explicit
+# check reads the prior precision tau diag(1, d) on [1, Z_c] (tau diag(d) on Z_c beside the flat intercept).
 # Each closed form is checked in the oracle at the posterior's most probable state of each size, at b = 1 and 1/2
 # and three tau (the fixed one under fixed-g): against quadrature over log sigma^2 of the Gaussian integral over a
 # on the explicit uncentred design [1, Z] with y as given (prior mean mean(y) e_0 under mean; the flat intercept
@@ -135,7 +143,9 @@ if (mode == "posterior")
   opt[c("coef", "centre", "sigma2_prior", "sigma2_shape", "tau_shape", "likelihood", "exact_fit_c", "rungs",
         "categorical", "L_max", "subsets")] <-
     list("sampled", "mean", "scaled", 1e-3, 0.5, "collapsed", 1e3, "0,0.05,0.2,0.5,1", 0, 3, "size")
-string_keys <- c("rungs", "coef", "centre", "sigma2_prior", "likelihood", "subsets")
+if (mode == "posterior") opt$form <- "g"
+string_keys <- c("rungs", "coef", "centre", "sigma2_prior", "likelihood", "subsets", "form")
+tau_given <- any(startsWith(args[-(1:3)], "tau="))
 for (kv in args[-(1:3)]) {
   parts <- strsplit(kv, "=", fixed = TRUE)[[1]]
   if (mode == "posterior" && !parts[1] %in% names(opt)) stop("unknown key ", parts[1])
@@ -524,6 +534,10 @@ if (mode == "posterior") {
   if (!opt$sigma2_prior %in% c("scaled", "jeffreys")) stop("sigma2_prior must be scaled or jeffreys")
   if (!opt$coef %in% c("sampled", "fixed")) stop("coef must be sampled or fixed")
   if (!opt$likelihood %in% c("collapsed", "constant")) stop("likelihood must be collapsed or constant")
+  if (!opt$form %in% c("g", "ridge")) stop("form must be g or ridge")
+  ridge <- opt$form == "ridge"
+  if (ridge && fixed_g && !tau_given) stop("a held ridge's tau is part of the model and must be declared (D03): pass tau=")
+  n0 <- if (ridge) 1 else N   # the form's unit-information precision is 1/n0
   rungs <- as.numeric(strsplit(opt$rungs, ",")[[1]])
   level <- if (centre == "zero") 0 else mean(y)
   if (!constant && (if (centre == "zero") all(y == 0) else all(y == y[1])))
@@ -555,17 +569,30 @@ if (mode == "posterior") {
   n_states <- length(state_sets); M_of <- lengths(state_sets)
   rss <- fit_stats[, "rss"]; Q <- fit_stats[, "Q"]; k <- M_of + !flat
 
+  # The ridge's spectrum per state: the convention's design scaled to unit RMS, its Gram's eigenvalues, and the fit
+  # energy of the convention's response along each eigenvector.
+  ridge_stats <- if (ridge) lapply(state_sets, function(S) {
+    Z <- basis[, S, drop = FALSE]
+    Zc <- Z - rep(colMeans(Z), each = N)
+    Xr <- if (flat) Zc else cbind(1, Zc)
+    if (ncol(Xr) == 0) return(list(lambda = numeric(0), q = numeric(0)))
+    Xn <- sweep(Xr, 2, sqrt(colSums(Xr^2) / N), "/")
+    e <- eigen(crossprod(Xn), symmetric = TRUE)
+    w <- c(crossprod(e$vectors, crossprod(Xn, yt)))
+    list(lambda = e$values, q = w^2 / e$values)
+  }) else NULL
+
   log_target <- vapply(state_sets, function(S) lgamma(opt$h1 + length(S)) - length(S) * log(opt$h2 + 1) +
                          sum(log_prior_term[S]), 0)
   log_prior_F <- log_target - lse(log_target)
 
   # tau's quadrature on u = log tau, with the prior's density on u folded into the weights; fixed-g is a point.
-  a_tau <- opt$tau_shape; r_tau <- a_tau * N
+  a_tau <- opt$tau_shape; r_tau <- a_tau * n0
   log_density_u <- function(u) a_tau * (u + log(r_tau)) - r_tau * exp(u) - lgamma(a_tau)
   if (fixed_g) {
     u <- log(opt$tau); logw <- 0; panel <- 1
   } else {
-    lo <- log(1 / N) - 37 / a_tau; hi <- log(1 / N) + log(80 / a_tau)
+    lo <- log(1 / n0) - 37 / a_tau; hi <- log(1 / n0) + log(80 / a_tau)
     if (hi - lo > 4000) stop("tau's prior is too diffuse for the quadrature")
     edges <- seq(lo, hi, length.out = ceiling(hi - lo) + 1)
     gl <- gauss_legendre(16)
@@ -581,6 +608,17 @@ if (mode == "posterior") {
   lp <- function(b, tt = tau, idx = seq_len(n_states)) {
     if (constant) return(matrix(0, length(idx), length(tt)))
     d <- g1 + (N * b - flat) / 2
+    if (ridge) {
+      base <- ig_const - (N * b - flat) / 2 * log(2 * pi) - (if (flat) 0.5 * log(b * N) else 0) + lgamma(d)
+      out <- matrix(0, length(idx), length(tt))
+      for (r in seq_along(idx)) {
+        st <- ridge_stats[[idx[r]]]
+        h <- outer(st$lambda * b, tt, function(bl, t0) t0 / (t0 + bl))   # columns by tau
+        Tb <- b * (rss[idx[r]] + colSums(st$q * h))
+        out[r, ] <- base + 0.5 * colSums(log(h)) - d * log(g2 + Tb / 2)
+      }
+      return(out)
+    }
     shrink <- tt / (tt + b)
     Tb <- b * (rss[idx] + outer(Q[idx], shrink))
     ig_const - (N * b - flat) / 2 * log(2 * pi) - (if (flat) 0.5 * log(b * N) else 0) + lgamma(d) +
@@ -589,6 +627,18 @@ if (mode == "posterior") {
   dlp <- function(b, tt = tau) {
     if (constant) return(matrix(0, n_states, length(tt)))
     d <- g1 + (N * b - flat) / 2
+    if (ridge) {
+      out <- matrix(0, n_states, length(tt))
+      for (i in seq_len(n_states)) {
+        st <- ridge_stats[[i]]
+        h <- outer(st$lambda * b, tt, function(bl, t0) t0 / (t0 + bl))
+        Tb <- b * (rss[i] + colSums(st$q * h)); dTb <- rss[i] + colSums(st$q * h^2)
+        dld <- -0.5 * colSums(st$lambda * h / rep(tt, each = length(st$lambda)))   # -(1/2) sum lambda/(tau + b lambda)
+        out[i, ] <- -(N / 2) * log(2 * pi) - (if (flat) 1 / (2 * b) else 0) + (N / 2) * digamma(d) + dld -
+          (N / 2) * log(g2 + Tb / 2) - d * (dTb / 2) / (g2 + Tb / 2)
+      }
+      return(out)
+    }
     shrink <- tt / (tt + b)
     Tb <- b * (rss + outer(Q, shrink)); dTb <- rss + outer(Q, shrink^2)
     -(N / 2) * log(2 * pi) - (if (flat) 1 / (2 * b) else 0) + (N / 2) * digamma(d) - outer(k / 2, 1 / (tt + b)) -
@@ -658,7 +708,21 @@ if (mode == "posterior") {
   # given, and the composite rule over tau against integrate(), at the posterior's most probable state of each size.
   explicit_lpb <- function(S, b, t0) {
     Z <- basis[, S, drop = FALSE]; Xd <- cbind(1, Z); kx <- ncol(Xd); G <- crossprod(Xd); Xty <- crossprod(Xd, y)
-    if (flat) {
+    if (ridge) {
+      # The ridge's prior precision on the centred design [1, Z_c]: t0 diag(1, d), d = colSums(Z_c^2)/N, the intercept's
+      # flat under the flat intercept.
+      Zc <- Z - rep(colMeans(Z), each = N)
+      Xd <- cbind(1, Zc); G <- crossprod(Xd); Xty <- crossprod(Xd, y)
+      P0 <- diag(t0 * c(1, colSums(Zc^2) / N), kx)
+      if (flat) P0[1, 1] <- 0
+      mu0 <- c(if (flat) 0 else level, rep(0, kx - 1))
+      prior_ld <- function(s2v) {
+        keep <- if (flat) -1 else seq_len(kx)
+        if (length(diag(P0)[keep]) == 0) return(0)
+        0.5 * sum(log(diag(P0)[keep] / s2v)) - length(diag(P0)[keep]) / 2 * log(2 * pi) -
+          0.5 * c(t(mu0) %*% P0 %*% mu0) / s2v
+      }
+    } else if (flat) {
       P0 <- matrix(0, kx, kx)
       if (length(S)) P0[-1, -1] <- t0 * crossprod(Z - rep(colMeans(Z), each = N))
       mu0 <- rep(0, kx)
@@ -688,7 +752,7 @@ if (mode == "posterior") {
   if (!constant) {
     reps <- vapply(0:M_max, function(M) { i <- which(M_of == M); if (length(i)) i[which.max(pst[i])] else NA_integer_ }, 0L)
     reps <- reps[!is.na(reps)]
-    tau_points <- if (fixed_g) opt$tau else c(0.1, 1, 10) / N
+    tau_points <- if (fixed_g) opt$tau else c(0.1, 1, 10) / n0
     bs <- Filter(defined, c(1, 0.5))
     sigma2_gap <- max(unlist(lapply(reps, function(i) lapply(bs, function(b) vapply(tau_points, function(t0)
       abs(lp(b, t0, i)[1, 1] - explicit_lpb(state_sets[[i]], b, t0)), 0)))))
@@ -716,6 +780,7 @@ if (mode == "posterior") {
     supported = supported, data = if (n_cat > 0) list(y = y, x = X, z = Z_cat) else list(y = y, x = X),
     response = list(centre = centre, level = level, s2 = s2, sigma2_shape = g1, sigma2_rate = g2,
                     n_eff = N - flat, absolute = absolute),
+    form = opt$form,
     categorical = if (n_cat > 0) list(count = n_cat, levels = lapply(cat_levels, I), L_max = L_max, subsets = opt$subsets) else NA,
     tau_prior = if (fixed_g) list(fixed = opt$tau) else list(shape = a_tau, rate = r_tau),
     n_gate_refused = sum(!keep), n_exact_fit_refused = sum(exact_fit),

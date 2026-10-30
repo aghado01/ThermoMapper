@@ -20,10 +20,12 @@ namespace Maths.Regression.Spline.Bass;
 /// them.</item>
 /// <item><b>The collapsed predictive</b> (<see cref="PointwiseContent.CollapsedPredictive"/>): the draw's structure and
 /// τ kept, and the coefficients and σ² integrated out given the observations outside the unit, ln p(y_U | y_rest,
-/// structure, τ), a multivariate Student t. It is the g-prior block's <see cref="GPriorConditional.LeaveOutLogDensity"/>
-/// on the structure's explicit design [1, Z_c], under the fit's intercept convention and σ² prior, with the prior (its
-/// centre, the Gram and τ) held at the full data's. It costs one explicit N × (M + 1) design and one factor per distinct
-/// structure, which the draws at that structure share, then N solves per draw.</item>
+/// structure, τ), a multivariate Student t. It is the coefficient block's <see cref="GPriorConditional.LeaveOutLogDensity"/>
+/// on the structure's explicit design [1, Z_c], under the fit's coefficient form, intercept convention and σ² prior, with
+/// the prior (its centre, the Gram or the ridge's scaling, and τ) held at the full data's. It costs one explicit
+/// N × (M + 1) design and one block per distinct structure, which the draws at that structure share, then N solves per
+/// draw. The g-form's precision is the Gram at every τ, so the units' quadratic forms are taken once per structure; the
+/// ridge's, bG_c + τD, moves with τ, so they are taken once per distinct τ.</item>
 /// </list>
 /// λ enters neither content: it is the count prior's rate. Thread-safe: it reads the model and the table and writes
 /// only its own buffers.
@@ -139,10 +141,11 @@ public static class BassPointwise
             BassDesign design = model.NewDesign();
             BassRefusal? refusal = design.Load(structure) ?? target.Refusal(BassStructureFit.Of(design, 0.0));
             if (refusal is { } reason) throw new ArgumentException($"A draw's structure lies outside F ({reason}).", parameter);
-            CollapsedGPrior block = CollapsedGPrior.FromCentredLeastSquares(design.Factor, design.Coefficients.ToArray(), design.ResidualSquares,
-                                                                             design.FittedSquares, design.Observations, design.ResponseMean, target.Intercept);
+            Func<double, double, GPriorConditional> block = target.CoefficientBlock(design);
+            bool ridge = design.IsRidge;
             double[,] x = fit.CentredDesign(ids);
-            // The units' quadratic forms are τ-free, taken once per structure; a draw at a τ already seen copies its row.
+            // The g-form's units' quadratic forms are τ-free, taken once per structure, the ridge's once per τ; a draw at a
+            // τ already seen copies its row.
             LeaveOutQuadratics[]? quadratics = null;
             var seen = new Dictionary<double, int>();
             foreach (int s in rows)
@@ -153,8 +156,8 @@ public static class BassPointwise
                     continue;
                 }
                 seen.Add(pooled[s].Tau, s);
-                GPriorConditional conditional = block.At(pooled[s].Tau);
-                if (quadratics is null)
+                GPriorConditional conditional = block(pooled[s].Tau, 1.0);
+                if (quadratics is null || ridge)
                 {
                     quadratics = new LeaveOutQuadratics[partition.Units];
                     for (int u = 0; u < partition.Units; u++) quadratics[u] = conditional.LeaveOutQuadratics(x, partition.Members[u]);

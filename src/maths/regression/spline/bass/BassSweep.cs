@@ -185,10 +185,9 @@ public sealed class BassStructureMoves
         Sync(state);
         BassTarget target = _model.Target;
         double tau = target.SamplesTau ? state.Tau : target.HeldTau!.Value;
-        CollapsedGPrior block = CollapsedGPrior.FromCentredLeastSquares(_design.Factor, _design.Coefficients.ToArray(), _design.ResidualSquares,
-                                                                         _design.FittedSquares, _design.Observations, _design.ResponseMean, target.Intercept);
-        var centred = new double[block.Columns];   // (α, β_c) in the design's order
-        double sigma2 = block.At(tau).Sample(target.Sigma2, rng, centred);
+        GPriorConditional conditional = target.CoefficientBlock(_design)(tau, 1.0);
+        var centred = new double[conditional.Columns];   // (α, β_c) in the design's order
+        double sigma2 = conditional.Sample(target.Sigma2, rng, centred);
         BassCountPrior count = _model.Prior.Count;
         double lambda = Gamma.ShapeRate(count.Shape + state.Count, count.Rate + 1.0).Sample(rng);
 

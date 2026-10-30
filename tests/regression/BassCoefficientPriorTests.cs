@@ -50,6 +50,7 @@ public sealed class BassCoefficientPriorTests
     public static TheoryData<string, string, double> TauCases => new()
     {
         { "g", "gamma", 0.5 }, { "g", "gamma", 2 }, { "g", "hyper-g", 3 }, { "g", "hyper-g/n", 3 }, { "g", "hyper-g", 1.5 },
+        { "ridge", "gamma", 0.5 }, { "ridge", "gamma", 2 }, { "ridge", "hyper-g", 3 }, { "ridge", "hyper-g", 1.5 },
     };
 
     [Theory]

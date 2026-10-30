@@ -8,22 +8,23 @@ namespace Maths.Regression.Spline.Bass;
 
 /// <summary>
 /// A structure's account for the collapsed target: M, the sum of its terms' ln π (D01), and its least-squares fit in
-/// the centred basis, ‖r‖² and Q_c; or the design's refusal, which puts it outside F.
+/// the centred basis, ‖r‖² and Q_c, with, under the normalized ridge, its columns' ridge terms (a spectrum, or a bordered
+/// candidate of one); or the design's refusal, which puts it outside F.
 /// </summary>
 public readonly record struct BassStructureFit(int Terms, double LogTermPrior, double ResidualSquares, double FittedSquares,
-                                               BassRefusal? Refusal = null)
+                                               BassRefusal? Refusal = null, RidgeColumns? Ridge = null)
 {
     /// <summary>The design's current structure, whose terms' log prior is <paramref name="logTermPrior"/>.</summary>
     public static BassStructureFit Of(BassDesign design, double logTermPrior)
     {
         ArgumentNullException.ThrowIfNull(design);
-        return new(design.Count, logTermPrior, design.ResidualSquares, design.FittedSquares);
+        return new(design.Count, logTermPrior, design.ResidualSquares, design.FittedSquares, null, design.IsRidge ? design.Spectrum : null);
     }
 
     /// <summary>A proposed structure, admitted or refused, whose terms' log prior is <paramref name="logTermPrior"/>.</summary>
     public static BassStructureFit Of(DesignProposal proposal, double logTermPrior) => proposal.Refusal is { } reason
         ? Refused(reason)
-        : new(proposal.Columns, logTermPrior, proposal.ResidualSquares, proposal.FittedSquares);
+        : new(proposal.Columns, logTermPrior, proposal.ResidualSquares, proposal.FittedSquares, null, proposal.Ridge);
 
     /// <summary>A structure outside F for <paramref name="reason"/>.</summary>
     public static BassStructureFit Refused(BassRefusal reason) => new(-1, double.NaN, double.NaN, double.NaN, reason);
@@ -37,11 +38,12 @@ public readonly record struct BassStructureFit(int Terms, double LogTermPrior, d
 /// (<see cref="BassStructurePrior"/>), and τ's prior from the shared family (<see cref="TauPrior"/>) on the coefficient
 /// form's τ₀, as a density on u = ln τ. That is the coordinate τ's slice step moves (D04), so the powered path powers τ
 /// in log τ (D05's recorded choice). A held τ is no coordinate of the state.</item>
-/// <item><b>The likelihood,</b> p(y | structure, τ) from the shared g-prior block on the design's centred statistics
-/// (<see cref="CollapsedGPrior.CentredMarginalAt"/>), under the intercept's convention (level centring, Liang's flat
-/// intercept or R's zero centre) and σ²'s prior (scaled to the response, Jeffreys, or a declared inverse gamma). On the
-/// likelihood path at b it takes D05's integrated form p_b, the coefficients and σ² integrated against the tempered
-/// likelihood, or the linear form b·ln p₁.</item>
+/// <item><b>The likelihood,</b> p(y | structure, τ) from the shared block of the coefficient form: the g-form's on the
+/// design's centred statistics (<see cref="CollapsedGPrior.CentredMarginalAt"/>), or the normalized ridge's on the
+/// structure's ridge terms (<see cref="CollapsedGPrior.CentredRidgeMarginalAt"/>), under the intercept's convention (level
+/// centring, Liang's flat intercept or R's zero centre) and σ²'s prior (scaled to the response, Jeffreys, or a declared
+/// inverse gamma). On the likelihood path at b it takes D05's integrated form p_b, the coefficients and σ² integrated
+/// against the tempered likelihood, or the linear form b·ln p₁.</item>
 /// <item><b>The support,</b> F: the design's admission (D06) and, under the Jeffreys σ² prior, no exact fit,
 /// ‖r‖ ≤ 10³·ε·‖y − level‖ (D03's propriety rule).</item>
 /// </list>
@@ -67,7 +69,6 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         if (config.Intercept is not (GPriorCentre.Mean or GPriorCentre.Flat or GPriorCentre.Zero))
             throw new ArgumentException("BASS's intercept is level-centred, flat or at zero (D03).", nameof(config));
         if (resolved.Scale is null) throw new ArgumentException("The resolved config holds no τ prior.", nameof(resolved));
-        if (config.Coefficients.Form is RidgeForm) throw new NotSupportedException("The ridge's marginal is not built yet.");
         Prior = prior;
         Form = form;
         CoefficientForm = config.Coefficients.Form;
@@ -125,13 +126,35 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     public double LogStructurePrior(BassStructureFit fit)
         => Refusal(fit) is null ? Prior.LogCollectionWeight(fit.Terms) + fit.LogTermPrior : double.NegativeInfinity;
 
-    /// <summary>The g-prior block's marginal for <paramref name="fit"/> at (<paramref name="tau"/>,
+    /// <summary>The coefficient block's marginal for <paramref name="fit"/> at (<paramref name="tau"/>,
     /// <paramref name="inverseTemperature"/>), the integrated form's; σ²'s posterior reads it too.</summary>
     public GPriorMarginal Marginal(BassStructureFit fit, double tau, double inverseTemperature = 1.0)
     {
         if (Refusal(fit) is { } reason) throw new ArgumentException($"The structure lies outside F ({reason}).", nameof(fit));
-        return CollapsedGPrior.CentredMarginalAt(fit.Terms, fit.ResidualSquares, fit.FittedSquares, Observations, ResponseMean,
-                                                 Intercept, tau, inverseTemperature);
+        if (CoefficientForm is not RidgeForm)
+            return CollapsedGPrior.CentredMarginalAt(fit.Terms, fit.ResidualSquares, fit.FittedSquares, Observations, ResponseMean,
+                                                     Intercept, tau, inverseTemperature);
+        RidgeColumns ridge = fit.Ridge ?? throw new ArgumentException("A structure under the ridge carries its columns' ridge terms.", nameof(fit));
+        if (ridge.Count != fit.Terms) throw new ArgumentException("The ridge terms are another structure's.", nameof(fit));
+        return CollapsedGPrior.CentredRidgeMarginalAt(ridge, fit.ResidualSquares, Observations, ResponseMean, Intercept, tau, inverseTemperature);
+    }
+
+    /// <summary>
+    /// The coefficient block of <paramref name="design"/>'s current structure, (τ, b) to its conditional: the g-form's
+    /// <see cref="CollapsedGPrior"/> on the design's factor and fit, or the ridge's <see cref="CollapsedRidgePrior"/> on its
+    /// spectrum. The retained draws' composition, the collapsed pointwise content and the conditional means read it.
+    /// </summary>
+    public Func<double, double, GPriorConditional> CoefficientBlock(BassDesign design)
+    {
+        ArgumentNullException.ThrowIfNull(design);
+        if (CoefficientForm is RidgeForm)
+        {
+            CollapsedRidgePrior ridge = CollapsedRidgePrior.FromCentred(design.Spectrum, design.ResidualSquares, design.ResponseMean, Intercept);
+            return ridge.At;
+        }
+        CollapsedGPrior block = CollapsedGPrior.FromCentredLeastSquares(design.Factor, design.Coefficients.ToArray(), design.ResidualSquares,
+                                                                         design.FittedSquares, design.Observations, design.ResponseMean, Intercept);
+        return block.At;
     }
 
     /// <summary>

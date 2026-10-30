@@ -233,18 +233,26 @@ public sealed record ResolvedTauPrior
     /// <summary>The spelling a manifest or a log reads: the declared prior with its n₀.</summary>
     public override string ToString() => FormattableString.Invariant($"{Declared} on τ₀ = 1/{UnitObservations:R}");
 
-    // ln(1 + eˣ), without overflow and accurate in both tails.
-    private static double Softplus(double x) => x > 0.0 ? x + Log1p(Math.Exp(-x)) : Log1p(Math.Exp(x));
+    private static double Softplus(double x) => LogFunctions.Softplus(x);
 
-    // ln(1 + x), accurate for small x (Goldberg's correction).
-    private static double Log1p(double x)
+    private static double Log1mExp(double u) => LogFunctions.Log1mExp(u);
+}
+
+/// <summary>The log-domain functions the g-prior blocks read, accurate in their tails.</summary>
+internal static class LogFunctions
+{
+    /// <summary>ln(1 + x), accurate for small x (Goldberg's correction).</summary>
+    public static double Log1p(double x)
     {
         double u = 1.0 + x;
-        return u == 1.0 ? x : Math.Log(u) * x / (u - 1.0);
+        return u == 1.0 ? x : double.IsPositiveInfinity(u) ? u : Math.Log(u) * x / (u - 1.0);
     }
 
-    // ln(1 − eᵘ) for u ≤ 0 (Mächler 2012).
-    private static double Log1mExp(double u)
+    /// <summary>ln(1 + eˣ), without overflow and accurate in both tails.</summary>
+    public static double Softplus(double x) => x > 0.0 ? x + Log1p(Math.Exp(-x)) : Log1p(Math.Exp(x));
+
+    /// <summary>ln(1 − eᵘ) for u ≤ 0 (Mächler 2012).</summary>
+    public static double Log1mExp(double u)
     {
         if (u > -0.6931471805599453)
         {

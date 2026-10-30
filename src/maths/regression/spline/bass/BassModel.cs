@@ -77,5 +77,5 @@ public sealed class BassModel
     public int MaxBasis => Resolved.MaxBasis;
 
     /// <summary>A new intercept-only design over the data, one per chain.</summary>
-    public BassDesign NewDesign() => new(Basis, Data, Admission);
+    public BassDesign NewDesign() => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm);
 }

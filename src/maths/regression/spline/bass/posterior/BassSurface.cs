@@ -97,7 +97,7 @@ internal sealed class BassConditionalMeans
 {
     private readonly BassModel _model;
     private readonly BassDrawFit _fit;
-    private readonly Dictionary<int[], (CollapsedGPrior Block, double[] ColumnMeans)> _blocks = new(IdsComparer.Instance);
+    private readonly Dictionary<int[], (Func<double, double, GPriorConditional> Block, double[] ColumnMeans)> _blocks = new(IdsComparer.Instance);
 
     public BassConditionalMeans(BassModel model, BassTermTable terms)
     {
@@ -116,9 +116,7 @@ internal sealed class BassConditionalMeans
             BassDesign design = _model.NewDesign();
             BassRefusal? refusal = design.Load(structure) ?? _model.Target.Refusal(BassStructureFit.Of(design, 0.0));
             if (refusal is { } reason) throw new ArgumentException($"A draw's structure lies outside F ({reason}).", "draws");
-            CollapsedGPrior block = CollapsedGPrior.FromCentredLeastSquares(design.Factor, design.Coefficients.ToArray(), design.ResidualSquares,
-                                                                             design.FittedSquares, design.Observations, design.ResponseMean,
-                                                                             _model.Target.Intercept);
+            Func<double, double, GPriorConditional> block = _model.Target.CoefficientBlock(design);
             var means = new double[ids.Length];
             for (int j = 0; j < ids.Length; j++)
             {
@@ -129,7 +127,7 @@ internal sealed class BassConditionalMeans
             entry = (block, means);
             _blocks.Add(ids, entry);
         }
-        ReadOnlySpan<double> centred = entry.Block.At(draw.Tau).Mean;   // (α, β_c) in the ids' order
+        ReadOnlySpan<double> centred = entry.Block(draw.Tau, 1.0).Mean;   // (α, β_c) in the ids' order
         var coefficients = new double[ids.Length + 1];
         double intercept = centred[0];
         for (int j = 0; j < ids.Length; j++)

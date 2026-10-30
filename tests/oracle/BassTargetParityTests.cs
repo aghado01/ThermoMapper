@@ -156,7 +156,7 @@ public sealed class BassTargetParityTests
         BassInputs inputs = BassInputs.Prepare(data, BassInputTransform.Fit(data));
         var prior = BassStructurePrior.From(config, resolved, inputs);
         var basis = new BassBasis(inputs, 1);
-        var design = new BassDesign(basis, data, BassAdmission.From(config, resolved));
+        var design = new BassDesign(basis, data, BassAdmission.From(config, resolved), config.Coefficients.Form is RidgeForm);
         var fits = new BassStructureFit[states.Length];
         var logPrior = new double[states.Length];
         for (int s = 0; s < states.Length; s++)
@@ -173,13 +173,14 @@ public sealed class BassTargetParityTests
         return new(data, config, resolved, prior, basis, fits, logPrior);
     }
 
-    internal static BassConfig Config(GPriorCentre centre = GPriorCentre.Mean, bool jeffreys = false, bool fixedG = false, int maxInteraction = 2)
+    internal static BassConfig Config(GPriorCentre centre = GPriorCentre.Mean, bool jeffreys = false, bool fixedG = false, int maxInteraction = 2,
+                                      BassCoefficientPrior? coefficients = null)
         => new()
         {
             Structure = new BassStructureSpec { MaxInteraction = maxInteraction, Support = new SupportRule(Minimum: 3) },
             Intercept = centre,
             Sigma2 = jeffreys ? Sigma2Prior.Jeffreys : Sigma2Prior.ScaledToResponse(1e-3),
-            Coefficients = fixedG ? BassCoefficientPrior.G(TauPrior.Held()) : BassCoefficientPrior.G(),
+            Coefficients = coefficients ?? (fixedG ? BassCoefficientPrior.G(TauPrior.Held()) : BassCoefficientPrior.G()),
         };
 
     // ln ∫ p(u) exp(ℓ_b(S, eᵘ)) du over the g mode's τ, or ℓ_b at the held τ; with the u-nodes' log weights when asked.
@@ -211,9 +212,10 @@ public sealed class BassTargetParityTests
         return total;
     }
 
-    private static List<(double U, double LogW)> TauNodes(int n)
+    // τ's nodes on u about the form's unit information τ₀: 1/N for the g-form, 1 for the ridge.
+    private static List<(double U, double LogW)> TauNodes(BassTarget target)
     {
-        double centre = Math.Log(1.0 / n);
+        double centre = Math.Log(target.Scale.UnitInformation);
         return [.. Nodes(centre - 80, centre + 8).Select(p => (p.U, Math.Log(p.W)))];
     }
 
@@ -290,6 +292,66 @@ public sealed class BassTargetParityTests
         Assert.Equal(p.GetProperty("response").GetProperty("absolute").GetBoolean(), config.Sigma2.IsProper && config.Intercept != GPriorCentre.Flat);
     }
 
+    // The normalized ridge (decided 2026-10-29) under each convention, sampled τ on its unit information 1 and a held τ
+    // declared, against the oracle's spectrum of each state's design scaled to unit RMS.
+    [Theory]
+    [InlineData("mean")]
+    [InlineData("flat")]
+    [InlineData("zero")]
+    [InlineData("jeffreys")]
+    [InlineData("flat + jeffreys")]
+    [InlineData("held")]
+    [InlineData("shape 2")]
+    public void Marginals_MatchTheOraclesPosterior_UnderTheRidge(string option)
+    {
+        if (!Available) return;
+        BassCoefficientPrior ridge = option switch
+        {
+            "held" => BassCoefficientPrior.Ridge(TauPrior.Held(2.5)),
+            "shape 2" => BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma(2)),
+            _ => BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma()),
+        };
+        (string[] args, BassConfig config) = option switch
+        {
+            "flat" => (["centre=flat"], Config(GPriorCentre.Flat, coefficients: ridge)),
+            "zero" => (["centre=zero"], Config(GPriorCentre.Zero, coefficients: ridge)),
+            "jeffreys" => (["sigma2_prior=jeffreys"], Config(jeffreys: true, coefficients: ridge)),
+            "flat + jeffreys" => (["centre=flat", "sigma2_prior=jeffreys"], Config(GPriorCentre.Flat, jeffreys: true, coefficients: ridge)),
+            "held" => (["coef=fixed", "tau=2.5"], Config(coefficients: ridge)),
+            "shape 2" => (["tau_shape=2"], Config(coefficients: ridge)),
+            _ => (Array.Empty<string>(), Config(coefficients: ridge)),
+        };
+        double[][] rows = FixtureA();
+        JsonElement r = Posterior(rows, ["M_max=2", "form=ridge", .. args]);
+        JsonElement p = r.GetProperty("posterior");
+        Assert.Equal("ridge", p.GetProperty("form").GetString());
+        JsonElement quadrature = p.GetProperty("quadrature");
+        _out.WriteLine($"{option}: the oracle's own checks, σ² quadrature {quadrature.GetProperty("sigma2_gap").GetDouble():E1}, τ quadrature {quadrature.GetProperty("tau_gap").GetDouble():E1}");
+        Assert.True(quadrature.GetProperty("sigma2_gap").GetDouble() <= 1e-8);
+        Assert.True(quadrature.GetProperty("tau_gap").GetDouble() <= 1e-8);
+        Side ours = Ours(Data(rows), config, Terms(r), States(r));
+        var target = new BassTarget(config, ours.Resolved, ours.Prior);
+        Compare("ridge, " + option, r, ours, target, config.Intercept);
+        if (option != "held")
+        {
+            // E[τ | y] over F, the posterior's τ mixed over the structures.
+            List<(double U, double LogW)> nodes = TauNodes(target);
+            var weights = new double[nodes.Count];
+            var lm = new double[ours.Fits.Length];
+            var tauMean = new double[ours.Fits.Length];
+            for (int s = 0; s < ours.Fits.Length; s++)
+            {
+                lm[s] = LogMarginal(target, ours.Fits[s], 1.0, nodes, weights, new double[nodes.Count]);
+                tauMean[s] = weights.Zip(nodes, (w, n) => w * Math.Exp(n.U)).Sum();
+            }
+            double z = LogSumExp([.. ours.LogPrior.Zip(lm, (a, c) => a + c)]);
+            double mean = 0.0;
+            for (int s = 0; s < lm.Length; s++) mean += Math.Exp(ours.LogPrior[s] + lm[s] - z) * tauMean[s];
+            double expected = p.GetProperty("tau").GetProperty("mean").GetDouble();
+            Assert.True(Math.Abs(mean - expected) <= 1e-8 * expected, $"E[τ | y] {mean:R} against {expected:R}");
+        }
+    }
+
     // Per state: ‖r‖², Q in the convention's own design, the prior over F, and the marginal (absolute, or relative to
     // the first state's under an improper prior).
     private void Compare(string name, JsonElement r, Side ours, BassTarget target, GPriorCentre centre)
@@ -301,7 +363,7 @@ public sealed class BassTargetParityTests
         int n = ours.Resolved.Observations;
         double level = centre == GPriorCentre.Zero ? n * ours.Resolved.ResponseMean * ours.Resolved.ResponseMean : 0.0;
         double scale = n * ours.Resolved.ResponseMeanSquare;
-        List<(double U, double LogW)> nodes = TauNodes(n);
+        List<(double U, double LogW)> nodes = TauNodes(target);
         var mine = new double[rss.Length];
         double worstRss = 0, worstQ = 0, worstPrior = 0, worstMarginal = 0;
         for (int s = 0; s < rss.Length; s++)
@@ -368,18 +430,24 @@ public sealed class BassTargetParityTests
     [Theory]
     [InlineData("defaults")]
     [InlineData("flat + jeffreys")]
+    [InlineData("ridge")]
+    [InlineData("ridge, held")]
+    [InlineData("ridge, flat + jeffreys")]
     public void Rungs_MatchTheOraclesLadder(string option)
     {
         if (!Available) return;
-        bool improper = option != "defaults";
+        bool improper = option.EndsWith("flat + jeffreys", StringComparison.Ordinal);
+        bool ridge = option.StartsWith("ridge", StringComparison.Ordinal), held = option == "ridge, held";
         double[][] rows = FixtureB();
         double[] rungs = [0.0, 0.1, 0.5, 1.0];
         string[] args = ["M_max=2", "rungs=" + string.Join(",", rungs.Select(b => b.ToString(CultureInfo.InvariantCulture))),
-                         .. improper ? new[] { "centre=flat", "sigma2_prior=jeffreys" } : []];
+                         .. improper ? new[] { "centre=flat", "sigma2_prior=jeffreys" } : [],
+                         .. ridge ? new[] { "form=ridge" } : [], .. held ? new[] { "coef=fixed", "tau=0.4" } : []];
         JsonElement r = Posterior(rows, args);
-        BassConfig config = improper ? Config(GPriorCentre.Flat, jeffreys: true) : Config();
+        BassCoefficientPrior? coefficients = ridge ? BassCoefficientPrior.Ridge(held ? TauPrior.Held(0.4) : TauPrior.UnitInformationGamma()) : null;
+        BassConfig config = improper ? Config(GPriorCentre.Flat, jeffreys: true, coefficients: coefficients) : Config(coefficients: coefficients);
         Side ours = Ours(Data(rows), config, Terms(r), States(r));
-        List<(double U, double LogW)> nodes = TauNodes(ours.Resolved.Observations);
+        List<(double U, double LogW)> nodes = TauNodes(new BassTarget(config, ours.Resolved, ours.Prior));
         JsonElement tempered = r.GetProperty("posterior").GetProperty("tempered");
         foreach ((string key, TemperedForm form) in new[] { ("integrated", TemperedForm.Integrated), ("linear", TemperedForm.Linear) })
         {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Maths.LinAlg;
+using Maths.Regression.GPrior;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -26,9 +27,11 @@ public enum BassRefusal
 
 /// <summary>A design's restart state (<see cref="BassDesign.Snapshot"/>): its terms in column order, a copy of its
 /// factor, and its coefficients, residual and statistics; for an in-memory hand-over, also its evaluated columns, shared
-/// (null in a checkpoint, which restores them from the terms).</summary>
+/// (null in a checkpoint, which restores them from the terms); and under the ridge its spectrum when it has one, an
+/// immutable value the restored design shares.</summary>
 internal sealed record BassDesignSnapshot(BassTerm[] Terms, BorderedCholesky Factor, double[] Beta, double[] Residual,
-                                          double ResidualSquares, double FittedSquares, BassDesignColumns? Columns = null);
+                                          double ResidualSquares, double FittedSquares, BassDesignColumns? Columns = null,
+                                          RidgeSpectrum? Spectrum = null);
 
 /// <summary>A design's evaluated columns in column order: each term's case side, its output side for a direct response,
 /// and its cross product with the response. A design never writes into a column once evaluated, so designs over the
@@ -52,11 +55,13 @@ public sealed record BassAdmission(
 
 /// <summary>
 /// A proposed structure's account: admitted, or refused with its reason; and, when admitted, its column count, its
-/// residual and fitted sums of squares in the centred basis, its smallest leave-one-out angle (D06's gate) and the new
-/// column's angle to the span of the others (NaN for a death).
+/// residual and fitted sums of squares in the centred basis, its smallest leave-one-out angle (D06's gate), the new
+/// column's angle to the span of the others (NaN for a death), and under the ridge its columns' terms at any (τ, b)
+/// (<see cref="RidgeColumns"/>; null under the g-form).
 /// </summary>
 public readonly record struct DesignProposal(
-    BassRefusal? Refusal, int Columns, double ResidualSquares, double FittedSquares, double MinAngle, double NewestAngle)
+    BassRefusal? Refusal, int Columns, double ResidualSquares, double FittedSquares, double MinAngle, double NewestAngle,
+    RidgeColumns? Ridge = null)
 {
     /// <summary>Whether the structure lies in F.</summary>
     public bool Admitted => Refusal is null;
@@ -88,6 +93,11 @@ public readonly record struct DesignProposal(
 /// digits only when one move explains nearly all the residual, where the candidate's residual is formed explicitly
 /// instead. Q′ is the candidate's quadratic form. On every acceptance β̂ is solved and the residual recomputed
 /// explicitly, r = ỹ − Z_cβ̂, so it never drifts; the factor rebuilds strictly on its cadence.</para>
+/// <para><b>Under the normalized ridge</b> (D03, decided 2026-10-29) the design also keeps its current structure's
+/// <see cref="RidgeSpectrum"/>, decomposed once per structure when first read, and each admitted proposal carries its
+/// columns' ridge terms: a bordered candidate of the current spectrum, O(M²) to start and O(M) per (τ, b), or, where the
+/// strict factorization decided admission near s_min, the candidate's own fresh decomposition, which an acceptance then
+/// keeps. Admission is the same under either form, so F is unchanged.</para>
 /// Not thread-safe: one per chain.
 /// </summary>
 public sealed class BassDesign
@@ -98,11 +108,11 @@ public sealed class BassDesign
     private enum Move { Birth, Death, Change }
 
     private sealed record Pending(Move Kind, int Index, BassTerm? Term, double[]? Column, double[]? Output, double BEntry,
-                                  double[,]? Strict, DesignProposal Account);
+                                  double[,]? Strict, DesignProposal Account, RidgeSpectrum? Fresh = null);
 
     private readonly BassBasis _basis;
     private readonly BassAdmission _rules;
-    private readonly bool _functional;
+    private readonly bool _functional, _ridge;
     private readonly int _cases, _locations, _rows;
     private readonly double[] _y;                   // ỹ, case by case and location by location
     private readonly double[] _residual;
@@ -114,15 +124,18 @@ public sealed class BassDesign
     private BorderedCholesky _factor;
     private BorderedCholesky? _strict;
     private Pending? _pending;
+    private RidgeSpectrum? _spectrum;   // the current structure's, under the ridge; null until read
 
-    /// <summary>The intercept-only design over <paramref name="basis"/>'s inputs for <paramref name="data"/>'s response.</summary>
-    public BassDesign(BassBasis basis, BassData data, BassAdmission rules)
+    /// <summary>The intercept-only design over <paramref name="basis"/>'s inputs for <paramref name="data"/>'s response;
+    /// <paramref name="ridge"/> keeps the normalized ridge's spectrum and proposal terms beside the factor.</summary>
+    public BassDesign(BassBasis basis, BassData data, BassAdmission rules, bool ridge = false)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(rules);
         _basis = basis;
         _rules = rules;
+        _ridge = ridge;
         _functional = basis.Inputs.Outputs is not null;
         if (_functional != data.Response is FunctionalResponse)
             throw new ArgumentException("The basis and the data disagree on the response's kind.", nameof(data));
@@ -170,6 +183,25 @@ public sealed class BassDesign
     /// <summary>The factor of G_c, in the terms' order.</summary>
     public ISpdFactor Factor => _factor;
 
+    /// <summary>Whether the design keeps the normalized ridge's spectrum and proposal terms.</summary>
+    public bool IsRidge => _ridge;
+
+    /// <summary>The current structure's spectrum under the normalized ridge, decomposed from the Gram when first read after
+    /// the structure changed; a ridge design only.</summary>
+    public RidgeSpectrum Spectrum
+    {
+        get
+        {
+            if (!_ridge) throw new InvalidOperationException("The design holds the g-form; it keeps no ridge spectrum.");
+            if (_spectrum is { } cached) return cached;
+            int n = _terms.Count;
+            var g = new double[n, n];
+            for (int i = 0; i < n; i++)
+                for (int j = 0; j < n; j++) g[i, j] = _factor.Entry(i, j);
+            return _spectrum = RidgeSpectrum.Of(g, [.. _b], _rows);
+        }
+    }
+
     /// <summary>The smallest leave-one-out angle of the current columns; +∞ with none.</summary>
     public double MinAngle => _factor.MinLeaveOneOutPivot();
 
@@ -189,7 +221,7 @@ public sealed class BassDesign
         double[] border = Border(column, output, -1, out double diagonal);
         double bEntry = CrossResponse(column, output);
         FactorProposal p = _factor.ProposeBirth(border, diagonal);
-        return Decide(Move.Birth, _terms.Count, term, column, output, border, diagonal, bEntry, p,
+        return Decide(Move.Birth, _terms.Count, term, column, output, border, border, diagonal, bEntry, p,
                       ResidualSquares, CrossResidual(column, output));
     }
 
@@ -202,7 +234,7 @@ public sealed class BassDesign
         double[] b = Without(_b, index);
         double q = _factor.ProposedInverseQuadraticForm(b);
         double rss = ResidualSquares + _beta[index] * _beta[index] / _factor.InverseDiagonal(index);
-        var account = new DesignProposal(null, _terms.Count - 1, rss, q, p.MinLeaveOneOutPivot, double.NaN);
+        var account = new DesignProposal(null, _terms.Count - 1, rss, q, p.MinLeaveOneOutPivot, double.NaN, _ridge ? Spectrum.Death(index) : null);
         _pending = new Pending(Move.Death, index, null, null, null, 0.0, null, account);
         return account;
     }
@@ -215,7 +247,8 @@ public sealed class BassDesign
         _pending = null;
         if (term.Equals(_terms[index]))   // the same state
         {
-            var same = new DesignProposal(null, _terms.Count, ResidualSquares, FittedSquares, MinAngle, _factor.LeaveOneOutPivot(index));
+            var same = new DesignProposal(null, _terms.Count, ResidualSquares, FittedSquares, MinAngle, _factor.LeaveOneOutPivot(index),
+                                          _ridge ? Spectrum : null);
             _pending = new Pending(Move.Change, index, term, null, null, 0.0, null, same);
             return same;
         }
@@ -234,7 +267,7 @@ public sealed class BassDesign
 
         double[] border = Without(full, index);
         FactorProposal p = _factor.ProposeChange(index, border, diagonal);
-        return Decide(Move.Change, index, term, column, output, border, diagonal, bEntry, p, rssReduced, zrReduced);
+        return Decide(Move.Change, index, term, column, output, border, full, diagonal, bEntry, p, rssReduced, zrReduced);
     }
 
     /// <summary>Commits the last proposal, which must have been admitted.</summary>
@@ -245,6 +278,7 @@ public sealed class BassDesign
         if (p.Kind == Move.Change && p.Column is null) return;   // a change to the same term
         if (p.Strict is not null) _factor.Decompose(p.Strict);
         else _factor.Accept();
+        _spectrum = p.Fresh;
         if (p.Kind is Move.Death or Move.Change)
         {
             _terms.RemoveAt(p.Index);
@@ -290,6 +324,7 @@ public sealed class BassDesign
         if (_rules.MaxVarianceInflation is { } cap && minAngle * cap < 1.0) return BassRefusal.VarianceInflation;
 
         _factor = fresh;
+        _spectrum = null;
         _terms.Clear(); _terms.AddRange(terms);
         _a.Clear(); _a.AddRange(columns);
         _h.Clear(); _h.AddRange(outputs);
@@ -308,7 +343,7 @@ public sealed class BassDesign
     /// </summary>
     internal BassDesignSnapshot Snapshot(bool shareColumns = false)
         => new([.. _terms], _factor.Copy(), (double[])_beta.Clone(), (double[])_residual.Clone(), ResidualSquares, FittedSquares,
-               shareColumns ? new BassDesignColumns([.. _a], _functional ? [.. _h] : null, [.. _b]) : null);
+               shareColumns ? new BassDesignColumns([.. _a], _functional ? [.. _h] : null, [.. _b]) : null, _spectrum);
 
     /// <summary>Replaces the structure with <paramref name="snapshot"/>'s, every statistic as the design it was taken from
     /// held it, so the two continue bit for bit; its columns shared when it carries them, else re-evaluated.</summary>
@@ -344,6 +379,7 @@ public sealed class BassDesign
             _b.Add(CrossResponse(column, output));
         }
         _factor = snapshot.Factor.Copy();
+        _spectrum = _ridge ? snapshot.Spectrum : null;
         _beta = (double[])snapshot.Beta.Clone();
         snapshot.Residual.CopyTo(_residual, 0);
         ResidualSquares = snapshot.ResidualSquares;
@@ -359,8 +395,9 @@ public sealed class BassDesign
         return drift;
     }
 
+    // `border` is the new column's Gram entries against the candidate's other columns, `full` against every current one.
     private DesignProposal Decide(Move kind, int index, BassTerm term, double[] column, double[]? output, double[] border,
-                                  double diagonal, double bEntry, FactorProposal p, double rssReduced, double zrReduced)
+                                  double[] full, double diagonal, double bEntry, FactorProposal p, double rssReduced, double zrReduced)
     {
         double floor = _rules.AngleFloor;
         double[] b = kind == Move.Change ? Without(_b, index) : [.. _b];
@@ -391,8 +428,15 @@ public sealed class BassDesign
         double rss = rssReduced - zrReduced * zrReduced / (newest * diagonal);
         if (!(rss > ExplicitBelow * rssReduced))
             rss = ExplicitResidualSquares(kind == Move.Change ? index : -1, column, output, strict ?? Candidate(kind == Move.Change ? index : -1, border, diagonal), b);
-        var account = new DesignProposal(null, kind == Move.Birth ? _terms.Count + 1 : _terms.Count, Math.Max(rss, 0.0), q, minAngle, newest);
-        _pending = new Pending(kind, index, term, column, output, bEntry, strict, account);
+        // The ridge's terms: bordered on the current spectrum, or, where the strict factorization decided, the candidate's
+        // own decomposition, which an acceptance keeps.
+        RidgeColumns? ridge = null;
+        RidgeSpectrum? fresh = null;
+        if (_ridge)
+            ridge = strict is not null ? fresh = RidgeSpectrum.Of(strict, b, _rows)
+                  : kind == Move.Birth ? Spectrum.Birth(full, diagonal, bEntry) : Spectrum.Change(index, full, diagonal, bEntry);
+        var account = new DesignProposal(null, kind == Move.Birth ? _terms.Count + 1 : _terms.Count, Math.Max(rss, 0.0), q, minAngle, newest, ridge);
+        _pending = new Pending(kind, index, term, column, output, bEntry, strict, account, fresh);
         return account;
     }
 
