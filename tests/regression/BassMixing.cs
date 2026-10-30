@@ -43,6 +43,16 @@ internal static class BassMixing
                 .Concat(term.Categorical.Select(c => Categorical[c.Variable]).Order())
                 .Concat(term.Functional.Select(h => Outputs[h.Variable]).Order()));
 
+        /// <summary>The structure's basin, the Friedman band brief's structural key: the multiset of its terms' variable
+        /// sets, signs and knots ignored, in ordinal order: "x1 + 2 × x1·x2 + x2 + 2 × x3 + x4 + x5"; "∅" for the intercept
+        /// alone.</summary>
+        public string Basin(IEnumerable<BassTerm> terms)
+        {
+            string key = string.Join(" + ", terms.Select(Variables).GroupBy(v => v).OrderBy(g => g.Key, StringComparer.Ordinal)
+                                                 .Select(g => g.Count() > 1 ? $"{g.Count()} × {g.Key}" : g.Key));
+            return key.Length == 0 ? "∅" : key;
+        }
+
         /// <summary>The term by name, each hinge with its sign and its knot's quantile j/(n_v − 1) among the variable's
         /// distinct values, each subset with its levels' indices: "x1+0.14 · x2−0.65", "x3+0.50 · z{0,1}".</summary>
         public string Describe(BassModel model, BassTerm term) => string.Join(" · ",
