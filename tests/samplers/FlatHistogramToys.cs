@@ -169,6 +169,93 @@ internal static class FlatHistogramToys
         return Math.Sqrt(ss / n);
     }
 
+    // ---- Toy 2: the q-state Potts lattice ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// A q-state Potts model on a periodic width × height lattice (both sides at least 3, so each site has four distinct
+    /// neighbours), with 2N bonds, a uniform prior over the qᴺ configurations and ℓ₁ = J·(agreeing bonds).
+    /// </summary>
+    public sealed class Potts
+    {
+        public Potts(int width, int height, int q, double coupling)
+        {
+            if (width < 3 || height < 3) throw new ArgumentOutOfRangeException(nameof(width), "Both sides need at least 3 sites.");
+            Width = width;
+            Height = height;
+            Q = q;
+            Coupling = coupling;
+            Sites = width * height;
+            var bonds = new List<(int, int)>();
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    int i = y * width + x;
+                    bonds.Add((i, y * width + (x + 1) % width));
+                    bonds.Add((i, ((y + 1) % height) * width + x));
+                }
+            Bonds = [.. bonds];
+            var neighbours = new List<int>[Sites];
+            for (int i = 0; i < Sites; i++) neighbours[i] = [];
+            foreach ((int a, int b) in Bonds)
+            {
+                neighbours[a].Add(b);
+                neighbours[b].Add(a);
+            }
+            Neighbours = Array.ConvertAll(neighbours, n => n.ToArray());
+        }
+
+        public int Width { get; }
+        public int Height { get; }
+        public int Q { get; }
+        public double Coupling { get; }
+        public int Sites { get; }
+        public (int A, int B)[] Bonds { get; }
+        public int[][] Neighbours { get; }
+
+        public int Agreeing(int[] colours)
+        {
+            int n = 0;
+            foreach ((int a, int b) in Bonds) if (colours[a] == colours[b]) n++;
+            return n;
+        }
+
+        public ISamplingTarget<int[]> Target => SamplingTarget.Separable<int[]>(_ => -Sites * Math.Log(Q), s => Coupling * Agreeing(s));
+
+        /// <summary>The exact count of configurations at each number of agreeing bonds, 0 to 2N, by enumeration: site 0's
+        /// colour is fixed and the counts multiplied by q, the global colour symmetry.</summary>
+        public long[] Counts()
+        {
+            // Each site's bonds to earlier sites, so a configuration's agreements accumulate site by site.
+            var earlier = new List<int>[Sites];
+            for (int i = 0; i < Sites; i++) earlier[i] = [];
+            foreach ((int a, int b) in Bonds) earlier[Math.Max(a, b)].Add(Math.Min(a, b));
+            int[][] back = Array.ConvertAll(earlier, e => e.ToArray());
+            var counts = new long[Bonds.Length + 1];
+            var colours = new int[Sites];
+            var agree = new int[Sites + 1];   // agreements among sites [0, i)
+            void Assign(int i)
+            {
+                if (i == Sites)
+                {
+                    counts[agree[i]] += Q;
+                    return;
+                }
+                for (int c = 0; c < Q; c++)
+                {
+                    colours[i] = c;
+                    int a = agree[i];
+                    foreach (int j in back[i]) if (colours[j] == c) a++;
+                    agree[i + 1] = a;
+                    Assign(i + 1);
+                }
+            }
+            colours[0] = 0;
+            agree[1] = 0;
+            Assign(1);
+            return counts;
+        }
+    }
+
     public static double LogSumExp(ReadOnlySpan<double> values)
     {
         double max = double.NegativeInfinity;
