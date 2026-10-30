@@ -32,6 +32,12 @@ internal interface ISwEngine
     double RunningSumMag { get; }
     double RunningSumMagSq { get; }
 
+    // The per-draw record, one entry per measured draw (see Accumulator for what each describes).
+    ReadOnlySpan<double> EnergyPerDraw { get; }
+    ReadOnlySpan<double> MagPerDraw { get; }
+    ReadOnlySpan<long> SumSqClusterSizesPerDraw { get; }
+    ReadOnlySpan<int> MaxClusterSizePerDraw { get; }
+
     /// <summary>
     /// Snapshot the full sampler state — scalar sufficient-statistics + resume state, plus the
     /// per-edge arrays (<see cref="Accumulator.BondFormedCount"/>/<see cref="Accumulator.SpinAgreementCount"/>)

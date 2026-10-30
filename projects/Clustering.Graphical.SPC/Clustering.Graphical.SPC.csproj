@@ -10,6 +10,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="VizCore.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../Clustering.Primitives/Clustering.Primitives.csproj" />
     <ProjectReference Include="../Clustering.Dendrograms/Clustering.Dendrograms.csproj" />
     <ProjectReference Include="../Clustering.Export/Clustering.Export.csproj" />

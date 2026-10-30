@@ -39,7 +39,7 @@ flowchart LR
 2. Find the resulting clusters with union–find.
 3. Give each cluster a new random color.
 
-**Accumulator.** The running sums folded in at every draw (scalar moments, optional per-edge counts, optional per-node sums), plus the resume state (spins and RNG words).
+**Accumulator.** The run's state: the per-draw record (E, m, Σ|c|² and c_max, one entry per measured draw) and the running sums folded in at every draw (scalar moments, optional per-edge counts, optional per-node sums), plus the resume state (spins and RNG words). The scalar sums are views of the record: each is its series, or the series squared, summed in draw order.
 
 **Currencies (per-edge "1-forms").** Model-agnostic per-edge fields indexed by CSR slot, meaningful only at the j > i slot (see [Concepts](./Concepts.md#per-edge-currencies)):
 
@@ -77,7 +77,7 @@ flowchart LR
 | Potts model | `FkKernel.BondProbability`; `PottsModelConfig` (Q = 20); `BwdPottsCriticalEstimate.TpsUpperBound`; `Susceptibility`, `MeanEnergy`, `SpecificHeat`, `Magnetization`, `MagnetizationSusceptibility` (`.Reduce`) |
 | Single run | `SwRunner.Run(SwRunSpec)` → `SwRunResult`; `SwRunSpec`, `RunBudget`, `AccumulationSpec` (`None`, `Currencies`, …), `Accumulator` |
 | Reductions | `SwCurrencies.ToAffinities` / `ToAlignments` / `ToCoMembership`; `SwLandscapes.MeanClusterSize` / `GiantParticipation` |
-| Checkpoints | `AccumulatorSerializer.Instance` (SPCX v8, `.spcx`) |
+| Checkpoints | `AccumulatorSerializer.Instance` (SPCX v9, `.spcx`) |
 | Execution | `ISpcExecutor` / `SpcExecutor` (`BuildTaskList`, `Run`, `RunBatch`, `ExecuteAll`, `ExecuteBatch`, `ExecuteTask`); `SpcTaskSpec`, `SpcBatchResult`, `SpcExecutionOptions`, `SpcRunResult`; sinks `InMemoryFrameSink`, `NullFrameSink`, `SpcxDiskFrameSink`; `WorkerBudgetPolicy`, `WorkerBudgetResolver`; `SpcGraphBuilder.BuildResult` |
 | Scheduling | `ISweepStrategy`; `FixedGridSweepStrategy(FixedGridSweepConfig).Run(graph, analyzer?)` → `SweepResult`; `AutoGridFixedSweep.BuildConfig`; `SpcScheduleHelpers` (`LogSpaceGrid`, `Estimate`, `EstimateBracket`); `SpcSeedHelper.Derive`; `SweepKernel` |
 
@@ -111,10 +111,11 @@ Swendsen–Wang passes the raw coupling to the bond kernel; the [cumulative-fiel
 - Energy and alignments are measured on the configuration *entering* the draw.
 - Magnetization is measured on the configuration *leaving* it.
 - The FK sums, co-membership and landscapes use this draw's bond clusters.
+- So in the per-draw record, E, Σ|c|² and c_max describe the spins entering draw t (and its bonds), and m the spins leaving it. A view pairing E with m on the same spins takes m[t] with E[t+1]; none is built yet. Σ|c|² − c_max² is the giant-excluded view, not a fifth series.
 
 **A useful invariant.** A bond forms only between equal spins. So for every edge, the counts satisfy bonds ≤ co-memberships ≤ agreements ($B_e\le K_e\le S_e$).
 
-**Cost.** Each draw is $O(N+\text{nnz})$ with no allocation. Burn-in draws are discarded by resetting the sums while keeping the spins and RNG state.
+**Cost.** Each draw is $O(N+\text{nnz})$ with no allocation. The per-draw record adds 28 bytes a draw; `Run` and `BurnIn` reserve their draw counts up front, so a budgeted run never copies it. Burn-in draws are discarded by resetting the sums and the record while keeping the spins and RNG state.
 
 **Memory.**
 
@@ -173,26 +174,28 @@ With D retained draws:
   - Explicit: clamped to $[1,L]$.
   - Either way, capped at the number of tasks.
 - **Determinism.** Each task owns its RNG, so given seeds the results do not depend on worker count or scheduling.
-- **SPCX v8** (little-endian):
-  1. Magic `SPCX` and version 8.
+- **SPCX v9** (little-endian):
+  1. Magic `SPCX` and version 9.
   2. T, Q, replica index and draw count.
   3. The spins and the histogram, whose counts are 64-bit.
   4. Four RNG state words.
   5. Six scalar sums.
-  6. For each optional array: a presence byte, then its length and payload.
-  7. A UTC timestamp.
+  6. The per-draw record, always present: its length, then E and m (doubles), Σ|c|² (64-bit) and c_max (32-bit), one series after another.
+  7. For each optional array: a presence byte, then its length and payload.
+  8. A UTC timestamp.
 
   The reader requires the exact magic and version. Checkpoint files are named `T_{T:F5}_rep_{r}_s{k}.spcx` by the fixed-grid sweep (k = 0 for sweep tasks, 1 for the equilibrium pass), and `T_{T:F5}_rep_{r}.spcx` by `SpcExecutor.BuildTaskList`.
 - **`Restore` validation.**
   - It checks presence of Affinities, Alignments and landscapes in both directions, but CoMembership only when the engine tracks it.
   - It checks T, Q and array lengths, but not the replica index.
+  - It checks each per-draw series' length against the draw count, so a restored run appends to the record.
 
 ## Configuration
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `PottsModelConfig.Q` | 20 | Number of Potts colors |
-| `AccumulationSpec` | `None` | Scalar moments and histogram only; `Currencies` adds all three edge counts |
+| `AccumulationSpec` | `None` | Scalar moments, the per-draw record and the histogram only; `Currencies` adds all three edge counts |
 | `FixedGridSweepConfig` Replicas / SweepBudget / EquilibriumBudget | 1 / (200, 1000) / (1000, 5000) | (burn-in, measured cycles) |
 | `FixedGridSweepConfig` SusceptibilityKind / BaseSeed / CheckpointDirectory | `FkCluster` / null / null | Primary χ; OS entropy; no checkpoints (`NullFrameSink`) |
 | `FixedGridSweepConfig` Sampler / Parallelism | `new PottsModelConfig()` / `new WorkerBudgetPolicy()` | — |

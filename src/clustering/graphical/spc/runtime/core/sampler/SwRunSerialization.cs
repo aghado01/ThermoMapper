@@ -13,8 +13,8 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
     /// </code>
     /// </summary>
     /// <remarks>
-    /// Little-endian, 4-byte magic + version. Writes the scalar moments + resume state, then — when the
-    /// run tracked them — the per-edge arrays inline behind a presence flag. The old paired <c>.spce</c>
+    /// Little-endian, 4-byte magic + version. Writes the scalar moments + resume state and the per-draw
+    /// record, then — when the run tracked them — the per-edge arrays inline behind a presence flag. The old paired <c>.spce</c>
     /// sidecar and its key-matching are retired: the per-edge section is now positionally nested in the
     /// same file (one accumulator, one artifact). Composes on Archivory's
     /// <see cref="BinarySerializerBase{T}"/> for atomic file I/O — this class supplies only the
@@ -26,7 +26,7 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
         public override string DefaultFileExtension => ".spcx";
 
         private const uint Magic = 0x58435053; // "SPCX"
-        private const int Version = 8;         // v8: the cluster-size histogram counts in 64 bits (v7: co-membership counts)
+        private const int Version = 9;         // v9: the per-draw record (v8: 64-bit histogram counts; v7: co-membership counts)
 
         public override void WriteTo(Accumulator value, Stream stream)
         {
@@ -58,6 +58,21 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
             w.Write(value.RunningSumEnergySq);
             w.Write(value.RunningSumMag);
             w.Write(value.RunningSumMagSq);
+
+            // Per-draw record (v9): always present — one length, then the four series column by column.
+            int records = value.EnergyPerDraw.Length;
+            if (value.MagPerDraw.Length != records
+                || value.SumSqClusterSizesPerDraw.Length != records
+                || value.MaxClusterSizePerDraw.Length != records)
+                throw new ArgumentException(
+                    $"Per-draw record lengths differ (E {records}, m {value.MagPerDraw.Length}, " +
+                    $"Σ|c|² {value.SumSqClusterSizesPerDraw.Length}, c_max {value.MaxClusterSizePerDraw.Length}).",
+                    nameof(value));
+            w.Write(records);
+            foreach (double x in value.EnergyPerDraw) w.Write(x);
+            foreach (double x in value.MagPerDraw) w.Write(x);
+            foreach (long x in value.SumSqClusterSizesPerDraw) w.Write(x);
+            foreach (int x in value.MaxClusterSizePerDraw) w.Write(x);
 
             // Per-edge section (v7: independently-gated flags — v6 used one shared flag which broke
             // when Affinities=true + Alignments=false).
@@ -145,6 +160,17 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
             double sumMag           = r.ReadDouble();
             double sumMagSq         = r.ReadDouble();
 
+            // Per-draw record (v9).
+            int records = r.ReadInt32();
+            var energyPerDraw = new double[records];
+            for (int i = 0; i < records; i++) energyPerDraw[i] = r.ReadDouble();
+            var magPerDraw = new double[records];
+            for (int i = 0; i < records; i++) magPerDraw[i] = r.ReadDouble();
+            var sumSqPerDraw = new long[records];
+            for (int i = 0; i < records; i++) sumSqPerDraw[i] = r.ReadInt64();
+            var maxSizePerDraw = new int[records];
+            for (int i = 0; i < records; i++) maxSizePerDraw[i] = r.ReadInt32();
+
             int[]? bond = null;
             bool hasBond = r.ReadBoolean();
             if (hasBond)
@@ -212,6 +238,10 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
                 RunningSumEnergySq           = sumEnergySq,
                 RunningSumMag                = sumMag,
                 RunningSumMagSq              = sumMagSq,
+                EnergyPerDraw            = energyPerDraw,
+                MagPerDraw               = magPerDraw,
+                SumSqClusterSizesPerDraw = sumSqPerDraw,
+                MaxClusterSizePerDraw    = maxSizePerDraw,
                 BondFormedCount    = bond,
                 SpinAgreementCount = spin,
                 CoMembershipCount  = coMembership,

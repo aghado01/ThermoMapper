@@ -4,8 +4,9 @@ using Graphs.Models.Potts;
 namespace Clustering.Graphical.SPC.Runtime.Core.Sampler;
 
 /// <summary>
-/// The Swendsen–Wang sampler's <b>accumulator</b>: the running field of sufficient statistics it
-/// folds each <c>Draw</c> into, plus the resume state (spins + RNG words). The model observables
+/// The Swendsen–Wang sampler's <b>accumulator</b>: the run's state — the per-draw record (E, m,
+/// Σ|c|², c_max) and the running field of sufficient statistics it folds each <c>Draw</c> into, the
+/// scalar sums being views of the record — plus the resume state (spins + RNG words). The model observables
 /// (<see cref="Graphs.Models.Potts.Observables.Susceptibility"/> &amp; siblings) reduce the scalar
 /// moments to χ/Cv/M/⟨E⟩; the optional per-edge counts reduce to the
 /// <see cref="Graphs.Primitives.Affinities"/> / <see cref="Graphs.Primitives.Alignments"/>
@@ -42,6 +43,26 @@ public sealed record Accumulator
     public required double RunningSumEnergySq           { get; init; }
     public required double RunningSumMag                { get; init; }
     public required double RunningSumMagSq              { get; init; }
+
+    // ── Per-draw record (always collected; one entry per measured draw, length DrawCount) ──
+    // The run's state, of which the running sums above are views: each sum is its series (or the
+    // series squared) summed in draw order, bit for bit. E, Σ|c|² and c_max describe the spins
+    // entering the draw and its bonds; m describes the spins leaving it (read after the recolouring),
+    // so a pairing of E with m on the same spins takes m[t] with E[t+1]. Σ|c|² − c_max² is the
+    // giant-excluded view behind RunningSumSqClusterSizesExcl, not a fifth series. Empty on a
+    // hand-built frame that carries sums alone.
+
+    /// <summary>E per draw: H = −Σ J δ over the spins entering the draw.</summary>
+    public double[] EnergyPerDraw { get; init; } = [];
+
+    /// <summary>The Blatt magnetization m per draw, over the spins leaving the draw.</summary>
+    public double[] MagPerDraw { get; init; } = [];
+
+    /// <summary>Σ|c|² per draw over the FK clusters of the entering spins and the draw's bonds.</summary>
+    public long[] SumSqClusterSizesPerDraw { get; init; } = [];
+
+    /// <summary>c_max per draw: the largest of those FK clusters.</summary>
+    public int[] MaxClusterSizePerDraw { get; init; } = [];
 
     // ── Per-edge sufficient-statistics (1-form → Affinities / Alignments / CoMembership; capability-gated, null when off) ──
     public int[]? BondFormedCount    { get; init; }

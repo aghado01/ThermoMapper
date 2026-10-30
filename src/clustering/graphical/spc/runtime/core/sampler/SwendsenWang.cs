@@ -30,8 +30,9 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler;
 /// from FK (which counts UF root sizes directly).</para>
 ///
 /// <para><b>Always-on accumulators.</b> FK χ, specific-heat moments, Blatt
-/// magnetization, and the cluster-size histogram are all populated every
-/// cycle regardless of <typeparamref name="TConfig"/>. They are free
+/// magnetization, the cluster-size histogram and the per-draw record (E, m,
+/// Σ|c|², c_max) are all populated every cycle regardless of
+/// <typeparamref name="TConfig"/>. They are free
 /// byproducts of the SW union-find pass — gating them would double the
 /// specialization count to save a handful of float ops per cycle, which is
 /// the wrong trade. Only the per-edge currency gates
@@ -88,6 +89,15 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
     private double _runningSumEnergySq;             // Σ_cycles ⟨H²⟩, for specific heat
     private double _runningSumMag;                  // Σ_cycles m  (Blatt; always populated)
     private double _runningSumMagSq;                // Σ_cycles m² (Blatt; always populated)
+
+    // ── Per-draw record (always on) ───────────────────────────────────────
+    // Entry t is draw t since the last reset, so the record's length is _drawCount and the
+    // running sums above are its sums in order. Run and BurnIn reserve their draw counts up
+    // front, so a budgeted run never copies; a bare Draw past the capacity doubles it.
+    private double[] _energyPerDraw = [];             // E of the spins entering the draw
+    private double[] _magPerDraw = [];                // m of the spins leaving the draw
+    private long[]   _sumSqClusterSizesPerDraw = [];  // Σ|c|² of the entering spins' FK clusters
+    private int[]    _maxClusterSizePerDraw = [];     // c_max of the same clusters
 
     private int _drawCount;
 
@@ -168,11 +178,17 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
     public double RunningSumMag                => _runningSumMag;
     public double RunningSumMagSq              => _runningSumMagSq;
 
+    public ReadOnlySpan<double> EnergyPerDraw            => _energyPerDraw.AsSpan(0, _drawCount);
+    public ReadOnlySpan<double> MagPerDraw               => _magPerDraw.AsSpan(0, _drawCount);
+    public ReadOnlySpan<long>   SumSqClusterSizesPerDraw => _sumSqClusterSizesPerDraw.AsSpan(0, _drawCount);
+    public ReadOnlySpan<int>    MaxClusterSizePerDraw    => _maxClusterSizePerDraw.AsSpan(0, _drawCount);
+
     // ── Drivers ───────────────────────────────────────────────────────────
 
     public void Run(int drawCount)
     {
         if (drawCount < 0) throw new ArgumentOutOfRangeException(nameof(drawCount));
+        ReserveRecord(checked(_drawCount + drawCount));
         for (int i = 0; i < drawCount; i++)
             Draw();
     }
@@ -180,6 +196,7 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
     public void BurnIn(int cycles)
     {
         if (cycles < 0) throw new ArgumentOutOfRangeException(nameof(cycles));
+        ReserveRecord(checked(_drawCount + cycles));
         for (int i = 0; i < cycles; i++)
             Draw();
         ResetAccumulators();
@@ -323,7 +340,28 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
 
         _runningSumEnergy   += cycleEnergy;
         _runningSumEnergySq += cycleEnergy * cycleEnergy;
+
+        // ── Record: the draw's entry in the per-draw series — the same values the sums
+        // above just folded, so each sum stays its series summed in order.
+        if (_drawCount == _energyPerDraw.Length)
+            ReserveRecord((int)Math.Min(Array.MaxLength, Math.Max(16L, 2L * _drawCount)));
+        _energyPerDraw[_drawCount]            = cycleEnergy;
+        _magPerDraw[_drawCount]               = m;
+        _sumSqClusterSizesPerDraw[_drawCount] = sumSq;
+        _maxClusterSizePerDraw[_drawCount]    = (int)maxSize;
         _drawCount++;
+    }
+
+    /// <summary>
+    /// Grow the per-draw record to hold <paramref name="capacity"/> draws, keeping the entries so far.
+    /// </summary>
+    private void ReserveRecord(int capacity)
+    {
+        if (capacity <= _energyPerDraw.Length) return;
+        Array.Resize(ref _energyPerDraw, capacity);
+        Array.Resize(ref _magPerDraw, capacity);
+        Array.Resize(ref _sumSqClusterSizesPerDraw, capacity);
+        Array.Resize(ref _maxClusterSizePerDraw, capacity);
     }
 
     // ── Checkpoint surface ────────────────────────────────────────────────
@@ -349,6 +387,10 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
             RunningSumEnergySq           = _runningSumEnergySq,
             RunningSumMag                = _runningSumMag,
             RunningSumMagSq              = _runningSumMagSq,
+            EnergyPerDraw            = EnergyPerDraw.ToArray(),
+            MagPerDraw               = MagPerDraw.ToArray(),
+            SumSqClusterSizesPerDraw = SumSqClusterSizesPerDraw.ToArray(),
+            MaxClusterSizePerDraw    = MaxClusterSizePerDraw.ToArray(),
             // Per-edge currency arrays travel in the same accumulator — each null when
             // its currency gate is off (Affinities ⟂ Alignments ⟂ CoMembership).
             BondFormedCount    = TConfig.Affinities ? (int[])_bondFormedCount!.Clone() : null,
@@ -395,6 +437,15 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         if (result.ClusterSizeHistogram is null || result.ClusterSizeHistogram.Length != _clusterSizeHistogram.Length)
             throw new InvalidOperationException(
                 $"Snapshot histogram bin count {result.ClusterSizeHistogram?.Length ?? 0} does not match model bin count {_clusterSizeHistogram.Length}.");
+        // The per-draw record holds one entry per draw, so a restored run appends at DrawCount.
+        if (result.EnergyPerDraw?.Length != result.DrawCount
+            || result.MagPerDraw?.Length != result.DrawCount
+            || result.SumSqClusterSizesPerDraw?.Length != result.DrawCount
+            || result.MaxClusterSizePerDraw?.Length != result.DrawCount)
+            throw new InvalidOperationException(
+                $"Snapshot per-draw record lengths (E {result.EnergyPerDraw?.Length ?? 0}, m {result.MagPerDraw?.Length ?? 0}, " +
+                $"Σ|c|² {result.SumSqClusterSizesPerDraw?.Length ?? 0}, c_max {result.MaxClusterSizePerDraw?.Length ?? 0}) " +
+                $"do not match its draw count {result.DrawCount}.");
 
         // Copy mutable state. Array.Copy because we want elementwise copy,
         // not reference assignment — the DTO keeps its arrays, the runner
@@ -411,6 +462,12 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         _runningSumEnergySq           = result.RunningSumEnergySq;
         _runningSumMag                = result.RunningSumMag;
         _runningSumMagSq              = result.RunningSumMagSq;
+
+        // The record is copied, never aliased; the next Run reserves past it.
+        _energyPerDraw            = (double[])result.EnergyPerDraw.Clone();
+        _magPerDraw               = (double[])result.MagPerDraw.Clone();
+        _sumSqClusterSizesPerDraw = (long[])result.SumSqClusterSizesPerDraw.Clone();
+        _maxClusterSizePerDraw    = (int[])result.MaxClusterSizePerDraw.Clone();
 
         // Restore the per-edge counts elementwise (presence already validated
         // above). Without this copy a resumed run keeps the snapshot's DrawCount
@@ -453,7 +510,8 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
     /// Zero every running accumulator and reset the cycle counter. Called
     /// at the tail of <see cref="BurnIn"/>; the model continues to hold
     /// post-burn-in spins and RNG state, but starts collecting statistics
-    /// fresh from this point.
+    /// fresh from this point. The per-draw record restarts with the counter
+    /// (its length is the draw count), so the measured series begins here.
     /// </summary>
     private void ResetAccumulators()
     {
