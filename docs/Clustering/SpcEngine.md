@@ -77,7 +77,7 @@ flowchart LR
 | Potts model | `FkKernel.BondProbability`; `PottsModelConfig` (Q = 20); `BwdPottsCriticalEstimate.TpsUpperBound`; `Susceptibility`, `MeanEnergy`, `SpecificHeat`, `Magnetization`, `MagnetizationSusceptibility` (`.Reduce`) |
 | Single run | `SwRunner.Run(SwRunSpec)` → `SwRunResult`; `SwRunSpec`, `RunBudget`, `AccumulationSpec` (`None`, `Currencies`, …), `Accumulator` |
 | Reductions | `SwCurrencies.ToAffinities` / `ToAlignments` / `ToCoMembership`; `SwLandscapes.MeanClusterSize` / `GiantParticipation` |
-| Checkpoints | `AccumulatorSerializer.Instance` (SPCX v10, `.spcx`) |
+| Checkpoints | `AccumulatorSerializer.Instance` (SPCX v11, `.spcx`) |
 | Execution | `ISpcExecutor` / `SpcExecutor` (`BuildTaskList`, `Run`, `RunBatch`, `ExecuteAll`, `ExecuteBatch`, `ExecuteTask`); `SpcTaskSpec`, `SpcBatchResult`, `SpcExecutionOptions`, `SpcRunResult`; sinks `InMemoryFrameSink`, `NullFrameSink`, `SpcxDiskFrameSink`; `WorkerBudgetPolicy`, `WorkerBudgetResolver`; `SpcGraphBuilder.BuildResult` |
 | Scheduling | `ISweepStrategy`; `FixedGridSweepStrategy(FixedGridSweepConfig).Run(graph, analyzer?)` → `SweepResult`; `AutoGridFixedSweep.BuildConfig`; `SpcScheduleHelpers` (`LogSpaceGrid`, `Estimate`, `EstimateBracket`); `SpcSeedHelper.Derive`; `SweepKernel` |
 
@@ -100,7 +100,7 @@ Swendsen–Wang passes the raw coupling to the bond kernel; the [cumulative-fiel
    - Accumulate $\sum_c|c|^2$, and also $\sum_c|c|^2-\max_c|c|^2$, which excludes the giant cluster.
    - Both are computed from union–find roots, so they are unaffected by color collisions.
 4. **Magnetization,** measured on the post-flip spins: $m=\frac{q\,N_{\max}/N-1}{q-1}$, where $N_{\max}$ is the size of the largest color class (so, unlike the FK sums, it sees color collisions). Accumulate m and m².
-5. **Cluster-size histogram,** binned by $\lfloor\log_2|c|\rfloor$.
+5. **Cluster-size histogram,** binned by $\lfloor\log_2|c|\rfloor$. With `ExactClusterSizeHistogram` on, each cluster is also counted at its exact size, in 64-bit counts at sizes 1..N (entry 0 stays zero); every cluster functional $\sum_k g(c_k)$ then has an exact mean (`Graphs.Observables.ClusterSizeSums`).
 6. **Per-node landscapes** (optional, checked at run time).
    - Accumulate $|c(i)|$ and $\mathbb 1[i\in\text{giant}]$.
    - The giant cluster is the lowest-index root of maximal size.
@@ -174,19 +174,19 @@ With D retained draws:
   - Explicit: clamped to $[1,L]$.
   - Either way, capped at the number of tasks.
 - **Determinism.** Each task owns its RNG, so given seeds the results do not depend on worker count or scheduling.
-- **SPCX v10** (little-endian):
-  1. Magic `SPCX` and version 10.
+- **SPCX v11** (little-endian):
+  1. Magic `SPCX` and version 11.
   2. T, Q, replica index and draw count.
   3. The spins and the histogram, whose counts are 64-bit.
   4. Four RNG state words.
   5. Six scalar sums.
   6. The per-draw record, always present: its length, then E and m (doubles), Σ|c|² (64-bit) and c_max (32-bit), one series after another.
-  7. For each optional section — affinities, alignments, the two landscapes, co-membership, then the burn-in trace — a presence byte, then its payload: an array's length and values, or the trace in the per-draw record's layout.
+  7. For each optional section — affinities, alignments, the two landscapes, co-membership, the burn-in trace, then the exact cluster-size histogram — a presence byte, then its payload: an array's length and values, or the trace in the per-draw record's layout.
   8. A UTC timestamp.
 
   The reader requires the exact magic and version. Checkpoint files are named `T_{T:F5}_rep_{r}_s{k}.spcx` by the fixed-grid sweep (k = 0 for sweep tasks, 1 for the equilibrium pass), and `T_{T:F5}_rep_{r}.spcx` by `SpcExecutor.BuildTaskList`.
 - **`Restore` validation.**
-  - It checks presence of Affinities, Alignments, the landscapes and the burn-in trace in both directions, but CoMembership only when the engine tracks it.
+  - It checks presence of Affinities, Alignments, the landscapes, the burn-in trace and the exact histogram in both directions, but CoMembership only when the engine tracks it.
   - It checks T, Q and array lengths, but not the replica index.
   - It checks each per-draw series' length against the draw count, so a restored run appends to the record.
 
@@ -197,6 +197,7 @@ With D retained draws:
 | `PottsModelConfig.Q` | 20 | Number of Potts colors |
 | `AccumulationSpec` | `None` | Scalar moments, the per-draw record and the histogram only; `Currencies` adds all three edge counts |
 | `AccumulationSpec.BurnInTrace` | off | Keep the burn-in draws' per-draw record (E, m, Σ\|c\|², c_max), one entry per discarded draw |
+| `AccumulationSpec.ExactClusterSizeHistogram` | off | Count the clusters at each exact size 1..N beside the log-binned bins, reset with them |
 | `FixedGridSweepConfig` Replicas / SweepBudget / EquilibriumBudget | 1 / (200, 1000) / (1000, 5000) | (burn-in, measured cycles) |
 | `FixedGridSweepConfig` SusceptibilityKind / BaseSeed / CheckpointDirectory | `FkCluster` / null / null | Primary χ; OS entropy; no checkpoints (`NullFrameSink`) |
 | `FixedGridSweepConfig` Sampler / Parallelism | `new PottsModelConfig()` / `new WorkerBudgetPolicy()` | — |

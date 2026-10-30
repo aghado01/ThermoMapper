@@ -133,6 +133,7 @@ public sealed class SwDrawRecordTests
     [Theory]
     [InlineData(8)]
     [InlineData(9)]
+    [InlineData(10)]
     public void Serializer_RefusesAnOlderFile_NamingItsVersion(int version)
     {
         using var ms = new MemoryStream();

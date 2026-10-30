@@ -84,6 +84,12 @@ public sealed record Accumulator
     public double[]? SumClusterSizePerNode    { get; init; }
     public double[]? SumInGiantClusterPerNode { get; init; }
 
+    // ── Exact cluster-size histogram (AccumulationSpec.ExactClusterSizeHistogram; null when off) ──
+    // Entry s counts the FK clusters of size s over the measured draws, length N + 1 (entry 0 stays
+    // zero): Σ_s s·n_s = N × DrawCount, Σ_s s²·n_s = RunningSumSqClusterSizes, and rebinned to
+    // [2^k, 2^(k+1)) it is ClusterSizeHistogram. 64-bit, as a count gains up to N a draw.
+    public long[]? ExactClusterSizeHistogram { get; init; }
+
     // ── Provenance ───────────────────────────────────────────────────────
     public DateTime TimestampUtc { get; init; } = DateTime.UtcNow;
 }

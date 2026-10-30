@@ -19,6 +19,8 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler;
 ///   (un-reduced χ and order parameter); an <c>O(N)</c> post-pass, so runtime-gated.</item>
 ///   <item><see cref="CoMembership"/> — an <c>O(E)</c> post-pass, runtime-gated.</item>
 ///   <item><see cref="BurnInTrace"/> — a diagnostic copy of the burn-in draws' records, runtime-gated.</item>
+///   <item><see cref="ExactClusterSizeHistogram"/> — counts at each exact cluster size; an
+///   <c>O(clusters)</c> scatter beside the log-binned one, runtime-gated.</item>
 /// </list>
 /// <para>The boundary mapping (spec → specialization + runtime flags) lives at the cold run-setup seam
 /// (<c>SwRunner</c>); the hot loop never sees this type.</para>
@@ -51,6 +53,13 @@ public readonly record struct AccumulationSpec
     /// Diagnostic; off by default.
     /// </summary>
     public bool BurnInTrace { get; init; }
+
+    /// <summary>
+    /// Accumulate 64-bit counts of the FK clusters at each exact size 1..N beside the log-binned
+    /// histogram, whose bins hold counts only: every cluster functional Σ_k g(c_k) is linear in these
+    /// counts, so its mean is exact (the <c>Graphs.Observables.ClusterSizeSums</c> reductions). Off by default.
+    /// </summary>
+    public bool ExactClusterSizeHistogram { get; init; }
 
     /// <summary>Moments, the per-draw record and the cluster-size histogram only (nothing optional) — the lightweight default.</summary>
     public static AccumulationSpec None => default;

@@ -65,7 +65,7 @@ flowchart LR
 | Algorithms | `UnionFind`; `BfsShells` → `BfsShellsResult` (`Distances`, `Shells`, `SeedNode`, `MaxDepth`, `ReachableNodeCount`); `BoundedMinHeap` over `Neighbor`; `TriangleCount.OnCsrGraph`; `Statistics`; `Dijkstra.ComputeBoundedDistances` (plus a target-mask overload) |
 | MST | `Prim.ComputeMutualReachabilityMst<TMetric>`; `Boruvka.AddMinimalBridges` → `BridgeEdge` list; `Kruskal.BuildMinimumSpanningTree`; `CoreDistances.Compute<TMetric>`; `MstEdge` |
 | Coupling | `Gaussian`, `Cauchy`, `Laplacian`, `Linear` (each `Bandwidth = 0`), `Mixture` (+ `MixtureWeights`, `MixtureBandwidth`); `*Kernel.Evaluate`; `Kernels.*` factories |
-| Observables | signals `AffinityDegree`, `AffinityBinaryEntropySum`, `AlignmentEigenCentrality` (`IGraphSignal<T>`); `AffinityNodeMarginals`, `AffinityEntropy`, `ClusterSizeEntropy`, `LinkOverlap`; diagnostics `Connectivity`, `Degree`, `EdgeWeights`, `Cycles`, `AlgebraicConnectivity` |
+| Observables | signals `AffinityDegree`, `AffinityBinaryEntropySum`, `AlignmentEigenCentrality` (`IGraphSignal<T>`); `AffinityNodeMarginals`, `AffinityEntropy`, `ClusterSizeEntropy`, `ClusterSizeSums`, `LinkOverlap`; diagnostics `Connectivity`, `Degree`, `EdgeWeights`, `Cycles`, `AlgebraicConnectivity` |
 
 ## Algorithms
 
@@ -113,6 +113,8 @@ The mixture is $J=w_GK_G(d;\delta_G)+w_CK_C(d;\delta_C)+w_LK_L(d;\delta_L)$. The
 | `AlignmentEigenCentrality` | top eigenvector of $A$ with $A_{ii}=1$ and $A_{ij}=G_{ij}$ on edges, sign-fixed so that $\sum_iv_i\ge0$. Dense; $O(N^2)$ memory |
 
 **Scalar entropies.** `AffinityEntropy` computes the Shannon entropy of the normalized G over **all** slots. It therefore relies on the mirror slots being zero. `ClusterSizeEntropy` computes the entropy of a histogram of cluster sizes. Both are in nats.
+
+**Cluster-size sums.** `ClusterSizeSums` reduces an exact cluster-size histogram (entry s counts clusters of size s, summed over draws) to the mean of a sum over clusters, $\langle\sum_k g(c_k)\rangle=\sum_s g(s)\,n_s/\text{draws}$, which is exact because each such sum is linear in the counts. Named instances: $S_2=\langle\sum_k c_k^2\rangle/N^2$, the size-floored count $F_n=\langle\sum_k(c_k-n)_+\rangle/n$ at any floor $n>0$, and $\langle\sum_k c_k\ln c_k\rangle$.
 
 **Partition comparison.** `LinkOverlap.Compute(graph, a, b, weighted = false)` compares two node labelings on the graph's edges: $Q=\sum_e w_e[\text{same}_a(e)=\text{same}_b(e)]/\sum_e w_e$, with $w_e=1$ or the coupling when `weighted`. It is the spin-glass link overlap of two Potts states (Hed and Domany 2007): it compares where two partitions draw their boundaries, and on the complete graph it equals the Rand index. Uses include two methods, two settings, two sampler replicas at one temperature, or a result against a reference. A negative label marks an unplaced node, and an edge touching one in either labeling is not counted, so Q is symmetric; it is 0 when no edge counts.
 

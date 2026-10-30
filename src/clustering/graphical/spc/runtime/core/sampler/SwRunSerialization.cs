@@ -26,7 +26,7 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
         public override string DefaultFileExtension => ".spcx";
 
         private const uint Magic = 0x58435053; // "SPCX"
-        private const int Version = 10;        // v10: the burn-in trace (v9: the per-draw record; v8: 64-bit histogram counts)
+        private const int Version = 11;        // v11: the exact cluster-size histogram (v10: the burn-in trace; v9: the per-draw record)
 
         public override void WriteTo(Accumulator value, Stream stream)
         {
@@ -116,6 +116,15 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
                 WriteRecord(w, "Burn-in trace",
                     value.BurnInEnergyPerDraw, value.BurnInMagPerDraw,
                     value.BurnInSumSqClusterSizesPerDraw, value.BurnInMaxClusterSizePerDraw);
+
+            // Exact cluster-size histogram (v11): presence flag + its N + 1 counts.
+            bool hasExact = value.ExactClusterSizeHistogram is not null;
+            w.Write(hasExact);
+            if (hasExact)
+            {
+                w.Write(value.ExactClusterSizeHistogram!.Length);
+                foreach (long x in value.ExactClusterSizeHistogram) w.Write(x);
+            }
 
             w.Write(value.TimestampUtc.Ticks);
         }
@@ -248,6 +257,16 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
             if (r.ReadBoolean())
                 burnIn = ReadRecord(r);
 
+            // Exact cluster-size histogram (v11).
+            long[]? exact = null;
+            bool hasExact = r.ReadBoolean();
+            if (hasExact)
+            {
+                int len = r.ReadInt32();
+                exact = new long[len];
+                for (int i = 0; i < len; i++) exact[i] = r.ReadInt64();
+            }
+
             long ticks = r.ReadInt64();
 
             return new Accumulator
@@ -258,6 +277,7 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
                 DrawCount                = drawCount,
                 Spins                    = spins,
                 ClusterSizeHistogram     = hist,
+                ExactClusterSizeHistogram = exact,
                 RngState0                = s0,
                 RngState1                = s1,
                 RngState2                = s2,

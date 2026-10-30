@@ -82,6 +82,7 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
 
     // ── Observables ───────────────────────────────────────────────────────
     private readonly long[] _clusterSizeHistogram; // log-binned; bin k = sizes [2^k, 2^(k+1)); 64-bit, as a bin gains up to N a cycle
+    private readonly long[]? _exactClusterSizeHistogram; // [N+1] entry s = clusters of size s (runtime-gated; null when off)
 
     private double _runningSumSqClusterSizes;       // Σ_cycles Σ_c |c|², the FK accumulator
     private double _runningSumSqClusterSizesExcl;   // Σ_cycles (Σ_c |c|² − max_c|c|²), percolation diagnostic
@@ -171,6 +172,7 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
 
         int maxBin = BitOperations.Log2((uint)Math.Max(1, _n)) + 1;
         _clusterSizeHistogram = new long[maxBin];
+        _exactClusterSizeHistogram = accumulation.ExactClusterSizeHistogram ? new long[_n + 1] : null;
 
         // Random initial configuration (high-T disorder).
         for (int i = 0; i < _n; i++)
@@ -324,6 +326,12 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
             int bin = BitOperations.Log2((uint)rootSizes[r]);
             _clusterSizeHistogram[bin]++;
         }
+        // The exact histogram beside it (runtime-gated): one count at each root's own size.
+        if (_exactClusterSizeHistogram is not null)
+        {
+            for (int r = 0; r < rootCount; r++)
+                _exactClusterSizeHistogram[rootSizes[r]]++;
+        }
 
         // ── Pass 3d: per-node thermodynamic landscapes (runtime-gated). The
         // un-collapsed 0-forms of Pass 3a's χ sum and giant-cluster size: for
@@ -412,6 +420,7 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
             DrawCount                = _drawCount,
             Spins                    = (int[])_spins.Clone(),
             ClusterSizeHistogram     = (long[])_clusterSizeHistogram.Clone(),
+            ExactClusterSizeHistogram = (long[]?)_exactClusterSizeHistogram?.Clone(),
             RngState0                = s0,
             RngState1                = s1,
             RngState2                = s2,
@@ -478,6 +487,15 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
             throw new InvalidOperationException(
                 $"Snapshot burn-in trace presence ({traceLength.HasValue}) does not " +
                 $"match model capability ({_burnInEnergyPerDraw is not null}).");
+        // The exact histogram gates on presence, with one count per size 0..N.
+        if ((_exactClusterSizeHistogram is not null) != (result.ExactClusterSizeHistogram is not null))
+            throw new InvalidOperationException(
+                $"Snapshot exact cluster-size histogram presence ({result.ExactClusterSizeHistogram is not null}) does not " +
+                $"match model capability ({_exactClusterSizeHistogram is not null}).");
+        if (_exactClusterSizeHistogram is not null && result.ExactClusterSizeHistogram!.Length != _exactClusterSizeHistogram.Length)
+            throw new InvalidOperationException(
+                $"Snapshot exact cluster-size histogram length ({result.ExactClusterSizeHistogram.Length}) does not " +
+                $"match model length N + 1 ({_exactClusterSizeHistogram.Length}).");
         if (result.Temperature != _temperature)
             throw new InvalidOperationException(
                 $"Snapshot temperature {result.Temperature} does not match model temperature {_temperature}.");
@@ -505,6 +523,8 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         // keeps its arrays, neither aliases the other.
         Array.Copy(result.Spins, _spins, _n);
         Array.Copy(result.ClusterSizeHistogram, _clusterSizeHistogram, _clusterSizeHistogram.Length);
+        if (_exactClusterSizeHistogram is not null)
+            Array.Copy(result.ExactClusterSizeHistogram!, _exactClusterSizeHistogram, _exactClusterSizeHistogram.Length);
 
         _rng.LoadState(result.RngState0, result.RngState1, result.RngState2, result.RngState3);
 
@@ -583,6 +603,7 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         _runningSumMagSq              = 0.0;
         _drawCount                   = 0;
         _clusterSizeHistogram.AsSpan().Clear();
+        _exactClusterSizeHistogram?.AsSpan().Clear();
         if (TConfig.Affinities) _bondFormedCount!.AsSpan().Clear();
         if (TConfig.Alignments) _spinAgreementCount!.AsSpan().Clear();
         _coMembershipCount?.AsSpan().Clear();
