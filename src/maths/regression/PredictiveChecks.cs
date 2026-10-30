@@ -57,11 +57,17 @@ public enum ParetoTail
 /// leave-one-unit-out cross-validation by Pareto-smoothed importance sampling (Vehtari, Gelman &amp; Gabry 2017; Vehtari,
 /// Simpson, Gelman, Yao &amp; Gabry 2024), following the loo package's algorithm. WAIC treats the draws as independent.
 /// PSIS-LOO reads the density's chains, when it has them, for each unit's relative efficiency, as loo does.
+/// <para>Weighted draws (<see cref="PointwiseLogDensity.Weights"/>, an SMC population's) enter exactly, never by resampling:
+/// each mean over the draws is the weighted one, and PSIS-LOO's log ratios are log W_s − log p(y_u | θ_s), the ratio of the
+/// leave-unit-out posterior to the weighted draws' law. Draws of weight 0 drop out. Their errors treat the draws as
+/// independent, which an SMC population's shared ancestry makes optimistic.</para>
 /// </summary>
 public static class PredictiveChecks
 {
     /// <summary>
-    /// WAIC: per unit, lppd_u = log mean_s p(y_u | θ_s) and p_u = Var_s log p(y_u | θ_s), and elpd_u = lppd_u − p_u.
+    /// WAIC: per unit, lppd_u = log mean_s p(y_u | θ_s) and p_u = Var_s log p(y_u | θ_s), and elpd_u = lppd_u − p_u. Under
+    /// weights W the mean is Σ W_s p(y_u | θ_s) and the variance Σ W_s (log p − its weighted mean)² / (1 − Σ W_s²), which
+    /// is the sample variance at equal weights.
     /// </summary>
     public static PredictiveCheck Waic(PointwiseLogDensity density)
     {
@@ -71,31 +77,78 @@ public static class PredictiveChecks
                 "WAIC's terms must condition on each unit's own data; these are leave-unit-out predictives (the collapsed content). Use PsisLoo.",
                 nameof(density));
         double[,] ll = density.Values;
-        int s = ll.GetLength(0), units = ll.GetLength(1);
-        if (s < 2) throw new ArgumentException("WAIC needs at least two draws.", nameof(density));
+        (int[] rows, double[]? logWeights) = Rows(density);
+        int s = rows.Length, units = ll.GetLength(1);
+        if (s < 2) throw new ArgumentException("WAIC needs at least two draws" + (logWeights is null ? "." : " of positive weight."), nameof(density));
+        var weights = logWeights is null ? null : Array.ConvertAll(logWeights, Math.Exp);
+        double reliability = 1.0;   // 1 − Σ W², the weighted variance's correction
+        if (weights is not null) foreach (double w in weights) reliability -= w * w;
         var elpd = new double[units];
         double pTotal = 0.0;
         var column = new double[s];
+        var weighted = new double[s];
         for (int u = 0; u < units; u++)
         {
-            for (int d = 0; d < s; d++) column[d] = ll[d, u];
-            double lppd = LogSumExp(column) - Math.Log(s);
-            double mean = 0.0;
-            foreach (double v in column) mean += v;
-            mean /= s;
-            double variance = 0.0;
-            foreach (double v in column) variance += (v - mean) * (v - mean);
-            variance /= s - 1;
+            for (int d = 0; d < s; d++) column[d] = ll[rows[d], u];
+            double lppd, variance = 0.0;
+            if (weights is null)
+            {
+                lppd = LogSumExp(column) - Math.Log(s);
+                double mean = 0.0;
+                foreach (double v in column) mean += v;
+                mean /= s;
+                foreach (double v in column) variance += (v - mean) * (v - mean);
+                variance /= s - 1;
+            }
+            else
+            {
+                for (int d = 0; d < s; d++) weighted[d] = logWeights![d] + column[d];
+                lppd = LogSumExp(weighted);
+                double mean = 0.0;
+                for (int d = 0; d < s; d++) mean += weights[d] * column[d];
+                for (int d = 0; d < s; d++) variance += weights[d] * (column[d] - mean) * (column[d] - mean);
+                variance /= reliability;
+            }
             elpd[u] = lppd - variance;
             pTotal += variance;
         }
         return Summarize(elpd, pTotal, null);
     }
 
+    // The draws a check reads, as rows of the density, and their normalized log weights: every row and null for equal
+    // weights; the rows of positive weight for weighted draws.
+    private static (int[] Rows, double[]? LogWeights) Rows(PointwiseLogDensity density)
+    {
+        int s = density.Draws;
+        if (density.Weights is not { } weights)
+        {
+            var all = new int[s];
+            for (int d = 0; d < s; d++) all[d] = d;
+            return (all, null);
+        }
+        double total = 0.0;
+        int positive = 0;
+        foreach (double w in weights)
+        {
+            total += w;
+            if (w > 0.0) positive++;
+        }
+        var rows = new int[positive];
+        var log = new double[positive];
+        for (int d = 0, k = 0; d < s; d++)
+        {
+            if (!(weights[d] > 0.0)) continue;
+            rows[k] = d;
+            log[k++] = Math.Log(weights[d] / total);
+        }
+        return (rows, log);
+    }
+
     /// <summary>
-    /// PSIS-LOO: per unit, the importance log-ratios −log p(y_u | θ_s) are Pareto-smoothed in their upper tail (the largest
-    /// M = ⌈min(S/5, 3√(S/r_eff))⌉, at least 5 for a fit), truncated at their raw maximum, and normalized to w̃_s; elpd_u
-    /// is the log of the weighted mean of p(y_u | θ_s). k̂ is the tail's fitted shape.
+    /// PSIS-LOO: per unit, the importance log-ratios −log p(y_u | θ_s), or log W_s − log p(y_u | θ_s) under weights, are
+    /// Pareto-smoothed in their upper tail (the largest M = ⌈min(S/5, 3√(S/r_eff))⌉ of the S draws of positive weight, at
+    /// least 5 for a fit), truncated at their raw maximum, and normalized to w̃_s; elpd_u is the log of the w̃-weighted mean
+    /// of p(y_u | θ_s). k̂ is the tail's fitted shape.
     /// <para>
     /// The relative efficiency r_eff is the unit's ESS over S, of its likelihoods p(y_u | θ_s) within the density's chains:
     /// Stan's estimator on split chains (<see cref="ChainDiagnostics.MeanEss"/>, loo's <c>relative_eff</c>). Independent
@@ -125,8 +178,9 @@ public static class PredictiveChecks
     {
         ArgumentNullException.ThrowIfNull(density);
         double[,] ll = density.Values;
-        int s = ll.GetLength(0), units = ll.GetLength(1);
-        if (s < 2) throw new ArgumentException("PSIS-LOO needs at least two draws.", nameof(density));
+        (int[] rows, double[]? logWeights) = Rows(density);
+        int s = rows.Length, units = ll.GetLength(1);
+        if (s < 2) throw new ArgumentException("PSIS-LOO needs at least two draws" + (logWeights is null ? "." : " of positive weight."), nameof(density));
         var elpd = new double[units];
         var khat = new double[units];
         var mcse = new double[units];
@@ -141,8 +195,18 @@ public static class PredictiveChecks
         for (int u = 0; u < units; u++)
         {
             double maxLl = double.NegativeInfinity;
-            for (int d = 0; d < s; d++) { column[d] = ll[d, u]; logRatios[d] = -ll[d, u]; maxLl = Math.Max(maxLl, column[d]); }
-            lppdTotal += LogSumExp(column) - Math.Log(s);
+            for (int d = 0; d < s; d++)
+            {
+                column[d] = ll[rows[d], u];
+                logRatios[d] = logWeights is null ? -column[d] : logWeights[d] - column[d];
+                maxLl = Math.Max(maxLl, column[d]);
+            }
+            if (logWeights is null) lppdTotal += LogSumExp(column) - Math.Log(s);
+            else
+            {
+                for (int d = 0; d < s; d++) weighted[d] = logWeights[d] + column[d];
+                lppdTotal += LogSumExp(weighted);
+            }
             for (int d = 0; d < s; d++) likelihood[d] = Math.Exp(column[d] - maxLl);   // scaled by its largest, which the ESS ignores
             rEff[u] = RelativeEfficiency(likelihood, density.ChainLengths);
             int tail = (int)Math.Ceiling(Math.Min(0.2 * s, 3.0 * Math.Sqrt(s / rEff[u])));

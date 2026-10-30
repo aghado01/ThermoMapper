@@ -26,7 +26,8 @@ public sealed class BassModel
     }
 
     /// <summary><paramref name="config"/> on <paramref name="data"/>, its target tempered in <paramref name="form"/>; null takes
-    /// the config's (<see cref="TemperingSpec.Form"/>), the integrated form when it declares none.</summary>
+    /// the config's (<see cref="TemperingSpec.Form"/> or <see cref="SmcSpec.Form"/>), the integrated form when it declares
+    /// none.</summary>
     public static BassModel Create(BassConfig config, BassData data, TemperedForm? form = null)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -38,7 +39,7 @@ public sealed class BassModel
         BassAdmission admission = BassAdmission.From(config, resolved);
         BassStructurePrior prior = BassStructurePrior.From(config, resolved, inputs);
         BassTermProposal proposal = BassTermProposal.From(config, prior);
-        var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? TemperedForm.Integrated);
+        var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated);
         return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, target);
     }
 

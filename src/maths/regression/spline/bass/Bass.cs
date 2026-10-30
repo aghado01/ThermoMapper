@@ -10,7 +10,8 @@ namespace Maths.Regression.Spline.Bass;
 /// <summary>
 /// BASS, Bayesian adaptive spline surfaces (Francom and Sansó 2020): the entry points (the contract shapes). A fit runs
 /// <see cref="BassSampling.Chains"/> chains of D04's sweep on the chain ensemble, each started from an exact draw of the
-/// prior on F, and keeps every retained draw.
+/// prior on F, and keeps every retained draw; or, with <see cref="BassSampling.Smc"/>, <see cref="SmcSpec.Replicates"/>
+/// SMC runs from the prior to the posterior (stage 8), and keeps each one's final population with its weights.
 /// </summary>
 public static class Bass
 {
@@ -25,8 +26,10 @@ public static class Bass
     /// <summary>
     /// Continues <paramref name="checkpoint"/>'s run (a fit's <see cref="BassFit.Checkpoint"/>) for
     /// <see cref="BassSampling.Samples"/> more draws per chain, or fewer when the R̂ stop is met, exactly as the
-    /// uninterrupted run would have gone on; the fit covers every draw since burn-in. <paramref name="config"/> and
-    /// <paramref name="data"/> must be those the checkpoint was taken on: one whose fingerprint differs is refused.
+    /// uninterrupted run would have gone on; the fit covers every draw since burn-in. An SMC fit's checkpoint continues
+    /// each replicate for up to <see cref="SmcSpec.MaxStages"/> more stages towards b = 1, as one uninterrupted run with
+    /// the larger budget would; a run already at b = 1 has nothing left, and gives its fit again. <paramref name="config"/>
+    /// and <paramref name="data"/> must be those the checkpoint was taken on: one whose fingerprint differs is refused.
     /// </summary>
     public static BassFit Resume(EnsembleCheckpoint checkpoint, BassConfig config, BassData data, BassRunOptions? run = null)
     {
@@ -50,6 +53,18 @@ public static class Bass
             throw new ArgumentException(
                 $"The checkpoint was taken on another config or data: its fingerprint is {resumeFrom.Identity.Fingerprint}, theirs {fingerprint}.",
                 "checkpoint");
+        if (sampling.Smc is not null)
+        {
+            try
+            {
+                return BassSmcFit.Run(model, fingerprint, options, resumeFrom);
+            }
+            catch (AggregateException e) when (Shared(e) is { } failure)
+            {
+                ExceptionDispatchInfo.Throw(failure);
+                throw;
+            }
+        }
         long planned = sampling.Chains * ((resumeFrom is null ? sampling.BurnIn : 0L) + (long)sampling.Samples * sampling.Thin);
         var ensemble = new BassEnsemble(model, fingerprint, options, planned, (resumeFrom?.DrawsPerChain ?? 0) + sampling.Samples);
         var parallel = new ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism, CancellationToken = options.Cancellation };

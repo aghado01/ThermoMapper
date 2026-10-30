@@ -1,18 +1,22 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Maths.Distributions;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bars;
 using Maths.Samplers.Evidence;
 using Maths.Samplers.Rjmcmc;
+using Maths.Samplers.Smc;
 
 namespace Maths.Regression.Spline.Bass;
 
 /// <summary>
 /// A tempered run's evidence ln p(y) (D03, D05): the data's marginal likelihood under BASS's priors restricted to F,
 /// estimated over each chain's ladder from b = 1 down to its exact reference rung at b = 0, where the prior on F is
-/// normalized. A run reports one only with the reference rung, under proper priors (neither the flat intercept nor the
-/// Jeffreys σ² prior, whose constants leave it undefined), and when <see cref="BassSampling.ReportEvidence"/> asks.
+/// normalized, or over an SMC fit's stages from the prior to b = 1 (<see cref="OfSmc"/>), each replicate's normalizer. A
+/// run reports one only with the reference rung or by SMC that reached b = 1, under proper priors (neither the flat
+/// intercept nor the Jeffreys σ² prior, whose constants leave it undefined), and when
+/// <see cref="BassSampling.ReportEvidence"/> asks.
 /// <list type="bullet">
 /// <item><see cref="SteppingStone"/> gives <see cref="LogEvidence"/>: it reads ℓ_b at the rungs only and has no
 /// discretization bias, so it is the integrated form's estimator.</item>
@@ -67,13 +71,45 @@ public sealed record BassEvidence(BassEvidenceEstimate SteppingStone, BassEviden
                                 readout.MaxPairRejection, readout.AtMaxLevels);
     }
 
+    /// <summary>
+    /// The evidence of an SMC fit (stage 8) from its <paramref name="replicates"/>, each run from the prior on F at b = 0 to
+    /// b = 1. Each replicate's estimate is its normalizer ln Ẑ with the genealogy error (Lee and Whiteley 2018; NaN unless
+    /// every resampling was multinomial), which is stepping-stone over its stages: with traced stages,
+    /// <see cref="LadderEvidence.FromSmc{TState}"/> gives it with its rungs, and path sampling joins on the linear form,
+    /// whose error reads the stages' weights and not their shared ancestry. The replicates pool by
+    /// <see cref="LadderEvidence.Pool"/>'s rule, the larger of the within-run and between-run errors. There is no ladder,
+    /// so the rejection flags read NaN and false.
+    /// </summary>
+    internal static BassEvidence OfSmc(BassModel model, IReadOnlyList<SmcResult<BassParticle>> replicates)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(replicates);
+        if (replicates.Count < 1) throw new ArgumentException("At least one replicate is required.", nameof(replicates));
+        bool traced = replicates[0].StageTraces is not null;
+        var normalizers = new LadderEstimate[replicates.Count];
+        for (int c = 0; c < normalizers.Length; c++)
+            normalizers[c] = traced
+                ? LadderEvidence.FromSmc(replicates[c])
+                : new LadderEstimate(LadderEstimator.SteppingStone, replicates[c].LogNormalizerRatio, replicates[c].LogNormalizerError, double.NaN, []);
+        BassEvidenceEstimate? pathSampling = null;
+        if (traced && model.Target.Form == TemperedForm.Linear)
+            pathSampling = Pooled([.. replicates.Select(r => LadderEvidence.FromSmc(r, LadderEstimator.PathSampling))]);
+        return new BassEvidence(Pooled(normalizers), pathSampling, BassEvidencePriors.Of(model.Config, model.Resolved), double.NaN, false);
+    }
+
     // Each chain's own ladder gives its estimate (each adapted its own rungs); the run's pools them as BARS's does.
     private static BassEvidenceEstimate Pooled(IReadOnlyList<BassLadder> ladders, LadderEstimator method)
     {
         var chains = new LadderEstimate[ladders.Count];
         for (int c = 0; c < chains.Length; c++) chains[c] = LadderEvidence.FromLadders([ladders[c].Tempering], method);
-        PooledLadderEstimate pooled = LadderEvidence.Pool(chains);
-        return new BassEvidenceEstimate(method, pooled.LogRatio, pooled.MonteCarloError, pooled.WithinChainError, pooled.BetweenChainError,
+        return Pooled(chains);
+    }
+
+    // Independent runs' estimates by one estimator, pooled.
+    private static BassEvidenceEstimate Pooled(IReadOnlyList<LadderEstimate> runs)
+    {
+        PooledLadderEstimate pooled = LadderEvidence.Pool(runs);
+        return new BassEvidenceEstimate(pooled.Method, pooled.LogRatio, pooled.MonteCarloError, pooled.WithinChainError, pooled.BetweenChainError,
                                         pooled.DiscretizationError, pooled.Chains);
     }
 }

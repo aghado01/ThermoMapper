@@ -13,7 +13,11 @@ namespace Maths.Regression.Spline.Bass;
 /// <list type="bullet">
 /// <item><see cref="Terms"/> merges the chains' own tables in chain order, so ids never depend on how the chains were
 /// scheduled.</item>
-/// <item><see cref="DrawWeights"/> is null: MCMC's draws weigh equally (SMC's carry weights when it joins).</item>
+/// <item><see cref="DrawWeights"/> is null for MCMC, whose draws weigh equally. An SMC fit's draws are each replicate's
+/// final population, one store per replicate, and their weights, pooled in replicate order, are each particle's
+/// normalized weight over the replicates' count, so they sum to 1. Every view reads them.</item>
+/// <item>An SMC fit short of b = 1 (<see cref="BassSmcReadout.ReachedPosterior"/>, its stage budget spent) holds a
+/// tempered population, not the posterior: the posterior views refuse it, and <see cref="Bass.Resume"/> continues it.</item>
 /// <item><see cref="Evidence"/> is the run's ln p(y) with its Monte Carlo error and the priors it depends on, from a run
 /// tempered down to an exact reference rung under proper priors (<see cref="BassEvidence"/>); null otherwise.</item>
 /// <item><see cref="ResidualDependence"/> is the direct functional fit's residual-dependence check along its one output
@@ -49,7 +53,7 @@ public sealed record BassFit(
                                                    PointwiseContent content = PointwiseContent.RetainedParameters)
     {
         BassModel model = ModelOn(data);
-        return BassPointwise.LogDensity(model, Terms, Draws, units, content);
+        return BassPointwise.LogDensity(model, Terms, Draws, units, content, DrawWeights);
     }
 
     /// <summary>
@@ -82,14 +86,21 @@ public sealed record BassFit(
     /// on, whose knots and levels the terms index and whose values the empirical measure reads; data with another
     /// fingerprint are refused.
     /// </summary>
-    public SobolAnalysis Sensitivity(BassData data, SensitivitySpec? spec = null) => BassSensitivity.Of(this, data, spec);
+    public SobolAnalysis Sensitivity(BassData data, SensitivitySpec? spec = null)
+    {
+        RequirePosterior();
+        return BassSensitivity.Of(this, data, spec);
+    }
 
     /// <summary>
     /// The main and two-way effect functions of the draws (D08, stage 6; <see cref="BassSensitivity.Effects"/>) under
     /// <paramref name="spec"/>'s measure, on the data the fit was run on; data with another fingerprint are refused.
     /// </summary>
     public EffectAnalysis Effects(BassData data, SensitivitySpec? spec = null, EffectSpec? effects = null)
-        => BassSensitivity.Effects(this, data, spec, effects);
+    {
+        RequirePosterior();
+        return BassSensitivity.Effects(this, data, spec, effects);
+    }
 
     /// <summary>Each chain's traces of M, σ², τ and λ in draw order (stage 9, P09; <see cref="BassTraces"/>).</summary>
     public BassTraces Traces() => BassTraces.Of(this);
@@ -101,7 +112,10 @@ public sealed record BassFit(
     /// <paramref name="data"/>, the data the fit was run on; data with another fingerprint are refused.
     /// </summary>
     public BassTrainingFit TrainingFit(BassData data, IReadOnlyList<double>? probabilities = null)
-        => BassTrainingFit.Of(this, data, probabilities);
+    {
+        RequirePosterior();
+        return BassTrainingFit.Of(this, data, probabilities);
+    }
 
     /// <summary>The fit's metadata (stage 9, P12; <see cref="BassMetadata"/>): the data's shape, the config and what it
     /// resolved to, the run's identity, lengths and account.</summary>
@@ -109,7 +123,11 @@ public sealed record BassFit(
 
     /// <summary>The metadata with the posterior summaries of M, σ², τ and λ at <paramref name="probabilities"/> (stage 9,
     /// P14; <see cref="BassSummary"/>), under the draw weights.</summary>
-    public BassSummary Summary(IReadOnlyList<double>? probabilities = null) => BassSummary.Of(this, probabilities);
+    public BassSummary Summary(IReadOnlyList<double>? probabilities = null)
+    {
+        RequirePosterior();
+        return BassSummary.Of(this, probabilities);
+    }
 
     /// <summary>
     /// The posterior summary of <see cref="Sensitivity"/>'s indices and variances at <paramref name="probabilities"/>
@@ -118,9 +136,19 @@ public sealed record BassFit(
     public SobolAnalysisSummary SensitivitySummary(BassData data, SensitivitySpec? spec = null, IReadOnlyList<double>? probabilities = null)
         => SobolAnalysisSummary.Of(this, Sensitivity(data, spec), probabilities);
 
-    // The model on `data`, refused when they are not the data the fit was run on.
+    // An SMC fit whose stage budget ran out before b = 1 holds a tempered population, which no posterior view reads.
+    private void RequirePosterior()
+    {
+        if (Diagnostics.Smc is { ReachedPosterior: false })
+            throw new InvalidOperationException(
+                "The SMC fit spent its stage budget (Sampling.Smc.MaxStages) before b = 1, so its draws are a tempered population, not the " +
+                "posterior; Bass.Resume continues it from its checkpoint.");
+    }
+
+    // The model on `data`, refused when they are not the data the fit was run on; the posterior's views only.
     private BassModel ModelOn(BassData data)
     {
+        RequirePosterior();
         ArgumentNullException.ThrowIfNull(data);
         string fingerprint = Bass.Fingerprint(Config, data);
         if (fingerprint != Identity.Fingerprint)

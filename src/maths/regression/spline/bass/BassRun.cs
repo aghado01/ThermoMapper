@@ -43,8 +43,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
     private readonly long _plannedSweeps;
     private readonly int _plannedDraws;
     private readonly IReadOnlyList<BassMonitoredPoint> _points;
-    private readonly CaseInputs _pointCases;         // the monitored cases' inputs
-    private readonly OutputInputs? _pointLocation;   // each monitored point's location, for a direct functional response
+    private readonly BassPointInputs _pointInputs;
     private readonly TemperingSpec? _tempering;
     private long _sweeps;
 
@@ -58,33 +57,8 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         _plannedSweeps = plannedSweeps;
         _plannedDraws = plannedDraws;
         _tempering = model.Config.Sampling.Tempering;
-        BassInputs inputs = model.Inputs;
-        _points = model.Resolved.MonitoredPoints;
-
-        CaseInputs cases = inputs.Cases;
-        var continuous = new double[cases.ContinuousCount][];
-        for (int v = 0; v < continuous.Length; v++)
-        {
-            continuous[v] = new double[_points.Count];
-            for (int p = 0; p < _points.Count; p++) continuous[v][p] = cases.Continuous(v)[_points[p].Case];
-        }
-        var categorical = new int[cases.CategoricalCount][];
-        for (int v = 0; v < categorical.Length; v++)
-        {
-            categorical[v] = new int[_points.Count];
-            for (int p = 0; p < _points.Count; p++) categorical[v][p] = cases.Categorical(v)[_points[p].Case];
-        }
-        _pointCases = new CaseInputs(continuous, categorical);
-        if (inputs.Outputs is { } outputs)
-        {
-            var at = new double[outputs.Count][];
-            for (int v = 0; v < at.Length; v++)
-            {
-                at[v] = new double[_points.Count];
-                for (int p = 0; p < _points.Count; p++) at[v][p] = outputs.Variable(v)[_points[p].Location!.Value];
-            }
-            _pointLocation = new OutputInputs(at);
-        }
+        _pointInputs = new BassPointInputs(model);
+        _points = _pointInputs.Points;
     }
 
     /// <summary>Every functional is monitored.</summary>
@@ -96,19 +70,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
 
     /// <summary>"M", "tau", "log_posterior", "sigma2", and "fitted[i]" at case i, or "fitted[i,r]" at case i and output
     /// location r, in the functionals' order.</summary>
-    public IReadOnlyList<string> FunctionalNames
-    {
-        get
-        {
-            var names = new List<string>(MonitoredDim) { "M" };
-            if (_model.Target.SamplesTau) names.Add("tau");
-            names.Add("log_posterior");
-            names.Add("sigma2");
-            foreach (BassMonitoredPoint p in _points)
-                names.Add(p.Location is int r ? $"fitted[{p.Case},{r}]" : $"fitted[{p.Case}]");
-            return names;
-        }
-    }
+    public IReadOnlyList<string> FunctionalNames => _pointInputs.FunctionalNames;
 
     /// <summary>D10's groups: <see cref="BassDiagnostics.PredictiveGroup"/> (σ² and the fitted values),
     /// <see cref="BassDiagnostics.LevelGroup"/> (the log posterior) and <see cref="BassDiagnostics.StructuralGroup"/> (M, and τ
@@ -281,7 +243,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
     }
 
     // A draw's ids through `map`, sorted, with its coefficients (the intercept, then one per id) following them.
-    private static BassDraw Remap(BassDraw draw, int[] map)
+    internal static BassDraw Remap(BassDraw draw, int[] map)
     {
         int[] ids = draw.Structure.TermIds;
         var mapped = new int[ids.Length];
@@ -344,16 +306,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         List<double[]?> cache = run.PointValues;
         while (cache.Count <= id) cache.Add(null);
         if (cache[id] is { } cached) return cached;
-        BassTerm term = run.Terms[id];
-        var values = new double[_points.Count];
-        _model.Basis.CaseColumn(term, _pointCases, values);
-        if (_pointLocation is { } at)
-        {
-            var h = new double[_points.Count];
-            _model.Basis.OutputColumn(term, at, h);
-            for (int p = 0; p < values.Length; p++) values[p] *= h[p];
-        }
-        return cache[id] = values;
+        return cache[id] = _pointInputs.Values(run.Terms[id]);
     }
 
     /// <summary>One chain's restart state: its <see cref="BassChain"/>'s snapshot or its <see cref="BassLadder"/>'s, the
@@ -423,5 +376,82 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
             for (int id = 0; id < terms.Length; id++) terms[id] = Terms[id];
             return new BassChainState(Chain?.Snapshot(), Ladder?.Snapshot(), Composition.SaveState(), terms, Draws.Copy(), Start, BurnMoves);
         }
+    }
+}
+
+/// <summary>
+/// The monitored points' inputs (<see cref="BassResolved.MonitoredPoints"/>): each point's case and, for a direct
+/// functional response, its output location, so a term's value at every point is one evaluation; and the monitored
+/// functionals' names, which the chain ensemble and SMC's between-run reading share.
+/// </summary>
+internal sealed class BassPointInputs
+{
+    private readonly BassModel _model;
+    private readonly CaseInputs _cases;          // the monitored cases' inputs
+    private readonly OutputInputs? _location;    // each monitored point's location, for a direct functional response
+
+    public BassPointInputs(BassModel model)
+    {
+        _model = model;
+        Points = model.Resolved.MonitoredPoints;
+        BassInputs inputs = model.Inputs;
+        CaseInputs cases = inputs.Cases;
+        var continuous = new double[cases.ContinuousCount][];
+        for (int v = 0; v < continuous.Length; v++)
+        {
+            continuous[v] = new double[Points.Count];
+            for (int p = 0; p < Points.Count; p++) continuous[v][p] = cases.Continuous(v)[Points[p].Case];
+        }
+        var categorical = new int[cases.CategoricalCount][];
+        for (int v = 0; v < categorical.Length; v++)
+        {
+            categorical[v] = new int[Points.Count];
+            for (int p = 0; p < Points.Count; p++) categorical[v][p] = cases.Categorical(v)[Points[p].Case];
+        }
+        _cases = new CaseInputs(continuous, categorical);
+        if (inputs.Outputs is { } outputs)
+        {
+            var at = new double[outputs.Count][];
+            for (int v = 0; v < at.Length; v++)
+            {
+                at[v] = new double[Points.Count];
+                for (int p = 0; p < Points.Count; p++) at[v][p] = outputs.Variable(v)[Points[p].Location!.Value];
+            }
+            _location = new OutputInputs(at);
+        }
+    }
+
+    /// <summary>The monitored points.</summary>
+    public IReadOnlyList<BassMonitoredPoint> Points { get; }
+
+    /// <summary>"M", "tau" in the g mode, "log_posterior", "sigma2", and "fitted[i]" at case i, or "fitted[i,r]" at case i
+    /// and output location r.</summary>
+    public IReadOnlyList<string> FunctionalNames
+    {
+        get
+        {
+            var names = new List<string>(4 + Points.Count) { "M" };
+            if (_model.Target.SamplesTau) names.Add("tau");
+            names.Add("log_posterior");
+            names.Add("sigma2");
+            foreach (BassMonitoredPoint p in Points)
+                names.Add(p.Location is int r ? $"fitted[{p.Case},{r}]" : $"fitted[{p.Case}]");
+            return names;
+        }
+    }
+
+    /// <summary><paramref name="term"/> at each monitored point: its case side at the point's case, times its output side at
+    /// the point's location.</summary>
+    public double[] Values(BassTerm term)
+    {
+        var values = new double[Points.Count];
+        _model.Basis.CaseColumn(term, _cases, values);
+        if (_location is { } at)
+        {
+            var h = new double[Points.Count];
+            _model.Basis.OutputColumn(term, at, h);
+            for (int p = 0; p < values.Length; p++) values[p] *= h[p];
+        }
+        return values;
     }
 }

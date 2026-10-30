@@ -99,9 +99,10 @@ public sealed record BassResolved
     /// <summary>
     /// <paramref name="config"/> resolved on <paramref name="data"/>, after <see cref="BassConfig.Validate"/>. Refused:
     /// a zero response under the zero centre, and a constant one under level centring or the flat intercept, which
-    /// leave no spread to fit (D03); a support threshold above its part's size, which no term could meet; and a ladder
+    /// leave no spread to fit (D03); a support threshold above its part's size, which no term could meet; a ladder
     /// with a rung where its tempered form is undefined (D05), its hot end, declared or auto-picked, or the reference
-    /// rung's b = 0, and an auto-picked hot end outside (0, 1), which tiny data give.
+    /// rung's b = 0, and an auto-picked hot end outside (0, 1), which tiny data give; and SMC on the integrated form under
+    /// the improper options, which has no b = 0 to start from.
     /// </summary>
     public static BassResolved Resolve(BassConfig config, BassData data)
     {
@@ -226,6 +227,18 @@ public sealed record BassResolved
                     throw new ArgumentException(
                         $"Sampling.Tempering.ReferenceRung needs b = 0, where the integrated form is undefined under {improper}; the linear form reaches it (D05).", "config");
             }
+        }
+
+        if (config.Sampling.Smc is { } smc)
+        {
+            // SMC starts from the prior at b = 0, where the integrated form exists under the proper priors alone (D05).
+            if (!BassTarget.Defines(smc.Form, config.Intercept, sigma2, n, 0.0))
+                throw new ArgumentException(
+                    $"Sampling.Smc.Form is integrated, which has no b = 0 member under {(config.Intercept == GPriorCentre.Flat ? "the flat intercept" : "the Jeffreys σ² prior")}, " +
+                    "where SMC starts from the prior; the linear form reaches it (D05).", "config");
+            log.Add(new("Sampling.Chains", "not read", $"SMC runs Sampling.Smc.Replicates = {smc.Replicates} independent populations"));
+            log.Add(new("Sampling.BurnIn, Samples, Thin, BatchSize, MinEssPerChain, StoppingScope", "not read",
+                        $"SMC's draws are each replicate's final population of {smc.Particles} particles, and it ends at b = 1, with no R̂ stop"));
         }
 
         BassStepWindows? windows = null;

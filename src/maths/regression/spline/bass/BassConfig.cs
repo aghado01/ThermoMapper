@@ -8,6 +8,7 @@ using Maths.Regression.Spline.Bars;
 using Maths.Samplers;
 using Maths.Samplers.Ensemble;
 using Maths.Samplers.Rjmcmc;
+using Maths.Samplers.Smc;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -40,7 +41,7 @@ public sealed record BassConfig
     /// </summary>
     public GPriorCentre Intercept { get; init; } = GPriorCentre.Mean;
 
-    /// <summary>The run: chains, seeds, lengths, the R̂ stop and the move schedule.</summary>
+    /// <summary>The run: chains or SMC's replicates, seeds, lengths, the R̂ stop and the move schedule.</summary>
     public BassSampling Sampling { get; init; } = new();
 
     /// <summary>
@@ -166,6 +167,20 @@ public sealed record BassConfig
                 throw Bad("Sampling.FactorMoves", "must weigh a prune or grow or a variable change; null turns the family off");
             if (run.LocalSteps is not null && !(family.Change > 0.0))
                 throw Bad("Sampling.FactorMoves.Change", "must be positive with local steps, which run inside the change");
+        }
+        if (run.Smc is { } smc)
+        {
+            if (run.Tempering is not null) throw Bad("Sampling.Tempering", "must be null with Sampling.Smc, which tempers its own sequence from the prior (D05)");
+            if (run.RHatTarget > 0.0) throw Bad("Sampling.RHatTarget", "must be 0 with Sampling.Smc: an SMC run ends when b reaches 1, with no R̂ stop");
+            if (smc.Particles < 2) throw Bad("Sampling.Smc.Particles", "must be at least 2, so the population has weights to read and a normalizer error");
+            if (smc.Replicates < 1) throw Bad("Sampling.Smc.Replicates", "must be at least 1");
+            if (!(smc.TargetConditionalEss > 0.0 && smc.TargetConditionalEss < 1.0)) throw Bad("Sampling.Smc.TargetConditionalEss", "must lie in (0, 1)");
+            if (smc.MutationSteps < 0) throw Bad("Sampling.Smc.MutationSteps", "must not be negative; 0 makes the run sequential importance sampling");
+            if (!(smc.ResampleBelow >= 0.0 && smc.ResampleBelow <= 1.0)) throw Bad("Sampling.Smc.ResampleBelow", "must lie in [0, 1]");
+            if (smc.Resampling is not (ResamplingScheme.Multinomial or ResamplingScheme.Stratified or ResamplingScheme.Systematic or ResamplingScheme.Residual))
+                throw Bad("Sampling.Smc.Resampling", "is not a known scheme");
+            if (smc.Form is not (TemperedForm.Integrated or TemperedForm.Linear)) throw Bad("Sampling.Smc.Form", "is not a known form");
+            if (smc.MaxStages < 1) throw Bad("Sampling.Smc.MaxStages", "must be at least 1");
         }
         if (run.Tempering is { } t)
         {
@@ -343,6 +358,15 @@ public sealed record BassSampling
     /// <summary>Parallel tempering within each chain; null, the default, runs untempered (D05).</summary>
     public TemperingSpec? Tempering { get; init; }
 
+    /// <summary>
+    /// Fitting by SMC from the prior to the posterior (stage 8, D05) in place of MCMC; null, the default, runs MCMC. It
+    /// refuses <see cref="Tempering"/>, since SMC tempers its own sequence, and an <see cref="RHatTarget"/>, since it ends
+    /// at b = 1; <see cref="Chains"/>, <see cref="BurnIn"/>, <see cref="Samples"/>, <see cref="Thin"/>,
+    /// <see cref="BatchSize"/>, <see cref="MinEssPerChain"/> and <see cref="StoppingScope"/> are not read under it, as the
+    /// resolved configuration logs.
+    /// </summary>
+    public SmcSpec? Smc { get; init; }
+
     /// <summary>Whether a run that can give an evidence reports it (D03, D05).</summary>
     public bool ReportEvidence { get; init; } = true;
 
@@ -419,6 +443,58 @@ public sealed record TemperingSpec
     /// <summary>The rungs a chain's ladder starts on: <see cref="Levels"/>, or a self-sizing ladder's
     /// <see cref="InitialLevels"/> within [<see cref="MinimumLevels"/>, <see cref="MaxLevels"/>].</summary>
     public int StartLevels() => Levels ?? Math.Clamp(InitialLevels, MinimumLevels(ReferenceRung), MaxLevels);
+}
+
+/// <summary>
+/// Fitting by SMC (stage 8; D05, decided 2026-10-27; its settings decided 2026-10-29): <see cref="Replicates"/> independent
+/// populations of <see cref="Particles"/>, each tempered from exact draws of the prior on F at b = 0 to the posterior at
+/// b = 1 on the likelihood path. Each next b is placed so the reweighting's conditional ESS is
+/// <see cref="TargetConditionalEss"/>·N (Zhou, Johansen and Aston 2016); each particle is reweighted by ℓ_{b′} − ℓ_b,
+/// the population resampled when its ESS/N falls below <see cref="ResampleBelow"/>, and each particle mutated by
+/// <see cref="MutationSteps"/> of D04's sweeps at b (<see cref="BassSmcKernel"/>). Each replicate's final population, with
+/// its weights, is the fit's draws, and under D03's proper defaults its normalizer is the evidence.
+/// <list type="bullet">
+/// <item>The values are provisional per-engine defaults, read in the stage 8 qualification and not tuned.</item>
+/// <item><see cref="Resampling"/>: multinomial (D05), whose offspring the normalizer's genealogy error describes; the
+/// lower-variance schemes stay selectable and leave that error NaN.</item>
+/// <item><see cref="Form"/>: the likelihood path's tempered form, integrated by default. Under D03's improper options (the
+/// Jeffreys σ² prior, the flat intercept) the integrated form has no b = 0 member, so the run needs the linear form, and
+/// its normalizer is then no evidence.</item>
+/// <item><see cref="MaxStages"/>: each replicate's stage budget. A run that spends it before b = 1 is returned flagged
+/// (<see cref="BassSmcReadout.ReachedPosterior"/>), its posterior views refused, and its checkpoint continues it.</item>
+/// <item><see cref="TraceStages"/>: record each stage's population, for stepping-stone over the stages and, on the linear
+/// form, path sampling; off by default, when the evidence is the normalizer alone.</item>
+/// </list>
+/// </summary>
+public sealed record SmcSpec
+{
+    /// <summary>The population per replicate, N.</summary>
+    public int Particles { get; init; } = 1000;
+
+    /// <summary>Independent SMC runs, run in parallel within the run's bound (<see cref="BassRunOptions.MaxDegreeOfParallelism"/>):
+    /// their spread is the between-run reading, and the evidence's between-run error.</summary>
+    public int Replicates { get; init; } = 4;
+
+    /// <summary>The adaptive schedule's conditional-ESS fraction.</summary>
+    public double TargetConditionalEss { get; init; } = 0.99;
+
+    /// <summary>D04's sweeps per particle at each stage; 0 makes the run sequential importance sampling.</summary>
+    public int MutationSteps { get; init; } = 5;
+
+    /// <summary>Resample when ESS/N falls below this fraction.</summary>
+    public double ResampleBelow { get; init; } = 0.5;
+
+    /// <summary>The resampling scheme: multinomial (D05).</summary>
+    public ResamplingScheme Resampling { get; init; } = ResamplingScheme.Multinomial;
+
+    /// <summary>The likelihood path's tempered form: integrated by default (D05).</summary>
+    public TemperedForm Form { get; init; } = TemperedForm.Integrated;
+
+    /// <summary>The stages a replicate may take after its initial draw.</summary>
+    public int MaxStages { get; init; } = 1000;
+
+    /// <summary>Whether each stage's population is recorded, for the evidence over the stages.</summary>
+    public bool TraceStages { get; init; }
 }
 
 /// <summary>How a state's move types are chosen (D01).</summary>

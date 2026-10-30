@@ -48,8 +48,9 @@ public sealed class BassMovePassTests
     internal const double Clears = 1.5, Floor = 0.8;
 
     // S10's Friedman data at n = 500, hashed before Friedman took its sample size. The hash reads the default config's JSON
-    // too: 6b52ce789967ee0c until N14 added Sampling.StoppingScope to it, the data unchanged (the old JSON still gives it).
-    private const string S10Friedman = "e38c2c6c05ff8dbc";
+    // too: 6b52ce789967ee0c until N14 added Sampling.StoppingScope to it, and e38c2c6c05ff8dbc until stage 8 added
+    // Sampling.Smc, the data unchanged each time.
+    private const string S10Friedman = "a2946a493a466d54";
 
 #if DEBUG
     private const string Configuration = "Debug";

@@ -5,6 +5,7 @@ using Maths.Regression.Spline.Bars;
 using Maths.Samplers;
 using Maths.Samplers.Ensemble;
 using Maths.Samplers.Rjmcmc;
+using Maths.Samplers.Smc;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -27,6 +28,12 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>The cap.</b> The share of retained draws at M_max (D02).</item>
 /// <item><b>Tempering.</b> The ladders' readout when the run was tempered (<see cref="BassTemperingReadout"/>), null
 /// otherwise. A tempered chain's moves, refusals and support account are its b = 1 replica's.</item>
+/// <item><b>SMC</b> (stage 8). With <see cref="BassSampling.Smc"/> the population's readout is <see cref="Smc"/>
+/// (<see cref="BassSmcReadout"/>), and the chain readings do not apply: a population has no order for R̂ or an
+/// autocorrelation ESS to read, so every functional's diagnostic is unavailable, the verdict undetermined in every group,
+/// and <see cref="Chains"/> empty. <see cref="ModeSeparation"/> reads the replicates' weighted means; the moves, support
+/// and refusal tallies sum every particle's sweeps; <see cref="MassAtCap"/> is the weighted share at M_max; and
+/// <see cref="SamplesUsed"/> is the particles per replicate.</item>
 /// </list>
 /// The totals are the chains' sums, and <see cref="Chains"/> keeps each chain's own, with its start.
 /// </summary>
@@ -48,7 +55,8 @@ public sealed record BassDiagnostics(
     ConvergenceVerdict Verdict,
     BassModeSeparation ModeSeparation,
     IReadOnlyList<BassChainAccount> Chains,
-    BassTemperingReadout? Tempering)
+    BassTemperingReadout? Tempering,
+    BassSmcReadout? Smc = null)
 {
     /// <summary>The predictive group: σ² and the fitted values. Do the chains predict the same surface and noise?</summary>
     public const string PredictiveGroup = "predictive";
@@ -159,6 +167,66 @@ public sealed record BassTemperingReadout(
                                         spec.ReferenceRung ? referenceAttempts / c : double.NaN);
     }
 }
+
+/// <summary>
+/// An SMC fit's population readout (stage 8), kept apart from chain R̂ and autocorrelation ESS.
+/// <list type="bullet">
+/// <item><see cref="Replicates"/>: each independent run's stage reports (ESS, conditional ESS, resampling, distinct
+/// ancestors, families, acceptance and the normalizer's increments with its genealogy error), where it ended, its
+/// normalizer, and its final population's Kish ESS and families.</item>
+/// <item><see cref="Spread"/>: the between-run reading for each monitored quantity, the SD over replicates of their
+/// weighted posterior means in units of the pooled posterior sd. Split R̂ means nothing for a population, which has no
+/// order to split, and an unsplit R̂ would invite comparison with D10's 1.01, which assumes autocorrelated chains. No stop
+/// reads it.</item>
+/// <item>Particles share ancestry, so a Kish ESS, or a Monte Carlo error that treats them as independent (the pointwise
+/// checks'), reads optimistic: each replicate's families say how many lineages remain, and the replicates' spread is the
+/// honest error.</item>
+/// </list>
+/// </summary>
+public sealed record BassSmcReadout(IReadOnlyList<BassSmcReplicate> Replicates, IReadOnlyList<BassSmcSpread> Spread)
+{
+    /// <summary>Whether every replicate reached b = 1 within its stage budget: only then are the draws the posterior.</summary>
+    public bool ReachedPosterior
+    {
+        get
+        {
+            foreach (BassSmcReplicate r in Replicates)
+                if (r.InverseTemperature != 1.0) return false;
+            return true;
+        }
+    }
+
+    /// <summary>The spread of the quantity named <paramref name="name"/> ("M", "tau", "log_posterior", "sigma2",
+    /// "fitted[i]" or "fitted[i,r]").</summary>
+    public BassSmcSpread Quantity(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        foreach (BassSmcSpread q in Spread)
+            if (q.Name == name) return q;
+        throw new KeyNotFoundException($"No monitored quantity is named \"{name}\".");
+    }
+}
+
+/// <summary>
+/// One SMC replicate's account: its stream's seed; its stage reports, the initial draw first; the b it ended at, 1 unless
+/// its budget ran out; its log normalizer ln Ẑ with the genealogy error (NaN unless every resampling was multinomial);
+/// its final population's Kish ESS and surviving families; the attempts its prior draws took; its kernel's account
+/// (<see cref="BassSmcAccount"/>); and its weighted mass at M_max.
+/// </summary>
+public sealed record BassSmcReplicate(
+    int Seed, IReadOnlyList<SmcStageReport> Stages, double InverseTemperature, double LogNormalizer, double LogNormalizerError,
+    double EffectiveSampleSize, int Families, long PriorAttempts, BassSmcAccount Account, double MassAtCap)
+{
+    /// <summary>The stages taken after the initial draw.</summary>
+    public int StageCount => Stages.Count - 1;
+}
+
+/// <summary>
+/// One monitored quantity's between-run reading: each replicate's weighted posterior mean, the pooled posterior's mean and
+/// sd over every replicate's draws (each replicate weighing 1/R), and <see cref="Spread"/>, the sample SD of the
+/// replicates' means over that sd. NaN with one replicate; 0 for a quantity every draw holds at one value.
+/// </summary>
+public sealed record BassSmcSpread(string Name, double[] ReplicateMeans, double PosteriorMean, double PosteriorSd, double Spread);
 
 /// <summary>
 /// How far apart the chains sit (D10), reported beside the verdict: once chains sit in separate modes, R̂ and bulk ESS

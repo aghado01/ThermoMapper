@@ -20,6 +20,13 @@ namespace Maths.Oracle.Tests;
 /// <item><b>Each stage's law, through the kernel alone:</b> the SMC kernel's sweeps at a fixed b, run as a chain from exact
 /// prior draws, against the oracle's tempered law on fixture A at three b, on both forms and under fixed g: the count law,
 /// E[τ] and every term's inclusion. A kernel that left π_b's prior tempered, or read another b, would miss them.</item>
+/// <item><b>The evidence:</b> an SMC fit's normalizer under the proper defaults, each replicate's within four of its
+/// genealogy errors and the pooled one within four of its error, against the oracle's exact ln Z on fixture B, on both
+/// forms, and on fixture C with its categorical predictor; stepping-stone over the traced stages reproduces each
+/// normalizer, and path sampling on the linear form stands within its error and diagnostic.</item>
+/// <item><b>The posterior:</b> an SMC fit's weighted populations against the exact posterior on fixture A, the defaults at
+/// M_max = 3 and fixed g at M_max = 2: the count law, E[τ] and every term's inclusion, each within five standard errors
+/// of the replicates' spread.</item>
 /// </list>
 /// Opt-in: it runs where the R toolchain and the BASS checkout are present.
 /// </summary>
@@ -89,6 +96,100 @@ public sealed class BassSmcParityTests
             for (int j = 0; j < terms.Length; j++) Check($"{form}, b = {stages[k]}, {terms[j]}", Row(included, j), inclusion[j], 0.005, quiet: true);
             _out.WriteLine($"{form}, b = {stages[k]}: acceptance {kernel.Account.AcceptanceRate:F3} over {kernel.Account.Sweeps} sweeps");
         }
+    }
+
+    private static BassConfig SmcConfig(int maxBasis, SmcSpec smc, int maxInteraction = 2, bool fixedG = false)
+    {
+        BassConfig config = BassTargetParityTests.Config(fixedG: fixedG, maxInteraction: maxInteraction);
+        return config with
+        {
+            Structure = config.Structure with { MaxBasis = maxBasis },
+            Sampling = config.Sampling with { MasterSeed = 2026, Smc = smc },
+        };
+    }
+
+    [Theory]
+    [InlineData("integrated")]
+    [InlineData("linear")]
+    [InlineData("categorical")]
+    public void Fit_NormalizerMatchesTheOraclesLogZ(string form)
+    {
+        if (!BassTargetParityTests.Available) return;
+        bool categorical = form == "categorical";
+        double[][] rows = categorical ? BassTargetParityTests.FixtureC() : BassTargetParityTests.FixtureB();
+        JsonElement r = categorical
+            ? BassTargetParityTests.Posterior(rows, "M_max=2", "K_max=1", "categorical=1")
+            : BassTargetParityTests.Posterior(rows, "M_max=2");
+        double logZ = r.GetProperty("posterior").GetProperty("log_Z").GetDouble();
+        var smc = new SmcSpec { Particles = 2000, Form = form == "linear" ? TemperedForm.Linear : TemperedForm.Integrated, TraceStages = true };
+        BassFit fit = Bass.Fit(SmcConfig(2, smc, maxInteraction: categorical ? 1 : 2), BassTargetParityTests.Data(rows, categorical));
+        BassEvidence evidence = fit.Evidence!;
+        BassSmcReadout readout = fit.Diagnostics.Smc!;
+        Assert.True(readout.ReachedPosterior);
+        foreach (BassSmcReplicate x in readout.Replicates)
+        {
+            _out.WriteLine($"{form}: replicate {x.Seed}, {x.StageCount} stages, ln Ẑ {x.LogNormalizer:F4} ± {x.LogNormalizerError:F4} " +
+                           $"(z {(x.LogNormalizer - logZ) / x.LogNormalizerError:F2}), families {x.Families}");
+            Assert.True(Math.Abs(x.LogNormalizer - logZ) <= 4 * x.LogNormalizerError + 0.01, $"{x.LogNormalizer:F4} ± {x.LogNormalizerError:F4} against {logZ:F4}");
+        }
+        _out.WriteLine($"{form}: pooled {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} (within {evidence.SteppingStone.WithinChainError:F4}, " +
+                       $"between {evidence.SteppingStone.BetweenChainError:F4}) against the oracle's {logZ:F4}");
+        Assert.True(Math.Abs(evidence.LogEvidence - logZ) <= 4 * evidence.MonteCarloError + 0.01,
+                    $"{evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against {logZ:F4}");
+        // Stepping-stone over the traced stages is the normalizer, rung by rung.
+        for (int c = 0; c < readout.Replicates.Count; c++)
+        {
+            Assert.Equal(readout.Replicates[c].LogNormalizer, evidence.SteppingStone.Chains[c].LogRatio, 9);
+            Assert.Equal(readout.Replicates[c].StageCount, evidence.SteppingStone.Chains[c].Rungs.Count);
+        }
+        if (evidence.PathSampling is { } ps)
+        {
+            _out.WriteLine($"{form}: path sampling {ps.LogEvidence:F4} ± {ps.MonteCarloError:F4}, diagnostic {ps.DiscretizationError:F4}");
+            Assert.True(Math.Abs(ps.LogEvidence + ps.DiscretizationError - logZ) <= 4 * ps.MonteCarloError + 0.5 * Math.Abs(ps.DiscretizationError) + 0.01);
+        }
+        Assert.Equal(form == "linear", evidence.PathSampling is not null);
+    }
+
+    [Theory]
+    [InlineData("defaults")]
+    [InlineData("fixed g")]
+    public void Fit_MatchesTheOraclesPosterior(string option)
+    {
+        if (!BassTargetParityTests.Available) return;
+        bool fixedG = option == "fixed g";
+        int maxBasis = fixedG ? 2 : 3;
+        double[][] rows = BassTargetParityTests.FixtureA();
+        JsonElement r = fixedG
+            ? BassTargetParityTests.Posterior(rows, $"M_max={maxBasis}", "coef=fixed")
+            : BassTargetParityTests.Posterior(rows, $"M_max={maxBasis}");
+        JsonElement p = r.GetProperty("posterior");
+        double[] countLaw = Doubles(p.GetProperty("count").GetProperty("posterior"));
+        double[] inclusion = Doubles(p.GetProperty("inclusion"));
+        BassTerm[] terms = BassTargetParityTests.Terms(r);
+        var index = terms.Select((t, i) => (t, i)).ToDictionary(e => e.t, e => e.i);
+        const int replicates = 8;
+        BassFit fit = Bass.Fit(SmcConfig(maxBasis, new SmcSpec { Particles = 1000, Replicates = replicates }, fixedG: fixedG), BassTargetParityTests.Data(rows));
+        Assert.True(fit.Diagnostics.Smc!.ReachedPosterior);
+
+        // Each replicate's weighted estimate; their spread gives each comparison's error.
+        double[] w = fit.DrawWeights!;
+        var count = new double[countLaw.Length, replicates];
+        var included = new double[terms.Length, replicates];
+        var tau = new double[replicates];
+        for (int c = 0, s = 0; c < replicates; c++)
+            foreach (BassDraw d in fit.Draws[c])
+            {
+                double weight = w[s++] * replicates;
+                count[d.Structure.TermIds.Length, c] += weight;
+                foreach (int id in d.Structure.TermIds) included[index[fit.Terms[id]], c] += weight;
+                tau[c] += weight * d.Tau;
+            }
+        for (int m = 0; m < countLaw.Length; m++) Check($"{option}, M = {m}", Row(count, m), countLaw[m], 0.003);
+        if (fixedG) Assert.All(fit.Draws.SelectMany(c => c), d => Assert.Equal(fit.Resolved.FixedTau!.Value, d.Tau));
+        else Check($"{option}, E[τ]", tau, p.GetProperty("tau").GetProperty("mean").GetDouble(), 0.0);
+        for (int j = 0; j < terms.Length; j++) Check($"{option}, {terms[j]}", Row(included, j), inclusion[j], 0.005, quiet: true);
+        _out.WriteLine($"{option}: {terms.Length} inclusions within their allowance; stages " +
+                       $"{string.Join(", ", fit.Diagnostics.Smc.Replicates.Select(x => x.StageCount))}");
     }
 
     private static double[] Doubles(JsonElement e) => [.. e.EnumerateArray().Select(v => v.GetDouble())];

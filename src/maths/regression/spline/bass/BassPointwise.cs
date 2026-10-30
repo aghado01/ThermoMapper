@@ -43,13 +43,18 @@ public static class BassPointwise
 
     /// <summary>
     /// log p(y_unit | draw) for the retained draws <paramref name="draws"/> of <paramref name="model"/>, per chain in draw
-    /// order, whose structures index <paramref name="terms"/>; the rows pool the chains in chain order.
+    /// order, whose structures index <paramref name="terms"/>; the rows pool the chains in chain order. Weighted draws, an
+    /// SMC fit's replicate populations, carry <paramref name="weights"/> (<see cref="PointwiseLogDensity.Weights"/>) in
+    /// place of chain lengths: their particles share ancestry, so the checks' Monte Carlo errors, which treat them as
+    /// independent, read optimistic.
     /// </summary>
     /// <param name="units">A partition of the N observations; null takes <see cref="DefaultUnits"/>.</param>
     /// <param name="content">The draw content; the retained parameters by default (D04).</param>
+    /// <param name="weights">One weight per draw, pooled in chain order; null for equal weights (MCMC).</param>
     public static PointwiseLogDensity LogDensity(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws,
                                                  UnitPartition? units = null,
-                                                 PointwiseContent content = PointwiseContent.RetainedParameters)
+                                                 PointwiseContent content = PointwiseContent.RetainedParameters,
+                                                 IReadOnlyList<double>? weights = null)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(terms);
@@ -79,7 +84,9 @@ public static class BassPointwise
         if (model.Target.SamplesTau) latents.Add(new LatentReport("prior precision τ", LatentScope.Global, LatentTreatment.Conditioned));
         latents.Add(new LatentReport("coefficients a", LatentScope.Global, treatment));
         latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, treatment));
-        return new PointwiseLogDensity(values, partition, latents, chains);
+        return weights is null
+            ? new PointwiseLogDensity(values, partition, latents, chains)
+            : new PointwiseLogDensity(values, partition, latents) { Weights = weights };
     }
 
     // Each draw's Normal log terms at its fit and σ², summed over each unit's observations.
