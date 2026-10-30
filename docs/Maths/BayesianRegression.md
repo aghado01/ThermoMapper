@@ -116,6 +116,7 @@ flowchart LR
 | BASS (F-M2 Phase 1) | `BassSampling.LocalSteps` (`LocalSteps`, `Window(n)`), `BassSampling.FactorMoves` (`FactorMoves`), `TemperingSpec.Split` (`SplitRule`); `BassResolved` (`StepWindows`, `FactorShares`, `SplitThreshold`); `BassTermProposal` (`ProposeChange`, `ProposePrune`, `ProposeGrow`, `ProposeVariableChange`, `Window`) → `BassTermMove`, `BassMoveKind`; `BassStructureMoves.Kinds`, `BassDiagnostics.MoveKinds` (`BassMoveTally`, `BassKindCount`); `TemperingLadder.Split` |
 | Verdicts (D10, N14) | `BassSampling.StoppingScope` (`BassStoppingScope`), `BassResolved.StoppingGroups`; `BassDiagnostics` (`LogPosterior`, `Verdict`, `ModeSeparation` → `BassModeSeparation`, `PredictiveGroup`, `LevelGroup`, `StructuralGroup`); `BarsResult.Verdict`, `BgpResult.Verdict`, `BapsResult.Verdict`, `HierarchicalResult.Verdict` |
 | BASS calibration (stage 7) | `ICalibrationEmulator`, `BassBasisEmulator`, `BassFitEmulator`, `EmulatorNoise` (`ComponentNoise`, `IndependentNoise`); `ContinuousParameter`, `CategoricalParameter`, `ParameterLayout`; `GaussianMeasurement`, `VarianceGroup`, `InverseGammaVariance`, `HalfCauchyDeviation`, `MeasurementModel`; `FunctionalFormulation` (`TruncationTerm`, `FunctionalDiscrepancy`), `MultivariateFormulation`, `CalibrationCovariance` (`Create`, `Factor`) → `CovarianceFactor`; `CalibrationModel` (`Target`, `Physical`, `Delta`), `CalibrationTarget`, `CalibrationState`; `CalibrationSampler.Run` → `ConditionalRun` of `CalibrationDraw`; `NestedCalibrationSampler.Run` → `NestedCalibration` (`Runs`, `NotConverged`, `Pooled`); `CalibrationConfig` (`ToJson`, `FromJson`, `Validate`) |
+| BASS SMC (stage 8) | `BassSampling.Smc` (`SmcSpec`), `BassParticle`, `BassParticles`, `BassParticleTarget`, `BassSmcKernel`, `BassSmcFit`; `BassDiagnostics.Smc` (`BassSmcReadout`, `BassSmcReplicate`, `ReachedPosterior`, `Spread`), `BassEvidence.OfSmc`; `PointwiseLogDensity.Weights`; `BassRunLengths.Smc`; calibration: `CalibrationConfig.Smc` (`CutSmcSpec`), `CalibrationBridge`, `BridgeEvaluation`, `CutSmcKernel`, `CutSmcParticles`, `CutSmcOrdering` (`Tour`, `Random`), `CutSmcSampler.Run` → `CutSmcCalibration` (`Populations`, `CutSmcPopulation`, `CutSmcLeg`, `Pooled`) |
 | BAPS | `IBandPenalty` (`Bandwidth`, `Nullity`, `AccumulateInto`, `Roughness`), `ILocallyAdaptivePenalty` and `IAnisotropicPenalty` (`Components`, `AccumulateComponents`, `ComponentRoughness`, `SamplePrior`, `Spectrum` → `PenaltySpectrum`: `LogPseudoDeterminant`, with its gradient and Hessian in ln λ); `ISmoothingVariancePrior` (`LogDensityOfLog`) and `ISmoothingVariancePriorChoice` (`Resolve`): `ScaledWeibullPrior(tailProbability = 0.05)`, `InverseGammaVariancePrior(shape, scale)`, `WeibullVariancePrior(scale, shape = ½)` (`Rate`), `WeibullVariancePrior.ScaledTo(design, penalty, bound, tailProbability = 0.05)` and `ScaledToResponse(design, penalty, y)`; `SmoothingVarianceUpdate` (`Slice`, `Newton`); `NoiseVariancePrior` (`InverseGamma`, `Jeffreys`); `DifferencePenalty(order = 2)`; `PenalizedSpline(design, y, IBandPenalty)` (`Coefficients`, `ProfiledVariance`, `RemlLogEvidence`, `EffectiveDegreesOfFreedom`, `EdfSlope`); `Baps(..., componentPrior, componentUpdate, noisePrior).Run(BapsScheme, …)` (`ComponentPrior`) with `BapsScheme` (`Gibbs`, `Collapsed`, `LocallyAdaptiveGibbs`, `AnisotropicGibbs`) → `BapsResult` (`PosteriorDraws`, `FitBand(design)` → `PointwiseBand`, `Sigma2Interval`, `Tau2Interval`, `ComponentLambdaInterval(j)` → `PosteriorInterval`, `ComponentLogLambdaConvergence`); `HierarchicalPSpline(..., anisotropicSmoothing = false, componentPrior, componentUpdate, noisePrior).Run` (`ComponentPrior`) → `HierarchicalResult` (`PosteriorDraws` per chain, Rao–Blackwellized means, `PopulationBand`, `ReplicateBand`, three variance intervals, `ComponentSmoothingVarianceInterval(j)`, three convergence diagnostics, `ComponentSmoothingVarianceConvergence`, `RHatPopulation`, `Checkpoint`); `HierarchicalStart` (`Overdispersed`, `Fixed`); `HierarchicalScheme` (`Centred`, `CollapsedPopulation`, `Interweaved`, `CollapsedInterweaved`, `ParameterExpanded`); `HalfTDeviationPrior(Degrees, Scale)`; `TensorProductDesign.Build` → `TensorDesign`; `TensorPenalty`; `AnisotropicTensorSpline` (`Coefficients`, `RemlLogEvidence`, `RemlOptimum` → `AnisotropicReml`, `Penalty`) |
 | BGP | `SquaredExponentialKernel : IGpKernel`; `GpRegression(x, y, sigma2, kernel, scaling = Similarity)` or `GpRegression.WithUnknownScale(x, y, kernel, scaling)` (`NoiseModel`, `Fit(t, η)` for an unknown scale; `Fit(t)` → `GpFit`, `PredictMean`, `PredictVariance`, `KernelAffinity`, `Transform` → `GpTransform`); `EmpiricalBayesBandwidthPrior(gp, …)`; `BgpSampler(gp, prior).Run(...)` → `BgpResult` (`PosteriorMean`, `PosteriorSd`, `BandwidthDraws`) |
 | Changepoint | `ExactChangepoint.Infer(y, σ², ν, ρ², maxSegments)` or `Infer(y, ISegmentModel, maxSegments)` → `ChangepointResult`; `DefaultHyperparameters(y)`; `GaussianSegmentModel`, `CauchySegmentModel`; `ChangepointResult.Posterior.Sample(draws, seed)` → `ChangepointDraw` |
@@ -740,7 +741,7 @@ with B the intercept and the terms' columns, τ the precision multiplier as in R
 
 - *Why level centring.* It is proper; it gives BARS and BASS one convention through the shared block; and it is R's convention applied to y − ȳ, which R's own code advises (a commented-out stop in its σ² update). The intercept stays a column inside the g-prior, so k = M + 1, centred on the level, μ₀ = ȳ·e₀. With the mean, the level's own energy is exactly zero, so τ's conditional reads no level at all. Liang with the scaled σ² prior was the coherent runner-up.
 - *What it costs against Liang.* It reads the level from the data at no charge, so σ² gets N degrees of freedom, not N − 1. Under the Jeffreys limit its marginal is Liang's with −N/2 in place of −(N − 1)/2 on (1 + g(1 − R²)), g = 1/τ (F-O9, to 10⁻⁸). Against the intercept-only structure it favours a structure by 0.43–0.47 nats more than Liang at M = 1 and by 1.06–1.08 at M = 5, and between two structures one term apart by 0.23–0.24, at N = 40, 100 and 1000. A term's Occam factor is about ½·ln(1 + g), 1.8–3.5 nats at these N, so the extra credit is a small fraction of it, but systematic and not shrinking with N.
-- *What it buys.* An evidence wherever a run can give one (a ladder ending at the reference rung, S8, or the SMC normalizer, stage 8; neither is built yet), empirical-Bayes in the level and the scale and so comparable only on the same data; proper exact fits; the exact reference rung and SMC from the prior with no separate mode; and no raw-unit prior among the defaults (OQ19 settled for BASS).
+- *What it buys.* An evidence wherever a run can give one (a ladder ending at the reference rung, S8, or the SMC normalizer, stage 8), empirical-Bayes in the level and the scale and so comparable only on the same data; proper exact fits; the exact reference rung and SMC from the prior with no separate mode; and no raw-unit prior among the defaults (OQ19 settled for BASS).
 - *The Liang convention* integrates a flat intercept out, with k = M. It gives up the absolute marginal: its values hold up to the flat prior's constant, which cancels from every within-rung ratio and every swap, so it reports no evidence, and on the integrated tempered form (below) it loses b = 0.
 - *The zero centre* is DiMatteo, Genovese and Kass's prior, selectable on its own terms, for a response whose level is known to be zero; k = M + 1, and the intercept's fitted energy Nȳ² joins Q. Under it, a y far from zero against its noise pushes τ small, and a small τ makes every term's Occam factor, about (τ/(1+τ))^{1/2}, harsher, so fits come out sparser than the data warrant. On F-O9's 40-point design the two-hinge structure's Bayes factor goes from 5.56 to 2.16 and −3.87 nats at offsets 0, 10 and −250, where level centring and Liang do not move.
 - *The median centre* is refused: it is for the noise extensions' weights. For supplied-basis and PCA fits the coefficient responses already have zero mean across cases, so the conventions nearly coincide there; the choice bites for scalar and direct fits.
@@ -953,6 +954,61 @@ The rounds read the barrier high while the replicas relax: on the functional fix
 - The evidence against the oracle's exact ln Z: fixture B −28.554 ± 0.070 (linear) and −28.609 ± 0.086 (integrated) against −28.589, fixture C −30.882 ± 0.075 against −30.903, self-sized.
 - The functional fixture, four chains of 4,000 burn-in and 4,000 draws: self-sized, ln Z 192.59 ± 0.52 (integrated) and 193.45 ± 0.41 (linear, path sampling 193.42 ± 0.53), against 193.40 ± 0.37 and 193.03 ± 0.30 at fixed 32 and 64 rungs; fixed 8 read 189.68 ± 1.51, the between-chain error showing what the within-chain 0.43 hid.
 - Resume bit for bit across resizes and after burn-in; the clone invariant; a binding budget flagged and still reported.
+
+### BASS: SMC
+
+Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage8-fitting-smc-brief.md#reports)) fits BASS by SMC on D05's sequence. It is an option beside MCMC: `BassSampling.Smc`, a `SmcSpec`, with null meaning MCMC, the default.
+
+**The sequence** (D05):
+- it starts from exact prior draws on F (`BassPriorSampler`) and runs to b = 1 on the likelihood path;
+- the integrated form is the default (`Form`). The linear form is selectable, and it is the only one under D03's improper options, where the normalizer is no evidence;
+- each particle's incremental weight is ℓ_{b′} − ℓ_b;
+- stages are placed by conditional ESS (`TargetConditionalEss` 0.99);
+- the population is resampled multinomially when its ESS falls below half (`ResampleBelow` 0.5);
+- the mutation is `MutationSteps` 5 of D04's sweep at the stage's b, with no adaptation.
+
+**A particle** is a `BassState` with its own moves and design. A fork copies the design as the ladder's hand-over does, the factor copied and the columns shared.
+
+**Replicates** (`Replicates` 4, of `Particles` 1,000 each) are independent runs, the SMC analogue of chains, run in parallel.
+- *Refused with `Smc`:* `Tempering` and an R̂ target.
+- *Not read:* `Chains`, `BurnIn`, `Samples`, `Thin` and the stop's settings, which the resolution logs as not read.
+- *The stage budget:* `MaxStages`, 1,000 per replicate. A replicate that spends it before b = 1 is flagged (`BassSmcReadout.ReachedPosterior`), and its posterior views refuse. `Bass.Resume` continues it, bit for bit.
+
+**The draws keep their weights** (`BassFit.DrawWeights`, each replicate's population at weight 1/R in all), and every view reads them. `PointwiseLogDensity.Weights` puts them into WAIC and PSIS-LOO (the pointwise section below).
+- *Shared ancestry* makes errors computed as though the draws were independent read optimistic. The readout reports each replicate's families beside its ESS, and the honest error is the spread between replicates.
+
+**The readout** (`BassDiagnostics.Smc`).
+- *Per replicate:* its stage reports (ESS, conditional ESS, resampling, families, acceptance, the normalizer's increments and genealogy variance), and its final ESS and families.
+- *Across replicates* (`Spread`): the spread of each monitored quantity's posterior mean, in posterior-sd units.
+- *No chain R̂:* it is unavailable under SMC, and the verdict reads undetermined in every group. Split R̂ means nothing for a population, which has no order to split.
+
+**The evidence** (`BassEvidence.OfSmc`), under D03's proper defaults.
+- Each replicate's normalizer, with its genealogy error (Lee and Whiteley 2018).
+- Pooled by `LadderEvidence.Pool`'s rule, the larger of the within-run and between-run errors.
+- Stepping-stone over the traced stages (`TraceStages`) equals the normalizer, and path sampling joins on the linear form.
+
+**Checked:**
+- the kernel's law against enumeration at three b, on both forms and under fixed g;
+- forks independent of their parents, and parallel runs equal to serial ones;
+- the normalizer against the oracle's exact ln Z: fixture B −28.597 ± 0.027 on the integrated form and −28.593 ± 0.032 on the linear, against −28.589; fixture C −30.888 ± 0.019, against −30.903;
+- fixture A's posterior: the count law 0.176, 0.750, 0.074 against 0.176, 0.751, 0.073, E[τ], and all 48 inclusions;
+- the weighted WAIC and PSIS-LOO against an equal-weight resample;
+- resume bit for bit;
+- MCMC fits bit-identical with `Smc` null.
+
+**The qualification** (D10's stage 8 question; exploration). Four replicates of 1,000 particles, with S10's seeds, at N ≈ 250, at S10's size, at 1,000 and at 4,000.
+- *Mixed and functional: SMC finds the better representation.* At S10's sizes every replicate holds the structure the best MCMC chains hold, where one mixed chain and two functional chains sat 22–29 nats below. The replicates agree within 1.3–2.4 nats.
+- *Friedman: it does not.*
+  - The replicates' log posteriors span −897 to −915, against the best chain's −892.4.
+  - They mostly hold three x1·x2 terms where the best chain holds two.
+  - They disagree by 13–66 nats, more at larger N.
+  - σ's interval misses the truth at N = 250–1,000, lying above it as untempered MCMC's does, and covers it at 4,000.
+- *Lineages collapse.* Friedman's replicates end descended from one or two initial particles, and the others thin as N grows.
+  - So the comparison between modes happens among the few lineages alive at low b, not near b = 1, where the modes' mass ratios would decide it.
+  - The genealogy error saturates at √ln 2 = 0.83 once one family is left. The replicates' spread, 1–21 times larger, is the error to read.
+- *Prediction agrees better than structure:* σ²'s spread is 0.04–0.4 posterior sd, while M's and the log posterior's reach 0.6–1.0 on Friedman.
+- *The cost:* about 125–300 stages, and 0.5–5 minutes a fit.
+- *No default changes:* MCMC stays the default. Whether more particles, more sweeps, or a schedule that keeps lineages would help is unread.
 
 ### BASS: the pointwise density and the residual check
 
@@ -1238,7 +1294,36 @@ Stage 7 (2026-10-29) builds D09's calibration under `spline/bass/calibration/`. 
 
 **A cost to watch.** `DiagonalPlusLowRank` factors by a Jacobi thin SVD of the m × k low-rank factor on every σ² proposal. That took 1.4 ms at m = 20 with 39 columns before the residual set's compression, and 33 µs after. Where sizes make it binding, the Cholesky factor of the capacitance matrix, O(m·k² + k³), is the cheaper route (N15).
 
-**Not built:** cut SMC and the fitting SMC adapter (stage 8: C4, C5).
+**Cut SMC** (stage 8's C5, 2026-10-29; [the chip's report](../../issues/regression/bass/stage8-cut-smc-brief.md#reports)). It is an option beside the nested reference: `CalibrationConfig.Smc`, a `CutSmcSpec`, with null keeping C3's sampler. It follows Mathews, Gopalan, Gattiker, Smith and Francom (arXiv 2406.07555).
+- *The first leg* tempers from an exact prior draw to the first emulator draw's conditional μ_1, on D05's likelihood path.
+- *The tour* orders the S outer draws, nearest neighbour then 2-opt.
+  - The distance d(s, s′) is the weighted spread of ℓ(θ; e_s) − ℓ(θ; e_s′) over the first leg's particles: the quantity a bridge's conditional ESS falls with.
+  - Any order gives a valid estimator; the tour changes only the cost. `Order.Random` is the comparison.
+- *The bridges* (`CalibrationBridge`): log π + ℓ_{s−1} + t·Δ, with Δ = ℓ_s − ℓ_{s−1}, a target on the likelihood path with t placed by conditional ESS.
+  - Each bridge's first step is bisected on cached increments; the core's tempering then takes it to t = 1.
+  - One `SmcRun` spans the tour, so its families count the lineages over every bridge.
+- *The kernel* (`CutSmcKernel`) is the conditional sampler's block scan, aimed at the bridge:
+  - the θ walk and the variance steps are Metropolis on the bridged density, with scales set per stage from the population;
+  - the categorical block enumerates the bridged conditional;
+  - the discrepancy draws from its bridged Gaussian, with precision I/s_v² + Σ_k w_k DᵀΣ_k⁻¹D.
+  - R's independence decorrelation step is left out, and every block keeps its stage invariant.
+- *The cut posterior* pools each visit's population at weight 1/S, whatever its evidence.
+  - A draw that misfits, with evidence 5 nats below the others', still pools at 1/3, where a joint posterior would weigh it at 0.36%.
+  - Weighted emulator draws are resampled by weight into the outer draws, as C3's are, so a draw resampled k times carries k/S.
+- *Checked:*
+  - the bridge's density, each block's invariance at t = 0.3 and 0.7 by quadrature, and the bridged Gaussian and enumeration against closed forms;
+  - the pooled posterior against the exact mixture (E[θ] 0.5359 against 0.5340, 1.5 SE), and each visit's evidence against quadrature;
+  - against C3 on stage 7's fixtures: every pooled moment within 2 SE;
+  - the cut kept, S = 1, and a collapsing bridge (45 stages, 196 families left, its population on its conditional).
+- *Compared* (exploration, on stage 7's recovery fixture):
+  - Against a random order, the tour halves the bridge stages (53 against 118 at S = 20) and keeps more lineages (341 against 241).
+  - At S = 6, C3 under the default gate reaches cut SMC's error on E[θ] for less processor time. SMC's first leg is most of its cost, about 70 of its 85–94 stages.
+  - Each further draw costs about 2.8 bridge stages, so SMC's advantage would come at larger S, which is untested.
+  - θ*'s coverage matches C3's.
+- *Two readings for stage 7:*
+  - every C3 inner run converged under the default gate (R̂ 1.01, ESS 100 per chain), in at most 2,750 draws a chain;
+  - on the direct fit, C3 at 1,000 fixed draws a chain sat 2.8 SE from its own 8,000-draw value: a short-run bias that its R̂ and ESS gate does not see.
+- *The cost* is the covariance factor's. A bridge sweep builds about four factors, at 164 µs each, against 1.6 µs for a prediction (N15).
 
 ### BASS: presentation
 
@@ -1257,8 +1342,10 @@ Stage 9 (2026-10-29) builds the data R's `plot`, `print` and `summary` methods s
   - `Min` and `Max` are R's boxplot whiskers at `range = 0`.
   - The default probabilities are 0.025, 0.25, 0.5, 0.75 and 0.975.
 - *One weighted quantile.* `DrawSample.Quantile` (see [Samplers](./Samplers.md)) serves every summary and a basis fit's predictive quantiles. Stage 5's step-CDF form (R's type 1) is gone, and a direct fit keeps the Gaussian mixture's exact quantile.
-  - Under equal weights at any scale it is type 7; under unequal weights, the weighted ECDF's midpoint rule.
-  - The jump between equal and near-equal weights is inherent to pairing the two. It will matter when SMC's unequal weights arrive (stage 8). A weighted type-7 generalization through Kish's effective size is the alternative.
+  - It is Akinshin's weighted type 7 (2023, §6; stage 8, `d0a0fd8`). It is exactly type 7 under equal weights at any scale, and continuous in the weights, a weight going to 0 included, so a negligible SMC particle moves no quantile.
+  - Under unequal weights it is not anchored at the extremes: Q(0) and Q(1) lie inside them once the end draws' weights fall below 1/n*. No rule can be both anchored and continuous, since the maximum over the positive weights jumps when the top draw's weight reaches 0.
+  - The rule it replaced, the midpoint rule, jumped between equal and near-equal weights, and let a weight of 10⁻⁹ act as a full node. An atom at 100 among atoms at 0 and 1 moved Q(0.99) from 0.99 to 97.03.
+- *An SMC fit* has no traces, since its draws are a population with no order; its stage readings are `Diagnostics.Smc`. Its run lengths report its `SmcSpec`, with the sweep counts null.
 - *Defaults* (the stage 9 chip's report; confirmed by the user on 2026-10-29):
   - indices are summarized over the defined draws, variances over every draw;
   - `NoiseSd` is E[σ], as R's code computes it;
@@ -1628,6 +1715,11 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 - **The relative efficiency** r_eff (loo's `relative_eff`). Per unit it is the ESS of the unit's likelihoods within the chains, over S. The ESS is `ChainDiagnostics.MeanEss`: Stan's estimator on split chains, not rank-normalized, the posterior package's `ess_mean`. Independent draws, and an ESS that cannot be estimated, take 1; chains of unequal length are cut to the shortest. A slowly mixing unit gets a longer tail and a larger error.
 - **The Monte Carlo error** (loo's `mcse_elpd_loo`). Per unit it is √log(1 + Σ_s w̃_s²(p_s/p̂ − 1)²/r_eff): the self-normalized estimator's relative variance (Vehtari et al. 2024, eq. 6), moved to the log scale by a log-normal's moments. The total is √Σ of the units' squares, NaN when any k̂ exceeds the threshold, as in loo. It treats the units' errors as independent, though they share the draws. `JointMonteCarloError` keeps their correlation to first order: each draw's influence on the total, Ψ_s = Σ_u w̃_us(p_us/p̂_u − 1), gives the total's variance Σ_s Ψ_s²/r_eff, with r_eff the ESS/S of Ψ along the chains (`MeanEss`). It is NaN under the same rule, and both totals are reported.
 - WAIC treats the draws as independent and reports no Monte Carlo error.
+- *Weighted draws* (SMC, stage 8; `PointwiseLogDensity.Weights`).
+  - WAIC's lppd is log Σ W p, and p_WAIC is Σ W(ℓ − ℓ̄)²/(1 − Σ W²).
+  - PSIS-LOO's log ratios are log W − ℓ, with zero-weight draws dropped.
+  - Equal weights reproduce the unweighted forms.
+  - A population refuses chain lengths, since it has no order for r_eff.
 - Conformal Bayes (Fong & Holmes 2021) is deferred to the SPC × BARS work.
 
 **Checks.**
@@ -1688,10 +1780,12 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
 | `BassSampling` Chains / MasterSeed / BurnIn / Samples / Thin | 4 / 0 / 9000 / 1000 / 1 | R's split of 10,000, provisional; read by the run (S7) |
 | `BassSampling` RHatTarget / BatchSize / MinEssPerChain / ReportEvidence | 0 / 0 / 100 / true | No early stop; read by the run (S7) and the ladder (S8) |
 | `BassSampling` StoppingScope | `All` | The groups an R̂ target gates: every group, or `Predictive` alone (D10, decided 2026-10-29) |
+| `BassSampling` Smc | null: MCMC | `SmcSpec`: `Particles` 1,000, `Replicates` 4, `TargetConditionalEss` 0.99, `MutationSteps` 5, `ResampleBelow` 0.5, multinomial, `Form` integrated, `MaxStages` 1,000, `TraceStages` false (stage 8; provisional) |
 | `CalibrationConfig` Parameters / Measurement / Covariance | required | The calibration inputs, the variance groups with their priors, and the declared formulation (D09) |
 | `CalibrationConfig` EnumerationCap | 1,024 | Categorical combinations enumerated whole; single-site steps above |
 | `CalibrationConfig` Sampling | `BurnIn` 2,000, `Samples` 2,000, `Thin` 1, `DecorrelationEvery` 100, `Tempering` null | The conditional sampler; no default ladder |
 | `CalibrationConfig` Reference | `OuterDraws` null (every draw), `Chains` 4, `MaxSamples` 4,000, `BatchSize` 250, `RHatTarget` 1.01, `MinEssPerChain` 100 | The nested reference sampler, gated by N14's verdict |
+| `CalibrationConfig` Smc | null: C3's nested sampler | `CutSmcSpec`: `Particles` 1,000, `TargetConditionalEss` 0.99, `MutationSteps` 5, `ResampleBelow` 0.5, multinomial, `OuterDraws` as C3's, `Order` Tour, `MaxStagesPerLeg` 1,000 (stage 8; provisional) |
 | `BassSampling` Moves | `EqualOverAvailable` | D01's schedule; `PriorCancelling(C = 0.4)`, C ∈ (0, ½], the option |
 | `BassSampling` LocalSteps | null: off | `LocalSteps(Probability = 0.5, WindowFraction = 0.02)`: local knot steps and level toggles inside a change (F-M2; the pass made it no default, 2026-10-29) |
 | `BassSampling` FactorMoves | null: off | `FactorMoves(Change = 1, PruneOrGrow = 1, VariableChange = 1)`: the fixed-M family in the change's slot, by these shares (F-M2; the pass made it no default, 2026-10-29) |
@@ -1753,7 +1847,7 @@ Every source is checked, papers and their code included (the user's decision, 20
 
 ## Status and caveats
 
-- **This section describes BASS through stage 4** (S1–S10, 2026-10-28), **with stages 5 and 6** (2026-10-29). Calibration (stage 7) is built to D09, decided on 2026-10-29; SMC (stage 8) is not. Stage 9 builds the presentation data; rendering and text formatting wait for a consumer above maths.
+- **This section describes BASS through stage 4** (S1–S10, 2026-10-28), **with stages 5 and 6** (2026-10-29). Calibration (stage 7) is built to D09, decided on 2026-10-29, and SMC (stage 8) is built for fitting (C4) and cut calibration (C5). Stage 9 builds the presentation data; rendering and text formatting wait for a consumer above maths.
   - *Stage 5 and 6's choices left as reversible defaults* are listed in their chips' reports (`issues/regression/bass/stage5-outputs-brief.md`, `stage6-sensitivity-brief.md`). Among them: basis sensitivity's integrated form includes the mean curve y_m in the location's effect (confirmed by the user on 2026-10-29; the centred anomaly y − y_m would be a later option); `Predict`, `Sensitivity` and `Effects` take the training data, since the fit keeps neither its knots nor its inputs; a basis fit's intervals are weighted quantiles of its draws.
   - *Open from the qualification:* the defaults mix slowly between structures. R̂ of M read 1.5–2.5 on the recovery surfaces at 5,000 + 2,000 sweeps, as R BASS's chains do, with births and deaths accepting about 1.5%; tempering lowers it, but the local moves bound it. Friedman's σ reads high untempered for that reason and for the fit's bias.
   - *Built:* the contracts and their refusals, the terms and the basis, the structure prior and the proposals, the design and admission, the collapsed target, the sweep, the run with its diagnostics and checkpoints, the self-sizing tempered ladder and the evidence, the pointwise density and the residual check, the qualification runs, and F-M2's local-move options (Phase 1).
@@ -1796,7 +1890,7 @@ Every source is checked, papers and their code included (the user's decision, 20
 |---|---|
 | Spline core | `spline/KnotConfig.cs`, `IBasis.cs`, `SplineBasis.cs`, `BSpline.cs`, `BandedDesign.cs` |
 | BARS | `spline/bars/Bars.cs`, `BarsEnsemble.cs`, `SplineTarget.cs`, `KnotMoves.cs`, `KnotKernels.cs`, `AdaptiveLocalBetaKernel.cs`, `DmgkSchedule.cs`, `ComplexityPriors.cs`, `WeightedNormalModel.cs`, `PoissonModel.cs`, `WhittleModel.cs`, `GibbsLossModel.cs`, `WeightResampling.cs`, `StepBasis.cs`, `SplineExtrema.cs`, `IObservationModel.cs`, `IConditionalFit.cs`, `IKnotKernel.cs` |
-| BASS | `spline/bass/Bass.cs` (the fit, resume and the fingerprint), `BassRun.cs`, `BassRunOptions.cs`, `BassFit.cs`, `BassDiagnostics.cs`, `BassPriorSampler.cs`, `BassLadder.cs`, `BassEvidence.cs`, `BassPointwise.cs`, `BassResidualDependence.cs`, `BassConfig.cs`, `BassData.cs`, `BassResolved.cs`, `BassInputTransform.cs`, `BassInputs.cs`, `BassTerm.cs`, `BassBasis.cs`, `BassStructurePrior.cs`, `BassTermProposal.cs`, `BassDesign.cs`, `BassTarget.cs`, `BassModel.cs`, `BassState.cs`, `BassSweep.cs`; stage 5: `spline/bass/output/` (`BassDecomposition.cs`, `BassComponents.cs`) and `spline/bass/posterior/` (`BassPrediction.cs`, `BassPredictionInputs.cs`, `BassSurface.cs`, `PredictiveMixture.cs`, `BassJointDraws.cs`, `BassBasisPrediction.cs`, `BassBasisDensity.cs`); stage 6: `spline/bass/sensitivity/` (`BassSensitivity.cs`, `BassBasisSensitivity.cs`, `BassBasisEffects.cs`, `SobolDecomposition.cs`, `EffectFunctions.cs`, `BassMoments.cs`, `PiecewisePolynomial.cs`, `InputMeasures.cs`); stage 9: `spline/bass/presentation/` (`BassSummary.cs`, `BassTraces.cs`, `BassTrainingFit.cs`, `PosteriorSummary.cs`, `SobolSummary.cs`); stage 7: `spline/bass/calibration/` (`BassEmulators.cs`, `CalibrationBlocks.cs`, `CalibrationConfig.cs`, `CalibrationCovariance.cs`, `CalibrationEmulator.cs`, `CalibrationModel.cs`, `CalibrationParameter.cs`, `CalibrationSampler.cs`, `MeasurementModel.cs`, `NestedCalibration.cs`) |
+| BASS | `spline/bass/Bass.cs` (the fit, resume and the fingerprint), `BassRun.cs`, `BassRunOptions.cs`, `BassFit.cs`, `BassDiagnostics.cs`, `BassPriorSampler.cs`, `BassLadder.cs`, `BassEvidence.cs`, `BassPointwise.cs`, `BassResidualDependence.cs`, `BassConfig.cs`, `BassData.cs`, `BassResolved.cs`, `BassInputTransform.cs`, `BassInputs.cs`, `BassTerm.cs`, `BassBasis.cs`, `BassStructurePrior.cs`, `BassTermProposal.cs`, `BassDesign.cs`, `BassTarget.cs`, `BassModel.cs`, `BassState.cs`, `BassSweep.cs`; stage 5: `spline/bass/output/` (`BassDecomposition.cs`, `BassComponents.cs`) and `spline/bass/posterior/` (`BassPrediction.cs`, `BassPredictionInputs.cs`, `BassSurface.cs`, `PredictiveMixture.cs`, `BassJointDraws.cs`, `BassBasisPrediction.cs`, `BassBasisDensity.cs`); stage 6: `spline/bass/sensitivity/` (`BassSensitivity.cs`, `BassBasisSensitivity.cs`, `BassBasisEffects.cs`, `SobolDecomposition.cs`, `EffectFunctions.cs`, `BassMoments.cs`, `PiecewisePolynomial.cs`, `InputMeasures.cs`); stage 9: `spline/bass/presentation/` (`BassSummary.cs`, `BassTraces.cs`, `BassTrainingFit.cs`, `PosteriorSummary.cs`, `SobolSummary.cs`); stage 7: `spline/bass/calibration/` (`BassEmulators.cs`, `CalibrationBlocks.cs`, `CalibrationConfig.cs`, `CalibrationCovariance.cs`, `CalibrationEmulator.cs`, `CalibrationModel.cs`, `CalibrationParameter.cs`, `CalibrationSampler.cs`, `MeasurementModel.cs`, `NestedCalibration.cs`); stage 8: `spline/bass/BassSmc.cs`, `BassSmcRun.cs`, and `calibration/CalibrationBridge.cs`, `CutSmcKernel.cs`, `CutSmcOrdering.cs`, `CutSmc.cs` |
 | BASS's shared pieces | `gprior/CollapsedGPrior.cs` (`FromCentredLeastSquares`, `CentredMarginalAt`, `GPriorMarginal.LogMarginalSlope`), `gprior/Sigma2Prior.cs`; under `src/maths/`: `distributions/Wallenius.cs`, `distributions/SpecialFunctions.cs` (`Digamma`), `linalg/BorderedCholesky.cs`, `linalg/KhatriRao.cs`, `linalg/PairwiseSum.cs`, `samplers/rjmcmc/ReversibleJumpChain.cs`, `samplers/rjmcmc/ParallelTempering.cs` (the per-replica blocks, for S8), `samplers/blocks/BlockScan.cs`, `samplers/blocks/SliceSampler.cs`; for stage 6, `distributions/IIntervalMoments.cs` with `Uniform.cs`, `Mixture.cs`, `Empirical.cs`, `GaussLegendre.cs` and the interval moments of `Normal`, `StudentT` and `Truncated<T>` |
 | BAPS | `spline/baps/DifferencePenalty.cs`, `IBandPenalty.cs`, `PenalizedSpline.cs`, `Baps.cs`, `HierarchicalPSpline.cs`, `TensorProductDesign.cs`, `TensorPenalty.cs`, `PenaltySpectrum.cs`, `ComponentSmoothing.cs`, `SmoothingVariancePriors.cs`, `AnisotropicTensorSpline.cs`; `NelderMead.cs` (the REML optimum's search) |
 | BGP | `bgp/GpKernel.cs`, `GpTransform.cs`, `GpRegression.cs`, `EmpiricalBayesBandwidthPrior.cs`, `BgpSampler.cs` |

@@ -18,8 +18,8 @@ Companion to [port-calibration-brief.md](port-calibration-brief.md). An item is 
 - [x] **C1** Typed covariance formulations: functional and multivariate (stage 7 chip, `24014cd`).
 - [x] **C2** Variance groups, discrepancy, and categorical calibration parameters (`50565b9`; the conditional sampler `d3af6a3`).
 - [x] **C3** Nested conditional reference sampler, with inner-run error measured (`ab14608`).
-- [ ] **C4** Fitting SMC adapter on D05's sequence.
-- [ ] **C5** Cut-calibration SMC adapter, with ordering and induced-density bridges.
+- [x] **C4** Fitting SMC adapter on D05's sequence (stage 8 chip C4: `d0a0fd8`, `9e8c349`, `b0978d5`, `73352f0`).
+- [x] **C5** Cut-calibration SMC adapter, with ordering and induced-density bridges (stage 8 chip C5: `86c5969`, `2e77db3`, `eb05485`, `cb0ecef`).
 
 ### Room for extensions
 
@@ -27,6 +27,31 @@ Companion to [port-calibration-brief.md](port-calibration-brief.md). An item is 
 - [x] **C-X2** Emulator draws behind an interface. Built in stage 7 itself (D09, 2026-10-29; `066a054`).
 
 ## Reports
+
+### Stage 8 verified: fitting SMC (C4) and cut SMC (C5) — 2026-10-29
+
+The two stage 8 chips built them in parallel ([C4's report](stage8-fitting-smc-brief.md#reports), [C5's](stage8-cut-smc-brief.md#reports)), and they were read and verified here.
+- *Commits:* C4 `d0a0fd8`, `9e8c349`, `b0978d5`, `73352f0` and report `9036a38`; C5 `86c5969`, `2e77db3`, `eb05485`, `cb0ecef` and report `e3ddc02`. `src/maths/samplers/smc/` is untouched.
+- *Read here:*
+  - `DrawSample` is Akinshin's window over the pooled step function, with n* counted over the individual draws;
+  - the incremental weights are the core's `Temperature.LogDensity` differences;
+  - each cut-SMC visit pools at exactly 1/S.
+- *Suites rerun here:* Samplers 206/206, Regression 1,169/1,169 and the BASS oracle classes 71/71 at the chips' last commits; after the presentation fix here (`ebf0697`), its classes 40/40 and the full Regression suite 1,170/1,170.
+- *A fix here,* the gap C4 named in stage 9's files: an SMC fit's `Traces()` now refuses (its draws are a population with no order), and its `BassRunLengths` carry its `SmcSpec` with the sweep counts null.
+- *What the readings show:*
+  - fitting SMC finds the best MCMC representation on the mixed and functional fits, but not on Friedman;
+  - lineages collapse to one or two families per replicate, so the genealogy error saturates and the replicates' spread is the error;
+  - cut SMC's tour halves the bridge stages against a random order, while C3 stays cheaper at S = 6;
+  - every C3 inner run converged under the default gate, which closes stage 7's open item.
+- *Docs:*
+  - `docs/Maths/BayesianRegression.md` gains "BASS: SMC" and cut SMC in the calibration section, the new weighted quantile, the weighted pointwise forms, and the API, configuration, status and source rows;
+  - `docs/Maths/Samplers.md` gains `DrawSample`'s rule.
+- *Open:*
+  - Friedman's worse modes under SMC: the lineages, not the particle count, bind;
+  - cut SMC at larger S;
+  - C3's short-run bias, which its gate does not see;
+  - N15, the covariance factor's cost;
+  - N16, the core's conveniences.
 
 ### Stage 7 verified: calibration — 2026-10-29
 
