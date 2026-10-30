@@ -24,10 +24,10 @@ public sealed class BassCalibrationRecoveryTests
     private readonly ITestOutputHelper _out;
     public BassCalibrationRecoveryTests(ITestOutputHelper output) => _out = output;
 
-    private const int M = 20;
-    private static readonly double[] T = [.. Enumerable.Range(0, M).Select(l => l / (M - 1.0))];
-    private static readonly double[] ThetaStar = [1.3, 0.4];
-    private static readonly ContinuousParameter Theta1 = new("theta1", 0.5, 2.0), Theta2 = new("theta2", 0.0, 1.0);
+    internal const int M = 20;
+    internal static readonly double[] T = [.. Enumerable.Range(0, M).Select(l => l / (M - 1.0))];
+    internal static readonly double[] ThetaStar = [1.3, 0.4];
+    internal static readonly ContinuousParameter Theta1 = new("theta1", 0.5, 2.0), Theta2 = new("theta2", 0.0, 1.0);
 
     private static double Eta(double t, double theta1, double theta2) => theta1 * Math.Sin(2 * Math.PI * (t + 0.25 * theta2)) + 0.5 * theta2 * t;
 
@@ -47,27 +47,27 @@ public sealed class BassCalibrationRecoveryTests
 
     private static BassConfig FitConfig(int seed) => BassRunTests.Config(chains: 2, burn: 1500, samples: 100, seed: seed, maxBasis: 12);
 
-    private static readonly Lazy<BassBasisFit> BasisFit = new(() =>
+    internal static readonly Lazy<BassBasisFit> BasisFit = new(() =>
     {
         (double[,] y, BassPredictor[] predictors) = Runs();
         BassDecomposition d = BassDecomposition.FromPca(y, new BassPcaSpec { VarianceShare = 0.9999 });
         return BassComponents.Fit(d, predictors, FitConfig(4));
     });
 
-    private static readonly Lazy<(BassData Data, BassFit Fit)> DirectFit = new(() =>
+    internal static readonly Lazy<(BassData Data, BassFit Fit)> DirectFit = new(() =>
     {
         (double[,] y, BassPredictor[] predictors) = Runs();
         var data = new BassData(predictors, new FunctionalResponse(y, [new ContinuousPredictor("t", T)]));
         return (data, Bass.Fit(FitConfig(6), data));
     });
 
-    private static double[] Field(int seed, double[] sd, Func<double, double>? delta = null)
+    internal static double[] Field(int seed, double[] sd, Func<double, double>? delta = null)
     {
         var rng = new Xoshiro256PlusPlus(seed);
         return [.. Enumerable.Range(0, M).Select(l => Eta(T[l], ThetaStar[0], ThetaStar[1]) + (delta?.Invoke(T[l]) ?? 0.0) + sd[l] * Normal.SampleStandard(rng))];
     }
 
-    private static double WeightedQuantile(double[] values, double[] weights, double p)
+    internal static double WeightedQuantile(double[] values, double[] weights, double p)
     {
         int[] order = [.. Enumerable.Range(0, values.Length).OrderBy(i => values[i])];
         double total = weights.Sum(), cumulative = 0.0;
@@ -109,7 +109,7 @@ public sealed class BassCalibrationRecoveryTests
         return (covered[0], covered[1]);
     }
 
-    private static GaussianMeasurement OneGroup() => new([new VarianceGroup([.. Enumerable.Range(0, M)], new InverseGammaVariance(4, 0.05))]);
+    internal static GaussianMeasurement OneGroup() => new([new VarianceGroup([.. Enumerable.Range(0, M)], new InverseGammaVariance(4, 0.05))]);
 
     [Fact]
     public void BasisEmulator_RecoversThetaStar()
