@@ -57,6 +57,13 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ## Reports
 
+### Friedman's posterior, by the flat histogram — 2026-10-30
+
+N17 Phase 2's qualification ([its report](flat-histogram-phase2-brief.md#reports); the numerics checklist's report has the verification). On master seed 8017 the flat-histogram sampler is the first to meet the criteria written before its run: every chain tunnels, the chains agree within a nat, and ln Ẑ(1) = −841.4 ± 0.2 reaches the −864.6 bound.
+- *The posterior:* a1, 4 × x1·x2 + 2 × x3 + x4 + x5, at 66–68%, with a1 + x6·x8 at 11%. The basins the MCMC chains and the reference path held carry 1.3% or less together, and σ's interval covers 1.
+- *Not yet replicated:* the WHAM start refused on seed 8217, and a flat start there reading nothing.
+- *What it means for the fitting defaults:* nothing yet. The flat histogram is an option, and its cost (13–15 minutes an arm on Friedman) and its warm start's robustness are open.
+
 ### Friedman's path from a pilot reference, measured — 2026-10-29
 
 A test chip ran SMC from a pilot-built reference on S10's Friedman ([its report](friedman-reference-brief.md#reports); `abdcd4d`, `99b9cb1`, tests only). The main session verified it.

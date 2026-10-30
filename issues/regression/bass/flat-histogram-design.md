@@ -73,6 +73,16 @@ Built and verified ([the chip's reports](flat-histogram-phase1-brief.md#reports)
 - *`FixedPoint`'s start* is fitted log-linearly per node cell, after a mean-field reading showed the first start failing on a density of states spanning hundreds of nats.
 - *Toy 2, 3 × 3 Potts,* is too small to compare samplers. A mean-field Potts toy reads the scaling: the flat histogram's crossing cost grows polynomially (N^(1.8–2.2)), and tempering's stops crossing at q = 4.
 
+## Phase 2, as built (2026-10-30)
+
+Built and verified ([the chip's report and the main session's](flat-histogram-phase2-brief.md#reports); `docs/Maths/BayesianRegression.md`, "BASS: the flat-histogram sampler"). As-built points:
+- *The adapter is the target wrapper over BASS's collapsed target,* with `BassChain` unchanged.
+- *A fit's evidence comes only from b_lo = 0.* From b_lo > 0 the readout holds the ratio, flagged, and the fit's evidence is null.
+- *An iteration is `Thin` sweeps,* since Friedman needed 25M production sweeps a chain.
+- *The pilot's self-sizing ladders are read one at a time and pooled by b.*
+- *Friedman, on one seed:* the decisions' bet held there. The flat histogram crossed the band that tempering and SMC do not, its chains agreed, and ln Z(1) = −841.4 ± 0.2 reached the bound, with the posterior on a1.
+- *Not yet robust:* on a second seed SAMC's fixed point refused the pilot's ĝ, and a flat start at the same budget learned nothing. A warm start that holds across seeds is the next item.
+
 ## What to expect, honestly
 
 - *The overhead is the window's width.* Production spends equal time per ℓ bin, so the share near b = 1 is about the posterior's ℓ₁ spread over the window's width. On Friedman that is roughly 10 nats in about 400, so the b = 1 ESS per sweep falls by a factor of about 40 against an ideal sampler. The bet is that crossing between basins costs far more than that today.

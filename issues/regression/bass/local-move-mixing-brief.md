@@ -315,6 +315,10 @@ Decided by the user on 2026-10-29, taking the recommendations laid out after the
 
 Newest first.
 
+### Friedman's posterior, by the flat histogram — 2026-10-30
+
+On one seed the flat-histogram sampler (N17 Phase 2) tunnels through Friedman's band and puts the posterior on a1, four x1·x2 terms with no x1 or x2 main effect, at 66–68%. So the local moves' slow mixing hid a basin, not just a slow walk between known ones: the chains' bands of M (F-M2) sit in basins holding 1.3% or less of the posterior. A second seed has not replicated it yet ([the report](flat-histogram-phase2-brief.md#reports)).
+
 ### Friedman's path from a pilot reference — 2026-10-29
 
 SMC from a reference built on the chains' and tempered fits' structures agrees within a nat, but on those structures' own evidence, 22–23 nats below the 99.9% lower bound that R2's from-prior normalizers set on ln p(y) ([its report](friedman-reference-brief.md#reports)). The posterior's mass inside basin A lies mostly off the structures the chains visit. The fitting checklist's report has the readings.

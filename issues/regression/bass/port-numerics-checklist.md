@@ -26,7 +26,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N14** D10's convergence verdict: read at the end of every run in the shared ensemble, with the engine's agreement groups and a declared stopping scope; BASS's three groups, the log posterior among its monitored quantities (decided 2026-10-29).
 - [ ] **N15** `DiagonalPlusLowRank` gains the capacitance matrix's Cholesky factor, O(m·k² + k³), beside its per-call Jacobi thin SVD. Found by stage 7 on 2026-10-29: 1.4 ms per σ² proposal at m = 20 with 39 columns. Built when real sizes make it binding.
 - [ ] **N16** The SMC core's conveniences, both stage 8 chips' notes (2026-10-29): `TemperToPosterior` returning at its stage budget rather than throwing, `SmcRun` exposing its `MaxStages`, and a first-step bisection on cached increments in `SmcWeights` beside `ConditionalEss`.
-- [ ] **N17** A flat-histogram sampler, shared by BASS and SPC: SAMC weight learning, multicanonical production over ℓ₁, reweighting and the ln Z(b) curve. Decided to build by the user on 2026-10-29, and its nine design decisions taken the same day ([flat-histogram-design.md](flat-histogram-design.md)); Phase 1, the engine and its toys, built and verified 2026-10-30 (`d7f4ab8`–`3c95d9b`; [its brief](flat-histogram-phase1-brief.md)). Phase 2, BASS's adapter and the Friedman qualification, is briefed ([its brief](flat-histogram-phase2-brief.md)); Phase 3 is SPC's.
+- [ ] **N17** A flat-histogram sampler, shared by BASS and SPC: SAMC weight learning, multicanonical production over ℓ₁, reweighting and the ln Z(b) curve. Decided to build by the user on 2026-10-29, and its nine design decisions taken the same day ([flat-histogram-design.md](flat-histogram-design.md)); Phase 1, the engine and its toys, built and verified 2026-10-30 (`d7f4ab8`–`3c95d9b`; [its brief](flat-histogram-phase1-brief.md)). Phase 2, BASS's adapter and the Friedman qualification, built and verified 2026-10-30 (`33e067e`–`69f6658`, [its brief](flat-histogram-phase2-brief.md)): Friedman's posterior computed on one seed, its replication waiting on a warm start robust across seeds. Phase 3 is SPC's.
 
 ### Room for extensions
 
@@ -35,6 +35,19 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [ ] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update.
 
 ## Reports
+
+### N17 Phase 2 verified: BASS's flat-histogram sampler and Friedman — 2026-10-30
+
+A chip built BASS's adapter and ran the Friedman qualification ([its brief and report](flat-histogram-phase2-brief.md#reports); `33e067e`, `9d78484`, `820982b`, `68ee777`, `6a656d8`, `acf9d2d`, `78708b3`, report `69f6658`). The main session verified it and ran a second seed (`56c66f3`, `699bd8b`; the nine nullable warnings cleared in `93ffbef`).
+- *What it is:* `BassSampling.FlatHistogram`, null by default. `BassChain` runs on the multicanonical wrapper, the fit's draws are weighted at b = 1, the evidence comes from the ratio estimator from b_lo = 0 only, and a WHAM start reads a linear-form pilot.
+- *Friedman, on master seed 8017:* every criterion written before the run holds. Every chain tunnels, the chains agree within 0.34 nats, and ln Ẑ(1) = −841.4 ± 0.2, 23 nats above the bound. The posterior is a1, 4 × x1·x2 + 2 × x3 + x4 + x5, at 66–68%, and σ's interval covers 1.
+- *On a second seed (8217):* the WHAM start was refused by SAMC's fixed point (a node 125 from flat, none empty). A flat start over that pilot's window, at twice the sweeps, made no round trip in learning or production, so by the first criterion it reads nothing. Its curve and a1's presence agree with seed 8017's without confirming them.
+- *The main session's checks:*
+  - the adapter read: the chain on π_w, `Reweigh`, the weights' alignment with the stores, the evidence's conditions and the pilot's linear form;
+  - the below-split diagnosis checked: agreement at b ≤ 0.03 pins the denominator, so SMC is the one losing mass;
+  - the suites rerun in Release: Regression 1,331 of 1,331, Samplers 262 of 262, the BASS oracle classes 90 of 90.
+- *Open, for the user:* the warm start's robustness. The fixed point refuses some pilots' ĝ with no node empty, and a flat start at this budget does not learn Friedman's window. Replication waits on one of them.
+- *Recorded in:* `docs/Maths/BayesianRegression.md`, "BASS: the flat-histogram sampler (N17 Phase 2)", with its Friedman qualification, and the API, configuration, status and source rows; "Friedman's band, measured" points to it.
 
 ### N17 Phase 1 verified: the flat-histogram engine — 2026-10-30
 

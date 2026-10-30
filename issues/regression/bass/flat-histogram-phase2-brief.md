@@ -169,6 +169,24 @@ Recommend no default.
 
 Newest first.
 
+### Verified by the main session, with a second seed — 2026-10-30
+
+- *The build:*
+  - the adapter read (`BassMulticanonical.cs`, `BassFlatHistogramRun.cs`): the chain on π_w, `Reweigh`, the weights against the stores, the evidence's conditions and the pilot's linear form;
+  - the suites rerun in Release: Regression 1,331, Samplers 262, the BASS oracle classes 90, all passing;
+  - the nine nullable warnings cleared (`93ffbef`).
+- *The below-split reading* checked. At b ≤ 0.03 the curve, SMC and exact importance sampling agree to 0.01 nats, and an error in the denominator would shift every b alike, so the 5.5-nat gap at b = 0.10 is SMC's.
+- *A second seed for arm (i),* written before its run (`56c66f3`): master seed 8217, the sweeps doubled through `Thin` = 400, and the same criteria, plus agreement with seed 8017 (ln Ẑ(1) within a nat plus both errors of −841.36, a1 within 5 points of 65.9%).
+  - *The run was refused at its start* (48 s). SAMC's fixed point could not flatten the pilot's ĝ over [−1552.56, −773.559], K = 128, b_lo = 0: no node was empty, but a node's occupancy stood 125 from flat.
+  - *A rerun from a flat start* over that window, K and b_lo, with the gain from 0 and the same lengths, was written before it ran (`699bd8b`). It took 22 minutes, at 67,000 sweeps a second a chain.
+    - Learning: no round trip on any chain in 100,000 iterations, flatness 0.99, the weights still moving 1.5 nats (RMS) between 10% and 50%.
+    - Production: no round trip, flatness 0.98, no draw above the window, b = 1 Kish ESS 8 of 500,000.
+    - ln Ẑ(1) −843.64 ± 0.46, chains −842.9 to −844.9; σ's interval [1.012, 1.104].
+    - a1 at 74.7% pooled, the chains at 81, 79, 47 and 46%, failing the χ² (p < 0.001).
+    - Its ln Z(b) curve matches seed 8017's to within a nat up to b = 0.8 (−126.1, −531.0, −687.7 at 0.1, 0.6, 0.8).
+  - *Against what would count:* the first criterion fails, so the rerun reads nothing about the posterior. What it shows agrees with seed 8017 without confirming it.
+- *So:* the Friedman reading stands on one seed. Replication needs a warm start that holds across seeds, whether a fixed point that does not refuse a ĝ with no empty node, or a learning budget a flat start can cross the window in.
+
 ### Phase 2 built, and the Friedman qualification read (chip, 2026-10-30)
 
 **What landed**, on `main`, nothing pushed:
