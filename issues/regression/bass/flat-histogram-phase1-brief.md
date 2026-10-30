@@ -240,6 +240,12 @@ Tempering wins by about 2× here: the transition at N = 9 is weak (peak/dip 2.4)
   - Coverage: narrow and wide windows, one chain, a chain that never tunnels, and resume mid-learning, each with its test.
   - Nothing existing changed: the four commits add 19 files and modify none.
 
+**WHAM checked against Ferrenberg and Swendsen 1989.** Checked after step 4 against the local copies: the letter at `codex-scientiae/supellex-private/PDFs/SPC/FerrenbergSwendsen1989_physrevlett.63.1195.pdf` and the longer paper at `PDFs/SPC/FerrenbergSwendsen1.4822862.pdf`.
+- *What matches:* `Wham.Estimate` solves their multiple-histogram equations (3) and (4) in the list form the letter allows for, with draws in place of histograms. It finds the f_n by the derivative-guided iteration they recommend, here Newton on the convex objective whose stationary point is (3)–(4).
+- *One departure:* they weigh run n by 1/g_n, with g_n = 1 + 2τ_n its statistical inefficiency (the letter's (3), the longer paper's (10)–(15)). That combination minimizes the error in W(S). `Wham` sets g_n = 1, as for independent draws.
+- *What the departure costs:* the estimate stays consistent under any positive per-run weights, so this costs efficiency only, where rungs mix at different rates. Nothing in step 4's tolerances relied on it.
+- *A follow-up, not done:* take g_n = n_n/ESS_n from each rung's ℓ₁ trace (`ChainDiagnostics`) as the pilot's effective counts. That would make the warm start FS's own combination.
+
 **For Phase 2.**
 - *BASS's structure prior is unnormalized.* The Friedman reference hand-over gives D02's count weight, with ln C 0.9531 and ln Z_F −0.194 on Friedman. The ratio estimator then reads ln Z(b) off by the prior's log mass, a constant in b. Add the known normalizer, or read `LogEvidenceCurve.LogRatio`, which cancels it.
 - *The denominator's tail.* E_w[1/w]'s variance is finite only if E_prior[e^{−b_lo·ℓ₁}] is finite over the low extension. With b_lo > 0 and ℓ₁ unbounded below, read `NormalizerEffectiveSampleSize`; b_lo = 0 removes the question.
