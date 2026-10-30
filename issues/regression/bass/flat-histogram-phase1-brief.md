@@ -153,6 +153,7 @@ Newest first.
 - `3627a13`, step 2: `SamcLearning` (with `FixedPoint`), `IMulticanonicalChain`/`IMulticanonicalModel`/`MulticanonicalChain`, `MulticanonicalRun`, `MulticanonicalDraws`, `FlatHistogramDiagnostics`, `FlatHistogramSpec`.
 - `54f417b`, step 3: `Reweighting` (`WeightedDraws`, `ReweightedEstimate`, `LogEvidenceCurve`).
 - `2fa3bc0`, step 4: `TemperingPilot`, `Wham` (`WhamEstimate`), the run's pilot, the spec's validation, JSON and resume.
+- `4c34930`, after the source check below: WHAM weighs each rung by its effective draws, as Ferrenberg and Swendsen.
 
 **The API.**
 - `MulticanonicalWeights(low, high, lowSlope, logWeights)`: ln w at K equally spaced nodes on [ℓ_lo, ℓ_hi], piecewise linear, slope b_lo below and 1 above; `LogWeight(ℓ)`, `TryLocate(ℓ, out segment, out fraction)`, `FlatOccupancy()` (π: 1/(K−1) inside, half at the edges), `Flat(...)`, `WithLogWeights(...)`. Immutable.
@@ -162,7 +163,7 @@ Newest first.
 - `MulticanonicalRun.Run(spec, target, model, masterSeed, pilot?, resumeFrom?, iterations?, checkpoint, parallel?)` → `MulticanonicalResult<TState>`: `Weights`, `Learning`, `LearningDiagnostics`, `WeightTrace` (start, each hundredth, end), `Production` (the shell's `EnsembleRun`, D10's verdict on π_w's functionals), `Draws`, `ProductionDiagnostics`, `Chains`, `Checkpoint`, `Complete`. Learning: every chain steps at the current weights (in parallel, or serially at a bound of 1), then one update from their visits in chain order, then every chain reweighs. Production: `ChainEnsemble.Run` with burn 0, the learned chains found by their seeds (the shell's `SeedTree` split), so the shell's checkpoint carries production.
 - `FlatHistogramDiagnostics`: `Occupancy`, `Desired`, `InWindow`/`BelowWindow`/`AboveWindow`, `RoundTrips` per chain (lowest bin = node 0's half-spacing cell and below, highest likewise; a trip leaves the lowest, reaches the highest, returns), `LastEnd`; `Flatness`, `MaxFlatnessDeviation`, `ChainsWithoutRoundTrip`, `TotalRoundTrips`.
 - `Reweighting`: `Weigh(draws, b)` → pooled self-normalized weights e^{b·ℓ₁}/w, chain-major, with pooled and per-chain Kish ESS; `Expectation(draws, b, functional | DrawFunction)` → pooled estimate, error sd(chain estimates)/√C, chain estimates; `LogEvidence(draws, grid)` → `LogEvidenceCurve` (pooled ratio estimator, chains' spread, per-chain curves, per-b Kish ESS, the denominator's ESS, `LogRatio(from, to)`).
-- `TemperingPilot(b[], levels[][])` or `FromLadders(ladders)` (traced, likelihood path, slopes; every hotter rung checked for log ratio = (b_c − b)·slope, so a target not linear in b is refused); `Wham.Estimate(pilot)` → `WhamEstimate` (pooled ℓ₁, ln ĝ per draw, f_i, iterations, residual); `Wham.WarmStart(pilot, shape)` = `FixedPoint` on ĝ; `Wham.Window(pilot, q, margin)`; `Wham.Nodes(pilot, window)`.
+- `TemperingPilot(b[], levels[][], inefficiencies?)` (g_i ≥ 1 per rung, null for 1) or `FromLadders(ladders)` (traced for the same scans, likelihood path, slopes; every hotter rung checked for log ratio = (b_c − b)·slope, so a target not linear in b is refused; g_i = max(1, n/ESS) from each rung's ℓ₁ chains); `Wham.Estimate(pilot)` → `WhamEstimate` (distinct pooled ℓ₁, ln ĝ at each, f_i, iterations, residual, effective draws n_i/g_i); `Wham.WarmStart(pilot, shape)` = `FixedPoint` on ĝ; `Wham.Window(pilot, q, margin)`; `Wham.Nodes(pilot, window)`.
 
 **The configuration**, `FlatHistogramSpec` (values only, `Validate()`, JSON round trip, `NeedsPilot` computed and not serialized): `Chains` (4), `LearningIterations` (required, ≥ 0), `ProductionDraws` (required, ≥ 1), `Start` (`Flat` | `Wham`), `Window` (null: from the pilot), `LowSlope` b_lo (null: the pilot's hottest rung), `Nodes` K (null: ⌈width/sd₁⌉ + 1, sd₁ the b = 1 rung's ℓ₁ sd), `GainScale` t₀ (null: 10·K, inside Liang et al.'s 2K–100K), `GainStart` (null: 0 from flat, the pilot's draws over the chains from WHAM), `WindowQuantile` q (0.01), `WindowMargin` (1 sd). A pilot window runs from the hottest rung's q-quantile less a margin to the b = 1 rung's (1 − q)-quantile plus a margin, held inside the pilot's pooled extreme draws (beyond them the extensions carry the hot end's and the posterior's own laws). Lengths are totals; `iterations` takes a call's share, and `resumeFrom` continues.
 
@@ -230,7 +231,7 @@ Newest first.
 Tempering wins by about 2× here: the transition at N = 9 is weak (peak/dip 2.4), the window spans the whole energy range at one site per step, and the two counts' ends differ, so it is a reading, not a claim. The bimodality that defeats tempering needs a lattice past enumeration.
 
 **The suites**, at `2fa3bc0` on a clean tree, built into `artifacts\chip-fh\`:
-- *Samplers:* 251 passed, 0 failed, in 1.3 min. That is 206 existing tests and 45 new: weights 9, learning and run 15, reweighting 5, Potts 4, WHAM 7, spec and resume 4, and the sweep's 1, which runs only under `SEED_SWEEP`.
+- *Samplers:* 251 passed, 0 failed, in 1.3 min. That is 206 existing tests and 45 new: weights 9, learning and run 15, reweighting 5, Potts 4, WHAM 7, spec and resume 4, and the sweep's 1, which runs only under `SEED_SWEEP`. At `4c34930`: 253 passed, 0 failed, the 2 new being WHAM's.
 - *Regression:* 1 303 passed, 0 failed, in 9 m 54 s. Nothing moved.
 
 **The review passes and their fixes.**
@@ -259,9 +260,13 @@ Tempering wins by about 2× here: the transition at N = 9 is weak (peak/dip 2.4)
 
 **WHAM checked against Ferrenberg and Swendsen 1989.** Checked after step 4 against the local copies: the letter at `codex-scientiae/supellex-private/PDFs/SPC/FerrenbergSwendsen1989_physrevlett.63.1195.pdf` and the longer paper at `PDFs/SPC/FerrenbergSwendsen1.4822862.pdf`.
 - *What matches:* `Wham.Estimate` solves their multiple-histogram equations (3) and (4) in the list form the letter allows for, with draws in place of histograms. It finds the f_n by the derivative-guided iteration they recommend, here Newton on the convex objective whose stationary point is (3)–(4).
-- *One departure:* they weigh run n by 1/g_n, with g_n = 1 + 2τ_n its statistical inefficiency (the letter's (3), the longer paper's (10)–(15)). That combination minimizes the error in W(S). `Wham` sets g_n = 1, as for independent draws.
-- *What the departure costs:* the estimate stays consistent under any positive per-run weights, so this costs efficiency only, where rungs mix at different rates. Nothing in step 4's tolerances relied on it.
-- *A follow-up, not done:* take g_n = n_n/ESS_n from each rung's ℓ₁ trace (`ChainDiagnostics`) as the pilot's effective counts. That would make the warm start FS's own combination.
+- *One departure, now corrected (`4c34930`):* they weigh run n by 1/g_n, with g_n = 1 + 2τ_n its statistical inefficiency (the letter's (3), the longer paper's (10)–(15)). That combination minimizes the error in W(S). Step 4's `Wham` had set g_n = 1, as for independent draws.
+  - `Wham` now counts each draw 1/g of its rung and enters each rung with n/g effective draws.
+  - `FromLadders` reads g = max(1, n/ESS), ESS the mean's effective sample size over the rung's ℓ₁ chains (`ChainDiagnostics.MeanEss`). A pilot built from arrays takes g = 1 unless given its own.
+  - *Checks:* exact rung histograms stay exact under unequal g (to 1e−3); a common g on every rung changes no f (to 1e−9); `FromLadders`' g matches `MeanEss` directly.
+- *What it bought on the toys, a reading:* the double well's g run 1.8–2.4, and 4.3–5.4 at the hot rung. Over the same 8 pilots, the per-pilot RMS to θ* is 0.164 with FS's weights against 0.152 with g = 1 (mean z² 2.41 against 2.37). On Potts it is 0.055 against 0.056 (z² 1.16 against 1.24).
+  - The warm-start comparisons still pass at the new default: double well warm 0.141 / 0.107 / 0.080 at 0 / 8k / 16k against flat 0.098 at 32k; Potts warm 0.039 / 0.083 / 0.069 at 0 / 25k / 50k against flat 0.093 at 100k.
+  - The weights did not lower the error here. One g per rung, read from ℓ₁'s mean, is FS's own summary of a run, not each bin's. The gain they promise needs rungs that mix at very different rates, which Friedman's band, where tempering stalls, may supply; Phase 2 can read it there.
 
 **For Phase 2.**
 - *BASS's structure prior is unnormalized.* The Friedman reference hand-over gives D02's count weight, with ln C 0.9531 and ln Z_F −0.194 on Friedman. The ratio estimator then reads ln Z(b) off by the prior's log mass, a constant in b. Add the known normalizer, or read `LogEvidenceCurve.LogRatio`, which cancels it.
