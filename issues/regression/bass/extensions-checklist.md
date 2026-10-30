@@ -21,8 +21,22 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E13** The free-energy curve over the ladder.
 - [ ] **E14** Semi-modular calibration.
 - [ ] **E15** Calibrated intervals for loss-based posteriors (BARS's Gibbs-loss route first).
+- [ ] **E16** Conformal Bayes, the consumer, with conformal predictive distributions.
+- [ ] **E17** Conformal bands for whole curves.
+- [ ] **E18** Posteriors for readouts by resampling units.
 
 ## Reports
+
+### Conformal Bayes and its curve-level relatives read — 2026-10-29
+
+Raised by the user: is conformal Bayes already in, and how would it reach the full posterior and combine with BARS?
+- *Already in:* OQ17's seam, but not the conformal step, which was deferred to the SPC × BARS work.
+- *New entries:*
+  - E16, the consumer, with conformal predictive distributions;
+  - E17, simultaneous bands for whole curves;
+  - E18, posteriors for readouts by resampling units (BayesBag, martingale posteriors), with E15 as the calibrated variant.
+- *The references' details* were checked on 2026-10-29. Fong and Holmes have a local copy; the others are still to be read.
+- *Not here:* Lei, Rinaldo and Wasserman's conformal clustering trees, a pseudo-density hierarchy with finite-sample guarantees, belong to SPC, beside the spin-glass threads' Thread 7.
 
 ### Bissiri, Holmes and Walker read — 2026-10-29
 

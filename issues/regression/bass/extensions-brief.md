@@ -18,6 +18,9 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Residuals correlated along the output index | Andros, Guhaniyogi, Francom and Pasqualini, arXiv 2406.18751, 2602.09351 | Fitting: the output-side inner product; the residual-dependence check | Candidate |
 | Semi-modular calibration | Carmona and Nicholls 2020, arXiv 2003.06804; Bissiri, Holmes and Walker 2016, §4.2 | Calibration: D09's cut posterior and its emulator interface. Stage 8: the cut SMC's induced-density bridges | Candidate |
 | Calibrated intervals for loss-based posteriors | Bissiri, Holmes and Walker 2016, §3.4; Holmes and Walker 2017; Lyddon, Holmes and Walker 2019; Syring and Martin 2019 | BARS: `GibbsLossModel`. Any engine that weights a likelihood or a loss | Candidate |
+| Conformal Bayes, the consumer | Fong and Holmes 2021, arXiv 2106.06137; Vovk, Shen, Manokhin and Xie 2019 | The pointwise seam (OQ17, built): retained draws, the n × S matrix, the unit and stratum maps | Candidate |
+| Conformal bands for whole curves | Lei, Rinaldo and Wasserman 2015; Diquigiovanni, Fontana and Vantini, arXiv 2106.01792 | The unit map's whole-curve unit; each draw's pointwise predictive sd | Candidate |
+| Posteriors for readouts by resampling units | Huggins and Miller 2023; Fong, Holmes and Walker 2023 | Retained draws with their readouts (BARS's peaks); replicate units | Candidate |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
 
 ## Generalized-hyperbolic noise (GBMARS)
@@ -202,6 +205,45 @@ Not taken:
 - the supplement's joint quantiles, which would become a quantile-emulation entry only if wanted.
 
 §5.2's model-free clustering belongs to SPC.
+
+## Conformal Bayes, the consumer
+
+The seam is built and the consumer is not. OQ17 (2026-10-23, built 2026-10-24; BASS's terms in S9) gives:
+- every draw's state, retained;
+- the n × S matrix of each unit's log density under each draw;
+- a unit map, under which a whole curve can be one unit;
+- a stratum map for the grouped (partially exchangeable, or Mondrian) form.
+
+The conformal step itself was deferred to the SPC × BARS work (`docs/Maths/BayesianRegression.md`, the pointwise section).
+- **The step** (Fong and Holmes, *Conformal Bayesian Computation*, NeurIPS 2021; arXiv 2106.06137, a local copy in `codex-scientiae/supellex-private/gauntlet/bayesian/2106.06137v2`). Add-one-in importance weights, w_s ∝ p(y | x, θ_s), turn the retained draws into conformal prediction sets for a candidate y, with no refits. Coverage holds in finite samples under exchangeability, up to Monte Carlo error, whether or not the noise model is right.
+- **A full predictive distribution at each x.** Sweeping the candidate y gives the conformal p-value as a function of y: a calibrated predictive CDF, the conformal predictive distribution of Vovk, Shen, Manokhin and Xie (*Machine Learning* 108, 445–474, 2019; arXiv 1710.08894). It comes from the same draws and weights, at the cost of a grid in y, and gives PIT-style calibration and a calibrated CRPS.
+- **The grouped form** is the noise-model calibration check: replicates at one design point are exchangeable, so their coverage tests the posterior's predictive width there.
+- **What it cannot reach** (recorded with OQ17). On SPC × BARS's fixed temperature grid, only replicates at one temperature are exchangeable. So coverage holds for a new replicate at a measured temperature, in steps of 1/(k + 1), and says nothing about unmeasured temperatures, the curve or the readout's features. The next two entries address that.
+
+## Conformal bands for whole curves
+
+Simultaneous prediction bands for a new unit's whole curve: a new simulator run's output for BASS, a new replicate sweep for SPC × BARS.
+- **The sources.**
+  - Lei, Rinaldo and Wasserman, *A conformal prediction approach to explore functional data* (*Annals of Mathematics and Artificial Intelligence*, 2015; arXiv 1302.6452): bands from a finite-dimensional projection and the inductive conformal predictor.
+  - Diquigiovanni, Fontana and Vantini, *Conformal prediction bands for multivariate functional data* (arXiv 2106.01792): exact bands around any estimator, in closed form, whose width can follow the data's local behaviour. Its univariate companion is *The Importance of Being a Band* (*Statistica Sinica* 35, 853–871, 2025).
+- **Here.** The nonconformity score is the curve's largest scaled residual, the maximum over locations of |y − f̂| over the posterior's pointwise predictive sd, so the band widens where the posterior is uncertain. The unit map already takes a whole curve as one unit, and conformal Bayes's add-one-in step applies to it.
+- **Why it matters for BASS.** Andros et al. 2024 found R BASS's 95% intervals covering 0.59 on held-out runs. D07's leave-one-out truncation residuals improve the intervals; conformal bands would guarantee their coverage for a new run, under exchangeable runs.
+- **Needs** exchangeable whole-curve units: the runs of a simulator design, or replicate SPC sweeps over one temperature grid.
+
+## Posteriors for readouts by resampling units
+
+The posterior of a population feature, such as the peak T* of SPC × BARS's curve, robust to the noise model being wrong. Conformal methods cover observables only, so this needs another route. Three relatives share one idea, that the uncertainty comes from resampling exchangeable units:
+- **BayesBag** (Huggins and Miller, *Reproducible model selection using bagged posteriors*, *Bayesian Analysis* 18(1), 79–104, 2023; arXiv 2007.14845): average the posteriors over bootstrap resamples, typically 50–100 refits. It is more stable than the standard posterior under misspecification, and slightly more conservative under a correct model.
+- **Martingale posteriors** (Fong, Holmes and Walker, *JRSS B* 85(5), 1357–1391, 2023): uncertainty as missing future data.
+  - Impute the rest of the population by predictive resampling, and compute the feature on the completed data.
+  - With the Bayesian predictive this recovers the usual posterior (Doob's theorem).
+  - With a predictive that resamples units (a Bayesian bootstrap), it gives a posterior that does not rest on the likelihood being right, which is BayesBag's construction in another reading.
+- **Syring and Martin's calibration** (E15) is the coverage-calibrated variant.
+- **The synthesis with BARS** (SPC × BARS): refit BARS on resamples of replicate sweeps, and pool the peak readouts its draws already carry. Together with the two entries above, that gives one layer over BARS's retained draws and the unit map, at three levels:
+  - a new replicate at a measured temperature (conformal Bayes);
+  - a new sweep's whole curve (the bands);
+  - the readouts (this entry).
+- **The constraint.** Both curve-level levels need replicate sweeps as the exchangeable unit. On a single sweep, nothing distribution-free exists for curve features, so replicate sweeps are worth budgeting for in SPC runs.
 
 ## Direct-functional BASS for families of SPC sweeps
 
