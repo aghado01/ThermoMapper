@@ -13,13 +13,13 @@ namespace Maths.Regression.Spline.Bass.Presentation;
 /// store keeping one in k.</param>
 /// <param name="Count">Each draw's M, its term count.</param>
 /// <param name="Sigma2">Each draw's σ².</param>
-/// <param name="Tau">Each draw's τ: the held value under fixed g.</param>
+/// <param name="Tau">Each draw's τ: the held value when τ is held.</param>
 /// <param name="Lambda">Each draw's λ, the count prior's Poisson rate.</param>
 public sealed record BassChainTrace(int Chain, long[] Iterations, int[] Count, double[] Sigma2, double[] Tau, double[] Lambda);
 
 /// <summary>
 /// A fit's traces (P09), one per chain in chain order: the data behind R's trace plots of M and σ², with τ and λ beside
-/// them. <see cref="TauSampled"/> is false under fixed g, whose τ trace is constant.
+/// them. <see cref="TauSampled"/> is false when τ is held, whose trace is constant.
 /// </summary>
 public sealed record BassTraces(IReadOnlyList<BassChainTrace> Chains, bool TauSampled, int Thin)
 {
@@ -48,6 +48,6 @@ public sealed record BassTraces(IReadOnlyList<BassChainTrace> Chains, bool TauSa
             }
             chains[c] = new BassChainTrace(c, iterations, count, sigma2, tau, lambda);
         }
-        return new BassTraces(Array.AsReadOnly(chains), fit.Config.Coefficients is SampledG, thin);
+        return new BassTraces(Array.AsReadOnly(chains), !fit.Config.Coefficients.Scale.IsHeld, thin);
     }
 }

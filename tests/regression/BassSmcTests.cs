@@ -310,7 +310,7 @@ public sealed class BassSmcTests
         BassConfig config = baseConfig;
         switch (option)
         {
-            case "fixed g": config = config with { Coefficients = new FixedG() }; break;
+            case "fixed g": config = config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) }; break;
             case "jeffreys, linear": config = config with { Sigma2 = Sigma2Prior.Jeffreys }; spec = spec with { Form = TemperedForm.Linear }; break;
             case "flat, linear": config = config with { Intercept = GPriorCentre.Flat }; spec = spec with { Form = TemperedForm.Linear }; break;
             case "linear, traced": spec = spec with { Form = TemperedForm.Linear, TraceStages = true }; break;
@@ -328,7 +328,7 @@ public sealed class BassSmcTests
         Assert.Equal(proper, fit.Evidence is not null);
         Assert.Equal(option == "fixed g", fit.Diagnostics.Tau is null);
         Assert.DoesNotContain(smc.Spread, q => option == "fixed g" && q.Name == "tau");
-        if (option == "fixed g") Assert.All(fit.Draws.SelectMany(c => c), dr => Assert.Equal(fit.Resolved.FixedTau!.Value, dr.Tau));
+        if (option == "fixed g") Assert.All(fit.Draws.SelectMany(c => c), dr => Assert.Equal(fit.Resolved.Scale.HeldTau!.Value, dr.Tau));
         if (option == "one replicate")
         {
             Assert.All(smc.Spread, q => Assert.True(double.IsNaN(q.Spread)));

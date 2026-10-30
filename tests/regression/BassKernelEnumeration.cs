@@ -203,7 +203,7 @@ internal static class BassKernelEnumeration
     /// </summary>
     internal static Space Enumerate(BassModel model, double inverseTemperature = 1.0)
     {
-        double logTau = Math.Log(model.Target.FixedTau ?? throw new ArgumentException("The enumeration holds τ fixed.", nameof(model)));
+        double logTau = Math.Log(model.Target.HeldTau ?? throw new ArgumentException("The enumeration holds τ fixed.", nameof(model)));
         var temperature = new Temperature(inverseTemperature, TemperingPath.Likelihood);
         List<BassTerm> terms = AllTerms(model);
         var ids = new Dictionary<BassTerm, int>();

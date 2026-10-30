@@ -179,7 +179,7 @@ public sealed class BassTargetParityTests
             Structure = new BassStructureSpec { MaxInteraction = maxInteraction, Support = new SupportRule(Minimum: 3) },
             Intercept = centre,
             Sigma2 = jeffreys ? Sigma2Prior.Jeffreys : Sigma2Prior.ScaledToResponse(1e-3),
-            Coefficients = fixedG ? new FixedG() : new SampledG(),
+            Coefficients = fixedG ? BassCoefficientPrior.G(TauPrior.Held()) : BassCoefficientPrior.G(),
         };
 
     // ln ∫ p(u) exp(ℓ_b(S, eᵘ)) du over the g mode's τ, or ℓ_b at the held τ; with the u-nodes' log weights when asked.

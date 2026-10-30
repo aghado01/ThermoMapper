@@ -134,7 +134,7 @@ internal static class BassSmcFit
             }
         }
 
-        // Each draw's monitored functionals, in the chain ensemble's order: M, τ in the g mode, the log posterior at b = 1,
+        // Each draw's monitored functionals, in the chain ensemble's order: M, τ when sampled, the log posterior at b = 1,
         // σ², and the fitted value at each monitored point.
         var inputs = new BassPointInputs(model);
         IReadOnlyList<string> names = inputs.FunctionalNames;
@@ -206,7 +206,8 @@ internal static class BassSmcFit
                                               account.Kinds, account.Refusals, account.EmptyBirths, account.Support, massAtCap, n, false, verdict,
                                               BassModeSeparation.Of(replicateLevel, replicateFitted), [], null, readout);
 
-        bool evidence = posterior && sampling.ReportEvidence && model.Target.Sigma2 is not null && model.Target.Intercept != GPriorCentre.Flat;
+        bool evidence = posterior && sampling.ReportEvidence && model.Target.Sigma2 is not null && model.Target.Intercept != GPriorCentre.Flat
+                        && model.Target.Scale.IsProper;
         var identity = new RunIdentity(sampling.MasterSeed, r, fingerprint);
         EnsembleCheckpoint? restart = checkpoint
             ? new EnsembleCheckpoint(identity, (int[])seeds.Clone(), n,

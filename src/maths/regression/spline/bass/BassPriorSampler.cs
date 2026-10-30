@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Maths.Distributions;
+using Maths.Regression.GPrior;
 using Maths.Rng;
 using Maths.Samplers;
 using Maths.Samplers.Ensemble;
@@ -15,7 +16,7 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>The proposal.</b> M from the count law with its orderings, p(M) ∝ Γ(h₁ + M)/(M!(h₂ + 1)^M) on
 /// {0, …, M_max}: the law of λ ~ Gamma(h₁, rate h₂), M | λ ~ Poisson(λ), which D02 integrates out, drawn by inversion
 /// and truncated at the cap, which F's cap rule would refuse anyway. Then M terms independently from D01's term measure
-/// (<see cref="BassStructurePrior.DrawTerm"/>), and in the g mode τ from its prior.</item>
+/// (<see cref="BassStructurePrior.DrawTerm"/>), and τ from its prior when it is sampled.</item>
 /// <item><b>The acceptance.</b> The collection is kept only when it lies in F: no term the intercept (a draw whose
 /// parts are all empty), distinct terms, the support and D06's gates as the design admits them, and under the Jeffreys
 /// σ² prior no exact fit (<see cref="BassTarget.Refusal"/>). Anything else is drawn again.</item>
@@ -164,16 +165,14 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
         return lo;
     }
 
-    // u = ln τ: from τ's prior in the g mode, redrawn in the far tails where τ leaves the doubles; ln of the held τ under
-    // fixed g.
+    // u = ln τ: an exact draw from τ's prior, redrawn in the far tails where τ leaves the doubles; ln of a held τ. An
+    // improper prior (hyper-g at a ≤ 2) has no draw: a chain's start takes ln τ₀, its family's centre, and the reference
+    // rung and SMC, which need the draw, refuse it (BassConfig.Validate).
     private double DrawLogTau(Xoshiro256PlusPlus rng)
     {
-        BassTarget target = _model.Target;
-        if (target.TauPrior is not { } tau) return Math.Log(target.FixedTau!.Value);
-        double u;
-        do u = Math.Log(tau.Sample(rng));
-        while (double.IsNegativeInfinity(target.LogTauDensity(u)));
-        return u;
+        ResolvedTauPrior scale = _model.Target.Scale;
+        if (scale.HeldTau is double held) return Math.Log(held);
+        return scale.IsProper ? scale.SampleLogTau(rng) : Math.Log(scale.UnitInformation);
     }
 }
 

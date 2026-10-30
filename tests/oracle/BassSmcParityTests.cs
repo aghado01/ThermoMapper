@@ -91,7 +91,7 @@ public sealed class BassSmcParityTests
             for (int s = 0; s < states.Length; s++)
                 foreach (int j in states[s]) inclusion[j] += probabilities[s];
             for (int m = 0; m < countLaw.Length; m++) Check($"{form}, b = {stages[k]}, M = {m}", Row(count, m), countLaw[m], 0.004);
-            if (fixedG) Assert.All(tau, t => Assert.Equal(model.Target.FixedTau!.Value, t, 12));   // held: no τ block runs
+            if (fixedG) Assert.All(tau, t => Assert.Equal(model.Target.HeldTau!.Value, t, 12));   // held: no τ block runs
             else Check($"{form}, b = {stages[k]}, E[τ]", tau, law.GetProperty("tau_mean").GetDouble(), 0.0);
             for (int j = 0; j < terms.Length; j++) Check($"{form}, b = {stages[k]}, {terms[j]}", Row(included, j), inclusion[j], 0.005, quiet: true);
             _out.WriteLine($"{form}, b = {stages[k]}: acceptance {kernel.Account.AcceptanceRate:F3} over {kernel.Account.Sweeps} sweeps");
@@ -185,7 +185,7 @@ public sealed class BassSmcParityTests
                 tau[c] += weight * d.Tau;
             }
         for (int m = 0; m < countLaw.Length; m++) Check($"{option}, M = {m}", Row(count, m), countLaw[m], 0.003);
-        if (fixedG) Assert.All(fit.Draws.SelectMany(c => c), d => Assert.Equal(fit.Resolved.FixedTau!.Value, d.Tau));
+        if (fixedG) Assert.All(fit.Draws.SelectMany(c => c), d => Assert.Equal(fit.Resolved.Scale.HeldTau!.Value, d.Tau));
         else Check($"{option}, E[τ]", tau, p.GetProperty("tau").GetProperty("mean").GetDouble(), 0.0);
         for (int j = 0; j < terms.Length; j++) Check($"{option}, {terms[j]}", Row(included, j), inclusion[j], 0.005, quiet: true);
         _out.WriteLine($"{option}: {terms.Length} inclusions within their allowance; stages " +

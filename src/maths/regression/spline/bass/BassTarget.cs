@@ -34,9 +34,9 @@ public readonly record struct BassStructureFit(int Terms, double LogTermPrior, d
 /// σ² integrated out.
 /// <list type="bullet">
 /// <item><b>The prior,</b> untempered on the likelihood path: D02's count weight and D01's term measure
-/// (<see cref="BassStructurePrior"/>), and in the g mode τ's unit-information Gamma(a, rate a·N) as a density on
-/// u = ln τ. That is the coordinate τ's slice step moves (D04), so the powered path powers τ in log τ (D05's recorded
-/// choice). Fixed g holds τ, and the state has no τ coordinate.</item>
+/// (<see cref="BassStructurePrior"/>), and τ's prior from the shared family (<see cref="TauPrior"/>) on the coefficient
+/// form's τ₀, as a density on u = ln τ. That is the coordinate τ's slice step moves (D04), so the powered path powers τ
+/// in log τ (D05's recorded choice). A held τ is no coordinate of the state.</item>
 /// <item><b>The likelihood,</b> p(y | structure, τ) from the shared g-prior block on the design's centred statistics
 /// (<see cref="CollapsedGPrior.CentredMarginalAt"/>), under the intercept's convention (level centring, Liang's flat
 /// intercept or R's zero centre) and σ²'s prior (scaled to the response, Jeffreys, or a declared inverse gamma). On the
@@ -55,7 +55,6 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     private const double MachineEpsilon = 2.220446049250313e-16;   // 2⁻⁵², not double.Epsilon, the least subnormal
 
     private readonly double _exactFitSquares;   // ‖r‖² at or below which Jeffreys refuses; −∞ under a proper prior
-    private readonly double _logTauConstant;    // a ln(rate) − ln Γ(a)
 
     /// <summary>The target <paramref name="config"/> sets on its data (<paramref name="resolved"/>), over
     /// <paramref name="prior"/>'s structures, tempered in <paramref name="form"/>.</summary>
@@ -67,19 +66,18 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         if (form is not (TemperedForm.Integrated or TemperedForm.Linear)) throw new ArgumentOutOfRangeException(nameof(form));
         if (config.Intercept is not (GPriorCentre.Mean or GPriorCentre.Flat or GPriorCentre.Zero))
             throw new ArgumentException("BASS's intercept is level-centred, flat or at zero (D03).", nameof(config));
-        if ((resolved.TauPrior is null) == (resolved.FixedTau is null))
-            throw new ArgumentException("A resolved config samples τ or holds it, not both.", nameof(resolved));
+        if (resolved.Scale is null) throw new ArgumentException("The resolved config holds no τ prior.", nameof(resolved));
+        if (config.Coefficients.Form is RidgeForm) throw new NotSupportedException("The ridge's marginal is not built yet.");
         Prior = prior;
         Form = form;
+        CoefficientForm = config.Coefficients.Form;
         Intercept = config.Intercept;
         Sigma2 = resolved.Sigma2;
-        TauPrior = resolved.TauPrior;
-        FixedTau = resolved.FixedTau;
+        Scale = resolved.Scale;
         Observations = resolved.Observations;
         ResponseMean = resolved.ResponseMean;
         double floor = ExactFitMultiple * MachineEpsilon;
         _exactFitSquares = Sigma2 is null ? floor * floor * Observations * resolved.ResponseMeanSquare : double.NegativeInfinity;
-        if (TauPrior is Gamma tau) _logTauConstant = tau.Shape * Math.Log(tau.Rate) - SpecialFunctions.LogGamma(tau.Shape);
     }
 
     /// <summary>The prior on structures.</summary>
@@ -88,20 +86,23 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// <summary>The tempered form on the likelihood path.</summary>
     public TemperedForm Form { get; }
 
+    /// <summary>The coefficient prior's covariance form: the g-form or the normalized ridge.</summary>
+    public CoefficientForm CoefficientForm { get; }
+
     /// <summary>The intercept's convention.</summary>
     public GPriorCentre Intercept { get; }
 
     /// <summary>σ²'s prior as resolved; null is the Jeffreys 1/σ².</summary>
     public InverseGamma? Sigma2 { get; }
 
-    /// <summary>τ's prior in the g mode; null under fixed g.</summary>
-    public Gamma? TauPrior { get; }
+    /// <summary>τ's prior on the coefficient form's τ₀, sampled or held.</summary>
+    public ResolvedTauPrior Scale { get; }
 
-    /// <summary>τ under fixed g; null in the g mode.</summary>
-    public double? FixedTau { get; }
+    /// <summary>The held τ; null when τ is sampled.</summary>
+    public double? HeldTau => Scale.HeldTau;
 
-    /// <summary>Whether τ is a coordinate of the state (the g mode).</summary>
-    public bool SamplesTau => TauPrior is not null;
+    /// <summary>Whether τ is a coordinate of the state: sampled, not held.</summary>
+    public bool SamplesTau => !Scale.IsHeld;
 
     /// <summary>N, the observations.</summary>
     public int Observations { get; }
@@ -110,18 +111,10 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     public double ResponseMean { get; }
 
     /// <summary>
-    /// The log density of u = ln τ under τ's prior, a ln(rate) − ln Γ(a) + a·u − rate·eᵘ; the g mode only. Where eᵘ
-    /// leaves the doubles, rounding to 0 or overflowing, τ is outside the support: −∞, a mass below e⁻³⁷⁰ of the prior's.
+    /// The log density of u = ln τ under τ's prior, its Jacobian included (<see cref="ResolvedTauPrior.LogDensity"/>); a
+    /// sampled τ only. Where eᵘ leaves the doubles, τ is outside the support: −∞.
     /// </summary>
-    public double LogTauDensity(double logTau)
-    {
-        Gamma prior = TauPrior ?? throw new InvalidOperationException("Fixed g holds τ; the state has no τ coordinate.");
-        if (double.IsNaN(logTau)) throw new ArgumentOutOfRangeException(nameof(logTau));
-        double tau = Math.Exp(logTau), rate = prior.Rate * tau;
-        return tau > 0.0 && double.IsFinite(rate)
-            ? _logTauConstant + prior.Shape * logTau - rate
-            : double.NegativeInfinity;
-    }
+    public double LogTauDensity(double logTau) => Scale.LogDensity(logTau);
 
     /// <summary>Why <paramref name="fit"/> lies outside F, or null: the design's refusal, or an exact fit under the
     /// Jeffreys σ² prior.</summary>
@@ -163,23 +156,23 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         return b > 0.0 || sigma2 is not null;
     }
 
-    /// <summary>A g-mode state: <paramref name="fit"/> with τ = e^<paramref name="logTau"/>.</summary>
+    /// <summary>A state with τ sampled: <paramref name="fit"/> with τ = e^<paramref name="logTau"/>.</summary>
     public BassEvaluation Evaluate(BassStructureFit fit, double logTau)
     {
-        if (!SamplesTau) throw new InvalidOperationException("Fixed g holds τ; evaluate the structure alone.");
+        if (!SamplesTau) throw new InvalidOperationException("τ is held; evaluate the structure alone.");
         double structure = LogStructurePrior(fit);
         double prior = double.IsNegativeInfinity(structure) ? structure : structure + LogTauDensity(logTau);
         return new BassEvaluation(this, fit, Math.Exp(logTau), prior, Refusal(fit));
     }
 
-    /// <summary>A fixed-g state: <paramref name="fit"/> at the held τ.</summary>
+    /// <summary>A state with τ held: <paramref name="fit"/> at the held τ.</summary>
     public BassEvaluation Evaluate(BassStructureFit fit)
     {
-        double tau = FixedTau ?? throw new InvalidOperationException("The g mode samples τ; evaluate the structure with it.");
+        double tau = HeldTau ?? throw new InvalidOperationException("τ is sampled; evaluate the structure with it.");
         return new BassEvaluation(this, fit, tau, LogStructurePrior(fit), Refusal(fit));
     }
 
-    /// <summary>A chain's state: its structure's fit with its τ in the g mode, or with the held one under fixed g.</summary>
+    /// <summary>A chain's state: its structure's fit with its τ when sampled, or with the held one.</summary>
     public BassEvaluation Evaluate(BassState state)
     {
         ArgumentNullException.ThrowIfNull(state);

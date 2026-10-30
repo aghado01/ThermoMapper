@@ -267,7 +267,8 @@ public sealed class BassLadder
         ArgumentNullException.ThrowIfNull(model);
         CheckSpec(spec);
         BassTarget target = model.Target;
-        double hot = spec.HotEnd ?? BassResolved.AutoHotEnd(spec, target.Intercept, target.Observations, target.FixedTau);
+        double hot = spec.HotEnd ?? BassResolved.AutoHotEnd(spec, target.Intercept, target.Observations,
+                                                            BassResolved.HalvingTau(target.CoefficientForm, target.Scale, target.Observations));
         if (!(hot > 0.0 && hot < 1.0)) throw new ArgumentException($"The hot end auto-picks {hot} on N = {target.Observations}, outside (0, 1).", nameof(spec));
         int levels = spec.StartLevels();
         return spec.ReferenceRung
@@ -312,7 +313,7 @@ public sealed class BassLadder
     // A resize's new replica's state: the source's, on its own copy of the term array (clone-safe replicas).
     private static BassState Fork(BassState state) => new((BassTerm[])state.TermArray.Clone(), state.Fit, state.LogTau);
 
-    // Each replica's τ block in the g mode; none under fixed g.
+    // Each replica's τ block when τ is sampled; none when it is held.
     private static Func<int, IReadOnlyList<IBlock<ReversibleJumpChain<BassState>>>>? Blocks(BassModel model)
         => model.Target.SamplesTau ? _ => [new BassTauBlock(model.Target)] : null;
 

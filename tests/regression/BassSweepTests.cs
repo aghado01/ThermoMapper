@@ -331,7 +331,7 @@ public sealed class BassSweepTests
         var mu = new double[k];
         mu[0] = ybar;
         InverseGamma sigmaPrior = model.Resolved.Sigma2!.Value;
-        Gamma tauPrior = model.Resolved.TauPrior!.Value;
+        Gamma tauPrior = model.Resolved.Scale.Gamma!.Value;
         var rng = new Xoshiro256PlusPlus(seed);
         double tau = 1.0 / n, sigma2 = 0.1;
         var a = new double[k];

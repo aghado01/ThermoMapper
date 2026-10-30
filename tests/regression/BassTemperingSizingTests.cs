@@ -125,13 +125,17 @@ public sealed class BassTemperingSizingTests
         Assert.Equal(2.0 / 18, Picked(flat, out BassAutoPick? pole));
         Assert.StartsWith("2/N", pole!.Reason);
         Assert.Equal(2.0 / 18, Picked(flat with { Sigma2 = Sigma2Prior.Jeffreys }, out _));
-        // Under fixed g the smaller of the held τ and those.
-        Assert.Equal(1.0 / 18, Picked(With(new TemperingSpec()) with { Coefficients = new FixedG() }, out _));
-        Assert.Equal(1.0 / 18, Picked(With(new TemperingSpec()) with { Coefficients = new FixedG(1.0) }, out BassAutoPick? above));
-        Assert.EndsWith("below the held τ", above!.Reason);
-        Assert.Equal(0.01, Picked(With(new TemperingSpec()) with { Coefficients = new FixedG(0.01) }, out BassAutoPick? held));
-        Assert.StartsWith("the held τ", held!.Reason);
-        Assert.Equal(0.08, Picked(flat with { Coefficients = new FixedG(0.08) }, out _));   // the held τ, below 2/N and past the pole at 0.0554
+        // Under a held τ the smaller of those and the b at which it halves a column's shrinkage: τ under the g-form,
+        // τ/N under the ridge.
+        Assert.Equal(1.0 / 18, Picked(With(new TemperingSpec()) with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) }, out _));
+        Assert.Equal(1.0 / 18, Picked(With(new TemperingSpec()) with { Coefficients = BassCoefficientPrior.G(TauPrior.Held(1.0)) }, out BassAutoPick? above));
+        Assert.EndsWith("below the b at which the held τ halves that shrinkage", above!.Reason);
+        Assert.Equal(0.01, Picked(With(new TemperingSpec()) with { Coefficients = BassCoefficientPrior.G(TauPrior.Held(0.01)) }, out BassAutoPick? held));
+        Assert.StartsWith("the b at which the held τ halves", held!.Reason);
+        Assert.Equal(1.0 / 18, Picked(With(new TemperingSpec()) with { Coefficients = BassCoefficientPrior.Ridge(TauPrior.Held(1.0)) }, out _));
+        Assert.Equal(0.09 / 18, Picked(With(new TemperingSpec()) with { Coefficients = BassCoefficientPrior.Ridge(TauPrior.Held(0.09)) }, out _));
+        Assert.Equal(1.0 / 18, Picked(With(new TemperingSpec()) with { Coefficients = BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma()) }, out _));
+        Assert.Equal(0.08, Picked(flat with { Coefficients = BassCoefficientPrior.G(TauPrior.Held(0.08)) }, out _));   // the held τ, below 2/N and past the pole at 0.0554
 
         // A declared hot end is no auto-pick; a self-sizing ladder's start is logged; an untempered run has none.
         BassResolved declared = BassResolved.Resolve(With(new TemperingSpec { HotEnd = 0.02, Levels = 5 }), data);
@@ -144,7 +148,7 @@ public sealed class BassTemperingSizingTests
         Assert.Null(BassResolved.Resolve(With(null!), data).HotEnd);
 
         // The ladder's own pick, on a model resolved without it, is the same.
-        BassModel model = BassModel.Create(With(null!) with { Coefficients = new FixedG(0.01) }, data);
+        BassModel model = BassModel.Create(With(null!) with { Coefficients = BassCoefficientPrior.G(TauPrior.Held(0.01)) }, data);
         BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(1)).State;
         Assert.Equal(0.01, new BassLadder(model, new TemperingSpec(), start.Terms, start.LogTau, 2).Tempering.InverseTemperatures[^1]);
         Assert.Equal(0.01, new BassLadder(model, new TemperingSpec { ReferenceRung = true }, start.Terms, start.LogTau, 2).Tempering.InverseTemperatures[^2]);
@@ -169,7 +173,7 @@ public sealed class BassTemperingSizingTests
 
         // Under fixed g a held τ below the flat intercept's pole takes the hot end there, which the integrated form lacks.
         BassData data = BassSweepTests.Data();
-        BassConfig small = BassTemperingTests.Config(new TemperingSpec()) with { Intercept = GPriorCentre.Flat, Coefficients = new FixedG(1e-3) };
+        BassConfig small = BassTemperingTests.Config(new TemperingSpec()) with { Intercept = GPriorCentre.Flat, Coefficients = BassCoefficientPrior.G(TauPrior.Held(1e-3)) };
         var pole = Assert.Throws<ArgumentException>(() => BassResolved.Resolve(small, data));
         Assert.StartsWith("Sampling.Tempering.HotEnd auto-picks 0.001", pole.Message);
         Assert.Contains("set it above", pole.Message);
@@ -217,7 +221,7 @@ public sealed class BassTemperingSizingTests
     public void AfterResizes_EveryReplicaHoldsItsStatesDesign_AndNoTwoShareAMidRunArray(bool reference, bool fixedG)
     {
         BassConfig config = BassTemperingTests.Config(null, maxBasis: 8);
-        if (fixedG) config = config with { Coefficients = new FixedG() };
+        if (fixedG) config = config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) };
         BassModel model = BassModel.Create(config, BassSweepTests.Data(large: true));
         var spec = new TemperingSpec { ReferenceRung = reference, MaxLevels = 24 };
         BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(5)).State;

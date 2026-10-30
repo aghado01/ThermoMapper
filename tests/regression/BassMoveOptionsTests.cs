@@ -174,7 +174,7 @@ public sealed class BassMoveOptionsTests
         (BassConfig config, BassData data) = BassLocalStepTests.Fixture(fixture, "equal", BassLocalStepTests.OptionsFor(options));
         config = config with
         {
-            Coefficients = new SampledG(),
+            Coefficients = BassCoefficientPrior.G(),
             Sampling = config.Sampling with
             {
                 Chains = 2, MasterSeed = 9, BurnIn = 400, Samples = 600,
@@ -207,7 +207,7 @@ public sealed class BassMoveOptionsTests
         (BassConfig config, BassData data) = BassLocalStepTests.Fixture("categorical, R's measure", "equal",
                                                                         s => s with { LocalSteps = new LocalSteps(), FactorMoves = new FactorMoves(1, 0, 1) });
         var model = BassModel.Create(config, data);
-        var chain = new BassChain(model, [], Math.Log(model.Target.FixedTau!.Value), new Xoshiro256PlusPlus(71), new Xoshiro256PlusPlus(72));
+        var chain = new BassChain(model, [], Math.Log(model.Target.HeldTau!.Value), new Xoshiro256PlusPlus(71), new Xoshiro256PlusPlus(72));
         for (int i = 0; i < 20_000; i++) chain.Step();
         BassStructureMoves moves = chain.Structure;
         Assert.Equal(moves.Refusals.Total, moves.Kinds.Entries.Sum(c => c.Refused));
@@ -217,7 +217,7 @@ public sealed class BassMoveOptionsTests
         // With them, a prune of a term's only factor is refused as a prune, beyond the reasons.
         (config, data) = BassLocalStepTests.Fixture("continuous", "equal", s => s with { FactorMoves = new FactorMoves() });
         model = BassModel.Create(config, data);
-        chain = new BassChain(model, [], Math.Log(model.Target.FixedTau!.Value), new Xoshiro256PlusPlus(73), new Xoshiro256PlusPlus(74));
+        chain = new BassChain(model, [], Math.Log(model.Target.HeldTau!.Value), new Xoshiro256PlusPlus(73), new Xoshiro256PlusPlus(74));
         for (int i = 0; i < 20_000; i++) chain.Step();
         moves = chain.Structure;
         Assert.True(moves.Kinds[BassMoveKind.Prune].Refused > 0);
@@ -283,7 +283,7 @@ public sealed class BassMoveOptionsTests
     public void Resume_KeepsTheKinds()
     {
         (BassConfig config, BassData data) = BassLocalStepTests.Fixture("categorical, R's measure", "equal", BassLocalStepTests.OptionsFor("all"));
-        config = config with { Coefficients = new SampledG(), Sampling = config.Sampling with { Chains = 2, MasterSeed = 3, BurnIn = 200, Samples = 400 } };
+        config = config with { Coefficients = BassCoefficientPrior.G(), Sampling = config.Sampling with { Chains = 2, MasterSeed = 3, BurnIn = 200, Samples = 400 } };
         BassFit whole = Bass.Fit(config, data);
         BassConfig half = config with { Sampling = config.Sampling with { Samples = 200 } };
         BassFit first = Bass.Fit(half, data, new BassRunOptions { Checkpoint = true });

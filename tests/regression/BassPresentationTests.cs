@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Maths.Distributions;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Regression.Spline.Bass.Presentation;
 using Maths.Samplers.Ensemble;
@@ -109,7 +110,7 @@ public sealed class BassPresentationTests
             Assert.Equal(draws.Min(d => d.Structure.TermIds.Length), summary.Posterior.Count.Min);
             Assert.Equal(draws.Max(d => d.Structure.TermIds.Length), summary.Posterior.Count.Max);
         }
-        Assert.Null((fit with { Config = fit.Config with { Coefficients = new FixedG() } }).Summary().Posterior.Tau);
+        Assert.Null((fit with { Config = fit.Config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) } }).Summary().Posterior.Tau);
         _out.WriteLine($"M in [{fit.Summary().Posterior.Count.Min}, {fit.Summary().Posterior.Count.Max}], E[σ²] = {fit.Summary().Posterior.Sigma2.Mean:G4}");
     }
 
@@ -143,7 +144,7 @@ public sealed class BassPresentationTests
         foreach (BassDraw d in fit.Draws[0]) sparse.Add(d);
         BassChainTrace thinned = (fit with { Draws = [sparse] }).Traces().Chains[0];
         Assert.Equal(Enumerable.Range(0, sparse.Count).Select(i => (3L * i + 1) * 2).ToArray(), thinned.Iterations);
-        Assert.False((fit with { Config = fit.Config with { Coefficients = new FixedG() } }).Traces().TauSampled);
+        Assert.False((fit with { Config = fit.Config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) } }).Traces().TauSampled);
     }
 
     // ── Fitted against observed ───────────────────────────────────────────────────────────────────────────────────

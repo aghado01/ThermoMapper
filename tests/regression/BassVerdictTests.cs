@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Maths.Samplers;
@@ -83,7 +84,7 @@ public sealed class BassVerdictTests
         Assert.Equal(4 + points.Count, sampled.FunctionalDim);
         AssertGroups(sampled, structural: ["M", "tau"]);
 
-        BassEnsemble held = Ensemble(config with { Coefficients = new FixedG() }, data);
+        BassEnsemble held = Ensemble(config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) }, data);
         Assert.Equal(["M", "log_posterior", "sigma2", .. points.Select(Name)], held.FunctionalNames);
         AssertGroups(held, structural: ["M"]);
 

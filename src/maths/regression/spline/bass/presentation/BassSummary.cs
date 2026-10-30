@@ -55,7 +55,7 @@ public sealed record BassMetadata(
 /// <summary>
 /// The posterior summaries of a fit's draws pooled over its chains under its draw weights (R's <c>summary.bass</c>; P14):
 /// M's, whose <see cref="PosteriorSummary.Min"/> and <see cref="PosteriorSummary.Max"/> are R's range of the basis count;
-/// σ²'s, whose mean is R's posterior mean error variance; τ's when it is sampled (null under fixed g); and λ's.
+/// σ²'s, whose mean is R's posterior mean error variance; τ's when it is sampled (null when it is held); and λ's.
 /// </summary>
 public sealed record BassPosteriorSummary(PosteriorSummary Count, PosteriorSummary Sigma2, PosteriorSummary? Tau, PosteriorSummary Lambda)
 {
@@ -66,7 +66,7 @@ public sealed record BassPosteriorSummary(PosteriorSummary Count, PosteriorSumma
             throw new ArgumentException($"The fit has {draws.Length} draws and {w.Length} weights.", nameof(fit));
         PosteriorSummary Summarized(Func<BassDraw, double> value) => PosteriorSummary.Over(Array.ConvertAll(draws, d => value(d)), fit.DrawWeights, probabilities);
         return new BassPosteriorSummary(Summarized(d => d.Structure.TermIds.Length), Summarized(d => d.Sigma2),
-                                        fit.Config.Coefficients is SampledG ? Summarized(d => d.Tau) : null, Summarized(d => d.Lambda));
+                                        !fit.Config.Coefficients.Scale.IsHeld ? Summarized(d => d.Tau) : null, Summarized(d => d.Lambda));
     }
 }
 

@@ -5,7 +5,7 @@ namespace Maths.Regression.Spline.Bass;
 
 /// <summary>
 /// One chain's state (D04): the structure, its terms in the design's column order with their fit, and u = ln τ, the
-/// coordinate τ's slice step moves (ln of the held τ under fixed g). Immutable: a τ update shares the structure, and a
+/// coordinate τ's slice step moves (ln of a held τ). Immutable: a τ update shares the structure, and a
 /// state's structure identity, which the chain's design tracks, is its terms' array.
 /// </summary>
 public sealed class BassState

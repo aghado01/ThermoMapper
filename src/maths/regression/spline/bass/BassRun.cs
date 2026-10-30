@@ -13,7 +13,7 @@ namespace Maths.Regression.Spline.Bass;
 /// BASS's client of the ensemble shell (<see cref="ChainEnsemble"/>; stage 4's S7 and S8): one <see cref="BassChain"/>
 /// per chain, or with <see cref="BassSampling.Tempering"/> one <see cref="BassLadder"/>, started from an exact draw of
 /// the prior on F (<see cref="BassPriorSampler"/>), each retained state composed into a <see cref="BassDraw"/>, kept in
-/// the chain's <see cref="DrawStore{TDraw}"/>, and reduced to the functionals the shell monitors: M, τ in the g mode, the
+/// the chain's <see cref="DrawStore{TDraw}"/>, and reduced to the functionals the shell monitors: M, τ when sampled, the
 /// log posterior, σ², and the draw's fitted value at each monitored point, in D10's three groups (structural, level,
 /// predictive). A ladder's draws are its b = 1 replica's.
 /// <list type="bullet">
@@ -64,7 +64,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
     /// <summary>Every functional is monitored.</summary>
     public int FunctionalDim => MonitoredDim;
 
-    /// <summary>M, τ in the g mode, the log posterior, σ², and the fitted value at each monitored point, in that order: the
+    /// <summary>M, τ when sampled, the log posterior, σ², and the fitted value at each monitored point, in that order: the
     /// structural group, then the level group, then the predictive group.</summary>
     public int MonitoredDim => (_model.Target.SamplesTau ? 4 : 3) + _points.Count;
 
@@ -99,10 +99,11 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
 
     /// <summary>
     /// Whether the run reports its evidence (D03, D05): asked for (<see cref="BassSampling.ReportEvidence"/>), tempered
-    /// down to the exact reference rung, under proper priors, neither the flat intercept nor the Jeffreys σ² prior.
+    /// down to the exact reference rung, under proper priors: neither the flat intercept, the Jeffreys σ² prior nor an
+    /// improper τ prior.
     /// </summary>
     public bool ReportsEvidence => _model.Config.Sampling.ReportEvidence && _tempering is { ReferenceRung: true }
-                                   && _model.Target.Sigma2 is not null && _model.Target.Intercept != GPriorCentre.Flat;
+                                   && _model.Target.Sigma2 is not null && _model.Target.Intercept != GPriorCentre.Flat && _model.Target.Scale.IsProper;
 
     /// <inheritdoc/>
     public IChainRun<BassState> StartChain(int chainSeed, int readoutSeed)
@@ -115,7 +116,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         if (_tempering is { } spec) ladder = new BassLadder(_model, spec, start.Terms, start.LogTau, seeds[3]);
         else chain = new BassChain(_model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(seeds[1]), new Xoshiro256PlusPlus(seeds[2]));
         return new BassChainRun(this, chain, ladder, new Xoshiro256PlusPlus(readoutSeed), new BassTermTable(), new DrawStore<BassDraw>(),
-                                new BassStart(start.Terms, _model.Target.FixedTau ?? start.Tau, sampler.Attempts));
+                                new BassStart(start.Terms, _model.Target.HeldTau ?? start.Tau, sampler.Attempts));
     }
 
     /// <summary>Rebuilds a chain from the restart state its run saved (<see cref="BassChainState"/>).</summary>
@@ -276,7 +277,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
             progress.Report(new BassProgress(done, _plannedSweeps));
     }
 
-    // The retained draw at `state`, kept, and its functionals: M, τ (g mode), the log posterior, σ², then the fitted value
+    // The retained draw at `state`, kept, and its functionals: M, τ (when sampled), the log posterior, σ², then the fitted value
     // f = a₀ + Σⱼ aⱼBⱼ at each monitored point. The log posterior is the collapsed ln π(structure, u | y) at b = 1, the
     // state's prior and log marginal, which is the chain's own density there (a ladder's b = 1 replica's).
     private void Accumulate(BassChainRun run, BassState state, Span<double> functionals)
@@ -424,7 +425,7 @@ internal sealed class BassPointInputs
     /// <summary>The monitored points.</summary>
     public IReadOnlyList<BassMonitoredPoint> Points { get; }
 
-    /// <summary>"M", "tau" in the g mode, "log_posterior", "sigma2", and "fitted[i]" at case i, or "fitted[i,r]" at case i
+    /// <summary>"M", "tau" when τ is sampled, "log_posterior", "sigma2", and "fitted[i]" at case i, or "fitted[i,r]" at case i
     /// and output location r.</summary>
     public IReadOnlyList<string> FunctionalNames
     {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Xunit;
@@ -133,7 +134,7 @@ public sealed class BassQualificationLooTests
                 logw[i] = target.SamplesTau
                     ? logPrior + Math.Log(w) + target.LogTauDensity(u) + target.Evaluate(fit, u).LogMarginal
                     : logPrior + target.Evaluate(fit).LogMarginal;
-                draws[i] = new BassDraw(new BassStructure(ids), target.SamplesTau ? Math.Exp(u) : target.FixedTau!.Value, 1.0,
+                draws[i] = new BassDraw(new BassStructure(ids), target.SamplesTau ? Math.Exp(u) : target.HeldTau!.Value, 1.0,
                                         new double[ids.Length + 1], 1.0);
             }
             numerators[k] = LogSumExp(logw);
@@ -169,7 +170,7 @@ public sealed class BassQualificationLooTests
     private static BassConfig Config(bool fixedG) => new()
     {
         Structure = new BassStructureSpec { MaxInteraction = 2, Support = new SupportRule(Minimum: 3) },
-        Coefficients = fixedG ? new FixedG() : new SampledG(),
+        Coefficients = fixedG ? BassCoefficientPrior.G(TauPrior.Held()) : BassCoefficientPrior.G(),
         Sampling = new BassSampling { Chains = 4, MasterSeed = 23, BurnIn = 1000, Samples = 2000 },
     };
 

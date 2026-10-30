@@ -306,7 +306,7 @@ public sealed class BassPriorSamplerTests
     [Fact]
     public void FixedG_HoldsTau()
     {
-        var model = BassModel.Create(BassSweepTests.Config() with { Coefficients = new FixedG() }, BassSweepTests.Data());
+        var model = BassModel.Create(BassSweepTests.Config() with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) }, BassSweepTests.Data());
         var sampler = new BassPriorSampler(model);
         var rng = new Xoshiro256PlusPlus(37);
         for (int d = 0; d < 200; d++)

@@ -86,7 +86,7 @@ public sealed class BassPointwiseTests
         => new()
         {
             Structure = new BassStructureSpec { MaxInteraction = 2, MaxBasis = maxBasis },
-            Coefficients = fixedG ? new FixedG() : new SampledG(),
+            Coefficients = fixedG ? BassCoefficientPrior.G(TauPrior.Held()) : BassCoefficientPrior.G(),
             Sigma2 = sigma2 ?? Sigma2Prior.ScaledToResponse(),
             Intercept = intercept,
         };

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Xunit;
@@ -29,13 +30,13 @@ public sealed class BassLocalStepTests
 
     /// <summary>The 2,263-state fixture at a fixed τ, unit information.</summary>
     internal static BassConfig Continuous(MoveSchedule? moves = null)
-        => BassSweepTests.Config(moves) with { Coefficients = new FixedG() };
+        => BassSweepTests.Config(moves) with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) };
 
     /// <summary>The categorical fixture (<see cref="BassKernelEnumeration.CategoricalData"/>): each part's cap 1, M ≤ 2.</summary>
     internal static BassConfig Categorical(CategoricalSubsetMeasure measure, MoveSchedule? moves = null) => new()
     {
         Structure = new BassStructureSpec { MaxInteraction = 1, MaxCategoricalInteraction = 1, MaxBasis = 2, CategoricalSubsets = measure },
-        Coefficients = new FixedG(),
+        Coefficients = BassCoefficientPrior.G(TauPrior.Held()),
         Sampling = new BassSampling { Moves = moves ?? new EqualOverAvailable() },
     };
 
@@ -43,7 +44,7 @@ public sealed class BassLocalStepTests
     internal static BassConfig Functional(MoveSchedule? moves = null) => new()
     {
         Structure = new BassStructureSpec { MaxInteraction = 1, MaxFunctionalInteraction = 1, MaxBasis = 2 },
-        Coefficients = new FixedG(),
+        Coefficients = BassCoefficientPrior.G(TauPrior.Held()),
         Sampling = new BassSampling { Moves = moves ?? new EqualOverAvailable() },
     };
 

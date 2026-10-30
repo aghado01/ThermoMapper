@@ -17,8 +17,7 @@ namespace Maths.Regression.Spline.Bass;
 /// serializes to JSON whole and is its own manifest, and the run's fingerprint hashes that serialization with the data;
 /// <c>BarsConfig</c>'s component instances fingerprint their types only (OQ10). The defaults are D01–D06's. The
 /// auto-picks (the basis cap, the support thresholds, N, s² and the centre's level) are resolved at entry and reported
-/// in <see cref="BassResolved"/>. A setting joins with the code that reads it: SMC with stage 8, the ridge priors when
-/// they are built.
+/// in <see cref="BassResolved"/>. A setting joins with the code that reads it.
 /// </summary>
 public sealed record BassConfig
 {
@@ -28,8 +27,9 @@ public sealed record BassConfig
     /// <summary>The count prior, λ integrated out (D02).</summary>
     public BassCountPrior Count { get; init; } = new();
 
-    /// <summary>The coefficient prior: the g-prior with τ sampled, by default, or with τ fixed (D03).</summary>
-    public BassCoefficientPrior Coefficients { get; init; } = new SampledG();
+    /// <summary>The coefficient prior, a covariance form and τ's prior: the g-form with Zellner–Siow's unit-information
+    /// Gamma, by default (D03).</summary>
+    public BassCoefficientPrior Coefficients { get; init; } = BassCoefficientPrior.G();
 
     /// <summary>σ²'s prior: IG(c, c·s²) scaled to the response, c = 10⁻³, by default (D03).</summary>
     public Sigma2Prior Sigma2 { get; init; } = Sigma2Prior.ScaledToResponse(1e-3);
@@ -106,23 +106,17 @@ public sealed record BassConfig
         if (!(count.Shape > 0.0 && double.IsFinite(count.Shape))) throw Bad("Count.Shape", "must be positive and finite");
         if (!(count.Rate > 0.0 && double.IsFinite(count.Rate))) throw Bad("Count.Rate", "must be positive and finite");
 
-        switch (Coefficients)
-        {
-            case SampledG g when !(g.TauShape > 0.0 && double.IsFinite(g.TauShape)):
-                throw Bad("Coefficients.TauShape", "must be positive and finite");
-            case FixedG { Tau: { } tau } when !(tau > 0.0 && double.IsFinite(tau)):
-                throw Bad("Coefficients.Tau", "must be positive and finite");
-            case SampledG or FixedG:
-                break;
-            case null:
-                throw Bad("Coefficients", "is missing");
-            default:
-                throw Bad("Coefficients", "is not a known prior");
-        }
+        BassCoefficientPrior coefficients = Coefficients ?? throw Bad("Coefficients", "is missing");
+        if (coefficients.Form is not (GForm or RidgeForm)) throw Bad("Coefficients.Form", coefficients.Form is null ? "is missing" : "is not a known form");
+        TauPrior scale = coefficients.Scale ?? throw Bad("Coefficients.Scale", "is missing");
+        if (coefficients.Form is RidgeForm && scale is { IsHeld: true, Tau: null })
+            throw Bad("Coefficients.Scale.Tau", "must be declared under the ridge, whose held scale is part of the model (D03)");
 
         if (Sigma2 is null) throw Bad("Sigma2", "is missing");
         if (Intercept == GPriorCentre.Median) throw Bad("Intercept", "the median centre is for the noise extensions' weights (D03)");
         if (Intercept is not (GPriorCentre.Mean or GPriorCentre.Flat or GPriorCentre.Zero)) throw Bad("Intercept", "is not a known convention");
+        if (!scale.IsProper && Intercept == GPriorCentre.Flat)
+            throw Bad("Coefficients.Scale", $"is {scale}, improper, which leaves τ no posterior under the flat intercept, whose intercept-only structure has no column inside the coefficient prior; take a > 2");
 
         BassSampling run = Sampling ?? throw Bad("Sampling", "is missing");
         if (run.Chains < 1) throw Bad("Sampling.Chains", "must be at least 1");
@@ -170,6 +164,7 @@ public sealed record BassConfig
         }
         if (run.Smc is { } smc)
         {
+            if (!scale.IsProper) throw Bad("Coefficients.Scale", $"is {scale}, improper, which SMC cannot start from (D05); take a > 2");
             if (run.Tempering is not null) throw Bad("Sampling.Tempering", "must be null with Sampling.Smc, which tempers its own sequence from the prior (D05)");
             if (run.RHatTarget > 0.0) throw Bad("Sampling.RHatTarget", "must be 0 with Sampling.Smc: an SMC run ends when b reaches 1, with no R̂ stop");
             if (smc.Particles < 2) throw Bad("Sampling.Smc.Particles", "must be at least 2, so the population has weights to read and a normalizer error");
@@ -190,6 +185,8 @@ public sealed record BassConfig
                 throw Bad("Sampling.Tempering.Form", "is the likelihood path's; the powered path powers the untempered marginal whole (D05)");
             if (t.ReferenceRung && t.Path != TemperingPath.Likelihood)
                 throw Bad("Sampling.Tempering.ReferenceRung", "needs the likelihood path, whose b = 0 member is the prior; the powered path's is not normalizable (D05)");
+            if (t.ReferenceRung && !scale.IsProper)
+                throw Bad("Sampling.Tempering.ReferenceRung", $"needs a proper τ prior, whose exact draw it takes, and Coefficients.Scale is {scale}; take a > 2");
             int minimum = TemperingSpec.MinimumLevels(t.ReferenceRung);
             if (t.Levels < minimum)
                 throw Bad("Sampling.Tempering.Levels", t.ReferenceRung ? "must be at least 3 with a reference rung: b = 1, the hot end and b = 0" : "must be at least 2");
@@ -294,23 +291,50 @@ public sealed record SupportRule(SupportKind Kind = SupportKind.Count, double? M
 /// <summary>D02's count prior: λ ~ Gamma(h₁, rate h₂), integrated out; h₁ = h₂ = 10, R's and Nott, Kuk and Duc's.</summary>
 public sealed record BassCountPrior(double Shape = 10, double Rate = 10);
 
-/// <summary>The coefficient prior (D03): the g-prior with τ sampled, or with τ fixed.</summary>
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "Kind")]
-[JsonDerivedType(typeof(SampledG), "SampledG")]
-[JsonDerivedType(typeof(FixedG), "FixedG")]
-public abstract record BassCoefficientPrior
+/// <summary>
+/// The coefficient prior (D03; its two axes decided 2026-10-29): a covariance <see cref="Form"/> and τ's prior,
+/// <see cref="Scale"/>, from the shared family, which samples τ or holds it.
+/// <list type="bullet">
+/// <item><see cref="GForm"/>, σ²G_c⁻¹/τ, with its unit information at τ₀ = 1/N; <see cref="RidgeForm"/>, σ²I/τ on the
+/// centred columns at unit root mean square, with τ₀ = 1.</item>
+/// <item><see cref="Scale"/>: the unit-information Gamma (a = ½, Zellner–Siow, the default), hyper-g, hyper-g/n, each on
+/// the form's τ₀, or a held τ. A held τ left null is τ₀ under the g-form, unit information (D03's second mode); under
+/// the ridge it must be declared, its scale part of the model.</item>
+/// </list>
+/// The intercept, a unit-RMS column already, sits inside either form under level centring and the zero centre, so its
+/// prior precision is τN under the g-form and τ under the ridge, unit information at τ₀ in both.
+/// </summary>
+public sealed record BassCoefficientPrior(CoefficientForm Form, TauPrior Scale)
 {
-    private protected BassCoefficientPrior() { }
+    /// <summary>The g-form with τ's prior <paramref name="scale"/>; null for Zellner–Siow's unit-information Gamma, the default.</summary>
+    public static BassCoefficientPrior G(TauPrior? scale = null) => new(new GForm(), scale ?? TauPrior.UnitInformationGamma());
+
+    /// <summary>The normalized ridge with τ's prior <paramref name="scale"/>, a held one with its τ declared.</summary>
+    public static BassCoefficientPrior Ridge(TauPrior scale) => new(new RidgeForm(), scale);
+
+    /// <summary>τ₀ = 1/n₀'s n₀ for <paramref name="observations"/> observations: N for the g-form, 1 for the ridge.</summary>
+    public double UnitObservations(int observations) => Form is RidgeForm ? 1.0 : observations;
 }
 
-/// <summary>
-/// The g-prior with τ sampled from the unit-information family, τ ~ Gamma(a, rate a·N), whose mean is 1/N at every
-/// shape; a = ½ is Zellner–Siow, the default (D03).
-/// </summary>
-public sealed record SampledG(double TauShape = 0.5) : BassCoefficientPrior;
+/// <summary>The coefficient prior's covariance form (D03, decided 2026-10-29).</summary>
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "Kind")]
+[JsonDerivedType(typeof(GForm), "G")]
+[JsonDerivedType(typeof(RidgeForm), "Ridge")]
+public abstract record CoefficientForm
+{
+    private protected CoefficientForm() { }
+}
 
-/// <summary>The g-prior with τ held at <paramref name="Tau"/>; null for unit information, 1/N (D03's second mode).</summary>
-public sealed record FixedG(double? Tau = null) : BassCoefficientPrior;
+/// <summary>The g-form, a | σ², τ ~ N(μ₀, σ²G_c⁻¹/τ) on the centred columns' Gram: shrinkage follows the design's
+/// own information, and the marginal depends on the column space alone.</summary>
+public sealed record GForm : CoefficientForm;
+
+/// <summary>
+/// The normalized ridge, β | σ², τ ~ N(0, σ²I/τ) on the centred columns scaled to unit root mean square over the N
+/// observations: τ = 1 is one observation's worth for every term, whatever its knot. In the design's raw centred
+/// coordinates it is the generalized ridge τD, D = diag(G_c)/N, so the marginal does not depend on the columns' scale.
+/// </summary>
+public sealed record RidgeForm : CoefficientForm;
 
 /// <summary>The run's settings.</summary>
 public sealed record BassSampling

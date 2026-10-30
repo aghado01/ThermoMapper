@@ -67,7 +67,7 @@ public sealed class BassChainParityTests
         double[] countLaw = [.. p.GetProperty("count").GetProperty("posterior").EnumerateArray().Select(v => v.GetDouble())];
         double[] inclusion = [.. p.GetProperty("inclusion").EnumerateArray().Select(v => v.GetDouble())];
         bool fixedG = option == "fixed g";
-        double tauMean = fixedG ? model.Target.FixedTau!.Value : p.GetProperty("tau").GetProperty("mean").GetDouble();
+        double tauMean = fixedG ? model.Target.HeldTau!.Value : p.GetProperty("tau").GetProperty("mean").GetDouble();
         BassTerm[] terms = BassTargetParityTests.Terms(r);
         var index = terms.Select((t, i) => (t, i)).ToDictionary(e => e.t, e => e.i);
         Assert.Equal(model.MaxBasis + 1, countLaw.Length);

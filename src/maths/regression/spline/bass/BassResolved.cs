@@ -61,11 +61,9 @@ public sealed record BassResolved
     /// <summary>σ²'s prior as resolved; null for the Jeffreys prior.</summary>
     public required InverseGamma? Sigma2 { get; init; }
 
-    /// <summary>τ's prior, Gamma(a, rate a·N), when τ is sampled; null when it is fixed.</summary>
-    public required Gamma? TauPrior { get; init; }
-
-    /// <summary>τ's value when it is fixed; null when it is sampled.</summary>
-    public required double? FixedTau { get; init; }
+    /// <summary>τ's prior on the coefficient form's unit-information precision τ₀ (1/N for the g-form, 1 for the ridge):
+    /// sampled, or held at its declared value or τ₀.</summary>
+    public required ResolvedTauPrior Scale { get; init; }
 
     /// <summary>The training points whose fitted values the diagnostics monitor: the config's, a direct response's
     /// missing locations at the middle one, or the defaults.</summary>
@@ -179,20 +177,19 @@ public sealed record BassResolved
 
         IReadOnlyList<BassMonitoredPoint> points = ResolvePoints(config.Sampling.MonitoredPoints, cases, functional ? locations : null, log);
 
-        Gamma? tauPrior = null;
-        double? fixedTau = null;
-        switch (config.Coefficients)
+        BassCoefficientPrior coefficients = config.Coefficients;
+        ResolvedTauPrior scale = coefficients.Scale.For(coefficients.UnitObservations(n));
+        string unit = coefficients.Form is RidgeForm ? "1, the normalized ridge's" : "1/N, the g-form's";
+        switch (coefficients.Scale.Kind)
         {
-            case SampledG g:
-                tauPrior = Gamma.ShapeRate(g.TauShape, g.TauShape * n);
-                log.Add(new("TauPrior", $"Gamma({Text(g.TauShape)}, rate {Text(g.TauShape * n)})", "the unit-information family, rate a·N, mean 1/N"));
+            case TauPriorKind.UnitInformationGamma:
+                log.Add(new("TauPrior", $"Gamma({Text(scale.Gamma!.Value.Shape)}, rate {Text(scale.Gamma.Value.Rate)})", $"the unit-information Gamma, rate a/τ₀, mean τ₀ = {unit}"));
                 break;
-            case FixedG { Tau: { } tau }:
-                fixedTau = tau;
+            case TauPriorKind.HyperG or TauPriorKind.HyperGOverN:
+                log.Add(new("TauPrior", scale.ToString(), $"τ₀ = {unit}" + (scale.IsProper ? "" : "; improper, a ≤ 2")));
                 break;
-            case FixedG:
-                fixedTau = 1.0 / n;
-                log.Add(new("FixedTau", Text(1.0 / n), "unit information, 1/N"));
+            case TauPriorKind.Held when coefficients.Scale.Tau is null:
+                log.Add(new("HeldTau", Text(scale.HeldTau!.Value), $"unit information, τ₀ = {unit}"));
                 break;
         }
 
@@ -205,11 +202,12 @@ public sealed record BassResolved
             hotEnd = tempering.HotEnd;
             if (hotEnd is null)
             {
-                double picked = AutoHotEnd(tempering, config.Intercept, n, fixedTau);
+                double? halving = HalvingTau(coefficients.Form, scale, n);
+                double picked = AutoHotEnd(tempering, config.Intercept, n, halving);
                 if (!(picked > 0.0 && picked < 1.0))
                     throw new ArgumentException($"Sampling.Tempering.HotEnd auto-picks {Text(picked)} on N = {n} observations, outside (0, 1); set it.", "config");
                 hotEnd = picked;
-                log.Add(new("Tempering.HotEnd", Text(picked), AutoHotEndReason(tempering, config.Intercept, fixedTau, picked)));
+                log.Add(new("Tempering.HotEnd", Text(picked), AutoHotEndReason(tempering, config.Intercept, halving, picked)));
             }
 
             // A ladder's rungs where its tempered form exists (D05): the integrated form loses b = 0 under the improper
@@ -263,7 +261,7 @@ public sealed record BassResolved
             Cases = cases, Locations = locations, Observations = n, MaxBasis = maxBasis,
             MaxInteraction = maxInteraction, MaxCategoricalInteraction = maxCategorical, MaxFunctionalInteraction = maxFunctional,
             SupportMinimum = support, SupportMinimumFunctional = supportFunctional,
-            MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, ResponseMeanSquare = meanSquare, Sigma2 = sigma2, TauPrior = tauPrior, FixedTau = fixedTau,
+            MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, ResponseMeanSquare = meanSquare, Sigma2 = sigma2, Scale = scale,
             StoppingGroups = BassDiagnostics.StoppingGroups(config.Sampling.StoppingScope),
             HotEnd = hotEnd, StepWindows = windows, FactorShares = shares, SplitThreshold = config.Sampling.Tempering?.Split?.Threshold,
             AutoPicks = log.AsReadOnly(),
@@ -272,26 +270,34 @@ public sealed record BassResolved
 
     /// <summary>
     /// The hot end a ladder auto-picks on <paramref name="observations"/> observations (decided 2026-10-28): 1/N, the b at
-    /// which E[τ] = 1/N makes the shrinkage τ/(τ + b) one half, so the tempered likelihood weighs one observation, as the
-    /// unit-information prior does; 2/N on the likelihood path's integrated form under the flat intercept, whose pole at
-    /// (1 − 2c)/N it clears with ν = Nb − 1 = 1; and under fixed g the smaller of the held τ and these.
+    /// which τ₀ makes a unit-information column's shrinkage, τ/(τ + b) under the g-form and τ/(τ + bN) under the ridge,
+    /// one half, so the tempered likelihood weighs one observation, as the unit-information prior does; 2/N on the
+    /// likelihood path's integrated form under the flat intercept, whose pole at (1 − 2c)/N it clears with ν = Nb − 1 = 1;
+    /// and under a held τ the smaller of these and the b at which the held τ halves it (<paramref name="halvingTau"/>).
     /// </summary>
-    internal static double AutoHotEnd(TemperingSpec tempering, GPriorCentre intercept, int observations, double? fixedTau)
+    internal static double AutoHotEnd(TemperingSpec tempering, GPriorCentre intercept, int observations, double? halvingTau)
     {
         double unit = (Pole(tempering, intercept) ? 2.0 : 1.0) / observations;
-        return fixedTau is double tau ? Math.Min(tau, unit) : unit;
+        return halvingTau is double tau ? Math.Min(tau, unit) : unit;
     }
+
+    /// <summary>
+    /// Under a held τ, the b at which it halves a unit-information column's shrinkage: τ under the g-form, τ/N under the
+    /// ridge, whose columns carry N observations' information each; null when τ is sampled.
+    /// </summary>
+    internal static double? HalvingTau(CoefficientForm form, ResolvedTauPrior scale, int observations)
+        => scale.HeldTau is double tau ? (form is RidgeForm ? tau / observations : tau) : null;
 
     private static bool Pole(TemperingSpec tempering, GPriorCentre intercept)
         => tempering.Path == TemperingPath.Likelihood && tempering.Form == TemperedForm.Integrated && intercept == GPriorCentre.Flat;
 
-    private static string AutoHotEndReason(TemperingSpec tempering, GPriorCentre intercept, double? fixedTau, double picked)
+    private static string AutoHotEndReason(TemperingSpec tempering, GPriorCentre intercept, double? halvingTau, double picked)
     {
         string unit = Pole(tempering, intercept)
             ? "2/N, past the integrated form's pole under the flat intercept at (1 − 2c)/N, with ν = Nb − 1 = 1"
-            : "1/N, where E[τ] = 1/N halves the shrinkage τ/(τ + b): the tempered likelihood weighs one observation, as the unit-information prior does";
-        if (fixedTau is not double tau) return unit;
-        return picked == tau ? $"the held τ under fixed g, at most {unit}" : $"{unit}, below the held τ";
+            : "1/N, where τ₀ halves a unit-information column's shrinkage: the tempered likelihood weighs one observation, as the unit-information prior does";
+        if (halvingTau is not double tau) return unit;
+        return picked == tau ? $"the b at which the held τ halves that shrinkage, at most {unit}" : $"{unit}, below the b at which the held τ halves that shrinkage";
     }
 
     // The declared points, checked against the data, or the defaults; a direct response's missing location is the middle one.

@@ -55,7 +55,7 @@ public sealed class BassStructureMoves
     private readonly record struct Pending(BassState State, BassMoveKind Kind, BassTerm? Added, BassTerm? Removed, bool Tallied);
 
     /// <summary>The moves of a chain started at <paramref name="terms"/>, which must lie in F, with u =
-    /// <paramref name="logTau"/> (the held τ's log under fixed g).</summary>
+    /// <paramref name="logTau"/> (the held τ's log when τ is held).</summary>
     public BassStructureMoves(BassModel model, IReadOnlyList<BassTerm> terms, double logTau)
     {
         ArgumentNullException.ThrowIfNull(model);
@@ -64,7 +64,7 @@ public sealed class BassStructureMoves
         _design = model.NewDesign();
         if (_design.Load(terms) is { } refusal) throw new ArgumentException($"The start lies outside F ({refusal}).", nameof(terms));
         BassTerm[] loaded = [.. _design.Terms];
-        Start = new BassState(loaded, Fit(loaded), model.Target.SamplesTau ? logTau : Math.Log(model.Target.FixedTau!.Value));
+        Start = new BassState(loaded, Fit(loaded), model.Target.SamplesTau ? logTau : Math.Log(model.Target.HeldTau!.Value));
         if (model.Target.Refusal(Start.Fit) is { } exact) throw new ArgumentException($"The start lies outside F ({exact}).", nameof(terms));
         _counts = CountsOf(loaded);
         _committed = Start;
@@ -184,7 +184,7 @@ public sealed class BassStructureMoves
         ArgumentNullException.ThrowIfNull(terms);
         Sync(state);
         BassTarget target = _model.Target;
-        double tau = target.SamplesTau ? state.Tau : target.FixedTau!.Value;
+        double tau = target.SamplesTau ? state.Tau : target.HeldTau!.Value;
         CollapsedGPrior block = CollapsedGPrior.FromCentredLeastSquares(_design.Factor, _design.Coefficients.ToArray(), _design.ResidualSquares,
                                                                          _design.FittedSquares, _design.Observations, _design.ResponseMean, target.Intercept);
         var centred = new double[block.Columns];   // (α, β_c) in the design's order
@@ -474,8 +474,8 @@ public sealed class BassTauBlock : IBlock<ReversibleJumpChain<BassState>>
 }
 
 /// <summary>
-/// One untempered chain (D04's sweep): each step is a structure move on D01's schedule, then τ's slice step in the g
-/// mode, run as a <see cref="BlockScan{TState}"/> over the reversible-jump chain. The moves draw from the chain's stream
+/// One untempered chain (D04's sweep): each step is a structure move on D01's schedule, then τ's slice step when
+/// τ is sampled, run as a <see cref="BlockScan{TState}"/> over the reversible-jump chain. The moves draw from the chain's stream
 /// and τ's block from the scan's. <see cref="Compose"/> gives a retained draw at the current state.
 /// </summary>
 public sealed class BassChain
@@ -499,7 +499,7 @@ public sealed class BassChain
         Scan = scan;
     }
 
-    // The scan's blocks: the moves, then τ in the g mode.
+    // The scan's blocks: the moves, then τ when it is sampled.
     private static List<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassModel model, ISamplingTarget<BassState> target)
     {
         List<IBlock<ReversibleJumpChain<BassState>>> blocks = [new MoveStep<BassState>()];

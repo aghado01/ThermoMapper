@@ -72,7 +72,7 @@ public sealed class BassTargetTests
     ];
 
     private static BassConfig Config(GPriorCentre centre = GPriorCentre.Mean, Sigma2Prior? sigma2 = null, BassCoefficientPrior? coefficients = null)
-        => new() { Intercept = centre, Sigma2 = sigma2 ?? Sigma2Prior.ScaledToResponse(1e-3), Coefficients = coefficients ?? new SampledG() };
+        => new() { Intercept = centre, Sigma2 = sigma2 ?? Sigma2Prior.ScaledToResponse(1e-3), Coefficients = coefficients ?? BassCoefficientPrior.G() };
 
     public static TheoryData<GPriorCentre> Centres() => new() { GPriorCentre.Mean, GPriorCentre.Flat, GPriorCentre.Zero };
 
@@ -136,7 +136,7 @@ public sealed class BassTargetTests
     public void TauPrior_IsTheUnitInformationGamma(double shape)
     {
         // F-O8's identities on u = ln τ: the density integrates to one, E[τ] = 1/N, and E[ln τ] = ψ(a) − ln(aN).
-        Built built = Build(Data(), Config(coefficients: new SampledG(shape)));
+        Built built = Build(Data(), Config(coefficients: BassCoefficientPrior.G(TauPrior.UnitInformationGamma(shape))));
         int n = built.Target.Observations;
         double centre = Math.Log(1.0 / n);
         double mass = 0, meanTau = 0, meanLog = 0;
@@ -165,7 +165,7 @@ public sealed class BassTargetTests
         Assert.Equal(0.03, ev.Tau, 15);
         Assert.Throws<InvalidOperationException>(() => g.Target.Evaluate(fit));
 
-        Built fixedG = Build(Data(), Config(coefficients: new FixedG()));
+        Built fixedG = Build(Data(), Config(coefficients: BassCoefficientPrior.G(TauPrior.Held())));
         BassEvaluation held = fixedG.Target.Evaluate(fixedG.Fit(Structures[2]));
         Assert.Equal(structure, held.LogPrior, 12);
         Assert.Equal(1.0 / 75, held.Tau);

@@ -135,7 +135,7 @@ public sealed class BassContractTests
                      (c.Structure.AngleFloor, c.Structure.MaxVarianceInflation, c.Structure.CategoricalSubsets,
                       c.Structure.OrderWeight, c.Structure.VariableWeight));
         Assert.Equal(new BassCountPrior(10, 10), c.Count);
-        Assert.Equal(new SampledG(0.5), c.Coefficients);
+        Assert.Equal(BassCoefficientPrior.G(TauPrior.UnitInformationGamma(0.5)), c.Coefficients);
         Assert.Equal(Sigma2Prior.ScaledToResponse(1e-3), c.Sigma2);
         Assert.Equal(GPriorCentre.Mean, c.Intercept);
         Assert.Equal((4, 0, 9000, 1000, 1, 0.0, 0, 100.0, true),
@@ -159,12 +159,16 @@ public sealed class BassContractTests
                     MaxVarianceInflation = 1e6, CategoricalSubsets = CategoricalSubsetMeasure.Uniform, OrderWeight = 2.5,
                 },
                 Count = new BassCountPrior(3, 0.5),
-                Coefficients = new FixedG(0.01),
+                Coefficients = BassCoefficientPrior.G(TauPrior.Held(0.01)),
                 Sigma2 = Sigma2Prior.Jeffreys,
                 Intercept = GPriorCentre.Flat,
                 Sampling = new BassSampling { Chains = 2, MasterSeed = 7, RHatTarget = 1.01, BatchSize = 200, Moves = new PriorCancelling(0.3) },
             },
-            new BassConfig { Coefficients = new FixedG(), Sigma2 = Sigma2Prior.InverseGamma(2, 0.5), Intercept = GPriorCentre.Zero },
+            new BassConfig { Coefficients = BassCoefficientPrior.G(TauPrior.Held()), Sigma2 = Sigma2Prior.InverseGamma(2, 0.5), Intercept = GPriorCentre.Zero },
+            new BassConfig { Coefficients = BassCoefficientPrior.Ridge(TauPrior.Held(2.5)) },
+            new BassConfig { Coefficients = BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma(1.5)) },
+            new BassConfig { Coefficients = BassCoefficientPrior.Ridge(TauPrior.HyperG(3)), Intercept = GPriorCentre.Flat },
+            new BassConfig { Coefficients = BassCoefficientPrior.G(TauPrior.HyperGOverN(1.5)) },
         };
         foreach (BassConfig config in configs)
         {
@@ -173,7 +177,8 @@ public sealed class BassContractTests
             Assert.Equal(json, BassConfig.FromJson(json).ToJson());
         }
         string defaults = new BassConfig().ToJson();
-        Assert.Contains("\"Coefficients\":{\"Kind\":\"SampledG\",\"TauShape\":0.5}", defaults);
+        Assert.Contains("\"Coefficients\":{\"Form\":{\"Kind\":\"G\"},\"Scale\":{\"Kind\":\"UnitInformationGamma\",\"Shape\":0.5,\"Tau\":null}}", defaults);
+        Assert.Contains("\"Coefficients\":{\"Form\":{\"Kind\":\"Ridge\"},\"Scale\":{\"Kind\":\"Held\",\"Shape\":null,\"Tau\":2.5}}", configs[3].ToJson());
         Assert.Contains("\"Intercept\":\"Mean\"", defaults);
         Assert.Contains("\"Moves\":{\"Kind\":\"EqualOverAvailable\"}", defaults);
     }
@@ -188,8 +193,9 @@ public sealed class BassContractTests
         Assert.StartsWith("Structure.AngleFloor", Reason(new BassConfig { Structure = new BassStructureSpec { AngleFloor = 1 } }));
         Assert.StartsWith("Structure.Support.Minimum", Reason(new BassConfig { Structure = new BassStructureSpec { Support = new SupportRule(Minimum: -1) } }));
         Assert.StartsWith("Count.Rate", Reason(new BassConfig { Count = new BassCountPrior(10, 0) }));
-        Assert.StartsWith("Coefficients.TauShape", Reason(new BassConfig { Coefficients = new SampledG(double.NaN) }));
-        Assert.StartsWith("Coefficients.Tau", Reason(new BassConfig { Coefficients = new FixedG(-1) }));
+        Assert.StartsWith("Coefficients.Form", Reason(new BassConfig { Coefficients = new BassCoefficientPrior(null!, TauPrior.Held()) }));
+        Assert.StartsWith("Coefficients.Scale", Reason(new BassConfig { Coefficients = new BassCoefficientPrior(new GForm(), null!) }));
+        Assert.StartsWith("Coefficients", Reason(new BassConfig { Coefficients = null! }));
         Assert.StartsWith("Intercept", Reason(new BassConfig { Intercept = GPriorCentre.Median }));
         Assert.StartsWith("Sampling.RHatTarget", Reason(new BassConfig { Sampling = new BassSampling { RHatTarget = 0.9 } }));
         Assert.StartsWith("Sampling.Chains", Reason(new BassConfig { Sampling = new BassSampling { Chains = 1, RHatTarget = 1.1 } }));
@@ -210,8 +216,11 @@ public sealed class BassContractTests
         string sigmaTypo = json.Replace("\"Shape\":0.001", "\"Shap\":0.001");
         Assert.ThrowsAny<System.Text.Json.JsonException>(() => BassConfig.FromJson(sigmaTypo));
 
-        string reordered = json.Replace("{\"Kind\":\"SampledG\",\"TauShape\":0.5}", "{\"TauShape\":0.25,\"Kind\":\"SampledG\"}");
-        Assert.Equal(new SampledG(0.25), BassConfig.FromJson(reordered).Coefficients);
+        string reordered = json.Replace("{\"Kind\":\"UnitInformationGamma\",\"Shape\":0.5,\"Tau\":null}", "{\"Shape\":0.25,\"Kind\":\"UnitInformationGamma\"}")
+                               .Replace("\"Form\":{\"Kind\":\"G\"}", "\"Form\":{\"Kind\":\"Ridge\"}");
+        Assert.Equal(BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma(0.25)), BassConfig.FromJson(reordered).Coefficients);
+        string unknownForm = json.Replace("\"Form\":{\"Kind\":\"G\"}", "\"Form\":{\"Kind\":\"Lasso\"}");
+        Assert.ThrowsAny<System.Text.Json.JsonException>(() => BassConfig.FromJson(unknownForm));
 
         // A field left out takes its default.
         BassConfig partial = BassConfig.FromJson("{\"Sampling\":{\"Chains\":2}}");
@@ -230,7 +239,8 @@ public sealed class BassContractTests
         Assert.NotEqual(baseline, Bass.Fingerprint(config with { Sampling = config.Sampling with { MasterSeed = 1 } }, data));
         Assert.NotEqual(baseline, Bass.Fingerprint(config with { Sigma2 = Sigma2Prior.ScaledToResponse(2e-3) }, data));
         Assert.NotEqual(baseline, Bass.Fingerprint(config with { Structure = config.Structure with { AngleFloor = 2e-10 } }, data));
-        Assert.NotEqual(baseline, Bass.Fingerprint(config with { Coefficients = new SampledG(0.25) }, data));
+        Assert.NotEqual(baseline, Bass.Fingerprint(config with { Coefficients = BassCoefficientPrior.G(TauPrior.UnitInformationGamma(0.25)) }, data));
+        Assert.NotEqual(baseline, Bass.Fingerprint(config with { Coefficients = BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma()) }, data));
 
         // One ulp in one response value.
         Assert.NotEqual(baseline, Bass.Fingerprint(config, Scalar(30, i => i == 7 ? Math.BitIncrement(Math.Exp(-0.7)) : Math.Exp(-i / 10.0))));
@@ -252,8 +262,8 @@ public sealed class BassContractTests
         Assert.Equal(meanSquare, r.ResponseMeanSquare, 1e-14);
         Assert.Equal(1e-3, r.Sigma2!.Value.Shape);
         Assert.Equal(1e-3 * meanSquare, r.Sigma2!.Value.Scale, 1e-16);
-        Assert.Equal((0.5, 20.0), (r.TauPrior!.Value.Shape, r.TauPrior!.Value.Rate));
-        Assert.Null(r.FixedTau);
+        Assert.Equal((0.5, 20.0), (r.Scale.Gamma!.Value.Shape, r.Scale.Gamma!.Value.Rate));
+        Assert.Null(r.Scale.HeldTau);
         Assert.Contains(r.AutoPicks, p => p.Setting == "Levels of 'z'" && p.Value == "'unused' left out");
         Assert.Contains(r.AutoPicks, p => p.Setting == "MaxInteraction" && p.Value == "2");
         Assert.Contains(r.AutoPicks, p => p.Setting == "SupportMinimum" && p.Value == "4");
@@ -273,7 +283,7 @@ public sealed class BassContractTests
         Assert.Equal((1, 0, 1), (r.MaxInteraction, r.MaxCategoricalInteraction, r.MaxFunctionalInteraction));
         Assert.Equal(3.0, r.SupportMinimum);
         Assert.Equal(20.0, r.SupportMinimumFunctional);
-        Assert.Equal(0.5 * 7500, r.TauPrior!.Value.Rate);
+        Assert.Equal(0.5 * 7500, r.Scale.Gamma!.Value.Rate);
     }
 
     [Fact]
@@ -285,10 +295,57 @@ public sealed class BassContractTests
         Assert.Equal(Enumerable.Range(0, 20).Select(i => 0.01 * i * i).Average(), zero.ResponseMeanSquare, 1e-14);
         Assert.Null(zero.Sigma2);
 
-        BassResolved fixedG = BassResolved.Resolve(new BassConfig { Coefficients = new FixedG() }, data);
-        Assert.Equal(1.0 / 20, fixedG.FixedTau);
-        Assert.Null(fixedG.TauPrior);
-        Assert.Equal(0.3, BassResolved.Resolve(new BassConfig { Coefficients = new FixedG(0.3) }, data).FixedTau);
+        BassResolved held = BassResolved.Resolve(new BassConfig { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) }, data);
+        Assert.Equal(1.0 / 20, held.Scale.HeldTau);
+        Assert.Null(held.Scale.Gamma);
+        Assert.Contains(held.AutoPicks, p => p.Setting == "HeldTau" && p.Value == "0.05");
+        Assert.Equal(0.3, BassResolved.Resolve(new BassConfig { Coefficients = BassCoefficientPrior.G(TauPrior.Held(0.3)) }, data).Scale.HeldTau);
+
+        // The ridge's unit information is 1, whatever N: its Gamma's rate is a, its held τ the declared one.
+        BassResolved ridge = BassResolved.Resolve(new BassConfig { Coefficients = BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma()) }, data);
+        Assert.Equal((0.5, 0.5, 1.0), (ridge.Scale.Gamma!.Value.Shape, ridge.Scale.Gamma.Value.Rate, ridge.Scale.UnitInformation));
+        Assert.Equal(2.0, BassResolved.Resolve(new BassConfig { Coefficients = BassCoefficientPrior.Ridge(TauPrior.Held(2.0)) }, data).Scale.HeldTau);
+        Assert.Equal(1.0 / 20, BassResolved.Resolve(new BassConfig { Coefficients = BassCoefficientPrior.G(TauPrior.HyperGOverN(3)) }, data).Scale.UnitInformation);
+    }
+
+    [Fact]
+    public void CoefficientPrior_RefusesWhatItsAxesCannotHold()
+    {
+        string Reason(BassConfig c) => Assert.Throws<ArgumentException>(c.Validate).Message;
+
+        // τ's family checks its own parameters, so a manifest read back is checked as a built prior is.
+        Assert.Throws<ArgumentOutOfRangeException>(() => TauPrior.UnitInformationGamma(double.NaN));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TauPrior.UnitInformationGamma(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TauPrior.Held(-1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TauPrior.Held(double.PositiveInfinity));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TauPrior.HyperG(1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TauPrior.HyperGOverN(double.NaN));
+        Assert.Throws<ArgumentException>(() => new TauPrior(TauPriorKind.Held, shape: 2));
+        Assert.Throws<ArgumentException>(() => new TauPrior(TauPriorKind.HyperG, 3, tau: 1));
+        string bad = new BassConfig().ToJson().Replace("\"Shape\":0.5,\"Tau\":null", "\"Shape\":-0.5,\"Tau\":null");
+        Assert.Throws<ArgumentOutOfRangeException>(() => BassConfig.FromJson(bad));
+
+        // The held ridge's scale is part of the model: declared, never τ₀ by default (D03).
+        Assert.StartsWith("Coefficients.Scale.Tau", Reason(new BassConfig { Coefficients = BassCoefficientPrior.Ridge(TauPrior.Held()) }));
+        new BassConfig { Coefficients = BassCoefficientPrior.Ridge(TauPrior.Held(1.0)) }.Validate();
+
+        // Hyper-g at a ≤ 2 is improper: refused where a proper prior is needed, run elsewhere.
+        foreach (BassCoefficientPrior improper in new[] { BassCoefficientPrior.G(TauPrior.HyperG(2)), BassCoefficientPrior.Ridge(TauPrior.HyperGOverN(1.5)) })
+        {
+            Assert.False(improper.Scale.IsProper);
+            new BassConfig { Coefficients = improper }.Validate();
+            new BassConfig { Coefficients = improper, Sampling = new BassSampling { Tempering = new TemperingSpec() } }.Validate();
+            Assert.StartsWith("Coefficients.Scale", Reason(new BassConfig { Coefficients = improper, Intercept = GPriorCentre.Flat }));
+            Assert.StartsWith("Coefficients.Scale", Reason(new BassConfig { Coefficients = improper, Sampling = new BassSampling { Smc = new SmcSpec() } }));
+            Assert.StartsWith("Sampling.Tempering.ReferenceRung",
+                              Reason(new BassConfig { Coefficients = improper, Sampling = new BassSampling { Tempering = new TemperingSpec { ReferenceRung = true } } }));
+        }
+        foreach (TauPrior proper in new[] { TauPrior.HyperG(2.5), TauPrior.HyperGOverN(4), TauPrior.UnitInformationGamma(0.1), TauPrior.Held(), TauPrior.Held(3) })
+        {
+            Assert.True(proper.IsProper);
+            new BassConfig { Coefficients = BassCoefficientPrior.G(proper), Intercept = GPriorCentre.Flat,
+                             Sampling = new BassSampling { Smc = new SmcSpec() } }.Validate();
+        }
     }
 
     [Fact]

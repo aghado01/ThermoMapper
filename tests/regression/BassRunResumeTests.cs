@@ -25,7 +25,7 @@ public sealed class BassRunResumeTests
         BassConfig config = BassRunTests.Config(chains: 3, burn: 800, samples: samples, maxBasis: 8);
         return option switch
         {
-            "fixed g" => config with { Coefficients = new FixedG() },
+            "fixed g" => config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) },
             "cancelling" => config with { Sampling = config.Sampling with { Moves = new PriorCancelling(0.4) } },
             "jeffreys, flat" => config with { Sigma2 = Sigma2Prior.Jeffreys, Intercept = GPriorCentre.Flat },
             "thinned" => config with { Sampling = config.Sampling with { Thin = 3 } },

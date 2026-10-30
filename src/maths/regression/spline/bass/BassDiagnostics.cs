@@ -13,7 +13,7 @@ namespace Maths.Regression.Spline.Bass;
 /// A BASS run's account (the contract shapes), over the sampling phase: everything after burn-in.
 /// <list type="bullet">
 /// <item><b>Convergence.</b> Rank-normalized R̂ with bulk and tail ESS (<see cref="ChainDiagnostics"/>) for M, τ (null
-/// under fixed g, which holds it), each draw's log posterior, σ², and the fitted value f = a₀ + Σⱼ aⱼBⱼ of each draw at
+/// when τ is held), each draw's log posterior, σ², and the fitted value f = a₀ + Σⱼ aⱼBⱼ of each draw at
 /// <see cref="Fitted"/>'s points. <see cref="SamplesUsed"/> and <see cref="StoppedEarly"/> read the R̂ stop.</item>
 /// <item><b>The verdict</b> (D10): the run's <see cref="ConvergenceVerdict"/> on three groups, <see cref="PredictiveGroup"/>
 /// (σ² and the fitted values), <see cref="LevelGroup"/> (the log posterior) and <see cref="StructuralGroup"/> (M, and τ

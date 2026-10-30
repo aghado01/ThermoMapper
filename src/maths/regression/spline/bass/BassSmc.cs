@@ -31,7 +31,7 @@ public sealed class BassParticle
 
 /// <summary>
 /// BASS's particles for SMC (stage 8; D05), the sampler of the sequence's b = 0 end. A draw is an exact draw of the prior
-/// on F, τ from its prior in the g mode (<see cref="BassPriorSampler"/>), loaded into the particle's own design. A fork
+/// on F, τ from its prior when sampled (<see cref="BassPriorSampler"/>), loaded into the particle's own design. A fork
 /// copies the design as the ladder's hand-over does, the factor and the fit copied and the columns shared, and gives the
 /// fork its own copy of the term array, so no two particles share a structure's identity (<see cref="BassLadder"/>'s
 /// clone-safe replicas). Draws may run concurrently, each on its own sampler; <see cref="PriorAttempts"/> counts the
@@ -104,7 +104,7 @@ public sealed class BassParticleTarget : ISamplingTarget<BassParticle>
 
 /// <summary>
 /// BASS's SMC mutation (stage 8; D04, D05): each move is one sweep of D04's chain at the stage's b, the structure move on
-/// D01's schedule, then τ's slice step in the g mode. The structure move accepts on ℓ_b(new) − ℓ_b(old) plus the
+/// D01's schedule, then τ's slice step when τ is sampled. The structure move accepts on ℓ_b(new) − ℓ_b(old) plus the
 /// untempered prior and proposal ratios, and τ's slice targets p(τ)·p_b, so every sweep leaves the stage's π_b invariant.
 /// <list type="bullet">
 /// <item><b>Streams.</b> A sweep runs on the stream SMC hands its particle, through a reversible-jump chain over the

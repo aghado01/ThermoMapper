@@ -134,8 +134,10 @@ public sealed record BassEvidenceEstimate(
 /// scales in a way the posterior is not (D05's third point). Two evidences on the same data compare as a Bayes factor
 /// only where these agree, or differ in what the comparison is about.
 /// <list type="bullet">
-/// <item><b>The coefficient prior:</b> <see cref="Coefficients"/> as declared (τ's shape a, or the held τ) and as
-/// resolved, τ ~ Gamma(a, rate a·N) (<see cref="TauPrior"/>) or the held τ (<see cref="FixedTau"/>).</item>
+/// <item><b>The coefficient prior:</b> <see cref="Coefficients"/> as declared, its covariance form and τ's prior, and τ's
+/// prior as resolved on the form's unit-information precision τ₀ (<see cref="Scale"/>): 1/N for the g-form, and 1 for the
+/// ridge, whose columns are the centred ones at unit root mean square over the N observations, the normalization its τ is
+/// stated against.</item>
 /// <item><b>The count prior</b> on M, λ integrated out (D02), truncated at <see cref="MaxBasis"/>.</item>
 /// <item><b>The term measure</b> (D01): the categorical subset measure and the interaction caps as resolved.</item>
 /// <item><b>The support rule</b> as declared and its resolved thresholds, and D06's admission gates, which with the caps
@@ -145,20 +147,22 @@ public sealed record BassEvidenceEstimate(
 /// </list>
 /// </summary>
 public sealed record BassEvidencePriors(
-    BassCoefficientPrior Coefficients, Gamma? TauPrior, double? FixedTau,
+    BassCoefficientPrior Coefficients, ResolvedTauPrior Scale,
     BassCountPrior Count, int MaxBasis,
     CategoricalSubsetMeasure CategoricalSubsets, int MaxInteraction, int MaxCategoricalInteraction, int MaxFunctionalInteraction,
     SupportRule Support, double SupportMinimum, double? SupportMinimumFunctional, double AngleFloor, double? MaxVarianceInflation,
     GPriorCentre Centre, double CentreLevel, Sigma2Prior Sigma2Prior, InverseGamma Sigma2)
 {
-    /// <summary>The record for <paramref name="config"/> as <paramref name="resolved"/> on its data, which must carry a
-    /// proper σ² prior.</summary>
+    /// <summary>The record for <paramref name="config"/> as <paramref name="resolved"/> on its data, which must carry
+    /// proper σ² and τ priors.</summary>
     public static BassEvidencePriors Of(BassConfig config, BassResolved resolved)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(resolved);
         BassStructureSpec s = config.Structure;
-        return new BassEvidencePriors(config.Coefficients, resolved.TauPrior, resolved.FixedTau, config.Count, resolved.MaxBasis,
+        if (!resolved.Scale.IsProper)
+            throw new ArgumentException($"τ's prior, {resolved.Scale.Declared}, is improper, which leaves the evidence undefined.", nameof(resolved));
+        return new BassEvidencePriors(config.Coefficients, resolved.Scale, config.Count, resolved.MaxBasis,
             s.CategoricalSubsets, resolved.MaxInteraction, resolved.MaxCategoricalInteraction, resolved.MaxFunctionalInteraction,
             s.Support, resolved.SupportMinimum, resolved.SupportMinimumFunctional, s.AngleFloor, s.MaxVarianceInflation,
             config.Intercept, resolved.CentreLevel, config.Sigma2,

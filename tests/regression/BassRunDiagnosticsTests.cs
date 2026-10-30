@@ -214,7 +214,7 @@ public sealed class BassRunDiagnosticsTests
     [Fact]
     public void FixedG_HasNoTauDiagnostic()
     {
-        BassConfig config = BassRunTests.Config() with { Coefficients = new FixedG() };
+        BassConfig config = BassRunTests.Config() with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) };
         BassFit fit = Bass.Fit(config, BassSweepTests.Data(large: true));
         Assert.Null(fit.Diagnostics.Tau);
         Assert.Equal(3, fit.Diagnostics.Fitted.Count);

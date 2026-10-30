@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Maths.Samplers.Evidence;
@@ -126,7 +127,7 @@ public sealed class BassTemperingResumeTests
     public void SelfSizingLadder_RestoredAcrossItsResizes_ContinuesBitForBit(bool reference, bool fixedG)
     {
         BassConfig config = BassTemperingTests.Config(null, maxBasis: 8);
-        if (fixedG) config = config with { Coefficients = new FixedG() };
+        if (fixedG) config = config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) };
         BassModel model = BassModel.Create(config, BassSweepTests.Data(large: true));
         var spec = new TemperingSpec { ReferenceRung = reference, MaxLevels = 20 };
         BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(5)).State;

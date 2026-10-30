@@ -154,8 +154,8 @@ public sealed class BassRunTests
             case "zero": config = config with { Intercept = GPriorCentre.Zero }; break;
             case "jeffreys": config = config with { Sigma2 = Sigma2Prior.Jeffreys }; break;
             case "inverse gamma": config = config with { Sigma2 = Sigma2Prior.InverseGamma(2, 0.5) }; break;
-            case "fixed g": config = config with { Coefficients = new FixedG() }; break;
-            case "fixed g, declared": config = config with { Coefficients = new FixedG(0.05) }; break;
+            case "fixed g": config = config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) }; break;
+            case "fixed g, declared": config = config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held(0.05)) }; break;
             case "cancelling": config = config with { Sampling = config.Sampling with { Moves = new PriorCancelling(0.4) } }; break;
             case "categorical":
             case "categorical, uniform subsets":
@@ -168,7 +168,7 @@ public sealed class BassRunTests
         }
         BassFit fit = Bass.Fit(config, data);
         var model = BassModel.Create(config, data);
-        double? fixedTau = model.Target.FixedTau;
+        double? fixedTau = model.Target.HeldTau;
         int moved = 0;
         foreach (DrawStore<BassDraw> chain in fit.Draws)
         {

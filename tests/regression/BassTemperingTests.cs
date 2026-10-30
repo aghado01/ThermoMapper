@@ -51,7 +51,7 @@ public sealed class BassTemperingTests
         const double step = 0.05;
         double[] nodes = target.SamplesTau
             ? [.. Enumerable.Range(0, (int)Math.Round((8.0 - lowest) / step) + 1).Select(i => lowest + step * i)]
-            : [Math.Log(target.FixedTau!.Value)];
+            : [Math.Log(target.HeldTau!.Value)];
         double logStep = target.SamplesTau ? Math.Log(step) : 0.0;
         var marginal = new double[rungs.Length][];
         var tauGiven = new double[rungs.Length][];
@@ -270,7 +270,7 @@ public sealed class BassTemperingTests
     public void Ladder_EveryReplicasDesignFollowsItsState(bool reference, bool fixedG, string options = "none")
     {
         BassConfig config = Config(null, maxBasis: 8);
-        if (fixedG) config = config with { Coefficients = new FixedG() };
+        if (fixedG) config = config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) };
         config = config with { Sampling = BassLocalStepTests.OptionsFor(options)(config.Sampling) };
         BassModel model = BassModel.Create(config, BassSweepTests.Data(large: true));
         var spec = new TemperingSpec { Levels = 5, HotEnd = 0.01, ReferenceRung = reference };
@@ -393,7 +393,7 @@ public sealed class BassTemperingTests
         BassConfig config = Config(spec);
         if (option.Contains("flat")) config = config with { Intercept = GPriorCentre.Flat };
         if (option.Contains("jeffreys")) config = config with { Sigma2 = Sigma2Prior.Jeffreys };
-        if (option == "fixed g") config = config with { Coefficients = new FixedG() };
+        if (option == "fixed g") config = config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) };
         BassModel model = BassModel.Create(config, BassSweepTests.Data());
         const int ladders = 4, burn = 2_000, scans = 40_000, batches = 20;
         int levels = inverseTemperatures.Length;
@@ -526,7 +526,7 @@ public sealed class BassTemperingTests
         BassConfig config = Config(spec, maxBasis: 6, samples: samples);
         config = option switch
         {
-            "fixed g" or "self-sizing, fixed g" => config with { Coefficients = new FixedG() },
+            "fixed g" or "self-sizing, fixed g" => config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) },
             "flat + jeffreys" => config with { Intercept = GPriorCentre.Flat, Sigma2 = Sigma2Prior.Jeffreys },
             "self-sizing, flat" => config with { Intercept = GPriorCentre.Flat },
             "thinned" => config with { Sampling = config.Sampling with { Thin = 2 } },
@@ -632,7 +632,7 @@ public sealed class BassTemperingTests
         config = option switch
         {
             "zero centre" => config with { Intercept = GPriorCentre.Zero },
-            "fixed g" => config with { Coefficients = new FixedG() },
+            "fixed g" => config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) },
             "declared σ²" => config with { Sigma2 = Sigma2Prior.InverseGamma(2.0, 0.5) },
             _ => config,
         };
@@ -676,7 +676,7 @@ public sealed class BassTemperingTests
         BassResolved r = fit.Resolved;
         BassEvidencePriors p = evidence.Priors;
         Assert.Equal(BassEvidencePriors.Of(config, r), p);
-        Assert.Equal((config.Coefficients, r.TauPrior, r.FixedTau, config.Count, r.MaxBasis), (p.Coefficients, p.TauPrior, p.FixedTau, p.Count, p.MaxBasis));
+        Assert.Equal((config.Coefficients, r.Scale, config.Count, r.MaxBasis), (p.Coefficients, p.Scale, p.Count, p.MaxBasis));
         Assert.Equal((config.Structure.CategoricalSubsets, r.MaxInteraction, r.MaxCategoricalInteraction, r.MaxFunctionalInteraction),
                      (p.CategoricalSubsets, p.MaxInteraction, p.MaxCategoricalInteraction, p.MaxFunctionalInteraction));
         Assert.Equal((config.Structure.Support, r.SupportMinimum, r.SupportMinimumFunctional, config.Structure.AngleFloor, config.Structure.MaxVarianceInflation),
