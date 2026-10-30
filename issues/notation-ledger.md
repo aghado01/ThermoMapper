@@ -11,6 +11,13 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### One SW update: draw, cycle and sweep (2026-10-29)
+
+- **Kind:** one concept under three names, one of which ("sweep") also names a second concept.
+- **Readings:** "draw" in `SwendsenWang.Draw` (`src/clustering/graphical/spc/runtime/core/sampler/SwendsenWang.cs:246`), `Accumulator.DrawCount` and the per-draw record `Accumulator.EnergyPerDraw` and siblings (`Accumulator.cs:29`, `:56`); "cycle" in `RunBudget.Cycles` (`RunBudget.cs:9`), `BurnIn(int cycles)` (`SwendsenWang.cs:214`) and the engine's `Σ_cycles` comments; "sweep" in the SW retention briefs' "per-sweep record" and "measured sweep" (`issues/spc/sw-retention-brief.md`, S1). "Sweep" also names the temperature sweep: `FixedGridSweepStrategy`, `SweepProfile`, `SweepCurves`, `SweepResult`.
+- **Found:** naming the per-draw record for the SW retention chip (S1).
+- **Note:** the record took "draw" (`…PerDraw`), after `DrawCount`.
+
 ### Coefficients: `Beta` beside `Coefficients` (2026-10-29)
 
 - **Kind:** one concept, two identifiers on one type.
