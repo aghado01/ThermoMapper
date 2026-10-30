@@ -8,6 +8,8 @@ Corrected 2026-10-29: SPC has no mid-run resume (the SPCX file caches finished t
 
 Chipped 2026-10-29: the items that stay inside SPC (S1–S4, S6, S7, and the Binder check) go to [the chip brief](sw-retention-chip-brief.md), under the user's frame that accumulation is the run's state and the sums its views. S5 and the consumers in `Maths.Samplers` (R-hat, ESS, the verdict, temperature integration, reweighting) stay here.
 
+Built 2026-10-29: S1–S4, S6 and S7 landed through the chip (`6de243a`–`d7269ea`, review `8c4c1ae`; [its report](sw-retention-chip-brief.md#reports)). What remains here is S5, S2's E³ and E⁴ views, and the samplers-side consumers.
+
 The principle, from the user: keep each draw's generative state, derive views from it, and where alternatives keep different information, offer both as options.
 
 ## Where things stand
@@ -17,9 +19,10 @@ The principle, from the user: keep each draw's generative state, derive views fr
   - running sums of E, E², m, m², Σ|c|² and Σ|c|² without the largest cluster;
   - the log-binned cluster-size histogram;
   - the final spins and RNG words, which the engine's `Restore` would resume from (nothing calls it);
-  - the optional per-edge counts (`AccumulationSpec`: affinities, alignments, co-membership) and per-node sums (the cluster-size and giant-participation landscapes).
+  - the optional per-edge counts (`AccumulationSpec`: affinities, alignments, co-membership) and per-node sums (the cluster-size and giant-participation landscapes);
+  - since the chip: the per-draw record, always kept (`EnergyPerDraw`, `MagPerDraw`, `SumSqClusterSizesPerDraw`, `MaxClusterSizePerDraw`), and two options, the burn-in trace (`BurnInTrace`) and the exact cluster-size histogram (`ExactClusterSizeHistogram`).
 - **The runner** (`SwRunner.cs`). It discards `RunBudget.BurnIn` cycles, then accumulates `Cycles`. A sweep keeps every run's accumulator, per temperature and replica (`SweepResult.SweepRuns`).
-- **The serialization.** The accumulator is serialized as SPCX v8 (`SwRunSerialization.cs`, `AccumulatorSerializer`) as a cache of finished tasks: `SpcExecutor` loads a completed task's file (`SpcxDiskFrameSink.TryLoad`) instead of rerunning it, and the loaded result carries the accumulator alone. There is no mid-run resume. A retained series kept on the accumulator becomes part of the binary format and returns with a cached task; one kept anywhere else is lost on that path.
+- **The serialization.** The accumulator is serialized as SPCX v11 (`SwRunSerialization.cs`, `AccumulatorSerializer`; the record and both options since v9–v11) as a cache of finished tasks: `SpcExecutor` loads a completed task's file (`SpcxDiskFrameSink.TryLoad`) instead of rerunning it, and the loaded result carries the accumulator alone. There is no mid-run resume. A retained series kept on the accumulator becomes part of the binary format and returns with a cached task; one kept anywhere else is lost on that path.
 
 ## Items
 
@@ -35,7 +38,7 @@ The principle, from the user: keep each draw's generative state, derive views fr
     - A trapezoid over the running ⟨E⟩ sums works today. Stepping-stone, and path sampling with a Monte Carlo error, need the per-sweep energies.
     - The integral starts at β = 0, which the grid does not reach. The closure is a reference rung, as BASS has: iid uniform spins are exact β = 0 draws, and stepping-stone from them up through a few hot rungs closes the integral (threads note, Thread 5);
   - equilibration checks on the measured stretch.
-- **Cost:** four doubles per sweep, about 0.3 MB per run at 10⁴ sweeps. Over a sweep that is the temperature count × the replica count × that, about 60 MB at 48 temperatures and 4 replicas.
+- **Cost:** as built, 28 bytes per sweep (E and m as doubles, Σ|c|² as a long, c_max as an int), about 0.28 MB per run at 10⁴ sweeps. Over a sweep that is the temperature count × the replica count × that, about 54 MB at 48 temperatures and 4 replicas.
 - **Reuse:**
   - `ChainTrace` (`src/maths/samplers/ensemble/ChainTrace.cs`) holds a set of functionals per draw, which is S1's record. `ChainDiagnostics.Diagnose` (`ConvergenceDiagnostics.cs`) gives rank-normalized split R-hat (bulk and tail) and ESS from Geyer's autocorrelation sum over a set of traces, with the replicas at one temperature as the chains.
   - The energy column feeds `RungDraws.FromChains` and `LadderEvidence.PathSampling` / `SteppingStone` (`src/maths/samplers/evidence/LadderEvidence.cs`).
@@ -44,7 +47,7 @@ The principle, from the user: keep each draw's generative state, derive views fr
 ### S2. Higher moments
 
 - m⁴, for the Binder cumulant U = 1 − ⟨m⁴⟩/(3⟨m²⟩²), and E³ and E⁴, for the error on C_v and the energy distribution's shape.
-- With S1 these are views over the series. If S1 ends up optional, running sums of them are worth keeping regardless: they cost three doubles per run.
+- With S1 these are views over the series, and S1 is always kept. The Binder cumulant is built (`BinderCumulant`, `f542951`). The E³ and E⁴ views over `EnergyPerDraw` are not; C_v's error also needs τ_int, from the samplers.
 
 ### S3. The largest cluster per sweep
 
@@ -91,10 +94,10 @@ The principle, from the user: keep each draw's generative state, derive views fr
 
 ## Sequencing
 
-1. **S1 with S3:** one per-sweep record, with the serialization change. Appending across a resume comes only if mid-run resume is ever wired.
-2. **S2:** views over S1, or running sums if S1 is optional.
-3. **S6 and S7:** independent and small; either can go any time.
-4. **S4:** follows S1's record shape.
+1. **S1 with S3:** one per-sweep record, with the serialization change. Appending across a resume comes only if mid-run resume is ever wired. *Done (`bc70bf2`).*
+2. **S2:** views over S1. *Binder done (`f542951`); E³ and E⁴ not built.*
+3. **S6 and S7:** independent and small. *Done (`96de69d`, `d7269ea`).*
+4. **S4:** follows S1's record shape. *Done (`1322e47`).*
 5. **S5:** waits on the persistence decision; in-memory thinning first if it is wanted sooner.
 
 **Working rules** (from the regression track):
@@ -123,4 +126,4 @@ Validation ground truth from outside the estimator's own model:
 
 ## Report
 
-Nothing yet.
+The SPC-side items' report, with the tests, the Binder crossing and the reversible defaults left for the user, is in [the chip brief](sw-retention-chip-brief.md#reports).
