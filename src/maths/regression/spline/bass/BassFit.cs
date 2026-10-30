@@ -102,8 +102,17 @@ public sealed record BassFit(
         return BassSensitivity.Effects(this, data, spec, effects);
     }
 
-    /// <summary>Each chain's traces of M, σ², τ and λ in draw order (stage 9, P09; <see cref="BassTraces"/>).</summary>
-    public BassTraces Traces() => BassTraces.Of(this);
+    /// <summary>Each chain's traces of M, σ², τ and λ in draw order (stage 9, P09; <see cref="BassTraces"/>). An SMC fit has
+    /// none: its draws are a weighted population with no order, and its stage-by-stage readings are
+    /// <see cref="BassDiagnostics.Smc"/>'s.</summary>
+    public BassTraces Traces()
+    {
+        if (Diagnostics.Smc is not null)
+            throw new InvalidOperationException(
+                "An SMC fit's draws are a weighted population with no draw order, so it has no traces; its stage-by-stage " +
+                "readings are Diagnostics.Smc's replicates.");
+        return BassTraces.Of(this);
+    }
 
     /// <summary>
     /// Fitted against observed at the training cases (stage 9, P10; <see cref="BassTrainingFit"/>): the posterior mean, the

@@ -20,8 +20,10 @@ public sealed record BassDataShape(int Cases, int Locations, IReadOnlyList<Predi
 }
 
 /// <summary>A run's lengths: its chains, the burn-in sweeps, the draws asked for per chain and the thinning, and the draws
-/// each chain kept, which the R̂ stop can shorten (<see cref="BassDiagnostics.SamplesUsed"/>).</summary>
-public sealed record BassRunLengths(int Chains, int BurnIn, int Samples, int Thin, IReadOnlyList<int> DrawsPerChain)
+/// each chain kept, which the R̂ stop can shorten (<see cref="BassDiagnostics.SamplesUsed"/>). An SMC fit reads no sweep
+/// count: <see cref="Chains"/> is then its replicates, <see cref="DrawsPerChain"/> each replicate's population,
+/// <see cref="BurnIn"/>, <see cref="Samples"/> and <see cref="Thin"/> null, and <see cref="Smc"/> its specification.</summary>
+public sealed record BassRunLengths(int Chains, int? BurnIn, int? Samples, int? Thin, IReadOnlyList<int> DrawsPerChain, SmcSpec? Smc = null)
 {
     /// <summary>The draws kept over every chain.</summary>
     public int Draws => DrawsPerChain.Sum();
@@ -41,8 +43,10 @@ public sealed record BassMetadata(
     {
         ArgumentNullException.ThrowIfNull(fit);
         BassSampling sampling = fit.Config.Sampling;
-        var lengths = new BassRunLengths(fit.Identity.Chains, sampling.BurnIn, sampling.Samples, sampling.Thin,
-                                         Array.AsReadOnly(fit.Draws.Select(c => c.Count).ToArray()));
+        bool sweeps = sampling.Smc is null;
+        var lengths = new BassRunLengths(fit.Identity.Chains, sweeps ? sampling.BurnIn : null, sweeps ? sampling.Samples : null,
+                                         sweeps ? sampling.Thin : null, Array.AsReadOnly(fit.Draws.Select(c => c.Count).ToArray()),
+                                         sampling.Smc);
         return new BassMetadata(BassDataShape.Of(fit.Transform, fit.Resolved.Cases, fit.Resolved.Locations), fit.Config, fit.Resolved,
                                 fit.Identity, lengths, fit.Diagnostics, fit.Evidence);
     }

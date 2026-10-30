@@ -254,7 +254,8 @@ public sealed class BassPresentationTests
 
         // The run's lengths.
         BassSampling s = fit.Config.Sampling;
-        Assert.Equal(new[] { s.Chains, s.BurnIn, s.Samples, s.Thin }, new[] { meta.Lengths.Chains, meta.Lengths.BurnIn, meta.Lengths.Samples, meta.Lengths.Thin });
+        Assert.Equal(new int?[] { s.Chains, s.BurnIn, s.Samples, s.Thin }, new[] { meta.Lengths.Chains, meta.Lengths.BurnIn, meta.Lengths.Samples, meta.Lengths.Thin });
+        Assert.Null(meta.Lengths.Smc);
         Assert.Equal(fit.Draws.Select(c => c.Count).ToArray(), meta.Lengths.DrawsPerChain);
         Assert.Equal(fit.Draws.Sum(c => c.Count), meta.Lengths.Draws);
         Assert.Same(meta.Config, fit.Summary().Metadata.Config);

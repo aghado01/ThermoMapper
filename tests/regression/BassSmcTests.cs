@@ -161,6 +161,22 @@ public sealed class BassSmcTests
     }
 
     [Fact]
+    public void Presentation_ReportsTheSpec_AndRefusesTraces()
+    {
+        BassFit fit = Bass.Fit(SmcConfig(), BassSweepTests.Data(large: true));
+        BassRunLengths lengths = fit.Metadata().Lengths;
+        Assert.Equal(Small.Replicates, lengths.Chains);
+        Assert.Null(lengths.BurnIn);
+        Assert.Null(lengths.Samples);
+        Assert.Null(lengths.Thin);
+        Assert.Equal(Small, lengths.Smc);
+        Assert.All(lengths.DrawsPerChain, n => Assert.Equal(Small.Particles, n));
+        Assert.Equal(Small.Replicates * Small.Particles, lengths.Draws);
+        Assert.Same(lengths.Smc, fit.Summary().Metadata.Lengths.Smc);
+        Assert.Throws<InvalidOperationException>(() => fit.Traces());
+    }
+
+    [Fact]
     public void Fit_KeepsEachReplicatesPopulation_WithWeightsThatReachTheViews()
     {
         BassData data = BassSweepTests.Data(large: true);
