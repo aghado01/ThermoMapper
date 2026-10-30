@@ -63,6 +63,16 @@ Date: 2026-10-29. Status: decided. The user decided to build it whatever the ref
    - Phase 3: SPC's adapter, in SPC's track.
 9. **The name.** "Flat-histogram" is the umbrella across fields, "multicanonical" the target (Berg), SAMC and Wang–Landau the learning algorithms, and "generalized ensemble" the physics umbrella. The recommendation is `FlatHistogram` for the namespace, with `MulticanonicalWeights`, `SamcLearning` and `MulticanonicalRun` inside, so each name stays true of its method.
 
+## Phase 1, as built (2026-10-30)
+
+Built and verified ([the chip's reports](flat-histogram-phase1-brief.md#reports); `docs/Maths/Samplers.md`, "Flat-histogram sampling"). The decisions held, with these as-built points:
+- *The seam is a target wrapper* (decision 6's means), so `Temperature` is unchanged.
+- *SAMC's update over interpolated nodes* leaves visits outside the window inert. Its limit is the θ* with flat hat occupancy, a function of g over the window alone.
+- *WHAM weighs each rung by its effective draws,* as Ferrenberg and Swendsen do.
+- *The ratio estimator needs a proper prior,* not a normalized one (corrected above).
+- *`FixedPoint`'s start* is fitted log-linearly per node cell, after a mean-field reading showed the first start failing on a density of states spanning hundreds of nats.
+- *Toy 2, 3 × 3 Potts,* is too small to compare samplers. A mean-field Potts toy reads the scaling: the flat histogram's crossing cost grows polynomially (N^(1.8–2.2)), and tempering's stops crossing at q = 4.
+
 ## What to expect, honestly
 
 - *The overhead is the window's width.* Production spends equal time per ℓ bin, so the share near b = 1 is about the posterior's ℓ₁ spread over the window's width. On Friedman that is roughly 10 nats in about 400, so the b = 1 ESS per sweep falls by a factor of about 40 against an ideal sampler. The bet is that crossing between basins costs far more than that today.

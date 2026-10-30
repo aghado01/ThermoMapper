@@ -86,6 +86,7 @@ flowchart LR
 | Readouts, traces, checkpoints | `IMergeable<T>`; `RunningMoments` (`Add(x, weight)`, `Merge`, `Of`), `WeightedSums` (`Add`, `AddSparse`, `Mean`), `DrawSample` (`Add`, `Quantile`), `Tally<TEnum>`; `ChainTrace` (`Add`, `Draws`, `Copy`); `DrawStore<T>(every = 1)` (`Add`, `AppendFrom`, `Copy`, `Every`, `Offered`), each engine's retained draws; `EnsembleCheckpoint`, `ChainCheckpoint`, `RunIdentity`, `IChainState`, `IResumableChainRun<T>`, `RunFingerprint`; `ReversibleJumpChain.Snapshot`/`Restore` (`ChainSnapshot<T>`), `ParallelTempering.Snapshot`/`Restore` (`LadderSnapshot<T>`) |
 | Blocks | `BlockScan<T>(blocks, state, rng, copy)` with `Step()`, `State`, `Steps`, `Attempts`, `Accepted`, `BlockStats()`, `Snapshot()` and static `Restore(blocks, snapshot, copy)` (`BlockScanSnapshot<T>`); `IBlock<T>` (`Name`, `Every`, `Update`); `GaussianConditional(dimension)` with `Draw(factor, rhs, rng, result, scale = 1)` and `Perturb(factor, mean, rng, result, scale = 1)`, and static `GaussianConditional.Perturb(factor, mean, rng, result, scale, z, innovation)` on the caller's scratch; `ConjugateUpdates.NormalVariance`, `ConjugateUpdates.NormalPrecision`; `RandomWalkMetropolis.Step(ref x, ref logTarget, step, logDensity, rng)`; `NewtonMetropolis(dimension, delta = 1/π)` with `Step(x, logDensity, rng)` and the `LogDensity(x, gradient, hessian)` delegate; `SliceSampler.Step(ref x, ref logTarget, width, maxSteps, logDensity, rng)` → evaluations |
 | Evidence | `LadderEvidence.SteppingStone(b, logRatios)`, `LadderEvidence.PathSampling(b, slopes)`, `LadderEvidence.FromLadders(ladders, method = DefaultEstimator)`, `LadderEvidence.FromSmc(result, method = DefaultEstimator)` with `SmcOptions.TraceStages` and `SmcStageTrace` (`Temperature`, `NewTarget`, `Weights`, `Slopes`, `LogRatios`) → `LadderEstimate` (`Method`, `LogRatio`, `MonteCarloError`, `DiscretizationError`, `Rungs` of `RungEstimate`); `LadderEvidence.Pool(chains)` → `PooledLadderEstimate` (the mean, `WithinChainError`, `BetweenChainError`, the larger reported, `BetweenToWithin`); `RungDraws.FromChains(chains)`, `RungDraws.FromPopulation(values, weights = null)`; `LadderEstimator` (`SteppingStone`, `PathSampling`) |
+| Flat histogram (N17) | `MulticanonicalWeights(low, high, lowSlope, logWeights)` (`LogWeight`, `TryLocate`, `FlatOccupancy`, `Flat`, `WithLogWeights`); `MulticanonicalTarget<T>(inner, weights)` → `MulticanonicalEvaluation` (`UntemperedLogLikelihood`, `LogWeight`, `Reweighed`); `SamcLearning(start, gainScale, gainStart)` (`Update`, `Gain`, `Save`, `FixedPoint`); `IMulticanonicalModel<T>`, `IMulticanonicalChain<T>`, `MulticanonicalChain<T>`; `MulticanonicalRun.Run(spec, target, model, masterSeed, pilot?, resumeFrom?, …)` → `MulticanonicalResult<T>`; `FlatHistogramSpec`; `FlatHistogramDiagnostics`; `Reweighting` (`Weigh`, `Expectation`, `LogEvidence` → `LogEvidenceCurve`); `TemperingPilot(b, levels, inefficiencies?)`, `TemperingPilot.FromLadders`; `Wham` (`Estimate` → `WhamEstimate`, `WarmStart`, `Window`, `Nodes`) |
 | i.i.d. and fields | `InverseTransform.Sample(rng, quantile, count)`, `InverseTransform.Exponential(rng, scale, count)`; `SpectralNoiseField.Generate(rng, gridSize, beta, boxMin, boxMax)` with `Sample`, `Min`, `Max` and presets `White` / `Pink` / `Brown` |
 
 ## Algorithms
@@ -294,6 +295,77 @@ Path sampling's rungs are positively correlated through swaps, which only the jo
 - traced ladders on the enumerable target, 200 replicates, both estimators calibrated as above;
 - the traces' values against the rungs' states every scan, AdaptLadder's refusal, resumption with the traces, a target without a slope (NaN slopes, path sampling refused, stepping-stone served; the powered path always has a slope), input validation, and a ladder given in either order.
 
+### Flat-histogram sampling (N17 Phase 1, 2026-10-29)
+
+`Maths.Samplers.FlatHistogram` samples a multicanonical target over the untempered log likelihood ℓ₁, with the prior as base measure. It learns the weights by SAMC during burn-in, then runs independent chains on the frozen weights, and reweighs their draws to any b on the linear path. The design was decided on 2026-10-29 ([flat-histogram-design.md](../../issues/regression/bass/flat-histogram-design.md)); Phase 1 is the engine and its toys, and BASS's and SPC's adapters are Phases 2 and 3.
+
+**The target.** π_w(x) ∝ p(x)·w(ℓ₁(x)), with w ≈ 1/g over a window [ℓ_lo, ℓ_hi], g the prior's density of states in ℓ₁, so that ℓ₁'s histogram under π_w is flat there.
+- *The weights* (`MulticanonicalWeights`): ln w at K equally spaced nodes, piecewise linear between them. It continues with slope b_lo below the window and slope 1 above, continuous at both edges, so the chain neither wanders into the prior's far tail nor past the posterior.
+- *The wrapper* (`MulticanonicalTarget`). It keeps the inner target's `LogPrior` and gives ln w(ℓ₁) as its `LogLikelihood(1)`, refusing every other b. So π_w is an ordinary target at `Temperature.Posterior`, and any kernel that runs on a target runs on it.
+  - The alternative was to generalize `Temperature` into a stage density shared with tempering and SMC. It was not taken, so tempering, SMC and every path through `Temperature` stay as they were. It stays possible if a later engine needs it.
+  - The evaluation exposes ℓ₁, and `Reweighed` re-reads ln w from the cached ℓ₁ when the learning installs new weights.
+
+**The learning** (`SamcLearning`; Liang, Liu and Carroll 2007).
+- With θ = −ln w, a visit at ℓ inside the window, in segment j at fraction u, spreads SAMC's indicator over its two nodes by their hat functions, φ_j = 1 − u and φ_{j+1} = u. Over C chains the update is
+
+$$\theta_k\leftarrow\theta_k+\gamma_t\,\frac1C\sum_c\mathbf 1_{\rm in}(\ell_c)\,\big(\varphi_k(\ell_c)-\pi_k\big),\qquad \gamma_t=\frac{t_0}{\max(t_0,t)},$$
+
+  with π the flat occupancy: 1/(K − 1) at an interior node and half that at the edges.
+- *Its limit.* The mean field is P_in(θ)·(E_θ[φ | in] − π) = −P_in·∇G for the convex G(θ) = ln ∫_in p·e^{−θ·φ(ℓ)} + π·θ. So the limit θ* is the unique (to a constant) solution of E_θ*[φ_k | in] = π_k: a function of g over the window alone, whatever the extensions. When ln g is piecewise linear on the nodes, θ* = ln g up to a constant.
+- *Visits outside the window* do not update, and an update conserves Σθ. A node whose hat sees no mass falls without bound, and the others take π_k + d, their equal share of the empty nodes' π (Liang et al.'s theorem).
+- *Shared across chains* (Bornn, Jacob, Del Moral and Doucet 2013, PAWL). Each iteration averages the chains' visits, summed in chain order, so the learned weights do not depend on scheduling: bit for bit under any parallelism bound.
+- *Not adopted:*
+  - the original Wang–Landau, which halves its modification factor on a flatness check: its error saturates and it has no convergence theorem. Belardinelli and Pereyra's 1/t form is this schedule with t₀ = K.
+  - counting outside visits on the edge nodes, whose limit would depend on the extensions.
+- *SAMC's limit for a known density of states* (`FixedPoint`) minimizes G by Newton's method. It is what the toys check against and what the warm start installs.
+  - Its start is fitted log-linearly per node cell, summed in logs, so a density of states spanning more than a double's 745 nats, or steep against the spacing, keeps its slope.
+  - A solve that cannot bring every node's occupancy within 10⁻³ of flat is refused.
+  - The first start, summed in linear space, lost ln g's slope on such a density and stalled. A mean-field reading exposed it, and it is fixed (`9f561d0`); it would have mis-set Friedman's warm start.
+
+**The run** (`MulticanonicalRun`, `FlatHistogramSpec`). Learning steps every chain at the current weights, applies one update from their visits, and has every chain reweigh. Production then runs `ChainEnsemble` on the frozen weights, as D10's adaptation policy asks.
+- The caller supplies the chain (`IMulticanonicalModel`, `IMulticanonicalChain`); `MulticanonicalChain` adapts a reversible-jump chain.
+- The checkpoint carries both phases, and resume is bit for bit.
+- D10's verdict reads π_w's own functionals. On the double well it reads `NotConverged`, since x mixes only by tunnelling, about 160 round trips per chain. The posterior's errors come instead from the chains' spread of the reweighted estimates.
+
+**The reweighting** (`Reweighting`). A production draw weighs e^{b·ℓ₁}/w(ℓ₁), self-normalized, at any b in [b_lo, 1]. `Weigh` gives the weighted sample with its Kish ESS, and `Expectation` a reweighted mean with its error sd(chain estimates)/√C.
+- *The evidence curve* is Z(b) = E_w[e^{b·ℓ₁}/w]/E_w[1/w] on a grid of b, with no rungs (`LogEvidence` → `LogEvidenceCurve`).
+  - It needs the prior proper, not normalized: the denominator estimates the prior's mass, so any normalizer cancels and Z(b) is the evidence under the normalized prior. The design draft said otherwise and was corrected on 2026-10-30; a test with a prior of mass e³ checks it.
+  - The denominator's variance is finite only if E_prior[e^{−b_lo·ℓ₁}] is finite over the low extension. `NormalizerEffectiveSampleSize` reads it, and b_lo = 0 removes the question.
+- *The cost* is the window's width. Production spends equal time per bin, so the b = 1 weights' Kish ESS was 2.3% of production draws on the double well and 5.7% on the Potts toy.
+
+**The warm start** (`Wham`, `TemperingPilot`). A short tempering pilot's rung draws combine by multiple-histogram reweighting into ln ĝ, and `FixedPoint` on ĝ gives the start, so learning corrects the pilot instead of discovering g from flat.
+- *The estimate* is Ferrenberg and Swendsen 1989's equations (3)–(4) in binless form: ĝ_j ∝ (1/g_{i(j)})/Σ_k ñ_k·e^{b_k·ℓ_j − f_k}, with e^{f_i} = Σ_j ĝ_j·e^{b_i·ℓ_j}. It is the stationary point of the convex MBAR objective, solved by Newton from the path-sampling estimate.
+- *Each rung enters by its effective draws* ñ_i = n_i/g_i, g_i = max(1, n/ESS) from its ℓ₁ chains (`4c34930`), Ferrenberg and Swendsen's error-minimizing combination. Any positive weights would be consistent; these lower the error where rungs mix at different rates.
+- *The pilot must be on the linear path.* `TemperingPilot.FromLadders` refuses a ladder whose rungs' log ratios are not (b_c − b)·ℓ₁, such as a collapsed likelihood's integrated form. It also sets the window from the hottest rung's 1% quantile to the b = 1 rung's 99%, each with a margin of one sd, b_lo at the hottest rung, and K = ⌈width/sd₁⌉ + 1.
+- *The gain's start* from a warm start is the pilot's draws over the chains. That is regime-dependent: it over-trusts the double well's pilot and under-trusts the Potts one.
+
+**Diagnostics** (`FlatHistogramDiagnostics`): the occupancy against the flat target, with its flatness; each chain's round trips between the window's lowest and highest bins, and the chains that make none; the learning's trace of the weights.
+
+**Checked** (`MulticanonicalWeightsTests`, `SamcLearningTests`, `ReweightingTests`, `PottsFlatHistogramTests`, `WhamTests`, `FlatHistogramSpecTests`, `MeanFieldPottsTests`). Toy 1 is a double well, x uniform on [−2, 2] with ℓ₁ = −10·(x² − 1)², against quadrature and the closed-form ln g. Toy 2 is 6-state Potts on a periodic 3 × 3 lattice, enumerated. Toy 3 is mean-field Potts, exact at any N.
+- *The weights and the wrapper:* continuity at the nodes and edges, and the wrapper's density as the inner prior plus ln w(ℓ₁). A chain on it reproduces p·w(ℓ₁).
+- *The learning:*
+  - `FixedPoint` recovers a piecewise-linear ln g to 3·10⁻¹²;
+  - on the double well the learned weights approach θ* as about 1/√L in the learning's length (0.170, 0.090, 0.043 RMS at 4k, 16k and 64k iterations);
+  - toy 2's θ* is learned to 0.040 RMS;
+  - the narrow and wide windows, one chain, and a chain that never tunnels, flagged.
+- *The reweighting:* the double well's laws at b = 0.1, 0.5 and 1, and ln Z(b) on 51 b, against quadrature within 4.5 of the chains' errors, with no bias over a 12-seed calibration. Toy 2's ln Z(b) and its energy law at the transition match the enumeration.
+- *The warm start:* WHAM on exact rung samples recovers ln Z(b_i) to 10⁻⁴. Over eight pilots its start meets θ* to 0.164 and 0.055 RMS on the two toys, with each rung at its effective draws, and warm learning at half the length beats flat learning at the full length.
+- *Toy 3:*
+  - the lumped occupation move's Hastings ratio equals the configuration chain's;
+  - its density of states by partitions equals the brute-force sum to 10⁻¹³;
+  - its finite-N transition approaches the derived limit β_cJ = 2(q − 1)·ln(q − 1)/(q − 2);
+  - the engine's learned weights, reweighted laws and ln Z(b) match the exact ones at (q, N) = (3, 32), (3, 64) and (4, 32).
+- *The spec and resume:* the spec's validation and JSON round trip, and resume across both phases, bit for bit.
+
+**What the toys read** (exploration; one run, one seed per size, the learning's cost left out).
+- *Toy 2 is too small to compare samplers.* Tempering made about twice the flat histogram's round trips there. Its transition is weak (peak to dip 2.4 at nine sites), so neither method's scaling shows.
+- *Toy 3 reads crossing rates against N* (`MeanFieldTunnellingReading`, behind `FLAT_HISTOGRAM_MEANFIELD_READING`). It counts round trips of ℓ₁ between the exact law's two peaks at the transition b_t, at equal single-site proposals, from N = 64 to 2,048. The hypotheses were written into the test before the run.
+  - *The flat histogram* follows a power law, rate ∝ N^(−α) with α 1.8–2.2, about N² proposals per round trip: a diffusion over the order parameter. A window reaching b = 1 costs a factor of 1–4 against one over the transition alone.
+  - *Tempering's replicas* go as N^(−3.0) at q = 3, steeper. At q = 4 they stop crossing from N = 512, too few sizes to tell exponential from power law.
+  - *A fixed-b chain* reads exponential at q = 4, where its power-law fit predicted round trips at N = 1,024 and 2,048 and none came.
+  - At q = 4 and N = 2,048, where the exact law's ln(peak/dip) is 12.2, the flat histogram is the only sampler that crosses: 16 and 41 round trips in the two windows, in 4.2·10⁸ proposals.
+  - Torpid mixing of tempering on mean-field Potts with q ≥ 3 is proven (Bhatnagar and Randall 2004; Woodard, Schmidler and Huber 2009); the reading agrees with it and claims nothing more.
+
 ### Ensemble shell
 
 `ChainEnsemble.Run`:
@@ -436,6 +508,10 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | `ParallelTempering` schedule | `DeterministicEvenOdd` | Non-reversible even-odd swaps |
 | `LadderEvidence.FromLadders` method | `SteppingStone` (`LadderEvidence.DefaultEstimator`) | Reads $\ell_b$ at the rungs only, with no discretization bias; path sampling is selectable |
 | `SpectralNoiseField` presets | White 0 / Pink 1 / Brown 2 | Spectral exponent β |
+| `FlatHistogramSpec` Chains / LearningIterations / ProductionDraws | 4 / (required) / (required) | Totals; learning in burn-in only, production on the frozen weights |
+| `FlatHistogramSpec` Start / Window / LowSlope / Nodes | `Flat` / null / null / null | `Wham` warm-starts from a pilot; null reads the window, b_lo (the hottest rung) and K = ⌈width/sd₁⌉ + 1 from it |
+| `FlatHistogramSpec` GainScale / GainStart | null / null | t₀ = 10·K; the gain counts from 0 from flat, from the pilot's draws over the chains from WHAM |
+| `FlatHistogramSpec` WindowQuantile / WindowMargin | 0.01 / 1 | The pilot window's quantiles and margin, in sd |
 
 ## Status and caveats
 
@@ -443,6 +519,7 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 - **The ladder evidence's limits.**
   - The discretization diagnostic misses a collapsed likelihood's curvature term, $E_b[\partial_b^2\ell_b]$.
   - A population's ESS ignores shared ancestry. The SMC normalizer's genealogy error sees it, under multinomial resampling only; path sampling over SMC stages does not.
+- **The flat-histogram engine is Phase 1 only** (N17). BASS's adapter and the Friedman qualification are Phase 2, and SPC's adapter with the multibondic variant is Phase 3. Its readings are on toys, and its learning's cost was left out of the mean-field reading.
 - **`SpectralNoiseField` is not periodic.** Its documentation describes the grid as periodic, but queries map the box to nodes 0..N−1, so the sampled field is not periodic over the box.
 
 ## Source map
@@ -453,6 +530,7 @@ The power spectrum is $\propto|k|^{-\beta}$ in **grid-index** units: $\beta=0$ i
 | Reversible jump | `rjmcmc/ReversibleJumpChain.cs`, `IRjMove.cs`, `Proposal.cs`, `MoveStat.cs`, `ScheduledMove.cs`, `MoveStep.cs`, `ParallelTempering.cs`, `TemperingLadder.cs` |
 | Ensemble | `ensemble/ChainEnsemble.cs`, `ChainDiagnostics.cs`, `ConvergenceDiagnostics.cs`, `ConvergenceVerdict.cs`, `RHatDiagnostic.cs`, `RunningMoments.cs`, `Readouts.cs`, `ChainTrace.cs`, `DrawStore.cs`, `Checkpoint.cs`, `EnsembleRun.cs`, `IChain.cs`, `IEnsembleModel.cs` |
 | Evidence | `evidence/LadderEvidence.cs` |
+| Flat histogram | `flathistogram/MulticanonicalWeights.cs`, `MulticanonicalTarget.cs`, `SamcLearning.cs`, `MulticanonicalChain.cs`, `MulticanonicalRun.cs`, `MulticanonicalDraws.cs`, `Reweighting.cs`, `TemperingPilot.cs`, `Wham.cs`, `FlatHistogramDiagnostics.cs`, `FlatHistogramSpec.cs` |
 | Blocks | `blocks/BlockScan.cs`, `GaussianConditional.cs`, `ConjugateUpdates.cs`, `RandomWalkMetropolis.cs`, `NewtonMetropolis.cs`, `SliceSampler.cs` |
 | i.i.d. and fields | `iid/InverseTransform.cs`; `SpectralNoiseField.cs` (at the `samplers/` root) |
 

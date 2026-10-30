@@ -26,7 +26,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N14** D10's convergence verdict: read at the end of every run in the shared ensemble, with the engine's agreement groups and a declared stopping scope; BASS's three groups, the log posterior among its monitored quantities (decided 2026-10-29).
 - [ ] **N15** `DiagonalPlusLowRank` gains the capacitance matrix's Cholesky factor, O(m·k² + k³), beside its per-call Jacobi thin SVD. Found by stage 7 on 2026-10-29: 1.4 ms per σ² proposal at m = 20 with 39 columns. Built when real sizes make it binding.
 - [ ] **N16** The SMC core's conveniences, both stage 8 chips' notes (2026-10-29): `TemperToPosterior` returning at its stage budget rather than throwing, `SmcRun` exposing its `MaxStages`, and a first-step bisection on cached increments in `SmcWeights` beside `ConditionalEss`.
-- [ ] **N17** A flat-histogram sampler, shared by BASS and SPC: SAMC weight learning, multicanonical production over ℓ₁, reweighting and the ln Z(b) curve. Decided to build by the user on 2026-10-29, and its nine design decisions taken the same day ([flat-histogram-design.md](flat-histogram-design.md)); Phase 1 runs as a chip ([its brief](flat-histogram-phase1-brief.md)).
+- [ ] **N17** A flat-histogram sampler, shared by BASS and SPC: SAMC weight learning, multicanonical production over ℓ₁, reweighting and the ln Z(b) curve. Decided to build by the user on 2026-10-29, and its nine design decisions taken the same day ([flat-histogram-design.md](flat-histogram-design.md)); Phase 1, the engine and its toys, built and verified 2026-10-30 (`d7f4ab8`–`3c95d9b`; [its brief](flat-histogram-phase1-brief.md)). Phase 2, BASS's adapter and the Friedman qualification, is next; Phase 3 is SPC's.
 
 ### Room for extensions
 
@@ -35,6 +35,34 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [ ] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update.
 
 ## Reports
+
+### N17 Phase 1 verified: the flat-histogram engine — 2026-10-30
+
+A chip built the engine in `Maths.Samplers.FlatHistogram` ([its brief and reports](flat-histogram-phase1-brief.md#reports); `d7f4ab8`, `3627a13`, `54f417b`, `2fa3bc0`, `4c34930`, `27fd047`, `9f561d0`, `001357b`, reports `f6412f1`, `dae3d1e`, `ffe6bb5`, `3c95d9b`). The main session verified it.
+- *What it is:*
+  - the multicanonical target as a wrapper, with `Temperature` unchanged;
+  - SAMC's learning over interpolated nodes, shared across chains, in burn-in only;
+  - production on the frozen weights over the ensemble shell;
+  - the reweighting to any b and the ln Z(b) ratio curve;
+  - the WHAM warm start, with Ferrenberg and Swendsen's per-rung effective draws.
+- *Added after the first report,* at the main session's and the user's requests:
+  - WHAM checked against Ferrenberg and Swendsen 1989, then given their run weights;
+  - the ratio estimator's condition corrected: it needs a proper prior, not a normalized one;
+  - a mean-field Potts toy with a tunnelling-against-N reading, since the 3 × 3 Potts toy is too small to compare samplers. Its first run exposed a `FixedPoint` defect on a density of states spanning hundreds of nats, now fixed.
+- *The main session's checks:*
+  - SAMC's update, its mean field as −P_in·∇G for the convex G, and its limit, re-derived;
+  - WHAM's binless equations and the MBAR objective's fixed point, re-derived;
+  - the wrapper's extensions and the ratio estimator's cancellation, re-derived;
+  - the suites rerun in Release at `3c95d9b`: Samplers 262 of 262, Regression 1,303 of 1,303.
+- *Readings, as exploration:* on mean-field Potts the flat histogram's crossing cost grows as N^(1.8–2.2), tempering's replicas as N^3.0 at q = 3. At q = 4 tempering stops crossing from N = 512, and at N = 2,048 only the flat histogram crosses.
+- *For Phase 2:*
+  - BASS needs its own `IMulticanonicalChain`;
+  - its tempering pilot must run on the linear form;
+  - SAMC's starting gain depends on the regime;
+  - the engine's window must reach b = 1, at a cost of 1–4× in crossing rate;
+  - the ratio estimator needs no correction for BASS's unnormalized structure prior;
+  - the Friedman qualification also reads ln Z(1) against the −864.6 bound.
+- *Recorded in:* `docs/Maths/Samplers.md`, "Flat-histogram sampling (N17 Phase 1, 2026-10-29)", with the API, configuration, status and source rows.
 
 ### N14 verified: the convergence verdict — 2026-10-29
 

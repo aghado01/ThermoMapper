@@ -104,7 +104,7 @@ Take a fresh-eyes pass and fix what it finds:
   - the gain sequence;
   - the weights frozen in production;
   - the reweighting's self-normalization;
-  - Z(b)'s ratio estimator, which needs a normalized prior (assert it on the toys);
+  - Z(b)'s ratio estimator, which needs a proper prior, its normalizer cancelling (corrected 2026-10-30; the toys' priors are normalized, asserted);
   - nothing existing changed.
 - *Coverage:*
   - a window too narrow, which the chain leaves by the Boltzmann extensions;
