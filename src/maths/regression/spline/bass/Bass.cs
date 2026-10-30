@@ -53,6 +53,8 @@ public static class Bass
             throw new ArgumentException(
                 $"The checkpoint was taken on another config or data: its fingerprint is {resumeFrom.Identity.Fingerprint}, theirs {fingerprint}.",
                 "checkpoint");
+        if (sampling.FlatHistogram is not null)
+            throw new NotSupportedException("Sampling.FlatHistogram's fit joins with its adapter (N17 Phase 2, step 2).");
         if (sampling.Smc is not null)
         {
             try

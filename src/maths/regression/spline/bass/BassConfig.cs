@@ -7,6 +7,7 @@ using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bars;
 using Maths.Samplers;
 using Maths.Samplers.Ensemble;
+using Maths.Samplers.FlatHistogram;
 using Maths.Samplers.Rjmcmc;
 using Maths.Samplers.Smc;
 
@@ -177,31 +178,72 @@ public sealed record BassConfig
             if (smc.Form is not (TemperedForm.Integrated or TemperedForm.Linear)) throw Bad("Sampling.Smc.Form", "is not a known form");
             if (smc.MaxStages < 1) throw Bad("Sampling.Smc.MaxStages", "must be at least 1");
         }
-        if (run.Tempering is { } t)
+        if (run.Tempering is { } t) CheckTempering(t, "Sampling.Tempering", scale);
+        if (run.FlatHistogram is { } flat)
         {
-            if (t.Path is not (TemperingPath.Likelihood or TemperingPath.Powered)) throw Bad("Sampling.Tempering.Path", "is not a known path");
-            if (t.Form is not (TemperedForm.Integrated or TemperedForm.Linear)) throw Bad("Sampling.Tempering.Form", "is not a known form");
-            if (t.Path == TemperingPath.Powered && t.Form == TemperedForm.Linear)
-                throw Bad("Sampling.Tempering.Form", "is the likelihood path's; the powered path powers the untempered marginal whole (D05)");
-            if (t.ReferenceRung && t.Path != TemperingPath.Likelihood)
-                throw Bad("Sampling.Tempering.ReferenceRung", "needs the likelihood path, whose b = 0 member is the prior; the powered path's is not normalizable (D05)");
-            if (t.ReferenceRung && !scale.IsProper)
-                throw Bad("Sampling.Tempering.ReferenceRung", $"needs a proper τ prior, whose exact draw it takes, and Coefficients.Scale is {scale}; take a > 2");
-            int minimum = TemperingSpec.MinimumLevels(t.ReferenceRung);
-            if (t.Levels < minimum)
-                throw Bad("Sampling.Tempering.Levels", t.ReferenceRung ? "must be at least 3 with a reference rung: b = 1, the hot end and b = 0" : "must be at least 2");
-            if (t.Levels is null && !t.Adaptive)
-                throw Bad("Sampling.Tempering.Adaptive", "must be true for a self-sizing ladder (Levels null), which sizes itself as it adapts; a fixed ladder declares Levels");
-            if (t.MaxLevels < minimum) throw Bad("Sampling.Tempering.MaxLevels", $"must be at least {minimum}, the fewest rungs a ladder takes");
-            if (t.MaxLevels < t.Levels) throw Bad("Sampling.Tempering.MaxLevels", "must not lie below the declared Levels");
-            if (t.HotEnd is double hot && !(hot > 0.0 && hot < 1.0)) throw Bad("Sampling.Tempering.HotEnd", "must lie in (0, 1)");
-            if (t.Schedule != SwapSchedule.DeterministicEvenOdd)
-                throw Bad("Sampling.Tempering.Schedule", "is DEO, the schedule D05 decided; another joins with its decision");
-            if (t.Split is { } split)
+            if (run.Smc is not null) throw Bad("Sampling.FlatHistogram", "must be null with Sampling.Smc: a fit runs one sampler");
+            if (run.Tempering is not null)
+                throw Bad("Sampling.Tempering", "must be null with Sampling.FlatHistogram, whose pilot declares its own ladder (Sampling.FlatHistogram.Pilot.Tempering)");
+            if (run.RHatTarget > 0.0) throw Bad("Sampling.RHatTarget", "must be 0 with Sampling.FlatHistogram, which runs to its lengths with no R̂ stop");
+            FlatHistogramSpec engine = flat.Run ?? throw Bad("Sampling.FlatHistogram.Run", "is missing");
+            try
             {
-                if (!(split.Threshold > 0.0 && split.Threshold < 1.0)) throw Bad("Sampling.Tempering.Split.Threshold", "must lie in (0, 1)");
-                if (t.Levels is not null) throw Bad("Sampling.Tempering.Split", "needs a self-sizing ladder (Levels null), since it adds rungs");
+                engine.Validate();
             }
+            catch (ArgumentException e)
+            {
+                string reason = e.Message, suffix = $" (Parameter '{e.ParamName}')";
+                if (reason.EndsWith(suffix, StringComparison.Ordinal)) reason = reason[..^suffix.Length];
+                throw new ArgumentException($"Sampling.FlatHistogram.Run.{e.ParamName}: {reason}", "config", e);
+            }
+            if (flat.MaxIterations is < 1) throw Bad("Sampling.FlatHistogram.MaxIterations", "must be at least 1, or null to run to the lengths");
+            if (engine.NeedsPilot && flat.Pilot is null)
+                throw Bad("Sampling.FlatHistogram.Pilot", "is missing, and the run starts from WHAM or reads its window, b_lo or K from a pilot");
+            if (!engine.NeedsPilot && flat.Pilot is not null)
+                throw Bad("Sampling.FlatHistogram.Pilot", "must be null: the run declares its window, b_lo and K and starts flat, so nothing reads a pilot");
+            bool lowestAtZero = engine.LowSlope is double low ? low == 0.0 : flat.Pilot?.Tempering?.ReferenceRung == true;
+            if (lowestAtZero && !scale.IsProper)
+                throw Bad("Coefficients.Scale", $"is {scale}, improper, which leaves the prior over (structure, τ) improper, and π_w below a window from b_lo = 0 is that prior; take a > 2, or a window from b_lo > 0");
+            if (flat.Pilot is { } pilot)
+            {
+                if (pilot.Chains < 1) throw Bad("Sampling.FlatHistogram.Pilot.Chains", "must be at least 1");
+                if (pilot.BurnIn < 0) throw Bad("Sampling.FlatHistogram.Pilot.BurnIn", "must not be negative");
+                if (pilot.TracedScans < 2) throw Bad("Sampling.FlatHistogram.Pilot.TracedScans", "must be at least 2, so every rung has draws to spread and weigh");
+                TemperingSpec ladder = pilot.Tempering ?? throw Bad("Sampling.FlatHistogram.Pilot.Tempering", "is missing");
+                CheckTempering(ladder, "Sampling.FlatHistogram.Pilot.Tempering", scale);
+                if (ladder.Path != TemperingPath.Likelihood)
+                    throw Bad("Sampling.FlatHistogram.Pilot.Tempering.Path", "must be the likelihood path: WHAM reads rung laws prior·e^{b·ℓ₁}");
+                if (ladder.Form != TemperedForm.Linear)
+                    throw Bad("Sampling.FlatHistogram.Pilot.Tempering.Form", "must be the linear form: WHAM reads rung laws prior·e^{b·ℓ₁}, which the integrated form's are not (D05)");
+            }
+        }
+    }
+
+    // A ladder's declaration, its fields named under `field`.
+    private static void CheckTempering(TemperingSpec t, string field, TauPrior scale)
+    {
+        if (t.Path is not (TemperingPath.Likelihood or TemperingPath.Powered)) throw Bad($"{field}.Path", "is not a known path");
+        if (t.Form is not (TemperedForm.Integrated or TemperedForm.Linear)) throw Bad($"{field}.Form", "is not a known form");
+        if (t.Path == TemperingPath.Powered && t.Form == TemperedForm.Linear)
+            throw Bad($"{field}.Form", "is the likelihood path's; the powered path powers the untempered marginal whole (D05)");
+        if (t.ReferenceRung && t.Path != TemperingPath.Likelihood)
+            throw Bad($"{field}.ReferenceRung", "needs the likelihood path, whose b = 0 member is the prior; the powered path's is not normalizable (D05)");
+        if (t.ReferenceRung && !scale.IsProper)
+            throw Bad($"{field}.ReferenceRung", $"needs a proper τ prior, whose exact draw it takes, and Coefficients.Scale is {scale}; take a > 2");
+        int minimum = TemperingSpec.MinimumLevels(t.ReferenceRung);
+        if (t.Levels < minimum)
+            throw Bad($"{field}.Levels", t.ReferenceRung ? "must be at least 3 with a reference rung: b = 1, the hot end and b = 0" : "must be at least 2");
+        if (t.Levels is null && !t.Adaptive)
+            throw Bad($"{field}.Adaptive", "must be true for a self-sizing ladder (Levels null), which sizes itself as it adapts; a fixed ladder declares Levels");
+        if (t.MaxLevels < minimum) throw Bad($"{field}.MaxLevels", $"must be at least {minimum}, the fewest rungs a ladder takes");
+        if (t.MaxLevels < t.Levels) throw Bad($"{field}.MaxLevels", "must not lie below the declared Levels");
+        if (t.HotEnd is double hot && !(hot > 0.0 && hot < 1.0)) throw Bad($"{field}.HotEnd", "must lie in (0, 1)");
+        if (t.Schedule != SwapSchedule.DeterministicEvenOdd)
+            throw Bad($"{field}.Schedule", "is DEO, the schedule D05 decided; another joins with its decision");
+        if (t.Split is { } split)
+        {
+            if (!(split.Threshold > 0.0 && split.Threshold < 1.0)) throw Bad($"{field}.Split.Threshold", "must lie in (0, 1)");
+            if (t.Levels is not null) throw Bad($"{field}.Split", "needs a self-sizing ladder (Levels null), since it adds rungs");
         }
     }
 
@@ -391,6 +433,16 @@ public sealed record BassSampling
     /// </summary>
     public SmcSpec? Smc { get; init; }
 
+    /// <summary>
+    /// Fitting by the flat-histogram sampler (N17) in place of MCMC: SAMC learns multicanonical weights over ℓ₁ in burn-in,
+    /// independent chains run on the frozen weights, and their draws weighted at b = 1 are the fit; null, the default, runs
+    /// MCMC. It refuses <see cref="Smc"/>, <see cref="Tempering"/> (its pilot declares its own ladder) and an
+    /// <see cref="RHatTarget"/>; <see cref="Chains"/>, <see cref="BurnIn"/>, <see cref="Samples"/>, <see cref="Thin"/>,
+    /// <see cref="BatchSize"/>, <see cref="MinEssPerChain"/> and <see cref="StoppingScope"/> are not read under it, the
+    /// spec's own lengths and chains standing in.
+    /// </summary>
+    public BassFlatHistogramSpec? FlatHistogram { get; init; }
+
     /// <summary>Whether a run that can give an evidence reports it (D03, D05).</summary>
     public bool ReportEvidence { get; init; } = true;
 
@@ -519,6 +571,59 @@ public sealed record SmcSpec
 
     /// <summary>Whether each stage's population is recorded, for the evidence over the stages.</summary>
     public bool TraceStages { get; init; }
+}
+
+/// <summary>
+/// Fitting by the flat-histogram sampler (N17; decided 2026-10-29, Phase 2 2026-10-30): the engine's
+/// <see cref="Maths.Samplers.FlatHistogram.MulticanonicalRun"/> over D04's sweep on the multicanonical target
+/// π_w ∝ prior(structure, τ)·w(ℓ₁), ℓ₁ the collapsed log marginal at b = 1, with the prior over (structure, τ) as the base
+/// measure. SAMC learns the weights in burn-in; then <see cref="FlatHistogramSpec.Chains"/> independent chains run on the
+/// frozen weights, and their draws weighted by e^{ℓ₁}/w(ℓ₁) are the fit (<see cref="BassFit.DrawWeights"/>).
+/// <list type="bullet">
+/// <item><see cref="Run"/>: the engine's spec, its chains, lengths, start, window, b_lo, K and gain. Its lengths are totals.</item>
+/// <item><see cref="Pilot"/>: the tempering pilot a WHAM start reads, and the window, b_lo or K the spec leaves to it,
+/// declared exactly when the spec needs one (<see cref="FlatHistogramSpec.NeedsPilot"/>). With its reference rung the
+/// pilot's hot end is b = 0, and so is b_lo.</item>
+/// <item><see cref="MaxIterations"/>: the iterations a call takes, learning updates and production draws per chain
+/// together, as SMC's stage budget; null runs to the lengths. A fit short of them is flagged incomplete, its posterior
+/// views refused, and its checkpoint continues it.</item>
+/// </list>
+/// The evidence is ln Z(1) by the engine's ratio estimator, reported only from b_lo = 0 under proper priors; above b_lo = 0
+/// the fit reports ln Z(1) − ln Z(b_lo), flagged as a ratio.
+/// </summary>
+public sealed record BassFlatHistogramSpec
+{
+    /// <summary>The engine's spec.</summary>
+    public required FlatHistogramSpec Run { get; init; }
+
+    /// <summary>The tempering pilot; null when <see cref="Run"/> reads none.</summary>
+    public BassFlatHistogramPilot? Pilot { get; init; }
+
+    /// <summary>The iterations one call takes at most, ≥ 1; null runs to the lengths.</summary>
+    public long? MaxIterations { get; init; }
+}
+
+/// <summary>
+/// The flat-histogram run's tempering pilot (N17 Phase 2): <see cref="Chains"/> ladders of D04's sweep, each from an exact
+/// draw of the prior on F, burned as a tempered fit burns them (<see cref="BassLadder"/>, adapted and, self-sizing, sized),
+/// then frozen and traced for <see cref="TracedScans"/> scans. Each ladder's rungs combine by WHAM
+/// (<see cref="Maths.Samplers.FlatHistogram.TemperingPilot.FromLadders"/>) into ln ĝ and the window. Its ladder is on the
+/// likelihood path's linear form, ℓ_b = b·ℓ₁, whose rung laws prior·e^{b·ℓ₁} WHAM needs; by default it sizes itself and
+/// has the exact reference rung at b = 0.
+/// </summary>
+public sealed record BassFlatHistogramPilot
+{
+    /// <summary>The ladder: the linear form with the reference rung, self-sizing, by default.</summary>
+    public TemperingSpec Tempering { get; init; } = new() { Form = TemperedForm.Linear, ReferenceRung = true };
+
+    /// <summary>The ladders, one per chain.</summary>
+    public int Chains { get; init; } = 4;
+
+    /// <summary>Each ladder's burn-in scans, ≥ 0, in which it adapts and sizes itself.</summary>
+    public required int BurnIn { get; init; }
+
+    /// <summary>Each ladder's traced scans after burn-in, ≥ 2: every rung's draws.</summary>
+    public required int TracedScans { get; init; }
 }
 
 /// <summary>How a state's move types are chosen (D01).</summary>
