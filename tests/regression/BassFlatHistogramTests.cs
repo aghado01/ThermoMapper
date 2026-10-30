@@ -579,7 +579,7 @@ public sealed class BassFlatHistogramTests
 
         // Every view runs on the weighted draws.
         BassRunLengths lengths = fit.Metadata().Lengths;
-        Assert.Equal((chains, (int?)null, (int?)null, (int?)null, (SmcSpec?)null), (lengths.Chains, lengths.BurnIn, lengths.Samples, lengths.Thin, lengths.Smc));
+        Assert.Equal((chains, (int?)null, (int?)null, (int?)1, (SmcSpec?)null), (lengths.Chains, lengths.BurnIn, lengths.Samples, lengths.Thin, lengths.Smc));
         Assert.Equal(spec, lengths.FlatHistogram);
         Assert.All(lengths.DrawsPerChain, n => Assert.Equal(draws, n));
         Assert.Equal(Enumerable.Range(0, pooled.Length).Sum(s => w[s] * pooled[s].Sigma2), fit.Summary().Posterior.Sigma2.Mean, 12);
@@ -606,7 +606,9 @@ public sealed class BassFlatHistogramTests
     [Fact]
     public void Fit_ResumesBitForBit_AcrossLearningAndProduction()
     {
-        (BassConfig plain, BassData data) = EndToEnd(functional: false, 7601);
+        // Each iteration two sweeps (Sampling.Thin), so the account's restart at production is counted in sweeps.
+        (BassConfig thinned, BassData data) = EndToEnd(functional: false, 7601);
+        BassConfig plain = thinned with { Sampling = thinned.Sampling with { Thin = 2 } };
         BassModel model = BassModel.Create(plain, data);
         BassFlatHistogramSpec spec = new() { Run = DeclaredRun(RoughShape(model, 8), 300, 200, chains: 3) };
         BassFit whole = Bass.Fit(WithFlatHistogram(plain, spec), data);
@@ -655,6 +657,9 @@ public sealed class BassFlatHistogramTests
         }
         Assert.Equal(whole.Evidence!.LogEvidence, third.Evidence!.LogEvidence);
         Assert.Equal(whole.Diagnostics.Count.RHat, third.Diagnostics.Count.RHat);
+        Assert.Equal(2, third.Metadata().Lengths.Thin);
+        // The accounts cover production's 400 sweeps (a null proposal is no attempt), the learning's 600 left out.
+        Assert.All(third.Diagnostics.Chains, a => Assert.InRange(a.Moves.Sum(m => m.Attempts), 1, 400));
         for (int c = 0; c < 3; c++)
         {
             Assert.Equal(whole.Diagnostics.Chains[c].MoveKinds.Entries, third.Diagnostics.Chains[c].MoveKinds.Entries);

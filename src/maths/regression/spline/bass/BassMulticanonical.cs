@@ -19,8 +19,10 @@ namespace Maths.Regression.Spline.Bass;
 /// <list type="bullet">
 /// <item><b>Streams.</b> The run's chain seed fans out into three, the start's draws, the moves and τ's block; its readout
 /// seed drives composition, as an MCMC fit's does.</item>
-/// <item><b>The account.</b> A chain's tallies restart when it takes its first production step, its step count then
-/// equal to the learning's length, so its account covers production, as an MCMC chain's covers sampling.</item>
+/// <item><b>Steps.</b> A chain's step, one iteration of the run, is <see cref="BassSampling.Thin"/> sweeps, as an MCMC
+/// chain's retained draw follows that many: the learning updates from the state after them, and production keeps it.</item>
+/// <item><b>The account.</b> A chain's tallies restart when it takes its first production step, its sweeps then the
+/// learning's, so its account covers production, as an MCMC chain's covers sampling.</item>
 /// </list>
 /// The model is shared read-only; each chain owns its design, streams and stores.
 /// </summary>
@@ -29,7 +31,8 @@ internal sealed class BassMulticanonicalModel : IMulticanonicalModel<BassState>
     private readonly BassPointInputs _pointInputs;
 
     /// <summary>The client for <paramref name="model"/>'s run, whose learning takes <paramref name="learningIterations"/>
-    /// steps per chain, its sweeps counted into <paramref name="sweeps"/>.</summary>
+    /// steps per chain of the config's <see cref="BassSampling.Thin"/> sweeps each, its sweeps counted into
+    /// <paramref name="sweeps"/>.</summary>
     public BassMulticanonicalModel(BassModel model, string fingerprint, long learningIterations, BassSweepCount sweeps)
     {
         ArgumentNullException.ThrowIfNull(model);
@@ -38,6 +41,7 @@ internal sealed class BassMulticanonicalModel : IMulticanonicalModel<BassState>
         Model = model;
         Fingerprint = fingerprint;
         LearningIterations = learningIterations;
+        Thin = model.Config.Sampling.Thin;
         Sweeps = sweeps;
         _pointInputs = new BassPointInputs(model);
     }
@@ -47,6 +51,9 @@ internal sealed class BassMulticanonicalModel : IMulticanonicalModel<BassState>
 
     /// <summary>The learning's length, per chain.</summary>
     public long LearningIterations { get; }
+
+    /// <summary>Sweeps per step.</summary>
+    public int Thin { get; }
 
     /// <summary>The run's sweep count, which reports progress and carries cancellation.</summary>
     public BassSweepCount Sweeps { get; }
@@ -168,18 +175,22 @@ internal sealed class BassMulticanonicalChain : IMulticanonicalChain<BassState>
     /// <inheritdoc/>
     public MulticanonicalEvaluation CurrentEvaluation => (MulticanonicalEvaluation)Chain.Moves.CurrentEvaluation;
 
-    /// <summary>One sweep on π_w. The first production sweep restarts the tallies first.</summary>
+    /// <summary>One step on π_w: <see cref="BassMulticanonicalModel.Thin"/> sweeps. The first production step restarts the
+    /// tallies first.</summary>
     public BassState Step()
     {
-        _owner.Sweeps.Cancellation.ThrowIfCancellationRequested();
-        if (LearningMoves is null && Chain.Scan.Steps == _owner.LearningIterations)
+        if (LearningMoves is null && Chain.Scan.Steps == _owner.LearningIterations * _owner.Thin)
         {
             Chain.Structure.ResetTallies();
             LearningMoves = Chain.Moves.MoveStats();
         }
-        BassState state = Chain.Step();
-        _owner.Sweeps.Add(1);
-        return state;
+        for (int t = 0; t < _owner.Thin; t++)
+        {
+            _owner.Sweeps.Cancellation.ThrowIfCancellationRequested();
+            Chain.Step();
+            _owner.Sweeps.Add(1);
+        }
+        return Chain.Current;
     }
 
     /// <inheritdoc/>

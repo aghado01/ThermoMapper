@@ -24,8 +24,8 @@ public sealed record BassDataShape(int Cases, int Locations, IReadOnlyList<Predi
 /// count: <see cref="Chains"/> is then its replicates, <see cref="DrawsPerChain"/> each replicate's population,
 /// <see cref="BurnIn"/>, <see cref="Samples"/> and <see cref="Thin"/> null, and <see cref="Smc"/> its specification. A
 /// flat-histogram fit's are its spec's: <see cref="Chains"/> its production chains, <see cref="DrawsPerChain"/> their
-/// draws so far, <see cref="BurnIn"/>, <see cref="Samples"/> and <see cref="Thin"/> null, and <see cref="FlatHistogram"/>
-/// its specification, learning's and production's lengths and the pilot's among it.</summary>
+/// draws so far, <see cref="Thin"/> its sweeps per iteration, <see cref="BurnIn"/> and <see cref="Samples"/> null, and
+/// <see cref="FlatHistogram"/> its specification, learning's and production's lengths and the pilot's among it.</summary>
 public sealed record BassRunLengths(int Chains, int? BurnIn, int? Samples, int? Thin, IReadOnlyList<int> DrawsPerChain, SmcSpec? Smc = null,
                                     BassFlatHistogramSpec? FlatHistogram = null)
 {
@@ -49,7 +49,7 @@ public sealed record BassMetadata(
         BassSampling sampling = fit.Config.Sampling;
         bool sweeps = sampling.Smc is null && sampling.FlatHistogram is null;
         var lengths = new BassRunLengths(fit.Identity.Chains, sweeps ? sampling.BurnIn : null, sweeps ? sampling.Samples : null,
-                                         sweeps ? sampling.Thin : null, Array.AsReadOnly(fit.Draws.Select(c => c.Count).ToArray()),
+                                         sampling.Smc is null ? sampling.Thin : null, Array.AsReadOnly(fit.Draws.Select(c => c.Count).ToArray()),
                                          sampling.Smc, sampling.FlatHistogram);
         return new BassMetadata(BassDataShape.Of(fit.Transform, fit.Resolved.Cases, fit.Resolved.Locations), fit.Config, fit.Resolved,
                                 fit.Identity, lengths, fit.Diagnostics, fit.Evidence);

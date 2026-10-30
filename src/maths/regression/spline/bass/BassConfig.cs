@@ -437,9 +437,10 @@ public sealed record BassSampling
     /// Fitting by the flat-histogram sampler (N17) in place of MCMC: SAMC learns multicanonical weights over ℓ₁ in burn-in,
     /// independent chains run on the frozen weights, and their draws weighted at b = 1 are the fit; null, the default, runs
     /// MCMC. It refuses <see cref="Smc"/>, <see cref="Tempering"/> (its pilot declares its own ladder) and an
-    /// <see cref="RHatTarget"/>; <see cref="Chains"/>, <see cref="BurnIn"/>, <see cref="Samples"/>, <see cref="Thin"/>,
+    /// <see cref="RHatTarget"/>; <see cref="Chains"/>, <see cref="BurnIn"/>, <see cref="Samples"/>,
     /// <see cref="BatchSize"/>, <see cref="MinEssPerChain"/> and <see cref="StoppingScope"/> are not read under it, the
-    /// spec's own lengths and chains standing in.
+    /// spec's own lengths and chains standing in. <see cref="Thin"/> is read: each iteration of the run, a learning update
+    /// or a production draw, follows that many sweeps of every chain.
     /// </summary>
     public BassFlatHistogramSpec? FlatHistogram { get; init; }
 
@@ -580,7 +581,8 @@ public sealed record SmcSpec
 /// measure. SAMC learns the weights in burn-in; then <see cref="FlatHistogramSpec.Chains"/> independent chains run on the
 /// frozen weights, and their draws weighted by e^{ℓ₁}/w(ℓ₁) are the fit (<see cref="BassFit.DrawWeights"/>).
 /// <list type="bullet">
-/// <item><see cref="Run"/>: the engine's spec, its chains, lengths, start, window, b_lo, K and gain. Its lengths are totals.</item>
+/// <item><see cref="Run"/>: the engine's spec, its chains, lengths, start, window, b_lo, K and gain. Its lengths are totals,
+/// in iterations of <see cref="BassSampling.Thin"/> sweeps per chain.</item>
 /// <item><see cref="Pilot"/>: the tempering pilot a WHAM start reads, and the window, b_lo or K the spec leaves to it,
 /// declared exactly when the spec needs one (<see cref="FlatHistogramSpec.NeedsPilot"/>). With its reference rung the
 /// pilot's hot end is b = 0, and so is b_lo.</item>

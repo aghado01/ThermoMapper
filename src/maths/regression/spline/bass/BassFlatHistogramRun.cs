@@ -58,7 +58,7 @@ internal static class BassFlatHistogramFit
         int[] roots = SeedTree.Derive(sampling.MasterSeed, 2);   // the run's, the pilot's
         bool piloted = restart is null && run.NeedsPilot;
         long pilotScans = piloted ? (long)spec.Pilot!.Chains * (spec.Pilot.BurnIn + spec.Pilot.TracedScans) : 0;
-        var sweeps = new BassSweepCount(options, pilotScans + (long)run.Chains * (run.LearningIterations + run.ProductionDraws));
+        var sweeps = new BassSweepCount(options, pilotScans + (long)run.Chains * (run.LearningIterations + run.ProductionDraws) * sampling.Thin);
         TemperingPilot? pilot = null;
         BassFlatHistogramPilotReadout? pilotReadout = restart?.Pilot;
         MulticanonicalWeights? shape = null;
