@@ -401,10 +401,18 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
     private void ReserveRecord(int capacity)
     {
         if (capacity <= _energyPerDraw.Length) return;
-        Array.Resize(ref _energyPerDraw, capacity);
-        Array.Resize(ref _magPerDraw, capacity);
-        Array.Resize(ref _sumSqClusterSizesPerDraw, capacity);
-        Array.Resize(ref _maxClusterSizePerDraw, capacity);
+        _energyPerDraw            = Grown(_energyPerDraw, capacity);
+        _magPerDraw               = Grown(_magPerDraw, capacity);
+        _sumSqClusterSizesPerDraw = Grown(_sumSqClusterSizesPerDraw, capacity);
+        _maxClusterSizePerDraw    = Grown(_maxClusterSizePerDraw, capacity);
+    }
+
+    /// <summary>A copy of the live entries [0, draw count) in a series of the new capacity — nothing past them.</summary>
+    private T[] Grown<T>(T[] series, int capacity)
+    {
+        var grown = new T[capacity];
+        Array.Copy(series, grown, _drawCount);
+        return grown;
     }
 
     // ── Checkpoint surface ────────────────────────────────────────────────

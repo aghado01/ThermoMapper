@@ -14,7 +14,8 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
     /// </summary>
     /// <remarks>
     /// Little-endian, 4-byte magic + version. Writes the scalar moments + resume state and the per-draw
-    /// record, then — when the run tracked them — the per-edge arrays inline behind a presence flag. The old paired <c>.spce</c>
+    /// record, then — when the run tracked them — the optional sections (per-edge and per-node arrays,
+    /// the burn-in trace, the exact histogram) inline, each behind a presence flag. The old paired <c>.spce</c>
     /// sidecar and its key-matching are retired: the per-edge section is now positionally nested in the
     /// same file (one accumulator, one artifact). Composes on Archivory's
     /// <see cref="BinarySerializerBase{T}"/> for atomic file I/O — this class supplies only the

@@ -39,9 +39,10 @@ internal interface ISwEngine
     ReadOnlySpan<int> MaxClusterSizePerDraw { get; }
 
     /// <summary>
-    /// Snapshot the full sampler state — scalar sufficient-statistics + resume state, plus the
-    /// per-edge arrays (<see cref="Accumulator.BondFormedCount"/>/<see cref="Accumulator.SpinAgreementCount"/>)
-    /// when this specialization tracks them, <see langword="null"/> otherwise.
+    /// Snapshot the full sampler state — scalar sufficient-statistics, the per-draw record + resume
+    /// state, plus each optional array (the per-edge counts such as <see cref="Accumulator.BondFormedCount"/>,
+    /// the landscapes, the burn-in trace, the exact histogram) when the run tracks it,
+    /// <see langword="null"/> otherwise.
     /// </summary>
     Accumulator GetCheckpoint();
     void Restore(Accumulator result);

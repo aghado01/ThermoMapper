@@ -39,7 +39,7 @@ flowchart LR
 2. Find the resulting clusters with union–find.
 3. Give each cluster a new random color.
 
-**Accumulator.** The run's state: the per-draw record (E, m, Σ|c|² and c_max, one entry per measured draw) and the running sums folded in at every draw (scalar moments, optional per-edge counts, optional per-node sums), plus the resume state (spins and RNG words). The scalar sums are views of the record: each is its series, or the series squared, summed in draw order.
+**Accumulator.** The run's state: the per-draw record (E, m, Σ|c|² and c_max, one entry per measured draw) and the running sums folded in at every draw (scalar moments, the histogram, optional per-edge counts, optional per-node sums, an optional exact histogram), an optional burn-in trace, plus the resume state (spins and RNG words). The scalar sums are views of the record: each is its series, or the series squared, summed in draw order.
 
 **Currencies (per-edge "1-forms").** Model-agnostic per-edge fields indexed by CSR slot, meaningful only at the j > i slot (see [Concepts](./Concepts.md#per-edge-currencies)):
 
@@ -74,7 +74,7 @@ flowchart LR
 
 | Area | Entry points |
 |---|---|
-| Potts model | `FkKernel.BondProbability`; `PottsModelConfig` (Q = 20); `BwdPottsCriticalEstimate.TpsUpperBound`; `Susceptibility`, `MeanEnergy`, `SpecificHeat`, `Magnetization`, `MagnetizationSusceptibility` (`.Reduce`) |
+| Potts model | `FkKernel.BondProbability`; `PottsModelConfig` (Q = 20); `BwdPottsCriticalEstimate.TpsUpperBound`; `Susceptibility`, `MeanEnergy`, `SpecificHeat`, `Magnetization`, `MagnetizationSusceptibility`, `BinderCumulant` (`.Reduce`; `BinderCumulant.Moments`) |
 | Single run | `SwRunner.Run(SwRunSpec)` → `SwRunResult`; `SwRunSpec`, `RunBudget`, `AccumulationSpec` (`None`, `Currencies`, …), `Accumulator` |
 | Reductions | `SwCurrencies.ToAffinities` / `ToAlignments` / `ToCoMembership`; `SwLandscapes.MeanClusterSize` / `GiantParticipation` |
 | Checkpoints | `AccumulatorSerializer.Instance` (SPCX v11, `.spcx`) |
@@ -123,6 +123,8 @@ Swendsen–Wang passes the raw coupling to the bond kernel; the [cumulative-fiel
 - The bond-probability table, at 8 bytes per slot.
 - Each optional per-edge count adds 4 bytes per slot.
 - Each optional per-node landscape adds 8 bytes per node.
+- The per-draw record adds 28 bytes per measured draw, and the optional burn-in trace 28 bytes per burn-in draw.
+- The optional exact cluster-size histogram adds 8 bytes per node.
 
 ### Observables
 
@@ -135,8 +137,9 @@ With D retained draws:
 | Specific heat | $C_v=\max(0,\langle E^2\rangle-\langle E\rangle^2)/T^2$ (extensive: no $1/N$) |
 | Magnetization | $\langle m\rangle$, $\langle m^2\rangle$ and their variance |
 | Magnetic susceptibility | $\chi_m=\frac NT\max(0,\langle m^2\rangle-\langle m\rangle^2)$ |
+| Binder cumulant | $U=1-\dfrac{\langle m^4\rangle}{3\langle m^2\rangle^2}$, from the per-draw m series |
 
-`MagnetizationSusceptibility` should be fed *pooled* moments (averaged over all replicas at one T), so the variance is taken once and no Jensen bias arises; the function cannot check this. `Susceptibility`, `MeanEnergy`, `SpecificHeat` and `Magnetization` return 0 when D ≤ 0; `Susceptibility` and `MagnetizationSusceptibility` also return 0 when N ≤ 0, and `SpecificHeat` and `MagnetizationSusceptibility` when T ≤ 0.
+`MagnetizationSusceptibility` and `BinderCumulant.Reduce` should be fed *pooled* moments (averaged over all replicas at one T), so the nonlinear reduction is taken once and no Jensen bias arises; the functions cannot check this. `BinderCumulant.Reduce` returns NaN when $\langle m^2\rangle\le 0$, where U is undefined. `Susceptibility`, `MeanEnergy`, `SpecificHeat` and `Magnetization` return 0 when D ≤ 0; `Susceptibility` and `MagnetizationSusceptibility` also return 0 when N ≤ 0, and `SpecificHeat` and `MagnetizationSusceptibility` when T ≤ 0.
 
 ### Currencies and landscapes
 

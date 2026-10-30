@@ -2,8 +2,8 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler;
 
 /// <summary>
 /// Result of one Swendsen–Wang sampler execution — the run's final
-/// <see cref="Accumulator"/> (scalar moments + resume state, plus the optional
-/// per-edge arrays when the run tracked edge observables).
+/// <see cref="Accumulator"/> (scalar moments, the per-draw record + resume state,
+/// plus the optional arrays the run tracked).
 /// </summary>
 public sealed record SwRunResult
 {
