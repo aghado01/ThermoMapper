@@ -768,6 +768,10 @@ The SW retention brief (`issues/spc/sw-retention-brief.md`, items S1–S6) preda
     §12.7 be chosen after the run.
   - S5's partitions would give the same means, at gigabytes.
   - Added to the brief as S7 (de7bb49).
+- **Since built** (2026-10-29/30): S1–S4, S6 and S7 (the retention chip), and within-run Monte Carlo errors from the
+  per-draw record (`MonteCarloError`): S₂'s SE as χ_FK's over N, so a single-replica sweep can carry the certificate's
+  SE; Var(m)'s, as weights for BARS on the detection curve; and C_v's. Each matches the spread across independent SW
+  replicas. Reweighting is not built.
 
 ### 12.14 The experiments on the user's schedule (n₀ = 10)
 

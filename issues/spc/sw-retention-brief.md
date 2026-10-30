@@ -48,7 +48,8 @@ The principle, from the user: keep each draw's generative state, derive views fr
 
 - m⁴, for the Binder cumulant U = 1 − ⟨m⁴⟩/(3⟨m²⟩²), and E³ and E⁴, for the error on C_v and the energy distribution's shape.
 - With S1 these are views over the series, and S1 is always kept. The Binder cumulant is built (`BinderCumulant`, `f542951`). So are ⟨E⟩ to ⟨E⁴⟩ and the energy cumulant V = 1 − ⟨E⁴⟩/(3⟨E²⟩²) (`EnergyCumulant`, `c50b273`), the first-order diagnostic for SPC's default q = 20.
-- C_v's Monte Carlo error is built without E³ and E⁴: C_v is the mean of y = (E − Ē)²/T², so its error is sd(y)/√ESS(y), with the ESS from `ChainDiagnostics.MeanEss` over the replicas (`SpecificHeatMonteCarloError`, `c50b273`). SPC's project already referenced `Maths.Samplers`; the call is on plain arrays, the user's choice over a port (2026-10-30). It matches Gaussian theory (iid 0.98, AR(1) 1.03) and the spread of C_v across SW replicas (1.04–1.05 at 128 replicas).
+- C_v's Monte Carlo error is built without E³ and E⁴: C_v is the mean of y = (E − Ē)²/T², so its error is sd(y)/√ESS(y), with the ESS from `ChainDiagnostics.MeanEss` over the replicas (`c50b273`). SPC's project already referenced `Maths.Samplers`; the call is on plain arrays, the user's choice over a port (2026-10-30). It matches Gaussian theory (iid 0.98, AR(1) 1.03) and the spread of C_v across SW replicas (1.04–1.05 at 128 replicas).
+- Generalized the same day to `MonteCarloError` (`OfMean`, `OfVariance`), for the two curves the stopping rule reads (`issues/spc-BARS/stopping-theory-primer.md`, §12.13 and §12.15): the detection curve Var(m), and χ_FK, whose error over N is S₂'s within-run SE. Against the spread across 32 SW replicas: Var(m) 1.15, χ_FK 1.05–1.07; against theory, the mean form 1.00 (iid) and 1.03 (AR(1)).
 
 ### S3. The largest cluster per sweep
 
