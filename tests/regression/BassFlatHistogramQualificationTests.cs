@@ -113,10 +113,38 @@ public sealed class BassFlatHistogramQualificationTests
         bool one = arm == "i";
         Assert.False(gainFromZero && !one, "only arm (i) runs the gain from 0");
         BassConfig config = ArmConfig(one, gainFromZero ? 0L : null, one ? ArmOneSeed : ArmTwoSeed);
+        string label = $"Arm ({arm}), {(gainFromZero ? "the gain from 0" : "the default gain start")}, master seed {config.Sampling.MasterSeed}";
+        RunArm(label, config, one ? null : SmcAtLowerSplit.Value);
+    }
+
+    // ---- A second master seed (the main session, 2026-10-30) ----
+
+    // Arm (i) at the default gain start on a second master seed, added after the first run, which read one seed per arm and
+    // 4–17 round trips a chain against the 20 sized for. Its sweeps are doubled through Thin (400), so the learning's
+    // iterations, its gain sequence and the draws kept are the first run's, and only the mixing per step grows.
+    // What would count, written before its run (2026-10-30):
+    // 1. the first run's three criteria, read on this seed alone: every chain tunnels; the chains' ln Ẑ_c(1) SD at most 1
+    //    nat, with a1 (or any labelled basin at 5% or more) passing the χ² at p ≥ 0.01; the pooled ln Ẑ(1) at or above −864.6;
+    // 2. agreement with seed 8017's arm (i): ln Ẑ(1) within 1 nat plus both runs' errors of −841.36 ± 0.17, and a1's pooled
+    //    share within 5 points of 65.9%.
+    private const int SecondSeed = 8217;
+
+    [Fact]
+    public void Friedman_ArmOne_SecondSeed_TwiceTheSweeps()
+    {
+        if (!BassQualification.Enabled) return;   // heavy: about half an hour
+        BassConfig first = ArmConfig(true, null, SecondSeed);
+        BassConfig config = first with { Sampling = first.Sampling with { Thin = 2 * Thin } };
+        RunArm($"Arm (i), the default gain start, master seed {SecondSeed}, twice the sweeps (Thin {2 * Thin})", config, null);
+    }
+
+    private void RunArm(string label, BassConfig config, SmcAt? smc)
+    {
         BassMixing.Fixture fixture = Fixture.Value;
         BassFlatHistogramPilot pilot = config.Sampling.FlatHistogram!.Pilot!;
+        FlatHistogramSpec run = config.Sampling.FlatHistogram.Run;
         long pilotScans = (long)pilot.Chains * (pilot.BurnIn + pilot.TracedScans);
-        long learningSweeps = Chains * LearningIterations * Thin;
+        long learningSweeps = run.Chains * run.LearningIterations * config.Sampling.Thin;
         var clock = Stopwatch.StartNew();
         double pilotEnd = double.NaN, learningEnd = double.NaN;
         var progress = new Progress(p =>
@@ -125,7 +153,6 @@ public sealed class BassFlatHistogramQualificationTests
             if (double.IsNaN(pilotEnd) && p.Sweeps >= pilotScans) pilotEnd = now;
             if (double.IsNaN(learningEnd) && p.Sweeps >= pilotScans + learningSweeps) learningEnd = now;
         });
-        string label = $"Arm ({arm}), {(gainFromZero ? "the gain from 0" : "the default gain start")}, master seed {config.Sampling.MasterSeed}";
         BassFit fit;
         try
         {
@@ -138,7 +165,7 @@ public sealed class BassFlatHistogramQualificationTests
             return;
         }
         double total = clock.Elapsed.TotalSeconds;
-        Read(label, fit, fixture, (pilotEnd, learningEnd - pilotEnd, total - learningEnd, total), one ? null : SmcAtLowerSplit.Value);
+        Read(label, fit, fixture, (pilotEnd, learningEnd - pilotEnd, total - learningEnd, total), smc);
     }
 
     [Fact]
@@ -291,6 +318,9 @@ public sealed class BassFlatHistogramQualificationTests
         BassFlatHistogramEvidence curve = fh.Evidence!;
         double[] w = fit.DrawWeights!;
         int chains = fit.Draws.Count, perChain = fit.Draws[0].Count;
+        FlatHistogramSpec run = fit.Config.Sampling.FlatHistogram!.Run;
+        long learning = run.LearningIterations;
+        int production = run.ProductionDraws, thin = fit.Config.Sampling.Thin;
         Assert.True(fh.Complete);
         Assert.Equal(1.0, w.Sum(), 9);
 
@@ -298,11 +328,11 @@ public sealed class BassFlatHistogramQualificationTests
         _out.WriteLine($"## {label}");
         _out.WriteLine($"- window [{fh.Window.Low:F1}, {fh.Window.High:F1}] ({fh.Window.High - fh.Window.Low:F0} nats), K = {fh.Nodes}, b_lo = {fh.LowSlope}, " +
                        $"t₀ = {fh.GainScale}, the gain counted from {fh.GainStart:N0}");
-        _out.WriteLine($"- budget: {Chains} chains × ({LearningIterations:N0} learning + {ProductionDraws:N0} production iterations) × {Thin} sweeps " +
-                       $"= {(LearningIterations + ProductionDraws) * Thin:N0} sweeps a chain; pilot {pilot.Ladders.Levels.Length} ladders × " +
+        _out.WriteLine($"- budget: {chains} chains × ({learning:N0} learning + {production:N0} production iterations) × {thin} sweeps " +
+                       $"= {(learning + production) * thin:N0} sweeps a chain; pilot {pilot.Ladders.Levels.Length} ladders × " +
                        $"({Pilot(true).BurnIn:N0} + {Pilot(true).TracedScans:N0}) scans");
         _out.WriteLine($"- time: pilot {seconds.Pilot:F0} s, learning {seconds.Learning:F0} s, production {seconds.Production:F0} s, all {seconds.Total:F0} s " +
-                       $"({(LearningIterations + ProductionDraws) * Thin / (seconds.Learning + seconds.Production):N0} sweeps a second a chain)");
+                       $"({(learning + production) * thin / (seconds.Learning + seconds.Production):N0} sweeps a second a chain)");
 
         // The pilot, and what WHAM's start had to fill.
         _out.WriteLine($"- pilot: ladders of {string.Join(", ", pilot.Ladders.Levels)} rungs; {pilot.Ladders.RoundTripsPerScan:F4} round trips per traced scan; " +
@@ -314,7 +344,7 @@ public sealed class BassFlatHistogramQualificationTests
 
         // The learning: its trace, and whether the weights settled.
         IReadOnlyList<LearningSnapshot> trace = fh.WeightTrace;
-        LearningSnapshot At(double share) => trace.Last(s => s.Iteration <= share * LearningIterations);
+        LearningSnapshot At(double share) => trace.Last(s => s.Iteration <= share * learning);
         _out.WriteLine($"- learning: round trips per chain {string.Join(", ", fh.Learning.RoundTrips)}; flatness {fh.Learning.MaxFlatnessDeviation:F2}; " +
                        $"visits in/below/above {fh.Learning.InWindow:N0}/{fh.Learning.BelowWindow:N0}/{fh.Learning.AboveWindow:N0}");
         _out.WriteLine($"- the weights' centred RMS change: start to 10% {Change(trace[0], At(0.1)):F2}, 10–50% {Change(At(0.1), At(0.5)):F2}, " +
