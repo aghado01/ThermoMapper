@@ -269,8 +269,7 @@ Where it stops being an analogy. Sketch only.
 - Wang, Swendsen, Kotecký, antiferromagnetic Potts cluster algorithm (PRL 1989):
   `Wang1989-PhysRevLett.63.109`.
 - Swendsen, Wang, *Replica Monte Carlo simulation of spin glasses* (PRL 57, 2607,
-  1986): `Swendsen1986-physrevlett.57.2607`. `Wang1986-physrevlett.57.2607` is
-  the same file.
+  1986): `Swendsen1986-physrevlett.57.2607`.
 - Houdayer, two-replica cluster algorithm (EPJ B 22, 479, 2001):
   `Houdayer-pl00011151`.
 - Domany, Hed, Palassini, Young, PRB 64, 224406 (2001): the earlier

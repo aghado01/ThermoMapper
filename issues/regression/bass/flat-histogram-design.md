@@ -75,4 +75,9 @@ Date: 2026-10-29. Status: decided. The user decided to build it whatever the ref
 - Belardinelli and Pereyra: `gauntlet/bayesian/cond-mat_0701672v2` (the 1/t algorithm) and `cond-mat_0702414v3` (the saturation of the error).
 - Bornn, Jacob, Del Moral and Doucet (PAWL): `gauntlet/bayesian/1109.3829v3`.
 - Janke and Kappler (multibondic): `gauntlet/bayesian/hep-lat_9407006v1`.
-- Berg and Neuhaus 1992, Wang and Landau 2001, Ferrenberg and Swendsen 1989, and Skilling 2006 are not held locally.
+- Berg and Neuhaus 1992, the multicanonical ensemble (*Phys. Rev. Lett.* 68, 9): `PDFs/SPC/BergNeuhaus1992_PhysRevLett.68.9.pdf`.
+- Wang and Landau 2001 (*Phys. Rev. Lett.* 86, 2050): `PDFs/SPC/WangLandau2001_physrevlett.86.2050.pdf`.
+- Ferrenberg and Swendsen 1989, multiple-histogram reweighting:
+  - the letter (*Phys. Rev. Lett.* 63, 1195): `PDFs/SPC/FerrenbergSwendsen1989_physrevlett.63.1195.pdf`;
+  - the longer paper of the same title (*Computers in Physics* 3, 101): `PDFs/SPC/FerrenbergSwendsen1.4822862.pdf`.
+- Skilling 2006, nested sampling (*Bayesian Analysis* 1(4), 833–860): `PDFs/Bayesian/Skilling2006.pdf`.
