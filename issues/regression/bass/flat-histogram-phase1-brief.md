@@ -128,3 +128,132 @@ Under "Reports" below, newest first:
 ## Reports
 
 Newest first.
+
+### Phase 1 built (chip, 2026-10-29)
+
+**What landed**, on `main`, nothing pushed, every file new under `src/maths/samplers/flathistogram/` and `tests/samplers/`; no existing file changed:
+- `d7f4ab8`, step 1: `MulticanonicalWeights`, `MulticanonicalTarget`, `MulticanonicalEvaluation`.
+- `3627a13`, step 2: `SamcLearning` (with `FixedPoint`), `IMulticanonicalChain`/`IMulticanonicalModel`/`MulticanonicalChain`, `MulticanonicalRun`, `MulticanonicalDraws`, `FlatHistogramDiagnostics`, `FlatHistogramSpec`.
+- `54f417b`, step 3: `Reweighting` (`WeightedDraws`, `ReweightedEstimate`, `LogEvidenceCurve`).
+- `2fa3bc0`, step 4: `TemperingPilot`, `Wham` (`WhamEstimate`), the run's pilot, the spec's validation, JSON and resume.
+
+**The API.**
+- `MulticanonicalWeights(low, high, lowSlope, logWeights)`: ln w at K equally spaced nodes on [ℓ_lo, ℓ_hi], piecewise linear, slope b_lo below and 1 above; `LogWeight(ℓ)`, `TryLocate(ℓ, out segment, out fraction)`, `FlatOccupancy()` (π: 1/(K−1) inside, half at the edges), `Flat(...)`, `WithLogWeights(...)`. Immutable.
+- `MulticanonicalTarget<TState>(inner, weights)`: `Evaluate` keeps the inner `LogPrior` and gives ln w(ℓ₁) as `LogLikelihood(1)`, refusing other b (`NotSupportedException`); `MulticanonicalEvaluation` exposes `UntemperedLogLikelihood` (ℓ₁), `LogWeight`, `Weights`, and `Reweighed(weights)`, which re-reads ln w from the cached ℓ₁. The run installs each new weight set on the target (internal), and each chain reweighs its cached evaluation.
+- `SamcLearning(start, gainScale t₀, gainStart)`: `Update(levels)` (one iteration, the chains' ℓ₁ in chain order), `Gain(t₀, t)`, `NextGain`, `Save()`/`SamcLearningState`; `FixedPoint(shape, levels, logMasses, out empty)`, SAMC's limit for a known density of states (Newton on the convex G below, from the histogram start).
+- The chain contract: `IMulticanonicalModel<TState>` (functional declarations as `IEnsembleModel`, `StartChain(target, chainSeed, readoutSeed)`, `Fingerprint`, `RestoreChain(target, state)`) and `IMulticanonicalChain<TState> : IChain<TState>` (`CurrentEvaluation`, `Reweigh()`, `Accumulate(draw, functionals)`, `SaveState()`). `MulticanonicalChain<TState>` adapts a `ReversibleJumpChain` on the target with a `DrawReduction<TState>`.
+- `MulticanonicalRun.Run(spec, target, model, masterSeed, pilot?, resumeFrom?, iterations?, checkpoint, parallel?)` → `MulticanonicalResult<TState>`: `Weights`, `Learning`, `LearningDiagnostics`, `WeightTrace` (start, each hundredth, end), `Production` (the shell's `EnsembleRun`, D10's verdict on π_w's functionals), `Draws`, `ProductionDiagnostics`, `Chains`, `Checkpoint`, `Complete`. Learning: every chain steps at the current weights (in parallel, or serially at a bound of 1), then one update from their visits in chain order, then every chain reweighs. Production: `ChainEnsemble.Run` with burn 0, the learned chains found by their seeds (the shell's `SeedTree` split), so the shell's checkpoint carries production.
+- `FlatHistogramDiagnostics`: `Occupancy`, `Desired`, `InWindow`/`BelowWindow`/`AboveWindow`, `RoundTrips` per chain (lowest bin = node 0's half-spacing cell and below, highest likewise; a trip leaves the lowest, reaches the highest, returns), `LastEnd`; `Flatness`, `MaxFlatnessDeviation`, `ChainsWithoutRoundTrip`, `TotalRoundTrips`.
+- `Reweighting`: `Weigh(draws, b)` → pooled self-normalized weights e^{b·ℓ₁}/w, chain-major, with pooled and per-chain Kish ESS; `Expectation(draws, b, functional | DrawFunction)` → pooled estimate, error sd(chain estimates)/√C, chain estimates; `LogEvidence(draws, grid)` → `LogEvidenceCurve` (pooled ratio estimator, chains' spread, per-chain curves, per-b Kish ESS, the denominator's ESS, `LogRatio(from, to)`).
+- `TemperingPilot(b[], levels[][])` or `FromLadders(ladders)` (traced, likelihood path, slopes; every hotter rung checked for log ratio = (b_c − b)·slope, so a target not linear in b is refused); `Wham.Estimate(pilot)` → `WhamEstimate` (pooled ℓ₁, ln ĝ per draw, f_i, iterations, residual); `Wham.WarmStart(pilot, shape)` = `FixedPoint` on ĝ; `Wham.Window(pilot, q, margin)`; `Wham.Nodes(pilot, window)`.
+
+**The configuration**, `FlatHistogramSpec` (values only, `Validate()`, JSON round trip, `NeedsPilot` computed and not serialized): `Chains` (4), `LearningIterations` (required, ≥ 0), `ProductionDraws` (required, ≥ 1), `Start` (`Flat` | `Wham`), `Window` (null: from the pilot), `LowSlope` b_lo (null: the pilot's hottest rung), `Nodes` K (null: ⌈width/sd₁⌉ + 1, sd₁ the b = 1 rung's ℓ₁ sd), `GainScale` t₀ (null: 10·K, inside Liang et al.'s 2K–100K), `GainStart` (null: 0 from flat, the pilot's draws over the chains from WHAM), `WindowQuantile` q (0.01), `WindowMargin` (1 sd). A pilot window runs from the hottest rung's q-quantile less a margin to the b = 1 rung's (1 − q)-quantile plus a margin, held inside the pilot's pooled extreme draws (beyond them the extensions carry the hot end's and the posterior's own laws). Lengths are totals; `iterations` takes a call's share, and `resumeFrom` continues.
+
+**SAMC's update with interpolated nodes, as derived.** With θ = −ln w, a visit at ℓ inside the window, in segment j at fraction u, has hat values φ_j = 1 − u, φ_{j+1} = u, and the iteration's update over C chains is θ_k ← θ_k + γ_t·(1/C)·Σ_c 1_in(ℓ_c)·(φ_k(ℓ_c) − π_k), γ_t = t₀/max(t₀, t), t counted from `GainStart` + 1. A visit outside the window contributes nothing. Since Σφ = Σπ = 1, each update conserves Σθ. The mean field is P_in(θ)·(E_θ[φ | in] − π) = −P_in·∇G for the convex G(θ) = ln ∫_in prior·e^{−θ·φ(ℓ)} + π·θ, so the limit is the unique (to a constant) θ* with E_θ*[φ_k | in] = π_k: a function of g over the window only, whatever the extensions, equal to ln g up to a constant when ln g is piecewise linear on the nodes. Two alternatives were rejected: counting outside visits on the edge nodes, whose limit would depend on the extensions, and leaving them in with zero indicator, which drifts every θ. Empty nodes (no mass under their hat) fall without bound while the rest take π_k + d, Liang et al.'s d. For a lattice energy on the nodes, θ* = ln g − ln(π + d) exactly; the edges' half share is the trapezoid's.
+
+**The checks, with their tolerances.** Toy 1 is the double well (x uniform on [−2, 2], ℓ₁ = −10·(x² − 1)², window [−30, −0.02], b_lo = 0.05, K = 31, t₀ = 310, a Gaussian walk of step 0.25). Its references are a 400 000-cell midpoint quadrature of the prior and, for ln g, the closed form. Toy 2 is the 6-state Potts model on a periodic 3 × 3 lattice, J = 1.5: 6⁹ ≈ 1.0·10⁷ configurations enumerated with site 0's colour fixed, a node on each level n = 0…18, b_lo = 0, single-site Metropolis.
+- *Step 1:*
+  - ln w equals its node values and is continuous at every node and both edges (to 1e−6 at h = 1e−9), with slopes b_lo and 1 outside.
+  - ℓ = −∞ gives −∞ when b_lo > 0, and ln w_0 at b_lo = 0.
+  - The wrapper's density is the inner prior + ln w(ℓ₁); off the support it is −∞ with no likelihood call. b = 0.5, b = 0 and the slope are refused.
+  - `Reweighed` makes no inner evaluation.
+  - A reversible-jump chain on the wrapper over ten states reproduces prior·w(ℓ₁) (400 000 draws, within 6 sd at an inflation of 20).
+- *Step 2:*
+  - The gain's values.
+  - The update by hand: spread, averaged, outside visits inert, Σ ln w conserved to 1e−14.
+  - `FixedPoint`: recovers a piecewise-linear ln g to 3e−12 (tolerance 1e−6); on levels at the nodes it equals ln g − ln(π + d) to 1e−9, with the empty node interpolated.
+  - Double well, learned against θ*: centred RMS 0.170 / 0.090 / 0.043 at 4k / 16k / 64k iterations. That is about 1/√L, and the ordering is asserted and registered for the seed sweep. Tolerance 0.15 at 64k.
+  - Against the closed-form ln g at the 24 nodes more than 2.5 spacings from ℓ = −c and 1.5 from the top: θ* 0.008 (tolerance 0.1), learned 0.064 (tolerance 0.15). g is singular at the barrier's top and at the wells' floors, where θ* departs from ln g at the nodes by up to 2.4 nats.
+  - Production on the frozen weights, 4 × 40 000 draws:
+    - the learned weights' own occupancy is flat to 0.114 (exact by quadrature, tolerance 0.2);
+    - production's visits match that occupancy to 0.088 (tolerance 0.2; about one over the root of the ~630 round trips);
+    - every chain tunnels (154–164 round trips).
+  - The same weights, draws and means under parallelism bounds 1, 2 and unbounded, bit for bit.
+  - One chain: RMS 0.081 (tolerance 0.3).
+  - A chain stepping 1e−7 is flagged in both phases.
+  - A narrow window [−12, −2] is left on both sides by the extensions (production 22 648 in, 20 095 below, 37 257 above), learns its own θ* to 0.024 and is flat to 0.056.
+  - A wide window [−30, 6] has its six empty nodes 1–6 rising without bound (ln w 39 against −9), the rest at θ* with d to 0.051, and the histogram unflat (> 0.99).
+  - A scripted chain gives two round trips exactly.
+  - The trace holds the start, every iteration and the end.
+- *Step 3:*
+  - The weights by hand (to 1e−14) and Kish's ESS.
+  - Double well, 8 chains × 40 000 draws, every bound |z| < 4.5 in the chains' spread errors (7 dof):
+    - E[ℓ₁], E[x²] and P(x > 0) at b = 0.1, 0.5 and 1, against quadrature: |z| ≤ 1.74. P(x > 0) at b = 1 is 0.5004 ± 0.0179, the two wells held equally across a 10-nat barrier.
+    - ln Z(b) on b = 0, 0.02, …, 1 against quadrature: |z| ≤ 3.99. The prior's masses sum to 1, asserted.
+    - That seed's 3.99 led to a 12-seed calibration: RMS z 1.19 for the denominator, 1.10 for ln Z(0.05) and 1.40 for ln Z(1), against t₇'s 1.18. There is no bias; the deviation's sign flips across seeds.
+    - The narrow window's laws stay exact through its extensions.
+    - One chain gives NaN errors.
+    - b = 1 Kish ESS 7 347 of 320 000.
+  - Potts:
+    - The enumeration sums to 6⁹, with n = 18 holding 6 configurations, n = 14 holding 270, and n = 13, 15–17 empty.
+    - At equal peak heights, b_c = 0.6146 (βJ = 0.9218): P(6) = 0.1117 = P(14), dip P(12) = 0.0471, so peak/dip is 2.37. The ordered mass is 0.211, with the gap 13, 15–17 between.
+    - Learned against θ*: 0.040 RMS over the 15 occupied levels (tolerance 0.1). θ* equals ln g − ln(π + d) to 3e−15.
+    - ln Z(b) on 13 b against the enumeration: |z| ≤ 0.94. The energy law at b_c: worst |z| 1.41 over the occupied levels, exactly 0 at the empty ones.
+    - b = 1 Kish ESS 45 636 of 800 000.
+- *Step 4:*
+  - WHAM on exact rung samples (4 rungs, 10⁵ draws each in exact proportion) recovers ln Z(b_i) − ln Z(0) to the printed 1e−4 (tolerance 2e−3), residual < 1e−8.
+  - Eight independent pilots of 8 rungs × 20 000 scans each give warm starts against θ*:
+    - double well: per-pilot RMS 0.152 (tolerance 0.25), mean z² over nodes 2.37 (tolerance 3; t₇ gives 1.4);
+    - Potts: 0.056 (tolerance 0.25), mean z² 1.24.
+  - Warm against flat, the mean of 3 learning seeds:
+    - double well: flat 0.139 / 0.120 / 0.098 at 8k / 16k / 32k; warm 0.116 / 0.093 / 0.073 at 0 / 8k / 16k;
+    - Potts: flat 0.123 / 0.127 / 0.093 at 25k / 50k / 100k; warm 0.050 / 0.092 / 0.053 at 0 / 25k / 50k.
+    - Asserted: warm at half the length beats flat at the full length. Registered for the seed sweep.
+  - A run from the pilot alone (2 ladders):
+    - window [−49.58, −0.000], K = 68, b_lo = 0.05, t₀ = 680, gain from t = 40 000;
+    - ln Z at b = 0.05, 0.5, 1 within 4.5 errors (−0.4566 ± 0.0070 against −0.4600, −1.5712 ± 0.0162 against −1.5677, −1.9504 ± 0.0211 against −1.9440).
+  - Refused: a pilot whose ℓ_b = ln(1 + b(e^{ℓ₁} − 1)), an untraced or powered ladder, no rung at b = 1, duplicate rungs, a NaN draw, a one-draw rung.
+  - The spec: each of 15 ill-formed fields refused, by `Validate` and by `Run`; JSON round trip equal and stable; `NeedsPilot` kept out.
+  - Resume: a run taken at 700 + 1 300 learning iterations, then 400 production draws, then the rest, ends bit for bit where the whole run ends. That covers weights, trace, both phases' diagnostics with `LastEnd`, draws, functionals, means, variances, acceptance and verdict. Another seed, spec or model fingerprint is refused, and so is a finished checkpoint.
+
+**Toy 2's exploration readings.** At 800 000 single-site proposals each:
+- the flat-histogram run (100 000 learning and 100 000 production iterations × 4 chains) made 760 round trips per 10⁶ production proposals between the window's end bins (n = 0 and n = 18), 304 in all;
+- an 8-rung likelihood-path ladder from b = 1 to 0, adapted in its burn-in to 1.00, 0.82, 0.73, 0.65, 0.55, 0.41, 0.23, 0.00, made 1 640 per 10⁶, 656 hot-to-cold-and-back in all, at swap acceptance 0.68.
+
+Tempering wins by about 2× here: the transition at N = 9 is weak (peak/dip 2.4), the window spans the whole energy range at one site per step, and the two counts' ends differ, so it is a reading, not a claim. The bimodality that defeats tempering needs a lattice past enumeration.
+
+**The suites**, at `2fa3bc0` on a clean tree, built into `artifacts\chip-fh\`:
+- *Samplers:* 251 passed, 0 failed, in 1.3 min. That is 206 existing tests and 45 new: weights 9, learning and run 15, reweighting 5, Potts 4, WHAM 7, spec and resume 4, and the sweep's 1, which runs only under `SEED_SWEEP`.
+- *Regression:* 1 303 passed, 0 failed, in 9 m 54 s. Nothing moved.
+
+**The review passes and their fixes.**
+- *Step 1:* nothing in the code. A test reached the slope's default refusal without the interface cast. The target's internal `Install` waited for step 2's runs to be covered.
+- *Step 2:*
+  - `FixedPoint`'s Hessian was asymmetric: the rank-one fill of later rows overwrote the tridiagonal cross terms, so Newton returned θ = 0. The fill order is fixed.
+  - Its line search spun at rounding level for 200 iterations, 112 s on the narrow window. It now starts from the histogram estimate ln(M_k/π_k) and stops when a step no longer lowers G; 0.14 s.
+  - The wide window has 6 empty nodes, not 5: node 0's hat sees ℓ just below 0.
+  - The flatness check was split into the learned weights' exact occupancy and production's sampling of it, after the single reading sat at 0.143 against 0.15.
+  - Added: the closed-form ln g check, the scripted round trips, the trace's shape, the adapter's refusals, and `FixedPoint`'s param tags.
+- *Step 3:*
+  - The Potts transition read at equal phase masses put b_c (0.718) where the disordered bump is barely a peak (peak/dip 1.17). It is read at equal peak heights now (2.37).
+  - The double well's ln Z at small b sat 3–4 errors high on its seed. The 12-seed calibration above found no bias and calibrated errors; the seed was kept.
+  - The Potts test now asserts the prior's normalization.
+- *Step 4:*
+  - The window test checked the hot rung's own minimum, but the window holds inside the pilot's pooled extremes.
+  - Warm against flat failed as single-seed comparisons at the default gain start. They are now seed-averaged, at half the length, and registered; see the gain-start note below.
+  - `NeedsPilot` serialized into the JSON: now `[JsonIgnore]`, asserted.
+  - A fan-out per learning iteration dominated the toys' time: the run steps serially at a bound of 1, and the toys run so, except where the bound is the subject.
+  - WHAM collapses identical levels, which took Potts' pilots from 66 s to 2 s.
+  - The enum's cref to `Wham` resolved to the enum member: now qualified.
+- *Final, against the brief's list:*
+  - Correctness, each covered above: the wrapper's density, the interpolated update, the gain, frozen production weights (every production chain's evaluation and the draws hold the learning's final weights, the same object), self-normalization, and the ratio estimator's normalized prior (asserted on both toys).
+  - Coverage: narrow and wide windows, one chain, a chain that never tunnels, and resume mid-learning, each with its test.
+  - Nothing existing changed: the four commits add 19 files and modify none.
+
+**For Phase 2.**
+- *BASS's structure prior is unnormalized.* The Friedman reference hand-over gives D02's count weight, with ln C 0.9531 and ln Z_F −0.194 on Friedman. The ratio estimator then reads ln Z(b) off by the prior's log mass, a constant in b. Add the known normalizer, or read `LogEvidenceCurve.LogRatio`, which cancels it.
+- *The denominator's tail.* E_w[1/w]'s variance is finite only if E_prior[e^{−b_lo·ℓ₁}] is finite over the low extension. With b_lo > 0 and ℓ₁ unbounded below, read `NormalizerEffectiveSampleSize`; b_lo = 0 removes the question.
+- *The pilot must be on the linear form.* `TemperingPilot.FromLadders` refuses a ladder whose log ratios are not (b_c − b)·slope, which is D05's integrated form; BASS's pilot runs on ℓ_b = b·ℓ₁. The window is read at the pilot's hottest rung, which also sets b_lo.
+- *BASS's chain.* BASS's chain is a `BlockScan` over a `ReversibleJumpChain`, so it needs its own `IMulticanonicalChain`:
+  - `Reweigh` is `SetState(Current, evaluation.Reweighed(target.Weights))`;
+  - `SaveState` carries the scan's snapshot;
+  - every block must leave π_w invariant, that is, evaluate through the chain's target at b = 1; a τ block on BASS's own density would not.
+- *The gain's start is regime-dependent.* t_w = pilot draws / chains is visit-count parity. On the toys it over-trusts the double well's pilot (whose error matches flat SAMC's at about t = 9k, not 40k) and under-trusts the Potts pilot (worth about t = 115k).
+  - A gain too large for a good start degrades it first: Potts 0.050 → 0.092 at 25k → 0.053 at 50k.
+  - A gain too small cannot fill what the pilot never sampled, Friedman's dip between phases above all; filling a δ-nat hole costs about t_w·(e^{δK/t₀} − 1) iterations.
+  - The qualification should read `GainStart` with t₀ (10·K, from Liang et al.'s range, not tuned).
+- *Overhead, measured.* b = 1 Kish ESS is 2.3% of production draws on the double well (31 nodes) and 5.7% on Potts (19). Production's per-node error runs at about one over the root of the round trips.
+- *Memory.* Production keeps every draw's ℓ₁ and all of its functionals, for the reweighted laws at any b. BASS's per-grid functionals may want a monitored subset.
+- *The posterior's weights.* `Reweighting.Weigh(draws, 1).Weights` is chain-major in draw order, the pooled order a `DrawWeights` array would need. Align it with BASS's `DrawStore`.
+- *D10's verdict.* On the double well's production (4 × 40 000 draws) the verdict reads NotConverged: x mixes only by tunnelling, about 160 round trips per chain.
+- *A file outside my set I would change:* `tests/samplers/ComparativeSweep.cs`, to hold this chip's three registered claims. They sit in the new `FlatHistogramSweep.cs`, rerun by the same `SeedSweep` under `SEED_SWEEP`.
