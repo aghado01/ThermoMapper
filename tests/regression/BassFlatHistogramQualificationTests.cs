@@ -161,14 +161,14 @@ public sealed class BassFlatHistogramQualificationTests
     private const int SmcParticles = 4_000, SmcReplicates = 4;
 
     private sealed record SmcAt(double LogEvidence, double Error, double Within, double Between, double[] Replicates, double[] Errors, int[] Stages,
-                                int[] Families, double Seconds);
+                                int[] Families, double Seconds, double[][]? Marks = null);
 
     private static readonly Lazy<SmcAt> SmcAtLowerSplit = new(() => SmcTo(LowerSplit), LazyThreadSafetyMode.ExecutionAndPublication);
 
     // ln Ẑ(b) = ln E_prior[e^{b·ℓ₁}] on the prior on F by fitting SMC's loop (C4's defaults) from exact prior draws to b on
     // the linear form, each next b the conditional-ESS rule's, capped at b: each replicate's normalizer, pooled by the larger
-    // of the within-run and between-run errors.
-    private static SmcAt SmcTo(double b)
+    // of the within-run and between-run errors. With `marks`, a stage is forced at each, and each replicate's ln Ẑ there kept.
+    private static SmcAt SmcTo(double b, double[]? marks = null)
     {
         BassMixing.Fixture f = Fixture.Value;
         BassModel linear = BassModel.Create(f.Config, f.Data, TemperedForm.Linear);
@@ -178,6 +178,7 @@ public sealed class BassFlatHistogramQualificationTests
         var errors = new double[SmcReplicates];
         var stages = new int[SmcReplicates];
         var families = new int[SmcReplicates];
+        double[][]? atMarks = marks is null ? null : [.. marks.Select(_ => new double[SmcReplicates])];
         var clock = Stopwatch.StartNew();
         int inner = Math.Max(1, Environment.ProcessorCount / SmcReplicates);
         Parallel.For(0, SmcReplicates, r =>
@@ -193,8 +194,12 @@ public sealed class BassFlatHistogramQualificationTests
                                                                   new BassParticles(linear), new BassSmcKernel(linear), options, streams[0]);
             while (run.Stage.Temperature.InverseTemperature < b)
             {
+                double now = run.Stage.Temperature.InverseTemperature;
                 double next = Math.Min(SmcSampler.NextInverseTemperature(run, defaults.TargetConditionalEss), b);
+                if (marks is not null && marks.FirstOrDefault(m => m > now, double.NaN) is double mark && !double.IsNaN(mark)) next = Math.Min(next, mark);
                 run.Advance(new SmcStage<BassParticle>(target, new Temperature(next, TemperingPath.Likelihood)));
+                int at = marks is null ? -1 : Array.IndexOf(marks, next);
+                if (at >= 0) atMarks![at][r] = run.Result().LogNormalizerRatio;
             }
             SmcResult<BassParticle> result = run.Result();
             values[r] = result.LogNormalizerRatio;
@@ -203,8 +208,79 @@ public sealed class BassFlatHistogramQualificationTests
             families[r] = result.Stages[^1].Families;
         });
         double within = Math.Sqrt(errors.Sum(e => e * e)) / SmcReplicates, between = Sd(values) / Math.Sqrt(SmcReplicates);
-        return new SmcAt(values.Average(), Math.Max(within, between), within, between, values, errors, stages, families, clock.Elapsed.TotalSeconds);
+        return new SmcAt(values.Average(), Math.Max(within, between), within, between, values, errors, stages, families, clock.Elapsed.TotalSeconds,
+                         atMarks);
     }
+
+    // ---- Added after the run (2026-10-30): where the arms' ln Ẑ(0.10) parts ----
+
+    private static readonly double[] Marks = [0.01, 0.02, 0.03, 0.05, 0.07, 0.10];
+
+    /// <summary>
+    /// Added after the run, to locate a difference it found: arm (i) read ln Ẑ(0.10) ≈ −125.9 and SMC from the prior
+    /// −131.35 ± 0.21, while the arms agree on ln Z(1) − ln Z(0.10). Below b = 0.10 three estimates of ln Z(b) on the linear
+    /// form are read side by side: arm (i)'s curve (the same run as <see cref="Friedman_Arm"/>'s, bit for bit), SMC from
+    /// the prior with a stage forced at each mark, and plain importance sampling from exact prior draws, reliable where b
+    /// times ℓ₁'s spread under the prior is small.
+    /// </summary>
+    [Fact]
+    public void Friedman_ArmOneAgainstSmcAndThePrior_BelowTheLowerSplit()
+    {
+        if (!BassQualification.Enabled) return;   // heavy: arm (i) again
+        BassMixing.Fixture fixture = Fixture.Value;
+        BassModel linear = BassModel.Create(fixture.Config, fixture.Data, TemperedForm.Linear);
+
+        // Plain importance sampling from the prior on F: ln mean e^{b·ℓ₁} over exact draws, its error from 8 streams' spread.
+        const int streams = 8, perStream = 25_000;
+        var levels = new double[streams][];
+        int[] seeds = SeedTree.Derive(SmcSeed + 1, streams);
+        Parallel.For(0, streams, s =>
+        {
+            var sampler = new BassPriorSampler(linear);
+            var rng = new Xoshiro256PlusPlus(seeds[s]);
+            levels[s] = new double[perStream];
+            for (int i = 0; i < perStream; i++) levels[s][i] = sampler.DrawState(rng).Evaluation.LogMarginal;
+        });
+        double[] all = [.. levels.SelectMany(l => l)];
+        double intercept = linear.Target.Evaluate(BassMixing.Loaded(linear, [], 0.0, out _)!).LogMarginal;
+        _out.WriteLine($"## Below the lower split: prior draws' ℓ₁ (n = {all.Length:N0}): min {all.Min():F1}, 1% {BassMixing.Quantile(all, 0.01):F1}, " +
+                       $"50% {BassMixing.Quantile(all, 0.5):F1}, 99% {BassMixing.Quantile(all, 0.99):F1}, max {all.Max():F1}; the intercept alone {intercept:F1}");
+
+        SmcAt smc = SmcTo(LowerSplit, Marks);
+        var clock = Stopwatch.StartNew();
+        BassFit fit = Bass.Fit(ArmConfig(true, null, ArmOneSeed), fixture.Data);
+        double armSeconds = clock.Elapsed.TotalSeconds;
+        BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
+        LogEvidenceCurve curve = fh.Evidence!.Curve;
+        Assert.Equal(-841.36, fh.Evidence.LogRatio, 2);   // the qualification's run
+        _out.WriteLine($"arm (i) rerun in {armSeconds:F0} s; window [{fh.Window.Low:F1}, {fh.Window.High:F1}]; the denominator's Kish ESS " +
+                       $"{curve.NormalizerEffectiveSampleSize:F0} of {fit.DrawWeights!.Length:N0}; production below the window " +
+                       $"{fh.Production!.BelowWindow:N0}, in its lowest bin's chains {string.Join(", ", fh.ProductionChains.Select(c => c.Flatness[0].ToString("F2")))} of flat");
+        _out.WriteLine("b | prior IS ± error | SMC (forced marks) per replicate, pooled ± error | arm (i) pooled ± error | arm (i) per chain | arm (i) Kish ESS");
+        _out.WriteLine("--- | --- | --- | --- | --- | ---");
+        for (int m = 0; m < Marks.Length; m++)
+        {
+            double b = Marks[m];
+            double[] perStreamZ = [.. levels.Select(l => LogMeanExp(l, b))];
+            double prior = LogMeanExp(all, b), priorError = Sd(perStreamZ) / Math.Sqrt(streams);
+            int k = (int)Math.Round(b * 100);
+            Assert.Equal(b, curve.InverseTemperatures[k], 12);
+            double[] chains = [.. curve.ChainLogEvidence.Select(c => c[k])];
+            double[] smcAt = smc.Marks![m];
+            _out.WriteLine($"{b:F2} | {prior:F2} ± {priorError:F2} | {string.Join(", ", smcAt.Select(v => v.ToString("F2")))}; {smcAt.Average():F2} ± " +
+                           $"{Sd(smcAt) / Math.Sqrt(smcAt.Length):F2} | {curve.LogEvidence[k]:F2} ± {curve.MonteCarloError[k]:F2} | " +
+                           $"{string.Join(", ", chains.Select(v => v.ToString("F2")))} | {curve.EffectiveSampleSize[k]:F0}");
+        }
+        _out.WriteLine($"SMC with the marks forced: ln Ẑ(0.10) {smc.LogEvidence:F2} ± {smc.Error:F2}; stages {string.Join(", ", smc.Stages)}; families " +
+                       $"{string.Join(", ", smc.Families)}; {smc.Seconds:F0} s");
+    }
+
+    private static double LogMeanExp(IReadOnlyList<double> levels, double b)
+    {
+        double max = levels.Max(l => b * l);
+        return max + Math.Log(levels.Average(l => Math.Exp(b * l - max)));
+    }
+
 
     // ---- The readings ----
 
