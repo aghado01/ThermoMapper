@@ -1,7 +1,7 @@
 # Spin-glass threads: frustration, overlaps, ultrametricity, and the regression bridge
 
 Discussion digest, 2026-10-28. Seeded by Domany's later papers (local copies in
-`codex-scientiae/supellex-private/PDFs/Domany`). Status: ideation. Nothing here is
+`codex-scientiae/supellex-private/PDFs/SPC`). Status: ideation. Nothing here is
 decided; the "Candidate work" list is what could be briefed.
 
 ## Sources read
@@ -12,7 +12,7 @@ decided; the "Candidate work" list is what could be briefed.
 | `PhysRevB.76.132408` | Hed, Domany 2007, *Nontrivial link overlap distribution in 3D Ising spin glasses* | link overlap, cross-cluster conditioning |
 | `j.physa.2013.07.036` | Farhi, Hed, …, Domany 2013, *Temperature Integration* | ln Z along a tempering ladder; ΔF between systems with equal Z(0); the energy cutoff |
 | `bioinformatics_19_9_1153` | Getz, Domany 2003, *Coupled two-way clustering server* | SPC stability index in biclustering (not pursued) |
-| `PhysRevD.98.063511` | Leclercq 2018, *Bayesian optimization for likelihood-free cosmological inference* (not Domany) | GP-surrogate acquisition under a simulation budget |
+| `PDFs/Bayesian/Leclercq2018_PhysRevD.98.063511` | Leclercq 2018, *Bayesian optimization for likelihood-free cosmological inference* (not Domany) | GP-surrogate acquisition under a simulation budget |
 | `gauntlet/bayesian/1306.6430v2` | Bissiri, Holmes, Walker 2016, *A general framework for updating belief distributions* (*JRSS B* 78, not Domany; read 2026-10-29) | SPC as a general-Bayes update over partitions; calibrating the temperature (Thread 7) |
 
 **The shared move in both spin-glass papers.** A global statistic over an
@@ -260,17 +260,26 @@ Where it stops being an analogy. Sketch only.
 
 ## Reading leads (verify before citing)
 
-### In D:/aghado01/codex-scientiae/supellex-private/PDFs/Domany
-- Bansal, Blum, Chawla, *Correlation Clustering* (Machine Learning 2004).
+### In D:/aghado01/codex-scientiae/supellex-private/PDFs/SPC
+- Bansal, Blum, Chawla, *Correlation Clustering* (Machine Learning 2004):
+  `Bansal2004`.
 - Reichardt, Bornholdt, *Statistical mechanics of community detection* (PRE 2006):
   modularity as a Potts spin-glass ground state with resolution γ.
-- Wang, Swendsen, Kotecký, antiferromagnetic Potts cluster algorithm (PRL 1989).
-- Swendsen, Wang, *Replica Monte Carlo simulation of spin glasses* (PRL 1986);
-- Houdayer, two-replica cluster algorithm (EPJ B 2001).
+  `Reichardt2006-PhysRevE.74.016110`.
+- Wang, Swendsen, Kotecký, antiferromagnetic Potts cluster algorithm (PRL 1989):
+  `Wang1989-PhysRevLett.63.109`.
+- Swendsen, Wang, *Replica Monte Carlo simulation of spin glasses* (PRL 57, 2607,
+  1986): `Swendsen1986-physrevlett.57.2607`. `Wang1986-physrevlett.57.2607` is
+  the same file.
+- Houdayer, two-replica cluster algorithm (EPJ B 22, 479, 2001):
+  `Houdayer-pl00011151`.
 - Domany, Hed, Palassini, Young, PRB 64, 224406 (2001): the earlier
-  state-clustering paper the 2004 and 2007 work builds on (not in the folder).
+  state-clustering paper the 2004 and 2007 work builds on.
+  `Domany2001-PhysRevB.64.224406`, and a second copy as `guyh_prbspinglass`.
 - Ronhovde, Nussinov: replica-correlation multiresolution community detection
-  (PRE 2009); 
+  (PRE 2009): `Ronhovde-physreve.80.016109`.
+- Not a lead: `Domany2001-epl2Fi2001-00169-0` is *Power law distribution of
+  dividends in horse races* (EPL 53, 419, 2001).
 
   ### In codex-scientiae/supellex-private/staging
 - Ronhovde, Nussinov: local resolution-limit-free "Absolute Potts Model" (PRE 2010).
