@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using Maths.Regression.Spline.Bars;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Maths.Samplers;
@@ -98,9 +99,9 @@ public sealed class BassSmcParityTests
         }
     }
 
-    private static BassConfig SmcConfig(int maxBasis, SmcSpec smc, int maxInteraction = 2, bool fixedG = false)
+    private static BassConfig SmcConfig(int maxBasis, SmcSpec smc, int maxInteraction = 2, bool fixedG = false, BassCoefficientPrior? coefficients = null)
     {
-        BassConfig config = BassTargetParityTests.Config(fixedG: fixedG, maxInteraction: maxInteraction);
+        BassConfig config = BassTargetParityTests.Config(fixedG: fixedG, maxInteraction: maxInteraction, coefficients: coefficients);
         return config with
         {
             Structure = config.Structure with { MaxBasis = maxBasis },
@@ -112,17 +113,23 @@ public sealed class BassSmcParityTests
     [InlineData("integrated")]
     [InlineData("linear")]
     [InlineData("categorical")]
+    [InlineData("ridge")]
+    [InlineData("ridge, categorical")]
+    [InlineData("ridge, held")]
     public void Fit_NormalizerMatchesTheOraclesLogZ(string form)
     {
         if (!BassTargetParityTests.Available) return;
-        bool categorical = form == "categorical";
+        bool categorical = form.EndsWith("categorical", StringComparison.Ordinal), ridge = form.StartsWith("ridge", StringComparison.Ordinal);
+        bool held = form == "ridge, held";
         double[][] rows = categorical ? BassTargetParityTests.FixtureC() : BassTargetParityTests.FixtureB();
+        string[] formArgs = ridge ? held ? ["form=ridge", "coef=fixed", "tau=0.4"] : ["form=ridge"] : [];
         JsonElement r = categorical
-            ? BassTargetParityTests.Posterior(rows, "M_max=2", "K_max=1", "categorical=1")
-            : BassTargetParityTests.Posterior(rows, "M_max=2");
+            ? BassTargetParityTests.Posterior(rows, ["M_max=2", "K_max=1", "categorical=1", .. formArgs])
+            : BassTargetParityTests.Posterior(rows, ["M_max=2", .. formArgs]);
         double logZ = r.GetProperty("posterior").GetProperty("log_Z").GetDouble();
         var smc = new SmcSpec { Particles = 2000, Form = form == "linear" ? TemperedForm.Linear : TemperedForm.Integrated, TraceStages = true };
-        BassFit fit = Bass.Fit(SmcConfig(2, smc, maxInteraction: categorical ? 1 : 2), BassTargetParityTests.Data(rows, categorical));
+        BassCoefficientPrior? coefficients = ridge ? BassCoefficientPrior.Ridge(held ? TauPrior.Held(0.4) : TauPrior.UnitInformationGamma()) : null;
+        BassFit fit = Bass.Fit(SmcConfig(2, smc, maxInteraction: categorical ? 1 : 2, coefficients: coefficients), BassTargetParityTests.Data(rows, categorical));
         BassEvidence evidence = fit.Evidence!;
         BassSmcReadout readout = fit.Diagnostics.Smc!;
         Assert.True(readout.ReachedPosterior);

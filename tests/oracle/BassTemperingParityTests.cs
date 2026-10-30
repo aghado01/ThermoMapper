@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using Maths.Regression.Spline.Bars;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Maths.Samplers;
@@ -41,9 +42,9 @@ public sealed class BassTemperingParityTests
     public BassTemperingParityTests(ITestOutputHelper output) => _out = output;
 
     private static BassConfig Config(int maxBasis, TemperingSpec? tempering, int chains = 4, int burn = 2_000, int samples = 20_000,
-                                     int maxInteraction = 2)
+                                     int maxInteraction = 2, BassCoefficientPrior? coefficients = null)
     {
-        BassConfig config = BassTargetParityTests.Config(maxInteraction: maxInteraction);
+        BassConfig config = BassTargetParityTests.Config(maxInteraction: maxInteraction, coefficients: coefficients);
         return config with
         {
             Structure = config.Structure with { MaxBasis = maxBasis },
@@ -97,22 +98,26 @@ public sealed class BassTemperingParityTests
     [Theory]
     [InlineData("integrated")]
     [InlineData("linear")]
-    public void Ladder_EachRungMatchesTheOraclesTemperedLaw(string form)
+    [InlineData("ridge, integrated")]
+    public void Ladder_EachRungMatchesTheOraclesTemperedLaw(string option)
     {
         if (!BassTargetParityTests.Available) return;
+        bool ridge = option.StartsWith("ridge", StringComparison.Ordinal);
+        string form = ridge ? option["ridge, ".Length..] : option;
         double[][] rows = BassTargetParityTests.FixtureB();
         var spec = new TemperingSpec
         {
             Form = form == "linear" ? TemperedForm.Linear : TemperedForm.Integrated, Levels = 4, HotEnd = 0.1, ReferenceRung = true, Adaptive = false,
         };
         double[] inverseTemperatures = ParallelTempering<BassState>.ReferenceLadder(spec.Levels!.Value, spec.HotEnd!.Value);
-        JsonElement r = BassTargetParityTests.Posterior(rows, "M_max=2", Rungs(inverseTemperatures));
+        JsonElement r = BassTargetParityTests.Posterior(rows, ["M_max=2", Rungs(inverseTemperatures), .. ridge ? new[] { "form=ridge" } : []]);
         BassTerm[] terms = BassTargetParityTests.Terms(r);
         int[][] states = BassTargetParityTests.States(r);
         var index = terms.Select((t, i) => (t, i)).ToDictionary(e => e.t, e => e.i);
         JsonElement[] rung = [.. r.GetProperty("posterior").GetProperty("tempered").GetProperty(form).EnumerateArray()];
 
-        BassModel model = BassModel.Create(Config(2, spec), BassTargetParityTests.Data(rows));
+        BassModel model = BassModel.Create(Config(2, spec, coefficients: ridge ? BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma()) : null),
+                                           BassTargetParityTests.Data(rows));
         const int ladders = 4, burn = 2_000, scans = 30_000, batches = 20, perBatch = scans / batches;
         int levels = inverseTemperatures.Length;
         var count = new double[levels][,];
@@ -243,18 +248,27 @@ public sealed class BassTemperingParityTests
     [InlineData("integrated")]
     [InlineData("linear")]
     [InlineData("categorical")]
+    [InlineData("ridge")]
+    [InlineData("ridge, categorical")]
     public void Evidence_MatchesTheOraclesLogZ(string form)
     {
         if (!BassTargetParityTests.Available) return;
-        bool categorical = form == "categorical";
+        bool categorical = form.EndsWith("categorical", StringComparison.Ordinal), ridge = form.StartsWith("ridge", StringComparison.Ordinal);
         double[][] rows = categorical ? BassTargetParityTests.FixtureC() : BassTargetParityTests.FixtureB();
+        string[] formArgs = ridge ? ["form=ridge"] : [];
         JsonElement r = categorical
-            ? BassTargetParityTests.Posterior(rows, "M_max=2", "K_max=1", "categorical=1")
-            : BassTargetParityTests.Posterior(rows, "M_max=2");
+            ? BassTargetParityTests.Posterior(rows, ["M_max=2", "K_max=1", "categorical=1", .. formArgs])
+            : BassTargetParityTests.Posterior(rows, ["M_max=2", .. formArgs]);
         double logZ = r.GetProperty("posterior").GetProperty("log_Z").GetDouble();
         var spec = new TemperingSpec { Form = form == "linear" ? TemperedForm.Linear : TemperedForm.Integrated, ReferenceRung = true };
-        BassFit fit = Bass.Fit(Config(2, spec, burn: 1_000, samples: 5_000, maxInteraction: categorical ? 1 : 2),
+        BassFit fit = Bass.Fit(Config(2, spec, burn: 1_000, samples: 5_000, maxInteraction: categorical ? 1 : 2,
+                                      coefficients: ridge ? BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma()) : null),
                                BassTargetParityTests.Data(rows, categorical));
+        if (ridge)
+        {
+            Assert.Equal(new RidgeForm(), fit.Evidence!.Priors.Coefficients.Form);
+            Assert.Equal(1.0, fit.Evidence.Priors.Scale.UnitInformation);
+        }
         BassEvidence evidence = fit.Evidence!;
         // The default ladder sizes itself from the hot end it auto-picks, 1/N.
         Assert.Equal(1.0 / fit.Resolved.Observations, fit.Resolved.HotEnd);

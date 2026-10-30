@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Xunit;
@@ -35,6 +36,9 @@ public sealed class BassChainParityTests
     [InlineData("A", "flat")]
     [InlineData("A", "jeffreys")]
     [InlineData("A", "cancelling")]
+    [InlineData("A", "ridge")]
+    [InlineData("A", "ridge, held")]
+    [InlineData("C", "ridge")]
     public void Chain_MatchesTheOraclesPosterior(string fixture, string option)
     {
         if (!BassTargetParityTests.Available) return;
@@ -45,17 +49,21 @@ public sealed class BassChainParityTests
             "fixed g" => ["coef=fixed"],
             "flat" => ["centre=flat"],
             "jeffreys" => ["sigma2_prior=jeffreys"],
+            "ridge" => ["form=ridge"],
+            "ridge, held" => ["form=ridge", "coef=fixed", "tau=2.5"],
             _ => [],
         };
         int maxBasis = categorical || !defaults ? 2 : 3;
         JsonElement r = categorical
-            ? BassTargetParityTests.Posterior(rows, "M_max=2", "K_max=1", "categorical=1")
+            ? BassTargetParityTests.Posterior(rows, ["M_max=2", "K_max=1", "categorical=1", .. args])
             : BassTargetParityTests.Posterior(rows, [$"M_max={maxBasis}", .. args]);
         BassConfig config = option switch
         {
             "fixed g" => BassTargetParityTests.Config(fixedG: true),
             "flat" => BassTargetParityTests.Config(Maths.Regression.GPrior.GPriorCentre.Flat),
             "jeffreys" => BassTargetParityTests.Config(jeffreys: true),
+            "ridge" => BassTargetParityTests.Config(maxInteraction: categorical ? 1 : 2, coefficients: BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma())),
+            "ridge, held" => BassTargetParityTests.Config(coefficients: BassCoefficientPrior.Ridge(TauPrior.Held(2.5))),
             _ => BassTargetParityTests.Config(maxInteraction: categorical ? 1 : 2),
         };
         config = config with { Structure = config.Structure with { MaxBasis = maxBasis } };
@@ -66,7 +74,7 @@ public sealed class BassChainParityTests
         JsonElement p = r.GetProperty("posterior");
         double[] countLaw = [.. p.GetProperty("count").GetProperty("posterior").EnumerateArray().Select(v => v.GetDouble())];
         double[] inclusion = [.. p.GetProperty("inclusion").EnumerateArray().Select(v => v.GetDouble())];
-        bool fixedG = option == "fixed g";
+        bool fixedG = option is "fixed g" or "ridge, held";
         double tauMean = fixedG ? model.Target.HeldTau!.Value : p.GetProperty("tau").GetProperty("mean").GetDouble();
         BassTerm[] terms = BassTargetParityTests.Terms(r);
         var index = terms.Select((t, i) => (t, i)).ToDictionary(e => e.t, e => e.i);
@@ -79,7 +87,7 @@ public sealed class BassChainParityTests
         int perBatch = Sweeps / Batches;
         for (int c = 0; c < Chains; c++)
         {
-            var chain = new BassChain(model, [], Math.Log(1.0 / rows.Length), new Xoshiro256PlusPlus(500 + c), new Xoshiro256PlusPlus(600 + c));
+            var chain = new BassChain(model, [], Math.Log(model.Target.Scale.UnitInformation), new Xoshiro256PlusPlus(500 + c), new Xoshiro256PlusPlus(600 + c));
             for (int i = 0; i < Burn; i++) chain.Step();
             for (int i = 0; i < Sweeps; i++)
             {

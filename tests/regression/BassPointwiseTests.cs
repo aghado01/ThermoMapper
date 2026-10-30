@@ -82,11 +82,14 @@ public sealed class BassPointwiseTests
         }
     }
 
-    internal static BassConfig Config(GPriorCentre intercept = GPriorCentre.Mean, Sigma2Prior? sigma2 = null, bool fixedG = false, int maxBasis = 6)
+    internal static BassConfig Config(GPriorCentre intercept = GPriorCentre.Mean, Sigma2Prior? sigma2 = null, bool fixedG = false, int maxBasis = 6,
+                                      bool ridge = false)
         => new()
         {
             Structure = new BassStructureSpec { MaxInteraction = 2, MaxBasis = maxBasis },
-            Coefficients = fixedG ? BassCoefficientPrior.G(TauPrior.Held()) : BassCoefficientPrior.G(),
+            Coefficients = ridge
+                ? BassCoefficientPrior.Ridge(fixedG ? TauPrior.Held(2.0) : TauPrior.UnitInformationGamma())
+                : fixedG ? BassCoefficientPrior.G(TauPrior.Held()) : BassCoefficientPrior.G(),
             Sigma2 = sigma2 ?? Sigma2Prior.ScaledToResponse(),
             Intercept = intercept,
         };
@@ -164,14 +167,15 @@ public sealed class BassPointwiseTests
 
     /// <summary>
     /// ln p(y_U | y_rest) by an explicit refit on the rest's rows of X = [1, Z_c], under the full data's prior: precision
-    /// Λ₀ = τXᵀX (its intercept row and column zero under the flat intercept, which leaves k₀ = p − 1 proper columns),
+    /// Λ₀ = τXᵀX under the g-form, or τ·diag(XᵀX)/N under the normalized ridge (its intercept row and column zero under
+    /// the flat intercept, which leaves k₀ = p − 1 proper columns),
     /// centre μ₀ = (ȳ, 0) under level centring and 0 under the zero centre, and σ² ~ IG(a, b) (a = b = 0 for Jeffreys).
     /// The posterior is Λₙ = X_rᵀX_r + Λ₀, μₙ = Λₙ⁻¹(X_rᵀy_r + Λ₀μ₀), aₙ = a + (n_r + k₀ − p)/2,
     /// bₙ = b + ½(‖y_r − X_rμₙ‖² + (μₙ − μ₀)ᵀΛ₀(μₙ − μ₀)), and the unit's predictive the multivariate t
     /// lnΓ(aₙ + m/2) − lnΓ(aₙ) − (m/2)ln 2π − ½ln|Σ_U| + aₙ ln bₙ − (aₙ + m/2) ln(bₙ + ½eᵀΣ_U⁻¹e), with
     /// Σ_U = I + X_UΛₙ⁻¹X_Uᵀ and e = y_U − X_Uμₙ.
     /// </summary>
-    private static double Refit(double[,] x, double[] y, int[] unit, double tau, GPriorCentre intercept, InverseGamma? prior)
+    private static double Refit(double[,] x, double[] y, int[] unit, double tau, GPriorCentre intercept, InverseGamma? prior, bool ridge)
     {
         int n = y.Length, p = x.GetLength(1), m = unit.Length;
         var inUnit = new bool[n];
@@ -182,7 +186,7 @@ public sealed class BassPointwiseTests
             {
                 double g = 0;
                 for (int k = 0; k < n; k++) g += x[k, a] * x[k, b];
-                lambda0[a, b] = intercept == GPriorCentre.Flat && (a == 0 || b == 0) ? 0.0 : tau * g;
+                lambda0[a, b] = intercept == GPriorCentre.Flat && (a == 0 || b == 0) ? 0.0 : ridge ? (a == b ? tau * g / n : 0.0) : tau * g;
             }
         var mu0 = new double[p];
         if (intercept == GPriorCentre.Mean) mu0[0] = y.Average();
@@ -273,7 +277,7 @@ public sealed class BassPointwiseTests
             {
                 int[] members = partition.Members[u];
                 Close(members.Sum(i => log[i]), retained.Values[s, u], 1e-10, $"{label} retained, draw {s}, unit {u}");
-                double refit = Refit(x, y, members, d.Tau, model.Target.Intercept, model.Target.Sigma2);
+                double refit = Refit(x, y, members, d.Tau, model.Target.Intercept, model.Target.Sigma2, model.Target.CoefficientForm is RidgeForm);
                 Close(refit, collapsed.Values[s, u], 1e-8, $"{label} collapsed, draw {s} (M = {d.Structure.TermIds.Length}, τ = {d.Tau:G3}), unit {u}");
             }
         }
@@ -298,6 +302,26 @@ public sealed class BassPointwiseTests
         (BassModel model, BassTermTable table, List<List<BassDraw>> draws) = Run(Config(intercept, sigma2, fixedG), Data(kind), seed: 11, kept: 8);
         Assert.Contains(draws.SelectMany(c => c), d => d.Structure.TermIds.Length > 0);
         CheckBoth(model, table, draws, null, $"{kind}, {intercept}, {sigma2}, {(fixedG ? "fixed g" : "g")}");
+    }
+
+    // The normalized ridge's collapsed content moves its precision with τ, so each draw's τ takes its own forms.
+    public static IEnumerable<object[]> RidgeConventions()
+    {
+        foreach (Kind kind in Enum.GetValues<Kind>())
+            foreach (GPriorCentre intercept in new[] { GPriorCentre.Mean, GPriorCentre.Zero, GPriorCentre.Flat })
+                foreach (bool jeffreys in new[] { false, true })
+                    foreach (bool held in new[] { false, true })
+                        yield return [kind, intercept, jeffreys, held];
+    }
+
+    [Theory]
+    [MemberData(nameof(RidgeConventions))]
+    public void BothContents_UnderTheRidge_MatchDenseReferencesAndRefits(Kind kind, GPriorCentre intercept, bool jeffreys, bool held)
+    {
+        Sigma2Prior sigma2 = jeffreys ? Sigma2Prior.Jeffreys : Sigma2Prior.ScaledToResponse();
+        (BassModel model, BassTermTable table, List<List<BassDraw>> draws) = Run(Config(intercept, sigma2, held, ridge: true), Data(kind), seed: 13, kept: 6);
+        Assert.Contains(draws.SelectMany(c => c), d => d.Structure.TermIds.Length > 0);
+        CheckBoth(model, table, draws, null, $"ridge, {kind}, {intercept}, {sigma2}, {(held ? "held" : "sampled")}");
     }
 
     [Fact]

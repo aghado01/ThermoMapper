@@ -124,10 +124,12 @@ public sealed class BassTemperingResumeTests
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(true, true)]
-    public void SelfSizingLadder_RestoredAcrossItsResizes_ContinuesBitForBit(bool reference, bool fixedG)
+    [InlineData(true, false, true)]
+    public void SelfSizingLadder_RestoredAcrossItsResizes_ContinuesBitForBit(bool reference, bool fixedG, bool ridge = false)
     {
         BassConfig config = BassTemperingTests.Config(null, maxBasis: 8);
         if (fixedG) config = config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) };
+        if (ridge) config = config with { Coefficients = BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma()) };
         BassModel model = BassModel.Create(config, BassSweepTests.Data(large: true));
         var spec = new TemperingSpec { ReferenceRung = reference, MaxLevels = 20 };
         BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(5)).State;
@@ -167,7 +169,7 @@ public sealed class BassTemperingResumeTests
         restored = BassLadder.Restore(model, spec, ladder.Snapshot());
         Both(300);
         AssertSameLadder(ladder, restored);
-        _out.WriteLine($"reference {reference}, fixed g {fixedG}: counts [{string.Join(", ", counts)}]");
+        _out.WriteLine($"reference {reference}, fixed g {fixedG}, ridge {ridge}: counts [{string.Join(", ", counts)}]");
         Assert.True(counts.Distinct().Count() > 1, "the ladder never resized");
     }
 
@@ -184,7 +186,11 @@ public sealed class BassTemperingResumeTests
             BassState s = x.Replicas[i].Current, t = y.Replicas[i].Current;
             Assert.Equal(s.Terms, t.Terms);
             Assert.Equal(s.LogTau, t.LogTau);
-            Assert.Equal(s.Fit, t.Fit);
+            // Under the ridge a fit carries its ridge terms, an object each ladder holds its own of: read them, bit for bit.
+            Assert.Equal(s.Fit with { Ridge = null }, t.Fit with { Ridge = null });
+            Assert.Equal(s.Fit.Ridge is null, t.Fit.Ridge is null);
+            if (s.Fit.Ridge is { } ridge)
+                foreach (double rung in new[] { 1.0, 0.3, 0.0 }) Assert.Equal(ridge.At(s.Tau, rung), t.Fit.Ridge!.At(t.Tau, rung));
             Assert.Equal(x.Replicas[i].MoveStats(), y.Replicas[i].MoveStats());
             Assert.Equal(x.BlockStats(i), y.BlockStats(i));
             BassTemperingTests.AssertSameDesign(a.Structures[i].DesignAt(s), b.Structures[i].DesignAt(t));

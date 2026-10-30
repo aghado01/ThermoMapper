@@ -44,7 +44,7 @@ public sealed class TauPriorTests
     }
 
     // E over the member's law of f(u), by composite Gauss–Legendre on u.
-    private static double Expect(ResolvedTauPrior prior, Func<double, double> f)
+    internal static double Expect(ResolvedTauPrior prior, Func<double, double> f)
     {
         (double lo, double hi) = Range(prior);
         double sum = 0.0;
@@ -135,7 +135,7 @@ public sealed class TauPriorTests
     }
 
     // The level-quantile of u, by bisection on the CDF, each by quadrature on a grid that ends at its argument.
-    private static double Quantile(ResolvedTauPrior prior, double level)
+    internal static double Quantile(ResolvedTauPrior prior, double level)
     {
         (double lo, double hi) = Range(prior);
         double start = lo;

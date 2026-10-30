@@ -100,6 +100,60 @@ public sealed class BassCoefficientPriorTests
         }
     }
 
+    public static TheoryData<string, string, double> SamplerCases => new()
+    {
+        { "g", "gamma", 0.5 }, { "ridge", "gamma", 0.5 }, { "ridge", "hyper-g", 3 }, { "g", "hyper-g/n", 3 }, { "ridge", "gamma", 4 },
+    };
+
+    [Theory]
+    [MemberData(nameof(SamplerCases))]
+    public void PriorSampler_DrawsTauFromItsPrior_ApartFromTheStructure(string form, string kind, double a)
+    {
+        // The reference rung's and the starts' exact draws: τ from the scale prior on the form's τ₀, independent of the
+        // structure drawn beside it.
+        var model = BassModel.Create(BassSweepTests.Config() with { Coefficients = Prior(form, kind, a) }, BassSweepTests.Data());
+        var sampler = new BassPriorSampler(model);
+        var rng = new Xoshiro256PlusPlus(41);
+        const int draws = 20_000;
+        var u = new double[draws];
+        var size = new double[draws];
+        for (int d = 0; d < draws; d++)
+        {
+            BassState s = sampler.DrawState(rng).State;
+            u[d] = s.LogTau;
+            size[d] = s.Count;
+        }
+        ResolvedTauPrior prior = model.Target.Scale;
+        double median = TauPriorTests.Quantile(prior, 0.5), expected = TauPriorTests.Expect(prior, v => v);
+        double mean = u.Average(), sd = Math.Sqrt(u.Sum(v => (v - mean) * (v - mean)) / (draws - 1));
+        double below = u.Count(v => v <= median) / (double)draws;
+        _out.WriteLine($"{form}, {prior}: E[u] {mean:F4} against {expected:F4} (± {sd / Math.Sqrt(draws):G2}); P(u ≤ median) {below:F4}");
+        Assert.True(Math.Abs(mean - expected) <= 5 * sd / Math.Sqrt(draws), $"E[u] {mean:F4} against {expected:F4}");
+        Assert.True(Math.Abs(below - 0.5) <= 5 * Math.Sqrt(0.25 / draws), $"P(u ≤ median) {below:F4}");
+        double sizeMean = size.Average();
+        double covariance = u.Zip(size, (x, m) => (x - mean) * (m - sizeMean)).Sum() / draws;
+        double correlation = covariance / (sd * Math.Sqrt(size.Sum(m => (m - sizeMean) * (m - sizeMean)) / draws));
+        Assert.True(Math.Abs(correlation) <= 5 / Math.Sqrt(draws), $"τ against M: correlation {correlation:F4}");
+    }
+
+    [Fact]
+    public void PriorSampler_HoldsAHeldTau_AndStartsAnImproperOneAtTauZero()
+    {
+        // A held τ is no draw; an improper hyper-g has none, so a chain's start takes τ₀, and the reference rung and SMC,
+        // which need the draw, refuse it (BassConfig.Validate).
+        foreach ((BassCoefficientPrior coefficients, double logTau) in new[]
+                 {
+                     (BassCoefficientPrior.Ridge(TauPrior.Held(2.5)), Math.Log(2.5)), (BassCoefficientPrior.Ridge(TauPrior.HyperG(1.5)), 0.0),
+                     (BassCoefficientPrior.G(TauPrior.HyperGOverN(2)), Math.Log(1.0 / 18)),
+                 })
+        {
+            var model = BassModel.Create(BassSweepTests.Config() with { Coefficients = coefficients }, BassSweepTests.Data());
+            var sampler = new BassPriorSampler(model);
+            var rng = new Xoshiro256PlusPlus(43);
+            for (int d = 0; d < 50; d++) Assert.Equal(logTau, sampler.DrawState(rng).State.LogTau);
+        }
+    }
+
     private static double Bisect(Func<double, double> f, double lo, double hi)
     {
         for (int i = 0; i < 60; i++)

@@ -26,6 +26,7 @@ public sealed class BassRunResumeTests
         return option switch
         {
             "fixed g" => config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) },
+            "ridge" or "ridge, functional" => config with { Coefficients = BassCoefficientPrior.Ridge(TauPrior.UnitInformationGamma()) },
             "cancelling" => config with { Sampling = config.Sampling with { Moves = new PriorCancelling(0.4) } },
             "jeffreys, flat" => config with { Sigma2 = Sigma2Prior.Jeffreys, Intercept = GPriorCentre.Flat },
             "thinned" => config with { Sampling = config.Sampling with { Thin = 3 } },
@@ -36,7 +37,7 @@ public sealed class BassRunResumeTests
 
     private static BassData Data(string option) => option switch
     {
-        "functional" => BassRunTests.FunctionalData(),
+        "functional" or "ridge, functional" => BassRunTests.FunctionalData(),
         "categorical" => BassPriorSamplerTests.MixedData(),
         _ => BassSweepTests.Data(large: true),
     };
@@ -50,6 +51,8 @@ public sealed class BassRunResumeTests
     [InlineData("jeffreys, flat")]
     [InlineData("thinned")]
     [InlineData("batches")]
+    [InlineData("ridge")]
+    [InlineData("ridge, functional")]
     public void Resume_IsBitIdentical(string option)
     {
         BassData data = Data(option);
