@@ -11,7 +11,9 @@ namespace Maths.Regression.Spline.Bass;
 /// BASS, Bayesian adaptive spline surfaces (Francom and Sansó 2020): the entry points (the contract shapes). A fit runs
 /// <see cref="BassSampling.Chains"/> chains of D04's sweep on the chain ensemble, each started from an exact draw of the
 /// prior on F, and keeps every retained draw; or, with <see cref="BassSampling.Smc"/>, <see cref="SmcSpec.Replicates"/>
-/// SMC runs from the prior to the posterior (stage 8), and keeps each one's final population with its weights.
+/// SMC runs from the prior to the posterior (stage 8), and keeps each one's final population with its weights; or, with
+/// <see cref="BassSampling.FlatHistogram"/>, the flat-histogram sampler on π_w (N17), and keeps its production chains'
+/// draws with their weights at b = 1.
 /// </summary>
 public static class Bass
 {
@@ -28,7 +30,9 @@ public static class Bass
     /// <see cref="BassSampling.Samples"/> more draws per chain, or fewer when the R̂ stop is met, exactly as the
     /// uninterrupted run would have gone on; the fit covers every draw since burn-in. An SMC fit's checkpoint continues
     /// each replicate for up to <see cref="SmcSpec.MaxStages"/> more stages towards b = 1, as one uninterrupted run with
-    /// the larger budget would; a run already at b = 1 has nothing left, and gives its fit again. <paramref name="config"/>
+    /// the larger budget would; a run already at b = 1 has nothing left, and gives its fit again. A flat-histogram fit's
+    /// checkpoint continues its run for up to <see cref="BassFlatHistogramSpec.MaxIterations"/> more iterations towards its
+    /// lengths, as the uninterrupted run would have gone on. <paramref name="config"/>
     /// and <paramref name="data"/> must be those the checkpoint was taken on: one whose fingerprint differs is refused.
     /// </summary>
     public static BassFit Resume(EnsembleCheckpoint checkpoint, BassConfig config, BassData data, BassRunOptions? run = null)
@@ -54,7 +58,17 @@ public static class Bass
                 $"The checkpoint was taken on another config or data: its fingerprint is {resumeFrom.Identity.Fingerprint}, theirs {fingerprint}.",
                 "checkpoint");
         if (sampling.FlatHistogram is not null)
-            throw new NotSupportedException("Sampling.FlatHistogram's fit joins with its adapter (N17 Phase 2, step 2).");
+        {
+            try
+            {
+                return BassFlatHistogramFit.Run(model, fingerprint, options, resumeFrom);
+            }
+            catch (AggregateException e) when (Shared(e) is { } failure)
+            {
+                ExceptionDispatchInfo.Throw(failure);
+                throw;
+            }
+        }
         if (sampling.Smc is not null)
         {
             try

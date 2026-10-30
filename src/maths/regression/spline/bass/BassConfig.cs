@@ -585,11 +585,11 @@ public sealed record SmcSpec
 /// declared exactly when the spec needs one (<see cref="FlatHistogramSpec.NeedsPilot"/>). With its reference rung the
 /// pilot's hot end is b = 0, and so is b_lo.</item>
 /// <item><see cref="MaxIterations"/>: the iterations a call takes, learning updates and production draws per chain
-/// together, as SMC's stage budget; null runs to the lengths. A fit short of them is flagged incomplete, its posterior
-/// views refused, and its checkpoint continues it.</item>
+/// together, as SMC's stage budget; null runs to the lengths. A fit short of them is flagged
+/// (<see cref="BassFlatHistogramReadout.Complete"/>), its posterior views refused, and its checkpoint continues it.</item>
 /// </list>
 /// The evidence is ln Z(1) by the engine's ratio estimator, reported only from b_lo = 0 under proper priors; above b_lo = 0
-/// the fit reports ln Z(1) − ln Z(b_lo), flagged as a ratio.
+/// the fit reports ln Z(1) − ln Z(b_lo), flagged as a ratio (<see cref="BassFlatHistogramEvidence"/>).
 /// </summary>
 public sealed record BassFlatHistogramSpec
 {

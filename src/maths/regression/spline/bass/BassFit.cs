@@ -15,9 +15,12 @@ namespace Maths.Regression.Spline.Bass;
 /// scheduled.</item>
 /// <item><see cref="DrawWeights"/> is null for MCMC, whose draws weigh equally. An SMC fit's draws are each replicate's
 /// final population, one store per replicate, and their weights, pooled in replicate order, are each particle's
-/// normalized weight over the replicates' count, so they sum to 1. Every view reads them.</item>
+/// normalized weight over the replicates' count, so they sum to 1. A flat-histogram fit's draws are its production
+/// chains', one store per chain, weighted at b = 1 by e^{ℓ₁}/w(ℓ₁), self-normalized over every chain's draws in their
+/// pooled order. Every view reads them.</item>
 /// <item>An SMC fit short of b = 1 (<see cref="BassSmcReadout.ReachedPosterior"/>, its stage budget spent) holds a
-/// tempered population, not the posterior: the posterior views refuse it, and <see cref="Bass.Resume"/> continues it.</item>
+/// tempered population, not the posterior: the posterior views refuse it, and <see cref="Bass.Resume"/> continues it.
+/// So does a flat-histogram fit short of its lengths (<see cref="BassFlatHistogramReadout.Complete"/>).</item>
 /// <item><see cref="Evidence"/> is the run's ln p(y) with its Monte Carlo error and the priors it depends on, from a run
 /// tempered down to an exact reference rung under proper priors (<see cref="BassEvidence"/>); null otherwise.</item>
 /// <item><see cref="ResidualDependence"/> is the direct functional fit's residual-dependence check along its one output
@@ -31,7 +34,8 @@ namespace Maths.Regression.Spline.Bass;
 /// <see cref="SensitivitySummary"/> (stage 9) are the presentation data, values only: what R's <c>plot</c>, <c>print</c>
 /// and <c>summary</c> show, with rendering and formatting left to adapters above maths.</item>
 /// <item><see cref="Checkpoint"/> is the run's restart state when <see cref="BassRunOptions.Checkpoint"/> asked for it,
-/// beside the posterior, never inside it; <see cref="Bass.Resume"/> continues it.</item>
+/// beside the posterior, never inside it; <see cref="Bass.Resume"/> continues it. A complete flat-histogram run has none:
+/// its lengths are totals, with nothing left to continue.</item>
 /// </list>
 /// </summary>
 public sealed record BassFit(
@@ -104,13 +108,18 @@ public sealed record BassFit(
 
     /// <summary>Each chain's traces of M, σ², τ and λ in draw order (stage 9, P09; <see cref="BassTraces"/>). An SMC fit has
     /// none: its draws are a weighted population with no order, and its stage-by-stage readings are
-    /// <see cref="BassDiagnostics.Smc"/>'s.</summary>
+    /// <see cref="BassDiagnostics.Smc"/>'s. Nor has a flat-histogram fit: its draws' order is π_w's, not the posterior's,
+    /// and its diagnostics are <see cref="BassDiagnostics.FlatHistogram"/>'s.</summary>
     public BassTraces Traces()
     {
         if (Diagnostics.Smc is not null)
             throw new InvalidOperationException(
                 "An SMC fit's draws are a weighted population with no draw order, so it has no traces; its stage-by-stage " +
                 "readings are Diagnostics.Smc's replicates.");
+        if (Diagnostics.FlatHistogram is not null)
+            throw new InvalidOperationException(
+                "A flat-histogram fit's draws follow π_w, not the posterior, and weigh e^{ℓ₁}/w(ℓ₁), so it has no posterior traces; " +
+                "its tunnelling, occupancy and weight trace are Diagnostics.FlatHistogram's.");
         return BassTraces.Of(this);
     }
 
@@ -145,13 +154,18 @@ public sealed record BassFit(
     public SobolAnalysisSummary SensitivitySummary(BassData data, SensitivitySpec? spec = null, IReadOnlyList<double>? probabilities = null)
         => SobolAnalysisSummary.Of(this, Sensitivity(data, spec), probabilities);
 
-    // An SMC fit whose stage budget ran out before b = 1 holds a tempered population, which no posterior view reads.
+    // An SMC fit whose stage budget ran out before b = 1 holds a tempered population, which no posterior view reads; a
+    // flat-histogram fit short of its lengths has not finished production.
     private void RequirePosterior()
     {
         if (Diagnostics.Smc is { ReachedPosterior: false })
             throw new InvalidOperationException(
                 "The SMC fit spent its stage budget (Sampling.Smc.MaxStages) before b = 1, so its draws are a tempered population, not the " +
                 "posterior; Bass.Resume continues it from its checkpoint.");
+        if (Diagnostics.FlatHistogram is { Complete: false })
+            throw new InvalidOperationException(
+                "The flat-histogram fit spent its call's budget (Sampling.FlatHistogram.MaxIterations) before its lengths, so it has no " +
+                "finished production; Bass.Resume continues it from its checkpoint.");
     }
 
     // The model on `data`, refused when they are not the data the fit was run on; the posterior's views only.

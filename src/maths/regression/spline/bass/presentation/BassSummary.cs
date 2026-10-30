@@ -22,8 +22,12 @@ public sealed record BassDataShape(int Cases, int Locations, IReadOnlyList<Predi
 /// <summary>A run's lengths: its chains, the burn-in sweeps, the draws asked for per chain and the thinning, and the draws
 /// each chain kept, which the R̂ stop can shorten (<see cref="BassDiagnostics.SamplesUsed"/>). An SMC fit reads no sweep
 /// count: <see cref="Chains"/> is then its replicates, <see cref="DrawsPerChain"/> each replicate's population,
-/// <see cref="BurnIn"/>, <see cref="Samples"/> and <see cref="Thin"/> null, and <see cref="Smc"/> its specification.</summary>
-public sealed record BassRunLengths(int Chains, int? BurnIn, int? Samples, int? Thin, IReadOnlyList<int> DrawsPerChain, SmcSpec? Smc = null)
+/// <see cref="BurnIn"/>, <see cref="Samples"/> and <see cref="Thin"/> null, and <see cref="Smc"/> its specification. A
+/// flat-histogram fit's are its spec's: <see cref="Chains"/> its production chains, <see cref="DrawsPerChain"/> their
+/// draws so far, <see cref="BurnIn"/>, <see cref="Samples"/> and <see cref="Thin"/> null, and <see cref="FlatHistogram"/>
+/// its specification, learning's and production's lengths and the pilot's among it.</summary>
+public sealed record BassRunLengths(int Chains, int? BurnIn, int? Samples, int? Thin, IReadOnlyList<int> DrawsPerChain, SmcSpec? Smc = null,
+                                    BassFlatHistogramSpec? FlatHistogram = null)
 {
     /// <summary>The draws kept over every chain.</summary>
     public int Draws => DrawsPerChain.Sum();
@@ -32,7 +36,7 @@ public sealed record BassRunLengths(int Chains, int? BurnIn, int? Samples, int? 
 /// <summary>
 /// A fit's metadata (R's <c>print.bass</c>; P12): the data's shape, the config and what it resolved to on the data with its
 /// auto-picks, the run's identity and lengths, and its account: convergence, the moves' acceptance and refusals, the
-/// support tally and the tempering readout (<see cref="BassDiagnostics"/>), with the evidence when the run reports one. The
+/// support tally and the tempering, SMC or flat-histogram readout (<see cref="BassDiagnostics"/>), with the evidence when the run reports one. The
 /// records are the fit's own, so the metadata round-trips what the fit holds.
 /// </summary>
 public sealed record BassMetadata(
@@ -43,10 +47,10 @@ public sealed record BassMetadata(
     {
         ArgumentNullException.ThrowIfNull(fit);
         BassSampling sampling = fit.Config.Sampling;
-        bool sweeps = sampling.Smc is null;
+        bool sweeps = sampling.Smc is null && sampling.FlatHistogram is null;
         var lengths = new BassRunLengths(fit.Identity.Chains, sweeps ? sampling.BurnIn : null, sweeps ? sampling.Samples : null,
                                          sweeps ? sampling.Thin : null, Array.AsReadOnly(fit.Draws.Select(c => c.Count).ToArray()),
-                                         sampling.Smc);
+                                         sampling.Smc, sampling.FlatHistogram);
         return new BassMetadata(BassDataShape.Of(fit.Transform, fit.Resolved.Cases, fit.Resolved.Locations), fit.Config, fit.Resolved,
                                 fit.Identity, lengths, fit.Diagnostics, fit.Evidence);
     }

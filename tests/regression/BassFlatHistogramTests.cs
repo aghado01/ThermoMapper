@@ -5,8 +5,11 @@ using System.Threading.Tasks;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bars;
 using Maths.Regression.Spline.Bass;
+using Maths.Regression.Spline.Bass.Presentation;
+using Maths.Regression.Spline.Bass.Sensitivity;
 using Maths.Rng;
 using Maths.Samplers;
+using Maths.Samplers.Ensemble;
 using Maths.Samplers.FlatHistogram;
 using Xunit;
 using Xunit.Abstractions;
@@ -14,9 +17,16 @@ using Xunit.Abstractions;
 namespace Maths.Regression.Tests;
 
 /// <summary>
-/// BASS's flat-histogram sampler (N17 Phase 2; the Phase 2 brief): the configuration and its refusals, and BASS's chain
-/// on the multicanonical target π_w ∝ prior(structure, τ)·w(ℓ₁) against π_w by enumeration on fixture A's F, with τ held
-/// and with τ sampled, by quadrature over u.
+/// BASS's flat-histogram sampler (N17 Phase 2; the Phase 2 brief).
+/// <list type="bullet">
+/// <item><b>Step 1.</b> The configuration and its refusals, and BASS's chain on the multicanonical target
+/// π_w ∝ prior(structure, τ)·w(ℓ₁) against π_w by enumeration on fixture A's F, with τ held and with τ sampled, by
+/// quadrature over u.</item>
+/// <item><b>Step 2.</b> The fit on fixture A, τ held and sampled, under the g-form and the ridge: its learned weights against
+/// SAMC's limit on the exact density of states, its reweighted posterior against the exact one, and its ln Z(b) against
+/// the enumeration's; ln Z(1) on the oracle's fixtures B and C; every view end to end on a scalar and a functional fit;
+/// resume across learning and production; the improper options; a chain that never tunnels.</item>
+/// </list>
 /// </summary>
 public sealed class BassFlatHistogramTests
 {
@@ -119,11 +129,11 @@ public sealed class BassFlatHistogramTests
 
     // ---- Step 1: the chain on π_w ----
 
-    // Fixture A (BassSweepTests' F) with τ sampled, or held at unit information.
-    internal static BassModel FixtureA(bool heldTau)
+    // Fixture A (BassSweepTests' F) with τ sampled, or held at unit information, under the g-form or the normalized ridge.
+    internal static BassModel FixtureA(bool heldTau, bool ridge = false)
     {
-        BassConfig config = BassSweepTests.Config();
-        if (heldTau) config = config with { Coefficients = BassCoefficientPrior.G(TauPrior.Held()) };
+        TauPrior scale = heldTau ? TauPrior.Held(ridge ? 1.0 : null) : TauPrior.UnitInformationGamma();
+        BassConfig config = BassSweepTests.Config() with { Coefficients = ridge ? BassCoefficientPrior.Ridge(scale) : BassCoefficientPrior.G(scale) };
         return BassModel.Create(config, BassSweepTests.Data());
     }
 
@@ -212,7 +222,6 @@ public sealed class BassFlatHistogramTests
         Check("E[ℓ₁]", meanLevel, items - 1, 0.01);
     }
 
-
     [Fact]
     public void Reweigh_ReadsTheCachedLevel_WithNoNewMarginal()
     {
@@ -243,6 +252,451 @@ public sealed class BassFlatHistogramTests
         chain.Reweigh();
         Assert.Same(now, chain.CurrentEvaluation);
         Assert.Equal(evaluations, counting.Evaluations);
+    }
+
+    // ---- Step 2: the fit, its evidence and its views ----
+
+    private const int FitChains = 8;
+
+    // A flat-start run of `chains` chains on `shape`'s declared window, b_lo and K.
+    internal static FlatHistogramSpec DeclaredRun(MulticanonicalWeights shape, long learning, int production, int chains = FitChains)
+        => new()
+        {
+            Chains = chains, LearningIterations = learning, ProductionDraws = production, Window = new FlatHistogramWindow(shape.Low, shape.High),
+            LowSlope = shape.LowSlope, Nodes = shape.Nodes,
+        };
+
+    // The window over F's exact density of states: from the prior's 1% quantile of ℓ₁ to the posterior's 99%.
+    internal static MulticanonicalWeights ExactShape(BassFlatHistogramSpace space, int nodes, double lowSlope = 0.0)
+    {
+        (double[] levels, double[] masses) = space.DensityOfStates();
+        double[] posterior = [.. masses.Select((m, i) => m + levels[i])];
+        return MulticanonicalWeights.Flat(BassFlatHistogramSpace.Quantile(levels, masses, 0.01), BassFlatHistogramSpace.Quantile(levels, posterior, 0.99),
+                                          lowSlope, nodes);
+    }
+
+    // Each chain's self-normalized estimate of g over its own draws under the fit's weights, the pooled estimate, and its
+    // error from the chains' spread, sd/√C.
+    private static (double Mean, double Error) Reweighted(BassFit fit, Func<BassDraw, double> g)
+    {
+        double[] w = fit.DrawWeights!;
+        var chains = new double[fit.Draws.Count];
+        double num = 0.0, den = 0.0;
+        int i = 0;
+        for (int c = 0; c < chains.Length; c++)
+        {
+            double cn = 0.0, cd = 0.0;
+            foreach (BassDraw d in fit.Draws[c])
+            {
+                double weight = w[i++];
+                cn += weight * g(d);
+                cd += weight;
+            }
+            chains[c] = cn / cd;
+            num += cn;
+            den += cd;
+        }
+        double mean = chains.Average();
+        return (num / den, Math.Sqrt(chains.Sum(x => (x - mean) * (x - mean)) / (chains.Length - 1) / chains.Length));
+    }
+
+    // Centred RMS between two sets of node values over the nodes not flagged empty.
+    private static double CentredRms(IReadOnlyList<double> a, IReadOnlyList<double> b, bool[] empty)
+    {
+        int[] kept = [.. Enumerable.Range(0, a.Count).Where(k => !empty[k])];
+        double shift = kept.Average(k => a[k] - b[k]);
+        return Math.Sqrt(kept.Average(k => (a[k] - b[k] - shift) * (a[k] - b[k] - shift)));
+    }
+
+    [Theory]
+    [InlineData(true, false, 0.0)]
+    [InlineData(false, false, 0.0)]
+    [InlineData(true, true, 0.0)]
+    [InlineData(false, true, 0.0)]
+    [InlineData(false, false, 0.3)]
+    public void Fit_OnFixtureA_MatchesTheEnumeration(bool heldTau, bool ridge, double lowSlope)
+    {
+        BassModel model = FixtureA(heldTau, ridge);
+        BassData data = model.Data;
+        var space = BassFlatHistogramSpace.Of(model);
+        MulticanonicalWeights shape = ExactShape(space, 12, lowSlope);
+        (double[] levels, double[] masses) = space.DensityOfStates();
+        MulticanonicalWeights exact = SamcLearning.FixedPoint(shape, levels, masses, out bool[] empty);
+        BassConfig config = model.Config with { Sampling = model.Config.Sampling with { MasterSeed = 7301 } };
+        BassFit fit = Bass.Fit(WithFlatHistogram(config, new BassFlatHistogramSpec { Run = DeclaredRun(shape, 30_000, 30_000) }), data);
+        BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
+        string label = $"τ {(heldTau ? "held" : "sampled")}, {(ridge ? "ridge" : "g-form")}, b_lo = {lowSlope}";
+        _out.WriteLine($"## Fixture A, {label}: {space.States.Count:N0} structures; window [{fh.Window.Low:F2}, {fh.Window.High:F2}], K = {fh.Nodes}, " +
+                       $"t₀ = {fh.GainScale}, gain from {fh.GainStart}; {FitChains} chains × 30,000 learning + 30,000 production");
+        Assert.True(fh.Complete);
+        Assert.Equal((shape.Low, shape.High, shape.Nodes, shape.LowSlope), (fh.Weights.Low, fh.Weights.High, fh.Weights.Nodes, fh.Weights.LowSlope));
+        Assert.Equal(10.0 * shape.Nodes, fh.GainScale);
+
+        // The learned weights against SAMC's limit on the exact density of states.
+        double rms = CentredRms(fh.Weights.LogWeights, exact.LogWeights, empty);
+        _out.WriteLine($"learned ln w against θ*: centred RMS {rms:F4} over {empty.Count(e => !e)} nodes (tolerance 0.15); " +
+                       $"production flatness {fh.Production!.MaxFlatnessDeviation:F3}, round trips {fh.Production.TotalRoundTrips}, b = 1 Kish ESS " +
+                       $"{fh.EffectiveSampleSize:F0} of {FitChains * 30_000}");
+        Assert.True(rms <= 0.15, $"learned ln w sits {rms:F4} from θ*");
+        Assert.Empty(fh.Production.ChainsWithoutRoundTrip);
+
+        // The reweighted structure posterior against the exact one, within 5 SE of the chains' spread.
+        double[] law = space.Law(l => l);
+        int cap = model.MaxBasis;
+        var countLaw = new double[cap + 1];
+        var inclusion = new Dictionary<BassTerm, double>();
+        double meanTau = 0.0;
+        for (int s = 0; s < law.Length; s++)
+        {
+            countLaw[space.States[s].Terms.Length] += law[s];
+            foreach (BassTerm t in space.States[s].Terms) inclusion[t] = inclusion.GetValueOrDefault(t) + law[s];
+            meanTau += law[s] * space.MeanTau(space.States[s], l => l);
+        }
+        _out.WriteLine("quantity | exact | reweighted ± chains' SE | z | allowance");
+        _out.WriteLine("--- | --- | --- | --- | ---");
+        void Check(string name, double expected, Func<BassDraw, double> g, double slack)
+        {
+            (double mean, double se) = Reweighted(fit, g);
+            double allowance = 5 * se + slack;
+            _out.WriteLine($"{name} | {expected:F4} | {mean:F4} ± {se:F4} | {(se > 0 ? $"{(mean - expected) / se:F2}" : "—")} | {allowance:F4}");
+            Assert.True(Math.Abs(mean - expected) <= allowance, $"{name}: reweighted {mean:F4} ± {se:F4}, exact {expected:F4}");
+        }
+        BassTerm[] Terms(BassDraw d) => [.. d.Structure.TermIds.Select(id => fit.Terms[id])];
+        for (int m = 0; m <= cap; m++) Check($"P(M = {m})", countLaw[m], d => d.Structure.TermIds.Length == m ? 1 : 0, 0.002);
+        foreach ((BassTerm t, double p) in inclusion.Where(x => x.Value >= 0.005))
+            Check($"incl. {BassMixing.Key([t])}", p, d => Terms(d).Contains(t) ? 1 : 0, 0.002);
+        foreach (int s in Enumerable.Range(0, law.Length).OrderByDescending(s => law[s]).Take(10))
+            Check($"S = {space.States[s].Key}", law[s], d => BassMixing.Key(Terms(d)) == space.States[s].Key ? 1 : 0, 0.002);
+        if (heldTau) Assert.All(fit.Draws.SelectMany(c => c), d => Assert.Equal(model.Target.HeldTau!.Value, d.Tau));
+        else Check("E[τ]", meanTau, d => d.Tau, 0.005 * meanTau);
+
+        // ln Z(b) − ln Z(b_lo) on the grid against the enumeration, within 5 errors + 0.01; the evidence only from b_lo = 0.
+        BassFlatHistogramEvidence curve = fh.Evidence!;
+        Assert.Equal(lowSlope, curve.From);
+        Assert.Equal(lowSlope == 0.0, curve.IsEvidence);
+        double[] grid = curve.Curve.InverseTemperatures;
+        Assert.Equal((BassFlatHistogramEvidence.GridPoints, lowSlope, 1.0), (grid.Length, grid[0], grid[^1]));
+        _out.WriteLine("b | exact ln Z(b) − ln Z(b_lo) | curve ± error | z");
+        _out.WriteLine("--- | --- | --- | ---");
+        foreach (int k in new[] { 10, 25, 50, 75, 100 })
+        {
+            double b = grid[k];
+            double expected = space.LogEvidence(b) - space.LogEvidence(lowSlope);
+            (double value, double error) = curve.Curve.LogRatio(0, k);
+            _out.WriteLine($"{b:F3} | {expected:F4} | {value:F4} ± {error:F4} | {(value - expected) / error:F2}");
+            Assert.True(Math.Abs(value - expected) <= 5 * error + 0.01, $"ln Z({b}) − ln Z(b_lo): {value:F4} ± {error:F4} against {expected:F4}");
+        }
+        Assert.Equal(curve.Curve.LogRatio(0, grid.Length - 1), (curve.LogRatio, curve.MonteCarloError));
+        if (lowSlope == 0.0)
+        {
+            Assert.Equal(0.0, curve.Curve.LogEvidence[0]);
+            Assert.Equal(curve.LogRatio, fit.Evidence!.LogEvidence);
+            Assert.Equal(curve.MonteCarloError, fit.Evidence.MonteCarloError);
+            Assert.Null(fit.Evidence.SteppingStone);
+            Assert.Same(curve, fit.Evidence.FlatHistogram);
+        }
+        else Assert.Null(fit.Evidence);
+    }
+
+    // The oracle's fixtures B and C, as BassTargetParityTests and the Friedman reference harness build them.
+    private static BassConfig OracleConfig(bool categorical)
+        => new()
+        {
+            Structure = new BassStructureSpec { MaxInteraction = categorical ? 1 : 2, Support = new SupportRule(Minimum: 3), MaxBasis = 2 },
+            Intercept = GPriorCentre.Mean,
+            Sigma2 = Sigma2Prior.ScaledToResponse(1e-3),
+            Coefficients = BassCoefficientPrior.G(),
+        };
+
+    private static double Hinge(double x, double knot, int sign) => Math.Max(sign * (x - knot), 0.0);
+
+    private static BassData OracleData(bool categorical)
+    {
+        var rows = new List<double[]>();
+        if (!categorical)
+        {
+            var rng = new Xoshiro256PlusPlus(seed: 7);
+            for (int rep = 0; rep < 2; rep++)
+                for (int j = 0; j < 4; j++)
+                    for (int i = 0; i < 4; i++)
+                    {
+                        double x1 = i / 3.0, x2 = j / 3.0;
+                        rows.Add([1 + 2 * Hinge(x1, 1 / 3.0, 1) + 3 * Hinge(x1, 1 / 3.0, 1) * Hinge(x2, 2 / 3.0, -1) + 0.25 * BassQualification.Gaussian(rng), x1, x2]);
+                    }
+        }
+        else
+        {
+            var rng = new Xoshiro256PlusPlus(seed: 21);
+            for (int z = 0; z < 3; z++)
+                for (int j = 0; j < 3; j++)
+                    for (int i = 0; i < 3; i++)
+                    {
+                        double x1 = i * 0.5, x2 = j * 0.5;
+                        rows.Add([1 + 1.5 * x1 + 1.5 * Hinge(x2, 0.5, 1) * (z == 0 ? 1 : 0) + 0.4 * BassQualification.Gaussian(rng), x1, x2, z]);
+                    }
+        }
+        var predictors = new List<BassPredictor>
+        {
+            new ContinuousPredictor("x1", [.. rows.Select(r => r[1])]),
+            new ContinuousPredictor("x2", [.. rows.Select(r => r[2])]),
+        };
+        if (categorical) predictors.Add(new CategoricalPredictor("z", [.. rows.Select(r => (int)r[3])], ["0", "1", "2"]));
+        return new BassData(predictors, new ScalarResponse([.. rows.Select(r => r[0])]));
+    }
+
+    [Theory]
+    [InlineData("B")]
+    [InlineData("C")]
+    public void Fit_OnFixturesBAndC_ReadsTheOraclesEvidence(string fixture)
+    {
+        bool categorical = fixture == "C";
+        double oracle = categorical ? -30.903 : -28.589;
+        BassData data = OracleData(categorical);
+        BassConfig config = OracleConfig(categorical) with { Sampling = new BassSampling { MasterSeed = 7401 } };
+        var space = BassFlatHistogramSpace.Of(BassModel.Create(config, data));
+        double enumerated = space.LogEvidence(1.0);
+        Assert.True(Math.Abs(enumerated - oracle) <= 0.002, $"the enumeration reads {enumerated:F4} against the oracle's {oracle}");
+        MulticanonicalWeights shape = ExactShape(space, 12);
+        BassFit fit = Bass.Fit(WithFlatHistogram(config, new BassFlatHistogramSpec { Run = DeclaredRun(shape, 30_000, 30_000) }), data);
+        BassEvidence e = fit.Evidence!;
+        double z = (e.LogEvidence - oracle) / e.MonteCarloError;
+        _out.WriteLine($"## Fixture {fixture}: {space.States.Count:N0} structures; ln Z(1) {e.LogEvidence:F4} ± {e.MonteCarloError:F4} against the oracle's " +
+                       $"{oracle} (enumeration {enumerated:F4}), z {z:F2}; round trips {fit.Diagnostics.FlatHistogram!.Production!.TotalRoundTrips}");
+        Assert.True(Math.Abs(e.LogEvidence - oracle) <= 4 * e.MonteCarloError + 0.01, $"ln Z(1) {e.LogEvidence:F4} ± {e.MonteCarloError:F4} against {oracle}");
+        Assert.Equal(config.Coefficients, e.Priors.Coefficients);
+    }
+
+    // A direct functional response with one output variable: x₀ and x₁ on a four-value grid (n = 16), t on five locations
+    // (N = 80), Y = 1 + 2x₀ + 1.5·t·x₁ + 2(x₀ − ½)₊(t − ½)₊ + noise.
+    private static BassData FunctionalData()
+    {
+        var rng = new Xoshiro256PlusPlus(13);
+        const int n = 16, m = 5;
+        double[] t = [.. Enumerable.Range(0, m).Select(r => r / (m - 1.0))];
+        var x0 = new double[n];
+        var x1 = new double[n];
+        var y = new double[n, m];
+        for (int i = 0; i < n; i++)
+        {
+            x0[i] = (i / 4) / 3.0;
+            x1[i] = (i % 4) / 3.0;
+            for (int r = 0; r < m; r++)
+                y[i, r] = 1 + 2 * x0[i] + 1.5 * t[r] * x1[i] + 2 * Math.Max(x0[i] - 0.5, 0) * Math.Max(t[r] - 0.5, 0) + 0.2 * BassQualification.Gaussian(rng);
+        }
+        return new BassData([new ContinuousPredictor("x0", x0), new ContinuousPredictor("x1", x1)],
+                            new FunctionalResponse(y, [new ContinuousPredictor("t", t)]));
+    }
+
+    // A rough window from b_lo = 0: from the 5% quantile of ℓ₁ over 400 exact prior draws to the top a short untempered
+    // chain reaches.
+    internal static MulticanonicalWeights RoughShape(BassModel model, int nodes)
+    {
+        var sampler = new BassPriorSampler(model);
+        var rng = new Xoshiro256PlusPlus(3);
+        double[] prior = [.. Enumerable.Range(0, 400).Select(_ => sampler.DrawState(rng).Evaluation.LogMarginal)];
+        BassState start = sampler.DrawState(rng).State;
+        var chain = new BassChain(model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(4), new Xoshiro256PlusPlus(5));
+        double top = double.NegativeInfinity;
+        for (int s = 0; s < 2_000; s++) top = Math.Max(top, model.Target.Evaluate(chain.Step()).LogMarginal);
+        return MulticanonicalWeights.Flat(BassMixing.Quantile(prior, 0.05), top, 0.0, nodes);
+    }
+
+    // A small fit's config: scalar on BassSweepTests' larger grid, or the functional response above.
+    private static (BassConfig Config, BassData Data) EndToEnd(bool functional, int seed)
+    {
+        BassData data = functional ? FunctionalData() : BassSweepTests.Data(large: true);
+        var config = new BassConfig
+        {
+            Structure = new BassStructureSpec { MaxInteraction = 2, MaxBasis = 8 },
+            Sampling = new BassSampling { MasterSeed = seed },
+        };
+        return (config, data);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Fit_EndToEnd_EveryViewReadsTheWeightedDraws(bool functional)
+    {
+        (BassConfig plain, BassData data) = EndToEnd(functional, 7501);
+        BassModel model = BassModel.Create(plain, data);
+        BassFlatHistogramSpec spec = new() { Run = DeclaredRun(RoughShape(model, 10), 4_000, 1_000, chains: 4) };
+        BassConfig config = WithFlatHistogram(plain, spec);
+        BassFit fit = Bass.Fit(config, data);
+        BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
+        const int chains = 4, draws = 1_000;
+
+        // The draws and their weights at b = 1, chain-major, as the readout weighs them.
+        Assert.Equal(new RunIdentity(plain.Sampling.MasterSeed, chains, Bass.Fingerprint(config, data)), fit.Identity);
+        Assert.All(fit.Draws, store => Assert.Equal(draws, store.Count));
+        double[] w = fit.DrawWeights!;
+        Assert.Equal(chains * draws, w.Length);
+        Assert.Equal(1.0, w.Sum(), 12);
+        Assert.Equal(Reweighting.Weigh(fh.Draws!, 1.0).Weights, w);
+        Assert.Equal(chains, fh.ChainEffectiveSampleSizes.Length);
+        Assert.InRange(fh.EffectiveSampleSize, 1.0, chains * draws);
+        Assert.Equal(chains, fh.ProductionChains.Count);
+        Assert.Equal(fh.Production!.InWindow, fh.ProductionChains.Sum(c => c.InWindow));
+        Assert.Equal(fh.Production.RoundTrips, fh.ProductionChains.Select(c => c.RoundTrips[0]));
+        Assert.Equal(spec.Run.LearningIterations, fh.LearningIterations);
+        Assert.Equal(spec.Run.LearningIterations * chains, fh.Learning.Visits);
+        Assert.Equal(chains * (long)draws, fh.Production.Visits);
+        Assert.Equal(0, fh.WeightTrace[0].Iteration);
+        Assert.Equal(spec.Run.LearningIterations, fh.WeightTrace[^1].Iteration);
+        Assert.Same(fh.Weights, fh.Draws!.Weights);
+
+        // Each draw's weight is e^{ℓ₁}/w(ℓ₁) of its own state, its ℓ₁ rebuilt from its structure and τ, up to the one
+        // normalizer: the weights align with the stores' pooled order.
+        BassDraw[] pooled = [.. fit.Draws.SelectMany(c => c)];
+        double offset = double.NaN;
+        for (int s = 0; s < pooled.Length; s += 37)
+        {
+            BassTerm[] terms = [.. pooled[s].Structure.TermIds.Select(id => fit.Terms[id])];
+            double level = model.Target.Evaluate(BassMixing.Loaded(model, terms, Math.Log(pooled[s].Tau), out _)!).LogMarginal;
+            double logNormalizer = level - fh.Weights.LogWeight(level) - Math.Log(w[s]);
+            if (double.IsNaN(offset)) offset = logNormalizer;
+            else Assert.Equal(offset, logNormalizer, 8);
+        }
+
+        // π_w's diagnostics over production: the verdict's three groups, and each chain's account.
+        BassDiagnostics d = fit.Diagnostics;
+        Assert.Equal(draws, d.SamplesUsed);
+        Assert.Equal([BassDiagnostics.PredictiveGroup, BassDiagnostics.LevelGroup, BassDiagnostics.StructuralGroup], d.Verdict.Groups.Select(g => g.Name));
+        Assert.Equal(chains, d.Chains.Count);
+        Assert.True(double.IsFinite(d.ModeSeparation.LogPosteriorGap));
+        Assert.InRange(d.MassAtCap, 0.0, 1.0);
+        Assert.Equal(d.AcceptanceRate, (double)d.Moves.Sum(m => m.Accepted) / d.Moves.Sum(m => m.Attempts), 12);
+        Assert.Equal(d.Moves.Sum(m => m.Attempts), d.Chains.Sum(a => a.Moves.Sum(m => m.Attempts)));
+        Assert.Null(d.Tempering);
+        Assert.Null(d.Smc);
+        _out.WriteLine($"{(functional ? "functional" : "scalar")}: window [{fh.Window.Low:F1}, {fh.Window.High:F1}], K {fh.Nodes}; round trips " +
+                       $"{string.Join(", ", fh.Production.RoundTrips)}; flatness {fh.Production.MaxFlatnessDeviation:F2}; ESS {fh.EffectiveSampleSize:F0}; " +
+                       $"verdict {d.Verdict.Outcome}; ln Z(1) {fit.Evidence!.LogEvidence:F3} ± {fit.Evidence.MonteCarloError:F3}");
+
+        // Every view runs on the weighted draws.
+        BassRunLengths lengths = fit.Metadata().Lengths;
+        Assert.Equal((chains, (int?)null, (int?)null, (int?)null, (SmcSpec?)null), (lengths.Chains, lengths.BurnIn, lengths.Samples, lengths.Thin, lengths.Smc));
+        Assert.Equal(spec, lengths.FlatHistogram);
+        Assert.All(lengths.DrawsPerChain, n => Assert.Equal(draws, n));
+        Assert.Equal(Enumerable.Range(0, pooled.Length).Sum(s => w[s] * pooled[s].Sigma2), fit.Summary().Posterior.Sigma2.Mean, 12);
+        Assert.Equal(Enumerable.Range(0, pooled.Length).Sum(s => w[s] * pooled[s].Structure.TermIds.Length), fit.Summary().Posterior.Count.Mean, 12);
+        foreach (PointwiseContent content in Enum.GetValues<PointwiseContent>())
+            Assert.Equal(w, fit.PointwiseLogDensity(data, content: content).Weights!.ToArray());
+        BassPrediction prediction = fit.Predict(data, PredictionCases.Of(data));
+        Assert.Equal(pooled.Length, prediction.DrawCount);
+        Assert.Equal(w, fit.Sensitivity(data).Decompositions[0].Weights);
+        fit.Effects(data, effects: new EffectSpec { GridPoints = 10 });
+        BassTrainingFit training = fit.TrainingFit(data);
+        if (!functional)
+        {
+            double[][] fitted = BassQualification.Fitted(BassModel.Create(config, data), fit);
+            for (int i = 0; i < training.Cases; i++)
+                Assert.Equal(Enumerable.Range(0, pooled.Length).Sum(s => w[s] * fitted[s][i]), training.Mean[i, 0], 9);
+            Assert.Null(fit.ResidualDependence);   // a scalar response has no output index
+        }
+        else Assert.NotNull(fit.ResidualDependence);
+        Assert.Throws<InvalidOperationException>(() => fit.Traces());
+        Assert.Null(fit.Checkpoint);
+    }
+
+    [Fact]
+    public void Fit_ResumesBitForBit_AcrossLearningAndProduction()
+    {
+        (BassConfig plain, BassData data) = EndToEnd(functional: false, 7601);
+        BassModel model = BassModel.Create(plain, data);
+        BassFlatHistogramSpec spec = new() { Run = DeclaredRun(RoughShape(model, 8), 300, 200, chains: 3) };
+        BassFit whole = Bass.Fit(WithFlatHistogram(plain, spec), data);
+
+        // A call budget of 170: mid-learning, then across into production, then the rest.
+        BassConfig cut = WithFlatHistogram(plain, spec with { MaxIterations = 170 });
+        var run = new BassRunOptions { Checkpoint = true };
+        BassFit first = Bass.Fit(cut, data, run);
+        BassFlatHistogramReadout readout = first.Diagnostics.FlatHistogram!;
+        Assert.False(readout.Complete);
+        Assert.Equal(170L, readout.LearningIterations);
+        Assert.Null(readout.Production);
+        Assert.All(first.Draws, store => Assert.Empty(store));
+        Assert.Null(first.Evidence);
+        Assert.Null(first.ResidualDependence);
+        Assert.Equal(ConvergenceOutcome.Undetermined, first.Diagnostics.Verdict.Outcome);
+        Assert.Throws<InvalidOperationException>(() => first.Summary());
+        Assert.Throws<InvalidOperationException>(() => first.Predict(data, PredictionCases.Of(data)));
+        Assert.Throws<InvalidOperationException>(() => first.PointwiseLogDensity(data));
+        Assert.Throws<InvalidOperationException>(() => first.Sensitivity(data));
+        Assert.Throws<InvalidOperationException>(() => first.Traces());
+        first.Metadata();
+        Assert.NotNull(first.Checkpoint);
+
+        BassFit second = Bass.Resume(first.Checkpoint!, cut, data, run);
+        Assert.False(second.Diagnostics.FlatHistogram!.Complete);
+        Assert.Equal(300L, second.Diagnostics.FlatHistogram.LearningIterations);
+        Assert.All(second.Draws, store => Assert.Equal(40, store.Count));
+        Assert.Throws<InvalidOperationException>(() => second.Summary());
+        BassFit third = Bass.Resume(second.Checkpoint!, cut, data, run);
+        Assert.True(third.Diagnostics.FlatHistogram!.Complete);
+        Assert.Null(third.Checkpoint);
+
+        // Bit for bit with the uninterrupted run: the draws and accounts, the weights, the learning and production records.
+        Assert.Equal(BassBitIdentityTests.Hash(whole), BassBitIdentityTests.Hash(third));
+        Assert.Equal(whole.DrawWeights, third.DrawWeights);
+        BassFlatHistogramReadout a = whole.Diagnostics.FlatHistogram!, b = third.Diagnostics.FlatHistogram!;
+        Assert.Equal(a.Weights.LogWeights, b.Weights.LogWeights);
+        Assert.Equal(a.WeightTrace.Select(t => (t.Iteration, t.Weights.LogWeights.ToArray())), b.WeightTrace.Select(t => (t.Iteration, t.Weights.LogWeights.ToArray())));
+        foreach ((FlatHistogramDiagnostics x, FlatHistogramDiagnostics y) in new[] { (a.Learning, b.Learning), (a.Production!, b.Production!) })
+        {
+            Assert.Equal(x.Occupancy, y.Occupancy);
+            Assert.Equal(x.RoundTrips, y.RoundTrips);
+            Assert.Equal(x.LastEnd, y.LastEnd);
+            Assert.Equal((x.InWindow, x.BelowWindow, x.AboveWindow), (y.InWindow, y.BelowWindow, y.AboveWindow));
+        }
+        Assert.Equal(whole.Evidence!.LogEvidence, third.Evidence!.LogEvidence);
+        Assert.Equal(whole.Diagnostics.Count.RHat, third.Diagnostics.Count.RHat);
+        for (int c = 0; c < 3; c++)
+        {
+            Assert.Equal(whole.Diagnostics.Chains[c].MoveKinds.Entries, third.Diagnostics.Chains[c].MoveKinds.Entries);
+            Assert.Equal(whole.Diagnostics.Chains[c].Support.Entries, third.Diagnostics.Chains[c].Support.Entries);
+        }
+
+        // Another config's checkpoint, and an MCMC one, are refused.
+        Assert.Throws<ArgumentException>(() => Bass.Resume(second.Checkpoint!, WithFlatHistogram(plain, spec), data));
+        BassConfig mcmc = plain with { Sampling = plain.Sampling with { Chains = 2, BurnIn = 20, Samples = 10 } };
+        BassFit chains = Bass.Fit(mcmc, data, run);
+        Assert.Throws<ArgumentException>(() => Bass.Resume(chains.Checkpoint!, WithFlatHistogram(mcmc, spec with { MaxIterations = 170 }), data));
+    }
+
+    [Fact]
+    public void Fit_UnderImproperSigmaOrFlatIntercept_RunsFromZero_WithNoEvidence()
+    {
+        foreach (BassConfig config in new[]
+                 {
+                     FixtureA(heldTau: false).Config with { Sigma2 = Sigma2Prior.Jeffreys },
+                     FixtureA(heldTau: false).Config with { Intercept = GPriorCentre.Flat },
+                 })
+        {
+            BassModel model = BassModel.Create(config, BassSweepTests.Data());
+            MulticanonicalWeights shape = ExactShape(BassFlatHistogramSpace.Of(model), 10);
+            BassFit fit = Bass.Fit(WithFlatHistogram(config, new BassFlatHistogramSpec { Run = DeclaredRun(shape, 2_000, 500, chains: 2) }), model.Data);
+            BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
+            Assert.True(fh.Complete);
+            Assert.Equal(0.0, fh.LowSlope);
+            Assert.Null(fh.Evidence);
+            Assert.Null(fit.Evidence);
+            Assert.Equal(1.0, fit.DrawWeights!.Sum(), 12);
+            fit.Summary();
+        }
+    }
+
+    [Fact]
+    public void Diagnostics_FlagAChainThatNeverTunnels()
+    {
+        BassModel model = FixtureA(heldTau: false);
+        MulticanonicalWeights shape = ExactShape(BassFlatHistogramSpace.Of(model), 10);
+        // Production too short to cross the window: three draws per chain.
+        BassFit fit = Bass.Fit(WithFlatHistogram(model.Config, new BassFlatHistogramSpec { Run = DeclaredRun(shape, 2_000, 3, chains: 2) }), model.Data);
+        BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
+        Assert.Equal([0, 1], fh.Production!.ChainsWithoutRoundTrip);
+        Assert.All(fh.ProductionChains, c => Assert.Equal([0L], c.RoundTrips));
+        Assert.Equal(0, fh.Production.TotalRoundTrips);
     }
 
     // The collapsed target, its evaluations counted.
@@ -383,6 +837,9 @@ internal sealed class BassFlatHistogramSpace
 
     /// <summary>E[u | S] under p(u)·e^{f(ℓ₁)}.</summary>
     public double MeanU(Structure s, Func<double, double> logWeight) => Mean(s, logWeight, k => U[k]);
+
+    /// <summary>E[τ | S] under p(u)·e^{f(ℓ₁)}.</summary>
+    public double MeanTau(Structure s, Func<double, double> logWeight) => Mean(s, logWeight, k => Math.Exp(U[k]));
 
     /// <summary>E[ℓ₁ | S] under p(u)·e^{f(ℓ₁)}.</summary>
     public double MeanLevel(Structure s, Func<double, double> logWeight) => Mean(s, logWeight, k => s.Levels[k]);

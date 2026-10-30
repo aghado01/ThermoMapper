@@ -4,6 +4,7 @@ using System.Linq;
 using Maths.Regression.Spline.Bars;
 using Maths.Samplers;
 using Maths.Samplers.Ensemble;
+using Maths.Samplers.FlatHistogram;
 using Maths.Samplers.Rjmcmc;
 using Maths.Samplers.Smc;
 
@@ -34,6 +35,11 @@ namespace Maths.Regression.Spline.Bass;
 /// and <see cref="Chains"/> empty. <see cref="ModeSeparation"/> reads the replicates' weighted means; the moves, support
 /// and refusal tallies sum every particle's sweeps; <see cref="MassAtCap"/> is the weighted share at M_max; and
 /// <see cref="SamplesUsed"/> is the particles per replicate.</item>
+/// <item><b>The flat histogram</b> (N17). With <see cref="BassSampling.FlatHistogram"/> the run's readout is
+/// <see cref="FlatHistogram"/> (<see cref="BassFlatHistogramReadout"/>). The chains sample π_w, not the posterior, so the
+/// convergence diagnostics and the verdict read π_w's functionals over production, D10's rules on the chains' own
+/// target. <see cref="ModeSeparation"/> reads the chains' reweighted means at b = 1, <see cref="MassAtCap"/> the weighted
+/// share at M_max, and <see cref="SamplesUsed"/> production's draws per chain; the accounts cover production.</item>
 /// </list>
 /// The totals are the chains' sums, and <see cref="Chains"/> keeps each chain's own, with its start.
 /// </summary>
@@ -56,7 +62,8 @@ public sealed record BassDiagnostics(
     BassModeSeparation ModeSeparation,
     IReadOnlyList<BassChainAccount> Chains,
     BassTemperingReadout? Tempering,
-    BassSmcReadout? Smc = null)
+    BassSmcReadout? Smc = null,
+    BassFlatHistogramReadout? FlatHistogram = null)
 {
     /// <summary>The predictive group: σ² and the fitted values. Do the chains predict the same surface and noise?</summary>
     public const string PredictiveGroup = "predictive";
@@ -219,6 +226,41 @@ public sealed record BassSmcReplicate(
 {
     /// <summary>The stages taken after the initial draw.</summary>
     public int StageCount => Stages.Count - 1;
+}
+
+/// <summary>
+/// A flat-histogram fit's readout (N17 Phase 2), the engine's diagnostics beside the weights they describe.
+/// <list type="bullet">
+/// <item><b>The weights</b> as resolved: <see cref="Weights"/> carries the window [ℓ_lo, ℓ_hi], K nodes and b_lo, the
+/// learning's last (frozen once production began), with t₀ (<see cref="GainScale"/>) and the gain's start.</item>
+/// <item><b>The learning:</b> its iterations, its visits' occupancy, flatness and round trips
+/// (<see cref="Learning"/>), and its weight trace, at its start, every hundredth of its length and its end.</item>
+/// <item><b>Production:</b> the visits pooled (<see cref="Production"/>) and per chain (<see cref="ProductionChains"/>),
+/// whose round trips between the window's end bins are the tunnelling, and whose chains without a round trip
+/// (<see cref="FlatHistogramDiagnostics.ChainsWithoutRoundTrip"/>) did not cross the window.</item>
+/// <item><b>The b = 1 weights'</b> Kish ESS, pooled and per chain: the posterior's share of production.</item>
+/// <item><see cref="Draws"/>: production's ℓ₁ and functionals per draw, which <see cref="Reweighting"/> takes to the
+/// tempered posterior at any b in [b_lo, 1].</item>
+/// <item><see cref="Evidence"/>: the ln Z(b) curve and ln Z(1) − ln Z(b_lo), from a complete run under proper σ² and
+/// intercept priors when the evidence is asked for; the fit's <see cref="BassFit.Evidence"/> only from b_lo = 0.</item>
+/// <item><see cref="Complete"/>: whether the run reached its lengths; a fit short of them has no posterior to view.</item>
+/// </list>
+/// </summary>
+public sealed record BassFlatHistogramReadout(
+    MulticanonicalWeights Weights, double GainScale, long GainStart, long LearningIterations,
+    FlatHistogramDiagnostics Learning, IReadOnlyList<LearningSnapshot> WeightTrace,
+    FlatHistogramDiagnostics? Production, IReadOnlyList<FlatHistogramDiagnostics> ProductionChains,
+    double EffectiveSampleSize, double[] ChainEffectiveSampleSizes,
+    MulticanonicalDraws? Draws, BassFlatHistogramEvidence? Evidence, bool Complete)
+{
+    /// <summary>The window [ℓ_lo, ℓ_hi].</summary>
+    public FlatHistogramWindow Window => new(Weights.Low, Weights.High);
+
+    /// <summary>b_lo, ln w's slope below the window.</summary>
+    public double LowSlope => Weights.LowSlope;
+
+    /// <summary>K, the weights' nodes.</summary>
+    public int Nodes => Weights.Nodes;
 }
 
 /// <summary>

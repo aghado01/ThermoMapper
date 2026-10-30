@@ -5,6 +5,7 @@ using Maths.Distributions;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bars;
 using Maths.Samplers.Evidence;
+using Maths.Samplers.FlatHistogram;
 using Maths.Samplers.Rjmcmc;
 using Maths.Samplers.Smc;
 
@@ -13,18 +14,21 @@ namespace Maths.Regression.Spline.Bass;
 /// <summary>
 /// A tempered run's evidence ln p(y) (D03, D05): the data's marginal likelihood under BASS's priors restricted to F,
 /// estimated over each chain's ladder from b = 1 down to its exact reference rung at b = 0, where the prior on F is
-/// normalized, or over an SMC fit's stages from the prior to b = 1 (<see cref="OfSmc"/>), each replicate's normalizer. A
-/// run reports one only with the reference rung or by SMC that reached b = 1, under proper priors (neither the flat
-/// intercept nor the Jeffreys σ² prior, whose constants leave it undefined), and when
+/// normalized, or over an SMC fit's stages from the prior to b = 1 (<see cref="OfSmc"/>), each replicate's normalizer, or
+/// by a flat-histogram fit's ratio estimator from b_lo = 0 (<see cref="OfFlatHistogram"/>). A run reports one only with the
+/// reference rung, by SMC that reached b = 1 or by a complete flat-histogram run from b_lo = 0, under proper priors
+/// (neither the flat intercept nor the Jeffreys σ² prior, whose constants leave it undefined), and when
 /// <see cref="BassSampling.ReportEvidence"/> asks.
 /// <list type="bullet">
 /// <item><see cref="SteppingStone"/> gives <see cref="LogEvidence"/>: it reads ℓ_b at the rungs only and has no
-/// discretization bias, so it is the integrated form's estimator.</item>
+/// discretization bias, so it is the integrated form's estimator. A flat-histogram fit has none.</item>
 /// <item><see cref="PathSampling"/> reads the same draws where the slope comes free: on the linear form, whose slope is ℓ₁
 /// and whose ℓ_b is linear in b, so Friel, Hurn and Wyse's diagnostic holds and the two estimates' difference reads the
 /// trapezoid's error. On the integrated form it is null: its slope at b = 0 carries −(k/2)·E[1/τ], infinite under
 /// Zellner–Siow, so the trapezoid's end has no finite mean, and elsewhere its diagnostic misses E_b[∂²ℓ_b/∂b²] (D05's
 /// first point).</item>
+/// <item><see cref="FlatHistogram"/>, a flat-histogram fit's: ln Z(1) by the engine's ratio estimator, whose prior's
+/// normalizer cancels, with its error from the production chains' spread; it gives <see cref="LogEvidence"/> there.</item>
 /// </list>
 /// <see cref="Priors"/> says what the value depends on beyond the data.
 /// <para>The evidence carries its flags, and a flagged one is still reported (decided 2026-10-28): the largest pair
@@ -34,8 +38,8 @@ namespace Maths.Regression.Spline.Bass;
 /// barrier asked for may not have been taken; and the between-to-within ratio of the errors
 /// (<see cref="BassEvidenceEstimate.BetweenToWithin"/>), well above 1 where the chains disagree beyond their own errors.</para>
 /// </summary>
-public sealed record BassEvidence(BassEvidenceEstimate SteppingStone, BassEvidenceEstimate? PathSampling, BassEvidencePriors Priors,
-                                  double MaxPairRejection, bool AtMaxLevels)
+public sealed record BassEvidence(BassEvidenceEstimate? SteppingStone, BassEvidenceEstimate? PathSampling, BassEvidencePriors Priors,
+                                  double MaxPairRejection, bool AtMaxLevels, BassFlatHistogramEvidence? FlatHistogram = null)
 {
     /// <summary>
     /// The pair rejection above which the evidence is flagged <see cref="Saturated"/>. Under a Gaussian reading of the swap,
@@ -46,11 +50,12 @@ public sealed record BassEvidence(BassEvidenceEstimate SteppingStone, BassEviden
     /// </summary>
     public const double RejectionThreshold = 0.9;
 
-    /// <summary>The run's evidence, by stepping-stone.</summary>
-    public double LogEvidence => SteppingStone.LogEvidence;
+    /// <summary>The run's evidence, by stepping-stone, or a flat-histogram fit's ratio estimator.</summary>
+    public double LogEvidence => SteppingStone?.LogEvidence ?? FlatHistogram!.LogRatio;
 
-    /// <summary>Its Monte Carlo error: the larger of the within- and between-chain errors.</summary>
-    public double MonteCarloError => SteppingStone.MonteCarloError;
+    /// <summary>Its Monte Carlo error: the larger of the within- and between-chain errors, or a flat-histogram fit's
+    /// chains' spread.</summary>
+    public double MonteCarloError => SteppingStone?.MonteCarloError ?? FlatHistogram!.MonteCarloError;
 
     /// <summary>Whether a pair's rejection rose above <see cref="RejectionThreshold"/>.</summary>
     public bool Saturated => MaxPairRejection > RejectionThreshold;
@@ -97,6 +102,18 @@ public sealed record BassEvidence(BassEvidenceEstimate SteppingStone, BassEviden
         return new BassEvidence(Pooled(normalizers), pathSampling, BassEvidencePriors.Of(model.Config, model.Resolved), double.NaN, false);
     }
 
+    /// <summary>
+    /// The evidence of a flat-histogram fit (N17) from its <paramref name="curve"/>, which must run from b_lo = 0: ln Z(1),
+    /// with no ladder, so the rejection flags read NaN and false.
+    /// </summary>
+    internal static BassEvidence OfFlatHistogram(BassModel model, BassFlatHistogramEvidence curve)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentNullException.ThrowIfNull(curve);
+        if (!curve.IsEvidence) throw new ArgumentException($"The curve runs from b_lo = {curve.From}, so it reads a ratio, not the evidence.", nameof(curve));
+        return new BassEvidence(null, null, BassEvidencePriors.Of(model.Config, model.Resolved), double.NaN, false, curve);
+    }
+
     // Each chain's own ladder gives its estimate (each adapted its own rungs); the run's pools them as BARS's does.
     private static BassEvidenceEstimate Pooled(IReadOnlyList<BassLadder> ladders, LadderEstimator method)
     {
@@ -111,6 +128,41 @@ public sealed record BassEvidence(BassEvidenceEstimate SteppingStone, BassEviden
         PooledLadderEstimate pooled = LadderEvidence.Pool(runs);
         return new BassEvidenceEstimate(pooled.Method, pooled.LogRatio, pooled.MonteCarloError, pooled.WithinChainError, pooled.BetweenChainError,
                                         pooled.DiscretizationError, pooled.Chains);
+    }
+}
+
+/// <summary>
+/// A flat-histogram fit's evidence curve (N17): ln Z(b) = ln E_prior[e^{b·ℓ₁}] on a grid of b from b_lo to 1 by the
+/// engine's ratio estimator (<see cref="LogEvidenceCurve"/>), and <see cref="LogRatio"/>, ln Z(1) − ln Z(b_lo), with its
+/// error from the production chains' spread of the same difference. The estimator needs the prior proper, not
+/// normalized: its normalizer cancels, so BASS's structure prior, D02's count weight on F, needs no correction, and from
+/// b_lo = 0 the ratio is ln p(y) under the prior on F (<see cref="IsEvidence"/>). Above b_lo = 0 the denominator reaches
+/// the prior only through the b_lo-tempered law below the window, so the ratio is reported as a ratio, never as the
+/// evidence.
+/// </summary>
+/// <param name="Curve">ln Ẑ(b) on the grid, b_lo first and b = 1 last.</param>
+/// <param name="From">b_lo, the grid's first b.</param>
+/// <param name="LogRatio">ln Ẑ(1) − ln Ẑ(b_lo).</param>
+/// <param name="MonteCarloError">Its error: the sd over the chains of their own differences, over √C (NaN for one chain).</param>
+public sealed record BassFlatHistogramEvidence(LogEvidenceCurve Curve, double From, double LogRatio, double MonteCarloError)
+{
+    /// <summary>The grid's points: 101, evenly spaced from b_lo to 1.</summary>
+    public const int GridPoints = 101;
+
+    /// <summary>Whether the ratio is the evidence: b_lo = 0, where ln Ẑ(0) = 0.</summary>
+    public bool IsEvidence => From == 0.0;
+
+    // The curve over `draws` on the grid from their weights' b_lo to 1.
+    internal static BassFlatHistogramEvidence Of(MulticanonicalDraws draws)
+    {
+        ArgumentNullException.ThrowIfNull(draws);
+        double low = draws.Weights.LowSlope;
+        var grid = new double[GridPoints];
+        for (int k = 0; k < grid.Length; k++) grid[k] = low + (1.0 - low) * k / (GridPoints - 1);
+        grid[^1] = 1.0;
+        LogEvidenceCurve curve = Reweighting.LogEvidence(draws, grid);
+        (double ratio, double error) = curve.LogRatio(0, grid.Length - 1);
+        return new BassFlatHistogramEvidence(curve, low, ratio, error);
     }
 }
 
