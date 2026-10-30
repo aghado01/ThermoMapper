@@ -4,6 +4,8 @@ Status: side brief, 2026-10-24. Parked for later and not scheduled. Written at t
 
 Revised 2026-10-28 after the spin-glass threads discussion (`issues/spc/opus-spin-glass-threads.md`): the `Maths.Samplers` containers S1 and S5 can reuse, R-hat across replicas, temperature integration as an S1 consumer, the state S5 keeps (SQ5), and the checks that follow. Nothing in S1–S7 had landed by then.
 
+Corrected 2026-10-29: SPC has no mid-run resume (the SPCX file caches finished tasks), so the series has nothing to append across; SQ2's leaning keeps its conclusion on the cache's grounds. The log-binned histogram counts in 64 bits since `1c42741` (SPCX v8).
+
 The principle, from the user: keep each draw's generative state, derive views from it, and where alternatives keep different information, offer both as options.
 
 ## Where things stand
@@ -12,10 +14,10 @@ The principle, from the user: keep each draw's generative state, derive views fr
 - **The accumulator** (`Accumulator.cs`). It keeps:
   - running sums of E, E², m, m², Σ|c|² and Σ|c|² without the largest cluster;
   - the log-binned cluster-size histogram;
-  - the final spins and RNG words, for resume;
+  - the final spins and RNG words, which the engine's `Restore` would resume from (nothing calls it);
   - the optional per-edge counts (`AccumulationSpec`: affinities, alignments, co-membership) and per-node sums (the cluster-size and giant-participation landscapes).
 - **The runner** (`SwRunner.cs`). It discards `RunBudget.BurnIn` cycles, then accumulates `Cycles`. A sweep keeps every run's accumulator, per temperature and replica (`SweepResult.SweepRuns`).
-- **The serialization.** The accumulator is the resume state and is serialized (`SwRunSerialization.cs`, `AccumulatorSerializer`), so any retained series is part of the binary format and has to append across a resume.
+- **The serialization.** The accumulator is serialized as SPCX v8 (`SwRunSerialization.cs`, `AccumulatorSerializer`) as a cache of finished tasks: `SpcExecutor` loads a completed task's file (`SpcxDiskFrameSink.TryLoad`) instead of rerunning it, and the loaded result carries the accumulator alone. There is no mid-run resume. A retained series kept on the accumulator becomes part of the binary format and returns with a cached task; one kept anywhere else is lost on that path.
 
 ## Items
 
@@ -81,13 +83,13 @@ The principle, from the user: keep each draw's generative state, derive views fr
   - For any superadditive g these means are monotone in β, which makes them endpoint-only certificates for the regime-A
     stopping rule (`issues/spc-BARS/stopping-theory-primer.md`, §12.4, §12.7 and §12.13). The log-binned histogram only
     bounds them.
-- **Cost:** N 64-bit counts per run, about 26 KB at N = 3,200, far less than S1. At high T nearly every node is a singleton each sweep, so a 32-bit count of size 1 overflows after about 2³¹/N sweeps (670,000 at N = 3,200); the log-binned histogram's int bins share that limit.
+- **Cost:** N 64-bit counts per run, about 26 KB at N = 3,200, far less than S1. At high T nearly every node is a singleton each sweep, so the count of size 1 gains about N a sweep, and a 32-bit count would wrap after about 2³¹/N sweeps (670,000 at N = 3,200). The counts are 64-bit, as the log-binned histogram's have been since `1c42741`.
 - **Relation to S5:** per-sweep partitions give the same means and much more, at gigabytes. S7 is the cheap route to the
   means alone.
 
 ## Sequencing
 
-1. **S1 with S3:** one per-sweep record, with the serialization change and resume appending.
+1. **S1 with S3:** one per-sweep record, with the serialization change. Appending across a resume comes only if mid-run resume is ever wired.
 2. **S2:** views over S1, or running sums if S1 is optional.
 3. **S6 and S7:** independent and small; either can go any time.
 4. **S4:** follows S1's record shape.
@@ -112,7 +114,7 @@ Validation ground truth from outside the estimator's own model:
 | ID | Question | Notes |
 |---|---|---|
 | SQ1 | Is S1 on by default? | Its size argues yes (0.3 MB per run); the binary format change argues for a version bump either way. Leaning yes (2026-10-28): keep each draw's state, and about 60 MB per sweep in memory |
-| SQ2 | Where do the series live in the result? | On `Accumulator` (travels with resume), or beside it in `SwRunResult` (keeps the resume state lean). Leaning `Accumulator` (2026-10-28): resume has to append the series, and the running sums are its reductions, so the series is the resume state and the sums are views; a side file would break resume |
+| SQ2 | Where do the series live in the result? | On `Accumulator` (travels with resume), or beside it in `SwRunResult` (keeps the resume state lean). Leaning `Accumulator` (2026-10-28): the running sums are the series' reductions, so the series is the state and the sums are views. The resume argument given then does not hold (corrected 2026-10-29: no mid-run resume exists). The cache does: a task loaded from its SPCX file carries the accumulator alone, so a series kept anywhere else is lost for cached tasks |
 | SQ3 | Storage format for persisted series and partitions | The interop tier's membrane doctrine points at a standard columnar spec at the crossing. The SPCX checkpoint stays internal; S5's persistence waits on Archivory |
 | SQ4 | Does SW join a shared diagnostics layer? | The MCMC engine family sketch has reversible engines sharing mixing diagnostics; S1 is the precondition. Proposed (2026-10-28): through the data shapes (`ChainTrace`, `ChainDiagnostics`, `RungDraws`), not the ensemble shell |
 | SQ5 | Which state does S5 keep: spins, FK labels, or both? | Spins are the Markov state and cost a byte per node; FK labels are what SPC reads; both is the full generative state of a sweep. They keep different information, so all three are candidate options |
