@@ -95,7 +95,7 @@ public sealed class SwCoMembershipTests
             Q                        = 4,
             DrawCount                = 4,
             Spins                    = new int[2],
-            ClusterSizeHistogram     = new int[2],
+            ClusterSizeHistogram     = new long[2],
             RngState0 = 1, RngState1 = 2, RngState2 = 3, RngState3 = 4,
             RunningSumSqClusterSizes = 0, RunningSumSqClusterSizesExcl = 0,
             RunningSumEnergy = 0, RunningSumEnergySq = 0,
@@ -116,7 +116,7 @@ public sealed class SwCoMembershipTests
         var accumulator = new Accumulator
         {
             Temperature = 1.0, Q = 4, DrawCount = 10,
-            Spins = new int[2], ClusterSizeHistogram = new int[2],
+            Spins = new int[2], ClusterSizeHistogram = new long[2],
             RngState0 = 1, RngState1 = 2, RngState2 = 3, RngState3 = 4,
             RunningSumSqClusterSizes = 0, RunningSumSqClusterSizesExcl = 0,
             RunningSumEnergy = 0, RunningSumEnergySq = 0,

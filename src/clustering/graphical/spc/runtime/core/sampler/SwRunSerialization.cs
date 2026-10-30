@@ -26,7 +26,7 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
         public override string DefaultFileExtension => ".spcx";
 
         private const uint Magic = 0x58435053; // "SPCX"
-        private const int Version = 7;         // v7: add co-membership count array behind its own presence flag
+        private const int Version = 8;         // v8: the cluster-size histogram counts in 64 bits (v7: co-membership counts)
 
         public override void WriteTo(Accumulator value, Stream stream)
         {
@@ -45,7 +45,7 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
             foreach (int s in value.Spins) w.Write(s);
 
             w.Write(value.ClusterSizeHistogram.Length);
-            foreach (int h in value.ClusterSizeHistogram) w.Write(h);
+            foreach (long h in value.ClusterSizeHistogram) w.Write(h);
 
             w.Write(value.RngState0);
             w.Write(value.RngState1);
@@ -130,8 +130,8 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
             for (int i = 0; i < spinCount; i++) spins[i] = r.ReadInt32();
 
             int histBins = r.ReadInt32();
-            var hist = new int[histBins];
-            for (int i = 0; i < histBins; i++) hist[i] = r.ReadInt32();
+            var hist = new long[histBins];
+            for (int i = 0; i < histBins; i++) hist[i] = r.ReadInt64();
 
             ulong s0 = r.ReadUInt64();
             ulong s1 = r.ReadUInt64();

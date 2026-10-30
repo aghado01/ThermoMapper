@@ -178,7 +178,7 @@ public sealed class LandscapeWalkTests
         Q = 4,
         DrawCount = draws,
         Spins = new int[perNode.Length],
-        ClusterSizeHistogram = new int[perNode.Length],
+        ClusterSizeHistogram = new long[perNode.Length],
         RngState0 = 1,
         RngState1 = 2,
         RngState2 = 3,

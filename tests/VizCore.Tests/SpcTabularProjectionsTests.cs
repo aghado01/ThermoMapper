@@ -72,7 +72,7 @@ public sealed class SpcTabularProjectionsTests
     private static Accumulator BondFrame(double temperature, int draws, int[] bondFormedCount) => new()
     {
         Temperature = temperature, Q = 4, DrawCount = draws,
-        Spins = new int[4], ClusterSizeHistogram = new int[4],
+        Spins = new int[4], ClusterSizeHistogram = new long[4],
         RngState0 = 1, RngState1 = 2, RngState2 = 3, RngState3 = 4,
         RunningSumSqClusterSizes = 0.0, RunningSumSqClusterSizesExcl = 0.0,
         RunningSumEnergy = 0.0, RunningSumEnergySq = 0.0,

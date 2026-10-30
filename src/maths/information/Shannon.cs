@@ -4,7 +4,7 @@ namespace Maths.Information;
 
 public static class Shannon
 {
-    public static double EntropyNats(ReadOnlySpan<int> counts)
+    public static double EntropyNats(ReadOnlySpan<long> counts)
     {
         long total = 0;
         for (int i = 0; i < counts.Length; i++)

@@ -29,7 +29,7 @@ public sealed record Accumulator
 
     // ── Configuration + resume state ─────────────────────────────────────
     public required int[]  Spins                { get; init; }
-    public required int[]  ClusterSizeHistogram { get; init; }
+    public required long[] ClusterSizeHistogram { get; init; }
     public required ulong  RngState0            { get; init; }
     public required ulong  RngState1            { get; init; }
     public required ulong  RngState2            { get; init; }

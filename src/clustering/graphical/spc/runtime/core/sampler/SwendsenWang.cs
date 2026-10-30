@@ -80,7 +80,7 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
     private readonly int[]? _coMembershipCount;
 
     // ── Observables ───────────────────────────────────────────────────────
-    private readonly int[] _clusterSizeHistogram;  // log-binned; bin k = sizes [2^k, 2^(k+1))
+    private readonly long[] _clusterSizeHistogram; // log-binned; bin k = sizes [2^k, 2^(k+1)); 64-bit, as a bin gains up to N a cycle
 
     private double _runningSumSqClusterSizes;       // Σ_cycles Σ_c |c|², the FK accumulator
     private double _runningSumSqClusterSizesExcl;   // Σ_cycles (Σ_c |c|² − max_c|c|²), percolation diagnostic
@@ -144,7 +144,7 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         _coMembershipCount = accumulation.CoMembership ? new int[_bondTable.Length] : null;
 
         int maxBin = BitOperations.Log2((uint)Math.Max(1, _n)) + 1;
-        _clusterSizeHistogram = new int[maxBin];
+        _clusterSizeHistogram = new long[maxBin];
 
         // Random initial configuration (high-T disorder).
         for (int i = 0; i < _n; i++)
@@ -159,7 +159,7 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
     public int N => _n;
 
     public ReadOnlySpan<int> Spins => _spins;
-    public ReadOnlySpan<int> ClusterSizeHistogram => _clusterSizeHistogram;
+    public ReadOnlySpan<long> ClusterSizeHistogram => _clusterSizeHistogram;
 
     public double RunningSumSqClusterSizes     => _runningSumSqClusterSizes;
     public double RunningSumSqClusterSizesExcl => _runningSumSqClusterSizesExcl;
@@ -338,7 +338,7 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
             Q                        = _q,
             DrawCount                = _drawCount,
             Spins                    = (int[])_spins.Clone(),
-            ClusterSizeHistogram     = (int[])_clusterSizeHistogram.Clone(),
+            ClusterSizeHistogram     = (long[])_clusterSizeHistogram.Clone(),
             RngState0                = s0,
             RngState1                = s1,
             RngState2                = s2,

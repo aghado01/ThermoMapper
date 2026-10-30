@@ -23,7 +23,7 @@ internal interface ISwEngine
     int N { get; }
 
     ReadOnlySpan<int> Spins { get; }
-    ReadOnlySpan<int> ClusterSizeHistogram { get; }
+    ReadOnlySpan<long> ClusterSizeHistogram { get; }
 
     double RunningSumSqClusterSizes { get; }
     double RunningSumSqClusterSizesExcl { get; }

@@ -37,7 +37,7 @@ public sealed class ThermalEomTests
             Q = 20,
             DrawCount = 20,
             Spins = new int[3],
-            ClusterSizeHistogram = new int[3],
+            ClusterSizeHistogram = new long[3],
             RngState0 = 1, RngState1 = 2, RngState2 = 3, RngState3 = 4,
             RunningSumSqClusterSizes = 0.0,
             RunningSumSqClusterSizesExcl = 0.0,

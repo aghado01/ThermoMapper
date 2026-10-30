@@ -77,7 +77,7 @@ flowchart LR
 | Potts model | `FkKernel.BondProbability`; `PottsModelConfig` (Q = 20); `BwdPottsCriticalEstimate.TpsUpperBound`; `Susceptibility`, `MeanEnergy`, `SpecificHeat`, `Magnetization`, `MagnetizationSusceptibility` (`.Reduce`) |
 | Single run | `SwRunner.Run(SwRunSpec)` → `SwRunResult`; `SwRunSpec`, `RunBudget`, `AccumulationSpec` (`None`, `Currencies`, …), `Accumulator` |
 | Reductions | `SwCurrencies.ToAffinities` / `ToAlignments` / `ToCoMembership`; `SwLandscapes.MeanClusterSize` / `GiantParticipation` |
-| Checkpoints | `AccumulatorSerializer.Instance` (SPCX v7, `.spcx`) |
+| Checkpoints | `AccumulatorSerializer.Instance` (SPCX v8, `.spcx`) |
 | Execution | `ISpcExecutor` / `SpcExecutor` (`BuildTaskList`, `Run`, `RunBatch`, `ExecuteAll`, `ExecuteBatch`, `ExecuteTask`); `SpcTaskSpec`, `SpcBatchResult`, `SpcExecutionOptions`, `SpcRunResult`; sinks `InMemoryFrameSink`, `NullFrameSink`, `SpcxDiskFrameSink`; `WorkerBudgetPolicy`, `WorkerBudgetResolver`; `SpcGraphBuilder.BuildResult` |
 | Scheduling | `ISweepStrategy`; `FixedGridSweepStrategy(FixedGridSweepConfig).Run(graph, analyzer?)` → `SweepResult`; `AutoGridFixedSweep.BuildConfig`; `SpcScheduleHelpers` (`LogSpaceGrid`, `Estimate`, `EstimateBracket`); `SpcSeedHelper.Derive`; `SweepKernel` |
 
@@ -173,10 +173,10 @@ With D retained draws:
   - Explicit: clamped to $[1,L]$.
   - Either way, capped at the number of tasks.
 - **Determinism.** Each task owns its RNG, so given seeds the results do not depend on worker count or scheduling.
-- **SPCX v7** (little-endian):
-  1. Magic `SPCX` and version 7.
+- **SPCX v8** (little-endian):
+  1. Magic `SPCX` and version 8.
   2. T, Q, replica index and draw count.
-  3. The spins and the histogram.
+  3. The spins and the histogram, whose counts are 64-bit.
   4. Four RNG state words.
   5. Six scalar sums.
   6. For each optional array: a presence byte, then its length and payload.

@@ -17,9 +17,9 @@ public sealed class SpcDiagnosticsTests
     [Fact]
     public void Shannon_EntropyNats_Counts_DegenerateAndUniformCasesBehaveAsExpected()
     {
-        Assert.Equal(0.0, Shannon.EntropyNats(new int[] { 0, 0, 0 }));
-        Assert.Equal(0.0, Shannon.EntropyNats(new int[] { 5, 0, 0 }));
-        Assert.InRange(Math.Abs(Shannon.EntropyNats(new int[] { 1, 1, 1, 1 }) - Math.Log(4.0)), 0.0, 1e-12);
+        Assert.Equal(0.0, Shannon.EntropyNats(new long[] { 0, 0, 0 }));
+        Assert.Equal(0.0, Shannon.EntropyNats(new long[] { 5, 0, 0 }));
+        Assert.InRange(Math.Abs(Shannon.EntropyNats(new long[] { 1, 1, 1, 1 }) - Math.Log(4.0)), 0.0, 1e-12);
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public sealed class SpcDiagnosticsTests
     {
         double expected = -(0.99 * Math.Log(0.99) + 0.01 * Math.Log(0.01));
 
-        Assert.InRange(Math.Abs(Shannon.EntropyNats(new int[] { 99, 1 }) - expected), 0.0, 1e-12);
+        Assert.InRange(Math.Abs(Shannon.EntropyNats(new long[] { 99, 1 }) - expected), 0.0, 1e-12);
     }
 
     [Fact]
@@ -69,9 +69,9 @@ public sealed class SpcDiagnosticsTests
     {
         var frames = new List<Accumulator>
         {
-            CreateFrame(temperature: 2.0, clusterSizeHistogram: new[] { 1, 0, 0, 0 }),
-            CreateFrame(temperature: 1.0, clusterSizeHistogram: new[] { 2, 0, 0, 0 }),
-            CreateFrame(temperature: 1.0, clusterSizeHistogram: new[] { 0, 2, 0, 0 }),
+            CreateFrame(temperature: 2.0, clusterSizeHistogram: new long[] { 1, 0, 0, 0 }),
+            CreateFrame(temperature: 1.0, clusterSizeHistogram: new long[] { 2, 0, 0, 0 }),
+            CreateFrame(temperature: 1.0, clusterSizeHistogram: new long[] { 0, 2, 0, 0 }),
         };
 
         LabelEntropyCurve curve = LabelEntropyCurve.From(frames);
@@ -112,7 +112,7 @@ public sealed class SpcDiagnosticsTests
                     Q = 3,
                     DrawCount = 4,
                     Spins = new[] { 0, 0 },
-                    ClusterSizeHistogram = new[] { 2 },
+                    ClusterSizeHistogram = new long[] { 2 },
                     RngState0 = 1UL,
                     RngState1 = 2UL,
                     RngState2 = 3UL,
@@ -134,7 +134,7 @@ public sealed class SpcDiagnosticsTests
                     Q = 3,
                     DrawCount = 2,
                     Spins = new[] { 0, 1 },
-                    ClusterSizeHistogram = new[] { 1, 1 },
+                    ClusterSizeHistogram = new long[] { 1, 1 },
                     RngState0 = 5UL,
                     RngState1 = 6UL,
                     RngState2 = 7UL,
@@ -302,7 +302,7 @@ public sealed class SpcDiagnosticsTests
             Accumulator = new Accumulator
             {
                 Temperature = 1.0, Q = 3, DrawCount = 4,
-                Spins = new[] { 0, 0 }, ClusterSizeHistogram = new[] { 2 },
+                Spins = new[] { 0, 0 }, ClusterSizeHistogram = new long[] { 2 },
                 RngState0 = 1UL, RngState1 = 2UL, RngState2 = 3UL, RngState3 = 4UL,
                 RunningSumSqClusterSizes = 8.0, RunningSumSqClusterSizesExcl = 0.0,
                 RunningSumEnergy = -4.0, RunningSumEnergySq = 4.0,
@@ -315,7 +315,7 @@ public sealed class SpcDiagnosticsTests
             Accumulator = new Accumulator
             {
                 Temperature = 2.0, Q = 3, DrawCount = 2,
-                Spins = new[] { 0, 1 }, ClusterSizeHistogram = new[] { 1, 1 },
+                Spins = new[] { 0, 1 }, ClusterSizeHistogram = new long[] { 1, 1 },
                 RngState0 = 5UL, RngState1 = 6UL, RngState2 = 7UL, RngState3 = 8UL,
                 RunningSumSqClusterSizes = 4.0, RunningSumSqClusterSizesExcl = 0.0,
                 RunningSumEnergy = 0.0, RunningSumEnergySq = 0.0,
@@ -329,7 +329,7 @@ public sealed class SpcDiagnosticsTests
         int cycleCount = 4,
         int nodeCount = 4,
         double sumSqClusterSizes = 0.0,
-        int[]? clusterSizeHistogram = null,
+        long[]? clusterSizeHistogram = null,
         double runningSumEnergy = 0.0,
         double runningSumEnergySq = 0.0)
     {
@@ -339,7 +339,7 @@ public sealed class SpcDiagnosticsTests
             Q = 4,
             DrawCount = cycleCount,
             Spins = new int[nodeCount],
-            ClusterSizeHistogram = clusterSizeHistogram ?? new int[nodeCount],
+            ClusterSizeHistogram = clusterSizeHistogram ?? new long[nodeCount],
             RngState0 = 1,
             RngState1 = 2,
             RngState2 = 3,

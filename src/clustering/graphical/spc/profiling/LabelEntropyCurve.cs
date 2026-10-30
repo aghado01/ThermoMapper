@@ -27,13 +27,13 @@ public readonly record struct LabelEntropyCurve(
         if (frames.Count == 0)
             return new LabelEntropyCurve(Array.Empty<double>(), Array.Empty<double>());
 
-        var grouped = new SortedDictionary<double, int[]>();
+        var grouped = new SortedDictionary<double, long[]>();
         for (int i = 0; i < frames.Count; i++)
         {
             Accumulator frame = frames[i];
-            if (!grouped.TryGetValue(frame.Temperature, out int[]? histogram))
+            if (!grouped.TryGetValue(frame.Temperature, out long[]? histogram))
             {
-                histogram = new int[frame.ClusterSizeHistogram.Length];
+                histogram = new long[frame.ClusterSizeHistogram.Length];
                 grouped[frame.Temperature] = histogram;
             }
             else if (histogram.Length < frame.ClusterSizeHistogram.Length)
@@ -49,7 +49,7 @@ public readonly record struct LabelEntropyCurve(
         var temperatures = new double[grouped.Count];
         var entropy = new double[grouped.Count];
         int index = 0;
-        foreach ((double temperature, int[] histogram) in grouped)
+        foreach ((double temperature, long[] histogram) in grouped)
         {
             temperatures[index] = temperature;
             entropy[index] = ClusterSizeEntropy.EntropyNats(histogram);

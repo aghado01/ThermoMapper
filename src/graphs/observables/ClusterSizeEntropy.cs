@@ -18,6 +18,6 @@ namespace Graphs.Observables;
 public static class ClusterSizeEntropy
 {
     /// <summary>Entropy of the size histogram in nats.</summary>
-    public static double EntropyNats(ReadOnlySpan<int> histogram)
+    public static double EntropyNats(ReadOnlySpan<long> histogram)
         => Shannon.EntropyNats(histogram);
 }
