@@ -1,6 +1,6 @@
 # A flat-histogram sampler, shared (design draft)
 
-Date: 2026-10-29. Status: decided. The user decided to build it whatever the reference-path test reads ([that test's brief](friedman-reference-brief.md)), and on the same day took the nine recommendations below as drafted. Phase 1 runs as a chip ([its brief](flat-histogram-phase1-brief.md)).
+Date: 2026-10-29. Status: decided. The user decided to build it whatever the reference-path test reads ([that test's brief](friedman-reference-brief.md)), and on the same day took the nine recommendations below as drafted. Phase 1 runs as a chip ([its brief](flat-histogram-phase1-brief.md)), and Phase 2 is briefed ([its brief](flat-histogram-phase2-brief.md)).
 
 ## Why
 
