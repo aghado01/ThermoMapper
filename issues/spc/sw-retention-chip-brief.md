@@ -92,3 +92,92 @@ Under "Reports" below, newest first:
 - anything the main session must know, including stale lines in the retention brief.
 
 ## Reports
+
+### 2026-10-29: all six tasks landed
+
+**What landed.** The record's bits were never regenerated: every later commit leaves the 12 probe cases bit-identical, with the options off and on.
+
+| Task | Commit | What |
+|---|---|---|
+| 1. The probe | `6de243a` | `SwAccumulatorProbeTests`: a triangle (q = 4; T = 0.3, 1, 3) and a 16-node random graph (q = 20; T = 0.1, 0.6, 2), under `None` and `Currencies` with both landscapes, 50 + 400 draws. Recorded at 6233f93: the six sums and four RNG words as bit patterns, plus a SHA-256 of the histogram, spins, per-edge counts and landscapes. The random graph's middle temperature sits at its χ_m and C_v peak (T ≈ 0.6–0.65). |
+| 2. S1 with S3 | `bc70bf2` | The per-draw record on `Accumulator` and the `ISwEngine` read surface. Also: SPCX v9, the `Restore` length check, and `InternalsVisibleTo` for the tests. |
+| 3. S2 | `f542951` | `BinderCumulant` (`Moments`, `Reduce`) in the Potts observables, and the `BinderCumulant` channel in `SweepProfile`, reduced once from moments pooled across replicas. Includes the lattice crossing check. |
+| 4. S4 | `1322e47` | `AccumulationSpec.BurnInTrace` and SPCX v10. |
+| 5. S6 | `96de69d` | `SweepCurves.ByTemperatureWithSpread` → `SweepCurve(Temperatures, Means, StandardDeviations, Replicas)`. |
+| 6. S7 | `d7269ea` | `AccumulationSpec.ExactClusterSizeHistogram`, SPCX v11, and `Graphs.Observables.ClusterSizeSums` (`Mean` for any g, `SecondMoment` = S₂, `FlooredCount` = F_n, `SizeLogSize`). |
+| Review | `8c4c1ae`, `564a1ab` | The fixes below, and one notation-ledger entry. |
+
+**The Binder crossing.** The tolerance was fixed before the first run, from a timing pass alone: |T× − T_c| ≤ 0.02 for each pair. The setup:
+- T ∈ {1.09, 1.11, 1.13, 1.15, 1.17, 1.19};
+- 4 replicas per point, 1,000 burn-in draws, and 25,000 / 12,500 / 6,250 measured draws for L = 8 / 16 / 32;
+- seeds from `SeedTree` per L, then `SpcSeedHelper` per (T, replica);
+- the crossing is the linear interpolation at the single sign change of U_larger − U_smaller.
+
+The crossings sit 0.0022–0.0023 below the exact T_c = 1/ln(1 + √2) = 1.13459:
+
+| Pair | Crossing |
+|---|---|
+| 8 × 16 | 1.1324 |
+| 8 × 32 | 1.1323 |
+| 16 × 32 | 1.1323 |
+
+U near the crossing is about 0.616; the 2D Ising U* is 0.611. The check takes 8.1 s alone (`Parallel.For` over 72 runs) and about 4 s warm.
+
+**Tests.** 93 new facts, all passing:
+
+| Class | Facts | What they check |
+|---|---|---|
+| `SwAccumulatorProbeTests` | 24 | 12 cases, with the options off and on |
+| `SwDrawRecordTests` | 25 | the series against the sums on every probe run; the burn-in reset; m on the leaving spins and E on the entering spins, bit for bit; v11 round trips, present and empty; v8, v9 and v10 refused with the version in the message; growth; `Restore` appends and refuses a short record |
+| `BinderCumulantTests` | 7 | the reduction, pooling, NaN without a record, the crossing |
+| `SwBurnInTraceTests` | 10 | the trace's length is the burn-in count; it is the head of the unburned stream; the measured record is unchanged; round trips; `Restore` |
+| `SweepCurvesSpreadTests` | 3 | the means match `ByTemperature` bit for bit; the sample SD; empty input |
+| `SwExactClusterSizeHistogramTests` | 24 | Σ s·n_s = N × draws, Σ s²·n_s = Σ\|c\|²'s sum, and the rebinning equals the log bins, on every probe run; the reset; round trips; `Restore`; the reductions by hand; S₂ = χ_FK/N on a run |
+
+The full VizCore Release runs, both built into `artifacts\chip-sw-retention\`:
+- after task 6: 357 passed, 2 skipped (the Möbius golden drafts), 0 failed;
+- at the end, after a clean (`--no-incremental`) build: 357 passed, 2 skipped, 0 failed, in 53 s. The build raised no warnings in the changed files; three CS1574 cref warnings in the sampler folder (`IReduction`, `PottsModel{TConfig}`) predate this work.
+
+**Changes outside my files.** All are behaviour-free, and the full VizCore run covers each.
+- `projects/Clustering.Graphical.SPC/Clustering.Graphical.SPC.csproj`: `InternalsVisibleTo VizCore.Tests`, so tests can drive the internal engine's `Restore` and bare `Draw`.
+- `docs/Clustering/SpcAnalysis.md`: the Binder bullet; "seven series" corrected to eight, with `BinderCumulant` added; the `ByTemperatureWithSpread` paragraph and its row in the surface table.
+- `docs/Graphs/GraphSubstrate.md`: `ClusterSizeSums` in the observables row, with a short paragraph.
+- `issues/notation-ledger.md`: "One SW update: draw, cycle and sweep".
+
+**Reversible defaults, open for the user.**
+- *The record's shape.* Four parallel plain arrays, named "PerDraw" after `DrawCount` and the existing `…PerNode` arrays: `EnergyPerDraw` and `MagPerDraw` (double), `SumSqClusterSizesPerDraw` (long, the cycle's own integer) and `MaxClusterSizePerDraw` (int). That is 28 bytes a draw, and every value is exact. The alternative is one record type of the four arrays, shared by the record and the trace.
+- *Not `required`.* The four arrays default to empty, so the seven hand-built frames in the tests stay valid. A consumer reads "no record" as length ≠ `DrawCount`. The SPCX reader accepts any length; `Restore` enforces it.
+- *Capacity.* `Run(n)` and `BurnIn(n)` reserve their own counts, so the budget arrives through the call and no constructor parameter is needed. Bare `Draw`s double the capacity.
+- *The trace's scope.* It keeps every draw a `BurnIn` reset discards, including bare draws before it, and appends across repeated `BurnIn` calls. With the option on and no burn-in, it is present and empty.
+- *Versions.* One bump per task (v9, v10, v11), since S4 and S7 landed in separate commits.
+- *Binder's degenerate cases.* NaN when ⟨m²⟩ ≤ 0, or when a frame lacks the record, rather than the house 0: U = 0 would read as "disordered". In `SweepProfile`, ⟨m²⟩ comes from the running sums, which match the series' mean bit for bit.
+- *Binder for q > 2.* m is Blatt's scalar order parameter, which is \|M\|/N for q = 2. For q > 2 this U is a scalar cumulant, not the vector-Potts one.
+- *Not built.* The E³ and E⁴ views of S2, and a fourth-moment channel.
+- *S6.* A sibling method with the sample SD (n − 1, so NaN for one replica). `ByTemperature` is untouched rather than delegating, so `SweepProfile` cannot move; delegating later would remove the duplicated grouping. The spreads are not `SweepProfile` channels.
+- *S7.* Length N + 1, indexed by size, with entry 0 zero. F_n takes any real floor > 0. The reductions return 0 for no draws, the house style.
+- *The crossing's cost.* The pre-registered budget is kept. The crossings agree to 10⁻⁴ with a tenfold margin, so a smaller budget would still pass if the suite's time matters.
+
+**Review passes.**
+1. *Correctness,* a fresh read of the engine, serializer and profiling diffs since 6233f93:
+   - which spins each value describes: docstrings, `SpcEngine.md`, and the two alignment tests;
+   - the reset: the record count, the exact histogram, and the trace appended before the reset;
+   - series = sums: bit equality on all 12 probe runs;
+   - the section order in writer and reader, and the version refusals.
+   - *Found and fixed:* growing the record after burn-in copied the burn-in's stale capacity (`Array.Resize`), contradicting "a budgeted run never copies". Growth now copies only the live entries.
+2. *Coverage and documentation:*
+   - *Found and fixed:* `BinderCumulant` was missing from `SpcEngine.md`'s Potts surface and observables tables, and from its pooling and NaN notes.
+   - *Found and fixed:* the memory costs lacked the record, trace and exact histogram, and the Accumulator concept line did not name the options.
+   - *Found and fixed:* stale docstrings: `ISwEngine.GetCheckpoint`, `SwRunResult` and the serializer remark (review commit); `AccumulationSpec` and `SwRunSpec` (fixed with task 4).
+   - *Found and fixed during the tasks:* `SpcAnalysis.md`'s "seven series" (task 3), and an unescaped `|` in a table cell (task 4).
+   - Every check in this brief has a test; none was left without one.
+
+**For the main session.**
+- *Old caches throw.* SPCX is v11, and `SpcxDiskFrameSink.TryLoad` does not catch the version refusal, so a checkpoint directory holding v8–v10 files throws `InvalidDataException`. Delete old checkpoint directories. A cache also loads without its options' arrays (null) if it was written without them; the "Resume works per task" caveat covers this.
+- *The CLI.* `SpcCommand.ParseAccumulationSpec` (user-repl) has no tokens for `BurnInTrace` or `ExactClusterSizeHistogram`. That is a small user-repl follow-up.
+- *A new export column.* `SweepProfile`'s tabular export gains a `BinderCumulant` column.
+- *Stale lines in the retention brief:*
+  - "Where things stand": the accumulator list lacks the per-draw record and the two options, and the serialization is now SPCX v11, not v8.
+  - S1's cost: the record is 28 bytes a draw (two doubles, a long, an int), not four doubles: 0.28 MB per run at 10⁴ draws, about 54 MB over 48 temperatures × 4 replicas.
+  - S2: "if S1 ends up optional" is moot. Binder is built; E³ and E⁴ are views over `EnergyPerDraw`, not built.
+  - S3, S4, S6 and S7 are built, so Sequencing steps 1–4 are done.
+  - The Report section still says "Nothing yet".
