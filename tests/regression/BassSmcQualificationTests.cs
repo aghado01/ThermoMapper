@@ -121,7 +121,7 @@ public sealed class BassSmcQualificationTests
         _out.WriteLine($"  M per replicate [{Line(smc.Quantity("M").ReplicateMeans, "F2")}]; families [{string.Join(", ", smc.Replicates.Select(x => x.Families))}]; " +
                        $"Kish ESS [{Line(smc.Replicates.Select(x => x.EffectiveSampleSize), "F0")}]; acceptance [{Line(smc.Replicates.Select(x => x.Account.AcceptanceRate), "F3")}]");
         BassEvidence evidence = fit.Evidence!;
-        _out.WriteLine($"  evidence {evidence.LogEvidence:F2} ± {evidence.MonteCarloError:F2} (within {evidence.SteppingStone.WithinChainError:F2}, between " +
+        _out.WriteLine($"  evidence {evidence.LogEvidence:F2} ± {evidence.MonteCarloError:F2} (within {evidence.SteppingStone!.WithinChainError:F2}, between " +
                        $"{evidence.SteppingStone.BetweenChainError:F2}); per replicate [{Line(smc.Replicates.Select(x => x.LogNormalizer), "F2")}] ± " +
                        $"[{Line(smc.Replicates.Select(x => x.LogNormalizerError), "F2")}]");
         var sd = new DrawSample();

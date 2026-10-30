@@ -273,7 +273,7 @@ public sealed class BassTemperingParityTests
         // The default ladder sizes itself from the hot end it auto-picks, 1/N.
         Assert.Equal(1.0 / fit.Resolved.Observations, fit.Resolved.HotEnd);
         BassTemperingReadout readout = fit.Diagnostics.Tempering!;
-        _out.WriteLine($"{form}: stepping-stone {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} (within {evidence.SteppingStone.WithinChainError:F4}, " +
+        _out.WriteLine($"{form}: stepping-stone {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} (within {evidence.SteppingStone!.WithinChainError:F4}, " +
                        $"between {evidence.SteppingStone.BetweenChainError:F4}) against the oracle's {logZ:F4}; N = {fit.Resolved.Observations}, settled levels " +
                        $"[{string.Join(", ", readout.Levels)}], max rejection {evidence.MaxPairRejection:F3}, cold chain's mean M " +
                        $"{fit.Draws[0].Average(d => d.Structure.TermIds.Length):F3}");

@@ -139,7 +139,7 @@ public sealed class BassSmcParityTests
                            $"(z {(x.LogNormalizer - logZ) / x.LogNormalizerError:F2}), families {x.Families}");
             Assert.True(Math.Abs(x.LogNormalizer - logZ) <= 4 * x.LogNormalizerError + 0.01, $"{x.LogNormalizer:F4} ± {x.LogNormalizerError:F4} against {logZ:F4}");
         }
-        _out.WriteLine($"{form}: pooled {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} (within {evidence.SteppingStone.WithinChainError:F4}, " +
+        _out.WriteLine($"{form}: pooled {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} (within {evidence.SteppingStone!.WithinChainError:F4}, " +
                        $"between {evidence.SteppingStone.BetweenChainError:F4}) against the oracle's {logZ:F4}");
         Assert.True(Math.Abs(evidence.LogEvidence - logZ) <= 4 * evidence.MonteCarloError + 0.01,
                     $"{evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4} against {logZ:F4}");

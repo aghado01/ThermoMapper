@@ -641,7 +641,7 @@ public sealed class BassTemperingTests
         BassFit fit = Bass.Fit(config, data);
         BassEvidence evidence = fit.Evidence!;
         _out.WriteLine($"{option}: stepping-stone {evidence.LogEvidence:F4} ± {evidence.MonteCarloError:F4}, exact {exact:F4}; per chain " +
-                       string.Join(", ", evidence.SteppingStone.Chains.Select(c => $"{c.LogRatio:F3} ± {c.MonteCarloError:F3}")));
+                       string.Join(", ", evidence.SteppingStone!.Chains.Select(c => $"{c.LogRatio:F3} ± {c.MonteCarloError:F3}")));
         Assert.Equal(LadderEstimator.SteppingStone, evidence.SteppingStone.Method);
         Assert.Equal(evidence.SteppingStone.LogEvidence, evidence.LogEvidence);
         Assert.Equal(evidence.SteppingStone.MonteCarloError, evidence.MonteCarloError);

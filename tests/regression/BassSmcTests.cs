@@ -333,7 +333,7 @@ public sealed class BassSmcTests
         {
             Assert.All(smc.Spread, q => Assert.True(double.IsNaN(q.Spread)));
             Assert.True(double.IsNaN(fit.Diagnostics.ModeSeparation.LogPosteriorGap));
-            Assert.Equal(fit.Evidence!.SteppingStone.WithinChainError, fit.Evidence.MonteCarloError);
+            Assert.Equal(fit.Evidence!.SteppingStone!.WithinChainError, fit.Evidence.MonteCarloError);
         }
         if (option == "systematic")
         {
@@ -350,7 +350,7 @@ public sealed class BassSmcTests
         {
             BassEvidence e = fit.Evidence!;
             Assert.NotNull(e.PathSampling);
-            Assert.All(e.SteppingStone.Chains, c => Assert.NotEmpty(c.Rungs));
+            Assert.All(e.SteppingStone!.Chains, c => Assert.NotEmpty(c.Rungs));
             for (int c = 0; c < smc.Replicates.Count; c++) Assert.Equal(smc.Replicates[c].LogNormalizer, e.SteppingStone.Chains[c].LogRatio, 9);
             _out.WriteLine($"linear: normalizer {e.LogEvidence:F4} ± {e.MonteCarloError:F4}, path sampling {e.PathSampling!.LogEvidence:F4} ± {e.PathSampling.MonteCarloError:F4}");
         }

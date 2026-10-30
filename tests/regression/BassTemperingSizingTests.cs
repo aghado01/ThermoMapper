@@ -72,7 +72,7 @@ public sealed class BassTemperingSizingTests
             double meanM = fit.Draws[0].Average(d => d.Structure.TermIds.Length);
             _out.WriteLine($"{name}: N = {fit.Resolved.Observations}, hot end {fit.Resolved.HotEnd:G4}, settled levels [{string.Join(", ", r.Levels)}], " +
                            $"cold chain's mean M {meanM:F3}, barrier {r.Barrier:F2}, max rejection {r.MaxPairRejection:F3}, round trips {r.RoundTripsPerScan:F4}/scan");
-            _out.WriteLine($"  evidence {e.LogEvidence:F3} ± {e.MonteCarloError:F3} (within {e.SteppingStone.WithinChainError:F3}, between " +
+            _out.WriteLine($"  evidence {e.LogEvidence:F3} ± {e.MonteCarloError:F3} (within {e.SteppingStone!.WithinChainError:F3}, between " +
                            $"{e.SteppingStone.BetweenChainError:F3}); chains {string.Join(", ", e.SteppingStone.Chains.Select(c => $"{c.LogRatio:F2} ± {c.MonteCarloError:F2}"))}" +
                            (e.PathSampling is { } ps ? $"; path sampling {ps.LogEvidence:F3} ± {ps.MonteCarloError:F3}" : ""));
             // S8's eight rungs rejected 0.96–1.00 here, its chains spreading 122–183 against errors of 2–5.
@@ -316,7 +316,7 @@ public sealed class BassTemperingSizingTests
         Assert.Equal(r.MaxPairRejection, e.MaxPairRejection);
         Assert.True(e.Saturated, $"max rejection {e.MaxPairRejection:F3}");
         Assert.True(double.IsFinite(e.LogEvidence) && e.MonteCarloError > 0);
-        _out.WriteLine($"cap 4: max rejection {e.MaxPairRejection:F3}, evidence {e.LogEvidence:F2} ± {e.MonteCarloError:F2}, between/within {e.SteppingStone.BetweenToWithin:F2}");
+        _out.WriteLine($"cap 4: max rejection {e.MaxPairRejection:F3}, evidence {e.LogEvidence:F2} ± {e.MonteCarloError:F2}, between/within {e.SteppingStone!.BetweenToWithin:F2}");
 
         // A fixed ladder at its budget is no binding cap; an unsaturated one is not flagged.
         BassFit fixedFit = Bass.Fit(BassTemperingTests.Config(new TemperingSpec { ReferenceRung = true, Levels = 6, HotEnd = 0.05, MaxLevels = 6 }, samples: 200),

@@ -512,7 +512,7 @@ public sealed class BassFriedmanBandTests
         _out.WriteLine("");
         _out.WriteLine($"ln Ẑ: replicates' mean {zMean:F2}, sd {zSd:F2}, range {logZ.Max() - logZ.Min():F2}" +
                        (fit.Evidence is { } ev
-                           ? $"; pooled evidence {ev.LogEvidence:F2} ± {ev.MonteCarloError:F2} (within {ev.SteppingStone.WithinChainError:F2}, between {ev.SteppingStone.BetweenChainError:F2})"
+                           ? $"; pooled evidence {ev.LogEvidence:F2} ± {ev.MonteCarloError:F2} (within {ev.SteppingStone!.WithinChainError:F2}, between {ev.SteppingStone.BetweenChainError:F2})"
                            : "; no evidence (a replicate short of b = 1)"));
         _out.WriteLine($"σ's 95% interval pooled [{pooledSigma.Quantile(0.025):F4}, {pooledSigma.Quantile(0.975):F4}] against 1; M4's chains' median log posteriors " +
                        $"[{string.Join(", ", legend.Medians.Select(x => x.ToString("F1")))}]");
