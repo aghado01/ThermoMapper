@@ -188,6 +188,12 @@ Decided by the user on 2026-10-27, taking the proper-defaults alternative: σ² 
   - *The held ridge's scale* is a required declaration, as above: the scale is part of the model.
   - *F is unchanged:* D06's gates apply under every coefficient prior, so priors are compared on one model space.
   - *Defaults are unchanged:* the g-form with the unit-information Gamma at a = ½, drawing bit-identically. Which prior the deterministic-simulator profile takes stays F-R1's pre-registered comparison.
+  - *As built* (2026-10-29, `79e0edb`–`0f92af0`, verified by the main session; [the chip's report](ridge-scale-prior-brief.md#reports); `docs/Maths/BayesianRegression.md`, "BASS: the coefficient prior's two axes, and the ridge").
+    - *The scale axis is the family itself.* `BassCoefficientPrior(CoefficientForm Form, TauPrior Scale)`, with the held value a member (`TauPrior.Held`), so no second `Held` sits inside a sampled wrapper.
+    - *Improper hyper-g,* 1 < a ≤ 2, is accepted where τ's posterior stays proper, and refused under the flat intercept, at a b = 0 rung, under SMC and for the evidence, as D05 refuses the improper options.
+    - *The ridge's intercept* sits inside the ridge under level centring and the zero centre, α | σ² ~ N(level, σ²/τ), so both forms give it unit information at τ₀.
+    - *The fast path* is bordered on the current structure's spectrum, chosen by measured cost; the ridge took 0.31 s against the g-form's 0.25 s on S10's Friedman.
+    - *Every configuration's fingerprint moved* with the new serialization; the g-form draws bit-identically.
 - **Other coefficient priors**, recorded so the contract leaves room for them:
   - *A ridge with a sampled τ* (GBMARS), an option.
   - *A ridge with a fixed scale,* an option only with the scale stated as part of the model: every added term then carries a factor in that scale, so the penalty on model size is set by it (Nott, Kuk and Duc's diffuse N(0, σ²/ε)). KHAOS found its fixed ridge best on noise-free simulators and its g-prior better on most noisy ones, which supports keeping both selectable. Defaults per regime come from a pre-registered comparison of our own.

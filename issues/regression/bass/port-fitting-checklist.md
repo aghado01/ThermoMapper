@@ -14,7 +14,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [x] **F-D06** Numerical model admission: decided 2026-10-27; the count as the support default, the centred angles under every convention.
 - [x] **F-C1** Contract shapes: data, config and result, decided 2026-10-28 as recommended.
 - [x] **F-C2** The shared-code changes the contracts need, before stage 4's first fit: `Sigma2Prior` as a serializable record, shared with BARS's config; `GPriorCentre.Flat` for the Liang convention, refused by BARS until the shared block supports it.
-- [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison.
+- [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison. The ridge it compares is built (2026-10-29), so the comparison can run.
 - [x] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison. Folded into F-M2's pass on 2026-10-29, which ran it the same day: prior-cancelling did not clear (0.864), so D01's schedule stays the default and prior-cancelling an option.
 - [ ] **F-M2** The local moves' mixing, its own design item before the efficiency pass (S10, decided 2026-10-28); the design draft is [local-move-mixing-brief.md](local-move-mixing-brief.md). Births and deaths accept about 1.5% on Friedman, and the chains hold their own bands of M. Levers: several structure moves per sweep, a local knot move inside a change, active-variable births on F-X4's seam. The run lengths and the ladder's sizing, its censored steep band included, follow it. Phase 1 was decided on 2026-10-29 (the draft's "Phase 1's decisions"): local knot steps, the fixed-M factor moves and the ladder's split rule, built as options by a chip ([its brief](local-move-options-brief.md)), landed and verified the same day; levers 1 and 3 are withdrawn. Phase 2, the pass, ran the same day: no arm clears, so the defaults stay D01's, with the untempered chains read at the bulk-ESS floor (this checklist's report). The run lengths, the worse modes and D10's treatment of chains that never agree are the user's next calls.
 
@@ -52,10 +52,28 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 - [ ] **F-X2** The sweep has a latent slot.
 - [ ] **F-X3** Term types behind one design-kernel contract, with derivatives.
 - [ ] **F-X4** Proposal kernels behind one contract with exact forward and reverse probabilities. Built with KHAOS's Bernoulli-inclusion proposal (the extensions brief), not with F-M2's lever 3, which was withdrawn on 2026-10-29.
-- [ ] **F-X5** Coefficient priors as a declared set.
+- [x] **F-X5** Coefficient priors as a declared set: `BassCoefficientPrior(Form, Scale)`, the g-form and the normalized ridge under τ's shared family (2026-10-29, `79e0edb`–`0f92af0`).
 - [ ] **F-X6** The output-side inner product is declared (Q = I now).
 
 ## Reports
+
+### The coefficient prior's two axes, and the ridge — 2026-10-29
+
+A chip built D03's two axes and the normalized ridge ([its report](ridge-scale-prior-brief.md#reports); `79e0edb`, `90ce809`, `e225c22`, `0f92af0`, `125d311`). The main session verified it.
+- *What it is:*
+  - `BassCoefficientPrior(Form, Scale)`, with forms `GForm` and `RidgeForm`, replacing `SampledG` and `FixedG`;
+  - τ's shared family `TauPrior` in `Maths.Regression.GPrior`: the unit-information Gamma, hyper-g, hyper-g/n and a held value;
+  - the ridge's marginal on the normalized Gram's spectrum, with a bordered fast path.
+- *The main session's checks:*
+  - the suites rerun in Release: Regression 1,303 of 1,303; Samplers 206 of 206, outside the flat-histogram chip's in-progress tests; the BASS oracle classes 90 of 90; R's stage-1 checks from `r/`, exit 0, 91 pass verdicts and none failing;
+  - the ridge's marginal, the death's and birth's bordered terms and their slopes in b, re-derived;
+  - the τ family's densities on u, the hyper-g draw and the improper domain, re-derived;
+  - one docstring sign corrected (the hyper-g draw's offset), the code unchanged.
+- *As built:* the scale axis is the family itself, with `Held` a member. Improper hyper-g (1 < a ≤ 2) is accepted only where τ's posterior is proper. Every fingerprint moved; the g-form draws bit-identically.
+- *Recorded in:*
+  - `docs/Maths/BayesianRegression.md`, "BASS: the coefficient prior's two axes, and the ridge", with the API, configuration, status and source rows;
+  - D03's *(2026-10-29)* bullet, as built;
+  - F-X5, ticked; F-R1 can run.
 
 ### Friedman's band and modes, measured — 2026-10-29
 
