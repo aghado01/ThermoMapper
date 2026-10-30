@@ -146,6 +146,104 @@ Asked by the user after toy 2's tunnelling reading, and sent to this chip by mes
 
 Newest first.
 
+### The mean-field Potts toy and its tunnelling-against-N reading (chip, 2026-10-30)
+
+**What changed after `f6412f1`/`dae3d1e`**, on `main`, nothing pushed:
+- `4c34930`: WHAM weighs each rung by its effective draws, as Ferrenberg and Swendsen do. `TemperingPilot` carries per-rung inefficiencies g_i (null for 1), `FromLadders` reads g = max(1, n/ESS) from each rung's ℓ₁ chains and requires equal traced scans, and `WhamEstimate` gains `EffectiveDraws`. This was committed in that turn, not left uncommitted.
+- `ffe6bb5`: Phase 1's report records it. Over 8 pilots, double well 0.164 against 0.152 with g = 1; Potts 0.055 against 0.056.
+- `27fd047`: the ratio estimator needs a proper prior, not a normalized one.
+  - `Reweighting`'s docs and the toys' comments are corrected; the toys' normalization asserts stay.
+  - The new test `AnUnnormalizedPrior_GivesTheNormalizedPriorsEvidence` uses a prior of mass e³.
+  - The Phase 2 note on BASS's structure prior is corrected in place and marked. The brief's own body, line 107 ("which needs a normalized prior"), is the brief's text and was left alone.
+- `9f561d0`: `SamcLearning.FixedPoint`'s fix, below, found by this addition's first run.
+- `001357b`: the mean-field toy, its checks and the reading, in `tests/samplers/MeanFieldPotts.cs`, `MeanFieldPottsTests.cs` and `MeanFieldTunnellingReading.cs`.
+
+**The model** (`tests/samplers/MeanFieldPotts.cs`): Curie–Weiss Potts on N sites, prior uniform over the qᴺ configurations, ℓ₁ = (J/(2N))·(Σ n_k² − N). J = β_cJ/0.6, which puts the limit's transition at b = 0.6.
+- *Lumping, derived.* Single-site Metropolis on configurations lumps exactly onto n.
+  - From n, a move k → l is proposed with probability (n_k/N)/(q − 1), and its reverse with (n_l + 1)/(N(q − 1)).
+  - The prior on n is the multinomial, whose ratio is n_k/(n_l + 1); it cancels the proposal ratio, so the Hastings ratio on n is e^{Δℓ}, as on configurations.
+  - `OccupationMove` proposes exactly that; a step costs O(q).
+- *The exact density of states.* ln g sums the multinomial over n with one Σ n_k². It is computed through the partitions n_1 ≥ … ≥ n_q, each weighed by its q!/Π m_v! orderings, and summed in logs per level.
+  - That is q! times fewer visits: N = 2048 at q = 4 takes 2.6 s.
+  - Laws, ln Z(b), quantiles, b_t and the phases follow. Peaks and dips are read on a law binned at 1/50 of the limit's latent ℓ₁ and smoothed over five bins, since compositions per level are irregular.
+- *The transition, derived.* With x the colour fractions, φ(x) = (βJ/2)·Σx² − Σx ln x. On the ordered branch x_1 = (1 + (q − 1)s)/q:
+  - Δφ(s) = (βJ(q − 1)/(2q))·s² − (1/q)·[(1 + (q − 1)s)·ln(1 + (q − 1)s) + (q − 1)(1 − s)·ln(1 − s)], and Δφ′ = ((q − 1)/q)·[βJ·s − ln((1 + (q − 1)s)/(1 − s))].
+  - Δφ = Δφ′ = 0 give s_c = (q − 2)/(q − 1) and β_cJ = 2(q − 1)·ln(q − 1)/(q − 2), checked by substitution: 4 ln 2 at q = 3, 3 ln 3 at q = 4.
+  - The barrier is weak at q = 3: Δφ at s_c/2 is about 0.0011 nats per site against 0.0065 at q = 4. So by N = 2048 the exact law's ln(peak/dip) reaches about 1.4 at q = 3 and 12 at q = 4.
+
+**The checks**, in the suite (`MeanFieldPottsTests`), each with its tolerance:
+- *The lumped move:* log π(n′) − log π(n) + the proposal ratio is 0 to 1e−10 over 2 000 moves. The lumped chain at N = 24, b = 0.55 gives E[ℓ₁] 23.53 against the exact 23.75, inside 0.2 sd.
+- *The density of states by partitions* equals the brute-force composition sum, (q, N) = (3, 20), (4, 12), (5, 8), (3, 7), to 1e−13, with total mass 1.
+- *b_t, the equal-weight point* (the phases split at the smoothed law's dip at the limit's b_c, bisected to equal mass), approaches the derived limit:
+  - q = 3: b_tJ 2.8411, 2.8063, 2.7722 at N = 128, 512, 2048, against 2.7726;
+  - q = 4: 3.4240, 3.3137, 3.2988 at N = 64, 128, 256, against 3.2958;
+  - asserted shrinking, and within 0.2% (q = 3) and 1% (q = 4) at the largest N.
+- *The engine at (q, N) = (3, 32), (3, 64), (4, 32):* a flat start, 300·N² learning iterations, 8 × 60 000 production draws, window from the 1% quantile at b_lo = 0.3 to the 99% at b = 1.
+  - Learned ln w against θ* on the exact density of states: 0.007, 0.037 and 0.090 RMS (tolerance 0.15).
+  - At b_t, the ordered mass, E[ℓ₁] and six equal-mass bins: worst |z| 0.71, 1.55 and 1.61.
+  - ln Z(b) on six b: worst |z| 1.03, 2.06 and 1.82. Every bound is 4.5 in the chains' spread errors.
+  - Nodes are spaced at least twice the widest level gap in the window. A small lattice's top levels thin out (5.3 nats apart at N = 32, q = 4), and a hat that sees mass only at its edges makes θ* extreme there. The first attempt, spaced by sd₁ alone, failed on exactly that, at 4.66 RMS.
+
+**Two defects the reading's first run exposed, both fixed before the run reported here:**
+- *`SamcLearning.FixedPoint` (engine, `9f561d0`).* Its Newton start summed hat masses in linear space. A density of states spanning more than 745 nats underflowed its far nodes; where ln g is steep against the spacing, a hat's mass leaned on its neighbour's segment. So the start lost ln g's slope, Newton stalled in damped steps, and the stall rule returned the result.
+  - The first run's engine-window flat histogram had all its predicted occupancy in the window's first tenth at q = 3, N = 512, and made 0 round trips at N ≥ 512 where its own small-N fit predicted about 30.
+  - *The fix:* a start fitted log-linearly per node cell, the stall rule active only once flat to 1e−8, and a solve not flat to 1e−3 refused. A new test recovers ln g = −3ℓ over 3 000 nats to 3e−9.
+  - *Phase 2:* this affected any warm start or reference whose ln g spans hundreds of nats, Friedman's included.
+- *The tempering measure (reading only).* The first run counted round trips of each rung's sequence of ℓ₁. That sequence flips whenever states of the two phases swap past the rung, with no state crossing: 395 356 at q = 3, N = 2048. The measure now follows replicas, each state tagged through its moves and swaps. The rungs' count stays in the detail column.
+
+**The reading** (`MeanFieldTunnellingReading`, exploration, runs only with `FLAT_HISTOGRAM_MEANFIELD_READING=1`; a value below 1 scales the budgets down; 28 min).
+- *Hypotheses, written into the test before the run:*
+  - H_exp for tempering and the fixed-b chain: r ≈ A·N^{−a}·(dip/peak)(N), exponential in N.
+  - H_pow for the flat histogram: r ≈ A·N^{−α} with α near 2, inside [1, 3].
+  - *What distinguishes them:* one form's RMS residual in ln r under 0.3 and under half the other's; or a power law fitted to the sizes that cross predicting more than three round trips where none came (Poisson P(0) < 5%).
+  - Anticipated: no separation at q = 3, where the barrier stays below about e^{1.4}; separation at q = 4 by N = 2048.
+- *The samplers, at 100·N² production proposals each (at least 2·10⁶):*
+  - the flat histogram on θ* from the exact density of states, so the learning's cost is not in the reading. Run in the engine's window (b_t's 0.1% to b = 1's 99.9%, b_lo = b_t) and in the transition's (the same engine on b_t·ℓ₁, both extensions at slope b_t, b_t's 0.1% to 99.9%). Four chains each, a tenth of the budget as uncounted burn-in;
+  - tempering from b = 1 to the prior, self-sized in 8 burn-in rounds over a quarter of the budget (uncounted), proposals counted across rungs, its replicas followed by tag;
+  - four fixed-b_t chains, two started disordered and two ordered.
+- *The crossing:* round trips of ℓ₁ between ℓ_dis and ℓ_ord, the smoothed exact law's two peaks at b_t, per 10⁶ proposals. Each cell below gives the rate and, in brackets, the round trips.
+
+| q, N | ln(peak/dip) | flat, engine window | flat, transition window | tempering (replicas) | fixed b_t |
+|---|---|---|---|---|---|
+| 3, 64 | 0.27 | 149 (298) | 169 (337) | 150 (299) | 330 (660) |
+| 3, 128 | 0.20 | 29.5 (59) | 33.5 (67) | 23.5 (47) | 67.5 (135) |
+| 3, 256 | 0.35 | 6.26 (41) | 10.5 (69) | 3.05 (20) | 19.2 (126) |
+| 3, 512 | 0.87 | 1.76 (46) | 2.90 (76) | 0.305 (8) | 3.93 (103) |
+| 3, 1024 | 0.49 | 0.257 (27) | 1.04 (109) | 0.038 (4) | 1.50 (157) |
+| 3, 2048 | 1.43 | 0.095 (40) | 0.269 (113) | 0.005 (2) | 0.260 (109) |
+| 4, 64 | 0.79 | 81 (162) | 90 (180) | 31 (62) | 86 (172) |
+| 4, 128 | 0.45 | 14.0 (28) | 16.5 (33) | 3.0 (6) | 26.5 (53) |
+| 4, 256 | 0.93 | 3.97 (26) | 3.97 (26) | 0.153 (1) | 5.19 (34) |
+| 4, 512 | 2.41 | 0.572 (15) | 1.22 (32) | 0 (0) | 0.687 (18) |
+| 4, 1024 | 5.64 | 0.153 (16) | 0.372 (39) | 0 (0) | 0 (0) |
+| 4, 2048 | 12.23 | 0.038 (16) | 0.098 (41) | 0 (0) | 0 (0) |
+
+  - Spreads over chains or replicas, ladder sizes (9–34 rungs, swap acceptance 0.47–0.54) and the ladder's own round trips are in the test's output table.
+- *Fits*, ln r against N (exponential) and against ln N (power), RMS residual:
+  - flat, engine window: q = 3, α 2.15, RMS 0.165 against the exponential's 1.170; q = 4, α 2.22, RMS 0.143 against 1.190.
+  - flat, transition window: q = 3, α 1.81, RMS 0.127 against 0.966; q = 4, α 1.92, RMS 0.151 against 1.057.
+  - fixed b_t:
+    - q = 3: α 2.01, RMS 0.145 against 1.008.
+    - q = 4, over N ≤ 512: exponential RMS 0.313, power 0.211. The power law predicts 17.7 and 14.1 round trips at N = 1024 and 2048, where none came.
+  - tempering:
+    - q = 3: α 3.02, RMS 0.100 against 1.486.
+    - q = 4, over N ≤ 256: exponential 0.261, power 0.152 (α 3.83). That power law predicts 0.3, 0.1 and 0.0 round trips where none came.
+- *Against the hypotheses:*
+  - *H_pow for the flat histogram:* read at both q and in both windows, by the RMS rule. α lies at 1.8–2.2, inside [1, 3], so the cost is a diffusion over the order parameter, about N² proposals per round trip. The engine's window, 1.8–2.5× the transition's width at N = 2048, costs a factor of 1–4 in rate.
+  - *H_exp for the fixed-b chain:* read at q = 4 by the censoring rule. At q = 3 it reads as a power law (α 2.0), because its barrier stays at or below e^{1.4}, as anticipated.
+  - *H_exp for tempering:* not distinguished at q = 4, with only three sizes that cross and a power law steep enough (α 3.8) to predict zeros anyway. At q = 3 its replicas' cost grows as N^{3.0}, steeper than the flat histogram's N^{2.2}.
+  - At q = 4, N = 2048 (the exact law's ln(peak/dip) is 12.2), the flat histogram is the only sampler that crosses: 16 and 41 round trips in 4.2·10⁸ proposals against none.
+- *This is a reading, not a claim:* one run, one seed per size, and a learning cost left out by construction.
+
+**The suites** at `001357b`, built into `artifacts\chip-fh\`:
+- *Samplers:* 262 passed, 0 failed, in 1.8 min. Since the Phase 1 report: 2 WHAM, 1 proper-prior, 1 wide-range fixed point and 7 mean-field tests, the reading among them, which passes trivially without its variable.
+- *Regression:* not rerun since `2fa3bc0` (1 303 passed). No code under `src/maths/regression` uses the engine, and the changes since are the engine's internals and the Samplers tests.
+
+**For Phase 2, from this addition:**
+- `FixedPoint` before `9f561d0` would have returned wrong warm-start weights for a density of states spanning hundreds of nats, Friedman's likely included. It now refuses a solve that is not flat.
+- The engine's window must reach b = 1 to reweigh to the posterior, and that width costs crossing rate against a window over the transition alone (a factor of 1–4 here). A transition-window run is the engine on b_t·ℓ₁, which reweighs only to b_t.
+- Learning was not in the reading. At the checks' sizes, 300·N² iterations from flat reached θ* to 0.09 RMS or better.
+
 ### Phase 1 built (chip, 2026-10-29)
 
 **What landed**, on `main`, nothing pushed, every file new under `src/maths/samplers/flathistogram/` and `tests/samplers/`; no existing file changed:
