@@ -315,6 +315,10 @@ Decided by the user on 2026-10-29, taking the recommendations laid out after the
 
 Newest first.
 
+### Friedman's band and modes, measured — 2026-10-29
+
+After stage 8, a measurement read why no sampler settles Friedman ([its report](friedman-band-brief.md#reports)). The band at b ≈ 0.23–0.28 is a first-order transition, with two phases coexisting at fixed b within each chain. SMC's lineages collapse through it at every particle count read, up to 16,000, and its replicates' ln Ẑ disagrees by 6.5–8.4 nats. The angle floor plays no part. The fitting checklist's report has the readings.
+
 ### Phase 2 run and verified: no arm clears — 2026-10-29
 
 - *The verdict:* no arm clears the rule, so every option stays an option and the defaults stay D01's. The best score is the fixed-M family's, 1.031, and tempering's is 0.078. The chip's report is in [its brief](local-move-pass-brief.md#reports), and the verification, with an independent rescoring, is in the fitting checklist's reports.

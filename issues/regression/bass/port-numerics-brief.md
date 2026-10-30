@@ -136,6 +136,7 @@ Drafted and decided on 2026-10-29: the user took the draft as written, with its 
   - SMC's resampling along D05's path weights particles by those ratios, which MCMC chains without round trips cannot. Stage 8's fitting adapter (C4) is the test, recorded as a qualification question: does a population of a given size find the better representation, and keep it?
   - *The caveat:* births are bounded by the Occam cost, so some particles must reach that representation at low b. The particle count is the variable to read.
   - Any later move work reads the agreement time from dispersed starts: the sweeps or seconds until every chain's mean log posterior lies within Δ nats of the leader's. It does not read ESS per second.
+  - *Answered 2026-10-29* (C4, then the Friedman measurement, [its report](friedman-band-brief.md#reports)): no population read, up to 16,000 particles, finds and keeps one answer. The band is a first-order transition, its two phases coexisting at fixed b, and the lineages collapse through it at every N.
 - **Not adopted:**
   - argon's 1.05 as the reference target, which is looser than the threshold the shared R̂ was built against; a caller can still declare 1.05;
   - a stop on the mode-separation readings, until they have a threshold;

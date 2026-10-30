@@ -1008,7 +1008,17 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
   - The genealogy error saturates at √ln 2 = 0.83 once one family is left. The replicates' spread, 1–21 times larger, is the error to read.
 - *Prediction agrees better than structure:* σ²'s spread is 0.04–0.4 posterior sd, while M's and the log posterior's reach 0.6–1.0 on Friedman.
 - *The cost:* about 125–300 stages, and 0.5–5 minutes a fit.
-- *No default changes:* MCMC stays the default. Whether more particles, more sweeps, or a schedule that keeps lineages would help is unread.
+- *No default changes:* MCMC stays the default.
+
+**Friedman's band, measured** (2026-10-29; [the measurement's report](../../issues/regression/bass/friedman-band-brief.md#reports); exploration).
+- *A first-order transition on the tempering path.* At fixed b inside the band (0.23–0.28), ℓ₁ is bimodal within each chain.
+  - The two phases sit 120–190 nats apart even at a fixed M, so they differ in what the terms are, not in how many.
+  - A second split at b ≈ 0.12–0.15 divides M classes (4 and 5 against 6).
+  - Λ̂ is 2.0–3.0 over the band and 8.6–10.2 over the whole ladder.
+- *SMC does not cross it reliably at any particle count read.* At 1,000, 4,000 and 16,000 particles the replicates' ln Ẑ spreads by 8.4, 7.1 and 6.5 nats, and still rises with N. Lineages collapse inside the band at every N, to 1–10 families by b = 0.32. One 16,000-particle replicate found a basin, four x1·x2 terms with no x1 or x2 main effect, with the largest ln Ẑ, which no MCMC chain visits.
+- *Mutation buys more than particles:* 20 sweeps per stage at 1,000 particles keep as many lineages as 16,000 particles at 5 sweeps, at a tenth of the time, but the replicates still disagree by 14 nats.
+- *Not the support's doing:* the angle floor refuses nothing, and halving the support minimum leaves the chains apart.
+- *So Friedman's structural posterior is not computed reliably by any sampler here,* and its evidence is unresolved. Predictions agree better than structure, and D10's verdict reports the disagreement.
 
 ### BASS: the pointwise density and the residual check
 

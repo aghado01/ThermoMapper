@@ -57,6 +57,18 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ## Reports
 
+### Friedman's band and modes, measured — 2026-10-29
+
+A measurement chip took four readings after the review notes in `issues/regression/argon-friedman-etc.md` ([its report](friedman-band-brief.md#reports); `5673978`, `f4577a2`, tests only).
+- *R1, the band:* ℓ₁ is bimodal at fixed b = 0.23–0.28 within each chain, its phases 120–190 nats apart at a fixed M. That is coexistence, a first-order transition, not a broad crossover. A second split at b ≈ 0.12–0.15 is between M classes.
+- *R2, particles:* at 1,000, 4,000 and 16,000 particles, the replicates' ln Ẑ spread is 8.4, 7.1 and 6.5 nats, still rising with N. Lineages collapse in the band at every N. One replicate found a basin no chain visits, with the largest ln Ẑ.
+- *R3, mutation:* 20 sweeps per stage match 16,000 particles' lineages at a tenth of the time, but the replicates still disagree by 14 nats.
+- *R4, the support:* the angle floor refuses nothing, so argon's mechanism is absent. Halving the support minimum, which changes F, leaves the chains apart.
+- *Λ̂ for OQ2:* 2.0–3.0 over the band, 8.6–10.2 over the ladder.
+- *Recorded in:*
+  - `docs/Maths/BayesianRegression.md`, "BASS: SMC", under "Friedman's band, measured";
+  - D10's stage 8 question, now answered.
+
 ### F-M2 Phase 2 verified: no arm clears — 2026-10-29
 
 The pass chip ran it ([its report](local-move-pass-brief.md#reports)), and it was verified here.
