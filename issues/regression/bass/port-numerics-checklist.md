@@ -26,7 +26,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N14** D10's convergence verdict: read at the end of every run in the shared ensemble, with the engine's agreement groups and a declared stopping scope; BASS's three groups, the log posterior among its monitored quantities (decided 2026-10-29).
 - [ ] **N15** `DiagonalPlusLowRank` gains the capacitance matrix's Cholesky factor, O(m·k² + k³), beside its per-call Jacobi thin SVD. Found by stage 7 on 2026-10-29: 1.4 ms per σ² proposal at m = 20 with 39 columns. Built when real sizes make it binding.
 - [ ] **N16** The SMC core's conveniences, both stage 8 chips' notes (2026-10-29): `TemperToPosterior` returning at its stage budget rather than throwing, `SmcRun` exposing its `MaxStages`, and a first-step bisection on cached increments in `SmcWeights` beside `ConditionalEss`.
-- [ ] **N17** A flat-histogram sampler, shared by BASS and SPC: SAMC weight learning, multicanonical production over ℓ₁, reweighting and the ln Z(b) curve. Decided to build by the user on 2026-10-29; the design draft is [flat-histogram-design.md](flat-histogram-design.md).
+- [ ] **N17** A flat-histogram sampler, shared by BASS and SPC: SAMC weight learning, multicanonical production over ℓ₁, reweighting and the ln Z(b) curve. Decided to build by the user on 2026-10-29, and its nine design decisions taken the same day ([flat-histogram-design.md](flat-histogram-design.md)); Phase 1 runs as a chip ([its brief](flat-histogram-phase1-brief.md)).
 
 ### Room for extensions
 

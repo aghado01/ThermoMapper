@@ -1,6 +1,6 @@
 # A flat-histogram sampler, shared (design draft)
 
-Date: 2026-10-29. Status: a draft for the user's design pass. The user decided to build it whatever the reference-path test reads ([that test's brief](friedman-reference-brief.md)); what is left to decide is how, which "The decisions" below lays out with recommendations.
+Date: 2026-10-29. Status: decided. The user decided to build it whatever the reference-path test reads ([that test's brief](friedman-reference-brief.md)), and on the same day took the nine recommendations below as drafted. Phase 1 runs as a chip ([its brief](flat-histogram-phase1-brief.md)).
 
 ## Why
 
@@ -24,7 +24,7 @@ Date: 2026-10-29. Status: a draft for the user's design pass. The user decided t
   - the evidence curve Z(b) = E_prior[e^{b·ℓ₁}] = E_w[e^{b·ℓ₁}/w]/E_w[1/w], a ratio estimator with no rungs, which needs the prior normalized (D03's defaults are).
 - *The energy is generic.* Every target exposes `LogPrior` and `LogLikelihood(1)` (`ISamplingTarget`), so π_w wraps any engine's target. BASS's ℓ₁ is its collapsed log marginal at b = 1. D05's integrated form plays no part: b = 1 is the same posterior on either form, and the reweighted intermediate b are the linear form's.
 
-## The decisions (for the user's pass, with recommendations)
+## The decisions (decided 2026-10-29, as recommended)
 
 1. **The algorithm.** Learn the weights by stochastic approximation during burn-in only, then freeze them. The production run is plain MCMC on π_w, under D10's adaptation policy.
    - *The learning:* SAMC (Liang, Liu and Carroll 2007, *JASA* 102, 305–320), with a gain decaying as 1/t. It has a convergence theorem, and its estimates keep improving. Belardinelli and Pereyra's 1/t Wang–Landau (*Phys. Rev. E* 75, 046701, 2007) is the physics form of the same fix.
@@ -44,6 +44,7 @@ Date: 2026-10-29. Status: a draft for the user's design pass. The user decided t
 6. **Where it lives.**
    - A generic engine in `Maths.Samplers.FlatHistogram`: the weight function, SAMC's learning, the multicanonical stage density, the run, the reweighting and Z(b).
    - *One seam, shared:* the stage density. Parallel tempering, SMC and this engine all evaluate "log prior + a function of ℓ" through one interface (today's `Temperature`, generalized). BASS's structure moves, already run at any SMC stage or ladder rung, then run on π_w unchanged.
+   - *(2026-10-29, at Phase 1's brief) The means.* The seam is met by wrapping the target rather than generalizing `Temperature`. The wrapper's evaluation keeps the inner prior and gives ln w(ℓ₁) as its log-likelihood at b = 1, so π_w is an ordinary target sampled at `Temperature.Posterior`, and any kernel that runs on a target runs on it. `Temperature` and every path through it stay as they are, which matters while two chips build against it. Generalizing `Temperature` stays possible if a later engine needs it.
    - *Adapters:*
      - BASS first (`BassSampling.FlatHistogram`, a spec, null by default);
      - SPC later, in its own track: the Potts energy H with single-site moves, and the multibondic cluster algorithm (Janke and Kappler, *Phys. Rev. Lett.* 74, 212, 1995) as the cluster variant. It is cautioned against at large q.
@@ -68,10 +69,10 @@ Date: 2026-10-29. Status: a draft for the user's design pass. The user decided t
 - *First-order barriers fall from exponential to polynomial in the Potts case,* the classic result. For BASS's structural phases nobody has measured it; Phase 2 does.
 - *Not adopted here:* nested sampling. It integrates the same g, but needs draws from the prior above a likelihood threshold, which BASS's reversible-jump moves give only by a constrained chain. The flat-histogram family uses the kernels this repo has.
 
-## Open questions for the user
+## Sources, held locally
 
-The nine decisions above, chiefly:
-- 1 (SAMC with a 1/t gain, learning in burn-in only);
-- 3 (the WHAM warm start from a tempering pilot);
-- 6 (the shared stage-density seam);
-- 8 (the phases).
+- Liang, Liu and Carroll 2007 (SAMC): `codex-scientiae/supellex-private/PDFs/Bayesian/Liang2007_StatAssc102.pdf`. Liang's trajectory averaging for SAMC (arXiv 0908.3553) is in `gauntlet/bayesian/0908.3553v1`.
+- Belardinelli and Pereyra: `gauntlet/bayesian/cond-mat_0701672v2` (the 1/t algorithm) and `cond-mat_0702414v3` (the saturation of the error).
+- Bornn, Jacob, Del Moral and Doucet (PAWL): `gauntlet/bayesian/1109.3829v3`.
+- Janke and Kappler (multibondic): `gauntlet/bayesian/hep-lat_9407006v1`.
+- Berg and Neuhaus 1992, Wang and Landau 2001, Ferrenberg and Swendsen 1989, and Skilling 2006 are not held locally.
