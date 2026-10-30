@@ -118,7 +118,8 @@ public sealed class SamcLearning
     /// is flat: <c>E[φ_k | in] = π_k</c> under <c>mass·w</c>, the minimizer of the convex G by Newton's method. Nodes whose
     /// hat sees no mass are empty: the others take π_k + d (<see cref="SamcLearning"/>), and an empty node's ln w is read
     /// off the line through its nearest non-empty neighbours, extrapolated beyond the last. The constant is fixed by the
-    /// first non-empty node's ln w = 0. Levels outside the window, and masses of −∞, play no part.
+    /// first non-empty node's ln w = 0. Levels outside the window, and masses of −∞, play no part. A solve that cannot
+    /// bring every node's occupancy within 1e−3 of flat is refused (<see cref="InvalidOperationException"/>).
     /// </summary>
     /// <param name="shape">The window, slope and node count; its values are not read.</param>
     /// <param name="levels">The measure's levels ℓ₁.</param>
@@ -170,20 +171,64 @@ public sealed class SamcLearning
         Array.Fill(index, -1);
         for (int f = 0; f < free.Count; f++) index[free[f]] = f;
 
-        // Newton starts from the histogram estimate θ_k = ln(M_k/π'_k), M_k the mass under node k's hat, which balances the
-        // occupancy to first order; from θ = 0 a peaked measure would take many damped steps.
-        var theta = new double[k];
-        var hatMass = new double[k];
-        double peak = double.NegativeInfinity;
-        foreach (double m in masses) peak = Math.Max(peak, m);
+        // Newton starts from ln g at each node, fitted to the measure near it: the node's cell (half a spacing either
+        // side, inside the window) is cut into sub-bins, their log masses summed in logs about each one's largest term (a
+        // density of states can span more than a double's 745 nats), and a line through the occupied ones is read at the
+        // node, less ln(sinh(βh/2)/(βh/2)) for its slope β over the sub-bins' width h, the bias of an exponential density
+        // averaged over a bin. So the start keeps ln g's slope however steep it is against the spacing, where hat or cell
+        // masses lean on their low or high edges. A cell holding no level takes the line through its nearest held
+        // neighbours. From a start far down a steep ln g, Newton would stall in damped steps.
+        const int subBins = 8;
+        double sub = shape.Spacing / subBins;
+        var subMax = new double[k * subBins];
+        var subSum = new double[k * subBins];
+        Array.Fill(subMax, double.NegativeInfinity);
         for (int j = 0; j < masses.Count; j++)
         {
-            double p = Math.Exp(masses[j] - peak);
-            hatMass[segments[j]] += p * (1.0 - fractions[j]);
-            hatMass[segments[j] + 1] += p * fractions[j];
+            int node = fractions[j] < 0.5 ? segments[j] : segments[j] + 1;
+            double offsetInCell = (segments[j] + fractions[j] - node) * shape.Spacing;   // in [−Δ/2, Δ/2]
+            int b = Math.Clamp((int)Math.Floor((offsetInCell + 0.5 * shape.Spacing) / sub), 0, subBins - 1);
+            int slot = node * subBins + b;
+            double logTerm = masses[j];
+            if (logTerm > subMax[slot])
+            {
+                subSum[slot] = subSum[slot] * Math.Exp(subMax[slot] - logTerm) + 1.0;
+                subMax[slot] = logTerm;
+            }
+            else subSum[slot] += Math.Exp(logTerm - subMax[slot]);
         }
+        var theta = new double[k];
+        var cellEmpty = new bool[k];
         for (int i = 0; i < k; i++)
-            if (seen[i]) theta[i] = hatMass[i] > 0.0 ? Math.Log(hatMass[i] / target[i]) : 0.0;
+        {
+            var xs = new List<double>(subBins);
+            var ys = new List<double>(subBins);
+            for (int b = 0; b < subBins; b++)
+            {
+                int slot = i * subBins + b;
+                if (double.IsNegativeInfinity(subMax[slot])) continue;
+                xs.Add((b + 0.5) * sub - 0.5 * shape.Spacing);
+                ys.Add(subMax[slot] + Math.Log(subSum[slot]) - Math.Log(sub));
+            }
+            cellEmpty[i] = xs.Count == 0;
+            if (cellEmpty[i]) continue;
+            if (xs.Count == 1)
+            {
+                theta[i] = ys[0];
+                continue;
+            }
+            double mx = 0.0, my = 0.0;
+            for (int t = 0; t < xs.Count; t++) { mx += xs[t]; my += ys[t]; }
+            mx /= xs.Count;
+            my /= xs.Count;
+            double sxy = 0.0, sxx = 0.0;
+            for (int t = 0; t < xs.Count; t++) { sxy += (xs[t] - mx) * (ys[t] - my); sxx += (xs[t] - mx) * (xs[t] - mx); }
+            double slope = sxx > 0.0 ? sxy / sxx : 0.0;
+            double half = 0.5 * Math.Abs(slope) * sub;
+            double bias = half < 1e-8 ? 0.0 : half + Math.Log((1.0 - Math.Exp(-2.0 * half)) / (2.0 * half));   // ln(sinh(h)/h)
+            theta[i] = my - slope * mx - bias;
+        }
+        FillEmpty(theta, cellEmpty);
         double offset = theta[pin];
         for (int i = 0; i < k; i++) theta[i] = seen[i] ? theta[i] - offset : 0.0;
         int n = free.Count;
@@ -237,10 +282,18 @@ public sealed class SamcLearning
                 break;
             }
             Array.Copy(trial, theta, k);
-            bool stalled = value - trialValue <= 1e-14 * Math.Max(1.0, Math.Abs(value));
+            // A step that no longer moves G ends the solve only once the occupancy is flat to 1e−8: rounding then
+            // limits it. Short of that, a small step is a damped step on the way, not convergence.
+            bool stalled = value - trialValue <= 1e-14 * Math.Max(1.0, Math.Abs(value)) && norm < 1e-8;
             value = trialValue;
             if (stalled) break;
         }
+
+        // A solve that stopped short of flat is refused rather than returned: its weights would not be SAMC's limit.
+        double worst = 0.0;
+        for (int i = 0; i < k; i++) if (seen[i]) worst = Math.Max(worst, Math.Abs(mean[i] / target[i] - 1.0));
+        if (!(worst <= 1e-3))
+            throw new InvalidOperationException($"SAMC's limit was not reached: a node's occupancy departs from flat by {worst:G3}.");
 
         var logWeights = new double[k];
         for (int i = 0; i < k; i++) logWeights[i] = -theta[i];

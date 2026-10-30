@@ -96,6 +96,27 @@ public sealed class SamcLearningTests
     }
 
     [Fact]
+    public void FixedPoint_HandlesADensityOfStatesWiderThanADoublesRange()
+    {
+        // ln g = −3ℓ on [0, 1000], fine levels: its masses span 3 000 nats, past the 745 of a double's exponent, so a start
+        // summed in linear space would underflow its far nodes. θ* is ln g itself, piecewise linear on any nodes.
+        var shape = MulticanonicalWeights.Flat(0.0, 1000.0, 0.5, 14);
+        const int cells = 100_000;
+        var levels = new double[cells];
+        var masses = new double[cells];
+        for (int j = 0; j < cells; j++)
+        {
+            levels[j] = (j + 0.5) * 1000.0 / cells;
+            masses[j] = -3.0 * levels[j];
+        }
+        MulticanonicalWeights fixedPoint = SamcLearning.FixedPoint(shape, levels, masses, out _);
+        double[] expected = Enumerable.Range(0, 14).Select(k => 3.0 * shape.Node(k)).ToArray();
+        double rms = CentredRms(fixedPoint.LogWeights, expected);
+        _out.WriteLine($"[fixed point] ln g spanning 3 000 nats recovered to {rms:E2}");
+        Assert.True(rms < 1e-4, $"θ* departs from ln g by {rms:E2}");
+    }
+
+    [Fact]
     public void FixedPoint_OnLevelsAtTheNodes_IsLnGLessLnPi_AndSkipsEmptyNodes()
     {
         // A lattice energy on the nodes: Liang et al.'s θ = C + ln g − ln π. Node 3 holds no mass, so the others take
