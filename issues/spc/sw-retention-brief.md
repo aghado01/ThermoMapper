@@ -6,6 +6,8 @@ Revised 2026-10-28 after the spin-glass threads discussion (`issues/spc/opus-spi
 
 Corrected 2026-10-29: SPC has no mid-run resume (the SPCX file caches finished tasks), so the series has nothing to append across; SQ2's leaning keeps its conclusion on the cache's grounds. The log-binned histogram counts in 64 bits since `1c42741` (SPCX v8).
 
+Chipped 2026-10-29: the items that stay inside SPC (S1–S4, S6, S7, and the Binder check) go to [the chip brief](sw-retention-chip-brief.md), under the user's frame that accumulation is the run's state and the sums its views. S5 and the consumers in `Maths.Samplers` (R-hat, ESS, the verdict, temperature integration, reweighting) stay here.
+
 The principle, from the user: keep each draw's generative state, derive views from it, and where alternatives keep different information, offer both as options.
 
 ## Where things stand
@@ -113,8 +115,8 @@ Validation ground truth from outside the estimator's own model:
 
 | ID | Question | Notes |
 |---|---|---|
-| SQ1 | Is S1 on by default? | Its size argues yes (0.3 MB per run); the binary format change argues for a version bump either way. Leaning yes (2026-10-28): keep each draw's state, and about 60 MB per sweep in memory |
-| SQ2 | Where do the series live in the result? | On `Accumulator` (travels with resume), or beside it in `SwRunResult` (keeps the resume state lean). Leaning `Accumulator` (2026-10-28): the running sums are the series' reductions, so the series is the state and the sums are views. The resume argument given then does not hold (corrected 2026-10-29: no mid-run resume exists). The cache does: a task loaded from its SPCX file carries the accumulator alone, so a series kept anywhere else is lost for cached tasks |
+| SQ1 | Is S1 on by default? | Its size argues yes (0.3 MB per run); the binary format change argues for a version bump either way. Leaning yes (2026-10-28): keep each draw's state, and about 60 MB per sweep in memory. **Decided 2026-10-29 (user):** always collected, as the sums and the histogram are, with no switch and no thinning |
+| SQ2 | Where do the series live in the result? | On `Accumulator` (travels with resume), or beside it in `SwRunResult` (keeps the resume state lean). Leaning `Accumulator` (2026-10-28): the running sums are the series' reductions, so the series is the state and the sums are views. The resume argument given then does not hold (corrected 2026-10-29: no mid-run resume exists). The cache does: a task loaded from its SPCX file carries the accumulator alone, so a series kept anywhere else is lost for cached tasks. **Decided 2026-10-29 (user):** on `Accumulator`; accumulation is the run's state, and the sums are its views |
 | SQ3 | Storage format for persisted series and partitions | The interop tier's membrane doctrine points at a standard columnar spec at the crossing. The SPCX checkpoint stays internal; S5's persistence waits on Archivory |
 | SQ4 | Does SW join a shared diagnostics layer? | The MCMC engine family sketch has reversible engines sharing mixing diagnostics; S1 is the precondition. Proposed (2026-10-28): through the data shapes (`ChainTrace`, `ChainDiagnostics`, `RungDraws`), not the ensemble shell |
 | SQ5 | Which state does S5 keep: spins, FK labels, or both? | Spins are the Markov state and cost a byte per node; FK labels are what SPC reads; both is the full generative state of a sweep. They keep different information, so all three are candidate options |
