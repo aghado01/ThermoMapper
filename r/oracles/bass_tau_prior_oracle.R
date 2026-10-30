@@ -19,6 +19,14 @@
 # Under the Liang convention the intercept-only structure carries no tau, so ln_bf is exact, not up to a constant.
 # The reference for the moments is quadrature, checked against the closed forms; the Bayes factor is quadrature
 # only, so the checks read its signs and trends, not its digits.
+#
+# The shared family's other members (decided 2026-10-29), each with a = 3: hyper-g (Liang, Paulo, Molina, Clyde and
+# Berger 2008) on g = 1/tau, p(g) = ((a - 2)/2)(1 + g)^(-a/2), and hyper-g/n, the same law on g/N. For each, per case:
+#   mass, log_mean, log_sd   the density of u = ln tau by quadrature (Jacobian included);
+#   beta_mean                E[g'/(1 + g')] by quadrature, against its closed form 2/a (g'/(1 + g') ~ Beta(1, a/2 - 1));
+#   ln_bf, ln_bf_wide        the Bayes factor against the intercept-only structure, by quadrature as above;
+#   ln_bf_closed             hyper-g's closed form, Liang et al.'s eq. (17): (a - 2)/(k + a - 2) 2F1((N - 1)/2, 1;
+#                            (k + a)/2; R2), its series summed in logs; null for hyper-g/n, which has none this simple.
 
 source("oracles/_common.R")
 
@@ -49,15 +57,13 @@ log_moments <- function(a, r) {
   c(mass = m0, mean = m1, sd = sqrt(m2))
 }
 
-ln_bf <- function(N, k, R2, a, r, half_width) {
+ln_bf <- function(N, k, R2, a, r, half_width, density = function(v) log_density_u(v, a, r)) {
   # Over u = ln g, g = 1/tau: the prior density of u is the density of ln tau at -u.
-  f <- function(u) exp(log_density_u(-u, a, r) + ((N - 1 - k) / 2) * log1p(exp(u)) -
-                         ((N - 1) / 2) * log1p(exp(u) * (1 - R2)))
   # The log integrand's peak sets a scale so the integral stays representable.
   grid <- seq(-half_width, half_width, length.out = 4001)
-  lf <- log_density_u(-grid, a, r) + ((N - 1 - k) / 2) * log1p(exp(grid)) - ((N - 1) / 2) * log1p(exp(grid) * (1 - R2))
+  lf <- density(-grid) + ((N - 1 - k) / 2) * log1p(exp(grid)) - ((N - 1) / 2) * log1p(exp(grid) * (1 - R2))
   peak <- max(lf)
-  g <- function(u) exp(log_density_u(-u, a, r) + ((N - 1 - k) / 2) * log1p(exp(u)) -
+  g <- function(u) exp(density(-u) + ((N - 1 - k) / 2) * log1p(exp(u)) -
                          ((N - 1) / 2) * log1p(exp(u) * (1 - R2)) - peak)
   edges <- seq(-half_width, half_width, length.out = 41)
   total <- sum(vapply(1:40, function(i) integrate(g, edges[i], edges[i + 1], rel.tol = 1e-12, abs.tol = 0,
@@ -79,5 +85,44 @@ for (name in names(shapes)) {
          ln_bf = ln_bf(N, k, R2, a, r, 100), ln_bf_wide = ln_bf(N, k, R2, a, r, 200))
   })
   out[[name]] <- rows
+}
+# hyper-g's density of u = ln tau, with g' = s/tau: s = 1 (hyper-g) or 1/N (hyper-g/n).
+log_density_u_hg <- function(u, a, s) log((a - 2) / 2) - (a / 2) * log1p(s * exp(-u)) + log(s) - u
+
+# ln 2F1(alpha, 1; gamma; z) for 0 <= z < 1, its series summed in logs: term k is (alpha)_k / (gamma)_k z^k.
+log_2f1_unit <- function(alpha, gamma, z) {
+  k <- 0:200000
+  lt <- lgamma(alpha + k) - lgamma(alpha) - lgamma(gamma + k) + lgamma(gamma) + k * log(z)
+  m <- max(lt)
+  if (lt[length(lt)] > m - 50) stop("2F1's series has not converged")
+  m + log(sum(exp(lt - m)))
+}
+
+hg_moments <- function(a, s) {
+  centre <- log(s); lo <- centre - 60 / (a / 2 - 1); hi <- centre + 60
+  edges <- seq(lo, hi, length.out = ceiling(hi - lo) + 1)
+  piece <- function(f) sum(vapply(seq_len(length(edges) - 1), function(i)
+    integrate(f, edges[i], edges[i + 1], rel.tol = 1e-12, abs.tol = 0, subdivisions = 1000L)$value, 0))
+  p <- function(u) exp(log_density_u_hg(u, a, s))
+  m0 <- piece(p)
+  m1 <- piece(function(u) u * p(u)) / m0
+  m2 <- piece(function(u) (u - m1)^2 * p(u)) / m0
+  b1 <- piece(function(u) s / (exp(u) + s) * p(u)) / m0
+  c(mass = m0, mean = m1, sd = sqrt(m2), beta_mean = b1)
+}
+
+hyper <- list(hyperg = function(N) 1, hypergn = function(N) 1 / N)
+a_hg <- 3
+for (name in names(hyper)) {
+  out[[name]] <- lapply(seq_len(nrow(cases)), function(i) {
+    N <- unname(cases[i, 1]); k <- unname(cases[i, 2]); R2 <- unname(cases[i, 3])
+    s <- hyper[[name]](N)
+    mom <- hg_moments(a_hg, s)
+    density <- function(v) log_density_u_hg(v, a_hg, s)
+    list(N = N, k = k, R2 = R2, a = a_hg, scale = s, mass = mom[["mass"]], log_mean = mom[["mean"]], log_sd = mom[["sd"]],
+         beta_mean = mom[["beta_mean"]], beta_mean_closed = 2 / a_hg,
+         ln_bf = ln_bf(N, k, R2, a_hg, NA, 100, density), ln_bf_wide = ln_bf(N, k, R2, a_hg, NA, 200, density),
+         ln_bf_closed = if (name == "hyperg") log((a_hg - 2) / (k + a_hg - 2)) + log_2f1_unit((N - 1) / 2, (k + a_hg) / 2, R2) else NA)
+  })
 }
 emit_json(out, args[2])

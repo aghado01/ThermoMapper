@@ -523,6 +523,21 @@ for (N in c(40, 100, 1000)) {
 cat(sprintf("  Francom's prior penalizes leaving the null, more as N grows: %s; between structures that both carry tau it nearly cancels (< 0.3 nats): %s\n",
             verdict(null_ok), verdict(pair_ok)))
 
+# The shared family's hyper-g members (2026-10-29), a = 3: the law on u normalizes, g'/(1 + g') has its Beta(1, a/2 - 1)
+# mean, and hyper-g's Bayes factors by quadrature meet Liang et al.'s closed form.
+hg <- tp$hyperg; hgn <- tp$hypergn
+cat("\nD03 tau prior, the shared family's hyper-g members (a = 3): hyper-g on g = 1/tau, hyper-g/n on g/N\n")
+cat(sprintf("  the density of ln tau normalizes, and E[g'/(1 + g')] = 2/a, by quadrature (<= 1e-10): %s\n",
+            verdict(all(abs(c(hg$mass, hgn$mass) - 1) <= 1e-10) && all(abs(c(hg$beta_mean, hgn$beta_mean) - 2 / 3) <= 1e-10))))
+hg_gap <- max(abs(hg$ln_bf - hg$ln_bf_closed))
+cat(sprintf("  Bayes factors converged over twice the range (<= 1e-8): %s; hyper-g's against Liang et al.'s eq. (17) (%.0e): %s\n",
+            verdict(all(abs(c(hg$ln_bf - hg$ln_bf_wide, hgn$ln_bf - hgn$ln_bf_wide)) <= 1e-8)), hg_gap, verdict(hg_gap <= 1e-8)))
+for (N in c(40, 1000)) {
+  i <- which(hg$N == N & hg$k == 1 & hg$R2 == 0.2)
+  cat(sprintf("  N = %4d, one term at R2 = 0.20: ln BF against the null, ZS %.2f, hyper-g %.2f, hyper-g/n %.2f\n",
+              N, zs$ln_bf[i], hg$ln_bf[i], hgn$ln_bf[i]))
+}
+
 cat("\nD03 intercept: Liang's flat intercept against level centring (F-O9, the D03 alternative)\n")
 int_cases <- rbind(c(40, 1, 0.05), c(40, 1, 0.2), c(40, 1, 0.5), c(40, 2, 0.25),
                    c(100, 1, 0.05), c(100, 1, 0.2), c(100, 1, 0.5), c(100, 2, 0.25),
