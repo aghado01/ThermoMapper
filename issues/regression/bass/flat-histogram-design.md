@@ -21,7 +21,7 @@ Date: 2026-10-29. Status: decided. The user decided to build it whatever the ref
 - *From one run on the frozen weights:*
   - the posterior, by importance weights e^{ℓ₁}/w(ℓ₁);
   - every tempered posterior on the linear path for b in [b_lo, 1], by e^{b·ℓ₁}/w(ℓ₁);
-  - the evidence curve Z(b) = E_prior[e^{b·ℓ₁}] = E_w[e^{b·ℓ₁}/w]/E_w[1/w], a ratio estimator with no rungs, which needs the prior normalized (D03's defaults are).
+  - the evidence curve Z(b) = E_prior[e^{b·ℓ₁}] = E_w[e^{b·ℓ₁}/w]/E_w[1/w], a ratio estimator with no rungs. It needs the prior proper, not normalized: the denominator estimates the prior's mass, so any normalizer cancels and Z(b) is the evidence under the normalized prior. *(Corrected 2026-10-30; the draft said the prior must be normalized.)*
 - *The energy is generic.* Every target exposes `LogPrior` and `LogLikelihood(1)` (`ISamplingTarget`), so π_w wraps any engine's target. BASS's ℓ₁ is its collapsed log marginal at b = 1. D05's integrated form plays no part: b = 1 is the same posterior on either form, and the reweighted intermediate b are the linear form's.
 
 ## The decisions (decided 2026-10-29, as recommended)
@@ -56,6 +56,7 @@ Date: 2026-10-29. Status: decided. The user decided to build it whatever the ref
    - *BASS:*
      - fixture A's enumerable F, with τ held, whose exact g comes from each structure's ℓ₁ and prior mass. Check the learned weights, the reweighted posterior and Z(b) against it, then sampled τ by quadrature;
      - then the Friedman qualification: whether the production chains' reweighted posteriors and ln Z(1) agree to about a nat, the basins' masses, tunnelling counts, and the cost against SMC.
+     - *(2026-10-30, after the reference path)* Agreement alone does not settle it: a path from the pilots' structures agreed within a nat 22–23 nats below the 99.9% lower bound, −864.6, that R2's from-prior normalizers set on ln p(y) ([its report](friedman-reference-brief.md#reports)). The qualification reads ln Z(1) against that bound too.
 8. **The phases.**
    - Phase 1: the engine, the seam and the Samplers validation.
    - Phase 2: the BASS adapter, its enumeration checks and the Friedman qualification. That qualification reads; it sets no default.

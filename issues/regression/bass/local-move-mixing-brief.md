@@ -315,6 +315,10 @@ Decided by the user on 2026-10-29, taking the recommendations laid out after the
 
 Newest first.
 
+### Friedman's path from a pilot reference — 2026-10-29
+
+SMC from a reference built on the chains' and tempered fits' structures agrees within a nat, but on those structures' own evidence, 22–23 nats below the 99.9% lower bound that R2's from-prior normalizers set on ln p(y) ([its report](friedman-reference-brief.md#reports)). The posterior's mass inside basin A lies mostly off the structures the chains visit. The fitting checklist's report has the readings.
+
 ### Friedman's band and modes, measured — 2026-10-29
 
 After stage 8, a measurement read why no sampler settles Friedman ([its report](friedman-band-brief.md#reports)). The band at b ≈ 0.23–0.28 is a first-order transition, with two phases coexisting at fixed b within each chain. SMC's lineages collapse through it at every particle count read, up to 16,000, and its replicates' ln Ẑ disagrees by 6.5–8.4 nats. The angle floor plays no part. The fitting checklist's report has the readings.

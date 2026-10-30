@@ -57,6 +57,15 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ## Reports
 
+### Friedman's path from a pilot reference, measured — 2026-10-29
+
+A test chip ran SMC from a pilot-built reference on S10's Friedman ([its report](friedman-reference-brief.md#reports); `abdcd4d`, `99b9cb1`, tests only). The main session verified it.
+- *The reading:* at 4,000 particles every arm agrees within a nat, pooled −886.4 to −887.5. That is the pilots' own structures' evidence (−887.15), 22–23 nats below the 99.9% lower bound, −864.6, that Markov's inequality puts on ln p(y) from R2's twelve from-prior normalizers. The shortfall lies inside basin A.
+- *What it means:* agreement from a reference measures its coverage, not ln p(y). Friedman's evidence stays unresolved, now bounded below.
+- *A fact for every evidence:* `BassTarget`'s structure prior is D02's count weight, unnormalized. An SMC normalizer from a normalized reference other than the prior on F subtracts ln C + ln Z_F; estimators normalized against the prior itself (from `BassPriorSampler`'s draws, a ladder's ratio to its reference rung, the flat-histogram ratio) cancel both.
+- *The main session's checks:* the construction re-derived (the path's stage density, p₀ = w/C from the count law, Z_F's error, the Markov bound); the four checks and the pilots rerun; one arm (all pilots, ε 0.05, 4,000 particles) rerun to the printed digit.
+- *Recorded in:* `docs/Maths/BayesianRegression.md`, "BASS: SMC", under "A path from a pilot reference"; the numerics segment's stage 8 answer; the flat-histogram design's Friedman qualification.
+
 ### The coefficient prior's two axes, and the ridge — 2026-10-29
 
 A chip built D03's two axes and the normalized ridge ([its report](ridge-scale-prior-brief.md#reports); `79e0edb`, `90ce809`, `e225c22`, `0f92af0`, `125d311`). The main session verified it.

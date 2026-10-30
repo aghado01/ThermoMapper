@@ -1095,6 +1095,16 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
 - *Not the support's doing:* the angle floor refuses nothing, and halving the support minimum leaves the chains apart.
 - *So Friedman's structural posterior is not computed reliably by any sampler here,* and its evidence is unresolved. Predictions agree better than structure, and D10's verdict reports the disagreement.
 
+**A path from a pilot reference** (2026-10-29, [its report](../../issues/regression/bass/friedman-reference-brief.md#reports); exploration, tests only). SMC ran on the geometric path from q = ε·p₀ + (1 − ε)·e to the posterior, with e the pilots' structures (M4's chains, S10's tempered fit and from-prior SMC) and ε 0.05 or 0.5.
+- *Agreement, on the pilots' evidence.* At 4,000 particles every arm's replicates agree: sd 0.26–0.58 nats, pooled −886.4 to −887.5. That is, within 0.8 nats, the evidence of e's own structures, −887.15 by quadrature with no move.
+- *A lower bound it misses.*
+  - An SMC normalizer is unbiased, so by Markov's inequality P(Ẑ ≥ e^t·p(y)) ≤ e^(−t) for each replicate.
+  - The largest of R2's twelve from-prior replicates, −855.22, then puts ln p(y) above −864.6 at 99.9% (t = ln 12,000).
+  - The arms lie 22–23 nats below that bound, and the shortfall lies inside basin A, not between basins.
+- *Why.* e stands 95–175 nats above ε·p₀ on its own structures, so leaving them costs (1 − b)·h at b. The population holds e's structures through b = 0.75 and spreads only in the last stages. No transition is crossed on this path, and 20–174 families survive to b = 1, against 1–5 from the prior.
+- *So agreement from such a start measures how well the reference covers the posterior, not ln p(y).* Every arm's 95% interval for σ misses the true σ = 1, which R2's 4,000- and 16,000-particle runs covered.
+- *The structure prior's normalization.* `BassTarget`'s structure prior is D02's count weight w, normalized neither by C, the count law's normalizer, nor on F. An SMC normalizer from a normalized reference other than the prior on F, as here, estimates ∫w·p(u)·L, so it subtracts ln C + ln Z_F. An estimator that normalizes against the prior itself cancels both: SMC from `BassPriorSampler`'s draws, as in C4's runs; a ladder's ratio to its reference rung; and the flat-histogram ratio estimator.
+
 ### BASS: the pointwise density and the residual check
 
 **The pointwise density** (`BassPointwise.LogDensity(model, terms, draws, units, content)`, `BassFit.PointwiseLogDensity(data, units, content)`; S9) is OQ17's draws × units matrix, with the chains' lengths for PSIS's r_eff. A unit is an observation of a scalar response, or a case of a direct one.
