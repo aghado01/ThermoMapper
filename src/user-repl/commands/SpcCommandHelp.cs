@@ -34,8 +34,11 @@ internal static class SpcCommandHelp
         Console.WriteLine("  --replicas <int>                     Independent replicas per T (default: 1)");
         Console.WriteLine("  --sweep burnin=N,cycles=N            Sweep-probe budget (default: burnin=200,cycles=1000)");
         Console.WriteLine("  --equilibrium burnin=N,cycles=N      Equilibrium-pass budget (default: burnin=1000,cycles=5000)");
-        Console.WriteLine("  --accumulation <spec>                Per-edge currencies to collect (default: none)");
+        Console.WriteLine("  --accumulation <spec>                What to collect beyond the scalar sums, the size histogram");
+        Console.WriteLine("                                       and the per-draw record (default: none)");
         Console.WriteLine("                                         none | affinities | alignments | comembership");
+        Console.WriteLine("                                         | cluster-size-landscape | order-landscape");
+        Console.WriteLine("                                         | burnin-trace | exact-cluster-size-histogram");
         Console.WriteLine("                                         or comma-joined, e.g. affinities,alignments,comembership");
         Console.WriteLine("  --q <int>                            Potts q (number of colors; default: 20)");
         Console.WriteLine();

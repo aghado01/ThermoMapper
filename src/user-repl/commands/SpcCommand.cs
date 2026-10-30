@@ -412,20 +412,24 @@ public static class SpcCommand
     {
         bool affinities = false, alignments = false, coMembership = false;
         bool clusterSizeLandscape = false, orderLandscape = false;
+        bool burnInTrace = false, exactClusterSizeHistogram = false;
         foreach (string token in s.Split(','))
         {
             switch (token.Trim().ToLowerInvariant())
             {
-                case "affinities":             affinities           = true; break;
-                case "alignments":             alignments           = true; break;
-                case "comembership":           coMembership         = true; break;
-                case "cluster-size-landscape": clusterSizeLandscape = true; break;
-                case "order-landscape":        orderLandscape       = true; break;
+                case "affinities":                   affinities                = true; break;
+                case "alignments":                   alignments                = true; break;
+                case "comembership":                 coMembership              = true; break;
+                case "cluster-size-landscape":       clusterSizeLandscape      = true; break;
+                case "order-landscape":              orderLandscape            = true; break;
+                case "burnin-trace":                 burnInTrace               = true; break;
+                case "exact-cluster-size-histogram": exactClusterSizeHistogram = true; break;
                 case "none": break;
                 default:
                     throw new ArgumentException(
                         $"Unknown accumulation token '{token}'. Valid: none, affinities, alignments, " +
-                        "comembership, cluster-size-landscape, order-landscape.");
+                        "comembership, cluster-size-landscape, order-landscape, burnin-trace, " +
+                        "exact-cluster-size-histogram.");
             }
         }
         return new AccumulationSpec
@@ -435,6 +439,8 @@ public static class SpcCommand
             CoMembership = coMembership,
             ClusterSizeLandscape = clusterSizeLandscape,
             OrderLandscape = orderLandscape,
+            BurnInTrace = burnInTrace,
+            ExactClusterSizeHistogram = exactClusterSizeHistogram,
         };
     }
 

@@ -26,6 +26,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="VizCore.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\..\src\user-repl\**\*.cs"
              Link="UserRepl\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
