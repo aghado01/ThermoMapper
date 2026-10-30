@@ -146,6 +146,83 @@ lacks couplings and topologies the probe had to build by hand. This brief collec
 _The user has more compiler changes planned. List them here, with any ordering against §2, before this brief goes to a
 session._
 
+### 4.1 Order of operations: where the gauge and the scale are decided
+
+Raised by the user on 2026-10-30: the gauge is decided at the wrong point relative to the other stages, and the split
+with the cumulative-field solver (formerly PKWang inside SPC) is part of the same problem. Traced in code at `f52697e`.
+
+**The order today, on the SW path.**
+1. Topology, then filter, which symmetrizes the graph (OrRule or MutualKnn).
+2. Repair adds the MST bridges.
+3. Refinement.
+4. Scaling, in `pipeline/scalers/GlobalBandwidthScaler.cs`:
+   - estimate the bandwidth from the post-repair neighbour lists;
+   - apply the kernel;
+   - multiply by 1/K̂, only under `BandwidthStrategy.MeanEdgeDistance`;
+   - drop every edge under the 1e-10 floor.
+5. The caller then picks the temperature bracket.
+
+**Findings.**
+1. **The gauge is a side effect of the bandwidth choice.** `couplingScale = n / totalNeighbors` exists only in the
+   `MeanEdgeDistance` branch of `ScaleSingle` (`GlobalBandwidthScaler.cs:147–153`). The mixture path (`ScaleMixture`)
+   and both LMP scalers (`AutoLmpScaler`, `LocalMutualProximityScaler`) never apply it. Whether a graph has a gauge is
+   decided by how its bandwidth is estimated.
+2. **The gauge comes before the floor, so it changes the edge set.** `coupling *= couplingScale; if (coupling > 1e-10)`
+   (`:172–174`): a larger K̂ (a larger K) shrinks every coupling and pushes more edges under the cut. The gauge is
+   equivalent to rescaling T, as the parked coupling-normalization arc treats it, only when it comes after every
+   threshold.
+3. **K̂ and the bandwidth are measured on the wrong edge set.** Both read `refined.AllNeighbors`: post-repair and
+   pre-cut.
+   - The repair bridges, the longest edges by construction, enter the mean-edge-distance bandwidth, so a topology fix
+     rescales every edge's coupling.
+   - They also count in K̂.
+   - K̂ is not the mean degree of the graph the compiler returns, since the cut comes after it.
+4. **The pre-repair comparison graph changes two things.** `scaler.Scale(filtered, n)` (`GraphCompiler.cs:284`), built
+   for `MstBridge.Compare`, re-estimates its own bandwidth and K̂ on the filtered edges. Comparing it with the returned
+   graph mixes a topology change with a change of units.
+5. **Temperature units are chosen downstream, by two rules that disagree.**
+   - The REPL's `auto` bracket reads the bandwidth option: T_ps(q) under `MeanEdgeDistance`, the data heuristic
+     otherwise (`user-repl/commands/SpcCommand.cs:262–280`).
+   - The library's `AutoGridFixedSweep` always uses the heuristic (`AutoGridFixedSweep.cs:45`). The REPL's comment says
+     the heuristic lands about K̂× too cold under the gauge; that factor is not measured here.
+   - So one graph config gets different brackets from the REPL and the library. The parked arc's seam, "the coupling
+     construction declares its T-estimate", is implemented as a caller reading a compiler option, not as the
+     construction declaring it.
+6. **The cumulative-field split.**
+   - `CumulativeFieldSolver` sets its units after compile, from its own cumulative ladder: a cut sits at
+     T = Hcum/ln 2, and `EstimateBracket` reads that ladder.
+   - Its `Field.Local` (a per-node ladder) is a density-adaptive normalization applied after compile, the same family
+     as LMP, which acts during compile. Nothing stops the two stacking, for example an LMP-scaled graph fed to
+     `Field.Local`. The parked arc flagged this double counting.
+   - Before the move (`e059df0`), `SpcCommand` called grid resolution "the LAST step shared by both siblings", yet
+     `auto` gave each its own bracket.
+   - SW's T and the cumulative-field T are in different units, and no artifact records either.
+
+**A proposed order, with each stage owning one concern** (gauge versus measure as the parked coupling-normalization
+note distinguishes them; for discussion, nothing decided):
+1. **Structure:** topology, filter and symmetrization, repair. It ends with the edge set E.
+2. **Scale:** estimated from a declared edge set, by default the data's own neighbourhoods before repair, and recorded.
+3. **Shape:** the kernel gives raw couplings on all of E, with no floor.
+4. **Measure, optional, one place:** LMP, a degree normalization, the α family, or a per-node field. These change the
+   structure, so exactly one is chosen and stated; the cumulative-field `Field.Local` is a member of this stage, not a
+   second, post-compile one.
+5. **Thinning, optional and explicit:** edges dropped for cost are dropped on raw couplings, relative to the kernel's own
+   scale, with repair edges protected or reported, and never after the gauge.
+6. **Gauge, last:** one declared global factor, for example 1/K̂ with K̂ the mean degree of the final graph, or none.
+   That makes it exactly a T rescaling.
+   - The manifest records it, with the temperature estimate it implies.
+   - SW, the cumulative-field solver and every bracket read their units from the graph, not from a CLI option, so the
+     REPL and the library agree.
+
+**Against §2.**
+- §2.1's floor question is partly settled by placement: a floor in stage 5, before the gauge, with repair edges
+  protected, is close to option b.
+- §2.2's connectivity log belongs after stage 5 and again after stage 6, which should change nothing if the gauge is
+  pure.
+- §2.3 is stage 2's choice of edge set and estimator; separating K from the bandwidth falls out of it.
+- §2.4's multi-scale union needs its per-scale 1/K̂_s to become stage 6's single gauge, or be stated as part of stage 4.
+- The current behaviour stays selectable beside any new default (§3).
+
 ## 5. Done when
 
 - A test reproduces §2.1's cut: a repair edge whose Gaussian coupling falls under the floor, and the compiled graph's
