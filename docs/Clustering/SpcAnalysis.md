@@ -121,6 +121,7 @@ For co-membership, $\bar\delta>\theta$ is equivalent to $\langle n_{ij}\rangle>(
 - $\mathrm{Var}(m)$;
 - **Specific heat** $C_v=\max(0,\langle E^2\rangle-\langle E\rangle^2)/T^2$;
 - **Magnetic susceptibility** $\chi_m=(N/T)\mathrm{Var}(m)$;
+- **Binder cumulant** $U=1-\langle m^4\rangle/(3\langle m^2\rangle^2)$, from each replica's per-draw m series, its $\langle m^4\rangle$ averaged over replicas beside $\langle m^2\rangle$ and reduced once (NaN where a frame carries no per-draw record);
 - **Label entropy**, from pooled cluster-size histograms, in nats;
 - **Bond entropy**, from pooled bond rates, when available.
 
@@ -133,7 +134,7 @@ The primary `Susceptibility` is set by `SusceptibilityKind`:
 | `Magnetization` | $\chi_m$ |
 | `MagnetizationVariance` | $\mathrm{Var}(m)$ |
 
-`AdditionalChannels` always holds seven series: `MeanEnergy`, `MeanMagnetization`, `MagnetizationSecondMoment`, `MagnetizationVariance`, `SusceptibilityFkCluster`, `SusceptibilityFkReduced`, `SusceptibilityMagnetization`. So every primary-χ choice is also available by name. $C_v$, label entropy and bond entropy are separate properties.
+`AdditionalChannels` always holds eight series: `MeanEnergy`, `MeanMagnetization`, `MagnetizationSecondMoment`, `MagnetizationVariance`, `SusceptibilityFkCluster`, `SusceptibilityFkReduced`, `SusceptibilityMagnetization`, `BinderCumulant`. So every primary-χ choice is also available by name. $C_v$, label entropy and bond entropy are separate properties.
 
 **SP-plateau landmarks** (`SpPlateau`), on the primary χ:
 

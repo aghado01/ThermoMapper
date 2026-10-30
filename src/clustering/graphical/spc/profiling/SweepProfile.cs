@@ -90,6 +90,18 @@ public sealed record SweepProfile(
             chiMag[i] = PottsObs.MagnetizationSusceptibility.Reduce(
                 meanMag[i], magSecondMoment[i], siteCount, temperatures[i]);
 
+        // Binder cumulant U = 1 − ⟨m⁴⟩/(3⟨m²⟩²), a view over the per-draw record: each replica's ⟨m⁴⟩
+        // from its m series, averaged across the replicas beside the ⟨m²⟩ above, then reduced once on
+        // the pooled moments (nonlinear — never per-replica U averaged). NaN at a temperature where a
+        // frame carries sums without a record (a hand-built frame).
+        var (_, magFourthMoment) = SweepCurves.ByTemperature(
+            frames, f => f.MagPerDraw.Length == f.DrawCount
+                ? PottsObs.BinderCumulant.Moments(f.MagPerDraw).FourthMoment
+                : double.NaN);
+        var binder = new double[temperatures.Length];
+        for (int i = 0; i < binder.Length; i++)
+            binder[i] = PottsObs.BinderCumulant.Reduce(magSecondMoment[i], magFourthMoment[i]);
+
         // The configured kind drives peak-finding; all three ride along as channels below for
         // free comparison (FK vs magnetization disagree only in edge cases — now testable).
         IReadOnlyList<double> primaryChi = kind switch
@@ -111,6 +123,7 @@ public sealed record SweepProfile(
             ["SusceptibilityFkCluster"] = chi,
             ["SusceptibilityFkReduced"] = chiReduced,
             ["SusceptibilityMagnetization"] = chiMag,
+            ["BinderCumulant"] = binder,
         };
 
         // Bond entropy: the dispersion of the bond-survival field. Mint the
