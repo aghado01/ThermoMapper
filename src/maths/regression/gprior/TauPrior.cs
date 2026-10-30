@@ -206,7 +206,7 @@ public sealed record ResolvedTauPrior
     /// <summary>
     /// An exact draw of u = ln τ; a proper sampled prior only. The Gamma's draw is <see cref="Distributions.Gamma"/>'s; a
     /// hyper-g member's inverts g′/(1 + g′) ~ Beta(1, a/2 − 1): 1 − B = U^(1/β) with β = a/2 − 1, so u = ln(1 − B) − ln B
-    /// − v₀, v₀ the offset of g′ from 1/τ. A draw whose τ leaves the doubles is drawn again.
+    /// + ln(g′τ), where ln(g′τ) is 0 for hyper-g and −ln n₀ for hyper-g/n. A draw whose τ leaves the doubles is drawn again.
     /// </summary>
     public double SampleLogTau(Xoshiro256PlusPlus rng)
     {
