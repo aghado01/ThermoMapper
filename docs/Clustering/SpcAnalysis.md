@@ -81,7 +81,7 @@ flowchart LR
 | Flat cuts | `ThresholdSpinAgreement`, `ThresholdBondFrequency`, `ThresholdCoMembership`, each with `{ Theta, PeripheralCapture }` |
 | Blatt hierarchy | `BlattPartitionStrategy(BlattPartitionConfig?)`; `MagnetizationPeakDetector`; `PartitionHierarchy`, `HierarchyLevel`, `PartitionNesting.Holds` (in `Clustering.Dendrograms`) |
 | Dense resolvers | Swendsen–Wang adapters over frames: `SweepDenseTStack.Build`, `SweepHierarchyEom.Resolve`, `SweepLineagePersistence.Resolve`, `SweepThermalEom.Resolve`. Cores in `Clustering.Dendrograms`: `DenseTStack.Build`; `HierarchyEom.Resolve` → `HierarchyEomResult`; `LineagePersistence.Resolve` → `LineagePersistenceResult` (`ClusterLineage`); `ThermalEom.Resolve` → `ThermalEomResult`; `PartitionHierarchyDendrogram.ToDendrogram` (cost axis `"temperature"`) |
-| Profiling | `SweepProfile.From(runs, kind)`, `SweepCurves.ByTemperature`, `SweepEdgeCurves.CoMembershipDelta`, `SweepLandscapes.FromFrames`, `LabelEntropyCurve.From`; `SpcProfileAnalysis` (`SpPlateau`, `ComputeHalfMaximumBand`, `PickPeakTemperature`, `ComputeStability`); `ChiPeakSignalAnalyzer`; `SusceptibilityKind` |
+| Profiling | `SweepProfile.From(runs, kind)`, `SweepCurves.ByTemperature`, `SweepCurves.ByTemperatureWithSpread` → `SweepCurve`, `SweepEdgeCurves.CoMembershipDelta`, `SweepLandscapes.FromFrames`, `LabelEntropyCurve.From`; `SpcProfileAnalysis` (`SpPlateau`, `ComputeHalfMaximumBand`, `PickPeakTemperature`, `ComputeStability`); `ChiPeakSignalAnalyzer`; `SusceptibilityKind` |
 | Export | `SpcCsvWriter.Write*`, `WriteAllToDirectory`; `SpcTabularProjections.Create*Projection`; shared `CurrencyCsvWriter.WritePartition` / `WriteEdgeCurrencies` (`Clustering.Export`); `SpcRunLayout`, `SpcRunPaths`; `SpcOutputPathHelper` (legacy) |
 
 The frame adapters and their cores are static resolvers. The session does not call them; it accepts only an `IHierarchicalPartitionStrategy`, which in this project means Blatt.
@@ -135,6 +135,8 @@ The primary `Susceptibility` is set by `SusceptibilityKind`:
 | `MagnetizationVariance` | $\mathrm{Var}(m)$ |
 
 `AdditionalChannels` always holds eight series: `MeanEnergy`, `MeanMagnetization`, `MagnetizationSecondMoment`, `MagnetizationVariance`, `SusceptibilityFkCluster`, `SusceptibilityFkReduced`, `SusceptibilityMagnetization`, `BinderCumulant`. So every primary-χ choice is also available by name. $C_v$, label entropy and bond entropy are separate properties.
+
+`SweepCurves.ByTemperatureWithSpread` assembles a per-frame reduction as `ByTemperature` does, with bit-identical means, and keeps the replicas' spread beside each: their sample standard deviation (n − 1 denominator, NaN for a single replica) and their count. `SweepProfile`'s curves are unchanged by it.
 
 **SP-plateau landmarks** (`SpPlateau`), on the primary χ:
 

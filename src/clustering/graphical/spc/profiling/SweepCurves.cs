@@ -59,4 +59,57 @@ public static class SweepCurves
 
         return (temperatures, values);
     }
+
+    /// <summary>
+    /// <see cref="ByTemperature"/> with the replicas' spread kept beside each mean: group
+    /// <paramref name="frames"/> by temperature (ascending) and return, at each, the replicas' mean of
+    /// <paramref name="perFrame"/> (bit-identical to <see cref="ByTemperature"/>'s value), their sample
+    /// standard deviation (n − 1 denominator; NaN for a single replica) and their count.
+    /// </summary>
+    /// <param name="frames">The per-draw accumulator frames across the sweep.</param>
+    /// <param name="perFrame">The model reduction applied to each frame.</param>
+    public static SweepCurve ByTemperatureWithSpread(
+        IReadOnlyList<Accumulator> frames,
+        Func<Accumulator, double> perFrame)
+    {
+        var grouped = new SortedDictionary<double, List<double>>();
+        for (int i = 0; i < frames.Count; i++)
+        {
+            Accumulator frame = frames[i];
+            if (!grouped.TryGetValue(frame.Temperature, out List<double>? values))
+                grouped[frame.Temperature] = values = new List<double>();
+            values.Add(perFrame(frame));
+        }
+
+        var temperatures = new double[grouped.Count];
+        var means = new double[grouped.Count];
+        var deviations = new double[grouped.Count];
+        var replicas = new int[grouped.Count];
+        int index = 0;
+        foreach ((double temperature, List<double> values) in grouped)
+        {
+            // Summed from the first value in frame order, as ByTemperature sums, so the means agree bit for bit.
+            double sum = values[0];
+            for (int r = 1; r < values.Count; r++) sum += values[r];
+            double mean = sum / values.Count;
+
+            double squares = 0.0;
+            foreach (double v in values) squares += (v - mean) * (v - mean);
+
+            temperatures[index] = temperature;
+            means[index] = mean;
+            deviations[index] = values.Count > 1 ? Math.Sqrt(squares / (values.Count - 1)) : double.NaN;
+            replicas[index] = values.Count;
+            index++;
+        }
+
+        return new SweepCurve(temperatures, means, deviations, replicas);
+    }
 }
+
+/// <summary>
+/// A curve over the temperature axis with its spread across replicas: at each temperature, the
+/// replicas' mean, their sample standard deviation (NaN for a single replica) and their count.
+/// Parallel arrays, temperatures ascending.
+/// </summary>
+public sealed record SweepCurve(double[] Temperatures, double[] Means, double[] StandardDeviations, int[] Replicas);
