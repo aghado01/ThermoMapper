@@ -10,6 +10,8 @@ Chipped 2026-10-29: the items that stay inside SPC (S1–S4, S6, S7, and the Bin
 
 Built 2026-10-29: S1–S4, S6 and S7 landed through the chip (`6de243a`–`d7269ea`, review `8c4c1ae`; [its report](sw-retention-chip-brief.md#reports)). What remains here is S5 and the samplers-side consumers. S2's energy moments, the energy cumulant and C_v's Monte Carlo error followed in `c50b273`.
 
+Built 2026-10-30: S5, as kept partitions and spins, every k-th draw (`a777534`, SPCX v12). Thinned to about one draw per autocorrelation time, it needs no Archivory. What remains here is the samplers-side consumers, and the partitions' own consumers (VI-loss cuts, credible balls, the robust window, replica P(Q)), which sit with the Bayesian clustering session.
+
 The principle, from the user: keep each draw's generative state, derive views from it, and where alternatives keep different information, offer both as options.
 
 ## Where things stand
@@ -73,6 +75,10 @@ The principle, from the user: keep each draw's generative state, derive views fr
 - **Cost:** about 40 MB per run at N = 1,000 and 10⁴ sweeps as int labels (10 MB as byte spins), so gigabytes over a sweep's temperatures and replicas. It is an option with thinning, never a default.
 - **Container:** `DrawStore<TDraw>` (`src/maths/samplers/ensemble/DrawStore.cs`) keeps every `every`-th draw, and `AppendFrom` covers resume.
 - **Persistence:** at that size it belongs behind Archivory's chunk engine, which is not built. An in-memory option with heavy thinning could come first.
+- **As built (2026-10-30, `a777534`).** The gigabyte figures above assume every sweep kept. The consumers need about as many partitions as there are effectively independent draws, which the per-draw record's ESS now measures; at a few hundred per run (0.8 MB at N = 1,000 and 200 draws) they fit in memory and the SPCX cache, as S7 did.
+  - `AccumulationSpec.PartitionEvery` keeps the FK partition of every k-th draw (draw t when t mod k = 0, as `DrawStore` thins), canonically labelled by each cluster's smallest node index. `SpinsEvery` keeps the leaving spins as bytes (q ≤ 256). Both are `Accumulator` arrays, flattened draw-major (`KeptPartitions`, `KeptSpins`), not `DrawStore`, so SPC holds no `Maths.Samplers` type, as with S1.
+  - Checked against what the run already accumulates: from k = 1 partitions, Σ|c|², c_max, the exact histogram and the co-membership counts rebuild exactly; kept spins colour each cluster uniformly and give the record's m bit for bit; thinning keeps exactly those draws of the same stream; the accumulator probe stays bit-identical.
+  - Not built: thinning by the run's own measured τ (keep all, thin at the end), compression of the canonical labels (`System.IO.Compression`, base library), and Archivory for keeping every draw at scale.
 
 ### S6. Replica spread in `SweepCurves`
 
@@ -100,7 +106,7 @@ The principle, from the user: keep each draw's generative state, derive views fr
 2. **S2:** views over S1. *Done: Binder (`f542951`); energy moments, energy cumulant and C_v's error (`c50b273`).*
 3. **S6 and S7:** independent and small. *Done (`96de69d`, `d7269ea`).*
 4. **S4:** follows S1's record shape. *Done (`1322e47`).*
-5. **S5:** waits on the persistence decision; in-memory thinning first if it is wanted sooner.
+5. **S5:** waits on the persistence decision; in-memory thinning first if it is wanted sooner. *Done, thinned, in the SPCX cache (`a777534`).*
 
 **Working rules** (from the regression track):
 - Retention must not change the RNG stream. Check each change against the old code with a probe that diffs the accumulator's outputs bit for bit.
@@ -124,7 +130,7 @@ Validation ground truth from outside the estimator's own model:
 | SQ2 | Where do the series live in the result? | On `Accumulator` (travels with resume), or beside it in `SwRunResult` (keeps the resume state lean). Leaning `Accumulator` (2026-10-28): the running sums are the series' reductions, so the series is the state and the sums are views. The resume argument given then does not hold (corrected 2026-10-29: no mid-run resume exists). The cache does: a task loaded from its SPCX file carries the accumulator alone, so a series kept anywhere else is lost for cached tasks. **Decided 2026-10-29 (user):** on `Accumulator`; accumulation is the run's state, and the sums are its views |
 | SQ3 | Storage format for persisted series and partitions | The interop tier's membrane doctrine points at a standard columnar spec at the crossing. The SPCX checkpoint stays internal; S5's persistence waits on Archivory |
 | SQ4 | Does SW join a shared diagnostics layer? | The MCMC engine family sketch has reversible engines sharing mixing diagnostics; S1 is the precondition. Proposed (2026-10-28): through the data shapes (`ChainTrace`, `ChainDiagnostics`, `RungDraws`), not the ensemble shell |
-| SQ5 | Which state does S5 keep: spins, FK labels, or both? | Spins are the Markov state and cost a byte per node; FK labels are what SPC reads; both is the full generative state of a sweep. They keep different information, so all three are candidate options |
+| SQ5 | Which state does S5 keep: spins, FK labels, or both? | Spins are the Markov state and cost a byte per node; FK labels are what SPC reads; both is the full generative state of a sweep. They keep different information, so all three are candidate options. **Decided 2026-10-30 (user):** both, as independent options (`PartitionEvery`, `SpinsEvery`); FK labels are what the Bayesian consumers read |
 
 ## Report
 
