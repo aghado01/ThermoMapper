@@ -47,7 +47,7 @@ The two stage 8 chips built them in parallel ([C4's report](stage8-fitting-smc-b
   - `docs/Maths/BayesianRegression.md` gains "BASS: SMC" and cut SMC in the calibration section, the new weighted quantile, the weighted pointwise forms, and the API, configuration, status and source rows;
   - `docs/Maths/Samplers.md` gains `DrawSample`'s rule.
 - *Open:*
-  - Friedman's worse modes under SMC: the lineages, not the particle count, bind;
+  - Friedman's worse modes under SMC. The qualification varied the data size at 1,000 particles (C4 read its brief's N as n), so how the particle count matters is unread, and the lineages' collapse is a reading at that count only (corrected 2026-10-29);
   - cut SMC at larger S;
   - C3's short-run bias, which its gate does not see;
   - N15, the covariance factor's cost;

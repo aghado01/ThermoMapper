@@ -132,7 +132,7 @@ Drafted and decided on 2026-10-29: the user took the draft as written, with its 
   - the largest distance between two chains' posterior-mean surfaces at the monitored points.
   - The verdict reports them. No stop reads them in this draft, since they have no calibrated threshold yet.
 - **Friedman's worse modes and stage 8.** Move work on them is parked.
-  - A mode 12–42 nats below the best carries about e⁻¹² of its mass or less, so a correct sampler all but never sits there.
+  - A mode 12–42 nats below the best carries about e⁻¹² of its mass or less, so a correct sampler all but never sits there. *(Corrected 2026-10-29.)* That is a gap in density per structure, not in mass. A basin's mass sums over the structures it holds, and basins differ in how many they hold, so the mass ratio needs basin fractions or per-basin evidence. The Opus chat's read in `issues/regression/argon-friedman-etc.md` caught it.
   - SMC's resampling along D05's path weights particles by those ratios, which MCMC chains without round trips cannot. Stage 8's fitting adapter (C4) is the test, recorded as a qualification question: does a population of a given size find the better representation, and keep it?
   - *The caveat:* births are bounded by the Occam cost, so some particles must reach that representation at low b. The particle count is the variable to read.
   - Any later move work reads the agreement time from dispersed starts: the sweeps or seconds until every chain's mean log posterior lies within Δ nats of the leader's. It does not read ESS per second.

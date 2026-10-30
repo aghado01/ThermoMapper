@@ -996,14 +996,14 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
 - resume bit for bit;
 - MCMC fits bit-identical with `Smc` null.
 
-**The qualification** (D10's stage 8 question; exploration). Four replicates of 1,000 particles, with S10's seeds, at N ≈ 250, at S10's size, at 1,000 and at 4,000.
+**The qualification** (D10's stage 8 question; exploration). Four replicates of 1,000 particles, with S10's seeds, on data of n ≈ 250, S10's size, 1,000 and 4,000 cases. The particle count was not varied: the chip read its brief's N as the data size, so D10's question of how the particle count matters is still unread.
 - *Mixed and functional: SMC finds the better representation.* At S10's sizes every replicate holds the structure the best MCMC chains hold, where one mixed chain and two functional chains sat 22–29 nats below. The replicates agree within 1.3–2.4 nats.
 - *Friedman: it does not.*
   - The replicates' log posteriors span −897 to −915, against the best chain's −892.4.
   - They mostly hold three x1·x2 terms where the best chain holds two.
   - They disagree by 13–66 nats, more at larger N.
   - σ's interval misses the truth at N = 250–1,000, lying above it as untempered MCMC's does, and covers it at 4,000.
-- *Lineages collapse.* Friedman's replicates end descended from one or two initial particles, and the others thin as N grows.
+- *Lineages collapse.* Friedman's replicates end descended from one or two initial particles, and the others thin as n grows.
   - So the comparison between modes happens among the few lineages alive at low b, not near b = 1, where the modes' mass ratios would decide it.
   - The genealogy error saturates at √ln 2 = 0.83 once one family is left. The replicates' spread, 1–21 times larger, is the error to read.
 - *Prediction agrees better than structure:* σ²'s spread is 0.04–0.4 posterior sd, while M's and the log posterior's reach 0.6–1.0 on Friedman.
