@@ -102,6 +102,20 @@ public sealed record SweepProfile(
         for (int i = 0; i < binder.Length; i++)
             binder[i] = PottsObs.BinderCumulant.Reduce(magSecondMoment[i], magFourthMoment[i]);
 
+        // Energy cumulant V = 1 − ⟨E⁴⟩/(3⟨E²⟩²) (Challa, Landau and Binder 1986), built as the Binder cumulant
+        // is: each replica's ⟨E⁴⟩ from its energy series, averaged beside the ⟨E²⟩ above, reduced once. Its
+        // minimum stays below 2/3 at a first-order transition.
+        var (_, energyFourthMoment) = SweepCurves.ByTemperature(
+            frames, f => f.EnergyPerDraw.Length == f.DrawCount
+                ? PottsObs.EnergyCumulant.Moments(f.EnergyPerDraw).FourthMoment
+                : double.NaN);
+        var energyCumulant = new double[temperatures.Length];
+        for (int i = 0; i < energyCumulant.Length; i++)
+            energyCumulant[i] = PottsObs.EnergyCumulant.Reduce(meanEnergySq[i], energyFourthMoment[i]);
+
+        // C_v's Monte Carlo error, from the per-draw energy record and the replicas' effective sample size.
+        var (_, specificHeatError) = SpecificHeatMonteCarloError.ByTemperature(frames);
+
         // The configured kind drives peak-finding; all three ride along as channels below for
         // free comparison (FK vs magnetization disagree only in edge cases — now testable).
         IReadOnlyList<double> primaryChi = kind switch
@@ -124,6 +138,8 @@ public sealed record SweepProfile(
             ["SusceptibilityFkReduced"] = chiReduced,
             ["SusceptibilityMagnetization"] = chiMag,
             ["BinderCumulant"] = binder,
+            ["EnergyCumulant"] = energyCumulant,
+            ["SpecificHeatMonteCarloError"] = specificHeatError,
         };
 
         // Bond entropy: the dispersion of the bond-survival field. Mint the

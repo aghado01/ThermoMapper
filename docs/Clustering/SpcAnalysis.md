@@ -119,9 +119,10 @@ For co-membership, $\bar\delta>\theta$ is equivalent to $\langle n_{ij}\rangle>(
 - **FK susceptibility** $\chi_{FK}$ and a giant-excluded variant $\chi_{\text{red}}$, both per site;
 - **Energy and magnetization moments** (per-frame means averaged over replicas);
 - $\mathrm{Var}(m)$;
-- **Specific heat** $C_v=\max(0,\langle E^2\rangle-\langle E\rangle^2)/T^2$;
+- **Specific heat** $C_v=\max(0,\langle E^2\rangle-\langle E\rangle^2)/T^2$, and its **Monte Carlo error** $\mathrm{sd}(y)/\sqrt{\mathrm{ESS}(y)}$ with $y=(E-\bar E)^2/T^2$ over the replicas' per-draw energies, the ESS from `ChainDiagnostics.MeanEss` with the replicas as chains (`SpecificHeatMonteCarloError`; NaN without a record, for unequal replicas or fewer than four draws, or for replicas frozen at different energies);
 - **Magnetic susceptibility** $\chi_m=(N/T)\mathrm{Var}(m)$;
 - **Binder cumulant** $U=1-\langle m^4\rangle/(3\langle m^2\rangle^2)$, from each replica's per-draw m series, its $\langle m^4\rangle$ averaged over replicas beside $\langle m^2\rangle$ and reduced once (NaN where a frame carries no per-draw record);
+- **Energy cumulant** $V=1-\langle E^4\rangle/(3\langle E^2\rangle^2)$ (Challa, Landau and Binder 1986), built the same way from the per-draw energies; its minimum stays below 2/3 at a first-order transition;
 - **Label entropy**, from pooled cluster-size histograms, in nats;
 - **Bond entropy**, from pooled bond rates, when available.
 
@@ -134,7 +135,7 @@ The primary `Susceptibility` is set by `SusceptibilityKind`:
 | `Magnetization` | $\chi_m$ |
 | `MagnetizationVariance` | $\mathrm{Var}(m)$ |
 
-`AdditionalChannels` always holds eight series: `MeanEnergy`, `MeanMagnetization`, `MagnetizationSecondMoment`, `MagnetizationVariance`, `SusceptibilityFkCluster`, `SusceptibilityFkReduced`, `SusceptibilityMagnetization`, `BinderCumulant`. So every primary-χ choice is also available by name. $C_v$, label entropy and bond entropy are separate properties.
+`AdditionalChannels` always holds ten series: `MeanEnergy`, `MeanMagnetization`, `MagnetizationSecondMoment`, `MagnetizationVariance`, `SusceptibilityFkCluster`, `SusceptibilityFkReduced`, `SusceptibilityMagnetization`, `BinderCumulant`, `EnergyCumulant`, `SpecificHeatMonteCarloError`. So every primary-χ choice is also available by name. $C_v$, label entropy and bond entropy are separate properties.
 
 `SweepCurves.ByTemperatureWithSpread` assembles a per-frame reduction as `ByTemperature` does, with bit-identical means, and keeps the replicas' spread beside each: their sample standard deviation (n − 1 denominator, NaN for a single replica) and their count. `SweepProfile`'s curves are unchanged by it.
 

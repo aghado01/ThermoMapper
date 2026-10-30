@@ -74,7 +74,7 @@ flowchart LR
 
 | Area | Entry points |
 |---|---|
-| Potts model | `FkKernel.BondProbability`; `PottsModelConfig` (Q = 20); `BwdPottsCriticalEstimate.TpsUpperBound`; `Susceptibility`, `MeanEnergy`, `SpecificHeat`, `Magnetization`, `MagnetizationSusceptibility`, `BinderCumulant` (`.Reduce`; `BinderCumulant.Moments`) |
+| Potts model | `FkKernel.BondProbability`; `PottsModelConfig` (Q = 20); `BwdPottsCriticalEstimate.TpsUpperBound`; `Susceptibility`, `MeanEnergy`, `SpecificHeat`, `Magnetization`, `MagnetizationSusceptibility`, `BinderCumulant` (`.Reduce`; `BinderCumulant.Moments`), `EnergyCumulant` (`.Reduce`; `EnergyCumulant.Moments`, ⟨E⟩ to ⟨E⁴⟩) |
 | Single run | `SwRunner.Run(SwRunSpec)` → `SwRunResult`; `SwRunSpec`, `RunBudget`, `AccumulationSpec` (`None`, `Currencies`, …), `Accumulator` |
 | Reductions | `SwCurrencies.ToAffinities` / `ToAlignments` / `ToCoMembership`; `SwLandscapes.MeanClusterSize` / `GiantParticipation` |
 | Checkpoints | `AccumulatorSerializer.Instance` (SPCX v11, `.spcx`) |
@@ -138,8 +138,9 @@ With D retained draws:
 | Magnetization | $\langle m\rangle$, $\langle m^2\rangle$ and their variance |
 | Magnetic susceptibility | $\chi_m=\frac NT\max(0,\langle m^2\rangle-\langle m\rangle^2)$ |
 | Binder cumulant | $U=1-\dfrac{\langle m^4\rangle}{3\langle m^2\rangle^2}$, from the per-draw m series |
+| Energy cumulant | $V=1-\dfrac{\langle E^4\rangle}{3\langle E^2\rangle^2}$, from the per-draw E series |
 
-`MagnetizationSusceptibility` and `BinderCumulant.Reduce` should be fed *pooled* moments (averaged over all replicas at one T), so the nonlinear reduction is taken once and no Jensen bias arises; the functions cannot check this. `BinderCumulant.Reduce` returns NaN when $\langle m^2\rangle\le 0$, where U is undefined. `Susceptibility`, `MeanEnergy`, `SpecificHeat` and `Magnetization` return 0 when D ≤ 0; `Susceptibility` and `MagnetizationSusceptibility` also return 0 when N ≤ 0, and `SpecificHeat` and `MagnetizationSusceptibility` when T ≤ 0.
+`MagnetizationSusceptibility`, `BinderCumulant.Reduce` and `EnergyCumulant.Reduce` should be fed *pooled* moments (averaged over all replicas at one T), so the nonlinear reduction is taken once and no Jensen bias arises; the functions cannot check this. `BinderCumulant.Reduce` returns NaN when $\langle m^2\rangle\le 0$, and `EnergyCumulant.Reduce` when $\langle E^2\rangle\le 0$, where the cumulant is undefined. `Susceptibility`, `MeanEnergy`, `SpecificHeat` and `Magnetization` return 0 when D ≤ 0; `Susceptibility` and `MagnetizationSusceptibility` also return 0 when N ≤ 0, and `SpecificHeat` and `MagnetizationSusceptibility` when T ≤ 0.
 
 ### Currencies and landscapes
 
