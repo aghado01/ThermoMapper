@@ -81,7 +81,7 @@ Built and verified ([the chip's report and the main session's](flat-histogram-ph
 - *An iteration is `Thin` sweeps,* since Friedman needed 25M production sweeps a chain.
 - *The pilot's self-sizing ladders are read one at a time and pooled by b.*
 - *Friedman, on one seed:* the decisions' bet held there. The flat histogram crossed the band that tempering and SMC do not, its chains agreed, and ln Z(1) = −841.4 ± 0.2 reached the bound, with the posterior on a1.
-- *Not yet robust:* on a second seed SAMC's fixed point refused the pilot's ĝ, and a flat start at the same budget learned nothing. A warm start that holds across seeds is the next item.
+- *Not yet robust:* on a second seed SAMC's fixed point refused the pilot's ĝ, and a flat start at the same budget learned nothing. A warm start that holds across seeds is the next item ([its brief](flat-histogram-warmstart-brief.md)).
 
 ## What to expect, honestly
 
