@@ -128,6 +128,11 @@ workstream subfolder (`ph`, `spred`, `viz`, `docs`, …). Canonical file kinds:
 - **[The Shelf](issues/SHELF.md)** (`issues/SHELF.md`) — action items jotted
   organically mid-work; entries incubate and may be amended before being
   promoted to a brief.
+- **[The notation ledger](issues/notation-ledger.md)**
+  (`issues/notation-ledger.md`) — splits in the module's language (symbols,
+  identifiers, terms) logged as they are found, newest first, for one
+  unification pass after the BASS regression work and its extensions land.
+  Record only; renames wait for that pass.
 
 Docs reference each other by wikilink or explicit relative link. Generated
 analysis output goes to `artifacts/`, not `issues/`.
