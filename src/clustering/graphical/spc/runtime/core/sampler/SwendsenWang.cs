@@ -107,6 +107,20 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
     private long[]?   _burnInSumSqClusterSizesPerDraw;
     private int[]?    _burnInMaxClusterSizePerDraw;
 
+    // ── Kept states (runtime-gated; null when off) ────────────────────────
+    // Every k-th measured draw's FK partition and spins, flattened draw-major, N entries per kept draw.
+    // Draw t is kept when t % k == 0, as DrawStore thins, so DrawCount draws keep ⌈DrawCount / k⌉; they
+    // reset with the record. A partition is canonical: each node carries the smallest node index in its
+    // FK cluster, so labels compare across draws and replicas as they stand. The spins are those leaving
+    // the draw, which colour each of its FK clusters uniformly.
+    private readonly int _partitionEvery;   // 0 = off
+    private readonly int _spinsEvery;       // 0 = off
+    private int[]?  _keptPartitions;
+    private byte[]? _keptSpins;
+    private int _keptPartitionCount;
+    private int _keptSpinsCount;
+    private readonly int[]? _labelScratch;  // [N] root -> canonical label, sentinel -1
+
     private int _drawCount;
 
     public SwendsenWang(
@@ -121,6 +135,10 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
             throw new ArgumentException("Graph CSR arrays are not initialized.", nameof(graph));
         if (temperature <= 0.0) throw new ArgumentOutOfRangeException(nameof(temperature), "Temperature must be strictly positive.");
         if (q < 2) throw new ArgumentOutOfRangeException(nameof(q), "Q must be at least 2.");
+        if (accumulation.PartitionEvery < 0 || accumulation.SpinsEvery < 0)
+            throw new ArgumentOutOfRangeException(nameof(accumulation), "PartitionEvery and SpinsEvery must be non-negative (0 = off).");
+        if (accumulation.SpinsEvery > 0 && q > 256)
+            throw new ArgumentOutOfRangeException(nameof(q), "Kept spins take one byte each, so they need q ≤ 256.");
 
         _graph = graph;
         _temperature = temperature;
@@ -173,6 +191,17 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         int maxBin = BitOperations.Log2((uint)Math.Max(1, _n)) + 1;
         _clusterSizeHistogram = new long[maxBin];
         _exactClusterSizeHistogram = accumulation.ExactClusterSizeHistogram ? new long[_n + 1] : null;
+
+        // Kept states: present (empty until a kept draw) when the run asks for them.
+        _partitionEvery = accumulation.PartitionEvery;
+        _spinsEvery     = accumulation.SpinsEvery;
+        if (_partitionEvery > 0)
+        {
+            _keptPartitions = [];
+            _labelScratch   = new int[_n];
+        }
+        if (_spinsEvery > 0)
+            _keptSpins = [];
 
         // Random initial configuration (high-T disorder).
         for (int i = 0; i < _n; i++)
@@ -392,11 +421,36 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         _magPerDraw[_drawCount]               = m;
         _sumSqClusterSizesPerDraw[_drawCount] = sumSq;
         _maxClusterSizePerDraw[_drawCount]    = (int)maxSize;
+
+        // ── Kept states (runtime-gated): this draw's FK partition, canonically labelled from the
+        // union-find Pass 2 compressed, and the spins Pass 2 left. ReserveRecord sized both for it.
+        if (_keptPartitions is not null && _drawCount % _partitionEvery == 0)
+        {
+            Span<int> labels = _keptPartitions.AsSpan(_keptPartitionCount * _n, _n);
+            _labelScratch.AsSpan().Fill(-1);
+            for (int i = 0; i < _n; i++)
+            {
+                int root = _uf.Find(i);
+                int label = _labelScratch![root];
+                if (label < 0) _labelScratch[root] = label = i;
+                labels[i] = label;
+            }
+            _keptPartitionCount++;
+        }
+        if (_keptSpins is not null && _drawCount % _spinsEvery == 0)
+        {
+            Span<byte> kept = _keptSpins.AsSpan(_keptSpinsCount * _n, _n);
+            for (int i = 0; i < _n; i++)
+                kept[i] = (byte)_spins[i];
+            _keptSpinsCount++;
+        }
+
         _drawCount++;
     }
 
     /// <summary>
-    /// Grow the per-draw record to hold <paramref name="capacity"/> draws, keeping the entries so far.
+    /// Grow the per-draw record to hold <paramref name="capacity"/> draws, keeping the entries so far, and the kept
+    /// states to hold the draws among them that are kept.
     /// </summary>
     private void ReserveRecord(int capacity)
     {
@@ -405,6 +459,29 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         _magPerDraw               = Grown(_magPerDraw, capacity);
         _sumSqClusterSizesPerDraw = Grown(_sumSqClusterSizesPerDraw, capacity);
         _maxClusterSizePerDraw    = Grown(_maxClusterSizePerDraw, capacity);
+        if (_keptPartitions is not null)
+            _keptPartitions = GrownKept(_keptPartitions, _keptPartitionCount, KeptLength(capacity, _partitionEvery));
+        if (_keptSpins is not null)
+            _keptSpins = GrownKept(_keptSpins, _keptSpinsCount, KeptLength(capacity, _spinsEvery));
+    }
+
+    /// <summary>The flattened length of the kept states among <paramref name="draws"/> draws thinned by <paramref name="every"/>.</summary>
+    private int KeptLength(int draws, int every)
+    {
+        long length = (long)((draws + (long)every - 1) / every) * _n;
+        if (length > Array.MaxLength)
+            throw new InvalidOperationException(
+                $"Keeping every {every}th of {draws} draws at N = {_n} needs {length} entries, past the largest array; raise the interval.");
+        return (int)length;
+    }
+
+    /// <summary>A copy of the <paramref name="keptCount"/> kept draws' entries in an array of the new length.</summary>
+    private T[] GrownKept<T>(T[] kept, int keptCount, int length)
+    {
+        if (length <= kept.Length) return kept;
+        var grown = new T[length];
+        Array.Copy(kept, grown, keptCount * _n);
+        return grown;
     }
 
     /// <summary>A copy of the live entries [0, draw count) in a series of the new capacity — nothing past them.</summary>
@@ -448,6 +525,11 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
             BurnInMagPerDraw               = (double[]?)_burnInMagPerDraw?.Clone(),
             BurnInSumSqClusterSizesPerDraw = (long[]?)_burnInSumSqClusterSizesPerDraw?.Clone(),
             BurnInMaxClusterSizePerDraw    = (int[]?)_burnInMaxClusterSizePerDraw?.Clone(),
+            // The kept states travel the same way — runtime-gated, null when off, trimmed to the kept draws.
+            KeptPartitions = _keptPartitions?.AsSpan(0, _keptPartitionCount * _n).ToArray(),
+            PartitionEvery = _partitionEvery,
+            KeptSpins      = _keptSpins?.AsSpan(0, _keptSpinsCount * _n).ToArray(),
+            SpinsEvery     = _spinsEvery,
             // Per-edge currency arrays travel in the same accumulator — each null when
             // its currency gate is off (Affinities ⟂ Alignments ⟂ CoMembership).
             BondFormedCount    = TConfig.Affinities ? (int[])_bondFormedCount!.Clone() : null,
@@ -504,6 +586,9 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
             throw new InvalidOperationException(
                 $"Snapshot exact cluster-size histogram length ({result.ExactClusterSizeHistogram.Length}) does not " +
                 $"match model length N + 1 ({_exactClusterSizeHistogram.Length}).");
+        // The kept states gate on presence and interval, with one block of N per kept draw.
+        CheckKept("partitions", result.KeptPartitions?.Length, result.PartitionEvery, _keptPartitions is not null, _partitionEvery, result.DrawCount);
+        CheckKept("spins", result.KeptSpins?.Length, result.SpinsEvery, _keptSpins is not null, _spinsEvery, result.DrawCount);
         if (result.Temperature != _temperature)
             throw new InvalidOperationException(
                 $"Snapshot temperature {result.Temperature} does not match model temperature {_temperature}.");
@@ -555,6 +640,16 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
             _burnInMagPerDraw               = (double[])result.BurnInMagPerDraw!.Clone();
             _burnInSumSqClusterSizesPerDraw = (long[])result.BurnInSumSqClusterSizesPerDraw!.Clone();
             _burnInMaxClusterSizePerDraw    = (int[])result.BurnInMaxClusterSizePerDraw!.Clone();
+        }
+        if (_keptPartitions is not null)
+        {
+            _keptPartitions      = (int[])result.KeptPartitions!.Clone();
+            _keptPartitionCount  = _keptPartitions.Length / _n;
+        }
+        if (_keptSpins is not null)
+        {
+            _keptSpins      = (byte[])result.KeptSpins!.Clone();
+            _keptSpinsCount = _keptSpins.Length / _n;
         }
 
         // Restore the per-edge counts elementwise (presence already validated
@@ -617,6 +712,27 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         _coMembershipCount?.AsSpan().Clear();
         _sumClusterSizePerNode?.AsSpan().Clear();
         _sumInGiantClusterPerNode?.AsSpan().Clear();
+        _keptPartitionCount = 0;
+        _keptSpinsCount     = 0;
+    }
+
+    /// <summary>
+    /// Check a snapshot's kept states against this model: present exactly when the model keeps them, at the same
+    /// interval, with N entries for each of the ⌈DrawCount / every⌉ kept draws, so a restored run appends.
+    /// </summary>
+    private void CheckKept(string what, int? length, int every, bool kept, int modelEvery, int drawCount)
+    {
+        if (kept != length.HasValue)
+            throw new InvalidOperationException(
+                $"Snapshot kept {what} presence ({length.HasValue}) does not match model capability ({kept}).");
+        if (!kept) return;
+        if (every != modelEvery)
+            throw new InvalidOperationException(
+                $"Snapshot kept {what} interval ({every}) does not match the model's ({modelEvery}).");
+        long expected = (long)((drawCount + (long)every - 1) / every) * _n;
+        if (length != expected)
+            throw new InvalidOperationException(
+                $"Snapshot kept {what} length ({length}) does not match ⌈{drawCount} / {every}⌉ draws × N = {expected}.");
     }
 
     /// <summary>

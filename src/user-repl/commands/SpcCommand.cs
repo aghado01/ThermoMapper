@@ -413,9 +413,20 @@ public static class SpcCommand
         bool affinities = false, alignments = false, coMembership = false;
         bool clusterSizeLandscape = false, orderLandscape = false;
         bool burnInTrace = false, exactClusterSizeHistogram = false;
+        int partitionEvery = 0, spinsEvery = 0;
         foreach (string token in s.Split(','))
         {
-            switch (token.Trim().ToLowerInvariant())
+            string t = token.Trim().ToLowerInvariant();
+            int eq = t.IndexOf('=');
+            if (eq > 0 && t[..eq] is "partitions" or "spins")
+            {
+                int every = GraphRun.ParseInt(t[(eq + 1)..]);
+                if (every < 0)
+                    throw new ArgumentException($"Accumulation token '{token}': the interval must be non-negative (0 = off).");
+                if (t[..eq] == "partitions") partitionEvery = every; else spinsEvery = every;
+                continue;
+            }
+            switch (t)
             {
                 case "affinities":                   affinities                = true; break;
                 case "alignments":                   alignments                = true; break;
@@ -429,7 +440,7 @@ public static class SpcCommand
                     throw new ArgumentException(
                         $"Unknown accumulation token '{token}'. Valid: none, affinities, alignments, " +
                         "comembership, cluster-size-landscape, order-landscape, burnin-trace, " +
-                        "exact-cluster-size-histogram.");
+                        "exact-cluster-size-histogram, partitions=K, spins=K.");
             }
         }
         return new AccumulationSpec
@@ -441,6 +452,8 @@ public static class SpcCommand
             OrderLandscape = orderLandscape,
             BurnInTrace = burnInTrace,
             ExactClusterSizeHistogram = exactClusterSizeHistogram,
+            PartitionEvery = partitionEvery,
+            SpinsEvery = spinsEvery,
         };
     }
 

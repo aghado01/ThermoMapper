@@ -38,7 +38,7 @@ public sealed class SwAccumulatorProbeTests
 
     /// <summary>The options that only keep more of what the cycle computes, all on.</summary>
     internal static AccumulationSpec WithDiagnostics(AccumulationSpec accumulation)
-        => accumulation with { BurnInTrace = true, ExactClusterSizeHistogram = true };
+        => accumulation with { BurnInTrace = true, ExactClusterSizeHistogram = true, PartitionEvery = 3, SpinsEvery = 2 };
 
     public static TheoryData<string> CaseNames()
     {

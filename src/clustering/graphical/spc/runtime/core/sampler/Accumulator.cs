@@ -90,6 +90,30 @@ public sealed record Accumulator
     // [2^k, 2^(k+1)) it is ClusterSizeHistogram. 64-bit, as a count gains up to N a draw.
     public long[]? ExactClusterSizeHistogram { get; init; }
 
+    // ── Kept states (AccumulationSpec.PartitionEvery / SpinsEvery; null when off) ──
+    // Every k-th measured draw's state, flattened draw-major with N entries per kept draw; draw t is
+    // kept when t % k == 0, so DrawCount draws keep ⌈DrawCount / k⌉. Kept draw j is measured draw j·k,
+    // whose per-draw record entries describe the same draw.
+
+    /// <summary>
+    /// The FK partition of every <see cref="PartitionEvery"/>-th draw, canonically labelled: each node carries the
+    /// smallest node index in its cluster, so labels compare across draws and replicas as they stand. These are the
+    /// clusters of the entering spins and the draw's bonds, the ones Σ|c|² and c_max describe.
+    /// </summary>
+    public int[]? KeptPartitions { get; init; }
+
+    /// <summary>The thinning interval of <see cref="KeptPartitions"/>; 0 when they are not kept.</summary>
+    public int PartitionEvery { get; init; }
+
+    /// <summary>
+    /// The spins of every <see cref="SpinsEvery"/>-th draw, one byte per node: the spins leaving the draw, which
+    /// colour each of its FK clusters uniformly and which m describes.
+    /// </summary>
+    public byte[]? KeptSpins { get; init; }
+
+    /// <summary>The thinning interval of <see cref="KeptSpins"/>; 0 when they are not kept.</summary>
+    public int SpinsEvery { get; init; }
+
     // ── Provenance ───────────────────────────────────────────────────────
     public DateTime TimestampUtc { get; init; } = DateTime.UtcNow;
 }

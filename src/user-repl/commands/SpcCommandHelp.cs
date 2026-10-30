@@ -39,6 +39,8 @@ internal static class SpcCommandHelp
         Console.WriteLine("                                         none | affinities | alignments | comembership");
         Console.WriteLine("                                         | cluster-size-landscape | order-landscape");
         Console.WriteLine("                                         | burnin-trace | exact-cluster-size-histogram");
+        Console.WriteLine("                                         | partitions=K | spins=K  (every K-th draw's FK partition");
+        Console.WriteLine("                                           or spins; thin to about one per autocorrelation time)");
         Console.WriteLine("                                         or comma-joined, e.g. affinities,alignments,comembership");
         Console.WriteLine("  --q <int>                            Potts q (number of colors; default: 20)");
         Console.WriteLine();

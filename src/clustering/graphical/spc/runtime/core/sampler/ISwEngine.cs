@@ -41,7 +41,7 @@ internal interface ISwEngine
     /// <summary>
     /// Snapshot the full sampler state — scalar sufficient-statistics, the per-draw record + resume
     /// state, plus each optional array (the per-edge counts such as <see cref="Accumulator.BondFormedCount"/>,
-    /// the landscapes, the burn-in trace, the exact histogram) when the run tracks it,
+    /// the landscapes, the burn-in trace, the exact histogram, the kept partitions and spins) when the run tracks it,
     /// <see langword="null"/> otherwise.
     /// </summary>
     Accumulator GetCheckpoint();

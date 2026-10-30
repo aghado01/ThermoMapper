@@ -77,7 +77,7 @@ flowchart LR
 | Potts model | `FkKernel.BondProbability`; `PottsModelConfig` (Q = 20); `BwdPottsCriticalEstimate.TpsUpperBound`; `Susceptibility`, `MeanEnergy`, `SpecificHeat`, `Magnetization`, `MagnetizationSusceptibility`, `BinderCumulant` (`.Reduce`; `BinderCumulant.Moments`), `EnergyCumulant` (`.Reduce`; `EnergyCumulant.Moments`, ⟨E⟩ to ⟨E⁴⟩) |
 | Single run | `SwRunner.Run(SwRunSpec)` → `SwRunResult`; `SwRunSpec`, `RunBudget`, `AccumulationSpec` (`None`, `Currencies`, …), `Accumulator` |
 | Reductions | `SwCurrencies.ToAffinities` / `ToAlignments` / `ToCoMembership`; `SwLandscapes.MeanClusterSize` / `GiantParticipation` |
-| Checkpoints | `AccumulatorSerializer.Instance` (SPCX v11, `.spcx`) |
+| Checkpoints | `AccumulatorSerializer.Instance` (SPCX v12, `.spcx`) |
 | Execution | `ISpcExecutor` / `SpcExecutor` (`BuildTaskList`, `Run`, `RunBatch`, `ExecuteAll`, `ExecuteBatch`, `ExecuteTask`); `SpcTaskSpec`, `SpcBatchResult`, `SpcExecutionOptions`, `SpcRunResult`; sinks `InMemoryFrameSink`, `NullFrameSink`, `SpcxDiskFrameSink`; `WorkerBudgetPolicy`, `WorkerBudgetResolver`; `SpcGraphBuilder.BuildResult` |
 | Scheduling | `ISweepStrategy`; `FixedGridSweepStrategy(FixedGridSweepConfig).Run(graph, analyzer?)` → `SweepResult`; `AutoGridFixedSweep.BuildConfig`; `SpcScheduleHelpers` (`LogSpaceGrid`, `Estimate`, `EstimateBracket`); `SpcSeedHelper.Derive`; `SweepKernel` |
 
@@ -105,12 +105,13 @@ Swendsen–Wang passes the raw coupling to the bond kernel; the [cumulative-fiel
    - Accumulate $|c(i)|$ and $\mathbb 1[i\in\text{giant}]$.
    - The giant cluster is the lowest-index root of maximal size.
 7. **Co-membership** (optional, checked at run time): count the slots whose endpoints share a root.
+8. **Kept states** (optional, checked at run time): on every k-th measured draw (draw t is kept when t mod k = 0, as `DrawStore` thins), keep the FK partition, each node labelled by the smallest node index in its cluster (`PartitionEvery`), and the spins leaving the draw, one byte each (`SpinsEvery`, q ≤ 256). Canonical labels compare across draws and replicas as they stand, which is what VI-loss estimates, credible balls and replica link overlaps need.
 
 **Measurement alignment.**
 
 - Energy and alignments are measured on the configuration *entering* the draw.
 - Magnetization is measured on the configuration *leaving* it.
-- The FK sums, co-membership and landscapes use this draw's bond clusters.
+- The FK sums, co-membership, landscapes and kept partitions use this draw's bond clusters; the kept spins are the leaving configuration, which colours each of those clusters uniformly.
 - So in the per-draw record, E, Σ|c|² and c_max describe the spins entering draw t (and its bonds), and m the spins leaving it. A view pairing E with m on the same spins takes m[t] with E[t+1]; none is built yet. Σ|c|² − c_max² is the giant-excluded view, not a fifth series.
 
 **A useful invariant.** A bond forms only between equal spins. So for every edge, the counts satisfy bonds ≤ co-memberships ≤ agreements ($B_e\le K_e\le S_e$).
@@ -125,6 +126,7 @@ Swendsen–Wang passes the raw coupling to the bond kernel; the [cumulative-fiel
 - Each optional per-node landscape adds 8 bytes per node.
 - The per-draw record adds 28 bytes per measured draw, and the optional burn-in trace 28 bytes per burn-in draw.
 - The optional exact cluster-size histogram adds 8 bytes per node.
+- The optional kept partitions add 4N bytes and the kept spins N bytes per kept draw, ⌈D/k⌉ of them. Thinned to about one draw per autocorrelation time, a few hundred partitions per run suffice: 0.8 MB per run at N = 1,000 and 200 kept draws. Keeping every draw at scale is what would need Archivory's chunk engine.
 
 ### Observables
 
@@ -178,21 +180,21 @@ With D retained draws:
   - Explicit: clamped to $[1,L]$.
   - Either way, capped at the number of tasks.
 - **Determinism.** Each task owns its RNG, so given seeds the results do not depend on worker count or scheduling.
-- **SPCX v11** (little-endian):
-  1. Magic `SPCX` and version 11.
+- **SPCX v12** (little-endian):
+  1. Magic `SPCX` and version 12.
   2. T, Q, replica index and draw count.
   3. The spins and the histogram, whose counts are 64-bit.
   4. Four RNG state words.
   5. Six scalar sums.
   6. The per-draw record, always present: its length, then E and m (doubles), Σ|c|² (64-bit) and c_max (32-bit), one series after another.
-  7. For each optional section — affinities, alignments, the two landscapes, co-membership, the burn-in trace, then the exact cluster-size histogram — a presence byte, then its payload: an array's length and values, or the trace in the per-draw record's layout.
+  7. For each optional section — affinities, alignments, the two landscapes, co-membership, the burn-in trace, the exact cluster-size histogram, then the kept partitions and the kept spins — a presence byte, then its payload: an array's length and values, the trace in the per-draw record's layout, or a kept state's interval k before its flattened length and values.
   8. A UTC timestamp.
 
   The reader requires the exact magic and version. Checkpoint files are named `T_{T:F5}_rep_{r}_s{k}.spcx` by the fixed-grid sweep (k = 0 for sweep tasks, 1 for the equilibrium pass), and `T_{T:F5}_rep_{r}.spcx` by `SpcExecutor.BuildTaskList`.
 - **`Restore` validation.**
   - It checks presence of Affinities, Alignments, the landscapes, the burn-in trace and the exact histogram in both directions, but CoMembership only when the engine tracks it.
   - It checks T, Q and array lengths, but not the replica index.
-  - It checks each per-draw series' length against the draw count, so a restored run appends to the record.
+  - It checks each per-draw series' length against the draw count, and each kept state's presence, interval and length (⌈D/k⌉ × N), so a restored run appends to both.
 
 ## Configuration
 
@@ -202,6 +204,7 @@ With D retained draws:
 | `AccumulationSpec` | `None` | Scalar moments, the per-draw record and the histogram only; `Currencies` adds all three edge counts |
 | `AccumulationSpec.BurnInTrace` | off | Keep the burn-in draws' per-draw record (E, m, Σ\|c\|², c_max), one entry per discarded draw |
 | `AccumulationSpec.ExactClusterSizeHistogram` | off | Count the clusters at each exact size 1..N beside the log-binned bins, reset with them |
+| `AccumulationSpec.PartitionEvery` / `SpinsEvery` | 0 (off) | Keep every k-th measured draw's FK partition (canonical labels) or spins (bytes, q ≤ 256); REPL `--accumulation partitions=K,spins=K` |
 | `FixedGridSweepConfig` Replicas / SweepBudget / EquilibriumBudget | 1 / (200, 1000) / (1000, 5000) | (burn-in, measured cycles) |
 | `FixedGridSweepConfig` SusceptibilityKind / BaseSeed / CheckpointDirectory | `FkCluster` / null / null | Primary χ; OS entropy; no checkpoints (`NullFrameSink`) |
 | `FixedGridSweepConfig` Sampler / Parallelism | `new PottsModelConfig()` / `new WorkerBudgetPolicy()` | — |

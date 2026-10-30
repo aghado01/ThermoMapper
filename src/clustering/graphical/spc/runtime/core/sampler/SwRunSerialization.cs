@@ -15,7 +15,7 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
     /// <remarks>
     /// Little-endian, 4-byte magic + version. Writes the scalar moments + resume state and the per-draw
     /// record, then — when the run tracked them — the optional sections (per-edge and per-node arrays,
-    /// the burn-in trace, the exact histogram) inline, each behind a presence flag. The old paired <c>.spce</c>
+    /// the burn-in trace, the exact histogram, the kept partitions and spins) inline, each behind a presence flag. The old paired <c>.spce</c>
     /// sidecar and its key-matching are retired: the per-edge section is now positionally nested in the
     /// same file (one accumulator, one artifact). Composes on Archivory's
     /// <see cref="BinarySerializerBase{T}"/> for atomic file I/O — this class supplies only the
@@ -27,7 +27,7 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
         public override string DefaultFileExtension => ".spcx";
 
         private const uint Magic = 0x58435053; // "SPCX"
-        private const int Version = 11;        // v11: the exact cluster-size histogram (v10: the burn-in trace; v9: the per-draw record)
+        private const int Version = 12;        // v12: the kept partitions and spins (v11: the exact cluster-size histogram; v10: the burn-in trace; v9: the per-draw record)
 
         public override void WriteTo(Accumulator value, Stream stream)
         {
@@ -125,6 +125,26 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
             {
                 w.Write(value.ExactClusterSizeHistogram!.Length);
                 foreach (long x in value.ExactClusterSizeHistogram) w.Write(x);
+            }
+
+            // Kept partitions (v12): presence flag, the thinning interval, then the flattened labels.
+            bool hasPartitions = value.KeptPartitions is not null;
+            w.Write(hasPartitions);
+            if (hasPartitions)
+            {
+                w.Write(value.PartitionEvery);
+                w.Write(value.KeptPartitions!.Length);
+                foreach (int x in value.KeptPartitions) w.Write(x);
+            }
+
+            // Kept spins (v12): presence flag, the thinning interval, then the flattened bytes.
+            bool hasKeptSpins = value.KeptSpins is not null;
+            w.Write(hasKeptSpins);
+            if (hasKeptSpins)
+            {
+                w.Write(value.SpinsEvery);
+                w.Write(value.KeptSpins!.Length);
+                w.Write(value.KeptSpins);
             }
 
             w.Write(value.TimestampUtc.Ticks);
@@ -268,6 +288,28 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
                 for (int i = 0; i < len; i++) exact[i] = r.ReadInt64();
             }
 
+            // Kept partitions and spins (v12).
+            int[]? keptPartitions = null;
+            int partitionEvery = 0;
+            if (r.ReadBoolean())
+            {
+                partitionEvery = r.ReadInt32();
+                int len = r.ReadInt32();
+                keptPartitions = new int[len];
+                for (int i = 0; i < len; i++) keptPartitions[i] = r.ReadInt32();
+            }
+
+            byte[]? keptSpins = null;
+            int spinsEvery = 0;
+            if (r.ReadBoolean())
+            {
+                spinsEvery = r.ReadInt32();
+                int len = r.ReadInt32();
+                keptSpins = r.ReadBytes(len);
+                if (keptSpins.Length != len)
+                    throw new EndOfStreamException($"SPCX kept spins: expected {len} bytes, read {keptSpins.Length}.");
+            }
+
             long ticks = r.ReadInt64();
 
             return new Accumulator
@@ -302,6 +344,10 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
                 CoMembershipCount  = coMembership,
                 SumClusterSizePerNode    = nodeSize,
                 SumInGiantClusterPerNode = nodeGiant,
+                KeptPartitions = keptPartitions,
+                PartitionEvery = partitionEvery,
+                KeptSpins      = keptSpins,
+                SpinsEvery     = spinsEvery,
                 TimestampUtc       = new DateTime(ticks, DateTimeKind.Utc),
             };
         }

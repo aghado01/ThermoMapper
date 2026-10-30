@@ -46,6 +46,17 @@ public sealed class SpcAccumulationTokensTests
     }
 
     [Fact]
+    public void KeptStates_TakeTheirInterval()
+    {
+        AccumulationSpec spec = SpcCommand.ParseAccumulationSpec("comembership, Partitions=10,spins=25");
+
+        Assert.Equal(new AccumulationSpec { CoMembership = true, PartitionEvery = 10, SpinsEvery = 25 }, spec);
+        Assert.Equal(AccumulationSpec.None, SpcCommand.ParseAccumulationSpec("partitions=0"));
+        Assert.Throws<ArgumentException>(() => SpcCommand.ParseAccumulationSpec("spins=-1"));
+        Assert.Throws<FormatException>(() => SpcCommand.ParseAccumulationSpec("partitions=x"));
+    }
+
+    [Fact]
     public void None_IsTheDefault()
         => Assert.Equal(AccumulationSpec.None, SpcCommand.ParseAccumulationSpec("none"));
 
@@ -55,7 +66,8 @@ public sealed class SpcAccumulationTokensTests
         var ex = Assert.Throws<ArgumentException>(() => SpcCommand.ParseAccumulationSpec("burn-in-trace"));
 
         foreach (string token in new[] { "none", "affinities", "alignments", "comembership", "cluster-size-landscape",
-                                         "order-landscape", "burnin-trace", "exact-cluster-size-histogram" })
+                                         "order-landscape", "burnin-trace", "exact-cluster-size-histogram",
+                                         "partitions=K", "spins=K" })
             Assert.Contains(token, ex.Message);
     }
 }
