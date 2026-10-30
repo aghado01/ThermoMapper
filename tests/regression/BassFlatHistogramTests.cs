@@ -26,6 +26,10 @@ namespace Maths.Regression.Tests;
 /// SAMC's limit on the exact density of states, its reweighted posterior against the exact one, and its ln Z(b) against
 /// the enumeration's; ln Z(1) on the oracle's fixtures B and C; every view end to end on a scalar and a functional fit;
 /// resume across learning and production; the improper options; a chain that never tunnels.</item>
+/// <item><b>Step 3.</b> The pilot: linear-form, reference-rung, self-sizing ladders read by
+/// <see cref="TemperingPilot.FromLadders"/> and pooled; eight pilots' WHAM starts against SAMC's limit on the exact density
+/// of states; learning from the warm start against learning from flat; a pilot whose ĝ has a gap, interpolated or
+/// refused.</item>
 /// </list>
 /// </summary>
 public sealed class BassFlatHistogramTests
@@ -697,6 +701,190 @@ public sealed class BassFlatHistogramTests
         Assert.Equal([0, 1], fh.Production!.ChainsWithoutRoundTrip);
         Assert.All(fh.ProductionChains, c => Assert.Equal([0L], c.RoundTrips));
         Assert.Equal(0, fh.Production.TotalRoundTrips);
+    }
+
+    // ---- Step 3: the warm start on BASS ----
+
+    // Fixture A's pilot: two linear-form, reference-rung, self-sizing ladders, burned 255 scans and traced 2,000.
+    internal static readonly BassFlatHistogramPilot FixtureAPilot = new() { Chains = 2, BurnIn = 255, TracedScans = 2_000 };
+
+    internal static (TemperingPilot Pilot, BassTemperingReadout Ladders) PilotOf(BassModel model, BassFlatHistogramPilot spec, int seed)
+        => BassFlatHistogramFit.Pilot(model, spec, seed, new BassRunOptions(), new BassSweepCount(new BassRunOptions(), 0));
+
+    // The mean over nodes of z², z the pilots' mean departure from θ* over its standard error from their spread, each
+    // pilot's ln w centred over the nodes first (WhamTests' measure); and the per-pilot centred RMS.
+    private static (double MeanZ2, double Rms) Agreement(IReadOnlyList<MulticanonicalWeights> starts, MulticanonicalWeights exact, bool[] empty)
+    {
+        int[] kept = [.. Enumerable.Range(0, exact.Nodes).Where(k => !empty[k])];
+        double exactCentre = kept.Average(k => exact.LogWeights[k]);
+        double[] centres = [.. starts.Select(w => kept.Average(k => w.LogWeights[k]))];
+        int p = starts.Count;
+        double z2 = 0.0, rms = 0.0;
+        foreach (int k in kept)
+        {
+            double[] d = [.. Enumerable.Range(0, p).Select(i => starts[i].LogWeights[k] - centres[i] - (exact.LogWeights[k] - exactCentre))];
+            double mean = d.Average();
+            double se = Math.Sqrt(d.Sum(v => (v - mean) * (v - mean)) / (p - 1) / p);
+            z2 += mean * mean / (se * se);
+            rms += d.Sum(v => v * v) / p;
+        }
+        return (z2 / kept.Length, Math.Sqrt(rms / kept.Length));
+    }
+
+    [Fact]
+    public void Pilot_PoolsItsLaddersRungs_AndItsWhamStartMeetsTheExactLimit_WithinThePilotsSpread()
+    {
+        BassModel model = FixtureA(heldTau: false);
+        var space = BassFlatHistogramSpace.Of(model);
+        MulticanonicalWeights shape = ExactShape(space, 12);
+        (double[] levels, double[] masses) = space.DensityOfStates();
+        MulticanonicalWeights exact = SamcLearning.FixedPoint(shape, levels, masses, out bool[] empty);
+
+        // One pilot: each ladder on the linear form, sized itself, frozen with b = 1 and the reference rung's b = 0, which
+        // the ladders share and the pilot pools.
+        (TemperingPilot pilot, BassTemperingReadout ladders) = PilotOf(model, FixtureAPilot, 7701);
+        Assert.Equal((TemperingPath.Likelihood, TemperedForm.Linear, true), (ladders.Path, ladders.Form, ladders.ReferenceRung));
+        Assert.All(ladders.Ladders, rungs => Assert.Equal((1.0, 0.0), (rungs[0], rungs[^1])));
+        double[] distinct = [.. ladders.Ladders.SelectMany(r => r).Distinct()];
+        Assert.Equal(distinct, pilot.InverseTemperatures);
+        Assert.Equal(0.0, pilot.HotEnd);
+        Assert.Equal(ladders.Levels.Sum() * (long)FixtureAPilot.TracedScans, pilot.Draws);
+        Assert.Equal(2 * FixtureAPilot.TracedScans, pilot.Levels(pilot.ColdRung).Length);
+        Assert.All(pilot.Inefficiencies, g => Assert.True(g >= 1.0));
+        WhamEstimate estimate = Wham.Estimate(pilot);
+        Assert.True(estimate.Residual < 1e-8, $"WHAM's fixed point holds to {estimate.Residual:E1}");
+        _out.WriteLine($"## Fixture A's pilot: ladders {string.Join(" | ", ladders.Ladders.Select(r => string.Join(", ", r.Select(b => b.ToString("F3")))))}; " +
+                       $"{pilot.Rungs} pooled rungs, {pilot.Draws:N0} draws, g {string.Join(", ", pilot.Inefficiencies.Select(g => g.ToString("F1")))}; " +
+                       $"{ladders.RoundTripsPerScan:F3} round trips per scan");
+
+        // Eight independent pilots' WHAM starts against θ* on the exact density of states.
+        List<MulticanonicalWeights> starts = [.. SeedTree.Derive(7702, 8).Select(s => Wham.WarmStart(PilotOf(model, FixtureAPilot, s).Pilot, shape))];
+        (double z2, double rms) = Agreement(starts, exact, empty);
+        _out.WriteLine($"8 pilots' WHAM starts against θ*: per-pilot centred RMS {rms:F3} (tolerance 0.25); mean z² over nodes {z2:F2} (tolerance 3; t₇ gives 1.4)");
+        Assert.True(z2 < 3.0, $"the warm starts depart from θ* by more than their spread: mean z² {z2:F2}");
+        Assert.True(rms < 0.25, $"a warm start departs from θ* by {rms:F3} RMS");
+    }
+
+    [Fact]
+    public void Pilot_PoolsSharedRungs_ByTheirEffectiveDraws()
+    {
+        var a = new TemperingPilot([1.0, 0.4, 0.0], [[-1.0, -2.0, -3.0, -4.0], [-5.0, -6.0], [-9.0, -8.0]], [2.0, 1.0, 1.5]);
+        var b = new TemperingPilot([1.0, 0.5, 0.0], [[-1.5, -2.5], [-5.5, -6.5, -7.5], [-9.5, -8.5, -7.0]], [1.0, 3.0, 1.0]);
+        TemperingPilot pooled = BassFlatHistogramFit.Pooled([a, b]);
+        Assert.Equal([1.0, 0.4, 0.0, 0.5], pooled.InverseTemperatures);
+        Assert.Equal([-1.0, -2.0, -3.0, -4.0, -1.5, -2.5], pooled.Levels(0).ToArray());
+        Assert.Equal([-9.0, -8.0, -9.5, -8.5, -7.0], pooled.Levels(2).ToArray());
+        Assert.Equal(6.0 / (4.0 / 2.0 + 2.0 / 1.0), pooled.Inefficiencies[0], 15);
+        Assert.Equal(1.0, pooled.Inefficiencies[1]);
+        Assert.Equal(5.0 / (2.0 / 1.5 + 3.0 / 1.0), pooled.Inefficiencies[2], 15);
+        Assert.Equal(3.0, pooled.Inefficiencies[3]);
+        Assert.Equal(a.Draws + b.Draws, pooled.Draws);
+    }
+
+    // The learned weights' centred RMS to θ* after `learning` iterations of four chains on fixture A, from flat or from the
+    // pilot's WHAM start, the gain counted from the pilot's draws over the chains; the mean over three seeds.
+    internal static double LearningError(long learning, TemperingPilot? pilot, int seed)
+    {
+        (BassModel model, MulticanonicalWeights shape, MulticanonicalWeights exact, bool[] empty) = FixtureALimit.Value;
+        return SeedTree.Derive(seed, 3).Average(s =>
+        {
+            FlatHistogramSpec spec = DeclaredRun(shape, learning, 1, chains: 4) with
+            {
+                Start = pilot is null ? FlatHistogramStart.Flat : FlatHistogramStart.Wham,
+            };
+            var client = new BassMulticanonicalModel(model, "fixture A", learning, new BassSweepCount(new BassRunOptions(), 0));
+            MulticanonicalResult<BassState> run = MulticanonicalRun.Run(spec, model.Target, client, s, pilot, parallel: new ParallelOptions { MaxDegreeOfParallelism = 1 });
+            return CentredRms(run.Weights.LogWeights, exact.LogWeights, empty);
+        });
+    }
+
+    // Fixture A, τ sampled: the model, the exact shape (K = 12 from b_lo = 0) and SAMC's limit on it.
+    private static readonly Lazy<(BassModel Model, MulticanonicalWeights Shape, MulticanonicalWeights Exact, bool[] Empty)> FixtureALimit = new(() =>
+    {
+        BassModel model = FixtureA(heldTau: false);
+        var space = BassFlatHistogramSpace.Of(model);
+        MulticanonicalWeights shape = ExactShape(space, 12);
+        (double[] levels, double[] masses) = space.DensityOfStates();
+        return (model, shape, SamcLearning.FixedPoint(shape, levels, masses, out bool[] empty), empty);
+    });
+
+    internal static (double Flat, double WarmHalf, double[] FlatCurve, double[] WarmCurve) WarmAgainstFlat(int pilotSeed, int seed, long length)
+    {
+        TemperingPilot pilot = PilotOf(FixtureALimit.Value.Model, FixtureAPilot, pilotSeed).Pilot;
+        double[] flat = [LearningError(length / 4, null, seed), LearningError(length / 2, null, seed), LearningError(length, null, seed)];
+        double[] warm = [LearningError(0, pilot, seed), LearningError(length / 4, pilot, seed), LearningError(length / 2, pilot, seed)];
+        return (flat[2], warm[2], flat, warm);
+    }
+
+    [Fact]
+    public void Pilot_LearningFromTheWarmStart_ReachesTheFlatStartsAccuracy_InHalfTheIterations()
+    {
+        // At L = 8,000, as read in exploration before this test was written; at 16,000 and 32,000 the warm start's
+        // learning, its gain counted from the pilot's draws, plateaus near 0.05 where flat learning reaches 0.06 and 0.03.
+        (double flat, double warmHalf, double[] f, double[] w) = WarmAgainstFlat(7701, 7703, 8_000);
+        _out.WriteLine($"## Fixture A, mean centred RMS to θ* over 3 seeds: flat start 2k {f[0]:F3}, 4k {f[1]:F3}, 8k {f[2]:F3}; " +
+                       $"warm start 0 {w[0]:F3}, 2k {w[1]:F3}, 4k {w[2]:F3}");
+        Assert.True(warmHalf < flat, $"4,000 iterations from the warm start ({warmHalf:F3}) should beat 8,000 from flat ({flat:F3})");
+    }
+
+    [Theory]
+    [InlineData(7803, true)]
+    [InlineData(7802, false)]
+    public void Fit_FromAPilotWithAGap_InterpolatesOrIsRefused_NamingTheEmptyNodes(int seed, bool accepted)
+    {
+        // Three fixed rungs, b = 1, 0.9 and the reference rung's 0, leave the levels between the prior's and the posterior's
+        // thinly drawn; τ held, so ℓ₁'s levels are discrete. SAMC's fixed point on the pilot's ĝ interpolates an empty node's
+        // weight, and refuses a ĝ it cannot flatten, as where a segment holds no draw: the fit then throws, naming the window,
+        // K and the empty nodes. Read on seeds 7801–7803 in exploration: 7803 accepted with nodes 13–15 empty, 7801 and 7802
+        // refused, 7802 with nodes 13 and 14 empty.
+        BassModel model = FixtureA(heldTau: true);
+        var pilot = new BassFlatHistogramPilot
+        {
+            Chains = 2, BurnIn = 50, TracedScans = 500,
+            Tempering = new TemperingSpec { Form = TemperedForm.Linear, ReferenceRung = true, Levels = 3, Adaptive = false, HotEnd = 0.9 },
+        };
+        BassConfig config = model.Config with
+        {
+            Sampling = model.Config.Sampling with
+            {
+                MasterSeed = seed,
+                FlatHistogram = new BassFlatHistogramSpec
+                {
+                    Run = new FlatHistogramSpec { LearningIterations = 3_000, ProductionDraws = 500, Start = FlatHistogramStart.Wham, Nodes = 20 },
+                    Pilot = pilot,
+                },
+            },
+        };
+        if (!accepted)
+        {
+            var refusal = Assert.Throws<InvalidOperationException>(() => Bass.Fit(config, model.Data));
+            _out.WriteLine(refusal.Message);
+            Assert.Contains("WHAM start", refusal.Message);
+            Assert.Contains("K = 20, b_lo = 0", refusal.Message);
+            Assert.Contains("nodes [13, 14]", refusal.Message);
+            Assert.IsType<InvalidOperationException>(refusal.InnerException);
+            return;
+        }
+        BassFit fit = Bass.Fit(config, model.Data);
+        BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
+        BassFlatHistogramPilotReadout read = fh.Pilot!;
+        _out.WriteLine($"accepted: window [{fh.Window.Low:F2}, {fh.Window.High:F2}], K {fh.Nodes}; empty nodes {string.Join(", ", read.EmptyNodes)}; start " +
+                       string.Join(", ", fh.WeightTrace[0].Weights.LogWeights.Select(v => v.ToString("F2"))));
+        Assert.Equal([1.0, 0.9, 0.0], read.InverseTemperatures);
+        Assert.All(read.Ladders.Levels, n => Assert.Equal(3, n));
+        Assert.Equal(2L * 3 * 500, read.Draws);
+        Assert.Equal(0.0, fh.LowSlope);
+        Assert.Equal(20, fh.Nodes);
+        int[] gap = read.EmptyNodes;
+        Assert.Equal([13, 14, 15], gap);
+
+        // The start reads the empty nodes off the line through their nearest drawn neighbours.
+        IReadOnlyList<double> start = fh.WeightTrace[0].Weights.LogWeights;
+        int below = gap[0] - 1, above = gap[^1] + 1;
+        foreach (int k in gap)
+            Assert.Equal(start[below] + (start[above] - start[below]) * (k - below) / (above - below), start[k], 9);
+        Assert.True(fh.Complete);
+        Assert.NotNull(fit.Evidence);
     }
 
     // The collapsed target, its evaluations counted.

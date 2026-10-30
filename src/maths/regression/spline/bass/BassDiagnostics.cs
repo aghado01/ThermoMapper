@@ -243,6 +243,8 @@ public sealed record BassSmcReplicate(
 /// tempered posterior at any b in [b_lo, 1].</item>
 /// <item><see cref="Evidence"/>: the ln Z(b) curve and ln Z(1) − ln Z(b_lo), from a complete run under proper σ² and
 /// intercept priors when the evidence is asked for; the fit's <see cref="BassFit.Evidence"/> only from b_lo = 0.</item>
+/// <item><see cref="Pilot"/>: the tempering pilot's readout, when the run read one (<see cref="BassFlatHistogramPilotReadout"/>).
+/// A fit whose start is WHAM's was accepted by SAMC's fixed point on the pilot's ĝ; a refused one throws.</item>
 /// <item><see cref="Complete"/>: whether the run reached its lengths; a fit short of them has no posterior to view.</item>
 /// </list>
 /// </summary>
@@ -251,7 +253,7 @@ public sealed record BassFlatHistogramReadout(
     FlatHistogramDiagnostics Learning, IReadOnlyList<LearningSnapshot> WeightTrace,
     FlatHistogramDiagnostics? Production, IReadOnlyList<FlatHistogramDiagnostics> ProductionChains,
     double EffectiveSampleSize, double[] ChainEffectiveSampleSizes,
-    MulticanonicalDraws? Draws, BassFlatHistogramEvidence? Evidence, bool Complete)
+    MulticanonicalDraws? Draws, BassFlatHistogramEvidence? Evidence, BassFlatHistogramPilotReadout? Pilot, bool Complete)
 {
     /// <summary>The window [ℓ_lo, ℓ_hi].</summary>
     public FlatHistogramWindow Window => new(Weights.Low, Weights.High);
@@ -261,6 +263,26 @@ public sealed record BassFlatHistogramReadout(
 
     /// <summary>K, the weights' nodes.</summary>
     public int Nodes => Weights.Nodes;
+}
+
+/// <summary>
+/// A flat-histogram fit's tempering pilot (N17 Phase 2): what its ladders did over their traced scans, and what WHAM read
+/// from their pooled rungs.
+/// <list type="bullet">
+/// <item><see cref="Ladders"/>: the ladders' readout over the traced scans, each one's frozen rungs, round trips, pair
+/// rejections and barrier (<see cref="BassTemperingReadout"/>).</item>
+/// <item><see cref="InverseTemperatures"/> and <see cref="Inefficiencies"/>: the pooled rungs WHAM combined, and each one's
+/// draws per effective draw; <see cref="Draws"/> over every rung.</item>
+/// <item><see cref="NodeDraws"/>: the pilot's draws under each node's hat over the start's window. Where a node holds none
+/// (<see cref="EmptyNodes"/>), as between phases the pilot does not cross, WHAM's ĝ has no mass, the start interpolates the
+/// node's weight, and the learning must fill it.</item>
+/// </list>
+/// </summary>
+public sealed record BassFlatHistogramPilotReadout(
+    BassTemperingReadout Ladders, double[] InverseTemperatures, double[] Inefficiencies, long Draws, double[] NodeDraws)
+{
+    /// <summary>The nodes under whose hats the pilot drew nothing.</summary>
+    public int[] EmptyNodes => [.. Enumerable.Range(0, NodeDraws.Length).Where(k => NodeDraws[k] == 0.0)];
 }
 
 /// <summary>

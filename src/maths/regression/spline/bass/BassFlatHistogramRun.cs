@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Maths.Regression.GPrior;
+using Maths.Regression.Spline.Bars;
 using Maths.Rng;
 using Maths.Samplers.Ensemble;
 using Maths.Samplers.FlatHistogram;
@@ -15,8 +16,14 @@ namespace Maths.Regression.Spline.Bass;
 /// (<see cref="BassMulticanonicalModel"/>), then assembled into a <see cref="BassFit"/> whose draws are the production
 /// chains', weighted at b = 1.
 /// <list type="bullet">
+/// <item><b>The pilot</b> (<see cref="Pilot"/>), when the run reads one: <see cref="BassFlatHistogramPilot.Chains"/> ladders
+/// on the linear form, each from an exact draw of the prior on F, burned as a tempered fit burns them (adapted after rounds
+/// of 1, 2, 4, … scans, a self-sizing ladder sized after every round but the last), then frozen and traced. Each ladder is
+/// read by <see cref="TemperingPilot.FromLadders"/>, since self-sizing ladders freeze their own rungs, and the rungs pool
+/// by b: a rung several ladders share (b = 1, b = 0) holds their draws, its inefficiency their draws over their summed
+/// effective draws.</item>
 /// <item><b>Streams.</b> The master seed derives the run's root and the pilot's (<see cref="SeedTree"/>); the run's root
-/// derives each chain's two seeds, as the ensemble shell does.</item>
+/// derives each chain's two seeds, as the ensemble shell does, and the pilot's root each ladder's start and stream.</item>
 /// <item><b>Draws.</b> Each chain's production draws, composed as an MCMC fit's retained draws are, so each keeps its full
 /// state (D04), in one store per chain; the terms merge in chain order. <see cref="BassFit.DrawWeights"/> are
 /// e^{ℓ₁}/w(ℓ₁) self-normalized over every chain's draws (<see cref="Reweighting.Weigh"/>), chain-major in draw order,
@@ -49,19 +56,135 @@ internal static class BassFlatHistogramFit
             restart = state;
         }
         int[] roots = SeedTree.Derive(sampling.MasterSeed, 2);   // the run's, the pilot's
-        var sweeps = new BassSweepCount(options, (long)run.Chains * (run.LearningIterations + run.ProductionDraws));
-        if (restart is null && run.NeedsPilot)
-            throw new NotSupportedException("Sampling.FlatHistogram's pilot joins with its warm start (N17 Phase 2, step 3).");
+        bool piloted = restart is null && run.NeedsPilot;
+        long pilotScans = piloted ? (long)spec.Pilot!.Chains * (spec.Pilot.BurnIn + spec.Pilot.TracedScans) : 0;
+        var sweeps = new BassSweepCount(options, pilotScans + (long)run.Chains * (run.LearningIterations + run.ProductionDraws));
+        TemperingPilot? pilot = null;
+        BassFlatHistogramPilotReadout? pilotReadout = restart?.Pilot;
+        MulticanonicalWeights? shape = null;
+        if (piloted)
+        {
+            (pilot, BassTemperingReadout ladders) = Pilot(model, spec.Pilot!, roots[1], options, sweeps);
+            shape = StartShape(run, pilot);
+            pilotReadout = new BassFlatHistogramPilotReadout(ladders, [.. pilot.InverseTemperatures], [.. pilot.Inefficiencies], pilot.Draws,
+                                                             NodeDraws(pilot, shape));
+        }
         var client = new BassMulticanonicalModel(model, fingerprint, run.LearningIterations, sweeps);
         var parallel = new ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism, CancellationToken = options.Cancellation };
-        MulticanonicalResult<BassState> result = MulticanonicalRun.Run(run, model.Target, client, roots[0], null, restart?.Run, spec.MaxIterations,
-                                                                       options.Checkpoint, parallel);
+        MulticanonicalResult<BassState> result;
+        try
+        {
+            result = MulticanonicalRun.Run(run, model.Target, client, roots[0], pilot, restart?.Run, spec.MaxIterations, options.Checkpoint, parallel);
+        }
+        catch (InvalidOperationException e) when (shape is not null && run.Start == FlatHistogramStart.Wham)
+        {
+            throw new InvalidOperationException(
+                $"The flat-histogram run failed from its WHAM start over the window [{shape.Low:G6}, {shape.High:G6}], K = {shape.Nodes}, b_lo = " +
+                $"{shape.LowSlope}, the pilot having drawn nothing under nodes [{string.Join(", ", pilotReadout!.EmptyNodes)}]: {e.Message}", e);
+        }
         sweeps.End();
-        return Assemble(model, fingerprint, spec, roots, result, client, options.Checkpoint);
+        MulticanonicalWeights start = result.WeightTrace[0].Weights;
+        if (shape is not null && (start.Low, start.High, start.Nodes, start.LowSlope) != (shape.Low, shape.High, shape.Nodes, shape.LowSlope))
+            throw new InvalidOperationException("The run resolved another window, K or b_lo than the pilot's readout.");
+        return Assemble(model, fingerprint, spec, roots, result, client, pilotReadout, options.Checkpoint);
+    }
+
+    /// <summary>
+    /// The tempering pilot of <paramref name="model"/> under <paramref name="spec"/> from <paramref name="seed"/>: each ladder on
+    /// the linear form from an exact draw of the prior on F, burned, frozen and traced, read by
+    /// <see cref="TemperingPilot.FromLadders"/> and pooled by b (<see cref="Pooled"/>); with the ladders' readout over their
+    /// traced scans. The ladders run in parallel within the run's bound; nothing depends on it.
+    /// </summary>
+    internal static (TemperingPilot Pilot, BassTemperingReadout Ladders) Pilot(BassModel model, BassFlatHistogramPilot spec, int seed,
+                                                                            BassRunOptions options, BassSweepCount sweeps)
+    {
+        BassModel linear = BassModel.Create(model.Config, model.Data, TemperedForm.Linear);
+        int[] seeds = SeedTree.Derive(seed, spec.Chains);
+        var ladders = new BassLadder[spec.Chains];
+        Parallel.For(0, spec.Chains, new ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism, CancellationToken = options.Cancellation }, c =>
+        {
+            int[] streams = SeedTree.Derive(seeds[c], 2);   // the start's draws, the ladder's
+            BassState start = new BassPriorSampler(linear).DrawState(new Xoshiro256PlusPlus(streams[0])).State;
+            var ladder = new BassLadder(linear, spec.Tempering, start.Terms, start.LogTau, streams[1]);
+            void Scan()
+            {
+                options.Cancellation.ThrowIfCancellationRequested();
+                ladder.Step();
+                sweeps.Add(1);
+            }
+            int done = 0;
+            if (ladder.Spec.Adaptive)
+                for (int round = 1; done + round <= spec.BurnIn; round *= 2)
+                {
+                    for (int k = 0; k < round; k++) Scan();
+                    done += round;
+                    if (ladder.SizesItself && done + 2L * round <= spec.BurnIn) ladder.Resize();
+                    else ladder.Adapt();
+                }
+            for (; done < spec.BurnIn; done++) Scan();
+            ladder.EndBurnIn(traceRungs: true);
+            for (int s = 0; s < spec.TracedScans; s++) Scan();
+            ladders[c] = ladder;
+        });
+        TemperingPilot pooled = Pooled([.. ladders.Select(l => TemperingPilot.FromLadders([l.Tempering]))]);
+        return (pooled, BassTemperingReadout.Of(ladders));
+    }
+
+    /// <summary>
+    /// <paramref name="pilots"/>' rungs pooled by b, in order of first appearance: a rung several pilots share holds their
+    /// draws in pilot order, and its inefficiency is their draws over their summed effective draws, Σn / Σ(n/g).
+    /// </summary>
+    internal static TemperingPilot Pooled(IReadOnlyList<TemperingPilot> pilots)
+    {
+        var b = new List<double>();
+        var levels = new List<List<double>>();
+        var effective = new List<double>();
+        var index = new Dictionary<double, int>();
+        foreach (TemperingPilot p in pilots)
+            for (int i = 0; i < p.Rungs; i++)
+            {
+                double rung = p.InverseTemperatures[i];
+                if (!index.TryGetValue(rung, out int k))
+                {
+                    index.Add(rung, k = b.Count);
+                    b.Add(rung);
+                    levels.Add([]);
+                    effective.Add(0.0);
+                }
+                ReadOnlySpan<double> draws = p.Levels(i);
+                foreach (double l in draws) levels[k].Add(l);
+                effective[k] += draws.Length / p.Inefficiencies[i];
+            }
+        var inefficiencies = new double[b.Count];
+        for (int k = 0; k < inefficiencies.Length; k++) inefficiencies[k] = Math.Max(1.0, levels[k].Count / effective[k]);
+        return new TemperingPilot(b, [.. levels.Select(l => l.ToArray())], inefficiencies);
+    }
+
+    // The start's window, b_lo and K as the run resolves them: the spec's, or the pilot's where it leaves them.
+    private static MulticanonicalWeights StartShape(FlatHistogramSpec run, TemperingPilot pilot)
+    {
+        FlatHistogramWindow window = run.Window ?? Wham.Window(pilot, run.WindowQuantile, run.WindowMargin);
+        int nodes = run.Nodes ?? Wham.Nodes(pilot, window);
+        return MulticanonicalWeights.Flat(window.Low, window.High, run.LowSlope ?? pilot.HotEnd, nodes);
+    }
+
+    // The pilot's draws under each node's hat over `shape`'s window, every rung's: where a node holds none, WHAM's ĝ has no
+    // mass and the warm start interpolates its weight.
+    private static double[] NodeDraws(TemperingPilot pilot, MulticanonicalWeights shape)
+    {
+        var counts = new double[shape.Nodes];
+        for (int i = 0; i < pilot.Rungs; i++)
+            foreach (double level in pilot.Levels(i))
+            {
+                if (!shape.TryLocate(level, out int segment, out double fraction)) continue;
+                counts[segment] += 1.0 - fraction;
+                counts[segment + 1] += fraction;
+            }
+        return counts;
     }
 
     private static BassFit Assemble(BassModel model, string fingerprint, BassFlatHistogramSpec spec, int[] roots, MulticanonicalResult<BassState> result,
-                                    BassMulticanonicalModel client, bool checkpoint)
+                                    BassMulticanonicalModel client, BassFlatHistogramPilotReadout? pilot, bool checkpoint)
     {
         BassConfig config = model.Config;
         BassSampling sampling = config.Sampling;
@@ -150,14 +273,15 @@ internal static class BassFlatHistogramFit
         var readout = new BassFlatHistogramReadout(result.Weights, result.Learning.GainScale, result.Learning.GainStart, result.Learning.Iterations,
                                                    result.LearningDiagnostics, result.WeightTrace, result.ProductionDiagnostics,
                                                    draws is null ? [] : PerChain(draws, result.ProductionDiagnostics!),
-                                                   posterior?.EffectiveSampleSize ?? double.NaN, posterior?.ChainEffectiveSampleSizes ?? [], draws, curve, complete);
+                                                   posterior?.EffectiveSampleSize ?? double.NaN, posterior?.ChainEffectiveSampleSizes ?? [], draws, curve,
+                                                   pilot, complete);
 
         var diagnostics = new BassDiagnostics(count, tau, logPosterior, sigma2, fitted, moves!, acceptance, kinds, refusals, emptyBirths, support,
                                               massAtCap, perChain, false, verdict, Separation(draws, client, points.Count), accounts, null, null, readout);
         BassEvidence? evidence = curve is { IsEvidence: true } && model.Target.Scale.IsProper ? BassEvidence.OfFlatHistogram(model, curve) : null;
         EnsembleCheckpoint? restart = checkpoint && !complete
             ? new EnsembleCheckpoint(new RunIdentity(sampling.MasterSeed, chains, fingerprint), (int[])roots.Clone(), perChain,
-                                     [new ChainCheckpoint(new BassFlatHistogramState(result.Checkpoint!), [], new ChainTrace(0), 0, 0)])
+                                     [new ChainCheckpoint(new BassFlatHistogramState(result.Checkpoint!, pilot), [], new ChainTrace(0), 0, 0)])
             : null;
         return new BassFit(config, model.Resolved, model.Transform, new RunIdentity(sampling.MasterSeed, chains, fingerprint), terms, stores, weights,
                            diagnostics, evidence, complete ? BassResidualDependence.Of(model, terms, stores, weights: weights) : null, restart);
@@ -206,5 +330,5 @@ internal static class BassFlatHistogramFit
 }
 
 /// <summary>A flat-histogram fit's restart state: the engine's checkpoint, the learning's and both phases' state with
-/// every chain's.</summary>
-internal sealed record BassFlatHistogramState(MulticanonicalCheckpoint Run) : IChainState;
+/// every chain's, and the pilot's readout (null without a pilot), which a resumed run reports without rerunning it.</summary>
+internal sealed record BassFlatHistogramState(MulticanonicalCheckpoint Run, BassFlatHistogramPilotReadout? Pilot) : IChainState;
