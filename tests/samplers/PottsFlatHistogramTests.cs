@@ -119,7 +119,8 @@ public sealed class PottsFlatHistogramTests
     [Fact]
     public void Potts_LogEvidence_AndTheTransitionsEnergyLaw_MatchTheEnumeration()
     {
-        // The ratio estimator needs the prior normalized: q^{−N} on each of the qᴺ configurations.
+        // The ratio estimator needs the prior proper, its normalizer cancelling; this one is normalized too: q^{−N} on each
+        // of the qᴺ configurations.
         Assert.Equal(-Lattice.Sites * Math.Log(Lattice.Q), Lattice.Target.Evaluate(new int[Lattice.Sites]).LogPrior);
         Assert.Equal((long)Math.Pow(Lattice.Q, Lattice.Sites), ExactCounts.Value.Sum());
 

@@ -22,9 +22,10 @@ public sealed record ReweightedEstimate(double InverseTemperature, double Mean, 
 
 /// <summary>
 /// The evidence curve ln Z(b) = ln E_prior[e^{b·ℓ₁}] over a grid of b from one multicanonical run, with no rungs and
-/// no path discretization: the ratio estimator <c>Z(b) = E_w[e^{b·ℓ₁}/w(ℓ₁)] / E_w[1/w(ℓ₁)]</c>, valid when the prior is
-/// normalized. Each b's value pools every chain's draws, and its Monte Carlo error is the chains' spread,
-/// <c>sd(ln Ẑ_c(b))/√C</c> (NaN for one chain). The record beside <see cref="LadderEstimate"/>'s ladders.
+/// no path discretization: the ratio estimator <c>Z(b) = E_w[e^{b·ℓ₁}/w(ℓ₁)] / E_w[1/w(ℓ₁)]</c>, valid for any proper
+/// prior. Its normalizer enters both expectations and cancels, so the curve is the evidence under the normalized prior
+/// whatever the log prior's constant. Each b's value pools every chain's draws, and its Monte Carlo error is the chains'
+/// spread, <c>sd(ln Ẑ_c(b))/√C</c> (NaN for one chain). The record beside <see cref="LadderEstimate"/>'s ladders.
 /// </summary>
 /// <param name="InverseTemperatures">The grid.</param>
 /// <param name="LogEvidence">ln Ẑ(b), pooled.</param>
@@ -135,8 +136,8 @@ public static class Reweighting
     }
 
     /// <summary>
-    /// ln Z(b) over <paramref name="grid"/> by the ratio estimator, which needs the inner target's prior normalized:
-    /// otherwise the curve is off by its log mass, a constant in b.
+    /// ln Z(b) over <paramref name="grid"/> by the ratio estimator, which needs the inner target's prior proper, not
+    /// normalized: its normalizer cancels in the ratio, so ln Ẑ(b) is the evidence under the normalized prior.
     /// </summary>
     public static LogEvidenceCurve LogEvidence(MulticanonicalDraws draws, ReadOnlySpan<double> grid)
     {

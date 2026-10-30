@@ -10,7 +10,8 @@ namespace Maths.Samplers.Tests;
 /// <summary>
 /// The reweighting and the ln Z(b) curve (N17 Phase 1, step 3), on the double well. One production run on the frozen
 /// weights gives the tempered laws at every b, by the self-normalized weights e^{b·ℓ₁}/w(ℓ₁), and ln Z(b) by the ratio
-/// estimator, which needs the prior normalized; both match the prior's quadrature within the production chains' errors.
+/// estimator, which needs the prior proper, its normalizer cancelling; both match the prior's quadrature within the
+/// production chains' errors, and an unnormalized prior gives the same curve.
 /// At b = 1 the reweighted posterior holds both wells equally, which a chain at b = 1 cannot cross to.
 /// </summary>
 public sealed class ReweightingTests
@@ -79,7 +80,8 @@ public sealed class ReweightingTests
     [Fact]
     public void DoubleWell_LogEvidence_MatchesQuadrature_OnAGrid()
     {
-        // The ratio estimator needs the prior normalized: the quadrature's masses sum to one.
+        // The ratio estimator needs the prior proper, its normalizer cancelling; this one is normalized too, the
+        // quadrature's masses summing to one, as its references assume.
         (_, _, double[] masses) = WellQuadrature(Depth, 400_000);
         Assert.Equal(0.0, LogSumExp(masses), 9);
 
@@ -99,6 +101,25 @@ public sealed class ReweightingTests
         double exactRatio = WellLogEvidence(Depth, 1.0) - WellLogEvidence(Depth, 0.05);
         Assert.True(Math.Abs(ratio - exactRatio) < Bound * error, $"ln Z(1)/Z(0.05) is {ratio:F4} ± {error:F4}, the quadrature's {exactRatio:F4}");
         _out.WriteLine($"[evidence] denominator's Kish ESS {curve.NormalizerEffectiveSampleSize:F0} of {run.Draws!.Chains * run.Draws.Draws}");
+    }
+
+    [Fact]
+    public void AnUnnormalizedPrior_GivesTheNormalizedPriorsEvidence()
+    {
+        // The double well's prior times e³: a proper prior of mass e³. Its normalizer cancels in the ratio estimator, so
+        // ln Ẑ(b) is still ln E[e^{b·ℓ₁}] under the normalized prior, the quadrature's.
+        ISamplingTarget<double> scaled = SamplingTarget.Separable<double>(
+            x => Math.Abs(x) <= WellHalfWidth ? 3.0 - Math.Log(2.0 * WellHalfWidth) : double.NegativeInfinity, x => WellLevel(x, Depth));
+        FlatHistogramSpec spec = SamcLearningTests.WellSpec(32_000, 20_000, chains: 8);
+        MulticanonicalResult<double> run = MulticanonicalRun.Run(spec, scaled, new WellModel(Depth, 0.25), 43, parallel: Serial);
+        LogEvidenceCurve curve = Reweighting.LogEvidence(run.Draws!, [0.1, 0.5, 1.0]);
+        for (int g = 0; g < 3; g++)
+        {
+            double exact = WellLogEvidence(Depth, curve.InverseTemperatures[g]);
+            _out.WriteLine($"[evidence] prior of mass e³, b = {curve.InverseTemperatures[g]}: ln Z {curve.LogEvidence[g]:F4} ± {curve.MonteCarloError[g]:F4} " +
+                           $"against the normalized prior's {exact:F4} (unnormalized: {exact + 3.0:F4})");
+            Assert.True(Math.Abs(curve.LogEvidence[g] - exact) < Bound * curve.MonteCarloError[g]);
+        }
     }
 
     [Fact]
