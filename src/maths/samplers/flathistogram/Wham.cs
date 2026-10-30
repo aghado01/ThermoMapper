@@ -8,11 +8,14 @@ namespace Maths.Samplers.FlatHistogram;
 /// log normalizers f_i = ln Z(b_i), up to one constant, at the fixed point of the multiple-histogram equations.
 /// </summary>
 /// <param name="Levels">The pooled draws' distinct ℓ₁, ascending.</param>
-/// <param name="LogMasses">ĝ's log mass at each: <c>ln m − ln Σ_k n_k e^{b_k·ℓ − f_k}</c>, m the draws at that ℓ₁.</param>
+/// <param name="LogMasses">ĝ's log mass at each: <c>ln m − ln Σ_k ñ_k e^{b_k·ℓ − f_k}</c>, m the draws at that ℓ₁ each
+/// counted 1/g of its rung, and ñ_k = n_k/g_k rung k's effective draws.</param>
 /// <param name="LogNormalizers">f_i per rung, the hottest at 0.</param>
 /// <param name="Iterations">Newton's iterations.</param>
 /// <param name="Residual">The fixed point's largest residual, max_i |Σ_j e^{b_i·ℓ_j − f_i}·ĝ_j − 1|.</param>
-public sealed record WhamEstimate(double[] Levels, double[] LogMasses, double[] LogNormalizers, int Iterations, double Residual);
+/// <param name="EffectiveDraws">ñ_i per rung, the weights its histogram entered with.</param>
+public sealed record WhamEstimate(double[] Levels, double[] LogMasses, double[] LogNormalizers, int Iterations, double Residual,
+                                  double[] EffectiveDraws);
 
 /// <summary>
 /// The warm start: multiple-histogram reweighting (Ferrenberg and Swendsen 1989; WHAM, in its binless form) of a
@@ -20,11 +23,14 @@ public sealed record WhamEstimate(double[] Levels, double[] LogMasses, double[] 
 /// (<see cref="SamcLearning.FixedPoint"/>), so the learning starts where it would converge were the pilot exact and
 /// corrects the pilot rather than discovering g from flat. It also reads the run's window, b_lo and K from the pilot.
 /// <para>The rungs' laws are <c>prior·e^{b_i·ℓ}/Z(b_i)</c>, so the draws pooled over every rung estimate g as the measure
-/// <c>ĝ_j ∝ 1/Σ_k n_k e^{b_k·ℓ_j − f_k}</c> with <c>e^{f_i} = Σ_j ĝ_j e^{b_i·ℓ_j}</c>, the free energies' fixed point.
-/// It is the stationary point of the convex <c>F(f) = Σ_j ln Σ_k n_k e^{b_k·ℓ_j − f_k} + Σ_i n_i f_i</c> (the MBAR
-/// objective), which Newton's method solves from the path-sampling estimate of f. Raw draw counts weigh the rungs:
-/// the estimate is consistent whatever their autocorrelation, which its error, not its value, depends on. Where the
-/// pilot drew nothing, as between two phases it does not cross, ĝ has no mass and the start's weights are interpolated.</para>
+/// <c>ĝ_j ∝ (1/g_{i(j)}) / Σ_k ñ_k e^{b_k·ℓ_j − f_k}</c> with <c>e^{f_i} = Σ_j ĝ_j e^{b_i·ℓ_j}</c>, the free energies'
+/// fixed point: Ferrenberg and Swendsen's equations (3) and (4) in their list form. Each rung enters by its effective
+/// draws ñ_i = n_i/g_i, g_i = 1 + 2τ_i its statistical inefficiency (<see cref="TemperingPilot.Inefficiencies"/>), their
+/// error-minimizing combination; any positive weights would be consistent, these lower the error where rungs mix at
+/// different rates. It is the stationary point of the convex
+/// <c>F(f) = Σ_j (1/g_{i(j)}) ln Σ_k ñ_k e^{b_k·ℓ_j − f_k} + Σ_i ñ_i f_i</c> (the MBAR objective), which Newton's method
+/// solves from the path-sampling estimate of f, the derivative-guided iteration they recommend. Where the pilot drew
+/// nothing, as between two phases it does not cross, ĝ has no mass and the start's weights are interpolated.</para>
 /// </summary>
 public static class Wham
 {
@@ -33,31 +39,35 @@ public static class Wham
     {
         ArgumentNullException.ThrowIfNull(pilot);
         int rungs = pilot.Rungs;
-        var pooled = new double[checked((int)pilot.Draws)];
-        var counts = new double[rungs];
+        int draws = checked((int)pilot.Draws);
+        var pooled = new double[draws];
+        var drawWeight = new double[draws];   // 1/g of the draw's rung
+        var counts = new double[rungs];       // ñ_i = n_i/g_i
         var b = new double[rungs];
         int at = 0;
         for (int i = 0; i < rungs; i++)
         {
             ReadOnlySpan<double> l = pilot.Levels(i);
+            double g = pilot.Inefficiencies[i];
             l.CopyTo(pooled.AsSpan(at));
+            drawWeight.AsSpan(at, l.Length).Fill(1.0 / g);
             at += l.Length;
-            counts[i] = l.Length;
+            counts[i] = l.Length / g;
             b[i] = pilot.InverseTemperatures[i];
         }
         var logCounts = Array.ConvertAll(counts, Math.Log);
 
-        // Draws at one ℓ₁ share their mass, so a lattice energy's draws collapse to its levels.
-        Array.Sort(pooled);
+        // Draws at one ℓ₁ share their mass, so a lattice energy's draws collapse to its levels, each weighing its draws.
+        Array.Sort(pooled, drawWeight);
         var levelList = new List<double>();
         var multiplicity = new List<double>();
-        foreach (double l in pooled)
+        for (int j = 0; j < draws; j++)
         {
-            if (levelList.Count > 0 && levelList[^1] == l) multiplicity[^1]++;
+            if (levelList.Count > 0 && levelList[^1] == pooled[j]) multiplicity[^1] += drawWeight[j];
             else
             {
-                levelList.Add(l);
-                multiplicity.Add(1.0);
+                levelList.Add(pooled[j]);
+                multiplicity.Add(drawWeight[j]);
             }
         }
         double[] levels = [.. levelList], weight = [.. multiplicity];
@@ -126,7 +136,7 @@ public static class Wham
         for (int i = 0; i < rungs; i++) residual = Math.Max(residual, Math.Abs(occupancy[i] / counts[i] - 1.0));
         var logMasses = new double[total];
         for (int j = 0; j < total; j++) logMasses[j] = Math.Log(weight[j]) - logDenominators[j];
-        return new WhamEstimate(levels, logMasses, f, iterations, residual);
+        return new WhamEstimate(levels, logMasses, f, iterations, residual, counts);
     }
 
     /// <summary>The warm-start weights over <paramref name="shape"/>'s window: SAMC's limit on WHAM's ĝ.</summary>
@@ -172,8 +182,8 @@ public static class Wham
         return Math.Max(2, checked((int)Math.Ceiling((window.High - window.Low) / sd)) + 1);
     }
 
-    // F(f), with each rung's Σ_j P_ji, the pairs' Σ_j P_ji P_jk, and each level's ln Σ_k n_k e^{b_k ℓ_j − f_k}; a level
-    // stands for its m_j draws.
+    // F(f), with each rung's Σ_j m_j P_ji, the pairs' Σ_j m_j P_ji P_jk, and each level's ln Σ_k ñ_k e^{b_k ℓ_j − f_k}; a
+    // level stands for its draws, m_j their summed weights 1/g.
     private static double Objective(double[] f, double[] b, double[] logCounts, double[] counts, double[] levels, double[] weight,
                                     double[] occupancy, double[] cross, double[] logDenominators)
     {

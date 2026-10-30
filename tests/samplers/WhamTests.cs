@@ -90,15 +90,24 @@ public sealed class WhamTests
         MulticanonicalWeights exact = SamcLearningTests.WellFixedPoint(new FlatHistogramWindow(-30.0, -0.02), 0.05, 31, out bool[] empty);
         int[] seeds = SeedTree.Derive(51, 8);
         var starts = new List<MulticanonicalWeights>();
+        var unweighted = new List<MulticanonicalWeights>();
+        var inefficiencies = new List<string>();
         foreach (int s in seeds)
         {
             TemperingPilot pilot = WellPilot(s);
             WhamEstimate estimate = Wham.Estimate(pilot);
             Assert.True(estimate.Residual < 1e-8, $"WHAM's fixed point holds to {estimate.Residual:E1}");
             starts.Add(Wham.WarmStart(pilot, shape));
+            inefficiencies.Add(string.Join("/", pilot.Inefficiencies.Select(g => g.ToString("F1"))));
+            // The same draws with every g = 1, as for independent draws: a reading of what the weights buy.
+            var flat = new TemperingPilot(pilot.InverseTemperatures, Enumerable.Range(0, pilot.Rungs).Select(i => pilot.Levels(i).ToArray()).ToArray());
+            unweighted.Add(Wham.WarmStart(flat, shape));
         }
-        (double z2, double rms) = Agreement(starts, exact, Array.ConvertAll(empty, e => !e));
-        _out.WriteLine($"[wham] double well, 8 pilots of 8 rungs × 20 000 scans: per-pilot centred RMS to θ* {rms:F3}; mean z² over nodes {z2:F2} (t₇: 1.4)");
+        bool[] full = Array.ConvertAll(empty, e => !e);
+        (double z2, double rms) = Agreement(starts, exact, full);
+        (double z2One, double rmsOne) = Agreement(unweighted, exact, full);
+        _out.WriteLine($"[wham] double well, 8 pilots of 8 rungs × 20 000 scans: per-pilot centred RMS to θ* {rms:F3}; mean z² over nodes {z2:F2} (t₇: 1.4); " +
+                       $"with every g = 1, {rmsOne:F3} and {z2One:F2}; g per rung, cold first, on the first pilots: {string.Join("; ", inefficiencies.Take(2))}");
         Assert.True(z2 < 3.0, $"the warm starts depart from θ* by more than their spread: mean z² {z2:F2}");
         Assert.True(rms < 0.25, $"a warm start departs from θ* by {rms:F3} RMS");
     }
@@ -249,6 +258,71 @@ public sealed class WhamTests
             Assert.True(Math.Abs(estimate.LogNormalizers[i] - expected) < 2e-3);
         }
         Assert.True(estimate.Residual < 1e-8);
+    }
+
+    [Fact]
+    public void Wham_WeighsEachRungByItsEffectiveDraws_AsFerrenbergAndSwendsen()
+    {
+        // Exact rung histograms give the exact f under any weights, so unequal inefficiencies leave them exact; one g on
+        // every rung scales every weight alike and changes nothing; on sampled draws unequal g move the estimate.
+        long[] counts = PottsFlatHistogramTests.Lattice.Counts();
+        double[] b = [1.0, 0.6, 0.3, 0.0];
+        var exactLevels = new List<double[]>();
+        foreach (double bi in b)
+        {
+            double[] log = counts.Select((c, n) => c > 0 ? Math.Log(c) + bi * 1.5 * n : double.NegativeInfinity).ToArray();
+            double z = LogSumExp(log);
+            var draws = new List<double>();
+            for (int n = 0; n < counts.Length; n++) for (int r = 0; r < (int)Math.Round(1e5 * Math.Exp(log[n] - z)); r++) draws.Add(1.5 * n);
+            exactLevels.Add([.. draws]);
+        }
+        WhamEstimate plain = Wham.Estimate(new TemperingPilot(b, exactLevels));
+        WhamEstimate weighted = Wham.Estimate(new TemperingPilot(b, exactLevels, [1.0, 3.0, 1.5, 7.0]));
+        for (int i = 0; i < b.Length; i++) Assert.True(Math.Abs(weighted.LogNormalizers[i] - plain.LogNormalizers[i]) < 1e-3);
+        Assert.Equal([exactLevels[0].Length / 1.0, exactLevels[1].Length / 3.0, exactLevels[2].Length / 1.5, exactLevels[3].Length / 7.0],
+                     weighted.EffectiveDraws);
+
+        TemperingPilot pilot = PottsPilot(71, scans: 4_000);
+        double[][] levels = Enumerable.Range(0, pilot.Rungs).Select(i => pilot.Levels(i).ToArray()).ToArray();
+        WhamEstimate one = Wham.Estimate(new TemperingPilot(pilot.InverseTemperatures, levels));
+        WhamEstimate common = Wham.Estimate(new TemperingPilot(pilot.InverseTemperatures, levels, Enumerable.Repeat(4.0, pilot.Rungs).ToArray()));
+        for (int i = 0; i < pilot.Rungs; i++) Assert.Equal(one.LogNormalizers[i], common.LogNormalizers[i], 9);
+        double[] uneven = Enumerable.Range(0, pilot.Rungs).Select(i => 1.0 + i).ToArray();
+        WhamEstimate moved = Wham.Estimate(new TemperingPilot(pilot.InverseTemperatures, levels, uneven));
+        Assert.True(Enumerable.Range(0, pilot.Rungs).Max(i => Math.Abs(moved.LogNormalizers[i] - one.LogNormalizers[i])) > 1e-6);
+        Assert.True(moved.Residual < 1e-8);
+    }
+
+    [Fact]
+    public void FromLadders_ReadsEachRungsInefficiency_FromItsChains()
+    {
+        int[] seeds = SeedTree.Derive(73, 2);
+        var ladders = new List<ParallelTempering<double>>();
+        foreach (int s in seeds)
+        {
+            var pt = new ParallelTempering<double>(_ => [new GaussianStep(0.25)], DoubleWell(Depth), 1.0, WellLadder, TemperingPath.Likelihood, s);
+            for (int i = 0; i < 1_000; i++) pt.Step();
+            pt.TraceRungs();
+            for (int i = 0; i < 5_000; i++) pt.Step();
+            ladders.Add(pt);
+        }
+        TemperingPilot pilot = TemperingPilot.FromLadders(ladders);
+        for (int i = 0; i < pilot.Rungs; i++)
+        {
+            double[][] chains = ladders.Select(l => l.RungTraces![i].Draws(Rjmcmc.RungFunctional.Slope)).ToArray();
+            double ess = Ensemble.ChainDiagnostics.MeanEss(chains).Value;
+            Assert.Equal(Math.Max(1.0, 10_000 / ess), pilot.Inefficiencies[i], 12);
+            Assert.True(pilot.Inefficiencies[i] > 1.0, $"rung {i}'s random-walk draws should be correlated");
+        }
+        _out.WriteLine($"[wham] two ladders × 5 000 scans: g per rung, cold first, {string.Join(", ", pilot.Inefficiencies.Select(g => g.ToString("F1")))}");
+
+        // Ladders traced for different numbers of scans are refused; so are ill-formed inefficiencies.
+        ladders[1].Step();
+        Assert.Throws<ArgumentException>(() => TemperingPilot.FromLadders(ladders));
+        Assert.Throws<ArgumentException>(() => new TemperingPilot([1.0, 0.5], [[1.0, 2.0], [1.0, 2.0]], [1.0, 0.5]));
+        Assert.Throws<ArgumentException>(() => new TemperingPilot([1.0, 0.5], [[1.0, 2.0], [1.0, 2.0]], [1.0, double.NaN]));
+        Assert.Throws<ArgumentException>(() => new TemperingPilot([1.0, 0.5], [[1.0, 2.0], [1.0, 2.0]], [1.0]));
+        Assert.Equal([1.0, 1.0], new TemperingPilot([1.0, 0.5], [[1.0, 2.0], [1.0, 2.0]]).Inefficiencies);
     }
 
     // ℓ_b = ln(1 + b(e^{ℓ₁} − 1)) with ℓ₁ = −x²/2 and a flat prior on [−3, 3]: not linear in b.
