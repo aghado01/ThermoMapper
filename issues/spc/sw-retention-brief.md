@@ -8,7 +8,7 @@ Corrected 2026-10-29: SPC has no mid-run resume (the SPCX file caches finished t
 
 Chipped 2026-10-29: the items that stay inside SPC (S1–S4, S6, S7, and the Binder check) go to [the chip brief](sw-retention-chip-brief.md), under the user's frame that accumulation is the run's state and the sums its views. S5 and the consumers in `Maths.Samplers` (R-hat, ESS, the verdict, temperature integration, reweighting) stay here.
 
-Built 2026-10-29: S1–S4, S6 and S7 landed through the chip (`6de243a`–`d7269ea`, review `8c4c1ae`; [its report](sw-retention-chip-brief.md#reports)). What remains here is S5, S2's E³ and E⁴ views, and the samplers-side consumers.
+Built 2026-10-29: S1–S4, S6 and S7 landed through the chip (`6de243a`–`d7269ea`, review `8c4c1ae`; [its report](sw-retention-chip-brief.md#reports)). What remains here is S5 and the samplers-side consumers. S2's energy moments, the energy cumulant and C_v's Monte Carlo error followed in `c50b273`.
 
 The principle, from the user: keep each draw's generative state, derive views from it, and where alternatives keep different information, offer both as options.
 
@@ -47,7 +47,8 @@ The principle, from the user: keep each draw's generative state, derive views fr
 ### S2. Higher moments
 
 - m⁴, for the Binder cumulant U = 1 − ⟨m⁴⟩/(3⟨m²⟩²), and E³ and E⁴, for the error on C_v and the energy distribution's shape.
-- With S1 these are views over the series, and S1 is always kept. The Binder cumulant is built (`BinderCumulant`, `f542951`). The E³ and E⁴ views over `EnergyPerDraw` are not; C_v's error also needs τ_int, from the samplers.
+- With S1 these are views over the series, and S1 is always kept. The Binder cumulant is built (`BinderCumulant`, `f542951`). So are ⟨E⟩ to ⟨E⁴⟩ and the energy cumulant V = 1 − ⟨E⁴⟩/(3⟨E²⟩²) (`EnergyCumulant`, `c50b273`), the first-order diagnostic for SPC's default q = 20.
+- C_v's Monte Carlo error is built without E³ and E⁴: C_v is the mean of y = (E − Ē)²/T², so its error is sd(y)/√ESS(y), with the ESS from `ChainDiagnostics.MeanEss` over the replicas (`SpecificHeatMonteCarloError`, `c50b273`). SPC's project already referenced `Maths.Samplers`; the call is on plain arrays, the user's choice over a port (2026-10-30). It matches Gaussian theory (iid 0.98, AR(1) 1.03) and the spread of C_v across SW replicas (1.04–1.05 at 128 replicas).
 
 ### S3. The largest cluster per sweep
 
@@ -95,7 +96,7 @@ The principle, from the user: keep each draw's generative state, derive views fr
 ## Sequencing
 
 1. **S1 with S3:** one per-sweep record, with the serialization change. Appending across a resume comes only if mid-run resume is ever wired. *Done (`bc70bf2`).*
-2. **S2:** views over S1. *Binder done (`f542951`); E³ and E⁴ not built.*
+2. **S2:** views over S1. *Done: Binder (`f542951`); energy moments, energy cumulant and C_v's error (`c50b273`).*
 3. **S6 and S7:** independent and small. *Done (`96de69d`, `d7269ea`).*
 4. **S4:** follows S1's record shape. *Done (`1322e47`).*
 5. **S5:** waits on the persistence decision; in-memory thinning first if it is wanted sooner.
