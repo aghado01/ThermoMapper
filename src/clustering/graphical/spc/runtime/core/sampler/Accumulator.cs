@@ -64,6 +64,14 @@ public sealed record Accumulator
     /// <summary>c_max per draw: the largest of those FK clusters.</summary>
     public int[] MaxClusterSizePerDraw { get; init; } = [];
 
+    // ── Burn-in trace (AccumulationSpec.BurnInTrace; null when off) ──
+    // The same four series for the draws the reset after burn-in discards, one entry per discarded
+    // draw (the burn-in count, for a run through SwRunner). All four present or all absent.
+    public double[]? BurnInEnergyPerDraw            { get; init; }
+    public double[]? BurnInMagPerDraw               { get; init; }
+    public long[]?   BurnInSumSqClusterSizesPerDraw { get; init; }
+    public int[]?    BurnInMaxClusterSizePerDraw    { get; init; }
+
     // ── Per-edge sufficient-statistics (1-form → Affinities / Alignments / CoMembership; capability-gated, null when off) ──
     public int[]? BondFormedCount    { get; init; }
     public int[]? SpinAgreementCount { get; init; }

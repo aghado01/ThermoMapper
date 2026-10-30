@@ -8,14 +8,17 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler;
 /// "final" pass.
 /// </summary>
 /// <remarks>
-/// <para>Scalar moments (FK χ, specific heat, magnetization) and the cluster-size histogram are free
-/// byproducts of the union-find pass — always collected, not gated here. The four optional dimensions:</para>
+/// <para>Scalar moments (FK χ, specific heat, magnetization), the per-draw record (E, m, Σ|c|², c_max)
+/// and the cluster-size histogram are free byproducts of the union-find pass — always collected, not
+/// gated here. The optional dimensions:</para>
 /// <list type="bullet">
 ///   <item><see cref="Affinities"/> / <see cref="Alignments"/> — the per-edge currency precursors;
 ///   hot-loop scatter-writes, so they map to an <see cref="ISwConfig"/> specialization
 ///   (compile-time monomorphization, independently gated).</item>
 ///   <item><see cref="ClusterSizeLandscape"/> / <see cref="OrderLandscape"/> — the per-node landscapes
 ///   (un-reduced χ and order parameter); an <c>O(N)</c> post-pass, so runtime-gated.</item>
+///   <item><see cref="CoMembership"/> — an <c>O(E)</c> post-pass, runtime-gated.</item>
+///   <item><see cref="BurnInTrace"/> — a diagnostic copy of the burn-in draws' records, runtime-gated.</item>
 /// </list>
 /// <para>The boundary mapping (spec → specialization + runtime flags) lives at the cold run-setup seam
 /// (<c>SwRunner</c>); the hot loop never sees this type.</para>
@@ -42,7 +45,14 @@ public readonly record struct AccumulationSpec
     /// </summary>
     public bool CoMembership { get; init; }
 
-    /// <summary>Moments + cluster-size histogram only (nothing optional) — the lightweight default.</summary>
+    /// <summary>
+    /// Keep the per-draw record (E, m, Σ|c|², c_max) of the burn-in draws, which the reset after
+    /// burn-in would otherwise discard, so the burn-in length can be checked rather than assumed.
+    /// Diagnostic; off by default.
+    /// </summary>
+    public bool BurnInTrace { get; init; }
+
+    /// <summary>Moments, the per-draw record and the cluster-size histogram only (nothing optional) — the lightweight default.</summary>
     public static AccumulationSpec None => default;
 
     /// <summary>Both per-edge currencies + co-membership: all three estimators for chosen-T comparison.</summary>

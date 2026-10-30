@@ -26,7 +26,7 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
         public override string DefaultFileExtension => ".spcx";
 
         private const uint Magic = 0x58435053; // "SPCX"
-        private const int Version = 9;         // v9: the per-draw record (v8: 64-bit histogram counts; v7: co-membership counts)
+        private const int Version = 10;        // v10: the burn-in trace (v9: the per-draw record; v8: 64-bit histogram counts)
 
         public override void WriteTo(Accumulator value, Stream stream)
         {
@@ -59,20 +59,9 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
             w.Write(value.RunningSumMag);
             w.Write(value.RunningSumMagSq);
 
-            // Per-draw record (v9): always present — one length, then the four series column by column.
-            int records = value.EnergyPerDraw.Length;
-            if (value.MagPerDraw.Length != records
-                || value.SumSqClusterSizesPerDraw.Length != records
-                || value.MaxClusterSizePerDraw.Length != records)
-                throw new ArgumentException(
-                    $"Per-draw record lengths differ (E {records}, m {value.MagPerDraw.Length}, " +
-                    $"Σ|c|² {value.SumSqClusterSizesPerDraw.Length}, c_max {value.MaxClusterSizePerDraw.Length}).",
-                    nameof(value));
-            w.Write(records);
-            foreach (double x in value.EnergyPerDraw) w.Write(x);
-            foreach (double x in value.MagPerDraw) w.Write(x);
-            foreach (long x in value.SumSqClusterSizesPerDraw) w.Write(x);
-            foreach (int x in value.MaxClusterSizePerDraw) w.Write(x);
+            // Per-draw record (v9): always present.
+            WriteRecord(w, "Per-draw record",
+                value.EnergyPerDraw, value.MagPerDraw, value.SumSqClusterSizesPerDraw, value.MaxClusterSizePerDraw);
 
             // Per-edge section (v7: independently-gated flags — v6 used one shared flag which broke
             // when Affinities=true + Alignments=false).
@@ -119,7 +108,51 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
                 foreach (int x in value.CoMembershipCount) w.Write(x);
             }
 
+            // Burn-in trace (v10): presence flag, then the per-draw record's layout.
+            bool hasBurnIn = value.BurnInEnergyPerDraw is not null || value.BurnInMagPerDraw is not null
+                || value.BurnInSumSqClusterSizesPerDraw is not null || value.BurnInMaxClusterSizePerDraw is not null;
+            w.Write(hasBurnIn);
+            if (hasBurnIn)
+                WriteRecord(w, "Burn-in trace",
+                    value.BurnInEnergyPerDraw, value.BurnInMagPerDraw,
+                    value.BurnInSumSqClusterSizesPerDraw, value.BurnInMaxClusterSizePerDraw);
+
             w.Write(value.TimestampUtc.Ticks);
+        }
+
+        /// <summary>
+        /// One per-draw record: its length, then E, m, Σ|c|² and c_max, one series after another. The four series
+        /// must be present with one length.
+        /// </summary>
+        private static void WriteRecord(
+            BinaryWriter w, string what, double[]? energy, double[]? mag, long[]? sumSq, int[]? maxSize)
+        {
+            if (energy is null || mag is null || sumSq is null || maxSize is null
+                || mag.Length != energy.Length || sumSq.Length != energy.Length || maxSize.Length != energy.Length)
+                throw new ArgumentException(
+                    $"{what} series are not all present with one length (E {energy?.Length.ToString() ?? "null"}, " +
+                    $"m {mag?.Length.ToString() ?? "null"}, Σ|c|² {sumSq?.Length.ToString() ?? "null"}, " +
+                    $"c_max {maxSize?.Length.ToString() ?? "null"}).");
+
+            w.Write(energy.Length);
+            foreach (double x in energy) w.Write(x);
+            foreach (double x in mag) w.Write(x);
+            foreach (long x in sumSq) w.Write(x);
+            foreach (int x in maxSize) w.Write(x);
+        }
+
+        private static (double[] Energy, double[] Mag, long[] SumSq, int[] MaxSize) ReadRecord(BinaryReader r)
+        {
+            int records = r.ReadInt32();
+            var energy = new double[records];
+            for (int i = 0; i < records; i++) energy[i] = r.ReadDouble();
+            var mag = new double[records];
+            for (int i = 0; i < records; i++) mag[i] = r.ReadDouble();
+            var sumSq = new long[records];
+            for (int i = 0; i < records; i++) sumSq[i] = r.ReadInt64();
+            var maxSize = new int[records];
+            for (int i = 0; i < records; i++) maxSize[i] = r.ReadInt32();
+            return (energy, mag, sumSq, maxSize);
         }
 
         public override Accumulator ReadFrom(Stream stream)
@@ -161,15 +194,7 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
             double sumMagSq         = r.ReadDouble();
 
             // Per-draw record (v9).
-            int records = r.ReadInt32();
-            var energyPerDraw = new double[records];
-            for (int i = 0; i < records; i++) energyPerDraw[i] = r.ReadDouble();
-            var magPerDraw = new double[records];
-            for (int i = 0; i < records; i++) magPerDraw[i] = r.ReadDouble();
-            var sumSqPerDraw = new long[records];
-            for (int i = 0; i < records; i++) sumSqPerDraw[i] = r.ReadInt64();
-            var maxSizePerDraw = new int[records];
-            for (int i = 0; i < records; i++) maxSizePerDraw[i] = r.ReadInt32();
+            var record = ReadRecord(r);
 
             int[]? bond = null;
             bool hasBond = r.ReadBoolean();
@@ -218,6 +243,11 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
                 for (int i = 0; i < len; i++) coMembership[i] = r.ReadInt32();
             }
 
+            // Burn-in trace (v10).
+            (double[] Energy, double[] Mag, long[] SumSq, int[] MaxSize)? burnIn = null;
+            if (r.ReadBoolean())
+                burnIn = ReadRecord(r);
+
             long ticks = r.ReadInt64();
 
             return new Accumulator
@@ -238,10 +268,14 @@ namespace Clustering.Graphical.SPC.Runtime.Core.Sampler
                 RunningSumEnergySq           = sumEnergySq,
                 RunningSumMag                = sumMag,
                 RunningSumMagSq              = sumMagSq,
-                EnergyPerDraw            = energyPerDraw,
-                MagPerDraw               = magPerDraw,
-                SumSqClusterSizesPerDraw = sumSqPerDraw,
-                MaxClusterSizePerDraw    = maxSizePerDraw,
+                EnergyPerDraw            = record.Energy,
+                MagPerDraw               = record.Mag,
+                SumSqClusterSizesPerDraw = record.SumSq,
+                MaxClusterSizePerDraw    = record.MaxSize,
+                BurnInEnergyPerDraw            = burnIn?.Energy,
+                BurnInMagPerDraw               = burnIn?.Mag,
+                BurnInSumSqClusterSizesPerDraw = burnIn?.SumSq,
+                BurnInMaxClusterSizePerDraw    = burnIn?.MaxSize,
                 BondFormedCount    = bond,
                 SpinAgreementCount = spin,
                 CoMembershipCount  = coMembership,

@@ -27,6 +27,19 @@ public sealed class SwAccumulatorProbeTests
         Assert.Equal(Recorded[name], Fingerprint(Run(probe)));
     }
 
+    [Theory]
+    [MemberData(nameof(CaseNames))]
+    public void Outputs_MatchTheRecord_WithTheDiagnosticOptionsOn(string name)
+    {
+        ProbeCase probe = Cases.Single(c => c.Name == name);
+
+        Assert.Equal(Recorded[name], Fingerprint(Run(probe, WithDiagnostics(probe.Accumulation))));
+    }
+
+    /// <summary>The options that only keep more of what the cycle computes, all on.</summary>
+    internal static AccumulationSpec WithDiagnostics(AccumulationSpec accumulation)
+        => accumulation with { BurnInTrace = true };
+
     public static TheoryData<string> CaseNames()
     {
         var data = new TheoryData<string>();

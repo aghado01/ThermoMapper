@@ -99,6 +99,13 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
     private long[]   _sumSqClusterSizesPerDraw = [];  // Σ|c|² of the entering spins' FK clusters
     private int[]    _maxClusterSizePerDraw = [];     // c_max of the same clusters
 
+    // ── Burn-in trace (runtime-gated; null when off) ─────────────────────
+    // The per-draw record of every draw a BurnIn discards, appended just before the reset.
+    private double[]? _burnInEnergyPerDraw;
+    private double[]? _burnInMagPerDraw;
+    private long[]?   _burnInSumSqClusterSizesPerDraw;
+    private int[]?    _burnInMaxClusterSizePerDraw;
+
     private int _drawCount;
 
     public SwendsenWang(
@@ -153,6 +160,15 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         // Co-membership accumulator: allocated when the run requests it.
         _coMembershipCount = accumulation.CoMembership ? new int[_bondTable.Length] : null;
 
+        // Burn-in trace: present (empty until a BurnIn) when the run asks for it.
+        if (accumulation.BurnInTrace)
+        {
+            _burnInEnergyPerDraw            = [];
+            _burnInMagPerDraw               = [];
+            _burnInSumSqClusterSizesPerDraw = [];
+            _burnInMaxClusterSizePerDraw    = [];
+        }
+
         int maxBin = BitOperations.Log2((uint)Math.Max(1, _n)) + 1;
         _clusterSizeHistogram = new long[maxBin];
 
@@ -199,7 +215,26 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         ReserveRecord(checked(_drawCount + cycles));
         for (int i = 0; i < cycles; i++)
             Draw();
+        if (_burnInEnergyPerDraw is not null)
+            AppendBurnInTrace();
         ResetAccumulators();
+    }
+
+    /// <summary>
+    /// Append the per-draw record so far — every draw the coming reset discards — to the burn-in trace.
+    /// </summary>
+    private void AppendBurnInTrace()
+    {
+        int kept = _burnInEnergyPerDraw!.Length;
+        int total = checked(kept + _drawCount);
+        Array.Resize(ref _burnInEnergyPerDraw, total);
+        Array.Resize(ref _burnInMagPerDraw, total);
+        Array.Resize(ref _burnInSumSqClusterSizesPerDraw, total);
+        Array.Resize(ref _burnInMaxClusterSizePerDraw, total);
+        Array.Copy(_energyPerDraw, 0, _burnInEnergyPerDraw, kept, _drawCount);
+        Array.Copy(_magPerDraw, 0, _burnInMagPerDraw, kept, _drawCount);
+        Array.Copy(_sumSqClusterSizesPerDraw, 0, _burnInSumSqClusterSizesPerDraw, kept, _drawCount);
+        Array.Copy(_maxClusterSizePerDraw, 0, _burnInMaxClusterSizePerDraw, kept, _drawCount);
     }
 
     /// <summary>
@@ -391,6 +426,11 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
             MagPerDraw               = MagPerDraw.ToArray(),
             SumSqClusterSizesPerDraw = SumSqClusterSizesPerDraw.ToArray(),
             MaxClusterSizePerDraw    = MaxClusterSizePerDraw.ToArray(),
+            // The burn-in trace travels the same way — runtime-gated, null when off.
+            BurnInEnergyPerDraw            = (double[]?)_burnInEnergyPerDraw?.Clone(),
+            BurnInMagPerDraw               = (double[]?)_burnInMagPerDraw?.Clone(),
+            BurnInSumSqClusterSizesPerDraw = (long[]?)_burnInSumSqClusterSizesPerDraw?.Clone(),
+            BurnInMaxClusterSizePerDraw    = (int[]?)_burnInMaxClusterSizePerDraw?.Clone(),
             // Per-edge currency arrays travel in the same accumulator — each null when
             // its currency gate is off (Affinities ⟂ Alignments ⟂ CoMembership).
             BondFormedCount    = TConfig.Affinities ? (int[])_bondFormedCount!.Clone() : null,
@@ -425,6 +465,19 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
             throw new InvalidOperationException(
                 $"Snapshot per-node giant-participation presence ({result.SumInGiantClusterPerNode is not null}) does not " +
                 $"match model capability ({_sumInGiantClusterPerNode is not null}).");
+        // The burn-in trace gates on presence too, its four series present together with one length.
+        int? traceLength = result.BurnInEnergyPerDraw?.Length;
+        if (result.BurnInMagPerDraw?.Length != traceLength
+            || result.BurnInSumSqClusterSizesPerDraw?.Length != traceLength
+            || result.BurnInMaxClusterSizePerDraw?.Length != traceLength)
+            throw new InvalidOperationException(
+                $"Snapshot burn-in trace series disagree (E {result.BurnInEnergyPerDraw?.Length.ToString() ?? "null"}, " +
+                $"m {result.BurnInMagPerDraw?.Length.ToString() ?? "null"}, Σ|c|² {result.BurnInSumSqClusterSizesPerDraw?.Length.ToString() ?? "null"}, " +
+                $"c_max {result.BurnInMaxClusterSizePerDraw?.Length.ToString() ?? "null"}).");
+        if ((_burnInEnergyPerDraw is not null) != traceLength.HasValue)
+            throw new InvalidOperationException(
+                $"Snapshot burn-in trace presence ({traceLength.HasValue}) does not " +
+                $"match model capability ({_burnInEnergyPerDraw is not null}).");
         if (result.Temperature != _temperature)
             throw new InvalidOperationException(
                 $"Snapshot temperature {result.Temperature} does not match model temperature {_temperature}.");
@@ -468,6 +521,13 @@ internal sealed class SwendsenWang<TConfig> : ISwEngine
         _magPerDraw               = (double[])result.MagPerDraw.Clone();
         _sumSqClusterSizesPerDraw = (long[])result.SumSqClusterSizesPerDraw.Clone();
         _maxClusterSizePerDraw    = (int[])result.MaxClusterSizePerDraw.Clone();
+        if (_burnInEnergyPerDraw is not null)
+        {
+            _burnInEnergyPerDraw            = (double[])result.BurnInEnergyPerDraw!.Clone();
+            _burnInMagPerDraw               = (double[])result.BurnInMagPerDraw!.Clone();
+            _burnInSumSqClusterSizesPerDraw = (long[])result.BurnInSumSqClusterSizesPerDraw!.Clone();
+            _burnInMaxClusterSizePerDraw    = (int[])result.BurnInMaxClusterSizePerDraw!.Clone();
+        }
 
         // Restore the per-edge counts elementwise (presence already validated
         // above). Without this copy a resumed run keeps the snapshot's DrawCount

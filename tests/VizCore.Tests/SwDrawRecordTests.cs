@@ -130,19 +130,21 @@ public sealed class SwDrawRecordTests
         Assert.Empty(round.MaxClusterSizePerDraw);
     }
 
-    [Fact]
-    public void Serializer_RefusesAV8File_NamingItsVersion()
+    [Theory]
+    [InlineData(8)]
+    [InlineData(9)]
+    public void Serializer_RefusesAnOlderFile_NamingItsVersion(int version)
     {
         using var ms = new MemoryStream();
         using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
         {
             w.Write(0x58435053u); // "SPCX"
-            w.Write(8);
+            w.Write(version);
         }
         ms.Position = 0;
 
         var ex = Assert.Throws<InvalidDataException>(() => AccumulatorSerializer.Instance.ReadFrom(ms));
-        Assert.Contains("version 8", ex.Message);
+        Assert.Contains($"version {version}", ex.Message);
     }
 
     [Fact]

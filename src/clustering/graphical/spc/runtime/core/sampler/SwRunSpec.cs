@@ -25,9 +25,9 @@ public sealed record SwRunSpec
 
     /// <summary>
     /// Declares what sufficient-statistics this run accumulates — the per-edge
-    /// currencies (<c>Affinities</c>/<c>Alignments</c>) and the per-node landscapes.
-    /// Scalar moments and the cluster-size histogram are always collected. Defaults
-    /// to <see cref="AccumulationSpec.None"/>.
+    /// currencies (<c>Affinities</c>/<c>Alignments</c>), the per-node landscapes and the
+    /// diagnostic options. Scalar moments, the per-draw record and the cluster-size
+    /// histogram are always collected. Defaults to <see cref="AccumulationSpec.None"/>.
     /// </summary>
     public AccumulationSpec Accumulation { get; init; }
 
