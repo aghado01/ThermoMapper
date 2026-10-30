@@ -125,6 +125,23 @@ Under "Reports" below, newest first:
 - the review passes and their fixes;
 - anything Phase 2 must know.
 
+## Addition (2026-10-30): a mean-field Potts toy
+
+Asked by the user after toy 2's tunnelling reading, and sent to this chip by message; it runs after the run weights and the normalization correction. Toy 2's 2× in tempering's favour is uninformative at nine sites. Tempering's crossing cost at a first-order transition grows exponentially with size, while the multicanonical cost should grow only polynomially (Berg and Neuhaus 1992), and at N = 9 neither shows. Torpid mixing of parallel and simulated tempering is proven for mean-field Potts with q ≥ 3 (Bhatnagar and Randall, SODA 2004; Woodard, Schmidler and Huber, *EJP* 2009).
+- *The model.*
+  - Curie–Weiss Potts with q = 3 (and 4 if cheap), the prior uniform over configurations, and ℓ₁ = (J/(2N))·(Σ_k n_k² − N).
+  - The state is the occupation vector n. Single-site Metropolis lumps onto it exactly; derive and check that the Hastings ratio reduces to the likelihood ratio.
+  - The exact ln g sums the multinomial over the n with one Σ n_k².
+  - J places the transition near b_t = 0.6. b_t at each N is the exact law's equal-weight point, checked against the derived closed form βJ = 2(q − 1)·ln(q − 1)/(q − 2).
+- *The checks,* in the suite: at two or three N, the learned ln g, the reweighted law at b_t and ln Z(b), each against the exact values within a stated tolerance.
+- *The reading* (exploration, behind an environment variable):
+  - N from about 50 to a few thousand.
+  - The flat-histogram run, a self-sized tempering ladder and a fixed-b chain at b_t, at equal single-site proposals.
+  - One crossing measure for all: round trips of ℓ₁ between the exact law's two peaks at b_t, per 10⁶ proposals.
+  - Per N: the peak-to-dip ratio, the crossing rates with their spread, and the fitted growth (exponential against power law).
+  - What would distinguish the hypotheses is written down before the run.
+- *Not in scope:* a 2D lattice past enumeration, BASS, defaults and `docs/Maths`.
+
 ## Reports
 
 Newest first.
