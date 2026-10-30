@@ -22,6 +22,16 @@ public sealed class FlatHistogramSweep
                    e3 = SamcLearningTests.WellLearningError(64_000, c[0]);
             return [new("RMS to θ*: 16k iterations < 4k", e2, e1), new("RMS to θ*: 64k iterations < 16k", e3, e2)];
         }),
+        new("WhamTests.DoubleWell_LearningFromTheWarmStart_ReachesTheFlatStartsAccuracy_InHalfTheIterations", DataSeed: null, ChainSeeds: [57, 61], (_, c) =>
+        {
+            var r = WhamTests.WarmAgainstFlat(WhamTests.WellError, WhamTests.WellPilot(c[0]), 32_000, c[1]);
+            return [new("RMS to θ*: warm start's 16k < flat start's 32k", r.WarmHalf, r.Flat)];
+        }),
+        new("WhamTests.Potts_LearningFromTheWarmStart_ReachesTheFlatStartsAccuracy_InHalfTheIterations", DataSeed: null, ChainSeeds: [59, 63], (_, c) =>
+        {
+            var r = WhamTests.WarmAgainstFlat(WhamTests.PottsError, WhamTests.PottsPilot(c[0]), 100_000, c[1]);
+            return [new("RMS to θ*: warm start's 50k < flat start's 100k", r.WarmHalf, r.Flat)];
+        }),
     ];
 
     [Fact]

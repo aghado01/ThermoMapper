@@ -27,7 +27,7 @@ public sealed class ReweightingTests
     private static MulticanonicalResult<double> WellProduction(FlatHistogramWindow? window = null, int nodes = 31, int seed = 31)
     {
         FlatHistogramSpec spec = SamcLearningTests.WellSpec(64_000, 40_000, chains: 8, window: window) with { Nodes = nodes };
-        return MulticanonicalRun.Run(spec, DoubleWell(Depth), new WellModel(Depth, 0.25), seed);
+        return MulticanonicalRun.Run(spec, DoubleWell(Depth), new WellModel(Depth, 0.25), seed, parallel: Serial);
     }
 
     [Fact]

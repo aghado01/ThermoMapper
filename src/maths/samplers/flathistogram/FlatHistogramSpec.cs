@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 using Maths.Samplers.Ensemble;
 
 namespace Maths.Samplers.FlatHistogram;
@@ -9,7 +10,7 @@ public enum FlatHistogramStart
     /// <summary>ln w = 0 over the window: SAMC discovers g from the prior.</summary>
     Flat,
 
-    /// <summary>ln g from a tempering pilot's rungs by multiple-histogram reweighting (<see cref="Wham"/>), which the
+    /// <summary>ln g from a tempering pilot's rungs by multiple-histogram reweighting (<see cref="FlatHistogram.Wham"/>), which the
     /// learning then corrects.</summary>
     Wham,
 }
@@ -57,7 +58,7 @@ public sealed record FlatHistogramSpec
     public double? GainScale { get; init; }
 
     /// <summary>The iteration the gain's count starts from, ≥ 0; null is 0 from flat and, from WHAM, the pilot's draws
-    /// over the chain count, the iterations its information is worth.</summary>
+    /// over the chain count, the iterations its draws are worth at one draw per chain visit.</summary>
     public long? GainStart { get; init; }
 
     /// <summary>q in (0, 0.5): a pilot window runs from ℓ₁'s q-quantile at the hot end to its (1 − q)-quantile at b = 1.</summary>
@@ -67,6 +68,7 @@ public sealed record FlatHistogramSpec
     public double WindowMargin { get; init; } = 1.0;
 
     /// <summary>Whether a run needs a tempering pilot: a WHAM start, or a window, b_lo or K to read from one.</summary>
+    [JsonIgnore]
     public bool NeedsPilot => Start == FlatHistogramStart.Wham || Window is null || LowSlope is null || Nodes is null;
 
     /// <summary>Refuse an ill-formed configuration (<see cref="ArgumentException"/>).</summary>

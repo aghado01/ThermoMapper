@@ -17,6 +17,10 @@ namespace Maths.Samplers.Tests;
 /// </summary>
 internal static class FlatHistogramToys
 {
+    /// <summary>One chain at a time: the toys' kernels are cheap enough that a fan-out per learning iteration costs
+    /// more than the steps, and the run's result does not depend on the bound.</summary>
+    public static readonly System.Threading.Tasks.ParallelOptions Serial = new() { MaxDegreeOfParallelism = 1 };
+
     // ---- Toy 1: the double well ------------------------------------------------------------------------------------
 
     public const double WellHalfWidth = 2.0;

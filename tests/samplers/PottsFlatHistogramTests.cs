@@ -99,7 +99,7 @@ public sealed class PottsFlatHistogramTests
     [Fact]
     public void Potts_LearnsSamcsLimit_OnTheExactDensityOfStates()
     {
-        MulticanonicalResult<int[]> run = MulticanonicalRun.Run(PottsSpec(200_000, 1, chains: 4), Lattice.Target, new PottsModel(Lattice), masterSeed: 7);
+        MulticanonicalResult<int[]> run = MulticanonicalRun.Run(PottsSpec(200_000, 1, chains: 4), Lattice.Target, new PottsModel(Lattice), masterSeed: 7, parallel: Serial);
         MulticanonicalWeights exact = PottsFixedPoint(run.Weights, out bool[] empty);
         bool[] full = Array.ConvertAll(empty, e => !e);
         double error = CentredRms(run.Weights.LogWeights, exact.LogWeights, full);
@@ -123,7 +123,7 @@ public sealed class PottsFlatHistogramTests
         Assert.Equal(-Lattice.Sites * Math.Log(Lattice.Q), Lattice.Target.Evaluate(new int[Lattice.Sites]).LogPrior);
         Assert.Equal((long)Math.Pow(Lattice.Q, Lattice.Sites), ExactCounts.Value.Sum());
 
-        MulticanonicalResult<int[]> run = MulticanonicalRun.Run(PottsSpec(200_000, 100_000), Lattice.Target, new PottsModel(Lattice), masterSeed: 11);
+        MulticanonicalResult<int[]> run = MulticanonicalRun.Run(PottsSpec(200_000, 100_000), Lattice.Target, new PottsModel(Lattice), masterSeed: 11, parallel: Serial);
         MulticanonicalDraws draws = run.Draws!;
 
         double[] grid = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.55, 0.6, 0.65, 0.7, 0.8, 0.9, 1.0];
@@ -165,7 +165,7 @@ public sealed class PottsFlatHistogramTests
         // burn-in, and both spend the same proposals.
         const long learning = 100_000;
         const int production = 100_000, chains = 4;
-        MulticanonicalResult<int[]> run = MulticanonicalRun.Run(PottsSpec(learning, production, chains), Lattice.Target, new PottsModel(Lattice), masterSeed: 13);
+        MulticanonicalResult<int[]> run = MulticanonicalRun.Run(PottsSpec(learning, production, chains), Lattice.Target, new PottsModel(Lattice), masterSeed: 13, parallel: Serial);
         long samcWork = (learning + production) * chains;
         double samcRate = 1e6 * run.ProductionDiagnostics!.TotalRoundTrips / (production * (double)chains);
 

@@ -315,8 +315,8 @@ public sealed class SamcLearning
     }
 
     // Solve H x = g for a symmetric positive definite H (n × n, row-major) by Cholesky, with a ridge where it is singular
-    // to rounding.
-    private static double[] SolveSpd(double[] h, double[] g, int n)
+    // to rounding. WHAM's Newton steps share it.
+    internal static double[] SolveSpd(double[] h, double[] g, int n)
     {
         var l = new double[n * n];
         double scale = 0.0;

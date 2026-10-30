@@ -144,7 +144,7 @@ public sealed class SamcLearningTests
     internal static double WellLearningError(long learning, int seed)
     {
         MulticanonicalWeights exact = WellFixedPoint(WellWindow, WellLowSlope, WellNodes, out _);
-        var result = MulticanonicalRun.Run(WellSpec(learning, production: 1), DoubleWell(Depth), new WellModel(Depth, 0.25), seed);
+        var result = MulticanonicalRun.Run(WellSpec(learning, production: 1), DoubleWell(Depth), new WellModel(Depth, 0.25), seed, parallel: Serial);
         return CentredRms(result.Weights.LogWeights, exact.LogWeights);
     }
 
@@ -164,7 +164,7 @@ public sealed class SamcLearningTests
         // the piecewise-linear θ* departs from ln g at the nodes. Away from them, within 2.5 spacings of −c and 1.5 of
         // the top, both θ* and the learned weights are ln g up to a constant.
         MulticanonicalWeights exact = WellFixedPoint(WellWindow, WellLowSlope, WellNodes, out _);
-        var result = MulticanonicalRun.Run(WellSpec(64_000, 1), DoubleWell(Depth), new WellModel(Depth, 0.25), masterSeed: 5);
+        var result = MulticanonicalRun.Run(WellSpec(64_000, 1), DoubleWell(Depth), new WellModel(Depth, 0.25), masterSeed: 5, parallel: Serial);
         var lnG = new double[WellNodes];
         var smooth = new bool[WellNodes];
         for (int k = 0; k < WellNodes; k++)
@@ -186,7 +186,7 @@ public sealed class SamcLearningTests
         // Two readings: the learned weights' own occupancy, exact by quadrature, against flat (the learning's accuracy),
         // and production's visits against that occupancy (production samples π_w on the frozen weights). Production's
         // per-node error runs at about one over the root of the round trips, some 600 here.
-        var result = MulticanonicalRun.Run(WellSpec(64_000, 40_000), DoubleWell(Depth), new WellModel(Depth, 0.25), masterSeed: 5);
+        var result = MulticanonicalRun.Run(WellSpec(64_000, 40_000), DoubleWell(Depth), new WellModel(Depth, 0.25), masterSeed: 5, parallel: Serial);
         FlatHistogramDiagnostics d = result.ProductionDiagnostics!;
         double[] predicted = WellOccupancy(result.Weights, Depth);
         double[] pi = result.Weights.FlatOccupancy();
@@ -229,7 +229,7 @@ public sealed class SamcLearningTests
     public void OneChain_LearnsAlone()
     {
         MulticanonicalWeights exact = WellFixedPoint(WellWindow, WellLowSlope, WellNodes, out _);
-        var result = MulticanonicalRun.Run(WellSpec(64_000, 1_000, chains: 1), DoubleWell(Depth), new WellModel(Depth, 0.25), masterSeed: 3);
+        var result = MulticanonicalRun.Run(WellSpec(64_000, 1_000, chains: 1), DoubleWell(Depth), new WellModel(Depth, 0.25), masterSeed: 3, parallel: Serial);
         double error = CentredRms(result.Weights.LogWeights, exact.LogWeights);
         _out.WriteLine($"[samc] one chain: centred RMS {error:F3}; verdict {result.Production!.Verdict.Outcome}");
         Assert.True(error < 0.3, $"one chain's learned ln w departs from θ* by {error:F3}");
@@ -241,7 +241,7 @@ public sealed class SamcLearningTests
     {
         int[] seeds = SeedTree.Derive(17, 2 * 4);
         var model = new WellModel(Depth, 0.25, stuckSeed: seeds[2]);
-        var result = MulticanonicalRun.Run(WellSpec(4_000, 4_000), DoubleWell(Depth), model, masterSeed: 17);
+        var result = MulticanonicalRun.Run(WellSpec(4_000, 4_000), DoubleWell(Depth), model, masterSeed: 17, parallel: Serial);
         _out.WriteLine($"[samc] stuck chain: learning round trips {string.Join(",", result.LearningDiagnostics.RoundTrips)}, " +
                        $"production {string.Join(",", result.ProductionDiagnostics!.RoundTrips)}");
         Assert.Equal([2], result.ProductionDiagnostics.ChainsWithoutRoundTrip);
@@ -256,7 +256,7 @@ public sealed class SamcLearningTests
         var narrow = new FlatHistogramWindow(-12.0, -2.0);
         MulticanonicalWeights exact = WellFixedPoint(narrow, WellLowSlope, 11, out _);
         FlatHistogramSpec spec = WellSpec(64_000, 20_000, window: narrow) with { Nodes = 11 };
-        var result = MulticanonicalRun.Run(spec, DoubleWell(Depth), new WellModel(Depth, 0.25), masterSeed: 13);
+        var result = MulticanonicalRun.Run(spec, DoubleWell(Depth), new WellModel(Depth, 0.25), masterSeed: 13, parallel: Serial);
         double error = CentredRms(result.Weights.LogWeights, exact.LogWeights);
         FlatHistogramDiagnostics d = result.ProductionDiagnostics!;
         _out.WriteLine($"[samc] narrow window: centred RMS {error:F3}; production in {d.InWindow} below {d.BelowWindow} above {d.AboveWindow}, " +
@@ -275,7 +275,7 @@ public sealed class SamcLearningTests
         var wide = new FlatHistogramWindow(-30.0, 6.0);
         MulticanonicalWeights exact = WellFixedPoint(wide, WellLowSlope, 37, out bool[] empty);
         FlatHistogramSpec spec = WellSpec(64_000, 20_000, window: wide) with { Nodes = 37 };
-        var result = MulticanonicalRun.Run(spec, DoubleWell(Depth), new WellModel(Depth, 0.25), masterSeed: 19);
+        var result = MulticanonicalRun.Run(spec, DoubleWell(Depth), new WellModel(Depth, 0.25), masterSeed: 19, parallel: Serial);
         bool[] full = Array.ConvertAll(empty, e => !e);
         double error = CentredRms(result.Weights.LogWeights, exact.LogWeights, full);
         IReadOnlyList<double> learned = result.Weights.LogWeights;
@@ -299,7 +299,7 @@ public sealed class SamcLearningTests
             Chains = 1, LearningIterations = script.Length, ProductionDraws = 1,
             Window = new FlatHistogramWindow(0.0, 10.0), LowSlope = 0.5, Nodes = 11, GainScale = 4.0,
         };
-        var result = MulticanonicalRun.Run(spec, SamplingTarget.Separable<double>(_ => 0.0, x => x), new ScriptedModel(script), masterSeed: 1);
+        var result = MulticanonicalRun.Run(spec, SamplingTarget.Separable<double>(_ => 0.0, x => x), new ScriptedModel(script), masterSeed: 1, parallel: Serial);
         FlatHistogramDiagnostics d = result.LearningDiagnostics;
         Assert.Equal([2L], d.RoundTrips);
         Assert.Equal(1, d.BelowWindow);

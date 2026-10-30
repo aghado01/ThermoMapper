@@ -44,7 +44,8 @@ public sealed record MulticanonicalResult<TState>(
 /// over the ensemble shell (<see cref="ChainEnsemble"/>), so D10's verdict reads π_w's functionals and the shell's
 /// checkpoint carries production. A learning iteration steps every chain once, in parallel at fixed weights, then
 /// applies one update from their visits in chain order and reweighs each chain's cached evaluation; the result does not
-/// depend on the parallelism bound. The model supplies the chains on the wrapped target
+/// depend on the parallelism bound. The weights start flat or from a tempering pilot's WHAM estimate
+/// (<see cref="Wham"/>), which can also give the window, b_lo and K. The model supplies the chains on the wrapped target
 /// (<see cref="IMulticanonicalModel{TState}"/>); the seeds are the shell's, from <see cref="SeedTree"/>.
 /// </summary>
 public static class MulticanonicalRun
@@ -54,17 +55,20 @@ public static class MulticanonicalRun
     /// at most <paramref name="iterations"/> iterations (a learning update or a production draw per chain each) before
     /// returning; null runs to the spec's lengths.
     /// </summary>
-    /// <param name="spec">The configuration.</param>
+    /// <param name="spec">The configuration; one whose window, b_lo or K is left to a pilot, or that starts from WHAM, needs
+    /// <paramref name="pilot"/>.</param>
     /// <param name="target">The target π_w wraps.</param>
     /// <param name="model">The chains and their functionals.</param>
     /// <param name="masterSeed">The seed the chains' streams derive from.</param>
+    /// <param name="pilot">A tempering pilot's rung draws (<see cref="TemperingPilot"/>); a resumed run takes its weights
+    /// from the checkpoint and reads none.</param>
     /// <param name="resumeFrom">A checkpoint of this run (same spec, seed and model fingerprint) to continue.</param>
     /// <param name="iterations">At most this many iterations in this call, ≥ 1; null for all that remain.</param>
     /// <param name="checkpoint">Whether to return the run's restart state; every chain must then save its state.</param>
     /// <param name="parallel">Bounds the fan-out over chains and carries cancellation; neither changes a result.</param>
     public static MulticanonicalResult<TState> Run<TState>(
         FlatHistogramSpec spec, ISamplingTarget<TState> target, IMulticanonicalModel<TState> model, int masterSeed,
-        MulticanonicalCheckpoint? resumeFrom = null, long? iterations = null,
+        TemperingPilot? pilot = null, MulticanonicalCheckpoint? resumeFrom = null, long? iterations = null,
         bool checkpoint = false, ParallelOptions? parallel = null)
     {
         ArgumentNullException.ThrowIfNull(spec);
@@ -86,7 +90,7 @@ public static class MulticanonicalRun
         int[] seeds = SeedTree.Derive(masterSeed, 2 * chains);
         if (resumeFrom is null)
         {
-            (MulticanonicalWeights start, double t0, long gainStart) = Resolve(spec);
+            (MulticanonicalWeights start, double t0, long gainStart) = Resolve(spec, pilot);
             learning = new SamcLearning(start, t0, gainStart);
             wrapped = new MulticanonicalTarget<TState>(target, start);
             learnHistogram = new HistogramAccumulator(start, chains);
@@ -119,9 +123,15 @@ public static class MulticanonicalRun
         {
             var levels = new double[chains];
             long steps = Math.Min(spec.LearningIterations - learning.Iterations, remaining);
+            bool serial = chains == 1 || parallel.MaxDegreeOfParallelism == 1;   // a fan-out per iteration costs more than a cheap kernel's step
             for (long i = 0; i < steps; i++)
             {
-                Parallel.For(0, chains, parallel, c => live[c].Step());
+                if (serial)
+                {
+                    parallel.CancellationToken.ThrowIfCancellationRequested();
+                    for (int c = 0; c < chains; c++) live[c].Step();
+                }
+                else Parallel.For(0, chains, parallel, c => live[c].Step());
                 for (int c = 0; c < chains; c++)
                 {
                     levels[c] = live[c].CurrentEvaluation.UntemperedLogLikelihood;
@@ -173,13 +183,18 @@ public static class MulticanonicalRun
             FlatHistogramDiagnostics.Merge(diagnostics), handles, restart, summary.SamplesUsed >= spec.ProductionDraws);
     }
 
-    // The starting weights, t₀ and the gain's start, from the spec.
-    private static (MulticanonicalWeights Start, double GainScale, long GainStart) Resolve(FlatHistogramSpec spec)
+    // The starting weights, t₀ and the gain's start, from the spec and, where it leaves them, the pilot.
+    private static (MulticanonicalWeights Start, double GainScale, long GainStart) Resolve(FlatHistogramSpec spec, TemperingPilot? pilot)
     {
-        if (spec.NeedsPilot)
-            throw new ArgumentException("A run without a pilot needs a flat start with its window, b_lo and K given.", nameof(spec));
-        var shape = MulticanonicalWeights.Flat(spec.Window!.Low, spec.Window.High, spec.LowSlope!.Value, spec.Nodes!.Value);
-        return (shape, spec.GainScale ?? 10.0 * shape.Nodes, spec.GainStart ?? 0);
+        if (spec.NeedsPilot && pilot is null)
+            throw new ArgumentException("The spec starts from WHAM or reads its window, b_lo or K from a tempering pilot, and none was given.", nameof(pilot));
+        FlatHistogramWindow window = spec.Window ?? Wham.Window(pilot!, spec.WindowQuantile, spec.WindowMargin);
+        double lowSlope = spec.LowSlope ?? pilot!.HotEnd;
+        int nodes = spec.Nodes ?? Wham.Nodes(pilot!, window);
+        var shape = MulticanonicalWeights.Flat(window.Low, window.High, lowSlope, nodes);
+        double t0 = spec.GainScale ?? 10.0 * nodes;
+        if (spec.Start == FlatHistogramStart.Flat) return (shape, t0, spec.GainStart ?? 0);
+        return (Wham.WarmStart(pilot!, shape), t0, spec.GainStart ?? pilot!.Draws / spec.Chains);
     }
 
     private static string Fingerprint<TState>(FlatHistogramSpec spec, IMulticanonicalModel<TState> model)
