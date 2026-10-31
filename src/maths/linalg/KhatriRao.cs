@@ -18,6 +18,11 @@ namespace Maths.LinAlg
     /// so the diagonal forms without the cancellation of XᵀX − nm·x̄x̄ᵀ (the BASS port's fixture F-O7).</item>
     /// <item><b>Scattered samples</b>, given as (case, location) pairs, accumulate each row's Hadamard product
     /// a_i ∘ h_l, skipping its zeros.</item>
+    /// <item><b>Tensor designs</b> (N-X1), whose rows are themselves face-splitting products: row i of X = B₁ ∗ … ∗ B_d is
+    /// the row-wise Kronecker product b¹ᵢ ⊗ … ⊗ bᵈᵢ of the axes' basis rows, as in a free-knot tensor-product spline surface.
+    /// Scattered samples accumulate G = Σᵢ xᵢxᵢᵀ over each row's nonzeros, O(n·(p+1)^(2d)) for B-splines of degree p, and a
+    /// full grid takes the Kronecker shortcut G = ⊗ₐ(BₐᵀBₐ). The Gram's columns are lexicographic with the first axis
+    /// slowest, so it is block-banded, with half-bandwidth <see cref="FaceSplittingHalfBandwidth"/>.</item>
     /// </list>
     /// Every inner product is a <see cref="PairwiseSum"/>. Factors are passed as columns: a[j] of length n, h[j] of
     /// length m.
@@ -156,22 +161,183 @@ namespace Maths.LinAlg
         {
             int count = Validate(a, h, out int n, out int m);
             RequireSamples(cases, locations, n, m);
-            // Blocks of PairwiseSum.Block samples are summed directly, and the blocks pairwise, by a binary cascade of
-            // partial sums (one per level), so memory stays O(M² log(samples)).
+            int[] caseOf = cases.ToArray(), locationOf = locations.ToArray();
+            return AccumulateGram(count, caseOf.Length, (r, z, nonzero) =>
+            {
+                int k = 0;
+                for (int j = 0; j < count; j++)
+                {
+                    z[j] = a[j][caseOf[r]] * h[j][locationOf[r]];
+                    if (z[j] != 0.0) nonzero[k++] = j;
+                }
+                return k;
+            });
+        }
+
+        /// <summary>
+        /// G = XᵀX for the tensor design X = B₁ ∗ … ∗ B_d (N-X1), the face-splitting product of the axes' bases
+        /// <paramref name="axes"/>, each n × νₐ for the same n samples: row i of X is the row-wise Kronecker product
+        /// b¹ᵢ ⊗ … ⊗ bᵈᵢ, columns lexicographic with axis 0 slowest. Each row's zeros are skipped, so a B-spline basis, with
+        /// p + 1 nonzeros a row on each axis, costs O(n·(p+1)^(2d)). Dense, for the designs whose Πνₐ a dense Gram holds.
+        /// </summary>
+        public static double[,] FaceSplittingGram(IReadOnlyList<double[,]> axes)
+        {
+            int rows = FaceSplittingShape(axes, out int[] widths, out int count);
+            var row = new FaceSplittingRow(axes, widths, count);
+            return AccumulateGram(count, rows, row.Fill);
+        }
+
+        /// <summary>Xᵀy for the tensor design of <see cref="FaceSplittingGram"/> and one response per sample.</summary>
+        public static double[] FaceSplittingCrossProducts(IReadOnlyList<double[,]> axes, ReadOnlySpan<double> y)
+        {
+            int rows = FaceSplittingShape(axes, out int[] widths, out int count);
+            if (y.Length != rows) throw new ArgumentException("Expected one response per sample.", nameof(y));
+            var row = new FaceSplittingRow(axes, widths, count);
+            double[] response = y.ToArray();
+            var levels = new List<double[]?>();
+            var block = new double[count];
+            var z = new double[count];
+            var nonzero = new int[count];
+            int inBlock = 0;
+            for (int r = 0; r < rows; r++)
+            {
+                int k = row.Fill(r, z, nonzero);
+                for (int p = 0; p < k; p++) block[nonzero[p]] += z[nonzero[p]] * response[r];
+                if (++inBlock == PairwiseSum.Block)
+                {
+                    Carry(levels, block);
+                    block = new double[count];
+                    inBlock = 0;
+                }
+            }
+            if (inBlock > 0) Carry(levels, block);
+            var total = new double[count];
+            foreach (double[]? level in levels)
+            {
+                if (level is null) continue;
+                for (int t = 0; t < count; t++) total[t] += level[t];
+            }
+            return total;
+        }
+
+        /// <summary>
+        /// The half-bandwidth of the Gram of the tensor design of <see cref="FaceSplittingGram"/>: the widest span between a
+        /// row's first and last nonzero column, which bounds |i − j| over the Gram's nonzero entries and meets it. For linear
+        /// B-splines on two axes it is p·ν₂ + p at p = 1; a caller that declares it chooses the
+        /// factor of the Gram by it.
+        /// </summary>
+        public static int FaceSplittingHalfBandwidth(IReadOnlyList<double[,]> axes)
+        {
+            int rows = FaceSplittingShape(axes, out int[] widths, out int count);
+            var stride = new long[widths.Length];
+            long s = 1;
+            for (int a = widths.Length - 1; a >= 0; a--)
+            {
+                stride[a] = s;
+                s *= widths[a];
+            }
+            long band = 0;
+            for (int r = 0; r < rows; r++)
+            {
+                long first = 0, last = 0;
+                bool empty = false;
+                for (int a = 0; a < widths.Length && !empty; a++)
+                {
+                    int lo = -1, hi = -1;
+                    for (int j = 0; j < widths[a]; j++)
+                        if (axes[a][r, j] != 0.0)
+                        {
+                            if (lo < 0) lo = j;
+                            hi = j;
+                        }
+                    if (lo < 0) empty = true;
+                    else
+                    {
+                        first += lo * stride[a];
+                        last += hi * stride[a];
+                    }
+                }
+                if (!empty) band = Math.Max(band, last - first);
+            }
+            return checked((int)band);
+        }
+
+        /// <summary>
+        /// G = ⊗ₐ(BₐᵀBₐ) for a tensor design on a full grid (N-X1's Cartesian shortcut): the samples are every combination of
+        /// the axes' own samples, so X = B₁ ⊗ … ⊗ B_d and its Gram is the Kronecker product of the axes' Grams. The axes' row
+        /// counts are their own grids' sizes. Columns lexicographic with axis 0 slowest, as <see cref="FaceSplittingGram"/>.
+        /// </summary>
+        public static double[,] KroneckerGram(IReadOnlyList<double[,]> axes)
+        {
+            ArgumentNullException.ThrowIfNull(axes);
+            if (axes.Count == 0) throw new ArgumentException("A tensor design needs an axis.", nameof(axes));
+            double[,]? gram = null;
+            foreach (double[,] axis in axes)
+            {
+                ArgumentNullException.ThrowIfNull(axis);
+                int rows = axis.GetLength(0), width = axis.GetLength(1);
+                if (rows == 0 || width == 0) throw new ArgumentException("Every axis needs samples and basis functions.", nameof(axes));
+                var columns = new double[width][];
+                for (int j = 0; j < width; j++)
+                {
+                    columns[j] = new double[rows];
+                    for (int i = 0; i < rows; i++) columns[j][i] = axis[i, j];
+                }
+                var g = new double[width, width];
+                for (int i = 0; i < width; i++)
+                    for (int j = 0; j <= i; j++) g[i, j] = g[j, i] = PairwiseSum.Dot(columns[i], columns[j]);
+                if (gram is null)
+                {
+                    gram = g;
+                    continue;
+                }
+                int outer = gram.GetLength(0);
+                if ((long)outer * width > MaxDenseOrder) throw new ArgumentException("The Gram is too large to hold densely.", nameof(axes));
+                var product = new double[outer * width, outer * width];
+                for (int i = 0; i < outer; i++)
+                    for (int j = 0; j < outer; j++)
+                        for (int k = 0; k < width; k++)
+                            for (int l = 0; l < width; l++) product[i * width + k, j * width + l] = gram[i, j] * g[k, l];
+                gram = product;
+            }
+            return gram!;
+        }
+
+        /// <summary>Xᵀy over scattered samples: h_j = Σ_r a_j[i_r]·h_j[l_r]·y_r.</summary>
+        public static double[] ScatteredCrossProducts(double[][] a, double[][] h, ReadOnlySpan<int> cases, ReadOnlySpan<int> locations, ReadOnlySpan<double> y)
+        {
+            int count = Validate(a, h, out int n, out int m);
+            RequireSamples(cases, locations, n, m);
+            if (y.Length != cases.Length) throw new ArgumentException("Expected one response per sample.", nameof(y));
+            var result = new double[count];
+            var terms = new double[cases.Length];
+            for (int j = 0; j < count; j++)
+            {
+                for (int r = 0; r < cases.Length; r++) terms[r] = a[j][cases[r]] * h[j][locations[r]] * y[r];
+                result[j] = PairwiseSum.Of(terms);
+            }
+            return result;
+        }
+
+        private const int MaxDenseOrder = 46340;
+
+        // One row's nonzero columns, ascending, and their values: fills z at those columns and returns how many.
+        private delegate int RowFiller(int row, double[] z, int[] nonzero);
+
+        // G = Σ_r z_r z_rᵀ over `rows` rows of `count` columns. Blocks of PairwiseSum.Block rows are summed directly, and the
+        // blocks pairwise, by a binary cascade of partial sums (one per level), so memory stays O(count² log rows).
+        private static double[,] AccumulateGram(int count, int rows, RowFiller fill)
+        {
+            if (count > MaxDenseOrder) throw new ArgumentException($"{count} columns are too many for a dense Gram.");
             int packed = count * (count + 1) / 2;
             var levels = new List<double[]?>();
             var block = new double[packed];
             var z = new double[count];
             var nonzero = new int[count];
             int inBlock = 0;
-            for (int r = 0; r < cases.Length; r++)
+            for (int r = 0; r < rows; r++)
             {
-                int k = 0;
-                for (int j = 0; j < count; j++)
-                {
-                    z[j] = a[j][cases[r]] * h[j][locations[r]];
-                    if (z[j] != 0.0) nonzero[k++] = j;
-                }
+                int k = fill(r, z, nonzero);
                 for (int p = 0; p < k; p++)
                     for (int q = 0; q <= p; q++)
                     {
@@ -200,20 +366,73 @@ namespace Maths.LinAlg
             return g;
         }
 
-        /// <summary>Xᵀy over scattered samples: h_j = Σ_r a_j[i_r]·h_j[l_r]·y_r.</summary>
-        public static double[] ScatteredCrossProducts(double[][] a, double[][] h, ReadOnlySpan<int> cases, ReadOnlySpan<int> locations, ReadOnlySpan<double> y)
+        // The axes' shared sample count, widths and the product of the widths.
+        private static int FaceSplittingShape(IReadOnlyList<double[,]> axes, out int[] widths, out int count)
         {
-            int count = Validate(a, h, out int n, out int m);
-            RequireSamples(cases, locations, n, m);
-            if (y.Length != cases.Length) throw new ArgumentException("Expected one response per sample.", nameof(y));
-            var result = new double[count];
-            var terms = new double[cases.Length];
-            for (int j = 0; j < count; j++)
+            ArgumentNullException.ThrowIfNull(axes);
+            if (axes.Count == 0) throw new ArgumentException("A tensor design needs an axis.", nameof(axes));
+            int rows = -1;
+            widths = new int[axes.Count];
+            long product = 1;
+            for (int a = 0; a < axes.Count; a++)
             {
-                for (int r = 0; r < cases.Length; r++) terms[r] = a[j][cases[r]] * h[j][locations[r]] * y[r];
-                result[j] = PairwiseSum.Of(terms);
+                double[,] axis = axes[a] ?? throw new ArgumentException($"Axis {a} is null.", nameof(axes));
+                if (rows < 0) rows = axis.GetLength(0);
+                if (axis.GetLength(0) != rows) throw new ArgumentException("Every axis needs one row per sample.", nameof(axes));
+                widths[a] = axis.GetLength(1);
+                if (widths[a] == 0) throw new ArgumentException($"Axis {a} has no basis function.", nameof(axes));
+                product *= widths[a];
+                if (product > MaxDenseOrder) throw new ArgumentException("The Gram is too large to hold densely.", nameof(axes));
             }
-            return result;
+            count = (int)product;
+            return rows;
+        }
+
+        // Row i of a face-splitting product, expanded axis by axis from the axes' nonzeros, which come out ascending.
+        private sealed class FaceSplittingRow
+        {
+            private readonly IReadOnlyList<double[,]> _axes;
+            private readonly int[] _widths;
+            private int[] _columns, _nextColumns;
+            private double[] _values, _nextValues;
+
+            public FaceSplittingRow(IReadOnlyList<double[,]> axes, int[] widths, int count)
+            {
+                _axes = axes;
+                _widths = widths;
+                _columns = new int[count];
+                _nextColumns = new int[count];
+                _values = new double[count];
+                _nextValues = new double[count];
+            }
+
+            public int Fill(int row, double[] z, int[] nonzero)
+            {
+                int total = 1;
+                _columns[0] = 0;
+                _values[0] = 1.0;
+                for (int a = 0; a < _axes.Count; a++)
+                {
+                    int next = 0, width = _widths[a];
+                    for (int t = 0; t < total; t++)
+                        for (int j = 0; j < width; j++)
+                        {
+                            double v = _axes[a][row, j];
+                            if (v == 0.0) continue;
+                            _nextColumns[next] = _columns[t] * width + j;
+                            _nextValues[next++] = _values[t] * v;
+                        }
+                    (_columns, _nextColumns) = (_nextColumns, _columns);
+                    (_values, _nextValues) = (_nextValues, _values);
+                    total = next;
+                }
+                for (int t = 0; t < total; t++)
+                {
+                    z[_columns[t]] = _values[t];
+                    nonzero[t] = _columns[t];
+                }
+                return total;
+            }
         }
 
         // Adds a block's partial sums to the cascade as a binary counter adds one: equal-sized partial sums merge.
