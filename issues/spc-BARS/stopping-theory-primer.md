@@ -274,7 +274,7 @@ entropy) suit it better.
 | C40 | A threshold set by replica noise makes "quiet" depend on the budget; certifying an absence needs a margin, the scale of interest | §13.7 | Argued here | none needed |
 | C41 | An interval is resolved when the trapezoid of its endpoint slopes matches its exact increment (ΔS₂, or Δ⟨E⟩ for energy), within error; the mismatch shrinks like h² | §13.5 | Derived here (exact integral; trapezoid error); unverified on SW data | E7 |
 | C42 | A replica stuck in one basin mixes well inside it, so no single-chain diagnostic or ESS weighting reveals it; only comparison across replicas does | §13.6 | Standard (the reason R̂ exists) | E10 |
-| C43 | For q ≥ 1, Bernoulli(p̃) ≤ Potts(q) ≤ Bernoulli(p) in the random-cluster order, p̃ = p/(p + q(1 − p)), so every increasing functional (S₂, F_n, τ_e) lies between two independent-bond percolations | §13.13 | Grimmett's comparison inequalities, cited from memory; consistent with C23 (lower side, on a tree) and C30 (one edge's crossing) | Confirm the citation; E14 |
+| C43 | For q ≥ 1, Bernoulli(p̃) ≤ Potts(q) ≤ Bernoulli(p) in the random-cluster order, p̃ = p/(p + q(1 − p)), so every increasing functional (S₂, F_n, τ_e) lies between two independent-bond percolations | §13.13 | Checked against Grimmett (2006), Theorem 3.21: (3.22) with q₂ = 1 gives the upper side, (3.23) with q₂ = 1 the lower; consistent with C23 (lower side, on a tree) and C30 (one edge's crossing) | E14 |
 
 ---
 
@@ -2127,7 +2127,7 @@ a whole.
 - **E13. A width predictor from the graph.** Predict each melt's width from its cluster's internal coupling spread;
   compare with the measured widths on the toy, BlattHierarchy and AnisotropicGaussian.
 - **E14. The percolation sandwich (§13.13), after the graph compiler revision.** Both percolation curves on the toy,
-  BlattHierarchy (both graphs) and Landsat: does every SW curve sit between them (a check of C43's citation too)? How
+  BlattHierarchy (both graphs) and Landsat: does every SW curve sit between them, as C43 requires? How
   wide is the sandwich at each event? Does the bracket recipe hold the toy's cold edge (C22)?
 
 ### 13.13 Addendum, 2026-10-31: a percolation sandwich, from the CumulativeField question
@@ -2139,9 +2139,14 @@ a cheap way to learn about a system up front, through a mean-field "thermal curv
   maps merges onto temperature has no proven relation to SW, so its order of significant merges is the part to read.
 - **The continuum that pays is the random-cluster family in q (C43).** The FK measure is defined for every real q ≥ 1;
   at q = 1 it is independent-bond percolation, with exact independent samples and no Markov chain. Grimmett's comparison
-  inequalities (Theorem 3.21, cited from memory; confirm both q directions) sandwich Potts between two percolations:
-  Bernoulli(p̃) ≤ Potts(q) ≤ Bernoulli(p), with p = 1 − e^(−J_e/T) and p̃ = p/(p + q(1 − p)), for every increasing
-  functional: S₂, F_n, ⟨Σ c ln c⟩, each τ_e.
+  inequalities sandwich Potts between two percolations: Bernoulli(p̃) ≤ Potts(q) ≤ Bernoulli(p), with
+  p = 1 − e^(−J_e/T) and p̃ = p/(p + q(1 − p)), for every increasing functional: S₂, F_n, ⟨Σ c ln c⟩, each τ_e.
+  - *The source* (Grimmett, *The Random-Cluster Model*, 2006, Theorem 3.21; a markdown copy in
+    `D:\aghado01\graveyard\bibliotecha\bibliotecha\codices\Grimmett2006`, Chapter 3, §3.4). (3.22):
+    φ_{p₁,q₁} ≤st φ_{p₂,q₂} if q₁ ≥ q₂, q₁ ≥ 1 and p₁ ≤ p₂; with q₂ = 1 and p₁ = p₂ = p, the upper side. (3.23):
+    φ_{p₁,q₁} ≥st φ_{p₂,q₂} if q₁ ≥ q₂, q₁ ≥ 1 and p₁/(q₁(1 − p₁)) ≥ p₂/(q₂(1 − p₂)); with q₂ = 1 and equality, p₂ = p̃,
+    the lower side. The copy's extraction garbles (3.23)'s fraction; the reading above is the only one consistent with
+    monotonicity in p (at q₁ = q₂ it must reduce to p₁ ≥ p₂).
   - C23's tree bound is the lower side restricted to a spanning tree; on the full graph the lower bound is tighter. The
     upper side is new here.
   - C30's rigid-block split T = C/ln(q + 1) is the lower bound's crossing for a single edge of coupling C.
