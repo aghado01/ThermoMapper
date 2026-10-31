@@ -149,7 +149,7 @@ Newest first.
 
 **For the user to decide.**
 - The thumb drive's path, for the 41 MB of archivables. They are small; the drive's real lever is outside this repo.
-- Whether to move `lean/.lake` to C: behind a junction.
+- ~~Whether to move `lean/.lake` to C: behind a junction.~~ Decided: leave it where it is.
 - `git gc`, once the chips finish.
 - `.codex`, and the loose `artifacts/` files.
 - Whether to add `StorageAudit` and `StorageAudit.Tests` to `ThermoMapper.sln`. The solution file wasn't in this chip's list of files.
