@@ -105,7 +105,8 @@ public sealed class BassParticleTarget : ISamplingTarget<BassParticle>
 
 /// <summary>
 /// BASS's SMC mutation (stage 8; D04, D05): each move is one sweep of D04's chain at the stage's b, the structure move on
-/// D01's schedule, then τ's slice step when τ is sampled. The structure move accepts on ℓ_b(new) − ℓ_b(old) plus the
+/// D01's schedule, then τ's slice step when τ is sampled and the observation model's later slots (<see cref="BassSweepSlots"/>,
+/// empty for Gaussian BASS). The structure move accepts on ℓ_b(new) − ℓ_b(old) plus the
 /// untempered prior and proposal ratios, and τ's slice targets p(τ)·p_b, so every sweep leaves the stage's π_b invariant.
 /// <list type="bullet">
 /// <item><b>Streams.</b> A sweep runs on the stream SMC hands its particle, through a reversible-jump chain over the

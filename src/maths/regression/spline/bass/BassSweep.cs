@@ -474,7 +474,8 @@ public sealed class BassTauBlock : IBlock<ReversibleJumpChain<BassState>>
 
 /// <summary>
 /// One untempered chain (D04's sweep): each step is a structure move on D01's schedule, then τ's slice step when
-/// τ is sampled, run as a <see cref="BlockScan{TState}"/> over the reversible-jump chain. The moves draw from the chain's stream
+/// τ is sampled and the observation model's later slots (<see cref="BassSweepSlots"/>, empty for Gaussian BASS), run as a
+/// <see cref="BlockScan{TState}"/> over the reversible-jump chain. The moves draw from the chain's stream
 /// and τ's block from the scan's. <see cref="Compose"/> gives a retained draw at the current state.
 /// </summary>
 public sealed class BassChain
