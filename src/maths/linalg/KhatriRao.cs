@@ -21,43 +21,54 @@ namespace Maths.LinAlg
     /// </list>
     /// Every inner product is a <see cref="PairwiseSum"/>. Factors are passed as columns: a[j] of length n, h[j] of
     /// length m.
+    /// <para><b>The output-side inner product (F-X6).</b> The direct contractions are written with Q, the declared inner
+    /// product on the output index (<see cref="IInnerProduct"/>): G = (AᵀA)∘(HᵀQH) and h_j = a_jᵀ·Y·Q·h_j, the weight of a
+    /// residual with covariance σ²(I ⊗ R) being I ⊗ Q with Q = R⁻¹. Only the output-side factors change; the case side and
+    /// the separable algebra stay. A null product is Q = I, which takes the unweighted arithmetic above exactly. The centred
+    /// forms serve Q = I: under Q the intercept's orthogonal complement is the Q-centred one, and the three-term form
+    /// carries over with m replaced by 1ᵀQ1, the means by Q-weighted means (1ᵀQh/1ᵀQ1) and the factors' inner products by
+    /// hᵀQh, which is the correlated-residual extension's to write.</para>
     /// </summary>
     public static class KhatriRao
     {
-        /// <summary>G = XᵀX = (AᵀA)∘(HᵀH).</summary>
-        public static double[,] Gram(double[][] a, double[][] h)
+        /// <summary>G = XᵀW X = (AᵀA)∘(HᵀQH), with W = I ⊗ Q; XᵀX = (AᵀA)∘(HᵀH) for a null <paramref name="output"/>.</summary>
+        public static double[,] Gram(double[][] a, double[][] h, IInnerProduct? output = null)
         {
-            int count = Validate(a, h, out _, out _);
+            int count = Validate(a, h, out _, out int m);
+            IInnerProduct q = Product(output, m);
             var g = new double[count, count];
             for (int i = 0; i < count; i++)
                 for (int j = 0; j <= i; j++)
-                    g[i, j] = g[j, i] = PairwiseSum.Dot(a[i], a[j]) * PairwiseSum.Dot(h[i], h[j]);
+                    g[i, j] = g[j, i] = PairwiseSum.Dot(a[i], a[j]) * q.Dot(h[i], h[j]);
             return g;
         }
 
         /// <summary>A new column a_new ⊗ h_new against the existing ones, in order (a birth's border), and its squared
         /// norm in <paramref name="diagonal"/>.</summary>
-        public static double[] Border(double[][] a, double[][] h, double[] aNew, double[] hNew, out double diagonal)
+        public static double[] Border(double[][] a, double[][] h, double[] aNew, double[] hNew, out double diagonal,
+                                      IInnerProduct? output = null)
         {
             int count = Validate(a, h, out int n, out int m);
             RequireLength(aNew, n, nameof(aNew));
             RequireLength(hNew, m, nameof(hNew));
+            IInnerProduct q = Product(output, m);
             var u = new double[count];
-            for (int k = 0; k < count; k++) u[k] = PairwiseSum.Dot(a[k], aNew) * PairwiseSum.Dot(h[k], hNew);
-            diagonal = PairwiseSum.Dot(aNew, aNew) * PairwiseSum.Dot(hNew, hNew);
+            for (int k = 0; k < count; k++) u[k] = PairwiseSum.Dot(a[k], aNew) * q.Dot(h[k], hNew);
+            diagonal = PairwiseSum.Dot(aNew, aNew) * q.Dot(hNew, hNew);
             return u;
         }
 
-        /// <summary>Xᵀvec(Y): h_j = a_jᵀ·Y·h_j, with Y n × m.</summary>
-        public static double[] CrossProducts(double[][] a, double[][] h, double[,] y)
+        /// <summary>XᵀW vec(Y): h_j = a_jᵀ·Y·Q·h_j, with Y n × m; Xᵀvec(Y) for a null <paramref name="output"/>.</summary>
+        public static double[] CrossProducts(double[][] a, double[][] h, double[,] y, IInnerProduct? output = null)
         {
             int count = Validate(a, h, out int n, out int m);
             RequireResponse(y, n, m);
+            IInnerProduct q = Product(output, m);
             var result = new double[count];
             var yh = new double[n];
             for (int j = 0; j < count; j++)
             {
-                for (int i = 0; i < n; i++) yh[i] = PairwiseSum.Dot(Row(y, i, m), h[j]);
+                for (int i = 0; i < n; i++) yh[i] = q.Dot(Row(y, i, m), h[j]);
                 result[j] = PairwiseSum.Dot(a[j], yh);
             }
             return result;
@@ -271,6 +282,15 @@ namespace Maths.LinAlg
                 RequireLength(h[j], m, nameof(h));
             }
             return a.Length;
+        }
+
+        // The declared product, the identity when none; one that acts on another output length is refused.
+        private static IInnerProduct Product(IInnerProduct? output, int m)
+        {
+            if (output is null) return IdentityInnerProduct.Instance;
+            if (output.Dimension != 0 && output.Dimension != m)
+                throw new ArgumentException($"The inner product acts on {output.Dimension} output locations, not {m}.", nameof(output));
+            return output;
         }
 
         private static void RequireLength(double[] x, int length, string name)

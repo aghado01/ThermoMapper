@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.LinAlg;
 using Maths.Samplers;
 using Maths.Samplers.Blocks;
 using Maths.Samplers.Rjmcmc;
@@ -7,13 +8,15 @@ using Maths.Samplers.Rjmcmc;
 namespace Maths.Regression.Spline.Bass;
 
 /// <summary>
-/// What an observation model hands the Gaussian core (F-X1): the working response y − offset and the observation weights
-/// W, the precisions the core's normal equations carry (ZᵀWZ, ZᵀWỹ). Gaussian BASS hands the response itself and unit
-/// weights, so its marginal and draws are the core's own. A variance-mean mixture (generalized-hyperbolic noise) hands
-/// y − β√w·v with weights 1/(w·v) at the current latent state, where a scale mixture hands weights alone.
-/// <para>The core fits the working response. Weights are carried by the contract and refused by today's core
-/// (<see cref="BassDesign"/>), which holds the unweighted Gram: the weighted Gram, centring and marginal arrive with the
-/// extension that supplies weights.</para>
+/// What an observation model hands the Gaussian core (F-X1, F-X6): the working response y − offset, the observation
+/// weights W, the precisions the core's normal equations carry (ZᵀWZ, ZᵀWỹ), and, for a direct functional response, the
+/// inner product Q on the output index that a residual correlated along it declares (covariance σ²(I ⊗ R), Q = R⁻¹).
+/// Gaussian BASS hands the response itself, unit weights and Q = I, so its marginal and draws are the core's own. A
+/// variance-mean mixture (generalized-hyperbolic noise) hands y − β√w·v with weights 1/(w·v) at the current latent state,
+/// where a scale mixture hands weights alone.
+/// <para>The core fits the working response. Weights and a Q other than the identity are carried by the contract and refused
+/// by today's core (<see cref="BassDesign"/>), which holds the unweighted, independent Gram: the weighted Gram, the centring
+/// under Q and the marginal's Σᵢ yᵢᵀQyᵢ and log|R| terms arrive with the extensions that supply them.</para>
 /// </summary>
 public sealed class WorkingResponse
 {
@@ -22,12 +25,21 @@ public sealed class WorkingResponse
 
     /// <summary>The working response of <paramref name="response"/> less <paramref name="offset"/> (one value per
     /// observation, case by case and location by location; none is zero), with <paramref name="weights"/> (positive, one per
-    /// observation; none is unit). Both are copied.</summary>
-    public WorkingResponse(BassResponse response, ReadOnlySpan<double> offset = default, ReadOnlySpan<double> weights = default)
+    /// observation; none is unit) and <paramref name="output"/>, the inner product on the output index (none is the identity;
+    /// a direct functional response's only). The arrays are copied.</summary>
+    public WorkingResponse(BassResponse response, ReadOnlySpan<double> offset = default, ReadOnlySpan<double> weights = default,
+                           IInnerProduct? output = null)
     {
         ArgumentNullException.ThrowIfNull(response);
         int n = response.Observations;
         Response = response;
+        Output = output ?? IdentityInnerProduct.Instance;
+        if (!Output.IsIdentity)
+        {
+            if (response is not FunctionalResponse) throw new ArgumentException("A scalar response has no output index.", nameof(output));
+            if (Output.Dimension != response.Locations)
+                throw new ArgumentException($"The inner product acts on {Output.Dimension} output locations, the response has {response.Locations}.", nameof(output));
+        }
         if (!offset.IsEmpty)
         {
             if (offset.Length != n) throw new ArgumentException($"The offset has {offset.Length} values for {n} observations.", nameof(offset));
@@ -63,6 +75,9 @@ public sealed class WorkingResponse
 
     /// <summary>Whether the weights are unit.</summary>
     public bool IsUnweighted => _weights is null;
+
+    /// <summary>Q, the inner product on the output index; the identity for independent noise.</summary>
+    public IInnerProduct Output { get; }
 }
 
 /// <summary>

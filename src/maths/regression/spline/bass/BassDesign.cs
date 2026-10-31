@@ -114,6 +114,7 @@ public sealed class BassDesign
     private readonly BassAdmission _rules;
     private readonly bool _functional, _ridge;
     private readonly int _cases, _locations, _rows;
+    private readonly IInnerProduct _output;         // Q on the output index; the identity for independent noise
     private readonly double[] _y;                   // ỹ, case by case and location by location
     private readonly double[] _residual;
     private readonly List<BassTerm> _terms = [];
@@ -148,11 +149,14 @@ public sealed class BassDesign
         if (!ReferenceEquals(working.Response, data.Response)) throw new ArgumentException("The working response is of another response.", nameof(working));
         if (!working.IsUnweighted)
             throw new NotSupportedException("The core holds the unweighted Gram; weights arrive with the extension that supplies them (F-X1).");
+        _output = working.Output;
+        if (!_output.IsIdentity)
+            throw new NotSupportedException("The core holds the independent Gram; a Q other than the identity arrives with the extension that centres under it (F-X6).");
         ReadOnlySpan<double> y = working.Values;
         ResponseMean = PairwiseSum.Of(y) / _rows;
         _y = new double[_rows];
         for (int i = 0; i < _rows; i++) _y[i] = y[i] - ResponseMean;
-        ResponseSquares = PairwiseSum.Dot(_y, _y);
+        ResponseSquares = _output.Dot(_y, _y);
         _residual = (double[])_y.Clone();
         ResidualSquares = ResponseSquares;
         _factor = new BorderedCholesky(Math.Min(InitialCapacity, Math.Max(rules.MaxBasis, 1)));
@@ -503,7 +507,7 @@ public sealed class BassDesign
         var eta = new double[h.Length];
         for (int i = 0; i < a.Length; i++) alpha[i] = a[i] - aBar;
         for (int r = 0; r < h.Length; r++) eta[r] = h[r] - hBar;
-        double aa = PairwiseSum.Dot(alpha, alpha), hh = PairwiseSum.Dot(eta, eta);
+        double aa = PairwiseSum.Dot(alpha, alpha), hh = _output.Dot(eta, eta);
         return aa * hh + a.Length * aBar * aBar * hh + h.Length * hBar * hBar * aa;
     }
 
@@ -513,7 +517,7 @@ public sealed class BassDesign
     {
         if (!_functional) return PairwiseSum.Dot(column, v);
         var vh = new double[_cases];
-        for (int i = 0; i < _cases; i++) vh[i] = PairwiseSum.Dot(v.AsSpan(i * _locations, _locations), output);
+        for (int i = 0; i < _cases; i++) vh[i] = _output.Dot(v.AsSpan(i * _locations, _locations), output);
         return PairwiseSum.Dot(column, vh);
     }
 
@@ -572,7 +576,7 @@ public sealed class BassDesign
         if (_functional) h.Add(output!);
         var r = new double[_rows];
         Fit(a, h, beta, r);
-        return PairwiseSum.Dot(r, r);
+        return _output.Dot(r, r);
     }
 
     // r = ỹ − Z_cβ, into r.
@@ -604,7 +608,7 @@ public sealed class BassDesign
         double[] b = [.. _b];
         _beta = _terms.Count == 0 ? [] : _factor.Solve(b);
         Fit(_a, _h, _beta, _residual);
-        ResidualSquares = PairwiseSum.Dot(_residual, _residual);
+        ResidualSquares = _output.Dot(_residual, _residual);
         FittedSquares = _terms.Count == 0 ? 0.0 : PairwiseSum.Dot(b, _beta);
     }
 
