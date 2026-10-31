@@ -231,79 +231,66 @@ public sealed class BassFlatHistogramQualificationTests
     private static readonly int[] SweepSeeds = [ArmOneSeed, SecondSeed, .. Enumerable.Range(8301, 14)];
     private const int ThirdSeed = 8417;
 
-    // Each seed's arm (i) pilot over the shape its run resolves. Before: SAMC's fixed point on ĝ as it stands. After: the
-    // warm start, the nodes under ThinDraws (10) pilot draws tied where the fixed point refuses ĝ; where it accepts, the
-    // warm start must be its limit bit for bit. Beside them, as readings, the candidates measured before this sweep on
-    // fixture A, its gap pilots and the double well: ties at 1, 2 and 5 draws; the nodes under 2 draws emptied, their atoms
-    // set aside so the empty-node rule interpolates them; and the grid coarsened by halving until the fixed point accepts.
-    // What would count, written before the run: nothing is ruled; the refusal rates before and after are the check.
-    [Fact]
-    public void Friedman_WarmStart_RefusalsBeforeAndAfter_OverSixteenPilots()
+    // Each seed's arm (i) pilot over the shape its run resolves, one case a seed so each row is read as it lands. Before:
+    // SAMC's fixed point on ĝ as it stands. After: the warm start, the nodes under ThinDraws (10) pilot draws tied where the
+    // fixed point refuses ĝ; where it accepts, the warm start must be its limit bit for bit. Beside them, as readings, the
+    // candidates measured before this sweep on fixture A, its gap pilots and the double well: ties at 1, 2 and 5 draws; the
+    // nodes under 2 draws emptied, their atoms set aside so the empty-node rule interpolates them; and the grid coarsened
+    // by halving until the fixed point accepts. What would count, written before the run: nothing is ruled; the refusal
+    // rates before and after, over the sixteen rows, are the check.
+    public static IEnumerable<object[]> SweepSeedData => SweepSeeds.Select(s => new object[] { s });
+
+    [Theory]
+    [MemberData(nameof(SweepSeedData))]
+    public void Friedman_WarmStart_RefusalsBeforeAndAfter_OverSixteenPilots(int seed)
     {
-        if (!BassQualification.Enabled) return;   // sixteen pilots, about a minute each
+        if (!BassQualification.Enabled) return;   // a pilot, about a minute
         Assert.DoesNotContain(ThirdSeed, SweepSeeds);
-        double[] ties = [1.0, 2.0, 5.0];
-        int before = 0, after = 0;
-        var tieRefusals = new int[ties.Length];
-        int emptiedRefusals = 0;
         var clock = Stopwatch.StartNew();
-        foreach (int seed in SweepSeeds)
+        (TemperingPilot pilot, MulticanonicalWeights shape) = ArmOnePilot(seed);
+        WhamEstimate estimate = Wham.Estimate(pilot);
+        double[] draws = Wham.NodeDraws(pilot, shape);
+        MulticanonicalWeights? plain = null;
+        string verdict;
+        try
         {
-            (TemperingPilot pilot, MulticanonicalWeights shape) = ArmOnePilot(seed);
-            WhamEstimate estimate = Wham.Estimate(pilot);
-            double[] draws = Wham.NodeDraws(pilot, shape);
-            MulticanonicalWeights? plain = null;
-            string verdict;
-            try
-            {
-                plain = SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _);
-                verdict = "accepted";
-            }
-            catch (InvalidOperationException e)
-            {
-                before++;
-                (int at, double gap) = FlatHistogramLimit.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
-                verdict = $"refused ({e.Message[(e.Message.LastIndexOf(' ') + 1)..].TrimEnd('.')} from flat; outside the hull at segment {at}, by {gap:F4})";
-            }
-            string afterVerdict;
-            try
-            {
-                MulticanonicalWeights start = Wham.WarmStart(pilot, shape, Wham.ThinDraws, out int[] tied);
-                if (plain is not null) Assert.Equal(BassFlatHistogramTests.StartHash([plain]), BassFlatHistogramTests.StartHash([start]));
-                afterVerdict = plain is not null ? "as it stood" : $"tied [{string.Join(", ", tied)}]";
-            }
-            catch (InvalidOperationException e)
-            {
-                after++;
-                afterVerdict = e.Message;
-            }
-            var readings = new List<string>();
-            if (plain is null)
-            {
-                for (int t = 0; t < ties.Length; t++)
-                {
-                    try
-                    {
-                        Wham.WarmStart(pilot, shape, ties[t], out int[] tied);
-                        readings.Add($"tied at {ties[t]:G}: {tied.Length} nodes");
-                    }
-                    catch (InvalidOperationException)
-                    {
-                        tieRefusals[t]++;
-                        readings.Add($"tied at {ties[t]:G}: refused");
-                    }
-                }
-                bool emptied = Emptied(shape, estimate, draws, 2.0);
-                if (!emptied) emptiedRefusals++;
-                readings.Add($"emptied at 2: {(emptied ? "accepted" : "refused")}");
-                readings.Add($"coarsened: accepted at K {Coarsened(shape, estimate)}");
-            }
-            _out.WriteLine($"  seed {seed}: window [{shape.Low:G6}, {shape.High:G6}], K {shape.Nodes}; nodes under 10 draws " +
-                           $"[{string.Join(", ", Enumerable.Range(0, shape.Nodes).Where(k => draws[k] < 10.0))}]; before {verdict}; after {afterVerdict}" +
-                           (readings.Count > 0 ? $"; {string.Join("; ", readings)}" : ""));
+            plain = SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _);
+            verdict = "accepted";
         }
-        _out.WriteLine($"## {SweepSeeds.Length} Friedman pilots (arm i): the fixed point refused {before}, the warm start {after}; of the refused, ties at " +
-                       $"{string.Join(", ", ties.Select((t, i) => $"{t:G} refused {tieRefusals[i]}"))}, emptied at 2 refused {emptiedRefusals}; {clock.Elapsed.TotalSeconds:F0} s");
+        catch (InvalidOperationException e)
+        {
+            (int at, double gap) = FlatHistogramLimit.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
+            verdict = $"refused ({e.Message[(e.Message.LastIndexOf(' ') + 1)..].TrimEnd('.')} from flat; outside the hull at segment {at}, by {gap:F4})";
+        }
+        string after;
+        try
+        {
+            MulticanonicalWeights start = Wham.WarmStart(pilot, shape, Wham.ThinDraws, out int[] tied);
+            if (plain is not null) Assert.Equal(BassFlatHistogramTests.StartHash([plain]), BassFlatHistogramTests.StartHash([start]));
+            after = plain is not null ? "accepted, as it stood" : $"accepted, tied [{string.Join(", ", tied)}]";
+        }
+        catch (InvalidOperationException e)
+        {
+            after = $"refused: {e.Message}";
+        }
+        var readings = new List<string>();
+        if (plain is null)
+        {
+            foreach (double t in new[] { 1.0, 2.0, 5.0 })
+            {
+                try
+                {
+                    Wham.WarmStart(pilot, shape, t, out int[] tied);
+                    readings.Add($"tied at {t:G}: accepted, {tied.Length} nodes");
+                }
+                catch (InvalidOperationException) { readings.Add($"tied at {t:G}: refused"); }
+            }
+            readings.Add($"emptied at 2: {(Emptied(shape, estimate, draws, 2.0) ? "accepted" : "refused")}");
+            readings.Add($"coarsened: accepted at K {Coarsened(shape, estimate)}");
+        }
+        _out.WriteLine($"## Friedman pilot, master seed {seed} ({clock.Elapsed.TotalSeconds:F0} s): window [{shape.Low:G6}, {shape.High:G6}], K {shape.Nodes}; " +
+                       $"nodes under 10 draws [{string.Join(", ", Enumerable.Range(0, shape.Nodes).Where(k => draws[k] < 10.0))}]; before: {verdict}; after: {after}" +
+                       (readings.Count > 0 ? $"; {string.Join("; ", readings)}" : ""));
     }
 
     // The nodes under `threshold` draws emptied: ĝ's atoms in their segments set aside, so the fixed point's empty-node rule
