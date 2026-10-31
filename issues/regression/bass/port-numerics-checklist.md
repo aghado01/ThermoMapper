@@ -25,7 +25,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N13** External reference for the rank-normalized and PSIS diagnostics against R `posterior` and `loo` (OQ9; D10's gate). Same chip; needs the user's approval for the download. Approved; `diagnostics_oracle.R` and `DiagnosticsParityTests` agree to 10⁻⁹ (`5eecbc1`, `ee8b97f`).
 - [x] **N14** D10's convergence verdict: read at the end of every run in the shared ensemble, with the engine's agreement groups and a declared stopping scope; BASS's three groups, the log posterior among its monitored quantities (decided 2026-10-29).
 - [ ] **N15** `DiagonalPlusLowRank` gains the capacitance matrix's Cholesky factor, O(m·k² + k³), beside its per-call Jacobi thin SVD. Found by stage 7 on 2026-10-29: 1.4 ms per σ² proposal at m = 20 with 39 columns. Built when real sizes make it binding.
-- [ ] **N16** The SMC core's conveniences, both stage 8 chips' notes (2026-10-29): `TemperToPosterior` returning at its stage budget rather than throwing, `SmcRun` exposing its `MaxStages`, and a first-step bisection on cached increments in `SmcWeights` beside `ConditionalEss`.
+- [x] **N16** The SMC core's conveniences, both stage 8 chips' notes (2026-10-29): `TemperToPosterior` returning at its stage budget rather than throwing, `SmcRun` exposing its `MaxStages`, and a first-step bisection on cached increments in `SmcWeights` beside `ConditionalEss`. Built 2026-10-31 (`63babfd`): `SmcResult.ReachedPosterior`, `SmcRun.MaxStages`, `SmcWeights.LargestStep`; the cut SMC checks its own end.
 - [ ] **N17** A flat-histogram sampler, shared by BASS and SPC: SAMC weight learning, multicanonical production over ℓ₁, reweighting and the ln Z(b) curve. Decided to build by the user on 2026-10-29, and its nine design decisions taken the same day ([flat-histogram-design.md](flat-histogram-design.md)); Phase 1, the engine and its toys, built and verified 2026-10-30 (`d7f4ab8`–`3c95d9b`; [its brief](flat-histogram-phase1-brief.md)). Phase 2, BASS's adapter and the Friedman qualification, built and verified 2026-10-30 (`33e067e`–`69f6658`, [its brief](flat-histogram-phase2-brief.md)): Friedman's posterior computed on one seed, its replication waiting on a warm start robust across seeds ([its brief](flat-histogram-warmstart-brief.md)). Phase 3 is SPC's.
 
 ### Room for extensions
@@ -35,6 +35,19 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [ ] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update.
 
 ## Reports
+
+### N16 built, the flat histogram's log, and OQ2 closed — 2026-10-31
+
+The main session built three small items from the BASS round-up.
+- *N16* (`63babfd`):
+  - `TemperToPosterior`, and so `RunTempered`, returns at `MaxStages`, short of b = 1, with `SmcResult.ReachedPosterior` false. A checkpoint there resumes, under a larger budget, into the uninterrupted run, bit for bit, since `SeedTree`'s streams are prefix-stable.
+  - `SmcRun.MaxStages` is exposed.
+  - `SmcWeights.LargestStep` bisects a step on cached increments by conditional ESS. The cut SMC's `FirstStep` now calls it, with the same arithmetic.
+  - The cut SMC relied on the old throw to name a leg that ran out of stages, so its `Temper` now checks the end itself and throws the same message at the same point.
+- *The flat histogram's unread settings* are logged in `BassResolved` beside SMC's (`c57d7ae`).
+- *OQ2 closed* in the preparation brief's table: on Friedman, ladders of about 2Λ̂ rungs made no round trip through the first-order band, so the rung stays opt-in, and the flat histogram is that regime's route.
+- *Suites,* in Release: Samplers 264, Regression 1,335 and the BASS oracle classes 90, all passing.
+- *Recorded in:* `docs/Maths/Samplers.md`, which gains the SMC core's API and source rows and the budget's caveat.
 
 ### N17 Phase 2 verified: BASS's flat-histogram sampler and Friedman — 2026-10-30
 
