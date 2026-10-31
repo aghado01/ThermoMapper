@@ -151,3 +151,139 @@ Recommend no default; the rule decides the profile.
 ## Reports
 
 Newest first.
+
+### 2026-10-31: the run (harness `8349663`, review fixes `fb35f51`)
+
+**The verdict: no arm clears.** The gate leaves out all twelve noise-free (benchmark, design) pairs, so no benchmark is scored, and no arm has a score, r_f or coverage under the rule. By decision 7 no profile is built, every option stays an option, and F-R1 closes as read.
+
+| arm | score | r_f per benchmark | coverage | clears |
+| --- | --- | --- | --- | --- |
+| A1, g, τ held at 1/N, λ (10, 10) | none | none scored | none scored | no |
+| A2, ridge, τ sampled, λ (10, 10) | none | none scored | none scored | no |
+| A3, ridge, τ held at 1, λ (10, 10) | none | none scored | none scored | no |
+| A4, g, Zellner–Siow, λ (1, 1) | none | none scored | none scored | no |
+| A5, g, τ held at 1/N, λ (1, 1) | none | none scored | none scored | no |
+| A6, ridge, τ sampled, λ (1, 1) | none | none scored | none scored | no |
+| A7, ridge, τ held at 1, λ (1, 1) | none | none scored | none scored | no |
+
+**The gate's exclusions.** Every one of the 144 fits reads a predictive R̂ above 1.05. That excludes all 12 noise-free pairs and all 6 noisy ones for every arm, leaving Friedman, Ishigami, borehole and the functional benchmark unscored, each with none of its three designs kept.
+- Noise-free: median 2.14, range 1.34–3.44. σ² sets the maximum in 55 of 96 fits.
+- Noisy controls: median 1.74, range 1.23–2.56. The fitted values set it in 45 of 48.
+- The least predictive ESS is 4.4–12.2 (median 5.4) of 8,000 draws.
+- D10's verdict reads N in all three groups (predictive, level, structural) for all 144 fits.
+
+| arm | predictive R̂, median [range] over 18 fits | least ESS, median | set by σ² |
+| --- | --- | --- | --- |
+| A0 | 2.16 [1.68, 3.35] | 5.1 | 6 |
+| A1 | 1.92 [1.34, 2.78] | 5.6 | 3 |
+| A2 | 2.20 [1.23, 3.44] | 5.1 | 10 |
+| A3 | 1.85 [1.55, 2.66] | 5.7 | 9 |
+| A4 | 2.43 [1.55, 3.38] | 4.9 | 7 |
+| A5 | 1.76 [1.36, 2.43] | 6.0 | 3 |
+| A6 | 2.29 [1.46, 3.21] | 5.0 | 11 |
+| A7 | 1.72 [1.29, 2.17] | 6.1 | 9 |
+
+Each fit's R̂, and the quantity setting it, are in the per-fit CSV.
+
+**Context outside the rule: the ratios without the gate.** These are not a verdict, and not part of the comparison as fixed. Every fit behind them is a chain stalled in the way decision 5's trap describes. They are here because the gate decided F-R1, not the arms.
+
+| arm | score | r_f Friedman | r_f Ishigami | r_f borehole | r_f functional | coverage − A0's | would clear |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| A1 | 1.653 | 1.473 | 1.242 | 2.042 | 2.001 | −0.002 to +0.017 | no |
+| A2 | 0.870 | 0.766 | 1.113 | 0.871 | 0.771 | −0.011 to +0.008 | no |
+| A3 | 1.276 | 1.109 | 1.343 | 1.085 | 1.639 | −0.040 to +0.014 | no |
+| A4 | 0.825 | 0.740 | 0.978 | 0.920 | 0.694 | −0.001 to +0.007 | yes |
+| A5 | 1.545 | 1.271 | 1.162 | 1.951 | 1.979 | −0.009 to +0.024 | no |
+| A6 | 0.598 | 0.619 | 0.943 | 0.770 | 0.285 | −0.003 to +0.022 | yes |
+| A7 | 1.093 | 0.905 | 1.183 | 0.888 | 1.500 | −0.030 to +0.024 | no |
+
+- *A0's own readings.* Its NRMSE, as a geometric mean over designs, is 0.0118 on Friedman, 0.0584 on Ishigami, 0.0084 on borehole and 0.0027 on the functional benchmark. Its coverage is 0.95–0.98.
+- *The functional ratios rest on one design.* Per design, ln r runs from −3.03 to −0.37 for A6 and from −2.01 to +1.00 for A4 (sd 1.53 for both). A0's functional NRMSE is 0.0085 on design 0, against 0.0016 and 0.0015 on the other two.
+- *One design left out.* A6 would still clear (0.524–0.730). A4 would not without design 0 (1.025).
+- *The noisy controls, ungated.* The scores run from 0.943 (A6) to 1.111 (A2). None is at or below 0.9, and A4 reads 0.992.
+
+**The per-fit table** is [`deterministic-profile-results.csv`](deterministic-profile-results.csv), beside this brief: 144 rows, one per fit.
+- *What it holds:* every reading this brief lists, plus the run order, the holdout hash, the draws hash and the fingerprint.
+- *One edit:* the run wrote D10's verdict unquoted. The committed file re-quotes that one field and changes nothing else, and the harness quotes it from `fb35f51` on.
+- *The basis cap:* no fit's draw reaches it. The largest M is 128, against a cap of 499, or 1,000 for the functional benchmark.
+- *M's median by arm, noise-free:*
+
+  | arm | A0 | A1 | A2 | A3 | A4 | A5 | A6 | A7 |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | M | 24–42 | 9–34 | 28–41 | 35–76 | 27–49 | 11–42 | 31–58 | 52–108 |
+- *The functional residual check:* the mean lag-one r₁ is 0.07–0.55, against −0.05 expected for independent residuals, in every arm and design. The noise-free functional fits' training residuals are dependent along t, so their intervals read after that check, as decision 9 says.
+
+**The noisy controls.** The gate leaves out all six pairs, so both controls are unscored. With no winner, nothing is compared against A0. Their ungated scores are in the context above.
+
+**Times.** The run took 60.4 minutes in all: the fits 20.0 minutes (1,202 s, timed), and the readings, the prediction on the holdouts, 39.5 minutes.
+- *The machine:* Release, 18 logical processors, workstation GC, CPU over wall 0.770. The flat-histogram warm-start chip and other sessions shared it.
+- *Against the trial:* the 1/10 trial projected about 0.45 hours of fits and readings, and the run took 0.99. Its fits took 3.3 times the linear projection (20.0 minutes against 6), and its readings 1.9 times (39.5 against 21). The run stayed well inside the 6-hour budget.
+- *Seconds per arm, over its 12 noise-free fits:*
+
+  | arm | A0 | A1 | A2 | A3 | A4 | A5 | A6 | A7 |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | seconds | 15.2 | 10.5 | 48.7 | 138.4 | 17.7 | 12.3 | 121.1 | 676.0 |
+
+  A7 costs 44 times A0, and its functional fits take 114 s each.
+
+**The checks, with their tolerances.** All passed before the run, and again after the review fixes.
+- *Ishigami,* by Monte Carlo over 10⁶ points, within 5 SE: the mean reads 3.49477 against 3.5 (1.40 SE), and the variance 13.8558 against 13.8446 (0.51 SE).
+- *Friedman's f₁ and the functional truth* against S10's generators: they differ by 0, within 1e-12.
+- *The borehole function:* increasing in r_w and H_u, decreasing in H_l and L, at 1,000 random points.
+- *The designs:* each Latin hypercube has one point per cell per variable.
+- *The holdouts* are reproducible:
+
+  | benchmark | hash | sd |
+  | --- | --- | --- |
+  | Friedman | a66dc51962b0142e | 4.884 |
+  | Ishigami | 3a1cd6180768a91c | 3.703 |
+  | borehole | 1a32494249af75d2 | 45.89 |
+  | functional | c802ebdb47e355c5 | 0.8927 |
+- *The noisy twins:* the noise sd is within 0.85–1.15 of nominal, reading 1.018 for Friedman and 0.365 against 0.37 for Ishigami.
+- *The arms,* as the table says:
+  - each fit's resolved form, τ₀ and held τ;
+  - the Gamma(0.5, 0.5·n₀) τ prior;
+  - the count prior and S10's sampling;
+  - eight distinct fingerprints per (benchmark, design);
+  - an arm with its priors reset gives A0's fingerprint.
+- *The metrics,* on a posterior set by hand: NRMSE 1/√1.25 = 0.894427…, coverage ½, and the bands' type-7 quantiles.
+- *The rule,* against a hand computation: a clearing arm, an r_f failure at 1.1696, a coverage failure, a gated design, an unscored benchmark, and the leave-one-out scores.
+- *The holdout path reads the latent surface:* at the training cases it matches `BassQualification.Fitted` within 1.35e-15 relative, against a tolerance of 1e-9.
+- *The 1/10 run* on one design produced every reading, and the rule's arithmetic ran. Every pair was gated there too, at R̂ 1.9–4.1.
+
+**The review passes.**
+- *Correctness.*
+  - The benchmarks' formulas and domains are covered by the checks above.
+  - The holdout is fixed: one hash per surface over all 48 of its fits, the noisy twins sharing their noise-free twin's.
+  - The readings are latent, not predictive: they take `Predictive = false`, and the holdout-path check pins it.
+  - The gate runs before the rule: the harness excludes first, and the report lists every exclusion.
+  - The rule's arithmetic: an independent recomputation from the CSV, in Python, finds the same 12 + 6 exclusions, no benchmark scored and no winner. It also computes the ungated context above.
+- *Coverage.*
+  - A reading resting on one design: none is scored. Ungated, the functional ratios rest on design 0, as above.
+  - An arm at the basis cap: no fit reaches it.
+  - A benchmark the gate leaves unscored: all four, and both controls.
+- *Found and fixed* in `fb35f51`, checked on a 1/50 run. None changes a reading.
+  - The CSV's verdict was unquoted.
+  - For an unscored arm, the noisy controls' "loses to A0" read "no"; it now reads "unscored".
+  - When nothing is scored, the context tables printed empty headers; they now give a line.
+
+**What the main session must know.**
+- *The gate decided, not the arms.* Decision 5 put the 1.05 gate on the predictive group, expecting it to agree better than the structure. At S10's lengths it does not, on noise-free or noisy data: R̂ medians of 2.14 and 1.74, and a least ESS of about 5 in 8,000 draws.
+  - F-M2 read the same configuration the same way: a least ESS median of 4.96, and M's R̂ of 1.96–2.45. So the cause is BASS's untempered mixing at these lengths, not this harness.
+  - Every option F-R1 compared stays an option.
+  - A re-run under decision 5's alternative, the self-sized tempered ladder for every arm, or with longer chains, would be a new pre-registration, and the user's decision.
+- *The ungated context* shows what lies behind the gate: A6 and A4 would clear without it, and A6's lead rests most on the functional benchmark's design 0. It is reported as context, not as a result.
+- *Pairing, as checked.* The arms cannot share literal starts, since each fit starts from its own prior's exact draw (S7). These were checked instead:
+  - one data fingerprint and one master seed across all eight arms of a (benchmark, design);
+  - the same start structures within each count prior;
+  - equal τ/τ₀ starts for the two sampled arms of a count prior, to 1e-12;
+  - the held arms starting at their held τ.
+- *The rule's edges.*
+  - Comparisons against 0.9, 1.05 and 0.05 take a 1e-12 slack, so rounding does not decide a reading at a threshold.
+  - The posterior mean is the mean of the draws.
+  - A gate quantity that is constant is skipped. A non-estimate reads +∞ and gates.
+- *The checkout.* The run started at 13:35 on `8349663`. Its build included other sessions' uncommitted SMC and flat-histogram edits, none on the untempered MCMC path:
+  - `BassResolved.cs`, `BassSmcRun.cs`, `CutSmc.cs`, `SmcRun.cs` and `SmcWeights.cs`.
+
+  The edits to `BassBasis.cs`, `BassDesign.cs` and `BassModel.cs`, and the new `DesignKernel*.cs` and `BassObservationModel.cs`, came after 14:07 and are not in the run. The post-review checks and the 1/50 run did build with them.
+- *A stale message.* A message saying none of this work was in the checkout reached this chip after `8349663` had been committed.
