@@ -326,7 +326,82 @@ public sealed class BassFlatHistogramQualificationTests
         return nodes;
     }
 
-    private void RunArm(string label, BassConfig config, SmcAt? smc)
+    // ---- Replication after the warm start's remedy (the warm start's chip, step 3, 2026-10-31) ----
+
+    // Seed 8217 is replicated by Friedman_ArmOne_SecondSeed_TwiceTheSweeps as committed in 56c66f3, its criteria unchanged,
+    // and a third master seed by the test below, written and committed before it runs.
+
+    // Arm (i) at the second seed's settings (the WHAM start, the default gain start, Thin 400) on master seed 8417, declared
+    // with the sweep (step 2) before any run and used by no harness or sweep. What would count, written before its run, the
+    // second seed's criteria (56c66f3) unchanged:
+    // 1. every production chain tunnels; the chains' ln Ẑ_c(1) SD at most 1 nat, with a1 (or any labelled basin at 5% or
+    //    more) passing the χ² at p ≥ 0.01; the pooled ln Ẑ(1) at or above −864.6;
+    // 2. agreement with seed 8017's arm (i): ln Ẑ(1) within 1 nat plus both runs' errors of −841.36 ± 0.17, and a1's pooled
+    //    share within 5 points of 65.9%.
+    [Fact]
+    public void Friedman_ArmOne_ThirdSeed_TwiceTheSweeps()
+    {
+        if (!BassQualification.Enabled) return;   // heavy: about half an hour
+        BassConfig first = ArmConfig(true, null, ThirdSeed);
+        BassConfig config = first with { Sampling = first.Sampling with { Thin = 2 * Thin } };
+        string start = ReadWarmStart(ThirdSeed);
+        BassFit? fit = RunArm($"Arm (i), the default gain start, master seed {ThirdSeed}, twice the sweeps (Thin {2 * Thin})", config, null);
+        if (fit is not null) Assert.Equal(start, BassFlatHistogramTests.StartHash([fit.Diagnostics.FlatHistogram!.WeightTrace[0].Weights]));
+    }
+
+    // A reading, not ruled: seed 8217's flat start over its pilot's window, K and b_lo, as Friedman_ArmOne_SecondSeed_FlatStart
+    // (the gain from 0, the same lengths, Thin 400), with the gain's scale t₀ = 100·K = 12,800 in place of the default 10·K
+    // (Liang et al.'s range runs to 100K). It reads whether a flat start can learn Friedman's window where the warm start is
+    // unavailable; the first flat start, at 10·K, made no round trip in learning or production.
+    [Fact]
+    public void Friedman_ArmOne_SecondSeed_FlatStart_GainScaleOneHundredK()
+    {
+        if (!BassQualification.Enabled) return;   // heavy: about half an hour
+        BassConfig first = ArmConfig(true, null, SecondSeed);
+        BassFlatHistogramSpec spec = first.Sampling.FlatHistogram! with
+        {
+            Run = first.Sampling.FlatHistogram!.Run with
+            {
+                Start = FlatHistogramStart.Flat, Window = new FlatHistogramWindow(-1552.56, -773.559), LowSlope = 0.0, Nodes = 128,
+                GainScale = 100.0 * 128,
+            },
+            Pilot = null,
+        };
+        BassConfig config = first with { Sampling = first.Sampling with { Thin = 2 * Thin, FlatHistogram = spec } };
+        RunArm($"Arm (i), a flat start over seed {SecondSeed}'s pilot window with t₀ = 100·K, master seed {SecondSeed}, twice the sweeps (Thin {2 * Thin})",
+               config, null);
+    }
+
+    // The warm start a run on this seed will take, read before it from the pilot rebuilt as Bass.Fit builds it: the fixed
+    // point's verdict on ĝ as it stands and the nodes the warm start ties (none where the fixed point accepts). Returns the
+    // start's hash, for the run's start to be checked against.
+    private string ReadWarmStart(int seed)
+    {
+        var clock = Stopwatch.StartNew();
+        (TemperingPilot pilot, MulticanonicalWeights shape) = ArmOnePilot(seed);
+        WhamEstimate estimate = Wham.Estimate(pilot);
+        string verdict = "accepted ĝ as it stands";
+        try { SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _); }
+        catch (InvalidOperationException e)
+        {
+            (int at, double gap) = FlatHistogramLimit.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
+            verdict = $"refused ĝ as it stands ({e.Message} Flat occupancy outside the hull at segment {at}, by {gap:F4}.)";
+        }
+        try
+        {
+            MulticanonicalWeights start = Wham.WarmStart(pilot, shape, Wham.ThinDraws, out int[] tied);
+            _out.WriteLine($"## Master seed {seed}'s warm start, read before the run ({clock.Elapsed.TotalSeconds:F0} s): window [{shape.Low:G6}, {shape.High:G6}], " +
+                           $"K {shape.Nodes}; SAMC's fixed point {verdict}; nodes tied [{string.Join(", ", tied)}]");
+            return BassFlatHistogramTests.StartHash([start]);
+        }
+        catch (InvalidOperationException e)
+        {
+            _out.WriteLine($"## Master seed {seed}'s warm start, read before the run: SAMC's fixed point {verdict}; the warm start refused: {e.Message}");
+            return "";
+        }
+    }
+
+    private BassFit? RunArm(string label, BassConfig config, SmcAt? smc)
     {
         BassMixing.Fixture fixture = Fixture.Value;
         BassFlatHistogramPilot? pilot = config.Sampling.FlatHistogram!.Pilot;
@@ -348,12 +423,13 @@ public sealed class BassFlatHistogramQualificationTests
         }
         catch (InvalidOperationException e) when (e.Message.Contains("WHAM start", StringComparison.Ordinal))
         {
-            _out.WriteLine($"## {label}: SAMC's fixed point refused the pilot's ĝ after {clock.Elapsed.TotalSeconds:F0} s");
+            _out.WriteLine($"## {label}: the warm start was refused after {clock.Elapsed.TotalSeconds:F0} s");
             _out.WriteLine(e.Message);
-            return;
+            return null;
         }
         double total = clock.Elapsed.TotalSeconds;
         Read(label, fit, fixture, (pilotEnd, learningEnd - pilotEnd, total - learningEnd, total), smc);
+        return fit;
     }
 
     [Fact]
@@ -535,7 +611,8 @@ public sealed class BassFlatHistogramQualificationTests
         _out.WriteLine($"- pilot: ladders of {string.Join(", ", pilot.Ladders.Levels)} rungs; {pilot.Ladders.RoundTripsPerScan:F4} round trips per traced scan; " +
                        $"barrier {pilot.Ladders.Barrier:F2}, worst pair rejection {pilot.Ladders.MaxPairRejection:F3}; {pilot.InverseTemperatures.Length} pooled " +
                        $"rungs, {pilot.Draws:N0} draws, inefficiencies {pilot.Inefficiencies.Min():F1}–{pilot.Inefficiencies.Max():F1}");
-        _out.WriteLine($"- SAMC's fixed point accepted the pilot's ĝ; empty nodes [{string.Join(", ", pilot.EmptyNodes)}]; nodes under 10 pilot draws " +
+        _out.WriteLine($"- the warm start (the nodes under ten draws tied where SAMC's fixed point refuses ĝ): empty nodes " +
+                       $"[{string.Join(", ", pilot.EmptyNodes)}]; nodes under 10 pilot draws " +
                        $"[{string.Join(", ", Enumerable.Range(0, pilot.NodeDraws.Length).Where(k => pilot.NodeDraws[k] < 10).Select(k => $"{k} ({fh.Weights.Node(k):F0})"))}]");
         _out.WriteLine($"- pilot draws per node: {string.Join(" ", pilot.NodeDraws.Select(v => v.ToString("F0")))}");
     }
