@@ -86,6 +86,10 @@ public sealed record SmcResult<TState>(
     /// (<see cref="SmcStageReport.NormalizerRelativeVariance"/>, <see cref="SmcWeights.LogNormalizerError"/>): NaN unless
     /// every resampling was multinomial.</summary>
     public double LogNormalizerError => SmcWeights.LogNormalizerError(Stages[^1].NormalizerRelativeVariance);
+
+    /// <summary>Whether the last stage stands at b = 1: on a tempered run, the posterior reached rather than the run
+    /// stopped by its stage budget (<see cref="SmcSampler.TemperToPosterior"/>).</summary>
+    public bool ReachedPosterior => Stages[^1].Temperature.InverseTemperature >= 1.0;
 }
 
 /// <summary>Everything a run needs to continue: restarting from it reproduces the uninterrupted run bit for bit.
@@ -169,6 +173,10 @@ public sealed class SmcRun<TState>
 
     /// <summary>The population size.</summary>
     public int Count => _state.Length;
+
+    /// <summary>The stages the run may take after its initial draw (<see cref="SmcOptions.MaxStages"/>); an
+    /// <see cref="Advance"/> past them throws.</summary>
+    public int MaxStages => _options.MaxStages;
 
     /// <summary>Draws the initial population from <paramref name="first"/>, with equal weights.</summary>
     public static SmcRun<TState> Start(SmcStage<TState> first, ISmcParticles<TState> particles, ISmcKernel<TState> kernel, SmcOptions options, int seed)
@@ -416,7 +424,8 @@ public static class SmcSampler
     /// <summary>
     /// Tempers <paramref name="target"/> along <paramref name="path"/> from b = 0, whose distribution
     /// <paramref name="particles"/> draws from (on the likelihood path, the prior), to b = 1, choosing each next b so that
-    /// the reweighting's conditional ESS is <paramref name="targetConditionalEss"/>·N (Zhou, Johansen and Aston 2016).
+    /// the reweighting's conditional ESS is <paramref name="targetConditionalEss"/>·N (Zhou, Johansen and Aston 2016);
+    /// or until its <see cref="SmcOptions.MaxStages"/>, as <see cref="TemperToPosterior"/> returns.
     /// </summary>
     public static SmcResult<TState> RunTempered<TState>(ISamplingTarget<TState> target, TemperingPath path, double targetConditionalEss,
                                                         ISmcParticles<TState> particles, ISmcKernel<TState> kernel, SmcOptions options, int seed)
@@ -426,13 +435,18 @@ public static class SmcSampler
         return TemperToPosterior(run, targetConditionalEss);
     }
 
-    /// <summary>Continues a run on its current target to b = 1 with the adaptive schedule; it can follow a resume.</summary>
+    /// <summary>
+    /// Continues a run on its current target to b = 1 with the adaptive schedule; it can follow a resume. It returns at
+    /// b = 1, or once the run has taken its <see cref="SmcRun{TState}.MaxStages"/>, its result then short of the posterior
+    /// (<see cref="SmcResult{TState}.ReachedPosterior"/> false): a budget is a return, not an exception, so a checkpoint
+    /// taken there resumes the run, and the resumed run equals one uninterrupted run with the larger budget.
+    /// </summary>
     public static SmcResult<TState> TemperToPosterior<TState>(SmcRun<TState> run, double targetConditionalEss)
     {
         ArgumentNullException.ThrowIfNull(run);
         if (!(targetConditionalEss > 0.0 && targetConditionalEss < 1.0))
             throw new ArgumentOutOfRangeException(nameof(targetConditionalEss), "The target fraction must lie in (0, 1).");
-        while (run.Stage.Temperature.InverseTemperature < 1.0)
+        while (run.Stage.Temperature.InverseTemperature < 1.0 && run.StagesDone < run.MaxStages)
             run.Advance(new SmcStage<TState>(run.Stage.Target, new Temperature(NextInverseTemperature(run, targetConditionalEss), run.Stage.Temperature.Path)));
         return run.Result();
     }

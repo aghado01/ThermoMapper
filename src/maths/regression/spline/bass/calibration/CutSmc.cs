@@ -247,30 +247,17 @@ public static class CutSmcSampler
     }
 
     internal static double FirstStep(double[] weights, double[] difference, double targetConditionalEss)
-    {
-        double goal = targetConditionalEss * weights.Length;
-        var increments = new double[difference.Length];
-        double Cess(double t)
-        {
-            for (int i = 0; i < increments.Length; i++) increments[i] = double.IsNegativeInfinity(difference[i]) ? double.NegativeInfinity : t * difference[i];
-            return SmcWeights.ConditionalEss(weights, increments);
-        }
-        if (Cess(1.0) >= goal) return 1.0;
-        double lo = 0.0, hi = 1.0;
-        for (int iteration = 0; iteration < 60 && hi - lo > 1e-12; iteration++)
-        {
-            double mid = 0.5 * (lo + hi);
-            if (Cess(mid) >= goal) lo = mid;
-            else hi = mid;
-        }
-        return lo > 0.0 ? lo : hi;
-    }
+        => SmcWeights.LargestStep(weights, difference, targetConditionalEss);
 
     private static readonly CutSmcBlockRates Empty = new(0, 0, 0, 0, 0, 0);
 
-    // Tempers the run's current target to 1, naming the leg if the run's stages run out.
+    // Tempers the run's current target to 1, naming the leg if the run's stages run out: the core returns at its budget,
+    // short of t = 1, and the leg refuses that end.
     private static void Temper(SmcRun<CalibrationState> run, CutSmcSpec spec, CalibrationTarget to, int maxStages)
-        => Guard(run, () => SmcSampler.TemperToPosterior(run, spec.TargetConditionalEss), to, maxStages);
+    {
+        SmcSampler.TemperToPosterior(run, spec.TargetConditionalEss);
+        if (run.Stage.Temperature.InverseTemperature < 1.0 && run.StagesDone == maxStages) throw StagesSpent(to, null);
+    }
 
     private static void Guard(SmcRun<CalibrationState> run, Action step, CalibrationTarget to, int maxStages)
     {
@@ -280,10 +267,12 @@ public static class CutSmcSampler
         }
         catch (InvalidOperationException e) when (run.StagesDone == maxStages)
         {
-            throw new InvalidOperationException(
-                $"The cut SMC run took all its stages on the leg to emulator draw {to.Draw}: raise CalibrationConfig.Smc.MaxStagesPerLeg, or read the leg's diagnostics.", e);
+            throw StagesSpent(to, e);
         }
     }
+
+    private static InvalidOperationException StagesSpent(CalibrationTarget to, Exception? inner) => new(
+        $"The cut SMC run took all its stages on the leg to emulator draw {to.Draw}: raise CalibrationConfig.Smc.MaxStagesPerLeg, or read the leg's diagnostics.", inner);
 
     // The population at `to`'s conditional as the leg leaves it, with the leg's stages from `stagesBefore` on.
     private static CutSmcPopulation Population(SmcRun<CalibrationState> run, CutSmcKernel kernel, CalibrationTarget to, int visit, CutSmcLeg leg,

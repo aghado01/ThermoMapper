@@ -14,8 +14,8 @@ namespace Maths.Regression.Spline.Bass;
 /// <summary>
 /// BASS's fit by SMC (stage 8; D05): <see cref="SmcSpec.Replicates"/> independent <see cref="SmcRun{TState}"/>s, each
 /// from exact draws of the prior on F at b = 0 to the posterior at b = 1 along D05's likelihood path, each next b placed by
-/// <see cref="SmcSampler.NextInverseTemperature"/> (the loop of <see cref="SmcSampler.RunTempered"/>, its stage budget a
-/// return rather than an exception), mutated by <see cref="BassSmcKernel"/>, then assembled into a <see cref="BassFit"/>.
+/// <see cref="SmcSampler.NextInverseTemperature"/> (the loop of <see cref="SmcSampler.RunTempered"/>, which returns at its
+/// stage budget), mutated by <see cref="BassSmcKernel"/>, then assembled into a <see cref="BassFit"/>.
 /// <list type="bullet">
 /// <item><b>Streams.</b> The master seed derives each replicate's seed (<see cref="SeedTree"/>), which fans out into its
 /// run's seed and its composition's; the composition draws each particle on its own stream, so the draws depend neither

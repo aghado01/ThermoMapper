@@ -192,6 +192,79 @@ public sealed class SmcTests
     }
 
     [Fact]
+    public void TemperToPosterior_ReturnsAtItsStageBudget_AndAResumeFinishesIt()
+    {
+        // N16: the stage budget is a return, short of the posterior, and the checkpoint there resumes, under a larger
+        // budget, into the uninterrupted run, since the stages' seeds are a prefix-stable stream.
+        (ISamplingTarget<double[]> target, _) = Conjugate();
+        var particles = new GaussianParticles(3, 1.0);
+        var options = new SmcOptions { Particles = 300, MutationSteps = 2 };
+        SmcResult<double[]> whole = SmcSampler.RunTempered(target, TemperingPath.Likelihood, 0.9, particles, new RandomWalkKernel(), options, seed: 1207);
+        Assert.True(whole.ReachedPosterior);
+        Assert.True(whole.Stages.Count - 1 >= 3, $"the run takes {whole.Stages.Count - 1} stages; the check needs at least 3");
+
+        var budget = options with { MaxStages = 2 };
+        SmcRun<double[]> run = SmcRun<double[]>.Start(new SmcStage<double[]>(target, new Temperature(0.0, TemperingPath.Likelihood)), particles,
+                                                      new RandomWalkKernel(), budget, seed: 1207);
+        Assert.Equal(2, run.MaxStages);
+        SmcResult<double[]> stopped = SmcSampler.TemperToPosterior(run, 0.9);
+        Assert.False(stopped.ReachedPosterior);
+        Assert.Equal(2, run.StagesDone);
+        Assert.Throws<InvalidOperationException>(() => run.Advance(new SmcStage<double[]>(target, new Temperature(1.0, TemperingPath.Likelihood))));
+
+        SmcRun<double[]> resumed = SmcRun<double[]>.Resume(run.Checkpoint(), particles, new RandomWalkKernel(), options);
+        Assert.Equal(options.MaxStages, resumed.MaxStages);
+        AssertSame(whole, SmcSampler.TemperToPosterior(resumed, 0.9));
+    }
+
+    [Fact]
+    public void LargestStep_KeepsTheConditionalEssAtItsTarget_OnCachedIncrements()
+    {
+        // N16: the bisection on cached increments t·g, with no model work; the conditional ESS falls as t grows.
+        var rng = new Xoshiro256PlusPlus(1208);
+        const int n = 500;
+        var logWeights = new double[n];
+        var slopes = new double[n];
+        for (int i = 0; i < n; i++)
+        {
+            double u = 1.0 - rng.NextDouble(), v = rng.NextDouble();
+            double radius = Math.Sqrt(-2.0 * Math.Log(u));
+            logWeights[i] = 0.5 * radius * Math.Cos(2.0 * Math.PI * v);
+            slopes[i] = 20.0 * radius * Math.Sin(2.0 * Math.PI * v);
+        }
+        var weights = new double[n];
+        SmcWeights.Normalize(logWeights, weights);
+        double Cess(double[] w, double[] g, double t)
+        {
+            var increments = new double[n];
+            for (int i = 0; i < n; i++) increments[i] = double.IsNegativeInfinity(g[i]) ? double.NegativeInfinity : t * g[i];
+            return SmcWeights.ConditionalEss(w, increments);
+        }
+
+        double step = SmcWeights.LargestStep(weights, slopes, 0.9);
+        Assert.InRange(step, 1e-6, 1.0 - 1e-9);
+        Assert.True(Cess(weights, slopes, step) >= 0.9 * n, $"at t = {step:R} the conditional ESS is {Cess(weights, slopes, step):F3}");
+        Assert.True(Cess(weights, slopes, step + 1e-9) < 0.9 * n, "a larger step keeps the target too");
+
+        // The whole step when it keeps the target: zero increments leave the conditional ESS at N.
+        Assert.Equal(1.0, SmcWeights.LargestStep(weights, new double[n], 0.9));
+
+        // A particle leaving the support at every t > 0, holding more weight than the target spares: the smallest step.
+        var heavy = (double[])logWeights.Clone();
+        heavy[0] = Math.Log(0.2 * n) + 0.5;
+        var heavyWeights = new double[n];
+        SmcWeights.Normalize(heavy, heavyWeights);
+        Assert.True(heavyWeights[0] > 0.1, $"the leaving particle holds {heavyWeights[0]:F3}");
+        var leaving = (double[])slopes.Clone();
+        leaving[0] = double.NegativeInfinity;
+        double smallest = SmcWeights.LargestStep(heavyWeights, leaving, 0.9);
+        Assert.InRange(smallest, double.Epsilon, 1e-11);
+
+        Assert.Throws<ArgumentException>(() => SmcWeights.LargestStep(weights, new double[n - 1], 0.9));
+        Assert.Throws<ArgumentOutOfRangeException>(() => SmcWeights.LargestStep(weights, slopes, 1.0));
+    }
+
+    [Fact]
     public void GenealogyVariance_ReadsEachFamilysWeight()
     {
         // Families {0, 1} and {2, 3} hold 0.3 and 0.7 after one resampling: 1 − (4/3)²·(1 − 0.3² − 0.7²).

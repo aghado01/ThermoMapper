@@ -68,6 +68,36 @@ public static class SmcWeights
         return weights.Length * first * first / second;
     }
 
+    /// <summary>
+    /// The largest step t in (0, 1] whose reweighting by t·<paramref name="slopes"/> keeps the conditional ESS at or above
+    /// <paramref name="targetConditionalEss"/>·N, bisected on those cached increments with no further model work, as
+    /// <see cref="SmcSampler.NextInverseTemperature"/> bisects on a run's evaluations; the smallest step bisection reaches
+    /// when even that falls below, as when part of the population leaves the support at any t &gt; 0 (a slope of −∞). It
+    /// serves a stage whose log density is linear in t from the current one, as a bridge's first step to a new target is.
+    /// </summary>
+    public static double LargestStep(ReadOnlySpan<double> weights, ReadOnlySpan<double> slopes, double targetConditionalEss)
+    {
+        if (weights.Length != slopes.Length) throw new ArgumentException("The two spans must have the same length.", nameof(slopes));
+        if (!(targetConditionalEss > 0.0 && targetConditionalEss < 1.0))
+            throw new ArgumentOutOfRangeException(nameof(targetConditionalEss), "The target fraction must lie in (0, 1).");
+        double goal = targetConditionalEss * weights.Length;
+        var increments = new double[slopes.Length];
+        double Cess(double t, ReadOnlySpan<double> w, ReadOnlySpan<double> d)
+        {
+            for (int i = 0; i < increments.Length; i++) increments[i] = double.IsNegativeInfinity(d[i]) ? double.NegativeInfinity : t * d[i];
+            return ConditionalEss(w, increments);
+        }
+        if (Cess(1.0, weights, slopes) >= goal) return 1.0;
+        double lo = 0.0, hi = 1.0;
+        for (int iteration = 0; iteration < 60 && hi - lo > 1e-12; iteration++)
+        {
+            double mid = 0.5 * (lo + hi);
+            if (Cess(mid, weights, slopes) >= goal) lo = mid;
+            else hi = mid;
+        }
+        return lo > 0.0 ? lo : hi;
+    }
+
     /// <summary>log Σ W_i e^{g_i}: the log ratio of consecutive stages' normalizers the reweighting estimates.</summary>
     public static double LogNormalizerIncrement(ReadOnlySpan<double> weights, ReadOnlySpan<double> logIncrements)
     {
