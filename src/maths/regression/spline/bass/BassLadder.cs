@@ -313,9 +313,12 @@ public sealed class BassLadder
     // A resize's new replica's state: the source's, on its own copy of the term array (clone-safe replicas).
     private static BassState Fork(BassState state) => new((BassTerm[])state.TermArray.Clone(), state.Fit, state.LogTau);
 
-    // Each replica's τ block when τ is sampled; none when it is held.
+    // Each replica's blocks after its moves, the sweep's slots from τ's on: τ's block when τ is sampled and the observation
+    // model's latent slots; none when there are none.
     private static Func<int, IReadOnlyList<IBlock<ReversibleJumpChain<BassState>>>>? Blocks(BassModel model)
-        => model.Target.SamplesTau ? _ => [new BassTauBlock(model.Target)] : null;
+        => BassSweepSlots.Blocks(model, model.Target, BassSweepSlot.Tau).Count == 0
+            ? null
+            : _ => BassSweepSlots.Blocks(model, model.Target, BassSweepSlot.Tau);
 
     // Each replica a swap handed a state it does not hold adopts the giver's design for it, the reference rung's too,
     // which takes no moves but saves its design in a checkpoint. The givers' copies are all taken before any replica

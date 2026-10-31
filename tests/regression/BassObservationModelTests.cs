@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
+using Maths.Samplers.Blocks;
+using Maths.Samplers.Rjmcmc;
 using Xunit;
 
 namespace Maths.Regression.Tests;
@@ -22,11 +25,15 @@ public sealed class BassObservationModelTests
     private sealed class Shifted(double[] offset) : IBassObservationModel
     {
         public WorkingResponse Working(BassResponse response) => new(response, offset);
+
+        public IReadOnlyList<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassSweepSlot slot) => [];
     }
 
     private sealed class Weighted(double[] weights) : IBassObservationModel
     {
         public WorkingResponse Working(BassResponse response) => new(response, weights: weights);
+
+        public IReadOnlyList<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassSweepSlot slot) => [];
     }
 
     private static double[] Offset(int n) => [.. Enumerable.Range(0, n).Select(i => 2.5 + 0.3 * Math.Sin(0.7 * i) + (i % 5 == 0 ? 1.0 : 0.0))];

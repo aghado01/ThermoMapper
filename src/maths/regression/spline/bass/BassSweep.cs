@@ -498,13 +498,10 @@ public sealed class BassChain
         Scan = scan;
     }
 
-    // The scan's blocks: the moves, then τ when it is sampled.
+    // The scan's blocks: the sweep's slots in D04's order, the moves, τ when it is sampled and the observation model's latent
+    // slots, which Gaussian BASS leaves empty.
     private static List<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassModel model, ISamplingTarget<BassState> target)
-    {
-        List<IBlock<ReversibleJumpChain<BassState>>> blocks = [new MoveStep<BassState>()];
-        if (model.Target.SamplesTau) blocks.Add(new BassTauBlock(target));
-        return blocks;
-    }
+        => BassSweepSlots.Blocks(model, target);
 
     /// <summary>
     /// The chain's restart state, the chain unchanged: the reversible-jump chain's snapshot (state, temperature, move
@@ -540,7 +537,7 @@ public sealed class BassChain
     /// <summary>The reversible-jump chain.</summary>
     public ReversibleJumpChain<BassState> Moves { get; }
 
-    /// <summary>The scan: the moves, then τ.</summary>
+    /// <summary>The scan: the sweep's slots in order (<see cref="BassSweepSlots"/>), the moves then τ.</summary>
     public BlockScan<ReversibleJumpChain<BassState>> Scan { get; }
 
     /// <summary>The current state.</summary>

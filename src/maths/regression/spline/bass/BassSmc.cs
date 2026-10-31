@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Maths.Rng;
 using Maths.Samplers;
+using Maths.Samplers.Blocks;
 using Maths.Samplers.Ensemble;
 using Maths.Samplers.Rjmcmc;
 using Maths.Samplers.Smc;
@@ -120,7 +121,7 @@ public sealed class BassParticleTarget : ISamplingTarget<BassParticle>
 public sealed class BassSmcKernel : ISmcKernel<BassParticle>
 {
     private readonly BassModel _model;
-    private readonly BassTauBlock? _tau;
+    private readonly IReadOnlyList<IBlock<ReversibleJumpChain<BassState>>> _blocks;
     private readonly CancellationToken _cancellation;
     private readonly Lock _gate = new();
 
@@ -130,7 +131,7 @@ public sealed class BassSmcKernel : ISmcKernel<BassParticle>
     {
         ArgumentNullException.ThrowIfNull(model);
         _model = model;
-        _tau = model.Target.SamplesTau ? new BassTauBlock(model.Target) : null;
+        _blocks = BassSweepSlots.Blocks(model, model.Target, BassSweepSlot.Tau);
         _cancellation = cancellation;
         Account = account?.Copy() ?? new BassSmcAccount(model.Prior);
     }
@@ -150,7 +151,7 @@ public sealed class BassSmcKernel : ISmcKernel<BassParticle>
         var chain = new ReversibleJumpChain<BassState>(moves.Moves, target, particle.State, rng, stage.Temperature);
         chain.Step();
         bool accepted = chain.Accepted > 0;
-        _tau?.Update(chain, rng);
+        foreach (IBlock<ReversibleJumpChain<BassState>> block in _blocks) block.Update(chain, rng);
         particle.State = chain.Current;
         moves.DesignAt(particle.State);   // commits an accepted candidate, which tallies its acceptance
         lock (_gate) Account.Add(chain.MoveStats(), moves);
