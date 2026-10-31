@@ -239,6 +239,14 @@ public sealed record BassResolved
                         $"SMC's draws are each replicate's final population of {smc.Particles} particles, and it ends at b = 1, with no R̂ stop"));
         }
 
+        if (config.Sampling.FlatHistogram is { Run: { } flat })
+        {
+            log.Add(new("Sampling.Chains", "not read", $"the flat histogram runs Sampling.FlatHistogram.Run.Chains = {flat.Chains} chains"));
+            log.Add(new("Sampling.BurnIn, Samples, BatchSize, MinEssPerChain, StoppingScope", "not read",
+                        $"the flat histogram runs {flat.LearningIterations} learning and {flat.ProductionDraws} production iterations a chain, " +
+                        $"each of Sampling.Thin = {config.Sampling.Thin} sweeps, with no R̂ stop"));
+        }
+
         BassStepWindows? windows = null;
         if (config.Sampling.LocalSteps is { } steps)
         {

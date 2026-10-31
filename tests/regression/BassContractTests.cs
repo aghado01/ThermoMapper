@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
+using Maths.Samplers.FlatHistogram;
 using Xunit;
 
 namespace Maths.Regression.Tests;
@@ -273,6 +274,27 @@ public sealed class BassContractTests
         BassResolved capped = BassResolved.Resolve(new BassConfig { Structure = new BassStructureSpec { MaxBasis = 500 } }, data);
         Assert.Equal(39, capped.MaxBasis);
         Assert.Contains(capped.AutoPicks, p => p.Setting == "MaxBasis" && p.Reason.Contains("exceeds"));
+    }
+
+    [Fact]
+    public void Resolved_LogsTheSettingsTheFlatHistogramDoesNotRead()
+    {
+        // As SMC's are, the flat histogram's unread settings are logged, with what stands in for them; Thin is read.
+        var flat = new BassFlatHistogramSpec
+        {
+            Run = new FlatHistogramSpec
+            {
+                LearningIterations = 200, ProductionDraws = 100, Start = FlatHistogramStart.Flat,
+                Window = new FlatHistogramWindow(-100.0, -10.0), LowSlope = 0.0, Nodes = 8,
+            },
+        };
+        BassData data = Scalar(40, i => Math.Sin(i / 5.0) + 3.0);
+        BassResolved r = BassResolved.Resolve(new BassConfig { Sampling = new BassSampling { FlatHistogram = flat, Thin = 3 } }, data);
+        Assert.Contains(r.AutoPicks, p => p.Setting == "Sampling.Chains" && p.Value == "not read" && p.Reason.Contains("Run.Chains = 4"));
+        Assert.Contains(r.AutoPicks, p => p.Setting == "Sampling.BurnIn, Samples, BatchSize, MinEssPerChain, StoppingScope" && p.Value == "not read"
+                                          && p.Reason.Contains("200 learning and 100 production") && p.Reason.Contains("Sampling.Thin = 3"));
+        Assert.DoesNotContain(r.AutoPicks, p => p.Setting.Contains("Thin"));
+        Assert.DoesNotContain(BassResolved.Resolve(new BassConfig(), data).AutoPicks, p => p.Reason.Contains("flat histogram"));
     }
 
     [Fact]
