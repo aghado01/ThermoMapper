@@ -72,8 +72,8 @@ public readonly record struct DesignProposal(
 
 /// <summary>
 /// One chain's design: its terms' columns in the centred basis, the factor of their Gram, and the least-squares fit of
-/// the centred response, maintained through births, deaths and changes (stage 4's S4; D06; the numerics segment's
-/// dense factor maintenance).
+/// the centred working response (the response less the observation model's offset, <see cref="WorkingResponse"/>),
+/// maintained through births, deaths and changes (stage 4's S4; D06; the numerics segment's dense factor maintenance).
 /// <para><b>The centred basis.</b> The marginal depends only on the column space of [1, Z] under every intercept
 /// convention, so the design holds Z_c, the columns centred over all N rows, and ỹ = y − ȳ: the intercept is
 /// orthogonal to them, and its Gram entry N stands apart (D03). Its statistics are the fit's residual ‖r‖² and fitted
@@ -126,9 +126,10 @@ public sealed class BassDesign
     private Pending? _pending;
     private RidgeSpectrum? _spectrum;   // the current structure's, under the ridge; null until read
 
-    /// <summary>The intercept-only design over <paramref name="basis"/>'s inputs for <paramref name="data"/>'s response;
+    /// <summary>The intercept-only design over <paramref name="basis"/>'s inputs for <paramref name="working"/>, the
+    /// observation model's working response for <paramref name="data"/>'s (the response itself when null);
     /// <paramref name="ridge"/> keeps the normalized ridge's spectrum and proposal terms beside the factor.</summary>
-    public BassDesign(BassBasis basis, BassData data, BassAdmission rules, bool ridge = false)
+    public BassDesign(BassBasis basis, BassData data, BassAdmission rules, bool ridge = false, WorkingResponse? working = null)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(data);
@@ -143,7 +144,11 @@ public sealed class BassDesign
         _locations = data.Response.Locations;
         _rows = data.Response.Observations;
         if (basis.Inputs.Cases.Cases != _cases) throw new ArgumentException("The basis was not prepared from these data.", nameof(basis));
-        ReadOnlySpan<double> y = data.Response.Values;
+        working ??= new WorkingResponse(data.Response);
+        if (!ReferenceEquals(working.Response, data.Response)) throw new ArgumentException("The working response is of another response.", nameof(working));
+        if (!working.IsUnweighted)
+            throw new NotSupportedException("The core holds the unweighted Gram; weights arrive with the extension that supplies them (F-X1).");
+        ReadOnlySpan<double> y = working.Values;
         ResponseMean = PairwiseSum.Of(y) / _rows;
         _y = new double[_rows];
         for (int i = 0; i < _rows; i++) _y[i] = y[i] - ResponseMean;

@@ -100,9 +100,10 @@ public sealed record BassResolved
     /// leave no spread to fit (D03); a support threshold above its part's size, which no term could meet; a ladder
     /// with a rung where its tempered form is undefined (D05), its hot end, declared or auto-picked, or the reference
     /// rung's b = 0, and an auto-picked hot end outside (0, 1), which tiny data give; and SMC on the integrated form under
-    /// the improper options, which has no b = 0 to start from.
+    /// the improper options, which has no b = 0 to start from. The response the intercept convention fits and the scaled σ²
+    /// prior reads is <paramref name="working"/>'s (F-X1); null is the response itself.
     /// </summary>
-    public static BassResolved Resolve(BassConfig config, BassData data)
+    public static BassResolved Resolve(BassConfig config, BassData data, WorkingResponse? working = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(data);
@@ -114,7 +115,7 @@ public sealed record BassResolved
         log.Add(new("Observations", Text(n), functional ? $"N = n_x · n_r = {cases} · {locations}" : "N = n_x, a scalar response"));
 
         // The response the intercept convention can fit, its level and its mean square about it.
-        ReadOnlySpan<double> y = response.Values;
+        ReadOnlySpan<double> y = (working ?? new WorkingResponse(response)).Values;
         bool constant = true, zero = y[0] == 0.0;
         for (int i = 1; i < y.Length && constant; i++) constant = y[i] == y[0];
         double mean = PairwiseSum.Of(y) / n, level;

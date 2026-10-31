@@ -11,9 +11,12 @@ namespace Maths.Regression.Spline.Bass;
 public sealed class BassModel
 {
     private BassModel(BassConfig config, BassData data, BassResolved resolved, BassInputTransform transform, BassInputs inputs,
-                      BassBasis basis, BassAdmission admission, BassStructurePrior prior, BassTermProposal proposal, BassTarget target)
+                      BassBasis basis, BassAdmission admission, BassStructurePrior prior, BassTermProposal proposal, BassTarget target,
+                      IBassObservationModel observation, WorkingResponse working)
     {
         Config = config;
+        Observation = observation;
+        Working = working;
         Data = data;
         Resolved = resolved;
         Transform = transform;
@@ -29,10 +32,17 @@ public sealed class BassModel
     /// the config's (<see cref="TemperingSpec.Form"/> or <see cref="SmcSpec.Form"/>), the integrated form when it declares
     /// none.</summary>
     public static BassModel Create(BassConfig config, BassData data, TemperedForm? form = null)
+        => Create(config, data, GaussianObservation.Instance, form);
+
+    /// <summary><see cref="Create(BassConfig, BassData, TemperedForm?)"/> with <paramref name="observation"/> as the noise
+    /// the Gaussian core fits (F-X1); Gaussian BASS is the overload above.</summary>
+    public static BassModel Create(BassConfig config, BassData data, IBassObservationModel observation, TemperedForm? form = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(data);
-        BassResolved resolved = BassResolved.Resolve(config, data);
+        ArgumentNullException.ThrowIfNull(observation);
+        WorkingResponse working = observation.Working(data.Response);
+        BassResolved resolved = BassResolved.Resolve(config, data, working);
         BassInputTransform transform = BassInputTransform.Fit(data);
         BassInputs inputs = BassInputs.Prepare(data, transform);
         var basis = new BassBasis(inputs, config.Structure.Degree);
@@ -40,7 +50,7 @@ public sealed class BassModel
         BassStructurePrior prior = BassStructurePrior.From(config, resolved, inputs);
         BassTermProposal proposal = BassTermProposal.From(config, prior);
         var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated);
-        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, target);
+        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, target, observation, working);
     }
 
     /// <summary>The config.</summary>
@@ -73,9 +83,15 @@ public sealed class BassModel
     /// <summary>The collapsed target (D03, D05).</summary>
     public BassTarget Target { get; }
 
+    /// <summary>The observation model: what the Gaussian core fits of the response (F-X1).</summary>
+    public IBassObservationModel Observation { get; }
+
+    /// <summary>What the observation model hands the Gaussian core: the working response and weights every design fits.</summary>
+    public WorkingResponse Working { get; }
+
     /// <summary>M_max, the basis cap.</summary>
     public int MaxBasis => Resolved.MaxBasis;
 
     /// <summary>A new intercept-only design over the data, one per chain.</summary>
-    public BassDesign NewDesign() => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm);
+    public BassDesign NewDesign() => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, Working);
 }
