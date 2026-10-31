@@ -48,6 +48,8 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ### Room for extensions
 
+The open seams (F-X1, F-X2, F-X3, F-X6 here; N-X1–N-X3; O-X4) are briefed for one chip, 2026-10-31 ([extensions-preparation-brief.md](extensions-preparation-brief.md)); F-X4 waits for KHAOS's proposal.
+
 - [ ] **F-X1** Observation-model seam carries an offset with the weights.
 - [ ] **F-X2** The sweep has a latent slot.
 - [ ] **F-X3** Term types behind one design-kernel contract, with derivatives.
