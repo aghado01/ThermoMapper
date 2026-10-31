@@ -161,6 +161,50 @@ public sealed class BassFlatHistogramQualificationTests
         RunArm($"Arm (i), a flat start over seed {SecondSeed}'s pilot window, master seed {SecondSeed}, twice the sweeps (Thin {2 * Thin})", config, null);
     }
 
+    // ---- Why SAMC's fixed point refused seed 8217's pilot (the warm start's chip, step 1, 2026-10-31) ----
+
+    // Both seeds' pilots rebuilt as Bass.Fit builds them (deterministic from the master seed), with their WHAM ĝ and the
+    // start's shape as the run resolves it. On 8217 the window's lowest node sees ĝ through one atom, 0.87 of the way to
+    // node 1, so node 0's flat share cannot be met without overfilling node 1: the flat occupancy lies outside the hull of
+    // ĝ's hat vectors (FlatHistogramLimit), no finite θ* exists, and Newton follows G down without bound until no step
+    // descends. The node reported 125 from flat is where the mass ran to, not the cause. 8017's pilot, accepted, for contrast.
+    [Fact]
+    public void Friedman_SecondSeed_WhyTheFixedPointRefusedItsPilot()
+    {
+        if (!BassQualification.Enabled) return;   // two pilots, about a minute each
+        BassMixing.Fixture f = Fixture.Value;
+        foreach ((int seed, bool refused, int segment) in new[] { (SecondSeed, true, 1), (ArmOneSeed, false, -1) })
+        {
+            BassConfig config = ArmConfig(true, null, seed);
+            BassFlatHistogramSpec spec = config.Sampling.FlatHistogram!;
+            var options = new BassRunOptions();
+            int[] roots = SeedTree.Derive(seed, 2);   // the run's, the pilot's, as Bass.Fit derives them
+            (TemperingPilot pilot, _) = BassFlatHistogramFit.Pilot(BassModel.Create(config, f.Data), spec.Pilot!, roots[1], options, new BassSweepCount(options, 0));
+            FlatHistogramWindow window = Wham.Window(pilot, spec.Run.WindowQuantile, spec.Run.WindowMargin);
+            var shape = MulticanonicalWeights.Flat(window.Low, window.High, pilot.HotEnd, Wham.Nodes(pilot, window));
+            WhamEstimate estimate = Wham.Estimate(pilot);
+            string verdict = "accepted";
+            try { SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _); }
+            catch (InvalidOperationException e) { verdict = e.Message; }
+            (int at, double gap) = FlatHistogramLimit.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
+            var draws = new double[shape.Nodes];
+            for (int i = 0; i < pilot.Rungs; i++)
+                foreach (double level in pilot.Levels(i))
+                    if (shape.TryLocate(level, out int s, out double u))
+                    {
+                        draws[s] += 1.0 - u;
+                        draws[s + 1] += u;
+                    }
+            _out.WriteLine($"## Master seed {seed}: window [{shape.Low:G6}, {shape.High:G6}], K {shape.Nodes}, spacing {shape.Spacing:F3}, b_lo {shape.LowSlope}; " +
+                           $"{pilot.Rungs} pooled rungs, {pilot.Draws:N0} draws, {estimate.Levels.Length:N0} atoms, WHAM residual {estimate.Residual:E1}; {verdict}; " +
+                           (at < 0 ? "flat occupancy inside the hull" : $"flat occupancy outside the hull at segment {at}, by {gap:F4}"));
+            for (int k = 0; k < 4; k++) _out.WriteLine("  " + FlatHistogramLimit.NodeReport(shape, pilot, estimate, k));
+            _out.WriteLine("  nodes under 10 pilot draws: " + string.Join(", ", Enumerable.Range(0, shape.Nodes).Where(k => draws[k] < 10.0).Select(k => $"{k} ({draws[k]:F1})")));
+            Assert.Equal(refused, verdict != "accepted");
+            Assert.Equal(segment, at);
+        }
+    }
+
     private void RunArm(string label, BassConfig config, SmcAt? smc)
     {
         BassMixing.Fixture fixture = Fixture.Value;
