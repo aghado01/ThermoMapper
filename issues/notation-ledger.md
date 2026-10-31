@@ -11,6 +11,20 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### E: the energy and the window's width (2026-10-31)
+
+- **Kind:** one symbol, two concepts in one doc.
+- **Readings:** the window's width in e-folds in the stopping primer's §3 ("over a window of E e-folds", n_min = 1 + ⌈2E/w_min⌉) and §13.4 (n ≈ c·E/w_min); the energy in its §5, §12 and §13 (⟨E⟩, Var(E), σ_E, D_J) and in `Accumulator.EnergyPerDraw` (`src/clustering/graphical/spc/runtime/core/sampler/Accumulator.cs`).
+- **Found:** writing the primer's round 2 (`issues/spc-BARS/stopping-theory-primer.md`, §13).
+- **Note:** §13 keeps §3's E for the window where it quotes §3's count, and the energy everywhere else.
+
+### Repeated runs at one temperature: replica and replicate (2026-10-31)
+
+- **Kind:** one concept, two names.
+- **Readings:** "replica" in `SweepCurve.Replicas` (`src/clustering/graphical/spc/profiling/SweepCurves.cs:115`), in `MonteCarloError`'s "the replicas as the chains" (`src/clustering/graphical/spc/profiling/MonteCarloError.cs:10`) and in the stopping primer's §12 and §13 ("8 replicas"); "replicate" in the primer's §1–§2 ("replicate spread"), in `Pointwise.cs`'s "a replicate's observation" (`src/maths/regression/Pointwise.cs:13`) and in the BASS extensions brief's "replicate sweeps" (`issues/regression/bass/extensions-brief.md`, the conformal entries).
+- **Found:** the primer's round 2, where the user's own word was "replicant".
+- **Note:** physics' replica (an independent copy of the system, as in replica exchange) and statistics' replicate (a repeated measurement) both fit. §13 says "replica" for a run and keeps "replicate sweep" where it follows the extensions brief.
+
 ### One SW update: draw, cycle and sweep (2026-10-29)
 
 - **Kind:** one concept under three names, one of which ("sweep") also names a second concept.
