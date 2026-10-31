@@ -129,6 +129,19 @@ public sealed class BassSweepSlotTests
     }
 
     [Fact]
+    public void TheTemperingReplicas_RunTheLaterSlotsAtEveryRung()
+    {
+        var log = new List<string>();
+        var spec = new TemperingSpec { Levels = 3, HotEnd = 0.2 };
+        BassModel model = BassModel.Create(Sampled(), SensitivityFixture.Scalar(), new Filling(log, draw: false));
+        BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(1)).State;
+        var ladder = new BassLadder(model, spec, start.Terms, start.LogTau, 2);
+        ladder.Step();
+        Assert.True(log.Count >= 3 * 4 && log.Count % 4 == 0, $"{log.Count} probe calls");   // each rung's replica: a, two latent blocks, scale
+        Assert.All(log.Chunk(4), call => Assert.Equal(["a", "latent-1", "latent-2", "scale"], call));
+    }
+
+    [Fact]
     public void ABlockInALaterSlot_SharesTheScansStream_BehindTau()
     {
         BassData data = SensitivityFixture.Scalar();
