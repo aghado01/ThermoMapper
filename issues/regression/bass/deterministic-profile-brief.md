@@ -1,6 +1,6 @@
 # F-R1: the deterministic-simulator profile's comparison (design draft and chip brief)
 
-Date: 2026-10-30. Status: a draft for the user's pass. "The decisions" below lays out the choices with recommendations. Once they are taken, "The comparison, fixed before any run" is the chip's brief, and nothing in it changes after a run.
+Date: 2026-10-30. Status: decided. The user took the nine recommendations below as drafted on 2026-10-30, so "The comparison, fixed before any run" is the chip's brief, and nothing in it changes after a run.
 
 ## Why
 
@@ -12,7 +12,7 @@ The fitting segment's regime note (2026-10-26, [port-fitting-brief.md](port-fitt
 
 Which coefficient prior the profile takes was left to a pre-registered comparison of our own. It was waiting on the ridge, which is built (2026-10-29, `docs/Maths/BayesianRegression.md`, "BASS: the coefficient prior's two axes, and the ridge"). The Opus chat's column-scale concern, that a common τ on raw hinge columns shrinks terms by where their knots sit, is handled by building the ridge on unit-RMS columns. So the comparison measures the prior, not a column scaling. The Bissiri reading (the extensions brief) adds that σ² on deterministic data is a learned loss weight, so the profile keeps σ² sampled.
 
-## The decisions (for the user's pass, with recommendations)
+## The decisions (decided 2026-10-30, as recommended)
 
 1. **The coefficient priors compared.** *Recommended:* the 2 × 2 of form and scale, so the ridge-against-g question and the sampled-against-held question are read apart:
    - the g-form under Zellner–Siow, today's default;
@@ -58,7 +58,7 @@ Which coefficient prior the profile takes was left to a pre-registered compariso
    - a winner becomes the named profile, a `BassConfig` factory in production built after the verdict, with its λ, its coefficient prior and D03's σ² default. Its docs say that direct functional fits read the residual check before intervals.
    - No default changes either way.
 
-## The comparison, fixed before any run (as recommended)
+## The comparison, fixed before any run
 
 **Arms.** Each is S10's configuration (four chains, `BurnIn` 5,000, `Samples` 2,000, `Thin` 1, untempered) with:
 

@@ -594,7 +594,7 @@ Three findings from the lineage and the propriety check point the same way.
 
 Which coefficient prior the profile uses is left to the pre-registered comparison, not set from KHAOS's study. Under the Jeffreys option the exact-fit refusal stays, and points users to this profile.
 
-*(2026-10-30)* The comparison's design is drafted for the user's pass, with its arms, benchmarks, metrics and rule ([deterministic-profile-brief.md](deterministic-profile-brief.md)).
+*(2026-10-30)* The comparison's design was decided by the user the same day, as recommended, with its arms, benchmarks, metrics and rule ([deterministic-profile-brief.md](deterministic-profile-brief.md)). A winner becomes the profile; if none clears, no profile is built, and no default changes either way.
 
 ## Room for extensions
 
