@@ -710,7 +710,7 @@ public sealed class BassDeterministicProfileTests
 
         public string Row() => string.Join(",",
             Benchmark, I(K), I(MasterSeed), Arm, I(Block), I(Position), F(Seconds), F(CpuSeconds), F(ReadSeconds), F(Nrmse), F(Coverage),
-            F(PredictiveRHat), PredictiveBy, F(PredictiveEss), Verdict, F(MedianM), F(LowerM), F(UpperM), I(MaxM), I(MaxBasis),
+            F(PredictiveRHat), PredictiveBy, F(PredictiveEss), $"\"{Verdict}\"", F(MedianM), F(LowerM), F(UpperM), I(MaxM), I(MaxBasis),
             F(MassAtCap), F(SigmaMedian), F(TauUnitsMedian), F(ResidualMean), F(ResidualExpected), F(ResidualMedian),
             HoldoutHash, DrawsHash, Fingerprint);
     }
@@ -1019,7 +1019,7 @@ public sealed class BassDeterministicProfileTests
             Head(["arm", "score", .. v.Scored.Select(f => $"r_f {BenchLabel(f)}"), .. v.Scored.Select(f => $"coverage {BenchLabel(f)} (A0's)"), ruled ? "clears" : "loses to A0 (score > 1)"]);
             foreach (Standing s in v.Standings)
                 Row([Label(s.Arm), $"{s.Score:F3}", .. s.LogRatio.Select(l => $"{Math.Exp(l):F3}"),
-                     .. s.Coverage.Select((c, i) => $"{c:F3} ({s.A0Coverage[i]:F3})"), ruled ? (s.Clears ? "yes" : "no") : (s.Score > 1 ? "yes" : "no")]);
+                     .. s.Coverage.Select((c, i) => $"{c:F3} ({s.A0Coverage[i]:F3})"), ruled ? (s.Clears ? "yes" : "no") : double.IsNaN(s.Score) ? "unscored" : (s.Score > 1 ? "yes" : "no")]);
         }
 
         md.Append("### The verdict\n\n");
@@ -1038,13 +1038,18 @@ public sealed class BassDeterministicProfileTests
         }
         Gate(verdict, "noise-free");
 
-        md.Append("### Context for the verdict\n\nEach arm's per-design ln(NRMSE/NRMSE_A0), and their sd:\n\n");
-        Head(["arm", .. verdict.Scored.Select(f => BenchLabel(f))]);
-        foreach (Standing s in verdict.Standings)
-            Row([Label(s.Arm), .. s.DesignLogRatios.Select((r, i) => $"{string.Join(", ", r.Select(x => x.ToString("F3")))} (sd {s.Spread[i]:F3})")]);
-        md.Append("\nEach arm's score with one benchmark left out:\n\n");
-        Head(["arm", .. verdict.Scored.Select(f => $"without {BenchLabel(f)}")]);
-        foreach (Standing s in verdict.Standings) Row([Label(s.Arm), .. s.LeaveOneOut.Select(x => $"{x:F3}")]);
+        md.Append("### Context for the verdict\n\n");
+        if (verdict.Scored.Length == 0) md.Append("No benchmark is scored, so there are no ratios to give.\n");
+        else
+        {
+            md.Append("Each arm's per-design ln(NRMSE/NRMSE_A0), and their sd:\n\n");
+            Head(["arm", .. verdict.Scored.Select(f => BenchLabel(f))]);
+            foreach (Standing s in verdict.Standings)
+                Row([Label(s.Arm), .. s.DesignLogRatios.Select((r, i) => $"{string.Join(", ", r.Select(x => x.ToString("F3")))} (sd {s.Spread[i]:F3})")]);
+            md.Append("\nEach arm's score with one benchmark left out:\n\n");
+            Head(["arm", .. verdict.Scored.Select(f => $"without {BenchLabel(f)}")]);
+            foreach (Standing s in verdict.Standings) Row([Label(s.Arm), .. s.LeaveOneOut.Select(x => $"{x:F3}")]);
+        }
 
         md.Append("\n### The noisy controls (read, not ruled)\n\n");
         Standings(controls, ruled: false);
