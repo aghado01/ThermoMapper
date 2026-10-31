@@ -1,0 +1,14 @@
+That's a big slate, but most of it builds on machinery BASS already has, so building it now makes sense. Reading the brief against what you're building, four things stood out.
+
+**KHAOS doesn't need E7 for its Sobol indices.** KHAOS is a fully Bayesian adaptive polynomial chaos expansion, with a new proposal that selects interactions from the data and a g-prior adapted to the PCE structure. Its basis is orthonormal under the input measure, so each draw's first-order and total indices are ratios of sums of squared coefficients. No integration is needed, so KHAOS skips the moment service that BASS's hinges and ABMRS's B-splines depend on. That only holds under the measure the polynomials are orthonormal for; any other input distribution puts you back to integrating. The brief also covers KHAOS only through its parts, E4's proposal kernel and E5's g-prior. If you're building the whole engine, it needs its own entry.
+
+**GBMARS's quantile case belongs under E15.** Asymmetric-Laplace noise is a working likelihood for the check loss, so its posterior is a Gibbs posterior. The §3.3 reading you used for F-R1 then applies: the sampled scale is a learned loss weight. That weight doesn't calibrate the quantile intervals. Yang, Wang and He (2016, *International Statistical Review*) show that the AL posterior's point estimates hold up but its spread doesn't, and they give a sandwich correction. E15 names BARS's `GibbsLossModel` and robustness weighting. The quantile route out of E1, and OQ20's BARS side, is a client it doesn't name.
+
+**Where you depart from the papers, use SBC to validate.** Putting the prior on u = √w changes GBMARS's prior when β ≠ 0. KHAOS's g₀² conditional has to be derived because the printed one has no data term. In both cases, no released implementation samples your posterior, so matching R output can't validate them. Simulation-based calibration can, and it tests exactly what your derivation claims: that the GIG step is exact. The β = 0 Student-t case can still be matched exactly against `StudentTWeights`.
+
+**ABMRS's peak ridge can reuse the 1D peak code.** Fixing θ in a tensor B-spline leaves a 1D B-spline in T on the same knots, with coefficients d_j(θ) = Σ_k c_jk B_k(θ). So T\*(θ) on any θ grid is `SplineExtrema` applied to slices, exact per slice and per draw, and the span tests carry over the same way. Only the global 2D maximum needs new code: in each cell it's a bivariate polynomial system, ∂f/∂T = ∂f/∂θ = 0.
+
+One bookkeeping point: the brief's table still has GBMARS deferred, ABMRS parked and the KHAOS pieces as candidates. The brief's own rule is that an entry starts with its own specification and acceptance criteria, and that's where the SBC runs and the ridge readout's tests would go.
+
+Sources:
+- [Bayesian Adaptive Polynomial Chaos Expansions (arXiv 2510.25036)](https://arxiv.org/pdf/2510.25036)

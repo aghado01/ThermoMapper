@@ -1,0 +1,4 @@
+
+**Back to abliteralus.** As I understand the module, the same split already runs through it: subspace comparisons are basis-free on the Grassmannian, and interventions use an orthonormal frame with Stiefel re-projection. Two of the BASS points carry over directly:
+- *Eigengaps decide what's reportable.* Individual directions from an SVD of contrastive activations are meaningful only across a clear eigengap. Inside a near-degenerate block, only the span is.
+- *Block spread gives a credible radius.* Running MoMPCA over prompt blocks gives the subspace's sampling spread in principal angles. Paired with the Jacobi-ensemble null for overlap, that tells you both whether a behavioural subspace is stable and whether its overlap with another is above chance.
