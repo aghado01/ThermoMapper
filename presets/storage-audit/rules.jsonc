@@ -1,0 +1,72 @@
+// storage-audit's rules: which paths are regenerable, archivable, kept or for the user to decide.
+// Globs are relative to their root, with forward slashes: * and ? stay within a segment, ** spans
+// segments, and a trailing / matches folders (without it, files). A deeper rule carves its item out of
+// a shallower one; among rules matching the same path, the first listed wins. keepNewest keeps the
+// newest n of a rule's matches that share a parent folder. Defaults come from the 2026-10-31 survey
+// (issues/tooling/storage-audit-brief.md); edit freely.
+{
+  "recentWindowHours": 24,
+
+  // Never acted on, nor anything holding them; .git/ is always protected besides.
+  "protect": ["issues/", "docs/"],
+
+  // Temp data the repository's sessions write outside it. {repoSlug} is the repository path with
+  // each non-alphanumeric character turned into '-' (D--aghado01-ThermoMapper).
+  "tempRoots": [
+    { "name": "claude-temp", "path": "%TEMP%\\claude\\{repoSlug}" }
+  ],
+
+  "rules": [
+    // Build outputs (Directory.Build.props routes bin/obj under artifacts/).
+    { "glob": "artifacts/bin/", "category": "regenerable", "kind": "build", "reason": ".NET build output; the next dotnet build recreates it" },
+    { "glob": "artifacts/obj/", "category": "regenerable", "kind": "build", "reason": ".NET intermediate output; dotnet restore/build recreates it" },
+
+    // Chips' and sessions' own artifacts roots: their chips clean them.
+    { "glob": "artifacts/chip-*/", "category": "ask", "kind": "chip", "reason": "a chip's artifacts root; its chip cleans it when done" },
+    { "glob": "artifacts/main-*/", "category": "ask", "kind": "session", "reason": "a session's artifacts root; its session cleans it when done" },
+
+    // Test, smoke and benchmark runs.
+    { "glob": "artifacts/test-runs/TestHarness.Runner/*/", "category": "regenerable", "kind": "run", "keepNewest": 1, "reason": "a fact-harness run's logs; every run writes a fresh folder" },
+    { "glob": "artifacts/test-runs/", "category": "keep", "kind": "run", "reason": "the tables and manifests the tests last wrote; small, and reruns overwrite them" },
+    { "glob": "artifacts/smoke-runs/", "category": "regenerable", "kind": "run", "reason": "smoke-test attempt folders; a rerun recreates them" },
+    { "glob": "artifacts/repo-audit/*/", "category": "regenerable", "kind": "run", "keepNewest": 1, "reason": "a repo-audit report; a rerun recreates the current one" },
+    { "glob": "artifacts/spc/", "category": "archivable", "kind": "run", "reason": "SPC run outputs; results of past runs" },
+    { "glob": "artifacts/bench/", "category": "archivable", "kind": "run", "reason": "benchmark measurements of past code" },
+    { "glob": "artifacts/benchmarks/", "category": "archivable", "kind": "run", "reason": "benchmark measurements of past code" },
+
+    // Caches.
+    { "glob": "artifacts/graph_cache/", "category": "regenerable", "kind": "cache", "reason": "graph cache; a run recreates it" },
+    { "glob": "artifacts/doc-dive/", "category": "regenerable", "kind": "cache", "reason": "doc-dive cache; a run recreates it" },
+    { "glob": "artifacts/gallery/", "category": "archivable", "kind": "cache", "reason": "the rendered viz gallery; a gallery run recreates it, kept for viewing" },
+
+    // storage-audit's own reports and ledger.
+    { "glob": "artifacts/storage-audit/runs/*/", "category": "regenerable", "kind": "run", "keepNewest": 3, "reason": "a storage-audit profile and plan; a rerun recreates them" },
+    { "glob": "artifacts/storage-audit/", "category": "keep", "kind": "ledger", "reason": "storage-audit's ledger of every action" },
+
+    // Whatever else lands in artifacts/.
+    { "glob": "artifacts/artifacts/", "category": "ask", "kind": "run", "reason": "a nested artifacts folder, likely a run from the wrong working directory" },
+    { "glob": "artifacts/", "category": "ask", "kind": "run", "reason": "loose run outputs no other rule claims" },
+
+    // Lean: the package builds are caches; the package sources are git clones lake fetches over the network.
+    { "glob": "lean/.lake/packages/*/.lake/build/", "category": "regenerable", "kind": "build", "reason": "a Lean package's build cache; `lake exe cache get` restores Mathlib's from ~/.cache/mathlib or by download" },
+    { "glob": "lean/.lake/build/", "category": "regenerable", "kind": "build", "reason": "the Lean project's build output; `lake build` recreates it" },
+    { "glob": "lean/.lake/", "category": "keep", "kind": "cache", "reason": "Lean package sources (git clones); lake re-clones them only over the network" },
+
+    // R oracles' library: renv reinstalls it, but over the network and slowly.
+    { "glob": "r/renv/library/", "category": "keep", "kind": "cache", "reason": "the R oracles' packages; renv::restore() reinstalls them over the network" },
+
+    // Reposnapshot payloads: the newest stays, older ones go to the archive.
+    { "glob": "**/.snapshot/*/", "category": "archivable", "kind": "snapshot", "keepNewest": 1, "reason": "an older reposnapshot payload; reposnapshot recreates the current one" },
+
+    // Agents' local data.
+    { "glob": ".claude/worktrees/*/", "category": "ask", "kind": "worktree", "reason": "a worktree folder; check it against git worktree list" },
+    { "glob": ".claude/", "category": "keep", "kind": "agent", "reason": "Claude Code's local settings" },
+    { "glob": ".codex/", "category": "ask", "kind": "agent", "reason": "Codex's local data (chat exports, temp)" },
+
+    { "glob": ".git/", "category": "keep", "kind": "git", "reason": "git's object store; maintenance is proposed, never run" },
+
+    // The sessions' scratchpads and task outputs (on C:, so they free nothing on D:).
+    // A week's window: an idle session can be resumed days later and still read its scratchpad.
+    { "glob": "*/", "root": "claude-temp", "category": "regenerable", "kind": "temp", "recentWindowHours": 168, "reason": "a session's scratchpad and task outputs; temp by design" }
+  ]
+}

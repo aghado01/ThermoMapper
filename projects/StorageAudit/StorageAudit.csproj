@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>StorageAudit</AssemblyName>
+    <RootNamespace>StorageAudit</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="StorageAudit.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\storage-audit\**\*.cs" Link="StorageAudit\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
