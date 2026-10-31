@@ -768,6 +768,58 @@ public sealed class BassFlatHistogramTests
         _out.WriteLine($"8 pilots' WHAM starts against θ*: per-pilot centred RMS {rms:F3} (tolerance 0.25); mean z² over nodes {z2:F2} (tolerance 3; t₇ gives 1.4)");
         Assert.True(z2 < 3.0, $"the warm starts depart from θ* by more than their spread: mean z² {z2:F2}");
         Assert.True(rms < 0.25, $"a warm start departs from θ* by {rms:F3} RMS");
+        // Pinned before the warm start's remedy (2026-10-31): a start the fixed point accepts stays as it was, bit for bit.
+        Assert.Equal("95ad874b5dce0d4e", StartHash(starts));
+    }
+
+    // FNV-1a over the starts' windows, slopes and ln w, bit for bit.
+    internal static string StartHash(IEnumerable<MulticanonicalWeights> starts)
+    {
+        var hash = new RunFingerprint();
+        foreach (MulticanonicalWeights w in starts) hash.Add(w.Low).Add(w.High).Add(w.LowSlope).Add([.. w.LogWeights]);
+        return hash.ToString();
+    }
+
+    // Fixture A, τ sampled: 48 pilots (FixtureAPilot, master seeds from 7905), each with the window, b_lo and K a run
+    // resolves from it, its WHAM ĝ, and SAMC's limit on the exact density of states over that shape.
+    internal sealed record ResolvedPilot(int Seed, TemperingPilot Pilot, MulticanonicalWeights Shape, WhamEstimate Estimate, MulticanonicalWeights Exact,
+                                         bool[] ExactEmpty);
+
+    internal static readonly Lazy<ResolvedPilot[]> FixtureAPilots = new(() =>
+    {
+        BassModel model = FixtureA(heldTau: false);
+        (double[] levels, double[] masses) = BassFlatHistogramSpace.Of(model).DensityOfStates();
+        return [.. SeedTree.Derive(7905, 48).Select(seed =>
+        {
+            TemperingPilot pilot = PilotOf(model, FixtureAPilot, seed).Pilot;
+            FlatHistogramWindow window = Wham.Window(pilot, 0.01, 1.0);
+            var shape = MulticanonicalWeights.Flat(window.Low, window.High, pilot.HotEnd, Wham.Nodes(pilot, window));
+            MulticanonicalWeights exact = SamcLearning.FixedPoint(shape, levels, masses, out bool[] empty);
+            return new ResolvedPilot(seed, pilot, shape, Wham.Estimate(pilot), exact, empty);
+        })];
+    }, System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
+
+    [Fact]
+    public void WarmStart_OnFortyEightFixtureAPilots_RefusesSeven_AndItsAcceptedStartsArePinned()
+    {
+        // Fixture A's pilots over the shapes they resolve themselves, the window's margins reaching the hot rung's sparse
+        // tail: SAMC's fixed point refuses 7 of 48 ĝ, each infeasible at the window's lowest segments (read in exploration,
+        // 2026-10-31). The accepted starts are pinned before the warm start's remedy, which must leave them bit for bit.
+        var accepted = new List<MulticanonicalWeights>();
+        var refused = new List<int>();
+        foreach (ResolvedPilot p in FixtureAPilots.Value)
+        {
+            try { accepted.Add(SamcLearning.FixedPoint(p.Shape, p.Estimate.Levels, p.Estimate.LogMasses, out _)); }
+            catch (InvalidOperationException)
+            {
+                refused.Add(p.Seed);
+                (int at, _) = FlatHistogramLimit.Infeasibility(p.Shape, p.Estimate.Levels, p.Estimate.LogMasses);
+                Assert.InRange(at, 0, 2);
+            }
+        }
+        _out.WriteLine($"## Fixture A, 48 pilots over their own shapes: {refused.Count} refused ({string.Join(", ", refused)}); start hash {StartHash(accepted)}");
+        Assert.Equal(7, refused.Count);
+        Assert.Equal("e09cb5b3b470f47e", StartHash(accepted));
     }
 
     [Fact]
@@ -922,6 +974,8 @@ public sealed class BassFlatHistogramTests
         int below = gap[0] - 1, above = gap[^1] + 1;
         foreach (int k in gap)
             Assert.Equal(start[below] + (start[above] - start[below]) * (k - below) / (above - below), start[k], 9);
+        // Pinned before the warm start's remedy (2026-10-31): a start the fixed point accepts stays as it was, bit for bit.
+        Assert.Equal("33f442de917867dc", StartHash([fh.WeightTrace[0].Weights]));
         Assert.True(fh.Complete);
         Assert.NotNull(fit.Evidence);
     }

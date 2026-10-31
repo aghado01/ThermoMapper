@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Maths.Rng;
+using Maths.Samplers.Ensemble;
 using Maths.Samplers.FlatHistogram;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
@@ -110,6 +111,16 @@ public sealed class WhamTests
                        $"with every g = 1, {rmsOne:F3} and {z2One:F2}; g per rung, cold first, on the first pilots: {string.Join("; ", inefficiencies.Take(2))}");
         Assert.True(z2 < 3.0, $"the warm starts depart from θ* by more than their spread: mean z² {z2:F2}");
         Assert.True(rms < 0.25, $"a warm start departs from θ* by {rms:F3} RMS");
+        // Pinned before the warm start's remedy (2026-10-31): a start the fixed point accepts stays as it was, bit for bit.
+        Assert.Equal("e3aa60d4d15c7b42", StartHash(starts.Concat(unweighted)));
+    }
+
+    // FNV-1a over the starts' windows, slopes and ln w, bit for bit.
+    internal static string StartHash(IEnumerable<MulticanonicalWeights> starts)
+    {
+        var hash = new RunFingerprint();
+        foreach (MulticanonicalWeights w in starts) hash.Add(w.Low).Add(w.High).Add(w.LowSlope).Add([.. w.LogWeights]);
+        return hash.ToString();
     }
 
     [Fact]
@@ -123,6 +134,8 @@ public sealed class WhamTests
         _out.WriteLine($"[wham] Potts, 8 pilots of 8 rungs × 20 000 scans: per-pilot centred RMS to θ* {rms:F3}; mean z² over levels {z2:F2} (t₇: 1.4)");
         Assert.True(z2 < 3.0, $"the warm starts depart from θ* by more than their spread: mean z² {z2:F2}");
         Assert.True(rms < 0.25, $"a warm start departs from θ* by {rms:F3} RMS");
+        // Pinned before the warm start's remedy (2026-10-31): a start the fixed point accepts stays as it was, bit for bit.
+        Assert.Equal("1d49177c45e38b17", StartHash(starts));
     }
 
     // The learned weights' centred RMS to θ* after a learning of the given length, from flat or from a pilot's WHAM start.

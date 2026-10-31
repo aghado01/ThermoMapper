@@ -172,16 +172,9 @@ public sealed class BassFlatHistogramQualificationTests
     public void Friedman_SecondSeed_WhyTheFixedPointRefusedItsPilot()
     {
         if (!BassQualification.Enabled) return;   // two pilots, about a minute each
-        BassMixing.Fixture f = Fixture.Value;
         foreach ((int seed, bool refused, int segment) in new[] { (SecondSeed, true, 1), (ArmOneSeed, false, -1) })
         {
-            BassConfig config = ArmConfig(true, null, seed);
-            BassFlatHistogramSpec spec = config.Sampling.FlatHistogram!;
-            var options = new BassRunOptions();
-            int[] roots = SeedTree.Derive(seed, 2);   // the run's, the pilot's, as Bass.Fit derives them
-            (TemperingPilot pilot, _) = BassFlatHistogramFit.Pilot(BassModel.Create(config, f.Data), spec.Pilot!, roots[1], options, new BassSweepCount(options, 0));
-            FlatHistogramWindow window = Wham.Window(pilot, spec.Run.WindowQuantile, spec.Run.WindowMargin);
-            var shape = MulticanonicalWeights.Flat(window.Low, window.High, pilot.HotEnd, Wham.Nodes(pilot, window));
+            (TemperingPilot pilot, MulticanonicalWeights shape) = ArmOnePilot(seed);
             WhamEstimate estimate = Wham.Estimate(pilot);
             string verdict = "accepted";
             try { SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _); }
@@ -203,6 +196,31 @@ public sealed class BassFlatHistogramQualificationTests
             Assert.Equal(refused, verdict != "accepted");
             Assert.Equal(segment, at);
         }
+    }
+
+    // Arm (i)'s pilot on a master seed, rebuilt as Bass.Fit builds it (deterministic from the seed), with the start's shape
+    // as the run resolves it.
+    private static (TemperingPilot Pilot, MulticanonicalWeights Shape) ArmOnePilot(int seed)
+    {
+        BassConfig config = ArmConfig(true, null, seed);
+        BassFlatHistogramSpec spec = config.Sampling.FlatHistogram!;
+        var options = new BassRunOptions();
+        int[] roots = SeedTree.Derive(seed, 2);   // the run's, the pilot's, as Bass.Fit derives them
+        (TemperingPilot pilot, _) = BassFlatHistogramFit.Pilot(BassModel.Create(config, Fixture.Value.Data), spec.Pilot!, roots[1], options, new BassSweepCount(options, 0));
+        FlatHistogramWindow window = Wham.Window(pilot, spec.Run.WindowQuantile, spec.Run.WindowMargin);
+        return (pilot, MulticanonicalWeights.Flat(window.Low, window.High, pilot.HotEnd, Wham.Nodes(pilot, window)));
+    }
+
+    // Seed 8017's accepted start, Friedman's one qualified reading, pinned before the warm start's remedy (2026-10-31): the
+    // remedy runs only where the fixed point refuses, so this start must stay as it was, bit for bit.
+    [Fact]
+    public void Friedman_ArmOne_WarmStart_IsPinned()
+    {
+        if (!BassQualification.Enabled) return;   // a pilot, about a minute
+        (TemperingPilot pilot, MulticanonicalWeights shape) = ArmOnePilot(ArmOneSeed);
+        string hash = BassFlatHistogramTests.StartHash([Wham.WarmStart(pilot, shape)]);
+        _out.WriteLine($"## Master seed {ArmOneSeed}'s WHAM start over [{shape.Low:G6}, {shape.High:G6}], K {shape.Nodes}: hash {hash}");
+        Assert.Equal("86f45b016b3f3f47", hash);
     }
 
     private void RunArm(string label, BassConfig config, SmcAt? smc)
