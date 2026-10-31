@@ -181,7 +181,7 @@ public sealed record HalfTDeviationPrior(double Degrees = 1.0, double? Scale = n
 /// population where its own data is weak. A fully conjugate banded Gibbs sampler, run as a <see cref="BlockScan{TState}"/>
 /// of five blocks: <c>β_r | ·</c> for every replicate and <c>β_0 | ·</c> are banded Gaussian draws
 /// (<see cref="GaussianConditional"/> on a <see cref="BandCholesky"/> factor), and the three variance components
-/// <c>(σ², τ_u², τ_0²)</c> are inverse-gamma (<see cref="ConjugateUpdates.NormalVariance"/>). Each sweep draws β_r,
+/// <c>(σ², τ_u², τ_0²)</c> are inverse-gamma (<see cref="ConjugateUpdates.NormalVariance(double, double, double, double)"/>). Each sweep draws β_r,
 /// then β_0, then the variances, every draw conditioning on the current values of the others.
 /// <c>Q_r = ZᵀZ/σ² + I/τ_u²</c> is shared across replicates so it factors once per sweep; the identity deviation
 /// term keeps <c>β_0</c>'s posterior proper. (Unstructured deviations are the clean first cut; smooth deviations
