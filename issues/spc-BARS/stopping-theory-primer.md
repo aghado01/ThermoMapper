@@ -1,8 +1,8 @@
 # Stopping conditions for SPC × BARS under dyadic refinement — a theory primer
 
-Date: 2026-10-24. Status: a briefing primer for a separate exploration thread. It records no decisions. The engine-side
-stopping strategy (OQ7, OQ8) stays parked until the SPC readout design is complete (bass-preparation-brief.md, "Parked
-decisions").
+Date: 2026-10-24. Status: a briefing primer for a separate exploration thread. §1–§12 record no decisions; round 2
+(§13, 2026-10-30/31) records the user's, each marked and dated. The engine-side stopping strategy (OQ7, OQ8) stays
+parked until the SPC readout design is complete (bass-preparation-brief.md, "Parked decisions").
 
 **Sources.** The primer consolidates three discussions and adds one synthesis of its own (§5.3):
 - [opus-ESS-bars-spc-etc.md](discussions/opus-ESS-bars-spc-etc.md): the dyadic scheme, the two regimes, and the
@@ -238,14 +238,14 @@ entropy) suit it better.
 | C4 | A split's width is w_q = 2.2/ln(q − 1), independent of cluster size | Fisher-zeros note | Partly refuted by E1 (§12.9): FkReduced respects it; variance observables at melts and at the toy's background-mediated split run 3–9× narrower | done (E1) |
 | C5 | n_min ≤ 1 + ⌈2E·ln(q − 1)/2.2⌉ on a grid evenly spaced in ln T | Fisher-zeros note | Partly checked (§12.9–12.10): the width floor fails for variance observables (E1); BARS registers bumps at 0.6–2.1 points per FWHM, under the geometric 2 (E4) | E3 |
 | C6 | The dense spacing is h ≈ a·(16ε/5)^(1/4) | Fisher-zeros note | Derived, unverified | Numeric, on a known analytic curve |
-| C7 | Im β₁ can't be estimated before the peak is resolved | Argon notes | Disputed in scope (§4) | Literature on zeros from Monte Carlo data |
+| C7 | Im β₁ can't be estimated before the peak is resolved | Argon notes | Disputed in scope (§4); partly reopened (§13.5): a grid point inside a first-order switch gives its width, and the zero, from the energy histogram's latent heat | Literature on zeros from Monte Carlo data |
 | C8 | D_J is the symmetrized KL divergence between endpoint Gibbs measures | Argon notes | Checked here (standard) | Lean (L1) |
 | C9 | L² ≤ D_J | This primer | Checked here | Lean (L1) |
 | C10 | A bounded mean's excursion is at most ((b − a)/2)√D_J | This primer | Checked here; tightened in §12.2 (C15) | Lean (L1) |
 | C11 | A rigid switch hidden beyond its θ-plateaus forces D_J ≥ ℓ(θ)² | This primer | Checked here, unconditional (§12.1): holds for coupled clusters; θ-plateaus restated against (q − 1)/q | Lean (L1); E2 on toys |
-| C12 | Two quiet volleys reduce aliasing | Argon notes | Heuristic, tested (§12.11, §12.14): on the n₀ = 10 schedule it stops once before a bump registers (iris's minor melt) | anytime-valid reformulation (§6); more curves |
+| C12 | Two quiet volleys reduce aliasing | Argon notes | Heuristic, tested (§12.11, §12.14): on the n₀ = 10 schedule it stops once before a bump registers (iris's minor melt); retired with the volley-sequential rule (§13.3) | none needed |
 | C13 | The global grid's union is non-uniform after refinement | Early dyadic discussion | Withdrawn (the union stays uniform) | none needed |
-| C14 | Critical slowing down makes regime-A noise heteroscedastic | Early dyadic discussion | Withdrawn (SW suppresses it; replicates measure the rest) | none needed |
+| C14 | Critical slowing down makes regime-A noise heteroscedastic | Early dyadic discussion | Withdrawn (SW suppresses it; replicates measure the rest); its premise reopened in part (§13.6): at q = 20 replicas can stick at transitions | none needed |
 | C15 | A [0, 1] observable's Fisher angle moves at most L ≤ √D_J, so its excursion is at most (b − a)·sin(min(√D_J, π)/2), sharply | §12.1–12.2 | Checked here (proof; enumeration) | Lean (L1) |
 | C16 | D_J is blind to size; its false-alarm floor is about 2.8ρ(Δ ln T)² at q = 20 | §12.3 | Confirmed by E2 (§12.9): D_J scales with N, and reaches 127 on intervals with no cluster change | done (E2) |
 | C17 | Pair connectivities, so S₂, are monotone in β; ΔS₂ bounds every merge inside an interval | Argon notes (seed); §12.4 | Checked here (Grimmett 3.21; enumeration; parity dump; all 64 steps of the extended run) | Lean (L4) |
@@ -260,12 +260,20 @@ entropy) suit it better.
 | C26 | BARS registers a bump at about one point per FWHM, roughly placed; its prominence gate, not the grid, drops weak bumps | §12.10, §12.14 | Observed (E4 on both schedules, equal weights): 0.2–2.4 points per FWHM, the low end from lucky lattice phases | E3; weighted fits |
 | C27 | Registration depends on the lattice's phase as well as its density, so a minimum should plan on the worst phase | §12.14 | Observed (n₀ = 2 against n₀ = 10 lattices) | Shifted lattices at fixed n₀ |
 | C28 | From about 145 points the default BARS fits sit at the replicate noise floor, so tighter fits need replicates, not settings | §12.18 | Observed (against an independent sweep) | More replicates on one curve |
-| C29 | Replicate weights through the robust-weight seam over-shrink, because the unweighted g-prior borrows the weighted σ² | §12.18 | Observed harm; mechanism a hypothesis | A weighted entry point with its own prior scale |
+| C29 | Replicate weights through the robust-weight seam over-shrink, because the unweighted g-prior borrows the weighted σ² | §12.18 | Observed harm; mechanism a hypothesis. §13.9 refines it: a measured-variance model, y ~ N(f, φs²) with the weighted unit-information prior, against the robust model's unweighted one; untested | A weighted entry point with its own prior scale |
 | C30 | Two rigid blocks joined by total coupling C split, under BWD's rule, at T = C/ln(q + 1), so a graph's stages can be read off its cuts before sampling | §12.27 | Observed: exact to a grid step on a tree of blocks (BlattHierarchy, Cauchy K = 5); 0.5–1 e-fold cold where blocks form loops | Random-cluster connectivity on the block graph instead of the pairwise rule |
 | C31 | One KNN graph shows one hierarchy level per K: K selects by cluster mass, the bandwidth grows with K, and the finer gaps fill with edges | §12.27 | Predicted by C30 across K = 5–320; SW-checked at K = 5 and 10 | SW at K = 40–320 |
 | C32 | A union of KNN scales weighted (a_min/a_s)², a discrete Gaussian scale mixture, puts every level of a hierarchy into one T-stack | §12.27 | Observed on BlattHierarchy; equal weights flood; `HierarchyEom` mixes levels on it | Other spreads and real data; a resolver that reads levels |
 | C33 | On hierarchical data a range-relative bump gate sees only each curve's largest feature; the smaller levels are steps and shoulders | §12.28 | Observed (BlattHierarchy, both graphs) | Scale-relative prominence, or a split-rate channel from each volley's own points |
 | C34 | The compiler drops MST repair edges whose coupling underflows, so Gaussian graphs come out disconnected across wide gaps, and a stage that begins at the grid's cold end then measures the grid | §12.27, §12.29 | Observed (edge counts against Cauchy; S₂ at the cold end) | Find where the edges are dropped; keep repair edges at a floor coupling, or report components |
+| C35 | For a function f of the FK bonds (S₂, FkReduced, c_max), −Cov(f, H) with the spin energy is not the β-slope; the slope is Cov(f, Σ_e J_e ω_e/p_e) | §13.2 | Checked here (derivation; one edge: J(1 − 1/q)φ(1 − φ) against Jφ(1 − φ)/p) | Enumeration on small graphs |
+| C36 | (⟨Σ c ln c⟩ at the cold end − at the hot end)/N is the expected variation of information between the endpoint partitions | §13.5 | Derived here (C17's monotone coupling; entropy of nested partitions); unverified numerically | Enumeration, as for C18 |
+| C37 | Cross-replica products estimate τ_e² without bias; Σ_e τ_e and Σ_e τ_e² are monotone in β, the pair indecision Σ_e τ_e(1 − τ_e) is not | §13.6 | Derived here (independence; C17) | none needed |
+| C38 | BWD's θ-partition at any T inside an interval lies between the endpoint partitions, in expectation | §13.6 | Derived here (C17); noise near θ breaks nesting in the data | E9 |
+| C39 | Under nested uniform refinement, an active parent's split ratio is near ½ when its event is resolved and near 0 or 1 when the event is narrower than the grid | §13.5 | Derived here (ρ = ½ − r₁H/(8r₀) for a locally linear split rate); unverified | E8 |
+| C40 | A threshold set by replica noise makes "quiet" depend on the budget; certifying an absence needs a margin, the scale of interest | §13.7 | Argued here | none needed |
+| C41 | An interval is resolved when the trapezoid of its endpoint slopes matches its exact increment (ΔS₂, or Δ⟨E⟩ for energy), within error; the mismatch shrinks like h² | §13.5 | Derived here (exact integral; trapezoid error); unverified on SW data | E7 |
+| C42 | A replica stuck in one basin mixes well inside it, so no single-chain diagnostic or ESS weighting reveals it; only comparison across replicas does | §13.6 | Standard (the reason R̂ exists) | E10 |
 
 ---
 
@@ -1579,3 +1587,540 @@ The user dropped iris as too limited and asked for the same SPC-only levers on t
 - q = 100 against 20 moves stage widths by under 10% everywhere, as on iris.
 - LMP at K = 5 fragments every dataset (S₂ 0.01–0.03 at the cold end), as on iris. At K = 10 it behaves.
 - **One pass, one seed: exploration.**
+
+---
+
+## 13. Round 2, 2026-10-30/31: reopening round 1's closures
+
+The user reopened what round 1 closed, as an adversarial round with new capabilities in hand. Round 2 was discussion: it
+ran no experiments (one quantile table was computed), and it changed no code. Where the user decided something, the
+entry says so and gives the date; everything else is open, with the experiment that would settle it. Experiments
+continue round 1's numbering (E6–E13, §13.12). New claims are C35–C42 in §7.
+
+**What round 1 did not have**, all on `main` by 2026-10-30:
+- **The per-draw record** on `Accumulator`: `EnergyPerDraw`, `MagPerDraw`, `SumSqClusterSizesPerDraw`,
+  `MaxClusterSizePerDraw` (`bc70bf2`); the burn-in trace (`1322e47`); the exact cluster-size histogram with
+  `Graphs.Observables.ClusterSizeSums`, which gives S₂, F_n at any floor and ⟨Σ c ln c⟩ (`d7269ea`).
+- **Replica spread** in `SweepCurves.ByTemperatureWithSpread` (`96de69d`); the Binder cumulant (`f542951`); the energy
+  moments and the energy cumulant V (`c50b273`).
+- **Within-run Monte Carlo errors** (`MonteCarloError`, `622a51c`), each matched against the spread across SW
+  replicas: C_v's; Var(m)'s; and χ_FK's, which over N is S₂'s.
+- **On the samplers side, not wired to SPC:** `ChainDiagnostics` (R̂, ESS); the convergence verdict on every ensemble
+  run and on BARS (`e8547d3`, `1c26dcd`, N14), with groups of functionals and a stopping scope; `LadderEvidence`; and
+  the flat-histogram engine (`src/maths/samplers/flathistogram`: SAMC learning, WHAM, reweighting to any b; Phases 1–2
+  built, SPC's adapter is Phase 3 and not built).
+
+### 13.1 What round 1 closed, and what round 2 did with each
+
+The inventory was taken before arguing anything. "Retired" means made moot by the reframing of §13.3, not refuted.
+
+| # | Round 1's position (where) | Round 2 |
+|---|---|---|
+| 1 | D_J replaced by S₂ as the certificate (§12.3–12.5) | Stands; the size-blindness unpacked (§13.5) |
+| 2 | Argon's D_J gate and quadrature ratio R dropped (§12.9) | R's mechanism reused, in S₂'s currency, as a resolution test (§13.5) |
+| 3 | S₂ as the currency; floor n = 5% of N; F_n parked as engine work (§12.4, §12.7) | Reopened: F_n and the information currency are free now (§13.5) |
+| 4 | The descending test's α over levels, by a union bound; Welch SE on 8 replicas (§12.17) | Simplified to one grid's Bonferroni; the SE source reopened (§13.5) |
+| 5 | Splits told from shedding by BARS's shape (C21, §12.7) | The information currency resists shedding (§13.5) |
+| 6 | A stop certifies the size floor, not every χ bump (§12.17) | Stands; the floor restated as a margin (§13.7) |
+| 7 | Var(m) detects, FkReduced gives spans, S₂ covers events, C_v out of scope (§12.15) | Not reached as a whole; Var(Σc²) noted as a new candidate (§13.9) |
+| 8 | Argon's Gate 2, slope consistency: never tested | Reworked without the spline, as the closure test (§13.5) |
+| 9 | Replicate weights shelved (C29, §12.18) | A diagnosis for the settings pass (§13.9) |
+| 10 | Readout extensions parked: plateaus, cliffs, split rate, scale-relative prominence (§12.16, C33) | Laid out for the settings pass (§13.9) |
+| 11 | OQ7/OQ8 parked with the readout design | Machinery exists (N14); the decision stays with the settings pass (§13.9) |
+| 12 | Argon's Gates 3–4 (posterior stability, knot saturation): not adopted | Moved to BARS's trust criterion (§13.8) |
+| 13 | Two quiet volleys kept as a soft check (C12) | Retired |
+| 14 | One afterburn volley (§12.12) | Retired as a BARS clause; given a mechanism by the split ratio (§13.5) |
+| 15 | A volley minimum from the narrowest feature on the worst lattice phase (C27) | Recast as the minimum density (§13.4) |
+| 16 | Conformal Bayes as a check, never run (§2) | Future work, laid out (§13.10) |
+| 17 | Fisher zeros as explanation only (C7) | Partly reopened: local widths from cumulants (§13.5) |
+| 18 | Reweighting out of reach at D_J > 4 (§12.13) | A catch recorded for FK observables (§13.2); otherwise not reached |
+| 19 | SW's bias "mostly moot"; C14 withdrawn (§1) | Reopened as the equilibration gate (§13.5, §13.6) |
+| 20 | Open intervals need replicates, not volleys; C28's noise floor | Cycles, replicas and the SE source worked through (§13.5) |
+| 21 | Global uniform refinement (the user's position, never pressure-tested) | Pressure-tested; the user's position held (§13.3) |
+| 22 | The bracket (Q5): coverage checks only (C19, C23) | Not reached |
+| 23 | Regime B (Q6) unanswered; the re-graphed subset hypothesis (§12.16, §12.28) | Not reached |
+| 24 | Persistence in levels against lifetimes in ln T (§12.21–12.22) | Not reached |
+
+Two observations from taking it:
+- **The synthesis came before half the findings.** §12.19 was written before §12.20–12.29, so C30 (stages from the
+  graph), C33 (one bump per curve on hierarchical data) and the BlattHierarchy runs never fed back into the rule.
+- **Three of argon's gates were dropped without a test.** Gate 2 (slope consistency) and Gates 3–4 (posterior and knot
+  stability) are absent from §5–§12; only Gate 1 and the quadrature ratio were measured.
+
+### 13.2 Catches in the new capabilities
+
+Checked in the code while taking the inventory.
+- **The recorded energy is the spin energy H, which is not the β-conjugate of an FK observable (C35).**
+  - For a function f of the bonds ω (Σc², c_max), the random-cluster weight gives
+    d⟨f⟩/dβ = Cov(f, Σ_e J_e ω_e/p_e), with p_e = 1 − e^(−βJ_e). That is §12.6's formula with p_e′ = J_e(1 − p_e).
+  - −Cov(f, H) is a different number. On one edge, take f the bond's indicator, whose mean is
+    φ = p/(p + q(1 − p)). The spin route gives J(1 − 1/q)·φ(1 − φ); the true slope dφ/dβ is J·φ(1 − φ)/p.
+  - S₂'s slope therefore needs one of two columns the record lacks: B = Σ_e J_e ω_e/p_e over the draw's bonds, or the
+    colour-class sum Σ_s N_s² on the same spins as H. The second works because S₂ = (q⟨Σ_s N_s²⟩/N² − 1)/(q − 1), a
+    spin observable, whose slope is −Cov(Σ_s N_s², H). Σc² is that estimator Rao–Blackwellized:
+    E[Σ_s N_s² | ω] = (1 − 1/q)Σc² + N²/q.
+  - The same catch applies to reweighting. S₂ and FkReduced can't be reweighted from H alone; a finite step needs
+    Σ_{e∈ω} ln(p_e(β′)/p_e(β)), which is not one scalar when the couplings differ.
+- **m and E describe different spins.** The chip's tests pin m to the spins leaving a draw and E to the spins entering
+  it (`SwDrawRecordTests`). A same-state pair is (m_t, E_{t+1}). Spin observables such as Var(m) get their slopes from
+  today's record through that pairing.
+- **C_v is still reduced from running sums** (`SweepProfile`: ⟨E²⟩ − ⟨E⟩² from the pooled sums), so §12.28's
+  cancellation below 10⁻⁴ remains. The record allows the two-pass form, a change to the view only.
+- **BARS's weighted model keeps the unweighted g-prior with the weighted σ²** (`WeightedNormalModel`, its decision Q2),
+  so the mechanism C29 suspects is still in the code. That code is in `src/maths`, outside this thread.
+
+### 13.3 The reframing (decided by the user, 2026-10-30)
+
+**Decisions.**
+1. **Bisection is not a requirement.** It was a means to keep the number of temperatures small, building the curve up
+   from few points. Points still accumulate by nested uniform refinement.
+2. **The question is when a BARS fit on a given grid can be trusted** to say whether features of interest exist, and
+   where. The dense pass for the ranges that matter to clustering is a separate question. The user's framing: this is
+   the same question a dense sweep of the old kind faces.
+3. **The reconnaissance grid stays uniform,** anchored at both ends of the bracket. Adaptive or uneven placement is
+   rejected.
+4. **The stopping criterion uses no BARS.** Something else says when to stop; BARS then measures the features on a fit
+   that is already trusted.
+
+**Decision 3: the arguments.**
+- *Against (this round, withdrawn).* Points could go where the active intervals are, since a certified-quiet interval
+  needs nothing more: cost would scale with the features' total width, not with the window over the narrowest one. The
+  descending test's hereditary quiet guards against tunnel vision for events at the floor or above.
+- *For (the user).* Adaptivity adds no certainty, and uneven spacing changes the fit in ways that are hard to predict.
+  Its mechanism, made precise here: the likelihood principle makes an adaptive design ignorable only under a correct
+  model, and BARS isn't one. Its single σ² is shared by every point, so a densely sampled stretch sets the noise for
+  the whole curve (C29's route), and the knot prior's pull trades off against the local density. The repo has seen
+  design-dependence downstream: `LineagePersistence`'s selections moved with the grid's density (§12.22). Reconnaissance
+  is cheap (the 289-point toy sweep took 251 s), so the cost argument is weak.
+- *Outcome.* The pass stays uniform.
+
+**On "a uniform grid with BARS guarantees the features emerge".** Agreed in the limit. Z(β) has no real zeros at finite
+N, so refinement converges as h → 0. But analyticity gives no rate without the strip's width, the distance to the
+nearest Fisher zero, which is the unknown. Every finite system is well behaved, and that bounds none of them: melts
+sharpen with cluster size (ΔS ≈ (n_c − 1) ln q), and at q = 20 transitions behave first-order, with zeros approaching
+the axis as N grows. The guarantee also covers only the bracket's inside (C22). This is why a stopping criterion is
+needed at all.
+
+**On "once the peak is resolved, the rest of the curve is".** True when the peak is the narrowest feature of interest.
+Iris's minor melt (FWHM 0.09 e-folds) registered only at 289 points, long after the main peak; BlattHierarchy's medium
+and fine splits never registered as bumps (C33). The user's reply: the aim is arbitrary systems, whose minimum density
+moves with how volatile or complex they are (§13.4).
+
+**What decision 4 does to §12.19.**
+- Two of its stop clauses ran through BARS: "every active block contains something the readout registered", and the
+  afterburn "past the last registration". Under decision 4 they leave the stopping rule. This also clears the
+  circularity of a fit vouching for itself, the principle of validation independence.
+- The volley-sequential pieces are retired with decision 1: the α spent over levels, two quiet volleys, and the volley
+  minimum. On one grid, α is split over that grid's intervals.
+- BARS's own reliability becomes a separate criterion on the measurement side (§13.8).
+
+### 13.4 The minimum density, abstractly
+
+**What it is.** Each stretch of the curve needs points in proportion to the width w of the features there, so the grid
+as a whole is priced by the narrowest: n ≈ c·E/w_min, with E the window in e-folds (§3) and c points per feature width.
+Round 1 measured c ≈ 1 for BARS to register a bump and about 2 to place it (C26), planned on the worst lattice phase
+(C27). The precise form of "volatility" is the nearest partition-function zero's distance from the real axis: it sets
+the curve's strip of analyticity, which is its local bandwidth (§4).
+
+**The point counts round 1 measured**, over a 5.97 e-fold window:
+
+| Job | Points | Source |
+|---|---|---|
+| First registration of each main bump | 10–37 (v0–v2 of the n₀ = 10 schedule) | E4, §12.14 |
+| Iris's minor melt (FWHM 0.09 e-folds) | 289 | §12.14 |
+| Default BARS fits at the noise between two independent sweeps | about 145 | C28, §12.18 |
+| D_J ≤ 4 on every toy interval | about 400 | E2, §12.9 |
+| Thread I's a priori count | 17 | §3; refuted for variance curves by E1 |
+
+C28's 145 is a crossover with measurement noise at one budget (8 replicas × 2,000 cycles) and one window width. It
+says more points stopped paying there, not that the grid had resolved the curve. A wider window needs more:
+BlattHierarchy's 12.6 e-folds at 145 points is h ≈ 0.087, twice as coarse.
+
+**Three ways to know a grid is dense enough.** For an arbitrary system w_min belongs to a curve not yet seen, and a fit
+alone can't certify what lies between its points (§2). So:
+- **(a) Bound w_min before sampling, from the system.** Weak in general. C1's switch width bounds splits but not melts:
+  melts and background-mediated splits ran 3–9× narrower than a rigid split's bump (E1), yet melts were far wider than
+  the rigid-melt 2.2/((n_c − 1) ln q). A melt's width
+  may be set by the spread of the couplings inside its cluster, collectively bound; that is a hypothesis (E13). The
+  graph-only pilots (C23's spanning-tree bound, C30's block model) predict where stages sit; whether they predict widths
+  is untested. Use: a budget prior.
+- **(b) Measure it from the samples.** That needs a second look wherever the first was not enough.
+- **(c) A monotone companion observable** that makes hidden features impossible rather than unlikely: S₂ and every
+  superadditive cluster functional, monotone in β for ferromagnetic Potts on any graph (C17, C18).
+
+A one-shot guarantee on a fixed grid can come only from (a) or (c). Under decision 4, (b) must be read from the samples
+without BARS (§13.5).
+
+**Where "arbitrary" breaks.**
+- **Signed couplings.** The comparison inequality behind C17 needs every J ≥ 0. Frustrated SPC has no known monotone
+  companion, so (c) fails there, leaving (a), (b) and holdouts. Whether frustrated systems are in scope is open
+  (§13.12).
+- **Non-equilibrium.** Monotonicity holds for the true means; a stuck replica can break it in the data (§13.6).
+- **Below the floor,** by construction: the floor is the scale of interest.
+
+### 13.5 A certification stack without BARS (proposed; nothing decided)
+
+| Stage | Question | Tool | State |
+|---|---|---|---|
+| Equilibration | Can each temperature be trusted? | R̂ across replicas; the replica outlyingness test; per-replica against pooled V (§13.6) | Views over built pieces |
+| Endpoints | Is each grid point's partition decided? | Replica agreement, or the per-edge SE (§13.6) | Views; per-edge counts are an option |
+| Quiet intervals | Is anything significant missing? | A monotone currency, against a margin | Built |
+| Active intervals | Is each event resolved? | The split ratio at each refinement (means only); the closure test from slopes | Split ratio: views. Closure: built for energy and Var(m); S₂ needs a new column |
+
+The stop: every interval quiet or resolved, and every endpoint decided. Then BARS measures. What it would certify: no
+change at or above the margin hides in a quiet interval; every active interval is resolved at its parent's scale; and
+each grid point's partition is reproducible across replicas.
+
+**Quiet intervals: the currency and D_J.**
+- *D_J stands as retired, and why.* D_J = Δβ·(⟨E⟩_{β₁} − ⟨E⟩_{β₂}) is in nats, and where σ_E is roughly constant,
+  √D_J ≈ Δ⟨E⟩/σ_E: how many energy standard deviations apart the endpoints' energy distributions sit. The toy's
+  largest, 155 at v6 (h = 0.093), puts them about 12σ apart; the argon gate's 4 is about 2σ. D_J grows with N, since
+  every small event adds its latent heat (iris peaks at 6.5; the ratio of maxima, 24, tracks the ratio of point counts,
+  21). C11's threshold is absolute, a few nats whatever N is, so a per-interval D_J test loses signal against
+  background as N grows. Dividing by N would make the threshold fall with N and void the guarantee. A size-aware
+  background model (§12.3's 2.8ρ(Δ ln T)²) needs the event density ρ, which isn't known in advance.
+- *The information currency (C36).* With H(P) = ln N − (1/N)·Σ_k c_k ln c_k the entropy of a partition, nested
+  partitions have variation of information VI = H(fine) − H(coarse) (Meilă's metric on partitions, cited from memory).
+  Monotone coupling lets the hot draw refine the cold one, so
+  (⟨Σ c ln c⟩_cold − ⟨Σ c ln c⟩_hot)/N is the expected VI between the endpoint partitions. The difference of means
+  doesn't depend on the coupling. It's monotone (C18), endpoint-only, and available through `SizeLogSize`.
+- *The currencies are partition metrics:* S₂ counts pairs (the Rand index's currency), ⟨Σ c ln c⟩ measures information
+  (VI), F_n counts mass above a floor.
+
+  | Event | S₂ adds | ⟨Σ c ln c⟩/N adds |
+  |---|---|---|
+  | One point leaves a cluster of size a | 2a/N² | about (ln a + 1)/N |
+  | Two n-clusters merge | 2n²/N² | 2n ln 2/N |
+
+  On the toy, under S₂ one residue point leaving the 2,500-point cluster outweighs a merge of two 30-point clusters by
+  about 3 to 1 (§12.7). Under the information currency the merge wins by about 4.7 to 1 (60 ln 2 = 41.6 against 8.8).
+  Shedding counts logarithmically and merges linearly in n, so it resists shedding without a floor while staying
+  size-aware.
+- *One grid, one test.* With bisection retired, α is split over the grid's intervals (Bonferroni), not spent over
+  levels.
+
+**Active intervals: two resolution tests.**
+- *The closure test (C41).* Write r = −dS₂/dβ ≥ 0, the density of merges, so ΔS₂ = ∫r dβ exactly. Slopes at the grid
+  points are cumulants (§13.2). An interval is resolved when the trapezoid of its endpoint slopes matches the measured
+  ΔS₂ within error. The relative mismatch shrinks like h² when the grid resolves the curve; a split-rate peak hidden
+  inside makes ΔS₂ much larger than the trapezoid; a shoulder shows as curvature. It needs no count of features.
+  - *A reversal of round 1.* §12.9 set aside argon's energy closure because its departures "follow σ_E²'s curvature at
+    the events". For the reframed question, curvature the grid misses is what "not enough points" means. Moved to S₂,
+    the test reads resolution in the currency clustering cares about. It joins argon's Gate 1 (an exact integral) and
+    Gate 2 (measured slopes) without a spline.
+  - *What's buildable.* Energy: the slope is −Var(E), argon's original closure, on today's record with C_v's error, but
+    size-blind. Var(m): its slope is −Cov(m², H) + 2⟨m⟩·Cov(m, H), on today's record through (m_t, E_{t+1}). S₂: one
+    new number per draw (§13.2), an engine change in SPC (the cycle, the record, an SPCX version), and the user's call.
+  - *Limits.* A peak whose integral sits below ΔS₂'s noise passes: the floor again, as a resolution floor. Covariances
+    react to a stuck replica before means do, so the test needs R̂ ≈ 1 first.
+- *The split ratio under nested uniform refinement (C39).* Refining a uniform grid splits each parent's increment
+  exactly between its children (ΔS₂ telescopes, §12.5). On active parents, take ρ = ΔS₂(left child)/ΔS₂(parent).
+  - Resolved, the parent's mass is spread smoothly and ρ ≈ ½. For a split rate locally linear across a parent of width
+    H, ρ = ½ − r₁H/(8r₀), so |ρ − ½| measures the parent's width against the scale on which the split rate varies.
+  - An event narrower than the grid puts its whole step in one child: ρ ≈ 0 or 1.
+  - A threshold such as |ρ − ½| ≤ ¼, with its noise from the within-run SEs, needs no BARS, no slopes and no new
+    column. Every currency telescopes, so it works for ⟨Σ c ln c⟩ and F_n too.
+  - It gives the user's afterburn (§12.12) a mechanism: a grid can be certified as resolved only once its refinement
+    has run, whose midpoints certify the parent's scale.
+  - *Gaps.* A step can sit inside the new midpoint's small window by luck and pass, with chance about its width over h;
+    the check repeats at each refinement. It certifies the parent's scale, not the children's.
+
+**The cumulants' role.** The energy cumulant V and the Binder cumulant flag a grid point that sits inside a first-order
+switch. There, the gap between the energy histogram's two peaks gives the latent heat ΔE, and the switch's width in ln T
+is about 2.2·T/ΔE (C1 with ΔS = ΔE/T*); C2's nearest zero sits at Im β₁ = π/ΔE. That is a local width without BARS for
+any feature that has a point on it, and it partly reopens C7: the zero is estimable locally once a point lands in the
+switch's window. The per-draw energies also give ⟨e^(−iτE)⟩ at every point, the characteristic function whose zeros
+Monte Carlo studies of Fisher zeros track.
+
+**Noise: cycles, replicas and the SE source.**
+- *Scaling.* SE ≈ σ·√(2τ_int/(replicas × cycles)). From 2,000 to 4,000 cycles every SE falls by √2, if burn-in is
+  adequate. Cost per temperature: 8 × (1,000 + 4,000) = 40k sweeps against 24k now; 16 × 2,000 buys the same SE for
+  48k, since burn-in is paid per replica. Cycles are cheaper; replicas buy R̂ and the exchangeable units §13.10 needs.
+- *What it does.* The test's band narrows by 29%. Only intervals whose true ΔS₂ is near the floor change state: at the
+  main budget, median SE(ΔS₂) was 0.0003–0.001 on the toy against a floor of 0.005.
+- *The quantile matters more.* §12.17 used Welch t quantiles at about 14 degrees of freedom (equal variances; down to 7
+  otherwise). Per-interval α falls fast across the levels, and t sits far above z there. Computed here, assuming
+  one-sided quantiles at the per-interval α:
+
+  | Volley | Intervals | Per-interval α | z | t₁₄ | t₇ |
+  |---|---|---|---|---|---|
+  | v0 | 9 | 3.4×10⁻³ | 2.71 | 3.17 | 3.80 |
+  | v3 | 72 | 2.6×10⁻⁵ | 4.04 | 5.72 | 8.71 |
+  | v5 | 288 | 2.9×10⁻⁶ | 4.53 | 7.04 | 12.15 |
+
+  The within-run SE takes its error from an ESS in the hundreds or more, so it uses z.
+- *A worked example, from round 1's iris numbers.* Iris's stage-1 plateau sheds about 0.1 of S₂ over two e-folds:
+  about 0.001 per interval at v5 (h = 0.021), against a floor of 0.0057. Certifying it quiet needs q·SE < 0.0047, with
+  median SE(ΔS₂) of 0.0006–0.0015.
+
+  | Budget | SE source | q·SE | Plateau intervals certified |
+  |---|---|---|---|
+  | 8 × 2,000 | Welch (t₁₄ = 7.04) | 0.004–0.011 | few (what §12.17 saw) |
+  | 8 × 4,000 | Welch | 0.003–0.0075 | roughly half |
+  | 8 × 2,000 | within-run (z = 4.53) | 0.0027–0.0068 | roughly half |
+  | 8 × 4,000 | within-run | 0.0019–0.0048 | nearly all |
+
+  Rough, from the median range; the direction holds. Switching the SE source is worth as much as doubling the cycles,
+  and costs nothing, but it trusts the chain's mixing: use the within-run SE where R̂ ≈ 1, and the replica spread or
+  more replicas where it isn't. It errs exactly where τ_int is largest, at the edges of active blocks near transitions.
+- *Depth.* An event spread over many intervals gives each a ΔS₂ ∝ h while the quantile rises, so holding it above the
+  noise one level deeper takes about 4.5× the draws. That is C25's loss of power in cycles, and why narrowest-over-
+  threshold localization reports a spread event at the coarser width where it still clears the floor.
+- *Unchanged by cycles:* a stuck replica (§13.6), and an interval whose true ΔS₂ sits at the floor.
+
+### 13.6 Replicas: what they carry, and how they compose
+
+**Three kinds of disagreement**, which round 1 treated as one:
+1. *Intrinsic.* At a fixed T a partition is a random object, so two draws differ on undecided pairs even at
+   equilibrium. It never shrinks with draws; it measures the ensemble's own indecision.
+2. *Estimation.* The replicas' averages differ by Monte Carlo error, shrinking as 1/√draws.
+3. *Non-ergodicity.* Replicas settled in different basins disagree until one tunnels across. Near a q = 20
+   transition this can outlast a run, in the region the stopping problem cares about most.
+
+Per-draw labels never converge (1); averages do (2), unless (3).
+
+**The composition rules.**
+- Linear functionals of the measure (S₂, ⟨E⟩, each edge's co-membership τ_e) pool across replicas in any order.
+- Labels never compose, since colours are arbitrary. Only label-invariant quantities do: co-memberships, overlaps,
+  partition distances.
+- Nonlinear reductions of the ensemble pool first, then reduce, as Var(m) and C_v already do.
+- *The rule that needs replicas (C37).* A product of two independent replicas' estimates is unbiased for the product of
+  expectations, E[τ̂ᵃ_e·τ̂ᵇ_e] = τ_e², where one chain's τ̂_e² is biased upward by its own variance: the U-statistic, or
+  cross-fitting, idea.
+
+**What it gives.**
+- *Pair indecision* Σ_e τ_e(1 − τ_e), the total Bernoulli variance of the edges' connectivities. It is zero on a crisp
+  plateau and peaks where edges sit near BWD's ½, where sampling noise can flip an edge's side; cross-replica products
+  estimate it without bias. Its parents Σ_e τ_e and Σ_e τ_e² are both monotone in β, since each τ_e ∈ [0, 1] is, so
+  both are endpoint certificates. It needs the per-edge co-membership option and two replicas; the accumulator counts
+  each edge on one slot only (§12.20). Not to be confused with `LineagePersistence`'s `Decidedness`, the mean
+  co-membership over a cluster's internal edges.
+- *The partition sandwich (C38).* With every τ_e monotone, BWD's θ-partition at any T inside an interval lies between
+  the endpoint partitions, in expectation (§12.21's merge tree, used as a certificate). If both endpoints keep the same
+  edges above θ, the clustering readout can't change inside: the interval is certified in the currency clustering reads.
+  The intervals where edges cross θ are where the T-stack changes, so they name the dense pass's windows. Noise near θ
+  breaks nesting in the data; the per-edge SE says which edges are undecided, as `HierarchyEom`'s nesting gate does.
+- *Consensus over replica readouts.* Consensus over draws is SPC's readout already: pooled co-memberships are the
+  co-association matrix, and BWD's rule is its majority cut. New information comes from cutting each replica's own
+  co-memberships into a partition and comparing the R partitions. Each is built from averages, so (1) has washed out
+  and what remains is (2) and (3).
+  - *Votes against pooling.* Votes per edge are robust (a stuck replica counts once) but weak: with 8 replicas,
+    unanimity bounds an edge's per-replica error rate only below 0.31 (95%, exact). Pooled evidence is efficient but a
+    stuck replica contaminates it. They keep different information, so both: pooling as the test, votes as the check.
+  - *Stuck replicas, detected.* A replica that mixes averages over both phases. If the replica partitions at one T fall
+    into groups (say 5 against 3), the replicas sat in different phases all run. Clustering the R × R overlap matrix
+    detects (3) specifically, from today's per-replica counts with the co-membership option on; the finer overlap
+    distribution P(Q) needs per-draw partitions (S5).
+  - *Reproducibility, not validity.* Replicas resample the chain on fixed data; agreement says another run would give
+    the same partition, not that it is real. Resampling the data, as consensus clustering does (Monti et al. 2003,
+    cited from memory), answers the second question.
+- *Robust estimators.* Right for heavy tails, wrong for stuck replicas.
+  - Near peaks the variance curves' per-replica estimates are skewed; a median-of-means or trimmed mean tames them, at
+    a cost: the median keeps 2/π ≈ 64% of the mean's efficiency under Gaussian noise (SEs about 1.25× larger), and
+    with 8 replicas its own SE is noisy.
+  - A stuck replica isn't an outlier: its draws are correct samples from one phase, over-weighted because it never
+    tunnelled. A robust centre picks the majority phase, set by the starts and the barriers rather than by equilibrium
+    weights, and its tidy error bar hides the bias. The certificate would then certify through a transition. The
+    repo ruled the same way for BARS tempering: "the failure that matters is the silent one" (bass-preparation brief,
+    parked decisions of 2026-10-22).
+  - *Why one chain can't see it (C42).* A replica stuck in a basin mixes well inside it: short τ, high ESS. ESS-weighted
+    pooling (WHAM's effective draws) does not down-weight it either. Only comparison across replicas shows it.
+  - *Detect, don't estimate.* The per-replica within-run SE sharpens detection: flag replica a when
+    |x̄_a − median of the others|/√(se_a² + se_others²) is large. A flagged temperature is undecided in the
+    certificate (no interval touching it is certified quiet) and marks a window. The remedy is sampling: longer runs,
+    more replicas, or a barrier-crossing sampler (the flat-histogram engine names q > 4 Potts as a target; SPC's
+    adapter is unbuilt). Dropping the flagged replica and estimating from the rest is the robust mean again.
+- *Divergences between replicas.* The energy cumulant V per replica against pooled: unimodal replicas (V ≈ 2/3) with a
+  bimodal pool (V < 2/3) means replicas sit in different phases, caught by shape where R̂ on means catches location.
+  VI between replica partitions is the information version of replica agreement.
+
+### 13.7 Changepoints and thresholds from the data
+
+- **Round 1 already used a changepoint method:** narrowest-over-threshold localization (§12.17), frequentist, with no
+  prior or likelihood. The division of labour holds: the monotone currency certifies what is absent; changepoints
+  locate where the mass sits.
+- **The split ratio (§13.5)** is the threshold read from observed data that certifies resolution.
+- **A threshold derived from replica noise can't certify absence (C40).** Certifying an interval quiet because its
+  endpoint partitions differ less than replicas at one temperature do (by permutation, in VI) detects change well, but:
+  failing to reject isn't certification; and the noise floor shrinks with draws, so more sampling would turn certified
+  intervals active, making quiet a property of the budget rather than of the system. Certifying an absence needs a
+  margin δ, the smallest change that matters (an equivalence test). The data decide relative to δ and can't supply it.
+- **The margin can be stated in units that carry across datasets:** bits per point changed, in the information
+  currency, rather than S₂'s 2n²/N².
+
+### 13.8 BARS's own needs: a trust criterion for the measurement
+
+BARS has its own sample-size needs, separate from the stopping rule. Round 1 traced both sides.
+- **Too few points.** At 5 points even the zero-knot cubic fails the support gate and BARS refuses to start; 9 points
+  was the first usable fit (§12.10). At 19 points the knot prior and basis mattered: Poisson(10) and the quadratic basis
+  cut the error, and Poisson(10) registered iris's Var(m) peak a volley earlier than Poisson(5); by about 145 points
+  the settings had stopped mattering (§12.18). An under-resolved feature spreads its peak mass: at 9 points the toy's
+  split put it on three modes, none above 0.43 (§12.10).
+- **Many points under the wrong noise model.** On heat capacity from 37 points up, knot R̂ reached 1.08–1.40 and ESS
+  fell to 8–44; on iris the fit R̂ reached 2.95 and the knot count climbed to 11.6 (§12.14). One shared σ² against
+  heteroscedastic SW noise, largest at the peaks, gives BARS noise structure to absorb with knots. Location intervals
+  also turned overconfident at fine volleys.
+
+**The checks, read per fit:**
+
+| Check | Passes when | Round 1's failure it catches |
+|---|---|---|
+| Convergence | The verdict (N14) passes on the knot count and the readouts used | Heat-capacity R̂ up to 2.95 |
+| The data dominate | The readout is stable across reasonable knot priors; KL(posterior on k ‖ prior on k) is well above zero | 19-point fits that depended on the prior |
+| Knots saturate | E[k] levels off as nested grids grow (argon's Gate 4, read as a check on the noise model) | Iris's heat-capacity knot count climbing with n |
+| Consistent with measured noise | Residuals look like noise against the within-run SEs; BARS's σ̂ agrees with them | The shared σ̂ undershooting at peaks (§12.11) |
+| Features concentrated | Each feature's mass sits in one mode, at least 0.9 | Mass spread over three modes at 9 points |
+| Points per feature | At least about 2 grid points across each feature's posterior width | Lucky landings at 0.2–0.4 points per FWHM (C27) |
+
+The dense pass needs both the stopping rule and trust. Failures map to remedies: convergence, longer chains; the prior
+dominating, more points; knots or noise, a better noise model. Trust never overrides the stopping rule.
+
+**Severity (the user's call, 2026-10-30).** Over-fitting at high n is a minor threat in practice, and BARS's settings
+will get defaults reconciled with the use case in a settings pass of its own; the use case isn't settled and depends on
+other work. Round 1 supports the call for the curves in scope: the bad non-mixing was all on heat capacity, while Var(m)
+peaked at R̂ 1.1–1.2 at 73–145 points and FkReduced showed nothing notable. The threats, ranked:
+1. *Missing a feature that matters.* A premature stop or aliasing. Silent and irreversible, since the dense pass never
+   samples what the stop missed. The stopping rule is aimed here.
+2. *Stuck replicas at transitions.* Silent, and it corrupts the temperatures that matter. Detection exists (§13.6).
+3. *Fits dominated by the prior at low n.* Visible through the checks; the fix is cheap, more points.
+4. *Over-fitting at high n.* Visible through R̂ and the knot count, mild on the curves in scope; settings fix it.
+
+The first two are the stopping problem; the last two are BARS's settings. Until the settings pass, the minimum kept is
+the convergence verdict, plus a check that the readout doesn't move with the knot prior at low n. One residual on Var(m)
+belongs to that pass: at fine volleys its location intervals were 0.00–0.04 e-folds wide and excluded the dense argmax
+(§12.14), which only scoring against an independent sweep can judge.
+
+### 13.9 BARS's settings: the options, laid out for the settings pass
+
+Nothing here is decided; the user will settle defaults against the use case. The pass has a home: OQ14's single
+designed pass over every efficiency default, with a criterion fixed before the run (bass-preparation brief), which the
+stopping strategy OQ7 joins once the readout design exists. Round 1's sweep (§12.18: one knob at a time, two datasets,
+scored against an independent sweep) was exploration, not a basis for defaults.
+
+1. **The noise model.**
+   - *Equal weights* (the default). Under-weights the precise flat stretches and over-weights the noisy peaks.
+   - *Robust weights,* latent scale-mixture weights with a free σ² and the unweighted g-prior (decision Q2 in
+     `WeightedNormalModel`). Right for outliers.
+   - *Measured variances* (proposed): y_i ~ N(f(T_i), φ·s_i²), with s_i the within-run SE (built for Var(m), χ_FK and
+     C_v) and a dispersion φ whose prior is centred at 1. Its unit-information prior would use the weighted information,
+     mσ²(ZᵀWZ)⁻¹. The hypothesis for C29: §12.18's fixed-weights stand-in applied the robust model's prior to
+     measured-variance weights, so the flat, precise stretches set σ² small and the prior shrank the peaks. Untested,
+     and the code is in `src/maths`, outside this thread.
+   - A measured-variance model is the precondition for BARS scaling with n (§13.8), and it gives the lack-of-fit check
+     its reference.
+2. **The knot prior.** Poisson(5) is the default. Poisson(10) was round 1's one consistent small gain: 0.95 of the
+   default's median error, the most registrations (29 of 48) and better coverage (86% against 79%). A uniform prior up
+   to 20 knots gained nothing. An idea for the pass: tie the expected knot count to the window and the features expected
+   there (for instance from C30's stage map). The trust criterion's prior-sensitivity check reads this axis.
+3. **The basis.** Cubic is the default. Quadratic recovered some coarse-volley error (toy Var(m) at 19 points, 0.080 →
+   0.042) at a fit R̂ of 1.11, and had the most fits over R̂ 1.1 overall (18 of 36).
+4. **The response scale.** The log response gave up held-out error (1.57×) and registrations (17 of 48, since the
+   range-relative gate reads differently on a log scale). It gained the best location error (0.018 e-folds), the best
+   coverage (88%) and the best convergence (7 fits over R̂ 1.1, against 14). It pairs naturally with a scale-relative
+   prominence gate.
+5. **The prominence gate.** The range-relative 10% gate misses iris's minor melt (about 5% above its neighbour) and
+   every hierarchy level below a curve's largest feature (C33). Options: SE-aware prominence (E1's finder used 10% of
+   the range and 4 SE together); scale-relative prominence, on the curve's log or against a local range; a split-rate
+   channel, giving each split its own bump.
+6. **The readout's features.** Today it reads maxima. Parked with the readout design: plateaus and cliffs (§12.16), S₂'s
+   steepest points (the roots of its second derivative, a closed form the spline supports), and the split rate
+   −dS₂/d ln T. The spans' clipping flags at the window's ends came back with the fix of BARS's two contract breaches
+   (bass-preparation brief).
+7. **Which curves BARS reads.** Var(m) for detection (§12.15); FkReduced for spans where a split births a second
+   cluster; S₂ for steps, which as a monotone curve could take a shape-constrained fit, or be read through its
+   derivative; and Var(Σc²), a new candidate. Argon's "estimator 3" spikes at every split, weighted by 2c₁c₂, rather
+   than following the giant as Var(m) does. It was never a candidate in round 1, since only Σc²'s mean was recorded; the
+   per-draw record gives it and its error. C_v stays out of scope.
+8. **Mixing and run length.**
+   - Tempering with 4 rungs gave 10 fits over R̂ 1.1 against 14, at 1.3× the time. The engine refuses tempering with a
+     weight resampler, so measured weights with tempering need that combination allowed.
+   - The relocation kernel and move schedule are regime-dependent (OQ14): DMGK's schedule at c = 0.4 won where the prior
+     wants fewer knots than the data and lost where it wants more.
+   - OQ7: which readouts gate an R̂ stop. The verdict's groups and stopping scope (N14) can now gate on a chosen group;
+     for SPC that would be the peak count and peak location. The peak location's τ of 250–330 puts an ESS-gated stop
+     near 30,000 draws per chain on peaked fits (bass-preparation brief), against today's default of 2,000.
+9. **The support gate** didn't bind at round 1's spacings (0.5 and 0.25 left the errors unchanged).
+10. **The pass's regimes, for SPC.** Sparse grids (10–37 points) and dense ones (145–289); peaked variance curves and
+    monotone S₂; equal against measured-variance weights; hierarchical data (BlattHierarchy) beside single-transition
+    data; scored against an independent sweep, as §12.18 did.
+
+### 13.10 Conformal Bayes and resampled readouts: future work
+
+**Where it sits.** On the trust side, not the stopping side: it uses BARS, which decision 4 keeps out of the stopping
+rule, and its guarantee covers sampled temperatures, so it can't see between grid points. Its job comes after a stop:
+checking that the fit's uncertainty is honest before features are read off it.
+
+**The plan exists.** `issues/regression/bass/extensions-brief.md` lays out one layer over BARS's retained draws and the
+unit map, at three levels:
+1. *A new replicate at a measured temperature: conformal Bayes, the consumer.* Fong and Holmes, *Conformal Bayesian
+   Computation* (NeurIPS 2021; arXiv 2106.06137; a local copy in `codex-scientiae/supellex-private/gauntlet/bayesian/`).
+   Add-one-in importance weights w_s ∝ p(y | x, θ_s) turn the retained draws into conformal prediction sets with no
+   refits. Sweeping the candidate y gives a calibrated predictive distribution (Vovk, Shen, Manokhin and Xie 2019). The
+   seam is built (OQ17: retained draws, the n × S matrix of pointwise log densities, the unit and stratum maps in
+   `Pointwise.cs`, where SPC × BARS takes a replicate's observation as the unit and the temperature as the stratum); the
+   consumer is not, deferred to this work (`docs/Maths/BayesianRegression.md`, the pointwise section).
+2. *A new sweep's whole curve: conformal bands.* Lei, Rinaldo and Wasserman (2015); Diquigiovanni, Fontana and Vantini
+   (arXiv 2106.01792). The nonconformity score is the curve's largest scaled residual, so the band widens where the
+   posterior is uncertain.
+3. *The readouts: posteriors by resampling units.* BayesBag (Huggins and Miller 2023); martingale posteriors (Fong,
+   Holmes and Walker, *JRSS B* 85(5), 2023), uncertainty as missing data imputed by predictive resampling; Syring and
+   Martin's calibration (E15 of that brief). The synthesis: refit BARS on resamples of replicate sweeps and pool the
+   peak readouts its draws already carry.
+
+The user confirmed the 2023 paper is the one remembered, and believes a copy is in the library. Papers to read when the
+budget allows: `gauntlet/bayesian` with its `inventory.jsonl`, and the SPC and Bayesian PDFs in `supellex-private`.
+
+**What round 2 adds to it.**
+- *Replicate sweeps are the exchangeable unit,* and §13.6 says what one is: one replica index across the grid, each run
+  seeded per (T, replica). Sweeps are exchangeable whatever their equilibration, so curve-level coverage holds.
+- *Coverage measures reproducibility.* Stuck replicas widen the bands honestly but don't reveal the equilibrium value,
+  so the equilibration gate comes first.
+- *The martingale reading of the grid.* The unsampled temperatures are literally the missing data. Predictive
+  resampling of the gaps gives the readouts' uncertainty from the curve not yet measured. The imputation runs through
+  BARS's predictive, so it stays on the trust side.
+- *A first target.* Round 1's overconfident Var(m) location intervals at fine volleys (§12.14) are the readout level's
+  natural test case.
+- *Budget.* The brief's constraint, that curve-level work needs replicate sweeps, meets §13.5's trade: replicas buy
+  exchangeable units, cycles buy cheaper effective draws.
+
+**Limits.** Level 1 covers values at measured temperatures, not derived features. On a fixed grid with uneven noise,
+coverage is an average over the grid points, in steps of 1/(k + 1) with k replicates, not a guarantee at each
+temperature.
+
+### 13.11 Not reached in round 2
+
+These stand as round 1 left them: the bracket (Q5, C19, C23); regime B (Q6, §12.16's re-graphed subset); persistence
+in levels against lifetimes in ln T (§12.21–12.22); C34's dropped repair edges; and the observable split of §12.15 as
+a whole.
+
+### 13.12 Open questions and experiments after round 2
+
+**Open questions for the user.**
+1. Are features of interest the dominant transition only, or every clustering level above some size? The answer sets
+   the margin, and decides whether "peak resolved ⇒ curve resolved" serves.
+2. Do arbitrary systems include signed couplings? There the monotone certificate fails (§13.4).
+3. Should S₂'s conjugate (B, or Σ_s N_s² on the same spins) join the per-draw record, or the closure be tried first on
+   energy and Var(m), which need no engine change?
+4. Which currency should the certificate use: S₂, the information currency, F_n, or several?
+5. Which stages of §13.5's stack become the rule?
+
+**Experiments (none run; toy and BlattHierarchy rather than iris, at the user's preference).**
+- **E6. The SE source.** Nested uniform grids at 8 × (1,000, 4,000), the certificate scored with Welch on replicas and
+  with the within-run SE gated on R̂, against an independent seed: the quiet share, and any contradicted certification.
+- **E7. The closure test.** Per interval on nested uniform grids, energy and Var(m) on today's record (S₂ once its
+  column exists), against a dense independent sweep: does the closure pass exactly where the dense curve is resolved?
+- **E8. The split ratio.** ρ for every active parent at every refinement, against the same truth: are the parents with
+  ρ near ½ those whose event the dense curve spreads over several children?
+- **E9. The partition sandwich and replica agreement.** With co-membership on, certify intervals by agreeing endpoint
+  partitions; is each certified interval's partition constant inside, on the independent sweep? Where do vote and
+  pooled verdicts differ?
+- **E10. Stuck replicas.** At q = 20, the outlyingness test, per-replica against pooled V, and R̂ at every temperature:
+  do flagged temperatures coincide with the transitions? Once SPC's flat-histogram adapter exists, its estimates there
+  measure how far the pooled and robust means each miss.
+- **E11. The information currency.** The certificate in ⟨Σ c ln c⟩ beside S₂ on the toy (residue-heavy) and
+  BlattHierarchy: does it flag the stripe split and the medium and fine levels with fewer active intervals from
+  shedding? Needs only the exact-histogram option.
+- **E12. BARS's trust checks** at each refinement for each curve, against the independent sweep's error and coverage:
+  do failing fits account for round 1's bad readouts? Part of the settings pass.
+- **E13. A width predictor from the graph.** Predict each melt's width from its cluster's internal coupling spread;
+  compare with the measured widths on the toy, BlattHierarchy and AnisotropicGaussian.
