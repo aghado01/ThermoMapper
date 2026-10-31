@@ -19,6 +19,8 @@ public readonly record struct TermSupport(int CaseNonzero, double CaseMass, int 
 /// An empty part is the constant 1. A scalar response's column is the case side; a direct functional response's
 /// column is the Khatri–Rao product, a(xᵢ)·h(t_r) at case i and location r, which the design layer contracts without
 /// forming (the hub's direct functional algebra). Powers follow R's <c>^</c>: x·x at q = 2, the library power above.
+/// <para>Each term type is a <see cref="IDesignKernel{TPoints}"/> (<see cref="Kernels"/>); the basis applies them in order to
+/// a column of ones, so a column, its support and its derivatives all come through the one contract.</para>
 /// </summary>
 public sealed class BassBasis
 {
@@ -29,6 +31,7 @@ public sealed class BassBasis
         if (degree < 1) throw new ArgumentOutOfRangeException(nameof(degree), "The degree is a positive integer.");
         Inputs = inputs;
         Degree = degree;
+        Kernels = new DesignKernels(inputs, degree);
     }
 
     /// <summary>The training inputs.</summary>
@@ -36,6 +39,9 @@ public sealed class BassBasis
 
     /// <summary>The hinges' degree q.</summary>
     public int Degree { get; }
+
+    /// <summary>The term types' kernels (F-X3): a term's columns, derivatives and factors are these applied in order.</summary>
+    public DesignKernels Kernels { get; }
 
     /// <summary>
     /// Refuses a term whose indices fall outside the inputs: a variable or knot beyond its kind's, a level beyond its
@@ -45,26 +51,8 @@ public sealed class BassBasis
     public void Validate(BassTerm term)
     {
         ArgumentNullException.ThrowIfNull(term);
-        CaseInputs cases = Inputs.Cases;
-        foreach (HingeFactor h in term.Continuous)
-        {
-            if (h.Variable >= cases.ContinuousCount) throw new ArgumentException($"Continuous variable {h.Variable} does not exist.", nameof(term));
-            if (h.Knot >= Inputs.ContinuousKnots(h.Variable).Length) throw new ArgumentException($"Knot {h.Knot} of continuous variable {h.Variable} does not exist.", nameof(term));
-        }
-        foreach (CategoricalFactor c in term.Categorical)
-        {
-            if (c.Variable >= cases.CategoricalCount) throw new ArgumentException($"Categorical variable {c.Variable} does not exist.", nameof(term));
-            int levels = Inputs.LevelCount(c.Variable);
-            if (c.Levels[^1] >= levels) throw new ArgumentException($"Categorical variable {c.Variable} has {levels} levels.", nameof(term));
-            if (c.Levels.Count >= levels) throw new ArgumentException($"A subset of categorical variable {c.Variable} must leave a level out.", nameof(term));
-        }
-        if (term.Functional.Count == 0) return;
-        OutputInputs outputs = Inputs.Outputs ?? throw new ArgumentException("A scalar response has no functional factors.", nameof(term));
-        foreach (HingeFactor h in term.Functional)
-        {
-            if (h.Variable >= outputs.Count) throw new ArgumentException($"Output variable {h.Variable} does not exist.", nameof(term));
-            if (h.Knot >= Inputs.FunctionalKnots(h.Variable).Length) throw new ArgumentException($"Knot {h.Knot} of output variable {h.Variable} does not exist.", nameof(term));
-        }
+        foreach (IDesignKernel<CaseInputs> kernel in Kernels.Case) kernel.Validate(term);
+        foreach (IDesignKernel<OutputInputs> kernel in Kernels.Output) kernel.Validate(term);
     }
 
     /// <summary>The term's case-side factor at each case of <paramref name="at"/>, into <paramref name="column"/>.</summary>
@@ -73,14 +61,26 @@ public sealed class BassBasis
         ArgumentNullException.ThrowIfNull(term);
         ArgumentNullException.ThrowIfNull(at);
         if (column.Length != at.Cases) throw new ArgumentException("The column needs one value per case.", nameof(column));
-        if (term.Continuous.Count == 0) column.Fill(1.0);
-        else Hinges(term.Continuous, at.Continuous, Inputs.ContinuousKnots, column);
-        foreach (CategoricalFactor c in term.Categorical)
-        {
-            ReadOnlySpan<int> levels = at.Categorical(c.Variable);
-            for (int i = 0; i < column.Length; i++)
-                if (!c.Contains(levels[i])) column[i] = 0.0;
-        }
+        column.Fill(1.0);
+        foreach (IDesignKernel<CaseInputs> kernel in Kernels.Case) kernel.Multiply(term, at, column);
+    }
+
+    /// <summary>
+    /// The partial derivative of the term's case-side factor in continuous predictor <paramref name="variable"/> (by its
+    /// position among the continuous predictors) at each case of <paramref name="at"/>, into <paramref name="column"/>: the
+    /// differentiable part's derivative times the other parts' values, zero for a term that does not hold the variable. At a
+    /// hinge's knot the derivative is the mean of its one-sided limits (<see cref="IDesignKernel{TPoints}"/>).
+    /// </summary>
+    public void CaseDerivative(BassTerm term, int variable, CaseInputs at, Span<double> column)
+    {
+        ArgumentNullException.ThrowIfNull(term);
+        ArgumentNullException.ThrowIfNull(at);
+        if (column.Length != at.Cases) throw new ArgumentException("The column needs one value per case.", nameof(column));
+        if ((uint)variable >= (uint)at.ContinuousCount) throw new ArgumentOutOfRangeException(nameof(variable), "No such continuous variable.");
+        column.Fill(1.0);
+        foreach (IDesignKernel<CaseInputs> kernel in Kernels.Case)
+            if (kernel.Differentiable) kernel.MultiplyDerivative(term, variable, at, column);
+            else kernel.Multiply(term, at, column);
     }
 
     /// <summary>The term's output-side factor at each location of <paramref name="at"/>, into <paramref name="column"/>.</summary>
@@ -89,8 +89,20 @@ public sealed class BassBasis
         ArgumentNullException.ThrowIfNull(term);
         ArgumentNullException.ThrowIfNull(at);
         if (column.Length != at.Locations) throw new ArgumentException("The column needs one value per location.", nameof(column));
-        if (term.Functional.Count == 0) column.Fill(1.0);
-        else Hinges(term.Functional, at.Variable, Inputs.FunctionalKnots, column);
+        column.Fill(1.0);
+        foreach (IDesignKernel<OutputInputs> kernel in Kernels.Output) kernel.Multiply(term, at, column);
+    }
+
+    /// <summary>The partial derivative of the term's output-side factor in output variable <paramref name="variable"/> at each
+    /// location of <paramref name="at"/>, into <paramref name="column"/> (<see cref="CaseDerivative"/>'s counterpart).</summary>
+    public void OutputDerivative(BassTerm term, int variable, OutputInputs at, Span<double> column)
+    {
+        ArgumentNullException.ThrowIfNull(term);
+        ArgumentNullException.ThrowIfNull(at);
+        if (column.Length != at.Locations) throw new ArgumentException("The column needs one value per location.", nameof(column));
+        if ((uint)variable >= (uint)at.Count) throw new ArgumentOutOfRangeException(nameof(variable), "No such output variable.");
+        column.Fill(1.0);
+        foreach (IDesignKernel<OutputInputs> kernel in Kernels.Output) kernel.MultiplyDerivative(term, variable, at, column);
     }
 
     /// <summary>The term's support on the training inputs: each part's nonzero count and mass.</summary>
@@ -114,31 +126,4 @@ public sealed class BassBasis
             if (v != 0.0) nonzero++;
         return (nonzero, PairwiseSum.Of(column));
     }
-
-    private delegate ReadOnlySpan<double> Column(int variable);
-
-    // Πⱼ (sⱼ(xⱼ − tⱼ))₊^q over the factors in variable order, divided by the product's largest value on [0, 1].
-    private void Hinges(System.Collections.Generic.IReadOnlyList<HingeFactor> factors, Column values, Column knots, Span<double> column)
-    {
-        column.Fill(1.0);
-        double peak = 1.0;
-        foreach (HingeFactor f in factors)
-        {
-            double t = knots(f.Variable)[f.Knot], s = f.Sign;
-            peak *= (s + 1.0) / 2.0 - s * t;
-            ReadOnlySpan<double> x = values(f.Variable);
-            for (int i = 0; i < column.Length; i++) column[i] *= Power(Math.Max(s * (x[i] - t), 0.0));
-        }
-        double c = Power(peak);
-        if (c == 0.0) return;   // a hinge facing its end of the range: zero there, so R leaves c at 1
-        for (int i = 0; i < column.Length; i++) column[i] /= c;
-    }
-
-    // R's x^q: x at q = 1, x·x at q = 2, the library power above.
-    private double Power(double x) => Degree switch
-    {
-        1 => x,
-        2 => x * x,
-        _ => Math.Pow(x, Degree),
-    };
 }

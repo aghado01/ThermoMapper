@@ -53,6 +53,8 @@ public sealed class TermPairMoments
 /// moment is a product over its variables of one-variable moments: a hinge's or hinge product's by
 /// <see cref="PiecewisePolynomial"/>, split at the knots and clipped to the measure's support, at every degree; a
 /// categorical factor's as a sum of the supplied level probabilities, an intersection's included.
+/// <para>The factors come from the term types' design kernels (<see cref="IDesignKernel{TPoints}"/>), which supply each factor's
+/// value, derivative (<see cref="FactorDerivative"/>) and moments; this service multiplies and caches them.</para>
 /// <para>Terms are taken by value, so terms from different fits on the same inputs (a basis fit's components) meet here;
 /// their knots and levels index <see cref="Inputs"/>. The normalization is the basis's: the case side's hinges divided by
 /// their largest value on [0, 1], and the output side's likewise when the measure covers the output variables. Without
@@ -62,16 +64,18 @@ public sealed class TermPairMoments
 /// </summary>
 public sealed class BassMoments
 {
-    private readonly Dictionary<(int Variable, int Sign, int Knot), double> _hingeMeans = [];
-    private readonly Dictionary<(int Variable, int S1, int K1, int S2, int K2), (double Cross, double Covariance)> _hingePairs = [];
+    private readonly Dictionary<DesignFactor, double> _means = [];
+    private readonly Dictionary<(DesignFactor, DesignFactor), (double Cross, double Covariance)> _factorPairs = [];
     private readonly Dictionary<BassTerm, TermShape> _shapes = [];
     private readonly Dictionary<(BassTerm, BassTerm), TermPairMoments> _pairs = [];
+    private readonly DesignKernels _kernels;
 
     private BassMoments(BassInputs inputs, int degree, ProductMeasure measure)
     {
         Inputs = inputs;
         Degree = degree;
         Measure = measure;
+        _kernels = new DesignKernels(inputs, degree);
     }
 
     /// <summary>The service for terms over <paramref name="inputs"/> at hinge degree <paramref name="degree"/>.</summary>
@@ -132,12 +136,14 @@ public sealed class BassMoments
     /// <paramref name="term"/>'s factor on its <paramref name="position"/>-th variable at <paramref name="value"/>, unnormalized:
     /// (s(x − t))₊^q for a hinge, at a scaled value; 1(z ∈ D) for a categorical factor, at a level index.
     /// </summary>
-    public double FactorValue(BassTerm term, int position, double value)
-    {
-        TermFactor f = Shape(term).Factors[position];
-        if (f.Subset is { } subset) return subset.Contains((int)value) ? 1.0 : 0.0;
-        return Power(Math.Max(f.Sign * (value - f.KnotValue), 0.0));
-    }
+    public double FactorValue(BassTerm term, int position, double value) => Shape(term).Factors[position].Value(value);
+
+    /// <summary>
+    /// The derivative of <see cref="FactorValue"/> in its variable (O-X4, through the design-kernel contract): q·s·(s(x − t))₊^(q−1)
+    /// for a hinge, the mean of the one-sided limits at the knot, which is s/2 at q = 1 and 0 above. Refused for a categorical
+    /// factor, whose variable is a level.
+    /// </summary>
+    public double FactorDerivative(BassTerm term, int position, double value) => Shape(term).Factors[position].Derivative(value);
 
     private TermPairMoments Build(TermShape a, TermShape b)
     {
@@ -168,7 +174,7 @@ public sealed class BassMoments
             }
             else
             {
-                (double c, double cov) = FactorPair(va, a.Factors[i], b.Factors[j], a.Means[i], b.Means[j]);
+                (double c, double cov) = FactorPair(a.Factors[i], b.Factors[j], a.Means[i], b.Means[j]);
                 union.Add(va);
                 cross.Add(c);
                 shared.Add(va);
@@ -216,115 +222,57 @@ public sealed class BassMoments
     }
 
     // (E[φ_a φ_b], Cov(φ_a, φ_b)) for two factors on one variable.
-    private (double Cross, double Covariance) FactorPair(int variable, TermFactor a, TermFactor b, double meanA, double meanB)
+    private (double Cross, double Covariance) FactorPair(DesignFactor a, DesignFactor b, double meanA, double meanB)
     {
-        if (a.Subset is { } da)
-        {
-            IReadOnlyList<double> p = Measure.Probabilities(variable)!;
-            double both = 0.0;
-            foreach (int level in da.Levels)
-                if (b.Subset!.Contains(level)) both += p[level];
-            return (both, both - meanA * meanB);
-        }
-        if (a.Sign > b.Sign || (a.Sign == b.Sign && a.Knot > b.Knot))
-        {
-            (a, b) = (b, a);
-            (meanA, meanB) = (meanB, meanA);
-        }
-        if (_hingePairs.TryGetValue((variable, a.Sign, a.Knot, b.Sign, b.Knot), out var cached)) return cached;
-        ContinuousMeasure measure = Measure.Continuous(variable)!;
-        (int, double)[] hinges = [(a.Sign, a.KnotValue), (b.Sign, b.KnotValue)];
-        (double c, double ec) = PiecewisePolynomial.HingeProduct(Degree, hinges).Expectation(measure.Measure, measure.Lower, measure.Upper);
-        (double cov, double ev) = PiecewisePolynomial.HingeProduct(Degree, hinges, [meanA, meanB]).Expectation(measure.Measure, measure.Lower, measure.Upper);
-        LargestError = Math.Max(LargestError, Math.Max(ec, ev));
-        _hingePairs[(variable, a.Sign, a.Knot, b.Sign, b.Knot)] = (c, cov);
-        return (c, cov);
+        if (_factorPairs.TryGetValue((a, b), out var cached)) return cached;
+        (double cross, double covariance) = a.Pair(b, meanA, meanB, Measure, out double error);
+        LargestError = Math.Max(LargestError, error);
+        _factorPairs[(a, b)] = (cross, covariance);
+        _factorPairs[(b, a)] = (cross, covariance);
+        return (cross, covariance);
     }
 
     private TermShape Shape(BassTerm term)
     {
         ArgumentNullException.ThrowIfNull(term);
         if (_shapes.TryGetValue(term, out TermShape? shape)) return shape;
-        var factors = new List<(int Variable, TermFactor Factor)>();
+        var factors = new List<DesignFactor>();
         double scale = 1.0;
-        CaseInputs cases = Inputs.Cases;
-        double peak = 1.0;
-        foreach (HingeFactor h in term.Continuous)
+        foreach (IDesignKernel<CaseInputs> kernel in _kernels.Case)
         {
-            if (h.Variable >= cases.ContinuousCount || h.Knot >= Inputs.ContinuousKnots(h.Variable).Length)
-                throw new ArgumentException($"Term {term} does not index these inputs.", nameof(term));
-            double t = Inputs.ContinuousKnots(h.Variable)[h.Knot];
-            peak *= (h.Sign + 1.0) / 2.0 - h.Sign * t;
-            factors.Add((Measure.OfContinuous(h.Variable), new TermFactor(h.Sign, h.Knot, t, null)));
+            factors.AddRange(kernel.Factors(term, Measure));
+            scale *= kernel.Scale(term);
         }
-        scale *= Normalizer(peak);
-        foreach (CategoricalFactor c in term.Categorical)
-        {
-            if (c.Variable >= cases.CategoricalCount || c.Levels[^1] >= Inputs.LevelCount(c.Variable))
-                throw new ArgumentException($"Term {term} does not index these inputs.", nameof(term));
-            factors.Add((Measure.OfCategorical(c.Variable), new TermFactor(0, 0, 0.0, c)));
-        }
-        if (Measure.IncludesOutputs && term.Functional.Count > 0)
-        {
-            peak = 1.0;
-            foreach (HingeFactor h in term.Functional)
+        if (Measure.IncludesOutputs)
+            foreach (IDesignKernel<OutputInputs> kernel in _kernels.Output)
             {
-                if (Inputs.Outputs is null || h.Variable >= Inputs.Outputs.Count || h.Knot >= Inputs.FunctionalKnots(h.Variable).Length)
-                    throw new ArgumentException($"Term {term} does not index these inputs.", nameof(term));
-                double t = Inputs.FunctionalKnots(h.Variable)[h.Knot];
-                peak *= (h.Sign + 1.0) / 2.0 - h.Sign * t;
-                factors.Add((Measure.OfOutput(h.Variable), new TermFactor(h.Sign, h.Knot, t, null)));
+                if (!kernel.Reads(term)) continue;
+                factors.AddRange(kernel.Factors(term, Measure));
+                scale *= kernel.Scale(term);
             }
-            scale *= Normalizer(peak);
-        }
         factors.Sort((x, y) => x.Variable.CompareTo(y.Variable));
         var variables = new int[factors.Count];
         var means = new double[factors.Count];
-        var each = new TermFactor[factors.Count];
+        var each = new DesignFactor[factors.Count];
         for (int k = 0; k < factors.Count; k++)
         {
-            (variables[k], each[k]) = factors[k];
-            means[k] = FactorMean(variables[k], each[k]);
+            each[k] = factors[k];
+            variables[k] = factors[k].Variable;
+            means[k] = FactorMean(factors[k]);
         }
         shape = new TermShape(variables, each, means, scale);
         _shapes[term] = shape;
         return shape;
     }
 
-    // 1/c with c the hinge product's largest value on [0, 1], raised to q; 1 where c is 0 (BassBasis's normalization).
-    private double Normalizer(double peak)
+    private double FactorMean(DesignFactor f)
     {
-        double c = Power(peak);
-        return c == 0.0 ? 1.0 : 1.0 / c;
-    }
-
-    private double FactorMean(int variable, TermFactor f)
-    {
-        if (f.Subset is { } subset)
-        {
-            IReadOnlyList<double> p = Measure.Probabilities(variable)!;
-            double sum = 0.0;
-            foreach (int level in subset.Levels) sum += p[level];
-            return sum;
-        }
-        if (_hingeMeans.TryGetValue((variable, f.Sign, f.Knot), out double mean)) return mean;
-        ContinuousMeasure measure = Measure.Continuous(variable)!;
-        (mean, double error) = PiecewisePolynomial.HingeProduct(Degree, [(f.Sign, f.KnotValue)]).Expectation(measure.Measure, measure.Lower, measure.Upper);
+        if (_means.TryGetValue(f, out double mean)) return mean;
+        mean = f.Mean(Measure, out double error);
         LargestError = Math.Max(LargestError, error);
-        _hingeMeans[(variable, f.Sign, f.Knot)] = mean;
+        _means[f] = mean;
         return mean;
     }
 
-    // R's x^q, as the basis evaluates it.
-    private double Power(double x) => Degree switch
-    {
-        1 => x,
-        2 => x * x,
-        _ => Math.Pow(x, Degree),
-    };
-
-    // A factor: a hinge (its sign, knot index and knot value) or a categorical subset.
-    private readonly record struct TermFactor(int Sign, int Knot, double KnotValue, CategoricalFactor? Subset);
-
-    private sealed record TermShape(int[] Variables, TermFactor[] Factors, double[] Means, double Scale);
+    private sealed record TermShape(int[] Variables, DesignFactor[] Factors, double[] Means, double Scale);
 }
