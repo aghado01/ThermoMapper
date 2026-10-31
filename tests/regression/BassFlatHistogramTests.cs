@@ -30,6 +30,9 @@ namespace Maths.Regression.Tests;
 /// <see cref="TemperingPilot.FromLadders"/> and pooled; eight pilots' WHAM starts against SAMC's limit on the exact density
 /// of states; learning from the warm start against learning from flat; a pilot whose ĝ has a gap, interpolated or
 /// refused.</item>
+/// <item><b>The warm start's chip.</b> Why SAMC's fixed point refuses a pilot's ĝ (flat occupancy outside the hull of its
+/// atoms' hats); the starts it accepts pinned before the remedy; 48 pilots over their own shapes and the gap pilots, the
+/// refused ones tied at ten draws, and a pilot too thin to tie refused.</item>
 /// </list>
 /// </summary>
 public sealed class BassFlatHistogramTests
@@ -800,26 +803,50 @@ public sealed class BassFlatHistogramTests
     }, System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);
 
     [Fact]
-    public void WarmStart_OnFortyEightFixtureAPilots_RefusesSeven_AndItsAcceptedStartsArePinned()
+    public void WarmStart_OnFortyEightFixtureAPilots_TiesTheSevenTheFixedPointRefuses_AndLeavesTheRestAsTheyWere()
     {
         // Fixture A's pilots over the shapes they resolve themselves, the window's margins reaching the hot rung's sparse
         // tail: SAMC's fixed point refuses 7 of 48 ĝ, each infeasible at the window's lowest segments (read in exploration,
-        // 2026-10-31). The accepted starts are pinned before the warm start's remedy, which must leave them bit for bit.
+        // 2026-10-31). The accepted starts were pinned before the warm start's remedy, which leaves them bit for bit; the
+        // refused seven, their nodes under ten draws tied, are accepted. Read in exploration: the tied starts' pooled
+        // centred RMS to θ* 0.29, against 0.84 for the 41 accepted as they stood, whose lowest nodes sit up to 17 nats off.
+        // Phase 1's 0.25 was read on denser pilots over the exact window, and neither group meets it here; the bound below,
+        // 0.35, was set after that reading.
         var accepted = new List<MulticanonicalWeights>();
+        var acceptedRms = new List<double>();
         var refused = new List<int>();
+        var tiedRms = new List<double>();
         foreach (ResolvedPilot p in FixtureAPilots.Value)
         {
-            try { accepted.Add(SamcLearning.FixedPoint(p.Shape, p.Estimate.Levels, p.Estimate.LogMasses, out _)); }
+            MulticanonicalWeights? plain = null;
+            try { plain = SamcLearning.FixedPoint(p.Shape, p.Estimate.Levels, p.Estimate.LogMasses, out _); }
             catch (InvalidOperationException)
             {
                 refused.Add(p.Seed);
                 (int at, _) = FlatHistogramLimit.Infeasibility(p.Shape, p.Estimate.Levels, p.Estimate.LogMasses);
                 Assert.InRange(at, 0, 2);
             }
+            MulticanonicalWeights start = Wham.WarmStart(p.Pilot, p.Shape, Wham.ThinDraws, out int[] tied);
+            double rms = CentredRms(start.LogWeights, p.Exact.LogWeights, p.ExactEmpty);
+            if (plain is null)
+            {
+                Assert.NotEmpty(tied);
+                tiedRms.Add(rms);
+                _out.WriteLine($"  seed {p.Seed}: K {p.Shape.Nodes}, tied [{string.Join(", ", tied)}], centred RMS to θ* {rms:F3}");
+                continue;
+            }
+            Assert.Empty(tied);
+            Assert.Equal(StartHash([plain]), StartHash([start]));
+            accepted.Add(start);
+            acceptedRms.Add(rms);
         }
-        _out.WriteLine($"## Fixture A, 48 pilots over their own shapes: {refused.Count} refused ({string.Join(", ", refused)}); start hash {StartHash(accepted)}");
+        double Pooled(List<double> values) => Math.Sqrt(values.Average(v => v * v));
+        _out.WriteLine($"## Fixture A, 48 pilots over their own shapes: {refused.Count} refused by the fixed point ({string.Join(", ", refused)}), none by " +
+                       $"the warm start; pooled centred RMS to θ* {Pooled(tiedRms):F3} tied, {Pooled(acceptedRms):F3} for the {accepted.Count} accepted as they stood");
         Assert.Equal(7, refused.Count);
+        // Pinned before the warm start's remedy (2026-10-31): a start the fixed point accepts stays as it was, bit for bit.
         Assert.Equal("e09cb5b3b470f47e", StartHash(accepted));
+        Assert.True(Pooled(tiedRms) < 0.35, $"the tied starts depart from θ* by {Pooled(tiedRms):F3} RMS");
     }
 
     [Fact]
@@ -923,62 +950,88 @@ public sealed class BassFlatHistogramTests
     }
 
     [Theory]
-    [InlineData(7803, true)]
-    [InlineData(7802, false)]
-    public void Fit_FromAPilotWithAGap_InterpolatesOrIsRefused_NamingTheEmptyNodes(int seed, bool accepted)
+    [InlineData(7803, false)]
+    [InlineData(7802, true)]
+    public void Fit_FromAPilotWithAGap_InterpolatesItsEmptyNodes_OrTiesItsThinOnes(int seed, bool tied)
     {
         // Three fixed rungs, b = 1, 0.9 and the reference rung's 0, leave the levels between the prior's and the posterior's
-        // thinly drawn; τ held, so ℓ₁'s levels are discrete. SAMC's fixed point on the pilot's ĝ interpolates an empty node's
-        // weight, and refuses a ĝ it cannot flatten, as where a segment holds no draw: the fit then throws, naming the window,
-        // K and the empty nodes. Read on seeds 7801–7803 in exploration: 7803 accepted with nodes 13–15 empty, 7801 and 7802
-        // refused, 7802 with nodes 13 and 14 empty.
+        // thinly drawn; τ held, so ℓ₁'s levels are discrete. Where SAMC's fixed point accepts the pilot's ĝ, as on 7803 with
+        // nodes 13–15 empty, the start reads the empty nodes off the line through their neighbours, as before the warm
+        // start's remedy (pinned). Where it refuses ĝ, as on 7802, whose node 15 sees ĝ through one draw at 0.24 of its hat
+        // beside empty nodes 13 and 14 (the chip's step 1), the nodes under ten pilot draws are tied to their neighbours and
+        // the fit runs from that start. Read on seeds 7801–7803 in exploration: 7801 and 7802 refused before the remedy.
         BassModel model = FixtureA(heldTau: true);
-        BassFlatHistogramPilot pilot = GapPilot;
-        BassConfig config = model.Config with
-        {
-            Sampling = model.Config.Sampling with
-            {
-                MasterSeed = seed,
-                FlatHistogram = new BassFlatHistogramSpec
-                {
-                    Run = new FlatHistogramSpec { LearningIterations = 3_000, ProductionDraws = 500, Start = FlatHistogramStart.Wham, Nodes = 20 },
-                    Pilot = pilot,
-                },
-            },
-        };
-        if (!accepted)
-        {
-            var refusal = Assert.Throws<InvalidOperationException>(() => Bass.Fit(config, model.Data));
-            _out.WriteLine(refusal.Message);
-            Assert.Contains("WHAM start", refusal.Message);
-            Assert.Contains("K = 20, b_lo = 0", refusal.Message);
-            Assert.Contains("nodes [13, 14]", refusal.Message);
-            Assert.IsType<InvalidOperationException>(refusal.InnerException);
-            return;
-        }
-        BassFit fit = Bass.Fit(config, model.Data);
+        BassFit fit = Bass.Fit(GapConfig(model, seed, GapPilot), model.Data);
         BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
         BassFlatHistogramPilotReadout read = fh.Pilot!;
-        _out.WriteLine($"accepted: window [{fh.Window.Low:F2}, {fh.Window.High:F2}], K {fh.Nodes}; empty nodes {string.Join(", ", read.EmptyNodes)}; start " +
-                       string.Join(", ", fh.WeightTrace[0].Weights.LogWeights.Select(v => v.ToString("F2"))));
+        IReadOnlyList<double> start = fh.WeightTrace[0].Weights.LogWeights;
+        _out.WriteLine($"window [{fh.Window.Low:F2}, {fh.Window.High:F2}], K {fh.Nodes}; empty nodes {string.Join(", ", read.EmptyNodes)}; start " +
+                       string.Join(", ", start.Select(v => v.ToString("F2"))));
         Assert.Equal([1.0, 0.9, 0.0], read.InverseTemperatures);
         Assert.All(read.Ladders.Levels, n => Assert.Equal(3, n));
         Assert.Equal(2L * 3 * 500, read.Draws);
         Assert.Equal(0.0, fh.LowSlope);
         Assert.Equal(20, fh.Nodes);
-        int[] gap = read.EmptyNodes;
-        Assert.Equal([13, 14, 15], gap);
-
-        // The start reads the empty nodes off the line through their nearest drawn neighbours.
-        IReadOnlyList<double> start = fh.WeightTrace[0].Weights.LogWeights;
-        int below = gap[0] - 1, above = gap[^1] + 1;
-        foreach (int k in gap)
-            Assert.Equal(start[below] + (start[above] - start[below]) * (k - below) / (above - below), start[k], 9);
-        // Pinned before the warm start's remedy (2026-10-31): a start the fixed point accepts stays as it was, bit for bit.
-        Assert.Equal("33f442de917867dc", StartHash([fh.WeightTrace[0].Weights]));
         Assert.True(fh.Complete);
         Assert.NotNull(fit.Evidence);
+
+        // The run's start is the warm start on the pilot rebuilt from the seed, over the shape the run resolved.
+        TemperingPilot pilot = PilotOf(model, GapPilot, SeedTree.Derive(seed, 2)[1]).Pilot;
+        var shape = MulticanonicalWeights.Flat(fh.Window.Low, fh.Window.High, fh.LowSlope, fh.Nodes);
+        Assert.Equal(StartHash([Wham.WarmStart(pilot, shape, Wham.ThinDraws, out int[] thin)]), StartHash([fh.WeightTrace[0].Weights]));
+        if (!tied)
+        {
+            Assert.Empty(thin);
+            int[] gap = read.EmptyNodes;
+            Assert.Equal([13, 14, 15], gap);
+            int below = gap[0] - 1, above = gap[^1] + 1;
+            foreach (int k in gap)
+                Assert.Equal(start[below] + (start[above] - start[below]) * (k - below) / (above - below), start[k], 9);
+            // Pinned before the warm start's remedy (2026-10-31): a start the fixed point accepts stays as it was, bit for bit.
+            Assert.Equal("33f442de917867dc", StartHash([fh.WeightTrace[0].Weights]));
+            return;
+        }
+
+        // Tied: the nodes under ten draws by the readout's own count, each interior run on the line through the drawn nodes
+        // either side, and node 0 below the first drawn node at b_lo = 0, level with it.
+        _out.WriteLine($"tied nodes [{string.Join(", ", thin)}]");
+        Assert.Equal([.. Enumerable.Range(0, fh.Nodes).Where(k => read.NodeDraws[k] < Wham.ThinDraws)], thin);
+        Assert.Equal([0, 7, 10, 11, 13, 14, 15, 16], thin);
+        Assert.Equal(start[1], start[0]);
+        foreach ((int below, int above) in new[] { (6, 8), (9, 12), (12, 17) })
+            for (int k = below + 1; k < above; k++)
+                Assert.Equal(start[below] + (start[above] - start[below]) * (k - below) / (above - below), start[k], 9);
     }
+
+    [Fact]
+    public void Fit_FromAPilotTooThinToTie_IsRefused_NamingItsWindowAndWhy()
+    {
+        // The gap pilot traced for 3 scans, 18 draws over 20 nodes: the fixed point refuses its ĝ, and no two nodes hold ten
+        // draws to tie the rest to, so the warm start is refused and the fit throws, naming the window, K, b_lo, the empty
+        // nodes and why (read on seeds 7801–7806 in exploration: every one refused so).
+        BassModel model = FixtureA(heldTau: true);
+        BassConfig config = GapConfig(model, 7801, GapPilot with { TracedScans = 3 });
+        var refusal = Assert.Throws<InvalidOperationException>(() => Bass.Fit(config, model.Data));
+        _out.WriteLine(refusal.Message);
+        Assert.Contains("WHAM start", refusal.Message);
+        Assert.Contains("K = 20, b_lo = 0", refusal.Message);
+        Assert.Contains("fewer than two nodes hold 10 of the pilot's draws", refusal.Message);
+        Assert.IsType<InvalidOperationException>(refusal.InnerException);
+    }
+
+    // The gap pilot's fit on fixture A, τ held, K = 20, from the WHAM start.
+    private static BassConfig GapConfig(BassModel model, int seed, BassFlatHistogramPilot pilot) => model.Config with
+    {
+        Sampling = model.Config.Sampling with
+        {
+            MasterSeed = seed,
+            FlatHistogram = new BassFlatHistogramSpec
+            {
+                Run = new FlatHistogramSpec { LearningIterations = 3_000, ProductionDraws = 500, Start = FlatHistogramStart.Wham, Nodes = 20 },
+                Pilot = pilot,
+            },
+        },
+    };
 
     // The collapsed target, its evaluations counted.
     private sealed class Counting(BassTarget inner) : ISamplingTarget<BassState>
@@ -1248,11 +1301,12 @@ internal static class FlatHistogramLimit
                     u.Add(f);
                     logHat.Add(estimate.LogMasses[j] + Math.Log(upper ? 1.0 - f : f));
                 }
-            if (u.Count == 0) return $"{segmentDraws} draws, no atom";
+            if (u.Count == 0) return $"{Count(segmentDraws, "draw")}, no atom";
             double max = logHat.Max();
             double mass = max + Math.Log(logHat.Sum(v => Math.Exp(v - max)));
-            return $"{segmentDraws} draws, {u.Count} atoms at u {u.Min():F3}–{u.Max():F3}, ln mass under the hat {mass:F2}";
+            return $"{Count(segmentDraws, "draw")}, {Count(u.Count, "atom")} at u {u.Min():F3}–{u.Max():F3}, ln mass under the hat {mass:F2}";
         }
+        static string Count(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
         return $"node {k} (ℓ {shape.Node(k):F2}): {draws:F1} pilot draws under its hat; below, {Side(k - 1, false, below)}; above, {Side(k, true, above)}";
     }
 }

@@ -16,7 +16,8 @@ namespace Maths.Samplers.Tests;
 /// the multiple-histogram equations, and SAMC's limit on that density of states is the start. On both toys the start
 /// matches θ* from the exact density of states within the pilots' own spread, and learning from it reaches the flat
 /// start's accuracy in fewer iterations. The pilot reads a traced ladder's slopes as ℓ₁, refusing a target whose ℓ_b
-/// is not linear in b; the window, b_lo and K come from it.
+/// is not linear in b; the window, b_lo and K come from it. Where the fixed point refuses a pilot's ĝ (the warm start's
+/// chip), the start ties the nodes under ten pilot draws, and leaves every start the fixed point accepts as it was.
 /// </summary>
 public sealed class WhamTests
 {
@@ -221,6 +222,142 @@ public sealed class WhamTests
                            $"ln Z {curve.LogEvidence[g]:F4} ± {curve.MonteCarloError[g]:F4} against {exact:F4}");
             Assert.True(Math.Abs(curve.LogEvidence[g] - exact) < 4.5 * curve.MonteCarloError[g]);
         }
+    }
+
+    // ---- The warm start where SAMC's fixed point refuses ĝ (the warm start's chip, step 2, 2026-10-31) ----
+
+    // A two-rung pilot, b = 1 and 0, each rung's draws a grid of 20 a unit over [−20, 0] less an open interval, the extra
+    // draws added to the hot rung.
+    private static TemperingPilot GridPilot(double[] extra, double gapLow = 0.0, double gapHigh = 0.0)
+    {
+        double[] grid = [.. Enumerable.Range(0, 400).Select(j => -20.0 + (j + 0.5) / 20.0).Where(l => !(l > gapLow && l < gapHigh))];
+        return new TemperingPilot([1.0, 0.0], [grid, [.. grid, .. extra]]);
+    }
+
+    // The fixed point refuses the pilot's ĝ over the shape; the warm start ties the expected nodes and is the tied limit on
+    // ĝ with every node under ThinDraws tied, bit for bit.
+    private static MulticanonicalWeights AssertTied(TemperingPilot pilot, MulticanonicalWeights shape, int[] expected)
+    {
+        WhamEstimate estimate = Wham.Estimate(pilot);
+        Assert.Throws<InvalidOperationException>(() => SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _));
+        MulticanonicalWeights start = Wham.WarmStart(pilot, shape, Wham.ThinDraws, out int[] tied);
+        Assert.Equal(expected, tied);
+        bool[] thin = [.. Wham.NodeDraws(pilot, shape).Select(d => d < Wham.ThinDraws)];
+        Assert.Equal(StartHash([SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, (ReadOnlySpan<bool>)thin)]), StartHash([start]));
+        Assert.Equal(StartHash([start]), StartHash([Wham.WarmStart(pilot, shape)]));
+        return start;
+    }
+
+    [Fact]
+    public void WarmStart_TiesTheThinNodes_OnlyWhereTheFixedPointRefusesGHat()
+    {
+        // A thin node at the window's edge, as on Friedman's seed 8217: node 0's hat sees one draw, 0.87 of the way to node 1,
+        // so its flat share would overfill node 1 and no limit exists. Tied, it continues from node 1 at b_lo = 0, level.
+        MulticanonicalWeights edge = AssertTied(GridPilot([-20.13]), MulticanonicalWeights.Flat(-21.0, 0.0, 0.0, 22), [0]);
+        Assert.Equal(edge.LogWeights[1], edge.LogWeights[0]);
+
+        // An empty segment beside a drawn node, as on fixture A's gap pilots: no grid draw in (−12, −10) but one at −11.85,
+        // which node 9's hat sees at 0.15. Tied, node 9 lies on the line through nodes 8 and 10.
+        MulticanonicalWeights gap = AssertTied(GridPilot([-11.85], -12.0, -10.0), MulticanonicalWeights.Flat(-20.0, 0.0, 0.0, 21), [9]);
+        Assert.Equal(0.5 * (gap.LogWeights[8] + gap.LogWeights[10]), gap.LogWeights[9], 12);
+
+        // Where the fixed point accepts ĝ, nothing is tied, and the start is its limit, bit for bit.
+        TemperingPilot dense = GridPilot([]);
+        var shape = MulticanonicalWeights.Flat(-20.0, 0.0, 0.0, 21);
+        WhamEstimate estimate = Wham.Estimate(dense);
+        MulticanonicalWeights start = Wham.WarmStart(dense, shape, Wham.ThinDraws, out int[] none);
+        Assert.Empty(none);
+        Assert.Equal(StartHash([SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _)]), StartHash([start]));
+    }
+
+    [Fact]
+    public void WarmStart_RefusesAPilotWithTooFewDrawsToTieTo_NamingWhy()
+    {
+        // Four draws over 22 nodes: the fixed point refuses ĝ, and no two nodes hold ten draws to tie the rest to.
+        var pilot = new TemperingPilot([1.0, 0.0], [[-1.2, -0.3], [-20.13, -10.5]]);
+        var shape = MulticanonicalWeights.Flat(-21.0, 0.0, 0.0, 22);
+        var refusal = Assert.Throws<InvalidOperationException>(() => Wham.WarmStart(pilot, shape));
+        _out.WriteLine(refusal.Message);
+        Assert.Contains("fewer than two nodes hold 10 of the pilot's draws", refusal.Message);
+        Assert.Throws<ArgumentOutOfRangeException>(() => Wham.WarmStart(pilot, shape, 0.0, out _));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Wham.WarmStart(pilot, shape, double.PositiveInfinity, out _));
+    }
+
+    [Fact]
+    public void WarmStart_OnSparseDoubleWellPilots_IsAcceptedWhereTheFixedPointRefused_AndUnchangedWhereItAccepted()
+    {
+        // 32 pilots of 5,000 scans, each over the window, b_lo and K it resolves itself, the window's lower margin reaching
+        // the hot rung's sparse tail. Read in exploration before this test (2026-10-31): the fixed point refuses 28 of them;
+        // tied at 10 draws, every one is accepted, at a pooled centred RMS to θ* of 0.26 with the tied edges held level and
+        // 0.32 with them on the extensions' slopes, as adopted (the double well's top is ℓ's maximum, where g is singular
+        // and no slope fits), against 0.71 for the four the fixed point accepts. Phase 1's 0.25 was read on denser pilots over
+        // a narrower window, and neither group meets it here; the bound below, 0.35, was set after those readings.
+        int refusedBefore = 0;
+        var remedied = new List<double>();
+        var accepted = new List<double>();
+        foreach (int s in SeedTree.Derive(71, 32))
+        {
+            TemperingPilot pilot = WellPilot(s, 5_000);
+            FlatHistogramWindow window = Wham.Window(pilot, 0.01, 1.0);
+            int nodes = Wham.Nodes(pilot, window);
+            var shape = MulticanonicalWeights.Flat(window.Low, window.High, pilot.HotEnd, nodes);
+            MulticanonicalWeights exact = SamcLearningTests.WellFixedPoint(window, pilot.HotEnd, nodes, out bool[] empty);
+            WhamEstimate estimate = Wham.Estimate(pilot);
+            MulticanonicalWeights? plain = null;
+            try { plain = SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _); }
+            catch (InvalidOperationException) { refusedBefore++; }
+            MulticanonicalWeights start = Wham.WarmStart(pilot, shape, Wham.ThinDraws, out int[] tied);
+            double rms = CentredRms(start.LogWeights, exact.LogWeights, Array.ConvertAll(empty, e => !e));
+            if (plain is null)
+            {
+                Assert.NotEmpty(tied);
+                remedied.Add(rms);
+                continue;
+            }
+            Assert.Empty(tied);
+            Assert.Equal(StartHash([plain]), StartHash([start]));
+            accepted.Add(rms);
+        }
+        double Pooled(List<double> values) => Math.Sqrt(values.Average(v => v * v));
+        _out.WriteLine($"[wham] 32 double-well pilots of 5,000 scans over their own shapes: {refusedBefore} refused by the fixed point, none by the " +
+                       $"warm start; pooled centred RMS to θ* {Pooled(remedied):F3} tied, {Pooled(accepted):F3} for the {accepted.Count} accepted as they stood");
+        Assert.Equal(28, refusedBefore);
+        Assert.True(Pooled(remedied) < 0.35, $"the tied starts depart from θ* by {Pooled(remedied):F3} RMS");
+    }
+
+    [Fact]
+    public void WarmStart_OnAGaussianDensityOfStatesWiderThanADoublesRange_TiesItsSparseEdges()
+    {
+        // ln g = −(ℓ − μ)²/(2s²) with μ = −2000 and s² = 2000, so rung b's law is N(μ + b·s², s²), drawn exactly: 21 rungs
+        // of 40 draws. The window runs from 0.87 of a spacing below the lowest draw, so node 0's hat sees it at 0.87 of the
+        // way to node 1 (Friedman's seed 8217), to the top the pilot resolves, with 50 nodes. Over it ln g spans more than a
+        // double's 745 nats, so the tied solve's start, like the untied one's, sums its masses in logs.
+        const double mu = -2000.0, s2 = 2000.0;
+        const int nodes = 50;
+        var rng = new Xoshiro256PlusPlus(73);
+        double[] b = [.. Enumerable.Range(0, 21).Select(i => 1.0 - i / 20.0)];
+        double Normal() => Math.Sqrt(-2.0 * Math.Log(1.0 - rng.NextDouble())) * Math.Cos(2.0 * Math.PI * rng.NextDouble());
+        double[][] levels = [.. b.Select(bi => Enumerable.Range(0, 40).Select(_ => mu + bi * s2 + Math.Sqrt(s2) * Normal()).ToArray())];
+        var pilot = new TemperingPilot(b, levels);
+        double high = Wham.Window(pilot, 0.01, 1.0).High, lowest = levels.Min(l => l.Min());
+        double low = (lowest - 0.87 * high / (nodes - 1)) / (1.0 - 0.87 / (nodes - 1));   // lowest = low + 0.87·(high − low)/(K − 1)
+        var window = new FlatHistogramWindow(low, high);
+        var shape = MulticanonicalWeights.Flat(low, high, pilot.HotEnd, nodes);
+        Assert.True(shape.TryLocate(lowest, out int segment, out double fraction) && segment == 0 && Math.Abs(fraction - 0.87) < 1e-9);
+        const int cells = 200_000;
+        double h = (window.High - window.Low) / cells;
+        double[] grid = [.. Enumerable.Range(0, cells).Select(j => window.Low + (j + 0.5) * h)];
+        double[] lnG = [.. grid.Select(l => -(l - mu) * (l - mu) / (2.0 * s2) + Math.Log(h))];
+        MulticanonicalWeights exact = SamcLearning.FixedPoint(shape, grid, lnG, out bool[] empty);
+        WhamEstimate estimate = Wham.Estimate(pilot);
+        Assert.Throws<InvalidOperationException>(() => SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _));
+        MulticanonicalWeights start = Wham.WarmStart(pilot, shape, Wham.ThinDraws, out int[] tied);
+        double rms = CentredRms(start.LogWeights, exact.LogWeights, Array.ConvertAll(empty, e => !e));
+        _out.WriteLine($"[wham] Gaussian ln g over [{window.Low:F0}, {window.High:F0}], K = {shape.Nodes}: span {lnG.Max() - lnG.Min():F0} nats; " +
+                       $"tied [{string.Join(", ", tied)}]; centred RMS to θ* {rms:F3}");
+        Assert.True(lnG.Max() - lnG.Min() > 745.0);
+        Assert.NotEmpty(tied);
+        Assert.All(start.LogWeights, v => Assert.True(double.IsFinite(v)));
     }
 
     [Fact]

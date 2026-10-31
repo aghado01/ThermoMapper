@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Maths.Samplers.FlatHistogram;
 
@@ -30,7 +31,9 @@ public sealed record WhamEstimate(double[] Levels, double[] LogMasses, double[] 
 /// different rates. It is the stationary point of the convex
 /// <c>F(f) = Σ_j (1/g_{i(j)}) ln Σ_k ñ_k e^{b_k·ℓ_j − f_k} + Σ_i ñ_i f_i</c> (the MBAR objective), which Newton's method
 /// solves from the path-sampling estimate of f, the derivative-guided iteration they recommend. Where the pilot drew
-/// nothing, as between two phases it does not cross, ĝ has no mass and the start's weights are interpolated.</para>
+/// nothing, as between two phases it does not cross, ĝ has no mass and the start's weights are interpolated; where it drew
+/// too little for SAMC's limit on ĝ to exist, the start ties the thin nodes to their neighbours
+/// (<see cref="WarmStart(TemperingPilot, MulticanonicalWeights, double, out int[])"/>).</para>
 /// </summary>
 public static class Wham
 {
@@ -139,12 +142,72 @@ public static class Wham
         return new WhamEstimate(levels, logMasses, f, iterations, residual, counts);
     }
 
-    /// <summary>The warm-start weights over <paramref name="shape"/>'s window: SAMC's limit on WHAM's ĝ.</summary>
-    public static MulticanonicalWeights WarmStart(TemperingPilot pilot, MulticanonicalWeights shape)
+    /// <summary>Fewer of the pilot's draws than this under a node's hat (<see cref="NodeDraws"/>), and the warm start ties
+    /// the node where SAMC's fixed point refuses ĝ as it stands: 10, the least of the thresholds measured (1, 2, 5 and 10)
+    /// at which every refused pilot read, on fixture A, its gap pilots, the double well and Friedman, was accepted (the warm
+    /// start's chip, 2026-10-31). A pilot too small for two nodes to hold ten draws is refused.</summary>
+    public const double ThinDraws = 10.0;
+
+    /// <summary>The warm-start weights over <paramref name="shape"/>'s window: SAMC's limit on WHAM's ĝ, or where the
+    /// fixed point refuses ĝ, its limit with the nodes under <see cref="ThinDraws"/> pilot draws tied.</summary>
+    public static MulticanonicalWeights WarmStart(TemperingPilot pilot, MulticanonicalWeights shape) => WarmStart(pilot, shape, ThinDraws, out _);
+
+    /// <summary>
+    /// The warm-start weights over <paramref name="shape"/>'s window: SAMC's limit on WHAM's ĝ
+    /// (<see cref="SamcLearning.FixedPoint(MulticanonicalWeights, ReadOnlySpan{double}, ReadOnlySpan{double}, out bool[])"/>),
+    /// returned as it stands wherever the fixed point accepts ĝ. ĝ is a discrete measure, its atoms the pilot's draws, and
+    /// where a node's hat sees it only through a few atoms far from the node, beside an empty segment or the window's edge,
+    /// no finite limit exists and the fixed point refuses it. Then the nodes holding fewer than
+    /// <paramref name="thinDraws"/> of the pilot's draws are tied to their neighbours, their ln w on the line through the
+    /// nearest held nodes and past the outermost at the extensions' slopes
+    /// (<see cref="SamcLearning.FixedPoint(MulticanonicalWeights, ReadOnlySpan{double}, ReadOnlySpan{double}, ReadOnlySpan{bool})"/>),
+    /// and the limit on that coarser interpolant is the start, which SAMC's learning then corrects at every node. Where even
+    /// that is refused, or fewer than two nodes hold the draws, the start is refused (<see cref="InvalidOperationException"/>),
+    /// saying which.
+    /// </summary>
+    /// <param name="pilot">The tempering pilot.</param>
+    /// <param name="shape">The window, slope and node count; its values are not read.</param>
+    /// <param name="thinDraws">The draws under a node's hat below which a refused ĝ's node is tied; positive.</param>
+    /// <param name="tied">The nodes tied, ascending; none where the fixed point accepted ĝ as it stands.</param>
+    public static MulticanonicalWeights WarmStart(TemperingPilot pilot, MulticanonicalWeights shape, double thinDraws, out int[] tied)
     {
         ArgumentNullException.ThrowIfNull(shape);
+        if (!(thinDraws > 0.0) || double.IsInfinity(thinDraws))
+            throw new ArgumentOutOfRangeException(nameof(thinDraws), "The thin nodes' draws must be positive and finite.");
         WhamEstimate estimate = Estimate(pilot);
-        return SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _);
+        MulticanonicalWeights? start = SamcLearning.Solve(shape, estimate.Levels, estimate.LogMasses, out _, out double departure);
+        if (start is not null)
+        {
+            tied = [];
+            return start;
+        }
+        double[] draws = NodeDraws(pilot, shape);
+        var thin = new bool[shape.Nodes];
+        for (int k = 0; k < thin.Length; k++) thin[k] = draws[k] < thinDraws;
+        tied = [.. Enumerable.Range(0, thin.Length).Where(k => thin[k])];
+        string refusal = $"SAMC's limit was not reached: a node's occupancy departs from flat by {departure:G3}";
+        if (thin.Length - tied.Length < 2)
+            throw new InvalidOperationException($"{refusal}, and fewer than two nodes hold {thinDraws:G} of the pilot's draws to tie the rest to.");
+        start = SamcLearning.SolveTied(shape, estimate.Levels, estimate.LogMasses, thin, out double tiedDeparture);
+        return start ?? throw new InvalidOperationException(
+            $"{refusal}; with the nodes under {thinDraws:G} pilot draws tied [{string.Join(", ", tied)}], a merged node's by {tiedDeparture:G3}.");
+    }
+
+    /// <summary>The pilot's draws under each node's hat over <paramref name="shape"/>'s window, every rung's: Σ φ_k(ℓ₁) over
+    /// the draws inside the window. Where a node holds none, ĝ has no mass there.</summary>
+    public static double[] NodeDraws(TemperingPilot pilot, MulticanonicalWeights shape)
+    {
+        ArgumentNullException.ThrowIfNull(pilot);
+        ArgumentNullException.ThrowIfNull(shape);
+        var counts = new double[shape.Nodes];
+        for (int i = 0; i < pilot.Rungs; i++)
+            foreach (double level in pilot.Levels(i))
+            {
+                if (!shape.TryLocate(level, out int segment, out double fraction)) continue;
+                counts[segment] += 1.0 - fraction;
+                counts[segment + 1] += fraction;
+            }
+        return counts;
     }
 
     /// <summary>

@@ -16,6 +16,7 @@ namespace Maths.Samplers.Tests;
 /// flat conditional hat occupancy, exact when ln g is piecewise linear on the nodes. On the double well, the learned
 /// weights approach θ* from the prior's quadrature, closer the longer the learning; production's histogram is flat; the
 /// shared weights give the same run under any parallelism bound; and the diagnostics flag a chain that never crosses.
+/// With nodes tied (the warm start's chip), the limit is the coarser interpolant's, ln g where it is linear across them.
 /// </summary>
 public sealed class SamcLearningTests
 {
@@ -142,6 +143,72 @@ public sealed class SamcLearningTests
         Assert.Throws<ArgumentException>(() => SamcLearning.FixedPoint(shape, [2.0, 3.0], [0.0, 0.0], out _));
         Assert.Throws<ArgumentException>(() => SamcLearning.FixedPoint(shape, [0.5], [double.NaN], out _));
         Assert.Throws<ArgumentException>(() => SamcLearning.FixedPoint(shape, [0.5], [0.0, 1.0], out _));
+    }
+
+    [Fact]
+    public void FixedPoint_WithTiedNodes_RecoversALnGLinearAcrossThem()
+    {
+        // ln g piecewise linear on nodes 0, 2, 5, 6 and 8, so linear across nodes 1, 3, 4 and 7. Tied, those lie on the lines
+        // through their untied neighbours, and the merged hats' flat occupancy is met by ln g itself, as the untied limit is
+        // where ln g is piecewise linear on every node.
+        var shape = MulticanonicalWeights.Flat(-6.0, 2.0, 0.3, 9);
+        double[] lnG = [3.0, 2.75, 2.5, 2.5 - 3.5 / 3.0, 2.5 - 7.0 / 3.0, -1.0, -4.0, -5.0, -6.0];
+        bool[] tied = [false, true, false, true, true, false, false, true, false];
+        (double[] levels, double[] masses) = Quadrature(shape.WithLogWeights(lnG), -6.0, 2.0, 80_000);
+        MulticanonicalWeights fixedPoint = SamcLearning.FixedPoint(shape, levels, masses, (ReadOnlySpan<bool>)tied);
+        double rms = CentredRms(fixedPoint.LogWeights, Array.ConvertAll(lnG, v => -v));
+        _out.WriteLine($"[fixed point, tied] ln g linear across the tied nodes recovered to {rms:E2}");
+        Assert.True(rms < 1e-6, $"θ* departs from ln g by {rms:E2}");
+        Assert.Equal(0.0, fixedPoint.LogWeights[0]);
+    }
+
+    [Fact]
+    public void FixedPoint_WithTiedNodes_ContinuesTheExtensionsAtTheEdges_AndTiesANodeItsHatMisses()
+    {
+        // Nodes 0 and 8, tied at the window's edges, continue from nodes 1 and 7 at the extensions' slopes, b_lo = 0.3 below
+        // and 1 above; node 4's hat sees no level (none in (−3, −1)), so it is tied too, on the line through nodes 3 and 5.
+        // ln g = −ℓ/2 elsewhere.
+        var shape = MulticanonicalWeights.Flat(-6.0, 2.0, 0.3, 9);
+        (double[] all, double[] allMasses) = Quadrature(shape.WithLogWeights([.. Enumerable.Range(0, 9).Select(k => -0.5 * shape.Node(k))]), -6.0, 2.0, 8_000);
+        int[] kept = [.. Enumerable.Range(0, all.Length).Where(j => all[j] <= -3.0 || all[j] >= -1.0)];
+        double[] levels = [.. kept.Select(j => all[j])], masses = [.. kept.Select(j => allMasses[j])];
+        bool[] tied = [true, false, false, false, false, false, false, false, true];
+        MulticanonicalWeights fixedPoint = SamcLearning.FixedPoint(shape, levels, masses, (ReadOnlySpan<bool>)tied);
+        IReadOnlyList<double> w = fixedPoint.LogWeights;
+        Assert.Equal(w[1] - 0.3, w[0], 12);
+        Assert.Equal(w[7] + 1.0, w[8], 12);
+        Assert.Equal(0.5 * (w[3] + w[5]), w[4], 12);
+        Assert.All(w, v => Assert.True(double.IsFinite(v)));
+    }
+
+    [Fact]
+    public void FixedPoint_WithTiedNodes_RefusesWhatItCannotFlatten_AndFewerThanTwoUntiedNodes()
+    {
+        // Two atoms at 0.9 of their segments: node 0's flat share, a quarter, needs 2.5 times the first atom's mass, more
+        // than the whole. No tilt reaches it, untied or tied, and each solve refuses it.
+        var shape = MulticanonicalWeights.Flat(0.0, 1.0, 0.5, 3);
+        Assert.Throws<InvalidOperationException>(() => SamcLearning.FixedPoint(shape, [0.45, 0.95], [0.0, 0.0], out _));
+        var refusal = Assert.Throws<InvalidOperationException>(() => SamcLearning.FixedPoint(shape, [0.45, 0.95], [0.0, 0.0], (ReadOnlySpan<bool>)new bool[3]));
+        Assert.Contains("merged node", refusal.Message);
+        // Tied, node 0 continues from node 1 at b_lo = 0.5, and node 1's merged hat sees the first atom whole: then it flattens.
+        MulticanonicalWeights tiedStart = SamcLearning.FixedPoint(shape, [0.45, 0.95], [0.0, 0.0], (ReadOnlySpan<bool>)new[] { true, false, false });
+        Assert.Equal(tiedStart.LogWeights[1] - 0.25, tiedStart.LogWeights[0], 12);
+        Assert.Throws<ArgumentException>(() => SamcLearning.FixedPoint(shape, [0.2, 0.7], [0.0, 0.0], (ReadOnlySpan<bool>)new[] { true, true, false }));
+        Assert.Throws<ArgumentException>(() => SamcLearning.FixedPoint(shape, [0.2, 0.7], [0.0, 0.0], (ReadOnlySpan<bool>)new bool[2]));
+    }
+
+    // A fine midpoint quadrature over [low, high] of the density e^{ln g}, ln g the interpolant's ln w.
+    private static (double[] Levels, double[] Masses) Quadrature(MulticanonicalWeights lnG, double low, double high, int cells)
+    {
+        var levels = new double[cells];
+        var masses = new double[cells];
+        double h = (high - low) / cells;
+        for (int j = 0; j < cells; j++)
+        {
+            levels[j] = low + (j + 0.5) * h;
+            masses[j] = lnG.LogWeight(levels[j]) + Math.Log(h);
+        }
+        return (levels, masses);
     }
 
     // The double well's θ* over a window, from a 400 000-cell quadrature of the prior.

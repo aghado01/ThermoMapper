@@ -223,6 +223,122 @@ public sealed class BassFlatHistogramQualificationTests
         Assert.Equal("86f45b016b3f3f47", hash);
     }
 
+    // ---- The warm start's remedy on a sweep of Friedman pilots (the warm start's chip, step 2, 2026-10-31) ----
+
+    // Sixteen master seeds, declared before the sweep: 8017 and 8217, arm (i)'s two seeds run, and 8301–8314, which no
+    // harness uses. The third replication seed (step 3), declared here before any run, is not among them, so the sweep
+    // reads nothing of its pilot.
+    private static readonly int[] SweepSeeds = [ArmOneSeed, SecondSeed, .. Enumerable.Range(8301, 14)];
+    private const int ThirdSeed = 8417;
+
+    // Each seed's arm (i) pilot over the shape its run resolves. Before: SAMC's fixed point on ĝ as it stands. After: the
+    // warm start, the nodes under ThinDraws (10) pilot draws tied where the fixed point refuses ĝ; where it accepts, the
+    // warm start must be its limit bit for bit. Beside them, as readings, the candidates measured before this sweep on
+    // fixture A, its gap pilots and the double well: ties at 1, 2 and 5 draws; the nodes under 2 draws emptied, their atoms
+    // set aside so the empty-node rule interpolates them; and the grid coarsened by halving until the fixed point accepts.
+    // What would count, written before the run: nothing is ruled; the refusal rates before and after are the check.
+    [Fact]
+    public void Friedman_WarmStart_RefusalsBeforeAndAfter_OverSixteenPilots()
+    {
+        if (!BassQualification.Enabled) return;   // sixteen pilots, about a minute each
+        Assert.DoesNotContain(ThirdSeed, SweepSeeds);
+        double[] ties = [1.0, 2.0, 5.0];
+        int before = 0, after = 0;
+        var tieRefusals = new int[ties.Length];
+        int emptiedRefusals = 0;
+        var clock = Stopwatch.StartNew();
+        foreach (int seed in SweepSeeds)
+        {
+            (TemperingPilot pilot, MulticanonicalWeights shape) = ArmOnePilot(seed);
+            WhamEstimate estimate = Wham.Estimate(pilot);
+            double[] draws = Wham.NodeDraws(pilot, shape);
+            MulticanonicalWeights? plain = null;
+            string verdict;
+            try
+            {
+                plain = SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _);
+                verdict = "accepted";
+            }
+            catch (InvalidOperationException e)
+            {
+                before++;
+                (int at, double gap) = FlatHistogramLimit.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
+                verdict = $"refused ({e.Message[(e.Message.LastIndexOf(' ') + 1)..].TrimEnd('.')} from flat; outside the hull at segment {at}, by {gap:F4})";
+            }
+            string afterVerdict;
+            try
+            {
+                MulticanonicalWeights start = Wham.WarmStart(pilot, shape, Wham.ThinDraws, out int[] tied);
+                if (plain is not null) Assert.Equal(BassFlatHistogramTests.StartHash([plain]), BassFlatHistogramTests.StartHash([start]));
+                afterVerdict = plain is not null ? "as it stood" : $"tied [{string.Join(", ", tied)}]";
+            }
+            catch (InvalidOperationException e)
+            {
+                after++;
+                afterVerdict = e.Message;
+            }
+            var readings = new List<string>();
+            if (plain is null)
+            {
+                for (int t = 0; t < ties.Length; t++)
+                {
+                    try
+                    {
+                        Wham.WarmStart(pilot, shape, ties[t], out int[] tied);
+                        readings.Add($"tied at {ties[t]:G}: {tied.Length} nodes");
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        tieRefusals[t]++;
+                        readings.Add($"tied at {ties[t]:G}: refused");
+                    }
+                }
+                bool emptied = Emptied(shape, estimate, draws, 2.0);
+                if (!emptied) emptiedRefusals++;
+                readings.Add($"emptied at 2: {(emptied ? "accepted" : "refused")}");
+                readings.Add($"coarsened: accepted at K {Coarsened(shape, estimate)}");
+            }
+            _out.WriteLine($"  seed {seed}: window [{shape.Low:G6}, {shape.High:G6}], K {shape.Nodes}; nodes under 10 draws " +
+                           $"[{string.Join(", ", Enumerable.Range(0, shape.Nodes).Where(k => draws[k] < 10.0))}]; before {verdict}; after {afterVerdict}" +
+                           (readings.Count > 0 ? $"; {string.Join("; ", readings)}" : ""));
+        }
+        _out.WriteLine($"## {SweepSeeds.Length} Friedman pilots (arm i): the fixed point refused {before}, the warm start {after}; of the refused, ties at " +
+                       $"{string.Join(", ", ties.Select((t, i) => $"{t:G} refused {tieRefusals[i]}"))}, emptied at 2 refused {emptiedRefusals}; {clock.Elapsed.TotalSeconds:F0} s");
+    }
+
+    // The nodes under `threshold` draws emptied: ĝ's atoms in their segments set aside, so the fixed point's empty-node rule
+    // interpolates them. Whether the fixed point then accepts.
+    private static bool Emptied(MulticanonicalWeights shape, WhamEstimate estimate, double[] draws, double threshold)
+    {
+        var levels = new List<double>();
+        var masses = new List<double>();
+        for (int j = 0; j < estimate.Levels.Length; j++)
+        {
+            if (shape.TryLocate(estimate.Levels[j], out int s, out double u) && ((u < 1.0 && draws[s] < threshold) || (u > 0.0 && draws[s + 1] < threshold))) continue;
+            levels.Add(estimate.Levels[j]);
+            masses.Add(estimate.LogMasses[j]);
+        }
+        try { SamcLearning.FixedPoint(shape, [.. levels], [.. masses], out _); return true; }
+        catch (InvalidOperationException) { return false; }
+    }
+
+    // The node count, halved (⌈(K − 1)/2⌉ + 1 nodes) until the fixed point accepts ĝ over the same window.
+    private static int Coarsened(MulticanonicalWeights shape, WhamEstimate estimate)
+    {
+        int nodes = shape.Nodes;
+        while (nodes > 2)
+        {
+            nodes = nodes / 2 + 1;
+            try
+            {
+                SamcLearning.FixedPoint(MulticanonicalWeights.Flat(shape.Low, shape.High, shape.LowSlope, nodes), estimate.Levels, estimate.LogMasses, out _);
+                return nodes;
+            }
+            catch (InvalidOperationException) { }
+        }
+        return nodes;
+    }
+
     private void RunArm(string label, BassConfig config, SmcAt? smc)
     {
         BassMixing.Fixture fixture = Fixture.Value;
