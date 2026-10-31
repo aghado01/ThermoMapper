@@ -274,6 +274,7 @@ entropy) suit it better.
 | C40 | A threshold set by replica noise makes "quiet" depend on the budget; certifying an absence needs a margin, the scale of interest | §13.7 | Argued here | none needed |
 | C41 | An interval is resolved when the trapezoid of its endpoint slopes matches its exact increment (ΔS₂, or Δ⟨E⟩ for energy), within error; the mismatch shrinks like h² | §13.5 | Derived here (exact integral; trapezoid error); unverified on SW data | E7 |
 | C42 | A replica stuck in one basin mixes well inside it, so no single-chain diagnostic or ESS weighting reveals it; only comparison across replicas does | §13.6 | Standard (the reason R̂ exists) | E10 |
+| C43 | For q ≥ 1, Bernoulli(p̃) ≤ Potts(q) ≤ Bernoulli(p) in the random-cluster order, p̃ = p/(p + q(1 − p)), so every increasing functional (S₂, F_n, τ_e) lies between two independent-bond percolations | §13.13 | Grimmett's comparison inequalities, cited from memory; consistent with C23 (lower side, on a tree) and C30 (one edge's crossing) | Confirm the citation; E14 |
 
 ---
 
@@ -1595,7 +1596,7 @@ The user dropped iris as too limited and asked for the same SPC-only levers on t
 The user reopened what round 1 closed, as an adversarial round with new capabilities in hand. Round 2 was discussion: it
 ran no experiments (one quantile table was computed), and it changed no code. Where the user decided something, the
 entry says so and gives the date; everything else is open, with the experiment that would settle it. Experiments
-continue round 1's numbering (E6–E13, §13.12). New claims are C35–C42 in §7.
+continue round 1's numbering (E6–E14, §13.12). New claims are C35–C43 in §7.
 
 **What round 1 did not have**, all on `main` by 2026-10-30:
 - **The per-draw record** on `Accumulator`: `EnergyPerDraw`, `MagPerDraw`, `SumSqClusterSizesPerDraw`,
@@ -2089,7 +2090,8 @@ temperature.
 
 ### 13.11 Not reached in round 2
 
-These stand as round 1 left them: the bracket (Q5, C19, C23); regime B (Q6, §12.16's re-graphed subset); persistence
+These stand as round 1 left them: the bracket (Q5, C19, C23; a construction from the graph alone is proposed in §13.13);
+regime B (Q6, §12.16's re-graphed subset); persistence
 in levels against lifetimes in ln T (§12.21–12.22); C34's dropped repair edges; and the observable split of §12.15 as
 a whole.
 
@@ -2124,3 +2126,46 @@ a whole.
   do failing fits account for round 1's bad readouts? Part of the settings pass.
 - **E13. A width predictor from the graph.** Predict each melt's width from its cluster's internal coupling spread;
   compare with the measured widths on the toy, BlattHierarchy and AnisotropicGaussian.
+- **E14. The percolation sandwich (§13.13), after the graph compiler revision.** Both percolation curves on the toy,
+  BlattHierarchy (both graphs) and Landsat: does every SW curve sit between them (a check of C43's citation too)? How
+  wide is the sandwich at each event? Does the bracket recipe hold the toy's cold edge (C22)?
+
+### 13.13 Addendum, 2026-10-31: a percolation sandwich, from the CumulativeField question
+
+The user asked whether the CumulativeField work (Wang et al. 2020's construction, solved in closed form here) points to
+a cheap way to learn about a system up front, through a mean-field "thermal curve".
+- **CumulativeField's curve** is single linkage on the coupling graph, with temperature mapped to a cut depth (T·ln 2)
+  on a cumulative ladder. It is free, dense and noise-free, and its merge order is the maximum spanning tree's. How it
+  maps merges onto temperature has no proven relation to SW, so its order of significant merges is the part to read.
+- **The continuum that pays is the random-cluster family in q (C43).** The FK measure is defined for every real q ≥ 1;
+  at q = 1 it is independent-bond percolation, with exact independent samples and no Markov chain. Grimmett's comparison
+  inequalities (Theorem 3.21, cited from memory; confirm both q directions) sandwich Potts between two percolations:
+  Bernoulli(p̃) ≤ Potts(q) ≤ Bernoulli(p), with p = 1 − e^(−J_e/T) and p̃ = p/(p + q(1 − p)), for every increasing
+  functional: S₂, F_n, ⟨Σ c ln c⟩, each τ_e.
+  - C23's tree bound is the lower side restricted to a spanning tree; on the full graph the lower bound is tighter. The
+    upper side is new here.
+  - C30's rigid-block split T = C/ln(q + 1) is the lower bound's crossing for a single edge of coupling C.
+- **What it gives up front.**
+  - *A guaranteed bracket from the graph alone (Q5).* Cold end: where the lower curve's floored functional (F_n) reaches
+    the pre-repair component floor, the true curve has too. Hot end: where the upper curve reaches 1/N, so has the
+    truth. The size floor keeps it from chasing repair edges such as iris's at 2×10⁻⁶ (§12.8).
+  - *Windows where events can sit.* Each edge's θ-crossing lies between its two percolation crossings: for a lone edge
+    of coupling J at q = 20, J/ln 21 and J/ln 2, 1.48 e-folds apart; for dense clusters up to ln q ≈ 3.0 e-folds, since
+    p̃ ≈ p/q at the hot end.
+  - *A self-assessing a priori map.* Tight where the structure is tree-like (the tree bound alone was nearly exact on
+    BlattHierarchy's Cauchy graph, §12.28), loose where binding is collective (the toy). The sandwich's width says how
+    far to trust the map: route (a) of §13.4 with its own error bar.
+- **What it doesn't give.** Feature widths: the bounds pin where events can be, not how sharp they are, so E13 stays
+  open. Signed couplings: ferromagnetic only, like C17.
+- **Mean field proper** (naive mean field, or the Bethe approximation through belief propagation) approximates the curve
+  itself and handles loops approximately. No guarantee for Potts is known here (for the ferromagnetic Ising model the
+  mean-field T_c is an upper bound, cited from memory), so it would be a point estimate inside the sandwich.
+- **Cost.** One union-find pass over the edges per sample, with no autocorrelation; a few hundred samples per
+  temperature put S₂ at about 10⁻³, on any grid. `ClusterSizeSums` reduces the samples unchanged. The sampler is small;
+  its placement is the user's call.
+- **Sequencing (the user, 2026-10-31).** E14 waits on the graph compiler revision (`graph-compiler-brief.md`). The
+  theorem holds on any graph, but the bracket and the sandwich's widths are properties of the compiled graph, and the
+  brief's changes move them: the coupling floor cutting repair edges (its §2.1, C34) decides connectivity across wide
+  gaps; K and the coupling scale (§2.3) and where the gauge and scale are decided (§4.1) shift every crossing; LMP's
+  fragmentation at small K (§2.7) changes which components exist. Confirming the citation is reading, not an
+  experiment, and needn't wait.
