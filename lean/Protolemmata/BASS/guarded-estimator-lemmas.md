@@ -2,7 +2,9 @@
 
 Grounds a design-based layer beside the emulators: it takes predictions from any of them and reports means whose validity comes from how the runs were drawn. It is general machinery for any expensive code with cheap surrogates (multifidelity Monte Carlo in UQ, the regression estimator in survey sampling, prediction-powered inference in ML). Linked from the [lineage-gaps register](../../../issues/regression/bass/lineage-gaps-register.md).
 
-**Status (2026-11-01).** Posed. [`lineage-gap-checks.py`](lineage-gap-checks.py) checks each item by simulation. The Lean is uncompiled.
+**Status (2026-11-01).** Proved in `lean/Enthymemata/GuardedEstimator.lean`, with no apologies: `crossfit_gap`, `srs_mean`, `crossfit_bias`, `srs_difference_unbiased` (GE-1); `guarded_fold_unbiased` (GE-2); `telescope_srs`, `telescope_iid`, `tunedVariance_sub_tuned`, `tunedVariance_tuned_le`, `tunedVariance_one_gt_zero_iff`, `horvitz_thompson_unbiased` (GE-3). [`lineage-gap-checks.py`](lineage-gap-checks.py) keeps the simulations.
+
+**What the finite statements cover.** A run's noise enters only through its conditional mean m. GE-3's quadratic is taken as stated, and its derivation (independence of pool and runs, variance of a mean) is not formalized. `horvitz_thompson_unbiased` needs only q_t ≠ 0 in the algebra; q being probabilities is what makes the weights a law. The martingale case, where π_t depends on earlier runs, is not covered.
 
 **Symbols.** A pool of N_p configurations and n_r runs. These stay apart from BASS's N (cases) on purpose. r = m − f̂ is a fit's error against the means m.
 

@@ -2,9 +2,20 @@
 
 Grounds the variance decomposition ([BassMoments](../../../docs/Maths/BayesianRegression.md)), active-subspace analysis (E8) and KHAOS's coefficient prior (E5) in one frame: Hoeffding components are the eigenfunctions of resampling dynamics. These are the statements behind gaps G3, G4 and G5 of the [lineage-gaps register](../../../issues/regression/bass/lineage-gaps-register.md).
 
-**Status (2026-11-01).** Posed. [`lineage-gap-checks.py`](lineage-gap-checks.py) checks each item numerically, on the labels below. The Lean is uncompiled: Mathlib's build output is absent from `lean/.lake`, so names and modules were checked against the Mathlib source only.
+**Status (2026-11-01).** SG-1, SG-2(a), SG-3, SG-4(a) and SG-5 proved in `lean/Enthymemata/BassSensitivity.lean`; SG-3's measure form and SG-4(b)'s one-variable identities in `BassIntegrals.lean`. No apologies in either. [`lineage-gap-checks.py`](lineage-gap-checks.py) still holds the numeric checks, on the labels below. Remaining: SG-4(b)'s sum over a tensor basis, which is the same identity per variable by Fubini. SG-2(b) stays an empirical check by triage.
 
-**Prior art.** The parts are known separately: the Efron–Stein and Hoeffding decomposition, DGSM's Poincaré link to total indices (Lamboni et al., arXiv 1202.0943; Roustant et al., arXiv 1612.03689), eigenfunction lower bounds (arXiv 1906.09883), weighted Poincaré inequalities (arXiv 2412.04918, 2605.30979). The Boolean version of SG-1 is in O'Donnell's *Analysis of Boolean Functions* (from memory, to confirm). The searches found no sensitivity paper stating the whole frame. It may be folklore, so this is synthesis, not a claim of discovery.
+**Statements that changed.**
+- SG-1 is proved over `CommutingMeans`, a commuting family of idempotents self-adjoint for a nonnegative symmetric form, then instantiated by `productMeans`. Its equality clause reads V_u = 0 for |u| ≥ 2 (`efron_stein_form_eq_iff`). On a finite product under full support that is "f is additive" literally (`efron_stein_eq_iff_additive`). Full support is needed for that reading: where μ has zeros, V_u = 0 only makes P_u f vanish almost everywhere.
+- `noise_prod_form` takes μ nonnegative as well, because it goes through the form in `productMeans`.
+- SG-5's example uses a = (1, 0) and b = (3/5, 4/5), at about 53°, so the matrices are rational. `no_common_eigenvector` shows they share no eigenvector at all, which is stronger than the tops differing. The 1.2 radian case stays in the numeric check.
+
+**Prior art, read 2026-11-01.**
+- *Roustant et al., arXiv 1906.09883v1,* state more of this than "eigenfunction lower bounds" suggested. Their `Background_Sobol` section has SG-1(b) outright: Sobol–Hoeffding is the expansion of Π_j(P_j + (I − P_j)) over commuting projectors, citing Kuo et al. (2010). Their `DO_expansions` section builds PDO expansions from each variable's Poincaré operator eigenbasis, with total indices as sums of squared coefficients and DGSM-type lower bounds. Its weighted extension has ⟨h′, e′_n⟩_w = λ_n⟨h, e_n⟩ (eq:intPartWeight), which is SG-4(b)'s identity, and it records that orthogonal polynomials are diffusion eigenfunctions only for Normal, Gamma and Beta (Hermite, Laguerre, Jacobi; from Bakry, Gentil & Ledoux, §2.7), with w = 1 − x² on the Beta.
+- *What neither Roustant paper has:* a resampling generator. Their operators are one per variable, and the words generator, Markov and semigroup do not occur in 1906.09883v1's sources. 1612.03689v1 is about one-variable spectral gaps for DGSM's upper bound on total indices. So L = Σ_v(E_v − I) with eigenvalue −|u|, the Dirichlet form read over subsets, and the variance-by-order polynomial are what these two do not state.
+- *From memory, unread:* Σ_v total(v) = Σ_u |u|·V_u is mean dimension (Owen; Liu & Owen 2006), and total influence in O'Donnell's *Analysis of Boolean Functions*. If so, SG-1(c)–(d) restate known identities in generator language, and only U_ρ's factorization as a moment-service readout is likely to be new here.
+- Weighted Poincaré inequalities (arXiv 2412.04918, 2605.30979) and Lamboni et al. (1202.0943) remain unread.
+
+So this is synthesis, not a claim of discovery.
 
 ---
 
@@ -75,7 +86,9 @@ theorem efron_stein (μ : ∀ i, X i → ℝ) (h₀ : ∀ i y, 0 ≤ μ i y) (h�
 
 **Limits and open pieces.**
 - *Which norm.* Contraction theorems here report ‖·‖ₙ at the design points ([PosteriorContraction](../../../docs/Maths/PosteriorContraction.md)), while Sobol reads L²(μ). Passing between them needs a random-design argument and μ comparable to the design. So (a) is conditional on that step.
-- *What would give C a rate.* An inverse inequality on a sieve with a lower bound on knot spacing, or interpolation against a smoother truth. BASS's knots sit at data values and can be adjacent, so the spacing bound is not free. Yoo & Ghosal (arXiv 1411.6716) get derivative rates for tensor-product B-splines, and Odin, Bachoc & Lagnoux (arXiv 2403.03540) subspace recovery for GP priors. The searches found nothing for gradient outer products under an adaptive hinge posterior. Both papers known from abstracts only.
+- *What would give C a rate.* An inverse inequality on a sieve with a lower bound on knot spacing, or interpolation against a smoother truth. BASS's knots sit at data values and can be adjacent, so the spacing bound is not free. The searches found nothing for gradient outer products under an adaptive hinge posterior. Two papers bound the neighbourhood, read 2026-11-01:
+  - *Yoo & Ghosal (arXiv 1411.6716v3)* get pointwise, L² and L∞ rates for mixed partial derivatives under tensor-product B-splines. Their knots are fixed and quasi-uniform, and the number of splines is set in advance by the truth's smoothness, J_k ≍ n^{α\*/(α_k(2α\*+d))}, so the method is not adaptive. The coefficients are conjugate normal, so a derivative is a linear functional of a Gaussian. Quasi-uniformity is exactly the spacing bound BASS's knots lack.
+  - *Odin, Bachoc & Lagnoux (arXiv 2403.03540v2)* recover a subspace from contraction, for a prior that **holds the subspace as a parameter**: a GP composed with a projection, with d fixed and the intrinsic dimension d₀ known. Their route runs from L² through a detectability assumption (‖f − c‖² ≥ D·l³ on small segments, implied by a C¹ truth with d₀ independent gradients), with rate √(2/D)·(d/L²)^{(d+2)/4}·ε_n. They do not treat E[∇f∇fᵀ]. BASS's draws are not ridge functions, so the theorem does not transport. The route does suggest something: a subspace can be reached from L² plus detectability, with no gradient rate.
 - *Kinks under atoms.* Knots sit at data values, and `EmpiricalMeasure` puts atoms there. So under an empirical measure C reads the kink convention (F-X3: the mean of the one-sided limits); under a continuous measure the kinks have mass zero and it does not. E8 should report which it computed.
 
 **Triage.** (a) formalize. (b) as a rate: validate empirically first, by C recovery on functions with known C, at growing N.
@@ -133,7 +146,7 @@ g_m = (1 + Σ_v α_v(α_v+1))^(−ζ/2).
 - The weight x(1−x) vanishes at the edges, so this functional reads sensitivity less there. The diagonal identity does not make a weighted C diagonal.
 - KHAOS reports its ridge best on noise-free simulators and its g-prior on most noisy ones. A new prior has to earn its place predictively, beside those.
 
-R2D2 on polynomial chaos already exists (Bürkner et al., arXiv 2204.06043): that is a prior on variance shares. The smoothness-matched prior is what the searches did not find.
+R2D2 on polynomial chaos already exists (Bürkner et al., arXiv 2204.06043v2, read): c_i ~ N(0, φ_iτ²σ²), R² ~ Beta(ζ, ν), φ ~ Dirichlet(θ) with θ = (1, …, 1). That is a prior on variance shares, exchangeable across the polynomials, and degree enters only through where the basis is truncated. So it does not read the eigenvalues. The smoothness-matched prior is what the searches and that paper did not show. Roustant et al. have the eigen-identity (above) and use it for sensitivity bounds, not for a coefficient prior.
 
 ```lean
 import Mathlib.Algebra.Polynomial.Derivative
@@ -157,4 +170,4 @@ theorem shiftedLegendre_jacobi (n : ℕ) :
 
 **Reading.** Both are legitimate and mean different things, so offer both, with the Grassmann Fréchet mean a third. E[C] answers "which directions carry the average squared gradient"; the subspace mean answers "which subspace do draws tend to agree on". A draw with a large gradient dominates the first and counts once in the second.
 
-**Fishable:** r = 1 is the Rayleigh quotient, which Mathlib has. Ky Fan for general r was not found (`rg -i 'ky.?fan'` finds nothing). The counterexample needs only explicit 2 × 2 matrices.
+**Lean.** `top_eigenspace_ne_subspace_mean`, on explicit rational 2 × 2 matrices, with `rayleigh_max_is_eigen` proved directly: A·I − M is nonnegative and vanishes at a maximizer. Mathlib's Rayleigh file was not needed, which keeps analysis out of the imports. Ky Fan for general r was not found (`rg -i 'ky.?fan'` finds nothing), and r > 1 stays numeric.

@@ -332,3 +332,20 @@ for _ in range(40000):
     ipw.append(level0(pool).mean() + np.sum((y - level0(pool[taken])) / inclusion[taken]) / 300)
 ipw = np.array(ipw)
 print(f"GE-3 known probabilities bias {ipw.mean() - goal:+.4f} +- {ipw.std() / np.sqrt(len(ipw)):.4f}")
+
+
+# SC-4: the mean-field Potts barrier at alpha_c, per site, along the symmetric path (Woodard et al., eq. 10-11).
+def potts_f(x, q, alpha):
+    y = (1 - x) / (q - 1)
+    return alpha / 2 * (x * x + (q - 1) * y * y) - x * np.log(x) - (q - 1) * y * np.log(y)
+
+
+for q in (3, 4):
+    alpha_c = 2 * (q - 1) * np.log(q - 1) / (q - 2)
+    xs = np.linspace(1 / q + 1e-6, (q - 1) / q - 1e-6, 200001)
+    c = potts_f(1 / q, q, alpha_c) - potts_f(xs, q, alpha_c).min()
+    n = 10.0
+    for _ in range(200):
+        n = max(10.0, 3 * np.log(n) / c)
+    print(f"SC-4 Potts q={q}: barrier per site {c:.5f}, across N=64..2048 e^{c * (2048 - 64):.2f} against"
+          f" N^3's e^{3 * np.log(32):.2f}, e^(cN) overtakes N^3 near N={n:,.0f}")

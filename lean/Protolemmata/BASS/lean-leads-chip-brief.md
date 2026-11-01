@@ -1,6 +1,6 @@
 # The lineage gaps' Lean leads — chip brief
 
-Date: 2026-11-01. Status: open, for a separate thread. Written at the user's request from the Francom-lineage review.
+Date: 2026-11-01. Status: done, report below. Written at the user's request from the Francom-lineage review.
 
 ## Context
 
@@ -90,3 +90,100 @@ Append a report below, newest first, under "Reports". Update each protolemma's s
 - what stopped you, if anything did.
 
 ## Reports
+
+### 2026-11-01: Parts 1 and 2 done, nothing false, three first-draft claims corrected
+
+**Proved, with nothing apologizing.** All eleven of Part 1's items, and SG-3's measure form and SG-4(b)'s identities besides. `#print axioms` on 43 main results reads `propext, Classical.choice, Quot.sound` on every one: no cited axiom, no `sorryAx`.
+
+| Module | Main declarations |
+|---|---|
+| `BassStructureChain` | SC-1: `mhRatio_mul_swap`, `mh_detailed_balance`, `not_isMhPair_of_mul_ne_one`. SC-2: `varianceOf_indicator`, `dirichlet_indicator`, `gap_le_cut`, `relaxation_ge_of_cut`, `gap_le_cut_of_stationary`. SC-3: `khaos_precision_entry`, `khaos_precision_eq`, `khaos_precision_eq_add_inv`, `khaos_precision_posDef`, `khaos_precision_of_const`, `khaos_precision_of_diagonal`. SC-5: `cutFlow_le_separator`, `gap_le_separator`, `collapsedLogMarginal_superset_ge` |
+| `GuardedEstimator` | GE-1: `crossfit_gap`, `srs_mean`, `crossfit_bias`, `srs_difference_unbiased`. GE-2: `guarded_fold_unbiased`. GE-3: `telescope_srs`, `telescope_iid`, `tunedVariance_sub_tuned`, `tunedVariance_tuned_le`, `tunedVariance_one_gt_zero_iff`, `horvitz_thompson_unbiased` |
+| `BassSensitivity` | SG-1 over `CommutingMeans`: `sum_component`, `component_component_of_ne`, `component_idem`, `generator_component`, `parseval`, `total_eq_sum`, `sum_total`, `dirichlet_eq_sum_total`, `efron_stein_form`, `efron_stein_form_eq_iff`, `noise_apply`, `form_noise`. On the finite product: `coordMean_idem`, `coordMean_comm`, `coordMean_selfAdjoint`, `efron_stein`, `efron_stein_eq_iff_additive`, `noise_prod_form`. `generator_eigen`. SG-2(a): `sqrt_compVar_sub_le`, `sqrt_compVar_sub_le_form`. SG-3: `mixture_product_integral`, `mixture_pair_integral`. SG-4(a): `shiftedLegendre_jacobi`. SG-5: `rayleigh_max_is_eigen`, `no_common_eigenvector`, `top_eigenspace_ne_subspace_mean` |
+| `BassIntegrals` | SG-3: `mixture_product_integral_pi`. SG-4(b): `l2Form_derivative_jacobi`, `jacobiForm_shiftedLegendre`, `shiftedLegendre_orthogonal`, `variance_le_half_jacobiForm`, `variance_eq_half_jacobiForm_of_degree_one` |
+| `BassContractionCover` | `card_le_of_pairwise_dist`, `exists_cover_subspace_ball`, `exists_local_cover_iUnion`, `exists_local_cover_with_scale`, `card_finsets_le`, `exists_dictionary_local_cover`, `log_dictionary_count_le`; `exists_mTerm_approx`; `sum_powersetCard_prod_le`; `jeffreysProfile_mono`, `rSquaredOf_mono`, `jeffreys_superset_ge` |
+
+`BassIntegrals` is a fifth module beyond the brief's four, so `BassSensitivity`'s imports stay free of measure theory. Lean items beyond the brief's list came from the walks: SC-5, the M-term bound and the normalizer.
+
+**Not done.**
+- SG-4(b)'s sum over a tensor basis, Σ_v E[x_v(1−x_v)(∂_v f)²] = Σ_α a_α²Σ_v α_v(α_v+1). The one-variable identity is proved, and the sum is that identity per variable by Fubini.
+- CW-1, the ‖·‖ₙ form of the KL ball, is posed, since it sits against `BgpGaussianKL`'s internals.
+- The local form of `fixed_constant_contraction` is proposed in the walk. `BgpUnknownVarianceTheorem` is unchanged.
+- GE-3's quadratic is taken as stated, per the brief, and not derived from independence.
+
+**Statements that changed.** None proved false.
+- `gap_le_cut` drops `∑ π = 1`, which the inequality never uses.
+- `noise_prod_form` takes μ nonnegative, since it goes through the form in `productMeans`.
+- `efron_stein`'s equality clause needed full support to read as "additive", which `efron_stein_eq_iff_additive` adds. Over the abstract family it reads V_u = 0 for |u| ≥ 2.
+- `mixture_product_integral` and `generator_eigen` lose `DecidableEq` binders nothing reads.
+- SG-5's example has rational entries (a, b at 53°) and proves more: the two matrices share no eigenvector.
+
+**What the first draft had wrong**, as claims rather than as Lean statements.
+1. *SC-4's linear barrier.* The expected linear growth in N, and so "the same exponential form", came from looking only at deaths. See the first walk.
+2. *SC-3's "a third form unless g ∝ 1"* needs a Gram with off-diagonal entries: on a diagonal Gram it is diagonal for any g.
+3. *Bhatnagar & Randall's q ≥ 3.* They proved q = 3 at α_c; Woodard et al. state q ≥ 3, α ≥ α_c, with some proofs in a thesis.
+
+**Walk 1: Ronen et al. onto the structure chain.** Full table in [SC-4](structure-chain-lemmas.md).
+
+| Step | Verdict |
+|---|---|
+| Finite reversible chain | Transports. F grows with N where theirs does not |
+| Mixing from conductance | Transports |
+| **The bottleneck: one edge through the trivial tree** | **Fails, and this is what uses trees.** BASS has no root, so a term can be removed from any state |
+| Flow through one state | Posed as a separator: `gap_le_separator` |
+| Likelihood ratio for one fixed tree | Transports only if a separator exists, and then uniformly over it |
+| Two trees exact on f₀ | Changes: both sides need large explained variance |
+
+*Lemma posed: SC-5.* A state can hold a term and its substitute, so S → S ∪ T → T loses at most k·½ ln(1 + g), not N times a variance (`jeffreys_superset_ge`, no hypothesis left on the profile). So the barrier's expected growth is polynomial in N, of degree growing with the k terms exchanged at once, and superpolynomial only if k or M grows with N. F-M2's births (−½ ln N at three N) against its deaths (median −234 nats) fit this. Kim & Roćková's lower bound has the same shape: a per-node Occam factor to the power of the nodes grown through noise. As printed it is n^{Θ(log n)} at L ~ log n, which the paper calls exponential. Their twiggy move suggests a several-term exchange, recorded as a finding. *Not verified:* this is a reasoned expectation about mixing, not a mixing bound. The [spectral-gap brief](../../../issues/regression/bass/spectral-gap-brief.md) pre-registered the same rival and can decide it.
+
+**Walk 2: Woodard, Schmidler & Huber.** Persistence is γ(A, φ) = min{1, φ[A]/π[A]}. The bound and what measuring it takes are in SC-4: a basin label and a per-level tally, since ln g alone does not hold a set's share. *Potts toy: resolved, the sizes are too short.* The settings match the theorem's. The barrier per site is 0.00113 nats at q = 3 (computed, and matching the test's own header), so e^{cN} moves by about e^{2.2} across the sweep where N³ moves by e^{10.4}, and it overtakes N³ only near N ≈ 27,000. No toy changed. *To your attention:* `docs/Maths/Samplers.md` says the reading "agrees with" the theorem, which holds at q = 4 only. That file is outside this chip.
+
+**Walk 3: the contraction chain against the book's Chapter 8.**
+
+| Check | Result |
+|---|---|
+| Theorem 8.19(b) asks only local entropy | **Confirmed:** (8.21) |
+| The fixed-constant axiom's global cover is a strengthening | **Confirmed:** the book names it, (8.22)–(8.23). A local restatement stays a consequence; proposed in the walk, not edited |
+| UV-1 | Transports with one small lemma, CW-1: `slab_subset_klBall` is sup-norm, and the prior mass works in ‖·‖ₙ |
+| UV-5 | Transports. Lemma 8.27(ii) needs less: σ bounded above only |
+| UV-2 | New. **"Fixed g" cannot be a constant** (CW-2): the coefficient mass costs N‖f_M‖ₙ²/(2gσ²), so g has to be of order N |
+| UV-3 | New and simple, as expected. The default cap min(1000, N − 1) has to grow for the asymptotics |
+| UV-4 | New, and **proved:** `exists_dictionary_local_cover` |
+| The normalizer | **No obstacle:** W_F lies in [1, 2.59] at the defaults, free of N and the design |
+| σ²'s upper tail | Looks removable by one test rather than a sieve. An expectation, not checked in Lean |
+
+*MARS via LASSO* arrived during the chip. **It states no M-term rate,** and "logarithmic in dimension" means n's exponent is free of d, with constants that depend on d, so it is a fixed-d result. *Lemma posed, CW-3:* `exists_mTerm_approx` (Maurey) gives ε(M)² = V²R²/M in ‖·‖ₙ, reading neither the dictionary nor the design. So prior mass is no longer wholly conditional: ε_n² ≈ V·(log(pN)/N)^{1/2} for every interaction order. That is slower than least squares' n^{−4/5}. The fast rate holds by hand at K = 1 and is open at K ≥ 2.
+
+**Walk 4: prior art.** Corrections are in SG's prior art and the register.
+- Roustant et al. (`1906.09883v1`) state SG-1(b) and SG-4(b)'s identity outright. What they lack is a resampling generator over subsets and a prior from the eigenvalues.
+- Σ_v total(v) = Σ_u |u|·V_u is, from memory and unread, mean dimension and total influence.
+- Yoo & Ghosal's quasi-uniform knots are exactly SG-2's missing bound.
+- Odin et al. hold the subspace as a parameter, so that does not transport, but it shows a route from L² through detectability.
+- Bürkner et al.'s R2D2 is exchangeable across polynomials.
+
+**Register corrections that change what a gap claims.**
+- *G1:* expected barrier growth is polynomial, not linear, and the Potts question is closed.
+- *G2:* several expectations became proved or corrected, listed there; the prior-mass step has a slow rate; "logarithmic in dimension" is corrected.
+- *G5:* what is likely new narrows to the variance-by-order readout and the prior.
+
+The reading list now says what was read.
+
+**Self-review passes and their fixes.**
+- *`BassStructureChain`:* dropped the unused `hπ`; removed `hP`, unused in the separator bound.
+- *SC-5:* the pass found `h R2 ≤ h R2'` doing the work, so `rSquaredOf_mono` and `jeffreys_superset_ge` now discharge it for the Jeffreys form. The proper IG form is argued, not written out.
+- *`BassSensitivity`:* `form_algebra_adj`'s first proof skipped the fact that a product of self-adjoints needs commuting. `noise_prod_form`'s first form ran over a list fold rather than the operator, and now reads `F.noise`. "Additive" was stated as V_u = 0, and is now proved literally.
+- *All modules:* `DecidableEq` binders nothing reads were removed. `set_option linter.unusedFintypeInType false` stays on four lemmas that need finiteness in the proof only: `eq_of_update_eq`, `eq_of_update_eq_of_ne`, `nonempty_of_prob`, `khaos_precision_posDef`.
+- *Walk 1:* the two-trees row was too loose, since Lemma 3 needs both sides.
+- *Walk 2:* a `pypdf` re-read corrected Corollary 3.1, where plain-text extraction had garbled γ's argument.
+- *Walk 3:* the g-form bound was re-derived in general g, which produced CW-2.
+
+**Build gates.**
+- *On `lean/.lake` (D:):* `lake build` of this chip's five modules, 2,704 jobs, 0 warnings. `scripts/meta-ci.ps1 -NoBuild` passes, and its ledger reads all five PROOF-CLOSED.
+- *Full `lake build`:* in a scratch workspace on C:, with the same sources, toolchain and Mathlib: 3,150 jobs, 0 errors. Its 8 warnings are the apologies already in `BARS` (6), `Stability` and `CumulativeField/Local`.
+- *Not run:* the full build on D:. It would only repeat the C: result, so `lean/.lake` holds output for this chip's closure alone. The first full build there will fetch about 0.45 GB more.
+
+**Disk.**
+- D: started at 6.6 GB free. This chip's scoped fetches took about 2.6 GB, including the first closure and the cache tool, which left a low of 3,387 MB, above the 3 GB floor. It reads **14,269 MB free** at the end, because something outside this chip released about 11 GB. Nothing was deleted to make room.
+- Iteration ran in `C:\Users\azrie\AppData\Local\Temp\bw`, shared-object clones of `lean/.lake/packages` with Mathlib unpacked. It is safe to delete.
+
+**What stopped me.** Nothing. The user's reboot paused the chip once, and the compile restarted from disk.
