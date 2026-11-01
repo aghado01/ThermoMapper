@@ -14,7 +14,7 @@ Companion to [port-fitting-brief.md](port-fitting-brief.md). An item is ticked w
 - [x] **F-D06** Numerical model admission: decided 2026-10-27; the count as the support default, the centred angles under every convention.
 - [x] **F-C1** Contract shapes: data, config and result, decided 2026-10-28 as recommended.
 - [x] **F-C2** The shared-code changes the contracts need, before stage 4's first fit: `Sigma2Prior` as a serializable record, shared with BARS's config; `GPriorCentre.Flat` for the Liang convention, refused by BARS until the shared block supports it.
-- [ ] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison. The ridge it compares is built (2026-10-29), so the comparison can run. Its design was decided by the user on 2026-10-30, as recommended ([deterministic-profile-brief.md](deterministic-profile-brief.md)): eight arms (g-form and ridge, τ sampled and held, λ at (10, 10) and (1, 1)), four noise-free benchmarks with noisy controls, held-out error gated by coverage, and F-M2's rule. The run is the next step.
+- [x] **F-R1** Deterministic-simulator profile: drafted 2026-10-26 as a proposal; its coefficient prior is set by a pre-registered comparison. The ridge it compares is built (2026-10-29), so the comparison can run. Its design was decided by the user on 2026-10-30, as recommended ([deterministic-profile-brief.md](deterministic-profile-brief.md)): eight arms (g-form and ridge, τ sampled and held, λ at (10, 10) and (1, 1)), four noise-free benchmarks with noisy controls, held-out error gated by coverage, and F-M2's rule. Ran 2026-10-31 (`8349663`, `fb35f51`, `c9e6191`), verified by the main session: every fit fails the predictive R̂ gate of 1.05, so no benchmark is scored and no arm clears. By decision 7 no profile is built and every option stays an option; F-R1 closes as read (this checklist's report).
 - [x] **F-M1** Move schedule: equal over available moves (D01) against the prior-cancelling option, in a pre-registered comparison. Folded into F-M2's pass on 2026-10-29, which ran it the same day: prior-cancelling did not clear (0.864), so D01's schedule stays the default and prior-cancelling an option.
 - [ ] **F-M2** The local moves' mixing, its own design item before the efficiency pass (S10, decided 2026-10-28); the design draft is [local-move-mixing-brief.md](local-move-mixing-brief.md). Births and deaths accept about 1.5% on Friedman, and the chains hold their own bands of M. Levers: several structure moves per sweep, a local knot move inside a change, active-variable births on F-X4's seam. The run lengths and the ladder's sizing, its censored steep band included, follow it. Phase 1 was decided on 2026-10-29 (the draft's "Phase 1's decisions"): local knot steps, the fixed-M factor moves and the ladder's split rule, built as options by a chip ([its brief](local-move-options-brief.md)), landed and verified the same day; levers 1 and 3 are withdrawn. Phase 2, the pass, ran the same day: no arm clears, so the defaults stay D01's, with the untempered chains read at the bulk-ESS floor (this checklist's report). The run lengths, the worse modes and D10's treatment of chains that never agree are the user's next calls.
 
@@ -48,16 +48,42 @@ Sequenced in the fitting segment's [stage-4 plan](port-fitting-brief.md#stage-4-
 
 ### Room for extensions
 
-The open seams (F-X1, F-X2, F-X3, F-X6 here; N-X1–N-X3; O-X4) are briefed for one chip, 2026-10-31 ([extensions-preparation-brief.md](extensions-preparation-brief.md)); F-X4 waits for KHAOS's proposal.
+The open seams (F-X1, F-X2, F-X3, F-X6 here; N-X1–N-X3; O-X4) were briefed for one chip, 2026-10-31 ([extensions-preparation-brief.md](extensions-preparation-brief.md)), and built and verified the same day (this checklist's report), with no draw changed; F-X4 waits for KHAOS's proposal.
 
-- [ ] **F-X1** Observation-model seam carries an offset with the weights.
-- [ ] **F-X2** The sweep has a latent slot.
-- [ ] **F-X3** Term types behind one design-kernel contract, with derivatives.
+- [x] **F-X1** Observation-model seam carries an offset with the weights. Built 2026-10-31 (`ebe2308`): `IBassObservationModel.Working` gives a `WorkingResponse` (values, weights, the output product); `GaussianObservation` is the one member, and the core refuses weights.
+- [x] **F-X2** The sweep has a latent slot. Built 2026-10-31 (`27b86b9`, `cbacbdb`): `BassSweepSlot` in D04's order; the chain, the tempering replicas and the SMC kernel assemble their blocks from it, and Gaussian BASS fills no later slot.
+- [x] **F-X3** Term types behind one design-kernel contract, with derivatives. Built 2026-10-31 (`9b0c189`): `IDesignKernel<TPoints>` per part and side, today's three in `DesignKernels`, `BassTerm` closed; a derivative at a kink is the mean of the one-sided limits.
 - [ ] **F-X4** Proposal kernels behind one contract with exact forward and reverse probabilities. Built with KHAOS's Bernoulli-inclusion proposal (the extensions brief), not with F-M2's lever 3, which was withdrawn on 2026-10-29.
 - [x] **F-X5** Coefficient priors as a declared set: `BassCoefficientPrior(Form, Scale)`, the g-form and the normalized ridge under τ's shared family (2026-10-29, `79e0edb`–`0f92af0`).
-- [ ] **F-X6** The output-side inner product is declared (Q = I now).
+- [x] **F-X6** The output-side inner product is declared (Q = I now). Built 2026-10-31 (`0131c78`): `IInnerProduct` rides the working response; `KhatriRao` takes it, and the centred forms stay Q = I, so the core refuses another Q.
 
 ## Reports
+
+### The extension seams, verified — 2026-10-31
+
+A chip built F-X1, F-X2, F-X3, F-X6, O-X4 and N-X1–N-X3 as contracts that today's code fills, one commit each ([its report](extensions-preparation-brief.md#reports); `9b0c189`–`83d3d09`, review fix `cbacbdb`, descriptions `d62f596`). F-X4 waits for KHAOS.
+- *No draw changed:* the eight bit-identity hashes (six BASS fits, Friedman tempered, the tempered BARS fit) held at each seam and on the final tree.
+- *The main session's checks,* at `7fc684e`, in Release:
+  - Regression's bit-identity hashes and the seams' tests (design kernels, observation model, output product, sweep slots): 43 of 43;
+  - LinAlg: 139 of 139;
+  - the GIG limits: 6 of 6;
+  - N-X3's GIG updates re-derived: GIG(p − n/2, a, b + S) for the variance and GIG(p + n/2, a + S, b) for the precision, with the inverse-gamma and gamma updates as the limits a = 0 and b = 0.
+- *Shape calls for the user's review* (the report's alternatives beside each):
+  - F-X3's contract is per part and generic in the points type, with `BassTerm` closed;
+  - a derivative at a kink is the mean of the one-sided limits;
+  - F-X1's core refuses weights, and the observation model is a runtime argument;
+  - F-X6's Q rides the working response, with the centred forms left at Q = I;
+  - N-X2's factor is a new class beside `BandCholesky`.
+- *Left to each extension* (the report's list): GBMARS's weighted Gram and its offset in prediction and the pointwise densities; ABMRS's term slot, knot moves and band output; correlated residuals' Q-centred forms; active subspaces' gradient integrals.
+
+### F-R1, the deterministic-simulator profile: no arm clears — 2026-10-31
+
+A chip ran the decided comparison ([its report](deterministic-profile-brief.md#reports); `8349663`, `fb35f51`, `c9e6191`, the per-fit table beside the brief). The gate decided it, not the arms.
+- *The gate:* all 144 fits read a predictive R̂ above 1.05: median 2.14 noise-free (1.34–3.44), 1.74 noisy (1.23–2.56), with a least ESS of 4.4–12.2 in 8,000 draws. σ² sets the maximum in 55 of the 96 noise-free fits. So no (benchmark, design) pair is kept, no benchmark is scored, and by decision 7 no profile is built.
+- *The cause is the sampler, not the harness:* F-M2's pass read the same configuration the same way (a least ESS median of 4.96). Untempered BASS at S10's lengths does not mix on these benchmarks, noise-free or noisy.
+- *Context only, ungated:* A6 (ridge, τ sampled, λ (1, 1)) and A4 (g, Zellner–Siow, λ (1, 1)) would clear, A6's lead resting mostly on one functional design. Every fit behind these ratios is a stalled chain.
+- *The main session's checks:* the gate recounted from the per-fit CSV (96 of 96 and 48 of 48 excluded, the medians, σ²'s 55, the largest M 128 against a cap of 499); the report's tables against the CSV.
+- *Open, the user's call:* a re-run on the self-sized tempered ladder for every arm (decision 5's alternative), or with longer chains, would be a new pre-registration.
 
 ### Friedman's posterior, by the flat histogram — 2026-10-30
 

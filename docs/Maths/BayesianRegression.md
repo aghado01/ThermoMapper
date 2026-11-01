@@ -831,7 +831,7 @@ $$\tfrac12\ln\frac{|\tau D|}{|bG_c+\tau D|}=\tfrac12\sum_j\ln\frac{\tau}{b\lambd
 - *Where the forms differ* (read from the formulas, not measured).
   - The g-form's Occam factor is ½ln(1 + b/τ) per term whatever the columns' correlation, and its marginal depends on the column space alone.
   - The ridge's is ½ln(1 + bλⱼ/τ) per eigen-direction. A term nearly collinear with the current ones adds a small λ, costs little, and is shrunk hard. So the ridge charges a term by the new direction it brings, and its marginal depends on the terms themselves, not only on the space they span.
-  - Which regime favours which is F-R1's pre-registered comparison. KHAOS found its fixed ridge best on noise-free simulators, and its g-prior better on most noisy ones.
+  - Which regime favours which was F-R1's pre-registered comparison. KHAOS found its fixed ridge best on noise-free simulators, and its g-prior better on most noisy ones. F-R1 ran on 2026-10-31 and read no regime: at S10's lengths every untempered fit failed its convergence gate (predictive R̂ above 1.05, median 2.14 noise-free), so no benchmark was scored and both forms stay options.
 - *The fast path* (chosen by measured cost). A design under the ridge keeps its current structure's spectrum, decomposed lazily once per structure (cyclic Jacobi on G̃/N, `DenseEigen`).
   - A birth, death or change is evaluated through that spectrum's eigenvectors (`RidgeSpectrum.Birth`, `Death`, `Change`). The parent's precision is Schur-reduced by the removed column, then bordered by the new one. That costs O(M²) to start and O(M) per (τ, b), with no factor of its own and no refactorization when τ moves.
   - Where admission's strict factorization sits within a factor of two of s_min, the candidate is decomposed fresh.

@@ -33,7 +33,7 @@ Companion to [port-outputs-brief.md](port-outputs-brief.md). An item is ticked w
 - [x] **O-X1** The decomposed surface is a declared input (`DecomposedSurface`, the mean built).
 - [x] **O-X2** The moment service is written over piecewise polynomials (`PiecewisePolynomial`).
 - [x] **O-X3** The basis contract admits robust bases, an uncertainty slot and a declared truncation model (`FromBasis`, `BasisUncertainty`, `TruncationResidual`).
-- [ ] **O-X4** Term derivatives are available to sensitivity.
+- [x] **O-X4** Term derivatives are available to sensitivity. Built 2026-10-31 with F-X3 (`9b0c189`): `BassMoments.FactorDerivative`, `BassBasis.CaseDerivative` and `OutputDerivative`. Verified in the fitting checklist's report.
 - [x] **O-X5** The response representation carries a declared reconstruction map (linear now; composition for elastic emulation) (`ReconstructionMap`, `ReconstructionDomain`).
 
 ## Reports

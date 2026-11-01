@@ -30,9 +30,9 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 
 ### Room for extensions
 
-- [ ] **N-X1** The face-splitting contraction covers tensor designs (ABMRS).
-- [ ] **N-X2** `ISpdFactor` admits a wide-band factor beside `DenseCholesky`.
-- [ ] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update.
+- [x] **N-X1** The face-splitting contraction covers tensor designs (ABMRS). Built 2026-10-31 (`df00275`): `KhatriRao.FaceSplittingGram`, `FaceSplittingCrossProducts`, `FaceSplittingHalfBandwidth` and `KroneckerGram`, dense output; the scattered Gram is pinned bit for bit.
+- [x] **N-X2** `ISpdFactor` admits a wide-band factor beside `DenseCholesky`. Built 2026-10-31 (`aa90524`): `WideBandCholesky`, strict, bit-identical to the dense factor on a band Gram; `SpdFactors.ForBand` applies the operation-count rule, and nothing selects it yet.
+- [x] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update. Built 2026-10-31 (`83d3d09`): `GigParameters` and the GIG forms of `NormalVariance` and `NormalPrecision`; the existing updates keep their formulas, equal to the limits bit for bit. No GIG sampler. Verified in the fitting checklist's report.
 
 ## Reports
 

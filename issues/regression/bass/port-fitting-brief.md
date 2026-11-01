@@ -596,7 +596,11 @@ Which coefficient prior the profile uses is left to the pre-registered compariso
 
 *(2026-10-30)* The comparison's design was decided by the user the same day, as recommended, with its arms, benchmarks, metrics and rule ([deterministic-profile-brief.md](deterministic-profile-brief.md)). A winner becomes the profile; if none clears, no profile is built, and no default changes either way.
 
+*(2026-10-31)* The comparison ran, and no arm clears: every fit fails its predictive R̂ gate of 1.05 (median 2.14 noise-free), so no benchmark is scored and no profile is built ([its report](deterministic-profile-brief.md#reports)). Every option stays an option. A run on tempered ladders or longer chains would be a new pre-registration.
+
 ## Room for extensions
+
+*(2026-10-31)* Built as contracts that today's code fills, F-X4 aside, with no draw changed ([the report](extensions-preparation-brief.md#reports)).
 
 Prep work in this segment, so that the [extensions](extensions-brief.md) plug in without reworking the port:
 - **An observation-model seam with an offset.** BASS's observation model hands the Gaussian core a working response and weights, (y − offset, W), not weights alone. Gaussian BASS uses a zero offset and unit weights; generalized-hyperbolic noise (GBMARS) then needs only its latent-scale block.
