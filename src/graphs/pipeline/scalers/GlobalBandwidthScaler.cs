@@ -137,6 +137,7 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
 
         Neighbor[][] allNeighbors = refined.AllNeighbors;
         var edges = new List<Edge>(n * (allNeighbors.Length > 0 ? allNeighbors[0].Length : 0));
+        int cutEdges = 0;
 
         // BWD replication kernel: J = (1/K̂)·exp(−d²/2a²) with K̂ = the actual
         // average number of neighbors per site (WBD1998 Table I). A uniform J
@@ -171,15 +172,18 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
 
                 coupling *= couplingScale;
 
-                if (coupling > 1e-10)
+                if (coupling > EdgeWeightThresholds.CouplingFloor)
                     edges.Add(new Edge(i, nb.Index, coupling));
+                else
+                    cutEdges++;
             }
         }
 
         return new ScalerResult(
             Graph:            CsrGraph.FromEdges(edges.ToArray(), n),
             SingleBandwidth:  delta,
-            MixtureBandwidth: null);
+            MixtureBandwidth: null,
+            CutEdges:         cutEdges);
     }
 
     private double EvaluateGlobalSchoenbergNormalized(double r, double delta, int m)
@@ -272,6 +276,7 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
 
         Neighbor[][] allNeighbors = refined.AllNeighbors;
         var edges = new List<Edge>(n * (allNeighbors.Length > 0 ? allNeighbors[0].Length : 0));
+        int cutEdges = 0;
 
         for (int i = 0; i < n; i++)
         {
@@ -279,15 +284,18 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
             {
                 if (i > nb.Index) continue;
                 double coupling = MixtureKernel.Evaluate(nb.Distance, resolved, weights);
-                if (coupling > 1e-10)
+                if (coupling > EdgeWeightThresholds.CouplingFloor)
                     edges.Add(new Edge(i, nb.Index, coupling));
+                else
+                    cutEdges++;
             }
         }
 
         return new ScalerResult(
             Graph:            CsrGraph.FromEdges(edges.ToArray(), n),
             SingleBandwidth:  null,
-            MixtureBandwidth: resolved);
+            MixtureBandwidth: resolved,
+            CutEdges:         cutEdges);
     }
 
     private double EstimateMeanEdgeDistance(NeighborSelection refined)

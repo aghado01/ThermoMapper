@@ -133,11 +133,12 @@ public static class GraphCompiler
                 "MST-based repair was applied because filtered coverage was below the auto-repair threshold.");
         }
 
+        // Re-check connectivity post-repair (NoRepair leaves it the same;
+        // MstMinRepair should fix it). The returned graph is compared with this.
+        var connectivityPost = Connectivity.Validate(BuildIndicatorGraph(repaired, n));
+
         if (config.Interrupts.MinLargestCoverage is double coverageLimit)
         {
-            // Re-check coverage post-repair (NoRepair leaves it the same;
-            // MstMinRepair should fix it).
-            var connectivityPost = Connectivity.Validate(BuildIndicatorGraph(repaired, n));
             double coverage = connectivityPost.NodeCount == 0
                 ? 1.0
                 : (double)connectivityPost.LargestComponent / connectivityPost.NodeCount;
@@ -163,8 +164,10 @@ public static class GraphCompiler
         if (config.Projection is DistanceProjection)
         {
             log.Info("Projection", "Distance pass-through — conditioned distance graph (L2).");
+            CsrGraph distanceGraph = BuildDistanceGraph(refined, n);
+            LogReturnedGraph(log, distanceGraph, n, filtered, repaired, connectivityPost, cutEdges: 0);
             return new GraphBuildResult(
-                Graph:                  BuildDistanceGraph(refined, n),
+                Graph:                  distanceGraph,
                 DirectedSelection:      directed,
                 SingleBandwidth:        null,
                 MixtureBandwidth:       null,
@@ -200,6 +203,7 @@ public static class GraphCompiler
             log,
             DefaultAutoLmpNearZeroRatio);
         ScalerResult scaled = scaler.Scale(refined, n);
+        LogReturnedGraph(log, scaled.Graph, n, filtered, repaired, connectivityPost, scaled.CutEdges);
 
         if (scaled.SingleBandwidth is double delta && delta > 0.0)
         {
@@ -265,7 +269,7 @@ public static class GraphCompiler
             }
             if (config.Interrupts.MaxNearZeroEdgeRatio is double maxRatio)
             {
-                double nzRatio = ComputeNearZeroRatio(scaled.Graph);
+                double nzRatio = EdgeWeightThresholds.NearZeroRatio(scaled.Graph, scaled.CutEdges);
                 log.Info("Scaling", $"NearZeroEdgeRatio={nzRatio:F4} (threshold={maxRatio:F4}).");
                 if (nzRatio > maxRatio)
                 {
@@ -569,18 +573,89 @@ public static class GraphCompiler
     }
 
     /// <summary>
-    /// Speculative near-zero edge ratio — fraction of edges whose
-    /// coupling weight has decayed below <c>1e-8</c>. The Stage 5
-    /// "delta-collapse" detector.
+    /// Log what the build returned: the component count and largest-component
+    /// coverage of the returned graph, the edges the coupling floor dropped, and
+    /// how many of the repair stage's added edges are missing from the result.
+    /// Repair counts its bridges as connecting; a scaler that drops them leaves
+    /// a graph the repair stage never reported.
     /// </summary>
-    private static double ComputeNearZeroRatio(CsrGraph graph)
+    private static void LogReturnedGraph(
+        DiagnosticsLog log,
+        CsrGraph returned,
+        int n,
+        NeighborSelection filtered,
+        NeighborSelection repaired,
+        ConnectivityReport repairedConnectivity,
+        int cutEdges)
     {
-        const double NearZero = 1e-8;
-        int count = 0;
-        double[] w = graph.Weights;
-        for (int i = 0; i < w.Length; i++)
-            if (w[i] < NearZero) count++;
-        return w.Length == 0 ? 0.0 : (double)count / w.Length;
+        ConnectivityReport report = Connectivity.Validate(returned);
+        log.Info(
+            "Connectivity",
+            $"Returned graph: {report.ComponentCount} component(s); largest covers " +
+            $"{report.LargestComponent}/{report.NodeCount} ({report.LargestCoverage:F3}); {report.EdgeCount} edges.");
+
+        if (cutEdges > 0)
+        {
+            log.Info(
+                "Scaling",
+                $"{cutEdges} edge(s) fell under the {EdgeWeightThresholds.CouplingFloor:G} coupling floor and were dropped.");
+        }
+
+        HashSet<long> repairEdges = RepairEdgeKeys(filtered, repaired, n);
+        if (repairEdges.Count > 0)
+        {
+            HashSet<long> returnedEdges = EdgeKeys(returned, n);
+            int missing = 0;
+            foreach (long key in repairEdges)
+                if (!returnedEdges.Contains(key)) missing++;
+
+            if (missing > 0)
+            {
+                log.Warning(
+                    "Connectivity",
+                    $"{missing} of {repairEdges.Count} repair edge(s) are absent from the returned graph " +
+                    "(dropped under the coupling floor): the repair stage counted them as bridges.");
+            }
+        }
+
+        if (report.ComponentCount > repairedConnectivity.ComponentCount)
+        {
+            log.Warning(
+                "Connectivity",
+                $"The repaired topology had {repairedConnectivity.ComponentCount} component(s); the returned graph has " +
+                $"{report.ComponentCount}. The graph is less connected than the repair stage reported.");
+        }
+    }
+
+    private static long EdgeKey(int a, int b, int n) =>
+        a < b ? (long)a * n + b : (long)b * n + a;
+
+    /// <summary>Undirected edges the repair stage added: in <paramref name="repaired"/>, in neither direction of <paramref name="filtered"/>.</summary>
+    private static HashSet<long> RepairEdgeKeys(NeighborSelection filtered, NeighborSelection repaired, int n)
+    {
+        var before = new HashSet<long>();
+        for (int i = 0; i < n; i++)
+            foreach (var nb in filtered.AllNeighbors[i])
+                before.Add(EdgeKey(i, nb.Index, n));
+
+        var added = new HashSet<long>();
+        for (int i = 0; i < n; i++)
+            foreach (var nb in repaired.AllNeighbors[i])
+            {
+                long key = EdgeKey(i, nb.Index, n);
+                if (!before.Contains(key)) added.Add(key);
+            }
+
+        return added;
+    }
+
+    private static HashSet<long> EdgeKeys(CsrGraph graph, int n)
+    {
+        var keys = new HashSet<long>(graph.Targets.Length / 2);
+        for (int i = 0; i < n; i++)
+            for (int slot = graph.RowPointers[i]; slot < graph.RowPointers[i + 1]; slot++)
+                if (graph.Targets[slot] > i) keys.Add(EdgeKey(i, graph.Targets[slot], n));
+        return keys;
     }
 
     private static int CountUndirectedEdges(NeighborSelection selection, int n)
