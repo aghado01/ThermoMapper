@@ -26,7 +26,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N14** D10's convergence verdict: read at the end of every run in the shared ensemble, with the engine's agreement groups and a declared stopping scope; BASS's three groups, the log posterior among its monitored quantities (decided 2026-10-29).
 - [ ] **N15** `DiagonalPlusLowRank` gains the capacitance matrix's Cholesky factor, O(m·k² + k³), beside its per-call Jacobi thin SVD. Found by stage 7 on 2026-10-29: 1.4 ms per σ² proposal at m = 20 with 39 columns. Built when real sizes make it binding.
 - [x] **N16** The SMC core's conveniences, both stage 8 chips' notes (2026-10-29): `TemperToPosterior` returning at its stage budget rather than throwing, `SmcRun` exposing its `MaxStages`, and a first-step bisection on cached increments in `SmcWeights` beside `ConditionalEss`. Built 2026-10-31 (`63babfd`): `SmcResult.ReachedPosterior`, `SmcRun.MaxStages`, `SmcWeights.LargestStep`; the cut SMC checks its own end.
-- [ ] **N17** A flat-histogram sampler, shared by BASS and SPC: SAMC weight learning, multicanonical production over ℓ₁, reweighting and the ln Z(b) curve. Decided to build by the user on 2026-10-29, and its nine design decisions taken the same day ([flat-histogram-design.md](flat-histogram-design.md)); Phase 1, the engine and its toys, built and verified 2026-10-30 (`d7f4ab8`–`3c95d9b`; [its brief](flat-histogram-phase1-brief.md)). Phase 2, BASS's adapter and the Friedman qualification, built and verified 2026-10-30 (`33e067e`–`69f6658`, [its brief](flat-histogram-phase2-brief.md)): Friedman's posterior computed on one seed, then replicated on two more after the warm start was made robust (2026-10-31, `694dfa9`–`3990c63`, [its brief](flat-histogram-warmstart-brief.md)); its loose ends follow in the same chip ([their brief](flat-histogram-loose-ends-brief.md)). Phase 3 is SPC's.
+- [ ] **N17** A flat-histogram sampler, shared by BASS and SPC: SAMC weight learning, multicanonical production over ℓ₁, reweighting and the ln Z(b) curve. Decided to build by the user on 2026-10-29, and its nine design decisions taken the same day ([flat-histogram-design.md](flat-histogram-design.md)); Phase 1, the engine and its toys, built and verified 2026-10-30 (`d7f4ab8`–`3c95d9b`; [its brief](flat-histogram-phase1-brief.md)). Phase 2, BASS's adapter and the Friedman qualification, built and verified 2026-10-30 (`33e067e`–`69f6658`, [its brief](flat-histogram-phase2-brief.md)): Friedman's posterior computed on one seed, then replicated on two more after the warm start was made robust (2026-10-31, `694dfa9`–`3990c63`, [its brief](flat-histogram-warmstart-brief.md)); its loose ends closed and verified the same day (`9d15376`–`a712cf8`, [their brief](flat-histogram-loose-ends-brief.md)): the window's top as two options, off by default; the sweep claims folded; the readout's tied nodes and a refusal naming its segment; SMC below the split read on both forms. Phase 3 is SPC's.
 
 ### Room for extensions
 
@@ -35,6 +35,25 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update. Built 2026-10-31 (`83d3d09`): `GigParameters` and the GIG forms of `NormalVariance` and `NormalPrecision`; the existing updates keep their formulas, equal to the limits bit for bit. No GIG sampler. Verified in the fitting checklist's report.
 
 ## Reports
+
+### N17's loose ends: verified — 2026-10-31
+
+The warm start's chip closed the four loose ends ([their brief and report](flat-histogram-loose-ends-brief.md#reports); `9d15376` the pins, `72788a2` and `0454bf8` the window's top, `25e5124` the sweeps, `f093987` SMC's reading, `0ec16d3` the readout and refusal, `a712cf8` the report).
+- *The main session's checks, by reading `91155ea..a712cf8` under `src/`:*
+  - `ExtendedAbove` sets ln w at ℓ_hi + mΔ to ln w_{K−1} + mΔ, the slope-1 extension, so w(ℓ) is unchanged; `SamcLearning.ExtendAbove` takes the wider window's flat occupancy and a fresh visits buffer, the gain's sequence continuing. The run raises the top only while the learning's iterations are under `ExtendTopUntil`, after the chains step and before the update reads their visits; it reads them in chain order, so the result is the same under any parallelism bound. The checkpoint's learning state and histogram carry the raised window.
+  - `WindowTopMargin` changes only the top's arithmetic; left null, `Wham.Window` takes the old path, held inside the pilot's highest draw. Both options are validated and enter the fingerprint.
+  - `Infeasibility` moved from test code (`FlatHistogramLimit`) unchanged but for spans and loops. Its recursion re-derived: given x_m in [lo, hi], x_{m+1} runs from (C_m − a·min(hi, C_m))/(1 − a) to (C_m − b·lo)/(1 − b), capped at 1, with a and b the segment's least and greatest fractions.
+  - The adapter fills `TiedNodes` from the engine's result, with no second WHAM solve, and calls `Wham.NodeDraws`; the sweep fold is claim for claim, seeds included.
+  - `SeedSweep` reports and asserts nothing, so the two claims that fail at their first swept seed fail no test.
+  - Item 3's ordering: the integrated form tempers inside the a, σ² integral, E[L^b], below the linear form's (E L)^b by Jensen's inequality, as the report says.
+- *The suites, rerun by the main session at `a712cf8`* (Release): Samplers 282 of 282, Regression 1,409 of 1,409 (`BassBitIdentityTests` among them), the BASS oracle classes 90 of 90, and seed 8017's pinned start under `BASS_QUALIFICATION`, the chip's counts.
+- *Read with care:*
+  - the window-top reading is one run per option on one seed, with builds overlapping the runs, so its times are context;
+  - the integrated form's 0.4 nats at b = 0.10 rests on one flat-histogram run reweighted;
+  - while the top rises, the learning's round trips count against the top as it stood when a chain reached it (diagnostics only);
+  - checkpoints taken before `72788a2` do not resume, since the options enter the fingerprint.
+- *Open, recorded, not scheduled:* whether "half the iterations from a warm start beat the flat start's full length" holds for the sampler or only for its seeds: the double well's claim fails at its first swept chain seed (ratio 1.254), BASS's too (1.188), and more seeds under `SEED_SWEEP` would say; a gentler extension rule.
+- *Recorded in:* `docs/Maths/Samplers.md` ("The learning": the refusal's segment; "The run": the window's top; "The warm start": the run's tied nodes; the checks, API and configuration rows); `docs/Maths/BayesianRegression.md` (the pilot's readout and refusals, the checks, SMC on both forms, the window's top on seed 8017, the API row); [flat-histogram-design.md](flat-histogram-design.md), "Phase 2, as built".
 
 ### N17's warm start made robust, and Friedman replicated: verified — 2026-10-31
 

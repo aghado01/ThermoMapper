@@ -82,6 +82,7 @@ Built and verified ([the chip's report and the main session's](flat-histogram-ph
 - *The pilot's self-sizing ladders are read one at a time and pooled by b.*
 - *Friedman, on one seed:* the decisions' bet held there. The flat histogram crossed the band that tempering and SMC do not, its chains agreed, and ln Z(1) = −841.4 ± 0.2 reached the bound, with the posterior on a1.
 - *Not yet robust,* as built: on a second seed SAMC's fixed point refused the pilot's ĝ, and a flat start at the same budget learned nothing. *(2026-10-31)* Made robust and replicated ([the warm start's brief and report](flat-histogram-warmstart-brief.md#reports)). The refusal was an ill-posed limit, flat occupancy outside the hull of the pilot's atoms' hats. Where the fixed point refuses ĝ, the warm start now ties the nodes under ten pilot draws, and Friedman's reading holds on seeds 8217 and 8417 by the criteria written before their runs.
+- *Loose ends closed* (2026-10-31, [their brief and report](flat-histogram-loose-ends-brief.md#reports)): the window's top movable by two options, off by default, neither better than today's window on seed 8017; the sweep claims in the hosts' `ComparativeSweep`; the readout's tied nodes, and a refusal naming the segment where flat occupancy leaves the hull.
 
 ## What to expect, honestly
 

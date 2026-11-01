@@ -118,7 +118,7 @@ flowchart LR
 | BASS calibration (stage 7) | `ICalibrationEmulator`, `BassBasisEmulator`, `BassFitEmulator`, `EmulatorNoise` (`ComponentNoise`, `IndependentNoise`); `ContinuousParameter`, `CategoricalParameter`, `ParameterLayout`; `GaussianMeasurement`, `VarianceGroup`, `InverseGammaVariance`, `HalfCauchyDeviation`, `MeasurementModel`; `FunctionalFormulation` (`TruncationTerm`, `FunctionalDiscrepancy`), `MultivariateFormulation`, `CalibrationCovariance` (`Create`, `Factor`) → `CovarianceFactor`; `CalibrationModel` (`Target`, `Physical`, `Delta`), `CalibrationTarget`, `CalibrationState`; `CalibrationSampler.Run` → `ConditionalRun` of `CalibrationDraw`; `NestedCalibrationSampler.Run` → `NestedCalibration` (`Runs`, `NotConverged`, `Pooled`); `CalibrationConfig` (`ToJson`, `FromJson`, `Validate`) |
 | BASS SMC (stage 8) | `BassSampling.Smc` (`SmcSpec`), `BassParticle`, `BassParticles`, `BassParticleTarget`, `BassSmcKernel`, `BassSmcFit`; `BassDiagnostics.Smc` (`BassSmcReadout`, `BassSmcReplicate`, `ReachedPosterior`, `Spread`), `BassEvidence.OfSmc`; `PointwiseLogDensity.Weights`; `BassRunLengths.Smc`; calibration: `CalibrationConfig.Smc` (`CutSmcSpec`), `CalibrationBridge`, `BridgeEvaluation`, `CutSmcKernel`, `CutSmcParticles`, `CutSmcOrdering` (`Tour`, `Random`), `CutSmcSampler.Run` → `CutSmcCalibration` (`Populations`, `CutSmcPopulation`, `CutSmcLeg`, `Pooled`) |
 | BASS coefficient prior (D03's two axes) | `BassCoefficientPrior(Form, Scale)` (`G(scale)`, `Ridge(scale)`, `UnitObservations`), `GForm`, `RidgeForm`; `TauPrior` (`UnitInformationGamma`, `HyperG`, `HyperGOverN`, `Held`, `For(n₀)`, `IsProper`) → `ResolvedTauPrior` (`LogDensity`, `SampleLogTau`, `HeldTau`); `RidgeSpectrum.Of` (`Birth`, `Death`, `Change`), `RidgeColumns.At` → `RidgeTerms`, `CollapsedGPrior.CentredRidgeMarginalAt`, `CollapsedRidgePrior` (`FromCentred`, `MarginalAt`, `At`); `BassTarget` (`Scale`, `HeldTau`, `CoefficientForm`, `CoefficientBlock`), `BassDesign.Spectrum`, `DesignProposal.Ridge`, `BassStructureFit.Ridge`, `BassEvidencePriors(Coefficients, Scale, …)` |
-| BASS flat histogram (N17 Phase 2) | `BassSampling.FlatHistogram` (`BassFlatHistogramSpec`: `Run`, `Pilot`, `MaxIterations`), `BassFlatHistogramPilot`; `BassDiagnostics.FlatHistogram` → `BassFlatHistogramReadout` (`Evidence` → `BassFlatHistogramEvidence`, `Pilot` → `BassFlatHistogramPilotReadout`); `BassEvidence.FlatHistogram`; `BassRunLengths.FlatHistogram` |
+| BASS flat histogram (N17 Phase 2) | `BassSampling.FlatHistogram` (`BassFlatHistogramSpec`: `Run`, `Pilot`, `MaxIterations`), `BassFlatHistogramPilot`; `BassDiagnostics.FlatHistogram` → `BassFlatHistogramReadout` (`Evidence` → `BassFlatHistogramEvidence`, `Pilot` → `BassFlatHistogramPilotReadout`, with `TiedNodes`); `BassEvidence.FlatHistogram`; `BassRunLengths.FlatHistogram` |
 | BAPS | `IBandPenalty` (`Bandwidth`, `Nullity`, `AccumulateInto`, `Roughness`), `ILocallyAdaptivePenalty` and `IAnisotropicPenalty` (`Components`, `AccumulateComponents`, `ComponentRoughness`, `SamplePrior`, `Spectrum` → `PenaltySpectrum`: `LogPseudoDeterminant`, with its gradient and Hessian in ln λ); `ISmoothingVariancePrior` (`LogDensityOfLog`) and `ISmoothingVariancePriorChoice` (`Resolve`): `ScaledWeibullPrior(tailProbability = 0.05)`, `InverseGammaVariancePrior(shape, scale)`, `WeibullVariancePrior(scale, shape = ½)` (`Rate`), `WeibullVariancePrior.ScaledTo(design, penalty, bound, tailProbability = 0.05)` and `ScaledToResponse(design, penalty, y)`; `SmoothingVarianceUpdate` (`Slice`, `Newton`); `NoiseVariancePrior` (`InverseGamma`, `Jeffreys`); `DifferencePenalty(order = 2)`; `PenalizedSpline(design, y, IBandPenalty)` (`Coefficients`, `ProfiledVariance`, `RemlLogEvidence`, `EffectiveDegreesOfFreedom`, `EdfSlope`); `Baps(..., componentPrior, componentUpdate, noisePrior).Run(BapsScheme, …)` (`ComponentPrior`) with `BapsScheme` (`Gibbs`, `Collapsed`, `LocallyAdaptiveGibbs`, `AnisotropicGibbs`) → `BapsResult` (`PosteriorDraws`, `FitBand(design)` → `PointwiseBand`, `Sigma2Interval`, `Tau2Interval`, `ComponentLambdaInterval(j)` → `PosteriorInterval`, `ComponentLogLambdaConvergence`); `HierarchicalPSpline(..., anisotropicSmoothing = false, componentPrior, componentUpdate, noisePrior).Run` (`ComponentPrior`) → `HierarchicalResult` (`PosteriorDraws` per chain, Rao–Blackwellized means, `PopulationBand`, `ReplicateBand`, three variance intervals, `ComponentSmoothingVarianceInterval(j)`, three convergence diagnostics, `ComponentSmoothingVarianceConvergence`, `RHatPopulation`, `Checkpoint`); `HierarchicalStart` (`Overdispersed`, `Fixed`); `HierarchicalScheme` (`Centred`, `CollapsedPopulation`, `Interweaved`, `CollapsedInterweaved`, `ParameterExpanded`); `HalfTDeviationPrior(Degrees, Scale)`; `TensorProductDesign.Build` → `TensorDesign`; `TensorPenalty`; `AnisotropicTensorSpline` (`Coefficients`, `RemlLogEvidence`, `RemlOptimum` → `AnisotropicReml`, `Penalty`) |
 | BGP | `SquaredExponentialKernel : IGpKernel`; `GpRegression(x, y, sigma2, kernel, scaling = Similarity)` or `GpRegression.WithUnknownScale(x, y, kernel, scaling)` (`NoiseModel`, `Fit(t, η)` for an unknown scale; `Fit(t)` → `GpFit`, `PredictMean`, `PredictVariance`, `KernelAffinity`, `Transform` → `GpTransform`); `EmpiricalBayesBandwidthPrior(gp, …)`; `BgpSampler(gp, prior).Run(...)` → `BgpResult` (`PosteriorMean`, `PosteriorSd`, `BandwidthDraws`) |
 | Changepoint | `ExactChangepoint.Infer(y, σ², ν, ρ², maxSegments)` or `Infer(y, ISegmentModel, maxSegments)` → `ChangepointResult`; `DefaultHyperparameters(y)`; `GaussianSegmentModel`, `CauchySegmentModel`; `ChangepointResult.Posterior.Sample(draws, seed)` → `ChangepointDraw` |
@@ -1136,7 +1136,7 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
   - production's visits and round trips, pooled and per chain;
   - the b = 1 Kish ESS, pooled and per chain;
   - the production draws, for reweighting to any b;
-  - the evidence curve, and the pilot's readout.
+  - the evidence curve, and the pilot's readout, with the nodes a warm start tied.
 - *D10's verdict* reads π_w's functionals over production, the chains' own target. The mode separation reads the chains' reweighted means at b = 1.
 
 **The evidence** (`BassFlatHistogramEvidence`). It is the ratio estimator's ln Z(b) on 101 points from b_lo to 1.
@@ -1146,7 +1146,7 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
 
 **The pilot** (`BassFlatHistogramFit.Pilot`). Its ladders run on the linear form, each from an exact draw of the prior on F, burned as a tempered fit burns them, then frozen and traced.
 - Self-sizing ladders each freeze their own rungs, so each ladder is read alone by `TemperingPilot.FromLadders`. The rungs then pool by b: a rung several ladders share holds their draws, with inefficiency Σn/Σ(n/g).
-- *Where SAMC's fixed point refuses the pilot's ĝ,* the warm start ties the nodes under ten pilot draws (2026-10-31; `docs/Maths/Samplers.md`, "The warm start"). A start still refused, or a pilot too thin for two nodes to hold ten draws, throws, naming the window, K, b_lo and the nodes the pilot left empty, with the warm start's reason. The readout does not yet say whether a start was tied.
+- *Where SAMC's fixed point refuses the pilot's ĝ,* the warm start ties the nodes under ten pilot draws (2026-10-31; `docs/Maths/Samplers.md`, "The warm start"). A start still refused, or a pilot too thin for two nodes to hold ten draws, throws, naming the window, K, b_lo and the nodes the pilot left empty, with the warm start's reason. The readout says whether a start was tied (`BassFlatHistogramPilotReadout.TiedNodes`, 2026-10-31: the nodes tied, empty where ĝ was accepted, the same through a cut and resumed fit). A refusal names the segment where flat occupancy leaves the hull of ĝ's atoms' hats, and by how much.
 
 **Checked** (`BassFlatHistogramTests`; [the report](../../issues/regression/bass/flat-histogram-phase2-brief.md#reports)).
 - *The chain on π_w at fixed weights,* on fixture A's enumerable F, against π_w by enumeration, with τ held and sampled, within 5 batch SE plus small slacks. Every 97th sweep the chain's density equals the inner prior plus ln w(ℓ₁).
@@ -1158,6 +1158,7 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
 - *End to end,* a scalar fit and a direct functional fit: every view on the weighted draws, each draw's weight rebuilt from its own state, and `Traces()` refused.
 - *Resume* across learning and production, bit for bit; the improper options with no evidence; a chain that never tunnels, flagged.
 - *The warm start:* WHAM's start meets SAMC's limit to 0.097 RMS over eight pilots. The pilot is worth about 8,000 flat iterations. From the default gain start the warm learning then plateaus near 0.05, the pilot's residual error not worked off, while flat learning overtakes it past 16,000, as Phase 1 found for the double well.
+- *The readout and the window's top* (2026-10-31): the gap pilots' fits, accepted (7803) and tied (7802), are pinned by hash before the top became adjustable, and hold with the options off; 7802's tied nodes, [0, 7, 10, 11, 13, 14, 15, 16], equal the warm start's own list, through a cut and resumed fit. The fixed point's refusals name their segments: gap pilot 7801's at segment 13, by 0.074 of the mass, and 7802's at segment 16, by 0.127. On fixture A with τ held, a top three spacings low rises to F's highest ℓ₁, −15.80, its learned ln w 0.102 from θ* and ln Z(b) within the enumeration's errors. A top margin there adds nodes past F's highest ℓ₁, which no state reaches, and the WHAM start is refused even tied.
 
 **Friedman, qualified** (2026-10-30; exploration, one run per seed; [the report](../../issues/regression/bass/flat-histogram-phase2-brief.md#reports)). What would count was written into the harness before the run:
 - every production chain tunnels between the window's ends;
@@ -1172,6 +1173,20 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
 - *Cost.* 13–15 minutes an arm, 45M sweeps a chain, against 9–11 minutes for R2's 16,000-particle SMC, whose replicates disagreed by 6.5 nats.
 
 *Through SMC to b = 0.10* (a reading added after the run). The ratio ln Z(1) − ln Z(0.10) agrees between the two windows (−715.25 ± 0.07 against −715.5). But SMC from the prior on the linear form reads ln Z(0.10) about 5.5 nats low, so that arm's −846.6 is low by as much. Below b = 0.05 the flat histogram, SMC and exact importance sampling from the prior agree to a tenth of a nat, which pins the ratio estimator's denominator; above it importance sampling falls first and SMC next, as estimators missing rare mass do.
+
+*On both forms* (2026-10-31; a reading, written before its run; the loose ends' chip, [its report](../../issues/regression/bass/flat-histogram-loose-ends-brief.md#reports)). SMC ran from the prior with a stage forced at b = 0.03, 0.05, 0.07 and 0.10 (4 replicates × 4,000 particles, C4's defaults), at 5 sweeps a stage and at 20. Its references are importance sampling from 200,000 exact prior draws and seed 8017's flat-histogram run, rerun bit for bit. On the integrated form, D05's SMC path, that run's 500,000 draws are reweighted by the form's tempered marginal, Ẑ(b) = Σ p_b(S, τ)/w(ℓ₁) over Σ 1/w(ℓ₁); every draw's rebuilt ℓ₁ equalled its level, and on the linear form the same code reproduces the curve to 6 digits.
+
+| b | form | importance sampling | flat histogram | SMC, 5 sweeps | SMC, 20 sweeps | families, 5; 20 sweeps |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.07 | linear | −98.84 ± 0.50 | −97.61 ± 0.01 | −97.89 ± 0.12 | −97.73 ± 0.03 | 478–524; 881–1,316 |
+| 0.10 | linear | −136.52 ± 0.85 | −125.93 ± 0.06 | −131.51 ± 0.22 | −129.83 ± 0.99 | 188–217; 69–639 |
+| 0.07 | integrated | −113.19 ± 0.10 | −112.95 ± 0.01 | −112.95 ± 0.04 | −112.94 ± 0.01 | 1,359–1,428; 2,081–2,149 |
+| 0.10 | integrated | −153.66 ± 0.33 | −150.17 ± 0.02 | −150.59 ± 0.14 | −150.58 ± 0.03 | 442–576; 823–855 |
+
+- *The 5.5 nats are the linear form's:* 5.6 at b = 0.10. Twenty sweeps a stage narrow the loss to 3.9 nats without closing it. One replicate came within a nat of the flat histogram as its families fell to 69, while the other three stayed 4.2–5.3 low: rare high-likelihood mass that a population reaches by chance, not mixing at a fixed b that more sweeps repair.
+- *On the integrated form SMC loses about 0.4 nats by b = 0.10,* keeping 442–855 families, and twenty sweeps tighten its replicates without moving that. At 0.07 and below it agrees with the flat histogram within 0.01. Whether the 0.4 nats is SMC's or the seed's is not settled: the reference is one run reweighted (Kish ESS 33,452 at 0.10, 2,991 at 0.03).
+- At b = 0.05 and below every estimator agrees on both forms. Importance sampling reads low first above it, SMC next, as before.
+- The integrated form's Z(b) is the lower of the two between b = 0 and 1: it tempers the likelihood inside the a, σ² integral, E[L^b], which Jensen's inequality puts below the linear form's (E L)^b.
 
 *A second seed, before the warm start was made robust* (the main session's, 2026-10-30).
 - On master seed 8217, SAMC's fixed point refused the pilot's ĝ: no node was empty, but one stood 125 from flat. So the WHAM warm start is not robust across seeds on Friedman.
@@ -1192,11 +1207,30 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
 
 - The ln Ẑ(b) curves agree within 0.4 nats at every b read, σ's 95% interval covers 1, and D10's verdict on π_w's functionals is converged, on each seed. Four x1·x2 terms carry 96–97%; A, B, G, S and T together 1.3% or less.
 - *Twice the sweeps bought more crossings, not 20 a chain:* one chain of the eight reached the 20 the lengths were sized for.
-- *The b = 1 Kish ESS fell* to 32% and 22% of seed 8017's. A reading: these pilots' windows top out higher (−773.6 and −771.7, against −778.3), so fewer production draws fall above the window, where the extension holds the posterior's own law.
+- *The b = 1 Kish ESS fell* to 32% and 22% of seed 8017's. A reading: these pilots' windows top out higher (−773.6 and −771.7, against −778.3), so fewer production draws fall above the window, where the extension holds the posterior's own law. The top was then read as two options on seed 8017 (below).
 - *Reported, not ruled:* on seed 8417 the unlabelled a1 + x6·x8's share disagrees across chains (13.8 to 6.7%, χ² p < 0.001); the criteria read labelled basins only.
 - *A flat start at t₀ = 100·K* (a reading, one run, on seed 8217's window) learned the window in the warm start's budget: ln Ẑ(1) = −841.38 ± 0.27, a1 at 67.1%. Its gain was still at t₀/t = 0.13 when learning stopped, and production's flatness, 1.36, was two to four times the warm starts'. At t₀ = 10·K it had learned nothing.
 
 *So* the flat histogram computes Friedman's structural posterior on three master seeds, within 0.41 nats and 2.5 points of one another, each run's error resting on four chains. It stays an option; no default changed.
+
+*The window's top, read on seed 8017* (2026-10-31; exploration, one run each at the qualification's lengths, written before the runs; the loose ends' chip, [its report](../../issues/regression/bass/flat-histogram-loose-ends-brief.md#reports)). The replications' pilots topped out higher and lost b = 1 draws; seed 8017's pilot never found the posterior's basin, and its learning spent 29% of its visits above the window, where SAMC does not update. The engine's two options for the top (`docs/Maths/Samplers.md`, "The run"), against today's window:
+
+| | today's window | `ExtendTopUntil` 50,000 | `WindowTopMargin` 3 |
+| --- | --- | --- | --- |
+| the window's top; K | −778.29, fixed; 204 | −751.65 by iteration 4,000; 211 | −767.73, fixed; 206 |
+| the start | accepted as it stood | the same | tied at both ends (its top nodes held no pilot draw) |
+| learning: visits above the window | 29.2% | 0.1% | 1.1% |
+| production: round trips, all chains (fewest) | 47 (9) | 3 (0) | 24 (4) |
+| production: draws above the window | 6.4% | 0.0% | 0.7% |
+| b = 1 Kish ESS of 500,000 | 34,256 | 7,462 | 14,543 |
+| ln Ẑ(1) (chains' SD) | −841.36 ± 0.17 (0.34) | −841.45 ± 0.19 (0.39) | −841.11 ± 0.27 (0.54) |
+| a1; a1 + x6·x8 (χ² p across chains) | 65.9%; 10.6% (0.197) | 69.6%; 8.5% (0.518) | 65.5%; 10.9% (< 0.001) |
+| time, pilot to production (a shared machine) | 15 min | 16 min | 15 min |
+
+- *Raising the top empties the learning's inert visits and costs production's b = 1 draws,* to 22% and 42% of today's ESS: the trade the replications foresaw.
+- *The extension as built climbed 26.6 nats within 4,000 iterations,* into a tail of rare states. Production then rarely reached the top bins and made 3 round trips, two chains none, failing the qualification's first criterion, though ln Ẑ(1) agrees within 0.1 nat and a1 within 4 points.
+- *The margin tunnels,* at 42% of today's ESS and within 0.25 nats, but a1 + x6·x8 parts across its chains (6.6–14.8%), as on seed 8417.
+- So neither option buys a reading today's window lacks on this seed. A gentler extension rule is the open variant. No default changed.
 
 ### BASS: the pointwise density and the residual check
 

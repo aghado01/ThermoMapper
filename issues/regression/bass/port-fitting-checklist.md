@@ -59,6 +59,10 @@ The open seams (F-X1, F-X2, F-X3, F-X6 here; N-X1–N-X3; O-X4) were briefed for
 
 ## Reports
 
+### SMC below Friedman's lower split, on both forms — 2026-10-31
+
+The flat-histogram loose ends' item 3 ([its report](flat-histogram-loose-ends-brief.md#reports); verified in the numerics checklist's report of the same day). Phase 2 read SMC from the prior about 5.5 nats low at b = 0.10 on the linear form. On D05's integrated path, the same stages lose about 0.4 nats there (−150.59 ± 0.14 at 5 sweeps a stage, −150.58 ± 0.03 at 20, against the flat histogram's −150.17 ± 0.02, reweighted from seed 8017), and agree within 0.01 at b = 0.07 and below. On the linear form twenty sweeps narrow the 5.6 nats to 3.9 without closing them. On the path D05's SMC takes, then, this reading puts little of from-prior SMC's loss below b = 0.10; its reference there is one run reweighted. Recorded in `docs/Maths/BayesianRegression.md`, "Through SMC to b = 0.10".
+
 ### Performance qualification's cost half, verified — 2026-10-31
 
 A chip measured the cost half ([its brief and report](performance-cost-brief.md#reports); the harness `fa39a1d` and six revisions, the report and its 83-row table `f7d54f7`). Tests and an R script only: no file under `src/` changed across `fa39a1d^..f7d54f7`.
