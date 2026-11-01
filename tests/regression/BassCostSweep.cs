@@ -24,7 +24,8 @@ namespace Maths.Regression.Tests;
 ///   with the two output-weighted cross products, as the design takes them. A categorical point adds a subset's
 ///   membership test over the cases; every point adds an empty part, the timer's own overhead.</item>
 ///   <item><b>Its frequencies</b> per sweep come from the sweep's batches, each on a copy of the chain restored at the
-///   state with its own streams, as M1 takes them.</item>
+///   state with its own streams, as M1 takes them, its composition's column means filled first (a running chain holds
+///   them; a restored one starts empty); beside them, the collections and GC pause time per sweep.</item>
 ///   <item><b>Its analytic counts</b> per call, in multiply-adds (or element passes, for a column), follow the code's
 ///   loops: the column n(ō + 4) (the fill, ō kernels, the support count, the mean, the centring); its cross products
 ///   n(M + 3) (M border dots, zᵀz, zᵀỹ, zᵀr), direct 3M(n_x + m) + 2(N + n_x) (every current factor re-centred, two
@@ -47,7 +48,8 @@ internal static class BassCostSweep
         public readonly Dictionary<string, double[]> Parts = [];
         public readonly Dictionary<string, double> Units = [];
         public double BirthsPerSweep, NonEmptyPerSweep, DeathsPerSweep, ChangesPerSweep, AdmittedPerSweep, RefusedPerSweep,
-                      BirthAccepts, DeathAccepts, ChangeAccepts, TauEvaluations, SweepEndM, ThreadBytesPerSweep, MembershipCases = double.NaN;
+                      BirthAccepts, DeathAccepts, ChangeAccepts, TauEvaluations, SweepEndM, ThreadBytesPerSweep, MembershipCases = double.NaN,
+                      GcPausePerSweep, Gen0PerThousand, Gen1PerThousand, Gen2PerThousand;
         public long RebuildsFired, CommitsTimed;
 
         public double Of(string name) => Parts.TryGetValue(name, out double[]? v) ? BassCost.Median(v) : double.NaN;
@@ -208,7 +210,8 @@ internal static class BassCostSweep
         int[] seeds = SeedTree.Derive(127, 2 * (BassCost.Repeats + 1));
         int sweepBatch = BassCost.Scaled(BassCost.SweepBatch);
         long sweeps = 0, births = 0, empties = 0, deathsTaken = 0, changes = 0, refused = 0, bornAccepted = 0, diedAccepted = 0,
-             changedAccepted = 0, endM = 0, threadBytes = 0;
+             changedAccepted = 0, endM = 0, threadBytes = 0, gen0 = 0, gen1 = 0, gen2 = 0;
+        TimeSpan paused = TimeSpan.Zero;
         double Sweeps(int round)
         {
             (ulong a0, ulong a1, ulong a2, ulong a3) = new Xoshiro256PlusPlus(seeds[2 * (round + 1)]).SaveState();
@@ -218,7 +221,12 @@ internal static class BassCostSweep
                 BlockRng = new Xoshiro256PlusPlus(seeds[2 * (round + 1) + 1]).SaveState(),
             };
             BassChain run = BassChain.Restore(model, reseeded);
+            // The column means' cache filled, as a running chain holds it at its state: a restored chain starts it empty. On
+            // the harness's stream, so the chain's own streams, and its path, are untouched.
+            run.Compose(rng, table);
             IReadOnlyList<MoveStat> before = run.Moves.MoveStats();
+            (int c0, int c1, int c2) = (GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2));
+            TimeSpan pause0 = GC.GetTotalPauseDuration();
             long emptyBefore = run.Structure.EmptyBirths, refusedBefore = run.Structure.Refusals.Total;
             (long p0, long th0) = BassCost.Allocated();
             long t0 = Stopwatch.GetTimestamp();
@@ -229,6 +237,8 @@ internal static class BassCostSweep
             }
             long ticks = Stopwatch.GetTimestamp() - t0;
             (long p1, long th1) = BassCost.Allocated();
+            TimeSpan pause = GC.GetTotalPauseDuration() - pause0;
+            (int d0, int d1, int d2) = (GC.CollectionCount(0) - c0, GC.CollectionCount(1) - c1, GC.CollectionCount(2) - c2);
             double value = meter == BassCost.Meter.Time ? ticks * 1e6 / Stopwatch.Frequency / sweepBatch : (double)(p1 - p0) / sweepBatch;
             if (round < 0) return value;   // the warm-up round
             IReadOnlyList<MoveStat> after = run.Moves.MoveStats();
@@ -243,6 +253,10 @@ internal static class BassCostSweep
             refused += run.Structure.Refusals.Total - refusedBefore;
             endM += run.Current.Count;
             threadBytes += th1 - th0;
+            paused += pause;
+            gen0 += d0;
+            gen1 += d1;
+            gen2 += d2;
             return value;
         }
 
@@ -322,6 +336,10 @@ internal static class BassCostSweep
         reading.DeathAccepts = (double)diedAccepted / sweeps;
         reading.ChangeAccepts = (double)changedAccepted / sweeps;
         reading.ThreadBytesPerSweep = (double)threadBytes / sweeps;
+        reading.GcPausePerSweep = paused.TotalMicroseconds / sweeps;
+        reading.Gen0PerThousand = 1000.0 * gen0 / sweeps;
+        reading.Gen1PerThousand = 1000.0 * gen1 / sweeps;
+        reading.Gen2PerThousand = 1000.0 * gen2 / sweeps;
         reading.ReadSeconds = clock.Elapsed.TotalSeconds;
 
         // The analytic counts per call, at the state's M and the pool's mean order.

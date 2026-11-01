@@ -307,6 +307,10 @@ public sealed class BassCostQualificationTests
         rows.Add(p, $"commit change {unit}, rebuild amortized", r.Commit("change"));
         foreach ((string name, double v) in r.PerSweep()) rows.Add(p, $"per sweep {unit}: {name}", v);
         if (meter == BassCost.Meter.Bytes) rows.Add(p, "bytes per sweep on the thread", r.ThreadBytesPerSweep);
+        rows.Add(p, "GC pause µs per sweep", r.GcPausePerSweep);
+        rows.Add(p, "gen0 collections per 1,000 sweeps", r.Gen0PerThousand);
+        rows.Add(p, "gen1 collections per 1,000 sweeps", r.Gen1PerThousand);
+        rows.Add(p, "gen2 collections per 1,000 sweeps", r.Gen2PerThousand);
         foreach ((string name, double units) in r.Units)
         {
             rows.Add(p, $"units: {name}", units);
