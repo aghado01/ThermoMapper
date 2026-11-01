@@ -1003,6 +1003,38 @@ public sealed class BassFlatHistogramTests
                 Assert.Equal(start[below] + (start[above] - start[below]) * (k - below) / (above - below), start[k], 9);
     }
 
+    // Today's fits from the gap pilots' WHAM starts, accepted (7803) and tied (7802), pinned before the window's top became
+    // adjustable (the loose ends' item 1, 2026-10-31): with the options left off, a fit stays as it was, bit for bit.
+    [Fact]
+    public void TodaysFits_FromTheGapPilots_ArePinned()
+    {
+        BassModel model = FixtureA(heldTau: true);
+        string accepted = FitHash(Bass.Fit(GapConfig(model, 7803, GapPilot), model.Data));
+        string tied = FitHash(Bass.Fit(GapConfig(model, 7802, GapPilot), model.Data));
+        _out.WriteLine($"gap pilot 7803 (accepted start) {accepted}; 7802 (tied start) {tied}");
+        Assert.Equal("f323760aeb7d24ee", accepted);
+        Assert.Equal("a98e0802bb4b83c1", tied);
+    }
+
+    // FNV-1a over a flat-histogram fit, bit for bit: the weights and their trace, both phases' visits, the draws' levels and
+    // their weights at b = 1.
+    internal static string FitHash(BassFit fit)
+    {
+        BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
+        var hash = new RunFingerprint();
+        foreach (LearningSnapshot s in fh.WeightTrace)
+            hash.Add((ulong)s.Iteration).Add(s.Weights.Low).Add(s.Weights.High).Add(s.Weights.LowSlope).Add([.. s.Weights.LogWeights]);
+        hash.Add([.. fh.Weights.LogWeights]);
+        foreach (FlatHistogramDiagnostics? d in new[] { fh.Learning, fh.Production })
+        {
+            if (d is null) continue;
+            hash.Add(d.Occupancy).Add((ulong)d.InWindow).Add((ulong)d.BelowWindow).Add((ulong)d.AboveWindow);
+            foreach (long r in d.RoundTrips) hash.Add((ulong)r);
+        }
+        for (int c = 0; c < fh.Draws!.Chains; c++) hash.Add(fh.Draws.Levels(c));
+        return hash.Add(fit.DrawWeights!).ToString();
+    }
+
     [Fact]
     public void Fit_FromAPilotTooThinToTie_IsRefused_NamingItsWindowAndWhy()
     {

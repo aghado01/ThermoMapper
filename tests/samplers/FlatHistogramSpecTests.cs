@@ -1,7 +1,9 @@
 using System;
 using System.Text.Json;
+using Maths.Samplers.Ensemble;
 using Maths.Samplers.FlatHistogram;
 using Xunit;
+using Xunit.Abstractions;
 using static Maths.Samplers.Tests.FlatHistogramToys;
 
 namespace Maths.Samplers.Tests;
@@ -10,11 +12,15 @@ namespace Maths.Samplers.Tests;
 /// The flat-histogram run's configuration and resume (N17 Phase 1, step 4). The spec is values only: it validates, it
 /// round-trips through JSON unchanged, and it says when it needs a pilot. A run taken in pieces, each resuming the last
 /// one's checkpoint, mid-learning, at the learning's end and mid-production, ends bit for bit where the run taken whole
-/// ends; a checkpoint of another run, or of a finished one, is refused.
+/// ends; a checkpoint of another run, or of a finished one, is refused. Today's runs on the toys are pinned, so an option
+/// left off keeps them bit for bit.
 /// </summary>
 public sealed class FlatHistogramSpecTests
 {
     private const double Depth = 10.0;
+
+    private readonly ITestOutputHelper _out;
+    public FlatHistogramSpecTests(ITestOutputHelper output) => _out = output;
 
     private static FlatHistogramSpec Explicit => new()
     {
@@ -121,6 +127,48 @@ public sealed class FlatHistogramSpecTests
         Assert.Equal(whole.Production.FunctionalVariance, d.Production.FunctionalVariance);
         Assert.Equal(whole.Production.AcceptanceRate, d.Production.AcceptanceRate);
         Assert.Equal(whole.Production.Verdict.Outcome, d.Production.Verdict.Outcome);
+    }
+
+    // Today's runs on the toys, pinned before the window's top became adjustable (the loose ends' item 1, 2026-10-31): with
+    // the options left off, a run stays as it was, bit for bit. A flat start over a declared window, and WHAM starts whose
+    // window, b_lo and K come from the pilot (the double well) or are declared (Potts).
+    [Fact]
+    public void TodaysRuns_ArePinned()
+    {
+        var model = new WellModel(Depth, 0.25);
+        string flat = RunHash(MulticanonicalRun.Run(Explicit, DoubleWell(Depth), model, 23));
+        var piloted = new FlatHistogramSpec { Chains = 4, LearningIterations = 4_000, ProductionDraws = 2_000, Start = FlatHistogramStart.Wham };
+        string well = RunHash(MulticanonicalRun.Run(piloted, DoubleWell(Depth), model, 71, WhamTests.WellPilot(57, scans: 5_000), parallel: Serial));
+        Potts lattice = PottsFlatHistogramTests.Lattice;
+        FlatHistogramSpec potts = PottsFlatHistogramTests.PottsSpec(4_000, 2_000, chains: 4) with { Start = FlatHistogramStart.Wham };
+        string pottsRun = RunHash(MulticanonicalRun.Run(potts, lattice.Target, new PottsFlatHistogramTests.PottsModel(lattice), 73,
+                                                        WhamTests.PottsPilot(59, scans: 5_000), parallel: Serial));
+        _out.WriteLine($"[pins] double well, flat start {flat}; double well, from the pilot {well}; Potts, WHAM start {pottsRun}");
+        Assert.Equal("c2ca4120735abd93", flat);
+        Assert.Equal("03d0356e2f62837d", well);
+        Assert.Equal("5d7b045e1e072b1b", pottsRun);
+    }
+
+    // FNV-1a over a run's outcome, bit for bit: the weights and their trace, both phases' visits, and the production draws.
+    internal static string RunHash<TState>(MulticanonicalResult<TState> result)
+    {
+        var hash = new RunFingerprint();
+        foreach (LearningSnapshot s in result.WeightTrace)
+            hash.Add((ulong)s.Iteration).Add(s.Weights.Low).Add(s.Weights.High).Add(s.Weights.LowSlope).Add([.. s.Weights.LogWeights]);
+        hash.Add([.. result.Weights.LogWeights]);
+        foreach (FlatHistogramDiagnostics? d in new[] { result.LearningDiagnostics, result.ProductionDiagnostics })
+        {
+            if (d is null) continue;
+            hash.Add(d.Occupancy).Add((ulong)d.InWindow).Add((ulong)d.BelowWindow).Add((ulong)d.AboveWindow);
+            foreach (long r in d.RoundTrips) hash.Add((ulong)r);
+        }
+        if (result.Draws is { } draws)
+            for (int c = 0; c < draws.Chains; c++)
+            {
+                hash.Add(draws.Levels(c));
+                for (int f = 0; f < draws.FunctionalDim; f++) hash.Add(draws.Functional(c, f));
+            }
+        return hash.ToString();
     }
 
     [Fact]
