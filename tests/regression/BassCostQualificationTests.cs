@@ -29,8 +29,9 @@ namespace Maths.Regression.Tests;
 ///   per sweep and per part, retained bytes per fit and per draw, and the axes' peak working sets, each in its own
 ///   process. Load does not move them, so they run at once.</item>
 ///   <item><b>Times</b> (<see cref="Timed_Blocks"/>): each block, named by <c>BASS_COST_BLOCK</c>, run on a quiet
-///   machine, its load recorded: the grid's axes, a repeat of the base point, the outputs, the other backends,
-///   calibration's N15 and cut SMC, and the parallel fit.</item>
+///   machine, its load recorded, each after a discarded pass at a tenth (so its code is tier 1): the grid's axes, a
+///   repeat of the base point, the outputs, the other backends, calibration's N15 and cut SMC, the parallel fit, and
+///   the machine's reference rates.</item>
 /// </list>
 /// Run it alone, in Release, behind <c>BASS_QUALIFICATION</c> = 1; rows go to <c>BASS_COST_OUT</c>.
 /// </summary>
@@ -46,7 +47,7 @@ public sealed class BassCostQualificationTests
         return [.. BassCost.Axes.Select(a => (a.Axis, a.Points.Where(x => seen.Add(x.Key)).ToArray()))];
     }
 
-    internal static readonly string[] OtherBlocks = ["repeat", "outputs", "backends", "calibration", "parallel"];
+    internal static readonly string[] OtherBlocks = ["repeat", "outputs", "backends", "calibration", "parallel", "machine"];
 
     // ---- Counts ----
 
@@ -272,6 +273,7 @@ public sealed class BassCostQualificationTests
             case "backends": Backends(rows); break;
             case "calibration": Calibration(rows); break;
             case "parallel": Parallel(rows); break;
+            case "machine": MachineRates(rows); break;
             default:
                 foreach (BassCost.Point x in grid.Single(g => g.Block == block).Points)
                 {
@@ -747,6 +749,71 @@ public sealed class BassCostQualificationTests
             _out.WriteLine($"parallel {x.Key}: {one:F1} s serial, {all:F1} s parallel, speedup {one / all:F2}");
             rows.Flush();
         }
+    }
+
+    // ---- The machine's rates ----
+
+    // The reference the parts' time per counted unit is read against: a dot product of two length-n vectors as a plain
+    // loop, as Vector<double> lanes, and as the engine's PairwiseSum.Dot, at the grid's lengths (in cache, repeated); and
+    // a streaming sum over 64 MB, the memory-bound rate. A calibration of the machine, not a lever: no part uses them.
+    private void MachineRates(BassCost.Rows rows)
+    {
+        var rng = new Xoshiro256PlusPlus(239);
+        double sink = 0.0;
+        foreach (int n in new[] { 1000, 10000, 50000 })
+        {
+            double[] a = [.. Enumerable.Range(0, n).Select(_ => rng.NextDouble())], b = [.. Enumerable.Range(0, n).Select(_ => rng.NextDouble())];
+            int batch = Math.Max(20, 2_000_000 / n);
+            Dictionary<string, double[]> times = BassCost.Interleave(
+            [
+                ("scalar", BassCost.Batch(BassCost.Meter.Time, () => sink += ScalarDot(a, b), batch)),
+                ("vector", BassCost.Batch(BassCost.Meter.Time, () => sink += VectorDot(a, b), batch)),
+                ("pairwise", BassCost.Batch(BassCost.Meter.Time, () => sink += PairwiseSum.Dot(a, b), batch)),
+            ]);
+            foreach ((string name, double[] v) in times)
+                rows.Add($"machine dot n={n}", $"{name} ns per multiply-add", BassCost.Median(v) * 1000 / n);
+        }
+        double[] big = [.. Enumerable.Range(0, 8 << 20).Select(_ => rng.NextDouble())];   // 64 MB
+        Dictionary<string, double[]> stream = BassCost.Interleave([("stream", BassCost.Batch(BassCost.Meter.Time, () => sink += VectorSum(big), batch: 2))]);
+        rows.Add("machine stream 64 MB", "ns per element", BassCost.Median(stream["stream"]) * 1000 / big.Length);
+        rows.Add("machine stream 64 MB", "GB/s", big.Length * 8.0 / (BassCost.Median(stream["stream"]) * 1000));
+        Assert.True(double.IsFinite(sink));
+        rows.Flush();
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    private static double ScalarDot(double[] a, double[] b)
+    {
+        double s = 0.0;
+        for (int i = 0; i < a.Length; i++) s += a[i] * b[i];
+        return s;
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    private static double VectorDot(double[] a, double[] b)
+    {
+        int w = System.Numerics.Vector<double>.Count, i = 0;
+        var acc0 = System.Numerics.Vector<double>.Zero;
+        var acc1 = System.Numerics.Vector<double>.Zero;
+        for (; i + 2 * w <= a.Length; i += 2 * w)
+        {
+            acc0 += new System.Numerics.Vector<double>(a, i) * new System.Numerics.Vector<double>(b, i);
+            acc1 += new System.Numerics.Vector<double>(a, i + w) * new System.Numerics.Vector<double>(b, i + w);
+        }
+        double s = System.Numerics.Vector.Dot(acc0 + acc1, System.Numerics.Vector<double>.One);
+        for (; i < a.Length; i++) s += a[i] * b[i];
+        return s;
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveOptimization)]
+    private static double VectorSum(double[] a)
+    {
+        int w = System.Numerics.Vector<double>.Count, i = 0;
+        var acc = System.Numerics.Vector<double>.Zero;
+        for (; i + w <= a.Length; i += w) acc += new System.Numerics.Vector<double>(a, i);
+        double s = System.Numerics.Vector.Dot(acc, System.Numerics.Vector<double>.One);
+        for (; i < a.Length; i++) s += a[i];
+        return s;
     }
 
     private static string OutputFolder() => Environment.GetEnvironmentVariable("BASS_COST_OUT") is { Length: > 0 } d ? d : Path.Combine(Path.GetTempPath(), "bass-cost");
