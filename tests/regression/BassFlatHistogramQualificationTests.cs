@@ -498,7 +498,8 @@ public sealed class BassFlatHistogramQualificationTests
     private const int SmcParticles = 4_000, SmcReplicates = 4;
 
     private sealed record SmcAt(double LogEvidence, double Error, double Within, double Between, double[] Replicates, double[] Errors, int[] Stages,
-                                int[] Families, double Seconds, double[][]? Marks = null, int[][]? MarkFamilies = null);
+                                int[] Families, double Seconds, double[][]? Marks = null, int[][]? MarkFamilies = null,
+                                SmcStageReport[][]? Reports = null);
 
     private static readonly Lazy<SmcAt> SmcAtLowerSplit = new(() => SmcTo(LowerSplit), LazyThreadSafetyMode.ExecutionAndPublication);
 
@@ -516,6 +517,7 @@ public sealed class BassFlatHistogramQualificationTests
         var errors = new double[SmcReplicates];
         var stages = new int[SmcReplicates];
         var families = new int[SmcReplicates];
+        var reports = new SmcStageReport[SmcReplicates][];
         double[][]? atMarks = marks is null ? null : [.. marks.Select(_ => new double[SmcReplicates])];
         int[][]? familiesAtMarks = marks is null ? null : [.. marks.Select(_ => new int[SmcReplicates])];
         var clock = Stopwatch.StartNew();
@@ -550,10 +552,11 @@ public sealed class BassFlatHistogramQualificationTests
             errors[r] = result.LogNormalizerError;
             stages[r] = result.Stages.Count - 1;
             families[r] = result.Stages[^1].Families;
+            reports[r] = [.. result.Stages];
         });
         double within = Math.Sqrt(errors.Sum(e => e * e)) / SmcReplicates, between = Sd(values) / Math.Sqrt(SmcReplicates);
         return new SmcAt(values.Average(), Math.Max(within, between), within, between, values, errors, stages, families, clock.Elapsed.TotalSeconds,
-                         atMarks, familiesAtMarks);
+                         atMarks, familiesAtMarks, reports);
     }
 
     // ---- Added after the run (2026-10-30): where the arms' ln Ẑ(0.10) parts ----
@@ -695,27 +698,7 @@ public sealed class BassFlatHistogramQualificationTests
         double scoreSeconds = clock.Elapsed.TotalSeconds;
         MulticanonicalWeights w = fh.Weights;
         LogEvidenceCurve curve = fh.Evidence.Curve;
-        (double Value, double Error, double Ess, double[] Chains) Flat(TemperedForm form, int m)
-        {
-            int chains = draws.Levels.Length;
-            var chainZ = new double[chains];
-            var pooled = new List<double>();
-            var pooledNormalizer = new List<double>();
-            for (int c = 0; c < chains; c++)
-            {
-                double[] levels = draws.Levels[c];
-                double[] logs = [.. levels.Select((l, s) => (form == TemperedForm.Linear ? SplitMarks[m] * l : draws.Tempered[c][m][s]) - w.LogWeight(l))];
-                double[] normalizer = [.. levels.Select(l => -w.LogWeight(l))];
-                chainZ[c] = LogMeanExp(logs, 1.0) - LogMeanExp(normalizer, 1.0);
-                pooled.AddRange(logs);
-                pooledNormalizer.AddRange(normalizer);
-            }
-            double max = pooled.Max();
-            double[] weights = [.. pooled.Select(v => Math.Exp(v - max))];
-            double total = weights.Sum();
-            double ess = total * total / weights.Sum(v => v * v);
-            return (LogMeanExp(pooled, 1.0) - LogMeanExp(pooledNormalizer, 1.0), Sd(chainZ) / Math.Sqrt(chains), ess, chainZ);
-        }
+        (double Value, double Error, double Ess, double[] Chains) Flat(TemperedForm form, int m) => FlatOnForm(w, draws, SplitMarks, form, m);
 
         _out.WriteLine($"## SMC below the lower split on both forms: importance sampling from {streams * perStream:N0} prior draws ({isSeconds:F0} s); " +
                        $"SMC {SmcParticles:N0} particles × {SmcReplicates} replicates, a stage forced at each b; arm (i) on seed {ArmOneSeed} rerun in {armSeconds:F0} s " +
@@ -754,11 +737,38 @@ public sealed class BassFlatHistogramQualificationTests
         }
     }
 
-    // Each production draw of a flat-histogram fit, chain by chain: its ℓ₁ (the reweighting's level) and the integrated
-    // form's tempered marginal ln m_b at each of SplitMarks, from its structure and τ, each structure's fit built once per
-    // chain. A draw's rebuilt ℓ₁ must be its level.
-    private static (double[][] Levels, double[][][] Tempered) DrawsOnTheIntegratedForm(BassFit fit, BassModel integrated)
+    // The flat histogram's ln Ẑ(marks[m]) on `form` from its draws, Ẑ(b) = Σ m_b/w(ℓ₁) over Σ 1/w(ℓ₁), with m_b = e^{b·ℓ₁} on
+    // the linear form: pooled over the chains, its error the chains' spread over √chains, the Kish ESS of the pooled weights,
+    // and each chain's own estimate.
+    private static (double Value, double Error, double Ess, double[] Chains) FlatOnForm(
+        MulticanonicalWeights w, (double[][] Levels, double[][][] Tempered) draws, double[] marks, TemperedForm form, int m)
     {
+        int chains = draws.Levels.Length;
+        var chainZ = new double[chains];
+        var pooled = new List<double>();
+        var pooledNormalizer = new List<double>();
+        for (int c = 0; c < chains; c++)
+        {
+            double[] levels = draws.Levels[c];
+            double[] logs = [.. levels.Select((l, s) => (form == TemperedForm.Linear ? marks[m] * l : draws.Tempered[c][m][s]) - w.LogWeight(l))];
+            double[] normalizer = [.. levels.Select(l => -w.LogWeight(l))];
+            chainZ[c] = LogMeanExp(logs, 1.0) - LogMeanExp(normalizer, 1.0);
+            pooled.AddRange(logs);
+            pooledNormalizer.AddRange(normalizer);
+        }
+        double max = pooled.Max();
+        double[] weights = [.. pooled.Select(v => Math.Exp(v - max))];
+        double total = weights.Sum();
+        double ess = total * total / weights.Sum(v => v * v);
+        return (LogMeanExp(pooled, 1.0) - LogMeanExp(pooledNormalizer, 1.0), Sd(chainZ) / Math.Sqrt(chains), ess, chainZ);
+    }
+
+    // Each production draw of a flat-histogram fit, chain by chain: its ℓ₁ (the reweighting's level) and the integrated
+    // form's tempered marginal ln m_b at each of `marks` (SplitMarks when null), from its structure and τ, each structure's
+    // fit built once per chain. A draw's rebuilt ℓ₁ must be its level.
+    private static (double[][] Levels, double[][][] Tempered) DrawsOnTheIntegratedForm(BassFit fit, BassModel integrated, double[]? marks = null)
+    {
+        marks ??= SplitMarks;
         MulticanonicalDraws draws = fit.Diagnostics.FlatHistogram!.Draws!;
         int chains = fit.Draws.Count;
         var levels = new double[chains][];
@@ -769,7 +779,7 @@ public sealed class BassFlatHistogramQualificationTests
             var fits = new Dictionary<string, BassStructureFit>();
             DrawStore<BassDraw> store = fit.Draws[c];
             levels[c] = draws.Levels(c).ToArray();
-            tempered[c] = [.. SplitMarks.Select(_ => new double[store.Count])];
+            tempered[c] = [.. marks.Select(_ => new double[store.Count])];
             for (int s = 0; s < store.Count; s++)
             {
                 BassDraw d = store[s];
@@ -783,7 +793,7 @@ public sealed class BassFlatHistogramQualificationTests
                 BassEvaluation e = target.SamplesTau ? target.Evaluate(structure, Math.Log(d.Tau)) : target.Evaluate(structure);
                 if (Math.Abs(e.LogMarginal - levels[c][s]) > 1e-6 * Math.Max(1.0, Math.Abs(levels[c][s])))
                     throw new InvalidOperationException($"Chain {c}, draw {s}: the rebuilt ℓ₁ {e.LogMarginal} is not the draw's {levels[c][s]}.");
-                for (int m = 0; m < SplitMarks.Length; m++) tempered[c][m][s] = e.LogLikelihood(SplitMarks[m]);
+                for (int m = 0; m < marks.Length; m++) tempered[c][m][s] = e.LogLikelihood(marks[m]);
             }
         });
         return (levels, tempered);
@@ -793,6 +803,176 @@ public sealed class BassFlatHistogramQualificationTests
     {
         double max = levels.Max(l => b * l);
         return max + Math.Log(levels.Average(l => Math.Exp(b * l - max)));
+    }
+
+
+    // ---- Where from-prior SMC leaves the flat histogram's curve, across the band (2026-11-01) ----
+
+    // A reading, its marks and seeds declared before any run (friedman-smc-band-brief.md; recommends no default): item 3's four
+    // marks, then on to b = 1 with marks below, inside and above the band the earlier work puts at b ≈ 0.16–0.32
+    // (docs/Maths/BayesianRegression.md). Each of the three parts below prints its tables, and the brief reads them together.
+    private static readonly double[] BandMarks = [0.03, 0.05, 0.07, 0.10, 0.13, 0.16, 0.20, 0.25, 0.32, 0.40, 0.50, 0.75, 1.0];
+
+    /// <summary>
+    /// The reference: the flat histogram's arm (i) at each master seed the qualification stands on, at its settings (8017 at
+    /// <c>Thin</c> 200, 8217 and 8417 at 400), which must reproduce that seed's ln Ẑ(1) (−841.36, −841.55, −841.14). Its draws are
+    /// reweighted to both forms at <see cref="BandMarks"/> as item 3 does. The checks: each draw's rebuilt ℓ₁ is its level (the
+    /// scoring throws otherwise); on the linear form the reweighting is the curve's; at b = 1 the two forms coincide; on seed
+    /// 8017 the first four marks reproduce item 3's flat-histogram column.
+    /// </summary>
+    [Theory]
+    [InlineData(ArmOneSeed, Thin, -841.36)]
+    [InlineData(SecondSeed, 2 * Thin, -841.55)]
+    [InlineData(ThirdSeed, 2 * Thin, -841.14)]
+    public void Friedman_SmcBand_FlatHistogramOnBothForms(int seed, int thin, double qualified)
+    {
+        if (!BassQualification.Enabled) return;   // heavy: arm (i), 13 to 40 minutes
+        BassMixing.Fixture fixture = Fixture.Value;
+        BassModel integrated = BassModel.Create(fixture.Config, fixture.Data, TemperedForm.Integrated);
+        BassConfig first = ArmConfig(true, null, seed);
+        var clock = Stopwatch.StartNew();
+        BassFit fit = Bass.Fit(first with { Sampling = first.Sampling with { Thin = thin } }, fixture.Data);
+        double armSeconds = clock.Elapsed.TotalSeconds;
+        BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
+        Assert.Equal(qualified, fh.Evidence!.LogRatio, 2);   // the qualification's run
+        clock.Restart();
+        (double[][] Levels, double[][][] Tempered) draws = DrawsOnTheIntegratedForm(fit, integrated, BandMarks);
+        double scoreSeconds = clock.Elapsed.TotalSeconds;
+        MulticanonicalWeights w = fh.Weights;
+        LogEvidenceCurve curve = fh.Evidence.Curve;
+        TemperedForm[] forms = [TemperedForm.Linear, TemperedForm.Integrated];
+        var read = forms.ToDictionary(f => f, f => BandMarks.Select((_, m) => FlatOnForm(w, draws, BandMarks, f, m)).ToArray());
+
+        _out.WriteLine($"## Flat histogram, master seed {seed} (Thin {thin}), rerun in {armSeconds:F0} s: window [{fh.Window.Low:F1}, {fh.Window.High:F1}], " +
+                       $"ln Ẑ(1) {fh.Evidence.LogRatio:R} (qualified {qualified}); the denominator's Kish ESS {curve.NormalizerEffectiveSampleSize:F0}; " +
+                       $"{draws.Levels.Sum(l => l.Length):N0} draws scored on the integrated form in {scoreSeconds:F0} s");
+        foreach (TemperedForm form in forms)
+        {
+            _out.WriteLine($"### The {form.ToString().ToLowerInvariant()} form, seed {seed}");
+            _out.WriteLine("b | ln Ẑ(b) ± error | per chain | Kish ESS");
+            _out.WriteLine("--- | --- | --- | ---");
+            for (int m = 0; m < BandMarks.Length; m++)
+            {
+                (double value, double error, double ess, double[] chains) = read[form][m];
+                _out.WriteLine($"{BandMarks[m]:F2} | {value:F3} ± {error:F3} | {string.Join(", ", chains.Select(v => v.ToString("F3")))} | {ess:F0}");
+            }
+        }
+
+        for (int m = 0; m < BandMarks.Length; m++)
+        {
+            int k = (int)Math.Round(BandMarks[m] * 100);
+            Assert.Equal(BandMarks[m], curve.InverseTemperatures[k], 12);
+            Assert.Equal(curve.LogEvidence[k], read[TemperedForm.Linear][m].Value, 6);   // the reweighting here is the curve's
+        }
+        Assert.Equal(read[TemperedForm.Linear][^1].Value, read[TemperedForm.Integrated][^1].Value, 6);   // the forms meet at b = 1
+        if (seed == ArmOneSeed)   // item 3's column
+        {
+            double[] linearOnItemThree = [-45.01, -73.02, -97.61, -125.93], integratedOnItemThree = [-54.29, -84.47, -112.95, -150.17];
+            for (int m = 0; m < SplitMarks.Length; m++)
+            {
+                Assert.Equal(SplitMarks[m], BandMarks[m], 12);
+                Assert.Equal(linearOnItemThree[m], read[TemperedForm.Linear][m].Value, 2);
+                Assert.Equal(integratedOnItemThree[m], read[TemperedForm.Integrated][m].Value, 2);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The SMC side: from the prior, 4 replicates × 4,000 particles at C4's defaults, a stage forced at each of
+    /// <see cref="BandMarks"/>, at 5 and at 20 mutation sweeps a stage, on both forms. Each replicate's ln Ẑ(b) and families at
+    /// each mark are printed, the stages and acceptance between marks, and, to say what forcing the marks costs, an unforced run
+    /// to b = 1 on the same seeds.
+    /// </summary>
+    [Theory]
+    [InlineData(TemperedForm.Linear, 5)]
+    [InlineData(TemperedForm.Linear, 20)]
+    [InlineData(TemperedForm.Integrated, 5)]
+    [InlineData(TemperedForm.Integrated, 20)]
+    public void Friedman_SmcBand_FromThePrior(TemperedForm form, int sweeps)
+    {
+        if (!BassQualification.Enabled) return;   // heavy: two SMC runs to b = 1
+        SmcAt forced = SmcTo(1.0, BandMarks, form, sweeps);
+        SmcAt free = SmcTo(1.0, null, form, sweeps);
+
+        _out.WriteLine($"## SMC from the prior to b = 1 on the {form.ToString().ToLowerInvariant()} form, {sweeps} sweeps a stage: {SmcParticles:N0} particles × {SmcReplicates} " +
+                       $"replicates from master seed {SmcSeed}, C4's other defaults, a stage forced at each mark ({forced.Seconds:F0} s; unforced {free.Seconds:F0} s)");
+        _out.WriteLine("b | ln Ẑ(b) per replicate | pooled ± error | families per replicate");
+        _out.WriteLine("--- | --- | --- | ---");
+        for (int m = 0; m < BandMarks.Length; m++)
+        {
+            double[] values = forced.Marks![m];
+            _out.WriteLine($"{BandMarks[m]:F2} | {string.Join(", ", values.Select(v => v.ToString("F3")))} | {values.Average():F3} ± {Sd(values) / Math.Sqrt(values.Length):F3} | " +
+                           string.Join(", ", forced.MarkFamilies![m]));
+        }
+        _out.WriteLine("between marks | stages per replicate | resampled | mean acceptance");
+        _out.WriteLine("--- | --- | --- | ---");
+        double[] edges = [0.0, .. BandMarks];
+        for (int m = 0; m < BandMarks.Length; m++)
+        {
+            SmcStageReport[][] within = [.. forced.Reports!.Select(stages => stages.Where(s => s.Index > 0 && s.Temperature.InverseTemperature > edges[m] &&
+                                                                                          s.Temperature.InverseTemperature <= edges[m + 1]).ToArray())];
+            _out.WriteLine($"{edges[m]:F2}–{edges[m + 1]:F2} | {string.Join(", ", within.Select(s => s.Length))} | {string.Join(", ", within.Select(s => s.Count(x => x.Resampled)))} | " +
+                           string.Join(", ", within.Select(s => s.Length == 0 ? "-" : s.Average(x => x.AcceptanceRate).ToString("F2"))));
+        }
+        static string FirstBelow(SmcStageReport[] stages, int families)
+        {
+            int i = Array.FindIndex(stages, s => s.Families < families);
+            return i < 0 ? "never" : stages[i].Temperature.InverseTemperature.ToString("F3");
+        }
+        foreach (int families in new[] { 1000, 100, 10 })
+            _out.WriteLine($"- families first below {families:N0} at b = {string.Join(", ", forced.Reports!.Select(stages => FirstBelow(stages, families)))}");
+        _out.WriteLine($"- forcing the marks: ln Ẑ(1) per replicate {string.Join(", ", forced.Replicates.Select(v => v.ToString("F3")))} against unforced " +
+                       $"{string.Join(", ", free.Replicates.Select(v => v.ToString("F3")))}; pooled {forced.LogEvidence:F3} ± {forced.Error:F3} against {free.LogEvidence:F3} ± {free.Error:F3}; " +
+                       $"stages {string.Join(", ", forced.Stages)} against {string.Join(", ", free.Stages)}; families at b = 1 {string.Join(", ", forced.Families)} against {string.Join(", ", free.Families)}");
+
+        Assert.All(forced.Replicates.Concat(free.Replicates), v => Assert.True(double.IsFinite(v)));
+        for (int r = 0; r < SmcReplicates; r++) Assert.Equal(forced.Replicates[r], forced.Marks![^1][r], 9);
+    }
+
+    /// <summary>
+    /// Importance sampling from 200,000 exact prior draws (item 3's streams) at <see cref="BandMarks"/> on both forms, as context:
+    /// ln Ẑ(b) with its error from the 8 streams' spread, and the Kish ESS of the pooled weights, which says where it still reads.
+    /// </summary>
+    [Fact]
+    public void Friedman_SmcBand_PriorImportanceSampling()
+    {
+        if (!BassQualification.Enabled) return;
+        BassMixing.Fixture fixture = Fixture.Value;
+        BassModel integrated = BassModel.Create(fixture.Config, fixture.Data, TemperedForm.Integrated);
+        const int streams = 8, perStream = 25_000;
+        var untempered = new double[streams][];
+        var tempered = new double[streams][][];   // [stream][mark][draw]: the integrated form's ln m_b
+        int[] seeds = SeedTree.Derive(SmcSeed + 1, streams);
+        var clock = Stopwatch.StartNew();
+        Parallel.For(0, streams, s =>
+        {
+            var sampler = new BassPriorSampler(integrated);
+            var rng = new Xoshiro256PlusPlus(seeds[s]);
+            untempered[s] = new double[perStream];
+            tempered[s] = [.. BandMarks.Select(_ => new double[perStream])];
+            for (int i = 0; i < perStream; i++)
+            {
+                BassEvaluation e = (BassEvaluation)sampler.DrawState(rng).Evaluation;
+                untempered[s][i] = e.LogMarginal;
+                for (int m = 0; m < BandMarks.Length; m++) tempered[s][m][i] = e.LogLikelihood(BandMarks[m]);
+            }
+        });
+        _out.WriteLine($"## Importance sampling from {streams * perStream:N0} prior draws, both forms ({clock.Elapsed.TotalSeconds:F0} s)");
+        foreach (TemperedForm form in new[] { TemperedForm.Linear, TemperedForm.Integrated })
+        {
+            _out.WriteLine($"### The {form.ToString().ToLowerInvariant()} form");
+            _out.WriteLine("b | ln Ẑ(b) ± error | Kish ESS");
+            _out.WriteLine("--- | --- | ---");
+            for (int m = 0; m < BandMarks.Length; m++)
+            {
+                double b = BandMarks[m];
+                double[][] logs = [.. Enumerable.Range(0, streams).Select(s => form == TemperedForm.Linear ? untempered[s].Select(l => b * l).ToArray() : tempered[s][m])];
+                double[] pooled = [.. logs.SelectMany(l => l)];
+                double max = pooled.Max();
+                double total = pooled.Sum(v => Math.Exp(v - max)), squares = pooled.Sum(v => Math.Exp(2 * (v - max)));
+                _out.WriteLine($"{b:F2} | {LogMeanExp(pooled, 1.0):F3} ± {Sd([.. logs.Select(l => LogMeanExp(l, 1.0))]) / Math.Sqrt(streams):F3} | {total * total / squares:F0}");
+            }
+        }
     }
 
 
