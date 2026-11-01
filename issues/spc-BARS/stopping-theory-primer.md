@@ -281,6 +281,8 @@ entropy) suit it better.
 | C47 | For signed couplings at q = 2, \|⟨σ_xσ_y⟩_J\| ≤ φ_{\|J\|,2}(x ↔ y) ≤ Bernoulli(p(\|J\|))(x ↔ y): a hot-side envelope survives, while monotonicity in β does not | §13.14 | Checked against Grimmett (Proposition 11.38, (11.44), Theorem 11.40); Potts form open | The Potts analogue |
 | C48 | One process of edge thresholds has, at every T at once, the law φ_{p(T),q}: each draw is a dendrogram in T, and ΔS₂ ≥ 0 per draw | §13.14 | Update rule derived here for edge-dependent couplings (Grimmett §8.6's construction; its displays are missing from the copy); mixing and cost unknown | E17 |
 | C49 | `LineagePersistence` on iris at k = 5 reads the published first stage and not the species: no selected lineage mixes setosa with the others in 60 of 60 runs, while the species-level reading passes 3 of 12 seeds at the parity budget and 0 of 12 at 8 × (1000, 2000) | §13.14 | Observed (12 seeds × 5 bracket and budget settings); agrees with §12.22 | A resolver that reads levels; lifetimes in ln T; the representative's choice |
+| C50 | Z_{p,q} = φ_{p,1}(q^k): the family is exponential in ln q with conjugate k, so ln Z(T, q) = ∫₀^(ln q) ⟨k⟩ d ln q′, with an exact reference rung at q = 1 for every T | §13.14 | Identity from the definition (Grimmett §10.8); the closure unbuilt | E18 |
+| C51 | The mean-field first-order line ends at q = 2, so a path through q = 2 joins q = 20's two phases without a jump | §13.14 | Derived from §10.2; unverified on graphs; literature unchecked | E18 |
 
 ---
 
@@ -1604,7 +1606,7 @@ The user dropped iris as too limited and asked for the same SPC-only levers on t
 The user reopened what round 1 closed, as an adversarial round with new capabilities in hand. Round 2 was discussion: it
 ran no experiments (one quantile table was computed), and it changed no code. Where the user decided something, the
 entry says so and gives the date; everything else is open, with the experiment that would settle it. Experiments
-continue round 1's numbering (E6–E17, §13.12). New claims are C35–C49 in §7.
+continue round 1's numbering (E6–E18, §13.12). New claims are C35–C51 in §7.
 
 **What round 1 did not have**, all on `main` by 2026-10-30:
 - **The per-draw record** on `Accumulator`: `EnergyPerDraw`, `MagPerDraw`, `SumSqClusterSizesPerDraw`,
@@ -2144,6 +2146,8 @@ a whole.
   where do the two disagree, against C46's window? Does R̂ within each start stay quiet there?
 - **E17. The coupled sampler on small graphs.** Level-set marginals against exact enumeration; coalescence time; ΔS₂'s
   noise against independent endpoints at equal work.
+- **E18. The path in q.** ln Z(T, q) from q = 1 up an integer ladder, against a tree's closed form and small-graph enumeration;
+  then whether a ladder through q = 2 frees C46's stuck replicas, at what cost beside the flat-histogram route.
 
 ### 13.13 Addendum, 2026-10-31: a percolation sandwich, from the CumulativeField question
 
@@ -2342,3 +2346,39 @@ the copy; re-derived here for edge-dependent couplings.
   extends C23's tree bound to series-parallel subgraphs, in closed form.
 - *The q ↓ 0 limit (§1.5)* gives uniform spanning trees and forests, not single linkage. So CumulativeField isn't simply
   the family's q → 0 end, and I wouldn't claim that continuum.
+
+**Read in the same pass, and recorded after a coverage check showed they had been dropped.**
+- *The partition function is an expectation over percolation (C50; §10.8's identity, general by the definition).*
+  Z_{p,q} = φ_{p,1}(q^k(ω)), with k the cluster count. So the family is exponential in ln q with conjugate k: d ln Z/d
+  ln q = ⟨k⟩, and d⟨f⟩/d ln q = Cov(f, k) (Theorem 3.12's second formula). Then ln Z(T, q) = ∫₀^(ln q) ⟨k⟩ d ln q′, with
+  q = 1 an exact reference rung at every T, Z = 1 and independent draws. That is a closure for Thread 5's free energy
+  (`issues/spc/opus-spin-glass-threads.md`) that needs no path from β = 0. ⟨k⟩ is already available: the exact
+  histogram's Σ_s n_s over the draws. Reweighting percolation draws straight to q = 20 by q^k is hopeless beyond small
+  graphs, since ln q^k spans hundreds of nats, so it would be a ladder in q.
+- *A way around the first-order line (C51; an idea, unverified, and the literature unchecked).* In mean field the
+  transition is continuous for q ≤ 2 and first-order above it (§10.2), so the line ends at q = 2, and a path can join q
+  = 20's two phases without a jump: from a disordered state lower q at fixed T to q = 2; cool through the continuous
+  transition; raise q at a T below every λ_c(q) up to 20, staying ordered, since λ_c rises with q. Integer rungs
+  suffice, so SW runs it as it stands, with swaps between q's weighted by (q₁/q₂)^(k₂ − k₁). It would sit beside the
+  flat-histogram route for C46's metastability, whose multibondic form the design doc cautions against at large q.
+- *A sampler at any real q (Proposition 10.16; Chayes and Machta, the book's [93, 94]).* Colour each cluster red with
+  probability r. Given the red vertex set, the red subgraph is random-cluster with parameter rq, and the rest with (1 −
+  r)q; at r = 1/q the red part is plain percolation. That is an SW-type step for every real q ≥ 1. The book states it on
+  K_n, and its calculation is generic. Not needed for C51's integer path; it would make q a continuous axis.
+- *The melt's latent entropy, and what it says about widths (§10.7).* The edge density jumps at λ_c, from λ_c/(2q) to
+  (λ_c/2q)(1 + (q − 1)θ₀²): 2.65 bonds per vertex at q = 20. The energy jumps by (s/2)(1 − 1/q)θ₀² = 0.426·s per vertex,
+  so the entropy jump ΔE/T is also 2.65 per vertex. A melt of n spins rounded only by finite size would then be about
+  2.2/(2.65·n) = 0.83/n wide in ln T: 0.017 e-folds at n = 50, under 0.001 at the toy's stripes. Measured melts run
+  0.09–0.97. So their widths aren't finite-size rounding, which strengthens E13's hypothesis that the spread of
+  couplings inside a cluster sets them. This derivation is mine, from the book's ψ and θ.
+- *Kirchhoff at the q → 0 end (Theorem 3.97's proof).* A uniform spanning tree holds an edge with probability equal to
+  its effective resistance, with a transfer-current matrix for several edges. So the family's far end has a closed form
+  from the graph Laplacian. Tangential to stopping, but a concrete tie from this family to the spectral side
+  (`Graphs.Spectral`, and effective-resistance filtering, which I'd want to source before relying on it).
+- *Two that lead nowhere practical.* Theorem 3.24 strictly improves (3.22) on bounded-degree graphs, which would tighten
+  the sandwich's upper side, but its γ comes from a Markov-chain argument with no usable constant (Proposition 3.28: it
+  "may be written down"). Theorem 3.79 dominates a Potts cluster set by an Ising model with a field, but the field is
+  negative only below a β that tends to 0 as the maximum degree grows, the book's own caveat.
+- *Not read, and the next places to look.* §10.8's large-deviation theorem (10.58) for the cluster count, which could
+  price replica tunnelling in mean field; §11.2 on the Potts model; §10.10–10.12 on trees. Chapters 2 and 4–7 and 9 stay
+  unread.
