@@ -268,8 +268,7 @@ public static class SpcCommand
             // there — it remains the estimator for the un-normalized default kernel.
             if (options.BandwidthStrategy == Graphs.Distance.BandwidthStrategy.MeanEdgeDistance)
             {
-                double tps = BwdPottsCriticalEstimate.TpsUpperBound(options.Q);
-                (lo, hi) = (0.05 * tps, 4.0 * tps);
+                (lo, hi) = BwdPottsCriticalEstimate.Bracket(options.Q);
             }
             else
             {

@@ -160,6 +160,7 @@ With D retained draws:
 
 - `SpcScheduleHelpers.Estimate` gives $\hat T=\tilde J\cdot\bar k_w/\ln q$, where $\tilde J$ is the median coupling and $\bar k_w$ the mean weighted degree.
 - `EstimateBracket` returns $(0.05\hat T,\,5\hat T)$.
+- `BwdPottsCriticalEstimate.Bracket` is the q-only bracket for the $1/\hat K$-normalized kernel, which the REPL's `auto` schedule reads under `MeanEdgeDistance`: $[0.05,\,4]\cdot T_{ps}(q)$, with $T_{ps}(q)=e^{-1/2}/(4\ln(1+\sqrt q))$ (Blatt, Wiseman and Domany 1997, eq. 4.2): 0.089 at $q=20$, so $[0.0045,\,0.357]$. A weak cut can still split colder than the cold end.
 - `LogSpaceGrid` spaces points geometrically, endpoints included.
 - `AutoGridFixedSweep.BuildConfig` combines these into 12 geometric points spanning a factor of 100.
 
@@ -217,7 +218,7 @@ The fixed-grid sweep builds its own execution options. It pre-derives seeds with
 ## Status and caveats
 
 - **The bracket heuristic scales with J².** $\hat T$ is quadratic in the coupling scale, although temperature should scale linearly with J. Check the bracket when couplings are rescaled.
-- **Duplicate grid temperatures collide.** With a `BaseSeed`, temperatures that truncate to the same $\lfloor 1000\,T\rfloor$ (for example, every grid point below $10^{-3}$) get the same seed for a given replica. Temperatures that format to the same 5-decimal string also share a checkpoint path, and with a checkpoint directory set they are written concurrently.
+- **Duplicate grid temperatures collide.** With a `BaseSeed`, temperatures that truncate to the same $\lfloor 1000\,T\rfloor$ (for example, every grid point below $10^{-3}$, and pairs among the q-only bracket's coldest points at 48 steps) get the same seed for a given replica. Temperatures that format to the same 5-decimal string also share a checkpoint path, and with a checkpoint directory set they are written concurrently.
 - **Resume works per task.** The SPCX resume state (spins and RNG) is saved, but `Restore` has no caller. Resuming means skipping each task whose checkpoint file already exists. The loaded file is not checked against the task's budget, accumulation or Q, so reuse a checkpoint directory only with an identical configuration.
 - **Couplings must be non-negative.** This is assumed but not checked. A negative coupling gives a bond probability below 0, contrary to the kernel's documentation.
 - **`SpcExecutor.BuildTaskList` with an explicit `baseSeed`.** It stamps that same seed on every task, so all temperatures and replicas share one stream. The production sweep derives distinct seeds per task and is unaffected.
