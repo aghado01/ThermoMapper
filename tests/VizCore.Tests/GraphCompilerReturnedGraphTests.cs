@@ -294,6 +294,26 @@ public sealed class GraphCompilerReturnedGraphTests
     }
 
     [Fact]
+    public void PreRepairGraph_IsTheReturnedGraphWithoutTheRepairEdges_InTheSameUnits()
+    {
+        double[][] points = FarApartLines(lines: 2, pointsPerLine: 10, separation: 10.0);
+
+        GraphBuildResult result = Build(points, Config(new Cauchy(), k: 3));
+
+        CsrGraph pre = result.PreRepairGraph!.Value;
+        ConnectivityReport preReport = Connectivity.Validate(pre);
+        Assert.Equal(2, preReport.ComponentCount);
+        Assert.Equal(Connectivity.Validate(result.Graph).EdgeCount - 1, preReport.EdgeCount);
+        for (int i = 0; i < pre.NodeCount; i++)
+            for (int slot = pre.RowPointers[i]; slot < pre.RowPointers[i + 1]; slot++)
+                Assert.Equal(WeightOf(result.Graph, i, pre.Targets[slot]), pre.Weights[slot]);
+
+        MstBridgeReport bridges = MstBridge.Compare(pre, result.Graph);
+        Assert.Equal(1, bridges.BridgeCount);
+        Assert.Equal(BridgeWeight(result.Graph, points.Length / 2), bridges.MinBridgeWeight);
+    }
+
+    [Fact]
     public void PointsWithinTheFloor_ReportOneComponentAndNoWarning()
     {
         // Control: a single line is connected by its own topology, no repair, no cut.

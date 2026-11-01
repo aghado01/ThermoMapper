@@ -173,7 +173,7 @@ public static class GraphCompiler
                 SingleBandwidth:        null,
                 MixtureBandwidth:       null,
                 EnsureConnectedApplied: repairApplied,
-                PreRepairGraph:         repairApplied ? BuildDistanceGraph(filtered, n) : null,
+                PreRepairGraph:         repairApplied ? WithoutEdges(distanceGraph, repairEdges, n) : null,
                 Metric:                 metric.Properties,
                 Diagnostics:            log,
                 WeightKind:             EdgeWeightKind.Distance);
@@ -282,14 +282,9 @@ public static class GraphCompiler
             }
         }
 
-        CsrGraph? preRepairGraph = null;
-        if (repairApplied)
-        {
-            // Build the pre-repair scaled view so MstBridge.Compare can run
-            // downstream — one extra Scale pass; negligible vs the O(N²) work.
-            var preRepairScaled = scaler.Scale(filtered, n);
-            preRepairGraph = preRepairScaled.Graph;
-        }
+        // The pre-repair view is the returned graph without the repair edges: the same units and
+        // weights, so MstBridge.Compare sees the topology change alone.
+        CsrGraph? preRepairGraph = repairApplied ? WithoutEdges(scaled.Graph, repairEdges, n) : null;
 
         return new GraphBuildResult(
             Graph:                  scaled.Graph,
@@ -673,6 +668,19 @@ public static class GraphCompiler
                 $"The repaired topology had {repairedConnectivity.ComponentCount} component(s); the returned graph has " +
                 $"{report.ComponentCount}. The graph is less connected than the repair stage reported.");
         }
+    }
+
+    /// <summary>A copy of <paramref name="graph"/> without the edges in <paramref name="removed"/>; weights unchanged.</summary>
+    private static CsrGraph WithoutEdges(CsrGraph graph, RepairEdgeSet removed, int n)
+    {
+        var edges = new List<Edge>(graph.Targets.Length / 2);
+        for (int i = 0; i < n; i++)
+            for (int slot = graph.RowPointers[i]; slot < graph.RowPointers[i + 1]; slot++)
+            {
+                int j = graph.Targets[slot];
+                if (j > i && !removed.Contains(i, j)) edges.Add(new Edge(i, j, graph.Weights[slot]));
+            }
+        return CsrGraph.FromEdges(edges.ToArray(), n);
     }
 
     private static Dictionary<long, double> EdgeWeightsByKey(CsrGraph graph, int n)
