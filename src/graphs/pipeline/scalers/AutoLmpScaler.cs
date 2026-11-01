@@ -11,8 +11,8 @@ namespace Graphs.Pipeline.Scalers;
 /// <summary>
 /// Stage 5 — automatic Local Mutual Proximity wrapping.
 /// Evaluates the inner scaler first, inspects the tentative graph for
-/// near-zero edge collapse (counting the edges the coupling floor already
-/// dropped), and applies LMP only when the graph appears numerically fragile.
+/// near-zero edge collapse, and applies LMP only when the graph appears
+/// numerically fragile.
 /// </summary>
 internal sealed class AutoLmpScaler : IEdgeScaler
 {
@@ -38,7 +38,9 @@ internal sealed class AutoLmpScaler : IEdgeScaler
     public ScalerResult Scale(NeighborSelection refined, int n)
     {
         ScalerResult tentative = _innerScaler.Scale(refined, n);
-        double ratio = EdgeWeightThresholds.NearZeroRatio(tentative.Graph, tentative.CutEdges);
+        // The kept edges only: LMP writes exact zeros and fragments sparse graphs, so edges the floor
+        // dropped must not tip a graph into it (the build log and MaxNearZeroEdgeRatio count them).
+        double ratio = EdgeWeightThresholds.NearZeroRatio(tentative.Graph, cutEdges: 0);
 
         if (ratio > _nearZeroEdgeRatioThreshold)
         {

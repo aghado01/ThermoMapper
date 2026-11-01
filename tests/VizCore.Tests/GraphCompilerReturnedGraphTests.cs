@@ -128,15 +128,16 @@ public sealed class GraphCompilerReturnedGraphTests
     }
 
     [Fact]
-    public void AutoLmp_CountsTheEdgesTheFloorAlreadyDropped()
+    public void AutoLmp_ReadsTheKeptEdgesOnly_SoDroppedEdgesDoNotSwitchItOn()
     {
-        // Three short lines, two bridges dropped: the dropped edges alone exceed the 5% auto-LMP threshold.
+        // Three short lines, two bridges dropped: the dropped edges alone would exceed the 5%
+        // threshold, but LMP fragments sparse graphs, so the trigger counts the kept edges only.
         double[][] points = FarApartLines(lines: 3, pointsPerLine: 5, separation: 10.0);
 
         GraphBuildResult result = Build(points, Config(new Gaussian(), k: 2, lmp: null));
 
-        Assert.Contains(result.Diagnostics!.Warnings, m =>
-            m.Stage == "Scaling" && m.Text.StartsWith("Auto-LMP enabled", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics!.Warnings, m => m.Text.StartsWith("Auto-LMP enabled", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics.Infos, m => m.Text.Contains("LMP is not required", StringComparison.Ordinal));
     }
 
     /// <summary>Components over the edges of positive weight, by a union-find independent of the library's.</summary>
