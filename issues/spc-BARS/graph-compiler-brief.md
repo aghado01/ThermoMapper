@@ -223,6 +223,49 @@ note distinguishes them; for discussion, nothing decided):
 - §2.4's multi-scale union needs its per-scale 1/K̂_s to become stage 6's single gauge, or be stated as part of stage 4.
 - The current behaviour stays selectable beside any new default (§3).
 
+### 4.2 Decisions, 2026-11-01
+
+The session took the decisions to the user, who answered "Build as revised". Measured first, on `7a35ffd` (`GraphCompilerReturnedGraphTests` and the
+REPL): the BWD toy, Iris, and Landsat parity configs (mutual kNN, `MstMin`, Gaussian, mean-edge) cut **no** edge, so a floor change leaves Domany parity
+and `BwdParityTests` untouched. On BlattHierarchy (Gaussian, mean-edge, K = 5, 10, 20) the floor cuts 5 repair edges and the graph goes from 1 component to
+6; under MAD at K = 5 it cuts 25 repair edges and goes to 27. A Cauchy kernel on the same topology keeps one component.
+
+1. **Floor and LMP.**
+   - Repair edges are never cut. They keep their kernel coupling, clamped to 1e-300 where the kernel underflows. The clamp is applied before the gauge, so
+     the gauge stays a pure rescale and 1e-300/K̂ stays a normal number. (`double.Epsilon` would round to 0 under 1/K̂.)
+   - Every other edge keeps the 1e-10 thinning, now a recorded config field `CouplingFloor` (0 = none).
+   - A kernel-honest caveat: this restores the graph's structure (components, what PH, Mapper and the cumulative-field ladder see). It does not change what SW
+     sees on a Gaussian graph: a bridge at 1e-31 activates near T = 1e-31, so S₂ at T = 10⁻⁶ still reads the separate components. No floor value fixes that
+     short of a large modelling constant, and none is added.
+   - Under LMP a repair bridge is the weakest edge at both ends, so the strict rank writes it exactly 0 (`GraphCompilerReturnedGraphTests`). Decided:
+     (a) repair edges join the LMP protect set, keeping their kernel coupling, as the H1 cycle edges do; (b) an inclusive rank rule (the empirical CDF, which
+     counts the edge itself) is added as an option beside the strict one, default strict, so no existing LMP graph moves from it. The strict rank also writes 0 on
+     every node's weakest edge, so a degree-1 node loses its only edge: that is the diagnosis of §2.7's fragmentation at small K.
+2. **Order.** §4.1's stages, with thinning before the measure step: structure, scale, shape (kernel), thinning (repair edges protected), measure (LMP), gauge
+   last. The floor is defined on kernel couplings, and LMP outputs rank products. The gauge is its own field (`Gauge`), K̂ is the returned graph's mean degree, and
+   `MeanEdgeDistance` stops implying it.
+3. **Edge set.** The mean-edge bandwidth reads the pre-repair edges by default (the bridges are the longest edges by construction); the post-repair reading stays
+   selectable (`ScaleEdges`), and the BWD presets and the parity config select it, since the papers' mean includes the superimposed MST. The other strategies
+   already read the pre-repair k-th sample. `PreRepairGraph` becomes the returned graph minus the repair edges: same units, topology change only, and the second
+   scaling pass goes.
+4. **The auto-LMP trigger is held.** Commit `7a35ffd` made the trigger count edges the floor dropped. LMP fragments sparse graphs (above), so a graph that loses
+   5% of its edges to the floor must not switch to it. The trigger returns to counting the kept edges; the `MaxNearZeroEdgeRatio` interrupt and the log keep
+   counting the cut edges. Revisit when the rank rule is settled.
+5. **Temperature units.** The build result declares its resolved construction (kernel, bandwidth estimator, gauge factor, resolved LMP). One bracket function reads
+   it, and the REPL's `auto` and `AutoGridFixedSweep` both call it. The q-only T_ps(q) bracket applies exactly when the declaration is the classic one (Gaussian,
+   mean-pair bandwidth, 1/K̂ gauge, no LMP); otherwise the data heuristic divided by the gauge (the heuristic is ∝ J², the gauge ∝ J). **This moves `auto` grids
+   for Cauchy or LMP graphs with mean-edge bandwidth**, which get T_ps today. Mapper patches carry no declaration and keep the heuristic. The T_ps correction
+   itself (C44) is `681bf5c`, a separate commit by another session. The cumulative-field command warns when LMP meets `Field.Local`, and both T-unit systems are recorded.
+6. **Resolved config and knobs.** `GraphConstructionManifest` gains a structured `Resolved` record, beside the requested config: what each `Auto` picked, the
+   statistic and threshold behind it, the bandwidths, the gauge, the floor, the cut count, and the returned graph's components. The four buried Auto thresholds
+   (skewness 3.0, coverage 0.95, near-zero 1e-8, near-zero ratio 0.05) become one `AutoThresholds` record with those defaults. The knob register is a table in
+   `docs/Graphs/GraphConstruction.md` (concern, default, entanglements, invariance test), and the invariance tests are written with it.
+7. **`ScaleRank`** (§2.3). Optional r ≤ K. For the mean-edge bandwidth the sample is the unique undirected pairs among each node's first r directed neighbours,
+   before repair; for the MAD family, the r-th neighbour distance. Null keeps today's behaviour.
+8. **Sequencing.** Now: 1–7 above. §2.9 folds into 1 (the closest pair is the default; the surface is K). Deferred, each landing on the restructured stages:
+   §2.4 multi-scale union, §2.5 α-kernel, §2.6 shared-neighbour and mutual-reachability couplings, §2.8 `MstAll` (check the BWD paper first). The user has not
+   yet said whether §4 holds more changes.
+
 ## 5. Done when
 
 - A test reproduces §2.1's cut: a repair edge whose Gaussian coupling falls under the floor, and the compiled graph's
