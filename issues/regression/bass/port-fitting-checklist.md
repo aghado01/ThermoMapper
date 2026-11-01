@@ -59,6 +59,11 @@ The open seams (F-X1, F-X2, F-X3, F-X6 here; N-X1–N-X3; O-X4) were briefed for
 
 ## Reports
 
+### Friedman's posterior, replicated on three seeds — 2026-10-31
+
+The flat histogram's warm start was made robust and Friedman replicated (the numerics checklist's report has the verification). Seeds 8217 and 8417, at twice the sweeps, meet every criterion written before their runs: ln Ẑ(1) −841.55 ± 0.07 and −841.14 ± 0.32 against seed 8017's −841.36 ± 0.17, and a1 at 66.6% and 68.4% against 65.9%.
+- *What it means for the fitting defaults:* the flat histogram is now a replicated option for a target like Friedman's, at 36–39 minutes an arm (`Thin` 400, the machine shared). The defaults are the user's call, and the statistical half of performance qualification, which waited on this replication, can now be briefed.
+
 ### The extension seams, verified — 2026-10-31
 
 A chip built F-X1, F-X2, F-X3, F-X6, O-X4 and N-X1–N-X3 as contracts that today's code fills, one commit each ([its report](extensions-preparation-brief.md#reports); `9b0c189`–`83d3d09`, review fix `cbacbdb`, descriptions `d62f596`). F-X4 waits for KHAOS.

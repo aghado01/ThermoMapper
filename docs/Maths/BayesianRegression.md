@@ -1094,7 +1094,7 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
 - *SMC does not cross it reliably at any particle count read.* At 1,000, 4,000 and 16,000 particles the replicates' ln Ẑ spreads by 8.4, 7.1 and 6.5 nats, and still rises with N. Lineages collapse inside the band at every N, to 1–10 families by b = 0.32. One 16,000-particle replicate found a basin, four x1·x2 terms with no x1 or x2 main effect, with the largest ln Ẑ, which no MCMC chain visits.
 - *Mutation buys more than particles:* 20 sweeps per stage at 1,000 particles keep as many lineages as 16,000 particles at 5 sweeps, at a tenth of the time, but the replicates still disagree by 14 nats.
 - *Not the support's doing:* the angle floor refuses nothing, and halving the support minimum leaves the chains apart.
-- *So Friedman's structural posterior is not computed reliably by any sampler here,* and its evidence is unresolved. Predictions agree better than structure, and D10's verdict reports the disagreement. *(2026-10-30)* The flat-histogram sampler has since computed it on one seed: a1, with ln Z(1) ≈ −841 ([below](#bass-the-flat-histogram-sampler-n17-phase-2-2026-10-30)).
+- *So Friedman's structural posterior is not computed reliably by any sampler here,* and its evidence is unresolved. Predictions agree better than structure, and D10's verdict reports the disagreement. *(2026-10-30)* The flat-histogram sampler has since computed it, on three master seeds by 2026-10-31: a1, with ln Z(1) ≈ −841 ([below](#bass-the-flat-histogram-sampler-n17-phase-2-2026-10-30)).
 
 **A path from a pilot reference** (2026-10-29, [its report](../../issues/regression/bass/friedman-reference-brief.md#reports); exploration, tests only). SMC ran on the geometric path from q = ε·p₀ + (1 − ε)·e to the posterior, with e the pilots' structures (M4's chains, S10's tempered fit and from-prior SMC) and ε 0.05 or 0.5.
 - *Agreement, on the pilots' evidence.* At 4,000 particles every arm's replicates agree: sd 0.26–0.58 nats, pooled −886.4 to −887.5. That is, within 0.8 nats, the evidence of e's own structures, −887.15 by quadrature with no move.
@@ -1146,7 +1146,7 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
 
 **The pilot** (`BassFlatHistogramFit.Pilot`). Its ladders run on the linear form, each from an exact draw of the prior on F, burned as a tempered fit burns them, then frozen and traced.
 - Self-sizing ladders each freeze their own rungs, so each ladder is read alone by `TemperingPilot.FromLadders`. The rungs then pool by b: a rung several ladders share holds their draws, with inefficiency Σn/Σ(n/g).
-- *A WHAM start the fixed point refuses* throws, naming the window, K, b_lo and the nodes the pilot left empty.
+- *Where SAMC's fixed point refuses the pilot's ĝ,* the warm start ties the nodes under ten pilot draws (2026-10-31; `docs/Maths/Samplers.md`, "The warm start"). A start still refused, or a pilot too thin for two nodes to hold ten draws, throws, naming the window, K, b_lo and the nodes the pilot left empty, with the warm start's reason. The readout does not yet say whether a start was tied.
 
 **Checked** (`BassFlatHistogramTests`; [the report](../../issues/regression/bass/flat-histogram-phase2-brief.md#reports)).
 - *The chain on π_w at fixed weights,* on fixture A's enumerable F, against π_w by enumeration, with τ held and sampled, within 5 batch SE plus small slacks. Every 97th sweep the chain's density equals the inner prior plus ln w(ℓ₁).
@@ -1173,12 +1173,30 @@ Stage 8's C4 (2026-10-29; [the chip's report](../../issues/regression/bass/stage
 
 *Through SMC to b = 0.10* (a reading added after the run). The ratio ln Z(1) − ln Z(0.10) agrees between the two windows (−715.25 ± 0.07 against −715.5). But SMC from the prior on the linear form reads ln Z(0.10) about 5.5 nats low, so that arm's −846.6 is low by as much. Below b = 0.05 the flat histogram, SMC and exact importance sampling from the prior agree to a tenth of a nat, which pins the ratio estimator's denominator; above it importance sampling falls first and SMC next, as estimators missing rare mass do.
 
-*A second seed* (the main session's, 2026-10-30).
+*A second seed, before the warm start was made robust* (the main session's, 2026-10-30).
 - On master seed 8217, SAMC's fixed point refused the pilot's ĝ: no node was empty, but one stood 125 from flat. So the WHAM warm start is not robust across seeds on Friedman.
 - Rerun from a flat start over that pilot's window, at twice the sweeps, the learning made no round trip in 100,000 iterations, and production none: flatness 0.98, b = 1 Kish ESS 8 of 500,000, no draw above the window. By the first criterion it reads nothing.
 - What it does show agrees with seed 8017 without confirming it. Its ln Z(b) curve matches to within a nat up to b = 0.8, and every chain found a1. But its chains disagree on a1's share (46–81%), and its ln Ẑ(1), −843.6 ± 0.5, rests on a handful of draws.
 
-*So* the flat histogram computes Friedman's structural posterior on one seed, and its replication waits on a warm start that holds across seeds.
+*Replicated* (2026-10-31; exploration, one run per seed; the warm start's chip, [its report](../../issues/regression/bass/flat-histogram-warmstart-brief.md#reports), verified by the main session). Seed 8217's refusal was an ill-posed limit, not a failure of Newton's: flat occupancy lay outside the hull of the pilot's atoms' hats ("The warm start" in `docs/Maths/Samplers.md`). With the thin nodes tied, seed 8217 ran by its test as committed before Phase 2's run, and a third master seed, 8417, declared before any run, by the same criteria at the same settings. Both meet every criterion: every chain tunnels; the chains' ln Ẑ_c(1) SD is within a nat, with a1 passing the χ² across chains; ln Ẑ(1) reaches the bound; and against seed 8017, ln Ẑ(1) lies within a nat plus both runs' errors and a1's share within 5 points.
+
+| | seed 8017 (`Thin` 200) | seed 8217 (`Thin` 400) | seed 8417 (`Thin` 400) |
+| --- | --- | --- | --- |
+| the warm start | accepted as it stood | nodes 0 and 1 tied | accepted as it stood |
+| production round trips per chain | 9–17 | 14–17 | 6–21 |
+| the chains' ln Ẑ_c(1) SD | 0.34 | 0.15 | 0.63 |
+| pooled ln Ẑ(1) | −841.36 ± 0.17 | −841.55 ± 0.07 | −841.14 ± 0.32 |
+| a1; a1 + x6·x8 | 65.9%; 10.6% | 66.6%; 9.8% | 68.4%; 10.1% |
+| b = 1 Kish ESS of 500,000 | 34,256 | 10,937 | 7,684 |
+| time, pilot to production | 13 min | 39 min | 36 min |
+
+- The ln Ẑ(b) curves agree within 0.4 nats at every b read, σ's 95% interval covers 1, and D10's verdict on π_w's functionals is converged, on each seed. Four x1·x2 terms carry 96–97%; A, B, G, S and T together 1.3% or less.
+- *Twice the sweeps bought more crossings, not 20 a chain:* one chain of the eight reached the 20 the lengths were sized for.
+- *The b = 1 Kish ESS fell* to 32% and 22% of seed 8017's. A reading: these pilots' windows top out higher (−773.6 and −771.7, against −778.3), so fewer production draws fall above the window, where the extension holds the posterior's own law.
+- *Reported, not ruled:* on seed 8417 the unlabelled a1 + x6·x8's share disagrees across chains (13.8 to 6.7%, χ² p < 0.001); the criteria read labelled basins only.
+- *A flat start at t₀ = 100·K* (a reading, one run, on seed 8217's window) learned the window in the warm start's budget: ln Ẑ(1) = −841.38 ± 0.27, a1 at 67.1%. Its gain was still at t₀/t = 0.13 when learning stopped, and production's flatness, 1.36, was two to four times the warm starts'. At t₀ = 10·K it had learned nothing.
+
+*So* the flat histogram computes Friedman's structural posterior on three master seeds, within 0.41 nats and 2.5 points of one another, each run's error resting on four chains. It stays an option; no default changed.
 
 ### BASS: the pointwise density and the residual check
 

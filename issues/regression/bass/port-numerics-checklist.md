@@ -26,7 +26,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N14** D10's convergence verdict: read at the end of every run in the shared ensemble, with the engine's agreement groups and a declared stopping scope; BASS's three groups, the log posterior among its monitored quantities (decided 2026-10-29).
 - [ ] **N15** `DiagonalPlusLowRank` gains the capacitance matrix's Cholesky factor, O(m·k² + k³), beside its per-call Jacobi thin SVD. Found by stage 7 on 2026-10-29: 1.4 ms per σ² proposal at m = 20 with 39 columns. Built when real sizes make it binding.
 - [x] **N16** The SMC core's conveniences, both stage 8 chips' notes (2026-10-29): `TemperToPosterior` returning at its stage budget rather than throwing, `SmcRun` exposing its `MaxStages`, and a first-step bisection on cached increments in `SmcWeights` beside `ConditionalEss`. Built 2026-10-31 (`63babfd`): `SmcResult.ReachedPosterior`, `SmcRun.MaxStages`, `SmcWeights.LargestStep`; the cut SMC checks its own end.
-- [ ] **N17** A flat-histogram sampler, shared by BASS and SPC: SAMC weight learning, multicanonical production over ℓ₁, reweighting and the ln Z(b) curve. Decided to build by the user on 2026-10-29, and its nine design decisions taken the same day ([flat-histogram-design.md](flat-histogram-design.md)); Phase 1, the engine and its toys, built and verified 2026-10-30 (`d7f4ab8`–`3c95d9b`; [its brief](flat-histogram-phase1-brief.md)). Phase 2, BASS's adapter and the Friedman qualification, built and verified 2026-10-30 (`33e067e`–`69f6658`, [its brief](flat-histogram-phase2-brief.md)): Friedman's posterior computed on one seed, its replication waiting on a warm start robust across seeds ([its brief](flat-histogram-warmstart-brief.md)); its loose ends follow in the same chip ([their brief](flat-histogram-loose-ends-brief.md)). Phase 3 is SPC's.
+- [ ] **N17** A flat-histogram sampler, shared by BASS and SPC: SAMC weight learning, multicanonical production over ℓ₁, reweighting and the ln Z(b) curve. Decided to build by the user on 2026-10-29, and its nine design decisions taken the same day ([flat-histogram-design.md](flat-histogram-design.md)); Phase 1, the engine and its toys, built and verified 2026-10-30 (`d7f4ab8`–`3c95d9b`; [its brief](flat-histogram-phase1-brief.md)). Phase 2, BASS's adapter and the Friedman qualification, built and verified 2026-10-30 (`33e067e`–`69f6658`, [its brief](flat-histogram-phase2-brief.md)): Friedman's posterior computed on one seed, then replicated on two more after the warm start was made robust (2026-10-31, `694dfa9`–`3990c63`, [its brief](flat-histogram-warmstart-brief.md)); its loose ends follow in the same chip ([their brief](flat-histogram-loose-ends-brief.md)). Phase 3 is SPC's.
 
 ### Room for extensions
 
@@ -35,6 +35,21 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 - [x] **N-X3** `ConjugateUpdates` expressible as limits of a GIG update. Built 2026-10-31 (`83d3d09`): `GigParameters` and the GIG forms of `NormalVariance` and `NormalPrecision`; the existing updates keep their formulas, equal to the limits bit for bit. No GIG sampler. Verified in the fitting checklist's report.
 
 ## Reports
+
+### N17's warm start made robust, and Friedman replicated: verified by reading — 2026-10-31
+
+A chip diagnosed the refusals, tied the thin nodes where SAMC's fixed point refuses ĝ, and replicated Friedman on seeds 8217 and 8417 ([its report](flat-histogram-warmstart-brief.md#reports); `694dfa9`–`7fc684e`, report `3990c63`). Source changed: `SamcLearning.cs` and `Wham.cs` only.
+- *The main session's checks, by reading:*
+  - the six start pins entered in `4f0dd6f`, before the remedy in `46332d7`, and no commit since changed their values (one line moved);
+  - the untied solve's code moved into `Solve`, `Measure` and `LogLinearStart` verbatim, its refusal turned into a null, so an accepted start's arithmetic is unchanged;
+  - the tied solve: the map θ = Aθ_u + offset, the edge offsets at b_lo below and slope 1 above, the merged targets Aᵀπ, the Hessian AᵀE[φφᵀ]A less the merged means' outer product, the Armijo step, and the departure read on the merged hats;
+  - the hull reading re-derived: SAMC's limit on a discrete measure exists only where flat occupancy lies inside the hull of the atoms' hat vectors; seed 8217's numbers (one atom at u = 0.869 under node 0, 3.0% needed, 2.6% handed to node 1 against its 0.79%) recomputed;
+  - `Friedman_ArmOne_SecondSeed_TwiceTheSweeps` byte-identical to `56c66f3`; seed 8417 declared in `46332d7`, and its test, with the same criteria, committed in `7fc684e` before its run;
+  - the replications' arithmetic recomputed from the per-chain values: the SDs (0.15 and 0.63; the flat start's 0.54), the errors, and each criterion.
+- *Not yet rerun by the main session:* the suites (the chip's Samplers 277, Regression 1,403, the BASS oracle classes 90) and `BassBitIdentityTests`. They are held while the cost-qualification chip times its grid, and run after it.
+- *Reported, not ruled:* on seed 8417 the unlabelled a1 + x6·x8 disagrees across chains (χ² p < 0.001). Phase 1's 0.25 RMS is met neither by the tied starts (0.29, 0.32) nor by the accepted ones on the same shapes (0.84, 0.71); the tests' 0.35 bounds were set after those readings, so they are pins, not criteria.
+- *Recorded in:* `docs/Maths/Samplers.md`, "Flat-histogram sampling" (the limit's existence, the tied solve, the warm start's rule, the API row); `docs/Maths/BayesianRegression.md`, "BASS: the flat-histogram sampler" (the refusal, the replication's table); the design's "Phase 2, as built".
+- *Open:* the loose-ends brief gains the readout's `TiedNodes`, the adapter's duplicate `NodeDraws`, and a refusal message naming the segment that leaves the hull. A relative threshold and tying always are options, not taken.
 
 ### N16 built, the flat histogram's log, and OQ2 closed — 2026-10-31
 
