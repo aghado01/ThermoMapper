@@ -1,6 +1,6 @@
 # BASS extensions brief
 
-Extensions beyond the port's completion contract, collected from the [full port brief](../bass-full-port-brief.md) and the reviews behind it. Each entry says what it adds, its source, what it needs from the port (each segment's "Room for extensions" section), and its status. Nothing here is scheduled: an entry starts on the user's go-ahead, with its own specification and acceptance criteria. Its checklist, where the reports go, is [extensions-checklist.md](extensions-checklist.md).
+Extensions beyond the port's completion contract, collected from the [full port brief](../bass-full-port-brief.md) and the reviews behind it. Each entry says what it adds, its source, what it needs from the port (each segment's "Room for extensions" section), and its status. Nothing here is scheduled: an entry starts on the user's go-ahead, with its own specification and acceptance criteria. Its checklist, where the reports go, is [extensions-checklist.md](extensions-checklist.md). Gaps past the lineage's own work, some of which bear on these entries, are in the [lineage-gaps register](lineage-gaps-register.md).
 
 | Extension | Source | Needs from the port | Status |
 |---|---|---|---|
@@ -104,7 +104,7 @@ These preserve the target when their forward and reverse probabilities are exact
 
 ## KHAOS's modified g-prior
 
-An n-component g-prior that shrinks each term by its complexity: per-term factors from the interaction order and degree, and a global g₀² with an inverse-gamma prior (Rumsey, Francom et al., arXiv 2510.25036). KHAOS found its fixed ridge best on noise-free simulators and its g-prior better on most noisy ones. Its displayed conditional for g₀² has no data term, so the conditional is derived rather than copied.
+An n-component g-prior that shrinks each term by its complexity: per-term factors from the interaction order and degree, and a global g₀² with an inverse-gamma prior (Rumsey, Francom et al., arXiv 2510.25036). KHAOS found its fixed ridge best on noise-free simulators and its g-prior better on most noisy ones. Its displayed conditional for g₀² has no data term, so the conditional is derived rather than copied. An option beside its penalty, built from the Jacobi generator's eigenvalues, is posed as [SG-4](../../../lean/Protolemmata/BASS/sensitivity-generator-lemmas.md).
 
 ## Basis-estimation uncertainty
 
@@ -116,7 +116,7 @@ A moment service written over piecewise polynomials rather than hinges only give
 
 ## Active-subspace analysis
 
-Posterior active-subspace analysis beside the Sobol stage (arXiv 2307.11241, *Discovering Active Subspaces for High-Dimensional Computer Models*, by overlapping authors; [PCA-extensions discussion](../discussion/astra-grassman-stiefel-pca-extensions.md)). For tensor-product representations, including MARS, the gradient integrals reduce to one-dimensional ones. It needs term derivatives, hinge reference cases, numerical integration checks and gradient-accuracy checks before its directions reduce another model, and it comes before jointly learning projection directions during fitting.
+Posterior active-subspace analysis beside the Sobol stage (arXiv 2307.11241, *Discovering Active Subspaces for High-Dimensional Computer Models*, by overlapping authors; [PCA-extensions discussion](../discussion/astra-grassman-stiefel-pca-extensions.md)). For tensor-product representations, including MARS, the gradient integrals reduce to one-dimensional ones. It needs term derivatives, hinge reference cases, numerical integration checks and gradient-accuracy checks before its directions reduce another model, and it comes before jointly learning projection directions during fitting. [Gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing) records why: unlike Sobol indices, C inherits no rate from a contraction result for f, E[C] is not the mean of the draws' subspaces, and under an empirical measure it reads the kink convention.
 
 ## Cross-engine evidence
 

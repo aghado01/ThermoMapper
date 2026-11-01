@@ -194,6 +194,9 @@ Reading the lineage turned up places where a later or sibling paper does somethi
 | Proper scores on held-out runs: the energy score over whole-output draws, the interval score | Andros et al. 2024, after Gneiting and Raftery 2007 | Comparison by RMSE and marginal coverage; evidence as the only comparison across engines | **Extension**, the held-out route in cross-engine evidence; it reads D07's joint draws |
 | A fixed basis in the inputs with Gaussian-process coefficient functions over the output domain (functional GP) | Andros et al. 2026 | Spatially varying linear coefficients | **Not adopted.** It is BASS-PCA's factorization the other way round, and its marginal likelihood is a GP over all n·m outputs; kept as a comparison point for SPC families |
 | Random sketches fitted in parallel and combined by a Wasserstein barycentre | Andros et al. 2024 | Data shards chosen by hand | **Not adopted.** The likelihood is raised to n/m, a pseudo-posterior; length-scales are fixed per sketch; only marginals are combined, which loses joint draws. Direct BASS's separable contractions already avoid forming the full design |
+| KHAOS's printed birth, death and Mutate1 ratios invert some proposal factors, beyond the (M+1) double count | Our reading of the manuscript, [SC-1](../../lean/Protolemmata/BASS/structure-chain-lemmas.md); the `khaos` source and the supplement unread | The printed displays | **To confirm** against the source; a KHAOS port derives its ratios and tests reciprocity under F-X4's contract |
+
+Where the lineage itself stops short, and what closing each gap would take, is in the [lineage-gaps register](bass/lineage-gaps-register.md).
 
 ## Implementation stages
 
