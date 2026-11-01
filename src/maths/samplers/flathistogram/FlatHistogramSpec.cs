@@ -77,9 +77,10 @@ public sealed record FlatHistogramSpec
 
     /// <summary>The learning iterations, from its start, during which its visits raise the window's top: a visit a node
     /// spacing or more above it adds nodes at that spacing up to the highest at or below the visit, ln w on the slope-1
-    /// extension there, so the weights are unchanged as a function and only the update's reach grows. In
-    /// [0, <see cref="LearningIterations"/>]; 0 keeps the window fixed. The learning is burn-in, so production's window is
-    /// frozen with its weights (D10).</summary>
+    /// extension there, so the weights are unchanged as a function and only the update's reach grows. Flattening the raised
+    /// nodes draws the chains higher in turn, so a long extension can climb into a sparse upper tail whose top bin production
+    /// then rarely reaches. In [0, <see cref="LearningIterations"/>]; 0 keeps the window fixed. The learning is burn-in, so
+    /// production's window is frozen with its weights (D10).</summary>
     public long ExtendTopUntil { get; init; }
 
     /// <summary>Whether a run needs a tempering pilot: a WHAM start, or a window, b_lo or K to read from one.</summary>
