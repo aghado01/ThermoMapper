@@ -90,6 +90,12 @@ public sealed class ComparativeSweep
             var r = PenaltyTests.PenalizedAgainstOverfit(d);
             return [new("MSE: best of five penalties < unpenalized", r.MseBest, r.MseOver)];
         }),
+        new("BassFlatHistogramTests.Pilot_LearningFromTheWarmStart_ReachesTheFlatStartsAccuracy_InHalfTheIterations", DataSeed: null,
+            ChainSeeds: [7701, 7703], (_, c) =>
+            {
+                var r = BassFlatHistogramTests.WarmAgainstFlat(c[0], c[1], 8_000);
+                return [new("RMS to θ*: warm start's 4k < flat start's 8k", r.WarmHalf, r.Flat)];
+            }),
     ];
 
     [Fact]
