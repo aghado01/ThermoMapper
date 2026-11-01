@@ -37,6 +37,7 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
     private readonly double[][]?       _features;
     private readonly IRiemannianManifold? _manifold;
     private readonly SphericalIntrinsicMode _sphericalMode;
+    private readonly ScalingContext _context;
 
     /// <summary>Single-kernel scaler.</summary>
     public GlobalBandwidthScaler(
@@ -48,8 +49,10 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
         int?              ambientDimension = null,
         double[][]?       features = null,
         IRiemannianManifold? manifold = null,
-        SphericalIntrinsicMode sphericalMode = SphericalIntrinsicMode.Auto)
+        SphericalIntrinsicMode sphericalMode = SphericalIntrinsicMode.Auto,
+        ScalingContext? context = null)
     {
+        _context = context ?? new ScalingContext();
         _kernel = kernel;
         _explicitBandwidth = bandwidth;
         _strategy = strategy;
@@ -73,8 +76,10 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
         int?              ambientDimension = null,
         double[][]?       features = null,
         IRiemannianManifold? manifold = null,
-        SphericalIntrinsicMode sphericalMode = SphericalIntrinsicMode.Auto)
+        SphericalIntrinsicMode sphericalMode = SphericalIntrinsicMode.Auto,
+        ScalingContext? context = null)
     {
+        _context = context ?? new ScalingContext();
         _kernel = default;                       // unused on the mixture path
         _explicitBandwidth = 0.0;
         _strategy = strategy;
@@ -166,16 +171,24 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
                 }
                 else
                 {
-                    if (isLocalParametrix && nb.Distance >= 0.9 * Math.PI) continue;
+                    if (isLocalParametrix && nb.Distance >= 0.9 * Math.PI)
+                    {
+                        // Outside the parametrix: no kernel value, but a repair bridge stays.
+                        if (IsRepairEdge(i, nb.Index))
+                            edges.Add(new Edge(i, nb.Index, ScalingContext.RepairEdgeMinimum));
+                        continue;
+                    }
                     coupling = kernelFn(nb.Distance, delta) * VolumeCorrection(nb.Distance);
                 }
 
                 coupling *= couplingScale;
 
-                if (coupling > EdgeWeightThresholds.CouplingFloor)
-                    edges.Add(new Edge(i, nb.Index, coupling));
-                else
+                if (!TryKeep(i, nb.Index, ref coupling))
+                {
                     cutEdges++;
+                    continue;
+                }
+                edges.Add(new Edge(i, nb.Index, coupling));
             }
         }
 
@@ -184,6 +197,24 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
             SingleBandwidth:  delta,
             MixtureBandwidth: null,
             CutEdges:         cutEdges);
+    }
+
+    private bool IsRepairEdge(int a, int b) => _context.RepairEdges?.Contains(a, b) == true;
+
+    /// <summary>
+    /// The thinning decision on a kernel coupling: kept above the floor (a floor of 0 keeps every
+    /// edge). A repair edge is kept at whatever the kernel gave, raised to
+    /// <see cref="ScalingContext.RepairEdgeMinimum"/> when that underflowed, so a repaired graph
+    /// stays connected under any kernel. NaN is never kept.
+    /// </summary>
+    private bool TryKeep(int a, int b, ref double coupling)
+    {
+        if (double.IsNaN(coupling)) return false;
+        double floor = _context.CouplingFloor;
+        if (floor <= 0.0 || coupling > floor) return true;
+        if (!IsRepairEdge(a, b)) return false;
+        if (!(coupling > ScalingContext.RepairEdgeMinimum)) coupling = ScalingContext.RepairEdgeMinimum;
+        return true;
     }
 
     private double EvaluateGlobalSchoenbergNormalized(double r, double delta, int m)
@@ -284,10 +315,12 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
             {
                 if (i > nb.Index) continue;
                 double coupling = MixtureKernel.Evaluate(nb.Distance, resolved, weights);
-                if (coupling > EdgeWeightThresholds.CouplingFloor)
-                    edges.Add(new Edge(i, nb.Index, coupling));
-                else
+                if (!TryKeep(i, nb.Index, ref coupling))
+                {
                     cutEdges++;
+                    continue;
+                }
+                edges.Add(new Edge(i, nb.Index, coupling));
             }
         }
 

@@ -75,6 +75,12 @@ public sealed record CouplingProjection : IEdgeProjection
     /// and fidelity is Intrinsic.</summary>
     public SphericalIntrinsicMode SphericalMode { get; init; } = SphericalIntrinsicMode.Auto;
 
+    /// <summary>Thinning on kernel couplings: an edge whose coupling is at or under this is
+    /// dropped. Repair edges are exempt and keep their kernel coupling, so a repaired graph
+    /// stays connected under any kernel. <c>0</c> keeps every edge. The default is the
+    /// historical 1e-10.</summary>
+    public double CouplingFloor { get; init; } = 1e-10;
+
     [JsonIgnore] public EdgeWeightKind Kind => EdgeWeightKind.Coupling;
 }
 

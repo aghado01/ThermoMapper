@@ -20,12 +20,14 @@ internal sealed class AutoLmpScaler : IEdgeScaler
     private readonly DiagnosticsLog _log;
     private readonly double _nearZeroEdgeRatioThreshold;
     private readonly Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? _protectedProvider;
+    private readonly RepairEdgeSet? _repairEdges;
 
     public AutoLmpScaler(
         IEdgeScaler innerScaler,
         DiagnosticsLog log,
         double nearZeroEdgeRatioThreshold = 0.05,
-        Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? protectedEdgeProvider = null)
+        Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? protectedEdgeProvider = null,
+        RepairEdgeSet? repairEdges = null)
     {
         _innerScaler = innerScaler ?? throw new ArgumentNullException(nameof(innerScaler));
         _log = log ?? throw new ArgumentNullException(nameof(log));
@@ -33,14 +35,16 @@ internal sealed class AutoLmpScaler : IEdgeScaler
             throw new ArgumentOutOfRangeException(nameof(nearZeroEdgeRatioThreshold));
         _nearZeroEdgeRatioThreshold = nearZeroEdgeRatioThreshold;
         _protectedProvider = protectedEdgeProvider;
+        _repairEdges = repairEdges;
     }
 
     public ScalerResult Scale(NeighborSelection refined, int n)
     {
         ScalerResult tentative = _innerScaler.Scale(refined, n);
-        // The kept edges only: LMP writes exact zeros and fragments sparse graphs, so edges the floor
-        // dropped must not tip a graph into it (the build log and MaxNearZeroEdgeRatio count them).
-        double ratio = EdgeWeightThresholds.NearZeroRatio(tentative.Graph, cutEdges: 0);
+        // The kept, non-repair edges only: LMP writes exact zeros and fragments sparse graphs, so edges
+        // the floor dropped must not tip a graph into it (the build log and MaxNearZeroEdgeRatio count
+        // them), and a repair bridge is weak by construction.
+        double ratio = EdgeWeightThresholds.NearZeroRatio(tentative.Graph, cutEdges: 0, excluded: _repairEdges);
 
         if (ratio > _nearZeroEdgeRatioThreshold)
         {

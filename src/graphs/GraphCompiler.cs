@@ -125,6 +125,7 @@ public static class GraphCompiler
         int edgesBeforeRepair = CountUndirectedEdges(filtered, n);
         NeighborSelection repaired = repair.Repair(filtered, n, distance);
         bool repairApplied = CountUndirectedEdges(repaired, n) > edgesBeforeRepair;
+        RepairEdgeSet repairEdges = RepairEdgeSet.Between(filtered, repaired, n);
 
         if (config.Repair.Kind == RepairKind.Auto && repairApplied)
         {
@@ -165,7 +166,7 @@ public static class GraphCompiler
         {
             log.Info("Projection", "Distance pass-through — conditioned distance graph (L2).");
             CsrGraph distanceGraph = BuildDistanceGraph(refined, n);
-            LogReturnedGraph(log, distanceGraph, n, filtered, repaired, connectivityPost, cutEdges: 0, weightsAreCouplings: false);
+            LogReturnedGraph(log, distanceGraph, n, repairEdges, connectivityPost, cutEdges: 0, couplingFloor: 0.0, weightsAreCouplings: false);
             return new GraphBuildResult(
                 Graph:                  distanceGraph,
                 DirectedSelection:      directed,
@@ -194,6 +195,7 @@ public static class GraphCompiler
 
         IEdgeScaler scaler = BuildScaler(
             coupling,
+            repairEdges,
             protectedEdges,
             lmpSetting,
             metric.Properties,
@@ -203,7 +205,7 @@ public static class GraphCompiler
             log,
             DefaultAutoLmpNearZeroRatio);
         ScalerResult scaled = scaler.Scale(refined, n);
-        LogReturnedGraph(log, scaled.Graph, n, filtered, repaired, connectivityPost, scaled.CutEdges, weightsAreCouplings: true);
+        LogReturnedGraph(log, scaled.Graph, n, repairEdges, connectivityPost, scaled.CutEdges, coupling.CouplingFloor, weightsAreCouplings: true);
 
         if (scaled.SingleBandwidth is double delta && delta > 0.0)
         {
@@ -418,6 +420,7 @@ public static class GraphCompiler
 
     private static IEdgeScaler BuildScaler(
         CouplingProjection coupling,
+        RepairEdgeSet repairEdges,
         ProtectedEdgeSource? protectedEdges,
         bool? lmpSetting,
         MetricProperties? metricProps,
@@ -427,6 +430,10 @@ public static class GraphCompiler
         DiagnosticsLog log,
         double defaultAutoLmpThreshold)
     {
+        if (double.IsNaN(coupling.CouplingFloor) || coupling.CouplingFloor < 0.0)
+            throw new ArgumentException("CouplingProjection.CouplingFloor must be zero or positive.");
+        var context = new ScalingContext(repairEdges, coupling.CouplingFloor);
+
         IKernelDescriptor kernel = coupling.Kernel;
         BandwidthStrategy strategy =
             coupling.BandwidthOverride
@@ -494,11 +501,11 @@ public static class GraphCompiler
 
         IEdgeScaler inner = kernel switch
         {
-            Gaussian g  => new GlobalBandwidthScaler(KernelType.Gaussian,  g.Bandwidth,   strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode),
-            Cauchy c    => new GlobalBandwidthScaler(KernelType.Cauchy,    c.Bandwidth,   strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode),
-            Laplacian l => new GlobalBandwidthScaler(KernelType.Laplacian, l.Bandwidth,   strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode),
-            Linear lin  => new GlobalBandwidthScaler(KernelType.Linear,    lin.Bandwidth, strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode),
-            Mixture m   => BuildMixtureScaler(m, strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode),
+            Gaussian g  => new GlobalBandwidthScaler(KernelType.Gaussian,  g.Bandwidth,   strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode, context),
+            Cauchy c    => new GlobalBandwidthScaler(KernelType.Cauchy,    c.Bandwidth,   strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode, context),
+            Laplacian l => new GlobalBandwidthScaler(KernelType.Laplacian, l.Bandwidth,   strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode, context),
+            Linear lin  => new GlobalBandwidthScaler(KernelType.Linear,    lin.Bandwidth, strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode, context),
+            Mixture m   => BuildMixtureScaler(m, strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode, context),
             _ => throw new NotSupportedException($"Unknown kernel descriptor: {kernel.GetType().Name}"),
         };
 
@@ -506,7 +513,7 @@ public static class GraphCompiler
         {
             true => new LocalMutualProximityScaler(inner, protectedEdgeProvider: protectedProvider),
             false => inner,
-            null => new AutoLmpScaler(inner, log, defaultAutoLmpThreshold, protectedProvider),
+            null => new AutoLmpScaler(inner, log, defaultAutoLmpThreshold, protectedProvider, repairEdges),
         };
     }
 
@@ -518,10 +525,11 @@ public static class GraphCompiler
         int? ambientDimension,
         double[][]? features,
         IRiemannianManifold? manifold,
-        SphericalIntrinsicMode sphericalMode)
+        SphericalIntrinsicMode sphericalMode,
+        ScalingContext context)
     {
         var (weights, bandwidth) = m.ToLegacy();
-        return new GlobalBandwidthScaler(weights, bandwidth, strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode);
+        return new GlobalBandwidthScaler(weights, bandwidth, strategy, geometry, fidelity, ambientDimension, features, manifold, sphericalMode, context);
     }
 
     private static BandwidthStrategy NaturalStrategyFor(SpaceGeometry geometry) => geometry switch
@@ -584,10 +592,10 @@ public static class GraphCompiler
         DiagnosticsLog log,
         CsrGraph returned,
         int n,
-        NeighborSelection filtered,
-        NeighborSelection repaired,
+        RepairEdgeSet repairEdges,
         ConnectivityReport repairedConnectivity,
         int cutEdges,
+        double couplingFloor,
         bool weightsAreCouplings)
     {
         ConnectivityReport report = Connectivity.Validate(returned);
@@ -600,7 +608,7 @@ public static class GraphCompiler
         {
             log.Info(
                 "Scaling",
-                $"{cutEdges} edge(s) fell under the {EdgeWeightThresholds.CouplingFloor:G} coupling floor and were dropped.");
+                $"{cutEdges} edge(s) fell under the {couplingFloor:G} coupling floor and were dropped (repair edges are exempt).");
         }
 
         if (weightsAreCouplings)
@@ -620,12 +628,11 @@ public static class GraphCompiler
             }
         }
 
-        HashSet<long> repairEdges = RepairEdgeKeys(filtered, repaired, n);
         if (repairEdges.Count > 0)
         {
             Dictionary<long, double> returnedWeights = EdgeWeightsByKey(returned, n);
             int missing = 0, zeroed = 0;
-            foreach (long key in repairEdges)
+            foreach (long key in repairEdges.Keys)
             {
                 if (!returnedWeights.TryGetValue(key, out double weight)) missing++;
                 else if (weightsAreCouplings && !(weight > 0.0)) zeroed++;
@@ -635,8 +642,8 @@ public static class GraphCompiler
             {
                 log.Warning(
                     "Connectivity",
-                    $"{missing} of {repairEdges.Count} repair edge(s) are absent from the returned graph " +
-                    "(dropped under the coupling floor): the repair stage counted them as bridges.");
+                    $"{missing} of {repairEdges.Count} repair edge(s) are absent from the returned graph: " +
+                    "the repair stage counted them as bridges.");
             }
             if (zeroed > 0)
             {
@@ -656,34 +663,12 @@ public static class GraphCompiler
         }
     }
 
-    private static long EdgeKey(int a, int b, int n) =>
-        a < b ? (long)a * n + b : (long)b * n + a;
-
-    /// <summary>Undirected edges the repair stage added: in <paramref name="repaired"/>, in neither direction of <paramref name="filtered"/>.</summary>
-    private static HashSet<long> RepairEdgeKeys(NeighborSelection filtered, NeighborSelection repaired, int n)
-    {
-        var before = new HashSet<long>();
-        for (int i = 0; i < n; i++)
-            foreach (var nb in filtered.AllNeighbors[i])
-                before.Add(EdgeKey(i, nb.Index, n));
-
-        var added = new HashSet<long>();
-        for (int i = 0; i < n; i++)
-            foreach (var nb in repaired.AllNeighbors[i])
-            {
-                long key = EdgeKey(i, nb.Index, n);
-                if (!before.Contains(key)) added.Add(key);
-            }
-
-        return added;
-    }
-
     private static Dictionary<long, double> EdgeWeightsByKey(CsrGraph graph, int n)
     {
         var weights = new Dictionary<long, double>(graph.Targets.Length / 2);
         for (int i = 0; i < n; i++)
             for (int slot = graph.RowPointers[i]; slot < graph.RowPointers[i + 1]; slot++)
-                if (graph.Targets[slot] > i) weights[EdgeKey(i, graph.Targets[slot], n)] = graph.Weights[slot];
+                if (graph.Targets[slot] > i) weights[RepairEdgeSet.KeyOf(i, graph.Targets[slot], n)] = graph.Weights[slot];
         return weights;
     }
 

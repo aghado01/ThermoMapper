@@ -47,24 +47,41 @@ public sealed class GraphCompilerReturnedGraphTests
         }));
 
     [Fact]
-    public void GaussianRepairBridge_UnderTheFloor_IsDroppedFromTheReturnedGraph()
+    public void GaussianRepairBridge_UnderTheFloor_StaysInTheReturnedGraph()
     {
-        // §2.1 as it stands: repair joins the two lines, then the 1e-10 floor drops the
-        // bridge (Gaussian coupling e^(-d²/2a²) with d ≈ 10 and a ≈ 0.2 underflows).
+        // §2.1: repair joins the two lines with a bridge whose Gaussian coupling e^(-d²/2a²)
+        // (d ≈ 10, a ≈ 0.2) underflows under the floor. The floor no longer cuts repair edges.
         double[][] points = FarApartLines(lines: 2, pointsPerLine: 10, separation: 10.0);
 
         GraphBuildResult result = Build(points, Config(new Gaussian(), k: 3));
 
         Assert.True(result.EnsureConnectedApplied);
-        ConnectivityReport returned = Connectivity.Validate(result.Graph);
-        Assert.Equal(2, returned.ComponentCount);
-
+        Assert.Equal(1, Connectivity.Validate(result.Graph).ComponentCount);
+        Assert.Equal(1, CoupledComponents(result.Graph));
         Assert.Contains(result.Diagnostics!.Messages, m =>
-            m.Stage == "Connectivity" && m.Text.StartsWith("Returned graph: 2 component(s)", StringComparison.Ordinal));
-        Assert.Contains(result.Diagnostics.Warnings, m =>
-            m.Stage == "Connectivity" && m.Text.StartsWith("1 of 1 repair edge(s) are absent", StringComparison.Ordinal));
-        Assert.Contains(result.Diagnostics.Warnings, m =>
-            m.Text.Contains("repaired topology had 1 component(s); the returned graph has 2", StringComparison.Ordinal));
+            m.Stage == "Connectivity" && m.Text.StartsWith("Returned graph: 1 component(s)", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics.Warnings, m => m.Stage == "Connectivity");
+
+        // The bridge carries the clamp: positive, far under the floor.
+        double bridge = BridgeWeight(result.Graph, points.Length / 2);
+        Assert.InRange(bridge, double.Epsilon, 1e-10);
+    }
+
+    private static double WeightOf(CsrGraph graph, int from, int to)
+    {
+        for (int slot = graph.RowPointers[from]; slot < graph.RowPointers[from + 1]; slot++)
+            if (graph.Targets[slot] == to) return graph.Weights[slot];
+        throw new InvalidOperationException($"No edge {from}-{to}.");
+    }
+
+    /// <summary>The smallest weight on an edge that crosses from the first half of the nodes to the second.</summary>
+    private static double BridgeWeight(CsrGraph graph, int half)
+    {
+        double smallest = double.PositiveInfinity;
+        for (int i = 0; i < half; i++)
+            for (int slot = graph.RowPointers[i]; slot < graph.RowPointers[i + 1]; slot++)
+                if (graph.Targets[slot] >= half) smallest = Math.Min(smallest, graph.Weights[slot]);
+        return smallest;
     }
 
     [Fact]
@@ -114,17 +131,81 @@ public sealed class GraphCompilerReturnedGraphTests
         Assert.Equal(2, scaled.Graph.Targets.Length);   // the d = 1 edge, in both CSR slots
     }
 
+    /// <summary>A line of points and one outlier far off its end: the outlier's own nominations are the long edges.</summary>
+    private static double[][] LineWithOutlier(int pointsPerLine, double outlierAt)
+    {
+        double[][] line = FarApartLines(lines: 1, pointsPerLine: pointsPerLine, separation: 0.0);
+        return line.Append(new[] { outlierAt, 0.0 }).ToArray();
+    }
+
+    [Fact]
+    public void FloorStillCutsATopologyEdge_AndTheLogSaysTheGraphIsLessConnectedThanRepairReported()
+    {
+        // The outlier is joined by its own nominations (no repair), and the floor drops all three:
+        // only repair edges are exempt, so the outlier is isolated in the returned graph.
+        double[][] points = LineWithOutlier(pointsPerLine: 10, outlierAt: 15.0);
+
+        GraphBuildResult result = Build(points, Config(new Gaussian(), k: 3));
+
+        ConnectivityReport returned = Connectivity.Validate(result.Graph);
+        Assert.Equal(2, returned.ComponentCount);
+        Assert.Contains(result.Diagnostics!.Messages, m =>
+            m.Stage == "Scaling" && m.Text.StartsWith("3 edge(s) fell under the", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics.Warnings, m =>
+            m.Text.Contains("repaired topology had 1 component(s); the returned graph has 2", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void NearZeroInterrupt_CountsTheEdgesTheFloorAlreadyDropped()
     {
-        // One bridge among ~20 edges is dropped by the floor: 1/21 of the produced edges
-        // are collapsed. The kept edges alone show a ratio of 0, which the interrupt used to read.
-        double[][] points = FarApartLines(lines: 2, pointsPerLine: 10, separation: 10.0);
+        // Three dropped edges among ~20: the kept edges alone show a ratio of 0.
+        double[][] points = LineWithOutlier(pointsPerLine: 10, outlierAt: 15.0);
         GraphCompilerConfig config = Config(
             new Gaussian(), k: 3, interrupts: new PathologyInterruptConfig { MaxNearZeroEdgeRatio = 0.01 });
 
         var thrown = Assert.Throws<GraphPathologyException>(() => Build(points, config));
         Assert.Contains("NearZeroEdgeRatio", thrown.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CouplingFloorOfZero_KeepsEveryEdge()
+    {
+        double[][] points = LineWithOutlier(pointsPerLine: 10, outlierAt: 15.0);
+        GraphCompilerConfig config = Config(new Gaussian(), k: 3) with
+        {
+            Projection = new CouplingProjection { Kernel = new Gaussian(), LmpRescale = false, CouplingFloor = 0.0 },
+        };
+
+        GraphBuildResult result = Build(points, config);
+
+        Assert.Equal(1, Connectivity.Validate(result.Graph).ComponentCount);
+        Assert.DoesNotContain(result.Diagnostics!.Messages, m => m.Text.Contains("coupling floor", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GlobalBandwidthScaler_KeepsARepairEdgeAtItsKernelCoupling_AndClampsAnUnderflow()
+    {
+        // Edges 0-1 (d = 1), 0-2 (d = 10: e^-50 ≈ 2e-22), 0-3 (d = 40: e^-800 underflows to 0).
+        var rows = new[]
+        {
+            new[] { Near(1, 1.0), Near(2, 10.0), Near(3, 40.0) },
+            new[] { Near(0, 1.0) },
+            new[] { Near(0, 10.0) },
+            new[] { Near(0, 40.0) },
+        };
+        var selection = new NeighborSelection(rows, new[] { 1.0, 1.0, 10.0, 40.0 }, new[] { 40.0, 1.0, 10.0, 40.0 });
+        var repair = RepairEdgeSet.Between(
+            new NeighborSelection(new[] { rows[0][..1], rows[1], Array.Empty<Neighbor>(), Array.Empty<Neighbor>() }, new double[4], new double[4]),
+            selection, 4);
+        Assert.Equal(2, repair.Count);
+
+        ScalerResult scaled = new GlobalBandwidthScaler(
+            KernelType.Gaussian, bandwidth: 1.0, context: new ScalingContext(repair)).Scale(selection, 4);
+
+        Assert.Equal(0, scaled.CutEdges);
+        Assert.Equal(Math.Exp(-0.5), WeightOf(scaled.Graph, 0, 1), 12);
+        Assert.InRange(WeightOf(scaled.Graph, 0, 2) / Math.Exp(-50.0), 1 - 1e-9, 1 + 1e-9);
+        Assert.Equal(ScalingContext.RepairEdgeMinimum, WeightOf(scaled.Graph, 0, 3));
     }
 
     [Fact]
