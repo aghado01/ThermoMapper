@@ -1,5 +1,9 @@
 import Enthymemata.Ascent
 import Enthymemata.BARS
+import Enthymemata.BassContractionCover
+import Enthymemata.BassIntegrals
+import Enthymemata.BassSensitivity
+import Enthymemata.BassStructureChain
 import Enthymemata.Bifiltration
 import Enthymemata.BgpCovering
 import Enthymemata.BgpGaussianKL
@@ -7,5 +11,6 @@ import Enthymemata.BgpGaussianTails
 import Enthymemata.BgpUnknownVariance
 import Enthymemata.BgpUnknownVarianceTheorem
 import Enthymemata.CumulativeField
+import Enthymemata.GuardedEstimator
 import Enthymemata.PottsPK
 import Enthymemata.Stability
