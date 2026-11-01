@@ -83,3 +83,17 @@ public enum GaugeKind
     /// the classical SPC normalization J = K-hat⁻¹·exp(−d²/2a²), which makes T comparable across data sets.</summary>
     InverseMeanDegree,
 }
+
+/// <summary>
+/// Which edges the mean-edge-distance bandwidth averages.
+/// </summary>
+public enum ScaleEdgeSet
+{
+    /// <summary>The edges the topology and filter produced, before repair: the data's own neighbourhoods.
+    /// The repair bridges, the longest edges by construction, do not move every coupling's scale.</summary>
+    BeforeRepair,
+
+    /// <summary>Every edge of the repaired graph, bridges included: the classical SPC reading, where the
+    /// papers superimpose the minimum spanning tree before averaging.</summary>
+    AfterRepair,
+}

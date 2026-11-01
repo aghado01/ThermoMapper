@@ -115,7 +115,7 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
             ? _explicitBandwidth
             : _strategy == BandwidthStrategy.MeanEdgeDistance
                 ? EstimateMeanEdgeDistance(refined)
-                : EstimateSingle(refined, refined.KthNeighborDistances);
+                : EstimateSingle(refined, ScaleSample(refined));
 
         Func<double, double, double> kernelFn = _kernel switch
         {
@@ -287,7 +287,7 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
         ValidateFidelitySupport();
 
         MixtureBandwidth resolved = _explicitMixtureBandwidth
-            ?? EstimateMixture(refined, refined.KthNeighborDistances);
+            ?? EstimateMixture(refined, ScaleSample(refined));
 
         Neighbor[][] allNeighbors = refined.AllNeighbors;
         var edges = new List<Edge>(n * (allNeighbors.Length > 0 ? allNeighbors[0].Length : 0));
@@ -315,8 +315,32 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
             CutEdges:         cutEdges);
     }
 
+    /// <summary>
+    /// The sample the MAD-family estimators read: the directed k-th-neighbour distances, or with a
+    /// scale rank r the r-th directed neighbour of each node.
+    /// </summary>
+    private double[] ScaleSample(NeighborSelection refined)
+    {
+        if (_context.ScaleRank is not int rank || _context.DirectedSelection is not { } directed)
+            return refined.KthNeighborDistances;
+
+        var sample = new double[directed.AllNeighbors.Length];
+        for (int i = 0; i < sample.Length; i++)
+        {
+            Neighbor[] row = directed.AllNeighbors[i];
+            sample[i] = row.Length == 0 ? 0.0 : row[Math.Min(rank, row.Length) - 1].Distance;
+        }
+        return sample;
+    }
+
     private double EstimateMeanEdgeDistance(NeighborSelection refined)
     {
+        if (_context.ScaleRank is int rank && _context.DirectedSelection is { } directed)
+            return MeanOverUniquePairs(directed, rank);
+        if (_context.ScaleSelection is { } before)
+            return MeanOverUniquePairs(before, int.MaxValue);
+
+        // The repaired selection is symmetric, so its row entries are each undirected edge twice.
         double sum = 0.0;
         int count = 0;
         foreach (var neighbors in refined.AllNeighbors)
@@ -328,6 +352,28 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
             }
         }
         return count == 0 ? 1.0 : sum / count;
+    }
+
+    /// <summary>
+    /// The mean distance over the unique undirected pairs among each node's first
+    /// <paramref name="rank"/> neighbours; a pair named from both ends counts once.
+    /// </summary>
+    private static double MeanOverUniquePairs(NeighborSelection selection, int rank)
+    {
+        int n = selection.AllNeighbors.Length;
+        var seen = new HashSet<long>();
+        double sum = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            Neighbor[] row = selection.AllNeighbors[i];
+            int take = Math.Min(rank, row.Length);
+            for (int r = 0; r < take; r++)
+            {
+                long key = RepairEdgeSet.KeyOf(i, row[r].Index, n);
+                if (seen.Add(key)) sum += row[r].Distance;
+            }
+        }
+        return seen.Count == 0 ? 1.0 : sum / seen.Count;
     }
 
     private double EstimateSingle(NeighborSelection refined, double[] sample)

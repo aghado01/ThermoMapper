@@ -11,6 +11,7 @@
   "kernel": "gaussian",
   "bandwidth_strategy": "mean-edge-distance",
   "gauge": "inverse-mean-degree",
+  "scale_edges": "after-repair",
   "susceptibility": "fk-reduced",
   "temperatures": "auto",
   "theta": 0.5,

@@ -69,6 +69,10 @@ public sealed record SpcPreset
     // ── Kernel bandwidth + landmark channel ──────────────────────────────
     public string?                              BandwidthStrategy { get; init; }
     public string?                              Gauge             { get; init; }
+    public string?                              ScaleEdges        { get; init; }
+    public int?                                 ScaleRank         { get; init; }
+    public double?                              CouplingFloor     { get; init; }
+    public string?                              LmpRank           { get; init; }
     public string?                              Susceptibility    { get; init; }
 
     // ── Profile analyzer + cut ───────────────────────────────────────────
@@ -141,6 +145,10 @@ public sealed record SpcPreset
         // Kernel bandwidth + landmark channel
         if (BandwidthStrategy is not null)    options.BandwidthStrategy        = GraphRun.ParseBandwidthStrategy(BandwidthStrategy);
         if (Gauge is not null)                options.Gauge                    = GraphRun.ParseGaugeKind(Gauge);
+        if (ScaleEdges is not null)           options.ScaleEdges               = GraphRun.ParseScaleEdgeSet(ScaleEdges);
+        if (ScaleRank.HasValue)               options.ScaleRank                = ScaleRank.Value;
+        if (CouplingFloor.HasValue)           options.CouplingFloor            = CouplingFloor.Value;
+        if (LmpRank is not null)              options.LmpRank                  = GraphRun.ParseLmpRankRule(LmpRank);
         if (Susceptibility is not null)       options.SusceptibilityKind       = SpcCommand.ParseSusceptibilityKind(Susceptibility);
 
         // Profile analyzer + cut

@@ -91,6 +91,16 @@ public sealed record CouplingProjection : IEdgeProjection
     /// longer implies it.</summary>
     public GaugeKind Gauge { get; init; } = GaugeKind.None;
 
+    /// <summary>The edges the <see cref="Distance.BandwidthStrategy.MeanEdgeDistance"/> bandwidth
+    /// averages. The other strategies read the directed k-th-neighbour sample, which repair never touches.</summary>
+    public ScaleEdgeSet ScaleEdges { get; init; } = ScaleEdgeSet.BeforeRepair;
+
+    /// <summary>Reads the bandwidth from each node's first r directed neighbours instead of all K, so a larger
+    /// K adds edges without widening the kernel (r ≤ K, k-NN topology only). <c>null</c> = the K-th
+    /// neighbour (MAD family) or every edge (mean-edge-distance). For mean-edge-distance the sample is the
+    /// unique undirected pairs among the first r directed neighbours, before repair.</summary>
+    public int? ScaleRank { get; init; }
+
     [JsonIgnore] public EdgeWeightKind Kind => EdgeWeightKind.Coupling;
 }
 

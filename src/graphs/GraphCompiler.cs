@@ -193,9 +193,20 @@ public static class GraphCompiler
             null  => "LMP rescaling auto-decided from tentative edge statistics."
         });
 
+        if (coupling.ScaleRank is int scaleRank)
+        {
+            if (config.Topology.Kind != TopologyKind.Knn)
+                throw new ArgumentException("CouplingProjection.ScaleRank needs the k-NN topology.");
+            if (scaleRank < 1 || scaleRank > ResolveK(config.Topology))
+                throw new ArgumentException(
+                    $"CouplingProjection.ScaleRank {scaleRank} must lie in [1, K = {ResolveK(config.Topology)}].");
+        }
+
         IEdgeScaler scaler = BuildScaler(
             coupling,
             repairEdges,
+            filtered,
+            directed,
             protectedEdges,
             lmpSetting,
             metric.Properties,
@@ -416,6 +427,8 @@ public static class GraphCompiler
     private static IEdgeScaler BuildScaler(
         CouplingProjection coupling,
         RepairEdgeSet repairEdges,
+        NeighborSelection filtered,
+        NeighborSelection directed,
         ProtectedEdgeSource? protectedEdges,
         bool? lmpSetting,
         MetricProperties? metricProps,
@@ -427,7 +440,12 @@ public static class GraphCompiler
     {
         if (double.IsNaN(coupling.CouplingFloor) || coupling.CouplingFloor < 0.0)
             throw new ArgumentException("CouplingProjection.CouplingFloor must be zero or positive.");
-        var context = new ScalingContext(repairEdges, coupling.CouplingFloor);
+        var context = new ScalingContext(
+            repairEdges,
+            coupling.CouplingFloor,
+            ScaleSelection: coupling.ScaleEdges == ScaleEdgeSet.BeforeRepair ? filtered : null,
+            DirectedSelection: coupling.ScaleRank is null ? null : directed,
+            ScaleRank: coupling.ScaleRank);
 
         IKernelDescriptor kernel = coupling.Kernel;
         BandwidthStrategy strategy =
@@ -484,7 +502,7 @@ public static class GraphCompiler
         }
 
         log.Info("Scaling",
-            $"Kernel={kernel.GetType().Name}, Strategy={strategy}, Geometry={geometry}, Fidelity={fidelity}, SphericalMode={sphericalMode}, CouplingFloor={coupling.CouplingFloor:G}, Gauge={coupling.Gauge}.");
+            $"Kernel={kernel.GetType().Name}, Strategy={strategy}, Geometry={geometry}, Fidelity={fidelity}, SphericalMode={sphericalMode}, CouplingFloor={coupling.CouplingFloor:G}, Gauge={coupling.Gauge}, ScaleEdges={coupling.ScaleEdges}, ScaleRank={(coupling.ScaleRank?.ToString() ?? "K")}.");
 
         // LMP leaves the injected protect set (H1 cycle edges) and the repair bridges their kernel coupling.
         Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? protectedProvider = null;

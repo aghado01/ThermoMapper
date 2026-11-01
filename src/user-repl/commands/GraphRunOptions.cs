@@ -54,4 +54,16 @@ internal abstract class GraphRunOptions
     /// <summary>A global factor on the finished couplings, applied last. The BWD replication kernel
     /// is <c>mean-edge-distance</c> bandwidth with the <c>inverse-mean-degree</c> gauge.</summary>
     public Graphs.GaugeKind Gauge { get; set; } = Graphs.GaugeKind.None;
+
+    /// <summary>Which edges the mean-edge-distance bandwidth averages: before or after repair.</summary>
+    public Graphs.ScaleEdgeSet ScaleEdges { get; set; } = Graphs.ScaleEdgeSet.BeforeRepair;
+
+    /// <summary>Read the bandwidth from each node's first r directed neighbours (r ≤ K); null = from K.</summary>
+    public int? ScaleRank { get; set; }
+
+    /// <summary>Kernel couplings at or under this are dropped, except on repair edges; 0 keeps every edge.</summary>
+    public double CouplingFloor { get; set; } = 1e-10;
+
+    /// <summary>How LMP ranks an edge among a node's edges: strict (the historical rule) or inclusive.</summary>
+    public Graphs.LmpRankRule LmpRank { get; set; } = Graphs.LmpRankRule.Strict;
 }

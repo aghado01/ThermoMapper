@@ -68,6 +68,10 @@ internal static class GraphRun
             case "--mixture-bandwidth": options.MixtureBandwidthSpec = RequireValue(next, arg); i++; return true;
             case "--bandwidth-strategy": options.BandwidthStrategy = ParseBandwidthStrategy(RequireValue(next, arg)); i++; return true;
             case "--gauge": options.Gauge = ParseGaugeKind(RequireValue(next, arg)); i++; return true;
+            case "--scale-edges": options.ScaleEdges = ParseScaleEdgeSet(RequireValue(next, arg)); i++; return true;
+            case "--scale-rank": options.ScaleRank = ParseInt(RequireValue(next, arg)); i++; return true;
+            case "--coupling-floor": options.CouplingFloor = ParseDouble(RequireValue(next, arg)); i++; return true;
+            case "--lmp-rank": options.LmpRank = ParseLmpRankRule(RequireValue(next, arg)); i++; return true;
 
             default: return false;
         }
@@ -145,6 +149,10 @@ internal static class GraphRun
                 LmpRescale = options.ApplyLmp,
                 BandwidthOverride = options.BandwidthStrategy,
                 Gauge = options.Gauge,
+                ScaleEdges = options.ScaleEdges,
+                ScaleRank = options.ScaleRank,
+                CouplingFloor = options.CouplingFloor,
+                LmpRank = options.LmpRank,
             },
             Interrupts = new PathologyInterruptConfig(),
         };
@@ -300,6 +308,10 @@ internal static class GraphRun
         Console.WriteLine("  --bandwidth-strategy <mad|quantile-normalized|log-scale-hyperbolic|mean-edge-distance>");
         Console.WriteLine("                                                Auto-bandwidth estimator (default: from the metric)");
         Console.WriteLine("  --gauge <none|inverse-mean-degree>            Global factor on the finished couplings (default: none)");
+        Console.WriteLine("  --scale-edges <before-repair|after-repair>    Edges the mean-edge-distance bandwidth averages (default: before-repair)");
+        Console.WriteLine("  --scale-rank <int>                            Read the bandwidth from each node's first r neighbours (r <= K; default: K)");
+        Console.WriteLine("  --coupling-floor <double>                     Drop couplings at or under this, repair edges excepted (default: 1e-10; 0 = keep all)");
+        Console.WriteLine("  --lmp-rank <strict|inclusive>                 LMP rank rule (default: strict)");
         Console.WriteLine("  --mixture <spec>                              Kernel mixture weights, e.g.");
         Console.WriteLine("                                                'gauss=0.5,cauchy=0.3,laplace=0.2'.");
         Console.WriteLine("                                                When set, overrides --kernel.");
@@ -342,6 +354,20 @@ internal static class GraphRun
         "or"        => FilterKind.OrRule,
         "mutualknn" => FilterKind.MutualKnn,
         _ => throw new ArgumentException($"Unknown filter kind '{value}'. Valid: or_rule, mutualknn."),
+    };
+
+    internal static Graphs.ScaleEdgeSet ParseScaleEdgeSet(string value) => value.ToLowerInvariant() switch
+    {
+        "before-repair" => Graphs.ScaleEdgeSet.BeforeRepair,
+        "after-repair"  => Graphs.ScaleEdgeSet.AfterRepair,
+        _ => throw new ArgumentException($"Unknown scale edge set '{value}'. Expected before-repair | after-repair."),
+    };
+
+    internal static Graphs.LmpRankRule ParseLmpRankRule(string value) => value.ToLowerInvariant() switch
+    {
+        "strict"    => Graphs.LmpRankRule.Strict,
+        "inclusive" => Graphs.LmpRankRule.Inclusive,
+        _ => throw new ArgumentException($"Unknown LMP rank rule '{value}'. Expected strict | inclusive."),
     };
 
     internal static Graphs.GaugeKind ParseGaugeKind(string value) => value.ToLowerInvariant() switch
