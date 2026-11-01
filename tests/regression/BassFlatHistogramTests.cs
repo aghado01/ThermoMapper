@@ -33,6 +33,8 @@ namespace Maths.Regression.Tests;
 /// <item><b>The warm start's chip.</b> Why SAMC's fixed point refuses a pilot's ĝ (flat occupancy outside the hull of its
 /// atoms' hats); the starts it accepts pinned before the remedy; 48 pilots over their own shapes and the gap pilots, the
 /// refused ones tied at ten draws, and a pilot too thin to tie refused.</item>
+/// <item><b>The loose ends' chip.</b> Today's fits pinned; a window whose top the learning raises, against the
+/// enumeration; a margin above the pilot's draws through the adapter.</item>
 /// </list>
 /// </summary>
 public sealed class BassFlatHistogramTests
@@ -403,6 +405,73 @@ public sealed class BassFlatHistogramTests
             Assert.Same(curve, fit.Evidence.FlatHistogram);
         }
         else Assert.Null(fit.Evidence);
+    }
+
+    // ---- The window's top: raised by the learning, or a margin above the pilot's draws (the loose ends' item 1) ----
+
+    [Fact]
+    public void Fit_OnFixtureA_FromALowTop_RaisedByTheLearning_MatchesTheEnumeration()
+    {
+        // The exact shape's spacing (12 nodes from the prior's 1% quantile of ℓ₁ to the posterior's 99%), its top three
+        // spacings lower, τ held: raised by the visits over the first 5,000 of 30,000 iterations, the window ends a whole
+        // number of spacings higher, inside F's highest ℓ₁; the learned weights meet SAMC's limit over it, and ln Z(b)
+        // the enumeration's, within the tolerances of the declared fits above.
+        BassModel model = FixtureA(heldTau: true);
+        var space = BassFlatHistogramSpace.Of(model);
+        MulticanonicalWeights full = ExactShape(space, 12);
+        var low = MulticanonicalWeights.Flat(full.Low, full.High - 3 * full.Spacing, 0.0, 9);
+        (double[] levels, double[] masses) = space.DensityOfStates();
+        BassConfig config = model.Config with { Sampling = model.Config.Sampling with { MasterSeed = 7311 } };
+        FlatHistogramSpec run = DeclaredRun(low, 30_000, 30_000) with { ExtendTopUntil = 5_000 };
+        BassFit fit = Bass.Fit(WithFlatHistogram(config, new BassFlatHistogramSpec { Run = run }), model.Data);
+        BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
+        MulticanonicalWeights w = fh.Weights;
+        int added = w.Nodes - low.Nodes;
+        Assert.True(added >= 1, "the window should rise");
+        Assert.Equal(low.High + added * low.Spacing, w.High, 9);
+        Assert.Equal(low.Spacing, w.Spacing, 9);
+        Assert.True(w.High <= levels.Max());
+        Assert.Equal(low.Nodes, fh.WeightTrace[0].Weights.Nodes);
+        Assert.Same(w, fh.Draws!.Weights);
+
+        MulticanonicalWeights exact = SamcLearning.FixedPoint(MulticanonicalWeights.Flat(w.Low, w.High, 0.0, w.Nodes), levels, masses, out bool[] empty);
+        double rms = CentredRms(w.LogWeights, exact.LogWeights, empty);
+        _out.WriteLine($"window [{low.Low:F2}, {low.High:F2}] raised to [{w.Low:F2}, {w.High:F2}] (+{added} nodes; F's highest ℓ₁ {levels.Max():F2}); learning's " +
+                       $"visits above {(double)fh.Learning.AboveWindow / fh.Learning.Visits:P1}; learned ln w to θ* {rms:F4} (tolerance 0.15); production " +
+                       $"round trips {fh.Production!.TotalRoundTrips}, b = 1 Kish ESS {fh.EffectiveSampleSize:F0}");
+        Assert.True(rms <= 0.15, $"learned ln w sits {rms:F4} from θ*");
+        BassFlatHistogramEvidence curve = fh.Evidence!;
+        foreach (int k in new[] { 25, 50, 100 })
+        {
+            double b = curve.Curve.InverseTemperatures[k], expected = space.LogEvidence(b) - space.LogEvidence(0.0);
+            (double value, double error) = curve.Curve.LogRatio(0, k);
+            _out.WriteLine($"b = {b:F2}: ln Z {value:F4} ± {error:F4} against {expected:F4}");
+            Assert.True(Math.Abs(value - expected) <= 5 * error + 0.01, $"ln Z({b}): {value:F4} ± {error:F4} against {expected:F4}");
+        }
+    }
+
+    [Fact]
+    public void Fit_WithATopMargin_StartsOverThePilotsWindowRaisedUnheld()
+    {
+        // The gap pilot's fit (K = 20) with a margin above of 2 sd, not held inside the pilot's highest draw: the run's
+        // start is the window the pilot gives with that margin, and the fit completes with its evidence. From a flat start:
+        // on fixture A with τ held the pilot's highest draw is F's highest ℓ₁, so the margin's nodes hold no mass, SAMC's
+        // limit there does not exist, and the WHAM start over that window is refused (read in exploration).
+        BassModel model = FixtureA(heldTau: true);
+        BassConfig gap = GapConfig(model, 7803, GapPilot);
+        BassFlatHistogramSpec spec = gap.Sampling.FlatHistogram!;
+        BassConfig config = WithFlatHistogram(gap, spec with { Run = spec.Run with { Start = FlatHistogramStart.Flat, WindowTopMargin = 2.0 } });
+        BassFit fit = Bass.Fit(config, model.Data);
+        BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
+        TemperingPilot pilot = PilotOf(model, GapPilot, SeedTree.Derive(7803, 2)[1]).Pilot;
+        FlatHistogramWindow held = Wham.Window(pilot, 0.01, 1.0), raised = Wham.Window(pilot, 0.01, 1.0, 2.0);
+        MulticanonicalWeights start = fh.WeightTrace[0].Weights;
+        _out.WriteLine($"window held [{held.Low:F2}, {held.High:F2}], with the margin [{raised.Low:F2}, {raised.High:F2}]; start [{start.Low:F2}, {start.High:F2}], " +
+                       $"K {start.Nodes}; ln Z(1) {fit.Evidence!.LogEvidence:F3} ± {fit.Evidence.MonteCarloError:F3}");
+        Assert.Equal((raised.Low, raised.High, 20), (start.Low, start.High, start.Nodes));
+        Assert.All(start.LogWeights, v => Assert.Equal(0.0, v));
+        Assert.True(raised.High > held.High);
+        Assert.True(fh.Complete);
     }
 
     // The oracle's fixtures B and C, as BassTargetParityTests and the Friedman reference harness build them.

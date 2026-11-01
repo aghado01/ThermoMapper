@@ -24,7 +24,8 @@ public sealed record MulticanonicalCheckpoint(
 /// <param name="Weights">The weights: frozen once learning is done, the learning's current ones otherwise.</param>
 /// <param name="Learning">The learning's state.</param>
 /// <param name="LearningDiagnostics">The learning's visits: occupancy, outside counts, round trips.</param>
-/// <param name="WeightTrace">The learning's weights, at its start and every hundredth of its length, and at its end.</param>
+/// <param name="WeightTrace">The learning's weights, at its start and every hundredth of its length, and at its end; where
+/// the learning raised the window's top, later snapshots hold more nodes.</param>
 /// <param name="Production">The ensemble shell's summary of production, D10's verdict on π_w's functionals among it;
 /// null before production.</param>
 /// <param name="Draws">The production draws, for the reweighting; null before production.</param>
@@ -45,7 +46,8 @@ public sealed record MulticanonicalResult<TState>(
 /// checkpoint carries production. A learning iteration steps every chain once, in parallel at fixed weights, then
 /// applies one update from their visits in chain order and reweighs each chain's cached evaluation; the result does not
 /// depend on the parallelism bound. The weights start flat or from a tempering pilot's WHAM estimate
-/// (<see cref="Wham"/>), which can also give the window, b_lo and K. The model supplies the chains on the wrapped target
+/// (<see cref="Wham"/>), which can also give the window, b_lo and K; while it learns, the chains' visits can raise the
+/// window's top (<see cref="FlatHistogramSpec.ExtendTopUntil"/>). The model supplies the chains on the wrapped target
 /// (<see cref="IMulticanonicalModel{TState}"/>); the seeds are the shell's, from <see cref="SeedTree"/>.
 /// </summary>
 public static class MulticanonicalRun
@@ -132,6 +134,11 @@ public static class MulticanonicalRun
                     for (int c = 0; c < chains; c++) live[c].Step();
                 }
                 else Parallel.For(0, chains, parallel, c => live[c].Step());
+                if (learning.Iterations < spec.ExtendTopUntil && NodesAbove(learning.Weights, live) is int raise and > 0)
+                {
+                    learning.ExtendAbove(raise);
+                    learnHistogram.Extend(learning.Weights);
+                }
                 for (int c = 0; c < chains; c++)
                 {
                     levels[c] = live[c].CurrentEvaluation.UntemperedLogLikelihood;
@@ -188,13 +195,26 @@ public static class MulticanonicalRun
     {
         if (spec.NeedsPilot && pilot is null)
             throw new ArgumentException("The spec starts from WHAM or reads its window, b_lo or K from a tempering pilot, and none was given.", nameof(pilot));
-        FlatHistogramWindow window = spec.Window ?? Wham.Window(pilot!, spec.WindowQuantile, spec.WindowMargin);
+        FlatHistogramWindow window = spec.Window ?? Wham.Window(pilot!, spec.WindowQuantile, spec.WindowMargin, spec.WindowTopMargin);
         double lowSlope = spec.LowSlope ?? pilot!.HotEnd;
         int nodes = spec.Nodes ?? Wham.Nodes(pilot!, window);
         var shape = MulticanonicalWeights.Flat(window.Low, window.High, lowSlope, nodes);
         double t0 = spec.GainScale ?? 10.0 * nodes;
         if (spec.Start == FlatHistogramStart.Flat) return (shape, t0, spec.GainStart ?? 0);
         return (Wham.WarmStart(pilot!, shape), t0, spec.GainStart ?? pilot!.Draws / spec.Chains);
+    }
+
+    // The whole node spacings the chains' highest visit lies above the window's top: the nodes that raise it to the highest
+    // node at or below the visit, so the top stays inside what the chains reached, as a pilot's window stays inside its draws.
+    private static int NodesAbove<TState>(MulticanonicalWeights weights, IMulticanonicalChain<TState>[] chains)
+    {
+        double highest = weights.High;
+        foreach (IMulticanonicalChain<TState> chain in chains)
+        {
+            double level = chain.CurrentEvaluation.UntemperedLogLikelihood;
+            if (level > highest && double.IsFinite(level)) highest = level;
+        }
+        return (int)Math.Min(Math.Floor((highest - weights.High) / weights.Spacing), int.MaxValue);
     }
 
     private static string Fingerprint<TState>(FlatHistogramSpec spec, IMulticanonicalModel<TState> model)

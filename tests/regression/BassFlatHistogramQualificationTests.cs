@@ -432,6 +432,52 @@ public sealed class BassFlatHistogramQualificationTests
         return fit;
     }
 
+    // ---- The window's top (the loose ends' item 1, 2026-10-31) ----
+
+    // Arm (i) on seed 8017, whose pilot never found the posterior's basin and read the window's top at −778.3, below the
+    // posterior's ℓ₁: today's window and each option that moves the top, one run each, at arm (i)'s lengths. A reading that
+    // recommends no default, written before its runs. Read for each: the window at the start and the end, the learning's
+    // visits above the window, production's round trips, the b = 1 Kish ESS, ln Ẑ(1), a1's share and the time.
+    // - "today": the window as the pilot reads it, which must reproduce the qualification's ln Ẑ(1), −841.36;
+    // - "extended": the top raised by the learning's visits over the first half of the learning (ExtendTopUntil 50,000);
+    // - "margin": the top at the b = 1 rung's 99% quantile plus 3 of its sd, not held inside the pilot's highest draw.
+    [Theory]
+    [InlineData("today")]
+    [InlineData("extended")]
+    [InlineData("margin")]
+    public void Friedman_ArmOne_TheWindowsTop(string option)
+    {
+        if (!BassQualification.Enabled) return;   // heavy: about twenty minutes a case
+        BassConfig first = ArmConfig(true, null, ArmOneSeed);
+        BassFlatHistogramSpec spec = first.Sampling.FlatHistogram!;
+        FlatHistogramSpec run = option switch
+        {
+            "today" => spec.Run,
+            "extended" => spec.Run with { ExtendTopUntil = LearningIterations / 2 },
+            "margin" => spec.Run with { WindowTopMargin = 3.0 },
+            _ => throw new ArgumentOutOfRangeException(nameof(option)),
+        };
+        if (option == "margin")
+        {
+            (TemperingPilot pilot, _) = ArmOnePilot(ArmOneSeed);
+            double[] cold = pilot.Levels(pilot.ColdRung).ToArray();
+            double highest = Enumerable.Range(0, pilot.Rungs).Max(i => pilot.Levels(i).ToArray().Max());
+            FlatHistogramWindow held = Wham.Window(pilot, run.WindowQuantile, run.WindowMargin), raised = Wham.Window(pilot, run.WindowQuantile, run.WindowMargin, 3.0);
+            _out.WriteLine($"## Master seed {ArmOneSeed}'s pilot, read before the run: b = 1 rung's 99% quantile {BassMixing.Quantile(cold, 0.99):F2}, sd {Sd(cold):F2}, " +
+                           $"highest draw over every rung {highest:F2}; the top held {held.High:F2}, with the margin of 3 sd {raised.High:F2}");
+        }
+        BassConfig config = first with { Sampling = first.Sampling with { FlatHistogram = spec with { Run = run } } };
+        BassFit? fit = RunArm($"Arm (i), master seed {ArmOneSeed}, the window's top: {option}", config, null);
+        if (fit is null) return;
+        BassFlatHistogramReadout fh = fit.Diagnostics.FlatHistogram!;
+        MulticanonicalWeights start = fh.WeightTrace[0].Weights;
+        LearningSnapshot raisedAt = fh.WeightTrace.FirstOrDefault(s => s.Weights.Nodes == fh.Nodes) ?? fh.WeightTrace[^1];
+        _out.WriteLine($"- the top: start [{start.Low:F1}, {start.High:F2}], K {start.Nodes}; end [{fh.Window.Low:F1}, {fh.Window.High:F2}], K {fh.Nodes} " +
+                       $"(the end's K first in the trace at iteration {raisedAt.Iteration:N0}); the learning's visits above the window " +
+                       $"{(double)fh.Learning.AboveWindow / fh.Learning.Visits:P1}, production's {(double)fh.Production!.AboveWindow / fh.Production.Visits:P1}");
+        if (option == "today") Assert.Equal(-841.36, fh.Evidence!.LogRatio, 2);
+    }
+
     [Fact]
     public void Friedman_SmcFromThePrior_ToTheLowerSplit()
     {
@@ -707,10 +753,10 @@ public sealed class BassFlatHistogramQualificationTests
                        $"ln Ẑ(1) {logZ:F2} {(logZ >= Bound ? "at or above" : "below")} {Bound}");
     }
 
-    // The centred RMS change of ln w between two snapshots.
+    // The centred RMS change of ln w between two snapshots, over the nodes both hold (the learning can raise the top).
     private static double Change(LearningSnapshot a, LearningSnapshot b)
     {
-        int k = a.Weights.Nodes;
+        int k = Math.Min(a.Weights.Nodes, b.Weights.Nodes);
         double shift = Enumerable.Range(0, k).Average(j => b.Weights.LogWeights[j] - a.Weights.LogWeights[j]);
         return Math.Sqrt(Enumerable.Range(0, k).Average(j => Math.Pow(b.Weights.LogWeights[j] - a.Weights.LogWeights[j] - shift, 2)));
     }

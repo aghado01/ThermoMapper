@@ -163,7 +163,7 @@ internal static class BassFlatHistogramFit
     // The start's window, b_lo and K as the run resolves them: the spec's, or the pilot's where it leaves them.
     private static MulticanonicalWeights StartShape(FlatHistogramSpec run, TemperingPilot pilot)
     {
-        FlatHistogramWindow window = run.Window ?? Wham.Window(pilot, run.WindowQuantile, run.WindowMargin);
+        FlatHistogramWindow window = run.Window ?? Wham.Window(pilot, run.WindowQuantile, run.WindowMargin, run.WindowTopMargin);
         int nodes = run.Nodes ?? Wham.Nodes(pilot, window);
         return MulticanonicalWeights.Flat(window.Low, window.High, run.LowSlope ?? pilot.HotEnd, nodes);
     }

@@ -83,6 +83,22 @@ public sealed class MulticanonicalWeights
     }
 
     /// <summary>
+    /// The window raised by <paramref name="nodes"/> ≥ 0 nodes at the same spacing, to ℓ_hi + m·Δ, ln w at each new node on
+    /// the slope-1 extension, so w(ℓ) is unchanged as a function (up to the spacing's rounding) while the learning's update
+    /// reaches the new nodes. 0 returns these weights.
+    /// </summary>
+    public MulticanonicalWeights ExtendedAbove(int nodes)
+    {
+        if (nodes < 0) throw new ArgumentOutOfRangeException(nameof(nodes), "The window is raised by a non-negative number of nodes.");
+        if (nodes == 0) return this;
+        int k = _logWeights.Length;
+        var logWeights = new double[k + nodes];
+        _logWeights.CopyTo(logWeights, 0);
+        for (int m = 1; m <= nodes; m++) logWeights[k - 1 + m] = _logWeights[k - 1] + m * Spacing;
+        return new MulticanonicalWeights(Low, High + nodes * Spacing, LowSlope, logWeights);
+    }
+
+    /// <summary>
     /// ln w(ℓ): the interpolant between the nodes inside the window, <c>ln w_0 + b_lo·(ℓ − ℓ_lo)</c> below it and
     /// <c>ln w_{K−1} + (ℓ − ℓ_hi)</c> above it. A zero likelihood, ℓ = −∞, has ln w = −∞ when b_lo &gt; 0 and ln w_0 at
     /// b_lo = 0, whose extension below is flat; NaN stays NaN.

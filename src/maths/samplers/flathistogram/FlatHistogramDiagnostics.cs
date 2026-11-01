@@ -94,8 +94,8 @@ public sealed record FlatHistogramDiagnostics(
 // The running form of the diagnostics over a fixed set of chains: a visit at a time, in chain order.
 internal sealed class HistogramAccumulator
 {
-    private readonly MulticanonicalWeights _weights;   // the window and nodes; only the shape is read
-    private readonly double[] _occupancy;
+    private MulticanonicalWeights _weights;   // the window and nodes; only the shape is read
+    private double[] _occupancy;
     private readonly long[] _roundTrips;
     private readonly sbyte[] _lastEnd;
     private long _inside, _below, _above;
@@ -138,6 +138,15 @@ internal sealed class HistogramAccumulator
             _lastEnd[chain] = -1;
         }
         else if (level > _weights.High - half && _lastEnd[chain] == -1) _lastEnd[chain] = +1;
+    }
+
+    // The window raised (SamcLearning.ExtendAbove): the new nodes start unvisited, and the visits already counted stay where
+    // they fell, above the window among them.
+    public void Extend(MulticanonicalWeights weights)
+    {
+        if (weights.Nodes < _occupancy.Length) throw new ArgumentException("The window is raised, not narrowed.", nameof(weights));
+        Array.Resize(ref _occupancy, weights.Nodes);
+        _weights = weights;
     }
 
     public FlatHistogramDiagnostics Snapshot()

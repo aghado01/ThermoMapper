@@ -17,7 +17,8 @@ namespace Maths.Samplers.Tests;
 /// matches θ* from the exact density of states within the pilots' own spread, and learning from it reaches the flat
 /// start's accuracy in fewer iterations. The pilot reads a traced ladder's slopes as ℓ₁, refusing a target whose ℓ_b
 /// is not linear in b; the window, b_lo and K come from it. Where the fixed point refuses a pilot's ĝ (the warm start's
-/// chip), the start ties the nodes under ten pilot draws, and leaves every start the fixed point accepts as it was.
+/// chip), the start ties the nodes under ten pilot draws, and leaves every start the fixed point accepts as it was. A
+/// margin above, unheld, lets the window's top reach past the pilot's highest draw.
 /// </summary>
 public sealed class WhamTests
 {
@@ -222,6 +223,35 @@ public sealed class WhamTests
                            $"ln Z {curve.LogEvidence[g]:F4} ± {curve.MonteCarloError[g]:F4} against {exact:F4}");
             Assert.True(Math.Abs(curve.LogEvidence[g] - exact) < 4.5 * curve.MonteCarloError[g]);
         }
+    }
+
+    // ---- A margin above not held inside the pilot's draws (the loose ends' item 1, 2026-10-31) ----
+
+    [Fact]
+    public void Window_WithATopMargin_ReachesAboveThePilotsHighestDraw_AndARunStartsThere()
+    {
+        // The double well's ℓ₁ ≤ 0, so its pilot's highest draw is just below 0; the b = 1 rung's 99% quantile plus a
+        // margin of its sd passes it. Without a top margin the window is as before; with one, its low edge is unchanged
+        // and its top moves by the margins' difference in sd, unheld.
+        TemperingPilot pilot = WellPilot(67, scans: 5_000);
+        double[] cold = pilot.Levels(pilot.ColdRung).ToArray();
+        double sd = Math.Sqrt(cold.Sum(v => (v - cold.Average()) * (v - cold.Average())) / (cold.Length - 1));
+        double highest = Enumerable.Range(0, pilot.Rungs).Max(i => pilot.Levels(i).ToArray().Max());
+        FlatHistogramWindow held = Wham.Window(pilot, 0.01, 1.0), one = Wham.Window(pilot, 0.01, 1.0, 1.0), three = Wham.Window(pilot, 0.01, 1.0, 3.0);
+        Assert.Equal(held, Wham.Window(pilot, 0.01, 1.0, null));
+        Assert.True(held.High <= highest);
+        Assert.Equal((held.Low, held.Low), (one.Low, three.Low));
+        Assert.True(one.High >= held.High);
+        Assert.Equal(2.0 * sd, three.High - one.High, 9);
+        Assert.True(three.High > highest, $"the top {three.High} should pass the pilot's highest draw {highest}");
+        Assert.Throws<ArgumentOutOfRangeException>(() => Wham.Window(pilot, 0.01, 1.0, -1.0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Wham.Window(pilot, 0.01, 1.0, double.PositiveInfinity));
+
+        var spec = new FlatHistogramSpec { Chains = 4, LearningIterations = 10, ProductionDraws = 10, Start = FlatHistogramStart.Wham, WindowTopMargin = 3.0 };
+        MulticanonicalWeights start = MulticanonicalRun.Run(spec, DoubleWell(Depth), new WellModel(Depth, 0.25), 79, pilot, parallel: Serial).WeightTrace[0].Weights;
+        Assert.Equal((three.Low, three.High, Wham.Nodes(pilot, three)), (start.Low, start.High, start.Nodes));
+        _out.WriteLine($"[wham] top margin: held top {held.High:F3}, pilot's highest draw {highest:F3}, margin 3 sd top {three.High:F3} (sd {sd:F3}); " +
+                       $"K {Wham.Nodes(pilot, held)} → {start.Nodes}");
     }
 
     // ---- The warm start where SAMC's fixed point refuses ĝ (the warm start's chip, step 2, 2026-10-31) ----

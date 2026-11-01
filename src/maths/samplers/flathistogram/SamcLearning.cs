@@ -31,9 +31,9 @@ public sealed record SamcLearningState(MulticanonicalWeights Weights, long Itera
 /// </summary>
 public sealed class SamcLearning
 {
-    private readonly double[] _logWeights;
-    private readonly double[] _pi;
-    private readonly double[] _visits;   // per update: Σ_c 1_in·φ_k
+    private double[] _logWeights;
+    private double[] _pi;
+    private double[] _visits;   // per update: Σ_c 1_in·φ_k
 
     /// <param name="start">The weights to learn from: flat, or a warm start.</param>
     /// <param name="gainScale">t₀ ≥ 1: the gain is 1 for the first t₀ iterations, then decays as t₀/t.</param>
@@ -108,6 +108,22 @@ public sealed class SamcLearning
         if (inside == 0) return Weights;
         for (int k = 0; k < _logWeights.Length; k++) _logWeights[k] -= step * (_visits[k] - inside * _pi[k]);
         Weights = Weights.WithLogWeights(_logWeights);
+        return Weights;
+    }
+
+    /// <summary>
+    /// The window's top raised by <paramref name="nodes"/> ≥ 0 at the same spacing
+    /// (<see cref="MulticanonicalWeights.ExtendedAbove"/>): w(ℓ) is unchanged, the update reaches the new nodes, and the flat
+    /// occupancy is the wider window's. The iterations and the gain's sequence continue. Returns the weights.
+    /// </summary>
+    public MulticanonicalWeights ExtendAbove(int nodes)
+    {
+        MulticanonicalWeights raised = Weights.ExtendedAbove(nodes);
+        if (ReferenceEquals(raised, Weights)) return Weights;
+        Weights = raised;
+        _logWeights = [.. raised.LogWeights];
+        _pi = raised.FlatOccupancy();
+        _visits = new double[_pi.Length];
         return Weights;
     }
 

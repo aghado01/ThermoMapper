@@ -214,12 +214,15 @@ public static class Wham
     /// The window from the pilot: from ℓ₁'s <paramref name="quantile"/>-quantile at the hottest rung less
     /// <paramref name="margin"/> of its sd, to its (1 − q)-quantile at b = 1 plus <paramref name="margin"/> of its sd, each
     /// held inside the pilot's extreme draws, past which the extensions carry the hot end's and the posterior's own laws.
+    /// With <paramref name="topMargin"/>, the top is the (1 − q)-quantile at b = 1 plus that many of its sd, not held inside
+    /// the pilot's highest draw, so the window can reach above what the pilot drew.
     /// </summary>
-    public static FlatHistogramWindow Window(TemperingPilot pilot, double quantile, double margin)
+    public static FlatHistogramWindow Window(TemperingPilot pilot, double quantile, double margin, double? topMargin = null)
     {
         ArgumentNullException.ThrowIfNull(pilot);
         if (!(quantile > 0.0 && quantile < 0.5)) throw new ArgumentOutOfRangeException(nameof(quantile));
         if (!(margin >= 0.0)) throw new ArgumentOutOfRangeException(nameof(margin));
+        if (topMargin is double t && !(t >= 0.0 && double.IsFinite(t))) throw new ArgumentOutOfRangeException(nameof(topMargin));
         double min = double.PositiveInfinity, max = double.NegativeInfinity;
         for (int i = 0; i < pilot.Rungs; i++)
             foreach (double l in pilot.Levels(i))
@@ -229,7 +232,9 @@ public static class Wham
             }
         ReadOnlySpan<double> hot = pilot.Levels(pilot.HotRung), cold = pilot.Levels(pilot.ColdRung);
         double low = Math.Max(Quantile(hot, quantile) - margin * StandardDeviation(hot), min);
-        double high = Math.Min(Quantile(cold, 1.0 - quantile) + margin * StandardDeviation(cold), max);
+        double high = topMargin is double above
+            ? Quantile(cold, 1.0 - quantile) + above * StandardDeviation(cold)
+            : Math.Min(Quantile(cold, 1.0 - quantile) + margin * StandardDeviation(cold), max);
         if (!(high > low)) throw new ArgumentException($"The pilot gives an empty window [{low}, {high}].", nameof(pilot));
         return new FlatHistogramWindow(low, high);
     }

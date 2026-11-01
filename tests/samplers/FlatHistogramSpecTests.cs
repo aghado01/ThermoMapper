@@ -12,8 +12,8 @@ namespace Maths.Samplers.Tests;
 /// The flat-histogram run's configuration and resume (N17 Phase 1, step 4). The spec is values only: it validates, it
 /// round-trips through JSON unchanged, and it says when it needs a pilot. A run taken in pieces, each resuming the last
 /// one's checkpoint, mid-learning, at the learning's end and mid-production, ends bit for bit where the run taken whole
-/// ends; a checkpoint of another run, or of a finished one, is refused. Today's runs on the toys are pinned, so an option
-/// left off keeps them bit for bit.
+/// ends, across the window top's extension too; a checkpoint of another run, or of a finished one, is refused. Today's runs
+/// on the toys are pinned, so an option left off keeps them bit for bit.
 /// </summary>
 public sealed class FlatHistogramSpecTests
 {
@@ -40,6 +40,7 @@ public sealed class FlatHistogramSpecTests
         [
             Explicit,
             new() { LearningIterations = 10, ProductionDraws = 5, Start = FlatHistogramStart.Wham, GainStart = 77, WindowQuantile = 0.05, WindowMargin = 0.5 },
+            new() { LearningIterations = 10, ProductionDraws = 5, Start = FlatHistogramStart.Wham, WindowTopMargin = 2.5, ExtendTopUntil = 4 },
         ];
         foreach (FlatHistogramSpec spec in specs)
         {
@@ -78,6 +79,10 @@ public sealed class FlatHistogramSpecTests
             Explicit with { WindowQuantile = 0.5 },
             Explicit with { WindowQuantile = 0.0 },
             Explicit with { WindowMargin = -1.0 },
+            Explicit with { WindowTopMargin = -0.5 },
+            Explicit with { WindowTopMargin = double.NaN },
+            Explicit with { ExtendTopUntil = -1 },
+            Explicit with { ExtendTopUntil = 2_001 },
         ];
         foreach (FlatHistogramSpec spec in bad)
         {
@@ -169,6 +174,25 @@ public sealed class FlatHistogramSpecTests
                 for (int f = 0; f < draws.FunctionalDim; f++) hash.Add(draws.Functional(c, f));
             }
         return hash.ToString();
+    }
+
+    [Fact]
+    public void ARunInPieces_AcrossTheTopsExtension_EndsBitForBit_WhereTheWholeRunEnds()
+    {
+        // The window's top below the wells' floors, raised by the visits over the first 1,000 iterations: pieces cut in
+        // the extension, at its end and in production resume the raised window, its visits and its trace.
+        FlatHistogramSpec spec = Explicit with { Window = new FlatHistogramWindow(-30.0, -4.0), Nodes = 27, ExtendTopUntil = 1_000 };
+        var model = new WellModel(Depth, 0.25);
+        MulticanonicalResult<double> whole = MulticanonicalRun.Run(spec, DoubleWell(Depth), model, 29);
+        Assert.True(whole.Weights.Nodes > 27);
+        MulticanonicalResult<double>? last = null;
+        foreach (long piece in new long[] { 300, 700, 1_500, 600, 900 })
+        {
+            last = MulticanonicalRun.Run(spec, DoubleWell(Depth), model, 29, resumeFrom: last?.Checkpoint, iterations: piece, checkpoint: true);
+            if (last.Complete) break;
+        }
+        Assert.True(last!.Complete);
+        Assert.Equal(RunHash(whole), RunHash(last));
     }
 
     [Fact]

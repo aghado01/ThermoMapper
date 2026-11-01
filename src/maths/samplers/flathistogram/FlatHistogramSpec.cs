@@ -22,8 +22,9 @@ public sealed record FlatHistogramWindow(double Low, double High);
 /// A flat-histogram run's configuration, values only (<see cref="MulticanonicalRun"/>): the chains, the learning and
 /// production lengths, where the weights start, the window, b_lo, K and the gain. What is left null is read from the
 /// tempering pilot the run is given: the window from ℓ₁'s quantiles at the pilot's hot end and at b = 1, with margins,
-/// b_lo as the pilot's hottest rung, and K from the window's width over the posterior's ℓ₁ sd. Lengths are totals,
-/// which a run reaches in one call or in several, each resuming the last.
+/// b_lo as the pilot's hottest rung, and K from the window's width over the posterior's ℓ₁ sd. Two options move the
+/// window's top, both off by default: a margin above not held inside the pilot's draws, and the learning's own visits
+/// raising it while it learns. Lengths are totals, which a run reaches in one call or in several, each resuming the last.
 /// </summary>
 public sealed record FlatHistogramSpec
 {
@@ -67,6 +68,20 @@ public sealed record FlatHistogramSpec
     /// <summary>A pilot window's margins, in each end rung's ℓ₁ sd, ≥ 0, never past the pilot's extreme draws.</summary>
     public double WindowMargin { get; init; } = 1.0;
 
+    /// <summary>A pilot window's margin above, in the b = 1 rung's ℓ₁ sd, ≥ 0: the top at that rung's (1 − q)-quantile plus
+    /// this margin, not held inside the pilot's highest draw, so the window can reach above what the pilot drew, where the
+    /// start's nodes hold no pilot draw and the learning fills them; past the highest ℓ₁ any state reaches they hold no mass,
+    /// SAMC's limit there does not exist, and a WHAM start may be refused. Null takes <see cref="WindowMargin"/>, held
+    /// there.</summary>
+    public double? WindowTopMargin { get; init; }
+
+    /// <summary>The learning iterations, from its start, during which its visits raise the window's top: a visit a node
+    /// spacing or more above it adds nodes at that spacing up to the highest at or below the visit, ln w on the slope-1
+    /// extension there, so the weights are unchanged as a function and only the update's reach grows. In
+    /// [0, <see cref="LearningIterations"/>]; 0 keeps the window fixed. The learning is burn-in, so production's window is
+    /// frozen with its weights (D10).</summary>
+    public long ExtendTopUntil { get; init; }
+
     /// <summary>Whether a run needs a tempering pilot: a WHAM start, or a window, b_lo or K to read from one.</summary>
     [JsonIgnore]
     public bool NeedsPilot => Start == FlatHistogramStart.Wham || Window is null || LowSlope is null || Nodes is null;
@@ -87,6 +102,10 @@ public sealed record FlatHistogramSpec
         if (GainStart is long t && t < 0) throw new ArgumentException("The gain's start must be non-negative.", nameof(GainStart));
         if (!(WindowQuantile > 0.0 && WindowQuantile < 0.5)) throw new ArgumentException("The window's quantile must lie in (0, 0.5).", nameof(WindowQuantile));
         if (!(WindowMargin >= 0.0 && double.IsFinite(WindowMargin))) throw new ArgumentException("The window's margin must be finite and non-negative.", nameof(WindowMargin));
+        if (WindowTopMargin is double top && !(top >= 0.0 && double.IsFinite(top)))
+            throw new ArgumentException("The window's top margin must be finite and non-negative.", nameof(WindowTopMargin));
+        if (ExtendTopUntil < 0 || ExtendTopUntil > LearningIterations)
+            throw new ArgumentException("The top's extension runs within the learning: 0 ≤ ExtendTopUntil ≤ LearningIterations.", nameof(ExtendTopUntil));
     }
 
     // Every field, for a run's fingerprint.
@@ -96,6 +115,6 @@ public sealed record FlatHistogramSpec
                    .Add(Window is null ? 0 : 1).Add(Window?.Low ?? 0.0).Add(Window?.High ?? 0.0)
                    .Add(LowSlope is null ? 0 : 1).Add(LowSlope ?? 0.0).Add(Nodes ?? 0)
                    .Add(GainScale is null ? 0 : 1).Add(GainScale ?? 0.0).Add(GainStart is null ? 0 : 1).Add((ulong)(GainStart ?? 0))
-                   .Add(WindowQuantile).Add(WindowMargin);
+                   .Add(WindowQuantile).Add(WindowMargin).Add(WindowTopMargin is null ? 0 : 1).Add(WindowTopMargin ?? 0.0).Add((ulong)ExtendTopUntil);
     }
 }

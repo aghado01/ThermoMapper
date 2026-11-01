@@ -17,6 +17,7 @@ namespace Maths.Samplers.Tests;
 /// weights approach θ* from the prior's quadrature, closer the longer the learning; production's histogram is flat; the
 /// shared weights give the same run under any parallelism bound; and the diagnostics flag a chain that never crosses.
 /// With nodes tied (the warm start's chip), the limit is the coarser interpolant's, ln g where it is linear across them.
+/// A window whose top the learning's visits raise learns the wider window's limit (the loose ends' item 1).
 /// </summary>
 public sealed class SamcLearningTests
 {
@@ -209,6 +210,53 @@ public sealed class SamcLearningTests
             masses[j] = lnG.LogWeight(levels[j]) + Math.Log(h);
         }
         return (levels, masses);
+    }
+
+    // ---- The window's top raised by the learning's visits (the loose ends' item 1, 2026-10-31) ----
+
+    [Fact]
+    public void DoubleWell_ALowTop_RaisedByTheLearningsVisits_LearnsTheWiderWindowsLimit_AndReweighsExactly()
+    {
+        // A window over [−30, −4], spacing 1, its top below the wells' floors (ℓ₁ → 0), where much of π_w's mass lies.
+        // Raised by the visits over the first 4,000 of 32,000 iterations, the window ends a whole number of spacings
+        // higher, inside what the chains reached (ℓ₁ ≤ 0); the visits above it fall against the fixed window's; the learned
+        // weights meet SAMC's limit over the wider window about as closely as a run declared over it from the start; and
+        // the evidence reweighs exactly.
+        var low = new FlatHistogramWindow(-30.0, -4.0);
+        FlatHistogramSpec fixedLow = WellSpec(32_000, 20_000, chains: 8, window: low) with { Nodes = 27 };
+        var model = new WellModel(Depth, 0.25);
+        MulticanonicalResult<double> held = MulticanonicalRun.Run(fixedLow, DoubleWell(Depth), model, 77, parallel: Serial);
+        MulticanonicalResult<double> raised = MulticanonicalRun.Run(fixedLow with { ExtendTopUntil = 4_000 }, DoubleWell(Depth), model, 77, parallel: Serial);
+        MulticanonicalWeights w = raised.Weights;
+        int added = w.Nodes - 27;
+        Assert.InRange(added, 1, 4);
+        Assert.Equal(-4.0 + added, w.High, 9);
+        Assert.Equal(1.0, w.Spacing, 9);
+        Assert.True(w.High <= 0.0);
+        Assert.Equal(27, raised.WeightTrace[0].Weights.Nodes);
+        Assert.All(raised.WeightTrace.Where(s => s.Iteration >= 4_000), s => Assert.Equal(w.Nodes, s.Weights.Nodes));
+        Assert.Equal(w.Nodes, raised.LearningDiagnostics.Occupancy.Length);
+        Assert.Same(w, raised.Draws!.Weights);
+
+        var wide = new FlatHistogramWindow(-30.0, w.High);
+        MulticanonicalWeights exact = WellFixedPoint(wide, WellLowSlope, w.Nodes, out _);
+        MulticanonicalResult<double> declared = MulticanonicalRun.Run(WellSpec(32_000, 20_000, chains: 8, window: wide) with { Nodes = w.Nodes },
+                                                                      DoubleWell(Depth), model, 77, parallel: Serial);
+        double rmsRaised = CentredRms(w.LogWeights, exact.LogWeights), rmsDeclared = CentredRms(declared.Weights.LogWeights, exact.LogWeights);
+        double aboveHeld = (double)held.LearningDiagnostics.AboveWindow / held.LearningDiagnostics.Visits;
+        double aboveRaised = (double)raised.LearningDiagnostics.AboveWindow / raised.LearningDiagnostics.Visits;
+        LogEvidenceCurve curve = Reweighting.LogEvidence(raised.Draws!, [0.5, 1.0]);
+        _out.WriteLine($"[samc] a low top raised: [−30, −4] → [−30, {w.High}] (+{added} nodes); learning's visits above the window {aboveHeld:P1} held, " +
+                       $"{aboveRaised:P1} raised; learned ln w to θ* over the wider window {rmsRaised:F3} raised, {rmsDeclared:F3} declared; " +
+                       $"production flatness {raised.ProductionDiagnostics!.MaxFlatnessDeviation:F2}");
+        Assert.True(aboveRaised < 0.5 * aboveHeld, $"the visits above the window: {aboveRaised:P1} raised, {aboveHeld:P1} held");
+        Assert.True(rmsRaised < Math.Max(1.5 * rmsDeclared, 0.15), $"the raised window's learned ln w departs from θ* by {rmsRaised:F3}, the declared's by {rmsDeclared:F3}");
+        for (int g = 0; g < 2; g++)
+        {
+            double b = curve.InverseTemperatures[g], exactZ = WellLogEvidence(Depth, b);
+            _out.WriteLine($"[samc] raised window, b = {b}: ln Z {curve.LogEvidence[g]:F4} ± {curve.MonteCarloError[g]:F4} against {exactZ:F4}");
+            Assert.True(Math.Abs(curve.LogEvidence[g] - exactZ) < 4.5 * curve.MonteCarloError[g]);
+        }
     }
 
     // The double well's θ* over a window, from a 400 000-cell quadrature of the prior.

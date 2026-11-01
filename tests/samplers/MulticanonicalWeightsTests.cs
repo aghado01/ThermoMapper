@@ -10,7 +10,8 @@ namespace Maths.Samplers.Tests;
 /// The flat-histogram engine's weights and stage density (N17 Phase 1, step 1). ln w is piecewise linear between the
 /// nodes and continues outside the window with slope b_lo below and 1 above, continuous at the nodes and at both edges.
 /// The wrapped target's density is the inner prior plus ln w(ℓ₁), −∞ off the support with no likelihood work, and its
-/// log likelihood is refused at b ≠ 1. A chain run on the wrapper samples π_w ∝ prior·w(ℓ₁) exactly.
+/// log likelihood is refused at b ≠ 1. A chain run on the wrapper samples π_w ∝ prior·w(ℓ₁) exactly. The window raised by
+/// whole spacings leaves w(ℓ) as it was.
 /// </summary>
 public sealed class MulticanonicalWeightsTests
 {
@@ -38,6 +39,19 @@ public sealed class MulticanonicalWeightsTests
         Assert.False(W.TryLocate(-10.0 - 1e-12, out _, out _));
         Assert.False(W.TryLocate(-2.0 + 1e-12, out _, out _));
         Assert.False(W.TryLocate(double.NaN, out _, out _));
+    }
+
+    [Fact]
+    public void ExtendedAbove_AddsNodesAtTheSpacing_OnTheSlopeOneExtension_LeavingTheWeightsAsTheyWere()
+    {
+        MulticanonicalWeights raised = W.ExtendedAbove(3);
+        Assert.Equal((W.Low, 4.0, W.LowSlope, 8), (raised.Low, raised.High, raised.LowSlope, raised.Nodes));
+        Assert.Equal(W.Spacing, raised.Spacing, 12);
+        for (int k = 0; k < W.Nodes; k++) Assert.Equal(Values[k], raised.LogWeights[k]);
+        for (int m = 1; m <= 3; m++) Assert.Equal(Values[^1] + 2.0 * m, raised.LogWeights[W.Nodes - 1 + m], 12);
+        for (double level = -14.0; level <= 9.0; level += 0.37) Assert.Equal(W.LogWeight(level), raised.LogWeight(level), 12);
+        Assert.Same(W, W.ExtendedAbove(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => W.ExtendedAbove(-1));
     }
 
     [Fact]
