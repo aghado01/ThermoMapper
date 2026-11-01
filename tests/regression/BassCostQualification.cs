@@ -44,9 +44,12 @@ internal static class BassCost
     internal const int BaseN = 1000, BaseP = 10, BaseCap = 20, BaseOrder = 2;
     internal const double Noise = 0.05;
 
-    /// <summary>The fraction of every timed batch: 1, or the trial's 0.1.</summary>
-    internal static double Scale => double.TryParse(Environment.GetEnvironmentVariable("BASS_COST_SCALE"), NumberStyles.Float,
-                                                    CultureInfo.InvariantCulture, out double s) && s > 0 && s <= 1 ? s : 1.0;
+    /// <summary>The fraction of every timed batch: 1, or the trial's 0.1; a block's warm-up pass overrides it.</summary>
+    internal static double Scale => ScaleOverride ?? (double.TryParse(Environment.GetEnvironmentVariable("BASS_COST_SCALE"), NumberStyles.Float,
+                                                      CultureInfo.InvariantCulture, out double s) && s > 0 && s <= 1 ? s : 1.0);
+
+    /// <summary>The scale a block's warm-up pass runs at, while it runs.</summary>
+    internal static double? ScaleOverride { get; set; }
 
     internal static int Scaled(int count) => Math.Max(2, (int)Math.Round(count * Scale));
 
@@ -426,7 +429,7 @@ internal static class BassCost
     // ---- Rows ----
 
     /// <summary>A block's rows, appended to its file under the output folder as block, point, quantity, value.</summary>
-    internal sealed class Rows(string pass, string block)
+    internal sealed class Rows(string pass, string block, bool discard = false)
     {
         private readonly List<string> _lines = [];
         public string Block => block;
@@ -437,6 +440,11 @@ internal static class BassCost
 
         public string Flush()
         {
+            if (discard)
+            {
+                _lines.Clear();
+                return "(discarded)";
+            }
             string dir = Environment.GetEnvironmentVariable("BASS_COST_OUT") is { Length: > 0 } d ? d : Path.Combine(Path.GetTempPath(), "bass-cost");
             Directory.CreateDirectory(dir);
             string path = Path.Combine(dir, $"{pass}-{Slug(block)}.csv");

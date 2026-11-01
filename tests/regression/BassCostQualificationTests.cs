@@ -244,23 +244,12 @@ public sealed class BassCostQualificationTests
             var rows = new BassCost.Rows("timed", block);
             foreach ((string q, string v) in BassCost.Machine()) rows.Add("machine", q, v);
             var load = new BassCost.Load();
-            BassCostSweep.Read(BassCost.Base with { N = 200 }, BassCost.Meter.Time);   // warm-up: JIT and caches
-            switch (block)
-            {
-                case "repeat": Repeat(rows); break;
-                case "outputs": Outputs(rows); break;
-                case "backends": Backends(rows); break;
-                case "calibration": Calibration(rows); break;
-                case "parallel": Parallel(rows); break;
-                default:
-                    foreach (BassCost.Point x in grid.Single(g => g.Block == block).Points)
-                    {
-                        BassCostSweep.Reading r = BassCostSweep.Read(x, BassCost.Meter.Time);
-                        Write(rows, r, BassCost.Meter.Time, block);
-                        _out.WriteLine($"{x.Key}: M {r.M}/{r.Cap}, {r.Of("sweep"):F1} µs per sweep, rest {r.PerSweep()[^1].Value:F1}");
-                    }
-                    break;
-            }
+            // The block whole at a tenth first, its rows discarded, so that every path it times has reached tier 1 before
+            // it is read: one short warm-up left a block's first readings at tier 0 (the repeat check found it).
+            BassCost.ScaleOverride = Math.Min(BassCost.Scale, 0.1);
+            try { RunBlock(block, new BassCost.Rows("warm-up", block, discard: true), grid); }
+            finally { BassCost.ScaleOverride = null; }
+            RunBlock(block, rows, grid);
             (string[] end, double cpu, double seconds, double others) = load.End();
             bool flagged = load.AtStart.Length > 0 || end.Length > 0;
             rows.Add("load", "other test hosts at the start", string.Join(" ", load.AtStart));
@@ -270,6 +259,27 @@ public sealed class BassCostQualificationTests
             rows.Add("load", "block seconds", seconds);
             rows.Add("load", "flagged", flagged ? "yes" : "no");
             _out.WriteLine($"{block}: {seconds:F0} s, CPU/wall {cpu:F2}, others {others:F2} cores, {(flagged ? "FLAGGED" : "quiet")}; rows {rows.Flush()}");
+        }
+    }
+
+    // One timed block's readings into its rows.
+    private void RunBlock(string block, BassCost.Rows rows, (string Block, BassCost.Point[] Points)[] grid)
+    {
+        switch (block)
+        {
+            case "repeat": Repeat(rows); break;
+            case "outputs": Outputs(rows); break;
+            case "backends": Backends(rows); break;
+            case "calibration": Calibration(rows); break;
+            case "parallel": Parallel(rows); break;
+            default:
+                foreach (BassCost.Point x in grid.Single(g => g.Block == block).Points)
+                {
+                    BassCostSweep.Reading r = BassCostSweep.Read(x, BassCost.Meter.Time);
+                    Write(rows, r, BassCost.Meter.Time, block);
+                    _out.WriteLine($"{x.Key}: M {r.M}/{r.Cap}, {r.Of("sweep"):F1} µs per sweep, rest {r.PerSweep()[^1].Value:F1}");
+                }
+                break;
         }
     }
 

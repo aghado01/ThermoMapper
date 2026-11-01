@@ -31,8 +31,9 @@ namespace Maths.Regression.Tests;
 ///   n(M + 3) (M border dots, zᵀz, zᵀỹ, zᵀr), direct 3M(n_x + m) + 2(N + n_x) (every current factor re-centred, two
 ///   passes each, its entry, and the two weighted products); the bordered proposal 1.5M² (Border's forward and back
 ///   solves, the quadratic form's forward solve); a commit NM (Refit's explicit residual); the rebuild M³/3 (the strict
-///   factor and diag(A⁻¹)); a death 2M²; a change a column, n(M + 2) and 3.5M²; a composition M²/2 (the
-///   innovation's back solve).</item>
+///   factor and diag(A⁻¹)); a death 2M² (the staged death's solves and rotations, the quadratic form; its copies left
+///   out); a change a column, its cross products (the full border, zᵀỹ and zᵀr) and 4M² (the solve, the staged death,
+///   the bordered factor and its quadratic form); a composition M²/2 (the innovation's back solve).</item>
 /// </list>
 /// It reads; it asserts only that the timed proposals committed nothing (<see cref="BassMixing.Untouched"/>), the chain
 /// stayed where it was, and every reading is finite where it is defined.
@@ -353,7 +354,7 @@ internal static class BassCostSweep
         reading.Units["commit"] = (double)rows * mm;
         reading.Units["rebuild"] = mm * mm * mm / 3;
         reading.Units["death"] = 2 * mm * mm;
-        reading.Units["change"] = column + (functional ? reading.Units["cross"] : n * (mm + 2)) + 3.5 * mm * mm;
+        reading.Units["change"] = column + reading.Units["cross"] + 4 * mm * mm;
         reading.Units["compose"] = mm * mm / 2;
         reading.Units["membership"] = n;
 
