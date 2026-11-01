@@ -34,7 +34,8 @@ namespace Maths.Regression.Tests;
 /// atoms' hats); the starts it accepts pinned before the remedy; 48 pilots over their own shapes and the gap pilots, the
 /// refused ones tied at ten draws, and a pilot too thin to tie refused.</item>
 /// <item><b>The loose ends' chip.</b> Today's fits pinned; a window whose top the learning raises, against the
-/// enumeration; a margin above the pilot's draws through the adapter.</item>
+/// enumeration; a margin above the pilot's draws through the adapter; the readout's tied nodes, and a refusal naming the
+/// segment where flat occupancy leaves the hull.</item>
 /// </list>
 /// </summary>
 public sealed class BassFlatHistogramTests
@@ -892,7 +893,7 @@ public sealed class BassFlatHistogramTests
             catch (InvalidOperationException)
             {
                 refused.Add(p.Seed);
-                (int at, _) = FlatHistogramLimit.Infeasibility(p.Shape, p.Estimate.Levels, p.Estimate.LogMasses);
+                (int at, _) = SamcLearning.Infeasibility(p.Shape, p.Estimate.Levels, p.Estimate.LogMasses);
                 Assert.InRange(at, 0, 2);
             }
             MulticanonicalWeights start = Wham.WarmStart(p.Pilot, p.Shape, Wham.ThinDraws, out int[] tied);
@@ -993,10 +994,11 @@ public sealed class BassFlatHistogramTests
     {
         // The warm start's chip, step 1: why SAMC's fixed point refuses a pilot's ĝ with no node empty or a gap beside a
         // drawn node. ĝ is a discrete measure, its atoms the pilot's draws; flat hat occupancy is reachable by a tilt of it
-        // only inside the hull of the atoms' hat vectors (FlatHistogramLimit.Infeasibility). Where a node's hat sees ĝ only
+        // only inside the hull of the atoms' hat vectors (SamcLearning.Infeasibility). Where a node's hat sees ĝ only
         // through atoms far from the node, beside an empty segment or the window's edge, its flat share cannot be met without
         // overfilling its neighbour: no finite θ* exists, G is unbounded below, and Newton's steps grow until none descends.
-        // So the refusal is the limit's, not Newton's, and the fixed point refuses exactly the infeasible ĝ.
+        // So the refusal is the limit's, not Newton's, and the fixed point refuses exactly the infeasible ĝ, naming the segment
+        // where flat occupancy leaves the hull and by how much (the loose ends' item 4).
         BassModel model = FixtureA(heldTau: true);
         foreach ((int seed, bool refused, int segment) in new[] { (7801, true, 13), (7802, true, 16), (7803, false, -1) })
         {
@@ -1008,13 +1010,14 @@ public sealed class BassFlatHistogramTests
             string verdict = "accepted";
             try { SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _); }
             catch (InvalidOperationException e) { verdict = e.Message; }
-            (int at, double gap) = FlatHistogramLimit.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
+            (int at, double gap) = SamcLearning.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
             _out.WriteLine($"## Gap pilot, seed {seed}: window [{window.Low:F2}, {window.High:F2}], K 20, {estimate.Levels.Length} atoms; {verdict}; " +
                            (at < 0 ? "flat occupancy inside the hull" : $"flat occupancy outside the hull at segment {at}, by {gap:F4}"));
             foreach (int k in at < 0 ? [12, 16] : new[] { at - 2, at - 1, at, at + 1 }.Where(k => k >= 0 && k < 20))
                 _out.WriteLine("  " + FlatHistogramLimit.NodeReport(shape, pilot, estimate, k));
             Assert.Equal(refused, verdict != "accepted");
             Assert.Equal(segment, at);
+            if (refused) Assert.Contains($"leaves the hull of the measure's hats at segment {segment} (ℓ {shape.Node(segment):G6} to {shape.Node(segment + 1):G6}), by {gap:G3}", verdict);
         }
     }
 
@@ -1048,6 +1051,8 @@ public sealed class BassFlatHistogramTests
         TemperingPilot pilot = PilotOf(model, GapPilot, SeedTree.Derive(seed, 2)[1]).Pilot;
         var shape = MulticanonicalWeights.Flat(fh.Window.Low, fh.Window.High, fh.LowSlope, fh.Nodes);
         Assert.Equal(StartHash([Wham.WarmStart(pilot, shape, Wham.ThinDraws, out int[] thin)]), StartHash([fh.WeightTrace[0].Weights]));
+        Assert.Equal(Wham.NodeDraws(pilot, shape), read.NodeDraws);
+        Assert.Equal(thin, read.TiedNodes);   // the readout says whether the start was tied (the loose ends' item 4)
         if (!tied)
         {
             Assert.Empty(thin);
@@ -1067,6 +1072,15 @@ public sealed class BassFlatHistogramTests
         Assert.Equal([.. Enumerable.Range(0, fh.Nodes).Where(k => read.NodeDraws[k] < Wham.ThinDraws)], thin);
         Assert.Equal([0, 7, 10, 11, 13, 14, 15, 16], thin);
         Assert.Equal(start[1], start[0]);
+
+        // A fit cut short and resumed reports the same tied nodes, from its checkpoint.
+        BassConfig cut = GapConfig(model, seed, GapPilot);
+        cut = WithFlatHistogram(cut, cut.Sampling.FlatHistogram! with { MaxIterations = 1_000 });
+        var options = new BassRunOptions { Checkpoint = true };
+        BassFit first = Bass.Fit(cut, model.Data, options);
+        Assert.Equal(thin, first.Diagnostics.FlatHistogram!.Pilot!.TiedNodes);
+        BassFit resumed = Bass.Resume(first.Checkpoint!, cut, model.Data, options);
+        Assert.Equal(thin, resumed.Diagnostics.FlatHistogram!.Pilot!.TiedNodes);
         foreach ((int below, int above) in new[] { (6, 8), (9, 12), (12, 17) })
             for (int k = below + 1; k < above; k++)
                 Assert.Equal(start[below] + (start[above] - start[below]) * (k - below) / (above - below), start[k], 9);
@@ -1117,6 +1131,7 @@ public sealed class BassFlatHistogramTests
         Assert.Contains("WHAM start", refusal.Message);
         Assert.Contains("K = 20, b_lo = 0", refusal.Message);
         Assert.Contains("fewer than two nodes hold 10 of the pilot's draws", refusal.Message);
+        Assert.Contains("flat occupancy leaves the hull of the measure's hats at segment 3 (ℓ -32.5261 to -31.5102)", refusal.Message);
         Assert.IsType<InvalidOperationException>(refusal.InnerException);
     }
 
@@ -1320,64 +1335,11 @@ internal sealed class BassFlatHistogramSpace
 }
 
 /// <summary>
-/// Whether SAMC's limit exists on a discrete measure over a node shape (the warm start's chip, step 1), and a node's view of
-/// a pilot's ĝ.
+/// A node's view of a pilot's ĝ (the warm start's chip, step 1); whether SAMC's limit exists on a discrete measure is the
+/// engine's <see cref="SamcLearning.Infeasibility"/>.
 /// </summary>
 internal static class FlatHistogramLimit
 {
-    /// <summary>
-    /// Where flat hat occupancy leaves the reach of a discrete measure's tilts: the occupancy
-    /// <see cref="SamcLearning.FixedPoint"/> targets (π_k, an empty node's share spread over the rest) must lie inside the
-    /// convex hull of the atoms' hat vectors φ(ℓ_j), the means the tilts e^{−θ·φ} reach (an exponential family's means fill
-    /// its support's hull), or no finite θ* exists. Read along the window: x_m, the mass in the segments below node m, runs
-    /// from 0 to 1, and segment m's atoms, at fractions u in [u_min, u_max], give node m between (1 − u_max) and (1 − u_min)
-    /// of the segment's mass, so the cumulative target C_m needs
-    /// x_m + (1 − u_max)(x_{m+1} − x_m) ≤ C_m ≤ x_m + (1 − u_min)(x_{m+1} − x_m), and C_m = x_m across an empty segment.
-    /// The feasible x_m form an interval, carried node to node. Returns the first segment where it closes and by how much,
-    /// or (−1, 0) where the target lies inside the hull (on its boundary θ* is infinite; the tolerance is 1e−12).
-    /// </summary>
-    internal static (int Segment, double Gap) Infeasibility(MulticanonicalWeights shape, IReadOnlyList<double> levels, IReadOnlyList<double> logMasses)
-    {
-        int k = shape.Nodes;
-        var uMin = new double[k - 1];
-        var uMax = new double[k - 1];
-        Array.Fill(uMin, double.PositiveInfinity);
-        Array.Fill(uMax, double.NegativeInfinity);
-        var seen = new bool[k];
-        for (int j = 0; j < levels.Count; j++)
-        {
-            if (double.IsNegativeInfinity(logMasses[j]) || !shape.TryLocate(levels[j], out int s, out double u)) continue;
-            uMin[s] = Math.Min(uMin[s], u);
-            uMax[s] = Math.Max(uMax[s], u);
-            if (u < 1.0) seen[s] = true;
-            if (u > 0.0) seen[s + 1] = true;
-        }
-        double[] pi = shape.FlatOccupancy();
-        int full = seen.Count(x => x);
-        double emptyShare = Enumerable.Range(0, k).Where(i => !seen[i]).Sum(i => pi[i]);
-        const double tolerance = 1e-12;
-        double c = 0.0, lo = 0.0, hi = 0.0;
-        for (int m = 0; m < k - 1; m++)
-        {
-            c += seen[m] ? pi[m] + emptyShare / full : 0.0;
-            if (lo > c + tolerance) return (m, lo - c);
-            if (uMax[m] < uMin[m])
-            {
-                // No atom: the segment holds no mass, so x_{m+1} = x_m = C_m.
-                if (c > hi + tolerance) return (m, c - hi);
-                lo = hi = c;
-                continue;
-            }
-            double a = uMin[m], b = uMax[m], top = Math.Min(hi, c);
-            if (a >= 1.0 && c > hi + tolerance) return (m, c - hi);
-            double next = a >= 1.0 ? c : c / (1.0 - a) - top * a / (1.0 - a);
-            double far = b >= 1.0 ? 1.0 : Math.Min(1.0, c / (1.0 - b) - lo * b / (1.0 - b));
-            (lo, hi) = (Math.Max(next, lo), far);
-            if (lo > hi + tolerance) return (m, lo - hi);
-        }
-        return lo <= 1.0 + tolerance && hi >= 1.0 - tolerance ? (-1, 0.0) : (k - 2, Math.Max(lo - 1.0, 1.0 - hi));
-    }
-
     /// <summary>Node k of a pilot's ĝ over a shape: the pilot's draws under its hat, and on each side the segment's draws
     /// and atoms, their fractions u and their log mass under the hat.</summary>
     internal static string NodeReport(MulticanonicalWeights shape, TemperingPilot pilot, WhamEstimate estimate, int k)

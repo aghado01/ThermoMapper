@@ -137,7 +137,8 @@ public sealed class SamcLearning
     /// first non-empty node's ln w = 0. Levels outside the window, and masses of −∞, play no part. A solve that cannot
     /// bring every node's occupancy within 1e−3 of flat is refused (<see cref="InvalidOperationException"/>): where a hat
     /// sees the measure only through atoms far from its node, beside an empty segment or the window's edge, its flat share
-    /// lies outside what any tilt of a discrete measure reaches, and no finite limit exists.
+    /// lies outside what any tilt of a discrete measure reaches, and no finite limit exists. The refusal names the segment
+    /// where flat occupancy leaves the hull of the atoms' hats, and by how much (<see cref="Infeasibility"/>).
     /// </summary>
     /// <param name="shape">The window, slope and node count; its values are not read.</param>
     /// <param name="levels">The measure's levels ℓ₁.</param>
@@ -146,7 +147,80 @@ public sealed class SamcLearning
     public static MulticanonicalWeights FixedPoint(MulticanonicalWeights shape, ReadOnlySpan<double> levels,
                                                   ReadOnlySpan<double> logMasses, out bool[] empty)
         => Solve(shape, levels, logMasses, out empty, out double departure)
-           ?? throw new InvalidOperationException($"SAMC's limit was not reached: a node's occupancy departs from flat by {departure:G3}.");
+           ?? throw new InvalidOperationException(Refusal(shape, levels, logMasses, departure) + ".");
+
+    /// <summary>
+    /// Where flat hat occupancy leaves the reach of a discrete measure's tilts, the diagnostic behind a refusal of
+    /// <see cref="FixedPoint(MulticanonicalWeights, ReadOnlySpan{double}, ReadOnlySpan{double}, out bool[])"/>: the occupancy
+    /// it targets (π_k, an empty node's share spread over the rest) must lie inside the convex hull of the atoms' hat
+    /// vectors φ(ℓ_j), the means the tilts e^{−θ·φ} reach (an exponential family's means fill its support's hull), or no
+    /// finite θ* exists (the warm start's chip, 2026-10-31). Read along the window: x_m, the mass in the segments below node
+    /// m, runs from 0 to 1, and segment m's atoms, at fractions u in [u_min, u_max], give node m between (1 − u_max) and
+    /// (1 − u_min) of the segment's mass, so the cumulative target C_m needs
+    /// x_m + (1 − u_max)(x_{m+1} − x_m) ≤ C_m ≤ x_m + (1 − u_min)(x_{m+1} − x_m), and C_m = x_m across an empty segment.
+    /// The feasible x_m form an interval, carried node to node. Returns the first segment where it closes and by how much
+    /// mass, or (−1, 0) where the target lies inside the hull (on its boundary θ* is infinite; the tolerance is 1e−12).
+    /// Levels outside the window, and masses of −∞, play no part.
+    /// </summary>
+    public static (int Segment, double Gap) Infeasibility(MulticanonicalWeights shape, ReadOnlySpan<double> levels, ReadOnlySpan<double> logMasses)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+        if (levels.Length != logMasses.Length) throw new ArgumentException("One log mass per level is required.", nameof(logMasses));
+        int k = shape.Nodes;
+        var uMin = new double[k - 1];
+        var uMax = new double[k - 1];
+        Array.Fill(uMin, double.PositiveInfinity);
+        Array.Fill(uMax, double.NegativeInfinity);
+        var seen = new bool[k];
+        for (int j = 0; j < levels.Length; j++)
+        {
+            if (double.IsNegativeInfinity(logMasses[j]) || !shape.TryLocate(levels[j], out int s, out double u)) continue;
+            uMin[s] = Math.Min(uMin[s], u);
+            uMax[s] = Math.Max(uMax[s], u);
+            if (u < 1.0) seen[s] = true;
+            if (u > 0.0) seen[s + 1] = true;
+        }
+        double[] pi = shape.FlatOccupancy();
+        int full = 0;
+        double emptyShare = 0.0;
+        for (int i = 0; i < k; i++)
+        {
+            if (seen[i]) full++;
+            else emptyShare += pi[i];
+        }
+        const double tolerance = 1e-12;
+        double c = 0.0, lo = 0.0, hi = 0.0;
+        for (int m = 0; m < k - 1; m++)
+        {
+            c += seen[m] ? pi[m] + emptyShare / full : 0.0;
+            if (lo > c + tolerance) return (m, lo - c);
+            if (uMax[m] < uMin[m])
+            {
+                // No atom: the segment holds no mass, so x_{m+1} = x_m = C_m.
+                if (c > hi + tolerance) return (m, c - hi);
+                lo = hi = c;
+                continue;
+            }
+            double a = uMin[m], b = uMax[m], top = Math.Min(hi, c);
+            if (a >= 1.0 && c > hi + tolerance) return (m, c - hi);
+            double next = a >= 1.0 ? c : c / (1.0 - a) - top * a / (1.0 - a);
+            double far = b >= 1.0 ? 1.0 : Math.Min(1.0, c / (1.0 - b) - lo * b / (1.0 - b));
+            (lo, hi) = (Math.Max(next, lo), far);
+            if (lo > hi + tolerance) return (m, lo - hi);
+        }
+        return lo <= 1.0 + tolerance && hi >= 1.0 - tolerance ? (-1, 0.0) : (k - 2, Math.Max(lo - 1.0, 1.0 - hi));
+    }
+
+    // Why the fixed point refused a measure, without a closing stop: where flat occupancy leaves the hull of its atoms' hats
+    // (Infeasibility) and by how much, then how far from flat the solve stopped; inside the hull, only the latter.
+    internal static string Refusal(MulticanonicalWeights shape, ReadOnlySpan<double> levels, ReadOnlySpan<double> logMasses, double departure)
+    {
+        (int segment, double gap) = Infeasibility(shape, levels, logMasses);
+        return segment < 0
+            ? $"SAMC's limit was not reached: a node's occupancy departs from flat by {departure:G3}, though flat occupancy lies inside the hull of the measure's hats"
+            : $"SAMC's limit does not exist: flat occupancy leaves the hull of the measure's hats at segment {segment} (ℓ {shape.Node(segment):G6} to " +
+              $"{shape.Node(segment + 1):G6}), by {gap:G3} of its mass, and the solve stopped with a node's occupancy {departure:G3} from flat";
+    }
 
     /// <summary>
     /// SAMC's limit with some nodes tied: a tied node's ln w is held on the line through its nearest untied neighbours, and

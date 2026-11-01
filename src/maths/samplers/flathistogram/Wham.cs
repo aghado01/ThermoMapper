@@ -163,7 +163,7 @@ public static class Wham
     /// (<see cref="SamcLearning.FixedPoint(MulticanonicalWeights, ReadOnlySpan{double}, ReadOnlySpan{double}, ReadOnlySpan{bool})"/>),
     /// and the limit on that coarser interpolant is the start, which SAMC's learning then corrects at every node. Where even
     /// that is refused, or fewer than two nodes hold the draws, the start is refused (<see cref="InvalidOperationException"/>),
-    /// saying which.
+    /// saying which, and where flat occupancy leaves the hull of ĝ's atoms' hats (<see cref="SamcLearning.Infeasibility"/>).
     /// </summary>
     /// <param name="pilot">The tempering pilot.</param>
     /// <param name="shape">The window, slope and node count; its values are not read.</param>
@@ -185,12 +185,13 @@ public static class Wham
         var thin = new bool[shape.Nodes];
         for (int k = 0; k < thin.Length; k++) thin[k] = draws[k] < thinDraws;
         tied = [.. Enumerable.Range(0, thin.Length).Where(k => thin[k])];
-        string refusal = $"SAMC's limit was not reached: a node's occupancy departs from flat by {departure:G3}";
+        string refusal = SamcLearning.Refusal(shape, estimate.Levels, estimate.LogMasses, departure);
         if (thin.Length - tied.Length < 2)
-            throw new InvalidOperationException($"{refusal}, and fewer than two nodes hold {thinDraws:G} of the pilot's draws to tie the rest to.");
+            throw new InvalidOperationException($"{refusal}; and fewer than two nodes hold {thinDraws:G} of the pilot's draws to tie the rest to.");
         start = SamcLearning.SolveTied(shape, estimate.Levels, estimate.LogMasses, thin, out double tiedDeparture);
         return start ?? throw new InvalidOperationException(
-            $"{refusal}; with the nodes under {thinDraws:G} pilot draws tied [{string.Join(", ", tied)}], a merged node's by {tiedDeparture:G3}.");
+            $"{refusal}; and with the nodes under {thinDraws:G} pilot draws tied [{string.Join(", ", tied)}], a merged node's occupancy departs " +
+            $"from flat by {tiedDeparture:G3}.");
     }
 
     /// <summary>The pilot's draws under each node's hat over <paramref name="shape"/>'s window, every rung's: Σ φ_k(ℓ₁) over

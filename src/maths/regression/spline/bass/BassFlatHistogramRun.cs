@@ -67,7 +67,7 @@ internal static class BassFlatHistogramFit
             (pilot, BassTemperingReadout ladders) = Pilot(model, spec.Pilot!, roots[1], options, sweeps);
             shape = StartShape(run, pilot);
             pilotReadout = new BassFlatHistogramPilotReadout(ladders, [.. pilot.InverseTemperatures], [.. pilot.Inefficiencies], pilot.Draws,
-                                                             NodeDraws(pilot, shape));
+                                                             Wham.NodeDraws(pilot, shape), []);
         }
         var client = new BassMulticanonicalModel(model, fingerprint, run.LearningIterations, sweeps);
         var parallel = new ParallelOptions { MaxDegreeOfParallelism = options.MaxDegreeOfParallelism, CancellationToken = options.Cancellation };
@@ -83,6 +83,7 @@ internal static class BassFlatHistogramFit
                 $"{shape.LowSlope}, the pilot having drawn nothing under nodes [{string.Join(", ", pilotReadout!.EmptyNodes)}]: {e.Message}", e);
         }
         sweeps.End();
+        if (piloted) pilotReadout = pilotReadout! with { TiedNodes = [.. result.TiedNodes] };
         MulticanonicalWeights start = result.WeightTrace[0].Weights;
         if (shape is not null && (start.Low, start.High, start.Nodes, start.LowSlope) != (shape.Low, shape.High, shape.Nodes, shape.LowSlope))
             throw new InvalidOperationException("The run resolved another window, K or b_lo than the pilot's readout.");
@@ -166,21 +167,6 @@ internal static class BassFlatHistogramFit
         FlatHistogramWindow window = run.Window ?? Wham.Window(pilot, run.WindowQuantile, run.WindowMargin, run.WindowTopMargin);
         int nodes = run.Nodes ?? Wham.Nodes(pilot, window);
         return MulticanonicalWeights.Flat(window.Low, window.High, run.LowSlope ?? pilot.HotEnd, nodes);
-    }
-
-    // The pilot's draws under each node's hat over `shape`'s window, every rung's: where a node holds none, WHAM's ĝ has no
-    // mass and the warm start interpolates its weight.
-    private static double[] NodeDraws(TemperingPilot pilot, MulticanonicalWeights shape)
-    {
-        var counts = new double[shape.Nodes];
-        for (int i = 0; i < pilot.Rungs; i++)
-            foreach (double level in pilot.Levels(i))
-            {
-                if (!shape.TryLocate(level, out int segment, out double fraction)) continue;
-                counts[segment] += 1.0 - fraction;
-                counts[segment + 1] += fraction;
-            }
-        return counts;
     }
 
     private static BassFit Assemble(BassModel model, string fingerprint, BassFlatHistogramSpec spec, int[] roots, MulticanonicalResult<BassState> result,

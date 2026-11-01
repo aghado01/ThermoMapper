@@ -183,12 +183,35 @@ public sealed class SamcLearningTests
     }
 
     [Fact]
+    public void Infeasibility_ReadsWhereFlatOccupancyLeavesTheHull_OfADiscreteMeasuresHats()
+    {
+        // Three nodes over [0, 1], π = (1/4, 1/2, 1/4). One atom at 0.9 of segment 0 gives node 0 at most a tenth of the
+        // mass under it, so node 0's quarter needs x₁ = 2.5, 1.5 past the whole: outside the hull at segment 0, by 1.5.
+        // Atoms at the nodes themselves span the simplex: inside. A dense quadrature: inside. With segment 0 empty, node 0's
+        // share spreads over the rest, and node 1's 5/8 needs more than the half an atom at u = 0.5 gives: outside at
+        // segment 1, by 0.25.
+        var shape = MulticanonicalWeights.Flat(0.0, 1.0, 0.5, 3);
+        (int segment, double gap) = SamcLearning.Infeasibility(shape, [0.45, 0.95], [0.0, 0.0]);
+        Assert.Equal(0, segment);
+        Assert.Equal(1.5, gap, 12);
+        Assert.Equal((-1, 0.0), SamcLearning.Infeasibility(shape, [0.0, 0.5, 1.0], [Math.Log(0.25), Math.Log(0.5), Math.Log(0.25)]));
+        var wide = MulticanonicalWeights.Flat(-6.0, 2.0, 0.3, 9);
+        (double[] levels, double[] masses) = Quadrature(wide.WithLogWeights([.. Enumerable.Range(0, 9).Select(k => -0.5 * wide.Node(k))]), -6.0, 2.0, 8_000);
+        Assert.Equal((-1, 0.0), SamcLearning.Infeasibility(wide, levels, masses));
+        (segment, gap) = SamcLearning.Infeasibility(shape, [0.75, 1.0], [0.0, 0.0]);
+        Assert.Equal(1, segment);
+        Assert.Equal(0.25, gap, 12);
+        Assert.Throws<ArgumentException>(() => SamcLearning.Infeasibility(shape, [0.5], [0.0, 0.0]));
+    }
+
+    [Fact]
     public void FixedPoint_WithTiedNodes_RefusesWhatItCannotFlatten_AndFewerThanTwoUntiedNodes()
     {
         // Two atoms at 0.9 of their segments: node 0's flat share, a quarter, needs 2.5 times the first atom's mass, more
         // than the whole. No tilt reaches it, untied or tied, and each solve refuses it.
         var shape = MulticanonicalWeights.Flat(0.0, 1.0, 0.5, 3);
-        Assert.Throws<InvalidOperationException>(() => SamcLearning.FixedPoint(shape, [0.45, 0.95], [0.0, 0.0], out _));
+        var untied = Assert.Throws<InvalidOperationException>(() => SamcLearning.FixedPoint(shape, [0.45, 0.95], [0.0, 0.0], out _));
+        Assert.Contains("leaves the hull of the measure's hats at segment 0 (ℓ 0 to 0.5), by 1.5 of its mass", untied.Message);
         var refusal = Assert.Throws<InvalidOperationException>(() => SamcLearning.FixedPoint(shape, [0.45, 0.95], [0.0, 0.0], (ReadOnlySpan<bool>)new bool[3]));
         Assert.Contains("merged node", refusal.Message);
         // Tied, node 0 continues from node 1 at b_lo = 0.5, and node 1's merged hat sees the first atom whole: then it flattens.

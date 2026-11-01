@@ -10,13 +10,13 @@ namespace Maths.Samplers.FlatHistogram;
 public sealed record LearningSnapshot(long Iteration, MulticanonicalWeights Weights);
 
 /// <summary>
-/// A multicanonical run's restart state: its identity, the learning's state, diagnostics and trace, and either the
-/// chains' restart states (while learning, or at its end before production) or the ensemble shell's checkpoint (once
-/// production has begun), whose chains carry their production records.
+/// A multicanonical run's restart state: its identity, the learning's state, diagnostics and trace, the nodes its warm
+/// start tied, and either the chains' restart states (while learning, or at its end before production) or the ensemble
+/// shell's checkpoint (once production has begun), whose chains carry their production records.
 /// </summary>
 public sealed record MulticanonicalCheckpoint(
     RunIdentity Identity, SamcLearningState Learning, FlatHistogramDiagnostics LearningDiagnostics,
-    IReadOnlyList<LearningSnapshot> WeightTrace, IReadOnlyList<IChainState>? Chains, EnsembleCheckpoint? Production);
+    IReadOnlyList<LearningSnapshot> WeightTrace, int[] TiedNodes, IReadOnlyList<IChainState>? Chains, EnsembleCheckpoint? Production);
 
 /// <summary>
 /// A multicanonical run's outcome, so far.
@@ -26,6 +26,9 @@ public sealed record MulticanonicalCheckpoint(
 /// <param name="LearningDiagnostics">The learning's visits: occupancy, outside counts, round trips.</param>
 /// <param name="WeightTrace">The learning's weights, at its start and every hundredth of its length, and at its end; where
 /// the learning raised the window's top, later snapshots hold more nodes.</param>
+/// <param name="TiedNodes">The nodes the warm start tied where SAMC's fixed point refused the pilot's ĝ
+/// (<see cref="Wham.WarmStart(TemperingPilot, MulticanonicalWeights, double, out int[])"/>), ascending; empty from flat or
+/// where the fixed point accepted ĝ as it stands.</param>
 /// <param name="Production">The ensemble shell's summary of production, D10's verdict on π_w's functionals among it;
 /// null before production.</param>
 /// <param name="Draws">The production draws, for the reweighting; null before production.</param>
@@ -35,7 +38,7 @@ public sealed record MulticanonicalCheckpoint(
 /// <param name="Complete">Whether the run reached its configured lengths.</param>
 public sealed record MulticanonicalResult<TState>(
     MulticanonicalWeights Weights, SamcLearningState Learning, FlatHistogramDiagnostics LearningDiagnostics,
-    IReadOnlyList<LearningSnapshot> WeightTrace, EnsembleRun? Production, MulticanonicalDraws? Draws,
+    IReadOnlyList<LearningSnapshot> WeightTrace, int[] TiedNodes, EnsembleRun? Production, MulticanonicalDraws? Draws,
     FlatHistogramDiagnostics? ProductionDiagnostics, IReadOnlyList<IMulticanonicalChain<TState>> Chains,
     MulticanonicalCheckpoint? Checkpoint, bool Complete);
 
@@ -86,13 +89,14 @@ public static class MulticanonicalRun
         SamcLearning learning;
         HistogramAccumulator learnHistogram;
         List<LearningSnapshot> trace;
+        int[] tied;
         IMulticanonicalChain<TState>[] live = new IMulticanonicalChain<TState>[chains];
         MulticanonicalTarget<TState> wrapped;
         EnsembleCheckpoint? production = null;
         int[] seeds = SeedTree.Derive(masterSeed, 2 * chains);
         if (resumeFrom is null)
         {
-            (MulticanonicalWeights start, double t0, long gainStart) = Resolve(spec, pilot);
+            (MulticanonicalWeights start, double t0, long gainStart, tied) = Resolve(spec, pilot);
             learning = new SamcLearning(start, t0, gainStart);
             wrapped = new MulticanonicalTarget<TState>(target, start);
             learnHistogram = new HistogramAccumulator(start, chains);
@@ -107,6 +111,7 @@ public static class MulticanonicalRun
             wrapped = new MulticanonicalTarget<TState>(target, learning.Weights);
             learnHistogram = new HistogramAccumulator(learning.Weights, resumeFrom.LearningDiagnostics);
             trace = [.. resumeFrom.WeightTrace];
+            tied = [.. resumeFrom.TiedNodes];
             production = resumeFrom.Production;
             if (production is null)
             {
@@ -158,9 +163,9 @@ public static class MulticanonicalRun
         if (!learned || remaining <= 0)
         {
             MulticanonicalCheckpoint? held = checkpoint
-                ? new MulticanonicalCheckpoint(identity, learning.Save(), learnHistogram.Snapshot(), [.. trace], Saved(live), null)
+                ? new MulticanonicalCheckpoint(identity, learning.Save(), learnHistogram.Snapshot(), [.. trace], [.. tied], Saved(live), null)
                 : null;
-            return new MulticanonicalResult<TState>(learning.Weights, learning.Save(), learnHistogram.Snapshot(), [.. trace],
+            return new MulticanonicalResult<TState>(learning.Weights, learning.Save(), learnHistogram.Snapshot(), [.. trace], [.. tied],
                 null, null, null, live, held, Complete: false);
         }
 
@@ -184,14 +189,15 @@ public static class MulticanonicalRun
         }
         var draws = new MulticanonicalDraws(learning.Weights, levelsOut, functionals, model.FunctionalDim);
         MulticanonicalCheckpoint? restart = checkpoint
-            ? new MulticanonicalCheckpoint(identity, learning.Save(), learnHistogram.Snapshot(), [.. trace], null, summary.Checkpoint)
+            ? new MulticanonicalCheckpoint(identity, learning.Save(), learnHistogram.Snapshot(), [.. trace], [.. tied], null, summary.Checkpoint)
             : null;
-        return new MulticanonicalResult<TState>(learning.Weights, learning.Save(), learnHistogram.Snapshot(), [.. trace], summary, draws,
+        return new MulticanonicalResult<TState>(learning.Weights, learning.Save(), learnHistogram.Snapshot(), [.. trace], [.. tied], summary, draws,
             FlatHistogramDiagnostics.Merge(diagnostics), handles, restart, summary.SamplesUsed >= spec.ProductionDraws);
     }
 
-    // The starting weights, t₀ and the gain's start, from the spec and, where it leaves them, the pilot.
-    private static (MulticanonicalWeights Start, double GainScale, long GainStart) Resolve(FlatHistogramSpec spec, TemperingPilot? pilot)
+    // The starting weights, t₀, the gain's start and the nodes the warm start tied, from the spec and, where it leaves them,
+    // the pilot.
+    private static (MulticanonicalWeights Start, double GainScale, long GainStart, int[] Tied) Resolve(FlatHistogramSpec spec, TemperingPilot? pilot)
     {
         if (spec.NeedsPilot && pilot is null)
             throw new ArgumentException("The spec starts from WHAM or reads its window, b_lo or K from a tempering pilot, and none was given.", nameof(pilot));
@@ -200,8 +206,9 @@ public static class MulticanonicalRun
         int nodes = spec.Nodes ?? Wham.Nodes(pilot!, window);
         var shape = MulticanonicalWeights.Flat(window.Low, window.High, lowSlope, nodes);
         double t0 = spec.GainScale ?? 10.0 * nodes;
-        if (spec.Start == FlatHistogramStart.Flat) return (shape, t0, spec.GainStart ?? 0);
-        return (Wham.WarmStart(pilot!, shape), t0, spec.GainStart ?? pilot!.Draws / spec.Chains);
+        if (spec.Start == FlatHistogramStart.Flat) return (shape, t0, spec.GainStart ?? 0, []);
+        MulticanonicalWeights start = Wham.WarmStart(pilot!, shape, Wham.ThinDraws, out int[] tied);
+        return (start, t0, spec.GainStart ?? pilot!.Draws / spec.Chains, tied);
     }
 
     // The whole node spacings the chains' highest visit lies above the window's top: the nodes that raise it to the highest

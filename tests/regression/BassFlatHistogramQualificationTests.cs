@@ -179,7 +179,7 @@ public sealed class BassFlatHistogramQualificationTests
             string verdict = "accepted";
             try { SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _); }
             catch (InvalidOperationException e) { verdict = e.Message; }
-            (int at, double gap) = FlatHistogramLimit.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
+            (int at, double gap) = SamcLearning.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
             var draws = new double[shape.Nodes];
             for (int i = 0; i < pilot.Rungs; i++)
                 foreach (double level in pilot.Levels(i))
@@ -259,8 +259,9 @@ public sealed class BassFlatHistogramQualificationTests
         }
         catch (InvalidOperationException e)
         {
-            (int at, double gap) = FlatHistogramLimit.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
-            verdict = $"refused ({e.Message[(e.Message.LastIndexOf(' ') + 1)..].TrimEnd('.')} from flat; outside the hull at segment {at}, by {gap:F4})";
+            (int at, double gap) = SamcLearning.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
+            Assert.Contains($"at segment {at} ", e.Message);
+            verdict = $"refused (outside the hull at segment {at}, by {gap:F4})";
         }
         string after;
         try
@@ -384,8 +385,7 @@ public sealed class BassFlatHistogramQualificationTests
         try { SamcLearning.FixedPoint(shape, estimate.Levels, estimate.LogMasses, out _); }
         catch (InvalidOperationException e)
         {
-            (int at, double gap) = FlatHistogramLimit.Infeasibility(shape, estimate.Levels, estimate.LogMasses);
-            verdict = $"refused ĝ as it stands ({e.Message} Flat occupancy outside the hull at segment {at}, by {gap:F4}.)";
+            verdict = $"refused ĝ as it stands ({e.Message})";
         }
         try
         {

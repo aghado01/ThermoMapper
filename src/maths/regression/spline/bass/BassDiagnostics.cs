@@ -231,8 +231,9 @@ public sealed record BassSmcReplicate(
 /// <summary>
 /// A flat-histogram fit's readout (N17 Phase 2), the engine's diagnostics beside the weights they describe.
 /// <list type="bullet">
-/// <item><b>The weights</b> as resolved: <see cref="Weights"/> carries the window [ℓ_lo, ℓ_hi], K nodes and b_lo, the
-/// learning's last (frozen once production began), with t₀ (<see cref="GainScale"/>) and the gain's start.</item>
+/// <item><b>The weights</b> as the learning left them: <see cref="Weights"/> carries the window [ℓ_lo, ℓ_hi], its top raised
+/// where the learning's visits raised it (<see cref="FlatHistogramSpec.ExtendTopUntil"/>), K nodes and b_lo, the learning's
+/// last (frozen once production began), with t₀ (<see cref="GainScale"/>) and the gain's start.</item>
 /// <item><b>The learning:</b> its iterations, its visits' occupancy, flatness and round trips
 /// (<see cref="Learning"/>), and its weight trace, at its start, every hundredth of its length and its end.</item>
 /// <item><b>Production:</b> the visits pooled (<see cref="Production"/>) and per chain (<see cref="ProductionChains"/>),
@@ -244,7 +245,9 @@ public sealed record BassSmcReplicate(
 /// <item><see cref="Evidence"/>: the ln Z(b) curve and ln Z(1) − ln Z(b_lo), from a complete run under proper σ² and
 /// intercept priors when the evidence is asked for; the fit's <see cref="BassFit.Evidence"/> only from b_lo = 0.</item>
 /// <item><see cref="Pilot"/>: the tempering pilot's readout, when the run read one (<see cref="BassFlatHistogramPilotReadout"/>).
-/// A fit whose start is WHAM's was accepted by SAMC's fixed point on the pilot's ĝ; a refused one throws.</item>
+/// A WHAM start is SAMC's limit on the pilot's ĝ, or where the fixed point refuses ĝ, its limit with the thin nodes tied
+/// (<see cref="BassFlatHistogramPilotReadout.TiedNodes"/>); a pilot too thin to tie, or a tied limit refused too,
+/// throws.</item>
 /// <item><see cref="Complete"/>: whether the run reached its lengths; a fit short of them has no posterior to view.</item>
 /// </list>
 /// </summary>
@@ -273,13 +276,17 @@ public sealed record BassFlatHistogramReadout(
 /// rejections and barrier (<see cref="BassTemperingReadout"/>).</item>
 /// <item><see cref="InverseTemperatures"/> and <see cref="Inefficiencies"/>: the pooled rungs WHAM combined, and each one's
 /// draws per effective draw; <see cref="Draws"/> over every rung.</item>
-/// <item><see cref="NodeDraws"/>: the pilot's draws under each node's hat over the start's window. Where a node holds none
-/// (<see cref="EmptyNodes"/>), as between phases the pilot does not cross, WHAM's ĝ has no mass, the start interpolates the
-/// node's weight, and the learning must fill it.</item>
+/// <item><see cref="NodeDraws"/>: the pilot's draws under each node's hat over the start's window
+/// (<see cref="Wham.NodeDraws"/>). Where a node holds none (<see cref="EmptyNodes"/>), as between phases the pilot does not
+/// cross, WHAM's ĝ has no mass there, and the learning must fill the node.</item>
+/// <item><see cref="TiedNodes"/>: the nodes the warm start tied, those under <see cref="Wham.ThinDraws"/> of
+/// <see cref="NodeDraws"/>, where SAMC's fixed point refused ĝ as it stands (flat occupancy outside the hull of its atoms'
+/// hats, <see cref="SamcLearning.Infeasibility"/>); empty where the fixed point accepted it, its empty nodes then read off
+/// the line through their neighbours. A tied node's weight is a start only, which the learning corrects.</item>
 /// </list>
 /// </summary>
 public sealed record BassFlatHistogramPilotReadout(
-    BassTemperingReadout Ladders, double[] InverseTemperatures, double[] Inefficiencies, long Draws, double[] NodeDraws)
+    BassTemperingReadout Ladders, double[] InverseTemperatures, double[] Inefficiencies, long Draws, double[] NodeDraws, int[] TiedNodes)
 {
     /// <summary>The nodes under whose hats the pilot drew nothing.</summary>
     public int[] EmptyNodes => [.. Enumerable.Range(0, NodeDraws.Length).Where(k => NodeDraws[k] == 0.0)];
