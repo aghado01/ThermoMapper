@@ -36,7 +36,7 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 
 ## Reports
 
-### N17's warm start made robust, and Friedman replicated: verified by reading — 2026-10-31
+### N17's warm start made robust, and Friedman replicated: verified — 2026-10-31
 
 A chip diagnosed the refusals, tied the thin nodes where SAMC's fixed point refuses ĝ, and replicated Friedman on seeds 8217 and 8417 ([its report](flat-histogram-warmstart-brief.md#reports); `694dfa9`–`7fc684e`, report `3990c63`). Source changed: `SamcLearning.cs` and `Wham.cs` only.
 - *The main session's checks, by reading:*
@@ -46,7 +46,7 @@ A chip diagnosed the refusals, tied the thin nodes where SAMC's fixed point refu
   - the hull reading re-derived: SAMC's limit on a discrete measure exists only where flat occupancy lies inside the hull of the atoms' hat vectors; seed 8217's numbers (one atom at u = 0.869 under node 0, 3.0% needed, 2.6% handed to node 1 against its 0.79%) recomputed;
   - `Friedman_ArmOne_SecondSeed_TwiceTheSweeps` byte-identical to `56c66f3`; seed 8417 declared in `46332d7`, and its test, with the same criteria, committed in `7fc684e` before its run;
   - the replications' arithmetic recomputed from the per-chain values: the SDs (0.15 and 0.63; the flat start's 0.54), the errors, and each criterion.
-- *Not yet rerun by the main session:* the suites (the chip's Samplers 277, Regression 1,403, the BASS oracle classes 90) and `BassBitIdentityTests`. They are held while the cost-qualification chip times its grid, and run after it.
+- *The suites, rerun by the main session at `f7d54f7`* (Release, after the cost grid finished): Samplers 277 of 277, Regression 1,403 of 1,403 (`BassBitIdentityTests` among them), the BASS oracle classes 90 of 90, the chip's counts.
 - *Reported, not ruled:* on seed 8417 the unlabelled a1 + x6·x8 disagrees across chains (χ² p < 0.001). Phase 1's 0.25 RMS is met neither by the tied starts (0.29, 0.32) nor by the accepted ones on the same shapes (0.84, 0.71); the tests' 0.35 bounds were set after those readings, so they are pins, not criteria.
 - *Recorded in:* `docs/Maths/Samplers.md`, "Flat-histogram sampling" (the limit's existence, the tied solve, the warm start's rule, the API row); `docs/Maths/BayesianRegression.md`, "BASS: the flat-histogram sampler" (the refusal, the replication's table); the design's "Phase 2, as built".
 - *Open:* the loose-ends brief gains the readout's `TiedNodes`, the adapter's duplicate `NodeDraws`, and a refusal message naming the segment that leaves the hull. A relative threshold and tying always are options, not taken.

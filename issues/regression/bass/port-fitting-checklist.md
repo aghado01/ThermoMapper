@@ -59,6 +59,20 @@ The open seams (F-X1, F-X2, F-X3, F-X6 here; N-X1–N-X3; O-X4) were briefed for
 
 ## Reports
 
+### Performance qualification's cost half, verified — 2026-10-31
+
+A chip measured the cost half ([its brief and report](performance-cost-brief.md#reports); the harness `fa39a1d` and six revisions, the report and its 83-row table `f7d54f7`). Tests and an R script only: no file under `src/` changed across `fa39a1d^..f7d54f7`.
+- *The main session's checks:*
+  - the harness asserts that the timed proposals commit nothing (`BassMixing.Untouched`, checked after each point's sweeps), the allocation counter (a `byte[1000]` at 1,024 B, `MarginalAt` × 1,000 at 0 B), the categorical designs' levels, and the counts' repeatability;
+  - the lever table recomputed from the CSV's 59 grid rows (the one-way share 2 − ō times the births' and changes' cross products, with and without the column, and the column's share): the base's 16%, 35% and 25% and every other column checked match; at K ≥ 4 and L = 1,024 the report gives bounds, as it says;
+  - the counted units at the base: a column, 1,000 × (1.05 + 4) passes at 2.1 ns, 10.6 µs against 10.9; the cross products, 23,000 at 0.41 ns, 9.4 against 9.3; a change, 29,650 units at 0.86 ns, 25.5; and at the cap 0.50 changes a sweep × 25.5 µs is 58% of 22.1, the change's share;
+  - the two full passes' ratio recomputed: median 1.29, quartiles 0.98–1.52, range 0.70–2.60; no block flagged.
+- *A correction:* the report says the unattributed rest stays within the sweep's IQR at all 59 points, −18% to +23% of a sweep. Recomputed, it exceeds the IQR at 8 points, all positive and at small sweeps (7–70 µs): 1.3–8.2 µs, 8–25% of the sweep, the most at n = 200, M_max = 50. That is fixed per-sweep work outside the timed parts, so the fixed class (lever 4) is understated there; the ranking does not move.
+- *Read with care:* other processes kept 1.6–6.9 cores busy though no test host ran, so absolute times hold to about ±30% and shares to about ±5 points; the quiet-machine rule as briefed counted test hosts only. The grid reads capped chains by design, where no births are proposed; below the cap births join changes, and lever 1 covers both. The order axis held mostly one-way terms (mean held order 1.05), so higher-order terms' costs are thinly read. The summary's "40–45%" for lever 1 at large n and M is the table's columns; the n × M_max cross reads up to 62% with the column (n = 20,000, M_max = 100).
+- *The suites at `f7d54f7`* (Release, after the grid): Samplers 277 of 277, Regression 1,403 of 1,403 (the eight bit-identity hashes among them, with the harness in the tree), the BASS oracle classes 90 of 90.*
+- *Recorded in:* `docs/Maths/BayesianRegression.md`, "Cost, qualified" (after S10's cost table, which it supersedes for today's costs); the hub's performance paragraph.
+- *Next:* the statistical half (error per unit time and run lengths), now that Friedman is replicated; the efficiency pass, its levers priced, when it is scheduled.
+
 ### Friedman's posterior, replicated on three seeds — 2026-10-31
 
 The flat histogram's warm start was made robust and Friedman replicated (the numerics checklist's report has the verification). Seeds 8217 and 8417, at twice the sweeps, meet every criterion written before their runs: ln Ẑ(1) −841.55 ± 0.07 and −841.14 ± 0.32 against seed 8017's −841.36 ± 0.17, and a1 at 66.6% and 68.4% against 65.9%.

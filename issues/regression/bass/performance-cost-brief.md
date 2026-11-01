@@ -229,7 +229,7 @@ A point is read at chain 0's burned state, started and seeded as the run does it
 - **The composition is no longer the sweep's largest part.** M1 read it at 34–94% at Thin = 1. That was before `9ed600a` (2026-10-29), which caches each term's column mean. A composition now costs about 2 µs a draw at M = 20 and 44 µs at M = 200. With τ, the composition is a fixed 18% of the base sweep, 36% at n = 200, and under 3% from n = 10,000.
 - **In direct functional fits, the commit takes 30–56% of a sweep from N = 20,000.** Refit rebuilds the residual explicitly, at O(N·M) per accepted move: 19.7 ms per commit at 500 × 1,000.
 - **Below the cap, births take 16–28% of a sweep:** at n = 200, at p ≥ 100, and at M_max ≥ 100 with n = 1,000.
-- **The rest stays within the sweep's IQR at all 59 points,** −18% to +23% of the sweep. The parts, weighed by their frequencies, account for the sweep.
+- **The rest stays within the sweep's IQR at all 59 points,** −18% to +23% of the sweep. The parts, weighed by their frequencies, account for the sweep. *(The main session's recount, 2026-10-31: the rest exceeds the IQR at 8 points, all positive and at sweeps of 7–70 µs, up to 25% at n = 200, M_max = 50; the fitting checklist's report.)*
 
 #### Memory
 
