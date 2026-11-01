@@ -57,7 +57,8 @@ public sealed record CouplingProjection : IEdgeProjection
     public required IKernelDescriptor Kernel { get; init; }
 
     /// <summary>Local Mutual Proximity post-rescaling. <c>null</c> =
-    /// diagnostic-driven; <c>true</c>/<c>false</c> = explicit user assertion.</summary>
+    /// diagnostic-driven; <c>true</c>/<c>false</c> = explicit user assertion. Repair edges keep
+    /// their kernel coupling under LMP.</summary>
     public bool? LmpRescale { get; init; }
 
     /// <summary>Override for the metric's declared
@@ -80,6 +81,10 @@ public sealed record CouplingProjection : IEdgeProjection
     /// stays connected under any kernel. <c>0</c> keeps every edge. The default is the
     /// historical 1e-10.</summary>
     public double CouplingFloor { get; init; } = 1e-10;
+
+    /// <summary>How LMP ranks an edge among a node's edges, when LMP runs. <see cref="LmpRankRule.Strict"/>
+    /// is the historical rule and writes an exact 0 on every node's weakest edge.</summary>
+    public LmpRankRule LmpRank { get; init; } = LmpRankRule.Strict;
 
     [JsonIgnore] public EdgeWeightKind Kind => EdgeWeightKind.Coupling;
 }

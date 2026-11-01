@@ -23,14 +23,20 @@ namespace Graphs.Proximity
         /// </param>
         /// <param name="protectedEdges">
         /// Undirected vertex pairs that keep their input weight instead of the MP product
-        /// (load-bearing H1 cycle edges from PH).
+        /// (load-bearing H1 cycle edges from PH, and the repair stage's bridges).
+        /// </param>
+        /// <param name="rankRule">
+        /// <see cref="LmpRankRule.Strict"/> counts strictly weaker edges, so each node's weakest edge
+        /// gets exactly 0; <see cref="LmpRankRule.Inclusive"/> counts the edge itself and ties.
         /// </param>
         public static CsrGraph ApplyLocalScaling(
             CsrGraph graph,
             bool weightsAreCouplings = false,
-            IReadOnlySet<(int Lo, int Hi)>? protectedEdges = null)
+            IReadOnlySet<(int Lo, int Hi)>? protectedEdges = null,
+            LmpRankRule rankRule = LmpRankRule.Strict)
         {
             double[] mpWeights = new double[graph.Weights.Length];
+            bool inclusive = rankRule == LmpRankRule.Inclusive;
 
             Parallel.For(0, graph.NodeCount, u =>
             {
@@ -60,8 +66,8 @@ namespace Graphs.Proximity
                     }
 
                     // P(U > w) and P(V > w)
-                    int countU = weightsAreCouplings ? CountWeakerCouplings(rowU, w) : CountLargerDistances(rowU, w);
-                    int countV = weightsAreCouplings ? CountWeakerCouplings(rowV, w) : CountLargerDistances(rowV, w);
+                    int countU = Count(rowU, w, weightsAreCouplings, inclusive);
+                    int countV = Count(rowV, w, weightsAreCouplings, inclusive);
 
                     double pU = (double)countU / degreeU;
                     double pV = (double)countV / degreeV;
@@ -78,6 +84,67 @@ namespace Graphs.Proximity
                 NodeCount = graph.NodeCount,
                 Weights = mpWeights              // Inject the new probabilities
             };
+        }
+
+        private static int Count(ReadOnlySpan<double> values, double threshold, bool couplings, bool inclusive) =>
+            (couplings, inclusive) switch
+            {
+                (true, false)  => CountWeakerCouplings(values, threshold),
+                (true, true)   => CountAtMost(values, threshold),
+                (false, false) => CountLargerDistances(values, threshold),
+                (false, true)  => CountAtLeast(values, threshold),
+            };
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int CountAtMost(ReadOnlySpan<double> values, double threshold)
+        {
+            int count = 0;
+            int i = 0;
+
+            if (Vector256.IsHardwareAccelerated && values.Length >= 4)
+            {
+                Vector256<double> vecTarget = Vector256.Create(threshold);
+                ref double ptr = ref MemoryMarshal.GetReference(values);
+
+                for (; i <= values.Length - 4; i += 4)
+                {
+                    Vector256<double> mask = Vector256.LessThanOrEqual(Vector256.LoadUnsafe(ref ptr, (nuint)i), vecTarget);
+                    count += BitOperations.PopCount(mask.ExtractMostSignificantBits());
+                }
+            }
+
+            for (; i < values.Length; i++)
+            {
+                if (values[i] <= threshold) count++;
+            }
+
+            return count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int CountAtLeast(ReadOnlySpan<double> values, double threshold)
+        {
+            int count = 0;
+            int i = 0;
+
+            if (Vector256.IsHardwareAccelerated && values.Length >= 4)
+            {
+                Vector256<double> vecTarget = Vector256.Create(threshold);
+                ref double ptr = ref MemoryMarshal.GetReference(values);
+
+                for (; i <= values.Length - 4; i += 4)
+                {
+                    Vector256<double> mask = Vector256.GreaterThanOrEqual(Vector256.LoadUnsafe(ref ptr, (nuint)i), vecTarget);
+                    count += BitOperations.PopCount(mask.ExtractMostSignificantBits());
+                }
+            }
+
+            for (; i < values.Length; i++)
+            {
+                if (values[i] >= threshold) count++;
+            }
+
+            return count;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

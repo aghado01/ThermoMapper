@@ -491,12 +491,24 @@ public static class GraphCompiler
         log.Info("Scaling",
             $"Kernel={kernel.GetType().Name}, Strategy={strategy}, Geometry={geometry}, Fidelity={fidelity}, SphericalMode={sphericalMode}.");
 
+        // LMP leaves the injected protect set (H1 cycle edges) and the repair bridges their kernel coupling.
         Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? protectedProvider = null;
-        if (protectedEdges is not null)
+        if (protectedEdges is not null || repairEdges.Count > 0)
         {
             protectedProvider = (sel, nodeCount) =>
-                protectedEdges(BuildDistanceGraph(sel, nodeCount));
-            log.Info("Scaling", "Protected-edge source supplied; LMP will preserve the designated edges.");
+            {
+                IReadOnlySet<(int Lo, int Hi)>? injected =
+                    protectedEdges?.Invoke(BuildDistanceGraph(sel, nodeCount));
+                if (repairEdges.Count == 0) return injected;
+                if (injected is null) return repairEdges.Pairs;
+                var union = new HashSet<(int Lo, int Hi)>(injected);
+                union.UnionWith(repairEdges.Pairs);
+                return union;
+            };
+            if (protectedEdges is not null)
+                log.Info("Scaling", "Protected-edge source supplied; LMP will preserve the designated edges.");
+            if (repairEdges.Count > 0)
+                log.Info("Scaling", $"LMP will keep the {repairEdges.Count} repair edge(s) at their kernel coupling.");
         }
 
         IEdgeScaler inner = kernel switch
@@ -511,9 +523,9 @@ public static class GraphCompiler
 
         return lmpSetting switch
         {
-            true => new LocalMutualProximityScaler(inner, protectedEdgeProvider: protectedProvider),
+            true => new LocalMutualProximityScaler(inner, protectedEdgeProvider: protectedProvider, rankRule: coupling.LmpRank),
             false => inner,
-            null => new AutoLmpScaler(inner, log, defaultAutoLmpThreshold, protectedProvider, repairEdges),
+            null => new AutoLmpScaler(inner, log, defaultAutoLmpThreshold, protectedProvider, repairEdges, coupling.LmpRank),
         };
     }
 

@@ -11,9 +11,9 @@ namespace Graphs.Pipeline.Scalers;
 /// <summary>
 /// Stage 5 — Local Mutual Proximity scaler. Computes coupling weights
 /// from local neighborhood probability counts (SIMD popcount-friendly)
-/// rather than a global MAD bandwidth. Right when the graph carries
-/// long-distance edges (MST bridges) that a global Gaussian would
-/// collapse to near-zero.
+/// rather than a global MAD bandwidth. The compiler protects the repair
+/// stage's MST bridges, which keep their kernel coupling; any other edge
+/// that is a node's weakest gets an exact 0 under the strict rank rule.
 /// </summary>
 /// <remarks>
 /// <para><b>Inner scaler.</b> LMP operates over an existing CsrGraph's
@@ -33,12 +33,15 @@ public sealed class LocalMutualProximityScaler : IEdgeScaler
     private readonly IEdgeScaler _innerScaler;
     private readonly bool        _weightsAreCouplings;
     private readonly Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? _protectedProvider;
+    private readonly LmpRankRule _rankRule;
 
     public LocalMutualProximityScaler(
         IEdgeScaler? innerScaler         = null,
         bool         weightsAreCouplings = true,
-        Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? protectedEdgeProvider = null)
+        Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? protectedEdgeProvider = null,
+        LmpRankRule  rankRule            = LmpRankRule.Strict)
     {
+        _rankRule = rankRule;
         // Default inner: Gaussian global scaler with auto bandwidth. The
         // compiler composes LMP after the global scaler in
         // GraphCompiler.BuildScaler; this default just keeps the scaler
@@ -55,7 +58,8 @@ public sealed class LocalMutualProximityScaler : IEdgeScaler
         CsrGraph rescaled = LocalMutualProximity.ApplyLocalScaling(
             inner.Graph,
             weightsAreCouplings: _weightsAreCouplings,
-            protectedEdges: protectedEdges);
+            protectedEdges: protectedEdges,
+            rankRule: _rankRule);
 
         return inner with { Graph = rescaled };
     }

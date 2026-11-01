@@ -56,3 +56,16 @@ public enum SphericalIntrinsicMode
 	GlobalSchoenberg
 }
 
+/// <summary>
+/// How Local Mutual Proximity ranks an edge among a node's incident edges.
+/// </summary>
+public enum LmpRankRule
+{
+    /// <summary>Counts the strictly weaker edges (the historical rule). A node's weakest edge ranks 0
+    /// at that node, so LMP writes it exactly 0; a degree-1 node loses its only edge.</summary>
+    Strict,
+
+    /// <summary>Counts the edges at most as strong, the edge itself included: the empirical CDF.
+    /// The weakest edge ranks 1/degree, so no edge is written 0.</summary>
+    Inclusive,
+}

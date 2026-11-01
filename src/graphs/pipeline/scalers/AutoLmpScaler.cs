@@ -21,14 +21,17 @@ internal sealed class AutoLmpScaler : IEdgeScaler
     private readonly double _nearZeroEdgeRatioThreshold;
     private readonly Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? _protectedProvider;
     private readonly RepairEdgeSet? _repairEdges;
+    private readonly LmpRankRule _rankRule;
 
     public AutoLmpScaler(
         IEdgeScaler innerScaler,
         DiagnosticsLog log,
         double nearZeroEdgeRatioThreshold = 0.05,
         Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? protectedEdgeProvider = null,
-        RepairEdgeSet? repairEdges = null)
+        RepairEdgeSet? repairEdges = null,
+        LmpRankRule rankRule = LmpRankRule.Strict)
     {
+        _rankRule = rankRule;
         _innerScaler = innerScaler ?? throw new ArgumentNullException(nameof(innerScaler));
         _log = log ?? throw new ArgumentNullException(nameof(log));
         if (nearZeroEdgeRatioThreshold < 0.0 || nearZeroEdgeRatioThreshold > 1.0)
@@ -57,7 +60,8 @@ internal sealed class AutoLmpScaler : IEdgeScaler
             CsrGraph rescaled = LocalMutualProximity.ApplyLocalScaling(
                 tentative.Graph,
                 weightsAreCouplings: true,
-                protectedEdges: protectedEdges);
+                protectedEdges: protectedEdges,
+                rankRule: _rankRule);
             return tentative with { Graph = rescaled };
         }
 
