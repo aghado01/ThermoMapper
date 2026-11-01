@@ -160,6 +160,9 @@ public sealed class BassCostQualificationTests
             new(BassCost.Surface.Functional, 100, 5, BassCost.BaseCap, BassCost.BaseOrder, Locations: 1000),
         ];
         var run = new BassRunOptions { MaxDegreeOfParallelism = 2 };
+        // A warm-up fit first, so the process's one-time allocations (JIT, statics, caches) fall outside every reading.
+        BassCost.Point warm = BassCost.Base with { N = 200 };
+        GC.KeepAlive(Bass.Fit(BassCost.Config(warm, samples: lengths[0]), BassCost.Data(warm), run));
         foreach (BassCost.Point x in points)
         {
             BassData data = BassCost.Data(x);
