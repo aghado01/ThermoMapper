@@ -245,7 +245,7 @@ entropy) suit it better.
 | C11 | A rigid switch hidden beyond its θ-plateaus forces D_J ≥ ℓ(θ)² | This primer | Checked here, unconditional (§12.1): holds for coupled clusters; θ-plateaus restated against (q − 1)/q | Lean (L1); E2 on toys |
 | C12 | Two quiet volleys reduce aliasing | Argon notes | Heuristic, tested (§12.11, §12.14): on the n₀ = 10 schedule it stops once before a bump registers (iris's minor melt); retired with the volley-sequential rule (§13.3) | none needed |
 | C13 | The global grid's union is non-uniform after refinement | Early dyadic discussion | Withdrawn (the union stays uniform) | none needed |
-| C14 | Critical slowing down makes regime-A noise heteroscedastic | Early dyadic discussion | Withdrawn (SW suppresses it; replicates measure the rest); its premise reopened in part (§13.6): at q = 20 replicas can stick at transitions | none needed |
+| C14 | Critical slowing down makes regime-A noise heteroscedastic | Early dyadic discussion | Withdrawn (SW suppresses it; replicates measure the rest); its premise reopened in part (§13.6, §13.14): at q = 20 replicas can stick at transitions | none needed |
 | C15 | A [0, 1] observable's Fisher angle moves at most L ≤ √D_J, so its excursion is at most (b − a)·sin(min(√D_J, π)/2), sharply | §12.1–12.2 | Checked here (proof; enumeration) | Lean (L1) |
 | C16 | D_J is blind to size; its false-alarm floor is about 2.8ρ(Δ ln T)² at q = 20 | §12.3 | Confirmed by E2 (§12.9): D_J scales with N, and reaches 127 on intervals with no cluster change | done (E2) |
 | C17 | Pair connectivities, so S₂, are monotone in β; ΔS₂ bounds every merge inside an interval | Argon notes (seed); §12.4 | Checked here (Grimmett 3.21; enumeration; parity dump; all 64 steps of the extended run) | Lean (L4) |
@@ -253,7 +253,7 @@ entropy) suit it better.
 | C19 | S₂ at the bracket ends bounds the merge mass outside the bracket | §12.5 | Checked here (a corollary of C17); usefulness open | E5, against the graph's components |
 | C20 | S₂ bounds FkReduced: inside an interval, sup \|Δχ_red\| ≤ N·ΔS₂ | §12.7 | Checked here (proof; enumeration) | Lean (L4) |
 | C21 | No monotone cluster functional ignores shedding: merge(n, n) ≤ n·max join(a) over a ∈ [n, 2n) | §12.7 | Checked here (proof) | none needed |
-| C22 | The toy dump's bracket clips its cold edge | User observation; §12.7 | Checked here (§12.8), and confirmed by the extended run (§12.9): the cold side of the stripe split lies below the old T_lo; not a miscomputed bracket, and not components | done |
+| C22 | The toy dump's bracket clips its cold edge | User observation; §12.7 | Checked here (§12.8), and confirmed by the extended run (§12.9): the cold side of the stripe split lies below the old T_lo; not components. Cause corrected (§13.14, C44): the anchor is miscomputed, and the corrected T_lo is 0.0045 | done |
 | C23 | A spanning tree's S₂ is a closed-form lower bound on S₂(T) | §12.8 | Checked here (comparison inequality; all 48 grid points on both datasets) | Lean (L4) |
 | C24 | A split through a sparse bridging population frees those spins too, so it is sharper than a bare split, towards a melt | §12.9 | Derived from E1, unverified | Toys that vary the bridge density |
 | C25 | Per-interval ΔS₂ tests lose power at fine volleys; a test that descends the dyadic tree keeps it | §12.9, §12.14, §12.17 | Designed (§12.17: hereditary quiet, α spent over levels, narrowest-over-threshold localization); no quiet certification contradicted by an independent sweep | More datasets; replicate allocation for indeterminate blocks |
@@ -274,7 +274,12 @@ entropy) suit it better.
 | C40 | A threshold set by replica noise makes "quiet" depend on the budget; certifying an absence needs a margin, the scale of interest | §13.7 | Argued here | none needed |
 | C41 | An interval is resolved when the trapezoid of its endpoint slopes matches its exact increment (ΔS₂, or Δ⟨E⟩ for energy), within error; the mismatch shrinks like h² | §13.5 | Derived here (exact integral; trapezoid error); unverified on SW data | E7 |
 | C42 | A replica stuck in one basin mixes well inside it, so no single-chain diagnostic or ESS weighting reveals it; only comparison across replicas does | §13.6 | Standard (the reason R̂ exists) | E10 |
-| C43 | For q ≥ 1, Bernoulli(p̃) ≤ Potts(q) ≤ Bernoulli(p) in the random-cluster order, p̃ = p/(p + q(1 − p)), so every increasing functional (S₂, F_n, τ_e) lies between two independent-bond percolations | §13.13 | Checked against Grimmett (2006), Theorem 3.21: (3.22) with q₂ = 1 gives the upper side, (3.23) with q₂ = 1 the lower; consistent with C23 (lower side, on a tree) and C30 (one edge's crossing) | E14 |
+| C43 | For q ≥ 1, Bernoulli(p̃) ≤ Potts(q) ≤ Bernoulli(p) in the random-cluster order, p̃ = p/(p + q(1 − p)), so every increasing functional (S₂, F_n, τ_e) lies between two independent-bond percolations | §13.13 | Checked against Grimmett (2006), Theorem 3.21: (3.22) with q₂ = 1 gives the upper side, (3.23) with q₂ = 1 the lower; edge-dependent p_e per §11.4 (11.28); consistent with C23 (lower side, on a tree) and C30 (one edge's crossing) | E14 |
+| C44 | The bracket's anchor is e^(−⟨d²⟩/2a²)/(4 ln(1 + √q)), and the code has ln(1 + √q) in the numerator: 0.258 where the formula gives 0.089 at q = 20, and it rises with q | §13.14 | Checked here (BWD 1997 eq. 4.2; (3.22) forbids a rise with q; measured melts 0.10–0.117) | Correct it and re-read the multipliers (the user's call) |
+| C45 | A dense cluster's melt sits at T = s/(d·K_d(q)), K_d(q) = ln[(q − 2)/((q − 1)^(1 − 2/d) − 1)], tending to s/λ_c with λ_c = 2((q − 1)/(q − 2))ln(q − 1); d·K_d is 6.22–7.14 at q = 20 | §13.14 | Closed forms checked here (free-energy crossing, Maxwell equality); against round 1's numbers about 1.2× cold, arithmetic only | E15 |
+| C46 | For q > 2 the disordered phase is metastable well below the melt (1.17 e-folds at q = 20, complete graph), and every replica starts disordered, so R̂ can miss a shared metastable phase | §13.14 | Derived here (Lemma 10.11); no sign at round 1's sizes | E16 |
+| C47 | For signed couplings at q = 2, \|⟨σ_xσ_y⟩_J\| ≤ φ_{\|J\|,2}(x ↔ y) ≤ Bernoulli(p(\|J\|))(x ↔ y): a hot-side envelope survives, while monotonicity in β does not | §13.14 | Checked against Grimmett (Proposition 11.38, (11.44), Theorem 11.40); Potts form open | The Potts analogue |
+| C48 | One process of edge thresholds has, at every T at once, the law φ_{p(T),q}: each draw is a dendrogram in T, and ΔS₂ ≥ 0 per draw | §13.14 | Update rule derived here for edge-dependent couplings (Grimmett §8.6's construction; its displays are missing from the copy); mixing and cost unknown | E17 |
 
 ---
 
@@ -527,6 +532,8 @@ bracket [0.0129, 1.031].
 
 - **The bracket isn't miscomputed; its recipe can't see this graph's weakest significant cut.** T_lo = 0.05·T_ps is what
   the q-only formula gives.
+  - **Corrected 2026-11-01 (§13.14, C44).** It is miscomputed: the code's q-only formula has its logarithm in the wrong
+    place, and the corrected T_lo is 0.0045, about where §12.9 later extended the grid by hand.
 - **The stripes are joined only through the sparse background in the two gaps between them.** The graph has no
   stripe–stripe edges.
   - The background's bonds are weak because the one global bandwidth (0.162, the mean edge distance) is set by the dense
@@ -1596,7 +1603,7 @@ The user dropped iris as too limited and asked for the same SPC-only levers on t
 The user reopened what round 1 closed, as an adversarial round with new capabilities in hand. Round 2 was discussion: it
 ran no experiments (one quantile table was computed), and it changed no code. Where the user decided something, the
 entry says so and gives the date; everything else is open, with the experiment that would settle it. Experiments
-continue round 1's numbering (E6–E14, §13.12). New claims are C35–C43 in §7.
+continue round 1's numbering (E6–E17, §13.12). New claims are C35–C48 in §7.
 
 **What round 1 did not have**, all on `main` by 2026-10-30:
 - **The per-draw record** on `Accumulator`: `EnergyPerDraw`, `MagPerDraw`, `SumSqClusterSizesPerDraw`,
@@ -1754,8 +1761,8 @@ without BARS (§13.5).
 
 **Where "arbitrary" breaks.**
 - **Signed couplings.** The comparison inequality behind C17 needs every J ≥ 0. Frustrated SPC has no known monotone
-  companion, so (c) fails there, leaving (a), (b) and holdouts. Whether frustrated systems are in scope is open
-  (§13.12).
+  companion, so (c) fails there, leaving (a), (b) and holdouts. At q = 2 a hot-side envelope survives (§13.14). Whether frustrated systems are in
+  scope is open (§13.12).
 - **Non-equilibrium.** Monotonicity holds for the true means; a stuck replica can break it in the data (§13.6).
 - **Below the floor,** by construction: the floor is the scale of interest.
 
@@ -1763,7 +1770,7 @@ without BARS (§13.5).
 
 | Stage | Question | Tool | State |
 |---|---|---|---|
-| Equilibration | Can each temperature be trusted? | R̂ across replicas; the replica outlyingness test; per-replica against pooled V (§13.6) | Views over built pieces |
+| Equilibration | Can each temperature be trusted? | R̂ across replicas; the replica outlyingness test; per-replica against pooled V (§13.6); two starts (§13.14, C46) | Views over built pieces; an ordered start is a small engine change |
 | Endpoints | Is each grid point's partition decided? | Replica agreement, or the per-edge SE (§13.6) | Views; per-edge counts are an option |
 | Quiet intervals | Is anything significant missing? | A monotone currency, against a margin | Built |
 | Active intervals | Is each event resolved? | The split ratio at each refinement (means only); the closure test from slopes | Split ratio: views. Closure: built for energy and Var(m); S₂ needs a new column |
@@ -2100,7 +2107,7 @@ a whole.
 **Open questions for the user.**
 1. Are features of interest the dominant transition only, or every clustering level above some size? The answer sets
    the margin, and decides whether "peak resolved ⇒ curve resolved" serves.
-2. Do arbitrary systems include signed couplings? There the monotone certificate fails (§13.4).
+2. Do arbitrary systems include signed couplings? There the monotone certificate fails (§13.4), and a hot-side envelope survives at q = 2 (§13.14).
 3. Should S₂'s conjugate (B, or Σ_s N_s² on the same spins) join the per-draw record, or the closure be tried first on
    energy and Var(m), which need no engine change?
 4. Which currency should the certificate use: S₂, the information currency, F_n, or several?
@@ -2129,6 +2136,13 @@ a whole.
 - **E14. The percolation sandwich (§13.13), after the graph compiler revision.** Both percolation curves on the toy,
   BlattHierarchy (both graphs) and Landsat: does every SW curve sit between them, as C43 requires? How
   wide is the sandwich at each event? Does the bracket recipe hold the toy's cold edge (C22)?
+- **E15. Melts from the graph.** T_melt = s/(d·K_d(q)) per cluster, with its mean node strength and degree measured,
+  against measured melts on the toy, BlattHierarchy's fine clusters and AnisotropicGaussian, at q = 20 and 100. After the
+  graph compiler revision.
+- **E16. Two starts.** Half the replicas from an ordered start, half random, at q = 20 and 100 and growing cluster size:
+  where do the two disagree, against C46's window? Does R̂ within each start stay quiet there?
+- **E17. The coupled sampler on small graphs.** Level-set marginals against exact enumeration; coalescence time; ΔS₂'s
+  noise against independent endpoints at equal work.
 
 ### 13.13 Addendum, 2026-10-31: a percolation sandwich, from the CumulativeField question
 
@@ -2161,7 +2175,7 @@ a cheap way to learn about a system up front, through a mean-field "thermal curv
     BlattHierarchy's Cauchy graph, §12.28), loose where binding is collective (the toy). The sandwich's width says how
     far to trust the map: route (a) of §13.4 with its own error bar.
 - **What it doesn't give.** Feature widths: the bounds pin where events can be, not how sharp they are, so E13 stays
-  open. Signed couplings: ferromagnetic only, like C17.
+  open. Signed couplings: the sandwich is ferromagnetic, like C17; at q = 2 its upper side survives (§13.14).
 - **Mean field proper** (naive mean field, or the Bethe approximation through belief propagation) approximates the curve
   itself and handles loops approximately. No guarantee for Potts is known here (for the ferromagnetic Ising model the
   mean-field T_c is an upper bound, cited from memory), so it would be a point estimate inside the sandwich.
@@ -2174,3 +2188,124 @@ a cheap way to learn about a system up front, through a mean-field "thermal curv
   gaps; K and the coupling scale (§2.3) and where the gauge and scale are decided (§4.1) shift every crossing; LMP's
   fragmentation at small K (§2.7) changes which components exist. Confirming the citation is reading, not an
   experiment, and needn't wait.
+
+### 13.14 Addendum, 2026-11-01: mining Grimmett, and a transcription error in the bracket's anchor
+
+The user cleaned the markdown copy of Grimmett (2006) and asked whether more in it was worth mining. Read through mdnav:
+§1.5, §3.3–3.4, §3.7's first theorems, §8.4–8.6, §10.1–10.3, §10.5 (its opening), §10.7, §11.4–11.5. Chapters 4–7 and 9
+are infinite-volume and lattice theory by their outlines, and were not read. Some displays are still missing from the
+copy: (8.14)–(8.18), (10.4) and (10.78). The closed forms below were checked by independent numerics (a scratch script,
+no SW and no dataset), so nothing here rests on those displays. Experiments are named, not run.
+
+**The bracket's anchor has its logarithm in the wrong place (C44).**
+- **The code.** `BwdPottsCriticalEstimate.TpsUpperBound` computes (e^(−1/2)/4)·ln(1 + √q): 0.258 at q = 20, rising with
+  q (0.13 at q = 2, 0.36 at q = 100). Its comment says the formula was read from the PRL by hand because the extraction
+  garbled it. The 1996 compendium copy carries no display of it.
+- **The source.** BWD 1997 (Neural Computation), eq. (4.2): T ≈ (1/(4 log(1 + √q)))·exp(−⟨d²⟩/2a²), from Wu's
+  square-lattice T_c = J/ln(1 + √q) at four neighbours. (A local copy:
+  `graveyard/bibliotecha/bibliotecha/compendia/clustering/BWD1997.md`.) BWD report 0.075 from it, "in good agreement"
+  with their curve, and add that a mean-field estimate "yields a very similar value". At q = 20 with e^(−1/2), it reads
+  0.089. The two differ by ln²(1 + √q) = 2.89.
+- **Why the code's form can't be right.** By (3.22), connectivity falls as q rises at fixed p, so no transition can move
+  hotter with q. The code's anchor does.
+- **What it does to round 1.** §12.8 said the bracket wasn't miscomputed, and blamed the recipe. On the corrected
+  anchor, [0.05, 4]·T_ps is [0.0045, 0.357]. Round 1 extended the toy's cold end by hand to 0.0046 to hold the stripe
+  split (C22, §12.9), so the clipped cold edge is what the error produced. The measured melts (0.10–0.117) sit near the
+  corrected anchor, and well below the code's.
+- **What the fix isn't.** The multipliers 0.05 and 4 were set against the wrong anchor, and the parity battery's grids
+  depend on them; its note reads iris's stage 2 at "≈ 3×T_ps" of the old value, which the corrected hot end (0.357) may
+  clip. So correcting it means re-reading the multipliers too. It is a code change, the user's call, and undecided.
+
+**A dense cluster's melt in closed form: the mean-field thermal curve (C45).**
+- **The complete graph (Bollobás, Grimmett and Janson 1996; §10.2–10.3).** With p = λ/n, the giant's share θ solves
+  e^(−λθ) = (1 − θ)/(1 + (q − 1)θ), (10.6). For q > 2 the transition is first-order, with a jump θ₀ = (q − 2)/(q − 1) at
+  λ_c = 2((q − 1)/(q − 2))·ln(q − 1). Reading λ = s/T, with s a cluster's mean node strength, gives T_melt = s/λ_c, and
+  (10.6) gives the curve θ(T) itself. At q = 20: λ_c = 6.216, θ₀ = 0.947. Above the melt the bond density is p/q
+  (§10.3(d)), so the hot phase follows the sandwich's lower side (§13.13). *Checked here:* f(θ₀) = λ_c and equal free
+  energies at λ_c.
+- **Finite degree: the Bethe lattice.** K_d(q) = ln[(q − 2)/((q − 1)^(1 − 2/d) − 1)], the expression in Grimmett's
+  (3.82) (there with the maximum degree, as a boundary of the Ising domination), gives T_melt = J̄/K_d(q) = s/(d·K_d) on
+  degree d. *Checked here:* against the free-energy crossing of belief propagation's fixed points, to five decimals, at
+  q = 20 and 100, d = 3–50. Its limit is λ_c as d → ∞. At q = 20, d·K_d runs 7.14, 6.72, 6.56, 6.42, 6.35, 6.22 at d =
+  3, 4, 5, 7, 10, ∞, so the degree hardly matters.
+- **Against round 1's numbers (arithmetic only; exploration).**
+  - s ≈ 0.6 gives 0.092–0.095 at d = 5–10, and explains why "the melt barely moves" with K (§12.27). The measured melts:
+    toy 0.110–0.117, iris 0.10, BlattHierarchy 0.114.
+  - §12.20's iris melts, across bandwidths, with s ≈ e^(−x/λ²) from the median x (0.26, 0.53, 0.68) and d ≈ 7:
+
+    | Bandwidth | Predicted: setosa, versicolor, virginica | Measured | Measured over predicted |
+    |---|---|---|---|
+    | ×0.5 | 0.055, 0.019, 0.010 | 0.079, 0.030, 0.021 | 1.44, 1.61, 2.05 |
+    | ×0.7 | 0.092, 0.053, 0.039 | 0.120, 0.067, 0.057 | 1.31, 1.27, 1.47 |
+    | ×1 | 0.120, 0.092, 0.079 | 0.152, 0.109, 0.099 | 1.27, 1.19, 1.25 |
+    | ×1.4 | 0.136, 0.119, 0.110 | 0.167, 0.138, 0.130 | 1.22, 1.16, 1.18 |
+    | ×2 | 0.146, 0.136, 0.131 | 0.177, 0.159, 0.152 | 1.21, 1.17, 1.16 |
+
+    It holds the order across species and a factor of eight in T, about 1.2 cold. The gap widens at ×0.5, as it should
+    if the median understates the mean of e^(−x/λ²) when couplings spread. "Measured" is §12.20's co-membership half
+    point.
+  - *The stage length's q-independence.* With C30's T_split = C/ln(q + 1), the ratio T_melt/T_split carries q only
+    through d·K_d/ln(q + 1): 2.11 at q = 20, 2.03 at q = 100, a shift of 0.04 e-folds. That is the "q doesn't widen the
+    stage" of §12.25 and §12.29 (0.43 → 0.38 on the Gaussian graph), from the graph, for rigid thin cuts only (C30's
+    caveat; iris's thick cut isn't one).
+- **What it gives.** The map from the graph that the CumulativeField question was reaching for (§13.13): the merge order
+  from single linkage, T_split from C30, T_melt from C45, per block. It's an estimate inside the sandwich, not a
+  guarantee. It gives no width: the mean-field jump is a step at N → ∞, and real widths come from finite size and
+  coupling spread (E13).
+
+**Replicas all start in one phase, so R̂ can miss metastability (C46).** This is a gap in §13.5's equilibration gate.
+- **The window.** The disordered root θ = 0 stays stable until λ = f(0+) = q, and the ordered root until λ = min f
+  (Lemma 10.11). At q = 20 the disordered phase is metastable for 1.17 e-folds below T_melt, and the ordered phase for
+  only 0.13 above; at q = 100, 2.38 and 0.22. Those are complete-graph numbers, indicative on a KNN graph.
+- **The hole.** `SwendsenWang` starts every chain from random spins (high-T disorder), so the "overdispersed" replicas
+  of the retention brief's S1 all begin on the same side. If they all stay there, R̂ ≈ 1 and the outlyingness test of
+  §13.6 are quiet, and the certificate reads a biased curve.
+- **Is it happening?** No sign at round 1's sizes: its melts land hotter than T_melt, not colder. §12.25's q = 1000
+  failure (a random start not ordering at the cold end) is the same mechanism. It should grow with q and with cluster
+  size.
+- **The remedy to test (E16):** half the replicas from an ordered start, one colour everywhere. Disagreement between the
+  two starts is hysteresis, and marks the temperature. The single-edge Gibbs sampler has a theorem behind this: chains
+  from all-closed and all-open sandwich every other chain, and approach the invariant measure monotonically from either
+  side ((8.32), Lemma 8.31). SW has no such monotone coupling that I know of, so for SW the two starts are a diagnostic,
+  not a bound. An ordered start is a small engine change, undecided.
+- **C14's premise, again.** Grimmett notes that at the critical point SW approaches equilibrium only slowly (§8.5's
+  footnote, citing Borgs et al. 1999, *Torpid mixing of some MCMC algorithms in statistical physics*). "SW cures it"
+  holds at second-order points, not at q = 20's first-order ones.
+
+**The sandwich on data graphs, and on signed couplings.**
+- **Edge-dependent couplings (C43).** Theorem 3.21 is stated with one p. §11.4 extends the theory to edge-dependent p_e,
+  "including the comparison inequalities", and uses both directions at (11.28). So p̃_e = p_e/(p_e + q(1 − p_e)) per
+  edge stands, which data graphs need.
+- **A hot-side envelope survives frustration, at q = 2 (C47).** For real-valued J, Proposition 11.38 gives ⟨σ_xσ_y⟩ =
+  φ_p(η_{x,y}), with η the path's sign product and 0 if x and y aren't connected, and φ_p the q = 2 FK measure with p_e
+  from |J_e|, conditioned on no frustration. That event is decreasing, so (11.44) puts the measure below the
+  ferromagnet's. Hence |⟨σ_xσ_y⟩_J| ≤ φ_{|J|,2}(x ↔ y) ≤ Bernoulli(p(|J|))(x ↔ y), and β_c(J) ≥ β_c(|J|) (Theorem
+  11.40). So frustrated systems keep an upper bound on correlations, and a guaranteed hot end. They lose the
+  certificate: "correlations are not generally monotonic in β". The text covers q = 2 only; the Potts form is open. It
+  narrows open question 2.
+
+**One process for every temperature: the coupled Gibbs sampler (C48).** §8.6 builds a Markov process on [0, 1]^E whose
+level sets have law φ_{p,q} for every p at once, monotone in the start. The update rules (8.14)–(8.18) are missing from
+the copy; re-derived here for edge-dependent couplings.
+- *The state.* A threshold Y_e per edge: e is open at T exactly when T ≤ Y_e. A draw's partitions are nested in T, so
+  each draw is one dendrogram, the maximum spanning tree of Y. *The query.* F_e = the best bottleneck over paths joining
+  e's ends and avoiding e. So e's ends are connected at T without e exactly when T ≤ F_e.
+- *The update.* With α uniform, let A be the T where p_e(T) = α, and B the T where p̃_e(T) = α, so B ≤ A. Set Y_e = A if
+  A ≤ F_e, otherwise Y_e = max(F_e, B). *Check:* for T ≤ F_e, P(Y_e ≥ T) = p_e(T); for T > F_e, it is p̃_e(T). That is
+  the heat bath at every T at once.
+- *What it would change.* There is no grid to stop on, since any T reads off the same draws. ΔS₂ ≥ 0 per draw, with
+  common random numbers, so an interval's noise could fall far below two independent endpoints'. The partition sandwich
+  (C38) holds per draw, not only in expectation. Coalescence of the all-open and all-closed chains is an exact sample
+  (§8.4).
+- *What stands in the way.* These are local, single-edge moves, so mixing near a first-order melt should be poor, and it
+  has to mix at every T at once. Each update needs a bottleneck query: a path-minimum in a dynamic tree for non-tree
+  edges, a replacement search for tree edges. It's a research bet, for small graphs first (E17).
+
+**Smaller items.**
+- *The slope (C35).* Theorem 2.46/3.12's cov(|η|, X)/(p(1 − p)) is the homogeneous form of C35's Σ_e J_e ω_e/p_e.
+- *Sharp thresholds (Theorem 3.16)* need a transitive automorphism group, which data graphs lack, and bound slowness
+  rather than sharpness. They give no floor on widths.
+- *Series and parallel laws (Theorem 3.89).* The parallel law is why C30's couplings add to one C. The series law
+  extends C23's tree bound to series-parallel subgraphs, in closed form.
+- *The q ↓ 0 limit (§1.5)* gives uniform spanning trees and forests, not single linkage. So CumulativeField isn't simply
+  the family's q → 0 end, and I wouldn't claim that continuum.
