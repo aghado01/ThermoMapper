@@ -11,6 +11,19 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### Pair connectivity: τ, ⟨n⟩, P(i↔j) and C, beside δ̄ (2026-11-01)
+
+- **Kind:** one concept under several names, with a second concept one affine map away.
+- **Readings:** τ_ij and τ_e in the stopping primer (§12.21, §13.6) and `issues/spc/bayesian-clustering-design.md`; ⟨n_ij⟩ in `CoMembership` (`src/graphs/primitives/CoMembership.cs:4`); P(i↔j) in `issues/spc/opus-gvdv-ideas.md`. δ̄ = ((q−1)τ + 1)/q, the spin agreement, is the different quantity `DenseTStack` cuts, read off co-membership by `SweepEdgeCurves.CoMembershipDelta`.
+- **Found:** reading θ as a cost ratio for the Bayesian clustering note. The ratio belongs to τ, so θ on δ̄ maps through (qθ − 1)/(q − 1).
+
+### Binder: the loss and the cumulant (2026-11-01)
+
+- **Kind:** one name, two concepts by two authors.
+- **Readings:** Binder's loss (D. A. Binder 1978), the expected pair-counting loss with costs a and b, in `issues/spc/opus-gvdv-ideas.md`; the Binder cumulant U = 1 − ⟨m⁴⟩/(3⟨m²⟩²) (K. Binder 1981), `BinderCumulant` (`src/graphs/models/potts/observables/BinderCumulant.cs:16`).
+- **Found:** naming the loss for the Bayesian clustering note.
+- **Note:** proposed, not decided: pair loss over all pairs, link loss over graph edges (`issues/spc/bayesian-clustering-design.md`). Each would keep "Binder's loss" as its citation only.
+
 ### E: the energy and the window's width (2026-10-31)
 
 - **Kind:** one symbol, two concepts in one doc.
