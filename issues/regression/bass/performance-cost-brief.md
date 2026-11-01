@@ -168,6 +168,7 @@ Newest first.
 - `fa39a1d`: the harness, written before its timed runs. `BassCostQualificationTests.cs` (the facts), `BassCostQualification.cs` (`BassCost`: the surfaces, the declared grid, the burn-in rule, the meters, the rows), `BassCostSweep.cs` (M1's reader generalized), `r/scripts/bass_cost_context.R`.
 - Revisions, each before the readings it affects: `c4caee4` (a restored chain's column-mean cache filled; GC per sweep), `b3ee63d` (effects on a 20-point grid), `e216f8e` (retained memory after a warm-up fit), `b484fca` (each timed block runs itself at a tenth first, discarded; the change's analytic count), `abe8a7c` and `ca729db` (the machine's reference rates).
 - `50650e6` repairs my error: `fa39a1d` swept in the warm-start chip's staged `flat-histogram-warmstart-brief.md`. `50650e6` put HEAD's copy back without touching the working tree, and that chip committed its report itself (`3990c63`). I told it. Every commit since names its paths explicitly.
+- `91155ea`: `truncdist` 1.0-2 (with `evd` 2.3-7.1) pinned in `r/`'s renv, so the R context runs R BASS as written.
 - `performance-cost-results.csv`, beside this brief: 83 rows (59 grid points, then the outputs', backends', calibration's, parallel and machine readings) and 288 columns. `count:` columns come from the counts pass, `time:` from the record pass, `re-run:` from the grid's second pass.
 
 **How to run it** (Release, behind `BASS_QUALIFICATION` = 1, rows to `BASS_COST_OUT`; `BASS_COST_SCALE` = 0.1 for the trial):
@@ -356,12 +357,12 @@ The ranking by share at the base: lever 1 with its column skip (35%), lever 2 (2
 #### The parallel and R context
 
 - **Parallel fits** (the default four chains at the default lengths; `MaxDegreeOfParallelism` 1 against unbounded): speedups of 3.4 at the base, 2.0 at n = 10,000 and 3.0 on the direct 100 × 200. Efficiency over four cores is 0.51–0.84; the first pass read 2.5–2.7. The draws were identical across the two. The CPU is a hybrid with 4 P-cores, so four chains need E-cores or SMT siblings.
-- **R BASS 1.3.1,** run from the pinned source under R 4.6.1 with R's reference BLAS ("Matrix products: default", LAPACK 3.12.1), over its default lengths (10,000 iterations, 9,000 burn-in):
-  - Friedman at n = 500, p = 10, R's defaults: 713 µs per sweep (S10 read about 630), mean M 11;
-  - the rich surface at n = 5,000, p = 10, maxBasis 20, maxInt 2: 764 µs, M 20;
-  - the direct functional at n_x = 100, m = 50: 392 µs, M 20.
+- **R BASS 1.3.1,** run as written from the pinned source under R 4.6.1 with R's reference BLAS ("Matrix products: default", LAPACK 3.12.1), over its default lengths (10,000 iterations, 9,000 burn-in), in a window no test host entered (a run that saw one was discarded):
+  - Friedman at n = 500, p = 10, R's defaults: 691 µs per sweep (S10 read about 630), mean M 11;
+  - the rich surface at n = 5,000, p = 10, maxBasis 20, maxInt 2: 825 µs, M 20;
+  - the direct functional at n_x = 100, m = 50: 525 µs, M 20.
 - **The C# grid reads 57 and 35 µs per sweep** at the last two points, at the burned state. R's figure covers its whole run, the burn-in at growing M included, with its own per-iteration updates and fixed ⅓ move probabilities. It is context, not a comparison.
-- **`truncdist` is not installed.** In the sourced environment its truncated gamma draw is replaced by the same law's inverse CDF, as the fitting checklist's R runs did.
+- **`truncdist`:** the first R run, before it was pinned, drew R BASS's upper-truncated gamma by the same law's inverse CDF in the sourced environment, and read 713, 764 and 392 µs. Both runs gave identical chains (mean M 11.004, 20 and 20), since `rtrunc` is that inverse CDF on the same uniform stream. The gap between them, −3% to +34%, is `rtrunc`'s own overhead plus the machine's run-to-run spread.
 
 #### The hub's list
 
