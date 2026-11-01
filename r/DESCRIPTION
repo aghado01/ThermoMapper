@@ -16,4 +16,5 @@ Imports:
     T4cluster,
     T4transport,
     TDAkit,
-    TDAstats
+    TDAstats,
+    truncdist

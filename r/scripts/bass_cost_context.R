@@ -7,6 +7,7 @@
 #   the rich surface at n = 5,000, p = 10, maxBasis = 20, maxInt = 2 (the C# base point's interaction cap);
 #   the direct functional at n_x = 100, m = 50, maxBasis = 20, maxInt = 2.
 # Each runs R's default lengths (nmcmc = 10,000, nburn = 9,000) once; µs per sweep is the elapsed time over nmcmc.
+# R BASS runs as written: its truncated gamma draws come from truncdist, which the renv pins.
 # sessionInfo() and the BLAS and LAPACK in use go beside the table.
 #
 # Usage (cwd = r/):  Rscript scripts/bass_cost_context.R <data folder> <output folder> [nmcmc]
@@ -23,14 +24,6 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 bass <- bass_source(c("bass.R", "basis_funcs.R", "mcmc_funcs.R", "mcmc_update.R", "misc.R", "rjmcmc_all.R", "rjmcmc_cat.R",
                       "rjmcmc_cat_func.R", "rjmcmc_des.R", "rjmcmc_des_cat.R", "rjmcmc_des_cat_func.R", "rjmcmc_des_func.R",
                       "rjmcmc_des_ridge.R", "generics.R", "predict.R"))
-# truncdist is not installed (the fitting checklist's R runs did the same): its rtrunc draws an upper-truncated gamma
-# by the inverse CDF, so the sourced environment's rtgamma does that directly, the same law at about the same cost.
-assign("rtgamma", function(n, upper, shape, rate) {
-  out <- rep(upper, n)
-  top <- pgamma(upper, shape = shape, rate = rate)
-  if (top > 0) out <- qgamma(runif(n) * top, shape = shape, rate = rate)
-  out
-}, envir = bass)
 
 scalar <- function(file) {
   d <- read.csv(file.path(data_dir, file))
