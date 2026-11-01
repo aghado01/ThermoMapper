@@ -17,12 +17,21 @@ namespace Graphs.Observables
         /// Connectivity diagnostics: component count, largest component coverage,
         /// isolated node count. O(E alpha(N)) via union-find.
         /// </summary>
-        public static ConnectivityReport Validate(CsrGraph graph)
+        public static ConnectivityReport Validate(CsrGraph graph) => Validate(graph, positiveWeightsOnly: false);
+
+        /// <summary>
+        /// Connectivity over the edges that carry weight: with
+        /// <paramref name="positiveWeightsOnly"/>, an edge of weight zero (a coupling the kernel
+        /// underflowed, or an exact zero Local Mutual Proximity wrote) joins nothing, and
+        /// <see cref="ConnectivityReport.EdgeCount"/> counts the positive-weight edges.
+        /// </summary>
+        public static ConnectivityReport Validate(CsrGraph graph, bool positiveWeightsOnly)
         {
             int n = graph.NodeCount;
             var uf = new UnionFind(n);
 
             // Iterate each edge once (source < target direction only)
+            int edgeCount = 0;
             for (int i = 0; i < n; i++)
             {
                 int rowStart = graph.RowPointers[i];
@@ -30,11 +39,13 @@ namespace Graphs.Observables
                 for (int idx = rowStart; idx < rowEnd; idx++)
                 {
                     int j = graph.Targets[idx];
-                    if (j > i) uf.Union(i, j);
+                    if (j <= i) continue;
+                    if (positiveWeightsOnly && !(graph.Weights[idx] > 0.0)) continue;
+                    uf.Union(i, j);
+                    edgeCount++;
                 }
             }
 
-            int edgeCount = graph.Targets.Length / 2;
             var compSizes = new Dictionary<int, int>(n / 4);
             for (int node = 0; node < n; node++)
             {

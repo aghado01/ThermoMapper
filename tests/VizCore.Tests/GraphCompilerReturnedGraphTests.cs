@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Graphs;
 using Graphs.Coupling;
 using Graphs.Diagnostics;
@@ -136,6 +137,50 @@ public sealed class GraphCompilerReturnedGraphTests
 
         Assert.Contains(result.Diagnostics!.Warnings, m =>
             m.Stage == "Scaling" && m.Text.StartsWith("Auto-LMP enabled", StringComparison.Ordinal));
+    }
+
+    /// <summary>Components over the edges of positive weight, by a union-find independent of the library's.</summary>
+    private static int CoupledComponents(CsrGraph graph)
+    {
+        int[] parent = Enumerable.Range(0, graph.NodeCount).ToArray();
+        int Find(int x) { while (parent[x] != x) x = parent[x] = parent[parent[x]]; return x; }
+        for (int i = 0; i < graph.NodeCount; i++)
+            for (int slot = graph.RowPointers[i]; slot < graph.RowPointers[i + 1]; slot++)
+                if (graph.Weights[slot] > 0.0) parent[Find(i)] = Find(graph.Targets[slot]);
+        return Enumerable.Range(0, graph.NodeCount).Count(x => Find(x) == x);
+    }
+
+    [Fact]
+    public void LmpWritesTheRepairBridgeAZero_AndTheLogCountsOnlyTheCoupledEdges()
+    {
+        // The Cauchy bridge survives the floor, then Local Mutual Proximity ranks it the weakest
+        // edge at both ends and writes it exactly 0: in the graph, joining nothing.
+        double[][] points = FarApartLines(lines: 2, pointsPerLine: 10, separation: 10.0);
+
+        GraphBuildResult result = Build(points, Config(new Cauchy(), k: 3, lmp: true));
+
+        Assert.Equal(1, Connectivity.Validate(result.Graph).ComponentCount);
+        int coupledComponents = CoupledComponents(result.Graph);
+        Assert.True(coupledComponents >= 2, $"Expected the zeroed bridge to split the coupled graph; got {coupledComponents}.");
+        Assert.Equal(coupledComponents, Connectivity.Validate(result.Graph, positiveWeightsOnly: true).ComponentCount);
+
+        Assert.Contains(result.Diagnostics!.Warnings, m =>
+            m.Stage == "Connectivity"
+            && m.Text.Contains("carry zero coupling", StringComparison.Ordinal)
+            && m.Text.Contains($"the graph has {coupledComponents} component(s)", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics.Warnings, m =>
+            m.Text.StartsWith("1 of 1 repair edge(s) carry zero coupling", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void WithoutLmp_EveryEdgeOfAConnectedCauchyGraphCarriesCoupling()
+    {
+        double[][] points = FarApartLines(lines: 2, pointsPerLine: 10, separation: 10.0);
+
+        GraphBuildResult result = Build(points, Config(new Cauchy(), k: 3, lmp: false));
+
+        Assert.Equal(1, CoupledComponents(result.Graph));
+        Assert.DoesNotContain(result.Diagnostics!.Messages, m => m.Text.Contains("carry zero coupling", StringComparison.Ordinal));
     }
 
     [Fact]

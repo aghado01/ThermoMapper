@@ -165,7 +165,7 @@ public static class GraphCompiler
         {
             log.Info("Projection", "Distance pass-through — conditioned distance graph (L2).");
             CsrGraph distanceGraph = BuildDistanceGraph(refined, n);
-            LogReturnedGraph(log, distanceGraph, n, filtered, repaired, connectivityPost, cutEdges: 0);
+            LogReturnedGraph(log, distanceGraph, n, filtered, repaired, connectivityPost, cutEdges: 0, weightsAreCouplings: false);
             return new GraphBuildResult(
                 Graph:                  distanceGraph,
                 DirectedSelection:      directed,
@@ -203,7 +203,7 @@ public static class GraphCompiler
             log,
             DefaultAutoLmpNearZeroRatio);
         ScalerResult scaled = scaler.Scale(refined, n);
-        LogReturnedGraph(log, scaled.Graph, n, filtered, repaired, connectivityPost, scaled.CutEdges);
+        LogReturnedGraph(log, scaled.Graph, n, filtered, repaired, connectivityPost, scaled.CutEdges, weightsAreCouplings: true);
 
         if (scaled.SingleBandwidth is double delta && delta > 0.0)
         {
@@ -574,9 +574,10 @@ public static class GraphCompiler
 
     /// <summary>
     /// Log what the build returned: the component count and largest-component
-    /// coverage of the returned graph, the edges the coupling floor dropped, and
-    /// how many of the repair stage's added edges are missing from the result.
-    /// Repair counts its bridges as connecting; a scaler that drops them leaves
+    /// coverage of the returned graph, over all its edges and over the edges that
+    /// carry coupling; the edges the coupling floor dropped; and what became of the
+    /// repair stage's bridges. Repair counts its bridges as connecting; a scaler
+    /// that drops them, or Local Mutual Proximity writing them an exact zero, leaves
     /// a graph the repair stage never reported.
     /// </summary>
     private static void LogReturnedGraph(
@@ -586,7 +587,8 @@ public static class GraphCompiler
         NeighborSelection filtered,
         NeighborSelection repaired,
         ConnectivityReport repairedConnectivity,
-        int cutEdges)
+        int cutEdges,
+        bool weightsAreCouplings)
     {
         ConnectivityReport report = Connectivity.Validate(returned);
         log.Info(
@@ -601,13 +603,33 @@ public static class GraphCompiler
                 $"{cutEdges} edge(s) fell under the {EdgeWeightThresholds.CouplingFloor:G} coupling floor and were dropped.");
         }
 
+        if (weightsAreCouplings)
+        {
+            // An edge of weight zero is in the graph but joins nothing: the kernel can underflow
+            // to it, and Local Mutual Proximity writes it for a node's weakest edge.
+            ConnectivityReport coupled = Connectivity.Validate(returned, positiveWeightsOnly: true);
+            int zeroEdges = report.EdgeCount - coupled.EdgeCount;
+            if (zeroEdges > 0)
+            {
+                string text =
+                    $"{zeroEdges} of {report.EdgeCount} edge(s) carry zero coupling; over the {coupled.EdgeCount} " +
+                    $"coupled edges the graph has {coupled.ComponentCount} component(s), largest " +
+                    $"{coupled.LargestComponent}/{coupled.NodeCount} ({coupled.LargestCoverage:F3}).";
+                if (coupled.ComponentCount > report.ComponentCount) log.Warning("Connectivity", text);
+                else log.Info("Connectivity", text);
+            }
+        }
+
         HashSet<long> repairEdges = RepairEdgeKeys(filtered, repaired, n);
         if (repairEdges.Count > 0)
         {
-            HashSet<long> returnedEdges = EdgeKeys(returned, n);
-            int missing = 0;
+            Dictionary<long, double> returnedWeights = EdgeWeightsByKey(returned, n);
+            int missing = 0, zeroed = 0;
             foreach (long key in repairEdges)
-                if (!returnedEdges.Contains(key)) missing++;
+            {
+                if (!returnedWeights.TryGetValue(key, out double weight)) missing++;
+                else if (weightsAreCouplings && !(weight > 0.0)) zeroed++;
+            }
 
             if (missing > 0)
             {
@@ -615,6 +637,13 @@ public static class GraphCompiler
                     "Connectivity",
                     $"{missing} of {repairEdges.Count} repair edge(s) are absent from the returned graph " +
                     "(dropped under the coupling floor): the repair stage counted them as bridges.");
+            }
+            if (zeroed > 0)
+            {
+                log.Warning(
+                    "Connectivity",
+                    $"{zeroed} of {repairEdges.Count} repair edge(s) carry zero coupling in the returned graph: " +
+                    "the repair stage counted them as bridges.");
             }
         }
 
@@ -649,13 +678,13 @@ public static class GraphCompiler
         return added;
     }
 
-    private static HashSet<long> EdgeKeys(CsrGraph graph, int n)
+    private static Dictionary<long, double> EdgeWeightsByKey(CsrGraph graph, int n)
     {
-        var keys = new HashSet<long>(graph.Targets.Length / 2);
+        var weights = new Dictionary<long, double>(graph.Targets.Length / 2);
         for (int i = 0; i < n; i++)
             for (int slot = graph.RowPointers[i]; slot < graph.RowPointers[i + 1]; slot++)
-                if (graph.Targets[slot] > i) keys.Add(EdgeKey(i, graph.Targets[slot], n));
-        return keys;
+                if (graph.Targets[slot] > i) weights[EdgeKey(i, graph.Targets[slot], n)] = graph.Weights[slot];
+        return weights;
     }
 
     private static int CountUndirectedEdges(NeighborSelection selection, int n)
