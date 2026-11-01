@@ -275,11 +275,12 @@ entropy) suit it better.
 | C41 | An interval is resolved when the trapezoid of its endpoint slopes matches its exact increment (ΔS₂, or Δ⟨E⟩ for energy), within error; the mismatch shrinks like h² | §13.5 | Derived here (exact integral; trapezoid error); unverified on SW data | E7 |
 | C42 | A replica stuck in one basin mixes well inside it, so no single-chain diagnostic or ESS weighting reveals it; only comparison across replicas does | §13.6 | Standard (the reason R̂ exists) | E10 |
 | C43 | For q ≥ 1, Bernoulli(p̃) ≤ Potts(q) ≤ Bernoulli(p) in the random-cluster order, p̃ = p/(p + q(1 − p)), so every increasing functional (S₂, F_n, τ_e) lies between two independent-bond percolations | §13.13 | Checked against Grimmett (2006), Theorem 3.21: (3.22) with q₂ = 1 gives the upper side, (3.23) with q₂ = 1 the lower; edge-dependent p_e per §11.4 (11.28); consistent with C23 (lower side, on a tree) and C30 (one edge's crossing) | E14 |
-| C44 | The bracket's anchor is e^(−⟨d²⟩/2a²)/(4 ln(1 + √q)), and the code has ln(1 + √q) in the numerator: 0.258 where the formula gives 0.089 at q = 20, and it rises with q | §13.14 | Checked here (BWD 1997 eq. 4.2; (3.22) forbids a rise with q; measured melts 0.10–0.117) | Correct it and re-read the multipliers (the user's call) |
+| C44 | The bracket's anchor is e^(−⟨d²⟩/2a²)/(4 ln(1 + √q)), and the code has ln(1 + √q) in the numerator: 0.258 where the formula gives 0.089 at q = 20, and it rises with q | §13.14 | Checked here (BWD 1997 eq. 4.2; (3.22) forbids a rise with q; measured melts 0.10–0.117) | Fixed 2026-11-01; multipliers stand (§13.14) |
 | C45 | A dense cluster's melt sits at T = s/(d·K_d(q)), K_d(q) = ln[(q − 2)/((q − 1)^(1 − 2/d) − 1)], tending to s/λ_c with λ_c = 2((q − 1)/(q − 2))ln(q − 1); d·K_d is 6.22–7.14 at q = 20 | §13.14 | Closed forms checked here (free-energy crossing, Maxwell equality); against round 1's numbers about 1.2× cold, arithmetic only | E15 |
 | C46 | For q > 2 the disordered phase is metastable well below the melt (1.17 e-folds at q = 20, complete graph), and every replica starts disordered, so R̂ can miss a shared metastable phase | §13.14 | Derived here (Lemma 10.11); no sign at round 1's sizes | E16 |
 | C47 | For signed couplings at q = 2, \|⟨σ_xσ_y⟩_J\| ≤ φ_{\|J\|,2}(x ↔ y) ≤ Bernoulli(p(\|J\|))(x ↔ y): a hot-side envelope survives, while monotonicity in β does not | §13.14 | Checked against Grimmett (Proposition 11.38, (11.44), Theorem 11.40); Potts form open | The Potts analogue |
 | C48 | One process of edge thresholds has, at every T at once, the law φ_{p(T),q}: each draw is a dendrogram in T, and ΔS₂ ≥ 0 per draw | §13.14 | Update rule derived here for edge-dependent couplings (Grimmett §8.6's construction; its displays are missing from the copy); mixing and cost unknown | E17 |
+| C49 | `LineagePersistence` on iris at k = 5 reads the published first stage and not the species: no selected lineage mixes setosa with the others in 60 of 60 runs, while the species-level reading passes 3 of 12 seeds at the parity budget and 0 of 12 at 8 × (1000, 2000) | §13.14 | Observed (12 seeds × 5 bracket and budget settings); agrees with §12.22 | A resolver that reads levels; lifetimes in ln T; the representative's choice |
 
 ---
 
@@ -1603,7 +1604,7 @@ The user dropped iris as too limited and asked for the same SPC-only levers on t
 The user reopened what round 1 closed, as an adversarial round with new capabilities in hand. Round 2 was discussion: it
 ran no experiments (one quantile table was computed), and it changed no code. Where the user decided something, the
 entry says so and gives the date; everything else is open, with the experiment that would settle it. Experiments
-continue round 1's numbering (E6–E17, §13.12). New claims are C35–C48 in §7.
+continue round 1's numbering (E6–E17, §13.12). New claims are C35–C49 in §7.
 
 **What round 1 did not have**, all on `main` by 2026-10-30:
 - **The per-draw record** on `Accumulator`: `EnergyPerDraw`, `MagPerDraw`, `SumSqClusterSizesPerDraw`,
@@ -2195,26 +2196,58 @@ The user cleaned the markdown copy of Grimmett (2006) and asked whether more in 
 §1.5, §3.3–3.4, §3.7's first theorems, §8.4–8.6, §10.1–10.3, §10.5 (its opening), §10.7, §11.4–11.5. Chapters 4–7 and 9
 are infinite-volume and lattice theory by their outlines, and were not read. Some displays are still missing from the
 copy: (8.14)–(8.18), (10.4) and (10.78). The closed forms below were checked by independent numerics (a scratch script,
-no SW and no dataset), so nothing here rests on those displays. Experiments are named, not run.
+no SW and no dataset), so nothing here rests on those displays. Experiments are named, not run, apart from what the
+anchor's fix needed.
 
-**The bracket's anchor has its logarithm in the wrong place (C44).**
-- **The code.** `BwdPottsCriticalEstimate.TpsUpperBound` computes (e^(−1/2)/4)·ln(1 + √q): 0.258 at q = 20, rising with
-  q (0.13 at q = 2, 0.36 at q = 100). Its comment says the formula was read from the PRL by hand because the extraction
-  garbled it. The 1996 compendium copy carries no display of it.
+**The bracket's anchor had its logarithm in the wrong place (C44).**
+- **The code, until the fix below.** `BwdPottsCriticalEstimate.TpsUpperBound` computed (e^(−1/2)/4)·ln(1 + √q): 0.258 at
+  q = 20, rising with q (0.13 at q = 2, 0.36 at q = 100). Its comment said the formula was read from the PRL by hand
+  because the extraction garbled it. The 1996 compendium copy carries no display of it.
 - **The source.** BWD 1997 (Neural Computation), eq. (4.2): T ≈ (1/(4 log(1 + √q)))·exp(−⟨d²⟩/2a²), from Wu's
   square-lattice T_c = J/ln(1 + √q) at four neighbours. (A local copy:
   `graveyard/bibliotecha/bibliotecha/compendia/clustering/BWD1997.md`.) BWD report 0.075 from it, "in good agreement"
   with their curve, and add that a mean-field estimate "yields a very similar value". At q = 20 with e^(−1/2), it reads
   0.089. The two differ by ln²(1 + √q) = 2.89.
 - **Why the code's form can't be right.** By (3.22), connectivity falls as q rises at fixed p, so no transition can move
-  hotter with q. The code's anchor does.
+  hotter with q. The code's anchor did.
 - **What it does to round 1.** §12.8 said the bracket wasn't miscomputed, and blamed the recipe. On the corrected
   anchor, [0.05, 4]·T_ps is [0.0045, 0.357]. Round 1 extended the toy's cold end by hand to 0.0046 to hold the stripe
   split (C22, §12.9), so the clipped cold edge is what the error produced. The measured melts (0.10–0.117) sit near the
   corrected anchor, and well below the code's.
-- **What the fix isn't.** The multipliers 0.05 and 4 were set against the wrong anchor, and the parity battery's grids
-  depend on them; its note reads iris's stage 2 at "≈ 3×T_ps" of the old value, which the corrected hot end (0.357) may
-  clip. So correcting it means re-reading the multipliers too. It is a code change, the user's call, and undecided.
+- **Fixed, 2026-11-01 (the user's call).** `TpsUpperBound` now divides by the logarithm; the REPL and the parity battery
+  share `BwdPottsCriticalEstimate.Bracket`. The multipliers were read against measurements, and stand at [0.05, 4]: the
+  same factor of 80, moved 1.06 e-folds colder.
+  - *The hot end.* S₂·N at T = 0.357 is 1.12–1.14 on the toy, iris (k = 5, 10) and Landsat, so no cluster mass lies past
+    it; the 12 grid points the old window spent above it were featureless. The test's note that iris's stage 2 sits at
+    "≈ 3×T_ps" had no support on these graphs, and a rebuilt subgraph has the same s ≈ 0.6, so the same melt by C45; it
+    is gone.
+  - *The cold end.* S₂ = 0.858 on the toy at T = 0.00446, with its stripes joined, where the old cold end read
+    0.56–0.64.
+  - *The anchor's q-dependence, measured.* On a homogeneous cloud (400 uniform points, k = 10) the melt, read where S₂
+    falls through half its cold value, is 0.87·T_ps at each of q = 5, 20 and 100. Against the old form the ratios run
+    0.63, 0.30 and 0.15.
+  - *One parity test had passed by luck (C49).* `LineagePersistence_Iris_SelectsPersistentSpeciesLineages` failed on the
+    new grid, on its purity assertion. Its recipe across 12 seeds:
+    | Bracket, budget | All its old assertions | Clean setosa core (≥ 35 at ≥ 0.90) | No lineage mixes setosa with the others |
+    |---|---|---|---|
+    | Old, 1 × (200, 400), the test's own | 3 of 12 (seed 42 among them) | 5 of 12 | 12 of 12 |
+    | Corrected, 1 × (200, 400) | 2 of 12 | 9 of 12 | 12 of 12 |
+    | Corrected, 4 × (500, 1000) | 2 of 12 | 7 of 12 | 12 of 12 |
+    | Corrected, 8 × (1000, 2000) | 0 of 12 | 5 of 12 | 12 of 12 |
+    | Old, 8 × (1000, 2000) | 1 of 12 | 3 of 12 | 12 of 12 |
+
+    More sampling makes the merged versicolor-plus-virginica lineage win, as §12.22 found, so the species-level reading
+    was noise. Changing either end of the bracket alone also breaks seed 42, through different assertions. A setosa
+    lineage represented by a 5-point remnant is §12.22's defect in the representative (the least-decided level), which
+    costs the clean-setosa assertion on many seeds. The test now asserts the published first stage, which holds in all
+    60 runs: each selected lineage is setosa only or holds no setosa, with both sides present. Choosing a seed that
+    passes was the alternative, and it would have kept a claim the resolver doesn't make.
+  - *Left as they are.* `AutoGridFixedSweep` still uses the data heuristic (the compiler brief's §4.1). exp(−⟨d²⟩/2a²)
+    stays at e^(−1/2), though a is the mean distance, so ⟨d²⟩ ≥ a²; BWD's own 0.075 implies an exponent above ½, and the
+    measured 0.87 may be this. The seed helper quantizes T to ⌊1000·T⌋, so pairs among the corrected bracket's coldest
+    points (below T ≈ 0.01) share a seed within a replica: each marginal is right, but those adjacent endpoints are
+    correlated. Grids below 10⁻³ (§12.28) share one seed per replica throughout, if the harness seeded through this
+    helper, which would weaken the Welch SE's independence across an interval there.
 
 **A dense cluster's melt in closed form: the mean-field thermal curve (C45).**
 - **The complete graph (Bollobás, Grimmett and Janson 1996; §10.2–10.3).** With p = λ/n, the giant's share θ solves
