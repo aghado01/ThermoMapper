@@ -86,6 +86,7 @@ Declare every value below in the harness class before the first run. A change af
 - *Per (fixture, backend),* µs per work unit by the cost half's readers (`tests/regression/BassCostSweep.cs` and `BassCostQualification.cs`), at the end state of s = 1 and of the backend's largest length. Call them as they are; if one needs a change, copy it into your helpers.
 - *Where M differs between the two,* a run's time is its work times the per-unit cost interpolated at the run's mean M.
 - *The quiet rule:* no other test host, and other processes' busy cores at most 1.5, at each block's start and end. The cost half saw 1.6–6.9 cores busy with no test host running. A block that fails the rule is flagged and re-timed once quiet; if no quiet window comes, report it with its load.
+- *When* (2026-11-01): the blocks are the one part that needs a quiet machine. Run them apart from the grid, in any quiet hour after it, keeping what each needs (the run's checkpoint, or the seeds that rebuild its end state). A later efficiency pass would leave the grid's error per unit work standing and rerun only these.
 
 ## The readings, fixed before any run
 
@@ -93,7 +94,7 @@ Declare every value below in the harness class before the first run. A change af
 2. **The work and µs to reach the target,** per functional, and the length at which every functional in a D10 group reaches it.
 3. **A bias floor:** a functional whose MSE stops falling over two grid steps while above its target.
 4. **D10's verdict against the error:** for each run, its verdict per group beside whether that group's functionals reach their targets. The rates of "converged" with an error above twice the target, and of "not converged" with every target met.
-5. **The self-reports' calibration:** the coverage of the reference by the estimate ± 1.96 × the backend's own error, over the replicates, and the backend's own ESS over the replicate effective draws.
+5. **The self-reports' calibration:** the coverage of the reference by the estimate ± 1.96 × the backend's own error, over the replicates, and the backend's own ESS over the replicate effective draws. *Added 2026-11-01, before any run:* for the flat histogram on tier S, the replicate effective draws against the b = 1 Kish ESS, against round trips, and against crossings between two levels of ℓ₁ fixed per fixture (the reweighted medians at b = 0.10 and b = 1, read from the trial). Round trips count at each window's own ends, and the top differs by pilot, so only the fixed levels compare across runs. On seed 8017 the Kish ESS moved 4.6× across three window tops while the reported errors moved less, which four chains cannot resolve ([the loose ends' report](flat-histogram-loose-ends-brief.md#reports)). Say which of the three tracks the error.
 6. **The early stop:** where it stopped, its error there, and its work against the first grid length that reached the targets.
 7. **The inferential plateau** (tier S): the RMSE of f's posterior mean to the true f over the test points, per length, and the shortest length within 5% of the longest's. That is how long is long enough for predictions, beside how long is long enough for the posterior.
 
@@ -121,10 +122,11 @@ Declare every value below in the harness class before the first run. A change af
 
 - **Work in `D:\aghado01\ThermoMapper` on `main`.** Worktrees fail on this repo's long paths. Switch no branch, push nothing.
 - **Tests only.** The harness is `tests/regression/BassStatisticalQualificationTests.cs`, with helpers in `BassStatisticalQualification.cs`, behind `BASS_QUALIFICATION` = 1. If a reading truly needs a production hook, stop and say so in the report rather than add one.
-- **Other chips may work beside you,** the flat histogram's loose-ends chip among them ([its brief](flat-histogram-loose-ends-brief.md)), in `src/maths/samplers/flathistogram/`, `BassFlatHistogramRun.cs`, `BassDiagnostics.cs` and the flat-histogram tests.
+- **A run survives a restart.** A Windows update's reboot ended the first attempt on 2026-11-01, before any harness existed. Append and flush each fit's row to the results CSV as the fit ends, and on a rerun skip the rows already there, keyed by fixture, backend, length and replicate, so a reboot costs only the fits in flight. A fit's seeds fix its draws, so a fit run again is the fit it would have been.
+- **Other chips may work beside you.**
   - Build against the checkout as it is; if a commit changes an API your harness uses, adapt your harness; never edit another chip's files.
-  - Its Friedman readings take times, which your load would distort: run tier E and the trial first, and start tier S's concurrent grid once no other session's test host is running.
-- **Build and test into your own artifacts root:** add `-p:ArtifactsRoot=D:\aghado01\ThermoMapper\artifacts\chip-perf2\` to every `dotnet build` and `dotnet test`. Do not run `scripts/fact-harness.ps1`. Delete `artifacts\chip-perf2\` when you finish.
+  - Another chip's timed readings would suffer your load: run tier E and the trial first, and start tier S's concurrent grid once no other session's test host is running.
+- **Build and test into your own artifacts root:** add `-p:ArtifactsRoot=D:\aghado01\ThermoMapper\artifacts\chip-perf2\` to every `dotnet build` and `dotnet test`, on the command itself rather than through a variable set earlier in a chain. Do not run `scripts/fact-harness.ps1`. Delete `artifacts\chip-perf2\` when you finish.
 - **Your files:**
   - the harness and its helpers;
   - `performance-statistical-results.csv` beside this brief, one row per fit;
