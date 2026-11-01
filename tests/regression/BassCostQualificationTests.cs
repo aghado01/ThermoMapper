@@ -364,11 +364,17 @@ public sealed class BassCostQualificationTests
             int draws = fit.Draws.Sum(c => c.Count);
             int cases = x.Surface == BassCost.Surface.Functional ? 50 : 200;
             PredictionCases at = PredictionCases.Of(x.Surface == BassCost.Surface.Functional ? BassCost.Functional(cases, x.Locations, x.P).Predictors : BassCost.Rich(cases, x.P).Predictors);
+            // The effects on a 20-point grid: R's 100 holds 100² cells per held pair, past the default budget at the full
+            // draw count (61,000 cells × 500 draws at the base point) and near 2 GB at the cap points; the cost per cell
+            // carries to any grid.
+            var effectSpec = new EffectSpec { GridPoints = 20, CellBudget = 50_000_000 };
+            EffectAnalysis probe = BassSensitivity.Effects(fit, data, effects: effectSpec);
+            long cells = probe.At.Sum(f => f.Effects.Sum(e => (long)e.Values.Length)) / draws;
             Dictionary<string, double[]> times = BassCost.Interleave(
             [
                 ("predict", BassCost.Batch(BassCost.Meter.Time, () => fit.Predict(data, at), batch: 1)),
                 ("sobol", BassCost.Batch(BassCost.Meter.Time, () => BassSensitivity.Of(fit, data), batch: 1)),
-                ("effects", BassCost.Batch(BassCost.Meter.Time, () => BassSensitivity.Effects(fit, data), batch: 1)),
+                ("effects", BassCost.Batch(BassCost.Meter.Time, () => BassSensitivity.Effects(fit, data, effects: effectSpec), batch: 1)),
             ]);
             double locations = Math.Max(1, x.Locations);
             rows.Add(x.Key, "draws", draws);
@@ -376,7 +382,9 @@ public sealed class BassCostQualificationTests
             rows.Add(x.Key, "prediction cases", cases);
             rows.Add(x.Key, "predict µs per case per location per draw", BassCost.Median(times["predict"]) / (cases * locations * draws));
             rows.Add(x.Key, "sobol µs per draw", BassCost.Median(times["sobol"]) / draws);
-            rows.Add(x.Key, "effects µs per draw", BassCost.Median(times["effects"]) / draws);
+            rows.Add(x.Key, "effects µs per draw (20-point grid)", BassCost.Median(times["effects"]) / draws);
+            rows.Add(x.Key, "effect cells (20-point grid)", cells);
+            rows.Add(x.Key, "effects ns per cell per draw", BassCost.Median(times["effects"]) * 1000 / (draws * (double)cells));
             foreach ((string name, double[] v) in times) rows.Add(x.Key, $"{name} µs per call IQR", BassCost.Iqr(v));
             _out.WriteLine($"outputs {x.Key}: {draws} draws, predict {BassCost.Median(times["predict"]) / (cases * locations * draws):G3} µs/case/draw, " +
                            $"sobol {BassCost.Median(times["sobol"]) / draws:G3} µs/draw, effects {BassCost.Median(times["effects"]) / draws:G3} µs/draw");
