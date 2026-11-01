@@ -266,7 +266,8 @@ public static class SpcCommand
             // q-only physics bracket is valid (T_ps(q) anchor, graphs/models/potts); the
             // data-dependent heuristic is dimensionally J² and lands ~K̂× too cold
             // there — it remains the estimator for the un-normalized default kernel.
-            if (options.BandwidthStrategy == Graphs.Distance.BandwidthStrategy.MeanEdgeDistance)
+            if (options.BandwidthStrategy == Graphs.Distance.BandwidthStrategy.MeanEdgeDistance
+                && options.Gauge == Graphs.GaugeKind.InverseMeanDegree)
             {
                 (lo, hi) = BwdPottsCriticalEstimate.Bracket(options.Q);
             }

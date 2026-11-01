@@ -484,7 +484,7 @@ public static class GraphCompiler
         }
 
         log.Info("Scaling",
-            $"Kernel={kernel.GetType().Name}, Strategy={strategy}, Geometry={geometry}, Fidelity={fidelity}, SphericalMode={sphericalMode}.");
+            $"Kernel={kernel.GetType().Name}, Strategy={strategy}, Geometry={geometry}, Fidelity={fidelity}, SphericalMode={sphericalMode}, CouplingFloor={coupling.CouplingFloor:G}, Gauge={coupling.Gauge}.");
 
         // LMP leaves the injected protect set (H1 cycle edges) and the repair bridges their kernel coupling.
         Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? protectedProvider = null;
@@ -516,12 +516,15 @@ public static class GraphCompiler
             _ => throw new NotSupportedException($"Unknown kernel descriptor: {kernel.GetType().Name}"),
         };
 
-        return lmpSetting switch
+        IEdgeScaler measured = lmpSetting switch
         {
             true => new LocalMutualProximityScaler(inner, protectedEdgeProvider: protectedProvider, rankRule: coupling.LmpRank),
             false => inner,
             null => new AutoLmpScaler(inner, log, defaultAutoLmpThreshold, protectedProvider, repairEdges, coupling.LmpRank),
         };
+
+        // The gauge goes last, after the floor and LMP: a pure rescaling of temperature.
+        return coupling.Gauge == GaugeKind.None ? measured : new GaugeScaler(measured, coupling.Gauge);
     }
 
     private static GlobalBandwidthScaler BuildMixtureScaler(

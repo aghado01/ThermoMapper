@@ -50,4 +50,8 @@ internal abstract class GraphRunOptions
     /// <c>MeanEdgeDistance</c> selects the BWD replication kernel
     /// (mean-pair <c>a</c> + 1/K̂).</summary>
     public Graphs.Distance.BandwidthStrategy? BandwidthStrategy { get; set; }
+
+    /// <summary>A global factor on the finished couplings, applied last. The BWD replication kernel
+    /// is <c>mean-edge-distance</c> bandwidth with the <c>inverse-mean-degree</c> gauge.</summary>
+    public Graphs.GaugeKind Gauge { get; set; } = Graphs.GaugeKind.None;
 }

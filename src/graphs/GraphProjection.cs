@@ -86,6 +86,11 @@ public sealed record CouplingProjection : IEdgeProjection
     /// is the historical rule and writes an exact 0 on every node's weakest edge.</summary>
     public LmpRankRule LmpRank { get; init; } = LmpRankRule.Strict;
 
+    /// <summary>A global factor on the finished couplings, applied last (after the floor and LMP), so it
+    /// only rescales temperature. <see cref="GaugeKind.None"/> by default; the bandwidth estimator no
+    /// longer implies it.</summary>
+    public GaugeKind Gauge { get; init; } = GaugeKind.None;
+
     [JsonIgnore] public EdgeWeightKind Kind => EdgeWeightKind.Coupling;
 }
 

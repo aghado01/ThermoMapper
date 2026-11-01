@@ -144,20 +144,6 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
         var edges = new List<Edge>(n * (allNeighbors.Length > 0 ? allNeighbors[0].Length : 0));
         int cutEdges = 0;
 
-        // BWD replication kernel: J = (1/K̂)·exp(−d²/2a²) with K̂ = the actual
-        // average number of neighbors per site (WBD1998 Table I). A uniform J
-        // rescale only moves the T-axis (structure-neutral at the chosen state
-        // point) but makes T comparable across data sets and enables the
-        // q-only T_ps bracket. Gated to the replication bandwidth strategy so
-        // production T-axes don't shift.
-        double couplingScale = 1.0;
-        if (_strategy == BandwidthStrategy.MeanEdgeDistance)
-        {
-            long totalNeighbors = 0;
-            for (int i = 0; i < n; i++) totalNeighbors += allNeighbors[i].Length;
-            if (totalNeighbors > 0) couplingScale = n / (double)totalNeighbors;
-        }
-
         for (int i = 0; i < n; i++)
         {
             foreach (var nb in allNeighbors[i])
@@ -180,8 +166,6 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
                     }
                     coupling = kernelFn(nb.Distance, delta) * VolumeCorrection(nb.Distance);
                 }
-
-                coupling *= couplingScale;
 
                 if (!TryKeep(i, nb.Index, ref coupling))
                 {

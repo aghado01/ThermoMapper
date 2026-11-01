@@ -8,6 +8,7 @@
   "ensure_connected": true,
   "kernel": "gaussian",
   "bandwidth_strategy": "mean-edge-distance",
+  "gauge": "inverse-mean-degree",
   "susceptibility": "fk-reduced",
   "temperatures": "auto",
   "theta": 0.5,

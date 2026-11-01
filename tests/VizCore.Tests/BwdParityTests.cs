@@ -754,7 +754,7 @@ public sealed class BwdParityTests
             // MST) — MstMin IS the faithful recipe, not a liberty.
             Repair = new Graphs.RepairConfig { Kind = Graphs.RepairKind.MstMin },
             Refinement = new Graphs.RefinementConfig { Kind = Graphs.RefinementKind.Auto },
-            Projection = new Graphs.CouplingProjection { Kernel = new Graphs.Coupling.Gaussian(bandwidth), BandwidthOverride = Graphs.Distance.BandwidthStrategy.MeanEdgeDistance, LmpRescale = false }
+            Projection = new Graphs.CouplingProjection { Kernel = new Graphs.Coupling.Gaussian(bandwidth), BandwidthOverride = Graphs.Distance.BandwidthStrategy.MeanEdgeDistance, Gauge = Graphs.GaugeKind.InverseMeanDegree, LmpRescale = false }
         };
     }
 }

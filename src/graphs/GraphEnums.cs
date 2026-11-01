@@ -69,3 +69,17 @@ public enum LmpRankRule
     /// The weakest edge ranks 1/degree, so no edge is written 0.</summary>
     Inclusive,
 }
+
+/// <summary>
+/// A global factor applied to the finished couplings, last in the pipeline after every threshold,
+/// so it is exactly a rescaling of temperature: <c>J → gJ</c> is <c>T → gT</c>.
+/// </summary>
+public enum GaugeKind
+{
+    /// <summary>No factor: couplings are the kernel's (or LMP's) own units.</summary>
+    None,
+
+    /// <summary>Every coupling multiplied by 1/K-hat, with K-hat the mean degree of the returned graph:
+    /// the classical SPC normalization J = K-hat⁻¹·exp(−d²/2a²), which makes T comparable across data sets.</summary>
+    InverseMeanDegree,
+}

@@ -38,10 +38,12 @@ public interface IEdgeScaler
 /// non-null — single-kernel scalers populate the former, mixture
 /// scalers populate the latter. Local Mutual Proximity scalers
 /// populate neither (no global bandwidth concept). <see cref="CutEdges"/> counts the
-/// undirected edges the kernel produced and the coupling floor dropped.
+/// undirected edges the kernel produced and the coupling floor dropped;
+/// <see cref="GaugeFactor"/> is the global factor applied last (1 for none).
 /// </summary>
 public readonly record struct ScalerResult(
     CsrGraph          Graph,
     double?           SingleBandwidth,
     MixtureBandwidth? MixtureBandwidth,
-    int               CutEdges = 0);
+    int               CutEdges = 0,
+    double            GaugeFactor = 1.0);

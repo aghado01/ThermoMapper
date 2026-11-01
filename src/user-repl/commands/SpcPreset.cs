@@ -68,6 +68,7 @@ public sealed record SpcPreset
 
     // ── Kernel bandwidth + landmark channel ──────────────────────────────
     public string?                              BandwidthStrategy { get; init; }
+    public string?                              Gauge             { get; init; }
     public string?                              Susceptibility    { get; init; }
 
     // ── Profile analyzer + cut ───────────────────────────────────────────
@@ -139,6 +140,7 @@ public sealed record SpcPreset
 
         // Kernel bandwidth + landmark channel
         if (BandwidthStrategy is not null)    options.BandwidthStrategy        = GraphRun.ParseBandwidthStrategy(BandwidthStrategy);
+        if (Gauge is not null)                options.Gauge                    = GraphRun.ParseGaugeKind(Gauge);
         if (Susceptibility is not null)       options.SusceptibilityKind       = SpcCommand.ParseSusceptibilityKind(Susceptibility);
 
         // Profile analyzer + cut

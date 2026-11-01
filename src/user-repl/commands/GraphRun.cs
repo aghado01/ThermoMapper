@@ -67,6 +67,7 @@ internal static class GraphRun
             case "--mixture": options.MixtureSpec = RequireValue(next, arg); i++; return true;
             case "--mixture-bandwidth": options.MixtureBandwidthSpec = RequireValue(next, arg); i++; return true;
             case "--bandwidth-strategy": options.BandwidthStrategy = ParseBandwidthStrategy(RequireValue(next, arg)); i++; return true;
+            case "--gauge": options.Gauge = ParseGaugeKind(RequireValue(next, arg)); i++; return true;
 
             default: return false;
         }
@@ -143,6 +144,7 @@ internal static class GraphRun
                 Kernel = kernel,
                 LmpRescale = options.ApplyLmp,
                 BandwidthOverride = options.BandwidthStrategy,
+                Gauge = options.Gauge,
             },
             Interrupts = new PathologyInterruptConfig(),
         };
@@ -297,6 +299,7 @@ internal static class GraphRun
         Console.WriteLine("  --bandwidth <double>                          Kernel bandwidth (0=auto)");
         Console.WriteLine("  --bandwidth-strategy <mad|quantile-normalized|log-scale-hyperbolic|mean-edge-distance>");
         Console.WriteLine("                                                Auto-bandwidth estimator (default: from the metric)");
+        Console.WriteLine("  --gauge <none|inverse-mean-degree>            Global factor on the finished couplings (default: none)");
         Console.WriteLine("  --mixture <spec>                              Kernel mixture weights, e.g.");
         Console.WriteLine("                                                'gauss=0.5,cauchy=0.3,laplace=0.2'.");
         Console.WriteLine("                                                When set, overrides --kernel.");
@@ -339,6 +342,13 @@ internal static class GraphRun
         "or"        => FilterKind.OrRule,
         "mutualknn" => FilterKind.MutualKnn,
         _ => throw new ArgumentException($"Unknown filter kind '{value}'. Valid: or_rule, mutualknn."),
+    };
+
+    internal static Graphs.GaugeKind ParseGaugeKind(string value) => value.ToLowerInvariant() switch
+    {
+        "none"                => Graphs.GaugeKind.None,
+        "inverse-mean-degree" => Graphs.GaugeKind.InverseMeanDegree,
+        _ => throw new ArgumentException($"Unknown gauge '{value}'. Expected none | inverse-mean-degree."),
     };
 
     internal static Graphs.Distance.BandwidthStrategy ParseBandwidthStrategy(string value) => value.ToLowerInvariant() switch
