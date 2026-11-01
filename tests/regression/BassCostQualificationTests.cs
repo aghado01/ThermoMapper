@@ -764,6 +764,10 @@ public sealed class BassCostQualificationTests
         {
             double[] a = [.. Enumerable.Range(0, n).Select(_ => rng.NextDouble())], b = [.. Enumerable.Range(0, n).Select(_ => rng.NextDouble())];
             int batch = Math.Max(20, 2_000_000 / n);
+            // The production dot promoted to tier 1 first, as it is in a chain that has run: this block alone is too short
+            // for its call counting, and read it at tier 0 (about 3 ns per multiply-add).
+            var spin = Stopwatch.StartNew();
+            while (spin.ElapsedMilliseconds < 1500) sink += PairwiseSum.Dot(a, b) + ScalarDot(a, b) + VectorDot(a, b);
             Dictionary<string, double[]> times = BassCost.Interleave(
             [
                 ("scalar", BassCost.Batch(BassCost.Meter.Time, () => sink += ScalarDot(a, b), batch)),
