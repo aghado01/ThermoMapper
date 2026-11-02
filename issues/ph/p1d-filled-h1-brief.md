@@ -120,5 +120,7 @@ one, and starts map the same way. So the prediction is a direct reading of the t
 
 ## Not verified
 
+(Closed 2026-11-02: [ph-loose-ends-brief.md](ph-loose-ends-brief.md).)
+
 - **Representatives.** `FastZigzag` gives none for bars born by a deletion, and its docs mark representatives above H₀
   unverified. So a `Flag` bar reports that it was filled, but cannot yet reliably name the cycle.

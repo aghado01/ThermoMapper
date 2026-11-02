@@ -25,15 +25,16 @@ it's a fixture generator and the two streams serve different draws. Fold a `Seed
 pair into the next moment the fixture's generated clouds are allowed to churn (any pinned
 expectations regenerate with it); not worth a churn cycle on its own.
 
-## PH setup loose ends (2026-11-01)
+## Left over from closing the PH loose ends (2026-11-02)
 
-None of these blocks anything. Each waits for the thing named beside it. Context: `issues/ph/ph-setup-brief.md`,
-`issues/ph/p1d-filled-h1-brief.md`.
+None of these blocks anything. Context: `issues/ph/ph-loose-ends-brief.md`, its report.
 
-- **`FastZigzag` H₁ representatives.** Unverified above H₀, and absent for bars born by a deletion, so a filled bar can't
-  yet reliably name its cycle. Pick up when a consumer asks which cycle.
-- **Relative barcode from one absolute run.** Proved (`lean/Lemmas/RelativePersistence.lean`) but not built as a code path.
-  Pick up if the relative reduction ever gets slow. Needs the involuted path's H₀ elder-rule inversion fixed first.
-- **Relative reading over frames.** Not built. Pick up when a sweep has a backbone with its own cycles.
-- **Older design notes.** The MarkBrain synthesis brief and `backbone-conditioned-persistence.md` still say relative needs
-  VSMJ2011, show it unbuilt, and call absolute and relative "two questions". Fix when next editing them.
+- **Compatible cycles along a zigzag bar.** `Bar.Cycle` names a bar's class where it begins. Under `Flag` the chain of a hole
+  that opens never fits its first frame, and a cycle can move before a bar ends. Dey, Hou and Morozov (arXiv:2410.20565)
+  compute the sequence; the coned run's V may give it directly (derived, unverified). Pick up when a consumer asks for the
+  cycle at a frame.
+- **Involuted representatives on negative values.** `PersistentInvolutedHomology` with `representatives` hangs on an essential
+  H₁ bar when an edge value is negative: `CycleReconstruction` runs a shortest path weighted by those values. Rips never gets
+  there. Pick up before anything non-Rips asks that engine for cycles.
+- **`PersistentCohomology` on a `CellFiltration`.** Throws, since its H₀ path reads `GetVertices`. Pick up if a cell complex
+  ever wants the clearing path.

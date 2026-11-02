@@ -43,7 +43,8 @@ Engine-first, P0 → P1 → P2. This is the track with the first genuinely new *
   the existing reducer unchanged. Brief: [p0-conditioned-filtration-brief.md](../../../MarkBrain/ThermoMapper/issues/tda-purification/persistent-homology/p0-conditioned-filtration-brief.md).
   - **The relative reading** `H(K_δ, K₀)` — ✅ **landed & green** 2026-11-01 (`RelativeFiltration`,
     `ConditionedFiltration.ComputeRelativeBarcode`). `ComputeBarcode` was absolute and matched only for an acyclic
-    backbone. Brief and report: [ph-setup-brief.md](ph-setup-brief.md).
+    backbone. Brief and report: [ph-setup-brief.md](ph-setup-brief.md). Both readings from one run, and the relative
+    reading over frames, landed 2026-11-02: [ph-loose-ends-brief.md](ph-loose-ends-brief.md).
 - **P1 · prior generalizes + multiparameter frame.**
   - **P1a** (residual band, monotone δ) — ✅ **landed** (`c91143d`; `src/tda/ph/ResidualPrior.cs`). `ResidualEdges`
     feeds P0's `BuildGraph`; `τ≡0` subsumes P0's similarity, a nonzero prior shifts a return's birth. Brief:
@@ -57,7 +58,8 @@ Engine-first, P0 → P1 → P2. This is the track with the first genuinely new *
     [ph-setup-brief.md](ph-setup-brief.md).
   - **P1d** (filled H1 over frames) — ✅ **landed & green** 2026-11-01 (`FrameComplex.Flag`, read by `FastZigzag`). The
     "key call", whether a return dies by fill or by departure, needed no decision: both happen, and `FrameBar.End`
-    reports which. Brief and report: [p1d-filled-h1-brief.md](p1d-filled-h1-brief.md).
+    reports which. Brief and report: [p1d-filled-h1-brief.md](p1d-filled-h1-brief.md). Each bar names its class where it
+    begins since 2026-11-02: [ph-loose-ends-brief.md](ph-loose-ends-brief.md).
   - **full multiparameter module** → **Z6**.
 - **P2 · directedness v1.5** — directed flag complex (combinatorial) + the built magnetic Laplacian (spectral);
   experiments M1–M3. **M2 = two returns equal in persistence, separated by flux — the gate that earns the phase.**
