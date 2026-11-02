@@ -279,7 +279,7 @@ public sealed class BasisSobolAnalysis
             for (int v = 0; v < inputs; v++) total[d, v] = Dot(weight, _state.Total, d, v);
             status[d] = BassSensitivity.Status(variance[d], Dot(magnitude, _state.Size, d), _tolerance, main, total, d);
         }
-        return new SobolDecomposition(Measure.Names, _subsets, main, total, variance, status, _chains, _draws, null);
+        return new SobolDecomposition(Measure.Names, _subsets, main, total, variance, status, _tolerance, _chains, _draws, null);
     }
 
     /// <summary>Every location's decomposition, in location order.</summary>
@@ -362,7 +362,7 @@ public sealed class BasisSobolAnalysis
             status[d] = BassSensitivity.Status(variance[d], Dot(magnitude, _state.Size, d) + _tolerance * size2, _tolerance, main, total, d);
         }
         string[] names = [.. Measure.Names, LocationInput];
-        return new SobolDecomposition(names, [.. kinds.Select(x => x.Subset)], main, total, variance, status, _chains, _draws, null);
+        return new SobolDecomposition(names, [.. kinds.Select(x => x.Subset)], main, total, variance, status, _tolerance, _chains, _draws, null);
     }
 
     // Per packed pair k ≤ k′: f(k, k′), doubled off the diagonal, so a quadratic form is one sum over the pairs.

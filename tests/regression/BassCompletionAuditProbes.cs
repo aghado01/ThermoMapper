@@ -929,26 +929,34 @@ public sealed class BassCompletionAuditProbes
 
     // ── What the hub names and the members leave to the reader ─────────────────────────────────────────────────────────
 
-    // R's `other`: the variance outside the reported subsets. No member holds it; the variance less the reported mains
-    // is it, the higher orders' mains read off the full decomposition.
+    // R's `other`: the variance outside the reported subsets, at a location and over the locations, the higher orders' mains
+    // read off the full decomposition. Audit gap G-1, closed.
     [Fact]
     public void BasisOther_IsTheVarianceLessTheReportedMains()
     {
         BassDecomposition d = Decomposition(Inputs.Continuous, Response.Pca);
         BassBasisFit fit = BassComponents.Fit(d, Predictors(Inputs.Continuous), Config());
-        SobolDecomposition full = fit.Sensitivity().AtLocation(d.Locations / 2);
-        SobolDecomposition first = fit.Sensitivity(new SensitivitySpec { MaxOrder = 1 }).AtLocation(d.Locations / 2);
-        Assert.Contains(full.Subsets, u => u.Length == 2);
-        int seen = 0;
-        for (int j = 0; j < first.Count; j++)
+        BasisSobolAnalysis wholeFit = fit.Sensitivity(), firstOrder = fit.Sensitivity(new SensitivitySpec { MaxOrder = 1 });
+        foreach ((SobolDecomposition full, SobolDecomposition first) in new[]
+                 {
+                     (wholeFit.AtLocation(d.Locations / 2), firstOrder.AtLocation(d.Locations / 2)),
+                     (wholeFit.Integrated, firstOrder.Integrated),
+                 })
         {
-            if (!first.IsDefined(j)) continue;
-            double reported = Enumerable.Range(0, first.Subsets.Count).Sum(u => first.MainVariance[j, u]);
-            double higher = Enumerable.Range(0, full.Subsets.Count).Where(u => full.Subsets[u].Length > 1).Sum(u => full.MainVariance[j, u]);
-            Assert.Equal(higher, first.Variance[j] - reported, 1e-9 * first.Variance[j]);
-            seen++;
+            Assert.Contains(full.Subsets, u => u.Length == 2);
+            Assert.All(full.OtherVariance, v => Assert.Equal(0.0, v));
+            int seen = 0;
+            for (int j = 0; j < first.Count; j++)
+            {
+                if (!first.IsDefined(j)) continue;
+                double reported = Enumerable.Range(0, first.Subsets.Count).Sum(u => first.MainVariance[j, u]);
+                double higher = Enumerable.Range(0, full.Subsets.Count).Where(u => full.Subsets[u].Length > 1).Sum(u => full.MainVariance[j, u]);
+                Assert.Equal(higher, first.Variance[j] - reported, 1e-9 * first.Variance[j]);
+                Assert.Equal(higher, first.OtherVariance[j], 1e-9 * first.Variance[j]);
+                seen++;
+            }
+            Assert.True(seen > 0);
         }
-        Assert.True(seen > 0);
     }
 
     // A direct fit needs its output variable to vary: a single location has no knot, and a scalar fit stands in.

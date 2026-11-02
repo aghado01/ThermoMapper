@@ -85,7 +85,7 @@ public sealed record SensitivitySpec
 public sealed class SobolDecomposition
 {
     internal SobolDecomposition(IReadOnlyList<string> inputs, int[][] subsets, double[,] main, double[,] total, double[] variance,
-                                DecompositionStatus[] status, int[] chains, int[] draws, double[]? weights)
+                                DecompositionStatus[] status, double tolerance, int[] chains, int[] draws, double[]? weights)
     {
         Inputs = inputs;
         Subsets = Array.AsReadOnly(subsets);
@@ -93,9 +93,24 @@ public sealed class SobolDecomposition
         TotalVariance = total;
         Variance = variance;
         Status = status;
+        OtherVariance = Others(main, variance, status, tolerance);
         Chains = chains;
         Draws = draws;
         Weights = weights;
+    }
+
+    // Each draw's total less its reported mains; 0 on a zero-variance draw, and within the tolerance relative to the total.
+    private static double[] Others(double[,] main, double[] variance, DecompositionStatus[] status, double tolerance)
+    {
+        var other = new double[variance.Length];
+        for (int d = 0; d < other.Length; d++)
+        {
+            if ((status[d] & DecompositionStatus.ZeroVariance) != 0) continue;
+            double rest = variance[d];
+            for (int u = 0; u < main.GetLength(1); u++) rest -= main[d, u];
+            if (Math.Abs(rest) > tolerance * variance[d]) other[d] = rest;
+        }
+        return other;
     }
 
     /// <summary>The inputs' names: the predictors in the data's order, then the integrated output variables.</summary>
@@ -116,6 +131,11 @@ public sealed class SobolDecomposition
 
     /// <summary>Each draw's status.</summary>
     public DecompositionStatus[] Status { get; }
+
+    /// <summary>Each draw's variance outside the reported subsets (R's <c>other</c>): the total less their main variances. It
+    /// is what <see cref="SensitivitySpec.MaxOrder"/> leaves out, so 0 when every order is reported, a difference within the
+    /// rounding tolerance reading 0.</summary>
+    public double[] OtherVariance { get; }
 
     /// <summary>Each draw's chain, the draws in chain order and each chain's in draw order.</summary>
     public int[] Chains { get; }
@@ -138,11 +158,18 @@ public sealed class SobolDecomposition
     /// <summary>Draw <paramref name="draw"/>'s total index of input <paramref name="input"/>; NaN where undefined.</summary>
     public double TotalIndex(int draw, int input) => IsDefined(draw) ? TotalVariance[draw, input] / Variance[draw] : double.NaN;
 
+    /// <summary>Draw <paramref name="draw"/>'s share outside the reported subsets (<see cref="OtherVariance"/>); NaN where undefined.</summary>
+    public double OtherIndex(int draw) => IsDefined(draw) ? OtherVariance[draw] / Variance[draw] : double.NaN;
+
     /// <summary>Each subset's posterior mean main index over the defined draws, under the weights; NaN with none defined.</summary>
     public double[] MeanMainIndices() => Means(Subsets.Count, MainIndex);
 
     /// <summary>Each input's posterior mean total index over the defined draws, under the weights; NaN with none defined.</summary>
     public double[] MeanTotalIndices() => Means(Inputs.Count, TotalIndex);
+
+    /// <summary>The posterior mean share outside the reported subsets over the defined draws, under the weights; NaN with none
+    /// defined.</summary>
+    public double MeanOtherIndex() => Means(1, (draw, _) => OtherIndex(draw))[0];
 
     private double[] Means(int count, Func<int, int, double> index)
     {

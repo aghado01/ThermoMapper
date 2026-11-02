@@ -75,7 +75,7 @@ public static class BassSensitivity
                 status[d] = Status(v, size, spec.RoundingTolerance, main, total, d);
             }
             decompositions[surface] = new SobolDecomposition(s.Moments.Measure.Names, subsets, main, total, variance, status,
-                                                             s.Chains, s.DrawIndex, s.Weights);
+                                                             spec.RoundingTolerance, s.Chains, s.DrawIndex, s.Weights);
         }
         return new SobolAnalysis(s.Form, s.Moments.Measure, maxOrder, decompositions, s.Coordinates, s.CoordinatesOutside,
                                  s.Moments.LargestError);

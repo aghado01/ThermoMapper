@@ -13,6 +13,8 @@ namespace Maths.Regression.Spline.Bass.Presentation;
 /// <see cref="SobolDecomposition.MeanTotalIndices"/>), the same sums in the same order;</item>
 /// <item>each subset's main variance, each input's total-effect variance and the total variance, in the response's units,
 /// over every draw, since a zero variance is a value: R's partitioned variance;</item>
+/// <item>the share and the variance outside the reported subsets (<see cref="SobolDecomposition.OtherVariance"/>, R's
+/// <c>other</c>), read as the index and the variances above are;</item>
 /// <item>the draws, the defined ones, and those clamped or negative beyond the tolerance.</item>
 /// </list>
 /// The subsets are input indices, smaller first, into <see cref="Inputs"/>.
@@ -21,6 +23,7 @@ public sealed record SobolSummary(
     IReadOnlyList<string> Inputs, IReadOnlyList<int[]> Subsets,
     IReadOnlyList<PosteriorSummary> MainIndex, IReadOnlyList<PosteriorSummary> TotalIndex,
     IReadOnlyList<PosteriorSummary> MainVariance, IReadOnlyList<PosteriorSummary> TotalVariance, PosteriorSummary Variance,
+    PosteriorSummary OtherIndex, PosteriorSummary OtherVariance,
     int Draws, int Defined, int Clamped, int NegativeBeyondTolerance)
 {
     /// <summary>The summary of <paramref name="decomposition"/> at <paramref name="probabilities"/>
@@ -55,7 +58,9 @@ public sealed record SobolSummary(
         return new SobolSummary(decomposition.Inputs, decomposition.Subsets,
             Indices(subsets, decomposition.MainIndex), Indices(inputs, decomposition.TotalIndex),
             Variances(subsets, decomposition.MainVariance), Variances(inputs, decomposition.TotalVariance),
-            PosteriorSummary.Over(decomposition.Variance, weights, p), n, defined.Length, clamped, negative);
+            PosteriorSummary.Over(decomposition.Variance, weights, p),
+            PosteriorSummary.Over([.. defined.Select(decomposition.OtherIndex)], definedWeights, p),
+            PosteriorSummary.Over(decomposition.OtherVariance, weights, p), n, defined.Length, clamped, negative);
     }
 }
 

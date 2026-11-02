@@ -60,6 +60,9 @@ public sealed class BassPresentationSensitivityTests
             Same(Reference(d => decomposition.TotalVariance[d, v], false), s.TotalVariance[v]);
         }
         Same(Reference(d => decomposition.Variance[d], false), s.Variance);
+        Same(Reference(decomposition.OtherIndex, true), s.OtherIndex);
+        Assert.Equal(decomposition.MeanOtherIndex(), s.OtherIndex.Mean);
+        Same(Reference(d => decomposition.OtherVariance[d], false), s.OtherVariance);
         Assert.Equal(n, s.Draws);
         Assert.Equal(Enumerable.Range(0, n).Count(decomposition.IsDefined), s.Defined);
         Assert.Equal(decomposition.Subsets, s.Subsets);

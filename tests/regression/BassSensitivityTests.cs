@@ -244,6 +244,9 @@ public sealed class BassSensitivityTests
         Assert.Equal(new[] { DecompositionStatus.ZeroVariance, DecompositionStatus.ZeroVariance }, s.Status.Take(2));
         Assert.True(double.IsNaN(s.MainIndex(0, 0)) && double.IsNaN(s.TotalIndex(1, 0)));
         Assert.True(s.IsDefined(2));
+        Assert.Equal(0.0, s.OtherVariance[0]);
+        Assert.True(double.IsNaN(s.OtherIndex(0)));
+        Assert.Equal(0.0, s.OtherVariance[2]);
         Assert.Equal(0.0, s.TotalIndex(2, 0));
         Assert.Equal(1.0, s.TotalIndex(2, 1), 14);
         Assert.Equal(1.0, s.MeanTotalIndices()[1], 14);   // the undefined draws are left out, not counted as 0
@@ -279,6 +282,36 @@ public sealed class BassSensitivityTests
         Assert.Equal(full.TotalVariance, first.Decompositions[0].TotalVariance);
         var ex = Assert.Throws<ArgumentException>(() => BassSensitivity.Of(fit, data, new SensitivitySpec { SubsetBudget = 2 }));
         Assert.Contains("budget", ex.Message);
+    }
+
+    [Fact]
+    public void Other_IsTheVarianceOutsideTheReportedSubsets()
+    {
+        BassFit fit = SensitivityFixture.FitScalar();
+        BassData data = SensitivityFixture.Scalar();
+        SobolDecomposition full = BassSensitivity.Of(fit, data).Decompositions[0];
+        SobolDecomposition first = BassSensitivity.Of(fit, data, new SensitivitySpec { MaxOrder = 1 }).Decompositions[0];
+        Assert.Contains(full.Subsets, u => u.Length > 1);
+        // Every order reported: nothing lies outside, to the bit.
+        Assert.All(full.OtherVariance, v => Assert.Equal(0.0, v));
+        double mass = 0.0, share = 0.0, largest = 0.0;
+        for (int d = 0; d < first.Count; d++)
+        {
+            double higher = Enumerable.Range(0, full.Subsets.Count).Where(u => full.Subsets[u].Length > 1).Sum(u => full.MainVariance[d, u]);
+            largest = Math.Max(largest, higher);
+            Assert.True(Math.Abs(first.OtherVariance[d] - higher) <= 1e-9 * Math.Max(first.Variance[d], 1e-300),
+                        $"draw {d}: other {first.OtherVariance[d]} against the higher orders' {higher}");
+            if (!first.IsDefined(d))
+            {
+                Assert.True(double.IsNaN(first.OtherIndex(d)));
+                continue;
+            }
+            Assert.Equal(first.OtherVariance[d] / first.Variance[d], first.OtherIndex(d));
+            share += first.OtherIndex(d);
+            mass += 1.0;
+        }
+        Assert.True(largest > 0.0, "the fixture must hold an interaction");
+        Assert.Equal(share / mass, first.MeanOtherIndex(), 13);
     }
 
     [Fact]
