@@ -619,9 +619,16 @@ public sealed class BassDesign
     private bool Supported(double[] part, double minimum, double[]? counts)
     {
         if (_rules.Support == SupportKind.ColumnMass) return (counts is null ? PairwiseSum.Of(part) : PairwiseSum.Dot(counts, part)) >= minimum;
-        double nonzero = 0.0;
-        for (int i = 0; i < part.Length; i++)
-            if (part[i] != 0.0) nonzero += counts?[i] ?? 1.0;
+        if (counts is not null)
+        {
+            double counted = 0.0;
+            for (int i = 0; i < part.Length; i++)
+                if (part[i] != 0.0) counted += counts[i];
+            return counted >= minimum;
+        }
+        int nonzero = 0;
+        foreach (double v in part)
+            if (v != 0.0) nonzero++;
         return nonzero >= minimum;
     }
 
