@@ -145,6 +145,7 @@ what was measured, what stayed open and why), and delete the build folder.
 | `37bc6a6` | `FastZigzag` names every bar's class where it begins; the contract in the docs; `ZigzagModuleOracle`; `GraphFrameFiltration.VerticesOf` |
 | `8119c7e` | `GraphFrameZigzag.BuildRelative`, `ConditionedFiltration.BuildRelativeSweep`, `RelativeCycle` |
 | `464f549` | Two other non-Rips deviations reported in the docs, not fixed |
+| `a4a0d44` | The timing as measured, in the docstring and docs; the differential extended below zero |
 
 **Left uncommitted in MarkBrain, as asked:** `persistent-homology/backbone-conditioned-persistence.md` and
 `persistent-homology/opus-brief-conditioned-persistence-synthesis.md` (dated notes beside each stale claim, original text kept),
