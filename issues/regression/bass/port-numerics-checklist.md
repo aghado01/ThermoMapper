@@ -36,6 +36,22 @@ Companion to [port-numerics-brief.md](port-numerics-brief.md). An item is ticked
 
 ## Reports
 
+### The warm-start claims, swept — 2026-11-01
+
+The loose ends' open question: the sweep folded in item 2 had read two warm-start claims failing at their first swept seed. Run by the main session: `SEED_SWEEP` = 32 on the chain axis, narrowed by the new `SEED_SWEEP_CLAIMS`, with a reading beside the claims (`WarmAgainstFlat_AlongTheLength`) that repeats the comparison along the length. Each row is one pilot seed and three learning seeds' mean RMS to θ*; holds of 32, then the median ratio of warm to flat.
+
+| | double well (L = 32k) | Potts (L = 100k) | fixture A (L = 8k) |
+| --- | --- | --- | --- |
+| warm L/2 < flat L, the old claim | 15; 1.03 | 17; 0.98 | 17; 0.99 |
+| warm 2L < flat 4L | 5; 1.26 | 2; 1.38 | 7; 1.41 |
+| warm L/2 < flat L/2 | 29; 0.73 | 30; 0.73 | 30; 0.65 |
+| warm 2L < flat 2L | 24; 0.84 | 20; 0.94 | 21; 0.92 |
+| the bare start matches flat at about | 8k | 100k | 8k |
+
+- *So the old claim was a coin flip at the lengths its tests chose,* where their own seeds had read 0.82, 0.74 and 0.83. Warm learning leads at equal iterations, by less the longer it runs, and it is flat learning that gains past that point.
+- *Changed:* the three tests now assert the equal-iterations lead, renamed to `…_LeadsTheFlatStart_AtEqualIterations`, with their registered claims; the half-length comparison stays in the reading. No file under `src/` changed.
+- *Recorded in:* `docs/Maths/Samplers.md` ("Checked", the warm start; the gain's start), `docs/Maths/BayesianRegression.md` ("Checked", the warm start).
+
 ### N17's loose ends: verified — 2026-10-31
 
 The warm start's chip closed the four loose ends ([their brief and report](flat-histogram-loose-ends-brief.md#reports); `9d15376` the pins, `72788a2` and `0454bf8` the window's top, `25e5124` the sweeps, `f093987` SMC's reading, `0ec16d3` the readout and refusal, `a712cf8` the report).
@@ -52,7 +68,7 @@ The warm start's chip closed the four loose ends ([their brief and report](flat-
   - the integrated form's 0.4 nats at b = 0.10 rests on one flat-histogram run reweighted;
   - while the top rises, the learning's round trips count against the top as it stood when a chain reached it (diagnostics only);
   - checkpoints taken before `72788a2` do not resume, since the options enter the fingerprint.
-- *Open, recorded, not scheduled:* whether "half the iterations from a warm start beat the flat start's full length" holds for the sampler or only for its seeds: the double well's claim fails at its first swept chain seed (ratio 1.254), BASS's too (1.188), and more seeds under `SEED_SWEEP` would say; a gentler extension rule.
+- *Open, recorded, not scheduled:* a gentler extension rule. Whether "half the iterations from a warm start beat the flat start's full length" holds beyond its seeds was swept the next day: it does not (the report above).
 - *Recorded in:* `docs/Maths/Samplers.md` ("The learning": the refusal's segment; "The run": the window's top; "The warm start": the run's tied nodes; the checks, API and configuration rows); `docs/Maths/BayesianRegression.md` (the pilot's readout and refusals, the checks, SMC on both forms, the window's top on seed 8017, the API row); [flat-histogram-design.md](flat-histogram-design.md), "Phase 2, as built".
 
 ### N17's warm start made robust, and Friedman replicated: verified — 2026-10-31

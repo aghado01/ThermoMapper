@@ -90,12 +90,23 @@ public sealed class ComparativeSweep
             var r = PenaltyTests.PenalizedAgainstOverfit(d);
             return [new("MSE: best of five penalties < unpenalized", r.MseBest, r.MseOver)];
         }),
-        new("BassFlatHistogramTests.Pilot_LearningFromTheWarmStart_ReachesTheFlatStartsAccuracy_InHalfTheIterations", DataSeed: null,
+        new("BassFlatHistogramTests.Pilot_LearningFromTheWarmStart_LeadsTheFlatStart_AtEqualIterations", DataSeed: null,
             ChainSeeds: [7701, 7703], (_, c) =>
             {
                 var r = BassFlatHistogramTests.WarmAgainstFlat(c[0], c[1], 8_000);
-                return [new("RMS to θ*: warm start's 4k < flat start's 8k", r.WarmHalf, r.Flat)];
+                return [new("RMS to θ*: warm start's 4k < flat start's 4k", r.WarmHalf, r.FlatCurve[1])];
             }),
+        // A reading beside the claims, no test's assertion: the same half-length comparison along the learning's length.
+        new("BassFlatHistogramTests.WarmAgainstFlat_AlongTheLength", DataSeed: null, ChainSeeds: [7701, 7703], (_, c) =>
+        {
+            var near = BassFlatHistogramTests.WarmAgainstFlat(c[0], c[1], 8_000);
+            var far = BassFlatHistogramTests.WarmAgainstFlat(c[0], c[1], 32_000);
+            return [new("warm start's 0 < flat start's 2000", near.WarmCurve[0], near.FlatCurve[0]),
+                    new("warm start's 2000 < flat start's 4000", near.WarmCurve[1], near.FlatCurve[1]),
+                    new("warm start's 4000 < flat start's 8000", near.WarmCurve[2], near.FlatCurve[2]),
+                    new("warm start's 8000 < flat start's 16000", far.WarmCurve[1], far.FlatCurve[1]),
+                    new("warm start's 16000 < flat start's 32000", far.WarmCurve[2], far.FlatCurve[2])];
+        }),
     ];
 
     [Fact]

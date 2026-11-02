@@ -350,7 +350,7 @@ $$\theta_k\leftarrow\theta_k+\gamma_t\,\frac1C\sum_c\mathbf 1_{\rm in}(\ell_c)\,
   - *Refusals before and after:* Friedman, 2 of 16 master seeds declared before the sweep, then none; fixture A, 7 of 48 pilots, then none; the double well's sparse pilots, 28 of 32, then none. Every Friedman window read starts thin: node 0 holds under ten draws on all 16.
   - *Accuracy:* the tied starts' centred RMS to SAMC's limit on the exact density of states is 0.29 on fixture A and 0.32 on the double well, against 0.84 and 0.71 for the starts accepted on the same shapes, whose window-edge nodes sit up to 17 nats off. Phase 1's 0.25, read on denser pilots over narrower windows, is met by neither.
   - *Not taken, options:* a threshold relative to the pilot's size (at ten draws a pilot needs a few thousand draws for the rule to apply); tying thin nodes always, not only on refusal, which would likely be more accurate but changes starts the fixed point accepts.
-- *The gain's start* from a warm start is the pilot's draws over the chains. That is regime-dependent: it over-trusts the double well's pilot and under-trusts the Potts one.
+- *The gain's start* from a warm start is the pilot's draws over the chains. That is regime-dependent: it over-trusts the double well's pilot and under-trusts the Potts one, whose learning first gives some of the start back, its median RMS rising from 0.060 to 0.073 over the first 25k iterations and regaining 0.064 by 50k.
 
 **Diagnostics** (`FlatHistogramDiagnostics`): the occupancy against the flat target, with its flatness; each chain's round trips between the window's lowest and highest bins, and the chains that make none; the learning's trace of the weights.
 
@@ -363,7 +363,7 @@ $$\theta_k\leftarrow\theta_k+\gamma_t\,\frac1C\sum_c\mathbf 1_{\rm in}(\ell_c)\,
   - toy 2's θ* is learned to 0.040 RMS;
   - the narrow and wide windows, one chain, and a chain that never tunnels, flagged.
 - *The reweighting:* the double well's laws at b = 0.1, 0.5 and 1, and ln Z(b) on 51 b, against quadrature within 4.5 of the chains' errors, with no bias over a 12-seed calibration. Toy 2's ln Z(b) and its energy law at the transition match the enumeration.
-- *The warm start:* WHAM on exact rung samples recovers ln Z(b_i) to 10⁻⁴. Over eight pilots its start meets θ* to 0.164 and 0.055 RMS on the two toys, with each rung at its effective draws, and warm learning at half the length beats flat learning at the full length.
+- *The warm start:* WHAM on exact rung samples recovers ln Z(b_i) to 10⁻⁴. Over eight pilots its start meets θ* to 0.164 and 0.055 RMS on the two toys, with each rung at its effective draws. *Warm against flat, swept over 32 chain seeds* (2026-11-01; `ComparativeSweep`, `WarmAgainstFlat_AlongTheLength`): warm learning leads flat at equal iterations, by less the longer they run. The ratio of their RMS has median 0.73 at 16k (holding on 29 seeds) and 0.84 at 64k (24) on the double well, and 0.73 at 50k (30) and 0.94 at 200k (20) on Potts. The bare start matches flat learning of about 8k iterations on the double well and 100k on Potts. One seed had read warm learning at half the length beating flat at the full length; that holds on 15 of 32 seeds at 32k and 17 at 100k, and on 5 and 2 at 128k and 400k.
 - *Toy 3:*
   - the lumped occupation move's Hastings ratio equals the configuration chain's;
   - its density of states by partitions equals the brute-force sum to 10⁻¹³;

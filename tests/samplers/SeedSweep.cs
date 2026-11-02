@@ -34,8 +34,8 @@ internal sealed record SweptClaim(string Test, int? DataSeed, int[] ChainSeeds, 
 /// </list>
 /// Each axis's seeds are derived by <see cref="SeedTree"/> from the test's own seeds, and each claim also runs once at
 /// those, as a check that it reproduces its test. Guarded by the <c>SEED_SWEEP</c> environment variable, the number of
-/// seeds per axis, so the default suite stays fast. The per-run table and the summary are written under
-/// <c>artifacts/test-runs/SeedSweep/</c>.
+/// seeds per axis, so the default suite stays fast; <c>SEED_SWEEP_CLAIMS</c>, a part of a test's name, narrows a run to the
+/// claims it names. The per-run table and the summary are written under <c>artifacts/test-runs/SeedSweep/</c>.
 /// </summary>
 internal static class SeedSweep
 {
@@ -43,6 +43,8 @@ internal static class SeedSweep
 
     public static void Run(string suite, IReadOnlyList<SweptClaim> claims, int seeds, ITestOutputHelper output)
     {
+        if (Environment.GetEnvironmentVariable("SEED_SWEEP_CLAIMS") is { Length: > 0 } only)
+            claims = [.. claims.Where(c => c.Test.Contains(only, StringComparison.Ordinal))];
         var jobs = new List<(SweptClaim Claim, string Axis, int Seed, int DataSeed, int[] ChainSeeds)>();
         foreach (SweptClaim claim in claims)
         {

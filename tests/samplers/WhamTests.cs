@@ -164,25 +164,29 @@ public sealed class WhamTests
     }
 
     [Fact]
-    public void DoubleWell_LearningFromTheWarmStart_ReachesTheFlatStartsAccuracy_InHalfTheIterations()
+    public void DoubleWell_LearningFromTheWarmStart_LeadsTheFlatStart_AtEqualIterations()
     {
         // The gain starts at t_w = the pilot's draws over the chains, so the warm start skips the flat start's large-gain
-        // discovery; on a toy that discovery is cheap, and the saving is about the pilot's own cost.
+        // discovery; on a toy that discovery is cheap, and the saving is about the pilot's own cost. Over 32 chain seeds
+        // (ComparativeSweep) the lead holds on 29 at 16k, while half a flat run's length holds on 15 at 16k against 32k and
+        // on 5 at 64k against 128k.
         TemperingPilot pilot = WellPilot(57);
-        (double flat, double warmHalf, double[] f, double[] w) = WarmAgainstFlat(WellError, pilot, 32_000, 61);
+        (_, double warmHalf, double[] f, double[] w) = WarmAgainstFlat(WellError, pilot, 32_000, 61);
         _out.WriteLine($"[wham] double well, mean centred RMS to θ* over 3 seeds: flat start 8k {f[0]:F3}, 16k {f[1]:F3}, 32k {f[2]:F3}; " +
                        $"warm start (pilot {pilot.Draws:N0} draws, the gain from t = {pilot.Draws / 4:N0}) 0 {w[0]:F3}, 8k {w[1]:F3}, 16k {w[2]:F3}");
-        Assert.True(warmHalf < flat, $"16 000 iterations from the warm start ({warmHalf:F3}) should beat 32 000 from flat ({flat:F3})");
+        Assert.True(warmHalf < f[1], $"16 000 iterations from the warm start ({warmHalf:F3}) should beat 16 000 from flat ({f[1]:F3})");
     }
 
     [Fact]
-    public void Potts_LearningFromTheWarmStart_ReachesTheFlatStartsAccuracy_InHalfTheIterations()
+    public void Potts_LearningFromTheWarmStart_LeadsTheFlatStart_AtEqualIterations()
     {
+        // Over 32 chain seeds (ComparativeSweep) the lead holds on 30 at 50k, while half a flat run's length holds on 17 at
+        // 50k against 100k and on 2 at 200k against 400k.
         TemperingPilot pilot = PottsPilot(59);
-        (double flat, double warmHalf, double[] f, double[] w) = WarmAgainstFlat(PottsError, pilot, 100_000, 63);
+        (_, double warmHalf, double[] f, double[] w) = WarmAgainstFlat(PottsError, pilot, 100_000, 63);
         _out.WriteLine($"[wham] Potts, mean centred RMS to θ* over 3 seeds: flat start 25k {f[0]:F3}, 50k {f[1]:F3}, 100k {f[2]:F3}; " +
                        $"warm start (pilot {pilot.Draws:N0} draws, the gain from t = {pilot.Draws / 4:N0}) 0 {w[0]:F3}, 25k {w[1]:F3}, 50k {w[2]:F3}");
-        Assert.True(warmHalf < flat, $"50 000 iterations from the warm start ({warmHalf:F3}) should beat 100 000 from flat ({flat:F3})");
+        Assert.True(warmHalf < f[1], $"50 000 iterations from the warm start ({warmHalf:F3}) should beat 50 000 from flat ({f[1]:F3})");
     }
 
     internal static double PottsError(long learning, TemperingPilot? pilot, int seed)

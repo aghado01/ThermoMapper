@@ -971,14 +971,15 @@ public sealed class BassFlatHistogramTests
     }
 
     [Fact]
-    public void Pilot_LearningFromTheWarmStart_ReachesTheFlatStartsAccuracy_InHalfTheIterations()
+    public void Pilot_LearningFromTheWarmStart_LeadsTheFlatStart_AtEqualIterations()
     {
-        // At L = 8,000, as read in exploration before this test was written; at 16,000 and 32,000 the warm start's
-        // learning, its gain counted from the pilot's draws, plateaus near 0.05 where flat learning reaches 0.06 and 0.03.
-        (double flat, double warmHalf, double[] f, double[] w) = WarmAgainstFlat(7701, 7703, 8_000);
+        // Over 32 chain seeds (ComparativeSweep) the lead holds on 30 at 4,000, while half a flat run's length holds on 17 at
+        // 4,000 against 8,000 and on 7 at 16,000 against 32,000: the warm start's learning, its gain counted from the pilot's
+        // draws, falls more slowly than flat learning.
+        (_, double warmHalf, double[] f, double[] w) = WarmAgainstFlat(7701, 7703, 8_000);
         _out.WriteLine($"## Fixture A, mean centred RMS to θ* over 3 seeds: flat start 2k {f[0]:F3}, 4k {f[1]:F3}, 8k {f[2]:F3}; " +
                        $"warm start 0 {w[0]:F3}, 2k {w[1]:F3}, 4k {w[2]:F3}");
-        Assert.True(warmHalf < flat, $"4,000 iterations from the warm start ({warmHalf:F3}) should beat 8,000 from flat ({flat:F3})");
+        Assert.True(warmHalf < f[1], $"4,000 iterations from the warm start ({warmHalf:F3}) should beat 4,000 from flat ({f[1]:F3})");
     }
 
     // The gap pilot: three fixed rungs, b = 1, 0.9 and the reference rung's 0, two ladders traced 500 scans; on fixture A

@@ -1,4 +1,5 @@
 using System;
+using Maths.Samplers.FlatHistogram;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -33,17 +34,34 @@ public sealed class ComparativeSweep
                    e3 = SamcLearningTests.WellLearningError(64_000, c[0]);
             return [new("RMS to θ*: 16k iterations < 4k", e2, e1), new("RMS to θ*: 64k iterations < 16k", e3, e2)];
         }),
-        new("WhamTests.DoubleWell_LearningFromTheWarmStart_ReachesTheFlatStartsAccuracy_InHalfTheIterations", DataSeed: null, ChainSeeds: [57, 61], (_, c) =>
+        new("WhamTests.DoubleWell_LearningFromTheWarmStart_LeadsTheFlatStart_AtEqualIterations", DataSeed: null, ChainSeeds: [57, 61], (_, c) =>
         {
             var r = WhamTests.WarmAgainstFlat(WhamTests.WellError, WhamTests.WellPilot(c[0]), 32_000, c[1]);
-            return [new("RMS to θ*: warm start's 16k < flat start's 32k", r.WarmHalf, r.Flat)];
+            return [new("RMS to θ*: warm start's 16k < flat start's 16k", r.WarmHalf, r.FlatCurve[1])];
         }),
-        new("WhamTests.Potts_LearningFromTheWarmStart_ReachesTheFlatStartsAccuracy_InHalfTheIterations", DataSeed: null, ChainSeeds: [59, 63], (_, c) =>
+        new("WhamTests.Potts_LearningFromTheWarmStart_LeadsTheFlatStart_AtEqualIterations", DataSeed: null, ChainSeeds: [59, 63], (_, c) =>
         {
             var r = WhamTests.WarmAgainstFlat(WhamTests.PottsError, WhamTests.PottsPilot(c[0]), 100_000, c[1]);
-            return [new("RMS to θ*: warm start's 50k < flat start's 100k", r.WarmHalf, r.Flat)];
+            return [new("RMS to θ*: warm start's 50k < flat start's 50k", r.WarmHalf, r.FlatCurve[1])];
         }),
+        // A reading beside the claims, no test's assertion: the same half-length comparison along the learning's length.
+        new("WhamTests.WarmAgainstFlat_AlongTheLength_DoubleWell", DataSeed: null, ChainSeeds: [57, 61], (_, c) =>
+            AlongTheLength(WhamTests.WellError, WhamTests.WellPilot(c[0]), 32_000, c[1])),
+        new("WhamTests.WarmAgainstFlat_AlongTheLength_Potts", DataSeed: null, ChainSeeds: [59, 63], (_, c) =>
+            AlongTheLength(WhamTests.PottsError, WhamTests.PottsPilot(c[0]), 100_000, c[1])),
     ];
+
+    // The warm start's error at each length against the flat start's at twice it, from the bare start (against L/4) to 2L.
+    private static Comparison[] AlongTheLength(Func<long, TemperingPilot?, int, double> error, TemperingPilot pilot, long length, int seed)
+    {
+        var near = WhamTests.WarmAgainstFlat(error, pilot, length, seed);
+        var far = WhamTests.WarmAgainstFlat(error, pilot, 4 * length, seed);
+        return [new($"warm start's 0 < flat start's {length / 4}", near.WarmCurve[0], near.FlatCurve[0]),
+                new($"warm start's {length / 4} < flat start's {length / 2}", near.WarmCurve[1], near.FlatCurve[1]),
+                new($"warm start's {length / 2} < flat start's {length}", near.WarmCurve[2], near.FlatCurve[2]),
+                new($"warm start's {length} < flat start's {2 * length}", far.WarmCurve[1], far.FlatCurve[1]),
+                new($"warm start's {2 * length} < flat start's {4 * length}", far.WarmCurve[2], far.FlatCurve[2])];
+    }
 
     [Fact]
     public void ComparativeAssertions_AcrossSeeds()
