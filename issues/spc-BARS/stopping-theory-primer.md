@@ -288,6 +288,7 @@ entropy) suit it better.
 | C54 | In a block's ordered bulk a shed fragment of n points is exponentially rare, exp(−γ·n^((d − 1)/d)), so shedding is dust and a size floor can be modest; C21's worst case isn't the typical one | §13.14 | Lattice result (Grimmett Theorem 5.104, Conjecture 5.101); matches the toy's cold edge (§12.9); on data graphs an analogy | The exact histogram across a plateau |
 | C55 | Theorem 9.35's literal form fails at q ≥ 3: Q(x ↔ y in the union of two sourceless Z_q currents) exceeds τ², by (q − 1)^L on a path of L edges at weak coupling; Q ≥ τ² held in all 126 cases | §13.14 | Observed by exact enumeration (q = 2 exact in 42 of 42); leading-order ratio derived; the inequality unproven | A proof, or a counterexample |
 | C56 | At any q ≥ 1, τ_xy² is the probability that x and y share a block of the meet of two independent FK draws, and equals (q⟨δ(ρ_x, ρ_y)⟩ − 1)/(q − 1) for the replicas' difference field ρ | §13.14 | Derived here (mixture convolution); checked by enumeration at q = 2 and 3 | E19 |
+| C57 | `LineagePersistence`'s dependence on seed and grid comes from four separable defects: the representative, a score counted in levels, the ratio elbow and `GapThreshold`. With all four fixed, iris reads its first stage on 12 of 12 seeds with ARI 1.000 between seeds at 8 × (1000, 2000), and every density design returns the same partition. Which hierarchy level to report stays a modelling choice: the longest-lived reading depends on the grid's extent, and a slice at T* does not | §13.15 | Observed (150 sweeps over 5 graphs; resolver copy checked against the code on all of them); the choice is the user's | The user's decision (§13.15) |
 
 ---
 
@@ -1611,7 +1612,7 @@ The user dropped iris as too limited and asked for the same SPC-only levers on t
 The user reopened what round 1 closed, as an adversarial round with new capabilities in hand. Round 2 was discussion: it
 ran no experiments (one quantile table was computed), and it changed no code. Where the user decided something, the
 entry says so and gives the date; everything else is open, with the experiment that would settle it. Experiments
-continue round 1's numbering (E6–E19, §13.12). New claims are C35–C56 in §7.
+continue round 1's numbering (E6–E19, §13.12). New claims are C35–C57 in §7.
 
 **What round 1 did not have**, all on `main` by 2026-10-30:
 - **The per-draw record** on `Accumulator`: `EnergyPerDraw`, `MagPerDraw`, `SumSqClusterSizesPerDraw`,
@@ -2496,3 +2497,223 @@ the squared correlation is a connectivity in the union of two independent source
   − S₂⁽²⁾ = Σ_xy τ(1 − τ)/N² is the all-pairs pair indecision of §13.6: a per-temperature scalar for the first kind of
   disagreement, read without BARS. Comparing the meet between replicas with the meet between far-apart draws of one
   replica would be a partition-level test of the third kind, stuck replicas (E19).
+
+### 13.15 Addendum, 2026-11-01: `LineagePersistence` measured: four defects, then a level choice (C57)
+
+§12.21, §12.22 and C49 left two defects on record: the representative and a score counted in levels. This section
+measures the candidates, and finds two more defects. Nothing in the tree has changed; the defaults wait on the user's
+decision at the end.
+
+**The run.**
+- **The recipe.** `BwdParityTests`': mutual KNN with MST repair, a kernel at the mean edge length, no LMP, q = 20, FK-reduced
+  χ for `SpPlateau`. Seeds 42 and 1–11 on the sampler; the toy's and BlattHierarchy's data stay at seed 42.
+- **Iris and the toy.** Iris at k = 5, minimum cluster 5; the toy at k = 10, minimum 50. The parity grid (the bracket, 48
+  log steps) at 1 × (200, 400) and 8 × (1000, 2000), with the parity test's window (T_fs up).
+- **BlattHierarchy.** 1,200 points, k = 5, minimum 10. Gaussian on the parity grid at those two budgets. Cauchy on 161 log
+  steps from 10⁻⁶ to 0.357, the only graph here carrying all three levels (§12.27), at 1 × (200, 400) and 4 × (500, 1000).
+- **Landsat.** k = 5, minimum 50, because its parity test rests on this resolver: 12 seeds at 1 × (200, 400), 6 at
+  4 × (500, 1000), with the test's window.
+- **The designs.** Iris and the toy also swept 160 levels: 129 on the bracket, plus 31 at eight times the step down to
+  10⁻⁶. §12.22's designs are subsets of those same sweeps. The levels below T ≈ 0.01 share seeds within a replica (§13.14),
+  which leaves each level's marginal right.
+- **The checks.** The harness (scratch, not committed) carries a copy of the resolver with the options below. Its
+  unmodified path matched `LineagePersistence.Resolve` on lineages, scores, representatives, split share and assignment
+  in all 150 sweeps and all three windows. It also reproduces §13.14's old-assertion counts, 2 of 12 and 0 of 12; its
+  clean-setosa counts (10 and 2, against 9 and 5) differ, and that table's seed list isn't recorded.
+- **Exploration.** One generator seed per synthetic dataset, and no held-out dataset. Nothing here is a basis for tuning a
+  number beyond these five graphs.
+
+**Four defects.**
+1. **The representative.** The least-decided level is the hottest and most eroded. A 50-point setosa lineage reports 5
+   points at the high budget, and on BlattHierarchy the fine clusters are lost: ARI 0.35–0.42 to the fine level, against
+   0.93–0.98 for the other representatives.
+2. **Levels.** Levels and ln T select alike on uniform grids (the "ln T only" rows match, or nearly), and part ways on
+   any other. On iris at the high budget:
+
+   | Design | Setosa: e-folds (levels) | Merged | Versicolor core |
+   |---|---|---|---|
+   | Uniform 129 | 2.79 (82) | 2.38 (70) | 0.51 (15) |
+   | Uniform 65 | 2.77 (41) | 2.36 (35) | 0.55 (8) |
+   | Uniform 33 | 2.81 (21) | 2.40 (18) | 0.55 (4) |
+   | Dense in [0.04, 0.08] | 2.79 (34) | 2.38 (22) | 0.56 (15) |
+   | Sparse in [0.04, 0.08] | 2.81 (69) | 2.40 (66) | 0.50 (4) |
+   | Cold edge at 0.025 | 1.04 (31) | 0.63 (19) | 0.51 (15) |
+   | Cold edge at 10⁻⁶ | 11.28 (113) | 10.87 (101) | 0.51 (15) |
+
+   Lifetimes hold within 0.06 across density and move with extent, since the cold edge censors any lineage that reaches it.
+   Virginica's core does less well (0.72–0.96): a split spread over two steps reads as one on a coarser grid, and the
+   split test works step by step.
+3. **The ratio elbow (new).** `SelectByGap` cuts at the largest ratio in the sorted scores and fires at 1.5. With a whole
+   representative, deduplication leaves two lineages on iris: setosa 40.0 and merged 25.8, a ratio of 1.55. So the merged
+   cluster is dropped and 100 points go unassigned, on 9 of 12 seeds at the high budget. The least-decided representative
+   only hid this: its remnants survive deduplication, and put a larger ratio further down. So fixing the representative
+   alone makes the first stage worse (10 and 3 of 12), and the two fixes go together. A lineage disjoint from the others
+   has no reason to be dropped for living less long.
+4. **`GapThreshold` finds no gap (new).** The shares it looks through have no structure: pooled over 12 seeds on iris at
+   the high budget, the 70 values in its band have a widest spacing of 0.028. So a run's threshold is the widest spacing
+   among its few values (a median of 2–36 per run, by graph), and moves between seeds on one grid: 0.300–0.427 on iris,
+   0.286–0.462 on the Cauchy graph. The species split sits at a share of 0.44–0.49 when it happens in one step, and
+   0.18–0.29 when it spreads over two. So on 3 of 12 seeds at the low budget and 1 of 12 at the high one, the threshold
+   sits above it and reads erosion: that is how one grid reads a split on one seed and erosion on another. With one value
+   in the band, the threshold equals that share exactly, so the reading can turn on the last bit: the harness's one
+   mismatch while it was being written, on one BlattHierarchy run, came from writing v/n for v·(1/n).
+
+**What the share should be.** A fixed share replaces the search. Measured with the largest representative:
+- **Any second successor of at least the minimum size (the size rule, HDBSCAN's).** It has no knob and keeps Landsat's
+  classes apart (12 of 12). But each 5-point chip ends the lineage: the merged stage's longest piece runs 2.21 e-folds
+  against 2.38, and a slice just after a chip reports the remnant (at T\* = 0.04, ARI to the 50/100 stage 0.62–0.69 in
+  three of the four grid-and-budget pairs, against 0.96–1.00).
+- **0.20 and above.** The stage stays whole, but a class under a fifth of its cluster stays in the chain, so the largest
+  level still holds it. Landsat's purity falls to 0.885, and its parity assertions hold on 9 of 12.
+- **0.10.** Keeps the stage whole (a 5-point chip on 98 is 0.05) and catches the class peel-offs on these data: 11 of 12
+  on Landsat at the low budget, 6 of 6 at the higher. The miss is seed 9, where a 1,180-point cluster pulls purity to
+  0.828. With the midpoint representative it's 12 of 12. It is fit to these five graphs, so it stays an exposed parameter.
+
+**All four fixed, side by side.** "All" means ln T widths, no elbow, and a share of 0.10. Each cell gives the low budget,
+then the high.
+
+*Iris, k = 5.* The first stage counts seeds where each selected lineage is setosa only or holds no setosa, with both sides
+present.
+
+| Change | First stage (of 12) | Setosa points in its representative | Assigned | ARI to 50/100 | ARI between seeds, median (min) |
+|---|---|---|---|---|---|
+| Current | 12, 12 | 44, 5 | 111, 97 | 0.577, 0.582 | 0.565 (−0.168), 0.793 (0.123) |
+| Largest only | 10, 3 | 50, 50 | 148, 50 | 0.964, 0.181 | 0.983 (0.193), 1.000 (0.193) |
+| ln T only | 12, 12 | 44, 5 | 111, 97 | 0.577, 0.582 | 0.565 (−0.168), 0.793 (0.123) |
+| Share 0.25 only | 12, 12 | 44, 35 | 123, 122 | 0.642, 0.678 | 0.828 (0.090), 0.959 (0.660) |
+| No elbow only | 12, 12 | 44, 5 | 118, 102 | 0.579, 0.584 | 0.587 (−0.084), 0.795 (0.160) |
+| All, least-decided | 12, 12 | 44, 36 | 126, 122 | 0.642, 0.681 | 0.828 (0.154), 0.908 (0.712) |
+| All, midpoint | 12, 12 | 49, 49 | 141, 141 | 0.855, 0.855 | 1.000 (0.984), 1.000 (1.000) |
+| All, largest | 12, 12 | 50, 50 | 148, 148 | 0.964, 0.964 | 1.000 (0.983), 1.000 (1.000) |
+
+*The toy, k = 10.* The parity test's own assertions held on 5 of 12 seeds at its budget, so seed 42 was passing by luck
+here too.
+
+| Change | Parity assertions (of 12) | Assigned | ARI to the stripes | ARI between seeds, median (min) |
+|---|---|---|---|---|
+| Current | 5, 8 | 1656, 2610 | 0.309, 0.690 | 0.145 (−0.037), 0.755 (0.425) |
+| Largest only | 3, 8 | 1847, 2760 | 0.519, 0.690 | 0.744 (−0.092), 0.807 (0.745) |
+| ln T only | 4, 7 | 1656, 2375 | 0.309, 0.569 | 0.105 (0.001), 0.750 (0.425) |
+| Share 0.25 only | 10, 12 | 2608, 2612 | 0.689, 0.691 | 0.795 (−0.058), 0.997 (0.994) |
+| No elbow only | 4, 7 | 1837, 2484 | 0.324, 0.572 | 0.240 (0.056), 0.752 (0.508) |
+| All, least-decided | 12, 12 | 2610, 2611 | 0.689, 0.691 | 0.965 (0.781), 0.997 (0.857) |
+| All, midpoint | 12, 12 | 2719, 2718 | 0.703, 0.705 | 0.992 (0.844), 0.999 (0.872) |
+| All, largest | 12, 12 | 2766, 2771 | 0.689, 0.691 | 0.986 (0.842), 0.996 (0.871) |
+
+The midpoint's stripes (seed 42: 911/909/903) sit closer to BWD's 900/894/877 than the largest's (941/923/922), which
+carry more background.
+
+*BlattHierarchy, Gaussian k = 5, which shows only its fine level (§12.27).*
+
+| Change | Clusters | Assigned of 1,200 | ARI to fine | ARI between seeds, median (min) |
+|---|---|---|---|---|
+| Current | 25, 25 | 575, 516 | 0.423, 0.345 | 0.656 (0.479), 0.688 (0.477) |
+| Largest only | 24, 24 | 1165, 1165 | 0.974, 0.974 | 1.000 (0.998), 1.000 (0.987) |
+| All, least-decided | 26, 25 | 692, 629 | 0.552, 0.498 | 0.802 (0.684), 0.906 (0.831) |
+| All, midpoint | 25, 25 | 1131, 1128 | 0.931, 0.928 | 0.989 (0.979), 0.997 (0.994) |
+| All, largest | 25, 25 | 1185, 1185 | 0.977, 0.977 | 0.999 (0.998), 1.000 (1.000) |
+
+*BlattHierarchy, Cauchy k = 5.* Current: ARI 0.82 to medium, and 7 of 12 seeds reach 0.8, at both budgets. Each "all" row:
+six clusters, ARI 1.000 to medium, 12 of 12, 1.000 between seeds.
+
+*Landsat, k = 5.* Its test asks for at least 4 clusters at purity ≥ 0.85.
+
+| Change | Parity assertions | Purity | Points covered of 6,435 | ARI between seeds, median (min) |
+|---|---|---|---|---|
+| Current | 12/12, 6/6 | 0.946, 0.962 | 899, 748 | 0.507 (0.174), 0.863 (0.824) |
+| Largest only | 6/12, 4/6 | 0.847, 0.890 | 2754, 2056 | 0.424 (0.057), 0.221 (0.061) |
+| All, least-decided | 12/12, 6/6 | 0.907, 0.901 | 1364, 1149 | 0.513 (0.163), 0.931 (0.902) |
+| All, midpoint | 12/12, 6/6 | 0.917, 0.915 | 1720, 1726 | 0.670 (0.392), 0.941 (0.921) |
+| All, largest | 11/12, 6/6 | 0.915, 0.915 | 2444, 2368 | 0.614 (0.293), 0.814 (0.745) |
+
+This is the real cost: current has the highest purity, at 12–14% coverage. The fixes trade 3–5 points of purity for about
+three times the coverage. Current and both new representatives pass all three parity tests' assertions at seed 42.
+
+**Which representatives keep different information.** Three do, and the other two track them (those two read at a share
+of 0.25):
+- **Largest:** the cluster when it formed, so capture. **Most decided** nearly always falls on the same cold level (setosa
+  50, iris ARI 0.947 against 0.964, BlattHierarchy 0.967 against 0.977), so it adds nothing.
+- **Midpoint in ln T:** a core, with the periphery that erodes in the first half of its life gone. Points present for at
+  least half the lifetime read about the same (assigned 141 against 141 on iris), and are the one to keep if a per-point
+  membership share is wanted later, the fraction of the lifetime each point stays in.
+- **Least decided:** the eroded core and the smallest. Once the other three fixes are in, it's dominated on these graphs,
+  Landsat's purity included (0.907 and 0.901, against 0.915–0.917). Its old purity came with the elbow's short list.
+
+**The score.** ∫ δ̄ d ln T, with each level owning the half-gaps to its neighbours. The δ̄ factor changed no selection on
+iris, the toy or BlattHierarchy. On Landsat it changed some (7 of 12 seeds and 3 of 6 read the same sizes without it), and raised ARI between seeds from 0.541 to
+0.644 and from 0.610 to 0.814 (read at the size rule), so it stays. The doc comment's reason for it doesn't hold, though:
+a merge doesn't read low. Mean δ̄ is 0.991 for the merged lineage, 0.982 for setosa, 0.948 for versicolor and 0.951 for
+virginica's core.
+
+**What's left is the level, and that is the modelling choice.** Two readings stand:
+
+- **Longest-lived on each branch.** Rank by score and drop what overlaps a better lineage. It takes the widest stage:
+  setosa plus merged on iris, the fine level on the Gaussian BlattHierarchy, the medium level on the Cauchy one (4.26
+  e-folds; it never reaches coarse or fine). It's invariant to density, but not to extent, since the cold edge censors the
+  long roots, so the bracket or the window can still make the choice silently, as in §12.22.
+- **A slice at an explicit T\*.** The lineages with a cluster at the grid level nearest T\*, each represented whole. It
+  reaches every level. It's invariant to density and extent, and more sampling now helps.
+
+ARI of each reading against itself, same seed, on uniform 129 (median/min), with the iris reading:
+
+| Design | Iris, high budget: current | Longest-lived, all fixed | Slice T\* = 0.06 | Toy, low budget: current | Longest-lived | Slice T\* = 0.03 |
+|---|---|---|---|---|---|---|
+| Uniform 65 | 0.879/0.038 | 1.000/1.000, merged | 1.000/1.000, species | 0.763/0.607 | 0.998/0.985 | 0.998/0.985 |
+| Uniform 33 | 0.191/0.068 | 1.000/1.000, merged | 0.990/0.990, species | 0.671/0.462 | 0.995/0.985 | 0.995/0.985 |
+| Dense in [0.04, 0.08] | 0.995/0.004 | 1.000/1.000, merged | 1.000/1.000, species | 0.478/0.018 | 0.995/0.985 | 0.995/0.985 |
+| Sparse in [0.04, 0.08] | 0.191/0.052 | 1.000/1.000, merged | 0.990/0.990, species | 0.907/0.088 | 1.000/1.000 | 1.000/1.000 |
+| Cold edge at 0.0129 | 1.000/0.998 | 0.890/0.890, merged | 0.986/0.986, species | 1.000/0.998 | 0.999/0.999 | 1.000/1.000 |
+| Cold edge at 0.025 | 0.074/0.004 | 0.350/0.261, species | 0.986/0.986, species | 0.911/0.302 | 0.972/0.968 | 0.973/0.969 |
+| Cold edge at 0.035 | 0.071/0.004 | 0.187/0.100, species, setosa in pieces | 0.972/0.972, species | 0.584/0.302 | 0.812/0.587 | 0.955/0.953 |
+| Cold edge at 10⁻⁶ | 1.000/0.213 | 0.964/0.964, merged | 1.000/1.000, species | 0.089/0.044 | 0.000/0.000, the giant | 1.000/1.000 |
+
+The slice with the largest representative and a share of 0.10, low budget then high:
+
+| Dataset, grid | T\* | Reading (seeds of 12) | ARI to that level | ARI between seeds, median (min) |
+|---|---|---|---|---|
+| Iris, 160 levels | 0.02 | Setosa + merged (12, 12) | 1.000, 1.000 (50/100) | 1.000 (1.000), 1.000 (1.000) |
+| | 0.04 | Setosa + merged (12, 12) | 1.000, 1.000 | 1.000 (0.714), 1.000 (1.000) |
+| | 0.06 | Setosa + species (11, 12) | 0.636, 0.662 (species) | 0.843 (0.771), 1.000 (1.000) |
+| | 0.07 | Setosa in pieces + species (9); setosa + species (12) | 0.454, 0.659 | 0.856 (0.666), 1.000 (1.000) |
+| Iris, parity grid | 0.04 | Setosa + merged (12, 12) | 0.964, 0.964 | 1.000 (0.705), 1.000 (1.000) |
+| | 0.06 | Setosa + species (11, 12) | 0.652, 0.662 | 0.963 (0.664), 1.000 (0.990) |
+| Toy, parity grid | 0.02–0.04 | Three clusters, one per stripe (12, 12) | 0.679, 0.679 (stripes) | 0.994 (0.985), 0.999 (0.994) |
+| BlattHierarchy, Cauchy | 10⁻⁵ | Coarse (12, 12) | 1.000, 1.000 | 1.000 (1.000), 1.000 (1.000) |
+| | 10⁻⁴–10⁻³ | Medium (12, 12) | 1.000, 1.000 | 1.000 (1.000), 1.000 (1.000) |
+| | 0.01 | Fine (12, 12) | 0.998, 0.998 | 1.000 (0.998), 1.000 (0.999) |
+
+- **The species reading is now reliable, given the level.** At T\* = 0.06 on iris, the old test's assertions pass on 11 and 12
+  of 12 at the two budgets, on both grids. §13.14 had 2 and 0 for the resolver's own choice. So those assertions failed
+  on the choice of level, and not on the lineages.
+- **T\* costs a number in units of T.** `AllLineages` is the menu it's read from. Past setosa's fragmentation near
+  T ≈ 0.08 it stops being useful: there the lineages alive are the melt's fragments.
+
+**One option measured and set aside: a floor on lifetime.** The finest antichain whose lineages live at least τ e-folds, on the
+tree of plurality parents, with τ doing the work of the share too. It is one knob and design-invariant. But it can't reach
+a stage shorter than its children: on the Cauchy graph, τ = 0.6–1.5 gives fine, τ = 3 gives medium, and nothing gives
+coarse (1.9 e-folds under medium's 4.26). And on iris, setosa's melt fragments outlive the species (reading "setosa in
+pieces" on 8 of 12 seeds at τ = 0.3–0.5), even with a chain dying once its children hold under half its largest size. A
+mass share of 2/3 fixes that (11 of 12), but that number is tuned on iris.
+
+**Recommendation, for the user's decision.**
+1. Score by ∫ δ̄ d ln T on the grid's cells.
+2. Remove the ratio elbow, and keep every lineage left after deduplication. `selectTopK` stays.
+3. Remove `GapThreshold`. Default the share to a fixed 0.10, exposed as `splitShare` now is.
+4. Default the representative to the largest level, with the midpoint and the least-decided level selectable. Keep each
+   lineage's levels on the record, so other reductions stay views.
+5. On the level: longest-lived as the default, and an optional T\* for the slice. That leaves the coarse reading as what
+   the resolver says by itself, and the species one a thing asked for by number. This one is the modelling choice, and the
+   user's.
+
+The largest level over the midpoint is the closest call. It covers about 40% more on Landsat, and reads iris (0.964 against
+0.855) and BlattHierarchy (0.977 against 0.931) better, at the price of that one Landsat seed, lower stability on Landsat
+(0.61 against 0.67, 0.81 against 0.94), and more background on the toy.
+
+**Seen in passing, not settled here.**
+- **The REPL's window.** `SpcCommand` clips at T_ps, where the parity test doesn't. On Landsat that window passes the test's
+  assertions on 3 of 12 seeds and 0 of 6 under the current resolver, and 5 of 12 and 3 of 6 with the changes above. The
+  window itself is what's limiting there.
+- **The chain's cold end.** A lineage reaching the grid's cold edge is censored, and nothing marks it. The cold edge's
+  effect on the longest-lived reading could at least be reported.
+- **Thermodynamic length** (§12.21) wasn't tried: it needs the energy variance, which this producer-agnostic core doesn't
+  get.
