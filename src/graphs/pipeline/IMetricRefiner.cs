@@ -10,8 +10,7 @@ namespace Graphs.Pipeline;
 /// </summary>
 /// <remarks>
 /// <para><see cref="RefinementKind.Auto"/> in <see cref="GraphCompilerConfig"/>
-/// resolves to <see cref="Graphs.Pipeline.Refinement.PathNeighborRefiner"/>
-/// and the explicit Euclidean pass-through refiner is retired.</para>
+/// resolves to <see cref="Graphs.Pipeline.Refinement.PathNeighborRefiner"/>.</para>
 /// </remarks>
 public interface IMetricRefiner
 {

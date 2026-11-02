@@ -47,10 +47,10 @@ internal sealed class AutoLmpScaler : IEdgeScaler
     public ScalerResult Scale(NeighborSelection refined, int n)
     {
         ScalerResult tentative = _innerScaler.Scale(refined, n);
-        // The kept, non-repair edges only: LMP writes exact zeros and fragments sparse graphs, so edges
-        // the floor dropped must not tip a graph into it (the build log and MaxNearZeroEdgeRatio count
-        // them), and a repair bridge is weak by construction.
-        double ratio = EdgeWeightThresholds.NearZeroRatio(tentative.Graph, cutEdges: 0, _nearZeroCoupling, _repairEdges);
+        // The kept edges only, repair and restored edges aside: LMP writes exact zeros and fragments sparse
+        // graphs, so edges the floor dropped must not tip a graph into it (the build log and
+        // MaxNearZeroEdgeRatio count them), and those two kinds are weak by construction.
+        double ratio = EdgeWeightThresholds.NearZeroRatio(tentative.Graph, cutEdges: 0, _nearZeroCoupling, _repairEdges, tentative.RestoredEdges);
 
         if (ratio > _nearZeroEdgeRatioThreshold)
         {
@@ -59,7 +59,8 @@ internal sealed class AutoLmpScaler : IEdgeScaler
                 $"Auto-LMP enabled because tentative global scaling produced a near-zero edge ratio " +
                 $"{ratio:P1}, which exceeds the threshold {_nearZeroEdgeRatioThreshold:P1}.");
 
-            IReadOnlySet<(int Lo, int Hi)>? protectedEdges = _protectedProvider?.Invoke(refined, n);
+            IReadOnlySet<(int Lo, int Hi)>? protectedEdges =
+                LocalMutualProximityScaler.WithRestored(_protectedProvider?.Invoke(refined, n), tentative.RestoredEdges);
             CsrGraph rescaled = LocalMutualProximity.ApplyLocalScaling(
                 tentative.Graph,
                 weightsAreCouplings: true,

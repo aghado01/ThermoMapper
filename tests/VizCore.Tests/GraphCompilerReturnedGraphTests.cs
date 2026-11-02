@@ -116,19 +116,58 @@ public sealed class GraphCompilerReturnedGraphTests
     [Fact]
     public void GlobalBandwidthScaler_CountsTheEdgesTheFloorDrops()
     {
-        // Two edges: d = 1 (coupling e^-0.5) and d = 10 (e^-50 ≈ 2e-22, under the floor).
+        // A triangle: two edges at d = 1 (coupling e^-0.5) and one at d = 10 (e^-50 ≈ 2e-22, under the floor)
+        // that joins nothing the others don't.
         var rows = new[]
         {
             new[] { Near(1, 1.0), Near(2, 10.0) },
-            new[] { Near(0, 1.0) },
-            new[] { Near(0, 10.0) },
+            new[] { Near(0, 1.0), Near(2, 1.0) },
+            new[] { Near(0, 10.0), Near(1, 1.0) },
         };
-        var selection = new NeighborSelection(rows, new[] { 1.0, 1.0, 10.0 }, new[] { 10.0, 1.0, 10.0 });
+        var selection = new NeighborSelection(rows, new[] { 10.0, 1.0, 10.0 }, new[] { 10.0, 1.0, 10.0 });
 
         ScalerResult scaled = new GlobalBandwidthScaler(KernelType.Gaussian, bandwidth: 1.0).Scale(selection, 3);
 
         Assert.Equal(1, scaled.CutEdges);
-        Assert.Equal(2, scaled.Graph.Targets.Length);   // the d = 1 edge, in both CSR slots
+        Assert.Null(scaled.RestoredEdges);
+        Assert.Equal(4, scaled.Graph.Targets.Length);   // the two d = 1 edges, each in both CSR slots
+    }
+
+    /// <summary>Two pairs at d = 1, joined only by cross edges at the given distances.</summary>
+    private static NeighborSelection TwoPairs(double cross02, double cross13)
+    {
+        var rows = new[]
+        {
+            new[] { Near(1, 1.0), Near(2, cross02) },
+            new[] { Near(0, 1.0), Near(3, cross13) },
+            new[] { Near(3, 1.0), Near(0, cross02) },
+            new[] { Near(2, 1.0), Near(1, cross13) },
+        };
+        return new NeighborSelection(rows, new[] { cross02, cross13, cross02, cross13 }, new[] { cross02, cross13, cross02, cross13 });
+    }
+
+    [Fact]
+    public void GlobalBandwidthScaler_RestoresOnlyTheStrongestEdgeAcrossASplit()
+    {
+        // Both cross edges fall under the floor. Dropping both would split the pairs, so d = 10 (e^-50) goes back and d = 12 stays out.
+        ScalerResult scaled = new GlobalBandwidthScaler(KernelType.Gaussian, bandwidth: 1.0).Scale(TwoPairs(10.0, 12.0), 4);
+
+        Assert.Equal(1, scaled.CutEdges);
+        Assert.Equal(new[] { (0, 2) }, scaled.RestoredEdges!.Select(e => (e.Lo, e.Hi)));
+        Assert.Equal(1, Connectivity.Validate(scaled.Graph).ComponentCount);
+        Assert.InRange(WeightOf(scaled.Graph, 0, 2) / Math.Exp(-50.0), 1 - 1e-9, 1 + 1e-9);
+        Assert.Throws<InvalidOperationException>(() => WeightOf(scaled.Graph, 1, 3));
+    }
+
+    [Fact]
+    public void GlobalBandwidthScaler_ARestoredEdgeThatUnderflowedKeepsItsExactLog()
+    {
+        // d = 40: e^-800 underflows to 0, so the linear coupling takes the clamp and the log stays the kernel's.
+        ScalerResult scaled = new GlobalBandwidthScaler(KernelType.Gaussian, bandwidth: 1.0).Scale(TwoPairs(40.0, 50.0), 4);
+
+        Assert.Equal(ScalingContext.RepairEdgeMinimum, WeightOf(scaled.Graph, 0, 2));
+        for (int slot = scaled.Graph.RowPointers[0]; slot < scaled.Graph.RowPointers[1]; slot++)
+            if (scaled.Graph.Targets[slot] == 2) Assert.Equal(-800.0, scaled.Graph.LogWeights![slot], 9);
     }
 
     /// <summary>A line of points and one outlier far off its end: the outlier's own nominations are the long edges.</summary>
@@ -139,26 +178,112 @@ public sealed class GraphCompilerReturnedGraphTests
     }
 
     [Fact]
-    public void FloorStillCutsATopologyEdge_AndTheLogSaysTheGraphIsLessConnectedThanRepairReported()
+    public void FloorKeepsTheStrongestEdgeAcrossASplit_SoTheGraphStaysAsConnectedAsRepairReported()
     {
-        // The outlier is joined by its own nominations (no repair), and the floor drops all three:
-        // only repair edges are exempt, so the outlier is isolated in the returned graph.
+        // The outlier is joined by its own three nominations (no repair), all under the floor and none a bridge.
+        // Dropping them would isolate it, so the strongest stays and the other two go.
         double[][] points = LineWithOutlier(pointsPerLine: 10, outlierAt: 15.0);
+        int outlier = points.Length - 1;
 
         GraphBuildResult result = Build(points, Config(new Gaussian(), k: 3));
 
-        ConnectivityReport returned = Connectivity.Validate(result.Graph);
-        Assert.Equal(2, returned.ComponentCount);
+        Assert.Equal(1, Connectivity.Validate(result.Graph).ComponentCount);
+        Assert.Equal(1, result.Resolved!.Coupling!.RestoredEdges);
+        Assert.Equal(2, result.Resolved.Coupling.CutEdges);
+        Assert.Equal(1, result.Graph.Degree(outlier));
+        Assert.Equal(outlier - 1, result.Graph.Targets[result.Graph.RowPointers[outlier]]);   // the line's nearest point
         Assert.Contains(result.Diagnostics!.Messages, m =>
-            m.Stage == "Scaling" && m.Text.StartsWith("3 edge(s) fell under the", StringComparison.Ordinal));
-        Assert.Contains(result.Diagnostics.Warnings, m =>
-            m.Text.Contains("repaired topology had 1 component(s); the returned graph has 2", StringComparison.Ordinal));
+            m.Stage == "Scaling" && m.Text.StartsWith("2 edge(s) fell under the", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics.Messages, m =>
+            m.Stage == "Scaling" && m.Text.StartsWith("1 edge(s) under the", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics.Warnings, m => m.Stage == "Connectivity");
+    }
+
+    [Fact]
+    public void TheFloorKeepsANaturalBridgeOnTheParityRecipe()
+    {
+        // Mutual k = 5, mean edge, gauge 1/K̂ after repair: one mutual edge (d/a = 7.15, kernel 8e-12) holds a
+        // class of 400 on, and it isn't a repair edge (stopping primer §13.20).
+        double[][] points = Synthetic.Euclidean.AnisotropicGaussian.Generate(pointsPerCluster: 400, meanSeparation: 4, anisotropyRatio: 1, seed: 55).Features;
+
+        GraphBuildResult result = Build(points, new GraphCompilerConfig
+        {
+            Topology = new TopologyConfig { Kind = TopologyKind.Knn, K = 5 },
+            Filter = new FilterConfig { Kind = FilterKind.MutualKnn },
+            Repair = new RepairConfig { Kind = RepairKind.MstMin },
+            Projection = new CouplingProjection
+            {
+                Kernel = new Gaussian(),
+                BandwidthOverride = Graphs.Distance.BandwidthStrategy.MeanEdgeDistance,
+                Gauge = GaugeKind.InverseMeanDegree,
+                ScaleEdges = ScaleEdgeSet.AfterRepair,
+                LmpRescale = false,
+            },
+        });
+
+        Assert.Equal(1, result.Resolved!.Components);
+        Assert.Equal(1, result.Resolved.Coupling!.RestoredEdges);
+        Assert.Equal(0, result.Resolved.Coupling.CutEdges);
+        Assert.InRange(WeightOf(result.Graph, 307, 863), 1e-13, 1e-10);
+    }
+
+    [Theory]
+    [InlineData(FilterKind.MutualKnn, 1)]   // one edge under the floor holds a 100-node region on
+    [InlineData(FilterKind.OrRule, 6)]      // the filter the compiler defaults to, on the same bandwidth
+    public void TheFloorLeavesEveryMergeHeightWhereItWas(FilterKind filter, int restored)
+    {
+        // Single linkage reads a maximum spanning forest of the couplings, and the restored edges are the part the floor would have dropped.
+        double[][] points = Synthetic.Euclidean.BlattHierarchy.Generate(pointsPerFine: 50, leafSpread: 0.15, seed: 42).Features;
+        GraphCompilerConfig Thinned(double floor) => new()
+        {
+            Topology = new TopologyConfig { Kind = TopologyKind.Knn, K = 5 },
+            Filter = new FilterConfig { Kind = filter },
+            Repair = new RepairConfig { Kind = filter == FilterKind.MutualKnn ? RepairKind.MstMin : RepairKind.Auto },
+            Projection = new CouplingProjection { Kernel = new Gaussian(), LmpRescale = false, CouplingFloor = floor },
+        };
+        static double[] Heights(CsrGraph graph) =>
+            MergeHeights.Compute(graph).Select(merge => merge.LogCoupling).OrderBy(height => height).ToArray();
+
+        GraphBuildResult thinned = Build(points, Thinned(1e-10));
+        GraphBuildResult whole = Build(points, Thinned(0.0));
+
+        Assert.Equal(restored, thinned.Resolved!.Coupling!.RestoredEdges);
+        Assert.Equal(whole.Resolved!.Components, thinned.Resolved.Components);
+        Assert.Equal(Heights(whole.Graph), Heights(thinned.Graph));
+    }
+
+    [Fact]
+    public void Lmp_KeepsARestoredEdgeAtItsKernelCoupling()
+    {
+        // The restored edge is the outlier's only one, weakest at both ends, which the strict rank would write 0.
+        double[][] points = LineWithOutlier(pointsPerLine: 10, outlierAt: 15.0);
+        int outlier = points.Length - 1;
+
+        GraphBuildResult withLmp = Build(points, Config(new Gaussian(), k: 3, lmp: true));
+        GraphBuildResult withoutLmp = Build(points, Config(new Gaussian(), k: 3, lmp: false));
+
+        double edge = WeightOf(withLmp.Graph, outlier, outlier - 1);
+        Assert.True(edge > 0.0);
+        Assert.Equal(WeightOf(withoutLmp.Graph, outlier, outlier - 1), edge);
+    }
+
+    [Fact]
+    public void AutoLmp_DoesNotCountARestoredEdge()
+    {
+        // A short line, so the one restored edge is over 5% of those kept and far under the near-zero coupling.
+        double[][] points = LineWithOutlier(pointsPerLine: 5, outlierAt: 15.0);
+
+        GraphBuildResult result = Build(points, Config(new Gaussian(), k: 3, lmp: null));
+
+        Assert.Equal(1, result.Resolved!.Coupling!.RestoredEdges);
+        Assert.False(result.Resolved.Coupling.Lmp);
+        Assert.Contains(result.Diagnostics!.Infos, m => m.Text.Contains("LMP is not required", StringComparison.Ordinal));
     }
 
     [Fact]
     public void NearZeroInterrupt_CountsTheEdgesTheFloorAlreadyDropped()
     {
-        // Three dropped edges among ~20: the kept edges alone show a ratio of 0.
+        // Two dropped edges and a restored one among ~20: the rest of the kept edges alone show a ratio of 0.
         double[][] points = LineWithOutlier(pointsPerLine: 10, outlierAt: 15.0);
         GraphCompilerConfig config = Config(
             new Gaussian(), k: 3, interrupts: new PathologyInterruptConfig { MaxNearZeroEdgeRatio = 0.01 });

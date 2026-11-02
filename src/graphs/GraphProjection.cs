@@ -77,9 +77,9 @@ public sealed record CouplingProjection : IEdgeProjection
     public SphericalIntrinsicMode SphericalMode { get; init; } = SphericalIntrinsicMode.Auto;
 
     /// <summary>Thinning on kernel couplings: an edge whose coupling is at or under this is
-    /// dropped. Repair edges are exempt and keep their kernel coupling, so a repaired graph
-    /// stays connected under any kernel. <c>0</c> keeps every edge. The default is the
-    /// historical 1e-10.</summary>
+    /// dropped. Repair edges are exempt and keep their kernel coupling, and so does the strongest
+    /// edge across each split dropping the others would open, so the floor never changes what is
+    /// connected, under any kernel. <c>0</c> keeps every edge. The default is the historical 1e-10.</summary>
     public double CouplingFloor { get; init; } = 1e-10;
 
     /// <summary>How LMP ranks an edge among a node's edges, when LMP runs. <see cref="LmpRankRule.Strict"/>

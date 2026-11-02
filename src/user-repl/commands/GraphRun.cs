@@ -313,7 +313,7 @@ internal static class GraphRun
         Console.WriteLine("  --gauge <none|inverse-mean-degree>            Global factor on the finished couplings (default: none)");
         Console.WriteLine("  --scale-edges <before-repair|after-repair>    Edges the mean-edge-distance bandwidth averages (default: before-repair)");
         Console.WriteLine("  --scale-rank <int>                            Read the bandwidth from each node's first r neighbours (r <= K; default: K)");
-        Console.WriteLine("  --coupling-floor <double>                     Drop couplings at or under this, repair edges excepted (default: 1e-10; 0 = keep all)");
+        Console.WriteLine("  --coupling-floor <double>                     Drop couplings at or under this, keeping repair edges and what connectivity needs (default: 1e-10; 0 = keep all)");
         Console.WriteLine("  --lmp-rank <strict|inclusive>                 LMP rank rule (default: strict)");
         Console.WriteLine("  --mixture <spec>                              Kernel mixture weights, e.g.");
         Console.WriteLine("                                                'gauss=0.5,cauchy=0.3,laplace=0.2'.");

@@ -82,6 +82,7 @@ internal static class GraphConstructionPersistence
         if (config is null) throw new ArgumentNullException(nameof(config));
 
         using var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        AppendUtf8(hasher, GraphConstructionManifest.CurrentSchemaVersion);
         AppendUtf8(hasher, config.Topology.Kind.ToString());
         AppendUtf8(hasher, (config.Topology.K ?? 0).ToString(CultureInfo.InvariantCulture));
         AppendUtf8(hasher, (config.Topology.Epsilon ?? 0.0).ToString(CultureInfo.InvariantCulture));

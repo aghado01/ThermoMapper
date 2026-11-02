@@ -191,8 +191,11 @@ public sealed class LogCouplingTests
             Assert.InRange(g.LogWeights![s] / expected, 1 - 1e-12, 1 + 1e-12);
         }
 
-        // With the historical 1e-10 floor the same three edges are cut.
-        Assert.Equal(0, Build(points, new Gaussian(), floor: 1e-10).Graph.Degree(outlier));
+        // With the historical 1e-10 floor two of the three are cut. The strongest stays, or the outlier would be
+        // cut off, with its linear weight raised to the repair edges' minimum.
+        CsrGraph thinned = Build(points, new Gaussian(), floor: 1e-10).Graph;
+        Assert.Equal(1, thinned.Degree(outlier));
+        Assert.Equal(ScalingContext.RepairEdgeMinimum, thinned.Weights[thinned.RowPointers[outlier]]);
     }
 
     [Fact]

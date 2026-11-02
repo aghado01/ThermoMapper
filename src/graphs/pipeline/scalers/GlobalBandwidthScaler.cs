@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Graphs;
 using Graphs.Coupling;
 using Graphs.Distance;
@@ -150,7 +151,7 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
 
         Neighbor[][] allNeighbors = refined.AllNeighbors;
         var edges = new List<Edge>(n * (allNeighbors.Length > 0 ? allNeighbors[0].Length : 0));
-        int cutEdges = 0;
+        var dropped = new List<Edge>();
 
         for (int i = 0; i < n; i++)
         {
@@ -180,18 +181,20 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
 
                 if (!TryKeep(i, nb.Index, ref coupling, ref logCoupling))
                 {
-                    cutEdges++;
+                    dropped.Add(new Edge(i, nb.Index, coupling, logCoupling));
                     continue;
                 }
                 edges.Add(new Edge(i, nb.Index, coupling, logCoupling));
             }
         }
 
+        IReadOnlySet<(int Lo, int Hi)>? restored = RestoreAcrossSplits(edges, dropped, n);
         return new ScalerResult(
             Graph:            CsrGraph.FromEdges(edges.ToArray(), n),
             SingleBandwidth:  delta,
             MixtureBandwidth: null,
-            CutEdges:         cutEdges);
+            CutEdges:         dropped.Count - (restored?.Count ?? 0),
+            RestoredEdges:    restored);
     }
 
     private bool IsRepairEdge(int a, int b) => _context.RepairEdges?.Contains(a, b) == true;
@@ -199,10 +202,8 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
     /// <summary>
     /// The thinning decision, made on the log coupling so it holds where the linear value has underflowed:
     /// kept above the floor (a floor of 0 keeps every edge). A repair edge is kept at the kernel's own log
-    /// coupling, exact however far; its linear coupling is raised to
-    /// <see cref="ScalingContext.RepairEdgeMinimum"/> when that underflowed, and a kernel that gives it exactly
-    /// zero (a Linear kernel past its support) gets the minimum in both, so a repaired graph stays connected
-    /// under any kernel. NaN is never kept.
+    /// coupling, exact however far, with its linear coupling raised by <see cref="RaiseToMinimum"/>, so a
+    /// repaired graph stays connected under any kernel. NaN is never kept.
     /// </summary>
     private bool TryKeep(int a, int b, ref double coupling, ref double logCoupling)
     {
@@ -212,12 +213,44 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
         bool above = floor <= 0.0 || logCoupling > Math.Log(floor);
         if (!above && !repair) return false;
 
-        if (repair)
-        {
-            if (!(coupling > ScalingContext.RepairEdgeMinimum)) coupling = ScalingContext.RepairEdgeMinimum;
-            if (double.IsNegativeInfinity(logCoupling)) logCoupling = Math.Log(ScalingContext.RepairEdgeMinimum);
-        }
+        if (repair) RaiseToMinimum(ref coupling, ref logCoupling);
         return true;
+    }
+
+    /// <summary>
+    /// Raises a linear coupling that underflowed to <see cref="ScalingContext.RepairEdgeMinimum"/>; the log
+    /// stays exact. A kernel that gives exactly zero (a Linear kernel past its support) gets the minimum in both.
+    /// </summary>
+    private static void RaiseToMinimum(ref double coupling, ref double logCoupling)
+    {
+        if (!(coupling > ScalingContext.RepairEdgeMinimum)) coupling = ScalingContext.RepairEdgeMinimum;
+        if (double.IsNegativeInfinity(logCoupling)) logCoupling = Math.Log(ScalingContext.RepairEdgeMinimum);
+    }
+
+    /// <summary>
+    /// Gives back the strongest dropped edge across each split the floor opened, so thinning leaves the
+    /// selection's components as they were. These are the dropped part of a maximum spanning forest of the
+    /// couplings, so the floor also leaves every single-linkage merge height where it was. Returns the edges
+    /// restored, or null for none; an edge with no coupling (NaN) can't be one.
+    /// </summary>
+    private static IReadOnlySet<(int Lo, int Hi)>? RestoreAcrossSplits(List<Edge> kept, List<Edge> dropped, int n)
+    {
+        if (dropped.Count == 0) return null;
+        var components = new UnionFind(n);
+        foreach (Edge edge in kept) components.Union(edge.Source, edge.Target);
+
+        HashSet<(int Lo, int Hi)>? restored = null;
+        foreach (Edge edge in dropped.Where(e => !double.IsNaN(e.J) && !double.IsNaN(e.LogJ)).OrderByDescending(e => e.LogJ))
+        {
+            if (components.Find(edge.Source) == components.Find(edge.Target)) continue;
+            components.Union(edge.Source, edge.Target);
+
+            double coupling = edge.J, logCoupling = edge.LogJ;
+            RaiseToMinimum(ref coupling, ref logCoupling);
+            kept.Add(new Edge(edge.Source, edge.Target, coupling, logCoupling));
+            (restored ??= new HashSet<(int Lo, int Hi)>()).Add((edge.Source, edge.Target));
+        }
+        return restored;
     }
 
 
@@ -311,7 +344,7 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
 
         Neighbor[][] allNeighbors = refined.AllNeighbors;
         var edges = new List<Edge>(n * (allNeighbors.Length > 0 ? allNeighbors[0].Length : 0));
-        int cutEdges = 0;
+        var dropped = new List<Edge>();
 
         for (int i = 0; i < n; i++)
         {
@@ -322,18 +355,20 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
                 double logCoupling = MixtureKernel.LogEvaluate(nb.Distance, resolved, weights);
                 if (!TryKeep(i, nb.Index, ref coupling, ref logCoupling))
                 {
-                    cutEdges++;
+                    dropped.Add(new Edge(i, nb.Index, coupling, logCoupling));
                     continue;
                 }
                 edges.Add(new Edge(i, nb.Index, coupling, logCoupling));
             }
         }
 
+        IReadOnlySet<(int Lo, int Hi)>? restored = RestoreAcrossSplits(edges, dropped, n);
         return new ScalerResult(
             Graph:            CsrGraph.FromEdges(edges.ToArray(), n),
             SingleBandwidth:  null,
             MixtureBandwidth: resolved,
-            CutEdges:         cutEdges);
+            CutEdges:         dropped.Count - (restored?.Count ?? 0),
+            RestoredEdges:    restored);
     }
 
     /// <summary>

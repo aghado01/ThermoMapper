@@ -50,7 +50,7 @@ When repair was applied, both output paths also return a `PreRepairGraph`: the r
 - **MST-min repair.** Adds only the Borůvka bridges needed to join the components. The added edges are the **repair edges** (`RepairEdgeSet`): the coupling floor never cuts them, and LMP leaves them their kernel coupling.
 - **Bandwidth δ.** The kernel length scale. By default it is estimated from the per-node k-th-neighbor distances (the "k-th sample"); `ScaleRank` r reads each node's r-th neighbor instead, so K can grow without widening the kernel.
 - **Gauge.** One global factor on the finished couplings, applied last (`Gauge = InverseMeanDegree` multiplies by $1/\hat K$, with $\hat K$ the returned graph's mean degree). It follows every threshold, so it is exactly a rescaling of temperature.
-- **Resolved construction.** `GraphBuildResult.Resolved`, echoed into the manifest beside the requested config: what each `Auto` picked and the statistic behind it, the bandwidth, the gauge factor, the floor, the cut count, the connectivity of the returned graph, and whether the couplings are the classic units BWD's q-only $T_{ps}(q)$ is derived for.
+- **Resolved construction.** `GraphBuildResult.Resolved`, echoed into the manifest beside the requested config: what each `Auto` picked and the statistic behind it, the bandwidth, the gauge factor, the floor, the cut and restored counts, the connectivity of the returned graph, and whether the couplings are the classic units BWD's q-only $T_{ps}(q)$ is derived for.
 - **Coupling fidelity.**
   - `GeodesicLinear`: a flat kernel applied to geodesic distance.
   - `Intrinsic`: the manifold heat kernel, including the Van Vleck volume correction.
@@ -162,7 +162,7 @@ The stages run in this order, and each owns one concern. The bandwidth δ is rea
 
 $$J^{\mathrm{raw}}_{ij}=K(d_{ij};\delta)\cdot V(d_{ij}).$$
 
-- **Thinning.** An edge is kept when $J^{\mathrm{raw}}_{ij}>f$, with $f$ = `CouplingFloor` (default $10^{-10}$; $f=0$ keeps every edge, a zero coupling included). A **repair edge** is exempt: it keeps its kernel coupling, raised to $10^{-300}$ when the kernel underflowed, so a repaired graph stays connected under any kernel. The floor still cuts a topology edge, and that can isolate a node whose only edges are weak; the build log then warns that the graph is less connected than the repair stage reported.
+- **Thinning.** An edge is kept when $J^{\mathrm{raw}}_{ij}>f$, with $f$ = `CouplingFloor` (default $10^{-10}$; $f=0$ keeps every edge, a zero coupling included). A **repair edge** is exempt: it keeps its kernel coupling, raised to $10^{-300}$ when the kernel underflowed, so a repaired graph stays connected under any kernel. The floor doesn't change what is connected either: after thinning, the strongest dropped edge across each split it opened goes back, at its kernel coupling and raised the same way. These **restored edges** are the dropped part of a maximum spanning forest of the couplings, one per split, so the floor leaves every single-linkage merge height where it was. An edge with no kernel value (NaN, or outside the spherical parametrix) isn't the floor's to restore; if that leaves the graph less connected than the repair stage reported, the build log warns.
 - **Kernel K.** One of Gaussian, Cauchy, Laplacian or Linear (formulas in [GraphSubstrate](./GraphSubstrate.md#coupling-kernels)).
 - **Gauge g.** `GaugeKind.InverseMeanDegree` multiplies every finished coupling by $g=1/\hat K=n/\sum_i\deg(i)$ of the *returned* graph, after thinning and LMP. `None` (the default) leaves the couplings alone. The classical SPC kernel $J=\hat K^{-1}e^{-d^2/2a^2}$ is `MeanEdgeDistance` bandwidth with this gauge; the bandwidth estimator no longer implies it. Because it follows every threshold, $J\to gJ$ is exactly $T\to gT$: the bond probabilities $1-e^{-J/T}$ are unchanged.
 - **Van Vleck factor V.** It is 1 unless fidelity is `Intrinsic`. It is also 1 for $r<10^{-12}$, for Euclidean geometry, and when its exponent is ≤ 0. Otherwise:
@@ -191,7 +191,7 @@ For m = 1 (λ = 0) the code uses the circle series $K_t(r)=1+2\sum_{n=1}^{50}\co
 The coupling projection also fills `CsrGraph.LogWeights`, ln J per slot, beside the linear `Weights`.
 
 - **Kernel.** The kernels' `LogEvaluate` (exact in the tail; see [GraphSubstrate](./GraphSubstrate.md#coupling-kernels)) plus the Van Vleck factor in logs, $\ln V=\tfrac{d-1}{2}\ln(r/\sinh r)$ (the sinh by its large-r form) or $\tfrac{m-1}{2}\ln(r/\sin r)$. The Schoenberg series has no tail form, so its log is the log of its value.
-- **Thinning** compares ln J with ln f, so it holds where the linear value is 0; a floor of 0 keeps an underflowed edge at its exact finite log. A repair edge keeps the kernel's own ln J; its linear weight is raised to $10^{-300}$, and a kernel that gives it exactly 0 (a Linear kernel past its support) gets the minimum in both.
+- **Thinning** compares ln J with ln f, so it holds where the linear value is 0; a floor of 0 keeps an underflowed edge at its exact finite log. A repair or restored edge keeps the kernel's own ln J; its linear weight is raised to $10^{-300}$, and a kernel that gives it exactly 0 (a Linear kernel past its support) gets the minimum in both.
 - **Gauge.** The factor is a shift: $\ln J\to\ln J+\ln g$, which is the $T\to gT$ of the linear form in a log coordinate.
 - **LMP** ranks by the log when the graph has it (so edges the linear weights tie at 0 still order) and stores $\ln$ of its rank products, −∞ for an exact zero; a protected edge keeps its kernel log.
 - **Connectivity.** "Coupled" means ln J above −∞, so a coupling that underflowed in `Weights` still joins; the build log's coupled-component count and `Resolved.Coupling.CoupledComponents` read it.
@@ -208,8 +208,8 @@ $$p_u=\frac{\#\{e'\in\mathrm{row}(u): w_{e'}\prec w\}}{\deg u},\qquad \mathrm{MP
 where $\prec$ means "weaker": `<` for couplings, `>` for distances. Protected pairs keep their weight. The implementation uses AVX2 compares and popcounts and runs in parallel over nodes, in $O(\sum_u\deg(u)^2)$.
 
 - **Rank rules.** `LmpRankRule.Strict` (the default) counts strictly weaker edges, so each node's weakest edge gets $p=0$ at that endpoint, and a degree-1 node loses its only edge. LMP then writes **exact zeros** into at least $1/\overline{\deg}$ of the slots, and the floor does not hold for the final graph. The zero edges stay in the graph and join nothing, so a graph that is connected by structure can split into many components over its coupled edges (mutual kNN + MST-min, Cauchy, K = 5, no injected protect set: Iris 111 of 262 edges zero, 30 coupled components; Landsat 3,754 of 9,048, 1,862; BlattHierarchy 828 of 2,169, 213). `LmpRankRule.Inclusive` counts the edges at most as strong, the edge itself included (the empirical CDF): the weakest edge ranks $1/\deg$, no edge is zero, and the same graphs stay in one coupled component.
-- **Repair edges.** The repair stage's bridges join the protect set and keep their kernel coupling. Under the strict rule a bridge is the weakest edge at both ends and would be written 0.
-- **When LMP runs.** `AutoLmpScaler` applies LMP when more than `Auto.LmpNearZeroRatio` (5%) of the kept, non-repair tentative weights fall below `Auto.NearZeroCoupling` ($10^{-8}$). Edges the floor dropped do not count: LMP fragments sparse graphs, so dropped edges must not switch it on.
+- **Repair and restored edges.** The repair stage's bridges and the floor's restored edges join the protect set and keep their kernel coupling. Under the strict rule either is the weakest edge at both ends and would be written 0.
+- **When LMP runs.** `AutoLmpScaler` applies LMP when more than `Auto.LmpNearZeroRatio` (5%) of the kept tentative weights, repair and restored edges aside, fall below `Auto.NearZeroCoupling` ($10^{-8}$). Edges the floor dropped do not count: LMP fragments sparse graphs, so dropped edges must not switch it on.
 
 ### Diagnostics and gates
 
@@ -224,7 +224,7 @@ where $\prec$ means "weaker": `<` for couplings, `>` for distances. Protected pa
 
 **`MstBridge`** summarizes the weights of the edges repair added.
 
-**The returned graph's connectivity.** After scaling, the build logs the component count and largest-component coverage of the graph it returns, over all edges and (for couplings) over the edges of positive weight, the number of edges the floor dropped, and how many repair edges are absent or carry zero coupling. A warning fires when the returned graph has more components than the repaired topology. `Connectivity.Validate(graph, positiveWeightsOnly: true)` is the coupled count.
+**The returned graph's connectivity.** After scaling, the build logs the component count and largest-component coverage of the graph it returns, over all edges and (for couplings) over the edges of positive weight, the number of edges the floor dropped and the number it restored, and how many repair edges are absent or carry zero coupling. A warning fires when the returned graph has more components than the repaired topology. `Connectivity.Validate(graph, positiveWeightsOnly: true)` is the coupled count.
 
 **`GraphHealth.Evaluate`** combines connectivity, degree and weight summaries with hubness, neighborhood scale, cycles, λ₂ (graphs with at most 2,000 nodes by default) and, when a `PreRepairGraph` exists, MST-bridge statistics into a `GraphHealthReport`. It derives a `GraphHealthVerdict` and one recommendation. The component analyses return their own records (`HubnessReport`, `NeighborhoodScaleReport`, `MstBridgeReport`).
 
@@ -247,12 +247,12 @@ where $\prec$ means "weaker": `<` for couplings, `>` for distances. Protected pa
 | `TopologyConfig.Kind` / `K` / `Epsilon` | required / 10 / required for ε-ball | Stage 1 |
 | `FilterConfig.Kind` / `MutualBandwidthSource` | `Auto` / `DirectedKth` | Auto: skew > 3.0 → mutual kNN |
 | `RepairConfig.Kind` | `Auto` | Auto: coverage < 0.95 → MST-min |
-| `RefinementConfig.Kind` / `MaxDistance` | `Auto` (path-neighbor) / ∞ | `Euclidean` throws |
+| `RefinementConfig.Kind` / `MaxDistance` | `Auto` (path-neighbor) / ∞ | Path-neighbor is the one refiner |
 | `PathologyInterruptConfig` MaxHubnessSkewness / MinLargestCoverage / MinMedianWeight / MaxMedianWeight / MaxNearZeroEdgeRatio | all null (off) | Fail-fast thresholds |
 | `CouplingProjection.Kernel` | required | Bandwidth 0 means estimate |
 | `CouplingProjection.LmpRescale` / `LmpRank` | null / `Strict` | null = auto (ratio > `Auto.LmpNearZeroRatio`), true = force, false = off; strict or inclusive rank |
 | `CouplingProjection.BandwidthOverride` / `Fidelity` / `SphericalMode` | null / `Auto` / `Auto` → `LocalParametrix` | — |
-| `CouplingProjection.CouplingFloor` | 1e-10 | Thinning on kernel couplings; repair edges exempt; 0 keeps every edge |
+| `CouplingProjection.CouplingFloor` | 1e-10 | Thinning on kernel couplings; repair edges exempt, the strongest edge across each split restored; 0 keeps every edge |
 | `CouplingProjection.Gauge` | `None` | `InverseMeanDegree` multiplies the finished couplings by 1/K̂, last |
 | `CouplingProjection.ScaleEdges` / `ScaleRank` | `BeforeRepair` / null (K) | The edges `MeanEdgeDistance` averages; read the bandwidth from each node's first r neighbors (r ≤ K, k-NN only) |
 | `GraphCompilerConfig.Auto` (`AutoThresholds`) | `FilterSkewness` 3.0; `RepairCoverage` 0.95; `NearZeroCoupling` 1e-8; `LmpNearZeroRatio` 0.05 | What the `Auto` strategies and the collapse detectors decide by; recorded in the manifest |
@@ -274,6 +274,7 @@ The brief (`issues/spc-BARS/graph-compiler-brief.md`, §4.1) found the gauge dec
 | Decision | Chosen | Alternatives | Trade-off |
 |---|---|---|---|
 | Coupling floor and repair edges | Repair edges never cut; kernel coupling, raised to 1e-300 on underflow. Other edges keep the 1e-10 thinning as a field. | No floor; a floor value for repair edges; keep the cut and report it. | Restores the structure (components, what PH, Mapper and the cumulative-field ladder see). It does not change what SW sees on a Gaussian graph: a bridge at $10^{-31}$ activates near $T=10^{-31}$. A floor large enough to be reachable would be a modelling constant that sets where the coarse stage lands. |
+| Coupling floor and connectivity | After thinning, the strongest dropped edge across each split goes back and joins the LMP protect set. | Keep the cut and report it; exempt graph bridges only; a floor of 0. | Measured on 90 graphs (five datasets, K = 5, 10, 20, three settings, two kernels; `issues/spc-BARS/stopping-theory-primer.md` §13.20): the floor split 24, all Gaussian, 22 of them under the MAD bandwidth or compiler defaults, with half of BlattHierarchy's points split off at defaults, K = 5. Exempting bridges fixes 6 of the 24, because a piece held on by two weak edges has no bridge. A floor of 0 keeps up to 4,573 more edges and moves K̂ by up to 2.9. This rule adds 1–103 edges and moves K̂ by at most 0.064. SW doesn't feel them at reachable T (ln J is at most about −23); merge heights, the thermal dendrogram and S₂'s cold limit do. |
 | Thinning before the measure step | Floor on raw kernel couplings, then LMP. | Thin after LMP (the first proposal). | The floor is defined on kernel couplings and LMP outputs rank products; thinning after would change every LMP graph that cuts a non-repair edge, and 1e-10 means nothing on rank weights. |
 | Gauge | Its own field, applied last; K̂ is the returned graph's mean degree. | Implied by the bandwidth strategy (before). | A pure $T\to gT$ only when no threshold depends on it. |
 | Edge set for the bandwidth | Pre-repair by default; `AfterRepair` selectable. | Always the repaired edges (before). | Bridges are the longest edges by construction: on Blatt K = 5, 82 of 2,169 edges. The BWD papers' mean includes the superimposed MST, so the BWD presets and the parity config select `AfterRepair`. |
@@ -298,8 +299,8 @@ Every knob has one concern; the invariance test is what keeps it there. Constant
 | `ScaleEdges` | scale | `BeforeRepair` | repair | `GraphCompilerScaleTests.MeanEdgeBandwidth_BeforeRepair_DoesNotDependOnWhetherRepairRan` |
 | `ScaleRank` | scale | null (K) | K | `GraphCompilerScaleTests.ScaleRank_*` |
 | `Kernel`, `Fidelity`, `SphericalMode` | shape | required, Auto | the bandwidth | `GraphBuilderBandwidthTests`, the geometry harnesses |
-| `CouplingFloor` | thinning | 1e-10 | repair edges (exempt), the auto-LMP trigger | `GraphCompilerReturnedGraphTests.CouplingFloorOfZero_KeepsEveryEdge`, `FloorStillCutsATopologyEdge…` |
-| `LmpRescale`, `Auto.LmpNearZeroRatio`, `Auto.NearZeroCoupling` | measure | null, 0.05, 1e-8 | the floor (the trigger reads kept non-repair edges) | `GraphCompilerReturnedGraphTests.AutoLmp_ReadsTheKeptEdgesOnly…`; `GraphCompilerResolvedTests.AutoLmp_RecordsTheRatioItRead…` |
+| `CouplingFloor` | thinning | 1e-10 | repair edges (exempt), restored edges (LMP protects them), the auto-LMP trigger | `GraphCompilerReturnedGraphTests.CouplingFloorOfZero_KeepsEveryEdge`, `FloorKeepsTheStrongestEdgeAcrossASplit…`, `TheFloorLeavesEveryMergeHeightWhereItWas` |
+| `LmpRescale`, `Auto.LmpNearZeroRatio`, `Auto.NearZeroCoupling` | measure | null, 0.05, 1e-8 | the floor (the trigger reads kept edges, repair and restored aside) | `GraphCompilerReturnedGraphTests.AutoLmp_ReadsTheKeptEdgesOnly…`; `GraphCompilerResolvedTests.AutoLmp_RecordsTheRatioItRead…` |
 | `LmpRank` | measure | `Strict` | LMP | `LmpRankRuleTests` |
 | `Gauge` | gauge | `None` | the temperature bracket | `GraphCompilerGaugeTests` (pure rescale; bond probabilities at (gJ, gT); no threshold moves); `GraphUnitsBracketTests` (the bracket moves by exactly g) |
 | `Interrupts.*` | diagnostic | off | the floor (the near-zero interrupt counts dropped edges) | `GraphCompilerReturnedGraphTests.NearZeroInterrupt_…` |

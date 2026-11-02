@@ -12,8 +12,9 @@ namespace Graphs.Pipeline.Scalers;
 /// Stage 5 — Local Mutual Proximity scaler. Computes coupling weights
 /// from local neighborhood probability counts (SIMD popcount-friendly)
 /// rather than a global MAD bandwidth. The compiler protects the repair
-/// stage's MST bridges, which keep their kernel coupling; any other edge
-/// that is a node's weakest gets an exact 0 under the strict rank rule.
+/// stage's MST bridges, and the inner scaler's restored edges are protected
+/// here, so both keep their kernel coupling; any other edge that is a node's
+/// weakest gets an exact 0 under the strict rank rule.
 /// </summary>
 /// <remarks>
 /// <para><b>Inner scaler.</b> LMP operates over an existing CsrGraph's
@@ -54,7 +55,7 @@ public sealed class LocalMutualProximityScaler : IEdgeScaler
     public ScalerResult Scale(NeighborSelection refined, int n)
     {
         ScalerResult inner = _innerScaler.Scale(refined, n);
-        IReadOnlySet<(int Lo, int Hi)>? protectedEdges = _protectedProvider?.Invoke(refined, n);
+        IReadOnlySet<(int Lo, int Hi)>? protectedEdges = WithRestored(_protectedProvider?.Invoke(refined, n), inner.RestoredEdges);
         CsrGraph rescaled = LocalMutualProximity.ApplyLocalScaling(
             inner.Graph,
             weightsAreCouplings: _weightsAreCouplings,
@@ -62,5 +63,17 @@ public sealed class LocalMutualProximityScaler : IEdgeScaler
             rankRule: _rankRule);
 
         return inner with { Graph = rescaled, Lmp = new LmpOutcome(true, null) };
+    }
+
+    /// <summary>The protect set with the restored edges in it: each is the weakest edge across its split, which the strict rank would write 0.</summary>
+    internal static IReadOnlySet<(int Lo, int Hi)>? WithRestored(
+        IReadOnlySet<(int Lo, int Hi)>? protectedEdges,
+        IReadOnlySet<(int Lo, int Hi)>? restored)
+    {
+        if (restored is null) return protectedEdges;
+        if (protectedEdges is null) return restored;
+        var union = new HashSet<(int Lo, int Hi)>(protectedEdges);
+        union.UnionWith(restored);
+        return union;
     }
 }

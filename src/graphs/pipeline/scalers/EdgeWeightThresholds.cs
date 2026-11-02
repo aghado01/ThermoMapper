@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Graphs.Pipeline;
 using Graphs.Primitives;
 
@@ -13,17 +15,20 @@ internal static class EdgeWeightThresholds
     /// <paramref name="nearZero"/>. The <paramref name="cutEdges"/> (undirected) the floor already
     /// dropped count as collapsed, so the ratio reads the edge set before the cut. The graph
     /// stores each edge in two CSR slots, so the cut edges count twice, as the kept ones do.
-    /// Edges in <paramref name="excluded"/> (the repair bridges, weak by construction) are left
-    /// out of both counts.
+    /// Edges in <paramref name="excluded"/> (the repair bridges, weak by construction) and in
+    /// <paramref name="restored"/> (kept under the floor, weak the same way) are left out of both counts.
     /// </summary>
-    public static double NearZeroRatio(CsrGraph graph, int cutEdges, double nearZero, RepairEdgeSet? excluded = null)
+    public static double NearZeroRatio(
+        CsrGraph graph, int cutEdges, double nearZero, RepairEdgeSet? excluded = null, IReadOnlySet<(int Lo, int Hi)>? restored = null)
     {
         long collapsed = 2L * cutEdges;
         long total = collapsed;
         for (int u = 0; u < graph.NodeCount; u++)
             for (int slot = graph.RowPointers[u]; slot < graph.RowPointers[u + 1]; slot++)
             {
-                if (excluded is not null && excluded.Contains(u, graph.Targets[slot])) continue;
+                int v = graph.Targets[slot];
+                if (excluded is not null && excluded.Contains(u, v)) continue;
+                if (restored is not null && restored.Contains((Math.Min(u, v), Math.Max(u, v)))) continue;
                 total++;
                 if (graph.Weights[slot] < nearZero) collapsed++;
             }

@@ -23,7 +23,11 @@ public sealed record GraphConstructionManifest(
     DiagnosticsLog      Diagnostics,
     ResolvedConstruction? Resolved = null)
 {
-    public const string CurrentSchemaVersion = "1.1";
+    /// <summary>
+    /// Bumped when a build's result or record changes under the same config. The config fingerprint hashes it,
+    /// so a graph cached by an older build isn't read back. 1.2: the floor keeps the graph's connectivity.
+    /// </summary>
+    public const string CurrentSchemaVersion = "1.2";
     public const string FileName = "graph.manifest.json";
 
     public static string PathFor(string graphDirectory) =>

@@ -3923,11 +3923,14 @@ them no better: 15 of 93 at v5 for k = 5. The likely reason: a bridge moves S₂
   Cauchy. §13.18 says the filter is what moves Landsat.
 - *Spread and the hot edge.* ln(s_p90/s_p10) doesn't predict the width, but it does track the hot edge over its anchor:
   Spearman 0.70, n = 24, exploratory. It fits the hottest structure living on the strongest nodes.
-- *The compiler's floor (not changed).* On Gaussian k = 5 the 10⁻¹⁰ floor cuts one mutual-KNN edge that is a graph
-  bridge, on the toy (345–671, d/a = 7.52, κ = 5.25×10⁻¹³, leaving 3,199 + 1) and AnisotropicGaussian (307–863, d/a =
-  7.15, κ = 8.05×10⁻¹², leaving 800 + 400). It logs this. "Repair edges are exempt" doesn't cover a natural bridge. J
-  about 10⁻¹² can't be felt on this grid, so the sweeps don't care. Also stale: `RefinementKind.Euclidean`'s entry at
-  `GraphCompilerConfig.cs:154` and the comment at `GraphCompiler.cs:159`, since it throws at `GraphCompiler.cs:436`.
+- *The compiler's floor (fixed since, at the user's ruling).* On Gaussian k = 5 the 10⁻¹⁰ floor cut one mutual-KNN edge
+  that was a graph bridge, on the toy (345–671, d/a = 7.52, κ = 5.25×10⁻¹³, leaving 3,199 + 1) and AnisotropicGaussian
+  (307–863, d/a = 7.15, κ = 8.05×10⁻¹², leaving 800 + 400). A wider measure then found the floor splitting 24 of 90 graphs,
+  all Gaussian, 22 of them under the MAD bandwidth or compiler defaults. The floor now restores the strongest dropped edge
+  across each split, and protects it under LMP (`docs/Graphs/GraphConstruction.md`). This panel's toy and AnisotropicGaussian
+  k = 5 Gaussian graphs, and the MAD and default graphs of §13.18 and §13.19, were built before that and weren't rerun. The
+  restored edges sit at ln J of about −23 or lower, so SW doesn't feel them at reachable T, and their edge count shifts the
+  random stream and moves the gauge by at most 1.5%. `RefinementKind.Euclidean`, which only threw, is gone.
 
 **Corrections.**
 - §13.17's "s̄ runs 0.603–0.643": on the Gaussian panel it's 0.603–0.710, at BlattHierarchy k = 5, whose long repair

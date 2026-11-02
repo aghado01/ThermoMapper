@@ -156,7 +156,7 @@ public static class GraphCompiler
             }
         }
 
-        // Stage 4 — Refinement (Euclidean is the only impl until PathNeighbor lands)
+        // Stage 4 — Refinement
         IMetricRefiner refiner = ResolveRefinement(config.Refinement, log);
         NeighborSelection refined = refiner.Refine(repaired, n);
 
@@ -166,7 +166,7 @@ public static class GraphCompiler
             log.Info("Projection", "Distance pass-through — conditioned distance graph (L2).");
             CsrGraph distanceGraph = BuildDistanceGraph(refined, n);
             ReturnedGraphReport distanceReport = LogReturnedGraph(
-                log, distanceGraph, n, repairEdges, connectivityPost, cutEdges: 0, couplingFloor: 0.0, weightsAreCouplings: false);
+                log, distanceGraph, n, repairEdges, connectivityPost, cutEdges: 0, restoredEdges: 0, couplingFloor: 0.0, weightsAreCouplings: false);
             return new GraphBuildResult(
                 Graph:                  distanceGraph,
                 DirectedSelection:      directed,
@@ -221,7 +221,7 @@ public static class GraphCompiler
             config.Auto);
         ScalerResult scaled = plan.Scaler.Scale(refined, n);
         ReturnedGraphReport returnedReport = LogReturnedGraph(
-            log, scaled.Graph, n, repairEdges, connectivityPost, scaled.CutEdges, coupling.CouplingFloor, weightsAreCouplings: true);
+            log, scaled.Graph, n, repairEdges, connectivityPost, scaled.CutEdges, scaled.RestoredEdges?.Count ?? 0, coupling.CouplingFloor, weightsAreCouplings: true);
 
         if (scaled.SingleBandwidth is double delta && delta > 0.0)
         {
@@ -423,17 +423,11 @@ public static class GraphCompiler
 
     private static IMetricRefiner ResolveRefinement(RefinementConfig cfg, DiagnosticsLog log)
     {
-        if (cfg.Kind == RefinementKind.Auto || cfg.Kind == RefinementKind.PathNeighbor)
-        {
-            log.Info("Refinement", cfg.Kind == RefinementKind.Auto
-                ? "Auto → PathNeighbor."
-                : $"Explicit: {cfg.Kind}.");
+        log.Info("Refinement", cfg.Kind == RefinementKind.Auto
+            ? "Auto → PathNeighbor."
+            : $"Explicit: {cfg.Kind}.");
 
-            return new PathNeighborRefiner(cfg.MaxDistance);
-        }
-
-        throw new NotSupportedException(
-            $"Unsupported refinement kind {cfg.Kind}. Euclidean refinement is retired.");
+        return new PathNeighborRefiner(cfg.MaxDistance);
     }
 
     private static ScalerPlan BuildScaler(
@@ -636,6 +630,7 @@ public static class GraphCompiler
         RepairEdgeSet repairEdges,
         ConnectivityReport repairedConnectivity,
         int cutEdges,
+        int restoredEdges,
         double couplingFloor,
         bool weightsAreCouplings)
     {
@@ -650,6 +645,12 @@ public static class GraphCompiler
             log.Info(
                 "Scaling",
                 $"{cutEdges} edge(s) fell under the {couplingFloor:G} coupling floor and were dropped (repair edges are exempt).");
+        }
+        if (restoredEdges > 0)
+        {
+            log.Info(
+                "Scaling",
+                $"{restoredEdges} edge(s) under the {couplingFloor:G} coupling floor were kept: each is the strongest across a split dropping them would have opened.");
         }
 
         ConnectivityReport coupled = report;
@@ -747,6 +748,7 @@ public static class GraphCompiler
             LmpRank: coupling.LmpRank,
             CouplingFloor: coupling.CouplingFloor,
             CutEdges: scaled.CutEdges,
+            RestoredEdges: scaled.RestoredEdges?.Count ?? 0,
             Gauge: coupling.Gauge,
             GaugeFactor: scaled.GaugeFactor,
             ScaleEdges: coupling.ScaleEdges,

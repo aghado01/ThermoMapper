@@ -145,13 +145,9 @@ public sealed record RefinementConfig
 public enum RefinementKind
 {
     /// <summary>Resolves to <see cref="PathNeighbor"/> — bounded SSSP with
-    /// edge-local early exit via <c>PathNeighborRefiner</c>. Heavier than
-    /// <see cref="Euclidean"/> pass-through; sweep configs should treat this
-    /// as the engine default.</summary>
+    /// edge-local early exit via <c>PathNeighborRefiner</c>; sweep configs
+    /// should treat this as the engine default.</summary>
     Auto,
-    /// <summary>Explicit pass-through: edge distances are not refined over
-    /// the repaired topology.</summary>
-    Euclidean,
     /// <summary>Geodesic path-neighbor refinement over the Stage 3 topology.</summary>
     PathNeighbor,
 }

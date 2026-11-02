@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Graphs.Coupling;
 using Graphs.Primitives;
 
@@ -39,7 +40,8 @@ public interface IEdgeScaler
 /// scalers populate the latter. Local Mutual Proximity scalers
 /// populate neither (no global bandwidth concept). <see cref="CutEdges"/> counts the
 /// undirected edges the kernel produced and the coupling floor dropped;
-/// <see cref="GaugeFactor"/> is the global factor applied last (1 for none); <see cref="Lmp"/> is set by the LMP scalers.
+/// <see cref="GaugeFactor"/> is the global factor applied last (1 for none); <see cref="Lmp"/> is set by the LMP scalers;
+/// <see cref="RestoredEdges"/> are the edges under the floor kept across each split it would have opened (null for none).
 /// </summary>
 public readonly record struct ScalerResult(
     CsrGraph          Graph,
@@ -47,7 +49,8 @@ public readonly record struct ScalerResult(
     MixtureBandwidth? MixtureBandwidth,
     int               CutEdges = 0,
     double            GaugeFactor = 1.0,
-    LmpOutcome?       Lmp = null);
+    LmpOutcome?       Lmp = null,
+    IReadOnlySet<(int Lo, int Hi)>? RestoredEdges = null);
 
 /// <summary>Whether Local Mutual Proximity ran, and for the auto trigger the near-zero ratio it read.</summary>
 public readonly record struct LmpOutcome(bool Applied, double? NearZeroRatio);
