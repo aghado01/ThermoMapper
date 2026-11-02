@@ -282,9 +282,10 @@ entropy) suit it better.
 | C48 | One process of edge thresholds has, at every T at once, the law φ_{p(T),q}: each draw is a dendrogram in T, and ΔS₂ ≥ 0 per draw | §13.14 | Update rule derived here for edge-dependent couplings (Grimmett §8.6's construction; its displays are missing from the copy); mixing and cost unknown | E17 |
 | C49 | `LineagePersistence` on iris at k = 5 reads the published first stage and not the species: no selected lineage mixes setosa with the others in 60 of 60 runs, while the species-level reading passes 3 of 12 seeds at the parity budget and 0 of 12 at 8 × (1000, 2000) | §13.14 | Observed (12 seeds × 5 bracket and budget settings); agrees with §12.22 | A resolver that reads levels; lifetimes in ln T; the representative's choice |
 | C50 | Z_{p,q} = φ_{p,1}(q^k): the family is exponential in ln q with conjugate k, so ln Z(T, q) = ∫₀^(ln q) ⟨k⟩ d ln q′, with an exact reference rung at q = 1 for every T | §13.14 | Grimmett (3.59), and §10.8; the closure unbuilt | E18 |
-| C51 | The mean-field first-order line ends at q = 2, so a path through q = 2 joins q = 20's two phases without a jump | §13.14 | Derived from §10.2; unverified on graphs; literature unchecked | E18 |
+| C51 | The mean-field first-order line ends at q = 2, so a path through q = 2 joins q = 20's two phases without a jump | §13.14 | Derived from §10.2 (lattices end the line higher, (4.64), and q = 2 stays on the continuous side); unverified on graphs; literature unchecked | E18 |
 | C52 | A cut F changes ln Z by at most \|F\| ln q nats at q ≥ 1, so a thin cut can move a block's melt by at most about \|F\| ln q/(2.65·n) e-folds at q = 20 | §13.14 | The bound is Grimmett's Theorem 3.63; the shift is an estimate on the mean-field slope | E15 |
-| C53 | At the melt the mean-field free-energy barrier is 0.168 nats per spin at q = 20 (0.015 at q = 5, 0.489 at q = 100), so a homogeneous cluster of about 50 points could stick within a parity budget | §13.14 | Computed here; a barrier in the stationary law, not in SW's dynamics; heterogeneity should lower it | E16 |
+| C53 | At the melt the mean-field free-energy barrier is 0.168 nats per spin at q = 20 (0.015 at q = 5, 0.489 at q = 100), so a homogeneous cluster of about 50 points could stick within a parity budget | §13.14 | Computed here; a barrier in the stationary law, not in SW's dynamics; heterogeneity should lower it. Corrected by the third pass: on data of intrinsic dimension d the cost goes with the surface, n^((d − 1)/d), not n (Grimmett Theorem 5.108), so this holds only for a dense, nearly complete cluster | E16 |
+| C54 | In a block's ordered bulk a shed fragment of n points is exponentially rare, exp(−γ·n^((d − 1)/d)), so shedding is dust and a size floor can be modest; C21's worst case isn't the typical one | §13.14 | Lattice result (Grimmett Theorem 5.104, Conjecture 5.101); matches the toy's cold edge (§12.9); on data graphs an analogy | The exact histogram across a plateau |
 
 ---
 
@@ -1608,7 +1609,7 @@ The user dropped iris as too limited and asked for the same SPC-only levers on t
 The user reopened what round 1 closed, as an adversarial round with new capabilities in hand. Round 2 was discussion: it
 ran no experiments (one quantile table was computed), and it changed no code. Where the user decided something, the
 entry says so and gives the date; everything else is open, with the experiment that would settle it. Experiments
-continue round 1's numbering (E6–E18, §13.12). New claims are C35–C53 in §7.
+continue round 1's numbering (E6–E18, §13.12). New claims are C35–C54 in §7.
 
 **What round 1 did not have**, all on `main` by 2026-10-30:
 - **The per-draw record** on `Accumulator`: `EnergyPerDraw`, `MagPerDraw`, `SumSqClusterSizesPerDraw`,
@@ -2146,7 +2147,8 @@ a whole.
   graph compiler revision.
 - **E16. Two starts.** Half the replicas from an ordered start, half random, at q = 20 and 100 and growing cluster size:
   where do the two disagree, against C46's window? Does R̂ within each start stay quiet there? A large uniform cloud is the
-  worst case (C53), and the sharpest test.
+  worst case (C53), and the sharpest test; run it at two intrinsic dimensions, since the barrier's scaling separates mean
+  field from a surface cost.
 - **E17. The coupled sampler on small graphs.** Level-set marginals against exact enumeration; coalescence time; ΔS₂'s
   noise against independent endpoints at equal work.
 - **E18. The path in q.** ln Z(T, q) from q = 1 up an integer ladder, against a tree's closed form and small-graph enumeration;
@@ -2382,8 +2384,8 @@ the copy; re-derived here for edge-dependent couplings.
   the sandwich's upper side, but its γ comes from a Markov-chain argument with no usable constant (Proposition 3.28: it
   "may be written down"). Theorem 3.79 dominates a Potts cluster set by an Ising model with a field, but the field is
   negative only below a β that tends to 0 as the maximum degree grows, the book's own caveat.
-**A second pass over what was still unread, 2026-11-01.** Added to the reading: §3.5–3.6, §8.3, §10.8, §10.10's main theorem,
-§11.2, §2.5. Closed forms checked by a scratch script, no SW and no dataset.
+**A second pass over what was still unread, 2026-11-01.** Added to the reading: §3.5–3.6, §8.3, §10.8, §10.10's main
+theorem, §11.2, §2.5. Closed forms checked by a scratch script, no SW and no dataset.
 - *C46's window at KNN degrees.* The book's binary-tree limit, p = q/(q + 1) (§10.11), is the d = 3 case of the
   disordered phase's linear stability on a Bethe lattice: K_dis = ln(1 + q/(d − 2)). The ordered limit K_ord, from
   belief propagation's fixed point (the book's (10.78) is missing from the copy), completes the window. In e-folds
@@ -2406,7 +2408,7 @@ the copy; re-derived here for edge-dependent couplings.
   homogeneous 50-point cluster already sticks within a parity budget at q = 20. Three cautions: this is a barrier in the
   stationary law, and SW's moves are not local in θ; data clusters aren't homogeneous, and melts 10–50× wider than
   rounding (above) suggest coexistence is largely dissolved; and round 1's replicas showed no such sticking. It says
-  where to look: a large uniform cloud is the worst case, and the sharpest test of E16.
+  where to look: a large uniform cloud is the worst case, and the sharpest test of E16. The third pass below corrects its scale.
 - *A sparse cut barely moves Z (C52; Theorems 3.60 and 3.63).* For a set F of edges whose removal splits G into G₁ and
   G₂, Z_{G₁}Z_{G₂}q^(−|F|) ≤ Z_G ≤ Z_{G₁}Z_{G₂} at q ≥ 1, for every p. The proof is edge by edge, so edge-dependent
   couplings are fine, and the bound holds whatever the coupling's size. So ln Z factorizes over blocks to within |F| ln
@@ -2425,7 +2427,37 @@ the copy; re-derived here for edge-dependent couplings.
 - *Read, and no use for data graphs.* §2.5's steepness inequality is for product measures. Theorem 3.45's sprinkling
   bound (an edge's probability rises by at least Δp/q) gives no floor on S₂. Theorem 11.3 is about infinite-volume Gibbs
   states. Theorem 10.82's tree theory is for infinite trees with boundary conditions, apart from the limits used above.
-- *Still unread:* Chapters 4–7 and 9, §2.1–2.4, §8.1–8.2, §8.7–8.9, §10.4, §10.6, §10.9, §10.11–10.12, §11.3 and §11.6,
-  about 300 KB. By their outlines these are infinite-volume and lattice theory. The candidates left: §5.7 on droplets
-  (the Wulff crystal), for nucleation on data of low intrinsic dimension; §9.1 on Potts models and flows, a different
-  representation of correlations; §4.5 on convexity of the pressure.
+**A third pass, 2026-11-01: §5.7, §9.1 and §4.5.**
+- *§5.7 corrects C53: a droplet pays for its surface, not its volume.* Theorem 5.108 gives log φ(n^d ≤ |C| < ∞)/n^(d −
+  1) → −γ for d ≥ 3, and the book says the results hold in two dimensions too: a finite droplet of N sites costs about
+  exp(−γ·N^((d − 1)/d)), the price accumulating around its boundary. Tunnelling follows the same logic: Berg and Neuhaus
+  1992 (`supellex-private/PDFs/SPC`) report tunnelling suppressed exponentially in the linear size L, on the 2D 10-state
+  lattice. So C53's n·b is the mean-field scale, right only for a dense, nearly complete cluster. On data of intrinsic
+  dimension 2 the barrier grows like √n, with a γ this book doesn't give for data graphs. "About 50 points" overstated
+  the risk there; the barrier still grows with size, more slowly. E16 should run at two intrinsic dimensions, since the
+  scaling is what separates the pictures.
+- *Shed fragments are small in a block's bulk (C54).* In the ordered phase a finite cluster's radius has an exponential
+  tail, and its volume the stretched exponential exp(−γ·n^((d − 1)/d)): Theorem 5.104 proves the radius for d ≥ 3 above
+  the slab critical point, and Conjecture 5.101 states both. So C21's worst case isn't the typical one: shedding is
+  dust, and a fragment of n points is exponentially rare, which is why F_n's floor could be modest. It matches round 1's
+  toy at its cold edge: one giant, about 36 singletons, 21 pairs and a few small clusters per draw (§12.9). On data
+  graphs this is an analogy from lattices, checkable from the exact histogram.
+- *Edge density and cluster count jump together (Theorems 4.60(c) and 4.63; (4.72)).* At q > 1 the pressure has one
+  partial derivative at a point exactly when it has both, and its gradient is (edge density, cluster density). So in the
+  infinite-volume theory a first-order jump in bonds is a jump in ⟨k⟩. That makes ⟨k⟩ a detector worth having: it is
+  free from the exact histogram, monotone in β (C18), and C50's integrand. It is size-blind, so a detector, not a
+  certificate.
+- *Where C51's line ends.* (4.64) conjectures that the singular set is empty for q ≤ Q(d) and a single point above it.
+  Mean field has Q = 2; lattices are higher (Q = 4 in two dimensions, from memory). q = 2 stays on the continuous side
+  in every case, so the path through it stands.
+- *§9.1, flows and random currents: no use at q = 20, one thing to keep.* Theorem 9.11 writes a Potts correlation as a
+  ratio of expected flow polynomials on a Poisson graph, edge-dependent couplings allowed; at q = 2 that becomes
+  even-subgraph probabilities (9.14). Beyond q = 2 the book says the cases "remain largely unexplained", and flow counts
+  aren't something to estimate. To keep: Theorem 9.35, σ(x, y)² = Q(x ↔ y in P₁ + P₂). The union of two independent
+  currents gives the squared correlation, an exact replica composition rule at q = 2, sibling to C37's product of FK
+  estimates. Simon's inequality across a separator (9.37) holds at q = 1 and 2 and is open beyond. The section also
+  marks first-order transitions by strict exponential decay of connectivity at the critical point, so at q = 20 a melt's
+  hot side should show no critical tail: a rounded step, not a divergence.
+- *Still unread:* about 250 KB of Chapters 4–7 and 9.2–9.4, §2.1–2.4, §8.1–8.2, §8.7–8.9, §10.4, §10.6, §10.9,
+  §10.11–10.12, §11.3 and §11.6. By their outlines these are infinite-volume and lattice theory, and no candidate for
+  data graphs is left among them. The finite-graph material is mined.
