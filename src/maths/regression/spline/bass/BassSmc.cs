@@ -96,6 +96,9 @@ public sealed class BassParticleTarget : ISamplingTarget<BassParticle>
     public BassTarget Target { get; }
 
     /// <inheritdoc/>
+    public bool HasCompleteValues => Target.HasCompleteValues;
+
+    /// <inheritdoc/>
     public ITargetEvaluation Evaluate(BassParticle particle)
     {
         ArgumentNullException.ThrowIfNull(particle);

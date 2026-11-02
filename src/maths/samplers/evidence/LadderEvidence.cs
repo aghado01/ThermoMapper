@@ -177,8 +177,8 @@ public sealed class RungDraws
 public readonly record struct RungEstimate(double InverseTemperature, double Value, double MonteCarloError, double EffectiveSampleSize);
 
 /// <summary>
-/// A ladder's estimate of <c>ln Z(b_max) − ln Z(b_min)</c>: an evidence when the lowest rung is a normalized reference
-/// (b = 0 under a proper prior) and the target's densities are complete.
+/// A ladder's estimate of <c>ln Z(b_max) − ln Z(b_min)</c>, from a target with complete values: an evidence when the lowest
+/// rung is a normalized reference (b = 0 under a proper prior).
 /// </summary>
 /// <param name="Method">The estimator.</param>
 /// <param name="LogRatio">The estimate.</param>
@@ -311,7 +311,8 @@ public static class LadderEvidence
     /// <summary>
     /// The estimate from the rung traces of one or more ladders run on the same rungs and path, each traced
     /// (<see cref="ParallelTempering{TState}.TraceRungs"/>) for the same number of scans; each ladder is one chain per
-    /// rung. Path sampling needs traces that hold slopes.
+    /// rung. Path sampling needs traces that hold slopes, and the target must declare complete values
+    /// (<see cref="ISamplingTarget{TState}.HasCompleteValues"/>).
     /// </summary>
     public static LadderEstimate FromLadders<TState>(IReadOnlyList<ParallelTempering<TState>> ladders,
                                                      LadderEstimator method = DefaultEstimator)
@@ -323,6 +324,7 @@ public static class LadderEvidence
         {
             ParallelTempering<TState> ladder = ladders[l];
             if (ladder.RungTraces is null) throw new InvalidOperationException($"Ladder {l} does not trace its rungs (TraceRungs).");
+            if (!ladder.HasCompleteValues) throw new InvalidOperationException("The target does not declare complete values (ISamplingTarget.HasCompleteValues), so a log normalizer read across b would not mean what it says.");
             if (ladder.Path != ladders[0].Path || !ladder.InverseTemperatures.AsSpan().SequenceEqual(inverseTemperatures))
                 throw new ArgumentException("Every ladder must run on the same rungs and path.", nameof(ladders));
             if (method == LadderEstimator.PathSampling && !ladder.TracesSlopes)
@@ -384,13 +386,15 @@ public static class LadderEvidence
     /// <see cref="SmcResult{TState}.LogNormalizerRatio"/>, and its error is the run's genealogy estimate
     /// (<see cref="SmcResult{TState}.LogNormalizerError"/>), which sees shared ancestry and is NaN unless every
     /// resampling was multinomial; its rungs' errors are their own weights'. Path sampling needs slopes, and its error is from the stages' weights, which ignore shared ancestry:
-    /// the genealogy estimate covers the normalizer, not a sum of stage means.
+    /// the genealogy estimate covers the normalizer, not a sum of stage means. The target must declare complete values
+    /// (<see cref="ISamplingTarget{TState}.HasCompleteValues"/>).
     /// </summary>
     public static LadderEstimate FromSmc<TState>(SmcResult<TState> result, LadderEstimator method = DefaultEstimator)
     {
         ArgumentNullException.ThrowIfNull(result);
         IReadOnlyList<SmcStageTrace> stages = result.StageTraces
             ?? throw new InvalidOperationException("The run did not trace its stages (SmcOptions.TraceStages).");
+        if (!result.HasCompleteValues) throw new InvalidOperationException("The target does not declare complete values (ISamplingTarget.HasCompleteValues), so a log normalizer read across b would not mean what it says.");
         var b = new double[stages.Count];
         var rungs = new RungDraws?[stages.Count];
         for (int k = 0; k < stages.Count; k++)

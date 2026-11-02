@@ -103,7 +103,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
     /// improper τ prior.
     /// </summary>
     public bool ReportsEvidence => _model.Config.Sampling.ReportEvidence && _tempering is { ReferenceRung: true }
-                                   && _model.Target.Sigma2 is not null && _model.Target.Intercept != GPriorCentre.Flat && _model.Target.Scale.IsProper;
+                                   && _model.Target.HasCompleteValues && _model.Target.Scale.IsProper;
 
     /// <inheritdoc/>
     public IChainRun<BassState> StartChain(int chainSeed, int readoutSeed)

@@ -307,6 +307,10 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// and on the likelihood path when the target supplies ∂ℓ_b/∂b.</summary>
     public bool TracesSlopes => _rungTraces is not null && _tracesSlopes;
 
+    /// <summary>Whether the target's values are complete (<see cref="ISamplingTarget{TState}.HasCompleteValues"/>), which a
+    /// log normalizer read from the traces needs.</summary>
+    public bool HasCompleteValues => _target.HasCompleteValues;
+
     /// <summary>
     /// Opt in to per-rung traces, after burn-in: from the next scan on, every <see cref="Step"/> records at each rung, on
     /// the state it holds after the scan's swaps, the <see cref="RungFunctional"/>s, read from the evaluations the rungs

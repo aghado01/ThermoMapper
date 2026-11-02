@@ -116,6 +116,8 @@ public sealed class BarsEvidenceTests
                                       temperReferenceRung: true).ReportsEvidence);                          // not the prior at b = 0
         var jeffreys = new WeightedNormalModel(form: TemperedForm.Linear, sigma2Prior: Sigma2Prior.Jeffreys);
         Assert.False(Tempered(jeffreys, prior).ReportsEvidence);                                             // a constant omitted
+        Assert.True(((IObservationModel)model).HasCompleteMarginal);
+        Assert.False(((IObservationModel)jeffreys).HasCompleteMarginal);
 
         (double[] x, double[] y) = Data();
         Assert.Null(new BarsEnsemble(basis, model, prior, kernel).Run(x, y, grid: x, chains: 1, masterSeed: 2, burn: 50, samples: 50).Evidence);

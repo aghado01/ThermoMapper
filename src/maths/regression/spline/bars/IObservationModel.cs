@@ -40,6 +40,10 @@ public interface IObservationModel
     /// knot prior itself: what an exact reference rung on that path needs. The default serves b = 1 only.</summary>
     bool CanTemperToPrior => false;
 
+    /// <summary>True when the marginal keeps every constant, so <see cref="SplineTarget"/>'s values are complete. The default
+    /// does not.</summary>
+    bool HasCompleteMarginal => false;
+
     /// <summary>Effective number of parameters for the complexity penalty (ν for the Normal model).</summary>
     int EffectiveDimension(double[,] design, double[]? weights);
 

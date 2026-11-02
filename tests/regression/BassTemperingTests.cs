@@ -184,6 +184,19 @@ public sealed class BassTemperingTests
     }
 
     [Fact]
+    public void Target_DeclaresCompleteValues_UnderProperSigma2AndIntercept()
+    {
+        BassData data = BassSweepTests.Data();
+        BassTarget Target(BassConfig c) => BassModel.Create(c, data).Target;
+        BassConfig config = Config(new TemperingSpec());
+        Assert.True(Target(config).HasCompleteValues);
+        Assert.True(new BassParticleTarget(Target(config)).HasCompleteValues);
+        Assert.False(Target(config with { Sigma2 = Sigma2Prior.Jeffreys }).HasCompleteValues);
+        Assert.False(Target(config with { Intercept = GPriorCentre.Flat }).HasCompleteValues);
+        Assert.False(new BassParticleTarget(Target(config with { Sigma2 = Sigma2Prior.Jeffreys })).HasCompleteValues);
+    }
+
+    [Fact]
     public void List_RunsAsGiven_UnlessAdaptiveIsSet()
     {
         double[] rungs = [1.0, 0.3, 0.1, 0.03, 0.01];

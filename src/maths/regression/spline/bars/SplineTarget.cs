@@ -33,6 +33,9 @@ public sealed class SplineTarget : ISamplingTarget<KnotConfig>
     /// <summary>The support gate's default minimum column mass: one data point's worth.</summary>
     public const double DefaultMinColumnMass = 1.0;
 
+    /// <summary>Whether the values are complete: the model's marginal keeps every constant.</summary>
+    public bool HasCompleteValues => _model.HasCompleteMarginal;
+
     /// <param name="basis">Spline basis (fixed degree).</param>
     /// <param name="model">Observation model supplying the marginal likelihood.</param>
     /// <param name="prior">Prior on the knot count.</param>

@@ -37,6 +37,7 @@ public sealed class ReweightingTests
         var weights = new MulticanonicalWeights(-4.0, 0.0, 0.5, [0.0, 1.0, -1.0, 2.0, 0.5]);
         double[] levels0 = [-3.5, -0.25, -6.0], levels1 = [-1.0, 1.0, -2.0];
         var draws = new MulticanonicalDraws(weights, [levels0, levels1], [new double[3], new double[3]], 1);
+        Assert.Contains("HasCompleteValues", Assert.Throws<InvalidOperationException>(() => Reweighting.LogEvidence(draws, [0.5])).Message);
         WeightedDraws w = Reweighting.Weigh(draws, 0.7);
         double[] all = [.. levels0, .. levels1];
         double[] raw = Array.ConvertAll(all, l => Math.Exp(0.7 * l - weights.LogWeight(l)));
@@ -109,7 +110,7 @@ public sealed class ReweightingTests
         // The double well's prior times e³: a proper prior of mass e³. Its normalizer cancels in the ratio estimator, so
         // ln Ẑ(b) is still ln E[e^{b·ℓ₁}] under the normalized prior, the quadrature's.
         ISamplingTarget<double> scaled = SamplingTarget.Separable<double>(
-            x => Math.Abs(x) <= WellHalfWidth ? 3.0 - Math.Log(2.0 * WellHalfWidth) : double.NegativeInfinity, x => WellLevel(x, Depth));
+            x => Math.Abs(x) <= WellHalfWidth ? 3.0 - Math.Log(2.0 * WellHalfWidth) : double.NegativeInfinity, x => WellLevel(x, Depth), completeValues: true);
         FlatHistogramSpec spec = SamcLearningTests.WellSpec(32_000, 20_000, chains: 8);
         MulticanonicalResult<double> run = MulticanonicalRun.Run(spec, scaled, new WellModel(Depth, 0.25), 43, parallel: Serial);
         LogEvidenceCurve curve = Reweighting.LogEvidence(run.Draws!, [0.1, 0.5, 1.0]);

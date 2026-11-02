@@ -262,7 +262,7 @@ internal static class BassFlatHistogramFit
 
         // The flat-histogram readout, with the evidence curve of a complete run under proper σ² and intercept priors.
         bool complete = result.Complete;
-        bool defined = sampling.ReportEvidence && model.Target.Sigma2 is not null && model.Target.Intercept != GPriorCentre.Flat;
+        bool defined = sampling.ReportEvidence && model.Target.HasCompleteValues;
         BassFlatHistogramEvidence? curve = complete && defined && draws is not null ? BassFlatHistogramEvidence.Of(draws) : null;
         var readout = new BassFlatHistogramReadout(result.Weights, result.Learning.GainScale, result.Learning.GainStart, result.Learning.Iterations,
                                                    result.LearningDiagnostics, result.WeightTrace, result.ProductionDiagnostics,

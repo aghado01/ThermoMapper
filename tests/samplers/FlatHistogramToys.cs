@@ -28,7 +28,7 @@ internal static class FlatHistogramToys
     /// <summary>The double well's target at depth <paramref name="c"/>.</summary>
     public static ISamplingTarget<double> DoubleWell(double c) => SamplingTarget.Separable<double>(
         x => Math.Abs(x) <= WellHalfWidth ? -Math.Log(2.0 * WellHalfWidth) : double.NegativeInfinity,
-        x => WellLevel(x, c));
+        x => WellLevel(x, c), completeValues: true);
 
     public static double WellLevel(double x, double c)
     {
@@ -223,7 +223,7 @@ internal static class FlatHistogramToys
             return n;
         }
 
-        public ISamplingTarget<int[]> Target => SamplingTarget.Separable<int[]>(_ => -Sites * Math.Log(Q), s => Coupling * Agreeing(s));
+        public ISamplingTarget<int[]> Target => SamplingTarget.Separable<int[]>(_ => -Sites * Math.Log(Q), s => Coupling * Agreeing(s), completeValues: true);
 
         /// <summary>The exact count of configurations at each number of agreeing bonds, 0 to 2N, by enumeration: site 0's
         /// colour is fixed and the counts multiplied by q, the global colour symmetry.</summary>

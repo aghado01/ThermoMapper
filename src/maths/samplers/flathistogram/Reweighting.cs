@@ -137,11 +137,13 @@ public static class Reweighting
 
     /// <summary>
     /// ln Z(b) over <paramref name="grid"/> by the ratio estimator, which needs the inner target's prior proper, not
-    /// normalized: its normalizer cancels in the ratio, so ln Ẑ(b) is the evidence under the normalized prior.
+    /// normalized: its normalizer cancels in the ratio, so ln Ẑ(b) is the evidence under the normalized prior. The inner
+    /// target must declare complete values (<see cref="MulticanonicalDraws.HasCompleteValues"/>).
     /// </summary>
     public static LogEvidenceCurve LogEvidence(MulticanonicalDraws draws, ReadOnlySpan<double> grid)
     {
         ArgumentNullException.ThrowIfNull(draws);
+        if (!draws.HasCompleteValues) throw new InvalidOperationException("The target does not declare complete values (ISamplingTarget.HasCompleteValues), so a log normalizer read across b would not mean what it says.");
         if (grid.Length == 0) throw new ArgumentException("The grid needs at least one b.", nameof(grid));
         foreach (double b in grid) CheckTemperature(b);
         int n = draws.Draws, chains = draws.Chains;

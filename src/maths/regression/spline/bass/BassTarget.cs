@@ -81,6 +81,10 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         _exactFitSquares = Sigma2 is null ? floor * floor * Observations * resolved.ResponseMeanSquare : double.NegativeInfinity;
     }
 
+    /// <summary>Whether the values are complete: under proper σ² and intercept priors. τ's prior is a separate condition, for
+    /// an evidence, since a ratio across b does not read it.</summary>
+    public bool HasCompleteValues => Sigma2 is not null && Intercept != GPriorCentre.Flat;
+
     /// <summary>The prior on structures.</summary>
     public BassStructurePrior Prior { get; }
 

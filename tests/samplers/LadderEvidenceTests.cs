@@ -267,7 +267,7 @@ public sealed class LadderEvidenceTests
 
     // Normal1 on real-vector particles, for SMC: x[0] ~ N(0, 3²), one observation 1.5 ~ N(x, 0.25²), separable.
     private static readonly ISamplingTarget<double[]> ConjugateTarget = SamplingTarget.Separable<double[]>(
-        x => -0.5 * Math.Log(2.0 * Math.PI * 9.0) - x[0] * x[0] / 18.0, x => Normal1.LogLikelihood(x[0]));
+        x => -0.5 * Math.Log(2.0 * Math.PI * 9.0) - x[0] * x[0] / 18.0, x => Normal1.LogLikelihood(x[0]), completeValues: true);
 
     private sealed class PriorParticles : ISmcParticles<double[]>
     {
@@ -340,6 +340,24 @@ public sealed class LadderEvidenceTests
             else Assert.True(double.IsFinite(LadderEvidence.FromLadders([ladder], LadderEstimator.PathSampling).LogRatio));
         }
         Assert.Throws<InvalidOperationException>(() => LadderEvidence.FromLadders([Bumps.Ladder(inverseTemperatures, 1)]));   // untraced
+    }
+
+    [Fact]
+    public void Estimates_RefuseATargetThatDoesNotDeclareCompleteValues()
+    {
+        var ladder = new ParallelTempering<int>(Bumps.Moves, new Undeclared(), 5, [1.0, 0.5, 0.1, 0.0], TemperingPath.Likelihood, masterSeed: 2);
+        ladder.TraceRungs();
+        for (int i = 0; i < 20; i++) ladder.Step();
+        Assert.False(ladder.HasCompleteValues);
+        Assert.Contains("HasCompleteValues", Assert.Throws<InvalidOperationException>(() => LadderEvidence.FromLadders([ladder])).Message);
+
+        ISamplingTarget<double[]> undeclared = SamplingTarget.Separable<double[]>(
+            x => ConjugateTarget.Evaluate(x).LogPrior, x => ConjugateTarget.Evaluate(x).LogLikelihood(1.0));
+        var options = new SmcOptions { Particles = 200, TraceStages = true };
+        SmcResult<double[]> run = SmcSampler.RunTempered(undeclared, TemperingPath.Likelihood, 0.9, new PriorParticles(), new RandomWalkKernel(), options, seed: 31);
+        Assert.False(run.HasCompleteValues);
+        Assert.Contains("HasCompleteValues", Assert.Throws<InvalidOperationException>(() => LadderEvidence.FromSmc(run)).Message);
+        Assert.True(SmcSampler.RunTempered(ConjugateTarget, TemperingPath.Likelihood, 0.9, new PriorParticles(), new RandomWalkKernel(), options, seed: 31).HasCompleteValues);
     }
 
     [Fact]
@@ -517,8 +535,15 @@ public sealed class LadderEvidenceTests
 
     // States 0..23 under a uniform prior, with ℓ_b(k) = 3·ln(1 + b·A_k) − b·C_k: two bumps, not linear in b, whose slope
     // the evaluation supplies in closed form.
+    private sealed class Undeclared : ISamplingTarget<int>
+    {
+        private readonly Bumps _inner = new();
+        public ITargetEvaluation Evaluate(int k) => _inner.Evaluate(k);
+    }
+
     private sealed class Bumps : ISamplingTarget<int>
     {
+        public bool HasCompleteValues => true;
         private const int States = 24;
         private static readonly double[] A = new double[States], C = new double[States];
 
@@ -583,6 +608,7 @@ public sealed class LadderEvidenceTests
     // Bumps without the slope: its evaluations keep the interface's refusal.
     private sealed class SlopeFree : ISamplingTarget<int>
     {
+        public bool HasCompleteValues => true;
         private readonly Bumps _inner = new();
         public ITargetEvaluation Evaluate(int k) => new Plain(_inner.Evaluate(k));
 

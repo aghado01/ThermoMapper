@@ -8,13 +8,20 @@ namespace Maths.Samplers;
 /// b, with the state's expensive work (a design, a factorization) done once, so another temperature is a query rather
 /// than a re-evaluation. That is what a likelihood-tempered swap or an SMC reweighting needs.
 /// <para>Values are needed only up to an additive constant that may depend on b and the data but never on the state:
-/// it cancels in Metropolis ratios, in swaps and in normalized SMC weights. An evidence estimate needs complete
-/// values.</para>
+/// it cancels in Metropolis ratios, in swaps and in normalized SMC weights. A log normalizer read across b needs complete
+/// values (<see cref="HasCompleteValues"/>).</para>
 /// </summary>
 public interface ISamplingTarget<in TState>
 {
     /// <summary>Evaluate <paramref name="state"/> once; temperatures are then queries on the result.</summary>
     ITargetEvaluation Evaluate(TState state);
+
+    /// <summary>Whether the values are complete: ℓ_b keeps every constant, and so does the log prior on the powered path,
+    /// which tempers it, so a log normalizer read across b means what it says. Off by default, since Metropolis ratios,
+    /// swaps and normalized weights need none of it. <see cref="Evidence.LadderEvidence"/> and
+    /// <see cref="FlatHistogram.Reweighting.LogEvidence"/> refuse without it. A proper prior is a separate condition, for
+    /// an evidence, which also needs b = 0 at the lowest rung.</summary>
+    bool HasCompleteValues => false;
 }
 
 /// <summary>One state's evaluation under an <see cref="ISamplingTarget{TState}"/>.</summary>
@@ -119,20 +126,22 @@ public static class SamplingTarget
 {
     /// <summary>
     /// A target given by its log density alone, read as a likelihood under a flat prior, so b tempers all of it and
-    /// the two paths agree. A state where the density is −∞ is off the support.
+    /// the two paths agree. A state where the density is −∞ is off the support. <paramref name="completeValues"/> declares
+    /// <see cref="ISamplingTarget{TState}.HasCompleteValues"/>.
     /// </summary>
-    public static ISamplingTarget<TState> FromLogDensity<TState>(Func<TState, double> logDensity)
+    public static ISamplingTarget<TState> FromLogDensity<TState>(Func<TState, double> logDensity, bool completeValues = false)
     {
         ArgumentNullException.ThrowIfNull(logDensity);
         return new FunctionTarget<TState>(state =>
         {
             double d = logDensity(state);
             return new SeparableEvaluation(double.IsNegativeInfinity(d) ? double.NegativeInfinity : 0.0, d);
-        });
+        }, completeValues);
     }
 
-    /// <summary>A separable target: <c>ℓ_b = b·ℓ₁</c>, with the prior untempered.</summary>
-    public static ISamplingTarget<TState> Separable<TState>(Func<TState, double> logPrior, Func<TState, double> logLikelihood)
+    /// <summary>A separable target: <c>ℓ_b = b·ℓ₁</c>, with the prior untempered. <paramref name="completeValues"/> declares
+    /// <see cref="ISamplingTarget{TState}.HasCompleteValues"/>.</summary>
+    public static ISamplingTarget<TState> Separable<TState>(Func<TState, double> logPrior, Func<TState, double> logLikelihood, bool completeValues = false)
     {
         ArgumentNullException.ThrowIfNull(logPrior);
         ArgumentNullException.ThrowIfNull(logLikelihood);
@@ -140,7 +149,7 @@ public static class SamplingTarget
         {
             double prior = logPrior(state);
             return new SeparableEvaluation(prior, double.IsNegativeInfinity(prior) ? double.NegativeInfinity : logLikelihood(state));
-        });
+        }, completeValues);
     }
 
     /// <summary>The untempered log posterior of one state, <c>ln prior + ℓ₁</c>.</summary>
@@ -153,7 +162,12 @@ public static class SamplingTarget
     private sealed class FunctionTarget<TState> : ISamplingTarget<TState>
     {
         private readonly Func<TState, ITargetEvaluation> _evaluate;
-        public FunctionTarget(Func<TState, ITargetEvaluation> evaluate) => _evaluate = evaluate;
+        public FunctionTarget(Func<TState, ITargetEvaluation> evaluate, bool completeValues)
+        {
+            _evaluate = evaluate;
+            HasCompleteValues = completeValues;
+        }
+        public bool HasCompleteValues { get; }
         public ITargetEvaluation Evaluate(TState state) => _evaluate(state);
     }
 }

@@ -14,11 +14,17 @@ public sealed class MulticanonicalDraws
     private readonly double[][] _levels;
     private readonly double[][] _functionals;   // per chain, [draw · FunctionalDim + f]
 
+    /// <summary>Whether the inner target declares complete values, which <see cref="Reweighting.LogEvidence"/> needs.</summary>
+    public bool HasCompleteValues { get; }
+
     /// <param name="weights">The frozen weights the draws were taken under.</param>
     /// <param name="levels">Per chain, each draw's ℓ₁; every chain holds the same number of draws.</param>
     /// <param name="functionals">Per chain, the draws' functionals, row-major, <paramref name="functionalDim"/> per draw.</param>
     /// <param name="functionalDim">The functionals per draw.</param>
-    public MulticanonicalDraws(MulticanonicalWeights weights, IReadOnlyList<double[]> levels, IReadOnlyList<double[]> functionals, int functionalDim)
+    /// <param name="hasCompleteValues">Whether the inner target declares complete values
+    /// (<see cref="ISamplingTarget{TState}.HasCompleteValues"/>), which an evidence curve needs.</param>
+    public MulticanonicalDraws(MulticanonicalWeights weights, IReadOnlyList<double[]> levels, IReadOnlyList<double[]> functionals, int functionalDim,
+                               bool hasCompleteValues = false)
     {
         ArgumentNullException.ThrowIfNull(weights);
         ArgumentNullException.ThrowIfNull(levels);
@@ -38,6 +44,7 @@ public sealed class MulticanonicalDraws
             _functionals[c] = (double[])functionals[c].Clone();
         }
         Weights = weights;
+        HasCompleteValues = hasCompleteValues;
         Draws = draws;
         FunctionalDim = functionalDim;
     }

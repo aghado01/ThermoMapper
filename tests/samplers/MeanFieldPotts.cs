@@ -70,7 +70,7 @@ internal sealed class MeanFieldPotts
         return v;
     }
 
-    public ISamplingTarget<int[]> Target => SamplingTarget.Separable<int[]>(LogPrior, Level);
+    public ISamplingTarget<int[]> Target => SamplingTarget.Separable<int[]>(LogPrior, Level, completeValues: true);
 
     /// <summary>The most even split: the disordered phase's centre.</summary>
     public int[] Disordered()

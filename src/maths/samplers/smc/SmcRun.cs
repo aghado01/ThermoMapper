@@ -78,9 +78,11 @@ public sealed record SmcStageTrace(Temperature Temperature, bool NewTarget, doub
 /// <param name="Stages">One report per stage, the initial draw first.</param>
 /// <param name="StageTraces">One population per stage, the initial draw first, when the run traced them; null
 /// otherwise.</param>
+/// <param name="HasCompleteValues">Whether the last stage's target's values are complete
+/// (<see cref="ISamplingTarget{TState}.HasCompleteValues"/>), which a stage-by-stage estimate needs.</param>
 public sealed record SmcResult<TState>(
     IReadOnlyList<TState> Particles, double[] Weights, double LogNormalizerRatio, IReadOnlyList<SmcStageReport> Stages,
-    IReadOnlyList<SmcStageTrace>? StageTraces = null)
+    IReadOnlyList<SmcStageTrace>? StageTraces = null, bool HasCompleteValues = false)
 {
     /// <summary>The standard error of <see cref="LogNormalizerRatio"/>, from the last stage's genealogy estimate
     /// (<see cref="SmcStageReport.NormalizerRelativeVariance"/>, <see cref="SmcWeights.LogNormalizerError"/>): NaN unless
@@ -355,7 +357,7 @@ public sealed class SmcRun<TState>
 
     /// <summary>The population as it stands.</summary>
     public SmcResult<TState> Result() => new((TState[])_state.Clone(), (double[])_weights.Clone(), _logNormalizer, _reports.ToArray(),
-                                             _traces?.ToArray());
+                                             _traces?.ToArray(), Stage.Target.HasCompleteValues);
 
     // The stage's population as it now stands, when the run traces its stages. Its arrays are never written again.
     private void RecordStage(bool newTarget)

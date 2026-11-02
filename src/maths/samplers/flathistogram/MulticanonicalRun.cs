@@ -187,7 +187,7 @@ public static class MulticanonicalRun
             diagnostics[c] = run.Histogram.Snapshot();
             handles[c] = run.Chain;
         }
-        var draws = new MulticanonicalDraws(learning.Weights, levelsOut, functionals, model.FunctionalDim);
+        var draws = new MulticanonicalDraws(learning.Weights, levelsOut, functionals, model.FunctionalDim, target.HasCompleteValues);
         MulticanonicalCheckpoint? restart = checkpoint
             ? new MulticanonicalCheckpoint(identity, learning.Save(), learnHistogram.Snapshot(), [.. trace], [.. tied], null, summary.Checkpoint)
             : null;
