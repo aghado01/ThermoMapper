@@ -2263,6 +2263,47 @@ anchor's fix needed.
     points (below T ≈ 0.01) share a seed within a replica: each marginal is right, but those adjacent endpoints are
     correlated. Grids below 10⁻³ (§12.28) share one seed per replica throughout, if the harness seeded through this
     helper, which would weaken the Welch SE's independence across an interval there.
+  - *The seed collision, fixed the same day.* `SpcSeedHelper.Derive` now folds T's own bits, so every seeded SPC stream
+    moved, and `TemperatureQuantizationFactor` is gone; nothing relied on nearby temperatures sharing a seed. The old
+    fold shared seeds within a replica at 3 pairs on the corrected bracket's 48 points, and at 223 of the 289 points on
+    §12.28's schedule, 158 of them (all those below 10⁻³) on one seed. The round-1 harness did seed through it: its
+    code, read from its session, sets `BaseSeed = seed` on the fixed-grid sweep.
+
+    *Do §12.28's cold-grid standard errors need re-reading?* Not for validity, on the graph measured: its bands at the
+    two finest volleys below 10⁻³ erred wide. BlattHierarchy, Cauchy K = 5, §12.28's schedule and budget, 12 independent
+    sweeps per fold, intervals below 10⁻³:
+
+    | Interval (fine steps, e-folds) | Volley | Endpoint correlation, old / new fold | SD(ΔS₂) ÷ Welch SE, old / new fold |
+    |---|---|---|---|
+    | 1, 0.044 | v5 | +0.33 / 0.00 | 0.81 / 1.04 |
+    | 2, 0.088 | v4 | +0.19 / −0.01 | 0.89 / 0.96 |
+    | 4, 0.175 | v3 | +0.04 / −0.02 | 0.89 / 0.90 |
+    | 8, 0.35 | v2 | +0.01 / −0.06 | 0.93 / 0.84 |
+
+    - *The noise.* The correlation is pooled by variance; by decade at v5 it is +0.26, +0.54 and +0.36 from the coldest
+      up. The new fold's SD column shows that ratio's own noise, since its truth is 1.
+    - *The direction.* Positive correlation puts the true noise of ΔS₂ below what Welch assumes, so Q and A were both
+      harder to reach than they should have been. §12.28's 287 quiet certifications stand, and some open cold blocks at
+      volleys 4–5 may read narrower on the new fold.
+    - *What didn't move.* The Welch SE itself: at v5 across 10⁻⁵–10⁻⁴ its rms is 5.7×10⁻⁴ on the old fold and 5.8×10⁻⁴
+      on the new. Point SEs stand too, since replicas never shared a seed within a temperature.
+    - *Above 10⁻³.* A shared seed shows no correlation here: +0.01 at v5 and −0.04 at v4, over the pairs in [10⁻³, 0.03]
+      that shared one. So the correlated cold pairs feared above don't show on this graph.
+    - *Why, as a reading from the kernel's code.* SW draws once per agreeing edge and once per cluster, so one differing
+      bond shifts the stream and the two chains part. Below 10⁻³ most couplings sit far above T, so decisions rarely
+      differ.
+    - *Not measured.* §12.28's own N: this ran at the generator's default N = 6000, against its 1200. Its Gaussian
+      K = 10 graph: a reboot killed that arm. The descending test's states rerun on the new fold. The toy and iris
+      graphs.
+
+    *Parity across both folds.* `BwdParityTests`, `BwdPottsCriticalEstimateTests` and `BinderCumulantTests` (27 cases)
+    ran on 12 seeds under each fold, on the tree before the compiler revision. An old-fold switch reproduced the
+    pre-change numbers to the printed digit. 26 cases pass on all 12 seeds under both, with readings in the same ranges
+    (11 rank-sum comparisons, smallest p = 0.05, uncorrected). `LineagePersistence_Toy_SelectsThreeStripeLineages`
+    passes seed 42 under both but only 7 of 12 seeds on the old fold and 6 of 12 on the new, and its third lineage at
+    seed 42 falls from 855 to 149 against the test's floor of 100. The fold didn't cause that: §13.15 counts 5 of 12 on
+    its own run, and the test stands until §13.15's choices settle what the resolver reports. With the compiler
+    revision in, all of them pass on their own seeds under the new fold, and full VizCore is green in Release.
 
 **A dense cluster's melt in closed form: the mean-field thermal curve (C45).**
 - **The complete graph (Bollobás, Grimmett and Janson 1996; §10.2–10.3).** With p = λ/n, the giant's share θ solves
