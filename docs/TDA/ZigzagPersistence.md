@@ -9,7 +9,7 @@
 >
 > **Maturity:**
 >
-> - Core: `FastZigzag`, the graph engines and the dual-graph builders.
+> - Core: `FastZigzag`, the graph engines, the dual-graph builders and the frame builder.
 > - Reference/oracle: `ZigzagBarcodeNaive`, `ZigzagMapBarcode`, `StrongCollapse`, `StrongCollapseZigzag`.
 > - Partial: `ReflectionZigzag`.
 > - Internal and not yet wired in: `RuVineyard`.
@@ -105,6 +105,7 @@ The general engines `FastZigzag`, `ReflectionZigzag` and `StrongCollapseZigzag` 
 | General engines | `FastZigzag.Compute(f, maxDimension = int.MaxValue, representatives = false)`; `ReflectionZigzag.Compute(f, maxDimension)` |
 | Oracles | `ZigzagBarcodeNaive.Compute(f, maxDimension)`; `ZigzagMapBarcode.Compute(complexes, dimOf, bndOf, N, steps, maxDimension)`, `ZigzagMapBarcode.ComputeFromZigzag(f, maxDimension)`, `ZigzagMapBarcode.Step(IsForward, CellMap)`; `StrongCollapse.Core`, `StrongCollapse.CoreWithRetraction`; `StrongCollapseZigzag.Compute(f, maxDimension)` |
 | Graph engines | `GraphZigzag.Compute(f, maxDimension = 0, representatives = false, strictRepresentatives = false, algorithm = Fast)`; `GraphZigzagFast.Compute(…)`; `GraphZigzagH1.Compute(f, representatives)`; `GraphZigzagH1Fast.Compute(f, representatives)`; `GraphZigzagAlgorithm` |
+| Frame sequences | `GraphFrameZigzag.Build(n, frames, transition = Union)`, `GraphFrameZigzag.FromEdgeSets(n, edgeSets, transition)`, `GraphFrameZigzag.FromGraphs(graphs, transition)`, `GraphFrameZigzag.FromEdgeField(substrate, fields, thresholds, transition)`; `GraphFrame(Vertices, Edges)`; `FrameTransition { Union, Intersection }`; `GraphFrameFiltration.Filtration`, `FrameCount`, `FrameBars(barcode)`, `TransientBars(barcode)`; `FrameBar(Dimension, FirstFrame, LastFrame, StepBar)`; `TransientBar(Dimension, AfterFrame, StepBar)` |
 | Codimension one | `DualGraphSpec(p, voidDualVertexIds, pSimplexDualVertex, pMinus1SimplexDualEdge)`; `PlanarDualGraph.Build(vertexCoords, edges, triangleVertices, firstDualVertexId = 0)`; `CodimensionOneDualGraph.Build(p, vertexCoords, pMinus1Simplices, pSimplices, firstDualVertexId = 0)`; `CodimensionOneZigzag.Compute(f, dual, algorithm = Reference)`; `EmbeddedComplexZigzag.Compute(p, vertexCoords, pMinus1Simplices, pSimplices, f, algorithm = Reference)` |
 | Support | `CellFiltration` (an `IFiltration` over explicit boundaries); internal `RuVineyard`; unused `IAbstractCell`, `SimplicialCell.GetBoundaryIndices` |
 
@@ -308,6 +309,29 @@ where $\mathcal E$ is a zigzag on the **dual graph**:
 
 Each piece scans the whole filtration.
 
+### Frame sequences
+
+`GraphFrameZigzag` is the input boundary for a sequence of graphs: frames over stable vertex ids become a `ZigzagFiltration`, one cell per step from empty back to empty, read by any engine unchanged. It is the one file in the zigzag stack that touches `CsrGraph`; the engines stay free of `Graphs.*`. Frames come from whatever a caller's sweep produces: graphs at successive parameter values, a sliding window (frames carry vertex sets, so points can enter and leave), or a per-edge field cut by a per-frame threshold. A constant threshold, a warped path and a non-monotone ridge are all the caller's choice, and nesting is not assumed.
+
+**Cell ids.** Vertex `v` is cell `v`. An edge keeps one cell id across re-entries, allocated at first appearance after the vertices. Inside a batch, faces enter before cofaces and leave after them, in id order.
+
+**Reading back.** Engines report bars in step coordinates. A bar covers levels `[Birth + 1, Death]`, where level ℓ is the complex after ℓ steps. `GraphFrameFiltration` keeps each frame's level and each between-frames level, and offers two views over the barcode:
+
+- `FrameBars`: the bars present at some frame, as the inclusive range of frames.
+- `TransientBars`: the bars present between two frames and at neither.
+
+A bar reaching neither is an artifact of the step order inside a batch, such as a vertex that exists for one step before its edge attaches it, and both views drop it. The step-level barcode stays with the caller.
+
+**Union or intersection.** Consecutive frames connect through their union (additions first) or their intersection (deletions first), by `FrameTransition`, default `Union`. The Diamond Principle (Carlsson and de Silva 2010, §5) makes this a choice about transients alone: frame bars are identical, and a transient H1 class of the union corresponds to a transient H0 class of the intersection, between the same two frames. Tests confirm both across random sequences.
+
+**Nested frames** reduce to ordinary persistence: with no deletions the barcode equals `PersistentHomology` on the edge-birth filtration, and H0 deaths are the union-find merges. Frames that lose edges are what needs the zigzag.
+
+**Caveats.**
+
+- Graph engines give unfilled H1. A cycle dies only when an edge leaves, not when triangles fill it. Filled H1 over frames needs triangle cells and `FastZigzag`, and the builder does not produce them.
+- H0 over frames is one bar whenever a connected spanning subgraph is present in every frame.
+- Teardown removes every vertex once, so a vertex that left and re-entered departs twice. With `representatives = true`, the graph H0 engines reject that ([Status](#status-and-caveats)).
+
 ### Input contracts and failure modes
 
 - **Step validity.**
@@ -334,6 +358,7 @@ Each piece scans the whole filtration.
 | `FastZigzag` `representatives` | `false` | Cycles for Add-created bars |
 | `GraphZigzag.Compute` maxDimension / representatives / strictRepresentatives / algorithm | 0 / false / false / `Fast` | H0 only (≥ 1 adds H1); attach chains; throw instead of null; engine |
 | `GraphZigzagH1*` `representatives` | `false` | Also switches both H1 engines from the threshold rule to cycle-containment pairing |
+| `GraphFrameZigzag` `transition` | `Union` | How consecutive frames connect; decides transients only |
 | `CodimensionOneZigzag`, `EmbeddedComplexZigzag` `algorithm` | `Reference` | Inner H0 engine |
 | `PlanarDualGraph` / `CodimensionOneDualGraph` `firstDualVertexId` | 0 | Base of the dual id range |
 | `CodimensionOneDualGraph` `Eps` (private constant) | 1e-9 (absolute) | Rank and determinant threshold; not configurable |
@@ -355,6 +380,7 @@ Each piece scans the whole filtration.
 | Data model | `ZigzagFiltration.cs`, `IntervalEnd.cs`, `CellFiltration.cs`, `AbstractCell.cs` |
 | General engine and oracles | `FastZigzag.cs`, `ZigzagBarcodeNaive.cs`, `ZigzagMapBarcode.cs`, `StrongCollapse.cs`, `StrongCollapseZigzag.cs`, `ReflectionZigzag.cs`, `RuVineyard.cs` |
 | Graph engines | `GraphZigzag.cs`, `GraphZigzagFast.cs`, `GraphZigzagH1.cs`, `GraphZigzagH1Fast.cs` |
+| Frame sequences | `GraphFrameZigzag.cs` |
 | Dynamic structures | `dynamic/DynamicConnectivity.cs`, `dynamic/EulerTourTree.cs`, `dynamic/LinkCutTree.cs`, `dynamic/DynamicMsf.cs` |
 | Codimension one | `PlanarDualGraph.cs`, `CodimensionOneDualGraph.cs`, `CodimensionOneZigzag.cs`, `EmbeddedComplexZigzag.cs` |
 

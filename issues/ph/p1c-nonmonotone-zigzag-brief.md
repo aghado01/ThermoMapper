@@ -82,3 +82,16 @@ prose.
 
 > H0 first, on the parity-complete graph-zigzag. The new code is the sweep → churn driver; the oracle is built.
 > If P1c reaches for triangles, that's the filled-H1 half (P1d) — a separate seam, and its own faithfulness call.
+
+## Report (2026-11-01)
+
+Built, with three departures from this brief; the checks and results are in [ph-setup-brief.md](ph-setup-brief.md).
+
+- **The driver is general.** It is `GraphFrameZigzag`, not `ConditionedZigzag`: nothing in it is specific to
+  conditioning. The conditioned sweep is a short `ConditionedFiltration.BuildSweep` on top.
+- **H0 alone says little here.** With a connected spanning backbone, H0 over any sweep is one bar. A conditioned
+  sweep's returns read in unfilled H1, which `GraphZigzag` already folds, so the driver reads both.
+- **The diff order is an option,** `FrameTransition { Union, Intersection }`, and it decides transients only, by the
+  Diamond Principle.
+
+Filled H1 (§3) stays deferred to P1d.

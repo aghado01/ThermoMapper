@@ -35,7 +35,7 @@ flowchart LR
   - Only triangles of the input graph are used, and the complex stops at dimension 2.
 - **Bar and barcode.** A bar is an interval from birth to death in homological dimension k; the standard engines leave `BirthEnd` and `DeathEnd` at their `Closed` defaults. `Death = +∞` marks an **essential** bar. `Barcode` is the output type that every engine returns, zigzag engines included.
 - **Clearing.** H0 is computed with union–find over the edges sorted by value, following the elder rule: when two components merge, the older survives and the younger one's bar ends (see [Status](#status-and-caveats) for a deviation). Edges that merge components are H0 deaths and are never reduced in dimension 1. The same rule applies in each higher dimension to simplices that were pivots one dimension lower.
-- **Conditioned persistence.** A **backbone prior** $K_0$, present from $\varepsilon_0$, is combined with **similarity edges** at their distances. An H1 bar then marks a similarity chord that closes a loop along the backbone. The code documents this as phases P0–P1 of a larger research program.
+- **Conditioned persistence.** A **backbone prior** $K_0$, present from $\varepsilon_0$, is combined with **similarity edges** at their distances. An H1 bar then marks a similarity chord that closes a loop along the backbone. There are two readings: backbone-at-base, $H(K_\delta)$, which also reports $K_0$'s own cycles, and backbone-quotiented, $H(K_\delta,K_0)$, the features $K_0$ does not explain. The code documents this as phases P0–P1 of a larger research program.
 
 ## Design
 
@@ -60,7 +60,8 @@ flowchart LR
 | Output | `Bar(Birth, Death, Dimension, Generator?, Cocycle?, Cycle?, BirthEnd, DeathEnd)`, `Bar.Persistence`; `Barcode(bars, axisLabel)` |
 | Distances | `DiagramMetrics.Wasserstein(a, b, dimension, p = 2, essential = default)`, `SlicedWasserstein(…, directions = 50)`, `SinkhornWasserstein(…, epsilon = 0.01, maxIters = 500)`; `Bottleneck(a, b, dimension, essential)` (not implemented); `DiagramMetrics.EssentialPolicy.InfiniteOnMismatch`, `DiagramMetrics.EssentialPolicy.FinitePenalty(perBar)`; `DiagramDistanceKind` |
 | Cycles | `CycleReconstruction.ReconstructH1Cycle(filtration, birthEdgeIndex)`; `BarCycleEdges.GetEdgePairs`, `BarCycleEdges.H1Loops`; `H1CycleEdges.FromDistanceGraph(distanceGraph)` |
-| Conditioned | `ConditionedFiltration.BuildGraph`, `ConditionedFiltration.ComputeBarcode`; `ResidualPrior.ResidualEdges`, `ResidualPrior.ReachSlices`; `ResidualSymmetry` |
+| Conditioned | `ConditionedFiltration.BuildGraph`, `ConditionedFiltration.ComputeBarcode`, `ConditionedFiltration.BuildRelative`, `ConditionedFiltration.ComputeRelativeBarcode`, `ConditionedFiltration.BuildSweep`; `ResidualPrior.ResidualEdges`, `ResidualPrior.ReachSlices`; `ResidualSymmetry` |
+| Relative | `RelativeFiltration(ambient, inSubcomplex, label = "relative")`, `RelativeFiltration.ComputeBarcode(maxDimension, representatives)`, `RelativeFiltration.Ambient`, `RelativeFiltration.AmbientIndices` |
 | Topology helpers | `Maths.Topology.CombinatorialIndex` (`Index`, `Vertices`, `PackKey`, `Binomial`); `Maths.Topology.Simplex`; `Maths.Topology.Z2LinearAlgebra` (oracle support) |
 
 ## Algorithms
@@ -123,8 +124,14 @@ The finite bars of the requested dimension form $A$ (n bars) and $B$ (m bars); w
 - **`ConditionedFiltration.ComputeBarcode`** runs graph Rips and then involuted homology with representatives.
 - **`ResidualPrior.ResidualEdges`** produces content edges as prediction residuals $r=\phi(|t_j-(t_i+\tau)|,|t_i-(t_j+\tau)|)$. The fold φ is the minimum by default, or the maximum or the mean. An optional reach bound $|\tau|\le\Delta$ applies.
 - **`ReachSlices`** evaluates a grid of reach bounds in the order given.
+- **`ConditionedFiltration.ComputeRelativeBarcode`** reads the union's filtration relative to $K_0$, the flag complex of the backbone edges on their endpoints. A content edge stays outside $K_0$ whatever its value, so a return the prior predicted (residual 0) is still reported. $K_0$ is present throughout the pair, so $\varepsilon_0$ does not enter. It reports only the degrees below the skeleton's top, which are exact.
+- **`ConditionedFiltration.BuildSweep`** turns a non-monotone sweep of the conditioned graph into frames for the zigzag engines ([frame sequences](./ZigzagPersistence.md#frame-sequences)). With a connected spanning backbone, H0 over any sweep is one bar, so a sweep's returns read in H1, as unfilled graph cycles.
 
-The later phases the code describes (directed, gauge, sheaf and zigzag variants) are not implemented.
+**The relative complex.** `RelativeFiltration` holds the cells of $K$ outside $K_0$, in $K$'s order, each boundary keeping only its faces outside $K_0$, and `PersistentHomology` reduces it with no new reduction code. A chord whose endpoints both lie in $K_0$ has an empty relative boundary, so it is a cycle by itself. A $K_0$ cycle that $K$ fills reappears one degree up, as a relative H2 class born where it is filled, by the pair's long exact sequence. For a connected spanning $K_0$, $H_1(K,K_0)\cong H_1(K)/\mathrm{im}\,H_1(K_0)$, so the relative H1 bars are exactly the absolute H1 bars born after $K_0$. This is persistence against a *fixed* subcomplex, an ordinary filtration of the quotient, and is a different object from the relative modules $H(K,K_i)$ of de Silva, Morozov and Vejdemo-Johansson, which move with the filtration.
+
+**Which engine reads it.** Only `PersistentHomology`. The cohomology and involuted paths compute H0 by union-find over each edge's two vertices and assume absolute structure, so handing them a `RelativeFiltration` is not supported. Bars from `RelativeFiltration.ComputeBarcode` index `Ambient`, and a bar's `Cycle` is a relative cycle, a chain whose boundary lies in $K_0$, so it need not close. Essential bars carry `Generator` only, which for a connected spanning $K_0$ is the chord that closed the return.
+
+The later phases the code describes (directed, gauge and sheaf variants), and filled H1 over a sweep, are not implemented.
 
 ## Configuration
 
@@ -139,8 +146,9 @@ The later phases the code describes (directed, gauge, sheaf and zigzag variants)
 | `SinkhornWasserstein` epsilon / maxIters | 0.01 / 500 | Tolerance 1e-9 |
 | `ConditionedFiltration` baseWeight / maxDimension | 0.0 / 2 | $\varepsilon_0$; skeleton dimension |
 | `ResidualPrior` symmetry / reachBound | `Min` / +∞ | — |
+| `ConditionedFiltration.BuildRelative`, `ComputeRelativeBarcode` maxDimension | 2 | Skeleton dimension; no `baseWeight`, as $K_0$ is present throughout the pair |
 
-**Truncation artifact.** On a 2-skeleton, any triangle left unpaired becomes an essential H2 bar when `maxDimension` is left at its default. `ConditionedFiltration.ComputeBarcode` always runs the involuted engine at that default, so its barcode contains these bars whenever its skeleton `maxDimension` is 2.
+**Truncation artifact.** On a 2-skeleton, any triangle left unpaired becomes an essential H2 bar when `maxDimension` is left at its default. `ConditionedFiltration.ComputeBarcode` always runs the involuted engine at that default, so its barcode contains these bars whenever its skeleton `maxDimension` is 2. `ComputeRelativeBarcode` stops below the top degree, so it has no such bars; `RelativeFiltration.ComputeBarcode` reports every degree it is asked for.
 
 ## Status and caveats
 
@@ -161,7 +169,7 @@ The later phases the code describes (directed, gauge, sheaf and zigzag variants)
 | Engines | `PersistentHomology.cs`, `PersistentCohomology.cs`, `FiltrationCohomologyReducer.cs`, `PersistenceClearing.cs`, `PersistentInvolutedHomology.cs` |
 | Output and distances | `Barcode.cs` (`Bar`, `Barcode`), `DiagramMetrics.cs` |
 | Cycles | `CycleReconstruction.cs`, `BarCycleEdges.cs`, `H1CycleEdges.cs` |
-| Conditioned persistence | `ConditionedFiltration.cs`, `ResidualPrior.cs` |
+| Conditioned persistence | `ConditionedFiltration.cs`, `ResidualPrior.cs`, `RelativeFiltration.cs` |
 | Topology helpers | `ThermoMapper/src/maths/topology/CombinatorialIndex.cs`, `Simplex.cs`, `Z2LinearAlgebra.cs` |
 
 **See also:** [ZigzagPersistence](./ZigzagPersistence.md) · [Spred](./Spred.md) · [GraphConstruction](./GraphConstruction.md) · [Concepts](./Concepts.md#barcodes)

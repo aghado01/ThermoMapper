@@ -1,6 +1,7 @@
 # Brief: PH setup, the relative backbone reading and the frame builder
 
-**Date:** 2026-11-01. **Status:** scope and checks fixed before the first run; the report is appended below.
+**Date:** 2026-11-01. **Status:** built; scope and checks were fixed before the first run (`14ff3d0`), and the
+[report](#report-2026-11-01) is below.
 **Asked by the user:** "some setup work on ph stuff like the backbone persistence update", in this session.
 Engine work only: no consumer is wired, and nothing here assumes one application.
 
@@ -96,3 +97,80 @@ the bijection and the section, not the shift. It is a prediction, and a failure 
 
 The brief's hand expectations were worked before the code exists. If one is wrong, the report says so and why,
 rather than the expectation being edited quietly.
+
+## Report (2026-11-01)
+
+**What landed.** `RelativeFiltration` and `ConditionedFiltration.BuildRelative` / `ComputeRelativeBarcode` (the
+backbone update); `GraphFrameZigzag`, `GraphFrameFiltration` and `ConditionedFiltration.BuildSweep` (P1c). Docs:
+`docs/TDA/PersistentHomology.md`, `docs/TDA/ZigzagPersistence.md`. No engine changed, and nothing is wired to a
+consumer. `ComputeBarcode` keeps its behaviour.
+
+**Results.** Every check above passed on its first run, with no hand expectation changed, including D2's degree shift,
+which was only a prediction. `TDA.Ph.Tests` is 375/375 and `TDA.Mapper.Tests` 28/28.
+
+**The sweeps reach what they claim.** Counts over the trials, after the first run raised the question:
+
+| Check | Reached |
+|---|---|
+| R7 | 130 backbone bars quotiented; 201 relative H₁ bars, 107 of them finite |
+| R8 | Bars in H₀/H₁/H₂: 169/155/167; 114 non-spanning backbones; 90 with K₀ triangles |
+| Z3 | 210 H₀ merges, 270 H₁ bars |
+| Z11 | 200 frame bars, 18 transients |
+| D1, D2 | 791 transients |
+
+**The tests can fail.** Two deliberate breaks, run once and reverted:
+
+- K₀ losing its triangles failed R8 alone. That is the expected reach: R7 reads H₁, which K₀'s triangles don't touch,
+  so the cone is the only guard on this choice.
+- The read-back's level window off by one failed Z1, Z2, Z3, Z11 and D1.
+
+**What the review changed, after the first green run:**
+
+- **A bug the checks missed.** `GraphRips` stops at triangles for any `maxDimension ≥ 2`, so `ComputeRelativeBarcode`
+  at `maxDimension: 3` would have reported the truncated H₂ it promises to leave out. Fixed; R11 pins it.
+- **The read-back had no independent reference beyond hand cases and nested frames.** Z11 now decomposes the module on
+  frames and between-frames complexes directly with `ZigzagMapBarcode`, with no single-cell refinement and no read-back.
+  It agrees for both transitions, frame bars and transients.
+- **R10** pins a finite bar's representative, in the ambient's indices. By hand: path 0–4 with chords (0,4), (0,2),
+  (2,4) gives H₁ [1,3) whose relative cycle is the chord (0,4) alone.
+- **Z4 and Z5 run 10 trials, not 30.** They ran green at 30, at 110 s against a suite of about 20 s, almost all of it
+  the naive oracle. D1 and Z11 cover the same ground far more cheaply.
+
+Checks added after the first run, so not pre-registered:
+
+| # | Check | Expected |
+|---|---|---|
+| R10 | Finite relative bar, hand | [1,3), cycle {(0,4)} |
+| R11 | `ComputeRelativeBarcode` at `maxDimension` 3 and 1 | No H₂; H₀ only |
+| Z11 | Random frames with vertex churn (40 trials, both transitions) | Read-back equals direct decomposition of the coarse module |
+
+## Not verified
+
+- **The Diamond Principle's degree shift is confirmed by the runs on graph sequences, not by reading the theorem.** The
+  source I could read gives the bijection and the section (Carlsson & de Silva 2010, §5), not the shift.
+- **VSMJ2011's relative objects being H(K, K_i)** is from memory, consistent with the abstract. The relative reading
+  does not depend on it; only the note that the older design notes overstated the cost does.
+
+## Status of the PH-for-SPC ideas
+
+Nothing below was decided except where it says so. Application framing stays out of the engine.
+
+| Idea | Status | Decision |
+|---|---|---|
+| Backbone persistence, relative reading | **Built** | User, 2026-11-01: do it, here |
+| Frames → zigzag (P1c) | **Built**, no consumer | Same request, as setup work |
+| SPC over temperature as zigzag | Not wired. The builder takes `CoMembership.G` as a field on the coupling graph as it stands. At fixed θ with J ≥ 0, the exact stack only gains edges, so zigzag reads the raw estimate, non-nesting cuts, a θ*(T) ridge or signed couplings | Open |
+| (β, θ) bifiltration and transforms | Not built; `lean/Enthymemata/Bifiltration.lean` is empty. "Not a bifiltration" holds for the cumulative field, where (T, θ) reduces to τ = T·κ(θ), and not for the sampler, whose edge curves cross | Open |
+| Ultrametricity test | Not built; placement undecided | Open |
+| Per-sweep partitions for PH | Not built. A zigzag over thinned draws is order-dependent; resampling them per temperature is the better route to barcodes with uncertainty | Open |
+
+**Next on the engine side, if wanted:** filled H₁ over frames (P1d). The builder would emit triangle cells for
+`FastZigzag`, which turns "does a return die by fill or by departure?" into two readable options instead of a choice.
+A relative reading over frames is the other open seam.
+
+**To forward to the Bayesian clustering session:** θ read as a Binder cost ratio applies to each edge's decision, while
+the θ-graph's components are the closure, which is single linkage and not the Binder optimum. The robust window and H₀
+bar length both measure an interval of stability, one per partition and one per cluster.
+
+**Older notes this corrects, left as they are:** the MarkBrain synthesis brief and `backbone-conditioned-persistence.md`
+still say relative persistence needs the VSMJ2011 machinery, and still show it unbuilt.

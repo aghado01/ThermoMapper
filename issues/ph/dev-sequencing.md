@@ -1,6 +1,6 @@
 # Dev sequencing — conditioned-persistence engine + graph-engine renovation
 
-**Status:** live sequencing record (updated 2026-07-03). **Tactical / transient** — lives in local `issues/`
+**Status:** live sequencing record (updated 2026-11-01; P0–P1c status below is current, the rest stands as of 2026-07-03). **Tactical / transient** — lives in local `issues/`
 while this arc is active, and **archives to the MarkBrain vault when the P0–P2 arc closes**. The design briefs it
 links are the stable canonical reference, already in MarkBrain (relative `../../../MarkBrain/…`, both repos under
 `D:\aghado01\`). Ties the two open fronts — the **PH engine** (`tda-purification/persistent-homology/`) and the
@@ -38,20 +38,23 @@ This unblocks **P0** — born in `tda/ph` against a clean tree, which was the wh
 
 Engine-first, P0 → P1 → P2. This is the track with the first genuinely new *science* (P2's M2).
 
-- **P0 · `ConditionedFiltration`** — ✅ **landed & green** (`src/tda/ph/ConditionedFiltration.cs`;
-  TDA.Ph.Tests **298/298**, +5 P0 tests). Union convention (`BuildGraph`) + convenience `ComputeBarcode`;
-  SIFTS `τ≡0` degenerate proven, barcode through the existing reducer unchanged. *Commit pending* (selective,
-  atop the Spred session's tree). Brief: [p0-conditioned-filtration-brief.md](../../../MarkBrain/ThermoMapper/issues/tda-purification/persistent-homology/p0-conditioned-filtration-brief.md).
-- **P1 · prior generalizes + multiparameter frame** — **← NEXT (scoped).**
-  - **P1a** (residual band, monotone δ) — ✅ **landed** (`c91143d`; `src/tda/ph/ResidualPrior.cs`, TDA.Ph.Tests
-    303/303). `ResidualEdges` feeds P0's `BuildGraph`; `τ≡0` subsumes P0's similarity, a nonzero prior shifts a
-    return's birth. Brief: [p1a-residual-prior-brief.md](p1a-residual-prior-brief.md).
-  - **P1b** (Δ reach axis) — ✅ **landed & green** (`ResidualPrior.reachBound` + `ReachSlices`; TDA.Ph.Tests
-    **306/306**, +3). Reach bound `|τ| ≤ Δ` → the monotone `(δ,Δ)` bifiltration read by PH slices; `+∞`
-    subsumes P1a, β₁ steps up at a return's Δ threshold. *Commit pending.* Brief: [p1b-delta-reach-brief.md](p1b-delta-reach-brief.md).
-  - **P1c** (non-monotone reader — H0) — **← NEXT (scoped).** brief: [p1c-nonmonotone-zigzag-brief.md](p1c-nonmonotone-zigzag-brief.md).
-    A sweep→churn driver feeding the parity-complete `GraphZigzag` H0 → components-over-`T` (merge/split); the
-    telos seated on the zigzag oracle. New code = the driver; the oracle is built.
+- **P0 · `ConditionedFiltration`** — ✅ **landed & green** (`9e3aa71`; `src/tda/ph/ConditionedFiltration.cs`).
+  Union convention (`BuildGraph`) + convenience `ComputeBarcode`; SIFTS `τ≡0` degenerate proven, barcode through
+  the existing reducer unchanged. Brief: [p0-conditioned-filtration-brief.md](../../../MarkBrain/ThermoMapper/issues/tda-purification/persistent-homology/p0-conditioned-filtration-brief.md).
+  - **The relative reading** `H(K_δ, K₀)` — ✅ **landed & green** 2026-11-01 (`RelativeFiltration`,
+    `ConditionedFiltration.ComputeRelativeBarcode`). `ComputeBarcode` was absolute and matched only for an acyclic
+    backbone. Brief and report: [ph-setup-brief.md](ph-setup-brief.md).
+- **P1 · prior generalizes + multiparameter frame.**
+  - **P1a** (residual band, monotone δ) — ✅ **landed** (`c91143d`; `src/tda/ph/ResidualPrior.cs`). `ResidualEdges`
+    feeds P0's `BuildGraph`; `τ≡0` subsumes P0's similarity, a nonzero prior shifts a return's birth. Brief:
+    [p1a-residual-prior-brief.md](p1a-residual-prior-brief.md).
+  - **P1b** (Δ reach axis) — ✅ **landed & green** (`66d6f24`; `ResidualPrior.reachBound` + `ReachSlices`). Reach
+    bound `|τ| ≤ Δ` → the monotone `(δ,Δ)` bifiltration read by PH slices; `+∞` subsumes P1a, β₁ steps up at a
+    return's Δ threshold. Brief: [p1b-delta-reach-brief.md](p1b-delta-reach-brief.md).
+  - **P1c** (non-monotone reader) — ✅ **landed & green** 2026-11-01 (`GraphFrameZigzag`,
+    `ConditionedFiltration.BuildSweep`): any frame sequence → `ZigzagFiltration` → the engines unchanged, read back
+    on the frames, H0 and unfilled H1. No consumer is wired. Briefs: [p1c-nonmonotone-zigzag-brief.md](p1c-nonmonotone-zigzag-brief.md),
+    [ph-setup-brief.md](ph-setup-brief.md).
   - **filled-H1 over the zigzag** (deferred, → P1d) — `GraphZigzag`'s H1 is *unfilled* cycle space; the
     Rips-faithful filled case needs the full simplicial `ZigzagFiltration` + oracle. Key call: a return-over-`T`
     dies by triangle-fill or by edge-departure ([zigzag-frontier.md](../../../MarkBrain/ThermoMapper/issues/tda-purification/zigzag-engine/zigzag-frontier.md) — verify before building, multi-track area).
