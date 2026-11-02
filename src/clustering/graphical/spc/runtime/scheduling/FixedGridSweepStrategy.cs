@@ -315,7 +315,6 @@ public sealed class FixedGridSweepStrategy : ISweepStrategy
     private static string? CheckpointFor(string? root, double T, int replica, int schedule)
     {
         if (root is null) return null;
-        string fileName = $"T_{T.ToString("F5", CultureInfo.InvariantCulture)}_rep_{replica}_s{schedule}.spcx";
-        return Path.Combine(root, fileName);
+        return Path.Combine(root, SpcExecutor.GetCheckpointFileName(T, replica, schedule));
     }
 }

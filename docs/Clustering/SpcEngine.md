@@ -191,7 +191,7 @@ With D retained draws:
   7. For each optional section — affinities, alignments, the two landscapes, co-membership, the burn-in trace, the exact cluster-size histogram, then the kept partitions and the kept spins — a presence byte, then its payload: an array's length and values, the trace in the per-draw record's layout, or a kept state's interval k before its flattened length and values.
   8. A UTC timestamp.
 
-  The reader requires the exact magic and version. Checkpoint files are named `T_{T:F5}_rep_{r}_s{k}.spcx` by the fixed-grid sweep (k = 0 for sweep tasks, 1 for the equilibrium pass), and `T_{T:F5}_rep_{r}.spcx` by `SpcExecutor.BuildTaskList`.
+  The reader requires the exact magic and version. Checkpoint files are named `T_{T:R}_rep_{r}_s{k}.spcx` by the fixed-grid sweep (k = 0 for sweep tasks, 1 for the equilibrium pass), and `T_{T:R}_rep_{r}.spcx` by `SpcExecutor.BuildTaskList`. T is in its round-trip form, so the name carries it exactly.
 - **`Restore` validation.**
   - It checks presence of Affinities, Alignments, the landscapes, the burn-in trace and the exact histogram in both directions, but CoMembership only when the engine tracks it.
   - It checks T, Q and array lengths, but not the replica index.
@@ -218,7 +218,7 @@ The fixed-grid sweep builds its own execution options and pre-derives each task'
 ## Status and caveats
 
 - **The bracket heuristic scales with J².** $\hat T$ is quadratic in the coupling scale, although temperature should scale linearly with J. Check the bracket when couplings are rescaled.
-- **Near-duplicate grid temperatures share a checkpoint path.** Temperatures that format to the same 5-decimal string (117 of the 289 points on a log grid over $[10^{-6}, 0.3]$) share one, and with a checkpoint directory set they are written concurrently. With a `BaseSeed`, only exactly equal temperatures share a seed for a given replica.
+- **Duplicate grid temperatures collide.** For a given replica, exactly equal temperatures share a seed under a `BaseSeed`, and a checkpoint path with a checkpoint directory set. There the later task loads the earlier one's frame, or throws if the two finish together.
 - **Resume works per task.** The SPCX resume state (spins and RNG) is saved, but `Restore` has no caller. Resuming means skipping each task whose checkpoint file already exists. The loaded file is not checked against the task's budget, accumulation or Q, so reuse a checkpoint directory only with an identical configuration.
 - **Couplings must be non-negative.** This is assumed but not checked. A negative coupling gives a bond probability below 0, contrary to the kernel's documentation.
 - **`SpcExecutor.BuildTaskList` with an explicit `baseSeed`.** It stamps that same seed on every task, so all temperatures and replicas share one stream. The production sweep derives distinct seeds per task and is unaffected.

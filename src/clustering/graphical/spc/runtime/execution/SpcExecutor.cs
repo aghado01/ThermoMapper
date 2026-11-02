@@ -348,8 +348,17 @@ public sealed class SpcExecutor : ISpcExecutor
             round: 0);
     }
 
-    public static string GetCheckpointFileName(double temperature, int replicaIndex)
-        => $"T_{temperature.ToString("F5", CultureInfo.InvariantCulture)}_rep_{replicaIndex}.spcx";
+    /// <summary>
+    /// A checkpoint's name: T in its round-trip form, so distinct temperatures never share a file, then the replica,
+    /// and the schedule for a strategy that runs more than one.
+    /// </summary>
+    public static string GetCheckpointFileName(double temperature, int replicaIndex, int? schedule = null)
+    {
+        string t = temperature.ToString("R", CultureInfo.InvariantCulture);
+        return schedule is int k
+            ? $"T_{t}_rep_{replicaIndex}_s{k}.spcx"
+            : $"T_{t}_rep_{replicaIndex}.spcx";
+    }
 
     private static string FileNameFor(double temperature, int replicaIndex)
         => GetCheckpointFileName(temperature, replicaIndex);
