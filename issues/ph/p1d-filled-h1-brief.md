@@ -110,8 +110,8 @@ The zeros under `Graph` are asserted, not just observed: a graph cycle can't be 
 **What the review changed.** `FrameTransition`'s docstrings said a transient is a cycle under `Union` and a component
 under `Intersection`. With triangles it can also be a void and a cycle. Fixed.
 
-**Cost.** The suite went from about 20 s to about 50 s at `xUnit.MaxParallelThreads=4`, mostly E1 and Z5, which are the
-naive oracle.
+**Cost.** The suite took 51 s on one run and 20 s on the next, at `xUnit.MaxParallelThreads=4`, against 19 s before these
+checks. The spread is machine load, so the checks add little.
 
 ## Not verified
 
