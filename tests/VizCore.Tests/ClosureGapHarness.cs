@@ -170,7 +170,7 @@ public sealed class ClosureGapHarness
 
     // ── Data ────────────────────────────────────────────────────────────────
 
-    private static (double[][] Features, int[] Labels, int K) Load(string set)
+    internal static (double[][] Features, int[] Labels, int K) Load(string set)
     {
         switch (set)
         {

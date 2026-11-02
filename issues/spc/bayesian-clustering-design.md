@@ -184,13 +184,69 @@ So a large gap doesn't say which kind it is, and a search reading the same loss 
 - *Keep the gap as a diagnostic,* with the limit above: alone it doesn't separate chaining from a melt. A label-free way to tell them apart is an open question.
 - *Possibly why Landsat differs.* A T-stack reads each block at its own T, so a split delayed by a step or two costs nothing unless the block melts first. Landsat's lower recall at matched precision would fit that. Untested.
 
-**Limits.** One seed and one θ. The gap is an upper bound on a search's gain, and the pair rule's scores against the labels aren't what a search would attain. Global ARI and pair counts don't see a T-stack's per-block reading. The integrated gap was recorded and not read. The graph is the one at `4ed2867`, without the graph compiler's later edits.
+**Limits.** One seed and one θ. The gap is an upper bound on a search's gain, and the pair rule's scores against the labels aren't what a search would attain. Global ARI and pair counts don't see a T-stack's per-block reading. The integrated gap was recorded and not read. The graph is the one at `4ed2867`, without the graph compiler's later edits. Each set was read on one graph only, so every reading above belongs to that graph.
+
+**The graphs, as resolved.** The protocol above named a recipe, which hides settings that could explain a result. These are as `GraphBuildResult.Resolved` reports them, read at the probe's commit; their edge counts match the measurement's rows. All are Euclidean kNN, mutual filter, `MstMin` repair, no LMP, a floor of 10⁻¹⁰, no repair edge dropped or zeroed, one component, and q = 20, with the mean-edge bandwidth over the repaired edges and gauge 1/K̂. `Auto` refinement resolves to `PathNeighbor`, which has no effect under Euclidean distance. The bracket is [0.004461, 0.3569], except `cauchy`'s [0.004778, 0.4778], whose units aren't BWD's.
+
+| Graph | K | n, edges | Largest component before repair | Repair edges | Edges the floor cut | Kernel | Bandwidth | Gauge 1/K̂ (K̂) |
+|---|---|---|---|---|---|---|---|---|
+| `blobs` | 10 | 400, 1,503 | 50% | 1 | 0 | Gaussian | 0.3216 | 0.1331 (7.52) |
+| `dumbbell` | 10 | 424, 1,574 | 53% | 1 | 22 | Gaussian | 0.4019 | 0.1347 (7.42) |
+| `iris` | 5 | 150, 262 | 53% | 15 | 0 | Gaussian | 0.3065 | 0.2863 (3.49) |
+| `toy` | 10 | 3,200, 12,655 | 99% | 12 | 0 | Gaussian | 0.1622 | 0.1264 (7.91) |
+| `landsat`, arm `k05` | 5 | 6,435, 9,048 | 78% | 983 | 0 | Gaussian | 22.71 | 0.3556 (2.81) |
+| `isolet` | 10 | 7,797, 19,454 | 91% | 297 | 0 | Gaussian | 7.365 | 0.2004 (4.99) |
+| Arm `k10` | 10 | 6,435, 17,109 | 95% | 282 | 0 | Gaussian | 23.84 | 0.1881 (5.32) |
+| Arm `k20` | 20 | 6,435, 34,234 | 99% | 52 | 0 | Gaussian | 25.27 | 0.0940 (10.64) |
+| Arm `cauchy` | 5 | 6,435, 9,048 | 78% | 983 | 0 | Cauchy | 22.71 | 0.3556 (2.81) |
+
+What these settings could explain:
+- `dumbbell`, the instrument's positive case, is two pieces joined by one repair edge, and is the only graph where the floor cut edges. So the chain the check saw isn't a clean path of kNN edges.
+- `iris` at K = 5 and `landsat` at K = 5 have the most repair (53% and 78% before it) and the lowest K̂, the conditions most likely to chain. They are the two sets that read *room*. `toy` and `isolet` read *no room* with K̂ of 7.91 and 4.99. Two sets each isn't evidence of a cause, but it is why the probe varies K.
+
+## Probe of Landsat's case
+
+Asked for by the user on 2026-11-02 ("Probe Landsat first"). The protocol and readings below were written before the first run. The thresholds are judgement calls, fixed so the reading isn't fitted to the results.
+
+**The question.** The measurement left Landsat as the one case for a search, on one seed and one graph. Can a partition reach the gap there? Does what it reaches recover the land-cover labels better than closure? Does the best level hold on other seeds? And is any of this the graph's rather than closure's?
+
+**Why the graph is in the question.** Default settings aren't correct settings, and these settings could explain the result. Landsat's graph at K = 5 has a mean degree of 2.81, with 983 of its 9,048 edges from repair and 78% of its points in the largest component before repair. That is close to a tree, where τ_ij is a product along the path, and closure's joins reach furthest past what the pairs hold. `docs/Clustering/SpcAnalysis.md` already records some of Landsat's readings as K = 5's. This chaining may be too.
+
+**Arms.** One seed per arm except the measurement's own graph, whose seeds carry the best-level question.
+
+| Arm | Graph | Master seeds |
+|---|---|---|
+| `k05` | K = 5, Gaussian: the measurement's graph | 20261102 (the measurement's), 20261103, 20261104 |
+| `k10` | K = 10, Gaussian | 20261102 |
+| `k20` | K = 20, Gaussian | 20261102 |
+| `cauchy` | K = 5, Cauchy | 20261102 |
+
+Each arm's graph is in the "as resolved" table above. Fixed across arms: those settings other than K and the kernel, all 6,435 points and 36 raw features, q = 20, θ = ½ on δ̄ (0.474 on the co-membership scale), and 8 replicas × (1,000 burn-in, 2,000 cycles), keeping every 10th partition.
+
+**Grid.** 65 temperatures evenly spaced in ln T over `AutoBracket`'s range for that graph, worked from the hot end down. An arm stops going colder once closure's ARI has reached 0.05 and then stayed under 0.02 for three levels in a row. Labels choose only where to stop.
+
+**The search.** `PairLossSearch` (`tests/VizCore.Tests/`), left with the tests since nothing has decided it should be more. It maximizes Σ_joined (τ_ij − θ), which is the pair loss up to a constant. Seven starts, each polished by single-node moves and positive merges, keeping the best score on the deciding field: the closure, agglomeration by summed and by mean weight, and four sequential allocations in random order. What it finds is a lower bound on what a partition can reach.
+
+**Measures, per level.**
+- *Saving:* the search's fall in pair loss below closure. *Cross-fit saving:* each replica half decides both partitions and the other half evaluates, averaged both ways, as the cross-fit gap does.
+- *Attained fraction:* cross-fit saving over cross-fit gap, at levels where the gap's share is over 5%.
+- *Attained share:* cross-fit saving over closure's pair loss.
+- *ARI:* the pooled partition of each, closure and search, against the labels.
+
+**The readings.**
+- *Reproduction.* `k05` on its original seed must match the measurement's `ari` and pair loss exactly on every level they share. If not, comparison with the measurement is void, and the rest stands alone.
+- *The best level.* It holds if closure's ARI at T = 0.0791 is within 0.05 of 0.248 on both fresh seeds of `k05`. Otherwise it doesn't.
+- *Attainable.* The median attained fraction over `k05`'s levels T = 0.0690–0.0847 and its three seeds. *Attainable* at ½ or more, *little* at ¼ or less, *partly* between.
+- *Better against the labels.* Gain is the search's best ARI over an arm's levels minus closure's best, for each seed. On `k05`: *worth building on this graph* if the gain is at least 0.05 on at least two of three seeds and the attained share is at least 5% at the search's best level; *no gain* if the gain is at most 0.02 on at least two of three; *small* otherwise. On the other arms, the same bands on their one seed.
+- *The graph.* Each arm gets the measurement's *room* reading at its own best levels. *The chain is K = 5's* if `k10` and `k20` both read no room. *A graph is the cheaper lever* if some other arm's closure reaches a best ARI at or above the median over `k05`'s seeds of the search's best.
+
+Reported with no threshold: ARI's range across seeds at each `k05` level, for closure and search; pairs joined at a hotter level and not at the next colder one, which breaks nesting, for both; recall at matched precision; cluster counts; run time. Partitions are kept in `artifacts/closure-gap/landsat-probe-labels.tsv` for these and for later reading.
 
 ## Proposed order
 
 Not decided.
 
-1. **The closure gap's measurement.** Read, above. The one follow-up that could change the proposal is on Landsat: a second seed, and a local search from closure for how much of the gap a partition attains. It runs only if the user asks.
+1. **The closure gap's measurement.** Read, above. The probe of Landsat's case is what could change the proposal.
 2. **Idea 3.** Stepping-stone and path sampling, validated on exact ln Z (a tree for any q, Kaufman at q = 2), then BARS on ⟨E⟩ checked against the same truth. Independent of 1.
 3. **The partition distance table,** then VI cuts, credible balls and P(Q) as its reductions, and the per-block window through BARS.
 4. **Idea 5.** BARS with `StepBasis` on lineage trajectories.

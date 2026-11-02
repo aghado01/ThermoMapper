@@ -338,6 +338,157 @@ public sealed class ClosureGapTests
         Assert.Throws<ArgumentException>(() => DenseCoMembership.FromPartitions(4, Array.Empty<int[]>()));
     }
 
+    // ── The probe's search, against every partition ─────────────────────────────────────────────
+
+    [Fact]
+    public void Search_MatchesEveryPartition_OnTheFixtures()
+    {
+        // Fixed before the first run: within 1e-10 of the exhaustive best on at least 99% of the cells.
+        int cells = 0, misses = 0;
+        foreach (string name in AllGraphs)
+        {
+            CsrGraph graph = Fixture(name);
+            List<(int I, int J)> pairs = AllPairs(graph.NodeCount);
+            List<int[]> partitions = Partitions(graph.NodeCount);
+            foreach (int q in Qs)
+                foreach (double beta in Betas)
+                {
+                    DenseCoMembership dense = Dense(graph, beta, q, 20000);
+                    double[,] tau = Tau(dense);
+                    foreach (double theta in Thetas)
+                    {
+                        int[] closure = AffinityThreshold.Connect(graph, dense.EdgeColumn(graph), theta).Labels;
+                        PairLossSearch.Found found = PairLossSearch.Best(dense, theta, closure, 4, cells);
+
+                        double foundLoss = Loss(found.Labels, pairs, tau, theta), closureLoss = Loss(closure, pairs, tau, theta);
+                        double best = partitions.Min(p => Loss(p, pairs, tau, theta));
+
+                        Assert.Equal(PairLossSearch.Score(dense, found.Labels, theta), found.Score, Exact);
+                        Assert.Equal(closureLoss - foundLoss, found.Score - PairLossSearch.Score(dense, closure, theta), Exact);
+                        Assert.True(foundLoss <= closureLoss + Exact);
+                        Assert.True(foundLoss >= best - Exact);
+
+                        cells++;
+                        if (foundLoss > best + Exact) misses++;
+                    }
+                }
+        }
+        Assert.True(misses <= 0.01 * cells, $"{misses} of {cells} cells short of the best partition");
+    }
+
+    [Fact]
+    public void Search_MatchesEveryPartition_OnRandomMixtures()
+    {
+        // Fixed before the first run: within 1e-10 of the exhaustive best on at least 90% of 200 fields of nine nodes,
+        // and no field short by over 5% of its best score.
+        const int nodes = 9, fields = 200;
+        List<int[]> partitions = Partitions(nodes);
+        var rng = new Xoshiro256PlusPlus(20261103);
+        int misses = 0;
+        double worst = 0.0;
+        for (int field = 0; field < fields; field++)
+        {
+            var run = new int[nodes * (3 + (int)(rng.NextDouble() * 8))];
+            for (int p = 0; p < run.Length; p += nodes)
+            {
+                int blocks = 2 + (int)(rng.NextDouble() * 4);
+                for (int i = 0; i < nodes; i++) run[p + i] = (int)(rng.NextDouble() * blocks);
+            }
+            DenseCoMembership dense = DenseCoMembership.FromPartitions(nodes, [run]);
+            double theta = Thetas[field % Thetas.Length];
+
+            var weights = new double[nodes, nodes];
+            for (int i = 0; i < nodes; i++)
+                for (int j = i + 1; j < nodes; j++)
+                    weights[i, j] = dense.At(i, j) - theta;
+            double best = double.NegativeInfinity;
+            foreach (int[] p in partitions)
+            {
+                double score = 0.0;
+                for (int i = 0; i < nodes; i++)
+                    for (int j = i + 1; j < nodes; j++)
+                        if (p[i] == p[j]) score += weights[i, j];
+                best = Math.Max(best, score);
+            }
+
+            var start = new int[nodes];    // no graph here, so the closure's start is the single cluster
+            PairLossSearch.Found found = PairLossSearch.Best(dense, theta, start, 4, field);
+            Assert.True(found.Score <= best + Exact);
+            if (found.Score < best - Exact)
+            {
+                misses++;
+                if (best > 0.0) worst = Math.Max(worst, (best - found.Score) / best);
+            }
+        }
+        Assert.True(misses <= 0.1 * fields, $"{misses} of {fields} fields short of the best partition");
+        Assert.True(worst <= 0.05, $"short by {worst} of the best score");
+    }
+
+    [Fact]
+    public void Search_PartsPlantedBlocks_WhereClosureChains()
+    {
+        // Blocks A and B of 20 and one bridge: each pair across reads 0.3, the bridge's ends 0.6 and A's other pairs at
+        // least 0.7. At θ = ½ the closure takes the bridge and joins all. The rule's score bounds any partition at 178.7,
+        // and a partition holding the bridge's ends together gives up 3.8 for 0.1, so the best is exactly A | B, at 178.6.
+        const int size = 20, nodes = 2 * size;
+        var run = new List<int>();
+        for (int copy = 0; copy < 3; copy++) run.AddRange(new int[nodes]);
+        for (int copy = 0; copy < 3; copy++)
+            for (int i = 0; i < nodes; i++)
+                run.Add(i == 0 || i == size ? 0 : i < size ? 1 : 2);
+        for (int copy = 0; copy < 4; copy++)
+            for (int i = 0; i < nodes; i++)
+                run.Add(i < size ? 0 : 1);
+        DenseCoMembership dense = DenseCoMembership.FromPartitions(nodes, [run.ToArray()]);
+
+        var edges = new List<(int, int, double)> { (0, size, 1.0) };
+        for (int i = 1; i < size; i++)
+        {
+            edges.Add((i - 1, i, 1.0));
+            edges.Add((size + i - 1, size + i, 1.0));
+        }
+        CsrGraph graph = Graph(nodes, edges.ToArray());
+        int[] closure = AffinityThreshold.Connect(graph, dense.EdgeColumn(graph), 0.5).Labels;
+        Assert.Single(closure.Distinct());
+
+        PairLossSearch.Found found = PairLossSearch.Best(dense, 0.5, closure, 4, 1);
+        Assert.Equal(178.6, found.Score, 1e-9);
+        for (int i = 0; i < nodes; i++)
+            Assert.Equal(i < size, found.Labels[i] == found.Labels[0]);
+    }
+
+    [Fact]
+    public void Polish_LeavesANodeAlone_WhenEveryClusterCostsIt()
+    {
+        // Node 0 reads 0.1 with {1, 2} and 0.2 with {3, 4}, so at θ = ½ its own cluster costs 0.8 and the other 0.6. Alone
+        // costs nothing, and moving to the cheaper cluster would still be a loss.
+        var run = new List<int>();
+        run.AddRange([0, 0, 0, 3, 3]);
+        for (int copy = 0; copy < 2; copy++) run.AddRange([0, 1, 1, 0, 0]);
+        for (int copy = 0; copy < 7; copy++) run.AddRange([0, 1, 1, 3, 3]);
+        DenseCoMembership dense = DenseCoMembership.FromPartitions(5, [run.ToArray()]);
+
+        PairLossSearch.Found found = PairLossSearch.Polished(dense, 0.5, [0, 0, 0, 3, 3]);
+
+        Assert.Equal(1.0, found.Score, Exact);    // {1, 2} and {3, 4}, at ½ each
+        Assert.Equal(3, found.Labels.Distinct().Count());
+        Assert.DoesNotContain(found.Labels[0], found.Labels.Skip(1));
+    }
+
+    [Fact]
+    public void Search_IsRepeatable_AndNoWorseThanClosure_OnASampledField()
+    {
+        CsrGraph graph = SwAccumulatorProbeTests.Random16();
+        Accumulator acc = Run(graph, 0.6, 20, new AccumulationSpec { PartitionEvery = 1 }, 2000, 11, 0);
+        DenseCoMembership dense = DenseCoMembership.FromPartitions(16, [acc.KeptPartitions!]);
+        int[] closure = AffinityThreshold.Connect(graph, dense.EdgeColumn(graph), 0.474).Labels;
+
+        PairLossSearch.Found a = PairLossSearch.Best(dense, 0.474, closure, 4, 7), b = PairLossSearch.Best(dense, 0.474, closure, 4, 7);
+        Assert.Equal(a.Labels, b.Labels);
+        Assert.Equal(a.Score, b.Score);
+        Assert.True(a.Score >= PairLossSearch.Score(dense, closure, 0.474) - Exact);
+    }
+
     // ── The sampler against the enumeration: the measure the checks assume is the one SW samples ──
 
     [Theory]
