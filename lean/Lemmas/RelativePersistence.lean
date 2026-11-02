@@ -25,7 +25,8 @@ filtration. Stated for any field; the engine's case is `ZMod 2`. A bar is a pair
 `IsLow R i j`, and `isLow_iff_of_reductions` makes that independent of the reduction, so the
 statements hold for whichever one an algorithm produces. The code this covers is
 `TDA.Ph.RelativeFiltration`, checked empirically by
-`RelativeBarcode_IsARereadingOfTheAbsoluteRunWithK0First`.
+`RelativeBarcode_IsARereadingOfTheAbsoluteRunWithK0First`. `RelativeHomology` proves that these bars
+are the persistent homology of the pair.
 -/
 
 namespace RelativePersistence
