@@ -47,6 +47,7 @@ internal static class BassKernelEnumeration
 
         internal Space(BassModel model, double inverseTemperature, List<BassTerm> terms, List<State> states)
         {
+            if (terms.Count >= (1 << 12) - 1) throw new ArgumentException("The keys hold ids below 4,095.", nameof(terms));
             Model = model;
             InverseTemperature = inverseTemperature;
             Terms = terms;
@@ -81,8 +82,8 @@ internal static class BassKernelEnumeration
 
         private static long Key(int[] ids)
         {
-            long key = ids.Length;
-            foreach (int id in ids) key = key * (1L << 20) + id + 1;
+            long key = ids.Length;   // 12 bits an id, so five terms and their count fit a long
+            foreach (int id in ids) key = key * (1L << 12) + id + 1;
             return key;
         }
     }
