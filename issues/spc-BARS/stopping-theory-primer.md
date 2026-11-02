@@ -290,6 +290,7 @@ entropy) suit it better.
 | C56 | At any q ≥ 1, τ_xy² is the probability that x and y share a block of the meet of two independent FK draws, and equals (q⟨δ(ρ_x, ρ_y)⟩ − 1)/(q − 1) for the replicas' difference field ρ | §13.14 | Derived here (mixture convolution); checked by enumeration at q = 2 and 3 | E19 |
 | C57 | `LineagePersistence`'s dependence on seed and grid comes from four separable defects: the representative, a score counted in levels, the ratio elbow and `GapThreshold`. With all four fixed, iris at K = 5 under a Gaussian reads its first stage on 12 of 12 seeds with ARI 1.000 between seeds at 8 × (1000, 2000) (a split one repair edge enforces there, §13.17; under a Cauchy at K = 10 that edge opens inside the grid and the resolver follows it, §13.16), and every density design returns the same partition. Which hierarchy level to report stays a modelling choice: the longest-lived reading depends on the grid's extent and on the graph, and a slice at T* holds across extent but is in one graph's units | §13.15, §13.16 | Observed (150 sweeps over 5 graphs, twice: resolver copy checked against the code on all of them; on the revised compiler the graphs are bit-identical bar five clamped bridges, and 134 sweeps byte-identical, §13.16); the defects hold on every graph probed over K and the coupling, the level, the share and T* are read on these graphs only. Built in `ad840ca` | Vary what the probe left fixed: the filter, repair, bandwidth rule, gauge, q and θ |
 | C58 | Under `BwdParityTests`' recipe (g = 1/K̂, Gaussian at the mean edge length) mean node strength is s̄ = ⟨κ⟩ ≈ e^(−1/2) whatever the data or K, so T_ps's fit and the hot end's S₂·N are one fact about the recipe, not independent evidence. On that recipe iris's setosa joins the rest by one repair edge at k = 5–40, open with probability at most 0.012 at the grid's cold end, so that split is the graph's | §13.17 | Identity derived here; 0.603–0.643 and the bridge read from the built graphs; no SPC | E20, the graph panel |
+| C59 | Across the filter, the repair, the bandwidth rule, `ScaleEdges`, the gauge, q and θ, `LineagePersistence`'s readings move with the graph, and its two provisional defaults don't: the midpoint beats the largest level in 1 of 133 cells, where neither passes, and no share beats 0.10 under the rule written first. The filter decides Landsat, the MAD bandwidth moves every dataset toward finer stages, and θ = 0.5 isn't q-free: δ̄ between two frozen blocks crosses θ at T = J/ln(θ(q − 1)/(1 − θ)), which moves faster with q than T_fs does, and θ = 0.6 restores Landsat at q = 5 | §13.18 | Observed (63 graphs, 133 cells, 12 seeds, one pass, mostly at the low budget, one generator seed: exploration); the two-block T derived, and it brackets the bridge on 9 of 9 Cauchy arms | E20; `auto` under a narrow bandwidth; the REPL's window |
 
 ---
 
@@ -2967,7 +2968,7 @@ the wide grid at 4 × (500, 1000):
 | The 5 above medium | −300.56, tied at the clamp | Never: δ̄ = 0.050 = 1/q at every level and seed |
 
 So the graph holds 24 fine clusters at T = 10⁻³, 20 at 10⁻⁵ and 17 at 10⁻⁶, the coldest level swept. The bridges on these
-edges clear 0.5 near T ≈ J/ln(1 + q), J/3 at q = 20, which fits the rows above and the Cauchy graph's: not J/ln 2, because
+edges clear 0.5 near T ≈ J/ln(1 + q) (J/ln(q − 1), §13.18, which differs little at q = 20), J/3 at q = 20, which fits the rows above and the Cauchy graph's: not J/ln 2, because
 joining two blocks costs a factor of q in the cluster count. So a whole medium stage would need T ≈ 10⁻⁹, and the five merges
 above it tie at T of order 10⁻³⁰¹, some 670 e-folds further, which leaves coarse no width at all.
 
@@ -3061,7 +3062,7 @@ Read against those:
 
 None of that puts a defect or the recommendation in doubt, so the build goes on. The scope is what changes: this is K and the coupling only, on one
 generator seed per synthetic dataset. The filter, the repair, the bandwidth rule, the gauge, q and θ weren't varied, and each of these readings could
-move with them.
+move with them; §13.18 varies them.
 
 **The verdict, and the decision.** On the revised compiler, none of the four defects changed, no reading or stage the recommendation relies on moved,
 and the largest-against-midpoint call stands. The user approved §13.15's recommendation on this condition, with one addition:
@@ -3222,3 +3223,332 @@ A claim about the data or the method needs more than one graph behind it, and sa
 **E20. The graph panel (not run).** The toy, BlattHierarchy, AnisotropicGaussian and Landsat at K ∈ {5, 10, 20}, Gaussian and Cauchy,
 with the recipe's gauge. Read the hot end's S₂·N, melts over T_ps, the cold end's S₂ and §13.12's stopping quantities, each under its
 graph line. Which of round 2's readings survive across the panel, and which belong to one graph?
+
+### 13.18 Addendum, 2026-11-02: `LineagePersistence` across the remaining graph settings (C59)
+
+§13.16 scoped its readings to K and the coupling, and said the filter, the repair, the bandwidth rule, the gauge, q and θ could each move them. This varies those, one at a time.
+
+**Neither default needs reconsidering on this evidence.** The largest level and the 0.10 share both stand under the criteria written before the sweeps, and 0.10 stays provisional. Nothing was changed. The readings themselves do move, and they follow the graph:
+
+| Setting | Moved | Held |
+|---|---|---|
+| Filter: OR for mutual | Landsat: 0 and 1 of 12 passing at K = 5 and 10, purity 0.58–0.59. Iris at K = 5: T_fs rises 14-fold, so that window reads the species. The toy's full window reads one lineage | Iris at K = 10 under both kernels. The toy at T_fs. BlattHierarchy |
+| Repair: none | Iris at K = 5: setosa in pieces. BlattHierarchy: fine only, ARI 0.88 | Landsat at T_fs. The toy. Iris's reading at K = 10 |
+| Bandwidth rule: MAD | Every dataset, toward finer stages. Iris at K = 5 reads the species on every window, Landsat 5 classes with 33–42% less covered, the toy fragments, BlattHierarchy medium or fine by seed. T\* falls by 6–55 times | Iris's reading at K = 10 |
+| `ScaleEdges`: before repair | Nothing beyond the noise | Every reading |
+| Gauge: none | On the same lens, graphs with K̂ ≥ 5 lose the hot end. On the lens × K̂, nothing | Every reading on that lens |
+| q: 5 and 40 | T\*, as 1/ln(q − 1). Landsat at K = 5 and q = 5: 3 of 12, purity 0.32, and 0 of 12 at the higher budget. θ = 0.6 restores it to 12 of 12 at both | Readings on iris at T_fs, the toy, BlattHierarchy. q = 40 everywhere |
+| θ: 0.3–0.7 | T\*. Landsat's counts. The toy at 0.7 | Iris and BlattHierarchy at all five |
+
+Two findings reach past the brief and are the user's to decide: `auto` stops short of Landsat's transition under the MAD bandwidth, and the REPL's [T_fs, T_ps] window reads something different from T_fs alone. Both are below.
+
+**What ran.** A build from an export of `aeebe0d`, read through `LineagePersistence.Resolve`, at 12 seeds (42, 1–11). One base sweep matches §13.16's cache byte for byte, and Landsat at K = 10 reproduces §13.16's row. Seven base graphs on the recipe (mutual, MST, mean edge length after repair, gauge 1/K̂, no LMP, q = 20), each changed one setting at a time. "Compiler defaults" sets K and the kernel only, so it changes several at once. θ runs on the base sweeps with no new sampling.
+- *Iris:* K = 5 and 10 under a Gaussian, K = 10 under a Cauchy. 96 log steps on [10⁻⁴, top of T_ps(q)'s bracket], at 4 × (500, 1000) and at 1 × (200, 400). Tables show the higher.
+- *The toy, Landsat:* T_ps(q)'s bracket with 48 levels, at 1 × (200, 400). The toy at K = 10, Landsat at K = 5 and 10.
+- *BlattHierarchy:* K = 5 under a Cauchy, 161 log steps on [10⁻⁶, top of the bracket], at 1 × (200, 400).
+- *Also:* no gauge on the lens × K̂, since the gauge is a rescaling of T. Graphs outside BWD's units on their own `auto` bracket, 48 levels, at 1 × (200, 400).
+
+That's 63 graphs and 133 cells, read in one pass as exploration. The criteria for "moved" and for bringing a default back were written first (`lineage-persistence/settings-probe/README.md`). A reading moved if the modal reading changes, its seeds fall by 3 or more of 12, or a median ARI or purity moves by 0.05 or more.
+
+The gauge gives that rule a yardstick. No gauge on the lens × K̂ is base's model on other draws, since the seed fold takes T's bits. The reading matches on all seven graphs, T_fs·K̂ within 9%. The gaps are up to 4 of 12 on a count near its threshold (iris's Cauchy graph, 7 against 11), 0.035 on ARI and 0.015 on purity. So 3 of 12 is about the noise on such a count.
+
+**The graphs, as resolved.** All are Euclidean kNN with `PathNeighbor` refinement (no effect under Euclidean distance), no LMP, a floor of 10⁻¹⁰, and q = 20 bar the two arms named for it. No gauge and q = 5, 40 change nothing below except the gauge or q.
+
+| Graph | Arm | Filter | Edges (K̂) | Largest component before repair | Repair edges | Components | Bandwidth rule | a | Cut by the floor | Scale edges | Gauge |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Iris, K = 5, Gaussian | Base | mutual | 262 (3.49) | 53% | 15 | 1 | mean edge | 0.3065 | 0 | after | 0.2863 |
+|  | OR filter | OR | 517 (6.89) | 65% | 1 | 1 | mean edge | 0.3896 | 0 | after | 0.1451 |
+|  | No repair | mutual | 247 (3.29) | 53% | 0 | 16 | mean edge | 0.2893 | 0 | after | 0.3036 |
+|  | MAD bandwidth | mutual | 262 (3.49) | 53% | 15 | 1 | MAD | 0.1212 | 0 | after | 0.2863 |
+|  | Scale before repair | mutual | 262 (3.49) | 53% | 15 | 1 | mean edge | 0.2893 | 0 | before | 0.2863 |
+|  | Compiler defaults | OR | 504 (6.72) | 65% | 1 | 1 | MAD | 0.1212 | 13 | before | none |
+| Iris, K = 10, Gaussian | Base | mutual | 528 (7.04) | 63% | 5 | 1 | mean edge | 0.3645 | 0 | after | 0.1421 |
+|  | OR filter | OR | 995 (13.27) | 67% | 1 | 1 | mean edge | 0.4754 | 0 | after | 0.0754 |
+|  | No repair | mutual | 523 (6.97) | 63% | 0 | 6 | mean edge | 0.3602 | 0 | after | 0.1434 |
+|  | MAD bandwidth | mutual | 525 (7.00) | 63% | 5 | 1 | MAD | 0.1414 | 3 | after | 0.1429 |
+|  | Scale before repair | mutual | 528 (7.04) | 63% | 5 | 1 | mean edge | 0.3602 | 0 | before | 0.1421 |
+|  | Compiler defaults | OR | 967 (12.89) | 67% | 1 | 1 | MAD | 0.1414 | 28 | before | none |
+| Iris, K = 10, Cauchy | Base | mutual | 528 (7.04) | 63% | 5 | 1 | mean edge | 0.3645 | 0 | after | 0.1421 |
+|  | OR filter | OR | 995 (13.27) | 67% | 1 | 1 | mean edge | 0.4754 | 0 | after | 0.0754 |
+|  | No repair | mutual | 523 (6.97) | 63% | 0 | 6 | mean edge | 0.3602 | 0 | after | 0.1434 |
+|  | MAD bandwidth | mutual | 528 (7.04) | 63% | 5 | 1 | MAD | 0.09535 | 0 | after | 0.1421 |
+|  | Scale before repair | mutual | 528 (7.04) | 63% | 5 | 1 | mean edge | 0.3602 | 0 | before | 0.1421 |
+|  | Compiler defaults | OR | 995 (13.27) | 67% | 1 | 1 | MAD | 0.09535 | 0 | before | none |
+| The toy, K = 10, Gaussian | Base | mutual | 12,655 (7.91) | 99% | 12 | 1 | mean edge | 0.1622 | 0 | after | 0.1264 |
+|  | OR filter | OR | 19,357 (12.10) | 100% | 0 | 1 | mean edge | 0.2206 | 0 | after | 0.0827 |
+|  | No repair | mutual | 12,643 (7.90) | 99% | 0 | 13 | mean edge | 0.162 | 0 | after | 0.1265 |
+|  | MAD bandwidth | mutual | 12,019 (7.51) | 99% | 12 | 56 | MAD | 0.05568 | 636 | after | 0.1331 |
+|  | Scale before repair | mutual | 12,655 (7.91) | 99% | 12 | 1 | mean edge | 0.162 | 0 | before | 0.1264 |
+|  | Compiler defaults | OR | 14,747 (9.22) | 100% | 0 | 57 | MAD | 0.05568 | 2109 | before | none |
+| Landsat, K = 5, Gaussian | Base | mutual | 9,048 (2.81) | 78% | 983 | 1 | mean edge | 22.71 | 0 | after | 0.3556 |
+|  | OR filter | OR | 24,284 (7.55) | 99% | 0 | 1 | mean edge | 24.8 | 0 | after | 0.1325 |
+|  | No repair | mutual | 8,065 (2.51) | 78% | 0 | 984 | mean edge | 22.32 | 0 | after | 0.3990 |
+|  | MAD bandwidth | mutual | 8,925 (2.77) | 78% | 983 | 66 | MAD | 6.732 | 123 | after | 0.3605 |
+|  | Scale before repair | mutual | 9,048 (2.81) | 78% | 983 | 1 | mean edge | 22.32 | 0 | before | 0.3556 |
+|  | Compiler defaults | OR | 15,742 (4.89) | 99% | 0 | 177 | MAD | 6.732 | 524 | before | none |
+| Landsat, K = 10, Gaussian | Base | mutual | 17,109 (5.32) | 95% | 282 | 1 | mean edge | 23.84 | 0 | after | 0.1881 |
+|  | OR filter | OR | 47,850 (14.87) | 100% | 0 | 1 | mean edge | 26.59 | 0 | after | 0.0672 |
+|  | No repair | mutual | 16,827 (5.23) | 95% | 0 | 283 | mean edge | 23.77 | 0 | after | 0.1912 |
+|  | MAD bandwidth | mutual | 16,872 (5.24) | 95% | 282 | 36 | MAD | 7.762 | 237 | after | 0.1907 |
+|  | Scale before repair | mutual | 17,109 (5.32) | 95% | 282 | 1 | mean edge | 23.77 | 0 | before | 0.1881 |
+|  | Compiler defaults | OR | 31,459 (9.78) | 100% | 0 | 51 | MAD | 7.762 | 853 | before | none |
+| BlattHierarchy, K = 5, Cauchy | Base | mutual | 2,169 (3.62) | 4% | 82 | 1 | mean edge | 0.08313 | 0 | after | 0.2766 |
+|  | OR filter | OR | 3,933 (6.55) | 8% | 20 | 1 | mean edge | 0.1059 | 0 | after | 0.1526 |
+|  | No repair | mutual | 2,087 (3.48) | 4% | 0 | 83 | mean edge | 0.06391 | 0 | after | 0.2875 |
+|  | MAD bandwidth | mutual | 2,169 (3.62) | 4% | 82 | 1 | MAD | 0.02741 | 0 | after | 0.2766 |
+|  | Scale before repair | mutual | 2,169 (3.62) | 4% | 82 | 1 | mean edge | 0.06391 | 0 | before | 0.2766 |
+|  | Compiler defaults | OR | 3,933 (6.55) | 8% | 20 | 1 | MAD | 0.02741 | 0 | before | none |
+
+`auto`, as `AutoBracket` resolves it. `T_ps` marks BWD's q-only bracket, and the rest are edge statistics over the gauge.
+
+| Graph | Base | OR filter | No repair | Scale before repair | MAD bandwidth | No gauge | q = 5 | q = 40 | Compiler defaults |
+|---|---|---|---|---|---|---|---|---|---|
+| Iris, K = 5, Gaussian | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | [1.16·10⁻⁴, 0.0116] | [0.0222, 2.22] | T_ps [0.00646, 0.516] | T_ps [0.00381, 0.305] | [1.2·10⁻⁴, 0.012] |
+| Iris, K = 10, Gaussian | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | [1.1·10⁻⁴, 0.011] | [0.0442, 4.42] | T_ps [0.00646, 0.516] | T_ps [0.00381, 0.305] | [1.41·10⁻⁴, 0.0141] |
+| Iris, K = 10, Cauchy | [0.00451, 0.451] | [0.00477, 0.477] | [0.00461, 0.461] | [0.00441, 0.441] | [1.11·10⁻⁴, 0.0111] | [0.0317, 3.17] | [0.00839, 0.839] | [0.00366, 0.366] | [6.62·10⁻⁴, 0.0662] |
+| The toy, K = 10, Gaussian | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | [1.05·10⁻⁴, 0.0105] | [0.0564, 5.64] | T_ps [0.00646, 0.516] | T_ps [0.00381, 0.305] | [3.58·10⁻⁴, 0.0358] |
+| Landsat, K = 5, Gaussian | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | [3.6·10⁻⁶, 3.6·10⁻⁴] | [0.019, 1.9] | T_ps [0.00646, 0.516] | T_ps [0.00381, 0.305] | [9.57·10⁻⁶, 9.57·10⁻⁴] |
+| Landsat, K = 10, Gaussian | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | T_ps [0.00446, 0.357] | [1.6·10⁻⁵, 0.0016] | [0.0364, 3.64] | T_ps [0.00646, 0.516] | T_ps [0.00381, 0.305] | [7.3·10⁻⁵, 0.0073] |
+| BlattHierarchy, K = 5, Cauchy | [0.00689, 0.689] | [0.00604, 0.604] | [0.0049, 0.49] | [0.00466, 0.466] | [6.5·10⁻⁴, 0.065] | [0.0249, 2.49] | [0.0128, 1.28] | [0.00559, 0.559] | [0.0016, 0.16] |
+
+The edge joining setosa to the rest: how many, and J.
+
+| Graph | Base | OR filter | No repair | Scale before repair | MAD bandwidth | No gauge | q = 5 | q = 40 | Compiler defaults |
+|---|---|---|---|---|---|---|---|---|---|
+| Iris, K = 5, Gaussian | 1: 1.7·10⁻⁷ | 1: 2.1·10⁻⁵ | none | 1: 3·10⁻⁸ | 1: 4.9·10⁻⁴¹ | 1: 6.1·10⁻⁷ | 1: 1.7·10⁻⁷ | 1: 1.7·10⁻⁷ | 1: 1.7·10⁻⁴⁰ |
+| Iris, K = 10, Gaussian | 1: 5.7·10⁻⁶ | 1: 2·10⁻⁴ | none | 1: 4.5·10⁻⁶ | 1: 8.4·10⁻³¹ | 1: 4·10⁻⁵ | 1: 5.7·10⁻⁶ | 1: 5.7·10⁻⁶ | 1: 5.9·10⁻³⁰ |
+| Iris, K = 10, Cauchy | 1: 0.0067 | 1: 0.0058 | none | 1: 0.0065 | 1: 4.8·10⁻⁴ | 1: 0.047 | 1: 0.0067 | 1: 0.0067 | 1: 0.0034 |
+
+**The readings.** Read through the built resolver at θ = 0.5 and the 0.10 share, largest level unless the column says otherwise. `auto` rows are at the low budget. Iris's readings use §13.16's labels, with "pieces" for setosa in pieces. The T\* column lists the slices reading setosa plus the species on at least 9 of 12 seeds, on a ladder of every third level, about 1.3 times apart.
+
+*Iris, K = 5, Gaussian.*
+
+| Arm | T_fs, T_ps (seeds with a cliff, if not 12) | T_fs window: reading | ARI to 50/100: largest, midpoint | Full window: reading; seeds `ColdCensored` | [T_fs, T_ps]: reading | Species at T* (≥ 9 seeds) |
+|---|---|---|---|---|---|---|
+| Base | 0.00442, 0.038 | setosa + pair (12) | 0.965, 0.855 | setosa + pair (12); 12 | setosa + pair (12) | 0.0493–0.0638 |
+| OR filter | 0.0611, 0.0826 | setosa + species (11), setosa + pair (1) | 0.293, 0.257 | setosa + pair (12); 12 | setosa + pair (12) | 0.0826 |
+| No repair | 0.0515, 0.0826 | pieces + species (12) | 0.107, 0.084 | pieces + pair (12); 12 | pieces + species (12) | 0.0493–0.0826, setosa in pieces |
+| Scale before repair | 0.00341, 0.038 | setosa + pair (12) | 0.965, 0.855 | setosa + pair (12); 12 | setosa + pair (12) | 0.0493–0.0638 |
+| MAD bandwidth | 4.92·10⁻⁴, 0.00171 | setosa + species (11), setosa + one species (1) | 0.319, 0.255 | setosa + species (11), setosa + one species (1); 12 | setosa + species (12) | 4.71·10⁻⁴–0.00222 |
+| No gauge | 0.0154, 0.127 | setosa + pair (12) | 0.965, 0.855 | setosa + pair (12); 12 | setosa + pair (12) | 0.179–0.232 |
+| q = 5 | 0.00524, 0.0544 | setosa + pair (12) | 1.000, 0.938 | setosa + pair (12); 12 | setosa + pair (12) | 0.112–0.147 |
+| q = 40 | 0.00411, 0.0325 | setosa + pair (12) | 0.965, 0.855 | setosa + pair (12); 12 | setosa + pair (12) | 0.0437 |
+| Compiler defaults | 1.29·10⁻⁴, 0.00807 | setosa + pair (12) | 0.734, 0.683 | setosa + pair (12); 12 | setosa + pair (12) | 0.00287–0.00807 |
+| No gauge, × K̂ lens | 0.0155, 0.133 | setosa + pair (12) | 0.965, 0.855 | setosa + pair (12); 12 | setosa + pair (12) | 0.172–0.223 |
+| MAD bandwidth, `auto` | 4.59·10⁻⁴, 0.00164 | setosa + species (9), setosa + one species (3) | 0.319, 0.251 | setosa + species (9), setosa + one species (3); 12 | setosa + species (12) | 5.06·10⁻⁴–0.0022 |
+| No gauge, `auto` | 0.0234, 0.143 | setosa + pair (12) | 0.947, 0.855 | setosa + pair (12); 12 | setosa + pair (12) | 0.313, setosa in pieces |
+| Compiler defaults, `auto` | 1.54·10⁻⁴, 0.00813 | setosa + pair (8), setosa + species (4) | 0.720, 0.676 | setosa + pair (12); 12 | setosa + pair (8), setosa + species (4) | 0.00305–0.00737 |
+
+*Iris, K = 10, Gaussian.*
+
+| Arm | T_fs, T_ps (seeds with a cliff, if not 12) | T_fs window: reading | ARI to 50/100: largest, midpoint | Full window: reading; seeds `ColdCensored` | [T_fs, T_ps]: reading | Species at T* (≥ 9 seeds) |
+|---|---|---|---|---|---|---|
+| Base | 0.00373, 0.0585 | setosa + pair (12) | 1.000, 0.815 | setosa + pair (12); 12 | setosa + pair (12) | 0.107 |
+| OR filter | 0.0168, 0.09 | setosa + pair (12) | 1.000, 0.947 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| No repair | 0.0124, 0.0638 | setosa + pair (12) | 0.831, 0.791 | setosa + pair (12); 12 | setosa + pair (12) | 0.107 |
+| Scale before repair | 0.00372, 0.0585 | setosa + pair (12) | 1.000, 0.815 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| MAD bandwidth | 10⁻⁴, 0.00442 | setosa + pair (12) | 0.748, 0.676 | setosa + pair (12); 12 | setosa + pair (12) | 0.00372–0.00482 |
+| No gauge | none (0) | setosa + pair (12) | 1.000, 1.000 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| q = 5 | 0.00438, 0.0934 | setosa + pair (12) | 1.000, 0.839 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| q = 40 | 0.00377, 0.0475 | setosa + pair (12) | 1.000, 0.815 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| Compiler defaults | 0.00121, 0.0349 | setosa + pair (12) | 0.734, 0.668 | setosa + pair (12); 12 | setosa + pair (12) | 0.0294–0.038 |
+| No gauge, × K̂ lens | 0.0285, 0.412 | setosa + pair (12) | 1.000, 0.815 | setosa + pair (12); 12 | setosa + pair (12) | 0.753 |
+| MAD bandwidth, `auto` | 1.1·10⁻⁴, 0.00454 | setosa + pair (12) | 0.720, 0.676 | setosa + pair (12); 12 | setosa + pair (12) | 0.00373–0.00501 |
+| No gauge, `auto` | 0.0442, 0.421 | setosa + pair (12) | 0.982, 0.815 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| Compiler defaults, `auto` | none (0) | setosa + pair (12) | 0.855, 0.734 | setosa + pair (12); 12 | setosa + pair (12) | None |
+
+*Iris, K = 10, Cauchy.*
+
+| Arm | T_fs, T_ps (seeds with a cliff, if not 12) | T_fs window: reading | ARI to 50/100: largest, midpoint | Full window: reading; seeds `ColdCensored` | [T_fs, T_ps]: reading | Species at T* (≥ 9 seeds) |
+|---|---|---|---|---|---|---|
+| Base | 0.0114, 0.0537 | setosa + pair (12) | 0.930, 0.783 | setosa + pair (12); 0 | setosa + pair (12) | 0.0826 |
+| OR filter | 0.032, 0.0757 | setosa + pair (12) | 1.000, 0.896 | setosa + pair (12); 0 | setosa + pair (12) | None |
+| No repair | 0.0092, 0.0585 | setosa + pair (12) | 0.896, 0.791 | setosa + pair (12); 12 | setosa + pair (12) | 0.0826 |
+| Scale before repair | 0.0114, 0.0537 | setosa + pair (12) | 0.930, 0.783 | setosa + pair (12); 0 | setosa + pair (12) | None |
+| MAD bandwidth | 0.00102, 0.0068 | setosa + pair (12) | 0.896, 0.783 | setosa + pair (12); 0 | setosa + pair (12) | 0.0135 |
+| No gauge | none (0) | one lineage of 150 (12) | 0.000, 0.000 | one lineage of 150 (12); 12 | one lineage of 150 (12) | None |
+| q = 5 | 0.0232, 0.0934 | setosa + pair (12) | 0.965, 0.783 | one lineage of 150 (12); 12 | setosa + pair (12) | None |
+| q = 40 | 0.00878, 0.0437 | setosa + pair (12) | 0.965, 0.783 | setosa + pair (12); 0 | setosa + pair (12) | None |
+| Compiler defaults | 0.0227, 0.107 | setosa + pair (12) | 1.000, 0.904 | setosa + pair (12); 0 | setosa + pair (12) | None |
+| No gauge, × K̂ lens | 0.0769, 0.378 | setosa + pair (12) | 0.965, 0.783 | setosa + pair (12); 0 | setosa + pair (12) | 0.581 |
+| Base, `auto` | 0.0109, 0.0522 | setosa + pair (12) | 0.965, 0.787 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| OR filter, `auto` | 0.0307, 0.0741 | setosa + pair (12) | 1.000, 0.909 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| No repair, `auto` | 0.0101, 0.0589 | setosa + pair (12) | 0.879, 0.799 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| Scale before repair, `auto` | 0.0117, 0.0511 | setosa + pair (12) | 0.960, 0.783 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| MAD bandwidth, `auto` | 0.00111, 0.00677 | setosa + pair (12) | 0.896, 0.800 | setosa + pair (12); 0 | setosa + pair (12) | None |
+| No gauge, `auto` | 0.0766, 0.367 | setosa + pair (12) | 0.951, 0.783 | setosa + pair (12); 12 | setosa + pair (12) | 0.6 |
+| q = 5, `auto` | 0.0223, 0.0881 | setosa + pair (12) | 0.982, 0.791 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| q = 40, `auto` | 0.00884, 0.0424 | setosa + pair (12) | 0.960, 0.783 | setosa + pair (12); 12 | setosa + pair (12) | None |
+| Compiler defaults, `auto` | none (0) | setosa + pair (12) | 1.000, 1.000 | setosa + pair (12); 0 | setosa + pair (12) | None |
+
+*Landsat.* Passing is at least 4 clusters of 50 or more at purity ≥ 0.85, §13.16's count. The test is what `BwdParityTests` asserts, counted over the 12 seeds: at least 6 such clusters, with purity ≥ 0.80 and 1,900 covered for the largest, 0.85 and 1,400 for the midpoint.
+
+K = 5:
+
+| Arm | T_fs, T_ps | Largest, 0.10: passing, test; purity; covered; classes | Midpoint, 0.10: same | Largest, passing at size rule, 0.10, 0.15, 0.25 | Midpoint, same | Full window: passing | [T_fs, T_ps], largest: passing; purity |
+|---|---|---|---|---|---|---|---|
+| Base | 0.0731, 0.0881 | 11, 12; 0.91; 2,391; 6 | 12, 12; 0.92; 1,720; 6 | 12, 11, 10, 9 | 12, 12, 12, 12 | 0 | 5; 0.80 |
+| OR filter | 0.0881, 0.0967 | 0, 0; 0.59; 4,148; 4 | 0, 0; 0.58; 3,389; 4 | 0, 0, 0, 0 | 0, 0, 0, 0 | 0 | 0; 0.59 |
+| No repair | 0.0881, 0.0967 | 12, 11; 0.90; 2,326; 6 | 12, 12; 0.91; 1,678; 6 | 12, 12, 7, 5 | 12, 12, 12, 12 | 0 | 3; 0.81 |
+| Scale before repair | 0.0731, 0.0881 | 12, 12; 0.90; 2,520; 6 | 12, 11; 0.91; 1,721; 6 | 12, 12, 11, 7 | 12, 12, 12, 12 | 0 | 8; 0.86 |
+| MAD bandwidth | 0.00446, 0.00537 | 12, 0; 0.93; 1,394; 5 | 12, 0; 0.95; 945; 5 | 12, 12, 12, 11 | 12, 12, 12, 12 | 12 | 11; 0.93 |
+| No gauge | 0.224, 0.246 | 12, 12; 0.89; 2,646; 6 | 12, 12; 0.92; 2,036; 6 | 12, 12, 8, 8 | 12, 12, 12, 12 | 0 | 6; 0.84 |
+| q = 5 | 0.106, 0.128 | 3, 3; 0.32; 5,428; 2 | 3, 3; 0.32; 4,924; 2 | 6, 3, 5, 5 | 7, 3, 5, 5 | 0 | 0; 0.32 |
+| q = 40 | 0.0624, 0.0752 | 12, 11; 0.91; 2,314; 6 | 12, 12; 0.93; 1,602; 6 | 12, 12, 12, 9 | 12, 12, 12, 12 | 0 | 7; 0.86 |
+| Compiler defaults | 0.0173, 0.0218 | 12, 0; 0.93; 1,661; 5 | 12, 0; 0.94; 1,162; 5 | 12, 12, 12, 12 | 12, 12, 12, 12 | 12 | 12; 0.93 |
+| No gauge, × K̂ lens | 0.216, 0.248 | 12, 12; 0.90; 2,504; 6 | 12, 12; 0.92; 1,804; 6 | 12, 12, 9, 7 | 12, 12, 12, 12 | 0 | 6; 0.85 |
+| MAD bandwidth, `auto` | 1.22·10⁻⁴, 3.6·10⁻⁴ (8) | 0, 0; 0.56; 4,501; 3 | 0, 0; 0.56; 4,266; 3 | 0, 0, 0, 0 | 0, 0, 0, 0 | 0 | 0; 0.56 |
+| No gauge, `auto` | 0.221, 0.243 | 12, 12; 0.91; 2,576; 6 | 12, 12; 0.92; 1,958; 6 | 12, 12, 12, 7 | 12, 12, 12, 12 | 0 | 8; 0.87 |
+| Compiler defaults, `auto` | none (0) | 0, 0; 0.32; 5,422; 2 | 0, 0; 0.32; 5,209; 2 | 0, 0, 0, 0 | 0, 0, 0, 0 | 0 | 0; 0.32 |
+
+K = 10:
+
+| Arm | T_fs, T_ps | Largest, 0.10: passing, test; purity; covered; classes | Midpoint, 0.10: same | Largest, passing at size rule, 0.10, 0.15, 0.25 | Midpoint, same | Full window: passing | [T_fs, T_ps], largest: passing; purity |
+|---|---|---|---|---|---|---|---|
+| Base | 0.0967, 0.117 | 9, 7; 0.94; 2,289; 6 | 2, 2; 0.64; 2,516; 4 | 4, 9, 9, 11 | 4, 2, 2, 10 | 0 | 0; 0.59 |
+| OR filter | 0.0881, 0.106 | 1, 0; 0.58; 4,262; 4 | 1, 0; 0.59; 3,936; 4 | 1, 1, 1, 0 | 1, 1, 1, 1 | 0 | 0; 0.57 |
+| No repair | 0.0967, 0.117 | 8, 6; 0.91; 2,438; 6 | 6, 5; 0.79; 2,300; 4 | 7, 8, 8, 9 | 7, 6, 6, 8 | 0 | 0; 0.59 |
+| Scale before repair | 0.0967, 0.117 | 7, 6; 0.89; 2,202; 5 | 3, 2; 0.64; 2,394; 4 | 5, 7, 7, 9 | 5, 3, 3, 9 | 0 | 1; 0.59 |
+| MAD bandwidth | 0.0094, 0.0113 | 12, 0; 0.93; 1,538; 5 | 12, 0; 0.94; 1,093; 5 | 12, 12, 12, 11 | 12, 12, 12, 12 | 12 | 12; 0.93 |
+| No gauge | 0.27, 0.325 (7) | 0, 0; 0.25; 5,032; 1 | 0, 0; 0.33; 4,862; 2 | 0, 0, 0, 0 | 0, 0, 0, 0 | 0 | 0; 0.25 |
+| q = 5 | 0.14, 0.169 | 9, 9; 0.93; 2,758; 6 | 2, 2; 0.66; 2,908; 4 | 11, 9, 9, 9 | 11, 2, 0, 8 | 0 | 0; 0.58 |
+| q = 40 | 0.0752, 0.0906 | 7, 7; 0.88; 2,254; 5 | 4, 3; 0.62; 2,302; 4 | 7, 7, 7, 7 | 7, 4, 5, 6 | 0 | 0; 0.58 |
+| Compiler defaults | 0.00446, 0.0094 | 0, 0; 0.55; 4,280; 3 | 0, 0; 0.58; 3,366; 4 | 0, 0, 0, 0 | 0, 0, 0, 0 | 0 | 0; 0.57 |
+| No gauge, × K̂ lens | 0.514, 0.592 | 8, 6; 0.94; 2,113; 6 | 4, 4; 0.65; 2,358; 4 | 4, 8, 8, 10 | 4, 4, 4, 10 | 0 | 0; 0.59 |
+| MAD bandwidth, `auto` | 6.62·10⁻⁴, 0.00145 | 0, 0; 0.57; 4,466; 3 | 0, 0; 0.57; 4,204; 3 | 0, 0, 0, 0 | 0, 0, 0, 0 | 0 | 0; 0.57 |
+| No gauge, `auto` | 0.514, 0.625 | 9, 8; 0.94; 2,091; 6 | 3, 3; 0.60; 2,347; 4 | 3, 9, 9, 10 | 3, 3, 3, 8 | 0 | 0; 0.59 |
+| Compiler defaults, `auto` | none (0) | 0, 0; 0.32; 5,722; 2 | 0, 0; 0.32; 5,410; 2 | 0, 0, 0, 0 | 0, 0, 0, 0 | 0 | 0; 0.32 |
+
+*The toy, K = 10.* The test is 3 or more clusters, the top two ≥ 900, the third ≥ 450, and 2,700 assigned.
+
+| Arm | T_fs, T_ps | T_fs window, largest: test; clusters; ARI | Midpoint: same | Full window: test; clusters; ARI; seeds `ColdCensored` | [T_fs, T_ps]: test; clusters; ARI |
+|---|---|---|---|---|---|
+| Base | 0.0251, 0.0504 | 12; 3; 0.689 | 9; 3; 0.703 | 12; 4; 0.680; 12 | 12; 3; 0.692 |
+| OR filter | 0.0607, 0.0881 | 12; 3; 0.688 | 12; 3; 0.695 | 0; 1; 0.000; 12 | 12; 3; 0.688 |
+| No repair | 0.0251, 0.0504 | 12; 3; 0.691 | 10; 3; 0.704 | 12; 4; 0.680; 11 | 12; 3; 0.692 |
+| Scale before repair | 0.0239, 0.0504 | 12; 3; 0.689 | 9; 3; 0.704 | 12; 4; 0.680; 12 | 12; 3; 0.690 |
+| MAD bandwidth | 0.00446, 0.0059 | 0; 19; 0.088 | 0; 19; 0.066 | 0; 19; 0.088; 12 | 0; 18; 0.095 |
+| No gauge | none (0) | 0; 1; 0.002 | 0; 1; 0.004 | 0; 1; 0.002; 12 | 0; 1; 0.002 |
+| q = 5 | 0.0417, 0.0729 | 12; 3; 0.686 | 12; 3; 0.701 | 11; 4; 0.677; 6 | 12; 3; 0.686 |
+| q = 40 | 0.0204, 0.0411 | 12; 3; 0.689 | 9; 3; 0.703 | 12; 4; 0.680; 11 | 12; 3; 0.694 |
+| Compiler defaults | 0.00446, 0.00711 | 0; 20; 0.147 | 0; 20; 0.101 | 0; 20; 0.147; 0 | 0; 6; 0.493 |
+| No gauge, × K̂ lens | 0.189, 0.398 | 12; 3; 0.692 | 11; 3; 0.704 | 12; 4; 0.680; 12 | 12; 3; 0.694 |
+| MAD bandwidth, `auto` | 1.05·10⁻⁴, 2.79·10⁻⁴ | 0; 13; 0.409 | 0; 13; 0.386 | 0; 13; 0.409; 12 | 12; 3; 0.704 |
+| No gauge, `auto` | 0.201, 0.4 | 12; 3; 0.689 | 7; 3; 0.704 | 12; 3; 0.679; 0 | 12; 3; 0.694 |
+| Compiler defaults, `auto` | 3.58·10⁻⁴, 0.00209 | 2; 6; 0.586 | 0; 6; 0.583 | 2; 6; 0.586; 12 | 12; 3; 0.700 |
+
+*BlattHierarchy, K = 5, Cauchy.* The full window reads as T_fs does on every arm.
+
+| Arm | T_fs, T_ps | T_fs and full windows, largest: reading; clusters; ARI coarse/medium/fine | Midpoint ARI | Full: seeds `ColdCensored` | [T_fs, T_ps] | T* bands (≥ 11 seeds) |
+|---|---|---|---|---|---|---|
+| Base | 1.19·10⁻⁵, 2.08·10⁻⁵ | medium (12); 6; 0.332/1.000/0.353 | 0.332/1.000/0.353 | 0 | coarse (12); 2; 1.000/0.332/0.082 | coarse 5.36·10⁻⁶–2.87·10⁻⁵ ; medium 3.64·10⁻⁵–0.00347 ; fine 0.0044–0.0994 |
+| OR filter | 1.1·10⁻⁵, 1.92·10⁻⁵ | medium (12); 6; 0.332/1.000/0.353 | 0.332/1.000/0.353 | 0 | coarse (12); 2; 1.000/0.332/0.082 | coarse 5.36·10⁻⁶–2.26·10⁻⁵ ; medium 2.87·10⁻⁵–0.00273 ; fine 0.0044–0.0994 |
+| No repair | 10⁻⁶, 0.0277 | fine (12); 25; 0.066/0.291/0.884 | 0.066/0.291/0.884 | 12 | fine (12); 25; 0.066/0.291/0.884 | coarse – ; medium – ; fine 10⁻⁶–0.0782 |
+| Scale before repair | 7.09·10⁻⁶, 1.19·10⁻⁵ | medium (12); 6; 0.332/1.000/0.353 | 0.332/1.000/0.353 | 0 | coarse (12); 2; 1.000/0.332/0.082 | coarse 3.32·10⁻⁶–1.4·10⁻⁵ ; medium 2.26·10⁻⁵–0.00215 ; fine 0.00273–0.0782 |
+| MAD bandwidth | 1.38·10⁻⁶, 2.22·10⁻⁶ | medium (7), fine (5); 16; 0.205/0.729/0.533 | 0.200/0.717/0.515 | 0 | coarse (12); 2; 1.000/0.332/0.082 | coarse 10⁻⁶–2.61·10⁻⁶ ; medium 4.21·10⁻⁶–4.01·10⁻⁴ ; fine 5.09·10⁻⁴–0.03 |
+| No gauge | 4.63·10⁻⁵, 7.48·10⁻⁵ | medium (12); 6; 0.332/1.000/0.353 | 0.332/1.000/0.353 | 0 | coarse (12); 2; 1.000/0.332/0.082 | coarse 2.26·10⁻⁵–9.51·10⁻⁵ ; medium 1.54·10⁻⁴–0.0115 ; fine 0.0146–0.329 |
+| q = 5 | 1.78·10⁻⁵, 3.43·10⁻⁵ | medium (12); 6; 0.332/1.000/0.353 | 0.332/1.000/0.353 | 0 | coarse (12); 2; 1.000/0.332/0.082 | coarse 1.18·10⁻⁵–5.18·10⁻⁵ ; medium 8.48·10⁻⁵–0.00718 ; fine 0.00919–0.177 |
+| q = 40 | 9.11·10⁻⁶, 1.71·10⁻⁵ | medium (12); 6; 0.332/1.000/0.353 | 0.332/1.000/0.353 | 0 | coarse (12); 2; 1.000/0.332/0.082 | coarse 5.24·10⁻⁶–2.17·10⁻⁵ ; medium 2.75·10⁻⁵–0.00247 ; fine 0.00397–0.068 |
+| Compiler defaults | 4.39·10⁻⁶, 8.32·10⁻⁶ | fine (12); 21; 0.124/0.497/0.786 | 0.123/0.495/0.782 | 0 | coarse (12); 2; 1.000/0.332/0.082 | coarse 2.05·10⁻⁶–8.65·10⁻⁶ ; medium 1.4·10⁻⁵–0.00133 ; fine 0.00169–0.16 |
+| No gauge, × K̂ lens | 4.48·10⁻⁵, 8.16·10⁻⁵ | medium (12); 6; 0.332/1.000/0.353 | 0.332/1.000/0.353 | 0 | coarse (12); 2; 1.000/0.332/0.082 | coarse 2.46·10⁻⁵–8.16·10⁻⁵ ; medium 1.32·10⁻⁴–0.0125 ; fine 0.0159–0.359 |
+| Base, `auto` | 0.00689, 0.0246 | fine (12); 25; 0.080/0.344/0.985 | 0.071/0.313/0.928 | 12 | fine (12); 24; 0.082/0.352/0.997 | coarse – ; medium – ; fine 0.00689–0.0971 |
+| OR filter, `auto` | 0.00604, 0.0575 | fine (12); 24; 0.082/0.353/1.000 | 0.082/0.352/0.998 | 12 | fine (12); 24; 0.082/0.353/1.000 | coarse – ; medium – ; fine 0.00604–0.0851 |
+| No repair, `auto` | 0.0049, 0.0286 | fine (12); 26; 0.065/0.288/0.879 | 0.061/0.274/0.851 | 12 | fine (12); 25; 0.066/0.290/0.885 | coarse – ; medium – ; fine 0.0049–0.0691 |
+| Scale before repair, `auto` | 0.00466, 0.0184 | fine (12); 25; 0.080/0.344/0.985 | 0.070/0.308/0.919 | 12 | fine (12); 24; 0.082/0.351/0.997 | coarse – ; medium – ; fine 0.00466–0.0656 |
+| MAD bandwidth, `auto` | 6.5·10⁻⁴, 0.00256 | fine (12); 25; 0.080/0.345/0.985 | 0.069/0.305/0.913 | 12 | fine (12); 24; 0.082/0.353/0.998 | coarse – ; medium – ; fine 6.5·10⁻⁴–0.0297 |
+| No gauge, `auto` | 0.0249, 0.089 | fine (12); 25; 0.080/0.344/0.985 | 0.071/0.312/0.926 | 12 | fine (12); 24; 0.082/0.352/0.998 | coarse – ; medium – ; fine 0.0249–0.351 |
+| q = 5, `auto` | 0.0128, 0.0342 | fine (12); 25; 0.080/0.345/0.986 | 0.073/0.321/0.943 | 12 | fine (12); 24; 0.082/0.353/0.998 | coarse – ; medium – ; fine 0.0128–0.181 |
+| q = 40, `auto` | 0.00559, 0.0221 | fine (12); 25; 0.080/0.344/0.984 | 0.071/0.311/0.924 | 12 | fine (12); 24; 0.082/0.352/0.997 | coarse – ; medium – ; fine 0.00559–0.0788 |
+| Compiler defaults, `auto` | 0.0016, 0.00262 | fine (12); 24; 0.082/0.353/1.000 | 0.081/0.350/0.995 | 12 | fine (12); 21; 0.106/0.439/0.854 | coarse – ; medium – ; fine 0.00215–0.132 |
+
+*θ on the base sweeps, T_fs window.*
+
+| θ | Iris K = 5: reading; ARI to 50/100 | Iris K = 10 Cauchy | Landsat K = 5, largest: passing, test; purity | Landsat K = 10 | Toy: test; clusters; ARI | BlattHierarchy: reading; ARI to medium |
+|---|---|---|---|---|---|---|
+| 0.3 | setosa + pair (12); 0.965 | setosa + pair (12); 1.000 | 9, 9; 0.90 | 5, 4; 0.65 | 12; 3; 0.685 | medium (12); 1.000 |
+| 0.4 | setosa + pair (12); 0.965 | setosa + pair (12); 0.965 | 9, 11; 0.90 | 7, 7; 0.91 | 12; 3; 0.689 | medium (12); 1.000 |
+| 0.5 | setosa + pair (12); 0.965 | setosa + pair (12); 0.930 | 11, 12; 0.91 | 9, 7; 0.94 | 12; 3; 0.689 | medium (12); 1.000 |
+| 0.6 | setosa + pair (12); 0.965 | setosa + pair (12); 0.888 | 12, 10; 0.92 | 6, 6; 0.80 | 12; 3; 0.693 | medium (12); 1.000 |
+| 0.7 | setosa + pair (12); 0.947 | setosa + pair (12); 0.888 | 12, 8; 0.91 | 7, 5; 0.91 | 10; 4; 0.619 | medium (12); 1.000 |
+
+**Read against those, setting by setting.**
+- **The filter decides Landsat.** Under OR it reads about 5 clusters holding 4 classes at either K, with purity 0.58–0.59, and the midpoint reads the same. It isn't density: OR at K = 5 has K̂ = 7.55, and the mutual graph at K = 20 has K̂ = 10.64 and passes on 8 of 12 (§13.16). The filter also moves T_fs on iris at K = 5, from 0.0044 to 0.061 (T_ps 0.083). T_fs then sits above the pair's stage, so that window reads the species on 11 of 12, while the full window and [T_fs, T_ps] still read the pair. There the window is doing the reading, as §13.16 found on the Cauchy graph. At K = 10 the pair's stage is wide enough that T_fs stays inside it.
+- **Repair links what the kNN graph doesn't, and only that.** On Landsat, with 984 components, and on the toy, with 13, the readings hold. On iris at K = 5, with 16 components, setosa's largest piece has 19 points. On BlattHierarchy, with 83, only the fine stage exists: T_fs falls to the grid's bottom and no T\* reads coarse or medium, which confirms §13.16's remark on the 82 repair edges.
+- **The MAD bandwidth moves every dataset toward finer stages.** It narrows the kernel 2.5–3.8 times, so under a Gaussian J spans far more e-folds, and the score is an integral over ln T. Iris at K = 5 reads setosa (47 points) plus the species on every window, and the species' slices widen from two rungs to seven. Landsat loses a class and a third or more of its coverage, keeps its purity, and passes on 12 of 12 at both K while failing the test, with 5 clusters. The toy reads fragments, and only [T_fs, T_ps] on `auto` finds its stripes. Iris at K = 10 keeps the pair. The floor also cuts edges here (123 and 237 on Landsat, 636 on the toy, none under a Cauchy), which splits those graphs into 36–66 components, so this arm isn't only the bandwidth.
+- **`ScaleEdges` moved nothing beyond the noise.** It changes a by up to 23%. Two things pass the rule: Landsat at K = 10, purity 0.94 to 0.89 and 9 to 7 passing, a median on a bimodal spread; and iris's one-rung species at K = 10, which falls just under 9 seeds on both kernels.
+- **The gauge is a rescaling, as it should be.** See the yardstick above. On the same lens, iris at K = 10 and the toy show no cliff, and Landsat at K = 10 shows one on 7 of 12. Those read one lineage (the toy, iris's Cauchy graph, Landsat at 5,032 points). Iris's Gaussian graph at K = 10 keeps the pair only because its bridge stays shut. `auto` recovers all of them: the edge statistics find the lens without the gauge.
+- **q moves T\* more than expected, and θ = 0.5 doesn't travel with it.** T_ps follows T_ps(q) exactly: Landsat at K = 5 reads 0.0881, 0.128 and 0.0752 at q = 20, 5 and 40, as ln(1 + √q) says. A crossing of δ̄ scales differently, as 1/ln(q − 1) (below): the species' slices move 2.3 times at q = 5, where that predicts 2.1. So q = 5 pulls the two apart: at T_fs the weakest coupling that holds a join at θ = 0.5 falls by about 30%. On Landsat at K = 5 and q = 5, 9 of 12 seeds then read a giant of 5,055–5,262 points. **Raising θ undoes it, with no new sampling: θ = 0.6 passes on 12 of 12 at purity 0.93 with 6 classes, and θ = 0.7 on 12 of 12.** At K = 10, θ = 0.5, 0.6 and 0.7 pass on 9, 5 and 12 of 12, which is noisier. Matching that coupling back at q = 5 gives θ ≈ 0.66, and the reading has already turned by 0.6. Iris's readings at T_fs, the toy and BlattHierarchy hold at q = 5 anyway, and iris's Cauchy graph reads one lineage on the full window because its bridge now opens twice as hot. So θ = 0.5 isn't q-free. q = 40 holds, with one cell past the rule: Landsat at K = 10, purity 0.94 to 0.88 and 9 to 7 passing, on the same bimodal median as `ScaleEdges`.
+- **θ on the base sweeps.** Iris and BlattHierarchy read the same at all five. The toy holds to 0.6 and reads 4 clusters at 0.7. On Landsat the test count peaks at 0.5 at K = 5 (9, 11, 12, 10, 8), and passing is noisy at K = 10 (5, 7, 9, 6, 7). The species' slices move hotter as θ falls, as the crossing says.
+- **Compiler defaults read as their strongest parts.** On Landsat at K = 5, OR alone fails and MAD alone passes, and together they pass on 12 of 12 with MAD's 5 classes. At K = 10 they fail, like OR. The toy reads fragments and BlattHierarchy fine, as under MAD. This is also the one reading budget alone moves far: iris at K = 5 reads the species on 7 of 12 at the low budget and the pair on 12 of 12 at the higher.
+- **Iris's species at T\*.** The reading is available on most arms at K = 5, and at K = 10 on at most two rungs and often none. T\* moves with every setting but `ScaleEdges`, so §13.16's "T\* is in one graph's units" extends to all of them.
+- **The first stage stays the graph's on every Gaussian arm.** The strongest bridge, OR at K = 10, has J = 2·10⁻⁴ and clears θ near 7·10⁻⁵, below the grid. Under a Cauchy it opens on every arm that has it, and the resolver follows it, in the table under the correction below.
+
+**A follow-up, added after reading the above.** Landsat's two collapses at K = 5 could have been the low budget's. The criteria's own budget follow-up didn't trigger, so this one is labelled as added: base, OR and q = 5 again at 4 × (500, 1000), on the same 12 seeds, with θ read on q = 5's sweeps.
+
+| Arm | Budget | Largest, 0.10: passing, test; purity; covered | Midpoint, 0.10: same | Largest at the size rule: passing | Seeds with a lineage over 4,000, largest | [T_fs, T_ps], largest: passing |
+|---|---|---|---|---|---|---|
+| Base, θ = 0.5 | low | 11, 12; 0.91; 2,391 | 12, 12; 0.92; 1,720 | 12 | 0 | 5 |
+| Base, θ = 0.5 | higher | 12, 12; 0.91; 2,423 | 12, 12; 0.92; 1,722 | 12 | 0 | 7 |
+| OR filter, θ = 0.5 | low | 0, 0; 0.59; 4,148 | 0, 0; 0.58; 3,389 | 0 | 0 | 0 |
+| OR filter, θ = 0.5 | higher | 0, 0; 0.59; 4,204 | 0, 0; 0.57; 3,822 | 0 | 0 | 0 |
+| q = 5, θ = 0.5 | low | 3, 3; 0.32; 5,428 | 3, 3; 0.32; 4,924 | 6 | 9 | 0 |
+| q = 5, θ = 0.5 | higher | 0, 0; 0.32; 5,490 | 0, 0; 0.32; 5,002 | 8 | 12 | 0 |
+| q = 5, θ = 0.6 | low | 12, 12; 0.93; 2,398 | 12, 12; 0.93; 1,809 | 12 | 0 | – |
+| q = 5, θ = 0.6 | higher | 12, 12; 0.93; 2,203 | 12, 12; 0.93; 1,612 | 12 | 0 | – |
+| q = 5, θ = 0.7 | low | 12, 11; 0.93; 2,223 | 12, 12; 0.92; 1,667 | 12 | 0 | – |
+| q = 5, θ = 0.7 | higher | 12, 12; 0.90; 2,352 | 12, 12; 0.92; 1,772 | 12 | 0 | – |
+
+Neither collapse is the budget's. OR stays at 0 of 12. At q = 5 and θ = 0.5, more sampling sharpens the giant, from 9 of 12 seeds to all 12, and θ = 0.6 clears it at both budgets. At the higher budget the shares 0.10–0.25 all read the giant where the size rule passes on 8 of 12, one short of the criteria's trigger, but every share passes at θ = 0.6, so that's θ's doing and no case against 0.10. On base, [T_fs, T_ps] gains with budget and stays behind T_fs alone.
+
+**Against what was written first.**
+- *No gauge on the lens × K̂ matches base.* Yes, on all seven.
+- *No gauge on the same lens loses the hot end by K̂.* Yes, once K̂ ≥ 5. Below that the lens had room.
+- *Setosa's edge moves with OR, MAD and `ScaleEdges`, and no repair removes it.* Yes. It stayed shut on every Gaussian arm regardless.
+- *q moves T\* a little and the readings not much.* Wrong for q = 5: T\* moves 2.3 times, and Landsat at K = 5 collapses. Right for q = 40.
+- *θ = 0.5 isn't special to the resolver.* Right on iris and BlattHierarchy. It is special relative to q.
+
+**The two defaults.**
+- **The largest level stands.** Over the 133 cells at the T_fs window, by the rule written first (2 or more seeds passing, or 0.05 on ARI or purity), the largest wins 82, 50 tie and the midpoint wins 1. That one is Landsat at K = 10 with no gauge on the same lens, where neither passes, so the budget follow-up didn't trigger on it. Wins, ties: iris 18, 5 at K = 5; 19, 4 at K = 10; 27, 2 under the Cauchy. The toy 6, 7. BlattHierarchy 5, 14. Landsat at K = 10 7, 5. Landsat at K = 5 ties all 13: on the nine arms where both pass on most seeds, the midpoint is up to 0.03 purer and covers 23–32% less. §13.16's closest call stays exactly that, on more arms.
+- **0.10 stands, and stays provisional.** Summed over Landsat's 26 cells, 312 seeds, the largest passes on 168 at the size rule, 180 at 0.10, 168 at 0.15 and 156 at 0.25. No share beats 0.10 by the 10% the rule asks, and no arm has another share at 9 or more with 0.10 under 6. It isn't selected by this either, since K pulls opposite ways: at K = 5 the counts are 114, 110, 98, 80, and at K = 10 they are 54, 70, 70, 76. All of 0.10's lead over the size rule is at K = 10.
+- **One pairing to know about.** The rule does trigger for the midpoint: 148 at 0.10 against 185 at 0.25, with no arm losing purity, and four arms where another share reaches 9–11 with 0.10 at 2–4. But the midpoint at 0.25 only draws level with the largest at 0.10 on Landsat (185 against 180) while covering 12–30% less on the base graphs, and it loses elsewhere: ARI to iris's first stage 0.855 against 0.965, and to BlattHierarchy's fine stage on `auto` about 0.93 against 0.985. So it's no case against the default pair.
+- **Where 0.10 costs.** Against the size rule on the largest level, it does 2 or more seeds worse only at q = 5: 3 against 6 at K = 5, 9 against 11 at K = 10, and 0 against 8 at K = 5 in the follow-up. That's θ's doing, and the share only sharpens it: at θ = 0.6 they tie at 12 of 12. The first forms aren't in this build, so the line in the criteria about a fix doing worse than the old behaviour can be read only for the alternatives the resolver still exposes.
+
+**Past the brief: `auto` under a narrow bandwidth.** `SpcScheduleHelpers.Estimate` scales the bracket by the median edge's J times the mean weighted degree. Under MAD the median J falls far below the couplings that hold the transition, which is the likely reason the bracket lands too cold, by 12–23 times at K = 5 on Landsat.
+
+| Landsat graph | `auto`'s top | T_fs, T_ps on the T_ps lens | Passing there | Passing on `auto` |
+|---|---|---|---|---|
+| K = 5, MAD | 3.6·10⁻⁴ | 0.00446, 0.00537 | 12 | 0 |
+| K = 5, compiler defaults | 9.57·10⁻⁴ | 0.0173, 0.0218 | 12 | 0, no cliff on any seed |
+| K = 10, MAD | 0.0016 | 0.0094, 0.0113 | 12 | 0 |
+| K = 10, compiler defaults | 0.0073 | 0.00446, 0.0094 | 0 | 0, no cliff on any seed |
+
+Under the mean edge length `auto` matches the T_ps lens (no gauge: 12 and 9 of 12). Iris, the toy and BlattHierarchy aren't hit this way. The REPL's own defaults (`GraphRunOptions`) sit near the last row: K = 10, OR, no gauge, scale before repair, bandwidth left to the compiler, no repair unless asked. On that row the lineage reading is 2 clusters at purity 0.32, and the only sign of a missed transition is the absent cliff. The REPL itself wasn't run. This isn't the resolver's doing, and "default settings aren't correct settings" applies to the bracket too.
+
+**Past the brief: the REPL's window.** The REPL bounds longest-lived by [T_fs, T_ps], the tests by T_fs alone (`SpcAnalysis.md`'s open point), and this settles neither way.
+- *Landsat, against the bound.* T_ps/T_fs is 1.10–1.26 wherever a reading works, 2 to 4 of 48 levels, so a lifetime has no room to differ and the band acts as a slice. Passing falls on every mutual mean-edge arm: at K = 5 from 11–12 to 3–8 (and from 3 to 0 at q = 5), at K = 10 from 7–9 to 0–1. No Landsat arm gains.
+- *BlattHierarchy, a different level.* On the wide grid, bar no repair, the band sits inside the coarse stage, so it reads coarse (ARI 1.000) where T_fs alone reads medium. Both are real levels. On `auto` it reads fine either way, a little better on most arms (0.985 to 0.997), and worse on compiler defaults (1.000 to 0.854).
+- *The toy, for the bound.* On the recipe the two tie. On `auto`, under MAD and under compiler defaults, T_fs alone reads 13 and 6 clusters and passes on 0 and 2 of 12, where the band passes on 12 of 12 at ARI 0.70.
+- *Iris.* A tie, bar OR at K = 5, where the band keeps the pair and T_fs alone reads the species.
+
+So the better bound depends on the graph. The window has no option in the REPL today. Exposing one and leaving the current default commits to nothing, and which default to take is the user's call.
+
+**Two corrections.**
+- **The bridge's temperature is J/ln(q − 1), not J/ln(1 + q).** Two frozen blocks joined by one edge of coupling J agree with probability e^(J/T)/(e^(J/T) + q − 1), so δ̄ crosses θ at T = J/ln(θ(q − 1)/(1 − θ)). §13.16's J/ln(1 + q) agrees to 3% at q = 20, which is why it fit, and q = 5 separates them. The sanity check is q = 2, where δ̄ never falls below 1/2. Iris's Cauchy graph follows the corrected form on all nine arms below, where "one lineage" and "setosa + pair" are the last and first slices settled on at least 11 of 12 seeds.
+
+| Arm | J | J/ln(q − 1) | Last one lineage | First setosa + pair |
+|---|---|---|---|---|
+| Base | 0.00669 | 0.00227 | 0.00171 | 0.00287 |
+| OR filter | 0.00584 | 0.00198 | 0.00171 | 0.00222 |
+| Scale before repair | 0.00653 | 0.00222 | 0.00171 | 0.00287 |
+| MAD bandwidth | 4.78·10⁻⁴ | 1.63·10⁻⁴ | 1.29·10⁻⁴ | 2.17·10⁻⁴ |
+| No gauge | 0.0471 | 0.0160 | 0.0135 | 0.0175 |
+| No gauge, × K̂ lens | 0.0471 | 0.0160 | 0.0156 | 0.0202 |
+| q = 5 | 0.00669 | 0.00482 (J/ln 6 = 0.00373) | 0.00438 | 0.00574 |
+| q = 40 | 0.00669 | 0.00183 | 0.00162 | 0.00209 |
+| Compiler defaults | 0.00337 | 0.00114 | 0.00102 | 0.00132 |
+
+- **`ColdCensored` under a window marks the window's edge.** Its comparison runs over the levels read, as its documentation says, so with a T_fs window nearly every run has a flagged lineage, right or wrong. Only the full window speaks to the grid's cold edge, and there the flag marks exposure, not failure. Iris's pair under a Gaussian is flagged on 12 of 12 and is the right reading, because the bridge never opens. Under a Cauchy, where the grid reaches below the bridge, it's flagged on none. The one lineage of 150 on the too-cold lens and at q = 5 is flagged on 12 of 12. BlattHierarchy on `auto` is flagged throughout, since that bracket stops above medium.
+
+**Limits.** This is exploration on one pass. It's one generator seed per synthetic dataset, 12 seeds per cell, and the low budget except on iris and the follow-up, so a low-budget reading here says nothing of what sampling might close. Settings changed one at a time, so interactions are read only through compiler defaults, which changes several at once and can't attribute any. The mechanism for q = 5 rests on θ read on Landsat alone, at two K. Not varied: distance, ε-ball topology, LMP, the floor, `ScaleRank`, generator seeds, kernels beyond those named. The T\* ladder has rungs about 1.3 apart, so a band of one rung is a statement about that ladder.
+
+Harness, resolved dump and raw tables: `side-session-notes/.../lineage-persistence/settings-probe/`.
