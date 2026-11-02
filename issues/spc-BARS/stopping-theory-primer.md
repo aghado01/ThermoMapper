@@ -2282,6 +2282,15 @@ anchor's fix needed.
     | 4, 0.175 | v3 | +0.04 / −0.02 | 0.89 / 0.90 |
     | 8, 0.35 | v2 | +0.01 / −0.06 | 0.93 / 0.84 |
 
+    - *The graph, as resolved.* BlattHierarchy at N = 6000, seed 42: mutual KNN at K = 5, MST repair (158 of 11,525
+      edges), path-neighbor refinement, one coupled component. Cauchy kernel, no LMP, mean-edge bandwidth 0.0346 read
+      after repair, gauge 1/K̂ = 0.260, floor 10⁻¹⁰ with nothing cut, not BWD units. J runs 2.3×10⁻⁶ to 0.26, median
+      0.16, with mean node strength 0.60. The probe predates `Resolved`, so this was read on e1eea5d with the gauge and
+      the scale edges set explicitly; its couplings match the probe's commit bit for bit.
+    - *Scope.* The table holds for that graph. The same config on today's defaults (no gauge, bandwidth read before
+      repair) builds another, with J up to 1.0 and mean node strength 2.13. §12.28's own Cauchy graph has these settings
+      at N = 1200 (bandwidth 0.0831, 82 repair edges, gauge 0.277), and it too is bit for bit the same across the
+      revision. Its Gaussian K = 10 graph isn't: the old code's lacks 5 of today's 37 repair edges.
     - *The noise.* The correlation is pooled by variance; by decade at v5 it is +0.26, +0.54 and +0.36 from the coldest
       up. The new fold's SD column shows that ratio's own noise, since its truth is 1.
     - *The direction.* Positive correlation puts the true noise of ΔS₂ below what Welch assumes, so Q and A were both
@@ -2292,8 +2301,8 @@ anchor's fix needed.
     - *Above 10⁻³.* A shared seed shows no correlation here: +0.01 at v5 and −0.04 at v4, over the pairs in [10⁻³, 0.03]
       that shared one. So the correlated cold pairs feared above don't show on this graph.
     - *Why, as a reading from the kernel's code.* SW draws once per agreeing edge and once per cluster, so one differing
-      bond shifts the stream and the two chains part. Below 10⁻³ most couplings sit far above T, so decisions rarely
-      differ.
+      bond shifts the stream and the two chains part. Below 10⁻³ most couplings sit far above T (J's 10th percentile is
+      0.072), so decisions rarely differ.
     - *Not measured.* §12.28's own N: this ran at the generator's default N = 6000, against its 1200. Its Gaussian
       K = 10 graph: a reboot killed that arm. The descending test's states rerun on the new fold. The toy and iris
       graphs.
@@ -2306,6 +2315,11 @@ anchor's fix needed.
     seed 42 falls from 855 to 149 against the test's floor of 100. The fold didn't cause that: §13.15 counts 5 of 12 on
     its own run, and the test stands until §13.15's choices settle what the resolver reports. With the compiler
     revision in, all of them pass on their own seeds under the new fold, and full VizCore is green in Release.
+
+    These readings are scoped to the parity graphs: Gaussian kernel, no LMP, mean-edge bandwidth read after repair,
+    gauge 1/K̂, mutual KNN, MST repair, BWD units. They are the toy at K = 10 (N = 3200, bandwidth 0.162, 12 repair
+    edges), iris at K = 5 and 10 (N = 150; 0.307 and 0.365; 15 and 5) and landsat at K = 5 (N = 6435; 22.7; 983). Each is
+    bit for bit the same from 63589b3 to e1eea5d, so the compiler revision didn't move these graphs under the sweep.
 
 **A dense cluster's melt in closed form: the mean-field thermal curve (C45).**
 - **The complete graph (Bollobás, Grimmett and Janson 1996; §10.2–10.3).** With p = λ/n, the giant's share θ solves
