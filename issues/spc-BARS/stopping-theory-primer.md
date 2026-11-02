@@ -277,12 +277,14 @@ entropy) suit it better.
 | C43 | For q ≥ 1, Bernoulli(p̃) ≤ Potts(q) ≤ Bernoulli(p) in the random-cluster order, p̃ = p/(p + q(1 − p)), so every increasing functional (S₂, F_n, τ_e) lies between two independent-bond percolations | §13.13 | Checked against Grimmett (2006), Theorem 3.21: (3.22) with q₂ = 1 gives the upper side, (3.23) with q₂ = 1 the lower; edge-dependent p_e per §11.4 (11.28); consistent with C23 (lower side, on a tree) and C30 (one edge's crossing) | E14 |
 | C44 | The bracket's anchor is e^(−⟨d²⟩/2a²)/(4 ln(1 + √q)), and the code has ln(1 + √q) in the numerator: 0.258 where the formula gives 0.089 at q = 20, and it rises with q | §13.14 | Checked here (BWD 1997 eq. 4.2; (3.22) forbids a rise with q; measured melts 0.10–0.117) | Fixed 2026-11-01; multipliers stand (§13.14) |
 | C45 | A dense cluster's melt sits at T = s/(d·K_d(q)), K_d(q) = ln[(q − 2)/((q − 1)^(1 − 2/d) − 1)], tending to s/λ_c with λ_c = 2((q − 1)/(q − 2))ln(q − 1); d·K_d is 6.22–7.14 at q = 20 | §13.14 | Closed forms checked here (free-energy crossing, Maxwell equality); against round 1's numbers about 1.2× cold, arithmetic only | E15 |
-| C46 | For q > 2 the disordered phase is metastable well below the melt (1.17 e-folds at q = 20, complete graph), and every replica starts disordered, so R̂ can miss a shared metastable phase | §13.14 | Derived here (Lemma 10.11); no sign at round 1's sizes | E16 |
+| C46 | For q > 2 the disordered phase is metastable well below the melt (1.17 e-folds at q = 20, complete graph), and every replica starts disordered, so R̂ can miss a shared metastable phase | §13.14 | Derived here (Lemma 10.11; on a Bethe lattice, 0.44–0.68 e-folds at d = 5–10); no sign at round 1's sizes | E16 |
 | C47 | For signed couplings at q = 2, \|⟨σ_xσ_y⟩_J\| ≤ φ_{\|J\|,2}(x ↔ y) ≤ Bernoulli(p(\|J\|))(x ↔ y): a hot-side envelope survives, while monotonicity in β does not | §13.14 | Checked against Grimmett (Proposition 11.38, (11.44), Theorem 11.40); Potts form open | The Potts analogue |
 | C48 | One process of edge thresholds has, at every T at once, the law φ_{p(T),q}: each draw is a dendrogram in T, and ΔS₂ ≥ 0 per draw | §13.14 | Update rule derived here for edge-dependent couplings (Grimmett §8.6's construction; its displays are missing from the copy); mixing and cost unknown | E17 |
 | C49 | `LineagePersistence` on iris at k = 5 reads the published first stage and not the species: no selected lineage mixes setosa with the others in 60 of 60 runs, while the species-level reading passes 3 of 12 seeds at the parity budget and 0 of 12 at 8 × (1000, 2000) | §13.14 | Observed (12 seeds × 5 bracket and budget settings); agrees with §12.22 | A resolver that reads levels; lifetimes in ln T; the representative's choice |
-| C50 | Z_{p,q} = φ_{p,1}(q^k): the family is exponential in ln q with conjugate k, so ln Z(T, q) = ∫₀^(ln q) ⟨k⟩ d ln q′, with an exact reference rung at q = 1 for every T | §13.14 | Identity from the definition (Grimmett §10.8); the closure unbuilt | E18 |
+| C50 | Z_{p,q} = φ_{p,1}(q^k): the family is exponential in ln q with conjugate k, so ln Z(T, q) = ∫₀^(ln q) ⟨k⟩ d ln q′, with an exact reference rung at q = 1 for every T | §13.14 | Grimmett (3.59), and §10.8; the closure unbuilt | E18 |
 | C51 | The mean-field first-order line ends at q = 2, so a path through q = 2 joins q = 20's two phases without a jump | §13.14 | Derived from §10.2; unverified on graphs; literature unchecked | E18 |
+| C52 | A cut F changes ln Z by at most \|F\| ln q nats at q ≥ 1, so a thin cut can move a block's melt by at most about \|F\| ln q/(2.65·n) e-folds at q = 20 | §13.14 | The bound is Grimmett's Theorem 3.63; the shift is an estimate on the mean-field slope | E15 |
+| C53 | At the melt the mean-field free-energy barrier is 0.168 nats per spin at q = 20 (0.015 at q = 5, 0.489 at q = 100), so a homogeneous cluster of about 50 points could stick within a parity budget | §13.14 | Computed here; a barrier in the stationary law, not in SW's dynamics; heterogeneity should lower it | E16 |
 
 ---
 
@@ -1606,7 +1608,7 @@ The user dropped iris as too limited and asked for the same SPC-only levers on t
 The user reopened what round 1 closed, as an adversarial round with new capabilities in hand. Round 2 was discussion: it
 ran no experiments (one quantile table was computed), and it changed no code. Where the user decided something, the
 entry says so and gives the date; everything else is open, with the experiment that would settle it. Experiments
-continue round 1's numbering (E6–E18, §13.12). New claims are C35–C51 in §7.
+continue round 1's numbering (E6–E18, §13.12). New claims are C35–C53 in §7.
 
 **What round 1 did not have**, all on `main` by 2026-10-30:
 - **The per-draw record** on `Accumulator`: `EnergyPerDraw`, `MagPerDraw`, `SumSqClusterSizesPerDraw`,
@@ -2143,7 +2145,8 @@ a whole.
   against measured melts on the toy, BlattHierarchy's fine clusters and AnisotropicGaussian, at q = 20 and 100. After the
   graph compiler revision.
 - **E16. Two starts.** Half the replicas from an ordered start, half random, at q = 20 and 100 and growing cluster size:
-  where do the two disagree, against C46's window? Does R̂ within each start stay quiet there?
+  where do the two disagree, against C46's window? Does R̂ within each start stay quiet there? A large uniform cloud is the
+  worst case (C53), and the sharpest test.
 - **E17. The coupled sampler on small graphs.** Level-set marginals against exact enumeration; coalescence time; ΔS₂'s
   noise against independent endpoints at equal work.
 - **E18. The path in q.** ln Z(T, q) from q = 1 up an integer ladder, against a tree's closed form and small-graph enumeration;
@@ -2379,6 +2382,50 @@ the copy; re-derived here for edge-dependent couplings.
   the sandwich's upper side, but its γ comes from a Markov-chain argument with no usable constant (Proposition 3.28: it
   "may be written down"). Theorem 3.79 dominates a Potts cluster set by an Ising model with a field, but the field is
   negative only below a β that tends to 0 as the maximum degree grows, the book's own caveat.
-- *Not read, and the next places to look.* §10.8's large-deviation theorem (10.58) for the cluster count, which could
-  price replica tunnelling in mean field; §11.2 on the Potts model; §10.10–10.12 on trees. Chapters 2 and 4–7 and 9 stay
-  unread.
+**A second pass over what was still unread, 2026-11-01.** Added to the reading: §3.5–3.6, §8.3, §10.8, §10.10's main theorem,
+§11.2, §2.5. Closed forms checked by a scratch script, no SW and no dataset.
+- *C46's window at KNN degrees.* The book's binary-tree limit, p = q/(q + 1) (§10.11), is the d = 3 case of the
+  disordered phase's linear stability on a Bethe lattice: K_dis = ln(1 + q/(d − 2)). The ordered limit K_ord, from
+  belief propagation's fixed point (the book's (10.78) is missing from the copy), completes the window. In e-folds
+  around the melt, disordered below and ordered above:
+  | d | q = 20: below, above | q = 100: below, above |
+  |---|---|---|
+  | 3 | 0.25, 0.05 | 0.34, 0.08 |
+  | 5 | 0.44, 0.08 | 0.62, 0.14 |
+  | 7 | 0.56, 0.09 | 0.82, 0.16 |
+  | 10 | 0.68, 0.10 | 1.02, 0.18 |
+  | 50 | 1.03, 0.12 | 1.80, 0.21 |
+  | complete graph | 1.17, 0.13 | 2.38, 0.22 |
+
+    So at K = 5–10 and q = 20, about half an e-fold below each melt is where a random start could sit disordered,
+  narrower than the complete-graph figure, and always asymmetric. A grid at h = 0.09 has several points inside it.
+- *The barrier that §10.8's theorem leaves open (C53).* Theorem 10.58 gives the large-deviation rate of the cluster
+  count, "except when the levels ... lie within the interval of discontinuity", which is where tunnelling happens. The
+  Curie–Weiss free energy gives it directly: at λ_c the barrier per spin is 0.015 at q = 5, 0.071 at q = 10, 0.168 at q
+  = 20 and 0.489 at q = 100. So e^(n·b) reaches 2,000 at n ≈ 45 for q = 20, and n ≈ 500 for q = 5. Read literally, a
+  homogeneous 50-point cluster already sticks within a parity budget at q = 20. Three cautions: this is a barrier in the
+  stationary law, and SW's moves are not local in θ; data clusters aren't homogeneous, and melts 10–50× wider than
+  rounding (above) suggest coexistence is largely dissolved; and round 1's replicas showed no such sticking. It says
+  where to look: a large uniform cloud is the worst case, and the sharpest test of E16.
+- *A sparse cut barely moves Z (C52; Theorems 3.60 and 3.63).* For a set F of edges whose removal splits G into G₁ and
+  G₂, Z_{G₁}Z_{G₂}q^(−|F|) ≤ Z_G ≤ Z_{G₁}Z_{G₂} at q ≥ 1, for every p. The proof is edge by edge, so edge-dependent
+  couplings are fine, and the bound holds whatever the coupling's size. So ln Z factorizes over blocks to within |F| ln
+  q nats. Against the melt's latent entropy of 2.65 per vertex at q = 20, a cut can move a block's melt by at most about
+  |F| ln q/(2.65·n) in ln T (the slope is mean-field, so the shift is an estimate): 0.02 e-folds for one repair edge on
+  50 points, 0.29 for iris's 13-edge cut at k = 5, 0.77 for its 34 edges at k = 10. It is the justification for reading
+  melts block by block (C45) when cuts are thin, and it says where that stops being safe.
+- *The two-parameter family (Theorem 3.73, (3.59)).* C50's identity is (3.59) in the book: Z_G(p, q) = φ_p(q^k), the
+  moment generating function of the cluster count. With π = ln(p/(1 − p)) and κ = ln q, ln Z is convex on the plane,
+  with joint cumulants of (|η|, k) as its derivatives, for homogeneous p. The ln q direction stays an exact exponential
+  family whatever the couplings, so D_J's analogue holds along q: Δ ln q·Δ⟨k⟩ is the exact Jeffreys divergence between
+  two q's at one T. It is size-blind, as D_J is.
+- *Smaller.* §8.3's coupling preserves order across q as well as p and the start, so C48 extends to a coupled q-path.
+  §10.8's remark that λ = 2 is a weak singularity of plain percolation, seen only through large deviations, fits C50: q
+  = 1 draws carry the first-order information, at exponential cost.
+- *Read, and no use for data graphs.* §2.5's steepness inequality is for product measures. Theorem 3.45's sprinkling
+  bound (an edge's probability rises by at least Δp/q) gives no floor on S₂. Theorem 11.3 is about infinite-volume Gibbs
+  states. Theorem 10.82's tree theory is for infinite trees with boundary conditions, apart from the limits used above.
+- *Still unread:* Chapters 4–7 and 9, §2.1–2.4, §8.1–8.2, §8.7–8.9, §10.4, §10.6, §10.9, §10.11–10.12, §11.3 and §11.6,
+  about 300 KB. By their outlines these are infinite-volume and lattice theory. The candidates left: §5.7 on droplets
+  (the Wulff crystal), for nucleation on data of low intrinsic dimension; §9.1 on Potts models and flows, a different
+  representation of correlations; §4.5 on convexity of the pressure.
