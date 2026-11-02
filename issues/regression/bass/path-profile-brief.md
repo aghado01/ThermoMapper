@@ -114,8 +114,8 @@ Append it under "Reports" below, newest first: commits, HEAD and the dirty `src/
 
 #### Commits and state
 
-- `4fb7dc5`: the harness, `tests/regression/BassPathProfile.cs` and `BassPathProfileTests.cs`, with a few private test members opened to it and a `seed` argument on `Friedman`. The commit carrying this report holds the rest of the harness, the CSVs and the report.
-- HEAD was `bbcf2ee` at the start and `2858598` when this was written. Other sessions landed `a772fd9` (the weighted core) and the truncated-draws commits meanwhile. The dirty `src/` files now: `rc/maths/distributions/HalfCauchy.cs`, `src/maths/distributions/Mixture.cs`, `src/maths/distributions/TailInversion.cs`, `src/maths/distributions/Weibull.cs`. Nothing under `src/` was changed here.
+- `4fb7dc5`: the harness, `tests/regression/BassPathProfile.cs` and `BassPathProfileTests.cs`, with a few private test members opened to it and a `seed` argument on `Friedman`. `dc16dd8`: the rest of the harness, the CSVs and this report.
+- HEAD was `bbcf2ee` at the start and `2858598` when this was written. Other sessions landed `a772fd9` (the weighted core) and the truncated-draws commits meanwhile. The dirty `src/` files now: `src/maths/distributions/HalfCauchy.cs`, `src/maths/distributions/Mixture.cs`, `src/maths/distributions/TailInversion.cs`, `src/maths/distributions/Weibull.cs`. Nothing under `src/` was changed here.
 - The modes ran on a build made at the start, and Parts 1 and 2 on a later one. So the scorer was rechecked on a build of `2858598` with those dirty files: it holds, below.
 - Run times, at below-normal priority on a machine shared with two other test hosts: arm (i) 4,882 s, against about 30 minutes alone; the ground truth under a minute; Part 1 9 m 33 s; Part 2 10 m 38 s, and 41 s for the redraw rows.
 
