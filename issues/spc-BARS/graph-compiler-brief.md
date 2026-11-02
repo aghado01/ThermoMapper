@@ -435,6 +435,37 @@ Stage widths in e-folds of ln T, from the cumulative field's thermal single-link
 
 **Not done.**
 - SW in ln T (the sampler takes a double T; the bond table would need `LogBondProbability` and a ln T grid).
-- The cumulative-field command, user session and thermal EOM take a double grid; a `lnspace:` grid spec and the exports' ln T column are the next step.
 - `HasBwdUnits`, the temperature bracket and `Resolved` do not mention the log.
 - The Schoenberg series has no tail form, so its log is the log of its value.
+
+### The command on a ln T grid
+
+The user asked for the cumulative-field command to take a grid in ln T ("Wire the command"), the next step named under Log-space coupling.
+
+**What landed** (`f1069fd`, one concern):
+- `--temperatures lnspace:lnTmin,lnTmax,N` parses to a `TemperatureGrid` (the values and whether they are ln T); `auto-ln` is the auto bracket from `EstimateLogBracket` as 48 points in ln T. `auto` and every other spec stay temperature grids and write what they always wrote, so no existing output moved.
+- The session solves with `SolveLog` on a log grid. The thermal dendrogram and the landscape carry the axis label `log-temperature` (`ThermalDendrogram.LogTemperatureAxis`, an optional `axis` on `FromEdgeCurves`); the axis-alignment law is unchanged.
+- A log run adds `log_temperature` to `sweep.csv`, `log_weight` to the edge snapshot, `temperatureAxis` and `representativeLogTemperature` to `summary.json`; `--cut-log-temperature` places the snapshot by ln T (`--cut-temperature` still takes T; both together is an error). The manifest records `CutLogTemperature`.
+
+**The EOM's measure moves with the grid.** The thermal EOM integrates lifetimes and masses over the grid axis, so on ln T a stage's persistence is its length in e-folds of T, and on a temperature grid its length in T. This is a modelling difference, not a refinement; the default (`auto`) keeps T.
+
+**Measured.** BlattHierarchy (pointsPerFine 50, leafSpread 0.15, seed 42; 24 fine, 6 medium, 2 coarse classes), kNN + mutual-kNN filter + MST-min repair, Gaussian, mean-edge-distance bandwidth, no LMP, no gauge, coupling floor 1e-10, edges for the bandwidth before repair; `Field.Mean`, `Mutual`, θ 0.5, min cluster size 1, no periphery completion. ARI against the 24 fine classes; clusters (abstained points).
+
+| Grid | K = 5 | K = 10 |
+|---|---|---|
+| `auto`: 48 points in T, T widths | 256 (204), ARI 0.352 | 91 (92), ARI 0.841 |
+| `auto-ln`: the same 48 points, e-fold widths | 46 (44), ARI 0.947 | 41 (45), ARI 0.968 |
+| `lnspace:-18000,2,1800` (step 10) | 2 (0), ARI 0.082 | 2 (0), ARI 0.082 |
+| `lnspace:-60,2,249` (step 0.25) | 23 (1), ARI 0.957 | 23 (1), ARI 0.957 |
+
+- **Same points, different widths.** `auto` and `auto-ln` evaluate the same affinities at the same 48 points and build the same dendrogram and landscape values; only the widths differ. With T widths the last step is about 750 T wide at K = 5 and the first 0.017, so the hot end carries nearly all the mass and the EOM picks a fragmented hot level (256 clusters); with e-fold widths every step is 0.23 wide. That is the likely reason, not a separate test of it.
+- **The wide grid reaches the far stages, and the EOM picks the longest-lived level.** The sweep counts hold 6 clusters for 231 points (about 2,310 e-folds) and 2 clusters for 1,469 points (about 14,700) at K = 5, and 6 for 125 points (about 1,250) and 2 for 795 (about 7,950) at K = 10, which are the Log-space coupling widths (2,312, 15,150; 1,251, 8,201). The coarse level is the longest in e-folds, so the EOM resolves the 2 coarse clusters (completeness 1.0, purity 0.083 against the fine classes).
+- **A fine window resolves the fine level.** `lnspace:-60,2,249` sits above the medium merges (ln J from -2,341), so the medium clusters are separate components in the window and the EOM sees the fine hierarchy within each: 23 clusters, one fine class merged or lost (the same at K = 5 and K = 10; not investigated).
+- **The step bounds what a wide grid sees.** At step 10 the 24-class stage (about 11 e-folds) is one point or none, and the sweep holds single points at 9, 17, 27 and 93 clusters instead. The grid's memory is its points times the graph's CSR slots (the session keeps every column), so a step of 1 over 18,000 e-folds does not fit in the session as written.
+
+**Checks.** `CumulativeFieldLogGridTests` (8 facts): the `lnspace:` parse and its refusal by the temperature parser; the dendrogram's axis; the session on the two-line Gaussian graph with a gap below -1000 (2 clusters, the log columns, `log_weight` holding the gap, the summary's axis); the temperature grid's files unchanged; a log grid and the temperature grid it is the log of count the same clusters at every point; the snapshot picked in the grid's own coordinate; `auto` still a temperature grid and `auto-ln` its bracket in logs; the `--cut` options. `VizCore.Tests` passes (613, 2 skipped).
+
+**Not done.**
+- A grid placed on the merge heights (`MergeHeights` gives them), which would resolve every stage at a few hundred points instead of thousands.
+- Whether the default measure should be e-folds for a log-spaced `auto` grid. The numbers above favour it on this set; it is a change to existing output, so it is the user's call.
+- SW in ln T.
