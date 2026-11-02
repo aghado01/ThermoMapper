@@ -6,11 +6,11 @@ using System.IO;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Graphs;
 using Maths.Geometry;
 using Maths.Geometry.DimReduction;
 using Maths.LinAlg;
+using Repo.TestHarness;
 using TDA.Ph;
 using Xunit;
 using Xunit.Abstractions;
@@ -21,7 +21,8 @@ namespace TDA.DimReduction.Tests;
 /// ISOLET Phase-2 pilot (S0, dimension 30, two seeds) — the standing pilot requirement of the
 /// ISOLET brief's "H0 matching-cost gate": expose pathology and cost, and produce the full-screen
 /// wall-clock extrapolation before any promotion decision. Not an assertion test — a recorded run
-/// that logs and writes the immutable JSON artifact to <c>issues/spred/pilot/</c>.
+/// that logs and writes its JSON record under <c>artifacts/test-runs/SpredIsoletPilot/</c>. Each run
+/// takes many minutes, so <c>SPRED_PILOT=1</c> turns them on and the default suite skips their work.
 /// <para>Protocol per the brief: raw617 (no preprocessing), deterministic label-free row shuffle
 /// with recorded seed and permutation hash, 8 contiguous blocks after the shuffle, H0-only
 /// objective with the adopted sliced-Wasserstein screening metric, parity-grade graph recipe
@@ -38,10 +39,14 @@ public sealed class SpredIsoletPilotTests
     private const int ShuffleSeed = 41;
     private static readonly int[] PilotSeeds = [211, 223];
 
+    private static bool Enabled => Environment.GetEnvironmentVariable("SPRED_PILOT") is { Length: > 0 };
+
     [Fact]
-    [Trait("Category", "Benchmark")]   // manual pilot; run alone with --filter "Category=Benchmark&FullyQualifiedName~SpredIsoletPilot"
+    [Trait("Category", "Benchmark")]   // manual pilot; SPRED_PILOT=1 with --filter "FullyQualifiedName~SpredIsoletPilot"
     public void Pilot_S0_Dim30_TwoSeeds_WallClockExtrapolation()
     {
+        if (!Enabled) return;   // heavy
+
         string repoRoot = LocateRepoRoot();
         string gzPath = Path.Combine(repoRoot, "datasets", "isolet.csv.gz");
         (double[][] features, string datasetHash) = LoadIsoletFeatures(gzPath);
@@ -135,7 +140,7 @@ public sealed class SpredIsoletPilotTests
             screens.Add(new { iterations = iters, secondsPerRun = perRun, s0ScreenMinutes = screen / 60 });
         }
 
-        WriteArtifact(repoRoot, new
+        WriteRecord("spred-pilot-s0-dim30.json", new
         {
             pilot = "S0-dim30-two-seeds",
             date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -187,6 +192,8 @@ public sealed class SpredIsoletPilotTests
     [Trait("Category", "Benchmark")]
     public void Probe_S0_Dim30_IterationBudget()
     {
+        if (!Enabled) return;   // heavy
+
         const int probeIters = 1000;
         int probeSeed = PilotSeeds[0];
 
@@ -241,23 +248,21 @@ public sealed class SpredIsoletPilotTests
         _out.WriteLine("");
         _out.WriteLine($"blocks improved: {moved}/{BlockCount}");
 
-        File.WriteAllText(
-            Path.Combine(repoRoot, "issues", "spred", "pilot", "spred-probe-s0-dim30-i1000.json"),
-            JsonSerializer.Serialize(new
-            {
-                probe = "S0-dim30-iteration-budget",
-                date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                seed = probeSeed,
-                iterations = probeIters,
-                shuffleSeed = ShuffleSeed,
-                datasetSha256 = datasetHash,
-                warmStartSeconds = warmSeconds,
-                annealedSeconds,
-                warmStartFullDataObjective = warm.FullDataObjective,
-                annealedFullDataObjective = annealed.FullDataObjective,
-                blocksImproved = moved,
-                blocks,
-            }, new JsonSerializerOptions { WriteIndented = true }));
+        WriteRecord("spred-probe-s0-dim30-i1000.json", new
+        {
+            probe = "S0-dim30-iteration-budget",
+            date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            seed = probeSeed,
+            iterations = probeIters,
+            shuffleSeed = ShuffleSeed,
+            datasetSha256 = datasetHash,
+            warmStartSeconds = warmSeconds,
+            annealedSeconds,
+            warmStartFullDataObjective = warm.FullDataObjective,
+            annealedFullDataObjective = annealed.FullDataObjective,
+            blocksImproved = moved,
+            blocks,
+        });
 
         Assert.True(true);
     }
@@ -277,6 +282,8 @@ public sealed class SpredIsoletPilotTests
     [Trait("Category", "Benchmark")]
     public void Probe_S0_Dim30_MobilityReprobe()
     {
+        if (!Enabled) return;   // heavy
+
         const int probeIters = 1000;
         int probeSeed = PilotSeeds[0];
         var annealerOptions = new SubspaceAnnealerOptions { InitialTemperature = 1e-3 };
@@ -368,32 +375,30 @@ public sealed class SpredIsoletPilotTests
         _out.WriteLine("");
         _out.WriteLine($"blocks improved: {moved}/{BlockCount}");
 
-        File.WriteAllText(
-            Path.Combine(repoRoot, "issues", "spred", "pilot", "spred-probe-s0-dim30-mobility-reprobe.json"),
-            JsonSerializer.Serialize(new
+        WriteRecord("spred-probe-s0-dim30-mobility-reprobe.json", new
+        {
+            probe = "S0-dim30-mobility-reprobe",
+            date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            seed = probeSeed,
+            iterations = probeIters,
+            shuffleSeed = ShuffleSeed,
+            datasetSha256 = datasetHash,
+            annealer = new
             {
-                probe = "S0-dim30-mobility-reprobe",
-                date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                seed = probeSeed,
-                iterations = probeIters,
-                shuffleSeed = ShuffleSeed,
-                datasetSha256 = datasetHash,
-                annealer = new
-                {
-                    proposals = "two-plane Givens primary (shipped defaults)",
-                    initialTemperature = annealerOptions.InitialTemperature,
-                    temperatureCalibration =
-                        "budget probe's recorded per-move increment ~4e-3 => T0 = 1e-3 (exp(-4) accept-worse)",
-                    blockSeedDerivation = "SeedTree SplitMix64 children (post seed-aliasing audit)",
-                },
-                eigengapPreCheck = eigenReports,
-                warmStartSeconds = warmSeconds,
-                annealedSeconds,
-                warmStartFullDataObjective = warm.FullDataObjective,
-                annealedFullDataObjective = annealed.FullDataObjective,
-                blocksImproved = moved,
-                blocks,
-            }, new JsonSerializerOptions { WriteIndented = true }));
+                proposals = "two-plane Givens primary (shipped defaults)",
+                initialTemperature = annealerOptions.InitialTemperature,
+                temperatureCalibration =
+                    "budget probe's recorded per-move increment ~4e-3 => T0 = 1e-3 (exp(-4) accept-worse)",
+                blockSeedDerivation = "SeedTree SplitMix64 children (post seed-aliasing audit)",
+            },
+            eigengapPreCheck = eigenReports,
+            warmStartSeconds = warmSeconds,
+            annealedSeconds,
+            warmStartFullDataObjective = warm.FullDataObjective,
+            annealedFullDataObjective = annealed.FullDataObjective,
+            blocksImproved = moved,
+            blocks,
+        });
 
         Assert.True(true);
     }
@@ -412,6 +417,8 @@ public sealed class SpredIsoletPilotTests
     [Trait("Category", "Benchmark")]
     public void Probe_S0_Dim30_PairedMoves()
     {
+        if (!Enabled) return;   // heavy
+
         const int probeIters = 1000;
         int probeSeed = PilotSeeds[0];
         var annealerOptions = new SubspaceAnnealerOptions
@@ -474,33 +481,31 @@ public sealed class SpredIsoletPilotTests
         _out.WriteLine("");
         _out.WriteLine($"blocks improved: {moved}/{BlockCount}");
 
-        File.WriteAllText(
-            Path.Combine(repoRoot, "issues", "spred", "pilot", "spred-probe-s0-dim30-paired.json"),
-            JsonSerializer.Serialize(new
+        WriteRecord("spred-probe-s0-dim30-paired.json", new
+        {
+            probe = "S0-dim30-paired-moves",
+            date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            seed = probeSeed,
+            iterations = probeIters,
+            shuffleSeed = ShuffleSeed,
+            datasetSha256 = datasetHash,
+            annealer = new
             {
-                probe = "S0-dim30-paired-moves",
-                date = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                seed = probeSeed,
-                iterations = probeIters,
-                shuffleSeed = ShuffleSeed,
-                datasetSha256 = datasetHash,
-                annealer = new
-                {
-                    proposals = "two-plane Givens + paired two-column at 0.5 mixture",
-                    pairedFraction = annealerOptions.PairedFraction,
-                    initialTemperature = annealerOptions.InitialTemperature,
-                    stepFloor = annealerOptions.StepFloor,
-                    stepFloorRationale =
-                        "paired-kind phi-window acceptance sits far below the controller target; the default floor would pin excisions at diffusion scale",
-                    blockSeedDerivation = "SeedTree SplitMix64 children (post seed-aliasing audit)",
-                },
-                warmStartSeconds = warmSeconds,
-                annealedSeconds,
-                warmStartFullDataObjective = warm.FullDataObjective,
-                annealedFullDataObjective = annealed.FullDataObjective,
-                blocksImproved = moved,
-                blocks,
-            }, new JsonSerializerOptions { WriteIndented = true }));
+                proposals = "two-plane Givens + paired two-column at 0.5 mixture",
+                pairedFraction = annealerOptions.PairedFraction,
+                initialTemperature = annealerOptions.InitialTemperature,
+                stepFloor = annealerOptions.StepFloor,
+                stepFloorRationale =
+                    "paired-kind phi-window acceptance sits far below the controller target; the default floor would pin excisions at diffusion scale",
+                blockSeedDerivation = "SeedTree SplitMix64 children (post seed-aliasing audit)",
+            },
+            warmStartSeconds = warmSeconds,
+            annealedSeconds,
+            warmStartFullDataObjective = warm.FullDataObjective,
+            annealedFullDataObjective = annealed.FullDataObjective,
+            blocksImproved = moved,
+            blocks,
+        });
 
         Assert.True(true);
     }
@@ -579,13 +584,10 @@ public sealed class SpredIsoletPilotTests
         return frame;
     }
 
-    private static void WriteArtifact(string repoRoot, object artifact)
+    private void WriteRecord<T>(string fileName, T record)
     {
-        string dir = Path.Combine(repoRoot, "issues", "spred", "pilot");
-        Directory.CreateDirectory(dir);
-        string path = Path.Combine(dir, "spred-pilot-s0-dim30.json");
-        File.WriteAllText(path, JsonSerializer.Serialize(
-            artifact, new JsonSerializerOptions { WriteIndented = true }));
+        ArtifactRun run = HarnessArtifacts.Create("test-runs", "SpredIsoletPilot", "TDA.DimReduction.Tests");
+        _out.WriteLine($"record {run.WriteJson(fileName, record)}");
     }
 
     private static string LocateRepoRoot()

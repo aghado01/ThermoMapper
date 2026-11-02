@@ -138,7 +138,7 @@ insufficient, exactly as the design section predicted. Runs in ~1 s, no PH depen
 
 ### 2026-07-17 — S0 re-probe executed: mobility restored on real data; finding 1's gate fires
 
-`Probe_S0_Dim30_MobilityReprobe` (artifact: `pilot/spred-probe-s0-dim30-mobility-reprobe.json`),
+`Probe_S0_Dim30_MobilityReprobe` (artifact: `pilot/spred-probe-s0-dim30-mobility-reprobe.json` at `249a7f2`),
 I = 1000, seed 211, shipped two-plane defaults with `InitialTemperature = 1e-3` — calibrated from
 the budget probe's one recorded per-move increment (~4e-3 ⇒ exp(−4) ≈ 2% accept-worse: refinement,
 not melt).
@@ -177,7 +177,7 @@ PCA's axes sample-determined (pin with a ~10% eigengap between the 45°-mixtures
 ≥1e-3 escape saddles by thermal diffusion regardless of proposal kind; small d lets rare
 complement draws hand single-column moves an escape (d=200 closes the tail).
 
-**S0 paired probe** (`Probe_S0_Dim30_PairedMoves`, artifact `pilot/spred-probe-s0-dim30-paired.json`;
+**S0 paired probe** (`Probe_S0_Dim30_PairedMoves`, artifact `pilot/spred-probe-s0-dim30-paired.json` at `1fa257e`;
 paired 0.5 / single 0.4 / isotropic 0.1, T₀ = 1e-3, StepFloor 0.05 to keep the paired kind's
 window-limited acceptance off the crawl floor): **8/8 blocks improve; per-block parity with the
 two-plane re-probe at equal budget** (mean 0.070% vs 0.068%; wins on blocks 2/5/6 up to 0.109%,

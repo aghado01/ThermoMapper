@@ -376,8 +376,9 @@ independently in R from raw bars, at p = 1 and p = 2:
 **Status 2026-07-17 — pilot recorded; the gate section is fully discharged.** The two S0 pilot
 seeds (211, 223) at dimension 30 ran on the shuffled raw617 (permutation seed 41, hashes in the
 artifact), 8 blocks, H0-only, sliced screening metric, parity-grade mutual-K10+MST recipe on both
-sides, I = 100 iterations. Full record: `pilot/spred-pilot-s0-dim30.json`; runner:
-`tests/tda/dim-reduction/SpredIsoletPilotTests.cs` (`Category=Benchmark`).
+sides, I = 100 iterations. Full record: `pilot/spred-pilot-s0-dim30.json` at `5dc3ceb`; reruns go
+under `artifacts/test-runs/SpredIsoletPilot/`; runner:
+`tests/tda/dim-reduction/SpredIsoletPilotTests.cs` (`Category=Benchmark`, on with `SPRED_PILOT=1`).
 
 - **Cost**: run(I) ≈ 46.7 s + 0.025 s·I (parallelism 8). The fixed share is dominated by the
   full-data objective's 7,797-row ambient reference; the marginal share is the annealing loop —
@@ -396,7 +397,7 @@ sides, I = 100 iterations. Full record: `pilot/spred-pilot-s0-dim30.json`; runne
 
 **Probe 2026-07-17 — iteration budget is NOT the fix; the annealer proposal scale is.** One seed
 (211) at I = 1000 vs the same-run PCA warm-start baseline
-(`pilot/spred-probe-s0-dim30-i1000.json`): **seven of eight blocks end bit-identical to the warm
+(`pilot/spred-probe-s0-dim30-i1000.json` at `2c84cac`): **seven of eight blocks end bit-identical to the warm
 start (Grassmann distance 0.0000 — zero accepted proposals in 1000 iterations); block 5 accepts
 exactly one first-iteration step** (improvement 0.006%, Grassmann move 0.1000 = the annealer's
 step length `temp·0.1` at initial temperature). Mechanism: `SubspaceAnnealer` proposes isotropic
