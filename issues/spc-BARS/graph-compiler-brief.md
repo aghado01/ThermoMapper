@@ -341,3 +341,54 @@ The user asked for a measurement before any change to the LMP default: `LmpRankR
 - **Anything else:** mixed, no call.
 
 **Readings alongside**, per the request: where strict's fine stage starts and ends at HEAD, and the same cell with the grid's cold edge at 10⁻⁴; whether the coldest partition equals the coupled components (zeros, not temperature, separating the clusters); low-degree chaining under inclusive (cross-class edges at degree ≤ 2 nodes, impure EOM clusters); bridge units against interior edges and single-linkage merge-order inversion per label level; zero edges and coupled components per cell.
+
+#### Results
+
+Built from `9abcf23` (harness `716e1f7`; `bb47dbd` later only padded the output columns). HEAD was exported with `git archive` to a short path, so other sessions' uncommitted edits stayed out, and built in Release. The run was 50 SW sweeps (24 grid cells, 24 runs on the two deciding cells, 2 cold-edge reruns) and 24 compile-only rows, 27 minutes; the cost plan did not change. Raw rows and the tabulating script are in the shared notes folder (`lmp-rank-comparison/`).
+
+**The call: mixed. No call is made for Azriel.**
+- *Criterion A, inclusive finds the 3 AnisotropicGaussian classes at K = 5: not met.* The stage is found in 0 of 6 seeds. Its width is 0.64–0.85 e-folds, short of the 1 e-fold set before the run, though the best matched share is 0.996–0.997, so the classes do separate at the best temperature. `HierarchyEom` returns 2 clusters, one impure, in 6 of 6 seeds. Strict misses entirely (0 of 6, matched share 0: no real cluster at any T; 175 coupled components), so the primer's premise holds.
+- *Criterion B, inclusive still resolves the 24 fine clusters at K = 10: met,* 6 of 6 seeds (stage 2.45–2.56 e-folds, matched 0.995–0.998, `HierarchyEom` matches).
+- *The chaining trigger, no fine stage in at least 4 of 6 seeds: not met* (found in 6 of 6).
+- Flip supported needs A and B, and A fails; not supported needs chaining, and there is none. So the result is mixed. As a post-hoc sensitivity, not the call: at a 0.5 e-fold threshold the stage count would meet A in 6 of 6, while `HierarchyEom` would still merge two classes.
+
+The two deciding cells (six sampler seeds, data seeds fixed):
+
+| Cell | Rule | Zero edges / edges; coupled components | Stage found | Stage width, e-folds | Best matched share | `HierarchyEom` matches |
+|---|---|---|---|---|---|---|
+| AnisotropicGaussian K = 5 | strict | 876 / 2,349; 175 | 0 of 6 | none | 0 | 0 of 6 (8–9 clusters) |
+| AnisotropicGaussian K = 5 | inclusive | 0 / 2,349; 1 | 0 of 6 | 0.64–0.85 | 0.996–0.997 | 0 of 6 (2 clusters) |
+| BlattHierarchy 0.15 K = 10 | strict | 916 / 4,303; 38 | fine 6 of 6; coarse, medium 0 of 6 | fine 2.02–2.13 | fine 0.944–0.946 | fine 6 of 6 |
+| BlattHierarchy 0.15 K = 10 | inclusive | 0 / 4,303; 1 | fine, medium, coarse 6 of 6 | fine 2.45–2.56; medium 4.05–4.37; coarse 1.81–2.02 | fine 0.995–0.998 | fine 6 of 6 |
+
+**The grid** (one sampler seed, exploration; stage widths in e-folds):
+
+| Cell | Strict: zero edges / edges; components; result | Inclusive: result |
+|---|---|---|
+| iris K = 5 | 111 / 262; 30. A 3-class stage of 9.5 from the cold end (three coupled components of at least 20 points, 27 smaller fragments); `HierarchyEom` 12 clusters, 43 abstained | none (a 0.21 sliver), best matched 0.75; `HierarchyEom` 2 (setosa, rest) |
+| iris K = 10 | 125 / 528; 6. None, best matched 0.64; `HierarchyEom` 2 | none, best matched 0.67; `HierarchyEom` 3 |
+| BlattHierarchy 0.15, K = 5 | 828 / 2,169; 213. No stage at any level; `HierarchyEom` 12 clusters, 856 abstained | coarse 1.81, medium 4.26, fine a 0.53 sliver (matched 0.998); `HierarchyEom` matches the 24 |
+| BlattHierarchy 0.15, K = 10 | 916 / 4,303; 38. Fine 1.92 (T 0.022–0.152); `HierarchyEom` 24 | coarse 1.92, medium 4.15, fine 2.45 (T 0.028–0.32); `HierarchyEom` 24 |
+| BlattHierarchy 0.3, K = 5 | 865 / 2,240; 209. None; `HierarchyEom` 9 (3 impure) | coarse 1.92, medium 4.05; `HierarchyEom` matches the 6 medium |
+| BlattHierarchy 0.3, K = 10 | 950 / 4,542; 22. Coarse 1.92, medium 4.58; `HierarchyEom` matches the 6 medium | coarse 2.02, medium 5.97; `HierarchyEom` matches the 6 medium |
+| AnisotropicGaussian K = 10 | 958 / 4,784; 14. 12.25 from the cold end (the cut components); `HierarchyEom` 3 (matched 0.944) | 2.13 (T 0.042–0.356); `HierarchyEom` 3 (0.988) |
+| Landsat K = 5 | 3,754 / 9,048; 1,862. None, best matched 0.15; `HierarchyEom` 6 clusters of which 3 real, 5,076 abstained | none, best matched 0.45; `HierarchyEom` 1 |
+| Landsat K = 10 | 4,890 / 17,109; 745. None, best matched 0.26; `HierarchyEom` 1 | none, best matched 0.27; `HierarchyEom` 1 |
+| BlattHierarchy 0.15, Gaussian, K = 5 | 828 / 2,169; 213. None; `HierarchyEom` 9 | fine 8.84 (T 3.6·10⁻⁶–0.025); no coarse or medium; `HierarchyEom` 24 |
+| BlattHierarchy 0.15, Gaussian, K = 10 | 916 / 4,303; 38. Fine 6.71 (T 2.1·10⁻⁴–0.17); `HierarchyEom` 24 | fine 6.07 (T 7.4·10⁻⁴–0.32); no coarse or medium; `HierarchyEom` 24 |
+
+Old against new, where the primer has a number (§12.29, which ran the unscaled couplings and the old compiler):
+- *AnisotropicGaussian a = 1:* every lever but LMP at K = 5 found the three classes, Cauchy at 3.0–4.2 e-folds, `HierarchyEom` 3. Now strict K = 5 misses (as stated), strict K = 10 "finds" them at 12.25 from the cold end (the cut), inclusive K = 10 finds them at 2.13 with `HierarchyEom` 3, and inclusive K = 5 reaches a 0.64–0.85 sliver with `HierarchyEom` 2.
+- *BlattHierarchy 0.15:* Cauchy had coarse 1.9, medium 4.3–4.5, fine 1.9–3.1; LMP K = 10 had fine 12.1; `HierarchyEom` matched the 24 except at LMP K = 5. Now inclusive gives 1.92 / 4.15 / 2.45 at K = 10 and 1.81 / 4.26 / sliver at K = 5; strict gives fine 1.92 at K = 10 (not 12.1) and nothing at K = 5, where `HierarchyEom` still misses the 24 (12 clusters), as before.
+- *BlattHierarchy 0.3:* Cauchy had coarse 2.1–2.6, medium 5.0–6.4, `HierarchyEom` the 6 medium on most graphs. Inclusive: coarse 1.92–2.02, medium 4.05–5.97, `HierarchyEom` matching the 6 medium.
+- *Landsat:* best matched share 0.24–0.41, `HierarchyEom` 1 or 2. Strict is 0.15 and 0.26; inclusive 0.45 and 0.27; no rule finds the six classes.
+
+**The readings, in the order asked.**
+1. *Strict's fine stage.* The 12.1 e-folds does not reproduce at HEAD. BlattHierarchy 0.15, K = 10, strict: fine 1.92 e-folds with the Cauchy inner kernel (T 0.0223–0.152; 2.02–2.13 over six seeds), 6.71 with the Gaussian inner kernel (T 2.1·10⁻⁴–0.169). Neither starts at the grid's cold edge, so the suspicion that the width measures the grid does not hold for this cell. With the cold edge at 10⁻⁴ the strict Cauchy stage is 2.06 (T 0.0216–0.170), unchanged within a grid step. The old compiler's graph, with the repair edges cut, is not recoverable at HEAD, so the 12.1 itself is unexplained beyond that. The suspicion does hold elsewhere: the strict stages that begin at the cold edge, iris K = 5 (9.5) and AnisotropicGaussian K = 10 (12.25), are the cut components, and their widths measure the grid. In all 10 strict Cauchy cells the coldest partition equals the coupled-component partition (Landsat K = 5: 1,862 clusters at T = 10⁻⁶); in Blatt K = 10 strict the 24 fine clusters are reached thermally (T ≥ 0.022) from 38 components. The cold-edge rerun also shows that inclusive's coarse stage lies near T = 10⁻⁵–10⁻⁴: with the edge at 10⁻⁴ it shrinks to 0.22 e-folds, so a sweep starting there loses the coarse pair.
+2. *Low-degree chaining under inclusive.* It is present at the edge level and costs in one cell. Cross-class edges sit on nodes of degree at most 2 and carry rank products 0.5–1: AnisotropicGaussian K = 5 has two cross-class edges, both 0.5, against a weakest within-class link of 0.015 (K = 10: 0.5 against 0.027); BlattHierarchy 0.15 has 23 cross-fine edges, 17 of them at nodes of degree at most 2 for K = 10 (22 for K = 5), and 4 (K = 10) and 1 (K = 5) of them above the weakest within-fine link. In AnisotropicGaussian K = 5 this is what narrows the 3-class stage and lets `HierarchyEom` merge two classes. In BlattHierarchy the fine clusters do not chain: `HierarchyEom` returns 24 clusters, none impure, and abstains on 73 points where strict abstains on 153. Strict writes those cross-class edges 0 (strongest cross edge 0 on AnisotropicGaussian), which is its useful side; it also writes 876–958 other edges 0.
+3. *Bridge units.* Under inclusive the protected bridges stay below the interior edges. BlattHierarchy 0.15, K = 10: 3 of 37 bridges exceed the weakest interior edge at an endpoint, none at both ends, 1 exceeds the median, and none of the 22 bridges between fine clusters exceeds either; K = 5: 18 of 82, none of the 22 cross-fine. The merge order holds at the coarse and medium levels (weakest within-class link 3.3·10⁻⁴ and 0.029 against strongest cross edges 5.3·10⁻⁵ and 3.9·10⁻⁴ at K = 10). It inverts at the fine level, but through the low-degree cross edges of reading 2, not the bridges. Under strict the interior's weakest edge is 0, so every bridge exceeds it (18 of 37 at K = 10) and the order inverts at every level, because the zeros leave classes disconnected over their positive edges.
+4. *Connectivity beside each cell:* in the tables above. Strict leaves 745–1,862 coupled components on Landsat and 6–213 on the other datasets; inclusive leaves 1 everywhere.
+
+**Against the inferences that were to be falsified.** The cold-edge reading (1) is not supported for BlattHierarchy K = 10, though it is for two other cells. The chaining reading (2) is supported at the edge level and costs a stage in one cell. The bridge-inversion reading (3) is not supported under inclusive. Besides the call: inclusive shows BlattHierarchy's coarse and medium stages (6 of 6 seeds at K = 10) where strict shows neither (0 of 6), and strict abstains on far more points (Landsat K = 5: 5,076 of 6,435; BlattHierarchy 0.15 K = 5: 856 of 1,200, against 50).
+
+**Limits.** No injected protect set (the REPL injects the H1 cycle edges, which would keep some of strict's zeroed edges); one data seed per dataset; the Cauchy inner kernel with the mean-edge bandwidth and no gauge, plus the Gaussian on BlattHierarchy 0.15 only; the stage threshold of 1 e-fold, fixed before the run; the six-seed cells vary the chain, not the data. The first TSV header named only one dataset's columns, so the rows were re-read with the per-dataset schema; `bb47dbd` fixes the harness.
