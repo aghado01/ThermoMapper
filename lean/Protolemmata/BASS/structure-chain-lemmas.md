@@ -2,7 +2,7 @@
 
 Grounds what the mixing results rest on, and the checks a new reversible-jump kernel owes before it lands (F-X4). Gap G1 of the [lineage-gaps register](../../../issues/regression/bass/lineage-gaps-register.md), and the KHAOS pieces of E4 and E5.
 
-**Status (2026-11-01).** SC-1, SC-2, SC-3 and SC-5 proved in `lean/Enthymemata/BassStructureChain.lean`, with no apologies. SC-4's walks are done, below, and they correct what SC-4 first expected. [`lineage-gap-checks.py`](lineage-gap-checks.py) keeps the numeric checks, and SC-0's measurement is [briefed](../../../issues/regression/bass/spectral-gap-brief.md) apart.
+**Status (2026-11-01).** SC-1, SC-2, SC-3 and SC-5 proved in `lean/Enthymemata/BassStructureChain.lean`, with no apologies. SC-4's walks are done, below, and they correct what SC-4 first expected. [`lineage-gap-checks.py`](lineage-gap-checks.py) keeps the numeric checks, and SC-0's measurement is [reported](../../../issues/regression/bass/spectral-gap-brief.md) apart: γ falls exponentially in N on every replicate cell, with all the growth at modes at the count cap, and one mode needing k = 2 nearly stops deepening at two free slots, as SC-5 gives. Weak directions, where a term's gain is comparable to ½ ln N, are unread.
 
 **Statements that changed.**
 - `gap_le_cut` drops `∑ π = 1`. The inequality never uses it: normalization is what makes the left side a variance, and `varianceOf_indicator` holds without it.
