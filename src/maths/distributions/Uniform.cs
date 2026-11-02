@@ -1,4 +1,5 @@
 using System;
+using Maths.Rng;
 
 namespace Maths.Distributions;
 
@@ -30,6 +31,42 @@ public readonly struct Uniform : IContinuousDistribution, IIntervalMoments
 
     /// <summary>The width upper − lower.</summary>
     public double Width => Upper - Lower;
+
+    /// <summary>One draw.</summary>
+    public double Sample(Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        return Lower + rng.NextDouble() * Width;
+    }
+
+    /// <inheritdoc/>
+    public double SampleOn(Xoshiro256PlusPlus rng, double lower, double upper)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        (lower, upper) = Tails.Clip(lower, upper, Lower, Upper);
+        return Math.Clamp(lower + rng.NextDouble() * (upper - lower), lower, upper);
+    }
+
+    /// <inheritdoc/>
+    public double Quantile(double p)
+    {
+        Tails.CheckProbability(p);
+        return Math.Min(Lower + p * Width, Upper);
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogCdf(double logP)
+    {
+        Tails.CheckLogProbability(logP);
+        return Math.Min(Lower + Math.Exp(logP) * Width, Upper);
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogSurvival(double logS)
+    {
+        Tails.CheckLogProbability(logS);
+        return Math.Max(Upper - Math.Exp(logS) * Width, Lower);
+    }
 
     public double LogPdf(double x) => x >= Lower && x <= Upper ? -Math.Log(Width) : double.NegativeInfinity;
     public double Cdf(double x) => Math.Clamp((x - Lower) / Width, 0.0, 1.0);

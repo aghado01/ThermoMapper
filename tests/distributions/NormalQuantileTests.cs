@@ -41,6 +41,25 @@ public sealed class NormalQuantileTests
         }
     }
 
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(-5.0)]
+    [InlineData(-700.0)]
+    [InlineData(-701.0)]      // where e^logP stops being in range for AS 241, and Newton takes over
+    [InlineData(-1e4)]
+    [InlineData(-1e8)]
+    [InlineData(-4e14)]       // the last Newton, with a slope that is already part rounding
+    [InlineData(-6e14)]       // past it, the Mills-ratio start alone
+    [InlineData(-1e300)]
+    public void InverseLogCdf_RoundTrips_PastTheDoubleRange(double logP)
+    {
+        double z = Normal.StandardInverseLogCdf(logP);
+        Assert.True(Math.Abs(Normal.StandardLogCdf(z) - logP) <= 1e-12 * Math.Max(1.0, -logP), $"Φ({z:R}) reads {Normal.StandardLogCdf(z):R} against {logP:R}");
+        Normal shifted = Normal.MeanSd(3.0, 2.0);
+        Assert.Equal(3.0 + 2.0 * z, shifted.InverseLogCdf(logP), 1e-13 * Math.Abs(3.0 + 2.0 * z));
+        Assert.Equal(3.0 - 2.0 * z, shifted.InverseLogSurvival(logP), 1e-13 * Math.Abs(3.0 - 2.0 * z));
+    }
+
     [Fact]
     public void Quantile_AtAndBeyondTheEnds()
     {

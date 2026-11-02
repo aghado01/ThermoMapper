@@ -9,6 +9,8 @@ namespace Maths.Distributions;
 /// Marsaglia–Tsang <see cref="Gamma"/> sampler. The tails come from <c>Φ(−z) = ½·Q(½, z²/2)</c> in log space, so
 /// <c>ln Φ(−40)</c> is exact where <c>Φ(−40)</c> underflows, and an interval straddling the mean is the sum of
 /// two error functions rather than a difference of CDFs near ½. A readonly value type: zero-alloc in inner loops.
+/// <para><see cref="SampleOn"/> is the tail-stable truncated draw, by <see cref="LogConcaveEnvelope"/>: N(0, 1) on
+/// [10, ∞) accepts 99.6% of its proposals, in differences from the bound that keep their digits on [10, 10.001].</para>
 /// <para>Interval moments are analytic at every power: the density's Taylor series about the centre of each short
 /// stretch of the interval, φ(z + u) = φ(z)·Σₙ (−1)ⁿHeₙ(z)uⁿ/n!, integrated term by term and summed to convergence. A
 /// stretch's half-width h keeps h·(1 + |z|) ≤ 1, so the series never cancels by more than e³, where the moments' recurrence
@@ -69,6 +71,24 @@ public readonly struct Normal : IContinuousDistribution, IIntervalMoments
 
     /// <summary>One draw from this distribution.</summary>
     public double Sample(Xoshiro256PlusPlus rng) => Mean + Sd * SampleStandard(rng);
+
+    /// <inheritdoc/>
+    public double SampleOn(Xoshiro256PlusPlus rng, double lower, double upper)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        (lower, upper) = Tails.Clip(lower, upper, double.NegativeInfinity, double.PositiveInfinity);
+        double anchor = Math.Clamp(Mean, lower, upper), z = (anchor - Mean) / Sd;
+        double reach = 2.0 / (Math.Abs(z) + Math.Sqrt(z * z + 2.0));
+        double delta = LogConcaveEnvelope.Draw(rng, new LogRatio(z), (anchor - lower) / Sd, (upper - anchor) / Sd, reach, reach);
+        return Math.Clamp(anchor + Sd * delta, lower, upper);
+    }
+
+    // h(δ) = −δ(z + δ/2): the standard normal's log density about z.
+    private readonly struct LogRatio(double z) : IConcaveLogRatio
+    {
+        public double Value(double delta) => -delta * (z + 0.5 * delta);
+        public double Slope(double delta) => -(z + delta);
+    }
 
     public double LogPdf(double x)
     {
@@ -166,8 +186,47 @@ public readonly struct Normal : IContinuousDistribution, IIntervalMoments
         }
     }
 
-    /// <summary>The quantile function: the x with <c>P(X ≤ x) = p</c>; −∞ at 0, +∞ at 1, NaN outside [0, 1].</summary>
-    public double Quantile(double p) => Mean + Sd * StandardQuantile(p);
+    /// <inheritdoc/>
+    public double Quantile(double p)
+    {
+        Tails.CheckProbability(p);
+        return Mean + Sd * StandardQuantile(p);
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogCdf(double logP) => Mean + Sd * StandardInverseLogCdf(logP);
+
+    /// <inheritdoc/>
+    public double InverseLogSurvival(double logS) => Mean - Sd * StandardInverseLogCdf(logS);
+
+    /// <summary>
+    /// Φ⁻¹(e^logP): <see cref="StandardQuantile"/> where e^logP is in range, and below that Newton on
+    /// <see cref="StandardLogCdf"/> from the Mills-ratio start z² = u − ln(2πu), u = −2·logP, which is the value itself once
+    /// u is past ε⁻¹, where the slope's −z²/2 − ln Φ(z) is all rounding. A positive log is refused.
+    /// </summary>
+    public static double StandardInverseLogCdf(double logP)
+    {
+        Tails.CheckLogProbability(logP);
+        if (logP == 0.0) return double.PositiveInfinity;
+        if (double.IsNegativeInfinity(logP)) return double.NegativeInfinity;
+        if (logP > -SpecialFunctions.Ln2) return -StandardInverseLogCdf(SpecialFunctions.Log1mExp(logP));
+        if (logP >= -700.0) return StandardQuantile(Math.Exp(logP));
+
+        double u = -2.0 * logP, start = -Math.Sqrt(u - Math.Log(2.0 * Math.PI * u));
+        if (u > 1e15) return start;
+        double z = TailInversion.Solve(new LowerTail(), logP, start, double.NegativeInfinity, 0.0, increasing: true, scale: 0.0, out double correction);
+        return z + correction;
+    }
+
+    private readonly struct LowerTail : ILogTail
+    {
+        public double At(double z, out double slope)
+        {
+            double value = StandardLogCdf(z);
+            slope = Math.Exp(-0.5 * z * z - LogSqrt2Pi - value);
+            return value;
+        }
+    }
 
     /// <summary>
     /// The standard normal quantile Φ⁻¹(p), by Wichura's algorithm AS 241 (PPND16, 1988): rational approximations

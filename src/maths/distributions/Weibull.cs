@@ -60,11 +60,40 @@ public readonly struct Weibull : IContinuousDistribution
         return Scale * Math.Pow(-Math.Log(1.0 - rng.NextDouble()), 1.0 / Shape);
     }
 
+    /// <summary>
+    /// One draw conditioned on [<paramref name="lower"/>, <paramref name="upper"/>] in closed form: (x/λ)ᵏ is a unit
+    /// exponential, and an exponential cut to an interval inverts directly. One uniform.
+    /// </summary>
+    public double SampleOn(Xoshiro256PlusPlus rng, double lower, double upper)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        (lower, upper) = Tails.Clip(lower, upper, 0.0, double.PositiveInfinity);
+        double floor = Math.Pow(lower / Scale, Shape);
+        double width = floor > 0.0 ? floor * SpecialFunctions.Expm1(Shape * LogConcaveEnvelope.LogRatio(lower, upper)) : Math.Pow(upper / Scale, Shape);
+        double e = LogConcaveEnvelope.TruncatedExponential(rng.NextDouble(), 1.0, width);
+        double x = floor > 0.0 ? LogConcaveEnvelope.Scaled(lower, SpecialFunctions.Log1p(e / floor) / Shape) : Scale * Math.Pow(e, 1.0 / Shape);
+        return Math.Clamp(x, lower, upper);
+    }
+
     /// <summary>The p-quantile <c>λ(−ln(1 − p))^(1/k)</c>, with ln(1 − p) taken accurately for small p.</summary>
     public double Quantile(double p)
     {
-        if (!(p >= 0.0 && p <= 1.0)) throw new ArgumentOutOfRangeException(nameof(p), "A probability must lie in [0, 1].");
+        Tails.CheckProbability(p);
         return Scale * Math.Pow(-SpecialFunctions.Log1p(-p), 1.0 / Shape);
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogCdf(double logP)
+    {
+        Tails.CheckLogProbability(logP);
+        return Scale * Math.Pow(-SpecialFunctions.Log1mExp(logP), 1.0 / Shape);
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogSurvival(double logS)
+    {
+        Tails.CheckLogProbability(logS);
+        return Scale * Math.Pow(-logS, 1.0 / Shape);
     }
 
     /// <summary>Log density; −∞ for <c>x ≤ 0</c>.</summary>

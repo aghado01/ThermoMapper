@@ -34,13 +34,57 @@ public readonly struct HalfCauchy : IContinuousDistribution
         return Quantile(rng.NextDouble());
     }
 
+    /// <summary>
+    /// One draw conditioned on [<paramref name="lower"/>, <paramref name="upper"/>] in closed form: x = s·tan θ with θ
+    /// uniform on the interval's angles, measured from the far end above s, so far-tail angles keep their digits. One uniform.
+    /// </summary>
+    public double SampleOn(Xoshiro256PlusPlus rng, double lower, double upper)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        (lower, upper) = Tails.Clip(lower, upper, 0.0, double.PositiveInfinity);
+        double a = lower / Scale, b = upper / Scale, u = rng.NextDouble();
+        // atan b − atan a = atan((b − a)/(1 + ab)), with no difference of near-equal angles.
+        double width = double.IsPositiveInfinity(b) ? 0.5 * Math.PI - Math.Atan(a) : Math.Atan2(b - a, 1.0 + a * b);
+        double x;
+        if (a >= 1.0)
+        {
+            x = Scale / Math.Tan(Math.Atan(1.0 / a) - u * width);
+        }
+        else
+        {
+            double theta = Math.Atan(a) + u * width;
+            x = theta <= 0.25 * Math.PI ? Scale * Math.Tan(theta) : Scale / Math.Tan(0.5 * Math.PI - theta);
+        }
+        return Math.Clamp(x, lower, upper);
+    }
+
     /// <summary>The p-quantile <c>s·tan(πp/2)</c>; +∞ at p = 1.</summary>
     public double Quantile(double p)
     {
-        if (!(p >= 0.0 && p <= 1.0)) throw new ArgumentOutOfRangeException(nameof(p), "A probability must lie in [0, 1].");
+        Tails.CheckProbability(p);
         if (p == 1.0) return double.PositiveInfinity;
         // tan(πp/2) = 1/tan(π(1 − p)/2), the form that keeps its digits as p approaches 1.
         return p <= 0.5 ? Scale * Math.Tan(0.5 * Math.PI * p) : Scale / Math.Tan(0.5 * Math.PI * (1.0 - p));
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogCdf(double logP)
+    {
+        Tails.CheckLogProbability(logP);
+        // Below e⁻³⁰, tan(πp/2) is πp/2 to double precision, and in logs a small s or p stays in range.
+        return logP < -30.0 ? Math.Exp(logP + Math.Log(0.5 * Math.PI * Scale))
+             : logP <= -SpecialFunctions.Ln2 ? Quantile(Math.Exp(logP))
+             : InverseLogSurvival(SpecialFunctions.Log1mExp(logP));
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogSurvival(double logS)
+    {
+        Tails.CheckLogProbability(logS);
+        if (logS == 0.0) return 0.0;
+        return logS < -30.0 ? Math.Exp(Math.Log(2.0 * Scale / Math.PI) - logS)
+             : logS <= -SpecialFunctions.Ln2 ? Scale / Math.Tan(0.5 * Math.PI * Math.Exp(logS))
+             : Scale * Math.Tan(0.5 * Math.PI * -SpecialFunctions.Expm1(logS));
     }
 
     /// <summary>Log density; −∞ for <c>x &lt; 0</c>.</summary>

@@ -52,6 +52,41 @@ public readonly struct InverseGamma : IContinuousDistribution
         return 1.0 / Gamma.SampleCore(rng, Shape, 1.0 / Scale);
     }
 
+    /// <summary>
+    /// One draw conditioned on [<paramref name="lower"/>, <paramref name="upper"/>]: the reciprocal of
+    /// <see cref="Gamma.SampleOn"/>'s draw, in the same coordinate, reflected. With a floor far above the mode, as a floor
+    /// on a variance has when the fit leaves almost no residual, the draw is nearly the power law x^(−α−1) beyond it.
+    /// </summary>
+    public double SampleOn(Xoshiro256PlusPlus rng, double lower, double upper)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        (lower, upper) = Tails.Clip(lower, upper, 0.0, double.PositiveInfinity);
+        double anchor = Math.Clamp(Scale / Shape, lower, upper);
+        double delta = Gamma.DrawLogOffset(rng, Shape, Scale / anchor, LogConcaveEnvelope.LogRatio(anchor, upper), LogConcaveEnvelope.LogRatio(lower, anchor));
+        return Math.Clamp(LogConcaveEnvelope.Scaled(anchor, -delta), lower, upper);
+    }
+
+    /// <inheritdoc/>
+    public double Quantile(double p)
+    {
+        Tails.CheckProbability(p);
+        return p <= 0.5 ? InverseLogCdf(Math.Log(p)) : InverseLogSurvival(SpecialFunctions.Log1p(-p));
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogCdf(double logP)
+    {
+        Tails.CheckLogProbability(logP);
+        return Scale / Gamma.UnitQuantile(Shape, SpecialFunctions.Log1mExp(logP), logP);
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogSurvival(double logS)
+    {
+        Tails.CheckLogProbability(logS);
+        return Scale / Gamma.UnitQuantile(Shape, logS, SpecialFunctions.Log1mExp(logS));
+    }
+
     /// <summary>Log density; −∞ for <c>x ≤ 0</c>.</summary>
     public double LogPdf(double x)
     {

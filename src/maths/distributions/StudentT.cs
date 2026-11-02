@@ -13,6 +13,10 @@ namespace Maths.Distributions;
 /// <para>Interval moments are by <see cref="GaussLegendre"/> at every ν, ν = 1 included, over a finite interval: panels
 /// split at the location and graded geometrically away from it, so each panel stays three half-widths from the density's
 /// poles at location ± i·scale·√ν, with 20 nodes per panel, and the error estimated by the 40-node rule's difference.</para>
+/// <para>In y = asinh(t/√ν) the density is log-concave at every ν, ∝ cosh(y)^(−ν), with tails linear in y. So
+/// <see cref="SampleOn"/> is rejection under <see cref="LogConcaveEnvelope"/>, and the quantiles are Newton on the log tail
+/// there, on P(|T| &lt; t) near the centre so a small t keeps relative digits. They inherit the tails' accuracy at very large
+/// ν; the draws read no tail.</para>
 /// </summary>
 public readonly struct StudentT : IContinuousDistribution, IIntervalMoments
 {
@@ -65,6 +69,115 @@ public readonly struct StudentT : IContinuousDistribution, IIntervalMoments
         double z = Normal.SampleStandard(rng);
         double v = 2.0 * Gamma.SampleStandard(rng, 0.5 * DegreesOfFreedom);
         return Location + Scale * z * Math.Sqrt(DegreesOfFreedom / v);
+    }
+
+    /// <inheritdoc/>
+    public double SampleOn(Xoshiro256PlusPlus rng, double lower, double upper)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        (lower, upper) = Tails.Clip(lower, upper, double.NegativeInfinity, double.PositiveInfinity);
+        double nu = DegreesOfFreedom, rootNu = Math.Sqrt(nu), anchor = Math.Clamp(Location, lower, upper);
+        double t0 = (anchor - Location) / Scale, v = Math.Abs(t0) / rootNu, hypot = Hypot(v);
+        double small = 0.5 / (hypot * (hypot + v));   // (1 − |τ|)/2, with τ = tanh y₀ = t₀/√(ν + t₀²)
+        double up = t0 >= 0.0 ? small : 1.0 - small, down = t0 >= 0.0 ? 1.0 - small : small;
+        double tau = down - up;
+        double left = t0 <= 0.0 ? AsinhSpan(v, (anchor - lower) / (Scale * rootNu)) : 0.0;
+        double right = t0 >= 0.0 ? AsinhSpan(v, (upper - anchor) / (Scale * rootNu)) : 0.0;
+        double reach = LogConcaveEnvelope.Reach(nu * Math.Abs(tau), 4.0 * nu * up * down);
+        double delta = LogConcaveEnvelope.Draw(rng, new AsinhRatio(nu, tau, up, down), left, right, reach, reach);
+        // t₀ cosh δ + √(ν + t₀²) sinh δ − t₀, whose terms share a sign, as δ points away from the location.
+        double half = Math.Sinh(0.5 * delta), moved = rootNu * hypot * Math.Sinh(delta);
+        if (t0 != 0.0) moved += 2.0 * t0 * half * half;
+        return Math.Clamp(anchor + Scale * moved, lower, upper);
+    }
+
+    // √(1 + v²), at the v where 1 is below the rounding of v² before v² can overflow.
+    private static double Hypot(double v) => v < 1e8 ? Math.Sqrt(1.0 + v * v) : v;
+
+    // asinh(v + w) − asinh(v) for v, w ≥ 0, keeping its digits for small w far out.
+    private static double AsinhSpan(double v, double w)
+    {
+        if (double.IsPositiveInfinity(w)) return w;
+        double far = v + w, hypotFar = Hypot(far), hypot = Hypot(v);
+        return SpecialFunctions.Log1p(w * (1.0 + (far + v) / (hypotFar + hypot)) / (v + hypot));
+    }
+
+    // h(δ) = −ν ln(cosh(y₀ + δ)/cosh y₀), with cosh δ + τ sinh δ = e^|δ|(1 + side·(e^(−2|δ|) − 1)), side the smaller of
+    // (1 ∓ τ)/2 on that side, which neither overflows nor cancels.
+    private readonly struct AsinhRatio(double nu, double tau, double up, double down) : IConcaveLogRatio
+    {
+        public double Value(double delta)
+            => delta >= 0.0 ? -nu * (delta + SpecialFunctions.Log1p(up * SpecialFunctions.Expm1(-2.0 * delta)))
+                            : -nu * (-delta + SpecialFunctions.Log1p(down * SpecialFunctions.Expm1(2.0 * delta)));
+
+        public double Slope(double delta)
+        {
+            double t = Math.Tanh(delta);
+            return -nu * (tau + t) / (1.0 + tau * t);
+        }
+    }
+
+    /// <inheritdoc/>
+    public double Quantile(double p)
+    {
+        Tails.CheckProbability(p);
+        if (p == 0.0) return double.NegativeInfinity;
+        if (p == 1.0) return double.PositiveInfinity;
+        return p < 0.5 ? Location - Scale * UpperT(Math.Log(p), 1.0 - 2.0 * p)
+                       : Location + Scale * UpperT(SpecialFunctions.Log1p(-p), 2.0 * p - 1.0);
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogCdf(double logP) => Location + Scale * SignedT(logP);
+
+    /// <inheritdoc/>
+    public double InverseLogSurvival(double logS) => Location - Scale * SignedT(logS);
+
+    // The standard t with ln P(T ≤ t) = logP.
+    private double SignedT(double logP)
+    {
+        Tails.CheckLogProbability(logP);
+        if (double.IsNegativeInfinity(logP)) return double.NegativeInfinity;
+        if (logP == 0.0) return double.PositiveInfinity;
+        if (logP <= -SpecialFunctions.Ln2) return -UpperT(logP, -SpecialFunctions.Expm1(logP + SpecialFunctions.Ln2));
+        double logTail = SpecialFunctions.Log1mExp(logP);
+        return UpperT(logTail, -SpecialFunctions.Expm1(logTail + SpecialFunctions.Ln2));
+    }
+
+    // The t ≥ 0 with ln P(T > t) = logTail and P(|T| < t) = central, solved on central near the centre and on the tail
+    // beyond it. P(|T| < t) ≤ 2f(0)t and ln S ≤ the tail's asymptote in y each bound the root, from the side Newton keeps.
+    private double UpperT(double logTail, double central)
+    {
+        if (central <= 0.0) return 0.0;
+        double nu = DegreesOfFreedom, rootNu = Math.Sqrt(nu), logUnit = _logNormalizer + Math.Log(Scale) + 0.5 * Math.Log(nu);
+        double y, correction;
+        if (logTail >= -2.0 * SpecialFunctions.Ln2)
+        {
+            double start = 0.5 * central * Math.Exp(-logUnit);   // the density in y at the centre is e^logUnit
+            y = TailInversion.Solve(new AsinhTail(this, logUnit, central: true), Math.Log(central), start, 0.0, double.PositiveInfinity, true, scale: 0.0, out correction);
+        }
+        else
+        {
+            double asymptote = SpecialFunctions.Ln2 + (-Math.Log(nu) - SpecialFunctions.LogBeta(0.5 * nu, 0.5) - logTail) / nu;
+            if (asymptote > 700.0) return rootNu * Math.Sinh(asymptote);
+            double z = Normal.StandardInverseLogCdf(logTail);
+            double start = Math.Min(asymptote, Math.Asinh(-z * (1.0 + (z * z + 1.0) / (4.0 * nu)) / rootNu));   // Cornish–Fisher
+            y = TailInversion.Solve(new AsinhTail(this, logUnit, central: false), logTail, start, 0.0, double.PositiveInfinity, false, scale: 0.0, out correction);
+        }
+        return rootNu * (Math.Sinh(y) + Math.Cosh(y) * correction);
+    }
+
+    // The log tail or ln P(|T| < t) in y = asinh(t/√ν), whose density is e^logUnit·cosh(y)^(−ν).
+    private readonly struct AsinhTail(StudentT owner, double logUnit, bool central) : ILogTail
+    {
+        public double At(double y, out double slope)
+        {
+            double nu = owner.DegreesOfFreedom;
+            (double logUpper, double logCentral) = owner.TailLogs(Math.Sqrt(nu) * Math.Sinh(y));
+            double logDensity = logUnit - nu * (y - SpecialFunctions.Ln2 + SpecialFunctions.Log1p(Math.Exp(-2.0 * y)));
+            slope = central ? 2.0 * Math.Exp(logDensity - logCentral) : -Math.Exp(logDensity - logUpper);
+            return central ? logCentral : logUpper;
+        }
     }
 
     public double LogPdf(double x)

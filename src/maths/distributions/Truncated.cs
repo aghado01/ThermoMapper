@@ -1,4 +1,5 @@
 using System;
+using Maths.Rng;
 
 namespace Maths.Distributions;
 
@@ -7,8 +8,11 @@ namespace Maths.Distributions;
 /// as the normalizer. Because that probability comes from the parent's log tails, a far-tail truncation such as
 /// N(0, 1) on [10, ∞) has the right density, φ(x)/Q(10), where 1 − Φ(10) would be 0. Generic over any
 /// <see cref="IContinuousDistribution"/> value type, so it adds no allocation; build it with
-/// <see cref="Truncated.Of{T}"/>. It has no sampler yet: no caller draws from a truncated law. Its interval moments are the
-/// parent's on the interval clipped to the bounds, scaled by the log mass, for a parent that has them.
+/// <see cref="Truncated.Of{T}"/>. Its draws are the parent's <see cref="IContinuousDistribution.SampleOn"/>, per family, none
+/// of which read the log mass, so a loop whose bounds or parameters move calls the parent directly and skips building this.
+/// Its quantiles read the parent's: F(x) = F(lower) + p·mass or S(x) = S(upper) + (1 − p)·mass, sums in log space that cancel
+/// nothing. Its interval moments are the parent's on the interval clipped to the bounds, scaled by the log mass, for a
+/// parent that has them.
 /// </summary>
 public readonly struct Truncated<T> : IContinuousDistribution, IIntervalMoments where T : struct, IContinuousDistribution
 {
@@ -53,6 +57,48 @@ public readonly struct Truncated<T> : IContinuousDistribution, IIntervalMoments 
         double lo = Math.Max(lower, Lower), hi = Math.Min(upper, Upper);
         if (!(hi > lo)) return double.NegativeInfinity;
         return Parent.LogIntervalProbability(lo, hi) - LogMass;
+    }
+
+    /// <summary>One draw, from the parent on the bounds.</summary>
+    public double Sample(Xoshiro256PlusPlus rng) => Parent.SampleOn(rng, Lower, Upper);
+
+    /// <inheritdoc/>
+    public double SampleOn(Xoshiro256PlusPlus rng, double lower, double upper)
+    {
+        (lower, upper) = Tails.Clip(lower, upper, Lower, Upper);
+        return Parent.SampleOn(rng, lower, upper);
+    }
+
+    /// <inheritdoc/>
+    public double Quantile(double p)
+    {
+        Tails.CheckProbability(p);
+        return p <= 0.5 ? InverseLogCdf(Math.Log(p)) : InverseLogSurvival(SpecialFunctions.Log1p(-p));
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogCdf(double logP)
+    {
+        Tails.CheckLogProbability(logP);
+        return Invert(logP, SpecialFunctions.Log1mExp(logP));
+    }
+
+    /// <inheritdoc/>
+    public double InverseLogSurvival(double logS)
+    {
+        Tails.CheckLogProbability(logS);
+        return Invert(SpecialFunctions.Log1mExp(logS), logS);
+    }
+
+    private double Invert(double logP, double logQ)
+    {
+        if (double.IsNegativeInfinity(logP)) return Lower;
+        if (double.IsNegativeInfinity(logQ)) return Upper;
+        double logLower = Tails.LogAdd(Parent.LogCdf(Lower), logP + LogMass);
+        double x = logLower <= -SpecialFunctions.Ln2
+            ? Parent.InverseLogCdf(logLower)
+            : Parent.InverseLogSurvival(Tails.LogAdd(Parent.LogSurvival(Upper), logQ + LogMass));
+        return Math.Clamp(x, Lower, Upper);
     }
 
     /// <inheritdoc/>
