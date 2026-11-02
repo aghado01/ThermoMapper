@@ -164,9 +164,8 @@ Nothing below was decided except where it says so. Application framing stays out
 | Ultrametricity test | Not built; placement undecided | Open |
 | Per-sweep partitions for PH | Not built. A zigzag over thinned draws is order-dependent; resampling them per temperature is the better route to barcodes with uncertainty | Open |
 
-**Next on the engine side, if wanted:** filled H₁ over frames (P1d). The builder would emit triangle cells for
-`FastZigzag`, which turns "does a return die by fill or by departure?" into two readable options instead of a choice.
-A relative reading over frames is the other open seam.
+**Next on the engine side:** filled H₁ over frames landed the same day as P1d
+([p1d-filled-h1-brief.md](p1d-filled-h1-brief.md)). A relative reading over frames is the open seam.
 
 **To forward to the Bayesian clustering session:** θ read as a Binder cost ratio applies to each edge's decision, while
 the θ-graph's components are the closure, which is single linkage and not the Binder optimum. The robust window and H₀

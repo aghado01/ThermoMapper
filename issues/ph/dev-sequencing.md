@@ -55,9 +55,9 @@ Engine-first, P0 → P1 → P2. This is the track with the first genuinely new *
     `ConditionedFiltration.BuildSweep`): any frame sequence → `ZigzagFiltration` → the engines unchanged, read back
     on the frames, H0 and unfilled H1. No consumer is wired. Briefs: [p1c-nonmonotone-zigzag-brief.md](p1c-nonmonotone-zigzag-brief.md),
     [ph-setup-brief.md](ph-setup-brief.md).
-  - **filled-H1 over the zigzag** (deferred, → P1d) — `GraphZigzag`'s H1 is *unfilled* cycle space; the
-    Rips-faithful filled case needs the full simplicial `ZigzagFiltration` + oracle. Key call: a return-over-`T`
-    dies by triangle-fill or by edge-departure ([zigzag-frontier.md](../../../MarkBrain/ThermoMapper/issues/tda-purification/zigzag-engine/zigzag-frontier.md) — verify before building, multi-track area).
+  - **P1d** (filled H1 over frames) — ✅ **landed & green** 2026-11-01 (`FrameComplex.Flag`, read by `FastZigzag`). The
+    "key call", whether a return dies by fill or by departure, needed no decision: both happen, and `FrameBar.End`
+    reports which. Brief and report: [p1d-filled-h1-brief.md](p1d-filled-h1-brief.md).
   - **full multiparameter module** → **Z6**.
 - **P2 · directedness v1.5** — directed flag complex (combinatorial) + the built magnetic Laplacian (spectral);
   experiments M1–M3. **M2 = two returns equal in persistence, separated by flux — the gate that earns the phase.**

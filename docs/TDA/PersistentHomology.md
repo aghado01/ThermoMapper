@@ -125,13 +125,13 @@ The finite bars of the requested dimension form $A$ (n bars) and $B$ (m bars); w
 - **`ResidualPrior.ResidualEdges`** produces content edges as prediction residuals $r=\phi(|t_j-(t_i+\tau)|,|t_i-(t_j+\tau)|)$. The fold φ is the minimum by default, or the maximum or the mean. An optional reach bound $|\tau|\le\Delta$ applies.
 - **`ReachSlices`** evaluates a grid of reach bounds in the order given.
 - **`ConditionedFiltration.ComputeRelativeBarcode`** reads the union's filtration relative to $K_0$, the flag complex of the backbone edges on their endpoints. A content edge stays outside $K_0$ whatever its value, so a return the prior predicted (residual 0) is still reported. $K_0$ is present throughout the pair, so $\varepsilon_0$ does not enter. It reports only the degrees below the skeleton's top, which are exact.
-- **`ConditionedFiltration.BuildSweep`** turns a non-monotone sweep of the conditioned graph into frames for the zigzag engines ([frame sequences](./ZigzagPersistence.md#frame-sequences)). With a connected spanning backbone, H0 over any sweep is one bar, so a sweep's returns read in H1, as unfilled graph cycles.
+- **`ConditionedFiltration.BuildSweep`** turns a non-monotone sweep of the conditioned graph into frames for the zigzag engines ([frame sequences](./ZigzagPersistence.md#frame-sequences)). With a connected spanning backbone, H0 over any sweep is one bar, so a sweep's returns read in H1: as graph cycles by default, or with `FrameComplex.Flag` as cycles that triangles can fill, where each bar reports whether it was filled or broken.
 
 **The relative complex.** `RelativeFiltration` holds the cells of $K$ outside $K_0$, in $K$'s order, each boundary keeping only its faces outside $K_0$, and `PersistentHomology` reduces it with no new reduction code. A chord whose endpoints both lie in $K_0$ has an empty relative boundary, so it is a cycle by itself. A $K_0$ cycle that $K$ fills reappears one degree up, as a relative H2 class born where it is filled, by the pair's long exact sequence. For a connected spanning $K_0$, $H_1(K,K_0)\cong H_1(K)/\mathrm{im}\,H_1(K_0)$, so the relative H1 bars are exactly the absolute H1 bars born after $K_0$. This is persistence against a *fixed* subcomplex, an ordinary filtration of the quotient, and is a different object from the relative modules $H(K,K_i)$ of de Silva, Morozov and Vejdemo-Johansson, which move with the filtration.
 
 **Which engine reads it.** Only `PersistentHomology`. The cohomology and involuted paths compute H0 by union-find over each edge's two vertices and assume absolute structure, so handing them a `RelativeFiltration` is not supported. Bars from `RelativeFiltration.ComputeBarcode` index `Ambient`, and a bar's `Cycle` is a relative cycle, a chain whose boundary lies in $K_0$, so it need not close. Essential bars carry `Generator` only, which for a connected spanning $K_0$ is the chord that closed the return.
 
-The later phases the code describes (directed, gauge and sheaf variants), and filled H1 over a sweep, are not implemented.
+The later phases the code describes (directed, gauge and sheaf variants) are not implemented.
 
 ## Configuration
 

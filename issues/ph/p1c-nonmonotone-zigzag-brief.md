@@ -94,4 +94,4 @@ Built, with three departures from this brief; the checks and results are in [ph-
 - **The diff order is an option,** `FrameTransition { Union, Intersection }`, and it decides transients only, by the
   Diamond Principle.
 
-Filled H1 (§3) stays deferred to P1d.
+Filled H₁ (§3) landed as P1d, and its "key decision" turned out not to be one: [p1d-filled-h1-brief.md](p1d-filled-h1-brief.md).

@@ -105,7 +105,7 @@ The general engines `FastZigzag`, `ReflectionZigzag` and `StrongCollapseZigzag` 
 | General engines | `FastZigzag.Compute(f, maxDimension = int.MaxValue, representatives = false)`; `ReflectionZigzag.Compute(f, maxDimension)` |
 | Oracles | `ZigzagBarcodeNaive.Compute(f, maxDimension)`; `ZigzagMapBarcode.Compute(complexes, dimOf, bndOf, N, steps, maxDimension)`, `ZigzagMapBarcode.ComputeFromZigzag(f, maxDimension)`, `ZigzagMapBarcode.Step(IsForward, CellMap)`; `StrongCollapse.Core`, `StrongCollapse.CoreWithRetraction`; `StrongCollapseZigzag.Compute(f, maxDimension)` |
 | Graph engines | `GraphZigzag.Compute(f, maxDimension = 0, representatives = false, strictRepresentatives = false, algorithm = Fast)`; `GraphZigzagFast.Compute(…)`; `GraphZigzagH1.Compute(f, representatives)`; `GraphZigzagH1Fast.Compute(f, representatives)`; `GraphZigzagAlgorithm` |
-| Frame sequences | `GraphFrameZigzag.Build(n, frames, transition = Union)`, `GraphFrameZigzag.FromEdgeSets(n, edgeSets, transition)`, `GraphFrameZigzag.FromGraphs(graphs, transition)`, `GraphFrameZigzag.FromEdgeField(substrate, fields, thresholds, transition)`; `GraphFrame(Vertices, Edges)`; `FrameTransition { Union, Intersection }`; `GraphFrameFiltration.Filtration`, `FrameCount`, `FrameBars(barcode)`, `TransientBars(barcode)`; `FrameBar(Dimension, FirstFrame, LastFrame, StepBar)`; `TransientBar(Dimension, AfterFrame, StepBar)` |
+| Frame sequences | `GraphFrameZigzag.Build(n, frames, transition = Union, complex = Graph)`, `GraphFrameZigzag.FromEdgeSets(n, edgeSets, transition, complex)`, `GraphFrameZigzag.FromGraphs(graphs, transition, complex)`, `GraphFrameZigzag.FromEdgeField(substrate, fields, thresholds, transition, complex)`; `GraphFrame(Vertices, Edges)`; `FrameTransition { Union, Intersection }`; `FrameComplex { Graph, Flag }`; `GraphFrameFiltration.Filtration`, `Transition`, `Complex`, `FrameCount`, `FrameBars(barcode)`, `TransientBars(barcode)`; `FrameBar(Dimension, FirstFrame, LastFrame, Start, End, StepBar)`; `FrameEvent { Unobserved, Arrival, Departure }`; `TransientBar(Dimension, AfterFrame, StepBar)` |
 | Codimension one | `DualGraphSpec(p, voidDualVertexIds, pSimplexDualVertex, pMinus1SimplexDualEdge)`; `PlanarDualGraph.Build(vertexCoords, edges, triangleVertices, firstDualVertexId = 0)`; `CodimensionOneDualGraph.Build(p, vertexCoords, pMinus1Simplices, pSimplices, firstDualVertexId = 0)`; `CodimensionOneZigzag.Compute(f, dual, algorithm = Reference)`; `EmbeddedComplexZigzag.Compute(p, vertexCoords, pMinus1Simplices, pSimplices, f, algorithm = Reference)` |
 | Support | `CellFiltration` (an `IFiltration` over explicit boundaries); internal `RuVineyard`; unused `IAbstractCell`, `SimplicialCell.GetBoundaryIndices` |
 
@@ -313,22 +313,40 @@ Each piece scans the whole filtration.
 
 `GraphFrameZigzag` is the input boundary for a sequence of graphs: frames over stable vertex ids become a `ZigzagFiltration`, one cell per step from empty back to empty, read by any engine unchanged. It is the one file in the zigzag stack that touches `CsrGraph`; the engines stay free of `Graphs.*`. Frames come from whatever a caller's sweep produces: graphs at successive parameter values, a sliding window (frames carry vertex sets, so points can enter and leave), or a per-edge field cut by a per-frame threshold. A constant threshold, a warped path and a non-monotone ridge are all the caller's choice, and nesting is not assumed.
 
-**Cell ids.** Vertex `v` is cell `v`. An edge keeps one cell id across re-entries, allocated at first appearance after the vertices. Inside a batch, faces enter before cofaces and leave after them, in id order.
+**Cell ids.** Vertex `v` is cell `v`. An edge or a triangle keeps one cell id across re-entries, allocated at first appearance after the vertices. Inside a batch, faces enter before cofaces and leave after them, in id order.
+
+**Filled or unfilled.** `FrameComplex` sets what each frame contributes.
+
+- `Graph` is the graph itself, read by the graph engines or `FastZigzag`. A cycle lasts until an edge leaves it.
+- `Flag` is the graph's flag complex through triangles, read by `FastZigzag` with `maxDimension: 1`. A cycle can also be filled, and a hole opens when triangles leave. The graph engines throw on these frames.
+
+H0 is the same under both. Under `Union`, the between-frames complex is the union of the two flag complexes, not the flag complex of the union, so it holds no triangle that neither frame holds, and the Diamond Principle below still applies.
 
 **Reading back.** Engines report bars in step coordinates. A bar covers levels `[Birth + 1, Death]`, where level ℓ is the complex after ℓ steps. `GraphFrameFiltration` keeps each frame's level and each between-frames level, and offers two views over the barcode:
 
-- `FrameBars`: the bars present at some frame, as the inclusive range of frames.
+- `FrameBars`: the bars present at some frame, as the inclusive range of frames, with what started and ended each.
 - `TransientBars`: the bars present between two frames and at neither.
 
 A bar reaching neither is an artifact of the step order inside a batch, such as a vertex that exists for one step before its edge attaches it, and both views drop it. The step-level barcode stays with the caller.
 
-**Union or intersection.** Consecutive frames connect through their union (additions first) or their intersection (deletions first), by `FrameTransition`, default `Union`. The Diamond Principle (Carlsson and de Silva 2010, §5) makes this a choice about transients alone: frame bars are identical, and a transient H1 class of the union corresponds to a transient H0 class of the intersection, between the same two frames. Tests confirm both across random sequences.
+**What starts and ends a bar.** `FrameBar.Start` and `End` read the bar's creating and killing steps from the filtration:
 
-**Nested frames** reduce to ordinary persistence: with no deletions the barcode equals `PersistentHomology` on the edge-birth filtration, and H0 deaths are the union-find merges. Frames that lose edges are what needs the zigzag.
+| `FrameEvent` | As a birth | As a death |
+|---|---|---|
+| `Arrival` | a vertex enters; an edge closes a cycle | a merge; triangles fill a cycle |
+| `Departure` | an edge leaves and splits a component; triangles leave and open a hole | an edge leaves and breaks a cycle; a vertex leaves |
+| `Unobserved` | the bar is at the first frame | the bar is at the last frame |
+
+So whether a cycle was filled or broken is read per bar, and it does not depend on `FrameTransition`. Under `Graph`, an H1 bar never ends by arrival or starts by departure.
+
+**Union or intersection.** Consecutive frames connect through their union (additions first) or their intersection (deletions first), by `FrameTransition`, default `Union`. The Diamond Principle (Carlsson and de Silva 2010, §5) makes this a choice about transients alone: frame bars and their events are identical, and a transient class of the union corresponds to a transient class of the intersection one degree lower, between the same two frames (H1 to H0, and under `Flag` H2 to H1). Tests confirm these across random sequences; that the events agree is a derivation from the theorem's interval map, confirmed by those runs, not read in the theorem.
+
+**Nested frames** reduce to ordinary persistence: with no deletions the barcode equals `PersistentHomology` on the edge-birth filtration, flag or not, and H0 deaths are the union-find merges. Frames that lose edges are what needs the zigzag.
 
 **Caveats.**
 
-- Graph engines give unfilled H1. A cycle dies only when an edge leaves, not when triangles fill it. Filled H1 over frames needs triangle cells and `FastZigzag`, and the builder does not produce them.
+- `Flag` stops at triangles. H0 and H1 are exact, while H2 has nothing above to fill it, so read `maxDimension: 1`.
+- A `Flag` bar reports that it was filled, but cannot yet reliably name the cycle: `FastZigzag` gives no representative for a bar born by a deletion, and representatives above H0 are unverified ([above](#fastzigzag-coning-to-standard-persistence)).
 - H0 over frames is one bar whenever a connected spanning subgraph is present in every frame.
 - Teardown removes every vertex once, so a vertex that left and re-entered departs twice. With `representatives = true`, the graph H0 engines reject that ([Status](#status-and-caveats)).
 
@@ -359,6 +377,7 @@ A bar reaching neither is an artifact of the step order inside a batch, such as 
 | `GraphZigzag.Compute` maxDimension / representatives / strictRepresentatives / algorithm | 0 / false / false / `Fast` | H0 only (≥ 1 adds H1); attach chains; throw instead of null; engine |
 | `GraphZigzagH1*` `representatives` | `false` | Also switches both H1 engines from the threshold rule to cycle-containment pairing |
 | `GraphFrameZigzag` `transition` | `Union` | How consecutive frames connect; decides transients only |
+| `GraphFrameZigzag` `complex` | `Graph` | Which complex each frame contributes; `Flag` is read by `FastZigzag` |
 | `CodimensionOneZigzag`, `EmbeddedComplexZigzag` `algorithm` | `Reference` | Inner H0 engine |
 | `PlanarDualGraph` / `CodimensionOneDualGraph` `firstDualVertexId` | 0 | Base of the dual id range |
 | `CodimensionOneDualGraph` `Eps` (private constant) | 1e-9 (absolute) | Rank and determinant threshold; not configurable |

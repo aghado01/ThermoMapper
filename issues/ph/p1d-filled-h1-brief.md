@@ -1,6 +1,7 @@
 # Brief: P1d, filled H₁ over frames
 
-**Date:** 2026-11-01. **Status:** scope and checks fixed before the first run; report appended below when built.
+**Date:** 2026-11-01. **Status:** built; scope and checks were fixed before the first run (`72763fb`), and the
+[report](#report-2026-11-01) is below.
 **Asked by the user:** "Yes, build P1d", after [ph-setup-brief.md](ph-setup-brief.md) named it as the next engine step.
 Engine work only: no consumer is wired.
 
@@ -72,3 +73,49 @@ All are exact equalities of multisets. Tests: `tests/TDA.Ph.Tests/GraphFrameZigz
 The Z11 check from [ph-setup-brief.md](ph-setup-brief.md) becomes C1, and now also covers events.
 
 If a hand expectation turns out wrong, the report says so and why.
+
+## Report (2026-11-01)
+
+**What landed.** `FrameComplex { Graph, Flag }` on every `GraphFrameZigzag` builder and on `BuildSweep`, and
+`FrameBar.Start` / `End` as `FrameEvent { Unobserved, Arrival, Departure }`. No engine changed, and `Graph` frames build
+the same steps as before. Docs: `docs/TDA/ZigzagPersistence.md`, `docs/TDA/PersistentHomology.md`.
+
+**Results.** `TDA.Ph.Tests` is 394/394 and `TDA.Mapper.Tests` 28/28. Every hand expectation held on its first run. The
+prediction held too: a bar's start and end events are the same under both transitions.
+
+**The first run had one failure, and it changed the tests.** C1's reach guard failed under `Flag`: the read-back agreed
+everywhere, but over 40 trials no cycle was filled and no hole opened. Independent random frames share too few edges for
+a cycle to survive into the next frame, so it can't be filled there. D1's prediction was passing without being tested on
+the events it is about.
+
+The fix was `EvolvingFrames`, where each frame is the last with a few vertices and pairs flipped. C1 now runs 80 trials
+and D1 keeps 200, each half independent and half evolving. No expectation changed, only what the trials reach:
+
+| Check | Reached after the fix |
+|---|---|
+| D1 | H₁ bars ended by arrival (filled): 37; by departure (broken): 179; started by departure (hole opened): 38 |
+| D2 | Union transients: H₁ 287, H₂ 32 |
+| C1, `Flag` | 224 frame bars, 106 transients, 5 fills, 6 holes opened |
+| C1, `Graph` | 577 frame bars, 106 transients, 0 fills, 0 holes opened |
+| N1 | 38 H₁ bars ended before the last frame |
+
+The zeros under `Graph` are asserted, not just observed: a graph cycle can't be filled, and no cell leaving can open one.
+
+**The tests can fail.** Two deliberate breaks, run once and reverted:
+
+- The events read from the wrong step failed F2, F4, C1 (both complexes) and D1.
+- Tearing the whole frame down under `Intersection`, so the between-frames complex is empty, failed F1–F5 under
+  `Intersection`, C1 and D1.
+
+**What the review changed.** `FrameTransition`'s docstrings said a transient is a cycle under `Union` and a component
+under `Intersection`. With triangles it can also be a void and a cycle. Fixed.
+
+**Cost.** The suite went from about 20 s to about 50 s at `xUnit.MaxParallelThreads=4`, mostly E1 and Z5, which are the
+naive oracle.
+
+## Not verified
+
+- **The events' independence from the transition is my derivation,** confirmed by the runs on the counts above and not
+  read in the theorem.
+- **Representatives.** `FastZigzag` gives none for bars born by a deletion, and its docs mark representatives above H₀
+  unverified. So a `Flag` bar reports that it was filled, but cannot yet reliably name the cycle.
