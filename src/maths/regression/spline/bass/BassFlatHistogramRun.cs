@@ -114,7 +114,7 @@ internal static class BassFlatHistogramFit
                 sweeps.Add(1);
             }
             int done = 0;
-            if (ladder.Spec.Adaptive)
+            if (ladder.Spec.Adapts())
                 for (int round = 1; done + round <= spec.BurnIn; round *= 2)
                 {
                     for (int k = 0; k < round; k++) Scan();

@@ -133,7 +133,7 @@ internal static class BassMixing
     internal static void Burn(BassLadder ladder, int steps = BurnIn)
     {
         int done = 0;
-        if (ladder.Spec.Adaptive)
+        if (ladder.Spec.Adapts())
             for (int round = 1; done + round <= steps; round *= 2)
             {
                 for (int k = 0; k < round; k++) ladder.Step();

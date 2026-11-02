@@ -23,7 +23,7 @@ namespace Maths.Regression.Spline.Bass;
 /// whose sampler loaded it whole, is loaded whole, by the same admission.</item>
 /// <item><b>The ladder.</b> The declared list (<see cref="TemperingSpec.InverseTemperatures"/>), or geometric from 1 down to
 /// the hot end (declared, or auto-picked as <see cref="BassResolved.HotEnd"/> is), then b = 0 with the exact reference rung,
-/// whose replica draws from <see cref="BassPriorSampler"/> every scan in place of its sweep. <see cref="Adapt"/> re-spaces the interior rungs during burn-in, and a self-sizing ladder's
+/// whose replica draws from <see cref="BassPriorSampler"/> every scan in place of its sweep. <see cref="Adapt"/> re-spaces the interior rungs during burn-in where the spec <see cref="TemperingSpec.Adapts"/>, and a self-sizing ladder's
 /// <see cref="Resize"/> sizes and places them; <see cref="EndBurnIn"/> freezes the ladder, restarts the tallies and, for
 /// an evidence, starts each rung's trace (D10).</item>
 /// <item><b>Clone-safe replicas.</b> A replica's structure identity is its term array, by reference. A resize's new replica
@@ -292,7 +292,7 @@ public sealed class BassLadder
         int minimum = TemperingSpec.MinimumLevels(spec.ReferenceRung);
         if (spec.ListFault() is { } fault) throw new ArgumentException($"The ladder's list {fault}.", nameof(spec));
         if (spec.Levels < minimum) throw new ArgumentException($"The ladder needs at least {minimum} levels, not {spec.Levels}.", nameof(spec));
-        if (spec.DeclaredLevels() is null && !spec.Adaptive) throw new ArgumentException("A self-sizing ladder adapts.", nameof(spec));
+        if (spec.DeclaredLevels() is null && !spec.Adapts()) throw new ArgumentException("A self-sizing ladder adapts.", nameof(spec));
         if (spec.MaxLevels < minimum || spec.MaxLevels < spec.DeclaredLevels())
             throw new ArgumentException($"The ladder's budget of {spec.MaxLevels} levels lies below {spec.DeclaredLevels() ?? minimum}.", nameof(spec));
         if (spec.HotEnd is double hot && !(hot > 0.0 && hot < 1.0)) throw new ArgumentException($"The hot end {hot} lies outside (0, 1).", nameof(spec));

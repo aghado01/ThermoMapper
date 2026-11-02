@@ -234,7 +234,7 @@ public sealed record BassConfig
         if (t.ListFault() is { } fault) throw Bad($"{field}.InverseTemperatures", fault);
         if (t.Levels < minimum)
             throw Bad($"{field}.Levels", t.ReferenceRung ? "must be at least 3 with a reference rung: b = 1, the hot end and b = 0" : "must be at least 2");
-        if (t.DeclaredLevels() is null && !t.Adaptive)
+        if (t.DeclaredLevels() is null && !t.Adapts())
             throw Bad($"{field}.Adaptive", "must be true for a self-sizing ladder (Levels null), which sizes itself as it adapts; a fixed ladder declares Levels or InverseTemperatures");
         if (t.MaxLevels < minimum) throw Bad($"{field}.MaxLevels", $"must be at least {minimum}, the fewest rungs a ladder takes");
         if (t.MaxLevels < t.DeclaredLevels()) throw Bad($"{field}.MaxLevels", "must not lie below the declared rungs");
@@ -473,7 +473,8 @@ public sealed record BassSampling
 /// <see cref="MaxLevels"/>, and settles a round before burn-in ends, so the last round equalizes it; and its hot end is
 /// auto-picked on the data (<see cref="BassResolved.HotEnd"/>).</item>
 /// <item><see cref="InverseTemperatures"/>: the rungs themselves, R's <c>temp.ladder</c>, in place of the count and the hot
-/// end. <see cref="Adaptive"/> reads as it does for any fixed ladder: off runs them as given, on re-spaces them from there.</item>
+/// end. A list declares its spacing, so it runs as given, as R's does, unless <see cref="Adaptive"/> is set true, which
+/// re-spaces its interior from there.</item>
 /// <item><see cref="Schedule"/>: DEO, the non-reversible even-odd swaps (Syed et al. 2022), swapped after every sweep.</item>
 /// <item><see cref="Split"/>: the split rule (F-M2's lever 4b) for a self-sizing ladder, opt-in.</item>
 /// <item><see cref="ReferenceRung"/>: the hot replica draws exactly from the prior on F every scan (OQ2), opt-in. A run
@@ -504,8 +505,9 @@ public sealed record TemperingSpec
     /// an adaptive ladder starts it. Null (the default) auto-picks it on the data (<see cref="BassResolved.HotEnd"/>).</summary>
     public double? HotEnd { get; init; }
 
-    /// <summary>Whether the ladder re-spaces its interior rungs during burn-in; it is frozen after it either way (D10).</summary>
-    public bool Adaptive { get; init; } = true;
+    /// <summary>Whether the ladder re-spaces its interior rungs during burn-in; it is frozen after it either way (D10). Null
+    /// (the default) reads by what is declared (<see cref="Adapts"/>): a built ladder adapts, and a list runs as given.</summary>
+    public bool? Adaptive { get; init; }
 
     /// <summary>The swap schedule: DEO (D05).</summary>
     public SwapSchedule Schedule { get; init; } = SwapSchedule.DeterministicEvenOdd;
@@ -530,6 +532,10 @@ public sealed record TemperingSpec
 
     /// <summary>The lowest positive b declared: the list's, or <see cref="HotEnd"/>; null when the data picks it.</summary>
     public double? DeclaredHotEnd() => InverseTemperatures is { } b ? b[ReferenceRung ? ^2 : ^1] : HotEnd;
+
+    /// <summary>Whether the ladder re-spaces during burn-in: <see cref="Adaptive"/>, or when null, false for a list, which
+    /// declares its spacing, and true for a built ladder.</summary>
+    public bool Adapts() => Adaptive ?? InverseTemperatures is null;
 
     /// <summary>The rungs a chain's ladder starts on: those declared, or a self-sizing ladder's
     /// <see cref="InitialLevels"/> within [<see cref="MinimumLevels"/>, <see cref="MaxLevels"/>].</summary>

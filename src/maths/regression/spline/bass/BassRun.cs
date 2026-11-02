@@ -354,7 +354,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         public void Burn(int steps)
         {
             int done = 0;
-            if (Ladder is { Spec.Adaptive: true } adaptive)
+            if (Ladder is { } adaptive && adaptive.Spec.Adapts())
                 for (int round = 1; done + round <= steps; round *= 2)
                 {
                     for (int k = 0; k < round; k++) owner.Sweep(this);

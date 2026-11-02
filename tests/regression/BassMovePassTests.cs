@@ -159,7 +159,8 @@ public sealed class BassMovePassTests
                 Assert.Equal(arm.Steps ? new LocalSteps(0.5, 0.02) : null, s.LocalSteps);
                 Assert.Equal(arm.Family ? new FactorMoves(1, 1, 1) : null, s.FactorMoves);
                 Assert.Equal(arm.Tempered ? new TemperingSpec { Split = new SplitRule(0.9) } : null, s.Tempering);
-                Assert.True(s.Tempering is null or { Levels: null, Adaptive: true, ReferenceRung: false });
+                Assert.True(s.Tempering is null or { Levels: null, ReferenceRung: false });
+                Assert.True(s.Tempering?.Adapts() ?? true);
 
                 BassResolved resolved = BassResolved.Resolve(config, f.Data);
                 if (arm.Steps)
