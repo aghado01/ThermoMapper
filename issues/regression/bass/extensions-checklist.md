@@ -42,6 +42,15 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ## Reports
 
+### Complete values declared — 2026-11-02
+
+`4e3ea95`, by the main session, at the user's word.
+- *Built:* `ISamplingTarget.HasCompleteValues`, off by default, with `completeValues` on the two factories. `LadderEvidence.FromLadders`, `FromSmc` and `Reweighting.LogEvidence` refuse without it, which `ParallelTempering`, `SmcResult` and `MulticanonicalDraws` carry. `BassTarget`, `BassParticleTarget` and `SplineTarget` declare it, the last through a new `IObservationModel.HasCompleteMarginal`.
+- *No run's numbers move:* BASS's three copies of the condition (`BassRun`, `BassSmcRun`, `BassFlatHistogramRun`) now read the one property, with τ's prior kept apart, since a flat-histogram ratio from b_lo > 0 under an improper τ is legitimate. The refusal only reaches targets that do not declare, and the toys that read an evidence now do.
+- *Suites:* on the shared checkout, with other chips' uncommitted work in it: Samplers 285/285, Regression 1,546/1,546, BASS oracle 90/90. On the commit alone, in a clean export: `LadderEvidenceTests` with `ReweightingTests` 21/21, `BarsEvidenceTests` with `BassTemperingTests` 97/97. The full suites were not run on the export.
+- *The commit:* the BASS core chip had already extended the property in its uncommitted `BassTarget.cs`, for a held σ². The commit takes only the one property from that file and leaves its working copy alone, so the chip's version lands with its own commit.
+- *Not covered:* `SmcResult.LogNormalizerRatio`, and the two estimators that take draws directly. The inventory's slope flag (U8) is not built, and the slope is still probed by catching an exception.
+
 ### The capability inventory written — 2026-11-02
 
 [The inventory](../capability-inventory.md) is E33's first part. BARS, BAPS, the hierarchical P-spline, BGP and BASS and the pieces under them are read against nine questions (marginal likelihood, weights and offset, tempering, prior draws, conditional draws, derivatives and smoothness, predictive draws and pointwise densities, resume, evidence), each answer with file and line. Nineteen gaps are marked upgrades and six true of the model itself. E33 stays unticked, since its declared capabilities and four verdicts are not built; the inventory's last section says what earns a declaration.
