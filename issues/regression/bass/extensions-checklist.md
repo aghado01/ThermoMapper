@@ -42,6 +42,18 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ## Reports
 
+### The three chips checked — 2026-11-02
+
+By the main session, on a clean export of `608964c`: Distributions 272/272, R parity 22/22, Regression 1,617/1,617 with `BassPathProfile` left out and `BassBitIdentityTests` in.
+- *The inventory (`1a38994`).* Nine sampled citations hold at `c1eda6a`. One correction, to its marks: N1, N2, N4 and part of N3 said the model forbids what is a choice of prior or an approximation of the method, by the same reasoning its U15 gives BGP. They are now U20 (a proper null-space prior, for BAPS's evidence and full prior draw) and U21 (exact coefficient draws for Poisson, Whittle and Gibbs-loss BARS), so it marks 21 upgrades and 5 gaps true of the model as stated. Not checked: the claims it marks as its own readings. Its commit is attributed to Sonnet 5.5, which is what that session ran on.
+- *Truncated draws and quantiles (`1f382ab`).* Reread and held: each family's coordinate, peak, spans and offset, the hat's tangents and cut, the bound, the mixture's pick. But a fuzz at random parameters and intervals found four defects its seventy chosen cases and R parity had not, all in the far range and all silent:
+  - `HalfCauchy.SampleOn` returned the lower bound on every draw past 10¹⁶ scales, where π/2 − atan a cancels to 0, and on a finite interval past 10¹⁵⁴, where ab overflows;
+  - `HalfCauchy.LogPdf` read −∞ past 10¹⁵⁴ scales, as z² overflowed;
+  - `Weibull.InverseLogCdf` and `LogCdf` underflowed below ln p ≈ −708 with the root still in range;
+  - `Mixture` returned a finite number for a root beyond the double range.
+  Corrected in `0acb3f6`, none changing a value that was right, and the fuzz is now `DistributionSweepTests`, seeded. After them: Distributions 280/280, R parity 22/22, bit identity 8/8. The Regression suite was not rerun on the fixes, which touch quantiles and those far-range values only.
+- *The weighted core and the marginal given σ² (`a772fd9`).* Reread and held: `PriorPencil`'s whitening, solve, draw and determinant; `LogMarginalGiven` and its slope; the two weight meanings. `TheBlock_MatchesDenseAlgebra` is a real check, building S and the determinant term from the columns with a dense Cholesky and never touching the pencil. Still that chip's: its docs are uncommitted, its before-and-after timing is unresolved, and the [moving-response options](moving-response-priors-options.md) wait on the user.
+
 ### Truncated draws and the rest of the quantiles — 2026-11-02
 
 The "Truncated draws" and "Quantiles for the rest" rows of [the upgrades](extensions-brief.md#upgrades-to-existing-code), built ahead of E20 and F-R1's `s2.lower` arm (`1f382ab`). The alternatives and trade-offs are in [ProbabilityAndInformation.md](../../../docs/Maths/ProbabilityAndInformation.md#truncated-draws-and-quantiles).
