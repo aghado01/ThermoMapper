@@ -15,8 +15,11 @@ namespace TDA.Ph;
 /// to the prior</em>. SIFTS is the <c>τ≡0</c> degenerate (reading-order backbone, zero prior).
 /// <para>The union convention (<see cref="BuildGraph"/>) is the only new code here; everything
 /// downstream is reuse — <see cref="RipsFiltration.GraphRips"/> and
-/// <see cref="PersistentInvolutedHomology"/>. Directedness, the <c>Δ</c> reach axis, the gauge
-/// <c>q</c>, the sheaf / <c>λ_q</c> reading, and zigzag slices are P1–P4 and deliberately absent.</para>
+/// <see cref="PersistentInvolutedHomology"/>. Two readings of one filtration:
+/// <see cref="ComputeBarcode"/> is backbone-at-base <c>H(K_δ)</c>, which equals the relative one when
+/// <c>K₀</c> is connected, spanning and acyclic; <see cref="ComputeRelativeBarcode"/> is
+/// backbone-quotiented <c>H(K_δ, K₀)</c> for any backbone. Directedness, the gauge <c>q</c> and the sheaf / <c>λ_q</c> reading are
+/// P2–P4 and deliberately absent.</para>
 /// </summary>
 public static class ConditionedFiltration
 {
@@ -94,5 +97,71 @@ public static class ConditionedFiltration
         SimplicialFiltration filtration = RipsFiltration.GraphRips(
             graph, FiltrationWeights.RawDistance, maxDimension, label: "conditioned");
         return PersistentInvolutedHomology.Compute(filtration, representatives: true);
+    }
+
+    /// <summary>
+    /// The backbone-quotiented reading: the union's filtration relative to <c>K₀</c>, the flag complex of the
+    /// backbone edges on their endpoints. <see cref="ComputeBarcode"/> reads <c>H(K_δ)</c>, which also reports
+    /// <c>K₀</c>'s own cycles; this reads <c>H(K_δ, K₀)</c>, the returns the prior does not already hold. A
+    /// content edge is outside <c>K₀</c> whatever its value, so a return the prior predicted (residual 0) stays.
+    /// <c>K₀</c> is present throughout the pair, so ε₀ does not enter.
+    /// </summary>
+    /// <param name="n">Vertex count.</param>
+    /// <param name="backbone">Prior <c>K₀</c> edges <c>(i, j)</c>. Empty gives <c>K₀ = ∅</c>, the absolute complex.</param>
+    /// <param name="similarity">Content edges <c>(i, j, d)</c>; a pair also in the backbone belongs to <c>K₀</c>.</param>
+    /// <param name="maxDimension">Skeleton dimension, as in <see cref="RipsFiltration.GraphRips"/>.</param>
+    public static RelativeFiltration BuildRelative(
+        int n,
+        IReadOnlyList<(int i, int j)> backbone,
+        IReadOnlyList<(int i, int j, double d)> similarity,
+        int maxDimension = 2)
+    {
+        CsrGraph graph = BuildGraph(n, backbone, similarity);
+        SimplicialFiltration filtration = RipsFiltration.GraphRips(
+            graph, FiltrationWeights.RawDistance, maxDimension, label: "conditioned");
+
+        var edges = new HashSet<(int Lo, int Hi)>(backbone.Count);
+        var vertices = new HashSet<int>();
+        foreach (var (i, j) in backbone)
+        {
+            if (i == j) continue;
+            edges.Add(i < j ? (i, j) : (j, i));
+            vertices.Add(i);
+            vertices.Add(j);
+        }
+
+        return new RelativeFiltration(filtration, s => InFlagComplex(s, vertices, edges));
+    }
+
+    static bool InFlagComplex(Simplex s, HashSet<int> vertices, HashSet<(int Lo, int Hi)> edges)
+    {
+        int[] v = s.Vertices;
+        if (v.Length == 1) return vertices.Contains(v[0]);
+
+        for (int a = 0; a < v.Length; a++)
+            for (int b = a + 1; b < v.Length; b++)
+                if (!edges.Contains(v[a] < v[b] ? (v[a], v[b]) : (v[b], v[a])))
+                    return false;
+
+        return true;
+    }
+
+    /// <summary>
+    /// <see cref="BuildRelative"/> → <see cref="RelativeFiltration.ComputeBarcode"/>, with representatives,
+    /// reporting the degrees below the skeleton's top, which <see cref="RipsFiltration.GraphRips"/> caps at
+    /// triangles. Those are exact; the top degree of a truncated skeleton is not, since nothing above it can fill
+    /// it. For the top degree, read <see cref="BuildRelative"/> directly.
+    /// </summary>
+    public static Barcode ComputeRelativeBarcode(
+        int n,
+        IReadOnlyList<(int i, int j)> backbone,
+        IReadOnlyList<(int i, int j, double d)> similarity,
+        int maxDimension = 2)
+    {
+        if (maxDimension < 1)
+            throw new ArgumentOutOfRangeException(nameof(maxDimension), "The skeleton needs at least edges.");
+
+        return BuildRelative(n, backbone, similarity, maxDimension)
+            .ComputeBarcode(Math.Min(maxDimension, 2) - 1, representatives: true);
     }
 }
