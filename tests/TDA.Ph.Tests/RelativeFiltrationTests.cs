@@ -12,7 +12,7 @@ namespace TDA.Ph.Tests;
 /// <summary>
 /// The relative reading <c>H(K_δ, K₀)</c>, against hand-worked complexes and two references that do not go
 /// through the relative complex: the quotient identity read by the involuted engine on the union, and reduced
-/// homology of <c>K ∪ cone(K₀)</c>. Checks and expectations: <c>issues/ph/ph-setup-brief.md</c> (R1–R11).
+/// homology of <c>K ∪ cone(K₀)</c>. Checks and expectations: <c>issues/ph/ph-setup-brief.md</c> (R1–R12).
 /// </summary>
 public sealed class RelativeFiltrationTests
 {
@@ -197,6 +197,58 @@ public sealed class RelativeFiltrationTests
         // The sweep has to reach every degree, backbones that do not span, and K₀ triangles.
         _output.WriteLine($"bars H0/H1/H2: {byDegree[0]}/{byDegree[1]}/{byDegree[2]}; non-spanning: {nonSpanning}; K0 triangles: {filledK0}");
         Assert.True(byDegree.All(c => c > 0) && nonSpanning > 0 && filledK0 > 0);
+    }
+
+    // ── R12 · one absolute run with K₀ first determines the relative barcode ────
+
+    [Fact]
+    public void RelativeBarcode_IsARereadingOfTheAbsoluteRunWithK0First()
+    {
+        const int trials = 200;
+        const double k0Birth = -1.0;
+        int kept = 0, movedUp = 0, dropped = 0;
+        for (int seed = 0; seed < trials; seed++)
+        {
+            var rng = new Random(seed);
+            int n = rng.Next(4, 9);
+            List<(int, int)> backbone = RandomEdges(n, rng, 0.3);
+            if (backbone.Count == 0) backbone.Add((0, 1));
+            List<(int, int, double)> content = RandomContent(n, rng, backbone, 0.35);
+
+            RelativeFiltration relative = ConditionedFiltration.BuildRelative(n, backbone, content);
+
+            // The same cells, with K₀ strictly before everything else, so a bar's birth says whether it began in K₀.
+            HashSet<int> k0Vertices = backbone.SelectMany(e => new[] { e.Item1, e.Item2 }).ToHashSet();
+            HashSet<(int, int)> k0Edges = backbone.Select(Ordered).ToHashSet();
+            IEnumerable<Simplex> cells = relative.Ambient.Simplices
+                .Select(s => InK0(s, k0Vertices, k0Edges) ? new Simplex(k0Birth, s.Vertices) : s);
+            Barcode absolute = PersistentHomology.Compute(new SimplicialFiltration(cells));
+
+            // Born outside K₀: the same bar. Born in K₀ and killed outside it: one degree up, born at that death, and
+            // essential. Born in K₀ and essential, or killed within it: gone.
+            var expected = new List<(int, double, double)>();
+            foreach (Bar bar in absolute.Bars)
+            {
+                if (bar.Birth > k0Birth)
+                {
+                    if (bar.IsInfinite || bar.Death > bar.Birth) { expected.Add((bar.Dimension, bar.Birth, bar.Death)); kept++; }
+                }
+                else if (!bar.IsInfinite && bar.Death > k0Birth)
+                {
+                    expected.Add((bar.Dimension + 1, bar.Death, double.PositiveInfinity));
+                    movedUp++;
+                }
+                else
+                {
+                    dropped++;
+                }
+            }
+
+            Assert.True(expected.OrderBy(x => x).SequenceEqual(Canon(relative.ComputeBarcode())), $"seed {seed}");
+        }
+
+        _output.WriteLine($"bars kept: {kept}, moved up a degree: {movedUp}, dropped: {dropped}");
+        Assert.True(kept > 0 && movedUp > 0 && dropped > 0);
     }
 
     // ── R10 · a finite bar's representative, in the ambient's indices ───────────
