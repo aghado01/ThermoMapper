@@ -68,6 +68,7 @@ public sealed class GraphFrameFiltration
 {
     readonly int[] _frameLevels;
     readonly int[] _betweenLevels;
+    readonly int[][] _cellVertices;
 
     /// <summary>The filtration to hand to an engine: <see cref="GraphZigzag"/>, <see cref="FastZigzag"/>, an oracle.</summary>
     public ZigzagFiltration Filtration { get; }
@@ -78,14 +79,20 @@ public sealed class GraphFrameFiltration
 
     public int FrameCount => _frameLevels.Length;
 
-    internal GraphFrameFiltration(ZigzagFiltration filtration, FrameTransition transition, FrameComplex complex, int[] frameLevels, int[] betweenLevels)
+    internal GraphFrameFiltration(ZigzagFiltration filtration, FrameTransition transition, FrameComplex complex, int[] frameLevels, int[] betweenLevels, int[][] cellVertices)
     {
         Filtration = filtration;
         Transition = transition;
         Complex = complex;
         _frameLevels = frameLevels;
         _betweenLevels = betweenLevels;
+        _cellVertices = cellVertices;
     }
+
+    /// <summary>The vertices of a cell id in <see cref="Filtration"/>, so a bar's <see cref="Bar.Cycle"/> reads in frame
+    /// terms: a vertex's own id, an edge's two, a triangle's three. That cycle belongs to the step complex where the bar
+    /// begins, which can still hold cells that leave before the bar's first frame.</summary>
+    public IReadOnlyList<int> VerticesOf(int cellId) => _cellVertices[cellId];
 
     /// <summary>The bars that exist at some frame, read on the frames. A view over the step-level barcode: it
     /// drops the transients (<see cref="TransientBars"/>) and the step-order artifacts.</summary>
@@ -174,10 +181,10 @@ public static class GraphFrameZigzag
         var filtration = new ZigzagFiltration();
         var frameLevels = new int[frames.Count];
         var betweenLevels = new int[Math.Max(0, frames.Count - 1)];
-        if (frames.Count == 0)
-            return new GraphFrameFiltration(filtration, transition, complex, frameLevels, betweenLevels);
-
         var ids = new CellIds(n);
+        if (frames.Count == 0)
+            return new GraphFrameFiltration(filtration, transition, complex, frameLevels, betweenLevels, ids.CellVertices());
+
         var cells = FrameCells.Empty;
 
         for (int t = 0; t < frames.Count; t++)
@@ -206,7 +213,7 @@ public static class GraphFrameZigzag
         }
 
         Leave(filtration, cells, ids);
-        return new GraphFrameFiltration(filtration, transition, complex, frameLevels, betweenLevels);
+        return new GraphFrameFiltration(filtration, transition, complex, frameLevels, betweenLevels, ids.CellVertices());
     }
 
     /// <summary><see cref="Build"/> for frames that all hold every vertex <c>0..n-1</c>.</summary>
@@ -337,6 +344,18 @@ public static class GraphFrameZigzag
             if (!_triangles.TryGetValue(triangle, out int id))
                 _triangles[triangle] = id = Next;
             return id;
+        }
+
+        public int[][] CellVertices()
+        {
+            var vertices = new int[Next][];
+            for (int v = 0; v < vertexCount; v++)
+                vertices[v] = new[] { v };
+            foreach (var (edge, id) in _edges)
+                vertices[id] = new[] { edge.Lo, edge.Hi };
+            foreach (var (triangle, id) in _triangles)
+                vertices[id] = new[] { triangle.A, triangle.B, triangle.C };
+            return vertices;
         }
     }
 

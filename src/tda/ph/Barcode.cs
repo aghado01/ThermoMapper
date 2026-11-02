@@ -16,7 +16,8 @@ namespace TDA.Ph;
 /// indices of filtration simplices forming a representative cocycle (Z/2).</para>
 /// <para><see cref="Cycle"/>: when requested from <see cref="PersistentInvolutedHomology"/>,
 /// indices of filtration simplices forming a representative homology cycle (Z/2).
-/// Use <see cref="BarCycleEdges"/> to obtain LMP-consumable vertex pairs for H1.</para>
+/// Use <see cref="BarCycleEdges"/> to obtain LMP-consumable vertex pairs for H1. From
+/// <see cref="FastZigzag"/>, global cell ids of a cycle at the bar's first level.</para>
 /// </summary>
 public readonly record struct Bar(
     double Birth,

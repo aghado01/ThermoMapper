@@ -105,7 +105,7 @@ The general engines `FastZigzag`, `ReflectionZigzag` and `StrongCollapseZigzag` 
 | General engines | `FastZigzag.Compute(f, maxDimension = int.MaxValue, representatives = false)`; `ReflectionZigzag.Compute(f, maxDimension)` |
 | Oracles | `ZigzagBarcodeNaive.Compute(f, maxDimension)`; `ZigzagMapBarcode.Compute(complexes, dimOf, bndOf, N, steps, maxDimension)`, `ZigzagMapBarcode.ComputeFromZigzag(f, maxDimension)`, `ZigzagMapBarcode.Step(IsForward, CellMap)`; `StrongCollapse.Core`, `StrongCollapse.CoreWithRetraction`; `StrongCollapseZigzag.Compute(f, maxDimension)` |
 | Graph engines | `GraphZigzag.Compute(f, maxDimension = 0, representatives = false, strictRepresentatives = false, algorithm = Fast)`; `GraphZigzagFast.Compute(…)`; `GraphZigzagH1.Compute(f, representatives)`; `GraphZigzagH1Fast.Compute(f, representatives)`; `GraphZigzagAlgorithm` |
-| Frame sequences | `GraphFrameZigzag.Build(n, frames, transition = Union, complex = Graph)`, `GraphFrameZigzag.FromEdgeSets(n, edgeSets, transition, complex)`, `GraphFrameZigzag.FromGraphs(graphs, transition, complex)`, `GraphFrameZigzag.FromEdgeField(substrate, fields, thresholds, transition, complex)`; `GraphFrame(Vertices, Edges)`; `FrameTransition { Union, Intersection }`; `FrameComplex { Graph, Flag }`; `GraphFrameFiltration.Filtration`, `Transition`, `Complex`, `FrameCount`, `FrameBars(barcode)`, `TransientBars(barcode)`; `FrameBar(Dimension, FirstFrame, LastFrame, Start, End, StepBar)`; `FrameEvent { Unobserved, Arrival, Departure }`; `TransientBar(Dimension, AfterFrame, StepBar)` |
+| Frame sequences | `GraphFrameZigzag.Build(n, frames, transition = Union, complex = Graph)`, `GraphFrameZigzag.FromEdgeSets(n, edgeSets, transition, complex)`, `GraphFrameZigzag.FromGraphs(graphs, transition, complex)`, `GraphFrameZigzag.FromEdgeField(substrate, fields, thresholds, transition, complex)`; `GraphFrame(Vertices, Edges)`; `FrameTransition { Union, Intersection }`; `FrameComplex { Graph, Flag }`; `GraphFrameFiltration.Filtration`, `Transition`, `Complex`, `FrameCount`, `FrameBars(barcode)`, `TransientBars(barcode)`, `VerticesOf(cellId)`; `FrameBar(Dimension, FirstFrame, LastFrame, Start, End, StepBar)`; `FrameEvent { Unobserved, Arrival, Departure }`; `TransientBar(Dimension, AfterFrame, StepBar)` |
 | Codimension one | `DualGraphSpec(p, voidDualVertexIds, pSimplexDualVertex, pMinus1SimplexDualEdge)`; `PlanarDualGraph.Build(vertexCoords, edges, triangleVertices, firstDualVertexId = 0)`; `CodimensionOneDualGraph.Build(p, vertexCoords, pMinus1Simplices, pSimplices, firstDualVertexId = 0)`; `CodimensionOneZigzag.Compute(f, dual, algorithm = Reference)`; `EmbeddedComplexZigzag.Compute(p, vertexCoords, pMinus1Simplices, pSimplices, f, algorithm = Reference)` |
 | Support | `CellFiltration` (an `IFiltration` over explicit boundaries); internal `RuVineyard`; unused `IAbstractCell`, `SimplicialCell.GetBoundaryIndices` |
 
@@ -135,10 +135,14 @@ Following Dey–Hou (arXiv:2204.11080), `FastZigzag` answers the whole zigzag wi
 
 **Why coning works.** $\hat E$ is a cone over every incarnation, including the padded survivors, so it is contractible. The only essential class is ω's, and every zigzag bar therefore comes from a *finite* standard pair. This is why padding is required. It also makes two of the code's guards, for ω and for a negative dimension, purely defensive: they cannot trigger on valid input.
 
-**Representatives.** With `representatives = true`, bars created by an Add get `Cycle` set to the standard engine's reduced column mapped back to original cell ids, with cone columns and ω removed. Bars created by a Delete get `Cycle = null`.
+**Representatives.** With `representatives = true`, every bar carries `Cycle`, as distinct global cell ids: a $\mathbb Z/2$ cycle of $K_b$, the complex at the bar's first level ($b$ = `Birth + 1`), whose class there is the bar's own.
 
-- For $H_0$, a representative contains only cells present at the birth step, with distinct ids.
-- For $p\ge1$, it has not been verified whether a representative can include incarnations deleted before the birth step.
+- **A closed birth,** a class created by adding σ at step $b-1$. `Cycle` is the reduced column of the pair's death cell, without ω, which can close a column in $H_0$. It holds σ, and no boundary in $K_b$ can, so its class is nonzero and outside the image of $H_p(K_{b-1})$.
+- **An open birth,** a class created by deleting τ at step $b-1$. `Cycle` is $\partial\tau$. The kernel of $H_p(K_b)\to H_p(K_{b-1})$ is spanned by $[\partial\tau]$, so the class is forced: "the non-zero element" of that kernel, in Definition 5 of Dey and Hou's graph paper (arXiv:2103.07353). The cone's dimension shift never has to be read.
+
+**Why a closed birth's column lies in $K_b$.** Every cell in the column comes before the pivot σ in $\hat E$, so it was added by step $b-1$. Each column summed into it had a pivot after σ, so it is an Add column added after step $b-1$, or a cone column of a cell deleted no earlier than the bar's death. So each cell of the sum is a face of a cell added later, or a cell deleted later, and either way it is still alive at level $b$. This holds in every degree. Incarnations are separate cells in $\hat E$, so a re-entering cell raises no question: no incarnation deleted before the birth step can appear, which is also why the ids are distinct.
+
+**What it does not name.** `Cycle` is the class where the bar begins. A later level may have lost its cells, so a bar reaching a later level is not generally represented there by the same chain. Dey and Hou's set of representatives is a compatible cycle at every level of the bar, and Dey, Hou and Morozov (arXiv:2410.20565) compute those; this engine does not. Tests check that the sequence exists for each bar's class and ends at the bar's end, against exact linear algebra outside the engine, and that this rejects cycles passing every condition at the birth step.
 
 **Cost.** Replay and construction take $O(m+U+\sum|\partial\sigma|)$, where $U$ is the size of the cell-id universe; the S padded survivors add a sort, $O(S\log S)$. The standard run then takes worst case $O(n^3\log n)$ on $n=2A+1$ columns.
 
@@ -346,7 +350,7 @@ So whether a cycle was filled or broken is read per bar, and it does not depend 
 **Caveats.**
 
 - `Flag` stops at triangles. H0 and H1 are exact, while H2 has nothing above to fill it, so read `maxDimension: 1`.
-- A `Flag` bar reports that it was filled, but cannot yet reliably name the cycle: `FastZigzag` gives no representative for a bar born by a deletion, and representatives above H0 are unverified ([above](#fastzigzag-coning-to-standard-persistence)).
+- A bar names its class through `StepBar.Cycle`, read in frame terms with `VerticesOf` ([representatives above](#fastzigzag-coning-to-standard-persistence)). That is the class where the bar begins, in the step complex there, which can still hold cells that leave before the bar's first frame. A hole opened by triangles leaving is named as one triangle's boundary, and an edge of that boundary may be gone by the frame, where the same class is another cycle. In a flag frame every such bar does this, since a triangle leaves only when an edge of it leaves, so the chain of a hole that opens is never in its first frame. Bars born by an arrival stayed in their first frame in every case swept (184 filled or broken H1 bars over 300 random sequences), which is a count and not a theorem. Under `Graph` a class is its one chain, so an H1 bar's cycle is in every frame the bar covers.
 - H0 over frames is one bar whenever a connected spanning subgraph is present in every frame.
 - Teardown removes every vertex once, so a vertex that left and re-entered departs twice. With `representatives = true`, the graph H0 engines reject that ([Status](#status-and-caveats)).
 
@@ -373,7 +377,7 @@ So whether a cycle was filled or broken is read per bar, and it does not depend 
 |---|---|---|
 | `FastZigzag`, `ReflectionZigzag` `maxDimension` | `int.MaxValue` | All dimensions |
 | `ZigzagBarcodeNaive`, `ZigzagMapBarcode`, `StrongCollapseZigzag` `maxDimension` | `int.MaxValue` | **Must be set explicitly** (see Status) |
-| `FastZigzag` `representatives` | `false` | Cycles for Add-created bars |
+| `FastZigzag` `representatives` | `false` | A cycle on every bar, for its class where it begins |
 | `GraphZigzag.Compute` maxDimension / representatives / strictRepresentatives / algorithm | 0 / false / false / `Fast` | H0 only (≥ 1 adds H1); attach chains; throw instead of null; engine |
 | `GraphZigzagH1*` `representatives` | `false` | Also switches both H1 engines from the threshold rule to cycle-containment pairing |
 | `GraphFrameZigzag` `transition` | `Union` | How consecutive frames connect; decides transients only |
@@ -389,7 +393,6 @@ So whether a cycle was filled or broken is read per bar, and it does not depend 
 - **The naive and map oracles loop forever at the default `maxDimension`.** `ZigzagBarcodeNaive`, `ZigzagMapBarcode` and `StrongCollapseZigzag` loop `p = 0..maxDimension` with no early exit. Each idle iteration still costs $O(m^3+mc)$, with $c$ the largest complex size, and at `int.MaxValue` the unchecked `p++` wraps around, so the loop never terminates. Always pass an explicit dimension. `FastZigzag` and `ReflectionZigzag` treat the default as "all dimensions".
 - **Parallel edges in the fast H1 engine.** `DynamicMsf` keys edges by unordered vertex pair. Two live parallel edges, or two live self-loops at one vertex, collide, and the second deletion fails on a missing key. The H0 engines and the reference H1 engine handle multigraphs correctly.
 - **H0 representatives assume a single presence per vertex.** Vertex presence is recorded as one interval per id. With `representatives = true`, a vertex that departs twice throws `ArgumentException`. After a re-entry, valid representatives can be nulled, or rejected under `strictRepresentatives`.
-- **Higher-dimensional `FastZigzag` representatives** have not been verified to lie in the birth complex (see [above](#fastzigzag-coning-to-standard-persistence)).
 - **Partial pieces.** `ReflectionZigzag` supports only last-in-first-out deletion. `RuVineyard` is not yet used by any engine. `IAbstractCell` and `SimplicialCell.GetBoundaryIndices` have no implementors or callers.
 
 ## Source map

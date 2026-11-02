@@ -10,6 +10,9 @@ namespace TDA.Ph;
 /// filtration to a single coned standard (non-zigzag) Δ-complex filtration, running standard
 /// persistence, and mapping each finite pair back to a 4-type zigzag bar via the creator/destroyer
 /// correspondence. Validated against the <see cref="ZigzagBarcodeNaive"/> oracle.
+/// <para>With representatives, each bar's <see cref="Bar.Cycle"/> is a cycle of the complex at the bar's first level,
+/// as global cell ids, whose class there is the bar's own. A later level may have lost its cells: this names the class
+/// where it begins, not the compatible cycles along the bar that Dey, Hou and Morozov (arXiv:2410.20565) compute.</para>
 /// </summary>
 public static class FastZigzag
 {
@@ -20,7 +23,8 @@ public static class FastZigzag
         public readonly int Index;     // F̂ step index of the add/delete (padding deletions are >= numSteps)
         public readonly EventKind Kind;
         public readonly int Dim;       // dimension of the ORIGINAL simplex (not the coned cell)
-        public CellEvent(int index, EventKind kind, int dim) { Index = index; Kind = kind; Dim = dim; }
+        public readonly int Incarnation;
+        public CellEvent(int index, EventKind kind, int dim, int incarnation) { Index = index; Kind = kind; Dim = dim; Incarnation = incarnation; }
     }
 
     public static Barcode Compute(ZigzagFiltration f, int maxDimension = int.MaxValue, bool representatives = false)
@@ -98,7 +102,7 @@ public static class FastZigzag
             for (int k = 0; k < bnd.Length; k++) col[k] = cid[bnd[k]];
             int colIdx = cells.Count;
             cells.Add((dimI[inc], colIdx, col));
-            cellEvent.Add(new CellEvent(addStepI[inc], EventKind.Add, dimI[inc]));
+            cellEvent.Add(new CellEvent(addStepI[inc], EventKind.Add, dimI[inc], inc));
             origOf.Add(origCellI[inc]);
             cid[inc] = colIdx;
         }
@@ -113,7 +117,7 @@ public static class FastZigzag
             else foreach (int tau in bnd) col.Add(coneId[tau]);  // ω·σ boundary = {σ} ∪ {ω·τ}
             int colIdx = cells.Count;
             cells.Add((dimI[inc] + 1, colIdx, col.ToArray()));
-            cellEvent.Add(new CellEvent(delStepI[inc], EventKind.Delete, dimI[inc]));
+            cellEvent.Add(new CellEvent(delStepI[inc], EventKind.Delete, dimI[inc], inc));
             origOf.Add(-1);
             coneId[inc] = colIdx;
         }
@@ -151,14 +155,22 @@ public static class FastZigzag
             else { death = hi.Index; dEnd = hi.Kind == EventKind.Delete ? IntervalEnd.Closed : IntervalEnd.Open; }
 
             int[]? cyc = null;
-            if (representatives && lo.Kind == EventKind.Add && bar.Cycle != null)
+            if (representatives)
             {
-                // Add-created bar: the coned-complex cycle rep restricted to original cells is a
-                // genuine cycle in the birth complex. (Delete-created bars carry a cone dimension
-                // shift — left null this pass.)
-                var oc = new List<int>(bar.Cycle.Length);
-                foreach (int c in bar.Cycle) if (origOf[c] >= 0) oc.Add(origOf[c]);
-                cyc = oc.ToArray();
+                // Created by an addition: the pair's reduced column, which holds only incarnations alive at that step
+                // (docs/TDA/ZigzagPersistence.md), and ω in H₀, not a cell of the complex. Created by a deletion: the
+                // deleted cell's boundary, the one non-zero class in the backward map's kernel (Dey–Hou's Definition 5).
+                var oc = new SortedSet<int>();
+                if (lo.Kind == EventKind.Add)
+                {
+                    foreach (int c in bar.Cycle!) if (origOf[c] >= 0) oc.Add(origOf[c]);
+                }
+                else
+                {
+                    foreach (int face in bndI[lo.Incarnation]) oc.Add(origCellI[face]);
+                }
+                cyc = new int[oc.Count];
+                oc.CopyTo(cyc);
             }
             bars.Add(new Bar(birth, death, dim, null, null, cyc, bEnd, dEnd));
         }

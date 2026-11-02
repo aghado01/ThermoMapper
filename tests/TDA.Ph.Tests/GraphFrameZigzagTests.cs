@@ -737,7 +737,7 @@ public sealed class GraphFrameZigzagTests
 
     // Each frame is the last with a few vertices and pairs flipped, so a cycle can outlive a frame and be filled later.
     // Independent frames share too few edges for that.
-    static GraphFrame[] EvolvingFrames(int n, int frames, Random rng, double vertexFlip, double pairFlip = 0.2)
+    internal static GraphFrame[] EvolvingFrames(int n, int frames, Random rng, double vertexFlip, double pairFlip = 0.2)
     {
         var present = Enumerable.Repeat(true, n).ToArray();
         var linked = new bool[n, n];

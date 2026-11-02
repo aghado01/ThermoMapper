@@ -29,6 +29,8 @@
     <Compile Include="SimplicialFiltrationFixtures.cs" Link="SimplicialFiltrationFixtures.cs" />
     <Compile Include="ZigzagBarcodeNaiveTests.cs" Link="ZigzagBarcodeNaiveTests.cs" />
     <Compile Include="FastZigzagTests.cs" Link="FastZigzagTests.cs" />
+    <Compile Include="FastZigzagRepresentativeTests.cs" Link="FastZigzagRepresentativeTests.cs" />
+    <Compile Include="ZigzagModuleOracle.cs" Link="ZigzagModuleOracle.cs" />
     <Compile Include="StrongCollapseTests.cs" Link="StrongCollapseTests.cs" />
     <Compile Include="ZigzagMapBarcodeTests.cs" Link="ZigzagMapBarcodeTests.cs" />
     <Compile Include="StrongCollapseSequenceTests.cs" Link="StrongCollapseSequenceTests.cs" />
