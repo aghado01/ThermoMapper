@@ -57,8 +57,9 @@ public sealed class TermPairMoments
 /// value, derivative (<see cref="FactorDerivative"/>) and moments; this service multiplies and caches them.</para>
 /// <para>Terms are taken by value, so terms from different fits on the same inputs (a basis fit's components) meet here;
 /// their knots and levels index <see cref="Inputs"/>. The normalization is the basis's: the case side's hinges divided by
-/// their largest value on [0, 1], and the output side's likewise when the measure covers the output variables. Without
-/// them a term's moments are its case side's, and the caller holds the output side at its coordinate.</para>
+/// their largest value on [0, 1], and the output side's likewise when the measure covers every output variable. Where it
+/// leaves some out, a term's moments are over the factors it covers, and the caller holds the others at a coordinate, with
+/// the output side's normalizer, which is one constant over the whole part.</para>
 /// <para>Every factor, factor pair, term and term pair is computed once and cached, since draws repeat their structures.
 /// One caller at a time.</para>
 /// </summary>
@@ -243,13 +244,12 @@ public sealed class BassMoments
             factors.AddRange(kernel.Factors(term, Measure));
             scale *= kernel.Scale(term);
         }
-        if (Measure.IncludesOutputs)
-            foreach (IDesignKernel<OutputInputs> kernel in _kernels.Output)
-            {
-                if (!kernel.Reads(term)) continue;
-                factors.AddRange(kernel.Factors(term, Measure));
-                scale *= kernel.Scale(term);
-            }
+        foreach (IDesignKernel<OutputInputs> kernel in _kernels.Output)
+        {
+            if (!kernel.Reads(term)) continue;
+            factors.AddRange(kernel.Factors(term, Measure));
+            if (Measure.IncludesOutputs) scale *= kernel.Scale(term);
+        }
         factors.Sort((x, y) => x.Variable.CompareTo(y.Variable));
         var variables = new int[factors.Count];
         var means = new double[factors.Count];

@@ -13,7 +13,8 @@ namespace Maths.Regression.Spline.Bass.Sensitivity;
 /// variance.
 /// <para>A direct functional fit's output variables are integrated as more inputs (one decomposition, main and total
 /// indices over inputs and outputs), or held at declared coordinates, where the surface's coefficients become aⱼ·hⱼ(t) and
-/// each coordinate has its own decomposition.</para>
+/// each coordinate has its own decomposition. A coordinate may hold only some of them (R's <c>func.var</c>): hⱼ then carries
+/// the held factors with the output side's normalizer, and the others stay inputs.</para>
 /// </summary>
 public static class BassSensitivity
 {
@@ -78,7 +79,7 @@ public static class BassSensitivity
                                                              spec.RoundingTolerance, s.Chains, s.DrawIndex, s.Weights);
         }
         return new SobolAnalysis(s.Form, s.Moments.Measure, maxOrder, decompositions, s.Coordinates, s.CoordinatesOutside,
-                                 s.Moments.LargestError);
+                                 s.CoordinateVariables, s.Moments.LargestError);
     }
 
     /// <summary>
@@ -202,7 +203,7 @@ public static class BassSensitivity
             at[surface] = new EffectFunctions(measure.Names,
                 [.. chosen.Select((u, e) => new Effect(u, [.. u.Select(v => grids[v])], tables[e]))], mean);
         }
-        return new EffectAnalysis(s.Form, measure, at, s.Coordinates);
+        return new EffectAnalysis(s.Form, measure, at, s.Coordinates, s.CoordinateVariables);
     }
 
     private static int Position(IReadOnlyList<int> variables, int v)
@@ -283,11 +284,25 @@ public static class BassSensitivity
         }
     }
 
+    private sealed class CoordinateComparer : IEqualityComparer<double[]>
+    {
+        public static readonly CoordinateComparer Instance = new();
+
+        public bool Equals(double[]? x, double[]? y) => x is not null && y is not null && x.AsSpan().SequenceEqual(y);
+
+        public int GetHashCode(double[] obj)
+        {
+            var hash = new HashCode();
+            foreach (double v in obj) hash.Add(v);
+            return hash.ToHashCode();
+        }
+    }
+
     // What both analyses share: the inputs, measure and moment service, the draws in chain order, and each surface's
     // coefficients (one surface, or one per conditioned coordinate).
     private sealed class Setup
     {
-        private double[][]? _outputSide;   // conditioned form: per term id, its output side at each coordinate
+        private double[][]? _outputSide;   // conditioned form: per term id, its normalizer and held factors at each coordinate
 
         public required BassFit Fit { get; init; }
         public required BassMoments Moments { get; init; }
@@ -300,6 +315,7 @@ public static class BassSensitivity
         public required FunctionalForm? Form { get; init; }
         public required IReadOnlyList<double[]>? Coordinates { get; init; }
         public required IReadOnlyList<bool>? CoordinatesOutside { get; init; }
+        public required IReadOnlyList<string>? CoordinateVariables { get; init; }
 
         public int Surfaces => Coordinates?.Count ?? 1;
 
@@ -307,11 +323,11 @@ public static class BassSensitivity
         public RangeScale RangeOf(int v)
         {
             int predictors = Fit.Transform.Predictors.Count;
-            return v < predictors ? (RangeScale)Fit.Transform.Predictors[v] : Fit.Transform.OutputVariables[v - predictors];
+            return v < predictors ? (RangeScale)Fit.Transform.Predictors[v] : Fit.Transform.OutputVariables[Moments.Measure.OutputOf(v)];
         }
 
         // b₀ and one coefficient per term of the draw's structure: the draw's own, or aⱼ·hⱼ(t) at a conditioned coordinate,
-        // the terms with no case factor folded into b₀.
+        // the terms with no factor left on an input folded into b₀.
         public void Coefficients(int surface, BassDraw draw, double[] b)
         {
             double[] a = draw.Coefficients;
@@ -325,7 +341,7 @@ public static class BassSensitivity
             for (int j = 0; j < ids.Length; j++)
             {
                 double h = _outputSide[ids[j]][surface];
-                if (Fit.Terms[ids[j]].HasCaseFactor) b[1 + j] = a[1 + j] * h;
+                if (Moments.Variables(Fit.Terms[ids[j]]).Count > 0) b[1 + j] = a[1 + j] * h;
                 else
                 {
                     b[0] += a[1 + j] * h;
@@ -350,7 +366,12 @@ public static class BassSensitivity
             FunctionalForm? form = inputs.Outputs is null ? null : spec.Functional;
             if (spec.Coordinates is not null && form != FunctionalForm.Condition)
                 throw new ArgumentException("Output coordinates apply only to a functional fit's conditioned form.", nameof(spec));
-            var measure = ProductMeasure.Resolve(fit.Transform, inputs, spec.Measures, spec.OutputMeasures, form == FunctionalForm.Integrate);
+            if (spec.ConditionOn is not null && form != FunctionalForm.Condition)
+                throw new ArgumentException("ConditionOn applies only to a functional fit's conditioned form.", nameof(spec));
+            IReadOnlyList<RangeScale> outputs = fit.Transform.OutputVariables;
+            int[] held = form == FunctionalForm.Condition ? Held(outputs, spec.ConditionOn) : [];
+            string[] integrated = [.. Enumerable.Range(0, outputs.Count).Where(d => Array.IndexOf(held, d) < 0).Select(d => outputs[d].Name)];
+            var measure = ProductMeasure.Resolve(fit.Transform, inputs, spec.Measures, spec.OutputMeasures, integrated);
             var moments = BassMoments.On(inputs, fit.Config.Structure.Degree, measure);
 
             int total = fit.Draws.Sum(c => c.Count);
@@ -373,44 +394,82 @@ public static class BassSensitivity
             {
                 Fit = fit, Moments = moments, Draws = draws, Chains = chains, DrawIndex = index, Weights = fit.DrawWeights,
                 TermIds = ids, MaxTerms = draws.Length == 0 ? 0 : draws.Max(d => d.Structure.TermIds.Length), Form = form,
-                Coordinates = null, CoordinatesOutside = null,
+                Coordinates = null, CoordinatesOutside = null, CoordinateVariables = null,
             };
             if (form != FunctionalForm.Condition) return setup;
 
-            // The conditioned form's coordinates, in their own units, scaled; each term's output side at them.
-            var functional = (FunctionalResponse)data.Response;
-            int dims = fit.Transform.OutputVariables.Count;
-            IReadOnlyList<double[]> coordinates = spec.Coordinates
-                ?? [.. Enumerable.Range(0, functional.Locations).Select(r => Enumerable.Range(0, dims).Select(k => functional.OutputVariables[k].Values.Span[r]).ToArray())];
-            var columns = new double[dims][];
-            for (int k = 0; k < dims; k++) columns[k] = new double[coordinates.Count];
+            // The conditioned form's coordinates, in their own units, scaled; each term's normalizer and held factors at them.
+            IReadOnlyList<double[]> coordinates = spec.Coordinates ?? TrainingCoordinates((FunctionalResponse)data.Response, held);
+            var columns = new double[held.Length][];
+            for (int q = 0; q < held.Length; q++) columns[q] = new double[coordinates.Count];
             var outside = new bool[coordinates.Count];
             for (int r = 0; r < coordinates.Count; r++)
             {
                 double[] t = coordinates[r] ?? throw new ArgumentException($"Coordinate {r} is null.", nameof(spec));
-                if (t.Length != dims) throw new ArgumentException($"Coordinate {r} has {t.Length} values for {dims} output variables.", nameof(spec));
-                for (int k = 0; k < dims; k++)
+                if (t.Length != held.Length) throw new ArgumentException($"Coordinate {r} has {t.Length} values for {held.Length} held output variables.", nameof(spec));
+                for (int q = 0; q < held.Length; q++)
                 {
-                    if (!double.IsFinite(t[k])) throw new ArgumentException($"Coordinate {r} is not finite.", nameof(spec));
-                    columns[k][r] = fit.Transform.OutputVariables[k].Scale(t[k]);
-                    outside[r] |= !fit.Transform.OutputVariables[k].Contains(t[k]);
+                    if (!double.IsFinite(t[q])) throw new ArgumentException($"Coordinate {r} is not finite.", nameof(spec));
+                    columns[q][r] = outputs[held[q]].Scale(t[q]);
+                    outside[r] |= !outputs[held[q]].Contains(t[q]);
                 }
             }
-            var basis = new BassBasis(inputs, fit.Config.Structure.Degree);
-            var at_ = new OutputInputs(columns);
+            int degree = fit.Config.Structure.Degree;
+            var kernels = new DesignKernels(inputs, degree);
             var outputSide = new double[fit.Terms.Count][];
             foreach (int id in ids)
             {
-                outputSide[id] = new double[coordinates.Count];
-                basis.OutputColumn(fit.Terms[id], at_, outputSide[id]);
+                BassTerm term = fit.Terms[id];
+                double scale = 1.0;
+                foreach (IDesignKernel<OutputInputs> kernel in kernels.Output) scale *= kernel.Scale(term);
+                double[] side = new double[coordinates.Count];
+                Array.Fill(side, scale);
+                foreach (HingeFactor h in term.Functional)
+                {
+                    int q = Array.IndexOf(held, h.Variable);
+                    if (q < 0) continue;
+                    double knot = inputs.FunctionalKnots(h.Variable)[h.Knot];
+                    for (int r = 0; r < side.Length; r++) side[r] *= Hinge.Value(degree, h.Sign, knot, columns[q][r]);
+                }
+                outputSide[id] = side;
             }
             return new Setup
             {
                 Fit = fit, Moments = moments, Draws = draws, Chains = chains, DrawIndex = index, Weights = fit.DrawWeights,
                 TermIds = ids, MaxTerms = setup.MaxTerms, Form = form,
                 Coordinates = [.. coordinates.Select(c => (double[])c.Clone())], CoordinatesOutside = outside,
+                CoordinateVariables = Array.AsReadOnly(held.Select(d => outputs[d].Name).ToArray()),
                 _outputSide = outputSide,
             };
+        }
+
+        // The output variables the conditioned form holds, by position, in the coordinates' order.
+        private static int[] Held(IReadOnlyList<RangeScale> outputs, IReadOnlyList<string>? names)
+        {
+            if (names is null) return [.. Enumerable.Range(0, outputs.Count)];
+            if (names.Count == 0) throw new ArgumentException("ConditionOn names no output variable: integrating them all is the integrated form.", "spec");
+            var held = new int[names.Count];
+            for (int k = 0; k < held.Length; k++)
+            {
+                int d = outputs.Select(v => v.Name).ToList().IndexOf(names[k]);
+                if (d < 0) throw new ArgumentException($"No output variable is named '{names[k]}'.", "spec");
+                if (Array.IndexOf(held, d, 0, k) >= 0) throw new ArgumentException($"ConditionOn names '{names[k]}' twice.", "spec");
+                held[k] = d;
+            }
+            return held;
+        }
+
+        // The held variables' distinct values over the training locations, in location order.
+        private static double[][] TrainingCoordinates(FunctionalResponse response, int[] held)
+        {
+            var seen = new HashSet<double[]>(CoordinateComparer.Instance);
+            var coordinates = new List<double[]>();
+            for (int r = 0; r < response.Locations; r++)
+            {
+                double[] t = [.. held.Select(d => response.OutputVariables[d].Values.Span[r])];
+                if (seen.Add(t)) coordinates.Add(t);
+            }
+            return [.. coordinates];
         }
     }
 }

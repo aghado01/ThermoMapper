@@ -25,7 +25,7 @@ public static class BassBasisEffects
         ArgumentNullException.ThrowIfNull(fit);
         spec ??= new SensitivitySpec();
         effects ??= new EffectSpec();
-        if (spec.Coordinates is not null)
+        if (spec.Coordinates is not null || spec.ConditionOn is not null)
             throw new ArgumentException("A basis exists only at its training locations, which have no output coordinates: read a location's effects by its index.", nameof(spec));
         if (spec.OutputMeasures is { Count: > 0 })
             throw new ArgumentException("A basis fit's locations are integrated equally weighted, its training grid; output-variable measures apply to direct functional fits.", nameof(spec));

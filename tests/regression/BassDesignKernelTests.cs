@@ -48,7 +48,7 @@ public sealed class BassDesignKernelTests
     {
         BassInputTransform transform = BassInputTransform.Fit(data);
         BassInputs inputs = BassInputs.Prepare(data, transform);
-        return (new BassBasis(inputs, degree), inputs, ProductMeasure.Resolve(transform, inputs, includeOutputs: outputs));
+        return (new BassBasis(inputs, degree), inputs, ProductMeasure.Resolve(transform, inputs, integratedOutputs: outputs ? [.. transform.OutputVariables.Select(v => v.Name)] : null));
     }
 
     // The case inputs with continuous variable `variable` moved by `by`.
@@ -313,7 +313,7 @@ public sealed class BassDesignKernelTests
         BassInputTransform transform = BassInputTransform.Fit(Functional);
         BassInputs inputs = BassInputs.Prepare(Functional, transform);
         var basis = new BassBasis(inputs, degree);
-        var measure = ProductMeasure.Resolve(transform, inputs, includeOutputs: true);
+        var measure = ProductMeasure.Resolve(transform, inputs, integratedOutputs: [.. transform.OutputVariables.Select(v => v.Name)]);
         var moments = BassMoments.On(inputs, degree, measure);
         int checkedTerms = 0, withFunctional = 0;
         for (int id = 0; id < fit.Terms.Count; id++)

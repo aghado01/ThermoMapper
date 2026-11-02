@@ -170,7 +170,8 @@ internal sealed class FunctionalHingeKernel(BassInputs inputs, int degree) : Hin
         {
             if (Inputs.Outputs is null || h.Variable >= Inputs.Outputs.Count || h.Knot >= Inputs.FunctionalKnots(h.Variable).Length)
                 throw new ArgumentException($"Term {term} does not index these inputs.", nameof(term));
-            factors.Add(new HingeDesignFactor(measure.OfOutput(h.Variable), h.Sign, h.Knot, Inputs.FunctionalKnots(h.Variable)[h.Knot], Degree));
+            int variable = measure.OfOutput(h.Variable);
+            if (variable >= 0) factors.Add(new HingeDesignFactor(variable, h.Sign, h.Knot, Inputs.FunctionalKnots(h.Variable)[h.Knot], Degree));
         }
         return factors;
     }

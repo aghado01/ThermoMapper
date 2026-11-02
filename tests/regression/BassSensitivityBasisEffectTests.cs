@@ -222,6 +222,7 @@ public sealed class BassSensitivityBasisEffectTests
     {
         BassBasisFit fit = BassOutputComponentsTests.FitOf();
         Assert.Contains("training locations", Assert.Throws<ArgumentException>(() => fit.Effects(new SensitivitySpec { Coordinates = [[0.5]] })).Message);
+        Assert.Contains("training locations", Assert.Throws<ArgumentException>(() => fit.Effects(new SensitivitySpec { ConditionOn = ["t"] })).Message);
         Assert.Contains("output-variable measures", Assert.Throws<ArgumentException>(() =>
             fit.Effects(new SensitivitySpec { OutputMeasures = new Dictionary<string, InputMeasure> { ["t"] = new UniformMeasure() } })).Message);
         Assert.Throws<ArgumentOutOfRangeException>(() => fit.Effects(effects: new EffectSpec { GridPoints = 1 }));

@@ -91,19 +91,18 @@ public sealed record ContinuousMeasure(IIntervalMoments Measure, double Lower, d
 }
 
 /// <summary>
-/// The product measure over a fit's inputs, in its transformed units: one measure per predictor, in the data's order, then,
-/// when <see cref="IncludesOutputs"/>, one per output variable, the integrated functional form's extra inputs. Its
-/// variables are numbered in that order, which is how sensitivity results name inputs.
+/// The product measure over a fit's inputs, in its transformed units: one measure per predictor, in the data's order, then
+/// one per integrated output variable, in the response's order, the functional forms' extra inputs. Its variables are
+/// numbered in that order, which is how sensitivity results name inputs.
 /// </summary>
 public sealed class ProductMeasure
 {
     private readonly ContinuousMeasure?[] _continuous;
     private readonly double[]?[] _probabilities;
-    private readonly int[] _ofContinuous, _ofCategorical;
-    private readonly int _outputOffset;
+    private readonly int[] _ofContinuous, _ofCategorical, _ofOutput;
 
     private ProductMeasure(string[] names, InputMeasure[] declared, ContinuousMeasure?[] continuous, double[]?[] probabilities,
-                           int[] ofContinuous, int[] ofCategorical, int outputOffset, bool includesOutputs)
+                           int[] ofContinuous, int[] ofCategorical, int[] ofOutput)
     {
         Names = Array.AsReadOnly(names);
         Declared = Array.AsReadOnly(declared);
@@ -111,11 +110,11 @@ public sealed class ProductMeasure
         _probabilities = probabilities;
         _ofContinuous = ofContinuous;
         _ofCategorical = ofCategorical;
-        _outputOffset = outputOffset;
-        IncludesOutputs = includesOutputs;
+        _ofOutput = ofOutput;
+        IncludesOutputs = ofOutput.Length > 0 && Array.TrueForAll(ofOutput, v => v >= 0);
     }
 
-    /// <summary>The variables' names: the predictors', then the output variables' when included.</summary>
+    /// <summary>The variables' names: the predictors', then the integrated output variables'.</summary>
     public IReadOnlyList<string> Names { get; }
 
     /// <summary>Each variable's measure as declared, defaults filled in.</summary>
@@ -124,7 +123,8 @@ public sealed class ProductMeasure
     /// <summary>The variables.</summary>
     public int Count => Names.Count;
 
-    /// <summary>Whether the output variables are inputs (the integrated functional form).</summary>
+    /// <summary>Whether every output variable is an input (the integrated functional form). Otherwise the caller holds the
+    /// others at a coordinate, with the output side's normalizer (<see cref="BassMoments"/>).</summary>
     public bool IncludesOutputs { get; }
 
     /// <summary>Variable <paramref name="variable"/>'s measure if it is continuous; null for a categorical predictor.</summary>
@@ -139,32 +139,40 @@ public sealed class ProductMeasure
     /// <summary>The variable of categorical predictor <paramref name="index"/>.</summary>
     public int OfCategorical(int index) => _ofCategorical[index];
 
-    /// <summary>The variable of output variable <paramref name="index"/>; −1 when the outputs are not inputs.</summary>
-    public int OfOutput(int index) => IncludesOutputs ? _outputOffset + index : -1;
+    /// <summary>The variable of output variable <paramref name="index"/>; −1 when the measure does not cover it.</summary>
+    public int OfOutput(int index) => _ofOutput[index];
+
+    /// <summary>The output variable that variable <paramref name="variable"/> is, by its position among them; −1 for a
+    /// predictor.</summary>
+    public int OutputOf(int variable) => Array.IndexOf(_ofOutput, variable);
 
     /// <summary>
-    /// The product of <paramref name="measures"/> over the predictors and, when <paramref name="includeOutputs"/>,
-    /// <paramref name="outputMeasures"/> over the output variables, each keyed by name and declared in the variable's own
-    /// units, carried into the units of <paramref name="transform"/>, which <paramref name="inputs"/> were prepared with. A
-    /// variable left out takes the uniform measure on its training range, or the uniform level probabilities. A name that is
-    /// not a variable's, or a measure of the wrong kind, is refused.
+    /// The product of <paramref name="measures"/> over the predictors and <paramref name="outputMeasures"/> over the
+    /// <paramref name="integratedOutputs"/> (none when null), each keyed by name and declared in the variable's own units,
+    /// carried into the units of <paramref name="transform"/>, which <paramref name="inputs"/> were prepared with. A variable
+    /// left out takes the uniform measure on its training range, or the uniform level probabilities. A name that is not a
+    /// variable's, a measure on an output variable not integrated, or a measure of the wrong kind, is refused.
     /// </summary>
     public static ProductMeasure Resolve(BassInputTransform transform, BassInputs inputs,
                                          IReadOnlyDictionary<string, InputMeasure>? measures = null,
                                          IReadOnlyDictionary<string, InputMeasure>? outputMeasures = null,
-                                         bool includeOutputs = false)
+                                         IReadOnlyCollection<string>? integratedOutputs = null)
     {
         ArgumentNullException.ThrowIfNull(transform);
         ArgumentNullException.ThrowIfNull(inputs);
         measures ??= new Dictionary<string, InputMeasure>();
         outputMeasures ??= new Dictionary<string, InputMeasure>();
-        if (includeOutputs && inputs.Outputs is null) throw new ArgumentException("A scalar response has no output variables to integrate.", nameof(includeOutputs));
+        integratedOutputs ??= [];
         Unknown(measures.Keys, transform.Predictors.Select(p => p.Name), "predictor", nameof(measures));
         Unknown(outputMeasures.Keys, transform.OutputVariables.Select(p => p.Name), "output variable", nameof(outputMeasures));
-        if (!includeOutputs && outputMeasures.Count > 0)
-            throw new ArgumentException("Output-variable measures apply only when the output variables are integrated.", nameof(outputMeasures));
+        Unknown(integratedOutputs, transform.OutputVariables.Select(p => p.Name), "output variable", nameof(integratedOutputs));
+        if (outputMeasures.Keys.Except(integratedOutputs, StringComparer.Ordinal).Any())
+            throw new ArgumentException("Output-variable measures apply only to the output variables integrated.", nameof(outputMeasures));
 
-        int p = transform.Predictors.Count, outputs = includeOutputs ? transform.OutputVariables.Count : 0;
+        int p = transform.Predictors.Count, outputs = 0;
+        var ofOutput = new int[transform.OutputVariables.Count];
+        for (int d = 0; d < ofOutput.Length; d++)
+            ofOutput[d] = integratedOutputs.Contains(transform.OutputVariables[d].Name) ? p + outputs++ : -1;
         var names = new string[p + outputs];
         var declared = new InputMeasure[names.Length];
         var continuous = new ContinuousMeasure?[names.Length];
@@ -190,15 +198,17 @@ public sealed class ProductMeasure
                 probabilities[j] = ResolveCategorical(scale.Name, declared[j], (TrainingLevels)scale);
             }
         }
-        for (int d = 0; d < outputs; d++)
+        for (int d = 0; d < ofOutput.Length; d++)
         {
+            int v = ofOutput[d];
+            if (v < 0) continue;
             RangeScale scale = transform.OutputVariables[d];
-            names[p + d] = scale.Name;
+            names[v] = scale.Name;
             outputMeasures.TryGetValue(scale.Name, out InputMeasure? given);
-            declared[p + d] = given ?? new UniformMeasure();
-            continuous[p + d] = ResolveContinuous(scale.Name, declared[p + d], scale, inputs.Outputs!.Variable(d));
+            declared[v] = given ?? new UniformMeasure();
+            continuous[v] = ResolveContinuous(scale.Name, declared[v], scale, inputs.Outputs!.Variable(d));
         }
-        return new ProductMeasure(names, declared, continuous, probabilities, ofContinuous, ofCategorical, p, includeOutputs);
+        return new ProductMeasure(names, declared, continuous, probabilities, ofContinuous, ofCategorical, ofOutput);
     }
 
     private static void Unknown(IEnumerable<string> given, IEnumerable<string> known, string kind, string parameter)

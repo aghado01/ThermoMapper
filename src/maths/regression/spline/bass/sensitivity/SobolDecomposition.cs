@@ -16,7 +16,8 @@ public enum FunctionalForm
     /// <summary>The output variables are more inputs, integrated under their declared measures: one decomposition.</summary>
     Integrate,
 
-    /// <summary>The surface is held at each declared output coordinate: one decomposition per coordinate, indices as
+    /// <summary>The surface is held at each declared output coordinate, on every output variable or on those
+    /// <see cref="SensitivitySpec.ConditionOn"/> names, the others integrated: one decomposition per coordinate, indices as
     /// functions of t.</summary>
     Condition,
 }
@@ -49,8 +50,8 @@ public sealed record SensitivitySpec
     /// training range, or uniform level probabilities.</summary>
     public IReadOnlyDictionary<string, InputMeasure>? Measures { get; init; }
 
-    /// <summary>The output variables' measures by name, for <see cref="FunctionalForm.Integrate"/>; uniform over the training
-    /// range when left out, <see cref="EmpiricalMeasure"/> for the training output grid.</summary>
+    /// <summary>The integrated output variables' measures by name; uniform over the training range when left out,
+    /// <see cref="EmpiricalMeasure"/> for the training output grid.</summary>
     public IReadOnlyDictionary<string, InputMeasure>? OutputMeasures { get; init; }
 
     /// <summary>The largest subset whose main index is reported; the posterior's largest term (its variable count) when null,
@@ -67,8 +68,13 @@ public sealed record SensitivitySpec
     /// <summary>A direct functional fit's form; ignored for a scalar response.</summary>
     public FunctionalForm Functional { get; init; } = FunctionalForm.Integrate;
 
-    /// <summary>The output coordinates of <see cref="FunctionalForm.Condition"/>, each one value per output variable in its own
-    /// units; the training output locations when null.</summary>
+    /// <summary>The output variables <see cref="FunctionalForm.Condition"/> holds, by name, in <see cref="Coordinates"/>' order
+    /// (R's <c>func.var</c>), the others integrated as more inputs; every output variable, in the response's order, when
+    /// null.</summary>
+    public IReadOnlyList<string>? ConditionOn { get; init; }
+
+    /// <summary>The output coordinates of <see cref="FunctionalForm.Condition"/>, each one value per held output variable in its
+    /// own units; those variables' distinct values over the training locations, in location order, when null.</summary>
     public IReadOnlyList<double[]>? Coordinates { get; init; }
 
     /// <summary>The rounding tolerance: a total variance at most this times its terms' moment magnitudes is zero, and a
@@ -198,6 +204,7 @@ public sealed class SobolDecomposition
 /// <param name="Coordinates">The conditioned form's output coordinates in their own units; null otherwise.</param>
 /// <param name="CoordinatesOutside">Whether each coordinate lies outside the training range, where the output hinges
 /// extrapolate; null otherwise.</param>
+/// <param name="CoordinateVariables">The output variables a coordinate holds, in its order; null otherwise.</param>
 /// <param name="MomentError">The largest quadrature error estimate among the one-variable moments (0 unless a Student
 /// component was integrated).</param>
 public sealed record SobolAnalysis(
@@ -207,4 +214,5 @@ public sealed record SobolAnalysis(
     IReadOnlyList<SobolDecomposition> Decompositions,
     IReadOnlyList<double[]>? Coordinates,
     IReadOnlyList<bool>? CoordinatesOutside,
+    IReadOnlyList<string>? CoordinateVariables,
     double MomentError);

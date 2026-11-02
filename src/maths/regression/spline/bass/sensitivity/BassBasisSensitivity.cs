@@ -31,8 +31,8 @@ public static class BassBasisSensitivity
         if (!(spec.RoundingTolerance >= 0.0) || double.IsPositiveInfinity(spec.RoundingTolerance))
             throw new ArgumentOutOfRangeException(nameof(spec), "The rounding tolerance must be nonnegative and finite.");
         if (spec.Surface != DecomposedSurface.Mean) throw new ArgumentException($"The decomposed surface {spec.Surface} is not built.", nameof(spec));
-        if (spec.Coordinates is not null)
-            throw new ArgumentException("A basis exists only at its training locations, which have no output coordinates: read a location's decomposition by its index.", nameof(spec));
+        if (spec.Coordinates is not null || spec.ConditionOn is not null)
+            throw new ArgumentException("A basis exists only at its training locations, which have no output coordinates: read a location's decomposition by its index.",nameof(spec));
         if (spec.OutputMeasures is { Count: > 0 })
             throw new ArgumentException("A basis fit's locations are integrated equally weighted, its training grid; output-variable measures apply to direct functional fits.", nameof(spec));
 

@@ -67,8 +67,8 @@ public sealed record SobolSummary(
 /// <summary>
 /// A direct fit's sensitivity summary (R's <c>plot.bassSob</c>; P11): one <see cref="SobolSummary"/> for a scalar fit or the
 /// integrated functional form, one per coordinate for the conditioned form, with the analysis's form, measure, order and
-/// moment error, and the conditioned form's coordinates, one value per output variable in <see cref="OutputVariables"/>'
-/// order.
+/// moment error, and the conditioned form's coordinates, one value per held output variable in <see cref="OutputVariables"/>'
+/// order. The other forms list every output variable there.
 /// </summary>
 public sealed record SobolAnalysisSummary(
     FunctionalForm? Form, ProductMeasure Measure, int MaxOrder, IReadOnlyList<SobolSummary> Decompositions,
@@ -79,7 +79,8 @@ public sealed record SobolAnalysisSummary(
         IReadOnlyList<double> p = PosteriorSummary.Checked(probabilities);
         return new SobolAnalysisSummary(analysis.Form, analysis.Measure, analysis.MaxOrder,
             Array.AsReadOnly(analysis.Decompositions.Select(d => SobolSummary.Over(d, p)).ToArray()), analysis.Coordinates,
-            analysis.CoordinatesOutside, Array.AsReadOnly(fit.Transform.OutputVariables.Select(v => v.Name).ToArray()), analysis.MomentError);
+            analysis.CoordinatesOutside, analysis.CoordinateVariables ?? Array.AsReadOnly(fit.Transform.OutputVariables.Select(v => v.Name).ToArray()),
+            analysis.MomentError);
     }
 }
 

@@ -124,9 +124,6 @@ public sealed class BassTerm : IEquatable<BassTerm>
     /// <summary>The functional part, by output variable.</summary>
     public IReadOnlyList<HingeFactor> Functional => _functional;
 
-    /// <summary>Whether the term has a factor on the case side, continuous or categorical.</summary>
-    public bool HasCaseFactor => _continuous.Length + _categorical.Length > 0;
-
     /// <inheritdoc/>
     public bool Equals(BassTerm? other)
         => other is not null && (ReferenceEquals(this, other)

@@ -637,7 +637,7 @@ public sealed class BassCompletionAuditProbes
         Assert.Equal(p.Latent[0, 1, 0], p.Mean()[1, 0]);
         Assert.Equal(p.Latent[0, 1, 0], p.Quantile(0.5)[1, 0], 9);    // one Gaussian: its median is its mean
         Assert.NotNull(p.Predictive);
-        Assert.Equal(1, fit.Sensitivity(data).Decompositions[0].Count);
+        Assert.Single(fit.Sensitivity(data).Decompositions[0].Variance);
         Assert.Single(fit.Effects(data, null, new EffectSpec { GridPoints = 3 }).At);
         Assert.Equal(1, fit.Summary().Metadata.Lengths.Draws);
         Assert.Single(fit.Traces().Chains[0].Count);
@@ -869,19 +869,79 @@ public sealed class BassCompletionAuditProbes
         AgreeWithGrid("a whole coordinate", c, richest, Moments([Continuous(200), Continuous(200)], n => Hand(fit, inputs, pooled[richest], [n[0].Value, n[1].Value], [], 0.0, at)), 0.02);
     }
 
-    // R's func.var: indices as a function of one output variable, the others integrated. A coordinate here names every
-    // output variable, so a one-valued coordinate on a two-variable fit is refused. Audit gap G-2.
-    [Fact(Skip = "audit gap G-2: conditioning on one of several output variables, integrating the others, is not built")]
-    public void ConditionOnOneOfTwoOutputVariables_IntegratesTheOther()
+    // R's func.var: indices as a function of one output variable, the others integrated. Audit gap G-2, closed.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void ConditionOnOneOfTwoOutputVariables_IntegratesTheOther(int degree)
     {
         BassData data = TwoOutputVariables();
-        BassFit fit = Bass.Fit(Config(samples: 16, burn: 200), data);
+        BassConfig config = Config(samples: 16, burn: 200);
+        BassFit fit = Bass.Fit(config with { Structure = config.Structure with { Degree = degree } }, data);
         BassInputs inputs = BassInputs.Prepare(data, fit.Transform);
         List<BassDraw> pooled = Pooled(fit);
-        SobolDecomposition s = Assert.Single(fit.Sensitivity(data, new SensitivitySpec { Functional = FunctionalForm.Condition, Coordinates = [[0.5]] }).Decompositions);
+        var spec = new SensitivitySpec { Functional = FunctionalForm.Condition, ConditionOn = ["t0"], Coordinates = [[0.5]] };
+        SobolDecomposition s = Assert.Single(fit.Sensitivity(data, spec).Decompositions);
+        Assert.Equal(new[] { "x0", "x1", "t1" }, s.Inputs);
         int richest = Richest(Enumerable.Range(0, pooled.Count), d => pooled[d].Structure.TermIds.Length);
-        AgreeWithGrid("t0 = 0.5", s, richest, Moments([Continuous(40), Continuous(40), Continuous(40)],
-                      n => Hand(fit, inputs, pooled[richest], [n[0].Value, n[1].Value], [], 0.0, [0.5, n[2].Value])), 0.03);
+        Node[][] grid = [Continuous(40), Continuous(40), Continuous(40)];
+        double Eval(Node[] n) => Hand(fit, inputs, pooled[richest], [n[0].Value, n[1].Value], [], 0.0, [0.5, n[2].Value]);
+        (double V, double Mean, double[] Main) moments = Moments(grid, Eval);
+        AgreeWithGrid("t0 = 0.5", s, richest, moments, 0.03);
+
+        // The effects share the split: the mean, and t1's main effect at its grid.
+        EffectFunctions effects = fit.Effects(data, spec, new EffectSpec { GridPoints = 5 }).At[0];
+        Assert.True(Math.Abs(effects.Mean[richest] - moments.Mean) <= 0.01 * Math.Max(Math.Abs(moments.Mean), 1.0));
+        Effect t1 = effects.Effects.Single(e => e.Inputs.SequenceEqual(new[] { 2 }));
+        for (int c = 0; c < t1.Grids[0].Values.Length; c++)
+        {
+            Node[][] given = [grid[0], grid[1], [new Node(t1.Grids[0].Values[c], -1, 1.0)]];
+            double expected = Moments(given, Eval).Mean - moments.Mean;
+            Assert.True(Math.Abs(t1.Values[richest, c] - expected) <= 0.01 * Math.Max(Math.Abs(moments.Mean), 1.0),
+                        $"t1's effect at {t1.Grids[0].Values[c]}: {t1.Values[richest, c]} against {expected}");
+        }
+    }
+
+    // Terms where the split between held and integrated factors matters: one held whole, which folds into the level; one
+    // integrated whole, with no case factor, which still varies; a case factor with both; and a hinge facing its end of the
+    // range, whose part R leaves unnormalized, at a coordinate past that end where it is not zero. The hand evaluation
+    // divides the whole part by one constant, so a normalizer split or counted twice fails here.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void ConditionOnOne_HandBuiltTerms_CarryTheNormalizerOnce(int degree)
+    {
+        BassData data = TwoOutputVariables();
+        BassConfig config = Config(samples: 2, chains: 1, burn: 5);
+        BassFit run = Bass.Fit(config with { Structure = config.Structure with { Degree = degree } }, data);
+        BassInputs inputs = BassInputs.Prepare(data, run.Transform);
+        Assert.Equal(1.0, inputs.FunctionalKnots(0)[3]);
+        var table = new BassTermTable();
+        int[] ids =
+        [
+            table.Intern(new BassTerm(functional: [new HingeFactor(0, 1, 1)])),
+            table.Intern(new BassTerm(functional: [new HingeFactor(1, -1, 6)])),
+            table.Intern(new BassTerm([new HingeFactor(0, 1, 2)], functional: [new HingeFactor(0, -1, 2), new HingeFactor(1, 1, 3)])),
+            table.Intern(new BassTerm([new HingeFactor(1, -1, 3)], functional: [new HingeFactor(0, 1, 3), new HingeFactor(1, 1, 1)])),
+        ];
+        var store = new DrawStore<BassDraw>();
+        store.Add(new BassDraw(new BassStructure(ids), 1.0, 1.0, [0.5, 1.5, -0.8, 2.0, 3.0], 1.0));
+        BassFit fit = run with { Terms = table, Draws = [store], DrawWeights = null };
+
+        double[] coordinates = [0.5, 1.2];
+        var spec = new SensitivitySpec { Functional = FunctionalForm.Condition, ConditionOn = ["t0"], Coordinates = [[coordinates[0]], [coordinates[1]]] };
+        SobolAnalysis analysis = fit.Sensitivity(data, spec);
+        EffectAnalysis effects = fit.Effects(data, spec, new EffectSpec { Subsets = [] });
+        Assert.Equal(new[] { false, true }, analysis.CoordinatesOutside);
+        Node[][] grid = [Continuous(60), Continuous(60), Continuous(60)];
+        for (int c = 0; c < 2; c++)
+        {
+            double at = coordinates[c];
+            (double V, double Mean, double[] Main) moments = Moments(grid, n => Hand(fit, inputs, store[0], [n[0].Value, n[1].Value], [], 0.0, [at, n[2].Value]));
+            AgreeWithGrid($"t0 = {at}", analysis.Decompositions[c], 0, moments, 0.01);
+            Assert.True(moments.V > 0.0);
+            Assert.True(Math.Abs(effects.At[c].Mean[0] - moments.Mean) <= 0.005 * Math.Max(Math.Abs(moments.Mean), 1.0), $"t0 = {at}: mean {effects.At[c].Mean[0]} against {moments.Mean}");
+        }
     }
 
     // ── Declared controls ──────────────────────────────────────────────────────────────────────────────────────────────

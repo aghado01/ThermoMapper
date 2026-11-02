@@ -55,7 +55,8 @@ public interface IDesignKernel<in TPoints>
     /// means by it, where <see cref="Multiply"/> divides by its reciprocal.</summary>
     double Scale(BassTerm term);
 
-    /// <summary>The part's separable factors, each on one variable of <paramref name="measure"/>.</summary>
+    /// <summary>The part's separable factors, each on one variable of <paramref name="measure"/>; one on a variable the
+    /// measure does not cover is left out.</summary>
     IReadOnlyList<DesignFactor> Factors(BassTerm term, ProductMeasure measure);
 }
 

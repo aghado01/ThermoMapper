@@ -133,6 +133,23 @@ public sealed class BassPresentationSensitivityTests
     }
 
     [Fact]
+    public void ConditionedSummary_OnSomeOutputs_NamesThem()
+    {
+        BassFit fit = SensitivityFixture.FitTwoOutputs();
+        BassData data = SensitivityFixture.TwoOutputs();
+        var spec = new SensitivitySpec { Functional = FunctionalForm.Condition, ConditionOn = ["t1"], Coordinates = [[0.25], [0.75]] };
+        SobolAnalysis analysis = fit.Sensitivity(data, spec);
+        SobolAnalysisSummary summary = fit.SensitivitySummary(data, spec);
+        Assert.Equal(new[] { "t1" }, summary.OutputVariables);
+        Assert.Equal(new[] { "x0", "x1", "t0" }, summary.Decompositions[0].Inputs);
+        for (int c = 0; c < 2; c++)
+        {
+            Assert.Equal(analysis.Coordinates![c], summary.Coordinates![c]);
+            AssertAgainstDraws(summary.Decompositions[c], analysis.Decompositions[c]);
+        }
+    }
+
+    [Fact]
     public void BasisSummary_IsPerLocationAndIntegrated()
     {
         BassBasisFit fit = BassOutputComponentsTests.FitOf();

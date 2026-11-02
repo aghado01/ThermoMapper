@@ -35,4 +35,4 @@ public sealed record EffectFunctions(IReadOnlyList<string> Inputs, IReadOnlyList
 /// <summary>Effect functions of a BASS fit (<see cref="BassSensitivity.Effects"/>): one set for a scalar fit or the integrated
 /// functional form, one per coordinate for the conditioned form, the draws in <see cref="SobolDecomposition"/>'s order.</summary>
 public sealed record EffectAnalysis(FunctionalForm? Form, ProductMeasure Measure, IReadOnlyList<EffectFunctions> At,
-                                    IReadOnlyList<double[]>? Coordinates);
+                                    IReadOnlyList<double[]>? Coordinates, IReadOnlyList<string>? CoordinateVariables);

@@ -285,6 +285,81 @@ public sealed class BassSensitivityTests
     }
 
     [Fact]
+    public void ConditioningOnSome_ObeysTheLawOfTotalVariance()
+    {
+        // t0 under its empirical measure, its four values equally weighted, so the integrated form is the conditioned one
+        // averaged over the coordinates, which default to those four values. t1 keeps its uniform measure in both.
+        BassFit fit = SensitivityFixture.FitTwoOutputs();
+        BassData data = SensitivityFixture.TwoOutputs();
+        var spec = new SensitivitySpec { Functional = FunctionalForm.Condition, ConditionOn = ["t0"] };
+        SobolDecomposition whole = Assert.Single(BassSensitivity.Of(fit, data, new SensitivitySpec
+        {
+            OutputMeasures = new Dictionary<string, InputMeasure> { ["t0"] = new EmpiricalMeasure() },
+        }).Decompositions);
+        SobolAnalysis held = BassSensitivity.Of(fit, data, spec);
+        EffectAnalysis means = BassSensitivity.Effects(fit, data, spec, new EffectSpec { Subsets = [] });
+
+        Assert.Equal(new[] { "x0", "x1", "t0", "t1" }, whole.Inputs);
+        Assert.Equal(FunctionalForm.Condition, held.Form);
+        Assert.Equal(new[] { "t0" }, held.CoordinateVariables);
+        Assert.Equal(new[] { "t0" }, means.CoordinateVariables);
+        Assert.Equal(new[] { 0.0, 1.0 / 3, 2.0 / 3, 1.0 }, held.Coordinates!.Select(c => Assert.Single(c)));
+        Assert.All(held.CoordinatesOutside!, Assert.False);
+        Assert.All(held.Decompositions, part => Assert.Equal(new[] { "x0", "x1", "t1" }, part.Inputs));
+        Assert.Contains(whole.Subsets, u => u.Contains(2));
+
+        int single = IndexOf(whole, [2]), moved = 0;
+        for (int d = 0; d < whole.Count; d++)
+        {
+            double within = held.Decompositions.Average(c => c.Variance[d]);
+            double grand = means.At.Average(e => e.Mean[d]);
+            double between = means.At.Average(e => (e.Mean[d] - grand) * (e.Mean[d] - grand));
+            double slack = 1e-10 * Math.Max(whole.Variance[d], 1e-9);
+            Assert.True(Math.Abs(whole.Variance[d] - (within + between)) <= slack, $"draw {d}: integrated {whole.Variance[d]}, within {within} + between {between}");
+            Assert.True(Math.Abs((single >= 0 ? whole.MainVariance[d, single] : 0.0) - between) <= slack, $"draw {d}: t0's main variance against the means' {between}");
+            // An input's total is its conditioned totals' average: E[Var(f | everything else)], t0 among the rest.
+            for (int i = 0; i < 2; i++)
+                Assert.True(Math.Abs(whole.TotalVariance[d, i] - held.Decompositions.Average(c => c.TotalVariance[d, i])) <= slack, $"draw {d}, input {i}");
+            Assert.True(Math.Abs(whole.TotalVariance[d, 3] - held.Decompositions.Average(c => c.TotalVariance[d, 2])) <= slack, $"draw {d}, t1");
+            foreach (SobolDecomposition part in held.Decompositions)
+            {
+                if (!part.IsDefined(d)) continue;
+                double sum = 0.0;
+                for (int u = 0; u < part.Subsets.Count; u++) sum += part.MainVariance[d, u];
+                Assert.True(Math.Abs(sum - part.Variance[d]) <= 1e-12 * part.Variance[d]);
+            }
+            if (between > 0.0 && within > 0.0) moved++;
+        }
+        Assert.True(moved > 0, "the fixture's draws must vary within and across the coordinates");
+    }
+
+    [Fact]
+    public void ConditioningOnEvery_IsTheConditionedForm_InAnyOrder()
+    {
+        BassFit fit = SensitivityFixture.FitTwoOutputs();
+        BassData data = SensitivityFixture.TwoOutputs();
+        var plain = new SensitivitySpec { Functional = FunctionalForm.Condition, Coordinates = [[0.5, 0.25], [1.0, 0.75]] };
+        SobolAnalysis all = BassSensitivity.Of(fit, data, plain);
+        SobolAnalysis named = BassSensitivity.Of(fit, data, plain with { ConditionOn = ["t0", "t1"] });
+        SobolAnalysis reversed = BassSensitivity.Of(fit, data, plain with { ConditionOn = ["t1", "t0"], Coordinates = [[0.25, 0.5], [0.75, 1.0]] });
+        Assert.Equal(new[] { "t0", "t1" }, all.CoordinateVariables);
+        Assert.Equal(new[] { "t0", "t1" }, named.CoordinateVariables);
+        Assert.Equal(new[] { "t1", "t0" }, reversed.CoordinateVariables);
+        for (int c = 0; c < 2; c++)
+        {
+            Assert.Equal(new[] { "x0", "x1" }, all.Decompositions[c].Inputs);
+            Assert.Equal(all.Decompositions[c].Variance, named.Decompositions[c].Variance);
+            Assert.Equal(all.Decompositions[c].MainVariance, named.Decompositions[c].MainVariance);
+            Assert.Equal(all.Decompositions[c].Variance, reversed.Decompositions[c].Variance);
+            Assert.Equal(all.Decompositions[c].TotalVariance, reversed.Decompositions[c].TotalVariance);
+        }
+        // With no coordinates, the held variables' distinct training values: here every location's own pair.
+        SobolAnalysis training = BassSensitivity.Of(fit, data, new SensitivitySpec { Functional = FunctionalForm.Condition });
+        Assert.Equal(12, training.Coordinates!.Count);
+        Assert.Equal(12, training.Coordinates.Select(c => (c[0], c[1])).Distinct().Count());
+    }
+
+    [Fact]
     public void Other_IsTheVarianceOutsideTheReportedSubsets()
     {
         BassFit fit = SensitivityFixture.FitScalar();
@@ -326,6 +401,28 @@ public sealed class BassSensitivityTests
             OutputMeasures = new Dictionary<string, InputMeasure> { ["t"] = new UniformMeasure() },
         }));
         Assert.Throws<ArgumentOutOfRangeException>(() => BassSensitivity.Of(fit, data, new SensitivitySpec { RoundingTolerance = -1.0 }));
+        Assert.Contains("conditioned form", Assert.Throws<ArgumentException>(() => BassSensitivity.Of(fit, data, new SensitivitySpec { ConditionOn = ["t"] })).Message);
+
+        BassFit two = SensitivityFixture.FitTwoOutputs();
+        BassData twoData = SensitivityFixture.TwoOutputs();
+        string Refusal(SensitivitySpec spec) => Assert.Throws<ArgumentException>(() => BassSensitivity.Of(two, twoData, spec)).Message;
+        var conditioned = new SensitivitySpec { Functional = FunctionalForm.Condition };
+        Assert.Contains("conditioned form", Refusal(new SensitivitySpec { ConditionOn = ["t0"] }));
+        Assert.Contains("integrated form", Refusal(conditioned with { ConditionOn = [] }));
+        Assert.Contains("'t9'", Refusal(conditioned with { ConditionOn = ["t9"] }));
+        Assert.Contains("twice", Refusal(conditioned with { ConditionOn = ["t0", "t0"] }));
+        Assert.Contains("1 held", Refusal(conditioned with { ConditionOn = ["t0"], Coordinates = [[0.5, 0.5]] }));
+        Assert.Contains("2 held", Refusal(conditioned with { Coordinates = [[0.5]] }));
+        Assert.Contains("integrated", Refusal(conditioned with
+        {
+            ConditionOn = ["t0"],
+            OutputMeasures = new Dictionary<string, InputMeasure> { ["t0"] = new UniformMeasure() },
+        }));
+        // A measure on the one left integrated is read.
+        var narrow = new Dictionary<string, InputMeasure> { ["t1"] = new UniformMeasure(0.2, 0.4) };
+        SobolAnalysis read = BassSensitivity.Of(two, twoData, conditioned with { ConditionOn = ["t0"], OutputMeasures = narrow, Coordinates = [[0.5]] });
+        Assert.Equal(narrow["t1"], read.Measure.Declared[2]);
+
         BassFit functional = SensitivityFixture.FitFunctional();
         Assert.Throws<ArgumentException>(() => BassSensitivity.Of(functional, SensitivityFixture.Functional(), new SensitivitySpec { Coordinates = [[0.5]] }));
         Assert.Throws<ArgumentException>(() => BassSensitivity.Of(functional, SensitivityFixture.Functional(), new SensitivitySpec

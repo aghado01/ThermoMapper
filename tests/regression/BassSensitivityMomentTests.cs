@@ -159,6 +159,40 @@ public sealed class BassSensitivityMomentTests
     }
 
     [Fact]
+    public void Resolution_CoversTheOutputVariablesItIsGiven_AndTheScaleStaysWithAWholePart()
+    {
+        BassData data = SensitivityFixture.TwoOutputs();
+        BassInputTransform transform = BassInputTransform.Fit(data);
+        BassInputs inputs = BassInputs.Prepare(data, transform);
+        ProductMeasure none = ProductMeasure.Resolve(transform, inputs), both = ProductMeasure.Resolve(transform, inputs, integratedOutputs: ["t1", "t0"]);
+        ProductMeasure one = ProductMeasure.Resolve(transform, inputs, integratedOutputs: ["t1"]);
+
+        // The variables keep the response's order, whatever the order named.
+        Assert.Equal(new[] { "x0", "x1" }, none.Names);
+        Assert.Equal(new[] { "x0", "x1", "t0", "t1" }, both.Names);
+        Assert.Equal(new[] { "x0", "x1", "t1" }, one.Names);
+        Assert.Equal((false, true, false), (none.IncludesOutputs, both.IncludesOutputs, one.IncludesOutputs));
+        Assert.Equal((-1, 2), (one.OfOutput(0), one.OfOutput(1)));
+        Assert.Equal((-1, 1), (one.OutputOf(1), one.OutputOf(2)));
+
+        // A term on x0, t0 and t1. Whole, the part's normalizer is in the moments; else the caller holds it with its factors.
+        BassTerm term = new([new HingeFactor(0, 1, 2)], functional: [new HingeFactor(0, 1, 1), new HingeFactor(1, -1, 6)]);
+        double caseSide = BassMoments.On(inputs, 1, none).Scale(term);
+        double whole = BassMoments.On(inputs, 1, both).Scale(term);
+        double t0Knot = inputs.FunctionalKnots(0)[1], t1Knot = inputs.FunctionalKnots(1)[6];
+        Assert.Equal(caseSide / ((1 - t0Knot) * t1Knot), whole, 13);
+        Assert.Equal(caseSide, BassMoments.On(inputs, 1, one).Scale(term));
+        Assert.Equal(new[] { 0 }, BassMoments.On(inputs, 1, none).Variables(term));
+        Assert.Equal(new[] { 0, 2 }, BassMoments.On(inputs, 1, one).Variables(term));
+        Assert.Equal(new[] { 0, 2, 3 }, BassMoments.On(inputs, 1, both).Variables(term));
+
+        // A measure on an output variable not integrated, or a name no output variable has, is refused.
+        Assert.Contains("integrated", Assert.Throws<ArgumentException>(() => ProductMeasure.Resolve(transform, inputs,
+            outputMeasures: new Dictionary<string, InputMeasure> { ["t0"] = new UniformMeasure() }, integratedOutputs: ["t1"])).Message);
+        Assert.Contains("'t9'", Assert.Throws<ArgumentException>(() => ProductMeasure.Resolve(transform, inputs, integratedOutputs: ["t9"])).Message);
+    }
+
+    [Fact]
     public void Resolution_RefusesUnknownNamesAndWrongKinds()
     {
         var transform = BassInputTransform.Fit(Data);
@@ -244,6 +278,28 @@ internal static class SensitivityFixture
                             new FunctionalResponse(y, [new ContinuousPredictor("t", t)]));
     }
 
+    // A functional response over two output variables on 12 locations that form no grid: t0 on four values, each at three
+    // locations, and t1 on twelve; x0 and x1 as above.
+    public static BassData TwoOutputs(int seed = 9)
+    {
+        var rng = new Maths.Rng.Xoshiro256PlusPlus(seed);
+        const int n = 40, m = 12;
+        double[] t0 = [.. Enumerable.Range(0, m).Select(r => (r % 4) / 3.0)];
+        double[] t1 = [.. Enumerable.Range(0, m).Select(r => (r * 5 % m) / (m - 1.0))];
+        var x0 = new double[n];
+        var x1 = new double[n];
+        var y = new double[n, m];
+        for (int i = 0; i < n; i++)
+        {
+            x0[i] = (i % 8) / 7.0;
+            x1[i] = (i * 3 % 5) / 4.0;
+            for (int r = 0; r < m; r++)
+                y[i, r] = 1 + 2 * x0[i] * t0[r] + Math.Max(t1[r] - 0.4, 0) * x1[i] + t0[r] * t1[r] + 0.1 * (rng.NextDouble() - 0.5);
+        }
+        return new BassData([new ContinuousPredictor("x0", x0), new ContinuousPredictor("x1", x1)],
+                            new FunctionalResponse(y, [new ContinuousPredictor("t0", t0), new ContinuousPredictor("t1", t1)]));
+    }
+
     public static BassConfig Config(int degree = 1, int maxBasis = 8)
         => new()
         {
@@ -254,10 +310,13 @@ internal static class SensitivityFixture
     private static readonly Lazy<BassFit> ScalarFit = new(() => Bass.Fit(Config(), Scalar()));
     private static readonly Lazy<BassFit> ScalarFit2 = new(() => Bass.Fit(Config(degree: 2), Scalar()));
     private static readonly Lazy<BassFit> FunctionalFit = new(() => Bass.Fit(Config(), Functional()));
+    private static readonly Lazy<BassFit> TwoOutputFit = new(() => Bass.Fit(Config(), TwoOutputs()));
 
     public static BassFit FitScalar(int degree = 1) => degree == 1 ? ScalarFit.Value : ScalarFit2.Value;
 
     public static BassFit FitFunctional() => FunctionalFit.Value;
+
+    public static BassFit FitTwoOutputs() => TwoOutputFit.Value;
 }
 
 /// <summary>Expectations of terms (and of any function of the case inputs) under a product measure by a tensor rule.</summary>

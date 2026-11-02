@@ -393,6 +393,7 @@ public sealed class BassSensitivityBasisTests
     {
         BassBasisFit fit = BassOutputComponentsTests.FitOf();
         Assert.Contains("training locations", Assert.Throws<ArgumentException>(() => fit.Sensitivity(new SensitivitySpec { Coordinates = [[0.5]] })).Message);
+        Assert.Contains("training locations", Assert.Throws<ArgumentException>(() => fit.Sensitivity(new SensitivitySpec { ConditionOn = ["t"] })).Message);
         Assert.Contains("equally weighted", Assert.Throws<ArgumentException>(() => fit.Sensitivity(new SensitivitySpec
         {
             OutputMeasures = new Dictionary<string, InputMeasure> { ["t"] = new UniformMeasure() },
