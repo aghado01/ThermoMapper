@@ -144,7 +144,7 @@ This is the published xoshiro256++ reference algorithm.
 - **`default(KlDivergence)` and `new KlDivergence()` have eps = 0.** The parameterless form bypasses the optional-argument constructor, so a zero entry in q (with $p_i>0$) gives $+\infty$ rather than being floored. Construct with an explicit eps, e.g. `new KlDivergence(1e-12)`.
 - **Unbounded rejection loop.** The Gamma rejection loop has no iteration cap. This is standard for Marsaglia–Tsang, whose acceptance rate is above 95%.
 - **Integer draws are slightly biased.** `NextInt` has no rejection step. The bias is negligible for small q.
-- **No truncated sampler and no quantiles.** `Truncated<T>` cannot draw, and no distribution has a quantile function. No caller needs either yet.
+- **No truncated sampler, and few quantiles.** `Truncated<T>` cannot draw, because no caller draws from a truncated law yet. Only `Normal`, `Weibull` and `HalfCauchy` have a quantile function, and no caller has needed one from the others.
 - **Large shapes.** Accuracy falls as $\varepsilon S$ with the prefactor's size (see Algorithms). For a Student-t with very large ν, use `Normal`.
 - **`default` structs are invalid.** `default(Gamma)` and the other `default` values have zero parameters. Build distributions with their factories.
 - **Partial divergence abstraction.** `IDivergence<T>` is a partial abstraction with a single adapter and no consumers.
