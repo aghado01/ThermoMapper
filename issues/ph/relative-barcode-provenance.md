@@ -47,7 +47,7 @@ treat it as a result.
 | Work | Prover | What it proves |
 |---|---|---|
 | Heras, Coquand, Mörtberg, Siles, [*Computing persistent homology within Coq/SSReflect*](https://dl.acm.org/doi/10.1145/2528929) (2013) | Coq | Persistent Betti numbers and the Fundamental Lemma, with certified programs. From what I read, not the pairing of a column reduction, and not relative persistence. |
-| `lean/Lemmas/RelativeHomology.lean` and `RelativePersistence.lean` | Lean 4 | This repo: reduction computes persistent homology, absolute and relative, over any field and for ℤ/2 simplicial chains. |
+| `lean/Lemmas/RelativePersistence.lean`, `RelativeHomology.lean`, `IntervalDecomposition.lean` | Lean 4 | This repo: reduction computes persistent homology, absolute and relative, over any field and for ℤ/2 simplicial chains. The module is the explicit sum of the table's intervals, and the ranks determine them. |
 
 I found no other formalization, and nothing in Lean.
 

@@ -193,9 +193,17 @@ A bar there is only what reduction reads, so the user asked to take it past matr
   the pair. No reduction appears in the statement.
 - `SimplicialFiltration`: all of it for ℤ/2 simplicial chains. Textbook ranks on one edge check the definitions.
 
-It covers the mathematics, not the C#: `RelativeFiltration` is still checked by tests. It stops at ranks: that a persistence
-module is a sum of intervals, which its ranks determine, is the standard structure theorem and is not formalized. It is
-folklore in substance, not new: [relative-barcode-provenance.md](relative-barcode-provenance.md).
+`lean/Lemmas/IntervalDecomposition.lean` then proves the structure behind those ranks, with no appeal to the general
+structure theorem:
+
+- `exists_intervalDecomposition`: each H_p(S, K) has a basis indexed by the bars alive on S, and the map to H_p(T, K) sends a
+  bar's basis element to the same bar's, or to zero once it has died. That is a direct sum of interval modules.
+- `barcode_unique`: any family of intervals with the module's ranks has exactly the table's intervals born outside K.
+- `rep`: a bar that dies is represented by the boundary that kills it, not by the column of V at its birth, whose class can
+  outlive the bar. A bar that never dies is represented by its column of V, a relative cycle for a class moved up from K.
+
+It covers the mathematics, not the C#: `RelativeFiltration` is still checked by tests. It is folklore in substance, not new:
+[relative-barcode-provenance.md](relative-barcode-provenance.md).
 
 **What it means for the design notes.**
 
