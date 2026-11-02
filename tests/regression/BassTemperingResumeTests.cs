@@ -24,7 +24,7 @@ public sealed class BassTemperingResumeTests
     {
         "reference", "linear", "powered", "fixed ladder", "fixed g", "functional", "categorical", "flat + jeffreys", "thinned", "two rungs",
         "three rungs, reference", "self-sizing", "self-sizing, linear", "self-sizing, powered", "self-sizing, fixed g", "self-sizing, functional",
-        "self-sizing, categorical", "self-sizing, flat",
+        "self-sizing, categorical", "self-sizing, flat", "declared list", "declared list, adaptive",
     };
 
     [Theory]
@@ -39,7 +39,7 @@ public sealed class BassTemperingResumeTests
         Assert.Equal(400, resumed.Diagnostics.SamplesUsed);
         BassRunTests.AssertSameFit(full, resumed);
         AssertSameTempering(full, resumed);
-        Assert.Equal(option is "reference" or "linear" or "fixed ladder" or "thinned" or "three rungs, reference"
+        Assert.Equal(option is "reference" or "linear" or "fixed ladder" or "thinned" or "three rungs, reference" or "declared list"
                      || option.StartsWith("self-sizing", StringComparison.Ordinal) && option is not ("self-sizing, powered" or "self-sizing, flat"),
                      full.Evidence is not null);
         _out.WriteLine($"{option}: {full.Terms.Count} terms, round trips {full.Diagnostics.Tempering!.RoundTripsPerScan:F4}/scan, " +

@@ -197,10 +197,10 @@ public sealed record BassResolved
         double? hotEnd = null;
         if (config.Sampling.Tempering is { } tempering)
         {
-            if (tempering.Levels is null)
+            if (tempering.DeclaredLevels() is null)
                 log.Add(new("Tempering.Levels", $"{tempering.StartLevels()}, self-sizing within {tempering.MaxLevels}",
                             "Levels null: the ladder sizes itself during burn-in by its barrier, N ≈ 2Λ pairs"));
-            hotEnd = tempering.HotEnd;
+            hotEnd = tempering.DeclaredHotEnd();
             if (hotEnd is null)
             {
                 double? halving = HalvingTau(coefficients.Form, scale, n);
@@ -216,10 +216,11 @@ public sealed record BassResolved
             if (tempering.Path == TemperingPath.Likelihood)
             {
                 string improper = config.Intercept == GPriorCentre.Flat ? "the flat intercept" : "the Jeffreys σ² prior";
-                bool setHotEnd = tempering.HotEnd is not null;
+                bool setHotEnd = tempering.DeclaredHotEnd() is not null;
+                string reading = tempering.InverseTemperatures is not null ? "InverseTemperatures reaches" : setHotEnd ? "HotEnd is" : "HotEnd auto-picks";
                 if (!BassTarget.Defines(tempering.Form, config.Intercept, sigma2, n, hotEnd.Value))
                     throw new ArgumentException(
-                        $"Sampling.Tempering.HotEnd {(setHotEnd ? "is" : "auto-picks")} {Text(hotEnd.Value)}, where the integrated form is undefined under " +
+                        $"Sampling.Tempering.{reading} {Text(hotEnd.Value)}, where the integrated form is undefined under " +
                         $"{improper}, which needs b > (1 − 2c)/N = {Text((1.0 - 2.0 * (sigma2?.Shape ?? 0.0)) / n)}; " +
                         $"{(setHotEnd ? "raise it" : "set it above")}, or take the linear form (D05).", "config");
                 if (tempering.ReferenceRung && !BassTarget.Defines(tempering.Form, config.Intercept, sigma2, n, 0.0))

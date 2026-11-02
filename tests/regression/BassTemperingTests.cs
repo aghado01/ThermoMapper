@@ -118,7 +118,7 @@ public sealed class BassTemperingTests
 
         BassConfig config = Config(spec with { Form = TemperedForm.Linear, ReferenceRung = true, Levels = 6, HotEnd = 0.02, Adaptive = false });
         string json = config.ToJson();
-        Assert.Contains("\"Tempering\":{\"Path\":\"Likelihood\",\"Form\":\"Linear\",\"Levels\":6,\"MaxLevels\":64,\"HotEnd\":0.02,\"Adaptive\":false,\"Schedule\":\"DeterministicEvenOdd\",\"ReferenceRung\":true,\"Split\":null}", json);
+        Assert.Contains("\"Tempering\":{\"Path\":\"Likelihood\",\"Form\":\"Linear\",\"Levels\":6,\"MaxLevels\":64,\"HotEnd\":0.02,\"Adaptive\":false,\"Schedule\":\"DeterministicEvenOdd\",\"ReferenceRung\":true,\"Split\":null,\"InverseTemperatures\":null}", json);
         Assert.Equal(config, BassConfig.FromJson(json));
         Assert.Equal(Config(spec), BassConfig.FromJson(Config(spec).ToJson()));
         Assert.Equal(new TemperingSpec { ReferenceRung = true }, BassConfig.FromJson("{\"Sampling\":{\"Tempering\":{\"ReferenceRung\":true}}}").Sampling.Tempering);
@@ -131,8 +131,72 @@ public sealed class BassTemperingTests
                  {
                      spec with { Path = TemperingPath.Powered }, spec with { Form = TemperedForm.Linear }, spec with { Levels = 9 },
                      spec with { MaxLevels = 32 }, spec with { HotEnd = 2e-3 }, spec with { Levels = 8, Adaptive = false }, spec with { ReferenceRung = true },
+                     spec with { InverseTemperatures = [1.0, 0.1] },
                  })
             Assert.NotEqual(baseline, Bass.Fingerprint(Config(other), data));
+    }
+
+    [Fact]
+    public void List_RoundTrips_MovesTheFingerprintWithARung_AndReadsAsItsCountAndHotEnd()
+    {
+        var spec = new TemperingSpec { InverseTemperatures = [1.0, 0.4, 0.1, 0.02] };
+        string json = Config(spec).ToJson();
+        Assert.Contains("\"InverseTemperatures\":[1,0.4,0.1,0.02]}", json);
+        BassConfig back = BassConfig.FromJson(json);
+        Assert.Equal(spec.InverseTemperatures, back.Sampling.Tempering!.InverseTemperatures);
+        Assert.Equal(json, back.ToJson());
+        BassData data = BassSweepTests.Data();
+        Assert.NotEqual(Bass.Fingerprint(Config(spec), data), Bass.Fingerprint(Config(new TemperingSpec { InverseTemperatures = [1.0, 0.4, 0.1, 0.03] }), data));
+
+        Assert.Equal((4, 0.02, 4), (spec.DeclaredLevels(), spec.DeclaredHotEnd(), spec.StartLevels()));
+        var reference = new TemperingSpec { InverseTemperatures = [1.0, 0.4, 0.1, 0.0], ReferenceRung = true };
+        Assert.Equal((4, 0.1, 4), (reference.DeclaredLevels(), reference.DeclaredHotEnd(), reference.StartLevels()));
+        var counted = new TemperingSpec { Levels = 5, HotEnd = 0.2 };
+        Assert.Equal((5, 0.2, 5), (counted.DeclaredLevels(), counted.DeclaredHotEnd(), counted.StartLevels()));
+        Assert.Equal(((int?)null, (double?)null, 8), (new TemperingSpec().DeclaredLevels(), new TemperingSpec().DeclaredHotEnd(), new TemperingSpec().StartLevels()));
+
+        // A list is what the data would otherwise pick: nothing is auto-picked, and the hot end it reports is its own.
+        BassResolved resolved = BassResolved.Resolve(Config(reference), data);
+        Assert.Equal(0.1, resolved.HotEnd);
+        Assert.DoesNotContain(resolved.AutoPicks, p => p.Setting is "Tempering.HotEnd" or "Tempering.Levels");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void List_OfTheBuiltRungs_RunsBitIdenticalToTheCountAndHotEnd(bool adaptive, bool reference)
+    {
+        const int levels = 5;
+        const double hot = 0.05;
+        double[] rungs = reference
+            ? ParallelTempering<BassState>.ReferenceLadder(levels, hot)
+            : ParallelTempering<BassState>.GeometricLadder(levels, hot);
+        BassConfig Of(TemperingSpec spec) => Config(spec with { Adaptive = adaptive, ReferenceRung = reference }, maxBasis: 6, samples: 200);
+        BassData data = BassSweepTests.Data(large: true);
+        BassFit built = Bass.Fit(Of(new TemperingSpec { Levels = levels, HotEnd = hot }), data);
+        BassFit listed = Bass.Fit(Of(new TemperingSpec { InverseTemperatures = rungs }), data);
+        BassRunTests.AssertSameFit(built, listed);
+        Assert.Equal(BassBitIdentityTests.Hash(built), BassBitIdentityTests.Hash(listed));
+        Assert.Equal(built.Resolved.HotEnd, listed.Resolved.HotEnd);
+        Assert.Equal(hot, listed.Resolved.HotEnd);
+    }
+
+    [Fact]
+    public void List_IsCopiedPerChain_SoAnAdaptiveRunLeavesTheDeclarationAlone()
+    {
+        double[] rungs = [1.0, 0.3, 0.1, 0.03, 0.01];
+        double[] before = [.. rungs];
+        BassFit fit = Bass.Fit(Config(new TemperingSpec { InverseTemperatures = rungs }, maxBasis: 6, samples: 200), BassSweepTests.Data(large: true));
+        Assert.Equal(before, rungs);
+        // Its ends and count hold, and burn-in did move the interior.
+        Assert.All(fit.Diagnostics.Tempering!.Ladders, ladder =>
+        {
+            Assert.Equal(rungs.Length, ladder.Length);
+            Assert.Equal((1.0, 0.01), (ladder[0], ladder[^1]));
+        });
+        Assert.Contains(fit.Diagnostics.Tempering.Ladders, ladder => !ladder.SequenceEqual(rungs));
     }
 
     public static TheoryData<string, TemperingSpec> Unrunnable => new()
@@ -153,6 +217,20 @@ public sealed class BassTemperingTests
         { "Sampling.Tempering.MaxLevels", new TemperingSpec { Levels = 10, MaxLevels = 9 } },
         { "Sampling.Tempering.Schedule", new TemperingSpec { Schedule = SwapSchedule.StochasticEvenOdd } },
         { "Sampling.Tempering.Schedule", new TemperingSpec { Schedule = SwapSchedule.Sequential } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [1.0, 0.5], Levels = 2 } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [1.0, 0.5], HotEnd = 0.5 } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [] } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [1.0] } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [1.0, 0.0], ReferenceRung = true } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [0.9, 0.5] } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [1.0, 0.5, 0.5] } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [1.0, 0.2, 0.5] } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [1.0, double.NaN, 0.5] } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [1.0, 0.5, 0.0] } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [1.0, -0.5] } },
+        { "Sampling.Tempering.InverseTemperatures", new TemperingSpec { InverseTemperatures = [1.0, 0.5, 0.1], ReferenceRung = true } },
+        { "Sampling.Tempering.MaxLevels", new TemperingSpec { InverseTemperatures = [1.0, 0.5, 0.2], MaxLevels = 2 } },
+        { "Sampling.Tempering.Split", new TemperingSpec { InverseTemperatures = [1.0, 0.5, 0.2], Split = new SplitRule() } },
     };
 
     [Theory]
@@ -168,6 +246,20 @@ public sealed class BassTemperingTests
         Config(new TemperingSpec { Levels = 4, Adaptive = false }).Validate();
         Config(new TemperingSpec { MaxLevels = 3, ReferenceRung = true }).Validate();
         Config(new TemperingSpec { Levels = 70, MaxLevels = 70 }).Validate();
+        Config(new TemperingSpec { InverseTemperatures = [1.0, 0.5] }).Validate();
+        Config(new TemperingSpec { InverseTemperatures = [1.0, 0.5], Adaptive = false }).Validate();
+        Config(new TemperingSpec { InverseTemperatures = [1.0, 0.5, 0.0], ReferenceRung = true }).Validate();
+        Config(new TemperingSpec { InverseTemperatures = [1.0, 0.5, 0.2], MaxLevels = 3 }).Validate();
+    }
+
+    [Fact]
+    public void Ladder_BuiltWithoutAValidatedConfig_RefusesAListInTheSpecsName()
+    {
+        BassModel model = BassModel.Create(Config(null), BassSweepTests.Data());
+        BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(5)).State;
+        var list = Assert.Throws<ArgumentException>(() => new BassLadder(model, new TemperingSpec { InverseTemperatures = [0.9, 0.5] }, start.Terms, start.LogTau, seed: 1));
+        Assert.StartsWith("The ladder's list must start", list.Message);
+        Assert.Equal("spec", list.ParamName);
     }
 
     [Fact]
@@ -190,6 +282,10 @@ public sealed class BassTemperingTests
         // The linear form, and the powered path, which reads ℓ₁ alone, reach every b.
         BassResolved.Resolve(Flat(new TemperingSpec { HotEnd = 1e-6, Form = TemperedForm.Linear }), data);
         BassResolved.Resolve(Flat(new TemperingSpec { HotEnd = 1e-6, Path = TemperingPath.Powered }), data);
+        // A list answers for its lowest positive rung, the strictest it holds.
+        var rung = Assert.Throws<ArgumentException>(() => BassResolved.Resolve(Flat(new TemperingSpec { InverseTemperatures = [1.0, 0.5, 0.99 * limit] }), data));
+        Assert.StartsWith("Sampling.Tempering.InverseTemperatures reaches", rung.Message);
+        BassResolved.Resolve(Flat(new TemperingSpec { InverseTemperatures = [1.0, 0.5, 1.01 * limit] }), data);
 
         // The reference rung needs b = 0, which the integrated form lacks under either improper option.
         foreach (BassConfig improper in new[]
@@ -501,7 +597,7 @@ public sealed class BassTemperingTests
     {
         "reference", "linear", "powered", "fixed ladder", "fixed g", "functional", "categorical", "two rungs", "three rungs, reference",
         "early stop", "self-sizing", "self-sizing, linear", "self-sizing, powered", "self-sizing, fixed g", "self-sizing, functional",
-        "self-sizing, categorical", "self-sizing, flat",
+        "self-sizing, categorical", "self-sizing, flat", "declared list", "declared list, adaptive",
     };
 
     internal static (BassConfig Config, BassData Data) RunCase(string option, int samples = 200)
@@ -517,6 +613,8 @@ public sealed class BassTemperingTests
             "thinned" => spec with { ReferenceRung = true },
             "two rungs" => spec with { Levels = 2, HotEnd = 0.2 },
             "three rungs, reference" => spec with { Levels = 3, HotEnd = 0.2, ReferenceRung = true },
+            "declared list" => new TemperingSpec { InverseTemperatures = [1.0, 0.3, 0.1, 0.03, 0.0], ReferenceRung = true, Adaptive = false },
+            "declared list, adaptive" => new TemperingSpec { InverseTemperatures = [1.0, 0.3, 0.1, 0.03, 0.01] },
             "self-sizing, linear" => new TemperingSpec { Form = TemperedForm.Linear, ReferenceRung = true },
             "self-sizing, powered" => new TemperingSpec { Path = TemperingPath.Powered },
             "self-sizing, flat" => new TemperingSpec(),
@@ -555,12 +653,12 @@ public sealed class BassTemperingTests
         int chains = config.Sampling.Chains;
         Assert.Equal(chains, readout.Ladders.Length);
         BassResolved resolved = fit.Resolved;
-        double hot = spec.HotEnd ?? resolved.HotEnd!.Value;
+        double hot = spec.DeclaredHotEnd() ?? resolved.HotEnd!.Value;
         Assert.Equal(hot, resolved.HotEnd);
-        int start = spec.Levels ?? TemperingSpec.InitialLevels;
-        double[] declared = spec.ReferenceRung
+        int start = spec.DeclaredLevels() ?? TemperingSpec.InitialLevels;
+        double[] declared = spec.InverseTemperatures ?? (spec.ReferenceRung
             ? ParallelTempering<BassState>.ReferenceLadder(start, hot)
-            : ParallelTempering<BassState>.GeometricLadder(start, hot);
+            : ParallelTempering<BassState>.GeometricLadder(start, hot));
         Assert.Equal(chains, readout.Levels.Length);
         Assert.Equal((chains, chains), (readout.PairRejection.Length, readout.PairAcceptance.Length));
         double worst = 0.0, ideal = 0.0;
@@ -568,7 +666,7 @@ public sealed class BassTemperingTests
         {
             double[] ladder = readout.Ladders[c];
             Assert.Equal(readout.Levels[c], ladder.Length);
-            if (spec.Levels is int levels) Assert.Equal(levels, ladder.Length);
+            if (spec.DeclaredLevels() is int levels) Assert.Equal(levels, ladder.Length);
             else Assert.InRange(ladder.Length, TemperingSpec.MinimumLevels(spec.ReferenceRung), spec.MaxLevels);
             Assert.Equal(1.0, ladder[0]);
             Assert.Equal(declared[^1], ladder[^1]);

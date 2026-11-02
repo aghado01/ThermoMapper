@@ -21,9 +21,9 @@ namespace Maths.Regression.Spline.Bass;
 /// the giver's, so a structure one replica admitted by incremental updates is neither refactored nor re-admitted by
 /// another, the reference rung's replica included, whose design a checkpoint saves. A state from the reference rung,
 /// whose sampler loaded it whole, is loaded whole, by the same admission.</item>
-/// <item><b>The ladder.</b> Geometric from 1 down to the hot end (declared, or auto-picked as <see cref="BassResolved.HotEnd"/>
-/// is), then b = 0 with the exact reference rung, whose replica draws from <see cref="BassPriorSampler"/> every scan in
-/// place of its sweep. <see cref="Adapt"/> re-spaces the interior rungs during burn-in, and a self-sizing ladder's
+/// <item><b>The ladder.</b> The declared list (<see cref="TemperingSpec.InverseTemperatures"/>), or geometric from 1 down to
+/// the hot end (declared, or auto-picked as <see cref="BassResolved.HotEnd"/> is), then b = 0 with the exact reference rung,
+/// whose replica draws from <see cref="BassPriorSampler"/> every scan in place of its sweep. <see cref="Adapt"/> re-spaces the interior rungs during burn-in, and a self-sizing ladder's
 /// <see cref="Resize"/> sizes and places them; <see cref="EndBurnIn"/> freezes the ladder, restarts the tallies and, for
 /// an evidence, starts each rung's trace (D10).</item>
 /// <item><b>Clone-safe replicas.</b> A replica's structure identity is its term array, by reference. A resize's new replica
@@ -111,8 +111,8 @@ public sealed class BassLadder
     /// <summary>Whether burn-in has ended: the ladder is frozen.</summary>
     public bool Frozen => BurnMarks is not null;
 
-    /// <summary>Whether the ladder sizes itself during burn-in (<see cref="TemperingSpec.Levels"/> null).</summary>
-    public bool SizesItself => Spec.Levels is null;
+    /// <summary>Whether the ladder sizes itself during burn-in (<see cref="TemperingSpec.DeclaredLevels"/> null).</summary>
+    public bool SizesItself => Spec.DeclaredLevels() is null;
 
     // The ladder's counters when burn-in ended, from which the readout counts the sampling phase; null before.
     internal BassLadderMarks? BurnMarks { get; private set; }
@@ -150,7 +150,7 @@ public sealed class BassLadder
     public double Resize()
     {
         if (Frozen) throw new InvalidOperationException("The ladder is frozen after burn-in (D10).");
-        if (!SizesItself) throw new InvalidOperationException($"The ladder's {Spec.Levels} levels are fixed; Adapt equalizes them.");
+        if (!SizesItself) throw new InvalidOperationException($"The ladder's {Spec.DeclaredLevels()} levels are fixed; Adapt equalizes them.");
         double[] rejection = Tempering.RoundRejection;
         if (double.IsNaN(rejection[0])) throw new InvalidOperationException("No scans since the last adaptation.");
         double barrier = TemperingLadder.Barrier(rejection);
@@ -260,12 +260,13 @@ public sealed class BassLadder
         return new BassLadder(model, spec, tempering, structures, reference, snapshot.Burn);
     }
 
-    // The ladder a chain starts on: geometric from 1 to the hot end, declared or auto-picked, then b = 0 with the reference
-    // rung, at the declared count or a self-sizing ladder's initial one.
+    // The ladder a chain starts on: the declared list, or geometric from 1 to the hot end, declared or auto-picked, then b = 0
+    // with the reference rung, at the declared count or a self-sizing ladder's initial one.
     private static double[] Rungs(BassModel model, TemperingSpec spec)
     {
         ArgumentNullException.ThrowIfNull(model);
         CheckSpec(spec);
+        if (spec.InverseTemperatures is { } declared) return (double[])declared.Clone();
         BassTarget target = model.Target;
         double hot = spec.HotEnd ?? BassResolved.AutoHotEnd(spec, target.Intercept, target.Observations,
                                                             BassResolved.HalvingTau(target.CoefficientForm, target.Scale, target.Observations));
@@ -289,10 +290,11 @@ public sealed class BassLadder
     {
         ArgumentNullException.ThrowIfNull(spec);
         int minimum = TemperingSpec.MinimumLevels(spec.ReferenceRung);
+        if (spec.ListFault() is { } fault) throw new ArgumentException($"The ladder's list {fault}.", nameof(spec));
         if (spec.Levels < minimum) throw new ArgumentException($"The ladder needs at least {minimum} levels, not {spec.Levels}.", nameof(spec));
-        if (spec.Levels is null && !spec.Adaptive) throw new ArgumentException("A self-sizing ladder adapts.", nameof(spec));
-        if (spec.MaxLevels < minimum || spec.MaxLevels < spec.Levels)
-            throw new ArgumentException($"The ladder's budget of {spec.MaxLevels} levels lies below {spec.Levels ?? minimum}.", nameof(spec));
+        if (spec.DeclaredLevels() is null && !spec.Adaptive) throw new ArgumentException("A self-sizing ladder adapts.", nameof(spec));
+        if (spec.MaxLevels < minimum || spec.MaxLevels < spec.DeclaredLevels())
+            throw new ArgumentException($"The ladder's budget of {spec.MaxLevels} levels lies below {spec.DeclaredLevels() ?? minimum}.", nameof(spec));
         if (spec.HotEnd is double hot && !(hot > 0.0 && hot < 1.0)) throw new ArgumentException($"The hot end {hot} lies outside (0, 1).", nameof(spec));
         if (spec.ReferenceRung && spec.Path != TemperingPath.Likelihood)
             throw new ArgumentException("The reference rung needs the likelihood path.", nameof(spec));
@@ -300,12 +302,12 @@ public sealed class BassLadder
 
     // Whether a ladder of `levels` rungs is one `spec` runs: its fixed count, or a self-sizing one within its budget.
     private static bool Counts(TemperingSpec spec, int levels)
-        => spec.Levels is int fixedLevels ? levels == fixedLevels : levels >= TemperingSpec.MinimumLevels(spec.ReferenceRung) && levels <= spec.MaxLevels;
+        => spec.DeclaredLevels() is int fixedLevels ? levels == fixedLevels : levels >= TemperingSpec.MinimumLevels(spec.ReferenceRung) && levels <= spec.MaxLevels;
 
     private static void CheckCount(TemperingSpec spec, int levels, string name)
     {
         if (!Counts(spec, levels))
-            throw new ArgumentException(spec.Levels is int fixedLevels
+            throw new ArgumentException(spec.DeclaredLevels() is int fixedLevels
                 ? $"The ladder declares {fixedLevels} levels, not {levels}."
                 : $"A self-sizing ladder takes {TemperingSpec.MinimumLevels(spec.ReferenceRung)} to {spec.MaxLevels} levels, not {levels}.", name);
     }

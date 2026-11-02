@@ -231,19 +231,20 @@ public sealed record BassConfig
         if (t.ReferenceRung && !scale.IsProper)
             throw Bad($"{field}.ReferenceRung", $"needs a proper τ prior, whose exact draw it takes, and Coefficients.Scale is {scale}; take a > 2");
         int minimum = TemperingSpec.MinimumLevels(t.ReferenceRung);
+        if (t.ListFault() is { } fault) throw Bad($"{field}.InverseTemperatures", fault);
         if (t.Levels < minimum)
             throw Bad($"{field}.Levels", t.ReferenceRung ? "must be at least 3 with a reference rung: b = 1, the hot end and b = 0" : "must be at least 2");
-        if (t.Levels is null && !t.Adaptive)
-            throw Bad($"{field}.Adaptive", "must be true for a self-sizing ladder (Levels null), which sizes itself as it adapts; a fixed ladder declares Levels");
+        if (t.DeclaredLevels() is null && !t.Adaptive)
+            throw Bad($"{field}.Adaptive", "must be true for a self-sizing ladder (Levels null), which sizes itself as it adapts; a fixed ladder declares Levels or InverseTemperatures");
         if (t.MaxLevels < minimum) throw Bad($"{field}.MaxLevels", $"must be at least {minimum}, the fewest rungs a ladder takes");
-        if (t.MaxLevels < t.Levels) throw Bad($"{field}.MaxLevels", "must not lie below the declared Levels");
+        if (t.MaxLevels < t.DeclaredLevels()) throw Bad($"{field}.MaxLevels", "must not lie below the declared rungs");
         if (t.HotEnd is double hot && !(hot > 0.0 && hot < 1.0)) throw Bad($"{field}.HotEnd", "must lie in (0, 1)");
         if (t.Schedule != SwapSchedule.DeterministicEvenOdd)
             throw Bad($"{field}.Schedule", "is DEO, the schedule D05 decided; another joins with its decision");
         if (t.Split is { } split)
         {
             if (!(split.Threshold > 0.0 && split.Threshold < 1.0)) throw Bad($"{field}.Split.Threshold", "must lie in (0, 1)");
-            if (t.Levels is not null) throw Bad($"{field}.Split", "needs a self-sizing ladder (Levels null), since it adds rungs");
+            if (t.DeclaredLevels() is not null) throw Bad($"{field}.Split", "needs a self-sizing ladder (Levels and InverseTemperatures null), since it adds rungs");
         }
     }
 
@@ -471,6 +472,8 @@ public sealed record BassSampling
 /// during burn-in to Syed et al.'s N ≈ 2Λ pairs by the barrier it reads (<see cref="TemperingLadder.Size"/>), within
 /// <see cref="MaxLevels"/>, and settles a round before burn-in ends, so the last round equalizes it; and its hot end is
 /// auto-picked on the data (<see cref="BassResolved.HotEnd"/>).</item>
+/// <item><see cref="InverseTemperatures"/>: the rungs themselves, R's <c>temp.ladder</c>, in place of the count and the hot
+/// end. <see cref="Adaptive"/> reads as it does for any fixed ladder: off runs them as given, on re-spaces them from there.</item>
 /// <item><see cref="Schedule"/>: DEO, the non-reversible even-odd swaps (Syed et al. 2022), swapped after every sweep.</item>
 /// <item><see cref="Split"/>: the split rule (F-M2's lever 4b) for a self-sizing ladder, opt-in.</item>
 /// <item><see cref="ReferenceRung"/>: the hot replica draws exactly from the prior on F every scan (OQ2), opt-in. A run
@@ -514,12 +517,38 @@ public sealed record TemperingSpec
     /// its threshold; null, the default, sizes by the barrier alone.</summary>
     public SplitRule? Split { get; init; }
 
+    /// <summary>The ladder's rungs themselves, strictly descending from exactly b = 1 and ending above b = 0, or at exactly
+    /// b = 0 with the reference rung; null (the default) builds them from <see cref="Levels"/> and <see cref="HotEnd"/>, which
+    /// it replaces. R's <c>temp.ladder</c>.</summary>
+    public double[]? InverseTemperatures { get; init; }
+
     /// <summary>The fewest rungs a ladder takes: b = 1 and the hot end, and b = 0 with the reference rung.</summary>
     public static int MinimumLevels(bool referenceRung) => referenceRung ? 3 : 2;
 
-    /// <summary>The rungs a chain's ladder starts on: <see cref="Levels"/>, or a self-sizing ladder's
+    /// <summary>The replicas declared: the list's, or <see cref="Levels"/>; null when the ladder sizes itself.</summary>
+    public int? DeclaredLevels() => InverseTemperatures?.Length ?? Levels;
+
+    /// <summary>The lowest positive b declared: the list's, or <see cref="HotEnd"/>; null when the data picks it.</summary>
+    public double? DeclaredHotEnd() => InverseTemperatures is { } b ? b[ReferenceRung ? ^2 : ^1] : HotEnd;
+
+    /// <summary>The rungs a chain's ladder starts on: those declared, or a self-sizing ladder's
     /// <see cref="InitialLevels"/> within [<see cref="MinimumLevels"/>, <see cref="MaxLevels"/>].</summary>
-    public int StartLevels() => Levels ?? Math.Clamp(InitialLevels, MinimumLevels(ReferenceRung), MaxLevels);
+    public int StartLevels() => DeclaredLevels() ?? Math.Clamp(InitialLevels, MinimumLevels(ReferenceRung), MaxLevels);
+
+    // Why the list cannot run, or null: BassConfig.Validate and the ladder both refuse it.
+    internal string? ListFault()
+    {
+        if (InverseTemperatures is not { } b) return null;
+        if (Levels is not null) return "replaces Levels, so it takes none";
+        if (HotEnd is not null) return "replaces HotEnd, so it takes none";
+        int minimum = MinimumLevels(ReferenceRung);
+        if (b.Length < minimum) return $"must hold at least {minimum} rungs";
+        if (b[0] != 1.0) return "must start at exactly b = 1";
+        for (int i = 1; i < b.Length; i++)
+            if (!(b[i] < b[i - 1])) return "must descend strictly";
+        if (ReferenceRung) return b[^1] == 0.0 ? null : "must end at exactly b = 0 with the reference rung";
+        return b[^1] > 0.0 ? null : "must end above b = 0 without the reference rung";
+    }
 }
 
 /// <summary>
