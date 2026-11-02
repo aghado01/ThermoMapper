@@ -286,6 +286,8 @@ entropy) suit it better.
 | C52 | A cut F changes ln Z by at most \|F\| ln q nats at q ≥ 1, so a thin cut can move a block's melt by at most about \|F\| ln q/(2.65·n) e-folds at q = 20 | §13.14 | The bound is Grimmett's Theorem 3.63; the shift is an estimate on the mean-field slope | E15 |
 | C53 | At the melt the mean-field free-energy barrier is 0.168 nats per spin at q = 20 (0.015 at q = 5, 0.489 at q = 100), so a homogeneous cluster of about 50 points could stick within a parity budget | §13.14 | Computed here; a barrier in the stationary law, not in SW's dynamics; heterogeneity should lower it. Corrected by the third pass: on data of intrinsic dimension d the cost goes with the surface, n^((d − 1)/d), not n (Grimmett Theorem 5.108), so this holds only for a dense, nearly complete cluster | E16 |
 | C54 | In a block's ordered bulk a shed fragment of n points is exponentially rare, exp(−γ·n^((d − 1)/d)), so shedding is dust and a size floor can be modest; C21's worst case isn't the typical one | §13.14 | Lattice result (Grimmett Theorem 5.104, Conjecture 5.101); matches the toy's cold edge (§12.9); on data graphs an analogy | The exact histogram across a plateau |
+| C55 | Theorem 9.35's literal form fails at q ≥ 3: Q(x ↔ y in the union of two sourceless Z_q currents) exceeds τ², by (q − 1)^L on a path of L edges at weak coupling; Q ≥ τ² held in all 126 cases | §13.14 | Observed by exact enumeration (q = 2 exact in 42 of 42); leading-order ratio derived; the inequality unproven | A proof, or a counterexample |
+| C56 | At any q ≥ 1, τ_xy² is the probability that x and y share a block of the meet of two independent FK draws, and equals (q⟨δ(ρ_x, ρ_y)⟩ − 1)/(q − 1) for the replicas' difference field ρ | §13.14 | Derived here (mixture convolution); checked by enumeration at q = 2 and 3 | E19 |
 
 ---
 
@@ -1609,7 +1611,7 @@ The user dropped iris as too limited and asked for the same SPC-only levers on t
 The user reopened what round 1 closed, as an adversarial round with new capabilities in hand. Round 2 was discussion: it
 ran no experiments (one quantile table was computed), and it changed no code. Where the user decided something, the
 entry says so and gives the date; everything else is open, with the experiment that would settle it. Experiments
-continue round 1's numbering (E6–E18, §13.12). New claims are C35–C54 in §7.
+continue round 1's numbering (E6–E19, §13.12). New claims are C35–C56 in §7.
 
 **What round 1 did not have**, all on `main` by 2026-10-30:
 - **The per-draw record** on `Accumulator`: `EnergyPerDraw`, `MagPerDraw`, `SumSqClusterSizesPerDraw`,
@@ -2153,6 +2155,9 @@ a whole.
   noise against independent endpoints at equal work.
 - **E18. The path in q.** ln Z(T, q) from q = 1 up an integer ladder, against a tree's closed form and small-graph enumeration;
   then whether a ladder through q = 2 frees C46's stuck replicas, at what cost beside the flat-histogram route.
+- **E19. The meet as a currency.** From kept partitions, S₂⁽²⁾ and the all-pairs indecision across T on the toy and
+  BlattHierarchy, against the per-edge form; the meet within one replica against between replicas, as a test for stuck
+  replicas beside R̂.
 
 ### 13.13 Addendum, 2026-10-31: a percolation sandwich, from the CumulativeField question
 
@@ -2461,3 +2466,33 @@ theorem, §11.2, §2.5. Closed forms checked by a scratch script, no SW and no d
 - *Still unread:* about 250 KB of Chapters 4–7 and 9.2–9.4, §2.1–2.4, §8.1–8.2, §8.7–8.9, §10.4, §10.6, §10.9,
   §10.11–10.12, §11.3 and §11.6. By their outlines these are infinite-volume and lattice theory, and no candidate for
   data graphs is left among them. The finite-graph material is mined.
+
+**Does Theorem 9.35 extend to any q? (the user's question, 2026-11-01)** Theorem 9.35 says σ(x, y)² = Q(x ↔ y in P₁ + P₂): at q = 2,
+the squared correlation is a connectivity in the union of two independent sourceless currents.
+- *The literal form is false at q ≥ 3 (C55).* Theorem 9.15's expansion gives Z_q currents at any q, so the right side
+  can be computed. By exact enumeration on 14 random small graphs at fixed couplings, q = 2 reproduces the theorem in
+  all 42 cases, which checks the code. At q = 3, 5 and 20, Q exceeds τ² in all 126 cases: the median ratio is 1.84, 3.56
+  and 16.3, with a maximum of 4,045. So Q ≥ τ² held throughout, unproven, and far too loose to be useful at q = 20.
+- *Why q = 2 is special.* On a path of L edges at weak coupling, a sourceless edge needs a neutral pair of charges,
+  whose weight carries a factor q − 1, so Q/τ² → (q − 1)^L. The ratio is 1 exactly when there is one non-trivial
+  character. The proof shows the same thing: the switching lemma moves a path's edges between the replicas, and at q = 2
+  moving an edge either way changes the sources alike, since ±1 agree mod 2. At q ≥ 3 the two directions differ by sign,
+  so the map stops being a shift. I found no Potts switching lemma in the literature, and Grimmett and Janson's *Flows
+  and ferromagnets* (arXiv math/0509127) names the general-q analysis as the main open area. So a true extension would
+  be new mathematics, and I don't have one.
+- *What does hold at any q (C56).* The theorem's left side has a representation at every q ≥ 1, in a partition rather
+  than a graph. For independent FK draws ω₁ and ω₂, τ_xy² = P(x and y share a block of the meet ω₁ ∧ ω₂), and k draws
+  give τ^k. On spins, the replicas' difference field ρ = σ − σ′ has τ_xy² = (q⟨δ(ρ_x, ρ_y)⟩ − 1)/(q − 1), the same form
+  as τ = (q⟨δ(σ_x, σ_y)⟩ − 1)/(q − 1). Checked here at q = 2 and 3 by spin enumeration, to nine decimals. The reason is
+  short: σ_x − σ_y is a mixture of a point mass with weight τ and a uniform law, and convolving two such mixtures gives
+  weight τ². At q = 2, ρ is the XOR-Ising field, which the clusters of a double current represent (arXiv 1712.02305), so
+  9.35 is this statement with a graph in place of the meet. What the meet gives up is the graph: its block event is not
+  a connectivity in one random graph, and ρ isn't independent across blocks, only pairwise so. The theorem's proofs lean
+  on exactly that structure, so the meet won't carry them over.
+- *Why it matters here.* It makes C37's second moment global and cheap. Σ_xy τ_xy² = ⟨Σ_{A∈ω₁, B∈ω₂} |A ∩ B|²⟩, one pass
+  over the nodes for a pair of draws from two replicas, over all pairs instead of graph edges, and with no per-edge
+  counts: `Accumulator.KeptPartitions` (S5) keeps the partitions it needs. So S₂⁽²⁾ = Σ_xy τ²/N² is a second monotone
+  currency, since the meet's blocks only merge as either draw gains bonds, and any superadditive g gives another. And S₂
+  − S₂⁽²⁾ = Σ_xy τ(1 − τ)/N² is the all-pairs pair indecision of §13.6: a per-temperature scalar for the first kind of
+  disagreement, read without BARS. Comparing the meet between replicas with the meet between far-apart draws of one
+  replica would be a partition-level test of the third kind, stuck replicas (E19).
