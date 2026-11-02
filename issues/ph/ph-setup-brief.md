@@ -183,8 +183,9 @@ argument above: any reduction D = R·U restricts to a reduction of the relative 
 - `low_degree` gives the degree.
 - A worked example over `ZMod 2` shows the hypotheses can be met.
 
-It covers the mathematics, not the C#: `RelativeFiltration` is still checked by tests. I haven't looked for whether this
-is stated in the literature, so it makes no claim to being new.
+It covers the matrix statement, not the C#: `RelativeFiltration` is still checked by tests. A bar there is what reduction
+reads, and the standard theorem that reduction computes persistent homology is taken as given, not formalized. I haven't
+looked for whether this is stated in the literature, so it makes no claim to being new.
 
 **What it means for the design notes.**
 
