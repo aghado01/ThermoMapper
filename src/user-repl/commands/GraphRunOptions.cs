@@ -47,8 +47,8 @@ internal abstract class GraphRunOptions
     public string? MixtureBandwidthSpec { get; set; }
 
     /// <summary>Null = resolve from metric properties / the MAD default;
-    /// <c>MeanEdgeDistance</c> selects the BWD replication kernel
-    /// (mean-pair <c>a</c> + 1/K̂).</summary>
+    /// <c>MeanEdgeDistance</c> is the BWD replication bandwidth (mean-pair <c>a</c>);
+    /// the 1/K̂ factor is <see cref="Gauge"/>.</summary>
     public Graphs.Distance.BandwidthStrategy? BandwidthStrategy { get; set; }
 
     /// <summary>A global factor on the finished couplings, applied last. The BWD replication kernel

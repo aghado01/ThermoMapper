@@ -116,7 +116,7 @@ The bandwidth strategy tells [graph construction](./GraphConstruction.md#bandwid
 | `MadConsistencyFactor` | median absolute deviation of the neighbor distances × the kernel's consistency factor |
 | `QuantileNormalized` | clamp neighbor distances above their 95th percentile (nearest rank) to that value, then MAD × the consistency factor; for bounded metrics |
 | `LogScaleHyperbolic` | $\exp\big(\operatorname{med}\ell+c\cdot\mathrm{MAD}(\ell)\big)$ with $\ell=\ln\max(d,10^{-12})$; for hyperbolic distances |
-| `MeanEdgeDistance` | plain mean of neighbor distances, no consistency factor: over all retained neighbor pairs on the single-kernel path, over the k-th-neighbor sample on the mixture path; reproduces the classical SPC papers' convention |
+| `MeanEdgeDistance` | plain mean of neighbor distances, no consistency factor: over the unique pre-repair neighbor pairs on the single-kernel path (`ScaleEdges = AfterRepair` for the repaired pairs), over the k-th-neighbor sample on the mixture path; the classical SPC papers' convention. The 1/K̂ factor is the separate `Gauge` |
 
 `SpaceGeometry` (Euclidean, κ = 0; Hyperbolic, κ < 0; Spherical, κ > 0) selects which consistency factors apply. It also selects how curvature enters the kernel.
 

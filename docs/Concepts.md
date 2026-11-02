@@ -141,7 +141,7 @@ Zigzag inputs have their own carrier. `ZigzagFiltration` is a sequence of `Zigza
 ## Neighbor selections and eigenpairs
 
 - **`NeighborSelection`** is the directed k-nearest-neighbor result from the first stage of graph construction. It holds `AllNeighbors`, `NearestNeighborDistances` and `KthNeighborDistances`.
-  - Later stages symmetrize and repair the graph but carry the directed **k-th-neighbor distance vector unchanged**. The one exception is mutual-kNN filtering with `MutualBandwidthSource.MutualKth`, which substitutes each row's largest mutual distance. The k-th-sample bandwidth estimators read this vector, so long bridge edges never pollute them (`MeanEdgeDistance` on the single-kernel path averages all retained edges instead).
+  - Later stages symmetrize and repair the graph but carry the directed **k-th-neighbor distance vector unchanged**. The one exception is mutual-kNN filtering with `MutualBandwidthSource.MutualKth`, which substitutes each row's largest mutual distance. The k-th-sample bandwidth estimators read this vector, so long bridge edges never pollute them (`MeanEdgeDistance` on the single-kernel path averages the unique pre-repair edges by default, or the repaired edges with `ScaleEdges = AfterRepair`).
   - `GraphBuildResult.DirectedSelection` returns the selection to the caller.
 - **`EigenPair(double Lambda, double[] Vector)`** is the common output of the dense and iterative eigensolvers. The vector is always a fresh copy. Bottom-k lists are ascending and top-k lists descending. Spectral graph code (Fiedler vectors, effective resistance, spectral layouts) consumes these lists (see [Linear Algebra](./LinearAlgebra.md) and [Spectral Graphs](./SpectralGraphs.md)).
 

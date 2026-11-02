@@ -38,8 +38,8 @@ public enum BandwidthStrategy
     LogScaleHyperbolic,
 
     /// <summary>
-    /// Mean of the sample. Used for exact replication of BWD/DMY papers
-    /// where bandwidth is defined as the mean of the K-th neighbor distances.
+    /// Mean of the neighbor-pair distances (the edge set is <c>CouplingProjection.ScaleEdges</c>).
+    /// Used for exact replication of BWD/DMY papers, where bandwidth is the average neighbor distance.
     /// </summary>
     MeanEdgeDistance,
 }

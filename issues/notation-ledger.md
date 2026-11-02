@@ -11,6 +11,27 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### The gauge factor: g, κ, 1/K̂ and the old couplingScale (2026-11-01)
+
+- **Kind:** one concept under several names.
+- **Readings:** `κ` ("Normalization κ") in `docs/Graphs/GraphConstruction.md` before the compiler revision, `g` there now, and `GaugeFactor` in `GaugeScaler`, `ScalerResult` and `CouplingResolution`; `1/K̂` in the BWD papers, `BwdPottsCriticalEstimate`'s comments and `issues/spc-BARS/graph-compiler-brief.md`; `couplingScale` (`n / totalNeighbors`) in `GlobalBandwidthScaler`, removed by the revision.
+- **Found:** the graph-compiler revision.
+- **Note:** K̂ is the mean degree of the returned graph, so g = 1/K̂ only for `GaugeKind.InverseMeanDegree`.
+
+### Bridge, MST bridge and repair edge (2026-11-01)
+
+- **Kind:** one concept under several names.
+- **Readings:** "bridge" and "MST bridge" in the compiler brief, `MstBridge`, `MstBridgeReport`, `EdgeWeightSummary.NearZeroBridges` and `ConnectivityRepair`'s "minimal bridges"; "repair edge" in `RepairEdgeSet` and the build log.
+- **Found:** the graph-compiler revision.
+- **Note:** a repair edge is not always a bridge in the graph-theoretic sense (a cut edge), and a graph-theoretic bridge need not be one the repair stage added.
+
+### Near-zero: three thresholds (2026-11-01)
+
+- **Kind:** one name for several concepts.
+- **Readings:** the coupling floor, 1e-10, under which an edge is dropped (`CouplingProjection.CouplingFloor`); the collapse level, 1e-8, which the auto-LMP trigger and `MaxNearZeroEdgeRatio` count against (`AutoThresholds.NearZeroCoupling`); `EdgeWeights.Summary`'s `nearZeroEpsilon`, 1e-10, behind `NearZeroBridges`.
+- **Found:** the graph-compiler revision.
+- **Note:** only the first two are config fields; the third is a parameter of the summary.
+
 ### Pair connectivity: τ, ⟨n⟩, P(i↔j) and C, beside δ̄ (2026-11-01)
 
 - **Kind:** one concept under several names, with a second concept one affine map away.

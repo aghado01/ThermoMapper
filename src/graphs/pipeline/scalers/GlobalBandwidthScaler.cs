@@ -108,8 +108,8 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
     {
         ValidateFidelitySupport();
 
-        // MeanEdgeDistance (BWD replication): a = mean over ALL retained
-        // neighbor-pair distances (the papers' "average nearest-neighbor
+        // MeanEdgeDistance: a = the mean over the neighbor-pair distances of the
+        // edge set the context names (the papers' "average nearest-neighbor
         // distance" over the mutual-K graph), not the K-th-only sample.
         double delta = _explicitBandwidth > 0.0
             ? _explicitBandwidth

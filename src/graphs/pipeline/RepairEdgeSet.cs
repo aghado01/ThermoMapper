@@ -21,8 +21,6 @@ public sealed class RepairEdgeSet
         _n = n;
     }
 
-    public static RepairEdgeSet Empty { get; } = new(new HashSet<long>(), 0);
-
     /// <summary>The edges in <paramref name="after"/> that <paramref name="before"/> holds in neither direction.</summary>
     public static RepairEdgeSet Between(NeighborSelection before, NeighborSelection after, int n)
     {
