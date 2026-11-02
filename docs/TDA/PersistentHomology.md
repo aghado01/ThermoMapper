@@ -155,6 +155,8 @@ The later phases the code describes (directed, gauge and sheaf variants) are not
 
 ## Status and caveats
 
+- **Involuted representatives need non-negative values.** With `representatives = true`, an essential H1 bar's cycle comes from `CycleReconstruction`, a shortest path weighted by filtration value. A negative edge value makes that search loop forever. Rips values are distances, so only other filtrations can reach it. Bars alone are unaffected, as is every other engine.
+- **`PersistentCohomology` reads vertices.** It takes any `IFiltration`, but its H0 path indexes `GetVertices`, which `CellFiltration` leaves empty, so that combination throws. `RelativeFiltration` has vertices but no absolute structure ([below](#which-engine-reads-it)). `PersistentHomology` reads both.
 - **"Cocycle" payloads are reduced coboundaries.** The cohomology engine's `Cocycle` holds the reduced coboundary column, a set of (d+1)-simplices, or just $\{j\}$ for essential bars. It is not a d-cocycle.
 - **Involuted engine with `cutoff > 0`.** Death columns that fail the cutoff are left out of the boundary reduction, so births and representatives can be wrong. Keep the default of 0. All callers in the repository do.
 - **`LazyRipsFiltration` is partial.** It assumes sorted CSR rows, which `CsrGraph.FromEdges` does not produce. It takes no `maxDimension` (it always builds the 2-skeleton), and it builds every simplex up front despite the name. Prefer `RipsFiltration.GraphRips`.
