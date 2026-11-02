@@ -71,7 +71,7 @@ internal static class PersistenceClearing
 
             if (ri != rj)
             {
-                int elder = birth[ri] > birth[rj] || (birth[ri] == birth[rj] && birthId[ri] > birthId[rj]) ? ri : rj;
+                int elder = birth[ri] < birth[rj] || (birth[ri] == birth[rj] && birthId[ri] < birthId[rj]) ? ri : rj;
                 int younger = elder == ri ? rj : ri;
                 if (maxDimension >= 0 && PassesCutoff(birth[younger], t, cutoff))
                     bars.Add(new Bar(birth[younger], t, 0));

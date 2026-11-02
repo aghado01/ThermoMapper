@@ -34,7 +34,7 @@ flowchart LR
   - A triangle is born at the largest of its three edge values.
   - Only triangles of the input graph are used, and the complex stops at dimension 2.
 - **Bar and barcode.** A bar is an interval from birth to death in homological dimension k; the standard engines leave `BirthEnd` and `DeathEnd` at their `Closed` defaults. `Death = +∞` marks an **essential** bar. `Barcode` is the output type that every engine returns, zigzag engines included.
-- **Clearing.** H0 is computed with union–find over the edges sorted by value, following the elder rule: when two components merge, the older survives and the younger one's bar ends (see [Status](#status-and-caveats) for a deviation). Edges that merge components are H0 deaths and are never reduced in dimension 1. The same rule applies in each higher dimension to simplices that were pivots one dimension lower.
+- **Clearing.** H0 is computed with union–find over the edges sorted by value, following the elder rule: when two components merge, the older survives and the younger one's bar ends. Edges that merge components are H0 deaths and are never reduced in dimension 1. The same rule applies in each higher dimension to simplices that were pivots one dimension lower.
 - **Conditioned persistence.** A **backbone prior** $K_0$, present from $\varepsilon_0$, is combined with **similarity edges** at their distances. An H1 bar then marks a similarity chord that closes a loop along the backbone. There are two readings: backbone-at-base, $H(K_\delta)$, which also reports $K_0$'s own cycles, and backbone-quotiented, $H(K_\delta,K_0)$, the features $K_0$ does not explain. The code documents this as phases P0–P1 of a larger research program.
 
 ## Design
@@ -154,7 +154,6 @@ The later phases the code describes (directed, gauge and sheaf variants) are not
 
 ## Status and caveats
 
-- **H0 elder rule is inverted in the union–find path.** The shared union–find computation used by the cohomology and involuted engines keeps the component with the *larger* birth. This makes no difference for Rips filtrations, where all vertices are born at 0. For general filtrations with distinct vertex births, their H0 bars disagree with `PersistentHomology`.
 - **"Cocycle" payloads are reduced coboundaries.** The cohomology engine's `Cocycle` holds the reduced coboundary column, a set of (d+1)-simplices, or just $\{j\}$ for essential bars. It is not a d-cocycle.
 - **Involuted engine with `cutoff > 0`.** Death columns that fail the cutoff are left out of the boundary reduction, so births and representatives can be wrong. Keep the default of 0. All callers in the repository do.
 - **`LazyRipsFiltration` is partial.** It assumes sorted CSR rows, which `CsrGraph.FromEdges` does not produce. It takes no `maxDimension` (it always builds the 2-skeleton), and it builds every simplex up front despite the name. Prefer `RipsFiltration.GraphRips`.

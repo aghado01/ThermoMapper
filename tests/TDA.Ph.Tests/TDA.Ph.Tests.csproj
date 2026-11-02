@@ -25,6 +25,7 @@
     <Compile Include="PersistentCohomologyTests.cs" Link="PersistentCohomologyTests.cs" />
     <Compile Include="PersistentCohomologyRipsParityTests.cs" Link="PersistentCohomologyRipsParityTests.cs" />
     <Compile Include="PersistentInvolutedHomologyTests.cs" Link="PersistentInvolutedHomologyTests.cs" />
+    <Compile Include="ClearingEngineParityTests.cs" Link="ClearingEngineParityTests.cs" />
     <Compile Include="SimplicialFiltrationFixtures.cs" Link="SimplicialFiltrationFixtures.cs" />
     <Compile Include="ZigzagBarcodeNaiveTests.cs" Link="ZigzagBarcodeNaiveTests.cs" />
     <Compile Include="FastZigzagTests.cs" Link="FastZigzagTests.cs" />
