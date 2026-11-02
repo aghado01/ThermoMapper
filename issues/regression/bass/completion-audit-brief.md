@@ -102,6 +102,22 @@ Open it by saying plainly whether the contract is fulfilled, and if not, what st
 
 Newest first.
 
+### The gaps closed (chip, 2026-11-02)
+
+G-1 `0ab1e4d`, G-2 `4c34948`, G-3 `1364cbb` with `b844f53`, G-4 `3a83d0a`, G-6 `26befff`; G-5 left out, as ruled. [The matrix](completion-audit-matrix.md) and [the report](../bass-completion-report.md) are flipped: F 192, FL 5, D 18, G 0, with P04, P05 and P08 Fulfilled, and the report's open questions turned into the rulings. G-7 and G-8 wait on a quiet window. At `b844f53`: Samplers 284 of 284, Regression 1,544 of 1,544 with none skipped, BASS oracle classes 90 of 90. `artifacts\chip-sens\` is deleted.
+
+**For the main session to check:**
+- *`BassMovePassTests`' hash did not move, against your note.* `new BassConfig()`'s JSON has `"Tempering":null`, so the new field sits inside a null. The pin and the bit-identity tests pass unchanged, so I re-pinned nothing. Only a tempered config's fingerprint moves, so only a tempered checkpoint from before `3a83d0a` stops resuming, a flat-histogram pilot's ladder included.
+- *Choices the rulings did not spell out:*
+  - **The list and `Adaptive`.** They stay independent, so on the default `true` a list is a start whose interior rungs re-space. R's as-given list is `Adaptive = false`.
+  - **`BasisParts` is one enum of three,** not R's two booleans. R's "neither" is `Latent`, and R's default pair is `Noise`. D07's full draw stays the default.
+  - **`ConditionOn` takes several names,** wider than R's one.
+  - **G-2's default coordinates** are the held variables' distinct training values. This also applies when every output variable is held, where it was one coordinate per location, and differs only if locations repeat.
+  - **`other` snaps to 0** within the rounding tolerance and on a zero-variance draw.
+- *What the review changed:* basis effects evaluated every component draw and then picked the selected ones. They now evaluate only those (`b844f53`), so a selection fits a budget the whole run would exceed.
+- *Not compared with R:* the new options have no R fixtures. Their references are quadrature, the whole analysis's draws, bit identity with the built ladder, and hand-assembled covariances.
+- *Docs owed, yours:* rows in `docs/Maths/BayesianRegression.md` for `TemperingSpec.InverseTemperatures`; `SensitivitySpec.Draws` and `ConditionOn`; `BassPredictOptions.BasisParts` (its row lists the record's fields) and `BassBasisPrediction.Parts`; `CoordinateVariables` on `SobolAnalysis` and `EffectAnalysis`; `OtherVariance`, `OtherIndex` and `MeanOtherIndex` on `SobolDecomposition`, and `OtherIndex` and `OtherVariance` on `SobolSummary`.
+
 ### Checked by the main session — 2026-11-01
 
 - *The gaps against R and the code:* each of G-1 to G-6 holds at the lines cited: `V.other` and its `names.ind` (`bassPCA.R:590-603`), `func.var` (`sobol_normTmix.R:215-225`) against the refusal at `sensitivity/BassSensitivity.cs:391`, no draw field on `SensitivitySpec`, the ladder's list on an internal constructor (`BassLadder.cs:56`), `start.temper` (`bass.R:39,78`), and `trunc.error` and `nugget` (`bassPCA.R:183`) against the one `Predictive`.

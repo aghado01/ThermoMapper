@@ -1,30 +1,32 @@
 # BASS completion report
 
-Date: 2026-11-01. Written by the audit in [bass/completion-audit-brief.md](bass/completion-audit-brief.md), against the contract in [the hub](bass-full-port-brief.md#scope-and-completion-contract). The row-by-row detail, with each test and reference, is in [bass/completion-audit-matrix.md](bass/completion-audit-matrix.md).
+Date: 2026-11-01, updated 2026-11-02 when the gaps closed. Written by the audit in [bass/completion-audit-brief.md](bass/completion-audit-brief.md), against the contract in [the hub](bass-full-port-brief.md#scope-and-completion-contract). The row-by-row detail, with each test and reference, is in [bass/completion-audit-matrix.md](bass/completion-audit-matrix.md).
 
 ## Is the contract fulfilled?
 
-**Not yet in full. Every capability P01–P15 exists and its central behaviour is verified, but six small items of R's surface differ from the contract, and two benchmark measures are open.** No statistical defect was found. All 215 rows of the matrix have a verdict; the probes this audit added found no wrong number.
+**Not yet in full, and only by two benchmark measures. Every capability P01–P15 exists and its central behaviour is verified, and every item of R's surface is now built or left out by a recorded decision: no row of the matrix is a gap.** No statistical defect was found. All 215 rows of the matrix have a verdict; the probes this audit added found no wrong number.
 
-What stands between:
+What stands between: **the benchmark list's two open measures,** statistical error per unit time and the sensitivity moment work alone. Both are in [the statistical half](bass/performance-statistical-brief.md), not run, and wait on a quiet window.
 
-1. **Three things the contract names or R exposes that are missing:** the `other` member of basis sensitivity (P05 names it), conditioning on one of several output variables (P04, `func.var`), and selecting draws for sensitivity (`mcmc.use`).
-2. **Three narrower controls:** a declared ladder as a list (`temp.ladder`), the swap start (`start.temper`), and `predict.bassBasis`'s two switches, here one.
-3. **The benchmark list's two open measures:** statistical error per unit time ([its brief](bass/performance-statistical-brief.md), not run) and the sensitivity moment work alone.
+What the audit first found open, and how it closed on the user's rulings (the gap list has each commit):
 
-Five of the six are a small change or a one-line recorded decision; conditioning on one output variable is the largest, small to medium. Rendering and text formatting remain above maths; the contract lists them as such, so they are not gaps.
+1. **Built:** the `other` member of basis sensitivity (P05 names it), conditioning on one of several output variables (P04, `func.var`), selecting draws for sensitivity (`mcmc.use`), a declared ladder as a list (`temp.ladder`), and `predict.bassBasis`'s two switches.
+2. **Left out by decision:** the swap start (`start.temper`).
+
+Rendering and text formatting remain above maths; the contract lists them as such, so they are not gaps.
 
 **My reading, apart from what I found.** On R's default paths the port has each capability, and it corrects the inventory's defects (18 rows in the matrix) with fixtures on both sides. The largest honest limit is not in this list: Friedman's posterior, where the default chains do not agree at practical lengths (below). That limit is measured and stated, and the contract does not promise otherwise.
 
 ## The audited revision and the suites
 
 - **Audited revision:** `8f4d2da0081c7f17ecb524d5514a27f994191d02`. R: BASS 1.3.1, `26710146c623a258854162367a939041efedd091`.
-- **Suites,** once at the end, one at a time, at below-normal priority with `-m:2` and `xUnit.MaxParallelThreads=4`, `BASS_QUALIFICATION` and `SEED_SWEEP` unset:
+- **Suites at the audit,** once at the end, one at a time, at below-normal priority with `-m:2` and `xUnit.MaxParallelThreads=4`, `BASS_QUALIFICATION` and `SEED_SWEEP` unset:
   - `Maths.Samplers.Tests`: 284 of 284, 1.3 minutes.
   - `Maths.Regression.Tests`: 1,507, of which 1,506 passed and 1 is skipped on purpose (G-2), 5.1 minutes.
   - The BASS classes of `Maths.Oracle.Tests` (`FullyQualifiedName~Maths.Oracle.Tests.Bass`): 90 of 90, 6.1 minutes.
 - **Later commits touching BASS:** this audit's `348ad80` (probes) and `ea6bb46` (matrix), and another session's `cb0400b`, a flat-histogram refusal: a b = 1 rung on one level refuses K instead of overflowing it (`BassFlatHistogramRun.cs`, `Wham.cs`, tests). It touches no row's verdict: the flat histogram is optional and beyond the contract. The other commits since `8f4d2da` are SPC, graphs and persistent homology.
 - **The tree they ran on:** the main checkout, not a clean snapshot, so that the R oracle's library was present. It began at `121005e` with `cb0400b`'s five files as another session's uncommitted edits, which it committed during the run; it ended clean in those paths at `8614a95`. So these counts are the audited revision plus the probes and that refusal. Under `src/maths/` they differ from the audited revision by `cb0400b` alone.
+- **Suites with the gaps closed, at `b844f53`,** the same way: `Maths.Samplers.Tests` 284 of 284; `Maths.Regression.Tests` 1,544 of 1,544, none skipped; the BASS classes of `Maths.Oracle.Tests` 90 of 90, R present. Since the audited revision, BASS's source has changed only by `cb0400b` above, one comment in `8ac7b05`, and the gaps' own commits.
 
 `oracle/` tests return early without R; R was present for this run (the parity tests' durations show them running).
 
@@ -47,14 +49,14 @@ Five of the six are a small change or a one-line recorded decision; conditioning
 
 | ID | R entry | Verdict | What limits it |
 |---|---|---|---|
-| P01 | `bass` | Fulfilled, limited | `temp.ladder` a geometric or self-sizing ladder; `start.temper` absent; tempering and log-posterior records aggregated |
+| P01 | `bass` | Fulfilled, limited | Tempering and log-posterior records aggregated, by the user's ruling. `start.temper` and `s2.lower` left out by decision |
 | P02 | `bassPCA` | Fulfilled | |
 | P03 | `bassBasis` | Fulfilled | |
-| P04 | `sobol` | Fulfilled, limited | No draw selection; several output variables condition together |
-| P05 | `sobolBasis` | Fulfilled, limited | No `other` member; no draw selection |
-| P06 | `calibrate.bassBasis` | Fulfilled | Cold rung's draws only; the adaptation scale is on the block |
+| P04 | `sobol` | Fulfilled | |
+| P05 | `sobolBasis` | Fulfilled | |
+| P06 | `calibrate.bassBasis` | Fulfilled | Cold rung's draws only, by the user's ruling; the adaptation scale is on the block |
 | P07 | `predict.bass` | Fulfilled | |
-| P08 | `predict.bassBasis` | Fulfilled, limited | One switch for noise and truncation together |
+| P08 | `predict.bassBasis` | Fulfilled | |
 | P09–P11 | three `plot` methods | Fulfilled, data | Rendering remains |
 | P12–P15 | `print`, `summary` | Fulfilled, data | Formatting remains |
 
@@ -106,16 +108,18 @@ These are records this audit read, each where it was measured; none was rerun.
 
 ### Contract gaps
 
-| # | Gap | Where | Size |
+Ranked as the audit found them. G-1 to G-6 are closed; G-7 and G-8 stay open.
+
+| # | Gap | Now | Where |
 |---|---|---|---|
-| G-1 | **`other`, the residual of basis sensitivity.** P05 names it. `Variance` less the reported mains is it, but no member holds it | Matrix F11; probe `BasisOther_IsTheVarianceLessTheReportedMains` pins the arithmetic | One member and a summary field |
-| G-2 | **Conditioning on one of several output variables** (`func.var`). A coordinate names every output variable; R conditions on one and integrates the others. Whole for one output variable | Matrix E06; probe `ConditionOnOneOfTwoOutputVariables_IntegratesTheOther`, `[Fact(Skip)]`. Reproduction: `Coordinates = [[0.5]]` on a two-variable fit refuses, "Coordinate 0 has 1 values for 2 output variables" (`sensitivity/BassSensitivity.cs:391`) | Small to medium: the measure already integrates output variables; the conditioned form takes a partial coordinate |
-| G-3 | **`mcmc.use` on `sobol` and `sobolBasis`.** Every retained draw is decomposed. Reachable only as `fit with { Draws = … }` | Matrix E05, F04 | Small: one field, as `BassPredictOptions.Draws` |
-| G-4 | **`temp.ladder` as a list.** A geometric ladder of declared count and hot end, adaptive, frozen or self-sizing; not an arbitrary list. Calibration's `Tempering` takes one | Matrix A22; `BassLadder.cs:56` already takes a list, internally | Small: one field and its validation, or a recorded decision |
-| G-5 | **`start.temper`.** Swaps start at the first scan. No record names the argument; `stage4-tempering-brief.md:206` left the cadence as a reversible default. Burn-in behaviour only, with no change of target | Matrix A23 | A recorded decision, or one field |
-| G-6 | **`predict.bassBasis`'s `nugget` and `trunc.error`, one switch here.** The members to form R's noise-only and truncation-only draws are returned; the draws are not. D07 fixes the full draw and no record names the two-switch form | Matrix D-p09 | A recorded decision, or one option |
-| G-7 | **Statistical error per unit time.** Known | Matrix part 5; [its brief](bass/performance-statistical-brief.md) | Long runs on the user's schedule; `BASS_QUALIFICATION` left unset here |
-| G-8 | **The sensitivity moment work alone.** Measured only inside Sobol and effects per draw. Known | Matrix part 5; `performance-cost-brief.md:380` | A few timed points in the cost harness |
+| G-1 | **`other`, the residual of basis sensitivity.** P05 names it | **Built,** `0ab1e4d`: `SobolDecomposition.OtherVariance`, `OtherIndex`, `MeanOtherIndex`, and the summary's two fields. The variance less the subsets reported, which agrees with R's where `nind` is null | Matrix F11 |
+| G-2 | **Conditioning on one of several output variables** (`func.var`) | **Built,** `4c34948`: `SensitivitySpec.ConditionOn` holds the variables it names at the coordinates and integrates the others. The output side's normalizer stays with the coordinate. The probe that was skipped now runs | Matrix E06, E07 |
+| G-3 | **`mcmc.use` on `sobol` and `sobolBasis`** | **Built,** `1364cbb`, `b844f53`: `SensitivitySpec.Draws`, as `BassPredictOptions.Draws`, over a basis fit's joint draws too. Effects evaluate only the draws selected | Matrix E05, F04 |
+| G-4 | **`temp.ladder` as a list** | **Built,** `3a83d0a`: `TemperingSpec.InverseTemperatures`, in place of the count and the hot end. A list of the built rungs runs bit-identical to them. A tempered config's fingerprint moves, because its JSON gains the field, so a tempered checkpoint from before this commit stops resuming. An untempered config's holds: its JSON has `"Tempering":null`, and `BassMovePassTests`' pin did not move | Matrix A22 |
+| G-5 | **`start.temper`** | **Left out by decision,** the user's ruling: it changes no target, and the self-sizing ladder reads its swap rejections during burn-in (`port-fitting-brief.md:487`) | Matrix A23 |
+| G-6 | **`predict.bassBasis`'s `nugget` and `trunc.error`** | **Built,** `26befff`: `BassPredictOptions.BasisParts` takes the noise or the truncation alone, and the covariance follows. D07's full draw stays the default, bit for bit | Matrix D-p09 |
+| G-7 | **Statistical error per unit time.** Known | **Open.** Long runs on the user's schedule; `BASS_QUALIFICATION` left unset here | Matrix part 5; [its brief](bass/performance-statistical-brief.md) |
+| G-8 | **The sensitivity moment work alone.** Measured only inside Sobol and effects per draw. Known | **Open.** In the statistical half's cost blocks, with G-7 | Matrix part 5; [its brief](bass/performance-statistical-brief.md) |
 
 ### Built but untested at the start of this audit
 
@@ -137,24 +141,27 @@ Each is **now covered by a probe that passed**, so none remains in the matrix as
 
 ### Record drift
 
-Each is a few lines for the main session; the matrix's part 6 has the lists.
+The main session has fixed these (the brief's Reports), apart from the extension seams' write-up in `docs/Maths`, which it still owes, and the 71 public types, which stay as listed because the rows name entry points. The matrix's part 6 has the lists.
 
 - **The source map** omits `BassObservationModel.cs`, `DesignKernel.cs`, `DesignKernels.cs` (doc line 2138). The **extension seams' write-up** in `docs/Maths` is owed, listed once.
 - **The API rows** name no removed thing, but 71 of 242 public types appear in no row: 10 seams, 31 a caller reads, 30 readouts and building blocks. `BassComponents.Assemble`, which carries basis restart, is unnamed.
 - **Statements found false:** `port-fitting-brief.md:503` (a cached training fit: none is built); `opus-bass-completion-remainder.md:1` ("Everything R's BASS can do is now built"); `BassRunOptions.cs:15` (tempering and SMC "when they join"); `completion-audit-brief.md` ("E1–E15": the checklist holds E18); `port-outputs-brief.md:82` ("condition on one functional coordinate", which G-2 qualifies).
 - **The open boxes** N15, N17, F-M2 and F-X4 are not stale: each is open by its own condition (the matrix, 6a).
 
-## What the brief does not rule on
+## The rulings on what the brief left open
 
-Three questions would change the conclusion above. I have decided none of them.
+The audit left three questions open. The user ruled on them on 2026-11-01, recorded in `port-fitting-brief.md` ("Not carried"), `deterministic-profile-brief.md` ("For a rerun") and `docs/Maths/BayesianRegression.md`.
 
-1. **Are G-4, G-5 and G-6 gaps or recorded choices?** If you rule that a declared ladder list, `start.temper` and the two switches stay out, each becomes "left out by decision", and the list shortens to G-1, G-2, G-3 and the two measures.
-2. **Is G-3 in the contract?** The hub's P04 row does not name draw selection; the inventory's "Sensitivity" paragraph does. I took the inventory as the checklist, as the brief says.
-3. **Do the per-iteration records count?** R's `log.post.cold`, `swap` and `temp.val` are aggregates here (matrix B-r10, B-r11), and calibration keeps the cold rung only (G14). I read the contract's "posterior retention" as not asking for them and marked them limited, not gaps.
+1. **Are G-4, G-5 and G-6 gaps or recorded choices?** G-4 and G-6 are in the contract and built, with D07's full draw staying the default. G-5 is left out by decision.
+2. **Is G-3 in the contract?** Yes, and it is built as `BassPredictOptions.Draws` does it.
+3. **Do the per-iteration records count?** No. `swap`, `temp.val`, a `log.post.cold` trace and calibration's hot rungs stay limited, not gaps (matrix B-r10, B-r11, G14): they are working diagnostics that the readouts stand in for.
+
+One more, which the main session raised: **`s2.lower`** (matrix A14) stays out of the contract shape, with nothing to build. A truncated σ² prior joins as a pre-registered arm when F-R1 reruns.
 
 ## How this was checked
 
 - **The standard:** each Fulfilled row names a test read for this audit. About 80 cited tests were read whole. For the other 192, a script kept each one's first nine assertions and comments, and those were read; a helper's assertions fall outside that. A script confirms every cited name exists (482 checked), and every `file:line` lies inside its file (164 checked).
 - **The re-trace** of every tenth Fulfilled row (18 rows) from R to the test: 17 stood. **`npart.func` did not:** its test built the admission by hand and read the config's value at its default. Widening to its neighbours moved **7 rows** (`maxInt`, `maxInt.func`, `maxInt.cat`, `npart.func`, `h1`/`h2`, `w1`, `w2`); all seven are Fulfilled again through `DeclaredControls_ReachTheModelAndTheRetainedTerms`.
-- **Probes:** 32 cases in `tests/regression/BassCompletionAuditProbes.cs`, 31 passing and 1 skipped as G-2, none over about 2 s. Nothing under `src/` changed.
-- **Not checked:** the long runs behind the measured limitations; `Maths.LinAlg.Tests` and `Maths.Distributions.Tests` at this revision; anything gated by `BASS_QUALIFICATION` or `SEED_SWEEP`.
+- **Probes:** at the audit, 32 cases in `tests/regression/BassCompletionAuditProbes.cs`, 31 passing and 1 skipped as G-2, none over about 2 s, with nothing under `src/` changed. With the gaps closed, 35 cases, all passing, none skipped.
+- **The gaps' tests** each compare against something outside the new path: tensor quadrature and the law of total variance (G-2), the whole analysis's own draws (G-1, G-3), bit identity with the ladder the count and hot end build (G-4), and the residuals and a covariance assembled by hand (G-6). A fresh-eyes review of the five changes then moved basis effects to evaluate only the draws selected, and added a test at conditioned coordinates (`b844f53`).
+- **Not checked:** the long runs behind the measured limitations; anything gated by `BASS_QUALIFICATION` or `SEED_SWEEP`; the new options against R runs, since their references are those above. `Maths.LinAlg.Tests` and `Maths.Distributions.Tests` were not run here; the main session ran them at `e1eea5d`, 139 of 139 and 148 of 148, and the gaps touched neither.
