@@ -24,3 +24,16 @@ additive aliasing (main stream of seed `s ^ C` ≡ noise stream of seed `s`). Be
 it's a fixture generator and the two streams serve different draws. Fold a `SeedTree.Derive(seed, 2)`
 pair into the next moment the fixture's generated clouds are allowed to churn (any pinned
 expectations regenerate with it); not worth a churn cycle on its own.
+
+## PH setup loose ends (2026-11-01)
+
+None of these blocks anything. Each waits for the thing named beside it. Context: `issues/ph/ph-setup-brief.md`,
+`issues/ph/p1d-filled-h1-brief.md`.
+
+- **`FastZigzag` H₁ representatives.** Unverified above H₀, and absent for bars born by a deletion, so a filled bar can't
+  yet reliably name its cycle. Pick up when a consumer asks which cycle.
+- **Relative barcode from one absolute run.** Proved (`lean/Lemmas/RelativePersistence.lean`) but not built as a code path.
+  Pick up if the relative reduction ever gets slow. Needs the involuted path's H₀ elder-rule inversion fixed first.
+- **Relative reading over frames.** Not built. Pick up when a sweep has a backbone with its own cycles.
+- **Older design notes.** The MarkBrain synthesis brief and `backbone-conditioned-persistence.md` still say relative needs
+  VSMJ2011, show it unbuilt, and call absolute and relative "two questions". Fix when next editing them.

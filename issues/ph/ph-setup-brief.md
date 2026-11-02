@@ -171,7 +171,20 @@ column whose pivot was in K₀ reduces to zero, so it becomes a birth. That cell
 column has it as a pivot, and the new class is essential.
 
 **The check.** R12 passes on 200 random trials: 427 bars kept, 64 moved up, 1184 dropped. The complexes stop at triangles,
-so no higher cell could have killed a moved-up class; "essential" there rests on the argument above.
+so no higher cell could have killed a moved-up class, and R12 alone can't test that one.
+
+**The proof.** The user asked for a formalization, since this was derived and not cited:
+`lean/Lemmas/RelativePersistence.lean`, no apologies, standard axioms only, for any field. It turned out simpler than the
+argument above: any reduction D = R·U restricts to a reduction of the relative matrix, which gives the table directly.
+
+- `relative_barcode` is the statement, for any reduction of either matrix.
+- `isLow_iff_of_reductions` shows the pairing doesn't depend on the reduction.
+- `column_zero_of_isLow` is the only place D·D = 0 enters, and it covers the "essential" claim R12 couldn't.
+- `low_degree` gives the degree.
+- A worked example over `ZMod 2` shows the hypotheses can be met.
+
+It covers the mathematics, not the C#: `RelativeFiltration` is still checked by tests. I haven't looked for whether this
+is stated in the literature, so it makes no claim to being new.
 
 **What it means for the design notes.**
 
