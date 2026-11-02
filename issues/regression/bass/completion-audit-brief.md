@@ -102,6 +102,15 @@ Open it by saying plainly whether the contract is fulfilled, and if not, what st
 
 Newest first.
 
+### A declared list runs as given — 2026-11-02
+
+- *The user's ruling:* "Yes, as given", on the choice the closing put (below).
+- *Built, `3424912`:* `TemperingSpec.Adaptive` is `bool?`, null by default, and `Adapts()` reads it: false for a list, which declares its spacing, and true for a built ladder. `Adaptive = true` still re-spaces a list, and `Adaptive = false` on a self-sizing ladder is still refused.
+- *What it moves:* a tempered config's JSON now holds `"Adaptive":null`, so its fingerprint moves and a tempered checkpoint from before `3424912` stops resuming. An untempered config's holds. A built ladder runs as before, and `BassBitIdentityTests`' hashes held.
+- *Suites:* Regression 1,544 of 1,545 on the full run, and BASS oracle 90/90. The failure was a pin the change missed, not a run that moved: `BassMovePassTests.Arms_AreWhatTheySay` read `Adaptive: true` in a pattern. It now reads `Adapts()`, and `BassMovePassTests` with `BassTemperingTests` rerun 96/96. The full suite was not rerun after that one assertion. Samplers was not run, since nothing under it changed.
+- *The chip's docs, read by me:* the seams section of `BayesianRegression.md` (`ab7bef4`), against the signatures it leans on: `Bass.Fit`, `Bass.Resume` and `Bass.Fingerprint` take no observation model, as it says. I read the section and that check, not every claim against the code. So the write-up I had owed is done, by the chip at the user's word, along with `867fbd7` and `2b20bd1` in `LinearAlgebra.md`.
+- *Open:* G-7 and G-8, waiting on a quiet window. The seams' shapes went to the user on 2026-10-31 with no ruling recorded.
+
 ### The docs owed, written (chip, 2026-11-02)
 
 At the user's word, in this chip, though `docs/Maths` is otherwise the main session's.
