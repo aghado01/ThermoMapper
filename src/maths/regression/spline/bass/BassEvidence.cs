@@ -203,10 +203,10 @@ public sealed record BassEvidencePriors(
     BassCountPrior Count, int MaxBasis,
     CategoricalSubsetMeasure CategoricalSubsets, int MaxInteraction, int MaxCategoricalInteraction, int MaxFunctionalInteraction,
     SupportRule Support, double SupportMinimum, double? SupportMinimumFunctional, double AngleFloor, double? MaxVarianceInflation,
-    GPriorCentre Centre, double CentreLevel, Sigma2Prior Sigma2Prior, InverseGamma Sigma2)
+    GPriorCentre Centre, double CentreLevel, Sigma2Prior Sigma2Prior, InverseGamma? Sigma2)
 {
     /// <summary>The record for <paramref name="config"/> as <paramref name="resolved"/> on its data, which must carry
-    /// proper σ² and τ priors.</summary>
+    /// proper σ² and τ priors; a held σ² has no inverse gamma, and the declared prior states it.</summary>
     public static BassEvidencePriors Of(BassConfig config, BassResolved resolved)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -214,10 +214,11 @@ public sealed record BassEvidencePriors(
         BassStructureSpec s = config.Structure;
         if (!resolved.Scale.IsProper)
             throw new ArgumentException($"τ's prior, {resolved.Scale.Declared}, is improper, which leaves the evidence undefined.", nameof(resolved));
+        if (resolved.Sigma2 is null && resolved.GivenSigma2 is null)
+            throw new ArgumentException("The Jeffreys σ² prior leaves the evidence undefined (D03).", nameof(resolved));
         return new BassEvidencePriors(config.Coefficients, resolved.Scale, config.Count, resolved.MaxBasis,
             s.CategoricalSubsets, resolved.MaxInteraction, resolved.MaxCategoricalInteraction, resolved.MaxFunctionalInteraction,
             s.Support, resolved.SupportMinimum, resolved.SupportMinimumFunctional, s.AngleFloor, s.MaxVarianceInflation,
-            config.Intercept, resolved.CentreLevel, config.Sigma2,
-            resolved.Sigma2 ?? throw new ArgumentException("The Jeffreys σ² prior leaves the evidence undefined (D03).", nameof(resolved)));
+            config.Intercept, resolved.CentreLevel, config.Sigma2, resolved.Sigma2);
     }
 }

@@ -69,6 +69,8 @@ public static class BassPointwise
         bool collapsed = content == PointwiseContent.CollapsedPredictive;
         if (collapsed)
         {
+            if (model.Working is { IsUnweighted: false, Meaning: WeightMeaning.Replication })
+                throw new NotSupportedException("The collapsed predictive leaves a row out whole; under weights that count rows it would leave out all its copies at once. Take the retained content.");
             // The predictive conditions on the observations outside the unit, beyond the one a flat intercept's integral
             // spends; under Jeffreys that is σ²'s shape given the rest, (N − spent − m)/2, staying positive.
             int spent = model.Target.Intercept == GPriorCentre.Flat ? 1 : 0;
@@ -91,10 +93,13 @@ public static class BassPointwise
             : new PointwiseLogDensity(values, partition, latents) { Weights = weights };
     }
 
-    // Each draw's Normal log terms at its fit and σ², summed over each unit's observations.
+    // Each draw's Normal log terms at its fit and σ², summed over each unit's observations: on the working response, under W
+    // at its meaning, N(y | f, σ²/w) or w copies of N(y | f, σ²).
     private static double[,] Retained(BassModel model, BassDrawFit fit, List<BassDraw> pooled, UnitPartition partition)
     {
-        ReadOnlySpan<double> y = model.Data.Response.Values;
+        ReadOnlySpan<double> y = model.Working.Values;
+        double[]? weights = model.Working.WeightArray;
+        bool counts = model.Working.Meaning == WeightMeaning.Replication;
         int n = y.Length;
         var values = new double[pooled.Count, partition.Units];
         var f = new double[n];
@@ -107,7 +112,9 @@ public static class BassPointwise
             for (int i = 0; i < n; i++)
             {
                 double e = y[i] - f[i];
-                log[i] = normalizer - 0.5 * e * e / sigma2;
+                if (weights is null) log[i] = normalizer - 0.5 * e * e / sigma2;
+                else if (counts) log[i] = weights[i] * (normalizer - 0.5 * e * e / sigma2);
+                else log[i] = normalizer + 0.5 * Math.Log(weights[i]) - 0.5 * weights[i] * e * e / sigma2;
             }
             for (int u = 0; u < partition.Units; u++)
             {
@@ -124,7 +131,8 @@ public static class BassPointwise
     private static double[,] Collapsed(BassModel model, BassDrawFit fit, List<BassDraw> pooled, UnitPartition partition, string parameter)
     {
         BassTarget target = model.Target;
-        ReadOnlySpan<double> y = model.Data.Response.Values;
+        ReadOnlySpan<double> y = model.Working.Values;
+        double[]? weights = model.Working.WeightArray;
         var byStructure = new Dictionary<int[], List<int>>(StructureComparer.Instance);
         for (int s = 0; s < pooled.Count; s++)
         {
@@ -142,10 +150,10 @@ public static class BassPointwise
             BassRefusal? refusal = design.Load(structure) ?? target.Refusal(BassStructureFit.Of(design, 0.0));
             if (refusal is { } reason) throw new ArgumentException($"A draw's structure lies outside F ({reason}).", parameter);
             Func<double, double, GPriorConditional> block = target.CoefficientBlock(design);
-            bool ridge = design.IsRidge;
+            bool perTau = design.PriorTerms is not null;
             double[,] x = fit.CentredDesign(ids);
-            // The g-form's units' quadratic forms are τ-free, taken once per structure, the ridge's once per τ; a draw at a
-            // τ already seen copies its row.
+            // The g-form's units' quadratic forms are τ-free, taken once per structure, those of a prior apart from its Gram once
+            // per τ; a draw at a τ already seen copies its row.
             LeaveOutQuadratics[]? quadratics = null;
             var seen = new Dictionary<double, int>();
             foreach (int s in rows)
@@ -157,13 +165,15 @@ public static class BassPointwise
                 }
                 seen.Add(pooled[s].Tau, s);
                 GPriorConditional conditional = block(pooled[s].Tau, 1.0);
-                if (quadratics is null || ridge)
+                if (quadratics is null || perTau)
                 {
                     quadratics = new LeaveOutQuadratics[partition.Units];
                     for (int u = 0; u < partition.Units; u++) quadratics[u] = conditional.LeaveOutQuadratics(x, partition.Members[u]);
                 }
                 for (int u = 0; u < partition.Units; u++)
-                    values[s, u] = conditional.LeaveOutLogDensity(target.Sigma2, x, y, null, quadratics[u]);
+                    values[s, u] = target.GivenSigma2 is double given
+                        ? conditional.LeaveOutLogDensityGiven(given, x, y, weights, quadratics[u])
+                        : conditional.LeaveOutLogDensity(target.Sigma2, x, y, weights, quadratics[u]);
             }
         }
         return values;
@@ -308,8 +318,8 @@ internal sealed class BassDrawFit
 
     /// <summary>
     /// The explicit design [1, Z_c] of the structure <paramref name="ids"/>, in their order: the intercept's column of
-    /// ones, then each term's column centred over all N observations, a − ā for a scalar response and
-    /// a(xᵢ)h(t_r) − āh̄ for a direct functional one, as the design layer centres them.
+    /// ones, then each term's column centred over all N observations under W, a − ā for a scalar response and
+    /// a(xᵢ)h(t_r) − level for a direct functional one, as the design layer centres them.
     /// </summary>
     public double[,] CentredDesign(int[] ids)
     {
@@ -319,13 +329,12 @@ internal sealed class BassDrawFit
         for (int j = 0; j < ids.Length; j++)
         {
             (double[] a, double[]? h) = Columns(ids[j]);
-            double aBar = PairwiseSum.Of(a) / _cases;
+            double level = _model.Working.ColumnMean(a, h);
             if (h is null)
             {
-                for (int i = 0; i < _cases; i++) x[i, j + 1] = a[i] - aBar;
+                for (int i = 0; i < _cases; i++) x[i, j + 1] = a[i] - level;
                 continue;
             }
-            double level = aBar * (PairwiseSum.Of(h) / _locations);
             for (int i = 0; i < _cases; i++)
                 for (int r = 0; r < _locations; r++) x[i * _locations + r, j + 1] = a[i] * h[r] - level;
         }

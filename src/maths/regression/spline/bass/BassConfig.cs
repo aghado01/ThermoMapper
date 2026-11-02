@@ -356,7 +356,7 @@ public sealed record BassCoefficientPrior(CoefficientForm Form, TauPrior Scale)
     public static BassCoefficientPrior Ridge(TauPrior scale) => new(new RidgeForm(), scale);
 
     /// <summary>τ₀ = 1/n₀'s n₀ for <paramref name="observations"/> observations: N for the g-form, 1 for the ridge.</summary>
-    public double UnitObservations(int observations) => Form is RidgeForm ? 1.0 : observations;
+    public double UnitObservations(double observations) => Form is RidgeForm ? 1.0 : observations;
 }
 
 /// <summary>The coefficient prior's covariance form (D03, decided 2026-10-29).</summary>

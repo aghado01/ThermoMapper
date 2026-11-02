@@ -121,8 +121,7 @@ internal sealed class BassConditionalMeans
             for (int j = 0; j < ids.Length; j++)
             {
                 (double[] a, double[]? h) = _fit.Columns(ids[j]);
-                double mean = PairwiseSum.Of(a) / a.Length;
-                means[j] = h is null ? mean : mean * (PairwiseSum.Of(h) / h.Length);
+                means[j] = _model.Working.ColumnMean(a, h);
             }
             entry = (block, means);
             _blocks.Add(ids, entry);

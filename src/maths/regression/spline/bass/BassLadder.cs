@@ -268,8 +268,8 @@ public sealed class BassLadder
         CheckSpec(spec);
         if (spec.InverseTemperatures is { } declared) return (double[])declared.Clone();
         BassTarget target = model.Target;
-        double hot = spec.HotEnd ?? BassResolved.AutoHotEnd(spec, target.Intercept, target.Observations,
-                                                            BassResolved.HalvingTau(target.CoefficientForm, target.Scale, target.Observations));
+        double hot = spec.HotEnd ?? BassResolved.AutoHotEnd(spec, target.Intercept, target.Weighting.Count,
+                                                            BassResolved.HalvingTau(target.CoefficientForm, target.Scale, target.Weighting.Count));
         if (!(hot > 0.0 && hot < 1.0)) throw new ArgumentException($"The hot end auto-picks {hot} on N = {target.Observations}, outside (0, 1).", nameof(spec));
         int levels = spec.StartLevels();
         return spec.ReferenceRung

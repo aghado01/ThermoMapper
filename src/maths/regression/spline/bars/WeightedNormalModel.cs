@@ -55,6 +55,7 @@ public sealed class WeightedNormalModel : IObservationModel
         if (form is not (TemperedForm.Integrated or TemperedForm.Linear)) throw new ArgumentOutOfRangeException(nameof(form));
         Centre = centre;
         Form = form;
+        if (sigma2Prior is { IsHeld: true }) throw new ArgumentException("BARS integrates σ²; it has no form given σ².", nameof(sigma2Prior));
         Sigma2Prior = sigma2Prior ?? Sigma2Prior.ScaledToResponse();
     }
 

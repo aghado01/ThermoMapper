@@ -42,6 +42,18 @@ public enum GPriorCentre
 }
 
 /// <summary>
+/// What observation weights add to a centred block's closed forms beyond its weighted statistics ‖r‖²_W and Q_W:
+/// <see cref="Count"/>, the observations σ²'s shape counts (N under precision weights, Σwᵢ when weights count rows);
+/// <see cref="Mass"/>, Σwᵢ, the intercept's Gram entry; and <see cref="SumLogWeights"/>, the likelihood's Σ ln wᵢ, which
+/// enters at b/2 (0 when weights count rows, whose likelihood has none). Unit weights are (N, N, 0).
+/// </summary>
+public readonly record struct GPriorWeights(double Count, double Mass, double SumLogWeights)
+{
+    /// <summary>Unit weights on <paramref name="rows"/> observations.</summary>
+    public static GPriorWeights Unit(int rows) => new(rows, rows, 0.0);
+}
+
+/// <summary>
 /// The collapsed g-prior block shared by the free-knot engines (BARS now, BASS next): for a fixed design Z with Gram
 /// <c>G = ZᵀZ</c>, the closed forms of <c>y ~ N(Zβ, σ²W⁻¹)</c> under <c>β | σ² ~ N(μ₀, σ²(τG)⁻¹)</c>, with the
 /// likelihood raised to an inverse temperature b and σ² integrated out or drawn (BASS derivations review §§1–3, 5).
@@ -58,7 +70,10 @@ public enum GPriorCentre
 /// precision <c>P_a = Zᵀ(W + τI)Z</c> depends on τ, so the block is built at one τ and b = 1.</item>
 /// <item><b>Centred, with the intercept apart.</b> BASS's design (D03): the factor is of the centred columns' Gram, the
 /// constant stands orthogonal to them, and its convention (<see cref="Intercept"/>) places it inside the g-prior or
-/// under Liang's flat prior (<see cref="FromCentredLeastSquares"/>). Unweighted, any (τ, b) as above.</item>
+/// under Liang's flat prior (<see cref="FromCentredLeastSquares"/>). Unweighted, any (τ, b) as above. With a
+/// <see cref="GPriorWeights"/> its statistics are the weighted fit's, its columns centred under W and its prior on their
+/// weighted Gram, so the same closed forms hold; a prior that stays on the unweighted Gram is
+/// <see cref="CollapsedPencilPrior"/>.</item>
 /// </list>
 /// The block reports its factors' statuses and leaves admission to the caller, and it knows nothing about the basis:
 /// a design layer such as <c>BandedGPrior</c> builds it.
@@ -72,10 +87,11 @@ public sealed class CollapsedGPrior
     private readonly double _rss, _fitted;     // unweighted: ‖r_OLS‖², Q
     private readonly double _scale, _sumLogWeights, _tau;   // weighted: S, Σ ln wᵢ, the τ it was built at
     private readonly double _responseMean, _level;          // centred: ȳ, and the intercept's centre (ȳ under Flat)
+    private readonly GPriorWeights _weights;                // centred: the count, the mass and Σ ln wᵢ
 
     private CollapsedGPrior(ISpdFactor gram, ISpdFactor? posterior, double[] coefficients, double rss, double fitted,
                             double scale, double sumLogWeights, double tau, int rows, double[]? priorMean,
-                            GPriorCentre? intercept = null, double responseMean = 0.0, double level = 0.0)
+                            GPriorCentre? intercept = null, double responseMean = 0.0, double level = 0.0, GPriorWeights? weights = null)
     {
         if (priorMean is not null && priorMean.Length != gram.Dimension)
             throw new ArgumentException("One prior mean per Gram column is required.", nameof(priorMean));
@@ -90,6 +106,7 @@ public sealed class CollapsedGPrior
         _tau = tau;
         _responseMean = responseMean;
         _level = level;
+        _weights = weights ?? GPriorWeights.Unit(rows);
         Intercept = intercept;
         Rows = rows;
         Columns = gram.Dimension + (intercept is null ? 0 : 1);
@@ -134,10 +151,11 @@ public sealed class CollapsedGPrior
     /// evidence. Given σ², <c>α ~ N(ȳ, σ²/(Nb))</c> apart from β_c.</item>
     /// </list>
     /// The median centre is the robust path's, on a basis that carries the constant (BARS), and is refused here.
+    /// <paramref name="weights"/> carries observation weights, with every statistic the weighted fit's; null is unit weights.
     /// </summary>
     public static CollapsedGPrior FromCentredLeastSquares(ISpdFactor centredGram, double[] centredCoefficients,
                                                           double residualSumOfSquares, double centredFittedSumOfSquares,
-                                                          int rows, double responseMean, GPriorCentre intercept)
+                                                          int rows, double responseMean, GPriorCentre intercept, GPriorWeights? weights = null)
     {
         ArgumentNullException.ThrowIfNull(centredGram);
         ArgumentNullException.ThrowIfNull(centredCoefficients);
@@ -145,25 +163,27 @@ public sealed class CollapsedGPrior
             throw new ArgumentException("One coefficient per centred column is required.", nameof(centredCoefficients));
         if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
         if (!(centredFittedSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(centredFittedSumOfSquares));
-        (double fitted, double level) = CentredFit(centredFittedSumOfSquares, rows, responseMean, intercept);
+        (double fitted, double level) = CentredFit(centredFittedSumOfSquares, (weights ?? GPriorWeights.Unit(rows)).Mass, responseMean, intercept);
         return new CollapsedGPrior(centredGram, null, centredCoefficients, residualSumOfSquares, fitted,
-                                   double.NaN, 0.0, double.NaN, rows, null, intercept, responseMean, level);
+                                   double.NaN, 0.0, double.NaN, rows, null, intercept, responseMean, level, weights);
     }
 
     /// <summary>
     /// The marginal of <see cref="FromCentredLeastSquares"/>'s block at (<paramref name="tau"/>,
     /// <paramref name="inverseTemperature"/>), from the fit's statistics alone: <paramref name="centredColumns"/> centred
     /// columns beside the intercept, ‖r‖² and Q_c. A design that weighs a candidate structure has these before it has
-    /// a factor or coefficients, and the marginal reads nothing else.
+    /// a factor or coefficients, and the marginal reads nothing else. <paramref name="weights"/> carries observation
+    /// weights, with the statistics the weighted fit's; null is unit weights.
     /// </summary>
     public static GPriorMarginal CentredMarginalAt(int centredColumns, double residualSumOfSquares, double centredFittedSumOfSquares,
                                                    int rows, double responseMean, GPriorCentre intercept, double tau,
-                                                   double inverseTemperature = 1.0)
+                                                   double inverseTemperature = 1.0, GPriorWeights? weights = null)
     {
         if (centredColumns < 0) throw new ArgumentOutOfRangeException(nameof(centredColumns));
         if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
-        (double fitted, _) = CentredFit(centredFittedSumOfSquares, rows, responseMean, intercept);
-        return Unweighted(centredColumns + 1, residualSumOfSquares, fitted, rows, intercept, tau, inverseTemperature);
+        GPriorWeights w = weights ?? GPriorWeights.Unit(rows);
+        (double fitted, _) = CentredFit(centredFittedSumOfSquares, w.Mass, responseMean, intercept);
+        return ClosedForm(centredColumns + 1, residualSumOfSquares, fitted, rows, intercept, tau, inverseTemperature, w);
     }
 
     /// <summary>
@@ -173,46 +193,73 @@ public sealed class CollapsedGPrior
     /// The intercept, a unit-RMS column already, is one more direction with λ₀ = N: under level centring it adds
     /// ½ln(τ/(bN + τ)) and no energy, under the zero centre also the energy Nȳ² shrunk by τ/(bN + τ), and under the flat
     /// intercept its integral (2πσ²/(Nb))^½, as <see cref="CentredMarginalAt"/> places it. Then S = b(‖r‖² + shrinkage), a sum
-    /// of non-negative terms; the same domain as the g-form's.
+    /// of non-negative terms; the same domain as the g-form's. <paramref name="weights"/> carries observation weights, with
+    /// N read as their mass in the intercept's direction; null is unit weights.
     /// </summary>
     public static GPriorMarginal CentredRidgeMarginalAt(RidgeColumns columns, double residualSumOfSquares, int rows, double responseMean,
-                                                        GPriorCentre intercept, double tau, double inverseTemperature = 1.0)
+                                                        GPriorCentre intercept, double tau, double inverseTemperature = 1.0, GPriorWeights? weights = null)
     {
         ArgumentNullException.ThrowIfNull(columns);
         if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
-        double level = CentredLevel(rows, responseMean, intercept), b = inverseTemperature;
+        GPriorWeights w = weights ?? GPriorWeights.Unit(rows);
+        double level = CentredLevel(w.Mass, responseMean, intercept), b = inverseTemperature;
         RidgeTerms terms = columns.At(tau, b);
-        double logDet = terms.LogDeterminant, shrink = terms.Shrinkage, logDetSlope = terms.LogDeterminantSlope, shrinkSlope = terms.ShrinkageSlope;
+        double logDet = terms.LogDeterminant + 0.5 * b * w.SumLogWeights, shrink = terms.Shrinkage;
+        double logDetSlope = terms.LogDeterminantSlope + 0.5 * w.SumLogWeights, shrinkSlope = terms.ShrinkageSlope;
         if (intercept == GPriorCentre.Flat)
         {
             if (!(b > 0.0))
                 throw new ArgumentOutOfRangeException(nameof(inverseTemperature),
                     "b = 0 is out of reach on the flat intercept's integrated form, whose (2πσ²/(Nb))^½ diverges there.");
-            return new GPriorMarginal(b * (residualSumOfSquares + shrink), logDet - 0.5 * Math.Log(rows * b), rows, tau, b, 1,
-                                      residualSumOfSquares + shrinkSlope, logDetSlope - 0.5 / b);
+            return new GPriorMarginal(b * (residualSumOfSquares + shrink), logDet - 0.5 * Math.Log(w.Mass * b), rows, tau, b, 1,
+                                      residualSumOfSquares + shrinkSlope, logDetSlope - 0.5 / b, w.Count);
         }
-        double bn = b * rows, h = tau / (bn + tau), energy = rows * (responseMean - level) * (responseMean - level);
+        double bn = b * w.Mass, h = tau / (bn + tau), energy = w.Mass * (responseMean - level) * (responseMean - level);
         logDet -= 0.5 * LogFunctions.Log1p(bn / tau);
-        logDetSlope -= 0.5 * rows / (bn + tau);
+        logDetSlope -= 0.5 * w.Mass / (bn + tau);
         shrink += energy * h;
         shrinkSlope += energy * h * h;
-        return new GPriorMarginal(b * (residualSumOfSquares + shrink), logDet, rows, tau, b, 0, residualSumOfSquares + shrinkSlope, logDetSlope);
+        return new GPriorMarginal(b * (residualSumOfSquares + shrink), logDet, rows, tau, b, 0, residualSumOfSquares + shrinkSlope, logDetSlope, w.Count);
+    }
+
+    /// <summary>
+    /// The marginal under a coefficient prior apart from the likelihood's Gram (<see cref="PriorPencil"/>), at
+    /// (<paramref name="tau"/>, <paramref name="inverseTemperature"/>), from the weighted fit's ‖r‖²_W. S = b(‖r‖²_W + shrinkage)
+    /// and the determinant term are the pencil's. A pencil holding the intercept has it inside the prior; a flat intercept
+    /// stands apart, with its integral (2πσ²/(Mass·b))^½.
+    /// </summary>
+    public static GPriorMarginal CentredPencilMarginalAt(PriorPencil pencil, double residualSumOfSquares, int rows, GPriorWeights weights,
+                                                         GPriorCentre intercept, double tau, double inverseTemperature = 1.0)
+    {
+        ArgumentNullException.ThrowIfNull(pencil);
+        if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
+        bool flat = intercept == GPriorCentre.Flat;
+        if (pencil.InterceptInside == flat) throw new ArgumentException("The pencil holds the intercept under another convention.", nameof(pencil));
+        double b = inverseTemperature;
+        RidgeTerms terms = pencil.At(tau, b);
+        double logDet = terms.LogDeterminant + 0.5 * b * weights.SumLogWeights, logDetSlope = terms.LogDeterminantSlope + 0.5 * weights.SumLogWeights;
+        double s = b * (residualSumOfSquares + terms.Shrinkage), sSlope = residualSumOfSquares + terms.ShrinkageSlope;
+        if (!flat) return new GPriorMarginal(s, logDet, rows, tau, b, 0, sSlope, logDetSlope, weights.Count);
+        if (!(b > 0.0))
+            throw new ArgumentOutOfRangeException(nameof(inverseTemperature),
+                "b = 0 is out of reach on the flat intercept's integrated form, whose (2πσ²/(Nb))^½ diverges there.");
+        return new GPriorMarginal(s, logDet - 0.5 * Math.Log(weights.Mass * b), rows, tau, b, 1, sSlope, logDetSlope - 0.5 / b, weights.Count);
     }
 
     /// <summary>The centre level an intercept apart from the centred columns reads: ȳ under level centring and the flat
     /// intercept, 0 under the zero centre; the median refused.</summary>
-    internal static double CentredLevel(int rows, double responseMean, GPriorCentre intercept) => CentredFit(0.0, rows, responseMean, intercept).Level;
+    internal static double CentredLevel(double mass, double responseMean, GPriorCentre intercept) => CentredFit(0.0, mass, responseMean, intercept).Level;
 
     // The fitted energy the centred block's convention reads, and the intercept's centre.
-    private static (double Fitted, double Level) CentredFit(double centredFitted, int rows, double responseMean, GPriorCentre intercept)
+    private static (double Fitted, double Level) CentredFit(double centredFitted, double mass, double responseMean, GPriorCentre intercept)
     {
         if (!(centredFitted >= 0.0)) throw new ArgumentOutOfRangeException(nameof(centredFitted));
-        if (rows < 1) throw new ArgumentOutOfRangeException(nameof(rows));
+        if (!(mass > 0.0)) throw new ArgumentOutOfRangeException(nameof(mass));
         if (!double.IsFinite(responseMean)) throw new ArgumentOutOfRangeException(nameof(responseMean));
         return intercept switch
         {
             GPriorCentre.Mean or GPriorCentre.Flat => (centredFitted, responseMean),
-            GPriorCentre.Zero => (centredFitted + rows * responseMean * responseMean, 0.0),
+            GPriorCentre.Zero => (centredFitted + mass * responseMean * responseMean, 0.0),
             GPriorCentre.Median => throw new ArgumentException(
                 "The median centre is the robust path's, on a basis that carries the constant; a design with its intercept "
                 + "apart takes the mean, the zero centre or the flat intercept.", nameof(intercept)),
@@ -290,7 +337,7 @@ public sealed class CollapsedGPrior
             bool flat = intercept == GPriorCentre.Flat;
             mean[0] = flat ? _responseMean : _level + shrink * (_responseMean - _level);
             for (int j = 1; j < p; j++) mean[j] = shrink * _coefficients[j - 1];
-            return new GPriorConditional(_gram, mean, marginal, 1.0 / (tau + b), p, flat ? 1.0 / b : 1.0 / (tau + b));
+            return new GPriorConditional(_gram, mean, marginal, 1.0 / (tau + b), p, flat ? 1.0 / b : 1.0 / (tau + b), _weights.Mass);
         }
         for (int j = 0; j < p; j++) mean[j] = (_priorMean?[j] ?? 0.0) + shrink * _coefficients[j];
         return new GPriorConditional(_gram, mean, marginal, 1.0 / (tau + b), p);
@@ -312,28 +359,28 @@ public sealed class CollapsedGPrior
             double logDet = 0.5 * (_gram.LogDet + Columns * Math.Log(tau)) - 0.5 * posterior.LogDet + 0.5 * _sumLogWeights;
             return new GPriorMarginal(_scale, logDet, Rows, tau, b);
         }
-        return Unweighted(Columns, _rss, _fitted, Rows, Intercept, tau, inverseTemperature);
+        return ClosedForm(Columns, _rss, _fitted, Rows, Intercept, tau, inverseTemperature, _weights);
     }
 
-    // The unweighted marginal at (τ, b), with S and the determinant term's slopes in b beside them:
-    // ∂S/∂b = ‖r‖² + (τ/(τ+b))²·Q and ∂/∂b (k/2)ln(τ/(τ+b)) = −(k/2)/(τ+b).
-    private static GPriorMarginal Unweighted(int columns, double rss, double fitted, int rows, GPriorCentre? intercept,
-                                             double tau, double b)
+    // The marginal at (τ, b) from a fit's statistics, with S and the determinant term's slopes in b beside them:
+    // ∂S/∂b = ‖r‖² + (τ/(τ+b))²·Q and ∂/∂b (k/2)ln(τ/(τ+b)) = −(k/2)/(τ+b). Weights add (b/2)Σ ln wᵢ.
+    private static GPriorMarginal ClosedForm(int columns, double rss, double fitted, int rows, GPriorCentre? intercept,
+                                             double tau, double b, in GPriorWeights weights)
     {
         CheckTau(tau);
         if (!(b >= 0.0) || double.IsPositiveInfinity(b))
             throw new ArgumentOutOfRangeException("inverseTemperature", "The inverse temperature must be non-negative and finite.");
         double shrink = tau / (tau + b);
-        double s = b * (rss + shrink * fitted), sSlope = rss + shrink * shrink * fitted;
+        double s = b * (rss + shrink * fitted), sSlope = rss + shrink * shrink * fitted, logWeights = 0.5 * weights.SumLogWeights;
         if (intercept != GPriorCentre.Flat)
-            return new GPriorMarginal(s, 0.5 * columns * Math.Log(shrink), rows, tau, b, 0, sSlope, -0.5 * columns / (tau + b));
+            return new GPriorMarginal(s, 0.5 * columns * Math.Log(shrink) + b * logWeights, rows, tau, b, 0, sSlope, -0.5 * columns / (tau + b) + logWeights, weights.Count);
 
         // α's integral, (2πσ²/(Nb))^½: ½ln 2π moves into the count's 2π term, −½ln(Nb) stays here.
         if (!(b > 0.0))
             throw new ArgumentOutOfRangeException("inverseTemperature",
                 "b = 0 is out of reach on the flat intercept's integrated form, whose (2πσ²/(Nb))^½ diverges there.");
-        double flatLogDet = 0.5 * (columns - 1) * Math.Log(shrink) - 0.5 * Math.Log(rows * b);
-        return new GPriorMarginal(s, flatLogDet, rows, tau, b, 1, sSlope, -0.5 * (columns - 1) / (tau + b) - 0.5 / b);
+        double flatLogDet = 0.5 * (columns - 1) * Math.Log(shrink) - 0.5 * Math.Log(weights.Mass * b) + b * logWeights;
+        return new GPriorMarginal(s, flatLogDet, rows, tau, b, 1, sSlope, -0.5 * (columns - 1) / (tau + b) - 0.5 / b + logWeights, weights.Count);
     }
 
     private static void CheckTau(double tau)
@@ -354,9 +401,10 @@ public readonly struct GPriorMarginal
 
     private readonly int _spent;   // observations a flat intercept's integral spends: 0 or 1
     private readonly double _sSlope, _logDeterminantSlope;   // ∂/∂b of S and of the determinant term; NaN when weighted
+    private readonly double _count;   // the observations ν counts: m, or Σwᵢ when weights count rows
 
     internal GPriorMarginal(double s, double logDeterminantTerm, int rows, double tau, double inverseTemperature,
-                            int spent = 0, double sSlope = double.NaN, double logDeterminantSlope = double.NaN)
+                            int spent = 0, double sSlope = double.NaN, double logDeterminantSlope = double.NaN, double? count = null)
     {
         S = s;
         LogDeterminantTerm = logDeterminantTerm;
@@ -366,14 +414,15 @@ public readonly struct GPriorMarginal
         _spent = spent;
         _sSlope = sSlope;
         _logDeterminantSlope = logDeterminantSlope;
+        _count = count ?? rows;
     }
 
     /// <summary>Observations m.</summary>
     public int Rows { get; }
 
     /// <summary>ν, the count σ²'s shape adds half of: <c>mb</c>, or <c>mb − 1</c> under the flat intercept, whose integral
-    /// spends one observation.</summary>
-    public double DegreesOfFreedom => Rows * InverseTemperature - _spent;
+    /// spends one observation; m reads Σwᵢ when weights count rows.</summary>
+    public double DegreesOfFreedom => _count * InverseTemperature - _spent;
 
     /// <summary>Prior precision τ.</summary>
     public double Tau { get; }
@@ -387,8 +436,9 @@ public readonly struct GPriorMarginal
     public double S { get; }
 
     /// <summary>The coefficient integral's determinant term: <c>(k/2)·ln(τ/(τ+b))</c> unweighted, k the g-prior's
-    /// columns, or <c>½Σⱼ ln(τ/(bλⱼ + τ))</c> over the normalized ridge's directions, less <c>½ln(mb)</c> under the flat
-    /// intercept; <c>½ln|τG| − ½ln|P_a| + ½Σ ln wᵢ</c> weighted.</summary>
+    /// columns, or <c>½Σⱼ ln(τ/(bλⱼ + τ))</c> over the normalized ridge's or a <see cref="PriorPencil"/>'s directions, less
+    /// <c>½ln(mb)</c> under the flat intercept, plus <c>(b/2)Σ ln wᵢ</c> under precision weights; BARS's weighted block's
+    /// is <c>½ln|τG| − ½ln|P_a| + ½Σ ln wᵢ</c>.</summary>
     public double LogDeterminantTerm { get; }
 
     /// <summary><c>σ² | y ~ IG(g₁ + ν/2, g₂ + S/2)</c>, ν = <see cref="DegreesOfFreedom"/>; null
@@ -406,7 +456,7 @@ public readonly struct GPriorMarginal
     /// </summary>
     public double LogMarginal(InverseGamma? sigmaPrior)
     {
-        double nb = 0.5 * Rows * InverseTemperature - 0.5 * _spent;
+        double nb = 0.5 * _count * InverseTemperature - 0.5 * _spent;
         double half = 0.5 * S;
         double common = -nb * Log2Pi + LogDeterminantTerm;
         if (sigmaPrior is InverseGamma prior)
@@ -432,7 +482,7 @@ public readonly struct GPriorMarginal
     public double LogMarginalSlope(InverseGamma? sigmaPrior)
     {
         if (double.IsNaN(_sSlope)) throw new NotSupportedException("The weighted block is untempered, so it has no slope in b.");
-        double nb = 0.5 * Rows * InverseTemperature - 0.5 * _spent, m = 0.5 * Rows;
+        double nb = 0.5 * _count * InverseTemperature - 0.5 * _spent, m = 0.5 * _count;
         double half = 0.5 * S;
         double common = -m * Log2Pi + _logDeterminantSlope;
         double shape = sigmaPrior?.Shape ?? 0.0, scale = sigmaPrior?.Scale ?? 0.0;
@@ -444,6 +494,33 @@ public readonly struct GPriorMarginal
         else if (!(shape + nb > 0.0)) throw new InvalidOperationException("σ²'s posterior shape g₁ + ν/2 is not positive.");
         return common + m * SpecialFunctions.Digamma(shape + nb) - m * Math.Log(scale + half)
                - (shape + nb) * 0.5 * _sSlope / (scale + half);
+    }
+
+    /// <summary>
+    /// The complete <c>ln p_b(y | Z, τ, σ²)</c> with β integrated out and σ² given (the structure step's form when σ² is
+    /// held or drawn apart, D04's generalized-hyperbolic row): <c>−(ν/2)ln(2πσ²) + LogDeterminantTerm − S/(2σ²)</c>, from the
+    /// same S and determinant term as <see cref="LogMarginal"/>, which is its integral against σ²'s prior. Finite for an exact
+    /// fit, and exactly 0 at b = 0, where the flat intercept's pole has refused already.
+    /// </summary>
+    public double LogMarginalGiven(double sigma2)
+    {
+        CheckGiven(sigma2);
+        if (InverseTemperature == 0.0) return 0.0;   // no likelihood; the terms below are each 0 already, −0 included
+        return -0.5 * DegreesOfFreedom * Math.Log(2.0 * Math.PI * sigma2) + LogDeterminantTerm - 0.5 * S / sigma2;
+    }
+
+    /// <summary><c>∂/∂b</c> of <see cref="LogMarginalGiven"/> at this b: <c>−(m/2)ln(2πσ²) + ∂LogDeterminantTerm − S'/(2σ²)</c>;
+    /// the same domain, unweighted and centred blocks only.</summary>
+    public double LogMarginalGivenSlope(double sigma2)
+    {
+        CheckGiven(sigma2);
+        if (double.IsNaN(_sSlope)) throw new NotSupportedException("The weighted block is untempered, so it has no slope in b.");
+        return -0.5 * _count * Math.Log(2.0 * Math.PI * sigma2) + _logDeterminantSlope - 0.5 * _sSlope / sigma2;
+    }
+
+    private static void CheckGiven(double sigma2)
+    {
+        if (!(sigma2 > 0.0) || double.IsPositiveInfinity(sigma2)) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive and finite.");
     }
 }
 
@@ -460,9 +537,10 @@ public sealed class GPriorConditional
     private readonly ISpdFactor _precision;
     private readonly double[] _mean;
     private readonly GPriorMarginal _marginal;
+    private readonly double _interceptMass;   // m, or Σwᵢ under weights
 
     internal GPriorConditional(ISpdFactor precision, double[] mean, GPriorMarginal marginal, double covarianceScale, int columns,
-                               double? interceptCovarianceScale = null)
+                               double? interceptCovarianceScale = null, double? interceptMass = null)
     {
         _precision = precision;
         _mean = mean;
@@ -470,6 +548,7 @@ public sealed class GPriorConditional
         CovarianceScale = covarianceScale;
         Columns = columns;
         InterceptCovarianceScale = interceptCovarianceScale;
+        _interceptMass = interceptMass ?? marginal.Rows;
     }
 
     /// <inheritdoc cref="GPriorMarginal.Rows"/>
@@ -493,8 +572,9 @@ public sealed class GPriorConditional
     /// <summary>c in <c>Cov(β | σ²) = σ²·c·A⁻¹</c>: <c>1/(τ+b)</c> unweighted, 1 weighted.</summary>
     public double CovarianceScale { get; }
 
-    /// <summary>c₀ in <c>Var(α | σ²) = σ²·c₀/m</c> for an intercept apart from centred columns: <c>1/(τ+b)</c> inside the
-    /// g-prior, <c>1/b</c> under the flat prior; null when the basis carries the constant.</summary>
+    /// <summary>c₀ in <c>Var(α | σ²) = σ²·c₀/m</c> for an intercept apart from centred columns, m read as Σwᵢ under weights:
+    /// <c>1/(τ+b)</c> inside the g-prior, <c>1/b</c> under the flat prior; null when the basis or the
+    /// <see cref="PriorPencil"/> carries the constant.</summary>
     public double? InterceptCovarianceScale { get; }
 
     /// <summary>The conditional posterior mean μ.</summary>
@@ -506,6 +586,9 @@ public sealed class GPriorConditional
     /// <inheritdoc cref="GPriorMarginal.LogMarginal"/>
     public double LogMarginal(InverseGamma? sigmaPrior) => _marginal.LogMarginal(sigmaPrior);
 
+    /// <inheritdoc cref="GPriorMarginal.LogMarginalGiven"/>
+    public double LogMarginalGiven(double sigma2) => _marginal.LogMarginalGiven(sigma2);
+
     /// <summary>
     /// A composition draw: σ² from its posterior, then <c>β = μ + √(σ²c)·v</c> with v ~ N(0, A⁻¹) from the factor
     /// (<see cref="GaussianConditional"/>), then an intercept apart from them from its normal. Writes β into
@@ -516,6 +599,18 @@ public sealed class GPriorConditional
         ArgumentNullException.ThrowIfNull(rng);
         if (beta.Length != Columns) throw new ArgumentException("One slot per coefficient is required.", nameof(beta));
         double sigma2 = Sigma2Posterior(sigmaPrior).Sample(rng);
+        SampleGiven(sigma2, rng, beta);
+        return sigma2;
+    }
+
+    /// <summary>
+    /// A draw of β given σ² = <paramref name="sigma2"/>: <c>β = μ + √(σ²c)·v</c>, then an intercept apart from them, into
+    /// <paramref name="beta"/>. The second half of <see cref="Sample"/>; the composition when σ² is held or drawn apart.
+    /// </summary>
+    public void SampleGiven(double sigma2, Xoshiro256PlusPlus rng, Span<double> beta)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (beta.Length != Columns) throw new ArgumentException("One slot per coefficient is required.", nameof(beta));
         int offset = InterceptCovarianceScale is null ? 0 : 1, p = Columns - offset;
         Span<double> z = p <= 128 ? stackalloc double[p] : new double[p];
         Span<double> innovation = p <= 128 ? stackalloc double[p] : new double[p];
@@ -523,8 +618,7 @@ public sealed class GPriorConditional
             GaussianConditional.Perturb(_precision, _mean.AsSpan(offset), rng, beta[offset..], Math.Sqrt(sigma2 * CovarianceScale),
                                         z, innovation);
         if (InterceptCovarianceScale is double c0)
-            beta[0] = _mean[0] + Math.Sqrt(sigma2 * c0 / Rows) * Normal.SampleStandard(rng);
-        return sigma2;
+            beta[0] = _mean[0] + Math.Sqrt(sigma2 * c0 / _interceptMass) * Normal.SampleStandard(rng);
     }
 
     /// <summary>
@@ -596,6 +690,37 @@ public sealed class GPriorConditional
             throw new ArgumentException("The design and response must be the ones this conditional was fitted to.", nameof(design));
         if (!ReferenceEquals(quadratics.Precision, _precision) || !ReferenceEquals(quadratics.Design, design))
             throw new ArgumentException("The quadratic forms were taken in another precision or over another design.", nameof(quadratics));
+        (double[,] block, double[] qr) = LeaveOutBlock(design, y, weights, quadratics);
+        return LeaveOutPredictive.StudentT(block, qr, S, _marginal.DegreesOfFreedom, sigmaPrior?.Shape ?? 0.0, sigmaPrior?.Scale ?? 0.0);
+    }
+
+    /// <summary>
+    /// <see cref="LeaveOutLogDensity(InverseGamma?, double[,], ReadOnlySpan{double}, double[], LeaveOutQuadratics)"/> with σ²
+    /// given: the unit's Gaussian predictive N(·, σ²Q_UU⁻¹), β alone integrated out.
+    /// </summary>
+    public double LeaveOutLogDensityGiven(double sigma2, double[,] design, ReadOnlySpan<double> y, double[]? weights, LeaveOutQuadratics quadratics)
+    {
+        ArgumentNullException.ThrowIfNull(design);
+        ArgumentNullException.ThrowIfNull(quadratics);
+        if (!(sigma2 > 0.0) || double.IsPositiveInfinity(sigma2)) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive and finite.");
+        if (InverseTemperature != 1.0) throw new InvalidOperationException("The leave-out predictive is untempered.");
+        if (design.GetLength(0) != Rows || design.GetLength(1) != Columns || y.Length != Rows)
+            throw new ArgumentException("The design and response must be the ones this conditional was fitted to.", nameof(design));
+        if (!ReferenceEquals(quadratics.Precision, _precision) || !ReferenceEquals(quadratics.Design, design))
+            throw new ArgumentException("The quadratic forms were taken in another precision or over another design.", nameof(quadratics));
+        (double[,] block, double[] qr) = LeaveOutBlock(design, y, weights, quadratics);
+        int m = qr.Length;
+        for (int a = 0; a < m; a++)
+        {
+            qr[a] /= sigma2;
+            for (int c = 0; c < m; c++) block[a, c] /= sigma2;
+        }
+        return LeaveOutPredictive.Gaussian(block, qr);
+    }
+
+    // The unit's precision block Q_UU and its Qr entries, from the forms.
+    private (double[,] Block, double[] Qr) LeaveOutBlock(double[,] design, ReadOnlySpan<double> y, double[]? weights, LeaveOutQuadratics quadratics)
+    {
         int[] unit = quadratics.Unit;
         int m = unit.Length, p = Columns;
         var qr = new double[m];
@@ -613,9 +738,9 @@ public sealed class GPriorConditional
         for (int a = 0; a < m; a++)
             for (int b = 0; b < m; b++)
                 block[a, b] = InterceptCovarianceScale is double c0
-                    ? (a == b ? w[a] : 0.0) - w[a] * w[b] * (CovarianceScale * quadratic[a, b] + c0 / Rows * design[unit[a], 0] * design[unit[b], 0])
+                    ? (a == b ? w[a] : 0.0) - w[a] * w[b] * (CovarianceScale * quadratic[a, b] + c0 / _interceptMass * design[unit[a], 0] * design[unit[b], 0])
                     : (a == b ? w[a] : 0.0) - w[a] * w[b] * CovarianceScale * quadratic[a, b];
-        return LeaveOutPredictive.StudentT(block, qr, S, _marginal.DegreesOfFreedom, sigmaPrior?.Shape ?? 0.0, sigmaPrior?.Scale ?? 0.0);
+        return (block, qr);
     }
 
     /// <summary>
@@ -637,7 +762,7 @@ public sealed class GPriorConditional
         for (int t = 0; t < g; t++)
             for (int j = 1; j < p; j++) centred[t, j - 1] = readoutDesign[t, j];
         double[] variance = p > 1 ? _precision.InverseQuadraticForms(centred, posterior.Mean * CovarianceScale) : new double[g];
-        for (int t = 0; t < g; t++) variance[t] += posterior.Mean * c0 / Rows * readoutDesign[t, 0] * readoutDesign[t, 0];
+        for (int t = 0; t < g; t++) variance[t] += posterior.Mean * c0 / _interceptMass * readoutDesign[t, 0] * readoutDesign[t, 0];
         return variance;
     }
 }
@@ -708,6 +833,21 @@ public abstract class RidgeColumns
     }
 
     private protected abstract RidgeTerms Evaluate(double tau, double b);
+
+    // The terms over a decomposed pencil's eigenvalues and energies.
+    private protected static RidgeTerms SpectralTerms(double[] lambda, double[] q, double tau, double b)
+    {
+        double logDet = 0.0, shrink = 0.0, logDetSlope = 0.0, shrinkSlope = 0.0;
+        for (int j = 0; j < lambda.Length; j++)
+        {
+            double bl = b * lambda[j], h = tau / (bl + tau);
+            logDet -= LogFunctions.Log1p(bl / tau);
+            shrink += q[j] * h;
+            logDetSlope -= lambda[j] / (bl + tau);
+            shrinkSlope += q[j] * h * h;
+        }
+        return new RidgeTerms(0.5 * logDet, shrink, 0.5 * logDetSlope, shrinkSlope);
+    }
 }
 
 /// <summary>
@@ -729,9 +869,10 @@ public sealed class RidgeSpectrum : RidgeColumns
     private readonly double[] _w;           // Vᵀc̃, c̃ = D^(−½)c
     private readonly double[] _q;           // wⱼ²/λⱼ
 
-    private RidgeSpectrum(int rows, double[] lambda, double[][] vectors, double[] root, double[] w)
+    private RidgeSpectrum(int rows, double mass, double[] lambda, double[][] vectors, double[] root, double[] w)
     {
         Rows = rows;
+        Mass = mass;
         _lambda = lambda;
         _vectors = vectors;
         _root = root;
@@ -743,23 +884,26 @@ public sealed class RidgeSpectrum : RidgeColumns
     /// <summary>
     /// The spectrum of the centred design whose Gram is <paramref name="centredGram"/> (G_c = Z_cᵀZ_c, positive definite)
     /// and cross products <paramref name="crossResponse"/> (Z_cᵀỹ), over <paramref name="rows"/> observations; an empty Gram
-    /// is the intercept-only structure.
+    /// is the intercept-only structure. Under weights the Gram and cross products are the weighted fit's and
+    /// <paramref name="mass"/> is Σwᵢ, which D's normalization then reads in place of N; null is N.
     /// </summary>
-    public static RidgeSpectrum Of(double[,] centredGram, ReadOnlySpan<double> crossResponse, int rows)
+    public static RidgeSpectrum Of(double[,] centredGram, ReadOnlySpan<double> crossResponse, int rows, double? mass = null)
     {
         ArgumentNullException.ThrowIfNull(centredGram);
         int m = centredGram.GetLength(0);
         if (centredGram.GetLength(1) != m) throw new ArgumentException("The Gram must be square.", nameof(centredGram));
         if (crossResponse.Length != m) throw new ArgumentException("One cross product per column is required.", nameof(crossResponse));
         if (rows < 1) throw new ArgumentOutOfRangeException(nameof(rows));
+        double total = mass ?? rows;
+        if (!(total > 0.0) || double.IsPositiveInfinity(total)) throw new ArgumentOutOfRangeException(nameof(mass));
         var root = new double[m];
         for (int i = 0; i < m; i++)
         {
             double g = centredGram[i, i];
             if (!(g > 0.0 && double.IsFinite(g))) throw new ArgumentException($"Column {i} has no spread.", nameof(centredGram));
-            root[i] = Math.Sqrt(g / rows);
+            root[i] = Math.Sqrt(g / total);
         }
-        if (m == 0) return new RidgeSpectrum(rows, [], [], [], []);
+        if (m == 0) return new RidgeSpectrum(rows, total, [], [], [], []);
         var unit = new double[m * m];   // G̃/N, symmetric, so its row- and column-major layouts agree
         for (int i = 0; i < m; i++)
             for (int j = 0; j < m; j++)
@@ -769,23 +913,26 @@ public sealed class RidgeSpectrum : RidgeColumns
         var w = new double[m];
         for (int j = 0; j < m; j++)
         {
-            lambda[j] = rows * eigen.Eigenvalues[j];
+            lambda[j] = total * eigen.Eigenvalues[j];
             if (!(lambda[j] > 0.0)) throw new ArgumentException("The Gram is not positive definite: the structure lies outside F.", nameof(centredGram));
             double[] v = eigen.Eigenvectors[j];
             double sum = 0.0;
             for (int i = 0; i < m; i++) sum += v[i] * crossResponse[i] / root[i];
             w[j] = sum;
         }
-        return new RidgeSpectrum(rows, lambda, eigen.Eigenvectors, root, w);
+        return new RidgeSpectrum(rows, total, lambda, eigen.Eigenvectors, root, w);
     }
 
-    /// <summary>N, the observations D's normalization reads.</summary>
+    /// <summary>N, the observations.</summary>
     public int Rows { get; }
+
+    /// <summary>What D's normalization reads: N, or Σwᵢ under weights.</summary>
+    public double Mass { get; }
 
     /// <inheritdoc/>
     public override int Count => _lambda.Length;
 
-    /// <summary>The normalized Gram's eigenvalues λⱼ, descending; their sum is N·M.</summary>
+    /// <summary>The normalized Gram's eigenvalues λⱼ, descending; their sum is <see cref="Mass"/>·M.</summary>
     public ReadOnlySpan<double> Eigenvalues => _lambda;
 
     /// <summary>Q_c = Σⱼ qⱼ, the least-squares fit's energy as the spectrum reads it.</summary>
@@ -799,19 +946,7 @@ public sealed class RidgeSpectrum : RidgeColumns
         }
     }
 
-    private protected override RidgeTerms Evaluate(double tau, double b)
-    {
-        double logDet = 0.0, shrink = 0.0, logDetSlope = 0.0, shrinkSlope = 0.0;
-        for (int j = 0; j < _lambda.Length; j++)
-        {
-            double bl = b * _lambda[j], h = tau / (bl + tau);
-            logDet -= LogFunctions.Log1p(bl / tau);
-            shrink += _q[j] * h;
-            logDetSlope -= _lambda[j] / (bl + tau);
-            shrinkSlope += _q[j] * h * h;
-        }
-        return new RidgeTerms(0.5 * logDet, shrink, 0.5 * logDetSlope, shrinkSlope);
-    }
+    private protected override RidgeTerms Evaluate(double tau, double b) => SpectralTerms(_lambda, _q, tau, b);
 
     /// <summary>
     /// The candidate with one column added last: <paramref name="border"/> its Gram entries against the current columns,
@@ -906,7 +1041,7 @@ public sealed class RidgeSpectrum : RidgeColumns
             }
             if (!_added) return;
             if (!(diagonal > 0.0 && double.IsFinite(diagonal))) throw new ArgumentException("The new column has no spread.", nameof(diagonal));
-            double root = Math.Sqrt(diagonal / parent.Rows);
+            double root = Math.Sqrt(diagonal / parent.Mass);
             var normalized = new double[m];
             for (int i = 0; i < m; i++) normalized[i] = i == removed ? 0.0 : border[i] / (parent._root[i] * root);
             _a = new double[m];
@@ -918,7 +1053,7 @@ public sealed class RidgeSpectrum : RidgeColumns
                 _a[j] = sum;
             }
             _cross = cross / root;
-            _schur = parent.Rows - ReducedInverseForm(_a, _a);
+            _schur = parent.Mass - ReducedInverseForm(_a, _a);
         }
 
         public override int Count => _parent.Count - (_removed >= 0 ? 1 : 0) + (_added ? 1 : 0);
@@ -942,7 +1077,8 @@ public sealed class RidgeSpectrum : RidgeColumns
         private protected override RidgeTerms Evaluate(double tau, double b)
         {
             double[] lambda = _parent._lambda;
-            int m = lambda.Length, n = _parent.Rows;
+            int m = lambda.Length;
+            double n = _parent.Mass;
             var h = new double[m];
             double logDet = 0.0, trace = 0.0;
             for (int j = 0; j < m; j++)
@@ -1041,7 +1177,7 @@ public sealed class RidgeSpectrum : RidgeColumns
             for (int i = 0; i < m; i++) logDet += 2.0 * Math.Log(spectrum._root[i]);
             LogDet = logDet;
             // The normalized precision's eigenvalues stand in for pivots; its diagonal is bN + τ.
-            Status = new FactorStatus(true, 0, min, max, m == 0 ? 1.0 : min / (b * spectrum.Rows + tau));
+            Status = new FactorStatus(true, 0, min, max, m == 0 ? 1.0 : min / (b * spectrum.Mass + tau));
         }
 
         public int Dimension => _spectrum.Count;
@@ -1131,13 +1267,15 @@ public sealed class CollapsedRidgePrior
 {
     private readonly RidgeSpectrum _spectrum;
     private readonly double _rss, _responseMean, _level;
+    private readonly GPriorWeights _weights;
 
-    private CollapsedRidgePrior(RidgeSpectrum spectrum, double rss, double responseMean, GPriorCentre intercept, double level)
+    private CollapsedRidgePrior(RidgeSpectrum spectrum, double rss, double responseMean, GPriorCentre intercept, double level, GPriorWeights weights)
     {
         _spectrum = spectrum;
         _rss = rss;
         _responseMean = responseMean;
         _level = level;
+        _weights = weights;
         Intercept = intercept;
     }
 
@@ -1145,14 +1283,17 @@ public sealed class CollapsedRidgePrior
     /// The block for the centred design decomposed as <paramref name="spectrum"/>, whose least-squares fit of ỹ = y − ȳ
     /// leaves <paramref name="residualSumOfSquares"/>, with ȳ = <paramref name="responseMean"/> and the intercept placed by
     /// <paramref name="intercept"/> (the median centre refused, as <see cref="CollapsedGPrior.FromCentredLeastSquares"/>
-    /// refuses it).
+    /// refuses it). <paramref name="weights"/> carries observation weights, the spectrum and ‖r‖² then the weighted fit's; null
+    /// is unit weights.
     /// </summary>
-    public static CollapsedRidgePrior FromCentred(RidgeSpectrum spectrum, double residualSumOfSquares, double responseMean, GPriorCentre intercept)
+    public static CollapsedRidgePrior FromCentred(RidgeSpectrum spectrum, double residualSumOfSquares, double responseMean, GPriorCentre intercept,
+                                                  GPriorWeights? weights = null)
     {
         ArgumentNullException.ThrowIfNull(spectrum);
         if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
-        double level = CollapsedGPrior.CentredLevel(spectrum.Rows, responseMean, intercept);
-        return new CollapsedRidgePrior(spectrum, residualSumOfSquares, responseMean, intercept, level);
+        GPriorWeights w = weights ?? GPriorWeights.Unit(spectrum.Rows);
+        double level = CollapsedGPrior.CentredLevel(w.Mass, responseMean, intercept);
+        return new CollapsedRidgePrior(spectrum, residualSumOfSquares, responseMean, intercept, level, w);
     }
 
     /// <summary>Observations N.</summary>
@@ -1167,7 +1308,7 @@ public sealed class CollapsedRidgePrior
     /// <summary>The marginal at (<paramref name="tau"/>, <paramref name="inverseTemperature"/>)
     /// (<see cref="CollapsedGPrior.CentredRidgeMarginalAt"/>).</summary>
     public GPriorMarginal MarginalAt(double tau, double inverseTemperature = 1.0)
-        => CollapsedGPrior.CentredRidgeMarginalAt(_spectrum, _rss, Rows, _responseMean, Intercept, tau, inverseTemperature);
+        => CollapsedGPrior.CentredRidgeMarginalAt(_spectrum, _rss, Rows, _responseMean, Intercept, tau, inverseTemperature, _weights);
 
     /// <summary>
     /// The conditional posterior at (<paramref name="tau"/>, <paramref name="inverseTemperature"/>): β_c | σ² ~
@@ -1177,11 +1318,11 @@ public sealed class CollapsedRidgePrior
     public GPriorConditional At(double tau, double inverseTemperature = 1.0)
     {
         GPriorMarginal marginal = MarginalAt(tau, inverseTemperature);
-        double b = inverseTemperature, bn = b * Rows;
+        double b = inverseTemperature, bn = b * _weights.Mass;
         var mean = new double[Columns];
         bool flat = Intercept == GPriorCentre.Flat;
         mean[0] = flat ? _responseMean : _level + bn / (bn + tau) * (_responseMean - _level);
         _spectrum.PosteriorMean(tau, b, mean.AsSpan(1));
-        return new GPriorConditional(_spectrum.Factor(tau, b), mean, marginal, 1.0, Columns, flat ? 1.0 / b : Rows / (bn + tau));
+        return new GPriorConditional(_spectrum.Factor(tau, b), mean, marginal, 1.0, Columns, flat ? 1.0 / b : _weights.Mass / (bn + tau), _weights.Mass);
     }
 }

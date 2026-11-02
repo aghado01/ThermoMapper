@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Maths.LinAlg;
 using Maths.Regression.GPrior;
 
@@ -27,16 +28,20 @@ public enum BassRefusal
 
 /// <summary>A design's restart state (<see cref="BassDesign.Snapshot"/>): its terms in column order, a copy of its
 /// factor, and its coefficients, residual and statistics; for an in-memory hand-over, also its evaluated columns, shared
-/// (null in a checkpoint, which restores them from the terms); and under the ridge its spectrum when it has one, an
-/// immutable value the restored design shares.</summary>
+/// (null in a checkpoint, which restores them from the terms); and under the ridge its spectrum when it has one, or under a
+/// prior apart from its Gram its pencil, immutable values the restored design shares.</summary>
 internal sealed record BassDesignSnapshot(BassTerm[] Terms, BorderedCholesky Factor, double[] Beta, double[] Residual,
                                           double ResidualSquares, double FittedSquares, BassDesignColumns? Columns = null,
-                                          RidgeSpectrum? Spectrum = null);
+                                          RidgeSpectrum? Spectrum = null, PriorPencil? Pencil = null);
 
-/// <summary>A design's evaluated columns in column order: each term's case side, its output side for a direct response,
-/// and its cross product with the response. A design never writes into a column once evaluated, so designs over the
-/// same data can share them.</summary>
-internal sealed record BassDesignColumns(double[][] Cases, double[][]? Outputs, double[] CrossResponses);
+/// <summary>A design's evaluated columns in column order: each term's case side, its output side for a direct response held
+/// as the Khatri–Rao pair, and its cross product with the response; under a prior apart from its Gram, each term's prior
+/// side too. A design never writes into a column once evaluated, so designs over the same data can share them.</summary>
+internal sealed record BassDesignColumns(double[][] Cases, double[][]? Outputs, double[] CrossResponses, BassPriorColumn[]? Priors = null);
+
+/// <summary>A column on the prior's side: centred over N rows free of the weights, with δ = z̄ − z̄_w, the two centres' gap,
+/// which couples the intercept to the column in the coordinates the design holds.</summary>
+internal sealed record BassPriorColumn(double[] Centred, double Shift);
 
 /// <summary>The admission rules a design applies, resolved from the config on the data.</summary>
 public sealed record BassAdmission(
@@ -56,8 +61,8 @@ public sealed record BassAdmission(
 /// <summary>
 /// A proposed structure's account: admitted, or refused with its reason; and, when admitted, its column count, its
 /// residual and fitted sums of squares in the centred basis, its smallest leave-one-out angle (D06's gate), the new
-/// column's angle to the span of the others (NaN for a death), and under the ridge its columns' terms at any (τ, b)
-/// (<see cref="RidgeColumns"/>; null under the g-form).
+/// column's angle to the span of the others (NaN for a death), and under a prior the g-form's closed form does not serve
+/// its columns' terms at any (τ, b) (<see cref="RidgeColumns"/>; null under the g-form on the design's own Gram).
 /// </summary>
 public readonly record struct DesignProposal(
     BassRefusal? Refusal, int Columns, double ResidualSquares, double FittedSquares, double MinAngle, double NewestAngle,
@@ -98,6 +103,16 @@ public readonly record struct DesignProposal(
 /// columns' ridge terms: a bordered candidate of the current spectrum, O(M²) to start and O(M) per (τ, b), or, where the
 /// strict factorization decided admission near s_min, the candidate's own fresh decomposition, which an acceptance then
 /// keeps. Admission is the same under either form, so F is unchanged.</para>
+/// <para><b>Under weights</b> (<see cref="WorkingResponse.Weights"/>) the rows are whitened: a column is held as
+/// W^½(z − z̄_w), centred under W, and the response as W^½(y − ȳ_w). Every inner product above then reads the weighted form,
+/// so bordering, rebuilds, the gate and the statistics carry the weights with no branch of their own: G_c = Z_cᵀWZ_c,
+/// b_c = Z_cᵀWỹ, ‖r‖² = ‖r‖²_W, and the intercept's Gram entry is Σwᵢ. A direct functional design holds its stacked columns,
+/// since per-row weights do not contract through the Khatri–Rao pair. The support threshold reads the raw parts, or a scalar
+/// response's rows as the weights count them under <see cref="WeightMeaning.Replication"/>.</para>
+/// <para><b>With the prior free of the weights</b> (<see cref="WeightedPriorGram.Unweighted"/>, D03's robust row) the design also
+/// holds each column on the prior's side and carries a <see cref="PriorPencil"/> for each admitted proposal, in the coordinates
+/// (α, β_c) with the columns centred under W. The prior's own Gram must clear the angle gate too, since it is a precision; so
+/// F is unchanged by the weights when they are unit.</para>
 /// Not thread-safe: one per chain.
 /// </summary>
 public sealed class BassDesign
@@ -108,12 +123,20 @@ public sealed class BassDesign
     private enum Move { Birth, Death, Change }
 
     private sealed record Pending(Move Kind, int Index, BassTerm? Term, double[]? Column, double[]? Output, double BEntry,
-                                  double[,]? Strict, DesignProposal Account, RidgeSpectrum? Fresh = null);
+                                  double[,]? Strict, DesignProposal Account, RidgeSpectrum? Fresh = null, BassPriorColumn? Prior = null,
+                                  double[,]? PriorGram = null, PriorPencil? Pencil = null);
 
     private readonly BassBasis _basis;
     private readonly BassAdmission _rules;
     private readonly bool _functional, _ridge;
+    private readonly bool _khatriRao;               // a direct response held as case and output factors, its rows unweighted
     private readonly int _cases, _locations, _rows;
+    private readonly double[]? _weights, _roots;    // W and W^½; null at unit weights
+    private readonly double[]? _counted;            // a scalar response's weights, when they count rows for the support threshold
+    private readonly GPriorCentre _intercept;       // what a prior apart from the Gram does with the intercept
+    private readonly List<BassPriorColumn>? _priorColumns;   // the prior's side, when it stands apart from the Gram
+    private double[,]? _priorGram;                  // G_c on the prior's side
+    private PriorPencil? _pencil;                   // the current structure's; null until read
     private readonly IInnerProduct _output;         // Q on the output index; the identity for independent noise
     private readonly double[] _y;                   // ỹ, case by case and location by location
     private readonly double[] _residual;
@@ -129,8 +152,10 @@ public sealed class BassDesign
 
     /// <summary>The intercept-only design over <paramref name="basis"/>'s inputs for <paramref name="working"/>, the
     /// observation model's working response for <paramref name="data"/>'s (the response itself when null);
-    /// <paramref name="ridge"/> keeps the normalized ridge's spectrum and proposal terms beside the factor.</summary>
-    public BassDesign(BassBasis basis, BassData data, BassAdmission rules, bool ridge = false, WorkingResponse? working = null)
+    /// <paramref name="ridge"/> keeps the normalized ridge's spectrum and proposal terms beside the factor; and
+    /// <paramref name="intercept"/> places the intercept for a prior apart from the Gram, which alone reads it.</summary>
+    public BassDesign(BassBasis basis, BassData data, BassAdmission rules, bool ridge = false, WorkingResponse? working = null,
+                      GPriorCentre intercept = GPriorCentre.Mean)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(data);
@@ -147,15 +172,34 @@ public sealed class BassDesign
         if (basis.Inputs.Cases.Cases != _cases) throw new ArgumentException("The basis was not prepared from these data.", nameof(basis));
         working ??= new WorkingResponse(data.Response);
         if (!ReferenceEquals(working.Response, data.Response)) throw new ArgumentException("The working response is of another response.", nameof(working));
-        if (!working.IsUnweighted)
-            throw new NotSupportedException("The core holds the unweighted Gram; weights arrive with the extension that supplies them (F-X1).");
+        _intercept = intercept;
         _output = working.Output;
         if (!_output.IsIdentity)
             throw new NotSupportedException("The core holds the independent Gram; a Q other than the identity arrives with the extension that centres under it (F-X6).");
+        _weights = working.WeightArray;
+        _khatriRao = _functional && _weights is null;
         ReadOnlySpan<double> y = working.Values;
-        ResponseMean = PairwiseSum.Of(y) / _rows;
+        ResponseMean = working.ResponseMean;
+        Weighting = working.Weighting;
         _y = new double[_rows];
         for (int i = 0; i < _rows; i++) _y[i] = y[i] - ResponseMean;
+        if (_weights is not null)
+        {
+            _roots = new double[_rows];
+            for (int i = 0; i < _rows; i++)
+            {
+                _roots[i] = Math.Sqrt(_weights[i]);
+                _y[i] *= _roots[i];
+            }
+            if (!_functional && working.Meaning == WeightMeaning.Replication) _counted = _weights;
+            if (working.PriorStandsApart)
+            {
+                if (intercept is not (GPriorCentre.Mean or GPriorCentre.Zero or GPriorCentre.Flat)) throw new ArgumentOutOfRangeException(nameof(intercept));
+                _priorColumns = [];
+                _priorGram = new double[0, 0];
+                PriorLevel = intercept == GPriorCentre.Zero ? 0.0 : PairwiseSum.Of(y) / _rows;
+            }
+        }
         ResponseSquares = _output.Dot(_y, _y);
         _residual = (double[])_y.Clone();
         ResidualSquares = ResponseSquares;
@@ -171,13 +215,19 @@ public sealed class BassDesign
     /// <summary>N, the observations.</summary>
     public int Observations => _rows;
 
-    /// <summary>ȳ, the response's mean over all N observations.</summary>
+    /// <summary>The count, the mass and Σ ln wᵢ the marginal reads beyond these statistics; (N, N, 0) at unit weights.</summary>
+    public GPriorWeights Weighting { get; }
+
+    /// <summary>ȳ, the response's mean over all N observations under W.</summary>
     public double ResponseMean { get; }
 
-    /// <summary>‖ỹ‖² = ‖y − ȳ‖².</summary>
+    /// <summary>The level a prior apart from the Gram centres the intercept on, free of the weights; 0 otherwise.</summary>
+    public double PriorLevel { get; }
+
+    /// <summary>‖ỹ‖²_W = ‖y − ȳ‖²_W.</summary>
     public double ResponseSquares { get; }
 
-    /// <summary>‖r‖², the fit's residual sum of squares, from the explicit residual.</summary>
+    /// <summary>‖r‖²_W, the fit's residual sum of squares, from the explicit residual.</summary>
     public double ResidualSquares { get; private set; }
 
     /// <summary>Q_c = b_cᵀG_c⁻¹b_c, the fitted sum of squares in the centred basis.</summary>
@@ -186,14 +236,30 @@ public sealed class BassDesign
     /// <summary>β̂_c, the least-squares coefficients of the centred columns.</summary>
     public ReadOnlySpan<double> Coefficients => _beta;
 
-    /// <summary>The explicit residual r = ỹ − Z_cβ̂, case by case and location by location.</summary>
+    /// <summary>The explicit residual r = ỹ − Z_cβ̂, whitened (W^½r) under weights, case by case and location by location.</summary>
     public ReadOnlySpan<double> Residual => _residual;
 
     /// <summary>The factor of G_c, in the terms' order.</summary>
     public ISpdFactor Factor => _factor;
 
-    /// <summary>Whether the design keeps the normalized ridge's spectrum and proposal terms.</summary>
+    /// <summary>Whether the coefficient prior's form is the normalized ridge.</summary>
     public bool IsRidge => _ridge;
+
+    /// <summary>The current structure's terms for a prior the g-form's closed form does not serve: the normalized ridge's
+    /// <see cref="Spectrum"/>, or the <see cref="Pencil"/> of a prior apart from the Gram; null otherwise.</summary>
+    public RidgeColumns? PriorTerms => _priorColumns is not null ? Pencil : _ridge ? Spectrum : null;
+
+    /// <summary>The current structure's pencil, under weights with the prior free of them; null otherwise.</summary>
+    public PriorPencil? Pencil
+    {
+        get
+        {
+            if (_priorColumns is null) return null;
+            if (_pencil is { } cached) return cached;
+            return _pencil = PencilOf(CurrentGram(), _priorGram!, CurrentShifts(), [.. _b])
+                ?? throw new InvalidOperationException("The current structure's prior is not positive definite.");
+        }
+    }
 
     /// <summary>The current structure's spectrum under the normalized ridge, decomposed from the Gram when first read after
     /// the structure changed; a ridge design only.</summary>
@@ -202,12 +268,13 @@ public sealed class BassDesign
         get
         {
             if (!_ridge) throw new InvalidOperationException("The design holds the g-form; it keeps no ridge spectrum.");
+            if (_priorColumns is not null) throw new InvalidOperationException("The prior stands apart from the Gram; the design keeps a pencil, not a spectrum.");
             if (_spectrum is { } cached) return cached;
             int n = _terms.Count;
             var g = new double[n, n];
             for (int i = 0; i < n; i++)
                 for (int j = 0; j < n; j++) g[i, j] = _factor.Entry(i, j);
-            return _spectrum = RidgeSpectrum.Of(g, [.. _b], _rows);
+            return _spectrum = RidgeSpectrum.Of(g, [.. _b], _rows, Weighting.Mass);
         }
     }
 
@@ -225,13 +292,13 @@ public sealed class BassDesign
         _pending = null;
         if (_terms.Count >= _rules.MaxBasis) return DesignProposal.Refused(BassRefusal.Cap);
         if (_terms.Contains(term)) return DesignProposal.Refused(BassRefusal.Numerical);
-        if (Evaluate(term) is not var (column, output)) return DesignProposal.Refused(BassRefusal.Support);
+        if (Evaluate(term) is not var (column, output, prior)) return DesignProposal.Refused(BassRefusal.Support);
         EnsureCapacity(_terms.Count + 1);
         double[] border = Border(column, output, -1, out double diagonal);
         double bEntry = CrossResponse(column, output);
         FactorProposal p = _factor.ProposeBirth(border, diagonal);
         return Decide(Move.Birth, _terms.Count, term, column, output, border, border, diagonal, bEntry, p,
-                      ResidualSquares, CrossResidual(column, output));
+                      ResidualSquares, CrossResidual(column, output), prior);
     }
 
     /// <summary>Proposes removing term <paramref name="index"/>. A death never leaves F, since the gate is downward closed.</summary>
@@ -243,6 +310,15 @@ public sealed class BassDesign
         double[] b = Without(_b, index);
         double q = _factor.ProposedInverseQuadraticForm(b);
         double rss = ResidualSquares + _beta[index] * _beta[index] / _factor.InverseDiagonal(index);
+        if (_priorColumns is not null)
+        {
+            // Downward closed: a principal block of a positive definite prior Gram stays so.
+            double[,] priorGram = PriorGramWithout(index);
+            PriorPencil pencil = PencilOf(Without(CurrentGram(), index), priorGram, Without(CurrentShifts(), index), b)!;
+            var apart = new DesignProposal(null, _terms.Count - 1, rss, q, p.MinLeaveOneOutPivot, double.NaN, pencil);
+            _pending = new Pending(Move.Death, index, null, null, null, 0.0, null, apart, null, null, priorGram, pencil);
+            return apart;
+        }
         var account = new DesignProposal(null, _terms.Count - 1, rss, q, p.MinLeaveOneOutPivot, double.NaN, _ridge ? Spectrum.Death(index) : null);
         _pending = new Pending(Move.Death, index, null, null, null, 0.0, null, account);
         return account;
@@ -256,13 +332,12 @@ public sealed class BassDesign
         _pending = null;
         if (term.Equals(_terms[index]))   // the same state
         {
-            var same = new DesignProposal(null, _terms.Count, ResidualSquares, FittedSquares, MinAngle, _factor.LeaveOneOutPivot(index),
-                                          _ridge ? Spectrum : null);
+            var same = new DesignProposal(null, _terms.Count, ResidualSquares, FittedSquares, MinAngle, _factor.LeaveOneOutPivot(index), PriorTerms);
             _pending = new Pending(Move.Change, index, term, null, null, 0.0, null, same);
             return same;
         }
         if (_terms.Contains(term)) return DesignProposal.Refused(BassRefusal.Numerical);
-        if (Evaluate(term) is not var (column, output)) return DesignProposal.Refused(BassRefusal.Support);
+        if (Evaluate(term) is not var (column, output, prior)) return DesignProposal.Refused(BassRefusal.Support);
         double[] full = Border(column, output, -1, out double diagonal);
         double bEntry = CrossResponse(column, output);
 
@@ -276,7 +351,7 @@ public sealed class BassDesign
 
         double[] border = Without(full, index);
         FactorProposal p = _factor.ProposeChange(index, border, diagonal);
-        return Decide(Move.Change, index, term, column, output, border, full, diagonal, bEntry, p, rssReduced, zrReduced);
+        return Decide(Move.Change, index, term, column, output, border, full, diagonal, bEntry, p, rssReduced, zrReduced, prior);
     }
 
     /// <summary>Commits the last proposal, which must have been admitted.</summary>
@@ -292,15 +367,22 @@ public sealed class BassDesign
         {
             _terms.RemoveAt(p.Index);
             _a.RemoveAt(p.Index);
-            if (_functional) _h.RemoveAt(p.Index);
+            if (_khatriRao) _h.RemoveAt(p.Index);
             _b.RemoveAt(p.Index);
+            _priorColumns?.RemoveAt(p.Index);
         }
         if (p.Kind is Move.Birth or Move.Change)
         {
             _terms.Add(p.Term!);
             _a.Add(p.Column!);
-            if (_functional) _h.Add(p.Output!);
+            if (_khatriRao) _h.Add(p.Output!);
             _b.Add(p.BEntry);
+            if (p.Prior is { } prior) _priorColumns!.Add(prior);
+        }
+        if (_priorColumns is not null)
+        {
+            _priorGram = p.PriorGram;
+            _pencil = p.Pencil;
         }
         Refit();
     }
@@ -317,12 +399,14 @@ public sealed class BassDesign
         var seen = new HashSet<BassTerm>();
         var columns = new List<double[]>(terms.Count);
         var outputs = new List<double[]>(terms.Count);
+        var priors = new List<BassPriorColumn>(terms.Count);
         foreach (BassTerm term in terms)
         {
             if (!seen.Add(term)) return BassRefusal.Numerical;
-            if (Evaluate(term) is not var (column, output)) return BassRefusal.Support;
+            if (Evaluate(term) is not var (column, output, prior)) return BassRefusal.Support;
             columns.Add(column);
-            if (_functional) outputs.Add(output!);
+            if (_khatriRao) outputs.Add(output!);
+            if (prior is not null) priors.Add(prior);
         }
         double[,] g = Gram(columns, outputs);
         var fresh = new BorderedCholesky(Math.Max(_factor.Capacity, terms.Count));
@@ -331,14 +415,30 @@ public sealed class BassDesign
         double minAngle = fresh.MinLeaveOneOutPivot();
         if (minAngle < _rules.AngleFloor) return BassRefusal.Numerical;
         if (_rules.MaxVarianceInflation is { } cap && minAngle * cap < 1.0) return BassRefusal.VarianceInflation;
+        var b = new double[columns.Count];
+        for (int j = 0; j < columns.Count; j++) b[j] = CrossResponse(columns[j], _khatriRao ? outputs[j] : null);
+        double[,]? priorGram = null;
+        PriorPencil? pencil = null;
+        if (_priorColumns is not null)
+        {
+            priorGram = PriorGramOf(priors);
+            double[] shifts = [.. priors.Select(c => c.Shift)];
+            if (PencilOf(g, priorGram, shifts, b) is not { } admitted) return BassRefusal.Numerical;
+            pencil = admitted;
+        }
 
         _factor = fresh;
         _spectrum = null;
         _terms.Clear(); _terms.AddRange(terms);
         _a.Clear(); _a.AddRange(columns);
         _h.Clear(); _h.AddRange(outputs);
-        _b.Clear();
-        for (int j = 0; j < columns.Count; j++) _b.Add(CrossResponse(columns[j], _functional ? outputs[j] : null));
+        _b.Clear(); _b.AddRange(b);
+        if (_priorColumns is not null)
+        {
+            _priorColumns.Clear(); _priorColumns.AddRange(priors);
+            _priorGram = priorGram;
+            _pencil = pencil;
+        }
         Refit();
         return null;
     }
@@ -352,7 +452,8 @@ public sealed class BassDesign
     /// </summary>
     internal BassDesignSnapshot Snapshot(bool shareColumns = false)
         => new([.. _terms], _factor.Copy(), (double[])_beta.Clone(), (double[])_residual.Clone(), ResidualSquares, FittedSquares,
-               shareColumns ? new BassDesignColumns([.. _a], _functional ? [.. _h] : null, [.. _b]) : null, _spectrum);
+               shareColumns ? new BassDesignColumns([.. _a], _khatriRao ? [.. _h] : null, [.. _b], _priorColumns is null ? null : [.. _priorColumns]) : null,
+               _spectrum, _pencil);
 
     /// <summary>Replaces the structure with <paramref name="snapshot"/>'s, every statistic as the design it was taken from
     /// held it, so the two continue bit for bit; its columns shared when it carries them, else re-evaluated.</summary>
@@ -363,8 +464,9 @@ public sealed class BassDesign
             throw new ArgumentException("The snapshot is not a design's over these data.", nameof(snapshot));
         if (snapshot.Columns is { } shared
             && (shared.Cases.Length != snapshot.Terms.Length || shared.CrossResponses.Length != snapshot.Terms.Length
-                || (shared.Outputs is null) == _functional || shared.Outputs is { } o && o.Length != snapshot.Terms.Length
-                || Array.Exists(shared.Cases, c => c.Length != _cases)
+                || (shared.Outputs is null) == _khatriRao || shared.Outputs is { } o && o.Length != snapshot.Terms.Length
+                || (shared.Priors is null) == (_priorColumns is not null) || shared.Priors is { } q && q.Length != snapshot.Terms.Length
+                || Array.Exists(shared.Cases, c => c.Length != (_khatriRao ? _cases : _rows))
                 || shared.Outputs is { } h && Array.Exists(h, c => c.Length != _locations)))
             throw new ArgumentException("The snapshot's columns are not its terms' over these data.", nameof(snapshot));
         _pending = null;
@@ -372,23 +474,32 @@ public sealed class BassDesign
         _a.Clear();
         _h.Clear();
         _b.Clear();
+        _priorColumns?.Clear();
         if (snapshot.Columns is { } columns)
         {
             _terms.AddRange(snapshot.Terms);
             _a.AddRange(columns.Cases);
-            if (_functional) _h.AddRange(columns.Outputs!);
+            if (_khatriRao) _h.AddRange(columns.Outputs!);
             _b.AddRange(columns.CrossResponses);
+            if (columns.Priors is { } held) _priorColumns!.AddRange(held);
         }
         else foreach (BassTerm term in snapshot.Terms)
         {
-            if (Evaluate(term) is not var (column, output)) throw new ArgumentException($"The snapshot holds {term}, which lacks support here.", nameof(snapshot));
+            if (Evaluate(term) is not var (column, output, prior)) throw new ArgumentException($"The snapshot holds {term}, which lacks support here.", nameof(snapshot));
             _terms.Add(term);
             _a.Add(column);
-            if (_functional) _h.Add(output!);
+            if (_khatriRao) _h.Add(output!);
             _b.Add(CrossResponse(column, output));
+            if (prior is not null) _priorColumns!.Add(prior);
         }
         _factor = snapshot.Factor.Copy();
         _spectrum = _ridge ? snapshot.Spectrum : null;
+        if (_priorColumns is not null)
+        {
+            _priorGram = PriorGramOf(_priorColumns);
+            _pencil = snapshot.Pencil;
+            _spectrum = null;
+        }
         _beta = (double[])snapshot.Beta.Clone();
         snapshot.Residual.CopyTo(_residual, 0);
         ResidualSquares = snapshot.ResidualSquares;
@@ -406,7 +517,8 @@ public sealed class BassDesign
 
     // `border` is the new column's Gram entries against the candidate's other columns, `full` against every current one.
     private DesignProposal Decide(Move kind, int index, BassTerm term, double[] column, double[]? output, double[] border,
-                                  double[] full, double diagonal, double bEntry, FactorProposal p, double rssReduced, double zrReduced)
+                                  double[] full, double diagonal, double bEntry, FactorProposal p, double rssReduced, double zrReduced,
+                                  BassPriorColumn? prior = null)
     {
         double floor = _rules.AngleFloor;
         double[] b = kind == Move.Change ? Without(_b, index) : [.. _b];
@@ -441,41 +553,163 @@ public sealed class BassDesign
         // own decomposition, which an acceptance keeps.
         RidgeColumns? ridge = null;
         RidgeSpectrum? fresh = null;
-        if (_ridge)
-            ridge = strict is not null ? fresh = RidgeSpectrum.Of(strict, b, _rows)
+        double[,]? priorGram = null;
+        PriorPencil? pencil = null;
+        if (_priorColumns is not null)
+        {
+            int skip = kind == Move.Change ? index : -1;
+            priorGram = PriorGramWith(skip, prior!);
+            double[] shifts = skip >= 0 ? Without(CurrentShifts(), skip) : CurrentShifts();
+            Array.Resize(ref shifts, shifts.Length + 1);
+            shifts[^1] = prior!.Shift;
+            pencil = PencilOf(strict ?? Candidate(skip, border, diagonal), priorGram, shifts, b);
+            if (pencil is null) return DesignProposal.Refused(BassRefusal.Numerical);
+            ridge = pencil;
+        }
+        else if (_ridge)
+            ridge = strict is not null ? fresh = RidgeSpectrum.Of(strict, b, _rows, Weighting.Mass)
                   : kind == Move.Birth ? Spectrum.Birth(full, diagonal, bEntry) : Spectrum.Change(index, full, diagonal, bEntry);
         var account = new DesignProposal(null, kind == Move.Birth ? _terms.Count + 1 : _terms.Count, Math.Max(rss, 0.0), q, minAngle, newest, ridge);
-        _pending = new Pending(kind, index, term, column, output, bEntry, strict, account, fresh);
+        _pending = new Pending(kind, index, term, column, output, bEntry, strict, account, fresh, prior, priorGram, pencil);
         return account;
     }
 
     // The term's columns, or null when it falls short of the support threshold in a part. Scalar: the centred case
-    // column. Direct: the case-side and output-side factors as evaluated.
-    private (double[] Column, double[]? Output)? Evaluate(BassTerm term)
+    // column. Direct: the case-side and output-side factors as evaluated. Under weights: the whitened column over all N rows,
+    // stacked for a direct response, and its prior side when the prior stands apart.
+    private (double[] Column, double[]? Output, BassPriorColumn? Prior)? Evaluate(BassTerm term)
     {
         _basis.Validate(term);
         var a = new double[_cases];
         _basis.CaseColumn(term, _basis.Inputs.Cases, a);
-        if (!Supported(a, _rules.SupportMinimum)) return null;
+        if (!Supported(a, _rules.SupportMinimum, _counted)) return null;
         if (!_functional)
         {
+            if (_weights is not null) return Whitened(a);
             double mean = PairwiseSum.Of(a) / _cases;
             for (int i = 0; i < a.Length; i++) a[i] -= mean;
-            return (a, null);
+            return (a, null, null);
         }
         var h = new double[_locations];
         _basis.OutputColumn(term, _basis.Inputs.Outputs!, h);
-        if (!Supported(h, _rules.SupportMinimumFunctional ?? 0.0)) return null;
-        return (a, h);
+        if (!Supported(h, _rules.SupportMinimumFunctional ?? 0.0, null)) return null;
+        if (_weights is null) return (a, h, null);
+        var stacked = new double[_rows];
+        for (int i = 0; i < _cases; i++)
+            for (int l = 0; l < _locations; l++) stacked[i * _locations + l] = a[i] * h[l];
+        return Whitened(stacked);
     }
 
-    private bool Supported(double[] part, double minimum)
+    // W^½(z − z̄_w), in place, and z's prior side when the prior stands apart.
+    private (double[] Column, double[]? Output, BassPriorColumn? Prior) Whitened(double[] z)
     {
-        if (_rules.Support == SupportKind.ColumnMass) return PairwiseSum.Of(part) >= minimum;
-        int nonzero = 0;
-        foreach (double v in part)
-            if (v != 0.0) nonzero++;
+        double mean = PairwiseSum.Dot(_weights!, z) / Weighting.Mass;
+        BassPriorColumn? prior = null;
+        if (_priorColumns is not null)
+        {
+            double own = PairwiseSum.Of(z) / _rows;
+            var centred = new double[_rows];
+            for (int i = 0; i < _rows; i++) centred[i] = z[i] - own;
+            prior = new BassPriorColumn(centred, own - mean);
+        }
+        for (int i = 0; i < _rows; i++) z[i] = _roots![i] * (z[i] - mean);
+        return (z, null, prior);
+    }
+
+    private bool Supported(double[] part, double minimum, double[]? counts)
+    {
+        if (_rules.Support == SupportKind.ColumnMass) return (counts is null ? PairwiseSum.Of(part) : PairwiseSum.Dot(counts, part)) >= minimum;
+        double nonzero = 0.0;
+        for (int i = 0; i < part.Length; i++)
+            if (part[i] != 0.0) nonzero += counts?[i] ?? 1.0;
         return nonzero >= minimum;
+    }
+
+    // The current columns' Gram entries, read from the factor.
+    private double[,] CurrentGram()
+    {
+        int n = _terms.Count;
+        var g = new double[n, n];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++) g[i, j] = _factor.Entry(i, j);
+        return g;
+    }
+
+    private double[] CurrentShifts()
+    {
+        var shifts = new double[_priorColumns!.Count];
+        for (int j = 0; j < shifts.Length; j++) shifts[j] = _priorColumns[j].Shift;
+        return shifts;
+    }
+
+    // The prior side's Gram of `columns`.
+    private static double[,] PriorGramOf(IReadOnlyList<BassPriorColumn> columns)
+    {
+        int n = columns.Count;
+        var g = new double[n, n];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j <= i; j++) g[i, j] = g[j, i] = PairwiseSum.Dot(columns[i].Centred, columns[j].Centred);
+        return g;
+    }
+
+    // The prior side's Gram without column `index`.
+    private double[,] PriorGramWithout(int index) => Without(_priorGram!, index);
+
+    // The prior side's Gram with column `skip` out (−1: none) and `added` last.
+    private double[,] PriorGramWith(int skip, BassPriorColumn added)
+    {
+        double[,] kept = skip >= 0 ? Without(_priorGram!, skip) : _priorGram!;
+        int n = kept.GetLength(0);
+        var g = new double[n + 1, n + 1];
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++) g[i, j] = kept[i, j];
+        for (int j = 0, k = 0; j < _priorColumns!.Count; j++)
+        {
+            if (j == skip) continue;
+            g[n, k] = g[k, n] = PairwiseSum.Dot(added.Centred, _priorColumns[j].Centred);
+            k++;
+        }
+        g[n, n] = PairwiseSum.Dot(added.Centred, added.Centred);
+        return g;
+    }
+
+    // The pencil of the structure whose weighted Gram is `g`, prior-side Gram `u`, centres' gaps `shifts` and cross products
+    // `b`; null when its prior fails the gate. In the coordinates the design holds, (α, β) with the columns centred under W,
+    // the likelihood is diag(Σw, G) and the prior D_α(1, δ)(1, δ)ᵀ + diag(0, D_β), since the prior reads α on the columns' own
+    // centring, α_u = α + δᵀβ: D_α = N and D_β = G_u under the g-form, D_α = 1 and D_β = diag(G_u)/N under the ridge. A flat
+    // intercept has no prior to couple, so it stands apart: G against D_β.
+    private PriorPencil? PencilOf(double[,] g, double[,] u, double[] shifts, double[] b)
+    {
+        int m = g.GetLength(0);
+        if (!_ridge && m > 0)
+        {
+            BorderedCholesky gate = StrictFactor(u);
+            if (gate.FailedAt >= 0 || gate.MinLeaveOneOutPivot() < _rules.AngleFloor) return null;
+        }
+        bool inside = _intercept != GPriorCentre.Flat;
+        int offset = inside ? 1 : 0, p = m + offset;
+        var likelihood = new double[p, p];
+        var prior = new double[p, p];
+        var cross = new double[p];
+        double priorMass = _ridge ? 1.0 : _rows;
+        for (int i = 0; i < m; i++)
+        {
+            cross[i + offset] = b[i];
+            for (int j = 0; j < m; j++)
+            {
+                likelihood[i + offset, j + offset] = g[i, j];
+                prior[i + offset, j + offset] = !_ridge ? u[i, j] : i == j ? u[i, i] / _rows : 0.0;
+                if (inside) prior[i + offset, j + offset] += priorMass * shifts[i] * shifts[j];
+            }
+            if (inside) prior[0, i + offset] = prior[i + offset, 0] = priorMass * shifts[i];
+        }
+        if (inside)
+        {
+            likelihood[0, 0] = Weighting.Mass;
+            prior[0, 0] = priorMass;
+            cross[0] = Weighting.Mass * (ResponseMean - PriorLevel);
+        }
+        return PriorPencil.Of(likelihood, prior, cross, m, inside);
     }
 
     // The new column's Gram entries against the current columns (all of them, or all but `skip`) and its diagonal.
@@ -483,7 +717,7 @@ public sealed class BassDesign
     {
         int count = _terms.Count - (skip >= 0 ? 1 : 0);
         var u = new double[count];
-        if (!_functional)
+        if (!_khatriRao)
         {
             for (int j = 0, k = 0; j < _terms.Count; j++)
                 if (j != skip) u[k++] = PairwiseSum.Dot(column, _a[j]);
@@ -512,10 +746,10 @@ public sealed class BassDesign
     }
 
     // z_cᵀv for the new column and a vector v with zero mean over all N rows (ỹ, or the residual): scalar z·v; direct
-    // aᵀVh, the centring dropping out against v's zero mean.
+    // aᵀVh, the centring dropping out against v's zero mean. Under weights both are whitened, so their dot is the W-form.
     private double Cross(double[] column, double[]? output, double[] v)
     {
-        if (!_functional) return PairwiseSum.Dot(column, v);
+        if (!_khatriRao) return PairwiseSum.Dot(column, v);
         var vh = new double[_cases];
         for (int i = 0; i < _cases; i++) vh[i] = _output.Dot(v.AsSpan(i * _locations, _locations), output);
         return PairwiseSum.Dot(column, vh);
@@ -548,7 +782,7 @@ public sealed class BassDesign
     private double[,] Gram(List<double[]> columns, List<double[]> outputs)
     {
         if (columns.Count == 0) return new double[0, 0];
-        if (_functional) return KhatriRao.CentredGram([.. columns], [.. outputs]);
+        if (_khatriRao) return KhatriRao.CentredGram([.. columns], [.. outputs]);
         var g = new double[columns.Count, columns.Count];
         for (int i = 0; i < columns.Count; i++)
             for (int j = 0; j <= i; j++) g[i, j] = g[j, i] = PairwiseSum.Dot(columns[i], columns[j]);
@@ -571,9 +805,9 @@ public sealed class BassDesign
         var a = new List<double[]>();
         var h = new List<double[]>();
         for (int j = 0; j < _terms.Count; j++)
-            if (j != skip) { a.Add(_a[j]); if (_functional) h.Add(_h[j]); }
+            if (j != skip) { a.Add(_a[j]); if (_khatriRao) h.Add(_h[j]); }
         a.Add(column);
-        if (_functional) h.Add(output!);
+        if (_khatriRao) h.Add(output!);
         var r = new double[_rows];
         Fit(a, h, beta, r);
         return _output.Dot(r, r);
@@ -586,7 +820,7 @@ public sealed class BassDesign
         for (int j = 0; j < beta.Length; j++)
         {
             double bj = beta[j];
-            if (!_functional)
+            if (!_khatriRao)
             {
                 double[] z = a[j];
                 for (int i = 0; i < _rows; i++) r[i] -= bj * z[i];
@@ -638,6 +872,23 @@ public sealed class BassDesign
         var w = new double[values.Length - 1];
         for (int j = 0, k = 0; j < values.Length; j++)
             if (j != index) w[k++] = values[j];
+        return w;
+    }
+
+    private static double[,] Without(double[,] values, int index)
+    {
+        int n = values.GetLength(0) - 1;
+        var w = new double[n, n];
+        for (int i = 0, gi = 0; i <= n; i++)
+        {
+            if (i == index) continue;
+            for (int j = 0, gj = 0; j <= n; j++)
+            {
+                if (j == index) continue;
+                w[gi, gj++] = values[i, j];
+            }
+            gi++;
+        }
         return w;
     }
 }

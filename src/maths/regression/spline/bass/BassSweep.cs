@@ -174,7 +174,7 @@ public sealed class BassStructureMoves
     }
 
     /// <summary>
-    /// The retained draw at <paramref name="state"/> (D04's composition): σ² from its collapsed conditional, the
+    /// The retained draw at <paramref name="state"/> (D04's composition): σ² from its collapsed conditional (or as held), the
     /// coefficients given σ², and λ | M ~ Gamma(h₁ + M, rate h₂ + 1), each exact given (structure, τ). The terms are
     /// interned in <paramref name="terms"/>, and the coefficients move to the uncentred basis in the ids' order.
     /// </summary>
@@ -187,7 +187,13 @@ public sealed class BassStructureMoves
         double tau = target.SamplesTau ? state.Tau : target.HeldTau!.Value;
         GPriorConditional conditional = target.CoefficientBlock(_design)(tau, 1.0);
         var centred = new double[conditional.Columns];   // (α, β_c) in the design's order
-        double sigma2 = conditional.Sample(target.Sigma2, rng, centred);
+        double sigma2;
+        if (target.GivenSigma2 is double given)
+        {
+            conditional.SampleGiven(given, rng, centred);
+            sigma2 = given;
+        }
+        else sigma2 = conditional.Sample(target.Sigma2, rng, centred);
         BassCountPrior count = _model.Prior.Count;
         double lambda = Gamma.ShapeRate(count.Shape + state.Count, count.Rate + 1.0).Sample(rng);
 
@@ -207,8 +213,9 @@ public sealed class BassStructureMoves
         return new BassDraw(new BassStructure([.. order.Select(j => ids[j])]), tau, sigma2, coefficients, lambda);
     }
 
-    // The mean of the term's column over all N observations, the design's centring: a case column's mean, or āh̄. Kept
-    // by term, since retained draws repeat their structures; the value is the one evaluation's, so draws are unchanged.
+    // The mean of the term's column over all N observations under W, the design's centring: a case column's mean, or āh̄ at
+    // unit weights. Kept by term, since retained draws repeat their structures; the value is the one evaluation's, so draws
+    // are unchanged.
     private double ColumnMean(BassTerm term)
     {
         if (_columnMeans.TryGetValue(term, out double cached)) return cached;
@@ -222,11 +229,10 @@ public sealed class BassStructureMoves
         BassBasis basis = _model.Basis;
         var a = new double[basis.Inputs.Cases.Cases];
         basis.CaseColumn(term, basis.Inputs.Cases, a);
-        double mean = PairwiseSum.Of(a) / a.Length;
-        if (basis.Inputs.Outputs is not { } outputs) return mean;
+        if (basis.Inputs.Outputs is not { } outputs) return _model.Working.ColumnMean(a, null);
         var h = new double[outputs.Locations];
         basis.OutputColumn(term, outputs, h);
-        return mean * (PairwiseSum.Of(h) / h.Length);
+        return _model.Working.ColumnMean(a, h);
     }
 
     // The design and counts follow the chain to `state`: a τ update keeps the structure; the pending candidate's

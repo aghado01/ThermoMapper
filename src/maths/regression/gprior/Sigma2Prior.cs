@@ -14,6 +14,9 @@ public enum Sigma2PriorKind
 
     /// <summary>IG(a, b) in the response's own units.</summary>
     InverseGamma,
+
+    /// <summary>σ² held at a declared value: a point mass, so the block's marginal is the one given σ².</summary>
+    Held,
 }
 
 /// <summary>
@@ -31,6 +34,9 @@ public enum Sigma2PriorKind
 /// fit is close. Normal BARS's default, at a = 10⁻³.</item>
 /// <item><see cref="InverseGamma"/>: IG(a, b) in the response's own units, so b is small or large depending on them
 /// (OQ19); for parity with an analysis that fixes it.</item>
+/// <item><see cref="Held"/>: σ² held at a declared value, as probit's identification holds it at 1 or a known noise
+/// states it. BASS's structure step then reads the marginal given σ² (<see cref="GPriorMarginal.LogMarginalGiven"/>);
+/// BARS, which integrates σ², refuses it.</item>
 /// </list>
 /// A proper prior makes the marginal complete: defined at every b in [0, 1], where b = 0 gives exactly 0, finite for an
 /// exact fit, and absolute, so it is an evidence. The scaled prior's evidence depends on a and on s², as every proper
@@ -45,10 +51,11 @@ public sealed record Sigma2Prior
     /// <summary>
     /// The prior of kind <paramref name="kind"/>: <see cref="Sigma2PriorKind.Jeffreys"/> takes no parameter,
     /// <see cref="Sigma2PriorKind.ScaledToResponse"/> a shape, and <see cref="Sigma2PriorKind.InverseGamma"/> a shape and
-    /// a scale, each positive and finite.
+    /// a scale, and <see cref="Sigma2PriorKind.Held"/> a value, each positive and finite.
     /// </summary>
-    public Sigma2Prior(Sigma2PriorKind kind, double? shape = null, double? scale = null)
+    public Sigma2Prior(Sigma2PriorKind kind, double? shape = null, double? scale = null, double? value = null)
     {
+        if (kind != Sigma2PriorKind.Held && value is not null) throw new ArgumentException("Only the held prior takes a value.", nameof(value));
         switch (kind)
         {
             case Sigma2PriorKind.Jeffreys:
@@ -63,12 +70,18 @@ public sealed record Sigma2Prior
                 if (shape is not { } a || scale is not { } b) throw new ArgumentException("The inverse gamma takes a shape and a scale.");
                 _ = Distributions.InverseGamma.ShapeScale(a, b);   // validates both
                 break;
+            case Sigma2PriorKind.Held:
+                if (shape is not null || scale is not null) throw new ArgumentException("The held prior takes a value alone.");
+                if (value is not (> 0.0 and < double.PositiveInfinity))
+                    throw new ArgumentOutOfRangeException(nameof(value), "The held σ² must be positive and finite.");
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind));
         }
         Kind = kind;
         Shape = shape;
         Scale = scale;
+        Value = value;
     }
 
     /// <summary>The improper p(σ²) ∝ 1/σ².</summary>
@@ -80,6 +93,9 @@ public sealed record Sigma2Prior
     /// <summary>IG(<paramref name="shape"/>, <paramref name="scale"/>) in the response's own units.</summary>
     public static Sigma2Prior InverseGamma(double shape, double scale) => new(Sigma2PriorKind.InverseGamma, shape, scale);
 
+    /// <summary>σ² held at <paramref name="value"/>.</summary>
+    public static Sigma2Prior Held(double value) => new(Sigma2PriorKind.Held, value: value);
+
     /// <summary>Which prior this is.</summary>
     public Sigma2PriorKind Kind { get; }
 
@@ -89,6 +105,14 @@ public sealed record Sigma2Prior
     /// <summary>The fixed scale b of <see cref="InverseGamma"/>; null otherwise.</summary>
     public double? Scale { get; }
 
+    /// <summary>The held σ²; null otherwise, and left out of the serialized form then, so the other kinds' forms stand as they were.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? Value { get; }
+
+    /// <summary>Whether σ² is held; read from the kind, so not serialized.</summary>
+    [JsonIgnore]
+    public bool IsHeld => Kind == Sigma2PriorKind.Held;
+
     /// <summary>True for every prior but <see cref="Jeffreys"/>; read from the kind, so not serialized.</summary>
     [JsonIgnore]
     public bool IsProper => Kind != Sigma2PriorKind.Jeffreys;
@@ -96,7 +120,8 @@ public sealed record Sigma2Prior
     /// <summary>
     /// The prior for a response whose mean square about the centre level is <paramref name="meanSquare"/>: null for
     /// <see cref="Jeffreys"/>, the fixed IG, or IG(a, a·s²). The scaled prior has none for a response with no spread
-    /// (s² = 0), which has no posterior for σ either; it returns null there and the caller refuses the response.
+    /// (s² = 0), which has no posterior for σ either; it returns null there and the caller refuses the response. A held σ²
+    /// has no inverse gamma either: null, with <see cref="Value"/> for its caller.
     /// </summary>
     public Distributions.InverseGamma? For(double meanSquare) => (Kind, Shape, Scale) switch
     {
@@ -115,6 +140,7 @@ public sealed record Sigma2Prior
     {
         Sigma2PriorKind.Jeffreys => "Jeffreys",
         Sigma2PriorKind.ScaledToResponse => FormattableString.Invariant($"ScaledToResponse({Shape:R})"),
+        Sigma2PriorKind.Held => FormattableString.Invariant($"Held({Value:R})"),
         _ => FormattableString.Invariant($"InverseGamma({Shape:R}, {Scale:R})"),
     };
 }

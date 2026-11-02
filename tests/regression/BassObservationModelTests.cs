@@ -17,7 +17,7 @@ namespace Maths.Regression.Tests;
 /// <item>An offset is the same as shifting the data, bit for bit: a design on y − offset has the statistics of a design on
 /// shifted data, the resolved record reads the working response's level and spread, and a chain of a model with the offset
 /// walks the shifted data's, draw for draw. Scalar and direct functional.</item>
-/// <item>The contract checks its inputs, and the core refuses weights it has no Gram for.</item>
+/// <item>The contract checks its inputs. The weighted core is <see cref="BassWeightedCoreTests"/>'s.</item>
 /// </list>
 /// </summary>
 public sealed class BassObservationModelTests
@@ -143,7 +143,7 @@ public sealed class BassObservationModelTests
     }
 
     [Fact]
-    public void TheContract_ChecksItsInputs_AndTheCoreRefusesWeights()
+    public void TheContract_ChecksItsInputs()
     {
         BassData data = SensitivityFixture.Scalar();
         int n = data.Response.Observations;
@@ -156,9 +156,14 @@ public sealed class BassObservationModelTests
         var weighted = new WorkingResponse(data.Response, weights: [.. Enumerable.Repeat(2.0, n)]);
         Assert.False(weighted.IsUnweighted);
         Assert.Equal(n, weighted.Weights.Length);
+        Assert.Equal(WeightMeaning.Precision, weighted.Meaning);
+        Assert.Equal(WeightedPriorGram.Unweighted, weighted.PriorGram);
+        Assert.Equal(2.0 * n, weighted.Weighting.Mass);
+        Assert.Equal(n, weighted.Weighting.Count);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new WorkingResponse(data.Response, meaning: (WeightMeaning)7));
         BassModel gaussian = BassModel.Create(SensitivityFixture.Config(), data);
-        Assert.Throws<NotSupportedException>(() => new BassDesign(gaussian.Basis, data, gaussian.Admission, working: weighted));
-        Assert.Throws<NotSupportedException>(() => BassModel.Create(SensitivityFixture.Config(), data, new Weighted([.. Enumerable.Repeat(2.0, n)])).NewDesign());
+        Assert.Equal(0, new BassDesign(gaussian.Basis, data, gaussian.Admission, working: weighted).Count);
+        Assert.Equal(0, BassModel.Create(SensitivityFixture.Config(), data, new Weighted([.. Enumerable.Repeat(2.0, n)])).NewDesign().Count);
 
         // A working response is of its own response.
         BassData other = SensitivityFixture.Scalar(seed: 8);

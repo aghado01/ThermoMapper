@@ -48,18 +48,31 @@ public sealed record BassResolved
     /// <summary>The support threshold on a term's functional part; null for a scalar response.</summary>
     public required double? SupportMinimumFunctional { get; init; }
 
-    /// <summary>The level the coefficient prior is centred on: the response's mean, or zero under the zero centre.</summary>
+    /// <summary>The level the coefficient prior is centred on: the response's mean, or zero under the zero centre. Under weights
+    /// the mean is under W only when the coefficient prior reads the weighted columns (<see cref="WeightedPriorGram"/>).</summary>
     public required double CentreLevel { get; init; }
 
-    /// <summary>ȳ, the response's mean over all N observations, whatever the centre; the zero centre's level energy
-    /// Nȳ² reads it.</summary>
+    /// <summary>ȳ, the response's mean over all N observations under W, whatever the centre; the zero centre's level energy
+    /// Σwᵢȳ² reads it.</summary>
     public required double ResponseMean { get; init; }
 
-    /// <summary>s², the response's mean square about <see cref="CentreLevel"/>, which the scaled σ² prior reads.</summary>
+    /// <summary>s², the response's mean square about <see cref="CentreLevel"/>, which the scaled σ² prior reads: under W only
+    /// when the coefficient prior reads the weighted columns (<see cref="WeightedPriorGram"/>).</summary>
     public required double ResponseMeanSquare { get; init; }
 
-    /// <summary>σ²'s prior as resolved; null for the Jeffreys prior.</summary>
+    /// <summary>The response's mean square under W about <see cref="CentreLevel"/>, whose ‖·‖²_W the exact-fit floor reads;
+    /// <see cref="ResponseMeanSquare"/> at unit weights.</summary>
+    public required double WeightedMeanSquare { get; init; }
+
+    /// <summary>The count, the mass and Σ ln wᵢ the marginal reads beyond the weighted statistics; (N, N, 0) at unit weights.</summary>
+    public required GPriorWeights Weighting { get; init; }
+
+    /// <summary>σ²'s prior as resolved; null for the Jeffreys prior and for a held σ².</summary>
     public required InverseGamma? Sigma2 { get; init; }
+
+    /// <summary>The held σ² (<see cref="Sigma2PriorKind.Held"/>), which the structure step's marginal is given; null when σ² is
+    /// integrated out.</summary>
+    public required double? GivenSigma2 { get; init; }
 
     /// <summary>τ's prior on the coefficient form's unit-information precision τ₀ (1/N for the g-form, 1 for the ridge):
     /// sampled, or held at its declared value or τ₀.</summary>
@@ -101,7 +114,8 @@ public sealed record BassResolved
     /// with a rung where its tempered form is undefined (D05), its hot end, declared or auto-picked, or the reference
     /// rung's b = 0, and an auto-picked hot end outside (0, 1), which tiny data give; and SMC on the integrated form under
     /// the improper options, which has no b = 0 to start from. The response the intercept convention fits and the scaled σ²
-    /// prior reads is <paramref name="working"/>'s (F-X1); null is the response itself.
+    /// prior reads is <paramref name="working"/>'s (F-X1); null is the response itself. A held σ² needs no spread, so it lifts
+    /// the first two refusals.
     /// </summary>
     public static BassResolved Resolve(BassConfig config, BassData data, WorkingResponse? working = null)
     {
@@ -115,13 +129,19 @@ public sealed record BassResolved
         log.Add(new("Observations", Text(n), functional ? $"N = n_x · n_r = {cases} · {locations}" : "N = n_x, a scalar response"));
 
         // The response the intercept convention can fit, its level and its mean square about it.
-        ReadOnlySpan<double> y = (working ?? new WorkingResponse(response)).Values;
+        WorkingResponse fitted = working ?? new WorkingResponse(response);
+        ReadOnlySpan<double> y = fitted.Values;
+        GPriorWeights weights = fitted.Weighting;
+        bool held = config.Sigma2.IsHeld;
+        if (!fitted.IsUnweighted)
+            log.Add(new("Weights", $"{fitted.Meaning}, prior on the {fitted.PriorGram} columns",
+                        $"Σwᵢ = {Text(weights.Mass)} over N = {n}; σ²'s shape counts {Text(weights.Count)}"));
         bool constant = true, zero = y[0] == 0.0;
         for (int i = 1; i < y.Length && constant; i++) constant = y[i] == y[0];
-        double mean = PairwiseSum.Of(y) / n, level;
+        double mean = fitted.ResponseMean, level;
         if (config.Intercept == GPriorCentre.Zero)
         {
-            if (constant && zero) throw new ArgumentException("The response is zero, which leaves σ no posterior (D03).", nameof(data));
+            if (constant && zero && !held) throw new ArgumentException("The response is zero, which leaves σ no posterior (D03).", nameof(data));
             if (constant && !config.Sigma2.IsProper)
                 throw new ArgumentException("Under the Jeffreys σ² prior a constant response is fitted exactly by the intercept, which leaves the posterior improper (D03).", nameof(data));
             level = 0.0;
@@ -129,14 +149,20 @@ public sealed record BassResolved
         }
         else
         {
-            if (constant) throw new ArgumentException("The response is constant, which the intercept absorbs whole, leaving no spread to fit (D03).", nameof(data));
-            level = mean;
+            if (constant && !held) throw new ArgumentException("The response is constant, which the intercept absorbs whole, leaving no spread to fit (D03).", nameof(data));
+            level = config.Intercept == GPriorCentre.Mean && fitted.PriorStandsApart ? PairwiseSum.Of(y) / n : mean;
             log.Add(new("CentreLevel", Text(level), config.Intercept == GPriorCentre.Flat ? "the response's mean, the flat intercept's estimate" : "the response's mean, level centring"));
         }
         var squares = new double[n];
         for (int i = 0; i < n; i++) squares[i] = (y[i] - level) * (y[i] - level);
-        double meanSquare = PairwiseSum.Of(squares) / n;
+        double meanSquare = PairwiseSum.Of(squares) / n, weightedMeanSquare = meanSquare;
+        if (fitted.WeightArray is { } w)
+        {
+            weightedMeanSquare = PairwiseSum.Dot(w, squares) / weights.Mass;
+            if (!fitted.PriorStandsApart) meanSquare = weightedMeanSquare;
+        }
         InverseGamma? sigma2 = config.Sigma2.For(meanSquare);
+        if (held) log.Add(new("Sigma2", Text(config.Sigma2.Value!.Value), "held, so the structure step reads the marginal given σ²"));
         if (config.Sigma2.ReadsResponse)
             log.Add(new("ResponseMeanSquare", Text(meanSquare), "s², the response's mean square about the centre level, which the scaled σ² prior reads"));
 
@@ -171,7 +197,9 @@ public sealed record BassResolved
         }
 
         SupportRule rule = s.Support;
-        double support = Threshold(rule.Minimum, cases, "Structure.Support.Minimum", "SupportMinimum", "n_x", log);
+        // Weights that count rows count toward a scalar response's support, as the rows they stand for would.
+        double caseCount = !functional && fitted is { IsUnweighted: false, Meaning: WeightMeaning.Replication } ? weights.Mass : cases;
+        double support = Threshold(rule.Minimum, caseCount, "Structure.Support.Minimum", "SupportMinimum", "n_x", log);
         double? supportFunctional = functional
             ? Threshold(rule.MinimumFunctional, locations, "Structure.Support.MinimumFunctional", "SupportMinimumFunctional", "n_r", log)
             : null;
@@ -179,7 +207,8 @@ public sealed record BassResolved
         IReadOnlyList<BassMonitoredPoint> points = ResolvePoints(config.Sampling.MonitoredPoints, cases, functional ? locations : null, log);
 
         BassCoefficientPrior coefficients = config.Coefficients;
-        ResolvedTauPrior scale = coefficients.Scale.For(coefficients.UnitObservations(n));
+        // One observation's information under the prior's own columns: N, or Σwᵢ for a prior on rows the weights count.
+        ResolvedTauPrior scale = coefficients.Scale.For(coefficients.UnitObservations(fitted.PriorStandsApart ? n : weights.Count));
         string unit = coefficients.Form is RidgeForm ? "1, the normalized ridge's" : "1/N, the g-form's";
         switch (coefficients.Scale.Kind)
         {
@@ -203,8 +232,8 @@ public sealed record BassResolved
             hotEnd = tempering.DeclaredHotEnd();
             if (hotEnd is null)
             {
-                double? halving = HalvingTau(coefficients.Form, scale, n);
-                double picked = AutoHotEnd(tempering, config.Intercept, n, halving);
+                double? halving = HalvingTau(coefficients.Form, scale, weights.Count);
+                double picked = AutoHotEnd(tempering, config.Intercept, weights.Count, halving);
                 if (!(picked > 0.0 && picked < 1.0))
                     throw new ArgumentException($"Sampling.Tempering.HotEnd auto-picks {Text(picked)} on N = {n} observations, outside (0, 1); set it.", "config");
                 hotEnd = picked;
@@ -218,12 +247,12 @@ public sealed record BassResolved
                 string improper = config.Intercept == GPriorCentre.Flat ? "the flat intercept" : "the Jeffreys σ² prior";
                 bool setHotEnd = tempering.DeclaredHotEnd() is not null;
                 string reading = tempering.InverseTemperatures is not null ? "InverseTemperatures reaches" : setHotEnd ? "HotEnd is" : "HotEnd auto-picks";
-                if (!BassTarget.Defines(tempering.Form, config.Intercept, sigma2, n, hotEnd.Value))
+                if (!BassTarget.Defines(tempering.Form, config.Intercept, sigma2, weights.Count, hotEnd.Value, held))
                     throw new ArgumentException(
                         $"Sampling.Tempering.{reading} {Text(hotEnd.Value)}, where the integrated form is undefined under " +
-                        $"{improper}, which needs b > (1 − 2c)/N = {Text((1.0 - 2.0 * (sigma2?.Shape ?? 0.0)) / n)}; " +
+                        $"{improper}, which needs b > (1 − 2c)/N = {Text((1.0 - 2.0 * (sigma2?.Shape ?? 0.0)) / weights.Count)}; " +
                         $"{(setHotEnd ? "raise it" : "set it above")}, or take the linear form (D05).", "config");
-                if (tempering.ReferenceRung && !BassTarget.Defines(tempering.Form, config.Intercept, sigma2, n, 0.0))
+                if (tempering.ReferenceRung && !BassTarget.Defines(tempering.Form, config.Intercept, sigma2, weights.Count, 0.0, held))
                     throw new ArgumentException(
                         $"Sampling.Tempering.ReferenceRung needs b = 0, where the integrated form is undefined under {improper}; the linear form reaches it (D05).", "config");
             }
@@ -232,7 +261,7 @@ public sealed record BassResolved
         if (config.Sampling.Smc is { } smc)
         {
             // SMC starts from the prior at b = 0, where the integrated form exists under the proper priors alone (D05).
-            if (!BassTarget.Defines(smc.Form, config.Intercept, sigma2, n, 0.0))
+            if (!BassTarget.Defines(smc.Form, config.Intercept, sigma2, weights.Count, 0.0, held))
                 throw new ArgumentException(
                     $"Sampling.Smc.Form is integrated, which has no b = 0 member under {(config.Intercept == GPriorCentre.Flat ? "the flat intercept" : "the Jeffreys σ² prior")}, " +
                     "where SMC starts from the prior; the linear form reaches it (D05).", "config");
@@ -271,7 +300,8 @@ public sealed record BassResolved
             Cases = cases, Locations = locations, Observations = n, MaxBasis = maxBasis,
             MaxInteraction = maxInteraction, MaxCategoricalInteraction = maxCategorical, MaxFunctionalInteraction = maxFunctional,
             SupportMinimum = support, SupportMinimumFunctional = supportFunctional,
-            MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, ResponseMeanSquare = meanSquare, Sigma2 = sigma2, Scale = scale,
+            MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, ResponseMeanSquare = meanSquare, WeightedMeanSquare = weightedMeanSquare,
+            Weighting = weights, Sigma2 = sigma2, GivenSigma2 = config.Sigma2.Value, Scale = scale,
             StoppingGroups = BassDiagnostics.StoppingGroups(config.Sampling.StoppingScope),
             HotEnd = hotEnd, StepWindows = windows, FactorShares = shares, SplitThreshold = config.Sampling.Tempering?.Split?.Threshold,
             AutoPicks = log.AsReadOnly(),
@@ -285,7 +315,7 @@ public sealed record BassResolved
     /// likelihood path's integrated form under the flat intercept, whose pole at (1 − 2c)/N it clears with ν = Nb − 1 = 1;
     /// and under a held τ the smaller of these and the b at which the held τ halves it (<paramref name="halvingTau"/>).
     /// </summary>
-    internal static double AutoHotEnd(TemperingSpec tempering, GPriorCentre intercept, int observations, double? halvingTau)
+    internal static double AutoHotEnd(TemperingSpec tempering, GPriorCentre intercept, double observations, double? halvingTau)
     {
         double unit = (Pole(tempering, intercept) ? 2.0 : 1.0) / observations;
         return halvingTau is double tau ? Math.Min(tau, unit) : unit;
@@ -295,7 +325,7 @@ public sealed record BassResolved
     /// Under a held τ, the b at which it halves a unit-information column's shrinkage: τ under the g-form, τ/N under the
     /// ridge, whose columns carry N observations' information each; null when τ is sampled.
     /// </summary>
-    internal static double? HalvingTau(CoefficientForm form, ResolvedTauPrior scale, int observations)
+    internal static double? HalvingTau(CoefficientForm form, ResolvedTauPrior scale, double observations)
         => scale.HeldTau is double tau ? (form is RidgeForm ? tau / observations : tau) : null;
 
     private static bool Pole(TemperingSpec tempering, GPriorCentre intercept)
@@ -349,7 +379,7 @@ public sealed record BassResolved
     }
 
     // R's default min(20, 0.1·n) for a part of size n, or the declared threshold, which must be one some term can meet.
-    private static double Threshold(double? declared, int size, string field, string setting, string sizeName, List<BassAutoPick> log)
+    private static double Threshold(double? declared, double size, string field, string setting, string sizeName, List<BassAutoPick> log)
     {
         if (declared is { } d)
         {

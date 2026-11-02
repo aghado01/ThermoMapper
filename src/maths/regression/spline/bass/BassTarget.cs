@@ -3,13 +3,15 @@ using Maths.Distributions;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bars;
 using Maths.Samplers;
+using Maths.Samplers.Rjmcmc;
 
 namespace Maths.Regression.Spline.Bass;
 
 /// <summary>
 /// A structure's account for the collapsed target: M, the sum of its terms' ln π (D01), and its least-squares fit in
-/// the centred basis, ‖r‖² and Q_c, with, under the normalized ridge, its columns' ridge terms (a spectrum, or a bordered
-/// candidate of one); or the design's refusal, which puts it outside F.
+/// the centred basis, ‖r‖² and Q_c, with, under a prior the g-form's closed form does not serve, its columns' terms: the
+/// normalized ridge's (a spectrum, or a bordered candidate of one) or a <see cref="PriorPencil"/>; or the design's refusal,
+/// which puts it outside F.
 /// </summary>
 public readonly record struct BassStructureFit(int Terms, double LogTermPrior, double ResidualSquares, double FittedSquares,
                                                BassRefusal? Refusal = null, RidgeColumns? Ridge = null)
@@ -18,7 +20,7 @@ public readonly record struct BassStructureFit(int Terms, double LogTermPrior, d
     public static BassStructureFit Of(BassDesign design, double logTermPrior)
     {
         ArgumentNullException.ThrowIfNull(design);
-        return new(design.Count, logTermPrior, design.ResidualSquares, design.FittedSquares, null, design.IsRidge ? design.Spectrum : null);
+        return new(design.Count, logTermPrior, design.ResidualSquares, design.FittedSquares, null, design.PriorTerms);
     }
 
     /// <summary>A proposed structure, admitted or refused, whose terms' log prior is <paramref name="logTermPrior"/>.</summary>
@@ -39,11 +41,13 @@ public readonly record struct BassStructureFit(int Terms, double LogTermPrior, d
 /// form's τ₀, as a density on u = ln τ. That is the coordinate τ's slice step moves (D04), so the powered path powers τ
 /// in log τ (D05's recorded choice). A held τ is no coordinate of the state.</item>
 /// <item><b>The likelihood,</b> p(y | structure, τ) from the shared block of the coefficient form: the g-form's on the
-/// design's centred statistics (<see cref="CollapsedGPrior.CentredMarginalAt"/>), or the normalized ridge's on the
-/// structure's ridge terms (<see cref="CollapsedGPrior.CentredRidgeMarginalAt"/>), under the intercept's convention (level
-/// centring, Liang's flat intercept or R's zero centre) and σ²'s prior (scaled to the response, Jeffreys, or a declared
+/// design's centred statistics (<see cref="CollapsedGPrior.CentredMarginalAt"/>), the normalized ridge's on the
+/// structure's ridge terms (<see cref="CollapsedGPrior.CentredRidgeMarginalAt"/>), or under weights with the prior free of
+/// them a <see cref="PriorPencil"/>'s (<see cref="CollapsedGPrior.CentredPencilMarginalAt"/>), under the intercept's convention
+/// (level centring, Liang's flat intercept or R's zero centre) and σ²'s prior (scaled to the response, Jeffreys, or a declared
 /// inverse gamma). On the likelihood path at b it takes D05's integrated form p_b, the coefficients and σ² integrated
-/// against the tempered likelihood, or the linear form b·ln p₁.</item>
+/// against the tempered likelihood, or the linear form b·ln p₁. With σ² held (<see cref="GivenSigma2"/>) it is the marginal
+/// given σ² from the same S and determinant term, the coefficients alone integrated.</item>
 /// <item><b>The support,</b> F: the design's admission (D06) and, under the Jeffreys σ² prior, no exact fit,
 /// ‖r‖ ≤ 10³·ε·‖y − level‖ (D03's propriety rule).</item>
 /// </list>
@@ -74,16 +78,44 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         CoefficientForm = config.Coefficients.Form;
         Intercept = config.Intercept;
         Sigma2 = resolved.Sigma2;
+        GivenSigma2 = resolved.GivenSigma2;
         Scale = resolved.Scale;
         Observations = resolved.Observations;
         ResponseMean = resolved.ResponseMean;
+        Weighting = resolved.Weighting;
         double floor = ExactFitMultiple * MachineEpsilon;
-        _exactFitSquares = Sigma2 is null ? floor * floor * Observations * resolved.ResponseMeanSquare : double.NegativeInfinity;
+        _exactFitSquares = Sigma2 is null && GivenSigma2 is null ? floor * floor * Weighting.Mass * resolved.WeightedMeanSquare : double.NegativeInfinity;
     }
 
-    /// <summary>Whether the values are complete: under proper σ² and intercept priors. τ's prior is a separate condition, for
-    /// an evidence, since a ratio across b does not read it.</summary>
-    public bool HasCompleteValues => Sigma2 is not null && Intercept != GPriorCentre.Flat;
+    // `source` given σ² = `sigma2`: every other part shared.
+    private BassTarget(BassTarget source, double sigma2)
+    {
+        Prior = source.Prior;
+        Form = source.Form;
+        CoefficientForm = source.CoefficientForm;
+        Intercept = source.Intercept;
+        Sigma2 = source.Sigma2;
+        GivenSigma2 = sigma2;
+        Scale = source.Scale;
+        Observations = source.Observations;
+        ResponseMean = source.ResponseMean;
+        Weighting = source.Weighting;
+        _exactFitSquares = double.NegativeInfinity;
+    }
+
+    /// <summary>This target with its structure step given σ² = <paramref name="sigma2"/>, the form for a σ² drawn apart from the
+    /// structure (D04's generalized-hyperbolic row) or supplied from outside: a block that moves σ² hands the chain this
+    /// target (<see cref="ReversibleJumpChain{TState}.ReplaceTarget"/>). <see cref="Sigma2"/> stays the prior such a block
+    /// draws against.</summary>
+    public BassTarget Given(double sigma2)
+    {
+        if (!(sigma2 > 0.0) || double.IsPositiveInfinity(sigma2)) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive and finite.");
+        return new BassTarget(this, sigma2);
+    }
+
+    /// <summary>Whether the values are complete: under proper σ² and intercept priors, or with σ² given and the intercept
+    /// proper. τ's prior is a separate condition, for an evidence, since a ratio across b does not read it.</summary>
+    public bool HasCompleteValues => (Sigma2 is not null || GivenSigma2 is not null) && Intercept != GPriorCentre.Flat;
 
     /// <summary>The prior on structures.</summary>
     public BassStructurePrior Prior { get; }
@@ -97,8 +129,14 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// <summary>The intercept's convention.</summary>
     public GPriorCentre Intercept { get; }
 
-    /// <summary>σ²'s prior as resolved; null is the Jeffreys 1/σ².</summary>
+    /// <summary>σ²'s prior as resolved; null is the Jeffreys 1/σ², or a σ² held by the config.</summary>
     public InverseGamma? Sigma2 { get; }
+
+    /// <summary>The σ² the structure step's marginal is given; null when σ² is integrated out.</summary>
+    public double? GivenSigma2 { get; }
+
+    /// <summary>The count, the mass and Σ ln wᵢ the marginal reads beyond the design's weighted statistics.</summary>
+    public GPriorWeights Weighting { get; }
 
     /// <summary>τ's prior on the coefficient form's τ₀, sampled or held.</summary>
     public ResolvedTauPrior Scale { get; }
@@ -112,7 +150,7 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// <summary>N, the observations.</summary>
     public int Observations { get; }
 
-    /// <summary>ȳ, which the zero centre's level energy reads.</summary>
+    /// <summary>ȳ under W, which the zero centre's level energy reads.</summary>
     public double ResponseMean { get; }
 
     /// <summary>
@@ -135,49 +173,70 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     public GPriorMarginal Marginal(BassStructureFit fit, double tau, double inverseTemperature = 1.0)
     {
         if (Refusal(fit) is { } reason) throw new ArgumentException($"The structure lies outside F ({reason}).", nameof(fit));
+        if (fit.Ridge is PriorPencil pencil)
+        {
+            if (pencil.Count != fit.Terms) throw new ArgumentException("The pencil is another structure's.", nameof(fit));
+            return CollapsedGPrior.CentredPencilMarginalAt(pencil, fit.ResidualSquares, Observations, Weighting, Intercept, tau, inverseTemperature);
+        }
         if (CoefficientForm is not RidgeForm)
             return CollapsedGPrior.CentredMarginalAt(fit.Terms, fit.ResidualSquares, fit.FittedSquares, Observations, ResponseMean,
-                                                     Intercept, tau, inverseTemperature);
+                                                     Intercept, tau, inverseTemperature, Weighting);
         RidgeColumns ridge = fit.Ridge ?? throw new ArgumentException("A structure under the ridge carries its columns' ridge terms.", nameof(fit));
         if (ridge.Count != fit.Terms) throw new ArgumentException("The ridge terms are another structure's.", nameof(fit));
-        return CollapsedGPrior.CentredRidgeMarginalAt(ridge, fit.ResidualSquares, Observations, ResponseMean, Intercept, tau, inverseTemperature);
+        return CollapsedGPrior.CentredRidgeMarginalAt(ridge, fit.ResidualSquares, Observations, ResponseMean, Intercept, tau, inverseTemperature, Weighting);
     }
+
+    // ln p_b of a structure's marginal: σ² integrated against its prior, or given.
+    internal double LogValue(in GPriorMarginal marginal) => GivenSigma2 is double given ? marginal.LogMarginalGiven(given) : marginal.LogMarginal(Sigma2);
+
+    // ∂/∂b of LogValue.
+    internal double LogSlope(in GPriorMarginal marginal) => GivenSigma2 is double given ? marginal.LogMarginalGivenSlope(given) : marginal.LogMarginalSlope(Sigma2);
 
     /// <summary>
     /// The coefficient block of <paramref name="design"/>'s current structure, (τ, b) to its conditional: the g-form's
-    /// <see cref="CollapsedGPrior"/> on the design's factor and fit, or the ridge's <see cref="CollapsedRidgePrior"/> on its
-    /// spectrum. The retained draws' composition, the collapsed pointwise content and the conditional means read it.
+    /// <see cref="CollapsedGPrior"/> on the design's factor and fit, the ridge's <see cref="CollapsedRidgePrior"/> on its
+    /// spectrum, or <see cref="CollapsedPencilPrior"/> on its pencil. The retained draws' composition, the collapsed pointwise
+    /// content and the conditional means read it.
     /// </summary>
     public Func<double, double, GPriorConditional> CoefficientBlock(BassDesign design)
     {
         ArgumentNullException.ThrowIfNull(design);
+        if (design.Pencil is { } pencil)
+        {
+            CollapsedPencilPrior apart = CollapsedPencilPrior.FromCentred(pencil, design.ResidualSquares, design.Observations, Weighting, design.ResponseMean,
+                                                                          design.PriorLevel, Intercept);
+            return apart.At;
+        }
         if (CoefficientForm is RidgeForm)
         {
-            CollapsedRidgePrior ridge = CollapsedRidgePrior.FromCentred(design.Spectrum, design.ResidualSquares, design.ResponseMean, Intercept);
+            CollapsedRidgePrior ridge = CollapsedRidgePrior.FromCentred(design.Spectrum, design.ResidualSquares, design.ResponseMean, Intercept, Weighting);
             return ridge.At;
         }
         CollapsedGPrior block = CollapsedGPrior.FromCentredLeastSquares(design.Factor, design.Coefficients.ToArray(), design.ResidualSquares,
-                                                                         design.FittedSquares, design.Observations, design.ResponseMean, Intercept);
+                                                                         design.FittedSquares, design.Observations, design.ResponseMean, Intercept, Weighting);
         return block.At;
     }
 
     /// <summary>
     /// Whether the integrated form is defined at <paramref name="inverseTemperature"/>: everywhere on [0, 1] under the
     /// proper defaults; b &gt; 0 under Jeffreys; and under the flat intercept, whose α integral spends one observation,
-    /// g₁ + (Nb − 1)/2 &gt; 0. The linear form is defined on all of [0, 1].
+    /// g₁ + (Nb − 1)/2 &gt; 0, or b &gt; 0 alone with σ² given. The linear form is defined on all of [0, 1].
     /// </summary>
-    public bool Defines(double inverseTemperature) => Defines(Form, Intercept, Sigma2, Observations, inverseTemperature);
+    public bool Defines(double inverseTemperature) => Defines(Form, Intercept, Sigma2, Weighting.Count, inverseTemperature, GivenSigma2 is not null);
 
     /// <summary>
     /// <see cref="Defines(double)"/> for a target in <paramref name="form"/> under <paramref name="intercept"/> and σ²'s
-    /// resolved prior <paramref name="sigma2"/> (null: Jeffreys) on <paramref name="observations"/> observations, before
-    /// the target is built: what <see cref="BassResolved"/> checks a ladder's rungs by.
+    /// resolved prior <paramref name="sigma2"/> (null: Jeffreys, unless <paramref name="givenSigma2"/>) on
+    /// <paramref name="observations"/> observations, before the target is built: what <see cref="BassResolved"/> checks a
+    /// ladder's rungs by.
     /// </summary>
-    public static bool Defines(TemperedForm form, GPriorCentre intercept, InverseGamma? sigma2, int observations, double inverseTemperature)
+    public static bool Defines(TemperedForm form, GPriorCentre intercept, InverseGamma? sigma2, double observations, double inverseTemperature,
+                               bool givenSigma2 = false)
     {
         double b = inverseTemperature;
         if (!(b >= 0.0 && b <= 1.0)) return false;
         if (form == TemperedForm.Linear) return true;
+        if (givenSigma2) return intercept != GPriorCentre.Flat || b > 0.0;
         double shape = sigma2?.Shape ?? 0.0;
         if (intercept == GPriorCentre.Flat) return b > 0.0 && shape + 0.5 * (observations * b - 1) > 0.0;
         return b > 0.0 || sigma2 is not null;
@@ -245,7 +304,7 @@ public sealed class BassEvaluation : ITargetEvaluation
     /// <summary>ln p₁(y | structure, τ), the untempered collapsed marginal; −∞ off the support.</summary>
     public double LogMarginal => _untempered ??= OffSupport
         ? double.NegativeInfinity
-        : _target.Marginal(Fit, Tau).LogMarginal(_target.Sigma2);
+        : _target.LogValue(_target.Marginal(Fit, Tau));
 
     /// <summary>The g-prior block's marginal at <paramref name="inverseTemperature"/>, for σ²'s posterior.</summary>
     public GPriorMarginal Marginal(double inverseTemperature = 1.0) => _target.Marginal(Fit, Tau, inverseTemperature);
@@ -256,7 +315,7 @@ public sealed class BassEvaluation : ITargetEvaluation
         double b = Check(inverseTemperature);
         if (OffSupport) return double.NegativeInfinity;
         if (_target.Form == TemperedForm.Linear) return b * LogMarginal;
-        return b == 1.0 ? LogMarginal : _target.Marginal(Fit, Tau, b).LogMarginal(_target.Sigma2);
+        return b == 1.0 ? LogMarginal : _target.LogValue(_target.Marginal(Fit, Tau, b));
     }
 
     /// <inheritdoc/>
@@ -266,7 +325,7 @@ public sealed class BassEvaluation : ITargetEvaluation
         if (OffSupport) throw new InvalidOperationException($"The state lies off the support ({Refusal?.ToString() ?? "τ"}); it has no likelihood.");
         return _target.Form == TemperedForm.Linear
             ? LogMarginal
-            : _target.Marginal(Fit, Tau, b).LogMarginalSlope(_target.Sigma2);
+            : _target.LogSlope(_target.Marginal(Fit, Tau, b));
     }
 
     private double Check(double b)
