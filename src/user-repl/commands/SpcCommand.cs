@@ -121,14 +121,16 @@ public static class SpcCommand
             };
 
             // Load the persisted graph artifact when available, else compile and cache it.
-            CsrGraph prebuiltGraph = GraphRun.LoadOrBuildGraph(options, dataset, graphConfig, baseDirectory, runDirectory);
+            (CsrGraph prebuiltGraph, ResolvedConstruction? resolvedGraph) =
+                GraphRun.LoadOrBuildGraph(options, dataset, graphConfig, baseDirectory, runDirectory);
 
-            (double[] temperatures, string temperaturesResolved) = ResolveTemperatureGrid(options, prebuiltGraph);
+            (double[] temperatures, string temperaturesResolved, string temperatureBasis) =
+                ResolveTemperatureGrid(options, prebuiltGraph, resolvedGraph);
 
             // Rewrite the manifest with the resolved temperature grid provenance
             manifest = manifest with
             {
-                Sweep = manifest.Sweep! with { TemperaturesResolved = temperaturesResolved }
+                Sweep = manifest.Sweep! with { TemperaturesResolved = temperaturesResolved, TemperatureBasis = temperatureBasis }
             };
             manifest.WriteTo(runDirectory);
 
@@ -246,10 +248,12 @@ public static class SpcCommand
 
     // ── Sweep strategy assembly ──────────────────────────────────────────
     /// <summary>
-    /// Resolve the temperature grid: an explicit spec, or the auto bracket the
-    /// coupling construction declares (T_ps(q) under 1/K̂, else the data heuristic).
+    /// Resolve the temperature grid: an explicit spec, or the auto bracket the graph's own
+    /// construction declares (<see cref="SpcScheduleHelpers.AutoBracket"/>, the one function the library's
+    /// <see cref="AutoGridFixedSweep"/> calls too). <c>Basis</c> names the estimator for the run manifest.
     /// </summary>
-    private static (double[] Temperatures, string Resolved) ResolveTemperatureGrid(Options options, CsrGraph graph)
+    private static (double[] Temperatures, string Resolved, string Basis) ResolveTemperatureGrid(
+        Options options, CsrGraph graph, ResolvedConstruction? construction)
     {
         if (string.IsNullOrWhiteSpace(options.TemperaturesSpec))
             throw new ArgumentException(
@@ -259,26 +263,11 @@ public static class SpcCommand
         string spec = options.TemperaturesSpec.Trim();
         if (spec.Equals("auto", StringComparison.OrdinalIgnoreCase))
         {
-            double lo, hi;
-
-            // The Potts sampler's coupling construction declares its T-estimate:
-            // under the 1/K̂-normalized replication kernel (MeanEdgeDistance) the
-            // q-only physics bracket is valid (T_ps(q) anchor, graphs/models/potts); the
-            // data-dependent heuristic is dimensionally J² and lands ~K̂× too cold
-            // there — it remains the estimator for the un-normalized default kernel.
-            if (options.BandwidthStrategy == Graphs.Distance.BandwidthStrategy.MeanEdgeDistance
-                && options.Gauge == Graphs.GaugeKind.InverseMeanDegree)
-            {
-                (lo, hi) = BwdPottsCriticalEstimate.Bracket(options.Q);
-            }
-            else
-            {
-                (lo, hi) = SpcScheduleHelpers.EstimateBracket(graph, options.Q, coldOvershoot: 0.05, hotOvershoot: 5.0);
-            }
-            return (SpcScheduleHelpers.LogSpaceGrid(lo, hi, 48), $"logspace:{lo:G6},{hi:G6},48");
+            (double lo, double hi, string basis) = SpcScheduleHelpers.AutoBracket(graph, options.Q, construction);
+            return (SpcScheduleHelpers.LogSpaceGrid(lo, hi, 48), $"logspace:{lo:G6},{hi:G6},48", basis);
         }
 
-        return (TemperatureGridSpec.Parse(options.TemperaturesSpec), options.TemperaturesSpec);
+        return (TemperatureGridSpec.Parse(options.TemperaturesSpec), options.TemperaturesSpec, "explicit");
     }
 
     private static ISweepStrategy BuildSweepStrategy(Options options, string checkpointDirectory, double[] temperatures)

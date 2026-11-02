@@ -103,7 +103,8 @@ public sealed record SweepSpec(
     string                              Analyzer,
     string                              PartitionStrategy,
     double                              Theta,
-    string?                             TemperaturesResolved = null);
+    string?                             TemperaturesResolved = null,
+    string?                             TemperatureBasis = null);   // what the grid's units rest on: explicit | bwd-t_ps(q) | edge-statistics[/gauge]
 
 /// <summary>Cumulative-field configuration: the ladder, its reconciliation, the
 /// temperature grid, and the thermal-EOM resolution settings.</summary>
@@ -115,7 +116,8 @@ public sealed record CumulativeFieldSpec(
     int                                 MinClusterSize,
     string                              Periphery,              // "None" | "Ascend"
     double?                             CutTemperature,
-    string?                             TemperaturesResolved = null);
+    string?                             TemperaturesResolved = null,
+    string?                             TemperatureBasis = null);   // explicit | own-ladder (the solver's units, never the SW gauge)
 
 /// <summary>HDBSCAN configuration.</summary>
 public sealed record HdbscanSpec(

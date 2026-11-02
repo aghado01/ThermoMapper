@@ -184,7 +184,7 @@ internal static class GraphRun
     /// <c>{baseDirectory}/graph_cache/</c> when present; otherwise compile it,
     /// persist the artifact, and write the graph-health report into the run.
     /// </summary>
-    internal static CsrGraph LoadOrBuildGraph(
+    internal static (CsrGraph Graph, ResolvedConstruction? Resolved) LoadOrBuildGraph(
         GraphRunOptions options, SpcUserDataset dataset, GraphCompilerConfig config,
         string baseDirectory, string runDirectory)
     {
@@ -202,7 +202,7 @@ internal static class GraphRun
             Console.WriteLine($"Graph artifact : {GraphConstructionPersistence.GetGraphPath(datasetRoot)}");
             Console.WriteLine($"Graph manifest : {GraphConstructionPersistence.GetManifestPath(datasetRoot)}");
             Console.WriteLine($"Graph manifest contains {persistedManifest?.Diagnostics.Messages.Count ?? 0} diagnostic entries.");
-            return persistedGraph;
+            return (persistedGraph, persistedManifest?.Resolved);
         }
 
         if (dataset.Features.Length == 0)
@@ -229,7 +229,7 @@ internal static class GraphRun
         }
         Console.WriteLine($"Graph health JSON  : {graphHealthPath}");
 
-        return buildResult.Graph;
+        return (buildResult.Graph, buildResult.Resolved);
     }
 
     // ── Manifest ─────────────────────────────────────────────────────────

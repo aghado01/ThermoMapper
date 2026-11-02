@@ -1,4 +1,5 @@
 using Clustering.Graphical.SPC.Runtime.Core.Sampler;
+using Graphs;
 using Graphs.Primitives;
 
 using Graphs.Models.Potts;
@@ -23,7 +24,9 @@ public static class AutoGridFixedSweep
     /// <summary>
     /// Build a fixed-grid config with a log-spaced grid auto-bracketed from
     /// <paramref name="graph"/>. <paramref name="sampler"/> null uses the default
-    /// <see cref="PottsModelConfig"/>.
+    /// <see cref="PottsModelConfig"/>. <paramref name="construction"/> is the build's declared
+    /// units (<see cref="GraphBuildResult.Resolved"/>), which the bracket reads; null for a graph
+    /// that has none, such as a Mapper patch.
     /// </summary>
     public static FixedGridSweepConfig BuildConfig(
         CsrGraph graph,
@@ -38,11 +41,12 @@ public static class AutoGridFixedSweep
         int replicas = 1,
         AccumulationSpec accumulation = default,
         int? baseSeed = null,
-        string? checkpointDirectory = null)
+        string? checkpointDirectory = null,
+        ResolvedConstruction? construction = null)
     {
         sampler ??= new PottsModelConfig();
 
-        (double lo, double hi) = SpcScheduleHelpers.EstimateBracket(graph, sampler.Q, coldOvershoot, hotOvershoot);
+        (double lo, double hi, _) = SpcScheduleHelpers.AutoBracket(graph, sampler.Q, construction, coldOvershoot, hotOvershoot);
         double[] grid = SpcScheduleHelpers.LogSpaceGrid(lo, hi, gridSteps);
 
         return new FixedGridSweepConfig

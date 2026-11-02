@@ -53,12 +53,19 @@ public static class CumulativeFieldCommand
             Console.WriteLine($"Field              : {options.Field} (symmetrization={options.Symmetrization}, theta={options.Theta})");
             Console.WriteLine($"Resolver           : thermal-eom (periphery={options.PeripheryCompletion}, min-size={options.MinClusterSize})");
 
-            CsrGraph graph = GraphRun.LoadOrBuildGraph(options, dataset, graphConfig, baseDirectory, runDirectory);
+            (CsrGraph graph, ResolvedConstruction? resolvedGraph) =
+                GraphRun.LoadOrBuildGraph(options, dataset, graphConfig, baseDirectory, runDirectory);
+            if (StackedNormalizationWarning(options.Field, resolvedGraph) is string stacked)
+                Console.WriteLine($"Warning            : {stacked}");
 
-            (double[] temperatures, string temperaturesResolved) = ResolveTemperatureGrid(options, graph);
+            (double[] temperatures, string temperaturesResolved, string temperatureBasis) = ResolveTemperatureGrid(options, graph);
             manifest = manifest with
             {
-                CumulativeField = manifest.CumulativeField! with { TemperaturesResolved = temperaturesResolved },
+                CumulativeField = manifest.CumulativeField! with
+                {
+                    TemperaturesResolved = temperaturesResolved,
+                    TemperatureBasis = temperatureBasis,
+                },
             };
             manifest.WriteTo(runDirectory);
             Console.WriteLine($"Temperatures       : {temperaturesResolved}");
@@ -143,17 +150,27 @@ public static class CumulativeFieldCommand
     /// log-spaced points across it. The resolved spec is recorded exactly
     /// (round-trip formatting), so re-parsing it reproduces the grid.
     /// </summary>
-    private static (double[] Temperatures, string Resolved) ResolveTemperatureGrid(Options options, CsrGraph graph)
+    private static (double[] Temperatures, string Resolved, string Basis) ResolveTemperatureGrid(Options options, CsrGraph graph)
     {
         string spec = options.TemperaturesSpec.Trim();
         if (!spec.Equals("auto", StringComparison.OrdinalIgnoreCase))
-            return (TemperatureGridSpec.Parse(spec), spec);
+            return (TemperatureGridSpec.Parse(spec), spec, "explicit");
 
         (double lo, double hi) = CumulativeFieldSolver.EstimateBracket(
             graph, EdgeWeightKind.Coupling, options.Field, options.Symmetrization);
         string resolved = string.Create(CultureInfo.InvariantCulture, $"logspace:{lo:R},{hi:R},48");
-        return (TemperatureGridSpec.Parse(resolved), resolved);
+        return (TemperatureGridSpec.Parse(resolved), resolved, "own-ladder");
     }
+
+    /// <summary>
+    /// <see cref="Field.Local"/> is a per-node normalization applied after compile, the same family as LMP,
+    /// which acts during compile; fed an LMP graph the two stack. Null when they do not.
+    /// </summary>
+    internal static string? StackedNormalizationWarning(Field field, ResolvedConstruction? construction) =>
+        field == Field.Local && construction?.Coupling is { Lmp: true }
+            ? "Field.Local normalizes per node after compile and this graph was LMP-rescaled during compile; " +
+              "the two normalizations stack (a double count)."
+            : null;
 
     // ── Argv ─────────────────────────────────────────────────────────────
     private static Options ParseArguments(string[] args)

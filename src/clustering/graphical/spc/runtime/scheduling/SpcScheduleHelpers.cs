@@ -5,7 +5,9 @@ using Clustering.Dendrograms;
 using Clustering.Evaluation.External;
 using Clustering.Graphical.SPC.Partitions.Strategies;
 using Clustering.Graphical.SPC.Runtime.Core.Sampler;
+using Graphs;
 using Graphs.Diagnostics;
+using Graphs.Models.Potts;
 using Graphs.Observables;
 using Graphs.Primitives;
 
@@ -58,6 +60,37 @@ public static class SpcScheduleHelpers
 
         double tc = Estimate(graph, q);
         return (tc * coldOvershoot, tc * hotOvershoot);
+    }
+
+    /// <summary>
+    /// The temperature bracket a graph declares through its <see cref="ResolvedConstruction"/>; the
+    /// one function the REPL's <c>auto</c> and <see cref="AutoGridFixedSweep"/> both call.
+    /// Couplings in the classic units (<see cref="CouplingResolution.HasBwdUnits"/>) take BWD's
+    /// q-only T_ps(q) bracket. Any other graph takes the data heuristic of <see cref="Estimate"/>
+    /// divided by the gauge: the heuristic goes as J² while a gauge g scales J by g, so dividing
+    /// keeps the bracket equivariant, <c>J → gJ</c> moving it to <c>T → gT</c>, which is all a gauge is.
+    /// <paramref name="construction"/> is null for a graph with no declaration (a Mapper patch);
+    /// it takes the heuristic as it stands. <c>Basis</c> names the estimator for the run manifest.
+    /// </summary>
+    public static (double Lo, double Hi, string Basis) AutoBracket(
+        CsrGraph graph,
+        int q,
+        ResolvedConstruction? construction,
+        double coldOvershoot = 0.05,
+        double hotOvershoot = 5.0)
+    {
+        if (construction?.Coupling is { HasBwdUnits: true })
+        {
+            (double tpsLo, double tpsHi) = BwdPottsCriticalEstimate.Bracket(q);
+            return (tpsLo, tpsHi, $"bwd-t_ps(q={q})");
+        }
+
+        double gauge = construction?.Coupling is { GaugeFactor: > 0.0 } c ? c.GaugeFactor : 1.0;
+        (double lo, double hi) = EstimateBracket(graph, q, coldOvershoot, hotOvershoot);
+        string basis = gauge == 1.0
+            ? "edge-statistics"
+            : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"edge-statistics/gauge={gauge:G6}");
+        return (lo / gauge, hi / gauge, basis);
     }
 
     public static IReadOnlyList<SchedulePartitionRollup> BuildPartitionScheduleRollups(
