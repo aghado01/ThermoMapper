@@ -319,3 +319,25 @@ and `BwdParityTests` untouched. On BlattHierarchy (Gaussian, mean-edge, K = 5, 1
 5. *Not done, §4:* the user had not said whether §4 holds further changes.
 
 
+
+### 2026-11-01: LMP rank comparison, strict versus inclusive
+
+The user asked for a measurement before any change to the LMP default: `LmpRankRule.Strict` stays the default until they have seen the results below. The harness is `tests/VizCore.Tests/LmpRankComparisonHarness.cs` (inert unless `LMP_RANK_COMPARISON` is set). This section was written, and committed, before any sweep ran.
+
+**Protocol, fixed before the run.**
+- **Graphs.** Mutual kNN + MST-min, K ∈ {5, 10}, Cauchy inner kernel with the mean-edge bandwidth (pre-repair edges), no gauge, no injected protect set (the REPL injects the H1 cycle edges; this run does not), LMP on, both `LmpRank` values. BlattHierarchy 0.15 also under Gaussian. Datasets: iris; BlattHierarchy (50 per fine cluster, spreads 0.15 and 0.3, generator seed 42); AnisotropicGaussian (400 per class, separation 4, a = 1, generator seed 55); Landsat (all 6,435 points).
+- **Sweep.** q = 20; 141 temperatures over [10⁻⁶, 3]; 4 replicas × 1,000 cycles (200 burn-in); rich accumulation.
+- **Scores,** per label level (BlattHierarchy has three, with 2, 6 and 24 classes), as primer §12.29 states them, with these readings of its words:
+  - a *real cluster* holds at least ⌈0.4 × the level's smallest class⌉ assigned points;
+  - a *stage* is a temperature with exactly k real clusters and k distinct majority classes; its *width* is ln(T_last/T_first) over the longest contiguous run, and it is *found* when the width is at least 1 e-fold;
+  - the *matched share* credits each class once, by the largest real cluster it leads (a giant cluster of several classes credits one), summed over N, maximised over T;
+  - `HierarchyEom` runs at minimum size N/50 (θ = 0.5, no periphery completion) and *matches* a level when its selection meets the stage rule there;
+  - the per-T partitions are the raw dense T-stack (θ = 0.5, no peripheral capture).
+- **Seeds.** Grid cells use sampler seed 42. The two deciding cells (AnisotropicGaussian K = 5; BlattHierarchy 0.15, K = 10, both Cauchy) run on six sampler seeds, `SeedTree.Derive(42, 6)`; the data seeds stay fixed.
+
+**Criteria, the user's, operationalised before the run.**
+- **Flip supported:** with inclusive, the 3-class stage is found in at least 5 of 6 seeds on AnisotropicGaussian K = 5, and the 24-class fine stage is found and matched by `HierarchyEom` in at least 5 of 6 seeds on BlattHierarchy 0.15 K = 10.
+- **Flip not supported:** with inclusive, the fine stage is not found in at least 4 of 6 seeds on BlattHierarchy 0.15 K = 10 (the fine clusters chain).
+- **Anything else:** mixed, no call.
+
+**Readings alongside**, per the request: where strict's fine stage starts and ends at HEAD, and the same cell with the grid's cold edge at 10⁻⁴; whether the coldest partition equals the coupled components (zeros, not temperature, separating the clusters); low-degree chaining under inclusive (cross-class edges at degree ≤ 2 nodes, impure EOM clusters); bridge units against interior edges and single-linkage merge-order inversion per label level; zero edges and coupled components per cell.
