@@ -288,7 +288,7 @@ entropy) suit it better.
 | C54 | In a block's ordered bulk a shed fragment of n points is exponentially rare, exp(−γ·n^((d − 1)/d)), so shedding is dust and a size floor can be modest; C21's worst case isn't the typical one | §13.14 | Lattice result (Grimmett Theorem 5.104, Conjecture 5.101); matches the toy's cold edge (§12.9); on data graphs an analogy | The exact histogram across a plateau |
 | C55 | Theorem 9.35's literal form fails at q ≥ 3: Q(x ↔ y in the union of two sourceless Z_q currents) exceeds τ², by (q − 1)^L on a path of L edges at weak coupling; Q ≥ τ² held in all 126 cases | §13.14 | Observed by exact enumeration (q = 2 exact in 42 of 42); leading-order ratio derived; the inequality unproven | A proof, or a counterexample |
 | C56 | At any q ≥ 1, τ_xy² is the probability that x and y share a block of the meet of two independent FK draws, and equals (q⟨δ(ρ_x, ρ_y)⟩ − 1)/(q − 1) for the replicas' difference field ρ | §13.14 | Derived here (mixture convolution); checked by enumeration at q = 2 and 3 | E19 |
-| C57 | `LineagePersistence`'s dependence on seed and grid comes from four separable defects: the representative, a score counted in levels, the ratio elbow and `GapThreshold`. With all four fixed, iris reads its first stage on 12 of 12 seeds with ARI 1.000 between seeds at 8 × (1000, 2000), and every density design returns the same partition. Which hierarchy level to report stays a modelling choice: the longest-lived reading depends on the grid's extent, and a slice at T* does not | §13.15 | Observed (150 sweeps over 5 graphs; resolver copy checked against the code on all of them); the choice is the user's | The user's decision (§13.15) |
+| C57 | `LineagePersistence`'s dependence on seed and grid comes from four separable defects: the representative, a score counted in levels, the ratio elbow and `GapThreshold`. With all four fixed, iris reads its first stage on 12 of 12 seeds with ARI 1.000 between seeds at 8 × (1000, 2000), and every density design returns the same partition. Which hierarchy level to report stays a modelling choice: the longest-lived reading depends on the grid's extent, and a slice at T* does not | §13.15, §13.16 | Observed (150 sweeps over 5 graphs, twice: resolver copy checked against the code on all of them; on the revised compiler the graphs are bit-identical bar five clamped bridges, and 134 sweeps byte-identical, §13.16); the user approved the build on that recheck | Build it (§13.16) |
 
 ---
 
@@ -2555,8 +2555,8 @@ decision at the end.
 - **Landsat.** k = 5, minimum 50, because its parity test rests on this resolver: 12 seeds at 1 × (200, 400), 6 at
   4 × (500, 1000), with the test's window.
 - **The designs.** Iris and the toy also swept 160 levels: 129 on the bracket, plus 31 at eight times the step down to
-  10⁻⁶. §12.22's designs are subsets of those same sweeps. The levels below T ≈ 0.01 share seeds within a replica (§13.14),
-  which leaves each level's marginal right.
+  10⁻⁶. §12.22's designs are subsets of those same sweeps. These sweeps ran with the seed fold that takes T's bits, uncommitted
+  at the time (§13.16), so every level had its own stream.
 - **The checks.** The harness (scratch, not committed) carries a copy of the resolver with the options below. Its
   unmodified path matched `LineagePersistence.Resolve` on lineages, scores, representatives, split share and assignment
   in all 150 sweeps and all three windows. It also reproduces §13.14's old-assertion counts, 2 of 12 and 0 of 12; its
@@ -2758,3 +2758,209 @@ The largest level over the midpoint is the closest call. It covers about 40% mor
   effect on the longest-lived reading could at least be reported.
 - **Thermodynamic length** (§12.21) wasn't tried: it needs the energy variance, which this producer-agnostic core doesn't
   get.
+
+### 13.16 Addendum, 2026-11-01: §13.15 rechecked on the revised graph compiler
+
+The compiler revision (`7a35ffd`..`dfcb817`, `graph-compiler-brief.md`) landed partly while §13.15 was measuring, so the
+user asked for its measurements to be rechecked before anything was built. **The revision changed nothing in those
+measurements.** The four defects and the recommended build stand. A second draw of the sampler adds one correction, and
+raises one price.
+
+**Which build §13.15 ran on.** Its notes didn't say. The checksums in the old build's PDBs, against the git blobs, do:
+`GraphCompiler.cs` and `GlobalBandwidthScaler.cs` at `be04f35`, so the floor exemption was in, and so was the T_ps fix
+(`681bf5c`). The gauge, `ScaleEdges` and `AutoBracket` commits came after it. It also held three uncommitted files from
+another session: `SpcSeedHelper`, `SpcExecutor` and `SpcExecutionOptions`, the seed fold that takes T's bits. So §13.15's
+sweeps ran with distinct streams at every level, and its remark that the cold levels share seeds was wrong for them; that
+remark is corrected above. The fold has since landed (`2d817d3`).
+
+**The two arms.** Both use the parity recipe as `BwdParityTests` now declares it (`Gauge = InverseMeanDegree`,
+`ScaleEdges = AfterRepair`), with the same seeds, budgets, grids and worker count. Each build came from an export of the
+commit, not from the working tree, and the harness's copy of the resolver matched `LineagePersistence.Resolve` on every
+run analysed, all 150 on the clean arm.
+- **Clean `c08fb6b`:** all 150 sweeps. It has the old fold, ⌊1000·T⌋, so its streams differ from §13.15's at every level,
+  and it serves as a second draw of the same graphs.
+- **`c08fb6b` plus the three seed files:** the seed-matched arm, which isolates the compiler. 134 of the 150 sweeps: all but
+  5 of Landsat's 6 and 11 of the toy's 12 at the high budget, the slowest, where one seed each stands as the check.
+
+**The graphs, old build against `c08fb6b`, edge by edge.**
+
+| Graph | Edges | Couplings bit-identical | Components, old and new |
+|---|---|---|---|
+| Iris | 262 | All | 1, 1 |
+| The toy | 12,655 | All | 1, 1 |
+| Landsat | 9,048 | All | 1, 1 |
+| BlattHierarchy, Cauchy | 2,169 | All | 1, 1 |
+| BlattHierarchy, Gaussian | 2,169 | 2,164; the other five are the clamped bridges, 1e-300 before and 2.77e-301 now, since the gauge comes last | 1, 1 |
+
+**The sweeps.** The seed-matched arm is **byte-identical to §13.15's caches on all 134**. So the BWD presets and the parity
+config do hold, as the compiler's report says, and the two BlattHierarchy graphs hold too. Neither expected move happened:
+- **The Gaussian graph** was already one component at `be04f35`, and SW can't feel the bridges anyway (below). The only bits
+  that changed are five couplings of about 10⁻³⁰⁰.
+- **The Cauchy graph** doesn't go through `AutoBracket` here: the harness fixes its grids. The bracket's move is read
+  separately below.
+
+Since `2d817d3`, main has that arm's seeds, so **§13.15's numbers are main's numbers.**
+
+**Old against the second draw.** A cell shows one value where the two agree, and old → new where they don't. Nothing below
+comes from the compiler; it's the sampler's spread, on identical graphs. Low budget, then high.
+
+*Iris.*
+
+| Change | First stage | Setosa points | Assigned | ARI to 50/100 | Old assertions | ARI between seeds |
+|---|---|---|---|---|---|---|
+| Current | 12, 12 | 44, 5 → 42, 6 | 111, 97 → 100, 98 | 0.577, 0.582 → 0.349, 0.583 | 2, 0 → 3, 0 | 0.565 (−0.168), 0.793 (0.123) → 0.417 (0.060), 0.882 (0.660) |
+| Largest only | 10, 3 → 12, 5 | 50, 50 | 148, 50 | 0.964, 0.181 | 0, 0 | 0.983 (0.193), 1.000 (0.193) → 1.000 (0.983), 0.193 (0.193) |
+| ln T only | 12, 12 | 44, 5 → 42, 6 | 111, 97 → 100, 98 | 0.577, 0.582 → 0.349, 0.583 | 2, 0 → 3, 0 | 0.565 (−0.168), 0.793 (0.123) → 0.417 (0.060), 0.882 (0.660) |
+| Share 0.25 only | 12, 12 | 44, 35 → 44, 36 | 123, 122 → 122, 122 | 0.642, 0.678 → 0.608, 0.681 | 0, 0 | 0.828 (0.090), 0.959 (0.660) → 0.807 (−0.099), 0.949 (0.710) |
+| No elbow only | 12, 12 | 44, 5 → 42, 6 | 118, 102 → 110, 103 | 0.579, 0.584 → 0.353, 0.584 | 0, 0 → 1, 0 | 0.587 (−0.084), 0.795 (0.160) → 0.431 (0.085), 0.884 (0.664) |
+| All, least-decided | 12, 12 | 44, 36 | 126, 122 → 127, 123 | 0.642, 0.681 → 0.650, 0.684 | 0, 0 → 1, 0 | 0.828 (0.154), 0.908 (0.712) → 0.828 (0.381), 0.949 (0.712) |
+| All, midpoint | 12, 12 | 49, 49 | 141, 141 | 0.855, 0.855 | 0, 0 | 1.000 (0.984), 1.000 (1.000) |
+| All, largest | 12, 12 | 50, 50 | 148, 148 | 0.964, 0.964 | 0, 0 | 1.000 (0.983), 1.000 (1.000) |
+
+*The toy.*
+
+| Change | Parity assertions | Assigned | ARI to stripes | ARI between seeds |
+|---|---|---|---|---|
+| Current | 5, 8 → 4, 10 | 1656, 2610 → 1748, 2440 | 0.309, 0.690 → 0.341, 0.611 | 0.145 (−0.037), 0.755 (0.425) → 0.535 (−0.002), 0.780 (0.743) |
+| Largest only | 3, 8 → 4, 6 | 1847, 2760 → 1857, 2312 | 0.519, 0.690 → 0.519, 0.606 | 0.744 (−0.092), 0.807 (0.745) → 0.925 (0.727), 0.752 (0.742) |
+| ln T only | 4, 7 | 1656, 2375 → 1748, 2440 | 0.309, 0.569 → 0.341, 0.611 | 0.105 (0.001), 0.750 (0.425) → 0.163 (−0.000), 0.747 (0.404) |
+| Share 0.25 only | 10, 12 → 11, 12 | 2608, 2612 → 2622, 2611 | 0.689, 0.691 → 0.691, 0.691 | 0.795 (−0.058), 0.997 (0.994) → 0.806 (0.374), 0.997 (0.996) |
+| No elbow only | 4, 7 → 4, 8 | 1837, 2484 → 2064, 2480 | 0.324, 0.572 → 0.350, 0.612 | 0.240 (0.056), 0.752 (0.508) → 0.400 (0.065), 0.763 (0.450) |
+| All, least-decided | 12, 12 | 2610, 2611 → 2622, 2611 | 0.689, 0.691 → 0.691, 0.691 | 0.965 (0.781), 0.997 (0.857) → 0.970 (0.786), 0.997 (0.996) |
+| All, midpoint | 12, 12 | 2719, 2718 → 2718, 2718 | 0.703, 0.705 → 0.705, 0.705 | 0.992 (0.844), 0.999 (0.872) → 0.993 (0.862), 0.999 (0.998) |
+| All, largest | 12, 12 | 2766, 2771 → 2770, 2771 | 0.689, 0.691 | 0.986 (0.842), 0.996 (0.871) → 0.987 (0.853), 1.000 (0.991) |
+
+*BlattHierarchy, Gaussian.*
+
+| Change | Clusters | Assigned | ARI to fine | ARI between seeds |
+|---|---|---|---|---|
+| Current | 25, 25 → 25.5, 24.5 | 575, 516 → 567, 488 | 0.423, 0.345 → 0.406, 0.299 | 0.656 (0.479), 0.688 (0.477) → 0.686 (0.492), 0.711 (0.514) |
+| Largest only | 24, 24 | 1165, 1165 | 0.974, 0.974 | 1.000 (0.998), 1.000 (0.987) → 1.000 (0.986), 1.000 (0.987) |
+| All, least-decided | 26, 25 → 25, 25 | 692, 629 → 682, 652 | 0.552, 0.498 → 0.534, 0.515 | 0.802 (0.684), 0.906 (0.831) → 0.828 (0.756), 0.932 (0.868) |
+| All, midpoint | 25, 25 | 1131, 1128 → 1130, 1128 | 0.931, 0.928 → 0.929, 0.928 | 0.989 (0.979), 0.997 (0.994) → 0.990 (0.982), 0.998 (0.995) |
+| All, largest | 25, 25 | 1185, 1185 | 0.977, 0.977 | 0.999 (0.998), 1.000 (1.000) → 1.000 (0.998), 1.000 (1.000) |
+
+*BlattHierarchy, Cauchy.*
+
+| Change | Clusters | ARI to medium | Seeds ≥ 0.8 | ARI between seeds |
+|---|---|---|---|---|
+| Current | 10.5, 10 → 9, 11 | 0.820, 0.814 → 0.858, 0.773 | 7, 7 → 9, 5 | 0.783 (0.459), 0.817 (0.656) → 0.789 (0.605), 0.841 (0.558) |
+| All, least-decided | 6, 6 | 1.000, 1.000 | 12, 12 | 1.000 (1.000), 1.000 (1.000) |
+| All, midpoint | 6, 6 | 1.000, 1.000 | 12, 12 | 1.000 (1.000), 1.000 (1.000) |
+| All, largest | 6, 6 | 1.000, 1.000 | 12, 12 | 1.000 (1.000), 1.000 (1.000) |
+
+*Landsat.*
+
+| Change | Parity assertions | Purity | Covered | ARI between seeds |
+|---|---|---|---|---|
+| Current | 12, 6 | 0.946, 0.962 → 0.960, 0.960 | 899, 748 → 862, 714 | 0.507 (0.174), 0.863 (0.824) → 0.567 (0.119), 0.662 (0.609) |
+| Largest only | 6, 4 → 5, 3 | 0.847, 0.890 → 0.819, 0.607 | 2754, 2056 → 2616, 2476 | 0.424 (0.057), 0.221 (0.061) → 0.572 (0.067), 0.101 (0.048) |
+| All, least-decided | 12, 6 → 11, 6 | 0.907, 0.901 → 0.911, 0.897 | 1364, 1149 → 1400, 1106 | 0.513 (0.163), 0.931 (0.902) → 0.449 (0.052), 0.869 (0.838) |
+| All, midpoint | 12, 6 | 0.917, 0.915 → 0.914, 0.919 | 1720, 1726 → 1894, 1738 | 0.670 (0.392), 0.941 (0.921) → 0.716 (0.600), 0.933 (0.904) |
+| All, largest | 11, 6 → 9, 6 | 0.915, 0.915 → 0.896, 0.910 | 2444, 2368 → 2644, 2550 | 0.614 (0.293), 0.814 (0.745) → 0.643 (0.415), 0.820 (0.705) |
+
+**The slices.** Share 0.10, largest representative. `S` is setosa whole and `s` setosa in pieces; `stripesN` counts clusters
+holding at least 500 of one stripe at purity ≥ 0.85.
+
+| Dataset, grid | T* | Reading | ARI to that level | ARI between seeds |
+|---|---|---|---|---|
+| iris f160 | 0.02 | S+merged:12, S+merged:12 | 1.000, 1.000 | 1.000 (1.000), 1.000 (1.000) |
+| iris f160 | 0.04 | S+merged:12, S+merged:12 | 1.000, 1.000 | 1.000 (0.714), 1.000 (1.000) → 1.000 (0.673), 1.000 (1.000) |
+| iris f160 | 0.06 | S+species:11, S+species:12 → S+species:12, S+species:12 | 0.636, 0.662 → 0.656, 0.662 | 0.843 (0.771), 1.000 (1.000) → 0.919 (0.801), 1.000 (0.996) |
+| iris f160 | 0.07 | s+species:9, S+species:12 → s+species:6, S+species:12 | 0.454, 0.659 → 0.476, 0.659 | 0.856 (0.666), 1.000 (1.000) → 0.886 (0.767), 1.000 (0.996) |
+| iris p48 | 0.04 | S+merged:12, S+merged:12 | 0.964, 0.964 | 1.000 (0.705), 1.000 (1.000) → 1.000 (0.605), 1.000 (1.000) |
+| iris p48 | 0.06 | S+species:11, S+species:12 → S+species:10, S+species:12 | 0.652, 0.662 → 0.650, 0.662 | 0.963 (0.664), 1.000 (0.990) → 0.893 (0.688), 1.000 (0.990) |
+| toy p48 | 0.02 | stripes2:12, stripes2:12 | 0.679, 0.679 → 0.680, 0.678 | 0.994 (0.985), 0.999 (0.994) → 0.993 (0.984), 0.999 (0.996) |
+| toy p48 | 0.03 | stripes2:12, stripes2:12 | 0.679, 0.679 → 0.680, 0.678 | 0.994 (0.985), 0.999 (0.994) → 0.993 (0.984), 0.999 (0.996) |
+| toy p48 | 0.04 | stripes2:12, stripes2:12 | 0.679, 0.679 → 0.680, 0.678 | 0.994 (0.985), 0.999 (0.994) → 0.993 (0.984), 0.999 (0.996) |
+| blatt-cauchy w161 | 1E-05 | coarse:12, coarse:12 | 1.000, 1.000 | 1.000 (1.000), 1.000 (1.000) |
+| blatt-cauchy w161 | 0.0001 | medium:12, medium:12 | 1.000, 1.000 | 1.000 (1.000), 1.000 (1.000) |
+| blatt-cauchy w161 | 0.001 | medium:12, medium:12 | 1.000, 1.000 | 1.000 (1.000), 1.000 (1.000) |
+| blatt-cauchy w161 | 0.01 | fine:12, fine:12 | 0.998, 0.998 | 1.000 (0.998), 1.000 (0.999) → 0.999 (0.998), 1.000 (0.999) |
+
+The old test's assertions at iris's T\* = 0.06: 11 and 12 of 12 → 10 and 12 on the parity grid, 11 and 12 → 12 and 12 on the
+160-level one.
+
+**Longest-lived, what it takes.** Iris setosa plus merged, 12 of 12 at both budgets. The toy three clusters, with
+`stripes3` on 8 and 11 → 9 and 12. Gaussian BlattHierarchy fine, 12 of 12. Cauchy on the wide grid medium, 12 of 12. Landsat
+8–11 clusters of at least 50 at the low budget, and 9 clusters holding 6 classes on all 6 seeds at the higher, both draws.
+
+**Its dependence on the design** holds as well. Against uniform 129 on iris at the high budget, every longest-lived cell
+agrees within 0.001, except the minimum at the cold edge 0.025 (0.261 → 0.107). The slice at T\* = 0.06 agrees within
+0.004. On the toy the longest-lived medians agree within 0.02, and the cold edge at 10⁻⁶ still returns the giant on 12 of 12. The current
+path keeps swinging on those same cells: 0.995 → 0.796 on iris's dense design. Full tables are in the shared notes
+(`lineage-persistence/recheck/results/compare-a.txt`).
+
+**The four defects, each on the second draw.**
+1. **The representative.** Setosa 42 and 6 points; ARI to fine 0.406 and 0.299 on the Gaussian graph, against 0.977 for the
+   largest.
+2. **Levels.** The current path's cells swing as above, and lifetimes hold.
+3. **The elbow.** Largest alone: setosa plus merged on 12 and 5 of 12 (it was 10 and 3), with a median of 50 assigned at the
+   high budget. So it's worse only at the high budget on this draw, and all four together are 12 and 12 on both.
+4. **`GapThreshold`.** Thresholds 0.292–0.450 on iris, 0.300–0.465 on the Cauchy graph, and a widest pooled spacing of
+   0.025–0.032 among iris's band values. There is still no gap.
+
+**The bracket's move, and the compiler's new defaults.** Beyond the 150, on the seed-matched build: 12 seeds, at
+1 × (200, 400) then 4 × (500, 1000), except Gaussian on T_ps, whose second cell is 8 × (1000, 2000) as in §13.15.
+
+| Graph | Bracket | Longest-lived reads | ARI to fine: all fixed, largest | All fixed, midpoint | Current |
+|---|---|---|---|---|---|
+| Gaussian, declared | T_ps, [0.00446, 0.357] | fine (12 of 12) | 0.977, 0.977 | 0.931, 0.928 | 0.423, 0.345 |
+| Gaussian, declared | Wide, [10⁻⁶, 0.357] | fine (12 of 12) | 0.998, 0.998 | 0.997, 0.997 | 0.446, 0.282 |
+| Gaussian, compiler defaults | `auto`, [0.0228, 2.28] | fine (12 of 12) | 0.938, 0.936 | 0.860, 0.856 | 0.447, 0.296 |
+| Cauchy, declared | T_ps, what `auto` gave before | fine (12 of 12) | 0.985, 0.985 | 0.949, 0.949 | 0.423, 0.240 |
+| Cauchy, declared | `auto` now, [0.00689, 0.689] | fine (12 of 12) | 0.985, 0.984 | 0.928, 0.928 | 0.448, 0.325 |
+| Cauchy, declared | Wide, [10⁻⁶, 0.357] | medium (12 of 12) | 0.353, 0.353 | 0.353, 0.353 | 0.391, 0.417 |
+| Cauchy, compiler defaults | `auto`, [0.0168, 1.68] | fine (12 of 12) | 0.984, 0.985 | 0.915, 0.915 | 0.428, 0.425 |
+
+- **`auto` moved, and the reading didn't.** On the Cauchy graph it went from [0.00446, 0.357] to [0.00689, 0.689], and
+  longest-lived reads fine on 12 of 12 on both. It reads medium only on the wide grid. That isn't new behaviour, since it's
+  §13.15's dependence on extent, but it means "the medium level on the Cauchy one" in §13.15 is a statement about that grid,
+  and a user on `auto` gets fine.
+- **T\* reaches only what the grid holds.** No `auto` bracket here reaches down to the medium stage, and the harness's slice
+  snaps to the nearest level, so T\* = 10⁻⁵ on the Cauchy graph's T_ps bracket silently reads the cold edge (about 20 clusters).
+- **The largest beats the midpoint in every row that reads fine.** On the wide Cauchy grid they tie, both reading medium.
+
+**What SW can reach on the Gaussian graph.** Merge heights in the parity recipe's couplings, with δ̄ on each merge's edge from
+the wide grid at 4 × (500, 1000):
+
+| Merges | log₁₀ J | δ̄ against the T-stack's 0.5 |
+|---|---|---|
+| 13 inside the fine clusters | −0.63 to −1.38 | Clear it up to T = 0.013–0.148 |
+| 7 of the 18 fine-to-medium | −3.49 to −5.31 | Clear it up to T = 1.0·10⁻⁴ to 1.6·10⁻⁶ |
+| The other 11 | −5.68 to −8.52 | Never, down to 10⁻⁶: δ̄ there is 0.284 falling to 0.050 |
+| The 5 above medium | −300.56, tied at the clamp | Never: δ̄ = 0.050 = 1/q at every level and seed |
+
+So the graph holds 24 fine clusters at T = 10⁻³, 20 at 10⁻⁵ and 17 at 10⁻⁶, the coldest level swept. The bridges on these
+edges clear 0.5 near T ≈ J/ln(1 + q), J/3 at q = 20, which fits the rows above and the Cauchy graph's: not J/ln 2, because
+joining two blocks costs a factor of q in the cluster count. So a whole medium stage would need T ≈ 10⁻⁹, and the five merges
+above it tie at T of order 10⁻³⁰¹, some 670 e-folds further, which leaves coarse no width at all.
+
+**What that does to the ARI-to-fine reading.** On this graph the fine stage is the only whole stage in reach, and on the
+parity grid the only one at all: across all its levels and seeds, the strongest bridge reaches δ̄ = 0.055, and the rest stay
+within 0.001 of 1/q. So ARI to fine doesn't test the choice of
+level here. The resolver can't choose anything else, so 0.977 measures the representative's capture of the one stage on
+offer, and it says nothing for longest-lived over a slice or the reverse. The Cauchy graph is the only one here that tests
+the level. The compiler's fix restores the structure, as its report says, and not what SW sees. With a Gaussian kernel at this
+bandwidth, the levels above fine aren't visible to this resolver at any temperature swept here.
+
+**Two findings from the second draw.**
+- **The largest level's price on Landsat is higher than §13.15 said.** Below the test's purity of 0.85 at the low budget: 1 of
+  12 and now 3 of 12, so 4 of 24, as low as 0.818. The midpoint: 0 of 24, with a minimum of 0.886. At the higher budget
+  neither misses (12 of 12, minimum 0.903). The largest still covers 40–47% more on this draw, and leads on iris (0.964
+  against 0.855) and BlattHierarchy (0.977 against 0.929), so the call doesn't flip. It stays the closest call, and it's a
+  low-budget cost: more sampling closes it, while the midpoint's lower capture stays. The midpoint stays selectable.
+- **Two supporting numbers in §13.15 were one draw's.**
+  - *The share.* On Landsat at the low budget, with the largest representative, summed over both draws: the size rule 24 of 24,
+    0.10 20 of 24, 0.15 18, 0.20 15, 0.25 15. So the ordering holds, and it's sharper. §13.15's case against the size rule
+    (it cuts a stage at each chip) is untouched, and 0.10 stays provisional.
+  - *The δ̄ factor.* §13.15 credited it with raising Landsat's ARI between seeds, read at the size rule, from 0.541 to 0.644 and from 0.610 to 0.814. On
+    this draw the medians barely move: 0.668 to 0.680, and 0.810 to 0.820. The minima improve on both draws (0.316 to 0.381 and
+    0.306 to 0.543; 0.548 to 0.745 and 0.522 to 0.705). It stays, for its floor rather than its median.
+
+**The verdict, and the decision.** None of the four defects changed, no reading or stage the recommendation relies on moved,
+and the largest-against-midpoint call stands. The user approved §13.15's recommendation on this condition, with one addition:
+lineages censored by the grid's cold edge are flagged, so the longest-lived reading's dependence on the bracket is visible. It
+gets built as recommended.
+
+Harness and raw tables: `side-session-notes/.../lineage-persistence/recheck/`.
