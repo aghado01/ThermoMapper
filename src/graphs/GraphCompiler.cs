@@ -70,7 +70,6 @@ public static class GraphCompiler
         const double HubnessWarningThreshold = 2.0;
         const double CoverageWarningThreshold = 0.98;
         const double MedianWeightWarningBand = 0.20; // 20% above/below configured limits
-        const double DefaultAutoLmpNearZeroRatio = 0.05;
 
         var log = new DiagnosticsLog();
         Func<int, int, double> distance = metric.Distance;
@@ -100,7 +99,7 @@ public static class GraphCompiler
         }
 
         // Stage 2 — Filter (Auto resolved here)
-        ITopologyFilter filter = ResolveFilter(config.Filter, hubness, log);
+        (ITopologyFilter filter, FilterKind resolvedFilter) = ResolveFilter(config.Filter, hubness, log, config.Auto);
         NeighborSelection filtered = filter.Filter(directed, n, distance);
 
         // Diagnostic gate 2: connectivity coverage
@@ -121,7 +120,7 @@ public static class GraphCompiler
         }
 
         // Stage 3 — Repair (Auto resolved here)
-        ITopologyRepair repair = ResolveRepair(config.Repair, connectivityPre, log);
+        (ITopologyRepair repair, RepairKind resolvedRepair) = ResolveRepair(config.Repair, connectivityPre, log, config.Auto);
         int edgesBeforeRepair = CountUndirectedEdges(filtered, n);
         NeighborSelection repaired = repair.Repair(filtered, n, distance);
         bool repairApplied = CountUndirectedEdges(repaired, n) > edgesBeforeRepair;
@@ -166,7 +165,8 @@ public static class GraphCompiler
         {
             log.Info("Projection", "Distance pass-through — conditioned distance graph (L2).");
             CsrGraph distanceGraph = BuildDistanceGraph(refined, n);
-            LogReturnedGraph(log, distanceGraph, n, repairEdges, connectivityPost, cutEdges: 0, couplingFloor: 0.0, weightsAreCouplings: false);
+            ReturnedGraphReport distanceReport = LogReturnedGraph(
+                log, distanceGraph, n, repairEdges, connectivityPost, cutEdges: 0, couplingFloor: 0.0, weightsAreCouplings: false);
             return new GraphBuildResult(
                 Graph:                  distanceGraph,
                 DirectedSelection:      directed,
@@ -176,7 +176,11 @@ public static class GraphCompiler
                 PreRepairGraph:         repairApplied ? WithoutEdges(distanceGraph, repairEdges, n) : null,
                 Metric:                 metric.Properties,
                 Diagnostics:            log,
-                WeightKind:             EdgeWeightKind.Distance);
+                WeightKind:             EdgeWeightKind.Distance,
+                Resolved:               new ResolvedConstruction(
+                    resolvedFilter, Finite(hubness.InDegreeSkewness), resolvedRepair, Finite(coveragePre), repairEdges.Count,
+                    RefinementKind.PathNeighbor, distanceReport.Structural.ComponentCount,
+                    Finite(distanceReport.Structural.LargestCoverage), Coupling: null));
         }
 
         if (config.Projection is not CouplingProjection coupling)
@@ -202,7 +206,7 @@ public static class GraphCompiler
                     $"CouplingProjection.ScaleRank {scaleRank} must lie in [1, K = {ResolveK(config.Topology)}].");
         }
 
-        IEdgeScaler scaler = BuildScaler(
+        (IEdgeScaler scaler, BandwidthStrategy strategy, CouplingFidelity fidelity, SphericalIntrinsicMode sphericalMode) = BuildScaler(
             coupling,
             repairEdges,
             filtered,
@@ -214,9 +218,10 @@ public static class GraphCompiler
             metric.Features,
             metric.Manifold,
             log,
-            DefaultAutoLmpNearZeroRatio);
+            config.Auto);
         ScalerResult scaled = scaler.Scale(refined, n);
-        LogReturnedGraph(log, scaled.Graph, n, repairEdges, connectivityPost, scaled.CutEdges, coupling.CouplingFloor, weightsAreCouplings: true);
+        ReturnedGraphReport returnedReport = LogReturnedGraph(
+            log, scaled.Graph, n, repairEdges, connectivityPost, scaled.CutEdges, coupling.CouplingFloor, weightsAreCouplings: true);
 
         if (scaled.SingleBandwidth is double delta && delta > 0.0)
         {
@@ -282,7 +287,7 @@ public static class GraphCompiler
             }
             if (config.Interrupts.MaxNearZeroEdgeRatio is double maxRatio)
             {
-                double nzRatio = EdgeWeightThresholds.NearZeroRatio(scaled.Graph, scaled.CutEdges);
+                double nzRatio = EdgeWeightThresholds.NearZeroRatio(scaled.Graph, scaled.CutEdges, config.Auto.NearZeroCoupling);
                 log.Info("Scaling", $"NearZeroEdgeRatio={nzRatio:F4} (threshold={maxRatio:F4}).");
                 if (nzRatio > maxRatio)
                 {
@@ -306,7 +311,12 @@ public static class GraphCompiler
             PreRepairGraph:         preRepairGraph,
             Metric:                 metric.Properties,
             Diagnostics:            log,
-            WeightKind:             EdgeWeightKind.Coupling);
+            WeightKind:             EdgeWeightKind.Coupling,
+            Resolved:               new ResolvedConstruction(
+                resolvedFilter, Finite(hubness.InDegreeSkewness), resolvedRepair, Finite(coveragePre), repairEdges.Count,
+                RefinementKind.PathNeighbor, returnedReport.Structural.ComponentCount,
+                Finite(returnedReport.Structural.LargestCoverage),
+                ResolveCoupling(coupling, scaled, returnedReport, strategy, fidelity, sphericalMode, repairEdges.Count)));
     }
 
     // ── Stage resolution ─────────────────────────────────────────────────
@@ -333,13 +343,13 @@ public static class GraphCompiler
     private static int ResolveK(TopologyConfig cfg) =>
         cfg.Kind == TopologyKind.Knn ? (cfg.K ?? 10) : 0;
 
-    private static ITopologyFilter ResolveFilter(
-        FilterConfig cfg, HubnessReport hubness, DiagnosticsLog log)
+    private static (ITopologyFilter Filter, FilterKind Kind) ResolveFilter(
+        FilterConfig cfg, HubnessReport hubness, DiagnosticsLog log, AutoThresholds auto)
     {
         FilterKind kind = cfg.Kind;
         if (kind == FilterKind.Auto)
         {
-            const double SkewnessAutoThreshold = 3.0;
+            double SkewnessAutoThreshold = auto.FilterSkewness;
             kind = hubness.InDegreeSkewness > SkewnessAutoThreshold
                 ? FilterKind.MutualKnn
                 : FilterKind.OrRule;
@@ -348,14 +358,14 @@ public static class GraphCompiler
                 log.Warning(
                     "Filter",
                     $"Auto-picked MutualKnn because skewness={hubness.InDegreeSkewness:F3} " +
-                    "exceeded the safe threshold (3.0). This is a conservative topology choice.");
+                    $"exceeded the safe threshold ({SkewnessAutoThreshold:G}). This is a conservative topology choice.");
             }
             else
             {
                 log.Info(
                     "Filter",
                     $"Auto: skewness={hubness.InDegreeSkewness:F3} " +
-                    "→ OrRule (≤ 3.0)." );
+                    $"→ OrRule (≤ {SkewnessAutoThreshold:G}).");
             }
         }
         else
@@ -363,22 +373,23 @@ public static class GraphCompiler
             log.Info("Filter", $"Explicit: {kind}.");
         }
 
-        return kind switch
+        ITopologyFilter filter = kind switch
         {
             FilterKind.OrRule    => new PassThroughFilter(),
             FilterKind.MutualKnn => new MutualKnnFilter(
                 cfg.MutualBandwidthSource ?? Graphs.MutualBandwidthSource.DirectedKth),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unresolvable FilterKind."),
         };
+        return (filter, kind);
     }
 
-    private static ITopologyRepair ResolveRepair(
-        RepairConfig cfg, ConnectivityReport connectivity, DiagnosticsLog log)
+    private static (ITopologyRepair Repair, RepairKind Kind) ResolveRepair(
+        RepairConfig cfg, ConnectivityReport connectivity, DiagnosticsLog log, AutoThresholds auto)
     {
         RepairKind kind = cfg.Kind;
         if (kind == RepairKind.Auto)
         {
-            const double CoverageAutoThreshold = 0.95;
+            double CoverageAutoThreshold = auto.RepairCoverage;
             double coverage = connectivity.NodeCount == 0
                 ? 1.0
                 : (double)connectivity.LargestComponent / connectivity.NodeCount;
@@ -387,13 +398,13 @@ public static class GraphCompiler
             {
                 log.Warning(
                     "Repair",
-                    $"Auto-picked MstMin because coverage={coverage:F3} fell below the safe threshold (0.95)." );
+                    $"Auto-picked MstMin because coverage={coverage:F3} fell below the safe threshold ({CoverageAutoThreshold:G}).");
             }
             else
             {
                 log.Info(
                     "Repair",
-                    $"Auto: coverage={coverage:F3} → NoRepair (≥ 0.95)." );
+                    $"Auto: coverage={coverage:F3} → NoRepair (≥ {CoverageAutoThreshold:G}).");
             }
         }
         else
@@ -401,12 +412,13 @@ public static class GraphCompiler
             log.Info("Repair", $"Explicit: {kind}.");
         }
 
-        return kind switch
+        ITopologyRepair repair = kind switch
         {
             RepairKind.NoRepair => new NoRepair(),
             RepairKind.MstMin   => new MstMinRepair(),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unresolvable RepairKind."),
         };
+        return (repair, kind);
     }
 
     private static IMetricRefiner ResolveRefinement(RefinementConfig cfg, DiagnosticsLog log)
@@ -424,7 +436,7 @@ public static class GraphCompiler
             $"Unsupported refinement kind {cfg.Kind}. Euclidean refinement is retired.");
     }
 
-    private static IEdgeScaler BuildScaler(
+    private static (IEdgeScaler Scaler, BandwidthStrategy Strategy, CouplingFidelity Fidelity, SphericalIntrinsicMode SphericalMode) BuildScaler(
         CouplingProjection coupling,
         RepairEdgeSet repairEdges,
         NeighborSelection filtered,
@@ -436,7 +448,7 @@ public static class GraphCompiler
         double[][]? features,
         IRiemannianManifold? manifold,
         DiagnosticsLog log,
-        double defaultAutoLmpThreshold)
+        AutoThresholds auto)
     {
         if (double.IsNaN(coupling.CouplingFloor) || coupling.CouplingFloor < 0.0)
             throw new ArgumentException("CouplingProjection.CouplingFloor must be zero or positive.");
@@ -538,11 +550,12 @@ public static class GraphCompiler
         {
             true => new LocalMutualProximityScaler(inner, protectedEdgeProvider: protectedProvider, rankRule: coupling.LmpRank),
             false => inner,
-            null => new AutoLmpScaler(inner, log, defaultAutoLmpThreshold, protectedProvider, repairEdges, coupling.LmpRank),
+            null => new AutoLmpScaler(inner, log, auto.LmpNearZeroRatio, protectedProvider, repairEdges, coupling.LmpRank, auto.NearZeroCoupling),
         };
 
         // The gauge goes last, after the floor and LMP: a pure rescaling of temperature.
-        return coupling.Gauge == GaugeKind.None ? measured : new GaugeScaler(measured, coupling.Gauge);
+        IEdgeScaler scaler = coupling.Gauge == GaugeKind.None ? measured : new GaugeScaler(measured, coupling.Gauge);
+        return (scaler, strategy, fidelity, sphericalMode);
     }
 
     private static GlobalBandwidthScaler BuildMixtureScaler(
@@ -616,7 +629,7 @@ public static class GraphCompiler
     /// that drops them, or Local Mutual Proximity writing them an exact zero, leaves
     /// a graph the repair stage never reported.
     /// </summary>
-    private static void LogReturnedGraph(
+    private static ReturnedGraphReport LogReturnedGraph(
         DiagnosticsLog log,
         CsrGraph returned,
         int n,
@@ -639,12 +652,14 @@ public static class GraphCompiler
                 $"{cutEdges} edge(s) fell under the {couplingFloor:G} coupling floor and were dropped (repair edges are exempt).");
         }
 
+        ConnectivityReport coupled = report;
+        int zeroEdges = 0;
         if (weightsAreCouplings)
         {
             // An edge of weight zero is in the graph but joins nothing: the kernel can underflow
             // to it, and Local Mutual Proximity writes it for a node's weakest edge.
-            ConnectivityReport coupled = Connectivity.Validate(returned, positiveWeightsOnly: true);
-            int zeroEdges = report.EdgeCount - coupled.EdgeCount;
+            coupled = Connectivity.Validate(returned, positiveWeightsOnly: true);
+            zeroEdges = report.EdgeCount - coupled.EdgeCount;
             if (zeroEdges > 0)
             {
                 string text =
@@ -656,10 +671,10 @@ public static class GraphCompiler
             }
         }
 
+        int missing = 0, zeroed = 0;
         if (repairEdges.Count > 0)
         {
             Dictionary<long, double> returnedWeights = EdgeWeightsByKey(returned, n);
-            int missing = 0, zeroed = 0;
             foreach (long key in repairEdges.Keys)
             {
                 if (!returnedWeights.TryGetValue(key, out double weight)) missing++;
@@ -689,6 +704,52 @@ public static class GraphCompiler
                 $"The repaired topology had {repairedConnectivity.ComponentCount} component(s); the returned graph has " +
                 $"{report.ComponentCount}. The graph is less connected than the repair stage reported.");
         }
+
+        return new ReturnedGraphReport(report, coupled, zeroEdges, missing, zeroed);
+    }
+
+    private readonly record struct ReturnedGraphReport(
+        ConnectivityReport Structural, ConnectivityReport Coupled, int ZeroEdges, int RepairDropped, int RepairZeroed);
+
+    private static double? Finite(double value) => double.IsFinite(value) ? value : null;
+
+    private static CouplingResolution ResolveCoupling(
+        CouplingProjection coupling,
+        ScalerResult scaled,
+        ReturnedGraphReport report,
+        BandwidthStrategy strategy,
+        CouplingFidelity fidelity,
+        SphericalIntrinsicMode sphericalMode,
+        int repairEdgeCount)
+    {
+        bool lmp = scaled.Lmp?.Applied ?? false;
+        bool bwdUnits = coupling.Kernel is Gaussian
+            && strategy == BandwidthStrategy.MeanEdgeDistance
+            && coupling.Gauge == GaugeKind.InverseMeanDegree
+            && fidelity == CouplingFidelity.GeodesicLinear
+            && !lmp;
+        double? bandwidth = scaled.SingleBandwidth ?? scaled.MixtureBandwidth?.Gaussian;
+
+        return new CouplingResolution(
+            Kernel: coupling.Kernel.GetType().Name,
+            BandwidthStrategy: strategy,
+            Bandwidth: bandwidth is double b ? Finite(b) : null,
+            Fidelity: fidelity,
+            SphericalMode: sphericalMode,
+            Lmp: lmp,
+            LmpNearZeroRatio: scaled.Lmp?.NearZeroRatio is double ratio ? Finite(ratio) : null,
+            LmpRank: coupling.LmpRank,
+            CouplingFloor: coupling.CouplingFloor,
+            CutEdges: scaled.CutEdges,
+            Gauge: coupling.Gauge,
+            GaugeFactor: scaled.GaugeFactor,
+            ScaleEdges: coupling.ScaleEdges,
+            ScaleRank: coupling.ScaleRank,
+            CoupledComponents: report.Coupled.ComponentCount,
+            ZeroCouplingEdges: report.ZeroEdges,
+            RepairEdgesDropped: report.RepairDropped,
+            RepairEdgesZeroed: report.RepairZeroed,
+            HasBwdUnits: bwdUnits);
     }
 
     /// <summary>A copy of <paramref name="graph"/> without the edges in <paramref name="removed"/>; weights unchanged.</summary>

@@ -42,6 +42,28 @@ public sealed record GraphCompilerConfig
     public required IEdgeProjection Projection { get; init; }
 
     public PathologyInterruptConfig Interrupts  { get; init; } = new();
+
+    /// <summary>The thresholds the <c>Auto</c> strategies decide by, chosen here and recorded in the manifest.</summary>
+    public AutoThresholds           Auto        { get; init; } = new();
+}
+
+/// <summary>
+/// The statistics-to-decision thresholds behind every <c>Auto</c> and the collapse detectors.
+/// The defaults are the values the compiler used before they were fields.
+/// </summary>
+public sealed record AutoThresholds
+{
+    /// <summary>In-degree skewness above which <see cref="FilterKind.Auto"/> picks MutualKnn.</summary>
+    public double FilterSkewness { get; init; } = 3.0;
+
+    /// <summary>Largest-component coverage below which <see cref="RepairKind.Auto"/> picks MstMin.</summary>
+    public double RepairCoverage { get; init; } = 0.95;
+
+    /// <summary>A coupling under this counts as collapsed in the delta-collapse detectors.</summary>
+    public double NearZeroCoupling { get; init; } = 1e-8;
+
+    /// <summary>Collapsed fraction of the kept edges above which auto-LMP applies LMP.</summary>
+    public double LmpNearZeroRatio { get; init; } = 0.05;
 }
 
 // ── Stage 1: Topology ───────────────────────────────────────────────────

@@ -19,6 +19,7 @@ internal sealed class AutoLmpScaler : IEdgeScaler
     private readonly IEdgeScaler _innerScaler;
     private readonly DiagnosticsLog _log;
     private readonly double _nearZeroEdgeRatioThreshold;
+    private readonly double _nearZeroCoupling;
     private readonly Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? _protectedProvider;
     private readonly RepairEdgeSet? _repairEdges;
     private readonly LmpRankRule _rankRule;
@@ -29,9 +30,11 @@ internal sealed class AutoLmpScaler : IEdgeScaler
         double nearZeroEdgeRatioThreshold = 0.05,
         Func<NeighborSelection, int, IReadOnlySet<(int Lo, int Hi)>?>? protectedEdgeProvider = null,
         RepairEdgeSet? repairEdges = null,
-        LmpRankRule rankRule = LmpRankRule.Strict)
+        LmpRankRule rankRule = LmpRankRule.Strict,
+        double nearZeroCoupling = 1e-8)
     {
         _rankRule = rankRule;
+        _nearZeroCoupling = nearZeroCoupling;
         _innerScaler = innerScaler ?? throw new ArgumentNullException(nameof(innerScaler));
         _log = log ?? throw new ArgumentNullException(nameof(log));
         if (nearZeroEdgeRatioThreshold < 0.0 || nearZeroEdgeRatioThreshold > 1.0)
@@ -47,7 +50,7 @@ internal sealed class AutoLmpScaler : IEdgeScaler
         // The kept, non-repair edges only: LMP writes exact zeros and fragments sparse graphs, so edges
         // the floor dropped must not tip a graph into it (the build log and MaxNearZeroEdgeRatio count
         // them), and a repair bridge is weak by construction.
-        double ratio = EdgeWeightThresholds.NearZeroRatio(tentative.Graph, cutEdges: 0, excluded: _repairEdges);
+        double ratio = EdgeWeightThresholds.NearZeroRatio(tentative.Graph, cutEdges: 0, _nearZeroCoupling, _repairEdges);
 
         if (ratio > _nearZeroEdgeRatioThreshold)
         {
@@ -62,7 +65,7 @@ internal sealed class AutoLmpScaler : IEdgeScaler
                 weightsAreCouplings: true,
                 protectedEdges: protectedEdges,
                 rankRule: _rankRule);
-            return tentative with { Graph = rescaled };
+            return tentative with { Graph = rescaled, Lmp = new LmpOutcome(true, ratio) };
         }
 
         if (ratio > _nearZeroEdgeRatioThreshold * 0.5)
@@ -78,6 +81,6 @@ internal sealed class AutoLmpScaler : IEdgeScaler
                 $"Tentative near-zero edge ratio is {ratio:F4}; LMP is not required.");
         }
 
-        return tentative;
+        return tentative with { Lmp = new LmpOutcome(false, ratio) };
     }
 }

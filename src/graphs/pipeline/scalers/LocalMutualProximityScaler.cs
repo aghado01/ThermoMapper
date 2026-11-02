@@ -61,6 +61,6 @@ public sealed class LocalMutualProximityScaler : IEdgeScaler
             protectedEdges: protectedEdges,
             rankRule: _rankRule);
 
-        return inner with { Graph = rescaled };
+        return inner with { Graph = rescaled, Lmp = new LmpOutcome(true, null) };
     }
 }

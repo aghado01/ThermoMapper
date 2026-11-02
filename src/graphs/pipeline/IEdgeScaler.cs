@@ -39,11 +39,15 @@ public interface IEdgeScaler
 /// scalers populate the latter. Local Mutual Proximity scalers
 /// populate neither (no global bandwidth concept). <see cref="CutEdges"/> counts the
 /// undirected edges the kernel produced and the coupling floor dropped;
-/// <see cref="GaugeFactor"/> is the global factor applied last (1 for none).
+/// <see cref="GaugeFactor"/> is the global factor applied last (1 for none); <see cref="Lmp"/> is set by the LMP scalers.
 /// </summary>
 public readonly record struct ScalerResult(
     CsrGraph          Graph,
     double?           SingleBandwidth,
     MixtureBandwidth? MixtureBandwidth,
     int               CutEdges = 0,
-    double            GaugeFactor = 1.0);
+    double            GaugeFactor = 1.0,
+    LmpOutcome?       Lmp = null);
+
+/// <summary>Whether Local Mutual Proximity ran, and for the auto trigger the near-zero ratio it read.</summary>
+public readonly record struct LmpOutcome(bool Applied, double? NearZeroRatio);

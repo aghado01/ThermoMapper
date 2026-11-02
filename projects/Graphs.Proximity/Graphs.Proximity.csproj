@@ -13,6 +13,7 @@
     <Compile Include="..\..\src\graphs\GraphCompiler.cs" Link="graphs\GraphCompiler.cs" />
     <Compile Include="..\..\src\graphs\GraphCompilerConfig.cs" Link="graphs\GraphCompilerConfig.cs" />
     <Compile Include="..\..\src\graphs\GraphBuildResult.cs" Link="graphs\GraphBuildResult.cs" />
+    <Compile Include="..\..\src\graphs\ResolvedConstruction.cs" Link="graphs\ResolvedConstruction.cs" />
     <Compile Include="..\..\src\graphs\GraphMetric.cs" Link="graphs\GraphMetric.cs" />
     <Compile Include="..\..\src\graphs\GraphProjection.cs" Link="graphs\GraphProjection.cs" />
     <Compile Include="..\..\src\graphs\GraphSelection.cs" Link="graphs\GraphSelection.cs" />

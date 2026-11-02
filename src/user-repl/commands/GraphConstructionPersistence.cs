@@ -115,7 +115,8 @@ internal static class GraphConstructionPersistence
             DatasetFingerprint: datasetFingerprint,
             Config:        config,
             Metric:        buildResult.Metric,
-            Diagnostics:   buildResult.Diagnostics ?? new DiagnosticsLog());
+            Diagnostics:   buildResult.Diagnostics ?? new DiagnosticsLog(),
+            Resolved:      buildResult.Resolved);
     }
 
     public static bool TryLoadGraphArtifact(

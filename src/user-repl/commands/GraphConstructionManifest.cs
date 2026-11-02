@@ -11,7 +11,8 @@ namespace UserRepl.Commands;
 /// <summary>
 /// Persisted metadata for a constructed graph artifact. Lives alongside
 /// <c>graph.bin</c> and the dataset fingerprint so repeated SPC sweeps can
-/// reuse the same graph without rebuilding it.
+/// reuse the same graph without rebuilding it. <see cref="Config"/> is what was requested;
+/// <see cref="Resolved"/> is what the build did: each <c>Auto</c>'s pick, the units, the connectivity.
 /// </summary>
 public sealed record GraphConstructionManifest(
     string              SchemaVersion,
@@ -19,7 +20,8 @@ public sealed record GraphConstructionManifest(
     string              DatasetFingerprint,
     GraphCompilerConfig Config,
     MetricProperties?   Metric,
-    DiagnosticsLog      Diagnostics)
+    DiagnosticsLog      Diagnostics,
+    ResolvedConstruction? Resolved = null)
 {
     public const string CurrentSchemaVersion = "1.1";
     public const string FileName = "graph.manifest.json";

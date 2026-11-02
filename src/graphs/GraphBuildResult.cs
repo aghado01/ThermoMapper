@@ -29,6 +29,9 @@ namespace Graphs
     /// without caring which side of the union it came from can read
     /// <see cref="RepresentativeBandwidth"/>.</para>
     ///
+    /// <para><b>Resolution.</b> <see cref="Resolved"/> records what each <c>Auto</c> picked and the units
+    /// of the returned graph; the manifest carries it beside the requested config.</para>
+    ///
     /// <para><b>Metric provenance.</b> <see cref="Metric"/> is non-null
     /// when the caller supplied a custom <see cref="IDistanceMetric"/> —
     /// it carries the metric's name, bounded/domain properties, and the
@@ -46,7 +49,8 @@ namespace Graphs
         CsrGraph?             PreRepairGraph = null,
         MetricProperties?     Metric         = null,
         DiagnosticsLog?       Diagnostics    = null,
-        EdgeWeightKind        WeightKind     = EdgeWeightKind.Coupling)
+        EdgeWeightKind        WeightKind     = EdgeWeightKind.Coupling,
+        ResolvedConstruction? Resolved       = null)
     {
         /// <summary>
         /// Convenience accessor: returns <see cref="SingleBandwidth"/> for
