@@ -152,7 +152,7 @@ Recommend no default; the rule decides the profile.
 
 Whether F-R1 reruns is the user's call, and nothing here changes the comparison that ran. *The user's ruling, 2026-11-01:* when it does, a truncated σ² prior, R's `s2.lower`, joins as a pre-registered arm.
 - *Why:* the contract shapes left `s2.lower` out on grounds of form, before this comparison ran. This brief names σ² running small as the trap on noise-free posteriors, and its arms varied the coefficient prior and the count alone. So the one control R offers for that was never read.
-- *It changes the target.* With σ² ≥ s under a prior IG(a₀, b₀), the collapsed marginal gains the factor P(a, b/s)/P(a₀, b₀/s), P the regularized lower incomplete gamma and (a, b) the σ² posterior's shape and scale, and the composition draws σ² from the truncated inverse gamma. So it needs its own derivation, and checks against enumeration, before a comparison reads it.
+- *It changes the target.* With σ² ≥ s under a prior IG(a₀, b₀), the collapsed marginal gains the factor P(a, b/s)/P(a₀, b₀/s), P the regularized lower incomplete gamma and (a, b) the σ² posterior's shape and scale, and the composition draws σ² from the truncated inverse gamma. So it needs its own derivation, and checks against enumeration, before a comparison reads it. The draw itself is built: `InverseGamma.SampleOn(rng, s, ∞)` (2026-11-02), which holds with s far above the mode.
 - *To declare before the run:* the floor s or its rule, since it sets how much of the response the fit may leave as noise, and that is the arm's meaning.
 
 ## Reports

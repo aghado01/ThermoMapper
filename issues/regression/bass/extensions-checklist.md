@@ -42,6 +42,28 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ## Reports
 
+### Truncated draws and the rest of the quantiles — 2026-11-02
+
+The "Truncated draws" and "Quantiles for the rest" rows of [the upgrades](extensions-brief.md#upgrades-to-existing-code), built ahead of E20 and F-R1's `s2.lower` arm (`1f382ab`). The alternatives and trade-offs are in [ProbabilityAndInformation.md](../../../docs/Maths/ProbabilityAndInformation.md#truncated-draws-and-quantiles).
+- *The shape.* `IContinuousDistribution` gains `Sample`, `SampleOn(rng, lower, upper)`, `Quantile(p)`, `InverseLogCdf(logP)` and `InverseLogSurvival(logS)`, on every family, `Uniform`, `Mixture` and `Truncated<T>` included. `Truncated<T>.Sample` is its parent's `SampleOn`. The brief expected per-family samplers; they are, behind one interface member, so no family can lack a draw.
+- *What made one sampler enough.* Each family is log-concave in one coordinate at every parameter value: z, ln x, logit x, asinh(t/√ν). So a gamma below shape 1, an inverse gamma's upper tail and a t's polynomial tail need no branch, and the same hat and the same solver serve all of them.
+- *Draws.* A hat of tangents, against h = ln f − ln f(anchor). It reads no CDF or normalizer. Weibull and half-Cauchy invert in closed form.
+  - *Compared:* Robert 1995 and Botev's `trandn` in one dimension, measured. Minimax tilting is multivariate, and reduces to `trandn` here, so it is left for E22. Inversion costs 2–9× the hat and loses a narrow interval.
+  - *Chosen:* the hat. It proves over half accepted and measures 87% or more, where Robert drops to 63% and `trandn` to 31%.
+- *Quantiles.* Newton on the smaller log tail in that coordinate, where the tail is concave, from the tail's asymptote or the bulk's approximation.
+- *Evidence.* The distributions project passes, 272 tests. The oracle project's 22 new parity cases pass (`r/oracles/distribution_quantile_oracle.R`, base R only). `BassBitIdentityTests` holds on every hash, so no existing draw changed.
+  - *Draws:* a chi-square against the density and the interval moments on 70-odd cases, N(0, 1) on [10, ∞) and [10, 10.0001] among them; acceptance counted from the generator with no hook in the sampler; and exact truncated means and variances from R's log tails, which never read a draw.
+  - *Quantiles:* closed forms to ln p = −10³⁰⁰; 418 round trips through R's `p*`; 361 gaps from R's `q*`, the worst 1.4×10⁻¹⁰, at ν = 10⁵, where this side's ln B cancels.
+- *R's flaws, corrected rather than ported.* `qt` stops 1% short at ν = 1.5 and tail −700, and overflows to ∞ at ν = ½ and tail −230, where t = 1.03×10¹⁹⁹. `qbeta` floors at 2⁻¹⁰²³ where the root is below the double range.
+- *What the review found and fixed.* Below ln p ≈ −10¹⁵ the solver's slope is all rounding, so the normal and gamma now return their asymptotes there. `Truncated<T>.Quantile(0)` missed the bound by an ulp. Test seeds from `HashCode.Combine` were random per process.
+- *A contract moved.* `Normal.Quantile` now refuses a p outside [0, 1], as the interface says, where it returned NaN; no caller relied on it. `Normal.StandardQuantile` keeps its NaN, for its callers.
+- *Limits.*
+  - A hat draw costs about 3× Robert's on a normal half-line, probit's case: about 100 ns against 30, the 5th percentile of short rounds on a shared machine, so rough. A closed half-line path could sit behind `Normal.SampleOn` if E20's latent block profiles there; nothing has measured that.
+  - Quantiles inherit the tails' accuracy, and throw above a shape near 10⁸, by the series' iteration cap; the draws read no tail, and hold at shape 10¹² and ν = 10¹⁴.
+  - `Empirical` has no draw or quantile.
+  - Dagpunar 1978 and Philippe 1997 are unmeasured, with both citations checked by abstract only. Gilks and Wild 1992, Prékopa 1973, AS 91, AS 109 and Hill 1970 are from memory.
+  - F-R1's `s2.lower` still needs its derivation and enumeration checks. E20 still needs its latent block.
+
 ### Complete values declared — 2026-11-02
 
 `4e3ea95`, by the main session, at the user's word.
