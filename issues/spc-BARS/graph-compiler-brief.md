@@ -1,6 +1,6 @@
 # Graph compiler revision: brief
 
-**Status: open.** Raised 2026-10-25 by the stopping-theory exploration (`stopping-theory-primer.md` §12.27–12.29,
+**Status: built 2026-11-01** (§2.1–2.3, §2.7, §2.9 and all of §4.1; §2.4–2.6 and §2.8 deferred, see the Report). Raised 2026-10-25 by the stopping-theory exploration (`stopping-theory-primer.md` §12.27–12.29,
 claims C30–C34). The user has more compiler changes in mind than these. They go in §4 before this brief is handed to a
 session.
 
@@ -277,4 +277,45 @@ and `BwdParityTests` untouched. On BlattHierarchy (Gaussian, mean-edge, K = 5, 1
 
 ## Report
 
-_Appended by the session that does the work._
+### 2026-11-01: the compiler revision
+
+**What landed** (all on `main`, one concern per commit):
+
+| Commit | Concern |
+|---|---|
+| `7a35ffd`, `b0b3186` | §2.2: the returned graph's component count and largest-component coverage, over all edges and over edges of positive coupling; the floor's dropped edges; what became of the repair bridges. The near-zero interrupt counts the dropped edges. |
+| `63589b3` | The auto-LMP trigger reads the kept, non-repair edges only (`7a35ffd` had let dropped edges switch it on). |
+| `be04f35` | §2.1: `CouplingProjection.CouplingFloor` (default 1e-10; 0 = none); repair edges are exempt, kept at their kernel coupling or 1e-300 on underflow. The §2.1 test reads connected. |
+| `7178dae` | LMP keeps the repair edges at their kernel coupling; `LmpRankRule.Inclusive` beside `Strict` (§2.7). |
+| `7506bf6` | §4.1 finding 4: `PreRepairGraph` is the returned graph without the repair edges; the second scaling pass is gone. |
+| `55f97f9` | §4.1 findings 1 and 2: `Gauge` is its own field, applied last; the mean-edge bandwidth no longer implies it. |
+| `5f60984` | §4.1 finding 3 and §2.3: `ScaleEdges` (pre-repair by default) and `ScaleRank`. |
+| `fe32dd7` | `Resolved` in the result and the manifest; `GraphCompilerConfig.Auto` (`AutoThresholds`). |
+| `f7da1f2` | §4.1 findings 5 and 6: the construction declares its units; `SpcScheduleHelpers.AutoBracket` is the one bracket function; the cumulative-field warning and the basis in both run manifests. |
+| `5b6d357`, `9741b4c` | `docs/Graphs/GraphConstruction.md` (order, decisions with alternatives, knob register), the notation ledger, REPL wiring tests. |
+
+**Checked against §5.** The §2.1 test (`GraphCompilerReturnedGraphTests.GaussianRepairBridge_UnderTheFloor_StaysInTheReturnedGraph`) passes under the chosen option. The final graph's connectivity is logged, over all edges and over coupled edges. Tests: `VizCore.Tests` 467 passed, 2 skipped (394 before the work; 73 new in `GraphCompilerReturnedGraphTests`, `GraphCompilerGaugeTests`, `GraphCompilerScaleTests`, `GraphCompilerResolvedTests`, `GraphUnitsBracketTests`, `GraphCompilerConfigWiringTests`, `LmpRankRuleTests`), `Clustering.Graphical.SPC.Tests` 13, `Clustering.Graphical.CumulativeField.Tests` 15, `TDA.Mapper.Tests` 28, `Graphs.Primitives.Tests` 3, all passing; `BwdParityTests` is unchanged and green. `TDA.DimReduction.Tests` (83) passed at `b0b3186`; the rerun at `5b6d357` was still running when this was written (the suite takes 40 minutes or more here).
+
+**Deferred, with reasons.** §2.4 (multi-scale union), §2.5 (an exponent for the power-law kernel), §2.6 (shared-neighbour and mutual-reachability couplings) and §2.8 (`MstAll`) each add a topology or coupling that lands on the restructured stages, and nothing else waited on them; §2.8 needs a read of the BWD paper first. §2.9 is the floor decision: the closest pair is the default, the surface is K.
+
+**What moved.**
+- *Graphs gaining edges:* those whose repair edges the floor used to cut. BlattHierarchy, Gaussian, mean-edge, K = 5, 10, 20 goes from 6 components to 1; MAD at K = 5 keeps 25 repair edges it lost. The BWD toy, Iris and Landsat parity configs cut no edge, so they are unchanged; `BwdParityTests` passes with its expected values untouched.
+- *Changed defaults:* the mean-edge bandwidth reads the pre-repair edges (the BWD presets and the parity config select `AfterRepair`); the 1/K̂ factor is no longer implied by the mean-edge bandwidth (the presets and the parity config declare `Gauge`); the gauge's K̂ is the returned graph's mean degree; LMP graphs with repair edges keep them (they were written 0).
+- *`auto` temperature grids* move for Cauchy or LMP graphs with the mean-edge bandwidth, which took T_ps before; the heuristic is now divided by the gauge. Graphs without the gauge are unchanged.
+- *Graph caches:* every cached graph rebuilds (the config fingerprint covers the new projection fields). Older run manifests that used `mean-edge-distance` re-materialize without the gauge in `extract`.
+- `docs/Clustering/SpcEngine.md` (line 163) still says the REPL's `auto` reads `MeanEdgeDistance`; it carries another session's uncommitted edits, so it was left.
+
+**Stage widths on Gaussian graphs for far-apart clusters.** Before, the cut left no connection: the 1,200-point BlattHierarchy was six components, and there were no merge heights above the finest level. Now the bridges are in the graph, so the heights exist, but they are not where SW can reach them.
+- *Gaussian, mean-edge, K = 5* (single-linkage merge heights, log₁₀ J): the finest merge at −13.5, then five merges at −300. The medium and coarse gaps underflow, so their repair edges sit on the 1e-300 clamp and tie: the medium and coarse stages are zero e-folds apart and some 640 e-folds below the fine one. At K = 10 the finest merge is at −7.3 and the rest tie at −300.
+- *Cauchy, same topology:* −1.8, −3.7, −3.7, −3.8, −4.5: data-determined, adjacent merge heights 0.2 to 4.4 e-folds apart.
+- *AnisotropicGaussian* (meanSeparation 4, K = 5), Gaussian: merges at −13.9, −10.7, −7.1, −4.4, so the widths are data-determined here, and the weakest bridge is 1.2·10⁻¹⁴. Its bond probability at T = 10⁻⁶ is about 10⁻⁸, so S₂ at T = 10⁻⁶ still reads three classes, as before: the fix restores the structure, and not the dynamics at a reachable temperature.
+- A stage across a far Gaussian gap therefore lies at T ≲ 10⁻¹⁴ and, once the kernel underflows, at the clamp. Storing couplings in log space would give the underflowed heights their data again; that is not done.
+
+**Findings for the user.**
+1. *LMP fragmentation, §2.7.* The strict rank writes 0 on each node's weakest edge. Mutual kNN + MST-min, Cauchy, K = 5, no injected protect set: Iris 111 of 262 edges are zero and the coupled graph has 30 components; Landsat 3,754 of 9,048 and 1,862; BlattHierarchy 828 of 2,169 and 213. The inclusive rank has no zero edge and one coupled component in all of them, and K = 10 behaves the same way (Iris 6 components strict, 1 inclusive). The default stays strict; flipping it moves every LMP graph, and is the user's call.
+2. *The heuristic against the corrected T_ps(20) = 0.0892.* The data heuristic on the gauged parity graphs lands 0.15 to 0.41 times it; divided by the gauge it lands 1.17 to 1.6 times it (toy 1.6, Iris 1.4, Landsat 1.5, Cauchy toy 1.17). The "K̂× too cold" in the REPL's old comment was measured against the old, wrong T_ps. Dividing by the gauge is exact (`g·h(raw)` and `h(gauged)/g` agree to four digits); the residual 1.2 to 1.6 is the heuristic's own calibration.
+3. *The floor still cuts topology edges.* Only repair edges are exempt. In Blatt, MAD, K = 5, mutual kNN + MST-min, one non-repair edge dropped under the floor splits off a 100-node region (the log says so). Protecting graph bridges (cut edges), not only repair edges, would close it.
+4. *Untested:* the spherical local-parametrix path for a repair edge beyond 0.9π (it keeps the 1e-300 clamp by code, with no test); the `Mixture` kernel is tested for the bridge only.
+5. *Not done, §4:* the user had not said whether §4 holds further changes.
+
+
