@@ -147,8 +147,21 @@ public sealed class TruncatedDrawTests
     [InlineData(1.0, 1e6, 1.001e6)]
     [InlineData(2.0, 0.5, 3.0)]
     [InlineData(2.0, 0.0, 1e-3)]
+    [InlineData(1.0, 1e20, Inf)]           // π/2 − atan a is all rounding here
+    [InlineData(1e-3, 1e18, 2e18)]
+    [InlineData(1.0, 1e200, Inf)]
+    [InlineData(1.0, 1e200, 3e200)]        // ab overflows here
     public void HalfCauchy_MatchesItsDensity_InClosedForm(double scale, double lower, double upper)
         => Check(HalfCauchy.WithScale(scale), lower, upper, 1.0);
+
+    [Fact]
+    public void HalfCauchy_DensityHoldsPastWhereItsSquareOverflows()
+    {
+        HalfCauchy h = HalfCauchy.WithScale(2.0);
+        Assert.Equal(Math.Log(2.0 / (Math.PI * 2.0)) - 2.0 * Math.Log(5e199), h.LogPdf(1e200), 1e-9);
+        // Either side of the switch reads the one curve.
+        Assert.Equal(h.LogPdf(2e150 * (1.0 - 1e-12)), h.LogPdf(2e150), 1e-9);
+    }
 
     [Fact]
     public void Uniform_DrawsItsClippedInterval()

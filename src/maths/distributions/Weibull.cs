@@ -86,7 +86,8 @@ public readonly struct Weibull : IContinuousDistribution
     public double InverseLogCdf(double logP)
     {
         Tails.CheckLogProbability(logP);
-        return Scale * Math.Pow(-SpecialFunctions.Log1mExp(logP), 1.0 / Shape);
+        // Below e⁻³⁶, −ln(1 − p) is p to double precision, and in logs it stays in range.
+        return logP < -36.0 ? Scale * Math.Exp(logP / Shape) : Scale * Math.Pow(-SpecialFunctions.Log1mExp(logP), 1.0 / Shape);
     }
 
     /// <inheritdoc/>
@@ -107,8 +108,13 @@ public readonly struct Weibull : IContinuousDistribution
     public double Cdf(double x) => Math.Exp(LogCdf(x));
     public double Survival(double x) => Math.Exp(LogSurvival(x));
 
-    // ln S(x) = −(x/λ)^k exactly; ln F(x) = ln(1 − e^(−(x/λ)^k)), accurate in both tails.
-    public double LogCdf(double x) => x <= 0.0 ? double.NegativeInfinity : SpecialFunctions.Log1mExp(-Math.Pow(x / Scale, Shape));
+    // ln S(x) = −(x/λ)^k exactly; ln F(x) = ln(1 − e^(−(x/λ)^k)), accurate in both tails, and k·ln(x/λ) where the power underflows.
+    public double LogCdf(double x)
+    {
+        if (x <= 0.0) return double.NegativeInfinity;
+        double power = Math.Pow(x / Scale, Shape);
+        return power < 1e-300 ? Shape * Math.Log(x / Scale) : SpecialFunctions.Log1mExp(-power);
+    }
     public double LogSurvival(double x) => x <= 0.0 ? 0.0 : -Math.Pow(x / Scale, Shape);
     public double IntervalProbability(double lower, double upper) => Math.Exp(LogIntervalProbability(lower, upper));
 

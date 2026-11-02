@@ -252,6 +252,11 @@ public sealed class QuantileTests
     [Fact]
     public void WeibullAndHalfCauchy_LogFormsMatchTheirClosedForms()
     {
+        // Far below where the power underflows, the root is still in range: x = λe^(ln p/k), and the log tail reads it back.
+        Weibull steep = Weibull.ShapeScale(5.0, 2.0);
+        Near(2.0 * Math.Exp(-200.0), steep.InverseLogCdf(-1000.0), 2.0 * Math.Exp(-200.0) * 1e-14, "Weibull far below");
+        Near(-1000.0, steep.LogCdf(steep.InverseLogCdf(-1000.0)), 1e-10, "Weibull far below, back");
+
         Weibull w = Weibull.ShapeScale(0.7, 3.0);
         HalfCauchy h = HalfCauchy.WithScale(1e-5);
         foreach (double tail in new[] { -Ln2, -1.0, -50.0, -700.0, -5000.0 })
@@ -318,6 +323,17 @@ public sealed class QuantileTests
         // Truncating the mixture reads through both.
         var truncated = Truncated.Of(mix, 3.0, double.PositiveInfinity);
         Assert.Equal(0.3, truncated.Cdf(truncated.Quantile(0.3)), 1e-10);
+        // A heavy component's root beyond the double range leaves the mixture's beyond it, at either scale: below 1, its t
+        // overflows before x does and its tail drops to −∞ inside the range.
+        foreach (double scale in new[] { 0.06, 1.0, 16.0 })
+        {
+            Mixture heavy = Mixture.Of([Normal.MeanSd(0.0, 1.0), StudentT.LocationScale(1.5, 2.0, scale)], [1.0, 1.0]);
+            Assert.Equal(double.NegativeInfinity, heavy.InverseLogCdf(-2500.0));
+            Assert.Equal(double.PositiveInfinity, heavy.InverseLogSurvival(-2500.0));
+            double x = heavy.InverseLogSurvival(-100.0);   // far out and in range, read from the same bracket
+            Assert.True(double.IsFinite(x));
+            Assert.Equal(-100.0, heavy.LogSurvival(x), 1e-6);
+        }
     }
 
     [Fact]

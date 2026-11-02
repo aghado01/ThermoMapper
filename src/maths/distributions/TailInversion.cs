@@ -49,7 +49,7 @@ internal static class TailInversion
 
             double next = y + step;
             if (!(next > lo && next < hi))
-                next = double.IsFinite(lo) && double.IsFinite(hi) ? 0.5 * (lo + hi)
+                next = double.IsFinite(lo) && double.IsFinite(hi) ? 0.5 * lo + 0.5 * hi
                      : double.IsInfinity(hi) ? y + (expansion *= 2.0)
                      : y - (expansion *= 2.0);
             if (next == y) return best;

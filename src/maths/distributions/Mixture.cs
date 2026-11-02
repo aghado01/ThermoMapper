@@ -16,6 +16,8 @@ namespace Maths.Distributions;
 /// </summary>
 public readonly struct Mixture : IContinuousDistribution, IIntervalMoments
 {
+    private const double UnreachedTail = 1e-6;
+
     private readonly IContinuousDistribution[] _components;
     private readonly double[] _weights, _logWeights;
 
@@ -172,9 +174,14 @@ public readonly struct Mixture : IContinuousDistribution, IIntervalMoments
         }
         if (!(hi > lo) || double.IsNegativeInfinity(logLower) || double.IsNegativeInfinity(logUpper)) return lower ? lo : hi;
         double a = double.IsFinite(lo) ? lo : double.MinValue, b = double.IsFinite(hi) ? hi : double.MaxValue;
-        double x = TailInversion.Solve(new MixtureTail(this, lower), lower ? logLower : logUpper, a + 0.5 * (b - a), a, b, lower,
-                                       scale: b - a, out double correction);
-        return Math.Clamp(x + correction, a, b);
+        double target = lower ? logLower : logUpper;
+        double x = TailInversion.Solve(new MixtureTail(this, lower), target, 0.5 * a + 0.5 * b, a, b, lower, scale: 0.5 * b - 0.5 * a, out double correction);
+        x = Math.Clamp(x + correction, a, b);
+        // A component's root beyond the double range can leave the mixture's beyond it too. The solve then stops short of the
+        // target, at the edge of what the tails can read, and the root is the range's end, as that component's is.
+        if (double.IsInfinity(lower ? lo : hi) && (lower ? LogCdf(x) : LogSurvival(x)) > target + UnreachedTail * Math.Max(1.0, -target))
+            return lower ? lo : hi;
+        return x;
     }
 
     private readonly struct MixtureTail(Mixture owner, bool lower) : ILogTail

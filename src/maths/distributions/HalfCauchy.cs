@@ -43,15 +43,18 @@ public readonly struct HalfCauchy : IContinuousDistribution
         ArgumentNullException.ThrowIfNull(rng);
         (lower, upper) = Tails.Clip(lower, upper, 0.0, double.PositiveInfinity);
         double a = lower / Scale, b = upper / Scale, u = rng.NextDouble();
-        // atan b − atan a = atan((b − a)/(1 + ab)), with no difference of near-equal angles.
-        double width = double.IsPositiveInfinity(b) ? 0.5 * Math.PI - Math.Atan(a) : Math.Atan2(b - a, 1.0 + a * b);
         double x;
         if (a >= 1.0)
         {
-            x = Scale / Math.Tan(Math.Atan(1.0 / a) - u * width);
+            // atan(1/a) − atan(1/b) = atan((1/a − 1/b)/(1 + 1/(ab))), in reciprocals: π/2 − atan a cancels and ab overflows far out.
+            double near = 1.0 / a;
+            double width = double.IsPositiveInfinity(b) ? Math.Atan(near) : Math.Atan2((b - a) / a / b, 1.0 + near / b);
+            x = Scale / Math.Tan(Math.Atan(near) - u * width);
         }
         else
         {
+            // atan b − atan a = atan((b − a)/(1 + ab)), with no difference of near-equal angles.
+            double width = double.IsPositiveInfinity(b) ? 0.5 * Math.PI - Math.Atan(a) : Math.Atan2(b - a, 1.0 + a * b);
             double theta = Math.Atan(a) + u * width;
             x = theta <= 0.25 * Math.PI ? Scale * Math.Tan(theta) : Scale / Math.Tan(0.5 * Math.PI - theta);
         }
@@ -93,7 +96,8 @@ public readonly struct HalfCauchy : IContinuousDistribution
         if (x < 0.0 || double.IsNaN(x)) return double.NegativeInfinity;
         if (double.IsPositiveInfinity(x)) return double.NegativeInfinity;
         double z = x / Scale;
-        return Math.Log(2.0 / (Math.PI * Scale)) - SpecialFunctions.Log1p(z * z);
+        // z² overflows past 10¹⁵⁴, long after the 1 has stopped counting.
+        return Math.Log(2.0 / (Math.PI * Scale)) - (z < 1e150 ? SpecialFunctions.Log1p(z * z) : 2.0 * Math.Log(z));
     }
 
     public double Cdf(double x) => x <= 0.0 ? 0.0 : 2.0 / Math.PI * Math.Atan(x / Scale);
