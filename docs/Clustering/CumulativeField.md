@@ -42,7 +42,7 @@ flowchart LR
 
 | Area | Entry points |
 |---|---|
-| Solver | `CumulativeFieldSolver.Prepare(graph, weightKind, field, rule = Mutual)` → `CumulativeFieldContext`; `Solve(context, T)` → `Affinities`; `Cluster(context, T, theta = 0.5)` → `Assignment`; `EstimateBracket` |
+| Solver | `CumulativeFieldSolver.Prepare(graph, weightKind, field, rule = Mutual)` → `CumulativeFieldContext`; `Solve(context, T)` → `Affinities`; `Cluster(context, T, theta = 0.5)` → `Assignment`; `EstimateBracket`. In log space: `SolveLog(context, lnT)`, `ClusterLog`, `EstimateLogBracket`, `CumulativeFieldSweep.RunLog(…, lnTemperatures, …)` |
 | Sweep | `CumulativeFieldSweep.Run(graph, weightKind, temperatures, field, rule, theta)` → `CumulativeFieldSweepResult` |
 | Landscapes | `CumulativeFieldLandscapes.OverGrid(context, temperatures, sink)`; `CumulativeFieldLandscapeSink` (`BondMass`, `LocalEnergy`) |
 | Export | `CumulativeFieldRunLayout`, `CumulativeFieldRunPaths(scope)`; `CumulativeFieldCsvWriter.WriteSweep`; partition and edge currencies via `Clustering.Export`'s `CurrencyCsvWriter` |
@@ -67,6 +67,8 @@ flowchart LR
   Partitions remain nested in T in every case.
 
 **Bracket.** `EstimateBracket` takes quantiles 2% and 98% of the positive $H^{\text{cum}}$ values, divides by $\ln 2$, and pads by factors 0.5 and 2.
+
+**The log ladder.** When the graph carries `LogWeights`, `Prepare` also builds $\ln H^{\text{cum}}$ by a running log-sum-exp over the ascending log couplings (per node for `Local`), and the solver runs on it: $G_e=-\mathrm{expm1}\big(-e^{\ln H^{\text{cum}}_e-\ln T}\big)$, so an edge cuts at $\ln T^*_e=\ln H^{\text{cum}}_e-\ln\ln2$ however far below the double range. A Gaussian gap with coupling $e^{-1250}$ is cut at $\ln T\approx-1250$, where the linear solver has no temperature to ask for (`Solve` rejects $T=0$). The linear paths are unchanged, and where both are representable the two agree to $10^{-10}$. `EstimateLogBracket` is `EstimateBracket` in $\ln T$, and `RunLog` returns the grid it ran in `LogTemperatures` (`Temperatures` is its exponential, 0 past about −745). The command and the user session do not take a log grid yet.
 
 **Monte Carlo demonstration.** `MonteCarloAffinityDemo` estimates $G_e$ by averaging exponential energy-budget draws, the estimator of Wang et al. (2020). It converges to `Solve` as the draw count grows; the closed form is that limit with zero variance.
 

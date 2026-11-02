@@ -309,7 +309,7 @@ and `BwdParityTests` untouched. On BlattHierarchy (Gaussian, mean-edge, K = 5, 1
 - *Gaussian, mean-edge, K = 5* (single-linkage merge heights, log₁₀ J): the finest merge at −13.5, then five merges at −300. The medium and coarse gaps underflow, so their repair edges sit on the 1e-300 clamp and tie: the medium and coarse stages are zero e-folds apart and some 640 e-folds below the fine one. At K = 10 the finest merge is at −7.3 and the rest tie at −300.
 - *Cauchy, same topology:* −1.8, −3.7, −3.7, −3.8, −4.5: data-determined, adjacent merge heights 0.2 to 4.4 e-folds apart.
 - *AnisotropicGaussian* (meanSeparation 4, K = 5), Gaussian: merges at −13.9, −10.7, −7.1, −4.4, so the widths are data-determined here, and the weakest bridge is 1.2·10⁻¹⁴. Its bond probability at T = 10⁻⁶ is about 10⁻⁸, so S₂ at T = 10⁻⁶ still reads three classes, as before: the fix restores the structure, and not the dynamics at a reachable temperature.
-- A stage across a far Gaussian gap therefore lies at T ≲ 10⁻¹⁴ and, once the kernel underflows, at the clamp. Storing couplings in log space would give the underflowed heights their data again; that is not done.
+- A stage across a far Gaussian gap therefore lies at T ≲ 10⁻¹⁴ and, once the kernel underflows, at the clamp. Storing couplings in log space gives the underflowed heights their data again; that was done afterwards ("Log-space coupling" below).
 
 **Findings for the user.**
 1. *LMP fragmentation, §2.7.* The strict rank writes 0 on each node's weakest edge. Mutual kNN + MST-min, Cauchy, K = 5, no injected protect set: Iris 111 of 262 edges are zero and the coupled graph has 30 components; Landsat 3,754 of 9,048 and 1,862; BlattHierarchy 828 of 2,169 and 213. The inclusive rank has no zero edge and one coupled component in all of them, and K = 10 behaves the same way (Iris 6 components strict, 1 inclusive). The default stays strict; flipping it moves every LMP graph, and is the user's call.
@@ -394,3 +394,47 @@ Old against new, where the primer has a number (§12.29, which ran the unscaled 
 **Decision (the user, 2026-11-01): keep strict as the default.** `LmpRankRule.Inclusive` stays an option; no default moved.
 
 **Limits.** No injected protect set (the REPL injects the H1 cycle edges, which would keep some of strict's zeroed edges); one data seed per dataset; the Cauchy inner kernel with the mean-edge bandwidth and no gauge, plus the Gaussian on BlattHierarchy 0.15 only; the stage threshold of 1 e-fold, fixed before the run; the six-seed cells vary the chain, not the data. The first TSV header named only one dataset's columns, so the rows were re-read with the per-dataset schema; `bb47dbd` fixes the harness. All 50 sweeps ran from one binary built at `9abcf23`, which predates `2d817d3` (the seed fold now takes the temperature's own bits; primer §13.14), so the rows pair with each other but not with a rerun from a later commit.
+
+### Log-space coupling
+
+The user asked for the fix to the Gaussian underflow named in the Report above ("Storing couplings in log space would give the underflowed heights their data again"). The design was put to them and approved as proposed: a parallel log array on the coupling graph, the cumulative field as the first consumer, and no change to SW.
+
+**What landed** (one concern per commit):
+
+| Commit | Concern |
+|---|---|
+| `e1eea5d` | `LogEvaluate` on the Gaussian, Cauchy, Laplacian, Linear and Mixture kernels, exact in the tail, with a precise `LogMath.Log1P` (.NET's `double.LogP1` is `Log(1+x)`). |
+| `ff8daf8` | `CsrGraph.LogWeights` (optional, in `graph.bin`, carried by `InducedSubgraph`, kept by `FromEdges` only when every `Edge` has a `LogJ`); the compiler fills it: log kernel plus the Van Vleck factor in logs, thinning on ln J, repair edges at the kernel's own ln J, the gauge as a shift by ln g, LMP ranking by the log and storing the log of its rank products, coupled connectivity reading the log. |
+| `c2301af` | `MergeHeights.Compute`: the single-linkage merges of a coupling graph strongest first, in ln J, with component sizes. |
+| `f9c3b6d` | The cumulative-field solver on a log ladder (`SolveLog`, `ClusterLog`, `EstimateLogBracket`, `CumulativeFieldSweep.RunLog`, `FkKernel.LogBondProbability`). |
+
+**Decided with the design.** `Weights` stays linear, and the repair edge's 1e-300 floor stays in it (so a repaired graph is connected for every linear consumer); the truth is `LogWeights`. SW is untouched: at a double-range temperature a coupling below 1e-308 gives probability 0 either way, and a sampler in ln T is a separate piece. Graphs written before this have no log section, fail to read, and rebuild (`TryLoadGraphArtifact` catches it).
+
+**Result.** BlattHierarchy 0.15, mutual kNN + MST-min, mean-edge bandwidth (the case the Report left tied at the clamp). Merge heights in ln J:
+
+| Kernel, K | Within a medium cluster (fine merges) | Between medium clusters | Between the coarse pair |
+|---|---|---|---|
+| Gaussian, 5 | −29.7 to −31.0 | −2,341, −2,380, −2,728, −2,832 | −17,530 |
+| Gaussian, 10 | −16.1 to −16.8 | −1,267, −1,288, −1,477, −1,533 | −9,489 |
+| Cauchy, 5 | −4.1 | −8.5 to −8.6 | −10.5 |
+| Cauchy, 10 | −3.5 | −7.8 to −8.0 | −9.9 |
+
+Stage widths in e-folds of ln T, from the cumulative field's thermal single-linkage (`Field.Mean`, ln T step 0.25; a stage is a run with exactly k clusters of at least 0.4 of the level's smallest class):
+
+| Kernel, K | Fine (24) | Medium (6) | Coarse (2) |
+|---|---|---|---|
+| Gaussian, 5 | 10.8 | 2,312 | 15,150 |
+| Gaussian, 10 | 7.8 | 1,251 | 8,201 |
+| Cauchy, 5 | 2.5 | 3.8 | 3.2 |
+| Cauchy, 10 | 2.8 | 3.8 | 3.2 |
+
+- **The answer to the Report's question, now exact.** Stage widths on a Gaussian graph for far-apart clusters are not small and not tied: they grow as the squared gap over 2a², reaching thousands of e-folds, and they lie at temperatures no sampler reaches (ln T from −17,530). The ties at the 1e-300 clamp were an artifact of the linear weights; the medium merges are four distinct heights.
+- **Not comparable with the SW stage widths** of the Report and the primer: the cumulative field is thermal single-linkage, and its stage here ignores the distinct-majority condition.
+
+**Checks.** Log evaluators against the closed forms and `log(Evaluate)` where representable (`LogKernelTests`); `LogWeights` against the linear weights, symmetric, additive under the gauge, the log of the LMP products, exact for a Gaussian bridge at d/a = 50, kept by a floor of 0, round-tripped through `graph.bin`, carried by `InducedSubgraph` and `PreRepairGraph`, and matching the Van Vleck-corrected linear values on the hyperbolic Gaussian (`LogCouplingTests`); `MergeHeights` against hand-built graphs and the Gaussian closed form (`MergeHeightsTests`); the log solver against the linear solver to 1e-10 for both fields, against a hand-summed ladder, and across a gap of e^-1250 where the linear solver has no temperature (`CumulativeFieldLogTests`). `VizCore.Tests`, `Clustering.Graphical.CumulativeField.Tests`, `Clustering.Graphical.SPC.Tests`, `TDA.Mapper.Tests` and `Graphs.Primitives.Tests` pass; `BwdParityTests` is unchanged. No existing output moved: the linear weights are computed as before, and the thinning decision is the same wherever the linear value is representable.
+
+**Not done.**
+- SW in ln T (the sampler takes a double T; the bond table would need `LogBondProbability` and a ln T grid).
+- The cumulative-field command, user session and thermal EOM take a double grid; a `lnspace:` grid spec and the exports' ln T column are the next step.
+- `HasBwdUnits`, the temperature bracket and `Resolved` do not mention the log.
+- The Schoenberg series has no tail form, so its log is the log of its value.

@@ -21,6 +21,7 @@ flowchart LR
   - A *slot* is an index into `Targets`/`Weights`, i.e. one directed half-edge.
   - The *upper-half* (j > i) slot, where row `i` has `Targets[e] > i`, is the canonical slot of an undirected edge.
   - The *mirror* slot is the reverse half-edge.
+- **Log couplings.** `CsrGraph.LogWeights` is an optional second `double[]` laid out as `Weights`: ln J per slot, exact where the linear weight has underflowed (a Gaussian gap at d/δ = 60 reads −1800 there and 0 in `Weights`). The graph compiler's coupling projection sets it, the binary format stores it behind its length (−1 = none), and `FromEdges` keeps it only when every `Edge` carries a `LogJ`. −∞ is no coupling. Anything that builds a graph from another's arrays carries it along or leaves it null.
 - **Per-edge field.** A `double[]` of length `Targets.Length`, indexed by slot. Values are meaningful only at upper-half slots.
 - **Currency.** A per-edge field at one temperature, produced by a sampler and consumed by partition steps and signals. There are three:
 
@@ -99,7 +100,9 @@ With distance d and bandwidth δ:
 
 $$K_G=e^{-d^2/(2\delta^2)},\qquad K_C=\frac{1}{1+d^2/\delta^2},\qquad K_L=e^{-d/\delta},\qquad K_{\mathrm{Lin}}=\max(0,1-d/\delta).$$
 
-The mixture is $J=w_GK_G(d;\delta_G)+w_CK_C(d;\delta_C)+w_LK_L(d;\delta_L)$. The weights are not normalized, and there is no linear component. The evaluators have **no δ guard**: with δ = 0 they return 0 for d > 0 and NaN at d = 0. The 0 sentinel must therefore always be resolved before evaluation.
+Each has a `LogEvaluate(distance, delta)` returning ln J, exact in the tail: $-d^2/2\delta^2$ (the Gaussian, past $d/\delta\approx38.6$ where $K_G$ underflows), $-\ln(1+d^2/\delta^2)$ (the Cauchy, by a precise log1p, and $-2\ln(d/\delta)$ once $d^2$ overflows), $-d/\delta$ (the Laplacian), $\ln(1-d/\delta)$ inside the Linear support and −∞ outside it. `LogMath.Log1P` is that log1p; .NET's `double.LogP1` is `Log(1+x)` and loses a small ratio.
+
+The mixture is $J=w_GK_G(d;\delta_G)+w_CK_C(d;\delta_C)+w_LK_L(d;\delta_L)$; its `LogEvaluate` is the log-sum-exp of the weighted components, so it survives every component underflowing. The weights are not normalized, and there is no linear component. The evaluators have **no δ guard**: with δ = 0 they return 0 for d > 0 and NaN at d = 0. The 0 sentinel must therefore always be resolved before evaluation.
 
 ### Observables
 
@@ -120,7 +123,8 @@ The mixture is $J=w_GK_G(d;\delta_G)+w_CK_C(d;\delta_C)+w_LK_L(d;\delta_L)$. The
 
 **Structural diagnostics.**
 
-- **`Connectivity.Validate`** returns components, isolated nodes and the largest-component coverage.
+- **`Connectivity.Validate`** returns components, isolated nodes and the largest-component coverage; with `positiveWeightsOnly` it counts only coupled edges (ln J above −∞ where the graph has the log, else a positive weight).
+- **`MergeHeights.Compute`** returns the single-linkage merges of a coupling graph strongest first, each with its height in ln J and the two component sizes. It reads `LogWeights`, so a far gap keeps its height.
 - **`Degree.Distribution`** reports the distribution of row counts. `IsolatedCount` counts degree 0 and `UndersampledCount` counts degree 1.
 - **`EdgeWeights.Summary`** returns the count, min, max, mean and median over upper-half slots, and `NearZeroBridges`.
 - **`AlgebraicConnectivity`** computes λ₂ of the dense $L=D-W$. It is gated at 2,000 nodes.

@@ -186,6 +186,18 @@ For m = 1 (λ = 0) the code uses the circle series $K_t(r)=1+2\sum_{n=1}^{50}\co
 
 **Bandwidth sanity check.** For single-kernel builds only, a warning is logged if δ is outside $[0.1\tilde s,10\tilde s]$, where $\tilde s$ is the median k-th-neighbor distance.
 
+### Log couplings
+
+The coupling projection also fills `CsrGraph.LogWeights`, ln J per slot, beside the linear `Weights`.
+
+- **Kernel.** The kernels' `LogEvaluate` (exact in the tail; see [GraphSubstrate](./GraphSubstrate.md#coupling-kernels)) plus the Van Vleck factor in logs, $\ln V=\tfrac{d-1}{2}\ln(r/\sinh r)$ (the sinh by its large-r form) or $\tfrac{m-1}{2}\ln(r/\sin r)$. The Schoenberg series has no tail form, so its log is the log of its value.
+- **Thinning** compares ln J with ln f, so it holds where the linear value is 0; a floor of 0 keeps an underflowed edge at its exact finite log. A repair edge keeps the kernel's own ln J; its linear weight is raised to $10^{-300}$, and a kernel that gives it exactly 0 (a Linear kernel past its support) gets the minimum in both.
+- **Gauge.** The factor is a shift: $\ln J\to\ln J+\ln g$, which is the $T\to gT$ of the linear form in a log coordinate.
+- **LMP** ranks by the log when the graph has it (so edges the linear weights tie at 0 still order) and stores $\ln$ of its rank products, −∞ for an exact zero; a protected edge keeps its kernel log.
+- **Connectivity.** "Coupled" means ln J above −∞, so a coupling that underflowed in `Weights` still joins; the build log's coupled-component count and `Resolved.Coupling.CoupledComponents` read it.
+- **Use.** On BlattHierarchy (spread 0.15, mutual kNN + MST-min, Gaussian, mean-edge bandwidth, K = 5) the merge heights are −29.7 to −31.0 within a medium cluster, −2,341 to −2,832 between medium clusters (not tied: they differ by the gaps' squared lengths), and −17,530 between the coarse pair; the Cauchy kernel gives −4.1, −8.5 to −8.6 and −10.5. In the cumulative field's thermal single-linkage (`Field.Mean`, ln T grid step 0.25), the stage widths in e-folds of ln T are Gaussian K = 5: fine 10.8, medium 2,312, coarse 15,150 (K = 10: 7.8, 1,251, 8,201); Cauchy K = 5: 2.5, 3.8, 3.2 (K = 10: 2.8, 3.8, 3.2). A stage is a run of grid points with exactly k clusters of at least 0.4 of the level's smallest class. The widths grow as $d^2/2a^2$ under the Gaussian, which is why they lie far below any reachable temperature.
+- **Not done.** SW still takes a double T, so it does not sample at ln T = −1250; the cumulative-field command, user session and thermal EOM take a double grid.
+
 ### Local mutual proximity
 
 For slot $(u,v)$ with weight w:
@@ -251,7 +263,7 @@ where $\prec$ means "weaker": `<` for couplings, `>` for distances. Protected pa
 - **Isolated nodes.** An ε-ball build with an isolated node throws, because the per-node vectors come out shorter than n. Under `MutualKth`, a node with no mutual neighbor puts $+\infty$ into the bandwidth sample. The MAD, quantile, log-scale, intrinsic and linear estimators then throw `ArgumentOutOfRangeException`; `MeanEdgeDistance` skips or ignores the value.
 - **Bandwidth labels are inverted.** All four kernels increase with δ, so a *low* median weight means δ is too *small*. `GraphHealth` labels that case `BandwidthTooLarge` ("halve --bandwidth"), and the interrupt messages invert the direction the same way. `Build`'s own δ-vs-median warning gives the correct direction.
 - **Zero bandwidth is not guarded.** MAD is 0 when more than half of the k-th distances are equal, as with quantized data. The hyperbolic Cauchy factor under MAD also gives 0. With δ = 0, every coupling fails the $10^{-10}$ test and the graph comes out empty, and the sanity warning does not fire.
-- **Far Gaussian gaps underflow.** With a Gaussian kernel a coarse gap's coupling $e^{-d^2/2a^2}$ can fall below the double range. Its repair edge is then clamped to $10^{-300}$, and every merge across such a gap ties at that height, so single-linkage heights across far-apart Gaussian clusters carry no data information (BlattHierarchy, mean-edge bandwidth, K = 5: the medium and coarse merges all sit at $10^{-300}$, the finest at $10^{-13.5}$). A heavy-tailed kernel keeps them (Cauchy: $10^{-3.7}$ to $10^{-4.5}$). Storing couplings in log space would lift this; it is not done.
+- **Far Gaussian gaps underflow in `Weights`, and not in `LogWeights`.** With a Gaussian kernel a coarse gap's coupling $e^{-d^2/2a^2}$ can fall below the double range. Its repair edge's linear weight is then clamped to $10^{-300}$, and every merge across such a gap ties there in any reading of `Weights`. The compiler's `LogWeights` (below) hold the exact ln J, and `MergeHeights` and the cumulative-field log ladder read it. A consumer of the linear weights (SW at a double-range temperature, the Laplacian, LMP's output) is unaffected.
 - **`MaxNearZeroEdgeRatio` fails on LMP builds.** LMP writes exact zeros, so the 0.05 recommended in the `MaxNearZeroEdgeRatio` doc comment will likely throw on builds where LMP runs.
 
 ## Order of operations, and the decisions behind it
