@@ -11,7 +11,8 @@ namespace Maths.Regression.Tests;
 /// BASS's contracts (stage 4, S1): the data refuses its defects and copies what it is given; the input transform maps
 /// the training range onto [0, 1] with exact ends and keeps the observed levels; the config round-trips through JSON
 /// by value, refuses out-of-range fields by name, and the fingerprint moves with any setting or any data bit; the
-/// resolved record matches direct computation and refuses what the intercept convention cannot fit.
+/// resolved record matches direct computation and refuses what the intercept convention cannot fit; the flat histogram
+/// refuses a pilot that cannot size its run.
 /// </summary>
 public sealed class BassContractTests
 {
@@ -295,6 +296,21 @@ public sealed class BassContractTests
                                           && p.Reason.Contains("200 learning and 100 production") && p.Reason.Contains("Sampling.Thin = 3"));
         Assert.DoesNotContain(r.AutoPicks, p => p.Setting.Contains("Thin"));
         Assert.DoesNotContain(BassResolved.Resolve(new BassConfig(), data).AutoPicks, p => p.Reason.Contains("flat histogram"));
+    }
+
+    [Fact]
+    public void FlatHistogram_RefusesAPilotThatCannotSizeTheRun_AsARefusedWarmStartIs()
+    {
+        // The fit draws its pilot, so what the pilot cannot give is the run's refusal, not a bad argument: the exact-gap
+        // harness's b = 1 rung on one level, and every rung on one level. What the spec declares is not read from the pilot.
+        const double level = -627.6808322874938;
+        double[] hot = [.. Enumerable.Range(1, 2000).Select(j => -(double)j)];
+        var onOneLevel = new TemperingPilot([1.0, 0.0], [[level, Math.BitIncrement(level), level, Math.BitDecrement(level)], hot]);
+        var noWidth = new TemperingPilot([1.0, 0.0], [[level, level], [level, level]]);
+        var run = new FlatHistogramSpec { LearningIterations = 10, ProductionDraws = 10 };
+        Assert.Contains("no spread", Assert.Throws<InvalidOperationException>(() => BassFlatHistogramFit.StartShape(run, onOneLevel)).Message);
+        Assert.Contains("empty window", Assert.Throws<InvalidOperationException>(() => BassFlatHistogramFit.StartShape(run, noWidth)).Message);
+        Assert.Equal(5, BassFlatHistogramFit.StartShape(run with { Nodes = 5 }, onOneLevel).Nodes);
     }
 
     [Fact]

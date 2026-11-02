@@ -241,14 +241,20 @@ public static class Wham
     }
 
     /// <summary>K from the pilot: ⌈width / sd₁⌉ + 1 nodes, sd₁ the b = 1 rung's ℓ₁ sd, so no segment is wider than
-    /// the posterior's spread; at least 2.</summary>
+    /// the posterior's spread; at least 2. A rung on one level is refused: an sd that is rounding at the levels' own
+    /// magnitude, or too small for K to fit an int, sizes nothing.</summary>
     public static int Nodes(TemperingPilot pilot, FlatHistogramWindow window)
     {
         ArgumentNullException.ThrowIfNull(pilot);
         ArgumentNullException.ThrowIfNull(window);
-        double sd = StandardDeviation(pilot.Levels(pilot.ColdRung));
-        if (!(sd > 0.0)) throw new ArgumentException("The pilot's b = 1 rung has no spread in ℓ₁ to size the nodes by.", nameof(pilot));
-        return Math.Max(2, checked((int)Math.Ceiling((window.High - window.Low) / sd)) + 1);
+        // A rung on one level reads an sd from its mean's running sum alone, up to n·u of the levels' magnitude however exact
+        // its draws: 8,000 identical draws at −627.68 read 1.04e-10, the exact-gap harness's crash. n·ε is twice that bound.
+        const double machineEpsilon = 2.220446049250313e-16;   // 2⁻⁵², not double.Epsilon, the least subnormal
+        ReadOnlySpan<double> cold = pilot.Levels(pilot.ColdRung);
+        double sd = StandardDeviation(cold), segments = Math.Ceiling((window.High - window.Low) / sd);
+        if (!(sd > cold.Length * machineEpsilon * Math.Abs(Mean(cold)) && segments < int.MaxValue))
+            throw new ArgumentException("The pilot's b = 1 rung has no spread in ℓ₁ to size the nodes by.", nameof(pilot));
+        return Math.Max(2, (int)segments + 1);
     }
 
     // F(f), with each rung's Σ_j m_j P_ji, the pairs' Σ_j m_j P_ji P_jk, and each level's ln Σ_k ñ_k e^{b_k ℓ_j − f_k}; a

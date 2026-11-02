@@ -829,7 +829,7 @@ public sealed class BassKernelSpectrumTests
             {
                 fit = Bass.Fit(config, spec.Data);
             }
-            catch (Exception refused) when (refused is InvalidOperationException or OverflowException)
+            catch (InvalidOperationException refused)
             {
                 Row("flat", FlatHeader,
                 [

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text.Json;
 using Maths.Samplers.Ensemble;
 using Maths.Samplers.FlatHistogram;
@@ -13,7 +14,8 @@ namespace Maths.Samplers.Tests;
 /// round-trips through JSON unchanged, and it says when it needs a pilot. A run taken in pieces, each resuming the last
 /// one's checkpoint, mid-learning, at the learning's end and mid-production, ends bit for bit where the run taken whole
 /// ends, across the window top's extension too; a checkpoint of another run, or of a finished one, is refused. Today's runs
-/// on the toys are pinned, so an option left off keeps them bit for bit.
+/// on the toys are pinned, so an option left off keeps them bit for bit. K read from a pilot refuses a b = 1 rung on one
+/// level, and keeps every tight rung that fits.
 /// </summary>
 public sealed class FlatHistogramSpecTests
 {
@@ -90,6 +92,62 @@ public sealed class FlatHistogramSpecTests
             Assert.Throws<ArgumentException>(() => MulticanonicalRun.Run(spec, DoubleWell(Depth), new WellModel(Depth, 0.25), 1));
         }
         Assert.Throws<ArgumentException>(() => MulticanonicalRun.Run(Explicit with { Nodes = null }, DoubleWell(Depth), new WellModel(Depth, 0.25), 1));
+    }
+
+    // A pilot whose b = 1 rung holds the given draws, beside a hot rung a unit apart from −2000 to −1.
+    private static TemperingPilot WithColdRung(params double[] cold) => new([1.0, 0.0], [cold, [.. Enumerable.Range(1, 2000).Select(j => -(double)j)]]);
+
+    private static void AssertNoSpread(TemperingPilot pilot, FlatHistogramWindow window) =>
+        Assert.Contains("no spread", Assert.Throws<ArgumentException>(() => Wham.Nodes(pilot, window)).Message);
+
+    [Fact]
+    public void Nodes_RefuseARungOnOneLevel_WhoseSpreadIsRoundingAtTheLevelsScale()
+    {
+        // The exact-gap harness's crash (spectral-gap brief) passed sd > 0 and overflowed K: 8,000 draws at −627.68 read sd
+        // 1.04e-10, the rounding of the mean's running sum, as identical draws do. Draws an ulp apart read no more. Each is
+        // over the window the pilot resolves.
+        const double level = -627.6808322874938;
+        TemperingPilot identical = WithColdRung([.. Enumerable.Repeat(level, 8_000)]);
+        AssertNoSpread(identical, Wham.Window(identical, 0.01, 1.0));
+        TemperingPilot ulps = WithColdRung(level, Math.BitIncrement(level), level, Math.BitDecrement(level));
+        AssertNoSpread(ulps, Wham.Window(ulps, 0.01, 1.0));
+
+        // Refused where the rung's scale decides it, not K, which fits: at a level of 10⁹ an ulp's spread sizes a window of 1
+        // at ~10⁷ nodes, and the sum's rounding grows with the draws, a million of them sizing a window of 1 at ~10⁸.
+        const double large = -1e9;
+        AssertNoSpread(WithColdRung(large, Math.BitIncrement(large), large, Math.BitDecrement(large)), new FlatHistogramWindow(large - 1.0, large));
+        AssertNoSpread(WithColdRung([.. Enumerable.Repeat(level, 1_000_000)]), new FlatHistogramWindow(level - 1.0, level));
+
+        // The run takes the same refusal, the pilot being its argument.
+        var spec = new FlatHistogramSpec { Chains = 3, LearningIterations = 10, ProductionDraws = 10, Start = FlatHistogramStart.Flat };
+        var refusal = Assert.Throws<ArgumentException>(() => MulticanonicalRun.Run(spec, DoubleWell(Depth), new WellModel(Depth, 0.25), 1, ulps));
+        Assert.Contains("no spread", refusal.Message);
+    }
+
+    [Fact]
+    public void Nodes_RefuseASpreadTooSmallForK_AndKeepEveryTightRungThatFits()
+    {
+        // Above rounding at its level, and yet K would not fit an int: no node count to size by, whatever the scale. The
+        // second rung sits at 0, so nothing is negligible at its scale; the third's K would be int.MaxValue + 1, which wraps.
+        var wide = new FlatHistogramWindow(-2000.0, 0.0);
+        AssertNoSpread(WithColdRung(-641.0 - 1e-8, -641.0 + 1e-8), wide);
+        AssertNoSpread(WithColdRung(-3e-17, 3e-17), wide);
+        AssertNoSpread(WithColdRung(-1.0, 1.0), new FlatHistogramWindow(-Math.Sqrt(2.0) * int.MaxValue, 0.0));
+        Assert.Equal(int.MaxValue, Wham.Nodes(WithColdRung(-1.0, 1.0), new FlatHistogramWindow(-Math.Sqrt(2.0) * 2_147_483_645.5, 0.0)));
+
+        // A rung tight at its level whose K fits keeps K = ⌈width / sd⌉ + 1 as it stood, at any scale and any draws: a bare
+        // floor on sd would refuse the one at −10⁻⁶.
+        foreach ((double a, double d, double width, int pairs) in new[]
+                 {
+                     (-641.0, 1e-6, 2e-3, 1), (-641.0, 1e-11, 1e-8, 1), (-641.0, 1e-8, 1.03e-5, 4_000), (-1e9, 1e-3, 1.0, 1), (-1e-6, 1e-12, 1e-9, 1), (-5.0, 2.0, 40.0, 1),
+                 })
+        {
+            double[] cold = [.. Enumerable.Range(0, 2 * pairs).Select(i => i % 2 == 0 ? a - d : a + d)];
+            double mean = cold.Average(), sd = Math.Sqrt(cold.Sum(v => (v - mean) * (v - mean)) / (cold.Length - 1));
+            var window = new FlatHistogramWindow(a - 0.5 * width, a + 0.5 * width);
+            Assert.Equal((int)Math.Ceiling((window.High - window.Low) / sd) + 1, Wham.Nodes(WithColdRung(cold), window));
+        }
+        Assert.Equal(2, Wham.Nodes(WithColdRung(-5.0, 5.0), new FlatHistogramWindow(-1.0, 0.0)));   // a window narrower than the sd
     }
 
     [Fact]

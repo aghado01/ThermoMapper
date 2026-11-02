@@ -161,12 +161,20 @@ internal static class BassFlatHistogramFit
         return new TemperingPilot(b, [.. levels.Select(l => l.ToArray())], inefficiencies);
     }
 
-    // The start's window, b_lo and K as the run resolves them: the spec's, or the pilot's where it leaves them.
-    private static MulticanonicalWeights StartShape(FlatHistogramSpec run, TemperingPilot pilot)
+    // The start's window, b_lo and K as the run resolves them: the spec's, or the pilot's where it leaves them. The fit drew
+    // the pilot, so one that cannot give them is the run's refusal, as a refused warm start is, not a bad argument.
+    internal static MulticanonicalWeights StartShape(FlatHistogramSpec run, TemperingPilot pilot)
     {
-        FlatHistogramWindow window = run.Window ?? Wham.Window(pilot, run.WindowQuantile, run.WindowMargin, run.WindowTopMargin);
-        int nodes = run.Nodes ?? Wham.Nodes(pilot, window);
-        return MulticanonicalWeights.Flat(window.Low, window.High, run.LowSlope ?? pilot.HotEnd, nodes);
+        try
+        {
+            FlatHistogramWindow window = run.Window ?? Wham.Window(pilot, run.WindowQuantile, run.WindowMargin, run.WindowTopMargin);
+            int nodes = run.Nodes ?? Wham.Nodes(pilot, window);
+            return MulticanonicalWeights.Flat(window.Low, window.High, run.LowSlope ?? pilot.HotEnd, nodes);
+        }
+        catch (ArgumentException e) when (e.ParamName == nameof(pilot))
+        {
+            throw new InvalidOperationException($"The flat-histogram run could not read its window or K from its pilot: {e.Message}", e);
+        }
     }
 
     private static BassFit Assemble(BassModel model, string fingerprint, BassFlatHistogramSpec spec, int[] roots, MulticanonicalResult<BassState> result,
