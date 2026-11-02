@@ -206,7 +206,7 @@ public static class GraphCompiler
                     $"CouplingProjection.ScaleRank {scaleRank} must lie in [1, K = {ResolveK(config.Topology)}].");
         }
 
-        (IEdgeScaler scaler, BandwidthStrategy strategy, CouplingFidelity fidelity, SphericalIntrinsicMode sphericalMode) = BuildScaler(
+        ScalerPlan plan = BuildScaler(
             coupling,
             repairEdges,
             filtered,
@@ -219,7 +219,7 @@ public static class GraphCompiler
             metric.Manifold,
             log,
             config.Auto);
-        ScalerResult scaled = scaler.Scale(refined, n);
+        ScalerResult scaled = plan.Scaler.Scale(refined, n);
         ReturnedGraphReport returnedReport = LogReturnedGraph(
             log, scaled.Graph, n, repairEdges, connectivityPost, scaled.CutEdges, coupling.CouplingFloor, weightsAreCouplings: true);
 
@@ -316,7 +316,7 @@ public static class GraphCompiler
                 resolvedFilter, Finite(hubness.InDegreeSkewness), resolvedRepair, Finite(coveragePre), repairEdges.Count,
                 RefinementKind.PathNeighbor, returnedReport.Structural.ComponentCount,
                 Finite(returnedReport.Structural.LargestCoverage),
-                ResolveCoupling(coupling, scaled, returnedReport, strategy, fidelity, sphericalMode, repairEdges.Count)));
+                ResolveCoupling(coupling, scaled, returnedReport, plan)));
     }
 
     // ── Stage resolution ─────────────────────────────────────────────────
@@ -436,7 +436,7 @@ public static class GraphCompiler
             $"Unsupported refinement kind {cfg.Kind}. Euclidean refinement is retired.");
     }
 
-    private static (IEdgeScaler Scaler, BandwidthStrategy Strategy, CouplingFidelity Fidelity, SphericalIntrinsicMode SphericalMode) BuildScaler(
+    private static ScalerPlan BuildScaler(
         CouplingProjection coupling,
         RepairEdgeSet repairEdges,
         NeighborSelection filtered,
@@ -555,7 +555,7 @@ public static class GraphCompiler
 
         // The gauge goes last, after the floor and LMP: a pure rescaling of temperature.
         IEdgeScaler scaler = coupling.Gauge == GaugeKind.None ? measured : new GaugeScaler(measured, coupling.Gauge);
-        return (scaler, strategy, fidelity, sphericalMode);
+        return new ScalerPlan(scaler, strategy, geometry, fidelity, sphericalMode);
     }
 
     private static GlobalBandwidthScaler BuildMixtureScaler(
@@ -708,6 +708,14 @@ public static class GraphCompiler
         return new ReturnedGraphReport(report, coupled, zeroEdges, missing, zeroed);
     }
 
+    /// <summary>The scaler chain and what its strategy, geometry and fidelity resolved to.</summary>
+    private sealed record ScalerPlan(
+        IEdgeScaler Scaler,
+        BandwidthStrategy Strategy,
+        SpaceGeometry Geometry,
+        CouplingFidelity Fidelity,
+        SphericalIntrinsicMode SphericalMode);
+
     private readonly record struct ReturnedGraphReport(
         ConnectivityReport Structural, ConnectivityReport Coupled, int ZeroEdges, int RepairDropped, int RepairZeroed);
 
@@ -717,25 +725,23 @@ public static class GraphCompiler
         CouplingProjection coupling,
         ScalerResult scaled,
         ReturnedGraphReport report,
-        BandwidthStrategy strategy,
-        CouplingFidelity fidelity,
-        SphericalIntrinsicMode sphericalMode,
-        int repairEdgeCount)
+        ScalerPlan plan)
     {
         bool lmp = scaled.Lmp?.Applied ?? false;
         bool bwdUnits = coupling.Kernel is Gaussian
-            && strategy == BandwidthStrategy.MeanEdgeDistance
+            && plan.Strategy == BandwidthStrategy.MeanEdgeDistance
             && coupling.Gauge == GaugeKind.InverseMeanDegree
-            && fidelity == CouplingFidelity.GeodesicLinear
+            && plan.Geometry == SpaceGeometry.Euclidean
+            && plan.Fidelity == CouplingFidelity.GeodesicLinear
             && !lmp;
         double? bandwidth = scaled.SingleBandwidth ?? scaled.MixtureBandwidth?.Gaussian;
 
         return new CouplingResolution(
             Kernel: coupling.Kernel.GetType().Name,
-            BandwidthStrategy: strategy,
+            BandwidthStrategy: plan.Strategy,
             Bandwidth: bandwidth is double b ? Finite(b) : null,
-            Fidelity: fidelity,
-            SphericalMode: sphericalMode,
+            Fidelity: plan.Fidelity,
+            SphericalMode: plan.SphericalMode,
             Lmp: lmp,
             LmpNearZeroRatio: scaled.Lmp?.NearZeroRatio is double ratio ? Finite(ratio) : null,
             LmpRank: coupling.LmpRank,

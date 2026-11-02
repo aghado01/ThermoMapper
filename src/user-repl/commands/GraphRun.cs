@@ -176,7 +176,10 @@ internal static class GraphRun
             $"Kernel={kernelDesc}, " +
             $"DistanceMetric={(options.DistanceMetricSpec ?? "EuclideanDefault")}, " +
             $"MST-repair={(config.Repair.Kind == RepairKind.MstMin)}, " +
-            $"LMP={((config.Projection as CouplingProjection)?.LmpRescale == true)}");
+            $"LMP={((config.Projection as CouplingProjection)?.LmpRescale == true)}" +
+            (config.Projection is CouplingProjection cp
+                ? $", Gauge={cp.Gauge}, CouplingFloor={cp.CouplingFloor:G}, ScaleEdges={cp.ScaleEdges}"
+                : string.Empty));
     }
 
     /// <summary>

@@ -314,6 +314,18 @@ public sealed class GraphCompilerReturnedGraphTests
     }
 
     [Fact]
+    public void MixtureKernel_AlsoKeepsTheRepairBridge()
+    {
+        // A Gaussian-only mixture underflows across the gap exactly as the single kernel does.
+        double[][] points = FarApartLines(lines: 2, pointsPerLine: 10, separation: 10.0);
+
+        GraphBuildResult result = Build(points, Config(new Mixture(GaussianWeight: 1.0), k: 3));
+
+        Assert.Equal(1, CoupledComponents(result.Graph));
+        Assert.InRange(BridgeWeight(result.Graph, points.Length / 2), double.Epsilon, 1e-10);
+    }
+
+    [Fact]
     public void PointsWithinTheFloor_ReportOneComponentAndNoWarning()
     {
         // Control: a single line is connected by its own topology, no repair, no cut.

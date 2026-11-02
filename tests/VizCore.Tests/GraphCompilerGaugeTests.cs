@@ -118,5 +118,38 @@ public sealed class GraphCompilerGaugeTests
         Assert.InRange(kept / (2e-10 / 3.0), 1 - 1e-9, 1 + 1e-9);
     }
 
+    [Fact]
+    public void Gauge_FollowsLmp_AndCountsTheZeroEdgesLmpWritesInTheMeanDegree()
+    {
+        // Strict LMP writes zeros but keeps the topology, so K-hat is still the structural mean degree
+        // and every weight, the zeros included, is the ungauged LMP weight times g.
+        CsrGraph plain = BuildLmp(GaugeKind.None);
+        CsrGraph gauged = BuildLmp(GaugeKind.InverseMeanDegree);
+
+        Assert.Contains(plain.Weights, w => w == 0.0);
+        double g = plain.NodeCount / (double)plain.Targets.Length;
+        for (int slot = 0; slot < plain.Weights.Length; slot++)
+            Assert.InRange(gauged.Weights[slot], plain.Weights[slot] * g * (1 - 1e-12), plain.Weights[slot] * g * (1 + 1e-12));
+    }
+
+    private static CsrGraph BuildLmp(GaugeKind gauge)
+    {
+        double[][] p = Points();
+        return GraphCompiler.Build(
+            new GraphCompilerConfig
+            {
+                Topology = new TopologyConfig { Kind = TopologyKind.Knn, K = 4 },
+                Filter = new FilterConfig { Kind = FilterKind.OrRule },
+                Repair = new RepairConfig { Kind = RepairKind.MstMin },
+                Projection = new CouplingProjection { Kernel = new Cauchy(), LmpRescale = true, Gauge = gauge },
+            },
+            p.Length,
+            new GraphMetric((i, j) =>
+            {
+                double dx = p[i][0] - p[j][0], dy = p[i][1] - p[j][1];
+                return Math.Sqrt(dx * dx + dy * dy);
+            })).Graph;
+    }
+
     private static Neighbor Near(int index, double distance) => new() { Index = index, Distance = distance };
 }
