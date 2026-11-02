@@ -51,7 +51,7 @@ By the main session, on a clean export of `608964c`: Distributions 272/272, R pa
   - `HalfCauchy.LogPdf` read −∞ past 10¹⁵⁴ scales, as z² overflowed;
   - `Weibull.InverseLogCdf` and `LogCdf` underflowed below ln p ≈ −708 with the root still in range;
   - `Mixture` returned a finite number for a root beyond the double range.
-  Corrected in `0acb3f6`, none changing a value that was right, and the fuzz is now `DistributionSweepTests`, seeded. After them: Distributions 280/280, R parity 22/22, bit identity 8/8. The Regression suite was not rerun on the fixes, which touch quantiles and those far-range values only.
+  Corrected in `0acb3f6`, whose message overstates one thing: no draw or density that was right changes, but a quantile can move by rounding, through the solver's midpoint and the Weibull's log form. The fuzz is now `DistributionSweepTests`, seeded. After them: Distributions 280/280, R parity 22/22, bit identity 8/8. The Regression suite was not rerun on the fixes, which touch quantiles and those far-range values only.
 - *The weighted core and the marginal given σ² (`a772fd9`).* Reread and held: `PriorPencil`'s whitening, solve, draw and determinant; `LogMarginalGiven` and its slope; the two weight meanings. `TheBlock_MatchesDenseAlgebra` is a real check, building S and the determinant term from the columns with a dense Cholesky and never touching the pencil. Still that chip's: its docs are uncommitted, its before-and-after timing is unresolved, and the [moving-response options](moving-response-priors-options.md) wait on the user.
 
 ### Truncated draws and the rest of the quantiles — 2026-11-02
