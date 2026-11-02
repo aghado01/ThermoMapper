@@ -100,11 +100,46 @@ A caveat on anything read through BARS here, these curves and ⟨E⟩(T) alike. 
 
 **Not done.** It hasn't been measured on the Domany battery or ISOLET. That is an experiment, for the user to ask for. Filling `DenseCoMembership` costs N²/2 increments per kept partition under a giant cluster, about 6 × 10⁹ per temperature at N = 7,800 and 200 kept partitions.
 
+## Measurement of the closure gap
+
+Asked for by the user on 2026-11-01. The protocol and readings below were written before the first run. The thresholds are judgement calls, fixed so the reading isn't fitted to the results.
+
+**The question.** Does closure cost anything on real data at the levels that matter, and is that cost chaining?
+
+**Protocol.** `tests/VizCore.Tests/ClosureGapHarness.cs`, built from an export of one commit, so the graph compiler's in-flight edits stay out of it.
+
+| Set | N | Graph (mutual kNN + MST repair, Gaussian mean-edge kernel, 1/K̂ gauge) | Labels |
+|---|---|---|---|
+| `blobs` | 400 | k = 10: two Gaussians, σ = 1, centres 24 apart | The two blobs |
+| `dumbbell` | 424 | k = 10: the same points, plus 24 evenly spaced on the line between them | Blob by side |
+| `iris` | 150 | k = 5 | Species |
+| `toy` | 3,200 | k = 10, `Bwd1995Toy` seed 42 | The generator's |
+| `landsat` | 6,435 | k = 5 | Land cover |
+| `isolet` | 7,797 | k = 10, raw 617 features | Letter |
+
+- q = 20, and θ = ½ on δ̄, which is 0.474 on the co-membership scale.
+- 65 temperatures evenly spaced in ln T over `BwdPottsCriticalEstimate.Bracket(20)`.
+- 8 replicas × (1,000 burn-in, 2,000 cycles), keeping every 10th partition: 1,600 per temperature, pooled.
+- One seed. This is exploration, so nothing is asserted.
+- Each row goes to `artifacts/closure-gap/closure-gap.tsv` as it finishes, and finished rows are skipped on a rerun.
+
+Below, *share* is the cross-fit pair gap over the closure's pair loss. A negative cross-fit gap counts as a share of zero.
+
+**The instrument check.** There must be a temperature where `dumbbell`'s share is at least 20% and `blobs`' is at most 5%. Without one the instrument can't see a chain, and the readings below are void. Expected on the same levels, not required: `dumbbell`'s edge form stays under 5%.
+
+**The readings, per real set.**
+- *Best levels:* the temperatures whose closure has an ARI within 0.02 of the set's highest. Labels choose only where to read.
+- *No room:* share ≤ 5% at every best level. A loss-optimal search isn't worth building on that set.
+- *Room:* otherwise. This is necessary, not sufficient: the gap is an upper bound, and it doesn't show that a search would gain it.
+- *Chaining shows:* room, and at those levels the labels side with the pair rule on more than half of the contradicted pairs.
+
+Expected everywhere, `blobs` included: the gap peaks at melts, where a partition can't represent intermediate co-membership. That is indecision, not chaining, so `blobs` is the reference for what a plain melt costs.
+
 ## Proposed order
 
 Not decided.
 
-1. **Measure the closure gap.** The edge form on the existing co-membership, and the pair form on kept partitions, scored as a curve over T on the Domany battery and ISOLET. If it is small everywhere, a loss-optimal search isn't worth building. If it is large, it says where.
+1. **Read the closure gap's measurement.** If it is small everywhere, a loss-optimal search isn't worth building. If it is large, it says where.
 2. **Idea 3.** Stepping-stone and path sampling, validated on exact ln Z (a tree for any q, Kaufman at q = 2), then BARS on ⟨E⟩ checked against the same truth. Independent of 1.
 3. **The partition distance table,** then VI cuts, credible balls and P(Q) as its reductions, and the per-block window through BARS.
 4. **Idea 5.** BARS with `StepBasis` on lineage trajectories.
