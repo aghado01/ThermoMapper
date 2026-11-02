@@ -16,8 +16,7 @@ namespace TDA.Ph;
 /// pair's long exact sequence), so the relative H₁ bars are the absolute ones born after <c>K₀</c>. This is fixed
 /// <c>K₀</c>, not the moving <c>H(K, K_i)</c> of de Silva, Morozov and Vejdemo-Johansson's dualities: an ordinary
 /// filtration of the quotient, read by <see cref="PersistentHomology"/> with no new reduction code. The clearing
-/// and involuted paths assume absolute structure, so they do not read this complex directly;
-/// <see cref="ComputeBothReadings"/> reaches them through one absolute run with <c>K₀</c> first.</para>
+/// and involuted paths assume absolute structure, so they do not apply.</para>
 /// </summary>
 public sealed class RelativeFiltration : IFiltration
 {
@@ -147,10 +146,11 @@ public sealed class RelativeFiltration : IFiltration
     /// <see cref="ComputeBarcode"/> for representatives.
     /// <para><c>Absolute</c> is <c>K</c> with <c>K₀</c> at the base: its cells read at the ambient's smallest value.
     /// When they already sit there, as a backbone at ε₀ = 0 does, it is the ambient's own barcode.</para>
-    /// <para>This is for wanting both. For the relative barcode alone <see cref="ComputeBarcode"/> is faster past small
-    /// complexes, since it reduces a smaller problem: about 3 times at 42,000 triangles.</para>
+    /// <para>Internal, so <see cref="ComputeBarcode"/> is the one public path. This is for wanting both: for the relative
+    /// barcode alone it is the slower one past small complexes, about 3 times at 42,000 triangles, since
+    /// <see cref="ComputeBarcode"/> reduces a smaller problem.</para>
     /// </summary>
-    public (Barcode Absolute, Barcode Relative) ComputeBothReadings(int maxDimension = int.MaxValue)
+    internal (Barcode Absolute, Barcode Relative) ComputeBothReadings(int maxDimension = int.MaxValue)
     {
         var absolute = new List<Bar>();
         var relative = new List<Bar>();

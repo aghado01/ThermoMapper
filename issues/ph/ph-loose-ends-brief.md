@@ -1,6 +1,6 @@
 # Brief: closing the PH setup's loose ends
 
-**Date:** 2026-11-02. **Status:** built; the [report](#report) is below. One ruling waits on the user: whether `ComputeBothReadings` stays public.
+**Date:** 2026-11-02. **Status:** built; the [report](#report) is below. The user ruled `ComputeBothReadings` internal.
 **Asked by the user:** "lets chip off to close the loose ends", the four entries under "PH setup loose ends" in
 [the Shelf](../SHELF.md). All four are decided: build them. Engine work only, with no consumer wired, and nothing here assumes
 one application.
@@ -319,9 +319,8 @@ The graph engines can't read this, since the cone over an edge is a triangle, so
 
 #### What stayed open, and why
 
-- **Whether `ComputeBothReadings` stays on the public surface.** Measured above: not faster for the relative barcode alone, about 3 times slower at n=400 and widening, and the
-  cheapest route when both readings are wanted. The docstring and the docs say so. The ruling is the user's. My recommendation is to keep it,
-  for that second use, since `ComputeBarcode` stays the default path and removing it later costs one method and its view.
+- **`ComputeBothReadings` is internal, by the user's ruling (2026-11-02).** On the timing above, I recommended keeping it public and the
+  user chose internal. `ComputeBarcode` is the one public path. The reading and its tests stay, with nothing outside the assembly calling it.
 - **Compatible cycles along a bar.** Above. The user's call; on the Shelf.
 - **The two reported deviations.** On the Shelf, per the brief.
 - **The tie change in `ComputeH0`.** Worth knowing if a tied-distance LMP run moves. I didn't measure one, since that's an experiment.
