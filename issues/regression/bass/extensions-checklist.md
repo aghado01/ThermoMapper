@@ -42,6 +42,37 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ## Reports
 
+### The weighted core and the marginal given σ² — 2026-11-02
+
+The first two rows of [Upgrades to existing code](extensions-brief.md#upgrades-to-existing-code) are built. The third, priors for a moving response, is [written out as options](moving-response-priors-options.md) for the user's call and not built. Commits: `a772fd9` (the core and the form), `ce15a49` (the unit path's support count, the cost block). The forms, alternatives and trade-offs are in [BayesianRegression](../../../docs/Maths/BayesianRegression.md#bass-the-weighted-core).
+- *A check that could not hold as written.* "Integer weights equal duplicated rows, through the marginal" conflicts with D03's robust row, the recorded default under weights, in two ways. Its g-prior stays on the unweighted Gram, while a duplicated row's own g-prior reads its copies. And precision weights count N in σ²'s ν, where duplicated rows count Σwᵢ. So both axes are selectable (`WeightedPriorGram`, `WeightMeaning`), with D03's prior and precision weights as the contract's defaults. The check holds in full on `Replication` with `Weighted`, and for the likelihood's statistics under all four readings. Under precision, given σ², it holds up to a constant free of the structure.
+- *What D03's prior added.* `FromWeighted`, BARS's block, is built at one τ and b = 1, which τ's slice step and tempered swaps cannot read, so the upgrade needed `PriorPencil`: any (τ, b) in O(p), O(p³) per admitted proposal.
+- *What the form added.* `Sigma2Prior.Held`, a fourth kind that leaves the other kinds' JSON and fingerprints as they were, and `BassTarget.Given`, for a σ² drawn apart through `ReplaceTarget`.
+- *Beyond the rows.* The pointwise densities now read the working response and its weights, so they read a fixed offset too.
+- *Evidence.*
+  - Regression 1,625 of 1,625 on the final tree, with the eight hashes held.
+  - The BASS oracle filter 90 of 90 on `a772fd9`: 85 serially, then 5 that had hit the R oracle's 120 s limit at below-normal priority. None was a mismatch, and they pass at normal priority in 17–46 s. After `ce15a49`, which only restores the unit path's old loop, the admission parity tests pass 3 of 3; the full filter was not rerun.
+  - The checks are listed with [the forms](../../../docs/Maths/BayesianRegression.md#bass-the-weighted-core): dense algebra, σ²'s integral to 10⁻⁹, enumeration of all 2,263 structures, duplicated rows state by state for 400 sweeps, and a held σ²'s evidence at ln Z −14.860 against the enumeration's −14.870.
+- *Cost, under load.* After/before over 72 paired blocks: Friedman 0.99 (IQR 0.94–1.05), direct functional 1.07 (IQR 0.98–1.26), or 0.99 on the pairs where others kept at most 4 cores busy. No block met the quiet rule: one other test host throughout, others' cores at a median of 3. So a difference under about 5% cannot be read. The pencil costs 3–4× the closed forms at M ≈ 9, growing as M³.
+- *The review found.*
+  - A real slowdown of +6 to +14% on Friedman, from a support count that took a nullable lookup and a floating-point add per nonzero element. A first timing block, short and unpaired, could not see it, and hid it behind 2–6× noise; the user's question about a busy machine prompted the paired one that did. Fixed in `ce15a49`.
+  - One name for the record (`Weighting`, with `Weights` left as the raw W), and a test name that had gone false.
+  - Coverage gaps, now tests: the strict factorization near the gate, the exact-fit floor under W, a ladder's hand-over, and the evidence under a held σ².
+- *Seam shapes to report, since they have no recorded ruling.*
+  - `WorkingResponse` gains `Meaning`, `PriorGram`, `Weighting` and `ResponseMean`.
+  - `BassDesign`'s constructor takes the intercept, which only the pencil reads.
+  - `Residual` reads W^½r.
+  - `BassEvidencePriors.Sigma2` is nullable, for a held σ².
+  - `BassTauBlock` keeps the target it was built with, so a sampled τ beside a moving σ² reads a stale σ². The fix is for it to read the chain's current target, which the chain does not yet expose.
+  - Option B for the third row would add a reference to `WorkingResponse`.
+- *Limits.*
+  - Nothing moves yet: weights and the working response are fixed per model, and the row beside the third, a design that follows them, is not built.
+  - `Bass.Fit` takes no observation model, so a weighted run reaches a model and a chain, not a run.
+  - Weights with a Q other than the identity are still refused.
+  - A direct design under weights costs O(N) per inner product.
+  - The gate reads W, so F moves with a latent scale (flagged in the options).
+  - `RidgeColumns` and its kin now also hold a pencil, logged in the [notation ledger](../../notation-ledger.md).
+
 ### The three chips checked — 2026-11-02
 
 By the main session, on a clean export of `608964c`: Distributions 272/272, R parity 22/22, Regression 1,617/1,617 with `BassPathProfile` left out and `BassBitIdentityTests` in.

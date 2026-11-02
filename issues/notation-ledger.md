@@ -11,6 +11,13 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### The ridge's names on a prior that is no ridge (2026-11-02)
+
+- **Kind:** one name for several concepts.
+- **Readings:** `RidgeColumns`, `RidgeTerms`, `DesignProposal.Ridge` and `BassStructureFit.Ridge` (`src/maths/regression/gprior/CollapsedGPrior.cs`, `src/maths/regression/spline/bass/BassDesign.cs`, `BassTarget.cs`) name the normalized ridge's terms, and now also hold `PriorPencil`'s, under the g-form on the unweighted columns as much as under the ridge. `BassDesign.PriorTerms` is the general spelling.
+- **Found:** 2026-11-02, the weighted core.
+- **Note:** what they hold is a decomposed pencil's log determinant and shrinkage, so a name for that fits both. `RidgeSpectrum` stays the ridge's own.
+
 ### The gauge factor: g, κ, 1/K̂ and the old couplingScale (2026-11-01)
 
 - **Kind:** one concept under several names.

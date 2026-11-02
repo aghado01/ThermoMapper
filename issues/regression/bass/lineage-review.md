@@ -47,7 +47,7 @@ F-X1 was built for noise, but it is more general. Many observation models turn G
 | Scale shared across a declared group | One scale per group | y, the group's weight | Weighted Gram, indexing by group |
 | Dirichlet-process mixture of normals (DPMBART) | μᵢ, σᵢ | y − μᵢ, 1/σᵢ² | Weighted Gram, the DP's state and moves |
 
-The weighted Gram unlocks most of these, so it is the most useful single piece here. It lets GBMARS split in two: first the weighted Gram, an engine change to centring and the marginal, then the GIG and GH pieces, which are model-specific. [E20](extensions-brief.md#data-augmented-observation-models) has the rest, including what probit needs that was first called free.
+The weighted Gram unlocks most of these, so it is the most useful single piece here. It lets GBMARS split in two: first the weighted Gram, an engine change to centring and the marginal, then the GIG and GH pieces, which are model-specific. [E20](extensions-brief.md#data-augmented-observation-models) has the rest, including what probit needs that was first called free. The weighted Gram and σ² held are built since 2026-11-02 ([the upgrades](extensions-brief.md#upgrades-to-existing-code)).
 
 A scale that varies with x, as in heteroscedastic GPs or NFT BART, is outside this seam. It needs a second modelled surface, not a latent per observation.
 
