@@ -101,3 +101,17 @@ Open it by saying plainly whether the contract is fulfilled, and if not, what st
 ## Reports
 
 Newest first.
+
+### The audit done (chip, 2026-11-01)
+
+[The report](../bass-completion-report.md) and [the matrix](completion-audit-matrix.md); probes in `tests/regression/BassCompletionAuditProbes.cs` (`348ad80`). Audited at `8f4d2da`. Samplers 284/284, Regression 1,507 (1 skipped: G-2), BASS oracle classes 90/90. Nothing under `src/` changed. `artifacts\chip-audit\` is deleted.
+
+**Found:** the contract is not yet fulfilled in full. Every capability exists and verifies, the 215 rows found no wrong number, and the defaults match the doc at every row. Six small items of R's surface differ (`other`, `func.var` on several output variables, `mcmc.use` on Sobol, `temp.ladder` as a list, `start.temper`, the two prediction switches), and two benchmark measures stay open, as known.
+
+**For the main session to check:**
+- *Three rulings the brief leaves open* (the report's "What the brief does not rule on"): they decide whether G-3 to G-6 are gaps or recorded choices. I decided none.
+- *Whether "one case" is met by a refusal* (Ed04, Fulfilled, limited). D01 and D07 imply it; the hub's list names the case without saying.
+- *The re-trace's finding:* declared controls read only at their defaults (seven rows, now covered by a probe). A similar pattern may exist beyond BASS's config.
+- *The run's tree:* the main checkout, with another session's `cb0400b` in it. Its one test run was not a clean snapshot, because the oracle's R library is ignored by git.
+- *Records to fix,* yours by the brief: the report's "Record drift", including the source map's three files and five false statements, one of them in this brief (E1–E15).
+- *`Maths.LinAlg.Tests` and `Maths.Distributions.Tests`* were read, not run here, and four rows cite LinAlg tests.

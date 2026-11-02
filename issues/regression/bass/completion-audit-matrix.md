@@ -6,6 +6,8 @@ Audited revision: `8f4d2da0081c7f17ecb524d5514a27f994191d02` (`git rev-parse HEA
 
 **Probes** are in `tests/regression/BassCompletionAuditProbes.cs` (the class `BassCompletionAuditProbes`, written "Probe." below).
 
+**The suites at the end,** in the main checkout, below normal, `-m:2`, `xUnit.MaxParallelThreads=4`, `BASS_QUALIFICATION` and `SEED_SWEEP` unset: Samplers 284 of 284; Regression 1,507, with 1,506 passed and the G-2 probe skipped; the BASS oracle classes 90 of 90, R present (`Basis_MatchesRBass` took 4 s per degree). **Later commits touching BASS:** this audit's own, and `cb0400b` (a flat-histogram refusal, another session's), uncommitted when the suites began and committed during them. It changes no verdict below.
+
 ## Part 1: capabilities
 
 ### 1a. `bass`: arguments
@@ -126,7 +128,7 @@ Audited revision: `8f4d2da0081c7f17ecb524d5514a27f994191d02` (`git rev-parse HEA
 | E13 | return `ints` | `BassMoments` `sensitivity/BassMoments.cs` | `BassSensitivityMomentTests.PairStructure_SumsToTheCovariance_AndItsTotalsToTheirComponents` | Quadrature | F | A service, not a result field |
 | E14 | return `prior` | `SobolAnalysis.Measure` | `BassSensitivityMomentTests.Resolution_RefusesUnknownNamesAndWrongKinds` | Direct | F | |
 | E15 | return `effects` | `EffectAnalysis` `sensitivity/EffectFunctions.cs` | E09 | | F | |
-| E16 | return `names.ind` | `Inputs`, `Subsets` :102,106 | `BassSensitivityTests.SobolIdentities_*` | Identity | F | |
+| E16 | return `names.ind`, `func` | `Inputs`, `Subsets` :102,106; `SobolAnalysis.Form` | `BassSensitivityTests.SobolIdentities_*` | Identity | F | |
 | E17 | functional return `S`, `S.var`, `xx` | `SobolAnalysis.Decompositions`, `Coordinates` `SobolDecomposition.cs:176` | `BassSensitivityTests.ConditionedVariance_*`; `BassPresentationSensitivityTests.ConditionedSummary_*` | Quadrature | F | |
 
 ### 1f. `sobolBasis`
@@ -229,7 +231,7 @@ Restart across a basis fit has no entry point of its own: each component's check
 
 ## Part 2: the baseline
 
-**The qualified existing-engine revision:** `cf37584` (2026-10-28), the last requalification, by the numerics checklist's report "Baseline requalified before stage 4". The chain before it: gate closed at `4c97de2` (B01–B03, B06), B04 and B05 at `fbe6d0d`, requalified at `2efa134`, `3a04601`, `cf37584`. Those suites are recorded runs of that work; this audit read the tests below and reran the three suites the brief names at the audited revision, not the baseline's four. Thirteen commits under `spline/bars`, `spline/baps`, `bgp`, `samplers/ensemble` and `linalg` follow `cf37584` (`git log cf37584..8f4d2da`); the N14 verdict, BARS's groups and the seams are among them, port changes each with its bit-identity pin or report, and **no requalification has run since**. The hub asks for one only before the first integration tests, so this is a note, not a gap.
+**The qualified existing-engine revision:** `cf37584` (2026-10-28), the last requalification, by the numerics checklist's report "Baseline requalified before stage 4". The chain before it: gate closed at `4c97de2` (B01–B03, B06), B04 and B05 at `fbe6d0d`, requalified at `2efa134`, `3a04601`, `cf37584`. Those suites are recorded runs of that work; this audit read the tests below and reran the three suites the brief names at the audited revision, not the baseline's four. Thirteen commits under `spline/bars`, `spline/baps`, `bgp`, `samplers/ensemble` and `linalg` follow `cf37584` (`git log cf37584..8f4d2da`); N14's verdict and BARS's groups, `DrawSample`'s two quantile fixes (`6d37bab`, `d0a0fd8`), the ladder's resize (`ec565f6`), the seams and the inverse temperature's rename (`f5ba714`) are among them, port changes each with its bit-identity pin or report, and **no requalification has run since**. The hub asks for one only before the first integration tests, so this is a note, not a gap.
 
 ### 2a. B01–B06
 
@@ -244,7 +246,7 @@ Restart across a basis fit has no entry point of its own: each component's check
 
 ### 2b. The inventory's observed defects
 
-Each row: the R oracle keeps R's value, the C# asserts the corrected one, as the parity rule says.
+The inventory's table, its calibration row split by defect. Each row: the R oracle keeps R's value, the C# asserts the corrected one, as the parity rule says.
 
 | # | R defect | R's value kept in | Corrected value asserted by | Verdict |
 |---|---|---|---|---|
@@ -411,7 +413,7 @@ Run no benchmark. Read against [the cost half's report](performance-cost-brief.m
 - **Files on disk the BASS source map does not name** (doc line 2138): `BassObservationModel.cs`, `DesignKernel.cs`, `DesignKernels.cs`, the extension seams.
 - **Public types under `spline/bass/` no API or configuration row names:** 71 of 242, by script.
   - *The seams, known owed, listed once:* `IBassObservationModel`, `WorkingResponse`, `GaussianObservation`, `BassSweepSlot`, `BassSweepSlots`, `IDesignKernel`, `DesignKernels`, `DesignFactor`, `HingeDesignFactor`, `SubsetDesignFactor`.
-  - *Entry points and shapes a caller reads:* `BassBasisPrediction`, `BassSensitivity`, `BassBasisSensitivity`, `BassBasisEffects`, `Effect`, `EffectFunctions`, `EffectGrid`, `ProductMeasure`, `InputMeasure`, `MixtureComponent`, `ContinuousMeasure`, `CalibrationSampling`, `ReferenceSampling`, `CovarianceFormulation`, `VariancePrior`, `MeasurementErrorModel`, `CalibrationParameter`, `CalibrationChain`, `BassPredictor`, `BassResponse`, `PredictionColumn`, `RangeScale`, `TrainingLevels`, `PredictorScale`, `MoveSchedule`, `BassProgress`, `BassPcaAccount`, `BassTruncationSummary`, `IntervalSource`, `DecompositionStatus`, `DecomposedSurface`. Seven of them appear in the doc's prose, none in a row.
+  - *Entry points and shapes a caller reads:* `BassBasisPrediction`, `BassSensitivity`, `BassBasisSensitivity`, `BassBasisEffects`, `Effect`, `EffectFunctions`, `EffectGrid`, `ProductMeasure`, `InputMeasure`, `MixtureComponent`, `ContinuousMeasure`, `CalibrationSampling`, `ReferenceSampling`, `CovarianceFormulation`, `VariancePrior`, `MeasurementErrorModel`, `CalibrationParameter`, `CalibrationChain`, `BassPredictor`, `BassResponse`, `PredictionColumn`, `RangeScale`, `TrainingLevels`, `PredictorScale`, `MoveSchedule`, `BassProgress`, `BassPcaAccount`, `BassTruncationSummary`, `IntervalSource`, `DecompositionStatus`, `DecomposedSurface`. Eight of them appear in the doc's prose, none in a row.
   - *Readouts and building blocks:* `TermSupport`, `BassChainAccount`, `BassMonitoredValue`, `BassOrderSupport`, `BassSmcSpread`, `BassStart`, `BassSupportTally`, `CaseInputs`, `OutputInputs`, `BassAutoPick`, `BassFactorShares`, `BassStepWindows`, `BassSmcAccount`, `BassPart`, `CalibrationBlock`, `CategoricalBlock`, `DiscrepancyBlock`, `VarianceBlock`, `CalibrationEvaluation`, `ThetaAdaptation`, `ThetaDecorrelation`, `ThetaWalk`, `CutSmcBlockRates`, `CutSmcOrder`, `InnerRun`, `BasisUncertainty`, `ReconstructionDomain`, `BassDataShape`, `SubsetCovariance`, `VariableCovariance`.
 - `BassComponents.Assemble` is public and carries basis restart; no row names it.
 
@@ -460,7 +462,7 @@ These are records this audit read, not reruns.
 
 ## The review pass
 
-**Completeness.** Rows by script against the brief's lists: P01–P15 in 1j and 1h; every formal argument of `bass` (30, in 28 rows), `bassPCA`, `bassBasis`, `predict.bass`, `predict.bassBasis`, `sobol`, `sobolBasis` and `calibrate.bassBasis`, and every returned element; B01–B06; D01–D10; the Corrected entries; each edge case of the hub's list; the benchmark list; the open boxes.
+**Completeness.** Rows checked by hand against R's signatures and return statements and the brief's lists: P01–P15 in 1j and 1h; every formal argument of `bass` (30, in 28 rows), `bassPCA`, `bassBasis`, `predict.bass`, `predict.bassBasis`, `sobol`, `sobolBasis` and `calibrate.bassBasis`, and every returned element; B01–B06; D01–D10; the Corrected entries; each edge case of the hub's list; the benchmark list; the open boxes.
 
 **The re-trace of every tenth Fulfilled row,** from R to the test, ignoring the note: A10, A27, B-r12, B-r23, C11, D-p05, E09, F02, G05, G16, H07, Bb02, Df06, Df16, Dd08, V03, V13, Ed10. The question for each: would this test fail if the capability were removed?
 
@@ -474,4 +476,4 @@ These are records this audit read, not reruns.
 
 **Demotion.** Two verdicts leaned on a record alone and were reworded rather than kept as read evidence: part 5's readings rest on the cost half's report, as the brief instructs, and say so; 7b's limitations are records and say so. `BassVerdictTests.S10_Fits_FailEveryGroup` reads the verdict off the pass's recorded R̂, not a new fit; 7b says so.
 
-**Citations.** A script confirms every cited test name exists; a second extracts each cited test's assertions (192 methods) for reading.
+**Citations.** A script confirms every cited test name exists (482) and every `file:line` lies inside its file (164). About 80 tests were read whole; for the other 192 a second script kept each one's first nine assertions and comments, and those were read, so a helper's assertions fall outside that reading.
