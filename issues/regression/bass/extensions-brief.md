@@ -40,17 +40,28 @@ Extensions beyond the port's completion contract, collected from the [full port 
 
 ## Upgrades to existing code
 
-Existing code that entries below would otherwise each change on their own, with the ideas that call for it, read against the code on 2026-11-02. These can be built whenever the user chooses, without waiting for an entry to start (the user, 2026-11-02). An analysis of an entry counts them as part of its work, not as reasons it cannot be done.
+Existing code that entries below would otherwise each change on their own, with the ideas that call for it, read against the code on 2026-11-02. These can be built whenever the user chooses, without waiting for an entry to start (the user, 2026-11-02). An analysis of an entry counts them as part of its work, not as reasons it cannot be done. The [capability inventory](../capability-inventory.md) holds the evidence for each row, family by family, and the gaps that are true of the model itself.
 
 | Upgrade | Today | Called for by |
 |---|---|---|
-| Weighted Gram, centring and marginal in the BASS core | `BassDesign` refuses weights, while the shared `CollapsedGPrior` already takes them for BARS | E1, E20, E22 through E20, E31's multiplier |
-| The structure step's marginal given σ² | D04 integrates σ² out, and `gprior/` has no form given σ² | E1's mode with σ² held, E20's probit, E32 with BASS as a component |
-| Priors that stop reading a moving response | `BassResolved.Resolve` reads the response for σ²'s scale and the level | E20, E32 |
+| Weighted Gram, centring and marginal in the BASS core | `BassDesign` refuses weights. The shared `CollapsedGPrior` takes them for BARS only at one τ and b = 1, with no slope, which BASS's τ steps and tempered swaps cannot use | E1, E20, E22 through E20, E31's multiplier; BARS's weighted tempering |
+| The structure step's marginal given σ² | D04 integrates σ² out, and `gprior/` has no form given σ². BGP's known-σ² mode has one, at s² = 1 | E1's mode with σ² held, E20's probit, E32 with BASS as a component |
+| Priors that stop reading a moving response | `BassResolved.Resolve` reads the response for σ²'s scale and the level, once. BARS's `WeightedNormalModel` re-reads it at every evaluation. BAPS's component prior and the hierarchical half-t scale read it once | E20, E32, E23 |
+| A BASS design whose working response moves | `BassModel.Create` builds the working response once, `BassDesign` holds ỹ read-only, and each state's `BassStructureFit` caches its sums. Pointwise and the training fit read y, not y − offset | E20, E23, E32, E1 |
 | Truncated draws | `Truncated<T>` cannot draw, and `IContinuousDistribution` has no draw. So these are probably per family: a tail-stable normal, a gamma and an inverse gamma | E20's probit and discrete-time survival; F-R1's [`s2.lower` arm](deterministic-profile-brief.md#for-a-rerun) |
-| Quantiles for the rest | `Normal`, `Weibull` and `HalfCauchy` have them; `Gamma`, `InverseGamma`, `StudentT` and `Beta` do not | Truncated draws by inversion, and a complete family |
-| `GpRegression` on a changing response | `y` is fixed at construction, and a known σ² forces s² = 1 | E32 |
-| Declared complete densities | Prose on `LadderEvidence` | [Cross-engine evidence](#cross-engine-evidence), E33 |
+| Quantiles for the rest | `Normal`, `Weibull` and `HalfCauchy` have them; `Gamma`, `InverseGamma`, `StudentT`, `Beta` and `Uniform` do not | Truncated draws by inversion, and a complete family |
+| `GpRegression` on a changing response | `y` is fixed at construction, and a known σ² forces s² = 1. The squared distances do not read `y`, so a `y` per fit is cheap. The nugget is one scalar, with no weights | E32 |
+| Declared complete densities | Prose on `LadderEvidence`. BARS guards by `ReportsEvidence`, BASS by `BassRun` and `Defines`, and the slope is probed by catching an exception | [Cross-engine evidence](#cross-engine-evidence), E33 |
+| BARS's integrated-form slope in b | `NormalMarginal` overrides no slope, so BARS's path sampling is linear-form only, though `GPriorMarginal.LogMarginalSlope` exists and BARS's τ is fixed, which keeps the slope at b = 0 finite | E13, E9 |
+| Path sampling on BASS's integrated form | The target supplies the slope, and `BassLadder` traces it on the linear form only, since the slope at b = 0 carries E[1/τ], infinite under Zellner–Siow | E13 |
+| Predictive draws outside BASS | Only BASS draws new responses. BARS, BAPS, the hierarchical model and BGP keep retained draws or a mean and variance, and BGP never draws f | E27, E9's held-out scores, E16, E17, E30 |
+| Derivatives of a fit | BASS has term-level derivatives and moments. `IBasis`, `BSpline` and `IGpKernel` have none, and no family reads out a fit's derivative | E8, E25 |
+| Declared smoothness | No contract states a fit's smoothness. BASS's default `Degree = 1` has kinks; BARS's cubic fit is C² at simple knots; a squared-exponential GP is C^∞ | E31, E8, E25, E33 |
+| A power on the likelihood | BAPS, the hierarchical model and BGP take no inverse temperature | E15; E9 through BGP's evidence |
+| Evidence outside Normal BARS and BASS | BGP: a flat mean prior, 1/s², an unnormalised bandwidth prior, no tempering. BARS's Poisson and Whittle drop a known Σ ln yᵢ!. BAPS and the hierarchical model cannot: their penalty is improper on its null space | E9 |
+| Exposed prior draws of the full state | BARS draws its knots and BASS its (structure, τ) exactly. No method composes (β, σ²) at b = 0 onto them, and the repo has no Geweke test | E31, E33 |
+| Weights and offset in BARS | Poisson, Whittle and Gibbs loss ignore `weights` without a word, and `Bars.Run` takes none | E1's BARS side, E20, E33 |
+| Weights, offset and a response per sweep in BAPS and the hierarchical model | y, ZᵀZ and Zᵀy are fixed at construction; `BandedDesign.Accumulate` already takes weights | E15, E20's seam applied to BAPS, E33 |
 
 ## Generalized-hyperbolic noise (GBMARS)
 
@@ -187,7 +198,7 @@ The ladder's evidence is one point, b = 1, of a curve: ln Z(b) at every rung, th
 
 **Needs.**
 - D05's ladder with the reference rung, and its rungs' draws kept, beyond the scalar traces evidence reads.
-- The integrated form's per-draw slope ∂_b ln p_b at a rung. BASS does not produce it today: in `BassEvidence` only the linear form's slope comes free, and on the integrated form it is infinite at b = 0 under Zellner–Siow, though finite at 1/ln N.
+- The integrated form's per-draw slope ∂_b ln p_b at a rung. BASS's target supplies it (`BassEvaluation.LogLikelihoodSlope`), but its ladder traces slopes on the linear form only, since on the integrated form the slope at b = 0 carries E[1/τ], infinite under Zellner–Siow, though finite at 1/ln N. Tracing it from a b_lo above 0, or with τ held, is an [upgrade](#upgrades-to-existing-code).
 - A rung pinned at 1/ln N, or a rule for reading between rungs, since an adaptive ladder places its interior rungs by swap rejections.
 
 ## Elastic emulation of misaligned functional outputs
@@ -428,7 +439,7 @@ y = g(x) + f(x) + ε, with g a GP and f a forest or BASS, and treed GPs. The sou
 ## Regression-family integration (E33)
 
 [The notes](../perplexity-bart-etc.md) put this after the spline families, with trees last as a test that the engine is basis-agnostic. They also pose a scope question, a library of qualified families or a general model-definition system, and favour the library.
-- **A capability inventory.** For BARS, BAPS, the hierarchical P-spline, BGP and BASS: what each can evaluate, integrate, draw conditionally, predict, resume, temper and report as evidence. Each gap is marked as an upgrade to make or as true by the nature of the model. The [completion matrix](completion-audit-matrix.md) covers BASS against R, and the lineage review's axes seed the rest.
+- **A capability inventory.** For BARS, BAPS, the hierarchical P-spline, BGP and BASS: what each can evaluate, integrate, draw conditionally, predict, resume, temper and report as evidence. Each gap is marked as an upgrade to make or as true by the nature of the model. The [completion matrix](completion-audit-matrix.md) covers BASS against R, and the lineage review's axes seed the rest. Written 2026-11-02: [the capability inventory](../capability-inventory.md), with each gap marked an upgrade or true of the model, and the rows it added to the table above.
 - **Declared capabilities.** Partly there: `CanTemperLikelihood` and `CanTemperToPrior` on BARS's model, and `BassConfig.Validate`'s refusals. `ITargetEvaluation` refuses a b or a slope by exception at first evaluation, so after a run starts. The inventory decides what else earns a declaration. Evidence's is [above](#cross-engine-evidence).
 - **Four verdicts.** Target correctness, computational adequacy, predictive adequacy and evidence qualification, each certified apart. F-R1 is the example: the oracle and enumeration checks pass while no arm clears the R̂ gate. `ConvergenceVerdict` reads computational adequacy alone. A new family's qualification report reads by these four.
 - **No composition layer.** `BlockScan` and `IBlock` already compose blocks, for collapsed BASS and explicitly blocked BAPS alike. What the notes' own sequence asks for is contracts on block invariance, tempering semantics, normalization and restart.
