@@ -170,19 +170,22 @@ public static class ConditionedFiltration
     /// P1c · a non-monotone sweep of the conditioned graph, as frames for the zigzag engines: frame <c>t</c> holds
     /// the backbone and the content edges of <c>content[t]</c> within slack <c>slack[t]</c>. Edges enter and leave
     /// between frames, as a monotone δ cannot show. With a connected spanning backbone H₀ is one bar, so a sweep's
-    /// returns read in H₁ (<c>maxDimension ≥ 1</c>), as unfilled graph cycles.
+    /// returns read in H₁. <see cref="FrameComplex"/> sets what can end one: an edge leaving, or also triangles filling
+    /// it, and <see cref="FrameBar.End"/> reports which did.
     /// </summary>
     /// <param name="n">Vertex count; every vertex is present in every frame.</param>
     /// <param name="backbone">Prior <c>K₀</c> edges, present in every frame.</param>
     /// <param name="content">Per frame, the content edges <c>(i, j, d)</c>.</param>
     /// <param name="slack">Per frame, the admission bound: an edge enters at <c>d ≤ slack[t]</c>.</param>
     /// <param name="transition">How consecutive frames connect.</param>
+    /// <param name="complex">Which complex each frame contributes.</param>
     public static GraphFrameFiltration BuildSweep(
         int n,
         IReadOnlyList<(int i, int j)> backbone,
         IReadOnlyList<IReadOnlyList<(int i, int j, double d)>> content,
         IReadOnlyList<double> slack,
-        FrameTransition transition = FrameTransition.Union)
+        FrameTransition transition = FrameTransition.Union,
+        FrameComplex complex = FrameComplex.Graph)
     {
         ArgumentNullException.ThrowIfNull(backbone);
         ArgumentNullException.ThrowIfNull(content);
@@ -200,6 +203,6 @@ public static class ConditionedFiltration
             edgeSets[t] = edges;
         }
 
-        return GraphFrameZigzag.FromEdgeSets(n, edgeSets, transition);
+        return GraphFrameZigzag.FromEdgeSets(n, edgeSets, transition, complex);
     }
 }
