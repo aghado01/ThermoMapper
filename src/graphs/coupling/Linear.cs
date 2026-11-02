@@ -13,6 +13,10 @@ public static class LinearKernel
     /// </summary>
     public static double Evaluate(double distance, double delta)
         => Math.Max(0.0, 1.0 - distance / delta);
+
+    /// <summary>ln J = ln(1 − d/δ), or −∞ from one scale length out, where the support ends.</summary>
+    public static double LogEvaluate(double distance, double delta)
+        => distance < delta ? LogMath.Log1P(-distance / delta) : double.NegativeInfinity;
 }
 
 /// <summary>

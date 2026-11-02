@@ -1,3 +1,5 @@
+using System;
+
 namespace Graphs.Coupling;
 
 /// <summary>
@@ -11,6 +13,17 @@ public static class CauchyKernel
     /// </summary>
     public static double Evaluate(double distance, double delta)
         => 1.0 / (1.0 + (distance * distance) / (delta * delta));
+
+    /// <summary>
+    /// ln J = −ln(1 + d²/δ²), by log1p so a small ratio keeps its digits; past d/δ = 1e150, where d² overflows,
+    /// the tail ln J = −2 ln(d/δ).
+    /// </summary>
+    public static double LogEvaluate(double distance, double delta)
+    {
+        double ratio = distance / delta;
+        double squared = ratio * ratio;
+        return double.IsInfinity(squared) ? -2.0 * Math.Log(ratio) : -LogMath.Log1P(squared);
+    }
 }
 
 /// <summary>

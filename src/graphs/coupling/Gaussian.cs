@@ -19,6 +19,12 @@ public static class GaussianKernel
         double twoSigmaSq = 2.0 * delta * delta;
         return Math.Exp(-(distance * distance) / twoSigmaSq);
     }
+
+    /// <summary>
+    /// ln J = −d² / 2δ², exact where <see cref="Evaluate"/> has underflowed to 0 (d/δ beyond about 38.6).
+    /// </summary>
+    public static double LogEvaluate(double distance, double delta)
+        => -(distance * distance) / (2.0 * delta * delta);
 }
 
 /// <summary>

@@ -13,6 +13,10 @@ public static class LaplacianKernel
     /// </summary>
     public static double Evaluate(double distance, double delta)
         => Math.Exp(-distance / delta);
+
+    /// <summary>ln J = −d / δ, exact where <see cref="Evaluate"/> has underflowed.</summary>
+    public static double LogEvaluate(double distance, double delta)
+        => -distance / delta;
 }
 
 /// <summary>
