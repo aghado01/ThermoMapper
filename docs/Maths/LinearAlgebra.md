@@ -83,7 +83,8 @@ For a slightly asymmetric input, the two dense eigen routes therefore decompose 
 |---|---|
 | Dense eigen | `DenseEigen.DecomposeSymmetric` (`double[,]` or column-major span) → `EigenResult`; `EigenFast.DecomposeSymmetricInPlace` (allocation-free core); `Eigen.DecomposeSymmetric`; `SpectralMath.BottomK`, `SpectralMath.SelectBottomK` → `IReadOnlyList<EigenPair>` |
 | Iterative eigen | `LOBPCG.Solve(op, k, Options?)` → `Result(Eigenpairs, Iterations, ResidualNorm, Converged)`; `LOBPCG.BottomK` / `TopK` (dense convenience); `DenseSymmetricOperator`; `ILinearOperator`, `IPreconditioner` |
-| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `Status`, `Strict`, `FailedAt`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`, `EquilibratedCondition`; implemented by `BandCholesky` and `DenseCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus` |
+| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `Status`, `Strict`, `FailedAt`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `WideBandCholesky(dimension, bandwidth)` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Factor`, `RelativePivot`, `Dimension`, `Bandwidth`), `SpdFactors` (`UsesWideBand`, `ForBand`, `MinimumOrder`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`, `EquilibratedCondition`; implemented by `BandCholesky`, `DenseCholesky` and `WideBandCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus` |
+| Contractions | `KhatriRao` (`Gram`, `Border`, `CrossProducts`, `CentredGram`, `CentredBorder`, `CentredCrossProducts`, `ScatteredGram`, `ScatteredCrossProducts`, `FaceSplittingGram`, `FaceSplittingCrossProducts`, `FaceSplittingHalfBandwidth`, `KroneckerGram`); `IInnerProduct` (`IsIdentity`, `Dimension`, `LogDeterminant`, `Dot`), `IdentityInnerProduct` |
 | Transforms and statistics | `Fft` (1-D, 3-D, N-D; `IsPowerOfTwo`); `Pca.Compute` → `PcaResult`; `FastIca.Compute` → `IcaResult`; `OnlineMahalanobis` (`Update`, `Distance` to the mean or between two points, `IsReady`, `GetMean`, `GetVariances`, `Reset`) |
 | Kernels | `MatrixOps` (`Dot`, `ScaledSubtract`, `Orthonormalize`, `RandomOrthonormal`, `ColumnGramMatrix`, `ColumnGramMatrixFromRowMajor`, `TransposeToColumnMajor`) |
 
@@ -198,6 +199,24 @@ $$\text{LDL}^\top:\quad D_j=a_{jj}-\textstyle\sum_k\ell_{jk}^2D_k,\qquad \ell_{i
 
 **Log-determinant.** $2\sum_j\ln\ell_{jj}$ for Cholesky, $\sum_j\ln D_j$ for LDLᵀ.
 
+### Wide-band Cholesky (`WideBandCholesky`)
+
+Strict Cholesky A = L·Lᵀ of a matrix whose entries vanish beyond a declared half-bandwidth p (N-X2, 2026-10-31), for Grams that are block-banded rather than banded by a spline's degree. A two-axis tensor design's, in lexicographic order, has half-bandwidth d·ν₂ + d at spline degree d, with ν₂ columns on the second axis.
+
+**Storage** is row-packed: L(i, j) for j ∈ [i − p, i] is contiguous in row i, and rows are factored in order (Cholesky–Banachiewicz), so every inner product reads two contiguous runs, where `BandCholesky`'s diagonal-major layout strides across a wide band. Cost: O(n·p²) to factor, O(n·p) per solve.
+
+**The dense factor's conventions.** There is no pivot floor: the first pivot that is not finite and positive stops the factorization, `FailedAt` says where, and the factor refuses to solve. A draw is L⁻ᵀz. On a matrix that is zero beyond the band the two factors do the same operations on the same nonzero terms in the same order, so the factor, the log-determinant, the solves, the draws and the status are bit-identical to `DenseCholesky`'s.
+- *Why a class beside `BandCholesky`.* `BandCholesky` handles a band too, but its draw needs LDLᵀ, through D^(−½), and it floors pivots unless strict. The caller here, ABMRS's Gram, wants one z to give one draw under either factor. The alternative was a `BandCholesky(strict, Ldlt)` path.
+
+**The band is the caller's declaration,** a precondition, as it is for `BandCholesky`. Only the lower triangle within the band is read, so an entry beyond it is no part of the matrix the factor sees. A bandwidth above n − 1 is clamped.
+
+**Selection.** `SpdFactors.ForBand(gram, halfBandwidth)` applies `UsesWideBand`: order at least 64 (`MinimumOrder`) and 2(p + 1) ≤ n take this factor, and the rest the dense one. The rule is the operation count's, not a measured crossover, and it errs toward the dense factor: timed, the band was already 1.5× faster at 2(p + 1) = n and 16× faster at p + 1 = n/8. Nothing selects this factor yet, and BASS keeps the dense path until a caller declares a banded Gram.
+
+**Checked** (`WideBandCholeskyTests`).
+- On the 72 × 72 block-banded Gram of a 9 × 8 tensor design (half-bandwidth 9), everything equals the dense factor's, exact: the entries, relative pivots, `LogDet`, `Status`, `Solve`, `InverseQuadraticForm`, `SampleInnovation` from one z, and `EquilibratedCondition`.
+- At the band's edge, a declaration above the Gram's band changes nothing, and a diagonal is a band of 0.
+- Near singularity, an order-80 pentadiagonal matrix with a pair of rows 1 − 10⁻⁸ alike reports the dense relative pivot. An exactly dependent pair and an indefinite one stop at the dense factor's row and status, with every solve and draw refused.
+
 ### Factor status (`FactorStatus`)
 
 After each factorization, all three classes set `Status`. It reports what the factorization found and leaves the decision to the caller. The pivots are the Schur-complement diagonals $d_j$ before flooring: $\ell_{jj}^2$ or $D_j$.
@@ -226,6 +245,30 @@ Because the floor is absolute, a well-conditioned matrix with a small scale, suc
 **Cost.** Factorization is $O(np^2)$; solve and sampling are $O(np)$; storage is $O((p+1)n)$.
 
 **As an `ISpdFactor`.** `Solve`, `SolveInPlace` and `SampleInnovation` take spans, so the collapsed g-prior block can hold a banded factor (BARS) or a dense one (BASS) behind one interface. `SpdFactorExtensions.InverseQuadraticForms` gives $s\,z_t^\top A^{-1}z_t$ for each row through either.
+
+### Khatri–Rao contractions (`KhatriRao`)
+
+Contractions with the column-wise Khatri–Rao product X = A ⊙ H, whose column j is a_j ⊗ h_j, computed through the factors without forming X. Its caller is BASS's direct functional design, with A the case-side factors (n × M), H the output-side factors (m × M), and the rows of X indexed (case, location) with the case outer. Every inner product is a pairwise sum.
+- **Cartesian samples,** every case at every location, take the Hadamard shortcut G = (AᵀA)∘(HᵀH) and h_j = a_jᵀ·Y·h_j: O(M²(n + m)) and O(M·n·m), against O(M²·n·m) (`Gram`, `Border`, `CrossProducts`).
+- **Centred forms** serve an intercept that leaves the design. They are a sum of three positive semidefinite terms, so the diagonal forms without cancellation (`CentredGram`, `CentredBorder`, `CentredCrossProducts`; [BASS's design](./BayesianRegression.md#bass-the-design-and-admission)).
+- **Scattered samples,** given as (case, location) pairs, accumulate each row's Hadamard product, skipping its zeros (`ScatteredGram`, `ScatteredCrossProducts`).
+
+**Tensor designs** (N-X1, 2026-10-31). Row i of X = B₁ ∗ … ∗ B_d is the row-wise Kronecker product of the axes' rows, with columns lexicographic and axis 0 slowest, as in a free-knot tensor-product spline surface.
+- `FaceSplittingGram(axes)` and `FaceSplittingCrossProducts(axes, y)` accumulate over each row's nonzeros, in the block cascade the scattered Gram uses: O(n·(p+1)^(2d)) for B-splines of degree p.
+- `KroneckerGram(axes)` takes the full grid's shortcut, G = ⊗ₐ(BₐᵀBₐ).
+- `FaceSplittingHalfBandwidth(axes)` gives the block-banded Gram's half-bandwidth, for [the factor's selection](#wide-band-cholesky-widebandcholesky).
+- *Dense output,* bounded by 46,340 columns like `DenseCholesky`. The alternative, LAPACK band output feeding a `DecomposeBanded`, is what ABMRS wants at real sizes, and nothing needs it yet. Gridded cross products are not built.
+
+**The output-side inner product** (F-X6, 2026-10-31). `IInnerProduct` is Q on the output index, ⟨u, v⟩ = uᵀQv, for a residual with covariance σ²(I ⊗ R), Q = R⁻¹.
+- `Dot` acts on stacked vectors, k cases of length m end to end, as I_k ⊗ Q, so one member gives the output-side Gram entries hᵀQh (k = 1) and the energy Σᵢ yᵢᵀQyᵢ (k = n). `LogDeterminant` gives the collapsed marginal's log|R| term, n·ln|R| = −n·ln|Q|.
+- `Gram`, `Border` and `CrossProducts` take an optional product: G = (AᵀA)∘(HᵀQH) and h_j = a_jᵀ·Y·Q·h_j. Only the output-side factors change. A null product and `IdentityInnerProduct` are Q = I, whose `Dot` is `PairwiseSum.Dot`, so a declared identity costs nothing.
+- *`Dot` alone, with no `Apply`.* A tridiagonal Q keeps each product linear in m, and `Apply` (Qh) would only save recomputation.
+- *The centred forms stay at Q = I.* Under Q the three-term form carries over with m replaced by 1ᵀQ1, the means by Q-weighted means (1ᵀQh/1ᵀQ1) and the factors' inner products by hᵀQh, which is the correlated-residual extension's to write.
+
+**Checked** (`FaceSplittingTests`, `InnerProductTests`).
+- `FaceSplittingGram` against XᵀX of the materialized product to 10⁻¹³ relative, on two axes (7 × 6 hats, 700 scattered samples) and three (4 × 3 × 5, 300), and Xᵀy to 10⁻¹². An 8 × 7 hat design's half-bandwidth is 8: no Gram entry lies beyond it and some lie on it. `KroneckerGram` on a grid matches the materialized product to 10⁻¹³ and the face-splitting Gram over the same grid.
+- The scattered Gram's entries are pinned by a hash taken with the old loop, before its accumulation was shared (`6e4c55f9a3d70b21`).
+- With the identity, `Gram`, `Border` and `CrossProducts` equal those without, exact. A tridiagonal Markov Q matches the materialized design and I ⊗ Q: G and the border to 10⁻¹², h_j to 10⁻¹¹ relative. `Dot` and `LogDeterminant` reproduce the Gaussian log density under the dense (nm)² covariance I ⊗ R, 2π aside, to 10⁻¹⁰.
 
 ### FFT
 
@@ -309,7 +352,8 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
 |---|---|
 | Dense eigen | `DenseEigen.cs`, `EigenFast.cs`, `Eigen.cs`, `SpectralMath.cs` |
 | Iterative eigen | `Lobpcg.cs`, `DenseSymmetricOperator.cs` |
-| Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `FactorStatus.cs`, `ISpdFactor.cs`, `ConditionEstimate.cs` |
+| Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `WideBandCholesky.cs` (with `SpdFactors`), `FactorStatus.cs`, `ISpdFactor.cs`, `ConditionEstimate.cs` |
+| Contractions | `KhatriRao.cs`, `InnerProduct.cs` |
 | Transforms and statistics | `Fft.cs`, `PCA.cs` (`Pca`), `ICA.cs` (`FastIca`), `WelfordMahal.cs` (`OnlineMahalanobis`) |
 | Kernels | `MatrixOps.cs` |
 

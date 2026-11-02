@@ -141,10 +141,10 @@ Each is **now covered by a probe that passed**, so none remains in the matrix as
 
 ### Record drift
 
-The main session has fixed these (the brief's Reports), apart from the extension seams' write-up in `docs/Maths`, which it still owes, and the 71 public types, which stay as listed because the rows name entry points. The matrix's part 6 has the lists.
+The main session has fixed these (the brief's Reports). The extension seams' write-up landed on 2026-11-02 ([the section](../../docs/Maths/BayesianRegression.md#bass-the-extension-seams)), and the rows now name the seams' types. The other public types stay as listed, because the rows name entry points. The matrix's part 6 has the lists.
 
-- **The source map** omits `BassObservationModel.cs`, `DesignKernel.cs`, `DesignKernels.cs` (doc line 2138). The **extension seams' write-up** in `docs/Maths` is owed, listed once.
-- **The API rows** name no removed thing, but 71 of 242 public types appear in no row: 10 seams, 31 a caller reads, 30 readouts and building blocks. `BassComponents.Assemble`, which carries basis restart, is unnamed.
+- **The source map** omits `BassObservationModel.cs`, `DesignKernel.cs`, `DesignKernels.cs` (doc line 2138). The **extension seams' write-up** in `docs/Maths` was owed, listed once.
+- **The API rows** name no removed thing, but at the audit 71 of 242 public types appeared in no row (60 of 243 on 2026-11-02, with the seams named): 10 seams, 31 a caller reads, 30 readouts and building blocks. `BassComponents.Assemble`, which carries basis restart, is unnamed.
 - **Statements found false:** `port-fitting-brief.md:503` (a cached training fit: none is built); `opus-bass-completion-remainder.md:1` ("Everything R's BASS can do is now built"); `BassRunOptions.cs:15` (tempering and SMC "when they join"); `completion-audit-brief.md` ("E1–E15": the checklist holds E18); `port-outputs-brief.md:82` ("condition on one functional coordinate", which G-2 qualifies).
 - **The open boxes** N15, N17, F-M2 and F-X4 are not stale: each is open by its own condition (the matrix, 6a).
 

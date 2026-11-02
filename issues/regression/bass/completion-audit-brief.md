@@ -102,6 +102,18 @@ Open it by saying plainly whether the contract is fulfilled, and if not, what st
 
 Newest first.
 
+### The docs owed, written (chip, 2026-11-02)
+
+At the user's word, in this chip, though `docs/Maths` is otherwise the main session's.
+- *The new members.* The main session's rows (`1591aad`) stand. This adds the names they left: `BasisPredictiveParts`, `BassBasisPrediction.Parts`, `CoordinateVariables` on `SobolAnalysis` and `EffectAnalysis`, and `OtherIndex` and `OtherVariance` on the summary.
+- *The seams' write-up.* `BayesianRegression.md` gains "BASS: the extension seams", with an API row, pointers from the sweep and the extension points, the source map's shared files and a status line. `LinearAlgebra.md` gains `WideBandCholesky` and `KhatriRao`, which it did not name. `Samplers.md` gains the GIG limits.
+- *Read against the code at `04cfbcb`, not only the seams' report.* Two things that report does not state are now written:
+  - **The observation model stops at the model.** `Bass.Fit`, `Bass.Resume` and `Bass.Fingerprint` take none, so a run through them is Gaussian, and GBMARS's list gains the run and the fingerprint.
+  - **No ruling on the seams' shapes is recorded,** so the section says they are open to review.
+- *By script:* every capitalized identifier in the new text exists under `src/maths` or `tests`, every new link resolves, every test class named exists, and the three docs keep their CRLF. Public types no row names: 60 of 243, from 72 at `04cfbcb`. No code changed, so no suite ran.
+- *Left for the main session:* `LinearAlgebra.md` still has no entry for `BorderedCholesky` or `PairwiseSum`, outside this owed list.
+- *Open:* G-7 and G-8, waiting on a quiet window.
+
 ### The closing, checked by the main session — 2026-11-02
 
 - *Read:* `src/` across `0ab1e4d`, `4c34948`, `1364cbb`, `b844f53`, `3a83d0a` and `26befff`, and the tests that carry them.

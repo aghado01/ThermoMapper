@@ -413,8 +413,8 @@ Run no benchmark. Read against [the cost half's report](performance-cost-brief.m
 
 - **Rows naming what no longer exists:** none. Every capitalized identifier in the BASS rows of "API at a glance" exists under `src/maths`, checked by script.
 - **Files on disk the BASS source map does not name** (doc line 2138): `BassObservationModel.cs`, `DesignKernel.cs`, `DesignKernels.cs`, the extension seams.
-- **Public types under `spline/bass/` no API or configuration row names:** 71 of 242, by script.
-  - *The seams, known owed, listed once:* `IBassObservationModel`, `WorkingResponse`, `GaussianObservation`, `BassSweepSlot`, `BassSweepSlots`, `IDesignKernel`, `DesignKernels`, `DesignFactor`, `HingeDesignFactor`, `SubsetDesignFactor`.
+- **Public types under `spline/bass/` no API or configuration row names:** 71 of 242 at the audit, by script; 60 of 243 on 2026-11-02, with the seams, `BassBasisPrediction` and `BasisPredictiveParts` named.
+  - *The seams, owed at the audit and named since 2026-11-02:* `IBassObservationModel`, `WorkingResponse`, `GaussianObservation`, `BassSweepSlot`, `BassSweepSlots`, `IDesignKernel`, `DesignKernels`, `DesignFactor`, `HingeDesignFactor`, `SubsetDesignFactor`.
   - *Entry points and shapes a caller reads:* `BassBasisPrediction`, `BassSensitivity`, `BassBasisSensitivity`, `BassBasisEffects`, `Effect`, `EffectFunctions`, `EffectGrid`, `ProductMeasure`, `InputMeasure`, `MixtureComponent`, `ContinuousMeasure`, `CalibrationSampling`, `ReferenceSampling`, `CovarianceFormulation`, `VariancePrior`, `MeasurementErrorModel`, `CalibrationParameter`, `CalibrationChain`, `BassPredictor`, `BassResponse`, `PredictionColumn`, `RangeScale`, `TrainingLevels`, `PredictorScale`, `MoveSchedule`, `BassProgress`, `BassPcaAccount`, `BassTruncationSummary`, `IntervalSource`, `DecompositionStatus`, `DecomposedSurface`. Eight of them appear in the doc's prose, none in a row.
   - *Readouts and building blocks:* `TermSupport`, `BassChainAccount`, `BassMonitoredValue`, `BassOrderSupport`, `BassSmcSpread`, `BassStart`, `BassSupportTally`, `CaseInputs`, `OutputInputs`, `BassAutoPick`, `BassFactorShares`, `BassStepWindows`, `BassSmcAccount`, `BassPart`, `CalibrationBlock`, `CategoricalBlock`, `DiscrepancyBlock`, `VarianceBlock`, `CalibrationEvaluation`, `ThetaAdaptation`, `ThetaDecorrelation`, `ThetaWalk`, `CutSmcBlockRates`, `CutSmcOrder`, `InnerRun`, `BasisUncertainty`, `ReconstructionDomain`, `BassDataShape`, `SubsetCovariance`, `VariableCovariance`.
 - `BassComponents.Assemble` is public and carries basis restart; no row names it.
@@ -429,7 +429,7 @@ Run no benchmark. Read against [the cost half's report](performance-cost-brief.m
 | Fa4 | `completion-audit-brief.md` "Not in this brief" | "The extensions (E1–E15)" | The checklist holds E1–E18 |
 | Fa5 | `port-outputs-brief.md:82` | "condition on one functional coordinate" | Built as: a coordinate naming every output variable (E06) |
 
-The extension seams' write-up is owed in `docs/Maths`, listed once (6b).
+The extension seams' write-up, owed at the audit, landed in `docs/Maths` on 2026-11-02 (6b).
 
 ## Part 7: what remains, and the limits
 
