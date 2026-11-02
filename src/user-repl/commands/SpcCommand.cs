@@ -353,6 +353,12 @@ public static class SpcCommand
                     i++; break;
                 case "--min-cluster-size":
                     options.MinClusterSize = GraphRun.ParseInt(RequireValue(next, arg)); i++; break;
+                case "--lineage-split-share":
+                    options.LineageSplitShare = GraphRun.ParseDouble(RequireValue(next, arg)); i++; break;
+                case "--lineage-representative":
+                    options.LineageRepresentative = ParseLineageRepresentative(RequireValue(next, arg)); i++; break;
+                case "--lineage-temperature":
+                    options.LineageTemperature = GraphRun.ParseDouble(RequireValue(next, arg)); i++; break;
                 case "--periphery":
                     options.PeripheryCompletion = RequireValue(next, arg).Trim().ToLowerInvariant() switch
                     {
@@ -532,29 +538,46 @@ public static class SpcCommand
     }
 
     /// <summary>
-    /// Track 2 — the lineage-persistence resolver: select cluster lineages by
-    /// persistence over the T-stack, bounded by the SP-plateau (T_fs/T_ps).
-    /// Reports the data-driven split-share and the persistence span of each
-    /// selected lineage.
+    /// Track 2 — the lineage-persistence resolver: read cluster lineages by
+    /// persistence over the T-stack. The longest-lived reading is bounded by the
+    /// SP-plateau (T_fs/T_ps); an explicit <c>--lineage-temperature</c> reads the
+    /// full grid, so its lineages stay whole. Reports how many selected lineages
+    /// reach the cold edge, since their lifetimes are lower bounds.
     /// </summary>
     private static (Clustering.Primitives.Assignment, string, string) ResolveLineagePersistence(
         CsrGraph graph, Accumulator[] frames, Clustering.Graphical.SPC.SpcSessionResult session, Options options)
     {
         // Regime border = the SP-plateau the analyzer already located.
         var plateau = SpcProfileAnalysis.SpPlateau(session.Profile);
-        (double, double)? window = plateau.CliffFound ? (plateau.TFs, plateau.TPs) : null;
+        (double, double)? window = plateau.CliffFound && options.LineageTemperature is null ? (plateau.TFs, plateau.TPs) : null;
 
         LineagePersistenceResult result = SweepLineagePersistence.Resolve(
             graph, frames, options.Theta,
-            minClusterSize: Math.Max(options.MinClusterSize, 1),
-            temperatureWindow: window);
+            new LineagePersistenceConfig
+            {
+                MinClusterSize = Math.Max(options.MinClusterSize, 1),
+                SplitShare = options.LineageSplitShare,
+                TemperatureWindow = window,
+                Representative = options.LineageRepresentative,
+                SliceTemperature = options.LineageTemperature,
+            });
 
+        string reading = result.SliceLevel is { } level ? $"slice at T={level:G4}" : "longest-lived";
         Console.WriteLine(
-            $"Lineage persistence: {result.AllLineages.Count} tracked, {result.Selected.Count} selected; " +
-            $"split-share={result.SplitShare:F2}" +
+            $"Lineage persistence: {result.AllLineages.Count} tracked, {result.Selected.Count} selected " +
+            $"({result.Selected.Count(l => l.ColdCensored)} reach the cold edge); {reading}; " +
+            $"representative={result.Config.Representative}; split-share={result.Config.SplitShare:G4}" +
             (window is { } w ? $"; SP-window=[{w.Item1:G4},{w.Item2:G4}]" : "; SP-window=full grid"));
         return (result.Assignment, "lineage", "spc_lineage_persistence");
     }
+
+    internal static LineageRepresentative ParseLineageRepresentative(string token) => token.Trim().ToLowerInvariant() switch
+    {
+        "largest"       => LineageRepresentative.Largest,
+        "midpoint"      => LineageRepresentative.Midpoint,
+        "least-decided" => LineageRepresentative.LeastDecided,
+        var v => throw new ArgumentException($"Unknown lineage representative '{v}'. Valid: largest, midpoint, least-decided."),
+    };
 
     private static string ResolverToken(ResolverKind kind) => kind switch
     {
@@ -609,6 +632,15 @@ public static class SpcCommand
 
         /// <summary>Selection eligibility floor for the thermal resolver.</summary>
         public int MinClusterSize { get; set; } = 1;
+
+        /// <summary>The lineage resolver's split share.</summary>
+        public double LineageSplitShare { get; set; } = LineagePersistenceConfig.DefaultSplitShare;
+
+        /// <summary>Which level stands for each lineage.</summary>
+        public LineageRepresentative LineageRepresentative { get; set; } = LineageRepresentative.Largest;
+
+        /// <summary>Read the lineages alive at this temperature, instead of the longest-lived.</summary>
+        public double? LineageTemperature { get; set; }
 
         /// <summary>Periphery completion for the thermal resolver's abstains.</summary>
         public Clustering.Dendrograms.ThermalPeripheryCompletion PeripheryCompletion { get; set; }

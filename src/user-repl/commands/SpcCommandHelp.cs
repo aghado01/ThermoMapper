@@ -61,11 +61,15 @@ internal static class SpcCommandHelp
         Console.WriteLine("T-stack resolver (post-sweep; resolves the whole stack, not one cut; off by default):");
         Console.WriteLine("  --resolver <none|thermal-eom|hierarchy|lineage>   thermal-eom: merge tree from per-edge G(T)");
         Console.WriteLine("                                                    hierarchy:   Blatt/Domany dendrogram-across-T");
-        Console.WriteLine("                                                    lineage:     select lineages by persistence");
+        Console.WriteLine("                                                    lineage:     read lineages by persistence");
         Console.WriteLine("                                                    thermal-eom/hierarchy need --accumulation");
         Console.WriteLine("                                                    comembership,cluster-size-landscape;");
         Console.WriteLine("                                                    lineage needs only comembership.");
         Console.WriteLine("  --min-cluster-size <int>                          Selection floor (default: 1)");
+        Console.WriteLine("  --lineage-split-share <float>                     Second successor's share that ends a lineage (default: 0.10)");
+        Console.WriteLine("  --lineage-representative <largest|midpoint|least-decided>  The level standing for a lineage (default: largest)");
+        Console.WriteLine("  --lineage-temperature <float>                     Read the lineages alive at this T, over the full grid");
+        Console.WriteLine("                                                    (default: the longest-lived on each branch, in the SP window)");
         Console.WriteLine("  --periphery <none|ascend>                         Complete abstains by modal ascent (default: none)");
         Console.WriteLine();
         Console.WriteLine("  --help, -h                    Show this help text");

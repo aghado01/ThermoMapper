@@ -20,24 +20,14 @@ public static class SweepLineagePersistence
     /// <c>AccumulationSpec.CoMembership</c> (the per-edge co-membership counts —
     /// the partition columns AND the decidedness field). No landscape needed.
     /// </summary>
-    /// <param name="minClusterSize">Clusters below this size are ignored when
-    /// building lineages (the overclustering-tail filter; default 3).</param>
-    /// <param name="splitShare">Second-successor share above which a step is a
-    /// split, not erosion. Null ⇒ gap-based on the observed distribution
-    /// (fallback 0.25).</param>
-    /// <param name="temperatureWindow">Restrict to [Lo, Hi] — the SP-plateau
-    /// bound (regime border: T_fs/T_ps from <see cref="SpcProfileAnalysis.SpPlateau"/>).
-    /// Null ⇒ the full grid.</param>
-    /// <param name="selectTopK">Force exactly this many lineages instead of the
-    /// gap rule. Null ⇒ gap-based selection.</param>
+    /// <param name="theta">The δ̄ cut of the dense stack.</param>
+    /// <param name="config">What to read and how. Null reads the longest-lived lineage on
+    /// each branch of the full grid, with <see cref="LineagePersistenceConfig"/>'s defaults.</param>
     public static LineagePersistenceResult Resolve(
         CsrGraph graph,
         IReadOnlyList<Accumulator> frames,
         double theta = 0.5,
-        int minClusterSize = 3,
-        double? splitShare = null,
-        (double Lo, double Hi)? temperatureWindow = null,
-        int? selectTopK = null)
+        LineagePersistenceConfig? config = null)
     {
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(frames);
@@ -46,6 +36,6 @@ public static class SweepLineagePersistence
         var (temperatures, delta) = SweepEdgeCurves.CoMembershipDelta(frames);
         PartitionHierarchy stack = DenseTStack.Build(graph, temperatures, delta, theta);
 
-        return LineagePersistence.Resolve(graph, stack, delta, q, minClusterSize, splitShare, temperatureWindow, selectTopK);
+        return LineagePersistence.Resolve(graph, stack, delta, q, config);
     }
 }

@@ -174,16 +174,71 @@ If the peak falls in the last two points, or χ never drops below the threshold,
   2. With `restoreNesting = false`, a stack that does not nest is not bridged: the resolver **abstains** and every point gets −1. With restoration on, this branch is never reached, because the restored stack always nests.
   3. Otherwise the stack becomes a dendrogram through `PartitionHierarchyDendrogram`. The dendrogram is walked with `LandscapeWalk` over a thermal landscape (mean cluster size, or giant participation), resolved by excess of mass, and optionally completed with `PeripheryPolicies.Ascend` on the coldest landscape column.
 - **Track 2 (`LineagePersistence`).**
-  1. Keep clusters of size ≥ 3, optionally within a temperature window.
+  1. Keep clusters of size ≥ `MinClusterSize`, optionally within a temperature window.
   2. Give each cluster a *decidedness* $d_c$: the mean $\bar\delta$ over its internal edges.
-  3. Link each cluster to its plurality successor at the next temperature, unless it splits: its second-successor share $s_2$ must be below a split threshold τ. τ comes from the observed $s_2$ values strictly inside (0.2, 0.5): it is the midpoint of the largest gap between consecutive sorted values when that gap exceeds 0.05, the value itself when only one lies in the band, and 0.3 otherwise. An explicit `splitShare` overrides the rule.
-  4. Score each lineage as **member-cluster count × mean decidedness**.
-  5. Walk the lineages with positive score in descending order, and drop any whose representative shares at least half of the smaller set with an already-kept lineage ($|A\cap B|/\min(|A|,|B|)\ge 0.5$).
-  6. Select by the largest score ratio (≥ 1.5). Failing that, keep lineages scoring ≥ ½ the maximum. `selectTopK` forces the top K.
-  7. Label points by lineage rank. Points not covered become −1.
+  3. Link each cluster to its plurality successor at the next temperature, unless it splits: a second-successor share $s_2\ge$ `SplitShare` ends the lineage.
+  4. Score each lineage **$\int\bar\delta\,d\ln T=\sum_\ell w_\ell d_\ell$**. Each level $\ell$ owns the half-gaps to its neighbours in $\ln T$, $w_\ell$, and $d_\ell$ averages $d_c$ over the lineage's clusters there. Its lifetime is $\sum_\ell w_\ell$. Every level stays on `ClusterLineage.Levels`, and `Representative` picks the one that stands for the lineage.
+  5. Take a reading:
+     - **Longest-lived on each branch**, the default. Walk the lineages by descending score, drop any whose representative shares at least half of the smaller set with an already-kept lineage ($|A\cap B|/\min(|A|,|B|)\ge 0.5$), and keep the rest.
+     - **A slice**, given `SliceTemperature`. The lineages alive at the level nearest T\* in $\ln T$, each represented whole. A T\* outside the levels read throws.
 
-  Track 2 does not restore nesting.
+     `SelectTopK` caps either reading.
+  6. Label points by lineage rank, higher scores claiming first. A lineage left with no point isn't selected. Points not covered become −1.
+
+  `ClusterLineage.ColdCensored` marks a lineage reaching the coldest level read, whose lifetime is therefore a lower bound. Track 2 does not restore nesting.
+
+  The choices are in [Track 2's decided choices](#track-2s-decided-choices).
 - **Thermal EOM (`ThermalEom`).** Builds the tree with `ThermalDendrogram.FromEdgeCurves` from the $\bar\delta(T)$ columns, then walks it exactly as Track 1 does.
+
+### Track 2's decided choices
+
+Each was measured on iris, the BWD toy, Landsat and BlattHierarchy under two kernels: 12 seeds at two budgets, on two seed streams (`issues/spc-BARS/stopping-theory-primer.md`, §13.15–§13.16, C57). That is exploration on five graphs with one generator seed each. Numbers below are low budget, then high.
+
+**The graphs.** Every number below is read on these, and default settings aren't correct settings. All are Euclidean kNN with the mutual filter, MST repair (`MstMin`), refinement `PathNeighbor` (which has no effect under Euclidean distance), the kernel's bandwidth at the mean edge length over the repaired edges, gauge 1/K̂, no LMP, no edge cut by the floor, one component, and q = 20.
+
+| Graph | K | Kernel | Bandwidth | K̂ | Repair edges | Largest component before repair |
+|---|---|---|---|---|---|---|
+| Iris | 5 | Gaussian | 0.3065 | 3.49 | 15 | 53% |
+| BWD toy | 10 | Gaussian | 0.1622 | 7.91 | 12 | 99% |
+| Landsat | 5 | Gaussian | 22.71 | 2.81 | 983 | 78% |
+| BlattHierarchy | 5 | Gaussian | 0.0831 | 3.62 | 82 | 4% |
+| BlattHierarchy | 5 | Cauchy | 0.0831 | 3.62 | 82 | 4% |
+
+**What those settings could explain**, from a probe over K and the coupling (primer §13.16):
+
+- *Not the defects* the choices below fix. The first forms' representative, level count and threshold misbehave on every graph probed. Whether the ratio cut fires depends on how far apart a graph's scores stand, but nothing justifies it where it does.
+- *The level reading, yes.* With $T_{fs}$ as the window, iris reads setosa plus the pair under a Gaussian at K = 5–15 and a Cauchy at K = 10, and the species with setosa in pieces under shared-neighbour couplings at K = 5. With the full window, the Cauchy at K = 5 and shared neighbours at K = 5 and 7 read one 150-point lineage, flagged `ColdCensored`.
+- *T\*, yes.* It's in this graph's units. Iris's species read near 0.05–0.07 at K = 5 and near 0.11 at K = 10, and no T\* tried reads them at K = 15.
+- *The split share, yes.* See its row below.
+- *Largest against midpoint, yes, and the direction firms up.* See below.
+- *Landsat's cost, yes.* The first forms' high purity there belongs to K = 5: at K = 10 and 20 they pass the parity assertions on 1 and 2 of 12 seeds, at purity 0.55 and 0.59.
+- *The toy, yes.* The stripes hold at K = 10 and 20, and at K = 5 the graph breaks them up (2 of 12 seeds), whichever representative is used.
+
+Only K and the coupling were varied. The filter, the repair, the bandwidth rule, the gauge, q and θ were not, and each of those findings could still move with them.
+
+| Choice | Decided | Alternatives measured | What it costs |
+|---|---|---|---|
+| Score | $\int\bar\delta\,d\ln T$. A lifetime holds within 0.06 e-folds across a grid's density, where the same lineage counts 18–70 levels | A count of levels (the first form); $\ln T$ alone; mass over $\ln T$ | It still moves with the grid's extent, so `ColdCensored` marks it. The $\bar\delta$ factor changes selections only on Landsat, where it raises the worst ARI between seeds on both seed streams, and the median clearly on one |
+| Selection | Keep every lineage left after the overlap rule. A lineage disjoint from the others has no reason to go for living less long | A cut at the largest score ratio (the first form, which dropped iris's pair at a ratio of 1.55 on 9 and 7 of 12 seeds at the high budget, once its representative was whole); half the top score; a floor on lifetime, which can't reach a stage shorter than its children | More small lineages on a graph that has them |
+| Split share | A fixed 0.10, **fitted to these five graphs and provisional**, so it's exposed | A gap in the observed shares (the first form: those shares have no gap, so its threshold moved 0.29–0.47 between seeds); the size rule (any second successor of at least the minimum size), which cuts a stage at each small chip; 0.20 and above, which leave a class under a fifth of its cluster in the chain | Fit on these graphs. On Landsat at K = 5 and the low budget, the largest representative clears the parity test's purity on 24, 21, 18, 15 and 15 of 24 seeds at the size rule, 0.10, 0.15, 0.20 and 0.25. That order doesn't hold across K: at K = 10 and 20, on 12 seeds each, it passes 4 and 6 at the size rule, 9 and 8 at 0.10, 11 and 9 at 0.25, though 0.10 keeps the higher median purity (0.940 and 0.961, against 0.890 and 0.912) |
+| Representative | The largest level | The midpoint in $\ln T$ and the least-decided level, both selectable; the most-decided level and a per-point core, which track the largest and the midpoint | See below |
+| The level | Longest-lived by default, with an optional T\* | A floor on lifetime; a mass share, tuned on iris | Which stage of a hierarchy to report is a modelling choice. Longest-lived takes the widest stage the grid shows and depends on the grid's extent. A slice costs a number in units of T |
+
+**Largest against midpoint, the closest call.**
+
+| | Largest | Midpoint |
+|---|---|---|
+| Iris, ARI to the first stage | 0.964 | 0.855 |
+| BlattHierarchy (Gaussian), ARI to fine | 0.977 | 0.93 |
+| BlattHierarchy (Cauchy, `auto` bracket), ARI to fine | 0.98 | 0.93 |
+| Landsat, points covered of 6,435 | 2,368–2,610 | 1,720–1,894 |
+| Landsat, seeds with purity ≥ 0.85 at the low budget | 21 of 24, minimum 0.818 | 24 of 24, minimum 0.886 |
+| Landsat, seeds with purity ≥ 0.85 at the higher budget | 12 of 12, minimum 0.903 | 12 of 12, minimum 0.913 |
+| Landsat, ARI between seeds at the higher budget | 0.81–0.82 | 0.93–0.94 |
+
+All at the K of the table above. The largest level captures more, so it's the default. Its purity cost on Landsat is mostly a low-budget one, which sampling closes, while the midpoint's lower capture stays. That cost is also K = 5's: at K = 10 and 20 the midpoint falls behind on purity too (median 0.640 and 0.705, against 0.940 and 0.961, with 2 and 5 of 12 seeds passing, against 9 and 8), and on iris the largest leads at every K probed. Take the midpoint when it's measured to help on the graph at hand.
+
+**Reading a hierarchy.** T\* reaches each stage the grid holds: on BlattHierarchy under a Cauchy kernel, coarse at $10^{-5}$, medium at $10^{-3}$ and fine at $0.01$, on 12 of 12 seeds. Longest-lived reads medium on that grid and fine on the `auto` bracket, which stops above the medium stage. A bridge of coupling $J$ between two blocks clears $\bar\delta=0.5$ near $T\approx J/\ln(1+q)$, which is how to tell what a grid can show. Under a Gaussian kernel at the mean-edge bandwidth, BlattHierarchy's stages above fine lie out of reach: its medium stage needs $T\approx10^{-9}$, and the merges above it tie at the coupling clamp. So there the fine level is the only one on offer, whichever reading is asked for.
 
 ### Closure gap
 
@@ -242,7 +297,8 @@ Columns derived from dictionaries (channels, enrichments, scores) follow the fix
 | `BlattPartitionConfig` Detector / CutPolicy / BaseSeed | `MagnetizationPeakDetector` / `ThresholdSpinAgreement { Theta = 0.5 }` / null | — |
 | `MagnetizationPeakDetector` SignalChannelName / MinProminence | `"MagnetizationVariance"` / 0.1 | — |
 | `SweepHierarchyEom.Resolve` theta / sink / minClusterSize / restoreNesting / completion | 0.5 / `MeanClusterSize` / 1 / true / `None` | Track 1 |
-| `SweepLineagePersistence.Resolve` theta / minClusterSize / splitShare / temperatureWindow / selectTopK | 0.5 / 3 / gap rule (fallback 0.3) / full grid / gap rule | Track 2 |
+| `SweepLineagePersistence.Resolve` theta | 0.5 | Track 2 |
+| `LineagePersistenceConfig` MinClusterSize / SplitShare / TemperatureWindow / Representative / SliceTemperature / SelectTopK | 3 / 0.10 (provisional) / full grid / `Largest` / null, the longest-lived reading / null, all | Track 2. REPL: `--min-cluster-size`, `--lineage-split-share`, `--lineage-representative`, `--lineage-temperature` |
 | `SweepThermalEom.Resolve` theta / sink / minClusterSize / completion | 0.5 / `MeanClusterSize` / 1 / `None` | — |
 | `SweepProfile.From` kind | `FkCluster` | Primary χ |
 | SP-plateau departure fraction | 0.8 | Fixed |
@@ -251,10 +307,10 @@ Columns derived from dictionaries (channels, enrichments, scores) follow the fix
 
 - **The default cut can throw on a reused rich sweep.** `ThresholdCoMembership` requires CoMembership. When $T_{\text{clus}}$ lands on a grid point, which always happens in the no-cliff fallback and often on uniform linear grids, the sweep's replica-0 frame is reused. If that sweep did not accumulate co-membership, the session's default cut throws.
 - **Detector scaling.** $\chi_m=(N/T)\mathrm{Var}(m)$ varies with $1/T$ across the grid. Peaks of $\mathrm{Var}(m)$ and of $\chi_m$ can therefore differ, although the detector's documentation says they do not.
-- **Track 2 has open design points.**
-  - The rule for choosing a lineage's representative is marked for refinement.
-  - `ClusterLineage.LevelCount` counts member clusters. On a stack that does not nest, this can overstate the number of levels a lineage survives.
-  - The `splitShare` value reported on early exits (0.25) differs from the fallback actually used (0.3).
+- **Track 2's open points.**
+  - The split share of 0.10 is fitted to five graphs and provisional.
+  - The longest-lived reading depends on the grid's extent. On the BWD toy with the cold edge at $10^{-6}$ it returns the one giant lineage on 12 of 12 seeds. `ColdCensored` shows when a selected lineage is exposed to this, and a slice isn't.
+  - The REPL bounds the longest-lived reading by $[T_{fs},T_{ps}]$ where the parity tests use $T_{fs}$ alone. On Landsat that upper bound passes the test's assertions on only 5 of 12 seeds and 3 of 6, so it limits the reading there. Not settled.
 - **Blatt passes no co-membership to its cut.** A `ThresholdCoMembership` cut policy therefore throws inside Blatt.
 - **Pooling and consistency checks.**
   - Profile moments are equal-weight averages across replicas. They equal draw-pooled values only when replicas have equal draw counts.
