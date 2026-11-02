@@ -216,25 +216,39 @@ In the second family, 207 moved-up classes had cells above them that could have 
 K₀ sat above the base in 289 trials. `Absolute` equals the ambient's barcode with K₀ at the base, built by hand. Plus the hand
 cases R1–R6 and R10, and K₀ a 2-sphere that fills, relative H₃ [d, ∞).
 
-**The timing.** CPU seconds, best of three, in Release, reading all degrees (`maxDimension: 1` is within a few percent). K₀ is a spanning
-tree with a few extra edges, and content is a uniform draw. Below-normal priority, on a shared machine at 88–100% across 18 logical
-processors with other sessions running, so read CPU time; wall clock tracked it. n=100 is at the clock's 16 ms tick, so coarse. A first
-version of the harness also held n=800, and it ran 30 minutes under this load without finishing, so I dropped that size.
+**The timing, corrected.** My first write-up said to read CPU time because it holds up under load, and that "the one run is about 3 times
+slower". The user pointed out that a busy machine probably confounds this, and it limits what these figures can say. CPU time drops the
+waiting for a core, not contention for cache, memory bandwidth and hyperthreads. The machine stayed at 80–100% across 18 logical processors
+through every run, with other sessions' test runs and long jobs going, so there is still **no quiet-machine timing**. I added allocated
+bytes, which barely depend on load and in these reducers roughly track the toggles of column entries. They measure work and not time.
 
-| n | Edges | Triangles | Relative, `ComputeBarcode` | One run | Absolute, column reducer | Absolute, clearing |
-|---|---|---|---|---|---|---|
-| 100 | 1567 | 5155 | 0.016 | 0.016 | 0.188 | 0.016 |
-| 200 | 4300 | 13314 | 0.453 | 0.531 | 3.42 | 0.516 |
-| 400 | 12626 | 42302 | 9.55 | 28.5 | 109 | 27.9 |
+All degrees, in Release, at below-normal priority. K₀ is a spanning tree with a few extra edges, and content is a uniform draw. n=800 was
+in a first version of the harness and ran 30 minutes under this load without finishing, so I dropped it.
 
-- **It is not faster for the relative barcode alone.** `ComputeBarcode` is 1.2 times faster at n=200 and 3.0 times at n=400, and the
-  gap widens with size. Nothing had measured the relative reduction as slow, and it isn't.
-- **K₀ first is not what costs.** The one run matches the clearing engine on the ambient in its own order. The relative complex is simply
-  a smaller problem: quotienting K₀ cuts the column reducer's time 11 times at n=400.
-- **For both readings it is the cheapest route measured.** At n=400, 4.2 times cheaper than `ComputeBarcode` plus the column reducer,
-  and 1.3 times cheaper than `ComputeBarcode` plus the clearing engine; 1.8 times at n=200 against that second pair.
+| n | Edges | Triangles | MB: relative, `ComputeBarcode` | MB: one run | MB: absolute, column reducer | MB: absolute, clearing | CPU s, best of 3: relative | CPU s, best of 3: one run |
+|---|---|---|---|---|---|---|---|---|
+| 100 | 1567 | 5155 | 12.6 | 5.5 | 25.0 | 3.5 | 0.016 | 0.016 |
+| 200 | 4300 | 13314 | 76.6 | 39.5 | 304 | 36.9 | 0.453 | 0.531 |
+| 400 | 12626 | 42302 | 1203 | 1646 | 8392 | 1632 | 9.55 | 28.5 |
 
-That is one K₀ shape, small against the content. A K₀ holding more of the complex could move these.
+What survives the load:
+
+- **At n=400 the relative barcode alone costs less through `ComputeBarcode`.** The one run allocates 1.37 times as much, and took 2.8–3.0 times the
+  CPU on all three passes. The sign holds; **the size of the gap isn't established.** The two figures differ by a factor of 2. The one run costs
+  about 2.3 times as much CPU per byte allocated, at both n=200 and n=400. That could be larger columns and deeper trees, and it could be cache
+  misses, which are what contention inflates. Only a quiet run separates them.
+- **The ratio grows with size.** In allocations it goes 0.44, 0.52, 1.37.
+- **K₀ first is not what costs.** The one run and the clearing engine on the ambient allocate the same, 1646 and 1632 MB at n=400.
+- **The relative complex is a smaller problem.** Quotienting K₀ cuts the column reducer's allocations 7 times at n=400 (time: 11 times).
+- **For both readings the one run is the cheapest route measured.** At n=400 it allocates 1.7 times less than `ComputeBarcode` plus the clearing
+  engine and 5.8 times less than `ComputeBarcode` plus the column reducer (CPU: 1.3 and 4.2 times).
+
+What doesn't survive:
+
+- **"Faster past small complexes."** At n≤200 the sign is open. Allocations favour the one run by about 2 times, and single-pass CPU ratios at n=200
+  ran from 0.38 to 1.29, which is noise on this machine. n=100's CPU figures are at the clock's 16 ms tick besides.
+
+This is one K₀ shape, small against the content. A K₀ holding more of the complex could move all of these.
 
 Breaks, run once and reverted: K₀ not first failed 2 tests, the moved-up degree off by one 4, the elder tie-break flipped 3.
 
@@ -319,8 +333,10 @@ The graph engines can't read this, since the cone over an edge is a triangle, so
 
 #### What stayed open, and why
 
-- **`ComputeBothReadings` is internal, by the user's ruling (2026-11-02).** On the timing above, I recommended keeping it public and the
-  user chose internal. `ComputeBarcode` is the one public path. The reading and its tests stay, with nothing outside the assembly calling it.
+- **`ComputeBothReadings` is internal, by the user's ruling (2026-11-02).** I recommended keeping it public and the user chose internal, at a point
+  when my figure was still "about 3 times slower", since softened above. `ComputeBarcode` is the one public path. The reading and its tests stay,
+  with nothing outside the assembly calling it.
+- **A timing on a quiet machine.** Not available today. The harness is ready; the command is on the Shelf.
 - **Compatible cycles along a bar.** Above. The user's call; on the Shelf.
 - **The two reported deviations.** On the Shelf, per the brief.
 - **The tie change in `ComputeH0`.** Worth knowing if a tied-distance LMP run moves. I didn't measure one, since that's an experiment.

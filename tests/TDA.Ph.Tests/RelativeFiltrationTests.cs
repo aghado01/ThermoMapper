@@ -357,17 +357,20 @@ public sealed class RelativeFiltrationTests
     }
 
     // The one timing, off by default: set RELATIVE_READING_TIMING to a file path and run in Release. It appends a line per
-    // case, so a long run loses nothing, and asserts no speed, since the machine is shared. CPU time is the figure that holds
-    // up under load. K₀ is a spanning tree with a few extra edges; content edges enter by a uniform draw. Beside the reference
-    // and the one run: the ambient absolute by the column reducer, which with the reference is both readings by two
-    // reductions, and by the clearing engine in the ambient's own order, which says whether K₀ first is what costs. A case
-    // whose reference took over a budget is run once.
+    // case, so a long run loses nothing, and asserts no speed. Run it on a quiet machine: CPU time drops the waiting for a core,
+    // but not contention for cache, memory bandwidth and hyperthreads. Allocated bytes barely depend on load, and in these
+    // reducers they track the toggles of column entries, so they are the figure to read on a busy machine, as work and not time.
+    // K₀ is a spanning tree with a few extra edges; content edges enter by a uniform draw. Beside the reference and the one run:
+    // the ambient absolute by the column reducer, which with the reference is both readings by two reductions, and by the
+    // clearing engine in the ambient's own order, which says whether K₀ first is what costs. RELATIVE_READING_TIMING_REPEATS
+    // sets the runs per case, default 3; a case whose reference took over a budget is run once.
     [Fact]
     public void BothReadings_Timing()
     {
         if (Environment.GetEnvironmentVariable("RELATIVE_READING_TIMING") is not { Length: > 0 } path) return;
 
         const double budgetSeconds = 15.0;
+        int repeats = int.TryParse(Environment.GetEnvironmentVariable("RELATIVE_READING_TIMING_REPEATS"), out int asked) ? asked : 3;
         Process process = Process.GetCurrentProcess();
         process.PriorityClass = ProcessPriorityClass.BelowNormal;
 
@@ -377,15 +380,17 @@ public sealed class RelativeFiltrationTests
             File.AppendAllText(path, line + Environment.NewLine);
         }
 
-        (double Wall, double Cpu, T Result) Measure<T>(Func<T> run)
+        (double Wall, double Cpu, double Megabytes, T Result) Measure<T>(Func<T> run)
         {
             process.Refresh();
             TimeSpan cpu = process.TotalProcessorTime;
+            long allocated = GC.GetAllocatedBytesForCurrentThread();
             var watch = Stopwatch.StartNew();
             T result = run();
             watch.Stop();
+            allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
             process.Refresh();
-            return (watch.Elapsed.TotalSeconds, (process.TotalProcessorTime - cpu).TotalSeconds, result);
+            return (watch.Elapsed.TotalSeconds, (process.TotalProcessorTime - cpu).TotalSeconds, allocated / 1048576.0, result);
         }
 
         foreach (var (n, p) in new[] { (100, 0.30), (200, 0.20), (400, 0.15) })
@@ -399,7 +404,7 @@ public sealed class RelativeFiltrationTests
                     if (!taken.Contains((a, b)) && rng.NextDouble() < p)
                         content.Add((a, b, rng.NextDouble()));
 
-            var (buildWall, _, relative) = Measure(() => ConditionedFiltration.BuildRelative(n, backbone, content));
+            var (buildWall, _, _, relative) = Measure(() => ConditionedFiltration.BuildRelative(n, backbone, content));
             int triangles = relative.Ambient.Simplices.Count(s => s.Dimension == 2);
 
             foreach (int maxDimension in new[] { 1, int.MaxValue })
@@ -417,7 +422,7 @@ public sealed class RelativeFiltrationTests
                 double referenceWall = first.Wall, readingWall = reading.Wall;
                 if (first.Wall < budgetSeconds)
                 {
-                    for (int repeat = 0; repeat < 2; repeat++)
+                    for (int repeat = 1; repeat < repeats; repeat++)
                     {
                         var again = Measure(() => relative.ComputeBarcode(maxDimension));
                         var readAgain = Measure(() => relative.ComputeBothReadings(maxDimension));
@@ -433,9 +438,10 @@ public sealed class RelativeFiltrationTests
                 }
 
                 Report($"n {n}, edges {backbone.Count + content.Count}, triangles {triangles}, degrees {degrees}, build wall {buildWall:F2} s: " +
+                    $"MB allocated: reference {first.Megabytes:F1}, one run {reading.Megabytes:F1}, absolute reducer {absolute.Megabytes:F1}, absolute clearing {clearing.Megabytes:F1}; " +
                     $"cpu s: reference {referenceCpu:F3}, one run {readingCpu:F3}, absolute reducer {absoluteCpu:F3}, absolute clearing {clearingCpu:F3}; " +
                     $"wall s: reference {referenceWall:F3}, one run {readingWall:F3}; " +
-                    $"reference/run cpu {referenceCpu / readingCpu:F2}, two reductions/run cpu {(referenceCpu + absoluteCpu) / readingCpu:F2}");
+                    $"one run/reference MB {reading.Megabytes / first.Megabytes:F2}, cpu {readingCpu / referenceCpu:F2}");
             }
         }
     }
