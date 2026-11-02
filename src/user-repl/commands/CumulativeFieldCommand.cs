@@ -58,7 +58,7 @@ public static class CumulativeFieldCommand
             if (StackedNormalizationWarning(options.Field, resolvedGraph) is string stacked)
                 Console.WriteLine($"Warning            : {stacked}");
 
-            (double[] temperatures, string temperaturesResolved, string temperatureBasis) = ResolveTemperatureGrid(options, graph);
+            (TemperatureGrid grid, string temperaturesResolved, string temperatureBasis) = ResolveTemperatureGrid(options, graph);
             manifest = manifest with
             {
                 CumulativeField = manifest.CumulativeField! with
@@ -93,21 +93,24 @@ public static class CumulativeFieldCommand
                 EdgeWeightKind.Coupling,
                 options.Field,
                 options.Symmetrization,
-                temperatures,
+                grid,
                 options.Theta,
                 options.MinClusterSize,
                 options.PeripheryCompletion,
                 options.CutTemperature,
                 externalEvaluators,
                 graphEvaluators,
-                dataset.Labels);
+                dataset.Labels,
+                options.CutLogTemperature);
 
             Console.WriteLine("Session finished.");
             Console.WriteLine($"Thermal EOM        : {result.ClusterCount} clusters; abstained: {result.Abstained}");
             Console.WriteLine($"Sweep CSV          : {result.SweepCsvPath}");
             Console.WriteLine($"Partition CSV      : {result.PartitionCsvPath}");
             if (result.EdgeCurrenciesCsvPath is not null)
-                Console.WriteLine($"Edge currencies    : {result.EdgeCurrenciesCsvPath} (T={result.RepresentativeTemperature:G6})");
+                Console.WriteLine(grid.IsLog
+                    ? $"Edge currencies    : {result.EdgeCurrenciesCsvPath} (ln T={result.RepresentativeLogTemperature:G6})"
+                    : $"Edge currencies    : {result.EdgeCurrenciesCsvPath} (T={result.RepresentativeTemperature:G6})");
             Console.WriteLine($"Summary JSON       : {result.SummaryJsonPath}");
             foreach (var kv in result.EvaluatorScores)
                 Console.WriteLine($"  {kv.Key,-24}: {kv.Value:F4}");
@@ -139,7 +142,8 @@ public static class CumulativeFieldCommand
                 TemperaturesSpec: options.TemperaturesSpec,
                 MinClusterSize:   options.MinClusterSize,
                 Periphery:        options.PeripheryCompletion.ToString(),
-                CutTemperature:   options.CutTemperature),
+                CutTemperature:   options.CutTemperature,
+                CutLogTemperature: options.CutLogTemperature),
             Output:          new OutputSpec(RunDirectory: runDirectory, CheckpointDirectory: null),
             Identity:        new RunIdentitySpec(identity.Family, identity.Source, identity.Requested));
 
@@ -147,19 +151,33 @@ public static class CumulativeFieldCommand
     /// <summary>
     /// An explicit spec, or <c>auto</c>: the solver brackets off its own
     /// cumulative-energy ladder (q-free, no Potts anchor) and the grid is 48
-    /// log-spaced points across it. The resolved spec is recorded exactly
-    /// (round-trip formatting), so re-parsing it reproduces the grid.
+    /// log-spaced points across it. <c>auto-ln</c> is the same bracket from the
+    /// log ladder, 48 points evenly spaced in <c>ln T</c> (<c>lnspace:</c>), for a
+    /// graph whose weak rungs lie below the double range. The resolved spec is
+    /// recorded exactly (round-trip formatting), so re-parsing it reproduces the grid.
     /// </summary>
-    private static (double[] Temperatures, string Resolved, string Basis) ResolveTemperatureGrid(Options options, CsrGraph graph)
+    internal static (TemperatureGrid Grid, string Resolved, string Basis) ResolveTemperatureGrid(Options options, CsrGraph graph)
     {
         string spec = options.TemperaturesSpec.Trim();
-        if (!spec.Equals("auto", StringComparison.OrdinalIgnoreCase))
-            return (TemperatureGridSpec.Parse(spec), spec, "explicit");
+        bool auto   = spec.Equals("auto", StringComparison.OrdinalIgnoreCase);
+        bool autoLn = spec.Equals("auto-ln", StringComparison.OrdinalIgnoreCase);
+        if (!auto && !autoLn)
+            return (TemperatureGridSpec.ParseGrid(spec), spec, "explicit");
 
-        (double lo, double hi) = CumulativeFieldSolver.EstimateBracket(
-            graph, EdgeWeightKind.Coupling, options.Field, options.Symmetrization);
-        string resolved = string.Create(CultureInfo.InvariantCulture, $"logspace:{lo:R},{hi:R},48");
-        return (TemperatureGridSpec.Parse(resolved), resolved, "own-ladder");
+        string resolved;
+        if (autoLn)
+        {
+            (double lnLo, double lnHi) = CumulativeFieldSolver.EstimateLogBracket(
+                graph, EdgeWeightKind.Coupling, options.Field, options.Symmetrization);
+            resolved = string.Create(CultureInfo.InvariantCulture, $"lnspace:{lnLo:R},{lnHi:R},48");
+        }
+        else
+        {
+            (double lo, double hi) = CumulativeFieldSolver.EstimateBracket(
+                graph, EdgeWeightKind.Coupling, options.Field, options.Symmetrization);
+            resolved = string.Create(CultureInfo.InvariantCulture, $"logspace:{lo:R},{hi:R},48");
+        }
+        return (TemperatureGridSpec.ParseGrid(resolved), resolved, "own-ladder");
     }
 
     /// <summary>
@@ -173,7 +191,7 @@ public static class CumulativeFieldCommand
             : null;
 
     // ── Argv ─────────────────────────────────────────────────────────────
-    private static Options ParseArguments(string[] args)
+    internal static Options ParseArguments(string[] args)
     {
         var options = new Options();
         for (int i = 0; i < args.Length; i++)
@@ -205,11 +223,15 @@ public static class CumulativeFieldCommand
                     i++; break;
                 case "--cut-temperature":
                     options.CutTemperature = GraphRun.ParseDouble(GraphRun.RequireValue(next, arg)); i++; break;
+                case "--cut-log-temperature":
+                    options.CutLogTemperature = GraphRun.ParseDouble(GraphRun.RequireValue(next, arg)); i++; break;
 
                 default:
                     throw new ArgumentException($"Unknown argument '{arg}'. Use --help for usage.");
             }
         }
+        if (options.CutTemperature is not null && options.CutLogTemperature is not null)
+            throw new ArgumentException("Give --cut-temperature or --cut-log-temperature, not both.");
         return options;
     }
 
@@ -246,12 +268,16 @@ public static class CumulativeFieldCommand
         Console.WriteLine("  --temperatures <spec>                    auto (default: bracket from the ladder)");
         Console.WriteLine("                                           | linspace:Tmin,Tmax,N | logspace:Tmin,Tmax,N");
         Console.WriteLine("                                           | 0.01,0.05,0.1  (explicit list)");
+        Console.WriteLine("                                           | lnspace:lnTmin,lnTmax,N  (a grid of ln T, for gaps below");
+        Console.WriteLine("                                             the double range; runs on the log ladder)");
+        Console.WriteLine("                                           | auto-ln (the auto bracket as 48 points in ln T)");
         Console.WriteLine();
         Console.WriteLine("Resolution:");
         Console.WriteLine("  --min-cluster-size <int>                 Selection floor (default: 1)");
         Console.WriteLine("  --periphery <none|ascend>                Complete abstains by modal ascent (default: none)");
         Console.WriteLine("  --cut-temperature <double>               Temperature of the exported edge-currency slice");
         Console.WriteLine("                                           (default: the coldest grid point)");
+        Console.WriteLine("  --cut-log-temperature <double>           The same slice, given as ln T (not with --cut-temperature)");
         Console.WriteLine();
         Console.WriteLine("  --help, -h                    Show this help text");
     }
@@ -266,5 +292,6 @@ public static class CumulativeFieldCommand
         public int MinClusterSize { get; set; } = 1;
         public ThermalPeripheryCompletion PeripheryCompletion { get; set; } = ThermalPeripheryCompletion.None;
         public double? CutTemperature { get; set; }
+        public double? CutLogTemperature { get; set; }
     }
 }

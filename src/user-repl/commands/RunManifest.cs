@@ -117,7 +117,8 @@ public sealed record CumulativeFieldSpec(
     string                              Periphery,              // "None" | "Ascend"
     double?                             CutTemperature,
     string?                             TemperaturesResolved = null,
-    string?                             TemperatureBasis = null);   // explicit | own-ladder (the solver's units, never the SW gauge)
+    string?                             TemperatureBasis = null,    // explicit | own-ladder (the solver's units, never the SW gauge)
+    double?                             CutLogTemperature = null);  // the edge slice as ln T (a grid of ln T reaches below the double range)
 
 /// <summary>HDBSCAN configuration.</summary>
 public sealed record HdbscanSpec(

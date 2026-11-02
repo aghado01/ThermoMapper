@@ -35,14 +35,16 @@ public static class CurrencyCsvWriter
         Affinities? affinities,
         Alignments? alignments,
         string path,
-        CoMembership? coMembership = null)
+        CoMembership? coMembership = null,
+        bool logWeight = false)
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Path cannot be null or whitespace.", nameof(path));
 
         if (affinities is null || affinities.G.Length == 0) return null;
 
-        CurrencyProjections.CreateEdgeCurrenciesProjection(graph, affinities, alignments, coMembership).WriteToFile(path);
+        CurrencyProjections.CreateEdgeCurrenciesProjection(
+            graph, affinities, alignments, coMembership, logWeight: logWeight).WriteToFile(path);
         return path;
     }
 }

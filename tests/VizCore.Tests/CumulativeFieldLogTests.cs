@@ -17,12 +17,18 @@ namespace VizCore.Tests;
 /// </summary>
 public sealed class CumulativeFieldLogTests
 {
-    private static GraphBuildResult TwoLines(IKernelDescriptor kernel, double separation = 10.0)
+    internal static double[][] LinePoints(double separation = 10.0)
     {
         var points = new double[20][];
         for (int line = 0; line < 2; line++)
             for (int i = 0; i < 10; i++)
                 points[line * 10 + i] = new[] { line * separation + 0.1 * i + 0.01 * i * i, 0.0 };
+        return points;
+    }
+
+    internal static GraphBuildResult TwoLines(IKernelDescriptor kernel, double separation = 10.0)
+    {
+        double[][] points = LinePoints(separation);
         return GraphCompiler.Build(
             new GraphCompilerConfig
             {

@@ -12,6 +12,7 @@ using Clustering.Primitives;
 using Graphs;
 using Graphs.Observables;
 using Graphs.Primitives;
+using UserRepl.Commands;
 
 namespace UserRepl;
 
@@ -43,6 +44,15 @@ namespace UserRepl;
 /// exports (susceptibility profile, criteria, replica traces) have no closed-form
 /// analog and are absent; in their place the solver writes a thin per-temperature
 /// cluster-count sweep.</para>
+///
+/// <para><b>A grid in ln T.</b> A <see cref="TemperatureGrid"/> of <c>ln T</c> runs the whole session on the log
+/// ladder (<see cref="CumulativeFieldSolver.SolveLog"/>), so a Gaussian gap below the double range is a stage with a
+/// temperature. The thermal dendrogram and the landscape then carry the
+/// <see cref="ThermalDendrogram.LogTemperatureAxis"/> label, and the EOM's lifetimes and masses integrate over ln T:
+/// persistence is measured in e-folds of T, where a temperature grid measures it in T. The two weigh the same stages
+/// differently (a stage from T to 10T is 9T wide on a temperature grid and 2.3 e-folds on a log grid), so they can
+/// resolve different partitions; the sweep gains a <c>log_temperature</c> column and the edge snapshot a
+/// <c>log_weight</c> column.</para>
 /// </remarks>
 public static class CumulativeFieldUserSession
 {
@@ -53,20 +63,24 @@ public static class CumulativeFieldUserSession
         EdgeWeightKind weightKind,
         Field field,
         SymmetrizationRule symmetrization,
-        IReadOnlyList<double> temperatures,
+        TemperatureGrid grid,
         double theta,
         int minClusterSize = 1,
         ThermalPeripheryCompletion completion = ThermalPeripheryCompletion.None,
         double? cutTemperature = null,
         IEnumerable<IExternalClusterEvaluator>? externalEvaluators = null,
         IEnumerable<IGraphPartitionEvaluator>? spcEvaluators = null,
-        int[]? referenceLabels = null)
+        int[]? referenceLabels = null,
+        double? cutLogTemperature = null)
     {
         ArgumentNullException.ThrowIfNull(dataset);
         ArgumentNullException.ThrowIfNull(paths);
-        ArgumentNullException.ThrowIfNull(temperatures);
-        if (temperatures.Count == 0)
-            throw new ArgumentException("Temperature grid must be non-empty.", nameof(temperatures));
+        ArgumentNullException.ThrowIfNull(grid);
+        if (grid.Values.Length == 0)
+            throw new ArgumentException("Temperature grid must be non-empty.", nameof(grid));
+        if (cutTemperature is not null && cutLogTemperature is not null)
+            throw new ArgumentException("Give the edge snapshot's temperature as T or as ln T, not both.", nameof(cutLogTemperature));
+        double[] temperatures = grid.Values;     // T, or ln T on a log grid; the solver call below is where the two part
 
         string runDirectory = paths.Scope.EnsureDirectory().Dir;
         var csv = paths.Csv.EnsureDirectory();
@@ -78,17 +92,20 @@ public static class CumulativeFieldUserSession
         // per-T affinity (the edge currency) and the per-T cluster count.
         CumulativeFieldContext context = CumulativeFieldSolver.Prepare(graph, weightKind, field, symmetrization);
 
-        int tCount = temperatures.Count;
+        int tCount = temperatures.Length;
         var affinities = new Affinities[tCount];
         var counts = new int[tCount];
         for (int i = 0; i < tCount; i++)
         {
-            affinities[i] = CumulativeFieldSolver.Solve(context, temperatures[i]);
-            counts[i] = CumulativeFieldSolver.Cluster(context, temperatures[i], theta).Count;
+            affinities[i] = grid.IsLog
+                ? CumulativeFieldSolver.SolveLog(context, temperatures[i])
+                : CumulativeFieldSolver.Solve(context, temperatures[i]);
+            counts[i] = AffinityThreshold.Connect(graph, affinities[i].G, theta).Count;
         }
 
         // Solver-native sweep diagnostic (caller order): per-T cluster count.
-        CumulativeFieldCsvWriter.WriteSweep(temperatures, counts, sweepPath);
+        if (grid.IsLog) CumulativeFieldCsvWriter.WriteLogSweep(temperatures, counts, sweepPath);
+        else            CumulativeFieldCsvWriter.WriteSweep(temperatures, counts, sweepPath);
 
         // Ascending view for the thermal resolution (FromEdgeCurves requires a
         // strictly ascending grid; column 0 is then the coldest/most-coupled).
@@ -107,9 +124,10 @@ public static class CumulativeFieldUserSession
         // Structure (thermal single-linkage) + height (bond-mass landscape),
         // both EXACT from the closed form — the producer-agnostic inputs the
         // shared resolver eats. SW builds the same two from sampled frames.
-        Dendrogram dendrogram = ThermalDendrogram.FromEdgeCurves(graph, ascTemps, edgeColumns, theta);
+        string axis = grid.IsLog ? ThermalDendrogram.LogTemperatureAxis : ThermalDendrogram.TemperatureAxis;
+        Dendrogram dendrogram = ThermalDendrogram.FromEdgeCurves(graph, ascTemps, edgeColumns, theta, axis);
         Landscape landscape = Landscape.Create(
-            axis: "temperature",
+            axis: axis,
             grid: ascTemps,
             valuesByGridPoint: bondColumns,
             provenance: new LandscapeProvenance("BondMass", GraphId: "cumulative-field", GaugeNote: "cumulative-field:closed-form"));
@@ -120,15 +138,16 @@ public static class CumulativeFieldUserSession
 
         // Representative single-T slice for the edge snapshot: the coldest
         // (most-coupled) column the periphery ascent keys on, unless overridden.
-        int repIdx = cutTemperature is double cut ? NearestIndex(temperatures, cut) : order[0];
-        double repTemperature = temperatures[repIdx];
+        int repIdx = RepresentativeIndex(grid, cutTemperature, cutLogTemperature, order[0]);
+        double repTemperature = grid.Temperature(repIdx);
+        double repLogTemperature = grid.LogTemperature(repIdx);
         Affinities repAffinities = affinities[repIdx];
 
         // Currency-typed exports — identical writers/formats as the SW path.
         CurrencyCsvWriter.WritePartition(
             partition, partitionPath, features: dataset.Features, trueLabels: dataset.Labels);
         string? edgesWritten = CurrencyCsvWriter.WriteEdgeCurrencies(
-            graph, repAffinities, alignments: null, edgesPath);
+            graph, repAffinities, alignments: null, edgesPath, logWeight: grid.IsLog);
 
         // Evaluator scores on the resolved cut (method-agnostic indices —
         // IGraphPartitionEvaluator explicitly scores the cumulative-field affinity currency).
@@ -154,11 +173,13 @@ public static class CumulativeFieldUserSession
             ["minClusterSize"]         = minClusterSize,
             ["periphery"]              = completion.ToString(),
             ["nodeCount"]              = graph.NodeCount,
-            ["temperatureCount"]       = temperatures.Count,
+            ["temperatureAxis"]        = axis,
+            ["temperatureCount"]       = tCount,
             ["clusterCount"]           = partition.Count,
             ["abstained"]              = abstained,
             ["representativeTemperature"] = repTemperature,
-            ["representativeBy"]       = cutTemperature is null ? "coldest-column" : "explicit",
+            ["representativeLogTemperature"] = repLogTemperature,
+            ["representativeBy"]       = cutTemperature is null && cutLogTemperature is null ? "coldest-column" : "explicit",
             ["evaluatorScores"]        = scoresNode,
             ["runDirectory"]           = runDirectory,
             ["sweepCsv"]               = sweepPath,
@@ -177,6 +198,7 @@ public static class CumulativeFieldUserSession
             ClusterCount:            partition.Count,
             Abstained:               abstained,
             RepresentativeTemperature: repTemperature,
+            RepresentativeLogTemperature: repLogTemperature,
             EvaluatorScores:         evaluatorScores);
     }
 
@@ -196,6 +218,21 @@ public static class CumulativeFieldUserSession
         for (int i = 0; i < order.Length; i++) order[i] = i;
         Array.Sort(order, (a, b) => temps[a].CompareTo(temps[b]));
         return order;
+    }
+
+    /// <summary>
+    /// The grid point of the edge snapshot: the one nearest the requested temperature, measured in the grid's own
+    /// coordinate (T on a temperature grid, ln T on a log grid); <paramref name="coldest"/> when none was requested.
+    /// </summary>
+    private static int RepresentativeIndex(TemperatureGrid grid, double? cutTemperature, double? cutLogTemperature, int coldest)
+    {
+        if (cutTemperature is null && cutLogTemperature is null) return coldest;
+        if (cutTemperature is <= 0.0)
+            throw new ArgumentOutOfRangeException(nameof(cutTemperature), "A temperature must be positive; use the ln T form for one below the double range.");
+        double target = grid.IsLog
+            ? cutLogTemperature ?? Math.Log(cutTemperature!.Value)
+            : cutTemperature ?? Math.Exp(cutLogTemperature!.Value);
+        return NearestIndex(grid.Values, target);
     }
 
     private static int NearestIndex(IReadOnlyList<double> temps, double t)
@@ -221,4 +258,5 @@ public sealed record CumulativeFieldUserRunResult(
     int ClusterCount,
     int Abstained,
     double RepresentativeTemperature,
+    double RepresentativeLogTemperature,
     IReadOnlyDictionary<string, double> EvaluatorScores);

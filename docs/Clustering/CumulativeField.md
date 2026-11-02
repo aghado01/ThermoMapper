@@ -68,7 +68,13 @@ flowchart LR
 
 **Bracket.** `EstimateBracket` takes quantiles 2% and 98% of the positive $H^{\text{cum}}$ values, divides by $\ln 2$, and pads by factors 0.5 and 2.
 
-**The log ladder.** When the graph carries `LogWeights`, `Prepare` also builds $\ln H^{\text{cum}}$ by a running log-sum-exp over the ascending log couplings (per node for `Local`), and the solver runs on it: $G_e=-\mathrm{expm1}\big(-e^{\ln H^{\text{cum}}_e-\ln T}\big)$, so an edge cuts at $\ln T^*_e=\ln H^{\text{cum}}_e-\ln\ln2$ however far below the double range. A Gaussian gap with coupling $e^{-1250}$ is cut at $\ln T\approx-1250$, where the linear solver has no temperature to ask for (`Solve` rejects $T=0$). The linear paths are unchanged, and where both are representable the two agree to $10^{-10}$. `EstimateLogBracket` is `EstimateBracket` in $\ln T$, and `RunLog` returns the grid it ran in `LogTemperatures` (`Temperatures` is its exponential, 0 past about −745). The command and the user session do not take a log grid yet.
+**The log ladder.** When the graph carries `LogWeights`, `Prepare` also builds $\ln H^{\text{cum}}$ by a running log-sum-exp over the ascending log couplings (per node for `Local`), and the solver runs on it: $G_e=-\mathrm{expm1}\big(-e^{\ln H^{\text{cum}}_e-\ln T}\big)$, so an edge cuts at $\ln T^*_e=\ln H^{\text{cum}}_e-\ln\ln2$ however far below the double range. A Gaussian gap with coupling $e^{-1250}$ is cut at $\ln T\approx-1250$, where the linear solver has no temperature to ask for (`Solve` rejects $T=0$). The linear paths are unchanged, and where both are representable the two agree to $10^{-10}$. `EstimateLogBracket` is `EstimateBracket` in $\ln T$, and `RunLog` returns the grid it ran in `LogTemperatures` (`Temperatures` is its exponential, 0 past about −745).
+
+**A grid in ln T.** `userrepl cumulative-field --temperatures lnspace:lnTmin,lnTmax,N` gives the command N points evenly spaced in $\ln T$, and `auto-ln` the `auto` bracket as 48 such points (`EstimateLogBracket`). `auto` and every other spec stay temperature grids and write what they always wrote. The session runs on `SolveLog`; `--cut-log-temperature` places the edge snapshot by $\ln T$ (`--cut-temperature` still takes T; give one of the two). The thermal dendrogram and the landscape carry the axis label `log-temperature` (`ThermalDendrogram.LogTemperatureAxis`), and the axis-alignment law checks it as it checks `temperature`. The bracket reaches only the quantile range of the rungs, as `auto` does: a gap far below it (BlattHierarchy's medium and coarse merges, at $\ln T$ from −2,300 to −17,500 under the Gaussian) needs an explicit `lnspace:` that spans it.
+
+**The EOM's measure changes with the grid.** Lifetimes and masses integrate over the grid's axis, so on a grid of $\ln T$ a stage's persistence is its length in e-folds of T, and on a temperature grid it is its length in T. A stage from T to 10T is 9T wide in one and 2.3 e-folds in the other, so the two grids can resolve different partitions of the same graph, and neither is a refinement of the other. A grid of $\ln T$ is the only one that reaches a stage below the double range.
+
+The measure matters at the grid points `auto` and `auto-ln` share. On BlattHierarchy (spread 0.15, mutual kNN + MST-min, Gaussian, mean-edge bandwidth, K = 5), the same 48 points resolve 256 clusters (204 abstained, ARI 0.35 against the 24 fine classes) with T widths and 46 (44 abstained, ARI 0.95) with e-fold widths; K = 10 gives 91 (ARI 0.84) and 41 (ARI 0.97). A wide explicit grid (`lnspace:-18000,2,1800`) resolves the 2 coarse clusters at both K, the level that lives longest in e-folds, and a grid placed on the fine stage (`lnspace:-60,2,249`) resolves 23 clusters (ARI 0.96 against the 24 fine classes). The grid is memory in proportion to its points times the graph's CSR slots, so a span of thousands of e-folds is coarse in step; a stage no wider than the step is one point or none (the 24-class stage, about 11 e-folds wide, at step 10). The graph-compiler brief ("The command on a ln T grid") has the table.
 
 **Monte Carlo demonstration.** `MonteCarloAffinityDemo` estimates $G_e$ by averaging exponential energy-budget draws, the estimator of Wang et al. (2020). It converges to `Solve` as the draw count grows; the closed form is that limit with zero variance.
 
@@ -76,9 +82,9 @@ flowchart LR
 
 | CSV file | Columns |
 |---|---|
-| `sweep.csv` | `temperature`, `cluster_count`, one row per grid temperature in caller order |
+| `sweep.csv` | `temperature`, `cluster_count`, one row per grid temperature in caller order; on a grid of ln T, `log_temperature`, `temperature` (its exponential, 0 below about −745) and `cluster_count` |
 | `partition.csv` | the shared partition schema: `node_index`, `x0…x{d−1}`, `true_label` (optional), `label` |
-| `edge_currencies.csv` | the shared edge schema at one representative temperature: `source`, `target`, `weight`, `affinity`, `alignment` and `co_membership` (NaN: the solver mints affinities only) |
+| `edge_currencies.csv` | the shared edge schema at one representative temperature: `source`, `target`, `weight`, `affinity`, `alignment` and `co_membership` (NaN: the solver mints affinities only); on a grid of ln T, a `log_weight` column (ln J, exact where `weight` has underflowed) follows `weight` |
 
 ## Configuration
 

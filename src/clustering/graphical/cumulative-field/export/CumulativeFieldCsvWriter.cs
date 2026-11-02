@@ -40,4 +40,29 @@ public static class CumulativeFieldCsvWriter
             .WriteToFile(path);
         return path;
     }
+
+    /// <summary>
+    /// <see cref="WriteSweep"/> for a grid in <c>ln T</c>: <c>log_temperature</c>, <c>temperature</c>,
+    /// <c>cluster_count</c>. <c>log_temperature</c> is the grid; <c>temperature</c> is its exponential, which is 0
+    /// once <c>ln T</c> falls below about −745 (the double range), so read the log column there.
+    /// </summary>
+    public static string WriteLogSweep(IReadOnlyList<double> logTemperatures, IReadOnlyList<int> clusterCounts, string path)
+    {
+        ArgumentNullException.ThrowIfNull(logTemperatures);
+        ArgumentNullException.ThrowIfNull(clusterCounts);
+        if (logTemperatures.Count != clusterCounts.Count)
+            throw new ArgumentException(
+                $"One cluster count per temperature: {clusterCounts.Count} counts vs {logTemperatures.Count} temperatures.",
+                nameof(clusterCounts));
+        if (string.IsNullOrWhiteSpace(path))
+            throw new ArgumentException("Path cannot be null or whitespace.", nameof(path));
+
+        TabularProjectionFactory.CreateIndexed("sweep", logTemperatures.Count)
+            .Column("log_temperature", i => logTemperatures[i])
+            .Column("temperature",     i => Math.Exp(logTemperatures[i]))
+            .Column("cluster_count",   i => clusterCounts[i])
+            .Build()
+            .WriteToFile(path);
+        return path;
+    }
 }

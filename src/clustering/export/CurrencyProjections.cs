@@ -64,7 +64,9 @@ public static class CurrencyProjections
     /// One row per undirected edge of <paramref name="graph"/> — the per-edge
     /// currencies at one temperature as a flat table: <c>source</c>,
     /// <c>target</c>, <c>weight</c>, <c>affinity</c>, <c>alignment</c> and
-    /// <c>co_membership</c> (NaN when that currency is absent).
+    /// <c>co_membership</c> (NaN when that currency is absent). With
+    /// <paramref name="logWeight"/> a <c>log_weight</c> column follows <c>weight</c>: ln J from
+    /// <see cref="CsrGraph.LogWeights"/> (NaN when the graph has none), exact where <c>weight</c> has underflowed.
     /// </summary>
     /// <remarks>
     /// <para><b>Upper-triangle only.</b> The CSR stores each undirected edge
@@ -76,7 +78,8 @@ public static class CurrencyProjections
         Affinities affinities,
         Alignments? alignments = null,
         CoMembership? coMembership = null,
-        string tableName = "edge_currencies")
+        string tableName = "edge_currencies",
+        bool logWeight = false)
     {
         ArgumentNullException.ThrowIfNull(affinities);
         if (affinities.G.Length != graph.Targets.Length)
@@ -102,7 +105,8 @@ public static class CurrencyProjections
             .Column("source",        k => rows[k].I)
             .Column("target",        k => rows[k].J)
             .Column("weight",        k => graph.Weights[rows[k].Slot])
-            .Column("affinity",      k => affinities.G[rows[k].Slot])
+            .ColumnIf(logWeight, "log_weight", k => graph.LogWeights is null ? double.NaN : graph.LogWeights[rows[k].Slot])
+            .Column("affinity",     k => affinities.G[rows[k].Slot])
             .Column("alignment",     k => alignments   is null ? double.NaN : alignments.G[rows[k].Slot])
             .Column("co_membership", k => coMembership is null ? double.NaN : coMembership.G[rows[k].Slot])
             .Build();

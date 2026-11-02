@@ -12,7 +12,9 @@ namespace Clustering.Dendrograms;
 /// descending T_e (the negation trick orders the build; the raw temperatures
 /// are re-stamped as heights) yields the thermal merge tree — hot singletons
 /// at the leaves, the cold root last. <c>CostAxis = "temperature"</c>, so the
-/// axis-alignment law holds against thermal landscapes directly. Heights
+/// axis-alignment law holds against thermal landscapes directly (a grid in
+/// <c>ln T</c> names itself <see cref="LogTemperatureAxis"/>, and is walked
+/// against a landscape that carries the same label). Heights
 /// DESCEND in build order (<see cref="LandscapeWalk"/> detects the
 /// orientation); <see cref="Dendrogram.CutAt"/> assumes ascending heights and
 /// does not apply — cut thermally with <see cref="Dendrogram.CutToK"/>.
@@ -27,6 +29,15 @@ namespace Clustering.Dendrograms;
 /// </remarks>
 public static class ThermalDendrogram
 {
+    /// <summary>The axis label of a grid of temperatures T.</summary>
+    public const string TemperatureAxis = "temperature";
+
+    /// <summary>
+    /// The axis label of a grid of <c>ln T</c>, which reaches temperatures below the double range. Lifetimes read
+    /// off it are in e-folds of T, not in T.
+    /// </summary>
+    public const string LogTemperatureAxis = "log-temperature";
+
     /// <summary>
     /// Builds the thermal merge FOREST from grid-major per-edge field columns
     /// (one column per ascending grid temperature, indexed by CSR slot — the
@@ -37,17 +48,22 @@ public static class ThermalDendrogram
     /// the result is a forest: multiple roots, with never-coupled leaves
     /// belonging to no merge at all. The walk handles forests natively and
     /// such leaves resolve to <c>Assignment.Unassigned</c> — the honest
-    /// abstain, not an error.
+    /// abstain, not an error. <paramref name="axis"/> names what the grid
+    /// holds: <see cref="TemperatureAxis"/> (the default), or
+    /// <see cref="LogTemperatureAxis"/> for a grid of <c>ln T</c>, whose merge
+    /// heights are then <c>ln T</c> too.
     /// </summary>
     public static Dendrogram FromEdgeCurves(
         CsrGraph graph,
         IReadOnlyList<double> temperatures,
         IReadOnlyList<double[]> edgeFieldByGridPoint,
-        double theta = 0.5)
+        double theta = 0.5,
+        string axis = TemperatureAxis)
     {
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(temperatures);
         ArgumentNullException.ThrowIfNull(edgeFieldByGridPoint);
+        ArgumentException.ThrowIfNullOrWhiteSpace(axis);
         if (graph.NodeCount < 2)
             throw new ArgumentOutOfRangeException(nameof(graph), "A thermal dendrogram needs at least 2 nodes.");
         if (temperatures.Count == 0)
@@ -108,6 +124,6 @@ public static class ThermalDendrogram
             nextId++;
         }
 
-        return new Dendrogram(merges, n, CostAxis: "temperature");
+        return new Dendrogram(merges, n, CostAxis: axis);
     }
 }

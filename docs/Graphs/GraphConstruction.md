@@ -196,7 +196,8 @@ The coupling projection also fills `CsrGraph.LogWeights`, ln J per slot, beside 
 - **LMP** ranks by the log when the graph has it (so edges the linear weights tie at 0 still order) and stores $\ln$ of its rank products, −∞ for an exact zero; a protected edge keeps its kernel log.
 - **Connectivity.** "Coupled" means ln J above −∞, so a coupling that underflowed in `Weights` still joins; the build log's coupled-component count and `Resolved.Coupling.CoupledComponents` read it.
 - **Use.** On BlattHierarchy (spread 0.15, mutual kNN + MST-min, Gaussian, mean-edge bandwidth, K = 5) the merge heights are −29.7 to −31.0 within a medium cluster, −2,341 to −2,832 between medium clusters (not tied: they differ by the gaps' squared lengths), and −17,530 between the coarse pair; the Cauchy kernel gives −4.1, −8.5 to −8.6 and −10.5. In the cumulative field's thermal single-linkage (`Field.Mean`, ln T grid step 0.25), the stage widths in e-folds of ln T are Gaussian K = 5: fine 10.8, medium 2,312, coarse 15,150 (K = 10: 7.8, 1,251, 8,201); Cauchy K = 5: 2.5, 3.8, 3.2 (K = 10: 2.8, 3.8, 3.2). A stage is a run of grid points with exactly k clusters of at least 0.4 of the level's smallest class. The widths grow as $d^2/2a^2$ under the Gaussian, which is why they lie far below any reachable temperature.
-- **Not done.** SW still takes a double T, so it does not sample at ln T = −1250; the cumulative-field command, user session and thermal EOM take a double grid.
+- **The cumulative-field command runs on it.** `--temperatures lnspace:lnTmin,lnTmax,N` (or `auto-ln`) runs the command, session and thermal EOM on a grid of ln T; see [CumulativeField](../Clustering/CumulativeField.md#algorithms).
+- **Not done.** SW still takes a double T, so it does not sample at ln T = −1250.
 
 ### Local mutual proximity
 
