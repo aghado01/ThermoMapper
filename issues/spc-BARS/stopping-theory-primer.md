@@ -288,7 +288,7 @@ entropy) suit it better.
 | C54 | In a block's ordered bulk a shed fragment of n points is exponentially rare, exp(−γ·n^((d − 1)/d)), so shedding is dust and a size floor can be modest; C21's worst case isn't the typical one | §13.14 | Lattice result (Grimmett Theorem 5.104, Conjecture 5.101); matches the toy's cold edge (§12.9); on data graphs an analogy | The exact histogram across a plateau |
 | C55 | Theorem 9.35's literal form fails at q ≥ 3: Q(x ↔ y in the union of two sourceless Z_q currents) exceeds τ², by (q − 1)^L on a path of L edges at weak coupling; Q ≥ τ² held in all 126 cases | §13.14 | Observed by exact enumeration (q = 2 exact in 42 of 42); leading-order ratio derived; the inequality unproven | A proof, or a counterexample |
 | C56 | At any q ≥ 1, τ_xy² is the probability that x and y share a block of the meet of two independent FK draws, and equals (q⟨δ(ρ_x, ρ_y)⟩ − 1)/(q − 1) for the replicas' difference field ρ | §13.14 | Derived here (mixture convolution); checked by enumeration at q = 2 and 3 | E19 |
-| C57 | `LineagePersistence`'s dependence on seed and grid comes from four separable defects: the representative, a score counted in levels, the ratio elbow and `GapThreshold`. With all four fixed, iris reads its first stage on 12 of 12 seeds with ARI 1.000 between seeds at 8 × (1000, 2000), and every density design returns the same partition. Which hierarchy level to report stays a modelling choice: the longest-lived reading depends on the grid's extent, and a slice at T* does not | §13.15, §13.16 | Observed (150 sweeps over 5 graphs, twice: resolver copy checked against the code on all of them; on the revised compiler the graphs are bit-identical bar five clamped bridges, and 134 sweeps byte-identical, §13.16); the user approved the build on that recheck | Build it (§13.16) |
+| C57 | `LineagePersistence`'s dependence on seed and grid comes from four separable defects: the representative, a score counted in levels, the ratio elbow and `GapThreshold`. With all four fixed, iris at K = 5 under a Gaussian reads its first stage on 12 of 12 seeds with ARI 1.000 between seeds at 8 × (1000, 2000), and every density design returns the same partition. Which hierarchy level to report stays a modelling choice: the longest-lived reading depends on the grid's extent and on the graph, and a slice at T* holds across extent but is in one graph's units | §13.15, §13.16 | Observed (150 sweeps over 5 graphs, twice: resolver copy checked against the code on all of them; on the revised compiler the graphs are bit-identical bar five clamped bridges, and 134 sweeps byte-identical, §13.16); the defects hold on every graph probed over K and the coupling, the level, the share and T* are read on these graphs only. Built in `ad840ca` | Vary what the probe left fixed: the filter, repair, bandwidth rule, gauge, q and θ |
 | C58 | Under `BwdParityTests`' recipe (g = 1/K̂, Gaussian at the mean edge length) mean node strength is s̄ = ⟨κ⟩ ≈ e^(−1/2) whatever the data or K, so T_ps's fit and the hot end's S₂·N are one fact about the recipe, not independent evidence. On that recipe iris's setosa joins the rest by one repair edge at k = 5–40, open with probability at most 0.012 at the grid's cold end, so that split is the graph's | §13.17 | Identity derived here; 0.603–0.643 and the bridge read from the built graphs; no SPC | E20, the graph panel |
 
 ---
@@ -2549,7 +2549,7 @@ decision at the end.
 
 **The run.**
 - **The recipe.** `BwdParityTests`': mutual KNN with MST repair, a kernel at the mean edge length, no LMP, q = 20, FK-reduced
-  χ for `SpPlateau`. Seeds 42 and 1–11 on the sampler; the toy's and BlattHierarchy's data stay at seed 42.
+  χ for `SpPlateau`. Each graph as resolved, and what its settings could explain, is in §13.16. Seeds 42 and 1–11 on the sampler; the toy's and BlattHierarchy's data stay at seed 42.
 - **Iris and the toy.** Iris at k = 5, minimum cluster 5; the toy at k = 10, minimum 50. The parity grid (the bracket, 48
   log steps) at 1 × (200, 400) and 8 × (1000, 2000), with the parity test's window (T_fs up).
 - **BlattHierarchy.** 1,200 points, k = 5, minimum 10. Gaussian on the parity grid at those two budgets. Cauchy on 161 log
@@ -2784,6 +2784,25 @@ run analysed, all 150 on the clean arm.
 - **`c08fb6b` plus the three seed files:** the seed-matched arm, which isolates the compiler. 134 of the 150 sweeps: all but
   5 of Landsat's 6 and 11 of the toy's 12 at the high budget, the slowest, where one seed each stands as the check.
 
+**The graphs, as resolved.** "The parity recipe" hides settings that could explain a result, and default settings aren't correct
+settings. So here each graph is as `GraphBuildResult.Resolved` reports it. All are Euclidean kNN, mutual filter, `MstMin` repair, no
+LMP, a floor of 10⁻¹⁰ cutting no edge, no repair edge dropped or zeroed, one component, and q = 20. All use the mean-edge bandwidth.
+`Auto` refinement resolves to `PathNeighbor`, which has no effect under Euclidean distance: it takes the shorter of the edge and the
+shortest path, and the direct edge is the shortest. So these couplings are the kernel of Euclidean distance.
+
+| Graph | K | n, edges | Largest component before repair | Repair edges | Kernel | Bandwidth | Scale edges | Gauge 1/K̂ (K̂) | `auto` bracket |
+|---|---|---|---|---|---|---|---|---|---|
+| Iris | 5 | 150, 262 | 53% | 15 | Gaussian | 0.3065 | all, after repair | 0.2863 (3.49) | [0.004461, 0.3569] |
+| The BWD toy | 10 | 3,200, 12,655 | 99% | 12 | Gaussian | 0.1622 | all, after repair | 0.1264 (7.91) | [0.004461, 0.3569] |
+| Landsat | 5 | 6,435, 9,048 | 78% | 983 | Gaussian | 22.71 | all, after repair | 0.3556 (2.81) | [0.004461, 0.3569] |
+| BlattHierarchy | 5 | 1,200, 2,169 | 4% | 82 | Gaussian | 0.08313 | all, after repair | 0.2766 (3.615) | [0.004461, 0.3569] |
+| BlattHierarchy | 5 | 1,200, 2,169 | 4% | 82 | Cauchy | 0.08313 | all, after repair | 0.2766 (3.615) | [0.006888, 0.6888] |
+| BlattHierarchy, compiler defaults | 5 | 1,200, 2,169 | 4% | 82 | Gaussian | 0.06391 | before repair | none | [0.02282, 2.282] |
+| BlattHierarchy, compiler defaults | 5 | 1,200, 2,169 | 4% | 82 | Cauchy | 0.06391 | before repair | none | [0.01683, 1.683] |
+
+Two things stand out. BlattHierarchy's mutual graph holds 4% of its points in its largest component, so what links its fine clusters is
+the 82 repair edges, not the kNN graph. And the first five rows are what every number in §13.15 is read on, at the one K each has.
+
 **The graphs, old build against `c08fb6b`, edge by edge.**
 
 | Graph | Edges | Couplings bit-identical | Components, old and new |
@@ -2960,10 +2979,87 @@ bandwidth, the levels above fine aren't visible to this resolver at any temperat
     this draw the medians barely move: 0.668 to 0.680, and 0.810 to 0.820. The minima improve on both draws (0.316 to 0.381 and
     0.306 to 0.543; 0.548 to 0.745 and 0.522 to 0.705). It stays, for its floor rather than its median.
 
-**The verdict, and the decision.** None of the four defects changed, no reading or stage the recommendation relies on moved,
+**What the graph settings could explain.** To scope these findings, a probe ran the same arms over K and the coupling, from the same
+frozen build at main's seeds, with 12 seeds. Everything else stays as in the table above, including q = 20 and the mutual filter. Shared
+neighbours is §12.25's coupling, J = max(|N(i) ∩ N(j)|/K, 0.05)/K̂ on the same edge set.
+
+*Iris, on one grid for every graph, [10⁻⁴, 0.357] with 96 log steps, at 4 × (500, 1000).*
+
+| K, coupling | Longest-lived, T_fs window: reading (seeds of 12) | ARI to 50/100: largest, midpoint | Longest-lived, full window | Species read at T\* | Current, T_fs window: setosa points, ARI to 50/100 |
+|---|---|---|---|---|---|
+| 5, Gaussian | Setosa + pair (12) | 0.964, 0.855 | Setosa + pair (12) | 0.05–0.07 | 32, 0.663 |
+| 7, Gaussian | Setosa + pair (12) | 0.947, 0.778 | Setosa + pair (12) | None settled (0.09 on some seeds) | 33, 0.083 |
+| 10, Gaussian | Setosa + pair (12) | 1.000, 0.815 | Setosa + pair (12) | About 0.11 | 25, 0.048 |
+| 15, Gaussian | Setosa + pair (12) | 1.000, 0.871 | Setosa + pair (12) | None | 26, 0.054 |
+| 5, Cauchy | Setosa + pair (9), Setosa + species (3) | 0.947, 0.839 | One lineage of 150 (12) | About 0.05 | 36, 0.186 |
+| 10, Cauchy | Setosa + pair (12) | 0.930, 0.784 | Setosa + pair (12) | None settled | 29, 0.066 |
+| 5, shared neighbours | Setosa in pieces + species (12) | 0.189, 0.164 | One lineage of 150 (12) | 0.03–0.09, setosa in pieces | 13, 0.110 |
+| 7, shared neighbours | Setosa in pieces + pair (9), Setosa + pair (3) | 0.808, 0.786 | One lineage of 150 (12) | 0.06–0.11, setosa in pieces | 16, 0.648 |
+
+*Landsat at 1 × (200, 400), parity grid and window: assertions passed of 12; median purity; median points covered. The K = 5 row is §13.15's
+stream, with the measured arm's score.*
+
+| K | Current | Size rule, largest | 0.10, largest | 0.15, largest | 0.25, largest | 0.10, midpoint | 0.25, midpoint |
+|---|---|---|---|---|---|---|---|
+| 5 | 12; 0.95; 899 | 12; 0.91; 2,238 | 11; 0.92; 2,444 | 10; 0.90; 2,520 | 9; 0.89; 2,684 | 12; 0.92; 1,720 | 12; 0.92; 1,678 |
+| 10 | 1; 0.55; 1,934 | 4; 0.66; 2,792 | 9; 0.94; 2,289 | 9; 0.94; 2,289 | 11; 0.89; 2,475 | 2; 0.64; 2,516 | 10; 0.94; 2,015 |
+| 20 | 2; 0.58; 1,850 | 6; 0.82; 3,128 | 8; 0.96; 2,770 | 9; 0.96; 2,753 | 9; 0.91; 2,784 | 5; 0.70; 2,866 | 6; 0.82; 2,828 |
+
+*The toy at 1 × (200, 400), parity grid and window: assertions passed of 12; clusters; ARI to the stripes.*
+
+| K | Current | All fixed, largest | All fixed, midpoint |
+|---|---|---|---|
+| 5 | 1; 12 clusters; ARI 0.150 | 2; 13 clusters; ARI 0.371 | 2; 14 clusters; ARI 0.355 |
+| 10 | 5; 4 clusters; ARI 0.309 | 12; 3 clusters; ARI 0.689 | 12; 3 clusters; ARI 0.703 |
+| 20 | 0; 3 clusters; ARI 0.305 | 12; 3 clusters; ARI 0.697 | 12; 3 clusters; ARI 0.706 |
+
+Read against those:
+- **The four defects aren't explained by the settings.** They come from the resolver's logic, and they show on every graph probed. The
+  current representative holds 13–36 of setosa's 50 points on iris's graphs, and thresholds move between seeds on each, from 0.21 to 0.48
+  overall. A count of levels depends on the grid and on nothing in the graph. *Whether the elbow fires* does depend on the graph and the
+  grid, since it needs scores 1.5 apart. On iris's Gaussian graphs at the full window it doesn't, and at K = 10 under a Cauchy it does.
+  Nothing justifies the cut where it fires.
+- **The level reading is partly the graph's, as the user suspected.** "Longest-lived takes setosa plus the pair" holds under a Gaussian at K
+  = 5–15 and a Cauchy at K = 10. Under shared neighbours at K = 5, with the T_fs window, it reads the species with setosa in pieces. That's the
+  same direction as `HierarchyEom` on that graph in §12.25, though with this resolver setosa's pieces hold ARI to the species at 0.40. So persistence
+  preferring the coarse stage is on record for these graphs and not in general.
+- **The full-window reading collapses on some graphs.** At the cold edge of 10⁻⁴, the Cauchy at K = 5 and shared neighbours at K = 5 and 7 read
+  one lineage of 150, the failure the toy shows at 10⁻⁶. Those graphs couple across the gap more strongly, so the giant lives inside the grid.
+  That lineage reaches the cold edge, so `ColdCensored` marks it. The T_fs window avoids it on all three.
+- **T\* doesn't carry between graphs.** The species' T\* moves from 0.05–0.07 at K = 5 to about 0.11 at K = 10, and at K = 15 no T\* tried reads them.
+  That's the same closing of the stage with K that §12.25 found. So "T\* = 0.06" is a fact about iris's graph at K = 5.
+- **The split share is K's as well.** §13.15's order on Landsat (the size rule, then 0.10, then 0.25) holds only at K = 5. At K = 10 and 20 the
+  size rule is the worst of them and 0.25 passes most often, though 0.10 keeps the higher median purity. Across the three K, 0.10, 0.15 and 0.25 pass
+  on 28, 28 and 29 of 36, and the size rule on 22. So 0.10 is defensible but not selected by this, and it stays provisional.
+- **Largest over midpoint firms up.** The midpoint's advantage on Landsat belongs to K = 5. At the 0.10 share, at K = 10 and 20, its median purity is 0.64
+  and 0.70, against 0.94 and 0.96, with 2 and 5 of 12 passing against 9 and 8. It depends on the share too: at 0.25 and K = 10 the midpoint recovers (10 of 12,
+  0.94). On iris the largest leads at every K and coupling here.
+- **Landsat's "real cost" belongs to K = 5.** §13.15 had current at the highest purity, the fixes trading 3–5 points for coverage. At K = 10 and 20
+  current passes 1 and 2 of 12, at purity 0.55 and 0.59. There the fixes gain on both.
+- **The toy's 12 of 12 is K's too.** K = 10 and 20 give it. At K = 5 the graph breaks the stripes up, into about 13 clusters, whichever resolver reads it.
+
+None of that puts a defect or the recommendation in doubt, so the build goes on. The scope is what changes: this is K and the coupling only, on one
+generator seed per synthetic dataset. The filter, the repair, the bandwidth rule, the gauge, q and θ weren't varied, and each of these readings could
+move with them.
+
+**The verdict, and the decision.** On the revised compiler, none of the four defects changed, no reading or stage the recommendation relies on moved,
 and the largest-against-midpoint call stands. The user approved §13.15's recommendation on this condition, with one addition:
 lineages censored by the grid's cold edge are flagged, so the longest-lived reading's dependence on the bracket is visible. It
 gets built as recommended.
+
+
+**The build (`ad840ca`).** As recommended, with the cold-edge flag:
+- `LineagePersistenceConfig` holds the options, since the list had outgrown a signature, and `ClusterLineage` gains `Lifetime`, `ColdCensored` and
+  `Levels`, replacing `TSpan`.
+- **Three decisions the measurements left open.** A level holding two clusters of a lineage counts once, as ∫ δ̄ d ln T says, where the measured arm
+  summed them. A T\* outside the levels read throws, since the harness's snapping read another stage silently. A lineage left with no point isn't
+  selected, so label k is always `Selected[k]`. In the REPL, a T\* reads the full grid, so its lineages stay whole.
+- **Against the measured arm**, on all 150 sweeps and the second draw's 150, in both windows and all three representatives, at the longest-lived reading and
+  eight T\*: lifetimes match everywhere. Counting a level once reorders labels widely and rarely changes a partition. On Landsat at the low budget and the T_fs window, it does on 1 of 12 seeds
+  on one stream and 2 of 12 on the other, at ARI 0.85, 0.77 and 0.89 to the measured partition at the largest level. Everywhere else, ARI ≥ 0.998. On Landsat the
+  largest level then clears 0.85 on 21 of 24 seeds, rather than the 20 above, and the seed the test runs passes on both streams.
+- **The parity tests** pin their graph as resolved, and assert bounds that held on every seed measured: all 24 runs at their budget, on the two streams. So
+  they're statements about those graphs. `VizCore.Tests` passes in full.
 
 Harness and raw tables: `side-session-notes/.../lineage-persistence/recheck/`.
 

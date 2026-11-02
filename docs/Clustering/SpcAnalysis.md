@@ -201,8 +201,8 @@ Each was measured on iris, the BWD toy, Landsat and BlattHierarchy under two ker
 | Iris | 5 | Gaussian | 0.3065 | 3.49 | 15 | 53% |
 | BWD toy | 10 | Gaussian | 0.1622 | 7.91 | 12 | 99% |
 | Landsat | 5 | Gaussian | 22.71 | 2.81 | 983 | 78% |
-| BlattHierarchy | 5 | Gaussian | 0.0831 | 3.62 | 82 | 4% |
-| BlattHierarchy | 5 | Cauchy | 0.0831 | 3.62 | 82 | 4% |
+| BlattHierarchy | 5 | Gaussian | 0.0831 | 3.615 | 82 | 4% |
+| BlattHierarchy | 5 | Cauchy | 0.0831 | 3.615 | 82 | 4% |
 
 **What those settings could explain**, from a probe over K and the coupling (primer §13.16):
 
@@ -236,7 +236,7 @@ Only K and the coupling were varied. The filter, the repair, the bandwidth rule,
 | Landsat, seeds with purity ≥ 0.85 at the higher budget | 12 of 12, minimum 0.903 | 12 of 12, minimum 0.913 |
 | Landsat, ARI between seeds at the higher budget | 0.81–0.82 | 0.93–0.94 |
 
-All at the K of the table above. The largest level captures more, so it's the default. Its purity cost on Landsat is mostly a low-budget one, which sampling closes, while the midpoint's lower capture stays. That cost is also K = 5's: at K = 10 and 20 the midpoint falls behind on purity too (median 0.640 and 0.705, against 0.940 and 0.961, with 2 and 5 of 12 seeds passing, against 9 and 8), and on iris the largest leads at every K probed. Take the midpoint when it's measured to help on the graph at hand.
+All at the K of the table above. The largest level captures more, so it's the default. Its purity cost on Landsat is mostly a low-budget one, which sampling closes, while the midpoint's lower capture stays. That cost is also K = 5's: at the 0.10 share, at K = 10 and 20, the midpoint falls behind on purity too (median 0.640 and 0.705, against 0.940 and 0.961, with 2 and 5 of 12 seeds passing, against 9 and 8), and on iris the largest leads at every K probed. Take the midpoint when it's measured to help on the graph at hand.
 
 **Reading a hierarchy.** T\* reaches each stage the grid holds: on BlattHierarchy under a Cauchy kernel, coarse at $10^{-5}$, medium at $10^{-3}$ and fine at $0.01$, on 12 of 12 seeds. Longest-lived reads medium on that grid and fine on the `auto` bracket, which stops above the medium stage. A bridge of coupling $J$ between two blocks clears $\bar\delta=0.5$ near $T\approx J/\ln(1+q)$, which is how to tell what a grid can show. Under a Gaussian kernel at the mean-edge bandwidth, BlattHierarchy's stages above fine lie out of reach: its medium stage needs $T\approx10^{-9}$, and the merges above it tie at the coupling clamp. So there the fine level is the only one on offer, whichever reading is asked for.
 
