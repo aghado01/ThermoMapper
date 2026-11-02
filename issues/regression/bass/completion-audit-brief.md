@@ -111,7 +111,7 @@ At the user's word, in this chip, though `docs/Maths` is otherwise the main sess
   - **The observation model stops at the model.** `Bass.Fit`, `Bass.Resume` and `Bass.Fingerprint` take none, so a run through them is Gaussian, and GBMARS's list gains the run and the fingerprint.
   - **No ruling on the seams' shapes is recorded,** so the section says they are open to review.
 - *By script:* every capitalized identifier in the new text exists under `src/maths` or `tests`, every new link resolves, every test class named exists, and the three docs keep their CRLF. Public types no row names: 60 of 243, from 72 at `04cfbcb`. No code changed, so no suite ran.
-- *`LinearAlgebra.md`'s other gaps, outside this owed list:* entries for `BorderedCholesky` and `PairwiseSum` followed at the user's word. `ThinSvd` and `DiagonalPlusLowRank` still have none.
+- *`LinearAlgebra.md`'s other gaps, outside this owed list:* entries for `BorderedCholesky`, `PairwiseSum`, `ThinSvd` and `DiagonalPlusLowRank` followed at the user's word, so it now names every file under `src/maths/linalg/`. Writing them turned up text stale since `e585b18` (2026-10-27), now fixed: `Pca`'s covariance and Gram routes and its arbitrary signs, and the Grassmann and Stiefel Gram-route SVD in `RiemannianGeometry.md`.
 - *Open:* G-7 and G-8, waiting on a quiet window.
 
 ### The closing, checked by the main session — 2026-11-02

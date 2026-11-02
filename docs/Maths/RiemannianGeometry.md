@@ -107,9 +107,9 @@ In the table, $\hat p=p/\|p\|$, and $\langle a,b\rangle_L$ is the Lorentz produc
 | Product | [A-part \| B-part] | $\sqrt{d_A^2+d_B^2}$ | factor-wise | factor-wise | `IsFlat` = both factors flat |
 | Scaled | as inner | $\sqrt s\,d$ | unchanged | unchanged | $s$ finite and $>0$ |
 
-**Grassmann SVD.** Grassmann and Stiefel compute a thin SVD from the eigendecomposition of the r×r Gram matrix: $\sigma_i=\sqrt{\max(\lambda_i,0)}$ and $U=AV\Sigma^{-1}$. The Grassmann Log matches Bendokat–Zimmermann–Absil and the Exp matches Edelman–Arias–Smith.
+**Grassmann SVD.** Grassmann and Stiefel take a thin SVD from [`ThinSvd`](./LinearAlgebra.md#thin-svd-thinsvd), which never forms the r×r Gram matrix. They zero the left vectors below σ = 10⁻¹², a rule the log maps rely on at the cut locus. The Grassmann Log matches Bendokat–Zimmermann–Absil and the Exp matches Edelman–Arias–Smith.
 
-**Cost.** Sphere, ball and hyperboloid operations are $O(D)$. Grassmann operations are $O(nr^2)$ plus a small Jacobi eigensolve.
+**Cost.** Sphere, ball and hyperboloid operations are $O(D)$. Grassmann operations are $O(nr^2)$ plus Jacobi sweeps on the r×r triangular factor.
 
 **Stiefel (partial).** The type's doc comments promise orientation-sensitive canonical (Edelman–Arias–Smith) geometry. The code does something different:
 

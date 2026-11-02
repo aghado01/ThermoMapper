@@ -1,6 +1,6 @@
 # Linear Algebra
 
-> The numerical foundation of ThermoMapper: symmetric eigensolvers (dense Jacobi and iterative LOBPCG), dense and banded Cholesky factorizations built for Gaussian statistics, an FFT, PCA, FastICA, a streaming diagonal Mahalanobis estimator and SIMD vector kernels. · **Project:** `Maths.LinAlg` (namespace `Maths.LinAlg`) · **Maturity:** core, except FastICA, which is partial (see [Status](#status-and-caveats))
+> The numerical foundation of ThermoMapper: symmetric eigensolvers (dense Jacobi and iterative LOBPCG), a thin SVD, dense, bordered and banded Cholesky factorizations built for Gaussian statistics, Khatri–Rao contractions, an FFT, PCA, FastICA, a streaming diagonal Mahalanobis estimator and SIMD vector kernels. · **Project:** `Maths.LinAlg` (namespace `Maths.LinAlg`) · **Maturity:** core, except FastICA, which is partial (see [Status](#status-and-caveats))
 
 ## Overview
 
@@ -11,8 +11,8 @@
 | Spectral graph analysis ([SpectralGraphs](./SpectralGraphs.md)) | dense eigen routes, LOBPCG |
 | Gaussian mixtures ([GaussianMixtures](./GaussianMixtures.md)) | `CholeskyDecomposition` |
 | Spline regression ([BayesianRegression](./BayesianRegression.md)) | `BandCholesky` in LDLᵀ mode |
-| Dense Gram reference (BASS, planned) | `DenseCholesky` |
-| Riemannian statistics ([RiemannianGeometry](./RiemannianGeometry.md)) | `DenseEigen`, `Pca`, `MatrixOps` |
+| BASS ([BayesianRegression](./BayesianRegression.md)) | `BorderedCholesky`, `DenseCholesky`, `KhatriRao`, `PairwiseSum`, `ThinSvd`, `DiagonalPlusLowRank` |
+| Riemannian statistics ([RiemannianGeometry](./RiemannianGeometry.md)) | `ThinSvd`, `DenseEigen`, `Pca`, `MatrixOps` |
 | Colored-noise synthesis ([Samplers](./Samplers.md)) | `Fft` |
 
 ```mermaid
@@ -23,11 +23,17 @@ flowchart LR
   LO[LOBPCG] -->|Rayleigh–Ritz| EJ
   LO --> OP[ILinearOperator / IPreconditioner]
   DSO[DenseSymmetricOperator] --> OP
-  PCA[Pca] --> DE
+  PCA[Pca] --> SVD[ThinSvd]
+  DL[DiagonalPlusLowRank] --> SVD
+  SVD --> PS[PairwiseSum]
+  KR[KhatriRao] --> PS
   ICA[FastIca] --> PCA
+  ICA --> DE
   CH[CholeskyDecomposition]
   DC[DenseCholesky: strict]
   BC[BandCholesky]
+  BO[BorderedCholesky]
+  WB[WideBandCholesky]
 ```
 
 ## Key concepts
@@ -83,7 +89,8 @@ For a slightly asymmetric input, the two dense eigen routes therefore decompose 
 |---|---|
 | Dense eigen | `DenseEigen.DecomposeSymmetric` (`double[,]` or column-major span) → `EigenResult`; `EigenFast.DecomposeSymmetricInPlace` (allocation-free core); `Eigen.DecomposeSymmetric`; `SpectralMath.BottomK`, `SpectralMath.SelectBottomK` → `IReadOnlyList<EigenPair>` |
 | Iterative eigen | `LOBPCG.Solve(op, k, Options?)` → `Result(Eigenpairs, Iterations, ResidualNorm, Converged)`; `LOBPCG.BottomK` / `TopK` (dense convenience); `DenseSymmetricOperator`; `ILinearOperator`, `IPreconditioner` |
-| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `Status`, `Strict`, `FailedAt`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `BorderedCholesky(capacity, rebuildInterval = 100)` (`ProposeBirth`, `ProposeDeath`, `ProposeChange`, `ProposedInverseQuadraticForm`, `Pending`, `Accept`, `Rebuild`, `LastDrift`, `UpdatesSinceRebuild`, `RebuildInterval`, `Copy`, `Clear`, `Decompose`, `Entry`, `Factor`, `RelativePivot`, `InverseDiagonal`, `LeaveOneOutPivot`, `MinLeaveOneOutPivot`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Dimension`, `Capacity`) → `FactorProposal` (`FactorChange`), `FactorDrift`; `WideBandCholesky(dimension, bandwidth)` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Factor`, `RelativePivot`, `Dimension`, `Bandwidth`), `SpdFactors` (`UsesWideBand`, `ForBand`, `MinimumOrder`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`, `EquilibratedCondition`; implemented by `BandCholesky`, `DenseCholesky`, `BorderedCholesky` and `WideBandCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus` |
+| Thin SVD | `ThinSvd.Decompose(a)` → `ThinSvdResult` (`SingularValues`, `LeftVectors`, `RightVectors`, `NumericalRank`, `RankTolerance`) |
+| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `Status`, `Strict`, `FailedAt`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `BorderedCholesky(capacity, rebuildInterval = 100)` (`ProposeBirth`, `ProposeDeath`, `ProposeChange`, `ProposedInverseQuadraticForm`, `Pending`, `Accept`, `Rebuild`, `LastDrift`, `UpdatesSinceRebuild`, `RebuildInterval`, `Copy`, `Clear`, `Decompose`, `Entry`, `Factor`, `RelativePivot`, `InverseDiagonal`, `LeaveOneOutPivot`, `MinLeaveOneOutPivot`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Dimension`, `Capacity`) → `FactorProposal` (`FactorChange`), `FactorDrift`; `WideBandCholesky(dimension, bandwidth)` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Factor`, `RelativePivot`, `Dimension`, `Bandwidth`), `SpdFactors` (`UsesWideBand`, `ForBand`, `MinimumOrder`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`, `EquilibratedCondition`; implemented by `BandCholesky`, `DenseCholesky`, `BorderedCholesky` and `WideBandCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus`; `DiagonalPlusLowRank(diagonal, factor, weights)` (`Dimension`, `LogDet`, `Solve`, `SolveInPlace`, `InverseQuadraticForm`, `Sample`, `SampleInnovation`) |
 | Contractions | `KhatriRao` (`Gram`, `Border`, `CrossProducts`, `CentredGram`, `CentredBorder`, `CentredCrossProducts`, `ScatteredGram`, `ScatteredCrossProducts`, `FaceSplittingGram`, `FaceSplittingCrossProducts`, `FaceSplittingHalfBandwidth`, `KroneckerGram`); `IInnerProduct` (`IsIdentity`, `Dimension`, `LogDeterminant`, `Dot`), `IdentityInnerProduct` |
 | Transforms and statistics | `Fft` (1-D, 3-D, N-D; `IsPowerOfTwo`); `Pca.Compute` → `PcaResult`; `FastIca.Compute` → `IcaResult`; `OnlineMahalanobis` (`Update`, `Distance` to the mean or between two points, `IsReady`, `GetMean`, `GetVariances`, `Reset`) |
 | Kernels | `MatrixOps` (`Dot`, `ScaledSubtract`, `Orthonormalize`, `RandomOrthonormal`, `ColumnGramMatrix`, `ColumnGramMatrixFromRowMajor`, `TransposeToColumnMajor`); `PairwiseSum` (`Of`, `Dot`, `Block`) |
@@ -139,6 +146,28 @@ All projections are two passes of **modified** Gram–Schmidt (MGS with re-ortho
 **Result.** Eigenpairs are sorted ascending (or descending with `WantLargest`). `ResidualNorm` is the residual measured at the top of the last iteration. When `Converged` is false, it describes the iterate *before* the final Rayleigh–Ritz update, not the returned vectors.
 
 **Cost per iteration.** Two operator applications (k columns, then up to 3k), $O(nm^2)$ Gram–Schmidt with $m\le 3k$, and a small $O(m^3)$ Jacobi. About $16nk$ doubles are preallocated. `LOBPCG.BottomK` and `TopK` wrap a copied `DenseSymmetricOperator` and return at most n−1 pairs.
+
+### Thin SVD (`ThinSvd`)
+
+`ThinSvd.Decompose(a)` gives A = U·diag(σ)·Vᵀ with k = min(m, n) singular values in descending order, as a `ThinSvdResult`: `SingularValues`, `LeftVectors`, `RightVectors`, `NumericalRank` and `RankTolerance`. A non-finite entry is refused.
+
+**The method** is Householder QR, then one-sided Jacobi rotations on the triangular factor (Hestenes 1958; Drmač and Veselić 2008). A wide matrix goes through its transpose, with U and V swapped at the end.
+- *Why not through a Gram matrix.* It never forms AᵀA, so singular values far below σ₁ keep their absolute accuracy of about ε·σ₁, rather than the √ε·σ₁ a Gram eigendecomposition leaves them. Moving `Pca` off its covariance and Gram routes also cut a 6238 × 617 fit from 22.3 s to 8.0 s, with the eigenvalues agreeing to 2·10⁻¹³ (`e585b18`).
+- *Convergence.* Sweeps rotate column pairs until every pair's |cos| is at most n·ε, over the n columns of the tall form. After 60 sweeps without that, it throws.
+- *Extreme scales.* Norms and rotation angles are computed without underflow or overflow. With ρ the ratio of a pair's norms, the angle is t = sign(ζ)·ρ/(|ζρ| + hypot(ρ, ζρ)), so nothing overflows however far apart the norms are.
+- *Negligible columns.* A column of R below ε·‖R‖_F is zero to working precision. Rotations leave it alone, and its left vector is completed to an orthonormal set from a standard basis vector, rather than read from its rounding noise.
+
+**Rank.** `RankTolerance` is max(m, n)·ε·σ₁ with ε = 2⁻⁵², the threshold of R's `Matrix::rankMatrix` and NumPy's `matrix_rank`. `NumericalRank` counts the values above it.
+
+**The same bits on every machine.** Rotations are elementwise, so vector width does not change the bits, and inner products are [pairwise sums](#pairwise-summation-pairwisesum).
+
+**Callers.** `Pca.Compute`; the Stiefel and Grassmann manifolds; BASS's PCA basis, whose rank is `NumericalRank`; calibration's compression of its residual set; and [`DiagonalPlusLowRank`](#diagonal-plus-low-rank-diagonalpluslowrank).
+
+**Checked** (`ThinSvdTests`).
+- From 1 × 1 to 200 × 5, tall and wide: each entry reconstructs within 10·max(m, n)·ε·σ₁, U and V are orthonormal to 10⁻¹³, and σ is descending and nonnegative.
+- A constructed spectrum from 1 down to 10⁻¹¹ is recovered within 10·m·ε absolute, and read at full rank.
+- A product of known rank 7 reads 7, with a gap above 10⁶ times the tolerance. Five centred curves on 200 locations lose exactly one rank. A zero matrix reads rank 0 with orthonormal factors, and a zero column is completed in the middle.
+- Two parallel columns of norms 1.8·10⁻¹⁶¹ and 0.115, the Grassmann exp map's input that stalled the first version, converge with σ₁ to 2ε relative. Columns scaled by 10¹⁵⁰ and 10⁻¹⁵⁰ stay finite.
 
 ### Dense Cholesky (`CholeskyDecomposition`)
 
@@ -246,9 +275,27 @@ Strict Cholesky A = L·Lᵀ of a matrix whose entries vanish beyond a declared h
 - At the band's edge, a declaration above the Gram's band changes nothing, and a diagonal is a band of 0.
 - Near singularity, an order-80 pentadiagonal matrix with a pair of rows 1 − 10⁻⁸ alike reports the dense relative pivot. An exactly dependent pair and an indefinite one stop at the dense factor's row and status, with every solve and draw refused.
 
+### Diagonal plus low rank (`DiagonalPlusLowRank`)
+
+Σ = D + U·diag(s)·Uᵀ, a positive diagonal plus a term of rank r ≪ m. Solves, bᵀΣ⁻¹b, ln|Σ| and draws cost O(m·r) after an O(m·r²) setup, and no m × m matrix is formed. BASS's calibration is its main caller, with noise and truncation variance on the diagonal and the emulator's component variances on the basis, and a basis fit's pointwise density is the other. It is immutable once constructed, so concurrent chains may share it. Its surface is its own, not `ISpdFactor`. A diagonal entry that is not positive, or a negative weight, is refused.
+
+**The factor.** With W = D^(−½)·U·diag(√s), Σ = D^(½)(I + WWᵀ)D^(½), and I + WWᵀ is read from the [thin SVD](#thin-svd-thinsvd) W = Q·diag(λ)·Pᵀ. With β = D^(−½)b:
+
+$$b^\top\Sigma^{-1}b=\lVert\beta-QQ^\top\beta\rVert^2+\sum_k\frac{(q_k^\top\beta)^2}{1+\lambda_k^2},\qquad\ln|\Sigma|=\sum_i\ln d_i+\sum_k\ln(1+\lambda_k^2)$$
+
+- *Why not the Woodbury form.* Both are sums of nonnegative terms, where bᵀD⁻¹b − zᵀ(I + WᵀW)⁻¹z cancels when b lies along a heavy direction. The projection β − QQᵀβ takes two passes, the second removing what the first left.
+- *Functions of I + WWᵀ.* `Solve`, `Sample` and `SampleInnovation` apply g(I + WWᵀ)x = x + Q·diag(g(1 + λ²) − 1)·Qᵀx, with each g − 1 written without cancellation for small λ.
+- *Draws are through symmetric roots,* not a triangular factor. `Sample` maps z to N(0, Σ) by D^(½)(I + WWᵀ)^(½)z, and `SampleInnovation` maps it to N(0, Σ⁻¹) by D^(−½)(I + WWᵀ)^(−½)z.
+- *The trade-off is the setup.* Each construction runs a Jacobi thin SVD, and calibration constructs one on every σ² proposal: 1.4 ms at m = 20 with 39 columns before the residual set's compression, and 33 µs after. Where sizes make that binding, the Cholesky factor of the capacitance matrix, O(m·k² + k³), is the cheaper route ([N15](./BayesianRegression.md#bass-calibration)).
+
+**Checked** (`DiagonalPlusLowRankTests`), against the dense Σ factored by `DenseCholesky`.
+- `LogDet` and bᵀΣ⁻¹b to 10⁻¹¹ and solves to 10⁻¹⁰, from r = 0 to a wide 3 × 5 factor, with a zero weight and a repeated column among them.
+- The draw maps are linear, so they can be summed exactly over the standard basis. `Sample`'s covariance equals Σ to 10⁻¹³ of its largest diagonal entry, and Σ times `SampleInnovation`'s is the identity to 10⁻¹².
+- With D = I, one column of weight 10¹⁶ and b along it, the quadratic form of about 10⁻¹⁷ holds to 10⁻¹⁰ relative, where the Woodbury subtraction is off by more than half.
+
 ### Factor status (`FactorStatus`)
 
-After each factorization, every factor sets `Status`. It reports what the factorization found and leaves the decision to the caller. The pivots are the Schur-complement diagonals $d_j$ before flooring: $\ell_{jj}^2$ or $D_j$.
+After each factorization, every Cholesky factor sets `Status`. It reports what the factorization found and leaves the decision to the caller. The pivots are the Schur-complement diagonals $d_j$ before flooring: $\ell_{jj}^2$ or $D_j$.
 
 | Member | Meaning |
 |---|---|
@@ -324,16 +371,13 @@ $$X_k=\sum_j x_je^{-2\pi ijk/n},\qquad x_j=\frac1n\sum_kX_ke^{+2\pi ijk/n}.$$
 
 ### PCA and FastICA
 
-**`Pca.Compute`** centers the data by default. With `center=false` it analyses the raw second moment instead. It then chooses a route:
-
-- **Primal** ($d\le n$): the biased covariance $\frac1nX_c^\top X_c$.
-- **Dual** ($d>n$): the Gram matrix $\frac1nX_cX_c^\top$, with components $v_i=X_c^\top u_i/\sqrt{n\lambda_i}$ (zero if $\lambda_i\le10^{-12}$).
+**`Pca.Compute`** centers the data by default. With `center=false` it analyses the raw second moment instead. It reads the components from the [thin SVD](#thin-svd-thinsvd) of that matrix, without forming a covariance or a Gram matrix: component i is the i-th right singular vector, and its eigenvalue is $\lambda_i=\sigma_i^2/n$, the biased variance. `PcaParityTests` checks the subspace and eigenvalues against base R's `prcomp`.
 
 Outputs:
 
 - `ExplainedVarianceRatio` is $\lambda_i/\sum_{\lambda>0}\lambda$ over the full spectrum.
 - Whitening scales the components in place by $1/\sqrt{\lambda_i+10^{-8}}$.
-- Component signs are arbitrary.
+- Each component is signed so that its largest-magnitude entry is positive, the first on ties (`Pca.Orient`).
 
 **`FastIca`** runs on PCA-whitened data with the logcosh contrast ($g=\tanh$) and the one-unit update $w^+=\overline{z\,g(w^\top z)}-\overline{g'(w^\top z)}\,w$. It supports `Deflation` and `Symmetric` modes. See [Status](#status-and-caveats).
 
@@ -347,7 +391,7 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
 
 ### Performance notes
 
-- **SIMD.** `MatrixOps.Dot` and `ScaledSubtract` take the `Vector512` path when it is accelerated (length ≥ 8), otherwise `Vector256`, then a scalar tail. They underlie every LOBPCG projection and norm and PCA's Gram matrix. `EigenFast` uses `Vector256`, with optional FMA.
+- **SIMD.** `MatrixOps.Dot` and `ScaledSubtract` take the `Vector512` path when it is accelerated (length ≥ 8), otherwise `Vector256`, then a scalar tail. They underlie every LOBPCG projection and norm, `ColumnGramMatrix`, and `ThinSvd`'s reflections. `EigenFast` uses `Vector256`, with optional FMA.
 - **`unsafe`.** `EigenFast` is the only `unsafe` code. It uses `fixed` pointers over the input, the pooled working copy and the output span.
 - **Pooling and allocation.** `EigenFast` and its wrappers use `ArrayPool<double>`. LOBPCG preallocates its $O(nk)$ blocks. Operators precompute their arrays so that `Apply` allocates nothing.
 - **Reproducibility.** Dot-product summation order depends on the SIMD width, so the last bits of results can differ between CPUs.
@@ -394,7 +438,8 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
 |---|---|
 | Dense eigen | `DenseEigen.cs`, `EigenFast.cs`, `Eigen.cs`, `SpectralMath.cs` |
 | Iterative eigen | `Lobpcg.cs`, `DenseSymmetricOperator.cs` |
-| Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `BorderedCholesky.cs`, `FactorProposal.cs`, `WideBandCholesky.cs` (with `SpdFactors`), `FactorStatus.cs`, `ISpdFactor.cs`, `ConditionEstimate.cs` |
+| Thin SVD | `ThinSvd.cs` |
+| Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `BorderedCholesky.cs`, `FactorProposal.cs`, `WideBandCholesky.cs` (with `SpdFactors`), `FactorStatus.cs`, `ISpdFactor.cs`, `ConditionEstimate.cs`, `DiagonalPlusLowRank.cs` |
 | Contractions | `KhatriRao.cs`, `InnerProduct.cs` |
 | Transforms and statistics | `Fft.cs`, `PCA.cs` (`Pca`), `ICA.cs` (`FastIca`), `WelfordMahal.cs` (`OnlineMahalanobis`) |
 | Kernels | `MatrixOps.cs`, `PairwiseSum.cs` |
