@@ -51,7 +51,8 @@ public sealed class BassFlatHistogramQualificationTests
 {
     // Master seeds no pilot or earlier harness uses: the band measurement and the reference path took 53 and its tree, 2026
     // and 4101–4202; this chip's checks 7101–7804, its sizing 8101.
-    private const int ArmOneSeed = 8017, ArmTwoSeed = 8027, SmcSeed = 8039;
+    internal const int ArmOneSeed = 8017;
+    private const int ArmTwoSeed = 8027, SmcSeed = 8039;
     private const double LowerSplit = 0.10;
     private const double Bound = -864.6, PilotsOwn = -887.15;
     private const int Chains = 4;
@@ -88,7 +89,7 @@ public sealed class BassFlatHistogramQualificationTests
         Tempering = new TemperingSpec { Form = TemperedForm.Linear, ReferenceRung = reference, HotEnd = reference ? null : LowerSplit },
     };
 
-    private static BassConfig ArmConfig(bool reference, long? gainStart, int seed)
+    internal static BassConfig ArmConfig(bool reference, long? gainStart, int seed)
     {
         BassMixing.Fixture f = Fixture.Value;
         var spec = new BassFlatHistogramSpec

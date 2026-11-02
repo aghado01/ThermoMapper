@@ -62,10 +62,11 @@ public sealed class BassQualificationRecoveryTests
     }
 
     // The surfaces, each with its truth at the training points; F-M2's measurements (BassMixing) read them too. Friedman's
-    // takes its sample size n, S10's 500 by default; its cases come in stream order, so a larger n extends S10's.
-    internal static (BassData Data, double[] Truth) Friedman(int n = 500)
+    // takes its sample size n, S10's 500 by default; its cases come in stream order, so a larger n extends S10's; another
+    // seed draws fresh cases.
+    internal static (BassData Data, double[] Truth) Friedman(int n = 500, int seed = 51)
     {
-        var rng = new Xoshiro256PlusPlus(seed: 51);
+        var rng = new Xoshiro256PlusPlus(seed);
         const int p = 10;
         var x = new double[p][];
         for (int v = 0; v < p; v++) x[v] = new double[n];

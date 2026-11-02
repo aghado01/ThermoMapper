@@ -29,7 +29,7 @@ public sealed class BassMixingExitProfileTests
     public BassMixingExitProfileTests(ITestOutputHelper output) => _out = output;
 
     // A greedy search's end: the state, its passes, whether its last pass still gained, its knots' total displacement.
-    private sealed record Search(BassState End, int Passes, bool AtLimit, int Displacement, int Steps);
+    internal sealed record Search(BassState End, int Passes, bool AtLimit, int Displacement, int Steps);
 
     // One term's profile death: its plain death's Δℓ, the 5-pass search, and the run on where that stopped at its limit.
     private sealed record Profiled(BassTerm Term, double Plain, Search Profile, double ProfileChange, Search? Longer, double LongerChange)
@@ -90,7 +90,7 @@ public sealed class BassMixingExitProfileTests
     }
 
     // The greedy knot search from `start`, at most `limit` passes, through one design's proposals; the end loaded afresh.
-    private static Search Greedy(BassModel model, BassState start, int limit)
+    internal static Search Greedy(BassModel model, BassState start, int limit)
     {
         BassDesign design = model.NewDesign();
         Assert.Null(design.Load(start.Terms));
