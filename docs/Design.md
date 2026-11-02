@@ -150,7 +150,7 @@ Independent random processes get independent streams, so changing one never shif
 
 ```csharp
 public static int[] Derive(int master, int count)
-public static int? Derive(int? baseSeed, double temperature, int replica, int round = 0, int quantizationFactor = DefaultTemperatureQuantizationFactor)
+public static int? Derive(int? baseSeed, double temperature, int replica, int round = 0)
 ```
 
 The first line is `SeedTree.Derive`. The second is the SPC per-task seed, which folds in the temperature and replica.

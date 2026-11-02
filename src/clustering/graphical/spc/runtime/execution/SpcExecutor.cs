@@ -345,8 +345,7 @@ public sealed class SpcExecutor : ISpcExecutor
             baseSeed,
             temperature,
             replica: replicaIndex,
-            round: 0,
-            quantizationFactor: executionOptions.TemperatureQuantizationFactor);
+            round: 0);
     }
 
     public static string GetCheckpointFileName(double temperature, int replicaIndex)

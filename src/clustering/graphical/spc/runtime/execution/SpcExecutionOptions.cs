@@ -37,11 +37,4 @@ public sealed record SpcExecutionOptions
     /// base seed unless the task already supplies an explicit seed.
     /// </summary>
     public int? BaseSeed { get; init; }
-
-    /// <summary>
-    /// Quantization factor for temperature-based seed derivation.
-    /// Higher values preserve more precision when the same temperature
-    /// occurs across different tasks.
-    /// </summary>
-    public int TemperatureQuantizationFactor { get; init; } = 1000;
 }

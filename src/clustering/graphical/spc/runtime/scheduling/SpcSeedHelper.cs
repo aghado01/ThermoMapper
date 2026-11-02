@@ -11,12 +11,12 @@ namespace Clustering.Graphical.SPC.Runtime.Scheduling;
 /// regardless of which strategy or executor builds it.
 /// </summary>
 /// <remarks>
-/// <para><b>Quantization.</b> Temperatures are quantized to roughly 3
-/// significant digits (factor 1000 by default) so callers that compute
-/// <c>T</c> via slightly different float paths still hash to the same
-/// bucket. Bump <see cref="DefaultTemperatureQuantizationFactor"/> on
-/// the per-call <c>quantizationFactor</c> argument when more precision
-/// is needed.</para>
+/// <para><b>Temperature.</b> The fold takes the double's own bits, so
+/// distinct temperatures get distinct streams at every scale, and a
+/// <c>T</c> reached by a different float path is a different temperature.
+/// Until 2026-11-01 it took ⌊1000·T⌋, which gave every grid point below
+/// 10⁻³ one stream per replica; that fix is a one-time seed-stream
+/// identity break.</para>
 ///
 /// <para><b>Determinism.</b> The mixer is a fixed SplitMix64 fold —
 /// <em>not</em> <see cref="System.HashCode"/>, whose per-process random
@@ -29,11 +29,6 @@ namespace Clustering.Graphical.SPC.Runtime.Scheduling;
 /// </remarks>
 public static class SpcSeedHelper
 {
-    /// <summary>
-    /// Default temperature quantization factor (3 sig-fig granularity).
-    /// </summary>
-    public const int DefaultTemperatureQuantizationFactor = 1000;
-
     /// <summary>
     /// Derive a per-task seed from a base seed and the discriminating
     /// task coordinates. Returns <see langword="null"/> when
@@ -48,21 +43,16 @@ public static class SpcSeedHelper
     /// <param name="round">Refinement-round index. Use 0 when the
     /// workload has no round dimension (most fixed-grid sweeps and
     /// raw task lists).</param>
-    /// <param name="quantizationFactor">Temperature quantization
-    /// factor; defaults to
-    /// <see cref="DefaultTemperatureQuantizationFactor"/>.</param>
     public static int? Derive(
         int? baseSeed,
         double temperature,
         int replica,
-        int round = 0,
-        int quantizationFactor = DefaultTemperatureQuantizationFactor)
+        int round = 0)
     {
         if (baseSeed is null) return null;
-        int tQuantized = (int)(temperature * quantizationFactor);
 
         ulong h = Mix((uint)baseSeed.Value);
-        h = Mix(h ^ (uint)tQuantized);
+        h = Mix(h ^ BitConverter.DoubleToUInt64Bits(temperature));
         h = Mix(h ^ (uint)replica);
         h = Mix(h ^ (uint)round);
         return (int)(h ^ (h >> 32));

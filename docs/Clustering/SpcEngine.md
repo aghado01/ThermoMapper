@@ -175,7 +175,7 @@ With D retained draws:
 
 ### Execution, seeds and checkpoints
 
-- **Seeds.** `SpcSeedHelper.Derive` folds (base seed, $\lfloor T\cdot f\rfloor$, replica, round) through the SplitMix64 finalizer, with f = 1000. The result is stable across processes and platforms. Temperatures are truncated to an absolute resolution of $10^{-3}$, and the conversion assumes $|T f|<2^{31}$.
+- **Seeds.** `SpcSeedHelper.Derive` folds (base seed, the bits of T, replica, round) through the SplitMix64 finalizer. The result is stable across processes and platforms. Distinct temperatures get distinct streams at every scale, up to the birthday bound of a 32-bit seed. A T reached by a different float path is a different temperature.
 - **Worker budget.**
   - Auto: $\max(1,L-\min(R,L-1))$, reserving R = 2 of L logical cores.
   - Explicit: clamped to $[1,L]$.
@@ -210,15 +210,15 @@ With D retained draws:
 | `FixedGridSweepConfig` SusceptibilityKind / BaseSeed / CheckpointDirectory | `FkCluster` / null / null | Primary χ; OS entropy; no checkpoints (`NullFrameSink`) |
 | `FixedGridSweepConfig` Sampler / Parallelism | `new PottsModelConfig()` / `new WorkerBudgetPolicy()` | — |
 | `AutoGridFixedSweep.BuildConfig` | 12 steps, cold 0.05, hot 5.0, sweep (200, 400), equilibrium (1000, 5000) | — |
-| `SpcExecutionOptions` FrameSink / BaseSeed / TemperatureQuantizationFactor | null (disk sink) / null / 1000 | — |
+| `SpcExecutionOptions` FrameSink / BaseSeed | null (disk sink) / null | — |
 | `WorkerBudgetPolicy` MaxWorkers / ReservedCores | null (auto) / 2 | — |
 
-The fixed-grid sweep builds its own execution options. It pre-derives seeds with the default quantization factor, so `SpcExecutionOptions.TemperatureQuantizationFactor` has no effect on that path.
+The fixed-grid sweep builds its own execution options and pre-derives each task's seed from `FixedGridSweepConfig.BaseSeed`.
 
 ## Status and caveats
 
 - **The bracket heuristic scales with J².** $\hat T$ is quadratic in the coupling scale, although temperature should scale linearly with J. Check the bracket when couplings are rescaled.
-- **Duplicate grid temperatures collide.** With a `BaseSeed`, temperatures that truncate to the same $\lfloor 1000\,T\rfloor$ (for example, every grid point below $10^{-3}$, and pairs among the q-only bracket's coldest points at 48 steps) get the same seed for a given replica. Temperatures that format to the same 5-decimal string also share a checkpoint path, and with a checkpoint directory set they are written concurrently.
+- **Near-duplicate grid temperatures share a checkpoint path.** Temperatures that format to the same 5-decimal string (117 of the 289 points on a log grid over $[10^{-6}, 0.3]$) share one, and with a checkpoint directory set they are written concurrently. With a `BaseSeed`, only exactly equal temperatures share a seed for a given replica.
 - **Resume works per task.** The SPCX resume state (spins and RNG) is saved, but `Restore` has no caller. Resuming means skipping each task whose checkpoint file already exists. The loaded file is not checked against the task's budget, accumulation or Q, so reuse a checkpoint directory only with an identical configuration.
 - **Couplings must be non-negative.** This is assumed but not checked. A negative coupling gives a bond probability below 0, contrary to the kernel's documentation.
 - **`SpcExecutor.BuildTaskList` with an explicit `baseSeed`.** It stamps that same seed on every task, so all temperatures and replicas share one stream. The production sweep derives distinct seeds per task and is unaffected.
