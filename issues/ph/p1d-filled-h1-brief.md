@@ -113,9 +113,12 @@ under `Intersection`. With triangles it can also be a void and a cycle. Fixed.
 **Cost.** The suite took 51 s on one run and 20 s on the next, at `xUnit.MaxParallelThreads=4`, against 19 s before these
 checks. The spread is machine load, so the checks add little.
 
+**Checked against the source afterward.** Theorem 7 of Dey & Hou 2022 (`2204.11080v2.md`, in the user's library) gives the
+interval rules, for a diamond at position j. Under them a bar ending at j−1 through the union ends at j through the
+intersection, and a bar ending at j ends at j−1. The first pair both die on a forward arrow and the second on a backward
+one, and starts map the same way. So the prediction is a direct reading of the theorem, not only my derivation.
+
 ## Not verified
 
-- **The events' independence from the transition is my derivation,** confirmed by the runs on the counts above and not
-  read in the theorem.
 - **Representatives.** `FastZigzag` gives none for bars born by a deletion, and its docs mark representatives above H₀
   unverified. So a `Flag` bar reports that it was filled, but cannot yet reliably name the cycle.

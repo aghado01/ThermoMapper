@@ -30,9 +30,9 @@ ultrametricity test, relative zigzag.
 - **The convenience entry reports only exact degrees** (below the skeleton's top), so it does not carry the H₂
   truncation artifact `ComputeBarcode` documents. `RelativeFiltration` itself reports every degree.
 - **Correction to the design notes: this is not VSMJ2011.** The notes say the relative flavour "needs the VSMJ2011
-  machinery". Their relative objects are H(K, K_i), against the moving stage of the filtration. H(K_δ, K₀) against a
-  fixed K₀ is ordinary persistence of the quotient, so it costs far less than those notes assumed. (Their definition
-  is from memory; the abstract I could read is consistent with it and does not state it.)
+  machinery". Their relative modules (§2.4) are H(Xₙ, Xᵢ), the whole complex against the moving stage, with surjective
+  chain maps. H(K_δ, K₀) against a fixed K₀ has injective ones and is ordinary persistence of the quotient, so it costs
+  far less than those notes assumed. (Written from memory first; checked against the paper afterward, see below.)
 - **Frames carry vertex sets**, because a sliding window has points entering and leaving. The convenience builders
   keep every vertex in every frame.
 - **The between-frames order is an option, `FrameTransition { Union, Intersection }`, default `Union`.** Correction to
@@ -144,12 +144,44 @@ Checks added after the first run, so not pre-registered:
 | R11 | `ComputeRelativeBarcode` at `maxDimension` 3 and 1 | No H₂; H₀ only |
 | Z11 | Random frames with vertex churn (40 trials, both transitions) | Read-back equals direct decomposition of the coarse module |
 
-## Not verified
+## Checked against the sources afterward
 
-- **The Diamond Principle's degree shift is confirmed by the runs on graph sequences, not by reading the theorem.** The
-  source I could read gives the bijection and the section (Carlsson & de Silva 2010, §5), not the shift.
-- **VSMJ2011's relative objects being H(K, K_i)** is from memory, consistent with the abstract. The relative reading
-  does not depend on it; only the note that the older design notes overstated the cost does.
+The user pointed me at their library (`graveyard/bibliotecha/bibliotecha/compendia/ph`), which settled both claims this
+brief had left unread.
+
+- **VSMJ2011's relative modules** are H(Xₙ, Xᵢ) with i moving (§2.4), and the paper's remark in that section says their
+  chain maps are surjective. Confirmed.
+- **The Diamond Principle's degree shift.** Carlsson, de Silva and Morozov 2009 (`CDSM2009.md`) pair a transient of degree
+  p at the intersection with one of degree p+1 at the union, and every other bar keeps its degree. Confirmed. The interval
+  rules are in Theorem 7 of Dey & Hou 2022 (`2204.11080v2.md`).
+
+## What VSMJ's Prop 2.4 suggested: R12
+
+Their Prop 2.4 says their absolute and relative barcodes carry the same information, with a degree shift for finite bars.
+A fixed K₀ has an analogue, which I derived after reading it and added as a check after the fact:
+
+| Absolute bar, run with K₀ strictly first | Relative bar |
+|---|---|
+| Born outside K₀ | The same bar |
+| Born in K₀, killed outside it at δ | [δ, ∞), one degree up |
+| Born in K₀, essential or killed within K₀ | None |
+
+**The argument.** With K₀'s rows lowest in the boundary matrix, deleting them leaves every pivot outside K₀ as it was. A
+column whose pivot was in K₀ reduces to zero, so it becomes a birth. That cell was negative in the absolute run, so no
+column has it as a pivot, and the new class is essential.
+
+**The check.** R12 passes on 200 random trials: 427 bars kept, 64 moved up, 1184 dropped. The complexes stop at triangles,
+so no higher cell could have killed a moved-up class; "essential" there rests on the argument above.
+
+**What it means for the design notes.**
+
+- The notes call absolute and relative "two questions", the relative one giving features "orthogonal to" the backbone.
+  With K₀ first they are one barcode read two ways. The relative reading adds a reading, not information. That is not an
+  objection to it: it says which bars the prior already explains.
+- `ComputeBarcode` does not run K₀ first. K₀ ties at 0 with the vertices outside it and with content at residual 0, so
+  its output alone doesn't determine the relative barcode. A run with K₀ strictly first does.
+- A second reduction is not strictly needed, so a faster path exists in principle. It is not built: the involuted path's
+  H₀ union-find inverts the elder rule when vertex births differ (`docs/TDA/PersistentHomology.md`), which K₀-first needs.
 
 ## Status of the PH-for-SPC ideas
 
