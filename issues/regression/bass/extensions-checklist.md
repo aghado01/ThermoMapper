@@ -36,8 +36,18 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E28** Bases that mix term types (lead).
 - [ ] **E29** Categorical levels: learned positions and a similarity readout (lead).
 - [ ] **E30** Choosing the next runs.
+- [ ] **E31** Tree ensembles, with BCF's multiplier.
+- [ ] **E32** Additive models with a GP component.
+- [ ] **E33** Regression-family integration.
 
 ## Reports
+
+### The post-BASS notes read against the code — 2026-11-02
+
+[Gemini's digest](../discussion/gemini-post-bass-feedback.md) of the Perplexity threads, checked against the code and the threads by the main session. New: [Upgrades to existing code](extensions-brief.md#upgrades-to-existing-code), E31, E32, E33 and a paragraph under cross-engine evidence, each tied to the idea it came from. What the lineage review already held is not repeated.
+- *Corrections to the digest.* BASS is not smooth by default, since `Degree = 1` has kinks. `BlockScan` snapshots do not copy state in BASS or BARS, which pass an identity and save state themselves. Loss-based updating is not for later, since `GibbsLossModel` is already a Gibbs posterior. BCF's `aᵢ = zᵢ` is one coding. The forest-tempering caveat needs no forest-integrated form, by a reading untested.
+- *What it dropped.* The threads' order, with trees last, and their scope question.
+- *Limits.* No code changed, and the from-memory citations are marked where they appear.
 
 ### The lineage review landed — 2026-11-02
 

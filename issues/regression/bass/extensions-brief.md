@@ -33,7 +33,24 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Bases that mix term types (E28) | None known | Fitting: the design-kernel contract, E21. E19 | Lead |
 | Categorical levels: learned positions and a similarity readout (E29) | Zhang, Tao, Chen and Apley 2020 | Fitting: the design-kernel contract. Retained draws | Lead |
 | Choosing the next runs (E30) | Binois et al. 2019; Ranjan, Bingham and Michailidis 2008; Watson and Pelli 1983 | Predictive draws, a noise model that varies with x | Candidate |
+| Tree ensembles, with BCF's multiplier (E31) | Chipman, George and McCulloch 2010; Hahn, Murray and Carvalho 2020; [the notes](../perplexity-bart-etc.md) | Samplers: `BlockScan`, `IRjMove`, the target's separable case. A leaf contract beside `IObservationModel`. Readouts: declared smoothness | Candidate |
+| Additive models with a GP component (E32) | [The notes](../perplexity-bart-etc.md) | BGP: `y` per fit, σ² from outside with s² free, a declared mean. Fitting: the marginal given σ² | Candidate |
+| Regression-family integration (E33) | [The notes](../perplexity-bart-etc.md) | Every family: an inventory, declared capabilities, four verdicts | Candidate |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
+
+## Upgrades to existing code
+
+Existing code that entries below would otherwise each change on their own, with the ideas that call for it, read against the code on 2026-11-02. These can be built whenever the user chooses, without waiting for an entry to start (the user, 2026-11-02). An analysis of an entry counts them as part of its work, not as reasons it cannot be done.
+
+| Upgrade | Today | Called for by |
+|---|---|---|
+| Weighted Gram, centring and marginal in the BASS core | `BassDesign` refuses weights, while the shared `CollapsedGPrior` already takes them for BARS | E1, E20, E22 through E20, E31's multiplier |
+| The structure step's marginal given σ² | D04 integrates σ² out, and `gprior/` has no form given σ² | E1's mode with σ² held, E20's probit, E32 with BASS as a component |
+| Priors that stop reading a moving response | `BassResolved.Resolve` reads the response for σ²'s scale and the level | E20, E32 |
+| Truncated draws | `Truncated<T>` cannot draw, and `IContinuousDistribution` has no draw. So these are probably per family: a tail-stable normal, a gamma and an inverse gamma | E20's probit and discrete-time survival; F-R1's [`s2.lower` arm](deterministic-profile-brief.md#for-a-rerun) |
+| Quantiles for the rest | `Normal`, `Weibull` and `HalfCauchy` have them; `Gamma`, `InverseGamma`, `StudentT` and `Beta` do not | Truncated draws by inversion, and a complete family |
+| `GpRegression` on a changing response | `y` is fixed at construction, and a known σ² forces s² = 1 | E32 |
+| Declared complete densities | Prose on `LadderEvidence` | [Cross-engine evidence](#cross-engine-evidence), E33 |
 
 ## Generalized-hyperbolic noise (GBMARS)
 
@@ -158,6 +175,8 @@ Evidence for BARS, BASS and BGP by path sampling (derivations review §7, item 8
 - It also needs the same base model. With improper priors on the common parameters, Bayes factors depend on whether they are null-based or full-based (Liang et al. §2); BASS's centred marginal (`CollapsedGPrior.CentredMarginalAt`) is null-based.
 - Cost: a truncated σ² or intercept changes the collapsed integrated form (incomplete-gamma and normal-CDF terms in place of the closed form).
 - It is an option, not a gap: D03's proper defaults already give evidence.
+
+**Complete densities, declared (added 2026-11-02, from [the notes'](../perplexity-bart-etc.md) capability list).** `LadderEvidence` needs complete densities, and that condition is prose on the class. Its callers guard it themselves: BASS through D03, and BARS's guard was not read. Most missing capabilities fail loudly, but a target with incomplete densities still returns a number. So a target should declare it, on `ISamplingTarget`, and `FromLadders` and `FromSmc` should refuse without it.
 
 ## The free-energy curve over the ladder
 
@@ -293,7 +312,7 @@ F-X1 hands the core a working response and weights, so any observation model tha
   - σ² held at 1, for identification, which the sweep has no way to do today. D04 integrates σ² out of the structure step, so this also needs the marginal given σ², from the same S and determinant term. D04's generalized-hyperbolic mode needs that form as well when σ² is not integrated;
   - priors that stop reading the response. D03's σ² scale and level-centred intercept read it through `BassResolved.Resolve`, and here the working response moves every sweep;
   - the latent state and its block in F-X2's slot, as for GBMARS, with the cross-products recomputed each time the latents move;
-  - a truncated-normal draw, tail-stable and qualified apart from density evaluation. `Truncated<T>` cannot draw today.
+  - a truncated-normal draw, tail-stable and qualified apart from density evaluation. `Truncated<T>` cannot draw today ([the upgrade](#upgrades-to-existing-code)).
 - **Putting the offset back.** Prediction and the pointwise densities read y today, not y − offset (the F-X1 report).
 - **Groups.** A heavy-tailed scale per declared group, rather than per observation, is GBMARS's latent indexed differently, and it gives units sharing a group joint extremes (E22).
 - **Mixtures.** A Dirichlet-process mixture of normals hands the core (y − μᵢ, 1/σᵢ²). Its mixing law is shared across x, so it gives an irregular residual, not heteroscedasticity, and its components are a density estimate rather than discovered populations.
@@ -388,6 +407,31 @@ Step five of the simulator workflow, for which no seam exists: where to run next
 - **Unread, closest on the lineage's side:** Hutchings et al. (arXiv 2405.16298), active learning for functional output.
 
 All of these are from memory or from the [evals note](../opus-bayesian-evals.md), to be read before this entry starts.
+
+## Tree ensembles, with BCF's multiplier (E31)
+
+BART (Chipman, George and McCulloch 2010) and its relatives, as a regression family of their own beside BARS and BASS. The source is [the notes](../perplexity-bart-etc.md) and [Gemini's digest of them](../discussion/gemini-post-bass-feedback.md), whose code claims were checked on 2026-11-02. The notes read the repo at `440d8a7`, before the extension seams. The reading list (SBART, DART, GP-BART, survival and NFT BART, XBART) stays in them, and the [lineage review](lineage-review.md#against-the-notes-in-issuesregression) has the engine boundary.
+- **A leaf contract beside `IObservationModel`, from BART's backfitting.** The update integrates one tree's leaves given partial residuals and a shared σ²: `LogIntegratedLeafLikelihood(stats, noiseVariance, leafPrior)` and `SampleLeaf`, over a leaf's count, Σr and Σr². Indicator columns in a design would lose those O(n) statistics.
+- **The component multiplier, from BCF.** A tree's contribution is aᵢ·g(xᵢ), so the count and Σr become Σa² and Σa·r. aᵢ = zᵢ is only one coding, under which controls say nothing about the treatment forest. Hahn, Murray and Carvalho's (2020) invariant coding, b_{zᵢ}, lets them inform it (from memory, unread here). So the contract takes any known aᵢ.
+- **The scan, from forests' mutable state.** Grow and prune fit `IRjMove` as BASS's collapsed moves do, with no coefficient map. A forest holds cached predictions and leaf assignments, so `BlockScan`'s `copy` has to be real. BASS and BARS pass an identity, since each saves its state itself (`BassSweep.cs:512`, `BarsEnsemble.cs:452`). A resume bit-identity test catches a wrong one.
+- **Block order, from the digest's fixed pipeline.** It puts shrinkage last, while D04 puts τ second because τ's block integrates the coefficients out. A partially collapsed sampler can lose its target when reordered (van Dyk and Park 2008, from memory). So each family declares its order and checks it by enumeration, or by Geweke's joint test (2004, from memory) where the space is too large to enumerate. The repo has no Geweke test.
+- **Tempering a forest (a reading here, untested).** The notes warn that one tree's integrated likelihood under b is not the forest's. That is true, and no forest-integrated form is needed. Temper the joint target, prior × p(y | trees, leaves, σ²)^b. Integrating one tree's leaves out, given the rest, is a valid conditional of that target. Swaps read b·ℓ₁ on the full state once the leaves are drawn, `ITargetEvaluation`'s separable case. The joint's margin on the structures is the integrated form, not the linear one.
+- **Readouts, from SoftBART and ridgeBART.** A standard BART draw is piecewise constant, so derivatives and peak counts need a smooth variant. No generic posterior-function contract exists for one to fall through today: `SplineExtrema` is BARS's own. The digest's "smooth" overstates BASS as well, whose default `Degree = 1` has kinks at its knots. So a shared posterior-output contract declares smoothness, which BASS needs as much as trees do.
+
+## Additive models with a GP component (E32)
+
+y = g(x) + f(x) + ε, with g a GP and f a forest or BASS, and treed GPs. The source is [the notes](../perplexity-bart-etc.md), and the question they left open was checked on 2026-11-02.
+- **`GpRegression` today.** It fixes `y`, its shift and the squared distances at construction. A known σ² sets s² = 1, and the unknown-scale mode learns both.
+- **What it needs.** `y` per fit, which the distances do not read; σ² given from outside with s² free; and a declared mean, in place of the training mean it subtracts today. `BgpSampler` follows.
+- **The other component.** BASS needs the marginal given σ² ([above](#upgrades-to-existing-code)). The lineage review's warning stands: such a sum is a new model, with centring to declare and component recovery to test.
+
+## Regression-family integration (E33)
+
+[The notes](../perplexity-bart-etc.md) put this after the spline families, with trees last as a test that the engine is basis-agnostic. They also pose a scope question, a library of qualified families or a general model-definition system, and favour the library.
+- **A capability inventory.** For BARS, BAPS, the hierarchical P-spline, BGP and BASS: what each can evaluate, integrate, draw conditionally, predict, resume, temper and report as evidence. Each gap is marked as an upgrade to make or as true by the nature of the model. The [completion matrix](completion-audit-matrix.md) covers BASS against R, and the lineage review's axes seed the rest.
+- **Declared capabilities.** Partly there: `CanTemperLikelihood` and `CanTemperToPrior` on BARS's model, and `BassConfig.Validate`'s refusals. `ITargetEvaluation` refuses a b or a slope by exception at first evaluation, so after a run starts. The inventory decides what else earns a declaration. Evidence's is [above](#cross-engine-evidence).
+- **Four verdicts.** Target correctness, computational adequacy, predictive adequacy and evidence qualification, each certified apart. F-R1 is the example: the oracle and enumeration checks pass while no arm clears the R̂ gate. `ConvergenceVerdict` reads computational adequacy alone. A new family's qualification report reads by these four.
+- **No composition layer.** `BlockScan` and `IBlock` already compose blocks, for collapsed BASS and explicitly blocked BAPS alike. What the notes' own sequence asks for is contracts on block invariance, tempering semantics, normalization and restart.
 
 ## Direct-functional BASS for families of SPC sweeps
 
