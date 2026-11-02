@@ -213,6 +213,7 @@ Each was measured on iris, the BWD toy, Landsat and BlattHierarchy under two ker
 - *Largest against midpoint, yes, and the direction firms up.* See below.
 - *Landsat's cost, yes.* The first forms' high purity there belongs to K = 5: at K = 10 and 20 they pass the parity assertions on 1 and 2 of 12 seeds, at purity 0.55 and 0.59.
 - *The toy, yes.* The stripes hold at K = 10 and 20, and at K = 5 the graph breaks them up (2 of 12 seeds), whichever representative is used.
+- *Iris's first stage, on this graph.* One edge joins setosa to the rest. Under the Gaussian at K = 5 it has $J=1.7\cdot10^{-7}$, shut at every level swept, so the graph enforces the split, and the iris row below measures the representative's capture of a split it couldn't lose. Under a Cauchy at K = 10 it has $J=0.0067$ and opens inside the grid, and there the resolver follows it: one lineage of 150 at T\* = 0.001, then setosa's whole 50 plus the pair from 0.005 up, on 12 of 12 seeds.
 
 Only K and the coupling were varied. The filter, the repair, the bandwidth rule, the gauge, q and θ were not, and each of those findings could still move with them.
 

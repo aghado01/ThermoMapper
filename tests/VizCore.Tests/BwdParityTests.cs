@@ -348,6 +348,11 @@ public sealed class BwdParityTests
     /// MST repair (15 edges), Gaussian at the mean edge length over the repaired edges, gauge 1/K̂, no LMP, q = 20.
     /// Other graphs read otherwise: shared-neighbour couplings at K = 5 read the species with setosa in pieces,
     /// and the species' T* moves with K (about 0.11 at K = 10, none at K = 15), so T* doesn't carry over.
+    ///
+    /// What can fail here: the count of lineages, setosa being whole (the old representative kept 5 to 44 of its 50
+    /// points), and the species slice. What can't: setosa staying unmixed. This graph joins it to the rest by one repair
+    /// edge at J = 1.7e-7, shut at every level of the grid, so the graph enforces that split (primer §13.17).
+    /// <see cref="LineagePersistence_IrisCauchy_TracksTheSetosaBridge"/> tests the split itself.
     /// </summary>
     [Fact]
     public void LineagePersistence_Iris_ReadsTheFirstStage_AndTheSpeciesByTemperature()
@@ -460,6 +465,63 @@ public sealed class BwdParityTests
         return n >= 30 && lineage.Members.All(p => trueLabels[p] != 0)
             && lineage.Members.Count(p => trueLabels[p] == 1) >= 0.2 * n
             && lineage.Members.Count(p => trueLabels[p] == 2) >= 0.2 * n;
+    }
+
+    /// <summary>
+    /// TRACK 2 on an iris graph where the setosa bridge is felt, so the split can fail. Under a Cauchy kernel at K = 10 the
+    /// one edge joining setosa to the rest has J = 0.0067, which clears δ̄ = 0.5 near T = J/ln 21 = 0.0022, inside this
+    /// grid. The resolver follows it: one lineage of 150 below, setosa's whole 50 plus the pair above. The T_fs window
+    /// (near 0.011) sits above the bridge, so it's what keeps the longest-lived reading off the giant here. Every assertion
+    /// holds on 12 of 12 seeds at this budget and at 4 × (500, 1000), on this graph as pinned below: Euclidean kNN at
+    /// K = 10, mutual filter, MST repair (5 edges), Cauchy at the mean edge length over the repaired edges, gauge 1/K̂,
+    /// no LMP, q = 20, on 96 log steps from 1e-4 to the T_ps bracket's top.
+    /// </summary>
+    [Fact]
+    public void LineagePersistence_IrisCauchy_TracksTheSetosaBridge()
+    {
+        var dataset = SpcUserSession.FromCsv(IrisCsvPath, null, false, ',');
+        int[] trueLabels = dataset.Labels;   // 0 = setosa
+        var parity = BuildGraphConfig(k: 10, bandwidth: 0);
+        var graphConfig = parity with { Projection = (Graphs.CouplingProjection)parity.Projection with { Kernel = new Graphs.Coupling.Cauchy(0) } };
+        var graphResult = SpcGraphBuilder.BuildResult(dataset.Features, graphConfig, null);
+        AssertLineageGraph(graphResult, kernel: "Cauchy", bandwidth: 0.3645, repairEdges: 5);
+
+        var bridges = new List<double>();
+        foreach (UndirectedEdge edge in graphResult.Graph.UndirectedEdges())
+            if ((trueLabels[edge.Source] == 0) != (trueLabels[edge.Target] == 0)) bridges.Add(graphResult.Graph.Weights[edge.Slot]);
+        Assert.Equal(0.0067, Assert.Single(bridges), precision: 4);
+
+        var sweepConfig = new FixedGridSweepConfig
+        {
+            Temperatures = SpcScheduleHelpers.LogSpaceGrid(1e-4, BwdPottsCriticalEstimate.Bracket(20).Hi, 96),
+            Replicas = 1,
+            SweepBudget = new RunBudget(200, 400),
+            Sampler = new PottsModelConfig(),
+            EquilibriumBudget = new RunBudget(1, 1),
+            Accumulation = new AccumulationSpec { CoMembership = true },
+            SusceptibilityKind = Clustering.Graphical.SPC.Profiling.SusceptibilityKind.FkReduced,
+            BaseSeed = 42,
+        };
+        var sweep = new FixedGridSweepStrategy(sweepConfig).Run(graphResult.Graph, null);
+        var frames = sweep.SweepRuns.Select(r => r.Accumulator).ToArray();
+
+        LineagePersistenceResult Read(double? tStar, (double Lo, double Hi)? window = null) => SweepLineagePersistence.Resolve(
+            graphResult.Graph, frames, theta: 0.5, new LineagePersistenceConfig { MinClusterSize = 5, SliceTemperature = tStar, TemperatureWindow = window });
+        bool Separated(LineagePersistenceResult r, int setosaAtLeast) =>
+            r.Selected.Any(l => l.Members.Length >= setosaAtLeast && l.Members.All(p => trueLabels[p] == 0))
+            && r.Selected.Any(l => IsMixedPair(l, trueLabels))
+            && r.Selected.All(l => { int s = l.Members.Count(p => trueLabels[p] == 0); return s == 0 || s == l.Members.Length; });
+
+        // Below the bridge, one cluster.
+        Assert.Equal(150, Assert.Single(Read(1e-3).Selected).Members.Length);
+        // Above it, setosa whole and apart.
+        Assert.True(Separated(Read(0.005), setosaAtLeast: 50), "Setosa should be whole and apart at T* = 0.005.");
+        Assert.True(Separated(Read(0.01), setosaAtLeast: 50), "Setosa should be whole and apart at T* = 0.01.");
+
+        var plateau = Clustering.Graphical.SPC.Profiling.SpcProfileAnalysis.SpPlateau(
+            Clustering.Graphical.SPC.Profiling.SweepProfile.From(sweep.SweepRuns, Clustering.Graphical.SPC.Profiling.SusceptibilityKind.FkReduced));
+        Assert.True(plateau.CliffFound && plateau.TFs > 0.0022, $"T_fs should sit above the bridge; got {plateau.TFs:G4}.");
+        Assert.True(Separated(Read(null, (plateau.TFs, double.PositiveInfinity)), setosaAtLeast: 45), "Longest-lived above T_fs should read setosa plus the pair.");
     }
 
     /// <summary>
