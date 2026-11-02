@@ -19,6 +19,13 @@ internal interface IField
     static abstract double[] BuildHcum(CsrGraph graph);
 
     /// <summary>
+    /// The same ladder in log space, <c>ln Hcum</c> by CSR slot, built from <see cref="CsrGraph.LogWeights"/> by a
+    /// running log-sum-exp, so the rungs below the double range keep their values. A slot with no ladder entry is
+    /// <c>−∞</c> (the linear ladder's 0). Requires <see cref="CsrGraph.LogWeights"/>.
+    /// </summary>
+    static abstract double[] BuildLogHcum(CsrGraph graph);
+
+    /// <summary>
     /// When <see langword="true"/>, both directed slots of each undirected edge
     /// carry a value and the kernel symmetrizes them before clustering
     /// (LocalField). MeanField is symmetric by construction and sets this false.

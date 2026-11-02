@@ -63,4 +63,45 @@ internal readonly struct LocalField : IField
         }
         return hcum;
     }
+
+    public static double[] BuildLogHcum(CsrGraph graph)
+    {
+        double[] logWeights = graph.LogWeights
+            ?? throw new ArgumentException("The log ladder needs CsrGraph.LogWeights.", nameof(graph));
+        int[] rowPtr = graph.RowPointers;
+        int n = graph.NodeCount;
+
+        var logHcum = new double[graph.Targets.Length];
+        Array.Fill(logHcum, double.NegativeInfinity);
+
+        int maxDeg = 0;
+        for (int i = 0; i < n; i++)
+            maxDeg = Math.Max(maxDeg, rowPtr[i + 1] - rowPtr[i]);
+        if (maxDeg == 0) return logHcum;
+
+        var localSlot = new int[maxDeg];
+        var localLog = new double[maxDeg];
+
+        for (int i = 0; i < n; i++)
+        {
+            int start = rowPtr[i];
+            int deg = rowPtr[i + 1] - start;
+            if (deg == 0) continue;
+
+            for (int t = 0; t < deg; t++)
+            {
+                localSlot[t] = start + t;
+                localLog[t] = logWeights[start + t];
+            }
+
+            Array.Sort(localLog, localSlot, 0, deg);
+            double logCum = double.NegativeInfinity;
+            for (int t = 0; t < deg; t++)
+            {
+                logCum = LogLadder.LogAddExp(logCum, localLog[t]);
+                logHcum[localSlot[t]] = logCum;
+            }
+        }
+        return logHcum;
+    }
 }

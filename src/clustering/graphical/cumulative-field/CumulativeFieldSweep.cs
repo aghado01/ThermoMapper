@@ -54,4 +54,45 @@ public static class CumulativeFieldSweep
             Partitions = partitions,
         };
     }
+
+    /// <summary>
+    /// <see cref="Run"/> on a grid of log temperatures, from the log ladder: the sweep reaches the heights of a graph whose
+    /// weak couplings lie below the double range. Requires a graph with <see cref="CsrGraph.LogWeights"/>. The result's
+    /// <see cref="CumulativeFieldSweepResult.Temperatures"/> are <c>exp(lnT)</c>, which underflow to 0 past about −745;
+    /// <see cref="CumulativeFieldSweepResult.LogTemperatures"/> holds the grid itself.
+    /// </summary>
+    public static CumulativeFieldSweepResult RunLog(
+        CsrGraph graph,
+        EdgeWeightKind weightKind,
+        IReadOnlyList<double> logTemperatures,
+        Field field,
+        SymmetrizationRule rule = SymmetrizationRule.Mutual,
+        double theta = 0.5)
+    {
+        ArgumentNullException.ThrowIfNull(logTemperatures);
+        if (logTemperatures.Count == 0)
+            throw new ArgumentException("Temperature grid must be non-empty.", nameof(logTemperatures));
+
+        CumulativeFieldContext context = CumulativeFieldSolver.Prepare(graph, weightKind, field, rule);
+
+        var logs = new double[logTemperatures.Count];
+        var temps = new double[logTemperatures.Count];
+        var partitions = new Assignment[logTemperatures.Count];
+        for (int i = 0; i < logTemperatures.Count; i++)
+        {
+            logs[i] = logTemperatures[i];
+            temps[i] = Math.Exp(logTemperatures[i]);
+            partitions[i] = CumulativeFieldSolver.ClusterLog(context, logTemperatures[i], theta);
+        }
+
+        return new CumulativeFieldSweepResult
+        {
+            Field = field,
+            Symmetrization = rule,
+            Theta = theta,
+            Temperatures = temps,
+            LogTemperatures = logs,
+            Partitions = partitions,
+        };
+    }
 }

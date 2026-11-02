@@ -58,8 +58,9 @@ public static class CumulativeFieldSolver
         where TField : struct, IField
     {
         double[] hcum = TField.BuildHcum(graph);
+        double[]? logHcum = graph.LogWeights is null ? null : TField.BuildLogHcum(graph);
         int[]? mirror = TField.DirectedSymmetrize ? graph.BuildReverseSlotMap() : null;
-        return new CumulativeFieldContext(graph, hcum, TField.DirectedSymmetrize, rule, mirror);
+        return new CumulativeFieldContext(graph, hcum, TField.DirectedSymmetrize, rule, mirror, logHcum);
     }
 
     /// <summary>
@@ -142,6 +143,83 @@ public static class CumulativeFieldSolver
             EdgeFieldSymmetrization.Symmetrize(context.Graph, g, context.Mirror!, context.Rule);
 
         return new Affinities { Temperature = T, G = g, ReplicaIndex = replicaIndex };
+    }
+
+    /// <summary>
+    /// <see cref="Solve"/> at a temperature given by its log, from the log ladder: <c>G = −expm1(−exp(ln Hcum − ln T))</c>.
+    /// Reaches temperatures no double can hold: a Gaussian gap of e^−1250 cuts at <c>ln T = ln Hcum − ln 2</c> there. The
+    /// context must have been prepared from a graph with <see cref="CsrGraph.LogWeights"/>. The returned
+    /// <see cref="Affinities.Temperature"/> is <c>exp(lnT)</c>, which underflows to 0 below about −745.
+    /// </summary>
+    public static Affinities SolveLog(CumulativeFieldContext context, double lnT, int replicaIndex = 0)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        double[] logHcum = context.LogHcum
+            ?? throw new InvalidOperationException(
+                "The log solve needs a graph with CsrGraph.LogWeights (the compiler's coupling projection sets them).");
+        if (double.IsNaN(lnT))
+            throw new ArgumentOutOfRangeException(nameof(lnT), "ln T must be a number.");
+
+        var g = new double[logHcum.Length];
+        for (int e = 0; e < logHcum.Length; e++)
+        {
+            if (double.IsNegativeInfinity(logHcum[e])) continue;
+            g[e] = FkKernel.LogBondProbability(logHcum[e], lnT);
+        }
+
+        if (context.DirectedSymmetrize)
+            EdgeFieldSymmetrization.Symmetrize(context.Graph, g, context.Mirror!, context.Rule);
+
+        return new Affinities { Temperature = Math.Exp(lnT), G = g, ReplicaIndex = replicaIndex };
+    }
+
+    /// <summary><see cref="Cluster"/> at <c>ln T</c>, from the log ladder.</summary>
+    public static Assignment ClusterLog(CumulativeFieldContext context, double lnT, double theta = 0.5)
+    {
+        Affinities affinity = SolveLog(context, lnT);
+        return AffinityThreshold.Connect(context.Graph, affinity.G, theta);
+    }
+
+    /// <summary>
+    /// <see cref="EstimateBracket"/> in log space, <c>(ln lo, ln hi)</c>, from the log ladder: the same quantiles of the
+    /// positive rungs, widened by the same pads, so it brackets graphs whose weak rungs lie below the double range.
+    /// </summary>
+    public static (double LnLo, double LnHi) EstimateLogBracket(
+        CsrGraph graph,
+        EdgeWeightKind weightKind,
+        Field field,
+        SymmetrizationRule rule = SymmetrizationRule.Mutual,
+        double loQuantile = 0.02,
+        double hiQuantile = 0.98,
+        double coldPad = 0.5,
+        double hotPad = 2.0)
+    {
+        if (loQuantile < 0.0 || loQuantile >= hiQuantile || hiQuantile > 1.0)
+            throw new ArgumentOutOfRangeException(nameof(loQuantile), "Require 0 ≤ loQuantile < hiQuantile ≤ 1.");
+        if (coldPad <= 0.0 || coldPad >= 1.0)
+            throw new ArgumentOutOfRangeException(nameof(coldPad), "coldPad must lie in (0, 1).");
+        if (hotPad <= 1.0)
+            throw new ArgumentOutOfRangeException(nameof(hotPad), "hotPad must exceed 1.");
+
+        double[] logHcum = Prepare(graph, weightKind, field, rule).LogHcum
+            ?? throw new InvalidOperationException("The log bracket needs a graph with CsrGraph.LogWeights.");
+        int count = 0;
+        for (int e = 0; e < logHcum.Length; e++)
+            if (double.IsFinite(logHcum[e])) count++;
+        if (count == 0)
+            throw new InvalidOperationException(
+                "Graph carries no finite cumulative energy; cannot bracket the sweep.");
+
+        var rungs = new double[count];
+        int k = 0;
+        for (int e = 0; e < logHcum.Length; e++)
+            if (double.IsFinite(logHcum[e])) rungs[k++] = logHcum[e];
+        Array.Sort(rungs);
+
+        double lnLn2 = Math.Log(Math.Log(2.0));
+        double lo = rungs[Math.Clamp((int)(loQuantile * (count - 1)), 0, count - 1)] - lnLn2;
+        double hi = rungs[Math.Clamp((int)(hiQuantile * (count - 1)), 0, count - 1)] - lnLn2;
+        return (Math.Log(coldPad) + lo, Math.Log(hotPad) + hi);
     }
 
     /// <summary>

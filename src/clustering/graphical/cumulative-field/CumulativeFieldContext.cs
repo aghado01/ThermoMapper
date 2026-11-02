@@ -15,6 +15,9 @@ public sealed class CumulativeFieldContext
 {
     internal CsrGraph Graph { get; }
     internal double[] Hcum { get; }
+
+    /// <summary><c>ln Hcum</c> by CSR slot, when the graph carried <see cref="CsrGraph.LogWeights"/>; null otherwise.</summary>
+    internal double[]? LogHcum { get; }
     internal bool DirectedSymmetrize { get; }
     internal SymmetrizationRule Rule { get; }
 
@@ -27,10 +30,12 @@ public sealed class CumulativeFieldContext
         double[] hcum,
         bool directedSymmetrize,
         SymmetrizationRule rule,
-        int[]? mirror)
+        int[]? mirror,
+        double[]? logHcum = null)
     {
         Graph = graph;
         Hcum = hcum;
+        LogHcum = logHcum;
         DirectedSymmetrize = directedSymmetrize;
         Rule = rule;
         Mirror = mirror;

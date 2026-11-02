@@ -24,6 +24,12 @@ public sealed record CumulativeFieldSweepResult
     /// <summary>Temperatures in caller order, parallel to <see cref="Partitions"/>.</summary>
     public required double[] Temperatures { get; init; }
 
+    /// <summary>
+    /// The grid itself, <c>ln T</c>, when the sweep ran in log space (<see cref="CumulativeFieldSweep.RunLog"/>); then
+    /// <see cref="Temperatures"/> is its exponential, 0 past the double range. Null for a linear sweep.
+    /// </summary>
+    public double[]? LogTemperatures { get; init; }
+
     /// <summary>Partition at each temperature, parallel to <see cref="Temperatures"/>.</summary>
     public required Assignment[] Partitions { get; init; }
 

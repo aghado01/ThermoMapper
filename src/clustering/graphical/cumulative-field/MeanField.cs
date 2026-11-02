@@ -66,4 +66,44 @@ internal readonly struct MeanField : IField
         }
         return hcum;
     }
+
+    public static double[] BuildLogHcum(CsrGraph graph)
+    {
+        double[] logWeights = graph.LogWeights
+            ?? throw new ArgumentException("The log ladder needs CsrGraph.LogWeights.", nameof(graph));
+        int[] rowPtr = graph.RowPointers;
+        int[] targets = graph.Targets;
+        int n = graph.NodeCount;
+
+        var logHcum = new double[targets.Length];
+        Array.Fill(logHcum, double.NegativeInfinity);
+
+        int edgeCount = 0;
+        for (int i = 0; i < n; i++)
+            for (int e = rowPtr[i]; e < rowPtr[i + 1]; e++)
+                if (targets[e] > i) edgeCount++;
+        if (edgeCount == 0) return logHcum;
+
+        var slot = new int[edgeCount];
+        var logCoupling = new double[edgeCount];
+        int k = 0;
+        for (int i = 0; i < n; i++)
+            for (int e = rowPtr[i]; e < rowPtr[i + 1]; e++)
+            {
+                if (targets[e] <= i) continue;
+                slot[k] = e;
+                logCoupling[k] = logWeights[e];
+                k++;
+            }
+
+        // Ascending by log coupling, then the running log-sum-exp: the same rank-inclusive ladder, in logs.
+        Array.Sort(logCoupling, slot);
+        double logCum = double.NegativeInfinity;
+        for (int r = 0; r < edgeCount; r++)
+        {
+            logCum = LogLadder.LogAddExp(logCum, logCoupling[r]);
+            logHcum[slot[r]] = logCum;
+        }
+        return logHcum;
+    }
 }
