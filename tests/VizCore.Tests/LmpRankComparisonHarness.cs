@@ -146,6 +146,63 @@ public sealed class LmpRankComparisonHarness
         return string.IsNullOrWhiteSpace(only) ? cells : cells.Where(c => c.Id.Contains(only, StringComparison.OrdinalIgnoreCase));
     }
 
+    // ── The scorer, on hand-built partitions (always on; the harness itself is inert) ──────────
+    [Fact]
+    public void Scorer_StageNeedsExactlyKRealClustersWithDistinctMajorities()
+    {
+        // Three classes of 4; a real cluster holds at least ceil(0.4 * 4) = 2 points.
+        int[] y = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2 };
+
+        LevelEval whole = Evaluate(new[] { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2 }, y, 3, minReal: 2);
+        Assert.True(whole.Stage);
+        Assert.Equal(1.0, whole.Matched, 12);
+
+        // Two classes in one cluster: two real clusters, and the merged one credits one class only.
+        LevelEval merged = Evaluate(new[] { 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1 }, y, 3, minReal: 2);
+        Assert.False(merged.Stage);
+        Assert.Equal(2, merged.Real);
+        Assert.Equal(8.0 / 12.0, merged.Matched, 12);
+
+        // One giant cluster of everything is one real cluster and credits one class: 4/12, not 12/12.
+        LevelEval giant = Evaluate(new int[12], y, 3, minReal: 2);
+        Assert.False(giant.Stage);
+        Assert.Equal(4.0 / 12.0, giant.Matched, 12);
+
+        // A class split in two real halves is four real clusters, with a repeated majority.
+        LevelEval split = Evaluate(new[] { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3 }, y, 3, minReal: 2);
+        Assert.False(split.Stage);
+        Assert.Equal(4, split.Real);
+
+        // Unassigned points count for nothing; fragments under the real size do not count as clusters.
+        LevelEval fragments = Evaluate(new[] { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, -1, -1 }, y, 3, minReal: 3);
+        Assert.False(fragments.Stage);
+        Assert.Equal(2, fragments.Real);
+    }
+
+    [Fact]
+    public void Scorer_MergeOrderFlagsACrossClassEdgeStrongerThanAWeakWithinClassLink()
+    {
+        // Classes {0,1,2} and {3,4,5}. Within class 0: 0-1 (0.9) and 1-2 (0.2); within class 1: a triangle of 0.8.
+        // The cross edge 2-3 carries 0.5: above the weakest within-class bottleneck (0.2), so the order inverts.
+        var edges = new List<(int U, int V, double W)>
+        {
+            (0, 1, 0.9), (1, 2, 0.2), (3, 4, 0.8), (4, 5, 0.8), (3, 5, 0.8), (2, 3, 0.5),
+        };
+        int[] y = { 0, 0, 0, 1, 1, 1 };
+        int[] degree = { 1, 2, 2, 2, 2, 2 };
+
+        var (wInt, wCross, aboveInt, crossEdges, _, _, _) = MergeOrder(edges, y, 2, 6, degree);
+
+        Assert.Equal(0.2, wInt, 12);
+        Assert.Equal(0.5, wCross, 12);
+        Assert.Equal(1, aboveInt);
+        Assert.Equal(1, crossEdges);
+
+        // A class with no positive within-class path has bottleneck 0.
+        var cut = new List<(int U, int V, double W)> { (0, 1, 0.0), (1, 2, 0.4), (3, 4, 0.8), (4, 5, 0.8) };
+        Assert.Equal(0.0, MergeOrder(cut, y, 2, 6, degree).WInt, 12);
+    }
+
     // ── Output ───────────────────────────────────────────────────────────────
     // One schema per file: the level groups are always L, C, M, F (the ones a dataset lacks are blank), so the header of
     // the first row names every later row's columns.
