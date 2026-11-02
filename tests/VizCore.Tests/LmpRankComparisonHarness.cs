@@ -147,6 +147,23 @@ public sealed class LmpRankComparisonHarness
     }
 
     // ── Output ───────────────────────────────────────────────────────────────
+    // One schema per file: the level groups are always L, C, M, F (the ones a dataset lacks are blank), so the header of
+    // the first row names every later row's columns.
+    private static readonly string[] AllTags = { "L", "C", "M", "F" };
+    private static readonly string[] RunLevelFields =
+    {
+        "k", "stageFound", "stagePts", "stageWidth", "stageTlo", "stageThi", "stageFromColdEnd", "stageToHotEnd",
+        "bestMatched", "bestMatchedT", "eomReal", "eomMatches", "eomMatched",
+    };
+    private static readonly string[] GraphLevelFields =
+    {
+        "weakestClassBottleneck", "strongestCrossEdge", "inverted", "crossEdges", "crossAboveBottleneck",
+        "intraMedian", "crossAboveIntraMedian", "crossAtDegLe2",
+    };
+
+    private static int LevelIndexOf(Data d, string tag) =>
+        d.Levels.Length == 1 ? (tag == "L" ? 0 : -1) : tag switch { "C" => 0, "M" => 1, "F" => 2, _ => -1 };
+
     private static string? OutDir() => Environment.GetEnvironmentVariable(EnvOut) is { Length: > 0 } dir ? dir : null;
 
     private static string F(double v) => v.ToString("G6", CultureInfo.InvariantCulture);
@@ -242,9 +259,14 @@ public sealed class LmpRankComparisonHarness
 
         // Single-linkage order per label level: does the strongest cross-class edge beat the weakest
         // within-class bottleneck? (an inversion: a link between classes before a class is whole).
-        for (int li = 0; li < d.Levels.Length; li++)
+        foreach (string tag in AllTags)
         {
-            string tag = d.Levels.Length == 1 ? "L" : d.LevelNames[li][..1].ToUpperInvariant();
+            int li = LevelIndexOf(d, tag);
+            if (li < 0)
+            {
+                foreach (string f in GraphLevelFields) row.Add(($"{tag}_{f}", ""));
+                continue;
+            }
             int[] y = Dense(d.Levels[li], out int k);
             (double wInt, double wCross, int chain, int crossEdges, double intraMedian, int crossLowDeg, int crossAboveIntraMedian) =
                 MergeOrder(edges, y, k, n, coupledDegree);
@@ -373,10 +395,14 @@ public sealed class LmpRankComparisonHarness
         row.Add(("coldClusters", cold.Where(l => l >= 0).Distinct().Count().ToString()));
         row.Add(("coldEqualsCoupledComps", SamePartition(cold, coupledLabels).ToString()));
 
-        double step = Math.Log(temps[1] / temps[0]);
-        for (int li = 0; li < d.Levels.Length; li++)
+        foreach (string tag in AllTags)
         {
-            string tag = d.Levels.Length == 1 ? "L" : new[] { "C", "M", "F" }[li];
+            int li = LevelIndexOf(d, tag);
+            if (li < 0)
+            {
+                foreach (string f in RunLevelFields) row.Add(($"{tag}_{f}", ""));
+                continue;
+            }
             int[] y = Dense(d.Levels[li], out int k);
             LevelScore s = ScoreStack(stack, y, k, temps);
             LevelEval ev = Evaluate(eom.Assignment.Labels, y, k, s.MinReal);
