@@ -780,3 +780,207 @@ I would add it because it offers:
 
 For benchmarking your implementation, I would report two tracks: equal wall-clock budget for prediction, and inferential quality for posterior functionals. Include tuning time in the first, and coverage plus effective sampling performance in the second. That would reveal whether your implementation is a useful predictor, a useful posterior engine, or both—without asking one RMSE number to answer all three questions.
 
+
+**Yes—the next phase should be an integrated Bayesian inference framework, not simply another set of regression implementations.** After KHAOS, GBMARS, and adaptive Bayesian multivariate regression splines, I would make the existing regression families share a clear contract for **posterior targets, conditional updates, predictive distributions, diagnostics, and evidence**.
+
+The strongest starting point is already in ThermoMapper: its sampling target distinguishes the prior from temperature-dependent likelihood evaluations, including collapsed models. That is an important architectural foundation to preserve. [Sampling target](https://github.com/aghado01/ThermoMapper/blob/440d8a7da8bae5a31233eaa2acf193d36c0edb44/src/maths/samplers/targets/SamplingTarget.cs)
+
+I’m treating “branch” as the next architectural phase rather than assuming you specifically mean tree-based regression. Also, I don’t have the titles of “all those papers” in this conversation, so I won’t pretend to have matched your newly acquired collection against the code.
+
+## Where to concentrate
+
+The existing documentation describes three substantial building blocks: model-neutral sampling, reusable conditional-update primitives, and shared probabilistic distributions. [Samplers](https://github.com/aghado01/ThermoMapper/blob/440d8a7da8bae5a31233eaa2acf193d36c0edb44/docs/Maths/Samplers.md) [Probability primitives](https://github.com/aghado01/ThermoMapper/blob/440d8a7da8bae5a31233eaa2acf193d36c0edb44/docs/Maths/ProbabilityAndInformation.md)
+
+**My recommendation is to integrate around mathematical capabilities—not around algorithm names.** A regression method should expose what it can evaluate, integrate, sample conditionally, and predict; the inference machinery should consume those capabilities without knowing whether the model uses knots, hinges, trees, or kernels.
+
+| Layer | Proposed responsibility | Avoid |
+|---|---|---|
+| Distributions | Probability laws, stable tails, support, parameterizations, sampling | Model-specific posterior-update logic |
+| Samplers | Transitions, populations, adaptation, diagnostics, execution state | Regression-specific design matrices and basis semantics |
+| Regression | Likelihoods, priors, structures, sufficient statistics, predictive laws | Reimplementing generic sampling machinery |
+| Assessment | Predictive evaluation, calibration, model comparison | Treating one convergence number as a correctness certificate |
+
+These are proposed boundaries, not a claim that every current implementation already follows them.
+
+## Preserve the tempering distinction
+
+This is the most important technical point in the current target contract: **tempering a likelihood and then integrating nuisance parameters is generally different from powering an already integrated likelihood**. ThermoMapper’s interface explicitly accommodates that distinction. [Target contract](https://github.com/aghado01/ThermoMapper/blob/440d8a7da8bae5a31233eaa2acf193d36c0edb44/src/maths/samplers/targets/SamplingTarget.cs)
+
+For structure \(s\) and nuisance parameters \(\eta\), the collapsed likelihood path is
+
+\[
+\ell_b(s)
+=
+\log \int
+p(\eta\mid s)\,
+p(y\mid s,\eta)^b\,d\eta,
+\]
+
+not generally
+
+\[
+b\log \int
+p(\eta\mid s)\,
+p(y\mid s,\eta)\,d\eta.
+\]
+
+That distinction is already reflected in the source’s definition of `LogLikelihood(b)`. [Target contract](https://github.com/aghado01/ThermoMapper/blob/440d8a7da8bae5a31233eaa2acf193d36c0edb44/src/maths/samplers/targets/SamplingTarget.cs)
+
+For your upcoming spline additions, I would make this a mandatory design review:
+
+- **Explicit target:** Which coefficients, scales, latent variables, and structures belong to the sampled state?
+- **Collapsed target:** Which variables have been integrated out, under exactly which priors?
+- **Path:** Is the implementation evaluating the integrated tempered likelihood or a different, deliberately chosen bridge?
+- **Reference:** Does the zero-temperature endpoint exist and have a known normalizer?
+- **Constants:** Are likelihood normalizers retained when computing evidence?
+
+**Do not force the explicit and collapsed representations into identical update code.** Instead, require them to agree on posterior quantities where both representations describe the same model.
+
+## Make capabilities explicit
+
+The current interface allows models to refuse unsupported temperatures or likelihood slopes. [Target contract](https://github.com/aghado01/ThermoMapper/blob/440d8a7da8bae5a31233eaa2acf193d36c0edb44/src/maths/samplers/targets/SamplingTarget.cs)
+
+For the next phase, I would supplement that interface with explicit capability metadata. The purpose would be to reject unsupported inference plans *before* starting a long run.
+
+| Proposed capability | Why expose it |
+|---|---|
+| Supports arbitrary likelihood temperature | Determines whether a proposed tempering or annealing path is usable |
+| Supports the prior endpoint | Prevents assuming that a run can start at \(b=0\) |
+| Supplies absolute normalization | Separates posterior sampling from evidence estimation |
+| Supplies temperature derivatives | Enables compatible path-sampling calculations |
+| Supplies conditional draws | Enables model-aware blocked inference |
+| Supplies gradients | Enables optional gradient-based continuous updates |
+| Supplies pointwise predictive quantities | Enables compatible predictive assessment |
+| Supplies exact prior draws | Enables prior initialization and suitable reference constructions |
+
+I would keep these as narrow interfaces or descriptors. A giant `IBayesianRegression` interface that requires every model to provide everything would make the framework less extensible.
+
+There is also an important naming issue for GBMARS: **“generalized” does not automatically mean generalized Bayes in the loss-based sense.** If you later add loss-based updating, give its learning rate a separate name from the sampler’s inverse temperature.
+
+## Build a regression composition layer
+
+For the post-spline branch, my preferred organizing principle would be:
+
+> **Structure + likelihood + coefficient prior + hyperprior + inference plan + predictive readout.**
+
+But I would make composition **compatibility-checked**, not unrestricted. A likelihood, prior, and basis representation should only advertise combinations for which the relevant mathematics is implemented.
+
+For example, the framework could distinguish:
+
+- A model with an analytic coefficient marginal
+- A model with exact Gaussian conditional draws
+- A model requiring latent-variable augmentation
+- A model requiring nonconjugate coefficient updates
+- A model whose structure and coefficients must move jointly
+
+The literature investigation should ask **which combinations preserve useful structure**, rather than asking how many named regression algorithms can be added.
+
+A particularly useful deliverable from your KHAOS/GBMARS/adaptive-spline work would be a small implementation matrix:
+
+| Component | Questions to settle |
+|---|---|
+| Basis structure | What changes dimension, and what remains fixed? |
+| Coefficients | Conditional draw, analytic integration, or numerical update? |
+| Scale parameters | Which parameterization and hyperprior? |
+| Structural prior | On ordered objects, labelled objects, or equivalence classes? |
+| Prediction | Conditional mean only, or full posterior predictive draws? |
+| Tempering | Which representation defines the path? |
+| Validation | What independent calculation can verify it? |
+
+That matrix would tell you which abstractions are genuinely shared and which should remain model-specific.
+
+## Samplers: improve composition first
+
+The documented sampler layer already includes reversible-jump machinery, blocked updates, tempering, SMC-related infrastructure, and flat-histogram methods. [Sampler architecture](https://github.com/aghado01/ThermoMapper/blob/440d8a7da8bae5a31233eaa2acf193d36c0edb44/docs/Maths/Samplers.md)
+
+I would therefore **not make “add another general sampler” the first milestone**. First make it straightforward to assemble, inspect, and validate a model-specific inference plan.
+
+For a structurally adaptive regression model, a proposed sweep might comprise:
+
+1. A structural transition
+2. A coefficient update, unless coefficients are collapsed
+3. Observation-scale or latent-weight updates
+4. Shrinkage and smoothing updates
+5. Optional representation-changing updates
+6. Predictive and diagnostic readouts
+
+Each block should declare the state it modifies, the target it preserves, its adaptation policy, and its checkpoint state.
+
+Only then would I prioritize additional continuous kernels. My proposed order is:
+
+- Exploit exact conditional updates where available
+- Improve parameterization and blocking
+- Add a gradient contract where a real model benefits
+- Benchmark additional kernels against existing alternatives
+
+That keeps “state of the art” tied to demonstrated performance on ThermoMapper’s models rather than the presence of fashionable sampler names.
+
+## Distributions: target inference needs
+
+The distribution layer already emphasizes named parameterizations and log-space tail calculations. [Distribution design](https://github.com/aghado01/ThermoMapper/blob/440d8a7da8bae5a31233eaa2acf193d36c0edb44/docs/Maths/ProbabilityAndInformation.md)
+
+My priority would be **correctness and consistency at inference-critical boundaries**, followed by additions justified by concrete regression clients.
+
+| Proposed workstream | What to investigate |
+|---|---|
+| Support semantics | Endpoint densities, invalid parameters, infinities, and degenerate cases |
+| Tail arithmetic | Narrow intervals, extreme truncation, underflow, and complementary tails |
+| Sampling consistency | Agreement between generated draws and the declared probability law |
+| Constrained variables | Truncated draws and transformations, when required by a model |
+| Shrinkage priors | Conditional representations needed by the chosen regression priors |
+| Discrete laws | Structural counts, allocations, or augmented likelihoods |
+| Multivariate operations | Shared Gaussian precision-factor operations without duplicating linear algebra |
+
+There is one concrete documentation issue worth fixing before expanding this surface: the probability guide lists quantile APIs but later states that no distributions have quantiles. [Probability guide](https://github.com/aghado01/ThermoMapper/blob/440d8a7da8bae5a31233eaa2acf193d36c0edb44/docs/Maths/ProbabilityAndInformation.md)
+
+I would reconcile that inventory against source and tests rather than using the guide alone to decide which primitives are missing.
+
+## Literature: organize by decisions
+
+For the next literature pass, I would use the following research agenda. This is a proposed reading structure—not a claim that I have verified the contents of your downloaded papers.
+
+| Literature strand | Question to extract | Implementation consequence |
+|---|---|---|
+| Adaptive spline regression | What is the actual posterior over structure and coefficients? | State representation and structural prior |
+| Bayesian backfitting | Which conditional decomposition makes fitting practical? | Block design and sufficient-statistic caches |
+| Transdimensional inference | How are forward/reverse proposals and reference measures defined? | Structural transition correctness |
+| Shrinkage and smoothing | Which priors control complexity without pathological geometry? | Hyperparameterization and conditional updates |
+| Robust regression | Which latent representations are computationally useful? | Observation-level augmentation |
+| Distributional regression | Which response parameters vary with predictors? | More than one predictor component |
+| Model assessment | Which predictive estimand is being evaluated? | Pointwise likelihood and validation-unit contracts |
+| Multimodal computation | What failure remains after ordinary local updates? | Evidence for tempering, SMC, or flat-histogram use |
+
+Your current sampler documentation already provides entry points into several relevant strands, including Lang–Brezger P-splines, Neal’s slice sampling, nonreversible parallel tempering, and stepping-stone evidence estimation. [Literature connections](https://github.com/aghado01/ThermoMapper/blob/440d8a7da8bae5a31233eaa2acf193d36c0edb44/docs/Maths/Samplers.md)
+
+For each new paper, I would extract **the target, the update, the assumptions, the computational shortcut, and the validation evidence**. Those five items are more actionable than a prose synopsis.
+
+## Define the validation standard
+
+The existing documentation distinguishes monitored functionals, convergence verdicts, and several evidence-error limitations. [Diagnostics and evidence](https://github.com/aghado01/ThermoMapper/blob/440d8a7da8bae5a31233eaa2acf193d36c0edb44/docs/Maths/Samplers.md)
+
+The next step should be a common qualification protocol across regression families:
+
+- **Target checks:** Compare small cases against enumeration, quadrature, or analytic calculations.
+- **Representation checks:** Compare explicit and collapsed implementations on common posterior estimands.
+- **Transition checks:** Validate structural probabilities and conditional laws independently of end-to-end predictive accuracy.
+- **Predictive checks:** Distinguish latent-function uncertainty from future-observation uncertainty.
+- **Evidence checks:** Require a valid reference, complete constants, and independent repeated runs.
+- **Execution checks:** Test checkpoint continuation, parallel reproducibility, and separation of readout randomness.
+- **Performance checks:** Compare at matched wall time and matched inferential accuracy, including adaptation cost.
+
+I would explicitly separate four verdicts: **target correctness, computational adequacy, predictive adequacy, and evidence qualification**. Passing one should not silently certify the others.
+
+## Recommended next branch
+
+My proposed sequence after the spline implementations is:
+
+1. **Write a model-capability inventory.** Use the completed spline families to discover the real shared seams.
+2. **Specify inference-plan contracts.** Establish block invariance, tempering semantics, normalization requirements, and restart behavior.
+3. **Standardize posterior outputs.** Make predictions, pointwise quantities, weighted draws, and uncertainty semantics comparable.
+4. **Close distribution gaps.** Add only primitives demanded by qualified model implementations.
+5. **Qualify two contrasting models.** Choose one heavily collapsed model and one explicit blocked model.
+6. **Add the next model family.** Use it to test whether the integration genuinely generalizes.
+
+**If your intended next branch is specifically Bayesian tree ensembles, put them at step six—not at step one.** They would then serve as a strong test of whether the regression engine is truly basis-agnostic, rather than becoming a second independent inference stack.
+
+The scope decision I would settle next is: **does “integrated Bayesian regression” mean a composable library of qualified model families, or a general model-definition system?** I would strongly favor the former for this phase; it gives you a concrete, testable route forward without turning completion of the spline work into an open-ended probabilistic-programming project.
