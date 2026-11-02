@@ -50,7 +50,7 @@ public static class BassBasisSensitivity
         // Each component's draws pooled in chain order; joint draw j takes pooled[k][JointDraws.Draw(k, j)], over the joint
         // draws selected.
         BassJointDraws joint = fit.JointDraws;
-        (int[] selected, _) = Draws3.Select(spec.Draws, joint.Count, null);
+        (int[] selected, _) = Draws3.Select(spec.Draws, joint.Count, null, nameof(spec));
         int n = selected.Length;
         var pooled = new List<BassDraw>[r];
         for (int k = 0; k < r; k++) pooled[k] = BassDrawFit.Pool(fit.Components[k].Draws, fit.Components[k].Terms, false, nameof(fit)).Pooled;

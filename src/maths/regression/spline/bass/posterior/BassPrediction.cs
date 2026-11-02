@@ -162,8 +162,8 @@ internal static class Draws3
     }
 
     // The requested draws, checked against the pool, and their weights normalized over the request; equal when the fit
-    // carries none.
-    public static (int[] Draws, double[] Weights) Select(IReadOnlyList<int>? requested, int pooled, IReadOnlyList<double>? weights)
+    // carries none. Refusals name the caller's parameter.
+    public static (int[] Draws, double[] Weights) Select(IReadOnlyList<int>? requested, int pooled, IReadOnlyList<double>? weights, string name = "options")
     {
         int[] draws;
         if (requested is null)
@@ -173,27 +173,27 @@ internal static class Draws3
         }
         else
         {
-            if (requested.Count == 0) throw new ArgumentException("Ask for at least one draw.", "options");
+            if (requested.Count == 0) throw new ArgumentException("Ask for at least one draw.", name);
             draws = new int[requested.Count];
             for (int d = 0; d < draws.Length; d++)
             {
                 if ((uint)requested[d] >= (uint)pooled)
-                    throw new ArgumentException($"Draw {requested[d]} is not among the fit's {pooled}.", "options");
+                    throw new ArgumentException($"Draw {requested[d]} is not among the fit's {pooled}.", name);
                 draws[d] = requested[d];
             }
         }
         if (weights is not null && weights.Count != pooled)
-            throw new ArgumentException($"The fit's {weights.Count} draw weights do not match its {pooled} draws.", "options");
+            throw new ArgumentException($"The fit's {weights.Count} draw weights do not match its {pooled} draws.", name);
         var selected = new double[draws.Length];
         double total = 0.0;
         for (int d = 0; d < draws.Length; d++)
         {
             double w = weights is null ? 1.0 : weights[draws[d]];
-            if (!(w >= 0.0) || double.IsPositiveInfinity(w)) throw new ArgumentException("The draw weights must be finite and not negative.", "options");
+            if (!(w >= 0.0) || double.IsPositiveInfinity(w)) throw new ArgumentException("The draw weights must be finite and not negative.", name);
             selected[d] = w;
             total += w;
         }
-        if (!(total > 0.0)) throw new ArgumentException("The requested draws carry no weight.", "options");
+        if (!(total > 0.0)) throw new ArgumentException("The requested draws carry no weight.", name);
         for (int d = 0; d < selected.Length; d++) selected[d] /= total;
         return (draws, selected);
     }

@@ -381,7 +381,7 @@ public static class BassSensitivity
                 for (int i = 0; i < fit.Draws[c].Count; i++, at++) pooled[at] = (fit.Draws[c][i], c, i);
             if (fit.DrawWeights is { } w && w.Length != total)
                 throw new ArgumentException($"The fit has {total} draws and {w.Length} weights.", nameof(fit));
-            (int[] selected, _) = Draws3.Select(spec.Draws, total, fit.DrawWeights);
+            (int[] selected, _) = Draws3.Select(spec.Draws, total, fit.DrawWeights, nameof(spec));
             BassDraw[] draws = [.. selected.Select(d => pooled[d].Draw)];
             int[] chains = [.. selected.Select(d => pooled[d].Chain)];
             int[] index = [.. selected.Select(d => pooled[d].Index)];

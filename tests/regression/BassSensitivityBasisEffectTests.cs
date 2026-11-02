@@ -234,6 +234,11 @@ public sealed class BassSensitivityBasisEffectTests
             Assert.Equal(every.Mean[picked[k]], chosen.Mean[k]);
             for (int c = 0; c < 4; c++) Assert.Equal(z0.Values[picked[k], c], z0Chosen.Values[k, c]);
         }
+
+        // Only the draws selected are evaluated, so a selection fits a budget the whole run would exceed.
+        var tight = new EffectSpec { GridPoints = 4, Subsets = [["z0"]], CellBudget = 4 * fit.Decomposition.Rank };
+        Assert.Contains("above the budget", Assert.Throws<ArgumentException>(() => fit.Effects(effects: tight)).Message);
+        Assert.Equal(1, fit.Effects(new SensitivitySpec { Draws = [all.Count - 1] }, tight).Count);
     }
 
     [Fact]

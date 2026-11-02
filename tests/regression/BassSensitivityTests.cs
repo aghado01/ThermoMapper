@@ -323,6 +323,17 @@ public sealed class BassSensitivityTests
         SobolDecomposition w = BassSensitivity.Of(weighted, data, new SensitivitySpec { Draws = [1, 2, 3] }).Decompositions[0];
         Assert.Equal(new[] { weights[1], weights[2], weights[3] }, w.Weights);
 
+        // At a conditioned coordinate too, each surface over the same draws.
+        BassFit functional = SensitivityFixture.FitFunctional();
+        BassData functionalData = SensitivityFixture.Functional();
+        var condition = new SensitivitySpec { Functional = FunctionalForm.Condition, Coordinates = [[0.25], [0.75]] };
+        SobolAnalysis every2 = BassSensitivity.Of(functional, functionalData, condition);
+        SobolAnalysis some2 = BassSensitivity.Of(functional, functionalData, condition with { Draws = picked });
+        Assert.Equal(2, some2.Decompositions.Count);
+        for (int surface = 0; surface < 2; surface++)
+            Assert.Equal(picked.Select(d => every2.Decompositions[surface].Variance[d]), some2.Decompositions[surface].Variance);
+
+        Assert.Equal("spec", Assert.Throws<ArgumentException>(() => BassSensitivity.Of(fit, data, new SensitivitySpec { Draws = [all.Count] })).ParamName);
         Assert.Contains("at least one", Assert.Throws<ArgumentException>(() => BassSensitivity.Of(fit, data, new SensitivitySpec { Draws = [] })).Message);
         Assert.Contains("not among", Assert.Throws<ArgumentException>(() => BassSensitivity.Of(fit, data, new SensitivitySpec { Draws = [all.Count] })).Message);
         Assert.Contains("no weight", Assert.Throws<ArgumentException>(() => BassSensitivity.Of(weighted, data, new SensitivitySpec { Draws = [0, 5] })).Message);
