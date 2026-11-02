@@ -183,9 +183,19 @@ argument above: any reduction D = R·U restricts to a reduction of the relative 
 - `low_degree` gives the degree.
 - A worked example over `ZMod 2` shows the hypotheses can be met.
 
-It covers the matrix statement, not the C#: `RelativeFiltration` is still checked by tests. A bar there is what reduction
-reads, and the standard theorem that reduction computes persistent homology is taken as given, not formalized. I haven't
-looked for whether this is stated in the literature, so it makes no claim to being new.
+A bar there is only what reduction reads, so the user asked to take it past matrices.
+`lean/Lemmas/RelativeHomology.lean` defines H_p(S, K) = Z_p(S, K) / B_p(S, K) with no reduction in sight:
+
+- `finrank_persistence`: the rank of H_p(S, K) → H_p(T, K) counts the table's bars alive from S through T.
+  `finrank_persistence_absolute` is the case K empty, the classical statement that reduction computes persistent homology.
+- `exists_gradedReduction`: every filtered complex has a reduction, so none of this is vacuous.
+- `finrank_quotient_persistence`: the complex with K's cells deleted, which `RelativeFiltration` reduces, has the ranks of
+  the pair. No reduction appears in the statement.
+- `SimplicialFiltration`: all of it for ℤ/2 simplicial chains. Textbook ranks on one edge check the definitions.
+
+It covers the mathematics, not the C#: `RelativeFiltration` is still checked by tests. It stops at ranks: that a persistence
+module is a sum of intervals, which its ranks determine, is the standard structure theorem and is not formalized. It is
+folklore in substance, not new: [relative-barcode-provenance.md](relative-barcode-provenance.md).
 
 **What it means for the design notes.**
 
