@@ -119,6 +119,9 @@ internal sealed class FiltrationCohomologyReducer
         }
     }
 
+    /// <summary>The column a death simplex from <see cref="RunDimension"/> is the pivot of: the bar's birth cell.</summary>
+    public int BirthOf(int deathSimplex) => _pivotOwner[deathSimplex];
+
     void EnsureReducedCapacity(int size)
     {
         if (size <= _reduced.Length)

@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Graphs.Primitives;
 using Maths.Topology;
@@ -249,6 +250,266 @@ public sealed class RelativeFiltrationTests
 
         _output.WriteLine($"bars kept: {kept}, moved up a degree: {movedUp}, dropped: {dropped}");
         Assert.True(kept > 0 && movedUp > 0 && dropped > 0);
+    }
+
+    // ── R13–R16 · the reading itself: one clearing run with K₀ strictly first ───
+
+    [Fact]
+    public void BothReadings_HandCases_MatchTheReference()
+    {
+        var cases = new (int N, List<(int, int)> Backbone, List<(int, int, double)> Content)[]
+        {
+            (6, new(), new() { (0, 1, 1.0), (1, 2, 2.0), (2, 3, 3.0), (3, 4, 4.0), (4, 5, 5.0), (5, 0, 6.0), (0, 2, 7.0) }), // R1
+            (8, PathEdges(8), new() { (0, 4, 1.5), (2, 7, 2.5), (1, 6, 3.5) }),                                              // R2
+            (6, CycleEdges(6), new() { (0, 3, 2.5) }),                                                                        // R3
+            (4, CycleEdges(4), new() { (0, 2, 2.5) }),                                                                        // R4
+            (6, new() { (0, 1), (1, 2) }, new() { (2, 3, 1.5), (4, 5, 2.5) }),                                                // R5
+            (6, PathEdges(6), new() { (0, 5, 0.0) }),                                                                         // R6
+            (5, PathEdges(5), new() { (0, 4, 1.0), (0, 2, 2.0), (2, 4, 3.0) }),                                               // R10
+        };
+
+        foreach (var (n, backbone, content) in cases)
+        {
+            RelativeFiltration relative = ConditionedFiltration.BuildRelative(n, backbone, content);
+            AssertReadingsMatchReference(relative);
+            AssertAbsoluteIsAmbient(relative);
+        }
+    }
+
+    [Fact]
+    public void BothReadings_AVoidK0Fills_MovesUpToH3_AndNothingKillsIt()
+    {
+        // K₀ is the boundary of a tetrahedron, its 2-sphere; K fills it at d. Absolutely H₂ [0, d); relatively H₃ [d, ∞).
+        const double d = 2.5;
+        var sphere = SimplicialFiltrationFixtures.TetrahedronBoundary().Simplices.Select(s => new Simplex(0.0, s.Vertices));
+        var ambient = new SimplicialFiltration(sphere.Append(new Simplex(d, 0, 1, 2, 3)));
+        var relative = new RelativeFiltration(ambient, s => s.Dimension < 3);
+
+        var (absolute, read) = relative.ComputeBothReadings();
+
+        Assert.Equal(new[] { (0, 0.0, double.PositiveInfinity), (2, 0.0, d) }, Canon(absolute));
+        Bar bar = Assert.Single(Significant(read, 3));
+        Assert.Equal((d, double.PositiveInfinity), (bar.Birth, bar.Death));
+        Assert.Equal(3, ambient.Simplices[bar.Generator!.Value].Dimension);
+        Assert.Equal(Canon(relative.ComputeBarcode()), Canon(read));
+    }
+
+    [Fact]
+    public void BothReadings_RandomBackbones_MatchTheReference_AndReachEveryRow()
+    {
+        const int trials = 200;
+        var rows = new Rows();
+        for (int seed = 0; seed < trials; seed++)
+        {
+            var rng = new Random(seed);
+            int n = rng.Next(4, 10);
+            // The R7 family, then the R8 family: connected spanning K₀ with cycles, then any K₀.
+            List<(int, int)> backbone = seed % 2 == 0 ? RandomConnectedSpanning(n, rng) : RandomEdges(n, rng, 0.3);
+            if (backbone.Count == 0) backbone.Add((0, 1));
+            List<(int, int, double)> content = RandomContent(n, rng, backbone, 0.35);
+
+            RelativeFiltration relative = ConditionedFiltration.BuildRelative(n, backbone, content);
+            AssertReadingsMatchReference(relative, $"seed {seed}");
+            AssertAbsoluteIsAmbient(relative, $"seed {seed}");
+            rows.Count(relative);
+        }
+
+        _output.WriteLine(rows.ToString());
+        Assert.True(rows.KeptFinite > 0 && rows.KeptEssential > 0 && rows.DroppedEssential > 0 && rows.DroppedFinite > 0);
+        Assert.True(rows.MovedUp[0] > 0 && rows.MovedUp[1] > 0);
+    }
+
+    [Fact]
+    public void BothReadings_AnyFiltration_AnySubcomplex_MatchTheReference_AndReachEveryRow()
+    {
+        const int trials = 300;
+        var rows = new Rows();
+        int k0Late = 0;
+        for (int seed = 0; seed < trials; seed++)
+        {
+            var rng = new Random(seed);
+            // A dense third of the trials, whose K0 holds whole 2-spheres, so a tetrahedron outside it can fill one.
+            bool dense = seed % 3 == 0;
+            SimplicialFiltration ambient = RandomComplex(rng, grid: seed % 2 == 0, fill: dense ? 0.95 : 0.55);
+            HashSet<int> k0Vertices = Enumerable.Range(0, 12).Where(_ => rng.NextDouble() < (dense ? 0.9 : 0.6)).ToHashSet();
+            Func<Simplex, bool> inK0 = RandomSubcomplex(ambient, k0Vertices, dense ? 0.95 : rng.NextDouble(), rng);
+
+            var relative = new RelativeFiltration(ambient, inK0);
+            AssertReadingsMatchReference(relative, $"seed {seed}");
+            rows.Count(relative);
+
+            // K₀ need not sit at the base here. Its reading is K with K₀ moved there, a filtration built by hand.
+            double baseValue = ambient.GetBirth(0);
+            var atBase = new SimplicialFiltration(ambient.Simplices.Select(s => inK0(s) ? new Simplex(baseValue, s.Vertices) : s));
+            Assert.True(
+                Canon(PersistentHomology.Compute(atBase)).SequenceEqual(Canon(relative.ComputeBothReadings().Absolute)),
+                $"absolute, seed {seed}");
+
+            if (ambient.Simplices.Any(s => inK0(s) && s.FiltrationValue > baseValue)) k0Late++;
+        }
+
+        _output.WriteLine($"{rows}; trials with K0 above the base: {k0Late}");
+        Assert.True(rows.KeptFinite > 0 && rows.KeptEssential > 0 && rows.DroppedEssential > 0 && rows.DroppedFinite > 0);
+        Assert.True(rows.MovedUp[0] > 0 && rows.MovedUp[1] > 0 && rows.MovedUp[2] > 0);
+        // A moved-up class is essential even with cells above it to kill it: the claim R12 could not reach.
+        Assert.True(rows.MovedUpWithCellsAbove > 0 && k0Late > 0);
+    }
+
+    // The one timing, off by default: RELATIVE_READING_TIMING=1, in Release. It reports and asserts no speed, since the
+    // machine is shared. The graph's edges enter by a uniform draw, K₀ is a spanning tree with a few extra edges.
+    [Fact]
+    public void BothReadings_Timing()
+    {
+        if (Environment.GetEnvironmentVariable("RELATIVE_READING_TIMING") is not "1") return;
+
+        Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal;
+        foreach (var (n, p) in new[] { (100, 0.30), (200, 0.20), (400, 0.15), (800, 0.10) })
+        {
+            var rng = new Random(n);
+            List<(int, int)> backbone = RandomConnectedSpanning(n, rng);
+            HashSet<(int, int)> taken = backbone.Select(Ordered).ToHashSet();
+            var content = new List<(int, int, double)>();
+            for (int a = 0; a < n; a++)
+                for (int b = a + 1; b < n; b++)
+                    if (!taken.Contains((a, b)) && rng.NextDouble() < p)
+                        content.Add((a, b, rng.NextDouble()));
+
+            var built = Stopwatch.StartNew();
+            RelativeFiltration relative = ConditionedFiltration.BuildRelative(n, backbone, content);
+            built.Stop();
+            int triangles = relative.Ambient.Simplices.Count(s => s.Dimension == 2);
+
+            foreach (int maxDimension in new[] { 1, int.MaxValue })
+            {
+                var referenceMs = new List<double>();
+                var readingMs = new List<double>();
+                (int, double, double, int?)[]? referenceBars = null, readingBars = null;
+                for (int repeat = 0; repeat < 3; repeat++)
+                {
+                    var watch = Stopwatch.StartNew();
+                    Barcode reference = relative.ComputeBarcode(maxDimension);
+                    referenceMs.Add(watch.Elapsed.TotalMilliseconds);
+
+                    watch.Restart();
+                    Barcode reading = relative.ComputeBothReadings(maxDimension).Relative;
+                    readingMs.Add(watch.Elapsed.TotalMilliseconds);
+
+                    referenceBars = Pairs(reference);
+                    readingBars = Pairs(reading);
+                }
+
+                Assert.True(referenceBars!.SequenceEqual(readingBars!), $"n {n}, maxDimension {maxDimension}");
+                double r = referenceMs.Min(), f = readingMs.Min();
+                _output.WriteLine($"n {n}, edges {backbone.Count + content.Count}, triangles {triangles}, " +
+                    $"maxDimension {(maxDimension == int.MaxValue ? "all" : maxDimension)}: build {built.Elapsed.TotalMilliseconds:F0} ms, " +
+                    $"reference {r:F1} ms, one run {f:F1} ms, reference/run {r / f:F2} (best of 3; all {string.Join(", ", referenceMs.Select(x => x.ToString("F0")))} vs {string.Join(", ", readingMs.Select(x => x.ToString("F0")))})");
+            }
+        }
+    }
+
+    // The same pairs as the reference, at every cutoff degree: every bar with its generator, zero-length ones included.
+    static void AssertReadingsMatchReference(RelativeFiltration relative, string context = "")
+    {
+        foreach (int maxDimension in new[] { int.MaxValue, 0, 1, 2 })
+        {
+            var expected = Pairs(relative.ComputeBarcode(maxDimension));
+            var actual = Pairs(relative.ComputeBothReadings(maxDimension).Relative);
+            Assert.True(expected.SequenceEqual(actual), $"{context}, maxDimension {maxDimension}");
+        }
+    }
+
+    // With K₀ at the base already, which a backbone at ε₀ = 0 is, the absolute reading is the ambient's own barcode.
+    static void AssertAbsoluteIsAmbient(RelativeFiltration relative, string context = "")
+    {
+        var expected = Canon(PersistentHomology.Compute(relative.Ambient));
+        Assert.True(expected.SequenceEqual(Canon(relative.ComputeBothReadings().Absolute)), $"{context}, absolute");
+    }
+
+    static (int, double, double, int?)[] Pairs(Barcode barcode) =>
+        barcode.Bars
+            .Select(b => (b.Dimension, b.Birth, b.Death, b.Generator))
+            .OrderBy(x => x)
+            .ToArray();
+
+    sealed class Rows
+    {
+        public int KeptFinite, KeptEssential, DroppedFinite, DroppedEssential, MovedUpWithCellsAbove;
+        public readonly int[] MovedUp = new int[4];
+
+        public void Count(RelativeFiltration relative)
+        {
+            int top = relative.Ambient.Simplices.Max(s => s.Dimension);
+            foreach (AbsolutePair pair in relative.AbsolutePairsWithK0First(int.MaxValue))
+            {
+                switch (pair.Row)
+                {
+                    case RelativeRow.Kept when pair.Death < 0: KeptEssential++; break;
+                    case RelativeRow.Kept: KeptFinite++; break;
+                    case RelativeRow.Dropped when pair.Death < 0: DroppedEssential++; break;
+                    case RelativeRow.Dropped: DroppedFinite++; break;
+                    case RelativeRow.MovedUp:
+                        MovedUp[pair.Dimension]++;
+                        if (pair.Dimension + 2 <= top) MovedUpWithCellsAbove++;
+                        break;
+                }
+            }
+        }
+
+        public override string ToString() =>
+            $"kept finite {KeptFinite}, kept essential {KeptEssential}, moved up from H0/H1/H2 {string.Join("/", MovedUp.Take(3))} " +
+            $"({MovedUpWithCellsAbove} with cells above), dropped finite {DroppedFinite}, dropped essential {DroppedEssential}";
+    }
+
+    // Any complex the faces allow, with vertices born apart and cells up to tetrahedra.
+    static SimplicialFiltration RandomComplex(Random rng, bool grid, double fill)
+    {
+        int n = rng.Next(4, 10);
+        double Later(double earliest) => grid ? earliest + rng.Next(0, 4) : earliest + rng.NextDouble() * 3.0;
+
+        var births = new Dictionary<string, double>();
+        var cells = new List<Simplex>();
+        foreach (int[] candidate in Faces(n))
+        {
+            string[] faces = candidate.Length == 1 ? Array.Empty<string>()
+                : Enumerable.Range(0, candidate.Length).Select(k => Key(candidate.Where((_, i) => i != k))).ToArray();
+            if (!faces.All(births.ContainsKey) || (candidate.Length > 1 && rng.NextDouble() >= fill))
+                continue;
+
+            double birth = candidate.Length == 1 ? rng.Next(0, 5) : Later(faces.Max(f => births[f]));
+            births[Key(candidate)] = birth;
+            cells.Add(new Simplex(birth, candidate));
+        }
+
+        return new SimplicialFiltration(cells);
+    }
+
+    // Candidates by increasing size, so faces are decided first.
+    static IEnumerable<int[]> Faces(int n)
+    {
+        for (int a = 0; a < n; a++) yield return new[] { a };
+        for (int a = 0; a < n; a++) for (int b = a + 1; b < n; b++) yield return new[] { a, b };
+        for (int a = 0; a < n; a++) for (int b = a + 1; b < n; b++) for (int c = b + 1; c < n; c++) yield return new[] { a, b, c };
+        for (int a = 0; a < n; a++) for (int b = a + 1; b < n; b++) for (int c = b + 1; c < n; c++) for (int d = c + 1; d < n; d++)
+            yield return new[] { a, b, c, d };
+    }
+
+    static string Key(IEnumerable<int> vertices) => string.Join(",", vertices);
+
+    // A random subcomplex: a cell joins with chance p once all its faces have, on the given vertices, and a tetrahedron
+    // with a smaller chance, since one outside K0 is what kills a 2-sphere inside it.
+    static Func<Simplex, bool> RandomSubcomplex(SimplicialFiltration ambient, HashSet<int> vertices, double p, Random rng)
+    {
+        var members = new HashSet<string>();
+        foreach (Simplex s in ambient.Simplices.OrderBy(s => s.Dimension))
+        {
+            int[] v = s.Vertices;
+            bool joins = v.Length == 1
+                ? vertices.Contains(v[0])
+                : Enumerable.Range(0, v.Length).All(k => members.Contains(Key(v.Where((_, i) => i != k)))) && rng.NextDouble() < (v.Length == 4 ? p / 3 : p);
+            if (joins) members.Add(Key(v));
+        }
+
+        return s => members.Contains(Key(s.Vertices));
     }
 
     // ── R10 · a finite bar's representative, in the ambient's indices ───────────
