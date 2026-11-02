@@ -185,6 +185,25 @@ If the peak falls in the last two points, or χ never drops below the threshold,
   Track 2 does not restore nesting.
 - **Thermal EOM (`ThermalEom`).** Builds the tree with `ThermalDendrogram.FromEdgeCurves` from the $\bar\delta(T)$ columns, then walks it exactly as Track 1 does.
 
+### Closure gap
+
+Each level of the T-stack closes a θ-graph into connected components. `ClosureGap` prices that step, and `SweepClosureGap` reads it as a curve over a sweep's temperatures, on the same cut `SweepDenseTStack` makes.
+
+With costs $a$ for a false merge and $b$ for a false split (D. A. Binder's 1978 loss, unrelated to the Binder cumulant), a pair decided alone links when $\langle n_{ij}\rangle>\theta_n=a/(a+b)$. So $\theta_n$, which is θ moved to the co-membership scale as in [Flat cuts](#flat-cuts), is a cost ratio for the θ-graph and not for its components. With $a=\theta_n$ and $b=1-\theta_n$:
+
+$$L(\theta\text{-graph})\le L(\text{best partition})\le L(\text{closure}),\qquad \Delta=L(\text{closure})-L(\theta\text{-graph})=\sum|\langle n_{ij}\rangle-\theta_n|,$$
+
+the sum running over the pairs where the closure contradicts their own rule. At $\Delta=0$ the closure is the exact optimum, and $\Delta$ bounds what any search for a better partition could gain. It needs no search. Integrated over the cut, $\int_0^1\Delta\,d\theta_n=\tfrac12\sum(m_{ij}-\langle n_{ij}\rangle)^2$, with $m_{ij}$ the level at which the closure first joins the pair: the single-linkage tree's distortion of the field, one number per temperature.
+
+| Scope | Reads | Sees | Misses |
+|---|---|---|---|
+| `OverEdges` | `AccumulationSpec.CoMembership`, every draw | False merges on the graph's edges, at low noise | Every pair with no edge. A pure chain reads 0 however far apart its ends are, and so does a pair more connected than any edge (two poles joined through parallel middles) |
+| `OverPairs` | `AccumulationSpec.PartitionEvery`, the kept draws | Every pair, false merges and false splits | Nothing by scope, but under thinning its closure can differ from the T-stack's near θ, and `DenseCoMembership` costs $N(N-1)/2$ counts |
+
+**Sampling noise.** Reading a pair's rule and its cost off one estimate inflates $\Delta$, since a pair near the cut whose noise lands it on the wrong side always adds. `ClosureGapCurve.Results` is that plug-in form. `CrossFitGap` decides on one half of the replicas and evaluates on the other, both ways round, which removes the inflation and needs at least two replicas. It measures decisions made on half the data, and it can come out negative. Their difference reads the noise floor. The integrated form is plug-in only.
+
+The gap holds for ferromagnetic couplings at $q\ge1$, and says nothing about whether the clusters are real: it compares the closure with the sampled measure, not with external labels. The derivations and checks are in `issues/spc/bayesian-clustering-design.md`.
+
 ### Export bundle
 
 `SpcRunLayout` names the files: `manifest.json`, `summary.json`, `graph_health.json` and `partition_hierarchy.json`, with sub-directories `csv/`, `tabular/` and `checkpoints/`. `SpcRunPaths` resolves them against an Archivory `ArtifactScope`.

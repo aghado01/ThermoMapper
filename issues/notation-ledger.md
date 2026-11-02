@@ -37,6 +37,7 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 - **Kind:** one concept under several names, with a second concept one affine map away.
 - **Readings:** τ_ij and τ_e in the stopping primer (§12.21, §13.6) and `issues/spc/bayesian-clustering-design.md`; ⟨n_ij⟩ in `CoMembership` (`src/graphs/primitives/CoMembership.cs:4`); P(i↔j) in `issues/spc/opus-gvdv-ideas.md`. δ̄ = ((q−1)τ + 1)/q, the spin agreement, is the different quantity `DenseTStack` cuts, read off co-membership by `SweepEdgeCurves.CoMembershipDelta`.
 - **Found:** reading θ as a cost ratio for the Bayesian clustering note. The ratio belongs to τ, so θ on δ̄ maps through (qθ − 1)/(q − 1).
+- **Note:** τ also names `LineagePersistence`'s split threshold in `docs/Clustering/SpcAnalysis.md`, so that doc and the closure gap's docstrings write ⟨n_ij⟩, and the design note writes τ, as the primer does.
 
 ### Binder: the loss and the cumulant (2026-11-01)
 

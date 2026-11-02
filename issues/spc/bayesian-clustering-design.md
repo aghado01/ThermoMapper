@@ -1,6 +1,6 @@
 # Bayesian clustering ideas for SPC: design note
 
-Status: discussion, started 2026-10-30. Nothing built. Decisions are the user's and are marked as such; the rest is proposal.
+Status: started 2026-10-30. The closure gap is built (2026-11-01) and not yet measured on data; the rest is discussion. Decisions are the user's and are marked as such; the rest is proposal.
 
 Sources: `opus-gvdv-ideas.md`, Threads 1, 5 and 7 of `opus-spin-glass-threads.md`, `sw-retention-brief.md`, and the stopping primer's §13.3 and §13.6 (`issues/spc-BARS/stopping-theory-primer.md`).
 
@@ -10,7 +10,7 @@ Symbols are the module's: τ_ij = P(i↔j), the pair connectivity; p_e = 1 − e
 
 2026-10-30, stated as a leaning and not as settled: pursue what fits a uniform temperature grid read by BARS. The primer's §13.3 records the grid decision; its decision 4 keeps BARS out of the stopping rule, so anything read through BARS here is on the measurement side.
 
-No idea is chosen for building yet.
+2026-11-01, the user's decision: build the closure gap first, as idea 1's first step (see "Built"). No other idea is chosen yet.
 
 ## Status
 
@@ -40,7 +40,7 @@ The code's θ cuts δ̄, not τ, so the cost ratio is a/(a + b) = (qθ − 1)/(q
 L(θ-graph) ≤ L(optimal partition) ≤ L(closure), and Δ(T, θ) = L(closure) − L(θ-graph) = Σ |τ_ij − θ| over the pairs where closure contradicts the pair's own rule.
 
 - Δ = 0 makes closure exactly optimal, and Δ bounds what any search can gain. It takes one pass per column, with no search and no nesting question.
-- Over edges only false merges can occur. Over all pairs both directions can.
+- Over edges only false merges can occur. Over all pairs both directions can: on K₂,₄ at q = 2 and β = 1, two poles with no edge between them read 0.700 through four parallel routes, while every edge reads 0.647. Between those levels the closure parts a pair whose own rule links it.
 - It differs from the primer's pair indecision Σ_e τ_e(1 − τ_e), which is large wherever edges are undecided, even if closure is right.
 - *Enumerated:* no sandwich violations in 3,840 cells; the formula holds to 1e-15.
 
@@ -83,11 +83,28 @@ A caveat on anything read through BARS here, these curves and ⟨E⟩(T) alike. 
    - *On states.* A triplet index over sampled partitions. Thread 1 notes that triplets inside one state are equilateral and uninformative. Ferromagnetic SPC is expected to have one state over most of T and two at a melt, which gives no hierarchy to test, so P(Q) gates it. Its natural home is frustrated SPC (Thread 4). Expected, not measured.
    - *On the field.* τ_ij against m_ij, the integrated gap above. Non-vacuous at every T.
 
+## Built
+
+**The closure gap (2026-11-01, `76e5dec`).**
+- `ClosureGap` (`src/clustering/dendrogram/`): `OverEdges` and `OverPairs` at one θ on the co-membership scale, each taking an optional independent estimate to read the costs from, and `IntegratedOverEdges` and `IntegratedOverPairs` for ½Σ(m − τ)².
+- `DenseCoMembership` (same folder): every pair's co-membership from kept partitions, N(N−1)/2 counts.
+- `SweepClosureGap` (`src/clustering/graphical/spc/profiling/`): curves over a sweep's temperatures, on the cut `SweepDenseTStack` makes, with θ taken on the δ̄ scale and moved by (qθ − 1)/(q − 1).
+- The curve carries the plug-in result from everything pooled, and a cross-fit gap with alternate replicas deciding and evaluating, averaged both ways.
+
+**Why the cross-fit.** The question is whether the gap is small, and the plug-in form can't say so near a cut: a pair near θ whose noise lands it on the wrong side always adds. With K₆ and every true co-membership on the cut, the true gap is zero. The cross-fit gap evaluates each decision on data that didn't make it, so its mean sits at zero, while the plug-in mean sits near 0.26 (`Noise_InflatesTheSameEstimate_AndIndependentEvaluationCancelsIt`). The cross-fit gap measures decisions made on half the data and can come out negative.
+
+**Tests** (`tests/VizCore.Tests/ClosureGapTests.cs`). Ground truth from outside the estimator, tolerances fixed before the first run and listed in the file's header:
+- Co-membership by enumerating every bond configuration of the FK measure, the best partition by searching every partition, and the join level by a widest-path recursion.
+- Six fixtures, including the chain and the poles, at q = 2 and 20, 12 values of β and 9 of θ. `Fixtures_ReachEveryKindOfContradiction` keeps the sandwich checks from passing vacuously; it failed on the first, coarser grid (8 and 3), which is why the grid is this wide.
+- Swendsen–Wang against the enumeration, so the measure the checks assume is the one SW samples; `DenseCoMembership` against the accumulated edge counts, exact; and the curve against `SweepDenseTStack`'s own levels.
+
+**Not done.** It hasn't been measured on the Domany battery or ISOLET. That is an experiment, for the user to ask for. Filling `DenseCoMembership` costs N²/2 increments per kept partition under a giant cluster, about 6 × 10⁹ per temperature at N = 7,800 and 200 kept partitions.
+
 ## Proposed order
 
 Not decided.
 
-1. **The closure gap.** The edge form on the existing co-membership, and the pair form on kept partitions, scored as a curve over T on the Domany battery and ISOLET. If it is small everywhere, a loss-optimal search isn't worth building. If it is large, it says where.
+1. **Measure the closure gap.** The edge form on the existing co-membership, and the pair form on kept partitions, scored as a curve over T on the Domany battery and ISOLET. If it is small everywhere, a loss-optimal search isn't worth building. If it is large, it says where.
 2. **Idea 3.** Stepping-stone and path sampling, validated on exact ln Z (a tree for any q, Kaufman at q = 2), then BARS on ⟨E⟩ checked against the same truth. Independent of 1.
 3. **The partition distance table,** then VI cuts, credible balls and P(Q) as its reductions, and the per-block window through BARS.
 4. **Idea 5.** BARS with `StepBasis` on lineage trajectories.
