@@ -258,7 +258,7 @@ the sum running over the pairs where the closure contradicts their own rule. At 
 
 **Sampling noise.** Reading a pair's rule and its cost off one estimate inflates $\Delta$, since a pair near the cut whose noise lands it on the wrong side always adds. `ClosureGapCurve.Results` is that plug-in form. `CrossFitGap` decides on one half of the replicas and evaluates on the other, both ways round, which removes the inflation and needs at least two replicas. It measures decisions made on half the data, and it can come out negative. Their difference reads the noise floor. The integrated form is plug-in only.
 
-The gap holds for ferromagnetic couplings at $q\ge1$, and says nothing about whether the clusters are real: it compares the closure with the sampled measure, not with external labels. The derivations and checks are in `issues/spc/bayesian-clustering-design.md`.
+The gap holds for ferromagnetic couplings at $q\ge1$, and says nothing about whether the clusters are real: it compares the closure with the sampled measure, not with external labels. A large $\Delta$ doesn't say why, either: on the sets measured, a chain and a melt reach the same height, and only the labels told them apart. The derivations, checks and measurement are in `issues/spc/bayesian-clustering-design.md`.
 
 ### Export bundle
 

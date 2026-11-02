@@ -1,6 +1,6 @@
 # Bayesian clustering ideas for SPC: design note
 
-Status: started 2026-10-30. The closure gap is built (2026-11-01) and not yet measured on data; the rest is discussion. Decisions are the user's and are marked as such; the rest is proposal.
+Status: started 2026-10-30. The closure gap is built (2026-11-01) and measured on data (2026-11-02; see "What the measurement found"); the rest is discussion. Decisions are the user's and are marked as such; the rest is proposal.
 
 Sources: `opus-gvdv-ideas.md`, Threads 1, 5 and 7 of `opus-spin-glass-threads.md`, `sw-retention-brief.md`, and the stopping primer's §13.3 and §13.6 (`issues/spc-BARS/stopping-theory-primer.md`).
 
@@ -16,7 +16,7 @@ Symbols are the module's: τ_ij = P(i↔j), the pair connectivity; p_e = 1 − e
 
 | # | Idea | Status | Fit with the uniform grid and BARS |
 |---|---|---|---|
-| 1 | Loss cuts, against closure | Buildable. Link loss over graph edges from co-membership; pair loss over all pairs from kept partitions | A column kernel for `DenseTStack`; the closure gap below is a curve over T |
+| 1 | Loss cuts, against closure | The gap is built and measured. The search is buildable (link loss over graph edges from co-membership; pair loss over all pairs from kept partitions), and the measurement argues against building it now | A column kernel for `DenseTStack`; the closure gap below is a curve over T |
 | 2 | VI cuts, credible balls, the robust window | Unblocked by S5 (`a777534`, SPCX v12) | Per-T. r(T) and each block's window are curves |
 | 3 | Free energy by temperature integration | Unblocked by S1 | ⟨E⟩(T) on the grid. BARS can fit it, and integrating its draws gives ln Z(T) with a band |
 | 4 | Calibrating T by posterior odds | Research-scale. The §5.2 rule does not carry over: the single cluster has the lowest H, and the colouring count q(q−1)…(q−k+1) favours splitting, the reverse of Bissiri et al. | Competes with the T* readout. Lowest priority |
@@ -98,7 +98,7 @@ A caveat on anything read through BARS here, these curves and ⟨E⟩(T) alike. 
 - Six fixtures, including the chain and the poles, at q = 2 and 20, 12 values of β and 9 of θ. `Fixtures_ReachEveryKindOfContradiction` keeps the sandwich checks from passing vacuously; it failed on the first, coarser grid (8 and 3), which is why the grid is this wide.
 - Swendsen–Wang against the enumeration, so the measure the checks assume is the one SW samples; `DenseCoMembership` against the accumulated edge counts, exact; and the curve against `SweepDenseTStack`'s own levels.
 
-**Not done.** It hasn't been measured on the Domany battery or ISOLET. That is an experiment, for the user to ask for. Filling `DenseCoMembership` costs N²/2 increments per kept partition under a giant cluster, about 6 × 10⁹ per temperature at N = 7,800 and 200 kept partitions.
+**Cost.** Filling `DenseCoMembership` costs N²/2 increments per kept partition under a giant cluster, about 5 × 10¹⁰ per temperature at N = 7,800 and 1,600 kept partitions. ISOLET's coldest rows took about a minute each, sampling included.
 
 ## Measurement of the closure gap
 
@@ -135,11 +135,62 @@ Below, *share* is the cross-fit pair gap over the closure's pair loss. A negativ
 
 Expected everywhere, `blobs` included: the gap peaks at melts, where a partition can't represent intermediate co-membership. That is indecision, not chaining, so `blobs` is the reference for what a plain melt costs.
 
+## What the measurement found
+
+Run 2026-11-01 to 11-02 from `4ed2867`, about two hours in all, at low priority on a shared machine. The rows are in `artifacts/closure-gap/closure-gap.tsv`, which git ignores.
+
+**The instrument check passes,** at 6 temperatures from T = 0.0045 to 0.0063: `dumbbell`'s share is 25–79% with `blobs` at 0%. The expectation on the edge form missed: it stayed under 5% at only 2 of the 6, rising to 43%. The cause isn't inspected. A guess is that the bridge isn't a pure chain, since k = 10 gives it edges spanning several hops.
+
+**The readings, as pre-registered.**
+
+| Set | Best ARI | Best levels | Highest share there | Edge share there | Labels side with the rule | Reading |
+|---|---|---|---|---|---|---|
+| `iris` | 0.638 | 1, T = 0.0490 | 9.6% | 0.4% | 0% | Room |
+| `toy` | 0.707 | 13, T = 0.0215–0.0490 | 4.4% | 1.6% | 71% | No room |
+| `landsat` | 0.248 | 1, T = 0.0791 | 67.7% | 0.0% | 73% | Room, chaining shows |
+| `isolet` | 0.148 | 3, T = 0.0907–0.1041 | 3.0% | 0.4% | 88% | No room |
+
+**A flaw in the chaining reading.** Its threshold of one half ignores the class base rate. Pairs from different classes are 81% of Landsat's pairs and 96% of ISOLET's, so a contradicted pair drawn blindly sides with the rule about that often, and Landsat's 73% is below its base rate. The reading stands as written because it was fixed in advance, but it says little alone. The fairer comparison is the pair rule's precision against closure's at the same level. At Landsat's best level that is 0.809 against 0.408, so chaining holds up there. ISOLET's 0.96–0.99 at T ≤ 0.037 comes with precision at most 0.053 on either side, which is the base rate and no evidence.
+
+**After the fact.** None of the rest was pre-registered. It is arithmetic on the same rows, with no new sampling.
+
+*Peaks of the same height, of two kinds.* `toy` reads 42.3% at T = 0.0143 and 43.2% at T = 0.0847.
+- On the cold peak the labels side with the rule on 97%, against a 75% base rate, and precision rises from 0.263 to 0.464. That is chaining.
+- On the hot peak they side with it on 17%, precision is 0.829 either way, and only recall moves, 0.369 to 0.204. That is a melt, where pair loss would pay to part pairs that belong together. `blobs` shows only this kind, with precision 1.000 throughout.
+
+So a large gap doesn't say which kind it is, and a search reading the same loss can't tell either.
+
+*Chain peaks sit just before closure's own split.* The toy's pair rule reaches ARI 0.68 at T = 0.0153 and closure reaches 0.68 at T = 0.0164, one step of this grid, or 7% in T. `iris` has the same shape: at T = 0.0458 closure's pair precision is 0.630 and the rule's 0.937, and one step hotter closure reaches 0.956 by itself.
+
+*Across the grid, the pair rule beats closure only on Landsat.* The rule is not a partition, so a search isn't sure to reach it, and this comparison favours the rule. ARI is by pair counts, to put both on one scale. Recall is the best each reaches over T at a given precision.
+
+| Set | Best ARI, closure | Best ARI, pair rule | Rule's recall over closure's, at matched precision |
+|---|---|---|---|
+| `iris` | 0.638 | 0.577 | 0.90 for precision 0.69–0.91 |
+| `toy` | 0.707 | 0.706 | 1.00 for 0.52–0.72 |
+| `landsat` | 0.248 | 0.289 | 1.47 for 0.45–0.72, 1.16 at 0.80, 0.87 below 0.37; higher only where recall is under 0.05 |
+| `isolet` | 0.149 | 0.149 | 0.76–0.90 |
+
+*Landsat's best level is fragile.* Over T = 0.0739–0.0907 closure's ARI by pair counts runs 0.083, 0.248, 0.084, 0.211, while the pair rule's falls smoothly: 0.289, 0.241, 0.186, 0.130. Closure's joined pairs rise from 3.44 to 3.85 million between T = 0.0791 and 0.0847, though the exact closure can only lose pairs as T rises (C17). So this is noise at the cut, probably a few bridge edges, not inspected. The level the reading rests on may not repeat under another seed. The chaining signature itself covers T = 0.069–0.085.
+
+*Smaller points.*
+- The edge form stays at or under 2.6% at every level of every real set, against a pair form up to 79%. Link loss can't see chains on data either.
+- False splits do occur on data: ISOLET at 11 levels, up to 2,681 pairs, and `dumbbell` at 3. Their cost is under 0.01% of the false merges'.
+- The cross-fit changed the reading in places: Landsat at T = 0.0847 from 83.6% to 60.4%, the toy at T = 0.0644 from 16.0% to 8.1%.
+- ISOLET's 10–18% at T = 0.0077–0.0095 is a ratio of small numbers. Its false-merge counts fit one or two dangling nodes under a single cluster.
+
+**What this says (proposal, the user's call).**
+- *Leave the search unbuilt for now.* On `toy` and ISOLET there is no room where it matters, and on `iris` the room at the best level points away from the labels: all 327 contradicted pairs are same-species pairs that pair loss would part. Only Landsat has a case: about 1.5 times the recall at matched precision, at a best ARI of 0.25, on one seed.
+- *Keep the gap as a diagnostic,* with the limit above: alone it doesn't separate chaining from a melt. A label-free way to tell them apart is an open question.
+- *Possibly why Landsat differs.* A T-stack reads each block at its own T, so a split delayed by a step or two costs nothing unless the block melts first. Landsat's lower recall at matched precision would fit that. Untested.
+
+**Limits.** One seed and one θ. The gap is an upper bound on a search's gain, and the pair rule's scores against the labels aren't what a search would attain. Global ARI and pair counts don't see a T-stack's per-block reading. The integrated gap was recorded and not read. The graph is the one at `4ed2867`, without the graph compiler's later edits.
+
 ## Proposed order
 
 Not decided.
 
-1. **Read the closure gap's measurement.** If it is small everywhere, a loss-optimal search isn't worth building. If it is large, it says where.
+1. **The closure gap's measurement.** Read, above. The one follow-up that could change the proposal is on Landsat: a second seed, and a local search from closure for how much of the gap a partition attains. It runs only if the user asks.
 2. **Idea 3.** Stepping-stone and path sampling, validated on exact ln Z (a tree for any q, Kaufman at q = 2), then BARS on ⟨E⟩ checked against the same truth. Independent of 1.
 3. **The partition distance table,** then VI cuts, credible balls and P(Q) as its reductions, and the per-block window through BARS.
 4. **Idea 5.** BARS with `StepBasis` on lineage trajectories.
@@ -149,7 +200,7 @@ A placement question for step 3: partition comparisons are observables (`LinkOve
 ## What bears on stopping, for the user to forward
 
 - The per-block window is a measurement-side readout under §13.3's decision 4. Its one-sided events are monotone, so they would be endpoint certificates in the family of §13.5 for a block known in advance. Blocks aren't known at stopping time, so this is a note, not a proposal.
-- The closure gap, over edges, could flag intervals where the θ-partition misleads even though C38's sandwich certifies it unchanged. Unmeasured.
+- The closure gap, over edges, could have flagged intervals where the θ-partition misleads even though C38's sandwich certifies it unchanged. Measured 2026-11-02, it wouldn't: on the real sets it stays at or under 2.6% at every level, and reads 0.0% at Landsat's best level, where the pair form reads 67.7%. The pair form sees more but costs N²/2 per kept partition, needs kept partitions, and doesn't separate chaining from a melt.
 - Budgets per temperature, set from measured ESS and R̂, were raised here (2026-10-30) as a way to spend draws. They clash with BARS as it stands: its run API takes no per-point weights (primer, "Equal weights"), so uneven budgets give it uneven noise it can't be told about. The same objection §13.3 raises against uneven spacing applies. They stay a diagnostic until BARS takes weights.
 
 ## Naming
