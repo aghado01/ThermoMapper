@@ -102,6 +102,20 @@ Open it by saying plainly whether the contract is fulfilled, and if not, what st
 
 Newest first.
 
+### The closing, checked by the main session — 2026-11-02
+
+- *Read:* `src/` across `0ab1e4d`, `4c34948`, `1364cbb`, `b844f53`, `3a83d0a` and `26befff`, and the tests that carry them.
+  - **G-2 against R:** `vf[vf==func.var]<-NA` (`sobol_normTmix.R:684`) removes only the variable conditioned on, so R keeps the others as inputs, as `ConditionOn` does. The normalizer is one constant over the part, carried once: `ConditionOnOne_HandBuiltTerms_CarryTheNormalizerOnce` builds the terms where a split would show, a coordinate past a hinge's end among them. Terms with no output factor get a normalizer of 1, so skipping `Reads` there is harmless.
+  - **G-3 on a weighted fit:** the selected draws keep raw weights that no longer sum to 1, which holds because the means divide by their mass and the summaries read a weighted sample.
+  - **G-4:** `ListFault` refuses NaN, a list not starting at 1, one not descending, and the wrong end for the reference rung.
+  - **G-6:** the default draw is bit-identical, a part left out draws nothing, and `Reconstruct` takes an empty residual.
+- *The matrix, by my script again:* F 192, FL 5, D 18, G 0, total 215. Every R argument and return still has a row.
+- *The suites, rerun by the main session at `971c84b` (Release, below-normal priority, four threads): Samplers 284 of 284, Regression 1,544 of 1,544 with none skipped, the BASS oracle classes 90 of 90, the chip's counts.*
+- *The chip's correction stands:* a list moves only a tempered config's fingerprint, since `Tempering` is null by default. So only a tempered checkpoint from before `3a83d0a` stops resuming, a narrower break than I told the user. No hash re-pinned.
+- *One choice put to the user:* a declared list on the default `Adaptive = true` re-spaces its interior rungs. `Levels` and `HotEnd` declare a count and an end, but a list declares the spacing itself, and on this default it does not run as declared.
+- *Written by me from the chip's list:* the API, configuration and prose rows for `InverseTemperatures`, `ConditionOn`, `Draws`, `BasisParts`, `OtherVariance` and `OtherIndex`, in `docs/Maths/BayesianRegression.md`.
+- *Open:* G-7 and G-8, waiting on a quiet window; the extension seams' write-up, mine, owed.
+
 ### The gaps closed (chip, 2026-11-02)
 
 G-1 `0ab1e4d`, G-2 `4c34948`, G-3 `1364cbb` with `b844f53`, G-4 `3a83d0a`, G-6 `26befff`; G-5 left out, as ruled. [The matrix](completion-audit-matrix.md) and [the report](../bass-completion-report.md) are flipped: F 192, FL 5, D 18, G 0, with P04, P05 and P08 Fulfilled, and the report's open questions turned into the rulings. G-7 and G-8 wait on a quiet window. At `b844f53`: Samplers 284 of 284, Regression 1,544 of 1,544 with none skipped, BASS oracle classes 90 of 90. `artifacts\chip-sens\` is deleted.

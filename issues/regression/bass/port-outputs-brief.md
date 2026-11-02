@@ -79,7 +79,7 @@ Sources: the JSS paper (§3), Francom et al. 2018, the inventory's Sobol section
   - *Placement* (the hub's boundary rules): a measure's interval moments ∫ₐᵇ xᵏ dF are Distributions'; the hinge products and their ANOVA structure are BASS's.
 - **Functional responses** have two forms (JSS §3.1):
   - integrate the functional variable as one more input, for a total decomposition, with its measure declared: uniform over its range by default, or the empirical output grid;
-  - condition on one functional coordinate, for indices as functions of t. *(2026-11-01, the completion audit: built with every output variable conditioned on; conditioning on one and integrating the others, R's `func.var`, is its gap G-2.)*
+  - condition on one functional coordinate, for indices as functions of t. *(2026-11-01, the completion audit: built with every output variable conditioned on; conditioning on one and integrating the others, R's `func.var`, was its gap G-2, closed 2026-11-02 by `SensitivitySpec.ConditionOn`.)*
 
   Both report main and total indices. R's functional path omits the totals.
 - **Basis sensitivity.**
