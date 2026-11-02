@@ -1,0 +1,103 @@
+# The BASS completion audit (chip brief)
+
+Date: 2026-11-01. Status: chipped on the user's word. An audit of the port against its contract, ending in the completion report the hub asks for ([bass-full-port-brief.md](../bass-full-port-brief.md), the last paragraph of "References and documentation updates").
+
+## Why
+
+Every stage is built, and each was verified when it landed, but each against its own brief. Nobody has read the whole against the contract. The first note on what remained ([opus-bass-completion-remainder.md](../opus-bass-completion-remainder.md)) named edge cases nobody could vouch for, the categorical representation above 64 levels among them. This audit turns "close to done" into a concrete list: what is fulfilled and on what evidence, what is built but untested, what is missing, and what was left out by decision.
+
+## The standard of evidence
+
+**Start from R and the contract.** The contract is the hub's "Scope and completion contract". The R source is BASS 1.3.1 at `D:/aghado01/packages/BASS`, commit `26710146c623a258854162367a939041efedd091`, and [the public inventory](../bass-public-inventory-and-backend-review.md) maps it.
+
+**Our records say where to look; the evidence is code and tests you have read.** The checklists' reports and the "Checked" bullets in `docs/Maths` were written by the work they describe. A verdict that rests on a record alone is not yet a verdict.
+
+Each row takes one verdict:
+- **Fulfilled:** the C# location (`file:line`); a named test you have read, which would fail if the capability broke; and its reference: R parity where R is right, the corrected value where R is wrong (the hub's parity rule), exact enumeration, closed form or controlled recovery.
+- **Fulfilled, limited:** as above, with the measured limitation stated.
+- **Built, untested:** the code path exists and no test exercises it.
+- **Gap:** missing, or it differs from the contract.
+- **Left out by decision:** cite the decision (a D-number, the parity rule, the hub's list of extensions) and where it is recorded.
+
+## The audit, in order
+
+Each part lands in `issues/regression/bass/completion-audit-matrix.md`, committed as it finishes, so a restart loses little. Record the audited revision (`git rev-parse HEAD`) first. Other sessions commit beside you, so note any later commit that touches BASS.
+
+1. **Capabilities P01–P15.**
+   - For each exported function and S3 method, read R's signature and return. Map every argument to its C# field, and every returned element to its C# member, or give the other verdicts. The inventory's "Fitting controls that must remain representable", "Three response workflows" and "Sensitivity, calibration, and operational coverage" are the checklist.
+   - Cross the three response representations (scalar, direct functional, supplied basis or PCA) with continuous, categorical and mixed inputs, and with each output: prediction at new inputs and output coordinates, sensitivity, effects, reconstruction, restart. A cell that cannot apply says why.
+   - The plot, print and summary methods (P09–P15): the contract asks for their data in regression, with rendering above maths. Say which data exists; rendering is listed as remaining, not as a gap.
+2. **The baseline.**
+   - The qualified existing-engine revision and the closure evidence for B01–B06 ([the prerequisites review](../bass-adaptation-prerequisites-review.md)), keeping baseline repairs distinguishable from port changes.
+   - The inventory's "Observed contract defects and qualification gaps": each R defect has its fixture, the C# test asserts the corrected value, and the R oracle keeps R's value beside it, as the parity rule says.
+3. **The decisions.**
+   - D01–D10, from the hub's register and the segment briefs: each decision as recorded, its code, and its test.
+   - **The defaults, mechanically:** every row of the BASS configuration tables in `docs/Maths/BayesianRegression.md` and the BASS-facing rows in `docs/Maths/Samplers.md`, against the value in code. List each difference.
+   - The register's **Corrected** entries.
+4. **The validation policy** (the hub's "Validation and performance qualification"), each item with its test, across the representations where it applies:
+   - the independent checks: boundary proposal ratios, enumerable model spaces, Gaussian conditionals, precision sampling, empirical covariance, functional contractions, sensitivity identities, calibration targets;
+   - the SMC tests: a known initial distribution, incremental weights, normalizer ratios, resampling, state ownership, populations whose modes are known;
+   - the essential edge cases: intercept-only models; one predictor, one response component, one case, one draw; constant columns and constant responses; nearly dependent terms; more than 64 category levels; category probabilities of zero; bounded and truncated input measures; full PCA rank; rejected proposals leaving the current state untouched.
+5. **The benchmark list.** The hub's axes and measures against [the cost half's report](performance-cost-brief.md#reports). Known open: statistical error per unit time ([its brief](performance-statistical-brief.md), not run) and the sensitivity moment work alone. Run no benchmark.
+6. **The records.**
+   - The open checklist boxes (N15, N17, F-M2, F-X4 at the time of writing): why each is open, and whether its box is stale.
+   - The API and source-map rows in `docs/Maths/BayesianRegression.md` against the public surface and the files: rows naming what no longer exists, and public types no row names.
+   - Statements you found false along the way. The extension seams' write-up is already known to be owed, so list it once.
+7. **What remains, and the limits.** The optional backends and extensions ([the extensions brief](extensions-brief.md); the hub tracks the SMC backends apart from capability completion), and the measured limitations, each with where it was measured: Friedman's posterior, the deterministic profile (F-R1), N15's cost and any others you meet.
+
+## Probes
+
+Where the contract names something and no test exists (edge cases above all), a small probe separates "built, untested" from "gap".
+- They go in one file, `tests/regression/BassCompletionAuditProbes.cs`, each a few seconds at most, each named for what it pins.
+- A probe that passes stays as coverage.
+- A probe that exposes a defect goes in as `[Fact(Skip = "audit gap G-n")]`, with its reproduction in the report.
+- Nothing under `src/` changes. A gap is reported for the user to schedule, not fixed here.
+
+## The machine
+
+The user's machine is shared with other sessions and applications, and it jammed under load on 2026-11-01. So this chip stays light:
+- Use targeted filters while you work, and run the suites once at the end, one at a time: `Maths.Samplers.Tests`, `Maths.Regression.Tests`, and the BASS classes of `Maths.Oracle.Tests` (`FullyQualifiedName~Maths.Oracle.Tests.Bass`).
+- Run every build and test at below-normal priority, so its children inherit it, and cap the work: `-m:2` on builds, `-- xUnit.MaxParallelThreads=4` on tests.
+- Leave `BASS_QUALIFICATION` and `SEED_SWEEP` unset; those runs are the user's to schedule.
+- Check that a run has really stalled before repeating it. These suites took 5–6 minutes each on an idle machine, and take far longer on a busy one.
+
+## Working rules
+
+- **Work in `D:\aghado01\ThermoMapper` on `main`.** Worktrees fail on this repo's long paths. Switch no branch, push nothing, and spawn no subagents.
+- **Your files:** the matrix, the probes, the report and this brief's Reports section. `docs/Maths`, the hub and the checklists are the main session's, which verifies your report and records it. Leave other sessions' uncommitted edits and the user's notes under `issues/regression/` alone.
+- **Commit your own files only, by explicit path** (`git commit -- paths`), never leaving anything staged, since the index is shared, in the repo's message style, ending with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Build and test into your own artifacts root:** `-p:ArtifactsRoot=D:\aghado01\ThermoMapper\artifacts\chip-audit\`, on each command itself rather than through a variable set earlier in a chain. Delete `artifacts\chip-audit\` when you finish.
+- **Search with `rg` through Bash;** the Grep tool is denied here. `docs/Maths/BayesianRegression.md` runs past 2,000 lines, so read it by section; the `mdnav` skill helps.
+- **Line endings:** briefs and C# are LF.
+- **Recommend no default.** Which gaps to fix, and in what order, is the user's call; give each gap its size and leave the choice.
+
+## Review before reporting
+
+A fresh-eyes pass, its fixes made before you report:
+- **Completeness of the audit:** every P-ID, B-ID, D-number and edge case above has a row, and so does every R argument and return.
+- **A re-trace:** take every tenth Fulfilled row and trace it again from R to the test, without reading your note first. Ask whether that test would fail if the capability were removed. If a row fails this, widen the check to its neighbours and report how many moved.
+- **Demotion:** any verdict that rests on a record alone drops to what you can show.
+
+## Report
+
+`issues/regression/bass-completion-report.md`, beside the hub and linking back to it, with what the hub lists:
+- the audited revision, and the suites' counts there;
+- the qualified existing-engine revision and the B01–B06 closure evidence, baseline repairs apart from port changes;
+- the fulfilled capability IDs;
+- the resolved statistical decisions;
+- the remaining optional backends and extensions;
+- the measured limitations;
+- **the gap list, ranked:** contract gaps first, then built-but-untested, then record drift, each with a one-line reading of its size.
+
+Open it by saying plainly whether the contract is fulfilled, and if not, what stands between. Keep what you found apart from what you make of it. The matrix holds the row-by-row detail. Put a short note under "Reports" below, newest first, with what the main session should check.
+
+## Not in this brief
+
+- **Any fix under `src/`,** and any change to a default.
+- **Performance qualification's statistical half** and the efficiency pass.
+- **The extensions** (E1–E15), the notation pass, and rendering above maths.
+- **The Friedman band reading,** a separate chip ([its brief](friedman-smc-band-brief.md)).
+
+## Reports
+
+Newest first.
