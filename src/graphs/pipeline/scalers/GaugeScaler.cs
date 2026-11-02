@@ -32,6 +32,15 @@ public sealed class GaugeScaler : IEdgeScaler
         var weights = new double[graph.Weights.Length];
         for (int i = 0; i < weights.Length; i++) weights[i] = graph.Weights[i] * factor;
 
+        // In log space the factor is a shift, ln g, and the gauge stays a pure rescaling of temperature.
+        double[]? logWeights = null;
+        if (graph.LogWeights is not null)
+        {
+            double shift = Math.Log(factor);
+            logWeights = new double[graph.LogWeights.Length];
+            for (int i = 0; i < logWeights.Length; i++) logWeights[i] = graph.LogWeights[i] + shift;
+        }
+
         return inner with
         {
             Graph = new CsrGraph
@@ -40,6 +49,7 @@ public sealed class GaugeScaler : IEdgeScaler
                 RowPointers = graph.RowPointers,
                 NodeCount = graph.NodeCount,
                 Weights = weights,
+                LogWeights = logWeights,
             },
             GaugeFactor = factor,
         };

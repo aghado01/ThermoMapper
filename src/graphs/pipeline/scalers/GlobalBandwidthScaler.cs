@@ -125,6 +125,14 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
             KernelType.Linear    => LinearKernel.Evaluate,
             _ => throw new NotSupportedException($"KernelType {_kernel} not implemented."),
         };
+        Func<double, double, double> logKernelFn = _kernel switch
+        {
+            KernelType.Gaussian  => GaussianKernel.LogEvaluate,
+            KernelType.Cauchy    => CauchyKernel.LogEvaluate,
+            KernelType.Laplacian => LaplacianKernel.LogEvaluate,
+            KernelType.Linear    => LinearKernel.LogEvaluate,
+            _ => throw new NotSupportedException($"KernelType {_kernel} not implemented."),
+        };
 
         bool isLocalParametrix = _geometry == SpaceGeometry.Spherical
             && _fidelity == CouplingFidelity.Intrinsic
@@ -150,10 +158,12 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
             {
                 if (i > nb.Index) continue;          // store each undirected edge once
 
-                double coupling;
+                double coupling, logCoupling;
                 if (isGlobalSchoenberg)
                 {
+                    // The series has no tail form; its log is the log of its value.
                     coupling = EvaluateGlobalSchoenbergNormalized(nb.Distance, delta, intrinsicDimension);
+                    logCoupling = coupling > 0.0 ? Math.Log(coupling) : double.NegativeInfinity;
                 }
                 else
                 {
@@ -161,18 +171,19 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
                     {
                         // Outside the parametrix: no kernel value, but a repair bridge stays.
                         if (IsRepairEdge(i, nb.Index))
-                            edges.Add(new Edge(i, nb.Index, ScalingContext.RepairEdgeMinimum));
+                            edges.Add(new Edge(i, nb.Index, ScalingContext.RepairEdgeMinimum, Math.Log(ScalingContext.RepairEdgeMinimum)));
                         continue;
                     }
                     coupling = kernelFn(nb.Distance, delta) * VolumeCorrection(nb.Distance);
+                    logCoupling = logKernelFn(nb.Distance, delta) + LogVolumeCorrection(nb.Distance);
                 }
 
-                if (!TryKeep(i, nb.Index, ref coupling))
+                if (!TryKeep(i, nb.Index, ref coupling, ref logCoupling))
                 {
                     cutEdges++;
                     continue;
                 }
-                edges.Add(new Edge(i, nb.Index, coupling));
+                edges.Add(new Edge(i, nb.Index, coupling, logCoupling));
             }
         }
 
@@ -186,20 +197,29 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
     private bool IsRepairEdge(int a, int b) => _context.RepairEdges?.Contains(a, b) == true;
 
     /// <summary>
-    /// The thinning decision on a kernel coupling: kept above the floor (a floor of 0 keeps every
-    /// edge). A repair edge is kept at whatever the kernel gave, raised to
-    /// <see cref="ScalingContext.RepairEdgeMinimum"/> when that underflowed, so a repaired graph
-    /// stays connected under any kernel. NaN is never kept.
+    /// The thinning decision, made on the log coupling so it holds where the linear value has underflowed:
+    /// kept above the floor (a floor of 0 keeps every edge). A repair edge is kept at the kernel's own log
+    /// coupling, exact however far; its linear coupling is raised to
+    /// <see cref="ScalingContext.RepairEdgeMinimum"/> when that underflowed, and a kernel that gives it exactly
+    /// zero (a Linear kernel past its support) gets the minimum in both, so a repaired graph stays connected
+    /// under any kernel. NaN is never kept.
     /// </summary>
-    private bool TryKeep(int a, int b, ref double coupling)
+    private bool TryKeep(int a, int b, ref double coupling, ref double logCoupling)
     {
-        if (double.IsNaN(coupling)) return false;
+        if (double.IsNaN(coupling) || double.IsNaN(logCoupling)) return false;
         double floor = _context.CouplingFloor;
-        if (floor <= 0.0 || coupling > floor) return true;
-        if (!IsRepairEdge(a, b)) return false;
-        if (!(coupling > ScalingContext.RepairEdgeMinimum)) coupling = ScalingContext.RepairEdgeMinimum;
+        bool repair = IsRepairEdge(a, b);
+        bool above = floor <= 0.0 || logCoupling > Math.Log(floor);
+        if (!above && !repair) return false;
+
+        if (repair)
+        {
+            if (!(coupling > ScalingContext.RepairEdgeMinimum)) coupling = ScalingContext.RepairEdgeMinimum;
+            if (double.IsNegativeInfinity(logCoupling)) logCoupling = Math.Log(ScalingContext.RepairEdgeMinimum);
+        }
         return true;
     }
+
 
     private double EvaluateGlobalSchoenbergNormalized(double r, double delta, int m)
     {
@@ -299,12 +319,13 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
             {
                 if (i > nb.Index) continue;
                 double coupling = MixtureKernel.Evaluate(nb.Distance, resolved, weights);
-                if (!TryKeep(i, nb.Index, ref coupling))
+                double logCoupling = MixtureKernel.LogEvaluate(nb.Distance, resolved, weights);
+                if (!TryKeep(i, nb.Index, ref coupling, ref logCoupling))
                 {
                     cutEdges++;
                     continue;
                 }
-                edges.Add(new Edge(i, nb.Index, coupling));
+                edges.Add(new Edge(i, nb.Index, coupling, logCoupling));
             }
         }
 
@@ -469,6 +490,35 @@ public sealed class GlobalBandwidthScaler : IEdgeScaler
         double sphericalExponent = (intrinsicDimension - 1) / 2.0;
         return sphericalExponent <= 0.0 ? 1.0 : Math.Pow(sphericalBaseFactor, sphericalExponent);
     }
+
+    /// <summary>
+    /// ln of <see cref="VolumeCorrection"/>, by the same cases: ln V = ((d−1)/2)·ln(r/sinh r) on H^d (the sinh by its
+    /// large-r form, so far edges keep their value) and ((m−1)/2)·ln(r/sin r) on S^m.
+    /// </summary>
+    private double LogVolumeCorrection(double r)
+    {
+        if (_fidelity != CouplingFidelity.Intrinsic || r < 1e-12)
+            return 0.0;
+
+        if (_geometry == SpaceGeometry.Hyperbolic)
+        {
+            int d = _ambientDimension
+                ?? throw new InvalidOperationException(
+                    "Intrinsic coupling on hyperbolic geometry requires the ambient dimension; build via GraphMetric.FromFeatures.");
+            double exponent = (d - 1) / 2.0;
+            if (exponent <= 0.0) return 0.0;
+            double logSinh = r < 1.0 ? Math.Log(Math.Sinh(r)) : r - Math.Log(2.0) + LogMath.Log1P(-Math.Exp(-2.0 * r));
+            return exponent * (Math.Log(r) - logSinh);
+        }
+
+        if (_geometry != SpaceGeometry.Spherical)
+            return 0.0;
+
+        int intrinsicDimension = ResolveSphericalIntrinsicDimension();
+        double sphericalExponent = (intrinsicDimension - 1) / 2.0;
+        return sphericalExponent <= 0.0 ? 0.0 : sphericalExponent * (Math.Log(r) - Math.Log(Math.Sin(r)));
+    }
+
 
     private int ResolveSphericalIntrinsicDimension()
     {

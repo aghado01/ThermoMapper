@@ -38,6 +38,11 @@ namespace Graphs.Proximity
             double[] mpWeights = new double[graph.Weights.Length];
             bool inclusive = rankRule == LmpRankRule.Inclusive;
 
+            // Couplings rank by their log when the graph has it, so edges whose linear value has underflowed to
+            // the same 0 (or the repair edge's floor) still order exactly. The ranks are of the same edges.
+            double[] ranked = weightsAreCouplings && graph.LogWeights is not null ? graph.LogWeights : graph.Weights;
+            double[]? mpLog = ranked == graph.LogWeights ? new double[graph.Weights.Length] : null;
+
             Parallel.For(0, graph.NodeCount, u =>
             {
                 int rowStartU = graph.RowPointers[u];
@@ -45,23 +50,24 @@ namespace Graphs.Proximity
                 if (degreeU == 0) return;
 
                 // The local distribution for node U
-                ReadOnlySpan<double> rowU = new ReadOnlySpan<double>(graph.Weights, rowStartU, degreeU);
+                ReadOnlySpan<double> rowU = new ReadOnlySpan<double>(ranked, rowStartU, degreeU);
 
                 for (int e = rowStartU; e < rowStartU + degreeU; e++)
                 {
                     int v = graph.Targets[e];
-                    double w = graph.Weights[e];
+                    double w = ranked[e];
 
                     // Fetch the local distribution for the target node V
                     int rowStartV = graph.RowPointers[v];
                     int degreeV = graph.RowPointers[v + 1] - rowStartV;
-                    ReadOnlySpan<double> rowV = new ReadOnlySpan<double>(graph.Weights, rowStartV, degreeV);
+                    ReadOnlySpan<double> rowV = new ReadOnlySpan<double>(ranked, rowStartV, degreeV);
 
                     int lo = u < v ? u : v;
                     int hi = u < v ? v : u;
                     if (protectedEdges?.Contains((lo, hi)) == true)
                     {
-                        mpWeights[e] = w;
+                        mpWeights[e] = graph.Weights[e];
+                        if (mpLog is not null) mpLog[e] = graph.LogWeights![e];
                         continue;
                     }
 
@@ -74,6 +80,7 @@ namespace Graphs.Proximity
 
                     // Final MP score is the intersection of marginal probabilities
                     mpWeights[e] = pU * pV;
+                    if (mpLog is not null) mpLog[e] = mpWeights[e] > 0.0 ? Math.Log(mpWeights[e]) : double.NegativeInfinity;
                 }
             });
 
@@ -82,7 +89,8 @@ namespace Graphs.Proximity
                 Targets = graph.Targets,         // Share the exact same topology array
                 RowPointers = graph.RowPointers, // Share the row pointers
                 NodeCount = graph.NodeCount,
-                Weights = mpWeights              // Inject the new probabilities
+                Weights = mpWeights,             // Inject the new probabilities
+                LogWeights = mpLog
             };
         }
 

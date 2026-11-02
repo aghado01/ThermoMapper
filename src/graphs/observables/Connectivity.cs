@@ -23,8 +23,15 @@ namespace Graphs.Observables
         /// Connectivity over the edges that carry weight: with
         /// <paramref name="positiveWeightsOnly"/>, an edge of weight zero (a coupling the kernel
         /// underflowed, or an exact zero Local Mutual Proximity wrote) joins nothing, and
-        /// <see cref="ConnectivityReport.EdgeCount"/> counts the positive-weight edges.
+        /// <see cref="ConnectivityReport.EdgeCount"/> counts the positive-weight edges. A graph that carries
+        /// <see cref="CsrGraph.LogWeights"/> decides by them (coupled means ln J above −∞), so a coupling that
+        /// underflowed in the linear weights still joins.
         /// </summary>
+        private static bool IsCoupled(CsrGraph graph, int slot) =>
+            graph.LogWeights is not null
+                ? graph.LogWeights[slot] > double.NegativeInfinity
+                : graph.Weights[slot] > 0.0;
+
         public static ConnectivityReport Validate(CsrGraph graph, bool positiveWeightsOnly)
         {
             int n = graph.NodeCount;
@@ -40,7 +47,7 @@ namespace Graphs.Observables
                 {
                     int j = graph.Targets[idx];
                     if (j <= i) continue;
-                    if (positiveWeightsOnly && !(graph.Weights[idx] > 0.0)) continue;
+                    if (positiveWeightsOnly && !IsCoupled(graph, idx)) continue;
                     uf.Union(i, j);
                     edgeCount++;
                 }

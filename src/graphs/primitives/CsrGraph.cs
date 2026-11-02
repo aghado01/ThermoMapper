@@ -16,11 +16,24 @@ namespace Graphs.Primitives
         public int Target;
         public double J;
 
+        /// <summary>ln J, when the producer has it; <c>NaN</c> when it has only <see cref="J"/>.</summary>
+        public double LogJ;
+
         public Edge(int source, int target, double coupling)
         {
             Source = source;
             Target = target;
             J = coupling;
+            LogJ = double.NaN;
+        }
+
+        /// <summary>An edge that carries its coupling and the coupling's log, exact where J has underflowed.</summary>
+        public Edge(int source, int target, double coupling, double logCoupling)
+        {
+            Source = source;
+            Target = target;
+            J = coupling;
+            LogJ = logCoupling;
         }
     }
 
@@ -36,6 +49,14 @@ namespace Graphs.Primitives
         public double[] Weights;
         public int[] RowPointers;
         public int NodeCount;
+
+        /// <summary>
+        /// ln of the coupling in each slot, laid out as <see cref="Weights"/>; <c>null</c> when the producer did not
+        /// compute it. Only the graph compiler's coupling graphs set it. <c>−∞</c> is no coupling. It is exact where
+        /// <see cref="Weights"/> has underflowed: a Gaussian bridge at d/δ = 60 reads −1800 here and 0 (or the repair
+        /// edge's 1e-300 floor) there. Every graph built from another's arrays must carry it along or leave it null.
+        /// </summary>
+        public double[]? LogWeights;
 
         /// <summary>
         /// Build a symmetric CSR graph from an undirected Edge[] where each
@@ -59,6 +80,12 @@ namespace Graphs.Primitives
             int[] targets = new int[totalEntries];
             double[] weights = new double[totalEntries];
 
+            // The log is kept only when every edge brings one.
+            bool withLog = edges.Length > 0;
+            for (int e = 0; withLog && e < edges.Length; e++)
+                withLog = !double.IsNaN(edges[e].LogJ);
+            double[]? logWeights = withLog ? new double[totalEntries] : null;
+
             int[] cursor = new int[nodeCount];
             Array.Copy(rowPointers, cursor, nodeCount);
 
@@ -70,10 +97,12 @@ namespace Graphs.Primitives
 
                 targets[cursor[src]] = tgt;
                 weights[cursor[src]] = w;
+                if (logWeights is not null) logWeights[cursor[src]] = edges[e].LogJ;
                 cursor[src]++;
 
                 targets[cursor[tgt]] = src;
                 weights[cursor[tgt]] = w;
+                if (logWeights is not null) logWeights[cursor[tgt]] = edges[e].LogJ;
                 cursor[tgt]++;
             }
 
@@ -81,6 +110,7 @@ namespace Graphs.Primitives
             {
                 Targets = targets,
                 Weights = weights,
+                LogWeights = logWeights,
                 RowPointers = rowPointers,
                 NodeCount = nodeCount
             };
@@ -158,6 +188,12 @@ namespace Graphs.Primitives
 
             for (int i = 0; i < Weights.Length; i++)
                 writer.Write(Weights[i]);
+
+            // The log couplings follow, behind their length (−1 = none).
+            writer.Write(LogWeights?.Length ?? -1);
+            if (LogWeights is not null)
+                for (int i = 0; i < LogWeights.Length; i++)
+                    writer.Write(LogWeights[i]);
         }
 
         /// <summary>
@@ -190,12 +226,25 @@ namespace Graphs.Primitives
             for (int i = 0; i < weightsLength; i++)
                 weights[i] = reader.ReadDouble();
 
+            int logLength = reader.ReadInt32();
+            if (logLength != -1 && logLength != weightsLength)
+                throw new InvalidDataException(
+                    $"Corrupt CSR graph: LogWeights length ({logLength}) must be -1 or equal Weights length ({weightsLength}).");
+            double[]? logWeights = null;
+            if (logLength >= 0)
+            {
+                logWeights = new double[logLength];
+                for (int i = 0; i < logLength; i++)
+                    logWeights[i] = reader.ReadDouble();
+            }
+
             return new CsrGraph
             {
                 NodeCount = nodeCount,
                 RowPointers = rowPointers,
                 Targets = targets,
                 Weights = weights,
+                LogWeights = logWeights,
             };
         }
 
@@ -270,6 +319,7 @@ namespace Graphs.Primitives
             int totalEntries = subRowPointers[subN];
             int[] subTargets  = new int[totalEntries];
             double[] subWeights = new double[totalEntries];
+            double[]? subLogWeights = LogWeights is null ? null : new double[totalEntries];
 
             // Pass 4: fill targets + weights using a per-row write cursor.
             int[] cursor = new int[subN];
@@ -285,6 +335,7 @@ namespace Graphs.Primitives
                     int pos = subRowPointers[newU] + cursor[newU]++;
                     subTargets[pos] = oldToNew[v];
                     subWeights[pos] = Weights[e];
+                    if (subLogWeights is not null) subLogWeights[pos] = LogWeights![e];
                 }
             }
 
@@ -292,6 +343,7 @@ namespace Graphs.Primitives
             {
                 Targets     = subTargets,
                 Weights     = subWeights,
+                LogWeights  = subLogWeights,
                 RowPointers = subRowPointers,
                 NodeCount   = subN,
             };

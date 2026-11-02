@@ -3,7 +3,7 @@ using System;
 namespace Graphs.Coupling;
 
 /// <summary>Log-space arithmetic the kernels' log evaluators share.</summary>
-internal static class LogMath
+public static class LogMath
 {
     /// <summary>
     /// ln(1 + x) with full relative precision for small |x| (x &gt; −1), where <c>Math.Log(1 + x)</c> loses every

@@ -674,11 +674,11 @@ public static class GraphCompiler
         int missing = 0, zeroed = 0;
         if (repairEdges.Count > 0)
         {
-            Dictionary<long, double> returnedWeights = EdgeWeightsByKey(returned, n);
+            Dictionary<long, bool> returnedCoupled = EdgeCoupledByKey(returned, n);
             foreach (long key in repairEdges.Keys)
             {
-                if (!returnedWeights.TryGetValue(key, out double weight)) missing++;
-                else if (weightsAreCouplings && !(weight > 0.0)) zeroed++;
+                if (!returnedCoupled.TryGetValue(key, out bool coupledEdge)) missing++;
+                else if (weightsAreCouplings && !coupledEdge) zeroed++;
             }
 
             if (missing > 0)
@@ -766,18 +766,25 @@ public static class GraphCompiler
             for (int slot = graph.RowPointers[i]; slot < graph.RowPointers[i + 1]; slot++)
             {
                 int j = graph.Targets[slot];
-                if (j > i && !removed.Contains(i, j)) edges.Add(new Edge(i, j, graph.Weights[slot]));
+                if (j > i && !removed.Contains(i, j))
+                    edges.Add(graph.LogWeights is null
+                        ? new Edge(i, j, graph.Weights[slot])
+                        : new Edge(i, j, graph.Weights[slot], graph.LogWeights[slot]));
             }
         return CsrGraph.FromEdges(edges.ToArray(), n);
     }
 
-    private static Dictionary<long, double> EdgeWeightsByKey(CsrGraph graph, int n)
+    /// <summary>Each edge's key, with whether it carries coupling: ln J above −∞ where the graph has the log, else a positive weight.</summary>
+    private static Dictionary<long, bool> EdgeCoupledByKey(CsrGraph graph, int n)
     {
-        var weights = new Dictionary<long, double>(graph.Targets.Length / 2);
+        var coupled = new Dictionary<long, bool>(graph.Targets.Length / 2);
         for (int i = 0; i < n; i++)
             for (int slot = graph.RowPointers[i]; slot < graph.RowPointers[i + 1]; slot++)
-                if (graph.Targets[slot] > i) weights[RepairEdgeSet.KeyOf(i, graph.Targets[slot], n)] = graph.Weights[slot];
-        return weights;
+                if (graph.Targets[slot] > i)
+                    coupled[RepairEdgeSet.KeyOf(i, graph.Targets[slot], n)] = graph.LogWeights is not null
+                        ? graph.LogWeights[slot] > double.NegativeInfinity
+                        : graph.Weights[slot] > 0.0;
+        return coupled;
     }
 
     private static int CountUndirectedEdges(NeighborSelection selection, int n)
