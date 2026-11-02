@@ -280,7 +280,7 @@ entropy) suit it better.
 | C46 | For q > 2 the disordered phase is metastable well below the melt (1.17 e-folds at q = 20, complete graph), and every replica starts disordered, so R̂ can miss a shared metastable phase | §13.14 | Derived here (Lemma 10.11; on a Bethe lattice, 0.44–0.68 e-folds at d = 5–10); no sign at round 1's sizes | E16 |
 | C47 | For signed couplings at q = 2, \|⟨σ_xσ_y⟩_J\| ≤ φ_{\|J\|,2}(x ↔ y) ≤ Bernoulli(p(\|J\|))(x ↔ y): a hot-side envelope survives, while monotonicity in β does not | §13.14 | Checked against Grimmett (Proposition 11.38, (11.44), Theorem 11.40); Potts form open | The Potts analogue |
 | C48 | One process of edge thresholds has, at every T at once, the law φ_{p(T),q}: each draw is a dendrogram in T, and ΔS₂ ≥ 0 per draw | §13.14 | Update rule derived here for edge-dependent couplings (Grimmett §8.6's construction; its displays are missing from the copy); mixing and cost unknown | E17 |
-| C49 | `LineagePersistence` on iris at k = 5 reads the published first stage and not the species: no selected lineage mixes setosa with the others in 60 of 60 runs, while the species-level reading passes 3 of 12 seeds at the parity budget and 0 of 12 at 8 × (1000, 2000) | §13.14 | Observed (12 seeds × 5 bracket and budget settings); agrees with §12.22 | A resolver that reads levels; lifetimes in ln T; the representative's choice |
+| C49 | `LineagePersistence` on iris at k = 5 reads the published first stage and not the species: no selected lineage mixes setosa with the others in 60 of 60 runs, while the species-level reading passes 3 of 12 seeds at the parity budget and 0 of 12 at 8 × (1000, 2000) | §13.14 | Observed (12 seeds × 5 bracket and budget settings); agrees with §12.22. Weakened (§13.17, C58): on this graph setosa hangs from one repair edge, so "no lineage mixes" can't fail, and "not the species" is a k = 5, Gaussian reading | A resolver that reads levels; lifetimes in ln T; the representative's choice |
 | C50 | Z_{p,q} = φ_{p,1}(q^k): the family is exponential in ln q with conjugate k, so ln Z(T, q) = ∫₀^(ln q) ⟨k⟩ d ln q′, with an exact reference rung at q = 1 for every T | §13.14 | Grimmett (3.59), and §10.8; the closure unbuilt | E18 |
 | C51 | The mean-field first-order line ends at q = 2, so a path through q = 2 joins q = 20's two phases without a jump | §13.14 | Derived from §10.2 (lattices end the line higher, (4.64), and q = 2 stays on the continuous side); unverified on graphs; literature unchecked | E18 |
 | C52 | A cut F changes ln Z by at most \|F\| ln q nats at q ≥ 1, so a thin cut can move a block's melt by at most about \|F\| ln q/(2.65·n) e-folds at q = 20 | §13.14 | The bound is Grimmett's Theorem 3.63; the shift is an estimate on the mean-field slope | E15 |
@@ -289,6 +289,7 @@ entropy) suit it better.
 | C55 | Theorem 9.35's literal form fails at q ≥ 3: Q(x ↔ y in the union of two sourceless Z_q currents) exceeds τ², by (q − 1)^L on a path of L edges at weak coupling; Q ≥ τ² held in all 126 cases | §13.14 | Observed by exact enumeration (q = 2 exact in 42 of 42); leading-order ratio derived; the inequality unproven | A proof, or a counterexample |
 | C56 | At any q ≥ 1, τ_xy² is the probability that x and y share a block of the meet of two independent FK draws, and equals (q⟨δ(ρ_x, ρ_y)⟩ − 1)/(q − 1) for the replicas' difference field ρ | §13.14 | Derived here (mixture convolution); checked by enumeration at q = 2 and 3 | E19 |
 | C57 | `LineagePersistence`'s dependence on seed and grid comes from four separable defects: the representative, a score counted in levels, the ratio elbow and `GapThreshold`. With all four fixed, iris reads its first stage on 12 of 12 seeds with ARI 1.000 between seeds at 8 × (1000, 2000), and every density design returns the same partition. Which hierarchy level to report stays a modelling choice: the longest-lived reading depends on the grid's extent, and a slice at T* does not | §13.15, §13.16 | Observed (150 sweeps over 5 graphs, twice: resolver copy checked against the code on all of them; on the revised compiler the graphs are bit-identical bar five clamped bridges, and 134 sweeps byte-identical, §13.16); the user approved the build on that recheck | Build it (§13.16) |
+| C58 | Under `BwdParityTests`' recipe (g = 1/K̂, Gaussian at the mean edge length) mean node strength is s̄ = ⟨κ⟩ ≈ e^(−1/2) whatever the data or K, so T_ps's fit and the hot end's S₂·N are one fact about the recipe, not independent evidence. On that recipe iris's setosa joins the rest by one repair edge at k = 5–40, open with probability at most 0.012 at the grid's cold end, so that split is the graph's | §13.17 | Identity derived here; 0.603–0.643 and the bridge read from the built graphs; no SPC | E20, the graph panel |
 
 ---
 
@@ -2232,8 +2233,8 @@ anchor's fix needed.
 - **Fixed, 2026-11-01 (the user's call).** `TpsUpperBound` now divides by the logarithm; the REPL and the parity battery
   share `BwdPottsCriticalEstimate.Bracket`. The multipliers were read against measurements, and stand at [0.05, 4]: the
   same factor of 80, moved 1.06 e-folds colder.
-  - *The hot end.* S₂·N at T = 0.357 is 1.12–1.14 on the toy, iris (k = 5, 10) and Landsat, so no cluster mass lies past
-    it; the 12 grid points the old window spent above it were featureless. The test's note that iris's stage 2 sits at
+  - *The hot end.* (§13.17: these four readings are one check, since the recipe pins the mean strength.) S₂·N at T = 0.357 is
+    1.12–1.14 on the toy, iris (k = 5, 10) and Landsat, so no cluster mass lies past it; the 12 grid points the old window spent above it were featureless. The test's note that iris's stage 2 sits at
     "≈ 3×T_ps" had no support on these graphs, and a rebuilt subgraph has the same s ≈ 0.6, so the same melt by C45; it
     is gone.
   - *The cold end.* S₂ = 0.858 on the toy at T = 0.00446, with its stripes joined, where the old cold end read
@@ -2256,7 +2257,8 @@ anchor's fix needed.
     lineage represented by a 5-point remnant is §12.22's defect in the representative (the least-decided level), which
     costs the clean-setosa assertion on many seeds. The test now asserts the published first stage, which holds in all
     60 runs: each selected lineage is setosa only or holds no setosa, with both sides present. Choosing a seed that
-    passes was the alternative, and it would have kept a claim the resolver doesn't make.
+    passes was the alternative, and it would have kept a claim the resolver doesn't make. (§13.17: on this graph the
+    setosa half of that assertion can't fail; only "both sides present" has content.)
   - *Left as they are.* `AutoGridFixedSweep` still uses the data heuristic (the compiler brief's §4.1). exp(−⟨d²⟩/2a²)
     stays at e^(−1/2), though a is the mean distance, so ⟨d²⟩ ≥ a²; BWD's own 0.075 implies an exponent above ½, and the
     measured 0.87 may be this. The seed helper quantizes T to ⌊1000·T⌋, so pairs among the corrected bracket's coldest
@@ -2964,3 +2966,142 @@ lineages censored by the grid's cold edge are flagged, so the longest-lived read
 gets built as recommended.
 
 Harness and raw tables: `side-session-notes/.../lineage-persistence/recheck/`.
+
+### 13.17 Addendum, 2026-11-02: the graphs behind round 2's numbers (C58)
+
+The user's objection: "these experiments that involve running SPC aren't taking into account what the settings on the graph
+are, these things needs to be made explicit so at least we know and can consider if there settings used might explain the
+results. default settings != correct settings".
+
+It holds. §13.1–§13.12 quote results by dataset and never name K, and §13.14 names K and little else. Once the settings are
+read, three of round 2's results turn out to be largely the graph's doing: the bracket's hot end, the cold end on the toy, and
+the setosa half of C49. C34 had already recorded the mechanism behind the last, and I didn't apply it.
+
+No SPC ran for this section. The graphs were built on the current compiler, the settings read from
+`GraphBuildResult.Resolved`, and percolation run over the edges. Harness and raw output:
+`side-session-notes/.../graph-settings-round2/`.
+
+**The graphs round 2 ran on.** All use `BwdParityTests`' recipe: Euclidean distance on raw features, KNN topology, mutual
+filter, MST repair, `PathNeighbor` refinement, a Gaussian kernel with bandwidth a = the mean edge length, gauge g = 1/K̂ over
+the edges after repair, no LMP, floor 10⁻¹⁰, q = 20 unless stated. Each is one component. s̄ is the mean node strength.
+
+| Graph | N × D | k | K̂ | In-degree skew | Largest component before repair | Repair edges | a | s̄ (p10, p90, max) |
+|---|---|---|---|---|---|---|---|---|
+| Uniform cloud | 400 × 2 | 10 | 8.46 | 0.18 | 1.000 | 0 | 0.058 | 0.603 (0.386, 0.816, 0.96) |
+| The toy | 3,200 × 2 | 10 | 7.91 | −0.44 | 0.993 | 12 (0.1%) | 0.162 | 0.636 (0.159, 0.945, 1.12) |
+| Iris | 150 × 4 | 5 | 3.49 | 0.18 | 0.527 | 15 (5.7%) | 0.307 | 0.616 (0.151, 1.126, 1.43) |
+| Iris | 150 × 4 | 10 | 7.04 | −0.02 | 0.633 | 5 (0.9%) | 0.365 | 0.613 (0.179, 1.123, 1.27) |
+| Landsat | 6,435 × 36 | 5 | 2.81 | 1.51 | 0.779 | 983 (10.9%) | 22.7 | 0.614 (0.185, 1.170, 2.55) |
+
+BlattHierarchy's two graphs are in §13.15 and §13.16, which state their recipe.
+
+- **Refinement has no effect on these.** `Auto` resolves to `PathNeighbor`, which takes the smaller of the edge and the
+  shortest path (`PathNeighborRefiner.cs:84`), and under Euclidean distance the triangle inequality makes the edge the smaller.
+  Against the true distances, repair edges included, the largest difference over all five graphs is 5.6×10⁻¹⁷. It could only
+  matter on a dissimilarity that breaks the triangle inequality.
+- **"Default" has been standing in for settings.** §12.28 calls Gaussian K = 10 "the pipeline's default graph". It's the recipe
+  at K = 10. Nothing in round 2 ran on the compiler's actual defaults, and they make a different graph. The REPL's defaults
+  are close to these, except that repair and LMP stay off unless asked for:
+
+  | Only K and a Gaussian kernel named | Filter | Repair (edges) | a (recipe's a over this) | LMP | Coupled components | s̄ |
+  |---|---|---|---|---|---|---|
+  | Uniform cloud, k = 10 | OR | none | 0.017 (3.5) | on | 1 | 2.58 |
+  | The toy, k = 10 | OR | none | 0.056 (2.9) | off | 57 | 1.17 |
+  | Iris, k = 5 | OR | MST (1) | 0.121 (2.5) | off | 1 | 0.60 |
+  | Iris, k = 10 | OR | MST (1) | 0.141 (2.6) | off | 1 | 0.98 |
+  | Landsat, k = 5 | OR | none | 6.73 (3.4) | off | 177 | 0.09 |
+
+  The bandwidth rule is `MadConsistencyFactor`, with no gauge. `Auto` picks LMP and repair per dataset, and s̄ spans a factor of
+  29. So neither column is "correct": the recipe is one chosen graph and the defaults are another.
+
+**The recipe pins the temperature scale (C58).** With g = 1/K̂, the mean node strength is exactly the mean kernel value, because
+s̄ = K̂·⟨J⟩ = K̂·g·⟨κ⟩ = ⟨κ⟩. With a = the mean edge length and a Gaussian kernel, that is ⟨e^(−d²/2a²)⟩ ≈ e^(−1/2) = 0.607,
+whatever the data or K. Over the toy, iris and Landsat at k = 5, 10, 20, 40 and the cloud, s̄ runs 0.603–0.643. T_ps's
+prefactor, 0.1516, is e^(−1/2)/4, the same number. What follows from that:
+- **The hot end's four checks are one check.** I read S₂·N = 1.12–1.14 at T = 0.357 on four graphs as support for the multiplier
+  of 4. To first order S₂·N ≈ 1 + s̄/(qT) = 1.09, the same arithmetic each time. The lower percolation envelope gives 1.10–1.13
+  from the graph alone at every k above. The upper envelope is no use there (6.9 to 806).
+- **"The melt barely moves with K" (§12.27, C45) is the same fact.** T_ps tracks the measured melts because the recipe normalizes
+  them to it. It isn't evidence about the data.
+- **What keeps the hot end safe on this recipe.** A cluster's strength is at most its degree over K̂, so at most k/K̂ on a mutual
+  graph, setting repair edges aside. T = 0.357 clears a melt at s/(d·K_d) while that stays under about 2.3. The highest here is
+  Landsat's, 1.78 at k = 5 and 1.88 at k = 10–40, and hub-heavier data could pass it. Arithmetic, not measured.
+- **Off the recipe, none of this transfers.** On these same edges s̄ is 0.52–0.56 under Cauchy and 0.18–0.26 under Gaussian with
+  LMP, which also fragments (coupled components 1, 75, 29, 6 and 1,862 in the table's order). Neither declares BWD units.
+- **The recipe doesn't pin the spread.** Strength p10 to p90 spans 0.75 e-folds on the uniform cloud and 1.8–2.0 on the rest. By
+  C45 local melts scale with local strength, so this spread is a candidate for how wide a graph's transitions are, and so for what
+  a grid has to resolve. Not measured.
+
+**K moves the rest.** Parity recipe, graph only. S₂ at the cold end T = 0.00446 lies between the percolation envelopes (C43):
+
+| k | The toy: largest before repair, repair edges, S₂ | Iris: same | Landsat: same |
+|---|---|---|---|
+| 5 | 0.192, 83, [0.631, 0.831] | 0.527, 15, [0.538, 0.552] | 0.779, 983, [0.992, 0.998] |
+| 10 | 0.993, 12, [0.838, 0.936] | 0.633, 5, [0.540, 0.555] | 0.946, 282, [0.986, 0.997] |
+| 20 | 0.999, 1, [0.949, 0.995] | 0.667, 1, [0.554, 0.571] | 0.991, 52, [0.982, 0.998] |
+| 40 | 1.000, 0, [0.987, 1.000] | 0.667, 1, [0.557, 0.640] | 0.999, 6, [0.967, 0.997] |
+
+- **The toy's cold end is a k = 10 reading.** The S₂ = 0.858 I measured sits inside its row. k = 5 can't reach 0.84, and k = 20 starts
+  at 0.95, so the same multiplier means something different at each. The toy's k = 10 also sits just above a connectivity jump:
+  0.192 to 0.993. Within that graph, one bandwidth across two densities leaves the background at strength 0.159 (p10) against a
+  median of 0.703, and that is where C22's cold-edge trouble lives.
+- **Landsat at k = 5 is close to a tree.** K̂ = 2.81, one edge in nine added by repair, in-degree skew 1.51. §12.29's "no lever finds
+  the six classes" covers K ∈ {5, 10} on raw features with one seed. K = 20 and 40 are unread, and higher K doesn't change the cold
+  end's connectedness.
+
+**Iris's setosa hangs from one edge.** At every k above, exactly one edge joins setosa to the other species, an MST repair edge
+about 1.64 long. A bridge is open in the FK measure with probability exactly p̃ = p/(p + q(1 − p)), largest at the grid's cold end:
+
+| k | The edge's J | p̃ at T = 0.00446 | versicolor–virginica cut: edges, ΣJ |
+|---|---|---|---|
+| 5 | 1.7×10⁻⁷ | 2.0×10⁻⁶ | 13, 1.68 |
+| 10 | 5.7×10⁻⁶ | 6.4×10⁻⁵ | 34, 2.35 |
+| 20 | 1.2×10⁻⁴ | 1.3×10⁻³ | 76, 2.65 |
+| 40 | 9.5×10⁻⁴ | 1.2×10⁻² | 285, 4.38 |
+
+Over the whole bracket, then, the split is there from the cold end. S₂ can't pass (50² + 100²)/150² = 0.556 on k = 5 or 10, as
+the envelopes above show.
+- **C49 weakens.** "No selected lineage mixes setosa with the others in 60 of 60 runs" can't fail on this graph. I restated
+  `LineagePersistence_Iris_SelectsPersistentSpeciesLineages` to assert it, and only its "both sides present" half has content. The
+  claim isn't false, but it carries almost no weight about the resolver. C34 recorded this mechanism in round 1.
+- **C57's iris row stands on the same split.** 12 of 12 seeds at ARI 1.000 shows the fixed resolver doesn't damage a split the graph
+  enforces. §13.16 already says the like of the Gaussian BlattHierarchy. The defects it found are untouched by this.
+- **"Not the species" is a k = 5, Gaussian reading.** §12.25's shared-neighbour coupling, at k = 5, widened that stage to 0.75 and
+  `HierarchyEom` selected three. The cut's ΣJ grows with k, which fits k = 10 having no species stage.
+- **A test with teeth needs a graph where the bridge is felt.** Under Cauchy the same edge at k = 5 gets J ≈ 0.01 (arithmetic), which
+  is on the grid. BlattHierarchy's Cauchy graph is the one on record that tests the level.
+
+**Each result, scoped.**
+
+| Result | Rests on | What in the graph could explain it | How to read it now |
+|---|---|---|---|
+| Hot end: multiplier 4, S₂·N 1.12–1.14 (§13.14) | Toy k = 10, iris k = 5, 10, Landsat k = 5 | s̄ pinned by the gauge and bandwidth rule | One check, on this recipe. Safe by arithmetic while k/K̂ stays under about 2.3. Says nothing off the recipe |
+| Cold end: multiplier 0.05, S₂ = 0.858 (§13.14) | Toy k = 10 | K, one bandwidth on two densities | A reading at k = 10 on one dataset |
+| Melt at 0.87·T_ps for q = 5, 20, 100 (§13.14) | Uniform cloud k = 10 only | Homogeneous: half the strength spread of the others | The q-dependence on one graph. 0.87 isn't shown to be a constant |
+| C45's melts, d·K_d | s ≈ 0.6, d ≈ 7 from iris k = 10 | s̄ pinned; dense clusters assumed | Prediction for this recipe's dense clusters. Doesn't apply to near-tree graphs such as Landsat k = 5 |
+| C46, C53: metastable windows, barrier | Arithmetic at K = 5–10, q = 20 | Degree, cut size, intrinsic dimension | As scoped there. No run behind it |
+| C49 | Iris k = 5 | The setosa bridge; K and kernel for the species | Above |
+| C57, iris row | Iris k = 5 | The setosa bridge | Above. Other graphs as §13.16 states |
+| Densities quoted in §13.3, §13.4 (iris's minor melt 0.09 e-folds, the toy's about 400 points for D_J ≤ 4, BlattHierarchy's 145) | Round 1's dumps: toy and iris on the recipe at k = 10, BlattHierarchy on Cauchy k = 5 | Stage widths move with K and kernel (§12.27–§12.29) | Per graph. The graph is part of the system whose volatility sets the density |
+
+Standing: the T_ps correction is the paper's formula and doesn't depend on any of this. The certification stack (§13.5) is built
+from quantities that don't assume a graph, but its thresholds have been reasoned on these graphs and tried on none.
+
+**How every SPC result states its graph from here on.** Read from `Resolved`, one line, for example:
+
+> iris 150 × 4, Euclidean, raw; KNN k = 5, mutual (skew 0.18), MST repair (15 edges, largest 0.527 before), `PathNeighbor`; Gaussian
+> a = 0.307 (mean edge), g = 0.286 (1/K̂, after repair), no LMP, floor 10⁻¹⁰; K̂ = 3.49, s̄ = 0.616 (0.151, 1.126), one component,
+> weakest bridge J = 1.7×10⁻⁷; q = 20, budget, grid, seeds, commit.
+
+A claim about the data or the method needs more than one graph behind it, and says when only one was tried.
+
+**What this buys for the stopping question.** Two things.
+- **The bad news.** A stopping rule tried on one recipe is tried on one recipe. The experiments in §13.12 need a graph axis.
+- **The good news, and it bears on the earlier question of what can be learned cheaply up front.** These readings took seconds, with
+  no SPC: the bridges and what's open at the grid's ends, the strength spread, S₂'s envelopes at both ends of the bracket. They say
+  in advance which splits are the graph's rather than the sampler's, and so which questions a sweep can't answer. Not built; it
+  would be the user's call.
+
+**E20. The graph panel (not run).** The toy, BlattHierarchy, AnisotropicGaussian and Landsat at K ∈ {5, 10, 20}, Gaussian and Cauchy,
+with the recipe's gauge. Read the hot end's S₂·N, melts over T_ps, the cold end's S₂ and §13.12's stopping quantities, each under its
+graph line. Which of round 2's readings survive across the panel, and which belong to one graph?
