@@ -33,10 +33,13 @@ namespace Maths.Regression.Tests;
 /// beside it.</item>
 /// <item>Beside exact and aligned, a third reading, <c>partial</c> (<see cref="BassPathProfile.BuildPartial"/>): a matched pair goes
 /// to the route as an exchange when that raises the route's lowest π. Aligned stays the primary reading.</item>
+/// <item>A closed pair (<see cref="BassPathProfile.ClosedPair"/>), one column twice under two signs, shuts L's supersets, which the
+/// brief's rule on depth reads as a closed cap. <c>aligned+redraw</c> and <c>partial+redraw</c> take such a pair by one redraw, the
+/// move production makes it by; the plain rows stay as they were read. No Part 1 pair holds one.</item>
 /// <item>A slide's edges are D01's redraw at one knot's distance, so each carries 1/(2n_v): the local steps are off in S10's
 /// configuration. Their share of the waiting time is its own column.</item>
 /// <item>Part 2 reads fresh cases from another seed of the fixture's generator, and the generator's own stream, which
-/// extends or truncates S10's. The polish holds τ at unit information.</item>
+/// extends or truncates S10's. The polish holds τ at unit information. The partial reading runs on the fresh cases at the held τ.</item>
 /// </list>
 /// </summary>
 public sealed class BassPathProfileTests
@@ -388,11 +391,12 @@ public sealed class BassPathProfileTests
                           "superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops");
     }
 
-    private void ReadPair(PathSurface surface, PathCsv routes, PathCsv steps, PathCsv validation, string n, string data, string pair, string rank, BassTerm[] s, BassTerm[] t, string[] alignments)
+    private void ReadPair(PathSurface surface, PathCsv routes, PathCsv steps, PathCsv validation, string n, string data, string pair, string rank, BassTerm[] s, BassTerm[] t, string[] alignments,
+                          PathReading[]? at = null)
     {
         var lattices = new Dictionary<string, PathLattice>();
         foreach (string alignment in alignments)
-            foreach (PathReading reading in new[] { PathReading.Held, PathReading.Profiled })
+            foreach (PathReading reading in at ?? [PathReading.Held, PathReading.Profiled])
             {
                 string[] key = [n, data, pair, rank, alignment, reading.ToString()];
                 if (routes.Has([.. key, "from S"]) && routes.Has([.. key, "from T"])) continue;
@@ -400,8 +404,9 @@ public sealed class BassPathProfileTests
                 PathRoute? route;
                 try
                 {
-                    route = alignment == "partial" ? BassPathProfile.BuildPartial(surface, s, t, reading, lattices)
-                                                   : BassPathProfile.Build(surface, s, t, alignment == "exact", reading, lattices);
+                    bool redraw = alignment.EndsWith("+redraw", StringComparison.Ordinal);
+                    route = alignment.StartsWith("partial", StringComparison.Ordinal) ? BassPathProfile.BuildPartial(surface, s, t, reading, lattices, redraw)
+                                                                                      : BassPathProfile.Build(surface, s, t, alignment == "exact", reading, lattices, redraw: redraw);
                 }
                 catch (ArgumentException e) when (e.Message.Contains("needs a beam", StringComparison.Ordinal))
                 {
@@ -560,7 +565,8 @@ public sealed class BassPathProfileTests
                 whole[i].Add(j);
                 if (group == BassKernelEnumeration.BirthDeath) births[i].Add(j);
             }
-        int[] modes = [.. Enumerable.Range(0, n).Where(i => whole[i].All(j => pi[j] < pi[i])).OrderByDescending(i => pi[i]).Take(MaxModesPerFixture)];
+        // A local mode has no higher neighbour; among ties, which equal column spaces make, the first state stands for them.
+        int[] modes = [.. Enumerable.Range(0, n).Where(i => whole[i].All(j => pi[j] < pi[i] - 1e-9 || (Math.Abs(pi[j] - pi[i]) <= 1e-9 && j > i))).OrderByDescending(i => pi[i]).Take(MaxModesPerFixture)];
         _out.WriteLine($"{name}, cap {cap}, seed {seed}: {n} states, {modes.Length} local modes read.");
         for (int a = 0; a < modes.Length; a++)
         {
@@ -642,7 +648,14 @@ public sealed class BassPathProfileTests
                 }
                 foreach (string label in labels.Skip(1))
                     if (polished.TryGetValue(label, out BassTerm[]? s) && polished.TryGetValue("a1", out BassTerm[]? t))
-                        ReadPair(surface, routes, steps, validation, F.I(n), data, label == best ? "best-a1" : $"{label}-a1", label == best ? best : "1", s, t, ["aligned"]);
+                    {
+                        string pair = label == best ? "best-a1" : $"{label}-a1", rank = label == best ? best : "1";
+                        ReadPair(surface, routes, steps, validation, F.I(n), data, pair, rank, s, t, ["aligned"]);
+                        if (data == "fresh") ReadPair(surface, routes, steps, validation, F.I(n), data, pair, rank, s, t, ["partial"], [PathReading.Held]);
+                        if (!s.Any(x => t.Any(y => BassPathProfile.ClosedPair(surface, x, y)))) continue;
+                        ReadPair(surface, routes, steps, validation, F.I(n), data, pair, rank, s, t, ["aligned+redraw"]);
+                        if (data == "fresh") ReadPair(surface, routes, steps, validation, F.I(n), data, pair, rank, s, t, ["partial+redraw"], [PathReading.Held]);
+                    }
                 validation.Append("sc5", $"N {n} {data} rerun {DateTime.UtcNow:yyyy-MM-ddTHH:mm}", F.I(surface.SupersetEdges), F.F(surface.SupersetLeast), F.F(surface.HeldOccam), "", "",
                                   "superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops");
                 _out.WriteLine($"N = {n}, {data}: {clock.Elapsed.TotalSeconds:F0} s.");

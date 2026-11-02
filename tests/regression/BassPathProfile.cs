@@ -486,9 +486,11 @@ internal static class BassPathProfile
 
     /// <summary>
     /// S and T lined up. <paramref name="exact"/>: terms match only if identical. Otherwise terms of one signature pair up by
-    /// the least total knot distance, every term of the smaller side paired.
+    /// the least total knot distance, every term of the smaller side paired. With <paramref name="closed"/>, then also a pair
+    /// that test holds true for, whatever its signs.
     /// </summary>
-    internal static PathAlignment Align(IReadOnlyList<BassTerm> s, IReadOnlyList<BassTerm> t, bool exact, int dropped = 0, HashSet<BassTerm>? excluded = null)
+    internal static PathAlignment Align(IReadOnlyList<BassTerm> s, IReadOnlyList<BassTerm> t, bool exact, int dropped = 0, HashSet<BassTerm>? excluded = null,
+                                        Func<BassTerm, BassTerm, bool>? closed = null)
     {
         BassTerm[] common = [.. s.Where(t.Contains)];
         List<BassTerm> onlyS = [.. s.Where(x => !common.Contains(x))], onlyT = [.. t.Where(x => !common.Contains(x))];
@@ -509,7 +511,30 @@ internal static class BassPathProfile
                     onlyT.Remove(to);
                 }
             }
+        if (!exact && closed is not null)
+            foreach (BassTerm from in onlyS.ToArray())
+                if (onlyT.FirstOrDefault(to => closed(from, to)) is { } to)
+                {
+                    matched.Add((from, to));
+                    onlyS.Remove(from);
+                    onlyT.Remove(to);
+                }
         return new PathAlignment(common, [.. matched], [.. onlyS], [.. onlyT], dropped);
+    }
+
+    /// <summary>
+    /// Whether the design refuses <paramref name="a"/> and <paramref name="b"/> together though one redraw takes one to the other:
+    /// one factor apart, as a hinge at its variable's lowest knot and its mirror at the highest, one linear column twice. D06 then
+    /// closes every superset holding both, and L can only pass by deleting a load-bearing term first, while production's redraw
+    /// makes the exchange in one step.
+    /// </summary>
+    internal static bool ClosedPair(PathSurface surface, BassTerm a, BassTerm b)
+    {
+        if (a.Equals(b) || a.Continuous.Count != b.Continuous.Count || a.Categorical.Count != 0 || b.Categorical.Count != 0 || a.Functional.Count != 0 || b.Functional.Count != 0) return false;
+        int[] va = [.. a.Continuous.Select(h => h.Variable).Order()], vb = [.. b.Continuous.Select(h => h.Variable).Order()];
+        if (!va.SequenceEqual(vb)) return false;
+        int apart = a.Continuous.Count(h => !b.Continuous.Contains(h));
+        return apart == 1 && !surface.Score([a, b], profile: false).Admitted;
     }
 
     // Each of `few` to a distinct one of `many`, by the least total distance: a bitmask search, the groups being small.
@@ -543,8 +568,8 @@ internal static class BassPathProfile
 
     /// <summary>
     /// The hops of a greedy slide from <paramref name="start"/>, each matched term stepped to its target one knot at a time,
-    /// always the step with the highest π; a jump of up to <see cref="SlideReach"/> where every single step is refused. Null,
-    /// with the pair's term, when a pair cannot move.
+    /// always the step with the highest π; a jump of up to <see cref="SlideReach"/> where every single step is refused; and a
+    /// factor whose sign differs, a closed pair's, by one redraw. Null, with the pair's term, when a pair cannot move.
     /// </summary>
     internal static PathHop[]? Slide(PathSurface surface, IReadOnlyList<BassTerm> start, (BassTerm From, BassTerm To)[] moves, PathReading r, out BassTerm? stuck)
     {
@@ -556,7 +581,7 @@ internal static class BassPathProfile
         var hops = new List<PathHop>();
         while (true)
         {
-            var pending = new List<(int Pair, int Slot, BassMixing.FactorAt F, int Remaining)>();
+            var pending = new List<(int Pair, int Slot, BassMixing.FactorAt F, int Remaining, HingeFactor? Redraw)>();
             for (int p = 0; p < moves.Length; p++)
             {
                 BassTerm now = current[slots[p]], to = moves[p].To;
@@ -564,18 +589,19 @@ internal static class BassPathProfile
                 {
                     HingeFactor h = f.Part == BassPart.Continuous ? now.Continuous[f.Index] : now.Functional[f.Index];
                     IReadOnlyList<HingeFactor> targets = f.Part == BassPart.Continuous ? to.Continuous : to.Functional;
-                    int remaining = targets.Single(x => x.Variable == h.Variable).Knot - h.Knot;
-                    if (remaining != 0) pending.Add((p, slots[p], f, remaining));
+                    HingeFactor target = targets.Single(x => x.Variable == h.Variable);
+                    if (target.Sign != h.Sign) pending.Add((p, slots[p], f, 1, target));
+                    else if (target.Knot != h.Knot) pending.Add((p, slots[p], f, target.Knot - h.Knot, null));
                 }
             }
             if (pending.Count == 0) return [.. hops];
 
             (int Slot, BassTerm Term, PathScore Score, BassMixing.FactorAt F)? best = null;
             for (int reach = 1; reach <= SlideReach && best is null; reach++)
-                foreach ((int _, int slot, BassMixing.FactorAt f, int remaining) in pending)
+                foreach ((int _, int slot, BassMixing.FactorAt f, int remaining, HingeFactor? redraw) in pending)
                 {
                     if (reach > Math.Abs(remaining)) continue;
-                    BassTerm stepped = BassMixing.Stepped(surface.Model, current[slot], f, Math.Sign(remaining) * reach)!;
+                    BassTerm stepped = redraw is { } g ? BassMixing.Replaced(current[slot], f, g, null) : BassMixing.Stepped(surface.Model, current[slot], f, Math.Sign(remaining) * reach)!;
                     if (current.Contains(stepped)) continue;
                     BassTerm[] next = [.. current];
                     next[slot] = stepped;
@@ -642,7 +668,7 @@ internal static class BassPathProfile
 
     /// <summary>The route's hops through the lattice, S's mask to T's, each state loaded afresh and checked against the
     /// lattice's score; SC-5's inequality checked at the lower state's best τ on the profile.</summary>
-    private static List<PathHop> LatticeHops(PathSurface surface, PathLattice lattice, int[] masks, PathReading r)
+    private static List<PathHop> LatticeHops(PathSurface surface, PathLattice lattice, int[] masks, PathReading r, bool priced)
     {
         var hops = new List<PathHop>(masks.Length);
         double[] pi = lattice.Pi(r);
@@ -665,7 +691,7 @@ internal static class BassPathProfile
                 if (slack < -1e-7) throw new InvalidOperationException($"SC-5's inequality fails by {-slack:E3} at the lower state's best τ, adding {BassMixing.Key([t])}.");
                 surface.CountSuperset(1, slack);
             }
-            (double lnClass, int size) = ClassFlow(surface, lower, t, sLower, r);
+            (double lnClass, int size) = priced ? ClassFlow(surface, lower, t, sLower, r) : (double.NaN, 0);
             hops.Add(new PathHop(add ? PathHopKind.Add : PathHopKind.Delete, BassMixing.Key([t]), x.Length, y.Length, sx.Pi(r), sy.Pi(r),
                                  sy.Marginal(r) - sx.Marginal(r), sy.Prior(r) - sx.Prior(r), c,
                                  add ? logBirth : logDeath, add ? logDeath : logBirth, lnClass, size));
@@ -680,17 +706,18 @@ internal static class BassPathProfile
     /// lattices across its readings.
     /// </summary>
     internal static PathRoute? Build(PathSurface surface, BassTerm[] s, BassTerm[] t, bool exact, PathReading r, Dictionary<string, PathLattice> lattices,
-                                     IEnumerable<BassTerm>? unmatched = null)
+                                     IEnumerable<BassTerm>? unmatched = null, bool priced = true, bool redraw = false)
     {
         var dropped = new HashSet<BassTerm>(unmatched ?? []);
+        Func<BassTerm, BassTerm, bool>? closed = redraw ? (a, b) => ClosedPair(surface, a, b) : null;
         while (true)
         {
-            PathAlignment a = Align(s, t, exact, dropped.Count / 2, dropped);
+            PathAlignment a = Align(s, t, exact, dropped.Count / 2, dropped, closed);
             BassTerm[] bits = [.. a.OnlyFrom, .. a.OnlyTo];
             if (a.Matched.Length == 0)
             {
                 PathLattice plain = Lattice(surface, a.Common, bits, lattices);
-                return Finish(surface, plain, a, r, exact, "none", [], [], s, t);
+                return Finish(surface, plain, a, r, exact, "none", [], [], s, t, priced);
             }
             BassTerm[] toKnots = [.. a.Matched.Select(m => m.To)], fromKnots = [.. a.Matched.Select(m => m.From)];
             PathHop[]? first = Slide(surface, s, a.Matched, r, out BassTerm? stuck);
@@ -705,8 +732,8 @@ internal static class BassPathProfile
             }
             PathLattice afterSlide = Lattice(surface, [.. a.Common, .. toKnots], bits, lattices);
             PathLattice beforeSlide = Lattice(surface, [.. a.Common, .. fromKnots], bits, lattices);
-            PathRoute? slideFirst = Finish(surface, afterSlide, a, r, exact, "first", first, [], [.. a.Common, .. toKnots, .. a.OnlyFrom], t);
-            PathRoute? slideLast = Finish(surface, beforeSlide, a, r, exact, "last", [], [.. Enumerable.Reverse(last).Select(h => h.Reversed)], s, [.. a.Common, .. fromKnots, .. a.OnlyTo]);
+            PathRoute? slideFirst = Finish(surface, afterSlide, a, r, exact, "first", first, [], [.. a.Common, .. toKnots, .. a.OnlyFrom], t, priced);
+            PathRoute? slideLast = Finish(surface, beforeSlide, a, r, exact, "last", [], [.. Enumerable.Reverse(last).Select(h => h.Reversed)], s, [.. a.Common, .. fromKnots, .. a.OnlyTo], priced);
             if (slideFirst is null) return slideLast;
             if (slideLast is null) return slideFirst;
             return slideFirst.Low >= slideLast.Low ? slideFirst : slideLast;
@@ -719,17 +746,17 @@ internal static class BassPathProfile
     /// whatever their distance, so it can cost more than exchanging the far ones; the search for a higher route stops at the first
     /// structure of dropped pairs no single further drop improves.
     /// </summary>
-    internal static PathRoute? BuildPartial(PathSurface surface, BassTerm[] s, BassTerm[] t, PathReading r, Dictionary<string, PathLattice> lattices)
+    internal static PathRoute? BuildPartial(PathSurface surface, BassTerm[] s, BassTerm[] t, PathReading r, Dictionary<string, PathLattice> lattices, bool redraw = false)
     {
         var dropped = new HashSet<BassTerm>();
-        PathRoute? best = Build(surface, s, t, false, r, lattices);
+        PathRoute? best = Build(surface, s, t, false, r, lattices, priced: false, redraw: redraw);
         if (best is null) return null;
         for (bool improved = true; improved;)
         {
             improved = false;
             foreach ((BassTerm from, BassTerm to) in best.Aligned.Matched.OrderByDescending(m => Distance(m.From, m.To)))
             {
-                PathRoute? trial = Build(surface, s, t, false, r, lattices, [.. dropped, from, to]);
+                PathRoute? trial = Build(surface, s, t, false, r, lattices, [.. dropped, from, to], priced: false, redraw: redraw);
                 if (trial is null || trial.Low <= best.Low + 1e-6) continue;
                 best = trial;
                 dropped.Add(from);
@@ -738,7 +765,7 @@ internal static class BassPathProfile
                 break;
             }
         }
-        return best with { Alignment = "partial" };
+        return Build(surface, s, t, false, r, lattices, dropped, redraw: redraw)! with { Alignment = "partial" };
     }
 
     private static PathLattice Lattice(PathSurface surface, BassTerm[] core, BassTerm[] bits, Dictionary<string, PathLattice> lattices)
@@ -749,13 +776,13 @@ internal static class BassPathProfile
     }
 
     private static PathRoute? Finish(PathSurface surface, PathLattice lattice, PathAlignment a, PathReading r, bool exact, string position, PathHop[] before, PathHop[] after,
-                                     IReadOnlyList<BassTerm> start, IReadOnlyList<BassTerm> end)
+                                     IReadOnlyList<BassTerm> start, IReadOnlyList<BassTerm> end, bool priced)
     {
         int from = lattice.Mask(start), to = lattice.Mask(end);
         double[] pi = lattice.Pi(r);
         int[]? masks = PathSearch.Route(pi, lattice.Dim, from, to, out double maximin);
         if (masks is null) return null;
-        List<PathHop> hops = [.. before, .. LatticeHops(surface, lattice, masks, r), .. after];
+        List<PathHop> hops = [.. before, .. LatticeHops(surface, lattice, masks, r, priced), .. after];
         for (int k = 0; k + 1 < hops.Count; k++) Assert.Equal(hops[k].PiTo, hops[k + 1].PiFrom, 6);
 
         // The superset route on the same lattice: every addition, then every deletion, each half at its own best order.
@@ -772,7 +799,7 @@ internal static class BassPathProfile
             kFrom = Enumerable.Range(0, lowest).Count(i => whole[i + 1] > whole[i] && pi[whole[i + 1]] < pi[whole[i]]);
             kTo = Enumerable.Range(lowest, whole.Length - 1 - lowest).Count(i => whole[i] > whole[i + 1] && pi[whole[i]] < pi[whole[i + 1]]);
         }
-        double best = lattice.Dim <= MaxDimPriced ? LeastResistance(surface, lattice, r, from, to) : double.NaN;
+        double best = priced && lattice.Dim <= MaxDimPriced ? LeastResistance(surface, lattice, r, from, to) : double.NaN;
         foreach (PathHop h in hops)
             if (h.Kind == PathHopKind.Slide) best = LogMath.Add(best, -h.LnFlow);
         return new PathRoute(exact ? "exact" : "aligned", r, position, a, [.. hops], lattice, masks, maximin, supersetLow, kFrom, kTo, best);

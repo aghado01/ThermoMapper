@@ -1,0 +1,185 @@
+check,case,cases,worst,value_a,value_b,value_c,note
+flow,continuous fixture at cap 3,36064,0.000000,0.000000,0.000000,,ln c_e against the enumerated kernel's ln π(x)K(x y) on birth edges and on redraw edges; the selection is in both so no factor is left over
+scorer,exemplars 2026-11-02T21:46,19,0.000001,0.000001,0.000000,,fresh design against the retained draw and against the stored π
+search,500 S10 A-a1 1/1 aligned Held,128,0.000000,-926.313154,-926.313154,-926.313154,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 1/1 aligned Profiled,128,0.000000,-926.354002,-926.354002,-926.354002,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 1/1 partial Held,128,0.000000,-905.396741,-905.396741,-905.396741,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 1/1 partial Profiled,128,0.000000,-905.354934,-905.354934,-905.354934,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 1/1 exact Held,128,0.000000,-897.626593,-897.626593,-897.626593,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 1/1 exact Profiled,128,0.000000,-897.597941,-897.597941,-897.597941,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 B-a1 1/1 aligned Held,128,0.000000,-919.630543,-919.630543,-919.630543,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 B-a1 1/1 aligned Profiled,128,0.000000,-919.761196,-919.761196,-919.761196,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 B-a1 1/1 partial Held,128,0.000000,-924.391797,-924.391797,-924.391797,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 B-a1 1/1 partial Profiled,128,0.000000,-975.324678,-975.324678,-975.324678,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 B-a1 1/1 exact Held,128,0.000000,-902.191612,-902.191612,-902.191612,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 B-a1 1/1 exact Profiled,128,0.000000,-902.136519,-902.136519,-902.136519,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a2-a1 1/1 aligned Held,32,0.000000,-895.996681,-895.996681,-895.996681,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a2-a1 1/1 aligned Profiled,32,0.000000,-895.559834,-895.559834,-895.559834,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a2-a1 1/1 partial Held,32,0.000000,-895.996681,-895.996681,-895.996681,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a2-a1 1/1 partial Profiled,32,0.000000,-895.559834,-895.559834,-895.559834,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a2-a1 1/1 exact Held,128,0.000000,-910.455718,-910.455718,-910.455718,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a2-a1 1/1 exact Profiled,128,0.000000,-910.397458,-910.397458,-910.397458,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a1+x6x8-a1 1/1 aligned Held,32,0.000000,-895.707930,-895.707930,-895.707930,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a1+x6x8-a1 1/1 aligned Profiled,32,0.000000,-895.264191,-895.264191,-895.264191,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a1+x6x8-a1 1/1 partial Held,128,0.000000,-895.704469,-895.704469,-895.704469,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a1+x6x8-a1 1/1 partial Profiled,128,0.000000,-895.260647,-895.260647,-895.260647,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a1+x6x8-a1 1/1 exact Held,128,0.000000,-907.275098,-907.275098,-907.275098,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 a1+x6x8-a1 1/1 exact Profiled,128,0.000000,-906.955184,-906.955184,-906.955184,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain0-a1 1/1 aligned Held,128,0.000000,-959.370896,-959.370896,-959.370896,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain0-a1 1/1 aligned Profiled,128,0.000000,-959.836481,-959.836481,-959.836481,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain0-a1 1/1 partial Held,128,0.000000,-1022.918077,-1022.918077,-1022.918077,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain0-a1 1/1 partial Profiled,128,0.000000,-1024.182867,-1024.182867,-1024.182867,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain0-a1 1/1 exact Held,128,0.000000,-1120.279518,-1120.279518,-1120.279518,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain0-a1 1/1 exact Profiled,128,0.000000,-1121.509020,-1121.509020,-1121.509020,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain1-a1 1/1 aligned Held,128,0.000000,-941.647796,-941.647796,-941.647796,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain1-a1 1/1 aligned Profiled,128,0.000000,-942.240476,-942.240476,-942.240476,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain1-a1 1/1 partial Held,128,0.000000,-930.821807,-930.821807,-930.821807,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain1-a1 1/1 partial Profiled,128,0.000000,-931.162142,-931.162142,-931.162142,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain1-a1 1/1 exact Held,128,0.000000,-923.470185,-923.470185,-923.470185,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain1-a1 1/1 exact Profiled,128,0.000000,-923.829238,-923.829238,-923.829238,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain2-a1 1/1 aligned Held,128,0.000000,-960.045682,-960.045682,-960.045682,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain2-a1 1/1 aligned Profiled,128,0.000000,-960.791410,-960.791410,-960.791410,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain2-a1 1/1 partial Held,128,0.000000,-1093.385935,-1093.385935,-1093.385935,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain2-a1 1/1 partial Profiled,128,0.000000,-1094.713040,-1094.713040,-1094.713040,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain2-a1 1/1 exact Held,128,0.000000,-1147.118309,-1147.118309,-1147.118309,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain2-a1 1/1 exact Profiled,128,0.000000,-1147.921769,-1147.921769,-1147.921769,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain3-a1 1/1 aligned Held,128,0.000000,-943.954520,-943.954520,-943.954520,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain3-a1 1/1 aligned Profiled,128,0.000000,-944.580486,-944.580486,-944.580486,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain3-a1 1/1 partial Held,128,0.000000,-1100.518810,-1100.518810,-1100.518810,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain3-a1 1/1 partial Profiled,128,0.000000,-1101.879450,-1101.879450,-1101.879450,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain3-a1 1/1 exact Held,128,0.000000,-1248.225546,-1248.225546,-1248.225546,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 chain3-a1 1/1 exact Profiled,128,0.000000,-1248.136925,-1248.136925,-1248.136925,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 2/2 aligned Held,64,0.000000,-922.973453,-922.973453,-922.973453,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 2/2 aligned Profiled,64,0.000000,-923.169084,-923.169084,-923.169084,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 2/2 partial Held,128,0.000000,-978.444777,-978.444777,-978.444777,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 2/2 partial Profiled,128,0.000000,-979.477369,-979.477369,-979.477369,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 2/2 exact Held,128,0.000000,-1299.467953,-1299.467953,-1299.467953,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 2/2 exact Profiled,128,0.000000,-1298.959563,-1298.959563,-1298.959563,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/1 aligned Held,128,0.000000,-984.406816,-984.406816,-984.406816,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/1 aligned Profiled,128,0.000000,-985.415888,-985.415888,-985.415888,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/1 partial Held,128,0.000000,-904.866011,-904.866011,-904.866011,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/1 partial Profiled,128,0.000000,-904.813269,-904.813269,-904.813269,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/1 exact Held,128,0.000000,-897.359837,-897.359837,-897.359837,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/1 exact Profiled,128,0.000000,-897.325725,-897.325725,-897.325725,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 1/d aligned Held,64,0.000000,-921.915202,-921.915202,-921.915202,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 1/d aligned Profiled,64,0.000000,-922.090483,-922.090483,-922.090483,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 1/d partial Held,128,0.000000,-925.799250,-925.799250,-925.799250,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 1/d partial Profiled,128,0.000000,-925.829882,-925.829882,-925.829882,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 1/d exact Held,128,0.000000,-897.796450,-897.796450,-897.796450,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 1/d exact Profiled,128,0.000000,-897.771267,-897.771267,-897.771267,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/d aligned Held,128,0.000000,-927.742503,-927.742503,-927.742503,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/d aligned Profiled,128,0.000000,-927.811528,-927.811528,-927.811528,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/d partial Held,128,0.000000,-921.929370,-921.929370,-921.929370,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/d partial Profiled,128,0.000000,-922.104924,-922.104924,-922.104924,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/d exact Held,128,0.000000,-897.451485,-897.451485,-897.451485,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 S10 A-a1 d/d exact Profiled,128,0.000000,-897.419251,-897.419251,-897.419251,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 500 rerun 2026-11-02T21:56,27357375,0.000000,3.108303,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,125 fresh A-a1 1 aligned Held,128,0.000000,-402.471608,-402.471608,-402.471608,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh A-a1 1 aligned Profiled,128,0.000000,-402.451272,-402.451272,-402.451272,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh A-a1 1 partial Held,128,0.000000,-411.885493,-411.885493,-411.885493,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh B-a1 1 aligned Held,128,0.000000,-352.738661,-352.738661,-352.738661,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh B-a1 1 aligned Profiled,128,0.000000,-354.146174,-354.146174,-354.146174,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh B-a1 1 partial Held,128,0.000000,-363.318109,-363.318109,-363.318109,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh best-a1 chain1 aligned Held,128,0.000000,-419.197698,-419.197698,-419.197698,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh best-a1 chain1 aligned Profiled,128,0.000000,-418.710834,-418.710834,-418.710834,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh best-a1 chain1 partial Held,128,0.000000,-419.197698,-419.197698,-419.197698,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 125 fresh rerun 2026-11-02T21:58,673136,0.000000,2.418141,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,125 stream A-a1 1 aligned Held,128,0.000000,-329.005534,-329.005534,-329.005534,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 stream A-a1 1 aligned Profiled,128,0.000000,-328.997517,-328.997517,-328.997517,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 stream B-a1 1 aligned Held,128,0.000000,-329.699779,-329.699779,-329.699779,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 stream B-a1 1 aligned Profiled,128,0.000000,-330.349982,-330.349982,-330.349982,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 stream best-a1 chain1 aligned Held,128,0.000000,-349.090916,-349.090916,-349.090916,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 stream best-a1 chain1 aligned Profiled,128,0.000000,-348.995132,-348.995132,-348.995132,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 125 stream rerun 2026-11-02T21:58,7600,0.000001,2.418141,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,250 fresh A-a1 1 aligned Held,128,0.000000,-536.325524,-536.325524,-536.325524,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 fresh A-a1 1 aligned Profiled,128,0.000000,-536.795295,-536.795295,-536.795295,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 fresh A-a1 1 partial Held,128,0.000000,-536.325524,-536.325524,-536.325524,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 fresh B-a1 1 aligned Held,128,0.000000,-520.324180,-520.324180,-520.324180,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 fresh B-a1 1 aligned Profiled,128,0.000000,-520.868146,-520.868146,-520.868146,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 fresh B-a1 1 partial Held,128,0.000000,-669.688562,-669.688562,-669.688562,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 fresh best-a1 chain1 aligned Held,128,0.000000,-556.233407,-556.233407,-556.233407,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 fresh best-a1 chain1 aligned Profiled,128,0.000000,-556.964893,-556.964893,-556.964893,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 fresh best-a1 chain1 partial Held,128,0.000000,-556.233407,-556.233407,-556.233407,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 250 fresh rerun 2026-11-02T21:59,609584,0.000000,2.762726,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,250 stream A-a1 1 aligned Held,128,,-inf,-inf,-inf,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 stream A-a1 1 aligned Profiled,128,,-inf,-inf,-inf,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 stream B-a1 1 aligned Held,128,0.000000,-541.526001,-541.526001,-541.526001,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 stream B-a1 1 aligned Profiled,128,0.000000,-542.434015,-542.434015,-542.434015,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 stream best-a1 chain1 aligned Held,128,0.000000,-557.674495,-557.674495,-557.674495,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 stream best-a1 chain1 aligned Profiled,128,0.000000,-558.467707,-558.467707,-558.467707,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 250 stream rerun 2026-11-02T21:59,6960,0.000003,2.762726,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,500 fresh A-a1 1 aligned Held,128,0.000000,-933.858105,-933.858105,-933.858105,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 fresh A-a1 1 aligned Profiled,128,0.000000,-934.440755,-934.440755,-934.440755,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 fresh A-a1 1 partial Held,128,0.000000,-940.596192,-940.596192,-940.596192,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 fresh B-a1 1 aligned Held,128,0.000000,-936.729406,-936.729406,-936.729406,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 fresh B-a1 1 aligned Profiled,128,0.000000,-937.278780,-937.278780,-937.278780,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 fresh B-a1 1 partial Held,128,0.000000,-934.994328,-934.994328,-934.994328,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 fresh best-a1 chain1 aligned Held,128,0.000000,-970.968789,-970.968789,-970.968789,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 fresh best-a1 chain1 aligned Profiled,128,0.000000,-971.966183,-971.966183,-971.966183,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,500 fresh best-a1 chain1 partial Held,128,0.000000,-986.334587,-986.334587,-986.334587,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 500 fresh rerun 2026-11-02T22:00,578864,0.000000,3.108303,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,1000 fresh A-a1 1 aligned Held,128,0.000000,-2636.769914,-2636.769914,-2636.769914,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh A-a1 1 aligned Profiled,128,0.000000,-2636.128951,-2636.128951,-2636.128951,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh A-a1 1 partial Held,128,0.000000,-2636.506599,-2636.506599,-2636.506599,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh B-a1 1 aligned Held,128,0.000000,-1630.644513,-1630.644513,-1630.644513,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh B-a1 1 aligned Profiled,128,0.000000,-1629.976466,-1629.976466,-1629.976466,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh B-a1 1 partial Held,128,0.000000,-1630.644513,-1630.644513,-1630.644513,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh best-a1 chain1 aligned Held,128,0.000000,-2657.215337,-2657.215337,-2657.215337,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh best-a1 chain1 aligned Profiled,128,0.000000,-2656.504869,-2656.504869,-2656.504869,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh best-a1 chain1 partial Held,128,0.000000,-2663.012734,-2663.012734,-2663.012734,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 1000 fresh rerun 2026-11-02T22:00,692528,0.000000,3.454377,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,1000 stream A-a1 1 aligned Held,128,0.000000,-2681.392452,-2681.392452,-2681.392452,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 stream A-a1 1 aligned Profiled,128,0.000000,-2680.520792,-2680.520792,-2680.520792,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 stream B-a1 1 aligned Held,128,0.000000,-1677.651853,-1677.651853,-1677.651853,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 stream B-a1 1 aligned Profiled,128,0.000000,-1677.464112,-1677.464112,-1677.464112,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 stream best-a1 chain1 aligned Held,128,0.000000,-2694.483633,-2694.483633,-2694.483633,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 stream best-a1 chain1 aligned Profiled,128,0.000000,-2693.586819,-2693.586819,-2693.586819,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 1000 stream rerun 2026-11-02T22:00,5552,0.000023,3.454377,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,2000 fresh A-a1 1 aligned Held,128,0.000000,-3209.268011,-3209.268011,-3209.268011,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 fresh A-a1 1 aligned Profiled,128,0.000000,-3209.181579,-3209.181579,-3209.181579,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 fresh A-a1 1 partial Held,128,0.000000,-3330.501437,-3330.501437,-3330.501437,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 fresh B-a1 1 aligned Held,128,0.000000,-3152.753902,-3152.753902,-3152.753902,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 fresh B-a1 1 aligned Profiled,128,0.000000,-3152.414711,-3152.414711,-3152.414711,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 fresh B-a1 1 partial Held,128,0.000000,-4756.109243,-4756.109243,-4756.109243,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 fresh best-a1 chain1 aligned Held,128,0.000000,-3175.848658,-3175.848658,-3175.848658,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 fresh best-a1 chain1 aligned Profiled,128,0.000000,-3175.832916,-3175.832916,-3175.832916,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 fresh best-a1 chain1 partial Held,128,0.000000,-3360.498008,-3360.498008,-3360.498008,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 2000 fresh rerun 2026-11-02T22:07,2251056,0.000000,3.800701,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,2000 stream A-a1 1 aligned Held,128,0.000000,-3187.426902,-3187.426902,-3187.426902,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 stream A-a1 1 aligned Profiled,128,0.000000,-3187.135128,-3187.135128,-3187.135128,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 stream B-a1 1 aligned Held,128,0.000000,-3146.136981,-3146.136981,-3146.136981,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 stream B-a1 1 aligned Profiled,128,0.000000,-3145.664016,-3145.664016,-3145.664016,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 stream best-a1 chain1 aligned Held,128,0.000000,-3182.927865,-3182.927865,-3182.927865,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,2000 stream best-a1 chain1 aligned Profiled,128,0.000000,-3183.237358,-3183.237358,-3183.237358,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 2000 stream rerun 2026-11-02T22:08,7600,0.000001,3.800701,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,125 fresh A-a1 1 aligned+redraw Held,64,0.000000,-323.661655,-323.661655,-323.661655,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh A-a1 1 aligned+redraw Profiled,64,0.000000,-324.562271,-324.562271,-324.562271,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh A-a1 1 partial+redraw Held,128,0.000000,-336.677385,-336.677385,-336.677385,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh B-a1 1 aligned+redraw Held,32,0.000000,-323.916795,-323.916795,-323.916795,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh B-a1 1 aligned+redraw Profiled,32,0.000000,-324.460960,-324.460960,-324.460960,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh B-a1 1 partial+redraw Held,128,0.000000,-333.701659,-333.701659,-333.701659,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh best-a1 chain1 aligned+redraw Held,128,0.000000,-318.232156,-318.232156,-318.232156,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh best-a1 chain1 aligned+redraw Profiled,128,0.000000,-317.771764,-317.771764,-317.771764,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,125 fresh best-a1 chain1 partial+redraw Held,128,0.000000,-336.133348,-336.133348,-336.133348,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 125 fresh rerun 2026-11-02T22:12,248548,0.000000,2.418141,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 125 stream rerun 2026-11-02T22:12,0,inf,2.418141,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 250 fresh rerun 2026-11-02T22:12,0,inf,2.762726,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,250 stream A-a1 1 aligned+redraw Held,64,0.000000,-531.392869,-531.392869,-531.392869,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,250 stream A-a1 1 aligned+redraw Profiled,64,0.000000,-532.247429,-532.247429,-532.247429,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 250 stream rerun 2026-11-02T22:12,396,0.002077,2.762726,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 500 fresh rerun 2026-11-02T22:12,0,inf,3.108303,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,1000 fresh A-a1 1 aligned+redraw Held,64,0.000000,-1642.224167,-1642.224167,-1642.224167,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh A-a1 1 aligned+redraw Profiled,64,0.000000,-1641.406105,-1641.406105,-1641.406105,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh A-a1 1 partial+redraw Held,128,0.000000,-1823.256890,-1823.256890,-1823.256890,a subcube of L; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh best-a1 chain1 aligned+redraw Held,128,0.000000,-1622.271540,-1622.271540,-1622.271540,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh best-a1 chain1 aligned+redraw Profiled,128,0.000000,-1621.414207,-1621.414207,-1621.414207,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 fresh best-a1 chain1 partial+redraw Held,128,0.000000,-1622.271540,-1622.271540,-1622.271540,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 1000 fresh rerun 2026-11-02T22:12,137242,0.000000,3.454377,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+search,1000 stream A-a1 1 aligned+redraw Held,64,0.000000,-1687.921131,-1687.921131,-1687.921131,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 stream A-a1 1 aligned+redraw Profiled,64,0.000000,-1687.940938,-1687.940938,-1687.940938,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 stream best-a1 chain1 aligned+redraw Held,128,0.000000,-1696.829348,-1696.829348,-1696.829348,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+search,1000 stream best-a1 chain1 aligned+redraw Profiled,128,0.000000,-1696.938810,-1696.938810,-1696.938810,L whole; worst is widest less orderings, 0 unless the best route is not monotone
+sc5,N 1000 stream rerun 2026-11-02T22:12,1306,0.000111,3.454377,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 2000 fresh rerun 2026-11-02T22:12,0,inf,3.800701,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 2000 stream rerun 2026-11-02T22:12,0,inf,3.800701,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+scorer,exemplars 2026-11-02T22:15,19,0.000001,0.000001,0.000000,,fresh design against the retained draw and against the stored π
