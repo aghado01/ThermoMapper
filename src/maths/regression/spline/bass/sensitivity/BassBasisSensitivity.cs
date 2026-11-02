@@ -47,15 +47,17 @@ public static class BassBasisSensitivity
         ProductMeasure measure = ProductMeasure.Resolve(first.Transform, inputs, spec.Measures);
         BassMoments moments = BassMoments.On(inputs, degree, measure);
 
-        // Each component's draws pooled in chain order; joint draw d takes pooled[k][JointDraws.Draw(k, d)].
+        // Each component's draws pooled in chain order; joint draw j takes pooled[k][JointDraws.Draw(k, j)], over the joint
+        // draws selected.
         BassJointDraws joint = fit.JointDraws;
-        int n = joint.Count;
+        (int[] selected, _) = Draws3.Select(spec.Draws, joint.Count, null);
+        int n = selected.Length;
         var pooled = new List<BassDraw>[r];
         for (int k = 0; k < r; k++) pooled[k] = BassDrawFit.Pool(fit.Components[k].Draws, fit.Components[k].Terms, false, nameof(fit)).Pooled;
         var held = new HashSet<BassTerm>();
         for (int k = 0; k < r; k++)
-            for (int d = 0; d < n; d++)
-                foreach (int id in pooled[k][joint.Draw(k, d)].Structure.TermIds) held.Add(fit.Components[k].Terms[id]);
+            foreach (int j in selected)
+                foreach (int id in pooled[k][joint.Draw(k, j)].Structure.TermIds) held.Add(fit.Components[k].Terms[id]);
         int largest = held.Select(t => moments.Variables(t).Count).DefaultIfEmpty(0).Max();
         int maxOrder = spec.MaxOrder ?? Math.Max(1, largest);
         int integratedOrder = spec.MaxOrder ?? largest + 1;
@@ -84,7 +86,7 @@ public static class BassBasisSensitivity
         {
             for (int k = 0; k < r; k++)
             {
-                draws[k] = pooled[k][joint.Draw(k, d)];
+                draws[k] = pooled[k][joint.Draw(k, selected[d])];
                 double[] a = draws[k].Coefficients;
                 int[] ids = draws[k].Structure.TermIds;
                 double mean = a[0], magnitude = Math.Abs(a[0]);
@@ -120,8 +122,8 @@ public static class BassBasisSensitivity
                 }
         }
 
-        var chains = new int[n];
-        var within = new int[n];
+        var chains = new int[joint.Count];
+        var within = new int[joint.Count];
         if (joint.ChainLengths is { } lengths)
         {
             int at = 0;
@@ -133,8 +135,9 @@ public static class BassBasisSensitivity
                 }
         }
         else
-            for (int d = 0; d < n; d++) within[d] = d;
-        return new BasisSobolAnalysis(fit.Decomposition.Map, measure, maxOrder, integratedOrder, subsets, state, chains, within,
+            for (int j = 0; j < within.Length; j++) within[j] = j;
+        return new BasisSobolAnalysis(fit.Decomposition.Map, measure, maxOrder, integratedOrder, subsets, state,
+                                      [.. selected.Select(j => chains[j])], [.. selected.Select(j => within[j])],
                                       spec.RoundingTolerance, moments.LargestError);
     }
 

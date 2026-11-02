@@ -33,7 +33,8 @@ public static class BassBasisEffects
 
         int r = fit.Components.Count;
         BassJointDraws joint = fit.JointDraws;
-        int n = joint.Count;
+        (int[] selected, _) = Draws3.Select(spec.Draws, joint.Count, null);
+        int n = selected.Length;
         BassFit first = fit.Components[0];
         BassInputs inputs = BassInputs.Prepare(fit.ComponentData(0), first.Transform);
         ProductMeasure measure = ProductMeasure.Resolve(first.Transform, inputs, spec.Measures);
@@ -49,8 +50,8 @@ public static class BassBasisEffects
             {
                 List<BassDraw> pooled = BassDrawFit.Pool(fit.Components[k].Draws, fit.Components[k].Terms, false, nameof(fit)).Pooled;
                 var seen = new HashSet<int>();
-                for (int d = 0; d < n; d++)
-                    foreach (int id in pooled[joint.Draw(k, d)].Structure.TermIds)
+                foreach (int draw in selected)
+                    foreach (int id in pooled[joint.Draw(k, draw)].Structure.TermIds)
                     {
                         if (!seen.Add(id)) continue;
                         IReadOnlyList<int> v = moments.Variables(fit.Components[k].Terms[id]);
@@ -80,14 +81,15 @@ public static class BassBasisEffects
         if (values > effects.CellBudget)
             throw new ArgumentException($"The effects hold {values} values ({cells} cells × {n} joint draws × {r} components), above the budget of {effects.CellBudget}: name fewer effects, a coarser grid, or raise the budget.", nameof(effects));
 
-        // Each component's effects over its pooled draws, read at the joint draws.
+        // Each component's effects over its pooled draws, read at the joint draws selected.
         EffectSpec each = effects with { Subsets = named };
+        SensitivitySpec whole = spec with { Draws = null };
         var state = new double[r][][,];
         var means = new double[n, r];
         IReadOnlyList<Effect>? layout = null;
         for (int k = 0; k < r; k++)
         {
-            EffectFunctions own = BassSensitivity.Effects(fit.Components[k], fit.ComponentData(k), spec, each).At[0];
+            EffectFunctions own = BassSensitivity.Effects(fit.Components[k], fit.ComponentData(k), whole, each).At[0];
             layout ??= own.Effects;
             state[k] = new double[own.Effects.Count][,];
             for (int e = 0; e < own.Effects.Count; e++)
@@ -97,12 +99,12 @@ public static class BassBasisEffects
                 var target = new double[n, width];
                 for (int d = 0; d < n; d++)
                 {
-                    int from = joint.Draw(k, d);
+                    int from = joint.Draw(k, selected[d]);
                     for (int c = 0; c < width; c++) target[d, c] = source[from, c];
                 }
                 state[k][e] = target;
             }
-            for (int d = 0; d < n; d++) means[d, k] = own.Mean[joint.Draw(k, d)];
+            for (int d = 0; d < n; d++) means[d, k] = own.Mean[joint.Draw(k, selected[d])];
         }
         return new BasisEffectAnalysis(fit.Decomposition.Map, measure, [.. layout!.Select(x => (x.Inputs, x.Grids))], state, means, effects.CellBudget);
     }

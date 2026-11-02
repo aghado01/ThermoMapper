@@ -54,6 +54,11 @@ public sealed record SensitivitySpec
     /// <see cref="EmpiricalMeasure"/> for the training output grid.</summary>
     public IReadOnlyDictionary<string, InputMeasure>? OutputMeasures { get; init; }
 
+    /// <summary>The draws to decompose, in the order wanted, as indices into the fit's draws pooled in chain order (a basis
+    /// fit's joint draws), as <see cref="BassPredictOptions.Draws"/> takes them; repeats allowed. Null takes every draw in
+    /// order. R's <c>mcmc.use</c>.</summary>
+    public IReadOnlyList<int>? Draws { get; init; }
+
     /// <summary>The largest subset whose main index is reported; the posterior's largest term (its variable count) when null,
     /// so every order is reported and the main indices sum to 1.</summary>
     public int? MaxOrder { get; init; }

@@ -218,6 +218,25 @@ public sealed class BassSensitivityBasisEffectTests
     }
 
     [Fact]
+    public void Draws_SelectTheJointDraws()
+    {
+        BassBasisFit fit = BassOutputComponentsTests.FitOf();
+        var effects = new EffectSpec { GridPoints = 4 };
+        BasisEffectAnalysis all = fit.Effects(effects: effects);
+        int[] picked = [all.Count - 1, 3, 3];
+        BasisEffectAnalysis some = fit.Effects(new SensitivitySpec { Draws = picked }, new EffectSpec { GridPoints = 4, Subsets = [["z0"], ["z1"]] });
+        Assert.Equal(picked.Length, some.Count);
+        int location = all.Locations / 2;
+        EffectFunctions every = all.AtLocation(location), chosen = some.AtLocation(location);
+        Effect z0 = every.Effects.Single(e => e.Inputs.SequenceEqual(new[] { 0 })), z0Chosen = chosen.Effects.Single(e => e.Inputs.SequenceEqual(new[] { 0 }));
+        for (int k = 0; k < picked.Length; k++)
+        {
+            Assert.Equal(every.Mean[picked[k]], chosen.Mean[k]);
+            for (int c = 0; c < 4; c++) Assert.Equal(z0.Values[picked[k], c], z0Chosen.Values[k, c]);
+        }
+    }
+
+    [Fact]
     public void Refusals_CarryTheirReasons()
     {
         BassBasisFit fit = BassOutputComponentsTests.FitOf();

@@ -285,6 +285,50 @@ public sealed class BassSensitivityTests
     }
 
     [Fact]
+    public void Draws_SelectAndOrderTheDecomposedDraws()
+    {
+        BassFit fit = SensitivityFixture.FitScalar();
+        BassData data = SensitivityFixture.Scalar();
+        SobolDecomposition all = BassSensitivity.Of(fit, data).Decompositions[0];
+        int[] picked = [37, 2, 2, 59];
+        var spec = new SensitivitySpec { Draws = picked };
+        SobolDecomposition s = BassSensitivity.Of(fit, data, spec).Decompositions[0];
+        Assert.Equal(picked.Length, s.Count);
+        Assert.Equal(picked.Select(d => all.Chains[d]), s.Chains);
+        Assert.Equal(picked.Select(d => all.Draws[d]), s.Draws);
+        Assert.Null(s.Weights);
+        // The subsets are those of the picked draws' terms, so a draw's mains are read by subset.
+        Assert.All(s.Subsets, u => Assert.Contains(all.Subsets, v => v.SequenceEqual(u)));
+        for (int k = 0; k < picked.Length; k++)
+        {
+            int d = picked[k];
+            Assert.Equal(all.Variance[d], s.Variance[k]);
+            Assert.Equal(Enumerable.Range(0, s.Inputs.Count).Select(i => all.TotalVariance[d, i]),
+                         Enumerable.Range(0, s.Inputs.Count).Select(i => s.TotalVariance[k, i]));
+            for (int u = 0; u < s.Subsets.Count; u++)
+                Assert.Equal(all.MainVariance[d, IndexOf(all, s.Subsets[u])], s.MainVariance[k, u]);
+        }
+
+        // The effects follow, and R's one draw is a selection of one.
+        var named = new EffectSpec { Subsets = [["x0"]], GridPoints = 4 };
+        double[,] every = BassSensitivity.Effects(fit, data, null, named).At[0].Effects[0].Values;
+        EffectFunctions some = BassSensitivity.Effects(fit, data, spec, named).At[0];
+        for (int k = 0; k < picked.Length; k++)
+            for (int c = 0; c < 4; c++) Assert.Equal(every[picked[k], c], some.Effects[0].Values[k, c]);
+        Assert.Single(BassSensitivity.Of(fit, data, new SensitivitySpec { Draws = [all.Count - 1] }).Decompositions[0].Variance);
+
+        // A weighted fit's picked draws keep their weights.
+        double[] weights = [.. Enumerable.Range(0, all.Count).Select(d => d % 5 == 0 ? 0.0 : 1.0 + d)];
+        BassFit weighted = fit with { DrawWeights = weights };
+        SobolDecomposition w = BassSensitivity.Of(weighted, data, new SensitivitySpec { Draws = [1, 2, 3] }).Decompositions[0];
+        Assert.Equal(new[] { weights[1], weights[2], weights[3] }, w.Weights);
+
+        Assert.Contains("at least one", Assert.Throws<ArgumentException>(() => BassSensitivity.Of(fit, data, new SensitivitySpec { Draws = [] })).Message);
+        Assert.Contains("not among", Assert.Throws<ArgumentException>(() => BassSensitivity.Of(fit, data, new SensitivitySpec { Draws = [all.Count] })).Message);
+        Assert.Contains("no weight", Assert.Throws<ArgumentException>(() => BassSensitivity.Of(weighted, data, new SensitivitySpec { Draws = [0, 5] })).Message);
+    }
+
+    [Fact]
     public void ConditioningOnSome_ObeysTheLawOfTotalVariance()
     {
         // t0 under its empirical measure, its four values equally weighted, so the integrated form is the conditioned one

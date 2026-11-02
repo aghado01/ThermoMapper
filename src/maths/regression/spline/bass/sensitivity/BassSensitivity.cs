@@ -375,24 +375,22 @@ public static class BassSensitivity
             var moments = BassMoments.On(inputs, fit.Config.Structure.Degree, measure);
 
             int total = fit.Draws.Sum(c => c.Count);
-            var draws = new BassDraw[total];
-            var chains = new int[total];
-            var index = new int[total];
+            var pooled = new (BassDraw Draw, int Chain, int Index)[total];
             int at = 0;
             for (int c = 0; c < fit.Draws.Count; c++)
-                for (int i = 0; i < fit.Draws[c].Count; i++, at++)
-                {
-                    draws[at] = fit.Draws[c][i];
-                    chains[at] = c;
-                    index[at] = i;
-                }
+                for (int i = 0; i < fit.Draws[c].Count; i++, at++) pooled[at] = (fit.Draws[c][i], c, i);
             if (fit.DrawWeights is { } w && w.Length != total)
                 throw new ArgumentException($"The fit has {total} draws and {w.Length} weights.", nameof(fit));
+            (int[] selected, _) = Draws3.Select(spec.Draws, total, fit.DrawWeights);
+            BassDraw[] draws = [.. selected.Select(d => pooled[d].Draw)];
+            int[] chains = [.. selected.Select(d => pooled[d].Chain)];
+            int[] index = [.. selected.Select(d => pooled[d].Index)];
+            double[]? weights = fit.DrawWeights is { } all ? [.. selected.Select(d => all[d])] : null;
             int[] ids = [.. draws.SelectMany(d => d.Structure.TermIds).Distinct().Order()];
 
             var setup = new Setup
             {
-                Fit = fit, Moments = moments, Draws = draws, Chains = chains, DrawIndex = index, Weights = fit.DrawWeights,
+                Fit = fit, Moments = moments, Draws = draws, Chains = chains, DrawIndex = index, Weights = weights,
                 TermIds = ids, MaxTerms = draws.Length == 0 ? 0 : draws.Max(d => d.Structure.TermIds.Length), Form = form,
                 Coordinates = null, CoordinatesOutside = null, CoordinateVariables = null,
             };
@@ -435,7 +433,7 @@ public static class BassSensitivity
             }
             return new Setup
             {
-                Fit = fit, Moments = moments, Draws = draws, Chains = chains, DrawIndex = index, Weights = fit.DrawWeights,
+                Fit = fit, Moments = moments, Draws = draws, Chains = chains, DrawIndex = index, Weights = weights,
                 TermIds = ids, MaxTerms = setup.MaxTerms, Form = form,
                 Coordinates = [.. coordinates.Select(c => (double[])c.Clone())], CoordinatesOutside = outside,
                 CoordinateVariables = Array.AsReadOnly(held.Select(d => outputs[d].Name).ToArray()),

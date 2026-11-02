@@ -389,6 +389,32 @@ public sealed class BassSensitivityBasisTests
     }
 
     [Fact]
+    public void Draws_SelectTheJointDraws()
+    {
+        BassBasisFit fit = BassOutputComponentsTests.FitOf();
+        BasisSobolAnalysis all = fit.Sensitivity();
+        int[] picked = [all.Count - 1, 3, 3, 7];
+        BasisSobolAnalysis some = fit.Sensitivity(new SensitivitySpec { Draws = picked });
+        Assert.Equal(picked.Length, some.Count);
+        SobolDecomposition every = all.Integrated, chosen = some.Integrated;
+        Assert.Equal(picked.Select(j => every.Chains[j]), chosen.Chains);
+        Assert.Equal(picked.Select(j => every.Draws[j]), chosen.Draws);
+        int location = all.Locations / 2;
+        for (int k = 0; k < picked.Length; k++)
+        {
+            Assert.Equal(all.ComponentCovariance(picked[k]), some.ComponentCovariance(k));
+            Assert.Equal(all.ComponentMeans(picked[k]), some.ComponentMeans(k));
+            Assert.Equal(every.Variance[picked[k]], chosen.Variance[k]);
+            Assert.Equal(all.AtLocation(location).Variance[picked[k]], some.AtLocation(location).Variance[k]);
+        }
+        // R's one draw, its last by default.
+        BasisSobolAnalysis last = fit.Sensitivity(new SensitivitySpec { Draws = [all.Count - 1] });
+        Assert.Equal(1, last.Count);
+        Assert.Equal(all.AtLocation(location).Variance[^1], Assert.Single(last.AtLocation(location).Variance));
+        Assert.Contains("not among", Assert.Throws<ArgumentException>(() => fit.Sensitivity(new SensitivitySpec { Draws = [all.Count] })).Message);
+    }
+
+    [Fact]
     public void Refusals_NameTheirReason()
     {
         BassBasisFit fit = BassOutputComponentsTests.FitOf();
