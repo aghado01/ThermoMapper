@@ -18,7 +18,8 @@ namespace TDA.Ph;
 /// <see cref="PersistentInvolutedHomology"/>. Two readings of one filtration:
 /// <see cref="ComputeBarcode"/> is backbone-at-base <c>H(K_δ)</c>, which equals the relative one when
 /// <c>K₀</c> is connected, spanning and acyclic; <see cref="ComputeRelativeBarcode"/> is
-/// backbone-quotiented <c>H(K_δ, K₀)</c> for any backbone. Directedness, the gauge <c>q</c> and the sheaf / <c>λ_q</c> reading are
+/// backbone-quotiented <c>H(K_δ, K₀)</c> for any backbone. A non-monotone sweep reads through
+/// <see cref="BuildSweep"/>. Directedness, the gauge <c>q</c> and the sheaf / <c>λ_q</c> reading are
 /// P2–P4 and deliberately absent.</para>
 /// </summary>
 public static class ConditionedFiltration
@@ -163,5 +164,42 @@ public static class ConditionedFiltration
 
         return BuildRelative(n, backbone, similarity, maxDimension)
             .ComputeBarcode(Math.Min(maxDimension, 2) - 1, representatives: true);
+    }
+
+    /// <summary>
+    /// P1c · a non-monotone sweep of the conditioned graph, as frames for the zigzag engines: frame <c>t</c> holds
+    /// the backbone and the content edges of <c>content[t]</c> within slack <c>slack[t]</c>. Edges enter and leave
+    /// between frames, as a monotone δ cannot show. With a connected spanning backbone H₀ is one bar, so a sweep's
+    /// returns read in H₁ (<c>maxDimension ≥ 1</c>), as unfilled graph cycles.
+    /// </summary>
+    /// <param name="n">Vertex count; every vertex is present in every frame.</param>
+    /// <param name="backbone">Prior <c>K₀</c> edges, present in every frame.</param>
+    /// <param name="content">Per frame, the content edges <c>(i, j, d)</c>.</param>
+    /// <param name="slack">Per frame, the admission bound: an edge enters at <c>d ≤ slack[t]</c>.</param>
+    /// <param name="transition">How consecutive frames connect.</param>
+    public static GraphFrameFiltration BuildSweep(
+        int n,
+        IReadOnlyList<(int i, int j)> backbone,
+        IReadOnlyList<IReadOnlyList<(int i, int j, double d)>> content,
+        IReadOnlyList<double> slack,
+        FrameTransition transition = FrameTransition.Union)
+    {
+        ArgumentNullException.ThrowIfNull(backbone);
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentNullException.ThrowIfNull(slack);
+        if (content.Count != slack.Count)
+            throw new ArgumentException($"{content.Count} content frames against {slack.Count} slack values.", nameof(slack));
+
+        var edgeSets = new IReadOnlyList<(int i, int j)>[content.Count];
+        for (int t = 0; t < edgeSets.Length; t++)
+        {
+            var edges = new List<(int i, int j)>(backbone);
+            foreach (var (i, j, d) in content[t])
+                if (d <= slack[t])
+                    edges.Add((i, j));
+            edgeSets[t] = edges;
+        }
+
+        return GraphFrameZigzag.FromEdgeSets(n, edgeSets, transition);
     }
 }
