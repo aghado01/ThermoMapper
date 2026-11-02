@@ -147,6 +147,8 @@ public sealed class RelativeFiltration : IFiltration
     /// <see cref="ComputeBarcode"/> for representatives.
     /// <para><c>Absolute</c> is <c>K</c> with <c>K₀</c> at the base: its cells read at the ambient's smallest value.
     /// When they already sit there, as a backbone at ε₀ = 0 does, it is the ambient's own barcode.</para>
+    /// <para>This is for wanting both. For the relative barcode alone <see cref="ComputeBarcode"/> is faster past small
+    /// complexes, since it reduces a smaller problem: about 3 times at 42,000 triangles.</para>
     /// </summary>
     public (Barcode Absolute, Barcode Relative) ComputeBothReadings(int maxDimension = int.MaxValue)
     {

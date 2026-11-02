@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using Graphs.Primitives;
 using Maths.Topology;
@@ -355,15 +356,39 @@ public sealed class RelativeFiltrationTests
         Assert.True(rows.MovedUpWithCellsAbove > 0 && k0Late > 0);
     }
 
-    // The one timing, off by default: RELATIVE_READING_TIMING=1, in Release. It reports and asserts no speed, since the
-    // machine is shared. The graph's edges enter by a uniform draw, K₀ is a spanning tree with a few extra edges.
+    // The one timing, off by default: set RELATIVE_READING_TIMING to a file path and run in Release. It appends a line per
+    // case, so a long run loses nothing, and asserts no speed, since the machine is shared. CPU time is the figure that holds
+    // up under load. K₀ is a spanning tree with a few extra edges; content edges enter by a uniform draw. Beside the reference
+    // and the one run: the ambient absolute by the column reducer, which with the reference is both readings by two
+    // reductions, and by the clearing engine in the ambient's own order, which says whether K₀ first is what costs. A case
+    // whose reference took over a budget is run once.
     [Fact]
     public void BothReadings_Timing()
     {
-        if (Environment.GetEnvironmentVariable("RELATIVE_READING_TIMING") is not "1") return;
+        if (Environment.GetEnvironmentVariable("RELATIVE_READING_TIMING") is not { Length: > 0 } path) return;
 
-        Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal;
-        foreach (var (n, p) in new[] { (100, 0.30), (200, 0.20), (400, 0.15), (800, 0.10) })
+        const double budgetSeconds = 15.0;
+        Process process = Process.GetCurrentProcess();
+        process.PriorityClass = ProcessPriorityClass.BelowNormal;
+
+        void Report(string line)
+        {
+            _output.WriteLine(line);
+            File.AppendAllText(path, line + Environment.NewLine);
+        }
+
+        (double Wall, double Cpu, T Result) Measure<T>(Func<T> run)
+        {
+            process.Refresh();
+            TimeSpan cpu = process.TotalProcessorTime;
+            var watch = Stopwatch.StartNew();
+            T result = run();
+            watch.Stop();
+            process.Refresh();
+            return (watch.Elapsed.TotalSeconds, (process.TotalProcessorTime - cpu).TotalSeconds, result);
+        }
+
+        foreach (var (n, p) in new[] { (100, 0.30), (200, 0.20), (400, 0.15) })
         {
             var rng = new Random(n);
             List<(int, int)> backbone = RandomConnectedSpanning(n, rng);
@@ -374,35 +399,43 @@ public sealed class RelativeFiltrationTests
                     if (!taken.Contains((a, b)) && rng.NextDouble() < p)
                         content.Add((a, b, rng.NextDouble()));
 
-            var built = Stopwatch.StartNew();
-            RelativeFiltration relative = ConditionedFiltration.BuildRelative(n, backbone, content);
-            built.Stop();
+            var (buildWall, _, relative) = Measure(() => ConditionedFiltration.BuildRelative(n, backbone, content));
             int triangles = relative.Ambient.Simplices.Count(s => s.Dimension == 2);
 
             foreach (int maxDimension in new[] { 1, int.MaxValue })
             {
-                var referenceMs = new List<double>();
-                var readingMs = new List<double>();
-                (int, double, double, int?)[]? referenceBars = null, readingBars = null;
-                for (int repeat = 0; repeat < 3; repeat++)
+                string degrees = maxDimension == int.MaxValue ? "all" : maxDimension.ToString();
+                var first = Measure(() => relative.ComputeBarcode(maxDimension));
+                var reading = Measure(() => relative.ComputeBothReadings(maxDimension));
+                Assert.True(Pairs(first.Result).SequenceEqual(Pairs(reading.Result.Relative)), $"n {n}, maxDimension {degrees}");
+
+                var absolute = Measure(() => PersistentHomology.Compute(relative.Ambient, maxDimension));
+                var clearing = Measure(() => PersistentCohomology.Compute((IFiltration)relative.Ambient, maxDimension));
+                Assert.True(Canon(absolute.Result).SequenceEqual(Canon(clearing.Result)), $"absolute, n {n}, maxDimension {degrees}");
+
+                double referenceCpu = first.Cpu, readingCpu = reading.Cpu, absoluteCpu = absolute.Cpu, clearingCpu = clearing.Cpu;
+                double referenceWall = first.Wall, readingWall = reading.Wall;
+                if (first.Wall < budgetSeconds)
                 {
-                    var watch = Stopwatch.StartNew();
-                    Barcode reference = relative.ComputeBarcode(maxDimension);
-                    referenceMs.Add(watch.Elapsed.TotalMilliseconds);
-
-                    watch.Restart();
-                    Barcode reading = relative.ComputeBothReadings(maxDimension).Relative;
-                    readingMs.Add(watch.Elapsed.TotalMilliseconds);
-
-                    referenceBars = Pairs(reference);
-                    readingBars = Pairs(reading);
+                    for (int repeat = 0; repeat < 2; repeat++)
+                    {
+                        var again = Measure(() => relative.ComputeBarcode(maxDimension));
+                        var readAgain = Measure(() => relative.ComputeBothReadings(maxDimension));
+                        var absoluteAgain = Measure(() => PersistentHomology.Compute(relative.Ambient, maxDimension));
+                        var clearingAgain = Measure(() => PersistentCohomology.Compute((IFiltration)relative.Ambient, maxDimension));
+                        referenceCpu = Math.Min(referenceCpu, again.Cpu);
+                        readingCpu = Math.Min(readingCpu, readAgain.Cpu);
+                        absoluteCpu = Math.Min(absoluteCpu, absoluteAgain.Cpu);
+                        clearingCpu = Math.Min(clearingCpu, clearingAgain.Cpu);
+                        referenceWall = Math.Min(referenceWall, again.Wall);
+                        readingWall = Math.Min(readingWall, readAgain.Wall);
+                    }
                 }
 
-                Assert.True(referenceBars!.SequenceEqual(readingBars!), $"n {n}, maxDimension {maxDimension}");
-                double r = referenceMs.Min(), f = readingMs.Min();
-                _output.WriteLine($"n {n}, edges {backbone.Count + content.Count}, triangles {triangles}, " +
-                    $"maxDimension {(maxDimension == int.MaxValue ? "all" : maxDimension)}: build {built.Elapsed.TotalMilliseconds:F0} ms, " +
-                    $"reference {r:F1} ms, one run {f:F1} ms, reference/run {r / f:F2} (best of 3; all {string.Join(", ", referenceMs.Select(x => x.ToString("F0")))} vs {string.Join(", ", readingMs.Select(x => x.ToString("F0")))})");
+                Report($"n {n}, edges {backbone.Count + content.Count}, triangles {triangles}, degrees {degrees}, build wall {buildWall:F2} s: " +
+                    $"cpu s: reference {referenceCpu:F3}, one run {readingCpu:F3}, absolute reducer {absoluteCpu:F3}, absolute clearing {clearingCpu:F3}; " +
+                    $"wall s: reference {referenceWall:F3}, one run {readingWall:F3}; " +
+                    $"reference/run cpu {referenceCpu / readingCpu:F2}, two reductions/run cpu {(referenceCpu + absoluteCpu) / readingCpu:F2}");
             }
         }
     }

@@ -68,7 +68,8 @@ public sealed class ClearingEngineParityTests
             var rng = new Random(seed);
             // Half the trials draw cell births from a small grid, so edges and cofaces tie with each other and with
             // their faces, which gives zero-length pairs and tied merges.
-            SimplicialFiltration filtration = RandomFiltration(rng, distinctVertexBirths: true, grid: seed % 2 == 0);
+            // A quarter of the trials run below zero: bars don't care, though involuted representatives do (see docs).
+            SimplicialFiltration filtration = RandomFiltration(rng, distinctVertexBirths: true, grid: seed % 2 == 0, shift: seed % 4 == 3 ? -20.0 : 0.0);
 
             foreach (int maxDimension in new[] { int.MaxValue, 0, 1, 2 })
             {
@@ -159,7 +160,7 @@ public sealed class ClearingEngineParityTests
 
     // Any complex the faces allow, not a flag complex: each candidate coface enters with a chance, at or after its
     // latest face. Goes up to tetrahedra so H2 can die.
-    static SimplicialFiltration RandomFiltration(Random rng, bool distinctVertexBirths, bool grid)
+    static SimplicialFiltration RandomFiltration(Random rng, bool distinctVertexBirths, bool grid, double shift = 0.0)
     {
         int n = rng.Next(4, 10);
         double Later(double earliest) => grid ? earliest + rng.Next(0, 4) : earliest + rng.NextDouble() * 3.0;
@@ -170,7 +171,7 @@ public sealed class ClearingEngineParityTests
         void Add(double birth, params int[] vertices)
         {
             births[Key(vertices)] = birth;
-            cells.Add(new Simplex(birth, vertices));
+            cells.Add(new Simplex(birth + shift, vertices));
         }
 
         // A permutation makes the vertex births distinct whichever values the rest of the complex draws.
