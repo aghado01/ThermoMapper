@@ -20,10 +20,10 @@ complex with `K`'s cells deleted, which is what `TDA.Ph.RelativeFiltration` redu
 of the pair, with no reduction in the statement. `SimplicialFiltration` instantiates all of this
 for ℤ/2 simplicial chains, the engine's case.
 
-The result is stated in ranks. That a persistence module over a finite chain is a sum of intervals,
-which its ranks determine, is the standard structure theorem and is not formalized here. Nor is the
-C#: `TDA.Ph.RelativeFiltration` is checked by tests. The statement is folklore in substance, not a
-new result: see `issues/ph/relative-barcode-provenance.md`.
+The result here is stated in ranks. `IntervalDecomposition` proves the module is the sum of those
+intervals, and that the ranks determine them. The C# is not covered: `TDA.Ph.RelativeFiltration` is
+checked by tests. The statement is folklore in substance, not a new result: see
+`issues/ph/relative-barcode-provenance.md`.
 -/
 
 namespace RelativePersistence
