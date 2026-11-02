@@ -83,10 +83,10 @@ For a slightly asymmetric input, the two dense eigen routes therefore decompose 
 |---|---|
 | Dense eigen | `DenseEigen.DecomposeSymmetric` (`double[,]` or column-major span) → `EigenResult`; `EigenFast.DecomposeSymmetricInPlace` (allocation-free core); `Eigen.DecomposeSymmetric`; `SpectralMath.BottomK`, `SpectralMath.SelectBottomK` → `IReadOnlyList<EigenPair>` |
 | Iterative eigen | `LOBPCG.Solve(op, k, Options?)` → `Result(Eigenpairs, Iterations, ResidualNorm, Converged)`; `LOBPCG.BottomK` / `TopK` (dense convenience); `DenseSymmetricOperator`; `ILinearOperator`, `IPreconditioner` |
-| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `Status`, `Strict`, `FailedAt`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `WideBandCholesky(dimension, bandwidth)` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Factor`, `RelativePivot`, `Dimension`, `Bandwidth`), `SpdFactors` (`UsesWideBand`, `ForBand`, `MinimumOrder`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`, `EquilibratedCondition`; implemented by `BandCholesky`, `DenseCholesky` and `WideBandCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus` |
+| Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `Status`, `Strict`, `FailedAt`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `BorderedCholesky(capacity, rebuildInterval = 100)` (`ProposeBirth`, `ProposeDeath`, `ProposeChange`, `ProposedInverseQuadraticForm`, `Pending`, `Accept`, `Rebuild`, `LastDrift`, `UpdatesSinceRebuild`, `RebuildInterval`, `Copy`, `Clear`, `Decompose`, `Entry`, `Factor`, `RelativePivot`, `InverseDiagonal`, `LeaveOneOutPivot`, `MinLeaveOneOutPivot`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Dimension`, `Capacity`) → `FactorProposal` (`FactorChange`), `FactorDrift`; `WideBandCholesky(dimension, bandwidth)` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Factor`, `RelativePivot`, `Dimension`, `Bandwidth`), `SpdFactors` (`UsesWideBand`, `ForBand`, `MinimumOrder`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`, `EquilibratedCondition`; implemented by `BandCholesky`, `DenseCholesky`, `BorderedCholesky` and `WideBandCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus` |
 | Contractions | `KhatriRao` (`Gram`, `Border`, `CrossProducts`, `CentredGram`, `CentredBorder`, `CentredCrossProducts`, `ScatteredGram`, `ScatteredCrossProducts`, `FaceSplittingGram`, `FaceSplittingCrossProducts`, `FaceSplittingHalfBandwidth`, `KroneckerGram`); `IInnerProduct` (`IsIdentity`, `Dimension`, `LogDeterminant`, `Dot`), `IdentityInnerProduct` |
 | Transforms and statistics | `Fft` (1-D, 3-D, N-D; `IsPowerOfTwo`); `Pca.Compute` → `PcaResult`; `FastIca.Compute` → `IcaResult`; `OnlineMahalanobis` (`Update`, `Distance` to the mean or between two points, `IsReady`, `GetMean`, `GetVariances`, `Reset`) |
-| Kernels | `MatrixOps` (`Dot`, `ScaledSubtract`, `Orthonormalize`, `RandomOrthonormal`, `ColumnGramMatrix`, `ColumnGramMatrixFromRowMajor`, `TransposeToColumnMajor`) |
+| Kernels | `MatrixOps` (`Dot`, `ScaledSubtract`, `Orthonormalize`, `RandomOrthonormal`, `ColumnGramMatrix`, `ColumnGramMatrixFromRowMajor`, `TransposeToColumnMajor`); `PairwiseSum` (`Of`, `Dot`, `Block`) |
 
 ## Algorithms
 
@@ -160,7 +160,7 @@ Derived quantities:
 
 ### Strict dense Cholesky (`DenseCholesky`)
 
-The reference factor for dense Gram matrices: BASS's active-term Gram, and the full rebuild that the incremental border and Givens updates (port stage 2) are checked against.
+The reference factor for dense Gram matrices: BASS's active-term Gram, and the full rebuild that [`BorderedCholesky`](#bordered-cholesky-borderedcholesky)'s border and Givens updates are checked against.
 
 - **Strict.** There is no pivot floor. The first pivot that is not finite and positive stops the factorization:
   - `FailedAt` gives its row;
@@ -182,6 +182,35 @@ The reference factor for dense Gram matrices: BASS's active-term Gram, and the f
 - **Agreement.** The loop order is `CholeskyDecomposition`'s. With no pivot at or below 1e-12, the factor, `LogDet` and `Status` are bit-identical.
 
 **Cost.** Factorization is about $n^3/6$ multiply-adds; solves and draws are $O(n^2)$; storage is $n(n+1)/2$.
+
+### Bordered Cholesky (`BorderedCholesky`)
+
+A strict dense factor A = L·Lᵀ of a matrix whose rows and columns come and go, for a Gram whose terms are born, die and change. BASS's design is its caller, one factor per chain. It keeps A itself, so it can rebuild, and diag(A⁻¹), so each column's angle to the span of all the others reads in O(1). Updating follows Golub and Van Loan (2013, §6.5). Storage is allocated once for `Capacity`, at most 46,340 as for `DenseCholesky`. An instance is not thread-safe.
+
+**Updates,** each O(n²).
+- *A birth* (`ProposeBirth(border, diagonal)`) borders the factor with a new last row, y = L⁻¹u with pivot d = c − ‖y‖², computed exactly as `DenseCholesky` computes a row. So a factor grown one row at a time is bit-identical to the strict one. With w = A⁻¹u, diag(A⁻¹) gains w²/d and its new corner is 1/d.
+- *A death* (`ProposeDeath(index)`) drops a row of L and restores the triangle with Givens rotations. The later rows move up, and a death never loses positive definiteness. With v = A⁻¹e_m, diag(A⁻¹) loses v²/v_m. A downdate that keeps less than 10⁻³ of an entry has cancelled the digits that matter, so that entry is recomputed from the new factor.
+- *A change* (`ProposeChange(index, border, diagonal)`) is a death and then a birth, staged together. The new column goes last.
+
+**Proposals are private.** Each call computes its candidate beside the accepted factor and returns a `FactorProposal`: its `Change` (`FactorChange`), `Index`, `PositiveDefinite`, `RelativePivot` (the new row's d/c, NaN for a death), `LogDetChange` and `MinLeaveOneOutPivot`. `ProposedInverseQuadraticForm(b)` gives bᵀA′⁻¹b for the proposed matrix.
+- `Accept` commits the pending proposal, if it is positive definite. A new proposal, a rebuild or a decomposition discards it.
+- A rejected proposal leaves every bit of the accepted factor as it was.
+- The factor reports and the caller decides what to admit.
+
+**The order-free angle.** `LeaveOneOutPivot(j)` is 1/(A_jj·(A⁻¹)_jj), the relative pivot column j would have if it were factored last. For a Gram matrix it is the squared sine of the angle between column j and the span of all the others, the reciprocal of the column's variance inflation factor, and it does not depend on column order. `RelativePivot(j)` reads against the earlier columns only, so it does. BASS's admission gate reads `MinLeaveOneOutPivot` ([D06](./BayesianRegression.md#bass-the-design-and-admission)).
+
+**Rebuilds.** Every `RebuildInterval` accepted updates (100 by default, 0 for on demand only), or on `Rebuild()`, the kept matrix is refactored strictly and diag(A⁻¹) recomputed, in O(n³). The fresh factor replaces the incremental one while the matrix is numerically positive definite, and otherwise the incremental one stays. `LastDrift`, a `FactorDrift`, records how far it had moved: max |ΔL(i,j)|/√A(i,i), which is scale-free, and the largest relative change in diag(A⁻¹).
+
+**Restarts.** `Copy` carries the accepted factor, the kept matrix, diag(A⁻¹), the capacity, the interval and the counters, so the copy's later updates and rebuilds match the original's bit for bit. A pending proposal stays behind. Restart state takes the copy because a factor grown by deaths and changes differs in its last bits from a strict refactorization of the same matrix.
+
+**As a strict factor.** `Decompose` stops at the first pivot that is not finite and positive, with `FailedAt` and a NaN `LogDet`, and the factor refuses further use until `Clear` or a good `Decompose`. Its solves and its draw, v = L⁻ᵀz, are `DenseCholesky`'s members, behind `ISpdFactor`.
+
+**Checked** (`BorderedCholeskyTests`, `BorderedCholeskyCopyTests`).
+- Births reproduce `DenseCholesky`'s factor bit for bit.
+- 400 random updates at capacity 20, each against a fresh `DenseCholesky` of the same matrix, with no periodic rebuild: L to 10⁻¹², scaled by its row; diag(A⁻¹), `LogDet` and bᵀA′⁻¹b to 10⁻¹¹; the log-determinant's change to 10⁻¹⁰. A rebuild then finds drift within 10⁻¹² and 10⁻¹¹, and leaves the strict factor exactly.
+- A near-duplicate's death: with b₂ = b₁ + 10⁻⁶·noise, (A⁻¹)₁₁ is about 10¹² and drops to about 1 when b₂ dies. The downdate alone would keep about four digits, and the recomputation holds it to 10⁻¹³ of a fresh factor.
+- The leave-one-out pivot matches the squared sine from a thin SVD of the other columns to 10⁻⁸ relative, down to s of about 10⁻⁶. On D06's counterexample the newest pivot reads 10⁻⁶ or 10⁻¹² by order, where the leave-one-out pivots agree.
+- A rejected proposal leaves a snapshot of the factor unchanged, a singular or indefinite birth is reported and refused, and a copy continues bit for bit while sharing nothing.
 
 ### Band Cholesky / LDLᵀ (`BandCholesky`)
 
@@ -219,7 +248,7 @@ Strict Cholesky A = L·Lᵀ of a matrix whose entries vanish beyond a declared h
 
 ### Factor status (`FactorStatus`)
 
-After each factorization, all three classes set `Status`. It reports what the factorization found and leaves the decision to the caller. The pivots are the Schur-complement diagonals $d_j$ before flooring: $\ell_{jj}^2$ or $D_j$.
+After each factorization, every factor sets `Status`. It reports what the factorization found and leaves the decision to the caller. The pivots are the Schur-complement diagonals $d_j$ before flooring: $\ell_{jj}^2$ or $D_j$.
 
 | Member | Meaning |
 |---|---|
@@ -246,9 +275,22 @@ Because the floor is absolute, a well-conditioned matrix with a small scale, suc
 
 **As an `ISpdFactor`.** `Solve`, `SolveInPlace` and `SampleInnovation` take spans, so the collapsed g-prior block can hold a banded factor (BARS) or a dense one (BASS) behind one interface. `SpdFactorExtensions.InverseQuadraticForms` gives $s\,z_t^\top A^{-1}z_t$ for each row through either.
 
+### Pairwise summation (`PairwiseSum`)
+
+`PairwiseSum.Of(x)` and `Dot(a, b)` sum by a balanced tree over blocks of 128 terms (`Block`), each block in four interleaved accumulators (Higham 1993). The left part of a split is about half, on a block boundary, so every leaf but the last is full. The rounding error grows as ε·(log₂(N/128) + 128/4), against left-to-right summation's ε·N.
+
+- **Why not left to right.** On a near-constant design column, many equal small terms follow one large one and round the same way every time. On BASS's fixture F-O7, the Gram's relative errors were 7·10⁻⁴ to 2·10⁻³ left to right and 2·10⁻⁷ to 3·10⁻⁷ pairwise, where ε times the condition number gives about 2·10⁻⁷ ([BASS's design](./BayesianRegression.md#bass-the-design-and-admission)). The numerics brief's N10 allows pairwise or compensated summation; this is the pairwise one.
+- **The same bits on every machine.** The accumulators are the lanes of one 256-bit vector, whose adds and multiplies are exact per lane in IEEE arithmetic, so a machine gets the same bits accelerated or not.
+- **Callers.** `KhatriRao`, `IdentityInnerProduct`, `ThinSvd`, `DiagonalPlusLowRank` and BASS's own sums over its data.
+
+**Checked** (`PairwiseSumTests`), against exact sums: each term is an integer times a power of two, so the sum is exact as a `BigInteger`.
+- The error stays within (`Block`/4 + ⌈log₂(N/`Block`)⌉ + 3)·u·Σ|terms|, with u = 2⁻⁵³, for sums and dots from 0 to 100,003 terms.
+- So it does on a centred indicator of 100,000 cases, one entry near −1 and then 99,999 equal entries near 10⁻⁵, where left-to-right's bound is at least a thousand times looser.
+- The vector lanes give scalar accumulators' bits at 5, 131 and 10,007 terms.
+
 ### Khatri–Rao contractions (`KhatriRao`)
 
-Contractions with the column-wise Khatri–Rao product X = A ⊙ H, whose column j is a_j ⊗ h_j, computed through the factors without forming X. Its caller is BASS's direct functional design, with A the case-side factors (n × M), H the output-side factors (m × M), and the rows of X indexed (case, location) with the case outer. Every inner product is a pairwise sum.
+Contractions with the column-wise Khatri–Rao product X = A ⊙ H, whose column j is a_j ⊗ h_j, computed through the factors without forming X. Its caller is BASS's direct functional design, with A the case-side factors (n × M), H the output-side factors (m × M), and the rows of X indexed (case, location) with the case outer. Every inner product is a [pairwise sum](#pairwise-summation-pairwisesum).
 - **Cartesian samples,** every case at every location, take the Hadamard shortcut G = (AᵀA)∘(HᵀH) and h_j = a_jᵀ·Y·h_j: O(M²(n + m)) and O(M·n·m), against O(M²·n·m) (`Gram`, `Border`, `CrossProducts`).
 - **Centred forms** serve an intercept that leaves the design. They are a sum of three positive semidefinite terms, so the diagonal forms without cancellation (`CentredGram`, `CentredBorder`, `CentredCrossProducts`; [BASS's design](./BayesianRegression.md#bass-the-design-and-admission)).
 - **Scattered samples,** given as (case, location) pairs, accumulate each row's Hadamard product, skipping its zeros (`ScatteredGram`, `ScatteredCrossProducts`).
@@ -352,9 +394,9 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
 |---|---|
 | Dense eigen | `DenseEigen.cs`, `EigenFast.cs`, `Eigen.cs`, `SpectralMath.cs` |
 | Iterative eigen | `Lobpcg.cs`, `DenseSymmetricOperator.cs` |
-| Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `WideBandCholesky.cs` (with `SpdFactors`), `FactorStatus.cs`, `ISpdFactor.cs`, `ConditionEstimate.cs` |
+| Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `BorderedCholesky.cs`, `FactorProposal.cs`, `WideBandCholesky.cs` (with `SpdFactors`), `FactorStatus.cs`, `ISpdFactor.cs`, `ConditionEstimate.cs` |
 | Contractions | `KhatriRao.cs`, `InnerProduct.cs` |
 | Transforms and statistics | `Fft.cs`, `PCA.cs` (`Pca`), `ICA.cs` (`FastIca`), `WelfordMahal.cs` (`OnlineMahalanobis`) |
-| Kernels | `MatrixOps.cs` |
+| Kernels | `MatrixOps.cs`, `PairwiseSum.cs` |
 
 **See also:** [SpectralGraphs](./SpectralGraphs.md) · [DesignPrinciples](./DesignPrinciples.md) · [BayesianRegression](./BayesianRegression.md) (band LDLᵀ in use) · [GaussianMixtures](./GaussianMixtures.md) (Cholesky in use)
