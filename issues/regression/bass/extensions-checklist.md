@@ -24,8 +24,26 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E16** Conformal Bayes, the consumer, with conformal predictive distributions.
 - [ ] **E17** Conformal bands for whole curves.
 - [ ] **E18** Posteriors for readouts by resampling units.
+- [ ] **E19** Polynomial-chaos terms.
+- [ ] **E20** Data-augmented observation models.
+- [ ] **E21** A prior-precision builder, with ridge blocks.
+- [ ] **E22** Correlated outputs and coupling within a run.
+- [ ] **E23** Multi-fidelity emulation through the offset.
+- [ ] **E24** Guarded estimators.
+- [ ] **E25** Sensitivity under dependent inputs.
+- [ ] **E26** Stochastic emulation through latent inputs.
+- [ ] **E27** External benchmarking.
+- [ ] **E28** Bases that mix term types (lead).
+- [ ] **E29** Categorical levels: learned positions and a similarity readout (lead).
+- [ ] **E30** Choosing the next runs.
 
 ## Reports
+
+### The lineage review landed — 2026-11-02
+
+A discussion of the Francom lineage, recorded after a sweep of the thread found most of it recorded nowhere. New: the [lineage review](lineage-review.md) (the five axes, separability, F-X1 as a data-augmentation seam, the simulator workflow, a proposed build order, reading leads, the notes against it) and entries E19–E30. E1, E8 and E11 gain what the first reading found. Nothing built, nothing scheduled, and most of the sources beyond the five the review names are unread.
+- *A correction from checking the code.* Probit was called free on unit weights. It also needs σ² held at 1, the marginal given σ², and priors that stop reading the response (E20).
+- *Open.* The build order is proposed and undecided, and the exact-against-sampled consumer shape is to settle before E8.
 
 ### Conformal Bayes and its curve-level relatives read — 2026-10-29
 

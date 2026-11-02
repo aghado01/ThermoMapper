@@ -196,7 +196,7 @@ Reading the lineage turned up places where a later or sibling paper does somethi
 | Random sketches fitted in parallel and combined by a Wasserstein barycentre | Andros et al. 2024 | Data shards chosen by hand | **Not adopted.** The likelihood is raised to n/m, a pseudo-posterior; length-scales are fixed per sketch; only marginals are combined, which loses joint draws. Direct BASS's separable contractions already avoid forming the full design |
 | KHAOS's printed birth, death and Mutate1 ratios invert some proposal factors, beyond the (M+1) double count | Our reading of the manuscript, [SC-1](../../lean/Protolemmata/BASS/structure-chain-lemmas.md); the `khaos` source and the supplement unread | The printed displays | **To confirm** against the source; a KHAOS port derives its ratios and tests reciprocity under F-X4's contract |
 
-Where the lineage itself stops short, and what closing each gap would take, is in the [lineage-gaps register](bass/lineage-gaps-register.md).
+Where the lineage itself stops short, and what closing each gap would take, is in the [lineage-gaps register](bass/lineage-gaps-register.md). The map of the lineage, read against the seams, is the [lineage review](bass/lineage-review.md).
 
 ## Implementation stages
 

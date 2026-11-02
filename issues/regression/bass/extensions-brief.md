@@ -1,6 +1,6 @@
 # BASS extensions brief
 
-Extensions beyond the port's completion contract, collected from the [full port brief](../bass-full-port-brief.md) and the reviews behind it. Each entry says what it adds, its source, what it needs from the port (each segment's "Room for extensions" section), and its status. Nothing here is scheduled: an entry starts on the user's go-ahead, with its own specification and acceptance criteria. Its checklist, where the reports go, is [extensions-checklist.md](extensions-checklist.md). Gaps past the lineage's own work, some of which bear on these entries, are in the [lineage-gaps register](lineage-gaps-register.md).
+Extensions beyond the port's completion contract, collected from the [full port brief](../bass-full-port-brief.md) and the reviews behind it. Each entry says what it adds, its source, what it needs from the port (each segment's "Room for extensions" section), and its status. Nothing here is scheduled: an entry starts on the user's go-ahead, with its own specification and acceptance criteria. Its checklist, where the reports go, is [extensions-checklist.md](extensions-checklist.md). Gaps past the lineage's own work, some of which bear on these entries, are in the [lineage-gaps register](lineage-gaps-register.md). The [lineage review](lineage-review.md) is the map behind entries E19–E30: the lineage's axes, what its closed forms rest on, and a proposed build order.
 
 | Extension | Source | Needs from the port | Status |
 |---|---|---|---|
@@ -21,6 +21,18 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Conformal Bayes, the consumer | Fong and Holmes 2021, arXiv 2106.06137; Vovk, Shen, Manokhin and Xie 2019 | The pointwise seam (OQ17, built): retained draws, the n × S matrix, the unit and stratum maps | Candidate |
 | Conformal bands for whole curves | Lei, Rinaldo and Wasserman 2015; Diquigiovanni, Fontana and Vantini, arXiv 2106.01792 | The unit map's whole-curve unit; each draw's pointwise predictive sd | Candidate |
 | Posteriors for readouts by resampling units | Huggins and Miller 2023; Fong, Holmes and Walker 2023 | Retained draws with their readouts (BARS's peaks); replicate units | Candidate |
+| Polynomial-chaos terms (E19) | Rumsey, Francom et al., arXiv 2510.25036 | Fitting: the design-kernel and proposal-kernel contracts. E4, E5 | Candidate |
+| Data-augmented observation models (E20) | Albert and Chib 1993; Polson, Scott and Windle 2013; Lawrence et al. 2008 | Fitting: the offset seam, the latent slot, a weighted Gram, σ² held. Distributions: a truncated draw | Candidate |
+| A prior-precision builder, with ridge blocks (E21) | KHAOS, via SC-3 | Fitting: the coefficient-prior set | Candidate |
+| Correlated outputs and coupling within a run (E22) | Chib and Greenberg 1998; Ghosh and Dunson 2009; Hoff 2007 | Fitting: the output-side inner product, its Q-centred forms. E20. Samplers: a covariance sampler | Candidate |
+| Multi-fidelity emulation through the offset (E23) | Kennedy and O'Hagan 2000; Tucker et al., arXiv 2609.27174 | Fitting: the offset seam. Stage 8's cut | Candidate |
+| Guarded estimators (E24) | [GE-1 to GE-3](../../../lean/Protolemmata/BASS/guarded-estimator-lemmas.md); Angelopoulos, Duchi and Zrnic 2023; Giles 2008; Zrnic and Candès 2024 | Per-draw integrals under a declared measure, predictions, fitting on folds | Candidate |
+| Sensitivity under dependent inputs (E25) | [G4](lineage-gaps-register.md#g4-one-moment-service-across-dependent-inputs); Francom and Nachtsheim, arXiv 2506.11471; Apley and Zhu 2020 | Outputs: `InputMeasures`, the moment service, term derivatives | Candidate |
+| Stochastic emulation through latent inputs (E26) | Zhu and Sudret, arXiv 2202.03344 | Fitting: the latent slot, the design-kernel contract | Candidate |
+| External benchmarking (E27) | Rumsey, Gibson, Francom and Morris, arXiv 2512.09060 | Predictive draws; E9's proper scores | Candidate |
+| Bases that mix term types (E28) | None known | Fitting: the design-kernel contract, E21. E19 | Lead |
+| Categorical levels: learned positions and a similarity readout (E29) | Zhang, Tao, Chen and Apley 2020 | Fitting: the design-kernel contract. Retained draws | Lead |
+| Choosing the next runs (E30) | Binois et al. 2019; Ranjan, Bingham and Michailidis 2008; Watson and Pelli 1983 | Predictive draws, a noise model that varies with x | Candidate |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
 
 ## Generalized-hyperbolic noise (GBMARS)
@@ -52,6 +64,11 @@ Extensions beyond the port's completion contract, collected from the [full port 
   - The residual is defined as r = ŷ − y, but the β and w conditionals hold only for r = y − ŷ. Implemented literally, the skew's sign flips. Fixture: recover a known β from skewed synthetic data.
   - Table 1's t(ν) row, GIG(−ν/2, 0, ν/2), gives under the paper's own GIG density a t_ν scaled by 1/√2. A standard t needs b = ν, which is what `StudentTWeights` implements, so the seam's t specialization must reproduce `StudentTWeights` exactly.
 - **Sensitivity:** D08's draft, which declares the decomposed surface.
+- **Sensitivity by quantile.** GBMARS fits one emulator per quantile level and tracks the Sobol indices across levels (its stochastic SIR example), showing which inputs matter in each tail. Two routes, the second a reading here, and a trade-off for `docs/Maths` rather than a default:
+  - one fit per level, which can cross. The paper finds crossing seldom in practice, and less with replicates and with a flexible count prior;
+  - quantiles read from one skewed fit, which cannot cross but rests on the generalized-hyperbolic family being right.
+- **A generalized beta-prime prior on the per-observation variances** (the paper's supplement, SM2). It has mass near both ends of the shrinkage scale, so that a point is either fitted or ignored ("interpolate or ignore"), with the Horseshoe as a special case. Its full conditional is not tractable, so on BARS's side it would be a non-conjugate `IWeightResampler`, sampled by a Metropolis–Hastings or slice step. The paper reports "some success" with it in certain problems.
+- **The weighted Gram comes first.** The core refuses weights today. It is an engine change that several other observation models also need ([E20](#data-augmented-observation-models)), so this entry splits into that, then the GIG and GH pieces.
 - **The BARS side:** quantile and skewed BARS come from the same seam (the preparation brief's OQ20).
 
 ## Robust centring and bases for functional responses (OQ16)
@@ -118,6 +135,15 @@ A moment service written over piecewise polynomials rather than hinges only give
 
 Posterior active-subspace analysis beside the Sobol stage (arXiv 2307.11241, *Discovering Active Subspaces for High-Dimensional Computer Models*, by overlapping authors; [PCA-extensions discussion](../discussion/astra-grassman-stiefel-pca-extensions.md)). For tensor-product representations, including MARS, the gradient integrals reduce to one-dimensional ones. It needs term derivatives, hinge reference cases, numerical integration checks and gradient-accuracy checks before its directions reduce another model, and it comes before jointly learning projection directions during fitting. [Gap G3](lineage-gaps-register.md#g3-sobol-indices-and-active-subspaces-have-different-standing) records why: unlike Sobol indices, C inherits no rate from a contraction result for f, E[C] is not the mean of the draws' subspaces, and under an empirical measure it reads the kink convention.
 
+This entry is larger than its first form.
+- **It is the moment service with derivative factors.** C = E[∇f ∇fᵀ] splits into three one-variable integrals per factor pair, ∫φ′ψ, ∫φψ and ∫φ′ψ′, which is what the moment service computes with `FactorDerivative` in place of the values.
+- **Pairs of models.** Co-active subspaces generalize C to pairs of functions, C_kl = E[∇f_k ∇f_lᵀ], for adjacent simulator models (arXiv 2311.18146). That asks whether two fits, or two versions of one simulator, respond to the same perturbations in the same direction, which matching accuracy does not show.
+- **Functional outputs, a reading here.** For a basis fit, f(x, t) = Σ φ_k(t) f_k(x), so the vector-valued active subspace of Zahm et al. (arXiv 1801.07922, unread) is Σ_kl ⟨φ_k, φ_l⟩_Q C_kl. So functional active subspaces are co-active blocks contracted with the output Gram, and F-X6's declared Q is the output norm their result depends on.
+- **A consistency check per draw.** The diagonal of C is the derivative-based sensitivity measure, and a Poincaré inequality bounds each input's total Sobol variance by (b − a)²/π² times that entry, for a uniform input on [a, b]. That ties value moments to derivative moments. It is a consistency check, not ground truth.
+- **Across engines.** Wycoff, Binois and Wild (arXiv 1907.11572, unread) give closed-form C for Gaussian processes, so one consumer covers BGP.
+- **The sequence the lineage implies.** A posterior active subspace, then rotating the inputs and refitting, then BPPR (arXiv 2210.09181, unread), which learns directions during fitting. F-X3's test already implements a directional hinge, and Zhang et al. 2003 is the frequentist precursor.
+- **Dependent inputs.** The first consumer that cannot assume a product measure, so the [lineage review's open question](lineage-review.md#separability-is-what-the-closed-forms-rest-on) is settled here, and [E25](#sensitivity-under-dependent-inputs) follows it.
+
 ## Cross-engine evidence
 
 Evidence for BARS, BASS and BGP by path sampling (derivations review §7, item 8). It needs proper priors in every engine, stated in each engine's units. BASS has them by default since D03 was decided (2026-10-27: σ² scaled to the response, the intercept level-centred), as Normal BARS has. Under D03's evidence rule, evidence is reported from any run that can give one, empirical-Bayes in the level and scale, and the predictive checks already built for OQ17 (WAIC, PSIS-LOO) are the default comparison across engines.
@@ -155,6 +181,7 @@ From *Elastic Bayesian Model Calibration* (Francom, Tucker, Huerta, Shuler and R
   - Two ordinary BASS basis fits, one for the aligned curves and one for the shooting vectors.
   - D09's cut likelihood over both parts.
   - The alignment itself, which is new code; the sphere and its exponential map relate to `Maths.Geometry`.
+- **A simpler route to compare first: landmark warping** (Francom, Sansó and Kupresanin, *SIAM/ASA JUQ* 10, 2022; unread). The predecessor to elastic warping, for outputs with identifiable features such as arrival times, spectral lines or peaks, where a landmark can stand in for a square-root-velocity alignment.
 - **Why it matters here.** A susceptibility peak whose temperature moves with a control parameter is exactly this situation. It is a second route to families of SPC sweeps, beside ABMRS's peak readouts (next entry).
 
 ## Residuals correlated along the output index
@@ -244,6 +271,123 @@ The posterior of a population feature, such as the peak T* of SPC × BARS's curv
   - a new sweep's whole curve (the bands);
   - the readouts (this entry).
 - **The constraint.** Both curve-level levels need replicate sweeps as the exchangeable unit. On a single sweep, nothing distribution-free exists for curve features, so replicate sweeps are worth budgeting for in SPC runs.
+
+## Polynomial-chaos terms
+
+KHAOS's basis (Rumsey, Francom et al., arXiv 2510.25036), for smooth responses, where polynomial chaos is the standard surrogate. A term is a product of one-variable shifted-Legendre polynomials, with a structure defined by a degree split across variables rather than by a knot. E4 and E5 hold its proposals and prior; this entry is the term type.
+- **It fits F-X3 as a case-side kernel.** Its factors are one-piece polynomials, so `PiecewisePolynomial` integrates them with no new moment code.
+- **A cross-check it brings.** Under a uniform measure, Sobol indices reduce to sums of squared coefficients, an independent check on `BassMoments`.
+- **Past the paper.** KHAOS assumes uniform, independent inputs. The moment service extends it to `MixtureMeasure` and `EmpiricalMeasure`.
+- **New.**
+  - The degree-split structure and its birth proposal.
+  - Poisson-binomial densities for delayed rejection, with E4's Bernoulli-inclusion proposal.
+  - Adaptive mutation probabilities, under D10.
+  - One step of `SliceSampler` on ln g₀², in place of the paper's Laplace-approximation independence proposal, with its conditional derived (E5).
+- **Defect fixtures from the TeX, to confirm against the `khaos` source.** The ratios are in [SC-1](../../../lean/Protolemmata/BASS/structure-chain-lemmas.md). The rest are probable typos: P₁(x) = 1 where x is meant; the order sum runs over M where p is meant; the degree is drawn from {q, …, p}, probably meaning d_max; the partition probability is binom(d−1, d−1)⁻¹ where binom(d−1, q−1)⁻¹ is meant.
+
+## Data-augmented observation models
+
+F-X1 hands the core a working response and weights, so any observation model that turns Gaussian given a latent variable is a member. The [lineage review](lineage-review.md#f-x1-is-a-data-augmentation-seam) tabulates them: probit, ordinal, logit through Pólya–Gamma, a scale per declared group, a mixture of normals.
+- **The weighted Gram, centring and marginal.** The core refuses weights today. This is the piece most of them need, and E1 needs it first.
+- **Probit needs more than unit weights.** An earlier reading called it free. It also needs:
+  - σ² held at 1, for identification, which the sweep has no way to do today. D04 integrates σ² out of the structure step, so this also needs the marginal given σ², from the same S and determinant term. D04's generalized-hyperbolic mode needs that form as well when σ² is not integrated;
+  - priors that stop reading the response. D03's σ² scale and level-centred intercept read it through `BassResolved.Resolve`, and here the working response moves every sweep;
+  - the latent state and its block in F-X2's slot, as for GBMARS, with the cross-products recomputed each time the latents move;
+  - a truncated-normal draw, tail-stable and qualified apart from density evaluation. `Truncated<T>` cannot draw today.
+- **Putting the offset back.** Prediction and the pointwise densities read y today, not y − offset (the F-X1 report).
+- **Groups.** A heavy-tailed scale per declared group, rather than per observation, is GBMARS's latent indexed differently, and it gives units sharing a group joint extremes (E22).
+- **Mixtures.** A Dirichlet-process mixture of normals hands the core (y − μᵢ, 1/σᵢ²). Its mixing law is shared across x, so it gives an irregular residual, not heteroscedasticity, and its components are a density estimate rather than discovered populations.
+- **Discrete-time survival** (Sparapani et al. 2016, from memory, via the [notes](../perplexity-literature-deep-dive.md)) is probit on a data set expanded per time point, so it arrives with this entry plus its own expansion and readouts. What a run's ending means, censoring or a competing outcome, is a modelling choice to declare.
+- **Not covered:** a scale that varies with x, which needs a second modelled surface; and likelihoods with no Gaussian augmentation, for which Linero's generalized BART (arXiv 2202.09924, unread, via the [notes](../perplexity-bayesian-trees.md)) uses nonconjugate reversible-jump updates.
+
+## A prior-precision builder, with ridge blocks
+
+KHAOS's modified g-prior needs the collapsed core to accept a prior precision other than ΨᵀΨ/g. [SC-3](../../../lean/Protolemmata/BASS/structure-chain-lemmas.md) shows G∘ΨᵀΨ = ΨᵀΨ + S₀⁻¹, so it stays conjugate. Declaring that as a builder, rather than adding one more case to the coefficient-prior set, gives a second kind of prior: a ridge block.
+- **Random-effect intercepts** on any grouping variable with many levels are ridge blocks, so E5's work pays off for every grouped-data problem.
+- **Scale-sensitive priors.** Ridge priors, unlike Zellner's, change when columns are rescaled, so they need the per-kernel standardization E28 raises.
+- **Identifiability.** A random-effect block overlaps the level-centred intercept unless it is centred or sum-constrained, so its convention is declared with it.
+
+## Correlated outputs and coupling within a run
+
+For several outputs from one run, or several outcomes for one case. Means do not reach how outcomes combine within a run: P(all succeed | x), conditional failure rates and the distribution of the number of successes all depend on it, however good the joint posterior of the means.
+- **Two reasons outcomes co-occur.** A hard configuration raises both, which the mean model captures. Within-run coupling is one run going bad across the board, which only R captures. Telling them apart needs repeated runs at one configuration.
+- **The model.** Latent z ~ N(μ(x), R) per run, with F-X6's Q = R⁻¹ for the mean. R is the correlation matrix, identified as one (Chib and Greenberg 1998). Binary and ordinal outcomes come through E20.
+- **A third inner product.** Beside the identity and E12's tridiagonal, Q = (ΛΛᵀ + D)⁻¹ by Woodbury, with Q-centred forms (documented on `KhatriRao`; the design refuses Q ≠ I today).
+- **Sampling R, in `Maths.Samplers`, apart from any model.** Parameter expansion for a free R: one conjugate inverse-Wishart draw, then a rescaling to a correlation matrix (Liu and Wu 1999; Lawrence et al. 2008). Factor loadings under parameter expansion for a low-rank R (Ghosh and Dunson 2009). All from memory.
+- **Where a Gaussian latent stops.**
+  - *Joint extremes.* A Gaussian copula has no tail dependence, so it underweights runs where everything fails together. A heavy-tailed scale shared across a run gives positive tail dependence (E20's groups), as does a heavy-tailed factor.
+  - *Weak identification.* When failures are rare, the information about R is in the co-failures, which are rarer still. A low-rank R with shrinkage holds up where a free K × K one does not.
+- **Alternatives, with different readouts.**
+  - *A chain factorization,* P(Y₁ | x)·P(Y₂ | Y₁, x)·…, reusing the binary machinery with earlier outcomes as categorical inputs. Directed and conditional, where the joint latent is symmetric; it needs an order.
+  - *A rank likelihood* (Hoff 2007) for mixed outcome types, estimating the copula without specifying the marginals.
+- **A proposed order:** a factor latent with one run-level factor, then the shared heavy-tailed scale, then ordinal cutpoints.
+- **Parked:** R(x), covariance regression (Hoff and Niu 2012), until a fixed R proves too stiff.
+
+## Multi-fidelity emulation through the offset
+
+Kennedy and O'Hagan's autoregressive model, y_hi = ρ·f_lo + δ, is close to a configuration here. F-X1's offset, built for calibration discrepancy, carries it: fit δ against y_hi − ρ·f_lo, with stage 8's cut deciding whether the high-fidelity data feed back into f_lo.
+- **Fixed against drawn ρ.** A fixed ρ, or one draw of f_lo at a time, is a plain offset. Drawing ρ moves the working response every sweep, so it meets E20's question of priors that read the response.
+- **The same structure, read across.** Any cheap and costly pair of a code, or a surrogate against the real system. δ is estimable only where both are observed.
+- **Prior work.** Tucker, Collins, Huerta and Brown (arXiv 2609.27174) use BASS emulators for multi-fidelity mapping and fusion, with elastic alignment. Read it to the end, then decide what this entry adds.
+
+## Guarded estimators
+
+Estimators that stay valid whatever the emulator does: the design supplies validity, the emulator supplies efficiency. They suit any problem where generating a configuration is cheap and running it is not. The mathematics is [GE-1 to GE-3](../../../lean/Protolemmata/BASS/guarded-estimator-lemmas.md), proved in `GuardedEstimator`. This entry is the layer beside the engine, taking predictions from any emulator.
+- **What it reads:** a per-draw integral under a declared measure (the moment service; the Monte Carlo fallback elsewhere), predictions at points, and a way to fit on folds. Under draws from the generator with the integral, the cross-fit bias is exactly zero (GE-2), which is a concrete return on the lineage's closed forms.
+- **The tuned weight, not a fixed difference.** With a poor emulator, Var(y − f̂) can exceed Var(y). Survey sampling's regression estimator and PPI++ tune it, and the tuned weight is asymptotically never worse than either end.
+- **Levels.** Several costs stack as a telescoping sum: multilevel and multifidelity Monte Carlo, and approximate control variates with a tuned weight per level (Gorodetsky et al. 2020, from memory).
+- **Adaptive runs.** Unbiasedness needs a random sample, which targeted designs (E30) break. Two options, kept apart until one is chosen, with the trade-off for `docs/Maths`:
+  - *An audit stream.* A fixed share of runs is drawn at random for the design-based estimates, and the emulator fits on all. Simple, but those runs do less for the design.
+  - *Known probabilities.* Each configuration is drawn with a probability the emulator sets, above a floor, and its residual is weighted by the inverse. Every run serves both purposes; variance grows as the floor drops.
+- **Limits.** The guarantees cover linear quantities, reweighted means and, through PPI, regression coefficients and quantiles. Sobol shares, boundaries and subspaces still depend on the emulator, and are checked by held-out prediction. After reweighting to another measure, report the Kish effective sample size of the correction term, which says whether the design covered that measure.
+
+## Sensitivity under dependent inputs
+
+Observational covariates, constrained parameter spaces and any calibrated posterior all break the product measure, and D09's θ posterior is never one. Francom and Nachtsheim (arXiv 2506.11471) sort methods by "enough runs for an emulator?" and "independent inputs?". In those terms the engine covers one quadrant.
+- **The measure.** [G4](lineage-gaps-register.md#g4-one-moment-service-across-dependent-inputs)'s joint mixture of products keeps every pair integral closed, from one component (`ProductMeasure`) to N with delta marginals (a joint sample). The G4 limits apply: moments and C are exact, and Hoeffding is lost.
+- **The readouts.**
+  - *Accumulated local effects* (Apley and Zhu 2020, from memory) need only derivatives and the empirical joint, and O-X4 already reaches the derivatives, so they are the first consumer.
+  - *Shapley effects* cost more, dropping under G4 from a double loop to a single one.
+  - *Monte Carlo over θ draws with O-X4's analytic gradients,* the fallback for any measure and any kernel.
+- **The consumer's shape** is the [review's open question](lineage-review.md#separability-is-what-the-closed-forms-rest-on), settled at E8.
+
+## Stochastic emulation through latent inputs
+
+Simulators whose output law at one input can be multimodal: agent-based, epidemiological and Monte Carlo codes. GBMARS's latent scales handle only unimodal laws. Zhu and Sudret (*IJUQ* 2023, arXiv 2202.03344, unread) add a latent input and noise to a polynomial-chaos model, which captures multimodal output laws without replicate runs.
+- **Here.** F-X2's latent slot holds a per-observation latent, and a kernel reads it as one more input: E19's polynomials, or a hinge. It is a different model from GBMARS's, with the latent in the basis rather than the noise.
+- **What is new:** the latent's update enters the design, so it moves columns rather than the working response, which F-X1 does not cover. The cost and the mixing of that update are the open questions.
+- **Before starting:** read the paper for how it fits and selects terms, since it is not known here to be an MCMC fit.
+
+## External benchmarking
+
+*All Emulators are Wrong…* (Rumsey, Gibson, Francom and Morris, arXiv 2512.09060, unread) compares about 30 emulators on 60 test functions and 40 real datasets, scored by CRPS, through the `duqling` R package.
+- **Why.** The port's oracle tests check parity with R BASS. This checks the engines against the field across many domains, with ground truth from outside any estimator.
+- **Needs:** predictive draws from each engine and E9's proper scorers, which read draws only. The test functions and datasets, and whether they can be reached without running R in the loop, are to be read first.
+
+## Bases that mix term types
+
+An option, not a recommendation. F-X3's contract already allows a term to mix kernels across variables (hinge × categorical exists), so a Legendre part on x₂ times a hinge part on x₁ fits the rule, and collapsing makes kernel-changing moves discrete Metropolis–Hastings steps with no Jacobian. No mixed hinge-and-polynomial basis is known in the lineage, which is an impression rather than a search result.
+- **The structure prior.** Each kernel has its own term measure, so each variable's part gets a kernel label, and that label's prior has to be chosen.
+- **The coefficient prior.** Zellner's g-prior is unchanged by rescaling columns. Ridge priors are not, so they need per-kernel standardization (E21). KHAOS's complexity factor is defined on a multi-index, so each kernel would report its own complexity.
+- **Mixing and identifiability.** One smooth effect can be one polynomial term or several hinges, and the path between them passes through poor states, which is the multimodality the tempering machinery is for. f's functionals do not care which representation the sampler is in. Structural summaries do: inclusion counts, term counts and the adaptive proposals that feed on them (KHAOS's variable weights, Nott and Kohn) say less the more freely the basis mixes.
+- **The alternative and a middle.** One fit per basis, compared by evidence or held-out scores (E9). Or one label per variable rather than per part: fewer labels and a simpler prior, which still gives "kinked in x₁, smooth in x₂".
+
+## Categorical levels: learned positions and a similarity readout
+
+Three ways of sharing strength across a categorical input's levels. Latent-variable GPs (Zhang, Tao, Chen and Apley 2020) place each level at a point in a low-dimensional space. Multidimensional item response theory gives each a latent vector. BASS's categorical factors group levels into subsets, term by term.
+- **A readout, cheap and untested.** How often two levels share a subset across the posterior, weighted by each term's variance, gives a similarity matrix from any fit with categorical factors, with no model change.
+- **A term type, the lead.** A level at a learned continuous position, with a hinge on that position: LVGP's idea as a BASS factor. It stays separable, so under a categorical measure the moments are a finite sum. It is not conjugate in the positions, and it is identified only up to rotation and translation, so its cost is statistical as well as in code.
+
+## Choosing the next runs
+
+Step five of the simulator workflow, for which no seam exists: where to run next, given a fitted emulator.
+- **Replicate or explore** (Binois, Huang, Gramacy and Ludkovski, *Technometrics* 2019), with noise that varies across the space, so it wants a noise model that varies with x.
+- **Contours** (Ranjan, Bingham and Michailidis 2008): place runs near a level set of the surface.
+- **From psychophysics, which has done this for decades.** A 50% threshold is a psychometric threshold: QUEST (Watson and Pelli 1983), the Psi method (Kontsevich and Tyler 1999), QUEST+ (Watson 2017) for several dimensions, and qCSF (Lesmes et al. 2010) for a threshold curve along a second dimension. Its psychometric function also has a lapse rate, success topping out below 1, kept apart from the slope. Contour designs from computer experiments usually have no such term.
+- **With E24.** Targeted runs break a design-based guarantee unless their probabilities are known, so the two are designed together.
+- **Unread, closest on the lineage's side:** Hutchings et al. (arXiv 2405.16298), active learning for functional output.
+
+All of these are from memory or from the [evals note](../opus-bayesian-evals.md), to be read before this entry starts.
 
 ## Direct-functional BASS for families of SPC sweeps
 
