@@ -95,12 +95,26 @@ Open it by saying plainly whether the contract is fulfilled, and if not, what st
 
 - **Any fix under `src/`,** and any change to a default.
 - **Performance qualification's statistical half** and the efficiency pass.
-- **The extensions** (E1–E15), the notation pass, and rendering above maths.
+- **The extensions** (E1–E18), the notation pass, and rendering above maths.
 - **The Friedman band reading,** a separate chip ([its brief](friedman-smc-band-brief.md)).
 
 ## Reports
 
 Newest first.
+
+### Checked by the main session — 2026-11-01
+
+- *The gaps against R and the code:* each of G-1 to G-6 holds at the lines cited: `V.other` and its `names.ind` (`bassPCA.R:590-603`), `func.var` (`sobol_normTmix.R:215-225`) against the refusal at `sensitivity/BassSensitivity.cs:391`, no draw field on `SensitivitySpec`, the ladder's list on an internal constructor (`BassLadder.cs:56`), `start.temper` (`bass.R:39,78`), and `trunc.error` and `nugget` (`bassPCA.R:183`) against the one `Predictive`.
+- *The audit's completeness, by a script of my own:* `NAMESPACE` holds the six exports and nine S3 methods the hub counts; every argument of the eleven R functions and every name in `bass`'s returned lists appears in the matrix. Its verdicts recount to the report's 215: F 183, FL 12, D 17, G 3.
+- *Rows re-traced:* the defaults (a dozen rows' values against `BassConfig.cs`, no difference), the 64-level representation, and `DeclaredControls_ReachTheModelAndTheRetainedTerms`, which reads the proposals, the count ratio and the retained terms, not the config's values alone.
+- *The suites, rerun by the main session at `e1eea5d`* (Release, below-normal priority, four threads, before the chip began on G-1): `Maths.LinAlg.Tests` 139 of 139 and `Maths.Distributions.Tests` 148 of 148, which the chip had read but not run; Samplers 284 of 284; Regression 1,506 of 1,507, the one skip being G-2's probe, as the chip read. The BASS oracle classes I take from its run (90 of 90); no `src/maths` change separates the two runs.
+- *Two additions to the report:*
+  - **G-1's definition.** R's `other` is the variance less the subsets it keeps, after `nind` keeps the largest (`bassPCA.R:582-590`). The port has no `nind`, by decision (`port-outputs-brief.md:88`), so here it is the variance less every subset up to `MaxOrder`. They agree where `nind` is null. `0ab1e4d` defines it that way, the variance less the subsets reported.
+  - **`s2.lower` is the one Left-out row worth reopening** (A14, D). It was left out at the contract shapes on grounds of form ("a truncated σ² prior, which would have to be stated as one"), not of merit, and before F-R1. The inventory lists it among the controls that must remain representable. F-R1 then read every noise-free fit failing its predictive gate, its brief naming σ² running small as the trap, and its arms varied the coefficient prior and the count alone. So a truncated σ² prior is untested where it would matter. It changes the target (the collapsed marginal gains a regularized incomplete gamma factor), so it is a pre-registered arm, not one more field. The user's ruling.
+- *My readings on what the chip asked:* a refusal with its reason meets "one case": one case makes every input constant, and two fit. The per-iteration records stay limited, not gaps: they are not a draw's generative state.
+- *Since the report:* the user set this chip to closing the surface gaps in its own session (G-1 `0ab1e4d`, G-2 next), on its plan: build G-3, G-4 and G-6, record G-5 as left out, since the self-sizing ladder reads its swap rejections during burn-in and a late start would starve it. I agree with those leans. They are checked when it reports.
+- *Open, the user's:* the report's three rulings, and `s2.lower`. The extension seams' write-up in `docs/Maths` is still the main session's, owed.
+- *Fixed from "Record drift":* the source map's three files, `BassComponents.Assemble` in the API row, the five false statements (annotated in place, or fixed in `BassRunOptions.cs` and this brief). G-8 joined the statistical half's cost blocks. The 71 public types no API row names stay as listed: the rows name entry points, and most of those are readouts.
 
 ### The audit done (chip, 2026-11-01)
 

@@ -500,7 +500,7 @@ public sealed record BassFit(
 public sealed record BassDraw(BassStructure Structure, double Tau, double Sigma2, double[] Coefficients, double Lambda);
 public readonly record struct BassStructure(int[] TermIds);   // sorted ids into Terms: an unordered collection (D01)
 ```
-- *Every draw's generative state* (D04): the structure, τ, σ², the coefficients and λ. Fitted values, posterior means and intervals are views over it, computed on demand. Training fits are a cached view only on request (R's `save.yhat`), stored apart from the draws.
+- *Every draw's generative state* (D04): the structure, τ, σ², the coefficients and λ. Fitted values, posterior means and intervals are views over it, computed on demand. Training fits are a cached view only on request (R's `save.yhat`), stored apart from the draws. *(2026-11-01, the completion audit: no cache was built; `BassFit.Predict` and `TrainingFit` compute on demand.)*
 - *Interned terms.* A `BassTermTable` shared by every draw holds each term's continuous factors (variable, sign, knot), categorical factors (variable, level subset) and functional factors (output variable, sign, knot), with the fit's degree. Structures hold ids, so a retained draw never aliases mutable state.
 - *Weighted draws.* SMC's draws carry their weights, and every view (prediction, sensitivity, summaries) takes weights, equal ones for MCMC.
 - *Diagnostics* (`BassDiagnostics`):

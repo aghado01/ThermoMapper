@@ -1,3 +1,5 @@
+*(2026-11-01: "Everything R's BASS can do" below overstates it; the completion audit found six small items of R's surface not built, [its report](bass-completion-report.md).)*
+
 We're close to the end of the BASS port itself. Everything R's BASS can do is now built at the maths layer, and the last mathematical stage, SMC, is running. What remains is checking the work against the port's contract and measuring its performance, rather than building new capabilities.
 
 **R's public surface (the completion contract, P01–P15)**

@@ -13,7 +13,7 @@ public sealed record BassRunOptions
     /// <summary>
     /// The most chains that run at once; −1, the default, leaves it to the machine. It is the run's one bound on
     /// parallelism over chains, replicas, particles and workers (the posterior-ownership rules), so tempering and SMC
-    /// read it too when they join.
+    /// read it too.
     /// </summary>
     public int MaxDegreeOfParallelism { get; init; } = -1;
 

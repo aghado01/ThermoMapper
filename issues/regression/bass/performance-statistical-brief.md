@@ -86,6 +86,7 @@ Declare every value below in the harness class before the first run. A change af
 - *Per (fixture, backend),* µs per work unit by the cost half's readers (`tests/regression/BassCostSweep.cs` and `BassCostQualification.cs`), at the end state of s = 1 and of the backend's largest length. Call them as they are; if one needs a change, copy it into your helpers.
 - *Where M differs between the two,* a run's time is its work times the per-unit cost interpolated at the run's mean M.
 - *The quiet rule:* no other test host, and other processes' busy cores at most 1.5, at each block's start and end. The cost half saw 1.6–6.9 cores busy with no test host running. A block that fails the rule is flagged and re-timed once quiet; if no quiet window comes, report it with its load.
+- *The sensitivity moment work alone* (2026-11-01; the completion audit's G-8, the benchmark list's other open measure): a few points of `BassMoments` timed on their own, at the n, M and interaction orders the cost half read Sobol at, in the same quiet blocks.
 - *When* (2026-11-01): the blocks are the one part that needs a quiet machine. Run them apart from the grid, in any quiet hour after it, keeping what each needs (the run's checkpoint, or the seeds that rebuild its end state). A later efficiency pass would leave the grid's error per unit work standing and rerun only these.
 
 ## The readings, fixed before any run
