@@ -40,6 +40,7 @@
     <Compile Include="ResidualPriorTests.cs" Link="ResidualPriorTests.cs" />
     <Compile Include="RelativeFiltrationTests.cs" Link="RelativeFiltrationTests.cs" />
     <Compile Include="GraphFrameZigzagTests.cs" Link="GraphFrameZigzagTests.cs" />
+    <Compile Include="GraphFrameRelativeTests.cs" Link="GraphFrameRelativeTests.cs" />
     <Compile Include="GraphZigzagTests.cs" Link="GraphZigzagTests.cs" />
     <Compile Include="GraphZigzagH1Tests.cs" Link="GraphZigzagH1Tests.cs" />
     <Compile Include="EulerTourTreeTests.cs" Link="EulerTourTreeTests.cs" />

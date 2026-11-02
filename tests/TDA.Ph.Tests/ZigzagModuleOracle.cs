@@ -89,7 +89,11 @@ sealed class ZigzagModuleOracle
         return chain;
     }
 
-    public ZigzagModuleOracle(ZigzagFiltration f, int p)
+    /// <param name="f">The filtration.</param>
+    /// <param name="p">The degree.</param>
+    /// <param name="subcomplex">Cells to quotient by: with them, this is the module of the relative chain complex, each
+    /// boundary keeping its faces outside them. Their steps change nothing.</param>
+    public ZigzagModuleOracle(ZigzagFiltration f, int p, IReadOnlySet<int>? subcomplex = null)
     {
         _f = f;
         _p = p;
@@ -102,6 +106,7 @@ sealed class ZigzagModuleOracle
 
         _cells[0] = new Dictionary<int, int[]>();
         _dims[0] = new Dictionary<int, int>();
+        var dimension = new Dictionary<int, int>();
         for (int s = 0; s < m; s++)
         {
             ZigzagStep step = f[s];
@@ -110,8 +115,11 @@ sealed class ZigzagModuleOracle
             if (step.Direction == ZigzagDirection.Add)
             {
                 int[] boundary = step.BoundaryAtAdd!;
-                _cells[s + 1][step.GlobalCellId] = boundary;
-                _dims[s + 1][step.GlobalCellId] = boundary.Length == 0 ? 0 : _dims[s][boundary[0]] + 1;
+                dimension[step.GlobalCellId] = boundary.Length == 0 ? 0 : dimension[boundary[0]] + 1;
+                if (subcomplex?.Contains(step.GlobalCellId) == true) continue;
+
+                _cells[s + 1][step.GlobalCellId] = subcomplex is null ? boundary : boundary.Where(face => !subcomplex.Contains(face)).ToArray();
+                _dims[s + 1][step.GlobalCellId] = dimension[step.GlobalCellId];
             }
             else
             {
@@ -165,6 +173,8 @@ sealed class ZigzagModuleOracle
         var bars = new List<(double, double)>();
         for (int s = 0; s < _f.Count; s++)
         {
+            if (IsIdentity(s)) continue;
+
             ZigzagStep step = _f[s];
             int level = s + 1;
             int cell = step.GlobalCellId;
@@ -239,6 +249,9 @@ sealed class ZigzagModuleOracle
         var filtration = new List<(int, ChainSpan)> { (-1, _b[l]) };
         ZigzagStep step = _f[l];
 
+        if (IsIdentity(l))
+            return _right[l + 1];
+
         if (step.Direction == ZigzagDirection.Add)
         {
             int cell = step.GlobalCellId;
@@ -256,6 +269,9 @@ sealed class ZigzagModuleOracle
 
         return filtration;
     }
+
+    // A step on a quotiented cell leaves the relative complex as it was.
+    bool IsIdentity(int step) => !_cells[step].ContainsKey(_f[step].GlobalCellId) && !_cells[step + 1].ContainsKey(_f[step].GlobalCellId);
 
     static void Push(List<(int Label, ChainSpan Space)> filtration, int label, ChainSpan space)
     {

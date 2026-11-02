@@ -187,6 +187,48 @@ public static class ConditionedFiltration
         FrameTransition transition = FrameTransition.Union,
         FrameComplex complex = FrameComplex.Graph)
     {
+        return GraphFrameZigzag.FromEdgeSets(n, SweepEdgeSets(backbone, content, slack), transition, complex);
+    }
+
+    /// <summary>
+    /// <see cref="BuildSweep"/> read relative to the backbone: <c>H(K_t, K₀)</c> over the frames, with <c>K₀</c> the
+    /// backbone on its endpoints, as in <see cref="BuildRelative"/>. A sweep's returns then read without the backbone's own
+    /// cycles, which <see cref="BuildSweep"/> reports as bars across every frame. Read it with <see cref="FastZigzag"/>.
+    /// </summary>
+    public static GraphFrameFiltration BuildRelativeSweep(
+        int n,
+        IReadOnlyList<(int i, int j)> backbone,
+        IReadOnlyList<IReadOnlyList<(int i, int j, double d)>> content,
+        IReadOnlyList<double> slack,
+        FrameTransition transition = FrameTransition.Union,
+        FrameComplex complex = FrameComplex.Graph)
+    {
+        if (n < 0) throw new ArgumentOutOfRangeException(nameof(n));
+        IReadOnlyList<(int i, int j)>[] edgeSets = SweepEdgeSets(backbone, content, slack);
+
+        var all = new int[n];
+        for (int v = 0; v < n; v++) all[v] = v;
+
+        var frames = new GraphFrame[edgeSets.Length];
+        for (int t = 0; t < frames.Length; t++)
+            frames[t] = new GraphFrame(all, edgeSets[t]);
+
+        var endpoints = new HashSet<int>();
+        foreach (var (i, j) in backbone)
+            if (i != j)
+            {
+                endpoints.Add(i);
+                endpoints.Add(j);
+            }
+
+        return GraphFrameZigzag.BuildRelative(n, frames, new GraphFrame(new List<int>(endpoints), backbone), transition, complex);
+    }
+
+    static IReadOnlyList<(int i, int j)>[] SweepEdgeSets(
+        IReadOnlyList<(int i, int j)> backbone,
+        IReadOnlyList<IReadOnlyList<(int i, int j, double d)>> content,
+        IReadOnlyList<double> slack)
+    {
         ArgumentNullException.ThrowIfNull(backbone);
         ArgumentNullException.ThrowIfNull(content);
         ArgumentNullException.ThrowIfNull(slack);
@@ -203,6 +245,6 @@ public static class ConditionedFiltration
             edgeSets[t] = edges;
         }
 
-        return GraphFrameZigzag.FromEdgeSets(n, edgeSets, transition, complex);
+        return edgeSets;
     }
 }

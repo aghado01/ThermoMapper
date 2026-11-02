@@ -63,12 +63,15 @@ public readonly record struct TransientBar(int Dimension, int AfterFrame, Bar St
 /// A frame sequence as a <see cref="ZigzagFiltration"/>, one cell per step from empty back to empty, with the
 /// level of each frame so a barcode reads back on them. A cell's step order inside one batch is an artifact of
 /// the refinement, so a bar that reaches neither a frame nor a between-frames complex is dropped by the views.
+/// <para>Built by <see cref="GraphFrameZigzag.BuildRelative"/>, it reads <c>H(K_t, K₀)</c>: the filtration holds a cone
+/// over <c>K₀</c> as well, and the views drop the apex's own bar.</para>
 /// </summary>
 public sealed class GraphFrameFiltration
 {
     readonly int[] _frameLevels;
     readonly int[] _betweenLevels;
     readonly int[][] _cellVertices;
+    readonly HashSet<int>? _subcomplexCells;
 
     /// <summary>The filtration to hand to an engine: <see cref="GraphZigzag"/>, <see cref="FastZigzag"/>, an oracle.</summary>
     public ZigzagFiltration Filtration { get; }
@@ -79,7 +82,10 @@ public sealed class GraphFrameFiltration
 
     public int FrameCount => _frameLevels.Length;
 
-    internal GraphFrameFiltration(ZigzagFiltration filtration, FrameTransition transition, FrameComplex complex, int[] frameLevels, int[] betweenLevels, int[][] cellVertices)
+    /// <summary>Whether this reads <c>H(K_t, K₀)</c>, from <see cref="GraphFrameZigzag.BuildRelative"/>.</summary>
+    public bool IsRelative => _subcomplexCells is not null;
+
+    internal GraphFrameFiltration(ZigzagFiltration filtration, FrameTransition transition, FrameComplex complex, int[] frameLevels, int[] betweenLevels, int[][] cellVertices, HashSet<int>? subcomplexCells = null)
     {
         Filtration = filtration;
         Transition = transition;
@@ -87,12 +93,32 @@ public sealed class GraphFrameFiltration
         _frameLevels = frameLevels;
         _betweenLevels = betweenLevels;
         _cellVertices = cellVertices;
+        _subcomplexCells = subcomplexCells;
     }
 
     /// <summary>The vertices of a cell id in <see cref="Filtration"/>, so a bar's <see cref="Bar.Cycle"/> reads in frame
     /// terms: a vertex's own id, an edge's two, a triangle's three. That cycle belongs to the step complex where the bar
     /// begins, which can still hold cells that leave before the bar's first frame.</summary>
     public IReadOnlyList<int> VerticesOf(int cellId) => _cellVertices[cellId];
+
+    /// <summary>
+    /// A relative reading's bar as a relative cycle: its <see cref="Bar.Cycle"/> without the cells of <c>K₀</c> and its
+    /// cone, so the chain's boundary lies in <c>K₀</c> and it need not close. It is the bar's class in
+    /// <c>H(K, K₀)</c> at the step complex where the bar begins.
+    /// </summary>
+    public int[] RelativeCycle(in Bar bar)
+    {
+        if (_subcomplexCells is null)
+            throw new InvalidOperationException("This filtration reads absolute frames.");
+        if (bar.Cycle is null)
+            throw new ArgumentException("The bar carries no cycle: ask the engine for representatives.", nameof(bar));
+
+        var chain = new List<int>(bar.Cycle.Length);
+        foreach (int cell in bar.Cycle)
+            if (!_subcomplexCells.Contains(cell))
+                chain.Add(cell);
+        return chain.ToArray();
+    }
 
     /// <summary>The bars that exist at some frame, read on the frames. A view over the step-level barcode: it
     /// drops the transients (<see cref="TransientBars"/>) and the step-order artifacts.</summary>
@@ -103,6 +129,8 @@ public sealed class GraphFrameFiltration
         var bars = new List<FrameBar>();
         foreach (Bar bar in barcode.Bars)
         {
+            if (IsApexBar(bar)) continue;
+
             var (first, last) = LevelsOf(bar);
             int a = LowerBound(_frameLevels, first);
             int b = LowerBound(_frameLevels, last + 1) - 1;
@@ -128,6 +156,8 @@ public sealed class GraphFrameFiltration
         var bars = new List<TransientBar>();
         foreach (Bar bar in barcode.Bars)
         {
+            if (IsApexBar(bar)) continue;
+
             var (first, last) = LevelsOf(bar);
             if (LowerBound(_frameLevels, first) <= LowerBound(_frameLevels, last + 1) - 1)
                 continue;
@@ -139,6 +169,10 @@ public sealed class GraphFrameFiltration
 
         return bars;
     }
+
+    // H₀ of K ∪ CK₀ is the reduced part, which is the relative module, plus the apex's component. The apex enters first and
+    // leaves last, so that class is the one bar born at step 0.
+    bool IsApexBar(in Bar bar) => _subcomplexCells is not null && bar.Dimension == 0 && (int)bar.Birth == 0;
 
     // Level ℓ is the complex after ℓ steps. A bar reports its creating step (level − 1) and its last level,
     // by ZigzagBarcodeNaive's convention, so it covers levels [Birth + 1, Death].
@@ -178,22 +212,76 @@ public static class GraphFrameZigzag
         ArgumentNullException.ThrowIfNull(frames);
         if (n < 0) throw new ArgumentOutOfRangeException(nameof(n));
 
+        return Assemble(n, frames, subcomplex: null, transition, complex);
+    }
+
+    /// <summary>
+    /// <see cref="Build"/> for the relative reading <c>H(K_t, K₀)</c> over the frames, with <c>K₀</c> in every frame.
+    /// <c>H_p(K, K₀) ≅ H̃_p(K ∪ CK₀)</c>, naturally in <c>K</c>, so the filtration adds an apex (cell <paramref name="n"/>)
+    /// and a cone over <c>K₀</c>, built first and torn down last, and any engine that reads a general complex reads the
+    /// module unchanged. <see cref="GraphFrameFiltration.FrameBars"/> and
+    /// <see cref="GraphFrameFiltration.TransientBars"/> drop the apex's bar. Unions and intersections of frames all hold
+    /// the cone, so the Diamond Principle carries over. The cone over an edge is a triangle, so the graph engines do not
+    /// read this: use <see cref="FastZigzag"/>.
+    /// </summary>
+    /// <param name="n">Vertex id bound: every id is in <c>[0, n)</c>.</param>
+    /// <param name="frames">The sequence. Each must hold <paramref name="subcomplex"/>.</param>
+    /// <param name="subcomplex"><c>K₀</c>, as a frame: under <see cref="FrameComplex.Flag"/>, its flag complex. No cells gives
+    /// <c>K₀ = ∅</c>, the absolute reading.</param>
+    /// <param name="transition">How consecutive frames connect.</param>
+    /// <param name="complex">Which complex each frame contributes.</param>
+    public static GraphFrameFiltration BuildRelative(
+        int n,
+        IReadOnlyList<GraphFrame> frames,
+        GraphFrame subcomplex,
+        FrameTransition transition = FrameTransition.Union,
+        FrameComplex complex = FrameComplex.Graph)
+    {
+        ArgumentNullException.ThrowIfNull(frames);
+        ArgumentNullException.ThrowIfNull(subcomplex);
+        if (n < 0) throw new ArgumentOutOfRangeException(nameof(n));
+
+        return Assemble(n, frames, subcomplex, transition, complex);
+    }
+
+    static GraphFrameFiltration Assemble(
+        int n,
+        IReadOnlyList<GraphFrame> frames,
+        GraphFrame? subcomplex,
+        FrameTransition transition,
+        FrameComplex complex)
+    {
         var filtration = new ZigzagFiltration();
         var frameLevels = new int[frames.Count];
         var betweenLevels = new int[Math.Max(0, frames.Count - 1)];
-        var ids = new CellIds(n);
+        var ids = new CellIds(subcomplex is null ? n : n + 1);
+
+        FrameCells k0 = subcomplex is null ? FrameCells.Empty : Normalize(subcomplex, n, "K₀", complex);
+        FrameCells coned = subcomplex is null ? FrameCells.Empty : ConeOver(k0, apex: n);
+        if (subcomplex is not null)
+        {
+            filtration.Add(n, Array.Empty<int>());
+            Enter(filtration, coned, ids);
+        }
+
         if (frames.Count == 0)
-            return new GraphFrameFiltration(filtration, transition, complex, frameLevels, betweenLevels, ids.CellVertices());
+        {
+            Leave(filtration, coned, ids);
+            if (subcomplex is not null) filtration.Delete(n);
+            return Finish(filtration, transition, complex, frameLevels, betweenLevels, ids, subcomplex is null ? null : coned, n);
+        }
 
         var cells = FrameCells.Empty;
 
         for (int t = 0; t < frames.Count; t++)
         {
-            FrameCells next = Normalize(frames[t], n, t, complex);
+            FrameCells next = Normalize(frames[t], n, $"Frame {t}", complex);
+            if (subcomplex is not null && !(k0.Vertices.IsSubsetOf(next.Vertices) && k0.Edges.IsSubsetOf(next.Edges)))
+                throw new ArgumentException($"Frame {t} does not hold K₀.", nameof(frames));
 
             if (t == 0)
             {
-                Enter(filtration, next, ids);
+                Enter(filtration, next.Except(k0), ids);
             }
             else if (transition == FrameTransition.Union)
             {
@@ -212,8 +300,31 @@ public static class GraphFrameZigzag
             cells = next;
         }
 
-        Leave(filtration, cells, ids);
-        return new GraphFrameFiltration(filtration, transition, complex, frameLevels, betweenLevels, ids.CellVertices());
+        Leave(filtration, cells.Except(k0), ids);
+        Leave(filtration, coned, ids);
+        if (subcomplex is not null) filtration.Delete(n);
+        return Finish(filtration, transition, complex, frameLevels, betweenLevels, ids, subcomplex is null ? null : coned, n);
+    }
+
+    static GraphFrameFiltration Finish(
+        ZigzagFiltration filtration, FrameTransition transition, FrameComplex complex, int[] frameLevels, int[] betweenLevels,
+        CellIds ids, FrameCells? coned, int apex)
+    {
+        HashSet<int>? subcomplexCells = coned is null ? null : ids.CellsOf(coned, apex);
+        return new GraphFrameFiltration(filtration, transition, complex, frameLevels, betweenLevels, ids.CellVertices(), subcomplexCells);
+    }
+
+    // K₀ and the cone over it, without the apex itself, which the builder enters first and removes last.
+    static FrameCells ConeOver(FrameCells k0, int apex)
+    {
+        var coned = new FrameCells(new(k0.Vertices), new(k0.Edges), new(k0.Triangles), new());
+        foreach (int v in k0.Vertices)
+            coned.Edges.Add((v, apex));
+        foreach (var (lo, hi) in k0.Edges)
+            coned.Triangles.Add((lo, hi, apex));
+        foreach (var (a, b, c) in k0.Triangles)
+            coned.Tetrahedra.Add((a, b, c, apex));
+        return coned;
     }
 
     /// <summary><see cref="Build"/> for frames that all hold every vertex <c>0..n-1</c>.</summary>
@@ -307,14 +418,15 @@ public static class GraphFrameZigzag
     }
 
     // One frame's cells by dimension, ordered so each batch enters and leaves in a fixed order.
-    sealed record FrameCells(SortedSet<int> Vertices, SortedSet<(int Lo, int Hi)> Edges, SortedSet<(int A, int B, int C)> Triangles)
+    sealed record FrameCells(SortedSet<int> Vertices, SortedSet<(int Lo, int Hi)> Edges, SortedSet<(int A, int B, int C)> Triangles, SortedSet<(int A, int B, int C, int D)> Tetrahedra)
     {
-        public static FrameCells Empty => new(new(), new(), new());
+        public static FrameCells Empty => new(new(), new(), new(), new());
 
         public FrameCells Except(FrameCells other) => new(
             Minus(Vertices, other.Vertices),
             Minus(Edges, other.Edges),
-            Minus(Triangles, other.Triangles));
+            Minus(Triangles, other.Triangles),
+            Minus(Tetrahedra, other.Tetrahedra));
 
         static SortedSet<T> Minus<T>(SortedSet<T> keep, SortedSet<T> minus)
         {
@@ -324,13 +436,14 @@ public static class GraphFrameZigzag
         }
     }
 
-    // Vertex v is cell v; edges and triangles take the next free id at first appearance and keep it.
+    // Vertex v is cell v; every other cell takes the next free id at first appearance and keeps it.
     sealed class CellIds(int vertexCount)
     {
         readonly Dictionary<(int Lo, int Hi), int> _edges = new();
         readonly Dictionary<(int A, int B, int C), int> _triangles = new();
+        readonly Dictionary<(int A, int B, int C, int D), int> _tetrahedra = new();
 
-        int Next => vertexCount + _edges.Count + _triangles.Count;
+        int Next => vertexCount + _edges.Count + _triangles.Count + _tetrahedra.Count;
 
         public int Edge((int Lo, int Hi) edge)
         {
@@ -346,6 +459,22 @@ public static class GraphFrameZigzag
             return id;
         }
 
+        public int Tetrahedron((int A, int B, int C, int D) tetrahedron)
+        {
+            if (!_tetrahedra.TryGetValue(tetrahedron, out int id))
+                _tetrahedra[tetrahedron] = id = Next;
+            return id;
+        }
+
+        public HashSet<int> CellsOf(FrameCells cells, int apex)
+        {
+            var ids = new HashSet<int>(cells.Vertices) { apex };
+            foreach (var edge in cells.Edges) ids.Add(_edges[edge]);
+            foreach (var triangle in cells.Triangles) ids.Add(_triangles[triangle]);
+            foreach (var tetrahedron in cells.Tetrahedra) ids.Add(_tetrahedra[tetrahedron]);
+            return ids;
+        }
+
         public int[][] CellVertices()
         {
             var vertices = new int[Next][];
@@ -355,11 +484,13 @@ public static class GraphFrameZigzag
                 vertices[id] = new[] { edge.Lo, edge.Hi };
             foreach (var (triangle, id) in _triangles)
                 vertices[id] = new[] { triangle.A, triangle.B, triangle.C };
+            foreach (var (tetrahedron, id) in _tetrahedra)
+                vertices[id] = new[] { tetrahedron.A, tetrahedron.B, tetrahedron.C, tetrahedron.D };
             return vertices;
         }
     }
 
-    static FrameCells Normalize(GraphFrame frame, int n, int t, FrameComplex complex)
+    static FrameCells Normalize(GraphFrame frame, int n, string name, FrameComplex complex)
     {
         ArgumentNullException.ThrowIfNull(frame);
 
@@ -367,7 +498,7 @@ public static class GraphFrameZigzag
         foreach (int v in frame.Vertices)
         {
             if ((uint)v >= (uint)n)
-                throw new ArgumentOutOfRangeException(nameof(frame), $"Frame {t}: vertex {v} out of range for n={n}.");
+                throw new ArgumentOutOfRangeException(nameof(frame), $"{name}: vertex {v} out of range for n={n}.");
             vertices.Add(v);
         }
 
@@ -376,7 +507,7 @@ public static class GraphFrameZigzag
         {
             if (i == j) continue;
             if (!vertices.Contains(i) || !vertices.Contains(j))
-                throw new ArgumentException($"Frame {t}: edge ({i},{j}) has an endpoint the frame does not hold.", nameof(frame));
+                throw new ArgumentException($"{name}: edge ({i},{j}) has an endpoint the frame does not hold.", nameof(frame));
             edges.Add(i < j ? (i, j) : (j, i));
         }
 
@@ -397,7 +528,7 @@ public static class GraphFrameZigzag
                 triangles.Add((flat[f], flat[f + 1], flat[f + 2]));
         }
 
-        return new FrameCells(vertices, edges, triangles);
+        return new FrameCells(vertices, edges, triangles, new());
     }
 
     static void Enter(ZigzagFiltration filtration, FrameCells cells, CellIds ids)
@@ -410,10 +541,16 @@ public static class GraphFrameZigzag
 
         foreach (var (a, b, c) in cells.Triangles)
             filtration.Add(ids.Triangle((a, b, c)), new[] { ids.Edge((a, b)), ids.Edge((a, c)), ids.Edge((b, c)) });
+
+        foreach (var (a, b, c, d) in cells.Tetrahedra)
+            filtration.Add(ids.Tetrahedron((a, b, c, d)), new[] { ids.Triangle((a, b, c)), ids.Triangle((a, b, d)), ids.Triangle((a, c, d)), ids.Triangle((b, c, d)) });
     }
 
     static void Leave(ZigzagFiltration filtration, FrameCells cells, CellIds ids)
     {
+        foreach (var tetrahedron in cells.Tetrahedra)
+            filtration.Delete(ids.Tetrahedron(tetrahedron));
+
         foreach (var triangle in cells.Triangles)
             filtration.Delete(ids.Triangle(triangle));
 

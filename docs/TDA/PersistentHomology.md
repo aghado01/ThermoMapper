@@ -61,6 +61,7 @@ flowchart LR
 | Distances | `DiagramMetrics.Wasserstein(a, b, dimension, p = 2, essential = default)`, `SlicedWasserstein(…, directions = 50)`, `SinkhornWasserstein(…, epsilon = 0.01, maxIters = 500)`; `Bottleneck(a, b, dimension, essential)` (not implemented); `DiagramMetrics.EssentialPolicy.InfiniteOnMismatch`, `DiagramMetrics.EssentialPolicy.FinitePenalty(perBar)`; `DiagramDistanceKind` |
 | Cycles | `CycleReconstruction.ReconstructH1Cycle(filtration, birthEdgeIndex)`; `BarCycleEdges.GetEdgePairs`, `BarCycleEdges.H1Loops`; `H1CycleEdges.FromDistanceGraph(distanceGraph)` |
 | Conditioned | `ConditionedFiltration.BuildGraph`, `ConditionedFiltration.ComputeBarcode`, `ConditionedFiltration.BuildRelative`, `ConditionedFiltration.ComputeRelativeBarcode`, `ConditionedFiltration.BuildSweep`; `ResidualPrior.ResidualEdges`, `ResidualPrior.ReachSlices`; `ResidualSymmetry` |
+| Relative over frames | `GraphFrameZigzag.BuildRelative`, `ConditionedFiltration.BuildRelativeSweep`; see [Zigzag Persistence](./ZigzagPersistence.md#frame-sequences) |
 | Relative | `RelativeFiltration(ambient, inSubcomplex, label = "relative")`, `RelativeFiltration.ComputeBarcode(maxDimension, representatives)`, `RelativeFiltration.ComputeBothReadings(maxDimension)`, `RelativeFiltration.Ambient`, `RelativeFiltration.AmbientIndices` |
 | Topology helpers | `Maths.Topology.CombinatorialIndex` (`Index`, `Vertices`, `PackKey`, `Binomial`); `Maths.Topology.Simplex`; `Maths.Topology.Z2LinearAlgebra` (oracle support) |
 
