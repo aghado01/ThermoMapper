@@ -106,6 +106,64 @@ public sealed class BassPredictBasisTests
     }
 
     [Fact]
+    public void Parts_TakeEachSourceAlone_AndTheDefaultIsTheFullDrawBitForBit()
+    {
+        // Kᵀe = 0 under in-sample residuals, as above: noise alone leaves no part off the span of K, and truncation alone
+        // is exactly one training case's whole residual vector.
+        BassBasisFit fit = BassOutputComponentsTests.FitOf(TruncationResidual.InSample);
+        BassDecomposition d = fit.Decomposition;
+        int r = d.Rank, m = d.Locations, n = d.Cases;
+        BassBasisPrediction Of(BasisPredictiveParts parts) => fit.Predict(Four, new BassPredictOptions { Seed = 17, BasisParts = parts });
+        BassBasisPrediction full = fit.Predict(Four, new BassPredictOptions { Seed = 17 });
+        BassBasisPrediction noise = Of(BasisPredictiveParts.Noise), truncation = Of(BasisPredictiveParts.Truncation);
+        Assert.Equal(BasisPredictiveParts.NoiseAndTruncation, full.Parts);
+        Assert.Equal((BasisPredictiveParts.Noise, BasisPredictiveParts.Truncation), (noise.Parts, truncation.Parts));
+        Assert.Equal(full.Predictive, Of(BasisPredictiveParts.NoiseAndTruncation).Predictive);
+        Assert.Equal(noise.Predictive, Of(BasisPredictiveParts.Noise).Predictive);
+        Assert.Equal(full.Latent, noise.Latent);
+        Assert.Equal(full.Latent, truncation.Latent);
+
+        double[] norm = [.. Enumerable.Range(0, r).Select(k => Enumerable.Range(0, m).Sum(l => d.Map.Basis(l, k) * d.Map.Basis(l, k)))];
+        double offSpan = 0.0, offCase = 0.0, epsilons = 0.0;
+        int s = full.DrawCount;
+        for (int j = 0; j < s; j++)
+            for (int i = 0; i < 4; i++)
+            {
+                double[] u = [.. Enumerable.Range(0, m).Select(l => (noise.Predictive![j, i, l] - noise.Latent[j, i, l]) / d.Map.Scales[l])];
+                double[] epsilon = [.. Enumerable.Range(0, r).Select(k => Enumerable.Range(0, m).Sum(l => d.Map.Basis(l, k) * u[l]) / norm[k])];
+                for (int l = 0; l < m; l++) offSpan = Math.Max(offSpan, Math.Abs(u[l] - Enumerable.Range(0, r).Sum(k => d.Map.Basis(l, k) * epsilon[k])));
+                for (int k = 0; k < r; k++) epsilons += epsilon[k] * epsilon[k] / noise.NoiseVariances[j, k];
+                double[] e = [.. Enumerable.Range(0, m).Select(l => (truncation.Predictive![j, i, l] - truncation.Latent[j, i, l]) / d.Map.Scales[l])];
+                offCase = Math.Max(offCase, Enumerable.Range(0, n).Min(c => Enumerable.Range(0, m).Max(l => Math.Abs(e[l] - d.Truncation.Values[c, l]))));
+            }
+        _out.WriteLine($"largest part off the span under noise alone {offSpan:E1}; largest gap to a training residual under truncation alone {offCase:E1}");
+        Assert.InRange(offSpan, 0, 1e-10);
+        Assert.InRange(offCase, 0, 1e-10);
+        // The noise is there at its own scale, not skipped.
+        int count = s * 4 * r;
+        Assert.InRange(epsilons / count, 1 - 6 * Math.Sqrt(2.0 / count), 1 + 6 * Math.Sqrt(2.0 / count));
+
+        // Each covariance holds the latent part and its own source, by hand.
+        double[,] residual = d.Truncation.Covariance();
+        double[] noiseMeans = [.. Enumerable.Range(0, r).Select(k => Enumerable.Range(0, s).Sum(j => full.Weights[j] * full.NoiseVariances[j, k]))];
+        for (int i = 0; i < 4; i++)
+        {
+            double[,] latent = full.Covariance(i, predictive: false), both = full.Covariance(i), a = noise.Covariance(i), b = truncation.Covariance(i);
+            Assert.Equal(latent, noise.Covariance(i, predictive: false));
+            Assert.Equal(latent, truncation.Covariance(i, predictive: false));
+            for (int l = 0; l < m; l++)
+                for (int q = 0; q < m; q++)
+                {
+                    double scale = d.Map.Scales[l] * d.Map.Scales[q], tolerance = 1e-11 * (1 + Math.Abs(both[l, q]));
+                    double fromNoise = scale * Enumerable.Range(0, r).Sum(k => d.Map.Basis(l, k) * d.Map.Basis(q, k) * noiseMeans[k]);
+                    Assert.Equal(latent[l, q] + fromNoise, a[l, q], tolerance);
+                    Assert.Equal(latent[l, q] + scale * residual[l, q], b[l, q], tolerance);
+                    Assert.Equal(a[l, q] + b[l, q] - latent[l, q], both[l, q], tolerance);
+                }
+        }
+    }
+
+    [Fact]
     public void DrawOrder_SingletonAxes_AndTheSeed()
     {
         BassBasisFit fit = BassOutputComponentsTests.FitOf();
@@ -239,5 +297,12 @@ public sealed class BassPredictBasisTests
         Assert.Contains("not among", Assert.Throws<ArgumentException>(() => fit.Predict(Four, new BassPredictOptions { Draws = [100000] })).Message);
         Assert.Contains("'z1'", Assert.Throws<ArgumentException>(() => fit.Predict(new PredictionCases([new ContinuousColumn("z0", [0.5])]))).Message);
         Assert.Throws<ArgumentOutOfRangeException>(() => fit.Predict(Four).Covariance(4));
+        Assert.Contains("not a known choice", Assert.Throws<ArgumentException>(() => fit.Predict(Four, new BassPredictOptions { BasisParts = (BasisPredictiveParts)7 })).Message);
+
+        // A direct fit has no truncation residuals to leave out or to take alone.
+        BassData data = SensitivityFixture.Scalar();
+        foreach (BasisPredictiveParts parts in new[] { BasisPredictiveParts.Noise, BasisPredictiveParts.Truncation })
+            Assert.Contains("no truncation residuals", Assert.Throws<ArgumentException>(() =>
+                SensitivityFixture.FitScalar().Predict(data, PredictionCases.Of(data), new BassPredictOptions { BasisParts = parts })).Message);
     }
 }

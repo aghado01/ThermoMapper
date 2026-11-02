@@ -6,6 +6,22 @@ using Maths.Rng;
 namespace Maths.Regression.Spline.Bass;
 
 /// <summary>
+/// What a basis fit's predictive draws add to the latent output, R's <c>nugget</c> and <c>trunc.error</c>. Neither is
+/// <see cref="BassBasisPrediction.Latent"/>, and R's defaults are <see cref="Noise"/>.
+/// </summary>
+public enum BasisPredictiveParts
+{
+    /// <summary>Component noise and a whole truncation residual: D07's full draw.</summary>
+    NoiseAndTruncation,
+
+    /// <summary>Component noise alone.</summary>
+    Noise,
+
+    /// <summary>A whole truncation residual alone.</summary>
+    Truncation,
+}
+
+/// <summary>
 /// What a prediction call asks for (D07): which draws, in which order; whether predictive draws join the latent ones;
 /// the call's own seed, so the same seed reproduces the same draws; what an unseen level does; new output locations for
 /// a direct functional fit; and the Rao–Blackwellized mean surface, off by default.
@@ -18,6 +34,10 @@ public sealed record BassPredictOptions
 
     /// <summary>Whether predictive draws, with their noise, join the latent ones.</summary>
     public bool Predictive { get; init; } = true;
+
+    /// <summary>What a basis fit's predictive draws and covariance add to the latent output: both sources by default (D07).
+    /// A direct fit, which has noise alone, takes only the default.</summary>
+    public BasisPredictiveParts BasisParts { get; init; } = BasisPredictiveParts.NoiseAndTruncation;
 
     /// <summary>The call's seed for the noise (and a basis fit's truncation draws).</summary>
     public int Seed { get; init; }
@@ -191,6 +211,8 @@ internal static class BassDirectPrediction
     {
         ArgumentNullException.ThrowIfNull(cases);
         ArgumentNullException.ThrowIfNull(options);
+        if (options.BasisParts != BasisPredictiveParts.NoiseAndTruncation)
+            throw new ArgumentException("A direct fit has no truncation residuals: its predictive draws add noise, and BasisParts is a basis fit's.", nameof(options));
         (List<BassDraw> pooled, _) = BassDrawFit.Pool(draws, terms, options.MeanSurface, nameof(draws));
         (int[] selected, double[] weights) = Draws3.Select(options.Draws, pooled.Count, drawWeights);
         (CaseInputs caseInputs, bool[] caseOutside) = cases.Prepare(model.Transform, model.Inputs, options.UnseenLevels);

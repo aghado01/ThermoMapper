@@ -14,9 +14,10 @@ namespace Maths.Regression.Spline.Bass;
 /// <item><b>Predictive</b>: y_m + y_s ∘ (K(w(x) + ε) + e), with ε_k ~ N(0, σ_k²) drawn for each draw and case (R draws one
 /// per draw and recycles it across cases), and e a whole training residual vector, which keeps its correlation across
 /// locations, drawn uniformly over the training cases independently for each draw and case, from the declared residual
-/// set in standardized units, added before y_s.</item>
+/// set in standardized units, added before y_s. <see cref="BassPredictOptions.BasisParts"/> takes ε or e alone.</item>
 /// <item><see cref="Covariance"/>: the predictive mixture's covariance over the locations at one case,
-/// diag(y_s)·(K(Cov[w] + E[diag σ²])Kᵀ + Cov[e])·diag(y_s), or the latent K·Cov[w]·Kᵀ under the same transform.</item>
+/// diag(y_s)·(K(Cov[w] + E[diag σ²])Kᵀ + Cov[e])·diag(y_s), under the same parts, or the latent K·Cov[w]·Kᵀ under the same
+/// transform.</item>
 /// <item><see cref="Quantile"/>: the weighted quantile of the predictive draws (<see cref="DrawSample.Quantile"/>, type 7
 /// under the joint draws' equal weights), the predictive mixture's quantile up to Monte Carlo error.</item>
 /// </list>
@@ -26,11 +27,12 @@ public sealed class BassBasisPrediction
     private readonly LinearReconstruction _map;
     private readonly TruncationResiduals _truncation;
 
-    internal BassBasisPrediction(LinearReconstruction map, TruncationResiduals truncation, int[] draws, double[] weights, double[,] noise,
+    internal BassBasisPrediction(LinearReconstruction map, TruncationResiduals truncation, BasisPredictiveParts parts, int[] draws, double[] weights, double[,] noise,
                                  double[,,] coefficients, double[,,] latent, double[,,]? predictive, bool[] caseOutside, double[,]? meanSurface)
     {
         _map = map;
         _truncation = truncation;
+        Parts = parts;
         Draws = Array.AsReadOnly(draws);
         Weights = Array.AsReadOnly(weights);
         NoiseVariances = noise;
@@ -40,6 +42,9 @@ public sealed class BassBasisPrediction
         CaseOutsideRange = Array.AsReadOnly(caseOutside);
         MeanSurface = meanSurface;
     }
+
+    /// <summary>What the predictive draws and <see cref="Covariance"/> add to the latent output.</summary>
+    public BasisPredictiveParts Parts { get; }
 
     /// <summary>The joint draws used, in order.</summary>
     public IReadOnlyList<int> Draws { get; }
@@ -56,7 +61,7 @@ public sealed class BassBasisPrediction
     /// <summary>y_m + y_s ∘ K w(x): draw × case × location.</summary>
     public double[,,] Latent { get; }
 
-    /// <summary>y_m + y_s ∘ (K(w(x) + ε) + e); null when not asked for.</summary>
+    /// <summary>y_m + y_s ∘ (K(w(x) + ε) + e), under <see cref="Parts"/>; null when not asked for.</summary>
     public double[,,]? Predictive { get; }
 
     /// <summary>Whether each case lies outside the training range of some continuous predictor.</summary>
@@ -98,13 +103,14 @@ public sealed class BassBasisPrediction
     /// <summary>
     /// The covariance over the locations at case <paramref name="case"/>, in physical units (m × m): the predictive
     /// mixture's, diag(y_s)·(K(Cov[w] + E[diag σ²])Kᵀ + Cov[e])·diag(y_s), with Cov[w] and E[σ²] under the draws' weights
-    /// and Cov[e] under the uniform draw over the training residuals; or, when <paramref name="predictive"/> is false, the
-    /// latent output's, diag(y_s)·K·Cov[w]·Kᵀ·diag(y_s).
+    /// and Cov[e] under the uniform draw over the training residuals, each source only as <see cref="Parts"/> takes it; or,
+    /// when <paramref name="predictive"/> is false, the latent output's, diag(y_s)·K·Cov[w]·Kᵀ·diag(y_s).
     /// </summary>
     public double[,] Covariance(int @case, bool predictive = true)
     {
         if ((uint)@case >= (uint)Cases) throw new ArgumentOutOfRangeException(nameof(@case));
         int s = DrawCount, r = Coefficients.GetLength(2), m = Locations;
+        bool withNoise = predictive && Parts != BasisPredictiveParts.Truncation, withResidual = predictive && Parts != BasisPredictiveParts.Noise;
         var mean = new double[r];
         for (int d = 0; d < s; d++)
             for (int k = 0; k < r; k++) mean[k] += Weights[d] * Coefficients[d, @case, k];
@@ -114,7 +120,7 @@ public sealed class BassBasisPrediction
             {
                 double a = Coefficients[d, @case, k] - mean[k];
                 for (int q = 0; q < r; q++) inner[k, q] += Weights[d] * a * (Coefficients[d, @case, q] - mean[q]);
-                if (predictive) inner[k, k] += Weights[d] * NoiseVariances[d, k];
+                if (withNoise) inner[k, k] += Weights[d] * NoiseVariances[d, k];
             }
         double[,] basis = _map.BasisArray;
         var kInner = new double[m, r];
@@ -125,7 +131,7 @@ public sealed class BassBasisPrediction
                 for (int k = 0; k < r; k++) v += basis[l, k] * inner[k, q];
                 kInner[l, q] = v;
             }
-        double[,] standardized = predictive ? _truncation.Covariance() : new double[m, m];
+        double[,] standardized = withResidual ? _truncation.Covariance() : new double[m, m];
         for (int l = 0; l < m; l++)
             for (int j = 0; j < m; j++)
             {
@@ -140,7 +146,7 @@ public sealed class BassBasisPrediction
 /// <summary>
 /// Basis prediction (D07; <see cref="BassBasisFit.Predict"/>): each component's surface under its draw in each requested
 /// joint draw, reconstructed; the predictive draws' component noise and truncation residuals from the call's seed, in
-/// draw then case order, the r noises before the residual's case.
+/// draw then case order, the r noises before the residual's case; a part left out draws nothing from the stream.
 /// </summary>
 internal static class BassBasisPredictor
 {
@@ -150,6 +156,8 @@ internal static class BassBasisPredictor
         ArgumentNullException.ThrowIfNull(options);
         if (options.OutputLocations is not null)
             throw new ArgumentException("A basis exists only at its training locations: it has no evaluation at new output coordinates.", nameof(options));
+        if (options.BasisParts is not (BasisPredictiveParts.NoiseAndTruncation or BasisPredictiveParts.Noise or BasisPredictiveParts.Truncation))
+            throw new ArgumentException($"BasisParts {options.BasisParts} is not a known choice.", nameof(options));
         BassDecomposition decomposition = fit.Decomposition;
         LinearReconstruction map = decomposition.Map;
         BassJointDraws joint = fit.JointDraws;
@@ -196,17 +204,21 @@ internal static class BassBasisPredictor
         double[,,]? predictive = null;
         if (options.Predictive)
         {
+            bool withNoise = options.BasisParts != BasisPredictiveParts.Truncation, withResidual = options.BasisParts != BasisPredictiveParts.Noise;
             double[,] residuals = decomposition.Truncation.Values;
             int trainingCases = residuals.GetLength(0);
-            var e = new double[m];
+            double[] e = withResidual ? new double[m] : [];
             var rng = new Xoshiro256PlusPlus(options.Seed);
             predictive = new double[s, n, m];
             for (int d = 0; d < s; d++)
                 for (int i = 0; i < n; i++)
                 {
-                    for (int k = 0; k < r; k++) w[k] = coefficients[d, i, k] + Math.Sqrt(noise[d, k]) * Normal.SampleStandard(rng);
-                    int drawn = rng.NextInt(trainingCases);
-                    for (int l = 0; l < m; l++) e[l] = residuals[drawn, l];
+                    for (int k = 0; k < r; k++) w[k] = withNoise ? coefficients[d, i, k] + Math.Sqrt(noise[d, k]) * Normal.SampleStandard(rng) : coefficients[d, i, k];
+                    if (withResidual)
+                    {
+                        int drawn = rng.NextInt(trainingCases);
+                        for (int l = 0; l < m; l++) e[l] = residuals[drawn, l];
+                    }
                     map.Reconstruct(w, e, y);
                     for (int l = 0; l < m; l++) predictive[d, i, l] = y[l];
                 }
@@ -223,6 +235,6 @@ internal static class BassBasisPredictor
                 for (int l = 0; l < m; l++) meanSurface[i, l] = y[l];
             }
         }
-        return new BassBasisPrediction(map, decomposition.Truncation, selected, weights, noise, coefficients, latent, predictive, caseOutside, meanSurface);
+        return new BassBasisPrediction(map, decomposition.Truncation, options.BasisParts, selected, weights, noise, coefficients, latent, predictive, caseOutside, meanSurface);
     }
 }
