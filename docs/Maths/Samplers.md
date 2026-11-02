@@ -380,7 +380,7 @@ $$\theta_k\leftarrow\theta_k+\gamma_t\,\frac1C\sum_c\mathbf 1_{\rm in}(\ell_c)\,
   - *Tempering's replicas* go as N^(−3.0) at q = 3, steeper. At q = 4 they stop crossing from N = 512, too few sizes to tell exponential from power law.
   - *A fixed-b chain* reads exponential at q = 4, where its power-law fit predicted round trips at N = 1,024 and 2,048 and none came.
   - At q = 4 and N = 2,048, where the exact law's ln(peak/dip) is 12.2, the flat histogram is the only sampler that crosses: 16 and 41 round trips in the two windows, in 4.2·10⁸ proposals.
-  - Torpid mixing of tempering on mean-field Potts with q ≥ 3 is proven (Bhatnagar and Randall 2004; Woodard, Schmidler and Huber 2009); the reading agrees with it and claims nothing more.
+  - Torpid mixing of tempering on mean-field Potts is proven, by Bhatnagar and Randall (2004) at q = 3 and the critical coupling, and widened to q ≥ 3 at or above it by Woodard, Schmidler and Huber (2009), whose proofs of the propositions are in Woodard's thesis. The reading is consistent with it at q = 4 and claims nothing more. At q = 3 it does not test it: the barrier is 0.00113 nats per site, about e^2.2 across the sweep against N³'s e^10.4, and an exponential at that rate overtakes N³ only near N ≈ 27,000. So the fitted N^(−3.0) is pre-asymptotic, not a polynomial rate that contradicts the theorem.
 
 ### Ensemble shell
 
