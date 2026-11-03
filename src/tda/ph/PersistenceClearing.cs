@@ -18,34 +18,23 @@ internal static class PersistenceClearing
         double.IsPositiveInfinity(death) ? double.PositiveInfinity : death - birth;
 
     /// <summary>
-    /// H₀ by union-find over the edges in filtration order, which is the pairing a full reduction finds. With
-    /// <paramref name="pairs"/>, also the pairs as cell indices: a vertex and the edge that killed it, or −1.
+    /// H₀ by union-find over the 1-cells in filtration order, which is the pairing a full reduction finds. A 1-cell reads
+    /// through its faces, so any cell complex works: two faces join, one joins its vertex to a root older than every cell
+    /// (the far end lies in a quotiented subcomplex), and none closes a cycle by itself. With <paramref name="pairs"/>, also
+    /// the pairs as cell indices: a vertex and the 1-cell that killed it, or −1.
     /// </summary>
-    public static (List<Bar> Bars, HashSet<int> ToReduce, HashSet<int> ToSkip) ComputeH0(
+    /// <returns>The bars, and the 1-cells that killed nothing, whose degree is the next to reduce.</returns>
+    public static (List<Bar> Bars, HashSet<int> ToReduce) ComputeH0(
         IFiltration filtration, int maxDimension, double cutoff, List<(int Birth, int Death)>? pairs = null)
     {
         var bars = new List<Bar>();
         var toReduce = new HashSet<int>();
-        var toSkip = new HashSet<int>();
         int n = filtration.Count;
+        int quotient = n;
 
-        var vertexIndex = new Dictionary<int, int>();
-        var birth = new double[n];
-        var parent = new int[n];
-        var birthId = new int[n];
-        int nextId = 0;
-
-        for (int i = 0; i < n; i++)
-        {
+        var parent = new int[n + 1];
+        for (int i = 0; i <= n; i++)
             parent[i] = i;
-            if (filtration.GetDimension(i) == 0)
-            {
-                int v = filtration.GetVertices(i)[0];
-                vertexIndex[v] = i;
-                birth[i] = filtration.GetBirth(i);
-                birthId[i] = nextId++;
-            }
-        }
 
         int Find(int x)
         {
@@ -59,32 +48,32 @@ internal static class PersistenceClearing
         {
             if (filtration.GetDimension(e) != 1) continue;
 
-            ReadOnlySpan<int> verts = filtration.GetVertices(e);
-            int u = verts[0];
-            int v = verts[1];
-            int i = vertexIndex[u];
-            int j = vertexIndex[v];
-            int ri = Find(i);
-            int rj = Find(j);
-            double t = filtration.GetBirth(e);
-
-            if (ri != rj)
+            int[] faces = filtration.GetBoundaryIndices(e);
+            if (faces.Length > 2)
             {
-                int elder = birth[ri] < birth[rj] || (birth[ri] == birth[rj] && birthId[ri] < birthId[rj]) ? ri : rj;
-                int younger = elder == ri ? rj : ri;
-                if (maxDimension >= 0 && PassesCutoff(birth[younger], t, cutoff))
-                {
-                    bars.Add(new Bar(birth[younger], t, 0));
-                    pairs?.Add((younger, e));
-                }
-
-                parent[younger] = elder;
-                toSkip.Add(e);
+                pairs?.Clear();
+                return ReduceH0Columns(filtration, maxDimension, cutoff, pairs);
             }
-            else
+
+            if (faces.Length == 0)
             {
                 toReduce.Add(e);
+                continue;
             }
+
+            int ri = Find(faces[0]);
+            int rj = faces.Length == 2 ? Find(faces[1]) : quotient;
+            if (ri == rj)
+            {
+                toReduce.Add(e);
+                continue;
+            }
+
+            // The elder is the earlier cell, as a reduction's pivot leaves it, and the quotient outlives them all.
+            int younger = ri == quotient ? rj : rj == quotient ? ri : Math.Max(ri, rj);
+            int elder = younger == ri ? rj : ri;
+            AddFinite(bars, pairs, filtration, younger, e, maxDimension, cutoff);
+            parent[younger] = elder;
         }
 
         for (int i = 0; i < n; i++)
@@ -92,11 +81,63 @@ internal static class PersistenceClearing
             if (filtration.GetDimension(i) != 0) continue;
             if (Find(i) == i && maxDimension >= 0)
             {
-                bars.Add(new Bar(birth[i], double.PositiveInfinity, 0));
+                bars.Add(new Bar(filtration.GetBirth(i), double.PositiveInfinity, 0));
                 pairs?.Add((i, -1));
             }
         }
 
-        return (bars, toReduce, toSkip);
+        return (bars, toReduce);
+    }
+
+    /// <summary>
+    /// H₀ for a general chain complex, where a 1-cell can have more than two faces and no union-find reads it: the columns of
+    /// ∂₁ reduced. The result is the same on a complex the union-find can read.
+    /// </summary>
+    static (List<Bar> Bars, HashSet<int> ToReduce) ReduceH0Columns(
+        IFiltration filtration, int maxDimension, double cutoff, List<(int Birth, int Death)>? pairs)
+    {
+        var bars = new List<Bar>();
+        var toReduce = new HashSet<int>();
+        var reduced = new Dictionary<int, SortedSet<int>>();
+        int n = filtration.Count;
+
+        for (int e = 0; e < n; e++)
+        {
+            if (filtration.GetDimension(e) != 1) continue;
+
+            var col = new SortedSet<int>(filtration.GetBoundaryIndices(e));
+            while (col.Count > 0 && reduced.TryGetValue(col.Max, out SortedSet<int>? owner))
+                col.SymmetricExceptWith(owner);
+
+            if (col.Count == 0)
+            {
+                toReduce.Add(e);
+                continue;
+            }
+
+            reduced[col.Max] = col;
+            AddFinite(bars, pairs, filtration, col.Max, e, maxDimension, cutoff);
+        }
+
+        for (int i = 0; i < n; i++)
+        {
+            if (filtration.GetDimension(i) != 0 || reduced.ContainsKey(i) || maxDimension < 0) continue;
+            bars.Add(new Bar(filtration.GetBirth(i), double.PositiveInfinity, 0));
+            pairs?.Add((i, -1));
+        }
+
+        return (bars, toReduce);
+    }
+
+    static void AddFinite(
+        List<Bar> bars, List<(int Birth, int Death)>? pairs, IFiltration filtration, int vertex, int killer, int maxDimension, double cutoff)
+    {
+        double birth = filtration.GetBirth(vertex);
+        double death = filtration.GetBirth(killer);
+        if (maxDimension >= 0 && PassesCutoff(birth, death, cutoff))
+        {
+            bars.Add(new Bar(birth, death, 0));
+            pairs?.Add((vertex, killer));
+        }
     }
 }

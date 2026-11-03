@@ -15,8 +15,8 @@ namespace TDA.Ph;
 /// <para>For a connected spanning <c>K₀</c>, <c>H₁(K, K₀) ≅ H₁(K) / im H₁(K₀)</c> (Azriel's derivation from the
 /// pair's long exact sequence), so the relative H₁ bars are the absolute ones born after <c>K₀</c>. This is fixed
 /// <c>K₀</c>, not the moving <c>H(K, K_i)</c> of de Silva, Morozov and Vejdemo-Johansson's dualities: an ordinary
-/// filtration of the quotient, read by <see cref="PersistentHomology"/> with no new reduction code. The clearing
-/// and involuted paths assume absolute structure, so they do not apply.</para>
+/// filtration of the quotient, read by <see cref="PersistentHomology"/> with no new reduction code, or by
+/// <see cref="PersistentCohomology"/> as any other cell complex.</para>
 /// </summary>
 public sealed class RelativeFiltration : IFiltration
 {

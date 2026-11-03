@@ -38,6 +38,4 @@ None of these blocks anything. Context: `issues/ph/ph-loose-ends-brief.md`, its 
   there. Pick up before anything non-Rips asks that engine for cycles.
 - **The relative reading's timing on a quiet machine.** Today's ran at 80–100% load, so `ComputeBothReadings` against `ComputeBarcode` has a sign at
   42,000 triangles and no reliable size, and no sign at n≤200. Set `RELATIVE_READING_TIMING` to an output file and run `BothReadings_Timing` in Release,
-  about 25 minutes under load at the default three passes. Pick up on a quiet machine, or if a caller wants both readings and the internal method's cost matters.
-- **`PersistentCohomology` on a `CellFiltration`.** Throws, since its H₀ path reads `GetVertices`. Pick up if a cell complex
-  ever wants the clearing path.
+  about 25 minutes under load at the default three passes. Pick up on a quiet machine, or if a caller wants both readings and the internal method's cost matters. `PersistentCohomology` now reads the quotient directly, which is a third route for the relative barcode alone; add it to the harness then.

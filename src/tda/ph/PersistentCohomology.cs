@@ -6,7 +6,9 @@ using Maths.Topology;
 namespace TDA.Ph;
 
 /// <summary>
-/// Fast persistent cohomology (Z/2Z) with H0 union-find clearing — Ripser-style barcode path.
+/// Fast persistent cohomology (Z/2Z) with H0 union-find clearing — Ripser-style barcode path. It reads any
+/// <see cref="IFiltration"/> through its boundaries and coboundaries: simplicial, a <see cref="CellFiltration"/>, or a
+/// <see cref="RelativeFiltration"/>'s quotient.
 /// </summary>
 public static class PersistentCohomology
 {
@@ -27,8 +29,7 @@ public static class PersistentCohomology
 
         int n = filtration.Count;
         var bars = new List<Bar>();
-        (List<Bar> h0Bars, HashSet<int> toReduce, HashSet<int> toSkip) =
-            PersistenceClearing.ComputeH0(filtration, maxDimension, cutoff);
+        (List<Bar> h0Bars, HashSet<int> toReduce) = PersistenceClearing.ComputeH0(filtration, maxDimension, cutoff);
         bars.AddRange(h0Bars);
 
         if (maxDimension <= 0)
@@ -40,7 +41,7 @@ public static class PersistentCohomology
                 maxSimplexDim = filtration.GetDimension(i);
 
         int dimCap = Math.Min(maxDimension, maxSimplexDim);
-        var reducer = new FiltrationCohomologyReducer(filtration, toReduce, toSkip);
+        var reducer = new FiltrationCohomologyReducer(filtration, toReduce);
 
         for (int dim = 1; dim <= dimCap; dim++)
         {
@@ -60,7 +61,7 @@ public static class PersistentCohomology
     internal static List<(int Birth, int Death, int Dimension)> ComputePairs(IFiltration filtration, int maxDimension)
     {
         var h0 = new List<(int Birth, int Death)>();
-        (_, HashSet<int> toReduce, HashSet<int> toSkip) = PersistenceClearing.ComputeH0(filtration, maxDimension, 0.0, h0);
+        (_, HashSet<int> toReduce) = PersistenceClearing.ComputeH0(filtration, maxDimension, 0.0, h0);
 
         var pairs = new List<(int Birth, int Death, int Dimension)>(filtration.Count);
         foreach ((int birth, int death) in h0)
@@ -74,7 +75,7 @@ public static class PersistentCohomology
             maxCellDim = Math.Max(maxCellDim, filtration.GetDimension(i));
 
         int dimCap = Math.Min(maxDimension, maxCellDim);
-        var reducer = new FiltrationCohomologyReducer(filtration, toReduce, toSkip);
+        var reducer = new FiltrationCohomologyReducer(filtration, toReduce);
         var deaths = new List<int>();
         var essential = new List<int>();
 

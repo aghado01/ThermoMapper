@@ -22,8 +22,7 @@ public static class PersistentInvolutedHomology
 
         int n = filtration.Simplices.Count;
         var bars = new List<Bar>();
-        (List<Bar> h0Bars, HashSet<int> toReduce, HashSet<int> toSkip) =
-            PersistenceClearing.ComputeH0(filtration, maxDimension, cutoff);
+        (List<Bar> h0Bars, HashSet<int> toReduce) = PersistenceClearing.ComputeH0(filtration, maxDimension, cutoff);
         bars.AddRange(h0Bars);
 
         if (maxDimension <= 0)
@@ -35,7 +34,7 @@ public static class PersistentInvolutedHomology
                 maxSimplexDim = filtration.Simplices[i].Dimension;
 
         int dimCap = Math.Min(maxDimension, maxSimplexDim);
-        var cohomology = new FiltrationCohomologyReducer(filtration, toReduce, toSkip);
+        var cohomology = new FiltrationCohomologyReducer(filtration, toReduce);
 
         for (int dim = 1; dim <= dimCap; dim++)
         {

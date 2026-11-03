@@ -16,18 +16,15 @@ internal sealed class FiltrationCohomologyReducer
     private readonly HashSet<int> _reducedKeys = new();
     private readonly HashSet<int> _deathSimplices = new();
     private List<int> _columnsToReduce;
-    private List<int> _columnsToSkip;
 
     public FiltrationCohomologyReducer(
         IFiltration filtration,
-        HashSet<int> toReduce,
-        HashSet<int> toSkip)
+        HashSet<int> toReduce)
     {
         _filtration = filtration;
         _n = filtration.Count;
         _reduced = new SortedSet<int>[_n];
         _columnsToReduce = toReduce.ToList();
-        _columnsToSkip = toSkip.ToList();
     }
 
     public void RunDimension(
@@ -182,32 +179,22 @@ internal sealed class FiltrationCohomologyReducer
         return true;
     }
 
+    /// <summary>
+    /// Moves to the next degree: its cells that were not cleared as a death. They are found by dimension, not as cofaces of
+    /// this degree, since a cell of a general complex can have no faces (a torus's 2-cell over Z/2, a relative cell whose
+    /// faces all lie in the subcomplex), and a degree can be empty with cells above it.
+    /// </summary>
     public bool AdvanceDimension(int dim, int dimCap)
     {
         if (dim >= dimCap)
             return false;
 
-        var nextReduce = new HashSet<int>();
-        var nextSkip = new HashSet<int>();
-        foreach (int sigma in _columnsToReduce.Concat(_columnsToSkip))
-        {
-            foreach (int tau in _filtration.GetCoboundaryIndices(sigma))
-            {
-                if (_filtration.GetDimension(tau) != dim + 1)
-                    continue;
+        var next = new List<int>();
+        for (int tau = 0; tau < _n; tau++)
+            if (_filtration.GetDimension(tau) == dim + 1 && !_reducedKeys.Contains(tau))
+                next.Add(tau);
 
-                if (_reducedKeys.Contains(tau))
-                    nextSkip.Add(tau);
-                else
-                    nextReduce.Add(tau);
-            }
-        }
-
-        if (nextReduce.Count == 0 && nextSkip.Count == 0)
-            return false;
-
-        _columnsToReduce = nextReduce.ToList();
-        _columnsToSkip = nextSkip.ToList();
+        _columnsToReduce = next;
         return true;
     }
 
