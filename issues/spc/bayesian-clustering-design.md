@@ -352,7 +352,7 @@ Run 2026-11-02 from `b664d7d`, 46 minutes in all at low priority on a shared mac
 |---|---|---|
 | Reproduction | Holds | ARI at θ = ½ matches the probe's `ari` exactly on every shared level of every arm (32–43 levels each), so `8af6199` changed nothing here |
 | Does θ help closure, `k05` | Doesn't | No seed gains at any θ. Nearest: +0.049 in ARI (20261103, θ = 0.65) and 1.09 times the points (20261104, θ = 0.60) |
-| Does θ help closure, `cauchy`, `k10`, `k20` | Doesn't | No θ gains. Best ARI rises at most 0.012, and points fall as θ rises |
+| Does θ help closure, `cauchy`, `k10`, `k20` | Doesn't | No θ gains. Best ARI rises at most 0.012, and points never rise |
 | Does it replace the search, `k05` | **Search still ahead** | All three seeds fall short at every θ. Nearest: 0.026 below in ARI with 82% of the points (20261103, θ = 0.65); 92% of the points, 0.081 below in ARI (20261104, θ = 0.60) |
 | Does it replace the search, `cauchy` | Search still ahead | Short at every θ. Nearest: 0.057 below in ARI with 89% of the points (θ = 0.70) |
 
@@ -395,7 +395,7 @@ On `k05`, across its three seeds:
 | 0.80 | 2,921–2,926 | 2,392–2,460 | 2,811–2,820 | 2,509–2,540 |
 | 0.75 | 2,923–3,478 | 2,392–2,460 | 2,811–2,820 | 2,509–2,540 |
 
-So at purity 0.90, closure at θ = 0.70 covers as much as the search or more, on all three seeds and with less spread. That is about the T-stack's 2,368–2,610 at the same purity and size, at another budget. At purity 0.80, θ = 0.65 reaches 96% of the search. The search's lead sits at purity 0.85, below 0.80, and in ARI. At T = 0.0739, θ = 0.70 holds all six classes apart at purity 0.90: 3 (about 745), 1 (about 720), 7 (about 630), 5 (119–206), 2 (130) and 4 (104). The search at that T reads more points in each block, at purity 0.87, with no block for class 4.
+So at purity 0.90, closure at θ = 0.70 covers about as much as the search or more (0.99–1.17 times, by seed) and with less spread. That is about the T-stack's 2,368–2,610 at the same purity and size, at another budget. At purity 0.80, θ = 0.65 reaches 96% of the search. The search's lead sits at purity 0.85, below 0.80, and in ARI. At T = 0.0739, θ = 0.70 holds all six classes apart at purity 0.90: 3 (about 745), 1 (about 720), 7 (about 630), 5 (119–206), 2 (130) and 4 (104). The search at that T reads more points in classes 1, 2, 3 and 7, at purity 0.87, with class 5 in two pieces and no block for class 4.
 
 *What bridges the blocks: very few edges, and they are the graph's own.* The minimum cut between the blocks of classes 1, 3 and 7, over the whole graph at any T:
 
@@ -406,7 +406,7 @@ So at purity 0.90, closure at θ = 0.70 covers as much as the search or more, on
 | `k10`, T = 0.1278 | 25 | 59 | 25 |
 | `k20`, T = 0.1278 | 92 | 178 | 92 |
 
-K = 10 and 20 hold blocks that size apart only at a hotter level, so their blocks are smaller, which if anything understates the difference. Taking the 983 repair edges out changes no cut on any graph, and no cut at any join holds a repair edge. So my guess that repair edges bridge the blocks was wrong. Over edges above θ = ½ on `k05`, the cut is 0–2 at the first levels below T = 0.0907 and stops at 2 for classes 1 and 7 and at 4 for 3 and 7, down to T = 0.043. On `k20` it climbs to 46 and 152.
+K = 10 and 20 hold blocks that size apart only at a hotter level, so their blocks are smaller, which if anything understates the difference. Taking the repair edges out changes no cut on any graph, and no cut at any join holds a repair edge. So my guess that repair edges bridge the blocks was wrong. Over edges above θ = ½ on `k05`, the cut is 0–2 at the first levels below T = 0.0907 and stops at 2 for classes 1 and 7 and at 4 for 3 and 7, down to T = 0.043. On `k20` it climbs to 46 and 152.
 
 At every join on `k05` at θ = ½, 0.65 and 0.90, the two blocks meet through a cut of 1 or 2 edges, and δ̄ on the widest path sits just above θ (0.50–0.56 at θ = ½). `k20`'s join of 3 and 7 goes through 15. In 9 of the 10 edges cut at `k05`'s joins of 3 and 7 both ends are class 4, which supports the path through 4 guessed above. So on K = 5 one edge can decide between an ARI of 0.09 and 0.22, and noise on that edge's δ̄ would explain the flip. This belongs to K = 5's graph: the mutual filter leaves these classes almost apart, which is also why it reads them at all.
 
