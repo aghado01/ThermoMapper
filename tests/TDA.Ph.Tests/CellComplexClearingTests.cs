@@ -208,7 +208,7 @@ public sealed class CellComplexClearingTests
 
     // A filtered Z/2 chain complex by construction: each cell's boundary is a sum of cycles one degree down among the cells
     // before it, so ∂∂ = 0, and nothing makes it a CW complex. Births are the cell indices, or a coarse grid that ties.
-    static List<(int Dimension, double Birth, int[] Boundary)> RandomChainComplex(Random rng, bool graphLike)
+    internal static List<(int Dimension, double Birth, int[] Boundary)> RandomChainComplex(Random rng, bool graphLike)
     {
         const int top = 3;
         int count = rng.Next(8, 28);

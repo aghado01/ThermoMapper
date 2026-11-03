@@ -30,9 +30,8 @@ public static class FastZigzag
     public static Barcode Compute(ZigzagFiltration f, int maxDimension = int.MaxValue, bool representatives = false) =>
         Run(f, maxDimension, representatives, keepChains: false).Barcode;
 
-    /// <summary>The barcode with each bar's compatible cycle at every level it covers. It keeps the coned run's <c>V</c>, which
-    /// took up to about twice the allocations of <see cref="Compute"/> with representatives, rising with size; figures in
-    /// <c>docs/TDA/ZigzagPersistence.md</c>.</summary>
+    /// <summary>The barcode with each bar's compatible cycle at every level it covers, read from the coned run's <c>V</c>, at
+    /// about the allocations of <see cref="Compute"/> with representatives; figures in <c>docs/TDA/ZigzagPersistence.md</c>.</summary>
     public static ZigzagCycles ComputeCycles(ZigzagFiltration f, int maxDimension = int.MaxValue) =>
         Run(f, maxDimension, representatives: true, keepChains: true);
 
@@ -135,9 +134,9 @@ public static class FastZigzag
         // ---- Standard persistence on Ê (cones raise dimension by one) ----
         var eHat = new CellFiltration(cells, "FastZigzag-coned");
         int stdMax = maxDimension == int.MaxValue ? int.MaxValue : maxDimension + 1;
-        SortedSet<int>?[]? chains = null;
+        ReductionChains? chains = null;
         Barcode std = keepChains
-            ? PersistentHomology.ComputeWithChains(eHat, stdMax, representatives, out chains)
+            ? PersistentHomology.ComputeWithChains(eHat, stdMax, out chains)
             : PersistentHomology.Compute(eHat, stdMax, representatives);
 
         // ---- Map finite pairs back via creator/destroyer ----
@@ -192,7 +191,7 @@ public static class FastZigzag
             {
                 var added = new List<int>();
                 var coned = new List<int>();
-                foreach (int c in chains[(int)bar.Death]!)
+                foreach (int c in chains.ChainOf((int)bar.Death))
                 {
                     CellEvent e = cellEvent[c]!.Value;
                     (e.Kind == EventKind.Add ? added : coned).Add(e.Incarnation);

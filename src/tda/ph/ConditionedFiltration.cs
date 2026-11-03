@@ -83,7 +83,8 @@ public static class ConditionedFiltration
 
     /// <summary>
     /// Convenience: <see cref="BuildGraph"/> → <see cref="RipsFiltration.GraphRips"/> (raw
-    /// distance filtration values) → involuted persistence → <see cref="TDA.Ph.Barcode"/>. H₁ bars
+    /// distance filtration values) → involuted persistence → <see cref="TDA.Ph.Barcode"/>, reporting H₀ and H₁. The
+    /// triangles are the top of a truncated skeleton, where nothing can fill what is left. H₁ bars
     /// carry representative cycles, so <see cref="BarCycleEdges.H1Loops"/> recovers which chord
     /// closed each return. Reads the built engine unchanged — no reduction code lives here.
     /// </summary>
@@ -97,7 +98,7 @@ public static class ConditionedFiltration
         CsrGraph graph = BuildGraph(n, backbone, similarity, baseWeight);
         SimplicialFiltration filtration = RipsFiltration.GraphRips(
             graph, FiltrationWeights.RawDistance, maxDimension, label: "conditioned");
-        return PersistentInvolutedHomology.Compute(filtration, representatives: true);
+        return PersistentInvolutedHomology.Compute(filtration, maxDimension: 1, representatives: true);
     }
 
     /// <summary>

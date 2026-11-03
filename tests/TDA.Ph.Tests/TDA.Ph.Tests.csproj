@@ -24,6 +24,7 @@
     <Compile Include="FullRipsTests.cs" Link="FullRipsTests.cs" />
     <Compile Include="PersistentCohomologyTests.cs" Link="PersistentCohomologyTests.cs" />
     <Compile Include="CellComplexClearingTests.cs" Link="CellComplexClearingTests.cs" />
+    <Compile Include="EssentialCyclesTests.cs" Link="EssentialCyclesTests.cs" />
     <Compile Include="PersistentCohomologyRipsParityTests.cs" Link="PersistentCohomologyRipsParityTests.cs" />
     <Compile Include="PersistentInvolutedHomologyTests.cs" Link="PersistentInvolutedHomologyTests.cs" />
     <Compile Include="ClearingEngineParityTests.cs" Link="ClearingEngineParityTests.cs" />

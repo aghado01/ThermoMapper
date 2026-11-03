@@ -9,6 +9,9 @@ namespace TDA.Ph;
 /// <summary>
 /// Čufar–Virk involuted persistent homology: cohomology death simplices → assisted boundary
 /// reduction for fast barcodes with cycle representatives (Ripser <c>:involuted</c>).
+/// <para>With representatives, every bar has a <see cref="Bar.Cycle"/>. An essential H₁ bar's is a shortest path closed by its
+/// birth edge. An essential bar higher up has the chain <c>V_i</c> of its birth cell, the same as
+/// <see cref="PersistentHomology"/>'s, and it costs a reduction of that cell's boundary through the degree's death columns.</para>
 /// </summary>
 public static class PersistentInvolutedHomology
 {
@@ -22,7 +25,7 @@ public static class PersistentInvolutedHomology
 
         int n = filtration.Simplices.Count;
         var bars = new List<Bar>();
-        (List<Bar> h0Bars, HashSet<int> toReduce) = PersistenceClearing.ComputeH0(filtration, maxDimension, cutoff);
+        (List<Bar> h0Bars, HashSet<int> toReduce) = PersistenceClearing.ComputeH0(filtration, maxDimension, cutoff, cycles: representatives);
         bars.AddRange(h0Bars);
 
         if (maxDimension <= 0)
@@ -35,6 +38,7 @@ public static class PersistentInvolutedHomology
 
         int dimCap = Math.Min(maxDimension, maxSimplexDim);
         var cohomology = new FiltrationCohomologyReducer(filtration, toReduce);
+        ReducedDeaths? deathsOfThisDegree = null;
 
         for (int dim = 1; dim <= dimCap; dim++)
         {
@@ -42,8 +46,9 @@ public static class PersistentInvolutedHomology
             var infiniteBirths = new List<int>();
             cohomology.RunDimension(dim, maxDimension, cutoff, representatives, null, deaths, infiniteBirths);
 
+            var deathsOfNextDegree = new ReducedDeaths(n, representatives);
             bars.AddRange(ReduceBoundaryColumns(
-                filtration, deaths, maxDimension, cutoff, representatives));
+                filtration, deaths, maxDimension, cutoff, representatives, deathsOfNextDegree));
 
             foreach (int birthIdx in infiniteBirths)
             {
@@ -54,10 +59,9 @@ public static class PersistentInvolutedHomology
                 int[]? cycle = null;
                 if (representatives)
                 {
-                    // H1 only — infinite H2+ voids keep birth-simplex-only reps (surface reconstruction is separate).
                     cycle = dimBirth == 1
                         ? CycleReconstruction.ReconstructH1Cycle(filtration, birthIdx)
-                        : new[] { birthIdx };
+                        : deathsOfThisDegree!.EssentialCycle(filtration, birthIdx);
                 }
 
                 bars.Add(new Bar(
@@ -67,6 +71,8 @@ public static class PersistentInvolutedHomology
                     birthIdx,
                     Cycle: cycle));
             }
+
+            deathsOfThisDegree = deathsOfNextDegree;
 
             if (!cohomology.AdvanceDimension(dim, dimCap))
                 break;
@@ -80,26 +86,34 @@ public static class PersistentInvolutedHomology
         List<int> columns,
         int maxDimension,
         double cutoff,
-        bool representatives)
+        bool representatives,
+        ReducedDeaths reduced)
     {
         var bars = new List<Bar>();
         if (columns.Count == 0)
             return bars;
 
-        int n = filtration.Simplices.Count;
-        var pivotCol = new Dictionary<int, int>();
-        var reducedCols = new SortedSet<int>[n];
+        Dictionary<int, int> pivotCol = reduced.PivotCol;
+        SortedSet<int>[] reducedCols = reduced.Columns;
+        List<int>? took = reduced.Chains is null ? null : new List<int>();
         var sorted = columns.OrderBy(j => j).ToList();
 
         foreach (int j in sorted)
         {
             var col = new SortedSet<int>(filtration.GetBoundaryIndices(j));
+            took?.Clear();
+
             while (col.Count > 0 && pivotCol.TryGetValue(col.Max, out int i))
+            {
                 foreach (int r in reducedCols[i])
                 {
                     if (!col.Remove(r)) col.Add(r);
                 }
 
+                took?.Add(i);
+            }
+
+            reduced.Chains?.Record(j, took!);
             reducedCols[j] = col;
 
             if (col.Count == 0)
@@ -132,5 +146,43 @@ public static class PersistentInvolutedHomology
         var indices = new int[cycle.Count];
         cycle.CopyTo(indices);
         return indices;
+    }
+
+    /// <summary>
+    /// One degree's death columns, reduced. They are all that degree's non-zero columns in a full reduction, so a cell whose
+    /// column reduces to zero takes the same columns through them as it would there.
+    /// </summary>
+    sealed class ReducedDeaths
+    {
+        public readonly Dictionary<int, int> PivotCol = new();
+        public readonly SortedSet<int>[] Columns;
+        public readonly ReductionChains? Chains;
+
+        public ReducedDeaths(int n, bool representatives)
+        {
+            Columns = new SortedSet<int>[n];
+            Chains = representatives ? new ReductionChains(n) : null;
+        }
+
+        /// <summary>The cycle of a cell of this degree that kills nothing: <c>V</c> of its column, as in a full reduction.</summary>
+        public int[] EssentialCycle(SimplicialFiltration filtration, int birth)
+        {
+            var col = new SortedSet<int>(filtration.GetBoundaryIndices(birth));
+            var took = new List<int>();
+
+            while (col.Count > 0)
+            {
+                int i = PivotCol[col.Max];
+                foreach (int r in Columns[i])
+                {
+                    if (!col.Remove(r)) col.Add(r);
+                }
+
+                took.Add(i);
+            }
+
+            Chains!.Record(birth, took);
+            return Chains.ChainOf(birth);
+        }
     }
 }

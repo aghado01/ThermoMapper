@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using Maths.Topology;
 namespace TDA.Ph;
@@ -21,11 +22,13 @@ internal static class PersistenceClearing
     /// H₀ by union-find over the 1-cells in filtration order, which is the pairing a full reduction finds. A 1-cell reads
     /// through its faces, so any cell complex works: two faces join, one joins its vertex to a root older than every cell
     /// (the far end lies in a quotiented subcomplex), and none closes a cycle by itself. With <paramref name="pairs"/>, also
-    /// the pairs as cell indices: a vertex and the 1-cell that killed it, or −1.
+    /// the pairs as cell indices: a vertex and the 1-cell that killed it, or −1. With <paramref name="cycles"/>, each bar has
+    /// a cycle: an essential one its root, a finite one the two roots the 1-cell joined, or the one vertex when the far root
+    /// is the quotient. A reduction's column can name a vertex below a root instead, in the same class.
     /// </summary>
     /// <returns>The bars, and the 1-cells that killed nothing, whose degree is the next to reduce.</returns>
     public static (List<Bar> Bars, HashSet<int> ToReduce) ComputeH0(
-        IFiltration filtration, int maxDimension, double cutoff, List<(int Birth, int Death)>? pairs = null)
+        IFiltration filtration, int maxDimension, double cutoff, List<(int Birth, int Death)>? pairs = null, bool cycles = false)
     {
         var bars = new List<Bar>();
         var toReduce = new HashSet<int>();
@@ -52,7 +55,7 @@ internal static class PersistenceClearing
             if (faces.Length > 2)
             {
                 pairs?.Clear();
-                return ReduceH0Columns(filtration, maxDimension, cutoff, pairs);
+                return ReduceH0Columns(filtration, maxDimension, cutoff, pairs, cycles);
             }
 
             if (faces.Length == 0)
@@ -72,7 +75,8 @@ internal static class PersistenceClearing
             // The elder is the earlier cell, as a reduction's pivot leaves it, and the quotient outlives them all.
             int younger = ri == quotient ? rj : rj == quotient ? ri : Math.Max(ri, rj);
             int elder = younger == ri ? rj : ri;
-            AddFinite(bars, pairs, filtration, younger, e, maxDimension, cutoff);
+            int[]? cycle = !cycles ? null : elder == quotient ? new[] { younger } : new[] { elder, younger };
+            AddFinite(bars, pairs, filtration, younger, e, maxDimension, cutoff, cycle);
             parent[younger] = elder;
         }
 
@@ -81,7 +85,7 @@ internal static class PersistenceClearing
             if (filtration.GetDimension(i) != 0) continue;
             if (Find(i) == i && maxDimension >= 0)
             {
-                bars.Add(new Bar(filtration.GetBirth(i), double.PositiveInfinity, 0));
+                bars.Add(new Bar(filtration.GetBirth(i), double.PositiveInfinity, 0, Cycle: cycles ? new[] { i } : null));
                 pairs?.Add((i, -1));
             }
         }
@@ -94,7 +98,7 @@ internal static class PersistenceClearing
     /// ∂₁ reduced. The result is the same on a complex the union-find can read.
     /// </summary>
     static (List<Bar> Bars, HashSet<int> ToReduce) ReduceH0Columns(
-        IFiltration filtration, int maxDimension, double cutoff, List<(int Birth, int Death)>? pairs)
+        IFiltration filtration, int maxDimension, double cutoff, List<(int Birth, int Death)>? pairs, bool cycles)
     {
         var bars = new List<Bar>();
         var toReduce = new HashSet<int>();
@@ -116,13 +120,13 @@ internal static class PersistenceClearing
             }
 
             reduced[col.Max] = col;
-            AddFinite(bars, pairs, filtration, col.Max, e, maxDimension, cutoff);
+            AddFinite(bars, pairs, filtration, col.Max, e, maxDimension, cutoff, cycles ? col.ToArray() : null);
         }
 
         for (int i = 0; i < n; i++)
         {
             if (filtration.GetDimension(i) != 0 || reduced.ContainsKey(i) || maxDimension < 0) continue;
-            bars.Add(new Bar(filtration.GetBirth(i), double.PositiveInfinity, 0));
+            bars.Add(new Bar(filtration.GetBirth(i), double.PositiveInfinity, 0, Cycle: cycles ? new[] { i } : null));
             pairs?.Add((i, -1));
         }
 
@@ -130,13 +134,13 @@ internal static class PersistenceClearing
     }
 
     static void AddFinite(
-        List<Bar> bars, List<(int Birth, int Death)>? pairs, IFiltration filtration, int vertex, int killer, int maxDimension, double cutoff)
+        List<Bar> bars, List<(int Birth, int Death)>? pairs, IFiltration filtration, int vertex, int killer, int maxDimension, double cutoff, int[]? cycle)
     {
         double birth = filtration.GetBirth(vertex);
         double death = filtration.GetBirth(killer);
         if (maxDimension >= 0 && PassesCutoff(birth, death, cutoff))
         {
-            bars.Add(new Bar(birth, death, 0));
+            bars.Add(new Bar(birth, death, 0, Cycle: cycle));
             pairs?.Add((vertex, killer));
         }
     }

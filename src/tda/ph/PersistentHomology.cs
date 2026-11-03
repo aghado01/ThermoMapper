@@ -7,41 +7,45 @@ namespace TDA.Ph;
 
 /// <summary>
 /// Standard persistent homology (Z/2Z column reduction) — explicit correctness path.
+/// <para>With representatives, every bar has a <see cref="Bar.Cycle"/>: the reduced column of what kills it, or, on an
+/// essential bar, the chain <c>V_i</c> of its birth cell, whose boundary is that column, here zero.</para>
 /// </summary>
 public static class PersistentHomology
 {
     public static Barcode Compute(SimplicialFiltration filtration, int maxDimension = int.MaxValue, bool representatives = false) =>
         Compute((IFiltration)filtration, maxDimension, representatives);
 
-    public static Barcode Compute(IFiltration filtration, int maxDimension = int.MaxValue, bool representatives = false) =>
-        Reduce(filtration, maxDimension, representatives, null);
-
-    /// <summary>
-    /// <see cref="Compute(IFiltration, int, bool)"/>, also keeping <c>V</c>: for each column that pairs, the chain whose
-    /// boundary is its reduced column, indexed by that column. Other columns stay null.
-    /// </summary>
-    internal static Barcode ComputeWithChains(IFiltration filtration, int maxDimension, bool representatives, out SortedSet<int>?[] chains)
+    public static Barcode Compute(IFiltration filtration, int maxDimension = int.MaxValue, bool representatives = false)
     {
         ArgumentNullException.ThrowIfNull(filtration);
 
-        chains = new SortedSet<int>?[filtration.Count];
-        return Reduce(filtration, maxDimension, representatives, chains);
+        return Reduce(filtration, maxDimension, representatives ? new ReductionChains(filtration.Count) : null);
     }
 
-    static Barcode Reduce(IFiltration filtration, int maxDimension, bool representatives, SortedSet<int>?[]? chains)
+    /// <summary>
+    /// <see cref="Compute(IFiltration, int, bool)"/> with representatives, also handing back <c>V</c>, to read any column's chain.
+    /// </summary>
+    internal static Barcode ComputeWithChains(IFiltration filtration, int maxDimension, out ReductionChains chains)
     {
         ArgumentNullException.ThrowIfNull(filtration);
 
+        chains = new ReductionChains(filtration.Count);
+        return Reduce(filtration, maxDimension, chains);
+    }
+
+    static Barcode Reduce(IFiltration filtration, int maxDimension, ReductionChains? chains)
+    {
         int n = filtration.Count;
         var bars = new List<Bar>();
         var paired = new bool[n];
         var pivotCol = new Dictionary<int, int>(n);
         var reducedCols = new SortedSet<int>[n];
+        List<int>? took = chains is null ? null : new List<int>();
 
         for (int j = 0; j < n; j++)
         {
             var col = new SortedSet<int>(filtration.GetBoundaryIndices(j));
-            SortedSet<int>? chain = chains is null ? null : new SortedSet<int> { j };
+            took?.Clear();
 
             while (col.Count > 0 && pivotCol.TryGetValue(col.Max, out int i))
             {
@@ -50,19 +54,14 @@ public static class PersistentHomology
                     if (!col.Remove(r)) col.Add(r);
                 }
 
-                if (chain is not null)
-                    foreach (int r in chains![i]!)
-                    {
-                        if (!chain.Remove(r)) chain.Add(r);
-                    }
+                took?.Add(i);
             }
 
+            chains?.Record(j, took!);
             reducedCols[j] = col;
 
             if (col.Count > 0)
             {
-                if (chains is not null) chains[j] = chain;
-
                 int pivot = col.Max;
                 pivotCol[pivot] = j;
                 paired[pivot] = true;
@@ -76,7 +75,7 @@ public static class PersistentHomology
                         dim, pivot,
                         // R-matrix column of the negative cell IS the cycle rep (D·R = 0); the
                         // pivot is already its max element. §2.2 of 2412.02591.
-                        Cycle: representatives ? ColumnToArray(col) : null));
+                        Cycle: chains is null ? null : ColumnToArray(col)));
             }
         }
 
@@ -87,7 +86,9 @@ public static class PersistentHomology
                 if (dim <= maxDimension)
                     bars.Add(new Bar(
                         filtration.GetBirth(i),
-                        double.PositiveInfinity, dim, i));
+                        double.PositiveInfinity, dim, i,
+                        // Unpaired, so R_i = 0 and ∂V_i = 0: V_i is a cycle whose latest cell is i.
+                        Cycle: chains?.ChainOf(i)));
             }
 
         return new Barcode(bars, filtration.Label);

@@ -110,7 +110,9 @@ public sealed class RelativeFiltration : IFiltration
     /// Reduces this complex through <see cref="PersistentHomology"/>, with each bar's
     /// <see cref="Bar.Generator"/> and <see cref="Bar.Cycle"/> indexing <see cref="Ambient"/>. A
     /// <see cref="Bar.Cycle"/> is a <em>relative</em> cycle, a chain whose boundary lies in <c>K₀</c>, so it need
-    /// not close; for a connected spanning <c>K₀</c>, an H₁ bar's generator is the chord that closed the return.
+    /// not close; for a connected spanning <c>K₀</c>, an H₁ bar's generator is the chord that closed the return. On an
+    /// essential bar it is the chain <c>V</c> of the generator, and those chains' boundaries span the classes of <c>K₀</c> that
+    /// <c>K</c> fills.
     /// Zero-length bars stay, as the reducer emits them.
     /// </summary>
     public Barcode ComputeBarcode(int maxDimension = int.MaxValue, bool representatives = false)

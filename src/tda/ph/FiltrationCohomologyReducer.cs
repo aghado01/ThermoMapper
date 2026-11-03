@@ -39,8 +39,6 @@ internal sealed class FiltrationCohomologyReducer
         var columns = new List<int>(_columnsToReduce);
         columns.Sort((a, b) => b.CompareTo(a));
 
-        double deathThreshold = double.NegativeInfinity;
-
         EnsureReducedCapacity(_filtration.Count);
 
         foreach (int j in columns)
@@ -94,24 +92,13 @@ internal sealed class FiltrationCohomologyReducer
 
             double birth = _filtration.GetBirth(j);
             double death = _filtration.GetBirth(pivot);
-            if (PersistenceClearing.PassesCutoff(birth, death, cutoff))
-                deathThreshold = Math.Max(deathThreshold, death);
-
-            if (dimJ <= maxDimension && PersistenceClearing.PassesCutoff(birth, death, cutoff))
+            if (dimJ <= maxDimension)
             {
+                // Every death, whatever the cutoff: a boundary reduction needs all of a degree's columns to reach the right
+                // pivots, and it applies the cutoff to the bars it finds.
                 deaths?.Add(pivot);
-                if (bars != null)
+                if (bars != null && PersistenceClearing.PassesCutoff(birth, death, cutoff))
                     bars.Add(new Bar(birth, death, dimJ, j, CocycleRep(representatives, col, j, infinite: false)));
-            }
-        }
-
-        if (deaths != null && deathThreshold > double.NegativeInfinity)
-        {
-            for (int i = deaths.Count - 1; i >= 0; i--)
-            {
-                int d = deaths[i];
-                if (_filtration.GetBirth(d) > deathThreshold)
-                    deaths.RemoveAt(i);
             }
         }
     }

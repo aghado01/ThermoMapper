@@ -33,6 +33,31 @@ public sealed class ConditionedFiltrationTests
     }
 
     [Fact]
+    public void ComputeBarcode_StopsBelowTheTriangles_WhereNothingCanFillWhatIsLeft()
+    {
+        // All pairs on six vertices: a tetrahedron would fill the triangles left over, and the skeleton has none.
+        const int n = 6;
+        List<(int, int)> backbone = PathEdges(n);
+        var similarity = new List<(int, int, double)>();
+        for (int a = 0; a < n; a++)
+            for (int b = a + 2; b < n; b++)
+                similarity.Add((a, b, 1.0 + a + b));
+
+        Barcode barcode = ConditionedFiltration.ComputeBarcode(n, backbone, similarity);
+        Assert.DoesNotContain(barcode.Bars, b => b.Dimension == 2);
+
+        SimplicialFiltration skeleton = RipsFiltration.GraphRips(
+            ConditionedFiltration.BuildGraph(n, backbone, similarity, 0.0), FiltrationWeights.RawDistance, 2, label: "all");
+        Barcode whole = PersistentInvolutedHomology.Compute(skeleton);
+        Assert.Contains(whole.Bars, b => b.Dimension == 2 && b.IsInfinite);
+
+        static IEnumerable<(int, double, double)> Canon(IEnumerable<Bar> bars) =>
+            bars.Select(b => (b.Dimension, b.Birth, b.Death)).OrderBy(t => t);
+
+        Assert.Equal(Canon(whole.Bars.Where(b => b.Dimension < 2)), Canon(barcode.Bars));
+    }
+
+    [Fact]
     public void PathPlusChord_ReconstructedCycle_IsPathPlusChord()
     {
         const int n = 6;

@@ -26,7 +26,7 @@ public static class H1CycleEdges
             maxDimension: 2,
             label: "load-bearing");
 
-        Barcode barcode = PersistentInvolutedHomology.Compute(filtration, representatives: true);
+        Barcode barcode = PersistentInvolutedHomology.Compute(filtration, maxDimension: 1, representatives: true);
 
         var set = new HashSet<(int, int)>();
         foreach (var (_, edges) in BarCycleEdges.H1Loops(barcode, filtration))
