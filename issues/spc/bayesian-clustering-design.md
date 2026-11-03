@@ -420,6 +420,43 @@ At every join on `k05` at θ = ½, 0.65 and 0.90, the two blocks meet through a 
 
 **Limits.** Labels choose T on both sides and θ on closure's. The search ran only at θ = ½, so it might also move at a higher one. Three seeds on `k05` and one on every other arm. The grid steps 7% in T, and joins are sharper than that. The flat cut isn't the T-stack's reading. Minimum cuts were read between blocks chosen by label, so a label-free procedure has to find them first.
 
+## A closure that won't cross a thin cut
+
+Asked for by the user on 2026-11-02 ("Test thin cuts first"). The protocol and readings below were written before the first run, once `ThinCutClosureTests` passed. The thresholds are judgement calls, fixed so the reading isn't fitted to the results, and they are the θ test's wherever a reading carries over.
+
+**The question.** The θ test found that on K = 5 the big blocks join through a cut of one or two edges. Can a closure that refuses such cuts between two large sides, reading only the edge column, reach what the search reached there: about 2,920 points at purity 0.85 in clusters of at least 50, and a best ARI of 0.28–0.32?
+
+**The rule.** `ThinCutClosure`, which stays with the tests. At a T and a θ, take the edges closure reads, those above the cut. They build a cut tree (Gomory & Hu 1961, by Gusfield 1990's flows, both from memory), which holds a minimum cut for every pair of nodes. A cut's weight counts its edges first and sums their co-membership second, so among cuts with equally few edges the tree holds the weakest. `Partition(k, m)` then goes over the tree's cuts of at most k edges, lightest first, and removes each one whose two sides within the current piece both hold at least m points. A cluster is a piece's part connected above the cut, so it is connected, as closure's are. A cut's size is counted over all edges above the cut, not within the piece.
+
+- k = 0 is closure.
+- m = 1 is the plain form with no size rule: the connected parts of the (k + 1)-edge-connected classes, on the ground of Matula's k-components (1972, from memory). They only coarsen as edges are added.
+- With m > 1 that isn't guaranteed, since a side can grow past m and part from what it had joined.
+
+**Settings.** k in 1, 2, 3, 4, 6 and m in 1, 20, 50, 100, 200, 400, so 30 of them. For k: cuts above θ on `k05` stop at 2 and 4, and whole-graph cuts at 3–6. For m: from no rule, through the 50 the measures read, to the 300 and more that the big blocks hold.
+
+**What runs.** No new sampling. The rule reads `landsat-theta-columns/` at all 65 levels. `k05` on its three seeds and `cauchy` run at all 11 θ. `k10` and `k20` run at θ = ½ only, since they have no search target and the densest trees. The graphs are those in the "as resolved" table, which these columns came from.
+
+**Measures, per arm and setting (θ, k, m), over T.** As in the θ test. *Best ARI* against the labels. *Points:* the most points covered at purity at least 0.85, in clusters of at least 50, with purity from `Clustering.Evaluation.External.Purity`. *The search's numbers,* best ARI 0.317, 0.284, 0.321 on `k05` and 0.312 on `cauchy`; points 2,921, 2,923, 2,926 on `k05` and 2,737 on `cauchy`. Closure's numbers are the k = 0 rows.
+
+**The readings.**
+- *Reproduction.* The k = 0 rows must match `landsat-theta.tsv` exactly in every column but timing, on every arm, level and θ run. If not, the run is void.
+- *Does the rule help closure?* A seed *gains* at a setting if, against closure at the same θ on that seed, its best ARI rises by at least 0.05 or its points by at least 10%. On `k05` the rule *helps* if one setting gains on at least two of three seeds. Otherwise it doesn't.
+- *Does it replace the search?* A seed *reaches* the search at a setting if its best ARI is no more than 0.02 below the search's on that seed and its points are at least 95% of the search's. It *falls short* if its best ARI is more than 0.05 below, or its points are under 90%. On `k05`: *search not needed on this graph* if one setting reaches on at least two of three seeds; *search still ahead* if at every setting at least two seeds fall short; *in between* otherwise.
+- *Other arms.* On `cauchy`, both readings on its one seed, over every setting and at each setting that reaches on `k05`, since that is the only check here that the setting wasn't chosen on it. On `k10` and `k20`, whether the rule helps at θ = ½, on their one seed.
+
+These favour the rule. Labels choose T, it has 330 settings against the search's one, and it reads all 16,000 draws per level where the search read every 10th. So *search not needed* would say only that this family reaches the target on this data set. Judging one fixed setting takes a fresh data set, which takes new sampling and the user's go-ahead.
+
+**Predictions, which decide nothing.**
+1. *The plain form strands points.* At k = 2, m = 1, θ = ½ on `k05`, points fall under half of closure's 2,392–2,460.
+2. *The blocks hold colder.* At k of at least 2 and m of at least 100, at θ = ½, the T of the best ARI on `k05` falls below closure's 0.0791–0.0907.
+3. *The flip shrinks.* At k = 2, m = 100, θ = ½, ARI's largest range across `k05`'s seeds at any level is at most 0.05, against closure's 0.158.
+4. *Shaving still counts.* ARI gets nearer the search than points do, since a cut doesn't take nodes off a block's edge.
+5. *It is K = 5's graph.* `k10` and `k20` don't gain.
+
+Reported with no threshold, by k and m: the T of the best ARI; clusters of at least 50 and how many classes lead one; ARI's range across `k05`'s seeds at each level; pairs breaking nesting across T; points at purity 0.80 and 0.90; time per tree.
+
+**Limits, known in advance.** The tree holds one minimum cut for each pair, not every cut. So at k of at least 2, a thin cut between two large sides can be missed if it is the lightest between no pair. At k = 1 none can (`ThinCutClosureTests`). With a size rule the order of removal matters, and lightest first is a choice. The whole-graph cuts behind the settings were read with blocks chosen by label, so the settings aren't free of the labels.
+
 ## Proposed order
 
 Not decided.

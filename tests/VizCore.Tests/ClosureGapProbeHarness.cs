@@ -53,6 +53,11 @@ public sealed class ClosureGapProbeHarness
         "arm\tmaster\tt\ttheta\tclusters\tsingletons\tari\tjoined\tjoined_same\tlargest\tlargest_purity\t" +
         "c50_clusters\tc50_covered\tc50_purity\tc20_clusters\tc20_covered\tc20_purity\tms_sample";
 
+    // The thin-cut test's settings: no cut of at most K edges between two sides of at least M points.
+    private static readonly int[] ThinCutEdges = [1, 2, 3, 4, 6], ThinCutSizes = [1, 20, 50, 100, 200, 400];
+    private const int MaxThinCut = 6;
+    private static readonly string ThinCutHeader = ThetaHeader.Replace("ms_sample", "ms_tree") + "\tk\tm\tbroken\tc50_classes";
+
     [Theory]
     [InlineData("k05", 20261102)]
     [InlineData("k05", 20261103)]
@@ -166,6 +171,100 @@ public sealed class ClosureGapProbeHarness
                 ThetaRow(arm, master, temperature, theta, AffinityThreshold.Connect(graph, column, SweepClosureGap.CoMembershipTheta(theta, Q)).Labels, labels, scorer, msSample)));
         }
     }
+
+    /// <summary>
+    /// The thin-cut closure at every setting, on the columns <see cref="MeasureTheta"/> kept, under the protocol in the
+    /// design note ("A closure that won't cross a thin cut"). No sampling. Going from the hot end down, a θ's rows are
+    /// appended once all its levels finish, and a rerun skips finished θ.
+    /// </summary>
+    [Theory]
+    [InlineData("k05", 20261102)]
+    [InlineData("k05", 20261103)]
+    [InlineData("k05", 20261104)]
+    [InlineData("k10", 20261102)]
+    [InlineData("k20", 20261102)]
+    [InlineData("cauchy", 20261102)]
+    public void MeasureThinCut(string arm, int master)
+    {
+        string? outDir = Environment.GetEnvironmentVariable(EnvOut);
+        if (string.IsNullOrEmpty(outDir)) return;
+
+        Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal;
+        int threads = int.TryParse(Environment.GetEnvironmentVariable(EnvThreads), out int t) ? t : 4;
+
+        string columnsDir = Path.Combine(outDir, "landsat-theta-columns");
+        string[][] edges = File.ReadLines(Path.Combine(columnsDir, $"{arm}-edges.tsv")).Select(line => line.Split('\t')).ToArray();
+        int[] sources = edges.Select(cells => int.Parse(cells[0], CultureInfo.InvariantCulture)).ToArray();
+        int[] targets = edges.Select(cells => int.Parse(cells[1], CultureInfo.InvariantCulture)).ToArray();
+        (double Temperature, double[] Column)[] levels = KeptColumns(Path.Combine(columnsDir, $"{arm}-{Text(master)}.bin"), edges.Length);
+        (_, int[] labels, _) = ClosureGapHarness.Load("landsat");
+
+        string rowsPath = Path.Combine(outDir, "landsat-thincut.tsv");
+        if (!File.Exists(rowsPath)) File.WriteAllText(rowsPath, ThinCutHeader + Environment.NewLine);
+        HashSet<string> finished = File.ReadLines(rowsPath).Skip(1)
+            .Select(line => line.Split('\t'))
+            .Where(cells => cells[0] == arm && cells[1] == Text(master))
+            .Select(cells => cells[3])
+            .ToHashSet();
+
+        // K = 10 and 20 have no search target and the densest trees, so they read θ = ½ alone.
+        double[] thetas = arm is "k10" or "k20" ? [Theta] : Thetas;
+        (int K, int M)[] settings = [(0, 1), .. ThinCutEdges.SelectMany(k => ThinCutSizes.Select(m => (k, m)))];
+        var writing = new object();
+
+        Parallel.ForEach(thetas.Where(theta => !finished.Contains(Text(theta))), new ParallelOptions { MaxDegreeOfParallelism = threads }, theta =>
+        {
+            var scorer = new AdjustedRandIndex();
+            var rows = new List<string>();
+            var hotter = new Dictionary<(int, int), int[]>();
+            double cut = SweepClosureGap.CoMembershipTheta(theta, Q);
+
+            foreach ((double temperature, double[] column) in levels)
+            {
+                var clock = Stopwatch.StartNew();
+                ThinCutClosure tree = ThinCutClosure.Above(labels.Length, sources, targets, column, cut, MaxThinCut);
+                long msTree = clock.ElapsedMilliseconds;
+
+                foreach ((int k, int m) in settings)
+                {
+                    int[] partition = tree.Partition(k, m);
+                    long broken = hotter.TryGetValue((k, m), out int[]? above) ? Broken(above, partition) : 0;
+                    hotter[(k, m)] = partition;
+                    rows.Add(string.Join('\t', ThetaRow(arm, master, temperature, theta, partition, labels, scorer, msTree),
+                        Text(k), Text(m), Text(broken), Text(ClassesHeld(partition, labels))));
+                }
+            }
+
+            lock (writing) File.AppendAllLines(rowsPath, rows);
+        });
+    }
+
+    private static (double Temperature, double[] Column)[] KeptColumns(string path, int edges)
+    {
+        var levels = new List<(double, double[])>();
+        using var reader = new BinaryReader(File.OpenRead(path));
+        while (reader.BaseStream.Position < reader.BaseStream.Length)
+        {
+            double temperature = reader.ReadDouble();
+            var column = new double[edges];
+            for (int e = 0; e < edges; e++) column[e] = reader.ReadDouble();
+            levels.Add((temperature, column));
+        }
+        return levels.OrderByDescending(level => level.Item1).ToArray();
+    }
+
+    // Pairs joined at the hotter level and apart at the colder, which exact closure can't have.
+    private static long Broken(int[] hotter, int[] colder)
+    {
+        long Joined(long size) => size * (size - 1) / 2;
+        return hotter.GroupBy(label => label).Sum(c => Joined(c.Count()))
+             - Enumerable.Range(0, hotter.Length).GroupBy(i => (hotter[i], colder[i])).Sum(c => Joined(c.Count()));
+    }
+
+    // How many classes lead some cluster of at least 50.
+    private static long ClassesHeld(int[] partition, int[] labels) =>
+        Enumerable.Range(0, partition.Length).GroupBy(i => partition[i]).Where(c => c.Count() >= 50)
+            .Select(c => c.GroupBy(i => labels[i]).MaxBy(g => g.Count())!.Key).Distinct().Count();
 
     private static HashSet<(int, int)> EdgeSet(CsrGraph graph)
     {
