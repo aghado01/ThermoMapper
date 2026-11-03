@@ -1,6 +1,6 @@
 # Brief: closing the PH setup's loose ends
 
-**Date:** 2026-11-02. **Status:** built; the [report](#report) is below. The user ruled `ComputeBothReadings` internal.
+**Date:** 2026-11-02. **Status:** built; the [report](#report) is below. The user ruled `ComputeBothReadings` internal. Three items left over from it landed the same day, at the report's end.
 **Asked by the user:** "lets chip off to close the loose ends", the four entries under "PH setup loose ends" in
 [the Shelf](../SHELF.md). All four are decided: build them. Engine work only, with no consumer wired, and nothing here assumes
 one application.
@@ -293,7 +293,7 @@ and homologous there to the cycle at the frame, but a consumer asking for the ho
 by a test. Bars born by an arrival stayed in their first frame in all 184 cases, which is a count and not a theorem: under `Union`
 a chain could hold an edge a leaving triangle covers.
 
-**Not built: compatible cycles along a bar.** That is what closes the finding above. Dey, Hou and Morozov's arXiv:2410.20565 exists
+**Not built here: compatible cycles along a bar** (built later the same day, at the end of this report). That is what closes the finding above. Dey, Hou and Morozov's arXiv:2410.20565 exists
 as cited; I read the abstract only, and it isn't in the library (`2412.02591v2.md` only cites it, as [26]). An idea, derived and
 **not verified**: the coned run's V may give the sequence directly, with z_ℓ = R + Σ ∂ρ over the Add columns of V added before ℓ for
 a closed birth, and z_ℓ = Σ ∂τ over the cone columns of cells deleted before ℓ for an open one. V isn't kept, and testing this is an
@@ -337,6 +337,67 @@ The graph engines can't read this, since the cone over an edge is a triangle, so
   when my figure was still "about 3 times slower". Asked again on the softened figures above, the user kept it internal. `ComputeBarcode` is the one
   public path. The reading and its tests stay, with nothing outside the assembly calling it.
 - **A timing on a quiet machine.** Not available today. The harness is ready; the command is on the Shelf.
-- **Compatible cycles along a bar.** Above. The user's call; on the Shelf.
-- **The two reported deviations.** On the Shelf, per the brief.
+- **Compatible cycles along a bar.** Above. The user's call; built later the same day, below.
+- **The two reported deviations.** On the Shelf, per the brief; both fixed later the same day, below.
 - **The tie change in `ComputeH0`.** Worth knowing if a tied-distance LMP run moves. I didn't measure one, since that's an experiment.
+
+### 2026-11-02, later: three of the items left over
+
+The user asked for three of the four Shelf items. The quiet-machine timing stays there. `TDA.Ph.Tests` 459/459, `TDA.Mapper.Tests` 28/28.
+
+**`PersistentCohomology` reads any cell complex (`5af778d`).** The Shelf entry was the smaller half of this. The crash came from reading `GetVertices`,
+but two more limits sat behind it, and they would have lost bars with no error: H₀ assumed every 1-cell has two faces, and the walk reached a degree only
+through cofaces, so a cell with no faces was never read (the minimal torus's 2-cell, a relative cell inside K₀) and an empty degree ended the walk.
+
+- A 1-cell now reads through its faces. Two join; one joins its vertex to a root older than every cell, since its far end lies in a quotiented
+  subcomplex; none closes a cycle. A general chain complex's 1-cell with more than two faces has no union-find reading, so that case reduces the columns
+  of ∂₁. Each degree's cells are found by dimension.
+- Checked against the column reducer at every cutoff degree: 400 random filtered chain complexes (2,096 cells above degree 0 with no faces; 409 1-cells with
+  one face, 347 with over two; finite H₀–H₂ 962/165/507, essential H₀–H₃ 1685/220/664/896), and 300 relative quotients (335 empty boundaries, 6,020 bars).
+- **This reverses something above.** I wrote that the clearing engine reaches the relative barcode only through `ComputeBothReadings`. It now reads the
+  quotient directly, which is a third route for the relative barcode alone. I haven't measured it; the timing's Shelf entry says to add it.
+
+**Involuted representatives (`0cc8224`).** Negative values read by edge count, since a value is not then a length and an undirected negative edge has no
+shortest path. That ends the hang.
+
+- **The sweep found an older bug the Shelf didn't know about.** The path could run through an edge tied with the birth edge and after it, and with a tied
+  triangle that makes the "cycle" a boundary, a class that is zero. All four value ranges failed on it when I first asked whether the cycle's class was
+  the bar's own; a test that only checked the cycle closes, like the one above, can't see this. The path now runs only through edges before the birth edge.
+- **Behaviour change at exact ties.** A Rips filtration with tied distances can now name a different cycle, the right one, so an LMP protect set
+  (`H1CycleEdges`) at tied distances could shift. No bars move. I didn't measure a run, since that's an experiment.
+- Lengths whose sum overflows reported "no path"; they now find it. Swept at scale 5e307, at shift −1e308, −20 and −1.5.
+
+**Compatible cycles (`70fe9be`).** The idea at step 4 holds, and passed on its first run. `FastZigzag.ComputeCycles` returns `ZigzagCycles`, with
+`CycleAt(bar, level)`; `GraphFrameFiltration` adds `CycleAtFrame`, `RelativeCycleAtFrame`, `LevelOfFrame` and `LevelBetweenFrames`.
+
+- **The formula.** With the bar's death column V = ω·S + W: born by an addition, z_ℓ = S + ∂(W's cells added at step ≥ ℓ); born by a deletion, z_ℓ = ∂(S's cells
+  deleted at step < ℓ). A bar keeps one chain, and a cycle is a view of it. `docs/TDA/ZigzagPersistence.md` has the argument: each z_ℓ lies in K_ℓ, consecutive
+  ones are homologous in the larger complex, the ends are as the bar says, and induction on the level gives a basis at each level. It takes from Dey and
+  Hou only that their pairs are the right bars. That argument is in prose; there is no Lean proof.
+- **Checked at every level of every bar,** against the oracle, which gained `CheckSequence` and `CheckBasis`. On churn with re-entry (120 sequences, 23,360 levels):
+  closed-closed/closed-open/open-closed/open-open in H₀ 655/705/421/341, H₁ 495/667/394/273, H₂ 197/249/160/193; bars whose chain moves 212/171/38; 3,560 through
+  a re-entered cell. On frames (200 sequences, both complexes, both transitions, 51,173 levels), and on relative frames (423 bars, 1,157 frame cycles).
+- **The check can refuse.** Of 204 bars that move, 112 were refused with their first cycle held still and 154 with the right cycles one level off; the rest stay
+  valid up to homology. All 753 sequences with a level swapped for its sum with another bar alive at that level and the next were refused. A bar alive at that
+  level alone would leave a valid sequence, since representatives aren't unique, so the test leaves those out.
+- **The step-4 finding closes.** A hole that opens under `Flag`: 34 of 34 birth chains miss the first frame, as before, and every `CycleAtFrame` lies in its frame.
+- **Cost, in allocated bytes** (Release, random flag frames, n = 20, 40, 80, at below-normal priority on a busy machine):
+
+  | Steps | Bars | MB: bars | MB: `representatives` | MB: `ComputeCycles` | Ratio to `representatives` | Reading |
+  |---|---|---|---|---|---|---|
+  | 856 | 253 | 1.6 | 1.8 | 2.7 | 1.55 | 2,220 cycles, 0.5 MB |
+  | 5,120 | 961 | 23.4 | 24.4 | 43.3 | 1.78 | 8,656 cycles, 1.8 MB |
+  | 37,528 | 3,883 | 612.5 | 619.4 | 1,194.7 | 1.93 | 34,465 cycles, 7.0 MB |
+
+  n = 160 did not finish inside the run's ten-minute limit, so it has no figure. The ratio rises with size, so 1.93 is not a ceiling. Mean cycle size there is 3, since a flag complex's cycles are short; other complexes will read larger. Set
+  `ZIGZAG_CYCLES_COST` to a file and run `ComputeCycles_Cost` in Release to redo it.
+- **Against Dey, Hou and Morozov.** I read their introduction and definitions, not their algorithm. They compute the same object with wires and bundles in O(m²n). This costs
+  what the coned reduction costs, O(m³ log m) worst case with sorted-set columns, and I have not compared the two on any input. Their paper has no reading from
+  a coned run in the part I read; I don't know whether one appears elsewhere, so the docs call the formula derived here and claim nothing beyond that.
+
+**Stayed open.**
+
+- **Essential bars' cycles.** `PersistentHomology` names none, `RelativeFiltration.ComputeBarcode` inherits that, and the involuted engine gives H₂ and up the
+  birth simplex alone, which isn't a cycle. An unpaired column's V is its cycle, and the reducer now keeps V for paired ones. On the Shelf.
+- **A Lean proof of the formula.** Not asked for, and not done. It would suit the harness.
+- **MarkBrain's commits are the user's.** One more uncommitted edit there: `zigzag-engine/zigzag-frontier.md`, the Representatives row.
