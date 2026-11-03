@@ -1708,6 +1708,8 @@ Only `Replication` makes integer weights equal duplicated rows when σ² is inte
 | Duplicated rows | No: the prior stays on the N rows | Yes, under `Replication` |
 | Cost of each (τ, b) | O(p) after O(p³) per structure | O(1) (g-form), O(M) (ridge), as unit |
 
+A third reading, `Frozen`, is a prior on a fixed W₀ ([priors that stop reading a moving response](#bass-priors-that-stop-reading-a-moving-response)).
+
 So "integer weights equal duplicated rows" holds for the likelihood's statistics under every reading, and for the marginal only on `Replication` with `Weighted`. D03's default cannot satisfy it, by construction, since a duplicated row's own g-prior reads its copies.
 
 `Weighted` needs nothing new: the unit block's closed forms hold on the weighted statistics, with `GPriorWeights` carrying the count, the mass and Σ ln wᵢ. `Unweighted` is the pencil.
@@ -1723,7 +1725,7 @@ It is selected two ways, and no default changes:
 - *`Sigma2Prior.Held(v)`, a config value:* σ² is a point mass, as probit's identification or a known noise states it. It is the shape τ's `TauPrior.Held` already has, and a `Bass.Fit` can run it. `Value` is left out of the JSON when null, so no other kind's form or fingerprint moves. It lifts the refusals of a constant or zero response, which need σ²'s posterior.
 - *`BassTarget.Given(σ²)`, at runtime:* the target given a σ² that moves, handed to the chain by `ReplaceTarget`, the pattern of BARS's robust sweep. This is the form for E1's σ² block and E32's outside σ². `Sigma2` stays the prior such a block draws against.
 - *The alternative* was σ² on `BassState`, which changes every snapshot, the decision the seams left to E1. A target per draw costs one small allocation.
-- *One seam to report:* `BassTauBlock` keeps the target it was built with, so a sampled τ beside a σ² that moves would read a stale σ². The check below holds τ. The fix is for τ's block to read the chain's current target, which the chain does not yet expose.
+- *The chain's own target.* `BassTauBlock` and a chain's composition read the target the chain holds now (`ReversibleJumpChain.Target`), so a sampled τ sits beside a σ² that moves.
 
 The composition draws β given σ² (`GPriorConditional.SampleGiven`), and the collapsed pointwise content is a Gaussian predictive (`LeaveOutLogDensityGiven`).
 
@@ -1741,6 +1743,70 @@ The composition draws β given σ² (`GPriorConditional.SampleGiven`), and the c
   - *A slowdown this found and removed.* An earlier pass read Friedman at +6 to +14%. The support count had taken a nullable lookup and a floating-point add per nonzero element, on every proposal. The unit path has its own loop again.
   - *The readings, on Friedman:* the prior on the weighted columns about 13 µs at M = 9–12, the unit path's order; the pencil about 44 µs at M = 8–10, so 3–4×, growing as M³. These ran under more load (others' median 7–9 cores), so read them against each other, not against the unit path's figures.
 - *Not checked.* A working response or weights that move, which needs a design that follows them. A run through `Bass.Fit` under weights, which takes no observation model. Weights with a Q other than the identity, which the core still refuses.
+
+### BASS: priors that stop reading a moving response
+
+Built 2026-11-02 ([the options](../../issues/regression/bass/moving-response-priors-options.md), [the report](../../issues/regression/bass/extensions-checklist.md#reports)), steps 1 and 2 of the note's order, as a family of selectable forms on one seam rather than one pick. D03 stays Gaussian BASS's default, and no default changes. Which route a consumer takes is the user's call, per engine.
+
+**The problem.** A moving working response is not data. y − β√w·v is a function of β, w and v, so a prior that reads it is conditioned on parameters. Two things are coherent: read something that does not move, or carry the conditional into every block. An uncorrected re-read does neither, since its conditionals share no joint.
+
+**The constraint.** Noise with a location-scale group, y → ky + m, covers Gaussian, t, Laplace, asymmetric Laplace and Normal-Wald. Under that group a prior can have at most two of proper, reading no data, and equivariant, because a proper measure cannot be invariant under a non-compact group. Binary responses have no such group, so a declared prior costs them nothing. Each route gives one up:
+
+| Route | Selected by | Proper | Reads | Equivariant |
+|---|---|---|---|---|
+| Invariant | `GPriorCentre.Flat`, `Sigma2Prior.Jeffreys` | No | Nothing | Yes |
+| Frozen read | `BassPriorReference` under `Mean`, `ScaledToResponse` | Yes | Observed y, once | Yes |
+| Declared | `Zero` or a stated level, `InverseGamma` or `Held`, κ | Yes | Nothing | No |
+| Hierarchical | `Sigma2Prior.Hierarchical`, `HalfCauchy` | Yes | s², for the hyperprior | Yes |
+
+The conditional on the latents and the pilot read wait for the latent blocks, and the fractional rung for the run ([the note](../../issues/regression/bass/moving-response-priors-options.md#what-to-build-in-order)).
+
+**The reference** (`BassPriorReference`, on `WorkingResponse`) holds what the priors read, apart from the working response, so the target stays one target whatever moves later. The observation model names the rule, since the read has to mean something for its noise:
+
+| Rule | Level | s² | For |
+|---|---|---|---|
+| `Moments` | ȳ | Mean square about it | D03's read |
+| `About` | Stated | Mean square about it | The zero centre, at 0 |
+| `Robust` | Median | (MAD/Φ⁻¹(¾))², or the mean square about the median when over half the values tie | Heavy tails |
+| `Quantile` | The ⌈qN⌉-th smallest | (Mean check loss)² | The asymmetric Laplace's level and scale, by maximum likelihood |
+| `FrozenGram` | Mean under W₀ | Mean square under W₀ | A prior on a frozen W₀ |
+| `Link` | None | None | κ alone, for a response with no group |
+
+- *What it leaves null the config must not read:* level centring needs a level, and a σ² prior that reads s² needs a mean square. Each is refused otherwise. The zero centre refuses a level other than 0.
+- *D03's refusals read it.* A working response that happens to be constant is no reason to refuse once the reference has spread. A reference with none is refused, unless σ² is held. The Jeffreys prior still refuses a constant working response, since its posterior does not exist there. The exact-fit floor reads s² too.
+- *The alternatives.* Standardizing y at entry gives the same numbers with every output to map back. Re-reading the moving values has no joint.
+- *The implication:* the data are used twice, and an evidence stays empirical-Bayes in what is read, as `BassEvidencePriors` already records for D03's default.
+
+**The level's energy.** Under a frozen level c, ȳ_w moves away from it, and the gap enters as the zero centre's energy does at c = 0: S = b(‖r‖² + τ/(τ + b)·(Q_c + Σwᵢ(ȳ_w − c)²)), with τ/(bΣwᵢ + τ) for the ridge's intercept. With no reference the centre is ȳ_w and no arithmetic is added. The pencil carried this term already.
+
+**The coefficient prior's constant κ.** The covariance is σ²κ(τG)⁻¹, so every form reads τ/κ. For a σ² held at 1, Sabanés Bové and Held's (2011) κ = v(h(0))/h′(0)² anchors the prior at an imaginary sample, so it reads no data: 4 for the logit, π/2 for the probit, π²/4 for the cauchit, 1 for the Poisson log.
+- *Why on the reference, not on τ's prior:* the link supplies it, so the observation model states it. Reading τ/κ reaches a held τ and hyper-g as it reaches the unit-information Gamma, where changing τ₀ would reach only the last. τ₀ keeps its meaning, and a draw's τ stays the state's.
+- *The implication:* the automatic hot end is 1/(κN), or the held τ's halving point over κ. The flat intercept's pole stays at 2/N.
+
+**The frozen Gram** (`WeightedPriorGram.Frozen`) puts the prior on the information at a fixed point (Li and Clyde 2018), free of the moving W: columns centred under W₀, D_α = Σw₀ and D_β = Z_c₀ᵀW₀Z_c₀, or under the ridge D_α = 1 and D_β = diag(G₀)/Σw₀. It takes the same pencil as `Unweighted`.
+- *W₀ reads in information per observation,* so τ₀ stays 1/N, and under the g-form W₀ = (1/κ)·1 is κ on the unweighted columns. That is why κ and W₀ are one idea: κ is the information at β = 0. The alternative, τ₀ = 1/Σw₀, would normalize W₀'s units away and lose the identity.
+- *The ridge's normalization strips W₀'s units,* as under `Weighted`, so there only κ carries them.
+- *With no likelihood weights* the working response reads unit weights, at the whitened path's cost.
+
+**The hierarchical prior** (`Sigma2Prior.Hierarchical(a, h)`). σ² | r ~ IG(a, r), r ~ Gamma(h, rate h/(a·s²)), whose mean is the scaled prior's a·s² at every h. This one family connects the other routes:
+- *h → ∞ is the frozen read:* r pins to a·s².
+- *h → 0 is the invariant prior, for any a:* IG(a, r) mixed over 1/r gives 1/σ².
+- *a = h = ½ is σ ~ half-Cauchy(s)* (`HalfCauchy()`; Wand et al. 2011).
+
+So s² sets the hyperprior's scale alone, and a poor read hurts less than under the plug-in. The choices made:
+- *r is a coordinate of the state, as τ is* (`BassState.LogRate`). The target stays one immutable target, so swaps, SMC's particles, the reference rung and the flat histogram carry r with no change of their own. The alternative, a target per replica through `ReplaceTarget`, would make every swap re-evaluate under the receiver's target.
+- *σ² stays integrated, and the marginal is given r,* as it is given τ. A slice step on v = ln r (`BassSigma2RateBlock`) runs last in the sweep's scale slot, at τ's cost per evaluation: O(1) under the g-form, O(M) under the ridge, O(p) on a pencil.
+- *The alternative is Wand's conjugate two-block form,* σ² | · then r | σ² ~ Gamma(a + h, rate + 1/σ²). It is exact only on the integrated form's rungs, and it draws σ² every sweep. The slice step is exact on every path and form, so it is the one built.
+- *With σ² drawn apart* (E1's w), the marginal does not read r, so the state's prior carries ln IG(σ²; a, r), and the same step reads it. The conjugate draw is exact there, should the slice's cost ever matter.
+- *A chain starts at r's mean* unless told otherwise; a run starts from its prior draw of r. r is not monitored: R̂ reads σ², which depends on it.
+
+**What was checked** (`BassPriorReferenceTests`).
+- *Unasked, nothing changes:* a reference that restates today's read walks today's chain, draw for draw, under the g-form's three centres and the ridge's level and zero centres.
+- *Dense algebra.* S, the determinant term and the conditional mean for each form and Gram, and the collapsed predictive against the joint normal, each to 10⁻⁹; the slope in b against a finite difference.
+- *The trilemma on the targets.* Under y → ky + m, across snapshots, the moments, robust, quantile, frozen-Gram, invariant and hierarchical routes keep their log posterior differences to 10⁻⁸, and a declared prior's move. Chains on y and on ky + m visit the same structures, sweep by sweep, through a moving response. Since a design cannot follow one yet, a moving response is a model per snapshot, each segment starting where the last ended.
+- *The family against outside readings.* At a = h = ½, against `HalfCauchy`'s own density, integrated on σ, to 10⁻⁸. Across structures both limits hold: at a = 2 the gap between two structures is 1.51143 at h = 10⁴ against the plug-in's 1.51160, and 1.21895 at h = 10⁻⁵ against Jeffreys'.
+- *Enumeration.* Detailed balance on every structure of F for a frozen level and a frozen Gram, against dense algebra. Chains' visits against the posterior, including with r integrated by quadrature, with σ² integrated and drawn apart. The rate's own conditional against quadrature, on both paths.
+- *The evidence,* against the enumeration's −16.294 with r integrated by quadrature: −16.280 on a ladder, −16.327 on a linear ladder, −16.303 on SMC.
 
 ### BAPS: penalized splines
 

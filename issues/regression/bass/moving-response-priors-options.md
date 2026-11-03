@@ -1,6 +1,6 @@
 # Priors that stop reading a moving response: the options
 
-The third row of [Upgrades to existing code](extensions-brief.md#upgrades-to-existing-code), written out for the user's call before it is built. Nothing here is decided. The row beside it, [a design whose working response moves](extensions-brief.md#upgrades-to-existing-code), is separate work: this note is only about what the priors read.
+The third row of [Upgrades to existing code](extensions-brief.md#upgrades-to-existing-code), written out for the user's call. **The user ruled on 2026-11-02: build steps 1 and 2 of [the order below](#what-to-build-in-order).** Those are built ([the forms](../../../docs/Maths/BayesianRegression.md#bass-priors-that-stop-reading-a-moving-response), [the report](extensions-checklist.md#reports)); steps 3 and 4 are open. Defaults stay the user's, per engine. The row beside it, [a design whose working response moves](extensions-brief.md#upgrades-to-existing-code), is separate work: this note is only about what the priors read.
 
 ## What reads the response today
 
@@ -49,9 +49,9 @@ So GBMARS is the invariant, declared and frozen routes below, by entry point, an
 | Route | Proper | Reads | Equivariant | Here |
 |---|---|---|---|---|
 | Invariant prior | No | Nothing | Yes | Built: `Flat`, `Jeffreys` |
-| Frozen read | Yes | Observed data, once | Yes | D03, for a fixed response |
-| Declared | Yes | Nothing | No | Built: `InverseGamma`, `Zero`, `Held`; a declared level is new |
-| Hierarchical | Per hyperprior | Per hyperprior | Per hyperprior | New: the `Scale` slot |
+| Frozen read | Yes | Observed data, once | Yes | Built: `BassPriorReference` |
+| Declared | Yes | Nothing | No | Built: `InverseGamma`, `Zero`, `Held`, a reference's stated level and κ |
+| Hierarchical | Per hyperprior | Per hyperprior | Per hyperprior | Built: `Sigma2Prior.Hierarchical`, on the state and the `Scale` slot |
 | Conditional on the latents | Yes | Parameters | Yes | Gram side: `Weighted`; its latent correction is new |
 | Pilot read | Yes | Posterior expectation of the moving values, then frozen | Yes | New |
 
@@ -100,19 +100,19 @@ So GBMARS is the invariant, declared and frozen routes below, by entry point, an
 
 D03 stays Gaussian BASS's default. Defaults elsewhere are the user's, per engine, with the rest selectable.
 
-1. **This row, on the seam, needing no latent blocks.**
-   - The level's energy Σwᵢ·(ȳ_w − c)² in `CentredFit`, which adds exactly 0 for Gaussian BASS.
-   - `BassPriorReference` on `WorkingResponse`: a frozen level, mean square and coefficient-prior constant c, with the rule named by the observation model. This changes the seam's shape, which has no recorded ruling.
+1. **Built: this row, on the seam, needing no latent blocks.**
+   - The level's energy Σwᵢ·(ȳ_w − c)² in `CentredFit`; with no reference, no arithmetic is added.
+   - `BassPriorReference` on `WorkingResponse`: a frozen level, mean square and coefficient-prior constant (κ, Sabanés Bové and Held's c), with the rule named by the observation model. This changed the seam's shape, as approved.
    - A frozen W₀ on `WeightedPriorGram`.
-   - Tests of the invariant and frozen forms under a moving response: chains through `ReplaceTarget` on y and on ky + m visit the same structures.
-2. **The `Scale` slot.** The hierarchical forms: a hyperprior on the IG's rate, and half-Cauchy, with their scale from the reference.
+   - Tests of the routes under a moving response: chains on y and on ky + m visit the same structures. A design cannot follow a response yet, so the response moves by a model per snapshot, not through `ReplaceTarget` as first written here, which swaps only the target.
+2. **Built: the `Scale` slot.** The hierarchical forms: a hyperprior on the IG's rate, and half-Cauchy, with their scale from the reference. The rate went on the state, not the target, and a slice step replaced the two-block form as the one built ([why](../../../docs/Maths/BayesianRegression.md#bass-priors-that-stop-reading-a-moving-response)).
 3. **With the latent blocks.** The corrected conditional prior on the Gram; the level on the mean under skew; the pilot read.
 4. **At the run.** The fractional rung.
 
 ## Decided with it, or left open
 
 - **F under a moving W.** The gate reads the weighted Gram, as this upgrade asks. So a latent move can put the current structure below s_min, outside F, where its posterior is 0. A latent block must then treat that draw as off the support. The alternative is to gate on the prior's columns alone, which keeps F fixed but admits a numerically singular weighted Gram. Left to the row beside this one, flagged here since the same decision reaches it.
-- **Refusals.** Under a frozen read the constant and zero refusals would read the reference, not the moving values. A held σ² already lifts them.
+- **Refusals.** Under a frozen read the constant and zero refusals read the reference, not the moving values, as built. A held σ² lifts them.
 - **The evidence.** Under a frozen read it stays empirical-Bayes in the level and scale, as `BassEvidencePriors` already records for D03's default.
 
 ## How far each source was read

@@ -11,6 +11,17 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### κ, r and h in the priors for a moving response (2026-11-02)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - κ, the coefficient prior's constant in σ²κ(τG)⁻¹ (`BassPriorReference.CoefficientConstant`, `docs/Maths/BayesianRegression.md`, "BASS: priors that stop reading a moving response"), against a term's normalizing constant κ ("BASS: sensitivity", "BASS: the extension seams") and the condition number κ(E) ("BASS: the design and admission").
+  - r, σ²'s rate under the hierarchical prior (`ResolvedSigma2Rate`, `BassState.LogRate`), which is b in `Sigma2Prior`'s IG(a, b) and g₂ in `GPriorMarginal`'s IG(g₁, g₂), against the residual r throughout `CollapsedGPrior`.
+  - h, the rate's shape (`Sigma2Prior.HyperShape`), against the link h(·) in `BassPriorReference.Link`'s text and the count prior's h₁, h₂.
+  - c stayed clear of the constant: it is already σ²'s shape in `BassResolved`'s (1 − 2c)/N and `BassEvidencePriors`, where `Sigma2Prior` says a.
+- **Found:** 2026-11-02, steps 1 and 2 of the moving-response priors.
+- **Note:** the sources' own symbols are c for κ (Sabanés Bové and Held 2011) and 1/ξ for r (Wand et al. 2011). b was not taken for r because b is the inverse temperature in BASS.
+
 ### The ridge's names on a prior that is no ridge (2026-11-02)
 
 - **Kind:** one name for several concepts.

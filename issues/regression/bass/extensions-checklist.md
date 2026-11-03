@@ -42,6 +42,47 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ## Reports
 
+### Priors that stop reading a moving response, steps 1 and 2 — 2026-11-02
+
+`950daca`. Steps 1 and 2 of [the options](moving-response-priors-options.md#what-to-build-in-order), built on the user's go-ahead as a family of selectable forms on one seam. No default changes. The forms, alternatives and trade-offs are in [the docs](../../../docs/Maths/BayesianRegression.md#bass-priors-that-stop-reading-a-moving-response).
+- *Built.*
+  - `BassPriorReference` on `WorkingResponse`: a frozen level and s², with a rule named per noise (`Moments`, `About`, `Robust`, `Quantile`, `FrozenGram`, `Link`). D03's refusals and the exact-fit floor read it.
+  - The level's energy Σwᵢ(ȳ_w − c)², on all three coefficient forms.
+  - The coefficient prior's constant κ, read as τ/κ, with Sabanés Bové and Held's link values.
+  - `WeightedPriorGram.Frozen`, a prior on a fixed W₀.
+  - `Sigma2Prior.Hierarchical` and `HalfCauchy`, with `BassSigma2RateBlock` last in the scale slot.
+  - `BassTauBlock` and a chain's composition read the target the chain holds, which closes row 2's seam note.
+- *Choices made in building, each argued in the docs.*
+  - σ²'s rate went on the state, not the target as the note implied, so swaps, particles, the reference rung and the flat histogram carry it. BARS refuses the prior.
+  - A slice step, not Wand's two-block form, since it is exact on every path and tempered form.
+  - κ reads through τ/κ rather than moving τ₀, so it reaches a held τ and hyper-g.
+  - τ₀ stays 1/N under W₀, so W₀ = (1/κ)·1 is κ under the g-form.
+- *Evidence.*
+  - Regression 1,701 of 1,701 on the final tree, 76 of them new, with the bit-identity hashes held. The BASS oracle filter 90 of 90, at below-normal priority.
+  - `BassPriorReferenceTests`: [the list](../../../docs/Maths/BayesianRegression.md#bass-priors-that-stop-reading-a-moving-response). Dense algebra and the joint normal to 10⁻⁹. Equivariance on the targets to 10⁻⁸ and through chains, with a declared prior failing it as the trilemma says. The family against `HalfCauchy`'s own density and both limits. Enumeration of all 2,263 structures, worst balance 3.6·10⁻¹⁴.
+  - The evidence against the enumeration's −16.294: −16.280 on a ladder, −16.327 on a linear ladder, −16.303 on SMC.
+- *Cost, under load.* After/before over 72 paired blocks of 200,000 sweeps, each pair's M identical. CPU 0.99 on Friedman (IQR 0.89–1.03) and 1.00 on direct functional (IQR 0.96–1.08); wall 0.96 and 0.99. No pair met the quiet rule, with about 2.4 other cores busy. On minima over four runs, the signs flip by fixture, within about ±2%, so no slowdown is resolved at this load.
+- *The review found.*
+  - **A real defect a loose tolerance had passed.** `BassParticles.Draw` rebuilt its state from terms and τ, so every SMC particle started at the rate's mean. ln Z read −16.00 against −16.29, inside my first tolerance of 0.5. The offset was the same at 600 × 2 and 4,000 × 4 particles, which is what showed it was no noise. Fixed, and the tolerance is now 0.15.
+  - A default run paid 24 bytes per evaluation for the option; now one double.
+  - The timing harness could not read this change: CPU time ticks every 15.6 ms, 8% of a 0.2 s block, and the first round's ratios disagreed in sign. `BASS_WEIGHTS_BLOCK` sets a longer block.
+  - The note's "chains through `ReplaceTarget`" could not move a response, since it swaps only the target. The tests use a model per snapshot, and the note is corrected.
+  - c was already σ²'s shape in this module, so the constant is κ, and the splits are in the [notation ledger](../../notation-ledger.md).
+  - Two stale statements about `BassTauBlock`, in the docs and the brief, and an overstatement in the docs' own list of checks.
+- *Seam shapes changed, approved with the go-ahead.*
+  - `WorkingResponse` gains `Reference`, and `WeightedPriorGram` gains `Frozen`.
+  - `BassState` gains `LogRate`, `BassDraw` gains `Sigma2Rate`, and `BassChain`, `BassLadder` and `BassStructureMoves` take a starting rate.
+  - `BassResolved` gains `PriorLevel`, `CoefficientConstant` and `Sigma2Rate`, and `BassEvidencePriors` gains `Sigma2Rate`.
+  - `ReversibleJumpChain` exposes `Target`.
+  - `BassTauBlock` takes no target, and `BassSweepSlots.Blocks` is `(model, first)`.
+- *Limits.*
+  - A design still cannot follow a response, so a moving response here is a model per snapshot. With no reference the priors read the snapshot, so the row beside this one has to require a reference or a route that reads nothing.
+  - `Bass.Fit` takes no observation model. So a reference reaches a model and a chain, not a run; the hierarchical prior, being config, reaches a run.
+  - A ladder's and a run's composition read the model's target; only a lone chain reads the one it holds. A σ² drawn apart on a ladder will need that.
+  - σ²'s rate is not monitored: R̂ reads σ².
+  - Which route each consumer takes is unruled, and steps 3 and 4 are open.
+  - The [capability inventory](../capability-inventory.md) stays as read at `c1eda6a`.
+
 ### The weighted core and the marginal given σ² — 2026-11-02
 
 The first two rows of [Upgrades to existing code](extensions-brief.md#upgrades-to-existing-code) are built. The third, priors for a moving response, is [written out as options](moving-response-priors-options.md) for the user's call and not built. Commits: `a772fd9` (the core and the form), `ce15a49` (the unit path's support count, the cost block). The forms, alternatives and trade-offs are in [BayesianRegression](../../../docs/Maths/BayesianRegression.md#bass-the-weighted-core).
