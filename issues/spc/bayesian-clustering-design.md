@@ -1,6 +1,6 @@
 # Bayesian clustering ideas for SPC: design note
 
-Status: started 2026-10-30. The closure gap is built (2026-11-01) and measured on data (2026-11-02; see "What the measurement found"); the rest is discussion. Decisions are the user's and are marked as such; the rest is proposal.
+Status: started 2026-10-30. The closure gap is built (2026-11-01), measured on data (2026-11-02; see "What the measurement found") and probed on Landsat (2026-11-02; see "Results of the probe"); the rest is discussion. Decisions are the user's and are marked as such; the rest is proposal.
 
 Sources: `opus-gvdv-ideas.md`, Threads 1, 5 and 7 of `opus-spin-glass-threads.md`, `sw-retention-brief.md`, and the stopping primer's §13.3 and §13.6 (`issues/spc-BARS/stopping-theory-primer.md`).
 
@@ -16,7 +16,7 @@ Symbols are the module's: τ_ij = P(i↔j), the pair connectivity; p_e = 1 − e
 
 | # | Idea | Status | Fit with the uniform grid and BARS |
 |---|---|---|---|
-| 1 | Loss cuts, against closure | The gap is built and measured. The search is buildable (link loss over graph edges from co-membership; pair loss over all pairs from kept partitions), and the measurement argues against building it now | A column kernel for `DenseTStack`; the closure gap below is a curve over T |
+| 1 | Loss cuts, against closure | The gap is built and measured, and a search over pair loss is tested and left with the tests. On Landsat at K = 5 it reads worth building on that graph, on K = 10 and 20 no gain, and closure at a higher θ is untested | A column kernel for `DenseTStack`; the closure gap below is a curve over T. The search's partitions don't nest, so a T-stack can't read them as they stand |
 | 2 | VI cuts, credible balls, the robust window | Unblocked by S5 (`a777534`, SPCX v12) | Per-T. r(T) and each block's window are curves |
 | 3 | Free energy by temperature integration | Unblocked by S1 | ⟨E⟩(T) on the grid. BARS can fit it, and integrating its draws gives ln Z(T) with a band |
 | 4 | Calibrating T by posterior odds | Research-scale. The §5.2 rule does not carry over: the single cluster has the lowest H, and the colouring count q(q−1)…(q−k+1) favours splitting, the reverse of Bissiri et al. | Competes with the T* readout. Lowest priority |
@@ -179,7 +179,7 @@ So a large gap doesn't say which kind it is, and a search reading the same loss 
 - The cross-fit changed the reading in places: Landsat at T = 0.0847 from 83.6% to 60.4%, the toy at T = 0.0644 from 16.0% to 8.1%.
 - ISOLET's 10–18% at T = 0.0077–0.0095 is a ratio of small numbers. Its false-merge counts fit one or two dangling nodes under a single cluster.
 
-**What this says (proposal, the user's call).**
+**What this says (proposal, the user's call; for Landsat at K = 5, "Results of the probe" replaces it).**
 - *Leave the search unbuilt for now.* On `toy` and ISOLET there is no room where it matters, and on `iris` the room at the best level points away from the labels: all 327 contradicted pairs are same-species pairs that pair loss would part. Only Landsat has a case: about 1.5 times the recall at matched precision, at a best ARI of 0.25, on one seed.
 - *Keep the gap as a diagnostic,* with the limit above: alone it doesn't separate chaining from a melt. A label-free way to tell them apart is an open question.
 - *Possibly why Landsat differs.* A T-stack reads each block at its own T, so a split delayed by a step or two costs nothing unless the block melts first. Landsat's lower recall at matched precision would fit that. Untested.
@@ -242,11 +242,84 @@ Each arm's graph is in the "as resolved" table above. Fixed across arms: those s
 
 Reported with no threshold: ARI's range across seeds at each `k05` level, for closure and search; pairs joined at a hotter level and not at the next colder one, which breaks nesting, for both; recall at matched precision; cluster counts; run time. Partitions are kept in `artifacts/closure-gap/landsat-probe-labels.tsv` for these and for later reading.
 
+### Results of the probe
+
+Run 2026-11-02, 7.5 hours in all at low priority on a shared machine, every arm finishing. The rows are in `artifacts/closure-gap/landsat-probe.tsv` and the partitions beside them, which git ignores. Every finding below belongs to the graphs in the "as resolved" table, at θ = ½ and this budget.
+
+**The readings, as pre-registered.**
+
+| Reading | Result | Numbers |
+|---|---|---|
+| Reproduction | Holds | `k05` on its original seed matches the measurement exactly on all 43 levels: `ari`, pair loss, rule loss, cross gap, false merges, clusters, joined pairs |
+| The best level | Doesn't hold | Closure's ARI at T = 0.0791 is 0.091 and 0.090 on the fresh seeds, against 0.248 |
+| Attainable | Attainable | Median attained fraction 0.992 over 12 cells, range 0.919–0.995 |
+| Better against the labels, `k05` | **Worth building on this graph** | Gain on all three seeds, attained share 48–78% at the search's best level |
+| Better against the labels, `cauchy` | **Worth building on this graph** | One seed, attained share 65% |
+| Better against the labels, `k10`, `k20` | No gain | One seed each |
+| The chain is K = 5's | Not met | `k10` reads room at two of its three best levels, `k20` at none |
+| A graph is the cheaper lever | Not met | The median of the search's best on `k05` is 0.317, and no other arm's closure reaches it |
+
+| Arm | Master seed | Closure's best ARI (T) | Search's best ARI (T) | Gain | Highest share at closure's best levels |
+|---|---|---|---|---|---|
+| `k05` | 20261102 | 0.248 (0.0791) | 0.317 (0.0690) | +0.069 | 67.7% |
+| `k05` | 20261103 | 0.226 (0.0847) | 0.284 (0.0739) | +0.058 | 63.7% |
+| `k05` | 20261104 | 0.221 (0.0907) | 0.321 (0.0690) | +0.099 | 56.6% |
+| `cauchy` | 20261102 | 0.259 (0.0736) | 0.312 (0.0593) | +0.053 | 37.0% |
+| `k10` | 20261102 | 0.236 (0.0907) | 0.244 (0.0972) | +0.008 | 17.1% |
+| `k20` | 20261102 | 0.277 (0.0972) | 0.281 (0.0791) | +0.005 | 1.5% |
+
+Search's best level isn't near where any arm stopped: it sits 11–19 levels from the cold end of what ran, and the search's ARI falls well below its peak on the way there.
+
+**With no threshold.**
+- *ARI across `k05`'s seeds.* Away from the flips below, the range at any level with an ARI above 0.03 is at most 0.013, for both, apart from the search's 0.045 at T = 0.0231, where the arms end. Closure's is 0.159 at T = 0.0791 and 0.143 at T = 0.0847. The search's is 0.115 at T = 0.0690, and 0.002 at T = 0.0739, where it reads 0.281–0.284. So the search isn't steadier in general. Each flips at its own cliff, and the search's cliff is colder.
+- *At the search's steady level.* Taking T = 0.0739 in place of each seed's peak, the gains are +0.034, +0.058 and +0.060, still at least 0.05 on two of three.
+- *Nesting.* Closure breaks none on `k10` and `k20`, and 13,129 pairs on `cauchy`, at 4 of 40 levels. On `k05`, 16,980 and 26,995 at 6 and 7 of 42, and 1,590,691 on the original seed at 3 of 42, nearly all of it one flip at T = 0.0847, 41% of that level's joined pairs. The search breaks more levels at smaller sizes: 30–31 of 42 on `k05` (33,785–141,051 pairs), 23 of 40 on `cauchy` (91,319), 15 of 31 on `k10` (27,208), 10 of 34 on `k20` (3,749). Its worst level is 8.6% of the joined pairs, on `k05`. The search's partitions don't form a hierarchy, so a T-stack can't read them as they stand.
+- *Recall at matched precision, search over closure.* On `k05`, 1.41–1.90 for precision 0.50–0.75 on all three seeds, 0.67–1.10 at 0.80, and 0.82–1.15 at 0.30–0.40. On `k10` and `k20`, 0.77–1.11. On `cauchy`, 1.32 for 0.45–0.70. The search reaches about the pair rule's recall on `k05`, within 0.02 for precision 0.65–0.75, so the rule's advantage in the measurement was attainable by a partition.
+- *Clusters.* At T = 0.0739 on `k05`, closure has 1,652–1,674 and the search 2,347–2,360. Most are singletons on either side, 1,515–1,527 and 1,958–1,981.
+- *Run time.* Per arm, for three searches a level: search 1,827–5,616 s, sampling 143–468 s, the dense field and gap 311–2,106 s. One search has a median of 10–42 s by arm, and the longest took 255 s.
+- *Shares over 100%.* `cauchy` reads 111% at T = 0.0685. The cross gap uses each half's closure and the denominator the pooled one's, so a level where a half's closure chains and the pooled one doesn't can exceed 1.
+- *Attained fraction elsewhere.* It stays at 0.83–1.12 on `k05`'s other levels and at 0.84–1.00 on `cauchy`'s, and falls where the gap is small: 0.55–1.00 on `k10`, and 0.38 at `k20`'s one level over 5%.
+
+**After the fact.** None of this was pre-registered. It is arithmetic on the stored partitions, with no new sampling. Purity is the majority class's share, and the minimum cluster size is my choice.
+
+*What the cliff is.* On `k05`, seed 20261103, closure at T = 0.0907 holds class 1 (713 points, purity 1.00), class 3 (680, 0.82), class 7 (678, 0.82) and class 2 (133). By T = 0.0847, 3 and 7 have joined with half of class 4 (1,832, 0.42). By T = 0.0791 class 1 has joined too (3,360, 0.29). An ARI near 0.09 against 0.22 is that one merge, class 1 in the giant or out of it: over T = 0.0739–0.0907 and all three seeds, closure reads 0.083–0.093 with class 1 in and 0.209–0.248 with it out, with no exception. The fragility across seeds is which side of the merge a level falls on. The original seed has it out of order, in at T = 0.0847 and out at T = 0.0791. Class 4 splits between 3's and 7's clusters before they join, which would fit a path through 4. That isn't inspected.
+
+*What the search does to it.* It keeps the same blocks apart further down. At T = 0.0739, on all three seeds, it reads class 3 (934–935, 0.78), class 7 (823–834, 0.81), class 1 (804–821, 1.00), class 2 (158) and class 5 (103–123), where closure has a giant of about 4,000 at 0.27. It reaches its own giant at T = 0.0644, two to three steps of this grid below closure's, or 14–22% in T. At T = 0.0690 two seeds read 3 and 7 apart and one reads them joined, which is the 0.206–0.321 flip. The attained fraction near 1 is dominated by cutting these giants, and says little about the fine structure.
+
+*The same search parts what belongs together on the hot side.* At T = 0.0907 closure's class 1 of 713 points is the search's 371 and 258. At equal T the search's ARI is below closure's at every level from T = 0.0907 up to where both read 0 (0.122 against 0.21 at T = 0.0907). This is the melt kind of gap from the measurement: pair loss pays for that split too, and can't tell the two apart. The search does better only at a colder T than closure's best.
+
+*The points covered at a given purity,* over each arm's levels, in clusters of at least 20 points:
+
+| Arm | Purity ≥ 0.90: closure, search | Purity ≥ 0.85: closure, search | Purity ≥ 0.80: closure, search |
+|---|---|---|---|
+| `k05`, three seeds | 2,254–2,656, 2,481–2,784 | 2,648–2,658, 3,150–3,171 | 2,648–2,658, 3,150–3,171 |
+| `cauchy` | 2,065, 2,633 | 2,957, 2,976 | 2,957, 3,439 |
+| `k10` | 1,667, 1,562 | 2,118, 1,980 | 2,118, 1,980 |
+| `k20` | 2,000, 1,938 | 2,409, 2,341 | 2,409, 2,341 |
+
+So on `k05` the search covers 19% more points at purity 0.85, on all three seeds, and 19–22% at a minimum size of 50 (2,399–2,469 against 2,921–2,926). At 0.90 it depends on the seed, 0.93–1.24 times closure.
+
+*K = 20's ARI is a different partition.* Its best of 0.277 reads 3 and 7 joined, with 4 (1,933 points: 783, 757, 362), at purity 0.664 over 3,429 points. By points covered at purity 0.85, the order changes: `k05`'s closure 2,650, then `k20`'s 2,409, then `k10`'s 2,118. So on the flat reading a higher K doesn't buy what the search buys, and 0.277 and 0.317 aren't to be read as close. This is one seed, K up to 20, and the flat reading only. `docs/Clustering/SpcAnalysis.md` records the T-stack's largest-level reading at K = 10 and 20 at median purity 0.940 and 0.961, so it says nothing about K for the reading SPC uses.
+
+**What the settings could explain.**
+- *K.* The share at the best levels falls with K, 57–68%, 17%, 1.5%, and the gain goes with it. The gain is the sparse graph's: closure pays for K̂ = 2.81 and the search pays it back. `k10` still reads room, so it isn't K = 5 alone.
+- *The kernel.* `cauchy` behaves as `k05` does, on one seed, with closure alone covering 11% more at purity 0.85.
+- *θ, the most open.* The probe held it at ½. A higher θ on closure may cut the same giants, with no dense field and no search. `docs/Clustering/SpcAnalysis.md` records θ = 0.6 passing on Landsat where θ = 0.5 reads a giant, on a T-stack at K = 5 and q = 5, which is another q and another reading. The levers tested were K and the kernel only, so *a graph is the cheaper lever* not being met says nothing about θ.
+- *Repair.* K = 5 has 983 repair edges, which are candidates for what bridges the blocks. The rows don't keep τ on edges, so this isn't inspected.
+- *Fixed and not varied:* Euclidean distance on the 36 raw features, the mutual filter, no LMP, mean-edge bandwidth, gauge 1/K̂, q = 20, the budget.
+
+**What this says (proposal, the user's call).**
+- *The measurement's proposal no longer stands for K = 5.* It rested on one seed and asked whether a partition could reach the gap. Now three seeds show one can, and it recovers the labels better: 0.03–0.10 in ARI, and 19% more points at purity 0.85. The reading, fixed in advance, is worth building on this graph.
+- *Test the cheaper closure before building.* The search costs a dense N²/2 field, kept partitions, half a minute or so a level, and a lost hierarchy. Closure at a higher θ needs none of these, and the probe didn't try it. If it covers about 3,150 points at purity 0.85 on `k05`, the search isn't needed. It may well not: raising θ at one T may only retrace raising T at one θ, which closure has already read. Then the case for building holds, with that as its evidence.
+- *The flat cut isn't SPC's reading.* The T-stack on this K = 5 graph covers 2,368–2,610 points at purity at least 0.90 at the higher budget (`docs/Clustering/SpcAnalysis.md`), which is about closure's flat frontier. That is for scale only: another budget and another size rule. Whether the search adds anything to a per-block reading is unmeasured, and needs an answer on nesting first.
+
+**Limits.** Labels choose the level on both sides, and no label-free way to pick the search's T is tested. Three seeds on `k05` and one on every other arm. One θ, one budget. The search is a lower bound on what a partition can reach. ARI and purity are global. The probe's binaries predate `8af6199`, which landed during the run. Rebuilt at `fca555a`, all ten graphs resolve the same, plus its new `RestoredEdges = 0`, and `ClosureGapTests` pass, 43 of 43.
+
 ## Proposed order
 
 Not decided.
 
-1. **The closure gap's measurement.** Read, above. The probe of Landsat's case is what could change the proposal.
+1. **The closure gap's measurement and probe.** Read, above. What's left of it is closure at a higher θ on Landsat at K = 5, which decides whether the search is needed.
 2. **Idea 3.** Stepping-stone and path sampling, validated on exact ln Z (a tree for any q, Kaufman at q = 2), then BARS on ⟨E⟩ checked against the same truth. Independent of 1.
 3. **The partition distance table,** then VI cuts, credible balls and P(Q) as its reductions, and the per-block window through BARS.
 4. **Idea 5.** BARS with `StepBasis` on lineage trajectories.
@@ -257,6 +330,7 @@ A placement question for step 3: partition comparisons are observables (`LinkOve
 
 - The per-block window is a measurement-side readout under §13.3's decision 4. Its one-sided events are monotone, so they would be endpoint certificates in the family of §13.5 for a block known in advance. Blocks aren't known at stopping time, so this is a note, not a proposal.
 - The closure gap, over edges, could have flagged intervals where the θ-partition misleads even though C38's sandwich certifies it unchanged. Measured 2026-11-02, it wouldn't: on the real sets it stays at or under 2.6% at every level, and reads 0.0% at Landsat's best level, where the pair form reads 67.7%. The pair form sees more but costs N²/2 per kept partition, needs kept partitions, and doesn't separate chaining from a melt.
+- Closure's reading can flip across seeds at a budget that reads steady elsewhere. On Landsat at K = 5, with 8 replicas × 2,000 cycles, one merge of about 900 points decides T = 0.0791–0.0847, and the ARI there runs 0.09 to 0.25 by seed, against a range of at most 0.013 at other levels. The original seed breaks nesting there by 41% of the joined pairs. Exact closure can't do that (C17), so it is noise at the cut, in a band a stopping rule would want flagged. How it relates to C38's sandwich isn't examined.
 - Budgets per temperature, set from measured ESS and R̂, were raised here (2026-10-30) as a way to spend draws. They clash with BARS as it stands: its run API takes no per-point weights (primer, "Equal weights"), so uneven budgets give it uneven noise it can't be told about. The same objection §13.3 raises against uneven spacing applies. They stay a diagnostic until BARS takes weights.
 
 ## Naming
