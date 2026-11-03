@@ -441,11 +441,11 @@ Bytes, Release, the same seeds. n = 160 again did not finish inside ten minutes,
 | 12,314 | 9,115, 70 | 74.6 → 137.4 | 1.84 | 7.5 → 145.5 | 19.43 |
 | 88,110 | 75,493, 232 | 2,172.0 → 4,437.5 | 2.04 | 110.9 → 4,601.4 | 41.50 |
 
-The ratios rise with size, so neither is a ceiling. The involuted ratio is the large one because clearing never reduces those columns otherwise. CPU at the largest went from about 1 s to about 39 s for the involuted engine, on a busy machine, so read the sign. These bars are artifacts unless the top degree is really the top, as on a closed surface. With few essential bars the cost is small: about 2% over the 37,528-step coned run above, with one. Reads could be cheaper with something other than sorted sets, which I left, since it belongs to the engine-wide question parked in `project_internal_currencies`.
+The ratios rise with size, so neither is a ceiling. The involuted ratio is the large one because clearing never reduces those columns otherwise. CPU at the largest went from about 1 s to about 39 s for the involuted engine, on a busy machine, so read the sign. Some of these bars are true voids and some would be filled by a tetrahedron the skeleton leaves out, and the skeleton can't tell them apart. With few essential bars the cost is small: about 2% over the 37,528-step coned run above, with one. Reads could be cheaper with something other than sorted sets, which I left, since it belongs to the engine-wide question parked in `project_internal_currencies`.
 
 **Changed as a result, which you didn't ask for by name:**
 
-- **`ConditionedFiltration.ComputeBarcode` no longer returns H₂ bars.** It ran the involuted engine with representatives at the default top degree, so it would have paid the table above for artifacts, on a default of `maxDimension = 2`. It now stops at H₁, as `ComputeRelativeBarcode` already stopped below the top. H₀ and H₁ are unchanged (tested). No caller in `src` reads it; say if you want those bars back.
+- **`ConditionedFiltration.ComputeBarcode` stopped returning H₂ bars.** That was wrong, and `da79547` undid it; the next section says why.
 - **`H1CycleEdges` stops at H₁,** which is all it reads. The same edges over 100 random complexes.
 - **Docs I had left wrong.** Two sub-bullets under `ReconstructH1Cycle` still said a path could use later tied edges, which `0cc8224` had ended. Gone.
 - **A slip.** A build through Bash mangled `-p:ArtifactsRoot` and left a stray folder. My cleanup filter also removed two empty stray folders from other sessions' builds (`tests/Maths.Distributions.Tests`, `tests/Maths.Regression.Tests`, from 2026-10-28 and 2026-11-01). They held no files and git doesn't track empty folders, so nothing is lost, but they weren't mine and I hadn't looked first.
@@ -455,3 +455,22 @@ The ratios rise with size, so neither is a ceiling. The involuted ratio is the l
 - **`TryEmergentPair` reports no death,** so a filtration with `EmergentPairs = true` would lose those bars in the involuted engine, and `EssentialCycle` would throw on the missing pivot. All five filtrations return false, so this is dead today, and I didn't touch it.
 - **The relative reading's timing on a quiet machine,** on the Shelf.
 - **MarkBrain's commits are the user's.** Nothing new there this round.
+
+### 2026-11-02, later still: the H₂ bars are back
+
+The user asked why they were gone, then pointed out that they can be restored without forcing a path that doesn't use them to use them. `da79547`; `TDA.Ph.Tests` 477/477, `TDA.Mapper.Tests` 28/28.
+
+**What was wrong with removing them.** I cut the bars to avoid paying for their cycles, when only the cycles cost: 111 MB for the bars against 4,601 MB with cycles at 88,110 cells. And I called them artifacts, which is too strong. The octahedron has no four vertices all joined, so its flag complex is a sphere and that void is real. A 2-skeleton can't tell such a void from a triangle that a left-out tetrahedron would fill.
+
+**`maxCycleDimension`,** on `PersistentHomology.Compute`, `PersistentInvolutedHomology.Compute` and `RelativeFiltration.ComputeBarcode`, is the highest degree whose bars get a cycle. By default that's every degree. Bars above it stay, without a cycle. `ConditionedFiltration.ComputeBarcode` reports the H₂ bars again and defaults it to 1, so pass 2 to read their cycles. `H1CycleEdges` still stops at H₁, since it returns an edge set and no bar is lost.
+
+| Cells | `PersistentHomology`, MB: bars / up to H₁ / every degree | `PersistentInvolutedHomology`, MB: bars / up to H₁ / every degree |
+|---|---|---|
+| 304 | 0.3 / 0.3 / 0.4 | 0.1 / 0.2 / 0.4 |
+| 1,702 | 4.0 / 4.1 / 6.2 | 1.0 / 1.2 / 6.8 |
+| 12,314 | 74.6 / 75.1 / 137.4 | 7.5 / 8.3 / 145.5 |
+| 88,110 | 2,172.0 / 2,174.3 / 4,437.5 | 110.9 / 114.3 / 4,601.5 |
+
+Up to H₁ that's 1.00 and 1.03 times the bars alone at the largest size, against 2.04 and 41.50. CPU at the largest, on a busy machine, was about 0.9 s for the involuted engine up to H₁, about 1 s for bars alone and about 34 s for every degree.
+
+**Checked.** Over 200 random complexes and limits from −1 to 3, on all three entry points: the same bars in the same order, the same cycles at or below the limit, and none above it (37,732 bars named, 32,408 not). On the octahedron through `ComputeBarcode`, there is one essential H₂ bar with no cycle by default, and with `maxCycleDimension: 2` its cycle is all 8 triangles.
