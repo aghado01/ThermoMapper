@@ -1643,7 +1643,7 @@ The extensions themselves are in [the extensions brief](../../issues/regression/
 **The observation model (F-X1).** `IBassObservationModel.Working(response)` hands the Gaussian core a `WorkingResponse`: `Values`, y − offset (the response itself, uncopied, when there is no offset), `Weights`, and `Output` (below). `BassDesign` and `BassResolved.Resolve` read it, so an offset is the shifted data in the resolved record, the target and the design, bit for bit.
 - *The core holds weights* since 2026-11-02 ([the weighted core](#bass-the-weighted-core)); until then it refused them.
 - *A runtime argument to the model:* `BassModel.Create(config, data, observation, form)`. A `BassConfig` field would change the serialized config and the fingerprint. The implication is that the seam stops at the model: `Bass.Fit`, `Bass.Resume` and `Bass.Fingerprint` take no observation model, so a run through them is Gaussian, and the extension that fills the seam adds it to the run and to the fingerprint.
-- *What still reads y.* The training fit and the residual-dependence check read the raw response, and prediction adds no offset back. Putting the offset back is the extension's. The pointwise densities read the working response and its weights.
+- *What reads the offset.* The pointwise densities, the training fit and the residual-dependence check read each draw's working response ([a design whose working response moves](#bass-a-design-whose-working-response-moves)). Prediction adds no offset back, which is the extension's.
 - *How GBMARS fills it:* y − β√w·v and weights 1/(w·v) at the current latent state, on the weighted core.
 
 **The sweep's slots (F-X2).** `BassSweepSlot` is D04's general order: `Structure`, `Tau`, `Coefficients`, `Latent`, `Scale`. `BassSweepSlots.Blocks` is the one place it is written. A chain starts at the structure's slot; a tempering replica or an SMC particle, whose moves the engine runs itself, starts at τ's. The observation model's `Blocks(slot)` fills the later three. Gaussian BASS returns none, so its scan has the two blocks of [the sweep](#bass-the-sweep), and an empty slot draws nothing and consumes no random number.
@@ -1659,7 +1659,7 @@ The extensions themselves are in [the extensions brief](../../issues/regression/
 
 | Extension | Beyond filling its contracts |
 |---|---|
-| GBMARS | The latent state and its blocks, with the decision on `BassState`; a design and a target whose working response moves; the offset back in prediction; the GIG sampler and Bessel K; the observation model in the run and the fingerprint |
+| GBMARS | The latent state and its blocks, with the decision on `BassState`; a latent's draw at b = 0; the offset back in prediction; the GIG sampler and Bessel K; the observation model in the run and the fingerprint |
 | ABMRS | A `BassTerm` slot or its own term type; the knot moves; band output from the face-splitting accumulation, with a `DecomposeBanded` on the wide-band factor; the factor's use by its target |
 | Correlated residuals | The Q-centred forms; the Q-aware level and σ² prior scale; the tridiagonal `IInnerProduct` and its θ updates |
 | Active subspaces | The gradient integrals from `FactorDerivative`; the moments of a non-separable kernel |
@@ -1680,7 +1680,7 @@ Built 2026-11-02 ([the report](../../issues/regression/bass/extensions-checklist
 **The rows are whitened.** `BassDesign` holds each column as W^½(z − z̄_w), centred under W, and the response as W^½(y − ȳ_w). Every inner product already in the design then reads the weighted form, so the Gram G_c = Z_cᵀWZ_c, the cross products, the residual ‖r‖²_W, bordering, rebuilds and the admission gate carry the weights with no branch of their own. The intercept's Gram entry is Σwᵢ, its column W-orthogonal to the others. A draw uncentres at z̄_w.
 - *The alternative* was an inner product carrying W through each dot, on the `IInnerProduct` pattern. It touches every dot, including the unit path's, for the same numbers.
 - *The implication:* `Residual` reads W^½r, not r.
-- *The gate reads W,* as this upgrade asks: two columns that differ only where the weights nearly vanish are one column to the fit. So F depends on W, and a latent move could put the current structure below s_min. A latent block has to treat that as off the support ([the open options](../../issues/regression/bass/moving-response-priors-options.md)).
+- *The gate reads W,* as this upgrade asks: two columns that differ only where the weights nearly vanish are one column to the fit. So F depends on W, and a latent move could put the current structure below s_min. A latent block treats that as off the support ([the options, and BARS's other reading](#bass-a-design-whose-working-response-moves)).
 - *A direct functional design holds its stacked columns,* since per-row weights do not contract through the Khatri–Rao pair. That is O(N) per inner product and N·M doubles, against the unit path's contraction. Weights separable as case × location would keep the contraction. They are not built, since the seam's contract is per row.
 - *The support threshold* reads the raw parts: rows, not weights, so a latent scale does not move it. Replication weights count on a scalar response (below).
 
@@ -1725,11 +1725,11 @@ It is selected two ways, and no default changes:
 - *`Sigma2Prior.Held(v)`, a config value:* σ² is a point mass, as probit's identification or a known noise states it. It is the shape τ's `TauPrior.Held` already has, and a `Bass.Fit` can run it. `Value` is left out of the JSON when null, so no other kind's form or fingerprint moves. It lifts the refusals of a constant or zero response, which need σ²'s posterior.
 - *`BassTarget.Given(σ²)`, at runtime:* the target given a σ² that moves, handed to the chain by `ReplaceTarget`, the pattern of BARS's robust sweep. This is the form for E1's σ² block and E32's outside σ². `Sigma2` stays the prior such a block draws against.
 - *The alternative* was σ² on `BassState`, which changes every snapshot, the decision the seams left to E1. A target per draw costs one small allocation.
-- *The chain's own target.* `BassTauBlock` and a chain's composition read the target the chain holds now (`ReversibleJumpChain.Target`), so a sampled τ sits beside a σ² that moves.
+- *The chain's own target.* `BassTauBlock` and the composition read the target the chain holds now (`ReversibleJumpChain.Target`), a lone chain's, a ladder's b = 1 replica's or a run's, so a sampled τ sits beside a σ² that moves.
 
 The composition draws β given σ² (`GPriorConditional.SampleGiven`), and the collapsed pointwise content is a Gaussian predictive (`LeaveOutLogDensityGiven`).
 
-**What reads the design.** `Compose`, the conditional means and `CentredDesign` centre under W (`WorkingResponse.ColumnMean`). The pointwise densities read the working response, N(y | f, σ²/w) under `Precision` and w copies of N(y | f, σ²) under `Replication`, whose collapsed predictive refuses, since a row left out is all its copies at once. Prediction's noise reads σ² as a unit-weight observation's. `BassResolved.Resolve` reads the weights once, and the level and s² stay as read: [priors for a response that moves](../../issues/regression/bass/moving-response-priors-options.md) are not built.
+**What reads the design.** `Compose`, the conditional means and `CentredDesign` centre under W (`WorkingResponse.ColumnMean`). The pointwise densities read the working response, N(y | f, σ²/w) under `Precision` and w copies of N(y | f, σ²) under `Replication`, whose collapsed predictive refuses, since a row left out is all its copies at once. Prediction's noise reads σ² as a unit-weight observation's. `BassResolved.Resolve` reads the weights once, and the level and s² stay as read, or as a [frozen reference](#bass-priors-that-stop-reading-a-moving-response) states them.
 
 **Checked** (`BassWeightedCoreTests`, `BassBitIdentityTests`).
 - *Unit weights.* The eight hashes hold. Declared unit weights under all four readings equal Gaussian to 10⁻¹⁰, through the marginal and its slope.
@@ -1742,7 +1742,7 @@ The composition draws β given σ² (`GPriorConditional.SampleGiven`), and the c
   - *The unit path,* wall-clock after/before over 72 pairs: Friedman at M = 9–10, a median of 0.99 (IQR 0.94–1.05), about 10 µs per sweep. Direct functional at M = 5, 1.07 (IQR 0.98–1.26), about 7 µs, which one burst of load inflates: 0.99 on the pairs where others kept at most 4 cores busy. A difference under about 5% cannot be read here.
   - *A slowdown this found and removed.* An earlier pass read Friedman at +6 to +14%. The support count had taken a nullable lookup and a floating-point add per nonzero element, on every proposal. The unit path has its own loop again.
   - *The readings, on Friedman:* the prior on the weighted columns about 13 µs at M = 9–12, the unit path's order; the pencil about 44 µs at M = 8–10, so 3–4×, growing as M³. These ran under more load (others' median 7–9 cores), so read them against each other, not against the unit path's figures.
-- *Not checked.* A working response or weights that move, which needs a design that follows them. A run through `Bass.Fit` under weights, which takes no observation model. Weights with a Q other than the identity, which the core still refuses.
+- *Not checked.* A run through `Bass.Fit` under weights, which takes no observation model. Weights with a Q other than the identity, which the core still refuses.
 
 ### BASS: priors that stop reading a moving response
 
@@ -1803,10 +1803,92 @@ So s² sets the hyperprior's scale alone, and a poor read hurts less than under 
 **What was checked** (`BassPriorReferenceTests`).
 - *Unasked, nothing changes:* a reference that restates today's read walks today's chain, draw for draw, under the g-form's three centres and the ridge's level and zero centres.
 - *Dense algebra.* S, the determinant term and the conditional mean for each form and Gram, and the collapsed predictive against the joint normal, each to 10⁻⁹; the slope in b against a finite difference.
-- *The trilemma on the targets.* Under y → ky + m, across snapshots, the moments, robust, quantile, frozen-Gram, invariant and hierarchical routes keep their log posterior differences to 10⁻⁸, and a declared prior's move. Chains on y and on ky + m visit the same structures, sweep by sweep, through a moving response. Since a design cannot follow one yet, a moving response is a model per snapshot, each segment starting where the last ended.
+- *The trilemma on the targets.* Under y → ky + m, across snapshots, the moments, robust, quantile, frozen-Gram, invariant and hierarchical routes keep their log posterior differences to 10⁻⁸, and a declared prior's move. Chains on y and on ky + m visit the same structures, sweep by sweep, through a moving response. A moving response here is a model per snapshot, each segment starting where the last ended, and [a chain moved in place](#bass-a-design-whose-working-response-moves) passes the same test.
 - *The family against outside readings.* At a = h = ½, against `HalfCauchy`'s own density, integrated on σ, to 10⁻⁸. Across structures both limits hold: at a = 2 the gap between two structures is 1.51143 at h = 10⁴ against the plug-in's 1.51160, and 1.21895 at h = 10⁻⁵ against Jeffreys'.
 - *Enumeration.* Detailed balance on every structure of F for a frozen level and a frozen Gram, against dense algebra. Chains' visits against the posterior, including with r integrated by quadrature, with σ² integrated and drawn apart. The rate's own conditional against quadrature, on both paths.
 - *The evidence,* against the enumeration's −16.294 with r integrated by quadrature: −16.280 on a ladder, −16.327 on a linear ladder, −16.303 on SMC.
+
+### BASS: a design whose working response moves
+
+Built 2026-11-02 ([the report](../../issues/regression/bass/extensions-checklist.md#reports)), ahead of the consumers that need it: E1, E20, E23, E32. Nothing fills it yet, since a latent block is the consumer's and `Bass.Fit` stays Gaussian. No default changes, and Gaussian BASS's draws hold their hashes.
+
+**What moves.** A working response is immutable, so a move is a new one: `WorkingResponse.Moved(offset, weights)` is the model's reading at another latent state, its meaning, prior's Gram, inner product and reference kept. A chain takes it between sweeps, two ways:
+- *`BassStructureMoves.ProposeFollow(state, working)`* returns the candidate for a block to weigh. Like a structure move's candidate it is pending until the chain shows it, and a refused one is scored off the support. A Metropolis step reads this.
+- *`BassStructureMoves.Follow(chain, working)`,* and `BassChain.Follow`, moves the chain, for a draw from the conditional or a response given from outside. It returns the refusal with everything as it was.
+
+A block reaches its replica's moves by `BassStructureMoves.Of(chain)`, so the same block serves a lone chain, each rung of a ladder and an SMC particle.
+
+**What follows.**
+
+| | An offset alone (probit's z, E23, E32) | Weights too (a latent scale) |
+|---|---|---|
+| ỹ, ȳ_w, ‖ỹ‖²_W | Read again, O(N) | Read again, O(N) |
+| Columns | Kept | Whitened again, O(NM) |
+| Gram, factor, gate | Kept: F does not read the values | Formed and factored strictly, O(NM²), and gated |
+| b_c, β̂, r, ‖r‖², Q | O(NM), and a solve in O(M²) | The same, on the new factor |
+| A prior's terms | Cross products only, O(M²) on a spectrum and O(p²) on a pencil | Decomposed, O(M³) or O(p³) |
+| A draw's column means | Kept | Read again |
+
+The weights' path runs the arithmetic of a design built there and loaded, to the bit. The offset's keeps the factor's incremental updates, so it differs from that design in rounding.
+
+**Where the statistics live.** A state's fit names the working response it was fitted on (`BassStructureFit.Working`), and the target reads ȳ_w, the weighting and the exact-fit floor from it. So the target stays one target, holding what the priors read, frozen.
+- *Why on the state:* σ²'s rate's reason. A swap hands over a state with its evaluation, an SMC stage holds one target for its particles, and the flat histogram wraps one. A state that carries what it read serves each of them with no change of theirs.
+- *The alternative* was a target per working response through `ReplaceTarget`, the pattern of BARS's robust sweep and `BassTarget.Given`. It needs a target per replica, which a swap would have to exchange, and it has no seat on SMC.
+- *The implication:* a state is its structure on its working response, and a design shows a state only when it holds both. Replicas that share a term array on different working responses hand over their designs as they do for different structures.
+- *The floor is no prior.* It is the round-off of the current squares, so under Jeffreys it reads them, with s² standing in under a frozen read that states one.
+
+**Decided: F under a moving W.** The gate reads the weighted Gram, so a latent draw can put the current structure below s_min, where its posterior is 0. Two options, and this is a design call for the user's review:
+
+| | The gate reads W (built) | The gate reads the prior's columns alone |
+|---|---|---|
+| F | Moves with W | Fixed |
+| The joint | π(S, z) ∝ π(S)·p(z)·1[S ∈ F(W(z))]·p(y \| S, τ, z): coherent, but F reads a parameter, so integrating z out gives the stated noise law only up to the mass the gate removes | The stated law, exactly |
+| A latent block | A draw off the support is refused and the old state kept. A conjugate draw is then an independence proposal from the conditional truncated to F, which accepts every draw inside F, so the step is exact | Unchanged |
+| A singular G | Never reached: the factor of G stays well conditioned | Admitted. ‖r‖²_W, Q and β̂ come from that factor, so the design needs a path with no factor of G: S = b(‖ỹ‖²_W − Σⱼ wⱼ²·b/(bλⱼ + τ)) on the pencil alone, proposals with no bordering, and the draw from the pencil |
+| Reach | Every reading of the prior | `Unweighted` and `Frozen` only. Under `Weighted` the prior's columns are the weighted ones, so a singular G is a singular prior and the gate must read W |
+| Cost per move | None beyond the Gram the move forms anyway | The same order, once the path exists |
+
+- *BARS went the other way.* After its review follow-up its robust block admits on G = ZᵀZ alone, since a joint gate is exact only with a weight update that rejects draws refusing the current knots, and it makes the knot support depend on latent outlier weights ([the admission's notes](#bars-observation-models)). That is this table's left column, rejected. BARS could do so cheaply: it factors P_a = Zᵀ(W + τI)Z, which is positive definite whenever G is, and never holds the likelihood's Gram alone. BASS's design does hold it.
+- *Why built this way here:* it needs no second path through the design, it covers all three readings, and it can be exact. The right column adds to this one, with no seam changed, so taking it later loses nothing.
+- *What it costs, read on the two fixtures and a small N.* On a Gaussian chain's structures at s_min = 10⁻¹⁰, with scales drawn from their conditionals given the least-squares residuals, Friedman (N = 500, M = 11) and direct functional (N = 1,200, M = 5) refused none of 3,600 draws each over t(3), t(1) and a Laplace's. The smallest angle was 9.6·10⁻⁴, on a Laplace's scales, nearly seven orders above the floor. At N = 30 with a support floor of one row, where a column can rest on a single row, t(3) and t(1) refused none of 1,200 each, with angles down to 1.2·10⁻⁶, and a Laplace's refused 16 of 1,200, or 1.3%. So the truncation is out of reach at the fixtures' sizes and measurable once few rows carry a column. A refused draw costs a block one step.
+- *What this reading leaves out.* Its residuals are least-squares ones at a Gaussian chain's structures, not a latent chain's own. Noise with a Laplace's latent scale in a chain that draws a can hold residuals smaller still, so E1 should read its own refusals; a block's accept counter reads them.
+- *An option refused:* gating at structure moves alone and never at a latent move. F would then depend on the chain's history, and no joint has that support.
+
+**Decided: what a model that moves must state.** With no reference, level centring and a σ² prior that reads s² would read the snapshot, conditioning the prior on parameters. `BassModel.PriorsReadResponse` says so, and the first move throws, naming the routes. The routes that read nothing are wider than the invariant one: a flat or zero intercept with Jeffreys, a declared inverse gamma or a held σ², so E32's and a mixture's zero centre qualifies.
+- *When it is refused:* at the move, not at `BassModel.Create`. A model that never moves is unaffected, and the seam gains no member.
+- *The alternatives.* A declaration on `IBassObservationModel` refused at `Create` would catch it one sweep sooner, for a member every implementer states. Freezing `BassPriorReference.Moments(y)` at the first move would pick a route for the user, and defaults are the user's. A warning leaves conditionals that share no joint.
+- *`Weighted` under a moving W is allowed:* the prior moves with W by its own statement. A block that weighs the marginal is exact on that joint, as the enumeration below checks; a conjugate draw needs the correction of [the options' step 3](../../issues/regression/bass/moving-response-priors-options.md#what-to-build-in-order).
+- *What stays fixed.* The model's meaning, Gram and reference. A model with no weights takes no weights, since a design's layout depends on holding them, so a model whose weights move declares unit weights at the start. Weights that count rows do not move, since the support threshold and τ₀ read their sum at resolution, and nothing that hands them moves them.
+
+**Decided: which target a composition reads.** A moved response asks nothing of the target, since the composition reads the design at the state. What was left is a σ² drawn apart, and a ladder's and a run's composition now read the target their sampling chain holds, as a lone chain's did.
+- *So a replica's target has to be its state's.* A swap hands over a state with an evaluation that read its giver's σ². A replica that kept its own target would then weigh its next moves against a σ² drawn for another state, so it takes the handed one (`BassLadder`), and the swap moves the pair.
+- *SMC and the flat histogram keep the model's,* since the first refuses another and the second wraps it: a σ² drawn apart has no seat on either yet.
+- *Two entries read the model's target for a moment:* a resize's new replica, in burn-in, until its block runs, and a state from the reference rung, which carries no σ² of its own.
+
+**What reads it.** A draw names the working response it was composed on (`BassDraw.Working`, null for the response itself), so these views read each draw's own.
+- *The pointwise densities.* The retained content is N(y − offset | f, σ²/w) at the draw's own offset and weights. The collapsed content takes a block per structure and working response. Where the draws differ, `Latents` reports the offset and weights as observation-level latents conditioned on. Integrating them out is the noise's own density, which arrives with its observation model.
+- *The training fit.* `Offset` is the draws' mean offset, and `Residuals` read y − offset − f̄. `Observed` stays y, so the name stays true, and `Mean` and `Quantiles` stay the surface's, as prediction's are. `NoiseSd` is null under weights, whose noise varies by row, as a basis fit's does by location.
+- *The alternatives for it.* Reporting y − offset as `Observed` would make the name false. Adding the offset to the mean would read well for E23 and E32, whose offset is shared, and badly for a latent scale, whose offset has read yᵢ itself, so the fit would sit near the data it conditioned on. The field gives either view.
+- *The residual check and the conditional means* read them too.
+- *Prediction adds no offset back.* At a new input no offset exists; a consumer with a g(x) or an f_lo(x) adds its own.
+- *A draw read on other data* reads that model's working response, since its own offset and weights say nothing there.
+- *The cost:* a retained draw shares its working response with the chain, so N to 3N doubles per distinct snapshot retained, about 24 MB at N = 1,000 over 1,000 draws under a latent scale. A draw `with { Working = null }` drops it, and the views then read the model's. The collapsed content and the conditional means take a design per structure and working response, so under a latent scale about one per draw.
+
+**Checked** (`BassMovingResponseTests`; `BassPriorReferenceTests.AMovingResponse_WalksTheSameStructures_OnKYPlusM`).
+- *In place against built.* After each of three moves a design holds what a design built there holds, on both forms and all readings, scalar and direct with the Khatri–Rao pair: ȳ_w, the weighting, ‖r‖², Q, β̂, r, the angle and the conditional mean to 10⁻⁹, S and the marginal at three (τ, b) against a rebuilt model's target, and the proposals after a move. The weights' path to the bit.
+- *In place against rebuilt.* A chain moved in place walks a chain rebuilt per snapshot for 320 sweeps, fifteen routes and forms: the same structures, τ, r and marginal, and each snapshot's draw to 10⁻⁸.
+- *Equivariance.* Chains on y and on ky + m visit the same structures, through a moved chain as through a model per snapshot.
+- *At each snapshot.* Detailed balance on all 2,263 structures of the rebuilt model to 10⁻¹³, the posterior against dense algebra to 10⁻⁹, and every structure through the moved path against that enumeration to 10⁻⁹, for level centring, the frozen and weighted Grams, and the flat and zero routes.
+- *The joint.* A latent of three values, each its own working response, with a prior that evens their posterior. A chain's visits over (structure, z) against the enumerated joint, by Metropolis and by Gibbs on the latent, on seven readings and a ladder.
+- *Off the support.* A move refused exactly where the enumeration says F leaves the structure, 720 refusals among 6,543 moves. In the joint, 3.6% of the mass sits on structures a move would leave F. A refused move leaves a chain bit for bit as if it was never tried.
+- *What reads it.* Each view against a rebuilt model's, by snapshot.
+- *Restart.* A chain's snapshot after a move, its columns re-evaluated under the moved weights, and a ladder's, with each replica's working response, continue bit for bit.
+- *A ladder under a σ² drawn apart.* 25,000 swaps, the visits against the collapsed posterior, each replica's target the one its evaluation read, and each composed σ² the one held.
+- *Whether the checks can fail.* 28 deliberate breaks, one at a time in an exported tree: the target reading the model's weighting, mean or floor; stale columns, responses or prior terms on a commit; a sync that ignores the working response; a view reading the model's. All are caught. Two survived the first pass, each a gap now closed: the conditional's draw reads Σw where its mean does not, and no test held a state no design holds.
+- *Cost.* A rough reading under load. The unit path's draws are bit-identical, so blocks pair across clean builds of the commit before and this one: eight alternating rounds of nine blocks of 200,000 sweeps, pinned to the P-core threads, M identical in all 144 pairs (`BassWeightsCostTests`). Others kept about 2 cores busy, and 5 pairs met the quiet rule.
+  - *The unit path,* after/before. Friedman at M = 9–10: wall 1.005 (IQR 0.93–1.13), CPU 1.017 (IQR 0.93–1.11). Direct functional at M = 5: wall 1.009 (IQR 0.95–1.09), CPU 1.028 (IQR 0.93–1.11). On minima, wall 0.974 and 1.025, CPU 0.978 and 1.018. The signs flip by fixture, so no slowdown is resolved, and a change of a few percent could hide in it.
+  - *A move,* CPU µs per sweep with one move each sweep, on Friedman at N = 500 and M = 8–9, each line's walk its own, so read them against each other: unit weights 9.4 with none and 19.5 with an offset (21.9 under the ridge); the prior on the unweighted columns 45 with none, 62 with an offset and 188 with weights too; the prior on the weighted columns 7.8 with none and 85 with weights too. So an offset costs about 10–16 µs and weights about 80–140 µs. A latent scale's draw of N values is its own, on top.
+- *Not checked.* A move on SMC or the flat histogram: the route exists and reads the same fit, but neither draws its start's latents, so neither would be exact until the latent blocks arrive. For the same reason a ladder's reference rung sits at the model's working response, which is checked only for its mechanics. A run's composition under a target a block handed it, since `Bass.Fit` takes no observation model. A σ² drawn apart across a restart, which a chain's snapshot does not hold.
 
 ### BAPS: penalized splines
 

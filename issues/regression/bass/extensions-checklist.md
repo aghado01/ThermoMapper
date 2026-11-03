@@ -42,6 +42,49 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ## Reports
 
+### A design whose working response moves — 2026-11-02
+
+`ab6b45b`. A chain takes a new working response between sweeps: the design refits the current structure, and the state's fit, the target's statistics, pointwise and the training fit follow. No default changes. The forms, options and trade-offs are in [the docs](../../../docs/Maths/BayesianRegression.md#bass-a-design-whose-working-response-moves).
+- *Built.*
+  - `WorkingResponse.Moved(offset, weights)`, the model's reading at another latent state.
+  - `BassStructureMoves.ProposeFollow`, a candidate for a block to weigh, and `Follow` and `BassChain.Follow`, which move the chain. A block reaches them by `BassStructureMoves.Of(chain)`.
+  - An offset alone keeps the columns, factor and gate, about 10–16 µs per move on Friedman. Weights whiten and factor again, about 80–140 µs, by a built design's arithmetic to the bit.
+  - `BassDraw.Working`, read by pointwise, the conditional means and the residual check. `BassTrainingFit.Offset`, with `Residuals` on y − offset − f̄.
+- *One choice beyond the brief.* The statistics went on the state, not on a target per snapshot: `BassStructureFit.Working`, read by the one target. σ²'s rate went the same way, for the same reason: a swap carries an evaluation, an SMC stage holds one target, and the flat histogram wraps one.
+- *For the user's review: F under a moving W.* Built with the gate reading W: a move that leaves F is refused, and a block keeps the old state, which is exact. **BARS's review rejected this reading:** its robust block admits on G alone, since a joint gate makes the support depend on latent outlier weights. BARS could, because it factors P_a. BASS's design holds a factor of G, so the other reading needs a path with no such factor, on the pencil alone, and `Weighted` cannot take it at all. It adds to this one with no seam changed.
+  - *Measured:* 0 of 7,200 draws refused on Friedman and direct functional, over t(3), t(1) and a Laplace's scales, with the smallest angle at 10⁻³, nearly seven orders above s_min. At N = 30 with a support floor of one row, a Laplace's refused 16 of 1,200, or 1.3%, and the t's none.
+  - *The call:* keep this, or build the other path for `Unweighted` and `Frozen`, at about the size of the pencil's own. My recommendation is to keep it until E1 reads its own refusals, which a block's accept counter gives.
+- *Decided, with the alternatives in the docs.*
+  - A model whose priors read the snapshot throws at its first move (`BassModel.PriorsReadResponse`). The routes that read nothing are wider than the brief's: a flat or zero intercept with Jeffreys, a declared inverse gamma or a held σ², so E32's zero centre qualifies.
+  - A ladder's and a run's composition read the target their sampling chain holds. Having a ladder read that target exposed something the row had not named: a swap left a replica's target behind its state, so a σ² drawn apart was read against the wrong state. A replica now takes the target with the state. SMC and the flat histogram keep the model's.
+- *Evidence.*
+  - Regression 1,820 of 1,820 on the final tree, 119 of them new, with the eight hashes held. The BASS oracle filter 90 of 90, at below-normal priority.
+  - `AMovingResponse_WalksTheSameStructures_OnKYPlusM` holds through the new path on all seven routes. A chain moved in place walks a chain rebuilt per snapshot for 320 sweeps on fifteen routes and forms, draws included.
+  - At each snapshot: detailed balance on all 2,263 structures, worst 3.6·10⁻¹⁴, dense algebra to 10⁻⁹, and every structure through the moved path to 10⁻⁹.
+  - The joint over (structure, latent) against enumeration on seven readings and a ladder. A move refused exactly where F leaves the structure, 720 of 6,543.
+  - 28 deliberate breaks, one at a time in an exported tree, all caught.
+- *Cost, under load.* After/before over 72 paired blocks of 200,000 sweeps per fixture, M identical in all. Friedman: wall 1.005 (IQR 0.93–1.13), CPU 1.017 (IQR 0.93–1.11). Direct functional: wall 1.009 (IQR 0.95–1.09), CPU 1.028 (IQR 0.93–1.11). On minima: wall 0.974 and 1.025, CPU 0.978 and 1.018. Others kept about 2 cores busy, and 5 of 144 pairs met the quiet rule. The signs flip by fixture, so no slowdown is resolved, and a change of a few percent could hide in it; the statistical half waits on a quiet window, as the others do.
+- *The review found.*
+  - **A test with no power.** The first gate case passed with z = 0 holding π = 1.0000, so nothing was tested off the support. A prior that evens z's posterior now gives every value mass, and the gate case must put over 3% where F moves.
+  - **A real gap the first mutants showed.** Two of the first 24 survived. The conditional's draw reads Σw where its mean does not, and the chain test had no route on the weighted Gram; and no test held a state no design holds. Each has one now.
+  - **A wrong reading of a draw.** A regression test reads a draw on another dataset, and the view took the draw's own n-row response for N rows. A draw's working response now applies only on the response it was composed on (`BassDraw.WorkingOn`). The mean offset bypassed that rule too.
+  - **Two scares that were not defects.** A lone chain's z-law read 0.25 against ⅓ under extreme weights; over 5,000,000 sweeps it read 0.327, so that was mixing. A chain held a structure "outside F" at s_min = 0.6, an exact rational tie on the grid's prior Gram, which rounding decides by column order, so the test's floor moved to 0.61.
+- *Seam shapes changed, with no recorded ruling.*
+  - `BassStructureFit` and `BassDraw` gain `Working`, and `BassTrainingFit` gains `Offset`.
+  - `BassTarget`'s constructor takes the working response it read. `NewDesign` and `BassDesign.Load` take one.
+  - `WorkingResponse` gains `Moved` and `IsResponseItself`, and its mean is read once.
+  - `ReversibleJumpChain` exposes `Moves`. `RidgeSpectrum` and `PriorPencil` gain `WithCross`.
+- *Limits.*
+  - Nothing fills it yet: latent blocks and `Bass.Fit` are out of scope, so a run's composition under a handed target is unreached.
+  - A latent's draw at b = 0 is unbuilt, so a reference rung and SMC's start sit at the model's working response. A ladder with a reference rung is checked for its mechanics only, and SMC and the flat histogram not at all.
+  - A conjugate draw under `Weighted` needs [the correction of step 3](moving-response-priors-options.md#what-to-build-in-order). A block that weighs the marginal is exact, as checked.
+  - Weights that count rows do not move, and a model with no weights takes none.
+  - The training fit's quantiles stay the surface's, and prediction adds no offset back.
+  - A σ² drawn apart is not in a snapshot, so a restart under one is not bit for bit.
+  - Under a latent scale a retained draw holds its own working response, about 24 MB at N = 1,000 over 1,000 draws, and the collapsed content and conditional means take a design per draw.
+  - `BassPriorReferenceTests` is committed, which frees the `SampleLogRate` fix in the report below.
+  - The [capability inventory](../capability-inventory.md) stays as read at `c1eda6a`, its U4 included.
+
 ### The moving-response priors checked — 2026-11-02
 
 By the main session, on a clean export of `b5ff1e6`: Regression 1,693/1,693 with `BassPathProfile` left out, the BASS oracle filter 90/90 at below-normal priority. Reread and held: the level's energy on all three forms, κ read as τ/κ and its link values, the frozen Gram, the family's mean and both limits, half-Cauchy at a = h = ½, ln IG on v. No reader found that drops a state's rate. The docs of `09774a2` and `d30ab9e` hold against the same derivations.

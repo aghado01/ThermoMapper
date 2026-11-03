@@ -11,6 +11,15 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### z in a moving response (2026-11-02)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - z, a term's raw column (`BassDesign.Whitened`, `docs/Maths/BayesianRegression.md`, "BASS: the weighted core": W^½(z − z̄_w)).
+  - z, a latent state or value that hands a working response (`moving-response-priors-options.md`: "the latent z (probit)"; "BASS: a design whose working response moves": π(S, z)).
+- **Found:** 2026-11-02, a design whose working response moves.
+- **Note:** Albert and Chib's own z is the probit's latent, so the column may be the one to rename.
+
 ### κ, r and h in the priors for a moving response (2026-11-02)
 
 - **Kind:** one name for several concepts.
