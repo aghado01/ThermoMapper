@@ -334,8 +334,8 @@ The graph engines can't read this, since the cone over an edge is a triangle, so
 #### What stayed open, and why
 
 - **`ComputeBothReadings` is internal, by the user's ruling (2026-11-02).** I recommended keeping it public and the user chose internal, at a point
-  when my figure was still "about 3 times slower", since softened above. `ComputeBarcode` is the one public path. The reading and its tests stay,
-  with nothing outside the assembly calling it.
+  when my figure was still "about 3 times slower". Asked again on the softened figures above, the user kept it internal. `ComputeBarcode` is the one
+  public path. The reading and its tests stay, with nothing outside the assembly calling it.
 - **A timing on a quiet machine.** Not available today. The harness is ready; the command is on the Shelf.
 - **Compatible cycles along a bar.** Above. The user's call; on the Shelf.
 - **The two reported deviations.** On the Shelf, per the brief.
