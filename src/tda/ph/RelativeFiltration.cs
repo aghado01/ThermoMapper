@@ -115,9 +115,9 @@ public sealed class RelativeFiltration : IFiltration
     /// <c>K</c> fills.
     /// Zero-length bars stay, as the reducer emits them.
     /// </summary>
-    public Barcode ComputeBarcode(int maxDimension = int.MaxValue, bool representatives = false)
+    public Barcode ComputeBarcode(int maxDimension = int.MaxValue, bool representatives = false, int maxCycleDimension = int.MaxValue)
     {
-        Barcode relative = PersistentHomology.Compute(this, maxDimension, representatives);
+        Barcode relative = PersistentHomology.Compute(this, maxDimension, representatives, maxCycleDimension);
 
         var bars = new Bar[relative.Bars.Count];
         for (int b = 0; b < bars.Length; b++)

@@ -498,6 +498,53 @@ public sealed class EssentialCyclesTests
     }
 
     [Fact]
+    public void MaxCycleDimension_KeepsEveryBar_AndNamesCyclesOnlyUpToIt()
+    {
+        int named = 0, unnamed = 0;
+
+        void Check(Barcode whole, Barcode limited, int limit)
+        {
+            Assert.Equal(whole.Bars.Count, limited.Bars.Count);
+            for (int b = 0; b < whole.Bars.Count; b++)
+            {
+                Bar expected = whole.Bars[b], bar = limited.Bars[b];
+                Assert.Equal((expected.Dimension, expected.Birth, expected.Death, expected.Generator), (bar.Dimension, bar.Birth, bar.Death, bar.Generator));
+
+                if (bar.Dimension <= limit)
+                {
+                    Assert.Equal(expected.Cycle, bar.Cycle);
+                    named++;
+                }
+                else
+                {
+                    Assert.Null(bar.Cycle);
+                    unnamed++;
+                }
+            }
+        }
+
+        for (int seed = 0; seed < 200; seed++)
+        {
+            SimplicialFiltration filtration = RandomComplex(new Random(seed));
+            var relative = new RelativeFiltration(filtration, s => s.Dimension == 0);
+
+            Barcode column = PersistentHomology.Compute(filtration, representatives: true);
+            Barcode involuted = PersistentInvolutedHomology.Compute(filtration, representatives: true);
+            Barcode quotient = relative.ComputeBarcode(representatives: true);
+
+            for (int limit = -1; limit <= 3; limit++)
+            {
+                Check(column, PersistentHomology.Compute(filtration, representatives: true, maxCycleDimension: limit), limit);
+                Check(involuted, PersistentInvolutedHomology.Compute(filtration, representatives: true, maxCycleDimension: limit), limit);
+                Check(quotient, relative.ComputeBarcode(representatives: true, maxCycleDimension: limit), limit);
+            }
+        }
+
+        _output.WriteLine($"bars named {named}, left without a cycle {unnamed}");
+        Assert.True(named > 1000 && unnamed > 1000);
+    }
+
+    [Fact]
     public void LargerSkeleton_BothEnginesNameTheSameCycles_AndTheyClose()
     {
         int voids = 0, largest = 0;
@@ -578,6 +625,8 @@ public sealed class EssentialCyclesTests
             var columnCycles = Measure(() => PersistentHomology.Compute(filtration, representatives: true));
             var involutedBars = Measure(() => PersistentInvolutedHomology.Compute(filtration));
             var involutedCycles = Measure(() => PersistentInvolutedHomology.Compute(filtration, representatives: true));
+            var columnUpToH1 = Measure(() => PersistentHomology.Compute(filtration, representatives: true, maxCycleDimension: 1));
+            var involutedUpToH1 = Measure(() => PersistentInvolutedHomology.Compute(filtration, representatives: true, maxCycleDimension: 1));
 
             var voids = columnCycles.Result.Bars.Where(b => b.IsInfinite && b.Dimension == 2).ToList();
             double meanSize = voids.Count == 0 ? 0.0 : voids.Average(b => b.Cycle!.Length);
@@ -585,7 +634,8 @@ public sealed class EssentialCyclesTests
             Report($"n {n}, cells {filtration.Count}, essential H2 {voids.Count} of mean size {meanSize:F1}, largest {(voids.Count == 0 ? 0 : voids.Max(b => b.Cycle!.Length))}: " +
                 $"MB column {columnBars.Megabytes:F1} -> {columnCycles.Megabytes:F1} ({columnCycles.Megabytes / columnBars.Megabytes:F2}); " +
                 $"involuted {involutedBars.Megabytes:F1} -> {involutedCycles.Megabytes:F1} ({involutedCycles.Megabytes / involutedBars.Megabytes:F2}); " +
-                $"cpu s column {columnBars.Cpu:F3} -> {columnCycles.Cpu:F3}, involuted {involutedBars.Cpu:F3} -> {involutedCycles.Cpu:F3}");
+                $"up to H1: column {columnUpToH1.Megabytes:F1} ({columnUpToH1.Megabytes / columnBars.Megabytes:F2}), involuted {involutedUpToH1.Megabytes:F1} ({involutedUpToH1.Megabytes / involutedBars.Megabytes:F2}); " +
+                $"cpu s column {columnBars.Cpu:F3} -> {columnCycles.Cpu:F3} (up to H1 {columnUpToH1.Cpu:F3}), involuted {involutedBars.Cpu:F3} -> {involutedCycles.Cpu:F3} (up to H1 {involutedUpToH1.Cpu:F3})");
 
             if (columnCycles.Cpu + involutedCycles.Cpu > budgetSeconds) break;
         }

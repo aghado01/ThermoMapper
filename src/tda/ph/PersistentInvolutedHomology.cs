@@ -11,7 +11,9 @@ namespace TDA.Ph;
 /// reduction for fast barcodes with cycle representatives (Ripser <c>:involuted</c>).
 /// <para>With representatives, every bar has a <see cref="Bar.Cycle"/>. An essential H₁ bar's is a shortest path closed by its
 /// birth edge. An essential bar higher up has the chain <c>V_i</c> of its birth cell, the same as
-/// <see cref="PersistentHomology"/>'s, and it costs a reduction of that cell's boundary through the degree's death columns.</para>
+/// <see cref="PersistentHomology"/>'s, and it costs a reduction of that cell's boundary through the degree's death columns.
+/// <c>maxCycleDimension</c> is the highest degree that gets one: the bars above it stay, without a cycle, so a path that reads
+/// none of them pays for none.</para>
 /// </summary>
 public static class PersistentInvolutedHomology
 {
@@ -19,13 +21,14 @@ public static class PersistentInvolutedHomology
         SimplicialFiltration filtration,
         int maxDimension = int.MaxValue,
         double cutoff = 0.0,
-        bool representatives = false)
+        bool representatives = false,
+        int maxCycleDimension = int.MaxValue)
     {
         ArgumentNullException.ThrowIfNull(filtration);
 
         int n = filtration.Simplices.Count;
         var bars = new List<Bar>();
-        (List<Bar> h0Bars, HashSet<int> toReduce) = PersistenceClearing.ComputeH0(filtration, maxDimension, cutoff, cycles: representatives);
+        (List<Bar> h0Bars, HashSet<int> toReduce) = PersistenceClearing.ComputeH0(filtration, maxDimension, cutoff, cycles: representatives && maxCycleDimension >= 0);
         bars.AddRange(h0Bars);
 
         if (maxDimension <= 0)
@@ -46,9 +49,9 @@ public static class PersistentInvolutedHomology
             var infiniteBirths = new List<int>();
             cohomology.RunDimension(dim, maxDimension, cutoff, representatives, null, deaths, infiniteBirths);
 
-            var deathsOfNextDegree = new ReducedDeaths(n, representatives);
+            var deathsOfNextDegree = new ReducedDeaths(n, keepChains: representatives && dim + 1 <= maxCycleDimension);
             bars.AddRange(ReduceBoundaryColumns(
-                filtration, deaths, maxDimension, cutoff, representatives, deathsOfNextDegree));
+                filtration, deaths, maxDimension, cutoff, representatives && dim <= maxCycleDimension, deathsOfNextDegree));
 
             foreach (int birthIdx in infiniteBirths)
             {
@@ -57,7 +60,7 @@ public static class PersistentInvolutedHomology
                     continue;
 
                 int[]? cycle = null;
-                if (representatives)
+                if (representatives && dimBirth <= maxCycleDimension)
                 {
                     cycle = dimBirth == 1
                         ? CycleReconstruction.ReconstructH1Cycle(filtration, birthIdx)
@@ -158,10 +161,10 @@ public static class PersistentInvolutedHomology
         public readonly SortedSet<int>[] Columns;
         public readonly ReductionChains? Chains;
 
-        public ReducedDeaths(int n, bool representatives)
+        public ReducedDeaths(int n, bool keepChains)
         {
             Columns = new SortedSet<int>[n];
-            Chains = representatives ? new ReductionChains(n) : null;
+            Chains = keepChains ? new ReductionChains(n) : null;
         }
 
         /// <summary>The cycle of a cell of this degree that kills nothing: <c>V</c> of its column, as in a full reduction.</summary>

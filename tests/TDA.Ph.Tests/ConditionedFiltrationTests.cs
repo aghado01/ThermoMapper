@@ -33,28 +33,27 @@ public sealed class ConditionedFiltrationTests
     }
 
     [Fact]
-    public void ComputeBarcode_StopsBelowTheTriangles_WhereNothingCanFillWhatIsLeft()
+    public void ComputeBarcode_ReportsAVoid_AndNamesItsCycleOnlyWhenAsked()
     {
-        // All pairs on six vertices: a tetrahedron would fill the triangles left over, and the skeleton has none.
+        // The octahedron: no four vertices are all joined, so its flag complex is a sphere and the void is real.
         const int n = 6;
-        List<(int, int)> backbone = PathEdges(n);
+        var backbone = new List<(int, int)>();
         var similarity = new List<(int, int, double)>();
         for (int a = 0; a < n; a++)
-            for (int b = a + 2; b < n; b++)
-                similarity.Add((a, b, 1.0 + a + b));
+            for (int b = a + 1; b < n; b++)
+                if (!(a % 2 == 0 && b == a + 1))
+                    similarity.Add((a, b, 1.0 + a + b));
 
         Barcode barcode = ConditionedFiltration.ComputeBarcode(n, backbone, similarity);
-        Assert.DoesNotContain(barcode.Bars, b => b.Dimension == 2);
 
-        SimplicialFiltration skeleton = RipsFiltration.GraphRips(
-            ConditionedFiltration.BuildGraph(n, backbone, similarity, 0.0), FiltrationWeights.RawDistance, 2, label: "all");
-        Barcode whole = PersistentInvolutedHomology.Compute(skeleton);
-        Assert.Contains(whole.Bars, b => b.Dimension == 2 && b.IsInfinite);
+        Bar sphere = Assert.Single(barcode.Bars, b => b.Dimension == 2);
+        Assert.True(sphere.IsInfinite);
+        Assert.Null(sphere.Cycle);
+        Assert.All(barcode.Bars.Where(b => b.Dimension < 2), b => Assert.NotNull(b.Cycle));
 
-        static IEnumerable<(int, double, double)> Canon(IEnumerable<Bar> bars) =>
-            bars.Select(b => (b.Dimension, b.Birth, b.Death)).OrderBy(t => t);
+        Barcode asked = ConditionedFiltration.ComputeBarcode(n, backbone, similarity, maxCycleDimension: 2);
 
-        Assert.Equal(Canon(whole.Bars.Where(b => b.Dimension < 2)), Canon(barcode.Bars));
+        Assert.Equal(8, Assert.Single(asked.Bars, b => b.Dimension == 2).Cycle!.Length);
     }
 
     [Fact]
