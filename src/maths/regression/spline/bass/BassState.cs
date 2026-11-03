@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.Regression.GPrior;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -38,6 +39,10 @@ public sealed class BassState
 
     /// <summary>v = ln r, σ²'s rate under a hierarchical prior; NaN under every other, which has no such coordinate.</summary>
     public double LogRate { get; }
+
+    /// <summary>v for a chain started from this prior draw: a draw far below the doubles starts at their end, since from there it would
+    /// take the rate's step long to climb, and burn-in forgets a start. A prior rung and SMC's particles keep the draw itself.</summary>
+    internal double StartLogRate => Math.Max(LogRate, ResolvedSigma2Rate.LogSmallestRate);
 
     /// <summary>This structure at another τ.</summary>
     public BassState WithLogTau(double logTau) => new(_terms, Fit, logTau, LogRate);

@@ -106,6 +106,67 @@ public sealed class DistributionSweepTests
         Assert.True(failures.Count == 0, string.Join("\n", failures.Take(20)));
     }
 
+    // ln X against the lower tail, at shapes whose X mostly falls below the doubles, where the tail's small-argument form reads it.
+    [Fact]
+    public void GammaSampleLog_FollowsTheTail()
+    {
+        var rng = new Xoshiro256PlusPlus(20261105);
+        var failures = new List<string>();
+        var logs = new double[Draws];
+        for (int c = 0; c < 300; c++)
+        {
+            double shape = LogUniform(rng, 1e-6, 1e3), rate = LogUniform(rng, 1e-3, 1e3);
+            Gamma d = Gamma.ShapeRate(shape, rate);
+            for (int i = 0; i < Draws; i++) logs[i] = d.SampleLog(rng);
+            Array.Sort(logs);
+            double gap = 0.0;
+            for (int i = 0; i < Draws; i++)
+            {
+                double logZ = logs[i] + Math.Log(rate);
+                double f = Math.Exp(logZ < -650.0 ? shape * logZ - SpecialFunctions.LogGamma(shape + 1.0) : d.LogCdf(Math.Exp(logs[i])));
+                gap = Math.Max(gap, Math.Max(Math.Abs(f - (i + 1.0) / Draws), Math.Abs(f - (double)i / Draws)));
+            }
+            double statistic = Math.Sqrt(Draws) * gap;
+            if (statistic > KolmogorovCut) failures.Add($"√n·D = {statistic:F2}: Gamma({shape:R}, rate {rate:R})");
+        }
+        Assert.True(failures.Count == 0, string.Join("\n", failures.Take(20)));
+    }
+
+    [Theory]
+    [InlineData(0.5, 1e-3)]
+    [InlineData(3.0, 2.0)]
+    public void GammaSampleLog_ReadsSamplesStream(double shape, double rate)
+    {
+        Gamma d = Gamma.ShapeRate(shape, rate);
+        var a = new Xoshiro256PlusPlus(11);
+        var b = new Xoshiro256PlusPlus(11);
+        for (int i = 0; i < 2_000; i++)
+        {
+            double x = d.Sample(a), log = d.SampleLog(b);
+            Assert.True(Math.Abs(Math.Log(x) - log) <= 1e-9 * Math.Max(1.0, Math.Abs(log)), $"draw {i}: {Math.Log(x):R} against {log:R}");
+        }
+        Assert.Equal(a.NextDouble(), b.NextDouble());
+    }
+
+    // Both tails where Rate·x underflows with x still in the doubles, and across the point where the forms change.
+    [Theory]
+    [InlineData(1e-3, 1e-3)]
+    [InlineData(1e-3, 1e3)]
+    [InlineData(1e-6, 1e-2)]
+    [InlineData(0.5, 1e-3)]
+    public void GammaTails_HoldWhereRateTimesXUnderflows(double shape, double rate)
+    {
+        Gamma d = Gamma.ShapeRate(shape, rate);
+        foreach (double x in new[] { 5e-324, 1e-320, 1e-305 / rate })
+        {
+            double logF = shape * (Math.Log(rate) + Math.Log(x)) - SpecialFunctions.LogGamma(shape + 1.0);
+            Assert.True(Math.Abs(d.LogCdf(x) - logF) <= 1e-12 * Math.Abs(logF), $"ln F({x:R}) = {d.LogCdf(x):R}, against {logF:R}");
+            Assert.True(Math.Abs(Math.Exp(d.LogCdf(x)) + Math.Exp(d.LogSurvival(x)) - 1.0) <= 1e-12, $"at {x:R}");
+        }
+        double below = d.LogCdf(0.999e-300 / rate), above = d.LogCdf(1.001e-300 / rate);
+        Assert.True(above >= below && above - below <= 0.003 * shape + 1e-12, $"across the change: {below:R} to {above:R}");
+    }
+
     private static double LogUniform(Xoshiro256PlusPlus rng, double lo, double hi) => Math.Exp(Math.Log(lo) + rng.NextDouble() * (Math.Log(hi) - Math.Log(lo)));
 
     private static double Signed(Xoshiro256PlusPlus rng, double scale) => (rng.NextDouble() < 0.5 ? -1.0 : 1.0) * LogUniform(rng, 1e-3, scale);

@@ -60,6 +60,15 @@ public readonly struct Gamma : IContinuousDistribution
         return SampleCore(rng, Shape, Scale);
     }
 
+    /// <summary>ln X of one draw, on <see cref="Sample"/>'s stream: a tiny shape's X falls below the doubles, where ln X still stands.</summary>
+    public double SampleLog(Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (Shape >= 1.0) return Math.Log(Sample(rng));
+        double u = 1.0 - rng.NextDouble();   // (0,1]
+        return Math.Log(SampleCore(rng, Shape + 1.0, Scale)) + Math.Log(u) / Shape;
+    }
+
     /// <summary>One draw from Gamma(shape, scale 1).</summary>
     public static double SampleStandard(Xoshiro256PlusPlus rng, double shape)
     {
@@ -199,8 +208,22 @@ public readonly struct Gamma : IContinuousDistribution
 
     public double Cdf(double x) => Math.Exp(LogCdf(x));
     public double Survival(double x) => Math.Exp(LogSurvival(x));
-    public double LogCdf(double x) => x <= 0.0 ? double.NegativeInfinity : SpecialFunctions.LogRegularizedGamma(Shape, Rate * x).LogP;
-    public double LogSurvival(double x) => x <= 0.0 ? 0.0 : SpecialFunctions.LogRegularizedGamma(Shape, Rate * x).LogQ;
+
+    // Where Rate·x nears the doubles' end, P(a, z) is zᵃ/Γ(a + 1) to double precision, and in logs it stays in range. A tiny shape keeps mass there.
+    public double LogCdf(double x)
+    {
+        if (x <= 0.0) return double.NegativeInfinity;
+        double z = Rate * x;
+        return z < 1e-300 ? Shape * (Math.Log(Rate) + Math.Log(x)) - SpecialFunctions.LogGamma(Shape + 1.0) : SpecialFunctions.LogRegularizedGamma(Shape, z).LogP;
+    }
+
+    public double LogSurvival(double x)
+    {
+        if (x <= 0.0) return 0.0;
+        double z = Rate * x;
+        return z < 1e-300 ? SpecialFunctions.Log1mExp(LogCdf(x)) : SpecialFunctions.LogRegularizedGamma(Shape, z).LogQ;
+    }
+
     public double IntervalProbability(double lower, double upper) => Math.Exp(LogIntervalProbability(lower, upper));
 
     public double LogIntervalProbability(double lower, double upper)

@@ -759,7 +759,7 @@ public sealed class BassPriorReferenceTests
         for (int i = 0; i < points; i++) total += Math.Exp(rate.LogDensity(-40.0 + i * step)) * step;
         Close(1.0, total, 1e-10, "the density's integral on v");
         Close(rate.Hyper.LogPdf(3.0) + Math.Log(3.0), rate.LogDensity(Math.Log(3.0)), 1e-12, "the Gamma with its Jacobian");
-        Assert.Equal(double.NegativeInfinity, rate.LogDensity(-800.0));
+        Close(2.0 * Math.Log(rate.Hyper.Rate) - 1600.0, rate.LogDensity(-800.0), 1e-12, "the density below the doubles");
         Assert.Equal(double.NegativeInfinity, rate.LogDensity(800.0));
         Assert.Throws<ArgumentOutOfRangeException>(() => rate.LogDensity(double.NaN));
         Close(InverseGamma.ShapeScale(0.5, 3.0).LogPdf(0.7), rate.LogConditional(0.7, Math.Log(3.0)), 1e-12, "σ²'s conditional prior");
@@ -771,9 +771,14 @@ public sealed class BassPriorReferenceTests
         double[] drawn = [.. Enumerable.Range(0, 200_000).Select(_ => Math.Exp(rate.SampleLogRate(rng)))];
         Close(4.5, drawn.Average(), 0.01, "r's mean");
 
-        // A tiny shape's draws underflow, and are drawn again.
+        // A tiny shape's mass below the doubles is drawn, not cut, about half of it at h = 10⁻³, and its prior reads r at their end.
         ResolvedSigma2Rate tiny = Sigma2Prior.Hierarchical(0.5, 1e-3).RateFor(1.0)!;
-        for (int i = 0; i < 2_000; i++) Assert.False(double.IsNegativeInfinity(tiny.LogDensity(tiny.SampleLogRate(rng))));
+        double cut = ResolvedSigma2Rate.LogSmallestRate;
+        double below = Enumerable.Range(0, 20_000).Count(_ => tiny.SampleLogRate(rng) < cut) / 20_000.0;
+        Assert.InRange(below - Math.Exp(tiny.Hyper.LogCdf(Math.Exp(cut))), -0.015, 0.015);
+        Assert.Equal(2.2250738585072014E-308, tiny.PriorAt(cut - 300.0).Scale, 1e-320);
+        Close(-150.0, tiny.LogRemainder(cut - 300.0), 1e-12, "r's power below the doubles");
+        Assert.Equal(0.0, tiny.LogRemainder(0.0));
     }
 
     // At a = h = ½ the marginal over r is the marginal given σ² integrated against σ ~ half-Cauchy(s): the half-Cauchy read from its own
@@ -1009,9 +1014,9 @@ public sealed class BassPriorReferenceTests
         Close(given.LogStructurePrior(state.Fit) + rate.LogDensity(state.LogRate) + rate.LogConditional(0.4, state.LogRate), conditioned.LogPrior, 1e-13, "the prior given σ²");
         Assert.Equal(given.Evaluate(moves.Start).LogMarginal, conditioned.LogMarginal);
 
-        // A rate off the doubles lies outside the support, with no value to compute.
+        // A rate past the doubles' top lies outside the support, with no value to compute. Below them r is too small to matter, and it stands.
         Assert.True(model.Target.Evaluate(state.WithLogRate(800.0)).OffSupport);
-        Assert.True(model.Target.Evaluate(state.WithLogRate(-800.0)).OffSupport);
+        Assert.False(model.Target.Evaluate(state.WithLogRate(-800.0)).OffSupport);
         Assert.Equal(double.NegativeInfinity, model.Target.Evaluate(state.WithLogRate(800.0)).LogMarginal);
 
         // The fit's overloads have no rate to read.
@@ -1065,19 +1070,29 @@ public sealed class BassPriorReferenceTests
     public void AHierarchicalPrior_ReportsTheEvidence_ThatMatchesTheEnumeration(string sampler)
     {
         BassData data = BassSweepTests.Data();
-        BassSampling sampling = sampler.EndsWith("ladder")
-            ? new BassSampling
-            {
-                Chains = 2, BurnIn = 1_500, Samples = 3_000, Moves = new EqualOverAvailable(), ReportEvidence = true,
-                Tempering = new TemperingSpec { Levels = sampler == "ladder" ? 8 : 16, HotEnd = 0.05, ReferenceRung = true, Form = sampler == "ladder" ? TemperedForm.Integrated : TemperedForm.Linear },
-            }
-            : new BassSampling { Moves = new EqualOverAvailable(), ReportEvidence = true, Smc = new SmcSpec { Particles = 4_000, Replicates = 4 } };
-        BassConfig config = BassWeightedCoreTests.EnumerationConfig(Sigma2Prior.HalfCauchy()) with { Sampling = sampling };
+        BassConfig config = BassWeightedCoreTests.EnumerationConfig(Sigma2Prior.HalfCauchy()) with { Sampling = EvidenceSampling(sampler) };
         BassFit fit = Bass.Fit(config, data);
         BassEvidence evidence = fit.Evidence ?? throw new InvalidOperationException("The run reports no evidence.");
         Assert.Equal(Sigma2Prior.HalfCauchy(), evidence.Priors.Sigma2Prior);
         Assert.NotNull(evidence.Priors.Sigma2Rate);
         BassModel model = BassModel.Create(config, data);
+        double exact = EnumeratedEvidence(model, data, m => OverRate(model.Target.Sigma2Rate!, prior => m.LogMarginal(prior)));
+        _out.WriteLine($"{sampler}: ln Z {evidence.LogEvidence:F3}, the enumeration's {exact:F3}");
+        Assert.True(Math.Abs(evidence.LogEvidence - exact) <= 0.15, $"ln Z {evidence.LogEvidence:F3}, the enumeration's {exact:F3}");
+        Assert.All(fit.Draws.SelectMany(c => c), draw => Assert.NotNull(draw.Sigma2Rate));
+    }
+
+    private static BassSampling EvidenceSampling(string sampler, int samples = 3_000) => sampler.EndsWith("ladder")
+        ? new BassSampling
+        {
+            Chains = 2, BurnIn = 1_500, Samples = samples, Moves = new EqualOverAvailable(), ReportEvidence = true,
+            Tempering = new TemperingSpec { Levels = sampler == "ladder" ? 8 : 16, HotEnd = 0.05, ReferenceRung = true, Form = sampler == "ladder" ? TemperedForm.Integrated : TemperedForm.Linear },
+        }
+        : new BassSampling { Moves = new EqualOverAvailable(), ReportEvidence = true, Smc = new SmcSpec { Particles = 4_000, Replicates = 4 } };
+
+    // ln Z by enumerating F, each structure's marginal integrated over r by overRate.
+    private static double EnumeratedEvidence(BassModel model, BassData data, Func<GPriorMarginal, double> overRate)
+    {
         BassKernelEnumeration.Space space = BassKernelEnumeration.Enumerate(BassModel.Create(BassWeightedCoreTests.EnumerationConfig(Sigma2Prior.ScaledToResponse(0.5)), data));
         var logPosterior = new double[space.States.Count];
         var logPrior = new double[space.States.Count];
@@ -1085,14 +1100,115 @@ public sealed class BassPriorReferenceTests
         {
             BassKernelEnumeration.State state = space.States[i];
             logPrior[i] = model.Prior.LogCollectionWeight(state.Terms.Length) + state.Terms.Sum(model.Prior.LogPrior);
-            GPriorMarginal marginal = model.Target.Marginal(state.Loaded.Fit, 0.1);
-            logPosterior[i] = logPrior[i] + OverRate(model.Target.Sigma2Rate!, prior => marginal.LogMarginal(prior));
+            logPosterior[i] = logPrior[i] + overRate(model.Target.Marginal(state.Loaded.Fit, 0.1));
         }
         double top = logPosterior.Max(), topPrior = logPrior.Max();
-        double exact = top + Math.Log(logPosterior.Sum(v => Math.Exp(v - top))) - topPrior - Math.Log(logPrior.Sum(v => Math.Exp(v - topPrior)));
-        _out.WriteLine($"{sampler}: ln Z {evidence.LogEvidence:F3}, the enumeration's {exact:F3}");
-        Assert.True(Math.Abs(evidence.LogEvidence - exact) <= 0.15, $"ln Z {evidence.LogEvidence:F3}, the enumeration's {exact:F3}");
-        Assert.All(fit.Draws.SelectMany(c => c), draw => Assert.NotNull(draw.Sigma2Rate));
+        return top + Math.Log(logPosterior.Sum(v => Math.Exp(v - top))) - topPrior - Math.Log(logPrior.Sum(v => Math.Exp(v - topPrior)));
+    }
+
+    // ln ∫ Gamma(r) p₁(y | r) dr over all of r, from S and the determinant term with r in logs, reading no inverse gamma: the trapezoid on
+    // v about r's mean, and below that in closed form, where r is far under S and the integrand is e^((a + h)v).
+    private static double OverTheWholeRate(ResolvedSigma2Rate rate, GPriorMarginal marginal, int observations)
+    {
+        double a = rate.Shape, h = rate.Hyper.Shape, nb = 0.5 * observations, half = 0.5 * marginal.S;
+        double constant = -nb * Math.Log(2.0 * Math.PI) + marginal.LogDeterminantTerm + SpecialFunctions.LogGamma(a + nb) - SpecialFunctions.LogGamma(a);
+        const int points = 24_001;
+        const double low = -80.0, high = 40.0;
+        double step = (high - low) / (points - 1), top = double.NegativeInfinity;
+        var values = new double[points];
+        for (int i = 0; i < points; i++)
+        {
+            double v = rate.CentreLogRate + low + i * step;
+            values[i] = rate.LogDensity(v) + constant + a * v - (a + nb) * Math.Log(Math.Exp(v) + half);
+            top = Math.Max(top, values[i]);
+        }
+        double sum = -0.5 * (Math.Exp(values[0] - top) + Math.Exp(values[^1] - top));
+        foreach (double value in values) sum += Math.Exp(value - top);
+        return top + Math.Log(sum * step + Math.Exp(values[0] - top) / (a + h));
+    }
+
+    // Under a tiny h most of r's prior lies below the doubles, and a run's evidence is the stated prior's all the same, each path's: a draw
+    // cut to the doubles read high here, by 0.6 at h = 10⁻³ and 2.6 at 10⁻⁴. With a tiny too, r's own posterior reaches below them. Few prior
+    // draws land where the likelihood is, so the check allows the run's own reported error, which has to stay small enough to tell, and a
+    // ladder's flag has to read the thin first stone.
+    [Theory]
+    [InlineData("ladder", 0.5, 1e-3, 3_000)]
+    [InlineData("linear ladder", 0.5, 1e-3, 3_000)]
+    [InlineData("smc", 0.5, 1e-3, 0)]
+    [InlineData("ladder", 0.5, 1e-4, 30_000)]
+    [InlineData("smc", 0.5, 1e-4, 0)]
+    [InlineData("ladder", 1e-3, 1e-3, 3_000)]
+    [InlineData("smc", 1e-3, 1e-3, 0)]
+    public void ATinyHyperShape_ReportsTheStatedPriorsEvidence(string sampler, double a, double h, int samples)
+    {
+        BassData data = BassSweepTests.Data();
+        BassConfig config = BassWeightedCoreTests.EnumerationConfig(Sigma2Prior.Hierarchical(a, h)) with { Sampling = EvidenceSampling(sampler, samples) };
+        BassEvidence evidence = Bass.Fit(config, data).Evidence ?? throw new InvalidOperationException("The run reports no evidence.");
+        BassModel model = BassModel.Create(config, data);
+        double exact = EnumeratedEvidence(model, data, m => OverTheWholeRate(model.Target.Sigma2Rate!, m, model.Target.Observations));
+        _out.WriteLine($"{sampler}, a = {a}, h = {h}, samples {samples}: ln Z {evidence.LogEvidence:F3} ± {evidence.MonteCarloError:F3}, rejection {evidence.MaxPairRejection:F4}, the enumeration's {exact:F3}");
+        Assert.True(evidence.MonteCarloError <= 0.4, $"The error, {evidence.MonteCarloError:F3}, is too large to tell.");
+        Assert.True(Math.Abs(evidence.LogEvidence - exact) <= Math.Max(0.15, 3.0 * evidence.MonteCarloError), $"ln Z {evidence.LogEvidence:F3} ± {evidence.MonteCarloError:F3}, the enumeration's {exact:F3}");
+        if (sampler == "ladder" && a == 0.5) Assert.True(evidence.Saturated, $"The largest pair's rejection reads {evidence.MaxPairRejection:F4}.");
+    }
+
+    // Below the doubles the integrated form carries the rest of rᵃ, the form given σ² reads r through its prior alone, and b = 0 reads no r.
+    [Fact]
+    public void BelowTheDoubles_TheTargetReadsTheRate()
+    {
+        BassData data = BassSweepTests.Data();
+        BassModel model = BassModel.Create(BassWeightedCoreTests.EnumerationConfig(Sigma2Prior.Hierarchical(0.5, 1e-3)), data);
+        ResolvedSigma2Rate rate = model.Target.Sigma2Rate!;
+        BassState state = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(5)).State;
+        double v = ResolvedSigma2Rate.LogSmallestRate - 300.0;
+        BassEvaluation below = model.Target.Evaluate(state.WithLogRate(v));
+        double Expected(double b)
+        {
+            GPriorMarginal m = below.Marginal(b);
+            double nb = 0.5 * b * model.Target.Observations;
+            return -nb * Math.Log(2.0 * Math.PI) + m.LogDeterminantTerm + SpecialFunctions.LogGamma(0.5 + nb) - SpecialFunctions.LogGamma(0.5) + 0.5 * v - (0.5 + nb) * Math.Log(0.5 * m.S);
+        }
+        Close(Expected(1.0), below.LogMarginal, 1e-12, "the marginal below the doubles");
+        Close(Expected(0.3), below.LogLikelihood(0.3), 1e-12, "tempered");
+        Assert.Equal(0.0, below.LogLikelihood(0.0));
+        double structure = model.Target.Evaluate(state.WithLogRate(0.0)).LogPrior - rate.LogDensity(0.0);
+        Close(structure + rate.LogDensity(v), below.LogPrior, 1e-12, "the prior below the doubles");
+
+        BassTarget given = model.Target.Given(0.7);
+        BassEvaluation fixedSigma = given.Evaluate(state.WithLogRate(v));
+        Close(fixedSigma.Marginal().LogMarginalGiven(0.7), fixedSigma.LogMarginal, 1e-12, "given σ², no rate in the marginal");
+        Close(structure + rate.LogDensity(v) + rate.LogConditional(0.7, v), fixedSigma.LogPrior, 1e-12, "given σ², the rate in the prior");
+    }
+
+    // A chain starts no lower than the doubles' normal range, so it climbs within burn-in from a prior draw far below them, while a prior
+    // rung's draw stays where it fell. A draw retains a rate the pointwise densities can read, which S cannot tell from a slightly larger one.
+    [Fact]
+    public void AVeryTinyShape_StartsWithinReach_AndItsDrawsReadPointwise()
+    {
+        BassData data = BassSweepTests.Data();
+        BassConfig config = BassWeightedCoreTests.EnumerationConfig(Sigma2Prior.Hierarchical(0.5, 1e-5))
+            with { Sampling = new BassSampling { Chains = 2, BurnIn = 200, Samples = 200, Moves = new EqualOverAvailable() } };
+        BassFit fit = Bass.Fit(config, data);
+        Assert.All(fit.Draws.SelectMany(c => c), draw => Assert.True(draw.Sigma2Rate > 1e-100, $"r = {draw.Sigma2Rate}"));
+
+        BassModel model = BassModel.Create(config, data);
+        BassState start = new BassPriorSampler(model).DrawState(new Xoshiro256PlusPlus(2)).State;
+        Assert.Equal(ResolvedSigma2Rate.LogSmallestRate, start.WithLogRate(-1e5).StartLogRate);
+        Assert.Equal(1.0, start.WithLogRate(1.0).StartLogRate);
+        BassModel scaled = BassModel.Create(BassWeightedCoreTests.EnumerationConfig(Sigma2Prior.ScaledToResponse(0.5)), data);
+        Assert.True(double.IsNaN(new BassPriorSampler(scaled).DrawState(new Xoshiro256PlusPlus(2)).State.StartLogRate));
+
+        ResolvedSigma2Rate rate = model.Target.Sigma2Rate!;
+        BassConfig large = BassWeightedCoreTests.Config(new GForm(), GPriorCentre.Mean, Sigma2Prior.Hierarchical(0.5, 1e-5), 0.2);
+        BassData largeData = BassSweepTests.Data(large: true);
+        BassModel chainModel = BassModel.Create(large, largeData);
+        var table = new BassTermTable();
+        var chain = new BassChain(chainModel, BassWeightedCoreTests.Terms[..3], Math.Log(0.2), new Xoshiro256PlusPlus(1), new Xoshiro256PlusPlus(2), logRate: -5000.0);
+        BassDraw composed = chain.Compose(new Xoshiro256PlusPlus(3), table);
+        Assert.Equal(rate.RateAt(-5000.0), composed.Sigma2Rate);
+        IReadOnlyList<BassDraw>[] draws = [[composed, composed with { Sigma2Rate = 1e-200 }]];
+        PointwiseLogDensity reading = BassPointwise.LogDensity(chainModel, table, draws, content: PointwiseContent.CollapsedPredictive);
+        for (int u = 0; u < reading.Values.GetLength(1); u++) Close(reading.Values[1, u], reading.Values[0, u], 1e-12, $"unit {u}");
     }
 
     // A flat-histogram run carries the rate through its pilot's linear ladder and its multicanonical chains.

@@ -1799,6 +1799,13 @@ So s² sets the hyperprior's scale alone, and a poor read hurts less than under 
 - *The alternative is Wand's conjugate two-block form,* σ² | · then r | σ² ~ Gamma(a + h, rate + 1/σ²). It is exact only on the integrated form's rungs, and it draws σ² every sweep. The slice step is exact on every path and form, so it is the one built.
 - *With σ² drawn apart* (E1's w), the marginal does not read r, so the state's prior carries ln IG(σ²; a, r), and the same step reads it. The conjugate draw is exact there, should the slice's cost ever matter.
 - *A chain starts at r's mean* unless told otherwise; a run starts from its prior draw of r. r is not monitored: R̂ reads σ², which depends on it.
+- *Below the doubles.* Under a tiny h much of r's prior lies below the doubles, about half at h = 10⁻³ and 93% at 10⁻⁴, and all of it counts, since the prior is normalized over all of r. So nothing is cut, and v stands for r:
+  - `LogDensity` reads any v, and `SampleLogRate` draws v through `Gamma.SampleLog`.
+  - `PriorAt` reads r no lower than the smallest normal double r_min. S, far above either, cannot tell r from r_min, so the integrated marginal is exact once `LogRemainder` adds a·(v − ln r_min). At b = 0 it reads no r.
+  - A draw retains r at r_min or above (`RateAt`), and the pointwise densities read it exactly, since rᵃ cancels in them.
+  - A chain starts no lower than r_min (`BassState.StartLogRate`), since from far below a step's reach it could not climb within burn-in. A prior rung and SMC's particles keep the draw itself.
+  - *The alternative* was to draw again on an underflow and add ln P(r in the doubles) to the evidence. It is quieter while a is not small, since the draws it drops weigh nothing. But once a + h is small r's own posterior reaches below the doubles, and that mass would be lost: about 0.25 nats at a = h = 10⁻³ (derived here, not run). Drawing again with no correction is what this replaced, whose ln Z read high by 0.6 at h = 10⁻³ and 2.6 at 10⁻⁴.
+  - *The implication:* of order h/a of the prior's draws land where the likelihood is, so a tiny h costs an evidence precision, and the run reports it. At a = ½, h = 10⁻⁴, against the enumeration's −23.29, a ladder of 8 levels read −23.75 ± 0.36 on 3,000 samples and −23.25 ± 0.13 on 30,000, with its largest pair's rejection at 0.998 or above, so `Saturated`. SMC read −23.47 ± 0.14 on 4,000 particles and −23.30 ± 0.07 on 16,000.
 
 **What was checked** (`BassPriorReferenceTests`).
 - *Unasked, nothing changes:* a reference that restates today's read walks today's chain, draw for draw, under the g-form's three centres and the ridge's level and zero centres.
@@ -1806,7 +1813,8 @@ So s² sets the hyperprior's scale alone, and a poor read hurts less than under 
 - *The trilemma on the targets.* Under y → ky + m, across snapshots, the moments, robust, quantile, frozen-Gram, invariant and hierarchical routes keep their log posterior differences to 10⁻⁸, and a declared prior's move. Chains on y and on ky + m visit the same structures, sweep by sweep, through a moving response. A moving response here is a model per snapshot, each segment starting where the last ended, and [a chain moved in place](#bass-a-design-whose-working-response-moves) passes the same test.
 - *The family against outside readings.* At a = h = ½, against `HalfCauchy`'s own density, integrated on σ, to 10⁻⁸. Across structures both limits hold: at a = 2 the gap between two structures is 1.51143 at h = 10⁴ against the plug-in's 1.51160, and 1.21895 at h = 10⁻⁵ against Jeffreys'.
 - *Enumeration.* Detailed balance on every structure of F for a frozen level and a frozen Gram, against dense algebra. Chains' visits against the posterior, including with r integrated by quadrature, with σ² integrated and drawn apart. The rate's own conditional against quadrature, on both paths.
-- *The evidence,* against the enumeration's −16.294 with r integrated by quadrature: −16.280 on a ladder, −16.327 on a linear ladder, −16.303 on SMC.
+- *The evidence,* against the enumeration's −16.294 with r integrated by quadrature: −16.296 on a ladder, −16.281 on a linear ladder, −16.302 on SMC.
+- *The evidence under a tiny h,* each against its own enumeration, with r integrated whole by a closed form below the quadrature, reading no inverse gamma: `ATinyHyperShape_ReportsTheStatedPriorsEvidence`, whose check allows the run's reported error up to a ceiling, and a ladder's flag must read the thin first stone at a = ½. The readings are in [the report](../../issues/regression/bass/extensions-checklist.md#reports). `BelowTheDoubles_TheTargetReadsTheRate` holds the marginal against its closed form in logs, tempered and given σ².
 
 ### BASS: a design whose working response moves
 

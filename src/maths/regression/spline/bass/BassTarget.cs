@@ -378,7 +378,7 @@ public sealed class BassEvaluation : ITargetEvaluation
     /// <summary>ln p₁(y | structure, τ), the untempered collapsed marginal; −∞ off the support.</summary>
     public double LogMarginal => _untempered ??= OffSupport
         ? double.NegativeInfinity
-        : _target.LogValue(_target.Marginal(Fit, Tau), Sigma2);
+        : LogValueAt(1.0);
 
     /// <summary>σ²'s prior at this state (<see cref="BassTarget.Sigma2At"/>); the rate's mean's, off the support.</summary>
     public InverseGamma? Sigma2 => _target.Sigma2Rate is { } rate && !OffSupport ? rate.PriorAt(_logRate) : _target.Sigma2;
@@ -392,7 +392,7 @@ public sealed class BassEvaluation : ITargetEvaluation
         double b = Check(inverseTemperature);
         if (OffSupport) return double.NegativeInfinity;
         if (_target.Form == TemperedForm.Linear) return b * LogMarginal;
-        return b == 1.0 ? LogMarginal : _target.LogValue(_target.Marginal(Fit, Tau, b), Sigma2);
+        return b == 1.0 ? LogMarginal : LogValueAt(b);
     }
 
     /// <inheritdoc/>
@@ -403,6 +403,13 @@ public sealed class BassEvaluation : ITargetEvaluation
         return _target.Form == TemperedForm.Linear
             ? LogMarginal
             : _target.LogSlope(_target.Marginal(Fit, Tau, b), Sigma2);
+    }
+
+    // ln p_b at this state, with what a hierarchical prior's reading of r leaves out below the doubles. At b = 0 the marginal reads no r.
+    private double LogValueAt(double b)
+    {
+        double value = _target.LogValue(_target.Marginal(Fit, Tau, b), Sigma2);
+        return _target.Sigma2Rate is { } rate && b > 0.0 && _target.GivenSigma2 is null ? value + rate.LogRemainder(_logRate) : value;
     }
 
     private double Check(double b)

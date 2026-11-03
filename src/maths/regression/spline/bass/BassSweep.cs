@@ -270,7 +270,7 @@ public sealed class BassStructureMoves
             intercept -= centred[j + 1] * ColumnMean(state.Terms[j]);
         }
         coefficients[0] = intercept;
-        return new BassDraw(new BassStructure([.. order.Select(j => ids[j])]), tau, sigma2, coefficients, lambda, target.Sigma2Rate is null ? null : Math.Exp(state.LogRate),
+        return new BassDraw(new BassStructure([.. order.Select(j => ids[j])]), tau, sigma2, coefficients, lambda, target.Sigma2Rate?.RateAt(state.LogRate),
                             _design.Working.IsResponseItself ? null : _design.Working);
     }
 

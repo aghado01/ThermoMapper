@@ -193,12 +193,17 @@ public sealed record Sigma2Prior
 /// A hierarchical σ² prior's rate on its mean square s² (<see cref="Sigma2Prior.RateFor"/>): r ~ Gamma(h, rate h/(a·s²)), with
 /// the density of v = ln r its Jacobian included, its exact draw and the inverse gamma it makes of σ²'s prior, the three that the
 /// rate's block, the reference rung and SMC's start read. The density is the one the block's slice step reads on v, so the step
-/// adds no Jacobian of its own, as <see cref="ResolvedTauPrior"/>'s is for τ.
+/// adds no Jacobian of its own, as <see cref="ResolvedTauPrior"/>'s is for τ. All of it stands on v, since under a tiny h most of
+/// r's prior lies below the doubles: at h = 10⁻³ about half. Only the inverse gamma needs r itself, and it reads r no lower than the
+/// doubles' normal range, with <see cref="LogRemainder"/> for the rest.
 /// </summary>
 public sealed record ResolvedSigma2Rate
 {
     private readonly double _logConstant;    // h ln(rate) − ln Γ(h)
     private readonly double _logGammaShape;  // ln Γ(a)
+
+    /// <summary>The lowest v at which the inverse gamma reads r, ln of the smallest normal double.</summary>
+    public static readonly double LogSmallestRate = Math.Log(2.2250738585072014E-308);
 
     internal ResolvedSigma2Rate(double shape, double hyperShape, double meanSquare)
     {
@@ -222,30 +227,39 @@ public sealed record ResolvedSigma2Rate
     public double CentreLogRate => Math.Log(Centre);
 
     /// <summary>
-    /// The log density of v = ln r: h ln(rate) − ln Γ(h) + h·v − rate·eᵛ. Where r leaves the doubles, rounding to 0 or overflowing,
-    /// it is outside the support: −∞, as for τ.
+    /// The log density of v = ln r: h ln(rate) − ln Γ(h) + h·v − rate·eᵛ, which stands below the doubles. Where r overflows it is
+    /// outside the support: −∞, as for τ.
     /// </summary>
     public double LogDensity(double logRate)
     {
         if (double.IsNaN(logRate)) throw new ArgumentOutOfRangeException(nameof(logRate));
-        double r = Math.Exp(logRate), scaled = Hyper.Rate * r;
-        return r > 0.0 && double.IsFinite(scaled) ? _logConstant + Hyper.Shape * logRate - scaled : double.NegativeInfinity;
+        double scaled = Hyper.Rate * Math.Exp(logRate);
+        return double.IsFinite(scaled) ? _logConstant + Hyper.Shape * logRate - scaled : double.NegativeInfinity;
     }
 
-    /// <summary>σ²'s prior at v, IG(a, eᵛ).</summary>
-    public InverseGamma PriorAt(double logRate) => InverseGamma.ShapeScale(Shape, Math.Exp(logRate));
+    /// <summary>r at v, no lower than the smallest normal double: what a draw retains and what <see cref="PriorAt"/> reads.</summary>
+    public double RateAt(double logRate) => Math.Exp(Math.Max(logRate, LogSmallestRate));
+
+    /// <summary>σ²'s prior at v, IG(a, <see cref="RateAt"/>).</summary>
+    public InverseGamma PriorAt(double logRate) => InverseGamma.ShapeScale(Shape, RateAt(logRate));
+
+    /// <summary>
+    /// What the marginal over σ² gains at v beyond <see cref="PriorAt"/>'s reading, once b &gt; 0: a·(v − ln r_min) below the smallest normal
+    /// double r_min, 0 above it. The marginal's r enters as rᵃ(r + S/2)^(−a−ν/2), and S, far above r, cannot tell r from r_min.
+    /// </summary>
+    public double LogRemainder(double logRate) => Shape * Math.Min(logRate - LogSmallestRate, 0.0);
 
     /// <summary>ln IG(<paramref name="sigma2"/>; a, eᵛ), which the state's prior carries when the structure's marginal is given σ²,
     /// so the rate's conditional still reads σ².</summary>
     public double LogConditional(double sigma2, double logRate)
         => Shape * logRate - _logGammaShape - (Shape + 1.0) * Math.Log(sigma2) - Math.Exp(logRate) / sigma2;
 
-    /// <summary>An exact draw of v; a draw whose r leaves the doubles is drawn again.</summary>
+    /// <summary>An exact draw of v, below the doubles too; a draw whose r overflows is drawn again.</summary>
     public double SampleLogRate(Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
         double v;
-        do v = Math.Log(Hyper.Sample(rng));
+        do v = Hyper.SampleLog(rng);
         while (double.IsNegativeInfinity(LogDensity(v)));
         return v;
     }
