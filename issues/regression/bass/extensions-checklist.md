@@ -42,6 +42,35 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ## Reports
 
+### The tiny-shape evidence fixed — 2026-11-03
+
+The defect [the priors' check](#the-moving-response-priors-checked--2026-11-02) found, on the user's go-ahead. No default changes and the hashes hold. The forms and the alternative are in [the docs](../../../docs/Maths/BayesianRegression.md#bass-priors-that-stop-reading-a-moving-response).
+- *Built.*
+  - `Gamma.SampleLog`: ln X on `Sample`'s stream, which stands where X would underflow.
+  - `ResolvedSigma2Rate` holds to v: `LogDensity` at any v, `SampleLogRate` through `SampleLog`, `PriorAt` and `RateAt` at the smallest normal double r_min or above, and `LogRemainder` for the rest of rᵃ, which `BassEvaluation` adds.
+  - `BassState.StartLogRate`: a chain starts no lower than r_min, while a prior rung and SMC's particles keep the draw.
+  - `Gamma.LogCdf` and `LogSurvival` where Rate·x falls under 10⁻³⁰⁰, the defect noted beside this one.
+  - The two U rows the [inventory](../capability-inventory.md) added, in [the brief's table](extensions-brief.md#upgrades-to-existing-code).
+- *Evidence.* All on the final tree at below-normal priority: Distributions 287/287, Regression 1,821/1,821 with `BassPathProfile` left out and the bit-identity tests in, and the oracle's BASS and quantile filters 112/112. That also reruns `ab6b45b`'s tests, whose docs I read and whose code I did not. ln Z, reported error in brackets, against each enumeration with r integrated whole:
+
+  | a, h | Enumeration | Ladder | Linear ladder | SMC |
+  |---|---|---|---|---|
+  | ½, ½ | −16.294 | −16.296 | −16.281 | −16.302 |
+  | ½, 10⁻³ | −21.000 | −21.130 (0.211) | −21.019 (0.069) | −21.010 (0.044) |
+  | ½, 10⁻⁴ | −23.294 | −23.248 (0.131), 30,000 samples | not run | −23.471 (0.140) |
+  | 10⁻³, 10⁻³ | −21.686 | −21.668 (0.034) | not run | −21.685 (0.009) |
+
+  The last row is where r's own posterior reaches below the doubles, so it is the check on `LogRemainder`.
+- *The review found.*
+  - **The fix as first proposed was not enough.** With a under about 0.01 it would have left a factor on the slice below the doubles, hence `LogRemainder`. A draw's rate could have read 0, which the pointwise densities refuse, hence `RateAt`. And a chain from a prior draw far below the doubles could not have climbed within burn-in, hence `StartLogRate`.
+  - **A tiny h costs precision, and that is no new bias.** The first run at h = 10⁻⁴ read −23.75 on a ladder and −23.47 on SMC, low by 0.45 and 0.18, since of order h/a of the prior's draws land where the likelihood is, and cutting the prior had hidden that by a factor of 14. A budget probe on the same seeds: the ladder at 30,000 samples read −23.25 (0.13), and at 16 levels −23.19 (0.13); SMC at 16,000 particles read −23.30 (0.07). The reported error covers each gap, and a ladder's largest pair's rejection read 0.998 and above, so `Saturated`. So the check allows three reported errors up to a ceiling of 0.4 on the error, in place of a flat 0.15.
+  - Two of the chip's tests asserted the old behaviour, `LogDensity(−800) = −∞` and a state below the doubles off the support, and now assert the new.
+- *Limits.*
+  - The integrated form's slope at b = 0 is unbounded for h ≤ 1, since E[1/r] diverges. That form reports no path sampling, so nothing reads it.
+  - `LogRemainder` needs S far above r_min, so a response whose squares sit near 10⁻³⁰⁸ would read wrongly, as it would elsewhere.
+  - A draw retains r_min for an r below it, since a double cannot hold less. ln r stays on the state.
+  - The alternative's size, about 0.25 nats at a = h = 10⁻³, is derived, not run.
+
 ### A design whose working response moves — 2026-11-02
 
 `ab6b45b`. A chain takes a new working response between sweeps: the design refits the current structure, and the state's fit, the target's statistics, pointwise and the training fit follow. No default changes. The forms, options and trade-offs are in [the docs](../../../docs/Maths/BayesianRegression.md#bass-a-design-whose-working-response-moves).
@@ -88,7 +117,7 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 ### The moving-response priors checked — 2026-11-02
 
 By the main session, on a clean export of `b5ff1e6`: Regression 1,693/1,693 with `BassPathProfile` left out, the BASS oracle filter 90/90 at below-normal priority. Reread and held: the level's energy on all three forms, κ read as τ/κ and its link values, the frozen Gram, the family's mean and both limits, half-Cauchy at a = h = ½, ln IG on v. No reader found that drops a state's rate. The docs of `09774a2` and `d30ab9e` hold against the same derivations.
-- *One defect, open.* `ResolvedSigma2Rate.SampleLogRate` draws again when a Gamma draw underflows, so the prior rung and SMC's start draw the Gamma cut to the doubles, while `LogDensity` keeps the whole Gamma's constant. ln Z then reads high by −ln P(r in the doubles), with P(below) about e^(−750h), silently. On the enumeration fixture at a = ½:
+- *One defect, fixed since ([the report](#the-tiny-shape-evidence-fixed--2026-11-03)).* `ResolvedSigma2Rate.SampleLogRate` draws again when a Gamma draw underflows, so the prior rung and SMC's start draw the Gamma cut to the doubles, while `LogDensity` keeps the whole Gamma's constant. ln Z then reads high by −ln P(r in the doubles), with P(below) about e^(−750h), silently. On the enumeration fixture at a = ½:
 
   | h | Predicted | Ladder | SMC |
   |---|---|---|---|
