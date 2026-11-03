@@ -291,10 +291,11 @@ entropy) suit it better.
 | C57 | `LineagePersistence`'s dependence on seed and grid comes from four separable defects: the representative, a score counted in levels, the ratio elbow and `GapThreshold`. With all four fixed, iris at K = 5 under a Gaussian reads its first stage on 12 of 12 seeds with ARI 1.000 between seeds at 8 × (1000, 2000) (a split one repair edge enforces there, §13.17; under a Cauchy at K = 10 that edge opens inside the grid and the resolver follows it, §13.16), and every density design returns the same partition. Which hierarchy level to report stays a modelling choice: the longest-lived reading depends on the grid's extent and on the graph, and a slice at T* holds across extent but is in one graph's units | §13.15, §13.16 | Observed (150 sweeps over 5 graphs, twice: resolver copy checked against the code on all of them; on the revised compiler the graphs are bit-identical bar five clamped bridges, and 134 sweeps byte-identical, §13.16); the defects hold on every graph probed over K and the coupling, the level, the share and T* are read on these graphs only. Built in `ad840ca` | Vary what the probe left fixed: the filter, repair, bandwidth rule, gauge, q and θ |
 | C58 | Under `BwdParityTests`' recipe (g = 1/K̂, Gaussian at the mean edge length) mean node strength is s̄ = ⟨κ⟩ ≈ e^(−1/2) whatever the data or K, so T_ps's fit and the hot end's S₂·N are one fact about the recipe, not independent evidence. On that recipe iris's setosa joins the rest by one repair edge at k = 5–40, open with probability at most 0.012 at the grid's cold end, so that split is the graph's | §13.17 | Identity derived here; 0.603–0.643 and the bridge read from the built graphs; no SPC. E20's panel widens the range to 0.603–0.710 (§13.20) | E20, run |
 | C59 | Across the filter, the repair, the bandwidth rule, `ScaleEdges`, the gauge, q and θ, `LineagePersistence`'s readings move with the graph, and its two provisional defaults don't: the midpoint beats the largest level in 1 of 133 cells, where neither passes, and no share beats 0.10 under the rule written first. The filter decides Landsat, the MAD bandwidth moves every dataset toward finer stages, and θ = 0.5 isn't q-free: δ̄ between two frozen blocks crosses θ at T = J/ln(θ(q − 1)/(1 − θ)), which moves faster with q than T_fs does, and θ = 0.6 restores Landsat at q = 5 | §13.18 | Observed (63 graphs, 133 cells, 12 seeds, one pass, mostly at the low budget, one generator seed: exploration); the two-block T derived, and it brackets the bridge on 9 of 9 Cauchy arms | E20; `auto` under a narrow bandwidth; the REPL's window |
-| C60 | `auto`'s edge-statistics top is 5·(median J/g)·s̄/ln q, so it scales with the kernel's median before the gauge and sits below the last melt on all 14 MAD graphs. A quantile of J doesn't repair it. The 90th percentile of strength over ln(1 + √q) holds the hot end on 63 of 63 with no gauge declared, and still fails the readings, because Landsat's reading follows where the T_fs window starts: a band 5–12 times wide, which T_fs misses when the lens's bottom cuts a stage's shoulder. The same lens loses iris's and the toy's cold structure. No candidate cleared the criteria | §13.19 | The identity derived and checked to 3·10⁻¹⁴ on 63 graphs. The rest observed (63 graphs at 6 seeds, 33 at 12 seeds, low budget, one pass: exploration); the scan of starts added after the candidates failed | A lens spanning the graph, read per χ stage; T_fs at a lens's edge |
+| C60 | `auto`'s edge-statistics top is 5·(median J/g)·s̄/ln q, so it scales with the kernel's median before the gauge and sits below the last melt on all 14 MAD graphs. A quantile of J doesn't repair it. The 90th percentile of strength over ln(1 + √q) holds the hot end on 63 of 63 with no gauge declared, and still fails the readings, because Landsat's reading follows where the T_fs window starts: a band 5–12 times wide, which T_fs misses when the lens's bottom cuts a stage's shoulder. The same lens loses iris's and the toy's cold structure. No candidate cleared the criteria | §13.19 | The identity derived and checked to 3·10⁻¹⁴ on 63 graphs. The rest observed (63 graphs at 6 seeds, 33 at 12 seeds, low budget, one pass: exploration); the scan of starts added after the candidates failed | A lens spanning the graph, read per χ stage (run, §13.21); T_fs at a lens's edge |
 | C61 | On `BwdParityTests`' recipe across k = 5, 10, 20, two kernels and four datasets at q = 20, s̄/(4 ln(1 + √q)) places the C_v peak at 1.16–1.70 times itself and the hottest structure at 1.47–2.00, the same for either kernel, and 4·T_ps leaves S₂·N at 1.09–1.16. S₂'s half-fall T½ spans a factor of 13 and reads necks and levels rather than a melt; the lower percolation envelope brings that to 3.3 overall and 1.3–1.7 at a given k, with no SPC. T_ps's cold end isn't general: it leaves two of BlattHierarchy's three levels below it on every Cauchy graph | §13.20 | Observed (24 graphs and a control, one seed, 8 × (500, 1,000)); k, kernel and q varied, the rest of the recipe fixed | Off-recipe graphs; E21 |
 | C62 | R̂ and energy closure catch different failures. At q = 100 with burn-in 500 the replicas are all still ordering through the recorded draws: R̂ sits near 1 at T_ps while closure is off by 4–15 times, flat in h, and S₂ breaches C43's lower envelope on Landsat. At burn-in 5,000 closure reads 0.87–1.06 and R̂ flags rise from 10–16 to 26–29 of 36 temperatures, because the replicas have settled into different long-lived states. At q ≤ 20 neither fires much, and burn-in 500 holds on the two largest k = 10 graphs | §13.20 | Observed (4 graphs traced, 6 re-measured); unplanned, chasing an anomaly | E16 |
 | C63 | The stop rule as written (every parent quiet or ρ in [¼, ¾]) stops on 7–11 of 24 graphs and reverses on 5 of 7 and 6 of 10, because ρ carries no noise term. With a jackknife band over replicas S₂ stops on 23 of 24 at v2–v5, reverses on 2 of 17, and its interpolation error at the stop is at most 0.053. The stop's density moves by a factor of 8 with k and kernel | §13.20 | Observed; the band was written after seeing the strict rule fail, so it's exploration | E21 |
+| C64 | A lens from the graph alone (top p90(s)/ln(1 + √q), bottom J_first/(4·ln(1 + q))) holds both ends on 62–63 of 63 graphs at 48–233 levels. T_fs on it gains the toy and passes none of Landsat's four narrow graphs. The hottest χ stage passes all four on 12 of 12, where one dataset is all the evidence. χ's stages don't reach BlattHierarchy's levels; confining the window does, and blind bands reach them as well as shelves. Under MAD and compiler defaults BlattHierarchy's reading becomes a per-branch mix of planted blocks. §13.18's rule flags `auto` against itself on 18 of 63, so no arm could meet the 60 asked | §13.21 | Observed (63 graphs at 12 seeds, low budget, one pass: exploration); constants fixed on the same graphs' curves; the control, the dataset-terms verdict and blind bands added after the results | A pass on data that fixed nothing; stages located by the partition |
 
 ---
 
@@ -3674,7 +3675,7 @@ The same lens that holds Landsat's band loses cold structure. The toy under comp
 
 **Recommendation: leave `AutoBracket` as it is.** No candidate cleared the criteria, and the top alone doesn't decide the reading. Three things are worth keeping, and the choices among them are the user's:
 - *D as the hot end of a later lens.* It's cheap, equivariant with no declaration, and never cut T_melt. On its own it trades Landsat's partial gain for iris's and the toy's loss and the lost warning.
-- *A lens spanning the graph, read per stage.* The question left isn't an anchor. It's a lens from first break to last melt, with levels set by the span, and a reading from each χ stage rather than from one T_fs (BWD1996 has one peak per pseudotransition). The connecting coupling offers a cold end: J_b/ln(q − 1) falls within 5.4 times of a χ stage on the 10 MAD graphs that have one, median 2.3, read after the fact. That's a new pass with its own criteria, since Landsat, the toy and iris want different stages.
+- *A lens spanning the graph, read per stage.* The question left isn't an anchor. It's a lens from first break to last melt, with levels set by the span, and a reading from each χ stage rather than from one T_fs (BWD1996 has one peak per pseudotransition). The connecting coupling offers a cold end: J_b/ln(q − 1) falls within 5.4 times of a χ stage on the 10 MAD graphs that have one, median 2.3, read after the fact. That's a new pass with its own criteria, since Landsat, the toy and iris want different stages. It ran: §13.21.
 - *T_fs at a lens's edge isn't a peak.* `SpPlateau` could say so, which would restore a warning on every lens.
 
 **Limits.** This is exploration on one pass.
@@ -3960,3 +3961,166 @@ settings stated, since the settings pass hasn't happened. Against the panel's 25
 reference: does the fit find the same features at the same temperatures, and does the rule reverse? This is the
 experiment that answers the question round 2 set: when a fit on a grid can be trusted to say whether features exist and
 where. About 3–4 hours on this machine. Off-recipe graphs and E16 remain separate.
+
+### 13.21 Addendum, 2026-11-02: a lens spanning the graph, read per stage (C64)
+
+§13.19 left a question: a lens from first break to last melt, with a reading from each χ stage instead of one T_fs. The user asked to have it run. Nothing in the engine changed.
+
+**No arm passes as written, and the criterion that stopped them was set wrong. The lens itself works. On it the hottest χ stage is the first single reading to clear all four of Landsat's narrow graphs, at a cost on BlattHierarchy and iris under narrow bandwidths. That gain rests on one dataset, so I recommend changing no default until it's read on other data.**
+
+- *The lens works.* Its top is p90(s)/ln(1 + √q) and its bottom J_first/(4·ln(1 + q)), both from the graph. It's equivariant to 2·10⁻¹⁶. S₂·N at its top is below 2 on 63 of 63, and χ at its bottom is under the graph's own components plus one block of m on 62. It takes 48–233 levels, median 102, and its time follows them: 2.5–4.5 times `auto`'s on the toy's and Landsat's narrow graphs. T_fs sits on its bottom on 9 or more of 12 seeds on 2 of 63, against 11 of 33 on `auto`'s lens.
+- *On its own it gains the toy and not Landsat.* T_fs on this lens reads all 3 stripes on 12 of 12 under MAD and compiler defaults, where `auto` reads 1 and 2. On Landsat's four narrow graphs it passes on 0 of 12, since χ's largest value is now the first big break, which is a stage below the classes.
+- *The hottest χ stage reads Landsat.* A window from there passes on 12 of 12 on all four, at 5–6 big clusters holding 5 of the six classes and purity 0.93–0.94, on 24–28% of the nodes. `auto` reads 0 on each. On §13.19's build D read 8, 0, 0, 0 and the T_ps lens 12, 12, 12, 0. Elsewhere it changes one modal reading against T_fs. §13.19 had already seen this stage work, after the fact, on this dataset.
+- *χ's stages don't see a hierarchy, and confining the window does.* BlattHierarchy's χ has one stage, so χ's lists reach at most one planted level. Shelves of S₂·N, read as slices, reach all three on 7 of 9 graphs, where blind slices never reach the coarse one. But blind bands reach all three on 8 of 9, against 6 for shelf bands, so what reaches the levels is the window's confinement more than its boundaries.
+- *The cost.* In each dataset's own terms `hot` is not a loss on 56 of 63. Of its 7 losses, 2 lie within `auto`'s disagreement with itself, and T_fs on this lens loses the same 7, so they come with the lens. BlattHierarchy under MAD and compiler defaults goes from passing on 12 to 3, and it's a per-branch mix of planted blocks rather than a garbled partition.
+- *The bar was wrong.* Criterion 4 asked for 60 of 63 by §13.18's rule, which counts any change of the modal reading as a fall, gains included. `auto`'s first six seeds against its last six get flagged on 18 of 63 by the same rule.
+
+**What ran.** The criteria were written first (`lineage-persistence/span-lens/README.md`).
+- *Build:* `394e3ef`, since the coupling floor now keeps connectivity, which changes 6 of the 63 graphs (the toy and Landsat under MAD and compiler defaults). 20 `auto` baselines ran on it: those 6, 2 unchanged graphs that came back identical row for row, and 12 iris graphs §13.18 had run only on a wider grid. The other 43 carry over from §13.18.
+- *The lens:* rungs of 1.098, the 48-level lens's spacing. J_first is the coupling of the coldest split a reading could keep: going down the edges by J, the last edge to join two components of m or more nodes, m being `MinClusterSize`. Edges below the floor, tested before the gauge, don't count, since they're the graph's connectivity, and counting them drops the bottom by up to 33 decades. A bridge of coupling J opens at even odds at J/ln(1 + q). The 4 is a margin set from a table of these against the wide lens's first breaks, with no labels.
+- *χ's stages:* §13.19's rule, unchanged, now read per seed. *Shelves:* χ's height is in nodes, so a balanced hierarchy's later stages make no local maximum. A shelf is a minimum of −d ln(S₂·N)/d ln T, a central difference over ±4 rungs on a 3-point smoothed curve, below the last melt, where the rate rises by 0.25 or more on both sides. The constants were set on §13.19's curves, with no labels.
+- *The readings:* 12 seeds at 1 × (200, 400), largest, 0.10, θ = 0.5.
+  - `chi up`, the primary: the whole lens, and [T_k, ∞) from each stage. `chi band`: between neighbouring stages. `chi slice`: the whole lens, and the slice at each stage.
+  - `shelf up`, `shelf band`, `shelf slice`: the same over shelves, from a shelf's cold step, between its steps, at its flat point.
+  - `null`: the whole lens, and [T, ∞) at K evenly spaced points in ln T.
+  - `tfs`: today's detector on this lens. `hot`: [T_K, ∞) from the hottest χ stage, or the whole lens if there's none.
+
+Two criteria were amended after the sweep started and before any result was read, since each decided graphs by construction:
+- The bottom's test now allows for the components the graph has above the floor. Against m²/N alone it's 53 of 63.
+- On Landsat's four rows a position reading the target holds `auto`, where the first version excused only ARI.
+
+Past what was written first, after seeing the results:
+- The rule against itself, half the seeds each way.
+- The verdict in each dataset's terms.
+- The check of BlattHierarchy's clusters against the planted blocks.
+- Blind slices and bands, since `null` only tried `up`, including four bands on all 63.
+
+**The graphs on edge statistics, as resolved.** All are Euclidean kNN with `PathNeighbor` refinement (no effect under Euclidean distance), no LMP, a floor of 10⁻¹⁰, q = 20 bar the arms named for it, and `ScaleEdges` after repair bar its own arm and compiler defaults. The stages and shelves are the medians over the seeds with the modal count.
+
+| Graph | Arm | Filter, K̂, repair edges, cut by the floor | Bandwidth rule, a | Gauge | J_first (nodes on its smaller side) | Lens: bottom, top, levels | χ stages | Shelves |
+|---|---|---|---|---|---|---|---|---|
+| Iris, K = 5, Gaussian | MAD bandwidth | mutual, 3.49, 15, 0 | MAD, 0.1212 | 0.2863 | 6.25·10⁻⁴ (38) | 5.13·10⁻⁵, 0.214, 91 | none | 0.0012, 0.00578 |
+|  | No gauge | mutual, 3.49, 15, 0 | mean edge, 0.3065 | none | 6.06·10⁻⁷ (50) | 4.98·10⁻⁸, 2.25, 191 | 0.0173 | 1.89·10⁻⁵ |
+|  | Compiler defaults | OR, 6.72, 1, 13 | MAD, 0.1212 | none | 0.00307 (38) | 2.52·10⁻⁴, 0.912, 89 | none | 0.00571, 0.0305 |
+| Iris, K = 10, Gaussian | MAD bandwidth | mutual, 7.00, 5, 3 | MAD, 0.1414 | 0.1429 | 0.00203 (38) | 1.67·10⁻⁴, 0.205, 78 | none | 0.0128 |
+|  | No gauge | mutual, 7.04, 5, 0 | mean edge, 0.3645 | none | 4.02·10⁻⁵ (50) | 3.3·10⁻⁶, 4.62, 153 | 0.0365 | 0.00141 |
+|  | Compiler defaults | OR, 12.89, 1, 28 | MAD, 0.1414 | none | 0.0142 (38) | 0.00117, 1.54, 79 | none | 0.097 |
+| Iris, K = 10, Cauchy | Base | mutual, 7.04, 5, 0 | mean edge, 0.3645 | 0.1421 | 0.00669 (50) | 5.49·10⁻⁴, 0.568, 76 | 0.0116 | 0.0128 |
+|  | OR filter | OR, 13.27, 1, 0 | mean edge, 0.4754 | 0.0754 | 0.00584 (50) | 4.8·10⁻⁴, 0.48, 76 | 0.0303 | 0.0145 |
+|  | No repair | mutual, 6.97, 0, 0 | mean edge, 0.3602 | 0.1434 | 0.0621 (38) | 0.0051, 0.57, 52 | none | none |
+|  | MAD bandwidth | mutual, 7.04, 5, 0 | MAD, 0.09535 | 0.1421 | 4.78·10⁻⁴ (50) | 3.93·10⁻⁵, 0.12, 88 | 9.03·10⁻⁴ | 6.85·10⁻⁴ |
+|  | Scale before repair | mutual, 7.04, 5, 0 | mean edge, 0.3602 | 0.1421 | 0.00653 (50) | 5.37·10⁻⁴, 0.565, 76 | 0.0115 | 0.0104 |
+|  | No gauge | mutual, 7.04, 5, 0 | mean edge, 0.3645 | none | 0.0471 (50) | 0.00387, 4, 76 | 0.0714 | 0.0707 |
+|  | q = 5 | mutual, 7.04, 5, 0 | mean edge, 0.3645 | 0.1421 | 0.00669 (50) | 9.33·10⁻⁴, 0.822, 74 | 0.022 | none |
+|  | q = 40 | mutual, 7.04, 5, 0 | mean edge, 0.3645 | 0.1421 | 0.00669 (50) | 4.5·10⁻⁴, 0.485, 76 | 0.00771 | 0.00702 |
+|  | Compiler defaults | OR, 13.27, 1, 0 | MAD, 0.09535 | none | 0.00337 (50) | 2.77·10⁻⁴, 1.05, 90 | 0.0196 | 0.0113, 0.165 |
+| Toy, K = 10, Gaussian | MAD bandwidth | mutual, 7.55, 12, 581 | MAD, 0.05568 | 0.1325 | 3.47·10⁻⁷ (923) | 2.85·10⁻⁸, 0.188, 170 | 1.55·10⁻⁶ | 2.76·10⁻⁵ |
+|  | No gauge | mutual, 7.91, 12, 0 | mean edge, 0.1622 | none | 0.00389 (53) | 3.19·10⁻⁴, 4.4, 104 | 0.189 | 0.228 |
+|  | Compiler defaults | OR, 9.25, 0, 2053 | MAD, 0.05568 | none | 2.62·10⁻⁶ (930) | 2.15·10⁻⁷, 1.42, 170 | 1.41·10⁻⁵ | 1.73·10⁻⁴ |
+| Landsat, K = 5, Gaussian | MAD bandwidth | mutual, 2.79, 983, 58 | MAD, 6.732 | 0.3579 | 2.05·10⁻¹⁰ (393) | 1.68·10⁻¹¹, 0.0408, 233 | 7.69·10⁻¹⁰, 1.21·10⁻⁴, 0.00274 | 1.67·10⁻⁴ |
+|  | No gauge | mutual, 2.81, 983, 0 | mean edge, 22.71 | none | 0.154 (393) | 0.0127, 1.93, 55 | 0.207 | none |
+|  | Compiler defaults | OR, 4.92, 0, 421 | MAD, 6.732 | none | 7.69·10⁻⁷ (436) | 6.32·10⁻⁸, 0.152, 159 | 7.09·10⁻⁷, 4.15·10⁻⁴, 0.0179 | 5.74·10⁻⁴, 0.026 |
+| Landsat, K = 10, Gaussian | MAD bandwidth | mutual, 5.25, 282, 202 | MAD, 7.762 | 0.1903 | 4.8·10⁻⁶ (437) | 3.94·10⁻⁷, 0.0736, 132 | 4.38·10⁻⁶, 6.52·10⁻⁴, 0.00873 | 0.00165 |
+|  | No gauge | mutual, 5.32, 282, 0 | mean edge, 23.84 | none | 0.326 (436) | 0.0267, 3.73, 54 | 0.527 | none |
+|  | Compiler defaults | OR, 9.79, 0, 812 | MAD, 7.762 | none | 2.52·10⁻⁵ (440) | 2.07·10⁻⁶, 0.525, 135 | 2.54·10⁻⁵, 0.00366, 0.0747 | 0.00461 |
+| BlattHierarchy, K = 5, Cauchy | Base | mutual, 3.62, 82, 0 | mean edge, 0.08313 | 0.2766 | 1.33·10⁻⁵ (600) | 1.1·10⁻⁶, 0.616, 144 | 1.11·10⁻⁵ | 9.22·10⁻⁶, 5.94·10⁻⁴, 0.0138 |
+|  | OR filter | OR, 6.55, 20, 0 | mean edge, 0.1059 | 0.1526 | 1.2·10⁻⁵ (600) | 9.81·10⁻⁷, 0.51, 143 | 1.09·10⁻⁵ | 8.27·10⁻⁶, 4.88·10⁻⁴, 0.0218 |
+|  | No repair | mutual, 3.48, 0, 0 | mean edge, 0.06391 | 0.2875 | 0.0388 (10) | 0.00319, 0.559, 57 | none | none |
+|  | MAD bandwidth | mutual, 3.62, 82, 0 | MAD, 0.02741 | 0.2766 | 1.45·10⁻⁶ (600) | 1.19·10⁻⁷, 0.276, 159 | 1.33·10⁻⁶ | 1.06·10⁻⁶, 6.56·10⁻⁵, 0.00202 |
+|  | Scale before repair | mutual, 3.62, 82, 0 | mean edge, 0.06391 | 0.2766 | 7.89·10⁻⁶ (600) | 6.48·10⁻⁷, 0.538, 148 | 6.9·10⁻⁶ | 6·10⁻⁶, 3.72·10⁻⁴, 0.0091 |
+|  | No gauge | mutual, 3.62, 82, 0 | mean edge, 0.08313 | none | 4.83·10⁻⁵ (600) | 3.96·10⁻⁶, 2.23, 144 | 4.4·10⁻⁵ | 4.01·10⁻⁵, 0.00179, 0.05 |
+|  | q = 5 | mutual, 3.62, 82, 0 | mean edge, 0.08313 | 0.2766 | 1.33·10⁻⁵ (600) | 1.86·10⁻⁶, 0.892, 142 | 1.81·10⁻⁵ | 7.74·10⁻⁴, 0.0239 |
+|  | q = 40 | mutual, 3.62, 82, 0 | mean edge, 0.08313 | 0.2766 | 1.33·10⁻⁵ (600) | 8.99·10⁻⁷, 0.526, 144 | 1.1·10⁻⁵ | 8.75·10⁻⁶, 4.53·10⁻⁴, 0.0112 |
+|  | Compiler defaults | OR, 6.55, 20, 0 | MAD, 0.02741 | none | 5.25·10⁻⁶ (600) | 4.31·10⁻⁷, 1.15, 160 | 4.84·10⁻⁶ | 3.34·10⁻⁶, 2.2·10⁻⁴, 0.0132 |
+
+**The other 30 graphs** are the arms of iris at K = 5 and 10 under a Gaussian kernel, the toy and Landsat that use T_ps's bracket, unchanged by the floor's change and stated in §13.18's table. Their lenses take 48–209 levels. Per graph, in the harness's results: `span-lens.tsv`, `span-resolved.tsv`.
+
+**The criteria.** The number needed is in brackets. "Holds by the rule" counts a position with no fall (strict), a position reading the target on Landsat's four rows, or a move between planted levels. "Not a loss" is the verdict written afterwards, below.
+
+| Arm | 2. Seeds agree, of 63 (51) | 3. Landsat: passing on the four rows (9 each) | 4. Holds `auto` by the rule, of 63 (60) | Not a loss in the dataset's terms, of 63 | 5. Beats blind | 6. Longest list (4) |
+|---|---|---|---|---|---|---|
+| `chi up`, the primary | 52 | 12, 12, 12, 12 | 47 (strict 38, target 2, move 7) | 56 | Yes | 4 |
+| `hot` | 52 | 12, 12, 12, 12 | 46 (strict 36, target 4, move 6) | 56 | – | 1 |
+| `tfs` | – | 0, 0, 0, 0 | 43 (strict 37, target 0, move 6) | 56 | – | 1 |
+| `chi band` | 52 | 12, 12, 12, 12 | 44 (strict 35, target 3, move 6) | 56 | Yes | 4 |
+| `chi slice` | 52 | 4, 10, 12, 12 | 38 (strict 27, target 2, move 9) | 40 | Yes | 4 |
+| `shelf up` | 41 | 0, 12, 0, 0 | 35 (strict 33, target 1, move 1) | 40 | Yes | 4 |
+| `shelf band` | 41 | 0, 12, 0, 0 | 35 (strict 33, target 1, move 1) | 40 | Yes | 4 |
+| `shelf slice` | 41 | 0, 12, 0, 0 | 37 (strict 35, target 1, move 1) | 40 | Yes | 4 |
+| `null`, χ's length | – | 0, 12, 12, 12 | 40 (strict 38, target 1, move 1) | 44 | – | 4 |
+| `null`, shelves' length | – | 0, 0, 0, 0 | 35 (strict 34, target 0, move 1) | 40 | – | 4 |
+| Four blind bands, past the criteria | – | 0, 12, 12, 12 | 41 (strict 39, target 1, move 1) | 46 | – | 4 |
+
+Criterion 1, the lens, is common to all and passes. So `chi up`, the primary, passes 1, 2, 3, 5 and 6 and fails 4, and `hot` passes 1, 2, 3 and 6 and fails 4. The shelf arms "beat blind" only because `null` fails Landsat, and they hold at most 2 more graphs than it does. χ's seed agreement clears its bar by one graph, and 5 of its 11 failures are at q = 40, where the low budget may leave the cold end uncoalesced. That wasn't checked at a higher budget. The modal list has 2 readings on 48 graphs.
+
+**What `hot`'s falls are.** A loss here needs 3 or more seeds' passes, 0.05 of purity or ARI, or a class or stripe. By dataset:
+
+| | Same | Gain | Move between planted levels | Loss |
+|---|---|---|---|---|
+| Iris, 27 graphs | 20 | 5 | | 2 |
+| Toy, 9 | 7 | 2 | | |
+| Landsat, 18 | 10 | 5 | | 3 |
+| BlattHierarchy, 9 | 1 | | 6 | 2 |
+
+- Of the rule's 17 falls, 5 are gains, 5 are no change in these terms, and 7 are the losses. The half-seed control flags 9 of those 17 graphs on `auto` itself.
+- On the 30 graphs that use T_ps's bracket there are 2 losses, Landsat at K = 10 base and q = 5. Both are inside what `auto` shows against itself: purity 0.94 to 0.79 and 0.94 to 0.76 between its own first and last six seeds.
+- The other 5 are on edge statistics. Landsat at K = 10 with no gauge: purity 0.94 to 0.88, passing 9 to 7. Iris under compiler defaults: K = 5 moves from S+merged at ARI 0.72 to S+species at 0.62, K = 10 falls 0.86 to 0.73, and both have no χ stage, so `hot` is the whole lens there. BlattHierarchy under MAD and compiler defaults are below.
+
+**Landsat.** Cells are seeds passing of 12, the median count of big clusters (classes they hold), median purity and the share of nodes in them.
+
+| Landsat graph | χ stages | Starts passing on 9 or more of 12, and their share of the lens | `auto` | `tfs` | `hot` |
+|---|---|---|---|---|---|
+| K = 5, MAD | 7.69·10⁻¹⁰, 1.21·10⁻⁴, 0.00274 | 7.43·10⁻⁴–0.00695, 9 of 78 | 0, 3 (3), 0.56, 70% | 0, 4 (3), 0.54, 65% | 12, 6 (5), 0.93, 28% |
+| K = 5, compiler defaults | 7.09·10⁻⁷, 4.15·10⁻⁴, 0.0179 | 0.00445–0.0313, 8 of 53 | 0, 3 (2), 0.32, 84% | 0, 4 (3), 0.55, 67% | 12, 5 (5), 0.93, 25% |
+| K = 10, MAD | 4.38·10⁻⁶, 6.52·10⁻⁴, 0.00873 | 0.00287–0.0152, 7 of 44 | 0, 3 (3), 0.57, 69% | 0, 4 (3), 0.54, 64% | 12, 5 (5), 0.93, 24% |
+| K = 10, compiler defaults | 2.54·10⁻⁵, 0.00366, 0.0747 | 0.0203–0.108, 7 of 45 | 0, 2 (2), 0.32, 89% | 0, 4 (3), 0.55, 67% | 12, 5 (5), 0.94, 26% |
+
+- The hottest stage sits inside the band of passing starts on all four, and that band is 12–16% of the lens's starts.
+- χ's three stages read coarse to fine: purity 0.31–0.33 on 88–97% of the nodes, then 0.54–0.55 on 64–67%, then 0.93–0.94 on 24–28%.
+- Four blind bands pass on 0, 12, 12, 12, and on the last three they read better than `hot`: 7 big clusters holding all six classes, purity 0.95, on 33–36% of the nodes. They fail K = 5 MAD because a near-floor J_first stretches that lens, so its top band starts at 1.8·10⁻⁴, below the classes. Over all 63 they aren't a loss on 46. They lose 7 of the toy's 9 graphs and 9 of Landsat's 18, all on the mean edge length, where the lens is narrow and a band's edge cuts the transition, and iris at K = 10 under compiler defaults.
+
+**The toy.**
+
+| Toy graph | `auto` | `tfs` and `hot` | Full lens | At the shelf |
+|---|---|---|---|---|
+| MAD | 1 stripe on 12, ARI 0.41 | 3 stripes on 12, ARI 0.69 | 2 stripes on 12, ARI 0.68 | 2 stripes on 12, ARI 0.68 |
+| No gauge | 3 stripes on 7, ARI 0.69 | 3 stripes on 8, ARI 0.69 | 0 stripes on 12, ARI 0.00 | 2 stripes on 12, ARI 0.68 |
+| Compiler defaults | 2 stripes on 9, ARI 0.59 | 3 stripes on 12, ARI 0.69 | 1 stripe on 11, ARI 0.67 | 1 stripe on 10, ARI 0.68 |
+
+The stage reads what the shelf doesn't, and this is the lens's gain, not `hot`'s. The toy's no-gauge graph reads the same as today.
+
+**BlattHierarchy.** Levels are those any position in the list reads at ARI ≥ 0.8: C coarse, M medium, F fine. Blind lists have the shelves' length on each graph.
+
+| Graph | `auto` | `hot` | `chi up` | `shelf band` | Blind bands | `shelf slice` | Blind slices |
+|---|---|---|---|---|---|---|---|
+| Base | fine on 12, passing 12, ARI 0.98 | medium on 12, passing 12, ARI 1.00 | –M– | CMF | CMF | CMF | –MF |
+| OR filter | fine on 12, passing 12, ARI 1.00 | medium on 12, passing 12, ARI 1.00 | –M– | CMF | CMF | CMF | –MF |
+| No repair | fine on 12, passing 12, ARI 0.88 | fine on 12, passing 12, ARI 0.88 | ––F | ––F | ––F | ––F | ––F |
+| MAD bandwidth | fine on 12, passing 12, ARI 0.99 | medium on 11, passing 3, ARI 0.73 | ––– | CMF | CMF | CMF | –MF |
+| Scale before repair | fine on 12, passing 12, ARI 0.98 | medium on 12, passing 12, ARI 1.00 | –M– | CMF | CMF | CMF | –MF |
+| No gauge | fine on 12, passing 12, ARI 0.98 | medium on 12, passing 12, ARI 1.00 | –M– | CMF | CMF | CMF | –MF |
+| q = 5 | fine on 12, passing 12, ARI 0.99 | medium on 12, passing 12, ARI 1.00 | –M– | –MF | CMF | –MF | –MF |
+| q = 40 | fine on 12, passing 12, ARI 0.98 | medium on 12, passing 12, ARI 1.00 | –M– | CMF | CMF | CMF | –MF |
+| Compiler defaults | fine on 12, passing 12, ARI 1.00 | fine on 12, passing 3, ARI 0.79 | ––– | C–F | CMF | CMF | –MF |
+
+- The lens moves six graphs from fine to medium, clean at ARI 1.00, because it now holds medium's long shelf. T_fs on it does the same.
+- Under MAD and compiler defaults the reading is longest-lived per branch across a span of 2–3·10⁶. Checked against the planted blocks, within 5% both ways, every node under compiler defaults lies in one, on every seed, with 0–2 blocks at medium and the rest fine. Under MAD 1149–1150 of 1200 do, with 2–4 at medium, 7–15 fine and 2 clusters that match neither. ARI to any one level falls, and which branches stay whole varies by seed (between-seed ARI 0.77 under MAD, 1.00 on `auto`).
+- Four blind bands read coarse, medium and fine at ARI 1.00 on 7 of the 9, in that order from cold to hot, including under MAD.
+
+**Iris** mostly holds: S+merged on 12 of 12 on 23 of 27 graphs under `auto` and 22 under `hot`. The whole lens reads it at ARI 1.00 to the stage on 10 graphs where `hot` reads 0.86–0.98, since a window start can drop a few nodes.
+
+**Recommendation: change no default on this pass.** `AutoBracket` and T_fs stay. The case for `hot` over T_fs comes from Landsat alone, and the rule's constants were set on these graphs' curves. Worth keeping, and the choices are the user's:
+- *The lens as an option beside `auto`.* It passed its criterion cleanly, and its cost is known. As a default it would move BlattHierarchy's recipe graphs to medium and take on the seven losses.
+- *A pass on data that fixed nothing,* over `hot`, χ's bands and blind bands, with the bar set from the rule's own noise and each dataset's terms written first. ISOLET is on disk, `datasets/prep/fetch_uci.py` fetches more, and the toy and BlattHierarchy have other generator seeds. The bands keep BlattHierarchy where `hot` loses it, and `hot` keeps 13 of the bands' 17 losses, so whether a single reading is the right shape at all is part of the question.
+- *Stages located by the partition.* χ and S₂·N are summaries. Reading windows along the lens and comparing neighbours would find where the partition itself is stable. Not tested.
+- *T_fs at a lens's edge,* from §13.19. On this lens it's rare, so the flag matters mainly on narrow ones.
+
+**Limits.** This is exploration on one pass, and it can't validate a rule.
+- Four datasets, 12 seeds at the low budget, one generator seed per synthetic dataset. Every constant was set on these graphs, and `hot`'s Landsat reading was known beforehand.
+- The verdict in each dataset's terms, the half-seed control and every blind band came after the results. The control compares six seeds with six, so it overstates the rule's noise on twelve.
+- Landsat's pass rewards a fine level. `hot` covers about a quarter of the nodes and fails the stricter test on every seed (6 big clusters on 1900 nodes). Its ARI under MAD is 0.11–0.14 against `auto`'s 0.29–0.30, though under compiler defaults it's the higher, 0.13–0.14 against 0.09. Between-seed ARI falls too, 0.96–0.99 to 0.91–0.95.
+- The whole lens is no fallback for a graph with no stage. On recipe graphs it selects the root, since the lens credits it with the frozen span (Landsat: one big cluster, purity 0.24). All 8 graphs with no stage here are split below the floor or have no repair, so this hasn't been tested the other way.
+- The bottom fails once, on BlattHierarchy at q = 40 (χ 0.95 against 0.08), and J_first needs `MinClusterSize`, so the lens depends on the reading's own unit.
+- Not varied: the budget, distance, LMP, the floor, θ, generator seeds, the rungs.
+
+Harness, curves, readings and scans: `side-session-notes/.../lineage-persistence/span-lens/`.
