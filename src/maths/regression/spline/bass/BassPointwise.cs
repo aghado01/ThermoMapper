@@ -28,8 +28,10 @@ namespace Maths.Regression.Spline.Bass;
 /// draw. The g-form's precision is the Gram at every τ, so the units' quadratic forms are taken once per structure; the
 /// ridge's, bG_c + τD, moves with τ, so they are taken once per distinct τ.</item>
 /// </list>
-/// λ enters neither content: it is the count prior's rate. Thread-safe: it reads the model and the table and writes
-/// only its own buffers.
+/// λ enters neither content: it is the count prior's rate. A draw composed on a working response reads it, the moved ones of a chain
+/// each their own (<see cref="BassDraw.Working"/>), and the offset and weights are then reported as latents conditioned on; the noise's
+/// density with them integrated out is its observation model's. Thread-safe: it reads the model and the table and writes only its own
+/// buffers.
 /// </summary>
 public static class BassPointwise
 {
@@ -88,6 +90,8 @@ public static class BassPointwise
         var latents = new List<LatentReport> { new("structure", LatentScope.Global, LatentTreatment.Conditioned) };
         if (model.Target.SamplesTau) latents.Add(new LatentReport("prior precision τ", LatentScope.Global, LatentTreatment.Conditioned));
         if (model.Target.Sigma2Rate is not null) latents.Add(new LatentReport("σ²'s rate", LatentScope.Global, LatentTreatment.Conditioned));
+        if (pooled.Exists(d => !ReferenceEquals(d.WorkingOn(model), model.Working)))
+            latents.Add(new LatentReport("the working response's offset and weights", LatentScope.Observation, LatentTreatment.Conditioned));
         latents.Add(new LatentReport("coefficients a", LatentScope.Global, treatment));
         latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, treatment));
         return weights is null
@@ -95,20 +99,21 @@ public static class BassPointwise
             : new PointwiseLogDensity(values, partition, latents) { Weights = weights };
     }
 
-    // Each draw's Normal log terms at its fit and σ², summed over each unit's observations: on the working response, under W
-    // at its meaning, N(y | f, σ²/w) or w copies of N(y | f, σ²).
+    // Each draw's Normal log terms at its fit and σ², summed over each unit's observations: on the working response it was composed on,
+    // under W at its meaning, N(y | f, σ²/w) or w copies of N(y | f, σ²).
     private static double[,] Retained(BassModel model, BassDrawFit fit, List<BassDraw> pooled, UnitPartition partition)
     {
-        ReadOnlySpan<double> y = model.Working.Values;
-        double[]? weights = model.Working.WeightArray;
-        bool counts = model.Working.Meaning == WeightMeaning.Replication;
-        int n = y.Length;
+        int n = model.Data.Response.Observations;
         var values = new double[pooled.Count, partition.Units];
         var f = new double[n];
         var log = new double[n];
         for (int s = 0; s < pooled.Count; s++)
         {
             BassDraw draw = pooled[s];
+            WorkingResponse working = draw.WorkingOn(model);
+            ReadOnlySpan<double> y = working.Values;
+            double[]? weights = working.WeightArray;
+            bool counts = working.Meaning == WeightMeaning.Replication;
             fit.Evaluate(draw, f);
             double sigma2 = draw.Sigma2, normalizer = -0.5 * Math.Log(2.0 * Math.PI * sigma2);
             for (int i = 0; i < n; i++)
@@ -128,32 +133,32 @@ public static class BassPointwise
         return values;
     }
 
-    // The draws grouped by structure: one design, block and explicit design per structure, then each draw's leave-unit-out
-    // predictive at its τ.
+    // The draws grouped by structure and working response: one design, block and explicit design per group, then each draw's
+    // leave-unit-out predictive at its τ.
     private static double[,] Collapsed(BassModel model, BassDrawFit fit, List<BassDraw> pooled, UnitPartition partition, string parameter)
     {
         BassTarget target = model.Target;
-        ReadOnlySpan<double> y = model.Working.Values;
-        double[]? weights = model.Working.WeightArray;
-        var byStructure = new Dictionary<int[], List<int>>(StructureComparer.Instance);
+        var groups = new Dictionary<(int[] Ids, WorkingResponse Working), List<int>>(BassDrawGroupComparer.Instance);
         for (int s = 0; s < pooled.Count; s++)
         {
-            int[] ids = pooled[s].Structure.TermIds;
-            if (!byStructure.TryGetValue(ids, out List<int>? rows)) byStructure.Add(ids, rows = []);
+            (int[], WorkingResponse) key = (pooled[s].Structure.TermIds, pooled[s].WorkingOn(model));
+            if (!groups.TryGetValue(key, out List<int>? rows)) groups.Add(key, rows = []);
             rows.Add(s);
         }
 
         var values = new double[pooled.Count, partition.Units];
-        foreach ((int[] ids, List<int> rows) in byStructure)
+        foreach (((int[] ids, WorkingResponse working), List<int> rows) in groups)
         {
+            ReadOnlySpan<double> y = working.Values;
+            double[]? weights = working.WeightArray;
             var structure = new BassTerm[ids.Length];
             for (int j = 0; j < ids.Length; j++) structure[j] = fit.Term(ids[j]);
-            BassDesign design = model.NewDesign();
+            BassDesign design = model.NewDesign(working);
             BassRefusal? refusal = design.Load(structure) ?? target.Refusal(BassStructureFit.Of(design, 0.0));
             if (refusal is { } reason) throw new ArgumentException($"A draw's structure lies outside F ({reason}).", parameter);
             Func<double, double, GPriorConditional> block = target.CoefficientBlock(design);
             bool perTau = design.PriorTerms is not null;
-            double[,] x = fit.CentredDesign(ids);
+            double[,] x = fit.CentredDesign(ids, working);
             // The g-form's units' quadratic forms are τ-free, taken once per structure, those of a prior apart from its Gram once
             // per τ; a draw at a τ already seen copies its row.
             LeaveOutQuadratics[]? quadratics = null;
@@ -181,19 +186,22 @@ public static class BassPointwise
         }
         return values;
     }
+}
 
-    private sealed class StructureComparer : IEqualityComparer<int[]>
+/// <summary>Draws that share a block: the same structure's ids on the same working response.</summary>
+internal sealed class BassDrawGroupComparer : IEqualityComparer<(int[] Ids, WorkingResponse Working)>
+{
+    public static readonly BassDrawGroupComparer Instance = new();
+
+    public bool Equals((int[] Ids, WorkingResponse Working) a, (int[] Ids, WorkingResponse Working) b)
+        => ReferenceEquals(a.Working, b.Working) && a.Ids.AsSpan().SequenceEqual(b.Ids);
+
+    public int GetHashCode((int[] Ids, WorkingResponse Working) key)
     {
-        public static readonly StructureComparer Instance = new();
-
-        public bool Equals(int[]? a, int[]? b) => a is not null && b is not null && a.AsSpan().SequenceEqual(b);
-
-        public int GetHashCode(int[] ids)
-        {
-            var hash = new HashCode();
-            foreach (int id in ids) hash.Add(id);
-            return hash.ToHashCode();
-        }
+        var hash = new HashCode();
+        hash.Add(key.Working);
+        foreach (int id in key.Ids) hash.Add(id);
+        return hash.ToHashCode();
     }
 }
 
@@ -320,19 +328,43 @@ internal sealed class BassDrawFit
     }
 
     /// <summary>
+    /// The posterior mean of the offsets of the working responses <paramref name="read"/> gives the draws, at every observation under
+    /// <paramref name="weights"/> (null weighs them equally), a draw with none counting as zero; null when no draw reads one.
+    /// </summary>
+    public static double[]? MeanOffset(IReadOnlyList<BassDraw> pooled, IReadOnlyList<double>? weights, int observations, Func<BassDraw, WorkingResponse?> read)
+    {
+        double[]? sum = null;
+        double total = 0.0;
+        for (int s = 0; s < pooled.Count; s++)
+        {
+            double weight = weights?[s] ?? 1.0;
+            total += weight;
+            ReadOnlySpan<double> offset = read(pooled[s]) is { } working ? working.Offset : default;
+            if (offset.IsEmpty) continue;
+            sum ??= new double[observations];
+            for (int i = 0; i < observations; i++) sum[i] += weight * offset[i];
+        }
+        if (sum is null) return null;
+        for (int i = 0; i < observations; i++) sum[i] /= total;
+        return sum;
+    }
+
+    /// <summary>
     /// The explicit design [1, Z_c] of the structure <paramref name="ids"/>, in their order: the intercept's column of
     /// ones, then each term's column centred over all N observations under W, a − ā for a scalar response and
-    /// a(xᵢ)h(t_r) − level for a direct functional one, as the design layer centres them.
+    /// a(xᵢ)h(t_r) − level for a direct functional one, as the design layer centres them. W is <paramref name="working"/>'s, the model's
+    /// when null.
     /// </summary>
-    public double[,] CentredDesign(int[] ids)
+    public double[,] CentredDesign(int[] ids, WorkingResponse? working = null)
     {
+        WorkingResponse centring = working ?? _model.Working;
         int n = _cases * _locations;
         var x = new double[n, ids.Length + 1];
         for (int i = 0; i < n; i++) x[i, 0] = 1.0;
         for (int j = 0; j < ids.Length; j++)
         {
             (double[] a, double[]? h) = Columns(ids[j]);
-            double level = _model.Working.ColumnMean(a, h);
+            double level = centring.ColumnMean(a, h);
             if (h is null)
             {
                 for (int i = 0; i < _cases; i++) x[i, j + 1] = a[i] - level;

@@ -938,6 +938,23 @@ public sealed class RidgeSpectrum : RidgeColumns
         return new RidgeSpectrum(rows, total, lambda, eigen.Eigenvectors, root, w);
     }
 
+    /// <summary>This spectrum with the cross products <paramref name="crossResponse"/> in place of its own: the same columns under
+    /// another response, in O(M²).</summary>
+    public RidgeSpectrum WithCross(ReadOnlySpan<double> crossResponse)
+    {
+        int m = Count;
+        if (crossResponse.Length != m) throw new ArgumentException("One cross product per column is required.", nameof(crossResponse));
+        var w = new double[m];
+        for (int j = 0; j < m; j++)
+        {
+            double[] v = _vectors[j];
+            double sum = 0.0;
+            for (int i = 0; i < m; i++) sum += v[i] * crossResponse[i] / _root[i];
+            w[j] = sum;
+        }
+        return new RidgeSpectrum(Rows, Mass, _lambda, _vectors, _root, w);
+    }
+
     /// <summary>N, the observations.</summary>
     public int Rows { get; }
 

@@ -18,8 +18,8 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// Priors that stop reading a moving response (the options note's steps 1 and 2): the frozen reference, the frozen Gram, the
-/// coefficient prior's constant and σ²'s hierarchical prior. A design's working response cannot move yet, so a moving response is
-/// a model per snapshot here, each chain segment starting where the last ended.
+/// coefficient prior's constant and σ²'s hierarchical prior. A moving response is a model per snapshot here, each chain segment starting
+/// where the last ended, and through a chain moved in place where the two agree (<see cref="BassMovingResponseTests"/> holds the rest).
 /// <list type="bullet">
 /// <item><b>Nothing changes unasked.</b> A reference that restates today's read is today's target, chain for chain.</item>
 /// <item><b>Dense algebra.</b> S, the determinant term and the conditional mean against matrices built here from the columns, with
@@ -36,7 +36,7 @@ public sealed class BassPriorReferenceTests
     private readonly ITestOutputHelper _out;
     public BassPriorReferenceTests(ITestOutputHelper output) => _out = output;
 
-    private sealed class Snapshot(Func<BassResponse, WorkingResponse> working) : IBassObservationModel
+    internal sealed class Snapshot(Func<BassResponse, WorkingResponse> working) : IBassObservationModel
     {
         public WorkingResponse Working(BassResponse response) => working(response);
 
@@ -48,14 +48,14 @@ public sealed class BassPriorReferenceTests
     private static double[] Unit(int n) => [.. Enumerable.Repeat(1.0, n)];
 
     // A working response's offset at one snapshot: what y − β√w·v is less y, with a mean of its own.
-    private static double[] Offset(int n, int snapshot)
+    internal static double[] Offset(int n, int snapshot)
     {
         var rng = new Xoshiro256PlusPlus(100 + snapshot);
         double shift = 0.3 * (snapshot + 1);
         return [.. Enumerable.Range(0, n).Select(_ => shift + 0.4 * (rng.NextDouble() - 0.5))];
     }
 
-    private static BassData Rescaled(BassData data, double k, double m)
+    internal static BassData Rescaled(BassData data, double k, double m)
         => new(data.Predictors, new ScalarResponse([.. data.Response.Values.ToArray().Select(v => k * v + m)]));
 
     // ---- Nothing changes unasked ----
@@ -566,7 +566,7 @@ public sealed class BassPriorReferenceTests
     }
 
     // The routes, stated on one response: the config and the rule.
-    private static (BassConfig Config, Func<double[], BassPriorReference?> Rule, WeightedPriorGram Gram, double[]? W0) Route(string route, bool ridge, int n)
+    internal static (BassConfig Config, Func<double[], BassPriorReference?> Rule, WeightedPriorGram Gram, double[]? W0) Route(string route, bool ridge, int n)
     {
         BassConfig Of(GPriorCentre intercept, Sigma2Prior sigma2) => BassWeightedCoreTests.Config(ridge ? new RidgeForm() : new GForm(), intercept, sigma2, 0.2, 6);
         double[] w0 = BassWeightedCoreTests.Weights(n, seed: 9);
@@ -576,9 +576,12 @@ public sealed class BassPriorReferenceTests
             "robust" => (Of(GPriorCentre.Mean, Sigma2Prior.ScaledToResponse(0.5)), v => BassPriorReference.Robust(v), WeightedPriorGram.Unweighted, null),
             "quantile" => (Of(GPriorCentre.Mean, Sigma2Prior.ScaledToResponse(0.5)), v => BassPriorReference.Quantile(v, 0.3), WeightedPriorGram.Unweighted, null),
             "frozen" => (Of(GPriorCentre.Mean, Sigma2Prior.ScaledToResponse(0.5)), v => BassPriorReference.FrozenGram(v, w0), WeightedPriorGram.Frozen, w0),
+            "weighted" => (Of(GPriorCentre.Mean, Sigma2Prior.ScaledToResponse(0.5)), v => BassPriorReference.Moments(v), WeightedPriorGram.Weighted, null),
             "invariant" => (Of(GPriorCentre.Flat, Sigma2Prior.Jeffreys), _ => null, WeightedPriorGram.Unweighted, null),
             "hierarchical" => (Of(GPriorCentre.Mean, Sigma2Prior.HalfCauchy()), v => BassPriorReference.Moments(v), WeightedPriorGram.Unweighted, null),
             "declared" => (Of(GPriorCentre.Mean, Sigma2Prior.InverseGamma(2.0, 0.3)), v => BassPriorReference.Moments(v), WeightedPriorGram.Unweighted, null),
+            "zero" => (Of(GPriorCentre.Zero, Sigma2Prior.InverseGamma(2.0, 0.3)), _ => null, WeightedPriorGram.Unweighted, null),
+            "held" => (Of(GPriorCentre.Flat, Sigma2Prior.Held(0.3)), _ => null, WeightedPriorGram.Unweighted, null),
             _ => throw new ArgumentOutOfRangeException(nameof(route)),
         };
     }
@@ -630,17 +633,24 @@ public sealed class BassPriorReferenceTests
         if (!equivariant) Assert.True(largest > 1e-2, $"A declared prior should not be equivariant: the gap moved {largest}.");
     }
 
-    // A chain whose working response moves: one segment per snapshot, the streams and the state carried across. On y and on ky + m
-    // the chains visit the same structures, step by step.
+    // A chain whose working response moves: one segment per snapshot, the streams and the state carried across, or one chain moved in
+    // place between them. On y and on ky + m the chains visit the same structures, step by step.
     [Theory]
-    [InlineData("moments", false)]
-    [InlineData("moments", true)]
-    [InlineData("robust", false)]
-    [InlineData("frozen", false)]
-    [InlineData("invariant", false)]
-    [InlineData("hierarchical", false)]
-    [InlineData("hierarchical", true)]
-    public void AMovingResponse_WalksTheSameStructures_OnKYPlusM(string route, bool ridge)
+    [InlineData("moments", false, false)]
+    [InlineData("moments", true, false)]
+    [InlineData("robust", false, false)]
+    [InlineData("frozen", false, false)]
+    [InlineData("invariant", false, false)]
+    [InlineData("hierarchical", false, false)]
+    [InlineData("hierarchical", true, false)]
+    [InlineData("moments", false, true)]
+    [InlineData("moments", true, true)]
+    [InlineData("robust", false, true)]
+    [InlineData("frozen", false, true)]
+    [InlineData("invariant", false, true)]
+    [InlineData("hierarchical", false, true)]
+    [InlineData("hierarchical", true, true)]
+    public void AMovingResponse_WalksTheSameStructures_OnKYPlusM(string route, bool ridge, bool inPlace)
     {
         const double k = 250.0, m = -40.0;
         BassData data = BassWeightedCoreTests.Scattered(60, 11), moved = Rescaled(data, k, m);
@@ -654,14 +664,24 @@ public sealed class BassPriorReferenceTests
         double tauA = Math.Log(0.05), tauB = tauA, rateA = double.NaN, rateB = double.NaN;
         int changes = 0;
         BassTerm[] last = [];
+        BassModel a = null!, b = null!;
+        BassChain chainA = null!, chainB = null!;
         for (int t = 0; t < 6; t++)
         {
             double[] offset = Offset(n, t), scaled = [.. offset.Select(o => k * o)];
             double[] w = BassWeightedCoreTests.Weights(n, seed: 30 + t);
-            BassModel a = BassModel.Create(config, data, new Snapshot(r => new WorkingResponse(r, offset, w, priorGram: gram, reference: rule(r.Values.ToArray()))));
-            BassModel b = BassModel.Create(config, moved, new Snapshot(r => new WorkingResponse(r, scaled, w, priorGram: gram, reference: rule(r.Values.ToArray()))));
-            var chainA = new BassChain(a, termsA, tauA, rngA.Item1, rngA.Item2, logRate: rateA);
-            var chainB = new BassChain(b, termsB, tauB, rngB.Item1, rngB.Item2, logRate: rateB);
+            if (inPlace && t > 0)
+            {
+                Assert.Null(chainA.Follow(a.Working.Moved(offset, w)));
+                Assert.Null(chainB.Follow(b.Working.Moved(scaled, w)));
+            }
+            else
+            {
+                a = BassModel.Create(config, data, new Snapshot(r => new WorkingResponse(r, offset, w, priorGram: gram, reference: rule(r.Values.ToArray()))));
+                b = BassModel.Create(config, moved, new Snapshot(r => new WorkingResponse(r, scaled, w, priorGram: gram, reference: rule(r.Values.ToArray()))));
+                chainA = new BassChain(a, termsA, tauA, rngA.Item1, rngA.Item2, logRate: rateA);
+                chainB = new BassChain(b, termsB, tauB, rngB.Item1, rngB.Item2, logRate: rateB);
+            }
             for (int s = 0; s < 40; s++)
             {
                 BassState x = chainA.Step(), y = chainB.Step();

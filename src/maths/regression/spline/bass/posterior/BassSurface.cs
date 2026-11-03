@@ -97,7 +97,7 @@ internal sealed class BassConditionalMeans
 {
     private readonly BassModel _model;
     private readonly BassDrawFit _fit;
-    private readonly Dictionary<int[], (Func<double, double, GPriorConditional> Block, double[] ColumnMeans)> _blocks = new(IdsComparer.Instance);
+    private readonly Dictionary<(int[] Ids, WorkingResponse Working), (Func<double, double, GPriorConditional> Block, double[] ColumnMeans)> _blocks = new(BassDrawGroupComparer.Instance);
 
     public BassConditionalMeans(BassModel model, BassTermTable terms)
     {
@@ -109,11 +109,12 @@ internal sealed class BassConditionalMeans
     public double[] Coefficients(BassDraw draw)
     {
         int[] ids = draw.Structure.TermIds;
-        if (!_blocks.TryGetValue(ids, out var entry))
+        WorkingResponse working = draw.WorkingOn(_model);
+        if (!_blocks.TryGetValue((ids, working), out var entry))
         {
             var structure = new BassTerm[ids.Length];
             for (int j = 0; j < ids.Length; j++) structure[j] = _fit.Term(ids[j]);
-            BassDesign design = _model.NewDesign();
+            BassDesign design = _model.NewDesign(working);
             BassRefusal? refusal = design.Load(structure) ?? _model.Target.Refusal(BassStructureFit.Of(design, 0.0));
             if (refusal is { } reason) throw new ArgumentException($"A draw's structure lies outside F ({reason}).", "draws");
             Func<double, double, GPriorConditional> block = _model.Target.CoefficientBlock(design);
@@ -121,10 +122,10 @@ internal sealed class BassConditionalMeans
             for (int j = 0; j < ids.Length; j++)
             {
                 (double[] a, double[]? h) = _fit.Columns(ids[j]);
-                means[j] = _model.Working.ColumnMean(a, h);
+                means[j] = working.ColumnMean(a, h);
             }
             entry = (block, means);
-            _blocks.Add(ids, entry);
+            _blocks.Add((ids, working), entry);
         }
         ReadOnlySpan<double> centred = entry.Block(draw.Tau, 1.0).Mean;   // (α, β_c) in the ids' order
         var coefficients = new double[ids.Length + 1];
@@ -136,19 +137,5 @@ internal sealed class BassConditionalMeans
         }
         coefficients[0] = intercept;
         return coefficients;
-    }
-
-    private sealed class IdsComparer : IEqualityComparer<int[]>
-    {
-        public static readonly IdsComparer Instance = new();
-
-        public bool Equals(int[]? a, int[]? b) => a is not null && b is not null && a.AsSpan().SequenceEqual(b);
-
-        public int GetHashCode(int[] ids)
-        {
-            var hash = new HashCode();
-            foreach (int id in ids) hash.Add(id);
-            return hash.ToHashCode();
-        }
     }
 }

@@ -11,22 +11,25 @@ namespace Maths.Regression.Spline.Bass;
 /// A structure's account for the collapsed target: M, the sum of its terms' ln π (D01), and its least-squares fit in
 /// the centred basis, ‖r‖² and Q_c, with, under a prior the g-form's closed form does not serve, its columns' terms: the
 /// normalized ridge's (a spectrum, or a bordered candidate of one) or a <see cref="PriorPencil"/>; or the design's refusal,
-/// which puts it outside F.
+/// which puts it outside F. It also names the working response it was fitted on, whose ȳ_w and weighting the target reads with these
+/// sums, so a state carries them wherever it goes: through a swap, a particle's fork, or a flat-histogram chain. Null reads the
+/// target's own.
 /// </summary>
 public readonly record struct BassStructureFit(int Terms, double LogTermPrior, double ResidualSquares, double FittedSquares,
-                                               BassRefusal? Refusal = null, RidgeColumns? Ridge = null)
+                                               BassRefusal? Refusal = null, RidgeColumns? Ridge = null, WorkingResponse? Working = null)
 {
     /// <summary>The design's current structure, whose terms' log prior is <paramref name="logTermPrior"/>.</summary>
     public static BassStructureFit Of(BassDesign design, double logTermPrior)
     {
         ArgumentNullException.ThrowIfNull(design);
-        return new(design.Count, logTermPrior, design.ResidualSquares, design.FittedSquares, null, design.PriorTerms);
+        return new(design.Count, logTermPrior, design.ResidualSquares, design.FittedSquares, null, design.PriorTerms, design.Working);
     }
 
-    /// <summary>A proposed structure, admitted or refused, whose terms' log prior is <paramref name="logTermPrior"/>.</summary>
-    public static BassStructureFit Of(DesignProposal proposal, double logTermPrior) => proposal.Refusal is { } reason
+    /// <summary>A proposed structure, admitted or refused, whose terms' log prior is <paramref name="logTermPrior"/>, fitted on
+    /// <paramref name="working"/>.</summary>
+    public static BassStructureFit Of(DesignProposal proposal, double logTermPrior, WorkingResponse? working = null) => proposal.Refusal is { } reason
         ? Refused(reason)
-        : new(proposal.Columns, logTermPrior, proposal.ResidualSquares, proposal.FittedSquares, null, proposal.Ridge);
+        : new(proposal.Columns, logTermPrior, proposal.ResidualSquares, proposal.FittedSquares, null, proposal.Ridge, working);
 
     /// <summary>A structure outside F for <paramref name="reason"/>.</summary>
     public static BassStructureFit Refused(BassRefusal reason) => new(-1, double.NaN, double.NaN, double.NaN, reason);
@@ -52,6 +55,9 @@ public readonly record struct BassStructureFit(int Terms, double LogTermPrior, d
 /// <item><b>σ²'s rate,</b> under a hierarchical prior (<see cref="Sigma2Rate"/>): a coordinate of the state as τ is, its density on
 /// v = ln r in the prior, the marginal given r. With σ² given, the prior also carries IG(σ²; a, r). One target serves every chain,
 /// rung and particle, each state holding its own r.</item>
+/// <item><b>A working response that moves</b> (<see cref="BassStructureMoves.Follow"/>) is read off the state too: its fit names the
+/// working response it was fitted on, for ȳ_w, the weighting and the exact-fit floor. So the target stays one target, and what the
+/// priors read stays frozen in it.</item>
 /// <item><b>The support,</b> F: the design's admission (D06) and, under the Jeffreys σ² prior, no exact fit,
 /// ‖r‖ ≤ 10³·ε·‖y − level‖ (D03's propriety rule).</item>
 /// </list>
@@ -63,12 +69,14 @@ public sealed class BassTarget : ISamplingTarget<BassState>
 {
     private const double ExactFitMultiple = 1e3;
     private const double MachineEpsilon = 2.220446049250313e-16;   // 2⁻⁵², not double.Epsilon, the least subnormal
+    private const double FloorSquared = ExactFitMultiple * MachineEpsilon * (ExactFitMultiple * MachineEpsilon);
 
     private readonly double _exactFitSquares;   // ‖r‖² at or below which Jeffreys refuses; −∞ under a proper prior
+    private readonly WorkingResponse? _resolvedOn;   // the working response `resolved` read, whose floor is the one above
 
-    /// <summary>The target <paramref name="config"/> sets on its data (<paramref name="resolved"/>), over
-    /// <paramref name="prior"/>'s structures, tempered in <paramref name="form"/>.</summary>
-    public BassTarget(BassConfig config, BassResolved resolved, BassStructurePrior prior, TemperedForm form = TemperedForm.Integrated)
+    /// <summary>The target <paramref name="config"/> sets on its data (<paramref name="resolved"/>, read from
+    /// <paramref name="working"/>), over <paramref name="prior"/>'s structures, tempered in <paramref name="form"/>.</summary>
+    public BassTarget(BassConfig config, BassResolved resolved, BassStructurePrior prior, TemperedForm form = TemperedForm.Integrated, WorkingResponse? working = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(resolved);
@@ -90,8 +98,8 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         PriorLevel = resolved.PriorLevel;
         CoefficientConstant = resolved.CoefficientConstant;
         Sigma2Rate = resolved.Sigma2Rate;
-        double floor = ExactFitMultiple * MachineEpsilon;
-        _exactFitSquares = Sigma2 is null && GivenSigma2 is null ? floor * floor * Weighting.Mass * resolved.WeightedMeanSquare : double.NegativeInfinity;
+        _resolvedOn = working;
+        _exactFitSquares = Sigma2 is null && GivenSigma2 is null ? FloorSquared * Weighting.Mass * resolved.WeightedMeanSquare : double.NegativeInfinity;
     }
 
     // `source` given σ² = `sigma2`: every other part shared.
@@ -110,6 +118,7 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         PriorLevel = source.PriorLevel;
         CoefficientConstant = source.CoefficientConstant;
         Sigma2Rate = source.Sigma2Rate;
+        _resolvedOn = source._resolvedOn;
         _exactFitSquares = double.NegativeInfinity;
     }
 
@@ -160,7 +169,8 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// <summary>The σ² the structure step's marginal is given; null when σ² is integrated out.</summary>
     public double? GivenSigma2 { get; }
 
-    /// <summary>The count, the mass and Σ ln wᵢ the marginal reads beyond the design's weighted statistics.</summary>
+    /// <summary>The count, the mass and Σ ln wᵢ the marginal reads beyond the design's weighted statistics, on the model's working
+    /// response; a fit reads the one it was fitted on. The count does not move.</summary>
     public GPriorWeights Weighting { get; }
 
     /// <summary>τ's prior on the coefficient form's τ₀, sampled or held.</summary>
@@ -175,7 +185,8 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// <summary>N, the observations.</summary>
     public int Observations { get; }
 
-    /// <summary>ȳ under W, which the zero centre's level energy reads.</summary>
+    /// <summary>ȳ under W, which the zero centre's level energy reads, on the model's working response; a fit reads the one it was
+    /// fitted on.</summary>
     public double ResponseMean { get; }
 
     /// <summary>
@@ -187,7 +198,17 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// <summary>Why <paramref name="fit"/> lies outside F, or null: the design's refusal, or an exact fit under the
     /// Jeffreys σ² prior.</summary>
     public BassRefusal? Refusal(BassStructureFit fit)
-        => fit.Refusal ?? (fit.ResidualSquares <= _exactFitSquares ? BassRefusal.ExactFit : null);
+        => fit.Refusal ?? (fit.ResidualSquares <= ExactFitSquares(fit.Working) ? BassRefusal.ExactFit : null);
+
+    // The floor on `working`: the round-off of its own squares about the level, s² standing in under a frozen read that states one.
+    private double ExactFitSquares(WorkingResponse? working)
+    {
+        if (working is null || ReferenceEquals(working, _resolvedOn) || double.IsNegativeInfinity(_exactFitSquares)) return _exactFitSquares;
+        double mass = working.Weighting.Mass;
+        if (working.Reference?.MeanSquare is double frozen) return FloorSquared * mass * frozen;
+        double gap = Intercept == GPriorCentre.Zero ? working.ResponseMean : PriorLevel is double level ? working.ResponseMean - level : 0.0;
+        return FloorSquared * (working.ResponseSquares + mass * gap * gap);
+    }
 
     /// <summary>The structure's untempered log prior, D02's count weight plus its terms' (on F).</summary>
     public double LogStructurePrior(BassStructureFit fit)
@@ -199,17 +220,19 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     {
         if (Refusal(fit) is { } reason) throw new ArgumentException($"The structure lies outside F ({reason}).", nameof(fit));
         double precision = tau / CoefficientConstant;
+        GPriorWeights weighting = fit.Working?.Weighting ?? Weighting;
         if (fit.Ridge is PriorPencil pencil)
         {
             if (pencil.Count != fit.Terms) throw new ArgumentException("The pencil is another structure's.", nameof(fit));
-            return CollapsedGPrior.CentredPencilMarginalAt(pencil, fit.ResidualSquares, Observations, Weighting, Intercept, precision, inverseTemperature);
+            return CollapsedGPrior.CentredPencilMarginalAt(pencil, fit.ResidualSquares, Observations, weighting, Intercept, precision, inverseTemperature);
         }
+        double mean = fit.Working?.ResponseMean ?? ResponseMean;
         if (CoefficientForm is not RidgeForm)
-            return CollapsedGPrior.CentredMarginalAt(fit.Terms, fit.ResidualSquares, fit.FittedSquares, Observations, ResponseMean,
-                                                     Intercept, precision, inverseTemperature, Weighting, PriorLevel);
+            return CollapsedGPrior.CentredMarginalAt(fit.Terms, fit.ResidualSquares, fit.FittedSquares, Observations, mean,
+                                                     Intercept, precision, inverseTemperature, weighting, PriorLevel);
         RidgeColumns ridge = fit.Ridge ?? throw new ArgumentException("A structure under the ridge carries its columns' ridge terms.", nameof(fit));
         if (ridge.Count != fit.Terms) throw new ArgumentException("The ridge terms are another structure's.", nameof(fit));
-        return CollapsedGPrior.CentredRidgeMarginalAt(ridge, fit.ResidualSquares, Observations, ResponseMean, Intercept, precision, inverseTemperature, Weighting, PriorLevel);
+        return CollapsedGPrior.CentredRidgeMarginalAt(ridge, fit.ResidualSquares, Observations, mean, Intercept, precision, inverseTemperature, weighting, PriorLevel);
     }
 
     // ln p_b of a structure's marginal: σ² integrated against its prior at this state, or given.
@@ -229,17 +252,17 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         ArgumentNullException.ThrowIfNull(design);
         if (design.Pencil is { } pencil)
         {
-            CollapsedPencilPrior apart = CollapsedPencilPrior.FromCentred(pencil, design.ResidualSquares, design.Observations, Weighting, design.ResponseMean,
+            CollapsedPencilPrior apart = CollapsedPencilPrior.FromCentred(pencil, design.ResidualSquares, design.Observations, design.Weighting, design.ResponseMean,
                                                                           design.PriorLevel, Intercept);
             return Precision(apart.At);
         }
         if (CoefficientForm is RidgeForm)
         {
-            CollapsedRidgePrior ridge = CollapsedRidgePrior.FromCentred(design.Spectrum, design.ResidualSquares, design.ResponseMean, Intercept, Weighting, PriorLevel);
+            CollapsedRidgePrior ridge = CollapsedRidgePrior.FromCentred(design.Spectrum, design.ResidualSquares, design.ResponseMean, Intercept, design.Weighting, PriorLevel);
             return Precision(ridge.At);
         }
         CollapsedGPrior block = CollapsedGPrior.FromCentredLeastSquares(design.Factor, design.Coefficients.ToArray(), design.ResidualSquares,
-                                                                         design.FittedSquares, design.Observations, design.ResponseMean, Intercept, Weighting, PriorLevel);
+                                                                         design.FittedSquares, design.Observations, design.ResponseMean, Intercept, design.Weighting, PriorLevel);
         return Precision(block.At);
     }
 
@@ -333,6 +356,9 @@ public sealed class BassEvaluation : ITargetEvaluation
         LogPrior = logPrior;
         Refusal = refusal;
     }
+
+    /// <summary>The target this evaluation read, which a replica's own target follows when a swap hands it this state.</summary>
+    internal BassTarget Target => _target;
 
     /// <summary>The structure's statistics.</summary>
     public BassStructureFit Fit { get; }

@@ -191,6 +191,7 @@ public sealed class WorkingResponse
 {
     private readonly double[]? _shifted;
     private readonly double[]? _offset, _weights;
+    private double _responseSquares = double.NaN;   // ‖y − ȳ‖²_W, when first read; two readers compute the one value
 
     /// <summary>The working response of <paramref name="response"/> less <paramref name="offset"/> (one value per
     /// observation, case by case and location by location; none is zero), with <paramref name="weights"/> (positive, one per
@@ -223,18 +224,7 @@ public sealed class WorkingResponse
             if (Output.Dimension != response.Locations)
                 throw new ArgumentException($"The inner product acts on {Output.Dimension} output locations, the response has {response.Locations}.", nameof(output));
         }
-        if (!offset.IsEmpty)
-        {
-            if (offset.Length != n) throw new ArgumentException($"The offset has {offset.Length} values for {n} observations.", nameof(offset));
-            _offset = offset.ToArray();
-            _shifted = new double[n];
-            ReadOnlySpan<double> y = response.Values;
-            for (int i = 0; i < n; i++)
-            {
-                if (!double.IsFinite(_offset[i])) throw new ArgumentException("The offset has a non-finite value.", nameof(offset));
-                _shifted[i] = y[i] - _offset[i];
-            }
-        }
+        (_offset, _shifted) = Shifted(response, offset);
         if (!weights.IsEmpty)
         {
             if (weights.Length != n) throw new ArgumentException($"The weights hold {weights.Length} values for {n} observations.", nameof(weights));
@@ -254,6 +244,53 @@ public sealed class WorkingResponse
             _weights = new double[n];
             Array.Fill(_weights, 1.0);
         }
+        ResponseMean = MeanOf(_weights, Values, Weighting, n);
+    }
+
+    // `source` at another offset: its weights shared, every other part as it stands.
+    private WorkingResponse(WorkingResponse source, ReadOnlySpan<double> offset)
+    {
+        Response = source.Response;
+        Meaning = source.Meaning;
+        PriorGram = source.PriorGram;
+        Reference = source.Reference;
+        Weighting = source.Weighting;
+        Output = source.Output;
+        _weights = source._weights;
+        (_offset, _shifted) = Shifted(Response, offset);
+        ResponseMean = MeanOf(_weights, Values, Weighting, Response.Observations);
+    }
+
+    private static (double[]? Offset, double[]? Shifted) Shifted(BassResponse response, ReadOnlySpan<double> offset)
+    {
+        if (offset.IsEmpty) return (null, null);
+        int n = response.Observations;
+        if (offset.Length != n) throw new ArgumentException($"The offset has {offset.Length} values for {n} observations.", nameof(offset));
+        double[] copied = offset.ToArray();
+        var shifted = new double[n];
+        ReadOnlySpan<double> y = response.Values;
+        for (int i = 0; i < n; i++)
+        {
+            if (!double.IsFinite(copied[i])) throw new ArgumentException("The offset has a non-finite value.", nameof(offset));
+            shifted[i] = y[i] - copied[i];
+        }
+        return (copied, shifted);
+    }
+
+    private static double MeanOf(double[]? weights, ReadOnlySpan<double> values, GPriorWeights weighting, int n)
+        => weights is null ? PairwiseSum.Of(values) / n : PairwiseSum.Dot(weights, values) / weighting.Mass;
+
+    /// <summary>
+    /// This reading of the response at another latent state: <paramref name="offset"/> (none is zero) and <paramref name="weights"/>
+    /// (none keeps these, shared rather than copied), with the meaning, the prior's Gram, the inner product and the reference as they
+    /// stand, since those are the model's. A chain moves to it by <see cref="BassStructureMoves.Follow"/>. A design's layout depends on
+    /// whether it holds weights, so a model whose weights move declares them from the start, unit weights if need be.
+    /// </summary>
+    public WorkingResponse Moved(ReadOnlySpan<double> offset, ReadOnlySpan<double> weights = default)
+    {
+        if (weights.IsEmpty) return new WorkingResponse(this, offset);
+        if (_weights is null) throw new ArgumentException("This working response holds no weights, and a design's layout depends on whether it does; declare them from the start.", nameof(weights));
+        return new WorkingResponse(Response, offset, weights, Output, Meaning, PriorGram, Reference);
     }
 
     /// <summary>The response the working response derives from.</summary>
@@ -287,9 +324,24 @@ public sealed class WorkingResponse
     public bool PriorStandsApart => _weights is not null && PriorGram != WeightedPriorGram.Weighted;
 
     /// <summary>ȳ, the working response's mean under W over all N observations: Σwᵢyᵢ/Σwᵢ, the mean at unit weights.</summary>
-    public double ResponseMean => _weights is null
-        ? PairwiseSum.Of(Values) / Response.Observations
-        : PairwiseSum.Dot(_weights, Values) / Weighting.Mass;
+    public double ResponseMean { get; }
+
+    /// <summary>Whether this is the response itself under unit weights: no offset, no weights.</summary>
+    public bool IsResponseItself => _offset is null && _weights is null;
+
+    /// <summary>‖y − ȳ‖²_W, the working response's squares about its mean under W, which the exact-fit floor reads once a chain has
+    /// moved; taken when first read.</summary>
+    internal double ResponseSquares
+    {
+        get
+        {
+            if (!double.IsNaN(_responseSquares)) return _responseSquares;
+            ReadOnlySpan<double> y = Values;
+            var squares = new double[y.Length];
+            for (int i = 0; i < y.Length; i++) squares[i] = (y[i] - ResponseMean) * (y[i] - ResponseMean);
+            return _responseSquares = _weights is null ? PairwiseSum.Of(squares) : PairwiseSum.Dot(_weights, squares);
+        }
+    }
 
     /// <summary>The weights' own array, not to be written; null at unit weights.</summary>
     internal double[]? WeightArray => _weights;
@@ -321,7 +373,8 @@ public sealed class WorkingResponse
 /// </summary>
 public interface IBassObservationModel
 {
-    /// <summary>The working response and weights the core fits for <paramref name="response"/>.</summary>
+    /// <summary>The working response and weights the core starts on for <paramref name="response"/>; a block moves a chain from there
+    /// (<see cref="BassStructureMoves.Follow"/>).</summary>
     WorkingResponse Working(BassResponse response);
 
     /// <summary>The blocks that fill <paramref name="slot"/> of the sweep, in the order they run; none leaves the slot empty,

@@ -101,6 +101,30 @@ public sealed class PriorPencil : RidgeColumns
         return new PriorPencil(centredColumns, interceptInside, lambda, eigen.Eigenvectors, t, w, logDeterminant, likelihood, prior);
     }
 
+    /// <summary>This pencil with the cross products <paramref name="cross"/> in place of its own: the same A and D under another
+    /// response, in O(p²).</summary>
+    public PriorPencil WithCross(ReadOnlySpan<double> cross)
+    {
+        int p = _lambda.Length;
+        if (cross.Length != p) throw new ArgumentException("One cross product per direction is required.", nameof(cross));
+        Span<double> whitened = p <= 128 ? stackalloc double[p] : new double[p];
+        for (int i = 0; i < p; i++)
+        {
+            double sum = 0.0;
+            for (int k = 0; k <= i; k++) sum += _inverseRoot[i, k] * cross[k];
+            whitened[i] = sum;
+        }
+        var w = new double[p];
+        for (int j = 0; j < p; j++)
+        {
+            double[] v = _vectors[j];
+            double sum = 0.0;
+            for (int i = 0; i < p; i++) sum += v[i] * whitened[i];
+            w[j] = sum;
+        }
+        return new PriorPencil(_columns, InterceptInside, _lambda, _vectors, _inverseRoot, w, _logPriorDeterminant, _likelihood, _prior);
+    }
+
     // L⁻¹ for D = LLᵀ, and ln|D|; null when D is not positive definite.
     private static double[,]? InverseRoot(double[,] d, out double logDeterminant)
     {

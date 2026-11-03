@@ -123,6 +123,7 @@ public sealed class BassLadder
     public BassState Step()
     {
         Tempering.Step();
+        FollowTargets();
         HandOver();
         return Current;
     }
@@ -219,8 +220,8 @@ public sealed class BassLadder
         if (traceRungs) Tempering.TraceRungs(traceSlopes: Model.Target.Form == TemperedForm.Linear);
     }
 
-    /// <summary>The retained draw at the b = 1 state (<see cref="BassStructureMoves.Compose"/>).</summary>
-    public BassDraw Compose(Xoshiro256PlusPlus rng, BassTermTable terms) => Structure.Compose(Current, rng, terms);
+    /// <summary>The retained draw at the b = 1 state (<see cref="BassStructureMoves.Compose"/>), under the target that replica holds.</summary>
+    public BassDraw Compose(Xoshiro256PlusPlus rng, BassTermTable terms) => Structure.Compose(Current, rng, terms, Moves.Target as BassTarget);
 
     /// <summary>
     /// The ladder's restart state, the ladder unchanged: the shared ladder's (each replica's state, rung, streams and
@@ -323,6 +324,15 @@ public sealed class BassLadder
         => BassSweepSlots.Blocks(model, BassSweepSlot.Tau).Count == 0
             ? null
             : _ => BassSweepSlots.Blocks(model, BassSweepSlot.Tau);
+
+    // A swap hands over a state with its evaluation, which read the target its giver held. A σ² a block drew apart belongs to the state
+    // it was drawn for, so the receiver takes that target too, and the swap moved the pair. With no block they are all the model's.
+    private void FollowTargets()
+    {
+        foreach (ReversibleJumpChain<BassState> replica in Tempering.Replicas)
+            if (replica.Target is BassTarget && replica.CurrentEvaluation is BassEvaluation { Target: var read } && !ReferenceEquals(read, replica.Target))
+                replica.ReplaceTarget(read);
+    }
 
     // Each replica a swap handed a state it does not hold adopts the giver's design for it, the reference rung's too,
     // which takes no moves but saves its design in a checkpoint. The givers' copies are all taken before any replica

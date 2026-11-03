@@ -1,4 +1,5 @@
 using System;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bars;
 
 namespace Maths.Regression.Spline.Bass;
@@ -49,7 +50,7 @@ public sealed class BassModel
         BassAdmission admission = BassAdmission.From(config, resolved);
         BassStructurePrior prior = BassStructurePrior.From(config, resolved, inputs);
         BassTermProposal proposal = BassTermProposal.From(config, prior);
-        var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated);
+        var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated, working);
         return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, target, observation, working);
     }
 
@@ -86,12 +87,21 @@ public sealed class BassModel
     /// <summary>The observation model: what the Gaussian core fits of the response (F-X1).</summary>
     public IBassObservationModel Observation { get; }
 
-    /// <summary>What the observation model hands the Gaussian core: the working response and weights every design fits.</summary>
+    /// <summary>What the observation model hands the Gaussian core: the working response and weights every design starts on.</summary>
     public WorkingResponse Working { get; }
+
+    /// <summary>
+    /// Whether the priors read the working response as it stands: no <see cref="BassPriorReference"/>, with level centring or a σ² prior
+    /// that reads s². A working response that moves is not data, so such a prior would read parameters, with conditionals that share no
+    /// joint, and a chain of this model refuses to move (<see cref="BassStructureMoves.ProposeFollow"/>). The routes that read nothing
+    /// are a flat or zero intercept with a σ² prior that reads no s² (Jeffreys, a declared inverse gamma, a held σ²).
+    /// </summary>
+    public bool PriorsReadResponse => Working.Reference is null && (Config.Intercept == GPriorCentre.Mean || Config.Sigma2.ReadsResponse);
 
     /// <summary>M_max, the basis cap.</summary>
     public int MaxBasis => Resolved.MaxBasis;
 
-    /// <summary>A new intercept-only design over the data, one per chain.</summary>
-    public BassDesign NewDesign() => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, Working, Config.Intercept);
+    /// <summary>A new intercept-only design over the data, one per chain, on <paramref name="working"/>; null is the model's.</summary>
+    public BassDesign NewDesign(WorkingResponse? working = null)
+        => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, working ?? Working, Config.Intercept);
 }

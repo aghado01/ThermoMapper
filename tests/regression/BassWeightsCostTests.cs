@@ -73,6 +73,55 @@ public sealed class BassWeightsCostTests
         Timed($"weighted {gram}", new BassChain(model, [], Math.Log(1.0 / f.Data.Response.Observations), new Xoshiro256PlusPlus(11), new Xoshiro256PlusPlus(12)));
     }
 
+    // A move's cost beside a sweep: a block moves the chain each sweep through a cycle of working responses, an offset alone or weights too,
+    // so its line reads the sweep and the move together. The moved fit changes the walk, so each line states its own M.
+    [Theory]
+    [InlineData("unit", "none", false)]
+    [InlineData("unit", "offset", false)]
+    [InlineData("unit", "offset", true)]
+    [InlineData("apart", "none", false)]
+    [InlineData("apart", "offset", false)]
+    [InlineData("apart", "both", false)]
+    [InlineData("weighted", "none", false)]
+    [InlineData("weighted", "both", false)]
+    public void AMove_TimingBlock(string reading, string moves, bool ridge)
+    {
+        if (Environment.GetEnvironmentVariable("BASS_WEIGHTS_TIMING") != "1") return;
+        BassMixing.Fixture f = BassMixing.Get(BassMixing.Friedman, null);
+        BassConfig config = ridge ? f.Config with { Coefficients = BassCoefficientPrior.Ridge(f.Config.Coefficients.Scale) } : f.Config;
+        double[] y = f.Data.Response.Values.ToArray();
+        int n = y.Length;
+        var rng = new Xoshiro256PlusPlus(21);
+        double[] Weights() => [.. Enumerable.Range(0, n).Select(_ => 0.5 + rng.NextDouble())];
+        double[] Offset() => [.. Enumerable.Range(0, n).Select(_ => 0.2 * (rng.NextDouble() - 0.5))];
+        double[][] offsets = [.. Enumerable.Range(0, 16).Select(_ => Offset())];
+        double[][] weights = [.. Enumerable.Range(0, 16).Select(_ => Weights())];
+        double[]? start = reading == "unit" ? null : Weights();
+        WeightedPriorGram gram = reading == "weighted" ? WeightedPriorGram.Weighted : WeightedPriorGram.Unweighted;
+        var observation = new Moving(r => new WorkingResponse(r, weights: start, priorGram: gram, reference: BassPriorReference.Moments(y)));
+        BassModel model = BassModel.Create(config, f.Data, observation);
+        if (moves != "none") observation.Block = new CycleBlock(k => model.Working.Moved(offsets[k % 16], moves == "both" ? weights[k % 16] : default));
+        Timed($"{reading}, {moves}, {(ridge ? "ridge" : "g")}", new BassChain(model, [], Math.Log(1.0 / n), new Xoshiro256PlusPlus(11), new Xoshiro256PlusPlus(12)));
+    }
+
+    private sealed class Moving(Func<BassResponse, WorkingResponse> working) : IBassObservationModel
+    {
+        public IBlock<ReversibleJumpChain<BassState>>? Block { get; set; }
+
+        public WorkingResponse Working(BassResponse response) => working(response);
+
+        public IReadOnlyList<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassSweepSlot slot) => slot == BassSweepSlot.Latent && Block is { } block ? [block] : [];
+    }
+
+    private sealed class CycleBlock(Func<int, WorkingResponse> next) : IBlock<ReversibleJumpChain<BassState>>
+    {
+        private int _sweep;
+
+        public string Name => "cycle";
+
+        public bool Update(ReversibleJumpChain<BassState> state, Xoshiro256PlusPlus rng) => BassStructureMoves.Follow(state, next(_sweep++)) is null;
+    }
+
     private sealed class Reading(double[] weights, WeightedPriorGram gram) : IBassObservationModel
     {
         public WorkingResponse Working(BassResponse response) => new(response, weights: weights, priorGram: gram);

@@ -204,6 +204,9 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
     /// <summary>The target the chain samples; <see cref="ReplaceTarget"/> changes it, so a block reads it here.</summary>
     public ISamplingTarget<TState> Target => _target;
 
+    /// <summary>The move set, in its order; a block reaches an engine's own state through it.</summary>
+    public IReadOnlyList<IRjMove<TState>> Moves => _moves;
+
     /// <summary>The cached log density of <see cref="Current"/> at <see cref="Temperature"/>.</summary>
     public double CurrentLogDensity => _currentLogDensity;
 

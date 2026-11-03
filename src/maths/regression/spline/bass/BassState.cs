@@ -60,6 +60,18 @@ public readonly record struct BassStructure(int[] TermIds);
 /// hierarchical prior. The coefficients are in
 /// the uncentred basis, R's: the intercept, then one per term in <see cref="BassStructure.TermIds"/>' order, so the
 /// draw's function is f = a₀ + Σⱼ aⱼBⱼ, with Bⱼ the term's column (its case side times its output side for a direct
-/// functional response).
+/// functional response). <see cref="Working"/> is the working response the draw was composed on, its offset and weights being part of
+/// that state, shared with the chain that held it; null when it is the response itself.
 /// </summary>
-public sealed record BassDraw(BassStructure Structure, double Tau, double Sigma2, double[] Coefficients, double Lambda, double? Sigma2Rate = null);
+public sealed record BassDraw(BassStructure Structure, double Tau, double Sigma2, double[] Coefficients, double Lambda, double? Sigma2Rate = null,
+                              WorkingResponse? Working = null)
+{
+    /// <summary>The working response this draw reads on <paramref name="model"/>: its own when it was composed on that response, the
+    /// model's otherwise, since a draw read on other data has no offset or weights there.</summary>
+    internal WorkingResponse WorkingOn(BassModel model)
+    {
+        if (Working is not { } own) return model.Working;
+        BassResponse response = model.Data.Response;
+        return ReferenceEquals(own.Response, response) || own.Response.Values.SequenceEqual(response.Values) ? own : model.Working;
+    }
+}

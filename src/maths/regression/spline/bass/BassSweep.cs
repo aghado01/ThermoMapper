@@ -33,6 +33,9 @@ namespace Maths.Regression.Spline.Bass;
 /// shows a state holding that candidate's structure it was accepted, and the design commits it. A replica handed a
 /// state by a swap adopts its giver's design, and a resize's new replica its source's (<see cref="BassLadder"/>); any
 /// other structure is loaded whole. A chain restored from its snapshot gets its design back as it was.</item>
+/// <item><b>The working response.</b> A block moves the chain to another one between sweeps (<see cref="Follow"/>): the design refits the
+/// current structure, and the state's fit names the working response it was fitted on, which the target reads and a swap carries. So a
+/// state is its structure on its working response, and a design shows it only when it holds both.</item>
 /// </list>
 /// Refusals are tallied by reason, the target's exact-fit refusal included; each birth's and change's candidate term by
 /// its orders with its support outcome (D01's tilt); and every proposal by its kind (<see cref="Kinds"/>). Not thread-safe:
@@ -48,6 +51,7 @@ public sealed class BassStructureMoves
     private BassState _committed;
     private Pending? _candidate;
     private readonly Dictionary<BassTerm, double> _columnMeans = [];
+    private double[]? _columnMeansWeights;        // the weights those means were read under
     private readonly BassFactorShares? _shares;   // the fixed-M family's shares of the change's slot; null when off
 
     // A proposal the design admitted, pending until the chain shows its structure: its kind, its terms in and out, and
@@ -73,6 +77,7 @@ public sealed class BassStructureMoves
         Support = new BassSupportTally(model.Prior);
         Kinds = new BassMoveTally();
         _shares = model.Resolved.FactorShares;
+        _columnMeansWeights = model.Working.WeightArray;
         Moves = Palette();
     }
 
@@ -95,7 +100,15 @@ public sealed class BassStructureMoves
         Support = snapshot.Support.Copy();
         Kinds = snapshot.Kinds.Copy();
         _shares = model.Resolved.FactorShares;
+        _columnMeansWeights = _design.Working.WeightArray;
         Moves = Palette();
+    }
+
+    /// <summary>The structure moves <paramref name="chain"/> runs, which a block in the sweep reaches them by.</summary>
+    public static BassStructureMoves Of(ReversibleJumpChain<BassState> chain)
+    {
+        ArgumentNullException.ThrowIfNull(chain);
+        return chain.Moves[0] is Birth birth ? birth.Owner : throw new ArgumentException("The chain does not run BASS's structure moves.", nameof(chain));
     }
 
     /// <summary>The state these moves started from: the chain's start, or the state they were restored at.</summary>
@@ -151,8 +164,51 @@ public sealed class BassStructureMoves
         return _design;
     }
 
-    // Whether the design can show `state`'s structure without a load: the committed one, or the pending candidate.
-    internal bool Holds(BassState state) => state.SharesStructure(_committed) || _candidate is { } c && state.SharesStructure(c.State);
+    // Whether the design can show `state` without a load: the committed one, or the pending candidate.
+    internal bool Holds(BassState state) => SameFit(state, _committed) || _candidate is { } c && SameFit(state, c.State);
+
+    // Whether `state` is `held`'s structure on `held`'s working response; a fit that names none reads whichever the design is on.
+    private static bool SameFit(BassState state, BassState held)
+        => state.SharesStructure(held) && (state.Fit.Working is null || held.Fit.Working is null || ReferenceEquals(state.Fit.Working, held.Fit.Working));
+
+    /// <summary>
+    /// The state at <paramref name="current"/>'s structure and τ on <paramref name="working"/>, its model's reading at another latent state
+    /// (<see cref="WorkingResponse.Moved"/>), for a block to weigh: the design refits the structure, and the candidate holds what the
+    /// target reads. Like a structure move's candidate, it is pending until the chain shows it, and a refused one (a weight that puts
+    /// the structure outside F, an exact fit) is scored off the support, posterior 0, so a block that weighs it stays put. Refused
+    /// outright when the model's priors read the working response (<see cref="BassModel.PriorsReadResponse"/>).
+    /// </summary>
+    public BassState ProposeFollow(BassState current, WorkingResponse working)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(working);
+        if (_model.PriorsReadResponse)
+            throw new InvalidOperationException(
+                "The priors read the working response as it stands, so moving it would condition them on parameters. State a BassPriorReference, " +
+                "or take a route that reads nothing: a flat or zero intercept with a σ² prior that reads no s².");
+        Sync(current);
+        _candidate = null;
+        BassStructureFit fit = BassStructureFit.Of(_design.ProposeFollow(working), current.Fit.LogTermPrior, working);
+        var candidate = new BassState(current.TermArray, fit, current.LogTau, current.LogRate);
+        if (_model.Target.Refusal(fit) is null) _candidate = new Pending(candidate, default, null, null, false);
+        return candidate;
+    }
+
+    /// <summary>
+    /// Moves <paramref name="chain"/> to <paramref name="working"/> between sweeps, for a working response drawn from its own conditional or
+    /// given from outside (<see cref="ProposeFollow"/>): the design, the state's fit and what the target reads follow; null when it moved.
+    /// When the current structure lies outside F there, returns why, and the chain and its design stay as they were. A draw from the
+    /// conditional is then off the support, and keeping the old state is the exact step: an independence proposal from that conditional,
+    /// truncated to F, accepts every draw inside F and none outside.
+    /// </summary>
+    public static BassRefusal? Follow(ReversibleJumpChain<BassState> chain, WorkingResponse working)
+    {
+        BassStructureMoves moves = Of(chain);
+        BassState candidate = moves.ProposeFollow(chain.Current, working);
+        if ((chain.Target as BassTarget ?? moves._model.Target).Refusal(candidate.Fit) is { } refusal) return refusal;
+        chain.SetState(candidate, chain.Target.Evaluate(candidate));
+        return null;
+    }
 
     // An exact copy of the design at `state`, which it is first synced to, for another replica to adopt (BassLadder): the
     // factor and the fit copied, the columns shared.
@@ -214,14 +270,20 @@ public sealed class BassStructureMoves
             intercept -= centred[j + 1] * ColumnMean(state.Terms[j]);
         }
         coefficients[0] = intercept;
-        return new BassDraw(new BassStructure([.. order.Select(j => ids[j])]), tau, sigma2, coefficients, lambda, target.Sigma2Rate is null ? null : Math.Exp(state.LogRate));
+        return new BassDraw(new BassStructure([.. order.Select(j => ids[j])]), tau, sigma2, coefficients, lambda, target.Sigma2Rate is null ? null : Math.Exp(state.LogRate),
+                            _design.Working.IsResponseItself ? null : _design.Working);
     }
 
     // The mean of the term's column over all N observations under W, the design's centring: a case column's mean, or āh̄ at
-    // unit weights. Kept by term, since retained draws repeat their structures; the value is the one evaluation's, so draws
-    // are unchanged.
+    // unit weights. Kept by term, since retained draws repeat their structures, until the weights move; the value is the one
+    // evaluation's, so draws are unchanged.
     private double ColumnMean(BassTerm term)
     {
+        if (!ReferenceEquals(_columnMeansWeights, _design.Working.WeightArray))
+        {
+            _columnMeans.Clear();
+            _columnMeansWeights = _design.Working.WeightArray;
+        }
         if (_columnMeans.TryGetValue(term, out double cached)) return cached;
         double mean = EvaluateColumnMean(term);
         _columnMeans.Add(term, mean);
@@ -233,23 +295,23 @@ public sealed class BassStructureMoves
         BassBasis basis = _model.Basis;
         var a = new double[basis.Inputs.Cases.Cases];
         basis.CaseColumn(term, basis.Inputs.Cases, a);
-        if (basis.Inputs.Outputs is not { } outputs) return _model.Working.ColumnMean(a, null);
+        if (basis.Inputs.Outputs is not { } outputs) return _design.Working.ColumnMean(a, null);
         var h = new double[outputs.Locations];
         basis.OutputColumn(term, outputs, h);
-        return _model.Working.ColumnMean(a, h);
+        return _design.Working.ColumnMean(a, h);
     }
 
     // The design and counts follow the chain to `state`: a τ update keeps the structure; the pending candidate's
-    // structure means the chain accepted it; anything else is loaded whole.
+    // structure on its working response means the chain accepted it; anything else is loaded whole, on the state's working response.
     private void Sync(BassState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        if (state.SharesStructure(_committed))
+        if (SameFit(state, _committed))
         {
             _committed = state;
             return;
         }
-        if (_candidate is { } c && state.SharesStructure(c.State))
+        if (_candidate is { } c && SameFit(state, c.State))
         {
             _design.Accept();
             if (c.Removed is { } removed) _counts.Remove(removed);
@@ -260,7 +322,7 @@ public sealed class BassStructureMoves
             return;
         }
         _candidate = null;
-        if (_design.Load(state.Terms) is { } refusal) throw new InvalidOperationException($"The chain holds a structure outside F ({refusal}).");
+        if (_design.Load(state.Terms, state.Fit.Working) is { } refusal) throw new InvalidOperationException($"The chain holds a structure outside F ({refusal}).");
         if (!_design.Terms.SequenceEqual(state.Terms)) throw new InvalidOperationException("The design reordered a loaded structure.");
         _counts = CountsOf(state.TermArray);
         _committed = state;
@@ -286,7 +348,7 @@ public sealed class BassStructureMoves
     // shows it; refused, by the design or the target, it is tallied and scored off the support.
     private BassState Candidate(BassState current, BassTerm[] terms, DesignProposal proposal, BassMoveKind kind, BassTerm? added, BassTerm? removed)
     {
-        BassStructureFit fit = BassStructureFit.Of(proposal, proposal.Admitted ? LogTermPrior(terms) : double.NaN);
+        BassStructureFit fit = BassStructureFit.Of(proposal, proposal.Admitted ? LogTermPrior(terms) : double.NaN, current.Fit.Working);
         if (added is not null) Support.Add(added, proposal.Refusal == BassRefusal.Support);
         var candidate = new BassState(terms, fit, current.LogTau, current.LogRate);
         Kinds.Attempted(kind);
@@ -330,6 +392,7 @@ public sealed class BassStructureMoves
 
     private sealed class Birth(BassStructureMoves owner) : IRjMove<BassState>
     {
+        public BassStructureMoves Owner => owner;
         public string Key => "birth";
         public string ReverseKey => "death";
         public double Weight(BassState state) => owner.Weight(Kind.Birth, state.Count);
@@ -574,6 +637,10 @@ public sealed class BassChain
         Scan.Step();
         return Moves.Current;
     }
+
+    /// <summary>Moves the chain to <paramref name="working"/> between sweeps (<see cref="BassStructureMoves.Follow"/>): null when it moved,
+    /// or why the current structure lies outside F there, with the chain as it was.</summary>
+    public BassRefusal? Follow(WorkingResponse working) => BassStructureMoves.Follow(Moves, working);
 
     /// <summary>The retained draw at the current state (<see cref="BassStructureMoves.Compose"/>).</summary>
     public BassDraw Compose(Xoshiro256PlusPlus rng, BassTermTable terms) => Structure.Compose(Current, rng, terms, Moves.Target as BassTarget);

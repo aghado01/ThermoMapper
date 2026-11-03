@@ -268,9 +268,10 @@ public static class BassResidualDependence
         ReadOnlySpan<double> y = response.Values;
         int n = response.Cases, m = response.Locations;
         double[] mean = PosteriorMean(new BassDrawFit(model, terms), pooled, weights, n, m);
+        double[]? offset = BassDrawFit.MeanOffset(pooled, weights, n * m, d => d.WorkingOn(model));
         var residuals = new double[n, m];
         for (int i = 0; i < n; i++)
-            for (int r = 0; r < m; r++) residuals[i, r] = y[i * m + r] - mean[i * m + r];
+            for (int r = 0; r < m; r++) residuals[i, r] = y[i * m + r] - (offset?[i * m + r] ?? 0.0) - mean[i * m + r];
         return read(residuals);
     }
 

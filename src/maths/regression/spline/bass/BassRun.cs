@@ -282,12 +282,12 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
     // state's prior and log marginal, which is the chain's own density there (a ladder's b = 1 replica's).
     private void Accumulate(BassChainRun run, BassState state, Span<double> functionals)
     {
-        BassDraw draw = run.Structure.Compose(state, run.Composition, run.Terms);
+        BassDraw draw = run.Structure.Compose(state, run.Composition, run.Terms, run.Moves.Target as BassTarget);
         run.Draws.Add(draw);
         int f = 0;
         functionals[f++] = state.Count;
         if (_model.Target.SamplesTau) functionals[f++] = draw.Tau;
-        functionals[f++] = Temperature.LogPosterior(_model.Target.Evaluate(state));
+        functionals[f++] = Temperature.LogPosterior(run.Moves.Target.Evaluate(state));
         functionals[f++] = draw.Sigma2;
         Span<double> fitted = functionals[f..];
         fitted.Fill(draw.Coefficients[0]);
