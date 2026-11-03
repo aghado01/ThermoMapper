@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Clustering.Dendrograms;
 using Clustering.Evaluation.External;
+using Clustering.Graphical.HdbScan;
 using Clustering.Graphical.SPC.Profiling;
 using Clustering.Graphical.SPC.Runtime.Core.Sampler;
 using Clustering.Graphical.SPC.Runtime.Execution;
@@ -209,7 +210,7 @@ public sealed class ClosureGapProbeHarness
 
         // K = 10 and 20 have no search target and the densest trees, so they read θ = ½ alone.
         double[] thetas = arm is "k10" or "k20" ? [Theta] : Thetas;
-        (int K, int M)[] settings = [(0, 1), .. ThinCutEdges.SelectMany(k => ThinCutSizes.Select(m => (k, m)))];
+        (int K, int M)[] settings = ThinCutSettings().ToArray();
         var writing = new object();
 
         Parallel.ForEach(thetas.Where(theta => !finished.Contains(Text(theta))), new ParallelOptions { MaxDegreeOfParallelism = threads }, theta =>
@@ -238,6 +239,119 @@ public sealed class ClosureGapProbeHarness
             lock (writing) File.AppendAllLines(rowsPath, rows);
         });
     }
+
+    /// <summary>
+    /// A control read after the thin-cut test, with no sampling: the rule on the graph alone. A level keeps the strongest
+    /// share of the edges by coupling, from 1/65 of them to all, so the coupling stands where the co-membership stood.
+    /// </summary>
+    [Theory]
+    [InlineData("k05")]
+    [InlineData("cauchy")]
+    [InlineData("k10")]
+    [InlineData("k20")]
+    public void MeasureThinCutOnTheGraph(string arm)
+    {
+        string? outDir = Environment.GetEnvironmentVariable(EnvOut);
+        if (string.IsNullOrEmpty(outDir)) return;
+
+        Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal;
+        int threads = int.TryParse(Environment.GetEnvironmentVariable(EnvThreads), out int t) ? t : 4;
+
+        string rowsPath = Path.Combine(outDir, "landsat-thincut-graph.tsv");
+        if (!File.Exists(rowsPath)) File.WriteAllText(rowsPath, ThinCutHeader + Environment.NewLine);
+        if (File.ReadLines(rowsPath).Skip(1).Any(line => line.StartsWith(arm + "\t", StringComparison.Ordinal))) return;
+
+        (double[][] features, int[] labels, _) = ClosureGapHarness.Load("landsat");
+        CsrGraph graph = SpcGraphBuilder.BuildResult(features, Config(arm), null).Graph;
+        var edges = new List<UndirectedEdge>();
+        foreach (UndirectedEdge edge in graph.UndirectedEdges()) edges.Add(edge);
+        int[] sources = edges.Select(edge => edge.Source).ToArray();
+        int[] targets = edges.Select(edge => edge.Target).ToArray();
+        double strongest = edges.Max(edge => graph.Weights[edge.Slot]);
+        double[] column = edges.Select(edge => graph.Weights[edge.Slot] / strongest).ToArray();
+        double[] ranked = column.OrderByDescending(value => value).ToArray();
+
+        var levels = new string[GridPoints][];
+        Parallel.For(0, GridPoints, new ParallelOptions { MaxDegreeOfParallelism = threads }, g =>
+        {
+            double share = (g + 1.0) / GridPoints;
+            int kept = (int)Math.Ceiling(share * ranked.Length);
+            double cut = kept < ranked.Length ? ranked[kept] : -1.0;
+
+            var scorer = new AdjustedRandIndex();
+            var clock = Stopwatch.StartNew();
+            ThinCutClosure tree = ThinCutClosure.Above(labels.Length, sources, targets, column, cut, MaxThinCut);
+            long msTree = clock.ElapsedMilliseconds;
+
+            levels[g] = ThinCutSettings().Select(setting =>
+            {
+                int[] partition = tree.Partition(setting.K, setting.M);
+                return string.Join('\t', ThetaRow(arm, 0, cut, share, partition, labels, scorer, msTree),
+                    Text(setting.K), Text(setting.M), Text(0L), Text(ClassesHeld(partition, labels)));
+            }).ToArray();
+        });
+        File.AppendAllLines(rowsPath, levels.SelectMany(rows => rows));
+    }
+
+    /// <summary>Partitions at a few settings of the thin-cut test, kept so they can be read apart from the code that made them.</summary>
+    [Theory]
+    [InlineData("k05", 20261102)]
+    [InlineData("k05", 20261103)]
+    [InlineData("k05", 20261104)]
+    [InlineData("cauchy", 20261102)]
+    public void KeepThinCutPartitions(string arm, int master)
+    {
+        string? outDir = Environment.GetEnvironmentVariable(EnvOut);
+        if (string.IsNullOrEmpty(outDir)) return;
+
+        string columnsDir = Path.Combine(outDir, "landsat-theta-columns");
+        string[][] edges = File.ReadLines(Path.Combine(columnsDir, $"{arm}-edges.tsv")).Select(line => line.Split('\t')).ToArray();
+        int[] sources = edges.Select(cells => int.Parse(cells[0], CultureInfo.InvariantCulture)).ToArray();
+        int[] targets = edges.Select(cells => int.Parse(cells[1], CultureInfo.InvariantCulture)).ToArray();
+        (_, int[] labels, _) = ClosureGapHarness.Load("landsat");
+
+        string path = Path.Combine(outDir, "landsat-thincut-partitions.tsv");
+        (double Theta, int K, int M)[] settings = [(0.5, 0, 1), (0.5, 2, 100), (0.5, 3, 100), (0.5, 4, 100), (0.5, 4, 200), (0.7, 4, 200)];
+        foreach ((double temperature, double[] column) in KeptColumns(Path.Combine(columnsDir, $"{arm}-{Text(master)}.bin"), edges.Length))
+        {
+            if (temperature is < 0.03 or > 0.10) continue;
+            foreach ((double theta, int k, int m) in settings)
+            {
+                double cut = SweepClosureGap.CoMembershipTheta(theta, Q);
+                int[] partition = ThinCutClosure.Above(labels.Length, sources, targets, column, cut, MaxThinCut).Partition(k, m);
+                File.AppendAllLines(path, [string.Join('\t', arm, Text(master), Text(temperature), Text(theta), Text(k), Text(m), string.Join(',', partition))]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// What HDBSCAN reads on Landsat by the same measures, to scale the thin-cut test's numbers. It reads the raw features
+    /// with no graph. A point it calls noise counts as a singleton, as closure's do.
+    /// </summary>
+    [Fact]
+    public void ThinCutComparators()
+    {
+        string? outDir = Environment.GetEnvironmentVariable(EnvOut);
+        if (string.IsNullOrEmpty(outDir)) return;
+
+        Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.BelowNormal;
+        (double[][] features, int[] labels, _) = ClosureGapHarness.Load("landsat");
+        var scorer = new AdjustedRandIndex();
+        var rows = new List<string> { ThetaHeader };
+
+        foreach (ClusterSelectionMethod selection in new[] { ClusterSelectionMethod.Eom, ClusterSelectionMethod.Leaf })
+            foreach (int size in new[] { 20, 50, 100, 200 })
+            {
+                int[] found = HdbscanSession.Run(features, new HdbscanSettings { MinPts = 5, MinClusterSize = size, AllowSingleCluster = false, ClusterSelectionMethod = selection }).Labels;
+                int[] partition = found.Select((label, i) => label < 0 ? found.Length + i : label).ToArray();
+                rows.Add(ThetaRow($"hdbscan-{selection}", size, 0, 0, partition, labels, scorer, 0));
+            }
+
+        File.WriteAllLines(Path.Combine(outDir, "landsat-thincut-comparators.tsv"), rows);
+    }
+
+    private static IEnumerable<(int K, int M)> ThinCutSettings() =>
+        new[] { (0, 1) }.Concat(ThinCutEdges.SelectMany(k => ThinCutSizes.Select(m => (k, m))));
 
     private static (double Temperature, double[] Column)[] KeptColumns(string path, int edges)
     {
