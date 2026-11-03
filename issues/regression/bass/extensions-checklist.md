@@ -42,6 +42,22 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ## Reports
 
+### The moving-response priors checked — 2026-11-02
+
+By the main session, on a clean export of `b5ff1e6`: Regression 1,693/1,693 with `BassPathProfile` left out, the BASS oracle filter 90/90 at below-normal priority. Reread and held: the level's energy on all three forms, κ read as τ/κ and its link values, the frozen Gram, the family's mean and both limits, half-Cauchy at a = h = ½, ln IG on v. No reader found that drops a state's rate. The docs of `09774a2` and `d30ab9e` hold against the same derivations.
+- *One defect, open.* `ResolvedSigma2Rate.SampleLogRate` draws again when a Gamma draw underflows, so the prior rung and SMC's start draw the Gamma cut to the doubles, while `LogDensity` keeps the whole Gamma's constant. ln Z then reads high by −ln P(r in the doubles), with P(below) about e^(−750h), silently. On the enumeration fixture at a = ½:
+
+  | h | Predicted | Ladder | SMC |
+  |---|---|---|---|
+  | 2 | 0 | −0.01 | −0.01 |
+  | 10⁻² | 0.0006 | not run | −0.02 |
+  | 10⁻³ | 0.64 | +0.60 | +0.62 |
+  | 10⁻⁴ | 2.62 | +2.56 | +2.61 |
+
+  So it is under 0.01 for h ≥ 0.006. The chip's evidence checks ran at h = ½ and its small-h checks on the target, so neither could see it. By the argument, not run: a ratio between models sharing h and s² cancels it, and chains are unaffected unless a is small too.
+- *The fix proposed, not built or tried.* Draw v exactly: on an underflow, v = ln ε + ln(U)/h, the left tail to double precision, with `LogDensity` finite to the left and `PriorAt` reading r at ε. It waits because `BassPriorReferenceTests` asserts `LogDensity(−800) = −∞` and holds another session's uncommitted edits. With a under about 0.01 as well, the marginal below ε would still read r at ε, so that corner stays approximate, within a factor (a + h)/h on that slice.
+- *Beside it.* `Gamma.LogCdf` reads −∞ where `Rate * x` underflows with x still in the doubles, at shape 10⁻³ about −0.75 in truth. The window is x within a factor 1/Rate of the doubles' end. Not fixed.
+
 ### Priors that stop reading a moving response, steps 1 and 2 — 2026-11-02
 
 `950daca`. Steps 1 and 2 of [the options](moving-response-priors-options.md#what-to-build-in-order), built on the user's go-ahead as a family of selectable forms on one seam. No default changes. The forms, alternatives and trade-offs are in [the docs](../../../docs/Maths/BayesianRegression.md#bass-priors-that-stop-reading-a-moving-response).
