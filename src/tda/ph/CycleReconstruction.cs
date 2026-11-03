@@ -11,7 +11,11 @@ namespace TDA.Ph;
 public static class CycleReconstruction
 {
     /// <summary>
-    /// Birth edge plus shortest-path edges in the 1-skeleton at the birth filtration value.
+    /// Birth edge plus shortest-path edges among the edges before it in the filtration. An edge tied with it and after it
+    /// stays out: a triangle tied with both can make the two a boundary, which is no cycle of the bar. Any path among the
+    /// earlier edges gives a cycle of the bar's class, so "shortest" only picks a small one: edge values read as lengths when
+    /// they are all non-negative, as a Rips filtration's distances are. Otherwise a value is not a length and an undirected
+    /// negative edge has no shortest path, so a path's length is its number of edges.
     /// </summary>
     public static int[] ReconstructH1Cycle(SimplicialFiltration filtration, int birthEdgeIndex)
     {
@@ -23,23 +27,27 @@ public static class CycleReconstruction
                 $"Simplex at index {birthEdgeIndex} is not a 1-simplex edge.",
                 nameof(birthEdgeIndex));
 
-        double t = birth.FiltrationValue;
         int u = birth.Vertices[0];
         int v = birth.Vertices[1];
 
-        var adjacency = new Dictionary<int, List<(int Neighbor, int EdgeIndex, double Weight)>>();
-        for (int i = 0; i < filtration.Simplices.Count; i++)
+        bool valuesAreLengths = true;
+        for (int i = 0; i < birthEdgeIndex; i++)
         {
-            if (i == birthEdgeIndex)
-                continue;
-
             Simplex s = filtration.Simplices[i];
-            if (s.Dimension != 1 || s.FiltrationValue > t)
+            if (s.Dimension == 1)
+                valuesAreLengths &= s.FiltrationValue >= 0.0;
+        }
+
+        var adjacency = new Dictionary<int, List<(int Neighbor, int EdgeIndex, double Weight)>>();
+        for (int i = 0; i < birthEdgeIndex; i++)
+        {
+            Simplex s = filtration.Simplices[i];
+            if (s.Dimension != 1)
                 continue;
 
             int a = s.Vertices[0];
             int b = s.Vertices[1];
-            double w = s.FiltrationValue;
+            double w = valuesAreLengths ? s.FiltrationValue : 1.0;
             AddAdjacency(adjacency, a, b, i, w);
             AddAdjacency(adjacency, b, a, i, w);
         }
@@ -47,7 +55,7 @@ public static class CycleReconstruction
         List<int> pathEdges = ShortestPathEdgeIndices(adjacency, filtration, u, v);
         if (pathEdges.Count == 0 && u != v)
             throw new InvalidOperationException(
-                $"No u→v path in 1-skeleton at filtration ≤ {t} (birth edge index {birthEdgeIndex}).");
+                $"No u→v path among the edges before birth edge index {birthEdgeIndex}, so it closes no cycle.");
 
         var cycle = new SortedSet<int> { birthEdgeIndex };
         foreach (int edgeIdx in pathEdges)
@@ -102,8 +110,9 @@ public static class CycleReconstruction
 
             foreach (var (neighbor, edgeIndex, weight) in neighbors)
             {
+                // Huge lengths can sum to infinity, which still reaches a vertex not reached before.
                 double nd = d + weight;
-                if (nd >= dist.GetValueOrDefault(neighbor, double.PositiveInfinity))
+                if (dist.TryGetValue(neighbor, out double known) && nd >= known)
                     continue;
 
                 dist[neighbor] = nd;

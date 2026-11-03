@@ -68,7 +68,7 @@ public sealed class ClearingEngineParityTests
             var rng = new Random(seed);
             // Half the trials draw cell births from a small grid, so edges and cofaces tie with each other and with
             // their faces, which gives zero-length pairs and tied merges.
-            // A quarter of the trials run below zero: bars don't care, though involuted representatives do (see docs).
+            // A quarter of the trials run below zero.
             SimplicialFiltration filtration = RandomFiltration(rng, distinctVertexBirths: true, grid: seed % 2 == 0, shift: seed % 4 == 3 ? -20.0 : 0.0);
 
             foreach (int maxDimension in new[] { int.MaxValue, 0, 1, 2 })
@@ -131,7 +131,7 @@ public sealed class ClearingEngineParityTests
         for (int seed = 0; seed < trials; seed++)
         {
             var rng = new Random(seed);
-            SimplicialFiltration filtration = RandomFiltration(rng, distinctVertexBirths: true, grid: seed % 2 == 0);
+            SimplicialFiltration filtration = RandomFiltration(rng, distinctVertexBirths: true, grid: seed % 2 == 0, shift: seed % 4 == 3 ? -20.0 : 0.0);
             Barcode barcode = PersistentInvolutedHomology.Compute(filtration, 1, representatives: true);
 
             foreach (Bar bar in barcode.Bars.Where(b => b.Dimension == 1 && (b.IsInfinite || b.Death > b.Birth)))

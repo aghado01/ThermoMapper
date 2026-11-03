@@ -113,7 +113,7 @@ The finite bars of the requested dimension form $A$ (n bars) and $B$ (m bars); w
 
 ### Cycle representatives and the H1 protect set
 
-- **`CycleReconstruction.ReconstructH1Cycle`** takes an essential H1 bar. It finds a shortest path, weighted by filtration value, between the birth edge's endpoints, using only edges with value up to that of the birth edge. It returns the birth edge together with that path.
+- **`CycleReconstruction.ReconstructH1Cycle`** takes an essential H1 bar. It finds a shortest path between the birth edge's endpoints among the edges before it in the filtration, and returns the birth edge together with that path. Any such path gives a cycle of the bar's class, since it differs from another by a cycle from before the birth edge, and the bar's class is independent of those at infinity. An edge tied with the birth edge and after it stays out: with a tied triangle, the two can be a boundary, whose class is zero. Edge values read as lengths when all are non-negative, as a Rips filtration's are. With a negative one a value is not a length and an undirected negative edge has no shortest path, so length is the number of edges.
   - When the birth edge's value is unique, the result is a representative in index order.
   - When several edges share that value, the path may use edges that come *later* in index order. The cycle is then a representative only at the level of filtration *values*.
 - **`BarCycleEdges.H1Loops`** turns bar cycles into edge sets of `TDA.Ph.UndirectedEdge` pairs.
@@ -155,7 +155,6 @@ The later phases the code describes (directed, gauge and sheaf variants) are not
 
 ## Status and caveats
 
-- **Involuted representatives need non-negative values.** With `representatives = true`, an essential H1 bar's cycle comes from `CycleReconstruction`, a shortest path weighted by filtration value. A negative edge value makes that search loop forever. Rips values are distances, so only other filtrations can reach it. Bars alone are unaffected, as is every other engine.
 - **"Cocycle" payloads are reduced coboundaries.** The cohomology engine's `Cocycle` holds the reduced coboundary column, a set of (d+1)-simplices, or just $\{j\}$ for essential bars. It is not a d-cocycle.
 - **Involuted engine with `cutoff > 0`.** Death columns that fail the cutoff are left out of the boundary reduction, so births and representatives can be wrong. Keep the default of 0. All callers in the repository do.
 - **`LazyRipsFiltration` is partial.** It assumes sorted CSR rows, which `CsrGraph.FromEdges` does not produce. It takes no `maxDimension` (it always builds the 2-skeleton), and it builds every simplex up front despite the name. Prefer `RipsFiltration.GraphRips`.
