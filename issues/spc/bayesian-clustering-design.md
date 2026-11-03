@@ -280,7 +280,7 @@ Search's best level isn't near where any arm stopped: it sits 11–19 levels fro
 - *Shares over 100%.* `cauchy` reads 111% at T = 0.0685. The cross gap uses each half's closure and the denominator the pooled one's, so a level where a half's closure chains and the pooled one doesn't can exceed 1.
 - *Attained fraction elsewhere.* It stays at 0.83–1.12 on `k05`'s other levels and at 0.84–1.00 on `cauchy`'s, and falls where the gap is small: 0.55–1.00 on `k10`, and 0.38 at `k20`'s one level over 5%.
 
-**After the fact.** None of this was pre-registered. It is arithmetic on the stored partitions, with no new sampling. Purity is the majority class's share, and the minimum cluster size is my choice.
+**After the fact.** None of this was pre-registered. It is arithmetic on the stored partitions, with no new sampling. Purity is the majority class's share over the clusters read, the definition of `Clustering.Evaluation.External.Purity` and `BwdParityTests.BigClusterPurity`, computed here by the reader. Those tests read clusters of at least 50. Leading with 20 below was my choice, so both sizes are given.
 
 *What the cliff is.* On `k05`, seed 20261103, closure at T = 0.0907 holds class 1 (713 points, purity 1.00), class 3 (680, 0.82), class 7 (678, 0.82) and class 2 (133). By T = 0.0847, 3 and 7 have joined with half of class 4 (1,832, 0.42). By T = 0.0791 class 1 has joined too (3,360, 0.29). An ARI near 0.09 against 0.22 is that one merge, class 1 in the giant or out of it: over T = 0.0739–0.0907 and all three seeds, closure reads 0.083–0.093 with class 1 in and 0.209–0.248 with it out, with no exception. The fragility across seeds is which side of the merge a level falls on. The original seed has it out of order, in at T = 0.0847 and out at T = 0.0791. Class 4 splits between 3's and 7's clusters before they join, which would fit a path through 4. That isn't inspected.
 
@@ -310,10 +310,37 @@ So on `k05` the search covers 19% more points at purity 0.85, on all three seeds
 
 **What this says (proposal, the user's call).**
 - *The measurement's proposal no longer stands for K = 5.* It rested on one seed and asked whether a partition could reach the gap. Now three seeds show one can, and it recovers the labels better: 0.03–0.10 in ARI, and 19% more points at purity 0.85. The reading, fixed in advance, is worth building on this graph.
-- *Test the cheaper closure before building.* The search costs a dense N²/2 field, kept partitions, half a minute or so a level, and a lost hierarchy. Closure at a higher θ needs none of these, and the probe didn't try it. If it covers about 3,150 points at purity 0.85 on `k05`, the search isn't needed. It may well not: raising θ at one T may only retrace raising T at one θ, which closure has already read. Then the case for building holds, with that as its evidence.
-- *The flat cut isn't SPC's reading.* The T-stack on this K = 5 graph covers 2,368–2,610 points at purity at least 0.90 at the higher budget (`docs/Clustering/SpcAnalysis.md`), which is about closure's flat frontier. That is for scale only: another budget and another size rule. Whether the search adds anything to a per-block reading is unmeasured, and needs an answer on nesting first.
+- *Test the cheaper closure before building.* The search costs a dense N²/2 field, kept partitions, half a minute or so a level, and a lost hierarchy. Closure at a higher θ needs none of these, and the probe didn't try it. If it covers about 3,150 points at purity 0.85 on `k05` (about 2,920 in clusters of at least 50), the search isn't needed. It may well not: raising θ at one T may only retrace raising T at one θ, which closure has already read. Then the case for building holds, with that as its evidence.
+- *The flat cut isn't SPC's reading.* The T-stack on this K = 5 graph covers 2,368–2,610 points at purity at least 0.90 at the higher budget (`docs/Clustering/SpcAnalysis.md`), in clusters of at least 50. At that size and purity, closure's flat cut covers 2,084–2,469 and the search's 2,163–2,550, at this budget, so the T-stack's reading is at least level with both. Whether the search adds anything to a per-block reading is unmeasured, and needs an answer on nesting first.
 
 **Limits.** Labels choose the level on both sides, and no label-free way to pick the search's T is tested. Three seeds on `k05` and one on every other arm. One θ, one budget. The search is a lower bound on what a partition can reach. ARI and purity are global. The probe's binaries predate `8af6199`, which landed during the run. Rebuilt at `fca555a`, all ten graphs resolve the same, plus its new `RestoredEdges = 0`, and `ClosureGapTests` pass, 43 of 43.
+
+## Closure at a higher θ
+
+Asked for by the user on 2026-11-02 ("Test higher θ first"). The protocol and readings below were written before the first run. The thresholds are judgement calls, fixed so the reading isn't fitted to the results.
+
+**The question.** The probe varied K and the kernel and held θ at ½. Can closure alone, at a higher θ, reach what the search reached on Landsat at K = 5: about 2,920 points at purity 0.85 in clusters of at least 50, and a best ARI of 0.28–0.32? If so, the search isn't needed there, and its costs go with it.
+
+**Two predictions, either of which could hold.** Two frozen blocks cross θ at T = J/ln(θ(q−1)/(1−θ)) (`docs/Clustering/SpcAnalysis.md`). So going from θ = 0.5 to 0.9 at q = 20 lets a split survive to 0.57 of the temperature, where the blocks hold together better, which predicts a gain. Against that, raising θ at one T may only retrace raising T at one θ, which closure has already read, and that predicts none.
+
+**Arms.** The probe's six: `k05` on master seeds 20261102, 20261103 and 20261104, and `k10`, `k20` and `cauchy` on 20261102. Their graphs are in the "as resolved" table. They are built from the current tree, which includes `8af6199`; those graphs resolve the same, and the reproduction reading below tests it.
+
+**What runs.** The probe's own chains, from the same seeds at the same budget, 8 replicas × (1,000 burn-in, 2,000 cycles). All 65 temperatures of each arm's grid run, with no stopping rule, since a higher θ's best T may sit colder than where the probe stopped. Closure is `AffinityThreshold.Connect` on the edge column over all draws, at each θ on the δ̄ scale in 0.50, 0.55, …, 0.95, 0.99. Each level's edge column is kept in `artifacts/closure-gap/landsat-theta-columns/`, with the edge list and which edges came from repair, so later questions about edges or θ need no new sampling.
+
+**Measures, per arm and θ, over T.**
+- *Best ARI:* the highest ARI against the labels.
+- *Points:* the most points covered at purity at least 0.85, in clusters of at least 50. Purity is `Clustering.Evaluation.External.Purity` with smaller clusters unassigned, which equals `BwdParityTests.BigClusterPurity`. A size of 50 is what the parity tests and `SpcAnalysis`'s Landsat table read, so it replaces the 20 the probe's results led with. Clusters of at least 20 are reported beside it.
+- *The search's numbers,* from the probe on the same seed. Best ARI: 0.317, 0.284, 0.321 on `k05`, and 0.312 on `cauchy`. Points: 2,921, 2,923, 2,926 on `k05`, and 2,737 on `cauchy`.
+
+**The readings.**
+- *Reproduction.* At θ = ½, each arm's ARI must match the probe's `ari` exactly on every level they share. If not, comparison with the probe is void, and the rest stands alone.
+- *Does θ help closure?* A seed *gains* at a θ if, against θ = ½ on that seed, its best ARI rises by at least 0.05 or its points by at least 10%. On `k05`, θ *helps* if one θ gains on at least two of three seeds. Otherwise it doesn't.
+- *Does it replace the search?* A seed *reaches* the search at a θ if its best ARI is no more than 0.02 below the search's on that seed and its points are at least 95% of the search's. It *falls short* if its best ARI is more than 0.05 below, or its points are under 90%. On `k05`: *search not needed on this graph* if one θ reaches on at least two of three seeds; *search still ahead* if at every θ at least two seeds fall short; *in between* otherwise.
+- *Other arms.* On `cauchy`, both readings, on its one seed. On `k10` and `k20`, whether θ helps, on their one seed. They have no search target, since the search showed no gain there.
+
+These favour closure in two ways, both accepted so a *search still ahead* means something. Closure gets to choose θ, while the search ran only at ½. And closure reads all 16,000 draws per level, while the search read every 10th.
+
+Reported with no threshold, by θ: the T of the best ARI; ARI's range across `k05`'s seeds at each T, which says whether the flip persists; pairs breaking nesting across T; recall at matched precision, against the search; cluster counts and singletons; points at purity 0.80 and 0.90; T × ln(θ(q−1)/(1−θ)) at the level where class 1 joins the giant, which tests the first prediction. And from the kept columns: at the level before class 1 joins, the edges across its block's boundary, how many there are, their δ̄, and how many came from repair. That is the note's open question on what bridges the blocks.
 
 ## Proposed order
 
