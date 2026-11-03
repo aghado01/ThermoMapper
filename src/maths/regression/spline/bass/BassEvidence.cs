@@ -195,7 +195,8 @@ public sealed record BassEvidenceEstimate(
 /// <item><b>The support rule</b> as declared and its resolved thresholds, and D06's admission gates, which with the caps
 /// define F, the support the prior is restricted to and normalized on.</item>
 /// <item><b>The centre</b> and its resolved level, and <b>σ²'s prior</b> as declared and as resolved, IG(c, c·s²) under the
-/// scaled default. Both read the response, so the default evidence is empirical-Bayes in the level and the scale.</item>
+/// scaled default. Both read the response, so the default evidence is empirical-Bayes in the level and the scale. A
+/// hierarchical prior's rate integrates over the scale and reads s² for its hyperprior alone (<see cref="Sigma2Rate"/>).</item>
 /// </list>
 /// </summary>
 public sealed record BassEvidencePriors(
@@ -203,7 +204,7 @@ public sealed record BassEvidencePriors(
     BassCountPrior Count, int MaxBasis,
     CategoricalSubsetMeasure CategoricalSubsets, int MaxInteraction, int MaxCategoricalInteraction, int MaxFunctionalInteraction,
     SupportRule Support, double SupportMinimum, double? SupportMinimumFunctional, double AngleFloor, double? MaxVarianceInflation,
-    GPriorCentre Centre, double CentreLevel, Sigma2Prior Sigma2Prior, InverseGamma? Sigma2)
+    GPriorCentre Centre, double CentreLevel, Sigma2Prior Sigma2Prior, InverseGamma? Sigma2, ResolvedSigma2Rate? Sigma2Rate)
 {
     /// <summary>The record for <paramref name="config"/> as <paramref name="resolved"/> on its data, which must carry
     /// proper σ² and τ priors; a held σ² has no inverse gamma, and the declared prior states it.</summary>
@@ -219,6 +220,6 @@ public sealed record BassEvidencePriors(
         return new BassEvidencePriors(config.Coefficients, resolved.Scale, config.Count, resolved.MaxBasis,
             s.CategoricalSubsets, resolved.MaxInteraction, resolved.MaxCategoricalInteraction, resolved.MaxFunctionalInteraction,
             s.Support, resolved.SupportMinimum, resolved.SupportMinimumFunctional, s.AngleFloor, s.MaxVarianceInflation,
-            config.Intercept, resolved.CentreLevel, config.Sigma2, resolved.Sigma2);
+            config.Intercept, resolved.CentreLevel, config.Sigma2, resolved.Sigma2, resolved.Sigma2Rate);
     }
 }

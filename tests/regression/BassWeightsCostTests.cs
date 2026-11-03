@@ -17,14 +17,16 @@ namespace Maths.Regression.Tests;
 /// the change it reads. Since the unit path's draws are bit-identical, block k does the same work in either binary, so blocks
 /// pair across them. Each block's line records the load the cost harness reads (<see cref="BassCost.Load"/>): the other test
 /// hosts at its ends and the cores other processes kept busy, against the statistical brief's quiet rule. It reads and judges
-/// nothing. Run it alone, in Release, behind <c>BASS_WEIGHTS_TIMING</c> = 1.
+/// nothing. Run it alone, in Release, behind <c>BASS_WEIGHTS_TIMING</c> = 1. CPU time ticks every 15.6 ms, so a block of about 0.2 s
+/// reads to 8%; <c>BASS_WEIGHTS_BLOCK</c> sets a longer one, to read a smaller change.
 /// </summary>
 public sealed class BassWeightsCostTests
 {
     private readonly ITestOutputHelper _out;
     public BassWeightsCostTests(ITestOutputHelper output) => _out = output;
 
-    private const int WarmUp = 2000, Block = 20_000, Blocks = 9;
+    private const int WarmUp = 2000, Blocks = 9;
+    private static readonly int Block = int.TryParse(Environment.GetEnvironmentVariable("BASS_WEIGHTS_BLOCK"), out int sweeps) ? sweeps : 20_000;
 
     // The blocks of `chain`, each timed apart from its load's reading, one line each.
     private void Timed(string label, BassChain chain)

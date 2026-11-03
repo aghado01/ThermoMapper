@@ -135,6 +135,8 @@ public sealed class BassDesign
     private readonly double[]? _counted;            // a scalar response's weights, when they count rows for the support threshold
     private readonly GPriorCentre _intercept;       // what a prior apart from the Gram does with the intercept
     private readonly List<BassPriorColumn>? _priorColumns;   // the prior's side, when it stands apart from the Gram
+    private readonly double[]? _priorWeights, _priorRoots;   // W₀ and W₀^½ when the prior's Gram is frozen on them; null otherwise
+    private readonly double _priorMass;             // Σw₀, N with no W₀: the prior side's centring and the ridge's normalization
     private double[,]? _priorGram;                  // G_c on the prior's side
     private PriorPencil? _pencil;                   // the current structure's; null until read
     private readonly IInnerProduct _output;         // Q on the output index; the identity for independent noise
@@ -197,7 +199,15 @@ public sealed class BassDesign
                 if (intercept is not (GPriorCentre.Mean or GPriorCentre.Zero or GPriorCentre.Flat)) throw new ArgumentOutOfRangeException(nameof(intercept));
                 _priorColumns = [];
                 _priorGram = new double[0, 0];
-                PriorLevel = intercept == GPriorCentre.Zero ? 0.0 : PairwiseSum.Of(y) / _rows;
+                _priorMass = _rows;
+                if (working.Reference?.GramWeightArray is { } frozen)
+                {
+                    _priorWeights = frozen;
+                    _priorMass = PairwiseSum.Of(frozen);
+                    _priorRoots = new double[_rows];
+                    for (int i = 0; i < _rows; i++) _priorRoots[i] = Math.Sqrt(frozen[i]);
+                }
+                PriorLevel = intercept == GPriorCentre.Zero ? 0.0 : working.Reference?.Level ?? PairwiseSum.Of(y) / _rows;
             }
         }
         ResponseSquares = _output.Dot(_y, _y);
@@ -607,9 +617,11 @@ public sealed class BassDesign
         BassPriorColumn? prior = null;
         if (_priorColumns is not null)
         {
-            double own = PairwiseSum.Of(z) / _rows;
+            double own = (_priorWeights is null ? PairwiseSum.Of(z) : PairwiseSum.Dot(_priorWeights, z)) / _priorMass;
             var centred = new double[_rows];
             for (int i = 0; i < _rows; i++) centred[i] = z[i] - own;
+            if (_priorRoots is not null)
+                for (int i = 0; i < _rows; i++) centred[i] *= _priorRoots[i];
             prior = new BassPriorColumn(centred, own - mean);
         }
         for (int i = 0; i < _rows; i++) z[i] = _roots![i] * (z[i] - mean);
@@ -683,8 +695,8 @@ public sealed class BassDesign
     // The pencil of the structure whose weighted Gram is `g`, prior-side Gram `u`, centres' gaps `shifts` and cross products
     // `b`; null when its prior fails the gate. In the coordinates the design holds, (α, β) with the columns centred under W,
     // the likelihood is diag(Σw, G) and the prior D_α(1, δ)(1, δ)ᵀ + diag(0, D_β), since the prior reads α on the columns' own
-    // centring, α_u = α + δᵀβ: D_α = N and D_β = G_u under the g-form, D_α = 1 and D_β = diag(G_u)/N under the ridge. A flat
-    // intercept has no prior to couple, so it stands apart: G against D_β.
+    // centring, α_u = α + δᵀβ: D_α = N and D_β = G_u under the g-form, D_α = 1 and D_β = diag(G_u)/N under the ridge, with Σw₀ for
+    // N on a frozen W₀. A flat intercept has no prior to couple, so it stands apart: G against D_β.
     private PriorPencil? PencilOf(double[,] g, double[,] u, double[] shifts, double[] b)
     {
         int m = g.GetLength(0);
@@ -698,14 +710,14 @@ public sealed class BassDesign
         var likelihood = new double[p, p];
         var prior = new double[p, p];
         var cross = new double[p];
-        double priorMass = _ridge ? 1.0 : _rows;
+        double priorMass = _ridge ? 1.0 : _priorMass;
         for (int i = 0; i < m; i++)
         {
             cross[i + offset] = b[i];
             for (int j = 0; j < m; j++)
             {
                 likelihood[i + offset, j + offset] = g[i, j];
-                prior[i + offset, j + offset] = !_ridge ? u[i, j] : i == j ? u[i, i] / _rows : 0.0;
+                prior[i + offset, j + offset] = !_ridge ? u[i, j] : i == j ? u[i, i] / _priorMass : 0.0;
                 if (inside) prior[i + offset, j + offset] += priorMass * shifts[i] * shifts[j];
             }
             if (inside) prior[0, i + offset] = prior[i + offset, 0] = priorMass * shifts[i];

@@ -246,7 +246,7 @@ public sealed class BassSweepTests
         BassTerm[] structure = [new BassTerm([new HingeFactor(0, 1, 2)]), new BassTerm([new HingeFactor(0, 1, 2), new HingeFactor(1, -1, 2)])];
         var moves = new BassStructureMoves(model, structure, Math.Log(0.02));
         var chain = new ReversibleJumpChain<BassState>([new Stay()], model.Target, moves.Start, new Xoshiro256PlusPlus(7));
-        var scan = new BlockScan<ReversibleJumpChain<BassState>>([new BassTauBlock(model.Target)], chain, new Xoshiro256PlusPlus(8), c => c);
+        var scan = new BlockScan<ReversibleJumpChain<BassState>>([new BassTauBlock()], chain, new Xoshiro256PlusPlus(8), c => c);
         var composer = new Xoshiro256PlusPlus(9);
         var table = new BassTermTable();
         const int sweeps = 100_000;

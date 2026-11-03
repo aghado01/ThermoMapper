@@ -201,6 +201,9 @@ public sealed class ReversibleJumpChain<TState> : IChain<TState>
     /// temperatures, without re-evaluating the state.</summary>
     public ITargetEvaluation CurrentEvaluation => _currentEvaluation;
 
+    /// <summary>The target the chain samples; <see cref="ReplaceTarget"/> changes it, so a block reads it here.</summary>
+    public ISamplingTarget<TState> Target => _target;
+
     /// <summary>The cached log density of <see cref="Current"/> at <see cref="Temperature"/>.</summary>
     public double CurrentLogDensity => _currentLogDensity;
 

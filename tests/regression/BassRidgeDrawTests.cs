@@ -40,7 +40,7 @@ public sealed class BassRidgeDrawTests
         BassTerm[] structure = BassCoefficientPriorTests.TwoTerms;
         var moves = new BassStructureMoves(model, structure, 0.0);
         var chain = new ReversibleJumpChain<BassState>([new BassCoefficientPriorTests.Stay()], model.Target, moves.Start, new Xoshiro256PlusPlus(7));
-        var scan = new BlockScan<ReversibleJumpChain<BassState>>([new BassTauBlock(model.Target)], chain, new Xoshiro256PlusPlus(8), c => c);
+        var scan = new BlockScan<ReversibleJumpChain<BassState>>([new BassTauBlock()], chain, new Xoshiro256PlusPlus(8), c => c);
         var composer = new Xoshiro256PlusPlus(9);
         var table = new BassTermTable();
         const int sweeps = 100_000;

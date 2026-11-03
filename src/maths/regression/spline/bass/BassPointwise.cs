@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Regression.GPrior;
 
@@ -86,6 +87,7 @@ public static class BassPointwise
         LatentTreatment treatment = collapsed ? LatentTreatment.IntegratedGivenOthers : LatentTreatment.Conditioned;
         var latents = new List<LatentReport> { new("structure", LatentScope.Global, LatentTreatment.Conditioned) };
         if (model.Target.SamplesTau) latents.Add(new LatentReport("prior precision τ", LatentScope.Global, LatentTreatment.Conditioned));
+        if (model.Target.Sigma2Rate is not null) latents.Add(new LatentReport("σ²'s rate", LatentScope.Global, LatentTreatment.Conditioned));
         latents.Add(new LatentReport("coefficients a", LatentScope.Global, treatment));
         latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, treatment));
         return weights is null
@@ -155,15 +157,16 @@ public static class BassPointwise
             // The g-form's units' quadratic forms are τ-free, taken once per structure, those of a prior apart from its Gram once
             // per τ; a draw at a τ already seen copies its row.
             LeaveOutQuadratics[]? quadratics = null;
-            var seen = new Dictionary<double, int>();
+            var seen = new Dictionary<(double Tau, double? Rate), int>();
             foreach (int s in rows)
             {
-                if (seen.TryGetValue(pooled[s].Tau, out int first))
+                if (seen.TryGetValue((pooled[s].Tau, pooled[s].Sigma2Rate), out int first))
                 {
                     for (int u = 0; u < partition.Units; u++) values[s, u] = values[first, u];
                     continue;
                 }
-                seen.Add(pooled[s].Tau, s);
+                seen.Add((pooled[s].Tau, pooled[s].Sigma2Rate), s);
+                InverseGamma? sigma2 = pooled[s].Sigma2Rate is double rate ? InverseGamma.ShapeScale(target.Sigma2Rate!.Shape, rate) : target.Sigma2;
                 GPriorConditional conditional = block(pooled[s].Tau, 1.0);
                 if (quadratics is null || perTau)
                 {
@@ -173,7 +176,7 @@ public static class BassPointwise
                 for (int u = 0; u < partition.Units; u++)
                     values[s, u] = target.GivenSigma2 is double given
                         ? conditional.LeaveOutLogDensityGiven(given, x, y, weights, quadratics[u])
-                        : conditional.LeaveOutLogDensity(target.Sigma2, x, y, weights, quadratics[u]);
+                        : conditional.LeaveOutLogDensity(sigma2, x, y, weights, quadratics[u]);
             }
         }
         return values;

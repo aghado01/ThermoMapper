@@ -55,8 +55,9 @@ public sealed class BassStructureMoves
     private readonly record struct Pending(BassState State, BassMoveKind Kind, BassTerm? Added, BassTerm? Removed, bool Tallied);
 
     /// <summary>The moves of a chain started at <paramref name="terms"/>, which must lie in F, with u =
-    /// <paramref name="logTau"/> (the held τ's log when τ is held).</summary>
-    public BassStructureMoves(BassModel model, IReadOnlyList<BassTerm> terms, double logTau)
+    /// <paramref name="logTau"/> (the held τ's log when τ is held), and under a hierarchical σ² prior v =
+    /// <paramref name="logRate"/>, NaN being the rate's mean.</summary>
+    public BassStructureMoves(BassModel model, IReadOnlyList<BassTerm> terms, double logTau, double logRate = double.NaN)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(terms);
@@ -64,7 +65,8 @@ public sealed class BassStructureMoves
         _design = model.NewDesign();
         if (_design.Load(terms) is { } refusal) throw new ArgumentException($"The start lies outside F ({refusal}).", nameof(terms));
         BassTerm[] loaded = [.. _design.Terms];
-        Start = new BassState(loaded, Fit(loaded), model.Target.SamplesTau ? logTau : Math.Log(model.Target.HeldTau!.Value));
+        double startRate = model.Target.Sigma2Rate is not { } rate ? double.NaN : double.IsNaN(logRate) ? rate.CentreLogRate : logRate;
+        Start = new BassState(loaded, Fit(loaded), model.Target.SamplesTau ? logTau : Math.Log(model.Target.HeldTau!.Value), startRate);
         if (model.Target.Refusal(Start.Fit) is { } exact) throw new ArgumentException($"The start lies outside F ({exact}).", nameof(terms));
         _counts = CountsOf(loaded);
         _committed = Start;
@@ -176,14 +178,16 @@ public sealed class BassStructureMoves
     /// <summary>
     /// The retained draw at <paramref name="state"/> (D04's composition): σ² from its collapsed conditional (or as held), the
     /// coefficients given σ², and λ | M ~ Gamma(h₁ + M, rate h₂ + 1), each exact given (structure, τ). The terms are
-    /// interned in <paramref name="terms"/>, and the coefficients move to the uncentred basis in the ids' order.
+    /// interned in <paramref name="terms"/>, and the coefficients move to the uncentred basis in the ids' order. Under a hierarchical
+    /// σ² prior σ²'s conditional reads the state's rate. <paramref name="current"/> is the target a chain has moved to from the model's,
+    /// for a σ² a block has given it; null is the model's.
     /// </summary>
-    public BassDraw Compose(BassState state, Xoshiro256PlusPlus rng, BassTermTable terms)
+    public BassDraw Compose(BassState state, Xoshiro256PlusPlus rng, BassTermTable terms, BassTarget? current = null)
     {
         ArgumentNullException.ThrowIfNull(rng);
         ArgumentNullException.ThrowIfNull(terms);
         Sync(state);
-        BassTarget target = _model.Target;
+        BassTarget target = current ?? _model.Target;
         double tau = target.SamplesTau ? state.Tau : target.HeldTau!.Value;
         GPriorConditional conditional = target.CoefficientBlock(_design)(tau, 1.0);
         var centred = new double[conditional.Columns];   // (α, β_c) in the design's order
@@ -193,7 +197,7 @@ public sealed class BassStructureMoves
             conditional.SampleGiven(given, rng, centred);
             sigma2 = given;
         }
-        else sigma2 = conditional.Sample(target.Sigma2, rng, centred);
+        else sigma2 = conditional.Sample(target.Sigma2At(state), rng, centred);
         BassCountPrior count = _model.Prior.Count;
         double lambda = Gamma.ShapeRate(count.Shape + state.Count, count.Rate + 1.0).Sample(rng);
 
@@ -210,7 +214,7 @@ public sealed class BassStructureMoves
             intercept -= centred[j + 1] * ColumnMean(state.Terms[j]);
         }
         coefficients[0] = intercept;
-        return new BassDraw(new BassStructure([.. order.Select(j => ids[j])]), tau, sigma2, coefficients, lambda);
+        return new BassDraw(new BassStructure([.. order.Select(j => ids[j])]), tau, sigma2, coefficients, lambda, target.Sigma2Rate is null ? null : Math.Exp(state.LogRate));
     }
 
     // The mean of the term's column over all N observations under W, the design's centring: a case column's mean, or āh̄ at
@@ -284,7 +288,7 @@ public sealed class BassStructureMoves
     {
         BassStructureFit fit = BassStructureFit.Of(proposal, proposal.Admitted ? LogTermPrior(terms) : double.NaN);
         if (added is not null) Support.Add(added, proposal.Refusal == BassRefusal.Support);
-        var candidate = new BassState(terms, fit, current.LogTau);
+        var candidate = new BassState(terms, fit, current.LogTau, current.LogRate);
         Kinds.Attempted(kind);
         if (_model.Target.Refusal(fit) is { } reason)
         {
@@ -440,8 +444,8 @@ public sealed class BassStructureMoves
 /// <summary>
 /// τ's block (D04): a slice step on u = ln τ (<see cref="SliceSampler"/>) against the chain's target at the chain's own
 /// temperature, each evaluation O(1) from the structure's cached fit. The target's density is already on u, so there is
-/// no Jacobian to add. A chain block, so a lone chain runs it beside its moves in a <see cref="BlockScan{TState}"/> and a
-/// tempering replica between its moves and the swaps.
+/// no Jacobian to add. It reads the target the chain holds now, so a σ² a block has handed the chain reaches it. A chain block, so a
+/// lone chain runs it beside its moves in a <see cref="BlockScan{TState}"/> and a tempering replica between its moves and the swaps.
 /// </summary>
 public sealed class BassTauBlock : IBlock<ReversibleJumpChain<BassState>>
 {
@@ -451,15 +455,6 @@ public sealed class BassTauBlock : IBlock<ReversibleJumpChain<BassState>>
     /// <summary>The stepping-out limit.</summary>
     public const int MaxSteps = 32;
 
-    private readonly ISamplingTarget<BassState> _target;
-
-    /// <summary>τ's block on the chain's target <paramref name="target"/>.</summary>
-    public BassTauBlock(ISamplingTarget<BassState> target)
-    {
-        ArgumentNullException.ThrowIfNull(target);
-        _target = target;
-    }
-
     /// <inheritdoc/>
     public string Name => "tau";
 
@@ -467,13 +462,41 @@ public sealed class BassTauBlock : IBlock<ReversibleJumpChain<BassState>>
     public bool Update(ReversibleJumpChain<BassState> state, Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(state);
+        ISamplingTarget<BassState> target = state.Target;
         BassState current = state.Current;
         Temperature temperature = state.Temperature;
         double u = current.LogTau, logDensity = state.CurrentLogDensity;
         SliceSampler.Step(ref u, ref logDensity, Width, MaxSteps,
-                          v => temperature.LogDensity(_target.Evaluate(current.WithLogTau(v))), rng);
+                          v => temperature.LogDensity(target.Evaluate(current.WithLogTau(v))), rng);
         BassState next = current.WithLogTau(u);
-        state.SetState(next, _target.Evaluate(next));
+        state.SetState(next, target.Evaluate(next));
+        return true;
+    }
+}
+
+/// <summary>
+/// σ²'s rate's block under a hierarchical prior (<see cref="Sigma2PriorKind.Hierarchical"/>): τ's slice step, on v = ln r, against
+/// the chain's target at its own temperature, at the cost of τ's. The same step on every path and tempered form: with σ² integrated
+/// the marginal reads IG(a, r) and σ²'s draw is left to the composition; with σ² given the state's prior carries IG(σ²; a, r). So
+/// it needs neither σ² in the state nor a conjugate form, which only the integrated form's rungs have.
+/// </summary>
+public sealed class BassSigma2RateBlock : IBlock<ReversibleJumpChain<BassState>>
+{
+    /// <inheritdoc/>
+    public string Name => "sigma2 rate";
+
+    /// <inheritdoc/>
+    public bool Update(ReversibleJumpChain<BassState> state, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ISamplingTarget<BassState> target = state.Target;
+        BassState current = state.Current;
+        Temperature temperature = state.Temperature;
+        double v = current.LogRate, logDensity = state.CurrentLogDensity;
+        SliceSampler.Step(ref v, ref logDensity, BassTauBlock.Width, BassTauBlock.MaxSteps,
+                          x => temperature.LogDensity(target.Evaluate(current.WithLogRate(x))), rng);
+        BassState next = current.WithLogRate(v);
+        state.SetState(next, target.Evaluate(next));
         return true;
     }
 }
@@ -487,15 +510,15 @@ public sealed class BassTauBlock : IBlock<ReversibleJumpChain<BassState>>
 public sealed class BassChain
 {
     /// <summary>A chain of <paramref name="model"/> from <paramref name="start"/> and u = <paramref name="logTau"/>,
-    /// sampling <paramref name="target"/> (the model's by default).</summary>
+    /// sampling <paramref name="target"/> (the model's by default), and under a hierarchical σ² prior from v =
+    /// <paramref name="logRate"/>, NaN being the rate's mean.</summary>
     public BassChain(BassModel model, IReadOnlyList<BassTerm> start, double logTau, Xoshiro256PlusPlus moveRng,
-                     Xoshiro256PlusPlus blockRng, ISamplingTarget<BassState>? target = null)
+                     Xoshiro256PlusPlus blockRng, ISamplingTarget<BassState>? target = null, double logRate = double.NaN)
     {
         ArgumentNullException.ThrowIfNull(model);
-        Structure = new BassStructureMoves(model, start, logTau);
-        ISamplingTarget<BassState> sampled = target ?? model.Target;
-        Moves = new ReversibleJumpChain<BassState>(Structure.Moves, sampled, Structure.Start, moveRng);
-        Scan = new BlockScan<ReversibleJumpChain<BassState>>(Blocks(model, sampled), Moves, blockRng, chain => chain);
+        Structure = new BassStructureMoves(model, start, logTau, logRate);
+        Moves = new ReversibleJumpChain<BassState>(Structure.Moves, target ?? model.Target, Structure.Start, moveRng);
+        Scan = new BlockScan<ReversibleJumpChain<BassState>>(BassSweepSlots.Blocks(model), Moves, blockRng, chain => chain);
     }
 
     private BassChain(BassStructureMoves structure, ReversibleJumpChain<BassState> moves, BlockScan<ReversibleJumpChain<BassState>> scan)
@@ -504,11 +527,6 @@ public sealed class BassChain
         Moves = moves;
         Scan = scan;
     }
-
-    // The scan's blocks: the sweep's slots in D04's order, the moves, τ when it is sampled and the observation model's latent
-    // slots, which Gaussian BASS leaves empty.
-    private static List<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassModel model, ISamplingTarget<BassState> target)
-        => BassSweepSlots.Blocks(model, target);
 
     /// <summary>
     /// The chain's restart state, the chain unchanged: the reversible-jump chain's snapshot (state, temperature, move
@@ -532,7 +550,7 @@ public sealed class BassChain
         ISamplingTarget<BassState> sampled = target ?? model.Target;
         var moves = ReversibleJumpChain<BassState>.Restore(structure.Moves, sampled, snapshot.Chain);
         (ulong r0, ulong r1, ulong r2, ulong r3) = snapshot.BlockRng;
-        var scan = BlockScan<ReversibleJumpChain<BassState>>.Restore(Blocks(model, sampled),
+        var scan = BlockScan<ReversibleJumpChain<BassState>>.Restore(BassSweepSlots.Blocks(model),
             new BlockScanSnapshot<ReversibleJumpChain<BassState>>(moves, r0, r1, r2, r3, snapshot.Steps, snapshot.BlockAttempts,
                                                                   snapshot.BlockAccepts), chain => chain);
         return new BassChain(structure, moves, scan);
@@ -558,7 +576,7 @@ public sealed class BassChain
     }
 
     /// <summary>The retained draw at the current state (<see cref="BassStructureMoves.Compose"/>).</summary>
-    public BassDraw Compose(Xoshiro256PlusPlus rng, BassTermTable terms) => Structure.Compose(Current, rng, terms);
+    public BassDraw Compose(Xoshiro256PlusPlus rng, BassTermTable terms) => Structure.Compose(Current, rng, terms, Moves.Target as BassTarget);
 }
 
 /// <summary>A chain's structure moves' restart state: the design's, and the tallies.</summary>

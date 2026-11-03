@@ -213,8 +213,8 @@ public sealed class BassMixingCostTests
         // τ's block on a copy of the chain restored at the state, its target's evaluations counted.
         BassChainSnapshot fixedChain = chain.Snapshot();
         var counting = new Counting(model.Target);
-        var tau = new BassTauBlock(counting);
-        BassChain moved = BassChain.Restore(model, fixedChain);
+        var tau = new BassTauBlock();
+        BassChain moved = BassChain.Restore(model, fixedChain, counting);
         long updates = 0;
         var table = new BassTermTable();
 

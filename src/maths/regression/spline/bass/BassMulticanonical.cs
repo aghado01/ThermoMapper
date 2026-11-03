@@ -101,7 +101,7 @@ internal sealed class BassMulticanonicalModel : IMulticanonicalModel<BassState>
         int[] seeds = SeedTree.Derive(chainSeed, 3);   // the start's draws, the moves, τ's block
         var sampler = new BassPriorSampler(Model);
         BassState start = sampler.DrawState(new Xoshiro256PlusPlus(seeds[0])).State;
-        var chain = new BassChain(Model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(seeds[1]), new Xoshiro256PlusPlus(seeds[2]), target);
+        var chain = new BassChain(Model, start.Terms, start.LogTau, new Xoshiro256PlusPlus(seeds[1]), new Xoshiro256PlusPlus(seeds[2]), target, start.LogRate);
         return new BassMulticanonicalChain(this, chain, target, new Xoshiro256PlusPlus(readoutSeed), new BassTermTable(), new DrawStore<BassDraw>(),
                                            new BassStart(start.Terms, Model.Target.HeldTau ?? start.Tau, sampler.Attempts), null);
     }

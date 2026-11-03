@@ -46,7 +46,7 @@ public sealed class BassWeightedCoreTests
     private static Observation Weighted(double[] weights, WeightMeaning meaning, WeightedPriorGram gram)
         => new(r => new WorkingResponse(r, weights: weights, meaning: meaning, priorGram: gram));
 
-    private static double[] Weights(int n, int seed = 3)
+    internal static double[] Weights(int n, int seed = 3)
     {
         var rng = new Xoshiro256PlusPlus(seed);
         return [.. Enumerable.Range(0, n).Select(_ => Math.Exp((2.0 * rng.NextDouble() - 1.0) * Math.Log(4.0)))];
@@ -68,9 +68,9 @@ public sealed class BassWeightedCoreTests
 
     private static BassTerm Product(int knot0, int knot1) => new(continuous: [new HingeFactor(0, 1, knot0), new HingeFactor(1, -1, knot1)]);
 
-    private static readonly BassTerm[] Terms = [Hinge(0, 1, 0), Hinge(1, -1, 2), Hinge(0, 1, 1), Product(0, 2), Hinge(1, 1, 1)];
+    internal static readonly BassTerm[] Terms = [Hinge(0, 1, 0), Hinge(1, -1, 2), Hinge(0, 1, 1), Product(0, 2), Hinge(1, 1, 1)];
 
-    private static BassConfig Config(CoefficientForm form, GPriorCentre intercept, Sigma2Prior sigma2, double tau, int maxBasis = 5)
+    internal static BassConfig Config(CoefficientForm form, GPriorCentre intercept, Sigma2Prior sigma2, double tau, int maxBasis = 5)
         => BassSweepTests.Config(maxBasis: maxBasis) with
         {
             Intercept = intercept,
@@ -79,7 +79,7 @@ public sealed class BassWeightedCoreTests
             Structure = new BassStructureSpec { MaxInteraction = 2, MaxBasis = maxBasis, Support = new SupportRule(SupportKind.Count, 1.0) },
         };
 
-    private static void Close(double expected, double actual, double relative, string what)
+    internal static void Close(double expected, double actual, double relative, string what)
     {
         double tolerance = relative * Math.Max(1.0, Math.Abs(expected));
         Assert.True(Math.Abs(expected - actual) <= tolerance, $"{what}: {expected:R} against {actual:R}, tolerance {tolerance:E2}");
@@ -213,7 +213,7 @@ public sealed class BassWeightedCoreTests
 
     // Inputs scattered, so no two terms share a column's span by the grid: a tied move's log ratio is rounding, on whose sign a
     // chain draws its uniform or not, and its stream then leaves the other's.
-    private static BassData Scattered(int n, int seed)
+    internal static BassData Scattered(int n, int seed)
     {
         var rng = new Xoshiro256PlusPlus(seed);
         var x0 = new double[n];
@@ -298,7 +298,7 @@ public sealed class BassWeightedCoreTests
 
     // ---- Dense algebra ----
 
-    private sealed record Dense(double S, double LogDeterminant, double[] FittedMean, double[,] Covariance, double[,] X);
+    internal sealed record Dense(double S, double LogDeterminant, double[] FittedMean, double[,] Covariance, double[,] X);
 
     private static double[] Solve(double[,] a, double[] b)
     {
@@ -319,12 +319,14 @@ public sealed class BassWeightedCoreTests
     // The block from the columns alone: the prior on (α, β) in the prior's own centring, its likelihood at weights w and power b.
     // α flat drops its prior row and spends the observation in ν, which the production form states apart.
     private static Dense Reference(double[] y, double[] w, double[][] z, bool priorOnWeighted, GPriorCentre intercept, bool ridge, double tau, double b)
+        => Reference(y, w, z, priorOnWeighted ? w : [.. Enumerable.Repeat(1.0, y.Length)], null, intercept, ridge, tau, b);
+
+    // The prior's Gram on `priorWeight`, and α centred on `frozenLevel`, or on y's mean under `priorWeight` when null.
+    internal static Dense Reference(double[] y, double[] w, double[][] z, double[] priorWeight, double? frozenLevel, GPriorCentre intercept, bool ridge, double tau, double b)
     {
         int n = y.Length, m = z.Length, p = m + 1;
-        double mass = w.Sum();
-        double[] priorWeight = priorOnWeighted ? w : [.. Enumerable.Repeat(1.0, n)];
         double priorMass = priorWeight.Sum();
-        double level = intercept == GPriorCentre.Zero ? 0.0 : y.Zip(priorWeight, (v, k) => v * k).Sum() / priorMass;
+        double level = intercept == GPriorCentre.Zero ? 0.0 : frozenLevel ?? y.Zip(priorWeight, (v, k) => v * k).Sum() / priorMass;
         var x = new double[n, p];
         for (int i = 0; i < n; i++) x[i, 0] = 1.0;
         for (int j = 0; j < m; j++)
@@ -390,7 +392,7 @@ public sealed class BassWeightedCoreTests
         return new Dense(s, logDet, fitted, covariance, x);
     }
 
-    private static double[][] Columns(BassModel model, IEnumerable<BassTerm> terms) => [.. terms.Select(t => BassPointwiseTests.Column(model, t))];
+    internal static double[][] Columns(BassModel model, IEnumerable<BassTerm> terms) => [.. terms.Select(t => BassPointwiseTests.Column(model, t))];
 
     [Theory]
     [InlineData("g", GPriorCentre.Mean, WeightedPriorGram.Unweighted)]
@@ -784,7 +786,7 @@ public sealed class BassWeightedCoreTests
 
     // ---- Enumeration ----
 
-    private static void CheckKernel(BassModel model, string label, ITestOutputHelper log)
+    internal static void CheckKernel(BassModel model, string label, ITestOutputHelper log)
     {
         BassKernelEnumeration.Space space = BassKernelEnumeration.Enumerate(model);
         var flows = BassKernelEnumeration.Kernel(space, (key, s) => BassKernelEnumeration.D01(space, key, s, null));
@@ -795,13 +797,16 @@ public sealed class BassWeightedCoreTests
 
     // π(S) by dense algebra at the held τ: the term measure, plus the marginal from the columns alone.
     private static double[] DensePosterior(BassKernelEnumeration.Space space, double[] y, double[] w, bool priorOnWeighted, double tau, double? given, InverseGamma? prior, double sumLog)
+        => DensePosterior(space, y, w, priorOnWeighted ? w : [.. Enumerable.Repeat(1.0, y.Length)], null, tau, given, prior, sumLog);
+
+    internal static double[] DensePosterior(BassKernelEnumeration.Space space, double[] y, double[] w, double[] priorWeight, double? frozenLevel, double tau, double? given, InverseGamma? prior, double sumLog)
     {
         BassModel model = space.Model;
         var logs = new double[space.States.Count];
         for (int s = 0; s < logs.Length; s++)
         {
             BassKernelEnumeration.State state = space.States[s];
-            Dense dense = Reference(y, w, Columns(model, state.Terms), priorOnWeighted, GPriorCentre.Mean, false, tau, 1.0);
+            Dense dense = Reference(y, w, Columns(model, state.Terms), priorWeight, frozenLevel, GPriorCentre.Mean, false, tau, 1.0);
             double logPrior = model.Prior.LogCollectionWeight(state.Terms.Length) + state.Terms.Sum(model.Prior.LogPrior);
             double common = dense.LogDeterminant + 0.5 * sumLog;
             int n = y.Length;
@@ -821,8 +826,10 @@ public sealed class BassWeightedCoreTests
 
     // A chain's visits against π: by M and on the most probable structures, within the tolerance its length earns.
     private static void CheckVisits(BassKernelEnumeration.Space space, Func<int, BassChain> start, ITestOutputHelper log, string label, Action<BassChain>? each = null)
+        => CheckVisits(space, space.Posterior(), start, log, label);
+
+    internal static void CheckVisits(BassKernelEnumeration.Space space, double[] pi, Func<int, BassChain> start, ITestOutputHelper log, string label)
     {
-        double[] pi = space.Posterior();
         const int chains = 4, burn = 2_000, sweeps = 30_000;
         var visits = new double[pi.Length];
         for (int c = 0; c < chains; c++)
@@ -853,7 +860,7 @@ public sealed class BassWeightedCoreTests
         log.WriteLine($"{label}: M's law {string.Join(", ", byCountPi.Select(v => v.ToString("F3")))} against {string.Join(", ", byCountVisits.Select(v => v.ToString("F3")))}");
     }
 
-    private static BassConfig EnumerationConfig(Sigma2Prior sigma2, double tau = 0.1)
+    internal static BassConfig EnumerationConfig(Sigma2Prior sigma2, double tau = 0.1)
         => BassSweepTests.Config(maxBasis: 3) with { Sigma2 = sigma2, Coefficients = BassCoefficientPrior.G(TauPrior.Held(tau)) };
 
     [Theory]

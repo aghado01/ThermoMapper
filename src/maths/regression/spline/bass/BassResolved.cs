@@ -48,27 +48,39 @@ public sealed record BassResolved
     /// <summary>The support threshold on a term's functional part; null for a scalar response.</summary>
     public required double? SupportMinimumFunctional { get; init; }
 
-    /// <summary>The level the coefficient prior is centred on: the response's mean, or zero under the zero centre. Under weights
-    /// the mean is under W only when the coefficient prior reads the weighted columns (<see cref="WeightedPriorGram"/>).</summary>
+    /// <summary>The level the coefficient prior is centred on: the response's mean, or zero under the zero centre, or a frozen
+    /// reference's level. Under weights the mean is under W only when the coefficient prior reads the weighted columns
+    /// (<see cref="WeightedPriorGram"/>).</summary>
     public required double CentreLevel { get; init; }
+
+    /// <summary>The frozen level level centring reads (<see cref="BassPriorReference.Level"/>); null otherwise, ȳ having no energy.</summary>
+    public required double? PriorLevel { get; init; }
+
+    /// <summary>κ in the coefficient prior's covariance σ²κ(τG)⁻¹ (<see cref="BassPriorReference.CoefficientConstant"/>); 1 otherwise.</summary>
+    public required double CoefficientConstant { get; init; }
 
     /// <summary>ȳ, the response's mean over all N observations under W, whatever the centre; the zero centre's level energy
     /// Σwᵢȳ² reads it.</summary>
     public required double ResponseMean { get; init; }
 
     /// <summary>s², the response's mean square about <see cref="CentreLevel"/>, which the scaled σ² prior reads: under W only
-    /// when the coefficient prior reads the weighted columns (<see cref="WeightedPriorGram"/>).</summary>
+    /// when the coefficient prior reads the weighted columns (<see cref="WeightedPriorGram"/>), and a frozen reference's when it
+    /// states one.</summary>
     public required double ResponseMeanSquare { get; init; }
 
     /// <summary>The response's mean square under W about <see cref="CentreLevel"/>, whose ‖·‖²_W the exact-fit floor reads;
-    /// <see cref="ResponseMeanSquare"/> at unit weights.</summary>
+    /// <see cref="ResponseMeanSquare"/> at unit weights and under a frozen reference's.</summary>
     public required double WeightedMeanSquare { get; init; }
 
     /// <summary>The count, the mass and Σ ln wᵢ the marginal reads beyond the weighted statistics; (N, N, 0) at unit weights.</summary>
     public required GPriorWeights Weighting { get; init; }
 
-    /// <summary>σ²'s prior as resolved; null for the Jeffreys prior and for a held σ².</summary>
+    /// <summary>σ²'s prior as resolved; null for the Jeffreys prior and for a held σ². Under a hierarchical prior, the inverse gamma
+    /// at its rate's mean.</summary>
     public required InverseGamma? Sigma2 { get; init; }
+
+    /// <summary>σ²'s rate under a hierarchical prior, on s²; null under every other.</summary>
+    public required ResolvedSigma2Rate? Sigma2Rate { get; init; }
 
     /// <summary>The held σ² (<see cref="Sigma2PriorKind.Held"/>), which the structure step's marginal is given; null when σ² is
     /// integrated out.</summary>
@@ -115,7 +127,9 @@ public sealed record BassResolved
     /// rung's b = 0, and an auto-picked hot end outside (0, 1), which tiny data give; and SMC on the integrated form under
     /// the improper options, which has no b = 0 to start from. The response the intercept convention fits and the scaled σ²
     /// prior reads is <paramref name="working"/>'s (F-X1); null is the response itself. A held σ² needs no spread, so it lifts
-    /// the first two refusals.
+    /// the first two refusals. Under a frozen reference (<see cref="BassPriorReference"/>) the level and s² are the reference's, and
+    /// those two refusals read its spread when it states one: a working response that happens to be constant is no reason to refuse.
+    /// Refused too: a reference that leaves out what the config reads, and a level the zero centre contradicts.
     /// </summary>
     public static BassResolved Resolve(BassConfig config, BassData data, WorkingResponse? working = null)
     {
@@ -132,6 +146,7 @@ public sealed record BassResolved
         WorkingResponse fitted = working ?? new WorkingResponse(response);
         ReadOnlySpan<double> y = fitted.Values;
         GPriorWeights weights = fitted.Weighting;
+        BassPriorReference? reference = fitted.Reference;
         bool held = config.Sigma2.IsHeld;
         if (!fitted.IsUnweighted)
             log.Add(new("Weights", $"{fitted.Meaning}, prior on the {fitted.PriorGram} columns",
@@ -139,9 +154,11 @@ public sealed record BassResolved
         bool constant = true, zero = y[0] == 0.0;
         for (int i = 1; i < y.Length && constant; i++) constant = y[i] == y[0];
         double mean = fitted.ResponseMean, level;
+        double? priorLevel = null;
         if (config.Intercept == GPriorCentre.Zero)
         {
-            if (constant && zero && !held) throw new ArgumentException("The response is zero, which leaves σ no posterior (D03).", nameof(data));
+            if (reference?.Level is double stated && stated != 0.0) throw new ArgumentException($"The reference's level is {Text(stated)}, and the zero centre's is 0.", nameof(working));
+            if ((reference?.MeanSquare is double about ? about == 0.0 : constant && zero) && !held) throw new ArgumentException("The response is zero, which leaves σ no posterior (D03).", nameof(data));
             if (constant && !config.Sigma2.IsProper)
                 throw new ArgumentException("Under the Jeffreys σ² prior a constant response is fitted exactly by the intercept, which leaves the posterior improper (D03).", nameof(data));
             level = 0.0;
@@ -149,9 +166,20 @@ public sealed record BassResolved
         }
         else
         {
-            if (constant && !held) throw new ArgumentException("The response is constant, which the intercept absorbs whole, leaving no spread to fit (D03).", nameof(data));
-            level = config.Intercept == GPriorCentre.Mean && fitted.PriorStandsApart ? PairwiseSum.Of(y) / n : mean;
-            log.Add(new("CentreLevel", Text(level), config.Intercept == GPriorCentre.Flat ? "the response's mean, the flat intercept's estimate" : "the response's mean, level centring"));
+            if ((reference?.MeanSquare is double about ? about == 0.0 : constant) && !held) throw new ArgumentException("The response is constant, which the intercept absorbs whole, leaving no spread to fit (D03).", nameof(data));
+            if (constant && !config.Sigma2.IsProper)
+                throw new ArgumentException("Under the Jeffreys σ² prior a constant response is fitted exactly by the intercept, which leaves the posterior improper (D03).", nameof(data));
+            if (config.Intercept == GPriorCentre.Mean && reference is not null)
+            {
+                level = reference.Level ?? throw new ArgumentException("The reference states no level, which level centring reads.", nameof(working));
+                priorLevel = level;
+                log.Add(new("CentreLevel", Text(level), "the reference's, frozen apart from the working response"));
+            }
+            else
+            {
+                level = config.Intercept == GPriorCentre.Mean && fitted.PriorStandsApart ? PairwiseSum.Of(y) / n : mean;
+                log.Add(new("CentreLevel", Text(level), config.Intercept == GPriorCentre.Flat ? "the response's mean, the flat intercept's estimate" : "the response's mean, level centring"));
+            }
         }
         var squares = new double[n];
         for (int i = 0; i < n; i++) squares[i] = (y[i] - level) * (y[i] - level);
@@ -161,10 +189,18 @@ public sealed record BassResolved
             weightedMeanSquare = PairwiseSum.Dot(w, squares) / weights.Mass;
             if (!fitted.PriorStandsApart) meanSquare = weightedMeanSquare;
         }
+        if (reference?.MeanSquare is double frozenSquare) meanSquare = weightedMeanSquare = frozenSquare;
+        else if (reference is not null && config.Sigma2.ReadsResponse) throw new ArgumentException($"The reference states no mean square, which {config.Sigma2} reads.", nameof(working));
         InverseGamma? sigma2 = config.Sigma2.For(meanSquare);
+        ResolvedSigma2Rate? rate = config.Sigma2.RateFor(meanSquare);
         if (held) log.Add(new("Sigma2", Text(config.Sigma2.Value!.Value), "held, so the structure step reads the marginal given σ²"));
         if (config.Sigma2.ReadsResponse)
-            log.Add(new("ResponseMeanSquare", Text(meanSquare), "s², the response's mean square about the centre level, which the scaled σ² prior reads"));
+            log.Add(new("ResponseMeanSquare", Text(meanSquare), reference is null
+                ? "s², the response's mean square about the centre level, which the scaled σ² prior reads"
+                : "s², the reference's, frozen apart from the working response"));
+        if (rate is not null) log.Add(new("Sigma2Rate", rate.ToString(), "the hierarchical prior's rate, its mean a·s²; the state carries it"));
+        double coefficientConstant = reference?.CoefficientConstant ?? 1.0;
+        if (coefficientConstant != 1.0) log.Add(new("CoefficientConstant", Text(coefficientConstant), "the reference's: the coefficient prior's covariance is σ²κ(τG)⁻¹"));
 
         // The caps, by the predictors of each kind.
         int continuous = 0, categorical = 0;
@@ -232,8 +268,8 @@ public sealed record BassResolved
             hotEnd = tempering.DeclaredHotEnd();
             if (hotEnd is null)
             {
-                double? halving = HalvingTau(coefficients.Form, scale, weights.Count);
-                double picked = AutoHotEnd(tempering, config.Intercept, weights.Count, halving);
+                double? halving = HalvingTau(coefficients.Form, scale, weights.Count, coefficientConstant);
+                double picked = AutoHotEnd(tempering, config.Intercept, weights.Count, halving, coefficientConstant);
                 if (!(picked > 0.0 && picked < 1.0))
                     throw new ArgumentException($"Sampling.Tempering.HotEnd auto-picks {Text(picked)} on N = {n} observations, outside (0, 1); set it.", "config");
                 hotEnd = picked;
@@ -300,8 +336,9 @@ public sealed record BassResolved
             Cases = cases, Locations = locations, Observations = n, MaxBasis = maxBasis,
             MaxInteraction = maxInteraction, MaxCategoricalInteraction = maxCategorical, MaxFunctionalInteraction = maxFunctional,
             SupportMinimum = support, SupportMinimumFunctional = supportFunctional,
-            MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, ResponseMeanSquare = meanSquare, WeightedMeanSquare = weightedMeanSquare,
-            Weighting = weights, Sigma2 = sigma2, GivenSigma2 = config.Sigma2.Value, Scale = scale,
+            MonitoredPoints = points, ResponseMean = mean, CentreLevel = level, PriorLevel = priorLevel, CoefficientConstant = coefficientConstant,
+            ResponseMeanSquare = meanSquare, WeightedMeanSquare = weightedMeanSquare,
+            Weighting = weights, Sigma2 = sigma2, Sigma2Rate = rate, GivenSigma2 = config.Sigma2.Value, Scale = scale,
             StoppingGroups = BassDiagnostics.StoppingGroups(config.Sampling.StoppingScope),
             HotEnd = hotEnd, StepWindows = windows, FactorShares = shares, SplitThreshold = config.Sampling.Tempering?.Split?.Threshold,
             AutoPicks = log.AsReadOnly(),
@@ -313,20 +350,21 @@ public sealed record BassResolved
     /// which τ₀ makes a unit-information column's shrinkage, τ/(τ + b) under the g-form and τ/(τ + bN) under the ridge,
     /// one half, so the tempered likelihood weighs one observation, as the unit-information prior does; 2/N on the
     /// likelihood path's integrated form under the flat intercept, whose pole at (1 − 2c)/N it clears with ν = Nb − 1 = 1;
-    /// and under a held τ the smaller of these and the b at which the held τ halves it (<paramref name="halvingTau"/>).
+    /// and under a held τ the smaller of these and the b at which the held τ halves it (<paramref name="halvingTau"/>). A coefficient
+    /// prior's constant κ reads τ as τ/κ, so the unit-information b is 1/(κN), the pole's staying where it is.
     /// </summary>
-    internal static double AutoHotEnd(TemperingSpec tempering, GPriorCentre intercept, double observations, double? halvingTau)
+    internal static double AutoHotEnd(TemperingSpec tempering, GPriorCentre intercept, double observations, double? halvingTau, double constant = 1.0)
     {
-        double unit = (Pole(tempering, intercept) ? 2.0 : 1.0) / observations;
+        double unit = Pole(tempering, intercept) ? 2.0 / observations : 1.0 / (constant * observations);
         return halvingTau is double tau ? Math.Min(tau, unit) : unit;
     }
 
     /// <summary>
     /// Under a held τ, the b at which it halves a unit-information column's shrinkage: τ under the g-form, τ/N under the
-    /// ridge, whose columns carry N observations' information each; null when τ is sampled.
+    /// ridge, whose columns carry N observations' information each, each over the coefficient prior's constant; null when τ is sampled.
     /// </summary>
-    internal static double? HalvingTau(CoefficientForm form, ResolvedTauPrior scale, double observations)
-        => scale.HeldTau is double tau ? (form is RidgeForm ? tau / observations : tau) : null;
+    internal static double? HalvingTau(CoefficientForm form, ResolvedTauPrior scale, double observations, double constant = 1.0)
+        => scale.HeldTau is double tau ? (form is RidgeForm ? tau / observations : tau) / constant : null;
 
     private static bool Pole(TemperingSpec tempering, GPriorCentre intercept)
         => tempering.Path == TemperingPath.Likelihood && tempering.Form == TemperedForm.Integrated && intercept == GPriorCentre.Flat;

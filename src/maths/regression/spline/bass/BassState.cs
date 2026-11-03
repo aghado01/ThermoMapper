@@ -5,18 +5,20 @@ namespace Maths.Regression.Spline.Bass;
 
 /// <summary>
 /// One chain's state (D04): the structure, its terms in the design's column order with their fit, and u = ln τ, the
-/// coordinate τ's slice step moves (ln of a held τ). Immutable: a τ update shares the structure, and a
-/// state's structure identity, which the chain's design tracks, is its terms' array.
+/// coordinate τ's slice step moves (ln of a held τ), with, under a hierarchical σ² prior, v = ln r, the coordinate the rate's step
+/// moves. Immutable: a τ update shares the structure, and a state's structure identity, which the chain's design tracks, is its
+/// terms' array.
 /// </summary>
 public sealed class BassState
 {
     private readonly BassTerm[] _terms;
 
-    internal BassState(BassTerm[] terms, BassStructureFit fit, double logTau)
+    internal BassState(BassTerm[] terms, BassStructureFit fit, double logTau, double logRate = double.NaN)
     {
         _terms = terms;
         Fit = fit;
         LogTau = logTau;
+        LogRate = logRate;
     }
 
     /// <summary>The terms, in the design's column order.</summary>
@@ -34,8 +36,14 @@ public sealed class BassState
     /// <summary>τ = eᵘ.</summary>
     public double Tau => Math.Exp(LogTau);
 
+    /// <summary>v = ln r, σ²'s rate under a hierarchical prior; NaN under every other, which has no such coordinate.</summary>
+    public double LogRate { get; }
+
     /// <summary>This structure at another τ.</summary>
-    public BassState WithLogTau(double logTau) => new(_terms, Fit, logTau);
+    public BassState WithLogTau(double logTau) => new(_terms, Fit, logTau, LogRate);
+
+    /// <summary>This structure at another rate.</summary>
+    public BassState WithLogRate(double logRate) => new(_terms, Fit, LogTau, logRate);
 
     internal BassTerm[] TermArray => _terms;
 
@@ -48,9 +56,10 @@ public sealed class BassState
 public readonly record struct BassStructure(int[] TermIds);
 
 /// <summary>
-/// One retained draw, its generative state (D04): the structure, τ, σ², the coefficients and λ. The coefficients are in
+/// One retained draw, its generative state (D04): the structure, τ, σ², the coefficients and λ, and σ²'s rate under a
+/// hierarchical prior. The coefficients are in
 /// the uncentred basis, R's: the intercept, then one per term in <see cref="BassStructure.TermIds"/>' order, so the
 /// draw's function is f = a₀ + Σⱼ aⱼBⱼ, with Bⱼ the term's column (its case side times its output side for a direct
 /// functional response).
 /// </summary>
-public sealed record BassDraw(BassStructure Structure, double Tau, double Sigma2, double[] Coefficients, double Lambda);
+public sealed record BassDraw(BassStructure Structure, double Tau, double Sigma2, double[] Coefficients, double Lambda, double? Sigma2Rate = null);

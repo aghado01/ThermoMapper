@@ -106,7 +106,7 @@ internal static class BassFlatHistogramFit
         {
             int[] streams = SeedTree.Derive(seeds[c], 2);   // the start's draws, the ladder's
             BassState start = new BassPriorSampler(linear).DrawState(new Xoshiro256PlusPlus(streams[0])).State;
-            var ladder = new BassLadder(linear, spec.Tempering, start.Terms, start.LogTau, streams[1]);
+            var ladder = new BassLadder(linear, spec.Tempering, start.Terms, start.LogTau, streams[1], start.LogRate);
             void Scan()
             {
                 options.Cancellation.ThrowIfCancellationRequested();

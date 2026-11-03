@@ -152,10 +152,13 @@ public sealed class CollapsedGPrior
     /// </list>
     /// The median centre is the robust path's, on a basis that carries the constant (BARS), and is refused here.
     /// <paramref name="weights"/> carries observation weights, with every statistic the weighted fit's; null is unit weights.
+    /// <paramref name="level"/> freezes level centring's centre at a level read apart from this response, for a response that
+    /// moves: α's energy Σwᵢ(ȳ − level)² then joins Q, shrunk as the columns' is; null is ȳ, whose energy is none.
     /// </summary>
     public static CollapsedGPrior FromCentredLeastSquares(ISpdFactor centredGram, double[] centredCoefficients,
                                                           double residualSumOfSquares, double centredFittedSumOfSquares,
-                                                          int rows, double responseMean, GPriorCentre intercept, GPriorWeights? weights = null)
+                                                          int rows, double responseMean, GPriorCentre intercept, GPriorWeights? weights = null,
+                                                          double? level = null)
     {
         ArgumentNullException.ThrowIfNull(centredGram);
         ArgumentNullException.ThrowIfNull(centredCoefficients);
@@ -163,9 +166,9 @@ public sealed class CollapsedGPrior
             throw new ArgumentException("One coefficient per centred column is required.", nameof(centredCoefficients));
         if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
         if (!(centredFittedSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(centredFittedSumOfSquares));
-        (double fitted, double level) = CentredFit(centredFittedSumOfSquares, (weights ?? GPriorWeights.Unit(rows)).Mass, responseMean, intercept);
+        (double fitted, double centre) = CentredFit(centredFittedSumOfSquares, (weights ?? GPriorWeights.Unit(rows)).Mass, responseMean, intercept, level);
         return new CollapsedGPrior(centredGram, null, centredCoefficients, residualSumOfSquares, fitted,
-                                   double.NaN, 0.0, double.NaN, rows, null, intercept, responseMean, level, weights);
+                                   double.NaN, 0.0, double.NaN, rows, null, intercept, responseMean, centre, weights);
     }
 
     /// <summary>
@@ -173,16 +176,17 @@ public sealed class CollapsedGPrior
     /// <paramref name="inverseTemperature"/>), from the fit's statistics alone: <paramref name="centredColumns"/> centred
     /// columns beside the intercept, ‖r‖² and Q_c. A design that weighs a candidate structure has these before it has
     /// a factor or coefficients, and the marginal reads nothing else. <paramref name="weights"/> carries observation
-    /// weights, with the statistics the weighted fit's; null is unit weights.
+    /// weights, with the statistics the weighted fit's; null is unit weights. <paramref name="level"/> is
+    /// <see cref="FromCentredLeastSquares"/>'s.
     /// </summary>
     public static GPriorMarginal CentredMarginalAt(int centredColumns, double residualSumOfSquares, double centredFittedSumOfSquares,
                                                    int rows, double responseMean, GPriorCentre intercept, double tau,
-                                                   double inverseTemperature = 1.0, GPriorWeights? weights = null)
+                                                   double inverseTemperature = 1.0, GPriorWeights? weights = null, double? level = null)
     {
         if (centredColumns < 0) throw new ArgumentOutOfRangeException(nameof(centredColumns));
         if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
         GPriorWeights w = weights ?? GPriorWeights.Unit(rows);
-        (double fitted, _) = CentredFit(centredFittedSumOfSquares, w.Mass, responseMean, intercept);
+        (double fitted, _) = CentredFit(centredFittedSumOfSquares, w.Mass, responseMean, intercept, level);
         return ClosedForm(centredColumns + 1, residualSumOfSquares, fitted, rows, intercept, tau, inverseTemperature, w);
     }
 
@@ -194,15 +198,17 @@ public sealed class CollapsedGPrior
     /// ½ln(τ/(bN + τ)) and no energy, under the zero centre also the energy Nȳ² shrunk by τ/(bN + τ), and under the flat
     /// intercept its integral (2πσ²/(Nb))^½, as <see cref="CentredMarginalAt"/> places it. Then S = b(‖r‖² + shrinkage), a sum
     /// of non-negative terms; the same domain as the g-form's. <paramref name="weights"/> carries observation weights, with
-    /// N read as their mass in the intercept's direction; null is unit weights.
+    /// N read as their mass in the intercept's direction; null is unit weights. <paramref name="level"/> is
+    /// <see cref="FromCentredLeastSquares"/>'s.
     /// </summary>
     public static GPriorMarginal CentredRidgeMarginalAt(RidgeColumns columns, double residualSumOfSquares, int rows, double responseMean,
-                                                        GPriorCentre intercept, double tau, double inverseTemperature = 1.0, GPriorWeights? weights = null)
+                                                        GPriorCentre intercept, double tau, double inverseTemperature = 1.0, GPriorWeights? weights = null,
+                                                        double? level = null)
     {
         ArgumentNullException.ThrowIfNull(columns);
         if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
         GPriorWeights w = weights ?? GPriorWeights.Unit(rows);
-        double level = CentredLevel(w.Mass, responseMean, intercept), b = inverseTemperature;
+        double centre = CentredLevel(w.Mass, responseMean, intercept, level), b = inverseTemperature;
         RidgeTerms terms = columns.At(tau, b);
         double logDet = terms.LogDeterminant + 0.5 * b * w.SumLogWeights, shrink = terms.Shrinkage;
         double logDetSlope = terms.LogDeterminantSlope + 0.5 * w.SumLogWeights, shrinkSlope = terms.ShrinkageSlope;
@@ -214,7 +220,7 @@ public sealed class CollapsedGPrior
             return new GPriorMarginal(b * (residualSumOfSquares + shrink), logDet - 0.5 * Math.Log(w.Mass * b), rows, tau, b, 1,
                                       residualSumOfSquares + shrinkSlope, logDetSlope - 0.5 / b, w.Count);
         }
-        double bn = b * w.Mass, h = tau / (bn + tau), energy = w.Mass * (responseMean - level) * (responseMean - level);
+        double bn = b * w.Mass, h = tau / (bn + tau), energy = w.Mass * (responseMean - centre) * (responseMean - centre);
         logDet -= 0.5 * LogFunctions.Log1p(bn / tau);
         logDetSlope -= 0.5 * w.Mass / (bn + tau);
         shrink += energy * h;
@@ -247,15 +253,24 @@ public sealed class CollapsedGPrior
     }
 
     /// <summary>The centre level an intercept apart from the centred columns reads: ȳ under level centring and the flat
-    /// intercept, 0 under the zero centre; the median refused.</summary>
-    internal static double CentredLevel(double mass, double responseMean, GPriorCentre intercept) => CentredFit(0.0, mass, responseMean, intercept).Level;
+    /// intercept, or a frozen level under level centring; 0 under the zero centre; the median refused.</summary>
+    internal static double CentredLevel(double mass, double responseMean, GPriorCentre intercept, double? level = null)
+        => CentredFit(0.0, mass, responseMean, intercept, level).Level;
 
-    // The fitted energy the centred block's convention reads, and the intercept's centre.
-    private static (double Fitted, double Level) CentredFit(double centredFitted, double mass, double responseMean, GPriorCentre intercept)
+    // The fitted energy the centred block's convention reads, and the intercept's centre: under a frozen level, the gap between the
+    // moving ȳ and that level is α's energy, as the zero centre's Nȳ² is its gap from 0.
+    private static (double Fitted, double Level) CentredFit(double centredFitted, double mass, double responseMean, GPriorCentre intercept, double? level = null)
     {
         if (!(centredFitted >= 0.0)) throw new ArgumentOutOfRangeException(nameof(centredFitted));
         if (!(mass > 0.0)) throw new ArgumentOutOfRangeException(nameof(mass));
         if (!double.IsFinite(responseMean)) throw new ArgumentOutOfRangeException(nameof(responseMean));
+        if (level is double frozen)
+        {
+            if (intercept != GPriorCentre.Mean) throw new ArgumentException("A frozen level is level centring's.", nameof(level));
+            if (!double.IsFinite(frozen)) throw new ArgumentOutOfRangeException(nameof(level));
+            double gap = responseMean - frozen;
+            return (centredFitted + mass * gap * gap, frozen);
+        }
         return intercept switch
         {
             GPriorCentre.Mean or GPriorCentre.Flat => (centredFitted, responseMean),
@@ -1284,16 +1299,16 @@ public sealed class CollapsedRidgePrior
     /// leaves <paramref name="residualSumOfSquares"/>, with ȳ = <paramref name="responseMean"/> and the intercept placed by
     /// <paramref name="intercept"/> (the median centre refused, as <see cref="CollapsedGPrior.FromCentredLeastSquares"/>
     /// refuses it). <paramref name="weights"/> carries observation weights, the spectrum and ‖r‖² then the weighted fit's; null
-    /// is unit weights.
+    /// is unit weights. <paramref name="level"/> is <see cref="CollapsedGPrior.FromCentredLeastSquares"/>'s.
     /// </summary>
     public static CollapsedRidgePrior FromCentred(RidgeSpectrum spectrum, double residualSumOfSquares, double responseMean, GPriorCentre intercept,
-                                                  GPriorWeights? weights = null)
+                                                  GPriorWeights? weights = null, double? level = null)
     {
         ArgumentNullException.ThrowIfNull(spectrum);
         if (!(residualSumOfSquares >= 0.0)) throw new ArgumentOutOfRangeException(nameof(residualSumOfSquares));
         GPriorWeights w = weights ?? GPriorWeights.Unit(spectrum.Rows);
-        double level = CollapsedGPrior.CentredLevel(w.Mass, responseMean, intercept);
-        return new CollapsedRidgePrior(spectrum, residualSumOfSquares, responseMean, intercept, level, w);
+        double centre = CollapsedGPrior.CentredLevel(w.Mass, responseMean, intercept, level);
+        return new CollapsedRidgePrior(spectrum, residualSumOfSquares, responseMean, intercept, centre, w);
     }
 
     /// <summary>Observations N.</summary>
@@ -1308,7 +1323,8 @@ public sealed class CollapsedRidgePrior
     /// <summary>The marginal at (<paramref name="tau"/>, <paramref name="inverseTemperature"/>)
     /// (<see cref="CollapsedGPrior.CentredRidgeMarginalAt"/>).</summary>
     public GPriorMarginal MarginalAt(double tau, double inverseTemperature = 1.0)
-        => CollapsedGPrior.CentredRidgeMarginalAt(_spectrum, _rss, Rows, _responseMean, Intercept, tau, inverseTemperature, _weights);
+        => CollapsedGPrior.CentredRidgeMarginalAt(_spectrum, _rss, Rows, _responseMean, Intercept, tau, inverseTemperature, _weights,
+                                                  Intercept == GPriorCentre.Mean ? _level : null);
 
     /// <summary>
     /// The conditional posterior at (<paramref name="tau"/>, <paramref name="inverseTemperature"/>): β_c | σ² ~

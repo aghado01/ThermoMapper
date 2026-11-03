@@ -45,22 +45,23 @@ public sealed class BassLadder
     /// <summary>
     /// A ladder of <paramref name="model"/> declared by <paramref name="spec"/>, every replica started at
     /// <paramref name="start"/> (which must lie in F) with u = <paramref name="logTau"/>, the reference rung on an exact
-    /// draw; its streams derive from <paramref name="seed"/>. The model's target must be in the spec's form.
+    /// draw; its streams derive from <paramref name="seed"/>. The model's target must be in the spec's form. Under a hierarchical σ²
+    /// prior the replicas start at v = <paramref name="logRate"/>, NaN being the rate's mean.
     /// </summary>
-    public BassLadder(BassModel model, TemperingSpec spec, IReadOnlyList<BassTerm> start, double logTau, int seed)
-        : this(model, spec, Rungs(model, spec), start, logTau, seed)
+    public BassLadder(BassModel model, TemperingSpec spec, IReadOnlyList<BassTerm> start, double logTau, int seed, double logRate = double.NaN)
+        : this(model, spec, Rungs(model, spec), start, logTau, seed, logRate)
     {
     }
 
     // A ladder on the declared rungs `inverseTemperatures` (cold first, b = 0 last with the reference rung), for tests that place them.
-    internal BassLadder(BassModel model, TemperingSpec spec, double[] inverseTemperatures, IReadOnlyList<BassTerm> start, double logTau, int seed)
+    internal BassLadder(BassModel model, TemperingSpec spec, double[] inverseTemperatures, IReadOnlyList<BassTerm> start, double logTau, int seed, double logRate = double.NaN)
     {
         Check(model, spec);
         ArgumentNullException.ThrowIfNull(inverseTemperatures);
         CheckCount(spec, inverseTemperatures.Length, nameof(inverseTemperatures));
         Model = model;
         Spec = spec;
-        var cold = new BassStructureMoves(model, start, logTau);
+        var cold = new BassStructureMoves(model, start, logTau, logRate);
         BassMovesSnapshot copy = cold.Snapshot(cold.Start);
         _structures = new BassStructureMoves[inverseTemperatures.Length];
         _structures[0] = cold;
@@ -269,7 +270,8 @@ public sealed class BassLadder
         if (spec.InverseTemperatures is { } declared) return (double[])declared.Clone();
         BassTarget target = model.Target;
         double hot = spec.HotEnd ?? BassResolved.AutoHotEnd(spec, target.Intercept, target.Weighting.Count,
-                                                            BassResolved.HalvingTau(target.CoefficientForm, target.Scale, target.Weighting.Count));
+                                                            BassResolved.HalvingTau(target.CoefficientForm, target.Scale, target.Weighting.Count, target.CoefficientConstant),
+                                                            target.CoefficientConstant);
         if (!(hot > 0.0 && hot < 1.0)) throw new ArgumentException($"The hot end auto-picks {hot} on N = {target.Observations}, outside (0, 1).", nameof(spec));
         int levels = spec.StartLevels();
         return spec.ReferenceRung
@@ -313,14 +315,14 @@ public sealed class BassLadder
     }
 
     // A resize's new replica's state: the source's, on its own copy of the term array (clone-safe replicas).
-    private static BassState Fork(BassState state) => new((BassTerm[])state.TermArray.Clone(), state.Fit, state.LogTau);
+    private static BassState Fork(BassState state) => new((BassTerm[])state.TermArray.Clone(), state.Fit, state.LogTau, state.LogRate);
 
-    // Each replica's blocks after its moves, the sweep's slots from τ's on: τ's block when τ is sampled and the observation
-    // model's latent slots; none when there are none.
+    // Each replica's blocks after its moves, the sweep's slots from τ's on: τ's block when τ is sampled, the observation
+    // model's latent slots and σ²'s rate; none when there are none.
     private static Func<int, IReadOnlyList<IBlock<ReversibleJumpChain<BassState>>>>? Blocks(BassModel model)
-        => BassSweepSlots.Blocks(model, model.Target, BassSweepSlot.Tau).Count == 0
+        => BassSweepSlots.Blocks(model, BassSweepSlot.Tau).Count == 0
             ? null
-            : _ => BassSweepSlots.Blocks(model, model.Target, BassSweepSlot.Tau);
+            : _ => BassSweepSlots.Blocks(model, BassSweepSlot.Tau);
 
     // Each replica a swap handed a state it does not hold adopts the giver's design for it, the reference rung's too,
     // which takes no moves but saves its design in a checkpoint. The givers' copies are all taken before any replica

@@ -64,7 +64,7 @@ public sealed class BassParticles : ISmcParticles<BassParticle>
         var sampler = new BassPriorSampler(_model);
         BassState start = sampler.DrawState(rng).State;
         Interlocked.Add(ref _attempts, sampler.Attempts);
-        var moves = new BassStructureMoves(_model, start.Terms, start.LogTau);
+        var moves = new BassStructureMoves(_model, start.Terms, start.LogTau, start.LogRate);
         return new BassParticle(moves, moves.Start);
     }
 
@@ -74,7 +74,7 @@ public sealed class BassParticles : ISmcParticles<BassParticle>
         ArgumentNullException.ThrowIfNull(particle);
         BassState state = particle.State;
         BassDesignSnapshot design = particle.Moves.DesignFor(state);
-        var copy = new BassState((BassTerm[])state.TermArray.Clone(), state.Fit, state.LogTau);
+        var copy = new BassState((BassTerm[])state.TermArray.Clone(), state.Fit, state.LogTau, state.LogRate);
         var moves = new BassStructureMoves(_model, copy, new BassMovesSnapshot(design, new Tally<BassRefusal>(), 0, new BassSupportTally(_model.Prior),
                                                                                new BassMoveTally()));
         return new BassParticle(moves, copy);
@@ -135,7 +135,7 @@ public sealed class BassSmcKernel : ISmcKernel<BassParticle>
     {
         ArgumentNullException.ThrowIfNull(model);
         _model = model;
-        _blocks = BassSweepSlots.Blocks(model, model.Target, BassSweepSlot.Tau);
+        _blocks = BassSweepSlots.Blocks(model, BassSweepSlot.Tau);
         _cancellation = cancellation;
         Account = account?.Copy() ?? new BassSmcAccount(model.Prior);
     }

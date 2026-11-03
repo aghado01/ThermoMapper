@@ -75,16 +75,16 @@ public sealed class BassSweepSlotTests
     {
         BassData data = SensitivityFixture.Scalar();
         BassModel sampled = BassModel.Create(Sampled(), data);
-        List<IBlock<ReversibleJumpChain<BassState>>> sweep = BassSweepSlots.Blocks(sampled, sampled.Target);
+        List<IBlock<ReversibleJumpChain<BassState>>> sweep = BassSweepSlots.Blocks(sampled);
         Assert.Equal(2, sweep.Count);
         Assert.IsType<MoveStep<BassState>>(sweep[0]);
         Assert.IsType<BassTauBlock>(sweep[1]);
-        Assert.Single(BassSweepSlots.Blocks(sampled, sampled.Target, BassSweepSlot.Tau));
+        Assert.Single(BassSweepSlots.Blocks(sampled, BassSweepSlot.Tau));
 
         BassModel held = BassModel.Create(Held(), data);
         Assert.False(held.Target.SamplesTau);
-        Assert.Single(BassSweepSlots.Blocks(held, held.Target));
-        Assert.Empty(BassSweepSlots.Blocks(held, held.Target, BassSweepSlot.Tau));
+        Assert.Single(BassSweepSlots.Blocks(held));
+        Assert.Empty(BassSweepSlots.Blocks(held, BassSweepSlot.Tau));
     }
 
     [Fact]
@@ -93,11 +93,11 @@ public sealed class BassSweepSlotTests
         BassData data = SensitivityFixture.Scalar();
         var log = new List<string>();
         BassModel model = BassModel.Create(Sampled(), data, new Filling(log, draw: false));
-        List<IBlock<ReversibleJumpChain<BassState>>> sweep = BassSweepSlots.Blocks(model, model.Target);
+        List<IBlock<ReversibleJumpChain<BassState>>> sweep = BassSweepSlots.Blocks(model);
         Assert.IsType<MoveStep<BassState>>(sweep[0]);
         Assert.IsType<BassTauBlock>(sweep[1]);
         Assert.Equal(["a", "latent-1", "latent-2", "scale"], sweep.Skip(2).Select(b => b.Name));
-        Assert.Equal(["tau", "a", "latent-1", "latent-2", "scale"], BassSweepSlots.Blocks(model, model.Target, BassSweepSlot.Tau).Select(b => b.Name));
+        Assert.Equal(["tau", "a", "latent-1", "latent-2", "scale"], BassSweepSlots.Blocks(model, BassSweepSlot.Tau).Select(b => b.Name));
 
         var chain = new BassChain(model, [], Math.Log(0.05), new Xoshiro256PlusPlus(1), new Xoshiro256PlusPlus(2));
         for (int step = 0; step < 5; step++) chain.Step();
@@ -105,7 +105,7 @@ public sealed class BassSweepSlotTests
 
         // Held τ: the later slots stay, behind the moves alone.
         BassModel heldModel = BassModel.Create(Held(), data, new Filling(new List<string>(), draw: false));
-        Assert.Equal(["a", "latent-1", "latent-2", "scale"], BassSweepSlots.Blocks(heldModel, heldModel.Target).Skip(1).Select(b => b.Name));
+        Assert.Equal(["a", "latent-1", "latent-2", "scale"], BassSweepSlots.Blocks(heldModel).Skip(1).Select(b => b.Name));
     }
 
     [Fact]

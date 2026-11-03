@@ -47,7 +47,11 @@ public readonly record struct BassStructureFit(int Terms, double LogTermPrior, d
 /// (level centring, Liang's flat intercept or R's zero centre) and σ²'s prior (scaled to the response, Jeffreys, or a declared
 /// inverse gamma). On the likelihood path at b it takes D05's integrated form p_b, the coefficients and σ² integrated
 /// against the tempered likelihood, or the linear form b·ln p₁. With σ² held (<see cref="GivenSigma2"/>) it is the marginal
-/// given σ² from the same S and determinant term, the coefficients alone integrated.</item>
+/// given σ² from the same S and determinant term, the coefficients alone integrated. Under a frozen read
+/// (<see cref="BassPriorReference"/>) it holds α's prior centre and the coefficient prior's constant apart from the working response.</item>
+/// <item><b>σ²'s rate,</b> under a hierarchical prior (<see cref="Sigma2Rate"/>): a coordinate of the state as τ is, its density on
+/// v = ln r in the prior, the marginal given r. With σ² given, the prior also carries IG(σ²; a, r). One target serves every chain,
+/// rung and particle, each state holding its own r.</item>
 /// <item><b>The support,</b> F: the design's admission (D06) and, under the Jeffreys σ² prior, no exact fit,
 /// ‖r‖ ≤ 10³·ε·‖y − level‖ (D03's propriety rule).</item>
 /// </list>
@@ -83,6 +87,9 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         Observations = resolved.Observations;
         ResponseMean = resolved.ResponseMean;
         Weighting = resolved.Weighting;
+        PriorLevel = resolved.PriorLevel;
+        CoefficientConstant = resolved.CoefficientConstant;
+        Sigma2Rate = resolved.Sigma2Rate;
         double floor = ExactFitMultiple * MachineEpsilon;
         _exactFitSquares = Sigma2 is null && GivenSigma2 is null ? floor * floor * Weighting.Mass * resolved.WeightedMeanSquare : double.NegativeInfinity;
     }
@@ -100,6 +107,9 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         Observations = source.Observations;
         ResponseMean = source.ResponseMean;
         Weighting = source.Weighting;
+        PriorLevel = source.PriorLevel;
+        CoefficientConstant = source.CoefficientConstant;
+        Sigma2Rate = source.Sigma2Rate;
         _exactFitSquares = double.NegativeInfinity;
     }
 
@@ -129,8 +139,23 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     /// <summary>The intercept's convention.</summary>
     public GPriorCentre Intercept { get; }
 
-    /// <summary>σ²'s prior as resolved; null is the Jeffreys 1/σ², or a σ² held by the config.</summary>
+    /// <summary>σ²'s prior as resolved; null is the Jeffreys 1/σ², or a σ² held by the config. Under a hierarchical prior, the
+    /// inverse gamma at its rate's mean; a state's own is <see cref="Sigma2At"/>.</summary>
     public InverseGamma? Sigma2 { get; }
+
+    /// <summary>σ²'s rate under a hierarchical prior; null under every other, whose state has no rate.</summary>
+    public ResolvedSigma2Rate? Sigma2Rate { get; }
+
+    /// <summary>σ²'s prior at <paramref name="state"/>: its rate's inverse gamma under a hierarchical prior, <see cref="Sigma2"/>
+    /// otherwise.</summary>
+    public InverseGamma? Sigma2At(BassState state) => Sigma2Rate is { } rate ? rate.PriorAt(state.LogRate) : Sigma2;
+
+    /// <summary>α's prior centre under a frozen read; null is the convention's own, ȳ under level centring.</summary>
+    public double? PriorLevel { get; }
+
+    /// <summary>κ in the coefficient prior's covariance σ²κ(τG)⁻¹ (<see cref="BassPriorReference.CoefficientConstant"/>); 1 is the
+    /// Gaussian's.</summary>
+    public double CoefficientConstant { get; }
 
     /// <summary>The σ² the structure step's marginal is given; null when σ² is integrated out.</summary>
     public double? GivenSigma2 { get; }
@@ -173,24 +198,25 @@ public sealed class BassTarget : ISamplingTarget<BassState>
     public GPriorMarginal Marginal(BassStructureFit fit, double tau, double inverseTemperature = 1.0)
     {
         if (Refusal(fit) is { } reason) throw new ArgumentException($"The structure lies outside F ({reason}).", nameof(fit));
+        double precision = tau / CoefficientConstant;
         if (fit.Ridge is PriorPencil pencil)
         {
             if (pencil.Count != fit.Terms) throw new ArgumentException("The pencil is another structure's.", nameof(fit));
-            return CollapsedGPrior.CentredPencilMarginalAt(pencil, fit.ResidualSquares, Observations, Weighting, Intercept, tau, inverseTemperature);
+            return CollapsedGPrior.CentredPencilMarginalAt(pencil, fit.ResidualSquares, Observations, Weighting, Intercept, precision, inverseTemperature);
         }
         if (CoefficientForm is not RidgeForm)
             return CollapsedGPrior.CentredMarginalAt(fit.Terms, fit.ResidualSquares, fit.FittedSquares, Observations, ResponseMean,
-                                                     Intercept, tau, inverseTemperature, Weighting);
+                                                     Intercept, precision, inverseTemperature, Weighting, PriorLevel);
         RidgeColumns ridge = fit.Ridge ?? throw new ArgumentException("A structure under the ridge carries its columns' ridge terms.", nameof(fit));
         if (ridge.Count != fit.Terms) throw new ArgumentException("The ridge terms are another structure's.", nameof(fit));
-        return CollapsedGPrior.CentredRidgeMarginalAt(ridge, fit.ResidualSquares, Observations, ResponseMean, Intercept, tau, inverseTemperature, Weighting);
+        return CollapsedGPrior.CentredRidgeMarginalAt(ridge, fit.ResidualSquares, Observations, ResponseMean, Intercept, precision, inverseTemperature, Weighting, PriorLevel);
     }
 
-    // ln p_b of a structure's marginal: σ² integrated against its prior, or given.
-    internal double LogValue(in GPriorMarginal marginal) => GivenSigma2 is double given ? marginal.LogMarginalGiven(given) : marginal.LogMarginal(Sigma2);
+    // ln p_b of a structure's marginal: σ² integrated against its prior at this state, or given.
+    internal double LogValue(in GPriorMarginal marginal, InverseGamma? sigma2) => GivenSigma2 is double given ? marginal.LogMarginalGiven(given) : marginal.LogMarginal(sigma2);
 
     // ∂/∂b of LogValue.
-    internal double LogSlope(in GPriorMarginal marginal) => GivenSigma2 is double given ? marginal.LogMarginalGivenSlope(given) : marginal.LogMarginalSlope(Sigma2);
+    internal double LogSlope(in GPriorMarginal marginal, InverseGamma? sigma2) => GivenSigma2 is double given ? marginal.LogMarginalGivenSlope(given) : marginal.LogMarginalSlope(sigma2);
 
     /// <summary>
     /// The coefficient block of <paramref name="design"/>'s current structure, (τ, b) to its conditional: the g-form's
@@ -205,17 +231,21 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         {
             CollapsedPencilPrior apart = CollapsedPencilPrior.FromCentred(pencil, design.ResidualSquares, design.Observations, Weighting, design.ResponseMean,
                                                                           design.PriorLevel, Intercept);
-            return apart.At;
+            return Precision(apart.At);
         }
         if (CoefficientForm is RidgeForm)
         {
-            CollapsedRidgePrior ridge = CollapsedRidgePrior.FromCentred(design.Spectrum, design.ResidualSquares, design.ResponseMean, Intercept, Weighting);
-            return ridge.At;
+            CollapsedRidgePrior ridge = CollapsedRidgePrior.FromCentred(design.Spectrum, design.ResidualSquares, design.ResponseMean, Intercept, Weighting, PriorLevel);
+            return Precision(ridge.At);
         }
         CollapsedGPrior block = CollapsedGPrior.FromCentredLeastSquares(design.Factor, design.Coefficients.ToArray(), design.ResidualSquares,
-                                                                         design.FittedSquares, design.Observations, design.ResponseMean, Intercept, Weighting);
-        return block.At;
+                                                                         design.FittedSquares, design.Observations, design.ResponseMean, Intercept, Weighting, PriorLevel);
+        return Precision(block.At);
     }
+
+    // A block's (τ, b) with τ read through the coefficient prior's constant.
+    private Func<double, double, GPriorConditional> Precision(Func<double, double, GPriorConditional> at)
+        => CoefficientConstant == 1.0 ? at : (tau, b) => at(tau / CoefficientConstant, b);
 
     /// <summary>
     /// Whether the integrated form is defined at <paramref name="inverseTemperature"/>: everywhere on [0, 1] under the
@@ -242,27 +272,43 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         return b > 0.0 || sigma2 is not null;
     }
 
-    /// <summary>A state with τ sampled: <paramref name="fit"/> with τ = e^<paramref name="logTau"/>.</summary>
+    /// <summary>A state with τ sampled: <paramref name="fit"/> with τ = e^<paramref name="logTau"/>. Under a hierarchical σ² prior the
+    /// rate is part of the state, so evaluate that.</summary>
     public BassEvaluation Evaluate(BassStructureFit fit, double logTau)
     {
         if (!SamplesTau) throw new InvalidOperationException("τ is held; evaluate the structure alone.");
+        RefuseSampledRate();
         double structure = LogStructurePrior(fit);
         double prior = double.IsNegativeInfinity(structure) ? structure : structure + LogTauDensity(logTau);
         return new BassEvaluation(this, fit, Math.Exp(logTau), prior, Refusal(fit));
     }
 
-    /// <summary>A state with τ held: <paramref name="fit"/> at the held τ.</summary>
+    /// <summary>A state with τ held: <paramref name="fit"/> at the held τ. Under a hierarchical σ² prior the rate is part of the state,
+    /// so evaluate that.</summary>
     public BassEvaluation Evaluate(BassStructureFit fit)
     {
         double tau = HeldTau ?? throw new InvalidOperationException("τ is sampled; evaluate the structure with it.");
+        RefuseSampledRate();
         return new BassEvaluation(this, fit, tau, LogStructurePrior(fit), Refusal(fit));
     }
 
-    /// <summary>A chain's state: its structure's fit with its τ when sampled, or with the held one.</summary>
+    /// <summary>A chain's state: its structure's fit with its τ when sampled, or with the held one, and its rate under a hierarchical
+    /// σ² prior.</summary>
     public BassEvaluation Evaluate(BassState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        return SamplesTau ? Evaluate(state.Fit, state.LogTau) : Evaluate(state.Fit);
+        if (Sigma2Rate is not { } rate) return SamplesTau ? Evaluate(state.Fit, state.LogTau) : Evaluate(state.Fit);
+        BassStructureFit fit = state.Fit;
+        double prior = LogStructurePrior(fit);
+        if (!double.IsNegativeInfinity(prior) && SamplesTau) prior += LogTauDensity(state.LogTau);
+        if (!double.IsNegativeInfinity(prior)) prior += rate.LogDensity(state.LogRate);
+        if (!double.IsNegativeInfinity(prior) && GivenSigma2 is double given) prior += rate.LogConditional(given, state.LogRate);
+        return new BassEvaluation(this, fit, SamplesTau ? Math.Exp(state.LogTau) : HeldTau!.Value, prior, Refusal(fit), state.LogRate);
+    }
+
+    private void RefuseSampledRate()
+    {
+        if (Sigma2Rate is not null) throw new InvalidOperationException("σ²'s rate is sampled; evaluate the state, which holds it.");
     }
 
     ITargetEvaluation ISamplingTarget<BassState>.Evaluate(BassState state) => Evaluate(state);
@@ -275,11 +321,13 @@ public sealed class BassTarget : ISamplingTarget<BassState>
 public sealed class BassEvaluation : ITargetEvaluation
 {
     private readonly BassTarget _target;
+    private readonly double _logRate;   // σ²'s rate under a hierarchical prior
     private double? _untempered;
 
-    internal BassEvaluation(BassTarget target, BassStructureFit fit, double tau, double logPrior, BassRefusal? refusal)
+    internal BassEvaluation(BassTarget target, BassStructureFit fit, double tau, double logPrior, BassRefusal? refusal, double logRate = double.NaN)
     {
         _target = target;
+        _logRate = logRate;
         Fit = fit;
         Tau = tau;
         LogPrior = logPrior;
@@ -304,7 +352,10 @@ public sealed class BassEvaluation : ITargetEvaluation
     /// <summary>ln p₁(y | structure, τ), the untempered collapsed marginal; −∞ off the support.</summary>
     public double LogMarginal => _untempered ??= OffSupport
         ? double.NegativeInfinity
-        : _target.LogValue(_target.Marginal(Fit, Tau));
+        : _target.LogValue(_target.Marginal(Fit, Tau), Sigma2);
+
+    /// <summary>σ²'s prior at this state (<see cref="BassTarget.Sigma2At"/>); the rate's mean's, off the support.</summary>
+    public InverseGamma? Sigma2 => _target.Sigma2Rate is { } rate && !OffSupport ? rate.PriorAt(_logRate) : _target.Sigma2;
 
     /// <summary>The g-prior block's marginal at <paramref name="inverseTemperature"/>, for σ²'s posterior.</summary>
     public GPriorMarginal Marginal(double inverseTemperature = 1.0) => _target.Marginal(Fit, Tau, inverseTemperature);
@@ -315,7 +366,7 @@ public sealed class BassEvaluation : ITargetEvaluation
         double b = Check(inverseTemperature);
         if (OffSupport) return double.NegativeInfinity;
         if (_target.Form == TemperedForm.Linear) return b * LogMarginal;
-        return b == 1.0 ? LogMarginal : _target.LogValue(_target.Marginal(Fit, Tau, b));
+        return b == 1.0 ? LogMarginal : _target.LogValue(_target.Marginal(Fit, Tau, b), Sigma2);
     }
 
     /// <inheritdoc/>
@@ -325,7 +376,7 @@ public sealed class BassEvaluation : ITargetEvaluation
         if (OffSupport) throw new InvalidOperationException($"The state lies off the support ({Refusal?.ToString() ?? "τ"}); it has no likelihood.");
         return _target.Form == TemperedForm.Linear
             ? LogMarginal
-            : _target.LogSlope(_target.Marginal(Fit, Tau, b));
+            : _target.LogSlope(_target.Marginal(Fit, Tau, b), Sigma2);
     }
 
     private double Check(double b)

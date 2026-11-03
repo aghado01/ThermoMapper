@@ -134,7 +134,8 @@ public sealed class BassPriorSampler : IReferenceSampler<BassState>
                 Refusals.Add(refusal);
                 continue;
             }
-            var state = new BassState([.. _design.Terms], BassStructureFit.Of(_design, logTermPrior), DrawLogTau(rng));
+            double logTau = DrawLogTau(rng);
+            var state = new BassState([.. _design.Terms], BassStructureFit.Of(_design, logTermPrior), logTau, target.Sigma2Rate?.SampleLogRate(rng) ?? double.NaN);
             BassEvaluation evaluation = target.Evaluate(state);
             if (evaluation.Refusal is { } exact)
             {

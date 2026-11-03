@@ -56,6 +56,7 @@ public sealed class WeightedNormalModel : IObservationModel
         Centre = centre;
         Form = form;
         if (sigma2Prior is { IsHeld: true }) throw new ArgumentException("BARS integrates σ²; it has no form given σ².", nameof(sigma2Prior));
+        if (sigma2Prior is { IsHierarchical: true }) throw new ArgumentException("BARS has no block for σ²'s rate.", nameof(sigma2Prior));
         Sigma2Prior = sigma2Prior ?? Sigma2Prior.ScaledToResponse();
     }
 

@@ -62,7 +62,7 @@ public sealed class BassCoefficientPriorTests
         BassTarget target = model.Target;
         var moves = new BassStructureMoves(model, TwoTerms, Math.Log(target.Scale.UnitInformation));
         var chain = new ReversibleJumpChain<BassState>([new Stay()], target, moves.Start, new Xoshiro256PlusPlus(7));
-        var scan = new BlockScan<ReversibleJumpChain<BassState>>([new BassTauBlock(target)], chain, new Xoshiro256PlusPlus(8), c => c);
+        var scan = new BlockScan<ReversibleJumpChain<BassState>>([new BassTauBlock()], chain, new Xoshiro256PlusPlus(8), c => c);
         const int sweeps = 60_000;
         for (int i = 0; i < 1_000; i++) scan.Step();
         double[] u = [.. Enumerable.Range(0, sweeps).Select(_ => scan.Step().Current.LogTau)];

@@ -837,7 +837,7 @@ public sealed class BassFriedmanReferenceTests
     /// </summary>
     private sealed class Kernel(Bridge bridge, Func<IReadOnlyList<BassTerm>, string>? basin = null) : ISmcKernel<RefParticle>
     {
-        private readonly BassTauBlock? _tau = bridge.Model.Target.SamplesTau ? new BassTauBlock(bridge) : null;
+        private readonly BassTauBlock? _tau = bridge.Model.Target.SamplesTau ? new BassTauBlock() : null;
         private readonly Lock _gate = new();
 
         public BassSmcAccount Account { get; } = new(bridge.Model.Prior);

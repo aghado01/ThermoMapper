@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Maths.Distributions;
 using Maths.LinAlg;
 using Maths.Regression.GPrior;
 using Maths.Samplers;
@@ -32,6 +33,145 @@ public enum WeightedPriorGram
     /// hold on the weighted statistics, at O(1) per (τ, b), and integer replication weights are duplicated rows. A latent scale's
     /// conditional gains |Z_cᵀWZ_c|^½, since the prior moves with W.</summary>
     Weighted,
+
+    /// <summary>The columns under a frozen W₀ (<see cref="BassPriorReference.GramWeights"/>), the information at a fixed point, free of
+    /// the moving W: τZ_c₀ᵀW₀Z_c₀ with the columns centred under W₀, and the ridge's D from them. W₀ reads in information per
+    /// observation: under the g-form W₀ = (1/κ)·1 is <see cref="BassPriorReference.CoefficientConstant"/> κ on the unweighted columns.
+    /// At a decomposition per structure, as <see cref="Unweighted"/>'s.</summary>
+    Frozen,
+}
+
+/// <summary>
+/// What the priors read of the response, frozen apart from it, for a working response that moves (y − β√w·v, the latent z of a
+/// probit, y − ρf_lo). A moving working response is not data: a prior that re-reads it is conditioned on parameters, with
+/// conditionals that share no joint. So the observation model states here what the priors read, from the observed response, and the
+/// target stays one target whatever moves later. What it leaves null the config must not read. The model names the rule, since the
+/// read has to mean something for its noise:
+/// <list type="bullet">
+/// <item><see cref="Moments(ReadOnlySpan{double}, double)"/>: the mean and the mean square about it, D03's read.</item>
+/// <item><see cref="About"/>: the mean square about a stated level, as the zero centre reads 0.</item>
+/// <item><see cref="Robust"/>: the median and MAD², for heavy tails.</item>
+/// <item><see cref="Quantile"/>: the sample q-quantile, for the asymmetric Laplace, whose f is the q-quantile.</item>
+/// <item><see cref="FrozenGram"/>: moments under a frozen W₀, with the prior's Gram on it.</item>
+/// <item><see cref="Link"/>: only the coefficient prior's constant, for a binary or count response, which has no location-scale
+/// group for a read to serve.</item>
+/// </list>
+/// Each read is equivariant under y → ky + m, so the frozen route keeps BASS's equivariance. It uses the data twice, so an evidence
+/// stays empirical-Bayes in what is read. The alternatives and their costs are in docs/Maths/BayesianRegression.md.
+/// </summary>
+public sealed class BassPriorReference
+{
+    private readonly double[]? _gramWeights;
+
+    /// <summary>A reference that states <paramref name="level"/>, <paramref name="meanSquare"/> (non-negative),
+    /// <paramref name="coefficientConstant"/> (positive) and <paramref name="gramWeights"/> (positive, one per observation; none leaves
+    /// the Gram to <see cref="WeightedPriorGram"/>'s other readings), each finite. The weights are copied.</summary>
+    public BassPriorReference(double? level = null, double? meanSquare = null, double coefficientConstant = 1.0, ReadOnlySpan<double> gramWeights = default)
+    {
+        if (level is double l && !double.IsFinite(l)) throw new ArgumentOutOfRangeException(nameof(level), "The level must be finite.");
+        if (meanSquare is double s && !(s >= 0.0 && double.IsFinite(s))) throw new ArgumentOutOfRangeException(nameof(meanSquare), "The mean square must be non-negative and finite.");
+        if (!(coefficientConstant > 0.0 && double.IsFinite(coefficientConstant))) throw new ArgumentOutOfRangeException(nameof(coefficientConstant), "The constant must be positive and finite.");
+        if (!gramWeights.IsEmpty)
+        {
+            _gramWeights = gramWeights.ToArray();
+            foreach (double w in _gramWeights)
+                if (!(w > 0.0 && double.IsFinite(w))) throw new ArgumentException("A frozen weight is positive and finite.", nameof(gramWeights));
+        }
+        Level = level;
+        MeanSquare = meanSquare;
+        CoefficientConstant = coefficientConstant;
+    }
+
+    /// <summary>The mean of <paramref name="values"/> and their mean square about it, D03's read.</summary>
+    public static BassPriorReference Moments(ReadOnlySpan<double> values, double coefficientConstant = 1.0)
+    {
+        double level = PairwiseSum.Of(values) / values.Length;
+        return About(values, level, coefficientConstant);
+    }
+
+    /// <summary>The mean square of <paramref name="values"/> about <paramref name="level"/>, stated, as the zero centre reads 0.</summary>
+    public static BassPriorReference About(ReadOnlySpan<double> values, double level, double coefficientConstant = 1.0)
+    {
+        var squares = new double[values.Length];
+        for (int i = 0; i < values.Length; i++) squares[i] = (values[i] - level) * (values[i] - level);
+        return new BassPriorReference(level, PairwiseSum.Of(squares) / values.Length, coefficientConstant);
+    }
+
+    /// <summary>
+    /// The median of <paramref name="values"/> and (MAD/Φ⁻¹(¾))², the normal-consistent scale, for heavy tails: an outlier a latent
+    /// scale discounts cannot move either. When over half the values tie, the MAD is 0 and says nothing of the spread, so the mean
+    /// square about the median stands in.
+    /// </summary>
+    public static BassPriorReference Robust(ReadOnlySpan<double> values, double coefficientConstant = 1.0)
+    {
+        double median = Middle(values.ToArray());
+        var deviations = new double[values.Length];
+        for (int i = 0; i < values.Length; i++) deviations[i] = Math.Abs(values[i] - median);
+        double scale = Middle(deviations) / Normal.StandardQuantile(0.75);
+        return scale > 0.0 ? new BassPriorReference(median, scale * scale, coefficientConstant) : About(values, median, coefficientConstant);
+    }
+
+    /// <summary>
+    /// The sample <paramref name="q"/>-quantile of <paramref name="values"/>, the ⌈qN⌉-th smallest, which minimizes the check loss, and
+    /// the squared mean check loss: the asymmetric Laplace's maximum-likelihood level and scale, whose f is the q-quantile and whose
+    /// ȳ is not its level.
+    /// </summary>
+    public static BassPriorReference Quantile(ReadOnlySpan<double> values, double q, double coefficientConstant = 1.0)
+    {
+        if (!(q > 0.0 && q < 1.0)) throw new ArgumentOutOfRangeException(nameof(q), "q lies in (0, 1).");
+        double[] sorted = values.ToArray();
+        Array.Sort(sorted);
+        double level = sorted[Math.Max((int)Math.Ceiling(q * sorted.Length) - 1, 0)];
+        var losses = new double[values.Length];
+        for (int i = 0; i < values.Length; i++)
+        {
+            double e = values[i] - level;
+            losses[i] = e < 0.0 ? (q - 1.0) * e : q * e;
+        }
+        double scale = PairwiseSum.Of(losses) / values.Length;
+        return new BassPriorReference(level, scale * scale, coefficientConstant);
+    }
+
+    /// <summary>The mean of <paramref name="values"/> under W₀ = <paramref name="gramWeights"/> and their mean square under W₀, with the
+    /// prior's Gram on W₀ (<see cref="WeightedPriorGram.Frozen"/>).</summary>
+    public static BassPriorReference FrozenGram(ReadOnlySpan<double> values, ReadOnlySpan<double> gramWeights, double coefficientConstant = 1.0)
+    {
+        if (gramWeights.Length != values.Length) throw new ArgumentException($"The frozen weights hold {gramWeights.Length} values for {values.Length} observations.", nameof(gramWeights));
+        double mass = PairwiseSum.Of(gramWeights), level = PairwiseSum.Dot(gramWeights, values) / mass;
+        var squares = new double[values.Length];
+        for (int i = 0; i < values.Length; i++) squares[i] = (values[i] - level) * (values[i] - level);
+        return new BassPriorReference(level, PairwiseSum.Dot(gramWeights, squares) / mass, coefficientConstant, gramWeights);
+    }
+
+    /// <summary>
+    /// Sabanés Bové and Held's (2011) constant alone, their c, κ = v(h(0))/h′(0)², from a link's response variance <paramref name="variance"/>
+    /// and slope <paramref name="slope"/> at 0: 4 for the logit, π/2 for the probit, π²/4 for the cauchit, 1 for the Poisson log. It
+    /// anchors the prior at an imaginary sample, so it reads no data.
+    /// </summary>
+    public static BassPriorReference Link(double variance, double slope) => new(coefficientConstant: variance / (slope * slope));
+
+    /// <summary>The level centring reads; null states none.</summary>
+    public double? Level { get; }
+
+    /// <summary>s², which the scaled and hierarchical σ² priors read and D03's refusal and the exact-fit floor gate on; null states none.</summary>
+    public double? MeanSquare { get; }
+
+    /// <summary>κ in the coefficient prior's covariance σ²κ(τG)⁻¹ (Sabanés Bové and Held 2011's c), whatever the form: the unit-information
+    /// prior for a noise whose information per observation is 1/κ. 1 is the Gaussian's.</summary>
+    public double CoefficientConstant { get; }
+
+    /// <summary>W₀, the prior's frozen Gram weights; empty when it holds none.</summary>
+    public ReadOnlySpan<double> GramWeights => _gramWeights;
+
+    /// <summary>W₀'s own array, not to be written; null when it holds none.</summary>
+    internal double[]? GramWeightArray => _gramWeights;
+
+    private static double Middle(double[] values)
+    {
+        Array.Sort(values);
+        int half = values.Length / 2;
+        return values.Length % 2 == 1 ? values[half] : 0.5 * (values[half - 1] + values[half]);
+    }
 }
 
 /// <summary>
@@ -42,7 +182,8 @@ public enum WeightedPriorGram
 /// variance-mean mixture (generalized-hyperbolic noise) hands y − β√w·v with weights 1/(w·v) at the current latent state,
 /// where a scale mixture hands weights alone.
 /// <para>The core fits the working response under its weights (<see cref="BassDesign"/>), read as <see cref="Meaning"/> says,
-/// with the coefficient prior on <see cref="PriorGram"/>'s columns. A Q other than the identity is carried by the contract and
+/// with the coefficient prior on <see cref="PriorGram"/>'s columns, and the priors read <see cref="Reference"/> when the model states
+/// one, the working response as it stands otherwise. A Q other than the identity is carried by the contract and
 /// refused by today's core, which holds the independent Gram: the centring under Q and the marginal's Σᵢ yᵢᵀQyᵢ and log|R|
 /// terms arrive with the extension that supplies them.</para>
 /// </summary>
@@ -54,19 +195,26 @@ public sealed class WorkingResponse
     /// <summary>The working response of <paramref name="response"/> less <paramref name="offset"/> (one value per
     /// observation, case by case and location by location; none is zero), with <paramref name="weights"/> (positive, one per
     /// observation; none is unit), read as <paramref name="meaning"/> says with the coefficient prior on
-    /// <paramref name="priorGram"/>'s columns, and <paramref name="output"/>, the inner product on the output index (none is the
-    /// identity; a direct functional response's only). The arrays are copied.</summary>
+    /// <paramref name="priorGram"/>'s columns, <paramref name="output"/>, the inner product on the output index (none is the
+    /// identity; a direct functional response's only), and <paramref name="reference"/>, what the priors read in place of this
+    /// working response (none reads it as it stands). <see cref="WeightedPriorGram.Frozen"/> takes its W₀ from the reference, and alone
+    /// does; with no weights of its own it reads unit weights. The arrays are copied.</summary>
     public WorkingResponse(BassResponse response, ReadOnlySpan<double> offset = default, ReadOnlySpan<double> weights = default,
                            IInnerProduct? output = null, WeightMeaning meaning = WeightMeaning.Precision,
-                           WeightedPriorGram priorGram = WeightedPriorGram.Unweighted)
+                           WeightedPriorGram priorGram = WeightedPriorGram.Unweighted, BassPriorReference? reference = null)
     {
         ArgumentNullException.ThrowIfNull(response);
         if (meaning is not (WeightMeaning.Precision or WeightMeaning.Replication)) throw new ArgumentOutOfRangeException(nameof(meaning));
-        if (priorGram is not (WeightedPriorGram.Unweighted or WeightedPriorGram.Weighted)) throw new ArgumentOutOfRangeException(nameof(priorGram));
+        if (priorGram is not (WeightedPriorGram.Unweighted or WeightedPriorGram.Weighted or WeightedPriorGram.Frozen)) throw new ArgumentOutOfRangeException(nameof(priorGram));
         int n = response.Observations;
+        if ((priorGram == WeightedPriorGram.Frozen) != reference?.GramWeightArray is not null)
+            throw new ArgumentException("The frozen Gram and the reference's W₀ come together.", nameof(priorGram));
+        if (reference?.GramWeightArray is { } frozen && frozen.Length != n)
+            throw new ArgumentException($"The reference's W₀ holds {frozen.Length} values for {n} observations.", nameof(reference));
         Response = response;
         Meaning = meaning;
         PriorGram = priorGram;
+        Reference = reference;
         Weighting = GPriorWeights.Unit(n);
         Output = output ?? IdentityInnerProduct.Instance;
         if (!Output.IsIdentity)
@@ -101,6 +249,11 @@ public sealed class WorkingResponse
             double mass = PairwiseSum.Of(_weights);
             Weighting = meaning == WeightMeaning.Replication ? new GPriorWeights(mass, mass, 0.0) : new GPriorWeights(n, mass, PairwiseSum.Of(logs));
         }
+        else if (priorGram == WeightedPriorGram.Frozen)
+        {
+            _weights = new double[n];
+            Array.Fill(_weights, 1.0);
+        }
     }
 
     /// <summary>The response the working response derives from.</summary>
@@ -121,14 +274,17 @@ public sealed class WorkingResponse
     /// <summary>What the weights state; unit weights state nothing.</summary>
     public WeightMeaning Meaning { get; }
 
-    /// <summary>Which columns the coefficient prior reads under weights; unit weights make them one.</summary>
+    /// <summary>Which columns the coefficient prior reads under weights; unit weights make the first two one.</summary>
     public WeightedPriorGram PriorGram { get; }
+
+    /// <summary>What the priors read in place of this working response; null reads it as it stands.</summary>
+    public BassPriorReference? Reference { get; }
 
     /// <summary>The count, the mass and Σ ln wᵢ the marginal reads beyond the weighted statistics.</summary>
     public GPriorWeights Weighting { get; }
 
     /// <summary>Whether a coefficient prior apart from the likelihood's Gram is needed: weights, with the prior free of them.</summary>
-    public bool PriorStandsApart => _weights is not null && PriorGram == WeightedPriorGram.Unweighted;
+    public bool PriorStandsApart => _weights is not null && PriorGram != WeightedPriorGram.Weighted;
 
     /// <summary>ȳ, the working response's mean under W over all N observations: Σwᵢyᵢ/Σwᵢ, the mean at unit weights.</summary>
     public double ResponseMean => _weights is null
@@ -210,7 +366,7 @@ public enum BassSweepSlot
     /// <summary>The per-observation latent scales.</summary>
     Latent,
 
-    /// <summary>σ² when it is not integrated out, and the skew.</summary>
+    /// <summary>σ² when it is not integrated out, the skew, and σ²'s rate under a hierarchical prior.</summary>
     Scale,
 }
 
@@ -223,16 +379,14 @@ public static class BassSweepSlots
         [BassSweepSlot.Structure, BassSweepSlot.Tau, BassSweepSlot.Coefficients, BassSweepSlot.Latent, BassSweepSlot.Scale];
 
     /// <summary>
-    /// The blocks of a sweep of <paramref name="model"/> from slot <paramref name="first"/> on, each block's target
-    /// <paramref name="target"/>: the structure's move step, τ's slice step when τ is sampled, then the observation model's
-    /// blocks for the slots after τ. A chain starts at the structure slot; a tempering replica or an SMC particle, whose moves
-    /// the engine runs itself, at τ's.
+    /// The blocks of a sweep of <paramref name="model"/> from slot <paramref name="first"/> on, each reading the chain's own target: the
+    /// structure's move step, τ's slice step when τ is sampled, then the observation model's blocks for the slots after τ, and last
+    /// in the scale slot σ²'s rate's step under a hierarchical prior, so it reads a σ² the model has just drawn. A chain starts at
+    /// the structure slot; a tempering replica or an SMC particle, whose moves the engine runs itself, at τ's.
     /// </summary>
-    public static List<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassModel model, ISamplingTarget<BassState> target,
-                                                                      BassSweepSlot first = BassSweepSlot.Structure)
+    public static List<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassModel model, BassSweepSlot first = BassSweepSlot.Structure)
     {
         ArgumentNullException.ThrowIfNull(model);
-        ArgumentNullException.ThrowIfNull(target);
         var blocks = new List<IBlock<ReversibleJumpChain<BassState>>>();
         foreach (BassSweepSlot slot in Order)
         {
@@ -243,7 +397,11 @@ public static class BassSweepSlots
                     blocks.Add(new MoveStep<BassState>());
                     break;
                 case BassSweepSlot.Tau:
-                    if (model.Target.SamplesTau) blocks.Add(new BassTauBlock(target));
+                    if (model.Target.SamplesTau) blocks.Add(new BassTauBlock());
+                    break;
+                case BassSweepSlot.Scale:
+                    blocks.AddRange(model.Observation.Blocks(slot));
+                    if (model.Target.Sigma2Rate is not null) blocks.Add(new BassSigma2RateBlock());
                     break;
                 default:
                     blocks.AddRange(model.Observation.Blocks(slot));

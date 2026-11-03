@@ -1,5 +1,7 @@
 using System;
 using System.Text.Json.Serialization;
+using Maths.Distributions;
+using Maths.Rng;
 
 namespace Maths.Regression.GPrior;
 
@@ -17,6 +19,10 @@ public enum Sigma2PriorKind
 
     /// <summary>σ² held at a declared value: a point mass, so the block's marginal is the one given σ².</summary>
     Held,
+
+    /// <summary>σ² | r ~ IG(a, r) with r ~ Gamma(h, rate h/(a·s²)), s² read as the scaled prior reads it; r a coordinate of the
+    /// chain's state.</summary>
+    Hierarchical,
 }
 
 /// <summary>
@@ -37,6 +43,11 @@ public enum Sigma2PriorKind
 /// <item><see cref="Held"/>: σ² held at a declared value, as probit's identification holds it at 1 or a known noise
 /// states it. BASS's structure step then reads the marginal given σ² (<see cref="GPriorMarginal.LogMarginalGiven"/>);
 /// BARS, which integrates σ², refuses it.</item>
+/// <item><see cref="Hierarchical"/>: σ² | r ~ IG(a, r) with the rate r ~ Gamma(h, rate h/(a·s²)), whose mean is the scaled prior's
+/// a·s² at every h, s² read as the scaled prior reads it. Proper and scale-free, with the family's two limits at its ends: h → ∞
+/// is the scaled prior, and h → 0 is p(σ²) ∝ 1/σ² for any a, since IG(a, r) mixed over 1/r gives it. a = h = ½ is σ ~ half-Cauchy(s)
+/// (<see cref="HalfCauchy"/>; Wand et al. 2011's two-block form). BASS's state carries r and a block in the sweep's scale slot moves
+/// it, the structure's marginal being given r as it is given τ; BARS, which has no such block, refuses it.</item>
 /// </list>
 /// A proper prior makes the marginal complete: defined at every b in [0, 1], where b = 0 gives exactly 0, finite for an
 /// exact fit, and absolute, so it is an evidence. The scaled prior's evidence depends on a and on s², as every proper
@@ -51,11 +62,13 @@ public sealed record Sigma2Prior
     /// <summary>
     /// The prior of kind <paramref name="kind"/>: <see cref="Sigma2PriorKind.Jeffreys"/> takes no parameter,
     /// <see cref="Sigma2PriorKind.ScaledToResponse"/> a shape, and <see cref="Sigma2PriorKind.InverseGamma"/> a shape and
-    /// a scale, and <see cref="Sigma2PriorKind.Held"/> a value, each positive and finite.
+    /// a scale, <see cref="Sigma2PriorKind.Held"/> a value, and <see cref="Sigma2PriorKind.Hierarchical"/> a shape and a hyper-shape,
+    /// each positive and finite.
     /// </summary>
-    public Sigma2Prior(Sigma2PriorKind kind, double? shape = null, double? scale = null, double? value = null)
+    public Sigma2Prior(Sigma2PriorKind kind, double? shape = null, double? scale = null, double? value = null, double? hyperShape = null)
     {
         if (kind != Sigma2PriorKind.Held && value is not null) throw new ArgumentException("Only the held prior takes a value.", nameof(value));
+        if (kind != Sigma2PriorKind.Hierarchical && hyperShape is not null) throw new ArgumentException("Only the hierarchical prior takes a hyper-shape.", nameof(hyperShape));
         switch (kind)
         {
             case Sigma2PriorKind.Jeffreys:
@@ -75,6 +88,13 @@ public sealed record Sigma2Prior
                 if (value is not (> 0.0 and < double.PositiveInfinity))
                     throw new ArgumentOutOfRangeException(nameof(value), "The held σ² must be positive and finite.");
                 break;
+            case Sigma2PriorKind.Hierarchical:
+                if (shape is not (> 0.0 and < double.PositiveInfinity))
+                    throw new ArgumentOutOfRangeException(nameof(shape), "The shape must be positive and finite.");
+                if (hyperShape is not (> 0.0 and < double.PositiveInfinity))
+                    throw new ArgumentOutOfRangeException(nameof(hyperShape), "The hyper-shape must be positive and finite.");
+                if (scale is not null) throw new ArgumentException("The hierarchical prior reads its scale from the response.", nameof(scale));
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind));
         }
@@ -82,6 +102,7 @@ public sealed record Sigma2Prior
         Shape = shape;
         Scale = scale;
         Value = value;
+        HyperShape = hyperShape;
     }
 
     /// <summary>The improper p(σ²) ∝ 1/σ².</summary>
@@ -96,6 +117,12 @@ public sealed record Sigma2Prior
     /// <summary>σ² held at <paramref name="value"/>.</summary>
     public static Sigma2Prior Held(double value) => new(Sigma2PriorKind.Held, value: value);
 
+    /// <summary>σ² | r ~ IG(<paramref name="shape"/>, r), r ~ Gamma(<paramref name="hyperShape"/>, rate h/(a·s²)).</summary>
+    public static Sigma2Prior Hierarchical(double shape, double hyperShape) => new(Sigma2PriorKind.Hierarchical, shape, hyperShape: hyperShape);
+
+    /// <summary>σ ~ half-Cauchy(s): the hierarchical prior at a = h = ½.</summary>
+    public static Sigma2Prior HalfCauchy() => Hierarchical(0.5, 0.5);
+
     /// <summary>Which prior this is.</summary>
     public Sigma2PriorKind Kind { get; }
 
@@ -109,6 +136,10 @@ public sealed record Sigma2Prior
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? Value { get; }
 
+    /// <summary>The rate's shape h; null otherwise, and left out of the serialized form then, as <see cref="Value"/> is.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? HyperShape { get; }
+
     /// <summary>Whether σ² is held; read from the kind, so not serialized.</summary>
     [JsonIgnore]
     public bool IsHeld => Kind == Sigma2PriorKind.Held;
@@ -117,23 +148,35 @@ public sealed record Sigma2Prior
     [JsonIgnore]
     public bool IsProper => Kind != Sigma2PriorKind.Jeffreys;
 
+    /// <summary>Whether the state carries σ²'s rate; read from the kind, so not serialized.</summary>
+    [JsonIgnore]
+    public bool IsHierarchical => Kind == Sigma2PriorKind.Hierarchical;
+
     /// <summary>
     /// The prior for a response whose mean square about the centre level is <paramref name="meanSquare"/>: null for
     /// <see cref="Jeffreys"/>, the fixed IG, or IG(a, a·s²). The scaled prior has none for a response with no spread
     /// (s² = 0), which has no posterior for σ either; it returns null there and the caller refuses the response. A held σ²
-    /// has no inverse gamma either: null, with <see cref="Value"/> for its caller.
+    /// has no inverse gamma either: null, with <see cref="Value"/> for its caller. A hierarchical prior's is the inverse gamma at
+    /// its rate's mean, which <see cref="RateFor"/> stands behind.
     /// </summary>
     public Distributions.InverseGamma? For(double meanSquare) => (Kind, Shape, Scale) switch
     {
         (Sigma2PriorKind.InverseGamma, { } a, { } b) => Distributions.InverseGamma.ShapeScale(a, b),
-        (Sigma2PriorKind.ScaledToResponse, { } a, _) when meanSquare > 0.0 && double.IsFinite(meanSquare)
+        (Sigma2PriorKind.ScaledToResponse or Sigma2PriorKind.Hierarchical, { } a, _) when meanSquare > 0.0 && double.IsFinite(meanSquare)
             => Distributions.InverseGamma.ShapeScale(a, a * meanSquare),
         _ => null,
     };
 
+    /// <summary>The hierarchical prior's rate on the mean square <paramref name="meanSquare"/>; null for every other kind, and
+    /// where <see cref="For"/> has none.</summary>
+    public ResolvedSigma2Rate? RateFor(double meanSquare)
+        => Kind == Sigma2PriorKind.Hierarchical && meanSquare > 0.0 && double.IsFinite(meanSquare)
+            ? new ResolvedSigma2Rate(Shape!.Value, HyperShape!.Value, meanSquare)
+            : null;
+
     /// <summary>Whether <see cref="For"/> reads the response's mean square; read from the kind, so not serialized.</summary>
     [JsonIgnore]
-    public bool ReadsResponse => Kind == Sigma2PriorKind.ScaledToResponse;
+    public bool ReadsResponse => Kind is Sigma2PriorKind.ScaledToResponse or Sigma2PriorKind.Hierarchical;
 
     /// <summary>The spelling BARS's checkpoint fingerprint reads.</summary>
     public override string ToString() => Kind switch
@@ -141,6 +184,72 @@ public sealed record Sigma2Prior
         Sigma2PriorKind.Jeffreys => "Jeffreys",
         Sigma2PriorKind.ScaledToResponse => FormattableString.Invariant($"ScaledToResponse({Shape:R})"),
         Sigma2PriorKind.Held => FormattableString.Invariant($"Held({Value:R})"),
+        Sigma2PriorKind.Hierarchical => FormattableString.Invariant($"Hierarchical({Shape:R}, {HyperShape:R})"),
         _ => FormattableString.Invariant($"InverseGamma({Shape:R}, {Scale:R})"),
     };
+}
+
+/// <summary>
+/// A hierarchical σ² prior's rate on its mean square s² (<see cref="Sigma2Prior.RateFor"/>): r ~ Gamma(h, rate h/(a·s²)), with
+/// the density of v = ln r its Jacobian included, its exact draw and the inverse gamma it makes of σ²'s prior, the three that the
+/// rate's block, the reference rung and SMC's start read. The density is the one the block's slice step reads on v, so the step
+/// adds no Jacobian of its own, as <see cref="ResolvedTauPrior"/>'s is for τ.
+/// </summary>
+public sealed record ResolvedSigma2Rate
+{
+    private readonly double _logConstant;    // h ln(rate) − ln Γ(h)
+    private readonly double _logGammaShape;  // ln Γ(a)
+
+    internal ResolvedSigma2Rate(double shape, double hyperShape, double meanSquare)
+    {
+        Shape = shape;
+        Centre = shape * meanSquare;
+        Hyper = Gamma.ShapeRate(hyperShape, hyperShape / Centre);
+        _logConstant = hyperShape * Math.Log(Hyper.Rate) - SpecialFunctions.LogGamma(hyperShape);
+        _logGammaShape = SpecialFunctions.LogGamma(shape);
+    }
+
+    /// <summary>a, the inverse gamma's shape.</summary>
+    public double Shape { get; }
+
+    /// <summary>r's prior.</summary>
+    public Gamma Hyper { get; }
+
+    /// <summary>r's mean, a·s²: the scaled prior's rate, and where a chain starts unless it is told otherwise.</summary>
+    public double Centre { get; }
+
+    /// <summary>v = ln of <see cref="Centre"/>.</summary>
+    public double CentreLogRate => Math.Log(Centre);
+
+    /// <summary>
+    /// The log density of v = ln r: h ln(rate) − ln Γ(h) + h·v − rate·eᵛ. Where r leaves the doubles, rounding to 0 or overflowing,
+    /// it is outside the support: −∞, as for τ.
+    /// </summary>
+    public double LogDensity(double logRate)
+    {
+        if (double.IsNaN(logRate)) throw new ArgumentOutOfRangeException(nameof(logRate));
+        double r = Math.Exp(logRate), scaled = Hyper.Rate * r;
+        return r > 0.0 && double.IsFinite(scaled) ? _logConstant + Hyper.Shape * logRate - scaled : double.NegativeInfinity;
+    }
+
+    /// <summary>σ²'s prior at v, IG(a, eᵛ).</summary>
+    public InverseGamma PriorAt(double logRate) => InverseGamma.ShapeScale(Shape, Math.Exp(logRate));
+
+    /// <summary>ln IG(<paramref name="sigma2"/>; a, eᵛ), which the state's prior carries when the structure's marginal is given σ²,
+    /// so the rate's conditional still reads σ².</summary>
+    public double LogConditional(double sigma2, double logRate)
+        => Shape * logRate - _logGammaShape - (Shape + 1.0) * Math.Log(sigma2) - Math.Exp(logRate) / sigma2;
+
+    /// <summary>An exact draw of v; a draw whose r leaves the doubles is drawn again.</summary>
+    public double SampleLogRate(Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        double v;
+        do v = Math.Log(Hyper.Sample(rng));
+        while (double.IsNegativeInfinity(LogDensity(v)));
+        return v;
+    }
+
+    /// <summary>The spelling a manifest or a log reads.</summary>
+    public override string ToString() => FormattableString.Invariant($"IG({Shape:R}, r), r ~ Gamma({Hyper.Shape:R}, rate {Hyper.Rate:R})");
 }
