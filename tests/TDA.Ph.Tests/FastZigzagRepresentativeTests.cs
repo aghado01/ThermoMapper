@@ -347,7 +347,7 @@ public sealed class FastZigzagRepresentativeTests
 
     // Simplices through tetrahedra over a few vertices, each with one cell id across re-entries. Each step adds a cell whose
     // faces are present or deletes one with no coface present, so cells leave and return. Half the trials tear down to empty.
-    static ZigzagFiltration RandomChurn(Random rng, int steps)
+    internal static ZigzagFiltration RandomChurn(Random rng, int steps)
     {
         int n = rng.Next(4, 7);
         var cells = new List<int[]>();

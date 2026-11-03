@@ -12,7 +12,7 @@ namespace TDA.Ph;
 /// correspondence. Validated against the <see cref="ZigzagBarcodeNaive"/> oracle.
 /// <para>With representatives, each bar's <see cref="Bar.Cycle"/> is a cycle of the complex at the bar's first level,
 /// as global cell ids, whose class there is the bar's own. A later level may have lost its cells: this names the class
-/// where it begins, not the compatible cycles along the bar that Dey, Hou and Morozov (arXiv:2410.20565) compute.</para>
+/// where it begins. <see cref="ComputeCycles"/> gives the compatible cycle at every level.</para>
 /// </summary>
 public static class FastZigzag
 {
@@ -27,10 +27,20 @@ public static class FastZigzag
         public CellEvent(int index, EventKind kind, int dim, int incarnation) { Index = index; Kind = kind; Dim = dim; Incarnation = incarnation; }
     }
 
-    public static Barcode Compute(ZigzagFiltration f, int maxDimension = int.MaxValue, bool representatives = false)
+    public static Barcode Compute(ZigzagFiltration f, int maxDimension = int.MaxValue, bool representatives = false) =>
+        Run(f, maxDimension, representatives, keepChains: false).Barcode;
+
+    /// <summary>The barcode with each bar's compatible cycle at every level it covers. It keeps the coned run's <c>V</c>, which
+    /// took up to about twice the allocations of <see cref="Compute"/> with representatives, rising with size; figures in
+    /// <c>docs/TDA/ZigzagPersistence.md</c>.</summary>
+    public static ZigzagCycles ComputeCycles(ZigzagFiltration f, int maxDimension = int.MaxValue) =>
+        Run(f, maxDimension, representatives: true, keepChains: true);
+
+    static ZigzagCycles Run(ZigzagFiltration f, int maxDimension, bool representatives, bool keepChains)
     {
         int numSteps = f.Count;
-        if (numSteps == 0) return new Barcode(Array.Empty<Bar>(), "FastZigzag");
+        if (numSteps == 0)
+            return new ZigzagCycles(new Barcode(Array.Empty<Bar>(), "FastZigzag"), Array.Empty<int[]>(), Array.Empty<int>(), Array.Empty<int>(), Array.Empty<int>(), new());
 
         // ---- Replay F into per-INCARNATION accounting. Each insertion of a cell is a distinct
         // incarnation: a cell deleted and re-added gets two lifetimes, and the coned filtration must see them
@@ -125,10 +135,14 @@ public static class FastZigzag
         // ---- Standard persistence on Ê (cones raise dimension by one) ----
         var eHat = new CellFiltration(cells, "FastZigzag-coned");
         int stdMax = maxDimension == int.MaxValue ? int.MaxValue : maxDimension + 1;
-        Barcode std = PersistentHomology.Compute(eHat, stdMax, representatives);
+        SortedSet<int>?[]? chains = null;
+        Barcode std = keepChains
+            ? PersistentHomology.ComputeWithChains(eHat, stdMax, representatives, out chains)
+            : PersistentHomology.Compute(eHat, stdMax, representatives);
 
         // ---- Map finite pairs back via creator/destroyer ----
         var bars = new List<Bar>();
+        var chainsByBirthStep = new Dictionary<int, (bool, int[], int[])>();
         foreach (var bar in std.Bars)
         {
             if (bar.IsInfinite) continue;
@@ -173,8 +187,21 @@ public static class FastZigzag
                 oc.CopyTo(cyc);
             }
             bars.Add(new Bar(birth, death, dim, null, null, cyc, bEnd, dEnd));
+
+            if (chains is not null)
+            {
+                var added = new List<int>();
+                var coned = new List<int>();
+                foreach (int c in chains[(int)bar.Death]!)
+                {
+                    CellEvent e = cellEvent[c]!.Value;
+                    (e.Kind == EventKind.Add ? added : coned).Add(e.Incarnation);
+                }
+
+                chainsByBirthStep[lo.Index] = (lo.Kind == EventKind.Add, added.ToArray(), coned.ToArray());
+            }
         }
 
-        return new Barcode(bars, "FastZigzag");
+        return new ZigzagCycles(new Barcode(bars, "FastZigzag"), bndI, addStepI, delStepI, origCellI, chainsByBirthStep);
     }
 }

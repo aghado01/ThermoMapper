@@ -13,7 +13,22 @@ public static class PersistentHomology
     public static Barcode Compute(SimplicialFiltration filtration, int maxDimension = int.MaxValue, bool representatives = false) =>
         Compute((IFiltration)filtration, maxDimension, representatives);
 
-    public static Barcode Compute(IFiltration filtration, int maxDimension = int.MaxValue, bool representatives = false)
+    public static Barcode Compute(IFiltration filtration, int maxDimension = int.MaxValue, bool representatives = false) =>
+        Reduce(filtration, maxDimension, representatives, null);
+
+    /// <summary>
+    /// <see cref="Compute(IFiltration, int, bool)"/>, also keeping <c>V</c>: for each column that pairs, the chain whose
+    /// boundary is its reduced column, indexed by that column. Other columns stay null.
+    /// </summary>
+    internal static Barcode ComputeWithChains(IFiltration filtration, int maxDimension, bool representatives, out SortedSet<int>?[] chains)
+    {
+        ArgumentNullException.ThrowIfNull(filtration);
+
+        chains = new SortedSet<int>?[filtration.Count];
+        return Reduce(filtration, maxDimension, representatives, chains);
+    }
+
+    static Barcode Reduce(IFiltration filtration, int maxDimension, bool representatives, SortedSet<int>?[]? chains)
     {
         ArgumentNullException.ThrowIfNull(filtration);
 
@@ -26,17 +41,28 @@ public static class PersistentHomology
         for (int j = 0; j < n; j++)
         {
             var col = new SortedSet<int>(filtration.GetBoundaryIndices(j));
+            SortedSet<int>? chain = chains is null ? null : new SortedSet<int> { j };
 
             while (col.Count > 0 && pivotCol.TryGetValue(col.Max, out int i))
+            {
                 foreach (int r in reducedCols[i])
                 {
                     if (!col.Remove(r)) col.Add(r);
                 }
 
+                if (chain is not null)
+                    foreach (int r in chains![i]!)
+                    {
+                        if (!chain.Remove(r)) chain.Add(r);
+                    }
+            }
+
             reducedCols[j] = col;
 
             if (col.Count > 0)
             {
+                if (chains is not null) chains[j] = chain;
+
                 int pivot = col.Max;
                 pivotCol[pivot] = j;
                 paired[pivot] = true;

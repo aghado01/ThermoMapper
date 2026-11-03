@@ -98,8 +98,28 @@ public sealed class GraphFrameFiltration
 
     /// <summary>The vertices of a cell id in <see cref="Filtration"/>, so a bar's <see cref="Bar.Cycle"/> reads in frame
     /// terms: a vertex's own id, an edge's two, a triangle's three. That cycle belongs to the step complex where the bar
-    /// begins, which can still hold cells that leave before the bar's first frame.</summary>
+    /// begins, which can still hold cells that leave before the bar's first frame; <see cref="CycleAtFrame"/> does not.</summary>
     public IReadOnlyList<int> VerticesOf(int cellId) => _cellVertices[cellId];
+
+    /// <summary>The level of <see cref="Filtration"/> that holds a frame's complex.</summary>
+    public int LevelOfFrame(int frame) => _frameLevels[frame];
+
+    /// <summary>The level of <see cref="Filtration"/> that holds the complex between two frames, where a
+    /// <see cref="TransientBar"/> lives.</summary>
+    public int LevelBetweenFrames(int afterFrame) => _betweenLevels[afterFrame];
+
+    /// <summary>
+    /// A bar's compatible cycle at a frame it covers, as cell ids, all of them cells of that frame's complex. Under a relative
+    /// reading the complex also holds <c>K₀</c>'s cone; <see cref="RelativeCycleAtFrame"/> leaves that out.
+    /// </summary>
+    public int[] CycleAtFrame(ZigzagCycles cycles, in Bar bar, int frame)
+    {
+        ArgumentNullException.ThrowIfNull(cycles);
+        return cycles.CycleAt(bar, LevelOfFrame(frame));
+    }
+
+    /// <summary>A relative reading's bar at a frame it covers, as a relative cycle: its boundary lies in <c>K₀</c>.</summary>
+    public int[] RelativeCycleAtFrame(ZigzagCycles cycles, in Bar bar, int frame) => WithoutSubcomplex(CycleAtFrame(cycles, bar, frame));
 
     /// <summary>
     /// A relative reading's bar as a relative cycle: its <see cref="Bar.Cycle"/> without the cells of <c>K₀</c> and its
@@ -108,13 +128,19 @@ public sealed class GraphFrameFiltration
     /// </summary>
     public int[] RelativeCycle(in Bar bar)
     {
-        if (_subcomplexCells is null)
-            throw new InvalidOperationException("This filtration reads absolute frames.");
         if (bar.Cycle is null)
             throw new ArgumentException("The bar carries no cycle: ask the engine for representatives.", nameof(bar));
 
-        var chain = new List<int>(bar.Cycle.Length);
-        foreach (int cell in bar.Cycle)
+        return WithoutSubcomplex(bar.Cycle);
+    }
+
+    int[] WithoutSubcomplex(int[] cycle)
+    {
+        if (_subcomplexCells is null)
+            throw new InvalidOperationException("This filtration reads absolute frames.");
+
+        var chain = new List<int>(cycle.Length);
+        foreach (int cell in cycle)
             if (!_subcomplexCells.Contains(cell))
                 chain.Add(cell);
         return chain.ToArray();

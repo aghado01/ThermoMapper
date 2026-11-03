@@ -244,6 +244,69 @@ sealed class ZigzagModuleOracle
         return null;
     }
 
+    /// <summary>
+    /// Whether a sequence of cycles is a set of representatives of a bar, Dey and Hou's Definition 5: null if so, otherwise the
+    /// first thing it fails. At each level the cycle is a non-bounding cycle of the complex there whose class ends at the bar's
+    /// end; consecutive cycles are homologous in the larger complex; it begins as <see cref="CheckAtBirth"/> asks; and the step
+    /// after its last level ends it by the bar's kind of end.
+    /// </summary>
+    public string? CheckSequence(Bar bar, Func<int, BigInteger> cycleAt)
+    {
+        int first = (int)bar.Birth + 1;
+        int last = (int)bar.Death;
+
+        string? birth = CheckAtBirth(bar, cycleAt(first));
+        if (birth is not null) return $"at its first level {first}: {birth}";
+
+        for (int level = first; level <= last; level++)
+        {
+            BigInteger cycle = cycleAt(level);
+            for (int cell = 0; cell < (int)cycle.GetBitLength(); cell++)
+                if (HasCell(cycle, cell) && !Holds(level, cell))
+                    return $"cell {cell} is not a {_p}-cell of level {level}";
+
+            if (!BoundaryOf(level, cycle).IsZero) return $"it does not close at level {level}";
+            if (_b[level].Contains(cycle)) return $"it bounds at level {level}";
+
+            int end = EndOf(level, cycle);
+            if (end != last) return $"its class at level {level} ends at {end}, not {last}";
+
+            if (level == last) break;
+
+            int larger = _f[level].Direction == ZigzagDirection.Add ? level + 1 : level;
+            if (!_b[larger].Contains(cycle ^ cycleAt(level + 1)))
+                return $"levels {level} and {level + 1} are not homologous in level {larger}";
+        }
+
+        if (last == _f.Count) return null;
+
+        BigInteger final = cycleAt(last);
+        if (bar.DeathEnd == IntervalEnd.Open)
+        {
+            if (_f[last].Direction != ZigzagDirection.Add) return "an open death on a deletion";
+            if (!_b[last + 1].Contains(final)) return "the addition that ends it does not kill it";
+        }
+        else
+        {
+            if (_f[last].Direction != ZigzagDirection.Delete) return "a closed death on an addition";
+            if (_z[last + 1].Plus(_b[last]).Contains(final)) return "its class survives the deletion that ends it";
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether classes are a basis of homology at a level: null if so, otherwise how they fail.</summary>
+    public string? CheckBasis(int level, IReadOnlyList<BigInteger> cycles)
+    {
+        var span = new ChainSpan();
+        foreach (BigInteger boundary in _b[level].Basis) span.Add(boundary);
+        foreach (BigInteger cycle in cycles) span.Add(cycle);
+
+        if (span.Dimension != _b[level].Dimension + cycles.Count) return $"{cycles.Count} classes at level {level} are dependent";
+        if (span.Dimension != _z[level].Dimension) return $"{cycles.Count} classes do not span level {level}";
+        return null;
+    }
+
     List<(int Label, ChainSpan Space)> WalkLeft(int l)
     {
         var filtration = new List<(int, ChainSpan)> { (-1, _b[l]) };

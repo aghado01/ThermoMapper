@@ -31,6 +31,7 @@
     <Compile Include="ZigzagBarcodeNaiveTests.cs" Link="ZigzagBarcodeNaiveTests.cs" />
     <Compile Include="FastZigzagTests.cs" Link="FastZigzagTests.cs" />
     <Compile Include="FastZigzagRepresentativeTests.cs" Link="FastZigzagRepresentativeTests.cs" />
+    <Compile Include="ZigzagCyclesTests.cs" Link="ZigzagCyclesTests.cs" />
     <Compile Include="ZigzagModuleOracle.cs" Link="ZigzagModuleOracle.cs" />
     <Compile Include="StrongCollapseTests.cs" Link="StrongCollapseTests.cs" />
     <Compile Include="ZigzagMapBarcodeTests.cs" Link="ZigzagMapBarcodeTests.cs" />

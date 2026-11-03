@@ -142,7 +142,7 @@ public sealed class RelativeFiltration : IFiltration
     /// </list>
     /// <c>Relative</c> holds the same pairs as <see cref="ComputeBarcode"/>, each with the same
     /// <see cref="Bar.Generator"/>. This path gives no <see cref="Bar.Cycle"/>: a moved-up class's relative cycle is
-    /// the chain <c>V_j</c>, with <c>∂V_j</c> in <c>K₀</c>, and no engine keeps <c>V</c>. Ask
+    /// the chain <c>V_j</c>, with <c>∂V_j</c> in <c>K₀</c>, and the clearing engine keeps no <c>V</c>. Ask
     /// <see cref="ComputeBarcode"/> for representatives.
     /// <para><c>Absolute</c> is <c>K</c> with <c>K₀</c> at the base: its cells read at the ambient's smallest value.
     /// When they already sit there, as a backbone at ε₀ = 0 does, it is the ambient's own barcode.</para>

@@ -29,10 +29,9 @@ expectations regenerate with it); not worth a churn cycle on its own.
 
 None of these blocks anything. Context: `issues/ph/ph-loose-ends-brief.md`, its report.
 
-- **Compatible cycles along a zigzag bar.** `Bar.Cycle` names a bar's class where it begins. Under `Flag` the chain of a hole
-  that opens never fits its first frame, and a cycle can move before a bar ends. Dey, Hou and Morozov (arXiv:2410.20565)
-  compute the sequence; the coned run's V may give it directly (derived, unverified). Pick up when a consumer asks for the
-  cycle at a frame.
+- **Essential bars' cycles, from `V`.** `PersistentHomology` names no cycle on an essential bar, so `RelativeFiltration.ComputeBarcode` doesn't
+  either and a moved-up class has only its generator. The involuted engine gives H₂ and up the birth simplex alone, which isn't a cycle. An unpaired
+  column's `V` is its cycle, and `PersistentHomology.ComputeWithChains` already keeps `V` for paired columns. Pick up before anything reads those bars' cycles.
 - **The relative reading's timing on a quiet machine.** Today's ran at 80–100% load, so `ComputeBothReadings` against `ComputeBarcode` has a sign at
   42,000 triangles and no reliable size, and no sign at n≤200. Set `RELATIVE_READING_TIMING` to an output file and run `BothReadings_Timing` in Release,
   about 25 minutes under load at the default three passes. Pick up on a quiet machine, or if a caller wants both readings and the internal method's cost matters. `PersistentCohomology` now reads the quotient directly, which is a third route for the relative barcode alone; add it to the harness then.

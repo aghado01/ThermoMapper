@@ -384,10 +384,10 @@ public sealed class GraphFrameRelativeTests
 
     // ── helpers ─────────────────────────────────────────────────────────────────
 
-    sealed record GraphFrameRelativeCase(int N, GraphFrame[] Frames, GraphFrame K0);
+    internal sealed record GraphFrameRelativeCase(int N, GraphFrame[] Frames, GraphFrame K0);
 
     // Evolving frames with a K₀ forced into every one: a random subgraph of the first frame, its vertices kept throughout.
-    static GraphFrameRelativeCase RandomCase(int n, Random rng, int? frames = null, double pairFlip = 0.2)
+    internal static GraphFrameRelativeCase RandomCase(int n, Random rng, int? frames = null, double pairFlip = 0.2)
     {
         GraphFrame[] raw = GraphFrameZigzagTests.EvolvingFrames(n, frames ?? rng.Next(3, 6), rng, rng.Next(2) == 0 ? 0.0 : 0.1, pairFlip);
         var edges = new List<(int i, int j)>();
@@ -408,7 +408,7 @@ public sealed class GraphFrameRelativeTests
 
     // The ids of K₀'s cells, its cone's and the apex, found from the cells' vertices: the apex is vertex n, and K₀ under Flag
     // is the flag complex of its edges.
-    static HashSet<int> SubcomplexCells(GraphFrameFiltration built, GraphFrame k0, int n)
+    internal static HashSet<int> SubcomplexCells(GraphFrameFiltration built, GraphFrame k0, int n)
     {
         HashSet<(int, int)> edges = k0.Edges.Select(e => e.i < e.j ? (e.i, e.j) : (e.j, e.i)).ToHashSet();
         HashSet<int> vertices = k0.Vertices.ToHashSet();
