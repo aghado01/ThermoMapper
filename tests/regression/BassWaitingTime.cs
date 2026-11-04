@@ -546,6 +546,9 @@ internal sealed class PassageTally
     /// <summary>The brief's window: first entry's stay, and the trace before it.</summary>
     internal const int Window = 10_000;
 
+    /// <summary>The shortest stretch outside the start's basin that counts as a departure: one spurious term is gone in a few dozen sweeps.</summary>
+    internal const int DepartureLength = 1_000;
+
     public long Sweeps { get; set; }
     public int Segment { get; set; }
     public long? FirstEntry { get; set; }
@@ -569,11 +572,14 @@ internal sealed class PassageTally
     public double Seconds { get; set; }
     public double LogTau { get; set; } = double.NaN;
     public string Structure { get; set; } = "";
+    public long? Departure { get; set; }
+    public string EntryFrom { get; set; } = "";
+    public double EntryPi { get; set; } = double.NaN;
 
     internal static readonly string[] Header =
     [
         "part", "start", "arm", "rung", "chain", "sweeps", "status", "b", "segment", "first_entry", "stay_sweeps", "stay_seen", "first_exit", "exit_to", "exact_hit",
-        "best_pi", "best_dwell", "best_since", "best_key", "pre_sweeps", "in_start_pre", "top_pi", "top_dwell", "top_since_all", "top_since_basin", "top_key", "accepted", "seconds", "log_tau", "structure",
+        "best_pi", "best_dwell", "best_since", "best_key", "pre_sweeps", "in_start_pre", "top_pi", "top_dwell", "top_since_all", "top_since_basin", "top_key", "accepted", "seconds", "log_tau", "structure", "departure", "entry_from", "entry_pi",
     ];
 
     private static string L(long? v) => v is { } x ? BassPathProfile.I(x) : "";
@@ -584,7 +590,7 @@ internal sealed class PassageTally
     [
         spec.Part, spec.Start, spec.Arm, spec.Rung, BassPathProfile.I(spec.Chain), BassPathProfile.I(Sweeps), Crossed(spec) ? "crossed" : "open", BassPathProfile.F(spec.B), BassPathProfile.I(Segment),
         L(FirstEntry), L(StaySweeps), L(StaySeen), L(FirstExit), ExitTo, L(ExactHit), BassPathProfile.F(BestPi), L(BestDwell), L(BestSince), BestKey, L(PreSweeps), L(InStartPre), BassPathProfile.F(TopPi),
-        L(TopDwell), L(TopSinceAll), L(TopSinceBasin), TopKey, L(Accepted), Seconds.ToString("F1", CultureInfo.InvariantCulture), BassPathProfile.F(LogTau), Structure,
+        L(TopDwell), L(TopSinceAll), L(TopSinceBasin), TopKey, L(Accepted), Seconds.ToString("F1", CultureInfo.InvariantCulture), BassPathProfile.F(LogTau), Structure, L(Departure), EntryFrom, BassPathProfile.F(EntryPi),
     ];
 
     internal static PassageTally Parse(string[] r)
@@ -596,7 +602,7 @@ internal sealed class PassageTally
         {
             Sweeps = N(r[5]), Segment = (int)N(r[8]), FirstEntry = O(r[9]), StaySweeps = N(r[10]), StaySeen = N(r[11]), FirstExit = O(r[12]), ExitTo = r[13], ExactHit = O(r[14]),
             BestPi = D(r[15]), BestDwell = N(r[16]), BestSince = N(r[17]), BestKey = r[18], PreSweeps = N(r[19]), InStartPre = N(r[20]), TopPi = D(r[21]), TopDwell = N(r[22]), TopSinceAll = N(r[23]),
-            TopSinceBasin = N(r[24]), TopKey = r[25], Accepted = N(r[26]), Seconds = D(r[27]), LogTau = D(r[28]), Structure = r[29],
+            TopSinceBasin = N(r[24]), TopKey = r[25], Accepted = N(r[26]), Seconds = D(r[27]), LogTau = D(r[28]), Structure = r[29], Departure = O(r[30]), EntryFrom = r[31], EntryPi = r[32].Length == 0 ? double.NaN : D(r[32]),
         };
     }
 
@@ -620,6 +626,8 @@ internal sealed class PassageTally
         var ring = new Queue<(long Sweep, IReadOnlyList<BassTerm> Terms, double Pi)>();
 
         bool inStart = false, inTarget = false, onBest = false, onTop = false;
+        long outSince = Sweeps;
+        IReadOnlyList<BassTerm>? before = null;
         double PiOf(BassState state) => held ? chain.Moves.CurrentLogDensity : spec.Surface.Score(state.Fit, profile: false).Pi(PathReading.Held);
         void See(BassState state, bool first)
         {
@@ -627,7 +635,9 @@ internal sealed class PassageTally
             int m = terms.Count;
             for (int i = 0; i < m; i++) code[i] = BassWaitingTime.Mask(terms[i]);
             Array.Sort(code, 0, m);
+            bool wasIn = inStart;
             inStart = code.AsSpan(0, m).SequenceEqual(startCode);
+            if (wasIn && !inStart) outSince = Sweeps;
             bool inBasin = code.AsSpan(0, m).SequenceEqual(targetCode), isExact = inBasin && m == exact.Count && terms.All(exact.Contains);
             inTarget = spec.ToExact ? isExact : inBasin;
             double pi = PiOf(state);
@@ -645,6 +655,8 @@ internal sealed class PassageTally
             if (inTarget && FirstEntry is null && !first)
             {
                 FirstEntry = Sweeps;
+                EntryFrom = before is null ? "" : spec.Basin(before);
+                EntryPi = pi;
                 if (trace is not null) Emit(ring, trace, spec);
             }
             if (pi > BestPi + 1e-9)
@@ -669,12 +681,14 @@ internal sealed class PassageTally
             Sweeps++;
             if (!ReferenceEquals(state.Terms, last))
             {
+                before = last;
                 last = state.Terms;
                 Accepted++;
                 See(state, first: false);
             }
             if (FirstEntry is null)
             {
+                if (!inStart && Departure is null && Sweeps - outSince >= DepartureLength) Departure = outSince;
                 PreSweeps++;
                 if (inStart) InStartPre++;
                 TopSinceAll++;

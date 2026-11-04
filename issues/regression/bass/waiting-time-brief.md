@@ -128,4 +128,11 @@ Append under "Reports": the checks; each part's table; which outcome each rule r
 
 ## Added after registration
 
+Written 2026-11-04, after Parts 1 and 2 and Part 3's deep starts to 10⁷, and before any ladder chain or Part 5 chain ran. The rules above stand and are read as written. These add to them.
+
+- **A second "held start" beside the literal one.** The ladder's drop-out rule, read literally, would drop every rung, since first exit from the start's `Basin` comes within 34–317 sweeps at b = 1 for chains that cross near 10⁶: one spurious term is an exit, and it is gone a few dozen sweeps later. So the chains also record a *departure*, the start of the first stretch of at least 1,000 sweeps outside the start's basin. The report counts drop-outs both ways: by first exit, as written, and by departure, the same 1% against it.
+- **More chains on the deep starts (`3x`).** Twelve more per deep start, arm H, to 10⁸ or the budget. Four chains can never reach the 8 crossings the exponential check asks for, and they cost about 1.4 core-hours, since the deep starts turned out to cross. These rows are kept apart from the registered four.
+- **Each crossing's gateway.** Each chain from here on records the basin it entered the target from and π at entry, since the deep starts' traces show two doors into a1's basin that stay very differently.
+- **The basins' shares.** The flat-histogram rerun also records its largest basins' shares, since those traces lean on `3 × x1·x2 + 2 × x3 + x4 + x5`, which the path profile did not read.
+
 ## Reports

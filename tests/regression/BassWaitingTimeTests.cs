@@ -645,6 +645,19 @@ public sealed class BassWaitingTimeTests
             if (!book.Advance(specs, tens * 10 * Million, _out)) break;
     }
 
+    // Added after registration: twelve more chains on each deep start, for the exponential check, the departure and the gateway at b = 1.
+    [Fact]
+    public void Part3_MoreDeepChains()
+    {
+        if (!BassQualification.Enabled) return;
+        Quietly();
+        S10 s = Load();
+        var book = new PassageBook();
+        PassageSpec[] specs = [.. Deep.SelectMany(l => Enumerable.Range(0, 12).Select(c => Chain(s, "3x", l, "H", "-", c, 1.0, false)))];
+        foreach (long limit in new[] { Million, 10 * Million, 20 * Million, 30 * Million, 40 * Million, 50 * Million, 60 * Million, 70 * Million, 80 * Million, 90 * Million, 100 * Million })
+            if (!book.Advance(specs, limit, _out)) break;
+    }
+
     // ---- Part 4 ----
 
     [Fact]
@@ -757,7 +770,7 @@ public sealed class BassWaitingTimeTests
         S10 s = Load();
         PathCsv csv = Csv("flathistogram", FlatHeader, 1);
         string[] labels = [.. s.Modes.Keys.Where(k => k.Rank == "1").Select(k => k.Label)];
-        if (labels.All(l => csv.Has(l))) return;
+        if (labels.All(l => csv.Has(l)) && csv.Has("largest 1")) return;
         BassConfig config = BassFlatHistogramQualificationTests.ArmConfig(true, null, BassFlatHistogramQualificationTests.ArmOneSeed);
         BassFit fit = Bass.Fit(config, s.Fixture.Data);
         var draws = fit.Diagnostics.FlatHistogram!.Draws!;
@@ -783,6 +796,13 @@ public sealed class BassWaitingTimeTests
             double ratio = top.N > 0 ? Math.Log(basin.W) - Math.Log(top.W) : double.NaN;
             csv.Append(label, e.Basin, F.F(basin.W), F.F(stored), F.F(ratio), F.I(top.N), F.I(basin.N), F.F(e.PiHeld), F.F(e.PiHeld + ratio), "draws of the structure beside it: a single draw holds a factor of e or more");
             _out.WriteLine($"{label}: share {basin.W:P3}, {basin.N} draws; the structure {top.N} draws; ln(mass / π(top)) {ratio:F2}.");
+        }
+        int place = 0;
+        foreach ((string name, (double W, long N) held) in byBasin.OrderByDescending(b => b.Value.W).Take(12))
+        {
+            place++;
+            csv.Append($"largest {place}", name, F.F(held.W), "", "", "", F.I(held.N), "", "", "the run's largest basins by share");
+            _out.WriteLine($"{held.W:P3} | {held.N:N0} draws | {name}");
         }
     }
 }
