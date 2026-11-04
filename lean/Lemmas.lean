@@ -2,5 +2,6 @@
 import Lemmas.CumulativeField
 import Lemmas.IntervalDecomposition
 import Lemmas.PKWangAudit
+import Lemmas.RandomCluster
 import Lemmas.RelativeHomology
 import Lemmas.RelativePersistence

@@ -93,7 +93,9 @@ happened at a sliver.
 - **Proofs about bars reach lineages only through the tree.** `exists_intervalDecomposition` and `barcode_unique` cover
   the gated filtration, and no theorem covers the lineage's chains. The area identity below is the one exact link.
 - **Almost no raw stack is a filtration at this budget.** Anything stated for nested stacks needs monotone columns or a
-  restoration first. With `restoreNesting` off, `HierarchyEom` would abstain on all but one of these stacks.
+  restoration first. With `restoreNesting` off, `HierarchyEom` would abstain on all but one of these stacks. The columns
+  estimate a connection probability proved monotone (`connProb_mono`, `lean/Lemmas/RandomCluster.lean`), so at equilibrium
+  this non-nesting is estimation error and should shrink with budget. That shrinkage wasn't measured here.
 - **Nothing here argues for reading bars instead of lineages.** They differ mostly where the data is hardest, and the bars
   give up purity there.
 

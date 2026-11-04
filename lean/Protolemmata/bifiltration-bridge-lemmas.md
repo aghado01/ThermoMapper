@@ -11,23 +11,28 @@ Same methodology as [spc-pkwang-lemmas.md](../Archeion/PKWang-legacy-2026-08-09/
 (Lemma B took the closed-form bond probability as given and proved the algebra from there). Here we
 quarantine exactly two inputs and prove the plumbing around them.
 
-**Status (2026-11-04).** The spine compiles in [Bifiltration.lean](../Enthymemata/Bifiltration.lean),
-which is the current form. The block below is the draft it came from, and it does not compile as
-written. The compiled file differs in these ways:
+**Status (2026-11-04).** A1 is proved in [RandomCluster.lean](../Lemmas/RandomCluster.lean) with no
+added axioms, along with P1–P4. The rest compiles in [Bifiltration.lean](../Enthymemata/Bifiltration.lean)
+over A2. Those two files are the current form. The block below is the draft they came from, and it
+does not compile as written. The compiled files differ in these ways:
 
-- `pe` is `noncomputable`, `cutGraph` takes the `Std.Symm` and `Std.Irrefl` fields, and P3 names
+- `IsRandomCluster` is defined rather than opaque. The measure is `rcProb`, `randomCluster` shows the
+  hypothesis can be met, and `rcProb_one_edge` checks the definition against Grimmett's (3.3).
+- `pe` is `noncomputable`, the cut graphs take the `Std.Symm` and `Std.Irrefl` fields, and P3 names
   `SimpleGraph.Reachable.mono`.
-- Both axioms take `IsEdgeParameter` (symmetric, in `[0, 1)`), which is what the cited theorems
-  cover, so the theorems take symmetric `J` and `β₁ ≥ 0`.
+- The measure and A2 take `IsEdgeParameter` (symmetric, in `[0, 1)`), which is what Grimmett's
+  theorems cover, so the theorems take symmetric `J` and `β₁ ≥ 0`.
 - T1 has its threshold half, `cutGraph_mono`, and `cutGraph_reachable_mono`, the nesting of clusters.
-- T2 and T3 are not declared there. T2's type is not a proposition and T3's statement is `True`, so
+- `connCutGraph` is the same family for connection probability, which is what SPC's co-membership
+  columns estimate. It needs no axiom.
+- T2 and T3 are not declared. T2's type is not a proposition and T3's statement is `True`, so
   both wait for their codomains.
 
 ## What is axiom vs. obligation
 
 | # | Statement | Status | Source / strategy |
 |---|-----------|--------|-------------------|
-| A1 | `comparison_inequality` — coordinatewise `p₁ ≤ p₂` ⇒ `φ_{p₁,q} ≤_st φ_{p₂,q}` (q ≥ 1) | **AXIOM** | Grimmett **Thm 3.21** for one `p`, via **Thm 3.8** (positive assoc., *finite graphs*) → FKG lattice → **Thm 2.1** (Holley). **§11.4** says it stays valid with parameters per edge. `q ≥ 1` load-bearing: positive association fails in general for `q < 1` (see before the proof of Thm 3.8). |
+| A1 | `comparison_inequality` — coordinatewise `p₁ ≤ p₂` ⇒ `φ_{p₁,q} ≤_st φ_{p₂,q}` (q ≥ 1) | **proved** | Mathlib's `holley`, the lattice inequality per edge, and Grimmett's (3.11) by the modular law for subspaces. Grimmett **Thm 3.21** states it for one `p`, and **§11.4** says it stays valid per edge. `q ≥ 1` load-bearing: positive association fails in general for `q < 1` (see before the proof of Thm 3.8). |
 | A2 | `edwards_sokal_twopoint` — `⟨δ_{sᵢsⱼ}⟩ = 1/q + (1−1/q)·φ(i↔j)` | **AXIOM** | Grimmett **Thm 1.16** (Edwards–Sokal coupling); with parameters per edge, **(11.25)** in §11.4. |
 | P1 | `pe_mono_in_beta` — `1 − exp(−βJ)` ↑ in β (J ≥ 0) | **proved** | `Real.exp_le_exp`. |
 | P2 | `p_vector_mono` — coordinatewise p-monotonicity from P1 | **proved** | pointwise P1. |
@@ -38,8 +43,8 @@ written. The compiled file differs in these ways:
 | T2 | `flag_homology_monotone` — edge inclusion ⇒ induced `Hₖ` map | **OBLIGATION** | your flag-complex + homology layer (no Mathlib PH). |
 | T3 | `barcode_reparam_invariant` — monotone reparam ⇒ iso module | **OBLIGATION** | certifies the Cᵥ-warp is topologically free. |
 
-Two `sorry`s you *cite* (A1, A2). Two you *build* (T2, T3, in your own TDA layer). Everything
-between the physics and the topology is discharged.
+One axiom you *cite* (A2). Two you *build* (T2, T3, in your own TDA layer). Everything between the
+physics and the edge sets is discharged.
 
 ```lean
 /-
@@ -209,18 +214,17 @@ theorem barcode_reparam_invariant
 
 ## Notes for the proof pass
 
-- **The honest `sorry` count is 4**, and they are not equal in kind: **A1, A2 are citations**
-  (Grimmett 3.21 + §11.2 — formalizing the random-cluster measure, Holley, and FKG is its own
-  project; don't block on it). **T2, T3 are construction obligations** in your TDA layer, not
+- **The honest count is 3**, and they are not equal in kind: **A2 is a citation** (Grimmett Thm 1.16
+  and (11.25)). A1 was one too, and is now proved: Mathlib has Holley's inequality, so it did not
+  need a project of its own. **T2, T3 are construction obligations** in your TDA layer, not
   Mathlib gaps — they wait on `FlagComplex`/`PersistentHomology` getting Lean definitions.
-  The physics→edge-set spine (P1–P5, T1) is **fully discharged**.
+  The physics→edge-set spine (P1–P5, T1) is **fully discharged** given A2.
 - **The inhomogeneous-comparison check** lives inside A1: `comparison_inequality` is stated for
   a *vector* `p : V → V → ℝ`, which is the version SPC needs (heterogeneous curved-metric
   couplings). Checked 2026-11-04: Grimmett 3.8 and 3.21 are written for one `p`, and §11.4 says the
   comparison inequalities stay valid with parameters per edge, there on a finite box of a lattice.
-  The proofs need neither homogeneity nor the lattice: in (3.10)–(3.11) only `k` is not modular, and
-  `p` enters through a product over edges, which stays modular per edge. That last step is a reading
-  of the proof, not stated in the book.
+  `comparison_inequality` now proves it on any finite graph with parameters per edge, so the citation
+  is no longer needed.
 - **`hmono` is the whole point.** Once `spin_agreement_mono` (P5) is green, the noisy-estimate
   monotonization (isotonic / monotone-BARS) is justified *not* as a hack but as recovering the
   property this file proves the estimand has — structure from outside the estimator
