@@ -136,6 +136,8 @@ public static class SpcCommand
 
             ISweepStrategy sweepStrategy = BuildSweepStrategy(options, checkpointDirectory, temperatures);
             Console.WriteLine($"Sweep strategy     : {sweepStrategy.GetType().Name} (temperatures: {temperaturesResolved})");
+            if (SpanClusterSizeWarning(options) is string spanWarning)
+                Console.WriteLine($"Warning            : {spanWarning}");
 
             var result = SpcUserSession.Run(
                 dataset,
@@ -250,15 +252,17 @@ public static class SpcCommand
     /// <summary>
     /// Resolve the temperature grid: an explicit spec, or the auto bracket the graph's own
     /// construction declares (<see cref="SpcScheduleHelpers.AutoBracket"/>, the one function the library's
-    /// <see cref="AutoGridFixedSweep"/> calls too). <c>Basis</c> names the estimator for the run manifest.
+    /// <see cref="AutoGridFixedSweep"/> calls too), or the bracket spanning the graph
+    /// (<see cref="SpcScheduleHelpers.SpanBracket"/>, whose bottom follows the reading's <c>--min-cluster-size</c>).
+    /// <c>Basis</c> names the estimator for the run manifest.
     /// </summary>
-    private static (double[] Temperatures, string Resolved, string Basis) ResolveTemperatureGrid(
+    internal static (double[] Temperatures, string Resolved, string Basis) ResolveTemperatureGrid(
         Options options, CsrGraph graph, ResolvedConstruction? construction)
     {
         if (string.IsNullOrWhiteSpace(options.TemperaturesSpec))
             throw new ArgumentException(
                 "--schedule fixed-grid requires --temperatures. Examples: " +
-                "auto | linspace:0.01,0.5,100 | logspace:0.001,1.0,80 | 0.01,0.05,0.1,0.5");
+                "auto | span | linspace:0.01,0.5,100 | logspace:0.001,1.0,80 | 0.01,0.05,0.1,0.5");
 
         string spec = options.TemperaturesSpec.Trim();
         if (spec.Equals("auto", StringComparison.OrdinalIgnoreCase))
@@ -266,9 +270,25 @@ public static class SpcCommand
             (double lo, double hi, string basis) = SpcScheduleHelpers.AutoBracket(graph, options.Q, construction);
             return (SpcScheduleHelpers.LogSpaceGrid(lo, hi, 48), $"logspace:{lo:G6},{hi:G6},48", basis);
         }
+        if (spec.Equals("span", StringComparison.OrdinalIgnoreCase))
+        {
+            (double lo, double hi, int levels, string basis) = SpcScheduleHelpers.SpanBracket(graph, options.Q, construction, Math.Max(options.MinClusterSize, 1));
+            string resolved = string.Create(CultureInfo.InvariantCulture, $"logspace:{lo:R},{hi:R},{levels}");
+            return (TemperatureGridSpec.Parse(resolved), resolved, basis);
+        }
 
         return (TemperatureGridSpec.Parse(options.TemperaturesSpec), options.TemperaturesSpec, "explicit");
     }
+
+    /// <summary>
+    /// A <c>span</c> grid's bottom is the coldest split into parts of the reading's smallest cluster. At the
+    /// default of 1 a lone node's split can set it, colder and longer than any span measured. Null otherwise.
+    /// </summary>
+    internal static string? SpanClusterSizeWarning(Options options) =>
+        options.MinClusterSize <= 1 && string.Equals(options.TemperaturesSpec?.Trim(), "span", StringComparison.OrdinalIgnoreCase)
+            ? "--temperatures span at --min-cluster-size 1: a lone node's split can set the grid's bottom, colder and " +
+              "longer than any span measured (primer §13.21). Set the reading's smallest cluster size."
+            : null;
 
     private static ISweepStrategy BuildSweepStrategy(Options options, string checkpointDirectory, double[] temperatures)
     {

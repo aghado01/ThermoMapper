@@ -11,6 +11,13 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### Lens and bracket (2026-11-04)
+
+- **Kind:** one concept under several names.
+- **Readings:** "lens" and "span lens" in the stopping primer (§13.19, §13.21) and `SpcAnalysis.md`'s open point. "Bracket" in code (`SpcScheduleHelpers.AutoBracket`, `SpanBracket`) and `GraphConstruction.md`'s decision table. "Grid" for the same ends with their levels, in `--temperatures` and `LogSpaceGrid`.
+- **Found:** 2026-11-04, building `SpanBracket` from the primer's probe.
+- **Note:** a bracket is two ends and a grid adds the levels; the primer's "lens" means both.
+
 ### z in a moving response (2026-11-02)
 
 - **Kind:** one name for several concepts.

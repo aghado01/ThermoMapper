@@ -93,6 +93,123 @@ public static class SpcScheduleHelpers
         return (lo / gauge, hi / gauge, basis);
     }
 
+    /// <summary>
+    /// A temperature bracket read from the graph's couplings alone, from its first break to its last melt;
+    /// the option beside <see cref="AutoBracket"/>, whose top can stop short of a graph that melts in stages.
+    /// The top is p90(s)/ln(1 + √q), with s a node's summed coupling. The bottom is J_first/(4·ln(1 + q)), with
+    /// J_first the coupling of the coldest split into two parts of <paramref name="minClusterSize"/> or more:
+    /// such a bridge opens at even odds at J/ln(1 + q), and the 4 is a measured margin. With no such split the
+    /// bottom is top/80. A coupling at or under the declared floor is no split, since it only keeps the graph
+    /// connected; <paramref name="construction"/> is read for nothing else, so <c>J → gJ</c> moves the bracket to
+    /// <c>T → gT</c> whichever units the graph is in. <c>Levels</c> follows the span at the 48-level bracket's
+    /// spacing, up to 240, past which the ends stay and the rungs widen. Measured on four datasets and nothing
+    /// held out (primer §13.21). <c>Basis</c> names the estimator for the run manifest.
+    /// </summary>
+    public static (double Lo, double Hi, int Levels, string Basis) SpanBracket(
+        CsrGraph graph,
+        int q,
+        ResolvedConstruction? construction,
+        int minClusterSize)
+    {
+        if (q < 2)
+            throw new ArgumentOutOfRangeException(nameof(q), q, "Potts q must be ≥ 2.");
+        if (minClusterSize < 1)
+            throw new ArgumentOutOfRangeException(nameof(minClusterSize), minClusterSize, "A cluster holds at least one node.");
+
+        var edges = new List<(double J, int A, int B)>();
+        var strength = new double[graph.NodeCount];
+        foreach (UndirectedEdge e in graph.UndirectedEdges())
+        {
+            double j = graph.Weights[e.Slot];
+            if (j < SmallestNormalCoupling) continue;
+            edges.Add((j, e.Source, e.Target));
+            strength[e.Source] += j;
+            strength[e.Target] += j;
+        }
+        if (edges.Count == 0)
+            return (1.0 / 80.0, 1.0, 48, "span(no-couplings)");
+
+        // The floor is tested before the gauge, so among the gauged couplings it stands at floor·g.
+        double floor = construction?.Coupling is { } c ? c.CouplingFloor * (c.GaugeFactor > 0.0 ? c.GaugeFactor : 1.0) : 0.0;
+        double jFirst = ColdestSplit(graph.NodeCount, edges, minClusterSize, floor);
+
+        Array.Sort(strength);
+        double melt = Math.Log(1.0 + Math.Sqrt(q));
+        double hi = strength[(int)Math.Floor(0.9 * (graph.NodeCount - 1))] / melt;
+        double lo = jFirst / (4.0 * Math.Log(1.0 + q));
+        // A tenth of the nodes can hold every strong coupling, leaving the percentile under them; the strongest node's s is above any J it holds.
+        if (hi <= 0.0 || lo >= hi)
+            hi = strength[^1] / melt;
+        if (double.IsNaN(lo))
+            lo = hi / 80.0;
+
+        int levels = (int)Math.Ceiling((Math.Log(hi) - Math.Log(lo)) / Math.Log(SpanRung)) + 1;
+        string split = double.IsNaN(jFirst)
+            ? "no-split"
+            : string.Create(System.Globalization.CultureInfo.InvariantCulture, $"J_first={jFirst:G6}");
+        return (lo, hi, Math.Min(levels, SpanMaxLevels), $"span(m={minClusterSize},{split})");
+    }
+
+    private static readonly double SpanRung = Math.Pow(80.0, 1.0 / 47.0);
+
+    private const int SpanMaxLevels = 240;
+
+    // A subnormal coupling counts as none: its temperatures would underflow to zero.
+    private const double SmallestNormalCoupling = 2.2250738585072014e-308;
+
+    // Going down the couplings, the last to join two components of minClusterSize or more as they stood above it,
+    // the coldest split in the merge tree; NaN when none does. Edges tied at a coupling merge at once, so the
+    // answer doesn't hang on their order. Sorts edges.
+    private static double ColdestSplit(int nodeCount, List<(double J, int A, int B)> edges, int minClusterSize, double floor)
+    {
+        edges.Sort((x, y) => y.J.CompareTo(x.J));
+
+        var parent = new int[nodeCount];
+        var size = new int[nodeCount];
+        var large = new int[nodeCount]; // At a root, how many components of minClusterSize or more it holds as they stood above this coupling.
+        for (int i = 0; i < nodeCount; i++)
+        {
+            parent[i] = i;
+            size[i] = 1;
+            large[i] = minClusterSize == 1 ? 1 : 0;
+        }
+
+        int Find(int x)
+        {
+            while (parent[x] != x)
+            {
+                parent[x] = parent[parent[x]];
+                x = parent[x];
+            }
+            return x;
+        }
+
+        double coldest = double.NaN;
+        int first = 0;
+        while (first < edges.Count && edges[first].J > floor)
+        {
+            double j = edges[first].J;
+            int end = first;
+            for (; end < edges.Count && edges[end].J == j; end++)
+            {
+                int a = Find(edges[end].A), b = Find(edges[end].B);
+                if (a == b) continue;
+                if (size[a] < size[b]) (a, b) = (b, a);
+                parent[b] = a;
+                size[a] += size[b];
+                large[a] += large[b];
+                if (large[a] >= 2) coldest = j;
+            }
+            for (int k = first; k < end; k++)
+            {
+                int root = Find(edges[k].A);
+                large[root] = size[root] >= minClusterSize ? 1 : 0;
+            }
+            first = end;
+        }
+        return coldest;
+    }
+
     public static IReadOnlyList<SchedulePartitionRollup> BuildPartitionScheduleRollups(
         CsrGraph graph,
         IEnumerable<Accumulator> observables,

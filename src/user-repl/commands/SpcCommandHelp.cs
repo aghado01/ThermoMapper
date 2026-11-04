@@ -28,6 +28,8 @@ internal static class SpcCommandHelp
         Console.WriteLine("Schedule:");
         Console.WriteLine("  --schedule <fixed-grid>              Default: fixed-grid (adaptive is parked)");
         Console.WriteLine("  --temperatures <spec>                Required for fixed-grid. Formats:");
+        Console.WriteLine("                                         auto  (48 levels, bracket from the graph's declared units)");
+        Console.WriteLine("                                         span  (first break to last melt, up to 240 levels; bottom follows --min-cluster-size)");
         Console.WriteLine("                                         linspace:Tmin,Tmax,N");
         Console.WriteLine("                                         logspace:Tmin,Tmax,N");
         Console.WriteLine("                                         0.01,0.05,0.1,0.5  (explicit list)");

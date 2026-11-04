@@ -65,6 +65,7 @@ public sealed record SpcPreset
     public string?                              Equilibrium       { get; init; }
     public string?                              Accumulation      { get; init; }
     public int?                                 Q                 { get; init; }
+    public int?                                 MinClusterSize    { get; init; }
 
     // ── Kernel bandwidth + landmark channel ──────────────────────────────
     public string?                              BandwidthStrategy { get; init; }
@@ -141,6 +142,7 @@ public sealed record SpcPreset
         if (Equilibrium is not null)      options.EquilibriumBudget    = SpcCommand.ParseRunBudget(Equilibrium, "equilibrium");
         if (Accumulation is not null)     options.Accumulation         = SpcCommand.ParseAccumulationSpec(Accumulation);
         if (Q.HasValue)                   options.Q                    = Q.Value;
+        if (MinClusterSize.HasValue)      options.MinClusterSize       = MinClusterSize.Value;
 
         // Kernel bandwidth + landmark channel
         if (BandwidthStrategy is not null)    options.BandwidthStrategy        = GraphRun.ParseBandwidthStrategy(BandwidthStrategy);

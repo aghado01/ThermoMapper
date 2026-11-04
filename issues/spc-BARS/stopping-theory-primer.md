@@ -4123,4 +4123,6 @@ The stage reads what the shelf doesn't, and this is the lens's gain, not `hot`'s
 - The bottom fails once, on BlattHierarchy at q = 40 (χ 0.95 against 0.08), and J_first needs `MinClusterSize`, so the lens depends on the reading's own unit.
 - Not varied: the budget, distance, LMP, the floor, θ, generator seeds, the rungs.
 
+**Built, 2026-11-04, on the user's call.** `SpcScheduleHelpers.SpanBracket`, `--temperatures span`, beside `auto`, which stays the default. No reading rule came with it. It gives the probe's lens exactly on all 63 graphs: the same ends and levels. Three things go past the probe, none changing those 63. Edges tied at a coupling merge at once, so the bottom doesn't hang on their order. A span past 240 levels keeps its ends and widens its rungs. The top takes the strongest node when the percentile falls to zero or under the bottom. At the REPL's default `MinClusterSize` of 1, which none of this swept, any split sets the bottom, down to a lone node's. It falls on 35 of 63, and the 63 take 55–240 levels, median 144, 8 of them at the cap, so the REPL warns.
+
 Harness, curves, readings and scans: `side-session-notes/.../lineage-persistence/span-lens/`.

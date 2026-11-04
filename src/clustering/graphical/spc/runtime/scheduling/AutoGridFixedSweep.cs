@@ -17,7 +17,8 @@ namespace Clustering.Graphical.SPC.Runtime.Scheduling;
 /// This is the bridge for consumers that previously leaned on the adaptive strategy purely
 /// to avoid supplying a temperature grid. It deliberately does <b>not</b> refine — it picks a
 /// fixed grid once and runs it. Callers that want to <i>see</i> the curves should supply their
-/// own grid via <see cref="FixedGridSweepConfig"/> directly.
+/// own grid via <see cref="FixedGridSweepConfig"/> directly, which is also where a grid from
+/// <see cref="SpcScheduleHelpers.SpanBracket"/> goes.
 /// </remarks>
 public static class AutoGridFixedSweep
 {

@@ -104,7 +104,7 @@ public sealed record SweepSpec(
     string                              PartitionStrategy,
     double                              Theta,
     string?                             TemperaturesResolved = null,
-    string?                             TemperatureBasis = null);   // what the grid's units rest on: explicit | bwd-t_ps(q) | edge-statistics[/gauge]
+    string?                             TemperatureBasis = null);   // what the grid's units rest on: explicit | bwd-t_ps(q) | edge-statistics[/gauge] | span(m,J_first)
 
 /// <summary>Cumulative-field configuration: the ladder, its reconciliation, the
 /// temperature grid, and the thermal-EOM resolution settings.</summary>
