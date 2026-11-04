@@ -187,6 +187,26 @@ TR the combination — a locating aside, not a hierarchy to enforce.)
   must pass: confirm the two detectors don't factor through a common filtration *before* counting their agreement.
   **Fishable:** one-witness (a reduction posing as an independent detector).
 
+The **H₀** four (added 2026-11-04, derived in discussion, none in Lean) reach the graph filtration L0 gives,
+which L2's single curve does not take. They are what would carry the chain to the bars and lineages in
+[lineages-against-bars.md](../../../issues/ph/lineages-against-bars.md).
+
+- **H0-1 — stability along θ** *(positive)*. At fixed `T`, if every edge's value moves by at most `ε`, the flag
+  barcode along `θ` moves by at most `ε`. A simplex's value is the min over its edges, so this is L2 for a function
+  on a fixed complex. It needs no nesting in `T`, so the finite-sample landmine does not touch this axis.
+  **Fishable:** **cited** (simplicial stability).
+- **H0-2 — the `T` axis needs a slope** *(one-witness)*. At fixed `θ`, an edge enters where its curve crosses `θ`, so
+  a band of `ε` on the curve is `ε / slope` on `ln T`, and a curve flat near `θ` can move far. "No inflation" holds
+  along `θ` and fails along `T`. **Mitigation:** take each edge's crossing per draw (SP-2, and
+  [Fable5-BARS-revisions.md](Fable5-BARS-revisions.md)) and put the band on the crossings. **Fishable:** one-witness.
+- **H0-3 — the size gate costs nothing** *(positive)*. Clusters of size `m` or more form a module with maps by
+  inclusion, and if edge levels move by at most `ε` the two modules are `ε`-interleaved: a cluster of size at least
+  `m` sits inside one of size at least `m` at the shifted level. So bars keep their bound under the gate. **Fishable:**
+  interleaving **proved** in a few lines; the isometry theorem **cited**.
+- **H0-4 — lineages have no such bound** *(one-witness)*. `SplitShare` is a hard threshold. Moving one point can take
+  a side across it, and then the lineage ends and its lifetime drops by an amount unrelated to the perturbation. Bars
+  fail the other way: lengths are stable, but which child is the elder can flip. **Fishable:** one-witness.
+
 **Sequencing.** SL-1 first (cleanest fish; certifies the whole warped-curve move). SL-2 / SL-3 are the
 one-witness costs that keep it honest (SL-3 graduates next to T3). **ZZ-1 is the highest-value *new* fish — nearly
 an omission, not an extension:** the chain proves the scalar reduction, but the structural zigzag (Z5's output) is
