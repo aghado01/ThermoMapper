@@ -3,13 +3,13 @@
 The **capstone** of the SPC-with-BARS chain. The seam between the **BARS posterior over the thermal
 curve** and the **persistence barcode**, stated so the deep statistical/topological content is *cited*
 and the composition is a *provable obligation* — same methodology as
-[bifiltration-bridge-lemmas.md](bifiltration-bridge-lemmas.md) (quarantine the cited theorems, discharge
+[bifiltration-bridge-lemmas.md](../bifiltration-bridge-lemmas.md) (quarantine the cited theorems, discharge
 the plumbing).
 
 Two earlier files prove the ends; this one joins them:
 - **bifiltration-bridge** proves the *estimand* has structure: spin agreement is monotone in β
   (`spin_agreement_mono`) ⇒ the (β,θ) affinity filtration is **monotone + functorial** (T1/T2).
-- **fable-BARS-lemma** + **bars-span** prove the *per-draw reduction is exact*: peak (`argmax_in_closed_form_set`)
+- **fable-BARS-lemma** + **bars-span** state the *per-draw reduction is exact*: peak (`argmax_in_closed_form_set`)
   and span (`unique_crossing_in_monotone_bracket`, SP-2) are closed-form roots ⇒ **zero optimizer slop**.
 
 What's left is the link that makes the guarantee *flow downstream*: a sup-norm credible band on the
@@ -21,8 +21,8 @@ to the whole barcode.
 
 | # | Statement | Status | Source |
 |---|-----------|--------|--------|
-| L0 | estimand monotone ⇒ filtration functorial | **proved** (mod Grimmett) | bifiltration-bridge (this dir) |
-| L1 | per-draw curve → per-draw diagram, **zero optimizer slop** | **proved** (mod spline-def) | fable-BARS-lemma + bars-span (this dir) |
+| L0 | estimand monotone ⇒ cut graphs grow and clusters nest | **proved** (mod Grimmett); the map on homology is T2, open | [Bifiltration.lean](../../Enthymemata/Bifiltration.lean), from the [bifiltration bridge](../bifiltration-bridge-lemmas.md) |
+| L1 | per-draw curve → per-draw diagram, **zero optimizer slop** | **stated**; proofs `sorry` in [BARS.lean](../../Enthymemata/BARS.lean) | fable-BARS-lemma + bars-span (this dir) |
 | L2 | **stability**: `d_b(Dgm f, Dgm g) ≤ ‖f − g‖_∞` | **AXIOM** | REF-PH §5.2 (stability for functions); **BCKL2010** §2.2 + §4 (statistical bottleneck + minimax rate); **PNV20XX** (the nerve readout's twin — persistent nerve lemma ⇒ `d_b`(nerve, space) bounded under ε-good cover) |
 | L3 | sup-norm credible band ⇒ bottleneck confidence ball | **proved** (this file) | measure-monotonicity over L2 |
 | L4 | the pushforward is a *consistent* posterior | **cited context** | **WRD2025** §4 (PH-posterior consistency + rate + misspec feature-recovery); **MNO2019** (PD = Poisson PP, conjugate posterior) / **MMO2019** (its frequentist twin — KDE + near-diagonal noise-likelihood + PHD = point-process intensity) |
@@ -32,7 +32,7 @@ to the whole barcode.
 
 Honest `sorry` count: **one cited** (L2 — the stability theorem; the random band's probability lives in
 the BARS posterior, not formalized here), **one built** (L5 — the landscape map, once
-`PersistenceLandscape` lands in `TDA.Ph`). L3 is fully discharged — see [Stability.lean](../Enthymemata/Stability.lean).
+`PersistenceLandscape` lands in `TDA.Ph`), plus L1's six in `BARS.lean`. L3 is fully discharged — see [Stability.lean](../../Enthymemata/Stability.lean).
 
 > **Corpus note.** **MMO2019** and **SGL2022** live in `compendia/ph` (moved from `intersections` this
 > session — both PH-proper: statistical PH, and applied-PH-for-phase-transitions). **Acronym guard:**

@@ -2,16 +2,18 @@
   Stability.lean — the confidence pushforward (capstone of the BARS → barcode chain).
 
   Companion to:
-    • Bifiltration.lean — the estimand is monotone (spin_agreement_mono ⇒ functorial filtration).
+    • Bifiltration.lean — the estimand is monotone (spin_agreement_mono ⇒ monotone cut graphs).
+                          That is a graph filtration, which `Dgm` below does not take, so it does
+                          not compose with this file yet.
     • BARS.lean         — the per-draw reduction is exact (argmax / span are closed-form roots).
-  This file joins them: a sup-norm credible band on the curve ⇒ a bottleneck confidence ball on
-  the diagram, with no inflation.
+  This file adds the step for one curve: a sup-norm credible band ⇒ a bottleneck confidence ball
+  on its diagram, with no inflation.
 
   AXIOM  : diagram_stability   (function → diagram is 1-Lipschitz; REF-PH §5.2, BCKL2010 §2.2/§4).
   PROVED : stability_event_subset, confidence_pushforward   (measure monotonicity over the axiom).
   OBLIGATION : landscape_stable   (FH2024 §4 — the averageable surrogate; build with TDA.Ph).
 
-  Protolemma: ../Protolemmata/confidence-pushforward-lemmas.md
+  Protolemma: ../Protolemmata/BARS/confidence-pushforward-lemmas.md
 -/
 import Mathlib.MeasureTheory.Measure.MeasureSpace
 import Mathlib.Topology.MetricSpace.Basic
@@ -28,8 +30,8 @@ opaque PersistenceDiagram : Type
 opaque bottleneck : PersistenceDiagram → PersistenceDiagram → ℝ
 /-- Sup-norm of a curve perturbation, `‖f − g‖_∞`. -/
 opaque supNorm : (ℝ → ℝ) → ℝ
-/-- The filtration-then-diagram functor: a curve (filtration index → value) to its barcode. The
-    monotonicity that makes this well-defined is `Bifiltration.lean`'s `spin_agreement_mono`. -/
+/-- The diagram of one curve, as sublevel persistence of its values. This needs no monotonicity in
+    the index: a monotone curve would have a single bar. -/
 axiom Dgm : (ℝ → ℝ) → PersistenceDiagram
 
 /-! ### 1. The one cited input — stability for functions. -/
