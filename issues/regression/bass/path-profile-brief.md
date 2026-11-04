@@ -469,6 +469,8 @@ N | data | label | M | π carried | π polished | passes | share in basin | top 
 
 *Waiting time, per chain-held pair against a1, class flow, the better τ:* **at least 10× the sampling phase on all four.** So each route is too slow to have been taken, which is consistent with the chains staying put. It does not show that no faster route exists. The better τ is held on every row. A sweep attempts one structure move (`MoveStep`), and τ's slice proposes none, so attempts are sweeps. The sampling phase is `BassMixing.Samples`, 2,000, so the rule's lines are ln 20,000 = 9.9 and ln 200 = 5.3.
 
+*Later, 2026-11-04:* the [waiting-time report](waiting-time-brief.md#reports) measured these waits, and this reading is refuted by 13–29 nats. Chains enter a1's basin in about 4.5 million sweeps, e^{15.0}–e^{15.7} by start, about 2,270 phases. So the rule's label still holds, on the measured waits, but "staying put" does not describe the chains, which leave the start's basin within a few thousand sweeps, and the route is not the reason a phase falls short. This report's figures are kept as read.
+
 chain | route | ln wait held | ln wait profiled | less ln 2,000 (better τ) | reading | best in L, exact flow | every addition's class credited
 --- | --- | --- | --- | --- | --- | --- | ---
 0 | aligned | 36.6 | 36.9 | 29.0 | ≥ 10× | 42.9 | 35.4
@@ -509,7 +511,7 @@ Two readings beside the rule, neither of which moves it:
 
 **G1,** under "How to close it", candidate reading (a) is now measured. Suggested wording:
 - Between Friedman's modes at N = 500 (one run, one data seed), the best routes found through L hold at most 2 terms above the start at their lowest state, and at most 4 from a1. They reach 15–26 nats below the chains' states and 28–37 below B and A, with 45–76 from a1 to the chains.
-- The waiting time on them is e^{28}–e^{45} sweeps from the chains' states against a 2,000-sweep phase, consistent with the chains staying put. At the costliest edge the proposal is 11–19 nats of that, and the fall the rest.
+- The waiting time on them is e^{28}–e^{45} sweeps from the chains' states against a 2,000-sweep phase, consistent with the chains staying put. At the costliest edge the proposal is 11–19 nats of that, and the fall the rest. *(Later: refuted, and replaced in the register by the [measured waits](waiting-time-brief.md#reports).)*
 - k counted by additions is not stable across exemplars; net k is.
 - "The real k between a1 and the reference basins is unread" should go. So should "at N = 500 each such term costs about 3.1 nats, so eight cost about e^{−25}", since 3.1 is the Occam part alone: in π each unpaid term costs 12.9 or 21.3 nats by its order, before the ±25-knot class's credit of at most ln 51 or ln 2,601.
 - k against N reads flat on carried modes, partly by construction. What remains open is k at modes found at large N.

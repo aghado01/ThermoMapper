@@ -421,3 +421,11 @@ SC-5 is untouched.
 - *Waits against N from modes found at each N,* for SC-4's slope.
 
 Which lever, if any, stays yours. The fact it would rest on is above: a crossing costs about 4.5 million sweeps, with a held or a drawn τ.
+
+#### The main session's check, 2026-11-04
+
+Recomputed apart from the harness, from the CSVs: every chain's pooled wait and interval, arm S, the 96's mean and shortest, the shallow starts and N = 125; all of Part 1's table and its depth bins, the identity and the dense solves; the ladder's 20 and 19 drops; the gateways; the 96's final (x1, x2, x1·x2) counts; the 21 traced lows' median and range. All agree. Not recomputed: 2 of 3,256 and the flat histogram's masses against the run itself.
+
+Two limits on the wording, so the register differs from the suggested text:
+- **"About as low in π as the route" holds on A and B only.** The traced low by start, against the aligned route's: A −925 to −902 against −922, B −959 to −913 against −920, chain0 −949 to −904 against −959, chain1 −958 to −904 against −929, chain2 −1,000 to −912 against −942, chain3 −938 and −920 against −943. Those on chain0–3 sit mostly above the route's low, and the comparison is not like for like: a trace holds the last 10⁴ sweeps, after the chain has climbed from its start. So "no shallower pass" is not read.
+- **2 of 3,256 matches by exact knot.** A chain walking the route's shape on other knots would score the same, so this says the chains are not on these knots, not that they take another path.
