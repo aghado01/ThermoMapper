@@ -21,7 +21,7 @@ to the whole barcode.
 
 | # | Statement | Status | Source |
 |---|-----------|--------|--------|
-| L0 | estimand monotone ⇒ cut graphs grow and clusters nest | **proved** outright for connection probability, and given Grimmett's two-point identity for spin agreement; the map on homology is T2, open | [RandomCluster.lean](../../Lemmas/RandomCluster.lean) and [Bifiltration.lean](../../Enthymemata/Bifiltration.lean), from the [bifiltration bridge](../bifiltration-bridge-lemmas.md) |
+| L0 | estimand monotone ⇒ cut graphs grow and clusters nest | **proved** for connection probability and spin agreement; the map on homology is T2, open | [RandomCluster.lean](../../Lemmas/RandomCluster.lean), [EdwardsSokal.lean](../../Lemmas/EdwardsSokal.lean) and [Bifiltration.lean](../../Enthymemata/Bifiltration.lean), from the [bifiltration bridge](../bifiltration-bridge-lemmas.md) |
 | L1 | per-draw curve → per-draw diagram, **zero optimizer slop** | **stated**; proofs `sorry` in [BARS.lean](../../Enthymemata/BARS.lean) | fable-BARS-lemma + bars-span (this dir) |
 | L2 | **stability**: `d_b(Dgm f, Dgm g) ≤ ‖f − g‖_∞` | **AXIOM** | REF-PH §5.2 (stability for functions); **BCKL2010** §2.2 + §4 (statistical bottleneck + minimax rate); **PNV20XX** (the nerve readout's twin — persistent nerve lemma ⇒ `d_b`(nerve, space) bounded under ε-good cover) |
 | L3 | sup-norm credible band ⇒ bottleneck confidence ball | **proved** (this file) | measure-monotonicity over L2 |
