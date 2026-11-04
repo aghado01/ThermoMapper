@@ -227,6 +227,7 @@ Nothing below was decided except where it says so. Application framing stays out
 | (β, θ) bifiltration and transforms | Not built; `lean/Enthymemata/Bifiltration.lean` is empty. "Not a bifiltration" holds for the cumulative field, where (T, θ) reduces to τ = T·κ(θ), and not for the sampler, whose edge curves cross | Open |
 | Ultrametricity test | Not built; placement undecided | Open |
 | Per-sweep partitions for PH | Not built. A zigzag over thinned draws is order-dependent; resampling them per temperature is the better route to barcodes with uncertainty | Open |
+| Lineages against H₀ bars | Measured on monotone stacks, no consumer: they cut the same tree differently and mostly read the same partition. [lineages-against-bars.md](lineages-against-bars.md) | User, 2026-11-04: compare them. The primer's sentence needs a qualifier, not yet applied |
 
 **Next on the engine side:** filled H₁ over frames landed the same day as P1d
 ([p1d-filled-h1-brief.md](p1d-filled-h1-brief.md)). A relative reading over frames is the open seam.
