@@ -539,7 +539,8 @@ internal sealed class PassageSpec
 /// π at the held τ, as the reading has it. Counts run over the sweeps' states, so the start's own sweep 0 is not among them. "Top" is the
 /// highest structure of the start's basin before first entry, its dwell read since first reached: the fraction it holds of the sweeps since
 /// then reads ln(M / π(top)) while v(top) ≈ 1, since a sweep's occupation before crossing is π(x)v(x)/M; of the sweeps in the basin since then,
-/// ln(mass / π(top)).
+/// ln(mass / π(top)). A departure's stretch restarts when a chain resumes outside the start's basin, so rows run before the column existed read
+/// it late: part <c>3d</c>'s departure is not read.
 /// </summary>
 internal sealed class PassageTally
 {

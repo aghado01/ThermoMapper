@@ -23,7 +23,7 @@ namespace Maths.Regression.Tests;
 /// <item>The chains' 99% interval on a mean of at least 1,000 passages, by the mean's normal law: about 5% across the checks together.</item>
 /// <item>"The series cut at the route's first state in the basin" keeps a slide the route takes first, whose every state is the start's basin, since the cut says where the series ends, not how it begins. <c>partial</c> and <c>exact</c> beside <c>aligned</c> read other starts of the same series.</item>
 /// <item>The mass from a chain reads the highest structure of the start's basin seen before first entry, its dwell counted from when first reached (<see cref="PassageTally"/>): an estimator of the same ratio that does not charge the climb to it.</item>
-/// <item>The ladder's grid in b is 0.005 apart; a rung is the grid's b nearest the brief's ln. The rungs run lowest ln first, so a budget that stops leaves the costliest ones.</item>
+/// <item>The ladder's grid in b is 0.005 apart; a rung is the grid's b nearest the brief's ln. The rungs run lowest ln first, so a budget that stops leaves the costliest ones. "10× the reading" is 10× the class reading that chose the rung.</item>
 /// <item>At M ≤ 4 the dense check runs on the exact targets alone: its cost is about a minute a target, and the set targets share the same arithmetic.</item>
 /// </list>
 /// </summary>
@@ -270,11 +270,15 @@ public sealed class BassWaitingTimeTests
         Assert.True(tally.InStartPre <= tally.PreSweeps && tally.TopDwell <= tally.TopSinceBasin && tally.TopSinceBasin <= tally.TopSinceAll);
         Assert.True(tally.StaySweeps <= tally.StaySeen);
         if (traced.Count > 0) Assert.Equal(fixture.Basin(b), traced[^1]);
+        Assert.NotEqual(fixture.Basin(b), tally.EntryFrom);
+        if (tally.Departure is { } departure) Assert.True(departure >= tally.FirstExit && departure + PassageTally.DepartureLength <= tally.FirstEntry);
 
         // The row reads back, and a resumed chain carries on from it.
         PassageTally back = PassageTally.Parse(tally.Row(spec));
         Assert.Equal(tally.FirstEntry, back.FirstEntry);
         Assert.Equal(tally.Sweeps, back.Sweeps);
+        Assert.Equal(tally.Departure, back.Departure);
+        Assert.Equal(tally.EntryFrom, back.EntryFrom);
         Assert.Equal(tally.BestPi, back.BestPi, 5);
         Assert.Equal(tally.Structure, BassMixing.Key(BassWaitingTime.ParseStructure(tally.Structure)));
         Assert.True(tally.BestPi >= surface.Score(a).Pi(PathReading.Held) - 1e-9);
@@ -765,7 +769,7 @@ public sealed class BassWaitingTimeTests
     [Fact]
     public void FlatHistogram_TheBasinsMass()
     {
-        if (!BassQualification.Enabled) return;   // heavy: arm (i) again, about half an hour
+        if (!BassQualification.Enabled) return;   // heavy: arm (i) again, about ten minutes
         Quietly();
         S10 s = Load();
         PathCsv csv = Csv("flathistogram", FlatHeader, 1);

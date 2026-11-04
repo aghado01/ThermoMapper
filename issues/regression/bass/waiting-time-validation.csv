@@ -16,3 +16,4 @@ rate,a2 arm H n 500 2026-11-04T19:05,10037,20893.292872,0.034672,0.480393,,,swee
 rate,B arm H n 125 2026-11-04T19:05,400000,166260.298786,0.048085,2.405866,,,sweeps a second under four concurrent chains at below-normal priority; the acceptance beside it
 rate,A arm H n 500 2026-11-04T19:05,400000,87323.519712,0.031273,4.580667,,,sweeps a second under four concurrent chains at below-normal priority; the acceptance beside it
 rate,A arm S n 500 2026-11-04T19:05,400000,73821.733617,0.027865,5.418458,,,sweeps a second under four concurrent chains at below-normal priority; the acceptance beside it
+starts,fresh design 2026-11-04T21:11,13,0.000000,,,,,each chain's start and target at the held τ against the stored π
