@@ -3,20 +3,32 @@
 The seam between the Swendsen–Wang spin model and the persistent-homology engine, stated
 so that the **deep probabilistic content is cited** (Grimmett 2006, *The Random-Cluster
 Model*) and **everything else is a provable obligation**. This sharpens the earlier
-"axiomatize all of `hmono`" framing from [gemini-persistence-lemmas.md](gemini-persistence-lemmas.md):
+"axiomatize all of `hmono`" framing from [fable-bifiltration-lemmas.md](fable-bifiltration-lemmas.md):
 the temperature-monotonicity of spin agreement is *not* one opaque axiom — it factors into
 two cited theorems and a chain of calculus/combinatorics we discharge ourselves.
 
-Same methodology as [spc-lemmas.md](spc-lemmas.md) (Lemma B took the closed-form bond
-probability as given and proved the algebra from there). Here we quarantine exactly two
-inputs and prove the plumbing around them.
+Same methodology as [spc-pkwang-lemmas.md](../Archeion/PKWang-legacy-2026-08-09/spc-pkwang-lemmas.md)
+(Lemma B took the closed-form bond probability as given and proved the algebra from there). Here we
+quarantine exactly two inputs and prove the plumbing around them.
+
+**Status (2026-11-04).** The spine compiles in [Bifiltration.lean](../Enthymemata/Bifiltration.lean),
+which is the current form. The block below is the draft it came from, and it does not compile as
+written. The compiled file differs in these ways:
+
+- `pe` is `noncomputable`, `cutGraph` takes the `Std.Symm` and `Std.Irrefl` fields, and P3 names
+  `SimpleGraph.Reachable.mono`.
+- Both axioms take `IsEdgeParameter` (symmetric, in `[0, 1)`), which is what the cited theorems
+  cover, so the theorems take symmetric `J` and `β₁ ≥ 0`.
+- T1 has its threshold half, `cutGraph_mono`, and `cutGraph_reachable_mono`, the nesting of clusters.
+- T2 and T3 are not declared there. T2's type is not a proposition and T3's statement is `True`, so
+  both wait for their codomains.
 
 ## What is axiom vs. obligation
 
 | # | Statement | Status | Source / strategy |
 |---|-----------|--------|-------------------|
-| A1 | `comparison_inequality` — coordinatewise `p₁ ≤ p₂` ⇒ `φ_{p₁,q} ≤_st φ_{p₂,q}` (q ≥ 1) | **AXIOM** | Grimmett **Thm 3.21** (inhomogeneous), via **Thm 3.8** (positive assoc., *finite graphs*) → FKG lattice → **Thm 2.1** (Holley). `q ≥ 1` load-bearing: §3.3 flags failure for `q < 1`. |
-| A2 | `edwards_sokal_twopoint` — `⟨δ_{sᵢsⱼ}⟩ = 1/q + (1−1/q)·φ(i↔j)` | **AXIOM** | Grimmett **§11.2** (Edwards–Sokal coupling). |
+| A1 | `comparison_inequality` — coordinatewise `p₁ ≤ p₂` ⇒ `φ_{p₁,q} ≤_st φ_{p₂,q}` (q ≥ 1) | **AXIOM** | Grimmett **Thm 3.21** for one `p`, via **Thm 3.8** (positive assoc., *finite graphs*) → FKG lattice → **Thm 2.1** (Holley). **§11.4** says it stays valid with parameters per edge. `q ≥ 1` load-bearing: positive association fails in general for `q < 1` (see before the proof of Thm 3.8). |
+| A2 | `edwards_sokal_twopoint` — `⟨δ_{sᵢsⱼ}⟩ = 1/q + (1−1/q)·φ(i↔j)` | **AXIOM** | Grimmett **Thm 1.16** (Edwards–Sokal coupling); with parameters per edge, **(11.25)** in §11.4. |
 | P1 | `pe_mono_in_beta` — `1 − exp(−βJ)` ↑ in β (J ≥ 0) | **proved** | `Real.exp_le_exp`. |
 | P2 | `p_vector_mono` — coordinatewise p-monotonicity from P1 | **proved** | pointwise P1. |
 | P3 | `connection_event_increasing` — `{i↔j}` upward-closed | **proved** | `SimpleGraph.Reachable.mono`. |
@@ -204,8 +216,11 @@ theorem barcode_reparam_invariant
   The physics→edge-set spine (P1–P5, T1) is **fully discharged**.
 - **The inhomogeneous-comparison check** lives inside A1: `comparison_inequality` is stated for
   a *vector* `p : V → V → ℝ`, which is the version SPC needs (heterogeneous curved-metric
-  couplings). Grimmett 3.21 is written scalar; confirm the per-edge version against his §3.1
-  conditional-probability machinery before treating A1 as discharged-by-citation.
+  couplings). Checked 2026-11-04: Grimmett 3.8 and 3.21 are written for one `p`, and §11.4 says the
+  comparison inequalities stay valid with parameters per edge, there on a finite box of a lattice.
+  The proofs need neither homogeneity nor the lattice: in (3.10)–(3.11) only `k` is not modular, and
+  `p` enters through a product over edges, which stays modular per edge. That last step is a reading
+  of the proof, not stated in the book.
 - **`hmono` is the whole point.** Once `spin_agreement_mono` (P5) is green, the noisy-estimate
   monotonization (isotonic / monotone-BARS) is justified *not* as a hack but as recovering the
   property this file proves the estimand has — structure from outside the estimator

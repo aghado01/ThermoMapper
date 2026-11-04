@@ -224,7 +224,7 @@ Nothing below was decided except where it says so. Application framing stays out
 | Backbone persistence, relative reading | **Built** | User, 2026-11-01: do it, here |
 | Frames → zigzag (P1c) | **Built**, no consumer | Same request, as setup work |
 | SPC over temperature as zigzag | Not wired. The builder takes `CoMembership.G` as a field on the coupling graph as it stands. At fixed θ with J ≥ 0, the exact stack only gains edges, so zigzag reads the raw estimate, non-nesting cuts, a θ*(T) ridge or signed couplings | Open |
-| (β, θ) bifiltration and transforms | Not built; `lean/Enthymemata/Bifiltration.lean` is empty. "Not a bifiltration" holds for the cumulative field, where (T, θ) reduces to τ = T·κ(θ), and not for the sampler, whose edge curves cross | Open |
+| (β, θ) bifiltration and transforms | Not built in code. `lean/Enthymemata/Bifiltration.lean` proves the exact edge family monotone on both axes and its clusters nested, over two cited theorems. "Not a bifiltration" holds for the cumulative field, where (T, θ) reduces to τ = T·κ(θ), and not for the sampler, whose edge curves cross | Open |
 | Ultrametricity test | Not built; placement undecided | Open |
 | Per-sweep partitions for PH | Not built. A zigzag over thinned draws is order-dependent; resampling them per temperature is the better route to barcodes with uncertainty | Open |
 | Lineages against H₀ bars | Measured on monotone stacks, no consumer: they cut the same tree differently and mostly read the same partition. [lineages-against-bars.md](lineages-against-bars.md) | User, 2026-11-04: compare them. The primer's sentence needs a qualifier, not yet applied |
