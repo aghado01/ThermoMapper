@@ -1,0 +1,18 @@
+check,case,count,worst,value_a,value_b,value_c,value_d,note
+starts,fresh design 2026-11-04T18:28,13,0.000000,,,,,each chain's start and target at the held τ against the stored π
+kernel walk,seed 11 2033 to 273 structure b 1.00,1000,0.002926,6.993715,6.996641,6.930608,7.058583,agrees; cv 0.784
+production chain,seed 11 2033 to 273 structure b 1.00,1000,-0.016132,6.993715,6.977584,6.914681,7.036762,agrees; cv 0.748
+kernel walk,seed 15 2033 to 2201 structure b 1.00,1000,0.007791,9.001502,9.009293,8.715852,9.235876,agrees; cv 3.122
+production chain,seed 15 2033 to 2201 structure b 1.00,1000,0.001834,9.001502,9.003336,8.724847,9.220924,agrees; cv 2.984
+kernel walk,seed 13 2033 to 2201 structure b 1.00,1000,-0.042703,11.162781,11.120078,11.003400,11.224555,agrees; cv 1.352
+production chain,seed 13 2033 to 2201 structure b 1.00,1000,-0.036776,11.162781,11.126005,11.005100,11.233856,agrees; cv 1.398
+kernel walk,seed 5 2201 to 273 basin b 1.00,1000,-0.057246,7.937624,7.880378,7.793497,7.960311,agrees; cv 1.022
+production chain,seed 5 2201 to 273 basin b 1.00,1000,-0.013068,7.937624,7.924556,7.852222,7.992009,agrees; cv 0.857
+kernel walk,seed 15 2033 to 2201 structure b 0.50,1000,0.016389,9.424286,9.440674,9.350478,9.523404,agrees; cv 1.059
+production chain,seed 15 2033 to 2201 structure b 0.50,1000,0.011834,9.424286,9.436119,9.352232,9.513511,agrees; cv 0.988
+kernel walk,seed 5 2201 to 273 basin b 0.50,1000,0.038058,4.876727,4.914785,4.840297,4.984107,agrees; cv 0.881
+production chain,seed 5 2201 to 273 basin b 0.50,1000,0.014306,4.876727,4.891033,4.822814,4.954894,agrees; cv 0.810
+rate,a2 arm H n 500 2026-11-04T19:05,10037,20893.292872,0.034672,0.480393,,,sweeps a second under four concurrent chains at below-normal priority; the acceptance beside it
+rate,B arm H n 125 2026-11-04T19:05,400000,166260.298786,0.048085,2.405866,,,sweeps a second under four concurrent chains at below-normal priority; the acceptance beside it
+rate,A arm H n 500 2026-11-04T19:05,400000,87323.519712,0.031273,4.580667,,,sweeps a second under four concurrent chains at below-normal priority; the acceptance beside it
+rate,A arm S n 500 2026-11-04T19:05,400000,73821.733617,0.027865,5.418458,,,sweeps a second under four concurrent chains at below-normal priority; the acceptance beside it

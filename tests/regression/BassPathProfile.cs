@@ -569,12 +569,15 @@ internal static class BassPathProfile
     /// <summary>
     /// The hops of a greedy slide from <paramref name="start"/>, each matched term stepped to its target one knot at a time,
     /// always the step with the highest π; a jump of up to <see cref="SlideReach"/> where every single step is refused; and a
-    /// factor whose sign differs, a closed pair's, by one redraw. Null, with the pair's term, when a pair cannot move.
+    /// factor whose sign differs, a closed pair's, by one redraw. Null, with the pair's term, when a pair cannot move. Each
+    /// structure along it, the start's first, goes to <paramref name="visited"/> when given.
     /// </summary>
-    internal static PathHop[]? Slide(PathSurface surface, IReadOnlyList<BassTerm> start, (BassTerm From, BassTerm To)[] moves, PathReading r, out BassTerm? stuck)
+    internal static PathHop[]? Slide(PathSurface surface, IReadOnlyList<BassTerm> start, (BassTerm From, BassTerm To)[] moves, PathReading r, out BassTerm? stuck,
+                                      List<BassTerm[]>? visited = null)
     {
         stuck = null;
         BassTerm[] current = [.. start];
+        visited?.Add([.. current]);
         int[] slots = [.. moves.Select(m => Array.IndexOf(current, m.From))];
         bool profile = r == PathReading.Profiled;
         PathScore here = surface.Score(current, profile);
@@ -619,6 +622,7 @@ internal static class BassPathProfile
             hops.Add(new PathHop(PathHopKind.Slide, BassMixing.Key([taken.Term]), current.Length, current.Length, here.Pi(r), taken.Score.Pi(r), dm, dp, 0.0, lnQ, lnQ,
                                  double.NaN, 0));
             current[taken.Slot] = taken.Term;
+            visited?.Add([.. current]);
             here = taken.Score;
         }
     }
@@ -648,7 +652,7 @@ internal static class BassPathProfile
     }
 
     // The terms of t's signature within the window, enumerated factor by factor.
-    private static IEnumerable<BassTerm> Neighbours(PathSurface surface, BassTerm t)
+    internal static IEnumerable<BassTerm> Neighbours(PathSurface surface, BassTerm t)
     {
         IEnumerable<HingeFactor[]> Spread(IReadOnlyList<HingeFactor> hinges, BassPart part)
         {
@@ -914,9 +918,9 @@ internal sealed class PathCsv
     private readonly int _keyColumns;
     private readonly int _columns;
 
-    internal PathCsv(string file, string[] header, int keyColumns)
+    internal PathCsv(string file, string[] header, int keyColumns, string prefix = "path-profile")
     {
-        Path = System.IO.Path.Combine(Folder, $"path-profile-{file}.csv");
+        Path = System.IO.Path.Combine(Folder, $"{prefix}-{file}.csv");
         _keyColumns = keyColumns;
         _columns = header.Length;
         lock (Gate)
