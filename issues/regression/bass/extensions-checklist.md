@@ -42,6 +42,14 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ## Reports
 
+### GBASS read — 2026-11-04
+
+GBMARS's reference implementation, read against the paper, E1 and G1; nothing built. The detail is in [E1](extensions-brief.md#generalized-hyperbolic-noise-gbmars).
+- *E1 gains* the sampled γ and β it had not named, the MHN as an exact draw at variance ∝ w in the v parameterization, and five defects to correct. The text's two defects are slips in the text alone.
+- *E20 gains* logistic noise by Stefanski's mixing, in GBASS since July 2026 and not yet in its sampler. Two reading leads go to the [lineage review](lineage-review.md#reading-leads).
+- *G1 gains* candidate reading (h), a whole-term redraw.
+- *Not checked:* the package was not run; `rMHN`'s series branch; `lag_beta`'s reason; the GBP step's scale, read and not measured.
+
 ### The tiny-shape evidence fixed — 2026-11-03
 
 The defect [the priors' check](#the-moving-response-priors-checked--2026-11-02) found, on the user's go-ahead. No default changes and the hashes hold. The forms and the alternative are in [the docs](../../../docs/Maths/BayesianRegression.md#bass-priors-that-stop-reading-a-moving-response).

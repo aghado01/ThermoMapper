@@ -44,6 +44,7 @@ F-X1 was built for noise, but it is more general. Many observation models turn G
 | Probit (Albert and Chib) | z, truncated | z, 1 | σ² held at 1, a truncated-normal draw |
 | Ordinal (Lawrence et al. 2008) | z, cutpoints | z, 1 | As probit, plus cutpoints |
 | Logit (Pólya–Gamma; Polson, Scott and Windle 2013) | ω | (y − ½)/ω, ω | Weighted Gram, σ² held at 1, a Pólya–Gamma sampler |
+| Logistic noise, or logit with a latent z (Stefanski 1991; Holmes and Held 2006, both unread) | v, and z for binary data | y or z, 1/v | Weighted Gram, a draw of v given the residual, which is neither GIG nor generalized beta prime |
 | Scale shared across a declared group | One scale per group | y, the group's weight | Weighted Gram, indexing by group |
 | Dirichlet-process mixture of normals (DPMBART) | μᵢ, σᵢ | y − μᵢ, 1/σᵢ² | Weighted Gram, the DP's state and moves |
 
@@ -99,6 +100,8 @@ The cost and the seams carry this order, so it does not depend on any one applic
 | Hutchings, Bingham, Lawrence (and Rumsey in v2), arXiv 2405.16298: fast emulation, modular calibration and active learning for functional output | Output and use axes, E30 | Unread; not on disk |
 | Francom, Sansó and Kupresanin, landmark-warped emulators, *SIAM/ASA JUQ* 10 (2022) | E11 | Unread; not on disk |
 | Zahm et al., arXiv 1801.07922, vector-valued dimension reduction | E8 | Unread; not on disk |
+| Stefanski, a normal scale mixture representation of the logistic, *Statistics & Probability Letters* 11 (1991); Holmes and Held, *Bayesian Analysis* 1 (2006), from memory | E20; the mixing law is in GBASS | Unread; not on disk |
+| Sun, Kong and Pal, the modified half-normal, *Communications in Statistics* (2021) | E1's global scale; `rMHN` is in GBASS | Unread; not on disk |
 | Wycoff, Binois and Wild, arXiv 1907.11572, closed-form C for GPs | E8, for BGP | Unread; not on disk |
 | Collins, Francom and Rumsey, BPPR, arXiv 2210.09181 | E8's end point | Unread; not on disk |
 | Rumsey et al., *Discovering Active Subspaces*, arXiv 2307.11241 | E8 | Unread; not on disk |
