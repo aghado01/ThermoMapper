@@ -23,7 +23,7 @@ namespace Maths.Oracle.Tests;
 /// </summary>
 public sealed class BassMomentParityTests(ITestOutputHelper output)
 {
-    private static readonly string BassSource = Environment.GetEnvironmentVariable("BASS_R_SOURCE") ?? "D:/aghado01/packages/BASS";
+    private static readonly string BassSource = Environment.GetEnvironmentVariable("BASS_R_SOURCE") ?? "D:/aghado01/packages/bayesian-related/BASS";
 
     private static readonly (string Name, InputMeasure Measure)[] Measures =
     [

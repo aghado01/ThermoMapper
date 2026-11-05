@@ -12,12 +12,12 @@ emit_json <- function(obj, path, ...) {
 
 # The pinned R BASS source (BASS 1.3.1, github.com/lanl/BASS), sourced rather than installed: R BASS is not in the
 # project's renv. Of its imports, hypergeo and truncdist are in the renv; truncdist sits on a path the oracles do not
-# call. BASS_R_SOURCE locates the checkout (default D:/aghado01/packages/BASS), which must be at the pinned commit. R BASS
+# call. BASS_R_SOURCE locates the checkout (default D:/aghado01/packages/bayesian-related/BASS), which must be at the pinned commit. R BASS
 # calls browser() on numerical anomalies, which under Rscript reads stdin; inside the sourced environment it is a
 # no-op, so an oracle never waits on input and records what R computes.
 bass_pinned_commit <- "26710146c623a258854162367a939041efedd091"
 
-bass_source <- function(files, root = Sys.getenv("BASS_R_SOURCE", "D:/aghado01/packages/BASS")) {
+bass_source <- function(files, root = Sys.getenv("BASS_R_SOURCE", "D:/aghado01/packages/bayesian-related/BASS")) {
   head <- suppressWarnings(tryCatch(system2("git", c("-C", root, "rev-parse", "HEAD"), stdout = TRUE, stderr = FALSE),
                                     error = function(e) NA_character_))
   if (!identical(as.vector(head), bass_pinned_commit))

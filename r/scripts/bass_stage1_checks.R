@@ -142,7 +142,7 @@ cat(sprintf("    leave-one-out equals the difference of the two cases: %.0e %s\n
             verdict(gap <= 1e-12 * max(abs(Y2)))))
 
 # ---- reference fixtures that do not wait on the design pass (issues/regression/bass/reference-fixtures-brief.md) ------
-# These oracles source the pinned R BASS checkout (BASS_R_SOURCE, default D:/aghado01/packages/BASS) at 2671014.
+# These oracles source the pinned R BASS checkout (BASS_R_SOURCE, default D:/aghado01/packages/bayesian-related/BASS) at 2671014.
 
 # F-O5 (D01): Wallenius probabilities against brute force over draw orders.
 cat("\nD01 Wallenius variable-set probabilities (F-O5)\n")

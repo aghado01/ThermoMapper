@@ -18,7 +18,7 @@ namespace Maths.Oracle.Tests;
 /// </summary>
 public sealed class WalleniusParityTests
 {
-    private static readonly string BassSource = Environment.GetEnvironmentVariable("BASS_R_SOURCE") ?? "D:/aghado01/packages/BASS";
+    private static readonly string BassSource = Environment.GetEnvironmentVariable("BASS_R_SOURCE") ?? "D:/aghado01/packages/bayesian-related/BASS";
     private readonly ITestOutputHelper _out;
     public WalleniusParityTests(ITestOutputHelper output) => _out = output;
 
