@@ -162,6 +162,16 @@ Recommend no default. Price the levers; do not build them.
 
 Newest first.
 
+### The efficiency pass read against this report (chip, 2026-11-04; appended, nothing above rewritten)
+
+The pass ([its brief and report](efficiency-pass-brief.md#reports)) built the levers of "The efficiency pass's levers, ranked" and re-read their shares. What it adds to this report's reading:
+- **Lever 1 (prefix sums).** Built for the cross products only, not the column's skip: after lever 2 the column costs about a third of what it did (a column's evaluation, support count and centring: 12–24 → 2.7–6.6 ns per case, indicative), so the 35% this report priced for skipping it is not there to take. The cross products' 16% at the base is mostly taken, where a design lives long enough to read a table back: the reach per (column, variable) at the base is 47 reads per table (3,767 builds, 173,256 reads in 20,000 sweeps), 8.6 at n = 200 and 2.3 at p = 200, and a table costs 11–17 dots to build (indicative). So tables serve a plain chain's scalar fit of at most 16 continuous predictors and 500 cases or more; not n = 200, not p = 200, not the categorical and direct points' interaction terms, not ladders or SMC. At M = 200 with n = 10,000 the 40% this report priced stays out of reach: the tables for all ten variables would hold 320 MB, and the 64 MiB budget serves two.
+- **Lever 2 (column kernels).** The column's 25% of the base sweep is lane arithmetic now: the kernels and the passes around them run 2.1–6.3× faster in one process (indicative), bit for bit.
+- **The commit's explicit residual (this report's lever 3).** 0.24–0.30 of its time where N·M or M is large (base 135 → 41 on the cycle clock, direct 500 × 1,000 36,857 → 9,415), 7.0× at N = 1,000, M = 20 in one process, and ×0.9 at direct 100 × 10, whose ten locations are shorter than the lanes pay for.
+- **Categorical membership (inside this report's lever 2 at the L points; the pass's lever 3).** 2.5× at L = 2 to 44.8× at L = 1,024 in one process, to 1.3–2 ns per case.
+- **The composition and τ (this report's lever 4; the pass's lever 5).** τ's block 0.40–0.50 of its time, from two memoized terms that depend on neither τ nor the structure (the marginal's `lnΓ` pair: 324 → 72 ns; the count prior's collection weight: 264 → 8 ns, indicative); the composition's fixed cost was left, its parts each under the 25% threshold.
+- **The sweep.** At the base about half the time (0.48), at L = 1,024 0.53, at direct 500 × 1,000 0.59, at direct 100 × 10 and n = 200 about 0.73 (cycle clock, ±40%, under 7–10 busy cores). **Indicative, not the wall clock and not a quiet window**: this report's own figures stand, and the pairs for the record wait for a quiet machine.
+
 ### The cost half measured (chip, 2026-10-31)
 
 **What landed** (on `main`, nothing pushed; tests and an R script only, no production file):
