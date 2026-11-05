@@ -136,7 +136,7 @@ No cost report prices this chain, and [the efficiency pass](efficiency-pass-brie
 
 ## Not in this brief
 
-- **G1's exact machinery.** With v moving, the structure is no longer a chain on an enumerable space. Whether heavy tails raise or lower the barriers between basins is unread, and worth a chip once slice 1 runs.
+- **G1's exact machinery.** With v moving, the structure is no longer a chain on an enumerable space. Whether heavy tails raise or lower the barriers between basins is unread, and it runs only if a decision comes to depend on it.
 - **Stefanski's logistic mixing (E20).** In the clone only; its route to logit is E20's.
 - **KHAOS.** Next ([the build order](lineage-review.md#build-order)), in a brief of its own, with CRAN's `khaos` 2.1.1 pinned the same way first. It shares this build's lineage and its method, not its pieces: it works on the basis, the proposals and the coefficient prior (E19, E4, E5, E21), which this build leaves alone, and it moves no latent. Once both exist their product costs nothing more: a polynomial-chaos basis under quantile or robust noise.
 
