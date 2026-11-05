@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using Maths.Distributions;
 using Maths.LinAlg;
+using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
 using Xunit;
@@ -163,6 +165,36 @@ public sealed class BassPrimitiveCostTests
             rows.Add(key, "speedup", old / now);
             _out.WriteLine($"membership {key}: old {old / n:F2} ns/case, new {now / n:F2}, ×{old / now:F1}");
         }
+        Finish(rows, load);
+    }
+
+    // Lever 5: the marginal's terms that τ and the structure do not move, read from the memo against computed at every evaluation, and the
+    // count prior's collection weight kept by M against computed; the direct forms are the old code.
+    [Fact]
+    public void Terms_OldAgainstNew()
+    {
+        if (!BassQualification.Enabled) return;
+        var rows = new BassCost.Rows("primitives", "terms");
+        foreach ((string q, string v) in BassCost.Machine()) rows.Add("machine", q, v);
+        var load = new BassCost.Load();
+        var terms = new Sigma2PriorTerms();
+        InverseGamma prior = InverseGamma.ShapeScale(2.0, 0.3);
+        var marginals = new GPriorMarginal[64];
+        for (int i = 0; i < marginals.Length; i++) marginals[i] = new GPriorMarginal(50.0 + 3.0 * i, -4.0 - 0.1 * i, 1000, 0.1 * (i + 1), 1.0);
+        int k = 0;
+        BassModel model = BassModel.Create(BassCost.Config(BassCost.Base with { N = 200, P = 4 }), BassCost.Data(BassCost.Base with { N = 200, P = 4 }));
+        BassStructurePrior structure = model.Prior;
+        double Direct(int m) => SpecialFunctions.LogGamma(structure.Count.Shape + m) - SpecialFunctions.LogGamma(structure.Count.Shape) - m * Math.Log(structure.Count.Rate + 1.0);
+        Dictionary<string, double[]> times = BassCost.Interleave(
+        [
+            ("marginal, direct", Timer(2000, () => marginals[k++ & 63].LogMarginal(prior))),
+            ("marginal, memo", Timer(2000, () => marginals[k++ & 63].LogMarginal(prior, terms))),
+            ("collection weight, direct", Timer(2000, () => Direct(k++ & 31))),
+            ("collection weight, kept", Timer(2000, () => structure.LogCollectionWeight(k++ & 31))),
+        ]);
+        foreach ((string name, double[] values) in times) rows.Add("terms", $"{name} ns per call", BassCost.Median(values));
+        _out.WriteLine($"marginal: direct {BassCost.Median(times["marginal, direct"]):F0} ns, memo {BassCost.Median(times["marginal, memo"]):F0} ns (×{BassCost.Median(times["marginal, direct"]) / BassCost.Median(times["marginal, memo"]):F1}); " +
+                       $"collection weight: direct {BassCost.Median(times["collection weight, direct"]):F0} ns, kept {BassCost.Median(times["collection weight, kept"]):F0} ns (×{BassCost.Median(times["collection weight, direct"]) / BassCost.Median(times["collection weight, kept"]):F1})");
         Finish(rows, load);
     }
 
