@@ -300,6 +300,7 @@ internal static class BassMixing
             Assert.True(birthProbe is not null || _state.Count == _model.MaxBasis, "No birth below the cap is admitted.");
             Assert.True(changeProbe is not null || _state.Count == 0, "No change is admitted.");
             var restored = _model.NewDesign();
+            restored.TablesOn = design.TablesOn;   // a chain's restored design asks for tables as the chain's does (lever 1: a pure cache, so the same numbers)
             restored.Restore(_before);
             var loaded = _model.NewDesign();
             Assert.Null(loaded.Load(_state.Terms));
