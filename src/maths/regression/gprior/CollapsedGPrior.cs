@@ -512,6 +512,29 @@ public readonly struct GPriorMarginal
     }
 
     /// <summary>
+    /// <see cref="LogMarginal(InverseGamma?)"/> with the terms that depend on neither τ nor the structure read from <paramref name="terms"/>,
+    /// which holds them for the σ² prior and ν it has seen: <c>g₁ln g₂</c>, <c>lnΓ(g₁ + ν/2)</c> and <c>lnΓ(g₁)</c> (the improper prior's
+    /// <c>lnΓ(ν/2)</c>) are computed once, not at every evaluation. The same expression in the same order, so the same bits.
+    /// </summary>
+    public double LogMarginal(InverseGamma? sigmaPrior, Sigma2PriorTerms terms)
+    {
+        ArgumentNullException.ThrowIfNull(terms);
+        double nb = 0.5 * _count * InverseTemperature - 0.5 * _spent;
+        double half = 0.5 * S;
+        double common = -nb * Log2Pi + LogDeterminantTerm;
+        if (sigmaPrior is InverseGamma prior)
+        {
+            if (!(prior.Shape + nb > 0.0)) throw new InvalidOperationException("σ²'s posterior shape g₁ + ν/2 is not positive.");
+            if (InverseTemperature == 0.0) return 0.0;
+            (double shapeLogScale, double logGammaPosterior, double logGammaPrior) = terms.Proper(prior.Shape, prior.Scale, nb);
+            return common + shapeLogScale + logGammaPosterior - logGammaPrior - (prior.Shape + nb) * Math.Log(prior.Scale + half);
+        }
+        if (!(S > 0.0)) throw new InvalidOperationException("The improper σ² prior needs S > 0.");
+        if (!(nb > 0.0)) throw new InvalidOperationException("The improper σ² prior needs ν > 0.");
+        return common + terms.Improper(nb) - nb * Math.Log(half);
+    }
+
+    /// <summary>
     /// The complete <c>ln p_b(y | Z, τ, σ²)</c> with β integrated out and σ² given (the structure step's form when σ² is
     /// held or drawn apart, D04's generalized-hyperbolic row): <c>−(ν/2)ln(2πσ²) + LogDeterminantTerm − S/(2σ²)</c>, from the
     /// same S and determinant term as <see cref="LogMarginal"/>, which is its integral against σ²'s prior. Finite for an exact
@@ -536,6 +559,50 @@ public readonly struct GPriorMarginal
     private static void CheckGiven(double sigma2)
     {
         if (!(sigma2 > 0.0) || double.IsPositiveInfinity(sigma2)) throw new ArgumentOutOfRangeException(nameof(sigma2), "σ² must be positive and finite.");
+    }
+}
+
+/// <summary>
+/// The terms of <see cref="GPriorMarginal.LogMarginal(InverseGamma?, Sigma2PriorTerms)"/> that depend on σ²'s prior and the observation
+/// count ν but on neither τ nor the structure: <c>g₁ln g₂</c>, <c>lnΓ(g₁ + ν/2)</c> and <c>lnΓ(g₁)</c>, or the improper prior's
+/// <c>lnΓ(ν/2)</c>. Each is computed once per (prior, ν) it is asked for, by the expression the marginal evaluates, and kept in a few
+/// slots by ν, so a τ update that evaluates the marginal several times per step, and a ladder's rungs at their own b, read them
+/// instead of calling the log-gamma twice per evaluation. Immutable entries behind a reference, so one instance serves every chain.
+/// </summary>
+public sealed class Sigma2PriorTerms
+{
+    private sealed class Entry(double shape, double scale, double nb, double shapeLogScale, double logGammaPosterior, double logGammaPrior)
+    {
+        public readonly double Shape = shape, Scale = scale, Nb = nb, ShapeLogScale = shapeLogScale, LogGammaPosterior = logGammaPosterior, LogGammaPrior = logGammaPrior;
+    }
+
+    private const int Slots = 8;
+    private readonly Entry?[] _slots = new Entry?[Slots];
+
+    private static int SlotOf(double nb) => (int)((ulong)BitConverter.DoubleToInt64Bits(nb) * 0x9E3779B97F4A7C15UL >> 61);
+
+    internal (double ShapeLogScale, double LogGammaPosterior, double LogGammaPrior) Proper(double shape, double scale, double nb)
+    {
+        int slot = SlotOf(nb);
+        Entry? e = _slots[slot];
+        if (e is not null && e.Shape == shape && e.Nb == nb)
+        {
+            // g₂ moves with a hierarchical prior's rate; only g₁ln g₂ follows it.
+            return e.Scale == scale ? (e.ShapeLogScale, e.LogGammaPosterior, e.LogGammaPrior) : (shape * Math.Log(scale), e.LogGammaPosterior, e.LogGammaPrior);
+        }
+        e = new Entry(shape, scale, nb, shape * Math.Log(scale), SpecialFunctions.LogGamma(shape + nb), SpecialFunctions.LogGamma(shape));
+        _slots[slot] = e;
+        return (e.ShapeLogScale, e.LogGammaPosterior, e.LogGammaPrior);
+    }
+
+    internal double Improper(double nb)
+    {
+        int slot = SlotOf(nb);
+        Entry? e = _slots[slot];
+        if (e is not null && double.IsNaN(e.Shape) && e.Nb == nb) return e.LogGammaPosterior;
+        e = new Entry(double.NaN, double.NaN, nb, double.NaN, SpecialFunctions.LogGamma(nb), double.NaN);
+        _slots[slot] = e;
+        return e.LogGammaPosterior;
     }
 }
 

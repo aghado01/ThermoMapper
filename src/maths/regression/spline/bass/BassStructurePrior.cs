@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Maths.Distributions;
 using Maths.Rng;
 
@@ -178,9 +179,17 @@ public sealed class BassStructurePrior
     public double LogCollectionWeight(int terms)
     {
         if (terms < 0) throw new ArgumentOutOfRangeException(nameof(terms));
-        return SpecialFunctions.LogGamma(Count.Shape + terms) - SpecialFunctions.LogGamma(Count.Shape)
-               - terms * Math.Log(Count.Rate + 1.0);
+        if (terms >= CollectionWeights) return CollectionWeightAt(terms);
+        double cached = _collectionWeight[terms];   // a pure function of M, kept once read: τ's slice step asks it six times a sweep
+        if (!double.IsNaN(cached)) return cached;
+        return _collectionWeight[terms] = CollectionWeightAt(terms);
     }
+
+    private const int CollectionWeights = 1024;
+    private readonly double[] _collectionWeight = Enumerable.Repeat(double.NaN, CollectionWeights).ToArray();
+
+    private double CollectionWeightAt(int terms)
+        => SpecialFunctions.LogGamma(Count.Shape + terms) - SpecialFunctions.LogGamma(Count.Shape) - terms * Math.Log(Count.Rate + 1.0);
 
     /// <summary>
     /// ln p(M + 1)/p(M) = ln[(M + h₁)/((M + 1)(h₂ + 1))], the count law's ratio with λ integrated out: a birth's count

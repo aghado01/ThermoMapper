@@ -260,7 +260,11 @@ public sealed class BassStructureMoves
         int m = state.Count;
         var ids = new int[m];
         for (int j = 0; j < m; j++) ids[j] = terms.Intern(state.Terms[j]);
-        int[] order = [.. Enumerable.Range(0, m).OrderBy(j => ids[j])];
+        // The terms in the ids' order; the ids are distinct, so the sort has one answer, and `sorted` is the structure's ids.
+        var order = new int[m];
+        for (int j = 0; j < m; j++) order[j] = j;
+        int[] sorted = (int[])ids.Clone();
+        Array.Sort(sorted, order);
         var coefficients = new double[m + 1];
         double intercept = centred[0];
         for (int k = 0; k < m; k++)
@@ -270,7 +274,7 @@ public sealed class BassStructureMoves
             intercept -= centred[j + 1] * ColumnMean(state.Terms[j]);
         }
         coefficients[0] = intercept;
-        return new BassDraw(new BassStructure([.. order.Select(j => ids[j])]), tau, sigma2, coefficients, lambda, target.Sigma2Rate?.RateAt(state.LogRate),
+        return new BassDraw(new BassStructure(sorted), tau, sigma2, coefficients, lambda, target.Sigma2Rate?.RateAt(state.LogRate),
                             _design.Working.IsResponseItself ? null : _design.Working);
     }
 

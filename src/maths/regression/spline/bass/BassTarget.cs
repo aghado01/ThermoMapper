@@ -235,8 +235,11 @@ public sealed class BassTarget : ISamplingTarget<BassState>
         return CollapsedGPrior.CentredRidgeMarginalAt(ridge, fit.ResidualSquares, Observations, mean, Intercept, precision, inverseTemperature, weighting, PriorLevel);
     }
 
+    // The marginal's terms that τ and the structure do not move, held once per σ² prior and count (lever 5 of the efficiency pass).
+    private readonly Sigma2PriorTerms _sigma2Terms = new();
+
     // ln p_b of a structure's marginal: σ² integrated against its prior at this state, or given.
-    internal double LogValue(in GPriorMarginal marginal, InverseGamma? sigma2) => GivenSigma2 is double given ? marginal.LogMarginalGiven(given) : marginal.LogMarginal(sigma2);
+    internal double LogValue(in GPriorMarginal marginal, InverseGamma? sigma2) => GivenSigma2 is double given ? marginal.LogMarginalGiven(given) : marginal.LogMarginal(sigma2, _sigma2Terms);
 
     // ∂/∂b of LogValue.
     internal double LogSlope(in GPriorMarginal marginal, InverseGamma? sigma2) => GivenSigma2 is double given ? marginal.LogMarginalGivenSlope(given) : marginal.LogMarginalSlope(sigma2);
