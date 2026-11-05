@@ -38,6 +38,11 @@ Rscript scripts/bootstrap.R    # installs the oracle package set and writes renv
 Thereafter `rnr` (`renv::restore`) reproduces the exact library from `renv.lock`;
 `rnsnap` (`renv::snapshot`) re-pins after adding a package.
 
+A reference package comes from CRAN through the lock, as `GBASS` 2.0.1 does for
+[E1's oracle modes](../issues/regression/bass/gbass-noise-brief.md). R BASS's source
+oracles are the exception: they read a checkout at a pinned commit (`bass_source`,
+`BASS_R_SOURCE`, default `D:/aghado01/packages/bayesian-related/BASS`).
+
 ## How the C# tests reach it
 
 A parity test resolves `Rscript.exe` from the live/user environment or the PDenv
