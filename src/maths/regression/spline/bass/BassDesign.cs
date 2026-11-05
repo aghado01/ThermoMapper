@@ -165,6 +165,56 @@ public sealed class BassDesign
     private Pending? _pending;
     private RidgeSpectrum? _spectrum;   // the current structure's, under the ridge; null until read
 
+    // Lever 1 of the efficiency pass: the cross products of a one-way hinge with the held columns, from prefix tables. A table is a pure
+    // cache, per (column, variable, sign), built the first time a proposal needs it and dropped with its column; which proposals read tables
+    // is decided once, by the design's size, never by what the cache holds, so a restored design, a handed-over one and a live one compute
+    // the same numbers. Tables serve the leading variables whose tables, at the cap, fit TableBytesAllowed.
+    private const int MaxTableVariables = 16;   // past this a (column, variable, sign) is reached too seldom for a table to pay (measured)
+    private const int MinTableCases = 500;      // below this a dot is cheaper than the scan's setup (measured)
+    private const long DefaultTableBytes = 64L << 20;
+    private const double NearGate = 1e4;   // a table proposal whose bordered minimum angle is under this many floors takes the dots
+    private readonly List<ColumnTables?> _tables = [];   // aligned with _a
+    private HingeOrder?[]? _orders;                       // per continuous variable, built when first read
+    private bool[]? _ordersTried;
+    private int _tableVariables = -1;
+
+    private sealed class ColumnTables(int variables)
+    {
+        public readonly double[]?[] Above = new double[]?[variables], Below = new double[]?[variables];
+    }
+
+    // BASS_TABLES = off or on, for a measurement to set for a whole process; unset, the design's size decides.
+    private static readonly string? TablesSetting = Environment.GetEnvironmentVariable("BASS_TABLES");
+
+    /// <summary>Whether a one-way hinge's cross products come from prefix tables.</summary>
+    internal bool TablesOn { get; set; }
+
+    /// <summary>The bytes the tables may hold at the cap; the leading variables that fit are served.</summary>
+    internal long TableBytesAllowed
+    {
+        get => _tableBytesAllowed;
+        set
+        {
+            _tableBytesAllowed = value;
+            _tableVariables = -1;
+        }
+    }
+
+    private long _tableBytesAllowed = DefaultTableBytes;
+
+    /// <summary>The border of <paramref name="term"/>, if a one-way hinge that tables serve, from the tables and from the dots; null
+    /// where tables do not apply.</summary>
+    internal (double[] Tabled, double[] Dotted)? BorderComparison(BassTerm term)
+    {
+        if (Evaluate(term, _response) is not var (column, output, _)) return null;
+        double[]? tabled = TableBorder(term, column, out _, out bool approximate);
+        return tabled is null || !approximate ? null : (tabled, Border(column, output, -1, out _));
+    }
+
+    /// <summary>Table entries read, dot entries beside them (a variable no table serves), tables built, and proposals the dots re-decided
+    /// near the gate.</summary>
+    internal long TableLookups, TableBuilds, TableFallbacks;
+
     /// <summary>The intercept-only design over <paramref name="basis"/>'s inputs for <paramref name="working"/>, the
     /// observation model's working response for <paramref name="data"/>'s (the response itself when null);
     /// <paramref name="ridge"/> keeps the normalized ridge's spectrum and proposal terms beside the factor; and
@@ -184,6 +234,7 @@ public sealed class BassDesign
         _cases = data.Response.Cases;
         _locations = data.Response.Locations;
         _rows = data.Response.Observations;
+        TablesOn = TablesSetting switch { "off" => false, "on" => true, _ => basis.Inputs.Cases.ContinuousCount <= MaxTableVariables && _cases >= MinTableCases };
         if (basis.Inputs.Cases.Cases != _cases) throw new ArgumentException("The basis was not prepared from these data.", nameof(basis));
         working ??= new WorkingResponse(data.Response);
         if (!ReferenceEquals(working.Response, data.Response)) throw new ArgumentException("The working response is of another response.", nameof(working));
@@ -329,11 +380,22 @@ public sealed class BassDesign
         if (_terms.Contains(term)) return DesignProposal.Refused(BassRefusal.Numerical);
         if (Evaluate(term, _response) is not var (column, output, prior)) return DesignProposal.Refused(BassRefusal.Support);
         EnsureCapacity(_terms.Count + 1);
-        double[] border = Border(column, output, -1, out double diagonal);
+        double[]? tabled = TableBorder(term, column, out double diagonal, out bool approximate);
+        double[] border = tabled ?? Border(column, output, -1, out diagonal);
         double bEntry = CrossResponse(column, output);
+        double crossResidual = CrossResidual(column, output);
         FactorProposal p = _factor.ProposeBirth(border, diagonal);
-        return Decide(Move.Birth, _terms.Count, term, column, output, border, border, diagonal, bEntry, p,
-                      ResidualSquares, CrossResidual(column, output), prior);
+        DesignProposal? account = Decide(Move.Birth, _terms.Count, term, column, output, border, border, diagonal, bEntry, p,
+                                         ResidualSquares, crossResidual, prior, approximate);
+        if (account is null)   // near the gate or the explicit residual: the dots decide
+        {
+            TableFallbacks++;
+            border = Border(column, output, -1, out diagonal);
+            p = _factor.ProposeBirth(border, diagonal);
+            account = Decide(Move.Birth, _terms.Count, term, column, output, border, border, diagonal, bEntry, p,
+                             ResidualSquares, crossResidual, prior);
+        }
+        return account.Value;
     }
 
     /// <summary>Proposes removing term <paramref name="index"/>. A death never leaves F, since the gate is downward closed.</summary>
@@ -373,8 +435,10 @@ public sealed class BassDesign
         }
         if (_terms.Contains(term)) return DesignProposal.Refused(BassRefusal.Numerical);
         if (Evaluate(term, _response) is not var (column, output, prior)) return DesignProposal.Refused(BassRefusal.Support);
-        double[] full = Border(column, output, -1, out double diagonal);
+        double[]? tabled = TableBorder(term, column, out double diagonal, out bool approximate);
+        double[] full = tabled ?? Border(column, output, -1, out diagonal);
         double bEntry = CrossResponse(column, output);
+        double crossResidual = CrossResidual(column, output);
 
         // The reduced model, term index removed: ‖r‖² gains β̂_m²/(G⁻¹)_mm, and zᵀr gains β̂_m·uᵀG⁻¹e_m/(G⁻¹)_mm.
         var unit = new double[_terms.Count];
@@ -382,11 +446,27 @@ public sealed class BassDesign
         _factor.SolveInPlace(unit);
         double inverseDiagonal = unit[index], beta = _beta[index];
         double rssReduced = ResidualSquares + beta * beta / inverseDiagonal;
-        double zrReduced = CrossResidual(column, output) + beta * PairwiseSum.Dot(full, unit) / inverseDiagonal;
 
+        DesignProposal? account = ChangeAccount(index, term, column, output, prior, full, diagonal, bEntry, rssReduced, crossResidual, beta, inverseDiagonal, unit, approximate);
+        if (account is null)   // near the gate or the explicit residual: the dots decide
+        {
+            TableFallbacks++;
+            full = Border(column, output, -1, out diagonal);
+            account = ChangeAccount(index, term, column, output, prior, full, diagonal, bEntry, rssReduced, crossResidual, beta, inverseDiagonal, unit, false);
+        }
+        return account.Value;
+    }
+
+    // A change's account from the candidate's border against every current column, `full`; null when the border came from tables
+    // and the proposal needs the dots' exactness.
+    private DesignProposal? ChangeAccount(int index, BassTerm term, double[] column, double[]? output, BassPriorColumn? prior, double[] full,
+                                          double diagonal, double bEntry, double rssReduced, double crossResidual, double beta, double inverseDiagonal,
+                                          double[] unit, bool approximate)
+    {
+        double zrReduced = crossResidual + beta * PairwiseSum.Dot(full, unit) / inverseDiagonal;
         double[] border = Without(full, index);
         FactorProposal p = _factor.ProposeChange(index, border, diagonal);
-        return Decide(Move.Change, index, term, column, output, border, full, diagonal, bEntry, p, rssReduced, zrReduced, prior);
+        return Decide(Move.Change, index, term, column, output, border, full, diagonal, bEntry, p, rssReduced, zrReduced, prior, approximate);
     }
 
     /// <summary>
@@ -480,6 +560,7 @@ public sealed class BassDesign
         {
             _terms.RemoveAt(p.Index);
             _a.RemoveAt(p.Index);
+            DropTables(p.Index);
             if (_khatriRao) _h.RemoveAt(p.Index);
             _b.RemoveAt(p.Index);
             _priorColumns?.RemoveAt(p.Index);
@@ -488,6 +569,7 @@ public sealed class BassDesign
         {
             _terms.Add(p.Term!);
             _a.Add(p.Column!);
+            _tables.Add(null);
             if (_khatriRao) _h.Add(p.Output!);
             _b.Add(p.BEntry);
             if (p.Prior is { } prior) _priorColumns!.Add(prior);
@@ -506,6 +588,7 @@ public sealed class BassDesign
         if (f.Columns is { } columns)
         {
             _a.Clear(); _a.AddRange(columns);
+            ResetTables();
             _factor = f.Factor!;
             if (_priorColumns is not null)
             {
@@ -568,6 +651,7 @@ public sealed class BassDesign
         _spectrum = null;
         _terms.Clear(); _terms.AddRange(terms);
         _a.Clear(); _a.AddRange(columns);
+        ResetTables();
         _h.Clear(); _h.AddRange(outputs);
         _b.Clear(); _b.AddRange(b);
         if (_priorColumns is not null)
@@ -630,6 +714,7 @@ public sealed class BassDesign
             _b.Add(CrossResponse(column, output));
             if (prior is not null) _priorColumns!.Add(prior);
         }
+        ResetTables();
         _factor = snapshot.Factor.Copy();
         _spectrum = _ridge ? snapshot.Spectrum : null;
         if (_priorColumns is not null)
@@ -653,12 +738,16 @@ public sealed class BassDesign
         return drift;
     }
 
-    // `border` is the new column's Gram entries against the candidate's other columns, `full` against every current one.
-    private DesignProposal Decide(Move kind, int index, BassTerm term, double[] column, double[]? output, double[] border,
-                                  double[] full, double diagonal, double bEntry, FactorProposal p, double rssReduced, double zrReduced,
-                                  BassPriorColumn? prior = null)
+    // `border` is the new column's Gram entries against the candidate's other columns, `full` against every current one. With
+    // `approximate`, the border holds table entries, within rounding of the dots': null is returned, and the dots decide, for a proposal
+    // that is not clear of the gate (bordered minimum angle under NearGate floors, or not positive definite) or whose residual
+    // explanation passes the explicit threshold.
+    private DesignProposal? Decide(Move kind, int index, BassTerm term, double[] column, double[]? output, double[] border,
+                                   double[] full, double diagonal, double bEntry, FactorProposal p, double rssReduced, double zrReduced,
+                                   BassPriorColumn? prior = null, bool approximate = false)
     {
         double floor = _rules.AngleFloor;
+        if (approximate && !(p.PositiveDefinite && p.MinLeaveOneOutPivot >= NearGate * floor)) return null;
         double[] b = kind == Move.Change ? Without(_b, index) : [.. _b];
         Array.Resize(ref b, b.Length + 1);
         b[^1] = bEntry;
@@ -686,7 +775,10 @@ public sealed class BassDesign
 
         double rss = rssReduced - zrReduced * zrReduced / (newest * diagonal);
         if (!(rss > ExplicitBelow * rssReduced))
+        {
+            if (approximate) return null;
             rss = ExplicitResidualSquares(kind == Move.Change ? index : -1, column, output, strict ?? Candidate(kind == Move.Change ? index : -1, border, diagonal), b);
+        }
         // The ridge's terms: bordered on the current spectrum, or, where the strict factorization decided, the candidate's
         // own decomposition, which an acceptance keeps.
         RidgeColumns? ridge = null;
@@ -879,6 +971,83 @@ public sealed class BassDesign
             if (j != skip) { a[k] = _a[j]; h[k++] = _h[j]; }
         return KhatriRao.CentredBorder(a, h, column, output!, out diagonal);
     }
+
+    // The border of a one-way hinge against the current columns, each entry the column's prefix table at the hinge's knot (built here the
+    // first time it is needed) over c, the hinge's peak. The diagonal is the column's own dot. Null where tables do not serve this
+    // proposal: a design too small or with too many variables for them to pay, a direct design, a prior apart from the Gram, weights that
+    // count rows, degree three or more, a term of order two or more or with a categorical or functional part, or a variable past the budget.
+    // `approximate` is true with a column to read from: the entries are the dots' within rounding, not in bits. Under weights the table is over
+    // roots∘z, since Σ rootᵢ zᵢ = 0 drops the new column's centring.
+    private double[]? TableBorder(BassTerm term, double[] column, out double diagonal, out bool approximate)
+    {
+        diagonal = 0.0;
+        approximate = false;
+        int degree = _basis.Degree;
+        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || degree is not (1 or 2)
+            || term.Continuous.Count != 1 || term.Categorical.Count != 0 || term.Functional.Count != 0)
+            return null;
+        HingeFactor f = term.Continuous[0];
+        if (f.Variable >= TableVariables() || OrderOf(f.Variable) is not { } order) return null;
+        double sign = f.Sign, c = Hinge.Power(degree, (sign + 1.0) / 2.0 - sign * order.Knots[f.Knot]);
+        int variables = _basis.Inputs.Cases.ContinuousCount;
+        double[]? roots = _response.Roots;
+        var u = new double[_terms.Count];
+        for (int j = 0; j < u.Length; j++)
+        {
+            ColumnTables tables = _tables[j] ??= new ColumnTables(variables);
+            double[]? table = f.Sign > 0 ? tables.Above[f.Variable] : tables.Below[f.Variable];
+            if (table is null)
+            {
+                if (f.Sign > 0) tables.Above[f.Variable] = table = HingeScan.Above(_a[j], roots, order, degree);
+                else tables.Below[f.Variable] = table = HingeScan.Below(_a[j], roots, order, degree);
+                TableBuilds++;
+            }
+            u[j] = c == 0.0 ? table[f.Knot] : table[f.Knot] / c;
+            TableLookups++;
+            approximate = true;
+        }
+        diagonal = PairwiseSum.Dot(column, column);
+        return u;
+    }
+
+    // The leading variables whose tables, for every column the cap allows and both signs, fit TableBytesAllowed: a function of the inputs
+    // and the cap, not of what the design holds.
+    private int TableVariables()
+    {
+        if (_tableVariables >= 0) return _tableVariables;
+        long used = 0;
+        int served = 0;
+        for (; served < _basis.Inputs.Cases.ContinuousCount; served++)
+        {
+            long bytes = 16L * Math.Max(_rules.MaxBasis, 1) * _basis.Inputs.ContinuousKnots(served).Length;
+            if (used + bytes > _tableBytesAllowed) break;
+            used += bytes;
+        }
+        return _tableVariables = served;
+    }
+
+    // The cases of continuous variable `variable` in order, built when first read; null where its knots are not its values' distinct entries.
+    private HingeOrder? OrderOf(int variable)
+    {
+        CaseInputs cases = _basis.Inputs.Cases;
+        _orders ??= new HingeOrder?[cases.ContinuousCount];
+        _ordersTried ??= new bool[cases.ContinuousCount];
+        if (!_ordersTried[variable])
+        {
+            _ordersTried[variable] = true;
+            _orders[variable] = HingeOrder.Of(cases.Continuous(variable), _basis.Inputs.ContinuousKnots(variable));
+        }
+        return _orders[variable];
+    }
+
+    // The tables follow their columns: every column starts without one.
+    private void ResetTables()
+    {
+        _tables.Clear();
+        for (int j = 0; j < _a.Count; j++) _tables.Add(null);
+    }
+
+    private void DropTables(int index) => _tables.RemoveAt(index);
 
     // ‖a ⊗ h − āh̄‖² by the three-term form: ‖α‖²‖η‖² + n·ā²‖η‖² + m·h̄²‖α‖², no cancellation.
     private double CentredSelf(double[] a, double[] h)
