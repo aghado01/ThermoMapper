@@ -167,7 +167,7 @@ internal static class CostProfile
             if (Warmed.Add(CurrentBlock + "/" + parts[p].Name)) WarmUp(parts[p]);
             (counts[p], heavy[p]) = Calibrate(parts[p], scaled);
         }
-        for (int p = 0; p < m; p++) parts[p].Run(counts[p]);   // the warm-up batch, discarded
+        for (int p = 0; p < m; p++) if (!heavy[p]) parts[p].Run(counts[p]);   // the warm-up batch, discarded (a heavy part's calibration call was its own)
         var times = new List<double>[m];
         var bytes = new List<double>[m];
         var pause = new double[m];
@@ -228,7 +228,9 @@ internal static class CostProfile
 
     private static (int Count, bool Heavy) Calibrate(Part part, double batchMs)
     {
+        long first0 = Stopwatch.GetTimestamp();
         part.Run(1);
+        if (Seconds(Stopwatch.GetTimestamp() - first0) * 1e3 > HeavyMs) return (1, true);   // already warmed by WarmUp or an earlier point
         int c = 1;
         double elapsed;
         while (true)
@@ -367,7 +369,7 @@ internal static class CostProfile
         Row(block, "(load)", "", "other_cores_busy", busy);
         Row(block, "(load)", "", "own_cpu_over_wall", own);
         Row(block, "(load)", "", "free_memory_gb_start", free);
-        Row(block, "(load)", "", "wall_s", watch.Elapsed.TotalSeconds);
+        Row(block, "(load)", "", "block_wall_s", watch.Elapsed.TotalSeconds);
         lock (Gate)
         {
             Append(_buffer!.ToString());
