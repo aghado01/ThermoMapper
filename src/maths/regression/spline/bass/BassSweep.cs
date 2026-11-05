@@ -158,7 +158,12 @@ public sealed class BassStructureMoves
     }
 
     // Asks for prefix tables on the design: a plain chain's lives long enough to read them back (BassDesign.EnableTables).
-    internal void UseTables() => _design.EnableTables();
+    internal void UseTables()
+    {
+        // A model whose latent block moves the working response between sweeps re-whitens every column each time, which discards the tables.
+        if (_model.Observation.Blocks(BassSweepSlot.Latent).Count > 0) return;
+        _design.EnableTables();
+    }
 
     // Builds every table the design could be asked for, for a measurement that begins from a restored chain's state.
     internal void WarmTables() => _design.WarmTables();

@@ -5,6 +5,7 @@ using Maths.LinAlg;
 using Maths.Regression.GPrior;
 using Maths.Regression.Spline.Bass;
 using Maths.Rng;
+using Maths.Samplers.Blocks;
 using Maths.Samplers.Ensemble;
 using Maths.Samplers.Rjmcmc;
 using Xunit;
@@ -418,6 +419,30 @@ public sealed class BassPrefixTableTests
         BassModel wide = Model(600, 20, 12, weighted: false, out _);
         BassChain many = BassMixing.Chain(wide, 0);
         Assert.False(many.Structure.DesignAt(many.Current).TablesOn, "20 predictors are too many for tables to pay");
+    }
+
+    // A model whose latent block moves the working response re-whitens every column each sweep, which discards the tables: its chain keeps the dots.
+    private sealed class MovingLatent : IBassObservationModel
+    {
+        private sealed class NoOp : IBlock<ReversibleJumpChain<BassState>>
+        {
+            public string Name => "latent";
+
+            public bool Update(ReversibleJumpChain<BassState> state, Xoshiro256PlusPlus rng) => false;
+        }
+
+        public WorkingResponse Working(BassResponse response) => new(response);
+
+        public IReadOnlyList<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassSweepSlot slot) => slot == BassSweepSlot.Latent ? [new NoOp()] : [];
+    }
+
+    [Fact]
+    public void Tables_AreNotAskedForWhereTheWorkingResponseMoves()
+    {
+        var point = BassCost.Base with { N = 600, P = 6, Cap = 12 };
+        BassModel moving = BassModel.Create(BassCost.Config(point), BassCost.Data(point), new MovingLatent());
+        BassChain chain = BassMixing.Chain(moving, 0);
+        Assert.False(chain.Structure.DesignAt(chain.Current).TablesOn);
     }
 
     // ---- Purity ----
