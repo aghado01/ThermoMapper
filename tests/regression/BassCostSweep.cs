@@ -222,6 +222,7 @@ internal static class BassCostSweep
                 BlockRng = new Xoshiro256PlusPlus(seeds[2 * (round + 1) + 1]).SaveState(),
             };
             BassChain run = BassChain.Restore(model, reseeded);
+            BassCost.WarmTables(run.Structure);
             // The column means' cache filled, as a running chain holds it at its state: a restored chain starts it empty. On
             // the harness's stream, so the chain's own streams, and its path, are untouched.
             run.Compose(rng, table);

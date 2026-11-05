@@ -20,13 +20,13 @@ namespace Maths.Regression.Tests;
 /// <item>A tempered BARS fit, which calls the same ladder: its fit and sd on the grid, and the ladder's readout.</item>
 /// </list>
 /// A hash moves only when a change moves the draws; regenerating one is a deliberate, called-out act.
-/// <para><b>Re-baselined 2026-11-04 (the efficiency pass's lever 1).</b> A one-way hinge's cross products with the held columns come from
-/// prefix tables in a scalar fit of at most 16 continuous predictors and at least 500 cases, which the Friedman fixture is (the mixed and
-/// functional fixtures are not). The tables differ from the dots by rounding, at most 4·K·ε of the columns' norms, so the draws differ in
-/// their last digits and the three Friedman hashes moved: untempered equal ee7d60a2738b56d8 → 07d9e2ca9822490c, untempered cancelling
-/// 414e30ea867f9058 → 9e1e7fb5e46ca40b, tempered 0d067c924599ed93 → 4a08c9eb42487316. With <c>BASS_TABLES=off</c> in the environment, all eight
-/// former values hold, which is the check that the pass's other levers left every bit; the structure sequences with tables on and off are
-/// identical (<c>BassPrefixTableTests</c>).</para>
+/// <para><b>Re-baselined 2026-11-04 (the efficiency pass's lever 1).</b> In a plain chain of a scalar fit of at most 16 continuous predictors and
+/// at least 500 cases, which the untempered Friedman fixture is (the mixed, functional and tempered ones are not: a ladder's replicas, handed
+/// states over, keep the dots), a one-way hinge's cross products with the held columns come from prefix tables. They differ from the dots by
+/// rounding, at most 4·K·ε of the columns' norms, so the draws differ in their last digits and two hashes moved: untempered equal
+/// ee7d60a2738b56d8 → 07d9e2ca9822490c, untempered cancelling 414e30ea867f9058 → 9e1e7fb5e46ca40b. With <c>BASS_TABLES=off</c> in the
+/// environment all eight former values hold, which is the check that the pass's other levers left every bit; the structure sequences with
+/// tables on and off are identical (<c>BassPrefixTableTests</c>).</para>
 /// </summary>
 public sealed class BassBitIdentityTests
 {
@@ -97,7 +97,7 @@ public sealed class BassBitIdentityTests
         BassFit fit = Bass.Fit(config, data);
         string hash = Hash(fit);
         _out.WriteLine($"Friedman tempered: {hash}; levels {string.Join(", ", fit.Diagnostics.Tempering!.Levels)}");
-        Assert.Equal("4a08c9eb42487316", hash);
+        Assert.Equal("0d067c924599ed93", hash);
     }
 
     [Fact]

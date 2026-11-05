@@ -399,6 +399,27 @@ public sealed class BassPrefixTableTests
         Assert.True(worstDensity <= 1e-9);
     }
 
+    // ---- Who asks ----
+
+    // A design reads tables only when asked: a plain chain's does, by its size; a bare design, a ladder's replica and a particle's step do not.
+    [Fact]
+    public void Tables_AreAskedForByAPlainChainOnly()
+    {
+        BassModel model = Model(600, 6, 12, weighted: false, out _);
+        Assert.False(model.NewDesign().TablesOn);
+        BassChain chain = BassMixing.Chain(model, 0);
+        Assert.True(chain.Structure.DesignAt(chain.Current).TablesOn);
+        (BassState start, int[] seeds) = BassMixing.Start(model, 0);
+        var ladder = new BassLadder(model, new TemperingSpec { Levels = 3, Adaptive = false }, [1.0, 0.5, 0.2], start.Terms, start.LogTau, seeds[3]);
+        for (int j = 0; j < 3; j++) Assert.False(ladder.Structures[j].DesignAt(ladder.Tempering.Replicas[j].Current).TablesOn);
+        BassModel small = Model(300, 6, 12, weighted: false, out _);
+        BassChain few = BassMixing.Chain(small, 0);
+        Assert.False(few.Structure.DesignAt(few.Current).TablesOn, "300 cases are too few for tables to pay");
+        BassModel wide = Model(600, 20, 12, weighted: false, out _);
+        BassChain many = BassMixing.Chain(wide, 0);
+        Assert.False(many.Structure.DesignAt(many.Current).TablesOn, "20 predictors are too many for tables to pay");
+    }
+
     // ---- Purity ----
 
     [Fact]

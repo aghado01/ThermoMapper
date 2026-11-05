@@ -285,6 +285,11 @@ internal static class BassCost
     /// <summary>A term's order: its factors over every part.</summary>
     internal static int OrderOf(BassTerm t) => t.Continuous.Count + t.Categorical.Count + t.Functional.Count;
 
+    /// <summary>Builds the tables a chain's design reads, where the build has them, so that a reading of a restored chain begins where a
+    /// running chain is after its first few hundred sweeps. By name, since a build without tables has no such method.</summary>
+    internal static void WarmTables(BassStructureMoves moves)
+        => typeof(BassStructureMoves).GetMethod("WarmTables", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.Invoke(moves, null);
+
     // ---- The clock ----
 
     /// <summary>Whether a time is read on the thread's own cycle counter (<c>BASS_COST_CLOCK</c> = cycles) rather than the wall clock. A

@@ -157,6 +157,12 @@ public sealed class BassStructureMoves
         return new BassMovesSnapshot(_design.Snapshot(), Refusals.Copy(), EmptyBirths, Support.Copy(), Kinds.Copy());
     }
 
+    // Asks for prefix tables on the design: a plain chain's lives long enough to read them back (BassDesign.EnableTables).
+    internal void UseTables() => _design.EnableTables();
+
+    // Builds every table the design could be asked for, for a measurement that begins from a restored chain's state.
+    internal void WarmTables() => _design.WarmTables();
+
     /// <summary>The chain's design, holding <paramref name="state"/>'s structure.</summary>
     public BassDesign DesignAt(BassState state)
     {
@@ -584,6 +590,7 @@ public sealed class BassChain
     {
         ArgumentNullException.ThrowIfNull(model);
         Structure = new BassStructureMoves(model, start, logTau, logRate);
+        Structure.UseTables();
         Moves = new ReversibleJumpChain<BassState>(Structure.Moves, target ?? model.Target, Structure.Start, moveRng);
         Scan = new BlockScan<ReversibleJumpChain<BassState>>(BassSweepSlots.Blocks(model), Moves, blockRng, chain => chain);
     }
@@ -614,6 +621,7 @@ public sealed class BassChain
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(snapshot);
         var structure = new BassStructureMoves(model, snapshot.Chain.Current, snapshot.Structure);
+        structure.UseTables();
         ISamplingTarget<BassState> sampled = target ?? model.Target;
         var moves = ReversibleJumpChain<BassState>.Restore(structure.Moves, sampled, snapshot.Chain);
         (ulong r0, ulong r1, ulong r2, ulong r3) = snapshot.BlockRng;

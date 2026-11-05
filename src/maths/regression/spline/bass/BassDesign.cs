@@ -183,11 +183,42 @@ public sealed class BassDesign
         public readonly double[]?[] Above = new double[]?[variables], Below = new double[]?[variables];
     }
 
-    // BASS_TABLES = off or on, for a measurement to set for a whole process; unset, the design's size decides.
+    // BASS_TABLES = off or on, for a measurement to set for a whole process; unset, a plain chain asks for tables (EnableTables) and the
+    // design's size decides.
     private static readonly string? TablesSetting = Environment.GetEnvironmentVariable("BASS_TABLES");
 
-    /// <summary>Whether a one-way hinge's cross products come from prefix tables.</summary>
-    internal bool TablesOn { get; set; }
+    /// <summary>Whether a one-way hinge's cross products come from prefix tables. Off for a design that is not asked: a table costs about
+    /// a dot's worth of work ten times over to build, so it pays only to a design that lives long enough to read it back, which a chain's does and a
+    /// particle's step, a handed-over replica's or a draw's does not.</summary>
+    internal bool TablesOn { get; set; } = TablesSetting == "on";
+
+    /// <summary>Asks for tables on a chain's design, which they serve when the fit is large enough and not too wide
+    /// (<see cref="MaxTableVariables"/> continuous predictors at most, <see cref="MinTableCases"/> cases at least); <c>BASS_TABLES=off</c> refuses.</summary>
+    internal void EnableTables()
+    {
+        if (TablesSetting == "off") return;
+        TablesOn = TablesSetting == "on" || (_basis.Inputs.Cases.ContinuousCount <= MaxTableVariables && _cases >= MinTableCases);
+    }
+
+    /// <summary>Builds every table the design could be asked for: each column's, for every variable the budget serves and both signs. A
+    /// chain reaches this state in its first few hundred sweeps; a measurement of a restored chain begins from it.</summary>
+    internal void WarmTables()
+    {
+        int degree = _basis.Degree;
+        if (!TablesOn || _functional || _khatriRao || _priorColumns is not null || _counted is not null || degree is not (1 or 2)) return;
+        int variables = _basis.Inputs.Cases.ContinuousCount, served = Math.Min(variables, TableVariables());
+        double[]? roots = _response.Roots;
+        for (int v = 0; v < served; v++)
+        {
+            if (OrderOf(v) is not { } order) continue;
+            for (int j = 0; j < _a.Count; j++)
+            {
+                ColumnTables tables = _tables[j] ??= new ColumnTables(variables);
+                if (tables.Above[v] is null) { tables.Above[v] = HingeScan.Above(_a[j], roots, order, degree); TableBuilds++; }
+                if (tables.Below[v] is null) { tables.Below[v] = HingeScan.Below(_a[j], roots, order, degree); TableBuilds++; }
+            }
+        }
+    }
 
     /// <summary>The bytes the tables may hold at the cap; the leading variables that fit are served.</summary>
     internal long TableBytesAllowed
@@ -234,7 +265,6 @@ public sealed class BassDesign
         _cases = data.Response.Cases;
         _locations = data.Response.Locations;
         _rows = data.Response.Observations;
-        TablesOn = TablesSetting switch { "off" => false, "on" => true, _ => basis.Inputs.Cases.ContinuousCount <= MaxTableVariables && _cases >= MinTableCases };
         if (basis.Inputs.Cases.Cases != _cases) throw new ArgumentException("The basis was not prepared from these data.", nameof(basis));
         working ??= new WorkingResponse(data.Response);
         if (!ReferenceEquals(working.Response, data.Response)) throw new ArgumentException("The working response is of another response.", nameof(working));
