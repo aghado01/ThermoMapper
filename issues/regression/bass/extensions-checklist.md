@@ -42,6 +42,10 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ## Reports
 
+### E1's build brief, and CRAN's GBASS pinned — 2026-11-04
+
+The user's reading: GBASS is BASS with a different noise model, a diff and not a new engine. [The build brief](gbass-noise-brief.md) states it: four new distributions and functions, the mixing law, one observation model and the upgrades, in slices from Student t on. CRAN's GBASS 2.0.1 is in `r/renv.lock` and ran for the first time; its code matches the clone E1 read but for four small differences, in the brief. Order by the user: GBMARS, then KHAOS. Nothing in the engine is built, and E1's checkbox stays open.
+
 ### GBASS read — 2026-11-04
 
 GBMARS's reference implementation, read against the paper, E1 and G1; nothing built. The detail is in [E1](extensions-brief.md#generalized-hyperbolic-noise-gbmars).

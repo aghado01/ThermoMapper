@@ -82,14 +82,14 @@ That keeps four kinds of uncertainty apart: which parameters (θ), interpolation
 
 **Where the framing stops.** Sobol indices mean only what the declared measure means, so a domain with no parameter box has to supply one or live with dependent inputs. Active subspaces need continuous, differentiable inputs. Emulators pay only when runs are expensive.
 
-## Build order: proposed, not decided
+## Build order
 
-KHAOS, then E8, then GBMARS, against leading with GBMARS.
-1. **KHAOS (E19, with E4, E5, E21).** It tests F-X3 with a member that is not a hinge and builds F-X4 as already decided. It is deterministic and conjugate, and its only new distribution is the Poisson-binomial. It pays for grouped-data problems through E21.
-2. **E8.** It only consumes what is built, and it has strong internal checks. The consumer shape above gets settled here.
-3. **GBMARS (E1, with E20).** The heaviest of the three: a GIG sampler, Bessel K, the weighted Gram and a decision on `BassState`. Its first half, the weighted Gram, could move earlier without reordering the rest, if a Pólya–Gamma or grouped-scale consumer wants it.
+**GBMARS first, then KHAOS: the user's call, 2026-11-04,** with CRAN's GBASS pinned as the oracle before any of it ([the build brief](gbass-noise-brief.md)). This reverses the order first proposed here, KHAOS, E8, GBMARS, which called GBMARS the heaviest of the three by counting the weighted Gram. That was built on 2026-11-02, so what remains is a GIG sampler, Bessel K, the latent state and the noise law's readers. E8 keeps its place after KHAOS.
+1. **GBMARS (E1, with E20).** The noise axis: a working response at a latent state, on seams built for it. The structure chain stays as it is.
+2. **KHAOS (E19, with E4, E5, E21).** The same lineage on other axes: the basis, the proposals and the coefficient prior. It tests F-X3 with a member that is not a hinge and builds F-X4 as already decided. It is deterministic and conjugate, and its only new distribution is the Poisson-binomial. It pays for grouped-data problems through E21. GBMARS builds none of this, so it is a diff of its own, with CRAN's `khaos` as its oracle. Its method carries over, and so does the product: a polynomial-chaos basis under GBMARS's noise needs nothing more.
+3. **E8.** It only consumes what is built, and it has strong internal checks. The consumer shape above gets settled here.
 
-The cost and the seams carry this order, so it does not depend on any one application. E24 is small, sits beside all of them and can land at any point.
+E24 is small, sits beside all of them and can land at any point.
 
 ## Reading leads
 
