@@ -1,0 +1,30 @@
+check,case,count,worst,value_a,value_b,value_c,value_d,note
+class rate,M 11 2026-11-04T23:57,999994,124448.668866,-964.270855,833070.000000,8.035393,-976.323933,members a second on four threads; ln of the sum; those admitted; seconds; the route's exact flow
+starts,fresh design 2026-11-04T23:57,9,0.000000,,,,,each start and a1's exemplar at the held τ against the stored π
+credit reduces,N = 500 2026-11-04T23:57,48,0.000001,0.000001,0.000001,0.000000,0.046287,against the stored readings: window 0 and the route; ±25 and the class reading; ±25 credited live and from the stored rows; and that against the path profile's column, printed to one decimal
+rayleigh,part 1 2026-11-04T23:58,668,0.016895,0.016895,0.405798,-0.000000,,least margins, in nats: R_eff over R_short; R_route over R_eff; R_lump over R_short. Any negative stops the run
+ledger,part 1 2026-11-04T23:58,,0.005174,,,,,core-hours this test host took
+ledger,part 2 2026-11-05T00:13,,0.546541,,,,,core-hours this test host took
+hold tally first entry,seed 5 2033 to 273,1000,0.873014,2258.537000,2161.123000,80.458183,77.313468,agrees; kernel walk then production chain; cv 1.127 and 1.131
+hold tally hold,seed 5 2033 to 273,1000,0.851487,1903.161000,1809.174000,79.642522,76.424953,agrees; kernel walk then production chain; cv 1.323 and 1.336
+hold tally return,seed 5 2033 to 273,1000,0.828589,53.795000,51.743000,1.761090,1.741153,agrees; kernel walk then production chain; cv 1.035 and 1.064
+hold tally entries,seed 5 2033 to 273,1000,1.762523,18.078000,18.435000,0.143585,0.142864,agrees; kernel walk then production chain; cv 0.251 and 0.245
+hold tally touches,seed 5 2033 to 273,1000,0.000000,0.000000,0.000000,0.000000,0.000000,agrees; kernel walk then production chain; cv NaN and NaN
+hold tally hold at (200, 0.25),seed 5 2033 to 273,1000,0.879027,2123.597000,2025.617000,80.348662,77.255054,agrees; kernel walk then production chain; cv 1.196 and 1.206
+hold tally first entry,seed 6 2033 to 273,1000,0.595218,978.288000,949.414000,33.749372,34.845324,agrees; kernel walk then production chain; cv 1.091 and 1.161
+hold tally hold,seed 6 2033 to 273,1000,0.221873,647.320000,636.989000,32.178642,33.654261,agrees; kernel walk then production chain; cv 1.572 and 1.671
+hold tally return,seed 6 2033 to 273,1000,0.221812,62.669000,63.333000,2.140840,2.092368,agrees; kernel walk then production chain; cv 1.080 and 1.045
+hold tally entries,seed 6 2033 to 273,1000,2.109331,17.636000,18.082000,0.150965,0.148045,agrees; kernel walk then production chain; cv 0.271 and 0.259
+hold tally touches,seed 6 2033 to 273,1000,1.155375,0.001000,0.005000,0.001000,0.003315,agrees; kernel walk then production chain; cv 31.623 and 20.963
+hold tally hold at (200, 0.25),seed 6 2033 to 273,1000,0.570776,845.809000,818.272000,33.571569,34.648391,agrees; kernel walk then production chain; cv 1.255 and 1.339
+share, arm H,seed 5,16,0.648576,0.815266,0.815460,0.000298,3000000.000000,agrees; exact π(basin), the chains' mean and its se, sweeps a chain; 99%
+share, arm H,seed 6,16,0.059907,0.831902,0.831881,0.000342,3000000.000000,agrees; exact π(basin), the chains' mean and its se, sweeps a chain; 99%
+share, arm H,seed 7,16,0.857668,0.371808,0.371404,0.000471,3000000.000000,agrees; exact π(basin), the chains' mean and its se, sweeps a chain; 99%
+share, arm H,seed 8,16,0.540166,0.450909,0.450700,0.000386,3000000.000000,agrees; exact π(basin), the chains' mean and its se, sweeps a chain; 99%
+share, arm S,seed 5,16,0.118488,0.854249,0.854198,0.000432,3000000.000000,agrees; τ integrated over 1201 points of ln τ, the chains' mean and its se, sweeps a chain; 99%
+ledger,flat histogram 2026-11-05T01:02,,1.222405,,,,,core-hours this test host took
+rate,chain1 arm H 2026-11-05T01:02,1000000,48872.043977,0.032768,20.461596,,,sweeps a second under four concurrent chains at below-normal priority, with the hold tally on; the acceptance
+rate,A arm H 2026-11-05T01:02,1000000,47680.108128,0.031164,20.973107,,,sweeps a second under four concurrent chains at below-normal priority, with the hold tally on; the acceptance
+rate,chain1 arm S 2026-11-05T01:02,1000000,42395.653570,0.027270,23.587324,,,sweeps a second under four concurrent chains at below-normal priority, with the hold tally on; the acceptance
+rate,A arm S 2026-11-05T01:02,1000000,41451.116371,0.028015,24.124803,,,sweeps a second under four concurrent chains at below-normal priority, with the hold tally on; the acceptance
+plan,cost 2026-11-05T01:02,72,45.613510,7.951012,3.452366,23.853036,10.357097,core-hours: arm S to 2.5e7; arm H to 2.5e7; arm S on to 1e8; arm H on to 1e8. The budget is 24

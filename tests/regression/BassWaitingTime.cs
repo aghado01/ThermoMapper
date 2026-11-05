@@ -451,7 +451,7 @@ internal static class BassWaitingTime
 }
 
 /// <summary>One row of the path profile's steps, read from S to T.</summary>
-internal sealed record StepRow(string Kind, string Term, double PiFrom, double PiTo, double LnFlow, double LnFlowClass, double PhaseLow, double LnResistance, int MFrom, int MTo);
+internal sealed record StepRow(string Kind, string Term, double PiFrom, double PiTo, double LnFlow, double LnFlowClass, double PhaseLow, double LnResistance, int MFrom, int MTo, int ClassSize);
 
 /// <summary>A route's series read back from <c>path-profile-steps.csv</c>, so the N = 500 and N = 125 readings take no new fit: full, and cut at
 /// a basin by replaying the terms the rows add and delete.</summary>
@@ -463,7 +463,7 @@ internal static class StepSeries
         static double D(string v) => v.Length == 0 ? double.NaN : double.Parse(v, CultureInfo.InvariantCulture);
         return [.. csv.Rows().Where(r => r[0] == n && r[1] == data && r[2] == pair && r[3] == exemplar && r[4] == alignment && r[5] == nameof(PathReading.Held))
                    .OrderBy(r => int.Parse(r[6], CultureInfo.InvariantCulture))
-                   .Select(r => new StepRow(r[7], r[8], D(r[15]), D(r[16]), D(r[19]), D(r[20]), D(r[23]), D(r[24]), int.Parse(r[9], CultureInfo.InvariantCulture), int.Parse(r[10], CultureInfo.InvariantCulture)))];
+                   .Select(r => new StepRow(r[7], r[8], D(r[15]), D(r[16]), D(r[19]), D(r[20]), D(r[23]), D(r[24]), int.Parse(r[9], CultureInfo.InvariantCulture), int.Parse(r[10], CultureInfo.InvariantCulture), int.Parse(r[21], CultureInfo.InvariantCulture)))];
     }
 
     /// <summary>The series from S (<paramref name="forward"/>) or T, whose terms <paramref name="startTerms"/> are, up to the first state in
