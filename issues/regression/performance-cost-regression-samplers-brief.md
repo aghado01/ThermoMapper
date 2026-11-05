@@ -1,6 +1,6 @@
 # Performance cost of the regression engines, the samplers and the shared factorizations (chip brief)
 
-Date: 2026-11-04. A measurement, tests only: nothing under `src/` changes and no default moves. It follows [the BASS cost brief](bass/performance-cost-brief.md), whose counted units, reference rate, quiet-machine protocol and lever table it reuses, and it covers what that brief left out. The efficiency pass for BASS is a separate chip (`bass-efficiency-pass`) that builds BASS's already priced levers; this one prices everything else. Its report goes under "Reports" below, newest first.
+Date: 2026-11-04. Status: harness built and trialled; the timed grid is paused for a quiet machine (see Reports). A measurement, tests only: nothing under `src/` changes and no default moves. It follows [the BASS cost brief](bass/performance-cost-brief.md), whose counted units, reference rate, quiet-machine protocol and lever table it reuses, and it covers what that brief left out. The efficiency pass for BASS is a separate chip (`bass-efficiency-pass`) that builds BASS's already priced levers; this one prices everything else. Its report goes under "Reports" below, newest first.
 
 ## Why
 
@@ -230,4 +230,44 @@ Under "Reports", newest first:
 
 Newest first.
 
-*(none yet)*
+### Paused for a quiet machine (chip, 2026-11-04)
+
+The timed grid is **not reported**. The user stopped it: the readings need a quiet machine to mean anything, and this one was not. The harness, its checks and the counts stand; the times wait.
+
+**What landed** (`main`, nothing pushed; tests and this brief only): `921357a` (the brief and the harness: `CostProfile.cs` meters and protocol, `CostProfileKernels.cs`, `CostProfileEngines.cs`, `CostProfileSamplers.cs`, `CostProfileParallel.cs`, `CostProfileTests.cs`), `175c827` and `0446aeb` (heavy-part trimming; timed passes at `AboveNormal`), and the commit with `CostProfileLevers.cs`, the lever replicas.
+
+**Why the times are not usable.** The 30-minute wait for a window with no other test host found none (three to four below-normal hosts throughout: the waiting-time and basin-hold chains and other sessions'). The record pass that ran saw 7–11 of 18 logical processors busy with other work. The `machine` block's reference rates came out 2–7× the BASS run's: the fixed-order `PairwiseSum.Dot` at 0.8–1.3 ns per multiply-add at n = 10,000–100,000, against 0.28–0.46; a plain scalar loop at 1.2–2.2, against 0.8–1.0. Ratios between a compute-bound part and a memory-bound one, parallel efficiency and GC pause shares are the readings load distorts differently, and they are the ones the report is for.
+
+**What ran, kept outside the repo** (`side-session-notes/local_b6732445…/cost-profile-loaded-partials/`): 13 blocks in tier B (`machine`, the eight `kernels:*`, `engine:bars`, `engine:baps`, `engine:gprior`, `engine:changepoint`), with the runner scripts. Two earlier record passes were discarded: the first read the early points of each block in tier-0 code (a 1,000-term scalar dot at 13.9 ns per multiply-add, against 1.2 at 10,000), and the second's adaptive warm-up accepted four equally slow batches before the runtime promoted the method. Both are fixed in `CostProfile.cs`: a warm-up that runs until four successive batches agree for at least 2 s, `DOTNET_TC_CallCountingDelayMs=0` in the runners (tier-up starts at once; the final tier-1 PGO code is the same), and a `drift_first3_over_last3` row per part. Not run: `engine:bgp`, the `sampler:*` blocks, `alloc:parallel`, `membound`, `settings`, `engine:levers` (the last validated only).
+
+**What does not depend on load** (counts and checks, from those runs and the trials):
+
+- *Bytes per call.* One BARS target evaluation allocates 45 KB at n = 100, 215 KB at n = 500, 851 KB at n = 2,000 and 4.24 MB at n = 10,000 (k = 8): 430 B per case, 89% of it in `SplineBasis.Design` (`BSpline.EvaluateBasis` allocates four arrays per row; 38.6 KB, 192 KB, 768 KB and 3.84 MB), 2% in the response's median clone and 2% in the centring. A step allocates 35 KB, 169 KB, 652 KB and 3.44 MB at the same n (realized k 2.5–3.1; one attempt per step). `BandedDesign`, the support gate, the accumulation, the factor, the fit and the collapsed block allocate 0 to 4 KB between them, and the condition estimate 464 B.
+- *BGP.* A fit allocates 24·n² bytes in three n × n arrays: 1.0 MB at n = 200, 3.8 MB at 400, 15.4 MB at 800, 61.5 MB at 1,600 (the last two past the large-object threshold), whatever the sampler does with them.
+- *BAPS.* A Gibbs iteration allocates 1.0, 2.1 and 7.8 KB at (n, ν) = (120, 29), (1,000, 104), (5,000, 504); a collapsed iteration 3.6, 10.7 and 48.4 KB, where one REML evidence per λ proposal allocates 2.9, 9.6 and 105 KB (the Gram band's clone and a new `BandCholesky`). The tensor fits (ν = 100 and 196, bandwidth 33 and 45): 2.1–4.1 KB per Gibbs iteration, 67 and 227 KB per REML evidence.
+- *Operation counts.* The changepoint DP's `LogSumExp` cells at (n, k) = (300, 10): 0.39 M forward, 0.39 M backward, 13 k breaks, **1.56 M in the regression-curve loop**; at (1,000, 20): 9.3 M, 9.3 M, 0.19 M and **83 M**. The curve loop is O(n²k²/4) and recomputes `LogBinom` (three `LogGamma` calls) inside its innermost loop. `Infer` allocates four (n+1)² tables: 3 MB at n = 300, 32 MB at n = 1,000.
+- *The factors' counted units* (the loops' own bounds, asserted against closed forms): `BandCholesky`'s factor is n·p(p+1)/2 three-operand terms less the first and last p columns' shortfall; `DenseCholesky` is (m−1)m(m+1)/6 + m(m−1)/2; `CholeskyDecomposition` is n³/6 for the factor and n³/6 again for L⁻¹, which `GpRegression.FitCore` never reads.
+- *Replicas against production.* The row-major band factor and the compile-time-bandwidth factors (p = 1, 2, 3) are bit-identical to `BandCholesky`'s LDLᵀ factor and ln|A| at every (ν, p) of `kernels:band`; the packed dense scalar replica is bit-identical to `DenseCholesky`'s, and the fixed-order vector replicas differ by 1.3·10⁻¹⁵ to 1.8·10⁻¹³ relative in the factor. The count-chain replicas (verbatim, no dictionary with cached weights, struct-generic) walk the production chain's path for 20,000 steps. The BARS replica with the four levers applied (allocation-free basis rows into a compact design; the gate, Gram band and right-hand side from it; the median and σ² scale taken once; the partition-of-unity scan left out) returns the **bit-identical** log marginal at all nine (n, k) of the trial. The lean BGP fit agrees with the verbatim to 3·10⁻¹⁵ relative (the strict factor without L⁻¹, scratch reused, the solves in place); the changepoint's hoisted `LogBinom` is bit-identical and the two-pass maximum differs by 1·10⁻¹⁴ in the total weight.
+
+**Read from the code and the counts, not yet from the clock** (each is a candidate lever to price in a quiet window, not a finding):
+
+- BARS evaluates through a dense n × ν design, then scans it twice (the gate, the spans) and sorts the response; every one of those is O(n·ν) or O(n log n) beside the band factor's O(ν·p²) at p = 3.
+- BAPS's noise block runs a dense n × ν residual loop beside an O(ν·p²) factor; `BandedDesign.Apply` does the same sum over the nonzero span in n·(p+1).
+- BGP's fit builds an n × n kernel matrix through an interface call and an `exp` per pair, then a factor plus the unused L⁻¹ pass.
+- The changepoint's curve loop and the three-transcendental `LogSumExp`.
+- `ReversibleJumpChain.Step` allocates its evaluation per proposal and looks the reverse move up by string; the struct-generic replica allocates nothing.
+- `KhatriRao` already runs its dots through `PairwiseSum.Dot`; its remaining cost is allocation and the centring passes.
+
+**To resume** (a window with no other `testhost`, or the waiting-time chains finished; check with `Get-Process testhost`):
+
+```bash
+export ART='-p:ArtifactsRoot=D:\aghado01\ThermoMapper\artifacts\chip-cost-profile\'
+dotnet build tests/Maths.Regression.Tests/Maths.Regression.Tests.csproj -c Release "$ART"
+# one block per process, rows to a fresh folder; a block already in COST_PROFILE_OUT is skipped
+DOTNET_TC_CallCountingDelayMs=0 BASS_QUALIFICATION=1 COST_PROFILE_OUT=<dir> COST_PROFILE_BLOCK="machine" \
+  dotnet test tests/Maths.Regression.Tests/Maths.Regression.Tests.csproj -c Release "$ART" --no-build --filter "FullyQualifiedName~CostProfileTests"
+```
+
+Blocks, in order: `machine`; `kernels:band`, `kernels:engines`, `kernels:dense`, `kernels:wide`, `kernels:bordered`, `kernels:lowrank`, `kernels:khatri`, `kernels:bgp`; `engine:bars`, `engine:baps`, `engine:gprior`, `engine:changepoint`, `engine:bgp`, `engine:levers`; `sampler:rj`, `sampler:blocks`, `sampler:pt`, `sampler:smc`, `sampler:samc`, `sampler:wham`, `sampler:ladder`, `sampler:ensemble`; `alloc:parallel`; `membound`; then `settings` once per row of the settings table (its environment variable, plus `DOTNET_TC_CallCountingDelayMs=0`), and `sampler:rj;sampler:blocks` once under `DOTNET_TieredPGO=0`. The trial of every block (`COST_PROFILE_SCALE=0.1`) took about 70 minutes under load, most of it the BGP sampler and changepoint points, which the scale does not shorten; the full grid was projected at 1.5–2.5 hours. A block's rows are written only when it finishes. The harness reports the tier of each block (Q: no other test host; B: only below-normal ones; L: otherwise) and the other processes' cores busy; accept Q only.
+
+**Deviations so far:** the `machine` block uses the in-box `Vector256.Exp`/`Log` for `TensorPrimitives` (the test project does not reference `System.Numerics.Tensors`); timed passes at `AboveNormal` (stated above); the warm-up and `DOTNET_TC_CallCountingDelayMs=0` described above; block rows held until a block finishes; the lever replicas (`engine:levers`) were added beyond the brief's block list to price levers by measurement, and ran only as a trial.

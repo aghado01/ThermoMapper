@@ -64,7 +64,7 @@ internal static class CostProfile
         {
             var vars = new List<string>();
             foreach (string name in new[] { "DOTNET_TieredPGO", "DOTNET_TieredCompilation", "DOTNET_TC_QuickJitForLoops", "DOTNET_gcConcurrent",
-                                             "DOTNET_gcServer", "DOTNET_GCgen0size", "DOTNET_ReadyToRun", "DOTNET_TC_OnStackReplacement" })
+                                             "DOTNET_gcServer", "DOTNET_GCgen0size", "DOTNET_ReadyToRun", "DOTNET_TC_OnStackReplacement", "DOTNET_TC_CallCountingDelayMs" })
             {
                 string? v = Environment.GetEnvironmentVariable(name);
                 if (!string.IsNullOrEmpty(v)) vars.Add($"{name.Replace("DOTNET_", "", StringComparison.Ordinal)}={v}");
@@ -138,7 +138,7 @@ internal static class CostProfile
     }
 
     internal readonly record struct Reading(string Name, double Median, double Q1, double Q3, double Bytes, double PauseNs, double Gen0, double Gen1,
-                                            double Gen2, int Count, bool Heavy, double Units, string UnitName, double PerWhole)
+                                            double Gen2, int Count, bool Heavy, double Units, string UnitName, double PerWhole, double Drift = double.NaN)
     {
         public double NsPerUnit => Units > 0 ? Median / Units : double.NaN;
     }
@@ -165,7 +165,7 @@ internal static class CostProfile
         var heavy = new bool[m];
         for (int p = 0; p < m; p++)
         {
-            if (Warmed.Add(CurrentBlock + "/" + parts[p].Name)) WarmUp(parts[p]);
+            if (Warmed.Add(CurrentBlock + "/" + parts[p].Name)) WarmUp(parts[p], scaled);
             (counts[p], heavy[p]) = Calibrate(parts[p], scaled);
         }
         for (int p = 0; p < m; p++) if (!heavy[p]) parts[p].Run(counts[p]);   // the warm-up batch, discarded (a heavy part's calibration call was its own)
@@ -199,7 +199,8 @@ internal static class CostProfile
         for (int p = 0; p < m; p++)
             readings[p] = new Reading(parts[p].Name, Median(times[p]), Quantile(times[p], 0.25), Quantile(times[p], 0.75), Median(bytes[p]),
                                       pause[p] / calls[p], gen[p, 0] / calls[p], gen[p, 1] / calls[p], gen[p, 2] / calls[p], counts[p], heavy[p],
-                                      parts[p].Units, parts[p].UnitName, parts[p].PerWhole);
+                                      parts[p].Units, parts[p].UnitName, parts[p].PerWhole,
+                                      times[p].Count >= 6 ? Median(times[p].Take(3).ToList()) / Median(times[p].Skip(times[p].Count - 3).ToList()) : double.NaN);
         return readings;
     }
 
@@ -213,7 +214,13 @@ internal static class CostProfile
     /// short warm-up reads unoptimized code: a vector <c>Exp</c> read about 2 µs per element in the trial.</summary>
     internal const double WarmMs = 400.0;
 
-    private static void WarmUp(Part part)
+    /// <summary>After the fixed warm-up, a part runs until four successive batches agree within 10% (at most
+    /// <see cref="WarmSeconds"/> seconds): on a machine at 80% load the runtime's background tier-up can take seconds, and a
+    /// fixed warm-up read the first points of the first trial in tier-0 code (a 1,000-term scalar dot at 13.8 ns per multiply-add,
+    /// against 2.2 at 100,000 terms).</summary>
+    internal const double WarmSeconds = 8.0, MinSteadySeconds = 2.0;
+
+    private static void WarmUp(Part part, double batchMs)
     {
         var watch = Stopwatch.StartNew();
         int c = 1;
@@ -222,8 +229,20 @@ internal static class CostProfile
             long t0 = Stopwatch.GetTimestamp();
             part.Run(c);
             double ms = Seconds(Stopwatch.GetTimestamp() - t0) * 1e3;
-            if (ms / c > HeavyMs) break;
+            if (ms / c > HeavyMs) return;
             if (ms < 2.0 && c < 1 << 24) c *= 2;
+        }
+        (int count, bool heavy) = Calibrate(part, batchMs);
+        if (heavy) return;
+        var recent = new Queue<double>();
+        var steady = Stopwatch.StartNew();
+        while (steady.Elapsed.TotalSeconds < WarmSeconds)
+        {
+            long t0 = Stopwatch.GetTimestamp();
+            part.Run(count);
+            recent.Enqueue(Seconds(Stopwatch.GetTimestamp() - t0) / count);
+            if (recent.Count > 4) recent.Dequeue();
+            if (steady.Elapsed.TotalSeconds >= MinSteadySeconds && recent.Count == 4 && recent.Max() <= 1.10 * recent.Min()) return;
         }
     }
 
@@ -266,6 +285,7 @@ internal static class CostProfile
         }
         if (!double.IsNaN(r.PerWhole)) Row(block, point, r.Name, "per_whole", r.PerWhole, flag);
         if (r.Heavy) Row(block, point, r.Name, "heavy", 1, flag);
+        if (!double.IsNaN(r.Drift)) Row(block, point, r.Name, "drift_first3_over_last3", r.Drift, flag);
     }
 
     /// <summary>Times a point's parts and writes them; a part called <c>(empty)</c> is the timer's overhead, added here.</summary>

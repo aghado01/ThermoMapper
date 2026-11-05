@@ -1,4 +1,6 @@
 using System;
+using Maths.LinAlg;
+using Maths.Regression.GPrior;
 using Xunit;
 
 namespace Maths.Regression.Tests;
@@ -63,4 +65,39 @@ public sealed class CostProfileTests
 
     /// <summary>One process per setting, by environment variable: no discarded pass, so the warm-up reads from the first call.</summary>
     [Fact] public void Settings() => CostProfile.Run("settings", CostParallel.SettingsBlock, discardPass: false);
+
+    [Fact] public void Engine_Levers() => CostProfile.Run("engine:levers", CostLevers.LeversBlock);
+
+    /// <summary>The brief's checks that need no quiet machine, always on: the allocation counter reads a known allocation and
+    /// <see cref="CollapsedGPrior.MarginalAt"/> reads nothing, and the counted units equal their closed forms at three sizes.</summary>
+    [Fact]
+    public void Checks_AllocationCounterAndCountedUnits()
+    {
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        CostKernels.ObjectSink = new byte[1000];
+        long known = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.InRange(known, 1000, 1100);
+
+        double[,] g = CostKernels.DenseSpd(20, 3);
+        var factor = new DenseCholesky(20);
+        factor.Decompose(g);
+        CollapsedGPrior block = CollapsedGPrior.FromLeastSquares(factor, CostKernels.Random(20, 4), 5.0, 40.0, 1000, null);
+        block.MarginalAt(0.001);   // warm
+        before = GC.GetAllocatedBytesForCurrentThread();
+        double sink = 0;
+        for (int i = 0; i < 1000; i++) sink += block.MarginalAt(0.001).S;
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.True(sink > 0);
+
+        foreach ((int n, int p) in new[] { (64, 3), (200, 8), (500, 32) })
+            Assert.InRange(Math.Abs(CostKernels.BandFactorTerms(n, p) - CostKernels.BandFactorTermsClosed(n, p)), 0, (long)p * p * p + (long)p * p);
+        foreach (int m in new[] { 5, 50, 500 })
+            Assert.Equal((long)m * (m - 1) * (m + 1) / 6 + (long)m * (m - 1) / 2, CostKernels.DenseFactorTerms(m));
+        foreach (int n in new[] { 100, 400 })
+        {
+            long closed = (long)(n - 1) * n * (n + 1) / 6;
+            Assert.Equal(closed, CostKernels.CholeskyStep1Terms(n));
+            Assert.Equal(closed, CostKernels.CholeskyStep2Terms(n));
+        }
+    }
 }

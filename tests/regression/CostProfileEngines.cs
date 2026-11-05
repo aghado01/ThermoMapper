@@ -25,7 +25,7 @@ namespace Maths.Regression.Tests;
 /// </summary>
 internal static class CostEngines
 {
-    private static double Gaussian(Xoshiro256PlusPlus rng)
+    internal static double Gaussian(Xoshiro256PlusPlus rng)
     {
         double u1 = 1.0 - rng.NextDouble(), u2 = rng.NextDouble();
         return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
@@ -78,7 +78,7 @@ internal static class CostEngines
         return true;
     }
 
-    private static double Median(double[] y)
+    internal static double Median(double[] y)
     {
         var sorted = (double[])y.Clone();
         Array.Sort(sorted);
@@ -354,7 +354,7 @@ internal static class CostEngines
 
     // ================================================================ BGP
 
-    private static (double[,] X, double[] Y) SwissRoll(int n, int seed)
+    internal static (double[,] X, double[] Y) SwissRoll(int n, int seed)
     {
         var rng = new Xoshiro256PlusPlus(seed);
         var x = new double[n, 3];
@@ -446,7 +446,7 @@ internal static class CostEngines
 
     // ================================================================ Changepoint
 
-    private static double LogSumExp(double a, double b)
+    internal static double LogSumExp(double a, double b)
     {
         if (double.IsNegativeInfinity(a)) return b;
         if (double.IsNegativeInfinity(b)) return a;
@@ -454,16 +454,16 @@ internal static class CostEngines
         return max + Math.Log(Math.Exp(a - max) + Math.Exp(b - max));
     }
 
-    private static double LogBinom(int n, int k) => SpecialFunctions.LogGamma(n + 1) - SpecialFunctions.LogGamma(k + 1) - SpecialFunctions.LogGamma(n - k + 1);
+    internal static double LogBinom(int n, int k) => SpecialFunctions.LogGamma(n + 1) - SpecialFunctions.LogGamma(k + 1) - SpecialFunctions.LogGamma(n - k + 1);
 
-    private sealed class ChangepointTables
+    internal sealed class ChangepointTables
     {
         public double[,] LogD = null!, Mean = null!, Var = null!, Fwd = null!, Bwd = null!;
         public int N, K;
     }
 
     // ExactChangepoint.Infer's loops, verbatim; the counter tallies the LogSumExp cells each executes.
-    private static void Forward(ChangepointTables t, ref long cells)
+    internal static void Forward(ChangepointTables t, ref long cells)
     {
         int n = t.N, k = t.K;
         for (int s = 0; s <= k; s++) for (int b = 0; b <= n; b++) t.Fwd[s, b] = double.NegativeInfinity;
@@ -478,7 +478,7 @@ internal static class CostEngines
             }
     }
 
-    private static void Backward(ChangepointTables t, ref long cells)
+    internal static void Backward(ChangepointTables t, ref long cells)
     {
         int n = t.N, k = t.K;
         for (int s = 0; s <= k; s++) for (int b = 0; b <= n; b++) t.Bwd[s, b] = double.NegativeInfinity;
@@ -516,7 +516,7 @@ internal static class CostEngines
         }
     }
 
-    private static double CurveLoop(ChangepointTables t, double logEvidence, double[] diffMean, double[] diffM2, ref long cells)
+    internal static double CurveLoop(ChangepointTables t, double logEvidence, double[] diffMean, double[] diffM2, ref long cells)
     {
         int n = t.N, k = t.K;
         double logPk = -Math.Log(k), total = 0.0;
