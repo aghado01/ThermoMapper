@@ -73,6 +73,17 @@ internal static class BassCost
 
     internal static Point Base => new(Surface.Rich, BaseN, BaseP, BaseCap, BaseOrder);
 
+    /// <summary>The grid points <c>BASS_COST_POINTS</c> names (their <see cref="Point.Key"/>s, separated by semicolons, in the
+    /// order given), read as one block "points" instead of the axes; none when it is unset. A before-and-after reading of a
+    /// change reads the handful of points it prices, not whole axes.</summary>
+    internal static Point[] NamedPoints()
+    {
+        if (Environment.GetEnvironmentVariable("BASS_COST_POINTS") is not { Length: > 0 } list) return [];
+        Point[] all = [.. Axes.SelectMany(a => a.Points)];
+        return [.. list.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                       .Select(k => all.FirstOrDefault(p => p.Key == k) ?? throw new ArgumentException($"No grid point is named '{k}'."))];
+    }
+
     /// <summary>The axes, each varied with the others at the base, and S10's crossed n × M extended; a point on two lists
     /// is read once.</summary>
     internal static readonly (string Axis, Point[] Points)[] Axes =

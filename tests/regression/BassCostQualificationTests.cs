@@ -43,6 +43,7 @@ public sealed class BassCostQualificationTests
     /// <summary>The grid's blocks: each axis's points not on an earlier axis.</summary>
     internal static (string Block, BassCost.Point[] Points)[] GridBlocks()
     {
+        if (BassCost.NamedPoints() is { Length: > 0 } named) return [("points", named)];
         var seen = new HashSet<string>();
         return [.. BassCost.Axes.Select(a => (a.Axis, a.Points.Where(x => seen.Add(x.Key)).ToArray()))];
     }
@@ -238,7 +239,7 @@ public sealed class BassCostQualificationTests
         string[] all = [.. grid.Select(g => g.Block), .. OtherBlocks];
         string[] asked = Environment.GetEnvironmentVariable("BASS_COST_BLOCK") is { Length: > 0 } list
             ? [.. list.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)]
-            : all;
+            : BassCost.NamedPoints().Length > 0 ? ["points"] : all;
         foreach (string block in asked)
         {
             Assert.Contains(block, all);
