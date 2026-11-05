@@ -189,9 +189,9 @@ public sealed class BassPrefixBreakEvenTests
         double sink = 0.0;
         return [MethodImpl(MethodImplOptions.AggressiveOptimization)] (int _) =>
         {
-            long t0 = Stopwatch.GetTimestamp();
+            long t0 = BassCost.Tick();
             for (int r = 0; r < repeats; r++) sink += call();
-            double us = (Stopwatch.GetTimestamp() - t0) * 1e6 / Stopwatch.Frequency / repeats;
+            double us = (BassCost.Tick() - t0) * 1e6 / BassCost.TicksPerSecond / repeats;
             return us + sink * 0.0;
         };
     }

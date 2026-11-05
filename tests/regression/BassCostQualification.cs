@@ -285,6 +285,46 @@ internal static class BassCost
     /// <summary>A term's order: its factors over every part.</summary>
     internal static int OrderOf(BassTerm t) => t.Continuous.Count + t.Categorical.Count + t.Functional.Count;
 
+    // ---- The clock ----
+
+    /// <summary>Whether a time is read on the thread's own cycle counter (<c>BASS_COST_CLOCK</c> = cycles) rather than the wall clock. A
+    /// thread starved by other processes' load keeps its cycles, so the counter reads the work a part does when the machine is not quiet; it
+    /// is an indicative reading for a comparison of builds in one window, in µs at the rate the counter ran at over a busy loop (the best of
+    /// several, the least starved), and a timing for the record still waits for a quiet machine and the wall clock.</summary>
+    internal static bool Cycles { get; } = Environment.GetEnvironmentVariable("BASS_COST_CLOCK") == "cycles";
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentThread();
+
+    [DllImport("kernel32.dll")]
+    private static extern bool QueryThreadCycleTime(IntPtr thread, out ulong cycles);
+
+    /// <summary>The clock's reading: a wall-clock tick, or the thread's cycles.</summary>
+    internal static long Tick()
+    {
+        if (!Cycles) return Stopwatch.GetTimestamp();
+        QueryThreadCycleTime(GetCurrentThread(), out ulong cycles);
+        return (long)cycles;
+    }
+
+    /// <summary>The clock's ticks per second: the wall clock's, or the cycle counter's calibrated rate.</summary>
+    internal static double TicksPerSecond { get; } = Cycles ? CalibratedCycleRate() : Stopwatch.Frequency;
+
+    // The best rate over eight 25 ms busy loops: a starved loop reads low, an unstarved one reads the core's clock.
+    private static double CalibratedCycleRate()
+    {
+        double best = 0.0, sink = 0.0;
+        for (int trial = 0; trial < 8; trial++)
+        {
+            QueryThreadCycleTime(GetCurrentThread(), out ulong c0);
+            long w0 = Stopwatch.GetTimestamp();
+            while (Stopwatch.GetTimestamp() - w0 < Stopwatch.Frequency / 40) sink += 1.0;
+            QueryThreadCycleTime(GetCurrentThread(), out ulong c1);
+            best = Math.Max(best, (c1 - c0) / ((Stopwatch.GetTimestamp() - w0) / (double)Stopwatch.Frequency));
+        }
+        return sink >= 0 ? best : 0.0;
+    }
+
     // ---- Meters ----
 
     /// <summary>What a batch reads: µs per call, or bytes allocated per call (the process's precise counter, and the
@@ -301,9 +341,9 @@ internal static class BassCost
         return meter == Meter.Time
             ? [MethodImpl(MethodImplOptions.AggressiveOptimization)] (int _) =>
             {
-                long t0 = Stopwatch.GetTimestamp();
+                long t0 = Tick();
                 for (int k = 0; k < size; k++) call();
-                return (Stopwatch.GetTimestamp() - t0) * 1e6 / Stopwatch.Frequency / size;
+                return (Tick() - t0) * 1e6 / TicksPerSecond / size;
             }
             : (int _) =>
             {
@@ -318,8 +358,8 @@ internal static class BassCost
     internal static Func<int, double> EachBatch(Meter meter, Func<Func<long>, long> call, int batch = SegmentBatch)
     {
         int size = Scaled(batch);
-        Func<long> read = meter == Meter.Time ? Stopwatch.GetTimestamp : () => GC.GetTotalAllocatedBytes(precise: true);
-        double unit = meter == Meter.Time ? 1e6 / Stopwatch.Frequency : 1.0;
+        Func<long> read = meter == Meter.Time ? Tick : () => GC.GetTotalAllocatedBytes(precise: true);
+        double unit = meter == Meter.Time ? 1e6 / TicksPerSecond : 1.0;
         return [MethodImpl(MethodImplOptions.AggressiveOptimization)] (int _) =>
         {
             long total = 0, counted = 0;
@@ -420,6 +460,7 @@ internal static class BassCost
         yield return ("tiered PGO", (AppContext.GetData("System.Runtime.TieredPGO") ?? "default").ToString()!);
         yield return ("DOTNET_TieredCompilation", Environment.GetEnvironmentVariable("DOTNET_TieredCompilation") ?? "unset");
         yield return ("scale", Scale.ToString(CultureInfo.InvariantCulture));
+        yield return ("clock", Cycles ? $"thread cycles, calibrated at {TicksPerSecond / 1e9:F2} GHz (indicative)" : "wall");
     }
 
     // The checkout's commit, read from .git above the test's folder.

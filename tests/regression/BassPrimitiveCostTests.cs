@@ -28,9 +28,9 @@ public sealed class BassPrimitiveCostTests
         double sink = 0.0;
         return [MethodImpl(MethodImplOptions.AggressiveOptimization)] (int _) =>
         {
-            long t0 = Stopwatch.GetTimestamp();
+            long t0 = BassCost.Tick();
             for (int c = 0; c < calls; c++) sink += call();
-            return (Stopwatch.GetTimestamp() - t0) * 1e9 / Stopwatch.Frequency / calls + sink * 0.0;
+            return (BassCost.Tick() - t0) * 1e9 / BassCost.TicksPerSecond / calls + sink * 0.0;
         };
     }
 

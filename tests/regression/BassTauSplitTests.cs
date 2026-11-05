@@ -106,9 +106,9 @@ public sealed class BassTauSplitTests
         double sink = 0.0;
         return [MethodImpl(MethodImplOptions.AggressiveOptimization)] (int _) =>
         {
-            long t0 = System.Diagnostics.Stopwatch.GetTimestamp();
+            long t0 = BassCost.Tick();
             for (int c = 0; c < calls; c++) sink += call();
-            return (System.Diagnostics.Stopwatch.GetTimestamp() - t0) * 1e6 / System.Diagnostics.Stopwatch.Frequency / calls + sink * 0.0;
+            return (BassCost.Tick() - t0) * 1e6 / BassCost.TicksPerSecond / calls + sink * 0.0;
         };
     }
 

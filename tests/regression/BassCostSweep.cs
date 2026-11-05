@@ -230,17 +230,17 @@ internal static class BassCostSweep
             TimeSpan pause0 = GC.GetTotalPauseDuration();
             long emptyBefore = run.Structure.EmptyBirths, refusedBefore = run.Structure.Refusals.Total;
             (long p0, long th0) = BassCost.Allocated();
-            long t0 = Stopwatch.GetTimestamp();
+            long t0 = BassCost.Tick();
             for (int k = 0; k < sweepBatch; k++)
             {
                 run.Step();
                 run.Compose(rng, table);
             }
-            long ticks = Stopwatch.GetTimestamp() - t0;
+            long ticks = BassCost.Tick() - t0;
             (long p1, long th1) = BassCost.Allocated();
             TimeSpan pause = GC.GetTotalPauseDuration() - pause0;
             (int d0, int d1, int d2) = (GC.CollectionCount(0) - c0, GC.CollectionCount(1) - c1, GC.CollectionCount(2) - c2);
-            double value = meter == BassCost.Meter.Time ? ticks * 1e6 / Stopwatch.Frequency / sweepBatch : (double)(p1 - p0) / sweepBatch;
+            double value = meter == BassCost.Meter.Time ? ticks * 1e6 / BassCost.TicksPerSecond / sweepBatch : (double)(p1 - p0) / sweepBatch;
             if (round < 0) return value;   // the warm-up round
             IReadOnlyList<MoveStat> after = run.Moves.MoveStats();
             sweeps += sweepBatch;
