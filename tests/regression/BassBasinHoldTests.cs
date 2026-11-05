@@ -1074,8 +1074,9 @@ public sealed class BassBasinHoldTests
         S10 s = Load();
         (HoldSpec[] armS, HoldSpec[] armH) = Plan(s);
         var book = new HoldBook();
+        // Rungs of 5 × 10⁶, so where the budget stops an arm its starts are level: a rung to 5 × 10⁷ would run four starts' chains and leave the rest at 2.5 × 10⁷.
         foreach (HoldSpec[] arm in new[] { armS, armH })
-            foreach (long limit in new[] { 50 * Million, 75 * Million, 100 * Million })
+            for (long limit = 30 * Million; limit <= 100 * Million; limit += 5 * Million)
                 if (!book.Advance(arm, limit, _out)) return;
     }
 }

@@ -28,3 +28,4 @@ rate,A arm H 2026-11-05T01:02,1000000,47680.108128,0.031164,20.973107,,,sweeps a
 rate,chain1 arm S 2026-11-05T01:02,1000000,42395.653570,0.027270,23.587324,,,sweeps a second under four concurrent chains at below-normal priority, with the hold tally on; the acceptance
 rate,A arm S 2026-11-05T01:02,1000000,41451.116371,0.028015,24.124803,,,sweeps a second under four concurrent chains at below-normal priority, with the hold tally on; the acceptance
 plan,cost 2026-11-05T01:02,72,45.613510,7.951012,3.452366,23.853036,10.357097,core-hours: arm S to 2.5e7; arm H to 2.5e7; arm S on to 1e8; arm H on to 1e8. The budget is 24
+starts,fresh design 2026-11-05T07:14,9,0.000000,,,,,each start and a1's exemplar at the held τ against the stored π

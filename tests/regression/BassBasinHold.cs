@@ -788,7 +788,8 @@ internal sealed class HoldBook
 
     public double CoreHours => _live.Values.Sum(t => t.Seconds) / 3600.0;
 
-    public bool Exhausted => CoreHours >= BudgetHours;
+    /// <summary>Spent, with the segments a check may leave in flight at the rate so far, so the budget is a ceiling.</summary>
+    public bool Exhausted => CoreHours + Threads * CoreHours / _live.Values.Sum(t => t.Sweeps) * Checkpoint >= BudgetHours;
 
     /// <summary>Every chain of <paramref name="specs"/> run to <paramref name="limit"/> sweeps, four at a time, a row at each checkpoint; false when the budget stopped it.</summary>
     public bool Advance(IReadOnlyList<HoldSpec> specs, long limit, ITestOutputHelper? log = null)
