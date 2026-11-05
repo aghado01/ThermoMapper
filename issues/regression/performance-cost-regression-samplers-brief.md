@@ -32,9 +32,9 @@ Declare every value in the harness classes before the first timed run. A change 
 ### The reference rates (`machine`)
 
 Denominators for every ns per counted unit. Each read single-threaded, warmed, at n = 1,000, 10,000, 100,000 and 1,000,000 where a length applies:
-- a scalar multiply-add loop; a `Vector<double>` loop; `PairwiseSum.Dot`; `MatrixOps.Dot`; `TensorPrimitives.Dot`;
+- a scalar multiply-add loop; a `Vector<double>` loop; `PairwiseSum.Dot`; `MatrixOps.Dot`; an unrolled four-accumulator `Vector256` dot;
 - memory streams (a copy and a triad) at 1, 2, 4 and 8 threads;
-- `Math.Exp`, `Math.Log`, `Math.Sqrt` and a division, scalar, and `TensorPrimitives.Exp` and `Log` per element;
+- `Math.Exp`, `Math.Log`, `Math.Sqrt` and a division, scalar, and the in-box `Vector256.Exp` and `Log` per element (`TensorPrimitives` is built on them; the test project does not reference `System.Numerics.Tensors`, and adding it would edit its project file, which this brief does not);
 - one `Func<double, double>` call, one interface call (monomorphic and bimorphic), one `Dictionary<string, T>` lookup, one `Lock` enter-exit (uncontended), one `new double[n]` for n = 8, 64, 512 and 4,096.
 
 ### The shared factorizations (`kernels:*`)
@@ -167,6 +167,7 @@ The BASS cost run's protocol, with the one change this machine forces.
 - **Counts first.** Run every count (allocation, operation counts, realized sizes, the checks) at once.
 - **Check before each timed block.** The harness records the other `testhost` processes at the block's start and end, their priority classes, the other processes' CPU in cores busy over the block (the processor-time deltas of every readable process, less its own), the free physical memory, and its own CPU over wall.
 - **Two tiers, declared now.** *Q (quiet):* no other `testhost` on the machine. *B (background):* the only other test hosts run at below-normal priority (the waiting-time and basin-hold chains, which may hold 4 threads for hours) and the block's other-process load is recorded. Wait for Q with the Monitor tool's until-loop, not a sleep, for at most 30 minutes before the first block; then proceed in B. A B block is flagged, never reported as quiet, and re-timed under Q at the run's end if a Q window then exists (a sample of at least 25 points over the blocks). Single-thread readings are read under B to about ±30% (the BASS run's spread under 1.6–4.2 busy cores); **parallel-efficiency and memory-bandwidth readings under B measure a shared machine and are reported as such, or not at all**.
+- **Priority.** On this machine other work holds below-normal threads on most of the 18 logical processors (the first look found the machine at about 80% CPU), so a Normal thread is timesliced against it. Each timed pass runs at `AboveNormal`, restored afterwards, and the block's rows say so. The tier and the priority are both reported; the A/B reading at `Normal` (`COST_PROFILE_PRIORITY=Normal`, its own rows) prices what the bump changes on the `machine` block and one engine.
 - **If no Q window comes by the end,** the report says which blocks stand under B only, with the loads, and the Q commands are written down.
 - **Record the machine:** the commit, Release, the .NET runtime, the CPU model and the logical processor count, the GC mode, tiered-compilation settings, and the active power plan (`powercfg /getactivescheme`, read only).
 

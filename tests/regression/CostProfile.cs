@@ -69,6 +69,7 @@ internal static class CostProfile
                 string? v = Environment.GetEnvironmentVariable(name);
                 if (!string.IsNullOrEmpty(v)) vars.Add($"{name.Replace("DOTNET_", "", StringComparison.Ordinal)}={v}");
             }
+            if (Environment.GetEnvironmentVariable("COST_PROFILE_PRIORITY") is { Length: > 0 } pr) vars.Add("priority=" + pr);
             return vars.Count == 0 ? "default" : string.Join(' ', vars);
         }
     }
@@ -350,8 +351,21 @@ internal static class CostProfile
         var watch = Stopwatch.StartNew();
         LoadSnapshot mid = Snapshot();
         lock (Gate) _buffer = new StringBuilder();
+        // The timed pass runs at AboveNormal (or COST_PROFILE_PRIORITY): the machine's long-running chains hold below-normal
+        // threads on most cores, and a Normal thread timesliced against them reads their load. Restored afterwards.
+        Process self = Process.GetCurrentProcess();
+        ProcessPriorityClass before = self.PriorityClass;
+        string priority = before.ToString();
+        try
+        {
+            if (Enum.TryParse(Environment.GetEnvironmentVariable("COST_PROFILE_PRIORITY"), true, out ProcessPriorityClass wanted)) self.PriorityClass = wanted;
+            else self.PriorityClass = ProcessPriorityClass.AboveNormal;
+            priority = self.PriorityClass.ToString();
+        }
+        catch (Exception) { /* keep the inherited class */ }
         try { body(); }
         catch { lock (Gate) _buffer = null; throw; }
+        finally { try { self.PriorityClass = before; } catch (Exception) { } }
         watch.Stop();
         LoadSnapshot end = Snapshot();
         string tier = Tier(start, end);
@@ -363,6 +377,7 @@ internal static class CostProfile
         double busy = wall > 0 ? others / wall : double.NaN;
         double own = wall > 0 ? (end.OwnCpu - mid.OwnCpu) / wall : double.NaN;
         Row(block, "(load)", "", "tier", tier);
+        Row(block, "(load)", "", "process_priority", priority);
         Row(block, "(load)", "", "other_test_hosts_start", start.OtherTestHosts);
         Row(block, "(load)", "", "other_test_hosts_end", end.OtherTestHosts);
         Row(block, "(load)", "", "priorities", end.Priorities.Length == 0 ? "-" : end.Priorities);
