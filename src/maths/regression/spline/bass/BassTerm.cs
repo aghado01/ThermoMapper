@@ -17,6 +17,7 @@ public readonly record struct HingeFactor(int Variable, int Sign, int Knot);
 public sealed class CategoricalFactor : IEquatable<CategoricalFactor>
 {
     private readonly int[] _levels;
+    private readonly ulong[] _bits;   // the subset as a bitset over level codes, 64 to a word
 
     /// <summary>The subset <paramref name="levels"/> of categorical predictor <paramref name="variable"/>'s training levels.</summary>
     public CategoricalFactor(int variable, IEnumerable<int> levels)
@@ -30,6 +31,8 @@ public sealed class CategoricalFactor : IEquatable<CategoricalFactor>
         for (int k = 1; k < _levels.Length; k++)
             if (_levels[k] == _levels[k - 1]) throw new ArgumentException($"Level {_levels[k]} is listed twice.", nameof(levels));
         Variable = variable;
+        _bits = new ulong[(_levels[^1] >> 6) + 1];
+        foreach (int level in _levels) _bits[level >> 6] |= 1UL << (level & 63);
     }
 
     /// <summary>The categorical predictor, by its position among the categorical predictors.</summary>
@@ -39,7 +42,23 @@ public sealed class CategoricalFactor : IEquatable<CategoricalFactor>
     public IReadOnlyList<int> Levels => _levels;
 
     /// <summary>Whether <paramref name="level"/> lies in the subset; a level outside the training levels (−1) never does.</summary>
-    public bool Contains(int level) => level >= 0 && Array.BinarySearch(_levels, level) >= 0;
+    public bool Contains(int level)
+    {
+        uint word = (uint)level >> 6;   // a negative level lands past the table
+        return word < (uint)_bits.Length && ((_bits[word] >> (level & 63)) & 1UL) != 0;
+    }
+
+    /// <summary>Sets to zero the entries of <paramref name="column"/> whose case's level (<paramref name="levels"/>, one per entry) lies
+    /// outside the subset: <see cref="Contains"/> per case, with the table read once.</summary>
+    internal void ZeroOutside(ReadOnlySpan<int> levels, Span<double> column)
+    {
+        ulong[] bits = _bits;
+        for (int i = 0; i < column.Length; i++)
+        {
+            uint word = (uint)levels[i] >> 6;
+            if (word >= (uint)bits.Length || ((bits[word] >> (levels[i] & 63)) & 1UL) == 0) column[i] = 0.0;
+        }
+    }
 
     /// <inheritdoc/>
     public bool Equals(CategoricalFactor? other)

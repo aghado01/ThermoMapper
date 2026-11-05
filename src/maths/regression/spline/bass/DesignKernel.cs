@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using Maths.Regression.Spline.Bass.Sensitivity;
 
 namespace Maths.Regression.Spline.Bass;
@@ -164,6 +166,38 @@ internal static class Hinge
     };
 
     public static double Value(int degree, int sign, double knot, double x) => Power(degree, Math.Max(sign * (x - knot), 0.0));
+
+    // column[i] *= Value(degree, sign, knot, x[i]), then column[i] /= divisor when `divide`: the scalar form's operations per element,
+    // in its order, four lanes at a time for degrees one and two. The lanes' subtract, multiply, compare, select and divide are exact
+    // per lane, so the bits are the scalar loop's on any hardware, and Math.Max's rules are kept: a NaN stays, a negative or −0 becomes +0.
+    // The library power (degree three and up) and the tail stay scalar.
+    public static void Scale(Span<double> column, ReadOnlySpan<double> x, int degree, int sign, double knot, bool divide, double divisor)
+    {
+        int n = column.Length, i = 0;
+        if (x.Length != n) throw new ArgumentException("One value per row.", nameof(x));
+        if (degree is 1 or 2 && n >= Vector256<double>.Count)
+        {
+            ref double c = ref MemoryMarshal.GetReference(column);
+            ref double xr = ref MemoryMarshal.GetReference(x);
+            Vector256<double> vk = Vector256.Create(knot), vs = Vector256.Create((double)sign), vd = Vector256.Create(divisor);
+            Vector256<double> zero = Vector256<double>.Zero;
+            for (; i + Vector256<double>.Count <= n; i += Vector256<double>.Count)
+            {
+                Vector256<double> u = Vector256.Multiply(vs, Vector256.Subtract(Vector256.LoadUnsafe(ref xr, (nuint)i), vk));
+                Vector256<double> keep = Vector256.GreaterThan(u, zero) | ~Vector256.Equals(u, u);
+                Vector256<double> h = Vector256.ConditionalSelect(keep, u, zero);
+                if (degree == 2) h = Vector256.Multiply(h, h);
+                Vector256<double> r = Vector256.Multiply(Vector256.LoadUnsafe(ref c, (nuint)i), h);
+                if (divide) r = Vector256.Divide(r, vd);
+                r.StoreUnsafe(ref c, (nuint)i);
+            }
+        }
+        for (; i < n; i++)
+        {
+            double v = column[i] * Value(degree, sign, knot, x[i]);
+            column[i] = divide ? v / divisor : v;
+        }
+    }
 
     // d/dx (s(x − t))₊^q = q·s·(s(x − t))₊^(q−1). At the knot, where degree one jumps from 0 to s, the mean of the
     // one-sided limits, s/2; from degree two up the hinge is differentiable there, with derivative 0.

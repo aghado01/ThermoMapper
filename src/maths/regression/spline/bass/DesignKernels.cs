@@ -56,7 +56,27 @@ internal abstract class HingeProductKernel<TPoints> : IDesignKernel<TPoints>
 
     public abstract IReadOnlyList<DesignFactor> Factors(BassTerm term, ProductMeasure measure);
 
-    public void Multiply(BassTerm term, TPoints at, Span<double> column) => Apply(term, -1, at, column);
+    // The column times the part's values: each factor's hinge in one pass over the column (Hinge.Scale, four lanes at a time), the last
+    // also dividing by c. The same operations per element, in the same order, as the scalar Apply: ((column·h₁)·h₂)…/c.
+    public void Multiply(BassTerm term, TPoints at, Span<double> column)
+    {
+        IReadOnlyList<HingeFactor> factors = Part(term);
+        if (factors.Count == 0) return;
+        double peak = 1.0;
+        foreach (HingeFactor f in factors)
+        {
+            double t = Knots(f.Variable)[f.Knot], s = f.Sign;
+            peak *= (s + 1.0) / 2.0 - s * t;
+        }
+        double c = Hinge.Power(Degree, peak);
+        bool divide = c != 0.0;   // a hinge facing its end of the range: zero there, so R leaves c at 1
+        int last = factors.Count - 1;
+        for (int k = 0; k <= last; k++)
+        {
+            HingeFactor f = factors[k];
+            Hinge.Scale(column, Values(at, f.Variable), Degree, f.Sign, Knots(f.Variable)[f.Knot], divide && k == last, c);
+        }
+    }
 
     public void MultiplyDerivative(BassTerm term, int variable, TPoints at, Span<double> column)
     {
@@ -78,9 +98,9 @@ internal abstract class HingeProductKernel<TPoints> : IDesignKernel<TPoints>
         return peak;
     }
 
-    // The column times the part's values, or, for `differentiate` ≥ 0, times its derivative in that variable: the product
-    // rule has one nonzero term, since a hinge product holds each variable once, and a part that lacks the variable is
-    // constant in it.
+    // The column times the part's derivative in variable `differentiate` ≥ 0, scalar, element by element: the product rule has
+    // one nonzero term, since a hinge product holds each variable once, and a part that lacks the variable is constant in it.
+    // (The values, differentiate < 0, are Multiply's.)
     private void Apply(BassTerm term, int differentiate, TPoints at, Span<double> column)
     {
         IReadOnlyList<HingeFactor> factors = Part(term);
@@ -199,9 +219,7 @@ internal sealed class CategoricalSubsetKernel(BassInputs inputs) : IDesignKernel
     {
         foreach (CategoricalFactor c in term.Categorical)
         {
-            ReadOnlySpan<int> levels = at.Categorical(c.Variable);
-            for (int i = 0; i < column.Length; i++)
-                if (!c.Contains(levels[i])) column[i] = 0.0;
+            c.ZeroOutside(at.Categorical(c.Variable), column);
         }
     }
 

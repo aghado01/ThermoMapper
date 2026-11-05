@@ -724,8 +724,7 @@ public sealed class BassDesign
         if (!_functional)
         {
             if (response.Roots is not null) return Whitened(a, response);
-            double mean = PairwiseSum.Of(a) / _cases;
-            for (int i = 0; i < a.Length; i++) a[i] -= mean;
+            ColumnOps.Subtract(a, PairwiseSum.Of(a) / _cases);
             return (a, null, null);
         }
         var h = new double[_locations];
@@ -733,8 +732,7 @@ public sealed class BassDesign
         if (!Supported(h, _rules.SupportMinimumFunctional ?? 0.0, null)) return null;
         if (response.Roots is null) return (a, h, null);
         var stacked = new double[_rows];
-        for (int i = 0; i < _cases; i++)
-            for (int l = 0; l < _locations; l++) stacked[i * _locations + l] = a[i] * h[l];
+        for (int i = 0; i < _cases; i++) ColumnOps.Scale(stacked.AsSpan(i * _locations, _locations), a[i], h);
         return Whitened(stacked, response);
     }
 
@@ -747,13 +745,10 @@ public sealed class BassDesign
         {
             double own = (_priorWeights is null ? PairwiseSum.Of(z) : PairwiseSum.Dot(_priorWeights, z)) / _priorMass;
             var centred = new double[_rows];
-            for (int i = 0; i < _rows; i++) centred[i] = z[i] - own;
-            if (_priorRoots is not null)
-                for (int i = 0; i < _rows; i++) centred[i] *= _priorRoots[i];
+            ColumnOps.CentreInto(centred, z, own, _priorRoots);
             prior = new BassPriorColumn(centred, own - mean);
         }
-        double[] roots = response.Roots!;
-        for (int i = 0; i < _rows; i++) z[i] = roots[i] * (z[i] - mean);
+        ColumnOps.CentreAndScale(z, mean, response.Roots!);
         return (z, null, prior);
     }
 
@@ -767,10 +762,7 @@ public sealed class BassDesign
                 if (part[i] != 0.0) counted += counts[i];
             return counted >= minimum;
         }
-        int nonzero = 0;
-        foreach (double v in part)
-            if (v != 0.0) nonzero++;
-        return nonzero >= minimum;
+        return ColumnOps.NonzeroCount(part) >= minimum;
     }
 
     // The current columns' Gram entries, read from the factor.
@@ -969,26 +961,22 @@ public sealed class BassDesign
     }
 
     // r = y − Z_cβ, into r, for y the design's ỹ on one working response.
+    // Element-wise, so the passes are ColumnOps': a scalar design's columns subtract in blocks of four, each entry meeting its columns
+    // in column order, and a direct design's inner loop runs over the case's locations.
     private void Fit(List<double[]> a, List<double[]> h, double[] beta, double[] r, double[] y)
     {
         Array.Copy(y, r, _rows);
+        if (!_khatriRao)
+        {
+            ColumnOps.SubtractScaledColumns(r, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(a)[..beta.Length], beta);
+            return;
+        }
         for (int j = 0; j < beta.Length; j++)
         {
             double bj = beta[j];
-            if (!_khatriRao)
-            {
-                double[] z = a[j];
-                for (int i = 0; i < _rows; i++) r[i] -= bj * z[i];
-                continue;
-            }
             double[] aj = a[j], hj = h[j];
             double level = PairwiseSum.Of(aj) / _cases * (PairwiseSum.Of(hj) / _locations);
-            for (int i = 0; i < _cases; i++)
-            {
-                double ai = aj[i];
-                int row = i * _locations;
-                for (int l = 0; l < _locations; l++) r[row + l] -= bj * (ai * hj[l] - level);
-            }
+            for (int i = 0; i < _cases; i++) ColumnOps.SubtractScaledProduct(r.AsSpan(i * _locations, _locations), bj, aj[i], hj, level);
         }
     }
 
