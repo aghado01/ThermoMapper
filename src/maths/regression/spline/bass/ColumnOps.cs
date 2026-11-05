@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 
@@ -8,7 +9,9 @@ namespace Maths.Regression.Spline.Bass;
 /// The element-wise passes over a design's columns that a term's column evaluation and the commit's explicit residual make, four
 /// lanes at a time. Every operation is a per-lane add, subtract, multiply, divide or compare in the order the scalar loop
 /// makes them, with no fused multiply-add, so each result is the scalar loop's, bit for bit, on any hardware (the software
-/// fallback of <c>Vector256</c> runs the same operations). The reductions (<see cref="NonzeroCount"/> aside, which is integer) stay in
+/// fallback of <c>Vector256</c> runs the same operations). The loops are compiled fully optimized from the first call
+/// (<see cref="MethodImplOptions.AggressiveOptimization"/>): tiered compilation starts a vector loop in unoptimized code, far slower than the scalar loop
+/// it replaces, and tiered PGO has nothing to learn from them. The reductions (<see cref="NonzeroCount"/> aside, which is integer) stay in
 /// <see cref="Maths.LinAlg.PairwiseSum"/>.
 /// </summary>
 internal static class ColumnOps
@@ -16,6 +19,7 @@ internal static class ColumnOps
     private const int Lanes = 4;
 
     /// <summary>The entries of <paramref name="values"/> that are not zero (a NaN counts, as <c>v != 0.0</c> does).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static int NonzeroCount(ReadOnlySpan<double> values)
     {
         int n = values.Length, nonzero = 0, i = 0;
@@ -34,6 +38,7 @@ internal static class ColumnOps
     }
 
     /// <summary><c>values[i] -= amount</c>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static void Subtract(Span<double> values, double amount)
     {
         int n = values.Length, i = 0;
@@ -48,6 +53,7 @@ internal static class ColumnOps
     }
 
     /// <summary><c>values[i] = roots[i] * (values[i] - amount)</c>: the whitened, centred column.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static void CentreAndScale(Span<double> values, double amount, ReadOnlySpan<double> roots)
     {
         int n = values.Length, i = 0;
@@ -64,6 +70,7 @@ internal static class ColumnOps
     }
 
     /// <summary><c>into[i] = (values[i] - amount) * roots[i]</c>, or without the roots when they are null: the prior side's centred column.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static void CentreInto(Span<double> into, ReadOnlySpan<double> values, double amount, ReadOnlySpan<double> roots)
     {
         int n = values.Length, i = 0;
@@ -91,6 +98,7 @@ internal static class ColumnOps
     }
 
     /// <summary><c>into[l] = factor * values[l]</c>: one row of an outer product.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static void Scale(Span<double> into, double factor, ReadOnlySpan<double> values)
     {
         int n = values.Length, i = 0;
@@ -110,6 +118,7 @@ internal static class ColumnOps
     /// <c>residual[i] -= betas[j] * columns[j][i]</c> for every column in order, the columns taken in blocks so that one pass over the
     /// residual subtracts a block: each entry still meets its columns one at a time, in column order, so it is the column-by-column loop's.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static void SubtractScaledColumns(Span<double> residual, ReadOnlySpan<double[]> columns, ReadOnlySpan<double> betas)
     {
         int count = columns.Length, j = 0;
@@ -119,8 +128,10 @@ internal static class ColumnOps
     }
 
     /// <summary><c>residual[i] -= beta * column[i]</c>.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static void SubtractScaled(Span<double> residual, ReadOnlySpan<double> column, double beta) => Subtract1(residual, column, beta);
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void Subtract1(Span<double> r, ReadOnlySpan<double> z0, double b0)
     {
         int n = r.Length, i = 0;
@@ -136,6 +147,7 @@ internal static class ColumnOps
         for (; i < n; i++) r[i] -= b0 * z0[i];
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void Subtract4(Span<double> r, double[] z0, double[] z1, double[] z2, double[] z3, double b0, double b1, double b2, double b3)
     {
         int n = r.Length, i = 0;
@@ -170,6 +182,7 @@ internal static class ColumnOps
     }
 
     /// <summary><c>residual[l] -= beta * (a * h[l] - level)</c>: a direct functional column's update over one case's locations.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static void SubtractScaledProduct(Span<double> residual, double beta, double a, ReadOnlySpan<double> h, double level)
     {
         int n = h.Length, i = 0;

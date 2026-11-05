@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -63,6 +64,7 @@ internal sealed class HingeOrder
 internal static class HingeScan
 {
     /// <summary>T⁺[k] = Σ_{xᵢ &gt; t_k} gᵢ (xᵢ − t_k)^q, for g = z, or roots∘z when <paramref name="roots"/> is given.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static double[] Above(ReadOnlySpan<double> z, double[]? roots, HingeOrder order, int degree)
     {
         int count = order.Knots.Length;
@@ -91,6 +93,7 @@ internal static class HingeScan
     }
 
     /// <summary>T⁻[k] = Σ_{xᵢ &lt; t_k} gᵢ (t_k − xᵢ)^q.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static double[] Below(ReadOnlySpan<double> z, double[]? roots, HingeOrder order, int degree)
     {
         int count = order.Knots.Length;

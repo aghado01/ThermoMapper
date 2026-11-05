@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using Maths.Regression.Spline.Bass.Sensitivity;
@@ -171,6 +172,7 @@ internal static class Hinge
     // in its order, four lanes at a time for degrees one and two. The lanes' subtract, multiply, compare, select and divide are exact
     // per lane, so the bits are the scalar loop's on any hardware, and Math.Max's rules are kept: a NaN stays, a negative or −0 becomes +0.
     // The library power (degree three and up) and the tail stay scalar.
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static void Scale(Span<double> column, ReadOnlySpan<double> x, int degree, int sign, double knot, bool divide, double divisor)
     {
         int n = column.Length, i = 0;
