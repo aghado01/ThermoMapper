@@ -22,7 +22,7 @@ public sealed class BassCandidateTests(ITestOutputHelper output)
 {
     public static TheoryData<string> Laws => ["gaussian", "t", "quantile", "normal-wald", "skewed t", "generalized hyperbolic"];
 
-    private static BassNoise? Noise(string law) => law switch
+    internal static BassNoise? Noise(string law) => law switch
     {
         "gaussian" => null,
         "t" => BassNoise.StudentT(3, 0.7),
@@ -107,7 +107,7 @@ public sealed class BassCandidateTests(ITestOutputHelper output)
     // ---- with the qualification switch -------------------------------------------------------------------------------------------
 
     // The truth: f = sin(2πx₀) + x₁ under a contaminated noise none of the four laws holds, 0.2ζ plus, one time in seven, 0.8·Exp(1).
-    private static (double[] X0, double[] X1, double[] Y) Draw(int n, Xoshiro256PlusPlus rng)
+    internal static (double[] X0, double[] X1, double[] Y) Draw(int n, Xoshiro256PlusPlus rng)
     {
         var x0 = new double[n];
         var x1 = new double[n];

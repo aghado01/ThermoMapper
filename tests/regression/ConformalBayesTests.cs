@@ -275,7 +275,7 @@ public sealed class ConformalBayesTests(ITestOutputHelper output)
     // ---- coverage from truth outside the model ----------------------------------------------------------------------------------
 
     // y | x, β ~ N(βx, 1) with β ~ N(0, 10): the posterior of β given (x, y) and S exact draws from it.
-    private static double[] ExactDraws(double[] x, double[] y, int s, Xoshiro256PlusPlus rng)
+    internal static double[] ExactDraws(double[] x, double[] y, int s, Xoshiro256PlusPlus rng)
     {
         double precision = 0.1, xy = 0.0;
         for (int i = 0; i < x.Length; i++) { precision += x[i] * x[i]; xy += x[i] * y[i]; }
@@ -285,10 +285,10 @@ public sealed class ConformalBayesTests(ITestOutputHelper output)
         return beta;
     }
 
-    private static double LogNormal(double y, double mean) => -0.5 * Math.Log(2 * Math.PI) - 0.5 * (y - mean) * (y - mean);
+    internal static double LogNormal(double y, double mean) => -0.5 * Math.Log(2 * Math.PI) - 0.5 * (y - mean) * (y - mean);
 
     // A skewed, heteroscedastic, curved truth the linear Gaussian model does not share: y = sin(1.5x) + (1 + scale·|x|)(E − 1).
-    private static double Truth(double x, double scale, Xoshiro256PlusPlus rng)
+    internal static double Truth(double x, double scale, Xoshiro256PlusPlus rng)
         => Math.Sin(1.5 * x) + (1 + scale * Math.Abs(x)) * (-Math.Log(1 - rng.NextDouble()) - 1);
 
     [Fact]
