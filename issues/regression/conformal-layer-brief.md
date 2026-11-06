@@ -110,3 +110,58 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### 2026-11-06 — Slice 0, the layer's core
+
+**Landed** on `main`, nothing pushed:
+- `4fb54fe` `DenseProduct` in `Maths.LinAlg`, with `DenseProductTests`. No dense product existed there; the search covered `MatrixOps`, `PairwiseSum`, `KhatriRao` and every `Multiply`/`Product` in `src/maths`.
+- `cb48ac7` the layer: `CandidateLogDensity` (the seam), `ConformalBayes.FullStep` and `Scores`, `ConformalSet`, with `ConformalBayesTests` and `ConformalCostTests`. `PredictiveChecks`' draw rows and the pointwise density's weight and chain checks became internal and shared.
+- `afb92fb` `docs/Maths/ConformalPrediction.md`, a `LinearAlgebra.md` section for the product, and `BayesianRegression.md`'s pointwise section pointing at the layer.
+
+**Gates.** Each contract test names its Lean declarations.
+- *CB-1 by enumeration.* The model is discrete: three parameter values under a uniform prior, a unit (x, y) of six values, the posterior held exactly as weighted draws. All 455 data sets of 2 to 5 units were run, each unit in turn the candidate, at every k:
+  - the 56 with distinct scores cover exactly 1 − k/m;
+  - the 399 with ties cover at least 1 − k/m and at most that plus the straddling share, with 720 (set, k) pairs straddling;
+  - the strict rule covers at most 1 − k/m, the tie-broken rule exactly 1 − k/m;
+  - `card_rankLe_le` holds, and equal units tie exactly.
+- *Per stratum:* the same on every stratum-0 multiset of 2 to 5 beside a fixed stratum 1, ranked within stratum 0.
+- *Coverage from truth outside the model.* Exact posterior draws (S 400) of y | x, β ~ N(βx, 1), against a truth sin(1.5x) + (1 + 0.5|x|)(E − 1) that is curved, skewed and heteroscedastic, with n 19 and α 0.1, so k 2.
+
+| Fit | Coverage (nominal 0.900, se 0.0048, 3,850 replications) | Mean width |
+|---|---|---|
+| The conformal set | 0.902 | 5.25, one interval each |
+| The model's own 90% predictive interval | 0.798 | 3.39 |
+
+- *Within strata.* Two strata of 12 units, the noise ×0.2 and ×3 under one homoscedastic model, k 2 of m 13 (nominal 0.846, se 0.0096). They cover 0.854 and 0.824, with widths 2.66 and 9.71.
+  - The noisy stratum's 0.824 (z −2.3) was read further. At 20,000 replications on seeds 611, 12345 and 777 it is 0.835, 0.848 and 0.851, and seed 611's next 20,000 give 0.843. Pooled it is 0.844 (z −1.2), so the low reading is seed 611's data.
+  - S 3,000 left all 1,400 decisions as S 300 had them, so it is not Monte Carlo error.
+  - The fixture keeps seed 611 and its 3.5-se band.
+- *The small stratum* is the whole space below ⌈1/α⌉ at α 0.1, 0.15 and 0.5.
+- *CB-4's refusals* all fire. `mixed_counterexample` is reproduced: labelled integrated to pass the refusal, the data unit scores 5/8, the candidate 1/2, and coverage is 0 against 1/2. The integrated reading ties them.
+- *Primitives.* A seeded sweep of 120 cases against a reference in logs. It covers weights from e⁻⁷⁰⁰ with zeros, chains, log terms near −10⁴ moving 900 nats across draws, candidates in a tail and outside the support, copied columns, and strata of one or none. Every score is within 10⁻¹² relative, with 62 exact ties; counts and π follow exactly, and the inputs are unchanged. The product matches the scalar fused loop bit for bit on chosen shapes and a 60-shape sweep, half of it with subnormals, signed zeros and ±2⁵⁰⁰.
+- *Nothing upstream moves.* The eight `BassBitIdentityTests` pins and the pointwise, PSIS-LOO, WAIC and diagnostics tests pass: 264 of 264, and `Maths.LinAlg.Tests` 152 of 152. These ran on a tree of HEAD plus this slice's files.
+
+**The cost row** (`BASS_QUALIFICATION=1`, `BASS_COST_CLOCK=cycles`, Release, best of five, indicative on a shared machine). One grid is G = 200 candidates.
+
+| n, S | Training side, once per stratum | Weights | Product | Ranks | Full step | Per candidate |
+|---|---|---|---|---|---|---|
+| 1,000, 1,000 | 15.8 ms | 2.5 ms | 14.3 ms | 1.2 ms | 36.7 ms | 12, 72, 6 µs |
+| 1,000, 4,000 | 68.4 ms | 12.6 ms | 62.0 ms | 1.7 ms | 149.8 ms | 63, 310, 9 µs |
+
+The product runs at 31 and 27 GFLOP/s, 33 and 40 times the scalar fused loop.
+
+**Defects found.** None in the layer. Two of my own fixture bounds were wrong and were fixed: a count of distinct data sets that cannot exceed 56, and a width ratio above what the fixture gives. One defect upstream, in BASS's noise latent report, belongs to slice 1 and is in its report.
+
+**Decisions taken beyond this brief.**
+- *The product sums in order, not pairwise,* by fused multiply-adds. It is bit for bit across hardware, and a candidate whose column equals a unit's gets that unit's score exactly, so CB-1's ties are the model's. Its error on non-negative terms is at most S·u relative.
+- *The log floor:* a product entry below 10⁻²⁰⁰ of its unit's largest likelihood is summed again in logs, by the same rule for the candidate.
+- *Outside every draw's support,* a candidate takes π = 1/m and ESS 0.
+- *A whole-space case computes nothing;* its p-values are null.
+- *Random tie-breaking waits for slice 4,* where a uniform p-value is wanted. The step reports `Below` and `Tied` so any rule can be read from it.
+- *Kish's ESS only.* The chain-aware relative efficiency and the influence-based error are what slice 2's ε reads, and they are shared there. Slice 0 reads only `PredictiveChecks`' draw rows, which it shares.
+- *Isolated builds.* The GBASS session resumed during this slice and edits BASS and distribution files in the checkout. Every build here ran on `git archive HEAD` plus this chip's files, so neither session builds the other's half-made edits.
+
+**Left unbuilt:** CB-4's latent-posterior reading, which needs a second candidate matrix; Hoff's score; refining boundaries between grid values. These are as the brief has them.
+
+**Follow-ups, each with the decision it would change.**
+- *A vector exponential* for the training side and the weights. Those are 81 of 150 ms for one case at S 4,000. It decides whether those exponentials may differ in their low bits from `Math.Exp` across hardware. The scores' ties would still hold within one machine, since every column takes the same function.

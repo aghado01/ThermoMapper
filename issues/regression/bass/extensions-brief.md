@@ -18,7 +18,7 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Residuals correlated along the output index | Andros, Guhaniyogi, Francom and Pasqualini, arXiv 2406.18751, 2602.09351 | Fitting: the output-side inner product; the residual-dependence check | Candidate |
 | Semi-modular calibration | Carmona and Nicholls 2020, arXiv 2003.06804; Bissiri, Holmes and Walker 2016, §4.2 | Calibration: D09's cut posterior and its emulator interface. Stage 8: the cut SMC's induced-density bridges | Candidate |
 | Calibrated intervals for loss-based posteriors | Bissiri, Holmes and Walker 2016, §3.4; Holmes and Walker 2017; Lyddon, Holmes and Walker 2019; Syring and Martin 2019 | BARS: `GibbsLossModel`. Any engine that weights a likelihood or a loss | Candidate |
-| Conformal Bayes, the consumer | Fong and Holmes 2021, arXiv 2106.06137; Vovk, Shen, Manokhin and Xie 2019 | The pointwise seam (OQ17, built): retained draws, the n × S matrix, the unit and stratum maps | Candidate |
+| Conformal Bayes, the consumer | Fong and Holmes 2021, arXiv 2106.06137; Vovk, Shen, Manokhin and Xie 2019 | The pointwise seam (OQ17, built): retained draws, the n × S matrix, the unit and stratum maps | Building ([the layer's brief](../conformal-layer-brief.md)) |
 | Conformal bands for whole curves | Lei, Rinaldo and Wasserman 2015; Diquigiovanni, Fontana and Vantini, arXiv 2106.01792 | The unit map's whole-curve unit; each draw's pointwise predictive sd | Candidate |
 | Posteriors for readouts by resampling units | Huggins and Miller 2023; Fong, Holmes and Walker 2023 | Retained draws with their readouts (BARS's peaks); replicate units | Candidate |
 | Polynomial-chaos terms (E19) | Rumsey, Francom et al., arXiv 2510.25036 | Fitting: the design-kernel and proposal-kernel contracts. E4, E5 | Candidate |
@@ -287,7 +287,10 @@ Not taken:
 
 ## Conformal Bayes, the consumer
 
-The seam is built and the consumer is not. OQ17 (2026-10-23, built 2026-10-24; BASS's terms in S9) gives:
+**Building,** by [the layer's brief](../conformal-layer-brief.md#reports):
+- *Slice 0, built 2026-11-06:* the full step over a training density and a candidate density, engine-free (`ConformalBayes`, `CandidateLogDensity`; [ConformalPrediction](../../../docs/Maths/ConformalPrediction.md)). CB-1 is exact by enumeration, and a misspecified fit covers 0.902 against 0.900.
+
+The seam was built first. OQ17 (2026-10-23, built 2026-10-24; BASS's terms in S9) gives:
 - every draw's state, retained;
 - the n × S matrix of each unit's log density under each draw;
 - a unit map, under which a whole curve can be one unit;
