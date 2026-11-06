@@ -199,10 +199,12 @@ public sealed class WorkingResponse
     /// <paramref name="priorGram"/>'s columns, <paramref name="output"/>, the inner product on the output index (none is the
     /// identity; a direct functional response's only), and <paramref name="reference"/>, what the priors read in place of this
     /// working response (none reads it as it stands). <see cref="WeightedPriorGram.Frozen"/> takes its W₀ from the reference, and alone
-    /// does; with no weights of its own it reads unit weights. The arrays are copied.</summary>
+    /// does; with no weights of its own it reads unit weights. <paramref name="latents"/> are the observation model's latents at this
+    /// reading (one value per observation), none for a model with none. The arrays are copied.</summary>
     public WorkingResponse(BassResponse response, ReadOnlySpan<double> offset = default, ReadOnlySpan<double> weights = default,
                            IInnerProduct? output = null, WeightMeaning meaning = WeightMeaning.Precision,
-                           WeightedPriorGram priorGram = WeightedPriorGram.Unweighted, BassPriorReference? reference = null)
+                           WeightedPriorGram priorGram = WeightedPriorGram.Unweighted, BassPriorReference? reference = null,
+                           ObservationLatents? latents = null)
     {
         ArgumentNullException.ThrowIfNull(response);
         if (meaning is not (WeightMeaning.Precision or WeightMeaning.Replication)) throw new ArgumentOutOfRangeException(nameof(meaning));
@@ -212,10 +214,13 @@ public sealed class WorkingResponse
             throw new ArgumentException("The frozen Gram and the reference's W₀ come together.", nameof(priorGram));
         if (reference?.GramWeightArray is { } frozen && frozen.Length != n)
             throw new ArgumentException($"The reference's W₀ holds {frozen.Length} values for {n} observations.", nameof(reference));
+        if (latents is not null && latents.Values.Length != n)
+            throw new ArgumentException($"The latents hold {latents.Values.Length} values for {n} observations.", nameof(latents));
         Response = response;
         Meaning = meaning;
         PriorGram = priorGram;
         Reference = reference;
+        Latents = latents;
         Weighting = GPriorWeights.Unit(n);
         Output = output ?? IdentityInnerProduct.Instance;
         if (!Output.IsIdentity)
@@ -247,13 +252,16 @@ public sealed class WorkingResponse
         ResponseMean = MeanOf(_weights, Values, Weighting, n);
     }
 
-    // `source` at another offset: its weights shared, every other part as it stands.
-    private WorkingResponse(WorkingResponse source, ReadOnlySpan<double> offset)
+    // `source` at another offset with `latents`: its weights shared, every other part as it stands.
+    private WorkingResponse(WorkingResponse source, ReadOnlySpan<double> offset, ObservationLatents? latents)
     {
+        if (latents is not null && latents.Values.Length != source.Response.Observations)
+            throw new ArgumentException($"The latents hold {latents.Values.Length} values for {source.Response.Observations} observations.", nameof(latents));
         Response = source.Response;
         Meaning = source.Meaning;
         PriorGram = source.PriorGram;
         Reference = source.Reference;
+        Latents = latents;
         Weighting = source.Weighting;
         Output = source.Output;
         _weights = source._weights;
@@ -281,16 +289,17 @@ public sealed class WorkingResponse
         => weights is null ? PairwiseSum.Of(values) / n : PairwiseSum.Dot(weights, values) / weighting.Mass;
 
     /// <summary>
-    /// This reading of the response at another latent state: <paramref name="offset"/> (none is zero) and <paramref name="weights"/>
-    /// (none keeps these, shared rather than copied), with the meaning, the prior's Gram, the inner product and the reference as they
-    /// stand, since those are the model's. A chain moves to it by <see cref="BassStructureMoves.Follow"/>. A design's layout depends on
-    /// whether it holds weights, so a model whose weights move declares them from the start, unit weights if need be.
+    /// This reading of the response at another latent state: <paramref name="offset"/> (none is zero), <paramref name="weights"/>
+    /// (none keeps these, shared rather than copied) and the latents there, <paramref name="latents"/> (none carries none), with the
+    /// meaning, the prior's Gram, the inner product and the reference as they stand, since those are the model's. A chain moves to it by
+    /// <see cref="BassStructureMoves.Follow"/>. A design's layout depends on whether it holds weights, so a model whose weights move declares
+    /// them from the start, unit weights if need be.
     /// </summary>
-    public WorkingResponse Moved(ReadOnlySpan<double> offset, ReadOnlySpan<double> weights = default)
+    public WorkingResponse Moved(ReadOnlySpan<double> offset, ReadOnlySpan<double> weights = default, ObservationLatents? latents = null)
     {
-        if (weights.IsEmpty) return new WorkingResponse(this, offset);
+        if (weights.IsEmpty) return new WorkingResponse(this, offset, latents);
         if (_weights is null) throw new ArgumentException("This working response holds no weights, and a design's layout depends on whether it does; declare them from the start.", nameof(weights));
-        return new WorkingResponse(Response, offset, weights, Output, Meaning, PriorGram, Reference);
+        return new WorkingResponse(Response, offset, weights, Output, Meaning, PriorGram, Reference, latents);
     }
 
     /// <summary>The response the working response derives from.</summary>
@@ -316,6 +325,9 @@ public sealed class WorkingResponse
 
     /// <summary>What the priors read in place of this working response; null reads it as it stands.</summary>
     public BassPriorReference? Reference { get; }
+
+    /// <summary>The observation model's latents at this reading, the state's (E1's decision 1); null for a model with none.</summary>
+    public ObservationLatents? Latents { get; }
 
     /// <summary>The count, the mass and Σ ln wᵢ the marginal reads beyond the weighted statistics.</summary>
     public GPriorWeights Weighting { get; }
@@ -369,7 +381,8 @@ public sealed class WorkingResponse
 /// The seam between the noise and the Gaussian core (F-X1, F-X2): the observation model supplies the core its
 /// <see cref="WorkingResponse"/> and, for a noise with latent variables, the blocks that update them in the sweep's slots
 /// (<see cref="BassSweepSlot"/>). Gaussian BASS is the one member (<see cref="GaussianObservation"/>); generalized-hyperbolic
-/// noise (GBMARS) joins by supplying an offset and weights at its latent state, and the blocks of its latent scales.
+/// noise joins by supplying an offset and weights at its latent state, the blocks of its latent scales and its law
+/// (<see cref="VarianceMeanMixture"/>).
 /// </summary>
 public interface IBassObservationModel
 {
@@ -381,6 +394,10 @@ public interface IBassObservationModel
     /// which draws nothing and consumes no random number. Asked of <see cref="BassSweepSlot.Coefficients"/>,
     /// <see cref="BassSweepSlot.Latent"/> and <see cref="BassSweepSlot.Scale"/> only: the structure's slot and τ's are BASS's.</summary>
     IReadOnlyList<IBlock<ReversibleJumpChain<BassState>>> Blocks(BassSweepSlot slot);
+
+    /// <summary>The noise's law, each observation's latent integrated out, which the pointwise density, prediction and the training fit
+    /// read (<see cref="IBassNoiseLaw"/>); null, the default, is the Gaussian N(0, σ²/w) those readers hold themselves.</summary>
+    IBassNoiseLaw? Law => null;
 }
 
 /// <summary>Independent Gaussian noise: the working response is the response, with zero offset and unit weights, so the

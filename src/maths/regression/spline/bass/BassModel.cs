@@ -31,17 +31,23 @@ public sealed class BassModel
 
     /// <summary><paramref name="config"/> on <paramref name="data"/>, its target tempered in <paramref name="form"/>; null takes
     /// the config's (<see cref="TemperingSpec.Form"/> or <see cref="SmcSpec.Form"/>), the integrated form when it declares
-    /// none.</summary>
+    /// none. The noise is the config's: <see cref="VarianceMeanMixture"/> for a declared <see cref="BassConfig.Noise"/>, Gaussian
+    /// otherwise.</summary>
     public static BassModel Create(BassConfig config, BassData data, TemperedForm? form = null)
-        => Create(config, data, GaussianObservation.Instance, form);
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        return Create(config, data, config.Noise is { } noise ? new VarianceMeanMixture(noise) : GaussianObservation.Instance, form);
+    }
 
     /// <summary><see cref="Create(BassConfig, BassData, TemperedForm?)"/> with <paramref name="observation"/> as the noise
-    /// the Gaussian core fits (F-X1); Gaussian BASS is the overload above.</summary>
+    /// the Gaussian core fits (F-X1), for a config that declares none; Gaussian BASS is the overload above.</summary>
     public static BassModel Create(BassConfig config, BassData data, IBassObservationModel observation, TemperedForm? form = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(observation);
+        if (config.Noise is { } declared && !(observation is VarianceMeanMixture mixture && mixture.Noise == declared))
+            throw new ArgumentException("The config declares its noise, so the observation model is the config's.", nameof(observation));
         WorkingResponse working = observation.Working(data.Response);
         BassResolved resolved = BassResolved.Resolve(config, data, working);
         BassInputTransform transform = BassInputTransform.Fit(data);

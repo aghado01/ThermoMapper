@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Maths.Distributions;
 
 namespace Maths.Regression.Spline.Bass;
@@ -41,6 +42,43 @@ public static class PredictiveMixture
             if (middle <= lower || middle >= upper) return middle;
             // The mass below the midpoint (above it, in the upper tail) against the target.
             bool below = upperTail ? Mass(means, sds, weights, middle, true) > target : Mass(means, sds, weights, middle, false) < target;
+            if (below) lower = middle;
+            else upper = middle;
+        }
+    }
+
+    /// <summary>
+    /// The <paramref name="probability"/> quantile of the mixture Σₛ wₛ·Fₛ(· − μₛ) of shifted noises <paramref name="noises"/>: the root of
+    /// Σₛ wₛFₛ(q − μₛ) = p, which lies between the least and largest component quantiles, solved as the Gaussian one is, the tail beyond
+    /// ½ through the survival function, by bisection to adjacent doubles. A noise law's predictive (<see cref="IBassNoiseLaw.At"/>).
+    /// </summary>
+    public static double Quantile(ReadOnlySpan<double> means, IReadOnlyList<IContinuousDistribution> noises, ReadOnlySpan<double> weights, double probability)
+    {
+        int s = means.Length;
+        if (s == 0) throw new ArgumentException("A mixture needs a draw.", nameof(means));
+        ArgumentNullException.ThrowIfNull(noises);
+        if (noises.Count != s || weights.Length != s) throw new ArgumentException("Every draw needs a mean, a noise and a weight.", nameof(noises));
+        if (!(probability > 0.0 && probability < 1.0)) throw new ArgumentOutOfRangeException(nameof(probability), "The probability lies in (0, 1).");
+        double total = Total(weights), lower = double.PositiveInfinity, upper = double.NegativeInfinity;
+        for (int k = 0; k < s; k++)
+        {
+            if (!double.IsFinite(means[k])) throw new ArgumentException("The means must be finite.", nameof(means));
+            if (weights[k] == 0.0) continue;
+            double q = means[k] + noises[k].Quantile(probability);
+            lower = Math.Min(lower, q);
+            upper = Math.Max(upper, q);
+        }
+        bool upperTail = probability > 0.5;
+        double target = (upperTail ? 1.0 - probability : probability) * total;
+        while (true)
+        {
+            double middle = lower + 0.5 * (upper - lower);
+            if (middle <= lower || middle >= upper) return middle;
+            double mass = 0.0;
+            for (int k = 0; k < s; k++)
+                if (weights[k] != 0.0)
+                    mass += weights[k] * (upperTail ? noises[k].Survival(middle - means[k]) : noises[k].Cdf(middle - means[k]));
+            bool below = upperTail ? mass > target : mass < target;
             if (below) lower = middle;
             else upper = middle;
         }

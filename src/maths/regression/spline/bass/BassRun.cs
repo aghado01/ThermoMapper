@@ -133,6 +133,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         return new BassChainRun(this, chain, ladder, Xoshiro256PlusPlus.Restore(c0, c1, c2, c3), terms, s.Draws.Copy(), s.Start)
         {
             BurnMoves = s.BurnMoves,
+            BurnBlocks = s.BurnBlocks,
         };
     }
 
@@ -198,8 +199,17 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
                 if (d.Structure.TermIds.Length == _model.MaxBasis) chainAtCap++;
             atCap += chainAtCap;
             retained += run.Draws.Count;
+            IReadOnlyList<MoveStat>? blocks = null;
+            if (run.Chain is { } lone)
+            {
+                IReadOnlyList<MoveStat> all = lone.Scan.BlockStats();
+                var counted = new MoveStat[all.Count];
+                for (int i = 0; i < all.Count; i++)
+                    counted[i] = new MoveStat(all[i].Key, all[i].Attempts - run.BurnBlocks[i].Attempts, all[i].Accepted - run.BurnBlocks[i].Accepted);
+                blocks = counted;
+            }
             accounts[c] = new BassChainAccount(run.Start, sampling, structure.Kinds.Copy(), structure.Refusals.Copy(), structure.EmptyBirths,
-                                               structure.Support.Copy(), (double)chainAtCap / run.Draws.Count);
+                                               structure.Support.Copy(), (double)chainAtCap / run.Draws.Count, blocks);
             kinds.MergeFrom(structure.Kinds);
             refusals.MergeFrom(structure.Refusals);
             emptyBirths += structure.EmptyBirths;
@@ -311,11 +321,11 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
     }
 
     /// <summary>One chain's restart state: its <see cref="BassChain"/>'s snapshot or its <see cref="BassLadder"/>'s, the
-    /// composition stream's words, its term table's terms in id order, its draws, its start and its move counts at the end
+    /// composition stream's words, its term table's terms in id order, its draws, its start and its move and block counts at the end
     /// of burn-in.</summary>
     private sealed record BassChainState(
         BassChainSnapshot? Chain, BassLadderSnapshot? Ladder, (ulong, ulong, ulong, ulong) Composition, BassTerm[] Terms,
-        DrawStore<BassDraw> Draws, BassStart Start, IReadOnlyList<MoveStat> BurnMoves) : IChainState;
+        DrawStore<BassDraw> Draws, BassStart Start, IReadOnlyList<MoveStat> BurnMoves, IReadOnlyList<MoveStat> BurnBlocks) : IChainState;
 
     /// <summary>One chain: its <see cref="BassChain"/> or its <see cref="BassLadder"/>, composition stream, term table,
     /// retained draws and start, and its move counts at the end of burn-in. As the shell's <see cref="IChain{TDraw}"/>, a
@@ -332,6 +342,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         public BassStart Start { get; } = start;
         public List<double[]?> PointValues { get; } = [];
         public IReadOnlyList<MoveStat> BurnMoves { get; set; } = [];
+        public IReadOnlyList<MoveStat> BurnBlocks { get; set; } = [];
 
         // The sampling chain: the lone chain's, or the ladder's b = 1 replica, with its structure moves.
         public ReversibleJumpChain<BassState> Moves => Ladder?.Moves ?? Chain!.Moves;
@@ -366,6 +377,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
             if (Ladder is { } ladder) ladder.EndBurnIn(owner.ReportsEvidence);
             else Chain!.Structure.ResetTallies();
             BurnMoves = Moves.MoveStats();
+            BurnBlocks = Chain?.Scan.BlockStats() ?? [];
         }
 
         public void Accumulate(in BassState draw, Span<double> functionals) => owner.Accumulate(this, draw, functionals);
@@ -375,7 +387,7 @@ internal sealed class BassEnsemble : IEnsembleModel<BassState>
         {
             var terms = new BassTerm[Terms.Count];
             for (int id = 0; id < terms.Length; id++) terms[id] = Terms[id];
-            return new BassChainState(Chain?.Snapshot(), Ladder?.Snapshot(), Composition.SaveState(), terms, Draws.Copy(), Start, BurnMoves);
+            return new BassChainState(Chain?.Snapshot(), Ladder?.Snapshot(), Composition.SaveState(), terms, Draws.Copy(), Start, BurnMoves, BurnBlocks);
         }
     }
 }

@@ -168,6 +168,9 @@ public sealed record BassFit(
                 "finished production; Bass.Resume continues it from its checkpoint.");
     }
 
+    // The noise law of the model on `data` (IBassObservationModel.Law); null for the Gaussian.
+    internal IBassNoiseLaw? NoiseLaw(BassData data) => ModelOn(data).Observation.Law;
+
     // The model on `data`, refused when they are not the data the fit was run on; the posterior's views only.
     private BassModel ModelOn(BassData data)
     {

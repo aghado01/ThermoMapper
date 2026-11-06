@@ -42,6 +42,14 @@ public sealed record BassConfig
     /// </summary>
     public GPriorCentre Intercept { get; init; } = GPriorCentre.Mean;
 
+    /// <summary>
+    /// The noise beyond the Gaussian (E1; <see cref="BassNoise"/>): null, the default, is Gaussian BASS. Left out of the serialized form
+    /// when null, so a Gaussian config's form and fingerprint stand as they were. A fit under a declared noise runs chains: its blocks on
+    /// a tempered rung, SMC's particles and the flat histogram are E1's slice 5.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public BassNoise? Noise { get; init; }
+
     /// <summary>The run: chains or SMC's replicates, seeds, lengths, the R̂ stop and the move schedule.</summary>
     public BassSampling Sampling { get; init; } = new();
 
@@ -118,6 +126,15 @@ public sealed record BassConfig
         if (Intercept is not (GPriorCentre.Mean or GPriorCentre.Flat or GPriorCentre.Zero)) throw Bad("Intercept", "is not a known convention");
         if (!scale.IsProper && Intercept == GPriorCentre.Flat)
             throw Bad("Coefficients.Scale", $"is {scale}, improper, which leaves τ no posterior under the flat intercept, whose intercept-only structure has no column inside the coefficient prior; take a > 2");
+
+        if (Noise is { } noise)
+        {
+            if (Sampling?.Tempering is not null) throw Bad("Noise", "takes no Sampling.Tempering yet: a latent noise's blocks on a tempered rung are E1's slice 5");
+            if (Sampling?.Smc is not null) throw Bad("Noise", "takes no Sampling.Smc yet: SMC's particles holding their own latents are E1's slice 5");
+            if (Sampling?.FlatHistogram is not null) throw Bad("Noise", "takes no Sampling.FlatHistogram yet: its walkers holding their own latents are E1's slice 5");
+            if (noise.Reference == BassNoiseReference.None && (Intercept == GPriorCentre.Mean || Sigma2.ReadsResponse))
+                throw Bad("Noise.Reference", "is None, while the intercept's level or σ²'s prior reads the response; state Moments or Robust, or take priors that read nothing");
+        }
 
         BassSampling run = Sampling ?? throw Bad("Sampling", "is missing");
         if (run.Chains < 1) throw Bad("Sampling.Chains", "must be at least 1");

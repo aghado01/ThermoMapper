@@ -29,9 +29,10 @@ namespace Maths.Regression.Spline.Bass;
 /// ridge's, bG_c + τD, moves with τ, so they are taken once per distinct τ.</item>
 /// </list>
 /// λ enters neither content: it is the count prior's rate. A draw composed on a working response reads it, the moved ones of a chain
-/// each their own (<see cref="BassDraw.Working"/>), and the offset and weights are then reported as latents conditioned on; the noise's
-/// density with them integrated out is its observation model's. Thread-safe: it reads the model and the table and writes only its own
-/// buffers.
+/// each their own (<see cref="BassDraw.Working"/>), and the offset and weights are then reported as latents conditioned on. A model with
+/// a noise law (<see cref="IBassObservationModel.Law"/>) takes the law's density instead, each observation's latent integrated out
+/// (OQ17's scope rule), at the draw's σ² and its latents' globals; its collapsed predictive is refused until it has a check of its own.
+/// Thread-safe: it reads the model and the table and writes only its own buffers.
 /// </summary>
 public static class BassPointwise
 {
@@ -72,6 +73,8 @@ public static class BassPointwise
         bool collapsed = content == PointwiseContent.CollapsedPredictive;
         if (collapsed)
         {
+            if (model.Observation.Law is not null)
+                throw new NotSupportedException("The collapsed predictive integrates a Gaussian noise; under a noise law it waits for a check of its own. Take the retained content, which integrates each observation's latent.");
             if (model.Working is { IsUnweighted: false, Meaning: WeightMeaning.Replication })
                 throw new NotSupportedException("The collapsed predictive leaves a row out whole; under weights that count rows it would leave out all its copies at once. Take the retained content.");
             // The predictive conditions on the observations outside the unit, beyond the one a flat intercept's integral
@@ -90,7 +93,9 @@ public static class BassPointwise
         var latents = new List<LatentReport> { new("structure", LatentScope.Global, LatentTreatment.Conditioned) };
         if (model.Target.SamplesTau) latents.Add(new LatentReport("prior precision τ", LatentScope.Global, LatentTreatment.Conditioned));
         if (model.Target.Sigma2Rate is not null) latents.Add(new LatentReport("σ²'s rate", LatentScope.Global, LatentTreatment.Conditioned));
-        if (pooled.Exists(d => !ReferenceEquals(d.WorkingOn(model), model.Working)))
+        if (model.Observation.Law is not null)
+            latents.Add(new LatentReport("the noise's latent per observation", LatentScope.Observation, LatentTreatment.IntegratedGivenOthers));
+        else if (pooled.Exists(d => !ReferenceEquals(d.WorkingOn(model), model.Working)))
             latents.Add(new LatentReport("the working response's offset and weights", LatentScope.Observation, LatentTreatment.Conditioned));
         latents.Add(new LatentReport("coefficients a", LatentScope.Global, treatment));
         latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, treatment));
@@ -100,16 +105,27 @@ public static class BassPointwise
     }
 
     // Each draw's Normal log terms at its fit and σ², summed over each unit's observations: on the working response it was composed on,
-    // under W at its meaning, N(y | f, σ²/w) or w copies of N(y | f, σ²).
+    // under W at its meaning, N(y | f, σ²/w) or w copies of N(y | f, σ²). Under a noise law, the law's density of y − f, each
+    // observation's latent integrated out.
     private static double[,] Retained(BassModel model, BassDrawFit fit, List<BassDraw> pooled, UnitPartition partition)
     {
         int n = model.Data.Response.Observations;
         var values = new double[pooled.Count, partition.Units];
         var f = new double[n];
         var log = new double[n];
+        IBassNoiseLaw? law = model.Observation.Law;
         for (int s = 0; s < pooled.Count; s++)
         {
             BassDraw draw = pooled[s];
+            if (law is not null)
+            {
+                ReadOnlySpan<double> observed = model.Data.Response.Values;
+                ObservationLatents? globals = draw.WorkingOn(model).Latents;
+                fit.Evaluate(draw, f);
+                for (int i = 0; i < n; i++) log[i] = law.LogDensity(observed[i] - f[i], draw.Sigma2, globals);
+                Sum(log, partition, values, s);
+                continue;
+            }
             WorkingResponse working = draw.WorkingOn(model);
             ReadOnlySpan<double> y = working.Values;
             double[]? weights = working.WeightArray;
@@ -123,14 +139,20 @@ public static class BassPointwise
                 else if (counts) log[i] = weights[i] * (normalizer - 0.5 * e * e / sigma2);
                 else log[i] = normalizer + 0.5 * Math.Log(weights[i]) - 0.5 * weights[i] * e * e / sigma2;
             }
-            for (int u = 0; u < partition.Units; u++)
-            {
-                double sum = 0.0;
-                foreach (int i in partition.Members[u]) sum += log[i];
-                values[s, u] = sum;
-            }
+            Sum(log, partition, values, s);
         }
         return values;
+    }
+
+    // Draw s's log terms summed over each unit's observations.
+    private static void Sum(double[] log, UnitPartition partition, double[,] values, int s)
+    {
+        for (int u = 0; u < partition.Units; u++)
+        {
+            double sum = 0.0;
+            foreach (int i in partition.Members[u]) sum += log[i];
+            values[s, u] = sum;
+        }
     }
 
     // The draws grouped by structure and working response: one design, block and explicit design per group, then each draw's

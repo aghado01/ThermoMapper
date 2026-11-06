@@ -346,10 +346,12 @@ public sealed record BassMonitoredValue(BassMonitoredPoint Point, ConvergenceDia
 public sealed record BassStart(IReadOnlyList<BassTerm> Terms, double Tau, long Attempts);
 
 /// <summary>One chain's account over the sampling phase, with its start: moves, by type and by kind, refusals, empty
-/// births, support by order and its share of draws at the cap.</summary>
+/// births, support by order and its share of draws at the cap; and the sweep's blocks after the structure moves, each block's attempts
+/// and acceptances in scan order (τ's, and an observation model's, whose latent block refuses a draw that puts the structure outside F),
+/// for a lone chain; null for a ladder's and for the other samplers.</summary>
 public sealed record BassChainAccount(
     BassStart Start, IReadOnlyList<MoveStat> Moves, BassMoveTally MoveKinds, Tally<BassRefusal> Refusals, long EmptyBirths,
-    BassSupportTally Support, double MassAtCap);
+    BassSupportTally Support, double MassAtCap, IReadOnlyList<MoveStat>? Blocks = null);
 
 /// <summary>One move kind's account: its proposals attempted, accepted, null and refused; the rest were rejected on their
 /// ratio.</summary>

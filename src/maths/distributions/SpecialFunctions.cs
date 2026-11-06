@@ -193,7 +193,7 @@ public static class SpecialFunctions
     }
 
     /// <summary><c>ln(1 + x)</c>, accurate for small <c>x</c> (Goldberg's correction).</summary>
-    internal static double Log1p(double x)
+    public static double Log1p(double x)
     {
         if (double.IsPositiveInfinity(x)) return x;
         double u = 1.0 + x;

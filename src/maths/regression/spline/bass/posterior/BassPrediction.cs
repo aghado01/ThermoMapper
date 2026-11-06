@@ -57,7 +57,9 @@ public sealed record BassPredictOptions
 /// <summary>
 /// A direct fit's prediction (D07, P07): latent draws f(x), or f(x, t) for a direct functional fit, and predictive draws
 /// that add N(0, σ²) noise drawn independently for each draw, case and location, as draw × case × location arrays with
-/// every axis kept, singletons included, in the requested draw order. A scalar fit has one location.
+/// every axis kept, singletons included, in the requested draw order. A scalar fit has one location. Under a noise law
+/// (<see cref="IBassObservationModel.Law"/>, E1) the three readings are the law's: the surface f, the mean f plus
+/// <see cref="MeanShifts"/>, and predictive draws whose noise draws each observation's latent from its prior, then ζ.
 /// <list type="bullet">
 /// <item><see cref="CaseOutsideRange"/> flags each case outside the training range of some continuous predictor, and
 /// <see cref="LocationOutsideRange"/> each location outside the output variables' training ranges; the hinges extrapolate
@@ -69,9 +71,14 @@ public sealed record BassPredictOptions
 /// </summary>
 public sealed class BassPrediction
 {
+    private readonly IContinuousDistribution[]? _noises;   // each draw's noise under a law; null for the Gaussian
+
     internal BassPrediction(int[] draws, double[] weights, double[] noiseVariances, double[,,] latent, double[,,]? predictive,
-                            bool[] caseOutside, bool[] locationOutside, double[,]? meanSurface)
+                            bool[] caseOutside, bool[] locationOutside, double[,]? meanSurface, IContinuousDistribution[]? noises = null,
+                            double[]? meanShifts = null)
     {
+        _noises = noises;
+        MeanShifts = Array.AsReadOnly(meanShifts ?? new double[draws.Length]);
         Draws = Array.AsReadOnly(draws);
         Weights = Array.AsReadOnly(weights);
         NoiseVariances = Array.AsReadOnly(noiseVariances);
@@ -88,8 +95,12 @@ public sealed class BassPrediction
     /// <summary>Each draw's weight, normalized to sum to 1.</summary>
     public IReadOnlyList<double> Weights { get; }
 
-    /// <summary>Each draw's noise variance σ².</summary>
+    /// <summary>Each draw's noise variance σ², the core's: under a noise law its scale, the noise's variance being the law's
+    /// σ²(β²Var[v] + c·E[v]).</summary>
     public IReadOnlyList<double> NoiseVariances { get; }
+
+    /// <summary>Each draw's E[ε], σβE[v] under a skewed law: the mean of y at x is f plus this. Zero for a symmetric noise.</summary>
+    public IReadOnlyList<double> MeanShifts { get; }
 
     /// <summary>f under each draw: draw × case × location.</summary>
     public double[,,] Latent { get; }
@@ -119,13 +130,40 @@ public sealed class BassPrediction
     /// <summary>The posterior mean of f, the weighted mean of the latent draws, case × location.</summary>
     public double[,] Mean() => Draws3.WeightedMean(Latent, Weights);
 
+    /// <summary>The posterior mean of y's mean at each case and location, f plus each draw's <see cref="MeanShifts"/>: f's under a
+    /// symmetric noise.</summary>
+    public double[,] ObservationMean()
+    {
+        double[,] mean = Mean();
+        double shift = 0.0;
+        for (int d = 0; d < DrawCount; d++) shift += Weights[d] * MeanShifts[d];
+        for (int i = 0; i < Cases; i++)
+            for (int l = 0; l < Locations; l++) mean[i, l] += shift;
+        return mean;
+    }
+
     /// <summary>
     /// The <paramref name="probability"/> quantile of the predictive mixture at each case and location, case × location:
-    /// Σₛ wₛ·N(fₛ, σₛ²), solved exactly (<see cref="PredictiveMixture.Quantile(ReadOnlySpan{double}, ReadOnlySpan{double}, ReadOnlySpan{double}, double)"/>).
+    /// Σₛ wₛ·N(fₛ, σₛ²), solved exactly (<see cref="PredictiveMixture.Quantile(ReadOnlySpan{double}, ReadOnlySpan{double}, ReadOnlySpan{double}, double)"/>);
+    /// under a noise law, Σₛ wₛ·Fₛ(· − fₛ) with each draw's noise, its latent integrated out.
     /// </summary>
     public double[,] Quantile(double probability)
     {
         int s = DrawCount, n = Cases, m = Locations;
+        if (_noises is { } noises)
+        {
+            var w = new double[s];
+            for (int d = 0; d < s; d++) w[d] = Weights[d];
+            var at = new double[s];
+            var lawQ = new double[n, m];
+            for (int i = 0; i < n; i++)
+                for (int l = 0; l < m; l++)
+                {
+                    for (int d = 0; d < s; d++) at[d] = Latent[d, i, l];
+                    lawQ[i, l] = PredictiveMixture.Quantile(at, noises, w, probability);
+                }
+            return lawQ;
+        }
         var sds = new double[s];
         var weights = new double[s];
         for (int d = 0; d < s; d++)
@@ -236,10 +274,19 @@ internal static class BassDirectPrediction
         var latent = new double[s, n, m];
         var noise = new double[s];
         var f = new double[n * m];
+        IBassNoiseLaw? law = model.Observation.Law;
+        IContinuousDistribution[]? noises = law is null ? null : new IContinuousDistribution[s];
+        double[]? shifts = law is null ? null : new double[s];
         for (int d = 0; d < s; d++)
         {
             BassDraw draw = pooled[selected[d]];
             noise[d] = draw.Sigma2;
+            if (law is not null)
+            {
+                ObservationLatents? globals = draw.WorkingOn(model).Latents;
+                noises![d] = law.At(draw.Sigma2, globals);
+                shifts![d] = law.MeanShift(draw.Sigma2, globals);
+            }
             surface.Evaluate(draw.Structure.TermIds, draw.Coefficients, f);
             for (int i = 0; i < n; i++)
                 for (int l = 0; l < m; l++) latent[d, i, l] = f[i * m + l];
@@ -252,6 +299,13 @@ internal static class BassDirectPrediction
             predictive = new double[s, n, m];
             for (int d = 0; d < s; d++)
             {
+                if (law is not null)
+                {
+                    ObservationLatents? globals = pooled[selected[d]].WorkingOn(model).Latents;
+                    for (int i = 0; i < n; i++)
+                        for (int l = 0; l < m; l++) predictive[d, i, l] = latent[d, i, l] + law.Sample(noise[d], globals, rng);
+                    continue;
+                }
                 double sd = Math.Sqrt(noise[d]);
                 for (int i = 0; i < n; i++)
                     for (int l = 0; l < m; l++) predictive[d, i, l] = latent[d, i, l] + sd * Normal.SampleStandard(rng);
@@ -271,6 +325,6 @@ internal static class BassDirectPrediction
                     for (int l = 0; l < m; l++) meanSurface[i, l] += weights[d] * f[i * m + l];
             }
         }
-        return new BassPrediction(selected, weights, noise, latent, predictive, caseOutside, locationOutside, meanSurface);
+        return new BassPrediction(selected, weights, noise, latent, predictive, caseOutside, locationOutside, meanSurface, noises, shifts);
     }
 }

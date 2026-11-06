@@ -53,6 +53,7 @@ public sealed class BassStructureMoves
     private readonly Dictionary<BassTerm, double> _columnMeans = [];
     private double[]? _columnMeansWeights;        // the weights those means were read under
     private readonly BassFactorShares? _shares;   // the fixed-M family's shares of the change's slot; null when off
+    private readonly Dictionary<BassTerm, (double[] Case, double[]? Output)> _sweepColumns = [];   // the sweep fit's raw columns, a pure cache
 
     // A proposal the design admitted, pending until the chain shows its structure: its kind, its terms in and out, and
     // whether its acceptance counts in the kinds' tally (not when the tallies restarted after it was proposed).
@@ -287,6 +288,69 @@ public sealed class BassStructureMoves
         coefficients[0] = intercept;
         return new BassDraw(new BassStructure(sorted), tau, sigma2, coefficients, lambda, target.Sigma2Rate?.RateAt(state.LogRate),
                             _design.Working.IsResponseItself ? null : _design.Working);
+    }
+
+    /// <summary>The coefficients' block's draw in this sweep (<see cref="BassCoefficientsBlock"/>), which the blocks after it read; null
+    /// before the first. Not state: it is redrawn each sweep before it is read, so a snapshot leaves it out.</summary>
+    internal BassSweepFit? SweepFit { get; private set; }
+
+    /// <summary>
+    /// σ² and the coefficients at <paramref name="state"/> from their conditional given the structure, τ and the working response, as
+    /// <see cref="Compose"/> draws them, with the fit f = α + Σⱼ βⱼ(zⱼ − z̄ⱼ) at every observation, centred under W as the design centres
+    /// it; kept as <see cref="SweepFit"/>. <paramref name="current"/> is the chain's target, the model's when null; <paramref name="power"/>
+    /// is the likelihood's, 1 in a sweep and 0 for a draw from the prior.
+    /// </summary>
+    internal BassSweepFit DrawSweepFit(BassState state, Xoshiro256PlusPlus rng, BassTarget? current = null, double power = 1.0)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        Sync(state);
+        BassTarget target = current ?? _model.Target;
+        double tau = target.SamplesTau ? state.Tau : target.HeldTau!.Value;
+        GPriorConditional conditional = target.CoefficientBlock(_design)(tau, power);
+        var centred = new double[conditional.Columns];
+        double sigma2;
+        if (target.GivenSigma2 is double given)
+        {
+            conditional.SampleGiven(given, rng, centred);
+            sigma2 = given;
+        }
+        else sigma2 = conditional.Sample(target.Sigma2At(state), rng, centred);
+
+        WorkingResponse working = _design.Working;
+        int n = _design.Observations;
+        var fitted = new double[n];
+        Array.Fill(fitted, centred[0]);
+        if (_sweepColumns.Count > 2 * state.Count + 16) _sweepColumns.Clear();
+        for (int j = 0; j < state.Count; j++)
+        {
+            (double[] a, double[]? h) = SweepColumns(state.Terms[j]);
+            double mean = working.ColumnMean(a, h), c = centred[j + 1];
+            if (h is null)
+            {
+                for (int i = 0; i < n; i++) fitted[i] += c * (a[i] - mean);
+                continue;
+            }
+            for (int i = 0; i < a.Length; i++)
+                for (int r = 0; r < h.Length; r++) fitted[i * h.Length + r] += c * (a[i] * h[r] - mean);
+        }
+        return SweepFit = new BassSweepFit(state, sigma2, centred, fitted);
+    }
+
+    // The term's case column and, for a direct functional response, its output column, at the training inputs.
+    private (double[] Case, double[]? Output) SweepColumns(BassTerm term)
+    {
+        if (_sweepColumns.TryGetValue(term, out var cached)) return cached;
+        BassBasis basis = _model.Basis;
+        var a = new double[basis.Inputs.Cases.Cases];
+        basis.CaseColumn(term, basis.Inputs.Cases, a);
+        double[]? h = null;
+        if (basis.Inputs.Outputs is { } outputs)
+        {
+            h = new double[outputs.Locations];
+            basis.OutputColumn(term, outputs, h);
+        }
+        _sweepColumns.Add(term, (a, h));
+        return (a, h);
     }
 
     // The mean of the term's column over all N observations under W, the design's centring: a case column's mean, or āh̄ at

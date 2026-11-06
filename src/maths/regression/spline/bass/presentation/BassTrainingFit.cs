@@ -33,7 +33,8 @@ public enum IntervalSource
 /// no offset y minus the mean.</param>
 /// <param name="NoiseSd">A direct fit's posterior mean of σ under the draws' weights, the sd of R's reference normal density
 /// for the residuals; null for a basis fit, whose noise varies by location, and for draws under observation weights, whose noise
-/// varies by row.</param>
+/// varies by row. Under a noise law (E1) the posterior mean of the noise's own sd, √(σ²(β²Var[v] + c·E[v])), null where that variance
+/// is infinite (t at ν ≤ 2).</param>
 /// <param name="LocationCoordinates">A direct functional fit's output variables at the training locations, by name; null
 /// for a scalar fit and a basis fit, whose locations are indices.</param>
 /// <param name="Offset">The posterior mean of the draws' offsets, case × location, which the surface's fit of y sits on; null when no
@@ -69,6 +70,13 @@ public sealed record BassTrainingFit(
                 for (int l = 0; l < m; l++) offset[i, l] = mean[i * m + l];
         }
         double? noiseSd = pooled.Exists(d => d.Working is { IsUnweighted: false }) ? null : sd;
+        if (fit.NoiseLaw(data) is { } law)
+        {
+            double lawSd = 0.0;
+            for (int d = 0; d < prediction.DrawCount; d++)
+                lawSd += prediction.Weights[d] * Math.Sqrt(law.Variance(prediction.NoiseVariances[d], pooled[prediction.Draws[d]].Working?.Latents));
+            noiseSd = double.IsFinite(lawSd) ? lawSd : null;
+        }
         IReadOnlyList<ContinuousColumn>? coordinates = data.Response is FunctionalResponse functional
             ? Array.AsReadOnly(Array.ConvertAll([.. functional.OutputVariables], v => new ContinuousColumn(v.Name, v.Values.ToArray())))
             : null;
