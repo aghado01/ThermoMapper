@@ -62,19 +62,20 @@ public sealed record BassTrainingFit(
         double sd = 0.0;
         for (int d = 0; d < prediction.DrawCount; d++) sd += prediction.Weights[d] * Math.Sqrt(prediction.NoiseVariances[d]);
         (List<BassDraw> pooled, _) = BassDrawFit.Pool(fit.Draws, fit.Terms, false, nameof(fit));
+        BassModel model = fit.ModelFor(data);
         double[,]? offset = null;
-        if (BassDrawFit.MeanOffset(pooled, prediction.Weights, n * m, d => d.Working) is { } mean)
+        if (BassDrawFit.MeanOffset(pooled, prediction.Weights, n * m, d => d.WorkingOn(model)) is { } mean)
         {
             offset = new double[n, m];
             for (int i = 0; i < n; i++)
                 for (int l = 0; l < m; l++) offset[i, l] = mean[i * m + l];
         }
-        double? noiseSd = pooled.Exists(d => d.Working is { IsUnweighted: false }) ? null : sd;
-        if (fit.NoiseLaw(data) is { } law)
+        double? noiseSd = pooled.Exists(d => d.Working is { IsUnweighted: false } || d.Latents is not null) ? null : sd;
+        if (model.Observation.Law is { } law)
         {
             double lawSd = 0.0;
             for (int d = 0; d < prediction.DrawCount; d++)
-                lawSd += prediction.Weights[d] * Math.Sqrt(law.Variance(prediction.NoiseVariances[d], pooled[prediction.Draws[d]].Working?.Latents));
+                lawSd += prediction.Weights[d] * Math.Sqrt(law.Variance(prediction.NoiseVariances[d], pooled[prediction.Draws[d]].LatentsOn(model)));
             noiseSd = double.IsFinite(lawSd) ? lawSd : null;
         }
         IReadOnlyList<ContinuousColumn>? coordinates = data.Response is FunctionalResponse functional

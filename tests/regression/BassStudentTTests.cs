@@ -236,7 +236,7 @@ public sealed class BassStudentTTests(ITestOutputHelper output)
         BassRunTests.AssertSameFit(a, b);
         for (int c = 0; c < a.Draws.Count; c++)
             for (int d = 0; d < a.Draws[c].Count; d++)
-                Assert.True(a.Draws[c][d].Working!.Latents!.Values.SequenceEqual(b.Draws[c][d].Working!.Latents!.Values));
+                Assert.True(a.Draws[c][d].Latents!.Values.SequenceEqual(b.Draws[c][d].Latents!.Values));
         foreach (BassChainAccount account in a.Diagnostics.Chains)
         {
             IReadOnlyList<Maths.Samplers.Rjmcmc.MoveStat> blocks = account.Blocks!;
@@ -311,13 +311,13 @@ public sealed class BassStudentTTests(ITestOutputHelper output)
     }
 }
 
-/// <summary>ln ∫ exp(h(u)) du for a unimodal h, by Gauss–Legendre panels a standard deviation of h's curvature wide, walked out from its
-/// peak until a panel adds under e⁻⁴⁰; each panel summed about its own largest term.</summary>
+/// <summary>ln ∫ exp(h(u)) du over (lower, upper) for a unimodal h, by Gauss–Legendre panels a standard deviation of h's curvature wide,
+/// walked out from its peak (or the bound nearest it) until a panel adds under e⁻⁴⁰; each panel summed about its own largest term.</summary>
 internal static class Quadrature
 {
-    public static double LogIntegral(Func<double, double> h, double guess)
+    public static double LogIntegral(Func<double, double> h, double guess, double lower = double.NegativeInfinity, double upper = double.PositiveInfinity)
     {
-        double peak = Peak(h, guess), e = 1e-4 * Math.Max(1.0, Math.Abs(peak));
+        double peak = Peak(h, guess, lower, upper), e = 1e-4 * Math.Max(1.0, Math.Abs(peak));
         double curvature = -(h(peak + e) - 2.0 * h(peak) + h(peak - e)) / (e * e);
         double width = curvature > 4.0 ? 1.0 / Math.Sqrt(curvature) : 0.5;
         var panels = new List<double>();
@@ -326,7 +326,8 @@ internal static class Quadrature
             double best = double.NegativeInfinity, step = width, a = peak;
             for (int k = 0; k < 200000; k++)
             {
-                double b = a + side * step;
+                if (side > 0 ? a >= upper : a <= lower) break;
+                double b = side > 0 ? Math.Min(a + step, upper) : Math.Max(a - step, lower);
                 double panel = Panel(h, Math.Min(a, b), Math.Max(a, b));
                 panels.Add(panel);
                 best = Math.Max(best, panel);
@@ -339,18 +340,21 @@ internal static class Quadrature
         return top + Math.Log(panels.Sum(p => Math.Exp(p - top)));
     }
 
-    private static double Peak(Func<double, double> h, double guess)
+    private static double Peak(Func<double, double> h, double guess, double lower, double upper)
     {
-        double step = 0.25;
-        int dir = h(guess + 1e-6) >= h(guess) ? 1 : -1;
-        double a = guess, b = guess;
-        for (int k = 0; k < 200 && h(b + dir * step) >= h(b); k++)
+        double Clamp(double u) => Math.Min(Math.Max(u, lower), upper);
+        double x = Clamp(guess), step = 0.25;
+        int dir = h(Clamp(x + 1e-6)) >= h(x) ? 1 : -1;
+        double a = x, b = x;
+        for (int k = 0; k < 200; k++)
         {
+            double next = Clamp(b + dir * step);
+            if (next == b || h(next) < h(b)) break;
             a = b;
-            b += dir * step;
+            b = next;
             step *= 2.0;
         }
-        double lo = Math.Min(a, b + dir * step), hi = Math.Max(a, b + dir * step), g = (Math.Sqrt(5.0) - 1.0) / 2.0;
+        double lo = Math.Min(a, Clamp(b + dir * step)), hi = Math.Max(a, Clamp(b + dir * step)), g = (Math.Sqrt(5.0) - 1.0) / 2.0;
         for (int k = 0; k < 300 && hi - lo > 1e-13 * Math.Max(1.0, Math.Abs(lo)); k++)
         {
             double c = hi - g * (hi - lo), d = lo + g * (hi - lo);

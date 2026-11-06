@@ -36,7 +36,7 @@ public sealed class BassModel
     public static BassModel Create(BassConfig config, BassData data, TemperedForm? form = null)
     {
         ArgumentNullException.ThrowIfNull(config);
-        return Create(config, data, config.Noise is { } noise ? new VarianceMeanMixture(noise) : GaussianObservation.Instance, form);
+        return Create(config, data, config.Noise is { } noise ? new VarianceMeanMixture(noise, config.Sigma2) : GaussianObservation.Instance, form);
     }
 
     /// <summary><see cref="Create(BassConfig, BassData, TemperedForm?)"/> with <paramref name="observation"/> as the noise

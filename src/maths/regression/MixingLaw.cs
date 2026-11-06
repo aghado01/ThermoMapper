@@ -39,7 +39,7 @@ public interface IMixingLaw
 /// v | r ~ IG((ν + b)/2, (ν + b·r²/s²)/2), drawn as the reciprocal of the precision's Gamma by the same call BARS's
 /// <c>StudentTWeights</c> makes, so at b = 1 the two draw the same numbers from the same stream. The marginal is t_ν(0, s), with
 /// ln Γ((ν + 1)/2) − ln Γ(ν/2) and ln(1 + r²/(νs²)) taken so neither loses its digits as ν grows. A drift m ≠ 0, a skewed t whose
-/// conditional is a GIG with a &gt; 0, waits for the GIG sampler (E1's slice 2) and is refused.
+/// conditional is a GIG with a &gt; 0, waits for general GIG mixing (E1's slice 3) and is refused.
 /// </summary>
 public sealed class StudentTMixing : IMixingLaw
 {
@@ -67,7 +67,7 @@ public sealed class StudentTMixing : IMixingLaw
         if (!(unitVariance > 0.0 && double.IsFinite(unitVariance))) throw new ArgumentOutOfRangeException(nameof(unitVariance), "s² must be positive and finite.");
         if (!(power >= 0.0 && power <= 1.0)) throw new ArgumentOutOfRangeException(nameof(power), "The power lies in [0, 1].");
         if (unitDrift != 0.0)
-            throw new NotSupportedException("A drift makes t mixing's conditional a GIG with a > 0, which waits for the GIG sampler (E1's slice 2).");
+            throw new NotSupportedException("A drift makes t mixing's conditional a GIG with a > 0, which waits for general GIG mixing (E1's slice 3).");
         if (!double.IsFinite(residual)) throw new ArgumentOutOfRangeException(nameof(residual), "The residual must be finite.");
         // StudentTWeights' step: the precision 1/v ~ Gamma((ν + b)/2, (ν + b·z²)/2), z² = r²/s².
         double z2 = residual * residual / unitVariance;
@@ -114,3 +114,49 @@ public sealed class StudentTMixing : IMixingLaw
         return 0.5 * Math.Log(x) + x * tail + (1.0 / (12.0 * y) - 1.0 / (12.0 * x)) - (1.0 / (360.0 * y * y * y) - 1.0 / (360.0 * x * x * x));
     }
 }
+
+/// <summary>
+/// Exponential mixing: v ~ Exp(1), GIG(1, 2, 0), the asymmetric Laplace's (Kozumi and Kobayashi 2011). Its conditional,
+/// GIG(1 − b/2, 2 + b·m²/s², b·r²/s²), is drawn by the GIG's own sampler (<see cref="GeneralizedInverseGaussian"/>); a residual of exactly
+/// zero gives its gamma limit. The marginal is closed for any drift: ∫ N(r | m·v, s²·v)e^(−v) dv = (m² + 2s²)^(−½)·exp(m·r/s² −
+/// |r|·√(m² + 2s²)/s²), an asymmetric Laplace, the quantile noise at m²/s² = (1 − 2q)²/(2q(1 − q)).
+/// </summary>
+public sealed class ExponentialMixing : IMixingLaw
+{
+    /// <summary>The one exponential mixing law.</summary>
+    public static ExponentialMixing Instance { get; } = new();
+
+    private ExponentialMixing() { }
+
+    /// <summary>v's prior as GIG(1, 2, 0).</summary>
+    public GigParameters Prior => GigParameters.OfGamma(1.0, 1.0);
+
+    /// <inheritdoc/>
+    public double SamplePrior(Xoshiro256PlusPlus rng) => SampleConditional(0.0, 1.0, 0.0, 0.0, rng);
+
+    /// <inheritdoc/>
+    public double SampleConditional(double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (!(unitVariance > 0.0 && double.IsFinite(unitVariance))) throw new ArgumentOutOfRangeException(nameof(unitVariance), "s² must be positive and finite.");
+        if (!(power >= 0.0 && power <= 1.0)) throw new ArgumentOutOfRangeException(nameof(power), "The power lies in [0, 1].");
+        if (!double.IsFinite(residual) || !double.IsFinite(unitDrift)) throw new ArgumentOutOfRangeException(nameof(residual), "The residual and the drift must be finite.");
+        return GeneralizedInverseGaussian.Of(1.0 - 0.5 * power, 2.0 + power * unitDrift * unitDrift / unitVariance, power * residual * residual / unitVariance)
+                                         .Sample(rng);
+    }
+
+    /// <inheritdoc/>
+    public double MarginalLogDensity(double residual, double unitVariance, double unitDrift)
+    {
+        if (!(unitVariance > 0.0 && double.IsFinite(unitVariance))) throw new ArgumentOutOfRangeException(nameof(unitVariance), "s² must be positive and finite.");
+        double k = Math.Sqrt(unitDrift * unitDrift + 2.0 * unitVariance);
+        return -Math.Log(k) + (unitDrift * residual - Math.Abs(residual) * k) / unitVariance;
+    }
+
+    /// <summary>1.</summary>
+    public double Mean => 1.0;
+
+    /// <summary>1.</summary>
+    public double Variance => 1.0;
+}
+

@@ -398,6 +398,15 @@ public interface IBassObservationModel
     /// <summary>The noise's law, each observation's latent integrated out, which the pointwise density, prediction and the training fit
     /// read (<see cref="IBassNoiseLaw"/>); null, the default, is the Gaussian N(0, σ²/w) those readers hold themselves.</summary>
     IBassNoiseLaw? Law => null;
+
+    /// <summary>Whether the model rebuilds its working response from its latents (<see cref="Rebuild"/>), so its retained draws keep the
+    /// latents alone; false, the default, keeps the working response on the draw.</summary>
+    bool Rebuilds => false;
+
+    /// <summary>The working response at <paramref name="latents"/>, rebuilt from <paramref name="model"/>, the model's own: what a retained
+    /// draw that keeps its latents alone reads, equal to the one its chain held. Null, the default, for a model that cannot, whose draws
+    /// keep their working response.</summary>
+    WorkingResponse? Rebuild(WorkingResponse model, ObservationLatents latents) => null;
 }
 
 /// <summary>Independent Gaussian noise: the working response is the response, with zero offset and unit weights, so the

@@ -283,7 +283,7 @@ internal static class BassDirectPrediction
             noise[d] = draw.Sigma2;
             if (law is not null)
             {
-                ObservationLatents? globals = draw.WorkingOn(model).Latents;
+                ObservationLatents? globals = draw.LatentsOn(model);
                 noises![d] = law.At(draw.Sigma2, globals);
                 shifts![d] = law.MeanShift(draw.Sigma2, globals);
             }
@@ -301,7 +301,7 @@ internal static class BassDirectPrediction
             {
                 if (law is not null)
                 {
-                    ObservationLatents? globals = pooled[selected[d]].WorkingOn(model).Latents;
+                    ObservationLatents? globals = pooled[selected[d]].LatentsOn(model);
                     for (int i = 0; i < n; i++)
                         for (int l = 0; l < m; l++) predictive[d, i, l] = latent[d, i, l] + law.Sample(noise[d], globals, rng);
                     continue;

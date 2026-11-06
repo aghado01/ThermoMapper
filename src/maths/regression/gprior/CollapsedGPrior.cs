@@ -620,9 +620,11 @@ public sealed class GPriorConditional
     private readonly double[] _mean;
     private readonly GPriorMarginal _marginal;
     private readonly double _interceptMass;   // m, or Σwᵢ under weights
+    private readonly PriorPencil? _pencil;    // the prior apart from the likelihood, when the block reads one
+    private readonly double _priorLevel;      // the intercept's prior centre inside the pencil
 
     internal GPriorConditional(ISpdFactor precision, double[] mean, GPriorMarginal marginal, double covarianceScale, int columns,
-                               double? interceptCovarianceScale = null, double? interceptMass = null)
+                               double? interceptCovarianceScale = null, double? interceptMass = null, PriorPencil? pencil = null, double priorLevel = 0.0)
     {
         _precision = precision;
         _mean = mean;
@@ -631,6 +633,26 @@ public sealed class GPriorConditional
         Columns = columns;
         InterceptCovarianceScale = interceptCovarianceScale;
         _interceptMass = interceptMass ?? marginal.Rows;
+        _pencil = pencil;
+        _priorLevel = priorLevel;
+    }
+
+    /// <summary>
+    /// The coefficients inside the prior, K, and their prior energy at <paramref name="coefficients"/> per unit σ², Q = τ·(β − β₀)ᵀD(β − β₀):
+    /// what a σ² drawn apart from the structure reads, since the coefficients' prior variance scales with it (E1's w). A flat intercept
+    /// stands outside the prior and adds neither. Read through the prior's pencil, which a prior apart from the likelihood's Gram holds,
+    /// as every latent noise's does; refused otherwise.
+    /// </summary>
+    public (double Quadratic, int Count) PriorEnergy(ReadOnlySpan<double> coefficients)
+    {
+        if (_pencil is not { } pencil)
+            throw new NotSupportedException("The prior's energy is read through its pencil, which a prior apart from the likelihood's Gram holds.");
+        if (coefficients.Length != Columns) throw new ArgumentException("One value per coefficient is required.", nameof(coefficients));
+        int offset = pencil.InterceptInside ? 0 : 1, p = Columns - offset;
+        Span<double> deviation = p <= 128 ? stackalloc double[p] : new double[p];
+        for (int i = 0; i < p; i++) deviation[i] = coefficients[i + offset];
+        if (pencil.InterceptInside) deviation[0] -= _priorLevel;
+        return (Tau * pencil.PriorQuadratic(deviation), p);
     }
 
     /// <inheritdoc cref="GPriorMarginal.Rows"/>

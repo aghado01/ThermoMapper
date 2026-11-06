@@ -1,0 +1,147 @@
+using System;
+using Maths.Rng;
+
+namespace Maths.Distributions;
+
+/// <summary>
+/// The generalized inverse Gaussian GIG(p, a, b), density ∝ x^(p−1)·exp(−(a·x + b/x)/2) on x &gt; 0 (Barndorff-Nielsen's family;
+/// Jørgensen 1982), with a ≥ 0, b ≥ 0, a &gt; 0 when p ≥ 0 and b &gt; 0 when p ≤ 0. The limits are the gamma, b = 0: Gamma(p, rate a/2);
+/// and the inverse gamma, a = 0: IG(−p, scale b/2).
+/// <para><b>Draws.</b> In u = ln x the log density is p·u − (a·eᵘ + b·e⁻ᵘ)/2, whose second derivative −(a·eᵘ + b·e⁻ᵘ)/2 is negative:
+/// the GIG is log-concave in ln x for every parameter. So one exact method serves every case, far ranges included: the tangent hat
+/// of <see cref="LogConcaveEnvelope"/> about the mode in u, with the log ratio written about it as a sum of two non-positive terms, so it
+/// keeps its digits (below). A draw on an interval is the same hat cut to it. The limits draw their own families. Hörmann and Leydold's (2014)
+/// three regions, ratio-of-uniforms with and without a mode shift and a dominating density where the GIG is not T-concave, are the
+/// alternative; this needs no case split and reuses the envelope behind every truncated draw.</para>
+/// <para>No normalizing constant lives here: it reads Bessel K of real order, which arrives with the Normal-Wald's density.</para>
+/// A readonly value type.
+/// </summary>
+public readonly struct GeneralizedInverseGaussian
+{
+    private GeneralizedInverseGaussian(double p, double a, double b)
+    {
+        P = p;
+        A = a;
+        B = b;
+    }
+
+    /// <summary>GIG(<paramref name="p"/>, <paramref name="a"/>, <paramref name="b"/>), each finite, a and b non-negative, a &gt; 0 when
+    /// p ≥ 0 and b &gt; 0 when p ≤ 0.</summary>
+    public static GeneralizedInverseGaussian Of(double p, double a, double b)
+    {
+        if (!double.IsFinite(p)) throw new ArgumentOutOfRangeException(nameof(p), "p must be finite.");
+        if (!(a >= 0.0 && double.IsFinite(a))) throw new ArgumentOutOfRangeException(nameof(a), "a must be non-negative and finite.");
+        if (!(b >= 0.0 && double.IsFinite(b))) throw new ArgumentOutOfRangeException(nameof(b), "b must be non-negative and finite.");
+        if (p >= 0.0 && !(a > 0.0)) throw new ArgumentException("A GIG with p ≥ 0 needs a > 0.", nameof(a));
+        if (p <= 0.0 && !(b > 0.0)) throw new ArgumentException("A GIG with p ≤ 0 needs b > 0.", nameof(b));
+        return new GeneralizedInverseGaussian(p, a, b);
+    }
+
+    /// <summary>p.</summary>
+    public double P { get; }
+
+    /// <summary>a, the coefficient of x.</summary>
+    public double A { get; }
+
+    /// <summary>b, the coefficient of 1/x.</summary>
+    public double B { get; }
+
+    /// <summary>ln of the unnormalized density, (p − 1)·ln x − (a·x + b/x)/2; −∞ for x ≤ 0.</summary>
+    public double LogKernel(double x) => x > 0.0 ? (P - 1.0) * Math.Log(x) - 0.5 * (A * x + B / x) : double.NegativeInfinity;
+
+    /// <summary>The density's mode, the positive root of a·x² − 2(p − 1)x − b = 0; 0 at b = 0 with p ≤ 1.</summary>
+    public double Mode
+    {
+        get
+        {
+            double q = P - 1.0;
+            if (B == 0.0) return q > 0.0 ? 2.0 * q / A : 0.0;
+            if (A == 0.0) return B / (2.0 * (1.0 - P));
+            // The root without cancellation: (q + √(q² + ab))/a, or b/(√(q² + ab) − q) when q < 0.
+            double root = Math.Sqrt(q * q + A * B);
+            return q >= 0.0 ? (q + root) / A : B / (root - q);
+        }
+    }
+
+    /// <summary>One draw: the gamma or inverse gamma at a limit, the tangent hat in ln x otherwise.</summary>
+    public double Sample(Xoshiro256PlusPlus rng) => SampleOn(rng, 0.0, double.PositiveInfinity);
+
+    /// <summary>One draw conditioned on [<paramref name="lower"/>, <paramref name="upper"/>]: the hat in ln x cut to the interval, or the
+    /// limit's own truncated draw.</summary>
+    public double SampleOn(Xoshiro256PlusPlus rng, double lower, double upper)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        (lower, upper) = Tails.Clip(lower, upper, 0.0, double.PositiveInfinity);
+        if (B == 0.0) return Gamma.ShapeRate(P, 0.5 * A).SampleOn(rng, lower, upper);
+        if (A == 0.0) return InverseGamma.ShapeScale(-P, 0.5 * B).SampleOn(rng, lower, upper);
+        // In u = ln x: p·u − (a·eᵘ + b·e⁻ᵘ)/2 = p·u − ω·cosh(u − ln s) with ω = √(ab), s = √(b/a); its peak is at u* = ln s + asinh(p/ω).
+        // The hat's anchor is the peak, or the interval's end nearest it, d from it, as the gamma's is.
+        double sa = Math.Sqrt(A), sb = Math.Sqrt(B), omega = sa * sb;
+        double peak = Math.Log(sb) - Math.Log(sa) + Math.Asinh(P / omega);
+        double lo = lower > 0.0 ? Math.Log(lower) : double.NegativeInfinity, hi = Math.Log(upper);
+        double anchor = Math.Clamp(peak, lo, hi), d = anchor - peak;
+        // R = √(p² + ω²) = ω·cosh(asinh(p/ω)); A = (R + p)/2 and B = (R − p)/2, the smaller one as ω²/(2(R + |p|)), without cancellation.
+        double radius = Math.Sqrt(P * P + omega * omega), small = omega * omega / (2.0 * (radius + Math.Abs(P)));
+        double up = P >= 0.0 ? 0.5 * (radius + P) : small, down = P >= 0.0 ? small : 0.5 * (radius - P);
+        var h = new LogRatio(up, down, d);
+        double leftReach, rightReach;
+        if (d == 0.0)
+        {
+            // From the peak h falls by 1 no later than either term alone does: −A·g(δ) grows as eᵟ to the right and as |δ| to the left, and
+            // −B·g(−δ) the other way. A reach near that point keeps the hat's far tangent moderate; one far past it, where h is
+            // astronomically negative, leaves the far tangent so steep that rounding in its cut swamps the hat.
+            leftReach = Math.Min(ExponentialReach(down), LinearReach(up));
+            rightReach = Math.Min(ExponentialReach(up), LinearReach(down));
+        }
+        else
+        {
+            double slope = h.Slope(0.0), curvature = -h.Curvature(0.0);
+            leftReach = LogConcaveEnvelope.Reach(Math.Max(0.0, slope), curvature);
+            rightReach = LogConcaveEnvelope.Reach(Math.Max(0.0, -slope), curvature);
+        }
+        double delta = LogConcaveEnvelope.Draw(rng, h, anchor - lo, hi - anchor, leftReach, rightReach);
+        return Math.Clamp(Math.Exp(anchor + delta), lower, upper);
+    }
+
+    // The t > 0 where c·(eᵗ − 1 − t) = 1: √(2/c) for c ≥ 1, where the quadratic rules, else t = ln(1 + 1/c + t) iterated from ln(1/c).
+    private static double ExponentialReach(double c)
+    {
+        if (c >= 1.0) return Math.Sqrt(2.0 / c);
+        double t = -Math.Log(c);
+        for (int i = 0; i < 4; i++) t = Math.Log(1.0 + 1.0 / c + t);
+        return t;
+    }
+
+    // The t > 0 where c·(e⁻ᵗ − 1 + t) = 1: √(2/c) for c ≥ 1, else t = 1 + 1/c − e⁻ᵗ iterated from 1 + 1/c.
+    private static double LinearReach(double c)
+    {
+        if (c >= 1.0) return Math.Sqrt(2.0 / c);
+        double t = 1.0 + 1.0 / c;
+        for (int i = 0; i < 4; i++) t = 1.0 + 1.0 / c - Math.Exp(-t);
+        return t;
+    }
+
+    // About the peak, L(δ) = p·δ − ω·(cosh(u* + δ) − cosh u*) = −A·g(δ) − B·g(−δ), g(x) = eˣ − 1 − x ≥ 0, A = (R + p)/2, B = (R − p)/2,
+    // R = √(p² + ω²): both terms non-positive, so nothing cancels however far the parameters range, and concave. The ratio about the anchor
+    // d from the peak is h(δ) = L(d + δ) − L(d) = −A·e^d·(e^δ − 1) − B·e^(−d)·(e^(−δ) − 1) + (A − B)·δ.
+    private readonly struct LogRatio(double up, double down, double d) : IConcaveLogRatio
+    {
+        public double Value(double delta)
+        {
+            if (d == 0.0) return -up * ExpLessLinear(delta) - down * ExpLessLinear(-delta);
+            return -up * Math.Exp(d) * SpecialFunctions.Expm1(delta) - down * Math.Exp(-d) * SpecialFunctions.Expm1(-delta) + (up - down) * delta;
+        }
+
+        public double Slope(double delta) => -up * SpecialFunctions.Expm1(d + delta) + down * SpecialFunctions.Expm1(-(d + delta));
+
+        public double Curvature(double delta) => -up * Math.Exp(d + delta) - down * Math.Exp(-(d + delta));
+
+        // eˣ − 1 − x, by its series where the two would cancel.
+        private static double ExpLessLinear(double x)
+        {
+            if (Math.Abs(x) > 0.1) return SpecialFunctions.Expm1(x) - x;
+            double x2 = x * x;
+            return x2 * (0.5 + x * (1.0 / 6.0 + x * (1.0 / 24.0 + x * (1.0 / 120.0 + x * (1.0 / 720.0 + x * (1.0 / 5040.0 + x / 40320.0))))));
+        }
+    }
+}

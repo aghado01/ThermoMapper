@@ -260,7 +260,7 @@ public sealed class BassStructureMoves
         GPriorConditional conditional = target.CoefficientBlock(_design)(tau, 1.0);
         var centred = new double[conditional.Columns];   // (α, β_c) in the design's order
         double sigma2;
-        if (target.GivenSigma2 is double given)
+        if (target.GivenAt(state.Fit) is double given)
         {
             conditional.SampleGiven(given, rng, centred);
             sigma2 = given;
@@ -286,8 +286,11 @@ public sealed class BassStructureMoves
             intercept -= centred[j + 1] * ColumnMean(state.Terms[j]);
         }
         coefficients[0] = intercept;
+        // A model that rebuilds its working response from its latents keeps the latents alone on the draw (the brief's retention lever).
+        WorkingResponse working = _design.Working;
+        bool rebuilds = working.Latents is not null && _model.Observation.Rebuilds;
         return new BassDraw(new BassStructure(sorted), tau, sigma2, coefficients, lambda, target.Sigma2Rate?.RateAt(state.LogRate),
-                            _design.Working.IsResponseItself ? null : _design.Working);
+                            working.IsResponseItself || rebuilds ? null : working, rebuilds ? working.Latents : null);
     }
 
     /// <summary>The coefficients' block's draw in this sweep (<see cref="BassCoefficientsBlock"/>), which the blocks after it read; null
@@ -309,7 +312,7 @@ public sealed class BassStructureMoves
         GPriorConditional conditional = target.CoefficientBlock(_design)(tau, power);
         var centred = new double[conditional.Columns];
         double sigma2;
-        if (target.GivenSigma2 is double given)
+        if (target.GivenAt(state.Fit) is double given)
         {
             conditional.SampleGiven(given, rng, centred);
             sigma2 = given;
@@ -333,7 +336,7 @@ public sealed class BassStructureMoves
             for (int i = 0; i < a.Length; i++)
                 for (int r = 0; r < h.Length; r++) fitted[i * h.Length + r] += c * (a[i] * h[r] - mean);
         }
-        return SweepFit = new BassSweepFit(state, sigma2, centred, fitted);
+        return SweepFit = new BassSweepFit(state, sigma2, centred, fitted, conditional);
     }
 
     // The term's case column and, for a direct functional response, its output column, at the training inputs.

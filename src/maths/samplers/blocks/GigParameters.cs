@@ -12,8 +12,8 @@ namespace Maths.Samplers.Blocks;
 /// <item>b → 0 is the <see cref="Gamma"/>, shape p, rate a/2 (<see cref="OfGamma"/>);</item>
 /// <item>a → 0 is the <see cref="InverseGamma"/>, shape −p, scale b/2 (<see cref="OfInverseGamma"/>).</item>
 /// </list>
-/// A parameterization only: no GIG distribution, sampler or normalizing constant lives here, so a kernel is all it
-/// evaluates.
+/// A parameterization: its distribution and sampler are <see cref="GeneralizedInverseGaussian"/>'s (<see cref="ToDistribution"/>), and no
+/// normalizing constant lives in either.
 /// </summary>
 public readonly record struct GigParameters(double P, double A, double B)
 {
@@ -36,6 +36,9 @@ public readonly record struct GigParameters(double P, double A, double B)
     /// <summary>The inverse gamma of the limit a = 0.</summary>
     public InverseGamma ToInverseGamma()
         => IsInverseGamma ? InverseGamma.ShapeScale(-P, 0.5 * B) : throw new InvalidOperationException("Only the limit a = 0 (p < 0, b > 0) is an inverse gamma.");
+
+    /// <summary>The distribution these parameters name (<see cref="GeneralizedInverseGaussian"/>), whose sampler draws it.</summary>
+    public GeneralizedInverseGaussian ToDistribution() => GeneralizedInverseGaussian.Of(P, A, B);
 
     /// <summary>ln of the unnormalized density, (p − 1)·ln x − (a·x + b/x)/2, for x &gt; 0.</summary>
     public double LogKernel(double x)

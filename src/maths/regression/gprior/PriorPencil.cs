@@ -189,6 +189,22 @@ public sealed class PriorPencil : RidgeColumns
         }
     }
 
+    /// <summary>xᵀDx, the prior's quadratic form at <paramref name="x"/>, a deviation from the prior's centre in the pencil's coordinates:
+    /// the coefficients' prior energy per unit τ/σ², which a σ² drawn apart reads (E1's w).</summary>
+    internal double PriorQuadratic(ReadOnlySpan<double> x)
+    {
+        int p = _lambda.Length;
+        if (x.Length != p) throw new ArgumentException($"The deviation holds {x.Length} values for {p} directions.", nameof(x));
+        double sum = 0.0;
+        for (int i = 0; i < p; i++)
+        {
+            double row = 0.0;
+            for (int j = 0; j < p; j++) row += _prior[i, j] * x[j];
+            sum += x[i] * row;
+        }
+        return sum;
+    }
+
     /// <summary>The precision bA + τD, as a factor read through the eigenvectors.</summary>
     internal ISpdFactor Factor(double tau, double b) => new SpectralFactor(this, tau, b);
 
@@ -365,10 +381,10 @@ public sealed class CollapsedPencilPrior
         {
             _pencil.PosteriorMean(tau, b, mean);
             mean[0] += _level;
-            return new GPriorConditional(_pencil.Factor(tau, b), mean, marginal, 1.0, Columns);
+            return new GPriorConditional(_pencil.Factor(tau, b), mean, marginal, 1.0, Columns, pencil: _pencil, priorLevel: _level);
         }
         mean[0] = _responseMean;
         _pencil.PosteriorMean(tau, b, mean.AsSpan(1));
-        return new GPriorConditional(_pencil.Factor(tau, b), mean, marginal, 1.0, Columns, 1.0 / b, _weights.Mass);
+        return new GPriorConditional(_pencil.Factor(tau, b), mean, marginal, 1.0, Columns, 1.0 / b, _weights.Mass, _pencil);
     }
 }

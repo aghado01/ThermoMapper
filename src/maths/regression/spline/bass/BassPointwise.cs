@@ -120,7 +120,7 @@ public static class BassPointwise
             if (law is not null)
             {
                 ReadOnlySpan<double> observed = model.Data.Response.Values;
-                ObservationLatents? globals = draw.WorkingOn(model).Latents;
+                ObservationLatents? globals = draw.LatentsOn(model);
                 fit.Evaluate(draw, f);
                 for (int i = 0; i < n; i++) log[i] = law.LogDensity(observed[i] - f[i], draw.Sigma2, globals);
                 Sum(log, partition, values, s);

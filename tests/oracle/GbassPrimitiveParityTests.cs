@@ -119,6 +119,73 @@ public sealed class GbassPrimitiveParityTests(ITestOutputHelper output)
         Assert.Equal(["negative", "normal", "series", "sqrt_gamma"], branches.Order());
     }
 
+    /// <summary>
+    /// The engine's own samplers (E1's slice 2), <see cref="Maths.Distributions.GeneralizedInverseGaussian"/> and
+    /// <see cref="Maths.Distributions.ModifiedHalfNormal"/>, against the oracle's law: at each R sampler's deciles R's quadrature gives the
+    /// law's CDF, and the engine's draws' share below each must carry it; where the mean exists, the engine's sample mean meets R's
+    /// quadrature mean within its standard error.
+    /// </summary>
+    [Fact]
+    public void EngineSamplers_CarryTheOraclesLaw()
+    {
+        if (Fixture.Value is not { } r) return;
+        var rng = new Maths.Rng.Xoshiro256PlusPlus(20261108);
+        foreach ((string kind, string sampler) in new[] { ("gig", "rgig2"), ("mhn", "rmhn") })
+        {
+            double worst = 0;
+            int cases = 0;
+            foreach (JsonElement c in r.GetProperty(kind).EnumerateArray())
+            {
+                Func<double> draw = kind == "gig"
+                    ? MakeGig(c, rng)
+                    : MakeMhn(c, rng);
+                double[] ours = [.. Enumerable.Range(0, Draws).Select(_ => draw()).Order()];
+                JsonElement s = c.GetProperty(sampler);
+                double[] deciles = GbassOracle.Numbers(s.GetProperty("deciles")), cdf = GbassOracle.Numbers(s.GetProperty("cdf"));
+                for (int k = 0; k < deciles.Length; k++)
+                {
+                    int below = LowerBound(ours, deciles[k]);
+                    double share = (double)below / ours.Length, z = (share - cdf[k]) / Math.Sqrt(cdf[k] * (1 - cdf[k]) / ours.Length);
+                    worst = Math.Max(worst, Math.Abs(z));
+                }
+                JsonElement m = kind == "gig" ? c.GetProperty("moments") : c;
+                if (m.GetProperty("mean").ValueKind == JsonValueKind.Number && m.GetProperty("var").ValueKind == JsonValueKind.Number)
+                {
+                    double mean = m.GetProperty("mean").GetDouble(), variance = m.GetProperty("var").GetDouble();
+                    double z = (ours.Average() - mean) / Math.Sqrt(variance / ours.Length);
+                    worst = Math.Max(worst, Math.Abs(z));
+                }
+                cases++;
+            }
+            output.WriteLine($"the engine's {kind} sampler on {cases} oracle cases, {Draws:N0} draws each: worst |z| {worst:F2}");
+            Assert.True(worst < 5.0, $"{kind}: worst |z| {worst:F2}");
+        }
+    }
+
+    private static Func<double> MakeGig(JsonElement c, Maths.Rng.Xoshiro256PlusPlus rng)
+    {
+        var gig = Maths.Distributions.GeneralizedInverseGaussian.Of(c.GetProperty("p").GetDouble(), c.GetProperty("a").GetDouble(), c.GetProperty("b").GetDouble());
+        return () => gig.Sample(rng);
+    }
+
+    private static Func<double> MakeMhn(JsonElement c, Maths.Rng.Xoshiro256PlusPlus rng)
+    {
+        var mhn = Maths.Distributions.ModifiedHalfNormal.Of(c.GetProperty("alpha").GetDouble(), c.GetProperty("beta").GetDouble(), c.GetProperty("gamma").GetDouble());
+        return () => mhn.Sample(rng);
+    }
+
+    // The count of sorted values below x.
+    private static int LowerBound(double[] sorted, double x)
+    {
+        int lo = 0, hi = sorted.Length;
+        while (lo < hi)
+        {
+            int mid = (lo + hi) >>> 1;
+            if (sorted[mid] < x) lo = mid + 1; else hi = mid;
+        }
+        return lo;
+    }
+
     [Fact]
     public void BesselK_MatchesItsIntegral_OverFarRanges()
     {
