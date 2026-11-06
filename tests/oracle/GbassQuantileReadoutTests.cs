@@ -15,6 +15,11 @@ namespace Maths.Oracle.Tests;
 /// term, weights orders and variables with pseudo-counts 1 against 5, holds a raw ridge with the intercept inside and τ ~ IG(½, N/2) where
 /// the engine's default is D03's g-prior (the ridge read beside it), and samples λ; and its w step at β ≠ 0 keeps no floor, which the
 /// engine has none of either. The priors read the sample 0.9-quantile on the engine's side, level and scale, where GBASS reads none.
+/// <para>The ridge arm, GBASS's own form, holds the parity bar: each surface mean within the wider 90% half-band. The g-prior arm carries a
+/// stated model difference, so its gap is not expected to be zero; its bar, 1.5 half-bands, catches gross defects and is no parity bar.
+/// Over engine seeds 43 to 48 its worst gap read 0.49 to 1.23 (mean 0.85) with the GIG's tangent hat drawing v and 0.61 to 1.26 (mean
+/// 0.92) with its ratio-of-uniforms draw, two of six above 1.0 under either: the 1.0 bar it held at first measured seed 43's stream more
+/// than the sampler. The ridge arm read 0.51 to 0.81 on all six (set 2026-11-06, with the faster GIG draw).</para>
 /// </summary>
 public sealed class GbassQuantileReadoutTests(ITestOutputHelper output)
 {
@@ -69,7 +74,8 @@ public sealed class GbassQuantileReadoutTests(ITestOutputHelper output)
             double m = fit.Draws.SelectMany(c => c).Average(d => d.Structure.TermIds.Length);
             output.WriteLine($"engine, {name}: w {sigma2.Average():G4} [{sigma2[(int)(0.05 * sigma2.Length)]:G4}, {sigma2[(int)(0.95 * sigma2.Length) - 1]:G4}], M {m:F2}; " +
                              $"surface gap over the wider 90% half-band: rms {Math.Sqrt(sumSq / grid.Length):F3}, worst {worst:F3}");
-            Assert.True(worst <= 1.0, $"{name}: a surface mean lies outside the other's 90% band ({worst:F3})");
+            double bar = name == "ridge" ? 1.0 : 1.5;
+            Assert.True(worst <= bar, $"{name}: a surface mean lies {worst:F3} of the wider 90% half-band from the other's, past {bar}");
             Assert.InRange(sigma2.Average() / rW, 0.8, 1.25);
         }
     }

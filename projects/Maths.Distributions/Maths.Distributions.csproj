@@ -15,5 +15,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Maths.Distributions.Tests" />
+    <InternalsVisibleTo Include="Maths.Regression.Tests" />
   </ItemGroup>
 </Project>

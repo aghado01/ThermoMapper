@@ -184,7 +184,7 @@ public sealed class LogConcaveEnvelopeTests
 
     // e^h on [−left, right], each side by five-point Gauss–Legendre on even panels out to where concavity puts h below −60: past the
     // root s of h = −1, h(t) ≤ −t/s.
-    private sealed class Law<T> where T : struct, IConcaveLogRatio
+    internal sealed class Law<T> where T : struct, IConcaveLogRatio
     {
         private readonly SideLaw<T> _below, _above;
 
@@ -266,7 +266,9 @@ public sealed class LogConcaveEnvelopeTests
     // Baselined with the design point's guard (2026-11-05): before it the hash was cc7b23455512c2f9, and the guard moved 31 of the
     // 1,311 cases, all the modified half-normal's, each one whose own reach left Newton's search out of steps short of h = −1: 25 in
     // its branch in x at α from just above 1 to 2.2, where the search met x = 0, and 6 in its ln x branch at α near 10⁻³, from a
-    // reach on the exponential side. No other family's draw moved.
+    // reach on the exponential side. No other family's draw moved. Rebaselined with the GIG's ratio-of-uniforms draw (2026-11-06), which
+    // takes its untruncated draws: ce13801abaff15d3 to 624f8b056215181a, exactly its 200 untruncated cases moved, none of its truncated
+    // ones (the hat's still) and no other family's.
     [Fact]
     public void Draws_ArePinned()
     {
@@ -308,7 +310,7 @@ public sealed class LogConcaveEnvelopeTests
             total = Add(total, BitConverter.Int64BitsToDouble((long)hash));
         }
         _out.WriteLine($"draws' hash {total:x16}");
-        Assert.Equal("ce13801abaff15d3", total.ToString("x16"));
+        Assert.Equal("624f8b056215181a", total.ToString("x16"));
     }
 
     // Found by a sweep of the GIG's own truncated draws, 4 of 4,000 cases at small |p|, a and b on far upper tails: the GIG's reach there
