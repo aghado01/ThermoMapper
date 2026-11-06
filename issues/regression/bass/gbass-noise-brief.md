@@ -157,6 +157,62 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### Slice 3: the Normal-Wald, the skewed t and the generalized hyperbolic, with the envelope's guard (chip, 2026-11-06)
+
+**Landed** in `f2e1e58` (the envelope's guard, its own commit as asked), `5e837c4` (slice 3's code and tests) and the commit that carries this report (`docs/Maths`, the notation ledger). [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#the-normal-wald-the-skewed-t-and-the-generalized-hyperbolic-e1s-slice-3) holds the model, the alternatives and the checks; [the distributions' section](../../../docs/Maths/ProbabilityAndInformation.md#log-bessel-k-the-gigs-normalizer-and-the-generalized-hyperbolic-e1) the log Bessel K, the GIG's normalizer and the generalized hyperbolic; this is the account.
+
+| Piece | Where |
+|---|---|
+| The envelope's guard | `LogConcaveEnvelope.GuardedPoint`, `Guarded`; `LogConcaveEnvelopeTests` |
+| Log Bessel K of real order | `SpecialFunctions.LogBesselK`, `LogBesselKScaled` (`src/maths/distributions/BesselK.cs`) |
+| The GIG's normalizer, density and moments | `GeneralizedInverseGaussian.LogNormalizer`, `LogPdf`, `Mean`, `Variance` |
+| The generalized hyperbolic | `GeneralizedHyperbolic` (density closed, tails by the integral over v, a reader's table) |
+| General GIG mixing, the skewed t | `GigMixing`; `StudentTMixing`'s drift routed to it |
+| The kinds on the config | `BassNoise.NormalWald`, `SkewedT`, `GeneralizedHyperbolic`; `BassNoisePrior` |
+| β and γ on the record, their block | `ObservationLatents.Gamma`, `WithShape`; `BassNoiseShapeBlock` |
+| The predictive's root by Newton | `PredictiveMixture.Quantile` (the law path) |
+| `nw_est_mom` and `nw_gamma_prior`, corrected | `NormalWaldCalibration.Moments`, `GammaPrior`; `NormalInverseGaussian` |
+
+**The guard.**
+- *What it does.* Newton's search for the design point runs as it did; where it runs out of steps short of its point, a guarded search runs from the reach: Newton where h ≥ −2²⁰, and below it Newton on ln(−h) against ln t, exact for a power of t and close for an exponential, or a halving in ln t where h has overflowed. So every search that converged before is unchanged, and any reach is valid.
+- *Every existing family's draws:* the eight pinned hashes, every fingerprint and each family's truncated-draw tests pass unchanged (the whole regression assembly 2,022 of 2,022, and the GBASS and distribution oracles 48 of 48, the distributions' 297 of 297, the samplers' 285 of 285). A new pin over 1,311 cases of the families' own draws, each case on its own stream, moved 31 cases and no family but one: all the modified half-normal's, 25 in its branch in x at α from just above 1 to 2.2, where the search met x = 0, and 6 in its ln x branch at α near 10⁻³, from a reach on the exponential side. Each is a case whose own reach ran Newton out of steps, the guard's target; no other draw moved.
+- *A seeded sweep with bad reaches:* every family's own log ratio (normal, t, beta, gamma, GIG at and off the peak, the half-normal's three), 30 cases each over far ranges, drawn with reaches from the root of h = −1 to 10¹⁰⁰ times it and +∞, against its law by quadrature. Before the guard, from ×10 or ×1,000 on, the GIG's, gamma's and the half-normal's hats threw or accepted nearly nothing, every family threw at +∞, and at ×10¹⁰⁰ beta's and t's draws failed Kolmogorov–Smirnov silently, the hat sunk below h (acceptance read above 1). After it, every law holds at every reach.
+- *Acceptance before and after* on those far ranges: the worst case per family at reaches ×10 to +∞ went from 0 (and no finite area) to 0.867 or more; at the root's own reach the half-normal's branch in x, which threw in 7 of 30 cases, draws, and the GIG's worst rose from 0.771 to 0.872; elsewhere it is unchanged.
+- *Defects it fixed outside the sweep:* the GIG's own truncated draw on far upper tails at small |p|, a and b, which threw in 4 of 4,000 cases (`Gig_OnAFarUpperTail_DrawsItsLaw`).
+- *The GIG's own reaches* (`ExponentialReach`, `LinearReach`) are no longer needed for correctness: with them replaced by the curvature's reach, slice 2's GIG law tests pass 17 of 17. They stay as first guesses, and save the guarded search on the ranges that need it, a draw four to seven times faster there (2.3 against 15 µs, 2.1 against 8.4).
+
+**Slice 3's gates.**
+- *The density against quadrature of the mixture:* GIG mixing's marginal against ∫ N(r | m·v, s²·v)p(v) dv taken over ln v with the GIG normalized by its own quadrature, 600 cases across the Normal-Wald, the skewed t, the variance gamma and general GIGs, drifts of both signs and none, to 10⁻⁸. The generalized hyperbolic's tails by the integral against its density's mass at its quantiles 0.001 to 0.999, to 1.3·10⁻⁹ on six laws.
+- *Log Bessel K against `gbass_primitives_oracle.R`'s `besselK`:* 4.2·10⁻¹⁵ at its nine points; against its integral on 2,000 cases, ν to 10⁴ and x from 10⁻³⁰⁰ to 10³⁰⁰, 10⁻¹².
+- *`nw_est_mom` corrected:* the NIG by its moments, in closed form with the NIG's kurtosis, recovers three NIGs from their moments taken by quadrature of their own densities to 7 digits.
+- *`nw_gamma_prior` corrected,* with targets a normal can reach: the normal on γ > 0, solved exactly, puts its two masses where asked to 8 digits; at P(γ > g₁) = ½ the most it puts below g₂ is 1 − 2^(−g₂/g₁), so GBASS's defaults, asking 0.05 where that is 0.0016, are refused with that value; the defaults here are (0.5, 0.9, 0.5, 0.03). The prior on ln γ and the gamma prior are on the page with their trade-offs.
+- *`nwbass`'s readouts* (β ~ N(0, 1), γ under N(2, 1), w's prior IG(0.1, 0.05), R at `lag_beta` = 0): the noise's variance 0.1814 under the g-prior and 0.1809 under the ridge against `nwbass`'s 0.1821; w, β and γ each inside the other's 90% interval (w 0.189 against 0.155, β 0.205 against 0.191, γ 1.13 against 0.92); the surface within 0.55 of the wider half-band at worst (0.76 under the ridge). w and γ trade along the noise's variance, which the data fix; the readouts oracle now reports GBASS's own `s2` for it. The stated differences: GBASS's untruncated γ draw and slice 2's list.
+- *`lag_beta`, read:* eight chains each way from the empty structure on NIG data, free against held at 0 for 500 sweeps: the median chain reached the reference's median M in 23 sweeps free and 26 held; free, β ran at 1.68 over the first 200 sweeps against the reference's 1.21, without slowing the structure; over sweeps 1,500 to 2,000 the arms read M 5.06 and 5.16, β 1.64 and 1.40 and σ² 0.127 and 0.121, against 5, 1.21 and 0.105. By the rule stated beside it, the hold is not adopted.
+- *The law, by Geweke's test* at twice slice 2's size (400,000 marginal-conditional draws against 600,000 sweeps): the Normal-Wald with β and γ drawn on two seeds, with γ alone (σ² integrated), the skewed t and the generalized hyperbolic with β drawn, every |z| ≤ 2.15 over ten functions each, β and ln γ among them. Its power: β's conditional with its data term's sign flipped fails every skew-drawn case (|z| 20.8, 34.1, 108.7 and 335.9) and leaves the case without a skew passing. At slice 2's size one function of one case reached |z| 4.08 (f₀, the Normal-Wald at seed 20261106); the same seed at twice the size gives −0.31.
+- *Recovery* on NIG noise (N = 600, σ 0.3, β 1, γ 1.5): β 1.29 [0.57, 3.80], γ 1.82 [0.93, 3.89], σ² 0.113 [0.062, 0.226] at 99%, each covering the truth; the surface within RMSE 0.056 of the truth, the mean within 0.029.
+- *Refusals and acceptance* (decision 4): no block draw refused in any Geweke case, 0 of 600,000 each.
+- *The cost row* (thread cycles, loaded, indicative): a Normal-Wald sweep is 1,271 µs at the base under the g-form against a Gaussian sweep's 28 (45×), 235 against 4.2 at n 200 and 320 ms against 1.6 at M 200; v's block, its N GIG draws and the Follow after them, is 78% of it at the base and 72% at M 200, and β's and γ's block 26 µs, near σ²'s. The table is on the page.
+- *Retention* is slice 2's: a retained draw keeps v with its scalars, γ now among them, rebuilt bit for bit under all three kinds; a Normal-Wald fit resumes bit for bit, β, γ and σ² included.
+- *`docs/Maths`:* the page's section; `ProbabilityAndInformation.md` takes the guard, log Bessel K, the GIG's normalizer and the generalized hyperbolic; the ledger takes γ beside the half-normal's and the NIG's, and repoints four of its references this slice shifted.
+
+**Defects.** *Corrected here* (slice 0's findings): GBASS's γ drawn from its γ > 0 piece's normal on the whole line, now drawn on γ > 0; `nw_est_mom`'s kurtosis; `nw_gamma_prior`'s stray −1, and its defaults out of reach. *Found and fixed:* the envelope's design point (above), which slice 2's GIG truncated draw met on far upper tails. *In this slice's own first forms:* a noise CDF from a mixture of normals at nodes of v, 10⁻⁵ in the body and wrong far out under a strong drift, replaced by the generalized hyperbolic's integral and table; the tail integral's Gauss–Kronrod recursing without end on a NaN integrand (0·∞ far out at no drift), made finite and NaN-proof; a table on an x grid stretched to the 10⁻¹² quantile, which left a heavy tail's body unresolved, replaced by the normal score walked out from the median.
+
+**Decisions taken beyond the brief.**
+- *The guard as a second search after Newton's,* not a change to Newton's own steps: a first form did that, and moved 38 of the pinned cases whose searches had recovered on their own.
+- *σ² on the record wherever the skew can be nonzero,* drawn or held away from 0; integrated where it is held at 0, so a symmetric Normal-Wald is a pure scale mixture as t is.
+- *β's and γ's priors stay out of the target,* entering their own block's conditional only.
+- *The predictive's noise is the exact generalized hyperbolic, read through a table:* the integral costs 110 to 230 µs a tail, and a predictive quantile reads hundreds per draw; the table holds the log tails to 10⁻⁵ in the body and 3·10⁻⁴ at a power tail's 10⁻⁹, within what the Monte Carlo over draws resolves.
+- *The predictive mixture's root by Newton* with the mixture's density, inside the bracket: a training fit's quantiles under the Normal-Wald went from minutes to a second. t's and the asymmetric Laplace's quantiles move by rounding; their readers' tests pass.
+- *The NIG by moments in closed form,* no optimizer; *the prior on γ on γ > 0,* the conjugate truncated normal, with its reach stated.
+- *The skewed t and the generalized hyperbolic exposed on the config,* both falling out of GIG mixing at no extra cost.
+- *`lag_beta` not adopted,* by the read and its rule.
+
+**Left unbuilt, and why.** Generalized beta prime (4), the engine's reach (5), BARS (6) and interweaving (7) are later slices; a prior on ln γ waits on the follow-up below.
+
+**Follow-ups, with the decision each would change.**
+- *A prior on ln γ for the Normal-Wald.* Decision: the default prior on γ. A normal on γ > 0 cannot hold a far median with mass near 0, so a fit meant to range from near-Gaussian to the heaviest tails needs targets past its reach; a prior on ln γ reaches them in closed form at the cost of a slice step for γ.
+- *A faster normal log tail in the generalized hyperbolic's integral.* Decision: whether its readers keep the table or read the integral everywhere; today a draw's table costs some 60 tail integrals, about 10 ms, so a predictive over thousands of draws spends seconds building them.
+
 ### Slice 2: the asymmetric Laplace, quantile regression (chip, 2026-11-05)
 
 **Landed** in `5beaa49` (the code and its tests) and the commit that carries this report (the docs, the notation ledger). At the user's request (2026-11-05) the noise's documentation moved to its own page, [Variance-mean mixture noise](../../../docs/Maths/VarianceMeanMixtures.md), which takes slice 1's section from `BayesianRegression.md` and this slice's; `BayesianRegression.md` keeps a pointer and is 65 lines shorter. The page holds the forms, the alternatives and the checks; this is the account.

@@ -11,11 +11,21 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### γ, the Normal-Wald's tail, beside the half-normal's γ and the NIG's α, β, δ (2026-11-06)
+
+- **Kind:** one name for several concepts, and one concept in two parameterizations.
+- **Readings:**
+  - γ, the Normal-Wald's tail, v ~ GIG(−½, γ², 1) (`ObservationLatents.Gamma`, `src/maths/regression/spline/bass/BassNoise.cs:275`; `BassNoise.GammaPrior`, `BassNoise.cs:197`), GBASS's `gam`, `m_gamma` and `s_gamma`; against the modified half-normal's γ (`ModifiedHalfNormal.Gamma`), which σ²'s block sets to βΣr/c.
+  - The NIG's γ = √(α² − β²) (`NormalInverseGaussian.Gamma`, `src/maths/regression/NormalWaldCalibration.cs:17`), Barndorff-Nielsen's, is the core's γ over δ; its β is the core's skew over δ, and its δ the core's σ. `NormalInverseGaussian.CoreSkew` and `CoreGamma` give the core's.
+  - ξ = (1 + δγ)^(−½), the steepness of the NIG's shape triangle (`NormalInverseGaussian.Steepness`, `NormalWaldCalibration.cs:29`), GBASS's `nw_triangle`, which `NormalWaldCalibration.GammaPrior`'s targets read.
+- **Found:** 2026-11-06, E1's slice 3 (the Normal-Wald on the BASS core).
+- **Note:** GBASS writes `gam` and `bet` in the core's parameterization and `alpha`, `beta`, `delta` in `nw_est_mom`'s, the NIG's. `docs/Maths/VarianceMeanMixtures.md` writes the core's γ and β and names the NIG's where they meet.
+
 ### q, level, and the modified half-normal's α, β, γ (2026-11-05)
 
 - **Kind:** one concept under several names, and one name for several concepts.
 - **Readings:**
-  - q, the quantile level, is `BassNoise.Quantile` (`src/maths/regression/spline/bass/BassNoise.cs:114`) and `AsymmetricLaplace.Level` (`src/maths/distributions/AsymmetricLaplace.cs:39`), where `AsymmetricLaplace.Quantile(p)` is the distribution's quantile function, as on every family.
+  - q, the quantile level, is `BassNoise.Quantile` (`src/maths/regression/spline/bass/BassNoise.cs:189`) and `AsymmetricLaplace.Level` (`src/maths/distributions/AsymmetricLaplace.cs:39`), where `AsymmetricLaplace.Quantile(p)` is the distribution's quantile function, as on every family.
   - Level is also the prior's centre, `BassPriorReference.Level`, which under the quantile read is the sample q-quantile.
   - α, β, γ, the modified half-normal's parameters (`ModifiedHalfNormal.Alpha`, `Beta`, `Gamma`, `src/maths/distributions/ModifiedHalfNormal.cs:42`), against α the intercept and β the centred coefficients ("BASS: the weighted core"), β the skew (`ObservationLatents.Skew`) and γ the Normal-Wald's tail (GBASS's `nwbass`, slice 3). In σ²'s block (`BassScaleBlock`) the half-normal's β is ½(Σrᵢ²/(c·vᵢ) + Q + 2β₀) and its γ is the skew β times Σrᵢ/c.
 - **Found:** 2026-11-05, E1's slice 2 (the asymmetric Laplace on the BASS core).
@@ -26,10 +36,10 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 - **Kind:** one name for several concepts, and one concept under several names.
 - **Readings:**
   - w: GBASS's global scale, the core's σ² (`BassDraw.Sigma2`; `gbass-noise-brief.md`, "Why"), against wᵢ and W, the observation weights (`WorkingResponse.Weights`, "BASS: the weighted core").
-  - β: GBASS's skew, the drift per unit v (`ObservationLatents.Skew`, `src/maths/regression/spline/bass/BassNoise.cs:166`), against β and β_c, the centred coefficients in (α, β) ("BASS: the weighted core") and β̂ (`BassDesign.Coefficients`).
+  - β: GBASS's skew, the drift per unit v (`ObservationLatents.Skew`, `src/maths/regression/spline/bass/BassNoise.cs:284`), against β and β_c, the centred coefficients in (α, β) ("BASS: the weighted core") and β̂ (`BassDesign.Coefficients`).
   - τ: GBASS's τ multiplies the coefficients' variance, a ~ N(0, wτI), so it is the reciprocal of the core's τ, which multiplies their precision.
-  - c: GBASS's `scale`, the Gaussian part's variance per unit w·v (`BassNoise.VarianceScale`, `BassNoise.cs:80`), against c, σ²'s shape in `BassResolved`'s (1 − 2c)/N and `BassEvidencePriors` (logged on 2026-11-02 below).
-  - v: GBASS's latent scale (`ObservationLatents.Values`, `BassNoise.cs:118`; `IMixingLaw`), against v = ln r, the hierarchical rate's coordinate ("BASS: priors that stop reading a moving response"; `BassState.LogRate`).
+  - c: GBASS's `scale`, the Gaussian part's variance per unit w·v (`BassNoise.VarianceScale`, `BassNoise.cs:182`), against c, σ²'s shape in `BassResolved`'s (1 − 2c)/N and `BassEvidencePriors` (logged on 2026-11-02 below).
+  - v: GBASS's latent scale (`ObservationLatents.Values`, `BassNoise.cs:281`; `IMixingLaw`), against v = ln r, the hierarchical rate's coordinate ("BASS: priors that stop reading a moving response"; `BassState.LogRate`).
 - **Found:** 2026-11-05, E1's slices 0 and 1 (GBASS's noise on the BASS core).
 - **Note:** the paper and GBASS's code write w, β, τ, c and v as here; the slice's own text writes σ² for w, and m = σβ, s² = σ²c for the mixing law's unit drift and variance.
 

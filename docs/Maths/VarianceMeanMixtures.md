@@ -1,6 +1,6 @@
 # Variance-mean mixture noise
 
-> GBASS's noise on the BASS core (E1): a normal variance-mean mixture, εᵢ = σ(β·vᵢ + √(c·vᵢ)·ζᵢ), Gaussian given a latent scale per observation, which the Gaussian core fits through a working response that moves with the latents. Student t (robust BASS) and the asymmetric Laplace (quantile regression) are built; the Normal-Wald, generalized beta prime mixing and the engine's samplers on the carrier follow.
+> GBASS's noise on the BASS core (E1): a normal variance-mean mixture, εᵢ = σ(β·vᵢ + √(c·vᵢ)·ζᵢ), Gaussian given a latent scale per observation, which the Gaussian core fits through a working response that moves with the latents. Student t (robust BASS), the asymmetric Laplace (quantile regression), the Normal-Wald with its skew and tails drawn, the skewed t and the generalized hyperbolic are built; generalized beta prime mixing and the engine's samplers on the carrier follow.
 
 ## Overview
 
@@ -10,7 +10,9 @@ GBASS (Rumsey, Francom and Shen, arXiv 2306.01911; CRAN 2.0.1, the oracle) is BA
 |---|---|---|---|---|---|
 | Student t (GBASS's `tbass`) | IG(ν/2, ν/2) | 1, or (ν − 2)/ν | 0 | Integrated in the structure step, redrawn with a | Slice 1 |
 | Asymmetric Laplace (`qbass`) | Exp(1) | 2/(q(1 − q)) | 1/q − 1/(1 − q), fixed | On the record, drawn by the modified half-normal | Slice 2 |
-| Normal-Wald (`nwbass`) | IG(1/γ, 1), γ sampled | 1 | Sampled | On the record | Slice 3 |
+| Normal-Wald (`nwbass`) | IG(1/γ, 1), γ drawn or held | c, GBASS's 1 | Drawn or held | On the record under a skew; integrated where β is held at 0 | Slice 3 |
+| Skewed t | IG(ν/2, ν/2) | as t | Drawn or held away from 0 | On the record | Slice 3 |
+| Generalized hyperbolic (`gbass`, GIG `v_prior`) | GIG(p, a, b) | c | Drawn or held | As the Normal-Wald | Slice 3 |
 | Beta prime (`hbass`) | GBP(1, ½, ½) | var(y) | 0 | Half-Cauchy on σ | Slice 4 |
 
 ## Student t, robust BASS (E1's slice 1)
@@ -118,6 +120,59 @@ Built 2026-11-05 ([the build brief](../../issues/regression/bass/gbass-noise-bri
 - *σ²'s move is cheap:* the offset alone moves, so its Follow keeps the factor, O(NM), and the modified half-normal is one draw.
 - *So a quantile sweep is 40 Gaussian sweeps at the base,* against t's 24, the GIG's draws being the difference.
 
+## The Normal-Wald, the skewed t and the generalized hyperbolic (E1's slice 3)
+
+Built 2026-11-06 ([the build brief](../../issues/regression/bass/gbass-noise-brief.md#reports), slice 3), GBASS's `nwbass` on the BASS core and the noise's general case: v ~ GIG(p, a, b), whose mixture is the generalized hyperbolic (Barndorff-Nielsen 1977), with the skew β drawn or held, so the data can choose the noise's skew and tails.
+
+| Kind | v's law | β | γ | On the config |
+|---|---|---|---|---|
+| Normal-Wald (`nwbass`) | GIG(−½, γ², 1), the inverse Gaussian of mean 1/γ and shape 1 | N(m, s²) drawn, or held (0 by default) | N(m, s²) on γ > 0 drawn, or held (1 by default) | `BassNoise.NormalWald(gamma, skew, c, reference)` |
+| Skewed t | IG(ν/2, ν/2), t's | N(m, s²) drawn, or held away from 0 | none | `BassNoise.SkewedT(ν, skew, c, reference)` |
+| Generalized hyperbolic (`gbass` with a GIG `v_prior`) | GIG(p, a, b) as declared | drawn or held (0 by default) | none | `BassNoise.GeneralizedHyperbolic(mixing, skew, c, reference)` |
+
+The defaults hold β at 0 and γ at 1, as GBASS's `nwbass` does; a fit that is to choose them states their priors. `BassNoisePrior(mean, sd)` is the normal, sd = 0 holding the scalar.
+
+**σ² and the sweep.** σ² sits in the offset σβv wherever the skew can be nonzero, drawn or held away from 0, so it is held on the record and drawn by the modified half-normal (slice 2's block); where β is held at 0 the noise is a pure scale mixture and σ² is integrated out of the structure step, as under t. After σ² the noise-shape block (`BassNoiseShapeBlock`, the scale slot) draws, each where it is drawn:
+- *β | ·*, normal: rᵢ/σ = βvᵢ + √(c·vᵢ)ζᵢ with rᵢ = yᵢ − fᵢ of the sweep's coefficients, so precision Σvᵢ/c + 1/s² and mean (Σrᵢ/(σc) + m/s²) over it, GBASS's β step;
+- *γ | v*, normal on γ > 0: GIG(−½, γ², 1)'s normalizer is e^γ/√(2π), so Πp(vᵢ | γ) ∝ exp(Nγ − γ²Σvᵢ/2), precision Σvᵢ + 1/s² and mean (N + m/s²) over it, drawn on its support by the normal's truncated draw. GBASS takes that normal on the whole line, which is γ's conditional only on γ > 0 (slice 0's finding, confirmed there at 0.132 of its mass below 0); this is the correction the brief records, not a parity variant.
+
+Then the chain follows the offset at the new β. v's law is read at the record's γ, so v's conditional is GIG(p − ½, a + β²/c, b + r²/(σ²c)) under the Normal-Wald at the current γ. The target reads neither β nor γ, and neither prior enters it: no move of the structure changes them. The skewed t is t mixing with a drift: its conditional is the GIG with a > 0 and its marginal the generalized hyperbolic's a = 0 limit (`StudentTMixing` routes a drift to `GigMixing`), so at m = 0 it is slice 1's t, draw for draw.
+
+**The readers.** The pointwise density is the generalized hyperbolic's, closed in log Bessel K ([its forms](./ProbabilityAndInformation.md#log-bessel-k-the-gigs-normalizer-and-the-generalized-hyperbolic-e1)); the mean's shift σβE[v] and the variance σ²(β²Var[v] + c·E[v]) are the GIG's moments; predictive draws take v from its law. The predictive quantiles read each draw's noise as the `GeneralizedHyperbolic` distribution, whose tails come from a table of its normal score built on the first read, and the predictive mixture's root is now found by Newton with the mixture's density as its slope, inside the bracket bisection kept, so a CDF that is an integral is read a few times per root rather than once per halving (t's and the asymmetric Laplace's quantiles move by rounding).
+
+**Calibrations: GBASS's `nw_est_mom` and `nw_gamma_prior`, corrected** (`NormalWaldCalibration`).
+- *The NIG by its moments.* GBASS fits mean, variance, skewness and kurtosis by `optim` with the kurtosis 3 + 3(1 + 4β²)/(α²δγ); the NIG's is 3 + 3(1 + 4β²/α²)/(δγ) (slice 0 confirmed the error against the mixture's own fourth moment). With it the fit is closed: ρ = β/α has ρ² = S²/(3K − 4S²) for skewness S and excess kurtosis K, δγ = 3(1 + 4ρ²)/K, γ² = δγ/((1 − ρ²)Var), and δ, α, β and μ follow. Moments with 3K ≤ 4S² are no NIG's and are refused. In the core's terms σ = δ, β′ = βδ and γ′ = γδ (`NormalInverseGaussian.CoreSkew`, `CoreGamma`).
+- *The prior on γ.* GBASS calibrates a normal on γ to the steepness ξ = (1 + γ)^(−½) of the NIG's shape triangle, P(ξ < q₁) = p₁ and P(ξ > q₂) = p₂, with a stray −1 in the second probability, and its default targets (0.1, 0.9, 0.5, 0.05) ask for half the mass above γ = 99 and 5% below 0.235, which no normal holds. Here the prior is the normal's part on γ > 0, the one γ is drawn from, and the targets are solved exactly. A bound says which targets a normal reaches: at P(γ > g₁) = ½ the most it puts below g₂ is 1 − 2^(−g₂/g₁), the exponential limit as the mean goes to −∞; GBASS's defaults ask 0.05 where that is 0.0016. Targets past it are refused with the most that is reached. The defaults here, (q₁, q₂, p₁, p₂) = (0.5, 0.9, 0.5, 0.03), put half the mass at ξ < ½ (γ > 3) and 3% at ξ > 0.9 (γ < 0.235, the heaviest tails), inside the 0.053 their bound allows.
+
+| Prior on γ | Targets it reaches | γ's draw | Trade-off |
+|---|---|---|---|
+| **Normal on γ > 0 (chosen)** | Those under 1 − 2^(−g₂/g₁) at p₁ = ½; not a far median with much mass near 0 | Exact: the truncated normal | GBASS's family and conjugacy kept; its reach is limited, and stated |
+| Normal on ln γ | Any, calibrated in closed form from two normal quantiles | Not conjugate: a slice step on ln γ, cheap (it reads N and Σv) | A prior spanning heavy to near-Gaussian tails over decades, at an MCMC step for an exact one |
+| Gamma on γ | A far median with mass near 0, by a small shape | Conjugate through the modified half-normal, MHN(k, Σv/2, N − 1/θ) | Its shape below 1 puts the draw on the half-normal's series branch, whose terms grow with N |
+
+**`lag_beta`, read** (decision 3: adopted only if a free skew is measured to soak up misfit early). GBASS holds β at its prior's mean for the first 1,000 iterations. Read on NIG data (N = 600, σ 0.3, β 1, γ 1.5), eight chains each way from the empty structure: free from the start, or held at 0 for 500 sweeps and then freed. Free from the start, the median chain reached the reference run's median M (5) in 23 sweeps (6 to 49); held for 500 sweeps, in 26 (13 to 56). Free, β over the first 200 sweeps averaged 1.68 against the reference's 1.21: the skew moves early, while M is small, without slowing the structure. Over sweeps 1,500 to 2,000 the two arms read M 5.06 and 5.16, β 1.64 and 1.40, σ² 0.127 and 0.121, against the reference's 5, 1.21 and 0.105; both arms' β sit above it by less than one of its posterior sd's (about 0.6), over windows short beside its mixing. By the rule stated beside it, adopt the hold only if the free arm takes half as long again to reach M or ends elsewhere, the hold is not adopted.
+
+**Checked** (`BassNormalWaldTests`, `GigMixingTests`, `NormalWaldCalibrationTests`; behind `BASS_QUALIFICATION`, `BassNormalWaldQualificationTests`; against R, `GbassNormalWaldReadoutTests`, `GbassPrimitiveParityTests`):
+- *The law.* GIG mixing's marginal against quadrature of the mixture itself over 600 cases, the Normal-Wald, the skewed t, the variance gamma and general GIGs, with drifts of both signs and none, to 10⁻⁸; the skewed t falls out of t mixing and meets the closed t at no drift; the conditional's draws carry its GIG's mean. The noise's tails, CDF and table as [the distribution's checks](./ProbabilityAndInformation.md#log-bessel-k-the-gigs-normalizer-and-the-generalized-hyperbolic-e1) state.
+- *Geweke's joint-distribution test*, the slice 2 design at twice its size (400,000 marginal-conditional draws against 600,000 sweeps): five cases, the Normal-Wald with β and γ drawn on two seeds, with γ alone drawn (σ² integrated), the skewed t with β drawn and the generalized hyperbolic GIG(0.7, 1.2, 0.8) with β drawn; every |z| ≤ 2.15 over ten functions each (M, ln τ, ln σ², ln v₀, mean ln v, f at two points, β, ln γ and the standardized residual), and no block draw refused. Its power: β's conditional with its data term's sign flipped fails every skew-drawn case (|z| 20.8 to 336) and leaves the symmetric one passing. At slice 2's size (200,000 against 300,000) one function of one case reached |z| 4.08 (f₀, the Normal-Wald at seed 20261106); the same seed at twice the size reads −0.31, so the gate runs at twice the size.
+- *Recovery* on NIG noise outside any fixture (N = 600, f = sin 2πx₁ + x₂, σ 0.3, β 1, γ 1.5; β ~ N(0, 2²), γ under the default calibrated prior; four chains): β 1.29 [0.57, 3.80], γ 1.82 [0.93, 3.89] and σ² 0.113 [0.062, 0.226] at their 99% intervals, each covering the truth; the surface f within RMSE 0.056 of the truth on 400 new points, and the mean f + σβE[v] within 0.029 of the true mean (its shift 0.249 against 0.200). β, γ and σ² trade along the noise's variance, which the data fix more tightly than any one of them.
+- *`nwbass`'s readouts* (N = 200, both sides β ~ N(0, 1), γ under N(2, 1), w's prior IG(0.1, 0.05), R with `lag_beta` = 0): the noise's variance, which the data fix, 0.1814 under the g-prior and 0.1809 under the ridge against `nwbass`'s 0.1821; w 0.189 [0.085, 0.370] against 0.155 [0.097, 0.244], β 0.205 [−0.057, 0.613] against 0.191 [−0.033, 0.500], γ 1.13 [0.43, 2.30] against 0.92 [0.53, 1.48], each mean inside the other's 90% interval; the surface's means within 0.55 of the wider 90% half-band at worst (0.76 under the ridge); M 4.32 against 4.44. w and γ trade along the noise's variance, so each is read for overlap. The differences stated beside it: GBASS's untruncated γ draw, and slice 2's (continuous knots, whole-term mutation, pseudo-counts 1 against 5, its raw ridge, λ sampled, priors reading no response).
+- *The calibrations.* The NIG by its moments recovers three NIGs from their moments taken by quadrature of their own densities to 7 digits, and α, β and δ from 400,000 draws; the prior on γ puts its two masses where asked to 8 digits on three targets, read by quadrature of the truncated normal, and refuses GBASS's defaults with the bound's value.
+- *The run.* A Normal-Wald fit resumes bit for bit, β, γ and σ² included; a retained draw keeps its latents, γ with them, and its view rebuilds bit for bit under the Normal-Wald, the skewed t and the generalized hyperbolic.
+
+**Cost** (`CostRow_PerBlockOfASweep`; thread cycles on a loaded machine, so indicative; µs per sweep by block, the Normal-Wald with β and γ drawn, under the g-form).
+
+| Point | M | Structure | τ | a | v's block | σ² | β and γ | Sweep | Gaussian sweep |
+|---|---|---|---|---|---|---|---|---|---|
+| n 1,000, p 10, the base | 20 | 193 | 3.6 | 31 | 987 | 31 | 26 | 1,271 | 28 |
+| n 200 | 9.4 | 33 | 2.5 | 5.0 | 181 | 6.6 | 6.4 | 235 | 4.2 |
+| n 10,000, M_max 200 | 199 | 80,634 | 18 | 4,560 | 229,628 | 2,456 | 2,455 | 319,750 | 1,638 |
+
+- *A Normal-Wald sweep is 45 Gaussian sweeps at the base, 56 at n 200 and 195 at M 200.* A second reading, beside slices 1's and 2's gates on four threads, read the Normal-Wald's blocks about twice as long and the Gaussian sweep the same: the machine's contention, so the solo reading is the table.
+
+- *v's N GIG draws and the Follow after them are most of a sweep,* as under the asymmetric Laplace; the skew and γ cost a block of O(N) sums, near σ²'s.
+- *Retention* is slice 2's: a retained draw keeps v with its scalars, γ now among them.
+
 ## Retention: a draw keeps its latents
 
 Read in slice 1, built in slice 2: the brief's lever for a working response that dominates a retained draw. A model that rebuilds its working response from its latents (`IBassObservationModel.Rebuild`, `VarianceMeanMixture`'s) has its retained draws keep `BassDraw.Latents`, v with β and σ², and rebuild the working response on demand (`WorkingOn`); the readers that need the latents alone take them without a rebuild (`LatentsOn`). The blocks and the rebuild build the working response by one function from the latents, so a view rebuilt from v is the one the chain held, bit for bit. The generative state stays: v is kept. Measured over 200 retained draws of one quantile chain (`BassQuantileQualificationTests.Retention_BeforeAndAfter`), held both ways: 313.4 KB a draw with its working response against 70.4 KB with its latents alone at N = 10,000 (4.45×; the weights, the offset, the shifted response and v against v, 4N doubles against N); 32.7 KB against 9.0 KB at N = 1,000 (3.6×), where the draw's own few hundred bytes and the collector's noise weigh more. Under t the working response held the weights and v, so the ratio there is 2.
@@ -126,20 +181,24 @@ Read in slice 1, built in slice 2: the brief's lever for a working response that
 
 ## Status and caveats
 
-- *Built:* slices 0 to 2 of [the brief](../../issues/regression/bass/gbass-noise-brief.md), each with its report there.
-- *Open, by slice:* a free skew and the Normal-Wald's γ, with Bessel K of real order and the corrected `nw_est_mom` and `nw_gamma_prior` (3); generalized beta prime mixing and its slice steps (4); the latents on tempered rungs, SMC and the flat histogram, and a per-observation latent under a direct functional design (5); BARS through the shared law (6); the z parameterization and interweaving (7).
+- *Built:* slices 0 to 3 of [the brief](../../issues/regression/bass/gbass-noise-brief.md), each with its report there.
+- *Open, by slice:* generalized beta prime mixing and its slice steps (4); the latents on tempered rungs, SMC and the flat histogram, and a per-observation latent under a direct functional design (5); BARS through the shared law (6); the z parameterization and interweaving (7).
 - *The asymmetric Laplace is a working likelihood* where the noise is not one: its posterior intervals for the q-quantile undercover under other noise (63.8% for nominal 90% at q = 0.9 on skewed, heteroscedastic noise), as Yang, Wang and He (2016) show in general. The surface is the q-quantile; its intervals are not yet calibrated for it.
+- *The Normal-Wald's prior on γ* is a normal on γ > 0, which cannot hold a far median with much mass near 0 (the bound above); a fit meant to range from near-Gaussian to the heaviest tails needs a prior on ln γ, open.
+- *The generalized hyperbolic's predictive tails* come from a table built per draw, some 60 tail integrals, about 10 ms; a predictive over thousands of draws spends seconds building them.
 
 ## Source map
 
 | Area | Files |
 |---|---|
-| The noise on the config, the model, its blocks | `src/maths/regression/spline/bass/BassNoise.cs` (`BassNoise`, `ObservationLatents`, `IBassNoiseLaw`, `VarianceMeanMixture`, `BassCoefficientsBlock`, `BassLatentScaleBlock`, `BassScaleBlock`) |
+| The noise on the config, the model, its blocks | `src/maths/regression/spline/bass/BassNoise.cs` (`BassNoise`, `BassNoisePrior`, `ObservationLatents`, `IBassNoiseLaw`, `VarianceMeanMixture`, `BassCoefficientsBlock`, `BassLatentScaleBlock`, `BassScaleBlock`, `BassNoiseShapeBlock`) |
 | The carrier and the seam | `BassObservationModel.cs` (`WorkingResponse.Latents`, `IBassObservationModel.Law`, `Rebuilds`, `Rebuild`) |
 | σ² read from the state | `BassTarget.cs` (`GivenAt`) |
 | The sweep's draw of a and σ² | `BassSweep.cs` (`BassStructureMoves.DrawSweepFit`, `SweepFit`) |
 | The draw keeping its latents | `BassState.cs` (`BassDraw.Latents`, `WorkingOn`, `LatentsOn`) |
 | The prior's energy for σ²'s block | `src/maths/regression/gprior/CollapsedGPrior.cs` (`GPriorConditional.PriorEnergy`), `PriorPencil.cs` |
-| The mixing laws | `src/maths/regression/MixingLaw.cs` (`IMixingLaw`, `StudentTMixing`, `ExponentialMixing`) |
-| The laws drawn from | `src/maths/distributions/GeneralizedInverseGaussian.cs`, `ModifiedHalfNormal.cs`, `AsymmetricLaplace.cs` |
-| Tests | `tests/regression/BassStudentTTests.cs`, `BassStudentTQualificationTests.cs`, `BassQuantileTests.cs`, `BassQuantileQualificationTests.cs`; `tests/oracle/Gbass*.cs` |
+| The mixing laws | `src/maths/regression/MixingLaw.cs` (`IMixingLaw`, `StudentTMixing`, `ExponentialMixing`, `GigMixing`) |
+| The Normal-Wald's calibrations | `src/maths/regression/NormalWaldCalibration.cs` (`NormalWaldCalibration`, `NormalInverseGaussian`) |
+| The predictive's quantile under a law | `src/maths/regression/spline/bass/posterior/PredictiveMixture.cs` |
+| The laws drawn from and read | `src/maths/distributions/GeneralizedInverseGaussian.cs`, `ModifiedHalfNormal.cs`, `AsymmetricLaplace.cs`, `GeneralizedHyperbolic.cs`, `BesselK.cs` |
+| Tests | `tests/regression/BassStudentTTests.cs`, `BassStudentTQualificationTests.cs`, `BassQuantileTests.cs`, `BassQuantileQualificationTests.cs`, `BassNormalWaldTests.cs`, `BassNormalWaldQualificationTests.cs`, `GigMixingTests.cs`, `NormalWaldCalibrationTests.cs`; `tests/distributions/BesselKTests.cs`, `GigNormalizerTests.cs`, `LogConcaveEnvelopeTests.cs`; `tests/oracle/Gbass*.cs` |
