@@ -1,6 +1,6 @@
 # Conformal prediction
 
-> The conformal layer (E16): prediction sets whose coverage holds in finite samples under exchangeability, whatever the model, from an engine's retained draws and pointwise densities with no refit. The layer owns the guarantee and the score owns the width, so the layer is built once, engine-free, and each engine contributes densities. Built: the full step (Fong and Holmes's conformal Bayes) over a training density and a candidate density, and BASS's candidate density for every noise law. The margin and inflation, the split form, the predictive distribution and the other engines' candidate seams follow.
+> The conformal layer (E16): prediction sets whose coverage holds in finite samples under exchangeability, whatever the model, from an engine's retained draws and pointwise densities with no refit. The layer owns the guarantee and the score owns the width, so the layer is built once, engine-free, and each engine contributes densities. Built: the full step (Fong and Holmes's conformal Bayes) over a training density and a candidate density; BASS's candidate density for every noise law; and CB-3's reading of the scores' Monte Carlo error, with the margin, the inflated rule and the fallback signal. The split form, the predictive distribution and the other engines' candidate seams follow.
 
 ## Overview
 
@@ -66,7 +66,41 @@ Each choice below is decided; its alternatives and what they would change are re
 
 **Weighted draws work as they are.** An SMC population's or the flat histogram's weights multiply the add-one-in weights, and draws of weight 0 drop out (`PredictiveChecks`' rows, shared). With exact posterior weights over a finite parameter the step is exact, which is how the CB-1 checks are run.
 
-**The Monte Carlo error is reported only through the ESS for now.** Each candidate's Kish ESS of its add-one-in weights, 1/Σ w̃² (`SmcWeights.EffectiveSampleSize`'s form), is reported. A low ESS marks a candidate far in a tail, where few draws carry the weights. The error of each score, and the margin it costs, are slice 2's: CB-3's ε from the add-one-in estimate's Monte Carlo error through `PredictiveChecks`' influence machinery and its chain-aware relative efficiency, reported as indicative since it is not a sure bound.
+**The Monte Carlo error is read by CB-3** ([below](#cb-3-the-scores-error-and-what-it-costs)). Each candidate's Kish ESS of its add-one-in weights, 1/Σ w̃² (`SmcWeights.EffectiveSampleSize`'s form), is reported beside it: a low ESS marks a candidate far in a tail, where few draws carry the weights.
+
+## CB-3: the scores' error and what it costs
+
+The scores are Monte Carlo estimates, so the step's guarantee holds up to their error (CB-3, `coverage_close`, `coverage_inflated`). Slice 2 reads that error and what it can cost, and reports it with every set (`ConformalSet.Margin`, a `ConformalMargin`). Each choice below is decided; its alternatives and what they would change are recorded with it.
+
+**The error is each score's Monte Carlo standard error, on the log scale.**
+- *The form* is PSIS-LOO's own (`PredictiveChecks`' influence, shared). For a self-normalized estimate p̂ = Σ_s w̃_s p_s, each draw's influence is ψ_s = w̃_s(p_s/p̂ − 1), and the error is √log(1 + Σ_s ψ_s²/r_eff).
+- *r_eff* is the relative efficiency of the candidate's density along the chains, the add-one-in ratio's, as PSIS reads the left-out unit's likelihood. It is 1 for independent or weighted draws.
+- *For every unit at once:* Σψ² = A₂/p̂² − 2A₁/p̂ + Σw̃², with A₁ = Σ w̃²p and A₂ = Σ w̃²p², so two more products, P·W̃² and P²·W̃², give it beside the scores. An entry below 10⁻¹⁰⁰ of its unit's largest likelihood is summed in logs, since squared likelihoods underflow past 10⁻¹⁵⁴.
+- *Alternatives:* the influence's ESS along the chains for each unit and candidate, which is exact for chains but an FFT for every pair; a concentration bound, which the Lean follow-up leaves open.
+
+**The bound is z standard errors, with z = Φ⁻¹(1 − ν/(2m)).** Every one of a stratum's m units then stays within its bound with chance about 1 − ν, by the union of their normal tails. ν (`ErrorLevel`, 0.01 by default) adds to the miscoverage, as CB-3 says a bound that is not sure must.
+- *Indicative:* the standard error is itself estimated, and the normal approximation fails where the weights degenerate. That is what k̂ reads (below).
+- *Alternatives:* a fixed multiple, 2 or 3, with no stated failure probability and narrower bounds; a concentration bound, which would be sure but wider.
+
+**The margin** (`coverage_close` with `card_fragile_le_estimated`) is always reported. For each grid value taken as the truth, it counts the band of units whose decision estimates within their bounds could change (`Fragile`). m̂ is the largest count over the grid values inside some draw's support, since any of them may be the truth. The plain set's coverage under error is then 1 − (k + m̂)/m − ν (`CoverageUnderError`).
+- *Read with the uniform bound by default* (`MarginBounds.Uniform`): the largest of the stratum's units' bounds and the candidate's, under this candidate's weights. That is the safe reading of `coverage_close`'s unit-carried bounds.
+- *Or with carried bounds* (`MarginBounds.Carried`): each unit takes the larger of its bound here and its bound as the candidate, under weights of its own density. Every unit is the candidate in some ordering, so this is the Lean chip's per-unit finding. It costs each unit's own weighting and, for chains, its r_eff, once per stratum.
+- *Both read the orderings the layer holds.* A bound sure over every ordering would need each unit's error under every other unit's weights, n² weightings per stratum. That is not built.
+
+**The inflated rule** (`coverage_inflated`, Ndiaye's stable set) is an option (`Inflate`, off by default) and always reported (`InflatedRanks`). It accepts y when more than k units have an estimate lowered by its bound at most the candidate's raised by its own. The bounds are per position, each unit's under this candidate's weights and the candidate's own. The rule keeps 1 − k/m − ν at the cost of width.
+
+**Trust** is PSIS's Pareto k̂ of the add-one-in log ratios (`PredictiveChecks`' k̂, shared). It is read where the inflated rule accepts, since there a decision rests on the bounds; above PSIS's threshold at S, the error estimate there cannot be trusted.
+
+**The fallback signal** (`FallBack`) is the signal to take the split form (CB-2, slice 3). It fires when m̂ > share·α·m (`FallbackShare`, 0.1 by default), or when an untrusted candidate sits in the inflated set.
+
+**What the readings showed** (the checks below). As specified, the margin reads far wider than the error costs, and the signal fires on every case measured:
+- *On exact draws* of the conjugate fixture, with the uniform bound, m̂ falls from 12.8 to 7.7 of 20 as S grows from 40 to 2,560, while the plain set covers 0.905 at S 40.
+- *On the BASS fits* of slice 1's check (S 1,000), m̂ is 98 of 100 (Gaussian) and 94 (t).
+- *Carried bounds narrow it* to 2.5 to 4.6 of 20 on exact draws, and to 72 and 52 of 100 on the BASS fits, which still fires the signal everywhere.
+- *Why:* the band counts every unit whose rank adversarial errors of that size could move. With bounds of a few tenths of a nat beside log scores spread over a few nats, that is most units. Random errors move few decisions.
+- *The inflated set keeps coverage,* 0.935 to 0.958 against 0.900, at 12 to 73% more width.
+
+So the margin and the fallback signal work as stated, but at these sizes they do not tell a degenerate case from a healthy one. The decision they wait on is recorded in the layer's brief.
 
 ## Numerics
 
@@ -154,19 +188,65 @@ The weights, the product and the ranks for one grid of G = 200 candidates, with 
   - Under the laws whose density is a Bessel function, the law's density is the slice's cost: 0.4 to 0.9 µs per evaluation, against 20 to 60 ns for the others.
   - Each call recomputes the law's normalizer, which is constant over a draw's grid. A density over many residuals at one draw would take it once; the pointwise density would share it.
 
+## Checks and cost (slice 2)
+
+Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformalMarginTests` and `ConformalCostTests`.
+- **The band is the Lean count.** Under a uniform bound it is the literal `FragileEstimated` count over 3,000 random cases, with ties and bounds of 0 and ∞. Under per-unit bounds it is that count on continuous scores, where no comparison sits at rounding distance.
+- **The deterministic statements on perturbed scores.** Exact scores with ties, per-unit bounds and estimates anywhere within them, over 4,000 cases:
+  - `accepts_or_fragile`: 1,771 decisions were lost, every one fragile.
+  - `acceptsInflated_of_accepts`, `accepts_shift_of_accepts_close` and `fragileEstimated_of_fragile` hold throughout.
+  - `card_fragile_le_estimated` holds, and so does `fragileEstimated_mono`: the uniform band counts at least the per-unit one.
+  - The adversary, the unit down by its bound and every other up by its own, refuses exactly the fragile units.
+- **The layer against a reference.** Over 80 cases with weights, chains and far ranges:
+  - its errors match Σψ²/r_eff read directly in logs, to 1.2·10⁻¹⁰;
+  - its inflated ranks, uniform bounds and bands, uniform and carried, match the literal definitions on its own scores and bounds.
+- **Inflated coverage on exact draws.** The conjugate fixture with S 40, so the scores carry real error, under noise the model does not share; n 19, k 2, 3,850 replications:
+  - the inflated set covers 0.935 against 1 − k/m − ν = 0.89, and the plain set 0.905;
+  - widths are 5.72 against 5.09;
+  - the margin's reading at the true value averaged 0.485, which the plain set's coverage exceeds, as `coverage_close` says it must.
+- **The margin as the draws grow** (exact draws, 100 data sets each, m 20):
+
+| S | m̂, uniform | Coverage under error | m̂, carried | Under error, carried | Width, plain / inflated |
+|---|---|---|---|---|---|
+| 40 | 12.8 | 0.253 | 4.6 | 0.662 | 5.34 / 5.90 |
+| 160 | 9.9 | 0.397 | 3.5 | 0.717 | 5.34 / 5.72 |
+| 640 | 8.8 | 0.450 | 2.9 | 0.746 | 5.33 / 5.54 |
+| 2,560 | 7.7 | 0.506 | 2.5 | 0.763 | 5.34 / 5.46 |
+
+  The fallback signal fired on all 100 at every S, under both bounds.
+- **The degenerate weights** (slice 1's Gaussian BASS fits, n 99, k 10, S 1,000, 20 fits × 50 held-out values, beside t fits of the same data):
+  - *Where ESS is below 50* (8 values, ESS 1.5 to 48): the candidate's bound is 0.7 to 2.6 nats against a median 0.08 elsewhere, and π is 0.01 to 0.02. Both rules refuse every one. The band holds 96 to 98 units under the uniform bound and 34 to 98 carried, and the signal fires.
+  - *So the degeneracy moves no decision there.* The inflated rule refuses it too, so its refusal survives its bounds. What fires the signal is every unit's error, not the candidate's weights.
+  - *Elsewhere* the medians are m̂ 98 (carried 72) for the Gaussian fits and 94 (carried 52) for the t fits.
+  - *Coverage* is 0.905 plain and 0.958 inflated for the Gaussian, 0.894 and 0.937 for the t.
+  - *Widths* are 1.20 against 2.07 for the Gaussian, 1.06 against 1.49 for the t.
+  - *k̂* was read at 958 Gaussian and 937 t values in the inflated set, and passed PSIS's threshold at all but one t value.
+- **The cost row**, per grid of 200 at n 1,000 (cycle clock, best of five, indicative). The weights include the errors' sums and each candidate's r_eff; the three products are the scores and the errors' two; the ranks include the bands and k̂:
+
+| S, draws | Training side | Weights | Three products | Ranks | Full step | Slice 0's step |
+|---|---|---|---|---|---|---|
+| 1,000, independent | 16.2 ms | 3.3 ms | 41.4 ms | 62.2 ms | 127.9 ms | 36.7 ms |
+| 1,000, two chains | 16.3 ms | 24.6 ms | 42.6 ms | 55.7 ms | 146.4 ms | |
+| 4,000, independent | 63.6 ms | 16.9 ms | 171.2 ms | 122.8 ms | 383.4 ms | 149.8 ms |
+| 4,000, two chains | 75.2 ms | 121.7 ms | 171.3 ms | 121.8 ms | 502.2 ms | |
+
+  - The margin's always-on reading costs 2.6 to 3.5 times slice 0's step.
+  - Its largest parts are the two error products, each candidate's r_eff along the chains (an FFT per candidate) and k̂ (a sort of S ratios per candidate in the inflated set).
+
 ## API at a glance
 
 | Area | Types and members |
 |---|---|
 | The seams | `PointwiseLogDensity` (training); `CandidateLogDensity(values, grids, latents, stratumOf, chainLengths)` with `Weights`, `Offset(t)`, `Cases`, `Draws` |
 | BASS's candidate density | `BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels)`; `BassPointwise.Latents` (internal, shared) |
-| The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
+| The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha, ErrorLevel, Inflate, FallbackShare, MarginBounds })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
 | A case's set | `ConformalSet`: `Stratum`, `Units` (m), `Level` (k), `Coverage`, `WholeSpace`, `Grid`, `PValues`, `Below`, `Tied`, `CandidateScores`, `EffectiveSampleSizes`, `Accepts(g)`, `Intervals` (`GridInterval(Lower, Upper)`), `Resolution`, `OpenBelow`, `OpenAbove`, `Width` |
+| CB-3's reading | `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `ConformalScores.Errors`, `CandidateError` |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
 
 ## Not built yet
 
-- CB-3's margin, the 2ε-inflated set and the fallback signal (slice 2).
+- A margin with bounds sure over every ordering, which needs each unit's error under every other unit's weights; and a fallback signal that tells a degenerate case from a healthy one (the brief's slice 2 report has the decision).
 - The split form, with density, CQR and residual scores (slice 3).
 - The conformal predictive distribution, with PIT and CRPS, and random tie-breaking with it (slice 4).
 - The candidate seams of BARS, BAPS, the hierarchical P-spline, BGP and the changepoint posterior (slice 5), and BASS's for a direct functional fit's curves (E17).
