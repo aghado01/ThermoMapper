@@ -27,7 +27,8 @@ namespace Maths.Regression.Spline.Bass;
 /// variable (<see cref="BassResidualDependence"/>, F11) under the posterior mean, computed at the end of the run; null for a
 /// scalar response and for several output variables, where <see cref="ResidualDependenceFor"/> takes a declared
 /// index.</item>
-/// <item><see cref="PointwiseLogDensity"/> is OQ17's matrix over the draws (S9), from the data the fit was run on.</item>
+/// <item><see cref="PointwiseLogDensity"/> is OQ17's matrix over the draws (S9), from the data the fit was run on, and
+/// <see cref="CandidateLogDensity"/> its sibling at new cases for the conformal layer (E16).</item>
 /// <item><see cref="Predict"/> (stage 5, D07), <see cref="Sensitivity"/> and <see cref="Effects"/> (stage 6, D08) are views
 /// over the draws too, each on the data the fit was run on.</item>
 /// <item><see cref="Traces"/>, <see cref="TrainingFit"/>, <see cref="Metadata"/>, <see cref="Summary"/> and
@@ -58,6 +59,24 @@ public sealed record BassFit(
     {
         BassModel model = ModelOn(data);
         return BassPointwise.LogDensity(model, Terms, Draws, units, content, DrawWeights);
+    }
+
+    /// <summary>
+    /// The candidate density at new cases (E16's seam; <see cref="BassCandidates"/>): log p(y | x_t, draw) for every retained draw and every
+    /// value y of each case's grid, in <see cref="PointwiseLogDensity"/>'s rows, with its chain lengths, weights and latent report, for the
+    /// conformal layer (<see cref="Conformal.ConformalBayes.FullStep"/>). A candidate is one observation of a scalar response.
+    /// <paramref name="data"/> must be the data the fit was run on; data with another fingerprint are refused.
+    /// </summary>
+    /// <param name="data">The data the fit was run on.</param>
+    /// <param name="cases">The test cases, through the fit's transform.</param>
+    /// <param name="grids">Each case's candidate values, ascending.</param>
+    /// <param name="strata">Each case's stratum in the training density's partition; null puts every case in stratum 0.</param>
+    /// <param name="unseenLevels">What a categorical level no training case took does: refused by default.</param>
+    public CandidateLogDensity CandidateLogDensity(BassData data, PredictionCases cases, IReadOnlyList<double[]> grids, int[]? strata = null,
+                                                   UnseenLevel unseenLevels = UnseenLevel.Refuse)
+    {
+        BassModel model = ModelOn(data);
+        return BassCandidates.LogDensity(model, Terms, Draws, DrawWeights, cases, grids, strata, unseenLevels);
     }
 
     /// <summary>
