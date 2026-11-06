@@ -101,6 +101,30 @@ Append a report below, newest first, under "Reports", and keep the protolemma's 
 
 Newest first.
 
+### 2026-11-06 — CB-3 with an error bound per unit
+
+The follow-up below on per-unit bounds is done, at your call. CB-3 now takes a bound εⱼ for each unit. With every εⱼ = ε it reads as before (2ε, 4ε), so no earlier claim changes.
+
+**Proved.** `ConformalValidity.lean` has 89 declarations and remains PROOF-CLOSED. `#print axioms` on the CB-3 results shows the standard three only.
+- `accepts_or_fragile`, `acceptsInflated_of_accepts`, `accepts_shift_of_accepts_close` and `fragileEstimated_of_fragile` are restated with per-unit bounds.
+- `coverage_close` now takes bounds carried by the units. `coverage_inflated` takes bounds that may differ by ordering and by position.
+- `card_fragile_le_estimated` reads the band with each ordering's bounds.
+- New: `fragileEstimated_mono`, so any dominating bounds serve; and `ratio_permsOn`, the counting step that `coverage_eq` and `coverage_close` share.
+
+**Checks first.** `conformal-checks.py` runs the per-unit forms on 150,435 deterministic cases, exhaustive with per-unit bounds to m = 3, plus the adversary's attainment, over orderings with bounds by unit and by position, and in the conformal-Bayes case. Every assertion holds.
+
+**Finding: where per-unit bounds pay.** Monte Carlo error attaches to a position, the candidate's or a data unit's, more than to a unit.
+- The inflated rule takes bounds by position, so it gains directly.
+- The margin needs bounds carried by the units, and each unit's worst error over the orderings includes its turn as the candidate. In the conformal-Bayes check that equals the uniform bound.
+- So the per-unit margin pays only where units differ in themselves.
+- This sharpens the decision. The layer inflates with per-position bounds, the candidate's error and each data unit's apart. It reports the margin with unit-carried bounds, and the uniform bound is the safe choice when no unit stands apart.
+
+**Gates.**
+- `lake build Enthymemata.ConformalValidity`: clean, no warnings.
+- `lake build Enthymemata`: green.
+- `scripts/meta-ci.ps1 -NoBuild`: PASS.
+- D: had 41 GB free.
+
 ### 2026-11-06 — CB-3's prior art, read in full
 
 The four arXiv papers are now in `gauntlet/conformal-bayes`, and Ndiaye's is in `PDFs/Bayesian/ndiaye22a.pdf` (ICML 2022, PMLR 162). Each was read at its theorems. [conformal-lemmas.md](conformal-lemmas.md) has the detail under CB-3's prior art.

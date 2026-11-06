@@ -530,17 +530,29 @@ print()
 print("=== CB-3: what an imperfect score costs ===")
 
 
+# Each unit j carries its own error bound eps[j] (its Monte Carlo error, say). With every eps[j]
+# equal to e, the shifts below are 2e (eps[j] + eps[u]) and 4e (2 eps[j] + 2 eps[u]).
 def kth(s, C, r):
     """The r-th smallest score over C (1-based)."""
     return sorted(s[j] for j in C)[r - 1]
 
 
+def rank_shift_at(s, u, C, d):
+    """Units of C, u itself always counted, scoring at least d[j] below s[u]."""
+    return sum(1 for j in C if j == u or s[j] + d[j] <= s[u])
+
+
 def fragile(k, s, u, C, eps):
-    return k < rank_le(s, u, C) and rank_shift(s, u, C, 2 * eps) <= k
+    return k < rank_le(s, u, C) and rank_shift_at(s, u, C, [e + eps[u] for e in eps]) <= k
+
+
+def accepts_inflated(k, sh, u, C, eps):
+    return k < sum(1 for j in C if sh[j] - eps[j] <= sh[u] + eps[u])
 
 
 def fragile_est(k, sh, u, C, eps):
-    return k < sum(1 for j in C if sh[j] <= sh[u] + 2 * eps) and rank_shift(sh, u, C, 4 * eps) <= k
+    return accepts_inflated(k, sh, u, C, eps) and \
+        rank_shift_at(sh, u, C, [2 * e + 2 * eps[u] for e in eps]) <= k
 
 
 def check_deterministic(s, sh, eps, C):
@@ -550,88 +562,118 @@ def check_deterministic(s, sh, eps, C):
             if not accepts(k, sh, u, C):
                 assert (not accepts(k, s, u, C)) or fragile(k, s, u, C, eps)  # loss only through M
             if accepts(k, s, u, C):
-                assert k < sum(1 for j in C if sh[j] <= sh[u] + 2 * eps)  # the inflated rule keeps it
+                assert accepts_inflated(k, sh, u, C, eps)  # the inflated rule keeps it
             if fragile(k, s, u, C, eps):
                 assert fragile_est(k, sh, u, C, eps)  # M is bounded from the estimated scores
             if accepts(k, sh, u, C) and not accepts(k, s, u, C):
-                assert k < sum(1 for j in C if s[j] <= s[u] + 2 * eps)  # gains, the other side
-    for r in range(1, N + 1):
-        assert abs(kth(sh, C, r) - kth(s, C, r)) <= eps
+                assert k < sum(1 for j in C if s[j] <= s[u] + eps[j] + eps[u])  # gains, the other side
+    if len(set(eps)) == 1:
+        for r in range(1, N + 1):
+            assert abs(kth(sh, C, r) - kth(s, C, r)) <= eps[0]
 
 
-eps = Q(1, 2)
 n_det = 0
+grid = [Q(i, 2) for i in range(5)]
 for N in range(1, 5):
     C = list(range(N))
-    for s in itertools.product([Q(i, 2) for i in range(5)], repeat=N):
-        for e in itertools.product((-eps, Q(0), eps), repeat=N):
-            check_deterministic(s, tuple(a + b for a, b in zip(s, e)), eps, C)
+    e0 = Q(1, 2)
+    for s in itertools.product(grid, repeat=N):
+        for e in itertools.product((-e0, Q(0), e0), repeat=N):
+            check_deterministic(s, tuple(a + b for a, b in zip(s, e)), (e0,) * N, C)
             n_det += 1
+for N in range(1, 4):
+    C = list(range(N))
+    for s in itertools.product(grid, repeat=N):
+        for eps in itertools.product((Q(0), Q(1, 2), Q(1)), repeat=N):
+            for sign in itertools.product((-1, 0, 1), repeat=N):
+                check_deterministic(s, tuple(a + g * b for a, g, b in zip(s, sign, eps)), eps, C)
+                n_det += 1
 for _ in range(3000):
     N = rng.randint(2, 7)
     C = list(range(N))
-    eps = Q(rng.randint(1, 40), rng.randint(1, 40))
+    uniform = rng.random() < 0.5
+    e0 = Q(rng.randint(1, 40), rng.randint(1, 40))
+    eps = tuple(e0 if uniform else Q(rng.randint(0, 40), rng.randint(1, 40)) for _ in C)
     s = tuple(Q(rng.randint(-60, 60), rng.randint(1, 12)) for _ in C)
-    sh = tuple(a + Q(rng.randint(-1000, 1000), 1000) * eps for a in s)
+    sh = tuple(a + Q(rng.randint(-1000, 1000), 1000) * e for a, e in zip(s, eps))
     check_deterministic(s, sh, eps, C)
     n_det += 1
-print(f"CB-3 deterministic part: {n_det} (exact scores, estimates within eps) cases, exhaustive on a "
-      "grid and a seeded random sweep: a decision is lost only in M, the inflated rule keeps every "
-      "exact acceptance, M sits inside the estimated band, order statistics move at most eps")
+print(f"CB-3 deterministic part: {n_det} (exact scores, estimates within per-unit eps) cases, "
+      "exhaustive on grids (uniform eps to N = 4, per-unit eps to N = 3) and a seeded random sweep: "
+      "a decision is lost only in M, the inflated rule keeps every exact acceptance, M sits inside "
+      "the estimated band, and with uniform eps order statistics move at most eps")
 
-# Tightness, and the order-statistic picture: an adversary within eps (the test down, the rest up)
-# rejects exactly the units with rank_shift(s, u, 2 eps) <= k; with no ties those beyond the
-# k rejected are the accepted units below s_(k) + 2 eps.
+# Tightness, and the order-statistic picture: an adversary within the bounds (the test unit down
+# by its own eps, the rest up by theirs) refuses exactly the units the bound counts; with uniform
+# eps and distinct scores those beyond the k refused are the accepted units below s_(k) + 2 eps.
 for _ in range(2000):
     N = rng.randint(2, 7)
     C = list(range(N))
-    eps = Q(rng.randint(1, 20), rng.randint(1, 20))
+    uniform = rng.random() < 0.5
+    e0 = Q(rng.randint(1, 20), rng.randint(1, 20))
+    eps = tuple(e0 if uniform else Q(rng.randint(0, 20), rng.randint(1, 20)) for _ in C)
     s = tuple(Q(v, 7) for v in rng.sample(range(-80, 80), N))
     for k in range(1, N):
         for u in C:
-            adv = tuple(s[j] - eps if j == u else s[j] + eps for j in C)
-            assert (not accepts(k, adv, u, C)) == (rank_shift(s, u, C, 2 * eps) <= k)
-            in_band = kth(s, C, k + 1) <= s[u] < kth(s, C, k) + 2 * eps
-            assert fragile(k, s, u, C, eps) == in_band
-print("CB-3 tightness: the adversary attains the bound for every unit; with distinct scores "
-      "M = {u : s_(k+1) <= s_u < s_(k) + 2 eps}")
+            adv = tuple(s[j] - eps[j] if j == u else s[j] + eps[j] for j in C)
+            assert (not accepts(k, adv, u, C)) == (rank_shift_at(s, u, C, [e + eps[u] for e in eps]) <= k)
+            if uniform:
+                in_band = kth(s, C, k + 1) <= s[u] < kth(s, C, k) + 2 * e0
+                assert fragile(k, s, u, C, eps) == in_band
+print("CB-3 tightness: the adversary attains the bound for every unit, uniform or per-unit eps; with "
+      "uniform eps and distinct scores M = {u : s_(k+1) <= s_u < s_(k) + 2 eps}")
 
 
-# Over orderings, with an asymmetric estimate: the exact score is equivariant; the estimate is
-# any function of the ordering within eps. Coverage >= 1 - (k + |M|)/N for the plain rule and
-# >= 1 - k/N for the inflated rule; the adversary attains the first when scores are distinct.
-def coverage_estimated(z, score, est, k, t, C, inflate=None):
+# Over orderings, with an asymmetric estimate: the exact score is equivariant, and the estimate for
+# each ordering p is anything within that ordering's bounds eps_of(p).
+# - The inflated rule keeps >= 1 - k/N whatever the bounds: by ordering and by position.
+# - The margin needs bounds that travel with the units (eps0 indexed by the original unit, so
+#   position i of ordering p has eps0[p[i]]): then the plain rule covers >= 1 - (k + |M|)/N, the
+#   adversary attains it with distinct scores, and every ordering's estimated band counts >= |M|.
+def coverage_estimated(z, est, eps_of, k, t, C, inflated=False):
     G = perms_on(len(z), C)
     hits = 0
     for p in G:
         sh = est(compose(z, p), p)
-        if inflate is None:
-            hits += accepts(k, sh, t, C)
-        else:
-            hits += k < sum(1 for j in C if sh[j] <= sh[t] + inflate)
+        hits += accepts_inflated(k, sh, t, C, eps_of(p)) if inflated else accepts(k, sh, t, C)
     return Q(hits, len(G))
 
 
 for N in (3, 4, 5):
     C = list(range(N))
     t = N - 1
-    eps = Q(1, 50)
-    for z in multisets(range(3), N):
-        s = score_sq(z)
-        adv = lambda w, p: tuple(v - eps if i == t else v + eps for i, v in enumerate(score_sq(w)))
-        noisy = lambda w, p: tuple(v + eps * Q(random.Random(hash((p, i))).randint(-10, 10), 10)
-                                   for i, v in enumerate(score_sq(w)))
-        for k in range(N + 1):
-            M = sum(1 for u in C if fragile(k, s, u, C, eps))
-            rej = sum(1 for u in C if not accepts(k, s, u, C))
-            for est in (adv, noisy):
-                cov = coverage_estimated(z, score_sq, est, k, t, C)
-                assert cov >= 1 - Q(rej + M, N) >= 1 - Q(k + M, N)
-                assert coverage_estimated(z, score_sq, est, k, t, C, inflate=2 * eps) >= 1 - Q(k, N)
-            if injective_on(s, C):
-                assert coverage_estimated(z, score_sq, adv, k, t, C) == 1 - Q(k + M, N)
-print("CB-3 over orderings: plain rule >= 1 - (k + |M|)/N, attained by the adversary with distinct "
-      "scores; the 2 eps-inflated rule >= 1 - k/N")
+    for eps0 in ((Q(1, 50),) * N, tuple(Q(i + 1, 100) for i in range(N))):
+        by_unit = lambda p, eps0=eps0: tuple(eps0[p[i]] for i in range(len(p)))
+        by_position = lambda p, eps0=eps0: eps0
+        for z in multisets(range(3), N):
+            s = score_sq(z)
+            for eps_of in (by_unit, by_position):
+
+                def adv(w, p, eps_of=eps_of):
+                    e = eps_of(p)
+                    return tuple(v - e[i] if i == t else v + e[i] for i, v in enumerate(score_sq(w)))
+
+                def noisy(w, p, eps_of=eps_of):
+                    e = eps_of(p)
+                    return tuple(v + e[i] * Q(random.Random(hash((p, i))).randint(-10, 10), 10)
+                                 for i, v in enumerate(score_sq(w)))
+
+                for k in range(N + 1):
+                    for est in (adv, noisy):
+                        assert coverage_estimated(z, est, eps_of, k, t, C, inflated=True) >= 1 - Q(k, N)
+                    if eps_of is by_position:
+                        continue
+                    M = sum(1 for u in C if fragile(k, s, u, C, eps0))
+                    rej = sum(1 for u in C if not accepts(k, s, u, C))
+                    for est in (adv, noisy):
+                        assert coverage_estimated(z, est, eps_of, k, t, C) >= 1 - Q(rej + M, N) >= 1 - Q(k + M, N)
+                        for p in perms_on(N, C):
+                            assert M <= sum(1 for u in C if fragile_est(k, est(compose(z, p), p), u, C, eps_of(p)))
+                    if injective_on(s, C):
+                        assert coverage_estimated(z, adv, eps_of, k, t, C) == 1 - Q(k + M, N)
+print("CB-3 over orderings: the inflated rule >= 1 - k/N with bounds by ordering and position; with "
+      "bounds carried by the units, the plain rule >= 1 - (k + |M|)/N, attained by the adversary with "
+      "distinct scores, and every ordering's estimated band counts at least |M|")
 
 
 # A real Monte Carlo case: conformal Bayes by add-one-in importance weights over T draws from the
@@ -669,12 +711,22 @@ for T in (20, 200):
         ests = {p: cb_draws(compose(z, p), T, 7) for p in G}
         eps = max(abs(a - b) for p in G for a, b in zip(ests[p], cb_exact(compose(z, p))))
         s = cb_exact(z)
-        M = sum(1 for u in C if fragile(k, s, u, C, eps))
+        M = sum(1 for u in C if fragile(k, s, u, C, (eps,) * N))
         cov = Q(sum(1 for p in G if accepts(k, ests[p], t, C)), len(G))
         cov_inf = Q(sum(1 for p in G if k < sum(1 for j in C if ests[p][j] <= ests[p][t] + 2 * eps)), len(G))
         exact = coverage_orderings(z, cb_exact, k, t, C)
         assert cov >= 1 - Q(k + M, N) and cov_inf >= 1 - Q(k, N)
-        rows.append(f"{''.join(map(str, z))}: eps {float(eps):.3f}, |M| {M}, exact {exact}, draws {cov}, inflated {cov_inf}")
+        # Per-unit bounds: each unit's worst error over the orderings, carried with the unit.
+        eps_u = [max(abs(ests[p][i] - cb_exact(compose(z, p))[i]) for p in G for i in C if p[i] == u) for u in C]
+        M_u = sum(1 for u in C if fragile(k, s, u, C, eps_u))
+        cov_inf_u = Q(sum(1 for p in G if accepts_inflated(k, ests[p], t, C, [eps_u[p[i]] for i in C])), len(G))
+        # Bounds by position: each ordering's own errors, the narrowest valid inflation.
+        cov_inf_p = Q(sum(1 for p in G if accepts_inflated(
+            k, ests[p], t, C, [abs(a - b) for a, b in zip(ests[p], cb_exact(compose(z, p)))])), len(G))
+        assert M_u <= M and cov_inf_u >= 1 - Q(k, N) and cov_inf_p >= 1 - Q(k, N)
+        rows.append(f"{''.join(map(str, z))}: eps {float(eps):.3f} (per unit {float(min(eps_u)):.3f} to "
+                    f"{float(max(eps_u)):.3f}), |M| {M} (per unit {M_u}), exact {exact}, draws {cov}, "
+                    f"inflated {cov_inf} (per unit {cov_inf_u}, by position {cov_inf_p})")
     print(f"CB-3 conformal Bayes by draws, T = {T}, N = 5, k = 1 (bound 4/5): " + "; ".join(rows))
 
 print()

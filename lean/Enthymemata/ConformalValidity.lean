@@ -41,9 +41,10 @@ unit's stratum.
   latter's closed form and its computation from the `n`-unit draws (`latentScore_eq`,
   `sum_jointU_addOneIn`); the mixed score covering no better than the latent one
   (`accepts_latent_of_mixed`) and covering nothing in `mixed_counterexample`.
-* **CB-3.** `accepts_or_fragile` and `acceptsInflated_of_accepts`, the deterministic part;
-  `coverage_close` and `coverage_inflated` over orderings; `card_fragile_le_estimated`, the margin
-  read from the estimated scores.
+* **CB-3**, with an error bound per unit. `accepts_or_fragile` and `acceptsInflated_of_accepts`,
+  the deterministic part; `coverage_close` (bounds carried by the units) and `coverage_inflated`
+  (bounds by ordering and position) over orderings; `card_fragile_le_estimated` and
+  `fragileEstimated_mono`, the margin read from the estimated scores and any dominating bounds.
 -/
 
 open Finset
@@ -301,6 +302,20 @@ reorders their scores with them. -/
 def Equivariant {Z α : Type*} (C : Finset ι) (S : (ι → Z) → ι → α) : Prop :=
   ∀ σ ∈ permsOn C, ∀ z i, S (z ∘ σ) i = S z (σ i)
 
+/-- The share of orderings putting the test unit on a unit with property `q` is the share of units
+of `C` with it. -/
+theorem ratio_permsOn {C : Finset ι} {t : ι} (ht : t ∈ C) (q : ι → Prop) [DecidablePred q] :
+    (((permsOn C).filter fun σ : Equiv.Perm ι => q (σ t)).card : ℝ) / (permsOn C).card =
+      ((C.filter q).card : ℝ) / C.card := by
+  have hcount := card_mul_card_filter_permsOn ht q
+  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
+  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
+  rw [div_eq_div_iff hg.ne' hc.ne']
+  have : ((C.card * ((permsOn C).filter fun σ : Equiv.Perm ι => q (σ t)).card : ℕ) : ℝ) =
+      (((permsOn C).card * (C.filter q).card : ℕ) : ℝ) := by rw [hcount]
+  push_cast at this
+  linarith
+
 /-- **Coverage over orderings is a count of units.** For an equivariant score and any property of
 a unit that reordering carries along, the share of orderings of a fixed data set giving the test
 unit the property is the share of units of `C` that have it. -/
@@ -315,14 +330,7 @@ theorem coverage_eq {Z α : Type*} [LinearOrder α] {C : Finset ι} {t : ι} (ht
     have : S (z ∘ σ) = S z ∘ σ := funext fun i => hS σ hσ z i
     rw [this, hp σ hσ]
   rw [hfilt]
-  have hcount := card_mul_card_filter_permsOn ht (p (S z))
-  have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
-  have hc : (0 : ℝ) < C.card := by exact_mod_cast card_pos.2 ⟨t, ht⟩
-  rw [div_eq_div_iff hg.ne' hc.ne']
-  have : ((C.card * ((permsOn C).filter fun σ : Equiv.Perm ι => p (S z) (σ t)).card : ℕ) : ℝ) =
-      (((permsOn C).card * (C.filter (p (S z))).card : ℕ) : ℝ) := by rw [hcount]
-  push_cast at this
-  linarith
+  exact ratio_permsOn ht (p (S z))
 
 /-- **CB-1, the rank guarantee.** Over every ordering of a fixed data set, an equivariant score's
 test unit is accepted at level `k` at least `1 − k/|C|` of the time, whatever the ties. -/
@@ -878,41 +886,44 @@ section Margin
 
 variable {ι : Type*} [DecidableEq ι]
 
-/-- The units of `C` at least `δ` below `s u`, `u` itself always counted. -/
-noncomputable def rankShift (C : Finset ι) (s : ι → ℝ) (δ : ℝ) (u : ι) : ℕ :=
-  (C.filter fun j => j = u ∨ s j + δ ≤ s u).card
+/-- The units of `C` at least `δ j` below `s u`, `u` itself always counted. -/
+noncomputable def rankShift (C : Finset ι) (s : ι → ℝ) (δ : ι → ℝ) (u : ι) : ℕ :=
+  (C.filter fun j => j = u ∨ s j + δ j ≤ s u).card
 
-/-- **The fragile units**: accepted by the exact score, but not by a margin of `2ε`, so an estimate
-within `ε` can refuse them. -/
-def Fragile (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ℝ) (u : ι) : Prop :=
-  k < rankLe C s u ∧ rankShift C s (2 * ε) u ≤ k
+/-- **The fragile units** under per-unit error bounds `ε`: accepted by the exact score, but with at
+most `k` units of `C` at least `ε j + ε u` below it, itself counted, so estimates within their
+bounds can refuse it. With every `ε j = ε` the shift is `2ε`. -/
+def Fragile (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ι → ℝ) (u : ι) : Prop :=
+  k < rankLe C s u ∧ rankShift C s (fun j => ε j + ε u) u ≤ k
 
-/-- The fragile band read from estimated scores alone. -/
-def FragileEstimated (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ℝ) (u : ι) : Prop :=
-  k < (C.filter fun j => s j ≤ s u + 2 * ε).card ∧ rankShift C s (4 * ε) u ≤ k
+/-- **The inflated rule** (Ndiaye's stable set): accept `u` when more than `k` units of `C` have an
+estimate, lowered by its bound, at most `u`'s, raised by its own. With every `ε j = ε`: at most
+`2ε` above `u`'s. -/
+def AcceptsInflated (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ι → ℝ) (u : ι) : Prop :=
+  k < (C.filter fun j => s j - ε j ≤ s u + ε u).card
 
-/-- **The inflated rule**: accept `u` when more than `k` estimated scores sit at most `2ε` above its
-own. -/
-def AcceptsInflated (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ℝ) (u : ι) : Prop :=
-  k < (C.filter fun j => s j ≤ s u + 2 * ε).card
+/-- The fragile band read from estimated scores and their bounds alone: accepted by the inflated
+rule, with at most `k` units at least `2ε j + 2ε u` below. With every `ε j = ε`: `4ε`. -/
+def FragileEstimated (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ι → ℝ) (u : ι) : Prop :=
+  AcceptsInflated k C s ε u ∧ rankShift C s (fun j => 2 * ε j + 2 * ε u) u ≤ k
 
-noncomputable instance (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ℝ) (u : ι) :
+noncomputable instance (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ι → ℝ) (u : ι) :
     Decidable (Fragile k C s ε u) :=
   inferInstanceAs (Decidable (_ ∧ _))
 
-noncomputable instance (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ℝ) (u : ι) :
-    Decidable (FragileEstimated k C s ε u) :=
-  inferInstanceAs (Decidable (_ ∧ _))
-
-noncomputable instance (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ℝ) (u : ι) :
+noncomputable instance (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ι → ℝ) (u : ι) :
     Decidable (AcceptsInflated k C s ε u) :=
   inferInstanceAs (Decidable (_ < _))
 
-/-- An estimate within `ε` of the exact score on `C` gives each unit of `C` at least the exact
-score's `2ε`-shifted rank. -/
-theorem rankShift_le_rankLe {C : Finset ι} {s ŝ : ι → ℝ} {ε : ℝ}
-    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε) {u : ι} (hu : u ∈ C) :
-    rankShift C s (2 * ε) u ≤ rankLe C ŝ u := by
+noncomputable instance (k : ℕ) (C : Finset ι) (s : ι → ℝ) (ε : ι → ℝ) (u : ι) :
+    Decidable (FragileEstimated k C s ε u) :=
+  inferInstanceAs (Decidable (_ ∧ _))
+
+/-- Estimates within their bounds on `C` give each unit of `C` at least the exact score's shifted
+rank. -/
+theorem rankShift_le_rankLe {C : Finset ι} {s ŝ ε : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C) :
+    rankShift C s (fun j => ε j + ε u) u ≤ rankLe C ŝ u := by
   refine card_le_card fun j hj => ?_
   rw [mem_filter] at hj ⊢
   refine ⟨hj.1, ?_⟩
@@ -922,19 +933,19 @@ theorem rankShift_le_rankLe {C : Finset ι} {s ŝ : ι → ℝ} {ε : ℝ}
     have hu' := abs_le.1 (hclose u hu)
     linarith
 
-/-- **CB-3, the deterministic part.** An estimate within `ε` of the exact score refuses a unit the
-exact score accepts only when that unit is fragile. -/
-theorem accepts_or_fragile {k : ℕ} {C : Finset ι} {s ŝ : ι → ℝ} {ε : ℝ}
-    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε) {u : ι} (hu : u ∈ C) (h : Accepts k C s u) :
+/-- **CB-3, the deterministic part.** Estimates within their bounds refuse a unit the exact score
+accepts only when that unit is fragile. -/
+theorem accepts_or_fragile {k : ℕ} {C : Finset ι} {s ŝ ε : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C) (h : Accepts k C s u) :
     Accepts k C ŝ u ∨ Fragile k C s ε u := by
-  by_cases hf : rankShift C s (2 * ε) u ≤ k
+  by_cases hf : rankShift C s (fun j => ε j + ε u) u ≤ k
   · exact Or.inr ⟨h, hf⟩
   · exact Or.inl (lt_of_lt_of_le (not_le.1 hf) (rankShift_le_rankLe hclose hu))
 
 omit [DecidableEq ι] in
 /-- The inflated rule keeps every unit the exact score accepts. -/
-theorem acceptsInflated_of_accepts {k : ℕ} {C : Finset ι} {s ŝ : ι → ℝ} {ε : ℝ}
-    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε) {u : ι} (hu : u ∈ C) (h : Accepts k C s u) :
+theorem acceptsInflated_of_accepts {k : ℕ} {C : Finset ι} {s ŝ ε : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C) (h : Accepts k C s u) :
     AcceptsInflated k C ŝ ε u := by
   refine lt_of_lt_of_le h (card_le_card fun j hj => ?_)
   rw [mem_filter] at hj ⊢
@@ -943,11 +954,12 @@ theorem acceptsInflated_of_accepts {k : ℕ} {C : Finset ι} {s ŝ : ι → ℝ}
   exact ⟨hj.1, by linarith [hj.2]⟩
 
 omit [DecidableEq ι] in
-/-- The other side: an estimate accepts a unit the exact score refuses only when that unit sits
-within `2ε` of acceptance. With `accepts_or_fragile`, a decision changes only inside the band. -/
-theorem accepts_shift_of_accepts_close {k : ℕ} {C : Finset ι} {s ŝ : ι → ℝ} {ε : ℝ}
-    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε) {u : ι} (hu : u ∈ C) (h : Accepts k C ŝ u) :
-    k < (C.filter fun j => s j ≤ s u + 2 * ε).card := by
+/-- The other side: estimates accept a unit the exact score refuses only when that unit sits within
+`ε j + ε u` of acceptance (Ndiaye's deflated set). With `accepts_or_fragile`, a decision changes
+only inside the band. -/
+theorem accepts_shift_of_accepts_close {k : ℕ} {C : Finset ι} {s ŝ ε : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C) (h : Accepts k C ŝ u) :
+    k < (C.filter fun j => s j ≤ s u + (ε j + ε u)).card := by
   refine lt_of_lt_of_le h (card_le_card fun j hj => ?_)
   rw [mem_filter] at hj ⊢
   have hj' := abs_le.1 (hclose j hj.1)
@@ -955,64 +967,74 @@ theorem accepts_shift_of_accepts_close {k : ℕ} {C : Finset ι} {s ŝ : ι → 
   exact ⟨hj.1, by linarith [hj.2]⟩
 
 /-- **The engine's reading.** A fragile unit of the exact score sits in the band read from the
-estimated scores alone. -/
-theorem fragileEstimated_of_fragile {k : ℕ} {C : Finset ι} {s ŝ : ι → ℝ} {ε : ℝ}
-    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε) {u : ι} (hu : u ∈ C) (h : Fragile k C s ε u) :
+estimated scores and their bounds alone. -/
+theorem fragileEstimated_of_fragile {k : ℕ} {C : Finset ι} {s ŝ ε : ι → ℝ}
+    (hclose : ∀ j ∈ C, |ŝ j - s j| ≤ ε j) {u : ι} (hu : u ∈ C) (h : Fragile k C s ε u) :
     FragileEstimated k C ŝ ε u := by
+  refine ⟨acceptsInflated_of_accepts hclose hu h.1, le_trans (card_le_card fun j hj => ?_) h.2⟩
+  rw [mem_filter] at hj ⊢
+  refine ⟨hj.1, ?_⟩
+  rcases hj.2 with rfl | h'
+  · exact Or.inl rfl
+  · have hj' := abs_le.1 (hclose j hj.1)
+    have hu' := abs_le.1 (hclose u hu)
+    exact Or.inr (by linarith)
+
+/-- The estimated band only widens with the bounds, so the engine may read it with any bounds that
+dominate the true ones. -/
+theorem fragileEstimated_mono {k : ℕ} {C : Finset ι} {s ε ε' : ι → ℝ} (hε : ∀ j, ε j ≤ ε' j)
+    {u : ι} (h : FragileEstimated k C s ε u) : FragileEstimated k C s ε' u := by
   refine ⟨lt_of_lt_of_le h.1 (card_le_card fun j hj => ?_),
     le_trans (card_le_card fun j hj => ?_) h.2⟩
   · rw [mem_filter] at hj ⊢
-    have hj' := abs_le.1 (hclose j hj.1)
-    have hu' := abs_le.1 (hclose u hu)
-    exact ⟨hj.1, by linarith [hj.2]⟩
+    exact ⟨hj.1, by linarith [hj.2, hε j, hε u]⟩
   · rw [mem_filter] at hj ⊢
     refine ⟨hj.1, ?_⟩
-    rcases hj.2 with rfl | h'
-    · exact Or.inl rfl
-    · have hj' := abs_le.1 (hclose j hj.1)
-      have hu' := abs_le.1 (hclose u hu)
-      exact Or.inr (by linarith)
+    rcases hj.2 with h' | h'
+    · exact Or.inl h'
+    · exact Or.inr (by linarith [hε j, hε u])
 
 variable [Fintype ι]
 
-theorem rankShift_comp {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (s : ι → ℝ)
-    (δ : ℝ) (u : ι) : rankShift C (s ∘ σ) δ u = rankShift C s δ (σ u) := by
-  apply card_equiv σ
-  intro j
-  simp only [mem_filter, Function.comp_apply, mem_iff_of_mem_permsOn hσ, σ.injective.eq_iff]
-
 theorem fragile_comp {k : ℕ} {C : Finset ι} {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C)
-    (s : ι → ℝ) (ε : ℝ) (u : ι) : Fragile k C (s ∘ σ) ε u ↔ Fragile k C s ε (σ u) := by
-  simp only [Fragile, rankLe_comp hσ, rankShift_comp hσ]
+    (s ε : ι → ℝ) (u : ι) : Fragile k C (s ∘ σ) (ε ∘ σ) u ↔ Fragile k C s ε (σ u) := by
+  have h : rankShift C (s ∘ σ) (fun j => (ε ∘ σ) j + (ε ∘ σ) u) u =
+      rankShift C s (fun j => ε j + ε (σ u)) (σ u) := by
+    apply card_equiv σ
+    intro j
+    simp only [mem_filter, Function.comp_apply, mem_iff_of_mem_permsOn hσ, σ.injective.eq_iff]
+  simp only [Fragile, rankLe_comp hσ, h]
 
-/-- **CB-3 over orderings.** The exact score `S` is equivariant; the estimate `ŝ σ` for the
-ordering `σ` is anything within `ε` of it on `C` (Monte Carlo error, an asymmetric computation).
-The estimate covers at least `1 − (k + |M|)/|C|`, `M` the fragile units of the exact score. -/
+/-- **CB-3 over orderings.** The exact score `S` is equivariant; each unit's error bound travels
+with it (`ε` indexed by the units of the fixed data set); the estimate `ŝ σ` for the ordering `σ`
+is anything within those bounds on `C` (Monte Carlo error, an asymmetric computation). The estimate
+covers at least `1 − (k + |M|)/|C|`, `M` the fragile units of the exact score. -/
 theorem coverage_close {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C) {S : (ι → Z) → ι → ℝ}
-    (hS : Equivariant C S) (z : ι → Z) (ŝ : Equiv.Perm ι → ι → ℝ) {ε : ℝ}
-    (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j - S (z ∘ σ) j| ≤ ε) (k : ℕ) :
+    (hS : Equivariant C S) (z : ι → Z) (ŝ : Equiv.Perm ι → ι → ℝ) (ε : ι → ℝ)
+    (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j - S (z ∘ σ) j| ≤ ε (σ j)) (k : ℕ) :
     1 - ((k : ℝ) + (C.filter fun u => Fragile k C (S z) ε u).card) / C.card ≤
       (((permsOn C).filter fun σ : Equiv.Perm ι => Accepts k C (ŝ σ) t).card : ℝ) /
         (permsOn C).card := by
+  have hfun : ∀ σ ∈ permsOn C, S (z ∘ σ) = S z ∘ σ := fun σ hσ => funext fun i => hS σ hσ z i
   have hsub : ((permsOn C).filter fun σ : Equiv.Perm ι => Accepts k C (S (z ∘ σ)) t) ⊆
       ((permsOn C).filter fun σ : Equiv.Perm ι => Accepts k C (ŝ σ) t) ∪
-        (permsOn C).filter fun σ : Equiv.Perm ι => Fragile k C (S (z ∘ σ)) ε t := by
+        (permsOn C).filter fun σ : Equiv.Perm ι => Fragile k C (S z) ε (σ t) := by
     intro σ hσ
     rw [mem_filter] at hσ
     rw [mem_union, mem_filter, mem_filter]
-    rcases accepts_or_fragile (hclose σ hσ.1) ht hσ.2 with h | h
+    rcases accepts_or_fragile (ε := ε ∘ σ) (hclose σ hσ.1) ht hσ.2 with h | h
     · exact Or.inl ⟨hσ.1, h⟩
-    · exact Or.inr ⟨hσ.1, h⟩
+    · rw [hfun σ hσ.1, fragile_comp hσ.1] at h
+      exact Or.inr ⟨hσ.1, h⟩
   have hcard := (card_le_card hsub).trans (card_union_le _ _)
   have hacc := coverage_orderings ht hS z k
-  have hfrag := coverage_eq ht hS z (fun s u => Fragile k C s ε u)
-    (fun σ hσ s u => fragile_comp hσ s ε u)
+  have hfrag := ratio_permsOn ht (fun u => Fragile k C (S z) ε u)
   have hg : (0 : ℝ) < (permsOn C).card := by exact_mod_cast card_permsOn_pos C
   have hcard' : (((permsOn C).filter fun σ : Equiv.Perm ι => Accepts k C (S (z ∘ σ)) t).card : ℝ)
       / (permsOn C).card ≤
       (((permsOn C).filter fun σ : Equiv.Perm ι => Accepts k C (ŝ σ) t).card : ℝ) /
         (permsOn C).card +
-      (((permsOn C).filter fun σ : Equiv.Perm ι => Fragile k C (S (z ∘ σ)) ε t).card : ℝ) /
+      (((permsOn C).filter fun σ : Equiv.Perm ι => Fragile k C (S z) ε (σ t)).card : ℝ) /
         (permsOn C).card := by
     rw [← add_div]
     exact div_le_div_of_nonneg_right (by exact_mod_cast hcard) hg.le
@@ -1021,15 +1043,16 @@ theorem coverage_close {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C) {S : 
   linarith
 
 /-- **The inflated rule over orderings** keeps CB-1's guarantee, `1 − k/|C|`, at the price of a
-wider set. -/
+wider set. The bounds may differ by ordering and by position, as Monte Carlo errors do (the
+candidate's against a data unit's). -/
 theorem coverage_inflated {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C) {S : (ι → Z) → ι → ℝ}
-    (hS : Equivariant C S) (z : ι → Z) (ŝ : Equiv.Perm ι → ι → ℝ) {ε : ℝ}
-    (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j - S (z ∘ σ) j| ≤ ε) (k : ℕ) :
+    (hS : Equivariant C S) (z : ι → Z) (ŝ ε : Equiv.Perm ι → ι → ℝ)
+    (hclose : ∀ σ ∈ permsOn C, ∀ j ∈ C, |ŝ σ j - S (z ∘ σ) j| ≤ ε σ j) (k : ℕ) :
     1 - (k : ℝ) / C.card ≤
-      (((permsOn C).filter fun σ : Equiv.Perm ι => AcceptsInflated k C (ŝ σ) ε t).card : ℝ) /
+      (((permsOn C).filter fun σ : Equiv.Perm ι => AcceptsInflated k C (ŝ σ) (ε σ) t).card : ℝ) /
         (permsOn C).card := by
   have hsub : ((permsOn C).filter fun σ : Equiv.Perm ι => Accepts k C (S (z ∘ σ)) t) ⊆
-      (permsOn C).filter fun σ : Equiv.Perm ι => AcceptsInflated k C (ŝ σ) ε t := by
+      (permsOn C).filter fun σ : Equiv.Perm ι => AcceptsInflated k C (ŝ σ) (ε σ) t := by
     intro σ hσ
     rw [mem_filter] at hσ ⊢
     exact ⟨hσ.1, acceptsInflated_of_accepts (hclose σ hσ.1) ht hσ.2⟩
@@ -1038,15 +1061,16 @@ theorem coverage_inflated {Z : Type*} {C : Finset ι} {t : ι} (ht : t ∈ C) {S
     (div_le_div_of_nonneg_right (by exact_mod_cast card_le_card hsub) hg.le)
 
 /-- **The margin read from the estimate.** For every ordering, the exact score's fragile count is
-at most the count of the band read from that ordering's estimated scores, so the engine can
-report `1 − (k + m̂)/|C|` with `m̂` read from the scores it has. -/
+at most the count of the band read from that ordering's estimates and the units' bounds, so the
+engine can report `1 − (k + m̂)/|C|` with `m̂` read from what it holds (with any dominating bounds,
+by `fragileEstimated_mono`). -/
 theorem card_fragile_le_estimated {Z : Type*} {C : Finset ι} {S : (ι → Z) → ι → ℝ}
-    (hS : Equivariant C S) (z : ι → Z) {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (ŝ : ι → ℝ)
-    {ε : ℝ} (hclose : ∀ j ∈ C, |ŝ j - S (z ∘ σ) j| ≤ ε) (k : ℕ) :
+    (hS : Equivariant C S) (z : ι → Z) {σ : Equiv.Perm ι} (hσ : σ ∈ permsOn C) (ŝ ε : ι → ℝ)
+    (hclose : ∀ j ∈ C, |ŝ j - S (z ∘ σ) j| ≤ ε (σ j)) (k : ℕ) :
     (C.filter fun u => Fragile k C (S z) ε u).card ≤
-      (C.filter fun u => FragileEstimated k C ŝ ε u).card := by
+      (C.filter fun u => FragileEstimated k C ŝ (ε ∘ σ) u).card := by
   have heq : (C.filter fun u => Fragile k C (S z) ε u).card =
-      (C.filter fun u => Fragile k C (S (z ∘ σ)) ε u).card := by
+      (C.filter fun u => Fragile k C (S (z ∘ σ)) (ε ∘ σ) u).card := by
     symm
     apply card_equiv σ
     intro u

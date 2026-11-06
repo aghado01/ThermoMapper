@@ -2,13 +2,13 @@
 
 Pins the contract of the engine's conformal layer, one layer over retained draws and pointwise densities for every model with a pointwise density ([E16](../../../issues/regression/bass/extensions-brief.md#conformal-bayes-the-consumer)). The layer owns coverage and the score owns width. These are the finite statements of that split. They are the sibling of [GuardedEstimator](../BASS/guarded-estimator-lemmas.md): there, means valid whatever the emulator does; here, prediction sets valid whatever the model does. Written from the [chip brief](conformal-chip-brief.md).
 
-**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (88 declarations, PROOF-CLOSED; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
+**Status (2026-11-06).** Proved in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, with no apologies (89 declarations, PROOF-CLOSED; `#print axioms` shows `propext`, `Classical.choice`, `Quot.sound` only):
 - CB-1: `card_rankLe_le`, `coverage_orderings`, `coverage_orderings_eq`, `coverage_strict_le`, `coverage_orderings_le`, `rank_uniform`, `coverage_tieBreak`, `coverage_given`, `coverage_law`, `coverage_stratum`;
 - CB-2: `split_coverage`, `exchangeable_given_training`, `cqr_ordConnected`;
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
-- CB-3: `accepts_or_fragile`, `accepts_shift_of_accepts_close`, `acceptsInflated_of_accepts`, `fragileEstimated_of_fragile`, `coverage_close`, `coverage_inflated`, `card_fragile_le_estimated`.
+- CB-3, with an error bound per unit: `accepts_or_fragile`, `accepts_shift_of_accepts_close`, `acceptsInflated_of_accepts`, `fragileEstimated_of_fragile`, `fragileEstimated_mono`, `coverage_close`, `coverage_inflated`, `card_fragile_le_estimated`.
 
-[`conformal-checks.py`](conformal-checks.py) holds the exact-arithmetic checks, run before the Lean. Every assertion holds. Changed from the brief: CB-1's upper bound is an equality at the grid levels, and Hoff's strict rule fails under ties; CB-3's band is one-sided and tight, and it gives a third option, the inflated rule. Nothing proved false. CB-3's prior art was read in full on 2026-11-06; the inflated rule is known, and the margin was not found. Open: the law forms on continuous spaces, CB-3's margin under an ε that holds only with high probability (for the inflated rule, Bhattacharyya et al. give 1 − α − 3√ν), and the Hoff finding under CB-4.
+[`conformal-checks.py`](conformal-checks.py) holds the exact-arithmetic checks, run before the Lean. Every assertion holds. Changed from the brief: CB-1's upper bound is an equality at the grid levels, and Hoff's strict rule fails under ties; CB-3's band is one-sided and tight, its bounds are per unit, and it gives a third option, the inflated rule. Nothing proved false. CB-3's prior art was read in full on 2026-11-06; the inflated rule is known, and the margin was not found. Open: the law forms on continuous spaces, CB-3's margin under an ε that holds only with high probability (for the inflated rule, Bhattacharyya et al. give 1 − α − 3√ν), and the Hoff finding under CB-4.
 
 **Conventions, fixed here and used throughout.**
 - A score is a **conformity** score: higher conforms better. The engine's pointwise log density is one, and a monotone map of every unit's score changes nothing.
@@ -119,32 +119,39 @@ The strict rule covers at most 1 − k/m (`coverage_strict_le`). With distinct s
 
 ## CB-3 — what an imperfect score costs
 
-**Claim, the deterministic part.** Let ŝ be within ε of an exact score s on C. Then:
-- ŝ refuses a unit that s accepts only when the unit is **fragile** (`accepts_or_fragile`). Fragile means accepted by s but with no more than k units of C at least 2ε below it, itself counted (`Fragile`).
-- ŝ accepts a unit that s refuses only when the unit sits within 2ε of acceptance (`accepts_shift_of_accepts_close`).
-- So a decision changes only inside a band around the threshold. With distinct scores, the loss side of that band is M = {u : s₍ₖ₊₁₎ ≤ s_u < s₍ₖ₎ + 2ε}: the accepted units within 2ε of the highest refused score.
+**Bounds.** Each unit j carries its own error bound εⱼ, its Monte Carlo error for instance. With every εⱼ equal to ε, the shifts below are 2ε and 4ε, which is how the brief posed it. This was generalized on 2026-11-06, following Ndiaye's per-unit τᵢ.
 
-**Claim, over orderings.** Let S be equivariant, and let the estimate ŝ_σ for each ordering σ be anything within ε of S (Monte Carlo error, an asymmetric computation). Then:
-- coverage is at least 1 − (k + |M|)/m, M the exact score's fragile units (`coverage_close`). This is the brief's identity P(test ∈ band) = E|band|/(n + 1), with the one-sided band;
-- the **inflated rule**, which accepts when more than k estimated scores sit at most 2ε above the candidate's, keeps 1 − k/m (`coverage_inflated`, from `acceptsInflated_of_accepts`).
+**Claim, the deterministic part.** Let each ŝⱼ be within εⱼ of an exact score sⱼ on C. Then:
+- ŝ refuses a unit u that s accepts only when u is **fragile** (`accepts_or_fragile`). Fragile means accepted by s, but with no more than k units j of C at least εⱼ + ε_u below it, itself counted (`Fragile`).
+- ŝ accepts a unit that s refuses only when more than k units have sⱼ ≤ s_u + εⱼ + ε_u, so that u is within reach of acceptance (`accepts_shift_of_accepts_close`, Ndiaye's deflated side).
+- So a decision changes only inside a band around the threshold. With uniform ε and distinct scores, the loss side of that band is M = {u : s₍ₖ₊₁₎ ≤ s_u < s₍ₖ₎ + 2ε}: the accepted units within 2ε of the highest refused score.
 
-**The engine's reading.** |M| is at most the count of the band read from any ordering's estimated scores alone (`card_fragile_le_estimated`, from `fragileEstimated_of_fragile`): k < #{ŝⱼ ≤ ŝ_u + 2ε} and at most k units 4ε below. With distinct estimates that is ŝ₍ₖ₊₁₎ − 2ε ≤ ŝ_u < ŝ₍ₖ₎ + 4ε, the brief's "within 4ε" on the high side. So the layer can report 1 − (k + m̂)/m from what it holds.
+**Claim, over orderings.** Let S be equivariant, and let the estimate ŝ_σ for each ordering σ be anything within its bounds (Monte Carlo error, an asymmetric computation).
+- *The margin* (`coverage_close`): with bounds that travel with the units, coverage is at least 1 − (k + |M|)/m, M the exact score's fragile units. This is the brief's identity P(test ∈ band) = E|band|/(n + 1), with the one-sided band.
+- *The inflated rule* (`coverage_inflated`, from `acceptsInflated_of_accepts`): accept u when more than k units have ŝⱼ − εⱼ ≤ ŝ_u + ε_u. It keeps 1 − k/m. Its bounds may differ by ordering and by position, since the candidate's error differs from a data unit's.
 
-**Changed from the brief.** The brief's band is two-sided, |s_test − s₍ₖ₎| ≤ 2ε. The coverage loss needs only the side above the threshold, and the bound is tight: an adversary within ε, the test unit down and the rest up, refuses exactly the units the bound counts. The k-th order statistic moving at most ε is checked, not formalized; the count form replaces it.
+**The engine's reading.** |M| is at most the count of the band read from any ordering's estimates and bounds alone (`card_fragile_le_estimated`, from `fragileEstimated_of_fragile`). That band holds the units the inflated rule accepts with at most k units 2εⱼ + 2ε_u below them. It only widens as the bounds grow (`fragileEstimated_mono`), so any dominating bounds will do. With uniform ε and distinct estimates it is ŝ₍ₖ₊₁₎ − 2ε ≤ ŝ_u < ŝ₍ₖ₎ + 4ε, the brief's "within 4ε" on the high side. So the layer can report 1 − (k + m̂)/m from what it holds.
+
+**Where per-unit bounds pay.** Monte Carlo error attaches to a position, the candidate's or a data unit's, more than to a unit.
+- The inflated rule takes bounds by position, so it gains directly: the candidate's larger error no longer widens every comparison.
+- The margin needs bounds carried by the units. Take each unit's bound as its worst error over the orderings: every unit is the candidate in some ordering, so it inherits the candidate's error. In the checks' conformal-Bayes case that bound equals the uniform one.
+- So the margin gains only where units differ in themselves, a unit in a tail for instance.
+
+**Changed from the brief.** The brief's band is two-sided, |s_test − s₍ₖ₎| ≤ 2ε. The coverage loss needs only the side above the threshold, and the bound is tight: an adversary within the bounds, the test unit down and the rest up, refuses exactly the units the bound counts. The bounds are per unit. The k-th order statistic moving at most ε is checked for uniform ε, not formalized; the count form replaces it.
 
 **Checks.**
-- The deterministic part holds on 57,240 cases, exhaustive on a grid and over a seeded random sweep. A loss lies only in M, the inflated rule keeps every exact acceptance, M lies inside the estimated band, and order statistics move at most ε.
-- The adversary attains the bound for every unit.
-- Over orderings, the bound holds for an adversarial and a noisy estimate, and is attained by the adversary with distinct scores.
-- Conformal Bayes by add-one-in weights over T = 20 and 200 draws on a Beta–Bernoulli grid: ε is 0.007 to 0.073, and every bound holds. Here the draws' decisions match the exact ones.
+- The deterministic part holds on 150,435 cases: exhaustive on grids (uniform ε to m = 4, per-unit ε to m = 3) and over a seeded random sweep. A loss lies only in M, the inflated rule keeps every exact acceptance, M lies inside the estimated band, and with uniform ε order statistics move at most ε.
+- With uniform or per-unit bounds, the adversary attains the bound for every unit.
+- Over orderings, the inflated rule holds with bounds by unit and by position. With bounds carried by the units, the margin holds for an adversarial and a noisy estimate, the adversary attains it with distinct scores, and every ordering's estimated band counts at least |M|.
+- Conformal Bayes by add-one-in weights over T = 20 and 200 draws on a Beta–Bernoulli grid: ε is 0.007 to 0.073, and every bound holds, per unit and by position too. Here the draws' decisions match the exact ones, and each unit's worst error equals the uniform ε.
 
-**Decision: whether the full-conformal layer reports its margin, and when it falls back to the split form.** One lemma gives three policies.
-- *Report the margin:* coverage ≥ 1 − (k + m̂)/m, with m̂ the estimated band's count, taken as the maximum over the candidates on the grid.
-- *Inflate by 2ε* (Ndiaye's stable sets): keep 1 − k/m at the cost of width.
-- *Fall back to the split form (CB-2):* when m̂/m is too large for the requested level, or when ε cannot be trusted.
+**Decision: whether the full-conformal layer reports its margin, and when it falls back to the split form.** One lemma gives these policies.
+- *Report the margin:* coverage ≥ 1 − (k + m̂)/m, with m̂ the estimated band's count, read with bounds carried by the units and taken as the maximum over the candidates on the grid.
+- *Inflate by each position's bound* (Ndiaye's stable sets): keep 1 − k/m at the cost of width. The width follows each estimate's own error, the candidate's included.
+- *Fall back to the split form (CB-2):* when m̂/m is too large for the requested level, or when the bounds cannot be trusted.
 - *Correct by tournament* (Bhattacharyya, Zhang and Barber, under prior art): full data and 1 − 2α whatever the draws, at the cost of n leave-one-out chains.
 
-ε is a sure bound in these statements. A Monte Carlo ε holds only with some probability, and its failure probability adds to the miscoverage. ε comes from the sampler's own error estimate for each unit's add-one-in score, so it is only as good as the mixing. A chain that fails its diagnostics sends the layer to the split form.
+The bounds are sure in these statements. A Monte Carlo bound holds only with some probability, and its failure probability adds to the miscoverage. The bounds come from the sampler's own error estimate for each add-one-in score, so they are only as good as the mixing. A chain that fails its diagnostics sends the layer to the split form or the tournament.
 
 **Prior art** (read on 2026-11-06 at their theorems, from `gauntlet/conformal-bayes` and `PDFs/Bayesian/ndiaye22a.pdf`).
 - *The inflated rule is known.*
