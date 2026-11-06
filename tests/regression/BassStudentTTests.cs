@@ -262,8 +262,13 @@ public sealed class BassStudentTTests(ITestOutputHelper output)
     {
         (BassData data, BassFit fit) = TFit.Value;
         PointwiseLogDensity pointwise = fit.PointwiseLogDensity(data);
-        Assert.Contains(pointwise.Latents, l => l.Scope == LatentScope.Observation && l.Treatment == LatentTreatment.IntegratedGivenOthers);
-        BassPrediction at = fit.Predict(data, PredictionCases.Of(data), new BassPredictOptions { Predictive = false });
+        // Each vᵢ is integrated against its prior, which no other observation moves given the globals: an in-sample term, so WAIC reads it
+        // and PSIS-LOO has an lppd to subtract from.
+        Assert.Contains(pointwise.Latents, l => l.Scope == LatentScope.Observation && l.Treatment == LatentTreatment.Integrated);
+        Assert.False(pointwise.LeavesUnitsOut);
+        Assert.True(double.IsFinite(PredictiveChecks.Waic(pointwise).Elpd));
+        Assert.True(double.IsFinite(PredictiveChecks.PsisLoo(pointwise).EffectiveParameters));
+        BassPrediction at =fit.Predict(data, PredictionCases.Of(data), new BassPredictOptions { Predictive = false });
         ReadOnlySpan<double> y = data.Response.Values;
         for (int d = 0; d < at.DrawCount; d++)
         {

@@ -89,19 +89,32 @@ public static class BassPointwise
         var fit = new BassDrawFit(model, terms);
         double[,] values = collapsed ? Collapsed(model, fit, pooled, partition, nameof(draws)) : Retained(model, fit, pooled, partition);
 
+        List<LatentReport> latents = Latents(model, pooled, collapsed);
+        return weights is null
+            ? new PointwiseLogDensity(values, partition, latents, chains)
+            : new PointwiseLogDensity(values, partition, latents) { Weights = weights };
+    }
+
+    /// <summary>
+    /// How the terms treat each latent, for <paramref name="pooled"/>'s draws: the structure, τ, σ²'s rate, the coefficients and σ² global
+    /// and conditioned on, or the last two integrated given the rest for the collapsed content; a noise law's latent per observation
+    /// integrated out, its prior being independent of every other observation's given the globals; a moved working response's offset and
+    /// weights conditioned on. The candidate density (<see cref="BassCandidates"/>) reports the same, since every unit is read by one
+    /// density (CB-4).
+    /// </summary>
+    internal static List<LatentReport> Latents(BassModel model, List<BassDraw> pooled, bool collapsed)
+    {
         LatentTreatment treatment = collapsed ? LatentTreatment.IntegratedGivenOthers : LatentTreatment.Conditioned;
         var latents = new List<LatentReport> { new("structure", LatentScope.Global, LatentTreatment.Conditioned) };
         if (model.Target.SamplesTau) latents.Add(new LatentReport("prior precision τ", LatentScope.Global, LatentTreatment.Conditioned));
         if (model.Target.Sigma2Rate is not null) latents.Add(new LatentReport("σ²'s rate", LatentScope.Global, LatentTreatment.Conditioned));
         if (model.Observation.Law is not null)
-            latents.Add(new LatentReport("the noise's latent per observation", LatentScope.Observation, LatentTreatment.IntegratedGivenOthers));
+            latents.Add(new LatentReport("the noise's latent per observation", LatentScope.Observation, LatentTreatment.Integrated));
         else if (pooled.Exists(d => !ReferenceEquals(d.WorkingOn(model), model.Working)))
             latents.Add(new LatentReport("the working response's offset and weights", LatentScope.Observation, LatentTreatment.Conditioned));
         latents.Add(new LatentReport("coefficients a", LatentScope.Global, treatment));
         latents.Add(new LatentReport("noise variance σ²", LatentScope.Global, treatment));
-        return weights is null
-            ? new PointwiseLogDensity(values, partition, latents, chains)
-            : new PointwiseLogDensity(values, partition, latents) { Weights = weights };
+        return latents;
     }
 
     // Each draw's Normal log terms at its fit and σ², summed over each unit's observations: on the working response it was composed on,
