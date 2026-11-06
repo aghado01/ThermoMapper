@@ -49,8 +49,8 @@ public static class PredictiveMixture
 
     /// <summary>
     /// The <paramref name="probability"/> quantile of the mixture Σₛ wₛ·Fₛ(· − μₛ) of shifted noises <paramref name="noises"/>: the root of
-    /// Σₛ wₛFₛ(q − μₛ) = p, which lies between the least and largest component quantiles, solved as the Gaussian one is, the tail beyond
-    /// ½ through the survival function, by bisection to adjacent doubles. A noise law's predictive (<see cref="IBassNoiseLaw.At"/>).
+    /// Σₛ wₛFₛ(q − μₛ) = p, which lies between the least and largest component quantiles, the tail beyond ½ read through the survival
+    /// function, by Newton with the mixture's density as its slope, kept in the bracket by bisection. A noise law's predictive (<see cref="IBassNoiseLaw.At"/>).
     /// </summary>
     public static double Quantile(ReadOnlySpan<double> means, IReadOnlyList<IContinuousDistribution> noises, ReadOnlySpan<double> weights, double probability)
     {
@@ -70,18 +70,29 @@ public static class PredictiveMixture
         }
         bool upperTail = probability > 0.5;
         double target = (upperTail ? 1.0 - probability : probability) * total;
-        while (true)
+        // Newton on the mass against the target, its slope the mixture's density, kept inside the bracket by bisection: a noise whose CDF
+        // is an integral (the generalized hyperbolic's) is read a few times per root, not once per halving.
+        double x = lower + 0.5 * (upper - lower);
+        for (int iteration = 0; iteration < 400; iteration++)
         {
-            double middle = lower + 0.5 * (upper - lower);
-            if (middle <= lower || middle >= upper) return middle;
-            double mass = 0.0;
+            if (x <= lower || x >= upper) return x;
+            double mass = 0.0, density = 0.0;
             for (int k = 0; k < s; k++)
-                if (weights[k] != 0.0)
-                    mass += weights[k] * (upperTail ? noises[k].Survival(middle - means[k]) : noises[k].Cdf(middle - means[k]));
-            bool below = upperTail ? mass > target : mass < target;
-            if (below) lower = middle;
-            else upper = middle;
+            {
+                if (weights[k] == 0.0) continue;
+                mass += weights[k] * (upperTail ? noises[k].Survival(x - means[k]) : noises[k].Cdf(x - means[k]));
+                density += weights[k] * Math.Exp(noises[k].LogPdf(x - means[k]));
+            }
+            double gap = upperTail ? target - mass : mass - target;   // rises with x
+            if (gap == 0.0) return x;
+            if (gap < 0.0) lower = x;
+            else upper = x;
+            double next = density > 0.0 ? x - gap / density : double.NaN;
+            if (!(next > lower && next < upper)) next = lower + 0.5 * (upper - lower);
+            if (Math.Abs(next - x) <= 1e-15 * Math.Max(1.0, Math.Abs(x))) return next;
+            x = next;
         }
+        return x;
     }
 
     private static double Mass(ReadOnlySpan<double> means, ReadOnlySpan<double> sds, ReadOnlySpan<double> weights, double q, bool above)

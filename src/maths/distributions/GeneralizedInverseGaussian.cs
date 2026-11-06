@@ -13,7 +13,9 @@ namespace Maths.Distributions;
 /// keeps its digits (below). A draw on an interval is the same hat cut to it. The limits draw their own families. Hörmann and Leydold's (2014)
 /// three regions, ratio-of-uniforms with and without a mode shift and a dominating density where the GIG is not T-concave, are the
 /// alternative; this needs no case split and reuses the envelope behind every truncated draw.</para>
-/// <para>No normalizing constant lives here: it reads Bessel K of real order, which arrives with the Normal-Wald's density.</para>
+/// <para><b>Normalizer and moments.</b> The normalizer is Bessel K of real order (<see cref="SpecialFunctions.LogBesselKScaled"/>), closed at the
+/// limits; the mean and variance are its ratios, taken in the expon-scaled logs so the exponentials cancel exactly and the variance's
+/// K_{p+2}K_p/K²_{p+1} − 1 keeps its digits at large √(ab).</para>
 /// A readonly value type.
 /// </summary>
 public readonly struct GeneralizedInverseGaussian
@@ -60,6 +62,55 @@ public readonly struct GeneralizedInverseGaussian
             // The root without cancellation: (q + √(q² + ab))/a, or b/(√(q² + ab) − q) when q < 0.
             double root = Math.Sqrt(q * q + A * B);
             return q >= 0.0 ? (q + root) / A : B / (root - q);
+        }
+    }
+
+    /// <summary>
+    /// ln ∫₀^∞ x^(p−1)·exp(−(a·x + b/x)/2) dx, the normalizer of GIG(<paramref name="p"/>, <paramref name="a"/>, <paramref name="b"/>) for any
+    /// p and finite a, b ≥ 0: ln 2 + (p/2)·ln(b/a) + ln K_p(√(ab)) where both are positive; ln Γ(p) + p·ln(2/a) at b = 0 with p &gt; 0, the
+    /// gamma's; ln Γ(−p) + p·ln(b/2) at a = 0 with p &lt; 0, the inverse gamma's; +∞ where the integral diverges.
+    /// </summary>
+    public static double LogNormalizer(double p, double a, double b)
+    {
+        if (double.IsNaN(p)) return double.NaN;
+        if (!(a >= 0.0 && double.IsFinite(a))) throw new ArgumentOutOfRangeException(nameof(a), "a must be non-negative and finite.");
+        if (!(b >= 0.0 && double.IsFinite(b))) throw new ArgumentOutOfRangeException(nameof(b), "b must be non-negative and finite.");
+        if (a > 0.0 && b > 0.0)
+        {
+            double omega = Math.Sqrt(a) * Math.Sqrt(b);
+            return SpecialFunctions.Ln2 + 0.5 * p * (Math.Log(b) - Math.Log(a)) + SpecialFunctions.LogBesselKScaled(p, omega) - omega;
+        }
+        if (a > 0.0) return p > 0.0 ? SpecialFunctions.LogGamma(p) + p * (SpecialFunctions.Ln2 - Math.Log(a)) : double.PositiveInfinity;
+        if (b > 0.0) return p < 0.0 ? SpecialFunctions.LogGamma(-p) + p * (Math.Log(b) - SpecialFunctions.Ln2) : double.PositiveInfinity;
+        return double.PositiveInfinity;
+    }
+
+    /// <summary>ln of the density at <paramref name="x"/>; −∞ for x ≤ 0.</summary>
+    public double LogPdf(double x) => LogKernel(x) - LogNormalizer(P, A, B);
+
+    /// <summary>E[x]: √(b/a)·K_{p+1}(√(ab))/K_p(√(ab)); 2p/a at b = 0; b/(2(−p − 1)) at a = 0 for p &lt; −1, +∞ otherwise.</summary>
+    public double Mean
+    {
+        get
+        {
+            if (B == 0.0) return 2.0 * P / A;
+            if (A == 0.0) return P < -1.0 ? 0.5 * B / (-P - 1.0) : double.PositiveInfinity;
+            double omega = Math.Sqrt(A) * Math.Sqrt(B);
+            return Math.Exp(0.5 * (Math.Log(B) - Math.Log(A)) + SpecialFunctions.LogBesselKScaled(P + 1.0, omega) - SpecialFunctions.LogBesselKScaled(P, omega));
+        }
+    }
+
+    /// <summary>Var[x]: E[x]²·(K_{p+2}K_p/K²_{p+1} − 1); 4p/a² at b = 0; (b/2)²/((−p − 1)²(−p − 2)) at a = 0 for p &lt; −2, +∞ otherwise.</summary>
+    public double Variance
+    {
+        get
+        {
+            if (B == 0.0) return 4.0 * P / (A * A);
+            if (A == 0.0) return P < -2.0 ? 0.25 * B * B / ((-P - 1.0) * (-P - 1.0) * (-P - 2.0)) : double.PositiveInfinity;
+            double omega = Math.Sqrt(A) * Math.Sqrt(B);
+            double k0 = SpecialFunctions.LogBesselKScaled(P, omega), k1 = SpecialFunctions.LogBesselKScaled(P + 1.0, omega);
+            double k2 = SpecialFunctions.LogBesselKScaled(P + 2.0, omega), mean = Mean;
+            return mean * mean * SpecialFunctions.Expm1(k2 + k0 - 2.0 * k1);
         }
     }
 

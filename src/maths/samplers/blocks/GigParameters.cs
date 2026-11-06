@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json.Serialization;
 using Maths.Distributions;
 
 namespace Maths.Samplers.Blocks;
@@ -23,10 +24,12 @@ public readonly record struct GigParameters(double P, double A, double B)
     /// <summary>The InverseGamma(<paramref name="shape"/>, <paramref name="scale"/>) as the limit a = 0: GIG(−shape, 0, 2·scale).</summary>
     public static GigParameters OfInverseGamma(double shape, double scale) => new(-shape, 0.0, 2.0 * scale);
 
-    /// <summary>Whether this is the gamma limit: b = 0 with p, a &gt; 0.</summary>
+    /// <summary>Whether this is the gamma limit: b = 0 with p, a &gt; 0. Read from the parameters, so not serialized.</summary>
+    [JsonIgnore]
     public bool IsGamma => B == 0.0 && A > 0.0 && P > 0.0;
 
-    /// <summary>Whether this is the inverse-gamma limit: a = 0 with p &lt; 0, b &gt; 0.</summary>
+    /// <summary>Whether this is the inverse-gamma limit: a = 0 with p &lt; 0, b &gt; 0. Read from the parameters, so not serialized.</summary>
+    [JsonIgnore]
     public bool IsInverseGamma => A == 0.0 && B > 0.0 && P < 0.0;
 
     /// <summary>The gamma of the limit b = 0.</summary>

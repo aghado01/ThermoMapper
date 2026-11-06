@@ -207,4 +207,24 @@ public sealed class GbassPrimitiveParityTests(ITestOutputHelper output)
         }
         Assert.Equal(Cases.Count(c => c[0] == 3), n);
     }
+
+    /// <summary>The engine's log Bessel K (E1's slice 3) against base R's <c>besselK(x, ν, expon.scaled = TRUE)</c> at the same points.</summary>
+    [Fact]
+    public void EngineBesselK_MeetsBesselK()
+    {
+        if (Fixture.Value is not { } r) return;
+        int n = 0;
+        double worst = 0.0;
+        foreach (JsonElement c in r.GetProperty("bessel").EnumerateArray())
+        {
+            double x = c.GetProperty("x").GetDouble(), nu = c.GetProperty("nu").GetDouble(), rs = c.GetProperty("log_k_r").GetDouble();
+            double ours = Maths.Distributions.SpecialFunctions.LogBesselK(nu, x), gap = Math.Abs(ours - rs) / Math.Max(1.0, Math.Abs(rs));
+            worst = Math.Max(worst, gap);
+            output.WriteLine($"ln K_{nu}({x}): besselK {rs:R}, the engine's {ours:R}");
+            Assert.True(gap <= 1e-12, $"at ({x}, {nu}): {ours:R} against {rs:R}");
+            n++;
+        }
+        output.WriteLine($"worst relative gap {worst:G3} over {n} points");
+        Assert.Equal(Cases.Count(c => c[0] == 3), n);
+    }
 }

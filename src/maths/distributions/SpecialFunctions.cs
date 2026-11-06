@@ -10,7 +10,7 @@ namespace Maths.Distributions;
 /// each evaluated for the tail it represents directly, so a tail probability far below 1e-308 keeps its digits as
 /// a log; the other tail is its accurate complement.
 /// </summary>
-public static class SpecialFunctions
+public static partial class SpecialFunctions
 {
     private static readonly double[] LanczosG7 =
     {

@@ -134,7 +134,10 @@ public sealed class BassStudentTTests(ITestOutputHelper output)
         Assert.Equal(2 * 25.0 / (9 * 1), new StudentTMixing(5).Variance, 13);
         Assert.Equal(double.PositiveInfinity, new StudentTMixing(2).Mean);
         Assert.Equal(double.PositiveInfinity, new StudentTMixing(4).Variance);
-        Assert.Throws<NotSupportedException>(() => new StudentTMixing(4).SampleConditional(1.0, 1.0, 0.3, 1.0, new Xoshiro256PlusPlus(1)));
+        // A drift is the skewed t (E1's slice 3): GIG mixing at t's prior, draw for draw.
+        var skewed = new GigMixing(new StudentTMixing(4).Prior);
+        Assert.Equal(skewed.SampleConditional(1.0, 1.0, 0.3, 1.0, new Xoshiro256PlusPlus(1)),
+                     new StudentTMixing(4).SampleConditional(1.0, 1.0, 0.3, 1.0, new Xoshiro256PlusPlus(1)));
     }
 
     [Theory]

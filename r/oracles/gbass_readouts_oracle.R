@@ -7,7 +7,8 @@
 #   model: tbass, qbass, nwbass or hbass; key=value pairs go to the wrapper as numeric arguments (df, q, s_beta, m_gamma, s_gamma, ...).
 #
 # Emits { model, args, N, seconds, surface: {mean, q05, q50, q95} at the grid (the draws' f, predict(predictive = FALSE)),
-#   shifted_mean: the mean of f + sqrt(w) beta E[v] at the grid (predict(bias_correct = TRUE), qbass and nwbass), w, beta, gamma, tau,
+#   shifted_mean: the mean of f + sqrt(w) beta E[v] at the grid (predict(bias_correct = TRUE), qbass and nwbass), w, s2 (the noise variance
+#   w(c E[v] + beta^2 Var[v]) per draw, GBASS's own), beta, gamma, tau,
 #   M: {mean, sd, q05, q50, q95}, below_fit: the share of y below the posterior mean surface at the data, cnt1, cnt2 (move counts
 #   proposed and accepted: birth, death, mutation) }.
 
@@ -40,6 +41,6 @@ pick <- function(q) unname(apply(f_grid, 2, quantile, probs = q))
 
 emit_json(list(model = model, args = extra, N = length(y), nmcmc = nmcmc, nburn = nburn, seed = seed, seconds = secs,
                surface = list(mean = colMeans(f_grid), q05 = pick(0.05), q50 = pick(0.5), q95 = pick(0.95)),
-               shifted_mean = shifted, w = summ(fit$w), beta = summ(fit$beta), gamma = summ(fit$gamma), tau = summ(fit$tau),
+               shifted_mean = shifted, w = summ(fit$w), s2 = summ(fit$s2), beta = summ(fit$beta), gamma = summ(fit$gamma), tau = summ(fit$tau),
                M = summ(fit$M), below_fit = mean(y < colMeans(f_data)), cnt1 = fit$cnt1, cnt2 = fit$cnt2),
           args[2], null = "null", na = "null")
