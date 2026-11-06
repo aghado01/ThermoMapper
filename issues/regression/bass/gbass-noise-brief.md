@@ -168,7 +168,7 @@ Newest first.
 | GBP mixing, v's slice step | `GbpParameters`, `GbpMixing`; `IMixingLaw.StepConditional`; `SliceSampler`'s struct overload (`IScalarLogDensity`) |
 | The kinds on the config | `BassNoise.GeneralizedBetaPrime`, `Horseshoe`, `StrawdermanBerger`; `BassNoiseKind.GeneralizedBetaPrime`, `BassNoise.BetaPrimePrior` |
 | The latent block from the current v | `BassLatentScaleBlock` |
-| The pointwise density, opt-in | `IBassNoiseLaw.DensityByQuadrature`, `IMixingLaw.MarginalByQuadrature`; `BassPointwise.LogDensity`'s and `BassFit.PointwiseLogDensity`'s `quadrature` |
+| The pointwise density, opt-in | `IBassNoiseLaw.DensityByQuadrature`, `IMixingLaw.MarginalByQuadrature`; `BassPointwise.LogDensity`'s and `BassFit.PointwiseLogDensity`'s `quadrature`; the conformal layer's candidate density the same (`BassCandidates.LogDensity`, `BassFit.CandidateLogDensity`, in its own commit after that layer's seam landed) |
 | `hbass`'s half-Cauchy | Nothing new: `Sigma2Prior.HalfCauchy()` and `BassSigma2RateBlock`, run under the noise |
 | `hbass` corrected in the oracle | `gbass_readouts_oracle.R`'s `prop_sigma` for `hbass`, v's posterior and step emitted |
 
