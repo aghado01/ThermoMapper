@@ -178,7 +178,7 @@ public sealed record PointwiseLogDensity(double[,] Values, UnitPartition Units, 
     /// <summary>The number of draws S.</summary>
     public int Draws => Values.GetLength(0);
 
-    private static IReadOnlyList<double>? CheckWeights(IReadOnlyList<double>? weights, double[,] values, IReadOnlyList<int>? chains)
+    internal static IReadOnlyList<double>? CheckWeights(IReadOnlyList<double>? weights, double[,] values, IReadOnlyList<int>? chains)
     {
         if (weights is null) return null;
         if (chains is not null) throw new ArgumentException("Weighted draws are a population, not chains: give no chain lengths with them.", nameof(Weights));
@@ -193,7 +193,7 @@ public sealed record PointwiseLogDensity(double[,] Values, UnitPartition Units, 
         return weights;
     }
 
-    private static IReadOnlyList<int>? CheckChains(IReadOnlyList<int>? lengths, double[,] values)
+    internal static IReadOnlyList<int>? CheckChains(IReadOnlyList<int>? lengths, double[,] values)
     {
         if (lengths is null) return null;
         long total = 0;
