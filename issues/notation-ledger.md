@@ -11,6 +11,18 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### w, β, τ, c and v between GBASS and the BASS core (2026-11-05)
+
+- **Kind:** one name for several concepts, and one concept under several names.
+- **Readings:**
+  - w: GBASS's global scale, the core's σ² (`BassDraw.Sigma2`; `gbass-noise-brief.md`, "Why"), against wᵢ and W, the observation weights (`WorkingResponse.Weights`, "BASS: the weighted core").
+  - β: GBASS's skew, the drift per unit v (`ObservationLatents.Skew`, `src/maths/regression/spline/bass/BassNoise.cs:121`), against β and β_c, the centred coefficients in (α, β) ("BASS: the weighted core") and β̂ (`BassDesign.Coefficients`).
+  - τ: GBASS's τ multiplies the coefficients' variance, a ~ N(0, wτI), so it is the reciprocal of the core's τ, which multiplies their precision.
+  - c: GBASS's `scale`, the Gaussian part's variance per unit w·v (`BassNoise.VarianceScale`, `BassNoise.cs:80`), against c, σ²'s shape in `BassResolved`'s (1 − 2c)/N and `BassEvidencePriors` (logged on 2026-11-02 below).
+  - v: GBASS's latent scale (`ObservationLatents.Values`, `BassNoise.cs:118`; `IMixingLaw`), against v = ln r, the hierarchical rate's coordinate ("BASS: priors that stop reading a moving response"; `BassState.LogRate`).
+- **Found:** 2026-11-05, E1's slices 0 and 1 (GBASS's noise on the BASS core).
+- **Note:** the paper and GBASS's code write w, β, τ, c and v as here; the slice's own text writes σ² for w, and m = σβ, s² = σ²c for the mixing law's unit drift and variance.
+
 ### Lens and bracket (2026-11-04)
 
 - **Kind:** one concept under several names.

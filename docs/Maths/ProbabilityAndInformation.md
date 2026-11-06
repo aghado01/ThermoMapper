@@ -173,6 +173,13 @@ The alternatives, with acceptance per proposal and rough nanoseconds per draw (t
   - `qt` overflows to ∞ at ν = ½ and tail −230, where t = 1.03×10¹⁹⁹ holds it.
   - `qbeta` returns a floor of 2⁻¹⁰²³ where the root lies below the double range, as at Beta(0.01, 0.01) and tail −23, whose tail at that floor is −7.8. This side returns 0.
 
+### Normal variance-mean mixtures: the mixing law (E1)
+
+A noise that is Gaussian given a latent per observation, εᵢ | vᵢ ~ N(m·vᵢ, s²·vᵢ), is a normal variance-mean mixture, and its mixing law is v's (`IMixingLaw`, in `Maths.Regression`, since BASS and BARS share it; [the BASS use](./BayesianRegression.md#bass-student-t-noise-the-first-variance-mean-mixture-e1)). It supplies v's prior draw, its conditional given a residual r at a likelihood power b, ∝ p(v)·N(r | m·v, s²·v)^b, the marginal ln ∫ N(r | m·v, s²·v)p(v)dv, and E[v] and Var[v], +∞ where infinite.
+- *Student t* (`StudentTMixing`): v ~ IG(ν/2, ν/2), GIG(−ν/2, 0, ν) in `GigParameters`' form, so at m = 0 the noise is s·t_ν. Its conditional is the inverse gamma IG((ν + b)/2, (ν + b·r²/s²)/2), drawn as the reciprocal of the precision's Gamma; its marginal is the t density. ln Γ((ν + 1)/2) − ln Γ(ν/2) is taken from the two log gammas below ν/2 = 10³ and from Stirling's series term by term above, ½ln x + x(ln(1 + h) − h) + (1/(12(x + ½)) − 1/(12x)) − (1/(360(x + ½)³) − 1/(360x³)), x = ν/2, h = 1/(2x), whose dropped terms are under 10⁻¹⁸ there; and ln(1 + r²/(νs²)) by `SpecialFunctions.Log1p`, public for it. The direct forms, as BARS's `StudentTWeights` takes them, read up to 2.0·10⁻⁵ off, relative, at ν = 3·10¹⁰ on the sweep below.
+- *Checked* (`BassStudentTTests`): the marginal against quadrature of the mixture over ln v, on 11 chosen cases and a seeded sweep of 400 with ν from 0.05 to 10¹¹ and s² over 24 decades, worst relative gap 1.4·10⁻¹³. The quadrature's own inverse-gamma normalizer needed Stirling's form above ν/2 = 10³, or it read 2.5·10⁻¹⁰ low at ν = 10⁶, the cancellation the law avoids. The conditional's draws against the Gamma's mean and log mean at b = 1, 0.4 and 0, within 5 standard errors.
+- *Members to come:* the asymmetric Laplace's exponential mixing and the Normal-Wald's inverse Gaussian, which draw from a GIG with a > 0 (the GIG sampler, E1's slices 2 and 3), and generalized beta prime mixing, which is not conjugate (slice 4). A drift m ≠ 0 is refused until then.
+
 ### Information measures
 
 | Measure | Definition as implemented | Conventions |

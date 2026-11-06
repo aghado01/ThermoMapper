@@ -157,6 +157,50 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### Slice 1: Student t, robust BASS (chip, 2026-11-05)
+
+**Landed** in `c6e0baf` (the code and its tests) and the commit that carries this report (`docs/Maths`, the notation ledger). [The docs' section](../../../docs/Maths/BayesianRegression.md#bass-student-t-noise-the-first-variance-mean-mixture-e1) holds the forms, the alternatives and the checks; this is the account.
+
+| Piece | Where |
+|---|---|
+| The mixing law, shared with BARS: prior draw, conditional at power b, marginal, E[v], Var[v] | `IMixingLaw`, `StudentTMixing` (`src/maths/regression/MixingLaw.cs`); `SpecialFunctions.Log1p` made public for it |
+| The noise on the config, left out of the JSON when null | `BassConfig.Noise`, `BassNoise` (`StudentT(ν, c, reference)`) |
+| The carrier: the latents on the working response (decision 1) | `ObservationLatents`; `WorkingResponse.Latents`, `Moved(offset, weights, latents)` |
+| The observation model and its blocks | `VarianceMeanMixture`, `BassCoefficientsBlock`, `BassLatentScaleBlock`; `BassStructureMoves.DrawSweepFit` |
+| The noise law for the readers | `IBassObservationModel.Law` (null for the Gaussian), `IBassNoiseLaw`; pointwise, prediction (`MeanShifts`, `ObservationMean`, the mixture's quantile over `IContinuousDistribution`s), the training fit's `NoiseSd` |
+| The run and the fingerprint | `BassModel.Create` reads `Noise`; `Bass.Fit`, `Resume` and `Fingerprint` take it through the config |
+| The blocks' counters per chain | `BassChainAccount.Blocks` |
+
+**The gates.**
+- *v's conditional equals `StudentTWeights`' number for number:* from one stream, the law's draw is 1/λ of `StudentTWeights`' weight exactly, 500 residuals at each of ν = 0.5, 3, 4, 30, and the marginals agree to 11 places there. Against R, GBASS's own v conditional under t mixing at a frozen state is that Gamma at every observation (slice 0's `GbassConditionalParityTests`).
+- *Large ν reaches Gaussian BASS's readouts:* ν = 10⁷ against Gaussian BASS, 16 chains of 1,000 draws each, N = 200: σ² 0.23295 against 0.23268 (z −0.47), M 4.275 against 4.239 (z −0.92), the fit at 200 cases rms z 1.06, max 2.54.
+- *`tbass`'s readouts* (`GbassStudentTReadoutTests`, ν = 3, c = ⅓, N = 200, R 6,000 iterations, the engine 4 chains × 1,500 draws): w 0.230 [0.180, 0.289] under the g-prior, 0.235 [0.181, 0.297] under the ridge, against 0.224 [0.174, 0.283]; the surface's means within 0.23 of the wider 90% half-band at worst over 15 grid points, rms 0.13 (under the ridge, worst 0.34, rms 0.19); M 4.17 and 4.63 against 5.29. The differences stated beside it: GBASS's continuous knots and whole-term mutation, pseudo-counts 1 against 5, its raw ridge with the intercept inside and τ ~ IG(½, N/2), its floor on w, λ sampled under Gamma(1, 1) where D02 integrates it.
+- *Gaussian untouched:* the eight pinned hashes and the seams' suites (bit identity, observation model, sweep slots, weighted core, moving response, prior reference, contract, resume) 316 of 316 after the change; the whole regression assembly 1,959 of 1,959. A Gaussian config's JSON has no `Noise` key, so every fingerprint holds.
+- *The law, by Geweke's test:* N = 12, M ≤ 2, proper priors that read no response, 200,000 marginal-conditional draws against 300,000 successive-conditional sweeps, eight functions on four cases (c = 0.7 on two seeds, c = 1, τ held): every |z| ≤ 1.78. Its power, by a deliberate break: dropping c from v's unit variance reads z 75 on mean ln v. The cases take τ ~ Gamma(5, rate 5N) or τ held; under Zellner–Siow's shape ½ the successive chain sticks in ln τ's long left tail (its mean 0.30 above the prior's on one seed, 0.58 below on another, the other seven functions in place), the test's reach rather than the sweep's.
+- *Recovery from truth outside the model:* contaminated normal noise, 0.85·N(0, 0.25²) + 0.15·N(0, 2²), on sin(2πx₁) + x₂, N = 300, six data sets. t(3) BASS's 90% intervals cover 89.5% of 294 grid points of the true surface, RMSE 0.059; Gaussian BASS's 86.4%, RMSE 0.142. Held-out responses inside the 90% predictive intervals: 88.3% under t, 92.7% under the Gaussian.
+- *Primitives, chosen cases and a seeded sweep:* the law's marginal against quadrature of the mixture, 11 chosen and 400 swept cases, ν from 0.05 to 10¹¹, s² over 24 decades: worst relative gap 1.4·10⁻¹³. The conditional's draws against the Gamma's moments at b = 1, 0.4 and 0. The log-gamma ratio across its switch. The sweep found the quadrature reference's own cancellation at ν = 10⁶ (2.5·10⁻¹⁰), fixed in the reference, and BARS's direct forms (below).
+- *Refusals and acceptance* (decision 4): the latent block refused no draw anywhere: 0 of 300,000 in each Geweke case, 0 of 120 per chain in the resume fit, 0 in 50 sweeps on the 80-case fixture. The structure's own moves are counted as before. So F under a moving W stays on the gate that reads W, with nothing yet to weigh against it.
+- *The cost row* (thread cycles, loaded, indicative): a t sweep is 961 µs at the base under the g-form against a Gaussian sweep's 40 (24×), 83 against 2.9 at n 200 (29×), 388 ms against 1.8 at M 200, n 10,000 (216×). Follow, the weighted Gram's refactoring at O(NM²), is 55% of it at the base and 74% at M 200; then the structure step, the pencil's O(p³) per proposal; then v's N draws. The table is in the docs.
+- *Retention:* 15.6 KB a retained draw at N = 1,000 and 1.5 MB at N = 100,000, its working response's weights and v, against about 0.2 KB of its own at M ≈ 10. It dominates a draw. The weights are a function of v, so keeping v alone halves it under t; under skew, where the offset and the shifted response join, it would quarter it.
+- *`docs/Maths`:* the section above, the seams' table, what GBMARS still writes, the corrections table (GBASS's moments where infinite), `ProbabilityAndInformation.md`'s mixing law, the source map. The notation ledger takes w, β, τ, c and v between GBASS and the core.
+
+**Defects.** *Found:* BARS's `StudentTWeights.MarginalLogDensity` takes ln Γ((ν + 1)/2) − ln Γ(ν/2) and ln(1 + x) directly, which lose digits as ν grows: on the law's sweep it reads up to 2.0·10⁻⁵ off, relative, at ν = 3·10¹⁰, where the law holds 1.4·10⁻¹³. No ν BARS takes by default comes near it. Slice 6 routes it through the law. *Corrected:* GBASS's s2 where the moments are infinite (slice 0's finding): the training fit states no noise sd at ν ≤ 2.
+
+**Decisions taken beyond the brief.**
+- *σ² and a ride the chain's own moves within a sweep* (`BassStructureMoves.SweepFit`), not the latent record. Decision 1 put them on the record; but a working response is shared by every chain at the start and by retained draws, so a value that changes within a sweep could ride it only as a copy per sweep, or as shared mutable state between chains. The latents themselves, v and β, are on the record as decided.
+- *What the priors read:* `Moments` by default, which restates D03's read and what Gaussian BASS reads (the moving-response note settles this row at β = 0 under the unweighted Gram); `Robust` and `None` selectable.
+- *c* defaults to 1, `StudentTWeights`' t; (ν − 2)/ν, `tbass`'s, is a value of the same field.
+- *Refused with their slice named:* a tempered rung, SMC and the flat histogram (slice 5), a direct functional response (slice 5), a drift (slices 2 and 3), and the collapsed predictive under a noise law, until it has its own check.
+- *GBASS's floor on w is not ported:* σ² is integrated in the structure step and redrawn with a, with no floor, as D04 has it.
+
+**Left unbuilt, and why.** The retention lever, v alone on a draw with the rest rebuilt on demand: under t it halves the 15.6 KB, and slice 2, where the offset joins, is where it quarters it, so it belongs with the skew. The cost row's direct functional point and the weighted prior Gram's reading: the first is refused in this slice, and the second is no valid chain under a latent scale without the options' step 3.
+
+**Follow-ups, with the decision each would change.**
+- *Retained draws keep v alone.* Decision: what a retained draw holds under a latent noise. Built, retention halves under t and quarters under skew, and the views rebuild the working response from v, O(N) per draw read. Left, long runs at N ≥ 10⁵ hold 1.5 MB a draw. Slice 2's to take.
+- *Structure sweeps per latent move,* the brief's lever after the row. Decision: the default cadence, one each (D04). Follow is most of a t sweep, so k structure sweeps per latent move cut its share by k; it changes the default only if effective sample size per second rises, read across fixtures, with the default staying one otherwise.
+
+**Open, with no decision waiting.** Whether the Geweke test reaches Zellner–Siow's τ at a length a session can run.
+
 ### Slice 0: the oracle modes (chip, 2026-11-05)
 
 **Landed** in `ee2cce6`: four modes under `r/oracles` that run from `r/` against the pinned GBASS 2.0.1, with their parity classes in `tests/oracle` and rows in `r/README.md`'s oracle map. 21 tests, each run against R and each printing its readings, 21 passed (`Maths.Oracle.Tests`, filter `Gbass`, about 85 s together on the loaded machine). A class returns early only when R is absent; a missing package fails it.
