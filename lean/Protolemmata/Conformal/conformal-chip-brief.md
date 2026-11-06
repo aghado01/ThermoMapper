@@ -125,7 +125,7 @@ Newest first.
 - *CB-4:* every unit, the candidate included, is read by one density. The default is latents integrated (OQ17's scope rule, GBASS's pointwise content now); the alternative is the latent-posterior density, with the candidate's latent drawn per draw. Data units at their retained latents with the candidate integrated undercover, so the layer refuses a latent-conditioned matrix.
 - *CB-3:* an estimate within ε costs at most |M|/m, and |M| is read from the estimates (`card_fragile_le_estimated`). The layer reports the margin, inflates by 2ε, or falls back to the split form. ε must be a sure bound, or its failure probability adds to the miscoverage.
 
-E16's "What the conformal literature adds" is unchanged: no result corrects it. One result corrects a line outside it, which is left to you. The bullet "Why the posterior predictive is the score" says Hoff's score "is the add-one-in step above". Hoff's cᵢ is each unit's predictive given every other unit, a leave-one-out. Fong and Holmes's step scores in-sample, p(zᵢ | all units). The two rank differently: on 12 of 216 data sets in the checks' model, and in Hoff's own setting with no covariate, y = (2, 2, 2, 0) puts the lone 0 lowest in-sample and highest by Hoff's. Both cover; Hoff's optimality attaches to cᵢ only.
+E16's "What the conformal literature adds" is unchanged: no result corrects it. One result corrects a line outside it, and at your call that line was corrected on 2026-11-06. The bullet "Why the posterior predictive is the score" said Hoff's score "is the add-one-in step above". Hoff's cᵢ is each unit's predictive given every other unit, a leave-one-out. Fong and Holmes's step scores in-sample, p(zᵢ | all units). The two rank differently: on 12 of 216 data sets in the checks' model, and in Hoff's own setting with no covariate, y = (2, 2, 2, 0) puts the lone 0 lowest in-sample and highest by Hoff's. Both cover; Hoff's optimality attaches to cᵢ only.
 
 **Prior art.**
 - Read: Fong and Holmes's §2–3 (the in-sample score's invariance, the group proposition, the remark on MC samples and exchangeability); Hoff 2023, §4.1.
@@ -156,7 +156,7 @@ E16's "What the conformal literature adds" is unchanged: no result corrects it. 
 - D: had 41 GB free at the start and the end.
 
 **Follow-ups, each with the decision it would change.**
-- *Hoff's score in the layer.* This decides whether the layer offers Hoff's leave-one-out cᵢ, which needs a weight of g(z_new | θ)/g(zᵢ | θ) for each data unit and brings PSIS's instability, and whether E16 keeps claiming Bayes-optimal width for the add-one-in step. It needs your edit of E16's Hoff bullet first.
+- *Hoff's score in the layer.* This decides whether the layer offers Hoff's leave-one-out cᵢ, which needs a weight of g(z_new | θ)/g(zᵢ | θ) for each data unit and brings PSIS's instability, E16's Hoff bullet was corrected on 2026-11-06 and no longer claims Bayes-optimal width for the add-one-in step.
 - *ε as a probabilistic bound.* This decides how the layer sets ε (a concentration bound on the self-normalized add-one-in estimate, or a multiple of its MCSE) and what miscoverage it budgets for ε failing. It changes the margin's reported form.
 - *Open, no decision waiting:* whether the one-sided fragile count is in the literature; the continuous-space law forms; promotion to `Lemmas/`, which waits for semantic review.
 
