@@ -289,6 +289,7 @@ Not taken:
 
 **Building,** by [the layer's brief](../conformal-layer-brief.md#reports):
 - *Slice 0, built 2026-11-06:* the full step over a training density and a candidate density, engine-free (`ConformalBayes`, `CandidateLogDensity`; [ConformalPrediction](../../../docs/Maths/ConformalPrediction.md)). CB-1 is exact by enumeration, and a misspecified fit covers 0.902 against 0.900.
+- *Slice 1, built 2026-11-06:* BASS's candidate density for every noise law (`BassFit.CandidateLogDensity`), the pointwise column bit for bit at training cases. Held-out coverage on contaminated data is 0.890 to 0.905 against 0.900 for Gaussian, t, quantile and Normal-Wald fits, with sets narrower than the Gaussian and quantile fits' own intervals.
 
 The seam was built first. OQ17 (2026-10-23, built 2026-10-24; BASS's terms in S9) gives:
 - every draw's state, retained;

@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0 and 1 started 2026-11-06. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0 and 1 built 2026-11-06 (reports below); slice 2 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -110,6 +110,68 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### 2026-11-06 — Slice 1, BASS's candidate seam
+
+**Landed** on `main`, nothing pushed:
+- `1b51458` fix: a noise law's latent per observation is reported `Integrated` (defect below), and the latent list moves into `BassPointwise.Latents`, which the seam shares.
+- `86aefe1` `BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels)`, in the new `BassCandidates.cs`, with `BassCandidateTests`.
+  - It gives log p(y | x_t, draw) on each new case's grid, in the pointwise density's rows, with its chain lengths or weights and its latent report.
+  - The surface is prediction's. The density is the training terms' own, N(y | f, σ²) or the law's with each latent integrated, for every law.
+  - Refused: a direct functional fit, a weighted fit, and draws whose working response moved.
+- `15c29ce` its section on `ConformalPrediction.md`, and the seam, the corrected report and the API entry on `BayesianRegression.md`.
+
+**Gates.**
+- *At training cases the candidate density is the pointwise column, bit for bit:* largest gap 0, over 120 draws × 80 cases for each of Gaussian, t, quantile, Normal-Wald, skewed t and generalized hyperbolic BASS. The latent report and chains are the same, an SMC fit's weights are carried, and the layer takes every pair.
+- *Held-out coverage from truth outside every model.* The truth is f = sin(2πx₀) + x₁ with noise 0.2ζ plus, one time in seven, 0.8·Exp(1). There are 20 fits per law of n 99, so k 10 of m 100, nominal 0.900, with 50 held-out cases per fit.
+  - The se is the fits' spread: each fit costs seconds, so the design is clustered, and the binomial se alone is 0.0095.
+  - The width is read on 20 cases per fit at grid step 0.08. The model's own 90% interval comes from its predictive draws.
+
+| Fit | Coverage (se) | Width | The model's own interval | Its width | Least ESS at the true value |
+|---|---|---|---|---|---|
+| Gaussian | 0.905 (0.010) | 1.20 | 0.944 | 1.52 | 1.5 (8 of 1,000 below 50) |
+| Student t | 0.894 (0.012) | 1.06 | 0.895 | 1.01 | 347 |
+| Quantile (q 0.5) | 0.895 (0.012) | 1.02 | 0.921 | 1.22 | 87 |
+| Normal-Wald | 0.890 (0.015) | 1.07 | 0.900 | 1.18 | 74 |
+
+  - Two of 1,600 sets split into two intervals, and none reached the grid's ends.
+  - The Gaussian fit's own interval overcovers and is wider, its σ² absorbing the contamination. Its add-one-in weights degenerate at outlying candidates, which is CB-3's margin to read (slice 2).
+- *The cost row* is per grid of 200 at the cost harness's base point (n 1,000), on the cycle clock, indicative:
+
+| Law | S | The candidate density | Per candidate | The layer's step |
+|---|---|---|---|---|
+| Gaussian | 1,000 | 3.8 ms | 19 µs | 24.1 ms |
+| Gaussian | 4,000 | 5.2 ms | 26 µs | 89.3 ms |
+| Quantile | 1,000 | 5.9 ms | 29 µs | 24.0 ms |
+| Student t | 1,000 | 12.7 ms | 64 µs | 23.4 ms |
+| Generalized hyperbolic | 1,000 | 82.7 ms | 414 µs | 25.3 ms |
+| Generalized hyperbolic | 4,000 | 289.6 ms | 1,448 µs | 82.6 ms |
+| Normal-Wald | 1,000 | 179.5 ms | 898 µs | 21.2 ms |
+
+- *Counts confirmed:* each of the four coverage facts ran as one test and printed its reading, and the cost row ran 7 of 7, all with `BASS_QUALIFICATION=1`. Without it they return at once, as the gate intends.
+- *Nothing upstream moves.* 450 of 450 tests pass: the eight `BassBitIdentityTests` pins, the pointwise, PSIS-LOO, WAIC and diagnostics tests, the t, quantile, Normal-Wald, SMC, prediction and mixing suites, and the conformal and candidate tests. 153 of 153 pass on the exact committed state of the two shared files.
+
+**Defects found.**
+- *The noise latent's report* (fixed, `1b51458`). BASS reported each law's latent per observation as `IntegratedGivenOthers`, the collapsed content's treatment, so `LeavesUnitsOut` was true for every noise-law fit. WAIC refused t, quantile, Normal-Wald, skewed t and GH fits, PSIS-LOO's p_loo was NaN, and the layer would have refused them all. The term is in sample, as `VarianceMeanMixtures.md` says. The GBASS session made the same change in its working copy after my note.
+- *A cost finding, not a defect.* `BassPrediction.Quantile` under the Normal-Wald takes 6 to 8 s per call at S 1,000 and 50 cases: each draw's generalized hyperbolic builds its tail table. The candidate density there takes 13 to 23 s per fit at 10,000 candidates.
+  - The first coverage run, which read the exact mixture quantile and used grids of 201, ran past 100 minutes and was stopped without a reading.
+  - The test now reads the model's interval from predictive draws, uses grids of 101 on 20 cases per fit, and runs each law as its own fact.
+
+**Decisions taken beyond this brief.**
+- *The seam's refusals.* A candidate is one observation of a scalar response; a weighted fit's terms read a weight a new case lacks; moved working responses condition on offsets a candidate lacks.
+- *One latent list* for both densities, so CB-4's match holds by construction.
+- *The clustered coverage design and its se,* above.
+- *Quadrature laws are left to GBASS.* GBASS's generalized beta prime noise is in progress in the checkout, with `DensityByQuadrature` and a `quadrature` flag on the pointwise path, neither in HEAD. The seam needs the same guard and flag once they land; the GBASS session was told.
+- *Commits from the index.* The GBASS session holds uncommitted edits in `BassFit.cs` and `BassPointwise.cs`. Those two files were committed as HEAD plus this slice's hunks (`git hash-object` and `update-index`), and `BassFit.cs`'s hunks were re-added to its working copy, which now differs from HEAD by GBASS's hunks only.
+- *Priority.* A reused MSBuild node started at normal priority carried that priority to some of this chip's test hosts: slice 0's runs and the first coverage run, until it was caught and lowered. Node reuse is now off in the runner, so every child inherits below-normal.
+
+**Left unbuilt:** the quadrature laws' guard, which is not in HEAD; candidates for a weighted fit, which would take each case's weight; and a direct functional fit's curves, which are E17's.
+
+**Follow-ups, each with the decision it would change.**
+- *A noise law's density over many residuals at one draw.* It decides whether `IBassNoiseLaw` gains a batched density that takes each draw's normalizer once.
+  - Under the Normal-Wald and the generalized hyperbolic, the law's density is this slice's cost: 0.4 to 0.9 µs per evaluation, 83 to 180 ms per grid against the layer's 24 ms. The pointwise density would share it.
+  - If built, those rows fall by about the normalizer's share. If not, the row stands. It touches `BassNoise.cs`, which the GBASS session is editing now.
+- *Open, no decision waiting:* the exact mixture quantile's cost under GH-family laws, for prediction's readers.
 
 ### 2026-11-06 — Slice 0, the layer's core
 
