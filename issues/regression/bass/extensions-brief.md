@@ -316,6 +316,11 @@ The conformal step itself is not built. It was first deferred to the SPC × BARS
   - *Predictions as distributions:* Gressmann et al. (arXiv 1801.00753) compare probabilistic predictions by proper scores, beside the CRPS above.
 - **What it does not reach: features.** Dobriban and Lin's joint coverage regions (arXiv 2303.00203) cover a parameter and a new point together, but their finite-sample results need a conditional pivot, which a nonparametric fit lacks. A curve's or a quantile's own intervals stay with [calibrated intervals](#calibrated-intervals-for-loss-based-posteriors) and [resampling units](#posteriors-for-readouts-by-resampling-units).
 - **The sampler** (this brief's reading, not a paper's). The step's score is symmetric in the n + 1 points only as far as the retained draws represent the posterior: that is the Monte Carlo error above. A chain slow to mix, as [G1](lineage-gaps-register.md#g1-does-the-sampler-reach-the-posterior) measured on one fixture, makes that error large. Add-one-in weights also concentrate on few draws for a candidate far in a tail. Split forms stay valid with any fitted model, at the cost of the held-out data. So the full step suits good draws and scarce data, and the split form suits a guarantee that must not lean on the sampler.
+  - *A third choice: the tournament correction* (Bhattacharyya, Zhang and Barber, arXiv 2605.29200, in `gauntlet/conformal-bayes`; added 2026-11-06). The candidate is compared with each data unit i under a score fitted without both of them.
+  - *Its guarantee:* coverage is at least 1 − 2α with no assumption on the approximation, randomized scores included. With a 2ε-inflated threshold, coverage is at least 1 − α − 3√ν, if moving one unit's role leaves the candidate's score within ε with probability 1 − ν.
+  - *What it costs in conformal Bayes:* posterior draws given each leave-one-out set, so n chains. Each chain must treat its data symmetrically but need not mix, so the guarantee keeps all the data without leaning on mixing.
+  - *Their shortcut,* rejection from the n-unit draws, holds only for exact draws and a likelihood bounded below.
+  - *Where it is recorded:* CB-3 in [`conformal-lemmas.md`](../../../lean/Protolemmata/Conformal/conformal-lemmas.md) has it beside the inflated rule and the reported margin.
 
 ## Conformal bands for whole curves
 

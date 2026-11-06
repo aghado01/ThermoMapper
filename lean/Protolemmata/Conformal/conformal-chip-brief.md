@@ -112,7 +112,7 @@ The four arXiv papers are now in `gauntlet/conformal-bayes`, and Ndiaye's is in 
 
 **Follow-ups, each with the decision it would change.**
 - *Per-unit bounds.* Ndiaye's τᵢ and the RKHS paper's τᵢ(y) suggest stating CB-3 with a per-unit εⱼ, the layer's per-unit MCSE in place of the largest one. That decides how wide the inflated set is and how large the reported margin is.
-- *E16's sampler bullet* ("What the conformal literature adds") weighs the full step on good draws against the split form. The tournament form is a third choice: full data at 1 − 2α, without mixing. That decides the fallback when the chain fails its diagnostics. E16 was not edited.
+- *E16's sampler bullet* ("What the conformal literature adds") weighs the full step on good draws against the split form. The tournament form is a third choice: full data at 1 − 2α, without mixing. That decides the fallback when the chain fails its diagnostics. At your call it was added to the bullet on 2026-11-06.
 
 ### 2026-11-06 — CB-1 to CB-4 posed, checked and proved
 
