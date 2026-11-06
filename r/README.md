@@ -81,6 +81,10 @@ is opt-in), so the normal `dotnet test` run is unaffected.
 | BASS's output path and sensitivity (D07, D08, O-O1, O-O2) *(port stages 5–6; not built)* | `bass_output_defects_oracle.R`, `bass_sensitivity_defects_oracle.R` | corrected expectations beside R BASS's behaviour |
 | BASS's hinge-product moments (D08, O-O3) *(port stage 6; not built)* | `bass_moments_oracle.R` | Gauss–Legendre quadrature and category enumeration |
 | BASS calibration's defects and covariance formulations (D09, C-O1, C-O2) *(port stage 7; not built)* | `bass_calibration_defects_oracle.R`, `bass_covariance_oracle.R` | dense eigen and Cholesky references; R BASS's Woodbury helpers for parity |
+| GBASS's primitives (E1, slice 0): the GIG and its limits through `GigParameters`, the modified half-normal's four branches, Bessel K of real order | `gbass_primitives_oracle.R` | `GIGrvg::rgig`, GBASS's `rgig2`, `rmhn`, `mu_gig`, `var_gig` against each law's own integral in logs; base `besselK` against K's integral representation; run by `GbassPrimitiveParityTests` |
+| GBASS's full conditionals at a frozen state (E1, slice 0): v, β, γ, τ, w (GIG and modified half-normal), a, a birth's likelihood | `gbass_conditionals_oracle.R` | `gbass`'s and `nwbass`'s expressions as written against the joint GBASS states; `StudentTWeights` and `ConjugateUpdates` on the C# side; run by `GbassConditionalParityTests` |
+| GBASS's defects (E1, slice 0), each confirmed or struck | `gbass_defects_oracle.R` | the code as written beside a reference sharing nothing with it: mixture moments, the definitions, the stated conditional; run by `GbassDefectParityTests` |
+| GBASS's posterior readouts (E1): `tbass`, `qbass`, `nwbass`, `hbass` | `gbass_readouts_oracle.R` | the fitted surface over a grid, w, β, γ, τ and M, never traces; run by `GbassReadoutParityTests` |
 
 `scripts/bass_stage1_checks.R` runs the BASS oracles on the port brief's fixtures and reproduces their numbers (about two minutes).
 `scripts/bass_stage4_checks.R` runs the stage-4 oracle modes (the posterior, its rungs, R's statistics) on the stage-4 oracle brief's fixtures and prints PASS or FAIL for each self-check (about five minutes).
