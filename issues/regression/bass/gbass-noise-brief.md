@@ -157,6 +157,49 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### Slice 0: the oracle modes (chip, 2026-11-05)
+
+**Landed** in `ee2cce6`: four modes under `r/oracles` that run from `r/` against the pinned GBASS 2.0.1, with their parity classes in `tests/oracle` and rows in `r/README.md`'s oracle map. 21 tests, each run against R and each printing its readings, 21 passed (`Maths.Oracle.Tests`, filter `Gbass`, about 85 s together on the loaded machine). A class returns early only when R is absent; a missing package fails it.
+
+| Mode | What it evaluates | Parity class, and what the C# side computes |
+| --- | --- | --- |
+| `gbass_primitives_oracle.R` | `GIGrvg::rgig`, `rgig2`, `mu_gig`, `var_gig`; `rmhn`; base `besselK` | `GbassPrimitiveParityTests`: each law's integral in logs from `GigParameters.LogKernel` and the kernels, so the reference is computed on both sides |
+| `gbass_conditionals_oracle.R` | `gbass`'s and `nwbass`'s conditionals for v, β, γ, τ, w, a and a birth's likelihood, as written, against the joint GBASS states | `GbassConditionalParityTests`: `StudentTWeights`' step, `ConjugateUpdates` for τ and w, β's and γ's closed forms |
+| `gbass_defects_oracle.R` | E1's defects, each beside a reference that shares nothing with the code | `GbassDefectParityTests` |
+| `gbass_readouts_oracle.R` | One wrapper's surface over a grid, w, β, γ, τ, M, the share below the fit, move counts | `GbassReadoutParityTests`; the engine meets it from slice 1 on |
+
+**The gates.** The modes run from `r/`. Each defect is confirmed or struck below.
+
+**Primitives** (`ours` here is a quadrature, since the engine's GIG sampler, modified half-normal and log Bessel K are slices 2 and 3; they meet the same mode then):
+- *The GIG is one parameterization.* `GigParameters`' kernel integrated here gives R's log mass to 9 places and its moments to 9 relative digits on 11 cases, the limits b = 0 (the qbass prior and a residual of exactly zero) and a = 0 (t mixing) included, with the Bessel K moments where a, b > 0. GIGrvg's draws and `rgig2`'s carry the law's probabilities at their deciles, worst |z| 2.23 over 50,000 draws a case.
+- *`rmhn`* matches quadrature on all four branches: worst decile |z| 2.09, the 0 < α ≤ 1 series branch at α = 0.3, 0.6 and 1 included, which E1's scratch had left unchecked. Its moments there also equal the series Σₖ (γ/√β)ᵏΓ((α + k)/2)/k! read in R to 15 digits. No defect.
+- *`besselK(x, ν, expon.scaled = TRUE)`* equals K's integral representation to 10⁻¹¹ relative on nine points from (10⁻⁶, 3) to (800, 40) and (20, 250), with no warning: a reference for slice 3's log Bessel K.
+
+**Conditionals at a frozen state** (N = 40, M = 2, two states: skewed with general GIG mixing; t(5) at β = 0). The joint less each conditional's log kernel is constant to 1.1·10⁻¹³ nats over eight points for v, β, τ, w's GIG at β = 0, and γ on γ > 0. a's mean and covariance as written equal dense algebra to 10⁻¹⁰, and a birth's likelihood part equals the difference of log N(z | 0, wcV + wτBBᵀ) to 9 places. On the C# side: under t mixing λ = 1/v is `StudentTWeights`' Gamma((ν + 1)/2, (ν + r²/(wc))/2) for every observation, shape exactly and rate to 14 digits; τ is `ConjugateUpdates.NormalVariance` over M + 1 coefficients, and w at β = 0 its GIG form (N-X3) over N + M + 1 terms, to 13 digits.
+
+**Defects.** Each is a correction the engine takes, not a parity variant.
+
+| Defect | Run | Verdict |
+| --- | --- | --- |
+| `nw_est_mom`'s kurtosis | The mixture's fourth moment by quadrature over the Wald, on both sides: 6.4641 at (α, β, δ) = (2, 1, 1), where the code gives 5.1651; 10.4536 for 8.0684 at (3, −2, ½); 3.5920 for 3.3085 at (1.5, 0.3, 4). The corrected form equals the mixture to 9 digits | Confirmed |
+| `nw_gamma_prior`'s stray −1 | P(ξ > 0.9) at its start (100, 100): 0.001135 by definition, 0.003537 as written; P(ξ < 0.1) right | Confirmed |
+| The w step at β ≠ 0 drops w's prior a and the floor | The modified half-normal's parameters are the same at a = 0 and a = 5; the joint less its kernel spreads 0.038 nats at a = 0.4, 10⁻¹³ at a = 0. With the floor at the conditional's median, 4,000 runs of the w block as written: at β = 0 none below it (49.7% keep the old w), at β = 0.4 59.2% below it | Confirmed |
+| Birth admits npart rows, mutation needs more | The two conditions as written on a column of exactly npart positive rows: birth admits, mutation refuses | Confirmed |
+| The GBP v step scaled from mean(ln v) | `hbass` at N = 60, 3,000 iterations: adapted step 0.543 against 2.38 × sd(mean ln v) = 0.641 and 2.38 × the median per-observation sd of ln vᵢ = 3.96; acceptance 0.90. A tuning defect: adaptation stops at burn-in, so the chain stays valid | Confirmed |
+| γ's draw untruncated | At N = 5, Σv = 20, (m, s) = (0.1, 3), the code's normal puts 0.132 below 0, where it is no conditional: the joint less its kernel spreads 58 nats on γ < 0 and 10⁻¹³ on γ > 0. Under a prior on γ > 0 that mass is the draw's total-variation error | Confirmed |
+| The text's r = ŷ − y | `r <- y - yhat` as written; the β conditional is the joint's for r = y − ŷ | Struck for the code |
+| Table 1's t row, b = ν/2 | `tbass`'s v prior as written is GIG(−ν/2, 0, ν), and √v·ζ's density is dt to 9 digits; b = ν/2 gives √2·t(√2x) | Struck for the code |
+
+**Found here.**
+- *`mu_gig` and `var_gig` where a moment is infinite.* At a = 0 they return −b/(2(p + 1)) and −b²/(4(p + 1)²(p + 2)) for any p < 0: −3 and −7.2 at tbass's ν = 1.5, −18 for t(3)'s variance. So `tbass` reports s2 = −w at ν = 1, −3w at ν = 1.5, NaN at ν = 2 (and bias NaN, 0·∞). The engine's `NoiseSd` is null there, as this brief already said.
+- *`nw_gamma_prior`'s default targets are out of reach.* (q₁, q₂, p₁, p₂) = (0.1, 0.9, 0.5, 0.05) asks for half of γ's mass above 99 and 5% within 0.235 of 0, which no normal holds. As written the fit lands at (−22.3, 90.4) with probabilities 0.288 and 0.0020; corrected at (−1.42, 82.7) with 0.231 and 0.0023. A calibration on the triangle should state targets a normal can reach, or a prior on log γ; slice 3's question.
+
+**Readouts** (N = 200, f = sin(2πx₁) + x₂, noise 0.3·t(3), 2,000 iterations, 1,000 burn-in): each wrapper runs in 9–11 s on the loaded machine. `qbass` at q = 0.9 has 90.5% of the responses below its surface in sample, with β held at 1/q − 1/(1 − q). `tbass` at ν = 3 reads w = 0.232 [0.181, 0.294] against the noise variance 0.27. Mean M 4.5–5.1, acceptance 0.10–0.18 per move.
+
+**Refusals and acceptance; the cost row.** Nothing of the engine runs in this slice, so neither applies; R's own move acceptances are above.
+
+**Left for later.** The engine's GIG sampler, modified half-normal and log Bessel K meet `gbass_primitives_oracle.R` at slices 2 and 3; `qbass`, `nwbass` and `hbass` meet the engine there and at slice 4. Readings, not proposals: `lower_bound` is a valid independence step that kept the old w half the time with the floor at the median.
+
 ### CRAN's GBASS pinned (main session, 2026-11-04)
 
 Slice 0's precondition. `r/DESCRIPTION` takes `GBASS`; `renv::install("GBASS@2.0.1")` and `renv::snapshot` add exactly three packages to `r/renv.lock`: GBASS 2.0.1, BASS 1.3.1, GIGrvg 0.8. `renv::status()` is consistent.
