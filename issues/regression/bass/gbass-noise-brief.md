@@ -81,7 +81,7 @@ The moves, the proposals, the term table, the design kernels, D01's knots, the c
 - *OQ17's scope rule:* the pointwise density integrates vᵢ.
 - *Corrections, not parity variants:* E1's defects, and the γ > 0 piece drawn with a truncated draw.
 
-**Recommended; a chip starts on these unless the user says otherwise.**
+**Recommended, and accepted by the user on 2026-11-05 when the chip for slices 0 and 1 started.**
 1. **The latent record rides `WorkingResponse`; this is the decision on `BassState` that the seams left to E1.** v, β, γ and, when held, w go on a record that `Moved` takes.
    - *Why there.* `BassStructureFit.Working` and `BassDraw.Working` already carry the working response through snapshots, swaps, SMC's copies and retention, and the moving-response tests already find a chain's latent by it (`LatentBlock`). It is by definition the reading of the response at a latent state.
    - *w too.* Under skew a move of w moves the offset, so `ReplaceTarget(Given(w))` and `Follow` are two updates that must stay in step, with a wrong density between them. On the record they are one move, and `BassTarget.Evaluate` reads w from the state, as it reads the statistics and σ²'s rate. SMC and the flat histogram, which hold one target, then work without a target per particle. `Given` stays for E32's outside σ².
@@ -147,6 +147,7 @@ No cost report prices this chain, and [the efficiency pass](efficiency-pass-brie
 - Heavy runs at below-normal priority with capped threads; the machine is shared, and basin-hold's chains were running when this was written.
 - New beside old; a removal is its own question to the user, with what is lost.
 - Findings framed by problem class, not by any one application.
+- A follow-up goes in a report with the decision it would change and what each outcome would do. A question with no decision waiting on it is recorded as open, not proposed.
 
 ## Report
 
