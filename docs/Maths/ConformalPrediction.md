@@ -1,6 +1,6 @@
 # Conformal prediction
 
-> The conformal layer (E16): prediction sets whose coverage holds in finite samples under exchangeability, whatever the model, from an engine's retained draws and pointwise densities with no refit. The layer owns the guarantee and the score owns the width, so the layer is built once, engine-free, and each engine contributes densities. Built: the full step (Fong and Holmes's conformal Bayes) over a training density and a candidate density. The margin and inflation, the split form, the predictive distribution and the other engines' candidate seams follow.
+> The conformal layer (E16): prediction sets whose coverage holds in finite samples under exchangeability, whatever the model, from an engine's retained draws and pointwise densities with no refit. The layer owns the guarantee and the score owns the width, so the layer is built once, engine-free, and each engine contributes densities. Built: the full step (Fong and Holmes's conformal Bayes) over a training density and a candidate density, and BASS's candidate density for every noise law. The margin and inflation, the split form, the predictive distribution and the other engines' candidate seams follow.
 
 ## Overview
 
@@ -114,11 +114,52 @@ The weights, the product and the ranks for one grid of G = 200 candidates, with 
 - *The training side* is paid once per stratum and call. Many test cases in one call share it; a call per case pays it each time.
 - *The exponentials* dominate the training side and the weights: n·S of them once, S·G per grid. A vector exponential would cut both, at the cost of bits that differ from `Math.Exp` across hardware.
 
+## BASS: the candidate density
+
+`BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels)` (slice 1) is log p(y | x_t, θ_s) for every retained draw and every value y of each new case's grid, in the rows of `BassFit.PointwiseLogDensity(data)`, with its chain lengths or weights and its latent report.
+- *The surface* at the cases is prediction's (`BassSurface`, the training basis at new inputs).
+- *The density* is the training terms' own: N(y | f, σ²), or the noise law's with each observation's latent integrated out (`IBassNoiseLaw.LogDensity`), at the draw's σ² and its latents' globals. That covers Gaussian, Student t, quantile (asymmetric Laplace), Normal-Wald, skewed t and generalized hyperbolic BASS, and the layer reads them all by one density (CB-4's default).
+- *The latent report* is the pointwise density's (`BassPointwise.Latents`, shared), so the layer's CB-4 check passes by construction and fails only if the two readings part.
+- *A candidate is one observation* of a scalar response, so it pairs with the default units.
+- *Refused:* a direct functional fit, whose unit is a curve (E17's whole-curve bands); a weighted fit, whose terms read a weight a new case does not carry; and draws whose working response moved, whose terms condition on an offset and weights a candidate does not have.
+
+**The noise latent's report, corrected.** Until 2026-11-06 BASS reported a noise law's latent per observation as `IntegratedGivenOthers`, the collapsed content's treatment. That made `LeavesUnitsOut` true for every noise-law fit: WAIC refused them, PSIS-LOO's p_loo was NaN, and the layer would have refused them as leave-unit-out terms. Each latent is integrated against its prior, which no other observation moves given the globals, so the term is in sample. It is now reported `Integrated`, as [VarianceMeanMixtures](./VarianceMeanMixtures.md) always described it.
+
+**Checks** (`BassCandidateTests`; coverage and cost with `BASS_QUALIFICATION=1`).
+- *At the training cases it is the pointwise column, bit for bit,* for all six laws (120 draws × 80 cases each, largest gap 0): the same draws, chains and latent report. An SMC fit's candidates carry its population weights. The layer takes each pair.
+- *Held-out coverage on data from outside every model.* The truth is f = sin(2πx₀) + x₁ with noise 0.2ζ plus, one time in seven, 0.8·Exp(1): contaminated and skewed. Each fit has n 99, so m 100 and k 10 at α 0.1, nominal 0.900. There are 20 fits per law with 50 held-out cases each, and the se is the fits' spread (binomial alone 0.0095). The width is read on 20 cases per fit, on a grid of step 0.08, and the model's own 90% interval from its predictive draws:
+
+| Fit | Coverage (se) | Mean width | The model's own 90% interval | Its width | Least ESS at the true value |
+|---|---|---|---|---|---|
+| Gaussian | 0.905 (0.010) | 1.20 | 0.944 | 1.52 | 1.5 (8 of 1,000 below 50) |
+| Student t (ν 3, c 0.7) | 0.894 (0.012) | 1.06 | 0.895 | 1.01 | 347 |
+| Quantile (q 0.5) | 0.895 (0.012) | 1.02 | 0.921 | 1.22 | 87 |
+| Normal-Wald (γ and β drawn) | 0.890 (0.015) | 1.07 | 0.900 | 1.18 | 74 |
+
+  - Every law's set covers within its error, and it is narrower than the model's own interval where that overcovers: the Gaussian fit's σ² absorbs the contamination and widens its interval, while the density score still ranks the outliers low.
+  - Two of 1,600 sets split into two intervals; none reached the grid's ends.
+  - A Gaussian fit's add-one-in weights fall to an ESS of 1.5 at an outlying candidate, where the heavy-tailed laws keep 74 or more. That is where CB-3's margin (slice 2) will read.
+- *Its cost,* for one grid of 200 values at the cost harness's base point (n 1,000, the rich surface, p 10, M_max 20), indicative on the cycle clock. Per candidate means the candidate's S density evaluations; the layer's step includes half the training side, which the two timed cases share.
+
+| Law | S | The candidate density per grid | Per candidate | The layer's step per grid |
+|---|---|---|---|---|
+| Gaussian | 1,000 | 3.8 ms | 19 µs | 24.1 ms |
+| Gaussian | 4,000 | 5.2 ms | 26 µs | 89.3 ms |
+| Quantile | 1,000 | 5.9 ms | 29 µs | 24.0 ms |
+| Student t | 1,000 | 12.7 ms | 64 µs | 23.4 ms |
+| Generalized hyperbolic | 1,000 | 82.7 ms | 414 µs | 25.3 ms |
+| Generalized hyperbolic | 4,000 | 289.6 ms | 1,448 µs | 82.6 ms |
+| Normal-Wald | 1,000 | 179.5 ms | 898 µs | 21.2 ms |
+
+  - Under the laws whose density is a Bessel function, the law's density is the slice's cost: 0.4 to 0.9 µs per evaluation, against 20 to 60 ns for the others.
+  - Each call recomputes the law's normalizer, which is constant over a draw's grid. A density over many residuals at one draw would take it once; the pointwise density would share it.
+
 ## API at a glance
 
 | Area | Types and members |
 |---|---|
 | The seams | `PointwiseLogDensity` (training); `CandidateLogDensity(values, grids, latents, stratumOf, chainLengths)` with `Weights`, `Offset(t)`, `Cases`, `Draws` |
+| BASS's candidate density | `BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels)`; `BassPointwise.Latents` (internal, shared) |
 | The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
 | A case's set | `ConformalSet`: `Stratum`, `Units` (m), `Level` (k), `Coverage`, `WholeSpace`, `Grid`, `PValues`, `Below`, `Tied`, `CandidateScores`, `EffectiveSampleSizes`, `Accepts(g)`, `Intervals` (`GridInterval(Lower, Upper)`), `Resolution`, `OpenBelow`, `OpenAbove`, `Width` |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
@@ -128,7 +169,7 @@ The weights, the product and the ranks for one grid of G = 200 candidates, with 
 - CB-3's margin, the 2ε-inflated set and the fallback signal (slice 2).
 - The split form, with density, CQR and residual scores (slice 3).
 - The conformal predictive distribution, with PIT and CRPS, and random tie-breaking with it (slice 4).
-- The candidate seams of BARS, BAPS, the hierarchical P-spline, BGP and the changepoint posterior (slice 5).
+- The candidate seams of BARS, BAPS, the hierarchical P-spline, BGP and the changepoint posterior (slice 5), and BASS's for a direct functional fit's curves (E17).
 - CB-4's latent-posterior reading, and Hoff's leave-one-out score.
 - Refining a set's boundaries between grid values.
 
