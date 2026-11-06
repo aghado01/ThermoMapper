@@ -11,12 +11,22 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### q, level, and the modified half-normal's α, β, γ (2026-11-05)
+
+- **Kind:** one concept under several names, and one name for several concepts.
+- **Readings:**
+  - q, the quantile level, is `BassNoise.Quantile` (`src/maths/regression/spline/bass/BassNoise.cs:114`) and `AsymmetricLaplace.Level` (`src/maths/distributions/AsymmetricLaplace.cs:39`), where `AsymmetricLaplace.Quantile(p)` is the distribution's quantile function, as on every family.
+  - Level is also the prior's centre, `BassPriorReference.Level`, which under the quantile read is the sample q-quantile.
+  - α, β, γ, the modified half-normal's parameters (`ModifiedHalfNormal.Alpha`, `Beta`, `Gamma`, `src/maths/distributions/ModifiedHalfNormal.cs:42`), against α the intercept and β the centred coefficients ("BASS: the weighted core"), β the skew (`ObservationLatents.Skew`) and γ the Normal-Wald's tail (GBASS's `nwbass`, slice 3). In σ²'s block (`BassScaleBlock`) the half-normal's β is ½(Σrᵢ²/(c·vᵢ) + Q + 2β₀) and its γ is the skew β times Σrᵢ/c.
+- **Found:** 2026-11-05, E1's slice 2 (the asymmetric Laplace on the BASS core).
+- **Note:** Sun, Kong and Pal (2021) write MHN(α, β, γ); Yu and Moyeed (2001) and GBASS write q. `docs/Maths/VarianceMeanMixtures.md` writes the half-normal's parameters in full where they meet BASS's.
+
 ### w, β, τ, c and v between GBASS and the BASS core (2026-11-05)
 
 - **Kind:** one name for several concepts, and one concept under several names.
 - **Readings:**
   - w: GBASS's global scale, the core's σ² (`BassDraw.Sigma2`; `gbass-noise-brief.md`, "Why"), against wᵢ and W, the observation weights (`WorkingResponse.Weights`, "BASS: the weighted core").
-  - β: GBASS's skew, the drift per unit v (`ObservationLatents.Skew`, `src/maths/regression/spline/bass/BassNoise.cs:121`), against β and β_c, the centred coefficients in (α, β) ("BASS: the weighted core") and β̂ (`BassDesign.Coefficients`).
+  - β: GBASS's skew, the drift per unit v (`ObservationLatents.Skew`, `src/maths/regression/spline/bass/BassNoise.cs:166`), against β and β_c, the centred coefficients in (α, β) ("BASS: the weighted core") and β̂ (`BassDesign.Coefficients`).
   - τ: GBASS's τ multiplies the coefficients' variance, a ~ N(0, wτI), so it is the reciprocal of the core's τ, which multiplies their precision.
   - c: GBASS's `scale`, the Gaussian part's variance per unit w·v (`BassNoise.VarianceScale`, `BassNoise.cs:80`), against c, σ²'s shape in `BassResolved`'s (1 − 2c)/N and `BassEvidencePriors` (logged on 2026-11-02 below).
   - v: GBASS's latent scale (`ObservationLatents.Values`, `BassNoise.cs:118`; `IMixingLaw`), against v = ln r, the hierarchical rate's coordinate ("BASS: priors that stop reading a moving response"; `BassState.LogRate`).

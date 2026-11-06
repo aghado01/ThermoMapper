@@ -157,9 +157,53 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### Slice 2: the asymmetric Laplace, quantile regression (chip, 2026-11-05)
+
+**Landed** in `5beaa49` (the code and its tests) and the commit that carries this report (the docs, the notation ledger). At the user's request (2026-11-05) the noise's documentation moved to its own page, [Variance-mean mixture noise](../../../docs/Maths/VarianceMeanMixtures.md), which takes slice 1's section from `BayesianRegression.md` and this slice's; `BayesianRegression.md` keeps a pointer and is 65 lines shorter. The page holds the forms, the alternatives and the checks; this is the account.
+
+| Piece | Where |
+|---|---|
+| The GIG's sampler, the modified half-normal, the asymmetric Laplace | `GeneralizedInverseGaussian`, `ModifiedHalfNormal`, `AsymmetricLaplace` (`Maths.Distributions`); `GigParameters.ToDistribution` |
+| Exponential mixing | `ExponentialMixing` (`src/maths/regression/MixingLaw.cs`) |
+| The noise on the config | `BassNoise.AsymmetricLaplace(q, reference)`, `BassNoiseReference.Quantile` |
+| σ² on the record, the target reading it (decision 1, w included) | `ObservationLatents.Sigma2`; `BassTarget.GivenAt`, with ln p(σ²) in the state's prior |
+| σ²'s block (decision 2) | `BassScaleBlock`: the modified half-normal on σ⁻¹, K and Q from `GPriorConditional.PriorEnergy` through the prior's pencil |
+| v's block with the drift, the offset following | `BassLatentScaleBlock`, `VarianceMeanMixture.At` |
+| The retention lever | `BassDraw.Latents`, `WorkingOn`, `LatentsOn`; `IBassObservationModel.Rebuilds`, `Rebuild` |
+| The readers | the asymmetric Laplace's density, mean shift, quantiles, noise sd, and the draws' mean offset |
+
+**The gates.**
+- *The skew's sign* (E1's fixture): on symmetric noise, N = 400, the held-out share of 2,000 responses below the surface is 0.903 at q = 0.9 and 0.106 at q = 0.1, which a flipped sign would swap.
+- *The q-quantile recovered,* on f + (0.3 + 0.4x₂)(G − 2), G ~ Gamma(2, 1), skewed and heteroscedastic, N = 400, four data sets: held-out share below the surface 0.518 at q = ½ and 0.884 at q = 0.9, within the ±0.04 asserted. Readings beside it: the surface's RMSE against the true quantile, 0.160 and 0.325, and f's 90% intervals covering the true quantile at 76.5% and 63.8% of a 7 × 7 grid.
+- *`qbass`'s readouts* (`GbassQuantileReadoutTests`, q = 0.9, N = 200, w's prior IG(0.1, 0.05) on both sides): σ² 0.00768 [0.00587, 0.00990] under the g-prior and 0.00820 [0.00640, 0.0103] under the ridge against `qbass`'s w 0.00800 [0.00624, 0.00991]; the surface's means within 0.49 of the wider 90% half-band at worst (0.65 under the ridge); M 4.94 and 3.96 against 4.87. The differences stated beside it: GBASS's continuous knots and whole-term mutation, pseudo-counts 1 against 5, its raw ridge with the intercept inside, λ sampled, and the engine's priors reading the sample 0.9-quantile. R's run is 3,000 iterations, since 6,000 overran the oracle's 120 s at below-normal priority on the loaded machine.
+- *The engine's GIG and modified half-normal against `gbass_primitives_oracle.R`'s law:* 11 and 9 cases, 50,000 draws each, worst |z| 2.56 and 2.55 at R's deciles and means.
+- *Gaussian untouched:* the eight pinned hashes and the seams' suites inside the whole regression assembly, 1,984 of 1,984 (slice 1's 1,959 and this slice's 25), and the GBASS oracle classes 24 of 24 with R present. A Gaussian config's JSON still has no `Noise` key. The gated tests return at once in that run; theirs above ran with `BASS_QUALIFICATION` = 1.
+- *The law, by Geweke's test* under the skew: four cases (q = 0.3 on two seeds, q = 0.8 with τ held, q = ½ where the drift vanishes), 200,000 marginal-conditional draws against 300,000 sweeps each, every |z| ≤ 2.95. Its power: flipping the skew's sign in σ²'s block sends σ² to infinity within seconds and fails every skewed case.
+- *Primitives, chosen cases and seeded sweeps:* the GIG on 134 cases (worst decile z 3.01) and four intervals; the modified half-normal on 134 across its three branches (3.32, 2.35, 2.57); the asymmetric Laplace against the exponential mixture to 12 digits; exponential mixing's marginal over 305 cases, 8.7·10⁻¹⁵.
+- *Refusals and acceptance* (decision 4): the latent and scale blocks refused nothing: 0 of 300,000 each in every Geweke case, 120 of 120 per block and chain in the resume fit.
+- *The cost row* (thread cycles, loaded, indicative): a quantile sweep is 1,810 µs at the base under the g-form against a Gaussian sweep's 45 (40×; t's was 24×), 360 against 5.1 at n 200, 381 ms against 1.7 at M 200. v's N GIG draws are 53% of it at the base, about 1 µs a draw; Follow after them 29%, and 70% at M 200. σ²'s move is cheap: the offset alone moves. The table is on the page.
+- *Retention, before and after:* 313.4 KB a retained draw with its working response against 70.4 KB with its latents alone at N = 10,000 (4.45×), 32.7 against 9.0 KB at N = 1,000. Views rebuilt from v equal the stored ones bit for bit (values, offset, weights, ȳ_w and the weighting, 40 draws each under the asymmetric Laplace and t), and a fit resumes bit for bit, latents and σ² included.
+- *`docs/Maths`:* the new page; `ProbabilityAndInformation.md`'s section on the GIG, the half-normal and the asymmetric Laplace; the notation ledger takes q and level, and the half-normal's α, β, γ.
+
+**Defects.** *Corrected here* (slice 0's finding): GBASS's w step at β ≠ 0 drops w's prior a and its floor; the engine's σ² priors are inverse gammas whose shape and scale both enter σ²'s modified half-normal, and it keeps no floor. Recorded on the page; the corrections register in `BayesianRegression.md` takes no new row, at the user's word not to grow that file. *Found and fixed in this slice's own first forms,* by the seeded sweeps: the GIG's log ratio cancelling where ω ≪ |p|; a hat reach that put the envelope's far tangent where h is −4·10¹⁶, whose rounding swamped the hat; the half-normal's left reach landing on x = 0.
+
+**Decisions taken beyond the brief.**
+- *The GIG is drawn by the tangent hat in ln x,* where every GIG is log-concave, in place of Hörmann and Leydold's three regions: one exact method across all parameters and far ranges, and a truncated draw for free. It costs about 1 µs a draw.
+- *The modified half-normal by exact routes of its own* (the hat in x for α ≥ 1, in ln x for γ ≤ 0, the series mixture otherwise) in place of Sun, Kong and Pal's rejection schemes, each branch checked against quadrature and R.
+- *The quantile read by default:* the sample q-quantile and the squared mean check loss; `Moments`, `Robust` and `None` selectable.
+- *The draw keeps its latents for any model that says it rebuilds* (`Rebuilds`), so t's draws keep v alone too, halving theirs.
+- *The quantile recovery's assertion is the held-out share,* with the RMSE and the coverage as readings: no prior standard exists for them.
+
+**Left unbuilt, and why.** A free skew and γ (slice 3), generalized beta prime (4), the engine's reach (5), BARS (6) and interweaving (7) are later slices. A skewed t too: its conditional is a GIG the new sampler draws, but its marginal needs Bessel K of real order, so both wait for slice 3's general GIG mixing; t mixing's refusal now points there. The shared envelope behind every truncated draw is unchanged: the GIG's own reaches avoid the overshoot.
+
+**Follow-ups, with the decision each would change.**
+- *Calibrated intervals for the quantile.* Decision: whether quantile BASS reports its intervals as credible for the q-quantile. Under other noise they undercover (63.8% for nominal 90% at q = 0.9); Yang, Wang and He's (2016) adjustment, or the learning rate of [the calibrated-intervals entry](extensions-brief.md#calibrated-intervals-for-loss-based-posteriors), would widen them toward nominal. Left, the page states the undercoverage.
+- *A faster GIG sampler as a measured option.* Decision: the GIG's default sampler under quantile BASS. Hörmann and Leydold's ratio-of-uniforms would cut v's draws, 53% of a sweep at n 1,000; it changes the default only if effective sample size per second rises.
+- *A guard on the envelope's design point.* Decision: whether the shared sampler behind every truncated draw bounds its Newton search where h falls astronomically. It changes draws only where today's hat would accept nothing, which no existing family's reach reaches.
+
 ### Slice 1: Student t, robust BASS (chip, 2026-11-05)
 
-**Landed** in `c6e0baf` (the code and its tests) and the commit that carries this report (`docs/Maths`, the notation ledger). [The docs' section](../../../docs/Maths/BayesianRegression.md#bass-student-t-noise-the-first-variance-mean-mixture-e1) holds the forms, the alternatives and the checks; this is the account.
+**Landed** in `c6e0baf` (the code and its tests) and the commit that carries this report (`docs/Maths`, the notation ledger). [The docs' section](../../../docs/Maths/VarianceMeanMixtures.md#student-t-robust-bass-e1s-slice-1) holds the forms, the alternatives and the checks; this is the account.
 
 | Piece | Where |
 |---|---|
