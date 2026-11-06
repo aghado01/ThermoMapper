@@ -10,7 +10,9 @@
 #   shifted_mean: the mean of f + sqrt(w) beta E[v] at the grid (predict(bias_correct = TRUE), qbass and nwbass), w, s2 (the noise variance
 #   w(c E[v] + beta^2 Var[v]) per draw, GBASS's own), beta, gamma, tau,
 #   M: {mean, sd, q05, q50, q95}, below_fit: the share of y below the posterior mean surface at the data, cnt1, cnt2 (move counts
-#   proposed and accepted: birth, death, mutation) }.
+#   proposed and accepted: birth, death, mutation), lnv (each draw's mean ln v), v_small (the share of v below 0.1), v_step and
+#   v_accept (v's random-walk step and its acceptance, under a GBP v) }.
+#   hbass takes prop_sigma=s to hold v's step at s with its adaptation off, the corrected reference (below).
 
 source("oracles/_common.R")
 suppressPackageStartupMessages(library(GBASS))
@@ -28,7 +30,17 @@ X <- D[, -ncol(D), drop = FALSE]; y <- D[, ncol(D)]
 
 set.seed(seed)
 t0 <- proc.time()[["elapsed"]]
-fit <- do.call(model, c(list(X = X, y = y, nmcmc = nmcmc, nburn = nburn, verbose = FALSE), extra))
+if (model == "hbass" && !is.null(extra$prop_sigma)) {
+  # hbass with v's random-walk step held at prop_sigma and its adaptation off: hbass adapts the step from mean(ln v)'s spread, slice 0's
+  # defect, which at N = 200 shrinks it to 0.04 to 0.12 at an acceptance of 0.98 or more, so v mixes slowly and M and w move with it; the
+  # corrected reference holds a step scaled to one v's conditional.
+  # Otherwise hbass as written: w ~ GBP(1, 1/2, 1/2), c = var(y), beta = 0.
+  rest <- extra[names(extra) != "prop_sigma"]
+  fit <- do.call(gbass, c(list(X = X, y = y, w_prior = list(type = "GBP", p = 1, a = 1/2, b = 1/2),
+                               v_prior = build_GBP(1, 1/2, 1/2, prop_sigma = extra$prop_sigma, adapt = FALSE), scale = var(y),
+                               nmcmc = nmcmc, nburn = nburn, verbose = FALSE), rest))
+  class(fit) <- c("hbass", "gbass")
+} else fit <- do.call(model, c(list(X = X, y = y, nmcmc = nmcmc, nburn = nburn, verbose = FALSE), extra))
 secs <- proc.time()[["elapsed"]] - t0
 
 summ <- function(x) if (is.null(x) || all(is.na(x))) NULL else
@@ -38,9 +50,15 @@ f_data <- predict(fit, newdata = X, predictive = FALSE)
 # GBASS warns that the shifted mean is seldom wanted under qbass; here it is a readout, asked for on purpose.
 shifted <- if (model %in% c("qbass", "nwbass")) colMeans(suppressWarnings(predict(fit, newdata = G, predictive = FALSE, bias_correct = TRUE))) else NULL
 pick <- function(q) unname(apply(f_grid, 2, quantile, probs = q))
+# v's posterior: each draw's mean of ln v, and the share of v below 0.1 over draws and observations; v's step and its acceptance.
+lnv <- if (is.matrix(fit$v)) summ(rowMeans(log(fit$v))) else NULL
+v_small <- if (is.matrix(fit$v)) mean(fit$v < 0.1) else NULL
+v_step <- fit$v_prior$prop_sigma
+v_accept <- if (is.null(fit$acc_rate_v)) NULL else mean(fit$acc_rate_v)
 
 emit_json(list(model = model, args = extra, N = length(y), nmcmc = nmcmc, nburn = nburn, seed = seed, seconds = secs,
                surface = list(mean = colMeans(f_grid), q05 = pick(0.05), q50 = pick(0.5), q95 = pick(0.95)),
                shifted_mean = shifted, w = summ(fit$w), s2 = summ(fit$s2), beta = summ(fit$beta), gamma = summ(fit$gamma), tau = summ(fit$tau),
-               M = summ(fit$M), below_fit = mean(y < colMeans(f_data)), cnt1 = fit$cnt1, cnt2 = fit$cnt2),
+               M = summ(fit$M), below_fit = mean(y < colMeans(f_data)), cnt1 = fit$cnt1, cnt2 = fit$cnt2,
+               lnv = lnv, v_small = v_small, v_step = v_step, v_accept = v_accept),
           args[2], null = "null", na = "null")

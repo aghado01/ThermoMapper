@@ -27,6 +27,11 @@ public enum BassNoiseKind
     /// <summary>The generalized hyperbolic: v ~ GIG(p, a, b) as declared (GBASS's <c>gbass</c> with a GIG <c>v_prior</c>), its skew held or
     /// drawn. The Normal-Wald is p = −½, b = 1; the skewed t a = 0; the variance gamma b = 0.</summary>
     GeneralizedHyperbolic,
+
+    /// <summary>The generalized beta prime mixture: v ~ GBP(p, a, b) as declared (GBASS's <c>gbass</c> with a GBP <c>v_prior</c>), its skew
+    /// held or drawn; the horseshoe at p = 1, a = b = ½ (GBASS's <c>hbass</c>), the Strawderman–Berger at p = ½, a = 1, b = ½. Heavy enough
+    /// at both ends of v that an observation is fitted closely or let go ("interpolate or ignore").</summary>
+    GeneralizedBetaPrime,
 }
 
 /// <summary>
@@ -94,11 +99,13 @@ public sealed record BassNoise
     /// fixes. <paramref name="reference"/> is what the priors read of the response; <see cref="BassNoiseReference.Quantile"/> is the
     /// asymmetric Laplace's alone. <paramref name="skewPrior"/> is β's prior for t, the Normal-Wald and the generalized hyperbolic: null
     /// holds β at 0, and t takes one only for a skew (the skewed t). <paramref name="gammaPrior"/> is the Normal-Wald's γ's, held at 1 when
-    /// null as GBASS's default holds it; a held γ is positive.
+    /// null as GBASS's default holds it; a held γ is positive. <paramref name="betaPrimePrior"/> is the generalized beta prime's
+    /// v ~ GBP(p, a, b), each positive and finite.
     /// </summary>
     public BassNoise(BassNoiseKind kind, double? degreesOfFreedom = null, double varianceScale = 1.0,
                      BassNoiseReference reference = BassNoiseReference.Moments, double? quantile = null,
-                     BassNoisePrior? skewPrior = null, BassNoisePrior? gammaPrior = null, GigParameters? mixingPrior = null)
+                     BassNoisePrior? skewPrior = null, BassNoisePrior? gammaPrior = null, GigParameters? mixingPrior = null,
+                     GbpParameters? betaPrimePrior = null)
     {
         if (kind != BassNoiseKind.StudentT && degreesOfFreedom is not null) throw new ArgumentException($"{kind} takes no ν.", nameof(degreesOfFreedom));
         if (kind != BassNoiseKind.AsymmetricLaplace && quantile is not null) throw new ArgumentException($"{kind} takes no quantile.", nameof(quantile));
@@ -107,6 +114,8 @@ public sealed record BassNoise
         if (kind != BassNoiseKind.NormalWald && gammaPrior is not null) throw new ArgumentException("γ is the Normal-Wald's.", nameof(gammaPrior));
         if (kind != BassNoiseKind.GeneralizedHyperbolic && mixingPrior is not null)
             throw new ArgumentException("A declared GIG is the generalized hyperbolic's.", nameof(mixingPrior));
+        if (kind != BassNoiseKind.GeneralizedBetaPrime && betaPrimePrior is not null)
+            throw new ArgumentException("A declared GBP is the generalized beta prime's.", nameof(betaPrimePrior));
         switch (kind)
         {
             case BassNoiseKind.StudentT:
@@ -128,6 +137,10 @@ public sealed record BassNoise
                 if (mixingPrior is not { } gig) throw new ArgumentException("The generalized hyperbolic takes v's GIG.", nameof(mixingPrior));
                 GeneralizedInverseGaussian.Of(gig.P, gig.A, gig.B);
                 break;
+            case BassNoiseKind.GeneralizedBetaPrime:
+                if (betaPrimePrior is not { } gbp) throw new ArgumentException("The generalized beta prime takes v's GBP.", nameof(betaPrimePrior));
+                gbp.ToDistribution();
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind));
         }
@@ -142,6 +155,7 @@ public sealed record BassNoise
         SkewPrior = skewPrior;
         GammaPrior = gammaPrior;
         MixingPrior = mixingPrior;
+        BetaPrimePrior = betaPrimePrior;
     }
 
     /// <summary>Student t on <paramref name="degreesOfFreedom"/> ν, with c = <paramref name="varianceScale"/>.</summary>
@@ -167,6 +181,22 @@ public sealed record BassNoise
     public static BassNoise GeneralizedHyperbolic(GigParameters mixing, BassNoisePrior? skew = null, double varianceScale = 1.0,
                                                   BassNoiseReference reference = BassNoiseReference.Moments)
         => new(BassNoiseKind.GeneralizedHyperbolic, varianceScale: varianceScale, reference: reference, skewPrior: skew, mixingPrior: mixing);
+
+    /// <summary>The generalized beta prime mixture, v ~ <paramref name="mixing"/>, β under <paramref name="skew"/> (held at 0 when null).</summary>
+    public static BassNoise GeneralizedBetaPrime(GbpParameters mixing, BassNoisePrior? skew = null, double varianceScale = 1.0,
+                                                 BassNoiseReference reference = BassNoiseReference.Moments)
+        => new(BassNoiseKind.GeneralizedBetaPrime, varianceScale: varianceScale, reference: reference, skewPrior: skew, betaPrimePrior: mixing);
+
+    /// <summary>The horseshoe, v ~ GBP(1, ½, ½), β under <paramref name="skew"/> (held at 0 when null). GBASS's <c>hbass</c> is c = 1 here
+    /// with σ² under <see cref="Sigma2Prior.HalfCauchy"/>, σ ~ C⁺(0, s) at the reference's mean square s², where <c>hbass</c> takes
+    /// c = var(y) and √w ~ C⁺(0, 1).</summary>
+    public static BassNoise Horseshoe(BassNoisePrior? skew = null, double varianceScale = 1.0, BassNoiseReference reference = BassNoiseReference.Moments)
+        => GeneralizedBetaPrime(GbpParameters.Horseshoe, skew, varianceScale, reference);
+
+    /// <summary>The Strawderman–Berger, v ~ GBP(½, 1, ½), β under <paramref name="skew"/> (held at 0 when null).</summary>
+    public static BassNoise StrawdermanBerger(BassNoisePrior? skew = null, double varianceScale = 1.0,
+                                              BassNoiseReference reference = BassNoiseReference.Moments)
+        => GeneralizedBetaPrime(GbpParameters.StrawdermanBerger, skew, varianceScale, reference);
 
     // 2/(q(1 − q)), the asymmetric Laplace's c; q outside (0, 1) is the constructor's to refuse.
     private static double LaplaceScale(double q) => q > 0.0 && q < 1.0 ? 2.0 / (q * (1.0 - q)) : double.NaN;
@@ -199,6 +229,10 @@ public sealed record BassNoise
     /// <summary>The generalized hyperbolic's v ~ GIG(p, a, b); null for another kind.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public GigParameters? MixingPrior { get; }
+
+    /// <summary>The generalized beta prime's v ~ GBP(p, a, b); null for another kind.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public GbpParameters? BetaPrimePrior { get; }
 
     /// <summary>β, the drift per unit v the kind fixes or a chain starts at: 1/q − 1/(1 − q) for the asymmetric Laplace, the prior's mean
     /// where β has one, 0 otherwise. Read from the kind, so not serialized.</summary>
@@ -236,6 +270,7 @@ public sealed record BassNoise
         BassNoiseKind.AsymmetricLaplace => ExponentialMixing.Instance,
         BassNoiseKind.NormalWald => GigMixing.NormalWald(gamma ?? GammaStart!.Value),
         BassNoiseKind.GeneralizedHyperbolic => new GigMixing(MixingPrior!.Value),
+        BassNoiseKind.GeneralizedBetaPrime => new GbpMixing(BetaPrimePrior!.Value),
         _ => throw new InvalidOperationException($"No mixing law for {Kind}."),
     };
 }
@@ -306,6 +341,10 @@ public interface IBassNoiseLaw
     /// <summary>The noise's distribution at a draw, v integrated out, for the predictive mixture's quantiles.</summary>
     IContinuousDistribution At(double sigma2, ObservationLatents? latents);
 
+    /// <summary>Whether <see cref="LogDensity"/> is an integral over each observation's latent, hundreds of nodes a read, so that the
+    /// pointwise density, N × draws reads, is opt-in.</summary>
+    bool DensityByQuadrature => false;
+
     /// <summary>E[ε], σβE[v]: the mean of y at x sits this far from the surface f.</summary>
     double MeanShift(double sigma2, ObservationLatents? latents);
 
@@ -322,7 +361,7 @@ public interface IBassNoiseLaw
 /// (<see cref="ObservationLatents"/>), the prior's Gram unweighted (D03's robust row) and the priors reading the
 /// <see cref="BassNoise.Reference"/> frozen at the start. A chain starts at v = 1. The sweep (D04's robust row): the structure with the
 /// coefficients integrated out, τ, then σ² and a, or a given σ², from their conditional (<see cref="BassCoefficientsBlock"/>), then each vᵢ
-/// from its own (<see cref="BassLatentScaleBlock"/>), then σ² (<see cref="BassScaleBlock"/>), then a skew and the Normal-Wald's γ where they
+/// by its law's step (<see cref="BassLatentScaleBlock"/>), then σ² (<see cref="BassScaleBlock"/>), then a skew and the Normal-Wald's γ where they
 /// are drawn (<see cref="BassNoiseShapeBlock"/>). Under a pure scale mixture (t, or a skew held at 0) the structure step integrates σ² too
 /// and redraws it with a each sweep, so σ² has no block of its own. Under a skew, held away from 0 or drawn, σ² sits in the offset, so it
 /// is drawn apart and held on the record, where the target reads it; its draw is the modified half-normal on σ⁻¹, and a held σ² is the
@@ -461,22 +500,27 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
     public double LogDensity(double residual, double sigma2, ObservationLatents? latents)
         => MixingAt(latents).MarginalLogDensity(residual, sigma2 * VarianceScale, Math.Sqrt(sigma2) * (latents?.Skew ?? 0.0));
 
-    /// <summary>The noise at a draw: t's and the asymmetric Laplace's closed forms; under a skewed t, the Normal-Wald and the generalized
-    /// hyperbolic, whose CDF has no closed form, that distribution with its tails integrated over v (<see cref="GigMixing.Noise"/>).</summary>
+    /// <summary>The noise at a draw: t's and the asymmetric Laplace's closed forms; under a skewed t, the Normal-Wald, the generalized
+    /// hyperbolic and the generalized beta prime, whose CDF has no closed form, that distribution with its tails integrated over v
+    /// (<see cref="GigMixing.Noise"/>, <see cref="GbpMixing.Noise"/>).</summary>
     public IContinuousDistribution At(double sigma2, ObservationLatents? latents)
     {
         double skew = latents?.Skew ?? 0.0;
         if (Noise.Kind == BassNoiseKind.StudentT && skew == 0.0)
             return StudentT.LocationScale(Noise.DegreesOfFreedom!.Value, 0.0, Math.Sqrt(sigma2 * VarianceScale));
         if (Noise.Kind == BassNoiseKind.AsymmetricLaplace) return AsymmetricLaplace.Of(0.0, Math.Sqrt(sigma2), Noise.Quantile!.Value);
-        GigMixing gig = MixingAt(latents) switch
+        double unitVariance = sigma2 * VarianceScale, drift = Math.Sqrt(sigma2) * skew;
+        return MixingAt(latents) switch
         {
-            GigMixing mixing => mixing,
-            StudentTMixing t => new GigMixing(t.Prior),
+            GigMixing mixing => mixing.Noise(unitVariance, drift),
+            StudentTMixing t => new GigMixing(t.Prior).Noise(unitVariance, drift),
+            GbpMixing mixing => mixing.Noise(unitVariance, drift),
             _ => throw new InvalidOperationException($"No distribution for {Noise.Kind}."),
         };
-        return gig.Noise(sigma2 * VarianceScale, Math.Sqrt(sigma2) * skew);
     }
+
+    /// <summary>Whether the density is the mixing law's integral over v: the generalized beta prime's.</summary>
+    public bool DensityByQuadrature => Mixing.MarginalByQuadrature;
 
     /// <inheritdoc/>
     public double MeanShift(double sigma2, ObservationLatents? latents)
@@ -527,8 +571,9 @@ public sealed class BassCoefficientsBlock : IBlock<ReversibleJumpChain<BassState
 }
 
 /// <summary>
-/// The latent scales' block (the latent slot): each vᵢ from its conditional given the residual rᵢ = yᵢ − fᵢ of this sweep's coefficients
-/// and σ² (<see cref="BassCoefficientsBlock"/>, which runs first), under the drift σβ and the unit variance σ²c, through the mixing law;
+/// The latent scales' block (the latent slot): each vᵢ by its law's step under its conditional given the residual rᵢ = yᵢ − fᵢ of this
+/// sweep's coefficients and σ² (<see cref="BassCoefficientsBlock"/>, which runs first), under the drift σβ and the unit variance σ²c
+/// (<see cref="IMixingLaw.StepConditional"/>): an exact draw where the law has one, else a step from the current vᵢ;
 /// then the chain follows the working response at the new v (<see cref="BassStructureMoves.Follow"/>), its offset and weights moved
 /// together. A draw that puts the current structure outside F is refused and the chain keeps its state, the exact step under the gate
 /// that reads W (decision 4); the scan's counters read its refusals.
@@ -558,12 +603,12 @@ public sealed class BassLatentScaleBlock : IBlock<ReversibleJumpChain<BassState>
             : throw new InvalidOperationException("The latent scales read this sweep's coefficients: the coefficients' block runs first, at the current state.");
         WorkingResponse working = moves.DesignAt(state.Current).Working;
         ObservationLatents latents = working.Latents ?? throw new InvalidOperationException("The working response holds no latents.");
-        ReadOnlySpan<double> y = working.Response.Values;
+        ReadOnlySpan<double> y = working.Response.Values, current = latents.Values;
         double unitVariance = fit.Sigma2 * _model.VarianceScale, drift = Math.Sqrt(fit.Sigma2) * latents.Skew;
         IMixingLaw mixing = _model.MixingAt(latents);
         int n = y.Length;
         var v = new double[n];
-        for (int i = 0; i < n; i++) v[i] = mixing.SampleConditional(y[i] - fit.Fitted[i], unitVariance, drift, 1.0, rng);
+        for (int i = 0; i < n; i++) v[i] = mixing.StepConditional(current[i], y[i] - fit.Fitted[i], unitVariance, drift, 1.0, rng);
         WorkingResponse moved = _model.At(working, new ObservationLatents(v, latents.Skew, latents.Sigma2, latents.Gamma));
         return BassStructureMoves.Follow(state, moved) is null;
     }

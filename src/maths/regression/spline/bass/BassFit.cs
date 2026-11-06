@@ -52,13 +52,14 @@ public sealed record BassFit(
     /// <summary>
     /// The draws × units log density (OQ17; <see cref="BassPointwise.LogDensity"/>) on <paramref name="data"/>, which
     /// must be the data the fit was run on: the fit holds the config and the draws, not the data, and the terms' knot and
-    /// level indices refer to that data's inputs, so data with another fingerprint are refused.
+    /// level indices refer to that data's inputs, so data with another fingerprint are refused. <paramref name="quadrature"/> takes a noise
+    /// whose density is an integral over each observation's latent, which costs N × draws integrals.
     /// </summary>
     public PointwiseLogDensity PointwiseLogDensity(BassData data, UnitPartition? units = null,
-                                                   PointwiseContent content = PointwiseContent.RetainedParameters)
+                                                   PointwiseContent content = PointwiseContent.RetainedParameters, bool quadrature = false)
     {
         BassModel model = ModelOn(data);
-        return BassPointwise.LogDensity(model, Terms, Draws, units, content, DrawWeights);
+        return BassPointwise.LogDensity(model, Terms, Draws, units, content, DrawWeights, quadrature);
     }
 
     /// <summary>

@@ -8,10 +8,10 @@ namespace Maths.Regression;
 /// <summary>
 /// The mixing law of a normal variance-mean mixture, per observation (E1): εᵢ | vᵢ ~ N(m·vᵢ, s²·vᵢ) with vᵢ drawn from this law, so the
 /// noise is Gaussian given its latent. m is the unit drift √σ²·β and s² the unit variance σ²·c of the engine that holds the law
-/// (GBASS's √w·β and w·c). It supplies what a sampler and a reader of the noise need of v: its prior draw, its conditional draw given a
-/// residual at a likelihood power b, the residual's density with v integrated out, which a pointwise density reads since each vᵢ
-/// belongs to one observation (OQ17), and v's mean and variance. BARS's <c>IWeightResampler</c> is this seam at m = 0, its weights
-/// the precisions 1/v. Shared by BASS and BARS.
+/// (GBASS's √w·β and w·c). It supplies what a sampler and a reader of the noise need of v: its prior draw, its step given a residual at a
+/// likelihood power b (an exact draw from the conditional where the law has one), the residual's density with v integrated out, which a
+/// pointwise density reads since each vᵢ belongs to one observation (OQ17), and v's mean and variance. BARS's <c>IWeightResampler</c> is
+/// this seam at m = 0, its weights the precisions 1/v. Shared by BASS and BARS.
 /// </summary>
 public interface IMixingLaw
 {
@@ -19,13 +19,19 @@ public interface IMixingLaw
     double SamplePrior(Xoshiro256PlusPlus rng);
 
     /// <summary>
-    /// v from its conditional given <paramref name="residual"/> r under the likelihood N(r | m·v, s²·v) raised to <paramref name="power"/>
-    /// b, with s² = <paramref name="unitVariance"/> and m = <paramref name="unitDrift"/>: ∝ p(v)·v^(−b/2)·exp(−b(r − m·v)²/(2s²v)).
+    /// v's next value from <paramref name="current"/> under its conditional given <paramref name="residual"/> r, the likelihood
+    /// N(r | m·v, s²·v) raised to <paramref name="power"/> b, with s² = <paramref name="unitVariance"/> and m = <paramref name="unitDrift"/>:
+    /// ∝ p(v)·v^(−b/2)·exp(−b(r − m·v)²/(2s²v)). A law with an exact draw from it takes that draw and ignores the current value; one without
+    /// takes a step that leaves the conditional invariant.
     /// </summary>
-    double SampleConditional(double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng);
+    double StepConditional(double current, double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng);
 
     /// <summary>ln ∫ N(r | m·v, s²·v) p(v) dv, the noise's log density at <paramref name="residual"/> with v integrated out.</summary>
     double MarginalLogDensity(double residual, double unitVariance, double unitDrift);
+
+    /// <summary>Whether <see cref="MarginalLogDensity"/> is an integral over v, hundreds of nodes a read, so that a reader taking it per
+    /// observation and draw opts in.</summary>
+    bool MarginalByQuadrature => false;
 
     /// <summary>E[v]; +∞ where it is infinite.</summary>
     double Mean { get; }
@@ -64,6 +70,10 @@ public sealed class StudentTMixing : IMixingLaw
     public double SamplePrior(Xoshiro256PlusPlus rng) => SampleConditional(0.0, 1.0, 0.0, 0.0, rng);
 
     /// <inheritdoc/>
+    public double StepConditional(double current, double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
+        => SampleConditional(residual, unitVariance, unitDrift, power, rng);
+
+    /// <summary>v drawn exactly from its conditional (<see cref="IMixingLaw.StepConditional"/>), the current value not read.</summary>
     public double SampleConditional(double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
@@ -138,6 +148,10 @@ public sealed class ExponentialMixing : IMixingLaw
     public double SamplePrior(Xoshiro256PlusPlus rng) => SampleConditional(0.0, 1.0, 0.0, 0.0, rng);
 
     /// <inheritdoc/>
+    public double StepConditional(double current, double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
+        => SampleConditional(residual, unitVariance, unitDrift, power, rng);
+
+    /// <summary>v drawn exactly from its conditional (<see cref="IMixingLaw.StepConditional"/>), the current value not read.</summary>
     public double SampleConditional(double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
@@ -201,6 +215,10 @@ public sealed class GigMixing : IMixingLaw
     public double SamplePrior(Xoshiro256PlusPlus rng) => SampleConditional(0.0, 1.0, 0.0, 0.0, rng);
 
     /// <inheritdoc/>
+    public double StepConditional(double current, double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
+        => SampleConditional(residual, unitVariance, unitDrift, power, rng);
+
+    /// <summary>v drawn exactly from its conditional (<see cref="IMixingLaw.StepConditional"/>), the current value not read.</summary>
     public double SampleConditional(double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
     {
         ArgumentNullException.ThrowIfNull(rng);
@@ -232,5 +250,98 @@ public sealed class GigMixing : IMixingLaw
     {
         if (!(unitVariance > 0.0 && double.IsFinite(unitVariance))) throw new ArgumentOutOfRangeException(nameof(unitVariance), "s² must be positive and finite.");
         return GeneralizedHyperbolic.Of(Prior.P, Prior.A, Prior.B, unitDrift, Math.Sqrt(unitVariance));
+    }
+}
+
+/// <summary>The parameters of a generalized beta prime, GBP(p, a, b): density ∝ v^(pa−1)·(1 + v^p)^(−(a+b)) on v &gt; 0, each positive
+/// (<see cref="GeneralizedBetaPrime"/>, which holds its distribution and draw).</summary>
+public readonly record struct GbpParameters(double P, double A, double B)
+{
+    /// <summary>The horseshoe's, GBP(1, ½, ½): √v half-Cauchy (GBASS's <c>hbass</c>).</summary>
+    public static GbpParameters Horseshoe => new(1.0, 0.5, 0.5);
+
+    /// <summary>The Strawderman–Berger's, GBP(½, 1, ½) (GBASS's <c>hbass</c> at <c>likelihood = "sb"</c>).</summary>
+    public static GbpParameters StrawdermanBerger => new(0.5, 1.0, 0.5);
+
+    /// <summary>Its distribution; refuses a parameter that is not positive and finite.</summary>
+    public GeneralizedBetaPrime ToDistribution() => GeneralizedBetaPrime.Of(P, A, B);
+}
+
+/// <summary>
+/// Generalized beta prime mixing: v ~ GBP(p, a, b) (<see cref="GeneralizedBetaPrime"/>; GBASS's <c>v_prior</c> "GBP"), the horseshoe at
+/// p = 1, a = b = ½ and the Strawderman–Berger at p = ½, a = 1, b = ½. Its conditional has no exact draw, so v moves by a slice step on
+/// u = ln v (<see cref="SliceSampler"/>), whose log density at power b′ is (pa − b′/2)·u − (a + b)·ln(1 + e^(pu)) − b′r²/(2s²)·e⁻ᵘ −
+/// b′m²/(2s²)·eᵘ, concave, so the slice is one interval: GBASS's random walk on ln v (<c>rgbp</c>), whose step slice 0 found scaled to the
+/// wrong spread, replaced by a step with nothing to tune. The two exponential terms are taken in logs, so a residual below the square's
+/// range keeps its wall. At a residual of exactly 0 the conditional is improper where pa ≤ b′/2, the noise's pole, and is refused. The
+/// marginal is the integral over u (<see cref="NormalGeneralizedBetaPrime"/>), hundreds of nodes a read, so a pointwise density is opt-in
+/// (<see cref="MarginalByQuadrature"/>). v's mean and variance are the GBP's, infinite for b ≤ 1/p and b ≤ 2/p: the horseshoe has neither.
+/// </summary>
+public sealed class GbpMixing : IMixingLaw
+{
+    // The slice's width in u = ln v and its stepping-out limit: the horseshoe's conditional falls at slope 1 to the right of its flat part
+    // and doubly exponentially to the left, so a slice is a few units wide; 64 widths reach far past any.
+    private const double Width = 2.0;
+    private const int MaxSteps = 64;
+    private readonly GeneralizedBetaPrime _law;
+
+    /// <summary>GBP mixing on the prior <paramref name="prior"/>, each parameter positive and finite.</summary>
+    public GbpMixing(GbpParameters prior)
+    {
+        _law = prior.ToDistribution();
+        Prior = prior;
+    }
+
+    /// <summary>v's prior.</summary>
+    public GbpParameters Prior { get; }
+
+    /// <inheritdoc/>
+    public double SamplePrior(Xoshiro256PlusPlus rng) => _law.Sample(rng);
+
+    /// <summary>One slice step on u = ln v from <paramref name="current"/>, positive and finite (<see cref="IMixingLaw.StepConditional"/>).</summary>
+    public double StepConditional(double current, double residual, double unitVariance, double unitDrift, double power, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(rng);
+        if (!(current > 0.0 && double.IsFinite(current))) throw new ArgumentOutOfRangeException(nameof(current), "v must be positive and finite.");
+        if (!(unitVariance > 0.0 && double.IsFinite(unitVariance))) throw new ArgumentOutOfRangeException(nameof(unitVariance), "s² must be positive and finite.");
+        if (!(power >= 0.0 && power <= 1.0)) throw new ArgumentOutOfRangeException(nameof(power), "The power lies in [0, 1].");
+        if (!double.IsFinite(residual) || !double.IsFinite(unitDrift)) throw new ArgumentOutOfRangeException(nameof(residual), "The residual and the drift must be finite.");
+        double pa = Prior.P * Prior.A;
+        if (residual == 0.0 && !(pa > 0.5 * power))
+            throw new ArgumentOutOfRangeException(nameof(residual), "At a residual of 0 v's conditional is improper where pa ≤ b/2: the noise has its pole there.");
+        // ln(b′r²/(2s²)) and ln(b′m²/(2s²)), −∞ where the term is 0.
+        double logFront = Math.Log(power) - Math.Log(2.0 * unitVariance);
+        var density = new LogConditional(pa - 0.5 * power, Prior.A + Prior.B, Prior.P,
+                                         logFront + 2.0 * Math.Log(Math.Abs(residual)), logFront + 2.0 * Math.Log(Math.Abs(unitDrift)));
+        double u = Math.Log(current), logTarget = density.At(u);
+        SliceSampler.Step(ref u, ref logTarget, Width, MaxSteps, density, rng);
+        return Math.Exp(u);
+    }
+
+    // v's conditional in u = ln v, its Jacobian eᵘ included, up to a constant.
+    private readonly struct LogConditional(double slope, double shapes, double power, double logResidual, double logDrift) : IScalarLogDensity
+    {
+        public double At(double u)
+            => slope * u - shapes * GPrior.LogFunctions.Softplus(power * u) - Math.Exp(logResidual - u) - Math.Exp(logDrift + u);
+    }
+
+    /// <inheritdoc/>
+    public double MarginalLogDensity(double residual, double unitVariance, double unitDrift) => Noise(unitVariance, unitDrift).LogPdf(residual);
+
+    /// <summary>True: the marginal is an integral over v.</summary>
+    public bool MarginalByQuadrature => true;
+
+    /// <summary>E[v], the GBP's; +∞ for b ≤ 1/p.</summary>
+    public double Mean => _law.Mean;
+
+    /// <summary>Var[v], the GBP's; +∞ for b ≤ 2/p.</summary>
+    public double Variance => _law.Variance;
+
+    /// <summary>The noise N(m·v, s²·v) with v integrated out, s² = <paramref name="unitVariance"/> and m = <paramref name="unitDrift"/>
+    /// (<see cref="NormalGeneralizedBetaPrime"/>), whose density, CDF and quantiles the readers take.</summary>
+    public NormalGeneralizedBetaPrime Noise(double unitVariance, double unitDrift)
+    {
+        if (!(unitVariance > 0.0 && double.IsFinite(unitVariance))) throw new ArgumentOutOfRangeException(nameof(unitVariance), "s² must be positive and finite.");
+        return NormalGeneralizedBetaPrime.Of(Prior.P, Prior.A, Prior.B, unitDrift, Math.Sqrt(unitVariance));
     }
 }

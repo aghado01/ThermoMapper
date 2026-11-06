@@ -57,16 +57,21 @@ public static class BassPointwise
     /// <param name="units">A partition of the N observations; null takes <see cref="DefaultUnits"/>.</param>
     /// <param name="content">The draw content; the retained parameters by default (D04).</param>
     /// <param name="weights">One weight per draw, pooled in chain order; null for equal weights (MCMC).</param>
+    /// <param name="quadrature">Takes a noise law whose density is an integral over each observation's latent
+    /// (<see cref="IBassNoiseLaw.DensityByQuadrature"/>), N × draws integrals of hundreds of nodes each; refused without it.</param>
     public static PointwiseLogDensity LogDensity(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws,
                                                  UnitPartition? units = null,
                                                  PointwiseContent content = PointwiseContent.RetainedParameters,
-                                                 IReadOnlyList<double>? weights = null)
+                                                 IReadOnlyList<double>? weights = null, bool quadrature = false)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(terms);
         ArgumentNullException.ThrowIfNull(draws);
         if (content is not (PointwiseContent.RetainedParameters or PointwiseContent.CollapsedPredictive))
             throw new ArgumentOutOfRangeException(nameof(content));
+        if (content == PointwiseContent.RetainedParameters && model.Observation.Law is { DensityByQuadrature: true } && !quadrature)
+            throw new NotSupportedException("This noise's density is an integral over each observation's latent, N × draws integrals of hundreds "
+                                            + "of nodes each; pass quadrature: true to take it.");
         UnitPartition partition = units ?? DefaultUnits(model);
         if (partition.Observations != model.Data.Response.Observations)
             throw new ArgumentException("The partition must cover the model's N observations, case by case and location by location.", nameof(units));

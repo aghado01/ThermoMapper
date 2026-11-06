@@ -318,7 +318,7 @@ public sealed class BassStudentTQualificationTests(ITestOutputHelper output)
                         ReadOnlySpan<double> y = working.Values;
                         for (int i = 0; i < v.Length; i++)
                         {
-                            v[i] = noise.Mixing.SampleConditional(y[i] - fit.Fitted[i], fit.Sigma2 * noise.VarianceScale, 0.0, 1.0, rng);
+                            v[i] = noise.Mixing.StepConditional(working.Latents!.Values[i], y[i] - fit.Fitted[i], fit.Sigma2 * noise.VarianceScale, 0.0, 1.0, rng);
                             w[i] = 1.0 / (noise.VarianceScale * v[i]);
                         }
                     });

@@ -280,7 +280,7 @@ public sealed class BassQuantileQualificationTests(ITestOutputHelper output)
                     {
                         ReadOnlySpan<double> y = working.Response.Values;
                         for (int i = 0; i < v.Length; i++)
-                            v[i] = noise.Mixing.SampleConditional(y[i] - fit.Fitted[i], fit.Sigma2 * noise.VarianceScale, drift, 1.0, rng);
+                            v[i] = noise.Mixing.StepConditional(latents.Values[i], y[i] - fit.Fitted[i], fit.Sigma2 * noise.VarianceScale, drift, 1.0, rng);
                     });
                     parts[4] += Timed(() => BassStructureMoves.Follow(chain.Moves, noise.At(working, new ObservationLatents(v, latents.Skew, latents.Sigma2))));
                     // σ²'s block whole, then its draw alone read off by redoing the draw's arithmetic is not separable without the block's

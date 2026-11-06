@@ -143,22 +143,40 @@ public readonly struct Beta : IContinuousDistribution
         double logX = (logLower + Math.Log(A) + logBeta) / A, logC = (logUpper + Math.Log(B) + logBeta) / B;
         if (logX < -700.0) return Math.Exp(logX);
         if (logC < -700.0) return 1.0;
+        double y = SolveLogit(logLower, logUpper, logBeta, logX, logC, out double correction);
+        (double x, double c, _, _) = FromLogit(y);
+        return x + x * c * correction;
+    }
 
+    /// <summary>logit x at the log tails <paramref name="logLower"/> and <paramref name="logUpper"/>, each the other's complement: the
+    /// solve's own coordinate, its last correction added, so x and 1 − x keep their digits through it at once (the generalized beta
+    /// prime's p·ln v).</summary>
+    internal double InverseLogit(double logLower, double logUpper)
+    {
+        if (double.IsNegativeInfinity(logLower)) return double.NegativeInfinity;
+        if (double.IsNegativeInfinity(logUpper)) return double.PositiveInfinity;
+        double logBeta = SpecialFunctions.LogBeta(A, B);
+        double logX = (logLower + Math.Log(A) + logBeta) / A, logC = (logUpper + Math.Log(B) + logBeta) / B;
+        // Below the double range the asymptotes are the answer: logit x = ln x there, or −ln(1 − x).
+        if (logX < -700.0) return logX;
+        if (logC < -700.0) return -logC;
+        return SolveLogit(logLower, logUpper, logBeta, logX, logC, out double correction) + correction;
+    }
+
+    private double SolveLogit(double logLower, double logUpper, double logBeta, double logX, double logC, out double correction)
+    {
         bool lower = logLower <= logUpper;
         double z = lower ? Normal.StandardInverseLogCdf(logLower) : -Normal.StandardInverseLogCdf(logUpper);
         double centre = SpecialFunctions.Digamma(A) - SpecialFunctions.Digamma(B) + z * Math.Sqrt(1.0 / A + 1.0 / B);
         double start = lower
             ? Math.Max(logX < 0.0 ? logX - SpecialFunctions.Log1mExp(logX) : double.NegativeInfinity, centre)
             : Math.Min(logC < 0.0 ? SpecialFunctions.Log1mExp(logC) - logC : double.PositiveInfinity, centre);
-
-        double y = TailInversion.Solve(new LogitTail(A, B, logBeta, lower), lower ? logLower : logUpper, start,
-                                       double.NegativeInfinity, double.PositiveInfinity, lower, scale: 1.0, out double correction);
-        (double x, double c, _, _) = FromLogit(y);
-        return x + x * c * correction;
+        return TailInversion.Solve(new LogitTail(A, B, logBeta, lower), lower ? logLower : logUpper, start,
+                                   double.NegativeInfinity, double.PositiveInfinity, lower, scale: 1.0, out correction);
     }
 
     // (x, 1 − x, ln x, ln(1 − x)) from y = logit x, for any y.
-    private static (double X, double C, double LogX, double LogC) FromLogit(double y)
+    internal static (double X, double C, double LogX, double LogC) FromLogit(double y)
     {
         double r = Math.Exp(-Math.Abs(y)), logOnePlus = SpecialFunctions.Log1p(r);
         return y >= 0.0 ? (1.0 / (1.0 + r), r / (1.0 + r), -logOnePlus, -y - logOnePlus)
