@@ -1,6 +1,6 @@
 # Variance-mean mixture noise
 
-> GBASS's noise on the BASS core (E1): a normal variance-mean mixture, εᵢ = σ(β·vᵢ + √(c·vᵢ)·ζᵢ), Gaussian given a latent scale per observation, which the Gaussian core fits through a working response that moves with the latents. Student t (robust BASS), the asymmetric Laplace (quantile regression), the Normal-Wald with its skew and tails drawn, the skewed t and the generalized hyperbolic are built; generalized beta prime mixing and the engine's samplers on the carrier follow.
+> GBASS's noise on the BASS core (E1): a normal variance-mean mixture, εᵢ = σ(β·vᵢ + √(c·vᵢ)·ζᵢ), Gaussian given a latent scale per observation, which the Gaussian core fits through a working response that moves with the latents. Student t (robust BASS), the asymmetric Laplace (quantile regression), the Normal-Wald with its skew and tails drawn, the skewed t, the generalized hyperbolic and the generalized beta prime with the horseshoe are built; the engine's samplers on the carrier follow.
 
 ## Overview
 
@@ -13,7 +13,8 @@ GBASS (Rumsey, Francom and Shen, arXiv 2306.01911; CRAN 2.0.1, the oracle) is BA
 | Normal-Wald (`nwbass`) | IG(1/γ, 1), γ drawn or held | c, GBASS's 1 | Drawn or held | On the record under a skew; integrated where β is held at 0 | Slice 3 |
 | Skewed t | IG(ν/2, ν/2) | as t | Drawn or held away from 0 | On the record | Slice 3 |
 | Generalized hyperbolic (`gbass`, GIG `v_prior`) | GIG(p, a, b) | c | Drawn or held | As the Normal-Wald | Slice 3 |
-| Beta prime (`hbass`) | GBP(1, ½, ½) | var(y) | 0 | Half-Cauchy on σ | Slice 4 |
+| Horseshoe (`hbass`) | GBP(1, ½, ½), √v half-Cauchy | 1 here; `hbass`'s var(y) | Drawn or held (0 by default) | Half-Cauchy on σ at the reference's scale, by the hierarchical route; integrated where β is held at 0 | Slice 4 |
+| Generalized beta prime (`gbass`, GBP `v_prior`) | GBP(p, a, b) | c | Drawn or held | As the horseshoe | Slice 4 |
 
 ## Student t, robust BASS (E1's slice 1)
 
@@ -173,6 +174,57 @@ Then the chain follows the offset at the new β. v's law is read at the record's
 - *v's N GIG draws and the Follow after them are most of a sweep,* as under the asymmetric Laplace; the skew and γ cost a block of O(N) sums, near σ²'s.
 - *Retention* is slice 2's: a retained draw keeps v with its scalars, γ now among them.
 
+## The generalized beta prime and the horseshoe (E1's slice 4)
+
+Built 2026-11-06 ([the build brief](../../issues/regression/bass/gbass-noise-brief.md#reports), slice 4), GBASS's `hbass` on the BASS core and its general case, `gbass` with a GBP `v_prior`: v ~ GBP(p, a, b), density ∝ v^(pa−1)·(1 + v^p)^(−(a+b)) ([the law](./ProbabilityAndInformation.md#the-generalized-beta-prime-and-its-normal-mixture-e1)), heavy at both ends of v, so that an observation is fitted closely, v small, or let go, v large: "interpolate or ignore".
+
+| Kind | v's law | β | On the config |
+|---|---|---|---|
+| Horseshoe (`hbass`) | GBP(1, ½, ½), √v ~ C⁺(0, 1) | N(m, s²) drawn, or held (0 by default) | `BassNoise.Horseshoe(skew, c, reference)` |
+| Strawderman–Berger (`hbass`, `likelihood = "sb"`) | GBP(½, 1, ½) | as above | `BassNoise.StrawdermanBerger(skew, c, reference)` |
+| Generalized beta prime (`gbass` with a GBP `v_prior`) | GBP(p, a, b) as declared | as above | `BassNoise.GeneralizedBetaPrime(mixing, skew, c, reference)` |
+
+**`hbass` as configuration.** `hbass` takes c = var(y) and w ~ GBP(1, ½, ½), √w ~ C⁺(0, 1), so the noise's scale per unit v, √(w·c), is half-Cauchy at sd(y). Here c = 1 and σ² under `Sigma2Prior.HalfCauchy()`: σ ~ C⁺(0, s) at the reference's mean square s², by the hierarchical route σ² | r ~ IG(½, r), r ~ Gamma(½, rate 1/s²) (Wand et al. 2011), with r's slice step (`BassSigma2RateBlock`). It is the same prior on the same quantity, the engine's σ² being `hbass`'s w·var(y), up to the reference's divisor N against var's N − 1; GBASS steps w by a log random walk. Nothing was built for it: the hierarchical prior was the core's and the noise never refused it. Slice 4 runs it under the noise: σ² integrated at the rate's prior where β is held at 0, and on the record, read by the rate's density (`BassTarget.Evaluate`'s σ² term) and drawn against IG(½, r) at the state's rate, under a skew. Its scale is read from y, so Geweke's test, whose y moves, cannot carry it; the readouts below can.
+
+**v's step.** Under GBP mixing v's conditional, ∝ p(v)·v^(−½)·exp(−(r − m·v)²/(2s²v)), has no exact draw, so `IMixingLaw` now steps: `StepConditional(current, residual, s², m, b)`, which an exact law answers with its draw, the current value unread, so t, the asymmetric Laplace and the GIG draw the numbers they drew; the latent block passes each vᵢ's current value. `GbpMixing` takes one slice step on u = ln v (Neal 2003; `SliceSampler`, width 2, at most 64 widths), whose log density (pa − ½)·u − (a + b)·ln(1 + e^(pu)) − r²/(2s²)·e⁻ᵘ − m²/(2s²)·eᵘ is concave, so the slice is one interval. Its two exponential terms are taken in logs, so a residual whose square is below the double range keeps its wall. At a residual of exactly 0 the conditional is improper where pa ≤ ½, the horseshoe's and the Strawderman–Berger's case, the noise's pole: refused, an event of probability 0 under continuous data. `SliceSampler` gained a struct overload, so N steps a sweep allocate no delegates; the delegate form calls it, its numbers unchanged.
+
+| v's step | Exact | Tuning | Trade-off |
+|---|---|---|---|
+| **Slice on ln v (chosen)** | A step that leaves the conditional invariant | None: stepping out and shrinkage size the interval | 6.6 to 6.8 evaluations of a few exponentials a step, 0.41 µs; one step a sweep |
+| GBASS's random walk on ln v (`rgbp`) | A step, invariant at a fixed size | A size adapted in burn-in from mean(ln v)'s spread, which slice 0 found 0.543 against the per-observation 3.96 | Its mixing rides that tuning |
+| Auxiliary gamma: at p = 1, v = G_a/G_b, so v \| λ ~ Gamma(a, λ), λ ~ Gamma(b, 1) | Exact draws: v \| λ, r is GIG(a − ½, 2λ + m²/s², r²/s²), λ \| v Gamma(a + b, 1 + v) (Armagan, Dunson and Clyde 2011) | None | p = 1 only, not the Strawderman–Berger; a second latent per observation; Gibbs between v and λ slows where they correlate |
+| Rejection from the prior under the likelihood's peak | Exact | None | Its acceptance falls as \|r\|/s near the pole, under 1% at r = 10⁻³·s |
+
+**The readers.** The noise's density has no closed form under a drift or a general GBP (the horseshoe's at m = 0 is (2π³)^(−½)·e^c·E₁(c)/s with c = r²/(2s²), which the checks read): it is the integral over ln v (`NormalGeneralizedBetaPrime`), hundreds of nodes a read. A pointwise density reads it N × draws times, so it is opt-in for that path: `BassFit.PointwiseLogDensity(data, quadrature: true)` and `BassPointwise.LogDensity(…, quadrature: true)` take it; without the flag a noise whose `IBassNoiseLaw.DensityByQuadrature` holds is refused with its reason. The predictive's quantiles read each draw's noise as that distribution, its tails from the mixture's table. The horseshoe and the Strawderman–Berger have neither a mean nor a variance: the variance reads +∞, so the training fit states no noise sd; under a drawn skew the mean's shift σβE[v] is ±∞, a noise without a mean. The pointwise density's latent report now calls the per-observation latent integrated (`LatentTreatment.Integrated`) under every noise law: given the globals nothing outside its observation moves it, so the term is in-sample, and WAIC and PSIS-LOO read it.
+
+| The pointwise density | A read | Trade-off |
+|---|---|---|
+| **The integral over ln v, opt-in (chosen)** | 41 µs | Every GBP and drift; N × draws reads, so asked for |
+| The horseshoe's closed form at m = 0 | An exponential integral | The symmetric horseshoe alone; a second path for one case |
+| Monte Carlo over v | A few hundred draws | Its noise enters the pointwise checks as the model's |
+
+**The mixture's integral, upgraded.** The generalized hyperbolic's integral and table are now a base the GBP's mixture shares (`NormalVarianceMeanMixture`), and three changes the GBP's heavy tails and pole forced move the generalized hyperbolic's tables too ([the forms](./ProbabilityAndInformation.md#the-generalized-beta-prime-and-its-normal-mixture-e1)): the integral about its peak where x and the drift share a sign, without the cancellation that made the far drift side's integrand noise and a table's build run for minutes; the table's cubic in asinh(x/s), where a power tail's score is smooth and the horseshoe's table in x missed its integral by up to half the log tail at 10⁻⁹; and the table's steps into a pole, at most ¼ of |x|. Its draws do not move; its predictive quantiles move at the table's level, under 3·10⁻⁴ of a log tail.
+
+**Checked** (`BassGeneralizedBetaPrimeTests`, `GbpMixingTests`, `GeneralizedBetaPrimeTests`; behind `BASS_QUALIFICATION`, `BassGeneralizedBetaPrimeQualificationTests`; against R, `GbassHorseshoeReadoutTests`):
+- *The law.* The slice step from exact draws of v's conditional (by rejection from the prior) leaves them on it, Kolmogorov–Smirnov against the conditional's CDF by quadrature in ln v, √n·D at most 1.17 against the cut 2.6 on eight cases: the horseshoe at residuals 10⁻³, ½ and 3, with a drift, at power ½ and at the prior, the Strawderman–Berger with a drift, a general GBP; every draw moved. A chain of 400,000 steps at r = 0.01 carries the conditional's mean of ln v (−4.582 ± 0.005 against −4.575). The exact laws' steps equal their draws, number for number. The noise's density, tails and table as [the distribution's checks](./ProbabilityAndInformation.md#the-generalized-beta-prime-and-its-normal-mixture-e1) state.
+- *Geweke's joint-distribution test* at slice 3's size (400,000 marginal-conditional draws against 600,000 sweeps), v moved by its slice step: the horseshoe with σ² integrated on two seeds, with β drawn and σ² on the record, and the Strawderman–Berger; every |z| under the bar of 4 over nine functions each (M, ln τ, ln σ², ln v₀, mean ln v, f at two points, β and the standardized residual), the worst 3.67, ln τ under the horseshoe at seed 20261106, which reads −0.19 at twice the size. Three more seeds at that size read |z| ≤ 1.91, and four times the size on a fifth, the horseshoe and its skewed form, ≤ 2.64; the skewed form's v functions, to 2.64, change sign between seeds, slow mixing along the skew and scale rather than a bias. Of 600,000 latent draws 0 to 9 were refused, each outside F and kept as the gate's exact step. `hbass`'s half-Cauchy cannot enter: its scale reads y, which the successive simulator moves.
+- *Recovery* from a contaminated normal outside the family (0.85·N(0, 0.25²) + 0.15·N(0, 2²), f = sin 2πx₀ + x₁, N = 300, six data sets), the horseshoe under `hbass`'s half-Cauchy against Gaussian BASS: f's 90% intervals cover 80.6% of 294 grid points against Gaussian BASS's 86.4%, at an RMSE of 0.086 against 0.142; the 90% predictive intervals cover 92.9% of 1,800 held-out responses against 92.7%. The horseshoe lets the outliers go and fits the surface closer than Gaussian BASS does. t(3) on the same data sets covers 89.5% at an RMSE of 0.059 (slice 1): its v is kept from 0 by its prior, where the horseshoe's v near 0 lets a fit follow some observations closely, and the horseshoe's intervals for f undercover.
+- *`hbass`'s readouts* (`GbassHorseshoeReadoutTests`, N = 200, R 6,000 iterations, the engine 4 chains × 1,500 draws). `hbass` as written adapts v's step from mean(ln v)'s spread, slice 0's defect, to 0.12 at an acceptance of 0.98 here (0.038 at 0.99 on a second set of N = 200), so v mixes slowly: against the same sampler with v's step held at 2.5 and its adaptation off (acceptance 0.55), the correction and the reference, it reads M 4.16 against 5.36 and w·var(y) 0.082 against 0.068. Against the reference, at engine seed 41: the surface within 0.55 of the wider 90% half-band under the g-prior and 0.82 under the ridge; σ² 0.0765 and 0.0802 against w·var(y) 0.0685 [0.043, 0.103]; mean ln v −0.177 and −0.192 against −0.162; v below 0.1 in 16.7% of draws under both against 17.2%; M 5.84 and 5.10 against 5.36. Over engine seeds 41 to 46 the ridge read 0.52 to 0.82 and the g-prior 0.55 to 1.20, so the bars are `qbass`'s: parity at 1.0 for the ridge, GBASS's own form, and 1.5 for the g-prior, a stated model difference. Against `hbass` as written the g-prior read 0.97 to 1.56: the gap was its sampler, not the engine.
+- *The run.* A horseshoe fit with a drawn skew under the half-Cauchy resumes bit for bit, v, σ², β and σ²'s rate included; a retained draw's view rebuilds bit for bit under the horseshoe, its skewed form and the Strawderman–Berger; the sweep runs the rate's block with the noise's, under σ² integrated and on the record.
+
+**Cost** (`CostRow_PerPartOfASweep_AndThePointwiseRead`; thread cycles on a loaded machine, so indicative; µs per sweep by part, the horseshoe under the g-form, t(4)'s exact draws of v at the same residuals beside).
+
+| Point | M | Structure | τ | a | v's slice steps | Follow | Sweep | t(4)'s v draws | Gaussian sweep |
+|---|---|---|---|---|---|---|---|---|---|
+| n 1,000, p 10, the base | 14 | 106 | 3.2 | 24 | 413 | 221 | 767 | 74 | 49 |
+| n 200 | 3.1 | 11 | 2.0 | 2.6 | 83 | 12 | 110 | 9.9 | 4.2 |
+| n 10,000, M_max 200 | 200 | 86,295 | 18 | 3,995 | 3,807 | 225,347 | 319,461 | 471 | 1,583 |
+
+- *v's slice steps* take 6.6 to 6.8 evaluations each, 0.41 µs at the base, 5.6 times t's exact draw: half the base's sweep, under the Follow at M 200.
+- *A horseshoe sweep is 16 Gaussian sweeps at the base,* 26 at n 200 and 200 at M 200.
+- *The pointwise read* (wall clock) is 41 µs against t's closed form's 0.11: at N 1,000 and 2,000 draws, 82 s, the opt-in's reason.
+- *The predictive's quantiles* read a table per draw, 15 to 28 ms for the horseshoe and the Strawderman–Berger (wall clock; 9 ms for a law without a pole): the recovery's twelve predictions over 2,000 draws each took most of its 29 minutes.
+
 ## The GIG's draw: ratio-of-uniforms where it is faster
 
 Built 2026-11-06 after slice 3, at the user's word that spline surfaces are expensive and every bit of performance counts. v's conditional is a GIG under the asymmetric Laplace, the Normal-Wald, the skewed t and the generalized hyperbolic, and its N draws were most of a sweep. An untruncated GIG draw is now Hörmann and Leydold's (2014), GIGrvg's ([the method](./ProbabilityAndInformation.md#the-gig-the-modified-half-normal-and-the-asymmetric-laplace-e1)), on a ratio-of-uniforms primitive other families can take (`RatioOfUniforms`); a truncated draw stays the tangent hat's. Both draw the same law exactly and independently, so a chain mixes as it did; the measure is time a draw.
@@ -211,11 +263,13 @@ Read in slice 1, built in slice 2: the brief's lever for a working response that
 
 ## Status and caveats
 
-- *Built:* slices 0 to 3 of [the brief](../../issues/regression/bass/gbass-noise-brief.md), each with its report there.
-- *Open, by slice:* generalized beta prime mixing and its slice steps (4); the latents on tempered rungs, SMC and the flat histogram, and a per-observation latent under a direct functional design (5); BARS through the shared law (6); the z parameterization and interweaving (7).
+- *Built:* slices 0 to 4 of [the brief](../../issues/regression/bass/gbass-noise-brief.md), each with its report there.
+- *Open, by slice:* the latents on tempered rungs, SMC and the flat histogram, and a per-observation latent under a direct functional design (5); BARS through the shared law (6); the z parameterization and interweaving (7).
 - *The asymmetric Laplace is a working likelihood* where the noise is not one: its posterior intervals for the q-quantile undercover under other noise (63.8% for nominal 90% at q = 0.9 on skewed, heteroscedastic noise), as Yang, Wang and He (2016) show in general. The surface is the q-quantile; its intervals are not yet calibrated for it.
 - *The Normal-Wald's prior on γ* is a normal on γ > 0, which cannot hold a far median with much mass near 0 (the bound above); a fit meant to range from near-Gaussian to the heaviest tails needs a prior on ln γ, open.
-- *The generalized hyperbolic's predictive tails* come from a table built per draw, some 60 tail integrals, about 10 ms; a predictive over thousands of draws spends seconds building them.
+- *A mixture's predictive tails* come from a table built per draw: the generalized hyperbolic's some 60 tail integrals, about 10 ms; the horseshoe's 15 to 28 ms, its pole and heavier tails taking more points; a predictive over thousands of draws spends seconds to minutes building them.
+- *The horseshoe's pointwise density* is an integral per observation and draw, 41 µs each, so it is opt-in; its symmetric case has a closed form (the exponential integral) not taken.
+- *`hbass`'s half-Cauchy has no Geweke check under the noise:* its scale reads y, which Geweke's successive simulator moves; the readouts and the run carry it.
 
 ## Source map
 
@@ -227,8 +281,10 @@ Read in slice 1, built in slice 2: the brief's lever for a working response that
 | The sweep's draw of a and σ² | `BassSweep.cs` (`BassStructureMoves.DrawSweepFit`, `SweepFit`) |
 | The draw keeping its latents | `BassState.cs` (`BassDraw.Latents`, `WorkingOn`, `LatentsOn`) |
 | The prior's energy for σ²'s block | `src/maths/regression/gprior/CollapsedGPrior.cs` (`GPriorConditional.PriorEnergy`), `PriorPencil.cs` |
-| The mixing laws | `src/maths/regression/MixingLaw.cs` (`IMixingLaw`, `StudentTMixing`, `ExponentialMixing`, `GigMixing`) |
+| The mixing laws | `src/maths/regression/MixingLaw.cs` (`IMixingLaw`, `StudentTMixing`, `ExponentialMixing`, `GigMixing`, `GbpParameters`, `GbpMixing`) |
+| v's slice step | `src/maths/samplers/blocks/SliceSampler.cs` (`IScalarLogDensity`) |
+| The pointwise opt-in | `BassPointwise.cs` (`LogDensity`'s `quadrature`, `Latents`), `BassFit.cs` (`PointwiseLogDensity`) |
 | The Normal-Wald's calibrations | `src/maths/regression/NormalWaldCalibration.cs` (`NormalWaldCalibration`, `NormalInverseGaussian`) |
 | The predictive's quantile under a law | `src/maths/regression/spline/bass/posterior/PredictiveMixture.cs` |
-| The laws drawn from and read | `src/maths/distributions/GeneralizedInverseGaussian.cs`, `ModifiedHalfNormal.cs`, `AsymmetricLaplace.cs`, `GeneralizedHyperbolic.cs`, `BesselK.cs`, `RatioOfUniforms.cs` |
-| Tests | `tests/regression/BassStudentTTests.cs`, `BassStudentTQualificationTests.cs`, `BassQuantileTests.cs`, `BassQuantileQualificationTests.cs`, `BassNormalWaldTests.cs`, `BassNormalWaldQualificationTests.cs`, `GigMixingTests.cs`, `NormalWaldCalibrationTests.cs`; `tests/distributions/BesselKTests.cs`, `GigNormalizerTests.cs`, `LogConcaveEnvelopeTests.cs`; `tests/oracle/Gbass*.cs` |
+| The laws drawn from and read | `src/maths/distributions/GeneralizedInverseGaussian.cs`, `ModifiedHalfNormal.cs`, `AsymmetricLaplace.cs`, `GeneralizedHyperbolic.cs`, `BesselK.cs`, `RatioOfUniforms.cs`, `NormalVarianceMeanMixture.cs`, `GeneralizedBetaPrime.cs`, `NormalGeneralizedBetaPrime.cs`, `Beta.cs` (`InverseLogit`) |
+| Tests | `tests/regression/BassStudentTTests.cs`, `BassStudentTQualificationTests.cs`, `BassQuantileTests.cs`, `BassQuantileQualificationTests.cs`, `BassNormalWaldTests.cs`, `BassNormalWaldQualificationTests.cs`, `GigMixingTests.cs`, `NormalWaldCalibrationTests.cs`, `BassGeneralizedBetaPrimeTests.cs`, `BassGeneralizedBetaPrimeQualificationTests.cs`, `GbpMixingTests.cs`; `tests/distributions/BesselKTests.cs`, `GigNormalizerTests.cs`, `LogConcaveEnvelopeTests.cs`, `GeneralizedBetaPrimeTests.cs`; `tests/oracle/Gbass*.cs` |

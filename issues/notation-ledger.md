@@ -11,6 +11,16 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### p, a, b of the GBP beside the GIG's, and hbass's c and w against the core's σ² (2026-11-06)
+
+- **Kind:** one name for several concepts, and one concept in two parameterizations.
+- **Readings:**
+  - p, a, b, the generalized beta prime's power and shapes, GBP(p, a, b) ∝ v^(pa−1)·(1 + v^p)^(−(a+b)) (`GbpParameters`, `src/maths/regression/MixingLaw.cs`; `GeneralizedBetaPrime.P`, `A`, `B`, `src/maths/distributions/GeneralizedBetaPrime.cs`), GBASS's `p`, `a`, `b` of a GBP `v_prior`; against the GIG's p, a, b (`GigParameters`, `src/maths/samplers/blocks/GigParameters.cs`), whose roles differ (a and b there are the rates on v and 1/v), and a, the coefficients.
+  - c and w under `hbass`: GBASS takes c = var(y) and w the global scale with √w ~ C⁺(0, 1); the core takes c = 1 (`BassNoise.Horseshoe`, `src/maths/regression/spline/bass/BassNoise.cs`) and σ² under `Sigma2Prior.HalfCauchy()`, so the core's σ² is `hbass`'s w·var(y), the noise's scale per unit v on both sides.
+  - The pole's rate, how fast ln g(u) rises from u = −∞ (`NormalVarianceMeanMixture.LeftExponent`, `src/maths/distributions/NormalVarianceMeanMixture.cs`), pa under the GBP and p under the variance gamma; written in words, not α, which names the intercept and the modified half-normal's first parameter.
+- **Found:** 2026-11-06, E1's slice 4 (the generalized beta prime on the BASS core).
+- **Note:** McDonald (1984) and Armagan, Dunson and Clyde (2011) write the GBP's shapes a and b with the power; `docs/Maths/VarianceMeanMixtures.md` writes GBP(p, a, b) in full where it meets the GIG.
+
 ### γ, the Normal-Wald's tail, beside the half-normal's γ and the NIG's α, β, δ (2026-11-06)
 
 - **Kind:** one name for several concepts, and one concept in two parameterizations.
