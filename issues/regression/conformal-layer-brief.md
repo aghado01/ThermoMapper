@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: open, not started. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0 and 1 started 2026-11-06. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -55,7 +55,7 @@ It does not reach a curve's or a parameter's own intervals: those stay with E15'
   - the split form holds for any fit, the sampler's included;
   - an estimate within ε costs at most |M|/m, with |M| read from the estimates; ε must be a sure bound, or its failure probability adds to the miscoverage.
 
-**Recommended; a chip starts on these unless the user says otherwise.**
+**Recommended, and accepted by the user on 2026-11-06 when the chip for slices 0 and 1 started.**
 1. **One seam, not one type per engine.** The layer reads `PointwiseLogDensity` and the candidate matrix. An engine joins by adding the candidate density; nothing in the layer knows BASS.
 2. **The full step's content is the retained parameters,** Fong and Holmes's in-sample score. Hoff's leave-one-out score, which carries his optimality, is a later option: it needs the weight g(y_c | θ)/g(y_i | θ) per data unit, add-one-in and leave-one-out at once, with PSIS's instability.
 3. **Sets on a grid in y,** its resolution stated with the set. π(y) need not be monotone, so a set can be a union of intervals, and the layer reports it as one. Refinement of the boundaries is an option, not the default.
