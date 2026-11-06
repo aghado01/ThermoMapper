@@ -8,7 +8,7 @@ Pins the contract of the engine's conformal layer, one layer over retained draws
 - CB-4: `sum_jointU`, `post_addOneIn`, `integratedScore_equivariant`, `latentScore_equivariant`, `latentScore_eq`, `sum_jointU_addOneIn`, `integratedScore_le_latentScore`, `accepts_latent_of_mixed`, `mixed_counterexample`;
 - CB-3: `accepts_or_fragile`, `accepts_shift_of_accepts_close`, `acceptsInflated_of_accepts`, `fragileEstimated_of_fragile`, `coverage_close`, `coverage_inflated`, `card_fragile_le_estimated`.
 
-[`conformal-checks.py`](conformal-checks.py) holds the exact-arithmetic checks, run before the Lean. Every assertion holds. Changed from the brief: CB-1's upper bound is an equality at the grid levels, and Hoff's strict rule fails under ties; CB-3's band is one-sided and tight, and it gives a third option, the inflated rule. Nothing proved false. Open: the law forms on continuous spaces, CB-3 under an ε that holds only with high probability, and the Hoff finding under CB-4.
+[`conformal-checks.py`](conformal-checks.py) holds the exact-arithmetic checks, run before the Lean. Every assertion holds. Changed from the brief: CB-1's upper bound is an equality at the grid levels, and Hoff's strict rule fails under ties; CB-3's band is one-sided and tight, and it gives a third option, the inflated rule. Nothing proved false. CB-3's prior art was read in full on 2026-11-06; the inflated rule is known, and the margin was not found. Open: the law forms on continuous spaces, CB-3's margin under an ε that holds only with high probability (for the inflated rule, Bhattacharyya et al. give 1 − α − 3√ν), and the Hoff finding under CB-4.
 
 **Conventions, fixed here and used throughout.**
 - A score is a **conformity** score: higher conforms better. The engine's pointwise log density is one, and a monotone map of every unit's score changes nothing.
@@ -140,15 +140,24 @@ The strict rule covers at most 1 − k/m (`coverage_strict_le`). With distinct s
 
 **Decision: whether the full-conformal layer reports its margin, and when it falls back to the split form.** One lemma gives three policies.
 - *Report the margin:* coverage ≥ 1 − (k + m̂)/m, with m̂ the estimated band's count, taken as the maximum over the candidates on the grid.
-- *Inflate by 2ε:* keep 1 − k/m at the cost of width.
+- *Inflate by 2ε* (Ndiaye's stable sets): keep 1 − k/m at the cost of width.
 - *Fall back to the split form (CB-2):* when m̂/m is too large for the requested level, or when ε cannot be trusted.
+- *Correct by tournament* (Bhattacharyya, Zhang and Barber, under prior art): full data and 1 − 2α whatever the draws, at the cost of n leave-one-out chains.
 
 ε is a sure bound in these statements. A Monte Carlo ε holds only with some probability, and its failure probability adds to the miscoverage. ε comes from the sampler's own error estimate for each unit's add-one-in score, so it is only as good as the mixing. A chain that fails its diagnostics sends the layer to the split form.
 
-**Prior art** (abstracts only, found by web search on 2026-11-06; none of these is on disk).
-- Barber, Candès, Ramdas and Tibshirani, *Conformal prediction beyond exchangeability* (AoS 2023, arXiv 2202.13415): coverage gaps bounded by weighted total-variation terms, and a randomization technique for algorithms that are not symmetric.
-- Ndiaye, *Stable conformal prediction sets* (ICML 2022, arXiv 2112.10224): a single fit, with a stability bound added to keep coverage. This is the inflated rule with a stability bound in place of ε.
-- Razafindrakoto, Celisse and Lacaille, *Approximate full conformal prediction in an RKHS* (arXiv 2601.13102): a slack τᵢ(y) added to the training scores, so the approximate region contains the full one. The same route, per point.
-- Bhattacharyya, Zhang and Barber, *Approximating full conformal prediction: … the tournament correction* (arXiv 2605.29200): 1 − 2α guaranteed, about 1 − α under stability.
-- Abad Martinez et al. (AAAI 2023, arXiv 2202.01315): influence-function approximations whose error vanishes as n grows.
-- None of these abstracts states the one-sided fragile count or its attainment. Whether a paper does is open.
+**Prior art** (read on 2026-11-06 at their theorems, from `gauntlet/conformal-bayes` and `PDFs/Bayesian/ndiaye22a.pdf`).
+- *The inflated rule is known.*
+  - Ndiaye, *Stable conformal prediction sets* (ICML 2022, PMLR 162; Prop. 3.2 to 3.4). Per-unit sure stability bounds τᵢ sandwich the exact p-value between a deflated and an inflated one. The inflated set contains the exact one and covers 1 − α. `coverage_inflated` is its case with a uniform ε, and `accepts_shift_of_accepts_close` is its deflated side.
+  - Razafindrakoto, Celisse and Lacaille, *Approximate full conformal prediction in an RKHS* (arXiv 2601.13102, the approximate region's definition). The same construction, with a slack τᵢ(y) for each unit and candidate.
+  - Bhattacharyya, Zhang and Barber, *Approximating full conformal prediction: … the tournament correction* (arXiv 2605.29200, appendix, "Coverage of the approximate method under stronger stability"). They inflate by 2ε, where each unit's error, the test unit's included, is within ε with probability 1 − ν, and they get 1 − α − 3√ν. Their Example 3 is Fong and Holmes's add-one-in score from draws.
+- *The uninflated rule's margin was not found.* None of the five bounds an uninflated approximation's coverage by a fragile count. Bhattacharyya et al. write that such approximations "typically do not come with general finite-sample coverage guarantees". Abad Martinez et al. (AAAI 2023, arXiv 2202.01315) bound their influence-function scores' error by O(1/N), but leave finite-sample validity open. `coverage_close` answers that for any sure score error.
+- *A full-data guarantee that does not need mixing* (Bhattacharyya et al., the tournament correction, Thm "Validity" and its randomized form).
+  - The candidate is compared with each data unit i, using a score fitted without both of them and symmetric in the rest.
+  - With no assumption on the approximation, coverage is at least 1 − 2α.
+  - Under a weaker stability, coverage of the 2ε-inflated set is at least 1 − α − 3√ν. The stability needed is that moving one data unit's role leaves the candidate's score within ε.
+  - For conformal Bayes this takes posterior draws given each leave-one-out set: n chains, each needing to treat its data symmetrically but not to mix.
+  - Their shortcut, which rejection-samples from the n-unit draws, is valid only for exact posterior draws and a likelihood bounded below.
+- Barber, Candès, Ramdas and Tibshirani, *Conformal prediction beyond exchangeability* (AoS 2023, arXiv 2202.13415, "Nonexchangeable full conformal prediction" with §3.2).
+  - An algorithm that treats one position specially is made valid by swapping the test unit with a random unit before fitting. The gap term vanishes under exchangeability.
+  - For add-one-in that means draws given every unit but a random one, the candidate included: a refit per candidate, which the step exists to avoid.

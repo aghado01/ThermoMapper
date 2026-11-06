@@ -101,6 +101,19 @@ Append a report below, newest first, under "Reports", and keep the protolemma's 
 
 Newest first.
 
+### 2026-11-06 — CB-3's prior art, read in full
+
+The four arXiv papers are now in `gauntlet/conformal-bayes`, and Ndiaye's is in `PDFs/Bayesian/ndiaye22a.pdf` (ICML 2022, PMLR 162). Each was read at its theorems. [conformal-lemmas.md](conformal-lemmas.md) has the detail under CB-3's prior art.
+- *No statement changes.* The checks, the Lean and the earlier report's findings stand.
+- *The inflated rule is known.* It is Ndiaye's stable set (Prop. 3.2 to 3.4) with a uniform ε in place of per-unit sure bounds τᵢ. The RKHS paper gives the same construction with τᵢ(y). `coverage_inflated` is the finite, sure-bound case of both, and `accepts_shift_of_accepts_close` is Ndiaye's deflated side.
+- *The margin was not found.* The fragile count bounding the uninflated rule (`coverage_close`), and its attainment, are in none of the five. Bhattacharyya, Zhang and Barber call uncorrected approximations unguaranteed in general. Abad Martinez et al. leave their scores' finite-sample validity open.
+- *The probabilistic-ε follow-up is half answered.* For the inflated rule, Bhattacharyya et al.'s appendix gives 1 − α − 3√ν when each unit's error is within ε with probability 1 − ν, test unit included, and their Example 3 is Fong and Holmes's add-one-in score. The margin's form under such an ε stays open.
+- *A new option for the fallback decision: the tournament correction.* It uses full data and covers at least 1 − 2α with no assumption on the approximation, randomized scores included. For conformal Bayes it needs draws given each leave-one-out set (n chains), and those chains need to treat their data symmetrically but not to mix. Their rejection shortcut from the n-unit draws needs exact draws and a likelihood bounded below. Barber, Candès, Ramdas and Tibshirani's swap randomization would need a refit per candidate.
+
+**Follow-ups, each with the decision it would change.**
+- *Per-unit bounds.* Ndiaye's τᵢ and the RKHS paper's τᵢ(y) suggest stating CB-3 with a per-unit εⱼ, the layer's per-unit MCSE in place of the largest one. That decides how wide the inflated set is and how large the reported margin is.
+- *E16's sampler bullet* ("What the conformal literature adds") weighs the full step on good draws against the split form. The tournament form is a third choice: full data at 1 − 2α, without mixing. That decides the fallback when the chain fails its diagnostics. E16 was not edited.
+
 ### 2026-11-06 — CB-1 to CB-4 posed, checked and proved
 
 **Proved** in `lean/Enthymemata/ConformalValidity.lean`, namespace `Conformal`, added to `Enthymemata.lean`. There are 88 declarations, no apologies, and the file is PROOF-CLOSED. `#print axioms` on the 28 main results shows `propext`, `Classical.choice` and `Quot.sound` only. The statements, the checks' figures and the decisions are in [conformal-lemmas.md](conformal-lemmas.md), and the exact-arithmetic checks in [conformal-checks.py](conformal-checks.py), run before any Lean.
