@@ -11,20 +11,25 @@ namespace Maths.Regression.Spline.Bass;
 /// chain lengths, draw weights and latent report. The surface f at the cases is prediction's (<see cref="BassSurface"/>, the
 /// training basis at new inputs). The density is the training terms' own: N(y | f, σ²), or under a noise law the law's with each
 /// observation's latent integrated out (OQ17's scope rule, CB-4's default), at the draw's σ² and its latents' globals. A
-/// candidate is one observation of a scalar response, so it pairs with the default units. Thread-safe: it reads the model and
-/// the table and writes only its own buffers.
+/// candidate is one observation of a scalar response, so it pairs with the default units. A law whose density is an integral over
+/// the latent (<see cref="IBassNoiseLaw.DensityByQuadrature"/>) costs draws × candidates integrals, so it is taken on
+/// <c>quadrature</c> alone, as the pointwise path takes it. Thread-safe: it reads the model and the table and writes only its own
+/// buffers.
 /// </summary>
 internal static class BassCandidates
 {
     public static CandidateLogDensity LogDensity(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws,
                                                  IReadOnlyList<double>? weights, PredictionCases cases, IReadOnlyList<double[]> grids,
-                                                 int[]? strata, UnseenLevel unseenLevels)
+                                                 int[]? strata, UnseenLevel unseenLevels, bool quadrature = false)
     {
         ArgumentNullException.ThrowIfNull(cases);
         ArgumentNullException.ThrowIfNull(grids);
         if (model.Data.Response is FunctionalResponse)
             throw new NotSupportedException("A direct functional fit's unit is a curve; a candidate here is one observation of a scalar response. Whole curves are E17's.");
         IBassNoiseLaw? law = model.Observation.Law;
+        if (law is { DensityByQuadrature: true } && !quadrature)
+            throw new NotSupportedException("This noise's density is an integral over each observation's latent, draws × candidates integrals of hundreds "
+                                            + "of nodes each; pass quadrature: true to take it.");
         if (law is null && !model.Working.IsUnweighted)
             throw new NotSupportedException("A weighted fit's terms read each observation's weight, and a new case carries none, so its candidates are not read as its units are.");
         (List<BassDraw> pooled, int[] chains) = BassDrawFit.Pool(draws, terms, false, nameof(draws));

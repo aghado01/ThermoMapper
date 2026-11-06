@@ -15,8 +15,9 @@ namespace Maths.Regression.Tests;
 /// <summary>
 /// The generalized beta prime on the BASS core (E1's slice 4), the horseshoe and the Strawderman–Berger: their declaration; the latent block,
 /// whose slice step moves each v from its current value, under σ² integrated and under a drawn skew with σ² on the record; σ² under the
-/// half-Cauchy, <c>hbass</c>'s prior; retention and resume bit for bit; and the readers, the pointwise density refused until opted into and
-/// then the law's integral, the predictive's quantiles from the mixture's table, and the moments the horseshoe lacks.
+/// half-Cauchy, <c>hbass</c>'s prior; retention and resume bit for bit; and the readers, the pointwise and candidate densities refused until
+/// opted into and then the law's integral, the one the other's column at the training cases, the predictive's quantiles from the mixture's
+/// table, and the moments the horseshoe lacks.
 /// </summary>
 public sealed class BassGeneralizedBetaPrimeTests(ITestOutputHelper output)
 {
@@ -158,6 +159,13 @@ public sealed class BassGeneralizedBetaPrimeTests(ITestOutputHelper output)
             for (int i = 0; i < y.Length; i += 9)
                 Assert.Equal(mixing.MarginalLogDensity(y[i] - p.Latent[d, i, 0], sigma2, 0.0), pointwise.Values[d, i], 10);
         }
+        // The candidate density takes the same opt-in, and at the training cases it is the pointwise column.
+        double[][] grids = [.. y.ToArray().Select(v => new[] { v })];
+        Assert.Throws<NotSupportedException>(() => fit.CandidateLogDensity(data, PredictionCases.Of(data), grids));
+        CandidateLogDensity candidates = fit.CandidateLogDensity(data, PredictionCases.Of(data), grids, quadrature: true);
+        for (int s = 0; s < pointwise.Draws; s += 13)
+            for (int i = 0; i < y.Length; i += 7)
+                Assert.Equal(pointwise.Values[s, i], candidates.Values[s, i], 12);
         double[,] lo = p.Quantile(0.05), hi = p.Quantile(0.95);
         for (int i = 0; i < y.Length; i++) Assert.True(double.IsFinite(lo[i, 0]) && double.IsFinite(hi[i, 0]) && lo[i, 0] < hi[i, 0]);
         // The horseshoe has no variance, so the training fit states no noise sd.

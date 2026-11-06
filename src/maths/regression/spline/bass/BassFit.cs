@@ -73,11 +73,13 @@ public sealed record BassFit(
     /// <param name="grids">Each case's candidate values, ascending.</param>
     /// <param name="strata">Each case's stratum in the training density's partition; null puts every case in stratum 0.</param>
     /// <param name="unseenLevels">What a categorical level no training case took does: refused by default.</param>
+    /// <param name="quadrature">Takes a noise whose density is an integral over each observation's latent, draws × candidates integrals;
+    /// refused without it, as <see cref="PointwiseLogDensity"/> refuses it.</param>
     public CandidateLogDensity CandidateLogDensity(BassData data, PredictionCases cases, IReadOnlyList<double[]> grids, int[]? strata = null,
-                                                   UnseenLevel unseenLevels = UnseenLevel.Refuse)
+                                                   UnseenLevel unseenLevels = UnseenLevel.Refuse, bool quadrature = false)
     {
         BassModel model = ModelOn(data);
-        return BassCandidates.LogDensity(model, Terms, Draws, DrawWeights, cases, grids, strata, unseenLevels);
+        return BassCandidates.LogDensity(model, Terms, Draws, DrawWeights, cases, grids, strata, unseenLevels, quadrature);
     }
 
     /// <summary>
