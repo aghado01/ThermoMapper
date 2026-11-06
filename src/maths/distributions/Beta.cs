@@ -87,7 +87,7 @@ public readonly struct Beta : IContinuousDistribution
     }
 
     // h(δ) on logit x = logit x₀ + δ: aδ − (a + b) ln(c₀ + x₀e^δ), written below and above the anchor so neither overflows.
-    private readonly struct LogitRatio(double a, double b, double x0, double c0) : IConcaveLogRatio
+    internal readonly struct LogitRatio(double a, double b, double x0, double c0) : IConcaveLogRatio
     {
         public double Value(double delta)
         {

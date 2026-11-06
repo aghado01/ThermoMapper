@@ -124,7 +124,7 @@ public readonly struct ModifiedHalfNormal
     }
 
     // About the mode x* of α ≥ 1: (α − 1)(ln(1 + t) − t) − βδ², t = δ/x*, the linear terms cancelled by 2βx* − γ = (α − 1)/x*.
-    private readonly struct LinearRatio(double power, double beta, double mode) : IConcaveLogRatio
+    internal readonly struct LinearRatio(double power, double beta, double mode) : IConcaveLogRatio
     {
         public double Value(double delta) => power * LogOnePlusLess(delta / mode) - beta * delta * delta;
 
@@ -136,7 +136,7 @@ public readonly struct ModifiedHalfNormal
     }
 
     // α = 1 with γ ≤ 0, about 0: −βδ² + γδ.
-    private readonly struct EdgeRatio(double beta, double gamma) : IConcaveLogRatio
+    internal readonly struct EdgeRatio(double beta, double gamma) : IConcaveLogRatio
     {
         public double Value(double delta) => delta * (gamma - beta * delta);
 
@@ -144,7 +144,7 @@ public readonly struct ModifiedHalfNormal
     }
 
     // About y* = ln z* for α < 1, γ ≤ 0: βz*²(2δ − (e^(2δ) − 1)) + γz*((e^δ − 1) − δ), with q = βz*², l = γz*.
-    private readonly struct LogRatio(double q, double l) : IConcaveLogRatio
+    internal readonly struct LogRatio(double q, double l) : IConcaveLogRatio
     {
         public double Value(double delta) => q * -ExpLessLinear(2.0 * delta) + l * ExpLessLinear(delta);
 

@@ -84,7 +84,7 @@ public readonly struct Normal : IContinuousDistribution, IIntervalMoments
     }
 
     // h(δ) = −δ(z + δ/2): the standard normal's log density about z.
-    private readonly struct LogRatio(double z) : IConcaveLogRatio
+    internal readonly struct LogRatio(double z) : IConcaveLogRatio
     {
         public double Value(double delta) => -delta * (z + 0.5 * delta);
         public double Slope(double delta) => -(z + delta);

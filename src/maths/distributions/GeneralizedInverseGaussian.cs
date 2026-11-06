@@ -88,8 +88,8 @@ public readonly struct GeneralizedInverseGaussian
         if (d == 0.0)
         {
             // From the peak h falls by 1 no later than either term alone does: −A·g(δ) grows as eᵟ to the right and as |δ| to the left, and
-            // −B·g(−δ) the other way. A reach near that point keeps the hat's far tangent moderate; one far past it, where h is
-            // astronomically negative, leaves the far tangent so steep that rounding in its cut swamps the hat.
+            // −B·g(−δ) the other way. The envelope draws from any reach; a reach near that point saves it a search: the curvature's,
+            // far past it where one term is tiny, made a draw four to seven times slower there.
             leftReach = Math.Min(ExponentialReach(down), LinearReach(up));
             rightReach = Math.Min(ExponentialReach(up), LinearReach(down));
         }
@@ -124,7 +124,7 @@ public readonly struct GeneralizedInverseGaussian
     // About the peak, L(δ) = p·δ − ω·(cosh(u* + δ) − cosh u*) = −A·g(δ) − B·g(−δ), g(x) = eˣ − 1 − x ≥ 0, A = (R + p)/2, B = (R − p)/2,
     // R = √(p² + ω²): both terms non-positive, so nothing cancels however far the parameters range, and concave. The ratio about the anchor
     // d from the peak is h(δ) = L(d + δ) − L(d) = −A·e^d·(e^δ − 1) − B·e^(−d)·(e^(−δ) − 1) + (A − B)·δ.
-    private readonly struct LogRatio(double up, double down, double d) : IConcaveLogRatio
+    internal readonly struct LogRatio(double up, double down, double d) : IConcaveLogRatio
     {
         public double Value(double delta)
         {

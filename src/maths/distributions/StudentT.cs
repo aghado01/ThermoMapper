@@ -104,7 +104,7 @@ public readonly struct StudentT : IContinuousDistribution, IIntervalMoments
 
     // h(δ) = −ν ln(cosh(y₀ + δ)/cosh y₀), with cosh δ + τ sinh δ = e^|δ|(1 + side·(e^(−2|δ|) − 1)), side the smaller of
     // (1 ∓ τ)/2 on that side, which neither overflows nor cancels.
-    private readonly struct AsinhRatio(double nu, double tau, double up, double down) : IConcaveLogRatio
+    internal readonly struct AsinhRatio(double nu, double tau, double up, double down) : IConcaveLogRatio
     {
         public double Value(double delta)
             => delta >= 0.0 ? -nu * (delta + SpecialFunctions.Log1p(up * SpecialFunctions.Expm1(-2.0 * delta)))

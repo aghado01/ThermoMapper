@@ -167,11 +167,11 @@ public sealed class DistributionSweepTests
         Assert.True(above >= below && above - below <= 0.003 * shape + 1e-12, $"across the change: {below:R} to {above:R}");
     }
 
-    private static double LogUniform(Xoshiro256PlusPlus rng, double lo, double hi) => Math.Exp(Math.Log(lo) + rng.NextDouble() * (Math.Log(hi) - Math.Log(lo)));
+    internal static double LogUniform(Xoshiro256PlusPlus rng, double lo, double hi) => Math.Exp(Math.Log(lo) + rng.NextDouble() * (Math.Log(hi) - Math.Log(lo)));
 
-    private static double Signed(Xoshiro256PlusPlus rng, double scale) => (rng.NextDouble() < 0.5 ? -1.0 : 1.0) * LogUniform(rng, 1e-3, scale);
+    internal static double Signed(Xoshiro256PlusPlus rng, double scale) => (rng.NextDouble() < 0.5 ? -1.0 : 1.0) * LogUniform(rng, 1e-3, scale);
 
-    private static (string Name, IContinuousDistribution Distribution) Family(Xoshiro256PlusPlus rng)
+    internal static (string Name, IContinuousDistribution Distribution) Family(Xoshiro256PlusPlus rng)
     {
         switch ((int)(rng.NextDouble() * 8.0))
         {
@@ -221,7 +221,7 @@ public sealed class DistributionSweepTests
     }
 
     // A half-line, both sides of the bulk, or a narrow interval out in a tail, placed by the distribution's own quantiles.
-    private static (double Lower, double Upper)? Interval(Xoshiro256PlusPlus rng, IContinuousDistribution d)
+    internal static (double Lower, double Upper)? Interval(Xoshiro256PlusPlus rng, IContinuousDistribution d)
     {
         double Tail() => -LogUniform(rng, 1e-3, rng.NextDouble() < 0.3 ? 600.0 : 20.0);
         double lower, upper;

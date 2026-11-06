@@ -12,4 +12,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Maths.Rng\Maths.Rng.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Maths.Distributions.Tests" />
+  </ItemGroup>
 </Project>

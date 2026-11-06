@@ -129,7 +129,7 @@ public readonly struct Gamma : IContinuousDistribution
     }
 
     // h(δ) = αδ − g₀(e^δ − 1): the log-gamma density about ln g₀.
-    private readonly struct LogGammaRatio(double shape, double g0) : IConcaveLogRatio
+    internal readonly struct LogGammaRatio(double shape, double g0) : IConcaveLogRatio
     {
         public double Value(double delta) => shape * delta - g0 * SpecialFunctions.Expm1(delta);
         public double Slope(double delta) => shape - g0 * Math.Exp(delta);
