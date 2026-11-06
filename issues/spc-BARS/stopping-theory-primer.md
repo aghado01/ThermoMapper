@@ -2077,7 +2077,7 @@ checking that the fit's uncertainty is honest before features are read off it.
 **The plan exists.** `issues/regression/bass/extensions-brief.md` lays out one layer over BARS's retained draws and the
 unit map, at three levels:
 1. *A new replicate at a measured temperature: conformal Bayes, the consumer.* Fong and Holmes, *Conformal Bayesian
-   Computation* (NeurIPS 2021; arXiv 2106.06137; a local copy in `codex-scientiae/supellex-private/gauntlet/bayesian/`).
+   Computation* (NeurIPS 2021; arXiv 2106.06137; a local copy in `codex-scientiae/supellex-private/gauntlet/conformal-bayes/`).
    Add-one-in importance weights w_s ∝ p(y | x, θ_s) turn the retained draws into conformal prediction sets with no
    refits. Sweeping the candidate y gives a calibrated predictive distribution (Vovk, Shen, Manokhin and Xie 2019). The
    seam is built (OQ17: retained draws, the n × S matrix of pointwise log densities, the unit and stratum maps in
