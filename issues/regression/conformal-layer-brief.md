@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0 and 1 built 2026-11-06 (reports below); slice 2 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06 (reports below); slice 3 waits for the user, and slice 2's report leaves the fallback signal's reading for the user's decision. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -110,6 +110,85 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### 2026-11-06 — Slice 2, the margin, inflation and the fallback signal
+
+**Landed** on `main`, nothing pushed:
+- `fa2123c` PSIS-LOO's draw influence, log-scale error, tail length and k̂ became shared helpers in `PredictiveChecks`, with its relative efficiency internal. PSIS-LOO's arithmetic is unchanged.
+- `e7f0049` CB-3 in the layer (`ConformalMargin`, `MarginBounds`, the new `ConformalOptions` and `ConformalSet` members), with `ConformalMarginTests`, `BassConformalMarginTests` and the cost row.
+- `aab438d` the CB-3 section, slice 2's checks and cost, and the API on `ConformalPrediction.md`.
+
+**What it does.**
+- *ε:* each score's Monte Carlo standard error, √log(1 + Σψ²/r_eff) with ψ_s = w̃_s(p_s/p̂ − 1). That is `PredictiveChecks`' influence, shared; r_eff is the candidate's density's along the chains. Two more products give it for every unit.
+- *The bound:* z standard errors, with z = Φ⁻¹(1 − ν/(2m)) and ν = 0.01, which adds to the miscoverage.
+- *The margin, always reported:* the estimated band per grid value, with m̂ the largest over the grid. It is read under the uniform bound by default, or each unit's carried one, and gives the plain set's coverage under error, 1 − (k + m̂)/m − ν.
+- *The inflated rule:* per-position bounds, an option, its ranks always reported.
+- *Trust:* PSIS's k̂ where the inflated rule accepts.
+- *The fallback signal:* m̂ > 0.1·α·m, or an untrusted candidate in the inflated set.
+
+**Gates.** Each contract test names its declarations.
+- *The margin against the Lean statement's count on perturbed scores.* The layer's band is the literal `FragileEstimated` count over 3,000 cases with ties and bounds of 0 and ∞, and over 3,000 with per-unit bounds on continuous scores. On 4,000 cases of exact scores, per-unit bounds and estimates within them:
+  - `accepts_or_fragile`: 1,771 decisions lost, every one fragile;
+  - `acceptsInflated_of_accepts`, `accepts_shift_of_accepts_close`, `fragileEstimated_of_fragile`, `card_fragile_le_estimated` and `fragileEstimated_mono` all hold;
+  - the adversary refuses exactly the fragile units.
+- *The layer against a reference* (80 cases with weights, chains and far ranges): its errors match Σψ²/r_eff in logs to 1.2·10⁻¹⁰, and its inflated ranks, bounds and bands, uniform and carried, match the definitions on its own scores.
+- *Inflated coverage on exact draws* (S 40, n 19, k 2, 3,850 replications, noise outside the model, se 0.0048):
+
+| Set | Coverage | Width |
+|---|---|---|
+| Inflated | 0.935, against 1 − k/m − ν = 0.89 | 5.72 |
+| Plain | 0.905, above the margin's reading of 0.485 | 5.09 |
+
+- *Nothing upstream moves:* 326 of 326 tests pass. They include the eight `BassBitIdentityTests` pins, the pointwise, PSIS-LOO, WAIC, diagnostics, SMC, candidate and conformal tests, on HEAD plus this slice's files. The gated readings ran with `BASS_QUALIFICATION=1`, and each printed its rows.
+
+**The added gate: slice 1's degenerate Gaussian weights.** These are slice 1's held-out fits again (n 99, k 10, S 1,000, 20 fits × 50 values), beside t fits of the same data.
+- *What the layer says at the 8 values with ESS below 50* (ESS 1.5 to 48):
+  - the candidate's bound is 0.7 to 2.6 nats, against a median 0.08 elsewhere, and π is 0.01 to 0.02;
+  - both the plain and the inflated rule refuse every one;
+  - the band holds 96 to 98 units under the uniform bound and 34 to 98 carried, and the fallback signal fires.
+- *So the degeneracy moves no decision.* The candidate's refusal survives its own bounds. What fires the signal is the error of every unit's score, not the candidate's weights.
+- *Everywhere else:* m̂ has median 98 (carried 72) for the Gaussian fits and 94 (carried 52) for the t fits, and the signal fires on 992 of 992 Gaussian values and 969 of 1,000 t values.
+
+| Fit | Plain coverage | Inflated coverage | Plain width | Inflated width |
+|---|---|---|---|---|
+| Gaussian | 0.905 | 0.958 | 1.20 | 2.07 |
+| t | 0.894 | 0.937 | 1.06 | 1.49 |
+
+  k̂ was read at 958 Gaussian and 937 t values in the inflated set, and passed PSIS's threshold at all but one t value.
+
+**The margin as the draws grow** (exact draws, m 20). The fallback signal fired on all 100 data sets at every S, under both bounds.
+
+| S | m̂, uniform | m̂, carried | Coverage under error, carried |
+|---|---|---|---|
+| 40 | 12.8 | 4.6 | 0.662 |
+| 2,560 | 7.7 | 2.5 | 0.763 |
+
+**The cost row,** per grid of 200 at n 1,000:
+- the full step is 127.9 ms at S 1,000 and 383.4 ms at S 4,000 with independent draws, and 146.4 and 502.2 ms with two chains;
+- slice 0's step was 36.7 and 149.8 ms, so the step now costs 2.6 to 3.5 times as much;
+- the largest parts are the two error products, each candidate's r_eff (an FFT per candidate) and k̂ (a sort of S ratios per accepted candidate).
+
+**Defects found.**
+- *In the cost test,* not the layer: `Count` overwrites the score product with the scores, so a repeated timed call read scores as products and fell onto the exact log path. That showed seconds per grid. The test now refreshes the product before each timed call.
+- *A stopped run's test host* held the Release DLL and failed the next build. The host was stopped and the readings rerun.
+
+**Decisions taken beyond this brief.**
+- *ε's bound:* z = Φ⁻¹(1 − ν/(2m)) with ν = 0.01, the union over the stratum's units. Its failure probability then adds to the miscoverage, as CB-3 says.
+- *r_eff:* one per candidate, from its density along the chains, rather than the influence's per unit and candidate, which would be an FFT per pair.
+- *The relative variance expanded* over two products, summed in logs below 10⁻¹⁰⁰.
+- *The carried bounds, built as an option.* Each unit takes the larger of its bound here and as the candidate. A bound sure over every ordering would need n² weightings.
+- *k̂ only where the inflated rule accepts;* candidates outside every draw's support left out of m̂.
+- *The fallback rule and its share* (0.1 of α's budget).
+
+**Left unbuilt:** bounds sure over every ordering; and a fallback signal that tells a degenerate case from a healthy one, which waits on the decision below.
+
+**Follow-ups, each with the decision it would change.**
+- *What the fallback signal reads.* As specified, a wide margin, it fires on every case measured, under both bounds and at every S tried, while the plain set covers within its error and the inflated set above nominal. Three options:
+  - Read it from the inflated set instead: fire when the inflated set is wider than the plain one by more than a stated share, or when the two disagree on more than a share of the grid. That measures how far the error moves this case's decisions, and its discrimination would be measured on these fixtures.
+  - Take ε at one standard error, without the union over m. The band narrows about 3.5 times, and the stated failure probability is given up.
+  - Keep the signal as it is, as "not certifiable at this S", and make the inflated set the default guard.
+- *Whether the margin stays always-on.* It costs 2.6 to 3.5 times the step. Opt-in would return the plain step to slice 0's cost, and the inflated rule needs only the per-position errors, not the band.
+- *ε's probabilistic form* (open in the Lean follow-up) decides whether the bound is z standard errors or a concentration bound, and with it how wide every reading above is.
 
 ### 2026-11-06 — Slice 1, BASS's candidate seam
 
