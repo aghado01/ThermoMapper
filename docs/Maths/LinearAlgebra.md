@@ -14,6 +14,7 @@
 | BASS ([BayesianRegression](./BayesianRegression.md)) | `BorderedCholesky`, `DenseCholesky`, `KhatriRao`, `PairwiseSum`, `ThinSvd`, `DiagonalPlusLowRank` |
 | Riemannian statistics ([RiemannianGeometry](./RiemannianGeometry.md)) | `ThinSvd`, `DenseEigen`, `Pca`, `MatrixOps` |
 | Colored-noise synthesis ([Samplers](./Samplers.md)) | `Fft` |
+| The conformal layer ([ConformalPrediction](./ConformalPrediction.md)) | `DenseProduct` |
 
 ```mermaid
 flowchart LR
@@ -93,7 +94,7 @@ For a slightly asymmetric input, the two dense eigen routes therefore decompose 
 | Factorizations | `CholeskyDecomposition` (`Decompose`, `LogDet`, `Status`, `Solve`, `WriteInverseTo`, `WriteLTo`, `Sample`); `BandCholesky` (`Decompose`, `DecomposeBanded`, `Solve`, `SolveInPlace`, `SampleInnovation`, `LogDet`, `Status`, `Strict`, `FailedAt`, `Dimension`, `Bandwidth`, `Factorization`); `BandFactorization` (`Cholesky`, `Ldlt`); `DenseCholesky` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `Factor`, `RelativePivot`, `Dimension`, `Capacity`); `BorderedCholesky(capacity, rebuildInterval = 100)` (`ProposeBirth`, `ProposeDeath`, `ProposeChange`, `ProposedInverseQuadraticForm`, `Pending`, `Accept`, `Rebuild`, `LastDrift`, `UpdatesSinceRebuild`, `RebuildInterval`, `Copy`, `Clear`, `Decompose`, `Entry`, `Factor`, `RelativePivot`, `InverseDiagonal`, `LeaveOneOutPivot`, `MinLeaveOneOutPivot`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Dimension`, `Capacity`) → `FactorProposal` (`FactorChange`), `FactorDrift`; `WideBandCholesky(dimension, bandwidth)` (`Decompose`, `Status`, `FailedAt`, `LogDet`, `Solve`, `SolveInPlace`, `ForwardSolveInPlace`, `BackSolveInPlace`, `InverseQuadraticForm`, `SampleInnovation`, `EquilibratedCondition`, `Factor`, `RelativePivot`, `Dimension`, `Bandwidth`), `SpdFactors` (`UsesWideBand`, `ForBand`, `MinimumOrder`); `ISpdFactor` (`Dimension`, `Status`, `LogDet`, `Solve`, `SolveInPlace`, `SampleInnovation`, `EquilibratedCondition`; implemented by `BandCholesky`, `DenseCholesky`, `BorderedCholesky` and `WideBandCholesky`), `SpdFactorExtensions.InverseQuadraticForms`; `FactorStatus`; `DiagonalPlusLowRank(diagonal, factor, weights)` (`Dimension`, `LogDet`, `Solve`, `SolveInPlace`, `InverseQuadraticForm`, `Sample`, `SampleInnovation`) |
 | Contractions | `KhatriRao` (`Gram`, `Border`, `CrossProducts`, `CentredGram`, `CentredBorder`, `CentredCrossProducts`, `ScatteredGram`, `ScatteredCrossProducts`, `FaceSplittingGram`, `FaceSplittingCrossProducts`, `FaceSplittingHalfBandwidth`, `KroneckerGram`); `IInnerProduct` (`IsIdentity`, `Dimension`, `LogDeterminant`, `Dot`), `IdentityInnerProduct` |
 | Transforms and statistics | `Fft` (1-D, 3-D, N-D; `IsPowerOfTwo`); `Pca.Compute` → `PcaResult`; `FastIca.Compute` → `IcaResult`; `OnlineMahalanobis` (`Update`, `Distance` to the mean or between two points, `IsReady`, `GetMean`, `GetVariances`, `Reset`) |
-| Kernels | `MatrixOps` (`Dot`, `ScaledSubtract`, `Orthonormalize`, `RandomOrthonormal`, `ColumnGramMatrix`, `ColumnGramMatrixFromRowMajor`, `TransposeToColumnMajor`); `PairwiseSum` (`Of`, `Dot`, `Block`) |
+| Kernels | `MatrixOps` (`Dot`, `ScaledSubtract`, `Orthonormalize`, `RandomOrthonormal`, `ColumnGramMatrix`, `ColumnGramMatrixFromRowMajor`, `TransposeToColumnMajor`); `PairwiseSum` (`Of`, `Dot`, `Block`); `DenseProduct` (`Multiply`, `Pack`, `FusedDot`, `Width`, `Chunk`), `PackedColumns` (`Fill`) |
 
 ## Algorithms
 
@@ -335,6 +336,20 @@ Because the floor is absolute, a well-conditioned matrix with a small scale, suc
 - So it does on a centred indicator of 100,000 cases, one entry near −1 and then 99,999 equal entries near 10⁻⁵, where left-to-right's bound is at least a thousand times looser.
 - The vector lanes give scalar accumulators' bits at 5, 131 and 10,007 terms.
 
+### Dense product (`DenseProduct`)
+
+`DenseProduct.Multiply` forms C = A·B for row-major A (rows × inner) and B (inner × columns). Built 2026-11-06 for the conformal layer's scores, the (units × draws)·(draws × candidates) product ([ConformalPrediction](./ConformalPrediction.md#numerics)); nothing in `Maths.LinAlg` formed a dense product before it.
+- **The arithmetic.** Each entry is its inner sum taken in order by fused multiply-adds from +0, c ← fma(a_ik, b_kj, c) for k = 0, 1, …. So every entry is the scalar loop's bit for bit on any machine, since `Vector256`'s software fallback fuses too, and two equal columns of B give two equal columns of C. `FusedDot(a, b)` is one entry.
+- **Why in order, and not pairwise.** A blocked or tree sum is more accurate by about an ulp per log₂ of the inner length, but its bits depend on where an entry falls in the tiles. The conformal layer needs a candidate whose column equals a unit's to score exactly as that unit does, so that the ties its rank rule counts are the model's. The sums it takes are of non-negative terms, whose in-order relative error is at most inner·u.
+- **The kernel.** B is packed once into panels of eight columns, the last padded with zeros (`Pack`, `PackedColumns`, refilled in place by `Fill`), and serves any number of left operands. A 4 × 8 tile of C sits in eight 256-bit accumulators. The inner index runs in chunks of 256, so a chunk of B's panels stays in cache across the tiles that read it; each chunk continues its entries' sums in order and changes no bit. Rows left over take a 1 × 8 tile. The loops are compiled fully optimized from the first call, as `ColumnOps`' are. It is single-threaded, and the caller splits rows or columns across threads, which changes no entry.
+- **Its speed.** At (1,000 × 4,000)·(4,000 × 200) it ran at 27 GFLOP/s, 40 times the scalar loop of fused multiply-adds, and at 31 GFLOP/s with inner length 1,000 (indicative, the cycle clock on a shared machine).
+
+**Checked** (`DenseProductTests`), bit for bit against the scalar loop:
+- chosen shapes around the tile and the chunk, from 1 × 1 × 1 to 13 × 513 × 3, inner length 0 included;
+- a seeded sweep of 60 shapes, half with far ranges: exact and signed zeros, subnormals, and magnitudes from 2⁻⁵⁰⁰ to 2⁵⁰⁰;
+- equal columns giving equal columns, equal to `FusedDot`;
+- one packed operand serving several left operands, and refilled.
+
 ### Khatri–Rao contractions (`KhatriRao`)
 
 Contractions with the column-wise Khatri–Rao product X = A ⊙ H, whose column j is a_j ⊗ h_j, computed through the factors without forming X. Its caller is BASS's direct functional design, with A the case-side factors (n × M), H the output-side factors (m × M), and the rows of X indexed (case, location) with the case outer. Every inner product is a [pairwise sum](#pairwise-summation-pairwisesum).
@@ -442,6 +457,6 @@ Dimensions with zero variance are skipped, which makes this a *pseudometric* (a 
 | Factorizations | `Cholesky.cs`, `DenseCholesky.cs`, `BandCholesky.cs`, `BorderedCholesky.cs`, `FactorProposal.cs`, `WideBandCholesky.cs` (with `SpdFactors`), `FactorStatus.cs`, `ISpdFactor.cs`, `ConditionEstimate.cs`, `DiagonalPlusLowRank.cs` |
 | Contractions | `KhatriRao.cs`, `InnerProduct.cs` |
 | Transforms and statistics | `Fft.cs`, `PCA.cs` (`Pca`), `ICA.cs` (`FastIca`), `WelfordMahal.cs` (`OnlineMahalanobis`) |
-| Kernels | `MatrixOps.cs`, `PairwiseSum.cs` |
+| Kernels | `MatrixOps.cs`, `PairwiseSum.cs`, `DenseProduct.cs` |
 
 **See also:** [SpectralGraphs](./SpectralGraphs.md) · [DesignPrinciples](./DesignPrinciples.md) · [BayesianRegression](./BayesianRegression.md) (band LDLᵀ in use) · [GaussianMixtures](./GaussianMixtures.md) (Cholesky in use)

@@ -125,6 +125,7 @@ flowchart LR
 | BGP | `SquaredExponentialKernel : IGpKernel`; `GpRegression(x, y, sigma2, kernel, scaling = Similarity)` or `GpRegression.WithUnknownScale(x, y, kernel, scaling)` (`NoiseModel`, `Fit(t, η)` for an unknown scale; `Fit(t)` → `GpFit`, `PredictMean`, `PredictVariance`, `KernelAffinity`, `Transform` → `GpTransform`); `EmpiricalBayesBandwidthPrior(gp, …)`; `BgpSampler(gp, prior).Run(...)` → `BgpResult` (`PosteriorMean`, `PosteriorSd`, `BandwidthDraws`) |
 | Changepoint | `ExactChangepoint.Infer(y, σ², ν, ρ², maxSegments)` or `Infer(y, ISegmentModel, maxSegments)` → `ChangepointResult`; `DefaultHyperparameters(y)`; `GaussianSegmentModel`, `CauchySegmentModel`; `ChangepointResult.Posterior.Sample(draws, seed)` → `ChangepointDraw` |
 | Pointwise and predictive checks | `UnitPartition(unitOf, stratumOf)`, `UnitPartition.EachObservation(n)`, `ConsecutiveBlocks(blocks, size)`; `PointwiseLogDensity` (`Values`, `Units`, `Latents`, `ChainLengths`, `LeavesUnitsOut`); `LatentReport`, `LatentScope`, `LatentTreatment`; `PointwiseContent`; `BarsEnsemble.PointwiseLogDensity(result, x, y, units, content)`, `IConditionalFit.LeaveOutLogDensities(units)`, `GPriorConditional.LeaveOutLogDensity(sigmaPrior, design, y, weights, unit)` and, with the unit's τ-free quadratic forms taken once (`LeaveOutQuadratics(design, unit)`), `LeaveOutLogDensity(sigmaPrior, design, y, weights, quadratics)`, `Baps.PointwiseLogDensity(result, units)`, `BgpSampler.PointwiseLogDensity(result, units)`, `GpRegression.LeaveOutLogDensities(fit, units)`, `HierarchicalPSpline.PointwiseLogDensity(result, units)`, `ChangepointPosterior.PointwiseLogDensity(draws, units)`; `PredictiveChecks.Waic`, `PsisLoo` → `PredictiveCheck` (`MonteCarloError`, `JointMonteCarloError`, `MonteCarloErrors`, `RelativeEfficiency`), `ParetoKThreshold`, `FitGeneralizedPareto`; `IWeightResampler.MarginalLogDensity`, `ISegmentModel.LogLikelihood` |
+| Conformal layer ([ConformalPrediction](./ConformalPrediction.md)) | `CandidateLogDensity(values, grids, latents, stratumOf, chainLengths)` (`Weights`, `Offset`); `ConformalBayes.FullStep(training, candidates, ConformalOptions)` → `ConformalPrediction` of `ConformalSet`s; `ConformalBayes.Scores` → `ConformalScores` |
 
 ## Algorithms
 
@@ -2269,7 +2270,7 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
   - PSIS-LOO's log ratios are log W − ℓ, with zero-weight draws dropped.
   - Equal weights reproduce the unweighted forms.
   - A population refuses chain lengths, since it has no order for r_eff.
-- Conformal Bayes (Fong & Holmes 2021) is deferred to the SPC × BARS work.
+- Conformal Bayes (Fong & Holmes 2021) reads this matrix beside a candidate density at new cases: the conformal layer, engine-free, in [ConformalPrediction](./ConformalPrediction.md). It refuses the collapsed content and an observation-level latent conditioned on.
 
 **Checks.**
 - The Pareto fit recovers shapes 0, 0.3 and 0.7. A tail whose first quartile is its minimum gets no fit. Each `ParetoTail` state appears where it should.
@@ -2303,7 +2304,7 @@ The draws give what the marginals cannot: which breaks occur together, per-draw 
   - **The collapsed content was the more accurate:** rms z 1.00 against 1.23, and no unit beyond 3 errors against 4.
   - **A rerun is the wrong reference.** Rerunning BARS on y₋ᵢ rebuilds the data-dependent g-prior; the first design's control measured up to 0.43 nats of difference at the endpoints, and it was replaced.
 
-**Not built yet:** the conformal consumer; the collapsed content for BAPS, `HierarchicalPSpline` and the changepoint draws; a k̂ that reads clumped ratios correctly. BGP has no retained content, since it never draws f.
+**Not built yet:** the collapsed content for BAPS, `HierarchicalPSpline` and the changepoint draws; a k̂ that reads clumped ratios correctly. BGP has no retained content, since it never draws f.
 
 ## Configuration
 
@@ -2450,6 +2451,7 @@ Every source is checked, papers and their code included (the user's decision, 20
 | BGP | `bgp/GpKernel.cs`, `GpTransform.cs`, `GpRegression.cs`, `EmpiricalBayesBandwidthPrior.cs`, `BgpSampler.cs` |
 | Changepoint | `changepoint/ExactChangepoint.cs`, `SegmentModels.cs`, `ChangepointPosterior.cs` |
 | Pointwise and predictive checks | `Pointwise.cs`, `PredictiveChecks.cs` |
+| Conformal layer | `CandidateLogDensity.cs`, `conformal/ConformalBayes.cs` |
 | Mixing laws of normal variance-mean mixtures (E1; BASS, and BARS at slice 6) | `MixingLaw.cs` |
 
 **See also:** [Samplers](./Samplers.md) · [LinearAlgebra](./LinearAlgebra.md#band-cholesky--ldlᵀ-bandcholesky) · [ProbabilityAndInformation](./ProbabilityAndInformation.md)
