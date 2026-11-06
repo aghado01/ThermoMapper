@@ -157,6 +157,32 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### The GIG's ratio-of-uniforms draw (chip, 2026-11-06)
+
+**Landed** in `72fb8e2` (the code, its tests and the qbass gate's bars) and the commit that carries this report (`docs/Maths`). At the user's word that spline surfaces are expensive and every bit of performance counts, after slice 3. [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#the-gigs-draw-ratio-of-uniforms-where-it-is-faster) holds the measurement, the rule and the trade-off.
+
+| Piece | Where |
+|---|---|
+| Ratio-of-uniforms, with and without a shift by the mode | `RatioOfUniforms.Draw`; `RatioOfUniforms.Bounds`, the rectangle by search for a family without closed sides (`src/maths/distributions/RatioOfUniforms.cs`) |
+| Hörmann and Leydold's GIG draw | `GeneralizedInverseGaussian.SampleByRatio`: the shifted ratio where λ > 2 or ω > 3, the unshifted where T₋½-concave or ω > 0.2, a three-piece hat below both |
+| Which one runs | `GeneralizedInverseGaussian.DrawsByRatio(p, a, b)` |
+
+**Measured** (thread cycles, indicative; µs a draw with its own setup, the least of five passes after six warm-up passes): on v's GIG parameters recorded from burned quantile and Normal-Wald chains at the cost row's points, ratio-of-uniforms 0.12 to 0.21 against the tangent hat's 0.52 to 0.95, 2.5 to 5.6 times faster; over 132 far-range points, λ to 1,000 and ω from 10⁻⁸ to 10⁸, 0.08 to 0.36 against 0.28 to 0.92, faster at every point. Each sampler's share of a sweep, each row run alone: on the quantile fit at the base v's draws went from 952 µs to 208 (53% of the sweep to 24%) and the sweep from 1,810 to 850; on the Normal-Wald v's block from 987 to 681 and the sweep from 1,271 to 1,027, at n 200 from 235 to 133. At M 200 the Follow after v dominates and nothing moved.
+
+**Which one runs.** Ratio-of-uniforms for every untruncated draw with a, b > 0, |p| ≤ 10³ and 10⁻⁸ ≤ ω ≤ 10⁸, the range its law was checked over; the tangent hat beyond it and for every truncated draw, where the ratio's rectangle would reject nearly everything in a far tail; the gamma and inverse gamma at the limits. A function of (p, a, b) alone, so a resumed run draws as the whole one did.
+
+**The gates.**
+- *The law against quadrature at the deciles and by Kolmogorov–Smirnov:* 18 chosen cases across the three regions and 300 seeded far-range cases (|p| to 10³, a and b over 16 decades), worst √n·D 1.76 against the cut 2.6; at 1,000,000 draws on nine of the fits' own parameter sets, means, variances and deciles within sampling error (the one case at mean z −2.48 read 1.16 and −0.25 at 4,000,000 draws on two other seeds). The primitive finds N(0, 1)'s rectangle at ±√(2/e) to 7 digits and draws it and a gamma's by search on their laws.
+- *Against `gbass_primitives_oracle.R`:* the default draw, now this one, carries R's GIG law at its deciles (`EngineSamplers_CarryTheOraclesLaw`, 26 of 26 GBASS oracle tests).
+- *Gaussian BASS untouched:* it draws no GIG; the whole regression assembly 2,022 of 2,022, the distributions' 317 of 317, the samplers' 285 of 285. t without a skew draws v by its own gamma step and did not move.
+- *The law under the sweep:* slices 2's and 3's Geweke cases pass with the new draw (23 of 23 qualification tests).
+- *What moved, and why.* Every quantile, Normal-Wald, skewed-t and generalized-hyperbolic fit draws v anew, so its draws and readings moved; no pinned hash covers those fits. The quantile recovery's held-out shares read 0.517 and 0.888 (0.518 and 0.884 before), the skew's sign 0.898 and 0.103 (0.903 and 0.106), `qbass`'s σ² 0.00723 [0.00567, 0.00909] under the g-prior (0.00768 before) and 0.00803 under the ridge, `nwbass`'s noise variance 0.1825 and 0.1804 against 0.1821. The envelope's pin moved by exactly its 200 untruncated GIG cases and was rebaselined, ce13801abaff15d3 to 624f8b056215181a.
+- *`qbass`'s surface gate, re-set* (approved 2026-11-06). Its g-prior arm read 1.26 of the wider half-band at seed 43 against the 1.0 bar. Over engine seeds 43 to 48 that arm read 0.49 to 1.23 (mean 0.85) under the tangent hat and 0.61 to 1.26 (mean 0.92) under the new draw, two of six above 1.0 under either: the bar measured seed 43's stream more than the sampler. The g-prior arm carries a stated model difference from `qbass`, so its gap is not expected to be zero; it now takes worst ≤ 1.5, a bar for gross defects, not parity. The ridge arm, GBASS's own form, keeps the parity bar ≤ 1.0 and read 0.51 to 0.81 on all six seeds.
+
+**Decisions taken beyond the brief.** The ratio's three regions take GIGrvg's thresholds, read from Hörmann and Leydold's algorithms, as GIGrvg 0.8's C source is not installed; its law was checked at those thresholds, each region on chosen cases and the sweep. Its range is the one checked, not GIGrvg's whole domain.
+
+**Left unbuilt.** No other family takes the primitive yet: none has a draw it would speed; the gamma's and the inverse gamma's untruncated draws are their own.
+
 ### Slice 3: the Normal-Wald, the skewed t and the generalized hyperbolic, with the envelope's guard (chip, 2026-11-06)
 
 **Landed** in `f2e1e58` (the envelope's guard, its own commit as asked), `5e837c4` (slice 3's code and tests) and the commit that carries this report (`docs/Maths`, the notation ledger). [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#the-normal-wald-the-skewed-t-and-the-generalized-hyperbolic-e1s-slice-3) holds the model, the alternatives and the checks; [the distributions' section](../../../docs/Maths/ProbabilityAndInformation.md#log-bessel-k-the-gigs-normalizer-and-the-generalized-hyperbolic-e1) the log Bessel K, the GIG's normalizer and the generalized hyperbolic; this is the account.

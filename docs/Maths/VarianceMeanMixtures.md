@@ -173,6 +173,36 @@ Then the chain follows the offset at the new β. v's law is read at the record's
 - *v's N GIG draws and the Follow after them are most of a sweep,* as under the asymmetric Laplace; the skew and γ cost a block of O(N) sums, near σ²'s.
 - *Retention* is slice 2's: a retained draw keeps v with its scalars, γ now among them.
 
+## The GIG's draw: ratio-of-uniforms where it is faster
+
+Built 2026-11-06 after slice 3, at the user's word that spline surfaces are expensive and every bit of performance counts. v's conditional is a GIG under the asymmetric Laplace, the Normal-Wald, the skewed t and the generalized hyperbolic, and its N draws were most of a sweep. An untruncated GIG draw is now Hörmann and Leydold's (2014), GIGrvg's ([the method](./ProbabilityAndInformation.md#the-gig-the-modified-half-normal-and-the-asymmetric-laplace-e1)), on a ratio-of-uniforms primitive other families can take (`RatioOfUniforms`); a truncated draw stays the tangent hat's. Both draw the same law exactly and independently, so a chain mixes as it did; the measure is time a draw.
+
+**Measured** (thread cycles on a loaded machine, so indicative; µs a draw, each with its own GIG's setup as the latent block draws, the least of five passes after six warm-up passes past tier 0). v's GIG parameters recorded from burned quantile (q = 0.9) and Normal-Wald chains at the cost row's points, in the standard form's λ = |p| and ω = √(ab):
+
+| Fit and point | λ | ω at the 10th, 50th, 90th percentile | Ratio-of-uniforms | Tangent hat | Ratio faster |
+|---|---|---|---|---|---|
+| Quantile, n 1,000, p 10, the base | ½ | 0.59, 3.7, 8.0 | 0.171 | 0.950 | 5.6× |
+| Quantile, n 200 | ½ | 0.48, 3.6, 8.5 | 0.126 | 0.703 | 5.6× |
+| Quantile, n 10,000, M_max 200 | ½ | 0.58, 3.3, 7.2 | 0.123 | 0.637 | 5.2× |
+| Normal-Wald, the base | 1 | 6.3, 6.6, 7.7 | 0.127 | 0.568 | 4.5× |
+| Normal-Wald, n 200 | 1 | 3.0, 3.5, 4.4 | 0.206 | 0.518 | 2.5× |
+| Normal-Wald, n 10,000, M_max 200 | 1 | 4.3, 4.5, 5.5 | 0.126 | 0.579 | 4.6× |
+
+On far ranges, λ from 0 to 1,000 by eleven steps and ω from 10⁻⁸ to 10⁸ by twelve, 132 points, ratio-of-uniforms took 0.08 to 0.36 µs a draw and the hat 0.28 to 0.92, the ratio the faster at every point.
+
+**Which one runs** (`GeneralizedInverseGaussian.DrawsByRatio`, a function of (p, a, b) alone, so a resumed run draws as the whole one did):
+
+| Draw | Sampler | Why |
+|---|---|---|
+| Untruncated, a, b > 0, \|p\| ≤ 10³ and 10⁻⁸ ≤ ω ≤ 10⁸ | Ratio-of-uniforms | Faster at every point measured; its law checked over this range (18 chosen cases across its three regions and 300 seeded far-range cases, against quadrature; R's `rgig` law in the oracle) |
+| Untruncated beyond that range | Tangent hat | One method for every parameter; the ratio's rectangle, from a cubic's roots by Cardano's rule, is not checked past it |
+| Truncated to an interval | Tangent hat | The ratio's rectangle is the whole law's; cut to a far tail it would reject nearly everything, where the hat cut to the interval tends to accept all |
+| b = 0 or a = 0 | The gamma's or the inverse gamma's own draw | The limits, as before |
+
+**The trade-off.** The ratio is three methods by region, with their rectangles in closed form, so more code and a range checked rather than every parameter; the hat is one method for every parameter and interval, at the cost of a Newton search for its design points every draw, which is where its time goes. Within the range the ratio is the default; beyond it the hat answers.
+
+**What it changed.** On the quantile fit at the base point (n 1,000, p 10, the g-form) v's GIG draws went from 952 µs a sweep to 208, from 53% of the sweep to 24%, and the sweep from 1,810 µs to 850; on the Normal-Wald, v's block (its draws and the Follow after them) went from 987 to 681 µs and the sweep from 1,271 to 1,027 at the base, from 235 to 133 at n 200. At M_max 200 the Follow after v dominates and the sweep is as it was. (Thread cycles, each row run alone, the before and after on different days: indicative.) Every quantile, Normal-Wald, skewed-t and generalized-hyperbolic fit draws v anew, so their draws and their readings moved within their gates (the change's report gives the numbers); no pinned hash covers those fits. Gaussian BASS draws no GIG and t without a skew draws v by its own gamma step, so neither moved. The envelope's pin moved by exactly its 200 untruncated GIG cases.
+
 ## Retention: a draw keeps its latents
 
 Read in slice 1, built in slice 2: the brief's lever for a working response that dominates a retained draw. A model that rebuilds its working response from its latents (`IBassObservationModel.Rebuild`, `VarianceMeanMixture`'s) has its retained draws keep `BassDraw.Latents`, v with β and σ², and rebuild the working response on demand (`WorkingOn`); the readers that need the latents alone take them without a rebuild (`LatentsOn`). The blocks and the rebuild build the working response by one function from the latents, so a view rebuilt from v is the one the chain held, bit for bit. The generative state stays: v is kept. Measured over 200 retained draws of one quantile chain (`BassQuantileQualificationTests.Retention_BeforeAndAfter`), held both ways: 313.4 KB a draw with its working response against 70.4 KB with its latents alone at N = 10,000 (4.45×; the weights, the offset, the shifted response and v against v, 4N doubles against N); 32.7 KB against 9.0 KB at N = 1,000 (3.6×), where the draw's own few hundred bytes and the collector's noise weigh more. Under t the working response held the weights and v, so the ratio there is 2.
@@ -200,5 +230,5 @@ Read in slice 1, built in slice 2: the brief's lever for a working response that
 | The mixing laws | `src/maths/regression/MixingLaw.cs` (`IMixingLaw`, `StudentTMixing`, `ExponentialMixing`, `GigMixing`) |
 | The Normal-Wald's calibrations | `src/maths/regression/NormalWaldCalibration.cs` (`NormalWaldCalibration`, `NormalInverseGaussian`) |
 | The predictive's quantile under a law | `src/maths/regression/spline/bass/posterior/PredictiveMixture.cs` |
-| The laws drawn from and read | `src/maths/distributions/GeneralizedInverseGaussian.cs`, `ModifiedHalfNormal.cs`, `AsymmetricLaplace.cs`, `GeneralizedHyperbolic.cs`, `BesselK.cs` |
+| The laws drawn from and read | `src/maths/distributions/GeneralizedInverseGaussian.cs`, `ModifiedHalfNormal.cs`, `AsymmetricLaplace.cs`, `GeneralizedHyperbolic.cs`, `BesselK.cs`, `RatioOfUniforms.cs` |
 | Tests | `tests/regression/BassStudentTTests.cs`, `BassStudentTQualificationTests.cs`, `BassQuantileTests.cs`, `BassQuantileQualificationTests.cs`, `BassNormalWaldTests.cs`, `BassNormalWaldQualificationTests.cs`, `GigMixingTests.cs`, `NormalWaldCalibrationTests.cs`; `tests/distributions/BesselKTests.cs`, `GigNormalizerTests.cs`, `LogConcaveEnvelopeTests.cs`; `tests/oracle/Gbass*.cs` |
