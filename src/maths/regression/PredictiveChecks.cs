@@ -209,8 +209,7 @@ public static class PredictiveChecks
             }
             for (int d = 0; d < s; d++) likelihood[d] = Math.Exp(column[d] - maxLl);   // scaled by its largest, which the ESS ignores
             rEff[u] = RelativeEfficiency(likelihood, density.ChainLengths);
-            int tail = (int)Math.Ceiling(Math.Min(0.2 * s, 3.0 * Math.Sqrt(s / rEff[u])));
-            (khat[u], tails[u]) = SmoothLogWeights(logRatios, tail);   // logRatios now holds the smoothed log weights
+            (khat[u], tails[u]) = SmoothLogWeights(logRatios, TailLength(s, rEff[u]));   // logRatios now holds the smoothed log weights
             double logNorm = LogSumExp(logRatios);
             for (int d = 0; d < s; d++)
             {
@@ -222,11 +221,11 @@ public static class PredictiveChecks
             double relativeVariance = 0.0;
             for (int d = 0; d < s; d++)
             {
-                double t = Math.Exp(logRatios[d]) * double.ExpM1(column[d] - e);   // w̃_s(p_s/p̂ − 1), within [−1, 1]: no overflow
+                double t = Influence(logRatios[d], column[d], e);
                 relativeVariance += t * t;
                 influence[d] += t;
             }
-            mcse[u] = double.IsNegativeInfinity(e) ? double.NaN : Math.Sqrt(double.LogP1(relativeVariance / rEff[u]));
+            mcse[u] = double.IsNegativeInfinity(e) ? double.NaN : LogScaleError(relativeVariance, rEff[u]);
         }
         double total = 0.0, mcVariance = 0.0, jointVariance = 0.0, threshold = ParetoKThreshold(s);
         foreach (double v in influence) jointVariance += v * v;
@@ -260,9 +259,26 @@ public static class PredictiveChecks
         return Math.Min(1.0 - 1.0 / Math.Log10(draws), 0.7);
     }
 
+    // A draw's influence on the log of a self-normalized estimate p̂ = Σ_s w̃_s p_s: w̃_s(p_s/p̂ − 1), within [−1, 1], so nothing
+    // overflows; its square summed over the draws is the estimator's relative variance. PSIS-LOO's units and the conformal layer's
+    // add-one-in scores read it.
+    internal static double Influence(double logWeight, double logTerm, double logEstimate) => Math.Exp(logWeight) * double.ExpM1(logTerm - logEstimate);
+
+    // A self-normalized estimate's Monte Carlo error on the log scale, from its relative variance over the draws' relative efficiency,
+    // by a log-normal's moments (loo's mcse_elpd_loo).
+    internal static double LogScaleError(double relativeVariance, double relativeEfficiency) => Math.Sqrt(double.LogP1(relativeVariance / relativeEfficiency));
+
+    // PSIS's tail: the largest M = ⌈min(S/5, 3√(S/r_eff))⌉ of S log ratios.
+    internal static int TailLength(int draws, double relativeEfficiency) => (int)Math.Ceiling(Math.Min(0.2 * draws, 3.0 * Math.Sqrt(draws / relativeEfficiency)));
+
+    // k̂ of log importance ratios, PSIS's diagnostic, on a copy: above ParetoKThreshold their self-normalized estimates and
+    // Monte Carlo errors are unreliable; +∞ when the tail is too short to fit or gives no fit.
+    internal static double ParetoK(ReadOnlySpan<double> logRatios, double relativeEfficiency)
+        => SmoothLogWeights(logRatios.ToArray(), TailLength(logRatios.Length, relativeEfficiency)).Khat;
+
     // r_eff = ESS/S of per-draw values within the chains: a unit's likelihoods, or the draws' influence on the total. It is
     // 1 for independent draws or an ESS that cannot be estimated; unequal chains are cut to the shortest.
-    private static double RelativeEfficiency(double[] values, IReadOnlyList<int>? chainLengths)
+    internal static double RelativeEfficiency(double[] values, IReadOnlyList<int>? chainLengths)
     {
         if (chainLengths is null) return 1.0;
         int m = chainLengths.Count, length = int.MaxValue;
