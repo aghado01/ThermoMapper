@@ -8,6 +8,7 @@ Imports:
     GBASS,
     hypergeo,
     jsonlite,
+    khaos,
     loo,
     maotai,
     posterior,

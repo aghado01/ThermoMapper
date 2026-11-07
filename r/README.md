@@ -39,7 +39,8 @@ Thereafter `rnr` (`renv::restore`) reproduces the exact library from `renv.lock`
 `rnsnap` (`renv::snapshot`) re-pins after adding a package.
 
 A reference package comes from CRAN through the lock, as `GBASS` 2.0.1 does for
-[E1's oracle modes](../issues/regression/bass/gbass-noise-brief.md). R BASS's source
+[E1's oracle modes](../issues/regression/bass/gbass-noise-brief.md) and `khaos` 2.1.1
+for [E19's](../issues/regression/bass/khaos-brief.md). R BASS's source
 oracles are the exception: they read a checkout at a pinned commit (`bass_source`,
 `BASS_R_SOURCE`, default `D:/aghado01/packages/bayesian-related/BASS`).
 
