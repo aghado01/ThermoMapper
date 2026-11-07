@@ -104,6 +104,33 @@ The scores are Monte Carlo estimates, so the step's guarantee holds up to their 
 - *The gap tracks the error.* On exact draws its median falls from 0.157 at S 8 to 0.016 at S 2,560. It is 0.60 on the BASS Gaussian fits and 0.36 on the t fits, whose chains' r_eff widen the bounds.
 - *The plain set lost no coverage* on any fixture: 0.905 at every S on exact draws, and within its error on the BASS fits. The inflated set covers 0.912 to 0.958 at 2 to 73% more width.
 
+**A second reading, measured beside it: the split-half comparator.** This is the main session's construction, not from a paper (2026-11-07, at the user's request).
+- *How it reads.* It splits the retained draws into two halves: each chain's first and second halves where there are chains, alternate draws otherwise. It builds the plain set from each half on the same grid, then reads the mass, under the full draws' predictive at x, of the region where the two half-sets disagree.
+- *What the mass means.* It estimates how much coverage the Monte Carlo error could shift for this case. It reads the error at its typical size, with no union over units and no worst case, and is conservative, since each half carries √2 the full run's error.
+- *It is measured, not adopted.* It lives in `ConformalFallbackComparisonTests`, and the layer's signal still reads the inflated set. Which rule becomes the signal is the user's call.
+
+Both rules were read case by case: the signal on a grid at x, and the plain set's decision at the true value at the same x. So a rule's firing can be set against the coverage the plain set achieved. A useful rule fires where the plain set falls short and stays quiet where it holds. Each entry below is the fire rate, then coverage where the rule fires against where it is quiet:
+
+| Fixture (1,000 cases each) | Plain coverage | The layer's signal | Split-half mass above 0.1α |
+|---|---|---|---|
+| Exact draws, S 40 | 0.907 | 59%: 0.912 / 0.899 | 20%: 0.827 / 0.927 |
+| Exact draws, S 160 | 0.904 | 8%: 0.924 / 0.902 | 10%: 0.800 / 0.916 |
+| Exact draws, S 640 | 0.888 | 2%: 0.833 / 0.889 | 6%: 0.738 / 0.898 |
+| Exact draws, S 2,560 | 0.905 | 1%: 1.000 / 0.904 | 3%: 0.923 / 0.905 |
+| Two chains, ρ 0.9 | 0.888 | 5%: 0.902 / 0.887 | 16%: 0.811 / 0.903 |
+| Two chains, ρ 0.99 | 0.886 | 15%: 0.759 / 0.908 | 34%: 0.794 / 0.933 |
+| Two chains, ρ 0.995 | 0.889 | 13%: 0.858 / 0.894 | 34%: 0.854 / 0.907 |
+| Two chains, ρ 0.999 | 0.887 | 5%: 0.635 / 0.901 | 24%: 0.753 / 0.929 |
+| BASS Gaussian, S 1,000 | 0.905 | 54%: 0.907 / 0.903 | 74%: 0.911 / 0.889 |
+| BASS t, S 1,000 | 0.894 | 32%: 0.896 / 0.893 | 61%: 0.893 / 0.895 |
+
+The chains are AR(1) about the exact posterior, two chains of 500, so they mix more slowly as ρ grows.
+
+- *On exact draws and slow chains* the split-half mass discriminates. Where it fires, the plain set covers 0.75 to 0.85; where it is quiet, 0.90 to 0.93.
+- *The layer's signal discriminates only for the slowest chains,* and fires rarely there. At small S its trust trigger fires where the plain set holds: at S 40, 59% of cases, covering 0.912. The gap alone above 0.5 behaves as the signal does on the chains and almost never fires on exact draws.
+- *On the BASS fits neither discriminates,* because the plain set loses nothing there. The split-half mass is large anyway (median 0.033 Gaussian, 0.014 t) and fires on 74% and 61% of cases at 0.1α. 0.1α is a starting point, not a calibrated share.
+- *At slice 1's degenerate Gaussian weights* (ESS 1.5 to 48), all eight true values are misses, outlying truths the plain set refuses. The layer's signal fires at six of their grids, the split-half at seven, with masses 0 to 0.125.
+
 ## Numerics
 
 **The product.** For G candidates and the n_h training units of a stratum, the scores are one product: P (n_h × S), each unit's likelihoods scaled by their largest, P_is = exp(ℓ_is − maxₛ ℓ_is), times W̃ (S × G), each candidate's normalized weights. P is built once per stratum and call, W̃ per batch of 256 candidates. The kernel is `DenseProduct`: every entry a sum of fused multiply-adds in draw order.

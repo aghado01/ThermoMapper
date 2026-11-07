@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call (reports below); slice 3 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it and the choice between them left to the user (reports below); slice 3 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -110,6 +110,43 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### 2026-11-07 — The fallback signal: the inflated-set rule and a split-half comparator, side by side
+
+At your request through the main session, a split-half comparator was measured beside the layer's signal on the same fixtures, with the same discrimination test. It is the main session's construction, not from a paper, and the page says so.
+- *Neither was adopted.* The layer's `FallBack` still reads the inflated set, as you chose directly, and the comparator lives only in the test.
+- *How the comparator reads.* The retained draws are split into two halves: each chain's first and second halves, or alternate draws without chains. It builds the plain set from each half on the same grid, then reads the mass, under the full draws' predictive at x, of the region where the two half-sets disagree. It fires at a mass above 0.1α.
+
+**Landed** on `main`, nothing pushed: `ConformalFallbackComparisonTests` (gated, `BASS_QUALIFICATION=1`), the side-by-side section on `ConformalPrediction.md`, and this report. Both rules were read case by case: the signal on a grid at x, and the plain set's decision at the true value at the same x.
+
+| Fixture (1,000 cases each) | Plain coverage | The layer's signal: fires, covered on / off | Split-half above 0.1α: fires, covered on / off |
+|---|---|---|---|
+| Exact draws, S 40 | 0.907 | 59%, 0.912 / 0.899 | 20%, 0.827 / 0.927 |
+| Exact draws, S 160 | 0.904 | 8%, 0.924 / 0.902 | 10%, 0.800 / 0.916 |
+| Exact draws, S 640 | 0.888 | 2%, 0.833 / 0.889 | 6%, 0.738 / 0.898 |
+| Exact draws, S 2,560 | 0.905 | 1%, 1.000 / 0.904 | 3%, 0.923 / 0.905 |
+| Two chains, ρ 0.9 | 0.888 | 5%, 0.902 / 0.887 | 16%, 0.811 / 0.903 |
+| Two chains, ρ 0.99 | 0.886 | 15%, 0.759 / 0.908 | 34%, 0.794 / 0.933 |
+| Two chains, ρ 0.995 | 0.889 | 13%, 0.858 / 0.894 | 34%, 0.854 / 0.907 |
+| Two chains, ρ 0.999 | 0.887 | 5%, 0.635 / 0.901 | 24%, 0.753 / 0.929 |
+| BASS Gaussian, S 1,000 | 0.905 | 54%, 0.907 / 0.903 | 74%, 0.911 / 0.889 |
+| BASS t, S 1,000 | 0.894 | 32%, 0.896 / 0.893 | 61%, 0.893 / 0.895 |
+
+**What the measurement says.**
+- *Where the plain set falls short, the split-half mass finds it.* On exact draws and slowly mixing chains, the cases it flags cover 0.75 to 0.85, and the rest cover 0.90 to 0.93. It is the rule that fires where the plain set falls short and stays quiet where it holds.
+- *The layer's signal discriminates only for the slowest chains,* and fires rarely there. At small S its trust trigger (k̂ undiagnosable or above PSIS's threshold) fires where the plain set holds: at S 40, 59% of cases, covering 0.912.
+- *On the BASS fits neither rule discriminates.* The plain set loses nothing there, yet the split-half mass is large (median 0.033 Gaussian, 0.014 t) and fires on 74% and 61% of cases. So 0.1α, the stated starting point, is not a calibrated share for these chains.
+- *At slice 1's degenerate Gaussian weights* all eight true values are misses: outlying truths the conformal rule refuses, part of the 10% by design. The layer's signal fires at six of their grids, the split-half at seven.
+- *The slow-chain fixture is the one this measurement added.* It is the first where the plain set's coverage varies with how well the draws represent the posterior, which the discrimination test needs.
+
+**Cost.** The comparator is two half-size full steps per call, about one extra score product, measured here through the public step. Built into the layer, it would need only the two half-size score products, not their margins.
+
+**Follow-ups, each with the decision it would change.**
+- *Which rule is the signal.* Each outcome changes this:
+  - The split-half mass: the signal would discriminate where the error costs coverage, but its share needs calibrating on chains like BASS's, where 0.1α fires on most cases that cover.
+  - The inflated-set gap, as now: it fires less often, but at small S on cases that cover, through the trust trigger.
+  - Both, the split-half mass firing and the gap reported: the signal reads typical error and the inflated set stays the width-for-safety option.
+- *The split-half share,* if adopted, set on a fixture with chains like BASS's against measured shortfall. The BASS fits here showed no shortfall to set it against.
 
 ### 2026-11-07 — Slice 2's fallback signal, read from the inflated set
 
