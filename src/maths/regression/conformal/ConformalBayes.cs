@@ -31,11 +31,13 @@ public sealed record ConformalOptions
     public bool Inflate { get; init; }
 
     /// <summary>
-    /// The fallback signal (<see cref="ConformalSet.FallBack"/>) fires when the margin's count m̂ exceeds this share of the
-    /// miscoverage budget, m̂ > share·α·m, or when a candidate the inflated rule accepts has add-one-in weights whose Pareto k̂
-    /// exceeds PSIS's threshold, so its bounds cannot be trusted. 0.1 by default.
+    /// The fallback signal (<see cref="ConformalSet.FallBack"/>) fires when the inflated set exceeds the plain one by more than
+    /// this share of the plain set (<see cref="ConformalSet.Gap"/>): the values whose decision rests on the scores' Monte Carlo
+    /// error are too much of the set. It fires too when a candidate the inflated rule accepts has add-one-in weights whose
+    /// Pareto k̂ exceeds PSIS's threshold, so its bounds cannot be trusted. 0.5 by default: half the plain set's extent again
+    /// resting on the error.
     /// </summary>
-    public double FallbackShare { get; init; } = 0.1;
+    public double FallbackShare { get; init; } = 0.5;
 
     /// <summary>The bounds the margin's band reads (<see cref="Conformal.MarginBounds"/>): the uniform one by default.</summary>
     public MarginBounds MarginBounds { get; init; } = MarginBounds.Uniform;
@@ -135,8 +137,8 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
 /// <param name="Margin">CB-3's reading; null for the whole space.</param>
 /// <param name="Inflated">Whether the set is the inflated rule's.</param>
 /// <param name="ErrorLevel">ν, which the bounds' coverage gives up.</param>
-/// <param name="FallBack">Whether the full step's margin is too wide, or its bounds untrusted, for the level: the signal to
-/// take the split form (CB-2).</param>
+/// <param name="FallBack">Whether the scores' error moves too much of the set (<see cref="Gap"/>), or its bounds are untrusted:
+/// the signal to take the split form (CB-2).</param>
 public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, double[] Grid, double[]? PValues, int[]? Below,
                                   int[]? Tied, double[]? CandidateScores, double[]? EffectiveSampleSizes,
                                   ConformalMargin? Margin = null, bool Inflated = false, double ErrorLevel = 0.0, bool FallBack = false)
@@ -155,8 +157,32 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     public double CoverageUnderError => WholeSpace ? 1.0
         : Inflated ? Coverage - ErrorLevel : 1.0 - (double)(Level + Margin!.Count) / Units - ErrorLevel;
 
-    /// <summary>Whether grid value <paramref name="g"/> is in the set.</summary>
-    public bool Accepts(int g) => WholeSpace || (Inflated ? Margin!.InflatedRanks[g] > Level : Below![g] + Tied![g] + 1 > Level);
+    /// <summary>Whether grid value <paramref name="g"/> is in the set: the inflated rule's under <see cref="Inflated"/>, the plain
+    /// rule's otherwise.</summary>
+    public bool Accepts(int g) => Inflated ? AcceptsInflated(g) : AcceptsPlain(g);
+
+    /// <summary>Whether the plain rule accepts grid value <paramref name="g"/>, π(y_g) > k/m.</summary>
+    public bool AcceptsPlain(int g) => WholeSpace || Below![g] + Tied![g] + 1 > Level;
+
+    /// <summary>Whether the inflated rule accepts grid value <paramref name="g"/>. It accepts every value the plain rule does,
+    /// since raising the candidate's estimate and lowering the units' only adds units at or below it.</summary>
+    public bool AcceptsInflated(int g) => WholeSpace || Margin!.InflatedRanks[g] > Level;
+
+    /// <summary>
+    /// How much more the inflated set holds than the plain one, as a share of the plain set: (|I| − |A|)/|A|, read on the grid's
+    /// cells as <see cref="Width"/> reads them, or by count on a grid of one value. The values only the inflated rule accepts are
+    /// those whose decision rests on the scores' Monte Carlo error, so this is how far the error moves the set. 0 for the whole
+    /// space and when both sets are empty; +∞ when only the inflated one holds anything.
+    /// </summary>
+    public double Gap
+    {
+        get
+        {
+            if (WholeSpace) return 0.0;
+            double plain = Extent(AcceptsPlain), inflated = Extent(AcceptsInflated);
+            return inflated <= plain ? 0.0 : plain > 0.0 ? (inflated - plain) / plain : double.PositiveInfinity;
+        }
+    }
 
     /// <summary>The set's maximal runs of accepted grid values; empty for the whole space and for an empty set.</summary>
     public IReadOnlyList<GridInterval> Intervals
@@ -198,23 +224,22 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     /// grid's end values the half-gap on their inner side twice; within <see cref="Resolution"/> of the true length per
     /// boundary. +∞ for the whole space.
     /// </summary>
-    public double Width
+    public double Width => WholeSpace ? double.PositiveInfinity : Grid.Length == 1 ? 0.0 : Extent(Accepts);
+
+    // The accepted values' cells summed, or their count on a grid of one value.
+    private double Extent(Func<int, bool> accepts)
     {
-        get
+        int n = Grid.Length;
+        if (n == 1) return accepts(0) ? 1.0 : 0.0;
+        double width = 0.0;
+        for (int g = 0; g < n; g++)
         {
-            if (WholeSpace) return double.PositiveInfinity;
-            int n = Grid.Length;
-            if (n == 1) return 0.0;
-            double width = 0.0;
-            for (int g = 0; g < n; g++)
-            {
-                if (!Accepts(g)) continue;
-                double left = g > 0 ? Grid[g] - Grid[g - 1] : Grid[1] - Grid[0];
-                double right = g < n - 1 ? Grid[g + 1] - Grid[g] : Grid[n - 1] - Grid[n - 2];
-                width += 0.5 * (left + right);
-            }
-            return width;
+            if (!accepts(g)) continue;
+            double left = g > 0 ? Grid[g] - Grid[g - 1] : Grid[1] - Grid[0];
+            double right = g < n - 1 ? Grid[g + 1] - Grid[g] : Grid[n - 1] - Grid[n - 2];
+            width += 0.5 * (left + right);
         }
+        return width;
     }
 }
 
@@ -320,8 +345,8 @@ public static class ConformalBayes
                 for (int j = 0; j < g; j++) p[j] = (r.Below[j] + r.Tied[j] + 1) / (double)m;
                 var margin = new ConformalMargin(scorer.Multiple, r.CandidateErrors, r.UniformErrors, r.Fragile, r.InflatedRanks, r.ParetoK,
                                                  PredictiveChecks.ParetoKThreshold(Math.Max(2, rows.Length)), options.MarginBounds);
-                bool fallBack = margin.Count > options.FallbackShare * alpha * m || margin.Untrusted(k) > 0;
-                sets[t] = new ConformalSet(t, h, m, k, candidates.Grids[t], p, r.Below, r.Tied, r.Own, r.Ess, margin, options.Inflate, nu, fallBack);
+                var set = new ConformalSet(t, h, m, k, candidates.Grids[t], p, r.Below, r.Tied, r.Own, r.Ess, margin, options.Inflate, nu);
+                sets[t] = set with { FallBack = set.Gap > options.FallbackShare || margin.Untrusted(k) > 0 };
             }
         }
         return new ConformalPrediction(sets, alpha);
@@ -672,7 +697,10 @@ public static class ConformalBayes
                         (double exact, relative) = LogScoreAndVariance(candidates, first + b, b, _members[i]);
                         score = acc >= Floor ? top + Math.Log(acc) : exact;
                     }
-                    double error = Multiple * PredictiveChecks.LogScaleError(Math.Max(0.0, relative), into.Efficiency[at + b]);
+                    // An error that does not exist (every weighted term of the unit at −∞) is taken as unbounded, so the inflated
+                    // rule still holds every unit the plain rule counts.
+                    double error = double.IsNaN(relative) ? double.PositiveInfinity
+                                 : Multiple * PredictiveChecks.LogScaleError(Math.Max(0.0, relative), into.Efficiency[at + b]);
                     if (score < candidate) below[b]++;
                     else if (score == candidate) tied[b]++;
                     if (score - error <= candidate + ownError[b]) inflated[b]++;

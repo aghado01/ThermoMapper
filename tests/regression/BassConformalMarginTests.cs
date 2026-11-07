@@ -12,12 +12,13 @@ namespace Maths.Regression.Tests;
 /// <summary>
 /// What CB-3's reading says where it matters (E16, slice 2), with the qualification switch (<c>BASS_QUALIFICATION</c> = 1): the
 /// Gaussian BASS fits of slice 1's held-out check, whose add-one-in weights fall to an ESS of 1.5 at outlying candidates, beside
-/// Student t fits of the same data; and how the margin tightens as the draws grow, on exact draws.
+/// Student t fits of the same data; and how the margin and the gap between the inflated and plain sets, which the fallback signal
+/// reads, move as the draws grow, on exact draws, with both rules' coverage beside them.
 /// </summary>
 public sealed class BassConformalMarginTests(ITestOutputHelper output)
 {
     private sealed record Candidate(double Ess, double Error, double Uniform, int Fragile, int Carried, double ParetoK, double PValue, bool Plain, bool Inflated,
-                                    bool FallBack, bool CarriedFallBack);
+                                    bool FallBack);
 
     [Theory]
     [InlineData("gaussian")]
@@ -33,7 +34,8 @@ public sealed class BassConformalMarginTests(ITestOutputHelper output)
         int[] seeds = SeedTree.Derive(2026_1107, fits);
         var at = new List<Candidate>();
         double plainWidth = 0.0, inflatedWidth = 0.0, gridMargin = 0.0, gridUnder = 0.0, carriedMargin = 0.0, carriedUnder = 0.0;
-        int gridFallBacks = 0, untrustedGrids = 0, carriedFallBacks = 0;
+        int gridFallBacks = 0, untrustedGrids = 0;
+        var gaps = new List<double>();
         for (int r = 0; r < fits; r++)
         {
             var rng = new Xoshiro256PlusPlus(seeds[r]);
@@ -52,7 +54,7 @@ public sealed class BassConformalMarginTests(ITestOutputHelper output)
                 ConformalSet set = p.Sets[t];
                 ConformalMargin m = set.Margin!;
                 at.Add(new Candidate(set.EffectiveSampleSizes![0], m.CandidateErrors[0], m.UniformErrors[0], m.Fragile[0], pc.Sets[t].Margin!.Fragile[0],
-                                     m.ParetoK[0], set.PValues![0], set.Accepts(0), (set with { Inflated = true }).Accepts(0), set.FallBack, pc.Sets[t].FallBack));
+                                     m.ParetoK[0], set.PValues![0], set.AcceptsPlain(0), set.AcceptsInflated(0), set.FallBack));
             }
             for (int t = 0; t < widths; t++)
             {
@@ -63,10 +65,10 @@ public sealed class BassConformalMarginTests(ITestOutputHelper output)
                 gridUnder += wide.CoverageUnderError;
                 if (wide.FallBack) gridFallBacks++;
                 if (wide.Margin.Untrusted(wide.Level) > 0) untrustedGrids++;
+                gaps.Add(wide.Gap);
                 ConformalSet carried = pc.Sets[tests + t];
                 carriedMargin += carried.Margin!.Count;
                 carriedUnder += carried.CoverageUnderError;
-                if (carried.FallBack) carriedFallBacks++;
             }
         }
         int count = at.Count, gridCount = fits * widths;
@@ -78,17 +80,26 @@ public sealed class BassConformalMarginTests(ITestOutputHelper output)
                              + $"the uniform bound median {Median(c.Select(x => x.Uniform))}, the band m̂ median {Median(c.Select(x => (double)x.Fragile))} (largest {c.Max(x => x.Fragile)}), "
                              + $"carried {Median(c.Select(x => (double)x.Carried))} (largest {c.Max(x => x.Carried)}); "
                              + $"plain accepts {c.Count(x => x.Plain)}, inflated {c.Count(x => x.Inflated)}; k̂ read at {khat.Length}, above the threshold at {khat.Count(v => v > PredictiveChecks.ParetoKThreshold(1000))}; "
-                             + $"fallback at {c.Count(x => x.FallBack)}, carried {c.Count(x => x.CarriedFallBack)}");
+                             + $"fallback at {c.Count(x => x.FallBack)}, the decision resting on the error (inflated only) at {c.Count(x => x.Inflated && !x.Plain)}");
         }
         output.WriteLine($"{law}: coverage at the true values, plain {at.Count(x => x.Plain) / (double)count:F4}, inflated {at.Count(x => x.Inflated) / (double)count:F4} (1 − k/m 0.900)");
         Line("ESS below 50", [.. at.Where(x => x.Ess < 50)]);
         Line("ESS 50 or more", [.. at.Where(x => x.Ess >= 50)]);
         foreach (Candidate c in at.OrderBy(x => x.Ess).Take(8))
-            output.WriteLine($"  ESS {c.Ess:F1}: π {c.PValue:F2}, bound {c.Error:F3}, uniform {c.Uniform:F3}, m̂ {c.Fragile}, carried {c.Carried}, k̂ {c.ParetoK:F2}, plain {c.Plain}, inflated {c.Inflated}, fallback {c.FallBack}, carried {c.CarriedFallBack}");
+            output.WriteLine($"  ESS {c.Ess:F1}: π {c.PValue:F2}, bound {c.Error:F3}, uniform {c.Uniform:F3}, m̂ {c.Fragile}, carried {c.Carried}, k̂ {c.ParetoK:F2}, plain {c.Plain}, inflated {c.Inflated}, fallback {c.FallBack}");
         output.WriteLine($"{law}, the width grids: plain width {plainWidth / gridCount:F3}, inflated {inflatedWidth / gridCount:F3}; m̂ over the grid averaged {gridMargin / gridCount:F1} of 100, "
                          + $"coverage under error averaged {gridUnder / gridCount:F3}; fallback on {gridFallBacks} of {gridCount}, untrusted candidates in the inflated set on {untrustedGrids}; "
-                         + $"carried: m̂ {carriedMargin / gridCount:F1}, coverage under error {carriedUnder / gridCount:F3}, fallback on {carriedFallBacks}");
+                         + $"carried: m̂ {carriedMargin / gridCount:F1}, coverage under error {carriedUnder / gridCount:F3}");
+        output.WriteLine($"{law}, the gap (|I| − |A|)/|A| over the grids: {Gaps(gaps)}");
         Assert.All(at.Where(x => x.Ess >= 1.0), x => Assert.True(double.IsFinite(x.Error) && x.Fragile >= 0));
+    }
+
+    // The gap's median and 90th percentile, and the share of cases above each candidate threshold.
+    private static string Gaps(IReadOnlyList<double> gaps)
+    {
+        double[] v = [.. gaps.Order()];
+        string Rate(double share) => $"{v.Count(g => g > share) / (double)v.Length:F2}";
+        return $"median {v[v.Length / 2]:F3}, 90th percentile {v[(int)(0.9 * (v.Length - 1))]:F3}; above 0.1 {Rate(0.1)}, 0.25 {Rate(0.25)}, 0.5 {Rate(0.5)}, 1 {Rate(1.0)}";
     }
 
     private static string Median(IEnumerable<double> values)
@@ -98,54 +109,58 @@ public sealed class BassConformalMarginTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void TheMargin_TightensAsTheDrawsGrow()
+    public void TheMarginAndTheGap_AsTheDrawsGrow()
     {
-        // Slice 0's conjugate fixture on exact draws (n 19, k 2 of m 20): the band over a grid, the fallback signal and both rules'
-        // widths at S 40, 160, 640 and 2,560, on the same data sets.
+        // Slice 0's conjugate fixture on exact draws (n 19, k 2 of m 20), at S 8 to 2,560: over 100 grids, the band under both bounds
+        // and the gap between the inflated and plain sets, which the fallback signal reads; over 2,000 true values, both rules'
+        // coverage and how often the decision rests on the error, so the gap can be read against what the error costs.
         if (!BassQualification.Enabled) return;
-        const int n = 19, sets = 100;
+        const int n = 19, sets = 100, truths = 2000;
         LatentReport[] theta = [new("θ", LatentScope.Global, LatentTreatment.Conditioned)];
         double[] grid = [.. Enumerable.Range(0, 401).Select(g => -10.0 + g / 20.0)];
-        int[] seeds = SeedTree.Derive(2026_1109, sets);
-        foreach (int s in new[] { 40, 160, 640, 2560 })
+        int[] seeds = SeedTree.Derive(2026_1109, sets + truths);
+        foreach (int s in new[] { 8, 16, 40, 160, 640, 2560 })
         {
-            double margin = 0.0, under = 0.0, plain = 0.0, inflated = 0.0, uniform = 0.0, carried = 0.0, carriedUnder = 0.0;
-            int fallBacks = 0, carriedFallBacks = 0;
-            for (int r = 0; r < sets; r++)
+            double margin = 0.0, carried = 0.0, plain = 0.0, inflated = 0.0;
+            var gaps = new List<double>();
+            int coveredPlain = 0, coveredInflated = 0, resting = 0, fallBacks = 0;
+            for (int r = 0; r < sets + truths; r++)
             {
                 var rng = new Xoshiro256PlusPlus(seeds[r]);
                 var x = new double[n];
                 var y = new double[n];
                 for (int i = 0; i < n; i++) { x[i] = 4 * rng.NextDouble() - 2; y[i] = ConformalBayesTests.Truth(x[i], 0.5, rng); }
-                double xt = 4 * rng.NextDouble() - 2;
+                double xt = 4 * rng.NextDouble() - 2, yt = ConformalBayesTests.Truth(xt, 0.5, rng);
                 double[] beta = ConformalBayesTests.ExactDraws(x, y, s, rng);
                 var ll = new double[s, n];
                 for (int d = 0; d < s; d++)
                     for (int i = 0; i < n; i++) ll[d, i] = ConformalBayesTests.LogNormal(y[i], beta[d] * x[i]);
-                var lc = new double[s, grid.Length];
+                double[] at = r < sets ? grid : [yt];
+                var lc = new double[s, at.Length];
                 for (int d = 0; d < s; d++)
-                    for (int g = 0; g < grid.Length; g++) lc[d, g] = ConformalBayesTests.LogNormal(grid[g], beta[d] * xt);
+                    for (int g = 0; g < at.Length; g++) lc[d, g] = ConformalBayesTests.LogNormal(at[g], beta[d] * xt);
                 var training = new PointwiseLogDensity(ll, UnitPartition.EachObservation(n), theta);
-                var candidates = new CandidateLogDensity(lc, [grid], theta);
+                var candidates = new CandidateLogDensity(lc, [at], theta);
                 ConformalSet set = ConformalBayes.FullStep(training, candidates).Sets[0];
+                if (r >= sets)
+                {
+                    if (set.AcceptsPlain(0)) coveredPlain++;
+                    if (set.AcceptsInflated(0)) coveredInflated++;
+                    if (set.AcceptsInflated(0) && !set.AcceptsPlain(0)) resting++;
+                    continue;
+                }
                 ConformalSet own = ConformalBayes.FullStep(training, candidates, new ConformalOptions { MarginBounds = MarginBounds.Carried }).Sets[0];
-                carried += own.Margin!.Count;
-                carriedUnder += own.CoverageUnderError;
-                if (own.FallBack) carriedFallBacks++;
                 margin += set.Margin!.Count;
-                under += set.CoverageUnderError;
+                carried += own.Margin!.Count;
                 plain += set.Width;
                 inflated += (set with { Inflated = true }).Width;
-                double accepted = 0.0;
-                int within = 0;
-                for (int g = 0; g < grid.Length; g++)
-                    if (set.Accepts(g)) { accepted += set.Margin.UniformErrors[g]; within++; }
-                uniform += within > 0 ? accepted / within : 0.0;
+                gaps.Add(set.Gap);
                 if (set.FallBack) fallBacks++;
             }
-            output.WriteLine($"S {s}: m̂ {margin / sets:F2} of 20, coverage under error {under / sets:F3}, fallback {fallBacks} of {sets}; "
-                             + $"the uniform bound in the set {uniform / sets:F3}; widths plain {plain / sets:F3}, inflated {inflated / sets:F3}; "
-                             + $"carried: m̂ {carried / sets:F2}, coverage under error {carriedUnder / sets:F3}, fallback {carriedFallBacks}");
+            double se = Math.Sqrt(0.09 / truths);
+            output.WriteLine($"S {s}: coverage plain {coveredPlain / (double)truths:F4}, inflated {coveredInflated / (double)truths:F4} (se {se:F4}), "
+                             + $"the decision resting on the error at {resting / (double)truths:F4} of the true values; m̂ {margin / sets:F2}, carried {carried / sets:F2} of 20; "
+                             + $"widths plain {plain / sets:F3}, inflated {inflated / sets:F3}; the gap {Gaps(gaps)}; fallback at the default {fallBacks} of {sets}");
         }
     }
 }

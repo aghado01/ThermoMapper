@@ -223,33 +223,106 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void FallBack_FiresOnAWideMargin_AndTheOptionsAreChecked()
+    public void FallBack_ReadsTheGapBetweenTheInflatedAndPlainSets_AndTheOptionsAreChecked()
     {
-        // A degenerate stratum: every unit's likelihood swings across a few draws, so the bounds are wide and the band takes most
-        // units; the plain set's guarantee under error falls far below 1 − α and the signal fires. Exact weights give no error.
+        // The signal reads the values whose decision rests on the scores' error, those only the inflated rule accepts: it fires when
+        // they exceed the share of the plain set (Gap), or when a candidate in the inflated set has weights whose k̂ is untrusted.
+        // Draws from two chains that barely move fire on the gap; six draws, too few for k̂'s tail, fire on trust with no gap; slice
+        // 0's conjugate fixture on 2,000 exact draws, with Gaussian noise, does not fire. Every set's signal is the rule's, at the
+        // default share and at others.
         LatentReport[] theta = [new("θ", LatentScope.Global, LatentTreatment.Conditioned)];
         var rng = new Xoshiro256PlusPlus(5);
         const int s = 6, n = 29;
         var ll = new double[s, n];
         for (int d = 0; d < s; d++)
             for (int i = 0; i < n; i++) ll[d, i] = -1 - 8 * rng.NextDouble();
-        var lc = new double[s, 3];
+        double[] grid = [.. Enumerable.Range(0, 41).Select(g => 0.25 * g)];
+        var lc = new double[s, grid.Length];
         for (int d = 0; d < s; d++)
-            for (int c = 0; c < 3; c++) lc[d, c] = -1 - 8 * rng.NextDouble();
+            for (int c = 0; c < grid.Length; c++) lc[d, c] = -1 - 8 * rng.NextDouble();
         var training = new PointwiseLogDensity(ll, UnitPartition.EachObservation(n), theta);
-        var candidates = new CandidateLogDensity(lc, [[0.0, 1.0, 2.0]], theta);
-        ConformalSet wide = ConformalBayes.FullStep(training, candidates).Sets[0];
-        output.WriteLine($"m̂ {wide.Margin!.Count} of {wide.Units}, coverage under error {wide.CoverageUnderError:F3}, fallback {wide.FallBack}");
-        Assert.True(wide.FallBack);
-        Assert.True(wide.CoverageUnderError < 0.9 - 0.1);
-        // One draw: the estimate is exact, every error 0, the band empty unless scores sit at the threshold.
+        var candidates = new CandidateLogDensity(lc, [grid], theta);
+        ConformalSet strained = ConformalBayes.FullStep(training, candidates).Sets[0];
+        output.WriteLine($"six draws: plain {strained.Width:F2}, inflated {(strained with { Inflated = true }).Width:F2}, gap {strained.Gap:F3}, "
+                         + $"untrusted {strained.Margin!.Untrusted(strained.Level)}, fallback {strained.FallBack}");
+        Assert.True(strained.FallBack);
+        Assert.True(strained.Margin!.Untrusted(strained.Level) > 0);
+
+        // Two chains of 500 whose β moves as an AR(1) with ρ 0.995 about the exact posterior: the relative efficiency is small, so
+        // the bounds are wide, and the inflated set holds far more than the plain one.
+        var cx = new double[19];
+        var cy = new double[19];
+        var chainRng = new Xoshiro256PlusPlus(23);
+        for (int i = 0; i < 19; i++) { cx[i] = 4 * chainRng.NextDouble() - 2; cy[i] = 0.7 * cx[i] + Maths.Distributions.Normal.SampleStandard(chainRng); }
+        double precision = 0.1 + cx.Sum(v => v * v), center = cx.Zip(cy, (a, b) => a * b).Sum() / precision, spread = 1.0 / Math.Sqrt(precision);
+        const int perChain = 500;
+        var chain = new double[2 * perChain];
+        for (int c = 0; c < 2; c++)
+        {
+            double z = Maths.Distributions.Normal.SampleStandard(chainRng);
+            for (int d = 0; d < perChain; d++)
+            {
+                z = 0.995 * z + Math.Sqrt(1 - 0.995 * 0.995) * Maths.Distributions.Normal.SampleStandard(chainRng);
+                chain[c * perChain + d] = center + spread * z;
+            }
+        }
+        var chainLl = new double[2 * perChain, 19];
+        for (int d = 0; d < 2 * perChain; d++)
+            for (int i = 0; i < 19; i++) chainLl[d, i] = ConformalBayesTests.LogNormal(cy[i], chain[d] * cx[i]);
+        double[] chainGrid = [.. Enumerable.Range(0, 301).Select(g => -6.0 + g / 25.0)];
+        var chainLc = new double[2 * perChain, chainGrid.Length];
+        for (int d = 0; d < 2 * perChain; d++)
+            for (int g = 0; g < chainGrid.Length; g++) chainLc[d, g] = ConformalBayesTests.LogNormal(chainGrid[g], chain[d] * 1.8);
+        var chainTraining = new PointwiseLogDensity(chainLl, UnitPartition.EachObservation(19), theta, [perChain, perChain]);
+        var chainCandidates = new CandidateLogDensity(chainLc, [chainGrid], theta, chainLengths: [perChain, perChain]);
+        ConformalSet slow = ConformalBayes.FullStep(chainTraining, chainCandidates).Sets[0];
+        output.WriteLine($"two slow chains: plain {slow.Width:F2}, inflated {(slow with { Inflated = true }).Width:F2}, gap {slow.Gap:F3}, "
+                         + $"untrusted {slow.Margin!.Untrusted(slow.Level)}, fallback {slow.FallBack}");
+        Assert.True(slow.Gap > 0.5);
+        Assert.True(slow.FallBack);
+        foreach (ConformalSet set in new[] { strained, slow })
+            for (int g = 0; g < set.Grid.Length; g++)
+                if (set.AcceptsPlain(g)) Assert.True(set.AcceptsInflated(g), "the inflated set holds the plain one");
+
+        var x = new double[19];
+        var y = new double[19];
+        var draw = new Xoshiro256PlusPlus(17);
+        for (int i = 0; i < 19; i++) { x[i] = 4 * draw.NextDouble() - 2; y[i] = 0.7 * x[i] + Maths.Distributions.Normal.SampleStandard(draw); }
+        double[] beta = ConformalBayesTests.ExactDraws(x, y, 2000, draw);
+        var exactLl = new double[2000, 19];
+        for (int d = 0; d < 2000; d++)
+            for (int i = 0; i < 19; i++) exactLl[d, i] = ConformalBayesTests.LogNormal(y[i], beta[d] * x[i]);
+        double[] wide = [.. Enumerable.Range(0, 301).Select(g => -6.0 + g / 25.0)];
+        var exactLc = new double[2000, wide.Length];
+        for (int d = 0; d < 2000; d++)
+            for (int g = 0; g < wide.Length; g++) exactLc[d, g] = ConformalBayesTests.LogNormal(wide[g], beta[d] * 0.5);
+        var healthyTraining = new PointwiseLogDensity(exactLl, UnitPartition.EachObservation(19), theta);
+        var healthyCandidates = new CandidateLogDensity(exactLc, [wide], theta);
+        ConformalSet healthy = ConformalBayes.FullStep(healthyTraining, healthyCandidates).Sets[0];
+        output.WriteLine($"2,000 exact draws: plain {healthy.Width:F2}, inflated {(healthy with { Inflated = true }).Width:F2}, gap {healthy.Gap:F3}, "
+                         + $"untrusted {healthy.Margin!.Untrusted(healthy.Level)}, fallback {healthy.FallBack}");
+        Assert.False(healthy.FallBack);
+        foreach (double share in new[] { 0.0, 0.01, 0.25, 1.0 })
+            foreach ((PointwiseLogDensity t, CandidateLogDensity c) in new[] { (training, candidates), (chainTraining, chainCandidates), (healthyTraining, healthyCandidates) })
+            {
+                ConformalSet set = ConformalBayes.FullStep(t, c, new ConformalOptions { FallbackShare = share }).Sets[0];
+                Assert.Equal(set.Gap > share || set.Margin!.Untrusted(set.Level) > 0, set.FallBack);
+            }
+        Assert.Throws<ArgumentOutOfRangeException>(() => ConformalBayes.FullStep(training, candidates, new ConformalOptions { ErrorLevel = 0.0 }));
+        Assert.Throws<ArgumentOutOfRangeException>(() => ConformalBayes.FullStep(training, candidates, new ConformalOptions { FallbackShare = -1 }));
+    }
+
+    [Fact]
+    public void OneExactDraw_HasNoError_AndNoBand()
+    {
+        // One draw: the estimate is exact, every error 0, and the band empty, since no score sits at the threshold.
+        LatentReport[] theta = [new("θ", LatentScope.Global, LatentTreatment.Conditioned)];
         var exact = new PointwiseLogDensity(new double[,] { { -1, -2, -3, -4, -5, -6, -7, -8, -9, -10 } }, UnitPartition.EachObservation(10), theta);
         ConformalSet sure = ConformalBayes.FullStep(exact, new CandidateLogDensity(new double[,] { { -2.5 } }, [[0.0]], theta)).Sets[0];
         Assert.Equal(0.0, sure.Margin!.CandidateErrors[0]);
         Assert.Equal(0.0, sure.Margin.UniformErrors[0]);
         Assert.Equal(0, sure.Margin.Count);
-        Assert.Throws<ArgumentOutOfRangeException>(() => ConformalBayes.FullStep(training, candidates, new ConformalOptions { ErrorLevel = 0.0 }));
-        Assert.Throws<ArgumentOutOfRangeException>(() => ConformalBayes.FullStep(training, candidates, new ConformalOptions { FallbackShare = -1 }));
+        Assert.Equal(0.0, sure.Gap);
     }
 
     // ---- inflated coverage on exact draws ---------------------------------------------------------------------------------------
