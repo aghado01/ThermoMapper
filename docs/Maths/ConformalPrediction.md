@@ -91,16 +91,18 @@ The scores are Monte Carlo estimates, so the step's guarantee holds up to their 
 
 **Trust** is PSIS's Pareto k̂ of the add-one-in log ratios (`PredictiveChecks`' k̂, shared). It is read where the inflated rule accepts, since there a decision rests on the bounds; above PSIS's threshold at S, the error estimate there cannot be trusted.
 
-**The fallback signal** (`FallBack`) is the signal to take the split form (CB-2, slice 3). It fires when m̂ > share·α·m (`FallbackShare`, 0.1 by default), or when an untrusted candidate sits in the inflated set.
+**The fallback signal** (`FallBack`) is the signal to take the split form (CB-2, slice 3). It reads the inflated set against the plain one, decided by the user on 2026-11-07.
+- *What it reads.* The inflated set holds the plain one, since raising the candidate's estimate and lowering the units' only adds units at or below it. The values only the inflated rule accepts are those whose decision rests on the scores' error.
+- *The rule:* it fires when they exceed a share of the plain set, (|I| − |A|)/|A| > share (`Gap`, `FallbackShare`, 0.5 by default). The sets are read on the grid's cells as `Width` reads them, and by count on a grid of one value, where it fires exactly when the decision rests on the error.
+- *Or on trust:* it also fires when a candidate in the inflated set has an untrusted k̂.
+- *The default,* 0.5, fires when half the plain set's extent again rests on Monte Carlo error. On the readings below it fires on about half the BASS Gaussian fits' grids, a third of the t fits', and almost never on exact draws through the gap.
+- *Alternatives.* A lower share fires earlier: 0.25 caught a quarter of the exact-draw grids at S 8 and about 70% of the BASS grids. Reading the margin instead, the rule first built in this slice, fired on every case measured. A share in coverage units would weigh the disagreement by the model's own predictive, which the layer exists not to lean on.
 
-**What the readings showed** (the checks below). As specified, the margin reads far wider than the error costs, and the signal fires on every case measured:
-- *On exact draws* of the conjugate fixture, with the uniform bound, m̂ falls from 12.8 to 7.7 of 20 as S grows from 40 to 2,560, while the plain set covers 0.905 at S 40.
-- *On the BASS fits* of slice 1's check (S 1,000), m̂ is 98 of 100 (Gaussian) and 94 (t).
-- *Carried bounds narrow it* to 2.5 to 4.6 of 20 on exact draws, and to 72 and 52 of 100 on the BASS fits, which still fires the signal everywhere.
-- *Why:* the band counts every unit whose rank adversarial errors of that size could move. With bounds of a few tenths of a nat beside log scores spread over a few nats, that is most units. Random errors move few decisions.
-- *The inflated set keeps coverage,* 0.935 to 0.958 against 0.900, at 12 to 73% more width.
-
-So the margin and the fallback signal work as stated, but at these sizes they do not tell a degenerate case from a healthy one. The decision they wait on is recorded in the layer's brief.
+**What the readings showed** (the checks below).
+- *The margin reads far wider than the error costs.* With the uniform bound, m̂ falls from 12.8 to 7.7 of 20 on exact draws as S grows from 40 to 2,560, and is 98 of 100 (Gaussian) and 94 (t) on the BASS fits at S 1,000. Carried bounds narrow it to 2.5 to 4.6 of 20, and to 72 and 52 of 100.
+- *Why:* the band counts every unit whose rank adversarial errors of that size could move. With bounds of a few tenths of a nat beside log scores spread over a few nats, that is most units, while random errors move few decisions. The margin stays as a reported worst case and no longer drives the signal.
+- *The gap tracks the error.* On exact draws its median falls from 0.157 at S 8 to 0.016 at S 2,560. It is 0.60 on the BASS Gaussian fits and 0.36 on the t fits, whose chains' r_eff widen the bounds.
+- *The plain set lost no coverage* on any fixture: 0.905 at every S on exact draws, and within its error on the BASS fits. The inflated set covers 0.912 to 0.958 at 2 to 73% more width.
 
 ## Numerics
 
@@ -213,10 +215,22 @@ Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformal
 | 640 | 8.8 | 0.450 | 2.9 | 0.746 | 5.33 / 5.54 |
 | 2,560 | 7.7 | 0.506 | 2.5 | 0.763 | 5.34 / 5.46 |
 
-  The fallback signal fired on all 100 at every S, under both bounds.
+- **The gap as the draws grow**, the same data sets, with both rules' coverage over 2,000 true values (se 0.0067):
+
+| S | Gap, median | 90th percentile | Above 0.25 | Above 0.5 | Fallback at 0.5 | Coverage, plain / inflated | Decision resting on the error |
+|---|---|---|---|---|---|---|---|
+| 8 | 0.157 | 0.313 | 24% | 1% | 100 | 0.905 / 0.941 | 3.6% |
+| 16 | 0.132 | 0.253 | 11% | 0% | 100 | 0.905 / 0.941 | 3.6% |
+| 40 | 0.103 | 0.189 | 5% | 0% | 58 | 0.906 / 0.937 | 3.1% |
+| 160 | 0.063 | 0.115 | 1% | 0% | 8 | 0.906 / 0.927 | 2.1% |
+| 640 | 0.032 | 0.072 | 0% | 0% | 3 | 0.906 / 0.918 | 1.3% |
+| 2,560 | 0.016 | 0.039 | 0% | 0% | 1 | 0.905 / 0.912 | 0.7% |
+
+  At S 8 and 16 the signal fires on trust: the add-one-in weights' tail is too short for k̂. At S 40, PSIS's threshold of 0.38 for that S fires it on 58 of 100. From S 160 it fires on a few.
 - **The degenerate weights** (slice 1's Gaussian BASS fits, n 99, k 10, S 1,000, 20 fits × 50 held-out values, beside t fits of the same data):
-  - *Where ESS is below 50* (8 values, ESS 1.5 to 48): the candidate's bound is 0.7 to 2.6 nats against a median 0.08 elsewhere, and π is 0.01 to 0.02. Both rules refuse every one. The band holds 96 to 98 units under the uniform bound and 34 to 98 carried, and the signal fires.
-  - *So the degeneracy moves no decision there.* The inflated rule refuses it too, so its refusal survives its bounds. What fires the signal is every unit's error, not the candidate's weights.
+  - *Where ESS is below 50* (8 values, ESS 1.5 to 48): the candidate's bound is 0.7 to 2.6 nats against a median 0.08 elsewhere, and π is 0.01 to 0.02. Both rules refuse every one, and the band holds 96 to 98 units under the uniform bound, 34 to 98 carried.
+  - *So the degeneracy moves no decision there,* and the signal, read from the inflated set, stays quiet at all eight. Its refusal survives its bounds. The margin read wide there, as it did everywhere.
+  - *The signal elsewhere:* at the true values it fires where the decision rests on the error, 53 of 992 Gaussian and 43 of 1,000 t values. Over the width grids the gap has median 0.60 (90th percentile 1.54) for the Gaussian fits and 0.36 (0.78) for the t fits, and fires on 218 and 120 of 400.
   - *Elsewhere* the medians are m̂ 98 (carried 72) for the Gaussian fits and 94 (carried 52) for the t fits.
   - *Coverage* is 0.905 plain and 0.958 inflated for the Gaussian, 0.894 and 0.937 for the t.
   - *Widths* are 1.20 against 2.07 for the Gaussian, 1.06 against 1.49 for the t.
@@ -241,12 +255,12 @@ Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformal
 | BASS's candidate density | `BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels)`; `BassPointwise.Latents` (internal, shared) |
 | The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha, ErrorLevel, Inflate, FallbackShare, MarginBounds })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
 | A case's set | `ConformalSet`: `Stratum`, `Units` (m), `Level` (k), `Coverage`, `WholeSpace`, `Grid`, `PValues`, `Below`, `Tied`, `CandidateScores`, `EffectiveSampleSizes`, `Accepts(g)`, `Intervals` (`GridInterval(Lower, Upper)`), `Resolution`, `OpenBelow`, `OpenAbove`, `Width` |
-| CB-3's reading | `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `ConformalScores.Errors`, `CandidateError` |
+| CB-3's reading | `ConformalSet.Gap`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `ConformalScores.Errors`, `CandidateError` |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
 
 ## Not built yet
 
-- A margin with bounds sure over every ordering, which needs each unit's error under every other unit's weights; and a fallback signal that tells a degenerate case from a healthy one (the brief's slice 2 report has the decision).
+- A margin with bounds sure over every ordering, which needs each unit's error under every other unit's weights.
 - The split form, with density, CQR and residual scores (slice 3).
 - The conformal predictive distribution, with PIT and CRPS, and random tie-breaking with it (slice 4).
 - The candidate seams of BARS, BAPS, the hierarchical P-spline, BGP and the changepoint posterior (slice 5), and BASS's for a direct functional fit's curves (E17).
