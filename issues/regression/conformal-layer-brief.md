@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06 (reports below); slice 3 waits for the user, and slice 2's report leaves the fallback signal's reading for the user's decision. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call (reports below); slice 3 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -110,6 +110,49 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### 2026-11-07 — Slice 2's fallback signal, read from the inflated set
+
+At your call on slice 2's first follow-up, the signal now reads the inflated set against the plain one, not the margin.
+
+**Landed** on `main`, nothing pushed:
+- `74c871b` `ConformalSet.Gap`, `AcceptsPlain` and `AcceptsInflated`, the new rule, and its tests.
+- `7a7bc3f` the rule, its default and alternatives, and the readings on `ConformalPrediction.md`.
+
+**The rule.**
+- *What it reads.* The inflated set holds the plain one, so the values only it accepts are those whose decision rests on the scores' Monte Carlo error.
+- *When it fires:* when they exceed a share of the plain set, (|I| − |A|)/|A| > `FallbackShare`, read on the grid's cells, or by count on a grid of one value, where it fires exactly when the true value's decision rests on the error. It also still fires when a candidate in the inflated set has an untrusted k̂.
+- *The margin* stays a reported worst case and no longer drives the signal.
+
+**The default, 0.5,** fires when half the plain set's extent again rests on the error. It was set from these readings:
+
+| Case | Gap, median | 90th percentile | Fires at 0.25 | Fires at 0.5 |
+|---|---|---|---|---|
+| Exact draws, S 8 | 0.157 | 0.313 | 24% | 1% |
+| Exact draws, S 160 | 0.063 | 0.115 | 1% | 0% |
+| Exact draws, S 2,560 | 0.016 | 0.039 | 0% | 0% |
+| BASS Gaussian, S 1,000, two chains | 0.60 | 1.54 | 77% | 55% |
+| BASS t, S 1,000, two chains | 0.36 | 0.78 | 69% | 30% |
+
+- The exact-draw grids rarely fire on the gap at 0.5. At S 8 and 16 they fire on trust, since the weights' tail is too short for k̂, and at S 40 on 58 of 100, where PSIS's threshold for that S is 0.38.
+- At the true values the signal fires where the decision rests on the error: 53 of 992 Gaussian and 43 of 1,000 t values.
+- *At the degenerate Gaussian weights* (ESS 1.5 to 48) both rules refuse, so no decision rests on the error and the signal stays quiet at all eight.
+
+**What it does not show.** The plain set lost no coverage on any fixture: 0.905 at every S on exact draws, and 0.905 and 0.894 on the BASS fits. So the signal reads how far the error could move the set, not a loss measured here. No fixture has yet shown the plain set losing coverage to Monte Carlo error.
+
+**Gates.**
+- Two slowly mixing chains (AR(1) with ρ 0.995) fire on the gap alone, at 0.884.
+- Six draws fire on trust alone, with a gap of 0.
+- 2,000 exact draws do not fire.
+- Every set's signal is the rule's at shares 0, 0.01, 0.25 and 1.
+- The inflated set holds the plain one throughout.
+- 209 of 209 neighbouring tests pass (the eight pins, PSIS-LOO, WAIC, pointwise, candidate and conformal), and 59 of 59 after the review's fix.
+
+**Defect found and fixed in review.** An error that does not exist, which happens when every weighted term of a unit is −∞, came out NaN. The inflated rule would then have skipped a unit the plain rule counts. It is now taken as unbounded.
+
+**Follow-ups, each with the decision it would change.**
+- *A fixture where the plain set does lose coverage to Monte Carlo error,* such as chains stopped before mixing. It decides whether the 0.5 default is set against measured harm rather than only against the gap's spread.
+- *Whether the margin stays always-on* (2.6 to 3.5 times slice 0's step). Nothing reads it now but the report.
 
 ### 2026-11-06 — Slice 2, the margin, inflation and the fallback signal
 
