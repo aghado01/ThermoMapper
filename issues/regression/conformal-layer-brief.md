@@ -1,6 +1,6 @@
 # The conformal layer: E16's build (chip brief)
 
-Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it and the choice between them left to the user (reports below); slice 3 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
+Date: 2026-11-06. Status: slices 0, 1 and 2 built 2026-11-06, the fallback signal read from the inflated set on 2026-11-07 at the user's call, with a split-half comparator measured beside it; on 2026-11-07 both became diagnostics on every set, with no trigger, at the user's decision (reports below); slice 3 waits for the user. Written at the user's request from [E16](bass/extensions-brief.md#conformal-bayes-the-consumer) and the [conformal Lean contract](../../lean/Protolemmata/Conformal/conformal-lemmas.md).
 
 ## Why
 
@@ -54,6 +54,12 @@ It does not reach a curve's or a parameter's own intervals: those stay with E15'
   - every unit, the candidate included, is read by one density. The default is latents integrated; the alternative is the latent-posterior density with the candidate's latent drawn per draw. A matrix whose observation-scope latents are conditioned, or mixed, is refused, as is a candidate whose latents are treated otherwise than the training units';
   - the split form holds for any fit, the sampler's included;
   - an estimate within ε costs at most |M|/m, with |M| read from the estimates; ε must be a sure bound, or its failure probability adds to the miscoverage.
+
+**Decided by the user on 2026-11-07: report the fallback diagnostics, with no trigger.**
+- *What the layer does.* Every set reports the inflated-set gap and the split-half mass; the split-half is the main session's construction, not from a paper. Neither fires anything, and nothing switches to the split form on its own. The fallback rule (the gap with k̂'s trust) stays as an opt-in with a caller-stated threshold, off by default.
+- *Why.* On the BASS fits the plain set covers at nominal, yet the split-half mass at 0.1α fires on 61 to 74% of cases and the gap at 0.5 on 32 to 54%. A default trigger would send most BASS cases to the split form, giving up data for no coverage gain.
+- *What would change it.* A trigger can be adopted once a fixture with chains like BASS's shows a measured shortfall to set its threshold by. None does yet, so none is scheduled.
+- *Open, no decision waiting:* the main session's reading of why. BASS's chains move between structures slowly, so the halves can disagree while coverage holds. A chain held in one region of the posterior may still score every unit nearly alike, where thin draws do not. If so, the split-half mass reads set instability, which differs from miscoverage. It is a reading, not a result.
 
 **Recommended, and accepted by the user on 2026-11-06 when the chip for slices 0 and 1 started.**
 1. **One seam, not one type per engine.** The layer reads `PointwiseLogDensity` and the candidate matrix. An engine joins by adding the candidate density; nothing in the layer knows BASS.
@@ -110,6 +116,34 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### 2026-11-07 — The fallback diagnostics on every set, with no trigger
+
+This executes your decision of 2026-11-07, recorded under "Decisions" above with its reasons and the open reading.
+
+**Landed** on `main`, nothing pushed (the commits are in the log beside this report):
+- *Two diagnostics on every set.* `ConformalSet.Gap`, the inflated-set gap, and `SplitHalfMass` with `SplitHalfDisagreements`, the main session's split-half construction.
+  - The split-half is built into the layer. Two plain-mode scorers take the draws' halves (each chain's first and second halves, or alternate rows without chains) and run the score product and the ranks only.
+  - Its mass is read under the full draws' predictive, which the full step already holds.
+- *No trigger.* `FallbackShare` is now null by default and `FallBack` stays false. With a share stated, the rule fires as before (gap or untrusted k̂). The rule was kept, not removed.
+- *The page and the brief* record the decision, why, and the open reading of why the halves disagree on BASS while coverage holds.
+
+**Gates.**
+- *The layer's split-half mass is the reference's* (two public steps on the half densities) to rounding, over 40 cases with and without chains, 44 of them with halves that disagree.
+- *The edge cases are NaN:* a grid of one value, and a half that gives some unit zero density under every draw. The step goes on.
+- *The rule is off by default and the rule when asked,* at shares 0 to 1, on the strained, slow-chain and healthy cases.
+- *Nothing upstream moves:* 63 of 63 neighbouring tests pass, among them the eight pins and PSIS-LOO. The comparison test now reads the layer's own diagnostic.
+
+**Defect found and fixed in review.** A half in which some unit has zero density under every draw would have made the half scorer throw, failing a step the full draws can take. The diagnostic is now NaN there.
+
+**Cost** (indicative, the machine loaded, about 40% above slice 2's readings for unchanged parts), per grid of 200 at n 1,000:
+- the split-half costs 21 to 25 ms at S 1,000 and 82 to 97 ms at S 4,000, plus its halves' likelihoods once per stratum (15 to 65 ms);
+- the gap costs almost nothing beside the inflated ranks;
+- the full step is 186 to 203 ms at S 1,000 against slice 0's plain 36.7, and 644 to 700 ms at S 4,000 against 149.8.
+
+**Follow-ups, each with the decision it would change.**
+- *Whether the margin stays always-on* (slice 2's question, still open). The gap needs only the per-position errors, the two error products and r_eff. Turning the margin's bands and k̂ off would save 60 to 160 ms per grid in these rows and keep both diagnostics.
+- *A trigger,* once a fixture with chains like BASS's shows a measured shortfall to set its threshold by. None is scheduled.
 
 ### 2026-11-07 — The fallback signal: the inflated-set rule and a split-half comparator, side by side
 

@@ -91,23 +91,23 @@ The scores are Monte Carlo estimates, so the step's guarantee holds up to their 
 
 **Trust** is PSIS's Pareto k̂ of the add-one-in log ratios (`PredictiveChecks`' k̂, shared). It is read where the inflated rule accepts, since there a decision rests on the bounds; above PSIS's threshold at S, the error estimate there cannot be trusted.
 
-**The fallback signal** (`FallBack`) is the signal to take the split form (CB-2, slice 3). It reads the inflated set against the plain one, decided by the user on 2026-11-07.
-- *What it reads.* The inflated set holds the plain one, since raising the candidate's estimate and lowering the units' only adds units at or below it. The values only the inflated rule accepts are those whose decision rests on the scores' error.
-- *The rule:* it fires when they exceed a share of the plain set, (|I| − |A|)/|A| > share (`Gap`, `FallbackShare`, 0.5 by default). The sets are read on the grid's cells as `Width` reads them, and by count on a grid of one value, where it fires exactly when the decision rests on the error.
-- *Or on trust:* it also fires when a candidate in the inflated set has an untrusted k̂.
-- *The default,* 0.5, fires when half the plain set's extent again rests on Monte Carlo error. On the readings below it fires on about half the BASS Gaussian fits' grids, a third of the t fits', and almost never on exact draws through the gap.
-- *Alternatives.* A lower share fires earlier: 0.25 caught a quarter of the exact-draw grids at S 8 and about 70% of the BASS grids. Reading the margin instead, the rule first built in this slice, fired on every case measured. A share in coverage units would weigh the disagreement by the model's own predictive, which the layer exists not to lean on.
+**Two diagnostics on every set, and no trigger** (decided by the user on 2026-11-07). The layer reports how far the scores' Monte Carlo error could move each set, and switches to nothing on its own.
+- *The inflated-set gap* (`Gap`). The inflated set holds the plain one, since raising the candidate's estimate and lowering the units' only adds units at or below it. The values only the inflated rule accepts are those whose decision rests on the error, as a share of the plain set: (|I| − |A|)/|A|, read on the grid's cells as `Width` reads them, or by count on a grid of one value.
+- *The split-half mass* (`SplitHalfMass`, with `SplitHalfDisagreements`), the main session's construction and not from a paper. The retained draws split into two halves: each chain's first and second halves, or alternate draws without chains. The layer scores each half on the same grid, by two half-size score products, and reads the mass, under the full draws' predictive at x, of the values where the two halves' plain sets disagree. It is the coverage the error could shift here, read at its typical size with no union over units, and conservative, since each half carries √2 the full run's error. It is NaN on a grid of one value.
+- *The fallback rule is an opt-in* (`FallbackShare`, null by default). With a share stated, `FallBack` fires when the gap exceeds it, or when a candidate in the inflated set has an untrusted k̂. Nothing calls it by default.
+- *Why no trigger.* On the BASS fits the plain set covers at nominal, yet the split-half mass at 0.1α fires on 61 to 74% of cases and the gap at 0.5 on 32 to 54%. A default trigger would send most BASS cases to the split form, giving up data for no coverage gain. A trigger can be adopted once a fixture with chains like BASS's shows a measured shortfall to set its threshold by. None does yet, so none is scheduled.
+- *Open, no decision waiting:* the main session's reading of why the halves disagree on BASS while coverage holds. BASS's chains move between structures slowly, so the two halves can sit in different regions of the posterior, and a chain held in one region may still score every unit nearly alike, where thin draws do not. If so, the split-half mass reads the set's instability, which differs from miscoverage. It is a reading, not a result.
 
 **What the readings showed** (the checks below).
 - *The margin reads far wider than the error costs.* With the uniform bound, m̂ falls from 12.8 to 7.7 of 20 on exact draws as S grows from 40 to 2,560, and is 98 of 100 (Gaussian) and 94 (t) on the BASS fits at S 1,000. Carried bounds narrow it to 2.5 to 4.6 of 20, and to 72 and 52 of 100.
-- *Why:* the band counts every unit whose rank adversarial errors of that size could move. With bounds of a few tenths of a nat beside log scores spread over a few nats, that is most units, while random errors move few decisions. The margin stays as a reported worst case and no longer drives the signal.
+- *Why:* the band counts every unit whose rank adversarial errors of that size could move. With bounds of a few tenths of a nat beside log scores spread over a few nats, that is most units, while random errors move few decisions. The margin stays as a reported worst case.
 - *The gap tracks the error.* On exact draws its median falls from 0.157 at S 8 to 0.016 at S 2,560. It is 0.60 on the BASS Gaussian fits and 0.36 on the t fits, whose chains' r_eff widen the bounds.
 - *The plain set lost no coverage* on any fixture: 0.905 at every S on exact draws, and within its error on the BASS fits. The inflated set covers 0.912 to 0.958 at 2 to 73% more width.
 
-**A second reading, measured beside it: the split-half comparator.** This is the main session's construction, not from a paper (2026-11-07, at the user's request).
+**The two diagnostics measured side by side** before they were built in, the split-half then read from two public steps (2026-11-07, at the user's request).
 - *How it reads.* It splits the retained draws into two halves: each chain's first and second halves where there are chains, alternate draws otherwise. It builds the plain set from each half on the same grid, then reads the mass, under the full draws' predictive at x, of the region where the two half-sets disagree.
 - *What the mass means.* It estimates how much coverage the Monte Carlo error could shift for this case. It reads the error at its typical size, with no union over units and no worst case, and is conservative, since each half carries √2 the full run's error.
-- *It is measured, not adopted.* It lives in `ConformalFallbackComparisonTests`, and the layer's signal still reads the inflated set. Which rule becomes the signal is the user's call.
+- *Read as signals,* the gap through the rule at 0.5 and the mass at 0.1α. In the table, "the layer's signal" is that rule.
 
 Both rules were read case by case: the signal on a grid at x, and the plain set's decision at the true value at the same x. So a rule's firing can be set against the coverage the plain set achieved. A useful rule fires where the plain set falls short and stays quiet where it holds. Each entry below is the fire rate, then coverage where the rule fires against where it is quiet:
 
@@ -274,15 +274,30 @@ Run on `ConformalMarginTests`, and with `BASS_QUALIFICATION=1` on `BassConformal
   - The margin's always-on reading costs 2.6 to 3.5 times slice 0's step.
   - Its largest parts are the two error products, each candidate's r_eff along the chains (an FFT per candidate) and k̂ (a sort of S ratios per candidate in the inflated set).
 
+**The two diagnostics' cost** (2026-11-07), per grid of 200 at n 1,000, on the cycle clock, best of five. Indicative: the machine was loaded, and parts unchanged since slice 2 read about 40% slower this time.
+- *The split-half mass* costs 21 to 25 ms per grid at S 1,000 and 82 to 97 ms at S 4,000, about one more score product. Its halves' likelihoods are built once per stratum, 15 to 65 ms.
+- *The gap* reads the inflated ranks the margin's errors give, so it costs almost nothing beside them.
+- *The full step* with both diagnostics and the margin:
+
+| S, draws | Full step | Slice 0's plain step |
+|---|---|---|
+| 1,000, independent | 185.8 ms | 36.7 ms |
+| 1,000, two chains | 203.4 ms | |
+| 4,000, independent | 643.9 ms | 149.8 ms |
+| 4,000, two chains | 700.1 ms | |
+
+- *Most of it is still the margin:* the two error products, the bands, k̂ and each candidate's r_eff.
+- *The gap needs only the per-position errors,* the two error products and r_eff, not the bands or k̂. So the margin's always-on question, slice 2's, would leave the gap's cost and remove the bands' and k̂'s, 60 to 160 ms per grid in these rows.
+
 ## API at a glance
 
 | Area | Types and members |
 |---|---|
 | The seams | `PointwiseLogDensity` (training); `CandidateLogDensity(values, grids, latents, stratumOf, chainLengths)` with `Weights`, `Offset(t)`, `Cases`, `Draws` |
 | BASS's candidate density | `BassFit.CandidateLogDensity(data, cases, grids, strata, unseenLevels)`; `BassPointwise.Latents` (internal, shared) |
-| The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha, ErrorLevel, Inflate, FallbackShare, MarginBounds })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
+| The full step | `ConformalBayes.FullStep(training, candidates, ConformalOptions { Alpha, ErrorLevel, Inflate, FallbackShare (opt-in, null by default), MarginBounds })` → `ConformalPrediction(Sets, Alpha)`; `ConformalBayes.Scores(training, candidates, column)` → `ConformalScores(Units, Scores, Candidate, EffectiveSampleSize)` |
 | A case's set | `ConformalSet`: `Stratum`, `Units` (m), `Level` (k), `Coverage`, `WholeSpace`, `Grid`, `PValues`, `Below`, `Tied`, `CandidateScores`, `EffectiveSampleSizes`, `Accepts(g)`, `Intervals` (`GridInterval(Lower, Upper)`), `Resolution`, `OpenBelow`, `OpenAbove`, `Width` |
-| CB-3's reading | `ConformalSet.Gap`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `ConformalScores.Errors`, `CandidateError` |
+| CB-3's reading | `ConformalSet.Gap`, `SplitHalfMass`, `SplitHalfDisagreements`, `AcceptsPlain(g)`, `AcceptsInflated(g)`; `ConformalSet.Margin` → `ConformalMargin` (`Multiple`, `CandidateErrors`, `UniformErrors`, `Fragile`, `InflatedRanks`, `ParetoK`, `ParetoKThreshold`, `Bounds`, `Count`, `Untrusted(k)`); `ConformalSet.Inflated`, `ErrorLevel`, `CoverageUnderError`, `FallBack`; `MarginBounds` (`Uniform`, `Carried`); `ConformalScores.Errors`, `CandidateError` |
 | The product | `DenseProduct.Multiply`, `Pack`, `FusedDot`; `PackedColumns` |
 
 ## Not built yet
