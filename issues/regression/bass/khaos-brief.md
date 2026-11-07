@@ -1,6 +1,6 @@
 # KHAOS on the BASS core: E19's build (chip brief)
 
-Date: 2026-11-07. Status: written, not started. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
+Date: 2026-11-07. Status: slice 0 started 2026-11-07. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
 
 ## Why
 
@@ -82,7 +82,7 @@ Pinned in `r/` (`fb38e44`), with its imports glmnet, shape and survival; mvtnorm
 - *Adaptive mutation probabilities:* under D10's policy.
 - *Corrections, not parity variants:* each defect below that is confirmed is corrected, and the tests assert the corrected reference, as GBASS's were.
 
-**Recommended; a chip starts on these unless the user says otherwise.**
+**Recommended, and accepted by the user on 2026-11-07 when the chip for slice 0 started.**
 1. **Legendre as a part type behind F-X3, not a separate engine.** The tempering ladders, SMC, the flat histogram, the pointwise density, the conformal layer and GBASS's noise then serve it as they serve hinges. A basis that mixes term types stays an option, not built.
 2. **β and σ² integrated in the structure step,** as BASS does and as KHAOS's own ratio already is. β is drawn for readouts only.
 3. **Uniform compositions:** q − 1 distinct cuts from {1, …, d − 1}, with probability 1/C(d − 1, q − 1). This corrects `random_partition` and the C(d, q) in the ratios (below).
