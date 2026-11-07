@@ -1,6 +1,6 @@
 # KHAOS on the BASS core: E19's build (chip brief)
 
-Date: 2026-11-07. Status: slice 0 started 2026-11-07. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
+Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 waits for the user. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
 
 ## Why
 
@@ -157,3 +157,74 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### Slice 0: the oracle modes (chip, 2026-11-07)
+
+**Landed** in `31362ad`: four modes under `r/oracles` that run from `r/` against the pinned khaos 2.1.1, sharing `khaos_helpers.R` (the namespace, khaos's expressions evaluated as written, and references that share nothing with its code), with their parity classes in `tests/oracle` and four rows in `r/README.md`'s oracle map. 26 tests (`Maths.Oracle.Tests`, filter `Khaos`), 26 passed, and all 26 printed their readings, so each ran against R; about 106 s together on the loaded machine. None is gated. The C# side reuses `GbassOracle`'s runner and computes its references itself: the collapsed marginal through `PriorPencil`, the Legendre recurrence, |𝒜|, compositions, `random_partition`'s law by counting, and the Poisson-binomial.
+
+| Mode | What it evaluates | Parity class |
+| --- | --- | --- |
+| `khaos_primitives_oracle.R` | `ss_legendre_poly`, `A_size` and `generate_A`, `make_weights`, `random_partition` | `KhaosPrimitiveParityTests` |
+| `khaos_conditionals_oracle.R` | At frozen states (60 cases, four Legendre terms): ln p(y \| structure) under the ridge and the modified g-prior; the samplers' structure ratios as written; g₀²'s conditional integrated and given β; σ² given β; the birth's exact forward law against khaos's own draw, the death's reverse, both mutations, the prior ratios and the move probabilities at M = 0 | `KhaosConditionalParityTests`, and the frozen-state rows of `KhaosDefectParityTests` |
+| `khaos_defects_oracle.R` | The other rows: an orthogonal design's per-term penalty, the log-evidence cores and their callers, `random_partition` against both counts, a seeded g-prior chain, the death's normal approximation, the paper's slips, each ratio factor's direction, σ²'s floor | `KhaosDefectParityTests` |
+| `khaos_readouts_oracle.R` | `adaptive_khaos` under each prior and `sobol_khaos`: the surface over a grid, M, s2, λ, g₀², the move counts, the indices and the terms that repeat a variable | `KhaosReadoutParityTests`; the engine meets it from slice 1 on |
+
+**The gates.** The modes run from `r/`. Each defect is confirmed or struck below.
+
+**Parity, and what the engine meets** (corrected references throughout):
+- *The collapsed marginal.* `PriorPencil` with prior precision D_g⁻¹ΨᵀΨD_g⁻¹ at τ = 1/g₀², and I at 1/τ² for the raw ridge, equals the dense multivariate t over n × n to 10⁻⁹ at five nested structures under each prior. So E21's builder through the pencil already serves both. The ridge's structure ratio as written is that marginal's difference to 10⁻⁹, and its death is the birth's negative.
+- *g₀²'s conditional.* With β and σ² integrated, read through the pencil at each g₀², it is the joint less a constant to 6·10⁻¹³ over g₀² ∈ [0.5, 5000]. Given β and σ², IG(a_g + (M + 1)/2, b_g + βᵀD_g⁻¹ΨᵀΨD_g⁻¹β/(2σ²)) holds to 8·10⁻¹³.
+- *σ² given β* is IG(a + n/2 + (M + 1)/2, b + RSS/2 + βᵀS₀⁻¹β/2) under either prior, to 10⁻¹⁴.
+- *The birth's forward probability* of an inclusion vector is Σ_{q₀} J(q₀)·P(χ \| q₀)/P(valid \| q₀): khaos's own draws carry it (worst z 1.3 and 2.0 over 20,000 births, at order < p and at order = p). The variable swap's ratio is exact for its own kernel, to 10⁻¹².
+- *The Legendre polynomials.* `ss_legendre_poly` equals Bonnet's recurrence here bit for bit, since both run the same recurrence. The independent checks: orthonormality to 5·10⁻¹⁵ under the engine's `GaussLegendre` and 1.5·10⁻¹⁴ under R's, and ψ_J vanishing at the J-point nodes to 6·10⁻¹⁴, degrees 8 and 24. R's Golub–Welsch nodes are the engine's to 13 digits.
+- *|𝒜|.* `A_size` equals the sum in exact integers and the multi-indices walked here, up to 53,710,887 at (p, d, q) = (20, 15, 5); the sum alone at (30, 15, 5), 467,246,768.
+- *`random_partition`.* The law found by enumerating its draws equals the sorted-cuts count to 10⁻¹⁴, and 40,000 of its draws carry it (worst z 3.1).
+- *Readouts, ridge* (Ishigami's function on x₁..x₃ and an inert x₄, 120 cases, noise 0.5, degree 8, order 3, 6,000 iterations):
+  - The fit: M 10.8, s2 0.232 against the noise's 0.25, the surface 0.17 RMSE from the function, and the 90% bands cover 15 of 16 grid points.
+  - The total indices: 0.573, 0.427, 0.248 and 0.000, against Ishigami's 0.558, 0.442, 0.244 and 0. The partial indices: x₁ 0.319, x₂ 0.420 and x₁:x₃ 0.244, against 0.314, 0.442 and 0.244.
+  - *A stated difference:* `sobol_khaos` divides by Var f + s2, with the noise taking a 0.016 share. The engine's `BassMoments` divides by Var f, so the mode emits both.
+- *Readouts, g-prior as written:* checked for form only (below).
+
+**Refusals and acceptance; the cost row.** Nothing of the engine runs in this slice, so neither applies.
+- *R's own acceptance* (birth/death/degree/swap): 0.039/0.033/0.113/0.000 under the ridge; 0.221/0.137/0.132/0.233 under the g-prior.
+- *R's costs on the loaded machine.* The ridge readout's 6,000 iterations take 14–43 s and the g-prior's 2,500 take 26–38 s, since it holds M ≈ 72. One `legendre_poly` call at degree 24 costs 0.95 s, because the recursion calls itself on j − 1 and j − 2 with no memory, about φ^j calls. The default degree 15 keeps that cheap; it is no cost the engine's lanes share.
+
+**Defects.** Each confirmed one is a correction the engine takes, not a parity variant.
+
+| Defect | Run | Verdict |
+| --- | --- | --- |
+| The g-prior's structure ratio leaves out ½Δln\|S₀⁻¹\| | Frozen state: as written equals the marginals' difference less ½Δln\|S₀⁻¹\| to 10⁻¹⁰ per birth, the missing part 0.17–1.28 nats a step. On a 64-case Hadamard design, the code's per-term penalty is ½ln 64 + ½ln(1 + 1/(g₀²g²)), so 2.08–3.94 nats; the model's is ½ln(1 + g₀²g²), 0.012–4.61 nats, over g₀² ∈ [1, 10⁴] and g ∈ {1, 0.30, 0.16}. At g₀² = 1 a q = 3, d = 12 term costs 3.94 nats as written and 0.012 under the model; at 10⁴, 2.08 and 2.76. `log_evidence_fast_core` leaves out the same term (to 10⁻¹⁰). `log_evidence_full_core` also reads the least-squares residual in place of the posterior's quadratic form, 2.5–6.2 nats a step beyond. Nothing in 2.1.1 calls either core: `sparse_khaos` ranks by KIC | Confirmed. Struck: its reach into `sparse_khaos`'s Bayes factors |
+| g₀²'s conditional has no data term | `dgsq_full` against the joint with β and σ² integrated: it spreads 80.1 nats as written; 9.21 nats, which is ln 10⁴, with the data term −(a + n/2)ln Q added; and 8·10⁻¹³ with one more factor 1/g₀². Against the joint given β and σ², 2,042 nats | Confirmed, with a second part: the code's power θ^(−a−M/2) (M counting the intercept) leaves out the inverse gamma's −1 |
+| The birth's forward probability | Against the exact law above, over every valid χ at p = 4 and p = 3. With no redraw the birth's term is the q₀-marginal P̄(χ), up to 0.33 nats off. Each redraw past q_max multiplies its P̄ in, down to −15.5 nats. An all-zero redraw adds ln 1, since R's `x[-integer(0)]` is empty, so at order = p the term never leaves P̄(χ), 0.29 nats off. The death's reverse is P̄(χ)/(1 − P̄(0) − P̄(q > q_max) by its normal), 0.033 nats off at order < p and 0.148 at order = p | Confirmed |
+| `random_partition` not uniform; the ratios' C(d, q) | Uniform for q ≤ 2 (one cut or none). At q ≥ 3 the total variation to uniform is 0.12–0.175 at (5, 3), (6, 3), (7, 4) and (8, 3), with tied cuts weighted down: at (7, 4) the law runs from 1/64 to 6/64 against the uniform 1/20. 1/C(d, q) matches neither law anywhere: it is 1/6 where q = 1's probability is 1, and the degree mutation as written reads 1.204 nats at q = 2, 3 → 5, where uniform (here also the draw's own law) gives 0.693 | Confirmed |
+| The swap can pick an active variable | Constructed state, the term {x₁, x₃} at η (2, 1, 1, 0): a repeated variable is proposed with probability 0.40 when x₁ is swapped out and 0.50 when x₃ is. Seeded g-prior chain (100 cases, 1,500 iterations): 55.6% of the kept terms repeat a variable, in all 750 kept draws. In the g-prior readout, 29% of terms, and `sobol_khaos` gives x₂:x₂ 0.388 of the variance. Under the ridge the swap is never accepted | Confirmed |
+| The death's normal approximation | Four (η, q_max) cases and nine q₀, against the Poisson-binomial by enumeration on both sides (agreeing to 10⁻¹³): up to 64% off in small tails (0.0018 for 0.0036, 0.0029 for 0.0082) and 7% in the body (0.346 for 0.322) | Confirmed |
+| σ²'s floor `s2_lower` | Its default is 0 in both samplers, applied as `max(s2_lower, ·)` | Not ported; recorded |
+| The paper's slips | In the code: `legendre_poly(x, 1)` returns x; the coins are `rbinom(p, 1, wts)`; the degree is drawn from {q, …, d_max} ({2, …, 6} at p = 3); the partition count is C(d, q), which is the row above | Struck for the code |
+| SC-1's printed ratios | Each factor's exponent in the code's birth, death and degree mutation, as written, is its Metropolis–Hastings exponent; 8 of the 12 are inverted in the print. The code also marginalizes q₀ inside the coins' term, where the print conditions on it | Struck for the code; the manuscript's inversions stand as SC-1 records them |
+
+**Found here.**
+- *The death's prior ratio is not the birth's reciprocal.* Birth plus death log prior ratio is ln(K/(K + 1)) to 10⁻¹², at K = 1..4. The birth carries the multiset prior's +ln(M + 1); the death writes −ln(M + 1) where −ln M is meant, so deaths pass K/(K + 1) as often as they should. The corrected pair is λ/|𝒜| and |𝒜|/λ (λ drawn), or its λ-integrated form.
+- *The move probabilities at M = 0.* The move is forced to birth there (share 1.000 over 20,000 draws), yet the birth from M = 0 and the death to M = 0 read P_B = P_D = 1/3. Their move parts are 0 as written where the exact parts are −ln 3 and +ln 3. Both errors, with the previous one, push mass away from the empty structure.
+- *σ²'s draw given β leaves out β's prior* (the paper's display too). As written it is IG(a + n/2, b + RSS/2); the joint less it spreads 63.6 nats under the g-prior and 20.5 under the ridge over σ² ∈ [0.03, 0.3]. Two more problems sit beside it:
+  - The ridge's draw reads its prior rate as g2 where its marginal reads g2/2, which matters only at g2 ≠ 0, and the default is 0.
+  - β is drawn given the previous sweep's σ², so (β, σ²) is not a draw from its joint given the structure.
+
+  Decision 2 already corrects all three: σ² given the structure, then β given σ².
+- *The degree weights index from q:* (d − q + 1)^(−s_d), where the paper writes d^(−s_d) with default 1. The code's default s_d = 0 is uniform, where the two agree. Either is a valid proposal, since both directions read the same weights. The engine follows the brief's d^(−s_d).
+- *`make_weights` sums to q₀ only to its three passes,* up to 3.5·10⁻⁵ off, where the exact root of Σv^β = q₀ meets it to 10⁻¹⁰. Either is a valid proposal; the brief's "summing to q₀" names the root.
+- *The g-prior chain as written is no reference.* It holds M ≈ 72 on the readouts' 120 cases. Its indices move with the seed: x₁'s total is 0.69 on one seed and 0.19 on another at 4,000 iterations, and 0.104 on the test's data, where Ishigami's is 0.558, with the inert x₄ at 0.153. Its surface is 1.21 RMSE from the function, and its bands cover 6 of 16 points. These are the defects above acting together.
+
+**Decisions beyond the brief.**
+- *The readouts' configuration:* Ishigami with one inert input (p = 4, so the swap runs), 120 cases, degree 8, order 3; the ridge at 6,000 iterations, the g-prior at 2,500 thinned by 2. The defaults fit neither budget:
+  - At degree 15, order 5, 200 cases and 5,000 iterations, the ridge never found x₁:x₃ (T₃ 0.004).
+  - At 150 cases and 10,000 iterations it did on three seeds (T₃ 0.245–0.255), but took 66–100 s, past the bridge's 120 s on this machine. Under the chosen configuration it does on every seed tried (four).
+
+  A mixing reading of khaos's birth on this function, not a defect.
+- *`ROracle`'s timeout* is left at 120 s; the g-prior's chain is sized to it.
+
+**Left unbuilt.** Nothing of the engine: slice 1 waits for the user. The readouts under the g-prior are checked for form only, for the reason above.
+
+**Follow-up, with the decision it changes.** Slice 2's gate reads "`adaptive_khaos_gprior` readouts under the corrected marginal", and the g-prior as written is no such reference. The choice is between two things:
+- *Patch khaos's g-prior sampler in the readouts mode,* body deparsed and replaced as GBASS's `nw_gamma_prior` was. The patches: the normalizer in the three ratios, g₀²'s conditional, σ²'s draw, the swap restricted to inactive variables, the death's prior ratio and the move probabilities at M = 0. Slice 2 then has an R readout to meet.
+- *Rest the g-prior's gates on the exact law, Geweke and recovery from truth,* with the ridge's readouts as the only R comparison. Slice 2 then drops that gate.
