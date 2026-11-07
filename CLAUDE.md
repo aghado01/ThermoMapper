@@ -10,3 +10,6 @@ docs — read both before doing anything substantive:
 
 This file stays a pointer. Only genuinely Claude-specific quirks (harness
 behaviors no other agent shares) would be recorded here.
+
+
+NO COMMITS WITH "Co-Authored-By: Claude Opus 5.5" OR THE LIKE. KEEP COMMITS INFORMATIVE TO THE WORK. 

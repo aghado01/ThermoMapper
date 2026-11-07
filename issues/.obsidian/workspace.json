@@ -1,0 +1,221 @@
+{
+  "main": {
+    "id": "11dbd6c5126739a2",
+    "type": "split",
+    "children": [
+      {
+        "id": "c48c5a42fa7fce9a",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "ee1ef913d33dea30",
+            "type": "leaf",
+            "state": {
+              "type": "canvas",
+              "state": {
+                "file": "Untitled.canvas",
+                "viewState": {
+                  "x": 0,
+                  "y": 0,
+                  "zoom": 0
+                }
+              },
+              "icon": "lucide-layout-dashboard",
+              "title": "Untitled"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "71eb6b7573514987",
+    "type": "split",
+    "children": [
+      {
+        "id": "67a9066d354e667b",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "e9f0888188ab4783",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "7606d960131a9251",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "8bb475e34c2c8464",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "3c9ee1a7f4722643",
+    "type": "split",
+    "children": [
+      {
+        "id": "ef55e2c35228eb24",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "549e5caae64912e2",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Untitled.canvas",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "13670ab4b78819ee",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "Untitled.canvas",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "498a128857e7cbd3",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "f253b7d75f79c370",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "6b1fdeda706db12f",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "Untitled.canvas",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "ee1ef913d33dea30",
+  "lastOpenFiles": [
+    "regression/conformal-layer-brief.md.tmp.38672.bde2f4ff362f",
+    "regression/conformal-layer-brief.md.tmp.38672.bca439979de7",
+    "regression/bass/extensions-brief.md.tmp.38672.1a10533e4e7f",
+    "regression/conformal-layer-brief.md.tmp.38672.4b33eed6ce30",
+    "regression/conformal-layer-brief.md.tmp.38672.dd2c1fa806e0",
+    "regression/conformal-layer-brief.md.tmp.38672.098db25b7d9c",
+    "regression/conformal-layer-brief.md",
+    "regression/conformal-layer-brief.md.tmp.38672.d91a6795f0af",
+    "regression/bass/extensions-brief.md.tmp.76216.6dd50df79f0f",
+    "regression/bass/extensions-brief.md.tmp.38672.0ce1c198f35f",
+    "regression/bass/extensions-brief.md.tmp.38672.9c68bd419c2f",
+    "regression/bass/extensions-brief.md.tmp.38672.973144311d4b",
+    "regression/bass/gbass-noise-brief.md",
+    "regression/bass/efficiency-pass-brief.md",
+    "regression/performance-cost-regression-samplers-brief.md",
+    "ph/identity-across-temperatures.md",
+    "regression/bass/basin-hold-brief.md",
+    "regression/bass/waiting-time-brief.md",
+    "ph/lineages-against-bars.md",
+    "regression/papers/conformal_bayesian_computation.md",
+    "regression/papers/Rohrer2026.md",
+    "regression/papers/interpretability-paper.md",
+    "regression/bartisan.md",
+    "Untitled.canvas"
+  ]
+}

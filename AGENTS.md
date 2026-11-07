@@ -136,3 +136,6 @@ workstream subfolder (`ph`, `spred`, `viz`, `docs`, …). Canonical file kinds:
 
 Docs reference each other by wikilink or explicit relative link. Generated
 analysis output goes to `artifacts/`, not `issues/`.
+
+
+NO COMMITS "Co-Authored-By: Claude Opus 5.5" OR THE LIKE. KEEP COMMITS INFORMATIVE TO THE WORK. 
