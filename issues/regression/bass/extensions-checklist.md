@@ -6,11 +6,11 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ### Entries
 
-- [ ] **E1** Generalized-hyperbolic noise (GBMARS), with OQ20's BARS side.
+- [ ] **E1** Generalized-hyperbolic noise (GBMARS), with OQ20's BARS side. Building ([brief](gbass-noise-brief.md)): slices 0–4 and the GIG's ratio-of-uniforms draw landed by 2026-11-06; slice 5 started 2026-11-07; slices 6 and 7 wait.
 - [ ] **E2** Robust centring and bases (OQ16).
 - [ ] **E3** Free-knot tensor-product surfaces (ABMRS).
-- [ ] **E4** Additional proposal kernels.
-- [ ] **E5** KHAOS's modified g-prior.
+- [ ] **E4** Additional proposal kernels. The Bernoulli-inclusion birth is briefed with KHAOS ([brief](khaos-brief.md), 2026-11-07).
+- [ ] **E5** KHAOS's modified g-prior. Briefed with KHAOS ([brief](khaos-brief.md), 2026-11-07).
 - [ ] **E6** Basis-estimation uncertainty.
 - [ ] **E7** Moments for piecewise polynomials.
 - [ ] **E8** Active-subspace analysis.
@@ -21,12 +21,12 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 - [ ] **E13** The free-energy curve over the ladder.
 - [ ] **E14** Semi-modular calibration.
 - [ ] **E15** Calibrated intervals for loss-based posteriors (BARS's Gibbs-loss route first).
-- [ ] **E16** Conformal Bayes, the consumer, with conformal predictive distributions.
+- [ ] **E16** Conformal Bayes, the consumer, with conformal predictive distributions. Building as an engine-wide layer ([brief](../conformal-layer-brief.md)): slices 0–2 landed 2026-11-06.
 - [ ] **E17** Conformal bands for whole curves.
 - [ ] **E18** Posteriors for readouts by resampling units.
-- [ ] **E19** Polynomial-chaos terms.
+- [ ] **E19** Polynomial-chaos terms. Briefed ([brief](khaos-brief.md), 2026-11-07), with CRAN's `khaos` 2.1.1 pinned.
 - [ ] **E20** Data-augmented observation models.
-- [ ] **E21** A prior-precision builder, with ridge blocks.
+- [ ] **E21** A prior-precision builder, with ridge blocks. Briefed with KHAOS ([brief](khaos-brief.md), 2026-11-07).
 - [ ] **E22** Correlated outputs and coupling within a run.
 - [ ] **E23** Multi-fidelity emulation through the offset.
 - [ ] **E24** Guarded estimators.

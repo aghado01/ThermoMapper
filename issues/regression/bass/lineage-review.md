@@ -85,11 +85,16 @@ That keeps four kinds of uncertainty apart: which parameters (θ), interpolation
 ## Build order
 
 **GBMARS first, then KHAOS: the user's call, 2026-11-04,** with CRAN's GBASS pinned as the oracle before any of it ([the build brief](gbass-noise-brief.md)). This reverses the order first proposed here, KHAOS, E8, GBMARS, which called GBMARS the heaviest of the three by counting the weighted Gram. That was built on 2026-11-02, so what remains is a GIG sampler, Bessel K, the latent state and the noise law's readers. E8 keeps its place after KHAOS.
-1. **GBMARS (E1, with E20).** The noise axis: a working response at a latent state, on seams built for it. The structure chain stays as it is.
-2. **KHAOS (E19, with E4, E5, E21).** The same lineage on other axes: the basis, the proposals and the coefficient prior. It tests F-X3 with a member that is not a hinge and builds F-X4 as already decided. It is deterministic and conjugate, and its only new distribution is the Poisson-binomial. It pays for grouped-data problems through E21. GBMARS builds none of this, so it is a diff of its own, with CRAN's `khaos` as its oracle. Its method carries over, and so does the product: a polynomial-chaos basis under GBMARS's noise needs nothing more.
+The user confirmed the order on 2026-11-07: KHAOS, then E8.
+1. **GBMARS (E1, with E20).** The noise axis: a working response at a latent state, on seams built for it. The structure chain stays as it is. Slices 0–4 and the GIG's ratio-of-uniforms draw landed by 2026-11-06, and slice 5, the engine's reach, started on 2026-11-07. Slices 6 (BARS) and 7 (interweaving) can run beside KHAOS's build, since they share no files with it.
+2. **KHAOS (E19, with E4, E5, E21).** The same lineage on other axes: the basis, the proposals and the coefficient prior. It tests F-X3 with a member that is not a hinge and builds F-X4 as already decided. It is deterministic and conjugate, and its only new distribution is the Poisson-binomial. It pays for grouped-data problems through E21. GBMARS builds none of this, so it is a diff of its own, with CRAN's `khaos` as its oracle. Its method carries over, and so does the product: a polynomial-chaos basis under GBMARS's noise needs nothing more. Its [build brief](khaos-brief.md) was written on 2026-11-07, with CRAN's `khaos` 2.1.1 pinned (`fb38e44`).
 3. **E8.** It only consumes what is built, and it has strong internal checks. The consumer shape above gets settled here.
 
 E24 is small, sits beside all of them and can land at any point.
+
+**Beside the order.**
+- *The conformal layer (E16)* is engine-wide by the user's call of 2026-11-05, with a [brief](../conformal-layer-brief.md) of its own. Slices 0–2 landed on 2026-11-06, and its fallback signal is being chosen.
+- *E15 and E18* are the engine's routes to calibrated intervals for a surface or a quantile function, which conformal methods do not reach. They are not scheduled. They matter because GBASS's quantile and horseshoe fits undercover their surfaces (E1's reports), and because both refit, the noise laws' cost follow-ups come first.
 
 ## Reading leads
 
