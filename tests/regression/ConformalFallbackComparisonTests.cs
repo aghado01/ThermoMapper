@@ -12,9 +12,11 @@ namespace Maths.Regression.Tests;
 
 /// <summary>
 /// Two readings of the fallback signal side by side (E16, slice 2), with the qualification switch (<c>BASS_QUALIFICATION</c> = 1):
-/// the layer's, the gap between the inflated and plain sets (<see cref="ConformalSet.Gap"/>, with k̂'s trust), and a split-half
-/// comparator, the main session's construction and not from a paper: the plain set from each half of the draws, and the mass,
-/// under the full draws' predictive at x, of the region where the two half-sets disagree. Each case reads both signals on a grid
+/// the opt-in rule at share 0.5, which reads the gap between the inflated and plain sets (<see cref="ConformalSet.Gap"/>, with
+/// k̂'s trust), and the split-half diagnostic (<see cref="ConformalSet.SplitHalfMass"/>), the main session's construction and not
+/// from a paper: the plain set from each half of the draws, and the mass, under the full draws' predictive at x, of the region
+/// where the two half-sets disagree. <see cref="SplitHalfMass"/> builds the same reading from two public steps, the layer's
+/// reference. Each case reads both signals on a grid
 /// at x and the plain set's decision at the true value at the same x, so a rule's firing is read against the coverage the plain
 /// set achieved: a useful rule fires where the plain set falls short and stays quiet where it holds. Fixtures: exact draws at S 40
 /// to 2,560; slowly mixing chains, where the plain set may fall short; slice 1's Gaussian and t BASS fits, with the degenerate
@@ -104,7 +106,7 @@ public sealed class ConformalFallbackComparisonTests(ITestOutputHelper output)
         }
         double[] mass = [.. cases.Select(c => c.Mass).Order()];
         return $"{label}: plain coverage {cases.Count(c => c.Covered) / (double)cases.Count:F4} over {cases.Count}; "
-               + Rule("the layer's signal", c => c.Fallback) + "; " + Rule("the gap alone above 0.5", c => c.Gap > 0.5) + "; "
+               + Rule("the rule at 0.5", c => c.Fallback) + "; " + Rule("the gap alone above 0.5", c => c.Gap > 0.5) + "; "
                + Rule("split-half mass above 0.1α", c => c.Mass > 0.1 * alpha) + "; " + Rule("above 0.25α", c => c.Mass > 0.25 * alpha) + "; "
                + $"the mass median {mass[mass.Length / 2]:F4}, 90th percentile {mass[(int)(0.9 * (mass.Length - 1))]:F4}";
     }
@@ -133,10 +135,9 @@ public sealed class ConformalFallbackComparisonTests(ITestOutputHelper output)
         }
         var training = new PointwiseLogDensity(ll, UnitPartition.EachObservation(n), Theta, chains);
         var candidates = new CandidateLogDensity(lc, [grid, [yt]], Theta, chainLengths: chains);
-        ConformalPrediction p = ConformalBayes.FullStep(training, candidates);
-        double[] mass = SplitHalfMass(training, candidates);
+        ConformalPrediction p = ConformalBayes.FullStep(training, candidates, new ConformalOptions { FallbackShare = 0.5 });
         ConformalSet set = p.Sets[0], truth = p.Sets[1];
-        return new Case(truth.AcceptsPlain(0), set.FallBack, set.Gap, mass[0], truth.EffectiveSampleSizes![0]);
+        return new Case(truth.AcceptsPlain(0), set.FallBack, set.Gap, set.SplitHalfMass, truth.EffectiveSampleSizes![0]);
     }
 
     [Fact]
@@ -206,12 +207,11 @@ public sealed class ConformalFallbackComparisonTests(ITestOutputHelper output)
             double[][] grids = [.. Enumerable.Range(0, tests).Select(_ => grid), .. yt.Select(v => new[] { v })];
             PointwiseLogDensity training = fit.PointwiseLogDensity(data);
             CandidateLogDensity candidates = fit.CandidateLogDensity(data, both, grids);
-            ConformalPrediction p = ConformalBayes.FullStep(training, candidates);
-            double[] mass = SplitHalfMass(training, candidates);
+            ConformalPrediction p = ConformalBayes.FullStep(training, candidates, new ConformalOptions { FallbackShare = 0.5 });
             for (int t = 0; t < tests; t++)
             {
                 ConformalSet set = p.Sets[t], truth = p.Sets[tests + t];
-                cases.Add(new Case(truth.AcceptsPlain(0), set.FallBack, set.Gap, mass[t], truth.EffectiveSampleSizes![0]));
+                cases.Add(new Case(truth.AcceptsPlain(0), set.FallBack, set.Gap, set.SplitHalfMass, truth.EffectiveSampleSizes![0]));
             }
         }
         output.WriteLine(Summary($"{law}, all cases", cases));

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -31,13 +32,13 @@ public sealed record ConformalOptions
     public bool Inflate { get; init; }
 
     /// <summary>
-    /// The fallback signal (<see cref="ConformalSet.FallBack"/>) fires when the inflated set exceeds the plain one by more than
-    /// this share of the plain set (<see cref="ConformalSet.Gap"/>): the values whose decision rests on the scores' Monte Carlo
-    /// error are too much of the set. It fires too when a candidate the inflated rule accepts has add-one-in weights whose
-    /// Pareto k̂ exceeds PSIS's threshold, so its bounds cannot be trusted. 0.5 by default: half the plain set's extent again
-    /// resting on the error.
+    /// The fallback rule, opt-in: when set, <see cref="ConformalSet.FallBack"/> fires when the inflated set exceeds the plain one
+    /// by more than this share of the plain set (<see cref="ConformalSet.Gap"/>), or when a candidate the inflated rule accepts
+    /// has add-one-in weights whose Pareto k̂ exceeds PSIS's threshold. Null, the default, fires nothing: the layer reports its
+    /// diagnostics (<see cref="ConformalSet.Gap"/>, <see cref="ConformalSet.SplitHalfMass"/>) and switches to nothing on its own,
+    /// the user's decision of 2026-11-07, since no fixture with chains like BASS's yet shows a shortfall to set a threshold by.
     /// </summary>
-    public double FallbackShare { get; init; } = 0.5;
+    public double? FallbackShare { get; init; }
 
     /// <summary>The bounds the margin's band reads (<see cref="Conformal.MarginBounds"/>): the uniform one by default.</summary>
     public MarginBounds MarginBounds { get; init; } = MarginBounds.Uniform;
@@ -137,11 +138,18 @@ public sealed record ConformalMargin(double Multiple, double[] CandidateErrors, 
 /// <param name="Margin">CB-3's reading; null for the whole space.</param>
 /// <param name="Inflated">Whether the set is the inflated rule's.</param>
 /// <param name="ErrorLevel">ν, which the bounds' coverage gives up.</param>
-/// <param name="FallBack">Whether the scores' error moves too much of the set (<see cref="Gap"/>), or its bounds are untrusted:
-/// the signal to take the split form (CB-2).</param>
+/// <param name="FallBack">The opt-in fallback rule's reading (<see cref="ConformalOptions.FallbackShare"/>): whether the scores'
+/// error moves too much of the set, or its bounds are untrusted. False unless the rule is asked for.</param>
+/// <param name="SplitHalfMass">The split-half diagnostic: the mass, under the full draws' predictive at the case, of the grid
+/// values where the plain sets of the draws' two halves disagree (each chain's first and second halves, or alternate draws without
+/// chains), the coverage Monte Carlo error could shift here, read at its typical size; conservative, since each half carries √2
+/// the run's error. The main session's construction (2026-11-07), not from a paper. NaN on a grid of one value, where it has no
+/// width, for the whole space, and when the draws do not split.</param>
+/// <param name="SplitHalfDisagreements">The grid values where the two halves' plain sets disagree.</param>
 public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, double[] Grid, double[]? PValues, int[]? Below,
                                   int[]? Tied, double[]? CandidateScores, double[]? EffectiveSampleSizes,
-                                  ConformalMargin? Margin = null, bool Inflated = false, double ErrorLevel = 0.0, bool FallBack = false)
+                                  ConformalMargin? Margin = null, bool Inflated = false, double ErrorLevel = 0.0, bool FallBack = false,
+                                  double SplitHalfMass = double.NaN, int SplitHalfDisagreements = 0)
 {
     /// <summary>Whether the stratum is too small for the level (k = 0), so the set is the whole space.</summary>
     public bool WholeSpace => PValues is null;
@@ -229,16 +237,10 @@ public sealed record ConformalSet(int Case, int Stratum, int Units, int Level, d
     // The accepted values' cells summed, or their count on a grid of one value.
     private double Extent(Func<int, bool> accepts)
     {
-        int n = Grid.Length;
-        if (n == 1) return accepts(0) ? 1.0 : 0.0;
+        if (Grid.Length == 1) return accepts(0) ? 1.0 : 0.0;
         double width = 0.0;
-        for (int g = 0; g < n; g++)
-        {
-            if (!accepts(g)) continue;
-            double left = g > 0 ? Grid[g] - Grid[g - 1] : Grid[1] - Grid[0];
-            double right = g < n - 1 ? Grid[g + 1] - Grid[g] : Grid[n - 1] - Grid[n - 2];
-            width += 0.5 * (left + right);
-        }
+        for (int g = 0; g < Grid.Length; g++)
+            if (accepts(g)) width += ConformalBayes.Cell(Grid, g);
         return width;
     }
 }
@@ -310,7 +312,7 @@ public static class ConformalBayes
         double alpha = options.Alpha, nu = options.ErrorLevel;
         if (!(alpha > 0.0 && alpha < 1.0)) throw new ArgumentOutOfRangeException(nameof(options), "α must lie in (0, 1).");
         if (!(nu > 0.0 && nu < 1.0)) throw new ArgumentOutOfRangeException(nameof(options), "ν must lie in (0, 1).");
-        if (!(options.FallbackShare >= 0.0)) throw new ArgumentOutOfRangeException(nameof(options), "The fallback share must be non-negative.");
+        if (options.FallbackShare is double share && !(share >= 0.0)) throw new ArgumentOutOfRangeException(nameof(options), "The fallback share must be non-negative.");
         Check(training, candidates);
         (int[] rows, double[]? logWeights) = PredictiveChecks.Rows(training);
         Dictionary<int, List<int>> units = UnitsByStratum(training.Units);
@@ -335,18 +337,28 @@ public static class ConformalBayes
             }
             var scorer = new StratumScorer(training.Values, rows, logWeights, members, training.ChainLengths, k, Multiple(nu, m),
                                            options.MarginBounds == MarginBounds.Carried);
+            (StratumScorer A, StratumScorer B)? halves = Halves(training.Values, rows, logWeights, members, training.ChainLengths, k);
             foreach (int t in cases)
             {
                 int g = candidates.Grids[t].Length, offset = candidates.Offset(t);
                 var r = new Reading(g);
+                Reading? ra = halves is null ? null : new Reading(g), rb = halves is null ? null : new Reading(g);
                 for (int b0 = 0; b0 < g; b0 += Batch)
-                    scorer.Rank(candidates.Values, offset + b0, Math.Min(Batch, g - b0), r.Slice(b0));
+                {
+                    int count = Math.Min(Batch, g - b0);
+                    scorer.Rank(candidates.Values, offset + b0, count, r.Slice(b0));
+                    if (halves is not { } h2) continue;
+                    h2.A.Rank(candidates.Values, offset + b0, count, ra!.Value.Slice(b0));
+                    h2.B.Rank(candidates.Values, offset + b0, count, rb!.Value.Slice(b0));
+                }
+                (double splitMass, int disagreements) = SplitHalf(candidates.Grids[t], r, ra, rb, k);
                 var p = new double[g];
                 for (int j = 0; j < g; j++) p[j] = (r.Below[j] + r.Tied[j] + 1) / (double)m;
                 var margin = new ConformalMargin(scorer.Multiple, r.CandidateErrors, r.UniformErrors, r.Fragile, r.InflatedRanks, r.ParetoK,
                                                  PredictiveChecks.ParetoKThreshold(Math.Max(2, rows.Length)), options.MarginBounds);
-                var set = new ConformalSet(t, h, m, k, candidates.Grids[t], p, r.Below, r.Tied, r.Own, r.Ess, margin, options.Inflate, nu);
-                sets[t] = set with { FallBack = set.Gap > options.FallbackShare || margin.Untrusted(k) > 0 };
+                var set = new ConformalSet(t, h, m, k, candidates.Grids[t], p, r.Below, r.Tied, r.Own, r.Ess, margin, options.Inflate, nu,
+                                           SplitHalfMass: splitMass, SplitHalfDisagreements: disagreements);
+                sets[t] = options.FallbackShare is double asked ? set with { FallBack = set.Gap > asked || margin.Untrusted(k) > 0 } : set;
             }
         }
         return new ConformalPrediction(sets, alpha);
@@ -373,6 +385,65 @@ public static class ConformalBayes
         scorer.Multiply(1);
         scorer.Unit(candidates.Values, candidate, r, scores, errors);
         return new ConformalScores(members, scores, r.Own[0], r.Ess[0], errors, r.CandidateErrors[0]);
+    }
+
+    // The two halves of the draws' rows, each chain's first and second halves where there are chains (an odd middle draw left out),
+    // alternate rows otherwise, each scored in the plain mode; null when a half would be empty, or would give some unit zero density
+    // under every one of its draws: the diagnostic is then NaN, and the step goes on.
+    private static (StratumScorer A, StratumScorer B)? Halves(double[,] ll, int[] rows, double[]? logWeights, int[] members,
+                                                             IReadOnlyList<int>? chains, int level)
+    {
+        var a = new List<int>();
+        var b = new List<int>();
+        if (chains is null)
+            for (int d = 0; d < rows.Length; d++) (d % 2 == 0 ? a : b).Add(d);
+        else
+        {
+            int start = 0;
+            foreach (int length in chains)
+            {
+                int half = length / 2;
+                for (int d = 0; d < half; d++) { a.Add(start + d); b.Add(start + half + d); }
+                start += length;
+            }
+        }
+        if (a.Count == 0 || b.Count == 0) return null;
+        StratumScorer Half(List<int> at)
+            => new(ll, [.. at.Select(d => rows[d])], logWeights is null ? null : [.. at.Select(d => logWeights[d])], members, null, level, 1.0, plain: true);
+        try
+        {
+            return (Half(a), Half(b));
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    // The split-half reading of one case: the full draws' predictive mass on the grid values where the halves' plain sets disagree,
+    // and how many there are.
+    private static (double Mass, int Disagreements) SplitHalf(double[] grid, Reading full, Reading? a, Reading? b, int level)
+    {
+        if (a is not { } ra || b is not { } rb) return (double.NaN, 0);
+        double mass = 0.0;
+        int disagreements = 0;
+        for (int g = 0; g < grid.Length; g++)
+        {
+            if (ra.Below[g] + ra.Tied[g] + 1 > level == rb.Below[g] + rb.Tied[g] + 1 > level) continue;
+            disagreements++;
+            if (grid.Length > 1) mass += Math.Exp(full.LogPredictive[g]) * Cell(grid, g);
+        }
+        return (grid.Length > 1 ? mass : double.NaN, disagreements);
+    }
+
+    /// <summary>Grid value <paramref name="g"/>'s cell: the half-gaps to its neighbours, the end values the half-gap on their inner
+    /// side twice.</summary>
+    internal static double Cell(double[] grid, int g)
+    {
+        int n = grid.Length;
+        double left = g > 0 ? grid[g] - grid[g - 1] : grid[1] - grid[0];
+        double right = g < n - 1 ? grid[g + 1] - grid[g] : grid[n - 1] - grid[n - 2];
+        return 0.5 * (left + right);
     }
 
     // z = Φ⁻¹(1 − ν/(2m)): the multiple of a score's Monte Carlo standard error that every one of a stratum's m units stays within
@@ -508,13 +579,14 @@ public static class ConformalBayes
     {
         public Reading(int count)
             : this(new int[count], new int[count], new double[count], new double[count], new double[count], new double[count],
-                   new int[count], new int[count], new double[count], new double[count], 0) { }
+                   new int[count], new int[count], new double[count], new double[count], new double[count], 0) { }
 
         private Reading(int[] below, int[] tied, double[] own, double[] ess, double[] candidateErrors, double[] uniformErrors,
-                        int[] fragile, int[] inflatedRanks, double[] paretoK, double[] efficiency, int start)
+                        int[] fragile, int[] inflatedRanks, double[] paretoK, double[] efficiency, double[] logPredictive, int start)
         {
             Below = below; Tied = tied; Own = own; Ess = ess; CandidateErrors = candidateErrors; UniformErrors = uniformErrors;
-            Fragile = fragile; InflatedRanks = inflatedRanks; ParetoK = paretoK; Efficiency = efficiency; Start = start;
+            Fragile = fragile; InflatedRanks = inflatedRanks; ParetoK = paretoK; Efficiency = efficiency; LogPredictive = logPredictive;
+            Start = start;
         }
 
         public int[] Below { get; }
@@ -527,18 +599,20 @@ public static class ConformalBayes
         public int[] InflatedRanks { get; }
         public double[] ParetoK { get; }
         public double[] Efficiency { get; }   // the relative efficiency of each candidate's density along the chains
+        public double[] LogPredictive { get; }   // ln of the draws' predictive density at each candidate, ln Σ_s W_s p(y | θ_s)
 
         /// <summary>The first grid value of this slice.</summary>
         public int Start { get; }
 
-        public Reading Slice(int start) => new(Below, Tied, Own, Ess, CandidateErrors, UniformErrors, Fragile, InflatedRanks, ParetoK, Efficiency, start);
+        public Reading Slice(int start) => new(Below, Tied, Own, Ess, CandidateErrors, UniformErrors, Fragile, InflatedRanks, ParetoK, Efficiency, LogPredictive, start);
     }
 
     /// <summary>
     /// One stratum's training units against batches of candidates. It holds each unit's likelihoods over the draws of positive
     /// weight scaled by their largest, P_is = p(z_i | θ_s)/max_s, and their squares, row by row, the products' left operands,
-    /// and for each batch the candidates' normalized add-one-in weights and their squares draw by draw, the right ones. Not
-    /// thread-safe: one per stratum and call.
+    /// and for each batch the candidates' normalized add-one-in weights and their squares draw by draw, the right ones. In the
+    /// plain mode, which scores a half of the draws for the split-half reading, it takes the scores and their ranks alone: no
+    /// squares, errors, bands or k̂. Not thread-safe: one per stratum and call.
     /// </summary>
     internal sealed class StratumScorer
     {
@@ -548,13 +622,15 @@ public static class ConformalBayes
         private readonly IReadOnlyList<int>? _chains;
         private readonly double[] _left, _leftSquared, _top;   // P and P², units × draws; each unit's largest log term
         private readonly int _s, _level;
+        private readonly bool _plain;
         private double[] _weights = [], _weightsSquared = [], _likelihoods = [], _logNorm = [], _candidateTop = [], _squareSums = [],
                          _ownFirst = [], _ownSecond = [], _product = [], _first = [], _second = [], _column = [];
         private PackedColumns? _right, _rightSquared;
 
         public StratumScorer(double[,] ll, int[] rows, double[]? logWeights, int[] members, IReadOnlyList<int>? chains, int level, double multiple,
-                             bool carried = false)
+                             bool carried = false, bool plain = false)
         {
+            _plain = plain;
             _ll = ll;
             _rows = rows;
             _logWeights = logWeights;
@@ -580,7 +656,7 @@ public static class ConformalBayes
                 if (double.IsNegativeInfinity(_top[i])) throw new ArgumentException($"Unit {members[i]} has zero density under every draw of positive weight.", "training");
             // P in tiles of 32 draws by 32 units, so the strided reads of the draws × units matrix stay in cache.
             _left = new double[(long)n * s];
-            _leftSquared = new double[(long)n * s];
+            _leftSquared = plain ? [] : new double[(long)n * s];
             const int tile = 32;
             for (int d0 = 0; d0 < s; d0 += tile)
                 for (int i0 = 0; i0 < n; i0 += tile)
@@ -592,7 +668,7 @@ public static class ConformalBayes
                         {
                             double p = Math.Exp(ll[rows[d], u] - top);
                             _left[(long)i * s + d] = p;
-                            _leftSquared[(long)i * s + d] = p * p;
+                            if (!plain) _leftSquared[(long)i * s + d] = p * p;
                         }
                     }
             if (carried) _selfErrors = SelfErrors();
@@ -642,7 +718,8 @@ public static class ConformalBayes
         {
             Weigh(candidates, first, count, into);
             Multiply(count);
-            Count(candidates, first, count, into);
+            if (_plain) CountPlain(count, into);
+            else Count(candidates, first, count, into);
         }
 
         /// <summary>The training units' scores and their errors' sums against the batch the last <see cref="Weigh"/> prepared:
@@ -658,9 +735,37 @@ public static class ConformalBayes
                 _second = new double[n * count];
             }
             DenseProduct.Multiply(_left, n, _right!, _product);
+            if (_plain) return;
             DenseProduct.Multiply(_left, n, _rightSquared!, _first);
             DenseProduct.Multiply(_leftSquared, n, _rightSquared!, _second);
         }
+
+        // The plain mode's counts: each candidate's below and tied units, as the full step's are taken, scores read from the product
+        // with the same floor.
+        private void CountPlain(int count, Reading into)
+        {
+            int at = into.Start;
+            Span<int> below = into.Below.AsSpan(at, count), tied = into.Tied.AsSpan(at, count);
+            ReadOnlySpan<double> own = into.Own.AsSpan(at, count);
+            below.Clear();
+            tied.Clear();
+            for (int i = 0; i < _members.Length; i++)
+            {
+                ReadOnlySpan<double> row = _product.AsSpan(i * count, count);
+                double top = _top[i];
+                for (int b = 0; b < count; b++)
+                {
+                    if (double.IsNegativeInfinity(own[b])) continue;
+                    double acc = row[b];
+                    double score = acc >= Floor ? top + Math.Log(acc) : LogScoreAndVariance(_batch!, _batchFirst + b, b, _members[i]).Score;
+                    if (score < own[b]) below[b]++;
+                    else if (score == own[b]) tied[b]++;
+                }
+            }
+        }
+
+        private double[,]? _batch;   // the last weighed batch's candidates and first column, for the plain mode's log path
+        private int _batchFirst;
 
         /// <summary>Each candidate's below and tied counts, inflated rank, uniform bound, estimated band and, where the inflated
         /// rule accepts, its weights' k̂, from the products, against its own score and bound.</summary>
@@ -763,6 +868,8 @@ public static class ConformalBayes
         public void Weigh(double[,] candidates, int first, int count, Reading into)
         {
             int s = _s, size = s * count, at = into.Start;
+            _batch = candidates;
+            _batchFirst = first;
             if (_weights.Length < size)
             {
                 _weights = new double[size];
@@ -843,12 +950,15 @@ public static class ConformalBayes
                 squares[b] = ess[b];   // Σ w̃², the relative variance's constant term
                 ess[b] = ess[b] > 0.0 ? 1.0 / ess[b] : 0.0;
             }
+            // The draws' predictive density at each candidate: ln Σ_s p(y | θ_s) − ln S at equal weights, ln Σ_s W_s p(y | θ_s) with
+            // the normalized weights.
+            for (int b = 0; b < count; b++) into.LogPredictive[at + b] = _logWeights is null ? norm[b] - Math.Log(s) : norm[b];
             Span<double> ownFirst = _ownFirst.AsSpan(0, count), ownSecond = _ownSecond.AsSpan(0, count);
             OwnSums(w, w2, p, s, count, own, ownFirst, ownSecond);
             Span<double> errors = into.CandidateErrors.AsSpan(at, count), efficiency = into.Efficiency.AsSpan(at, count);
             for (int b = 0; b < count; b++)
             {
-                efficiency[b] = Efficiency(p, count, b);
+                efficiency[b] = _plain ? 1.0 : Efficiency(p, count, b);
                 if (double.IsNegativeInfinity(top[b]) || double.IsNegativeInfinity(norm[b]))
                 {
                     own[b] = double.NegativeInfinity;
@@ -871,6 +981,7 @@ public static class ConformalBayes
             _right ??= new PackedColumns(s, count);
             if (_right.Columns != count) _right = new PackedColumns(s, count);
             _right.Fill(w);
+            if (_plain) return;
             _rightSquared ??= new PackedColumns(s, count);
             if (_rightSquared.Columns != count) _rightSquared = new PackedColumns(s, count);
             _rightSquared.Fill(w2);

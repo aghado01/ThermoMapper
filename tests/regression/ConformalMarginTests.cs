@@ -223,13 +223,13 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void FallBack_ReadsTheGapBetweenTheInflatedAndPlainSets_AndTheOptionsAreChecked()
+    public void FallBack_IsOptIn_AndReadsTheGapBetweenTheInflatedAndPlainSets()
     {
-        // The signal reads the values whose decision rests on the scores' error, those only the inflated rule accepts: it fires when
-        // they exceed the share of the plain set (Gap), or when a candidate in the inflated set has weights whose k̂ is untrusted.
-        // Draws from two chains that barely move fire on the gap; six draws, too few for k̂'s tail, fire on trust with no gap; slice
-        // 0's conjugate fixture on 2,000 exact draws, with Gaussian noise, does not fire. Every set's signal is the rule's, at the
-        // default share and at others.
+        // The rule fires nothing unless a share is stated (the user's decision of 2026-11-07). Asked for, it reads the values whose
+        // decision rests on the scores' error, those only the inflated rule accepts: it fires when they exceed the share of the plain
+        // set (Gap), or when a candidate in the inflated set has weights whose k̂ is untrusted. Draws from two chains that barely move
+        // fire on the gap; six draws, too few for k̂'s tail, fire on trust with no gap; slice 0's conjugate fixture on 2,000 exact
+        // draws, with Gaussian noise, does not fire. Every set's signal is the rule's at each share.
         LatentReport[] theta = [new("θ", LatentScope.Global, LatentTreatment.Conditioned)];
         var rng = new Xoshiro256PlusPlus(5);
         const int s = 6, n = 29;
@@ -242,7 +242,9 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
             for (int c = 0; c < grid.Length; c++) lc[d, c] = -1 - 8 * rng.NextDouble();
         var training = new PointwiseLogDensity(ll, UnitPartition.EachObservation(n), theta);
         var candidates = new CandidateLogDensity(lc, [grid], theta);
-        ConformalSet strained = ConformalBayes.FullStep(training, candidates).Sets[0];
+        var asked = new ConformalOptions { FallbackShare = 0.5 };
+        Assert.False(ConformalBayes.FullStep(training, candidates).Sets[0].FallBack);
+        ConformalSet strained = ConformalBayes.FullStep(training, candidates, asked).Sets[0];
         output.WriteLine($"six draws: plain {strained.Width:F2}, inflated {(strained with { Inflated = true }).Width:F2}, gap {strained.Gap:F3}, "
                          + $"untrusted {strained.Margin!.Untrusted(strained.Level)}, fallback {strained.FallBack}");
         Assert.True(strained.FallBack);
@@ -275,7 +277,8 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
             for (int g = 0; g < chainGrid.Length; g++) chainLc[d, g] = ConformalBayesTests.LogNormal(chainGrid[g], chain[d] * 1.8);
         var chainTraining = new PointwiseLogDensity(chainLl, UnitPartition.EachObservation(19), theta, [perChain, perChain]);
         var chainCandidates = new CandidateLogDensity(chainLc, [chainGrid], theta, chainLengths: [perChain, perChain]);
-        ConformalSet slow = ConformalBayes.FullStep(chainTraining, chainCandidates).Sets[0];
+        Assert.False(ConformalBayes.FullStep(chainTraining, chainCandidates).Sets[0].FallBack);
+        ConformalSet slow = ConformalBayes.FullStep(chainTraining, chainCandidates, asked).Sets[0];
         output.WriteLine($"two slow chains: plain {slow.Width:F2}, inflated {(slow with { Inflated = true }).Width:F2}, gap {slow.Gap:F3}, "
                          + $"untrusted {slow.Margin!.Untrusted(slow.Level)}, fallback {slow.FallBack}");
         Assert.True(slow.Gap > 0.5);
@@ -298,7 +301,7 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
             for (int g = 0; g < wide.Length; g++) exactLc[d, g] = ConformalBayesTests.LogNormal(wide[g], beta[d] * 0.5);
         var healthyTraining = new PointwiseLogDensity(exactLl, UnitPartition.EachObservation(19), theta);
         var healthyCandidates = new CandidateLogDensity(exactLc, [wide], theta);
-        ConformalSet healthy = ConformalBayes.FullStep(healthyTraining, healthyCandidates).Sets[0];
+        ConformalSet healthy = ConformalBayes.FullStep(healthyTraining, healthyCandidates, asked).Sets[0];
         output.WriteLine($"2,000 exact draws: plain {healthy.Width:F2}, inflated {(healthy with { Inflated = true }).Width:F2}, gap {healthy.Gap:F3}, "
                          + $"untrusted {healthy.Margin!.Untrusted(healthy.Level)}, fallback {healthy.FallBack}");
         Assert.False(healthy.FallBack);
@@ -310,6 +313,62 @@ public sealed class ConformalMarginTests(ITestOutputHelper output)
             }
         Assert.Throws<ArgumentOutOfRangeException>(() => ConformalBayes.FullStep(training, candidates, new ConformalOptions { ErrorLevel = 0.0 }));
         Assert.Throws<ArgumentOutOfRangeException>(() => ConformalBayes.FullStep(training, candidates, new ConformalOptions { FallbackShare = -1 }));
+    }
+
+    [Fact]
+    public void SplitHalf_IsTheReferencesReading_FromTwoHalfSteps()
+    {
+        // The layer's split-half diagnostic, from two half-size score products, against the same reading built from two public steps
+        // on the half densities (ConformalFallbackComparisonTests.SplitHalfMass): exact draws split by alternate rows and chains by
+        // halves, one case of two cases' grids each. The halves' decisions agree bit for bit, so the masses agree to rounding.
+        LatentReport[] theta = [new("θ", LatentScope.Global, LatentTreatment.Conditioned)];
+        var rng = new Xoshiro256PlusPlus(808);
+        int nonzero = 0;
+        for (int trial = 0; trial < 40; trial++)
+        {
+            int s = 20 + rng.NextInt(300), n = 9 + rng.NextInt(20);
+            bool chains = trial % 2 == 1;
+            var x = new double[n];
+            var y = new double[n];
+            for (int i = 0; i < n; i++) { x[i] = 4 * rng.NextDouble() - 2; y[i] = ConformalBayesTests.Truth(x[i], 0.5, rng); }
+            double[] beta = ConformalBayesTests.ExactDraws(x, y, s, rng);
+            var ll = new double[s, n];
+            for (int d = 0; d < s; d++)
+                for (int i = 0; i < n; i++) ll[d, i] = ConformalBayesTests.LogNormal(y[i], beta[d] * x[i]);
+            double[] grid = [.. Enumerable.Range(0, 121).Select(g => -6.0 + g / 10.0)];
+            double[] xs = [2 * rng.NextDouble() - 1, 2 * rng.NextDouble() - 1];
+            var lc = new double[s, 2 * grid.Length];
+            for (int d = 0; d < s; d++)
+                for (int c = 0; c < 2; c++)
+                    for (int g = 0; g < grid.Length; g++) lc[d, c * grid.Length + g] = ConformalBayesTests.LogNormal(grid[g], beta[d] * xs[c]);
+            int[]? lengths = chains ? [s / 2, s - s / 2] : null;
+            var training = new PointwiseLogDensity(ll, UnitPartition.EachObservation(n), theta, lengths);
+            var candidates = new CandidateLogDensity(lc, [grid, grid], theta, chainLengths: lengths);
+            ConformalPrediction p = ConformalBayes.FullStep(training, candidates);
+            double[] reference = ConformalFallbackComparisonTests.SplitHalfMass(training, candidates);
+            for (int c = 0; c < 2; c++)
+            {
+                ConformalSet set = p.Sets[c];
+                if (set.WholeSpace) continue;
+                Assert.True(Math.Abs(set.SplitHalfMass - reference[c]) <= 1e-12 + 1e-9 * reference[c], $"{set.SplitHalfMass:R} against {reference[c]:R}");
+                Assert.Equal(set.SplitHalfDisagreements > 0, reference[c] > 0);
+                if (reference[c] > 0) nonzero++;
+            }
+        }
+        output.WriteLine($"{nonzero} cases with halves that disagree");
+        Assert.True(nonzero > 10);
+        // A single value has no width: its mass is NaN, its disagreement a count.
+        var one = new PointwiseLogDensity(new double[,] { { -1, -2 }, { -1.5, -1 }, { -2, -1.2 }, { -1.1, -2.2 } }, UnitPartition.EachObservation(2), theta);
+        ConformalSet single = ConformalBayes.FullStep(one, new CandidateLogDensity(new double[,] { { -1 }, { -2 }, { -1 }, { -2 } }, [[0.0]], theta),
+                                                      new ConformalOptions { Alpha = 0.4 }).Sets[0];
+        Assert.True(double.IsNaN(single.SplitHalfMass));
+        // A half in which some unit has zero density under every draw does not split: the diagnostic is NaN, and the step stands.
+        var split = new PointwiseLogDensity(new double[,] { { -1, double.NegativeInfinity }, { -1.5, -1 }, { -2, double.NegativeInfinity }, { -1.1, -2.2 } },
+                                            UnitPartition.EachObservation(2), theta);
+        ConformalSet stands = ConformalBayes.FullStep(split, new CandidateLogDensity(new double[,] { { -1, -2 }, { -2, -1 }, { -1, -1.5 }, { -2, -1 } }, [[0.0, 1.0]], theta),
+                                                      new ConformalOptions { Alpha = 0.4 }).Sets[0];
+        Assert.True(double.IsNaN(stands.SplitHalfMass));
+        Assert.NotNull(stands.PValues);
     }
 
     [Fact]
