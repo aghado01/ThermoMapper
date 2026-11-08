@@ -157,6 +157,40 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### The move along β·v, corrected: the coefficients drawn after an accepted move (chip, 2026-11-08)
+
+**Landed** in `1a8459c` (the move, its tests and the gates) and the commit that carries this report (the page's section, the ledger's anchors). The main session's review of `3be066e` found that after an accepted move the blocks that follow read coefficients drawn before it. It asked for a fix, choosing between two exact forms by mixing per second, then a rerun of the skewed horseshoe's Geweke rows and the effective sizes, and a correction of the page and this report. The previous report's readings with the move come from the version with the defect; these replace them. [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#the-skews-rescaling-a-move-along-βv-slices-5s-and-7s-follow-up) holds the forms, the tables and the decisions.
+
+**The defect, and a second one beside it.**
+- *Stale coefficients.* The move accepts on ℓ_b, the coefficients a integrated, so it is a partially collapsed step. σ²'s block, the shape's and interweaving's, each drawing given this sweep's a, then read an a drawn at the old (β, v).
+- *A proposal read through a.* κ's scale took the likelihood's curvature as b·R/(2σ²), R from the sweep's fit. On the a-marginal that is a proposal depending on a variable the step does not condition on, which is not exact either.
+
+**Two exact forms, built and measured side by side.**
+
+| Form | The fix | On its orbit |
+|---|---|---|
+| The coefficients integrated | a drawn at the new state after an accepted move (`DrawSweepFit`); the scale's likelihood term b·N/2, from x alone | \|z\| ≤ 1.54, 44 to 46% accepted, a a draw at the new state after every acceptance |
+| Given this sweep's a | ln A on the likelihood given a, −(bN/2)·t − (b·R/(2σ²))·(e⁻ᵗ − 1), O(N); the weights refitted only when accepted | \|z\| ≤ 1.97, 44% accepted |
+
+**The choice: the coefficients integrated.**
+- *Mixing per second.* On v's mean, which the move moves, it mixes 1.7 times faster under the skewed horseshoe (177 and 226 a second against 98 and 136 at seeds 11 and 23) and alike under the generalized hyperbolic and the Normal-Wald. ln σ², β and M swing by seed in both forms, following the structure's R̂ of 1.3 to 3.8 (given a under the Normal-Wald, 2.14 against the plain sweep on one seed and 0.09 on the other), so they do not separate the forms. The form given a runs 4 to 10% faster.
+- *Geweke under the skewed horseshoe,* worst |z| at b = 1, ¾ and ½: the coefficients integrated, 1.93, 2.15 and 9.71 on seed 20261107; 1.43, 2.69 and 4.29 at four times the size; 2.41, 2.59 and 5.18 on seed 20261108. Given a: 4.01, 3.00 and 4.54; 2.23, 1.48 and 5.23; 4.21, 1.96 and 5.70. As first committed: 2.36, 5.70 and 11.13; 4.04, 4.69 and 4.26; 2.02, 5.47 and 3.46. The fix clears b = ¾, which the stale a failed.
+- *Under the other skewed laws,* the kept form: the generalized hyperbolic, the Normal-Wald and the skewed t at b = 1, 1.65, 2.20 and 1.48; the generalized hyperbolic and the Normal-Wald at b = ½, 2.58 and 1.29.
+- The form given a and its knob are removed. Its derivation stays on the page beside the kept one.
+
+**The default, against the decision rule.** The move was to become the default under a skewed heavy-tailed law if it passed where the scan failed. It passes at b = 1, where the scan alone failed at four times the size (1.43 against 4.13), and at ¾. At b = ½ it fails on every seed and size, as the scan does, though less at four times the size (4.29 against 9.16). Per second it buys v's mean, 3.5 times under the skewed horseshoe, and not ln σ², β or M (0.41 to 1.70), at 1.2 to 1.6 times a run's time. **So it stays opt-in:** it clears the full-power reading the scan failed, but not the hot rungs', and its gain is in v alone. The skewed horseshoe's failures at b = ½ stand as its mixing limit on hot rungs.
+
+**Interweaving reads a conditionally, confirmed.** The scale slot runs σ²'s block, the shape's, then interweaving, each from its conditional given this sweep's a, none integrating it. The only step between the coefficients' draw and them that integrates a is this move, which now draws a afresh whenever it changes x. v's block draws v given a, so a stands after it.
+
+**Gates.**
+- *Per commit,* the selected classes and the pinned tier from a snapshot (`scripts/test-select.ps1 -Scope Commit`): 1,618 of 1,618.
+- *Geweke gates now* the kept form at b = 1 and ¾ under the skewed horseshoe on two seeds and four times the size, beside the other skewed laws' rows; b = ½ stays a reading.
+- *A ladder's swap rates* under the skewed horseshoe (6 rungs to 0.05): the cold pair accepts no swap with or without the move, the others 0.007 to 0.040 without it and 0.009 to 0.042 with it; no round trip either way.
+- *The cost row:* a sweep at n 200, both chains at M 2, 275 µs with the move against 91 without (3.0×); at the base point 976 against 448, at M 7 against M 1. A whole run takes 1.2 to 1.6 times as long.
+- *At the slice's end,* the whole assembly (`-Scope Slice`): 2,320 of 2,320.
+
+**Follow-ups, with the decision each would change.** None new. Slice 5's reading for the scan alone did not involve the move, and stands as recorded.
+
 ### The move along β·v, the skew's rescaling (chip, 2026-11-08)
 
 **Landed** in `3be066e` (the code and its tests) and the commit that carries this report (`docs/Maths`, the ledger, the checklist). The user's go-ahead came through the main session on 2026-11-08 ("Yes, build it"), as slice 5's and slice 7's follow-up. [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#the-skews-rescaling-a-move-along-βv-slices-5s-and-7s-follow-up) holds the derivation, κ's proposal against its alternatives, and the measurement.

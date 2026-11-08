@@ -370,39 +370,59 @@ the likelihood given z, v's prior at zᵢ/σ with its Jacobian, σ²'s IG(α₀,
 
 ## The skew's rescaling: a move along β·v (slices 5's and 7's follow-up)
 
-Built 2026-11-08 ([the build brief](../../issues/regression/bass/gbass-noise-brief.md#reports)): the joint move slice 5 proposed for a drift that pins β and v along a ridge, opt-in on the noise (`BassNoise.SkewRescale`), under a drawn skew.
+Built 2026-11-08 ([the build brief](../../issues/regression/bass/gbass-noise-brief.md#reports)): the joint move slice 5 proposed for a drift that pins β and v along a ridge, opt-in on the noise (`BassNoise.SkewRescale`), under a drawn skew. Corrected the same day (`1a8459c`) after the main session's review: as first committed (`3be066e`), the blocks after an accepted move read coefficients drawn before it, and the proposal's scale read them too.
 
-**The move** (`BassSkewRescaleBlock`, in the latent slot after v's block): (β, v) → (β/κ, κ·v). Every βvᵢ stands, so the offset σβ·v does, and the weights move to W/κ, refitted once. On the joint the sweep targets, π ∝ p(structure, τ)·p(σ²)·p(β)·Πp_v(vᵢ)·ℓ_b, ℓ_b the target's marginal given σ² on the working response at the rung's power, the coefficients integrated and the weights' normalizer in it, the map has Jacobian κ^(N−1) and its reverse is 1/κ. With t = ln κ it accepts with
+**The move** (`BassSkewRescaleBlock`, in the latent slot after v's block): (β, v) → (β/κ, κ·v). Every βvᵢ stands, so the offset σβ·v does, and the weights move to W/κ, refitted once. On the sweep's joint with the coefficients integrated, π ∝ p(structure, τ)·p(σ²)·p(β)·Πp_v(vᵢ)·ℓ_b, ℓ_b the target's marginal given σ² on the working response at the rung's power, the weights' normalizer in it, the map has Jacobian κ^(N−1) and its reverse is 1/κ. With t = ln κ it accepts with
 
 ln A = Δℓ_b + Σᵢ [ln p_v(κ·vᵢ) − ln p_v(vᵢ)] + ln p(β/κ) − ln p(β) + (N − 1)·t + ln q(−t | x′) − ln q(t | x),
 
 declining a move that leaves F, where π is 0. A held skew has nothing to move along, and refuses it.
 
+**A step on the coefficients' marginal.** Accepting on ℓ_b makes the move a partially collapsed step (van Dyk and Park 2008), so two things follow. After an accepted move the coefficients a are drawn afresh at the new state (`DrawSweepFit`), so σ²'s block, the shape's and interweaving's, each drawing given this sweep's a, read a draw at the state they move. A declined move leaves x, and the a drawn there stands, since the decision never reads it. And the move's proposal reads x alone, since a proposal that depends on a, which the step does not condition on, is not exact on the marginal.
+
+| The move's form | Its likelihood ratio | Cost a move | Measured against the other |
+|---|---|---|---|
+| **The coefficients integrated (chosen)** | Δℓ_b, by a refit at the proposal | One refit, and a draw of a when accepted | v's mean mixes 1.7 times faster per second under the skewed horseshoe, alike under the others; passes the skewed horseshoe's Geweke test at b = 1 and ¾ |
+| Given this sweep's a | −(bN/2)·t − (b·R/(2σ²))·(e⁻ᵗ − 1), every variance scaled by κ and every mean held, R = Σᵢ eᵢ²/(c·vᵢ) and eᵢ = yᵢ − fᵢ − σβvᵢ at the sweep's fit; a's prior does not read W | O(N), the weights refitted only when accepted: a run 4 to 10% shorter | Exact on the joint over (a, x) too, and its orbit's law met; fails the skewed horseshoe's Geweke test at b = 1 at the base size on both seeds, 4.01 and 4.21, as v mixes slower |
+
 | κ's proposal | Cost a move | Trade-off |
 |---|---|---|
-| **ln κ ~ N(0, h(x)²), h = 2.4/√C(x) (chosen)** | One refit, and some 6N prior reads | C is the log target's curvature along t at the state: the likelihood's b·R/(2σ²), R = Σᵢ eᵢ²/(c·vᵢ) at the sweep's fit, less the second derivatives of v's prior and β's. It scales itself across laws, rungs and data with no state kept and no burn-in signal; the scale moving with the state puts its Hastings ratio in A |
+| **ln κ ~ N(0, h(x)²), h = 2.4/√C(x) (chosen)** | One refit, and some 6N prior reads | C is the log target's curvature along t at the state: the likelihood's b·N/2, less the second derivatives of v's prior and β's. b·N/2 is the conditional's b·R/(2σ²) at R ≈ Nσ², read from x alone. It scales itself across laws, rungs and data with no state kept and no burn-in signal; the scale moving with the state puts its Hastings ratio in A |
 | A fixed scale adapted in burn-in (D10) | One refit | A scale per replica, kept in its restart state, and a burn-in signal for the block: state in `BassStructureMoves` and the run, which other chips hold, and a ladder's rungs want their own |
 | A slice step on ln κ | Some six refits | No tuning, at six times the move's cost, where a weight refit is the sweep's largest part |
 | An exact draw of κ | None | Not available: κ's conditional reads the marginal's refit at every κ |
 
 **Checked** (`BassSkewRescaleTests`; behind `BASS_QUALIFICATION`, the "+rescale" forms of `BassNoiseReachQualificationTests` and `BassSkewRescaleQualificationTests`):
-- *Its statement on a frozen state.* From one state the move stays on the orbit (β₀·e⁻ᵗ, eᵗ·v₀), so its stationary law there is ∝ π(Tₜ(x₀))·e^((N−1)t), read on a grid of 801 points by the engine's own target. 60,000 moves meet that law's mean and mean square, |z| at most 0.87, under the skewed horseshoe and the generalized hyperbolic at b = 1 and ½. They accept 44% of moves, h reading 2.2 to 2.4 times the orbit's sd. From x to x′ and back the acceptances cancel to 2·10⁻¹³.
-- *Geweke's test with the whole sweep and the move.* The generalized hyperbolic, the Normal-Wald and the skewed t at b = 1, worst |z| 2.19, 2.61 and 2.03; the generalized hyperbolic and the Normal-Wald at b = ½, 2.96 and 1.38; the skewed horseshoe at b = 1, 2.36 and 2.02 on two seeds, and at ½ on seed 20261108, 3.46.
+- *Its statement on a frozen state.* From one state the move stays on the orbit (β₀·e⁻ᵗ, eᵗ·v₀), so its stationary law there is ∝ π(Tₜ(x₀))·e^((N−1)t), read on a grid of 801 points by the engine's own target. 60,000 moves meet that law's mean and mean square, |z| at most 1.54, under the skewed horseshoe and the generalized hyperbolic at b = 1 and ½, and after every accepted one a is a draw at the new state. They accept 44 to 46% of moves, h reading 2.3 to 2.4 times the orbit's sd. From x to x′ and back the acceptances cancel to 5·10⁻¹³.
+- *Geweke's test with the whole sweep and the move.* The generalized hyperbolic, the Normal-Wald and the skewed t at b = 1, worst |z| 1.65, 2.20 and 1.48; the generalized hyperbolic and the Normal-Wald at b = ½, 2.58 and 1.29; the skewed horseshoe in the table below.
 - *The run:* a tempered fit with the move and a reference rung resumes bit for bit; the switch refuses a held skew.
 
-**The measurement, and the decision it made.** The move was to become the default under a skewed heavy-tailed law if it passed where the scan failed. It does not:
+**The measurement, and the decisions it made.** The move was to become the default under a skewed heavy-tailed law if it passed where the scan failed; of its two exact forms, the one that mixes better per second stays.
 
 | Skewed horseshoe, worst \|z\| | b = 1 | b = ¾ | b = ½ |
 |---|---|---|---|
-| With the move, seed 20261107 | 2.36 | 5.70 | 11.13 |
-| With the move, seed 20261107, four times the size | 4.04 | 4.69 | 4.26 |
-| With the move, seed 20261108 | 2.02 | 5.47 | 3.46 |
+| With the move, seed 20261107 | 1.93 | 2.15 | 9.71 |
+| With the move, seed 20261107, four times the size | 1.43 | 2.69 | 4.29 |
+| With the move, seed 20261108 | 2.41 | 2.59 | 5.18 |
+| Given this sweep's a, seed 20261107 | 4.01 | 3.00 | 4.54 |
+| Given this sweep's a, seed 20261107, four times the size | 2.23 | 1.48 | 5.23 |
+| Given this sweep's a, seed 20261108 | 4.21 | 1.96 | 5.70 |
+| As first committed, a stale, seed 20261107 | 2.36 | 5.70 | 11.13 |
 | The scan alone, seed 20261107, four times the size | 4.13 | 3.13 | 9.16 (slice 5) |
 
-- *The readings change size and side between seeds and sizes,* the scan alone fails at b = 1 at four times the size too, and the move holds its law on its orbit and where the tails are lighter. So they are the skewed horseshoe's slow mixing, which neither interweaving nor the move cures: **this noise's mixing limit under the sweep, recorded with these numbers; the move stays opt-in.**
-- *Effective sizes per second* with the move over without it, at seeds 11 and 23, as slice 7's row reads them: ln σ² 1.03 and 0.76 under the skewed horseshoe, 0.53 and 0.35 under the skewed generalized hyperbolic, 0.23 and 0.73 under the skewed Normal-Wald; β 0.22 to 0.82; mean ln v 0.49 to 3.33. The skewed horseshoe's ln σ² R̂ moves from 1.70 to 1.29 on one seed and from 1.51 to 1.39 on the other.
-- *A ladder's swap rates* under the skewed horseshoe (6 rungs to 0.05, 2 chains × 4,000 draws): the cold pair accepts no swap with or without the move, the others 0.007 to 0.040 without it and 0.001 to 0.035 with it; no round trip either way.
-- *The cost:* a sweep at the base point takes 2,794 µs with the move against 1,097 without it (2.5×), and 481 against 307 at n 200 (1.6×); thread cycles under load, so indicative.
+| Bulk ESS per second over the sweep without the move, seeds 11 and 23 | ln σ² | β | mean ln v | M |
+|---|---|---|---|---|
+| Skewed horseshoe, the move | 0.66, 0.91 | 0.64, 0.74 | 3.63, 3.49 | 0.41, 1.70 |
+| Skewed horseshoe, given this sweep's a | 1.96, 0.77 | 1.41, 0.69 | 2.01, 2.09 | 0.42, 1.27 |
+| Skewed generalized hyperbolic, the move | 0.34, 1.03 | 0.35, 1.73 | 1.41, 1.02 | 0.37, 0.57 |
+| Skewed generalized hyperbolic, given this sweep's a | 0.46, 0.31 | 0.81, 0.24 | 1.51, 1.21 | 0.66, 0.67 |
+| Skewed Normal-Wald, the move | 0.41, 0.22 | 0.37, 0.28 | 1.08, 1.13 | 0.63, 0.59 |
+| Skewed Normal-Wald, given this sweep's a | 2.14, 0.09 | 2.13, 0.10 | 1.42, 1.28 | 6.24, 0.61 |
+
+- *The form, by mixing per second.* M's R̂ is 1.3 to 3.8 in all but one of these runs, and ln σ² and β follow it: their ratios change side between seeds in both forms (given a under the Normal-Wald, 2.14 on one seed and 0.09 on the other), so they read the structure's mixing more than the move's. Under the skewed horseshoe ln σ² and β have bulk ESS 5 to 16 of 32,000 draws in every run, R̂ 1.2 to 2.0. On v's mean, which the move moves, the form integrating a mixes 1.7 times faster per second under the skewed horseshoe (177 and 226 a second against 98 and 136) and alike under the others, and it passes the skewed horseshoe's readings at b = 1 that the other fails. **So the move integrates the coefficients.** The readings of the move as first committed, with a stale, fail at b = ¾ (5.70, and 5.47 on seed 20261108) where both exact forms pass.
+- *The default.* The move passes at b = 1, where the scan alone failed at four times the size (1.43 against 4.13), and at ¾. At b = ½ it fails on every seed and size, as the scan does, though less at four times the size (4.29 against 9.16). Per second it buys v's mean, 3.5 times under the skewed horseshoe, and not ln σ², β or M, at 1.2 to 1.6 times a run's time. **So it stays opt-in:** it clears the reading at full power that the scan failed, but not the hot rungs', and its gain is in v alone. The skewed horseshoe's failures at b = ½ stand as that noise's mixing limit on hot rungs, recorded with these numbers.
+- *A ladder's swap rates* under the skewed horseshoe (6 rungs to 0.05, 2 chains × 4,000 draws): the cold pair accepts no swap with or without the move, the others 0.007 to 0.040 without it and 0.009 to 0.042 with it; no round trip either way.
+- *The cost:* a sweep at n 200, both chains at M 2, takes 275 µs with the move against 91 without it (3.0×), its refit and, when it accepts, a draw of a against a sweep otherwise cheap; at the base point 976 against 448, the chains at M 7 and M 1. A whole run, in the effective sizes' rows, takes 1.2 to 1.6 times as long. Thread cycles under load, so indicative.
 
 ## The GIG's draw: ratio-of-uniforms where it is faster
 
@@ -444,7 +464,7 @@ Read in slice 1, built in slice 2: the brief's lever for a working response that
 
 - *Built:* slices 0 to 7 of [the brief](../../issues/regression/bass/gbass-noise-brief.md), each with its report there; what stays open is in the reports' follow-ups.
 - *Interweaving is opt-in and buys no σ² mixing on the fits read:* the z = σ·v step moves σ little; z′ = σ²·v under a pure scale mixture is the follow-up.
-- *The skewed horseshoe mixes slowly under every sweep built:* its Geweke readings fail on some seeds and sizes with the scan, with interweaving and with the move along β·v, which stays opt-in. That is its mixing limit, recorded with the numbers in the move's section.
+- *The skewed horseshoe mixes slowly under every sweep built:* its Geweke readings fail on some seeds and sizes with the scan and with interweaving. The move along β·v passes them at b = 1 and ¾ but not at ½, and stays opt-in. That is its mixing limit on hot rungs, recorded with the numbers in the move's section.
 - *BARS's noise runs untempered,* as its resampler does, and holds the Normal-Wald's γ and the mixing law fixed: its skew is the one global it draws beside σ².
 - *The flat histogram takes no noise:* its π_w and WHAM read the marginal over a and σ², whose weights couple every latent; two routes are on [slice 5's section](#the-engines-reach-ladders-smc-and-a-direct-functional-response-e1s-slice-5), neither built. Ladders and SMC carry every noise, on the likelihood path in the integrated form.
 - *A skewed heavy-tailed noise mixes slowly on hot rungs:* the skewed horseshoe fails Geweke's test at b = ½, a drift pinning β and v along a ridge the one-at-a-time scan crawls; at b = ¾ and without the drift it passes. A ladder's hot rungs under it move slowly in (β, v).
