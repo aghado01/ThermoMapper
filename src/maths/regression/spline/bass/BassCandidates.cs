@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using Maths.Distributions;
 using Maths.Regression.Conformal;
+using Maths.Regression.GPrior;
 
 namespace Maths.Regression.Spline.Bass;
 
@@ -13,14 +15,15 @@ namespace Maths.Regression.Spline.Bass;
 /// observation's latent integrated out (OQ17's scope rule, CB-4's default), at the draw's σ² and its latents' globals. A
 /// candidate is one observation of a scalar response, so it pairs with the default units. A law whose density is an integral over
 /// the latent (<see cref="IBassNoiseLaw.DensityByQuadrature"/>) costs draws × candidates integrals, so it is taken on
-/// <c>quadrature</c> alone, as the pointwise path takes it. Thread-safe: it reads the model and the table and writes only its own
-/// buffers.
+/// <c>quadrature</c> alone, as the pointwise path takes it. On <c>cdf</c> each draw's log CDF rides beside the density, from the same law
+/// at the draw (<see cref="IBassNoiseLaw.At"/>) or N(f, σ²), and <see cref="UnitLogCdf"/> gives the training units' (E16, slice 4).
+/// Thread-safe: it reads the model and the table and writes only its own buffers.
 /// </summary>
 internal static class BassCandidates
 {
     public static CandidateLogDensity LogDensity(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws,
                                                  IReadOnlyList<double>? weights, PredictionCases cases, IReadOnlyList<double[]> grids,
-                                                 int[]? strata, UnseenLevel unseenLevels, bool quadrature = false)
+                                                 int[]? strata, UnseenLevel unseenLevels, bool quadrature = false, bool cdf = false)
     {
         ArgumentNullException.ThrowIfNull(cases);
         ArgumentNullException.ThrowIfNull(grids);
@@ -45,6 +48,7 @@ internal static class BassCandidates
             offsets[t + 1] = checked(offsets[t] + (grids[t] ?? throw new ArgumentException($"Case {t}'s grid is null.", nameof(grids))).Length);
 
         var values = new double[pooled.Count, offsets[n]];
+        double[,]? logCdfs = cdf ? new double[pooled.Count, offsets[n]] : null;
         var f = new double[n];
         for (int s = 0; s < pooled.Count; s++)
         {
@@ -52,7 +56,8 @@ internal static class BassCandidates
             surface.Evaluate(draw.Structure.TermIds, draw.Coefficients, f);
             double sigma2 = draw.Sigma2;
             ObservationLatents? globals = law is null ? null : draw.LatentsOn(model);
-            double normalizer = -0.5 * Math.Log(2.0 * Math.PI * sigma2);
+            IContinuousDistribution? noise = cdf && law is not null ? law.At(sigma2, globals) : null;
+            double normalizer = -0.5 * Math.Log(2.0 * Math.PI * sigma2), sigma = Math.Sqrt(sigma2);
             for (int t = 0; t < n; t++)
             {
                 double[] grid = grids[t];
@@ -61,12 +66,68 @@ internal static class BassCandidates
                 {
                     double e = grid[g] - f[t];
                     values[s, at + g] = law is null ? normalizer - 0.5 * e * e / sigma2 : law.LogDensity(e, sigma2, globals);
+                    if (logCdfs is not null) logCdfs[s, at + g] = noise is null ? Normal.StandardLogCdf(e / sigma) : LogCdf(noise, e);
                 }
             }
         }
         List<LatentReport> latents = BassPointwise.Latents(model, pooled, collapsed: false);
         return weights is null
-            ? new CandidateLogDensity(values, grids, latents, strata, chains)
-            : new CandidateLogDensity(values, grids, latents, strata) { Weights = weights };
+            ? new CandidateLogDensity(values, grids, latents, strata, chains) { LogCdf = logCdfs }
+            : new CandidateLogDensity(values, grids, latents, strata) { Weights = weights, LogCdf = logCdfs };
+    }
+
+    /// <summary>
+    /// Each draw's log CDF at each training unit's response, ln F(y_u | x_u, θ_s), draws × units in the pooled draws' rows, for the
+    /// training density's <see cref="PointwiseLogDensity.LogCdf"/>: the surface at the training cases (<see cref="BassDrawFit"/>), under
+    /// the noise's law at the draw (<see cref="IBassNoiseLaw.At"/>) or N(f, σ²), each unit one observation. The candidates' log CDF reads
+    /// the same law, so every unit is read by one distribution (CB-4). The fits the candidate density refuses are refused here too.
+    /// </summary>
+    public static double[,] UnitLogCdf(BassModel model, BassTermTable terms, IReadOnlyList<IReadOnlyList<BassDraw>> draws, UnitPartition units)
+    {
+        ArgumentNullException.ThrowIfNull(units);
+        if (model.Data.Response is FunctionalResponse)
+            throw new NotSupportedException("A direct functional fit's unit is a curve; a CDF orders one observation of a scalar response.");
+        int n = model.Data.Response.Observations;
+        if (units.Observations != n) throw new ArgumentException("The partition must cover the model's N observations.", nameof(units));
+        for (int u = 0; u < units.Units; u++)
+            if (units.Members[u].Length != 1) throw new ArgumentException($"Unit {u} holds {units.Members[u].Length} observations; a CDF orders one value.", nameof(units));
+        IBassNoiseLaw? law = model.Observation.Law;
+        if (law is null && !model.Working.IsUnweighted)
+            throw new NotSupportedException("A weighted fit's terms read each observation's weight, and a new case carries none, so its candidates are not read as its units are.");
+        (List<BassDraw> pooled, _) = BassDrawFit.Pool(draws, terms, false, nameof(draws));
+        if (law is null && pooled.Exists(d => !ReferenceEquals(d.WorkingOn(model), model.Working)))
+            throw new NotSupportedException("The draws' working responses moved, so the training terms condition on each observation's offset and weights; "
+                                            + "a candidate has neither, and the conformal layer reads every unit by one distribution (CB-4).");
+        var fit = new BassDrawFit(model, terms);
+        ReadOnlySpan<double> y = law is null ? model.Working.Values : model.Data.Response.Values;
+        var logCdfs = new double[pooled.Count, units.Units];
+        var f = new double[n];
+        for (int s = 0; s < pooled.Count; s++)
+        {
+            BassDraw draw = pooled[s];
+            fit.Evaluate(draw, f);
+            double sigma = Math.Sqrt(draw.Sigma2);
+            IContinuousDistribution? noise = law?.At(draw.Sigma2, draw.LatentsOn(model));
+            for (int u = 0; u < units.Units; u++)
+            {
+                int i = units.Members[u][0];
+                double e = y[i] - f[i];
+                logCdfs[s, u] = noise is null ? Normal.StandardLogCdf(e / sigma) : LogCdf(noise, e);
+            }
+        }
+        return logCdfs;
+    }
+
+    private const double Ln2 = 0.69314718055994530942;
+
+    /// <summary>
+    /// ln F(e) under a noise at a draw, each half on its own tail: above the median ln(1 − S(e)) from the survival, which a law integrates on
+    /// the upper side. The mixtures' tables end at the 10⁻¹² tails, and beyond the upper one their <c>LogCdf</c> integrates the lower side,
+    /// losing 1 − F's digits and reading a few units of 10⁻¹⁵ above 0. The closed forms' own <c>LogCdf</c> takes this path already.
+    /// </summary>
+    internal static double LogCdf(IContinuousDistribution noise, double e)
+    {
+        double lower = noise.LogCdf(e);
+        return lower > -Ln2 ? LogFunctions.Log1mExp(noise.LogSurvival(e)) : lower;
     }
 }

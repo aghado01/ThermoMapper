@@ -175,8 +175,37 @@ public sealed record PointwiseLogDensity(double[,] Values, UnitPartition Units, 
         init => _weights = CheckWeights(value, Values, ChainLengths);
     }
 
+    /// <summary>
+    /// Each draw's log CDF at each unit's response, ln F(y_u | θ_s), in <see cref="Values"/>' layout and with the latents treated as
+    /// <see cref="Latents"/> reports; null where the engine gave none. A CDF orders one value, so each unit is one observation. The log
+    /// keeps both tails: with ℓ = ln F, F = e^ℓ, and 1 − F = −expm1(ℓ) to full relative precision where F is near 1, which a
+    /// probability rounds to 1. The conformal predictive distribution reads it (E16, slice 4).
+    /// </summary>
+    public double[,]? LogCdf
+    {
+        get;
+        init
+        {
+            if (value is not null)
+                for (int u = 0; u < Units.Units; u++)
+                    if (Units.Members[u].Length != 1) throw new ArgumentException($"Unit {u} holds {Units.Members[u].Length} observations; a CDF orders one value.", nameof(LogCdf));
+            field = CheckLogCdf(value, Values);
+        }
+    }
+
     /// <summary>The number of draws S.</summary>
     public int Draws => Values.GetLength(0);
+
+    /// <summary>Refuses a log CDF matrix not of <paramref name="values"/>' shape, or holding a value that is NaN or above 0.</summary>
+    internal static double[,]? CheckLogCdf(double[,]? logCdf, double[,] values)
+    {
+        if (logCdf is null) return null;
+        if (logCdf.GetLength(0) != values.GetLength(0) || logCdf.GetLength(1) != values.GetLength(1))
+            throw new ArgumentException("The log CDF matrix must have the log terms' shape, draws × columns.", "LogCdf");
+        foreach (double l in logCdf)
+            if (!(l <= 0.0)) throw new ArgumentException("A log CDF must lie in [−∞, 0].", "LogCdf");
+        return logCdf;
+    }
 
     internal static IReadOnlyList<double>? CheckWeights(IReadOnlyList<double>? weights, double[,] values, IReadOnlyList<int>? chains)
     {

@@ -374,7 +374,7 @@ public sealed class SplitConformalTests(ITestOutputHelper output)
 
     // A chain stopped early: random-walk Metropolis on the conjugate model's posterior from β = 5, steps of sd 0.02, forty iterations
     // all kept, nowhere near the posterior.
-    private static double[] StoppedEarly(double[] x, double[] y, Xoshiro256PlusPlus rng)
+    internal static double[] StoppedEarly(double[] x, double[] y, Xoshiro256PlusPlus rng)
     {
         double LogPost(double b)
         {

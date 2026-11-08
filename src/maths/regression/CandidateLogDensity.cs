@@ -90,6 +90,15 @@ public sealed record CandidateLogDensity
         init => _weights = PointwiseLogDensity.CheckWeights(value, Values, ChainLengths);
     }
 
+    /// <summary>Each draw's log CDF at each candidate, ln F(y | x_t, θ_s), in <see cref="Values"/>' layout and with the latents treated
+    /// as <see cref="Latents"/> reports, both tails kept as <see cref="PointwiseLogDensity.LogCdf"/> keeps them; null where the engine
+    /// gave none. The conformal predictive distribution reads it.</summary>
+    public double[,]? LogCdf
+    {
+        get;
+        init => field = PointwiseLogDensity.CheckLogCdf(value, Values);
+    }
+
     /// <summary>The number of draws S.</summary>
     public int Draws => Values.GetLength(0);
 

@@ -53,13 +53,19 @@ public sealed record BassFit(
     /// The draws × units log density (OQ17; <see cref="BassPointwise.LogDensity"/>) on <paramref name="data"/>, which
     /// must be the data the fit was run on: the fit holds the config and the draws, not the data, and the terms' knot and
     /// level indices refer to that data's inputs, so data with another fingerprint are refused. <paramref name="quadrature"/> takes a noise
-    /// whose density is an integral over each observation's latent, which costs N × draws integrals.
+    /// whose density is an integral over each observation's latent, which costs N × draws integrals. <paramref name="cdf"/> adds each
+    /// draw's log CDF at each unit's response (<see cref="Maths.Regression.PointwiseLogDensity.LogCdf"/>, <see cref="BassCandidates.UnitLogCdf"/>),
+    /// for the conformal predictive distribution: the retained content, each unit one observation.
     /// </summary>
     public PointwiseLogDensity PointwiseLogDensity(BassData data, UnitPartition? units = null,
-                                                   PointwiseContent content = PointwiseContent.RetainedParameters, bool quadrature = false)
+                                                   PointwiseContent content = PointwiseContent.RetainedParameters, bool quadrature = false,
+                                                   bool cdf = false)
     {
         BassModel model = ModelOn(data);
-        return BassPointwise.LogDensity(model, Terms, Draws, units, content, DrawWeights, quadrature);
+        if (cdf && content != PointwiseContent.RetainedParameters)
+            throw new ArgumentException("The CDF is the retained parameters' own; the collapsed content's terms leave each unit out.", nameof(cdf));
+        PointwiseLogDensity density = BassPointwise.LogDensity(model, Terms, Draws, units, content, DrawWeights, quadrature);
+        return cdf ? density with { LogCdf = BassCandidates.UnitLogCdf(model, Terms, Draws, density.Units) } : density;
     }
 
     /// <summary>
@@ -75,11 +81,13 @@ public sealed record BassFit(
     /// <param name="unseenLevels">What a categorical level no training case took does: refused by default.</param>
     /// <param name="quadrature">Takes a noise whose density is an integral over each observation's latent, draws × candidates integrals;
     /// refused without it, as <see cref="PointwiseLogDensity"/> refuses it.</param>
+    /// <param name="cdf">Adds each draw's log CDF at each candidate (<see cref="Maths.Regression.CandidateLogDensity.LogCdf"/>), for the
+    /// conformal predictive distribution. A noise without a closed-form CDF builds one table of its tails per draw.</param>
     public CandidateLogDensity CandidateLogDensity(BassData data, PredictionCases cases, IReadOnlyList<double[]> grids, int[]? strata = null,
-                                                   UnseenLevel unseenLevels = UnseenLevel.Refuse, bool quadrature = false)
+                                                   UnseenLevel unseenLevels = UnseenLevel.Refuse, bool quadrature = false, bool cdf = false)
     {
         BassModel model = ModelOn(data);
-        return BassCandidates.LogDensity(model, Terms, Draws, DrawWeights, cases, grids, strata, unseenLevels, quadrature);
+        return BassCandidates.LogDensity(model, Terms, Draws, DrawWeights, cases, grids, strata, unseenLevels, quadrature, cdf);
     }
 
     /// <summary>
