@@ -1,6 +1,6 @@
 # KHAOS on the BASS core: E19's build (chip brief)
 
-Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding done 2026-11-08 (real, not a trap); slice 2 landed 2026-11-08 (`f289af3`); the rest in the user's order of 2026-11-08 ("Yes, 5 first"): slice 5, then 4, then 3, each after the coordinating session's verification of the one before; slice 5 landed 2026-11-08 (`98b0e7e`); slice 4 waits on the coordinating session's verification, then slice 3, and SMC's trap is flagged (`42739ac`, the coordinating session's call of 2026-11-08), its remedies recorded, not built. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
+Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding done 2026-11-08 (real, not a trap); slice 2 landed 2026-11-08 (`f289af3`); the rest in the user's order of 2026-11-08 ("Yes, 5 first"): slice 5, then 4, then 3, each after the coordinating session's verification of the one before; slice 5 landed 2026-11-08 (`98b0e7e`); slice 4 landed 2026-11-08 (`8f57487`); slice 3 waits on the coordinating session's verification; and SMC's trap is flagged (`42739ac`, the coordinating session's call of 2026-11-08), its remedies recorded, not built. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
 
 ## Why
 
@@ -157,6 +157,62 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### Slice 4: readouts past the paper (chip, 2026-11-08)
+
+At the user's order (5, then 4, then 3), after the coordinating session verified slice 5 and SMC's flags.
+
+**Landed** on `main`, nothing pushed:
+- `8f57487`: the coefficient route (`BassSensitivity.FromCoefficients` → `PolynomialChaosSensitivity`), the gradient readout (`BassFit.Gradient` → `BassGradient`, through `BassSurface.EvaluateDerivative`), and their gates (`KhaosReadoutTests`; `KhaosSobolParityTests` with `khaos_sobol_oracle.R`).
+- This commit: `PolynomialChaos.md`'s section and rows, `BayesianRegression.md`'s rows, the status line and this report.
+
+**What is built.**
+- *Sobol and the Jacobi measure from the coefficients,* under the product uniform law on each input's box: its declared domain, else its training range.
+  - The decomposition is the moment route's own type: Var f = Σ b_α², each subset's main variance, each input's total Σ_{α_v ≥ 1} b_α², read from the same draws at O(M) per draw.
+  - The Jacobi measure is E[x_v(1 − x_v)(∂_v f)²] = Σ b_α² α_v(α_v + 1). It is invariant under the affine map to raw units.
+  - These are Lean SG-4(b)'s identities (`faca090`): `tensorTotal_eq`, `integral_jacobi_tensorPartial`, `tensorTotal_le` and `tensorTotal_eq_half`.
+  - Refused for a hinge or categorical term and for a functional response.
+  - It takes no measure, and its readout states the law it holds under.
+- *The gradient readout:* ∂f/∂z per draw, case and location, in each predictor's own units. Each term's derivative comes through the design kernels, and the chain rule through the box. It holds pointwise, under no measure, for hinge and Legendre fits alike.
+- *Moments under the other measures:* no code changed. The moment route already takes Legendre factors through their polynomial expansions and each measure's interval moments, so the slice gates it.
+
+**Which measure each readout holds under,** as the coordinating session asked:
+
+| Readout | Measure | Route |
+| --- | --- | --- |
+| `PolynomialChaosSensitivity.Sobol` | The product uniform law on the boxes | The coefficients, exact |
+| `PolynomialChaosSensitivity.Jacobi` | The same law | The coefficients, exact |
+| `BassFit.Sensitivity` on a Legendre fit | Any product measure, `MixtureMeasure` and `EmpiricalMeasure` included | The moment service, exact (a Student component by Gauss–Legendre, its error reported) |
+| `BassFit.Gradient` | None: pointwise | The design kernels |
+
+E8's C under a product measure is the moment service with derivative factors, and that is E8's own build. Under any measure, a dependent one included, the gradient averaged over the measure's points is the route, so E8's first consumer has an input that does not assume a product measure.
+
+**The gates.**
+
+| Gate | Reading |
+| --- | --- |
+| Sobol against the coefficients under the uniform measure | The moment route against the coefficient route, draw for draw, on an Ishigami fit (degree 8, order 3; 80 draws, M up to 18, 7 subsets): 6·10⁻¹⁴ of Var f, the statuses equal |
+| Against `sobol_khaos` | Its own code on the engine's 80 draws, packed as khaos 2.1.1's `adaptive_khaos` object (multi-indices, coefficients, σ²): every index, its division by Var f + σ² included, to 2.2·10⁻¹⁶ |
+| SG-4(b)'s identities against numeric integration | A 10³ Gauss–Legendre rule, exact at these degrees, on 8 draws each at degree 8, order 3 and at degree 2, order 2, from the draws' own surfaces and gradients: Var f, the main and total variances and the Jacobi measure to 4·10⁻¹⁵. Total ≤ ½·Jacobi at every draw and input, the least ratio 2.79 at degree 8. Equality to 10⁻¹² at the 4 (draw, input) pairs held to degree 1 |
+| Moments against quadrature | The moment route on a Legendre fit (degree 4, order 2) against brute-force tensor sums over each measure, the density written out in the test. Under the empirical marginals, all 27,000 triples of training values: 3·10⁻¹⁴ of Var f. Under truncated mixtures (normal and Student components, both weightings), 40 density-weighted Gauss–Legendre nodes per input: 3·10⁻¹⁴, the Student moments' own quadrature error 7·10⁻¹² |
+| Derivatives against central differences | The gradient readout against the predicted surface's central differences at 10⁻⁶ of each range, 40 cases: a Legendre fit on [−π, π]³ with that domain declared, so the chain rule shows, 3·10⁻¹⁰ relative; a hinge fit, 2·10⁻¹⁰ |
+| Hinge BASS | The whole regression assembly at the slice's end, once, on HEAD `6bfb497` with the slice: 2,374 of 2,374, the pinned hashes and the SMC baseline among them. The commit's selection with the pinned tier: 1,678 of 1,678. The draws of every existing fit are unchanged: `BassSurface.Evaluate` keeps its arithmetic, and the pinned tier holds |
+
+**The cost** (wall clock, one run, indicative): on the comparison's 80 draws, the moment route took 18.1 ms and the coefficients 0.7 ms, each with its setup.
+
+**Found here.**
+- *Degree 1 everywhere cannot hold interactions.* `LegendreBasis.MaxDegree` is a term's total degree, which must be at least its order. So SG-4(b)'s equality case is checked wherever a draw holds an input to degree 1 alone, at degree 2 and order 2.
+- *The reference's own cancellation.* A near-empty draw's variance as E[f²] − (E f)² loses every digit. The test's references are two-pass sums about the mean.
+
+**Decisions beyond the brief.**
+- *The coefficient route returns the moment route's type,* so the two compare field for field and a consumer reads either. The moment route stays `BassFit.Sensitivity`'s default, since it serves every measure and every term type.
+- *The gradient readout is general,* hinge and Legendre alike, and pointwise. It is the input E8 and E25 can take under a dependent measure.
+- *`BassFit.Sensitivity`'s doc* now says the default law is on each input's box, its declared domain, else its training range. Slice 2 had noted this as left.
+
+**Left unbuilt, and why.**
+- *E8's derivative moments* (C = E[∇f∇fᵀ] by the moment service with derivative factors): E8's own build.
+- *The gradient of a basis fit* (`BassBasisFit`), its components' gradients combined through the output basis. E8's functional reading, co-active blocks contracted with the output Gram, decides that shape, so it is recorded for E8.
+- *Slice 3,* waiting on the coordinating session's note.
 
 ### Slice 5 addendum: SMC's flags (chip, 2026-11-08)
 

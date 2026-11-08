@@ -17,6 +17,8 @@ KHAOS (Rumsey, Francom et al., *Bayesian Adaptive Polynomial Chaos Expansions*, 
 | The config | `BassStructureSpec.Legendre` (`LegendreBasis`), `BassCoefficientPrior.RawRidge` | 1 |
 | Declared input domains | `InputDomain` on `ContinuousPredictor`; `RangeScale` scales by it | 1 |
 | The modified g-prior, g₀² by τ's slice step | `ModifiedGForm`; `BassPriorPrecision`, the design's prior-precision builder (E21); `TauPrior.Gamma` | 2 |
+| Sobol and the Jacobi measure from the coefficients | `BassSensitivity.FromCoefficients` → `PolynomialChaosSensitivity` | 4 |
+| The gradient readout | `BassFit.Gradient` → `BassGradient`; `BassSurface.EvaluateDerivative` | 4 |
 | The engine's reach | The ladder, SMC, the flat histogram, the pointwise and candidate densities and GBASS's noise laws, unchanged; gated on Legendre terms | 5 |
 
 ## The basis (E19)
@@ -104,6 +106,39 @@ each validity the Poisson-binomial's, by dynamic programming over the p coins in
 
 `BassStructureSpec.Legendre` is a `LegendreBasis`; null, the default, is BASS's hinges. It holds d_max (`MaxDegree`, `khaos`'s 15), s_q (`OrderPenalty`, 1), s_d (`DegreePenalty`, 0), `make_weights`' α, ε and passes (1, 2, 3), the swap's pseudo-count (1) and the mutation probability (½). q_max is `MaxInteraction`, a term's continuous factors, resolved to at most p. `Legendre` and `RawRidge` are left out of the JSON when unused, so a hinge config's form and fingerprint stand as they were. A Legendre fit's `BassModel.Proposal` (D01's) is refused, and `BassModel.Kernel` is its proposal.
 
+## Readouts past the paper (slice 4)
+
+Each readout holds under one measure, read by one route:
+
+| Readout | Measure | Route | Exact |
+| --- | --- | --- | --- |
+| `BassSensitivity.FromCoefficients` → `PolynomialChaosSensitivity.Sobol`, the moment route's own type | The product uniform law on each input's box: its declared domain, else its training range | Σ b_α² over each subset's terms, O(M) per draw | Yes, on a Legendre fit alone |
+| `PolynomialChaosSensitivity.Jacobi`, E[x_v(1 − x_v)(∂_v f)²] | The same law | Σ b_α² α_v(α_v + 1) | Yes |
+| `BassFit.Sensitivity` (`BassSensitivity.Of`) on a Legendre fit | Any product measure: a uniform on any interval, `MixtureMeasure`, `EmpiricalMeasure` | The moment service: each factor's moments through its polynomial expansion and the measure's interval moments, O(M²) per draw | Yes; a Student component's moments are taken by Gauss–Legendre, their error reported (`MomentError`) |
+| `BassFit.Gradient` → `BassGradient`, ∂f/∂z per draw, case and location in each predictor's own units | None: pointwise | Each term's derivative through the design kernels (O-X4), and the chain rule through the box | Yes; at a hinge's knot, the mean of the one-sided limits |
+
+**From the coefficients** (Lean SG-4(b), `BassIntegrals.lean`, `faca090`). On the product uniform law the ψ_α are orthonormal with mean 0 for α ≠ 0, so for f = b₀ + Σ_α b_α ψ_α:
+- Var f = Σ b_α². A subset's main variance is the sum over the terms whose variables are exactly that subset. An input's total is Σ_{α_v≥1} b_α², which is E[(f − E_v f)²] itself (`tensorTotal_eq`).
+- The Jacobi measure is E[x_v(1 − x_v)(∂_v f)²] = Σ b_α² α_v(α_v + 1) (`integral_jacobi_tensorPartial`).
+  - Under the affine map to raw units it reads E[(z − a)(b − z)(∂_z f)²]: the same number.
+- Each total is at most half its Jacobi measure, with equality where every term holding the input has degree 1 in it (`tensorTotal_le`, `tensorTotal_eq_half`).
+  - This is the Poincaré-type check E8's entry asks for, read per draw. On the Ishigami fixture at degree 8, ½·Jacobi over the total was 2.79 or more.
+- The decomposition is the moment route's on the same draws, at O(M) per draw in place of O(M²). The moment route stays the default (`BassFit.Sensitivity`), since it serves every measure and every term type.
+
+**Under any other measure the coefficient formulas do not hold.** There the ψ_α are neither orthonormal nor of mean 0, so `FromCoefficients` takes no measure. Its readout says the law it holds under.
+- *The decomposition* is the moment route's, exact through the measure's interval moments. KHAOS's "past the paper" is this route on Legendre factors, and no code changed for it.
+- *A derivative measure* is the gradient readout averaged over the measure's points. That route serves any measure, a dependent one included.
+- *Refused:* `FromCoefficients` on a fit with a hinge or categorical term, whose coefficients are not on an orthonormal basis, and on a functional response.
+
+**For E8.** E8's C = E[∇f∇fᵀ] is the moment service with derivative factors, under a product measure. That is not built here: it is E8's own.
+- What E8 can take from this slice:
+  - the gradient readout, pointwise and so good under any measure, which is the fallback for the first consumer that cannot assume a product measure;
+  - the Jacobi diagonal in closed form under the uniform law;
+  - its bound against the totals.
+- The lineage review's open question on the consumer's shape is still settled at E8.
+
+**The cost** (wall clock, one run, indicative): on the comparison's 80 draws with M up to 18, the moment route took 18.1 ms and the coefficients 0.7 ms, each with its setup.
+
 ## The engine's reach (slice 5)
 
 A Legendre term is a part type behind F-X3, so every sampler and reader serves it as it serves hinges, through the design and the target. Slice 5 changed no engine code; it gated each one on KHAOS's priors (the checks below):
@@ -145,7 +180,7 @@ Two things to know when fitting:
   - a birth proposed from the data's residual through F-X4, aimed at the 2% birth acceptance;
   - a reference nearer the posterior, a pilot run and a tempering path from it.
 
-## What was checked (slices 1, 2 and 5)
+## What was checked (slices 1, 2, 4 and 5)
 
 | Gate | Reading |
 |---|---|
@@ -163,6 +198,10 @@ Two things to know when fitting:
 | The exact law, g₀² integrated | Each of the 466 structures' weight by Simpson's rule over ln τ on the oracle's nodes, against `khaos_exactlaw_oracle.R`: 1.6·10⁻¹⁵ in P(M) and the inclusions and 1.7·10⁻¹⁵ in g₀²'s posterior CDF at 300, 1,000 and 10⁴, on both boxes. The production chain with g₀² ~ IG(0.001, 1,000) drawn, against it over 400,000 steps: worst \|z\| 1.46 |
 | Geweke, g₀² drawn | 12 cases, p 4, M ≤ 3, σ² ~ IG(3, 2), g₀² ~ IG(2, 2) drawn by τ's step; 200,000 marginal-conditional draws against 300,000 successive steps over M, σ², ln g₀², the surface at two points, two inclusions, the degree sum and a scaled residual: worst \|z\| 2.37 and 1.52 (ζ = 1, two seeds), 2.14 (ζ = 0) |
 | `adaptive_khaos_gprior` readouts | Corrected, degree 8, order 3, R 6,000 iterations with 3,000 kept against the engine's two chains of 10,000 after 10,000. On the raw inputs with [0, 1] declared: M 14.66 against 13.87, σ² 0.201 against 0.203, g₀²'s median 3,137 against 3,256, the surfaces 0.068 apart, total indices within 0.003. On the rescaled inputs: M 20.23 against 19.08, σ² 0.221 against 0.236, the surfaces 0.074 apart, the indices within 0.003. Long runs on the declared box: eight engine chains of 40,000 read M 15.06 (sd 0.36), σ² 0.197 and g₀²'s median about 3,130; two `khaos` runs of 40,000 read M 15.06 and 15.03, σ² 0.198 and g₀²'s median 3,125 and 3,115 |
+| Sobol from the coefficients (slice 4) | Against the moment route, draw for draw, on an Ishigami fit (degree 8, order 3; 80 draws, M up to 18, 7 subsets): 6·10⁻¹⁴ of Var f. Against `sobol_khaos` on the same 80 draws, packed as khaos's own object (`khaos_sobol_oracle.R`, `KhaosSobolParityTests`): 2.2·10⁻¹⁶ in every index, its division by Var f + σ² included |
+| SG-4(b)'s identities | Against a 10³ Gauss–Legendre rule, exact at these degrees, on 8 draws each of fits at degree 8, order 3 and at degree 2, order 2, from the draws' own surfaces and gradients: Var f, the main and total variances and the Jacobi measure to 4·10⁻¹⁵. Total ≤ ½·Jacobi at every draw and input, the least ratio 2.79 at degree 8; equality to 10⁻¹² at the 4 (draw, input) pairs held to degree 1 |
+| The gradient | Against central differences of the predicted surface at 10⁻⁶ of each range, on 40 cases: a Legendre fit on [−π, π]³ with that domain declared, so the chain rule through the box shows, 3·10⁻¹⁰ relative; a hinge fit, 2·10⁻¹⁰ |
+| Moments under other measures | The moment route's decomposition of a Legendre fit (degree 4, order 2) against brute-force tensor sums over each measure, its density written out in the test: under the empirical marginals, all 27,000 triples of training values, 3·10⁻¹⁴ of Var f; under truncated mixtures (normal and Student components, both weightings) on 40 density-weighted Gauss–Legendre nodes per input, 3·10⁻¹⁴, the Student moments' own quadrature error 7·10⁻¹² |
 | The law at each rung (slice 5) | Slice 0's exact-law fixture with σ² ~ IG(2, 0.5), under the raw ridge at τ held and the modified g-prior with g₀² ~ IG(2, 80) drawn: four ladders of 40,000 scans, with and without the reference rung, read from their own replicas against the enumeration's tempered law. The count law at every rung within 5 SE + 0.004, and E[ln τ] at every rung within 5 SE + 0.01, from b = 1 (−3.512 against −3.510) to the prior at b = 0 (−3.959 against −3.959) |
 | SMC and the ladder | ln p(y) against the enumeration's: SMC (2,000 particles, 4 replicates) −72.297 ± 0.014 against −72.291 on the raw ridge, −69.617 ± 0.017 and, under the adaptive count, −69.599 ± 0.023 against −69.587 on the modified g-prior; the ladder (reference rung, self-sizing) −72.258 ± 0.036 and −69.606 ± 0.043. At 32 replicates of 8,000 particles SMC's count law sits within 1.2 SE of the posterior with g₀² held, and within 0.72 SE with it drawn, its ln p(y) within 0.8 SE with it drawn. A tempered fit with its rungs stepped at once is the fit stepped in order, hash for hash |
 | The flat histogram | Against the enumeration (`BassFlatHistogramTests.MatchesTheEnumeration`): the learned weights 0.039 (modified g-prior, 12 nodes) and 0.020 (raw ridge, 6 nodes) from SAMC's limit, the reweighted count law, inclusions, likeliest structures and E[τ] within their allowances. At a held τ the density of states is F's 466 point masses, which leave SAMC's limit undefined on 12 nodes |
