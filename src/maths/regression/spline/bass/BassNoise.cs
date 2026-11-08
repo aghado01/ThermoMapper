@@ -223,6 +223,20 @@ public sealed record BassNoise
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Interweave { get; init; }
 
+    /// <summary>
+    /// Whether the latent slot adds the skew's rescaling move (<see cref="BassSkewRescaleBlock"/>): a Metropolis move of β and every vᵢ along
+    /// the ridge β·vᵢ holds, β → β/κ and v → κ·v, the weights refitted once. Off by default; left out of the serialized form when off.
+    /// It needs a drawn skew, which it moves.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool SkewRescale
+    {
+        get;
+        init => field = value && !SkewDrawn
+            ? throw new ArgumentException("The skew's rescaling moves β, so it needs a drawn skew.", nameof(SkewRescale))
+            : value;
+    }
+
     /// <summary>The asymmetric Laplace's q; null for a kind that takes none.</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? Quantile { get; }
@@ -394,7 +408,7 @@ public sealed class VarianceMeanMixture : IBassObservationModel, IBassNoiseLaw
         Skewed = noise.Skewed;
         _held = sigma2?.IsHeld == true ? sigma2.Value : null;
         _coefficients = [new BassCoefficientsBlock()];
-        _latent = [new BassLatentScaleBlock(this)];
+        _latent = noise.SkewRescale ? [new BassLatentScaleBlock(this), new BassSkewRescaleBlock(this)] : [new BassLatentScaleBlock(this)];
         var scale = new List<IBlock<ReversibleJumpChain<BassState>>>();
         if (Skewed && _held is null) scale.Add(new BassScaleBlock(this));
         if (noise.SkewDrawn || noise.GammaPrior is { IsHeld: false }) scale.Add(new BassNoiseShapeBlock(this));
@@ -666,6 +680,121 @@ public sealed class BassLatentScaleBlock : IBlock<ReversibleJumpChain<BassState>
         for (int i = 0; i < n; i++) v[i] = mixing.StepConditional(current[i], y[i] - fit.Fitted[i], unitVariance, drift, power, rng);
         WorkingResponse moved = _model.At(working, new ObservationLatents(v, latents.Skew, latents.Sigma2, latents.Gamma));
         return BassStructureMoves.Follow(state, moved) is null;
+    }
+}
+
+/// <summary>
+/// The skew's rescaling move (the latent slot, after v's block, under a drawn skew): a Metropolis move of β and every vᵢ along the ridge
+/// β·vᵢ holds, (β, v) → (β/κ, κ·v), slice 5's and slice 7's follow-up. The offset σβ·v stands and the weights 1/(c·vᵢ) move to W/κ, refitted
+/// once. On the joint the sweep targets, π ∝ p(structure, τ)·p(σ²)·p(β)·Πp_v(vᵢ)·ℓ_b, with ℓ_b the target's marginal given σ² on the working
+/// response at the rung's power (the coefficients integrated, the weights' normalizer in it), the map has Jacobian κ^(N−1) and its reverse
+/// is 1/κ, so with t = ln κ the move accepts with
+/// <para>ln A = Δℓ_b + Σᵢ [ln p_v(κ·vᵢ) − ln p_v(vᵢ)] + ln p(β/κ) − ln p(β) + (N − 1)·t + ln q(−t | x′) − ln q(t | x).</para>
+/// <para>t is drawn from N(0, h(x)²) with h = 2.4/√C(x), C the log target's curvature along t at the state: the likelihood's b·R/(2σ²), with
+/// R = Σᵢ eᵢ²/(c·vᵢ) and eᵢ = yᵢ − fᵢ − σβvᵢ at this sweep's fit, which the move leaves alone, less the second derivatives of v's prior and
+/// β's along t, at least 1. The scale moves with the state, so the reverse's density is read at x′ and the ratio carries both (Hastings).
+/// A move that puts the structure outside F is declined, as π is 0 there.</para>
+/// </summary>
+public sealed class BassSkewRescaleBlock : IBlock<ReversibleJumpChain<BassState>>
+{
+    private const double Step = 2.4;       // the random walk's scale over the target's sd along t
+    private const double Difference = 1e-2;   // the finite difference v's prior's curvature is read at
+    private readonly VarianceMeanMixture _model;
+
+    internal BassSkewRescaleBlock(VarianceMeanMixture model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+        if (model.Noise.SkewPrior is not { IsHeld: false }) throw new ArgumentException("The skew's rescaling needs a drawn skew.", nameof(model));
+        _model = model;
+    }
+
+    /// <inheritdoc/>
+    public string Name => "skew rescale";
+
+    /// <inheritdoc/>
+    public bool Update(ReversibleJumpChain<BassState> state, Xoshiro256PlusPlus rng)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(rng);
+        Proposal x = Read(state);
+        double t = x.Scale * Normal.SampleStandard(rng);
+        if (Propose(state, x, t) is not { } move) return false;
+        if (!(Math.Log(1.0 - rng.NextDouble()) < move.LogAcceptance)) return false;
+        state.SetState(move.Candidate, move.Evaluation);
+        return true;
+    }
+
+    /// <summary>The state's reading the move needs: v, β, σ², the fit's R, v's law, β's prior, the power b and the proposal's scale h(x).</summary>
+    internal readonly record struct Proposal(double[] V, double Skew, double Sigma2, double R, IMixingLaw Mixing, BassNoisePrior SkewPrior, double Power,
+                                             double Scale, WorkingResponse Working, ObservationLatents Latents);
+
+    /// <summary>A proposed move: the candidate state, its evaluation, and ln A.</summary>
+    internal readonly record struct Move(BassState Candidate, ITargetEvaluation Evaluation, double LogAcceptance);
+
+    // The current state's reading, at this sweep's coefficients.
+    internal Proposal Read(ReversibleJumpChain<BassState> state)
+    {
+        BassStructureMoves moves = BassStructureMoves.Of(state);
+        BassSweepFit fit = moves.SweepFit is { } drawn && ReferenceEquals(drawn.Structure, state.Current.TermArray)
+            ? drawn
+            : throw new InvalidOperationException("The skew's rescaling reads this sweep's coefficients: the coefficients' block runs first, at the current structure.");
+        WorkingResponse working = moves.DesignAt(state.Current).Working;
+        ObservationLatents latents = working.Latents ?? throw new InvalidOperationException("The working response holds no latents.");
+        double sigma2 = latents.Sigma2 ?? throw new InvalidOperationException("A drawn skew's latents hold σ².");
+        ReadOnlySpan<double> y = working.Response.Values, v = latents.Values;
+        double c = _model.VarianceScale, sigma = Math.Sqrt(sigma2), beta = latents.Skew, r = 0.0;
+        for (int i = 0; i < y.Length; i++)
+        {
+            double e = y[i] - fit.Fitted[i] - sigma * beta * v[i];
+            r += e * e / (c * v[i]);
+        }
+        IMixingLaw mixing = _model.MixingAt(latents);
+        BassNoisePrior prior = _model.Noise.SkewPrior!;
+        double b = BassCoefficientsBlock.Power(state);
+        double[] values = v.ToArray();
+        return new Proposal(values, beta, sigma2, r, mixing, prior, b, Scale(values, beta, sigma2, r, mixing, prior, b), working, latents);
+    }
+
+    // h = Step/√C, C = b·R/(2σ²) − ∂²/∂t² Σᵢ ln p_v(vᵢ·eᵗ) − ∂²/∂t² ln p(β·e⁻ᵗ) at t = 0, at least 1.
+    internal static double Scale(double[] v, double beta, double sigma2, double r, IMixingLaw mixing, BassNoisePrior prior, double power)
+    {
+        double up = Math.Exp(Difference), down = Math.Exp(-Difference), centre = 0.0, above = 0.0, below = 0.0;
+        foreach (double vi in v)
+        {
+            centre += mixing.LogPrior(vi);
+            above += mixing.LogPrior(vi * up);
+            below += mixing.LogPrior(vi * down);
+        }
+        double latent = (above - 2.0 * centre + below) / (Difference * Difference);
+        double skew = -(2.0 * beta * beta - prior.Mean * beta) / (prior.Sd * prior.Sd);
+        double curvature = power * r / (2.0 * sigma2) - latent - skew;
+        return Step / Math.Sqrt(double.IsFinite(curvature) ? Math.Max(curvature, 1.0) : 1.0);
+    }
+
+    // The move at t from x, or null when it leaves F: the candidate, its evaluation at the chain's temperature, and ln A.
+    internal Move? Propose(ReversibleJumpChain<BassState> state, Proposal x, double t)
+    {
+        double kappa = Math.Exp(t), inverse = Math.Exp(-t);
+        int n = x.V.Length;
+        var moved = new double[n];
+        double latentRatio = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            moved[i] = kappa * x.V[i];
+            latentRatio += x.Mixing.LogPrior(moved[i]) - x.Mixing.LogPrior(x.V[i]);
+        }
+        double skew = x.Skew * inverse;
+        double sd = x.SkewPrior.Sd, m = x.SkewPrior.Mean;
+        double skewRatio = -((skew - m) * (skew - m) - (x.Skew - m) * (x.Skew - m)) / (2.0 * sd * sd);
+        double reverse = Scale(moved, skew, x.Sigma2, x.R * inverse, x.Mixing, x.SkewPrior, x.Power);
+        double proposalRatio = Math.Log(x.Scale) - Math.Log(reverse) - t * t / (2.0 * reverse * reverse) + t * t / (2.0 * x.Scale * x.Scale);
+        WorkingResponse working = _model.At(x.Working, new ObservationLatents(moved, skew, x.Sigma2, x.Latents.Gamma));
+        BassStructureMoves moves = BassStructureMoves.Of(state);
+        BassState candidate = moves.ProposeFollow(state.Current, working);
+        if ((state.Target as BassTarget ?? throw new InvalidOperationException("The chain's target is BASS's.")).Refusal(candidate.Fit) is not null) return null;
+        ITargetEvaluation evaluation = state.Target.Evaluate(candidate);
+        double target = state.Temperature.LogDensity(evaluation) - state.CurrentLogDensity;
+        return new Move(candidate, evaluation, target + latentRatio + skewRatio + (n - 1) * t + proposalRatio);
     }
 }
 

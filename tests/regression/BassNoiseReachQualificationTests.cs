@@ -38,8 +38,19 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
 
     private static BassData GewekeData(double[] y) => new([new ContinuousPredictor("x", GewekeX)], new ScalarResponse(y));
 
-    private static BassNoise GewekeNoise(string form) => form switch
+    // A form ending "+rescale" turns the skew's rescaling move on (BassSkewRescaleBlock).
+    private static string Base(string form) => form.EndsWith("+rescale", StringComparison.Ordinal) ? form[..^"+rescale".Length] : form;
+
+    private static BassNoise GewekeNoise(string form)
     {
+        BassNoise noise = Law(Base(form));
+        return form == Base(form) ? noise : noise with { SkewRescale = true };
+    }
+
+    private static BassNoise Law(string form) => form switch
+    {
+        "nw" => BassNoise.NormalWald(skew: new BassNoisePrior(0.3, 0.5), reference: BassNoiseReference.None),
+        "skewed-t" => BassNoise.SkewedT(5, new BassNoisePrior(0.3, 0.5), reference: BassNoiseReference.None),
         "t" => BassNoise.StudentT(5, reference: BassNoiseReference.None),
         "gh" => BassNoise.GeneralizedHyperbolic(new GigParameters(0.7, 1.2, 0.8), new BassNoisePrior(0.3, 0.5), reference: BassNoiseReference.None),
         "gbp" => BassNoise.GeneralizedBetaPrime(new GbpParameters(1.0, 0.5, 1.5), new BassNoisePrior(0.0, 0.5), reference: BassNoiseReference.None),
@@ -59,8 +70,10 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
     };
 
     // v from its law tilted by v^((1−b)/2): the exponent of v's density raised by (1 − b)/2.
-    private static Func<Xoshiro256PlusPlus, double> Tilted(string form, double b) => form switch
+    private static Func<Xoshiro256PlusPlus, double> Tilted(string form, double b) => Base(form) switch
     {
+        "nw" => GeneralizedInverseGaussian.Of(-0.5 + 0.5 * (1.0 - b), 1.0, 1.0).Sample,
+        "skewed-t" => GeneralizedInverseGaussian.Of(-2.5 + 0.5 * (1.0 - b), 0.0, 5.0).Sample,
         "t" => GeneralizedInverseGaussian.Of(-2.5 + 0.5 * (1.0 - b), 0.0, 5.0).Sample,
         "gh" => GeneralizedInverseGaussian.Of(0.7 + 0.5 * (1.0 - b), 1.2, 0.8).Sample,
         "gbp" => GeneralizedBetaPrime.Of(1.0, 0.5 + 0.5 * (1.0 - b), 1.5 - 0.5 * (1.0 - b)).Sample,
@@ -92,6 +105,16 @@ public sealed class BassNoiseReachQualificationTests(ITestOutputHelper output)
     [InlineData("horseshoe", 0.75, 20261108, true, 1)]
     [InlineData("horseshoe", 0.5, 20261108, true, 1)]
     [InlineData("horseshoe", 1.0, 20261107, false, 1)]
+    // The skew's rescaling move under every skewed family, at b = 1 and on a rung. The skewed horseshoe's other readings with the move, which
+    // fail with and without it as its v mixes slowly (the move's report), are readings, not gates.
+    [InlineData("gh+rescale", 1.0, 20261107, false, 1)]
+    [InlineData("nw+rescale", 1.0, 20261107, false, 1)]
+    [InlineData("skewed-t+rescale", 1.0, 20261107, false, 1)]
+    [InlineData("gh+rescale", 0.5, 20261107, false, 1)]
+    [InlineData("nw+rescale", 0.5, 20261107, false, 1)]
+    [InlineData("horseshoe+rescale", 1.0, 20261107, false, 1)]
+    [InlineData("horseshoe+rescale", 1.0, 20261108, false, 1)]
+    [InlineData("horseshoe+rescale", 0.5, 20261108, false, 1)]
     public void Geweke_ARungLeavesItsTiltedJointInvariant(string form, double b, int seed, bool interweave, int scale)
     {
         if (!BassQualification.Enabled) return;   // heavy
