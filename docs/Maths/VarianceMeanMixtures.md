@@ -1,6 +1,6 @@
 # Variance-mean mixture noise
 
-> GBASS's noise on the BASS core (E1): a normal variance-mean mixture, εᵢ = σ(β·vᵢ + √(c·vᵢ)·ζᵢ), Gaussian given a latent scale per observation, which the Gaussian core fits through a working response that moves with the latents. Student t (robust BASS), the asymmetric Laplace (quantile regression), the Normal-Wald with its skew and tails drawn, the skewed t, the generalized hyperbolic and the generalized beta prime with the horseshoe are built, and every one runs on tempered ladders and SMC, with the evidence, on a direct functional response and on categorical predictors; BARS through the shared law and the z parameterization follow.
+> GBASS's noise on the BASS core (E1): a normal variance-mean mixture, εᵢ = σ(β·vᵢ + √(c·vᵢ)·ζᵢ), Gaussian given a latent scale per observation, which the Gaussian core fits through a working response that moves with the latents. Student t (robust BASS), the asymmetric Laplace (quantile regression), the Normal-Wald with its skew and tails drawn, the skewed t, the generalized hyperbolic and the generalized beta prime with the horseshoe are built, and every one runs on tempered ladders and SMC, with the evidence, on a direct functional response and on categorical predictors; BARS takes the same noise, skewed and quantile BARS among it; the z parameterization follows.
 
 ## Overview
 
@@ -280,6 +280,51 @@ At b = 0 each block draws from its prior. A swap moves a state with its working 
 - *The direct functional point* pays the stacked design under per-row weights, O(N·M·K) a weight move: 2,722 µs at b = 1 against 30 to 100 µs, across runs, for Gaussian BASS's unweighted Khatri–Rao design.
 - *Slice 1's rows stand.* Its per-part harness, rerun on this code, reads the base's sweep at 962 µs against the 961 it documented, so the noise's sweep did not move. Whole sweeps timed here read about twice that sum on the same machine, a gap between the two harnesses, not the codes, so this row's numbers compare within it. An untimed first pass warms the JIT: cold, the first cell read 3,157 µs.
 
+## BARS under the noise (E1's slice 6, OQ20)
+
+Built 2026-11-07 ([the build brief](../../issues/regression/bass/gbass-noise-brief.md#reports), slice 6): the same noise on BARS's spline curves, so quantile and skewed BARS come from the seam BASS's noises share.
+
+**`StudentTWeights` through the law.** BARS's t weights are the shared law's precision draws (`StudentTMixing.SamplePrecision`), the same call v's draw takes the reciprocal of, so its weights are what they were, number for number, and its marginal is the law's t_ν(0, σ), which keeps its digits as ν grows where the direct forms lost up to 2·10⁻⁵ at ν = 3·10¹⁰ (slice 1's reading).
+
+**`BarsNoise`**, on `BarsConfig.Noise` or the ensemble, in place of a resampler:
+- `Quantile(q)`: the asymmetric Laplace, v ~ Exp(1), c = 2/(q(1 − q)) and β = (1 − 2q)/(q(1 − q)) held, so the fitted curve is the q-quantile;
+- `Skewed(law, prior)`: β drawn under a normal prior, on any mixing law (t, GIG, GBP);
+- `HeldSkew`, `StudentT`, `ScaleMixture`: a held skew, and the pure scale mixtures with v kept, on any law.
+
+**The sweep.** The knot step runs on the weight block's cadence (`WeightEvery`, 25 knot steps a block, as robust BARS has it), then the noise block, GBASS's steps after the knots, drawn by the conditionals BASS's blocks draw (`VarianceMeanConditionals`, moved there from BASS's blocks with their arithmetic unchanged):
+- the coefficients from their conditional given the knots and the weights 1/(c·vᵢ), with σ² drawn with them under a pure scale mixture and given under a skew;
+- each vᵢ by its law's step given rᵢ = yᵢ − fᵢ, the drift σβ and the unit variance σ²c;
+- under a skew, σ² by its modified half-normal, the coefficients' prior energy Q = τ‖Z(β_c − μ₀)‖² over all p coefficients (the g-prior's variance scales with σ²), then a drawn β by its normal.
+
+The knot chain then takes its target on the new working response and weights, keeping its state and counters.
+
+| σ² under a skew | The knot step | Trade-off |
+|---|---|---|
+| **Held on the chain, drawn by its own block (chosen)** | The marginal given σ² on y − σβv (`GPriorMarginal.LogMarginalGiven`) | GBASS's and BASS's route; σ² mixes by its block, not inside the knot step |
+| Integrated in the knot step, as robust BARS does | None: σ sits in the offset σβv, so the marginal over σ² is not a closed form | Not available under a skew |
+| The drift in the response's units, β̃ = σβ, so σ² leaves the offset | σ² integrated again | The asymmetric Laplace's skew is fixed in σ's units, so the quantile noise cannot take it, and β̃'s prior would carry the response's units |
+
+**Priors that stop reading the response.** BARS's σ² prior (scaled to the response) and its median centre read the response; under a noise the working response moves each sweep, so the noise's reading of the Normal model (`WeightedNormalModel.ReadingFrom`) reads both once, from the data, as BASS's priors that stop reading a moving response do. A run without a noise reads the response as it always has.
+
+**The readers.** A retained draw keeps its weights and its skew (`BarsDraw.Skew`); the pointwise density is the law's with vᵢ integrated at the draw's σ² and skew, opt-in where the law's marginal is an integral (the GBP's, `quadrature`), and the collapsed predictive is refused, as under robust weights. The run's fingerprint takes the noise only when there is one, so every other run's stands. A noise runs untempered and on a fixed kernel, as the resampler does.
+
+**Checked** (`BarsNoiseTests`, `BarsResumeTests`; behind `BASS_QUALIFICATION`, `BarsNoiseQualificationTests`):
+- *`StudentTWeights`.* Its weights against the step as written before it went through the law, number for number, at ν = 0.5, 3, 4 and 30 over 500 residuals; its marginal the law's.
+- *The noise's Normal model.* On the data its reading is the model's own, bit for bit, and on a shifted working response it keeps the data's level; its marginal given σ² against the normal density of y under N(level·1, σ²(W⁻¹ + m·ZG⁻¹Zᵀ)) by a dense Cholesky, within 6·10⁻¹⁴ at σ² = 0.05, 0.3 and 2.
+- *Geweke's joint-distribution test* on 16 points (cubic B-splines, a Poisson(1) knot count, the centre at zero and σ² ~ IG(4, 0.6), so no prior reads the response the successive simulator moves): the knots from their prior on its support (`SplineTarget.Reference`), the coefficients from their g-prior, σ², v and β, 400,000 marginal-conditional draws against 600,000 steps of one chain (a knot move, then the noise block, through `BarsEnsemble.Probe`), over eight functions (the knot count, ln σ², ln v₀, mean ln v, f at two points, β and the standardized residual). t(5) reads a worst |z| of 1.53, the quantile noise at q = 0.8 1.66, the skewed GIG 2.41, and the skewed GBP 3.80 at seed 20261108, 1.29 at 20261109 and 0.85 at four times the size. No noise block refused.
+- *Recovery* on 400 points of sin 2πx + (0.2 + 0.3x)(E − 1), E ~ Exp(1), 4 chains × 2,000 draws: the quantile fits at q = 0.1, 0.5 and 0.9 put 10.5%, 50.2% and 89.5% of the data at or below their curve, at RMSEs against the true quantile curve of 0.023, 0.051 and 0.162 over a grid (the 0.9 curve follows the exponential's long tail, with 6.9 knots on average). A known skew, β = 0.8 under GIG(0.7, 1.2, 0.8) mixing and σ = 0.25, over four data sets: the 90% intervals cover it in three, the posterior means 0.635, 0.638, 0.865 and 0.752. The noise's mean σβE[v] trades off with the curve's level, so β is read from the residuals' asymmetry alone, and its intervals are wide.
+- *The run.* Quantile and skewed fits resume bit for bit, the skew and the weights included; the pointwise density is the law's at the draw's σ² and skew; the GBP's is refused without `quadrature`.
+
+**Cost** (`CostRow_AStep_UnderEachNoise`; thread cycles on a loaded machine, one chain stepped on the test thread after 1,000 untimed steps, so indicative; µs per step, a knot move with the noise or weight block every 25 steps):
+
+| n | Plain | `StudentTWeights(4)` | t(4) | AL(0.9) | Skewed GIG |
+|---|---|---|---|---|---|
+| 200 | 110 | 139 | 113 | 94 | 70 |
+| 1,000 | 211 | 291 | 257 | 313 | 274 |
+
+- *At n = 1,000 a step under a noise costs 1.2 to 1.5 plain steps,* about what `StudentTWeights`' costs. At n = 200 the readings swing with the load and the knot count more than with the noise.
+- *The row steps one chain on the test thread* (`BarsEnsemble.ChainOn`). A run fans its chains out over the pool, which a thread's clock misses and the process's CPU time inflates with the pool's spinning; the first harness timed whole runs and read both ways wrong.
+
 ## The GIG's draw: ratio-of-uniforms where it is faster
 
 Built 2026-11-06 after slice 3, at the user's word that spline surfaces are expensive and every bit of performance counts. v's conditional is a GIG under the asymmetric Laplace, the Normal-Wald, the skewed t and the generalized hyperbolic, and its N draws were most of a sweep. An untruncated GIG draw is now Hörmann and Leydold's (2014), GIGrvg's ([the method](./ProbabilityAndInformation.md#the-gig-the-modified-half-normal-and-the-asymmetric-laplace-e1)), on a ratio-of-uniforms primitive other families can take (`RatioOfUniforms`); a truncated draw stays the tangent hat's. Both draw the same law exactly and independently, so a chain mixes as it did; the measure is time a draw.
@@ -318,8 +363,9 @@ Read in slice 1, built in slice 2: the brief's lever for a working response that
 
 ## Status and caveats
 
-- *Built:* slices 0 to 5 of [the brief](../../issues/regression/bass/gbass-noise-brief.md), each with its report there.
-- *Open, by slice:* BARS through the shared law (6); the z parameterization and interweaving (7).
+- *Built:* slices 0 to 6 of [the brief](../../issues/regression/bass/gbass-noise-brief.md), each with its report there.
+- *Open, by slice:* the z parameterization and interweaving (7).
+- *BARS's noise runs untempered,* as its resampler does, and holds the Normal-Wald's γ and the mixing law fixed: its skew is the one global it draws beside σ².
 - *The flat histogram takes no noise:* its π_w and WHAM read the marginal over a and σ², whose weights couple every latent; two routes are on [slice 5's section](#the-engines-reach-ladders-smc-and-a-direct-functional-response-e1s-slice-5), neither built. Ladders and SMC carry every noise, on the likelihood path in the integrated form.
 - *A skewed heavy-tailed noise mixes slowly on hot rungs:* the skewed horseshoe fails Geweke's test at b = ½, a drift pinning β and v along a ridge the one-at-a-time scan crawls; at b = ¾ and without the drift it passes. A ladder's hot rungs under it move slowly in (β, v).
 - *The asymmetric Laplace is a working likelihood* where the noise is not one: its posterior intervals for the q-quantile undercover under other noise (63.8% for nominal 90% at q = 0.9 on skewed, heteroscedastic noise), as Yang, Wang and He (2016) show in general. The surface is the q-quantile; its intervals are not yet calibrated for it.
@@ -341,8 +387,9 @@ Read in slice 1, built in slice 2: the brief's lever for a working response that
 | The mixing laws | `src/maths/regression/MixingLaw.cs` (`IMixingLaw`, `StudentTMixing`, `ExponentialMixing`, `GigMixing`, `GbpParameters`, `GbpMixing`) |
 | v's slice step | `src/maths/samplers/blocks/SliceSampler.cs` (`IScalarLogDensity`) |
 | Ladders, SMC and the prior's draw under a noise | `BassNoise.cs` (`BassCoefficientsBlock.Power`, `VarianceMeanMixture.PriorLatents`), `BassPriorSampler.cs` (`DrawPrior`, `LastDesign`, `Holds`), `BassSmc.cs` (`BassParticles.Draw`), `BassLadder.cs` (`HandOver`), `BassConfig.cs` (the noise's rules) |
+| BARS under the noise | `src/maths/regression/spline/bars/BarsNoise.cs`, `BarsEnsemble.cs` (the noise block, `Probe`, `ChainOn`), `WeightedNormalModel.cs` (`ReadingFrom`, `Given`, `SampleNoiseFit`), `WeightResampling.cs` (`StudentTWeights`); `src/maths/regression/VarianceMeanConditionals.cs`, shared with BASS's blocks |
 | The pointwise opt-in | `BassPointwise.cs` (`LogDensity`'s `quadrature`, `Latents`), `BassFit.cs` (`PointwiseLogDensity`) |
 | The Normal-Wald's calibrations | `src/maths/regression/NormalWaldCalibration.cs` (`NormalWaldCalibration`, `NormalInverseGaussian`) |
 | The predictive's quantile under a law | `src/maths/regression/spline/bass/posterior/PredictiveMixture.cs` |
 | The laws drawn from and read | `src/maths/distributions/GeneralizedInverseGaussian.cs`, `ModifiedHalfNormal.cs`, `AsymmetricLaplace.cs`, `GeneralizedHyperbolic.cs`, `BesselK.cs`, `RatioOfUniforms.cs`, `NormalVarianceMeanMixture.cs`, `GeneralizedBetaPrime.cs`, `NormalGeneralizedBetaPrime.cs`, `Beta.cs` (`InverseLogit`) |
-| Tests | `tests/regression/BassStudentTTests.cs`, `BassStudentTQualificationTests.cs`, `BassQuantileTests.cs`, `BassQuantileQualificationTests.cs`, `BassNormalWaldTests.cs`, `BassNormalWaldQualificationTests.cs`, `GigMixingTests.cs`, `NormalWaldCalibrationTests.cs`, `BassGeneralizedBetaPrimeTests.cs`, `BassGeneralizedBetaPrimeQualificationTests.cs`, `GbpMixingTests.cs`, `BassNoiseReachTests.cs`, `BassNoiseReachQualificationTests.cs`; `tests/distributions/BesselKTests.cs`, `GigNormalizerTests.cs`, `LogConcaveEnvelopeTests.cs`, `GeneralizedBetaPrimeTests.cs`; `tests/oracle/Gbass*.cs` |
+| Tests | `tests/regression/BassStudentTTests.cs`, `BassStudentTQualificationTests.cs`, `BassQuantileTests.cs`, `BassQuantileQualificationTests.cs`, `BassNormalWaldTests.cs`, `BassNormalWaldQualificationTests.cs`, `GigMixingTests.cs`, `NormalWaldCalibrationTests.cs`, `BassGeneralizedBetaPrimeTests.cs`, `BassGeneralizedBetaPrimeQualificationTests.cs`, `GbpMixingTests.cs`, `BassNoiseReachTests.cs`, `BassNoiseReachQualificationTests.cs`, `BarsNoiseTests.cs`, `BarsNoiseQualificationTests.cs`, `BarsResumeTests.cs`; `tests/distributions/BesselKTests.cs`, `GigNormalizerTests.cs`, `LogConcaveEnvelopeTests.cs`, `GeneralizedBetaPrimeTests.cs`; `tests/oracle/Gbass*.cs` |

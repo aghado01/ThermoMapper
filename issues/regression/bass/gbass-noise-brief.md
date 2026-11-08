@@ -157,6 +157,47 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### Slice 6: BARS under the noise, skewed and quantile BARS (chip, 2026-11-07)
+
+**Landed** in `957629b` (the code and its tests) and the commit that carries this report (`docs/Maths`, the checklist). The user's go-ahead for slices 6 and 7 came through the main session on 2026-11-07 ("Yes, start both"). [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#bars-under-the-noise-e1s-slice-6-oq20) holds σ²'s route under a skew against its alternatives, the priors read once, and the readers.
+
+| Piece | Where |
+|---|---|
+| `StudentTWeights` through the law | `StudentTMixing.SamplePrecision`, the precision draw both take; `StudentTWeights` holds the law |
+| BARS's noise | `BarsNoise` (`Quantile`, `Skewed`, `HeldSkew`, `StudentT`, `ScaleMixture`), on `BarsConfig.Noise` and the ensemble |
+| The noise block | `BarsEnsemble`'s noise block on the weight block's cadence, `NoiseState` on the chain, its restart state and fingerprint |
+| The Normal model under a noise | `WeightedNormalModel.ReadingFrom` (the priors read once), `Given` (σ² held), `SampleNoiseFit` (the coefficients, f and the prior's energy) |
+| The shared conditionals | `VarianceMeanConditionals.SampleInverseScale` and `SampleSkew`, which BASS's σ² and shape blocks now call |
+| The conditional variance at a given σ² | `GPriorConditional.ConditionalVarianceGiven` |
+| A chain for tests and cost readings | `BarsEnsemble.Probe` (Geweke's successive simulator), `ChainOn` (one chain on the caller's thread) |
+
+**Slice 6's gates.**
+- *Gaussian untouched, and BASS's noises:* the whole regression assembly on `957629b`, 2,189 of 2,189 in 15 minutes, the eight pinned hashes and every fingerprint unmoved. Before the commit, the 624 tests the change reaches (BARS's, BASS's noise classes, the g-prior's readers and `BassBitIdentityTests`' eight pinned hashes) and the GBASS oracles' 27 passed; BASS's σ² and skew blocks call the shared conditionals with their arithmetic unchanged.
+- *`StudentTWeights`' pinned values:* its weights equal the step as written before, number for number (ν = 0.5, 3, 4, 30; 500 residuals each); its marginal is the law's, which the BARS suites' checks to 9 and 12 places still meet.
+- *The law, Geweke's test* on 16 points with priors that read no response (cubic B-splines, Poisson(1) knots, the centre at zero, σ² ~ IG(4, 0.6)), 400,000 against 600,000, eight functions: t(5) worst |z| 1.53, AL(0.8) 1.66, skewed GIG 2.41, skewed GBP 3.80 at seed 20261108, 1.29 at 20261109 and 0.85 at four times the size.
+- *The given marginal* against a dense normal density of the working response: within 6·10⁻¹⁴.
+- *Recovery,* the brief's and OQ20's: three quantile curves under heteroscedastic exponential noise, 10.5%, 50.2% and 89.5% of the data at or below the q = 0.1, 0.5 and 0.9 fits, RMSE 0.023, 0.051 and 0.162 against the true curves; a known skew of 0.8 covered by the 90% interval in three of four data sets, posterior means 0.635 to 0.865.
+- *Refusals and acceptance:* no noise block refused in any Geweke case (BARS's support reads the unweighted Gram, so a weight cannot leave it); the ensemble refuses a noise with another model, with a resampler, tempered or on an adaptive kernel, each with its reason.
+- *The cost row* (thread cycles, loaded, indicative; one chain on the test thread): a step at n = 1,000 costs 257 to 313 µs under a noise against 211 plain and 291 for `StudentTWeights`; at n = 200 70 to 139 µs, the load and the knot count swinging more than the noise.
+- *The run:* quantile and skewed fits resume bit for bit, the skew and the weights included; the pointwise density is the law's at each draw's σ² and skew.
+- *"The same oracle modes":* BARS's σ² and β steps are now the code GBASS's conditional oracle checks through BASS (`VarianceMeanConditionals`), and its v step is the shared law's; the oracle's 27 pass.
+
+**Defects found and fixed in this slice.**
+- *The first cost harness read nothing true.* It timed whole runs on the test thread's cycle clock while the chains ran on the pool (robust BARS read 0.6 µs a step), and then on the process's CPU time, which the pool's spinning inflates (plain BARS read slower at n = 200 than at 1,000). The row now steps one chain on the test thread.
+- *A snapshot build kept a stale assembly:* `git archive` stamps files with the commit's time, older than the previous build's outputs, so MSBuild skipped recompiling the source under KHAOS's new tests. A fresh snapshot now drops its build output. Harness only; no commit carried it.
+
+**Decisions taken beyond the brief.**
+- *σ² is held on BARS's chain under a skew,* with the knot step reading the marginal given σ²: σ sits in the offset, so it cannot stay integrated. The alternative, the drift in the response's units, would have kept σ² integrated but cannot carry the quantile noise, whose skew is fixed in σ's units.
+- *BARS's priors under a noise read the data once* (`ReadingFrom`), as BASS's do under a moving working response; a run without a noise reads as it did.
+- *The σ² and β conditionals are shared code* (`VarianceMeanConditionals`), so the two engines cannot drift apart.
+- *`BarsNoise` beside `IWeightResampler`,* not in it: the resampler's seam has no offset, no σ² state and no current v for a stepped law; the contaminated normal and `StudentTWeights` keep it.
+- *No tempering, no adaptive kernel, no drawn γ under BARS's noise,* as its resampler has none; each is refused with its reason.
+- *The ensemble's run context is set in one place* (`SetContext`), shared by a run, the probe and `ChainOn`.
+
+**Left unbuilt, and why.** Tempered BARS under a noise: BARS's weighted marginal is built at b = 1 only, so robust BARS has no tempered form either, and a tempered noise would start there. The Normal-Wald's drawn γ on BARS: `BarsNoise` holds its mixing law. Both are recorded as open, with no decision waiting on them. Slice 7 follows.
+
+**Follow-ups, with the decision each would change.** None from this slice.
+
 ### Slice 5: the engine's reach, ladders, SMC and a direct functional response (chip, 2026-11-07)
 
 **Landed** in `37137f2` (the code and its tests) and the commit that carries this report (`docs/Maths`, the notation ledger). [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#the-engines-reach-ladders-smc-and-a-direct-functional-response-e1s-slice-5) holds the tempered target, the prior's draw with the latents, the evidence and the flat histogram's refusal, each against its alternatives.

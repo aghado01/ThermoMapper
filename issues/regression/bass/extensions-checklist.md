@@ -6,7 +6,7 @@ Companion to [extensions-brief.md](extensions-brief.md). An item is ticked when 
 
 ### Entries
 
-- [ ] **E1** Generalized-hyperbolic noise (GBMARS), with OQ20's BARS side. Building ([brief](gbass-noise-brief.md)): slices 0–4 and the GIG's ratio-of-uniforms draw landed by 2026-11-06; slice 5 started 2026-11-07; slices 6 and 7 wait.
+- [ ] **E1** Generalized-hyperbolic noise (GBMARS), with OQ20's BARS side. Building ([brief](gbass-noise-brief.md)): slices 0–4 and the GIG's ratio-of-uniforms draw landed by 2026-11-06; slices 5 and 6, the engine's reach and OQ20's BARS side, landed 2026-11-07; slice 7 building.
 - [ ] **E2** Robust centring and bases (OQ16).
 - [ ] **E3** Free-knot tensor-product surfaces (ABMRS).
 - [ ] **E4** Additional proposal kernels. The Bernoulli-inclusion birth is briefed with KHAOS ([brief](khaos-brief.md), 2026-11-07).
