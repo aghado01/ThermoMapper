@@ -1,6 +1,6 @@
 # Variance-mean mixture noise
 
-> GBASS's noise on the BASS core (E1): a normal variance-mean mixture, εᵢ = σ(β·vᵢ + √(c·vᵢ)·ζᵢ), Gaussian given a latent scale per observation, which the Gaussian core fits through a working response that moves with the latents. Student t (robust BASS), the asymmetric Laplace (quantile regression), the Normal-Wald with its skew and tails drawn, the skewed t, the generalized hyperbolic and the generalized beta prime with the horseshoe are built, and every one runs on tempered ladders and SMC, with the evidence, on a direct functional response and on categorical predictors; BARS takes the same noise, skewed and quantile BARS among it; the z parameterization follows.
+> GBASS's noise on the BASS core (E1): a normal variance-mean mixture, εᵢ = σ(β·vᵢ + √(c·vᵢ)·ζᵢ), Gaussian given a latent scale per observation, which the Gaussian core fits through a working response that moves with the latents. Student t (robust BASS), the asymmetric Laplace (quantile regression), the Normal-Wald with its skew and tails drawn, the skewed t, the generalized hyperbolic and the generalized beta prime with the horseshoe are built, and every one runs on tempered ladders and SMC, with the evidence, on a direct functional response and on categorical predictors; BARS takes the same noise, skewed and quantile BARS among it; and the noise's scale can be interwoven under the z parameterization, opt-in.
 
 ## Overview
 
@@ -325,6 +325,49 @@ The knot chain then takes its target on the new working response and weights, ke
 - *At n = 1,000 a step under a noise costs 1.2 to 1.5 plain steps,* about what `StudentTWeights`' costs. At n = 200 the readings swing with the load and the knot count more than with the noise.
 - *The row steps one chain on the test thread* (`BarsEnsemble.ChainOn`). A run fans its chains out over the pool, which a thread's clock misses and the process's CPU time inflates with the pool's spinning; the first harness timed whole runs and read both ways wrong.
 
+## Interweaving: the z parameterization beside v (E1's slice 7)
+
+Built 2026-11-08 ([the build brief](../../issues/regression/bass/gbass-noise-brief.md#reports), slice 7): the user's u and z parameterization (E1, 2026-10-26) beside v, interwoven on the noise's scale (Yu and Meng 2011's ancillarity-sufficiency interweaving), opt-in on the noise (`BassNoise.Interweave`).
+
+**The two parameterizations.** Under v, εᵢ = σ(β·vᵢ + √(c·vᵢ)·ξᵢ) and v's prior is free of σ: v is the scale's ancillary augmentation, and σ given v moves the offset and the variance together. Under z = σ·v, εᵢ = β·zᵢ + √(c·σ·zᵢ)·ξᵢ: the offset is β·z, free of σ, and σ is read through the variance and z's prior, p_v(z/σ)/σ. A sweep that draws σ under each moves it along both: after the noise's blocks, the interweaving step (`BassInterweavingBlock`) holds z, draws σ from its conditional given z, and sets vᵢ = zᵢ/σ, so the offset σβ·v = β·z stands and only the weights 1/(c·vᵢ) move.
+
+**σ's conditional given z.** With rᵢ = yᵢ − fᵢ at the sweep's coefficients and A = Σᵢ (rᵢ − β·zᵢ)²/(c·zᵢ), in t = ln σ at a rung's power b:
+
+ℓ(t) = −(bN/2 + N + 2α₀ + K)·t − (b·A/2)·e^(−t) − (β₀ + Q/2)·e^(−2t) + Σᵢ ln p_v(zᵢ·e^(−t)),
+
+the likelihood given z, v's prior at zᵢ/σ with its Jacobian, σ²'s IG(α₀, β₀) carried to σ, and the coefficients' prior, whose variance scales with σ² (K coefficients inside it, energy Q per unit σ²). Each mixing law states its prior's log density (`IMixingLaw.LogPrior`).
+
+| σ's draw given z | When | Trade-off |
+|---|---|---|
+| **One slice step on ln σ (chosen)** | Every law and every prior BASS takes: the coefficients' variance scales with σ², the equivariant prior | One step per sweep, some six evaluations of N log densities; log-concave in ln σ under GIG mixing, so the step mixes well there |
+| An exact GIG draw | A prior on σ in the GIG family with the coefficients' variance scaling as σ, or not at all (the derivation's route) | Not scale-equivariant: the coefficients' prior then carries the response's units, and σ²'s inverse gamma on w falls outside; BASS offers neither prior |
+| No interweaving (the default) | Every fit until it is asked for | σ moves only along v's parameterization, where σ and v trade against each other when the noise's tails are heavy |
+
+**Where it runs.** Last in the scale slot, after σ²'s and the shape's blocks and before σ²'s rate's; under a skew σ² goes on the record, and under a pure scale mixture σ² is the sweep's draw with the coefficients, so only v moves. A move that puts the structure outside F is refused and the chain keeps its state, as the latent block's is. Rungs and SMC's stages run it at their power. A held σ² has no scale to move, and is refused with it.
+
+**Checked** (`BassNoiseReachTests`; behind `BASS_QUALIFICATION`, `BassNoiseReachQualificationTests` and `BassInterweavingQualificationTests`):
+- *The switch.* Off, the noise's serialized form and every fingerprint stand; on, the config round-trips and its fingerprint moves; a held σ² refuses it. A woven chain's draws differ from the plain chain's, the step taking all 120 of its moves.
+- *A rung at b = 0 with the step:* SMC's kernel at b = 0 on exact prior draws against fresh ones, the two-sample √(n/2)·D at most 1.63 over M, ln τ, ln v₀, mean ln v, β and ln σ², under t(4), the skewed Normal-Wald and the skewed GBP.
+- *The step alone.* With β held at 0.5 and σ moved only by the interweaving step (σ²'s block left out of the sweep), Geweke's test at b = 1 on the reach harness's design, 400,000 against 600,000 over eight functions: the skewed horseshoe's worst |z| 1.75, the generalized hyperbolic's 2.31.
+- *The interwoven sweep,* the same test with every block: t(5) at b = 1 and 0.4, worst |z| 1.42 and 1.90; the generalized hyperbolic with a drawn skew at b = 1, 1.40; the quantile noise at q = 0.8, 1.42; the skewed horseshoe at seed 20261108, 3.03, 2.42 and 3.07 at b = 1, ¾ and ½.
+- *The skewed horseshoe at seed 20261107 fails with the step and without it.* With it: 4.10, 5.11 and 4.96 at b = 1, ¾ and ½, and 10.12 at ½ at four times the size, each on v's functions. Without it, on the same design with β held and σ moved only by its own block: 4.27 (ln v₀); slice 5's plain readings at ½ were 5.33 to 9.16. The step alone passes on that seed, so the reading is the horseshoe's v mixing slowly against the drift, which the step does not cure; slice 5's joint move along β·v stays the follow-up it was.
+- *The run:* a tempered fit with the step, a reference rung and the evidence resumes bit for bit.
+
+**What it buys** (`EffectiveSizesPerUnitOfWork_WithAndWithoutInterweaving`; 300 points of sin 2πx₀ + x₁ + 0.3(E − 1), E ~ Exp(1), at most 6 additive terms, 4 chains × 8,000 draws after 2,000, on one thread; thread cycles under load, so indicative). Bulk ESS per second, interwoven over plain, at seeds 11 and 23:
+
+| Noise | ln σ² | β | mean ln v | M |
+|---|---|---|---|---|
+| t(4) | 0.10, 0.84 | | 0.73, 0.83 | 0.11, 0.86 |
+| AL(0.9) | 0.05, 0.04 | | 0.14, 1.35 | 0.20, 0.91 |
+| Skewed generalized hyperbolic | 0.35, 0.51 | 0.40, 0.57 | 3.09, 3.55 | 3.75, 0.64 |
+| Skewed horseshoe | 1.15, 0.90 | 0.93, 0.76 | 4.49, 5.84 | 0.44, 0.68 |
+
+- *σ² gains nowhere,* and under the quantile noise its ESS falls about twentyfold (706 to 50 and 1,270 to 59 of 32,000 draws).
+- *mean ln v gains three- to sixfold* under the skewed generalized hyperbolic and horseshoe; under t it does not.
+- *A sweep with the step costs 1.3 to 2.5 plain sweeps:* some six evaluations of N log densities, and a Follow whose weights move.
+- *So the step stays opt-in.* Given z, σ's conditional still reads every observation's variance c·σ·zᵢ, so it is about as narrow as σ's given v and σ moves little. Under a pure scale mixture z′ = σ²·v leaves the likelihood free of σ, so σ given z′ reads only the priors and would move along the ridge σ²·v holds; that parameterization is the follow-up in the report.
+- *A first harness* read t's interwoven sweep with the sweep's own σ², which the step moves without keeping under a pure scale mixture; it now draws the coefficients and σ² afresh given the structure and the new latents. And the GIG's prior density first recomputed its Bessel normalizer on every read, so an interwoven generalized-hyperbolic fit took 4.7 times the plain fit's work; it now reads the law's cached normalizer, and takes 1.8 times.
+
 ## The GIG's draw: ratio-of-uniforms where it is faster
 
 Built 2026-11-06 after slice 3, at the user's word that spline surfaces are expensive and every bit of performance counts. v's conditional is a GIG under the asymmetric Laplace, the Normal-Wald, the skewed t and the generalized hyperbolic, and its N draws were most of a sweep. An untruncated GIG draw is now Hörmann and Leydold's (2014), GIGrvg's ([the method](./ProbabilityAndInformation.md#the-gig-the-modified-half-normal-and-the-asymmetric-laplace-e1)), on a ratio-of-uniforms primitive other families can take (`RatioOfUniforms`); a truncated draw stays the tangent hat's. Both draw the same law exactly and independently, so a chain mixes as it did; the measure is time a draw.
@@ -363,8 +406,8 @@ Read in slice 1, built in slice 2: the brief's lever for a working response that
 
 ## Status and caveats
 
-- *Built:* slices 0 to 6 of [the brief](../../issues/regression/bass/gbass-noise-brief.md), each with its report there.
-- *Open, by slice:* the z parameterization and interweaving (7).
+- *Built:* slices 0 to 7 of [the brief](../../issues/regression/bass/gbass-noise-brief.md), each with its report there; what stays open is in the reports' follow-ups.
+- *Interweaving is opt-in and buys no σ² mixing on the fits read:* the z = σ·v step moves σ little; z′ = σ²·v under a pure scale mixture is the follow-up.
 - *BARS's noise runs untempered,* as its resampler does, and holds the Normal-Wald's γ and the mixing law fixed: its skew is the one global it draws beside σ².
 - *The flat histogram takes no noise:* its π_w and WHAM read the marginal over a and σ², whose weights couple every latent; two routes are on [slice 5's section](#the-engines-reach-ladders-smc-and-a-direct-functional-response-e1s-slice-5), neither built. Ladders and SMC carry every noise, on the likelihood path in the integrated form.
 - *A skewed heavy-tailed noise mixes slowly on hot rungs:* the skewed horseshoe fails Geweke's test at b = ½, a drift pinning β and v along a ridge the one-at-a-time scan crawls; at b = ¾ and without the drift it passes. A ladder's hot rungs under it move slowly in (β, v).
@@ -388,8 +431,9 @@ Read in slice 1, built in slice 2: the brief's lever for a working response that
 | v's slice step | `src/maths/samplers/blocks/SliceSampler.cs` (`IScalarLogDensity`) |
 | Ladders, SMC and the prior's draw under a noise | `BassNoise.cs` (`BassCoefficientsBlock.Power`, `VarianceMeanMixture.PriorLatents`), `BassPriorSampler.cs` (`DrawPrior`, `LastDesign`, `Holds`), `BassSmc.cs` (`BassParticles.Draw`), `BassLadder.cs` (`HandOver`), `BassConfig.cs` (the noise's rules) |
 | BARS under the noise | `src/maths/regression/spline/bars/BarsNoise.cs`, `BarsEnsemble.cs` (the noise block, `Probe`, `ChainOn`), `WeightedNormalModel.cs` (`ReadingFrom`, `Given`, `SampleNoiseFit`), `WeightResampling.cs` (`StudentTWeights`); `src/maths/regression/VarianceMeanConditionals.cs`, shared with BASS's blocks |
+| Interweaving | `BassNoise.cs` (`BassNoise.Interweave`, `BassInterweavingBlock`), `MixingLaw.cs` (`IMixingLaw.LogPrior`), `BassConfig.cs` (its refusal) |
 | The pointwise opt-in | `BassPointwise.cs` (`LogDensity`'s `quadrature`, `Latents`), `BassFit.cs` (`PointwiseLogDensity`) |
 | The Normal-Wald's calibrations | `src/maths/regression/NormalWaldCalibration.cs` (`NormalWaldCalibration`, `NormalInverseGaussian`) |
 | The predictive's quantile under a law | `src/maths/regression/spline/bass/posterior/PredictiveMixture.cs` |
 | The laws drawn from and read | `src/maths/distributions/GeneralizedInverseGaussian.cs`, `ModifiedHalfNormal.cs`, `AsymmetricLaplace.cs`, `GeneralizedHyperbolic.cs`, `BesselK.cs`, `RatioOfUniforms.cs`, `NormalVarianceMeanMixture.cs`, `GeneralizedBetaPrime.cs`, `NormalGeneralizedBetaPrime.cs`, `Beta.cs` (`InverseLogit`) |
-| Tests | `tests/regression/BassStudentTTests.cs`, `BassStudentTQualificationTests.cs`, `BassQuantileTests.cs`, `BassQuantileQualificationTests.cs`, `BassNormalWaldTests.cs`, `BassNormalWaldQualificationTests.cs`, `GigMixingTests.cs`, `NormalWaldCalibrationTests.cs`, `BassGeneralizedBetaPrimeTests.cs`, `BassGeneralizedBetaPrimeQualificationTests.cs`, `GbpMixingTests.cs`, `BassNoiseReachTests.cs`, `BassNoiseReachQualificationTests.cs`, `BarsNoiseTests.cs`, `BarsNoiseQualificationTests.cs`, `BarsResumeTests.cs`; `tests/distributions/BesselKTests.cs`, `GigNormalizerTests.cs`, `LogConcaveEnvelopeTests.cs`, `GeneralizedBetaPrimeTests.cs`; `tests/oracle/Gbass*.cs` |
+| Tests | `tests/regression/BassStudentTTests.cs`, `BassStudentTQualificationTests.cs`, `BassQuantileTests.cs`, `BassQuantileQualificationTests.cs`, `BassNormalWaldTests.cs`, `BassNormalWaldQualificationTests.cs`, `GigMixingTests.cs`, `NormalWaldCalibrationTests.cs`, `BassGeneralizedBetaPrimeTests.cs`, `BassGeneralizedBetaPrimeQualificationTests.cs`, `GbpMixingTests.cs`, `BassNoiseReachTests.cs`, `BassNoiseReachQualificationTests.cs`, `BarsNoiseTests.cs`, `BarsNoiseQualificationTests.cs`, `BarsResumeTests.cs`, `BassInterweavingQualificationTests.cs`; `tests/distributions/BesselKTests.cs`, `GigNormalizerTests.cs`, `LogConcaveEnvelopeTests.cs`, `GeneralizedBetaPrimeTests.cs`; `tests/oracle/Gbass*.cs` |

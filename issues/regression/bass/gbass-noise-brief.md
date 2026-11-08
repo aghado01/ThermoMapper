@@ -157,6 +157,41 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 
 Newest first.
 
+### Slice 7: interweaving, the z parameterization beside v (chip, 2026-11-08)
+
+**Landed** in `211d768` (the code and its tests) and the commit that carries this report (`docs/Maths`, the checklist). [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#interweaving-the-z-parameterization-beside-v-e1s-slice-7) holds σ's conditional given z, its draw against the exact GIG route, and what it buys.
+
+| Piece | Where |
+|---|---|
+| The switch | `BassNoise.Interweave`, serialized only when on; `BassConfig.Validate` refuses it with a held σ² |
+| The step | `BassInterweavingBlock`, last in the scale slot: z = σ·v held, σ by one slice step on ln σ, then v = z/σ |
+| v's prior density per law | `IMixingLaw.LogPrior` on t, the exponential, the GIG (its cached normalizer) and the GBP |
+
+**Slice 7's gates.**
+- *Gaussian untouched:* the whole regression assembly once at the slice's end (`scripts/test-select.ps1 -Scope Slice` on a snapshot of `211d768`), 2,241 of 2,241 in 13 minutes, the pinned tier among them. Before the commit, the selected classes and the pinned tier (`scripts/test-select.ps1 -Scope Commit`, from a snapshot of HEAD and this slice's files): 1,689 of 1,689.
+- *Same law as v:* the step alone, σ moved by it only (β held at 0.5, σ²'s block out), Geweke at b = 1: the skewed horseshoe 1.75, the generalized hyperbolic 2.31. The interwoven sweep: t(5) at b = 1 and 0.4, 1.42 and 1.90; the generalized hyperbolic with a drawn skew, 1.40; the quantile noise, 1.42; the skewed horseshoe at seed 20261108, 3.03, 2.42 and 3.07 at b = 1, ¾ and ½. A rung at b = 0 with the step leaves every block on its prior, √(n/2)·D at most 1.63.
+- *The main session's added gate, the skewed horseshoe at b = ½* (seed 20261107, slice 5's failing reading): with the step it fails, 4.96 at 1× and 10.12 at four times the size; at seed 20261108 it passes at 3.07. It fails on that seed at b = 1 and ¾ too (4.10 and 5.11), and without the step on the same design, σ moved only by its own block, at 4.27; the step alone passes there. **So interweaving does not cure the reading, and slice 5's joint move along β·v stays a follow-up with these readings as its measurement.**
+- *R̂ and effective sizes per unit of work* (4 noises × 2 seeds, 4 chains × 8,000 draws): bulk ESS per second interwoven over plain, ln σ² 0.04 to 1.15, β 0.40 to 0.93, mean ln v 0.14 to 5.84 (three- to sixfold under the skewed generalized hyperbolic and horseshoe), M 0.11 to 3.75; under the quantile noise σ²'s ESS falls about twentyfold. R̂ moves with the ESS: the skewed horseshoe's σ² from 1.51 to 1.20 and 1.70 to 1.25, the quantile noise's from 1.01 to 1.04.
+- *Refusals and acceptance:* the step moved every time it ran (8,000 of 8,000 per chain); no Geweke case refused a step for F.
+- *The cost:* a fit with the step takes 1.3 to 2.5 times the work of one without.
+- *The run:* a tempered fit with the step and a reference rung resumes bit for bit.
+
+**Defects found and fixed in this slice.**
+- *The GIG's prior density recomputed its Bessel normalizer on every read* (`GigMixing.LogPrior` through `LogPdf`), N reads per evaluation: an interwoven generalized-hyperbolic fit took 4.7 times the plain fit's work. It now reads the law's cached normalizer, 1.8 times. Found by the ESS row before the commit.
+- *The Geweke harness read t's interwoven sweep with the sweep's own σ²,* which the step moves without keeping under a pure scale mixture: |z| 11 to 14 on the standardized residual. It now draws the coefficients and σ² afresh given the structure and the new latents. Harness only.
+
+**Decisions taken beyond the brief.**
+- *σ given z by one slice step on ln σ for every law and prior.* The derivation's exact GIG holds for a prior on σ in the GIG family with the coefficients' variance scaling as σ or not at all; BASS's priors are equivariant (the g-prior's variance scales with σ², σ²'s inverse gamma sits on w), so the slice step is the route, as the derivation itself names for the equivariant prior.
+- *Opt-in, off by default,* so every fit's draws stand; given what it buys, it stays so.
+- *Under a pure scale mixture the step moves v only:* σ² is the sweep's draw with the coefficients and is integrated again by the next structure step.
+- *A held σ² refuses the switch,* which has no scale to move.
+
+**Left unbuilt, and why.** The exact GIG route (no BASS prior takes it). E1's brief is built through slice 7: what stays open is the flat histogram under a noise (the user's decision, slice 5's report) and the follow-ups below and in slices 4 to 6.
+
+**Follow-ups, with the decision each would change.**
+- *z′ = σ²·v under a pure scale mixture.* Decision: whether interweaving earns a default for t and the other scale mixtures. Under z′ the likelihood is free of σ, so σ given z′ reads only its priors and moves along the ridge σ²·v holds, where z = σ·v reads every observation's variance and moves σ little. Measured by this slice's ESS-per-work row: if σ²'s ESS per second rises above the plain sweep's on t and the quantile noise's symmetric case, the switch defaults on for pure scale mixtures; if not, interweaving stays opt-in.
+- *Slice 5's joint move along β·v,* with this slice's readings: the skewed horseshoe fails on seed 20261107 with either block moving σ.
+
 ### Slice 6: BARS under the noise, skewed and quantile BARS (chip, 2026-11-07)
 
 **Landed** in `957629b` (the code and its tests) and the commit that carries this report (`docs/Maths`, the checklist). The user's go-ahead for slices 6 and 7 came through the main session on 2026-11-07 ("Yes, start both"). [The page's section](../../../docs/Maths/VarianceMeanMixtures.md#bars-under-the-noise-e1s-slice-6-oq20) holds σ²'s route under a skew against its alternatives, the priors read once, and the readers.

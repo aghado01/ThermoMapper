@@ -11,6 +11,17 @@ Splits in the module's language (symbols, identifiers, terms), logged as session
 
 ## Entries
 
+### u and z of the z parameterization, beside u = ln v and z in a moving response, and BARS's w beside GBASS's (2026-11-08)
+
+- **Kind:** one name for several concepts.
+- **Readings:**
+  - u = σ = √w and z = σ·v, the noise's scale and its latent under the z parameterization (the user's derivation, E1, 2026-10-26; `BassInterweavingBlock`, `src/maths/regression/spline/bass/BassNoise.cs:795`); slice 7's section in `docs/Maths/VarianceMeanMixtures.md` writes σ and z.
+  - u = ln v, the coordinate of the GBP's slice step (`GbpMixing.StepConditional`, `src/maths/regression/MixingLaw.cs:331`) and of the mixture's integral (`NormalVarianceMeanMixture`).
+  - z, a term's raw column and a latent that hands a working response (the 2026-11-02 entry).
+  - w, BARS's per-point weights, the precisions 1/(c·vᵢ) under a noise (`BarsDraw.Weights`, `src/maths/regression/spline/bars/BarsEnsemble.cs:62`), beside GBASS's w, the global variance multiplier the core writes σ² (the 2026-11-06 entry).
+- **Found:** 2026-11-07 and 08, E1's slices 6 and 7.
+- **Note:** Yu and Meng (2011) name the two augmentations ancillary and sufficient; the page does too, rather than by their letters.
+
 ### α, the miscoverage level, beside Vovk's conformity scores α, and the in-sample predictive CDF F̃ (2026-11-07)
 
 - **Kind:** one name for several concepts, and a symbol taken to keep them apart.
