@@ -349,7 +349,7 @@ The library (`codex-scientiae` gauntlet/bayesian and PDFs/Bayesian) holds none o
   - The count saved sweeps at b ≈ 0, where structure is found cheaply, and spent them just before the moved fraction collapsed, which left the hardest stages at the budget.
   - Its lower work ratios there (0.72, 0.50) come from the trapped runs' lower cost against an equal bias, which is not a comparison at equal cost.
 
-So `AdaptiveMutation` stays an option, and the fixed count stays the default.
+So `AdaptiveMutation` stays an option, and the fixed count stays the default (the user's call, 2026-11-08, "Keep fixed": a work ratio compares at equal cost only where the error is variance, so a run that is cheaply wrong does not win by it).
 
 ### Flat-histogram sampling (N17 Phase 1, 2026-10-29)
 

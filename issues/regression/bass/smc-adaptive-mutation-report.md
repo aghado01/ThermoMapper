@@ -2,7 +2,8 @@
 
 **Status (2026-11-08).** The option and the readout are built and gated, the measurement has run, and the rule is recorded
 in `Samplers.md`, and BASS's fit takes the option as `SmcSpec.AdaptiveMutation`. The adaptive count **stays an option**;
-the fixed count stays the default (reading below). `BayesianRegression.md` names the option (`03b6d13`).
+the fixed count stays the default (reading below), confirmed by the user on 2026-11-08 ("Keep fixed") against the
+rule's letter. `BayesianRegression.md` names the option (`03b6d13`).
 
 **To rerun the measurement:** build `Maths.Regression.Tests` in Release, then run `dotnet test` filtered to
 `BassSmcMutationQualificationTests`, at below-normal priority. Set `BASS_QUALIFICATION=1` and `BASS_COST_CLOCK=cycles`; the
@@ -151,6 +152,8 @@ N 500 throughout; 32 replicates on GBASS, 16 on KHAOS. The KHAOS chains read M 1
   - They are no less wrong: 0 of 48 against 6 of 64.
 - I did not apply the rule's letter, and say so here: this departs from the recorded rule. Should the user read it the
   other way, the change is one default in `SmcSpec`, and with it the re-baselining of the pinned SMC hash.
+- **Confirmed by the user, 2026-11-08: "Keep fixed."** The fixed count stays `SmcSpec`'s default. A later rule of this
+  kind compares work ratios only among runs that reach the posterior, or counts the runs that do beside them.
 
 ## Open, each with the decision it would change
 
