@@ -194,3 +194,14 @@ sc5,N 2000 fresh rerun 2026-11-05T01:53,0,inf,3.800701,,,superset edges read; th
 sc5,N 2000 stream rerun 2026-11-05T01:54,0,inf,3.800701,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
 scorer,exemplars 2026-11-05T02:05,19,0.000001,0.000001,0.000000,,fresh design against the retained draw and against the stored π
 sc5,N 500 rerun 2026-11-05T02:05,0,inf,3.108303,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 125 fresh rerun 2026-11-08T03:09,0,inf,2.418141,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 125 stream rerun 2026-11-08T03:09,0,inf,2.418141,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 250 fresh rerun 2026-11-08T03:09,0,inf,2.762726,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 250 stream rerun 2026-11-08T03:09,0,inf,2.762726,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 500 fresh rerun 2026-11-08T03:09,0,inf,3.108303,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 1000 fresh rerun 2026-11-08T03:09,0,inf,3.454377,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 1000 stream rerun 2026-11-08T03:10,0,inf,3.454377,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 2000 fresh rerun 2026-11-08T03:10,0,inf,3.800701,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+sc5,N 2000 stream rerun 2026-11-08T03:10,0,inf,3.800701,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops
+scorer,exemplars 2026-11-08T03:10,19,0.000001,0.000001,0.000000,,fresh design against the retained draw and against the stored π
+sc5,N 500 rerun 2026-11-08T03:10,0,inf,3.108303,,,superset edges read; the least slack L(M+1) − (L(M) − c); no violation, or the run stops

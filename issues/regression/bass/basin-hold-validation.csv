@@ -29,3 +29,21 @@ rate,chain1 arm S 2026-11-05T01:02,1000000,42395.653570,0.027270,23.587324,,,swe
 rate,A arm S 2026-11-05T01:02,1000000,41451.116371,0.028015,24.124803,,,sweeps a second under four concurrent chains at below-normal priority, with the hold tally on; the acceptance
 plan,cost 2026-11-05T01:02,72,45.613510,7.951012,3.452366,23.853036,10.357097,core-hours: arm S to 2.5e7; arm H to 2.5e7; arm S on to 1e8; arm H on to 1e8. The budget is 24
 starts,fresh design 2026-11-05T07:14,9,0.000000,,,,,each start and a1's exemplar at the held τ against the stored π
+rayleigh,part 1 2026-11-08T00:17,668,inf,inf,inf,inf,,least margins, in nats: R_eff over R_short; R_route over R_eff; R_lump over R_short. Any negative stops the run
+ledger,part 1 2026-11-08T00:17,,0.367461,,,,,core-hours this test host took
+ledger,part 2 2026-11-08T00:17,,0.367539,,,,,core-hours this test host took
+credit reduces,N = 500 2026-11-08T00:17,48,0.000001,0.000001,0.000001,0.000000,0.046287,against the stored readings: window 0 and the route; ±25 and the class reading; ±25 credited live and from the stored rows; and that against the path profile's column, printed to one decimal
+share, arm H,seed 5,16,0.648576,0.815266,0.815460,0.000298,3000000.000000,agrees; exact π(basin), the chains' mean and its se, sweeps a chain; 99%
+share, arm H,seed 6,16,0.059907,0.831902,0.831881,0.000342,3000000.000000,agrees; exact π(basin), the chains' mean and its se, sweeps a chain; 99%
+share, arm H,seed 7,16,0.857668,0.371808,0.371404,0.000471,3000000.000000,agrees; exact π(basin), the chains' mean and its se, sweeps a chain; 99%
+share, arm H,seed 8,16,0.540166,0.450909,0.450700,0.000386,3000000.000000,agrees; exact π(basin), the chains' mean and its se, sweeps a chain; 99%
+share, arm S,seed 5,16,0.118488,0.854249,0.854198,0.000432,3000000.000000,agrees; τ integrated over 1201 points of ln τ, the chains' mean and its se, sweeps a chain; 99%
+class rate,M 11 2026-11-08T00:21,999994,77629.166198,-964.270855,833070.000000,12.881679,-976.323933,members a second on four threads; ln of the sum; those admitted; seconds; the route's exact flow
+starts,fresh design 2026-11-08T00:21,9,0.000000,,,,,each start and a1's exemplar at the held τ against the stored π
+hold tally hold at (200, 0.25),seed 5 2033 to 273,1000,0.879027,2123.597000,2025.617000,80.348662,77.255054,agrees; kernel walk then production chain; cv 1.196 and 1.206
+hold tally hold at (200, 0.25),seed 6 2033 to 273,1000,0.570776,845.809000,818.272000,33.571569,34.648391,agrees; kernel walk then production chain; cv 1.255 and 1.339
+rate,A arm H 2026-11-08T00:22,1000000,58524.886213,0.031164,17.086748,,,sweeps a second under four concurrent chains at below-normal priority, with the hold tally on; the acceptance
+rate,chain1 arm H 2026-11-08T00:22,1000000,57409.665117,0.032332,17.418670,,,sweeps a second under four concurrent chains at below-normal priority, with the hold tally on; the acceptance
+rate,chain1 arm S 2026-11-08T00:22,1000000,49119.333574,0.027479,20.358582,,,sweeps a second under four concurrent chains at below-normal priority, with the hold tally on; the acceptance
+rate,A arm S 2026-11-08T00:22,1000000,47046.542721,0.026955,21.255547,,,sweeps a second under four concurrent chains at below-normal priority, with the hold tally on; the acceptance
+plan,cost 2026-11-08T00:22,72,39.230606,6.932466,2.875185,20.797398,8.625556,core-hours: arm S to 2.5e7; arm H to 2.5e7; arm S on to 1e8; arm H on to 1e8. The budget is 24
