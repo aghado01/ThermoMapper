@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.ExceptionServices;
+using System.Threading.Tasks;
 using Maths.Rng;
 using Maths.Samplers.Blocks;
 using Maths.Samplers.Ensemble;
@@ -68,6 +70,9 @@ public static class RungFunctional
 /// (<see cref="TemperingLadder.Place"/>) or for a readout's resolution: kept replicas keep their states and streams, and
 /// new ones start from forks of their sources' states on streams drawn from one growth stream, the last in the
 /// <see cref="SeedTree"/>, so a ladder that never resizes keeps every stream.</para>
+/// <para>A scan's rungs can step at once (<see cref="MaxDegreeOfParallelism"/>): each rung's step reads its own replica,
+/// streams and blocks and nothing another rung writes, and the swaps wait for every rung, so the draws are the same bit for
+/// bit at every setting.</para>
 /// As an <see cref="IChain{TState}"/> the ladder presents as a single chain whose draw is the cold state and whose
 /// acceptance is the cold replica's, so the ensemble shell can drive a tempered replica like any other.
 /// </summary>
@@ -92,6 +97,9 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     private IReadOnlyList<IBlock<ReversibleJumpChain<TState>>>[]? _blocks;   // per replica, when given
     private Xoshiro256PlusPlus[]? _blockRngs;
     private long[][]? _blockAttempts, _blockAccepts;
+    private ParallelOptions? _rungWorkers;         // null: the rungs step in order on the caller's thread
+    private Exception?[] _rungFailures = [];       // per rung, the scan's exception when the rungs step at once
+    private Action<int>? _stepRungCaught;
 
     /// <summary>Adjacent-pair swap attempts so far.</summary>
     public long SwapAttempts { get; private set; }
@@ -299,6 +307,26 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// <summary>Scans so far: one <see cref="Step"/> each.</summary>
     public long Scans { get; private set; }
 
+    /// <summary>
+    /// How many rungs step at once within a scan; 1, the default, steps them in order on the caller's thread. A rung's step
+    /// (its moves, its blocks, or the reference rung's exact draw) reads its own replica, streams and blocks and the shared
+    /// target, which its evaluations only read, and the swaps run once every rung has stepped, so the draws, the swaps and
+    /// every statistic are the same bit for bit at every setting. Its caller sets it from its config (BASS from its run's
+    /// rung workers, within its bound), never from the machine's load. It pays where a rung's step is long against the scan's
+    /// fan-out and wait, and cores are free. It is not restart state: a restored ladder steps in
+    /// order until it is set, and a resize keeps it. A scan whose rungs throw rethrows the coldest one's exception, as the
+    /// in-order loop would, though the rungs past it have stepped; the ladder is then not to be stepped on either way.
+    /// </summary>
+    public int MaxDegreeOfParallelism
+    {
+        get => _rungWorkers?.MaxDegreeOfParallelism ?? 1;
+        set
+        {
+            if (value < 1) throw new ArgumentOutOfRangeException(nameof(value), "At least one rung steps at a time.");
+            _rungWorkers = value == 1 ? null : new ParallelOptions { MaxDegreeOfParallelism = value };
+        }
+    }
+
     /// <summary>Each rung's trace of the <see cref="RungFunctional"/>s, cold first, one draw per scan since
     /// <see cref="TraceRungs"/>; null until then.</summary>
     public IReadOnlyList<ChainTrace>? RungTraces => _rungTraces;
@@ -388,26 +416,14 @@ public sealed class ParallelTempering<TState> : IChain<TState>
     /// Advance every replica one step (local exploration) and run its blocks, then attempt the scan's swaps. A swap of
     /// x_i and x_j is accepted with <c>log α = d_i(x_j) + d_j(x_i) − d_i(x_i) − d_j(x_j)</c>, d_i replica i's log
     /// density, which on the powered path reduces to <c>(b_i − b_j)(L_j − L_i)</c>. Every pair's rejection probability
-    /// 1 − α is recorded every scan, attempted or not. Returns the cold state.
+    /// 1 − α is recorded every scan, attempted or not. The rungs step <see cref="MaxDegreeOfParallelism"/> at a time.
+    /// Returns the cold state.
     /// </summary>
     public TState Step()
     {
-        int last = _chains.Length - 1;
-        for (int i = 0; i < last; i++)
-        {
-            _chains[i].Step();
-            RunBlocks(i);
-        }
-        if (_reference is null)
-        {
-            _chains[last].Step();
-            RunBlocks(last);
-        }
-        else
-        {
-            (TState x, ITargetEvaluation e) = _reference.Draw(_referenceRng!);
-            _chains[last].SetState(x, e);
-        }
+        if (_rungWorkers is null)
+            for (int i = 0; i < _chains.Length; i++) StepRung(i);
+        else StepRungsAtOnce(_rungWorkers);
         Scans++;
         _pairScans++;
         _roundScans++;
@@ -605,6 +621,43 @@ public sealed class ParallelTempering<TState> : IChain<TState>
 
     // A new replica's stream seed, the growth stream's next draw (its high 32 bits).
     private int NextGrowthSeed() => unchecked((int)(_growthRng.NextUInt64() >> 32));
+
+    // Rung i's step: its replica's moves, then its blocks; at a reference rung, the exact draw in their place.
+    private void StepRung(int i)
+    {
+        if (_reference is not null && i == _chains.Length - 1)
+        {
+            (TState x, ITargetEvaluation e) = _reference.Draw(_referenceRng!);
+            _chains[i].SetState(x, e);
+            return;
+        }
+        _chains[i].Step();
+        RunBlocks(i);
+    }
+
+    // Every rung's step, `workers` at a time. Each rung's exception is held by its rung, so the coldest one is rethrown as
+    // the in-order loop would throw it, not the fan-out's aggregate.
+    private void StepRungsAtOnce(ParallelOptions workers)
+    {
+        if (_rungFailures.Length != _chains.Length) _rungFailures = new Exception?[_chains.Length];
+        Parallel.For(0, _chains.Length, workers, _stepRungCaught ??= i =>
+        {
+            try
+            {
+                StepRung(i);
+            }
+            catch (Exception e)
+            {
+                _rungFailures[i] = e;
+            }
+        });
+        for (int i = 0; i < _rungFailures.Length; i++)
+        {
+            if (_rungFailures[i] is not { } failure) continue;
+            Array.Clear(_rungFailures);
+            ExceptionDispatchInfo.Throw(failure);
+        }
+    }
 
     // Replica i's blocks whose cadence falls due on the scan being taken, in order, on its block stream.
     private void RunBlocks(int i)
