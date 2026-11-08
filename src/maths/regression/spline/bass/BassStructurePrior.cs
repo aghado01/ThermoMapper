@@ -94,11 +94,15 @@ public sealed class BassStructurePrior
         _parts[(int)BassPart.Legendre] = Part.Legendre(space);
     }
 
-    /// <summary>The prior <paramref name="config"/> sets, with the caps <paramref name="resolved"/> holds.</summary>
+    /// <summary>The prior <paramref name="config"/> sets, with the caps <paramref name="resolved"/> holds: over a Legendre term
+    /// space when the config declares a polynomial-chaos basis.</summary>
     public static BassStructurePrior From(BassConfig config, BassResolved resolved, BassInputs inputs)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(resolved);
+        ArgumentNullException.ThrowIfNull(inputs);
+        if (config.Structure.Legendre is { } legendre)
+            return new(new LegendreTermSpace(inputs.Cases.ContinuousCount, legendre.MaxDegree, resolved.MaxInteraction), config.Count);
         return new(inputs, resolved.MaxInteraction, resolved.MaxCategoricalInteraction, resolved.MaxFunctionalInteraction,
                    config.Structure.CategoricalSubsets, config.Count);
     }

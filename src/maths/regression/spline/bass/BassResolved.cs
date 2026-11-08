@@ -218,6 +218,19 @@ public sealed record BassResolved
         int maxInteraction = Cap("MaxInteraction", s.MaxInteraction, continuous, "continuous predictors", log);
         int maxCategorical = Cap("MaxCategoricalInteraction", s.MaxCategoricalInteraction, categorical, "categorical predictors", log);
         int maxFunctional = Cap("MaxFunctionalInteraction", s.MaxFunctionalInteraction, outputs, "output variables", log);
+        if (s.Legendre is { } legendre)
+        {
+            // A polynomial-chaos fit (E19): Legendre terms over the continuous predictors alone, a scalar response, q_max the
+            // continuous cap; mixed term types are not built.
+            if (categorical > 0) throw new ArgumentException($"A Legendre basis reads continuous predictors alone, and the data hold {categorical} categorical ones.", nameof(data));
+            if (functional) throw new ArgumentException("A Legendre basis serves a scalar response; a direct functional response's output part is a hinge product.", nameof(data));
+            if (maxInteraction < 1) throw new ArgumentException("A Legendre basis needs a continuous predictor.", nameof(data));
+            if (legendre.MaxDegree < maxInteraction)
+                throw new ArgumentException($"Structure.Legendre.MaxDegree is {legendre.MaxDegree}, below q_max = {maxInteraction}, so the top orders would hold no term.", "config");
+            maxCategorical = maxFunctional = 0;
+            var space = new LegendreTermSpace(continuous, legendre.MaxDegree, maxInteraction);
+            log.Add(new("Legendre", $"q_max {maxInteraction}, d_max {legendre.MaxDegree}", $"KHAOS's term space over {continuous} predictors, |𝒜| = {Text(space.Size)}"));
+        }
 
         int bound = n - 1;   // the intercept counts toward the dimension bound
         int maxBasis;
@@ -243,9 +256,11 @@ public sealed record BassResolved
         IReadOnlyList<BassMonitoredPoint> points = ResolvePoints(config.Sampling.MonitoredPoints, cases, functional ? locations : null, log);
 
         BassCoefficientPrior coefficients = config.Coefficients;
+        if (coefficients.Form is RawRidgeForm && functional)
+            throw new ArgumentException("KHAOS's raw ridge reads a scalar response's columns as evaluated; a direct functional response's are centred by construction.", "config");
         // One observation's information under the prior's own columns: N, or Σwᵢ for a prior on rows the weights count.
         ResolvedTauPrior scale = coefficients.Scale.For(coefficients.UnitObservations(fitted.PriorStandsApart ? n : weights.Count));
-        string unit = coefficients.Form is RidgeForm ? "1, the normalized ridge's" : "1/N, the g-form's";
+        string unit = coefficients.Form switch { RidgeForm => "1, the normalized ridge's", RawRidgeForm => "1, the raw ridge's", _ => "1/N, the g-form's" };
         switch (coefficients.Scale.Kind)
         {
             case TauPriorKind.UnitInformationGamma:
@@ -360,11 +375,11 @@ public sealed record BassResolved
     }
 
     /// <summary>
-    /// Under a held τ, the b at which it halves a unit-information column's shrinkage: τ under the g-form, τ/N under the
-    /// ridge, whose columns carry N observations' information each, each over the coefficient prior's constant; null when τ is sampled.
+    /// Under a held τ, the b at which it halves a unit-information column's shrinkage: τ under the g-form, τ/N under either
+    /// ridge, whose columns carry about N observations' information each, each over the coefficient prior's constant; null when τ is sampled.
     /// </summary>
     internal static double? HalvingTau(CoefficientForm form, ResolvedTauPrior scale, double observations, double constant = 1.0)
-        => scale.HeldTau is double tau ? (form is RidgeForm ? tau / observations : tau) / constant : null;
+        => scale.HeldTau is double tau ? (form is RidgeForm or RawRidgeForm ? tau / observations : tau) / constant : null;
 
     private static bool Pole(TemperingSpec tempering, GPriorCentre intercept)
         => tempering.Path == TemperingPath.Likelihood && tempering.Form == TemperedForm.Integrated && intercept == GPriorCentre.Flat;

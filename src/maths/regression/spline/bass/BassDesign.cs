@@ -118,6 +118,10 @@ public readonly record struct DesignProposal(
 /// holds each column on the prior's side and carries a <see cref="PriorPencil"/> for each admitted proposal, in the coordinates
 /// (α, β_c) with the columns centred under W. The prior's own Gram must clear the angle gate too, since it is a precision; so
 /// F is unchanged by the weights when they are unit.</para>
+/// <para><b>Under KHAOS's raw ridge</b> (<see cref="RawRidgeForm"/>) the prior reads the coefficients on the columns as evaluated,
+/// uncentred: D = I on (β₀, β), with β₀ = α − z̄_wᵀβ in the design's coordinates. So it stands apart from the Gram at any weights,
+/// and the design carries a <see cref="PriorPencil"/> for each admitted proposal with D_α = 1, δ = −z̄_w and D_β = I. It reads no
+/// prior-side columns or Gram, and adds nothing to admission, so F is the g-form's.</para>
 /// <para><b>When the working response moves</b> (<see cref="ProposeFollow"/>) the design refits its current structure on the new one,
 /// its own record of the response replaced whole. F does not read the values, so an offset alone keeps the columns, the factor and
 /// the gate. Weights whiten the columns again and factor their Gram strictly, and the gate reads them, so a move can put the
@@ -143,6 +147,7 @@ public sealed class BassDesign
     private readonly BassBasis _basis;
     private readonly BassAdmission _rules;
     private readonly bool _functional, _ridge;
+    private readonly bool _rawRidge;                // KHAOS's raw ridge: the prior reads the columns as evaluated, D = I
     private readonly bool _khatriRao;               // a direct response held as case and output factors, its rows unweighted
     private readonly int _cases, _locations, _rows;
     private BassDesignResponse _response;           // what the design reads of the working response it is on
@@ -249,9 +254,10 @@ public sealed class BassDesign
     /// <summary>The intercept-only design over <paramref name="basis"/>'s inputs for <paramref name="working"/>, the
     /// observation model's working response for <paramref name="data"/>'s (the response itself when null);
     /// <paramref name="ridge"/> keeps the normalized ridge's spectrum and proposal terms beside the factor; and
-    /// <paramref name="intercept"/> places the intercept for a prior apart from the Gram, which alone reads it.</summary>
+    /// <paramref name="intercept"/> places the intercept for a prior apart from the Gram, which alone reads it; and
+    /// <paramref name="rawRidge"/> takes KHAOS's raw ridge, a prior apart from the Gram at any weights.</summary>
     public BassDesign(BassBasis basis, BassData data, BassAdmission rules, bool ridge = false, WorkingResponse? working = null,
-                      GPriorCentre intercept = GPriorCentre.Mean)
+                      GPriorCentre intercept = GPriorCentre.Mean, bool rawRidge = false)
     {
         ArgumentNullException.ThrowIfNull(basis);
         ArgumentNullException.ThrowIfNull(data);
@@ -259,6 +265,8 @@ public sealed class BassDesign
         _basis = basis;
         _rules = rules;
         _ridge = ridge;
+        _rawRidge = rawRidge;
+        if (ridge && rawRidge) throw new ArgumentException("A design takes one ridge: the normalized or KHAOS's raw one.", nameof(rawRidge));
         _functional = basis.Inputs.Outputs is not null;
         if (_functional != data.Response is FunctionalResponse)
             throw new ArgumentException("The basis and the data disagree on the response's kind.", nameof(data));
@@ -290,6 +298,13 @@ public sealed class BassDesign
                     for (int i = 0; i < _rows; i++) _priorRoots[i] = Math.Sqrt(frozen[i]);
                 }
             }
+        }
+        if (rawRidge)
+        {
+            if (_functional) throw new ArgumentException("KHAOS's raw ridge reads a scalar response's columns as evaluated.", nameof(rawRidge));
+            if (intercept is not (GPriorCentre.Mean or GPriorCentre.Zero or GPriorCentre.Flat)) throw new ArgumentOutOfRangeException(nameof(intercept));
+            _priorColumns ??= [];
+            _priorGram = new double[0, 0];
         }
         _response = Read(working);
         _residual = (double[])_response.Y.Clone();
@@ -846,8 +861,9 @@ public sealed class BassDesign
         if (!_functional)
         {
             if (response.Roots is not null) return Whitened(a, response);
-            ColumnOps.Subtract(a, PairwiseSum.Of(a) / _cases);
-            return (a, null, null);
+            double mean = PairwiseSum.Of(a) / _cases;
+            ColumnOps.Subtract(a, mean);
+            return (a, null, _rawRidge ? new BassPriorColumn([], -mean) : null);
         }
         var h = new double[_locations];
         _basis.OutputColumn(term, _basis.Inputs.Outputs!, h);
@@ -863,7 +879,8 @@ public sealed class BassDesign
     {
         double mean = PairwiseSum.Dot(response.Working.WeightArray!, z) / response.Working.Weighting.Mass;
         BassPriorColumn? prior = null;
-        if (_priorColumns is not null)
+        if (_rawRidge) prior = new BassPriorColumn([], -mean);   // the raw coefficients' centre is 0
+        else if (_priorColumns is not null)
         {
             double own = (_priorWeights is null ? PairwiseSum.Of(z) : PairwiseSum.Dot(_priorWeights, z)) / _priorMass;
             var centred = new double[_rows];
@@ -939,11 +956,12 @@ public sealed class BassDesign
     // `b`; null when its prior fails the gate. In the coordinates the design holds, (α, β) with the columns centred under W,
     // the likelihood is diag(Σw, G) and the prior D_α(1, δ)(1, δ)ᵀ + diag(0, D_β), since the prior reads α on the columns' own
     // centring, α_u = α + δᵀβ: D_α = N and D_β = G_u under the g-form, D_α = 1 and D_β = diag(G_u)/N under the ridge, with Σw₀ for
-    // N on a frozen W₀. A flat intercept has no prior to couple, so it stands apart: G against D_β.
+    // N on a frozen W₀; D_α = 1, D_β = I and δ = −z̄_w under KHAOS's raw ridge, whose coefficients sit on the uncentred columns. A flat
+    // intercept has no prior to couple, so it stands apart: G against D_β.
     private PriorPencil? PencilOf(double[,] g, double[,] u, double[] shifts, double[] b, BassDesignResponse response)
     {
         int m = g.GetLength(0);
-        if (!_ridge && m > 0)
+        if (!_ridge && !_rawRidge && m > 0)
         {
             BorderedCholesky gate = StrictFactor(u);
             if (gate.FailedAt >= 0 || gate.MinLeaveOneOutPivot() < _rules.AngleFloor) return null;
@@ -952,13 +970,13 @@ public sealed class BassDesign
         int offset = inside ? 1 : 0, p = m + offset;
         var likelihood = new double[p, p];
         var prior = new double[p, p];
-        double priorMass = _ridge ? 1.0 : _priorMass;
+        double priorMass = _ridge || _rawRidge ? 1.0 : _priorMass;
         for (int i = 0; i < m; i++)
         {
             for (int j = 0; j < m; j++)
             {
                 likelihood[i + offset, j + offset] = g[i, j];
-                prior[i + offset, j + offset] = !_ridge ? u[i, j] : i == j ? u[i, i] / _priorMass : 0.0;
+                prior[i + offset, j + offset] = _rawRidge ? (i == j ? 1.0 : 0.0) : !_ridge ? u[i, j] : i == j ? u[i, i] / _priorMass : 0.0;
                 if (inside) prior[i + offset, j + offset] += priorMass * shifts[i] * shifts[j];
             }
             if (inside) prior[0, i + offset] = prior[i + offset, 0] = priorMass * shifts[i];

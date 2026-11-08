@@ -12,8 +12,8 @@ namespace Maths.Regression.Spline.Bass;
 public sealed class BassModel
 {
     private BassModel(BassConfig config, BassData data, BassResolved resolved, BassInputTransform transform, BassInputs inputs,
-                      BassBasis basis, BassAdmission admission, BassStructurePrior prior, BassTermProposal proposal, BassTarget target,
-                      IBassObservationModel observation, WorkingResponse working)
+                      BassBasis basis, BassAdmission admission, BassStructurePrior prior, BassTermProposal? proposal, IBassProposalKernel kernel,
+                      BassTarget target, IBassObservationModel observation, WorkingResponse working)
     {
         Config = config;
         Observation = observation;
@@ -25,8 +25,8 @@ public sealed class BassModel
         Basis = basis;
         Admission = admission;
         Prior = prior;
-        Proposal = proposal;
-        Kernel = proposal;
+        _proposal = proposal;
+        Kernel = kernel;
         Target = target;
     }
 
@@ -56,9 +56,10 @@ public sealed class BassModel
         var basis = new BassBasis(inputs, config.Structure.Degree);
         BassAdmission admission = BassAdmission.From(config, resolved);
         BassStructurePrior prior = BassStructurePrior.From(config, resolved, inputs);
-        BassTermProposal proposal = BassTermProposal.From(config, prior);
+        BassTermProposal? proposal = config.Structure.Legendre is null ? BassTermProposal.From(config, prior) : null;
+        IBassProposalKernel kernel = proposal ?? (IBassProposalKernel)new LegendreTermProposal(prior, config.Structure.Legendre!);
         var target = new BassTarget(config, resolved, prior, form ?? config.Sampling.Tempering?.Form ?? config.Sampling.Smc?.Form ?? TemperedForm.Integrated, working);
-        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, target, observation, working);
+        return new(config, data, resolved, transform, inputs, basis, admission, prior, proposal, kernel, target, observation, working);
     }
 
     /// <summary>The config.</summary>
@@ -85,10 +86,13 @@ public sealed class BassModel
     /// <summary>The prior on structures (D01, D02).</summary>
     public BassStructurePrior Prior { get; }
 
-    /// <summary>D01's proposals.</summary>
-    public BassTermProposal Proposal { get; }
+    private readonly BassTermProposal? _proposal;
 
-    /// <summary>The proposal kernel the structure moves draw from (F-X4): D01's over hinges.</summary>
+    /// <summary>D01's proposals over the hinges; refused for a polynomial-chaos fit, which draws from KHAOS's (<see cref="Kernel"/>).</summary>
+    public BassTermProposal Proposal
+        => _proposal ?? throw new InvalidOperationException("A Legendre basis draws from KHAOS's proposal (Kernel), not D01's.");
+
+    /// <summary>The proposal kernel the structure moves draw from (F-X4): D01's over hinges, KHAOS's over a Legendre term space.</summary>
     public IBassProposalKernel Kernel { get; }
 
     /// <summary>The collapsed target (D03, D05).</summary>
@@ -113,5 +117,5 @@ public sealed class BassModel
 
     /// <summary>A new intercept-only design over the data, one per chain, on <paramref name="working"/>; null is the model's.</summary>
     public BassDesign NewDesign(WorkingResponse? working = null)
-        => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, working ?? Working, Config.Intercept);
+        => new(Basis, Data, Admission, Config.Coefficients.Form is RidgeForm, working ?? Working, Config.Intercept, Config.Coefficients.Form is RawRidgeForm);
 }

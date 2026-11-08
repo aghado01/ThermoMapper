@@ -111,15 +111,22 @@ public sealed record BassConfig
             throw Bad("Structure.OrderWeight", "must be positive and finite, or a death could have no reverse birth");
         if (!(s.VariableWeight > 0.0 && double.IsFinite(s.VariableWeight)))
             throw Bad("Structure.VariableWeight", "must be positive and finite, or a death could have no reverse birth");
+        if (s.Legendre is { } legendre)
+        {
+            if (legendre.Problem() is { } problem) throw Bad($"Structure.Legendre.{problem.Setting}", problem.Reason);
+            if (s.Degree != 1) throw Bad("Structure.Degree", "is the hinges' power, which a Legendre basis does not read; its degrees are capped by Structure.Legendre.MaxDegree");
+            if (s.Support.Kind == SupportKind.ColumnMass)
+                throw Bad("Structure.Support.Kind", "is the column mass, which reads hinges normalized to a maximum of one; a Legendre column sums to about zero, so a Legendre basis takes the count");
+        }
 
         BassCountPrior count = Count ?? throw Bad("Count", "is missing");
         if (!(count.Shape > 0.0 && double.IsFinite(count.Shape))) throw Bad("Count.Shape", "must be positive and finite");
         if (!(count.Rate > 0.0 && double.IsFinite(count.Rate))) throw Bad("Count.Rate", "must be positive and finite");
 
         BassCoefficientPrior coefficients = Coefficients ?? throw Bad("Coefficients", "is missing");
-        if (coefficients.Form is not (GForm or RidgeForm)) throw Bad("Coefficients.Form", coefficients.Form is null ? "is missing" : "is not a known form");
+        if (coefficients.Form is not (GForm or RidgeForm or RawRidgeForm)) throw Bad("Coefficients.Form", coefficients.Form is null ? "is missing" : "is not a known form");
         TauPrior scale = coefficients.Scale ?? throw Bad("Coefficients.Scale", "is missing");
-        if (coefficients.Form is RidgeForm && scale is { IsHeld: true, Tau: null })
+        if (coefficients.Form is RidgeForm or RawRidgeForm && scale is { IsHeld: true, Tau: null })
             throw Bad("Coefficients.Scale.Tau", "must be declared under the ridge, whose held scale is part of the model (D03)");
 
         if (Sigma2 is null) throw Bad("Sigma2", "is missing");
@@ -195,6 +202,11 @@ public sealed record BassConfig
                 throw Bad("Sampling.FactorMoves", "must weigh a prune or grow or a variable change; null turns the family off");
             if (run.LocalSteps is not null && !(family.Change > 0.0))
                 throw Bad("Sampling.FactorMoves.Change", "must be positive with local steps, which run inside the change");
+        }
+        if (s.Legendre is not null)
+        {
+            if (run.LocalSteps is not null) throw Bad("Sampling.LocalSteps", "steps D01's hinge knots, which a Legendre basis has none of; its changes are KHAOS's mutations");
+            if (run.FactorMoves is not null) throw Bad("Sampling.FactorMoves", "is D01's fixed-M family over hinge parts; a Legendre basis changes its terms by KHAOS's mutations");
         }
         if (run.Smc is { } smc)
         {
@@ -319,6 +331,15 @@ public sealed record BassStructureSpec
 
     /// <summary>w₂, the pseudo-count on variables in births; positive, for the same reason.</summary>
     public double VariableWeight { get; init; } = 5;
+
+    /// <summary>
+    /// A polynomial-chaos basis in place of the hinges (E19): Legendre terms over the continuous predictors, of order at most
+    /// <see cref="MaxInteraction"/> and degree at most its <see cref="LegendreBasis.MaxDegree"/>, with KHAOS's proposal. Null, the
+    /// default, is BASS's hinges; left out of the serialized form when null, so a hinge config's form and fingerprint stand as
+    /// they were.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public LegendreBasis? Legendre { get; init; }
 }
 
 /// <summary>What a term's support is measured by (D06).</summary>
@@ -388,14 +409,18 @@ public sealed record BassCoefficientPrior(CoefficientForm Form, TauPrior Scale)
     /// <summary>The normalized ridge with τ's prior <paramref name="scale"/>, a held one with its τ declared.</summary>
     public static BassCoefficientPrior Ridge(TauPrior scale) => new(new RidgeForm(), scale);
 
-    /// <summary>τ₀ = 1/n₀'s n₀ for <paramref name="observations"/> observations: N for the g-form, 1 for the ridge.</summary>
-    public double UnitObservations(double observations) => Form is RidgeForm ? 1.0 : observations;
+    /// <summary>KHAOS's raw ridge with τ's prior <paramref name="scale"/>, a held one with its τ declared: <c>khaos</c>'s τ² is 1/τ.</summary>
+    public static BassCoefficientPrior RawRidge(TauPrior scale) => new(new RawRidgeForm(), scale);
+
+    /// <summary>τ₀ = 1/n₀'s n₀ for <paramref name="observations"/> observations: N for the g-form, 1 for either ridge.</summary>
+    public double UnitObservations(double observations) => Form is RidgeForm or RawRidgeForm ? 1.0 : observations;
 }
 
 /// <summary>The coefficient prior's covariance form (D03, decided 2026-10-29).</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "Kind")]
 [JsonDerivedType(typeof(GForm), "G")]
 [JsonDerivedType(typeof(RidgeForm), "Ridge")]
+[JsonDerivedType(typeof(RawRidgeForm), "RawRidge")]
 public abstract record CoefficientForm
 {
     private protected CoefficientForm() { }
@@ -411,6 +436,16 @@ public sealed record GForm : CoefficientForm;
 /// coordinates it is the generalized ridge τD, D = diag(G_c)/N, so the marginal does not depend on the columns' scale.
 /// </summary>
 public sealed record RidgeForm : CoefficientForm;
+
+/// <summary>
+/// KHAOS's raw ridge, (β₀, β) | σ², τ ~ N(0, σ²I/τ) on the columns as evaluated, uncentred and unscaled, the intercept's
+/// included under the zero centre (<c>khaos</c>'s <c>adaptive_khaos_ridge</c>, whose τ² is 1/τ); under level centring β₀'s
+/// prior centres on the level instead, and a flat intercept leaves β₀ out. A Legendre basis is orthonormal under the uniform
+/// measure, so its columns sit near unit root mean square and the two ridges nearly agree there; on hinges they do not. The
+/// design carries it as a prior apart from the Gram (<see cref="Maths.Regression.GPrior.PriorPencil"/>), D = I on the raw
+/// coefficients, so each structure costs its own decomposition.
+/// </summary>
+public sealed record RawRidgeForm : CoefficientForm;
 
 /// <summary>The run's settings.</summary>
 public sealed record BassSampling
