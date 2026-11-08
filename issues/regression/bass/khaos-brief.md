@@ -1,6 +1,6 @@
 # KHAOS on the BASS core: E19's build (chip brief)
 
-Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`); slice 2 waits for the user. Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
+Date: 2026-11-07. Status: slice 0 landed 2026-11-07 (`31362ad`); slice 1 landed 2026-11-07 (`fa05048`, `b408bf4`, `baf69f9`), with declared input domains (`3eb56e1`, the user's decision of 2026-11-07); the check on slice 1's input-box finding, then slice 2, under way (the user's go-ahead of 2026-11-08). Written at the user's request after GBASS's slices 0–4, from the KHAOS paper's TeX, the `khaos` 2.1.1 source and the engine.
 
 ## Why
 
@@ -157,6 +157,39 @@ Under "Reports" below, newest first, per slice: what landed by commit; the gates
 ## Reports
 
 Newest first.
+
+### Slice 1 addendum: declared input domains (chip, 2026-11-07)
+
+**The decision.** The slice 1 report left open whether a continuous predictor may declare its domain. The user leaned toward it ("predictor able to declare its domain") and chose to build it, on 2026-11-07, which the main session confirmed ("i approved the declared domains thing").
+
+**Landed** on `main`, nothing pushed, the commit messages without attribution lines:
+- `3eb56e1`: `InputDomain` on `ContinuousPredictor`, the box in `RangeScale`, the fingerprint, the sensitivity measures' default and flag, the resolution's log, and the tests.
+- This commit: `PolynomialChaos.md`, `BayesianRegression.md` (with GBASS's GBMARS row for its slice 6, at its request) and this addendum.
+
+**What it is.**
+- *The declaration.* `InputDomain(Lower, Upper)` on `ContinuousPredictor`, output variables included. Refused: an end that is not finite, a lower end not below the upper, and a value outside the domain.
+- *The box.* `RangeScale` scales by the domain when one is declared and by the training range otherwise (`Min`, `Max`), and keeps the training range (`TrainingMin`, `TrainingMax`). `Contains`, which flags prediction cases and calibration bounds, reads the training range, since past the data a fit extrapolates whatever the box.
+- *The fingerprint* adds a domain after its column's values, and only when one is declared, so data that declare none keep their fingerprint.
+- *Sensitivity.* A measure left undeclared is uniform over the box, and `ContinuousMeasure.Extrapolates` reads the training range in the box's units.
+- *The log.* Resolution logs each domain, and a Legendre fit's line says when a predictor declares none.
+
+**The gates.**
+
+| Gate | Reading |
+| --- | --- |
+| The exact law | With [0, 1] declared on slice 0's raw rows, the engine's π against `khaos_exactlaw_oracle.R`, 3.4·10⁻¹⁵. With the inputs drawn into [0.05, 0.95] and [0, 1] declared, π against a dense marginal on ψ at the raw values, 3.4·10⁻¹⁵; the training range's law differs from it by up to 0.019 |
+| Readouts | Ishigami's raw inputs with [0, 1] declared, against corrected `adaptive_khaos_ridge`: M 10.15 against 10.15, σ² 0.2275 against 0.2278, the surfaces 0.005 apart, total indices within 0.001. The rescaled case, kept beside it: M 6.22 against 6.13, σ² 0.929 against 1.005, the surfaces 0.035 apart, the indices within 0.004 |
+| Hinge BASS | 2,263 enumerated structures under the g-form with a domain of [−0.5, 2] around data on [0, 1]: the same structures admitted, π unchanged to 7.8·10⁻¹⁶. The whole regression assembly, 2,179 of 2,179 |
+| The rest | Refusals, the box and the flags, the fingerprint, the measure and the log (`InputDomainTests`) |
+
+**Found here.** The readout gate's engine chains ran 3,000 steps after 3,000. On the raw inputs they sat at M 9.78 and σ² 0.263, a σ² ratio of 1.155 against the gate's 1.15. Eight engine chains of 30,000 read M 10.13 and σ² 0.2282, and two `khaos` runs of 30,000 read M 10.14 and 10.15 and σ² 0.2274 and 0.2275. With about 1.4% of births accepted, the short chains had not finished growing from M = 0. The engine's chains now run 10,000 after 10,000, about two seconds.
+
+**Decisions beyond the brief.**
+- *The domain is the data's, not the config's.* It is a fact about the input, it travels with the predictor to every fit, and the fingerprint already covers the data.
+- *The flags read the training range.* Past the data a hinge fit extrapolates beyond its last knot and a Legendre fit has no observations, whatever the box. A case outside the declared domain is flagged the same way, not refused.
+- *Hinge fits take a domain too.* Their law is unchanged under the g-form and the normalized ridge, since the knots are the data's and the prior reads each column up to its scale. Two readings move: D06's column mass, which reads hinges normalized over the box, and an undeclared sensitivity measure, which spans it.
+
+**Left as it was.** `BassFit.Sensitivity`'s doc still says "the training range's uniform by default". `BassFit.cs` holds another session's uncommitted edits, so the line waits for whoever commits that file.
 
 ### Slice 1: the Legendre basis under the ridge (chip, 2026-11-07)
 
