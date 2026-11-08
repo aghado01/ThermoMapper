@@ -2,8 +2,12 @@
 
 **Status (2026-11-08).** The option and the readout are built and gated, the measurement has run, and the rule is recorded
 in `Samplers.md`, and BASS's fit takes the option as `SmcSpec.AdaptiveMutation`. The adaptive count **stays an option**;
-the fixed count stays the default (reading below). Left for a later pass: `BayesianRegression.md`'s `SmcSpec` row and its
-"with no adaptation" line, which wait on another chip's uncommitted edit there.
+the fixed count stays the default (reading below). `BayesianRegression.md` names the option (`03b6d13`).
+
+**To rerun the measurement:** build `Maths.Regression.Tests` in Release, then run `dotnet test` filtered to
+`BassSmcMutationQualificationTests`, at below-normal priority. Set `BASS_QUALIFICATION=1` and `BASS_COST_CLOCK=cycles`; the
+`SMC_MUTATION_*` settings in the class's summary size the run. GBASS took about 23 minutes and KHAOS about 9, at roughly
+1.7 cores under load.
 
 The chip's assignment (2026-11-08, from the GBASS/KHAOS coordinating session): let the engine's SMC choose how many
 mutation sweeps each stage takes, and measure whether that beats the fixed count at equal cost. Found in the Kimi review
