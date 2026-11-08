@@ -36,6 +36,7 @@ Extensions beyond the port's completion contract, collected from the [full port 
 | Tree ensembles, with BCF's multiplier (E31) | Chipman, George and McCulloch 2010; Hahn, Murray and Carvalho 2020; [the notes](../perplexity-bart-etc.md) | Samplers: `BlockScan`, `IRjMove`, the target's separable case. A leaf contract beside `IObservationModel`. Readouts: declared smoothness | Candidate |
 | Additive models with a GP component (E32) | [The notes](../perplexity-bart-etc.md) | BGP: `y` per fit, σ² from outside with s² free, a declared mean. Fitting: the marginal given σ² | Candidate |
 | Regression-family integration (E33) | [The notes](../perplexity-bart-etc.md) | Every family: an inventory, declared capabilities, four verdicts | Candidate |
+| Several outputs on one basis, with Σ integrated (E34) | Brown, Vannucci and Fearn 1998; Huang and Wand 2013; [the lineage review](lineage-review.md) | Fitting: the collapsed core with a K × K quadratic form, the latent record by row. Samplers: nothing new | Candidate; requested 2026-11-08 |
 | Direct-functional BASS for families of SPC sweeps | Derivations review §7, item 9 | The completed port | Application |
 
 ## Upgrades to existing code
@@ -405,6 +406,34 @@ For several outputs from one run, or several outcomes for one case. Means do not
   - *A rank likelihood* (Hoff 2007) for mixed outcome types, estimating the copula without specifying the marginals.
 - **A proposed order:** a factor latent with one run-level factor, then the shared heavy-tailed scale, then ordinal cutpoints.
 - **Parked:** R(x), covariance regression (Hoff and Niu 2012), until a fixed R proves too stiff.
+
+## Several outputs on one basis, with Σ integrated (E34)
+
+The user asked for this on 2026-11-08, after the Kimi review raised it under ABMRS's name ([lineage review](lineage-review.md#against-the-notes-in-issuesregression)). It is for K continuous outputs per case that share one structure, unordered or few enough that a free covariance is affordable.
+- **The model.** Y (n × K) = BA + E, with each row of E ~ N(0, Σ).
+  - The coefficients take a matrix-normal prior scaled by Σ, A | Σ, τ ~ MN(0, S₀(τ), Σ), and Σ ~ IW(ν₀, Ψ₀). The scaling by Σ is what keeps the model conjugate, as in BASS's g-prior (Zellner's form).
+  - Brown, Vannucci and Fearn (JRSS B, 1998) select variables in this model, with inclusion shared across the responses (cited from memory).
+- **The collapse carries over.** With A and Σ integrated, p(Y | structure, τ) is matrix-t.
+  - Where BASS reads a scalar residual sum, the structure step reads a K × K quadratic form, Ψ₀ + Yᵀ(I − BΣ_nBᵀ)Y in the g-prior's or the ridge's form, and its log-determinant. That costs O(nMK + M²K + MK² + K³) a move.
+  - So D04's integrated σ² becomes an integrated Σ. The structure chain, its moves and every sampler are unchanged, and `PriorPencil` serves both priors' τ steps as it does for one output.
+- **What each piece becomes.**
+  - *Centring.* A level-centred intercept per output, with n − 1 degrees of freedom in the IW posterior.
+  - *GBMARS's noise.* A per-row scale vᵢ shared across the outputs gives the multivariate t and the multivariate generalized hyperbolic, with a skew vector γ ∈ ℝᴷ. Given the latents, the rows are weighted by 1/vᵢ and offset by γvᵢ, so the matrix-normal form and the latent record carry over. A scale shared across a case's outputs is also E22's source of tail dependence.
+  - *Tempering and evidence.* The tilted likelihood keeps the collapse, as slice 5's σ² did: p(Y | A, Σ)^b is N(BA, Σ/b) times |Σ|^(n(1 − b)/2). That shifts the IW's degrees of freedom, and small b brings the same properness condition the σ² prior meets.
+  - *Readouts.* The matrix-t predictive gives joint bands, the cross-output correlation of predictions, the probability that every output meets its specification, and Sobol indices per output and for any declared combination.
+- **Where it sits.**
+  - *E22 builds on it.* Given E22's latents z, a free Σ is this entry's collapse. A correlation matrix R, which binary and ordinal outcomes need, is drawn by parameter expansion around the same inverse-Wishart.
+  - *The PCA mode (D07)* fits each component apart, assuming the component scores are independent. Taking the scores as K outputs here reads their residual correlation.
+  - *Ordered outputs,* such as a functional response on a grid, stay with the direct and PCA modes and E12's output-side inner product. A free K × K Σ is for small or unordered K.
+- **Choices for its brief.**
+  - *Σ's prior.* The IW keeps the collapse. Huang and Wand's (2013) scale-mixture form gives marginally uniform correlations, but it is only conditionally conjugate, so its scales would take a slice step as τ does.
+  - *Inclusion* is shared across outputs, as the collapse needs. Inclusion specific to each output would need an indicator per (term, output) and loses the matrix-t.
+  - *Missing outputs* are refused at first. A case missing some outputs breaks the matrix-normal form, and its missing entries can be drawn as latents.
+  - *The oracle.* None is known in CRAN's lineage. The checks instead:
+    - the marginal against an integral over Σ: by quadrature at K = 2, by Monte Carlo at K = 3;
+    - the law by enumeration on small structure spaces, and Geweke;
+    - recovery of a known Σ and of surfaces from outside the model.
+- **Not scheduled.** Its place in the order is the user's call.
 
 ## Multi-fidelity emulation through the offset
 

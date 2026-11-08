@@ -131,7 +131,7 @@ The [Kimi review](../discussion/perplexity-kimi-regression-engine-review.md.md),
   - The E1 slice 5 guards it names (latents under a direct functional design, noise blocks on tempered rungs) were lifted by GBMARS's slice 5 (`37137f2`), which put every noise on ladders and SMC with the evidence.
   - Its sequencing note (KHAOS before GBMARS, to spare the observation-model seam) came after that seam was built. The user struck it.
 - **Corrected here.**
-  - *ABMRS is multivariate in its inputs* (E3: He, Yang and Kang's free-knot tensor-product surfaces), not in its responses. The matrix-normal slab with an inverse-Wishart Σ, whose marginal is matrix-t, is sound, but it is a multi-output BASS, a model of its own.
+  - *ABMRS is multivariate in its inputs* (E3: He, Yang and Kang's free-knot tensor-product surfaces), not in its responses. The matrix-normal slab with an inverse-Wishart Σ, whose marginal is matrix-t, is sound, but it is a multi-output BASS, a model of its own. The user wants it: E34 (2026-11-08).
   - *KHAOS's modified g-prior is not a per-column ridge.* Its prior precision D_g⁻¹ΨᵀΨD_g⁻¹/g₀² is a full matrix, and it goes through `PriorPencil` as E21's prior-precision builder (KHAOS slice 0).
   - *`sobol_khaos` reads coefficients* as the engine does. The difference slice 0 found is its denominator, Var f + s².
   - *Between-replicate spread does catch an SMC replicate stuck apart from the others.* It misses replicates all stuck the same way, the question KHAOS's slice 1 check settles for its fixture.
