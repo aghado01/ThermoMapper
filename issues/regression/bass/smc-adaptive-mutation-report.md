@@ -1,9 +1,9 @@
 # SMC's adaptive mutation count: report
 
-**Status (2026-11-08).** The option and the readout are built and gated, and the measurement has run. The adaptive count
-**stays an option**; the fixed count stays the default (reading below). Two pieces wait on files other chips hold:
-`SmcSpec.AdaptiveMutation` waits on `BassConfig.cs` (KHAOS slice 2), and the `Samplers.md` section waits on the
-parallel-rungs chip. Both are written and tested in a snapshot.
+**Status (2026-11-08).** The option and the readout are built and gated, the measurement has run, and the rule is recorded
+in `Samplers.md`. The adaptive count **stays an option**; the fixed count stays the default (reading below). One piece
+waits on a file another chip holds: `SmcSpec.AdaptiveMutation`, with its validation, `BassSmcRun`'s pass-through and its
+`BassSmcTests`, waits on `BassConfig.cs` (KHAOS slice 2). It is written, and passes in a snapshot.
 
 The chip's assignment (2026-11-08, from the GBASS/KHAOS coordinating session): let the engine's SMC choose how many
 mutation sweeps each stage takes, and measure whether that beats the fixed count at equal cost. Found in the Kimi review
@@ -56,13 +56,14 @@ Otherwise it stays an option, with this reading recorded.
 | `8ec1bc8` | `SmcOptions.AdaptiveMutation` (`src/maths/samplers/smc/SmcMutation.cs`), `SmcStageReport.Steps` and `MovedFraction`, `SmcStageReadout`; core tests |
 | `9261c9f` | `BassSmcReplicate.StageReadout`, the per-replicate readout |
 | `ebe5757` | The oracle law test under the adaptive count |
-| this report's commit | The measurement harness (`BassSmcMutationQualificationTests`), its tables (`smc-adaptive-mutation-results.csv`, `-replicates.csv`, `-stages.csv`) and this report |
+| `7d0869a` | The measurement harness (`BassSmcMutationQualificationTests`), its tables (`smc-adaptive-mutation-results.csv`, `-replicates.csv`, `-stages.csv`) and this report |
+| `11436c4` | `Samplers.md`: the rule, its alternatives and trade-offs, the library's holdings, the measured reading |
 
 **The rule.** Stage t reads stage t − 1's report: k sweeps left a fraction 1 − m of the live particles where they were (a
 particle moved when any of its moves was accepted). So stage t wants ⌈k·ln c / ln(1 − m)⌉, at least 1. It takes that
 within its credit, k̄·t − Σ_{s<t} k_s with k̄ = `MutationSteps`. Easy stages pass unspent sweeps to hard ones, and a run
 never sweeps more than the fixed count over the same stages. Why the moved fraction, why a credit, the invariance
-argument and the alternatives not taken are in the `Samplers.md` section (pending, below).
+argument and the alternatives not taken are in `Samplers.md`, "SMC's sweeps per stage".
 
 **The readout.** `BassSmcReplicate.StageReadout` lays out, stage by stage: b, sweeps, the structure move's acceptance,
 the fraction of particles whose structure changed, ESS/N, resampling and families. `LeastMoved` names the worst stage.
