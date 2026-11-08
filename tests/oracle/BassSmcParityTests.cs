@@ -28,6 +28,8 @@ namespace Maths.Oracle.Tests;
 /// <item><b>The posterior:</b> an SMC fit's weighted populations against the exact posterior on fixture A, the defaults at
 /// M_max = 3 and fixed g at M_max = 2: the count law, E[τ] and every term's inclusion, each within five standard errors
 /// of the replicates' spread.</item>
+/// <item><b>Under the adaptive count of sweeps</b> (<see cref="AdaptiveMutation"/>): populations held at b = 0 keep the prior's law,
+/// populations tempered to b = 1 and held there meet the exact posterior on fixture A, and the normalizer meets ln Z on fixture B.</item>
 /// </list>
 /// Opt-in: it runs where the R toolchain and the BASS checkout are present.
 /// </summary>
@@ -197,6 +199,105 @@ public sealed class BassSmcParityTests
         for (int j = 0; j < terms.Length; j++) Check($"{option}, {terms[j]}", Row(included, j), inclusion[j], 0.005, quiet: true);
         _out.WriteLine($"{option}: {terms.Length} inclusions within their allowance; stages " +
                        $"{string.Join(", ", fit.Diagnostics.Smc.Replicates.Select(x => x.StageCount))}");
+    }
+
+    [Fact]
+    public void AdaptiveMutation_KeepsThePriorAtBZero_AndMeetsThePosteriorAndLogZAtBOne()
+    {
+        // Under the adaptive count every stage's sweeps keep its law: SMC populations through BASS's particles and kernel, held at b = 0
+        // for twenty stages, and tempered to b = 1 and held there five more, against the oracle's laws on fixture A; and the normalizer
+        // against its exact ln Z on fixture B. Each comparison's error is the replicates' spread.
+        if (!BassTargetParityTests.Available) return;
+        const int replicates = 8, particles = 1000, rate = 8;
+        double[][] rows = BassTargetParityTests.FixtureA();
+        BassConfig config = BassTargetParityTests.Config();
+        config = config with { Structure = config.Structure with { MaxBasis = 3 } };
+        BassModel model = BassModel.Create(config, BassTargetParityTests.Data(rows), TemperedForm.Integrated);
+        JsonElement r = BassTargetParityTests.Posterior(rows, "M_max=3", Rungs([0.0]));
+        BassTerm[] terms = BassTargetParityTests.Terms(r);
+        int[][] states = BassTargetParityTests.States(r);
+        var index = terms.Select((t, i) => (t, i)).ToDictionary(e => e.t, e => e.i);
+        JsonElement prior = r.GetProperty("posterior").GetProperty("tempered").GetProperty("integrated").EnumerateArray().Single(x => x.GetProperty("b").GetDouble() == 0.0);
+        JsonElement posterior = r.GetProperty("posterior");
+        int[] seeds = SeedTree.Derive(2026_11_08, replicates);
+
+        foreach (bool atOne in new[] { false, true })
+        {
+            var count = new double[model.MaxBasis + 1, replicates];
+            var included = new double[terms.Length, replicates];
+            var tau = new double[replicates];
+            for (int c = 0; c < replicates; c++)
+            {
+                SmcRun<BassParticle> run = AdaptiveRun(model, particles, seeds[c], rate);
+                SmcStage<BassParticle> stage = run.Stage;
+                if (atOne)
+                {
+                    SmcSampler.TemperToPosterior(run, 0.99);
+                    stage = run.Stage;
+                }
+                for (int s = 0; s < (atOne ? 5 : 20); s++) run.Advance(stage);
+                SmcResult<BassParticle> result = run.Result();
+                for (int i = 0; i < particles; i++)
+                {
+                    BassState state = result.Particles[i].State;
+                    double w = result.Weights[i];
+                    count[state.Count, c] += w;
+                    foreach (BassTerm term in state.Terms) included[index[term], c] += w;
+                    tau[c] += w * state.Tau;
+                }
+                int[] steps = SmcStageReadout.Of(result.Stages).Steps;
+                if (c == 0) _out.WriteLine($"b = {(atOne ? 1 : 0)}: steps {string.Join(" ", steps)}");
+                Assert.All(steps.Skip(1), k => Assert.InRange(k, 1, int.MaxValue));
+                Assert.True(steps.Skip(1).Any(k => k != rate), "the count never moved off the budget, so the run did not exercise the rule");
+            }
+            string at = atOne ? "b = 1" : "b = 0";
+            double[] countLaw = atOne ? Doubles(posterior.GetProperty("count").GetProperty("posterior")) : Doubles(prior.GetProperty("count"));
+            double[] inclusion;
+            if (atOne) inclusion = Doubles(posterior.GetProperty("inclusion"));
+            else
+            {
+                double[] probabilities = Doubles(prior.GetProperty("law"));
+                inclusion = new double[terms.Length];
+                for (int s = 0; s < states.Length; s++)
+                    foreach (int j in states[s]) inclusion[j] += probabilities[s];
+            }
+            for (int m = 0; m < countLaw.Length; m++) Check($"adaptive, {at}, M = {m}", Row(count, m), countLaw[m], 0.003);
+            Check($"adaptive, {at}, E[τ]", tau, atOne ? posterior.GetProperty("tau").GetProperty("mean").GetDouble() : prior.GetProperty("tau_mean").GetDouble(), 0.0);
+            for (int j = 0; j < terms.Length; j++) Check($"adaptive, {at}, {terms[j]}", Row(included, j), inclusion[j], 0.005, quiet: true);
+        }
+
+        // The normalizer on fixture B, M_max 2.
+        double[][] rowsB = BassTargetParityTests.FixtureB();
+        double logZ = BassTargetParityTests.Posterior(rowsB, "M_max=2").GetProperty("posterior").GetProperty("log_Z").GetDouble();
+        BassConfig configB = BassTargetParityTests.Config();
+        BassModel modelB = BassModel.Create(configB with { Structure = configB.Structure with { MaxBasis = 2 } }, BassTargetParityTests.Data(rowsB), TemperedForm.Integrated);
+        var normalizers = new double[4];
+        double within = 0.0;
+        for (int c = 0; c < normalizers.Length; c++)
+        {
+            SmcResult<BassParticle> result = SmcSampler.TemperToPosterior(AdaptiveRun(modelB, 2000, seeds[c], rate), 0.99);
+            normalizers[c] = result.LogNormalizerRatio;
+            within += result.LogNormalizerError * result.LogNormalizerError;
+            _out.WriteLine($"adaptive: ln Ẑ {result.LogNormalizerRatio:F4} ± {result.LogNormalizerError:F4} against {logZ:F4}");
+            Assert.True(Math.Abs(result.LogNormalizerRatio - logZ) <= 4 * result.LogNormalizerError + 0.01, $"{result.LogNormalizerRatio:F4} ± {result.LogNormalizerError:F4} against {logZ:F4}");
+        }
+        // Pooled as the fit's evidence pools its replicates: the larger of the within-run (genealogy) and between-run errors.
+        double pooled = normalizers.Average(), between = Math.Sqrt(normalizers.Sum(v => (v - pooled) * (v - pooled)) / (normalizers.Length - 1) / normalizers.Length);
+        double error = Math.Max(Math.Sqrt(within) / normalizers.Length, between);
+        _out.WriteLine($"adaptive, pooled ln Ẑ {pooled:F4} ± {error:F4} (within {Math.Sqrt(within) / normalizers.Length:F4}, between {between:F4}) against {logZ:F4}");
+        Assert.True(Math.Abs(pooled - logZ) <= 4 * error + 0.01, $"pooled {pooled:F4} ± {error:F4} against {logZ:F4}");
+    }
+
+    // An SMC run through BASS's particles and kernel at b = 0, under the adaptive count on `rate` sweeps per stage's budget. A stay
+    // probability of 0.3 lets fixture A's stages want fewer than the budget, so the count moves.
+    private static SmcRun<BassParticle> AdaptiveRun(BassModel model, int particles, int seed, int rate)
+    {
+        var options = new SmcOptions
+        {
+            Particles = particles, MutationSteps = rate, AdaptiveMutation = new AdaptiveMutation { StayProbability = 0.3 }, MaxDegreeOfParallelism = 4,
+        };
+        return SmcRun<BassParticle>.Start(new SmcStage<BassParticle>(new BassParticleTarget(model.Target), new Temperature(0.0, TemperingPath.Likelihood)),
+                                          new BassParticles(model), new BassSmcKernel(model), options, seed);
     }
 
     private static double[] Doubles(JsonElement e) => [.. e.EnumerateArray().Select(v => v.GetDouble())];
